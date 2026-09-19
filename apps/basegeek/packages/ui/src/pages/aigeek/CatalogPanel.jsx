@@ -123,12 +123,12 @@ const visionCell = (acceptsImageInput) => {
   }
   if (acceptsImageInput === false) {
     return (
-      <Typography variant="body2" color="text.disabled" sx={{ fontSize: 12 }}>text only</Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ fontSize: 12 }}>text only</Typography>
     );
   }
   return (
     <Tooltip title="This provider's listing does not say whether this row accepts images — only OpenRouter's does today">
-      <Typography variant="body2" color="text.disabled" sx={{ fontSize: 12 }}>?</Typography>
+      <Typography variant="body2" color="text.secondary" sx={{ fontSize: 12 }}>?</Typography>
     </Tooltip>
   );
 };
@@ -144,7 +144,7 @@ const WEIGHT_LABELS = { fast: 'fast', balanced: 'balanced', deep: 'deep' };
  */
 const speedCell = (row) => {
   if (!row.weightClass) {
-    return <Typography variant="body2" color="text.disabled" sx={{ fontSize: 12 }}>not timed</Typography>;
+    return <Typography variant="body2" color="text.secondary" sx={{ fontSize: 12 }}>not timed</Typography>;
   }
   return (
     <Box>
@@ -175,7 +175,7 @@ const qualityCell = (row) => {
   if (typeof row.qualityScore !== 'number') {
     return (
       <Tooltip title="Never asked the golden set">
-        <Typography variant="body2" color="text.disabled">—</Typography>
+        <Typography variant="body2" color="text.secondary">—</Typography>
       </Tooltip>
     );
   }
@@ -357,7 +357,7 @@ export default function CatalogPanel({
               )
               : (
                 <Tooltip title="Never probed — a row written by an older sync, or one the job has not reached">
-                  <Typography variant="body2" color="text.disabled">—</Typography>
+                  <Typography variant="body2" color="text.secondary">—</Typography>
                 </Tooltip>
               )),
           },
