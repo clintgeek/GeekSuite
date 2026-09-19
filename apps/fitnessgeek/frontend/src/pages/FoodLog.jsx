@@ -34,7 +34,7 @@ import { useFoodLog } from '../hooks/useFoodLog.js';
 import { fitnessGeekService } from '../services/fitnessGeekService.js';
 import { settingsService } from '../services/settingsService.js';
 import { goalsService } from '../services/goalsService.js';
-import { useGeekPrimaryAction } from '@geeksuite/ui';
+import { useGeekPrimaryAction, useToast } from '@geeksuite/ui';
 import { Surface, SectionLabel, DisplayHeading, StatNumber } from '../components/primitives';
 import { netCarbs as calcNetCarbs, ketoStatus } from '../utils/ketoMath.js';
 import { useFoodLogging } from '../hooks/useFoodLogging.js';
@@ -65,9 +65,15 @@ const mealTypeForNow = (now = new Date()) => {
 
 const FoodLog = () => {
   const theme = useTheme();
+  const { notify } = useToast();
   const [selectedDate, setSelectedDate] = useState(() => fitnessGeekService.formatDate(new Date()));
   const [showAddDialog, setShowAddDialog] = useState(false);
-  const [selectedMealType, setSelectedMealType] = useState('snack');
+  // Bug: this used to hardcode 'snack' regardless of the clock, so tapping a
+  // search result — the advertised "one tap to log it" path — logged
+  // breakfast as a snack until you noticed the chip and fixed it by hand.
+  // The FAB already gets this right via mealTypeForNow(); the inline search
+  // box's own initial chip did not.
+  const [selectedMealType, setSelectedMealType] = useState(() => mealTypeForNow());
   const [showEditDialog, setShowEditDialog] = useState(false);
   const [editingLog, setEditingLog] = useState(null);
   const [updatingLog, setUpdatingLog] = useState(false);
@@ -102,6 +108,8 @@ const FoodLog = () => {
     updateFoodLog,
     deleteFoodLog,
     saveMeal,
+    favoriteFoodIds,
+    toggleFavoriteId,
     showError,
     clearSuccessMessage,
     clearErrorMessage
@@ -269,6 +277,11 @@ const FoodLog = () => {
     if (success) {
       setShowEditDialog(false);
       setEditingLog(null);
+      // Floating toast near the thumb — same surface adding a food uses,
+      // instead of the Alert that used to render below the whole page.
+      notify('Food log updated.', { tone: 'success' });
+    } else {
+      notify('Could not update that log. Try again.', { tone: 'error' });
     }
     setUpdatingLog(false);
   };
@@ -279,7 +292,37 @@ const FoodLog = () => {
   };
 
   const handleDeleteLog = async (logId) => {
-    await deleteFoodLog(logId);
+    // Snapshot the row before it's gone. Deleting used to be one tap with no
+    // way back, while adding a food always shipped an in-toast Undo
+    // (useFoodLogging.js) — the same mechanism reused here, not a second one:
+    // Undo re-logs the captured item via `logItems`, the exact function the
+    // search box's own undo calls. It lands as a new log (a REST delete can't
+    // hand back the old id), but it reads and totals identically to the row
+    // that was removed.
+    const log = logs.find((l) => (l.id || l._id) === logId);
+    const food_item = log?.food_item || log?.food_item_id;
+
+    const success = await deleteFoodLog(logId);
+    if (!success) {
+      notify('Could not delete that item. Try again.', { tone: 'error' });
+      return;
+    }
+
+    notify(`Deleted ${food_item?.name || 'item'}`, {
+      tone: 'info',
+      action: log && food_item ? (
+        <Button
+          size="small"
+          sx={{ color: 'inherit', fontWeight: 700 }}
+          onClick={() => logItems(
+            [{ ...food_item, servings: log.servings, nutrition: log.nutrition }],
+            log.meal_type
+          )}
+        >
+          Undo
+        </Button>
+      ) : undefined
+    });
   };
 
   const handleSaveMeal = (mealType, logs) => {
@@ -481,6 +524,8 @@ const FoodLog = () => {
             onSaveMeal={handleSaveMeal}
             showActions={true}
             mode={mode}
+            favoriteFoodIds={favoriteFoodIds}
+            onFavoriteChange={toggleFavoriteId}
           />
         </Box>
       ))}
@@ -686,7 +731,15 @@ const FoodLog = () => {
         }}
       />
 
-      {/* Success/Error Messages */}
+      {/* Save-Meal Success/Error — the only producer left here.
+          Edit and delete used to report through this same pair of state
+          slots, rendered as an Alert below the header, date nav, quick
+          actions, search box and all four meal sections: likely off-screen
+          on a phone, gone in 3 seconds regardless, and the reason deleting
+          near the top of a long day's log read as a silent failure. They now
+          use the floating toast (see handleUpdateLog/handleDeleteLog above),
+          matching how adding a food already reports. saveMeal wasn't part of
+          that bug, so it still lands here. */}
       {successMessage && (
         <Alert severity="success" sx={{ mt: 2 }} onClose={clearSuccessMessage}>
           {successMessage}

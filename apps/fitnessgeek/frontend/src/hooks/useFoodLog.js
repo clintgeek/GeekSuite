@@ -3,6 +3,7 @@ import { fitnessGeekService } from '../services/fitnessGeekService.js';
 // Legacy goals removed
 import { settingsService } from '../services/settingsService.js';
 import { goalsService } from '../services/goalsService.js';
+import { foodService } from '../services/foodService.js';
 import logger from '../utils/logger.js';
 
 export const useFoodLog = (selectedDate) => {
@@ -11,6 +12,14 @@ export const useFoodLog = (selectedDate) => {
   const [loading, setLoading] = useState(false);
   const [successMessage, setSuccessMessage] = useState(null);
   const [errorMessage, setErrorMessage] = useState(null);
+  // Real favourite state for the log view. This used to not exist at all:
+  // FoodLogItem defaulted `isFavorite` to false and nothing here fed it real
+  // data, so every star rendered unfavourited regardless of truth, and
+  // tapping it always called addFavorite, never removeFavorite. Favourites
+  // are food-catalog metadata, not per-log-entry, so they're loaded once
+  // (not per selectedDate) and shared by id across every meal section —
+  // the same food logged at breakfast and dinner shows the same star.
+  const [favoriteFoodIds, setFavoriteFoodIds] = useState(() => new Set());
 
   // Load goals (prefer settings-based nutrition_goal; fallback to legacy /goals)
   const loadGoals = async () => {
@@ -102,50 +111,26 @@ export const useFoodLog = (selectedDate) => {
     }
   };
 
-  // Add food to log
-  const addFoodToLog = async (food, mealType) => {
-    try {
-      const parsedServings = typeof food?.servings === 'string'
-        ? parseFloat(food.servings)
-        : (food?.servings ?? 1);
-
-      const safeServings = Number.isFinite(parsedServings) && parsedServings > 0
-        ? parsedServings
-        : 1;
-
-      const logData = {
-        food_item: food,
-        meal_type: mealType,
-        servings: Math.max(0.1, safeServings),
-        log_date: selectedDate,
-        // Preserve nutrition snapshot at time of logging when provided
-        nutrition: food?.nutrition
-      };
-
-      logger.debug('Sending log data');
-      const response = await fitnessGeekService.addFoodToLog(logData);
-      logger.debug('addFoodToLog response received');
-
-      // The backend returns { success: true, data: log, message: '...' }
-      // The apiService returns the entire response object
-      if (response && response.success) {
-        logger.debug('Food log added successfully');
-        setAutoCloseMessage('Food added successfully!', setSuccessMessage);
-        await loadFoodLogs();
-        return true;
-      } else {
-        logger.warn('Food log add failed');
-        setAutoCloseMessage('Failed to add food. Please try again.', setErrorMessage);
-        return false;
-      }
-    } catch (error) {
-      logger.error('Error adding food log:', error);
-      setAutoCloseMessage('Error adding food. Please try again.', setErrorMessage);
-      return false;
-    }
-  };
+  // NOTE: this hook used to also export its own `addFoodToLog`, a second "add
+  // a food to the log" implementation that disagreed with the one actually in
+  // use (useFoodLogging.js's `logItems`, which every real caller — the search
+  // box, the FAB dialog, the describe path — goes through). Nothing ever
+  // destructured it off this hook's return value, so it was dead: reachable
+  // by nothing, and a landmine for whoever next needed "add a food" and found
+  // two candidates. Confirmed dead by a repo-wide grep for `useFoodLog(` and
+  // its destructuring before removal; deleted rather than fixed.
 
   // Update food log
+  // NOTE on feedback: update/delete used to route their success/error text
+  // through `setAutoCloseMessage` into `successMessage`/`errorMessage`, which
+  // FoodLog.jsx rendered as an Alert *below* the header, date nav, quick
+  // actions, search box and all four meal sections — likely off-screen on a
+  // phone, and gone in 3 seconds regardless. Deleting near the top of a long
+  // day's log read as a silent failure. Adding a food, by contrast, gets a
+  // floating toast near the thumb (useFoodLogging.js). These two now leave
+  // that decision to the caller, which shows the same toast add already
+  // does — see FoodLog.jsx's handleUpdateLog/handleDeleteLog. `saveMeal`
+  // below is unchanged and still uses this Alert; it wasn't part of this bug.
   const updateFoodLog = async (logId, updateData) => {
     try {
       const response = await fitnessGeekService.updateFoodLog(logId, updateData);
@@ -153,16 +138,12 @@ export const useFoodLog = (selectedDate) => {
 
       // The backend returns { success: true, data: log, message: '...' }
       if (response && response.success) {
-        setAutoCloseMessage('Food log updated successfully!', setSuccessMessage);
         await loadFoodLogs();
         return true;
-      } else {
-        setAutoCloseMessage('Failed to update food log. Please try again.', setErrorMessage);
-        return false;
       }
+      return false;
     } catch (error) {
       logger.error('Error updating food log:', error);
-      setAutoCloseMessage('Error updating food log. Please try again.', setErrorMessage);
       return false;
     }
   };
@@ -175,16 +156,12 @@ export const useFoodLog = (selectedDate) => {
 
       // The backend returns { success: true, data: log, message: '...' }
       if (response && response.success) {
-        setAutoCloseMessage('Food log deleted successfully!', setSuccessMessage);
         await loadFoodLogs();
         return true;
-      } else {
-        setAutoCloseMessage('Failed to delete food log. Please try again.', setErrorMessage);
-        return false;
       }
+      return false;
     } catch (error) {
       logger.error('Error deleting food log:', error);
-      setAutoCloseMessage('Error deleting food log. Please try again.', setErrorMessage);
       return false;
     }
   };
@@ -265,6 +242,31 @@ export const useFoodLog = (selectedDate) => {
     return logs.filter(log => log.meal_type === mealType);
   };
 
+  // Load the user's favourite foods once and reduce to a Set of ids, which
+  // is all FoodLogItem needs to answer "is this one starred".
+  const loadFavorites = async () => {
+    try {
+      const favorites = await foodService.getFavorites();
+      const list = Array.isArray(favorites) ? favorites : (favorites?.data || []);
+      const ids = list.map((food) => String(food?._id || food?.id)).filter(Boolean);
+      setFavoriteFoodIds(new Set(ids));
+    } catch (error) {
+      logger.error('Error loading favorites:', error);
+    }
+  };
+
+  // FoodLogItem calls this after it successfully adds/removes a favourite,
+  // so every meal section showing the same food agrees immediately rather
+  // than waiting on the next full favorites reload.
+  const toggleFavoriteId = (foodId, isFavorite) => {
+    const id = String(foodId);
+    setFavoriteFoodIds((prev) => {
+      const next = new Set(prev);
+      if (isFavorite) next.add(id); else next.delete(id);
+      return next;
+    });
+  };
+
   // Clear messages
   const clearSuccessMessage = () => setSuccessMessage(null);
   const clearErrorMessage = () => setErrorMessage(null);
@@ -283,6 +285,11 @@ export const useFoodLog = (selectedDate) => {
     loadGoals();
   }, [selectedDate]);
 
+  // Favourites aren't date-scoped — load them once, not on every day change.
+  useEffect(() => {
+    loadFavorites();
+  }, []);
+
   const showError = (msg) => setAutoCloseMessage(msg, setErrorMessage);
   const showSuccess = (msg) => setAutoCloseMessage(msg, setSuccessMessage);
 
@@ -294,7 +301,6 @@ export const useFoodLog = (selectedDate) => {
     errorMessage,
     nutritionSummary: calculateNutritionSummary(),
     getLogsByMealType,
-    addFoodToLog,
     updateFoodLog,
     deleteFoodLog,
     saveMeal,
@@ -303,6 +309,8 @@ export const useFoodLog = (selectedDate) => {
     clearSuccessMessage,
     clearErrorMessage,
     refreshGoals: loadGoals,
-    refreshLogs: loadFoodLogs
+    refreshLogs: loadFoodLogs,
+    favoriteFoodIds,
+    toggleFavoriteId
   };
 };

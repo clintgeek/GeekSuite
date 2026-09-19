@@ -48,6 +48,87 @@ const CONFIDENCE = {
 /** How many of the user's own foods to hold in the personal index. */
 const PERSONAL_INDEX_LIMIT = Number.parseInt(process.env.PERSONAL_INDEX_LIMIT || '200', 10);
 
+/**
+ * How long `fetchCandidates` waits on any ONE leg before moving on without it.
+ *
+ * WHY THIS EXISTS — read before changing the number
+ * ---------------------------------------------------
+ * `fetchCandidates` fans four independent lookups out with `Promise.allSettled`,
+ * which by definition waits for the slowest one. Under normal operation every
+ * leg answers in well under a second (measured live, 2026-09-19: full search
+ * including real network calls to FatSecret/USDA/OpenFoodFacts/CalorieNinjas
+ * ran 0.6–2.4s end to end). But each leg's OWN worst case is much larger and
+ * is not, and should not be, this file's problem to fix:
+ *   - `searchLocalDB` (Mongo): `serverSelectionTimeoutMS: 5000` is set in
+ *     `config/database.js`. A `find()` issued while the driver cannot select a
+ *     server pays that in full; confirmed live against a black-holed host
+ *     (2026-09-19): a single stalled attempt takes ~5000ms, and the ~10s
+ *     figure measured against production that night is consistent with two
+ *     such stalls back to back (an initial attempt plus the driver's default
+ *     one-time read retry) — a connectivity hiccup, not a slow query. The text
+ *     index this function relies on (`{name:'text', brand:'text'}`,
+ *     `packages/schemas/fitnessgeek/foodItem.js`) is confirmed present and
+ *     confirmed to be what Mongo's planner actually uses
+ *     (`planSummary: "IXSCAN {_fts:'text', _ftsx:1}"`, mongod's own slow-query
+ *     log) — the index is not the problem, and this constant is not a
+ *     substitute for one being missing.
+ *   - `fatSecretService` has no circuit breaker (only usda/openfoodfacts/
+ *     calorieninjas do, see `lib/breakers.js`) and its own axios timeout is
+ *     10s — a slow FatSecret response is a full 10s today with nothing here
+ *     to stop it.
+ *   - `foodApiService` / `calorieNinjasService` are behind opossum breakers
+ *     with a 6s timeout each (`lib/breakers.js`), which already caps them
+ *     below this deadline in the closed/half-open state.
+ *
+ * So this is a CEILING on the fan-out, not a fix for any one leg: whichever
+ * leg hasn't answered by the deadline is treated exactly like a leg that
+ * already failed — `fetchCandidates` already tolerates that today (a
+ * rejected/empty leg just contributes no candidates; see `foodRanker.js`,
+ * which scores whatever candidate set it's handed and has no "all four
+ * sources must answer" assumption). The slow call itself is NOT cancelled —
+ * it keeps running in the background so its own `cacheService.wrap` (7-day
+ * Redis TTL on every one of the three external services) still warms the
+ * cache for the next person who asks, even though this request didn't wait
+ * for it.
+ *
+ * 5000ms was picked to match the deliberate 5s "fail fast" contract already
+ * expressed by `serverSelectionTimeoutMS` in `config/database.js`, and sits
+ * comfortably above every normal-path timing measured live (see above) —
+ * it should never fire for a healthy request.
+ */
+const FETCH_LEG_DEADLINE_MS = Number.parseInt(process.env.FOOD_SEARCH_LEG_DEADLINE_MS || '5000', 10);
+
+/**
+ * Race `promise` against a `ms` timer. If the timer wins, resolve to
+ * `fallback` — the original promise is left running (not cancelled, Promises
+ * can't be) so its side effects (notably, upstream services' own Redis
+ * caching) still land. A `.catch` is attached to the original so a rejection
+ * that arrives after the deadline doesn't surface as an unhandled rejection.
+ *
+ * @param {Promise<any>} promise
+ * @param {number} ms
+ * @param {any} fallback
+ * @param {string} label - for the timeout log line, so a slow leg is visible
+ *   in production without needing to reproduce it.
+ * @returns {Promise<any>}
+ */
+function withDeadline(promise, ms, fallback, label) {
+  let timer;
+  const timeout = new Promise((resolve) => {
+    timer = setTimeout(() => {
+      logger.warn({ label, ms }, 'Food search leg missed its deadline — continuing without it');
+      resolve(fallback);
+    }, ms);
+  });
+
+  // However this resolves, the original promise's own errors are ours to
+  // swallow once we've stopped waiting on it — it is still running for its
+  // caching side effects, not for its return value.
+  promise.catch(() => {});
+
+  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+}
+
 class UnifiedFoodService {
   constructor() {
     this.usdaApiKey = process.env.USDA_API_KEY;
@@ -339,11 +420,20 @@ class UnifiedFoodService {
     // breakers. The old generic path called those two upstreams directly over
     // axios instead — no cache, no breaker — which is most of why a
     // multi-word search cost 3–5 seconds every single time.
+    //
+    // Each leg is additionally raced against FETCH_LEG_DEADLINE_MS (see its
+    // comment above) so that ONE stuck leg — a Mongo server-selection stall,
+    // FatSecret's un-breakered 10s axios timeout — can no longer force every
+    // search to wait for the worst case. `Promise.allSettled` still runs
+    // underneath: a leg that misses its deadline just contributes `[]` here,
+    // exactly as a leg that outright failed already did before this change.
     const settled = await Promise.allSettled([
-      this.searchLocalDB(searchText, fetchLimit, userId),
-      fatSecretService.searchFoods(searchText, fetchLimit),
-      foodApiService.searchFoods(searchText, fetchLimit),
-      useCalorieNinjas ? calorieNinjasService.searchFoods(searchText) : Promise.resolve([])
+      withDeadline(this.searchLocalDB(searchText, fetchLimit, userId), FETCH_LEG_DEADLINE_MS, [], 'searchLocalDB'),
+      withDeadline(fatSecretService.searchFoods(searchText, fetchLimit), FETCH_LEG_DEADLINE_MS, [], 'fatSecret'),
+      withDeadline(foodApiService.searchFoods(searchText, fetchLimit), FETCH_LEG_DEADLINE_MS, [], 'foodApi'),
+      useCalorieNinjas
+        ? withDeadline(calorieNinjasService.searchFoods(searchText), FETCH_LEG_DEADLINE_MS, [], 'calorieNinjas')
+        : Promise.resolve([])
     ]);
 
     const [local, fatsecret, external, cn] = settled.map((r) =>

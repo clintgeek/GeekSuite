@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -33,6 +33,20 @@ const FoodLogItem = ({
   const theme = useTheme();
   const [isFavorite, setIsFavorite] = useState(initialFavorite);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
+
+  // Bug this fixes: `isFavorite` used to default to false and NOTHING ever
+  // passed real data in (MealSection rendered this with no favourite prop at
+  // all), so every star rendered unfavourited regardless of truth and
+  // tapping it always called addFavorite, never removeFavorite. The parent
+  // now supplies real state (useFoodLog.js's `favoriteFoodIds`), but it can
+  // arrive AFTER this component's first render — favourites load
+  // asynchronously and separately from the logs themselves. `useState`'s
+  // initializer only runs once, so without this effect a food that turns out
+  // to be favourited would render its star unfilled forever once the initial
+  // (pre-load) `false` had already been committed to state.
+  useEffect(() => {
+    setIsFavorite(initialFavorite);
+  }, [initialFavorite]);
 
   // Swipe state
   const [translateX, setTranslateX] = useState(0);
@@ -162,7 +176,20 @@ const FoodLogItem = ({
 
     return (
       <Box sx={{ position: 'relative', overflow: 'hidden', borderRadius: '12px' }}>
-        {/* Edit action (left side, revealed on swipe right) */}
+        {/* Edit action (left side, revealed on swipe right).
+            This box (and its Delete sibling below) sits at rest with
+            opacity 0 but was still IN the layout and still absolutely
+            positioned over the real content, with no `pointer-events: none`
+            to say otherwise. z-index put the real Edit/Delete buttons above
+            it for a human's pointer, but this box shares the same icon (and
+            so the same MUI `data-testid="EditIcon"`) and comes first in DOM
+            order — so `page.locator('[data-testid="EditIcon"]').first()`
+            (the mobile harness's 26-edit-log-dialog scene) always resolved
+            to this invisible, non-swiped copy, whose own click handler only
+            does anything once a real swipe has actually revealed it. Gating
+            pointer-events on the same condition as its visibility closes
+            that: at rest it's genuinely inert, and it still intercepts (and
+            fires) exactly as before once a swipe reveals it. */}
         <Box
           onClick={() => handleSwipeAction('edit')}
           sx={{
@@ -176,6 +203,7 @@ const FoodLogItem = ({
             justifyContent: 'center',
             backgroundColor: theme.palette.primary.main,
             opacity: translateX > 0 ? 1 : 0,
+            pointerEvents: translateX > 0 ? 'auto' : 'none',
             transition: 'opacity 0.15s ease',
             cursor: 'pointer',
             zIndex: 0
@@ -203,6 +231,7 @@ const FoodLogItem = ({
             justifyContent: 'center',
             backgroundColor: '#ef4444',
             opacity: translateX < 0 ? 1 : 0,
+            pointerEvents: translateX < 0 ? 'auto' : 'none',
             transition: 'opacity 0.15s ease',
             cursor: 'pointer',
             zIndex: 0

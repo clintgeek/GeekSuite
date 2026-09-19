@@ -129,9 +129,17 @@ const EditLogDialog = ({
                   {food_item.name}
                 </Typography>
                 <Box sx={{ mt: 0.5 }}>
+                  {/* These fields hold PER-SERVING numbers — the same object
+                      the "Nutrition for N servings" preview below multiplies
+                      by `servings`. Plain "Calories" here reads as the total
+                      someone remembers eating, and typing that total with
+                      servings > 1 silently doubles (or worse) what actually
+                      gets saved. The qualifier makes the units explicit at
+                      the point of entry instead of only in the preview. */}
                   <NutritionInputs
                     values={nutrition}
                     onChange={(field, val) => setNutritionField(field, val)}
+                    qualifier=" (per serving)"
                   />
                 </Box>
               </Box>

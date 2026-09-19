@@ -378,7 +378,7 @@ const Profile = () => {
             />
             <TextField
               label="Height"
-              placeholder="5'11"
+              placeholder={"5'11\""}
               value={editData.height}
               onChange={(e) => setEditData({ ...editData, height: e.target.value })}
             />

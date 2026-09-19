@@ -4,11 +4,6 @@ A clean, reusable component library for food logging features that matches the D
 
 ## Components
 
-### `FoodLogHeader`
-- **Purpose**: Subtle header with date display (no obvious titles)
-- **Props**: `selectedDate`, `formatDate`
-- **Style**: Matches DashboardHeader with TodayIcon and date
-
 ### `DateNavigator`
 - **Purpose**: Date navigation with previous/next buttons
 - **Props**: `selectedDate`, `onPreviousDay`, `onNextDay`, `formatDate`
@@ -60,35 +55,34 @@ A clean, reusable component library for food logging features that matches the D
 
 ```jsx
 import {
-  FoodLogHeader,
   DateNavigator,
-  FoodLogLayout,
   AddFoodDialog,
   NutritionSummary,
   MealSection
 } from '../components/FoodLog';
 import { useFoodLog } from '../hooks/useFoodLog';
+import { useFoodLogging } from '../hooks/useFoodLogging';
 
-// Use in pages
+// Use in pages. `useFoodLog` owns the log list, goals and favourites;
+// `useFoodLogging` owns logging-and-undo (logItems/undoLogs/describeMeal) —
+// see FoodLog.jsx for how the two are composed together.
 const {
   loading,
-  successMessage,
-  errorMessage,
   nutritionSummary,
   getLogsByMealType,
-  addFoodToLog,
-  clearSuccessMessage,
-  clearErrorMessage
+  favoriteFoodIds,
+  toggleFavoriteId
 } = useFoodLog(selectedDate);
 
-<FoodLogLayout loading={loading} successMessage={successMessage}>
-  <FoodLogHeader selectedDate={date} formatDate={formatDate} />
-  <DateNavigator {...dateProps} />
-  <NutritionSummary summary={nutritionSummary} />
-  <MealSection {...mealProps} />
-  <AddFoodDialog {...dialogProps} />
-</FoodLogLayout>
+<DateNavigator {...dateProps} />
+<NutritionSummary summary={nutritionSummary} />
+<MealSection {...mealProps} favoriteFoodIds={favoriteFoodIds} onFavoriteChange={toggleFavoriteId} />
+<AddFoodDialog {...dialogProps} />
 ```
+
+Note: this doc previously described a `FoodLogLayout` wrapper and a
+`FoodLogHeader` component; neither exists in the current tree (`FoodLogHeader`
+was deleted as dead code — nothing imported it, see git history for details).
 
 ## Architecture Benefits
 
