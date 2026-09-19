@@ -19,14 +19,33 @@ import { localDateString } from '@geeksuite/utils';
 import AddBPDialog from './AddBPDialog.jsx';
 import DateField from '../primitives/DateField.jsx';
 import { categorizeBP } from '../../utils/bpUtils.js';
+import { nowLocalTime, combineDateTimeToISO } from './bpTimeUtils.js';
 
-const QuickAddBP = ({ onAdd, unit = "mmHg", existingTodayBP = null }) => {
+// Mirrors `bloodPressureBounds` in `@geeksuite/schemas/fitnessgeek/bloodPressure.js`.
+// See AddBPDialog.jsx's copy of this comment — same reason, same numbers.
+const SYS_BOUNDS = { min: 60, max: 300 };
+const DIA_BOUNDS = { min: 30, max: 200 };
+const PULSE_BOUNDS = { min: 30, max: 250 };
+
+/**
+ * QuickAddBP — the desktop inline "add" card, plus the mobile FAB → dialog.
+ *
+ * `existingTodayBP` is gone. It warned about a restriction — one reading per
+ * calendar day — that the backend no longer enforces (see AddBPDialog.jsx's
+ * header): a home cuff is read morning and evening, and the old warning
+ * would fire on exactly that normal second entry.
+ */
+const QuickAddBP = ({ onAdd, unit = "mmHg" }) => {
   const theme = useTheme();
   const [showDialog, setShowDialog] = useState(false);
   const [systolic, setSystolic] = useState('');
   const [diastolic, setDiastolic] = useState('');
   const [pulse, setPulse] = useState('');
   const [date, setDate] = useState(localDateString());
+  // Defaults to right now, same as the mobile dialog — see AddBPDialog.jsx's
+  // `blankForm`. The common case (log a reading just taken) never touches
+  // date or time at all.
+  const [time, setTime] = useState(nowLocalTime());
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -57,13 +76,13 @@ const QuickAddBP = ({ onAdd, unit = "mmHg", existingTodayBP = null }) => {
       return;
     }
 
-    if (systolicNum < 70 || systolicNum > 200) {
-      setError('Systolic should be between 70-200 mmHg');
+    if (systolicNum < SYS_BOUNDS.min || systolicNum > SYS_BOUNDS.max) {
+      setError(`Systolic should be between ${SYS_BOUNDS.min}-${SYS_BOUNDS.max} mmHg`);
       return;
     }
 
-    if (diastolicNum < 40 || diastolicNum > 130) {
-      setError('Diastolic should be between 40-130 mmHg');
+    if (diastolicNum < DIA_BOUNDS.min || diastolicNum > DIA_BOUNDS.max) {
+      setError(`Diastolic should be between ${DIA_BOUNDS.min}-${DIA_BOUNDS.max} mmHg`);
       return;
     }
 
@@ -72,8 +91,8 @@ const QuickAddBP = ({ onAdd, unit = "mmHg", existingTodayBP = null }) => {
       return;
     }
 
-    if (pulse && (pulseNum < 40 || pulseNum > 200)) {
-      setError('Pulse should be between 40-200 bpm');
+    if (pulse && (pulseNum < PULSE_BOUNDS.min || pulseNum > PULSE_BOUNDS.max)) {
+      setError(`Pulse should be between ${PULSE_BOUNDS.min}-${PULSE_BOUNDS.max} bpm`);
       return;
     }
 
@@ -83,7 +102,8 @@ const QuickAddBP = ({ onAdd, unit = "mmHg", existingTodayBP = null }) => {
         systolic: systolicNum,
         diastolic: diastolicNum,
         pulse: pulseNum,
-        date: date
+        date,
+        measured_at: combineDateTimeToISO(date, time),
       });
 
       // Reset form
@@ -91,6 +111,9 @@ const QuickAddBP = ({ onAdd, unit = "mmHg", existingTodayBP = null }) => {
       setDiastolic('');
       setPulse('');
       setDate(localDateString());
+      setTime(nowLocalTime());
+    } catch (err) {
+      setError(err.message || 'Failed to add blood pressure reading');
     } finally {
       setLoading(false);
     }
@@ -132,24 +155,6 @@ const QuickAddBP = ({ onAdd, unit = "mmHg", existingTodayBP = null }) => {
               Quick Add Blood Pressure
             </Typography>
           </Box>
-
-          {existingTodayBP && (
-            <Box sx={{
-              backgroundColor: theme.palette.info.light,
-              borderRadius: 1,
-              p: 1.5,
-              mb: 2,
-              border: `1px solid ${theme.palette.info.main}`
-            }}>
-              <Typography variant="body2" sx={{ color: theme.palette.info.contrastText, fontWeight: 500 }}>
-                📝 You already have a reading for today: <strong>{existingTodayBP.systolic}/{existingTodayBP.diastolic}</strong>
-                {existingTodayBP.pulse && ` (pulse: ${existingTodayBP.pulse})`}
-              </Typography>
-              <Typography variant="caption" sx={{ color: theme.palette.info.contrastText }}>
-                Adding a new reading will replace the existing one.
-              </Typography>
-            </Box>
-          )}
 
           <form onSubmit={handleSubmit}>
             <Grid container spacing={2} alignItems="center">
@@ -195,11 +200,24 @@ const QuickAddBP = ({ onAdd, unit = "mmHg", existingTodayBP = null }) => {
                 />
               </Grid>
 
-              <Grid xs={12} sm={3}>
+              <Grid xs={12} sm={2}>
                 <DateField fullWidth value={date} onChange={setDate} size="small" />
               </Grid>
 
-              <Grid xs={12} sm={3}>
+              <Grid xs={12} sm={2}>
+                <TextField
+                  fullWidth
+                  label="Time"
+                  type="time"
+                  value={time}
+                  onChange={(e) => setTime(e.target.value)}
+                  size="small"
+                  InputLabelProps={{ shrink: true }}
+                  inputProps={{ step: 60 }}
+                />
+              </Grid>
+
+              <Grid xs={12} sm={2}>
                 <Button
                   type="submit"
                   variant="contained"
@@ -248,7 +266,6 @@ const QuickAddBP = ({ onAdd, unit = "mmHg", existingTodayBP = null }) => {
         open={showDialog}
         onClose={() => setShowDialog(false)}
         onAdd={onAdd}
-        existingTodayBP={existingTodayBP}
       />
     </>
   );

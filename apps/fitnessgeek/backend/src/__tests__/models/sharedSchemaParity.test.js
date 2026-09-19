@@ -148,6 +148,7 @@ const PAIRS = [
       'diastolic',
       'pulse',
       'log_date',
+      'measured_at',
       'notes',
       'created_at',
       'updated_at',

@@ -23,9 +23,10 @@ import { SectionLabel, DisplayHeading, SuspenseSurface } from '../components/pri
 import BPInsights from '../components/BloodPressure/BPInsights.jsx';
 import QuickAddBP from '../components/BloodPressure/QuickAddBP.jsx';
 import BPLogList from '../components/BloodPressure/BPLogList.jsx';
+import AddBPDialog from '../components/BloodPressure/AddBPDialog.jsx';
 import { bpService } from '../services/bpService.js';
 import { fitnessGeekService } from '../services/fitnessGeekService.js';
-import { localDateString, utcDateString } from '@geeksuite/utils';
+import { localDateString } from '@geeksuite/utils';
 import logger from '../utils/logger.js';
 
 // Charts and the report are lazy: between them they pulled Nivo (line + pie,
@@ -179,7 +180,8 @@ const BloodPressure = () => {
         systolic: bpData.systolic,
         diastolic: bpData.diastolic,
         pulse: bpData.pulse,
-        date: bpData.date
+        date: bpData.date,
+        measured_at: bpData.measured_at
       });
 
       if (response.success) {
@@ -190,18 +192,64 @@ const BloodPressure = () => {
         notify(response.message || 'Failed to add blood pressure reading', { tone: 'error' });
       }
     } catch (error) {
-      // Handle specific error cases
-      if (error.message && error.message.includes('already exists for this date')) {
-        const todayBP = getTodayBP();
-        if (todayBP) {
-          notify(`You already have a blood pressure reading for today (${todayBP.systolic}/${todayBP.diastolic}${todayBP.pulse ? `, pulse: ${todayBP.pulse}` : ''}). You can update the existing entry or delete it first.`, { tone: 'error' });
-        } else {
-          notify('You already have a blood pressure reading for today. You can update the existing entry or delete it first.', { tone: 'error' });
-        }
+      // The old "one reading per calendar day" rejection is gone — multiple
+      // readings a day are the normal case now (see the shared schema's
+      // header). What can still collide is the exact same instant: a
+      // retried request or a double-tap hits the `(userId, measured_at)`
+      // unique index and comes back as this specific, already-recorded
+      // reading, not "you already logged today".
+      if (error.message && error.message.includes('already been recorded')) {
+        notify('This exact reading has already been recorded.', { tone: 'error' });
       } else {
         notify('Failed to add blood pressure reading', { tone: 'error' });
       }
       logger.error('Error adding BP reading:', error);
+    }
+  };
+
+  // Edit-in-place: `bpService.updateBPLog` already existed but nothing in the
+  // frontend called it — a typo meant delete-and-retype, which also lost the
+  // reading's place in the day (see BPLogList.jsx's edit affordance).
+  // `editingLog` holds the row being edited; a separate AddBPDialog instance
+  // (not QuickAddBP's "add" one) opens pre-filled from it.
+  const [editingLog, setEditingLog] = useState(null);
+
+  const handleEditBP = (log) => {
+    setEditingLog(log);
+  };
+
+  const handleCloseEdit = () => {
+    setEditingLog(null);
+  };
+
+  const handleSaveEditBP = async (bpData) => {
+    const id = editingLog?.id || editingLog?._id;
+    try {
+      const response = await bpService.updateBPLog(id, {
+        systolic: bpData.systolic,
+        diastolic: bpData.diastolic,
+        pulse: bpData.pulse,
+        date: bpData.date,
+        measured_at: bpData.measured_at
+      });
+
+      if (response.success) {
+        await loadBPData();
+        notify('Blood pressure reading updated successfully!', { tone: 'success' });
+        setEditingLog(null);
+      } else {
+        notify(response.message || 'Failed to update blood pressure reading', { tone: 'error' });
+      }
+    } catch (error) {
+      if (error.message && error.message.includes('already been recorded')) {
+        notify('This exact reading has already been recorded.', { tone: 'error' });
+      } else {
+        notify('Failed to update blood pressure reading', { tone: 'error' });
+      }
+      logger.error('Error updating BP reading:', error);
+      // Re-throw so AddBPDialog's own try/catch keeps the dialog open and
+      // shows the error inline, instead of closing on a failed save.
+      throw error;
     }
   };
 
@@ -230,16 +278,6 @@ const BloodPressure = () => {
     return sortedLogs[0];
   };
 
-  const getTodayBP = () => {
-    const today = localDateString();
-    return bpLogs.find(log => {
-      // log_date is stored as a UTC-midnight calendar date (the local day the
-      // reading was logged on), so it must be read back with utcDateString —
-      // localDateString(new Date(log.log_date)) rolls it back a day west of UTC.
-      return utcDateString(log.log_date) === today;
-    });
-  };
-
   if (loading) {
     return (
       <Box sx={{
@@ -255,7 +293,6 @@ const BloodPressure = () => {
   }
 
   const currentBP = getCurrentBP();
-  const todayBP = getTodayBP();
 
   return (
     <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 960, mx: 'auto' }}>
@@ -358,16 +395,28 @@ const BloodPressure = () => {
       {/* Quick Add and Log List Grid */}
       <Grid container spacing={3}>
         <Grid item xs={12}>
-          <QuickAddBP onAdd={handleAddBP} unit="mmHg" existingTodayBP={todayBP} />
+          <QuickAddBP onAdd={handleAddBP} unit="mmHg" />
         </Grid>
         <Grid item xs={12} sx={{ width: '100%' }}>
           <BPLogList
             logs={bpLogs}
             onDelete={handleDeleteBP}
+            onEdit={handleEditBP}
             unit="mmHg"
           />
         </Grid>
       </Grid>
+
+      {/* Edit dialog — a separate instance from QuickAddBP's own "add"
+          dialog, opened from a BPLogList row and pre-filled from it. See
+          `handleEditBP` above. */}
+      <AddBPDialog
+        open={Boolean(editingLog)}
+        onClose={handleCloseEdit}
+        onAdd={handleSaveEditBP}
+        mode="edit"
+        initialValues={editingLog}
+      />
 
       {/* BP Report Dialog */}
       {showReport && (

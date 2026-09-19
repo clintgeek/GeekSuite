@@ -46,6 +46,62 @@
  * NOTE — `userId`, not `user_id`. Same pre-existing inconsistency as `Weight`;
  * see that module's header. Left alone deliberately.
  *
+ * TWO DATES, NOT ONE — READ BEFORE TOUCHING EITHER
+ * --------------------------------------------------
+ * `measured_at` is an INSTANT: the exact moment the cuff was read, stored as
+ * a full ISO-8601 UTC value. `log_date` is a CALENDAR DATE: UTC midnight of
+ * the day the reading counts for. See `DOCS/THE_CONTEXT.md` §3.1 and
+ * `bodyComposition.js`'s header, which solved this identical split first —
+ * these are two different kinds of date and the suite is strict about not
+ * mixing them.
+ *
+ * Added 2026-09 alongside two other fixes to the same headline problem
+ * (`DOCS/SUITE_TODO.md`): the controller used to `findOne` on `(userId,
+ * log_date)` and reject a second reading the SAME DAY with "Blood pressure
+ * log already exists for this date" — but this monitor is read morning AND
+ * evening, by hand, and an evening reading was simply turned away. Multiple
+ * readings a day are the normal case, `log_date` alone cannot tell them
+ * apart (it never carried a time), and `measured_at` is what now does:
+ * ordering, dedupe, and "which one was the evening reading" all read off it.
+ *
+ * UNLIKE `bodyComposition.js`'s `measured_at`, THIS ONE DEFAULTS TO `Date.now`
+ * ----------------------------------------------------------------------------
+ * `BodyComposition.measured_at` deliberately has NO default: it must equal
+ * the instant printed on an uploaded scan report, and defaulting it to "now"
+ * would silently record the wrong instant (when the file was uploaded, not
+ * when the scan was taken). A blood-pressure reading has no such report to
+ * misread — the moment it is entered IS, for all practical purposes, the
+ * moment the cuff was read, so "now" is the correct instant when the caller
+ * doesn't supply one, not a fallback standing in for a better answer.
+ *
+ * This also matters for the OTHER writer: basegeek's `addBloodPressure`
+ * mutation (`apps/basegeek/packages/api/src/graphql/fitnessgeek/resolvers.js`)
+ * spreads its `input` straight into `new BloodPressure({...input, userId:
+ * user.id}).save()` with no computed fields at all — unlike fitnessgeek's
+ * controller, it has no opportunity to fill in `measured_at` before
+ * construction. A schema-level default is what keeps that mutation working
+ * unmodified rather than failing required-field validation on every call.
+ *
+ * THE UNIQUE INDEX IS `(userId, measured_at)`, NOT `(userId, log_date)`
+ * ------------------------------------------------------------------------
+ * `log_date` used to be the day-scoped rejection's key, and rejecting a
+ * second reading per day was exactly the bug being fixed — so the day can no
+ * longer be the uniqueness boundary. `measured_at` is: two ingests (or a
+ * retried request, or a double-tap) that read the same instant off the same
+ * event collide here instead of creating a duplicate row, the same shape as
+ * `bodyComposition.js`'s dedupe index. The non-unique `(userId, log_date)`
+ * index stays, unchanged, for the day view.
+ *
+ * BOUNDS ARE TYPO GUARDS, NOT A CLINICAL RANGE
+ * -----------------------------------------------
+ * AHA hypertensive crisis starts at 180/120, and a real crisis reading — the
+ * exact case `classifyBloodPressure` exists to flag — can run higher still.
+ * The bounds below exist to catch a fat-fingered entry (an extra digit, a
+ * transposed pair), not to gate on plausibility inside the danger zone; a
+ * genuine emergency reading must be storable. Severity interpretation is
+ * `classifyBloodPressure`'s job (and the frontend's `bpUtils.js`), not the
+ * bounds'.
+ *
  * WHY `mongoose` IS A PARAMETER, AND WHY THIS MODULE IS CJS
  * --------------------------------------------------------
  * Same reasons as `weight.js` and `userSettings.js`: the consumers own their
@@ -59,9 +115,12 @@
  * zod request validator. Frozen so a consumer cannot mutate the contract.
  */
 const bloodPressureBounds = Object.freeze({
-  systolic: Object.freeze({ min: 70, max: 200 }),
-  diastolic: Object.freeze({ min: 40, max: 130 }),
-  pulse: Object.freeze({ min: 40, max: 200 }),
+  // Typo guards, not a clinical range — see the header. A genuine
+  // hypertensive-crisis reading (>180/120, AHA) must be storable, so these
+  // ceilings sit well above it.
+  systolic: Object.freeze({ min: 60, max: 300 }),
+  diastolic: Object.freeze({ min: 30, max: 200 }),
+  pulse: Object.freeze({ min: 30, max: 250 }),
   notes: Object.freeze({ maxlength: 500 }),
 });
 
@@ -130,6 +189,15 @@ function bloodPressureDefinition(mongoose) {
       required: true,
       default: Date.now
     },
+    // The INSTANT the reading was taken — see the header before conflating
+    // this with `log_date`. Defaults to "now", unlike `BodyComposition`'s
+    // `measured_at`; see the header for why that's the right default here
+    // and not there.
+    measured_at: {
+      type: Date,
+      required: true,
+      default: Date.now
+    },
     notes: {
       type: String,
       maxlength: bloodPressureBounds.notes.maxlength,
@@ -163,7 +231,13 @@ const bloodPressureOptions = {
 function createBloodPressureSchema(mongoose) {
   const schema = new mongoose.Schema(bloodPressureDefinition(mongoose), bloodPressureOptions);
 
-  // Compound index for efficient queries.
+  // The dedupe key — see the header. Two writes for the same user at the
+  // same instant collide here instead of creating a duplicate row. NOT
+  // `log_date`: rejecting a second reading per calendar day was the bug this
+  // field exists to fix.
+  schema.index({ userId: 1, measured_at: 1 }, { unique: true });
+
+  // Compound index for efficient day-view queries. Non-unique, unchanged.
   schema.index({ userId: 1, log_date: -1 });
 
   // Virtual for formatted date.
