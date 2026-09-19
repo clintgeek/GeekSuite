@@ -133,6 +133,44 @@ export async function extractBodyCompUpload(uploadId) {
 }
 
 /**
+ * Run the spreadsheet import path against a previously stored upload — the
+ * Arboleaf app's own ".xlsx" history export (DOCS/BODY_COMPOSITION_INTAKE.md).
+ * No AI extraction and no confirm screen: every row runs the same arithmetic
+ * gate as `.../extract`, using the export's own derived columns as the
+ * witness, and the whole file's outcome comes back as one aggregate
+ * `{imported, skipped, failed}` rather than a single scan's status.
+ *
+ * Like `extractBodyCompUpload`, this only throws for a genuine transport/
+ * server failure — an unreadable workbook or a gate mismatch on some rows
+ * are still a 200 with counts a caller renders, not an exception.
+ *
+ * @param {string} uploadId
+ * @returns {Promise<{status: string, imported: number, skipped: number, failed: number, results: Array}>}
+ */
+export async function importBodyCompXlsx(uploadId) {
+  const response = await fetch(`/api/body-comp/uploads/${encodeURIComponent(uploadId)}/import-xlsx`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: { ...csrfHeaders('POST') },
+  });
+
+  let body = null;
+  try {
+    body = await response.json();
+  } catch {
+    // fall through to the generic error below
+  }
+
+  if (!response.ok || !body?.success) {
+    const error = new Error(body?.error?.message || 'Import failed.');
+    error.code = body?.error?.code || `HTTP_${response.status}`;
+    throw error;
+  }
+
+  return body.data;
+}
+
+/**
  * The partial-accept path (DOCS/BODY_COMPOSITION_INTAKE.md §6): called from
  * the confirm screen only when a `.../extract` mismatch came back with
  * `classification.safeToAccept === true` — the printed witness disagreed but

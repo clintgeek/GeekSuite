@@ -146,6 +146,21 @@ function derive(doc) {
       weightKg,
     ),
 
+    // The same measurement in pounds, for display.
+    //
+    // Litres is the right thing to STORE — it is the unit the device reports
+    // and the unit the PDF prints, so storing it means storing what was
+    // measured rather than a conversion of it. It is the wrong thing to SHOW
+    // someone whose every other figure on the page is in pounds: "59.4 L of
+    // body water" invites the reader to compare it against a weight in lb and
+    // quietly get it wrong.
+    //
+    // Not an independent measurement, so it is derived here rather than
+    // stored. Reproduces the spreadsheet export's own column exactly: 59.24 L
+    // -> 130.6 lb.
+    body_water_lb:
+      num(doc?.body_water_l) === null ? null : (doc.body_water_l * LITRES_TO_KG) / LB_TO_KG,
+
     // Katch-McArdle. Verified, not assumed: the device's printed 2105 kcal
     // reproduces to 2104 from lean mass alone, while Mifflin-St Jeor gives
     // 2331. Worth knowing, because it means the report's BMR carries no

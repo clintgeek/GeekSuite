@@ -259,3 +259,23 @@ describe('classifyMismatches — telling a bad number from a bad witness', () =>
     }
   });
 });
+
+describe('body water in pounds, for display', () => {
+  test('reproduces the spreadsheet export own column', () => {
+    // The 2026-09-18 export row: 59.24 L stored, 130.6 lb printed.
+    const d = derive({ ...SCAN, body_water_l: 130.6 * 0.45359237 });
+    expect(d.body_water_lb).toBeCloseTo(130.6, 1);
+  });
+
+  test('the reference scan converts consistently with its own percentage', () => {
+    const d = derive(SCAN);
+    // 59.4 L of water in a 317.2 lb body: the lb figure and the percentage
+    // must agree, or one of the two conversions is wrong.
+    expect(d.body_water_lb / SCAN.weight_value * 100).toBeCloseTo(d.body_water_pct, 6);
+  });
+
+  test('null in, null out — never a converted zero', () => {
+    const { body_water_l, ...noWater } = SCAN;
+    expect(derive(noWater).body_water_lb).toBeNull();
+  });
+});

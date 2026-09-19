@@ -41,9 +41,14 @@ import { validate, classifyMismatches } from '@geeksuite/schemas/fitnessgeek/bod
  * why ownership doesn't leak) and the same way again on a genuine read
  * failure (a 500).
  *
+ * Exported for reuse by `bodyCompImportController.js` (the spreadsheet
+ * import path) — the ownership/existence check is identical for both, and
+ * this is the one implementation of "does this upload exist and is it
+ * mine."
+ *
  * @returns {Promise<{ok: true, upload: object} | {ok: false, response: {status: number, body: object}}>}
  */
-async function readOwnedUpload(id, userId) {
+export async function readOwnedUpload(id, userId) {
   let upload;
   try {
     upload = await getUpload(id, userId);

@@ -8,6 +8,8 @@
 import { describe, test, expect, jest } from '@jest/globals';
 import express from 'express';
 import request from 'supertest';
+import fs from 'fs/promises';
+import path from 'path';
 
 const mod = (p) => new URL(p, import.meta.url).pathname;
 
@@ -36,6 +38,8 @@ function buildApp() {
 
 const REAL_PDF = Buffer.from('%PDF-1.4\n%test pdf content for staging\n', 'latin1');
 const NOT_A_REAL_FILE = Buffer.from('this is just plain text, not a pdf or image', 'utf8');
+// Same cwd-relative convention as bodyCompXlsxParser.test.js.
+const REAL_XLSX_PATH = path.resolve(process.cwd(), '../../../DOCS/body_comp.xlsx');
 
 describe('POST /share-target', () => {
   test('stages a valid file and 303-redirects to /scan-import with a stagedId', async () => {
@@ -60,6 +64,27 @@ describe('POST /share-target', () => {
     const location = new URL(res.headers.location, 'http://localhost');
     expect(location.searchParams.get('error')).toBe('unsupported_type');
     expect(location.searchParams.get('stagedId')).toBeNull();
+  });
+
+  // The coordinator's own scope addition: now that the Arboleaf ".xlsx"
+  // history export is the PRIMARY import path (manifest.json's share_target
+  // now advertises it), a shared export must stage successfully here too —
+  // the exact same file that a picked-file upload accepts
+  // (bodyCompImport.test.js), not rejected for being a zip the signature
+  // sniff alone can't identify (see fileSniff.js's header).
+  test('stages a REAL Arboleaf .xlsx export, not just PDF/image', async () => {
+    const buffer = await fs.readFile(REAL_XLSX_PATH);
+    const res = await request(buildApp())
+      .post('/share-target')
+      .attach('file', buffer, {
+        filename: 'body_comp.xlsx',
+        contentType: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      });
+
+    expect(res.status).toBe(303);
+    const location = new URL(res.headers.location, 'http://localhost');
+    expect(location.searchParams.get('error')).toBeNull();
+    expect(location.searchParams.get('stagedId')).toBeTruthy();
   });
 
   test('redirects with error=no_file when no file field is sent', async () => {

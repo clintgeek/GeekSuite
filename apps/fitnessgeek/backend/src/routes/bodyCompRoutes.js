@@ -9,6 +9,7 @@ import {
   createBodyCompUpload,
 } from '../controllers/bodyCompUploadController.js';
 import { extractBodyCompUpload, acceptBodyCompUpload } from '../controllers/bodyCompExtractController.js';
+import { importBodyCompXlsxUploadRoute } from '../controllers/bodyCompImportController.js';
 
 /**
  * @route GET /api/body-comp/share-staged/:id
@@ -58,5 +59,18 @@ router.post('/uploads/:id/extract', authenticateToken, extractBodyCompUpload);
  * @access Private
  */
 router.post('/uploads/:id/accept', authenticateToken, acceptBodyCompUpload);
+
+/**
+ * @route POST /api/body-comp/uploads/:id/import-xlsx
+ * @desc The spreadsheet import path (DOCS/BODY_COMPOSITION_INTAKE.md — the
+ *       Arboleaf app's own ".xlsx" history export). No AI extraction and no
+ *       confirm screen: every row runs the same arithmetic gate as the
+ *       vision path, using the export's own derived columns as the witness,
+ *       and only a row that verifies clean is saved. Returns aggregate
+ *       `{imported, skipped, failed}` counts across the whole file — see
+ *       bodyCompImportController.js.
+ * @access Private
+ */
+router.post('/uploads/:id/import-xlsx', authenticateToken, importBodyCompXlsxUploadRoute);
 
 export default router;

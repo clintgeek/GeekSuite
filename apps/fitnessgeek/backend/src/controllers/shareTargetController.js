@@ -52,7 +52,7 @@
 
 import multer from 'multer';
 import logger from '../config/logger.js';
-import { sniffContentType, ALLOWED_UPLOAD_MIME_TYPES } from '../services/fileSniff.js';
+import { sniffUploadContentType } from '../services/fileSniff.js';
 import { stageFile, consumeStagedFile } from '../services/shareTargetStaging.js';
 
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10MB — matches bookgeek's import limit
@@ -117,7 +117,14 @@ export async function receiveShareTarget(req, res) {
       return redirectTo(res, { error: 'no_file' });
     }
 
-    const mimeType = sniffContentType(file.buffer);
+    // Same combined sniff as the manual-upload endpoint
+    // (bodyCompUploadController.js) — a shared ".xlsx" (the Arboleaf history
+    // export, see bodyCompXlsxParser.js) must survive this path exactly the
+    // same way a picked one does. It's a zip, so the cheap signature check
+    // alone can't identify it; `sniffUploadContentType` falls through to
+    // actually opening the archive only when the signature check finds
+    // nothing (see fileSniff.js's header on why that split exists).
+    const mimeType = await sniffUploadContentType(file.buffer);
     if (!mimeType) {
       logger.warn(
         { declaredMimeType: file.mimetype, originalName: file.originalname, fieldName: file.fieldname },

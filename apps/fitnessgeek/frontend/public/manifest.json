@@ -51,6 +51,8 @@
             ".png",
             ".jpg",
             ".jpeg",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            ".xlsx",
             "application/octet-stream"
           ]
         }

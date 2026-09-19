@@ -14,7 +14,7 @@
 
 import multer from 'multer';
 import logger from '../config/logger.js';
-import { sniffContentType, ALLOWED_UPLOAD_MIME_TYPES } from '../services/fileSniff.js';
+import { sniffUploadContentType, ALLOWED_UPLOAD_MIME_TYPES, XLSX_MIME_TYPE } from '../services/fileSniff.js';
 import { saveUpload } from '../services/bodyCompUploadStorage.js';
 
 export const MAX_UPLOAD_BYTES = 10 * 1024 * 1024; // 10MB — matches bookgeek's import limit
@@ -62,7 +62,13 @@ export async function createBodyCompUpload(req, res) {
     // or the extension in req.file.originalname. See fileSniff.js docstring;
     // DOCS/screenshots/arboleaf.png in this repo is a real example of a
     // mislabeled extension (it's JPEG bytes).
-    const mimeType = sniffContentType(req.file.buffer);
+    //
+    // `sniffUploadContentType` covers both the original signature-only
+    // formats AND the Arboleaf ".xlsx" data export (bodyCompXlsxParser.js) —
+    // the latter needs opening the zip to confirm, since a bare zip
+    // signature can't distinguish a spreadsheet from any other archive (see
+    // fileSniff.js's header on why that's a separate, asynchronous check).
+    const mimeType = await sniffUploadContentType(req.file.buffer);
     if (!mimeType) {
       logger.warn(
         { declaredMimeType: req.file.mimetype, originalName: req.file.originalname, userId: req.user?.id },
@@ -72,7 +78,7 @@ export async function createBodyCompUpload(req, res) {
         success: false,
         error: {
           code: 'UNSUPPORTED_FILE_TYPE',
-          message: `Unsupported file type. Allowed: ${ALLOWED_UPLOAD_MIME_TYPES.join(', ')}.`,
+          message: `Unsupported file type. Allowed: ${[...ALLOWED_UPLOAD_MIME_TYPES, XLSX_MIME_TYPE].join(', ')}.`,
         },
       });
     }

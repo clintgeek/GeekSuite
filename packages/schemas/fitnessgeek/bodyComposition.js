@@ -174,6 +174,16 @@ const bodyCompositionBounds = Object.freeze({
 const BODY_COMPOSITION_SOURCES = Object.freeze([
   'arboleaf_pdf',
   'arboleaf_image',
+  // The Arboleaf app's own ".xlsx" data export — every stored primary read
+  // straight from a labelled column, no AI transcription anywhere in the
+  // path. Added 2026-09-18 once the export format was discovered; see
+  // DOCS/BODY_COMPOSITION_INTAKE.md and bodyCompXlsxImportService.js. This
+  // is now the PREFERRED path where available — a full history import in
+  // one file, with nothing for a vision model to misread — but
+  // 'arboleaf_pdf'/'arboleaf_image' remain first-class: not every user finds
+  // (or wants to hunt for) the export option, and a single fresh scan is
+  // still most easily shared as the report screen itself.
+  'arboleaf_xlsx',
   'manual',
 ]);
 
