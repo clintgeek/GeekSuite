@@ -14,6 +14,7 @@ import {
 import { useTheme } from '@mui/material/styles';
 import { toneForMode } from '@geeksuite/ui';
 import { displayCalendarDate, localDateString, utcDateString } from '@geeksuite/utils';
+import { categorizeBP } from '../../utils/bpUtils.js';
 import {
   Delete as DeleteIcon,
   MonitorHeart as BPIcon
@@ -23,14 +24,6 @@ const BPLogList = ({ logs, onDelete, unit = "mmHg" }) => {
   const theme = useTheme();
   // Status hues are tuned for dark tints; darken for legible text on light-mode tints.
   const statusTextColor = (color) => toneForMode(color, theme, { lightenBy: 0, darkenBy: 0.35 });
-  const getBPStatus = (systolic, diastolic) => {
-    // BP Categories based on American Heart Association guidelines
-    if (systolic < 120 && diastolic < 80) return { status: 'Normal', color: '#10b981' };
-    if (systolic < 130 && diastolic < 80) return { status: 'Elevated', color: '#f59e0b' };
-    if (systolic < 140 || diastolic < 90) return { status: 'Stage 1', color: '#f97316' };
-    if (systolic < 180 || diastolic < 120) return { status: 'Stage 2', color: '#ef4444' };
-    return { status: 'Crisis', color: '#dc2626' };
-  };
 
   // `log_date` is a CALENDAR date stored at UTC midnight, not an instant.
   // Rendering it with a plain `toLocaleDateString` showed the previous day for
@@ -88,7 +81,8 @@ const BPLogList = ({ logs, onDelete, unit = "mmHg" }) => {
 
         <List sx={{ p: 0, m: 0, width: '100%' }}>
           {sortedLogs.map((log) => {
-            const bpStatus = getBPStatus(log.systolic, log.diastolic);
+            const bpStatus = categorizeBP(log.systolic, log.diastolic);
+            const deleteLabel = `Delete the ${log.systolic}/${log.diastolic} ${unit} reading from ${formatDate(log.log_date)}`;
             // Compare the stored calendar day against the reader's calendar day —
             // `new Date(utcMidnight).toDateString()` is yesterday west of UTC, so
             // today's reading never read as today.
@@ -124,7 +118,7 @@ const BPLogList = ({ logs, onDelete, unit = "mmHg" }) => {
                         {log.systolic}/{log.diastolic} {unit}
                       </Typography>
                       <Chip
-                        label={bpStatus.status}
+                        label={bpStatus.stage}
                         size="small"
                         sx={{
                           backgroundColor: `${bpStatus.color}20`,
@@ -137,7 +131,7 @@ const BPLogList = ({ logs, onDelete, unit = "mmHg" }) => {
                     </Box>
                     <IconButton
                       edge="end"
-                      aria-label="delete"
+                      aria-label={deleteLabel}
                       onClick={() => onDelete(log.id || log._id)}
                       sx={{ color: 'error.main', p: 0.5 }}
                       size="small"
@@ -186,7 +180,7 @@ const BPLogList = ({ logs, onDelete, unit = "mmHg" }) => {
                   {/* Status Chip */}
                   <Box sx={{ flex: '0 0 auto' }}>
                     <Chip
-                      label={bpStatus.status}
+                      label={bpStatus.stage}
                       size="small"
                       sx={{
                         backgroundColor: `${bpStatus.color}20`,
@@ -213,7 +207,7 @@ const BPLogList = ({ logs, onDelete, unit = "mmHg" }) => {
                   <Box sx={{ flex: '0 0 auto' }}>
                     <IconButton
                       edge="end"
-                      aria-label="delete"
+                      aria-label={deleteLabel}
                       onClick={() => onDelete(log.id || log._id)}
                       sx={{ color: 'error.main' }}
                     >

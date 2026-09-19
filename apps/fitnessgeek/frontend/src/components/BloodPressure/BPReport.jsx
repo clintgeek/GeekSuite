@@ -90,11 +90,16 @@ const BPReport = ({ bpLogs, onClose }) => {
     // Sort by week start date (newest first)
     weeklyData.sort((a, b) => b.weekStart - a.weekStart);
 
-    // Calculate category counts
+    // Calculate category counts. Keep each stage's color alongside its count —
+    // that's the only way the summary render below can color a count by ITS
+    // OWN stage instead of reaching for a hardcoded categorizeBP(120, 80).
     const categoryCounts = {};
     sortedLogs.forEach(log => {
       const category = categorizeBP(log.systolic, log.diastolic);
-      categoryCounts[category.stage] = (categoryCounts[category.stage] || 0) + 1;
+      if (!categoryCounts[category.stage]) {
+        categoryCounts[category.stage] = { count: 0, color: category.color };
+      }
+      categoryCounts[category.stage].count++;
     });
 
     return {
@@ -172,8 +177,8 @@ const BPReport = ({ bpLogs, onClose }) => {
 
     markdown += `## Summary\n\n`;
     markdown += `- **Total Readings:** ${stats.totalReadings}\n`;
-    Object.entries(stats.categoryCounts).forEach(([category, count]) => {
-      markdown += `- **${category}:** ${count} days\n`;
+    Object.entries(stats.categoryCounts).forEach(([category, data]) => {
+      markdown += `- **${category}:** ${data.count} days\n`;
     });
     markdown += `\n`;
 
@@ -337,14 +342,14 @@ const BPReport = ({ bpLogs, onClose }) => {
               Summary
             </Typography>
             <Grid container spacing={2}>
-              {Object.entries(stats.categoryCounts).map(([category, count]) => (
+              {Object.entries(stats.categoryCounts).map(([category, data]) => (
                 <Grid item xs={6} sm={3} key={category}>
                   <Box sx={{ textAlign: 'center', p: 1 }}>
                     <Typography variant="h4" sx={{
                       fontWeight: 700,
-                      color: categorizeBP(120, 80).color
+                      color: data.color
                     }}>
-                      {count}
+                      {data.count}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
                       Days {category}

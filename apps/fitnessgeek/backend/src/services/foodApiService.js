@@ -73,7 +73,22 @@ class FoodApiService {
           api_key: this.usdaApiKey,
           query: query,
           pageSize: limit,
-          dataType: 'Foundation,SR Legacy,Survey (FNDDS)'
+          // `Survey (FNDDS)` has to arrive with its parentheses percent-encoded.
+          //
+          // USDA sits behind an nginx that rejects a raw `(` or `)` in the query
+          // string with a 400 and an HTML body — before the API is reached, which
+          // is why the error never looked like an API error. axios's default
+          // serializer leaves parens alone (they are sub-delims, legal per RFC
+          // 3986), so the request went out unencoded and came back 400 every
+          // single time.
+          //
+          // The catch below returns `[]` on error, so this failed SILENTLY:
+          // USDA — the authority for non-branded whole foods, the "banana"
+          // case — contributed nothing to any search, and the only symptom was
+          // thin results. Measured 2026-09-19: dropping the parens entirely
+          // returns 200, and so does this, so the dataset is kept rather than
+          // traded away for a passing request.
+          dataType: 'Foundation,SR Legacy,Survey %28FNDDS%29'
         },
         timeout: 10000
       }));
