@@ -12,21 +12,26 @@ import {
   Error as ErrorIcon
 } from '@mui/icons-material';
 import { parseISO, differenceInDays } from 'date-fns';
+import { categorizeBP } from '../../utils/bpUtils.js';
 
-// BP Categories based on AHA guidelines
+// Icons per stage. The category itself — name, color, thresholds — comes
+// from the one shared categoriser; this just decorates its output.
+const CATEGORY_ICONS = {
+  Normal: CheckIcon,
+  Elevated: WarningIcon,
+  'Stage 1': WarningIcon,
+  'Stage 2': ErrorIcon,
+  Crisis: ErrorIcon,
+  Unknown: HeartIcon,
+};
+
 const getBPCategory = (systolic, diastolic) => {
-  if (systolic < 120 && diastolic < 80) {
-    return { name: 'Normal', color: '#10b981', icon: CheckIcon };
-  } else if (systolic >= 120 && systolic < 130 && diastolic < 80) {
-    return { name: 'Elevated', color: '#f59e0b', icon: WarningIcon };
-  } else if ((systolic >= 130 && systolic < 140) || (diastolic >= 80 && diastolic < 90)) {
-    return { name: 'Stage 1 Hypertension', color: '#f97316', icon: WarningIcon };
-  } else if (systolic >= 140 || diastolic >= 90) {
-    return { name: 'Stage 2 Hypertension', color: '#ef4444', icon: ErrorIcon };
-  } else if (systolic >= 180 || diastolic >= 120) {
-    return { name: 'Hypertensive Crisis', color: '#dc2626', icon: ErrorIcon };
-  }
-  return { name: 'Unknown', color: '#78716C', icon: HeartIcon };
+  const category = categorizeBP(systolic, diastolic);
+  return {
+    name: category.stage,
+    color: category.color,
+    icon: CATEGORY_ICONS[category.stage] || HeartIcon
+  };
 };
 
 const BPInsights = ({ bpLogs = [] }) => {

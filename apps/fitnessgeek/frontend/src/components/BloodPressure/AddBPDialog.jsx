@@ -4,8 +4,7 @@ import {
   TextField,
   Box,
   Typography,
-  Alert,
-  useTheme
+  Alert
 } from '@mui/material';
 import {
   MonitorHeart as BPIcon,
@@ -14,10 +13,9 @@ import {
 import { localDateString } from '@geeksuite/utils';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
 import DateField from '../primitives/DateField.jsx';
+import { categorizeBP } from '../../utils/bpUtils.js';
 
 const AddBPDialog = ({ open, onClose, onAdd, existingTodayBP = null }) => {
-  const theme = useTheme();
-
   const [systolic, setSystolic] = useState('');
   const [diastolic, setDiastolic] = useState('');
   const [pulse, setPulse] = useState('');
@@ -104,13 +102,12 @@ const AddBPDialog = ({ open, onClose, onAdd, existingTodayBP = null }) => {
 
     if (isNaN(sys) || isNaN(dia)) return null;
 
-    // BP Categories based on American Heart Association guidelines
-    if (sys < 120 && dia < 80) return { status: 'Normal', color: theme.palette.success.main };
-    if (sys < 130 && dia < 80) return { status: 'Elevated', color: theme.palette.warning.main };
-    if (sys < 140 && dia < 90) return { status: 'High Normal', color: theme.palette.warning.main };
-    if (sys < 160 && dia < 100) return { status: 'Stage 1', color: theme.palette.error.main };
-    if (sys < 180 && dia < 110) return { status: 'Stage 2', color: theme.palette.error.dark };
-    return { status: 'Crisis', color: '#b71c1c' };
+    // The one shared categoriser — same bands, same order, as the saved row
+    // will get once it lands in BPLogList/BPInsights/BPReport. No local
+    // "High Normal" band here; that band never existed in the AHA guidelines
+    // and let the live-typing category disagree with what got saved.
+    const category = categorizeBP(sys, dia);
+    return { status: category.stage, color: category.color };
   };
 
   const bpStatus = getBPStatus();

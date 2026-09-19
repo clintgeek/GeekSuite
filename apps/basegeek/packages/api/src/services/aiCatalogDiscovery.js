@@ -1033,9 +1033,26 @@ export async function writeAlive({ provider, modelId, fitness = null, name = nul
   return { provider, modelId, wrote: denied ? 'denied' : 'alive' };
 }
 
-/** A row is gone: cool it 30 days and take its model out of the active list. */
+/**
+ * A row is gone: retire it if the vendor withdrew the slug, otherwise cool it
+ * 30 days — either way, take its model out of the active list.
+ *
+ * This is the `syncResults` path (the ~24h discovery run), and it used to
+ * always cool. `runProbe` gained the `isRetirement` branch on 2026-09-16 (see
+ * the comment there for the full incident) because cooling a withdrawn model
+ * is a slower way of failing forever: the row comes back in 30 days, 404s
+ * again, and cools again, and nothing ever learns. `writeDead` classifies the
+ * exact same `dead` verdict from the exact same probe and was left disagreeing
+ * with `runProbe` about it — a model that 404s on its *first* discovery probe
+ * (rather than a later probe sweep) was cooled instead of retired. The blast
+ * radius was small — `isFree: true` survives a cool, so `runProbeSweep` picks
+ * the row back up within 6h and retires it there — but it is the same
+ * two-paths-disagree shape this file exists to eliminate, so both call sites
+ * now share the one answer.
+ */
 export async function writeDead({ provider, modelId, code = 'unknown', now = new Date() }, deps) {
   const at = new Date(now);
+  const retired = isRetirement(code);
   await deps.freeTier.updateOne(
     { provider, modelId },
     {
@@ -1043,14 +1060,18 @@ export async function writeDead({ provider, modelId, code = 'unknown', now = new
         probedAt: at,
         'health.lastFailureAt': at,
         'health.lastFailureCode': code,
-        'health.coolingUntil': new Date(at.getTime() + PROBE_MARK_COOLDOWN_MS)
+        // A retired row is taken out of selection directly (`isFree: false`)
+        // and left alone, not scheduled to be re-asked in 30 days for an
+        // answer that will not change. An ordinary dead row still cools.
+        ...(retired ? { isFree: false } : {}),
+        'health.coolingUntil': retired ? null : new Date(at.getTime() + PROBE_MARK_COOLDOWN_MS)
       }
     }
   );
   if (deps.model) {
     await deps.model.updateOne({ provider, modelId }, { $set: { isActive: false, lastChecked: at } });
   }
-  return { provider, modelId, wrote: 'dead' };
+  return { provider, modelId, wrote: retired ? 'retired' : 'dead' };
 }
 
 /**

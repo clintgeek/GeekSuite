@@ -4,8 +4,22 @@
  * This is the old Usage & Cost tab with the one line it was missing at the
  * top. `AISpend` is the ledger (Phase 2), so the month, the day and both caps
  * are one read from `GET /api/ai/status` — and that line, not the tables, is
- * what a monthly visit is actually for. The plan's target number: "the status
- * page shows dollars left of the $10, and the number barely moves."
+ * what a monthly visit is actually for.
+ *
+ * The plan's original target number — "the status page shows dollars left of
+ * the $10, and the number barely moves" — turned out not to be computable.
+ * `spend.monthUsd` is a strict calendar-month sum that resets every month;
+ * the $10 named in `DOCS/ARCHIVE/AIGEEK_ELEVATION_PLAN.md` is a **one-time**
+ * OpenRouter credit purchase, a lifetime balance with no field anywhere
+ * tracking cumulative spend against it. The earlier version of this line read
+ * "$1.76 of the $10", which is arithmetically a monthly ratio and reads as
+ * "$8.24 left this month" — reassuring at any balance, because nothing behind
+ * it can go down as the real credit is actually spent (2026-09-19, review
+ * §1.6). Rather than fabricate a running-balance figure no data source
+ * supports, the line now states the month's spend on its own and leans on the
+ * numbers the server actually enforces in real time: the per-day and
+ * per-call caps. Those are the true ceilings a call can hit today; the $10
+ * is a separate, slower-moving fact called out below the line instead.
  *
  * Two Phase 3 changes below the line. Each feature row now carries the app's
  * `dailyCap` next to its count, because a count with no ceiling next to it
@@ -60,8 +74,15 @@ import { DeleteSweep as DeleteSweepIcon } from '@mui/icons-material';
 import { GeekEmptyState, GeekErrorState } from '@geeksuite/ui';
 import { formatCost, formatTokens, formatUsd, featureRows, normalizeAppId } from './format';
 
-/** The budget the whole plan is written against (DOCS/AIGEEK_ELEVATION_PLAN.md D1). */
-const MONTHLY_BUDGET_USD = 10;
+/**
+ * The one-time OpenRouter credit purchase named in
+ * `DOCS/ARCHIVE/AIGEEK_ELEVATION_PLAN.md` (D1). It is **not** a monthly
+ * allowance and nothing in `status.spend` tracks the running balance against
+ * it, so this is quoted for context in a caption below the spend line — never
+ * as a denominator next to a monthly figure. See the file header (review
+ * §1.6) for why that framing was wrong.
+ */
+const ONE_TIME_CREDIT_USD = 10;
 
 /**
  * The spend line.
@@ -70,6 +91,11 @@ const MONTHLY_BUDGET_USD = 10;
  * over the usage tables, which count *session* calls (`aiService` resets them
  * on restart) and would disagree with the ledger by however long ago the last
  * deploy was.
+ *
+ * No ratio against the $10 credit: see the file header. What *is* shown is
+ * the pair of ceilings the server enforces on every paid call right now —
+ * `AI_PAID_PER_DAY_USD` / `AI_PAID_PER_CALL_USD` in `aiRoute.js` — which are
+ * both smaller than the credit and the numbers a call can actually hit today.
  */
 function SpendLine({ spend }) {
   if (!spend) {
@@ -81,16 +107,23 @@ function SpendLine({ spend }) {
   }
 
   return (
-    <Typography variant="body1" sx={{ fontVariantNumeric: 'tabular-nums', wordBreak: 'break-word' }}>
-      <Box component="span" sx={{ fontWeight: 600 }}>
-        This month: {formatUsd(spend.monthUsd)} of the ${MONTHLY_BUDGET_USD}
-      </Box>
-      {' · '}today {formatUsd(spend.todayUsd)}
-      {' · '}caps {formatUsd(spend.capPerDayUsd)}/day, {formatUsd(spend.capPerCallUsd)}/call
-      {typeof spend.paidCallsMonth === 'number' && (
-        <>{' · '}{spend.paidCallsMonth.toLocaleString()} paid call{spend.paidCallsMonth === 1 ? '' : 's'}</>
-      )}
-    </Typography>
+    <>
+      <Typography variant="body1" sx={{ fontVariantNumeric: 'tabular-nums', wordBreak: 'break-word' }}>
+        <Box component="span" sx={{ fontWeight: 600 }}>
+          This month: {formatUsd(spend.monthUsd)}
+        </Box>
+        {' · '}today {formatUsd(spend.todayUsd)}
+        {' · '}caps {formatUsd(spend.capPerDayUsd)}/day, {formatUsd(spend.capPerCallUsd)}/call
+        {typeof spend.paidCallsMonth === 'number' && (
+          <>{' · '}{spend.paidCallsMonth.toLocaleString()} paid call{spend.paidCallsMonth === 1 ? '' : 's'}</>
+        )}
+      </Typography>
+      <Typography variant="caption" color="text.muted" sx={{ display: 'block', fontSize: 12, mt: 0.5 }}>
+        The ${ONE_TIME_CREDIT_USD} OpenRouter credit was a one-time purchase, not a monthly
+        budget — nothing here tracks the running balance left against it. The caps above are
+        what the server actually enforces.
+      </Typography>
+    </>
   );
 }
 

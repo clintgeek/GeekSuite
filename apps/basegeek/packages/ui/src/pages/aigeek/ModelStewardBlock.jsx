@@ -63,13 +63,24 @@ function RecommendationRow({ rec, selected, onPick }) {
     >
       <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1 }}>
         <Typography variant="body2" sx={{ fontWeight: 600 }}>{rec.name}</Typography>
-        {typeof rec.score === 'number' && (
+        {typeof rec.score === 'number' ? (
           <Chip
             size="small"
             label={`fit ${rec.score}`}
             color={selected ? 'primary' : 'default'}
             sx={{ fontSize: 12 }}
           />
+        ) : (
+          // `aiDirectorService.capabilityFitScore` returns `null` — not a
+          // low number — for a row with no measured signal at all: never
+          // probed, never timed, never golden-set scored (review §1.4).
+          // Saying so plainly here beats both a confident number and simply
+          // omitting the chip, which would read as a rendering gap rather
+          // than an honest "we don't know yet". `rec.reasoning` (below)
+          // already spells out why, for anyone who wants the full sentence.
+          <Typography variant="caption" color="text.disabled" sx={{ fontSize: 12, flexShrink: 0 }}>
+            not yet measured
+          </Typography>
         )}
       </Box>
       <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: 12 }}>

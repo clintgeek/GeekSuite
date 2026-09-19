@@ -364,6 +364,27 @@ describe('selectFreeTierCandidates', () => {
     expect(live[0].probedAt.getTime()).toBe(probedAt.getTime());
     expect(live[0].observed.remainingRequests).toBe(7);
   });
+
+  /*
+   * §1.7 of the 2026-09 review: `aiNeedResolver.exclusionFor` checks
+   * `row.isFree === false` and `row.override === 'deny'`, but neither field
+   * was on this hand-copied candidate object — the same literal that has
+   * already dropped `latency`, `quality` and `acceptsImageInput` in turn.
+   * Harmless today only because this query filters to `isFree: true` and a
+   * denied row never reaches the literal at all; if either of those upstream
+   * guarantees is ever loosened, both resolver checks silently stop working.
+   * `aiFreeTierProjection.test.js` pins the resolver's side of the contract
+   * against a synthetic row; this test is the one that would actually have
+   * caught the projection dropping the fields, because it calls the real
+   * `selectFreeTierCandidates` rather than a hand-built stand-in.
+   */
+  it('carries isFree and override onto the candidate', async () => {
+    enable('groq');
+    await AIFreeTier.create({ provider: 'groq', modelId: 'm', isFree: true, override: 'allow' });
+    const { live } = await aiService.selectFreeTierCandidates();
+    expect(live[0].isFree).toBe(true);
+    expect(live[0].override).toBe('allow');
+  });
 });
 
 /* ── every adapter hands the headers back ─────────────────────────────────── */

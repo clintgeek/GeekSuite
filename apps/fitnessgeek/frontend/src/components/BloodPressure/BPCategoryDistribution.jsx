@@ -2,21 +2,12 @@ import React, { useMemo } from 'react';
 import { Box, Typography, Card, CardContent } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { ResponsivePie } from '@nivo/pie';
+import { categorizeBP } from '../../utils/bpUtils.js';
 
-// BP Categories based on AHA guidelines
+// Category name and color come from the one shared categoriser.
 const getBPCategory = (systolic, diastolic) => {
-  if (systolic < 120 && diastolic < 80) {
-    return { name: 'Normal', color: '#10b981' };
-  } else if (systolic >= 120 && systolic < 130 && diastolic < 80) {
-    return { name: 'Elevated', color: '#f59e0b' };
-  } else if ((systolic >= 130 && systolic < 140) || (diastolic >= 80 && diastolic < 90)) {
-    return { name: 'Stage 1', color: '#f97316' };
-  } else if (systolic >= 140 || diastolic >= 90) {
-    return { name: 'Stage 2', color: '#ef4444' };
-  } else if (systolic >= 180 || diastolic >= 120) {
-    return { name: 'Crisis', color: '#dc2626' };
-  }
-  return { name: 'Unknown', color: '#78716C' };
+  const category = categorizeBP(systolic, diastolic);
+  return { name: category.stage, color: category.color };
 };
 
 const BPCategoryDistribution = ({ bpLogs = [] }) => {

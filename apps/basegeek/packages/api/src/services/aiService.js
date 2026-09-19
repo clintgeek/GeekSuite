@@ -1265,6 +1265,24 @@ class AIService {
         // field missing from THIS list is invisible to every reader
         // downstream. `aiFreeTierProjection.test.js` now pins it.
         acceptsImageInput: fm.acceptsImageInput ?? null,
+        // `isFree` and `override` — forwarded defensively (§1.7 of the
+        // 2026-09 review). `aiNeedResolver.exclusionFor` checks
+        // `row.isFree === false` and `row.override === 'deny'`, and until now
+        // neither field was on this object, which made both checks permanent
+        // no-ops for every caller of `selectFreeTierCandidates`.
+        //
+        // Harmless TODAY, and only today: the query above already filters to
+        // `isFree: true`, and a `deny`d row is skipped by the `continue`
+        // above before this literal is even built — so both fields, if
+        // present, could only ever read `true` / not-`'deny'` here regardless.
+        // But that safety is upstream filtering, not a promise this object
+        // makes for itself, and this is the exact literal that has already
+        // silently dropped three fields (`latency`, `quality`,
+        // `acceptsImageInput`) that real callers needed. If either upstream
+        // filter is ever loosened or reordered, these two checks fail closed
+        // instead of silently doing nothing — that trade costs two lines.
+        isFree: fm.isFree ?? null,
+        override: fm.override ?? null,
         health
       };
 

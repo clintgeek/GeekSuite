@@ -23,7 +23,7 @@
  * actually counts, by `requireAdminUser` on every mutation and route the
  * server exposes.
  */
-import { useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { Box, useMediaQuery } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
@@ -60,6 +60,29 @@ export default function AIGeekPage() {
   const [searchParams, setSearchParams] = useSearchParams();
 
   const { scrollToId } = aigeek;
+
+  /**
+   * Jump to a section, opening it first if it starts collapsed.
+   *
+   * `catalog` and `try-it` render behind `CollapsedSection` and show only a
+   * header until opened, so scrolling straight to one lands on that header —
+   * the content the jump was actually for is a second click away. The
+   * `?tab=` deep link below solved this once already; the sticky `StatusNav`
+   * is the same click assembled a different way (a button instead of a URL
+   * param), so it reuses this rather than re-deriving the same two-step dance
+   * (review §3.5).
+   *
+   * The scroll waits one macrotask: the target section renders behind a
+   * fetch, and a collapse that was just opened has not mounted its body yet.
+   * A miss here is a page that opens at the top, not an error.
+   */
+  const jumpToSection = useCallback((sectionId) => {
+    if (sectionId === 'catalog' || sectionId === 'try-it') {
+      dispatch({ type: 'section/open', id: sectionId });
+    }
+    setTimeout(() => scrollToId(sectionId), 0);
+  }, [dispatch, scrollToId]);
+
   const requestedTab = searchParams.get('tab');
   // Once, ever. Consuming the param re-runs this effect with `requestedTab`
   // gone, and a cleanup that cancelled the pending scroll would mean the jump
@@ -72,16 +95,8 @@ export default function AIGeekPage() {
     const sectionId = TAB_SECTIONS[requestedTab];
     setSearchParams({}, { replace: true });
     if (!sectionId) return;
-    // A collapsed section cannot be scrolled to while it is collapsed.
-    if (sectionId === 'catalog' || sectionId === 'try-it') {
-      dispatch({ type: 'section/open', id: sectionId });
-    }
-    // The scroll has to wait for the anchor to exist: the section it names
-    // renders behind a fetch, and a collapse that was just opened has not
-    // mounted its body yet. One macrotask is enough, and a miss is a page
-    // that opened at the top rather than an error.
-    setTimeout(() => scrollToId(sectionId), 0);
-  }, [requestedTab, dispatch, setSearchParams, scrollToId]);
+    jumpToSection(sectionId);
+  }, [requestedTab, setSearchParams, jumpToSection]);
 
   /**
    * Everything `AliveModelPicker` needs, in one prop, because it has two hosts
@@ -119,7 +134,7 @@ export default function AIGeekPage() {
       <StatusNav
         attentionCount={attentionCount}
         hasWarning={(state.status?.attention || []).some(item => item.severity === 'warn')}
-        onJump={aigeek.scrollToId}
+        onJump={jumpToSection}
       />
 
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>

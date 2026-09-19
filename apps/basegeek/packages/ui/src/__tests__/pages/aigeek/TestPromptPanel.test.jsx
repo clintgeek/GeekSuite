@@ -235,6 +235,125 @@ describe('TestPromptPanel', () => {
     }));
   });
 
+  it('sends need instead of a pin (review §3.3)', async () => {
+    // The one diagnostic tool that answers "who answers, given the front
+    // door as configured right now" could not exercise `need:` routing at
+    // all — every real caller in the suite routes this way now. This goes
+    // RED against the pre-fix panel, which has no way to type a need and so
+    // could never produce this body.
+    api.post.mockResolvedValue(ok('ok'));
+    renderWithProviders(panel());
+
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText('Prompt'), 'Name three fruits.');
+    await user.type(screen.getByLabelText(/^Need/), 'structured:fast');
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith('/ai/feature', {
+      feature: 'tryit',
+      user: 'Name three fruits.',
+      need: 'structured:fast',
+    }));
+  });
+
+  it('sends need rather than a pin when both are set — the door only resolves a need with no pin', async () => {
+    // aiRoutes.js resolves a need `if (need && !wantsPin)`: a pin always
+    // wins server-side. Sending both from here would mean the panel reports
+    // a pin the door silently ignored, so a filled-in need takes over
+    // instead of riding alongside the picker's selection.
+    api.post.mockResolvedValue(ok('ok'));
+    renderWithProviders(panel());
+
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText('Prompt'), 'Name three fruits.');
+    fireEvent.change(screen.getByLabelText('Model (Automatic when unset)'), {
+      target: { value: 'cerebras::qwen-3-235b' },
+    });
+    await user.type(screen.getByLabelText(/^Need/), 'vision+structured:balanced');
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith('/ai/feature', {
+      feature: 'tryit',
+      user: 'Name three fruits.',
+      need: 'vision+structured:balanced',
+    }));
+  });
+
+  it('surfaces provenance.need when the door resolved it', async () => {
+    api.post.mockResolvedValue(ok('Apple, banana, cherry', {
+      need: {
+        asked: 'structured:fast',
+        resolved: true,
+        provider: 'cerebras',
+        model: 'qwen-3-235b',
+        why: ['probe extracted JSON from this row', 'measured p50 400ms (fast)'],
+      },
+    }));
+    renderWithProviders(panel());
+
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText('Prompt'), 'Name three fruits.');
+    await user.type(screen.getByLabelText(/^Need/), 'structured:fast');
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+
+    expect(await screen.findByText(/need structured:fast/)).toBeInTheDocument();
+    expect(screen.getByText(/cerebras\/qwen-3-235b/)).toBeInTheDocument();
+    expect(screen.getByText(/probe extracted JSON from this row/)).toBeInTheDocument();
+  });
+
+  it('surfaces provenance.need when nothing in the catalog met it, as a real outcome not an error', async () => {
+    api.post.mockResolvedValue(ok('an answer from the ordinary rotation', {
+      need: {
+        asked: 'vision+structured:deep',
+        resolved: false,
+        why: ['nothing in the catalog measurably meets this need'],
+      },
+    }));
+    renderWithProviders(panel());
+
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText('Prompt'), 'Name three fruits.');
+    await user.type(screen.getByLabelText(/^Need/), 'vision+structured:deep');
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+
+    expect(await screen.findByText(/unresolved, fell through to the ordinary rotation/)).toBeInTheDocument();
+    expect(screen.getByText(/nothing in the catalog measurably meets this need/)).toBeInTheDocument();
+    // Still a normal result, not the soft-failure warning banner.
+    expect(screen.queryByText(/soft failure, not an error/)).toBeNull();
+  });
+
+  it('shows a malformed need as a clear inline refusal, not swallowed', async () => {
+    // The door refuses an unparseable need with 400 INVALID_NEED, which lands
+    // in the same 4xx/5xx catch as any other bad request — this pins that the
+    // existing error path renders the door's own message rather than a
+    // generic "The call failed".
+    api.post.mockRejectedValue({
+      response: {
+        status: 400,
+        data: {
+          error: {
+            message: 'need must be <task>[+<task>...]:<weight> — tasks structured|reasoning|prose|code|vision, weights fast|balanced|deep',
+            code: 'INVALID_NEED',
+          },
+        },
+      },
+    });
+    renderWithProviders(panel());
+
+    const user = userEvent.setup();
+    await user.type(screen.getByLabelText('Prompt'), 'Name three fruits.');
+    await user.type(screen.getByLabelText(/^Need/), 'strutured:fast');
+    fireEvent.click(screen.getByRole('button', { name: 'Run' }));
+
+    // Exact match, not a substring regex: the same message also appears
+    // inside the toast's "Try it failed: ..." text, and a substring match
+    // would find both and fail as ambiguous.
+    expect(await screen.findByText(
+      'need must be <task>[+<task>...]:<weight> — tasks structured|reasoning|prose|code|vision, weights fast|balanced|deep'
+    )).toBeInTheDocument();
+    expect(screen.queryByText('The call failed')).toBeNull();
+  });
+
   it('renders a structured answer as pretty JSON, and keeps the raw envelope one click away', async () => {
     api.post.mockResolvedValue(ok({ fruits: ['apple'] }));
     renderWithProviders(panel());

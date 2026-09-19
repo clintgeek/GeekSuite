@@ -1,7 +1,7 @@
 import aiService from './aiService.js';
 import AIModel from '../models/AIModel.js';
 import AIPricing from '../models/AIPricing.js';
-import AIFreeTier from '../models/AIFreeTier.js';
+import AIFreeTier, { weightClassOf } from '../models/AIFreeTier.js';
 import aiModelCapabilitiesService from './aiModelCapabilitiesService.js';
 import { PROVIDER_IDS } from '../config/aiProviders.js';
 import logger from '../lib/logger.js';
@@ -24,14 +24,40 @@ export function costForTokens(tokens, pricePerMillion) {
 }
 
 /**
- * The orderings the recommender sorts by. Both used to be redeclared inside
- * the per-provider reduce *and* the final sort; one table each now.
+ * The orderings the recommender sorts by (priority: 'speed' / 'quality'), and
+ * the tie-break `capabilityFitScore` computes underneath them.
+ *
+ * Until 2026-09-19 all three read `capabilities.performance.*` —
+ * string-matched off the model id (`aiModelCapabilitiesService.js`: "70b" or
+ * "405b" -> excellent, "8b" -> ultra-fast). `DOCS/AIGEEK_CAPABILITY_ROUTING.md`
+ * §2 calls that "demonstrably wrong in both directions", and the live `need:`
+ * routing path (`aiNeedResolver.js`) deliberately never reads it — it moved
+ * onto three measured/vendor-stated facts on 2026-09-16: `fitness` (a probe
+ * extracted JSON from this row, or it did not), `latency.p50Ms` (timed over
+ * five runs) and golden-set `quality.score` (six questions with known
+ * answers, scored by code, `aiGoldenSet.js`). This file's admin-facing
+ * "Suggest a model" tool (`ModelStewardBlock.jsx`) was the one caller that
+ * had not moved — fixed here, review §1.4. A numeric "fit 87" chip built on a
+ * name guess is worse than no ranking at all, because it *looks*
+ * authoritative.
+ *
+ * Both tables below mirror a rule `aiNeedResolver.js` already worked out and
+ * documents at length: an unmeasured row must not be scored as a *bad* row,
+ * or a newly discovered model could never be picked for that priority, and
+ * therefore could never be measured. So `unknown` (never timed) sits mid-
+ * table for speed, between `fast` and `deep`, and an unscored quality
+ * (`QUALITY_UNMEASURED_FRACTION` below) sits mid-scale rather than at zero —
+ * the same placement `aiNeedResolver.js`'s `WEIGHT_POINTS.unknown` and
+ * `QUALITY_UNMEASURED` give the identical situation.
  */
-const SPEED_ORDER = { 'ultra-fast': 0, fast: 1, medium: 2, slow: 3 };
-const QUALITY_ORDER = { 'state-of-the-art': 0, excellent: 1, good: 2, basic: 3 };
+const SPEED_BAND_ORDER = { fast: 0, balanced: 1, unknown: 2, deep: 3 };
 
-/** Quality tier as points out of 100, for capabilityFitScore. */
-const QUALITY_POINTS = { 'state-of-the-art': 100, excellent: 85, good: 70, basic: 50 };
+/**
+ * Where an unscored row sits on the golden set's 0-1 scale — between
+ * measured-good and measured-bad, not at either end. See the block comment
+ * above for why.
+ */
+const QUALITY_UNMEASURED_FRACTION = 0.5;
 
 class AIDirectorService {
   /**
@@ -56,6 +82,42 @@ class AIDirectorService {
     const output = AIDirectorService.numericPrice(model?.pricing?.output);
     if (input === Infinity || output === Infinity) return Infinity;
     return input + output;
+  }
+
+  /**
+   * A model's measured speed band, for `priority: 'speed'` ordering. See the
+   * `SPEED_BAND_ORDER` comment for why this replaced
+   * `capabilities.performance.speed` and why `unknown` (never timed) sits
+   * mid-table rather than last.
+   */
+  static speedBandRank(model) {
+    const band = weightClassOf(model?.freeTier?.latency?.p50Ms);
+    return SPEED_BAND_ORDER[band ?? 'unknown'];
+  }
+
+  /**
+   * A model's golden-set quality, 0-1, for `priority: 'quality'` ordering and
+   * for `capabilityFitScore`. `QUALITY_UNMEASURED_FRACTION` — not zero — for
+   * a row the golden set has never asked, so it is not permanently outranked
+   * by a measured-but-mediocre one.
+   */
+  static measuredQualityOf(model) {
+    const score = model?.freeTier?.quality?.score;
+    return typeof score === 'number' ? score : QUALITY_UNMEASURED_FRACTION;
+  }
+
+  /**
+   * Whether this row carries *any* measured signal at all — fitness ever
+   * probed, latency ever timed, or a golden-set score. Used to tell "ranked
+   * on a real but middling signal" from "nothing has ever been measured",
+   * because those are different facts and the Suggest UI should not present
+   * the second one as a confident number (review §1.4).
+   */
+  static hasMeasuredSignal(model) {
+    const freeTier = model?.freeTier || {};
+    return freeTier.fitness === 'structured' || freeTier.fitness === 'basic'
+      || typeof freeTier.latency?.p50Ms === 'number'
+      || typeof freeTier.quality?.score === 'number';
   }
 
   /**
@@ -136,6 +198,19 @@ class AIDirectorService {
           // The whole row, not just the flag: the status page's catalog shows
           // fitness, cooling and the live quota reading off this, and the
           // override drawer reads `override` to render its switches.
+          //
+          // `acceptsImageInput`, `latency` and `quality` joined this literal
+          // 2026-09-19 (review §3.4). They are the three measured/vendor-
+          // stated facts added specifically to replace
+          // `capabilities.performance.*`/`tasks.*` as a routing signal
+          // (§1.4, `aiNeedResolver.js`), and until now this was the one place
+          // in the whole request path that read the AIFreeTier row and threw
+          // them away — so the director view, the one page whose job is to
+          // prevent a bad model choice, could not show which rows accept an
+          // image, how fast a row actually answers, or how it scored on the
+          // golden set. `candidateProjection` (aiService.js, a different
+          // caller reading the same collection for live routing) already
+          // carried all three; this was the gap, not that one.
           freeTierMap[freeTier.modelId] = {
             isFree: freeTier.isFree,
             limits: freeTier.freeLimits,
@@ -144,7 +219,10 @@ class AIDirectorService {
             probedAt: freeTier.probedAt ?? null,
             observed: freeTier.observed ?? null,
             health: freeTier.health ?? null,
-            override: freeTier.override ?? null
+            override: freeTier.override ?? null,
+            acceptsImageInput: freeTier.acceptsImageInput ?? null,
+            latency: freeTier.latency ?? null,
+            quality: freeTier.quality ?? null
           };
         }
 
@@ -404,13 +482,17 @@ class AIDirectorService {
             const costB = AIDirectorService.totalPriceOf(best);
             return costA < costB ? current : best;
           } else if (effectivePriority === 'speed') {
-            const speedA = SPEED_ORDER[current.capabilities?.performance?.speed || 'medium'];
-            const speedB = SPEED_ORDER[best.capabilities?.performance?.speed || 'medium'];
+            // Measured latency band, not the guessed `performance.speed`
+            // tier — see the `SPEED_BAND_ORDER` comment (review §1.4).
+            const speedA = AIDirectorService.speedBandRank(current);
+            const speedB = AIDirectorService.speedBandRank(best);
             return speedA < speedB ? current : best;
           } else if (effectivePriority === 'quality') {
-            const qualityA = QUALITY_ORDER[current.capabilities?.performance?.quality || 'good'];
-            const qualityB = QUALITY_ORDER[best.capabilities?.performance?.quality || 'good'];
-            return qualityA < qualityB ? current : best;
+            // Golden-set score, not the guessed `performance.quality` tier.
+            // Higher is better, unlike the speed/cost bands above.
+            const qualityA = AIDirectorService.measuredQualityOf(current);
+            const qualityB = AIDirectorService.measuredQualityOf(best);
+            return qualityA > qualityB ? current : best;
           }
           return best;
         });
@@ -423,7 +505,7 @@ class AIDirectorService {
           reasoning,
           capabilities: bestModel.capabilities,
           isFree: Boolean(bestModel.freeTier?.isFree),
-          score: this.capabilityFitScore(bestModel, taskRequirements)
+          score: this.capabilityFitScore(bestModel)
         });
       }
 
@@ -438,15 +520,19 @@ class AIDirectorService {
           // "equal" for every unpriced pair rather than shuffling them.
           if (costA !== costB) return costA === Infinity ? 1 : costB === Infinity ? -1 : costA - costB;
         } else if (effectivePriority === 'speed') {
-          const speedA = SPEED_ORDER[a.model.capabilities?.performance?.speed || 'medium'];
-          const speedB = SPEED_ORDER[b.model.capabilities?.performance?.speed || 'medium'];
+          const speedA = AIDirectorService.speedBandRank(a.model);
+          const speedB = AIDirectorService.speedBandRank(b.model);
           if (speedA !== speedB) return speedA - speedB;
         } else if (effectivePriority === 'quality') {
-          const qualityA = QUALITY_ORDER[a.model.capabilities?.performance?.quality || 'good'];
-          const qualityB = QUALITY_ORDER[b.model.capabilities?.performance?.quality || 'good'];
-          if (qualityA !== qualityB) return qualityA - qualityB;
+          const qualityA = AIDirectorService.measuredQualityOf(a.model);
+          const qualityB = AIDirectorService.measuredQualityOf(b.model);
+          if (qualityA !== qualityB) return qualityB - qualityA; // higher score first
         }
-        return b.score - a.score;
+        // `score` can be `null` (§1.4 — a row with no measured signal at
+        // all); `null` coerces to 0 in subtraction, which sinks it below
+        // every row that has a real number here without throwing NaN at
+        // the comparator.
+        return (b.score ?? 0) - (a.score ?? 0);
       });
 
       return {
@@ -609,35 +695,66 @@ class AIDirectorService {
   }
 
   /**
-   * capabilityFitScore — 0-100, how well a model's advertised capabilities
-   * answer the parsed requirements.
+   * capabilityFitScore — 0-100, how well a model's *measured* track record
+   * supports being suggested at all. Shown in the Suggest control
+   * (`ModelStewardBlock.jsx`) as a "fit N" chip.
    *
    * It does *not* set the ordering: the priority comparator (cost / speed /
-   * quality) still does, exactly as it did before, and this only breaks ties
-   * inside it. Shown in the App Routing dialog as "fit" so a human can see why
-   * two free models are not interchangeable.
+   * quality, above in `recommendProvider`) still does, exactly as it did
+   * before, and this only breaks ties inside it.
    *
-   * With no specific requirement parsed out of the task, there is nothing to
-   * cover, so the score falls back to the model's general quality tier — the
-   * number stays meaningful on a bare "summarize this text".
+   * Until 2026-09-19 this scored `capabilities.performance.quality` — a
+   * name-guessed tier — optionally blended with whether the model's
+   * `capabilities.tasks`/`performance` flags matched the task's parsed
+   * requirements. Both are exactly the signal `DOCS/AIGEEK_CAPABILITY_
+   * ROUTING.md` §2 calls "demonstrably wrong in both directions", and — a
+   * separate problem, found while fixing this — every one of those parsed
+   * requirements was *already* a hard filter in `recommendProvider`'s
+   * `suitableModels.filter` above, so by the time a model reaches this
+   * function every requirement that was asked for is already guaranteed
+   * true. The met/asked ratio the old code computed from them was
+   * therefore always 1, contributing nothing; it existed only to smuggle in
+   * a second read of the same disowned fields. Removed rather than kept as
+   * dead weight, per review §1.4.
+   *
+   * Ranked instead on the same three measured/vendor-stated facts
+   * `aiNeedResolver.js` ranks the live `need:` path on: `fitness` (a probe
+   * extracted JSON from this row, or it did not), `latency.p50Ms` (timed,
+   * via `weightClassOf`) and golden-set `quality.score` (six questions with
+   * known answers, scored by code). Quality is weighted heaviest (60%) for
+   * the same reason `aiNeedResolver.js` weighs it heaviest: a fast, cleanly-
+   * shaped wrong answer is worth less than a slow right one.
+   *
+   * Returns `null` — not a number — when a row carries no measured signal
+   * at all: never probed for fitness, never timed, never golden-set scored.
+   * `ModelStewardBlock.jsx`'s `RecommendationRow` already hides the "fit"
+   * chip when `score` is not a number, so a genuinely unmeasured row reads
+   * as unmeasured rather than carrying a confident, made-up number — the
+   * one place review §1.4 asks for that explicitly, rather than the
+   * per-axis "unmeasured is not bad" mid-banding everywhere else in this
+   * function.
    */
-  capabilityFitScore(model, requirements = {}) {
-    const caps = model.capabilities || {};
-    const qualityPoints = QUALITY_POINTS[caps.performance?.quality] ?? 70;
+  capabilityFitScore(model) {
+    if (!AIDirectorService.hasMeasuredSignal(model)) return null;
 
-    const asked = [
-      [requirements.needsVision, caps.supportsVision],
-      [requirements.needsAudio, caps.supportsAudio],
-      [requirements.needsFunctionCalling, caps.supportsFunctionCalling],
-      [requirements.needsJSONOutput, caps.supportsJSONOutput],
-      [requirements.needsCodeGeneration, caps.tasks?.codeGeneration],
-      [requirements.needsReasoning, caps.performance?.reasoning !== 'basic']
-    ].filter(([needed]) => needed);
+    const freeTier = model.freeTier || {};
 
-    if (asked.length === 0) return qualityPoints;
+    // A row the probe watched emit valid JSON outranks one it has never
+    // asked, which in turn outranks one that answered and did not manage
+    // JSON — the same ordering `aiNeedResolver.js`'s `isStructured` bonus
+    // implies, just expressed as points on this 0-100 scale.
+    const fitnessPoints = freeTier.fitness === 'structured' ? 100
+      : freeTier.fitness === 'basic' ? 40
+      : 60; // never probed — closer to "proven" than to "proven and failed"
 
-    const met = asked.filter(([, supported]) => Boolean(supported)).length;
-    return Math.round((met / asked.length) * 70 + (qualityPoints / 100) * 30);
+    // Measured latency band. `weightClassOf` returns null for a row never
+    // timed; that sits at the same neutral point speedBandRank gives it.
+    const band = weightClassOf(freeTier.latency?.p50Ms);
+    const speedPoints = band === 'fast' ? 100 : band === 'balanced' ? 70 : band === 'deep' ? 40 : 50;
+
+    const qualityPoints = Math.round(AIDirectorService.measuredQualityOf(model) * 100);
+
+    return Math.round(fitnessPoints * 0.2 + speedPoints * 0.2 + qualityPoints * 0.6);
   }
 
   /**
@@ -674,16 +791,36 @@ class AIDirectorService {
     };
   }
 
+  /**
+   * The human sentence next to a suggestion's "fit" chip.
+   *
+   * Until 2026-09-19 two of these lines read `capabilities.tasks.
+   * codeGeneration` and `capabilities.performance.{reasoning,speed,quality}`
+   * — the same name-guessed fields `capabilityFitScore` stopped ranking on
+   * above, for the same reason (review §1.4). A guessed sentence sitting
+   * next to a now-honest number would just move the problem from the chip
+   * to the caption underneath it. "Good at code generation" is dropped
+   * outright: the golden set has no code-generation class
+   * (`aiGoldenSet.js`'s `GOLDEN_CLASSES`), so there is no measured claim to
+   * make here at all, and no reason beats a guessed one. The other three
+   * are rephrased onto what is actually measured: the golden set's
+   * per-class `reasoning` score, the measured latency band, and the
+   * golden-set overall score.
+   */
   generateReasoning(model, requirements, priority) {
     const reasons = [];
     const caps = model.capabilities || {};
+    const freeTier = model.freeTier || {};
+    const quality = freeTier.quality || {};
 
-    if (model.freeTier?.isFree) {
+    if (freeTier.isFree) {
       reasons.push('Free tier available');
     }
 
-    if (requirements.needsVision && caps.supportsVision) {
-      reasons.push('Supports vision tasks');
+    // Vendor-stated, not guessed — the same field `aiNeedResolver.js`'s
+    // `isVisionCapable` filters `vision:*` need calls on.
+    if (requirements.needsVision && freeTier.acceptsImageInput === true) {
+      reasons.push('Accepts image input (vendor-listed)');
     }
 
     if (requirements.needsAudio && caps.supportsAudio) {
@@ -698,28 +835,35 @@ class AIDirectorService {
       reasons.push('Returns structured JSON');
     }
 
-    if (requirements.needsCodeGeneration && caps.tasks?.codeGeneration) {
-      reasons.push('Good at code generation');
+    // Golden-set per-class score, not the guessed `performance.reasoning`
+    // tier. Silent when this row has never been asked a reasoning question
+    // — no claim beats a guessed one.
+    if (requirements.needsReasoning && typeof quality.byClass?.reasoning === 'number'
+      && quality.byClass.reasoning >= 0.7) {
+      reasons.push(`Scored well on reasoning (golden set ${quality.byClass.reasoning})`);
     }
 
-    if (requirements.needsReasoning && caps.performance?.reasoning !== 'basic') {
-      reasons.push('Good reasoning capabilities');
+    if (priority === 'speed' && weightClassOf(freeTier.latency?.p50Ms) === 'fast') {
+      reasons.push(`Fast, measured (${freeTier.latency.p50Ms}ms median)`);
     }
 
-    if (priority === 'speed' && caps.performance?.speed === 'ultra-fast') {
-      reasons.push('Ultra-fast inference');
+    if (priority === 'quality' && typeof quality.score === 'number' && quality.score >= 0.8) {
+      reasons.push(`High golden-set score (${quality.score})`);
     }
 
-    if (priority === 'quality' && caps.performance?.quality === 'state-of-the-art') {
-      reasons.push('State-of-the-art quality');
-    }
-
-    if (priority === 'cost' && model.freeTier?.isFree) {
+    if (priority === 'cost' && freeTier.isFree) {
       reasons.push('Cost-effective (free tier)');
     }
 
     if (typeof caps.contextWindow === 'number' && caps.contextWindow >= 128000) {
       reasons.push(`${Math.round(caps.contextWindow / 1000)}k context window`);
+    }
+
+    // The one case worth saying plainly rather than filling with a generic
+    // fallback: nothing here has ever measured this row at all (review
+    // §1.4 — same condition `capabilityFitScore` returns `null` for).
+    if (!AIDirectorService.hasMeasuredSignal(model)) {
+      reasons.push('Not yet measured — no fitness, latency or golden-set score for this row');
     }
 
     return reasons.join(', ') || `Best ${priority} option`;
