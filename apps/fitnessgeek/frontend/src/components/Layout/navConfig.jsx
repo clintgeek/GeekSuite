@@ -21,6 +21,7 @@ import LocalDiningIcon from '@mui/icons-material/LocalDining';
 import RestaurantMenuIcon from '@mui/icons-material/RestaurantMenu';
 import CalculateIcon from '@mui/icons-material/Calculate';
 import InsightsIcon from '@mui/icons-material/Insights';
+import UploadFileIcon from '@mui/icons-material/UploadFile';
 
 export const APP_NAME = 'fitnessgeek';
 
@@ -42,6 +43,12 @@ export const navSections = [
       { id: '/dashboard', label: 'Dashboard', to: '/dashboard', icon: <HomeIcon sx={{ fontSize: 18 }} /> },
       { id: '/food-log', label: 'Food Log', to: '/food-log', icon: <RestaurantIcon sx={{ fontSize: 18 }} /> },
       { id: '/weight', label: 'Weight', to: '/weight', icon: <MonitorWeightIcon sx={{ fontSize: 18 }} /> },
+      // Body-composition import, next to Weight because that is the data it
+      // lands in. It had NO nav row at all until 2026-09-19: the route
+      // existed and the only way to reach it was the Android share target's
+      // redirect, so the page was visible only after a share had already
+      // failed. Exactly what the header above says must not happen.
+      { id: '/scan-import', label: 'Import Scan', to: '/scan-import', icon: <UploadFileIcon sx={{ fontSize: 18 }} /> },
       { id: '/profile', label: 'Profile', to: '/profile', icon: <PersonIcon sx={{ fontSize: 18 }} /> },
     ],
   },
