@@ -91,7 +91,12 @@ function envPositiveInt(name, fallback) {
   return parsed;
 }
 
-function normalizeMessageContent(content) {
+// Exported for tests. These run on the live `aiFeatureRunner` -> `callAI`
+// path and are otherwise unreachable without standing up a provider, which is
+// how a test suite came to "cover" them by calling `preprocessContext` with an
+// unconfigured provider — a call that returns before it ever reaches here, so
+// the tests passed with the bug in place and with it removed.
+export function normalizeMessageContent(content) {
   if (typeof content === 'string') {
     return content;
   }
@@ -113,8 +118,26 @@ function normalizeMessageContent(content) {
     // `partsOf` is imported rather than reimplemented so "a part this codebase
     // recognizes" has exactly one definition. A text-only parts array still
     // flattens, which is what every existing caller already relies on.
-    const { images, unrecognized } = partsOf(content);
-    if (!unrecognized && images.length > 0) {
+    //
+    // The guard is `images.length > 0` ALONE, and deliberately does not also
+    // require `!unrecognized`.
+    //
+    // It did require it, for a day, and that was a fourth instance of the very
+    // bug this function was fixed to close. `partsOf` reports `unrecognized`
+    // for the WHOLE array if any single part fails to match, so an array
+    // carrying one good image plus one malformed part failed the guard, fell
+    // into the map below, matched neither `part.text` nor `part.type ===
+    // 'text'`, and had its base64 stringified into the prompt — the exact
+    // silent-wrong-answer this comment block warns about, reachable over HTTP.
+    //
+    // Refusing a malformed part is the ADAPTERS' job and they already do it:
+    // every one of them runs `partsOf` and raises `unsupported_content` rather
+    // than stringifying. Duplicating that judgement here could only ever
+    // disagree with them, and when it disagreed it failed open. So this layer
+    // answers one question — are there images to preserve? — and leaves the
+    // verdict to the layer that knows each provider's wire format.
+    const { images } = partsOf(content);
+    if (images.length > 0) {
       return content;
     }
 
@@ -139,7 +162,7 @@ function normalizeMessageContent(content) {
   return String(content);
 }
 
-function normalizeMessages(messages) {
+export function normalizeMessages(messages) {
   if (!Array.isArray(messages)) {
     return messages;
   }

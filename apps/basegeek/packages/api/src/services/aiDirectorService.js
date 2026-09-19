@@ -42,8 +42,8 @@ class AIDirectorService {
    * the catalog. `('Unknown' || 0)` evaluates to the string `'Unknown'`, so the
    * cheapest-model reduce was concatenating (`'UnknownUnknown'`) and comparing
    * strings, and the sort's `costA - costB` was `NaN` — i.e. the default
-   * `priority: 'cost'` ordering was arbitrary, and that is exactly the call
-   * StoryGeek's epub pipeline makes before reading `recommendations[0]`.
+   * `priority: 'cost'` ordering was arbitrary, and `recommendProvider` reads
+   * `recommendations[0]` straight off that ordering.
    * An unpriced model now sorts LAST, not free.
    */
   static numericPrice(value) {
@@ -210,11 +210,10 @@ class AIDirectorService {
       // never touches — it upserts `lastChecked`. So two days after seeding the
       // 24h guard was permanently true, and every `/director/models`,
       // `/director/free-models`, `/director/recommend` and
-      // `/director/analyze-cost` (plus their GraphQL twins and StoryGeek's
-      // epub pipeline) fanned out a live vendor `models` call per enabled
-      // provider — spending provider quota on a read. `lastChecked` is the
-      // field the refresh actually writes, so the guard now measures the thing
-      // it was always meant to.
+      // `/director/analyze-cost` (plus their GraphQL twins) fanned out a live
+      // vendor `models` call per enabled provider — spending provider quota on
+      // a read. `lastChecked` is the field the refresh actually writes, so the
+      // guard now measures the thing it was always meant to.
       const freshestModel = await AIModel.findOne({ provider })
         .sort({ lastChecked: -1 })
         .select('lastChecked createdAt');
@@ -298,10 +297,18 @@ class AIDirectorService {
    *   recommendProvider(task, budget, priority, requirements)          // positional
    *   recommendProvider(task, { budget, priority, requirements, freeOnly, limit })
    *
-   * StoryGeek's epub pipeline calls the positional form over REST
-   * (`POST /api/ai/director/recommend`, apps/storygeek/backend/src/services/
-   * aiService.js), so the second argument keeps its old meaning unless it is a
-   * plain object — a number, null or undefined is still `budget`.
+   * The positional form was kept for StoryGeek's epub pipeline, which called
+   * it over REST (`POST /api/ai/director/recommend`). That integration was
+   * removed in Phase 2 of DOCS/AIGEEK_ELEVATION_PLAN.md — StoryGeek's own
+   * `services/aiService.js` documents the cutover, and its
+   * `recommendProviderModel` is gone. The only live callers today are
+   * basegeek's own console (`ModelStewardBlock.jsx` → `useAIGeek.js`'s
+   * `aiRecommendModel` GraphQL query, and `AliveModelPicker.jsx`), and all of
+   * them use the options-object form. The second argument still keeps its old
+   * positional meaning unless it is a plain object — a number, null or
+   * undefined is still `budget` — because nothing has yet had reason to drop
+   * that compatibility; see aiModelSteward.test.js for the regression coverage
+   * that pins it.
    *
    * `freeOnly` narrows the candidates to models whose AIFreeTier record says
    * `isFree`, on providers that are both enabled and hold a key. That is the
@@ -312,9 +319,9 @@ class AIDirectorService {
    * `limit` caps the returned list (the App Routing dialog shows three); null
    * or absent returns every provider that qualified.
    *
-   * The returned entry shape is unchanged — `{ provider, model, reasoning,
-   * capabilities }` — with `score` and `isFree` added alongside. StoryGeek
-   * reads `recommendations[0].provider` and `.model.id`; both still land.
+   * The returned entry shape is `{ provider, model, reasoning, capabilities,
+   * score, isFree }`. The console reads `recommendations[0].provider` and
+   * `.model.id`.
    */
   async recommendProvider(task, budgetOrOptions = null, priority = 'cost', requirements = {}) {
     try {

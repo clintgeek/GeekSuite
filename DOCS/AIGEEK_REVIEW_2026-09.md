@@ -49,7 +49,7 @@ new bug, which is finding #1 below, introduced *inside* the fix for the other th
 
 ## 1. Bugs and correctness risks
 
-### 1.1 A fourth `JSON.stringify` fallthrough, hiding inside the fix for the other three — **open**
+### 1.1 A fourth `JSON.stringify` fallthrough, hiding inside the fix for the other three — **done 2026-09-19**
 
 `apps/basegeek/packages/api/src/services/aiService.js` — `normalizeMessageContent`.
 
@@ -73,7 +73,7 @@ reaches this live, returning a confident wrong answer instead of the documented 
 **Fix (small):** `if (images.length > 0) return content;` and let each adapter's existing
 check be the single place that refuses.
 
-### 1.2 The vision refusal breaks `/feature`'s documented contract — **open**
+### 1.2 The vision refusal breaks `/feature`'s documented contract — **done 2026-09-19**
 
 `routes/aiRoutes.js`. The route documents exactly two shapes — `200 {ok:true}` and
 `200 {ok:false, reason}` with `reason ∈ cap|unavailable|unparseable|empty|invalid` — and
@@ -88,7 +88,7 @@ Refusing rather than degrading is right (§1.2 of the reasoning stands). The *sh
 match. **Fix (small):** emit `{ok:false, reason:'no_vision_model', provenance}` at 200, or
 document the exception explicitly.
 
-### 1.3 `capabilities.source` is written everywhere and read nowhere — **open**
+### 1.3 `capabilities.source` is written everywhere and read nowhere — **done 2026-09-19**
 
 `services/aiModelCapabilitiesService.js` — `looksObserved()`.
 
@@ -170,6 +170,38 @@ deliberately omitted and why.
 
 | What | Where | Evidence | Status |
 |---|---|---|---|
+| `POST /api/ai/context/reset/:conversationId` | `aiRoutes.js` | Always returned `{success:true, message:'Context reset queued (Phase 2A½ feature)'}` whatever the input. Zero callers, zero tests. **A caller would have believed context was reset when nothing happened.** | **done** |
+| `AI_PROVENANCE_SDL` | `aiFeatureRunner.js` | Its own comment said not to import it; nothing did. Already missing `costUsd`/`hints`. Dropped from the default export too. | **done** |
+| `updateModelCapabilities()` / `updateAllModelCapabilities()` | `aiModelCapabilitiesService.js` | Zero callers including tests; the two prose mentions are historical. ~50 lines, plus three imports that became dead only because of it. Rest of the file untouched. | **done** |
+| Stale "StoryGeek's epub pipeline calls this" comments | `aiDirectorService.js` ×2, `aiRoutes.js` ×1 | That integration went in Phase 2 — StoryGeek's own service documents the cutover. Live callers are basegeek's own console, via the options-object form. Comment-only; the positional signature was left alone. | **done** |
+| `GET /api/ai/usage/:provider` and `/:provider/:modelId` | `aiRoutes.js` | **Reverted — will not delete.** See §2.1. | **won't do** |
+| `GET /api/ai/stats`, `GET /api/ai/capabilities` | `aiRoutes.js` | **Will not delete.** `/stats` is covered by a permission-gating test (`aiRoutesGates.test.js`) asserting `ai:stats` reaches it, and both are documented as public routes in `apps/basegeek/DOCS/API_KEYS.md` — intentional operator endpoints, not orphans. | **won't do** |
+| `catalogRows.health` | `useAIGeek.js` | Computed and passed, never rendered. Better fixed than deleted: `health.coolingUntil`/`consecutiveFailures` would turn the generic "cooling" tooltip into "cooling until 4:12 PM after 3 failures". | open |
+
+### 2.1 Why `/usage` was spared — and the rule it produced
+
+The routes are genuinely uncalled over HTTP; their own comments say so and a repo-wide
+grep agrees. They were deleted, and six tests broke — not "does the route exist" tests,
+but these:
+
+    refuses a key minted without ai:usage                        403 -> 404
+    admits a key minted with the schema defaults                 200 -> 404
+    two sessions asking about the same user get their own answer, not each other's
+
+That last one asserts a caller passing `?userId=<another user's id>` gets their **own**
+usage back. Someone deliberately hardened these routes against a cross-user read and
+pinned it with a test.
+
+**The rule: "nothing calls it" and "nothing is protected by it" are different claims, and
+only the first one grep can answer.** A repo-wide search cannot see an operator with curl,
+a monitoring script, or anything outside the tree. Where the reward is a hundred lines and
+the cost is deleting tested, deliberate security behaviour, the trade is bad.
+
+`/stats` turned out to carry the same shape — a permission-gating test — which is why it
+was investigated rather than deleted. Apply this test to any future deletion here: **before
+removing a route, check what its tests are asserting, not just who calls it.**
+
+---|---|---|---|
 | `POST /api/ai/context/reset/:conversationId` | `aiRoutes.js` | Always returns `{success:true, message:'Context reset queued (Phase 2A½ feature)'}` whatever the input. Zero callers in the repo, tests included. **A caller today would believe context was reset when nothing happened.** | open |
 | `GET /api/ai/usage/:provider` and `/:provider/:modelId` | `aiRoutes.js` | The routes' own comments say nothing in the suite calls them over HTTP; confirmed by grep. The console reads usage via in-process GraphQL. Service methods stay — route deletion only. | open |
 | `AI_PROVENANCE_SDL` | `aiFeatureRunner.js` | Its own comment says not to import it; nothing does. Already missing `costUsd`/`hints`, so it is stale as well as unused. | open |

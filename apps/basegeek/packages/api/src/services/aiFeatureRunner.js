@@ -403,23 +403,11 @@ export async function runAIFeature(opts) {
   };
 }
 
-/**
- * The GraphQL shape, for reference. The live declaration is `type AIProvenance`
- * in `graphql/shared/typeDefs.js`; do NOT import this constant from a
- * typeDefs file — this module pulls in aiService and crypto-vault, and
- * tools/gql-arg-audit.mjs imports every typeDefs standalone with no env.
- */
-export const AI_PROVENANCE_SDL = `
-  """Where an AI-assisted result came from. \`source: "fallback"\` means no model was consulted."""
-  type AIProvenance {
-    source: String!
-    reason: String
-    model: String
-    provider: String
-    cached: Boolean!
-    callsToday: Int!
-    cap: Int
-  }
-`;
+// `AI_PROVENANCE_SDL` — removed 2026-09-19 (aiGeek review §2). It was a stale
+// reference copy of the GraphQL shape; its own comment said not to import it
+// from a typeDefs file, and nothing ever did. It had also drifted from the
+// live declaration — missing `costUsd` and `hints` — so it was wrong as well
+// as unused. The live declaration is `type AIProvenance` in
+// `graphql/shared/typeDefs.js`. See DOCS/AIGEEK_REVIEW_2026-09.md §2.
 
-export default { runAIFeature, runFeatureCore, callsToday, parseJson, unwrapSchemaEnvelope, utcDay, AI_PROVENANCE_SDL };
+export default { runAIFeature, runFeatureCore, callsToday, parseJson, unwrapSchemaEnvelope, utcDay };
