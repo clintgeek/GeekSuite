@@ -20,6 +20,17 @@
  * and the job's revive path all honour it. `Always allow` writes `'allow'` —
  * the row stays a candidate through a cooling spell. Both off clears the
  * field and the row goes back to living by what the job observes.
+ *
+ * **Vision / Speed / Quality columns** (2026-09-19, review §3.4). This table
+ * is the one page whose job is to prevent a bad model choice, and until now
+ * it could not show the three measured facts added specifically to replace
+ * `capabilities.performance`/`tasks` name-guessing as a routing signal
+ * (§1.4): whether a row accepts an image (`acceptsImageInput`, the vendor's
+ * own listing), how fast it actually answers (`latency.p50Ms`, timed over
+ * five runs), and how it scored on the golden set (`quality.score`, six
+ * questions with known answers, scored by code). All three came from
+ * `aiDirectorService.freeTierMap`, which carried them into `aiDirectorModels`
+ * all along — this file and `useAIGeek.catalogRows` were the gap.
  */
 import {
   Box,
@@ -62,6 +73,120 @@ const observedLine = (observed) => {
     ? ` · resets ${new Date(observed.resetAt).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`
     : '';
   return `${formatLimit(observed.remainingRequests)} left${reset}`;
+};
+
+/**
+ * "Cooling until 4:12 PM after 3 failures" — `health.coolingUntil` and
+ * `health.consecutiveFailures` (review §2, `catalogRows.health`). This is the
+ * fields' only reader anywhere in the UI: `useAIGeek.js` has computed and
+ * passed the whole `health` object since the health-memory work landed
+ * (R130), and nothing rendered it until now. Falls back to the old generic
+ * line when there is no `coolingUntil` to be concrete about — a row can also
+ * read "not a candidate" for reasons `health` does not carry, such as never
+ * having been on the free tier at all.
+ *
+ * Exported so `CatalogPanel.test.jsx` can assert the exact sentence without
+ * having to drive a real MUI `Tooltip` open in jsdom.
+ */
+export const coolingLine = (health) => {
+  const until = health?.coolingUntil ? new Date(health.coolingUntil) : null;
+  if (!until || Number.isNaN(until.getTime())) {
+    return 'Not a candidate right now: cooling after a failure, or not on the free tier';
+  }
+  const when = until.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const failures = health?.consecutiveFailures;
+  const failureNote = typeof failures === 'number' && failures > 0
+    ? ` after ${failures} failure${failures === 1 ? '' : 's'}`
+    : '';
+  return `Cooling until ${when}${failureNote}`;
+};
+
+/**
+ * The vendor's own answer to "does this row accept an image?" — one of the
+ * three fields `aiDirectorService.freeTierMap` gained 2026-09-19 to replace
+ * the name-guessed `capabilities.performance`/`tasks` fields this table used
+ * to have nothing measured to show instead of (review §3.4).
+ *
+ * Three states, not two: `true` is vendor-confirmed, `false` is
+ * vendor-confirmed-not, and `null` is "this provider's listing does not say"
+ * — only OpenRouter's does today (`AIFreeTier.js`'s `acceptsImageInput`
+ * doc). Collapsing the last two into one "no" would misrepresent eight of
+ * nine providers as having been asked and declined.
+ */
+const visionCell = (acceptsImageInput) => {
+  if (acceptsImageInput === true) {
+    return (
+      <Tooltip title="This provider's listing declares image input">
+        <Chip size="small" variant="outlined" color="info" label="sees images" sx={{ fontSize: 12 }} />
+      </Tooltip>
+    );
+  }
+  if (acceptsImageInput === false) {
+    return (
+      <Typography variant="body2" color="text.disabled" sx={{ fontSize: 12 }}>text only</Typography>
+    );
+  }
+  return (
+    <Tooltip title="This provider's listing does not say whether this row accepts images — only OpenRouter's does today">
+      <Typography variant="body2" color="text.disabled" sx={{ fontSize: 12 }}>?</Typography>
+    </Tooltip>
+  );
+};
+
+/** The weight-class label a row's measured `latency.p50Ms` falls in. */
+const WEIGHT_LABELS = { fast: 'fast', balanced: 'balanced', deep: 'deep' };
+
+/**
+ * Measured speed, not a guessed `performance.speed` tier (review §1.4/§3.4):
+ * the weight-class band `latency.p50Ms` falls in, plus the raw median so an
+ * admin can see how close a row is to the next band. `null` means never
+ * timed — the row has not been probed enough times yet, not that it is slow.
+ */
+const speedCell = (row) => {
+  if (!row.weightClass) {
+    return <Typography variant="body2" color="text.disabled" sx={{ fontSize: 12 }}>not timed</Typography>;
+  }
+  return (
+    <Box>
+      <Chip
+        size="small"
+        variant="outlined"
+        label={WEIGHT_LABELS[row.weightClass] || row.weightClass}
+        sx={{ fontSize: 12 }}
+      />
+      <Typography variant="caption" color="text.muted" display="block" sx={{ fontSize: 12, fontVariantNumeric: 'tabular-nums' }}>
+        {formatLimit(row.latencyP50Ms)}ms median
+      </Typography>
+    </Box>
+  );
+};
+
+/**
+ * The golden set's answer to "is this row's output any good", 0-100
+ * (`quality.score` is stored 0-1). `fitness` says a row can emit JSON;
+ * this says whether what it emits is worth reading, which `DOCS/
+ * AIGEEK_CAPABILITY_ROUTING.md` §3.2 explains is the different, more
+ * important question. `—` for a row the golden set has never asked, not a
+ * red 0 — the same "unmeasured is not the same as bad" rule the score
+ * itself is ranked with (`aiNeedResolver.js`, `aiDirectorService.js`
+ * `capabilityFitScore`).
+ */
+const qualityCell = (row) => {
+  if (typeof row.qualityScore !== 'number') {
+    return (
+      <Tooltip title="Never asked the golden set">
+        <Typography variant="body2" color="text.disabled">—</Typography>
+      </Tooltip>
+    );
+  }
+  const pct = Math.round(row.qualityScore * 100);
+  const tone = pct >= 70 ? 'success' : pct >= 40 ? 'warning' : 'error';
+  const scoredLine = row.qualityScoredAt ? `Scored ${formatAgo(row.qualityScoredAt)}` : 'Golden-set score';
+  return (
+    <Tooltip title={scoredLine}>
+      <Chip size="small" variant="outlined" color={tone} label={`${pct}/100`} sx={{ fontSize: 12 }} />
+    </Tooltip>
+  );
 };
 
 /**
@@ -237,6 +362,21 @@ export default function CatalogPanel({
               )),
           },
           {
+            key: 'acceptsImageInput',
+            label: 'Vision',
+            render: (row) => visionCell(row.acceptsImageInput),
+          },
+          {
+            key: 'weightClass',
+            label: 'Speed',
+            render: (row) => speedCell(row),
+          },
+          {
+            key: 'qualityScore',
+            label: 'Quality',
+            render: (row) => qualityCell(row),
+          },
+          {
             key: 'alive',
             label: 'State',
             render: (row) => {
@@ -261,7 +401,7 @@ export default function CatalogPanel({
                 return <Chip size="small" variant="outlined" label="no key" sx={{ fontSize: 12 }} />;
               }
               return (
-                <Tooltip title="Not a candidate right now: cooling after a failure, or not on the free tier">
+                <Tooltip title={coolingLine(row.health)}>
                   <Chip size="small" variant="outlined" color="warning" label="cooling" sx={{ fontSize: 12 }} />
                 </Tooltip>
               );

@@ -32,6 +32,21 @@
  *
  * `feature: 'tryit'` is deliberate: the daily cap is counted per feature, so
  * an admin poking at this cannot eat an app's bucket.
+ *
+ * **`need:` routing (review §3.3, 2026-09-19).** Every real caller in the
+ * suite now routes with `need: '<task>[+<task>...]:<weight>'`
+ * (`aiNeedResolver.js`) rather than a pin, and this panel had no way to send
+ * one — the one diagnostic tool built to answer "given the front door as
+ * configured right now, who answers?" could not exercise the mechanism every
+ * caller actually uses. A caller pin still wins server-side when both are
+ * sent (the door resolves a need only `if (need && !wantsPin)`), so this
+ * panel keeps them mutually exclusive on purpose: typing a need clears
+ * whatever the picker had pinned, rather than sending both and reporting a
+ * pin that silently did nothing. `provenance.need` — `{ asked, resolved,
+ * provider?, model?, why? }` — is rendered the same way `hints` already is:
+ * in place, not hidden behind "Show raw JSON". A malformed need is a
+ * `400 INVALID_NEED` from the door, which lands in the existing 4xx/5xx catch
+ * below exactly like any other bad request — no separate handling needed.
  */
 import { useState } from 'react';
 import {
@@ -105,6 +120,7 @@ export default function TestPromptPanel({ picker }) {
   const { notify } = useToast();
 
   const [pin, setPin] = useState({ provider: null, model: null });
+  const [need, setNeed] = useState('');
   const [prompt, setPrompt] = useState('');
   const [useSchema, setUseSchema] = useState(false);
   const [schemaText, setSchemaText] = useState('');
@@ -139,8 +155,17 @@ export default function TestPromptPanel({ picker }) {
       }
     }
 
-    // Both or neither — the door refuses half a pin, and rightly.
-    if (pin.provider && pin.model) {
+    // A need and a pin are mutually exclusive here, on purpose. The door
+    // itself only resolves a need `if (need && !wantsPin)` — a pin always
+    // wins server-side — so sending both would silently drop the need the
+    // admin typed and report a pin they may not have meant to keep. Whichever
+    // one the admin filled in last is the one that should win, and that is
+    // "need, when set" per the door's own precedence.
+    const trimmedNeed = need.trim();
+    if (trimmedNeed) {
+      body.need = trimmedNeed;
+    } else if (pin.provider && pin.model) {
+      // Both or neither — the door refuses half a pin, and rightly.
       body.provider = pin.provider;
       body.model = pin.model;
     }
@@ -182,8 +207,8 @@ export default function TestPromptPanel({ picker }) {
       <Typography variant="body2" color="text.secondary" sx={{ mb: 2, fontSize: 12 }}>
         Sends one prompt through <code>POST /api/ai/feature</code> — the same door the suite&apos;s
         apps use — as the <code>{TRY_IT_FEATURE}</code> feature, so it cannot eat an app&apos;s daily
-        cap. Leave the model on Automatic to exercise the health-ranked walk exactly as a caller
-        would get it.
+        cap. Leave both the model below and the need unset to exercise the health-ranked walk
+        exactly as a caller with no opinion would get it.
       </Typography>
 
       <AliveModelPicker
@@ -197,6 +222,29 @@ export default function TestPromptPanel({ picker }) {
         )}
         onReload={picker?.onReload}
         label="Model (Automatic when unset)"
+      />
+
+      {/*
+        * Every real caller routes with `need:`, not a pin — this is the one
+        * field that lets this panel exercise that mechanism at all (review
+        * §3.3). It wins over the picker above when both are filled: the door
+        * itself only resolves a need `if (need && !wantsPin)`, so honouring
+        * anything else here would mean the panel silently sends a pin the
+        * admin can see was ignored.
+        */}
+      <TextField
+        fullWidth
+        label="Need (overrides the model above when set)"
+        value={need}
+        onChange={(e) => setNeed(e.target.value)}
+        margin="normal"
+        placeholder="e.g. structured:fast or vision+structured:balanced"
+        helperText={
+          need.trim() && pin.provider && pin.model
+            ? `Sent instead of the pinned ${pin.provider}/${pin.model} — a need always wins here.`
+            : 'One or more of structured | reasoning | prose | code | vision, joined by "+", then '
+              + ':fast | balanced | deep. Leave blank to use the model above, or Automatic.'
+        }
       />
 
       <TextField
@@ -304,6 +352,35 @@ export default function TestPromptPanel({ picker }) {
               <Chip key={hint} size="small" color="warning" variant="outlined" sx={{ fontSize: 12 }} label={hint} />
             ))}
           </Box>
+
+          {/*
+            * `provenance.need` only exists when this call sent one (aiRoutes.js
+            * only attaches it `if (need) {...}` on the response). `resolved`
+            * is `false` when nothing in the catalog measurably met it — a
+            * real outcome, not a bug — and the call still went through on the
+            * ordinary rotation, which is why this sits beside the other facts
+            * rather than replacing them.
+            */}
+          {provenance.need && (
+            <Box sx={{ mb: 1.5 }}>
+              <Chip
+                size="small"
+                variant="outlined"
+                color={provenance.need.resolved ? 'success' : 'default'}
+                sx={{ fontSize: 12, mb: 0.5 }}
+                label={`need ${provenance.need.asked} → ${
+                  provenance.need.resolved
+                    ? `${provenance.need.provider}/${provenance.need.model}`
+                    : 'unresolved, fell through to the ordinary rotation'
+                }`}
+              />
+              {Array.isArray(provenance.need.why) && provenance.need.why.length > 0 && (
+                <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: 12 }}>
+                  {provenance.need.why.join(' · ')}
+                </Typography>
+              )}
+            </Box>
+          )}
 
           <Typography variant="caption" color="text.secondary" display="block" sx={{ fontSize: 12, mb: 0.5 }}>
             Answer

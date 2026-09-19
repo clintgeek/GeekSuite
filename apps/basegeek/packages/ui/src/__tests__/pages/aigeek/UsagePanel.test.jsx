@@ -114,7 +114,22 @@ describe('UsagePanel', () => {
     // The tables count in-process calls and reset on every deploy; the spend
     // line is `AISpend`. They disagree by however long ago the last restart was.
     renderWithProviders(<UsagePanel {...baseProps()} />);
-    expect(screen.getByText(/This month: \$1\.76 of the \$10/)).toBeInTheDocument();
+    expect(screen.getByText(/This month: \$1\.76/)).toBeInTheDocument();
     expect(screen.getByText(/Since basegeek last restarted:/)).toBeInTheDocument();
+  });
+
+  it('does not compare the month figure to the $10 credit as a ratio (review §1.6)', () => {
+    // `spend.monthUsd` resets every calendar month; the $10 named in
+    // DOCS/ARCHIVE/AIGEEK_ELEVATION_PLAN.md is a one-time credit purchase with
+    // no field tracking cumulative spend against it. "$X of the $10" implied a
+    // remaining balance that nothing here actually computes — this pins that
+    // the ratio framing is gone, and that the real, currently-enforced caps
+    // are what the line leads with instead.
+    //
+    // This test goes RED against the pre-fix line ("This month: $1.76 of the
+    // $10 · today ...") and GREEN once the "of the $10" ratio is removed.
+    renderWithProviders(<UsagePanel {...baseProps()} />);
+    expect(screen.queryByText(/of the \$10/)).toBeNull();
+    expect(screen.getByText(/one-time purchase/)).toBeInTheDocument();
   });
 });

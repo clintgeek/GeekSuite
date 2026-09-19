@@ -160,7 +160,10 @@ describe('AIGeekPage', () => {
   it('renders the spend line from status.spend, not from the session counters', async () => {
     mockTransports();
     renderWithProviders(<AIGeekPage />);
-    expect(await screen.findByText(/This month: \$1\.76 of the \$10/)).toBeInTheDocument();
+    // No "of the $10" ratio (review §1.6) — the $10 is a one-time credit, not
+    // a monthly allowance, and nothing here tracks a balance against it.
+    expect(await screen.findByText(/This month: \$1\.76/)).toBeInTheDocument();
+    expect(screen.queryByText(/of the \$10/)).toBeNull();
     expect(screen.getByText(/today \$0\.02/)).toBeInTheDocument();
     expect(screen.getByText(/\$0\.25\/day, \$0\.02\/call/)).toBeInTheDocument();
   });
@@ -306,5 +309,31 @@ describe('AIGeekPage', () => {
     renderWithProviders(<AIGeekPage />, { initialEntries: ['/aigeek?tab=keys'] });
     await screen.findByRole('heading', { name: 'Apps and keys' });
     await waitFor(() => expect(scrolled).toContain('apps-keys'));
+  });
+
+  it('the sticky nav opens Catalog before scrolling to it, same as the ?tab= deep link does (review §3.5)', async () => {
+    // Before the fix, StatusNav's onJump was handed the raw scroll function,
+    // so clicking "Catalog" scrolled to a collapsed card showing only a
+    // header and a "Show" button — a second click was needed to see anything.
+    // This goes RED against that: the toggle stays "Show" (closed) after the
+    // nav click, on the un-fixed code, and GREEN once the jump opens the
+    // section first, same as the ?tab= effect already did for it.
+    mockTransports();
+    renderWithProviders(<AIGeekPage />);
+    await screen.findByRole('heading', { name: 'Needs attention' });
+
+    // Both collapsed sections start "Show"; Catalog is the first of the two.
+    const [catalogToggle] = screen.getAllByRole('button', { name: 'Show' });
+    expect(catalogToggle).toHaveAttribute('aria-expanded', 'false');
+
+    // The badge's own "0" is part of the accessible name (MuiBadge nests it
+    // as a sibling text node), so this matches on the leading label.
+    fireEvent.click(screen.getByRole('button', { name: /^Catalog/ }));
+
+    // Opened, not just scrolled: the toggle now reads "Hide" and the body —
+    // unmounted while collapsed — is in the DOM.
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Hide' })).toBeInTheDocument());
+    expect(catalogToggle).toHaveAttribute('aria-expanded', 'true');
+    await waitFor(() => expect(scrolled).toContain('catalog'));
   });
 });

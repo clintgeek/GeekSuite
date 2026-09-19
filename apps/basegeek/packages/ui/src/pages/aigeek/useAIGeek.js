@@ -115,6 +115,28 @@ export const STATUS_POLL_MS = 60_000;
 export const providerAnchorId = (provider) => `provider-${provider}`;
 
 /**
+ * Which measured-latency band a p50 falls in, or `null` when the row has
+ * never been timed.
+ *
+ * Mirrors `weightClassOf` in `apps/basegeek/packages/api/src/models/
+ * AIFreeTier.js` — the UI package cannot import backend model code, so the
+ * two thresholds are restated here rather than shared. `null` is not "slow",
+ * it is "unmeasured", the same distinction the backend's version makes and
+ * for the same reason (review §3.4): a row the catalog job has not reached
+ * yet should read as unmeasured in `CatalogPanel.jsx`, not as a bad one.
+ * Exported so `catalogRows.test.js` can pin the boundary without duplicating
+ * the thresholds a third time.
+ */
+export const CATALOG_WEIGHT_FAST_MS = 2000;
+export const CATALOG_WEIGHT_BALANCED_MS = 6000;
+export function weightClassOf(p50Ms) {
+  if (typeof p50Ms !== 'number' || !Number.isFinite(p50Ms)) return null;
+  if (p50Ms <= CATALOG_WEIGHT_FAST_MS) return 'fast';
+  if (p50Ms <= CATALOG_WEIGHT_BALANCED_MS) return 'balanced';
+  return 'deep';
+}
+
+/**
  * A provider entry before the server has been heard from.
  *
  * The server sends `{ hasKey, keyHint, enabled }` and never the credential, so
@@ -1072,6 +1094,14 @@ export function useAIGeek(notify) {
    * (`fitness`), which is the column an admin actually reads. A model in the
    * catalog and not in the alive list is cooling or unkeyed — which is
    * information, so it stays in the table rather than being filtered out.
+   *
+   * `acceptsImageInput` / `latencyP50Ms` / `weightClass` / `qualityScore` /
+   * `qualityScoredAt` joined this selector 2026-09-19 (review §3.4): the
+   * backend's `freeTierMap` carried them into `aiDirectorModels` but this
+   * selector dropped them on the floor, so the one page meant to show
+   * *measured* facts instead of `capabilities.performance`/`tasks` guesses
+   * could not show whether a row sees images, how fast it actually answers,
+   * or how it scored on the golden set. `CatalogPanel.jsx` renders them.
    */
   const catalogRows = useMemo(() => {
     const aliveBy = new Map(
@@ -1099,6 +1129,16 @@ export function useAIGeek(notify) {
           lastSuccessAt: alive?.lastSuccessAt ?? model.freeTier?.health?.lastSuccessAt ?? null,
           limits: model.freeTier?.limits || {},
           hasKey: entry.hasApiKey === true,
+          // Vendor-listed, not guessed — null means "this provider's listing
+          // never said" (only OpenRouter's does today), which is different
+          // from `false` ("said, and no").
+          acceptsImageInput: model.freeTier?.acceptsImageInput ?? null,
+          latencyP50Ms: model.freeTier?.latency?.p50Ms ?? null,
+          weightClass: weightClassOf(model.freeTier?.latency?.p50Ms ?? null),
+          qualityScore: typeof model.freeTier?.quality?.score === 'number'
+            ? model.freeTier.quality.score
+            : null,
+          qualityScoredAt: model.freeTier?.quality?.scoredAt ?? null,
         });
       }
     }

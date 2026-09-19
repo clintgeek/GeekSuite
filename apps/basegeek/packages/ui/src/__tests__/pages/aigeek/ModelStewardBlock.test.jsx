@@ -81,6 +81,29 @@ describe('ModelStewardBlock', () => {
     expect(screen.getByText('fit 91')).toBeInTheDocument();
   });
 
+  it('shows "not yet measured" instead of a fit chip when a row has no measured signal', () => {
+    // `aiDirectorService.capabilityFitScore` returns `null` (not a low
+    // number) for a row with no fitness, latency or golden-set score at
+    // all (review §1.4) — this is the honest-UI half of that fix, and the
+    // one place a test that only checked "some chip renders" would not
+    // have distinguished the fix from the bug: the old code always
+    // produced a number, so `score: null` never happened before it.
+    renderWithProviders(<ModelStewardBlock {...baseProps({
+      recommendations: [
+        {
+          provider: 'groq', modelId: 'never-measured', name: 'Never Measured',
+          score: null, contextWindow: 8192,
+          reasoning: 'Free tier available, Not yet measured — no fitness, latency or golden-set score for this row',
+        },
+      ],
+    })} />);
+    expect(screen.getByText('Never Measured')).toBeInTheDocument();
+    expect(screen.getByText('not yet measured')).toBeInTheDocument();
+    // No "fit N" chip anywhere for this row — a guessed number would be
+    // worse than none (review §1.4's whole complaint about the old score).
+    expect(screen.queryByText(/^fit \d+$/)).not.toBeInTheDocument();
+  });
+
   it('shows a "no model matched" warning when recommendations resolve empty', () => {
     renderWithProviders(<ModelStewardBlock {...baseProps({ recommendations: [] })} />);
     expect(screen.getByText(/No model matched that description/)).toBeInTheDocument();

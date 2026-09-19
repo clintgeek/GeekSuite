@@ -403,14 +403,19 @@ describe('syncResults writes what discover found', () => {
     { kind: 'listing', provider: 'openrouter', count: 2, candidates: 2 },
     { kind: 'probe', provider: 'openrouter', modelId: 'free/y', status: 'alive', fitness: 'structured', code: 'ok' },
     { kind: 'probe', provider: 'openrouter', modelId: 'openrouter/free', status: 'alive', fitness: 'basic', code: 'ok' },
-    { kind: 'probe', provider: 'openrouter', modelId: 'gone/z', status: 'dead', fitness: null, code: 'http_404' },
+    // http_401 is dead but not a retirement code (a bad key, not a withdrawn
+    // slug) — it exercises the ordinary cool-30-days branch below.
+    { kind: 'probe', provider: 'openrouter', modelId: 'gone/z', status: 'dead', fitness: null, code: 'http_401' },
     { kind: 'probe', provider: 'openrouter', modelId: 'busy/w', status: 'unknown', fitness: null, code: 'http_429' },
+    // http_404 IS a retirement code (RETIREMENT_CODES in models/AIFreeTier.js)
+    // — see the 'retires a row the vendor withdrew' test below (§1.5).
+    { kind: 'probe', provider: 'openrouter', modelId: 'withdrawn/v', status: 'dead', fitness: null, code: 'http_404' },
   ];
 
   it('counts each outcome and prices the paid rows per 1M', async () => {
     const deps = fakeCollections();
     const counts = await syncResults(RESULTS, deps, { now: Date.UTC(2026, 8, 7) });
-    expect(counts).toMatchObject({ alive: 2, dead: 1, unknown: 1, listed: 2 });
+    expect(counts).toMatchObject({ alive: 2, dead: 2, unknown: 1, listed: 2 });
     const priceWrite = deps.writes.find(w => w.label === 'pricing');
     expect(priceWrite.update.$set).toMatchObject({ inputPrice: 0.5, outputPrice: 1.5, priceUnit: 'per_1m_tokens' });
   });
@@ -426,16 +431,35 @@ describe('syncResults writes what discover found', () => {
     });
   });
 
-  it('cools a dead row 30 days and never deletes it', async () => {
+  it('cools an ordinary dead row 30 days and never deletes it', async () => {
     const now = Date.UTC(2026, 8, 7);
     const deps = fakeCollections();
     await syncResults(RESULTS, deps, { now });
     const dead = deps.writes.find(w => w.label === 'freeTier' && w.filter.modelId === 'gone/z');
-    expect(dead.update.$set['health.lastFailureCode']).toBe('http_404');
+    expect(dead.update.$set['health.lastFailureCode']).toBe('http_401');
     expect(dead.update.$set['health.coolingUntil'].getTime() - now).toBe(30 * 24 * 60 * 60 * 1000);
+    expect(dead.update.$set.isFree).toBeUndefined();
     expect(deps.writes.some(w => w.op === 'deleteMany' && w.label === 'freeTier')).toBe(false);
     // An unknown row is not written at all: a bad minute is not a verdict.
     expect(deps.writes.some(w => w.filter?.modelId === 'busy/w')).toBe(false);
+  });
+
+  /*
+   * §1.5 of the review: `runProbe` gained an `isRetirement` branch on
+   * 2026-09-16 so a vendor-withdrawn slug retires instead of cooling for 30
+   * days. `writeDead` — reached from here, via `syncResults`, on the ~24h
+   * discovery run — never got the same branch, so a model that 404s on its
+   * FIRST discovery probe was cooled and would 404 again in 30 days, forever.
+   * This pins that `writeDead` now agrees with `runProbe`.
+   */
+  it('retires a row the vendor withdrew (http_404) instead of cooling it', async () => {
+    const now = Date.UTC(2026, 8, 7);
+    const deps = fakeCollections();
+    await syncResults(RESULTS, deps, { now });
+    const retired = deps.writes.find(w => w.label === 'freeTier' && w.filter.modelId === 'withdrawn/v');
+    expect(retired.update.$set.isFree).toBe(false);
+    expect(retired.update.$set['health.coolingUntil']).toBeNull();
+    expect(retired.update.$set['health.lastFailureCode']).toBe('http_404');
   });
 
   it('never deactivates a model that just answered but was not in the listing', async () => {

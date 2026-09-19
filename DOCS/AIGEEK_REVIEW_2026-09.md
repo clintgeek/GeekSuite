@@ -107,7 +107,7 @@ the accurate vendor-reported `contextTokens` sitting beside it is never surfaced
 **Fix (small):** add `if (stored.source) return true;` to `looksObserved`; have the
 director read `contextTokens`/`maxOutputTokens` directly.
 
-### 1.4 "Suggest a model" ranks on exactly the signals the design doc disowns — **open**
+### 1.4 "Suggest a model" ranks on exactly the signals the design doc disowns — **done 2026-09-19**
 
 `ModelStewardBlock.jsx` → `aiRecommendModel` → `aiDirectorService.capabilityFitScore()`.
 
@@ -123,7 +123,7 @@ Worse than no ranking, because a numeric "fit 87" chip looks authoritative.
 (**substantial**), or as a stopgap drop the numeric score and the Speed/Quality sort from
 the UI until it does (**small**).
 
-### 1.5 `writeDead()` and `runProbe()` disagree about retirement — **open**
+### 1.5 `writeDead()` and `runProbe()` disagree about retirement — **done 2026-09-19**
 
 `services/aiCatalogDiscovery.js`. `runProbe` gained an `isRetirement(code)` branch on
 2026-09-16 so a vendor-withdrawn model retires instead of cooling. `writeDead` — the
@@ -136,7 +136,7 @@ two-paths-disagree shape the codebase has worked hard to eliminate. No test cove
 
 **Fix (small):** apply the same `isRetirement` check at the `writeDead` call site.
 
-### 1.6 The spend line compares a monthly figure to a one-time credit — **open**
+### 1.6 The spend line compares a monthly figure to a one-time credit — **done 2026-09-19**
 
 `aigeek/UsagePanel.jsx` — `const MONTHLY_BUDGET_USD = 10;` rendered as
 *"This month: $X of the $10"*.
@@ -153,7 +153,7 @@ defaulting to $0.05/$0.01) are much smaller numbers and are not shown at all.
 **Fix (small):** reword to stop implying a monthly ratio. **Substantial** if the intent is
 to genuinely track remaining credit — no field exists for it today.
 
-### 1.7 (Landmine, not yet live) the candidate projection omits `isFree` and `override` — **open**
+### 1.7 (Landmine, not yet live) the candidate projection omits `isFree` and `override` — **done 2026-09-19**
 
 `aiService.js` — the same hand-copied candidate literal from §0. `exclusionFor` checks
 `row.isFree === false` and `row.override === 'deny'`; neither field is on the candidate, so
@@ -176,7 +176,7 @@ deliberately omitted and why.
 | Stale "StoryGeek's epub pipeline calls this" comments | `aiDirectorService.js` ×2, `aiRoutes.js` ×1 | That integration went in Phase 2 — StoryGeek's own service documents the cutover. Live callers are basegeek's own console, via the options-object form. Comment-only; the positional signature was left alone. | **done** |
 | `GET /api/ai/usage/:provider` and `/:provider/:modelId` | `aiRoutes.js` | **Reverted — will not delete.** See §2.1. | **won't do** |
 | `GET /api/ai/stats`, `GET /api/ai/capabilities` | `aiRoutes.js` | **Will not delete.** `/stats` is covered by a permission-gating test (`aiRoutesGates.test.js`) asserting `ai:stats` reaches it, and both are documented as public routes in `apps/basegeek/DOCS/API_KEYS.md` — intentional operator endpoints, not orphans. | **won't do** |
-| `catalogRows.health` | `useAIGeek.js` | Computed and passed, never rendered. Better fixed than deleted: `health.coolingUntil`/`consecutiveFailures` would turn the generic "cooling" tooltip into "cooling until 4:12 PM after 3 failures". | open |
+| `catalogRows.health` | `useAIGeek.js` | Computed and passed, never rendered. Better fixed than deleted: `health.coolingUntil`/`consecutiveFailures` would turn the generic "cooling" tooltip into "cooling until 4:12 PM after 3 failures". | **done 2026-09-19** |
 
 ### 2.1 Why `/usage` was spared — and the rule it produced
 
@@ -208,7 +208,7 @@ removing a route, check what its tests are asserting, not just who calls it.**
 | `updateModelCapabilities()` / `updateAllModelCapabilities()` | `aiModelCapabilitiesService.js` | Zero callers anywhere, including tests. ~35 lines including an upsert. **Do not delete the rest of the file** — `getCapabilities`/`supportsTools`/`supportsJSONMode`/`supportsJSONSchema` are live on the request path and are a different, trustworthy, adapter-derived signal. | open |
 | `GET /api/ai/stats`, `GET /api/ai/capabilities` | `aiRoutes.js` | No caller found, but no comment admitting it either — could be operator debug endpoints. **Confirm before deleting.** | open |
 | Stale "StoryGeek's epub pipeline calls this" comments | `aiDirectorService.js`, `aiRoutes.js` | That integration was removed in Phase 2 — StoryGeek's own service says so. The only live callers are basegeek's own console, and both use the options-object form, not the positional one the comments justify keeping. | open |
-| `catalogRows.health` | `useAIGeek.js` | Computed and passed, never rendered. Better fixed than deleted: `health.coolingUntil`/`consecutiveFailures` would turn the generic "cooling" tooltip into "cooling until 4:12 PM after 3 failures". | open |
+| `catalogRows.health` | `useAIGeek.js` | Computed and passed, never rendered. Better fixed than deleted: `health.coolingUntil`/`consecutiveFailures` would turn the generic "cooling" tooltip into "cooling until 4:12 PM after 3 failures". | **done 2026-09-19** |
 
 ---
 
@@ -238,7 +238,7 @@ But **status/poll, usage stats, provider config and suggest/recommend have no re
 share a reducer with them** — they could be standalone hooks with no change to either join
 selector, cutting roughly a third of the file and making the real coupling visible.
 
-### 3.3 "Try it" cannot test `need:` routing — **open**
+### 3.3 "Try it" cannot test `need:` routing — **done 2026-09-19**
 
 `TestPromptPanel.jsx` sends only `feature`, `user`, optional `schema`, and an optional
 pin. There is no `need` field. So the one diagnostic tool built to answer *"given the front
@@ -249,7 +249,7 @@ logs instead.
 **Fix (small):** add a `need` field, send it instead of the pin when set, and surface
 `provenance.need` — already returned.
 
-### 3.4 The catalog table cannot show vision, quality or latency — **open**
+### 3.4 The catalog table cannot show vision, quality or latency — **done 2026-09-19**
 
 `aiDirectorService.freeTierMap` copies only `{isFree, limits, notes, fitness, probedAt,
 observed, health, override}` — it drops `acceptsImageInput`, `latency.p50Ms` and
@@ -259,7 +259,7 @@ So on the one page meant to prevent exactly this, an admin cannot see which rows
 an image, how fast a row answers, or how it scored on the golden set. **Substantial**, and
 it starts in the backend.
 
-### 3.5 `StatusNav` jump does not open a collapsed section — **open**
+### 3.5 `StatusNav` jump does not open a collapsed section — **done 2026-09-19**
 
 The `?tab=` deep link dispatches `section/open` before scrolling; the sticky nav's `onJump`
 passes the raw scroll function, so clicking "Catalog" scrolls to a collapsed card needing a

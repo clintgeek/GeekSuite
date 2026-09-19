@@ -54,7 +54,17 @@ const { resolvers } = await import('../graphql/basegeek/resolvers.js');
 
 // ─── Fixtures ────────────────────────────────────────────────────────────────
 
-/** A free Groq model with full capability data — the happy path. */
+/**
+ * A free Groq model with full capability data — the happy path.
+ *
+ * Also the one row in this file with a full *measured* history (fitness,
+ * latency, golden-set quality) — added 2026-09-19 alongside review §1.4, so
+ * `capabilityFitScore` and the speed/quality priority orderings have real,
+ * ranked-on-purpose data to score instead of falling back to "unmeasured".
+ * `latency.p50Ms: 420` is deliberately in the `fast` band
+ * (`AIFreeTier.WEIGHT_FAST_MS` is 2000) so this row wins `priority: 'speed'`
+ * against `TOGETHER_FREE_SPARSE`, which carries no latency at all.
+ */
 const GROQ_FREE = {
   id: 'llama-3.3-70b-versatile',
   name: 'Llama 3.3 70B Versatile',
@@ -62,7 +72,11 @@ const GROQ_FREE = {
   freeTier: {
     isFree: true,
     limits: { requestsPerMinute: 30, requestsPerDay: 14400, tokensPerMinute: 18000, tokensPerDay: 5184000 },
-    notes: 'Free tier - PRIMARY recommended model'
+    notes: 'Free tier - PRIMARY recommended model',
+    fitness: 'structured',
+    acceptsImageInput: false,
+    latency: { recentMs: [400, 410, 420, 430, 440], p50Ms: 420, measuredAt: '2026-09-16T00:00:00.000Z' },
+    quality: { score: 0.86, byClass: { structured: 1, reasoning: 0.9 }, offLanguage: false, answered: 6, scoredAt: '2026-09-16T00:00:00.000Z' }
   },
   capabilities: {
     contextWindow: 131072,
@@ -250,7 +264,10 @@ describe('recommendProvider — freeOnly', () => {
     });
 
     expect(result.data.recommendations).toHaveLength(1);
-    expect(result.data.recommendations[0].provider).toBe('groq'); // ultra-fast
+    // groq's measured latency.p50Ms (420ms) is in the `fast` band; together
+    // has no latency at all (unmeasured). Neither model's guessed
+    // `capabilities.performance.speed` matters any more (review §1.4).
+    expect(result.data.recommendations[0].provider).toBe('groq');
   });
 
   it('carries a fit score and a human reason on every candidate', async () => {
@@ -266,6 +283,163 @@ describe('recommendProvider — freeOnly', () => {
     expect(groq.score).toBeLessThanOrEqual(100);
     expect(groq.reasoning).toContain('Free tier available');
     expect(groq.reasoning).toContain('Returns structured JSON');
+  });
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+/**
+ * capabilityFitScore / priority ordering — measured facts, not guessed ones
+ * (review §1.4).
+ *
+ * Until 2026-09-19, `capabilityFitScore` and the speed/quality priority
+ * comparators in `recommendProvider` scored `capabilities.performance.*` /
+ * `capabilities.tasks.*` — string-matched off the model id
+ * (`aiModelCapabilitiesService.js`: "70b" -> excellent). Every test in this
+ * block is built so that guess and measurement *disagree*: a test that
+ * merely checked "the ranking is plausible" would pass whether the code read
+ * the guess or the measurement, which is exactly the trap the review
+ * document's own §"non-negotiable" warns about (three tests earlier the same
+ * day asserted a field name-inference sets for every model, and could not
+ * tell the two code paths apart). Each test below was run against the
+ * pre-fix code too, to confirm it goes red there — see the PR description /
+ * task report for the transcript.
+ */
+describe('capabilityFitScore / priority ordering — measured facts, not the name guess', () => {
+  /**
+   * `capabilities.performance.speed: 'slow'` (a guess the old code would have
+   * ranked last) but a measured `latency.p50Ms` of 250ms — solidly `fast`.
+   */
+  const MEASURED_FAST_GUESSED_SLOW = {
+    id: 'measured-fast-guessed-slow',
+    name: 'Measured Fast, Guessed Slow',
+    pricing: { input: 0.001, output: 0.001 },
+    freeTier: { isFree: true, limits: {}, notes: '', latency: { p50Ms: 250 } },
+    capabilities: { performance: { speed: 'slow', quality: 'good' } }
+  };
+
+  /**
+   * `capabilities.performance.speed: 'ultra-fast'` (a guess the old code
+   * would have ranked first) but a measured `latency.p50Ms` of 9000ms —
+   * solidly `deep`, i.e. actually slow.
+   */
+  const GUESSED_FAST_MEASURED_SLOW = {
+    id: 'guessed-fast-measured-slow',
+    name: 'Guessed Fast, Measured Slow',
+    pricing: { input: 0.001, output: 0.001 },
+    freeTier: { isFree: true, limits: {}, notes: '', latency: { p50Ms: 9000 } },
+    capabilities: { performance: { speed: 'ultra-fast', quality: 'good' } }
+  };
+
+  /**
+   * `capabilities.performance.quality: 'basic'` (a guess the old code would
+   * have ranked last) but a fresh golden-set `quality.score` of 0.95.
+   */
+  const MEASURED_EXCELLENT_GUESSED_BASIC = {
+    id: 'measured-excellent-guessed-basic',
+    name: 'Measured Excellent, Guessed Basic',
+    pricing: { input: 0.001, output: 0.001 },
+    freeTier: {
+      isFree: true, limits: {}, notes: '',
+      quality: { score: 0.95, byClass: {}, scoredAt: new Date().toISOString() }
+    },
+    capabilities: { performance: { speed: 'medium', quality: 'basic' } }
+  };
+
+  /**
+   * `capabilities.performance.quality: 'state-of-the-art'` (a guess the old
+   * code would have ranked first) but a fresh golden-set `quality.score` of
+   * 0.1 — measured badly.
+   */
+  const GUESSED_EXCELLENT_MEASURED_POOR = {
+    id: 'guessed-excellent-measured-poor',
+    name: 'Guessed Excellent, Measured Poor',
+    pricing: { input: 0.001, output: 0.001 },
+    freeTier: {
+      isFree: true, limits: {}, notes: '',
+      quality: { score: 0.1, byClass: {}, scoredAt: new Date().toISOString() }
+    },
+    capabilities: { performance: { speed: 'medium', quality: 'state-of-the-art' } }
+  };
+
+  /** No fitness, no latency, no golden-set score — never measured at all. */
+  const NEVER_MEASURED = {
+    id: 'never-measured',
+    name: 'Never Measured',
+    pricing: { input: 0.001, output: 0.001 },
+    freeTier: { isFree: true, limits: {}, notes: '' },
+    capabilities: { performance: { speed: 'ultra-fast', quality: 'state-of-the-art' } }
+  };
+
+  const speedVsQualityCatalog = () => ({
+    success: true,
+    data: {
+      providers: {
+        groq: { hasApiKey: true, isEnabled: true, totalModels: 1, models: [MEASURED_FAST_GUESSED_SLOW] },
+        gemini: { hasApiKey: true, isEnabled: true, totalModels: 1, models: [GUESSED_FAST_MEASURED_SLOW] },
+        cohere: { hasApiKey: true, isEnabled: true, totalModels: 1, models: [MEASURED_EXCELLENT_GUESSED_BASIC] },
+        together: { hasApiKey: true, isEnabled: true, totalModels: 1, models: [GUESSED_EXCELLENT_MEASURED_POOR] },
+      },
+      summary: {}
+    }
+  });
+
+  it('priority: speed picks the measured-fast row over the guessed-"ultra-fast" one', async () => {
+    jest.spyOn(aiDirectorService, 'collectModelInformation').mockResolvedValue(speedVsQualityCatalog());
+
+    const result = await aiDirectorService.recommendProvider('summarize a note', {
+      freeOnly: true, priority: 'speed', limit: 1
+    });
+
+    // If this read `capabilities.performance.speed` (the old code), the
+    // winner would be `gemini` (guessed 'ultra-fast'), not `groq` (guessed
+    // 'slow', measured 250ms).
+    expect(result.data.recommendations[0].provider).toBe('groq');
+  });
+
+  it('priority: quality picks the golden-set-measured row over the guessed-"state-of-the-art" one', async () => {
+    jest.spyOn(aiDirectorService, 'collectModelInformation').mockResolvedValue(speedVsQualityCatalog());
+
+    const result = await aiDirectorService.recommendProvider('summarize a note', {
+      freeOnly: true, priority: 'quality', limit: 1
+    });
+
+    // If this read `capabilities.performance.quality` (the old code), the
+    // winner would be `together` (guessed 'state-of-the-art', measured
+    // 0.1), not `cohere` (guessed 'basic', measured 0.95).
+    expect(result.data.recommendations[0].provider).toBe('cohere');
+  });
+
+  it('scores a partially-measured row on what it does know, not the guess', async () => {
+    jest.spyOn(aiDirectorService, 'collectModelInformation').mockResolvedValue({
+      success: true,
+      data: { providers: { groq: { hasApiKey: true, isEnabled: true, totalModels: 1, models: [MEASURED_EXCELLENT_GUESSED_BASIC] } }, summary: {} }
+    });
+
+    const result = await aiDirectorService.recommendProvider('summarize a note', { freeOnly: true });
+    const [top] = result.data.recommendations;
+
+    // fitness/latency are unmeasured here (mid-band), but the golden-set
+    // score (0.95) dominates the 60%-weighted quality term, so the score
+    // still reads as strong — not the 50-ish "basic" guess would have given.
+    expect(typeof top.score).toBe('number');
+    expect(top.score).toBeGreaterThan(70);
+  });
+
+  it('gives a genuinely unmeasured row no numeric fit score, and says so', async () => {
+    jest.spyOn(aiDirectorService, 'collectModelInformation').mockResolvedValue({
+      success: true,
+      data: { providers: { groq: { hasApiKey: true, isEnabled: true, totalModels: 1, models: [NEVER_MEASURED] } }, summary: {} }
+    });
+
+    const result = await aiDirectorService.recommendProvider('summarize a note', { freeOnly: true });
+    const [top] = result.data.recommendations;
+
+    // Not "a low number" — no number at all. `ModelStewardBlock.jsx` hides
+    // the "fit" chip precisely when `score` is not a number, so a row this
+    // guessed-confident (`performance: 'ultra-fast'/'state-of-the-art'`) and
+    // this unmeasured must not carry one.
+    expect(top.score).toBeNull();
+    expect(top.reasoning).toContain('Not yet measured');
   });
 });
 
