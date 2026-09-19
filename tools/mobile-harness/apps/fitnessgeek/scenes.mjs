@@ -1,7 +1,8 @@
-// FitnessGeek — the M1/M2 pilot surfaces (MOBILE_UI_PLAN.md), plus the Night 2
-// AI quick-add scene (R115/R126). Scenes are independent: any scene that
-// needs a dialog open re-navigates and re-opens it rather than relying on a
-// previous scene's state.
+// FitnessGeek — the M1/M2 pilot surfaces (MOBILE_UI_PLAN.md), the Night 2 AI
+// quick-add scene (R115/R126), and the nine previously-uncovered screens plus
+// four dialogs closed out in the "no scene at all" review (2026-09-19).
+// Scenes are independent: any scene that needs a dialog open re-navigates and
+// re-opens it rather than relying on a previous scene's state.
 import { json, graphqlRoute } from '../../lib/net.mjs';
 import { OPS, SETTINGS } from './fixtures.mjs';
 
@@ -9,10 +10,12 @@ import { OPS, SETTINGS } from './fixtures.mjs';
 // on the settings document, R124 — see
 // `apps/fitnessgeek/frontend/src/utils/quickAddPreference.js`), off by
 // default in fixtures.mjs's context-wide SETTINGS so no scene above this one
-// renders "Describe a meal". Scene 11 flips it on for itself only, via a
-// page-scoped GetFitnessUserSettings stub (page.route() beats ctx.route()
-// for a matching request — README "Night 2"), and must stay the LAST scene
-// in the file for the same reason.
+// renders "Describe a meal". The last scene flips it on for itself only, via
+// a page-scoped GetFitnessUserSettings stub (page.route() beats ctx.route()
+// for a matching request — README "Night 2"), and must stay LAST in the file
+// for the same reason — everything else has to run before that override (and
+// the health-dashboard scenes' own page-scoped override, unrouted at the end
+// of that trio) exists.
 
 export const scenes = [
   { name: '01-home', goto: '/dashboard', wait: 1600 },
@@ -91,6 +94,227 @@ export const scenes = [
     },
     teardown: (page, h) => h.esc(400),
   },
+
+  // ── Previously uncovered screens (2026-09-19 review) ─────────────────────
+
+  {
+    // The search box doubles as the describe box here too (FoodSearch.jsx
+    // passes `onDescribe`), so the placeholder is "What did you eat?" — same
+    // box as the describe-and-log scene below, different route.
+    name: '11-food-search',
+    goto: '/food-search',
+    wait: 1400,
+    async setup(page, h) {
+      const box = page.getByPlaceholder(/what did you eat/i).first();
+      if (!(await box.count())) return h.log('no search box on /food-search') ?? false;
+      await box.fill('greek yogurt');
+      // Local-catalog wave (150ms) + deep-search wave (400ms), both real here
+      // (fixtures.mjs stubs `/api/foods` and `/api/foods/suggest`) — long
+      // enough for both to land and the row list to settle.
+      await h.settle(1000);
+    },
+  },
+  { name: '12-my-foods', goto: '/my-foods', wait: 1400 },
+  { name: '13-my-meals', goto: '/my-meals', wait: 1400 },
+  { name: '14-medications', goto: '/medications', wait: 1400 },
+  {
+    // The editor surface: Type select, the time-of-day ToggleButtonGroup (no
+    // sx override in Medications.jsx, unlike BloodPressure.jsx's range
+    // toggle), and the "Your indications" chips (Chip + onDelete, genuinely
+    // interactive). Neither Edit nor Delete IconButton carries an aria-label
+    // or a Tooltip in the app, so there is no role-accessible name to select
+    // on — MUI's icon components stamp a `data-testid` unconditionally
+    // (`createSvgIcon.js`), which is the harness's documented fallback for
+    // exactly this case (see storygeek/scenes.mjs's 03-delete-confirm).
+    // Unlike 26-edit-log-dialog below, Medications.jsx has no swipe-reveal
+    // decoration sharing this testid — checked directly (6 matches on a
+    // 6-medication list, all real, all `inButton: true`) — so `.first()`
+    // here is safe.
+    name: '15-medications-edit',
+    goto: '/medications',
+    wait: 1400,
+    async setup(page, h) {
+      const edit = page.locator('[data-testid="EditIcon"]').first();
+      if (!(await edit.count())) return h.log('no medication edit icon') ?? false;
+      await edit.click();
+      await h.settle(700);
+    },
+  },
+  // Garmin-backed: daily stats, sleep stages, heart-rate detail and recent
+  // activities. All four fixture ops (status/daily/sleep/activities) carry
+  // real schema field names now — see fixtures.mjs's GARMIN_* comment.
+  { name: '16-activity', goto: '/activity', wait: 1800 },
+  // Reports: DayRibbon, meal breakdown, goal compliance, top foods, trend
+  // highlights and the 7d/14d/30d ToggleButtonGroup — the other range toggle
+  // with no sx override (compare BloodPressure.jsx's, which has one).
+  { name: '17-reports', goto: '/reports', wait: 1800 },
+
+  // ── /health — HealthDashboard. influxEnabled is false in the shared
+  // SETTINGS fixture (every other scene expects the real default), so this
+  // trio flips it on with a page-scoped GetFitnessUserSettings override,
+  // same pattern the last scene in this file uses for its own opt-in. The
+  // override is registered once here and unrouted at the end of the trio so
+  // it doesn't leak into scenes 21+.
+  {
+    name: '18-health-overview',
+    async setup(page, h) {
+      await page.route('**/graphql', async (route) => {
+        let payload = {};
+        try { payload = JSON.parse(route.request().postData() || '{}'); } catch { /* not JSON */ }
+        if (payload.operationName === 'GetFitnessUserSettings') {
+          return json(route, { data: { fitnessUserSettings: { ...SETTINGS, influxEnabled: true } } });
+        }
+        return route.fallback();
+      });
+      await page.goto(h.base + '/health', { waitUntil: 'networkidle' });
+      await h.settle(1800);
+    },
+  },
+  {
+    // The review's first named suspect: IntradayDashboard's "Show Detailed
+    // Charts" chip (Chip + onClick, MUI's suite-wide MuiChip override is a
+    // flat `height: 24` with no breakpoint carve-out — see
+    // packages/ui/src/createGeekSuiteTheme.js). This scene both measures the
+    // chip itself (visible before the click) and opens the nivo line charts
+    // it gates, the densest part of the page.
+    name: '19-health-overview-detailed',
+    goto: '/health',
+    wait: 1800,
+    async setup(page, h) {
+      const chip = page.getByText(/show detailed charts/i).first();
+      if (!(await chip.count())) return h.log('no "Show Detailed Charts" chip') ?? false;
+      await chip.click();
+      await h.settle(900);
+    },
+  },
+  {
+    // The review's second named suspect: MealImpactVisualization's HR/Stress/
+    // Energy ToggleButtonGroup, plain `size="small"` with no `{xs:44}`
+    // override. Visible as soon as the tab mounts — no extra click needed to
+    // measure it.
+    name: '20-health-meal-impact',
+    goto: '/health',
+    wait: 1800,
+    async setup(page, h) {
+      const tab = page.getByRole('tab', { name: /meal impact/i }).first();
+      if (!(await tab.count())) return h.log('no "Meal Impact" tab') ?? false;
+      await tab.click();
+      await h.settle(1200);
+    },
+    async teardown(page) {
+      // Restore the shared (influxEnabled: false) fixture for every scene
+      // after this trio — see the page-scoped-override note on 18 above.
+      await page.unroute('**/graphql');
+    },
+  },
+  // AIGoalPlanner. SETTINGS.nutrition_goal.enabled is true, so this loads
+  // straight into the existing-goal summary (Step 3, standard mode) rather
+  // than the intake wizard — the state a returning user actually sees.
+  { name: '21-calorie-wizard', goto: '/calorie-wizard', wait: 1500 },
+  { name: '22-settings', goto: '/settings', wait: 1400 },
+  {
+    // The household dialog: fixtures.mjs's GetFitnessHousehold already has an
+    // active household (h1, one member), so HouseholdSettings should render
+    // its "in a household" branch — Create/Join unreachable, Leave Household
+    // the dialog that state can actually open.
+    //
+    // It doesn't, and this is a real app bug, not a fixture gap: the wire
+    // response is verified correct (confirmed by instrumenting the actual
+    // GraphQL traffic), but `settingsService.getHouseholdSettings()`
+    // (settingsService.js:58-65) already returns the UNWRAPPED household
+    // object — `apiService.get()` auto-unwraps any single-key GraphQL
+    // response, so `getHouseholdSettings()`'s own `response.data` IS the
+    // household. Its one caller, `HouseholdSettings.jsx:62-63`
+    // (`loadHouseholdSettings`), does `setHouseholdData(response.data)` —
+    // reading `.data` a SECOND time off an object that no longer has one —
+    // so `householdData` is always `undefined` and `isInHousehold` is always
+    // `false`. In production this means nobody, including a user genuinely
+    // in a household, ever sees the household code, sharing switches,
+    // member list or Leave button — only Create/Join, regardless of what
+    // fixtures.mjs's GetFitnessHousehold says. Not this file's job to fix
+    // apps/fitnessgeek, so the scene targets whichever dialog the bug
+    // currently leaves reachable (Create today) and falls back to the
+    // intended one (Leave) so it keeps working the day someone fixes it,
+    // rather than flipping from covered to silently-skipped.
+    name: '23-settings-household-leave',
+    goto: '/settings',
+    wait: 1400,
+    async setup(page, h) {
+      const leave = page.getByRole('button', { name: /leave household/i }).first();
+      if (await leave.count()) {
+        await leave.click();
+        await h.settle(600);
+        return;
+      }
+      const create = page.getByRole('button', { name: /create household/i }).first();
+      if (!(await create.count())) return h.log('no household dialog trigger (Leave or Create) found') ?? false;
+      h.log('HouseholdSettings shows Create/Join, not Leave — see the double-unwrap bug noted above; covering Create instead');
+      await create.click();
+      await h.settle(600);
+    },
+    teardown: (page, h) => h.esc(400),
+  },
+  {
+    // BP Report — lazy (jspdf + html2canvas + Nivo), behind "View Report".
+    name: '24-bp-report-dialog',
+    goto: '/blood-pressure',
+    wait: 1800,
+    viewports: ['phone'],
+    async setup(page, h) {
+      const view = page.getByRole('button', { name: /view report/i }).first();
+      if (!(await view.count())) return h.log('no "View Report" button') ?? false;
+      await view.click();
+      await h.settle(900);
+    },
+    teardown: (page, h) => h.esc(400),
+  },
+  {
+    // Save Meal — MealSection's per-meal "Save … as a meal" IconButton, only
+    // rendered when that meal has logs (Breakfast does, in FOOD_LOGS).
+    name: '25-save-meal-dialog',
+    goto: '/food-log',
+    wait: 1600,
+    async setup(page, h) {
+      const save = page.getByRole('button', { name: /save .* as a meal/i }).first();
+      if (!(await save.count())) return h.log('no "Save … as a meal" button') ?? false;
+      await save.click();
+      await h.settle(700);
+    },
+    teardown: (page, h) => h.esc(400),
+  },
+  {
+    // Edit Log — FoodLogItem's per-row Edit icon.
+    //
+    // NOT `[data-testid="EditIcon"]` here, unlike 15-medications-edit: each
+    // FoodLogItem renders its swipe-reveal Edit decoration (a plain, inert
+    // `<div>`, `SwipeWrapper`'s left-side reveal panel, FoodLogItem.jsx
+    // ~line 178 on) BEFORE the real toolbar `IconButton` in DOM order, and
+    // both carry the same MUI-stamped `data-testid="EditIcon"` — confirmed
+    // by counting matches directly (14 on a 7-row food log: decorative,
+    // real, decorative, real, …, alternating). `.first()` on that selector
+    // always resolves to the decorative copy, which sits behind the row and
+    // times out any click aimed at it. The toolbar IconButton *is* wrapped
+    // in a `Tooltip title="Edit"`, which MUI turns into `aria-label="Edit"`
+    // on the button itself (no such tooltip on the decoration, which isn't
+    // a `<button>` at all) — so a role query is both correct and, unlike a
+    // shared data-testid, unambiguous.
+    name: '26-edit-log-dialog',
+    goto: '/food-log',
+    wait: 1600,
+    async setup(page, h) {
+      const edit = page.getByRole('button', { name: /^edit$/i }).first();
+      if (!(await edit.count())) return h.log('no food-log edit button') ?? false;
+      await edit.click();
+      await h.settle(700);
+    },
+    teardown: (page, h) => h.esc(400),
+  },
+
+  // Body-composition scan import. Reachable from the Android share sheet and
+  // from its own file picker, so it is a real destination rather than a
+  // sub-view of something already covered — it needs its own scene or the
+  // gate never looks at it.
+  { name: '27-scan-import', goto: '/scan-import', wait: 1600 },
   {
     /*
      * Describe-and-log — the app's primary path
@@ -111,7 +335,7 @@ export const scenes = [
      * The stubs are page-scoped, so this must stay the LAST scene in the file
      * — page.route() beats ctx.route() only for requests registered after it.
      */
-    name: '11-describe-and-log',
+    name: '28-describe-and-log',
     async setup(page, h) {
       // The box's two search waves. Neither should be what answers here, but
       // both fire on a pause, and an unstubbed call would hang the scene.
@@ -160,11 +384,6 @@ export const scenes = [
     },
     teardown: (page, h) => h.esc(400),
   },
-  // Body-composition scan import. Reachable from the Android share sheet and
-  // from its own file picker, so it is a real destination rather than a
-  // sub-view of something already covered — it needs its own scene or the
-  // gate never looks at it.
-  { name: '12-scan-import', goto: '/scan-import', wait: 1600 },
 ];
 
 // Known, ticketed violations. Each one should die when the app is fixed —
