@@ -15,8 +15,7 @@ import {
   ListItemIcon,
   ListItemText,
   Divider,
-  CircularProgress,
-  Button
+  CircularProgress
 } from '@mui/material';
 import {
   FitnessCenter as TrainingIcon,
@@ -132,7 +131,7 @@ function RecommendationCard({ recommendation }) {
 /**
  * Main RecoveryCoach component
  */
-export default function RecoveryCoach({ date, onRequestAIAnalysis }) {
+export default function RecoveryCoach({ date }) {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState(null);
 
@@ -159,19 +158,6 @@ export default function RecoveryCoach({ date, onRequestAIAnalysis }) {
     fetchRecommendations();
   }, [date]);
 
-  const handleAIAnalysisClick = async () => {
-    if (!onRequestAIAnalysis) return;
-
-    try {
-      const response = await influxService.getRecoveryContext(date);
-      if (response.available) {
-        onRequestAIAnalysis(response.promptText);
-      }
-    } catch (err) {
-      console.warn('Recovery context unavailable:', err.message);
-    }
-  };
-
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', p: 3 }}>
@@ -194,18 +180,16 @@ export default function RecoveryCoach({ date, onRequestAIAnalysis }) {
   return (
     <Box>
       <Stack spacing={3}>
-        {/* Header */}
+        {/* Header.
+            "Get Full AI Analysis" used to live here, wired to a native
+            `alert('...coming soon')` in HealthDashboard — the one place in
+            the app that broke the design language outright (a blocking
+            browser alert instead of the app's own toast/empty-state system),
+            promising an analysis feature that doesn't exist. Removed rather
+            than wired to a fake destination; re-add it once there's a real
+            AI analysis surface to send the recovery context to. */}
         <Stack direction="row" justifyContent="space-between" alignItems="center">
           <Typography variant="h5">AI Recovery Coach</Typography>
-          {onRequestAIAnalysis && (
-            <Button
-              variant="outlined"
-              size="small"
-              onClick={handleAIAnalysisClick}
-            >
-              Get Full AI Analysis
-            </Button>
-          )}
         </Stack>
 
         {/* Readiness Score */}

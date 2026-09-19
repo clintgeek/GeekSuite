@@ -14,7 +14,6 @@ import {
   Slide,
 } from '@mui/material';
 import {
-  Notifications as NotificationsIcon,
   Palette as ThemeIcon,
   Language as LanguageIcon,
   MonitorHeart as BPIcon,
@@ -109,13 +108,6 @@ const Settings = () => {
       usernameChanged
     );
   }, [settings, baseline, garminUsername, garminUsernameBaseline, garminPassword]);
-
-  const handleNotificationSettingChange = (setting, value) => {
-    setSettings((prev) => ({
-      ...prev,
-      notifications: { ...prev.notifications, [setting]: value },
-    }));
-  };
 
   const handleUnitSettingChange = (type, value) => {
     setSettings((prev) => ({
@@ -246,56 +238,21 @@ const Settings = () => {
         </FormControl>
       </Surface>
 
-      {/* Notifications */}
-      <Surface sx={{ mb: 2 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2, gap: 1.25 }}>
-          <NotificationsIcon sx={{ color: 'primary.main' }} />
-          <Typography
-            sx={{
-              fontFamily: "'DM Serif Display', serif",
-              fontSize: '1.375rem',
-              fontWeight: 400,
-              color: 'text.primary',
-              letterSpacing: '-0.01em',
-            }}
-          >
-            Notifications
-          </Typography>
-        </Box>
-
-        <FormControlLabel
-          control={
-            <Switch
-              checked={settings.notifications.enabled}
-              onChange={(e) => handleNotificationSettingChange('enabled', e.target.checked)}
-            />
-          }
-          label="Enable Notifications"
-          sx={{ mb: 1, display: 'flex' }}
-        />
-        <FormControlLabel
-          control={
-            <Switch
-              checked={settings.notifications.daily_reminder}
-              onChange={(e) => handleNotificationSettingChange('daily_reminder', e.target.checked)}
-              disabled={!settings.notifications.enabled}
-            />
-          }
-          label="Daily Reminders"
-          sx={{ mb: 1, display: 'flex' }}
-        />
-        <FormControlLabel
-          control={
-            <Switch
-              checked={settings.notifications.goal_reminders}
-              onChange={(e) => handleNotificationSettingChange('goal_reminders', e.target.checked)}
-              disabled={!settings.notifications.enabled}
-            />
-          }
-          label="Goal Reminders"
-          sx={{ display: 'flex' }}
-        />
-      </Surface>
+      {/*
+        Notifications section removed (not disabled — removed). It rendered
+        and persisted three switches ("Enable Notifications", "Daily
+        Reminders", "Goal Reminders") that flipped a boolean in settings and
+        did nothing else. A repo-wide grep for showNotification,
+        Notification.requestPermission, new Notification(, cron/node-cron,
+        and "reminder" turned up only this page and the settings schema — no
+        service worker push registration, no scheduled job, nothing that
+        could ever fire one. Toggling them on told the owner he'd be
+        reminded; he never would be. Rebuild this section if/when a real
+        reminder mechanism (push + a scheduler) exists to back it — until
+        then the honest UI is no UI. The `notifications` object stays in the
+        settings schema/backend (out of this page's scope to touch) but
+        nothing here reads or writes it anymore.
+      */}
 
       {/* Units */}
       <Surface sx={{ mb: 2 }}>

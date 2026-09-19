@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Box, Paper, Typography, TextField, Button, CircularProgress, Chip, Card, CardContent,
-  Stepper, Step, StepLabel, Divider, FormControl, InputLabel, Select, MenuItem
+  Stepper, Step, StepLabel, StepButton, Divider, FormControl, InputLabel, Select, MenuItem, Alert
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import {
@@ -52,6 +52,11 @@ const CalorieGoalWizard = () => {
   const [plan, setPlan] = useState(null);
   const [hasExistingGoal, setHasExistingGoal] = useState(false);
 
+  // Set only when a filled-in height fails every format parseHeightToInches
+  // knows about. Distinct from "field is empty" (which just disables the
+  // Next/Calculate buttons via the existing required-field check).
+  const [heightError, setHeightError] = useState(false);
+
   // Load user profile and any existing saved goal on mount
   useEffect(() => {
     loadUserProfile();
@@ -91,6 +96,11 @@ const CalorieGoalWizard = () => {
           rules: {
             minSafeCalories: ng.min_safe_calories || 1200,
             capPercent: 20,
+            // A previously-saved goal always had a real BMR at save time
+            // (the Step 1 gate and calculateCaloriePlan's guard both saw to
+            // that) — this just keeps the Safety Check card consistent for
+            // goals loaded back from settings rather than freshly computed.
+            calculationValid: Math.round(ng.bmr || 0) > 0,
             autoAdjust: (ng.plan_type === 'auto')
           }
         };
@@ -130,13 +140,20 @@ const CalorieGoalWizard = () => {
     }
   };
 
+  // `calculateBMR` returns three distinct things and callers must not blur
+  // them together:
+  //   0    — a required field is simply empty (normal, mid-entry state)
+  //   null — every field is filled in, but the height string doesn't match
+  //          any format we understand (the actual bug: this used to fall
+  //          through to 0 as well, which is indistinguishable from "empty"
+  //          and let a broken calculation masquerade as a real one)
+  //   N    — a real BMR
   const calculateBMR = () => {
     const { age, weight, height, gender } = profile;
     if (!age || !weight || !height || !gender) return 0;
 
-    // Convert height from "5'11" format to inches
     const heightInches = parseHeightToInches(height);
-    if (!heightInches) return 0;
+    if (heightInches === null) return null;
 
     // Mifflin-St Jeor Equation
     let bmr = 10 * parseFloat(weight) + 6.25 * heightInches - 5 * parseFloat(age);
@@ -145,11 +162,46 @@ const CalorieGoalWizard = () => {
     return Math.round(bmr);
   };
 
+  // Accepts the handful of height notations a person would actually type.
+  // Anything that doesn't match one of these returns null — it does NOT fall
+  // back to a guess. That null is load-bearing: it's what lets calculateBMR
+  // tell "couldn't parse this" apart from "field is empty", which is the
+  // difference between a visible error and a silent 1200-calorie floor
+  // reported as "Safe".
   const parseHeightToInches = (height) => {
-    const match = height.match(/(\d+)'(\d+)"/);
-    if (match) {
-      return parseInt(match[1]) * 12 + parseInt(match[2]);
+    if (!height) return null;
+    const trimmed = String(height).trim();
+
+    // 5'11" — the closing inch mark is REQUIRED here, on purpose. The old
+    // placeholder read "5'11" (no closing quote) while the old regex
+    // demanded one; typing exactly what the placeholder showed produced an
+    // unparseable height that silently became a BMR of 0. The fix is a
+    // correct placeholder ("5'11\"", below) plus a visible error for
+    // anything that still doesn't match — not loosening this pattern to
+    // swallow the very typo that caused the bug. (The other two formats
+    // below have no such landmine, so those get the leniency instead.)
+    const feetInches = trimmed.match(/^(\d+)\s*'\s*(\d{1,2})"$/);
+    if (feetInches) {
+      return parseInt(feetInches[1], 10) * 12 + parseInt(feetInches[2], 10);
     }
+
+    // 5 ft 11, 5ft 11in, 5 feet 11 inches
+    const feetWord = trimmed.match(/^(\d+)\s*(?:ft|feet)\.?\s*(\d{1,2})?\s*(?:in|inches)?\.?$/i);
+    if (feetWord) {
+      const feet = parseInt(feetWord[1], 10);
+      const inches = feetWord[2] ? parseInt(feetWord[2], 10) : 0;
+      return feet * 12 + inches;
+    }
+
+    // A bare number, optionally tagged in/inches/" — treated as total inches.
+    // Range-checked against plausible adult height so a typo like "6" (feet,
+    // not inches) or "511" doesn't get silently accepted as something valid.
+    const bareInches = trimmed.match(/^(\d{2,3})\s*(?:in|inches|")?$/i);
+    if (bareInches) {
+      const inches = parseInt(bareInches[1], 10);
+      if (inches >= 36 && inches <= 96) return inches;
+    }
+
     return null;
   };
 
@@ -217,6 +269,19 @@ const CalorieGoalWizard = () => {
 
   const calculateCaloriePlan = () => {
     const bmr = calculateBMR();
+
+    // Belt-and-suspenders: the Step 1 "Next" button is now gated on a
+    // parseable height (see the Height TextField below), so in practice this
+    // branch shouldn't be reachable from the UI. But this function used to
+    // be the ONLY place the bug lived — a null/0 height silently became a
+    // BMR of 0, then a "Safe" plan — so it gets its own guard rather than
+    // trusting the earlier gate to always hold.
+    if (bmr === null) {
+      setHeightError(true);
+      return;
+    }
+    setHeightError(false);
+
     const tdee = calculateTDEE(bmr);
     const weightToLose = parseFloat(profile.weight) - parseFloat(goal.targetWeight);
     const weeklyDeficit = parseFloat(goal.weightChangeRate) * 500; // 1 lb = 3500 calories, so 1 lb/week = 500 cal/day deficit
@@ -248,7 +313,13 @@ const CalorieGoalWizard = () => {
       rules: {
         minSafeCalories: minSafe,
         capPercent: 20,
-        autoAdjust: goal.planType === 'auto'
+        autoAdjust: goal.planType === 'auto',
+        // A real Mifflin-St Jeor BMR for an adult is always comfortably
+        // above zero. The Safety Check card reads this — not just
+        // dailyCalories >= 1200 — so a floored, never-actually-computed
+        // plan can't be reported "Safe" just because the floor happens to
+        // sit at the minimum.
+        calculationValid: bmr > 0
       }
     };
 
@@ -286,10 +357,24 @@ const CalorieGoalWizard = () => {
         </Typography>
       </Box>
 
-      {/* Stepper (hide when showing existing goal summary) */}
+      {/* Stepper (hide when showing existing goal summary). Steps the user has
+          already completed are clickable so Step 1 (and beyond) has a way
+          back to Step 0 — previously the only exits from Step 1 were "Save
+          Profile" and "Next", with no way to revisit the standard-vs-keto
+          choice short of abandoning the wizard. Steps ahead of activeStep
+          stay inert: clicking forward would skip the required-field checks
+          each step guards. */}
       {!hasExistingGoal && (
         <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
-          {steps.map((label) => (<Step key={label}><StepLabel>{label}</StepLabel></Step>))}
+          {steps.map((label, index) => (
+            <Step key={label}>
+              {index < activeStep ? (
+                <StepButton onClick={() => setActiveStep(index)}>{label}</StepButton>
+              ) : (
+                <StepLabel>{label}</StepLabel>
+              )}
+            </Step>
+          ))}
         </Stepper>
       )}
 
@@ -341,10 +426,25 @@ const CalorieGoalWizard = () => {
               />
               <TextField
                 label="Height"
-                placeholder="5'11"
+                placeholder={"5'11\""}
                 value={profile.height}
-                onChange={(e) => setProfile(prev => ({ ...prev, height: e.target.value }))}
+                onChange={(e) => {
+                  setProfile(prev => ({ ...prev, height: e.target.value }));
+                  // Clear a stale error the instant the user edits the field
+                  // again — don't leave yesterday's error glued to today's input.
+                  if (heightError) setHeightError(false);
+                }}
                 size="small"
+                // Live validation: as soon as there's SOMETHING in the field,
+                // tell the user right away whether we can read it, instead of
+                // waiting for a "Calculate My Plan" click three steps later
+                // to discover the height silently became a BMR of 0.
+                error={!!profile.height && parseHeightToInches(profile.height) === null}
+                helperText={
+                  !!profile.height && parseHeightToInches(profile.height) === null
+                    ? "Can't read that height — try 5'11\", 5 ft 11, or 71 (inches)"
+                    : "Formats: 5'11\", 5 ft 11, or 71 (inches)"
+                }
               />
               <FormControl size="small">
                 <InputLabel>Gender</InputLabel>
@@ -380,15 +480,27 @@ const CalorieGoalWizard = () => {
           <Box sx={{ mt: 3, display: 'flex', gap: 2 }}>
             <Button
               variant="outlined"
+              onClick={() => setActiveStep(0)}
+            >
+              Back
+            </Button>
+            <Button
+              variant="outlined"
               onClick={handleSaveProfile}
-              disabled={!profile.age || !profile.weight || !profile.height || !profile.gender}
+              disabled={
+                !profile.age || !profile.weight || !profile.height || !profile.gender ||
+                parseHeightToInches(profile.height) === null
+              }
             >
               Save Profile
             </Button>
             <Button
               variant="contained"
               onClick={() => setActiveStep(2)}
-              disabled={!profile.age || !profile.weight || !profile.height || !profile.gender}
+              disabled={
+                !profile.age || !profile.weight || !profile.height || !profile.gender ||
+                parseHeightToInches(profile.height) === null
+              }
               sx={{ bgcolor: 'primary.main', '&:hover': { bgcolor: 'primary.dark' } }}
             >
               Next: Set Goal
@@ -473,6 +585,17 @@ const CalorieGoalWizard = () => {
                 </Box>
               </CardContent>
             </Card>
+          )}
+
+          {/* Should be unreachable — Step 1 already blocks an unparseable
+              height — but calculateCaloriePlan sets this if it's ever hit
+              anyway, and it must produce a visible error, not a plan built
+              on a BMR of 0. */}
+          {heightError && (
+            <Alert severity="error" sx={{ mb: 3 }}>
+              We couldn't calculate your plan — the height on your profile
+              couldn't be read. Go back to Step 1 and re-enter it (e.g. 5'11", 5 ft 11, or 71 inches).
+            </Alert>
           )}
 
           <Box sx={{ display: 'flex', gap: 2 }}>
@@ -702,11 +825,28 @@ const CalorieGoalWizard = () => {
                 </Box>
                 <Box>
                   <Typography variant="body2" sx={{ color: 'text.secondary' }}>Safety Check</Typography>
-                  <Typography variant="h6" sx={{ color: plan.dailyCalories >= 1200 ? theme.palette.success.main : theme.palette.warning.main }}>
-                    {plan.dailyCalories >= 1200 ? 'Safe' : 'Below minimum'}
+                  {/* `calculationValid` (bmr > 0) gates this before the calorie
+                      floor does. dailyCalories >= 1200 is true of every plan,
+                      including one built on a BMR that never actually
+                      computed — that plan should never be able to say "Safe". */}
+                  <Typography
+                    variant="h6"
+                    sx={{
+                      color: !plan.rules?.calculationValid
+                        ? theme.palette.error.main
+                        : plan.dailyCalories >= 1200
+                          ? theme.palette.success.main
+                          : theme.palette.warning.main
+                    }}
+                  >
+                    {!plan.rules?.calculationValid
+                      ? 'Calculation error'
+                      : plan.dailyCalories >= 1200 ? 'Safe' : 'Below minimum'}
                   </Typography>
                   <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                    Minimum recommended: 1,200 calories/day
+                    {!plan.rules?.calculationValid
+                      ? "Your height couldn't be read, so this plan isn't reliable"
+                      : 'Minimum recommended: 1,200 calories/day'}
                   </Typography>
                 </Box>
               </CardContent>

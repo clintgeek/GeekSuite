@@ -74,7 +74,6 @@ export default function HealthDashboard() {
   });
   const [influxEnabled, setInfluxEnabled] = useState(false);
   const [checkingInflux, setCheckingInflux] = useState(true);
-  const [aiAnalysisPrompt, setAiAnalysisPrompt] = useState(null);
 
   useEffect(() => {
     checkInfluxStatus();
@@ -99,14 +98,6 @@ export default function HealthDashboard() {
 
   const handleDateChange = (newDate) => {
     setSelectedDate(newDate);
-  };
-
-  const handleAIAnalysisRequest = async (promptText) => {
-    setAiAnalysisPrompt(promptText);
-    // In a real implementation, this would open a modal or navigate to an AI chat interface
-    // For now, just log it
-    console.log('AI Analysis Requested:', promptText);
-    alert('AI Analysis feature coming soon! This would open your AI analyzer with the recovery context.');
   };
 
   if (checkingInflux) {
@@ -240,10 +231,7 @@ export default function HealthDashboard() {
             {activeTab === 1 && <SleepAnalysis date={selectedDate} />}
             {activeTab === 2 && <MealImpactVisualization date={selectedDate} />}
             {activeTab === 3 && (
-              <RecoveryCoach
-                date={selectedDate}
-                onRequestAIAnalysis={handleAIAnalysisRequest}
-              />
+              <RecoveryCoach date={selectedDate} />
             )}
           </SuspenseSurface>
 
