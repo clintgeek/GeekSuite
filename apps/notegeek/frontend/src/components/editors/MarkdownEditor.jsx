@@ -101,17 +101,32 @@ function MarkdownEditor({ content = '', setContent, isLoading, readOnly = false,
             }}
             sx={{
                 height: '100%',
+                // The scroll lives on the input ROOT, and the textarea inside
+                // it is left alone to grow — the same shape RichTextEditor
+                // uses, where ProseMirror's content div grows and its wrapper
+                // scrolls.
+                //
+                // This used to set `height: 100% !important` and
+                // `overflow: auto !important` on `.MuiInputBase-input`, which
+                // looked like "make the textarea fill the pane" and did the
+                // opposite. A `multiline` TextField grows by measuring the
+                // content with a hidden shadow textarea and writing the result
+                // to the visible one as an INLINE height; `!important` in a
+                // stylesheet outranks an inline style, so the measurement was
+                // computed correctly and then thrown away. Measured on a
+                // note with 80 sections: inline height 8956px, computed height
+                // 44.78px — collapsed to about one line, with the whole note
+                // scrolling inside that sliver.
                 '& .MuiInputBase-root': {
                     height: '100%',
                     alignItems: 'flex-start',
+                    overflow: 'auto',
                     p: { xs: 1.5, sm: 2 },
                 },
                 '& .MuiInputBase-input': {
                     fontFamily: '"Roboto Mono", monospace',
                     fontSize: `${fontSize}px`,
                     lineHeight: 1.6,
-                    height: '100% !important',
-                    overflow: 'auto !important',
                 },
             }}
         />
