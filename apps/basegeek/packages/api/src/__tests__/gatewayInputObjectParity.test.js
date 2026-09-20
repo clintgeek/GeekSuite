@@ -159,11 +159,27 @@ const FIXTURES = {
   },
   'Mutation.addBloodPressure': {
     // apps/fitnessgeek/frontend/src/services/bpService.js createBPLog()
+    //
+    // `measured_at` is in here because the service SENDS it (conditionally,
+    // when the dialog built one). A fixture that lags the real payload is a
+    // tripwire pointed at the wrong spot: this suite caught the identical
+    // `suggested_indications` bug for medications, then missed `measured_at`
+    // for blood pressure in 2026-09 for exactly that reason — the field was
+    // added to the schema, the model and the service, and the fixture here
+    // still described the old call. When you teach a service to send a new
+    // input field, add it here in the same commit.
     source: `
       mutation AddBp($input: BloodPressureInput!) { addBloodPressure(input: $input) { id } }
     `,
     variables: {
-      input: { systolic: 118, diastolic: 76, pulse: 68, log_date: '2026-09-05', notes: 'resting' },
+      input: {
+        systolic: 118,
+        diastolic: 76,
+        pulse: 68,
+        measured_at: '2026-09-05T08:01:00.000Z',
+        log_date: '2026-09-05',
+        notes: 'resting',
+      },
     },
   },
   'Mutation.updateBloodPressure': {
@@ -173,7 +189,14 @@ const FIXTURES = {
     `,
     variables: {
       id: 'bp1',
-      input: { systolic: 118, diastolic: 76, pulse: 68, log_date: '2026-09-05', notes: 'resting' },
+      input: {
+        systolic: 118,
+        diastolic: 76,
+        pulse: 68,
+        measured_at: '2026-09-05T08:01:00.000Z',
+        log_date: '2026-09-05',
+        notes: 'resting',
+      },
     },
   },
   'Mutation.addFitnessFood': {

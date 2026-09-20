@@ -121,16 +121,22 @@ const DELETE_MEDICATION = gql`
   mutation DeleteFitnessMedication($id: ID!) { deleteFitnessMedication(id: $id) }
 `;
 
+// `measured_at` is selected on every BP document and accepted on both
+// mutations. A selection set that omits it means the field exists in Mongo,
+// is declared on the type, and still never reaches the browser — which is
+// exactly how the per-reading times would have rendered blank while every
+// backend test passed. UPDATE_BP previously selected only `id`, so an edit
+// returned nothing the list could re-render from.
 const GET_BPS = gql`
-  query GetBps { bloodPressures { id systolic diastolic pulse log_date notes formatted_date status } }
+  query GetBps { bloodPressures { id systolic diastolic pulse measured_at log_date notes formatted_date status } }
 `;
 
 const ADD_BP = gql`
-  mutation AddBp($input: BloodPressureInput!) { addBloodPressure(input: $input) { id systolic diastolic pulse log_date notes formatted_date status } }
+  mutation AddBp($input: BloodPressureInput!) { addBloodPressure(input: $input) { id systolic diastolic pulse measured_at log_date notes formatted_date status } }
 `;
 
 const UPDATE_BP = gql`
-  mutation UpdateBp($id: ID!, $input: BloodPressureInput!) { updateBloodPressure(id: $id, input: $input) { id } }
+  mutation UpdateBp($id: ID!, $input: BloodPressureInput!) { updateBloodPressure(id: $id, input: $input) { id systolic diastolic pulse measured_at log_date notes formatted_date status } }
 `;
 
 const DELETE_BP = gql`

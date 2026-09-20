@@ -169,6 +169,7 @@ const PAIRS = [
       'diastolic',
       'pulse',
       'log_date',
+      'measured_at',
       'notes',
       'created_at',
       'updated_at',
@@ -182,9 +183,10 @@ const PAIRS = [
       diastolic: 78,
       pulse: 61,
       log_date: new Date('2026-09-05T00:00:00.000Z'),
+      measured_at: new Date('2026-09-05T08:01:00.000Z'),
       notes: 'post-consolidation probe',
     }),
-    probe: (doc) => ({ pulse: doc.pulse, notes: doc.notes }),
+    probe: (doc) => ({ pulse: doc.pulse, notes: doc.notes, measured_at: new Date(doc.measured_at).toISOString() }),
   },
   {
     name: 'Medication',
@@ -937,6 +939,97 @@ describe.each(PAIRS.map((p) => [p.name, p]))(
     });
   }
 );
+
+// ---------------------------------------------------------------------------
+// BloodPressure — the (userId, measured_at) dedupe index, and the widened
+// typo-guard bounds, against real Mongo. Same shape as the BodyComposition
+// block below: the hermetic fitnessgeek suite covers the same ground without
+// a database; this half proves the index actually enforces the constraint at
+// the collection level, and that two readings the SAME calendar day (the
+// headline bug this pair fixes) really do both save.
+// ---------------------------------------------------------------------------
+
+describe('BloodPressure dedupe index and widened bounds (real Mongo)', () => {
+  const legalDoc = (over = {}) => ({
+    userId: OWNER,
+    systolic: 128,
+    diastolic: 78,
+    pulse: 61,
+    log_date: new Date('2026-09-16T00:00:00.000Z'),
+    measured_at: new Date('2026-09-16T08:01:00.000Z'),
+    ...over,
+  });
+
+  afterEach(async () => {
+    await BloodPressureGraphQL.deleteMany({ userId: OWNER });
+  });
+
+  test('a second write at the exact same measured_at collides — the real E11000', async () => {
+    await BloodPressureGraphQL.create(legalDoc());
+    await expect(BloodPressureGraphQL.create(legalDoc())).rejects.toMatchObject({ code: 11000 });
+    expect(await BloodPressureGraphQL.countDocuments({ userId: OWNER })).toBe(1);
+  });
+
+  test('a morning AND an evening reading the SAME calendar day both save — the headline fix', async () => {
+    // The bug this pair exists to close: the controller used to reject a
+    // second reading on the same `log_date`. Two distinct instants, same
+    // day, must both persist.
+    await BloodPressureGraphQL.create(
+      legalDoc({ measured_at: new Date('2026-09-16T08:01:00.000Z') })
+    );
+    await BloodPressureGraphQL.create(
+      legalDoc({ measured_at: new Date('2026-09-16T20:15:00.000Z') })
+    );
+    expect(await BloodPressureGraphQL.countDocuments({ userId: OWNER })).toBe(2);
+    const rows = await BloodPressureGraphQL.find({ userId: OWNER }).sort({ measured_at: 1 }).lean();
+    expect(rows.map((r) => r.log_date.toISOString())).toEqual([
+      '2026-09-16T00:00:00.000Z',
+      '2026-09-16T00:00:00.000Z',
+    ]);
+  });
+
+  test('a different user at the SAME measured_at is not a collision', async () => {
+    const other = String(new mongoose.Types.ObjectId());
+    await BloodPressureGraphQL.create(legalDoc());
+    await BloodPressureGraphQL.create(legalDoc({ userId: other }));
+    expect(
+      await BloodPressureGraphQL.countDocuments({ measured_at: legalDoc().measured_at })
+    ).toBe(2);
+    await BloodPressureGraphQL.deleteMany({ userId: other });
+  });
+
+  test('both models declare the SAME unique index, not one each', () => {
+    const uniqueOf = (schema) =>
+      schema
+        .indexes()
+        .filter(([, opts = {}]) => opts.unique)
+        .map(([keys]) => keys);
+    expect(uniqueOf(BloodPressureRest.schema)).toEqual([{ userId: 1, measured_at: 1 }]);
+    expect(uniqueOf(BloodPressureGraphQL.schema)).toEqual([{ userId: 1, measured_at: 1 }]);
+  });
+
+  test('a 200/130 hypertensive-crisis reading saves on both models — bounds are typo guards, not a clinical ceiling', async () => {
+    const crisis = legalDoc({ systolic: 200, diastolic: 130, measured_at: new Date('2026-09-17T07:00:00.000Z') });
+    const saved = await BloodPressureGraphQL.create(crisis);
+    expect(saved.systolic).toBe(200);
+    expect(saved.diastolic).toBe(130);
+    expect(saved.status).toBe('Crisis');
+
+    for (const Model of [BloodPressureRest, BloodPressureGraphQL]) {
+      expect(new Model(crisis).validateSync()).toBeUndefined();
+    }
+  });
+
+  test('log_date stays UTC midnight and measured_at stays a real instant through a real write and read-back', async () => {
+    const midnight = new Date('2026-09-16T00:00:00.000Z');
+    const instant = new Date('2026-09-16T20:15:00.000Z');
+    await BloodPressureGraphQL.create(legalDoc({ log_date: midnight, measured_at: instant }));
+
+    const stored = await BloodPressureGraphQL.findOne({ userId: OWNER }).lean();
+    expect(new Date(stored.log_date).toISOString()).toBe('2026-09-16T00:00:00.000Z');
+    expect(new Date(stored.measured_at).toISOString()).toBe('2026-09-16T20:15:00.000Z');
+  });
+});
 
 // ---------------------------------------------------------------------------
 // Medication — the enums and bounds, enforced by both models
