@@ -156,3 +156,63 @@ describe('TaskContext.updateTask', () => {
     expect(screen.getByTestId('step-s1')).toBeInTheDocument();
   });
 });
+
+/**
+ * `deleteTask` used to return `undefined` on success, on failure AND on the
+ * user cancelling the recurring-scope prompt, so callers could not tell the
+ * three apart. `ReviewPage` therefore marked a card reviewed whatever
+ * happened: a failed delete still removed it from the queue, the run said
+ * "all done", and the task came back the next day.
+ *
+ * The contract is what the fix is, so it is asserted here on the real
+ * context rather than against a re-implementation of the caller.
+ */
+describe('TaskContext.deleteTask reports its outcome', () => {
+  it('returns true when the server confirmed the delete', async () => {
+    await loadDaily();
+    mutate.mockResolvedValue({ data: { deleteTask: { success: true } } });
+
+    let result;
+    await act(async () => {
+      result = await api.deleteTask('t1', 'THIS_INSTANCE');
+    });
+
+    expect(result).toBe(true);
+  });
+
+  it('returns false when the mutation fails — it used to be indistinguishable', async () => {
+    await loadDaily();
+    mutate.mockRejectedValue(new Error('network down'));
+
+    let result;
+    await act(async () => {
+      result = await api.deleteTask('t1', 'THIS_INSTANCE');
+    });
+
+    expect(result).toBe(false);
+  });
+
+  it('leaves the row on screen when the delete failed', async () => {
+    // The rollback half: a failed delete must not look like a successful one
+    // in the list either.
+    await loadDaily();
+    mutate.mockRejectedValue(new Error('network down'));
+
+    await act(async () => {
+      await api.deleteTask('t1', 'THIS_INSTANCE');
+    });
+
+    expect(screen.getByTestId('row-t1')).toBeInTheDocument();
+  });
+
+  it('removes the row when the delete succeeded', async () => {
+    await loadDaily();
+    mutate.mockResolvedValue({ data: { deleteTask: { success: true } } });
+
+    await act(async () => {
+      await api.deleteTask('t1', 'THIS_INSTANCE');
+    });
+
+    expect(screen.queryByTestId('row-t1')).not.toBeInTheDocument();
+  });
+});

@@ -82,9 +82,12 @@ const TodayPage = () => {
       });
       setUpcomingRangeTasks(res.data?.monthlyTasks || []);
     } catch (err) {
+      // Told, not swallowed. A console line is not a user-facing signal, and
+      // an empty Upcoming section is indistinguishable from a quiet week.
       console.error('Failed to fetch upcoming tasks:', err);
+      notify('Could not load upcoming tasks.', { tone: 'error' });
     }
-  }, [apolloClient, currentDate]);
+  }, [apolloClient, currentDate, notify]);
 
   useEffect(() => {
     fetchUpcoming();
@@ -99,9 +102,14 @@ const TodayPage = () => {
       });
       setBlockedTasks(res.data?.blockedTasks || []);
     } catch (err) {
+      // This one asserts in prose. On an empty list `BlockedSection` renders
+      // "nothing is waiting on anyone" and the header reports "0 blocked" —
+      // so a failed query did not merely show nothing, it stated something
+      // false about the user's parked work.
       console.error('Failed to fetch blocked tasks:', err);
+      notify('Could not load parked tasks.', { tone: 'error' });
     }
-  }, [apolloClient]);
+  }, [apolloClient, notify]);
 
   useEffect(() => {
     fetchBlocked();

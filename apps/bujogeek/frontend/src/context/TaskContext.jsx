@@ -754,6 +754,17 @@ const TaskProvider = ({ children }) => {
     }
   }, [apolloClient, handleApiError]);
 
+  /**
+   * Delete a task. Returns TRUE only when the server confirmed it.
+   *
+   * It used to return `undefined` on success, on failure AND on the user
+   * cancelling the recurring-scope prompt, so a caller could not tell the
+   * three apart. `ReviewPage` consequently marked a card reviewed whatever
+   * happened: the mutation failed, a snackbar flashed, and the card left the
+   * queue anyway — the task resurfaced the next day having been "reviewed".
+   *
+   * Callers that ignore the return value are unaffected.
+   */
   const deleteTask = useCallback(async (taskId, editScopeParam = null) => {
     try {
       const task = getTaskFromState(taskId);
@@ -761,7 +772,7 @@ const TaskProvider = ({ children }) => {
       if (!editScope) {
         if (task && (task.isSeriesMaster || task.seriesId || task.recurrenceRule || String(taskId).startsWith('virtual_'))) {
           editScope = await promptRecurringScope('delete');
-          if (!editScope) return; // user cancelled
+          if (!editScope) return false; // user cancelled — nothing happened
         } else {
           editScope = 'THIS_INSTANCE';
         }
@@ -786,8 +797,10 @@ const TaskProvider = ({ children }) => {
       });
 
       setTasks(prev => removeTaskFromState(prev, taskId));
+      return true;
     } catch (error) {
       handleApiError(error, 'Failed to delete task');
+      return false;
     } finally {
       setLoading(LoadingState.IDLE);
     }

@@ -134,11 +134,17 @@ const ReviewPage = () => {
     [updateTask, markReviewed]
   );
 
+  // `markReviewed` only after the server confirmed. These two used to call it
+  // unconditionally, and neither `deleteTask` nor `updateTaskStatus` rejects
+  // on failure — they roll back, toast, and resolve. So a failed cancel or
+  // delete still removed the card from the queue, the run reported "all
+  // done", and the task came back the next day. The other four handlers are
+  // correct by accident: they go through `updateTask`, which throws.
   const handleDelete = useCallback(
     async (task) => {
       if (window.confirm('Delete this task permanently?')) {
-        await deleteTask((task.id || task._id));
-        markReviewed((task.id || task._id));
+        const deleted = await deleteTask((task.id || task._id));
+        if (deleted) markReviewed((task.id || task._id));
       }
     },
     [deleteTask, markReviewed]
@@ -146,8 +152,8 @@ const ReviewPage = () => {
 
   const handleCancel = useCallback(
     async (task) => {
-      await updateTaskStatus((task.id || task._id), 'cancelled');
-      markReviewed((task.id || task._id));
+      const updated = await updateTaskStatus((task.id || task._id), 'cancelled');
+      if (updated) markReviewed((task.id || task._id));
     },
     [updateTaskStatus, markReviewed]
   );
