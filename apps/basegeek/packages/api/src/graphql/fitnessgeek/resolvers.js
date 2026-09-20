@@ -6,6 +6,7 @@ import pkg from 'garmin-connect';
 const { GarminConnect } = pkg;
 import aiService from '../../services/aiService.js';
 import UserSettings from './models/UserSettings.js';
+import { resolveActiveNutritionGoal } from './nutritionGoalBridge.js';
 import Weight from './models/Weight.js';
 import NutritionGoals from './models/NutritionGoals.js';
 import FoodItem from './models/FoodItem.js';
@@ -431,7 +432,13 @@ const buildUserContext = async (userId, options = {}) => {
     getFoodLogContext(userId, startDate, endDate),
     getWeightContext(userId, startDate, endDate),
     getBPContext(userId, startDate, endDate),
-    Promise.all([NutritionGoals.getActiveGoals(userId), WeightGoals.getActiveWeightGoals(userId)])
+    Promise.all([
+      // Bridged — see nutritionGoalBridge.js. Before this, every AI insight
+      // reasoned about a user whose targets it could not see, and said so to
+      // no one.
+      resolveActiveNutritionGoal(userId, { NutritionGoals, UserSettings }),
+      WeightGoals.getActiveWeightGoals(userId),
+    ])
   ]);
   context.nutrition = nutrition.status === 'fulfilled' ? nutrition.value : null;
   context.weight = weight.status === 'fulfilled' ? weight.value : null;
@@ -499,7 +506,11 @@ export const resolvers = {
     },
     activeNutritionGoals: async (_, __, { user }) => {
       if (!user) throw new Error('Unauthorized');
-      return NutritionGoals.getActiveGoals(user.id);
+      // Via the bridge: the live UI only ever writes
+      // `UserSettings.nutrition_goal`, so querying `nutritiongoals` alone
+      // returned null for every user (that collection held 0 documents on
+      // 2026-09-20). See nutritionGoalBridge.js.
+      return resolveActiveNutritionGoal(user.id, { NutritionGoals, UserSettings });
     },
     nutritionGoalsHistory: async (_, __, { user }) => {
       if (!user) throw new Error('Unauthorized');
@@ -732,7 +743,7 @@ export const resolvers = {
       const averages = toAverages(totals, daily.length);
       const meals = mealBreakdown(logs);
       const top = topFoods(logs);
-      const goals = await NutritionGoals.getActiveGoals(user.id);
+      const goals = await resolveActiveNutritionGoal(user.id, { NutritionGoals, UserSettings });
       const goalCompliance = {};
       if (goals) {
         METRICS.forEach(metric => {
