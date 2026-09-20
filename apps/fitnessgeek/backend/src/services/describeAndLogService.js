@@ -354,13 +354,37 @@ export function usableRange(resolution, loggedCalories) {
 export async function logDescription(text, { userId, date, hour, ...options } = {}) {
   const parsed = parseMealDescription(text, { hour });
   if (parsed.entries.length === 0) {
-    return { logged: [], skipped: [], logIds: [], questions: [], parsed };
+    return { logged: [], skipped: [], logIds: [], questions: [], parsed, requested: 0 };
   }
 
   const resolutions = await resolveEntries(parsed.entries, { userId });
 
+  // `resolveEntries` returns `resolved.filter(Boolean)` — every entry it could
+  // not identify is simply absent from that array. An entry reaches that state
+  // by missing history, missing the catalog, and then getting an AI estimate
+  // that declined, timed out or returned unparseable JSON. `estimateDishes`
+  // reports all three as a clean `{ ok: false }` rather than throwing, so this
+  // is ordinary traffic, not a rare crash.
+  //
+  // Those entries used to vanish completely: not logged, not skipped, not
+  // counted anywhere, while the route answered 200 `{success: true}`. Describe
+  // "chicken sandwich, kombucha, diet coke", have the kombucha estimate time
+  // out, and you were told everything worked — on the app's primary logging
+  // path. The response carried no original-entry count either, so the frontend
+  // could not have detected the loss even in principle.
+  //
+  // Recovered by difference: each resolution carries its source `entry` by
+  // reference, so anything parsed but not resolved is a silent drop. They go
+  // into `skipped`, which callers already render, rather than into a new field
+  // nothing reads.
+  const resolvedEntries = new Set(resolutions.map((r) => r.entry));
+  const unresolved = parsed.entries.filter((entry) => !resolvedEntries.has(entry));
+
   const logged = [];
-  const skipped = [];
+  const skipped = unresolved.map((entry) => ({
+    name: entryKey(entry) || entry.description || 'that item',
+    reason: 'could-not-identify'
+  }));
   const logIds = [];
   const questions = [];
 
@@ -444,6 +468,7 @@ export async function logDescription(text, { userId, date, hour, ...options } = 
     entries: parsed.entries.length,
     logged: logged.length,
     skipped: skipped.length,
+    unresolved: unresolved.length,
     sources: [...new Set(logged.map((l) => l.source))]
   }, 'Described meal logged');
 
@@ -454,7 +479,10 @@ export async function logDescription(text, { userId, date, hour, ...options } = 
       .catch((error) => logger.warn({ err: error }, 'Background review failed'));
   }
 
-  return { logged, skipped, logIds, questions, parsed };
+  // `requested` is the count the user actually described. Every entry is now
+  // accounted for — `logged.length + skipped.length === requested` — so a
+  // caller can assert that rather than trust it.
+  return { logged, skipped, logIds, questions, parsed, requested: parsed.entries.length };
 }
 
 export default {
