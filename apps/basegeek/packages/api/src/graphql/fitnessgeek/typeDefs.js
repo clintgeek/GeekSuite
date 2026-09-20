@@ -503,6 +503,12 @@ export const typeDefs = gql`
     systolic: Float!
     diastolic: Float!
     pulse: Float
+    # The calendar DAY the reading belongs to, at UTC midnight, and the
+    # INSTANT it was taken. Two different things — see THE_CONTEXT.md §3.1.
+    # \`measured_at\` is what distinguishes a morning reading from an evening
+    # one and what the unique (userId, measured_at) index dedupes on.
+    # Nullable because rows predating the 2026-09 backfill may lack it.
+    measured_at: Date
     log_date: Date!
     notes: String
     formatted_date: String
@@ -515,6 +521,11 @@ export const typeDefs = gql`
     systolic: Float!
     diastolic: Float!
     pulse: Float
+    # Optional: the backend defaults it to now when a caller omits it.
+    # It must be declared here regardless — GraphQL rejects an undeclared
+    # input field by failing the WHOLE mutation, so a client sending
+    # \`measured_at\` against a schema without it cannot log at all.
+    measured_at: Date
     log_date: Date
     notes: String
   }

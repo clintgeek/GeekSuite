@@ -30,26 +30,37 @@ export const bpService = {
 
   /**
    * Create a new blood pressure log
+   *
+   * `measured_at` is the INSTANT the reading was taken (full ISO-8601 UTC) —
+   * see `DOCS/THE_CONTEXT.md` §3.1 and the shared schema's header. `log_date`
+   * stays the calendar day; the two are not interchangeable. Forwarded
+   * straight through if the caller built one (AddBPDialog/QuickAddBP do, via
+   * `bpTimeUtils.combineDateTimeToISO`); omitted otherwise, in which case the
+   * backend defaults it to "now".
    */
   async createBPLog(bpData) {
     const response = await apiService.post(BASE_URL, {
       systolic: bpData.systolic,
       diastolic: bpData.diastolic,
       pulse: bpData.pulse,
-      log_date: bpData.date
+      log_date: bpData.date,
+      ...(bpData.measured_at ? { measured_at: bpData.measured_at } : {})
     });
     return response;
   },
 
   /**
-   * Update an existing blood pressure log
+   * Update an existing blood pressure log. See `createBPLog` above for
+   * `measured_at` — an edit that only changes the numbers and leaves the
+   * time alone should omit it rather than send a recomputed "now".
    */
   async updateBPLog(id, bpData) {
     const response = await apiService.put(`${BASE_URL}/${id}`, {
       systolic: bpData.systolic,
       diastolic: bpData.diastolic,
       pulse: bpData.pulse,
-      log_date: bpData.date
+      log_date: bpData.date,
+      ...(bpData.measured_at ? { measured_at: bpData.measured_at } : {})
     });
     return response;
   },

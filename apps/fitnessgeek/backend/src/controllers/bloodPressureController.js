@@ -86,7 +86,7 @@ const getBPLog = async (req, res) => {
 const createBPLog = async (req, res) => {
   try {
     const userId = req.user.id;
-    const { systolic, diastolic, pulse, log_date, notes } = req.body;
+    const { systolic, diastolic, pulse, log_date, measured_at, notes } = req.body;
 
     // Validate required fields
     if (!systolic || !diastolic) {
@@ -104,28 +104,20 @@ const createBPLog = async (req, res) => {
       });
     }
 
-    // Check if BP log already exists for the same date
-    const checkDate = log_date ? toUtcMidnight(log_date) : toUtcMidnight(new Date());
-    const checkEnd = new Date(checkDate);
-    checkEnd.setUTCHours(23, 59, 59, 999);
-
-    const existingLog = await BloodPressure.findOne({
-      userId,
-      log_date: {
-        $gte: checkDate,
-        $lt: checkEnd
-      }
-    });
-
-    if (existingLog) {
-      return res.status(409).json({
-        success: false,
-        message: 'Blood pressure log already exists for this date',
-        data: existingLog
-      });
-    }
-
+    // NOTE: there used to be a `findOne` here rejecting a second reading on
+    // the same calendar day ("Blood pressure log already exists for this
+    // date"). Multiple readings a day (morning/evening on a home cuff) are
+    // the normal case, not an error — see the shared schema's header. The
+    // `(userId, measured_at)` unique index below is what now catches an
+    // actual duplicate, and it's translated into a clean 409 in the catch
+    // block rather than a raw 500.
     const logDate = log_date ? toUtcMidnight(log_date) : toUtcMidnight(new Date());
+    // The INSTANT this reading was taken. Defaults to "now" — a manual
+    // reading's instant is knowable the moment it's entered; see the shared
+    // schema's header for why that default is safe here (unlike
+    // BodyComposition's measured_at, which must equal a report's own
+    // timestamp and carries no default).
+    const measuredAt = measured_at ? new Date(measured_at) : new Date();
 
     const bpLog = new BloodPressure({
       userId,
@@ -133,6 +125,7 @@ const createBPLog = async (req, res) => {
       diastolic: parseInt(diastolic),
       pulse: pulse ? parseInt(pulse) : null,
       log_date: logDate,
+      measured_at: measuredAt,
       notes: notes || ''
     });
 
@@ -146,6 +139,19 @@ const createBPLog = async (req, res) => {
       data: bpLog
     });
   } catch (error) {
+    if (error?.code === 11000) {
+      // The `(userId, measured_at)` unique index — this exact reading was
+      // already recorded (a retried request, a double-tap, a re-import).
+      // Expected traffic, not a fault: same translation as
+      // bodyCompXlsxImportService.js's identical E11000 handling for the
+      // sibling schema's dedupe index. Not a 500.
+      logger.info({ userId: req.user?.id }, 'Blood pressure log: duplicate measured_at, already recorded');
+      return res.status(409).json({
+        success: false,
+        message: 'This blood pressure reading has already been recorded',
+        code: 'DUPLICATE_READING'
+      });
+    }
     logger.error({ err: error }, 'Error creating blood pressure log:');
     res.status(500).json({
       success: false,
@@ -162,7 +168,7 @@ const updateBPLog = async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user.id;
-    const { systolic, diastolic, pulse, log_date, notes } = req.body;
+    const { systolic, diastolic, pulse, log_date, measured_at, notes } = req.body;
 
     const bpLog = await BloodPressure.findOne({ _id: id, userId });
 
@@ -196,6 +202,9 @@ const updateBPLog = async (req, res) => {
     if (log_date) {
       bpLog.log_date = toUtcMidnight(log_date);
     }
+    if (measured_at) {
+      bpLog.measured_at = new Date(measured_at);
+    }
     if (notes !== undefined) bpLog.notes = notes;
 
     await bpLog.save();
@@ -208,6 +217,17 @@ const updateBPLog = async (req, res) => {
       data: bpLog
     });
   } catch (error) {
+    if (error?.code === 11000) {
+      // Same translation as createBPLog — an edit that moves `measured_at`
+      // onto a value the user already has recorded is a duplicate, not a
+      // server fault.
+      logger.info({ userId: req.user?.id }, 'Blood pressure log update: duplicate measured_at, already recorded');
+      return res.status(409).json({
+        success: false,
+        message: 'This blood pressure reading has already been recorded',
+        code: 'DUPLICATE_READING'
+      });
+    }
     logger.error({ err: error }, 'Error updating blood pressure log:');
     res.status(500).json({
       success: false,

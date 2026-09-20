@@ -59,9 +59,18 @@ const HouseholdSettings = () => {
   const loadHouseholdSettings = async () => {
     try {
       setLoading(true);
-      const response = await settingsService.getHouseholdSettings();
-      setHouseholdData(response.data);
-      setDisplayName(response.data?.display_name || '');
+      // `settingsService.getHouseholdSettings()` already returns the household
+      // itself, not an envelope: `apiService.get` unwraps a single-key GraphQL
+      // response (`{ fitnessHousehold: {...} }` -> `{...}`) and the service
+      // returns that `.data`. Reaching for `.data` a second time here yielded
+      // `undefined` on every load, so `isInHousehold` was permanently false and
+      // EVERY user saw only Create/Join — including one actually in a household.
+      //
+      // Invisible until 2026-09-19 because no CI scene had ever rendered this
+      // screen; the wire response was correct the whole time.
+      const household = await settingsService.getHouseholdSettings();
+      setHouseholdData(household);
+      setDisplayName(household?.display_name || '');
     } catch (err) {
       notify('Failed to load household settings', { tone: 'error' });
     } finally {
@@ -205,7 +214,24 @@ const HouseholdSettings = () => {
                 <Typography variant="h5" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
                   {householdData.household_id}
                 </Typography>
-                <IconButton size="small" onClick={handleCopyCode}>
+                {/*
+                  * Icon-only, so the label IS the button's name — there is no
+                  * inner text for a screen reader to fall back to. It tracks
+                  * `codeCopied` so the confirmation is announced and not just
+                  * drawn: a tick that only changes colour says nothing to
+                  * anyone not looking at it.
+                  *
+                  * axe never flagged this before 2026-09-19 because the branch
+                  * it lives in was unreachable — `householdData` was always
+                  * undefined (see loadHouseholdSettings), so every run audited
+                  * the Create/Join half and the gate passed on UI no user in a
+                  * household could actually get to.
+                  */}
+                <IconButton
+                  size="small"
+                  onClick={handleCopyCode}
+                  aria-label={codeCopied ? 'Household code copied' : 'Copy household code'}
+                >
                   {codeCopied ? <CheckIcon color="success" /> : <CopyIcon />}
                 </IconButton>
               </Box>

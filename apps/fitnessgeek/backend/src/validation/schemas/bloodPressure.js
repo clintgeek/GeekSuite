@@ -33,6 +33,11 @@ const bpFields = {
   diastolic,
   pulse,
   log_date: logDateSchema.optional(),
+  // The instant the reading was taken. Same date-or-ISO shape as `log_date`
+  // (`dateOnlyOrIso`) since a caller may reasonably send either; the
+  // controller defaults it to "now" when omitted — see
+  // bloodPressureController.js and the shared schema's header.
+  measured_at: logDateSchema.optional(),
   notes,
 };
 

@@ -15,12 +15,14 @@ import { useTheme } from '@mui/material/styles';
 import { toneForMode } from '@geeksuite/ui';
 import { displayCalendarDate, localDateString, utcDateString } from '@geeksuite/utils';
 import { categorizeBP } from '../../utils/bpUtils.js';
+import { formatLocalTime } from './bpTimeUtils.js';
 import {
   Delete as DeleteIcon,
+  Edit as EditIcon,
   MonitorHeart as BPIcon
 } from '@mui/icons-material';
 
-const BPLogList = ({ logs, onDelete, unit = "mmHg" }) => {
+const BPLogList = ({ logs, onDelete, onEdit, unit = "mmHg" }) => {
   const theme = useTheme();
   // Status hues are tuned for dark tints; darken for legible text on light-mode tints.
   const statusTextColor = (color) => toneForMode(color, theme, { lightenBy: 0, darkenBy: 0.35 });
@@ -65,8 +67,18 @@ const BPLogList = ({ logs, onDelete, unit = "mmHg" }) => {
     );
   }
 
-  // Sort logs by date (newest first)
-  const sortedLogs = [...logs].sort((a, b) => new Date(b.log_date) - new Date(a.log_date));
+  // Sort by calendar day (newest first), then — now that more than one
+  // reading a day is normal, see the shared schema's header — by the actual
+  // time within that day, also newest first, so the most recent reading of
+  // "today" (this evening's, say) leads and this morning's follows it. Falls
+  // back to `log_date` for the tie-break if a row has no `measured_at` yet
+  // (a pre-rollout row, or a stage where the GraphQL layer isn't returning
+  // it) — same instant, so it's a stable no-op, not a crash.
+  const sortedLogs = [...logs].sort((a, b) => {
+    const dayDiff = new Date(b.log_date) - new Date(a.log_date);
+    if (dayDiff !== 0) return dayDiff;
+    return new Date(b.measured_at || b.log_date) - new Date(a.measured_at || a.log_date);
+  });
 
   return (
     <Card sx={{
@@ -82,11 +94,17 @@ const BPLogList = ({ logs, onDelete, unit = "mmHg" }) => {
         <List sx={{ p: 0, m: 0, width: '100%' }}>
           {sortedLogs.map((log) => {
             const bpStatus = categorizeBP(log.systolic, log.diastolic);
-            const deleteLabel = `Delete the ${log.systolic}/${log.diastolic} ${unit} reading from ${formatDate(log.log_date)}`;
+            const readingLabel = `${log.systolic}/${log.diastolic} ${unit} reading from ${formatDate(log.log_date)}`;
+            const deleteLabel = `Delete the ${readingLabel}`;
+            const editLabel = `Edit the ${readingLabel}`;
             // Compare the stored calendar day against the reader's calendar day —
             // `new Date(utcMidnight).toDateString()` is yesterday west of UTC, so
             // today's reading never read as today.
             const isToday = utcDateString(log.log_date) === localDateString();
+            // An instant, unlike `log_date` — rendered in the viewer's own
+            // timezone, not forced to UTC. Empty string (not a fabricated
+            // time) when the row has none yet.
+            const timeLabel = formatLocalTime(log.measured_at);
 
             return (
               <ListItem
@@ -129,19 +147,32 @@ const BPLogList = ({ logs, onDelete, unit = "mmHg" }) => {
                         }}
                       />
                     </Box>
-                    <IconButton
-                      edge="end"
-                      aria-label={deleteLabel}
-                      onClick={() => onDelete(log.id || log._id)}
-                      sx={{ color: 'error.main', p: 0.5 }}
-                      size="small"
-                    >
-                      <DeleteIcon fontSize="small" />
-                    </IconButton>
+                    <Box sx={{ display: 'flex', alignItems: 'center' }}>
+                      {onEdit && (
+                        <IconButton
+                          edge="end"
+                          aria-label={editLabel}
+                          onClick={() => onEdit(log)}
+                          sx={{ color: 'text.secondary', p: 0.5 }}
+                          size="small"
+                        >
+                          <EditIcon fontSize="small" />
+                        </IconButton>
+                      )}
+                      <IconButton
+                        edge="end"
+                        aria-label={deleteLabel}
+                        onClick={() => onDelete(log.id || log._id)}
+                        sx={{ color: 'error.main', p: 0.5 }}
+                        size="small"
+                      >
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    </Box>
                   </Box>
 
-                  {/* Row 2: Pulse + Date */}
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, pl: 5 }}>
+                  {/* Row 2: Pulse + Date + Time */}
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, pl: 5, flexWrap: 'wrap' }}>
                     {log.pulse && (
                       <Typography variant="body2" sx={{ fontWeight: 500, color: theme.palette.text.secondary }}>
                         ♥ {log.pulse} bpm
@@ -149,6 +180,7 @@ const BPLogList = ({ logs, onDelete, unit = "mmHg" }) => {
                     )}
                     <Typography variant="body2" color="text.secondary">
                       {formatDate(log.log_date)}
+                      {timeLabel && ` • ${timeLabel}`}
                       {isToday && ' • Today'}
                     </Typography>
                   </Box>
@@ -195,6 +227,7 @@ const BPLogList = ({ logs, onDelete, unit = "mmHg" }) => {
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, flex: '0 0 auto' }}>
                     <Typography variant="body2" color="text.secondary">
                       {formatDate(log.log_date)}
+                      {timeLabel && ` • ${timeLabel}`}
                     </Typography>
                     {isToday && (
                       <Typography variant="body2" color="text.secondary">
@@ -202,6 +235,20 @@ const BPLogList = ({ logs, onDelete, unit = "mmHg" }) => {
                       </Typography>
                     )}
                   </Box>
+
+                  {/* Edit Button */}
+                  {onEdit && (
+                    <Box sx={{ flex: '0 0 auto' }}>
+                      <IconButton
+                        edge="end"
+                        aria-label={editLabel}
+                        onClick={() => onEdit(log)}
+                        sx={{ color: 'text.secondary' }}
+                      >
+                        <EditIcon />
+                      </IconButton>
+                    </Box>
+                  )}
 
                   {/* Delete Button */}
                   <Box sx={{ flex: '0 0 auto' }}>
