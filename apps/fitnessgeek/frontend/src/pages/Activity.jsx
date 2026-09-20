@@ -31,6 +31,7 @@ import { alpha } from '@mui/material/styles';
 import { GeekEmptyState, GeekErrorState, toneForMode } from '@geeksuite/ui';
 import { fitnessGeekService } from '../services/fitnessGeekService';
 import { Surface, SectionLabel, DisplayHeading, StatNumber, EmptyState } from '../components/primitives';
+import { localDateString } from '@geeksuite/utils';
 
 /**
  * Duration-formatted sleep tile. Renders "Nh Mm" in mono.
@@ -372,10 +373,17 @@ const Activity = () => {
         return;
       }
 
-      // Fetch daily summary, sleep details, and activities in parallel
+      // Fetch daily summary, sleep details, and activities in parallel.
+      //
+      // The date is sent explicitly. Omitting it lets the resolver fall back
+      // to the server's `new Date()`, and the containers run UTC — so after
+      // 19:00 Central this page asked Garmin for TOMORROW and showed an empty
+      // day. A server cannot know which day it is for its user; the client is
+      // the only party that does.
+      const today = localDateString();
       const [dailyRes, sleepRes, activitiesRes] = await Promise.allSettled([
-        fitnessGeekService.getGarminDaily(),
-        fitnessGeekService.getGarminSleep(),
+        fitnessGeekService.getGarminDaily(today),
+        fitnessGeekService.getGarminSleep(today),
         fitnessGeekService.getGarminActivities(0, 10),
       ]);
 

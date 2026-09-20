@@ -192,6 +192,38 @@ export function localDateString(value = new Date()) {
 }
 
 /**
+ * The local calendar date `days` before `from`, as `YYYY-MM-DD`.
+ *
+ * For building an inclusive "last N days" window that means what the USER
+ * means by it. The naive alternatives are both wrong:
+ *
+ *   - `subDays(new Date(), n)` on the server reads the SERVER's day. The
+ *     containers run UTC, so a report opened at 20:00 US-Central anchored on
+ *     tomorrow's UTC date: the last seven days came out as 09-15 -> 09-21,
+ *     silently dropping the user's 09-14 from every total and average while
+ *     reserving a slot for a day that had not started for them.
+ *   - Subtracting `n * 86400000` milliseconds is not calendar arithmetic. It
+ *     lands an hour out across a DST boundary, which is enough to change the
+ *     date.
+ *
+ * This constructs a local `Date` with an out-of-range day-of-month and lets
+ * the platform normalise it, which is calendar-correct across month, year and
+ * DST boundaries alike.
+ *
+ * @param {number} days how many days back (0 is today)
+ * @param {Date} [from] the reference instant, default now
+ * @returns {string} `YYYY-MM-DD`, or `''` for an unusable input
+ */
+export function localDateStringDaysAgo(days, from = new Date()) {
+  const n = Number(days);
+  if (!Number.isFinite(n)) return '';
+  const d = from instanceof Date ? from : new Date(from);
+  if (Number.isNaN(d.getTime())) return '';
+  const shifted = new Date(d.getFullYear(), d.getMonth(), d.getDate() - Math.trunc(n));
+  return `${shifted.getFullYear()}-${pad(shifted.getMonth() + 1)}-${pad(shifted.getDate())}`;
+}
+
+/**
  * Local midnight for the day an instant falls on.
  *
  * For comparing instants by day in the browser — "was this created before

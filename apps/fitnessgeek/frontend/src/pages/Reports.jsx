@@ -24,7 +24,7 @@ import {
   Star as StarIcon
 } from '@mui/icons-material';
 import { reportsService } from '../services/reportsService.js';
-import { localDateString } from '@geeksuite/utils';
+import { localDateString, localDateStringDaysAgo } from '@geeksuite/utils';
 import { insightsService } from '../services/insightsService.js';
 
 const RANGE_OPTIONS = ['7', '14', '30'];
@@ -70,9 +70,16 @@ const Reports = () => {
       // the two report panels do not. With Promise.all a single AI failure
       // rejected the whole batch, so a provider hiccup blanked the food report
       // the user actually came for and replaced the page with an error.
+      // `start` is sent explicitly, computed from the LOCAL calendar day.
+      // Without it the resolver falls back to `subDays(new Date(), days - 1)`
+      // on a UTC container, so a report opened at 20:00 Central anchored on
+      // tomorrow: "the last 7 days" came out as 09-15 -> 09-21, dropping the
+      // user's own 09-14 from every total, average, ribbon and compliance
+      // percentage, and printing a range that ended tomorrow.
+      const start = localDateStringDaysAgo(days - 1);
       const [overviewData, trendsData, weeklyReport, trendSummary] = await Promise.allSettled([
-        reportsService.getOverview({ days }),
-        reportsService.getTrends({ days }),
+        reportsService.getOverview({ days, start }),
+        reportsService.getTrends({ days, start }),
         insightsService.getWeeklyReport({ days }),
         insightsService.getTrendWatch({ days: Math.max(days, 21) })
       ]);

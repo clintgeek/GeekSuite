@@ -683,7 +683,11 @@ export const typeDefs = gql`
     loginStreak: LoginStreak
     dailySummary(date: String): FitnessDailySummary
     weeklySummary(startDate: String!): FitnessJSON
-    derivedMacros: DerivedMacros
+    # \`date\` is the CALLER'S local calendar day (YYYY-MM-DD). Without it the
+    # resolver has to guess with \`new Date()\`, which on a UTC container is
+    # the UTC weekday — so a weekly calorie schedule rolled over to the next
+    # day's target at 19:00 US-Central, five hours early.
+    derivedMacros(date: String): DerivedMacros
     fitnessHousehold: Household
     fitnessHouseholdMemberLogs(memberId: ID!, date: String!): [FoodLog]
     fitnessFoodReportOverview(start: String, days: Int): FitnessFoodReport
@@ -732,7 +736,10 @@ export const typeDefs = gql`
     addBloodPressure(input: BloodPressureInput!): BloodPressure
     updateBloodPressure(id: ID!, input: BloodPressureInput!): BloodPressure
     deleteBloodPressure(id: ID!): Boolean
-    recordLoginStreak: LoginStreak
+    # \`date\` is the CALLER'S local calendar day (YYYY-MM-DD). A server
+    # cannot know which day it is for its user, and guessing reset the streak
+    # on any evening login while crediting days the user skipped.
+    recordLoginStreak(date: String): LoginStreak
     createFitnessHousehold(display_name: String!): Household
     joinFitnessHousehold(household_id: String!, display_name: String!): Household
     updateFitnessHouseholdSettings(input: FitnessJSON!): Household

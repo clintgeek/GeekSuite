@@ -6,6 +6,7 @@ import {
   utcDateString,
   displayCalendarDate,
   localDateString,
+  localDateStringDaysAgo,
   startOfLocalDay,
 } from '../dates.js';
 
@@ -410,5 +411,41 @@ describe('missing input is missing, not 1970', () => {
     expect(utcDateString(null)).toBe('');
     expect(localDateString(null)).toBe('');
     expect(displayCalendarDate(null)).toBe('');
+  });
+});
+
+describe('localDateStringDaysAgo', () => {
+  it('returns the local calendar date N days back, inclusive-window friendly', () => {
+    const from = new Date(2026, 8, 20, 20, 0, 0); // 2026-09-20 20:00 LOCAL
+    expect(localDateStringDaysAgo(0, from)).toBe('2026-09-20');
+    expect(localDateStringDaysAgo(6, from)).toBe('2026-09-14');
+    expect(localDateStringDaysAgo(29, from)).toBe('2026-08-22');
+  });
+
+  it('anchors on the LOCAL day even late in the evening', () => {
+    // The whole point: at 20:00 US-Central the UTC date is already tomorrow,
+    // and a server-side `subDays(new Date(), 6)` produced 09-15 -> 09-21,
+    // dropping the user's 09-14 and reserving a slot for a day that had not
+    // started for them.
+    const lateEvening = new Date(2026, 8, 20, 23, 30, 0);
+    expect(localDateStringDaysAgo(6, lateEvening)).toBe('2026-09-14');
+  });
+
+  it('crosses month and year boundaries correctly', () => {
+    expect(localDateStringDaysAgo(5, new Date(2026, 8, 2, 12, 0))).toBe('2026-08-28');
+    expect(localDateStringDaysAgo(3, new Date(2026, 0, 2, 12, 0))).toBe('2025-12-30');
+  });
+
+  it('is calendar arithmetic, not 86400000ms — it holds across DST', () => {
+    // 2026-11-01 is the US fall-back. Subtracting milliseconds lands an hour
+    // out here, which is enough to change the date.
+    expect(localDateStringDaysAgo(1, new Date(2026, 10, 1, 1, 30))).toBe('2026-10-31');
+    expect(localDateStringDaysAgo(1, new Date(2026, 2, 9, 1, 30))).toBe('2026-03-08');
+  });
+
+  it('returns empty string for unusable input rather than a wrong date', () => {
+    expect(localDateStringDaysAgo(NaN)).toBe('');
+    expect(localDateStringDaysAgo('abc')).toBe('');
+    expect(localDateStringDaysAgo(3, new Date('nope'))).toBe('');
   });
 });

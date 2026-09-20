@@ -148,7 +148,9 @@ const GET_LOGIN_STREAK = gql`
 `;
 
 const RECORD_LOGIN_STREAK = gql`
-  mutation RecordLoginStreak { recordLoginStreak { currentStreak longestStreak lastLoginDate streakStartDate } }
+  mutation RecordLoginStreak($date: String) {
+    recordLoginStreak(date: $date) { currentStreak longestStreak lastLoginDate streakStartDate }
+  }
 `;
 
 const GET_DAILY_SUMMARY = gql`
@@ -172,8 +174,8 @@ const GET_WEEKLY_SUMMARY = gql`
 `;
 
 const GET_DERIVED_MACROS = gql`
-  query GetDerivedMacros {
-    derivedMacros {
+  query GetDerivedMacros($date: String) {
+    derivedMacros(date: $date) {
       todayIndex
       calories { daily weekly_schedule }
       fixed { protein_g fat_g protein_kcal fat_kcal }
@@ -463,8 +465,13 @@ function routeRequest(method, url, data) {
     // /user/settings is an alias — same underlying FitnessUserSettings document
     if (base === '/user/settings') return { query: GET_USER_SETTINGS };
     if (base === '/weight') return { query: GET_WEIGHTS };
-    if (base === '/goals/nutrition/macros' || base === '/goals/nutrition') return { query: GET_DERIVED_MACROS };
-    if (base === '/goals') return { query: GET_DERIVED_MACROS };
+    // The browser owns the calendar day — same rule as /summary and
+    // /insights/daily-summary above. Without it the weekly schedule picks the
+    // server's UTC weekday and rolls over at 19:00 Central.
+    if (base === '/goals/nutrition/macros' || base === '/goals/nutrition') {
+      return { query: GET_DERIVED_MACROS, variables: { date: localDateString() } };
+    }
+    if (base === '/goals') return { query: GET_DERIVED_MACROS, variables: { date: localDateString() } };
     if (base === '/foods') return { query: GET_FOOD_ITEMS, variables: { search: url.includes('search=') ? new URLSearchParams(url.split('?')[1]).get('search') : null } };
     // Single food item lookup: /foods/:id (24-char Mongo ObjectId)
     if (parts[0] === 'foods' && parts[1] && /^[0-9a-f]{24}$/i.test(parts[1])) {
@@ -558,7 +565,11 @@ function routeRequest(method, url, data) {
   }
 
   if (method === 'POST') {
-    if (base === '/streaks/login') return { mutation: RECORD_LOGIN_STREAK };
+    // The browser owns the calendar day. Deciding it server-side reset the
+    // streak on any login after 19:00 Central and credited skipped days.
+    if (base === '/streaks/login') {
+      return { mutation: RECORD_LOGIN_STREAK, variables: { date: data?.date || localDateString() } };
+    }
     if (base === '/settings/household/create') {
       return {
         mutation: CREATE_HOUSEHOLD,

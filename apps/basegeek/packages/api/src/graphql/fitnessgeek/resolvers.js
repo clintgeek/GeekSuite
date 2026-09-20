@@ -641,7 +641,7 @@ export const resolvers = {
       };
     },
 
-    derivedMacros: async (_, __, { user }) => {
+    derivedMacros: async (_, { date } = {}, { user }) => {
       if (!user) throw new Error('Unauthorized');
       const settings = await UserSettings.getOrCreate(user.id);
       const ng = settings?.nutrition_goal || {};
@@ -669,8 +669,24 @@ export const resolvers = {
         return { dayIndex: idx, base_calories: baseCal, activity_add_kcal: 0, target_calories: target, protein_g: proteinG, fat_g: fatG, carbs_g: carbsG };
       });
 
-      const now = new Date();
-      const dow = now.getDay();
+      // WHICH DAY IS IT FOR THE USER?
+      //
+      // `new Date().getDay()` is the SERVER's weekday, and the containers run
+      // UTC — so on a weekly schedule the target flipped to the next day's
+      // number at 19:00 US-Central (18:00 CST): at 18:59 a Sunday allowance,
+      // at 19:00 Monday's, telling the user they were hundreds of calories
+      // over with five hours of their Sunday left. Invisible in fixed mode,
+      // where all seven entries are equal, which is why it survived.
+      //
+      // `date` is the caller's own local calendar day. A bare `YYYY-MM-DD`
+      // is read with `getUTC*` here because that is how the platform parses
+      // it — as UTC midnight — so this stays a pure calendar calculation and
+      // never touches the server's zone. The `new Date()` fallback is for
+      // callers that send nothing, and is the old, wrong-in-the-evening
+      // behaviour by necessity: a server cannot know a user's day.
+      const parsed = date ? new Date(`${date}T00:00:00.000Z`) : null;
+      const usable = parsed && !Number.isNaN(parsed.getTime());
+      const dow = usable ? parsed.getUTCDay() : new Date().getDay();
       const todayIndex = (dow + 6) % 7;
       const today = weekly[todayIndex] || null;
 
@@ -1272,10 +1288,12 @@ export const resolvers = {
       return result.deletedCount === 1;
     },
 
-    recordLoginStreak: async (_, __, { user }) => {
+    recordLoginStreak: async (_, { date } = {}, { user }) => {
       if (!user) throw new Error('Unauthorized');
       const streak = await LoginStreak.getOrCreateStreak(user.id);
-      await streak.recordLogin();
+      // The caller's own calendar day — see the shared module's header for
+      // what deciding it here instead used to cost.
+      await streak.recordLogin(date || null);
       return {
         currentStreak: streak.current_streak,
         longestStreak: streak.longest_streak,

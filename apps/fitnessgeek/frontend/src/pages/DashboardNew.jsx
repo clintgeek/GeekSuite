@@ -111,7 +111,14 @@ const DashboardNew = () => {
         goalsService.getDerivedMacros(),
         weightService.getWeightStats(),
         bpService.getCurrentBP(),
-        fitnessGeekService.getGarminDaily(),
+        // `today` (local, computed just above) — NOT the no-argument form.
+        // Without a date the resolver falls back to the server's `new Date()`,
+        // and the containers run UTC: opening the dashboard at 20:00 Central
+        // asked Garmin for TOMORROW, so Steps showed `--` and activeCalories
+        // came back 0, dropping the activity eat-back added to the calorie
+        // target. It repaired itself at midnight UTC, which is why it only
+        // ever looked broken in the evening.
+        fitnessGeekService.getGarminDaily(today),
         fitnessGeekService.getLogsForDate(today),
         streakService.getLoginStreak(),
       ]);

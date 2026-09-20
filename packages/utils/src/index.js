@@ -5,6 +5,7 @@ export {
   utcDateString,
   displayCalendarDate,
   localDateString,
+  localDateStringDaysAgo,
   startOfLocalDay,
 } from './dates.js';
 

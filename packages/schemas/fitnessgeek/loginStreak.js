@@ -126,12 +126,28 @@ const loginStreakOptions = {
  * The streak arithmetic, lifted verbatim out of `recordLogin` so it can be
  * asserted without a database.
  *
- * "Today" is the *server's local* calendar day, stored as UTC midnight so it
- * lines up with the UTC-midnight dates read back elsewhere. Truncating the
- * instant with `setUTCHours` instead would roll to tomorrow after ~18:00
- * US-Central, which is why it is built from the local Y/M/D. Do not
- * "simplify" that into `toUtcMidnight(new Date())` — they are not the same
- * function for an instant argument.
+ * "Today" is the USER'S calendar day, stored as UTC midnight so it lines up
+ * with the UTC-midnight dates read back elsewhere.
+ *
+ * It has to be passed in. This comment used to claim the day was built from
+ * "the server's local Y/M/D" and warn against simplifying it to `setUTCHours`
+ * — but the containers run UTC, so `now.getFullYear/getMonth/getDate` ARE the
+ * UTC fields and the expression was byte-for-byte what it warned against. The
+ * defence was illusory and the comment sent the next reader away.
+ *
+ * What that cost, verified by running this function:
+ *   - Open the app Mon 10:00, Tue 21:00, Wed 10:00 Central. The Tuesday
+ *     evening login is 02:00Z Wednesday, so UTC "today" is Wednesday; Monday
+ *     is neither that nor its yesterday, so the streak RESETS. Wednesday
+ *     morning is then the same UTC day, so nothing increments. Three
+ *     consecutive days read 1, 1, 1.
+ *   - The mirror: a Monday-evening login is recorded as Tuesday, so skipping
+ *     Tuesday entirely still counts as consecutive and the streak grows on a
+ *     day the user never opened the app.
+ *
+ * A server cannot know what day it is for its user. `AuthListener` already
+ * computes `localDateString()` to decide whether to POST at all; it now sends
+ * it too.
  *
  * Branches, in the order they are evaluated:
  *   - no previous login, or the previous login was yesterday → increment
@@ -145,8 +161,16 @@ const loginStreakOptions = {
  * @param {Date} [now] - injectable clock, for tests. Defaults to `new Date()`.
  * @returns {Object} the same object, for chaining.
  */
-function applyLoginToStreak(streak, now = new Date()) {
-  const today = new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
+function applyLoginToStreak(streak, now = new Date(), localDate = null) {
+  // A bare `YYYY-MM-DD` from the client is the authoritative answer. The
+  // `now`-derived fallback remains for callers that send nothing and is the
+  // old, UTC-dependent behaviour by necessity.
+  const parsed = typeof localDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(localDate)
+    ? new Date(`${localDate}T00:00:00.000Z`)
+    : null;
+  const today = parsed && !Number.isNaN(parsed.getTime())
+    ? parsed
+    : new Date(Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()));
 
   const lastLogin = streak.last_login_date ? new Date(streak.last_login_date) : null;
   if (lastLogin) {
@@ -190,8 +214,8 @@ function applyLoginToStreak(streak, now = new Date()) {
  */
 function attachLoginStreakMethods(schema) {
   // Method to record a login and update streak
-  schema.methods.recordLogin = async function recordLogin() {
-    applyLoginToStreak(this);
+  schema.methods.recordLogin = async function recordLogin(localDate = null) {
+    applyLoginToStreak(this, new Date(), localDate);
     return await this.save();
   };
 }
