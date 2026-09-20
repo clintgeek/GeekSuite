@@ -12,6 +12,12 @@ import { useToast } from '@geeksuite/ui';
 import { userService } from '../../services/userService.js';
 import { settingsService } from '../../services/settingsService.js';
 import { useAuth } from '@geeksuite/auth';
+import {
+  mifflinStJeorBMR,
+  tdeeFromBMR,
+  BMR_CALC_VERSION,
+  isPlanCalculationStale,
+} from '@geeksuite/utils';
 import ModeSelector from './ModeSelector';
 import KetoPlanStep from './KetoPlanStep';
 
@@ -20,6 +26,8 @@ const CalorieGoalWizard = () => {
   const theme = useTheme();
   const { notify } = useToast();
   const [isLoadingProfile, setIsLoadingProfile] = useState(true);
+  // True when the saved plan predates the BMR unit fix. See loadExistingGoal.
+  const [planStale, setPlanStale] = useState(false);
   const [activeStep, setActiveStep] = useState(0);
   const [mode, setMode] = useState('standard');
   const [ketoConfig, setKetoConfig] = useState({
@@ -77,6 +85,11 @@ const CalorieGoalWizard = () => {
       const resp = await settingsService.getSettings();
       const data = resp?.data || resp?.data?.data || resp;
       const ng = data?.nutrition_goal;
+      // A plan saved before 2026-09-20 was built with the pounds-and-inches
+      // BMR bug and is up to 45% too high. Its inputs were never persisted,
+      // so it cannot be silently recomputed — the only honest handling is to
+      // say so and let the user re-enter three fields.
+      setPlanStale(isPlanCalculationStale(ng));
       if (ng && ng.enabled) {
         const computedWeeklyDeficit = (ng.weight_change_rate || 0) * 500;
         const scheduleDays = buildDaysFromSchedule(ng.weekly_schedule);
@@ -155,11 +168,13 @@ const CalorieGoalWizard = () => {
     const heightInches = parseHeightToInches(height);
     if (heightInches === null) return null;
 
-    // Mifflin-St Jeor Equation
-    let bmr = 10 * parseFloat(weight) + 6.25 * heightInches - 5 * parseFloat(age);
-    bmr = gender === 'male' ? bmr + 5 : bmr - 161;
-
-    return Math.round(bmr);
+    // The formula itself lives in `@geeksuite/utils/energy`, imported by the
+    // backend's `fitnessGoalService` too. It used to be written out here, in
+    // kg/cm form, applied to the pounds in this form's "Current Weight (lbs)"
+    // field and the inches `parseHeightToInches` returns — inflating every
+    // BMR by 11-45%, worse the heavier the user. The parameter names carry
+    // the units now precisely so that cannot recur silently.
+    return mifflinStJeorBMR({ weightLb: weight, heightIn: heightInches, age, gender });
   };
 
   // Accepts the handful of height notations a person would actually type.
@@ -205,17 +220,12 @@ const CalorieGoalWizard = () => {
     return null;
   };
 
-  const calculateTDEE = (bmr) => {
-    const activityMultipliers = {
-      sedentary: 1.2,      // Little to no exercise
-      light: 1.375,         // Light exercise 1-3 days/week
-      moderate: 1.55,       // Moderate exercise 3-5 days/week
-      very: 1.725,          // Hard exercise 6-7 days/week
-      extra: 1.9            // Very hard exercise, physical job
-    };
-
-    return Math.round(bmr * activityMultipliers[profile.activityLevel]);
-  };
+  // Shared with the backend; the multiplier table moved to
+  // `@geeksuite/utils/energy` alongside the BMR formula so the two cannot
+  // drift. An unrecognised activity level now falls back to `sedentary` (the
+  // smallest factor) rather than producing `NaN`, which is what
+  // `bmr * undefined` did here before.
+  const calculateTDEE = (bmr) => tdeeFromBMR(bmr, profile.activityLevel);
 
   const getMinSafeCalories = (bmr) => {
     // Minimum recommended calories: max(1200, BMR - 20%)
@@ -303,6 +313,17 @@ const CalorieGoalWizard = () => {
       weightToLose: Math.abs(weightToLose),
       bmr,
       tdee,
+      // Carried so the SAVE can persist what this BMR was computed from.
+      // A plan that stores only its outputs cannot be re-derived, audited,
+      // or repaired — which is exactly the position every plan saved before
+      // 2026-09-20 is in.
+      calcInputs: {
+        weight_lb: parseFloat(profile.weight),
+        height_in: parseHeightToInches(profile.height),
+        age: parseFloat(profile.age),
+        gender: profile.gender,
+        activity_level: profile.activityLevel,
+      },
       dailyCalories,
       weeklyDeficit,
       timeline,
@@ -364,6 +385,24 @@ const CalorieGoalWizard = () => {
           choice short of abandoning the wizard. Steps ahead of activeStep
           stay inert: clicking forward would skip the required-field checks
           each step guards. */}
+      {/* A plan saved before 2026-09-20 was computed by feeding pounds and
+          inches to a formula that wants kilograms and centimetres, so its
+          calorie target is 11-45% too high — worse the heavier the person.
+          The planner of that era saved only its outputs, so there is nothing
+          to recompute FROM: this cannot be repaired silently, and leaving it
+          unmentioned would mean someone eating to a maintenance number while
+          the app calls them compliant. Hence a plain warning that survives
+          until the plan is re-saved, rather than a toast. */}
+      {planStale && (
+        <Alert severity="warning" sx={{ mb: 3 }}>
+          This plan was calculated with a unit error that made its calorie
+          target too high — by more than 20% for many people. The original
+          height, weight and age weren&apos;t saved, so it can&apos;t be
+          corrected automatically. Re-run the planner to get an accurate
+          target.
+        </Alert>
+      )}
+
       {!hasExistingGoal && (
         <Stepper activeStep={activeStep} sx={{ mb: 4 }}>
           {steps.map((label, index) => (
@@ -652,6 +691,8 @@ const CalorieGoalWizard = () => {
                       min_safe_calories: plan.rules.minSafeCalories,
                       bmr: plan.bmr,
                       tdee: plan.tdee,
+                      bmr_calc_version: BMR_CALC_VERSION,
+                      calc_inputs: plan.calcInputs,
                       timeline_weeks: plan.timeline,
                       estimated_end_date: estimatedEnd.toISOString(),
                       mode,
@@ -957,6 +998,8 @@ const CalorieGoalWizard = () => {
                           min_safe_calories: plan.rules.minSafeCalories,
                           bmr: plan.bmr,
                           tdee: plan.tdee,
+                          bmr_calc_version: BMR_CALC_VERSION,
+                          calc_inputs: plan.calcInputs,
                           timeline_weeks: plan.timeline,
                           estimated_end_date: estimatedEnd.toISOString(),
                           mode,

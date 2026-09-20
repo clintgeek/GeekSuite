@@ -216,6 +216,28 @@ function userSettingsDefinition(mongoose) {
       min_safe_calories: { type: Number },
       bmr: { type: Number },
       tdee: { type: Number },
+      // WHICH FORMULA PRODUCED `bmr`, AND WHAT IT WAS GIVEN.
+      //
+      // Until 2026-09-20 both copies of Mifflin-St Jeor were fed pounds and
+      // inches where the equation wants kilograms and centimetres, inflating
+      // every BMR by 11-45% (worse the heavier the user) and with it
+      // `daily_calorie_target`, the number the whole app holds people to.
+      //
+      // The planner persisted only its OUTPUTS, so a plan saved before the
+      // fix cannot be recomputed — the height, weight and age it was built
+      // from are simply gone. That is why both of these exist: the version
+      // lets `isPlanCalculationStale` (@geeksuite/utils/energy) tell a
+      // pre-fix plan from a corrected one and prompt the user to re-enter it,
+      // and `calc_inputs` makes sure this is the LAST time a stored plan is
+      // a number with no provenance.
+      bmr_calc_version: { type: Number },
+      calc_inputs: {
+        weight_lb: { type: Number },
+        height_in: { type: Number },
+        age: { type: Number },
+        gender: { type: String },
+        activity_level: { type: String }
+      },
       timeline_weeks: { type: Number },
       estimated_end_date: { type: Date },
       mode: {

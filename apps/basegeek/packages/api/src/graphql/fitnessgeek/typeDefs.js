@@ -69,10 +69,29 @@ export const typeDefs = gql`
     min_safe_calories: Float
     bmr: Float
     tdee: Float
+    # Provenance for the two numbers above — see the shared schema's comment
+    # on \`bmr_calc_version\`. The INPUT side of this settings write is a
+    # JSON scalar, so a new field reaches Mongo without being declared; this
+    # READ type is what decides whether it ever reaches the browser again.
+    # Omitting it here is how a field exists in the database, is written
+    # correctly, and still renders as undefined forever.
+    bmr_calc_version: Float
+    calc_inputs: NutritionGoalCalcInputs
     timeline_weeks: Float
     estimated_end_date: Date
     mode: String
     keto: KetoSettings
+  }
+
+  # What the saved plan's BMR was actually computed from. Persisted so a plan
+  # can be re-derived or audited; plans written before 2026-09-20 have none,
+  # which is precisely why they cannot be repaired automatically.
+  type NutritionGoalCalcInputs {
+    weight_lb: Float
+    height_in: Float
+    age: Float
+    gender: String
+    activity_level: String
   }
 
   type WeightGoalSettings {

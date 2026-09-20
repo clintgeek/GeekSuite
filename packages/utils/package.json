@@ -6,7 +6,8 @@
   "main": "src/index.js",
   "exports": {
     ".": "./src/index.js",
-    "./dates": "./src/dates.js"
+    "./dates": "./src/dates.js",
+    "./energy": "./src/energy.js"
   },
   "scripts": {
     "test": "vitest run",

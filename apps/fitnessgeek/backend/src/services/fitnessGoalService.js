@@ -1,5 +1,10 @@
 import logger from '../config/logger.js';
 import aiGeekClient, { UNAVAILABLE_MESSAGE } from './aiGeekClient.js';
+import {
+  mifflinStJeorBMR,
+  tdeeFromBMR,
+  ACTIVITY_MULTIPLIERS as SHARED_ACTIVITY_MULTIPLIERS,
+} from '@geeksuite/utils';
 
 /**
  * fitnessGoalService — the nutrition-goal and meal-plan side of FitnessGeek.
@@ -33,13 +38,11 @@ import aiGeekClient, { UNAVAILABLE_MESSAGE } from './aiGeekClient.js';
 const GOAL_TIMEOUT_MS = 60000;
 
 /** Activity multipliers, matching AIGoalPlanner.jsx exactly. */
-const ACTIVITY_MULTIPLIERS = {
-  sedentary: 1.2,
-  light: 1.375,
-  moderate: 1.55,
-  very: 1.725,
-  extra: 1.9
-};
+// Re-exported from the shared module rather than restated, so this table and
+// the frontend's cannot drift apart the way the BMR formula did. The keys are
+// the app's own activity-level values; see the shared module's comment before
+// renaming any of them.
+const ACTIVITY_MULTIPLIERS = SHARED_ACTIVITY_MULTIPLIERS;
 
 /** `5'11"` → 71. Returns null for anything it cannot read. */
 function parseHeightToInches(height) {
@@ -76,13 +79,20 @@ class FitnessGoalService {
       return null;
     }
 
-    // Mifflin-St Jeor.
-    let bmr = 10 * weight + 6.25 * heightInches - 5 * age;
-    bmr = gender === 'male' ? bmr + 5 : bmr - 161;
-    bmr = Math.round(bmr);
+    // Mifflin-St Jeor, from `@geeksuite/utils/energy` — the same module the
+    // frontend planner calls. It used to be written out here in kg/cm form
+    // and handed `weight` in POUNDS and `heightInches` in INCHES, which
+    // inflated every BMR by 11-45% (worse the heavier the person). Having
+    // the formula in two places is why the identical bug had to be found
+    // twice; there is one copy now, and its parameter names carry the units.
+    const bmr = mifflinStJeorBMR({ weightLb: weight, heightIn: heightInches, age, gender });
+    if (bmr === null) {
+      // Individually-plausible numbers that don't make a metabolism.
+      return null;
+    }
 
     const level = ACTIVITY_MULTIPLIERS[userProfile.currentFitnessLevel] ? userProfile.currentFitnessLevel : 'sedentary';
-    const tdee = Math.round(bmr * ACTIVITY_MULTIPLIERS[level]);
+    const tdee = tdeeFromBMR(bmr, level);
 
     const rate = Math.min(2, Math.max(0.25, parseFloat(userProfile.weightChangeRate) || 1));
     const dailyDeficit = rate * 500; // 3500 kcal per lb, spread over a week

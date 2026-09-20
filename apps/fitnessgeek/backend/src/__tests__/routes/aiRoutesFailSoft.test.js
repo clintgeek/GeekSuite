@@ -218,10 +218,19 @@ describe('POST /api/ai/create-nutrition-goals — deterministic fallback', () =>
 
     expect(res.status).toBe(200);
     expect(res.body.meta).toMatchObject({ ok: false, source: 'deterministic' });
-    // Mifflin-St Jeor: 10*210 + 6.25*71 - 5*45 + 5 = 2323.75 → 2324. TDEE at
-    // the `light` multiplier 1.375 = 3195.5 → 3196. Minus a 500 kcal/day
-    // deficit for 1 lb/week = 2696, well above the max(1200, BMR*0.8) floor.
-    expect(res.body.data.primary_goal.daily_calorie_target).toBe(2696);
+    // Mifflin-St Jeor takes KILOGRAMS and CENTIMETRES. 210 lb = 95.254 kg,
+    // 71 in = 180.34 cm:
+    //   BMR  = 10(95.254) + 6.25(180.34) - 5(45) + 5 = 1859.7 → 1860
+    //   TDEE = 1860 × 1.375 (`light`)                = 2557.5 → 2558
+    //   target = 2558 - 500 (1 lb/week) = 2058, above the max(1200, BMR*0.8)
+    //   floor of 1488.
+    //
+    // This assertion used to read 2696, from `10*210 + 6.25*71 - 5*45 + 5` —
+    // the formula applied to pounds and inches directly. The test was
+    // faithfully pinning the bug: it agreed with the implementation, and
+    // both were wrong by 638 kcal/day. Fixed 2026-09-20 along with the
+    // formula itself; see `@geeksuite/utils/energy`.
+    expect(res.body.data.primary_goal.daily_calorie_target).toBe(2058);
     expect(res.body.data.primary_goal.timeline_weeks).toBe(20);
   });
 
