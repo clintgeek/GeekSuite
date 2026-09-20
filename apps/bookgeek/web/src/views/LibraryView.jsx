@@ -29,8 +29,12 @@ export default function LibraryView({
   books,
   clearBasket,
   error,
+  exportError,
+  exportNotice,
+  exportingCsv,
   handleCreateDeviceBasket,
   handleMergeSelectedBooks,
+  handleExportCsv,
   handleSaveCurrentFilter,
   hasMore,
   loadMoreError,
@@ -88,6 +92,16 @@ export default function LibraryView({
   useEffect(() => {
     if (basketError) notify(basketError, { tone: "error" });
   }, [basketError, notify]);
+  // The CSV export finishes after the sheet has closed, so its result needs a
+  // surface that outlives the sheet. Both outcomes are reported — a failed
+  // export that looked like a successful one is the pattern this suite has
+  // had to fix repeatedly.
+  useEffect(() => {
+    if (exportError) notify(exportError, { tone: "error" });
+  }, [exportError, notify]);
+  useEffect(() => {
+    if (exportNotice) notify(exportNotice, { tone: "success" });
+  }, [exportNotice, notify]);
 
   const hasFilters =
     Boolean(searchQuery.trim()) ||
@@ -284,6 +298,8 @@ export default function LibraryView({
         savedFiltersError={savedFiltersError}
         applySavedFilter={applySavedFilter}
         handleSaveCurrentFilter={handleSaveCurrentFilter}
+        handleExportCsv={handleExportCsv}
+        exportingCsv={exportingCsv}
         saveFilterLoading={saveFilterLoading}
         onEnterSelectMode={() => setSelectMode?.(true)}
         showMergeUi={showMergeUi}

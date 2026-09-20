@@ -20,6 +20,7 @@ import {
   Add as AddIcon,
   CheckBoxOutlined as SelectIcon,
   MergeType as MergeIcon,
+  FileDownloadOutlined as ExportIcon,
 } from "@mui/icons-material";
 import { GeekSheet, GeekTextField } from "@geeksuite/ui";
 import { SORT_LABELS, SORT_ORDER } from "./librarySort";
@@ -79,6 +80,8 @@ export default function FilterSheet({
   savedFiltersError,
   applySavedFilter,
   handleSaveCurrentFilter,
+  handleExportCsv,
+  exportingCsv = false,
   saveFilterLoading,
   onEnterSelectMode,
   showMergeUi,
@@ -205,6 +208,21 @@ export default function FilterSheet({
         <Divider sx={{ my: 2.5 }} />
 
         <Box sx={{ display: "flex", flexDirection: "column", alignItems: "flex-start" }}>
+          {/* Exports what the CURRENT filters match, not the rows rendered so
+              far — the grid pages behind a sentinel, so those are usually a
+              prefix. The label says "these books" rather than "library" for
+              that reason: with a shelf or tag up, this is that subset. */}
+          <Button
+            startIcon={<ExportIcon />}
+            disabled={exportingCsv}
+            onClick={() => {
+              handleExportCsv?.();
+              onClose?.();
+            }}
+            sx={{ justifyContent: "flex-start", color: "text.primary" }}
+          >
+            {exportingCsv ? "Exporting…" : "Export these books (CSV)"}
+          </Button>
           <Button
             startIcon={<SelectIcon />}
             onClick={() => {

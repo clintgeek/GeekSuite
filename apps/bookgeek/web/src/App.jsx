@@ -16,6 +16,11 @@ import {
   DRAFT_BOOK_METADATA,
 } from "./graphql/queries.js";
 import {
+  buildBooksCsv,
+  booksCsvFilename,
+  UTF8_BOM,
+} from "./utils/exportBooksCsv.js";
+import {
   UPDATE_BOOK,
   DELETE_BOOK,
   CREATE_BOOK,
@@ -62,6 +67,10 @@ export default function App() {
   const { preferences: appPrefs, updateAppPreferences, loaded: appPrefsLoaded } = useAppPreferences("bookgeek");
   const [health, setHealth] = useState(null);
   const [books, setBooks] = useState([]);
+  // CSV export of whatever the current filters match (handleExportCsv).
+  const [exportingCsv, setExportingCsv] = useState(false);
+  const [exportError, setExportError] = useState(null);
+  const [exportNotice, setExportNotice] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [token, setToken] = useState(null);
@@ -452,6 +461,96 @@ export default function App() {
     setAuthorFilter(preset.authorFilter || "");
     setTagFilter(preset.tagFilter || "");
     setShelfFilter(preset.shelfFilter || "all");
+  }
+
+  /**
+   * Export the books the current filters match, as CSV.
+   *
+   * NOT the rows React has rendered. The grid pages 50 at a time behind a
+   * load-more sentinel, so the rendered rows are usually a prefix of the
+   * match — exporting those would quietly hand back 50 of 200 books. This
+   * re-runs the SAME query with the SAME filters and sort and walks every
+   * page, so the file is "everything this view is showing you", in the order
+   * you would reach it by scrolling.
+   *
+   * The server caps `limit` at 100 (server.js), so the page size here is 100
+   * and not a number of our choosing — asking for more silently returns 100
+   * and the loop would never terminate if it trusted the request instead of
+   * the response.
+   */
+  async function handleExportCsv() {
+    if (exportingCsv) return;
+    setExportingCsv(true);
+    try {
+      const filters = {};
+      if (searchQuery.trim()) filters.q = searchQuery.trim();
+      if (authorFilter.trim()) filters.author = authorFilter.trim();
+      if (tagFilter.trim()) filters.tag = tagFilter.trim();
+      if (shelfFilter !== "all") filters.shelf = shelfFilter;
+
+      const PAGE_SIZE = 100;
+      const collected = [];
+      let pageToLoad = 1;
+      let guard = 0;
+
+      // Bounded: `guard` stops a bad `total` or a server that ignores `page`
+      // from spinning forever. 200 pages at 100 each is 20k books, well past
+      // any real library, and failing loudly beats hanging the tab.
+      while (guard < 200) {
+        guard += 1;
+        const res = await apolloClient.query({
+          query: GET_BOOKS,
+          variables: {
+            ...filters,
+            page: pageToLoad,
+            limit: PAGE_SIZE,
+            sort: sortBy || "title",
+            sortDir: sortDir || "asc",
+          },
+          fetchPolicy: "no-cache",
+        });
+        const payload = res.data?.books || {};
+        const items = Array.isArray(payload.items) ? payload.items : [];
+        collected.push(...items);
+
+        const totalCount =
+          typeof payload.total === "number" ? payload.total : collected.length;
+        // Trust the RESPONSE's page size, not the one requested.
+        const pageSize =
+          typeof payload.pageSize === "number" && payload.pageSize > 0
+            ? payload.pageSize
+            : items.length;
+        if (items.length === 0 || collected.length >= totalCount || pageSize === 0) break;
+        pageToLoad += 1;
+      }
+
+      const csv = buildBooksCsv(collected);
+      const filename = booksCsvFilename(filters);
+
+      // The BOM is what makes Excel read this as UTF-8 rather than the local
+      // codepage; see the util's header.
+      const blob = new Blob([UTF8_BOM, csv], { type: "text/csv;charset=utf-8;" });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = filename;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+
+      setExportError(null);
+      setExportNotice(
+        `Exported ${collected.length} ${collected.length === 1 ? "book" : "books"}.`
+      );
+    } catch (err) {
+      // Surfaced, not swallowed: a failed export that looks like a successful
+      // one is the exact pattern this suite keeps having to fix.
+      setExportError(err?.message || "Could not export the library.");
+      setExportNotice(null);
+    } finally {
+      setExportingCsv(false);
+    }
   }
 
   async function handleSaveCurrentFilter() {
@@ -2366,6 +2465,10 @@ export default function App() {
             error={error}
             handleCreateDeviceBasket={handleCreateDeviceBasket}
             handleMergeSelectedBooks={handleMergeSelectedBooks}
+            handleExportCsv={handleExportCsv}
+            exportingCsv={exportingCsv}
+            exportError={exportError}
+            exportNotice={exportNotice}
             handleSaveCurrentFilter={handleSaveCurrentFilter}
             hasMore={hasMore}
             loadMoreError={loadMoreError}

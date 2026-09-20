@@ -109,3 +109,49 @@ describe('FilterSheet', () => {
     expect(screen.getByRole('button', { name: 'Show 1 book' })).toBeInTheDocument();
   });
 });
+
+describe('FilterSheet — CSV export', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('offers the export and calls the handler', async () => {
+    const handleExportCsv = vi.fn();
+    const user = userEvent.setup();
+    renderWithProviders(<FilterSheet {...baseProps({ handleExportCsv })} />);
+
+    await user.click(screen.getByRole('button', { name: /export these books/i }));
+    expect(handleExportCsv).toHaveBeenCalledTimes(1);
+  });
+
+  it('closes the sheet, since the export outlives it and reports by toast', async () => {
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+    renderWithProviders(
+      <FilterSheet {...baseProps({ handleExportCsv: vi.fn(), onClose })} />
+    );
+
+    await user.click(screen.getByRole('button', { name: /export these books/i }));
+    expect(onClose).toHaveBeenCalled();
+  });
+
+  it('shows progress and blocks a second click while exporting', async () => {
+    // A long export must not be startable twice; App also guards, but the
+    // control should say why it is inert.
+    const handleExportCsv = vi.fn();
+    renderWithProviders(
+      <FilterSheet {...baseProps({ handleExportCsv, exportingCsv: true })} />
+    );
+
+    const button = screen.getByRole('button', { name: /exporting/i });
+    expect(button).toBeDisabled();
+  });
+
+  it('does not throw when no handler is wired', async () => {
+    // The optional-call guard, so a caller that forgets the prop degrades to
+    // a no-op rather than a crash in the sheet.
+    const user = userEvent.setup();
+    renderWithProviders(<FilterSheet {...baseProps({ handleExportCsv: undefined })} />);
+    await expect(
+      user.click(screen.getByRole('button', { name: /export these books/i }))
+    ).resolves.not.toThrow();
+  });
+});
