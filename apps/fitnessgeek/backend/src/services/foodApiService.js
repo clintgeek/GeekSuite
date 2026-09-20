@@ -3,6 +3,7 @@ import cacheService from './cacheService.js';
 import foodQualityService from './foodQualityService.js';
 import logger from '../config/logger.js';
 import { createBreaker } from '../lib/breakers.js';
+import { normalizeOpenFoodFactsNutrition } from './openFoodFactsNutrition.js';
 
 // One breaker per upstream, shared across every call site below (and, for
 // 'openfoodfacts', with openFoodFactsService.js — same upstream, same
@@ -268,23 +269,17 @@ class FoodApiService {
     const servingSize = parseServingSize(product.serving_size || product.quantity);
     const servingUnit = product.serving_unit || product.unit || 'g';
 
-    // Calculate nutrition per actual serving (not per 100g)
-    const servingRatio = servingSize / 100;
-
+    // Scaling and the grams-to-milligrams sodium conversion both live in
+    // `openFoodFactsNutrition`, shared with unifiedFoodService's barcode
+    // path — the two used to disagree about the same product. The
+    // `servingRatio` that used to be computed here was never referenced, so
+    // per-100g values were stored as if they were per-serving amounts.
     return {
       id: `openfoodfacts_${product.code || product._id}`,
       name: product.product_name || product.generic_name || 'Unknown Product',
       brand: product.brands || product.brand_owner || '',
       barcode: product.code,
-      nutrition: {
-        calories_per_serving: Math.round((nutriments['energy-kcal_serving'] || nutriments['energy-kcal_100g'] || nutriments['energy_100g'] / 4.184 || 0)),
-        protein_grams: Math.round((nutriments.proteins_serving || nutriments.proteins_100g || 0) * 10) / 10,
-        carbs_grams: Math.round((nutriments.carbohydrates_serving || nutriments.carbohydrates_100g || 0) * 10) / 10,
-        fat_grams: Math.round((nutriments.fat_serving || nutriments.fat_100g || 0) * 10) / 10,
-        fiber_grams: Math.round((nutriments.fiber_serving || nutriments.fiber_100g || 0) * 10) / 10,
-        sugar_grams: Math.round((nutriments.sugars_serving || nutriments.sugars_100g || 0) * 10) / 10,
-        sodium_mg: Math.round((nutriments.sodium_serving || nutriments.sodium_100g || 0) * 10) / 10
-      },
+      nutrition: normalizeOpenFoodFactsNutrition(nutriments, servingSize),
       serving: {
         size: servingSize,
         unit: servingUnit

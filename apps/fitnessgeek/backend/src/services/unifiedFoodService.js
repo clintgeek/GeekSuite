@@ -32,6 +32,7 @@ import cacheService from './cacheService.js';
 import { foodCatalogVisibilityFilter } from '@geeksuite/schemas/fitnessgeek/foodItem';
 import { parseFoodQuery, parseFragment, itemIsGroundedInQuery } from './foodQueryParser.js';
 import { rankFoodResults, isConfidentMatch } from './foodRanker.js';
+import { normalizeOpenFoodFactsNutrition } from './openFoodFactsNutrition.js';
 
 /**
  * Confidence levels for food lookup results
@@ -748,15 +749,10 @@ class UnifiedFoodService {
       name: product.product_name || product.generic_name || 'Unknown',
       brand: product.brands || '',
       barcode: product.code || '',
-      nutrition: {
-        calories_per_serving: Math.round(n['energy-kcal_serving'] || n['energy-kcal_100g'] || 0),
-        protein_grams: Math.round((n.proteins_serving || n.proteins_100g || 0) * 10) / 10,
-        carbs_grams: Math.round((n.carbohydrates_serving || n.carbohydrates_100g || 0) * 10) / 10,
-        fat_grams: Math.round((n.fat_serving || n.fat_100g || 0) * 10) / 10,
-        fiber_grams: Math.round((n.fiber_serving || n.fiber_100g || 0) * 10) / 10,
-        sugar_grams: Math.round((n.sugars_serving || n.sugars_100g || 0) * 10) / 10,
-        sodium_mg: Math.round((n.sodium_serving || n.sodium_100g || 0) * 1000 * 10) / 10
-      },
+      // Shared with foodApiService's text-search path; this one already had
+      // the sodium conversion but, like the other, treated per-100g values as
+      // per-serving amounts. See openFoodFactsNutrition.js.
+      nutrition: normalizeOpenFoodFactsNutrition(n, servingSize),
       serving: {
         size: servingSize,
         unit: servingUnit
