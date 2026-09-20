@@ -189,7 +189,10 @@ const BloodPressure = () => {
         await loadBPData();
         notify('Blood pressure reading logged successfully!', { tone: 'success' });
       } else {
-        notify(response.message || 'Failed to add blood pressure reading', { tone: 'error' });
+        // A soft failure is still a failure. Falling through here let
+        // AddBPDialog's `await onAdd(...)` resolve normally, so it cleared the
+        // form and closed exactly as if the reading had saved.
+        throw new Error(response.message || 'Failed to add blood pressure reading');
       }
     } catch (error) {
       // The old "one reading per calendar day" rejection is gone — multiple
@@ -204,6 +207,13 @@ const BloodPressure = () => {
         notify('Failed to add blood pressure reading', { tone: 'error' });
       }
       logger.error('Error adding BP reading:', error);
+      // Re-throw, like handleSaveEditBP below. Without this the dialog closed
+      // and blanked the form on every failure while a 3-second toast was the
+      // only trace — so a reading logged on bad signal was simply gone, and
+      // by the time it was noticed the number had been forgotten. The inline
+      // <Alert> AddBPDialog renders for exactly this case could never fire,
+      // because nothing ever rejected.
+      throw error;
     }
   };
 
@@ -238,7 +248,9 @@ const BloodPressure = () => {
         notify('Blood pressure reading updated successfully!', { tone: 'success' });
         setEditingLog(null);
       } else {
-        notify(response.message || 'Failed to update blood pressure reading', { tone: 'error' });
+        // Same reasoning as handleAddBP: a falsy `success` must not look like
+        // a saved edit.
+        throw new Error(response.message || 'Failed to update blood pressure reading');
       }
     } catch (error) {
       if (error.message && error.message.includes('already been recorded')) {
