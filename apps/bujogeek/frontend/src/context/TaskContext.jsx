@@ -425,7 +425,13 @@ const TaskProvider = ({ children }) => {
           break;
         }
         case 'weekly': {
-          const startDate = startOfWeek(date || new Date());
+          // `weekStartsOn: 1`. date-fns defaults to Sunday, so this silently
+          // re-derived the week start from the Monday `WeeklySpread` had
+          // already computed and handed back the PREVIOUS Sunday — the UI
+          // drew Mon-Sun while the gateway was asked for Sun-Sat, so the
+          // rendered Sunday column was structurally always empty. Monday is
+          // the app's week everywhere else (see utils/reviewWeek.js).
+          const startDate = startOfWeek(date || new Date(), { weekStartsOn: 1 });
           const wRes = await apolloClient.query({
             query: GET_WEEKLY_TASKS,
             variables: { date: format(startDate, 'yyyy-MM-dd') },

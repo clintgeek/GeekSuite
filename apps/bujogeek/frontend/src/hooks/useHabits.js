@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useQuery, useMutation } from '@apollo/client';
+import { localDateString } from '@geeksuite/utils';
 import { GET_HABITS, GET_HABIT_LOGS } from '../graphql/queries';
 import {
   CREATE_HABIT,
@@ -44,7 +45,10 @@ const useHabits = ({ startDate, endDate, skip = false } = {}) => {
     error,
     refetch: refetchHabits,
   } = useQuery(GET_HABITS, {
-    variables: { includeArchived: true },
+    // `today` is the browser's calendar day. Without it the streak is
+    // computed against the server's UTC day, and the containers run UTC — a
+    // 19-day streak read 0 from 19:00 US-Central until today was logged.
+    variables: { includeArchived: true, today: localDateString() },
     fetchPolicy: 'cache-and-network',
     skip,
   });

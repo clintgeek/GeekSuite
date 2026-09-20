@@ -163,6 +163,43 @@ class TaskService {
     return { $or: [{ collectionId: null }, { dueDate: { $ne: null } }] };
   }
 
+  /**
+   * UTC midnight on the MONDAY of the week a date falls in.
+   *
+   * Weeks start on Monday everywhere else in this app — `utils/reviewWeek.js`
+   * says so outright and `reviewDraft` refuses anything else — but the weekly
+   * log view snapped to Sunday with `- getUTCDay()` while `WeeklySpread`
+   * rendered Monday to Sunday. The two disagreed by one day, so the Sunday
+   * column the UI drew was outside the window the gateway returned and could
+   * never contain anything, while the Sunday the gateway did return was never
+   * drawn.
+   *
+   * Extracted rather than fixed in place because this boundary is computed
+   * TWICE in `getTasksForDateRange` — once for the Mongo filter and once for
+   * the RRULE expansion window. Patching one copy is how those two silently
+   * stop agreeing at a week edge, which drops or duplicates an occurrence.
+   * One definition, two call sites.
+   */
+  startOfUtcWeek(date) {
+    const start = new Date(date);
+    // Sunday is 0, so (day + 6) % 7 is "days back to Monday": 0 for Monday,
+    // 6 for Sunday. Plain `- getUTCDay()` is the Sunday-start version.
+    const daysBack = (start.getUTCDay() + 6) % 7;
+    start.setUTCDate(start.getUTCDate() - daysBack);
+    start.setUTCHours(0, 0, 0, 0);
+    return start;
+  }
+
+  /**
+   * UTC end-of-day on the Sunday closing the week `startOfUtcWeek` opened.
+   */
+  endOfUtcWeek(weekStart) {
+    const end = new Date(weekStart);
+    end.setUTCDate(end.getUTCDate() + 6);
+    end.setUTCHours(23, 59, 59, 999);
+    return end;
+  }
+
   async getTasksForDateRange({ userId, startDate, endDate, viewType }) {
     this.requireUser(userId);
     const query = { createdBy: userId, isSeriesMaster: { $ne: true } };
@@ -189,12 +226,8 @@ class TaskService {
         ];
         break;
       case 'weekly': {
-        const startOfWeekDate = new Date(startOfDayDate);
-        startOfWeekDate.setUTCDate(startOfWeekDate.getUTCDate() - startOfWeekDate.getUTCDay());
-        startOfWeekDate.setUTCHours(0, 0, 0, 0);
-        const endOfWeekDate = new Date(startOfWeekDate);
-        endOfWeekDate.setUTCDate(endOfWeekDate.getUTCDate() + 6);
-        endOfWeekDate.setUTCHours(23, 59, 59, 999);
+        const startOfWeekDate = this.startOfUtcWeek(startOfDayDate);
+        const endOfWeekDate = this.endOfUtcWeek(startOfWeekDate);
         query.$or = [
           { dueDate: { $gte: startOfWeekDate, $lte: endOfWeekDate } },
           { status: { $in: ['completed', 'cancelled'] }, updatedAt: { $gte: startOfWeekDate, $lte: endOfWeekDate } },
@@ -238,13 +271,10 @@ class TaskService {
     if (viewType === 'daily') {
       viewStart = startOfDayDate; viewEnd = endOfDayDate;
     } else if (viewType === 'weekly') {
-      const startOfWeekDate = new Date(startOfDayDate);
-      startOfWeekDate.setUTCDate(startOfWeekDate.getUTCDate() - startOfWeekDate.getUTCDay());
-      startOfWeekDate.setUTCHours(0, 0, 0, 0);
-      const endOfWeekDate = new Date(startOfWeekDate);
-      endOfWeekDate.setUTCDate(endOfWeekDate.getUTCDate() + 6);
-      endOfWeekDate.setUTCHours(23, 59, 59, 999);
-      viewStart = startOfWeekDate; viewEnd = endOfWeekDate;
+      // Same two helpers as the filter above — see startOfUtcWeek's comment
+      // for why this is not written out a second time.
+      viewStart = this.startOfUtcWeek(startOfDayDate);
+      viewEnd = this.endOfUtcWeek(viewStart);
     } else if (viewType === 'monthly') {
       viewStart = new Date(Date.UTC(startOfDayDate.getUTCFullYear(), startOfDayDate.getUTCMonth(), 1, 0, 0, 0, 0));
       viewEnd = new Date(Date.UTC(startOfDayDate.getUTCFullYear(), startOfDayDate.getUTCMonth() + 1, 0, 23, 59, 59, 999));

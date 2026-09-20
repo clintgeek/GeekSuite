@@ -495,10 +495,13 @@ export const resolvers = {
     daysOfWeek: (habit) => habit.daysOfWeek ?? [],
     archived: (habit) => Boolean(habit.archived),
     // Resolved lazily and per-habit: the grid asks for it, a bare create does not.
-    currentStreak: async (habit, _, context) => {
+    currentStreak: async (habit, { today } = {}, context) => {
       const userId = context.user?.id;
       if (!userId) return 0;
-      return habitService.getCurrentStreak(habit, userId);
+      // The caller's own day — see the field's comment in typeDefs. The
+      // `undefined` fallback is the old server-day behaviour, kept only for
+      // a caller that sends nothing.
+      return habitService.getCurrentStreak(habit, userId, today || undefined);
     },
   },
   HabitLog: {

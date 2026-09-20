@@ -473,14 +473,16 @@ export const GET_TASKS_BY_TAG = gql`
 `;
 
 export const GET_HABITS = gql`
-  query GetHabits($includeArchived: Boolean) {
+  query GetHabits($includeArchived: Boolean, $today: String) {
     habits(includeArchived: $includeArchived) {
       id
       name
       daysOfWeek
       color
       archived
-      currentStreak
+      # The browser owns the calendar day. Omit it and the streak is computed
+      # against the server's UTC day, which reads 0 after 19:00 US-Central.
+      currentStreak(today: $today)
     }
   }
 `;

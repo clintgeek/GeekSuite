@@ -84,7 +84,12 @@ export const typeDefs = gql`
     color: String
     archived: Boolean!
     "Consecutive scheduled days done, counting back from today. Unscheduled days are skipped; today unlogged does not break it."
-    currentStreak: Int!
+    # \`today\` is the CALLER'S local calendar day (YYYY-MM-DD). Without it the
+    # resolver falls back to the server's UTC day, and the containers run UTC
+    # — so the "today is still open, it doesn't break the streak" grace was
+    # granted to UTC's today and the user's own today counted as a missed day.
+    # A 19-day streak read 0 from 19:00 US-Central until it was logged.
+    currentStreak(today: String): Int!
     createdAt: Date
     updatedAt: Date
   }
