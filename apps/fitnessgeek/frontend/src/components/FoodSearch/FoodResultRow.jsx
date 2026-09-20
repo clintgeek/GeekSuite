@@ -179,7 +179,7 @@ const FoodResultRow = ({
           sx={{
             display: { xs: 'none', md: 'inline-flex' },
             height: 20,
-            fontSize: '0.6875rem',
+            fontSize: '0.75rem',
             flexShrink: 0,
             backgroundColor: alpha(theme.palette.text.secondary, 0.1),
             color: muted

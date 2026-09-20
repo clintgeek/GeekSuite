@@ -104,7 +104,7 @@ const WeightProgressRing = ({
               </Typography>
               <Typography variant="caption" sx={{
                 color: theme.palette.text.secondary,
-                fontSize: '0.6rem',
+                fontSize: '0.75rem',
                 display: 'block'
               }}>
                 Complete
@@ -125,7 +125,7 @@ const WeightProgressRing = ({
 
             <Typography variant="caption" sx={{
               color: theme.palette.text.secondary,
-              fontSize: '0.7rem',
+              fontSize: '0.75rem',
               display: 'block',
               mb: 0.5
             }}>
@@ -134,7 +134,7 @@ const WeightProgressRing = ({
 
             <Typography variant="caption" sx={{
               color: theme.palette.text.secondary,
-              fontSize: '0.7rem',
+              fontSize: '0.75rem',
               display: 'block'
             }}>
               {totalWeightLoss - currentWeightLoss} {unit} to go
@@ -154,14 +154,14 @@ const WeightProgressRing = ({
         }}>
           <Typography variant="caption" sx={{
             color: theme.palette.text.secondary,
-            fontSize: '0.7rem'
+            fontSize: '0.75rem'
           }}>
             {isOnTrack ? 'On Track' : 'Behind Schedule'}
           </Typography>
 
           <Typography variant="caption" sx={{
             color: theme.palette.text.secondary,
-            fontSize: '0.7rem'
+            fontSize: '0.75rem'
           }}>
             {Math.round(timeProgress)}% time elapsed
           </Typography>

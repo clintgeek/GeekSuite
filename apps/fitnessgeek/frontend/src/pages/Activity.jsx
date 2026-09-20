@@ -73,7 +73,7 @@ const SleepStageTile = ({ icon: Icon, minutes = 0, label, color }) => {
       </Typography>
       <Typography
         sx={{
-          fontSize: '0.625rem',
+          fontSize: '0.75rem',
           fontWeight: 700,
           textTransform: 'uppercase',
           letterSpacing: '0.1em',
@@ -127,7 +127,7 @@ const MetricTile = ({ icon: Icon, label, value, unit, color, subtext }) => {
           <Typography
             sx={{
               fontFamily: "'JetBrains Mono', monospace",
-              fontSize: '0.625rem',
+              fontSize: '0.75rem',
               fontWeight: 600,
               textTransform: 'uppercase',
               letterSpacing: '0.08em',
@@ -140,7 +140,7 @@ const MetricTile = ({ icon: Icon, label, value, unit, color, subtext }) => {
       </Box>
       <Typography
         sx={{
-          fontSize: '0.625rem',
+          fontSize: '0.75rem',
           fontWeight: 700,
           textTransform: 'uppercase',
           letterSpacing: '0.1em',
@@ -153,7 +153,7 @@ const MetricTile = ({ icon: Icon, label, value, unit, color, subtext }) => {
         <Typography
           sx={{
             fontFamily: "'JetBrains Mono', monospace",
-            fontSize: '0.625rem',
+            fontSize: '0.75rem',
             color: 'text.disabled',
           }}
         >
@@ -266,7 +266,7 @@ const ActivityCard = ({ activity }) => {
             <Typography
               sx={{
                 fontFamily: "'JetBrains Mono', monospace",
-                fontSize: '0.6875rem',
+                fontSize: '0.75rem',
                 color: 'text.secondary',
                 mt: 0.25,
                 letterSpacing: '0.02em',

@@ -34,7 +34,7 @@ const NetCarbMeter = ({ consumed = 0, limitG = 20, sx }) => {
       {/* Label row */}
       <Typography
         sx={{
-          fontSize: '0.7rem',
+          fontSize: '0.75rem',
           fontFamily: "'DM Sans', sans-serif",
           fontWeight: 700,
           textTransform: 'uppercase',

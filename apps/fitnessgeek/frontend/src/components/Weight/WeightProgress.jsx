@@ -37,10 +37,24 @@ const WeightProgress = ({
         return null;
       }
 
-    // Calculate progress
-    const totalWeightChange = Math.abs(goal.targetWeight - goal.startWeight);
-    const currentWeightChange = Math.abs(currentWeight - goal.startWeight);
-    const progressPercent = Math.min((currentWeightChange / totalWeightChange) * 100, 100);
+    // PROGRESS IS DIRECTIONAL. Both of these used to be wrapped in
+    // `Math.abs`, which threw the direction away and counted movement AWAY
+    // from the target as progress: start 200, target 180, now 210 rendered
+    // "50.0% Complete" with a half-filled bar — sitting next to a correctly
+    // computed "30.0 lbs to go" — and 220 rendered 100%. The right answer in
+    // both cases is 0%.
+    //
+    // Signed delta over signed goal: same sign means moving toward the
+    // target, opposite means away. Clamped to 0..100, so overshooting reads
+    // as complete and backsliding reads as none.
+    const goalDelta = goal.targetWeight - goal.startWeight;
+    const currentDelta = currentWeight - goal.startWeight;
+    // A maintenance goal (target === start) has no distance to cover; 0/0 used
+    // to produce NaN, which rendered "0.0%" on the label but passed NaN to the
+    // progress bar's `value`.
+    const progressPercent = goalDelta === 0
+      ? (currentDelta === 0 ? 100 : 0)
+      : Math.min(Math.max((currentDelta / goalDelta) * 100, 0), 100);
 
     // Calculate time metrics
     const weeksSinceStart = differenceInWeeks(today, startDate);
@@ -90,8 +104,19 @@ const WeightProgress = ({
       projectedDate = goalDate;
     } else {
       // Use 6-week average rate
+      // `currentRate` is SIGNED — negative while losing. `Math.abs` on the
+      // quotient hid the case that matters: someone gaining 0.33 lb/week
+      // against a 20 lb loss goal got a tidy "60 weeks" and a projected
+      // completion date, rather than the truth, which is that this rate never
+      // arrives. A rate pointing the wrong way now yields Infinity and falls
+      // through to the isFinite guard below, which shows the goal date rather
+      // than a fabricated one.
       const rateToUse = currentRate || goal.ratePerWeek;
-      const projectedWeeks = Math.abs(remainingWeight / rateToUse);
+      const movingTowardGoal = (goal.targetWeight - currentWeight) === 0
+        || Math.sign(rateToUse) === Math.sign(goal.targetWeight - currentWeight);
+      const projectedWeeks = movingTowardGoal
+        ? Math.abs(remainingWeight / rateToUse)
+        : Infinity;
       projectedDate = new Date(today);
 
       // Validate projected weeks is a valid number

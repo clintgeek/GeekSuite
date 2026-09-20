@@ -37,7 +37,7 @@ const TopBar = () => {
         <Typography
           sx={{
             fontFamily: "'JetBrains Mono', monospace",
-            fontSize: '0.6875rem',
+            fontSize: '0.75rem',
             fontWeight: 600,
             textTransform: 'uppercase',
             letterSpacing: '0.14em',

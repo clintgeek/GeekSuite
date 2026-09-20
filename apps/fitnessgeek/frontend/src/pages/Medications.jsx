@@ -28,7 +28,9 @@ function SuggestionChips({ suggestions, userTags, onChange }) {
             if (next.has(tag)) next.delete(tag); else next.add(tag);
             onChange(Array.from(next));
           }}
-          sx={{ mb: 1 }}
+          // These are tappable (onClick above), so the 44px floor applies —
+          // MUI's default Chip is 32px high, 24px at size="small".
+          sx={{ mb: 1, height: 44 }}
         />
       ))}
     </Stack>
@@ -417,7 +419,9 @@ export default function Medications() {
       </Box>
 
       {/* Export Buttons */}
-      <Box sx={{ mb: 3, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+      {/* `size="small"` renders these under the 44px tap floor the mobile
+          harness enforces. minHeight only — the compact look is unchanged. */}
+      <Box sx={{ mb: 3, display: 'flex', gap: 1, flexWrap: 'wrap', '& .MuiButton-root': { minHeight: 44, minWidth: 44 } }}>
         <Button size="small" variant="outlined" onClick={handleCopyExport}>Copy text</Button>
         <Button size="small" variant="outlined" onClick={handleDownloadExport}>Download .txt</Button>
         <Button size="small" variant="outlined" onClick={handleDownloadPdf}>Download PDF</Button>
@@ -462,7 +466,7 @@ export default function Medications() {
                 <Typography
                   sx={{
                     fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: '0.6875rem',
+                    fontSize: '0.75rem',
                     color: 'text.secondary',
                     mt: 0.25,
                   }}
@@ -541,7 +545,12 @@ export default function Medications() {
               <Typography variant="caption" color="text.secondary">Your indications</Typography>
               <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 1 }}>
                 {(userTags || []).map(tag => (
-                  <Chip key={tag} label={tag} onDelete={() => setUserTags((prev) => prev.filter(t => t !== tag))} />
+                  <Chip
+                    key={tag}
+                    label={tag}
+                    onDelete={() => setUserTags((prev) => prev.filter(t => t !== tag))}
+                    sx={{ height: 44 }}
+                  />
                 ))}
               </Stack>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 1 }}>
@@ -660,7 +669,7 @@ export default function Medications() {
                                   bgcolor: typeInfo.bg,
                                   color: typeInfo.color,
                                   fontWeight: 700,
-                                  fontSize: '0.625rem',
+                                  fontSize: '0.75rem',
                                   letterSpacing: '0.06em',
                                   height: 20,
                                 }}
@@ -676,7 +685,7 @@ export default function Medications() {
                                     fontFamily: "'JetBrains Mono', monospace",
                                     fontVariantNumeric: 'tabular-nums',
                                     fontWeight: 600,
-                                    fontSize: '0.6875rem',
+                                    fontSize: '0.75rem',
                                     height: 20,
                                   }}
                                 />

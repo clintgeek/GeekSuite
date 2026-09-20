@@ -57,7 +57,20 @@ const EditLogDialog = ({
         servings: parseFloat(servings) || 1,
         meal_type: mealType,
         notes: notes.trim(),
+        // SPREAD FIRST. This object used to carry only the four fields the
+        // dialog edits, and the gateway assigns `patch.nutrition` wholesale —
+        // a `$set` of a nested path REPLACES the subdocument — so fiber, sugar
+        // and sodium were wiped by any edit, including one that only changed
+        // the servings.
+        //
+        // The keto ring reads net carbs as `carbs - fiber`, so editing a cup
+        // of black beans from 1 to 1.5 servings took it from 37.5 g to 60 g:
+        // a 60% overstatement produced by an edit that never touched a fiber
+        // field. `normalizeLogNutrition` whitelists the seven nutrition keys
+        // on the way out, so spreading cannot leak `__typename` or anything
+        // else the input type would reject.
         nutrition: {
+          ...nutrition,
           calories_per_serving: Math.max(0, parseFloat(nutrition.calories_per_serving) || 0),
           protein_grams: Math.max(0, parseFloat(nutrition.protein_grams) || 0),
           carbs_grams: Math.max(0, parseFloat(nutrition.carbs_grams) || 0),

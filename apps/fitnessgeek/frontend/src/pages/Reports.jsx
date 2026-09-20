@@ -213,7 +213,16 @@ const Reports = () => {
           </Typography>
         </Box>
         <Box sx={{ ml: { md: 'auto' }, display: 'flex', gap: 2, alignItems: 'center' }}>
-          <ToggleButtonGroup size="small" value={range} exclusive onChange={handleRangeChange}>
+          {/* `size="small"` renders under the 44px tap floor the mobile
+              harness enforces (MOBILE_UI_PLAN 6). The compact look is kept;
+              only the hit area grows. */}
+          <ToggleButtonGroup
+            size="small"
+            value={range}
+            exclusive
+            onChange={handleRangeChange}
+            sx={{ '& .MuiToggleButtonGroup-grouped': { minHeight: 44, minWidth: 44 } }}
+          >
             {RANGE_OPTIONS.map((option) => (
               <ToggleButton key={option} value={option}>
                 {option}d
@@ -252,7 +261,7 @@ const Reports = () => {
                   <StatNumber value={Math.round(value)} size="display" />
                   <Typography
                     sx={{
-                      fontSize: '0.625rem',
+                      fontSize: '0.75rem',
                       fontWeight: 700,
                       textTransform: 'uppercase',
                       letterSpacing: '0.12em',
@@ -327,7 +336,7 @@ const Reports = () => {
                           sx={{
                             fontFamily: "'JetBrains Mono', monospace",
                             fontVariantNumeric: 'tabular-nums',
-                            fontSize: '0.6875rem',
+                            fontSize: '0.75rem',
                             color: 'text.secondary',
                             mt: 0.75,
                           }}
@@ -420,7 +429,7 @@ const Reports = () => {
                         <Typography
                           sx={{
                             fontFamily: "'JetBrains Mono', monospace",
-                            fontSize: '0.6875rem',
+                            fontSize: '0.75rem',
                             color: 'text.secondary',
                           }}
                         >

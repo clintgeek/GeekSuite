@@ -131,7 +131,10 @@ const StatNumber = ({
                 ? '0.875rem'
                 : size === 'display'
                 ? '0.75rem'
-                : '0.6875rem',
+                // 12px floor (MOBILE_UI_PLAN 6). This was 0.6875rem and is
+                // the `body` size's unit label — the "×" beside sleep counts
+                // on the Activity page.
+                : '0.75rem',
             fontWeight: 600,
             textTransform: 'uppercase',
             letterSpacing: '0.08em',

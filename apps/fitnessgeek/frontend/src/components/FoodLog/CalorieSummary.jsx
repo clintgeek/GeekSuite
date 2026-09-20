@@ -23,7 +23,12 @@ const CalorieSummary = ({
   // ─── Keto mode ───────────────────────────────────────────────────────────
   if (mode === 'keto') {
     const carbProgress = Math.min((netCarbsConsumed / netCarbLimit) * 100, 100);
-    const carbsLeft = Math.max(0, netCarbLimit - netCarbsConsumed);
+    // Rounded to one decimal at the point of subtraction. `netCarbsConsumed`
+    // arrives already quantised to 0.1, so the subtraction produces binary
+    // float residue that nothing downstream cleaned up: a 20 g cap with 16.6 g
+    // eaten rendered "3.3999999999999986g left" — the only unrounded number on
+    // a card where everything else is rounded.
+    const carbsLeft = Math.round(Math.max(0, netCarbLimit - netCarbsConsumed) * 10) / 10;
     const barColor = carbProgress >= 100
       ? theme.palette.error.main
       : carbProgress >= 70

@@ -386,6 +386,7 @@ export default function MealImpactVisualization({ date }) {
                 exclusive
                 onChange={(e, value) => value && setSelectedMetric(value)}
                 size="small"
+                sx={{ '& .MuiToggleButtonGroup-grouped': { minHeight: 44, minWidth: 44 } }}
               >
                 <ToggleButton value="heartRate">
                   <HeartIcon fontSize="small" sx={{ mr: 0.5 }} />

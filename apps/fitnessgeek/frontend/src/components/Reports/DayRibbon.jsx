@@ -120,7 +120,7 @@ const DayCard = ({ day, calorieTarget, macroTargets }) => {
             sx={{
               fontFamily: "'JetBrains Mono', monospace",
               fontVariantNumeric: 'tabular-nums',
-              fontSize: '0.6875rem',
+              fontSize: '0.75rem',
               fontWeight: 600,
               color: muted,
               letterSpacing: '0.02em',
@@ -164,11 +164,23 @@ const DayCard = ({ day, calorieTarget, macroTargets }) => {
                   gap: 0.375,
                 }}
               >
-                {/* Tick label */}
+                {/* Tick label.
+
+                    These were 9px — the smallest type in the app — and the
+                    macro spine was the one place where raising it to the 12px
+                    floor was a real design question rather than a rounding
+                    change. It is raised because this ribbon SCROLLS
+                    HORIZONTALLY: horizontal space is free here, so 9px was
+                    buying slightly fewer swipes, not more information, on a
+                    health app where the numbers are the entire point. At 12px
+                    JetBrains Mono a three-digit value is ~21.6px in a ~24px
+                    column, so it still fits; if it ever stops fitting, widen
+                    the card (already 148 at `sm`) rather than shrink the type
+                    back. */}
                 <Typography
                   sx={{
                     fontFamily: "'JetBrains Mono', monospace",
-                    fontSize: '0.5625rem',
+                    fontSize: '0.75rem',
                     fontWeight: 700,
                     color: muted,
                     letterSpacing: '0.04em',
@@ -208,7 +220,7 @@ const DayCard = ({ day, calorieTarget, macroTargets }) => {
                   sx={{
                     fontFamily: "'JetBrains Mono', monospace",
                     fontVariantNumeric: 'tabular-nums',
-                    fontSize: '0.5625rem',
+                    fontSize: '0.75rem',
                     fontWeight: 600,
                     color: ink,
                     lineHeight: 1,
@@ -265,7 +277,7 @@ const DayRibbon = ({ daily = [], macroTargets, calorieTarget, title = 'Daily Tot
           <Typography
             sx={{
               fontFamily: "'JetBrains Mono', monospace",
-              fontSize: '0.6875rem',
+              fontSize: '0.75rem',
               fontWeight: 600,
               color: 'text.secondary',
               letterSpacing: '0.02em',
@@ -322,7 +334,7 @@ const DayRibbon = ({ daily = [], macroTargets, calorieTarget, title = 'Daily Tot
         >
           <Typography
             sx={{
-              fontSize: '0.625rem',
+              fontSize: '0.75rem',
               fontWeight: 700,
               textTransform: 'uppercase',
               letterSpacing: '0.14em',
@@ -341,7 +353,7 @@ const DayRibbon = ({ daily = [], macroTargets, calorieTarget, title = 'Daily Tot
               <Box sx={{ width: 10, height: 3, borderRadius: 2, backgroundColor: color }} />
               <Typography
                 sx={{
-                  fontSize: '0.625rem',
+                  fontSize: '0.75rem',
                   fontWeight: 600,
                   color: 'text.secondary',
                   textTransform: 'capitalize',

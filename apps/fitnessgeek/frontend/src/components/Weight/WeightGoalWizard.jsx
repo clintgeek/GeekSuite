@@ -346,7 +346,7 @@ const WeightGoalWizard = ({ open, onClose, onSave, currentWeight, existingGoal, 
                   <Typography variant="h6" sx={{ fontWeight: 700 }}>
                     {option.label}
                   </Typography>
-                  <Typography variant="caption" sx={{ fontSize: '0.7rem', opacity: 0.8 }}>
+                  <Typography variant="caption" sx={{ fontSize: '0.75rem', opacity: 0.8 }}>
                     {unit}/week
                   </Typography>
                 </ToggleButton>

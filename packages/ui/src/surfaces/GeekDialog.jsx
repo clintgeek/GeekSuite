@@ -225,6 +225,12 @@ export const GeekDialog = forwardRef(function GeekDialog(
                   '& .MuiButton-startIcon': { display: 'none' },
                   '& .MuiButton-root': {
                     minHeight: geekLayout.minClickTarget,
+                    // BOTH axes. This slot has always set the height and
+                    // stopped there, and `px: 1.5` with the start icon hidden
+                    // makes a short label narrower than it is tall: a "PDF"
+                    // button measured 40x44 and failed the tap-target gate on
+                    // width alone. A touch target is an area, not a height.
+                    minWidth: geekLayout.minClickTarget,
                     px: 1.5,
                     py: 0.5,
                     fontSize: '0.875rem',
