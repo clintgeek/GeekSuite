@@ -12,6 +12,34 @@ and neither I nor the review could build a failing case; act on those only after
 
 ---
 
+## Status — updated 2026-09-21
+
+Nine findings shipped and verified in production across three commits
+(`f591de2a`, `aaac66e0`, `6b60f92c`).
+
+| Section | Finding | Status |
+| --- | --- | --- |
+| §1.2 | Weekly spread's Sunday column | FIXED |
+| §1.3 | Habit streak reads 0 after 7pm | FIXED |
+| §1.5 | Blocked shelf asserts on a failed query | FIXED |
+| §1.6 | Review marks failed actions as handled | FIXED |
+| §2.1 | Unbounded `all` expansion (2.9M occurrences) | FIXED |
+| §2.2 | Override files under the series' start date | FIXED |
+| §2.3 | Double tap creates two permanent rows | FIXED |
+| §2.4 | Recurring reminders fire once | DOCUMENTED, not fixed |
+| §3.4 | View window computed twice by hand | FIXED (fell out of §2.1) |
+
+§2.4 is deliberate: fixing it changes what `remindedAt` MEANS, from "notified" to
+"the occurrence notified for", and needs a decision about missed windows. It is
+now written down in `apps/bujogeek/DOCS/REMINDERS.md` and at the sweep itself,
+with what the fix would take.
+
+**Still open, in the order the last section recommends:** §1.1 (evening due
+times land on the wrong day — the headline), §1.4 (two disagreeing sort
+comparators), then the index work in §3.1 and the UX gaps in §4.
+
+---
+
 ## The short version
 
 BuJoGeek is in good shape. The ownership invariant genuinely holds, the Apollo cache updates
