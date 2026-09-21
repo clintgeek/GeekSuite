@@ -67,6 +67,53 @@ describe('NoteActions', () => {
         expect(screen.getByRole('button', { name: /^Saved$/i })).toBeInTheDocument();
     });
 
+    /**
+     * History and Compose are offered by the PRESENCE of a handler, so a note
+     * type that cannot be composed simply doesn't get the button. Both have to
+     * exist in both layouts: the bottom bar is the only actions row on mobile,
+     * and I shipped one of them twice there once already.
+     */
+    describe.each(['inline', 'bottom-bar'])('History and Compose — %s', (variant) => {
+        it('offers neither without a handler', () => {
+            render(<NoteActions onSave={mockOnSave} onDelete={mockOnDelete} variant={variant} />, { wrapper: ThemeWrapper });
+            expect(screen.queryByRole('button', { name: 'Version history' })).not.toBeInTheDocument();
+            expect(screen.queryByLabelText('Compose a document from this note')).not.toBeInTheDocument();
+        });
+
+        it('offers History exactly once, and it calls back', () => {
+            const onHistory = vi.fn();
+            render(
+                <NoteActions onSave={mockOnSave} onDelete={mockOnDelete} onHistory={onHistory} variant={variant} />,
+                { wrapper: ThemeWrapper },
+            );
+            // By role, not by label: MUI puts the tooltip's title on the
+            // wrapper span, so a label query matches the span as well.
+            expect(screen.getAllByRole('button', { name: 'Version history' })).toHaveLength(1);
+            fireEvent.click(screen.getByRole('button', { name: 'Version history' }));
+            expect(onHistory).toHaveBeenCalledTimes(1);
+        });
+
+        it('offers Compose exactly once, and it calls back', () => {
+            const onCompose = vi.fn();
+            render(
+                <NoteActions onSave={mockOnSave} onDelete={mockOnDelete} onCompose={onCompose} variant={variant} />,
+                { wrapper: ThemeWrapper },
+            );
+            expect(screen.getAllByLabelText('Compose a document from this note')).toHaveLength(1);
+            fireEvent.click(screen.getByLabelText('Compose a document from this note'));
+            expect(onCompose).toHaveBeenCalledTimes(1);
+        });
+
+        it('locks Compose out while one is running', () => {
+            const onCompose = vi.fn();
+            render(
+                <NoteActions onSave={mockOnSave} onDelete={mockOnDelete} onCompose={onCompose} isComposing variant={variant} />,
+                { wrapper: ThemeWrapper },
+            );
+            expect(screen.getByLabelText('Compose a document from this note')).toBeDisabled();
+        });
+    });
+
     it('renders bottom-bar variant properly', () => {
         render(<NoteActions onSave={mockOnSave} onDelete={mockOnDelete} variant="bottom-bar" />, { wrapper: ThemeWrapper });
         // In bottom bar, delete is a text button

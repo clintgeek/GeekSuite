@@ -115,9 +115,12 @@ function NoteActions({
       <span>
         <IconButton
           onClick={onHistory}
-          size="small"
+          size={isBottomBar ? 'medium' : 'small'}
           aria-label="Version history"
           sx={{
+            // The bottom bar is the mobile one: 44px is the tap floor the
+            // harness enforces, and `medium` alone is only 40.
+            ...(isBottomBar ? { minWidth: 44, minHeight: 44 } : {}),
             borderRadius: '6px',
             transition: 'background 120ms ease',
             '&:hover': { bgcolor: glow(theme).soft },
@@ -140,9 +143,10 @@ function NoteActions({
           color="primary"
           onClick={onCompose}
           disabled={isComposing}
-          size="small"
+          size={isBottomBar ? 'medium' : 'small'}
           aria-label="Compose a document from this note"
           sx={{
+            ...(isBottomBar ? { minWidth: 44, minHeight: 44 } : {}),
             borderRadius: '6px',
             transition: 'background 120ms ease',
             '&:hover': { bgcolor: glow(theme).soft },
@@ -203,8 +207,7 @@ function NoteActions({
       >
         {onBack && <BackButton />}
         {onHistory && <HistoryButton />}
-        {onHistory && <HistoryButton />}
-      {onCompose && <ComposeButton />}
+        {onCompose && <ComposeButton />}
         {canToggleEdit && <ToggleEditButton />}
         {isEditMode && <SaveButton />}
         {canDelete && <DeleteButton />}
@@ -216,6 +219,7 @@ function NoteActions({
   return (
     <>
       {onBack && <BackButton />}
+      {onHistory && <HistoryButton />}
       {onCompose && <ComposeButton />}
       {canToggleEdit && <ToggleEditButton />}
       {isEditMode && <SaveButton />}
