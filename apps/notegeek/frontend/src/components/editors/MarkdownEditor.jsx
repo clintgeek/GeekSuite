@@ -19,6 +19,9 @@ import AutoFixHigh from '@mui/icons-material/AutoFixHigh';
 import { useMutation } from '@apollo/client';
 import { useToast } from '@geeksuite/ui';
 import ReactMarkdown from 'react-markdown';
+// See NoteViewer: the preview and the viewer must agree about what markdown
+// is, or the editor shows something the saved note will not.
+import remarkGfm from 'remark-gfm';
 import { surfaces } from '../../theme/tokens';
 import { TIDY_MARKDOWN } from '../../graphql/mutations';
 
@@ -208,7 +211,7 @@ function MarkdownEditor({ content = '', setContent, isLoading, readOnly = false,
             }}
         >
             {content ? (
-                <ReactMarkdown>{content}</ReactMarkdown>
+                <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
             ) : (
                 <Box sx={{ color: 'text.secondary', fontStyle: 'italic' }}>
                     Nothing to preview yet...

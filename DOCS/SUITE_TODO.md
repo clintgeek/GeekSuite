@@ -86,6 +86,51 @@ Pull from here when planning the next pass; update as work lands or priorities s
 
 ## 5. Features & Fixes
 
+### BuJoGeek — remaining from `DOCS/BUJOGEEK_REVIEW_2026-09.md`
+
+All of §1 and §2 shipped 2026-09-20/21. What is left, in the report's own
+recommended order:
+
+- **§3.1 Indexes** — cheap insurance while the corpus is small (365 tasks).
+  `getTasksForDateRange` is the most-executed query in the app and no index
+  pairs `createdBy` with `dueDate`, the field every branch ranges or sorts on.
+  Two more in the same function: the series-master lookup, and the override
+  fetch, which pulls **every materialised override for every series with no
+  date bound at all** — the one whose cost rises forever. `Template` and
+  `JournalEntry` declare no `createdBy` index while every read filters on it.
+- **§3.2 Two N+1s** — each collection costs four count queries (two field
+  resolvers each calling a two-count helper); `currentStreak` issues one log
+  query per habit. Both bounded; fold in when those files are open.
+- **§3.3 `TaskRow` is not memoised** — `mapTasksState` re-sorts the whole
+  array on every mutation, so one checkbox tap re-renders every row. Matters
+  on Search/Backlog, which render the full corpus.
+- **§3.5 Two doors onto the blocked state machine** — `updateTaskStatus`'s
+  resolver throws a plain Error where `blockTask` throws a classified one, and
+  `updateTask` accepts `status` straight through, bypassing the guard and the
+  timestamp stamping. Latent; loaded for the next bulk-edit feature.
+- **§3.6 Undocumented ownership exception** — push-subscription upsert matches
+  on endpoint alone and re-stamps `createdBy`. Deliberate, but `CONTEXT.md`
+  states the invariant with no exceptions. Needs a line in that doc.
+- **§4 Ten UX gaps** — highest value first: no one-tap "move to tomorrow" on
+  Today; Plan's Weekly and Backlog cannot edit a task at all; `useKeyboardNav`
+  tracks focus by array index so editing a task moves focus to a different
+  row (a correctness bug wearing a UX hat); deleting a habit destroys its
+  history with no confirmation.
+
+**Open question for Chef:** recurring reminders fire once and then go silent
+(documented in `apps/bujogeek/DOCS/REMINDERS.md`, not fixed). The fix changes
+what `remindedAt` MEANS and needs a decision: when a push is missed because
+the app was down over its due time, should it arrive late or be skipped?
+
+### NoteGeek
+
+- **`remark-breaks`?** GFM was added 2026-09-21 so pipe tables render. BuJoGeek
+  and StoryGeek also pin `remark-breaks`, which turns a single newline into a
+  line break. Deliberately NOT added: it changes how every existing note
+  renders, which is more than the reported bug asked for. Chef's call.
+
+
+
 - **aiGeek capability routing** — the live work stream lives in
   [`DOCS/AIGEEK_CAPABILITY_ROUTING.md`](./AIGEEK_CAPABILITY_ROUTING.md). Stages 1–3 shipped
   2026-09-15/16: cause-based retirement, `need:`-based resolution, measured latency, and the

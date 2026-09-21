@@ -1,5 +1,11 @@
 import React, { useState } from 'react';
 import ReactMarkdown from 'react-markdown';
+// GFM is what makes a pipe table a table. Without it react-markdown parses
+// only CommonMark, where `| a | b |` is ordinary text and consecutive lines
+// fold into one paragraph — which is exactly how a table rendered here: a
+// single run of literal pipes. The `& th` / `& td` styling below has been
+// waiting for tables it could never receive.
+import remarkGfm from 'remark-gfm';
 import {
     Paper,
     Typography,
@@ -384,7 +390,7 @@ function NoteViewer() {
                             }}
                         >
                             {noteToView.type === 'markdown' ? (
-                                <ReactMarkdown>{noteToView.content || ''}</ReactMarkdown>
+                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{noteToView.content || ''}</ReactMarkdown>
                             ) : noteToView.type === 'text' ? (
                                 // Stored TipTap HTML. It is rendered as
                                 // markup, so it is sanitized here — the one
