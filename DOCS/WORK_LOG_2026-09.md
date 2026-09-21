@@ -12,6 +12,26 @@ anything a future reader would otherwise have to rediscover.
 
 ## 2026-09-21
 
+### NoteGeek — Tidy was silently destroying long notes
+
+`28d9a29d`
+
+`TIDY_MAX_TOKENS` capped the OUTPUT at ~12k characters, and a tidy's output
+is about as long as its input — so a 19k note came back cut off at ~63% and
+that stump replaced the note. Undetectable: `finish_reason` never reaches
+the module, so a guillotined response looks complete.
+
+Now refuses up front past `MAX_TIDY_CHARS`, and discards any result under
+80% of the input length. The prompt was also a rewriter ("tighten phrasing",
+"reorganize language"), which is why it mangled notes that were already
+clean — and the guard meant to catch that was exact string equality against
+an LLM response, so it never fired.
+
+**The general lesson:** an output token cap on a transform whose output is
+proportional to its input is an INPUT limit in disguise. If the chain cannot
+see `finish_reason`, length is the only truncation signal available — and
+something has to check it.
+
 ### BuJoGeek — §3.1 indexes and four UX gaps
 
 `74c15b89`, `b8458bcd`, `6b7c89f6`, `73694862`

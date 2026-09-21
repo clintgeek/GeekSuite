@@ -125,6 +125,14 @@ the app was down over its due time, should it arrive late or be skipped?
 
 ### NoteGeek
 
+- **Tidy's premise needs a decision.** The destructive faults are fixed
+  (2026-09-21): it no longer truncates long notes, no longer accepts a result
+  that lost content, and no longer rewrites notes that are already clean. But
+  it still sends a whole note to a model and overwrites the note with the
+  reply, and the only undo is a 9-second Revert toast. Options worth weighing:
+  keep as-is now that it is safe; narrow it to a selection rather than the
+  whole note; show a diff and let the user accept; or drop it. Chef's call.
+
 - **`remark-breaks`?** GFM was added 2026-09-21 so pipe tables render. BuJoGeek
   and StoryGeek also pin `remark-breaks`, which turns a single newline into a
   line break. Deliberately NOT added: it changes how every existing note
