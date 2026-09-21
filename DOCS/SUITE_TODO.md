@@ -91,13 +91,11 @@ Pull from here when planning the next pass; update as work lands or priorities s
 All of §1 and §2 shipped 2026-09-20/21. What is left, in the report's own
 recommended order:
 
-- **§3.1 Indexes** — cheap insurance while the corpus is small (365 tasks).
-  `getTasksForDateRange` is the most-executed query in the app and no index
-  pairs `createdBy` with `dueDate`, the field every branch ranges or sorts on.
-  Two more in the same function: the series-master lookup, and the override
-  fetch, which pulls **every materialised override for every series with no
-  date bound at all** — the one whose cost rises forever. `Template` and
-  `JournalEntry` declare no `createdBy` index while every read filters on it.
+- ~~**§3.1 Indexes**~~ — done 2026-09-21 (`b8458bcd`), verified with explain.
+  The override fetch's missing DATE bound remains open; the index itself is
+  served by the partial unique index on `(seriesId, originalDueDate)`.
+- **§3.1 leftover — the unbounded override fetch.** Still pulls every
+  materialised override for every series with no date bound, on every load.
 - **§3.2 Two N+1s** — each collection costs four count queries (two field
   resolvers each calling a two-count helper); `currentStreak` issues one log
   query per habit. Both bounded; fold in when those files are open.
@@ -111,11 +109,14 @@ recommended order:
 - **§3.6 Undocumented ownership exception** — push-subscription upsert matches
   on endpoint alone and re-stamps `createdBy`. Deliberate, but `CONTEXT.md`
   states the invariant with no exceptions. Needs a line in that doc.
-- **§4 Ten UX gaps** — highest value first: no one-tap "move to tomorrow" on
-  Today; Plan's Weekly and Backlog cannot edit a task at all; `useKeyboardNav`
-  tracks focus by array index so editing a task moves focus to a different
-  row (a correctness bug wearing a UX hat); deleting a habit destroys its
-  history with no confirmation.
+- **§4 UX gaps — four of ten done 2026-09-21.** Shipped: one-tap move to
+  tomorrow, focus-by-id, the habit delete confirm, the missing g-chords on
+  Plan/Tags, and the phantom ⌘K help row.
+  **Still open:** Plan's Weekly and Backlog cannot edit a task at all (the
+  biggest remaining one — the screen whose job is planning can only complete
+  or delete); Review's `e` re-files instead of editing; `RecurringEditDialog`
+  bypasses `BujoDialog` and its 44px floor; subtask removal is the one delete
+  with no confirm; day navigation on Today is mouse-only.
 
 **Open question for Chef:** recurring reminders fire once and then go silent
 (documented in `apps/bujogeek/DOCS/REMINDERS.md`, not fixed). The fix changes

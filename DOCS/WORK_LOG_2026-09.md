@@ -12,6 +12,34 @@ anything a future reader would otherwise have to rediscover.
 
 ## 2026-09-21
 
+### BuJoGeek — §3.1 indexes and four UX gaps
+
+`74c15b89`, `b8458bcd`, `6b7c89f6`, `73694862`
+
+- **One-tap "move to tomorrow" on Today** (§4.1). Review has had the one-tap
+  version since it shipped; it was never offered where the decision is made.
+  Tomorrow is relative to the DAY BEING VIEWED, not to `new Date()`, because
+  Today has day navigation.
+- **Keyboard focus follows the task, not the row** (§4.3). Focus was an array
+  index re-clamped only on a LENGTH change, and the list re-sorts on every
+  edit — so a same-length reorder left it pointing at a different task and
+  the next `x`/`d` acted on that one.
+- **Indexes** (§3.1). `{createdBy, dueDate}` on the most-executed query in the
+  app, plus the series-master lookup, `JournalEntry` and `Template` — the
+  latter two had no `createdBy` index at all while every read filters on it.
+  Verified with explain: FETCH-with-in-memory-filter before, `IXSCAN` after.
+- **Three small gaps** (§4.4, §4.7, §4.8): deleting a habit took its whole
+  history with no confirm; Plan and Tags never registered the g-chords; the
+  help screen advertised a ⌘K command palette that does not exist.
+
+**A process failure worth keeping.** The test suite went green while
+`pnpm build` failed on a duplicated prop binding — no test imported the three
+Today sections, and vitest only compiles what a test reaches. The build was
+also piped to `tail`, so the shell saw tail's exit code and the `&& git
+commit` fired regardless. Two holes lining up. Fixed by a shallow smoke test
+over the three sections, and by checking build exit codes without a pipe.
+
+
 ### NoteGeek — pipe tables render as tables
 
 `ba…` · one commit
