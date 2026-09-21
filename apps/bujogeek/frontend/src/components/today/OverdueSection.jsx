@@ -14,7 +14,6 @@ import { domainInk } from '../../theme/inks';
  * Fraunces caption.
  */
 const OverdueSection = ({ tasks, onStatusToggle, onEdit, onDelete, onSaveAsNote, onCancel, onMoveToTomorrow,
-  onMoveToTomorrow,
   onBlock, focusedTaskId, subtaskProps }) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
