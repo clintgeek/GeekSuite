@@ -84,8 +84,18 @@ templateSchema.virtual('preview').get(function () {
 // Use mongoose.models.Template if it exists, otherwise create a new model
 const Template = bujoConn.models.Template || bujoConn.model('Template', templateSchema);
 
-// `templates` filters on `createdBy` and sorts by name; this model declared
-// no index at all.
+// `templates` filters on `createdBy` (plus optional type/isDefault) and sorts
+// by name. The MODEL declared no index; the live collection turned out to
+// carry legacy ones from an older schema — `createdBy_1_type_1`,
+// `isPublic_1_type_1`, `tags_1` — none of which are declared here any more.
+// So the filter was already served and the practical gain from this is the
+// sort, on a collection holding two rows. Declared anyway because an index
+// the code does not know about is one nobody can reason about.
+//
+// NOTE: this builds LAZILY. `resolvers.js` imports this model with a dynamic
+// `await import(...)` inside the resolver, so the model is not registered at
+// boot and autoIndex does not run until the templates query is first hit —
+// unlike every other model here, whose indexes appear immediately on deploy.
 templateSchema.index({ createdBy: 1, name: 1 });
 
 export default Template;

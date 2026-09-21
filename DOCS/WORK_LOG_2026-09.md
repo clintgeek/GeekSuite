@@ -25,9 +25,19 @@ anything a future reader would otherwise have to rediscover.
   edit — so a same-length reorder left it pointing at a different task and
   the next `x`/`d` acted on that one.
 - **Indexes** (§3.1). `{createdBy, dueDate}` on the most-executed query in the
-  app, plus the series-master lookup, `JournalEntry` and `Template` — the
-  latter two had no `createdBy` index at all while every read filters on it.
-  Verified with explain: FETCH-with-in-memory-filter before, `IXSCAN` after.
+  app, plus the series-master lookup and `JournalEntry {createdBy, date}`.
+  Verified with explain: FETCH-with-in-memory-filter before, `IXSCAN` after,
+  and all confirmed present on the deployed container.
+
+  **Correction to the review and to my own commit message:** `Template` was
+  described as having no index. That is true of the MODEL, but the live
+  collection carries legacy indexes from an older schema
+  (`createdBy_1_type_1` and two others) that already served the filter — so
+  it was not doing full scans, and the gain from the one added is the sort on
+  a two-row collection. It also builds lazily: the resolver imports that
+  model with a dynamic `await import(...)`, so autoIndex does not run until
+  the templates query is first hit. Worth knowing before trusting "no index
+  declared" to mean "no index exists".
 - **Three small gaps** (§4.4, §4.7, §4.8): deleting a habit took its whole
   history with no confirm; Plan and Tags never registered the g-chords; the
   help screen advertised a ⌘K command palette that does not exist.
