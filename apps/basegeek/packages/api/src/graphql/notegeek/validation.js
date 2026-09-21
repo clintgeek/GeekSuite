@@ -169,9 +169,28 @@ export const updateNoteArgsSchema = z
     content: z.string().max(SNAPSHOT_CONTENT_MAX).optional(),
     type: noteTypeSchema,
     tags: updateTagsSchema,
+    // Labels the history entry this update creates. NOT a note field — the
+    // resolver peels it off before building the update payload, so it can
+    // never be written to the row. Constrained to the labels the history UI
+    // knows how to render, rather than left free-form, because an unbounded
+    // string on a strict schema is an invitation.
+    changeReason: z.enum(['edit', 'tidy', 'compose', 'restore']).optional(),
   })
   .strict()
   .superRefine(checkContentCeiling({ unknownTypeIsSnapshot: true }));
+
+/**
+ * Compose takes raw pasted material, so the ceiling is the snapshot one
+ * rather than a type-specific limit — the caller may be handing over the
+ * body of a `text` note, a `markdown` note, or a paste that belongs to
+ * neither yet. `compose.js` enforces its own, smaller working limit and
+ * REFUSES past it rather than truncating.
+ */
+export const composeNoteArgsSchema = z
+  .object({
+    content: z.string().min(1).max(SNAPSHOT_CONTENT_MAX),
+  })
+  .strict();
 
 export const deleteNoteArgsSchema = z.object({ id: idString }).strict();
 

@@ -9,11 +9,20 @@ import {
   deleteTagArgsSchema,
   suggestForNoteArgsSchema,
   tidyMarkdownArgsSchema,
+  composeNoteArgsSchema,
   assertContentCeiling,
 } from './validation.js';
 import { sanitizeNoteArgs } from './sanitize.js';
 import { suggestForNote } from './suggest.js';
 import { tidyMarkdown } from './tidy.js';
+import { composeNote } from './compose.js';
+import {
+  snapshotNote,
+  isMeaningfulChange,
+  listNoteVersions,
+  getNoteVersion,
+  deleteVersionsForNote,
+} from './versions.js';
 
 const validateCreateNote = validateInput(createNoteArgsSchema);
 const validateUpdateNote = validateInput(updateNoteArgsSchema);
@@ -22,12 +31,29 @@ const validateRenameTag = validateInput(renameTagArgsSchema);
 const validateDeleteTag = validateInput(deleteTagArgsSchema);
 const validateSuggestForNote = validateInput(suggestForNoteArgsSchema);
 const validateTidyMarkdown = validateInput(tidyMarkdownArgsSchema);
+const validateComposeNote = validateInput(composeNoteArgsSchema);
 
 /** How many search hits one `searchNotes` call may return. */
 const SEARCH_RESULT_LIMIT = 100;
 
 export const resolvers = {
   Query: {
+    /** A note's history, newest first. Content omitted — see versions.js. */
+    noteVersions: async (_, { noteId }, context) => {
+      const userId = context.user?.id;
+      if (!userId) return [];
+      if (!noteId || !mongoose.isValidObjectId(noteId)) return [];
+      return listNoteVersions({ noteId, userId });
+    },
+
+    /** One version, with its content. Null for anyone else's. */
+    noteVersion: async (_, { id }, context) => {
+      const userId = context.user?.id;
+      if (!userId) return null;
+      if (!id || !mongoose.isValidObjectId(id)) return null;
+      return getNoteVersion({ versionId: id, userId });
+    },
+
     notes: async (_, { tag, prefix, type, limit, sort }, context) => {
       const userId = context.user?.id;
       if (!userId) return [];
@@ -195,7 +221,9 @@ export const resolvers = {
     updateNote: async (_, rawArgs, context) => {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
-      const { id, ...args } = validateUpdateNote(rawArgs);
+      // `changeReason` is peeled off here: it labels the HISTORY entry, and
+      // must never become part of the update payload written to the note.
+      const { id, changeReason, ...args } = validateUpdateNote(rawArgs);
       if (!id || id === 'undefined' || !mongoose.isValidObjectId(id)) {
         throw new Error(`Invalid Note ID format: ${ id }`);
       }
@@ -233,12 +261,28 @@ export const resolvers = {
       }
       // `args` is schema-validated by GraphQL and carries no userId field, so
       // ownership cannot be reassigned through the update payload.
+      // The note as it stands, kept so the update can be undone. Read BEFORE
+      // the write and stored AFTER it succeeds: a rejected write must not
+      // leave a version behind, or the history fills with states that never
+      // existed. This is the ONLY site that updates a note's content, which
+      // is what makes one snapshot call sufficient.
+      const previous = await Note.findOne({ _id: id, userId }).lean();
+
       const note = await Note.findOneAndUpdate(
         { _id: id, userId },
         payload,
         { new: true }
       );
       if (!note) throw new Error('Note not found or you do not have permission to edit it');
+
+      if (isMeaningfulChange(previous, payload)) {
+        // `reason` rides in from the caller so an AI rewrite is labelled as
+        // one in the history; a plain edit is the default. Never awaited for
+        // its failure — `snapshotNote` swallows its own errors, because
+        // losing a history entry must not lose the edit.
+        await snapshotNote(previous, changeReason || 'edit');
+      }
+
       return note;
     },
 
@@ -251,13 +295,61 @@ export const resolvers = {
       }
       const note = await Note.findOneAndDelete({ _id: id, userId });
       if (!note) throw new Error('Note not found or you do not have permission to delete it');
+      // Keeping the history of a deleted note would mean delete did not
+      // delete, which is not what the word promises.
+      await deleteVersionsForNote(id, userId);
       return true;
     },
+    /**
+     * Put a note back to an earlier version.
+     *
+     * Snapshots the CURRENT state first, so restoring is itself undoable —
+     * a restore to the wrong version must not be the thing that finally
+     * loses the work.
+     */
+    restoreNoteVersion: async (_, rawArgs, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const { versionId } = rawArgs || {};
+      if (!versionId || !mongoose.isValidObjectId(versionId)) {
+        throw new Error(`Invalid version ID format: ${ versionId }`);
+      }
+
+      const version = await getNoteVersion({ versionId, userId });
+      if (!version) throw new Error('Version not found or you do not have permission to use it');
+
+      const current = await Note.findOne({ _id: version.noteId, userId }).lean();
+      if (!current) throw new Error('Note not found or you do not have permission to edit it');
+
+      const note = await Note.findOneAndUpdate(
+        { _id: version.noteId, userId },
+        { title: version.title, content: version.content, type: version.type },
+        { new: true }
+      );
+      await snapshotNote(current, 'restore');
+      return note;
+    },
+
     tidyMarkdown: async (_, rawArgs, context) => {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
       const { content } = validateTidyMarkdown(rawArgs);
       return await tidyMarkdown({ content, userId });
+    },
+
+    /**
+     * Build a document from a pile of scraps.
+     *
+     * Returns the document and changes NOTHING. Saving it as a new note, or
+     * deliberately replacing the source, is the caller's separate act — a
+     * compose is lossy by design, so it must never be the thing that writes
+     * over the only copy of the raw material.
+     */
+    composeNote: async (_, rawArgs, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const { content } = validateComposeNote(rawArgs);
+      return await composeNote({ content, userId });
     },
 
     renameTag: async (_, rawArgs, context) => {
