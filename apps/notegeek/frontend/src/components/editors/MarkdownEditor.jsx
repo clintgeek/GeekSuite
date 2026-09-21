@@ -53,8 +53,37 @@ function MarkdownEditor({ content = '', setContent, isLoading, readOnly = false,
                 variables: { content: previousContent },
             });
             const formatted = data?.tidyMarkdown?.formatted;
+            const reason = data?.tidyMarkdown?.provenance?.reason;
 
-            if (!formatted || formatted.trim() === previousContent.trim()) {
+            // The server REFUSED, and says why. Both of these mean "your note
+            // is unchanged", which is the whole point — a tidy that cannot
+            // complete must leave the note alone rather than write back what
+            // it managed.
+            if (reason === 'content_too_long') {
+                notify(
+                    'This note is too long to tidy in one pass, so it was left unchanged.',
+                    { tone: 'warning', duration: 6000 }
+                );
+                return;
+            }
+            if (reason === 'result_too_short') {
+                notify(
+                    'Tidy came back missing part of the note, so it was discarded. Nothing changed.',
+                    { tone: 'warning', duration: 6000 }
+                );
+                return;
+            }
+
+            // Normalised comparison, not exact equality. This guard used to be
+            // `formatted.trim() === previousContent.trim()`, which an LLM
+            // response essentially never satisfies — so "already clean" was
+            // dead code and every Tidy replaced the note, including notes that
+            // needed nothing done to them. Collapsing runs of whitespace is
+            // enough to recognise a result that is the same text.
+            const sameText = (a, b) =>
+                a.replace(/\s+/g, ' ').trim() === b.replace(/\s+/g, ' ').trim();
+
+            if (!formatted || sameText(formatted, previousContent)) {
                 notify('Note is already in clean, structured markdown.', { tone: 'info' });
                 return;
             }
