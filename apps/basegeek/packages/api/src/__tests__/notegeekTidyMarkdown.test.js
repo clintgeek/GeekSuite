@@ -1,7 +1,13 @@
 import { jest, describe, test, expect, beforeEach } from '@jest/globals';
 import { GraphQLError } from 'graphql';
 import { validateInput, tidyMarkdownArgsSchema } from '../graphql/notegeek/validation.js';
-import { tidyMarkdown, TIDY_SYSTEM_PROMPT, MAX_TIDY_CHARS } from '../graphql/notegeek/tidy.js';
+import {
+  tidyMarkdown,
+  TIDY_SYSTEM_PROMPT,
+  MAX_TIDY_CHARS,
+  TIDY_MAX_TOKENS,
+  tidyMaxTokensFor,
+} from '../graphql/notegeek/tidy.js';
 import { _resetCounters } from '../services/aiFeatureRunner.js';
 
 function fakeAI(impl, info = { provider: 'groq', model: 'llama-3.3' }) {
@@ -177,5 +183,49 @@ describe('the prompt is a formatter, not an editor', () => {
 
   test('tells the model to prefer the original over a partial answer', () => {
     expect(TIDY_SYSTEM_PROMPT).toMatch(/rather than a partial/i);
+  });
+});
+
+/**
+ * The token ask is sized to the note.
+ *
+ * The first repair to the truncation bug raised `TIDY_MAX_TOKENS` to a flat
+ * 8000, and groq answered HTTP 400 — a fixed ask that large exceeds what some
+ * models will emit. The request then fell through to a 12-second timeout and
+ * the fallback returned the note unchanged, which the UI reported as "already
+ * clean". Silent destruction traded for silent failure.
+ */
+describe('tidyMaxTokensFor', () => {
+  test('a small note asks for a small budget', () => {
+    // ~900 input tokens for a 3.5k note; nothing a provider will refuse.
+    const asked = tidyMaxTokensFor('x'.repeat(3500));
+    expect(asked).toBeLessThan(2500);
+    expect(asked).toBeGreaterThan(800);
+  });
+
+  test('never exceeds the provider-safe ceiling', () => {
+    expect(tidyMaxTokensFor('x'.repeat(MAX_TIDY_CHARS))).toBeLessThanOrEqual(TIDY_MAX_TOKENS);
+    expect(tidyMaxTokensFor('x'.repeat(500000))).toBe(TIDY_MAX_TOKENS);
+  });
+
+  test('always leaves room for a one-line note', () => {
+    expect(tidyMaxTokensFor('hi')).toBeGreaterThanOrEqual(800);
+    expect(tidyMaxTokensFor('')).toBeGreaterThanOrEqual(800);
+  });
+
+  test('asks for MORE than the input, since formatting adds characters', () => {
+    // Headings, list markers and table pipes all cost tokens; an ask equal to
+    // the input would truncate the formatted version.
+    const note = 'x'.repeat(4000);
+    const inputTokens = Math.ceil(note.length / 4);
+    expect(tidyMaxTokensFor(note)).toBeGreaterThan(inputTokens);
+  });
+
+  test('the ceiling and the refusal threshold stay consistent', () => {
+    // MAX_TIDY_CHARS must be small enough that a note at the limit can still
+    // be asked for within the ceiling — otherwise the refusal is unreachable
+    // and we are back to truncating.
+    const atLimit = 'x'.repeat(MAX_TIDY_CHARS);
+    expect(tidyMaxTokensFor(atLimit)).toBeLessThanOrEqual(TIDY_MAX_TOKENS);
   });
 });

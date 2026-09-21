@@ -53,7 +53,17 @@ function MarkdownEditor({ content = '', setContent, isLoading, readOnly = false,
                 variables: { content: previousContent },
             });
             const formatted = data?.tidyMarkdown?.formatted;
-            const reason = data?.tidyMarkdown?.provenance?.reason;
+            const provenance = data?.tidyMarkdown?.provenance;
+            const reason = provenance?.reason;
+
+            // A FALLBACK IS A FAILURE. `source: 'fallback'` means no model
+            // answered — a timeout, a provider 400, a quota refusal — and the
+            // server handed back the original note. That used to land in the
+            // "already clean" branch below (the text is identical, after
+            // all), so a dead provider was reported as "Note is already in
+            // clean, structured markdown". Saying nothing happened is fine;
+            // claiming the note was inspected and approved is not.
+            const isFallback = provenance?.source === 'fallback';
 
             // The server REFUSED, and says why. Both of these mean "your note
             // is unchanged", which is the whole point — a tidy that cannot
@@ -82,6 +92,14 @@ function MarkdownEditor({ content = '', setContent, isLoading, readOnly = false,
             // enough to recognise a result that is the same text.
             const sameText = (a, b) =>
                 a.replace(/\s+/g, ' ').trim() === b.replace(/\s+/g, ' ').trim();
+
+            if (isFallback) {
+                notify('Tidy is unavailable right now — your note is unchanged.', {
+                    tone: 'warning',
+                    duration: 6000,
+                });
+                return;
+            }
 
             if (!formatted || sameText(formatted, previousContent)) {
                 notify('Note is already in clean, structured markdown.', { tone: 'info' });

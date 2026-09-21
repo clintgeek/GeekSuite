@@ -24,19 +24,26 @@ export const TIDY_DAILY_CAP = 50;
 /** Timeout in milliseconds before falling back to original content. */
 export const TIDY_TIMEOUT_MS = 12000;
 /**
- * Max tokens generated in response.
+ * The CEILING on generated tokens — not the number requested.
  *
- * This is an OUTPUT cap, and a tidy's output is about as long as its input —
- * so it is also, in effect, an input limit. At 3000 (~12k characters) a
- * 19k-character note came back cut off around 63% of the way through, and
- * that stump replaced the whole note. Nothing detected it: `finish_reason`
- * never reaches this module, so a guillotined response is indistinguishable
- * from a complete one.
+ * History, because both mistakes are instructive. It was 3000, which is an
+ * OUTPUT cap on a transform whose output is as long as its input, so it was
+ * an input limit in disguise: a 19k-character note came back cut off at ~63%
+ * and that stump replaced the note. `finish_reason` never reaches this
+ * module, so nothing could tell a guillotined answer from a finished one.
  *
- * Raised, and `MAX_TIDY_CHARS` below now refuses anything that still would
- * not fit rather than silently truncating it.
+ * The first repair raised it to a flat 8000 — and groq answered **HTTP 400**,
+ * because a fixed ask that large exceeds what some models will emit. The
+ * request then fell through to a 12-second timeout and the fallback returned
+ * the note unchanged, which the UI cheerfully reported as "already clean".
+ * Trading silent destruction for silent failure is not a fix.
+ *
+ * So the ask is now SIZED TO THE NOTE (`tidyMaxTokensFor`) and this is only
+ * the upper bound. A 3.5k-character note asks for ~1800 tokens, which every
+ * provider accepts; a note big enough to need more than this ceiling is
+ * refused outright by `MAX_TIDY_CHARS`.
  */
-export const TIDY_MAX_TOKENS = 8000;
+export const TIDY_MAX_TOKENS = 4000;
 
 /** Roughly how many characters one token is worth, for English prose. */
 const CHARS_PER_TOKEN = 4;
@@ -61,6 +68,23 @@ export const MAX_TIDY_CHARS = Math.floor(TIDY_MAX_TOKENS * CHARS_PER_TOKEN * 0.7
  * style check.
  */
 export const MIN_LENGTH_RATIO = 0.8;
+
+/**
+ * How many output tokens to ask for, given the note.
+ *
+ * A formatted note is a little longer than its raw form — headings, list
+ * markers and table pipes all cost characters — so this asks for the input's
+ * own size plus 60% headroom, floored so a one-line note still has room to
+ * breathe and capped at the provider-safe ceiling.
+ *
+ * Asking for what is needed rather than a flat maximum is what keeps
+ * providers from rejecting the request outright, and costs less besides.
+ */
+export function tidyMaxTokensFor(content) {
+  const inputTokens = Math.ceil((content?.length || 0) / CHARS_PER_TOKEN);
+  const wanted = Math.ceil(inputTokens * 1.6) + 400;
+  return Math.min(Math.max(wanted, 800), TIDY_MAX_TOKENS);
+}
 
 /**
  * Tidy messy text into clean, structured markdown.
@@ -118,7 +142,7 @@ export async function tidyMarkdown({ content, userId, ai = undefined }) {
     user: content,
     maxCallsPerDay: TIDY_DAILY_CAP,
     timeoutMs: TIDY_TIMEOUT_MS,
-    maxTokens: TIDY_MAX_TOKENS,
+    maxTokens: tidyMaxTokensFor(content),
     fallback: () => content,
     ...(ai ? { ai } : {}),
   });
