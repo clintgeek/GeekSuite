@@ -12,6 +12,33 @@ anything a future reader would otherwise have to rediscover.
 
 ## 2026-09-21
 
+### NoteGeek — Tidy 400'd, and I caused it
+
+`c5d2e1a7`
+
+The fix below raised the token cap to a flat 8000. groq answered **400** — a
+fixed ask that large exceeds what some models emit — then the request timed
+out at 12s and the fallback returned the note unchanged, which the UI
+reported as "already clean". Silent destruction traded for silent failure.
+
+Now the ask is sized to the note (input + 60% headroom, floored, capped at a
+provider-safe 4000), and the frontend checks `provenance.source === 'fallback'`
+before claiming anything was inspected.
+
+**Backed out, and worth remembering.** The 400's reason was invisible because
+`AdapterError` discards `error.response.data`, with a comment saying the body
+"is read for nothing, not even a log line". I read that as an oversight and
+made it append the provider's explanation. It is a SECURITY INVARIANT —
+`aiAdapters.test.js` pins it with a fixture whose body contains an API key
+fragment, an org id and a project id, plus an 80-character
+`trimProviderText` limit. My change would have written keys into the logs
+automatically. Two tests caught it; reverted whole.
+
+Same shape as the /usage-routes lesson: *"X is read for nothing"* and *"X must
+not be read"* are different claims, and here the comment stated the first
+while the tests enforced the second. Read the tests before repairing a gap a
+comment describes.
+
 ### NoteGeek — Tidy was silently destroying long notes
 
 `28d9a29d`
