@@ -356,7 +356,15 @@ function NoteEditorPage() {
             changeReason: 'compose',
           },
         });
+        // The server has it now, so the editor is clean again. Leaving it
+        // dirty would have the unmount flush re-save the same text on the way
+        // out — harmless, but it also leaves a false "unsaved" on screen.
+        setDirty(false);
         notify('Replaced. The previous version is in History.', { tone: 'success' });
+      } else {
+        // An unsaved note has nothing to replace server-side yet. The text is
+        // on screen and dirty; the user's Save writes it.
+        notify('Composed. Save when you are happy with it.', { tone: 'success' });
       }
     } catch (err) {
       notify(err?.message || 'Could not replace the note.', { tone: 'error' });
