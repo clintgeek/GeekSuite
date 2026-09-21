@@ -14,7 +14,7 @@ anything a future reader would otherwise have to rediscover.
 
 ### NoteGeek — every note gets history, and Compose builds a document from scraps
 
-`deeffb53` (gateway) + this commit (web)
+`deeffb53` (gateway), `8091c0de` `9d8b7c0a` `1684b94f` (web + tests)
 
 Two features that only make sense together.
 
@@ -63,10 +63,29 @@ Works on text, markdown and code notes — not the canvas types, which have no
 plain text to read. Rich-text content is converted with `DOMParser`, not a tag
 regex.
 
-One landmine for the next reader: `NoteHistoryDialog` is mounted only while
-open. Mounted closed it still ran `useLazyQuery`, which needs an Apollo client
-even when skipped — that blew up three unrelated page tests whose harness
-mocks `useQuery` and `useMutation` but not `useLazyQuery`.
+Three landmines for the next reader:
+
+- `NoteHistoryDialog` is mounted only while open. Mounted closed it still ran
+  `useLazyQuery`, which needs an Apollo client even when skipped — that blew up
+  three unrelated page tests whose harness mocks `useQuery` and `useMutation`
+  but not `useLazyQuery`.
+- MUI copies a Tooltip's `title` onto the wrapper span, so
+  `getAllByLabelText('Version history')` matches the span as well as the
+  button — and therefore never sees a duplicated button. Query by role.
+  (`9d8b7c0a`: my scripted edit had shipped the History button twice in the
+  bottom bar and not at all inline, which is the row NoteEditorPage actually
+  passes `onHistory` to.)
+- The `notegeekContentCeilings` sanitize-timing test was set at 500 ms and
+  failed CI at 572 ms while passing locally at 173 ms in the same commit. It
+  guards against a return to the *16-second* path; the bar is 2 s now. A
+  wall-clock assertion on a shared runner measures the runner too.
+
+Verified live after deploy: `noteVersions`, `noteVersion`, `composeNote` and
+`restoreNoteVersion` all answer on the gateway, and `noteversions` exists in
+`noteGeek` with both indexes built (`noteId_1_createdAt_-1`,
+`userId_1_noteId_1`). The one thing not verified end to end is a real
+snapshot — that needs Chef's own session. Editing any note should take the
+collection above 0.
 
 ### NoteGeek — Tidy 400'd, and I caused it
 
