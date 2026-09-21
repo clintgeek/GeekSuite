@@ -84,4 +84,8 @@ templateSchema.virtual('preview').get(function () {
 // Use mongoose.models.Template if it exists, otherwise create a new model
 const Template = bujoConn.models.Template || bujoConn.model('Template', templateSchema);
 
+// `templates` filters on `createdBy` and sorts by name; this model declared
+// no index at all.
+templateSchema.index({ createdBy: 1, name: 1 });
+
 export default Template;

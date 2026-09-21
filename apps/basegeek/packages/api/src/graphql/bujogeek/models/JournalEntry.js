@@ -43,4 +43,11 @@ journalEntrySchema.virtual('preview').get(function () {
 });
 
 const JournalEntry = bujoConn.models.JournalEntry || bujoConn.model('JournalEntry', journalEntrySchema);
+// Every read filters on `createdBy` and sorts by `date` descending
+// (resolvers.js `journalEntries`), and this model had no index on either — a
+// full collection scan per load. It matters more here than elsewhere: this is
+// roughly one row per day in an app whose whole premise is accumulating for
+// years, so the scan gets linearly worse forever.
+journalEntrySchema.index({ createdBy: 1, date: -1 });
+
 export default JournalEntry;

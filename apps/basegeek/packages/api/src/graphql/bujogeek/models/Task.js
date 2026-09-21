@@ -79,6 +79,25 @@ taskSchema.index({ createdBy: 1, collectionId: 1 });
 // The blocked list: owner's parked tasks, newest-blocked first.
 taskSchema.index({ createdBy: 1, status: 1, blockedAt: -1 });
 
+// THE LOG QUERY'S OWN INDEX.
+//
+// `getTasksForDateRange` backs dailyTasks / weeklyTasks / monthlyTasks /
+// allTasks — every Today, Plan, Search, Review and Backlog load, and by some
+// margin the most-executed query in the app. It filters on `createdBy` plus a
+// four-branch `$or` over `dueDate`, and none of the indexes above pairs those
+// two: Mongo could use `createdBy` as a prefix (via one of the unrelated
+// compound indexes) and then had to filter and sort the rest in memory.
+//
+// Equality on `createdBy` first, then the field every branch ranges or
+// enumerates. The trailing sort (`status, dueDate, priority, createdAt`) is
+// not fully served by this and deliberately so — a four-field index to cover
+// a sort over a small per-user result set costs more to maintain than it
+// saves.
+taskSchema.index({ createdBy: 1, dueDate: 1 });
+
+// The series-master lookup, run on every one of those same loads.
+taskSchema.index({ createdBy: 1, isSeriesMaster: 1 });
+
 // ONE MATERIALISED OVERRIDE PER OCCURRENCE.
 //
 // Completing a `virtual_` occurrence writes an override row. The checkbox had
