@@ -42,7 +42,7 @@ over the three sections, and by checking build exit codes without a pipe.
 
 ### NoteGeek — pipe tables render as tables
 
-`ba…` · one commit
+`c33ce90c`
 
 `<ReactMarkdown>` was called with no `remarkPlugins` in **both** markdown
 surfaces, so only CommonMark was parsed — and CommonMark has no tables. A pipe
