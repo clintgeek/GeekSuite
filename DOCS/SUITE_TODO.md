@@ -125,11 +125,28 @@ the app was down over its due time, should it arrive late or be skipped?
 
 ### NoteGeek
 
+- ~~**No undo for anything.**~~ — **done 2026-09-21.** Every note now carries
+  version history (50 per note), and Tidy, Compose, plain edits and restores
+  are all labelled and reversible. This is also what makes Compose's
+  `Replace this note` defensible.
+
+- **Compose follow-ups** (shipped 2026-09-21, worth watching):
+  - Compose is available on text, markdown and code notes. The canvas types
+    (sketch, mind map, handwritten) have no plain text to read, so the button
+    is hidden there rather than failing at the model.
+  - The incremental workflow — paste scraps into a composed note, compose
+    again, replace — has no affordance of its own yet. It works; it just
+    isn't signposted. Worth watching whether that needs a "compose in" gesture
+    or whether pasting-then-composing reads naturally enough.
+  - `MAX_COMPOSE_CHARS` is 96k with 8 batches. No user has hit it yet; if one
+    does, the cap is the thing to raise, not the batch size.
+
 - **Tidy's premise needs a decision.** The destructive faults are fixed
   (2026-09-21): it no longer truncates long notes, no longer accepts a result
   that lost content, and no longer rewrites notes that are already clean. But
   it still sends a whole note to a model and overwrites the note with the
-  reply, and the only undo is a 9-second Revert toast. Options worth weighing:
+  reply. The undo problem is solved now (a Tidy leaves a `tidy` entry in the
+  note's history), so what is left is only the premise. Options worth weighing:
   keep as-is now that it is safe; narrow it to a selection rather than the
   whole note; show a diff and let the user accept; or drop it. Chef's call.
 

@@ -36,7 +36,6 @@ function MarkdownEditor({ content = '', setContent, isLoading, readOnly = false,
     const [viewMode, setViewMode] = useState(readOnly ? 'preview' : 'edit');
     const { notify } = useToast();
     const [tidyMarkdownMutation, { loading: isTidying }] = useMutation(TIDY_MARKDOWN);
-
     // On mobile, only allow edit or preview (no split)
     const handleViewModeChange = (event, newMode) => {
         if (newMode !== null) {
@@ -359,6 +358,7 @@ function MarkdownEditor({ content = '', setContent, isLoading, readOnly = false,
                     </>
                 )}
             </Box>
+
         </Box>
     );
 }

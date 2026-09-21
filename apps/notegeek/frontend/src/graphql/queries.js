@@ -82,3 +82,37 @@ export const SUGGEST_FOR_NOTE = gql`
         }
     }
 `;
+
+/**
+ * A note's history, newest first.
+ *
+ * `content` is deliberately absent — the server omits it from the list, and
+ * pulling twenty bodies of a 12k note to render a list of timestamps is a
+ * payload nobody asked for. `GET_NOTE_VERSION` fetches one when it is wanted.
+ */
+export const GET_NOTE_VERSIONS = gql`
+    query GetNoteVersions($noteId: ID!) {
+        noteVersions(noteId: $noteId) {
+            id
+            noteId
+            title
+            type
+            reason
+            createdAt
+        }
+    }
+`;
+
+export const GET_NOTE_VERSION = gql`
+    query GetNoteVersion($id: ID!) {
+        noteVersion(id: $id) {
+            id
+            noteId
+            title
+            content
+            type
+            reason
+            createdAt
+        }
+    }
+`;

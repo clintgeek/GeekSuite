@@ -12,6 +12,62 @@ anything a future reader would otherwise have to rediscover.
 
 ## 2026-09-21
 
+### NoteGeek — every note gets history, and Compose builds a document from scraps
+
+`deeffb53` (gateway) + this commit (web)
+
+Two features that only make sense together.
+
+**History.** NoteGeek had none, which is why the Tidy truncation a few hours
+earlier was *permanent*. Every meaningful update now snapshots the previous
+state into `noteversions` first — 50 per note, newest kept. The pieces that
+matter:
+
+- A save that changes nothing is not a version. Autosave on blur, an
+  idempotent AI result and a re-save of identical text would otherwise scroll
+  the real history out of retention inside a single editing session. Tags-only
+  changes don't count either — cheap to redo, noisy to version.
+- A snapshot that fails returns `null` rather than throwing. Losing a history
+  entry is bad; losing the user's edit *because* the history entry failed is
+  worse.
+- An encrypted note's content is ciphertext in both places, so a restore
+  round-trips without the server ever holding plaintext.
+- A restore snapshots the CURRENT state first, so restoring to the wrong
+  version is itself undoable.
+- The list query omits `content` on purpose; bodies are fetched one at a time.
+  50 versions of a long note is a payload nobody asked for.
+- Deleting a note deletes its history. Otherwise delete didn't delete.
+
+The `reason` label (`edit` / `tidy` / `compose` / `restore`) is the part that
+earns its keep: it's how you tell "I typed over this" from "Tidy ate this",
+which is the thing you're actually hunting for after an AI action.
+
+**Compose.** The thing Tidy was never for. Paste in chat messages, half an
+email, a ChatGPT answer and three brain-dumps; get back one organised
+document. Map-reduce over the material — segment into fragments, batch, extract
+per batch, compose the whole — so it survives input far larger than a context
+window. Under ~10k chars it takes the single-call path instead.
+
+Compose is **lossy by design** (merging, reordering and dropping is the job),
+so unlike Tidy it never writes back over its source, which may be the only
+copy of something pasted from another app. The result is previewed; `Save as a
+new note` is primary and `Replace this note` is secondary and sits left of it,
+so the muscle-memory click is the safe one. Replace is only defensible at all
+*because* history now exists.
+
+`chunksFailed` is stated **before** the document, not after. A batch that
+failed means material missing from something that still looks complete, and
+that changes what the reader is looking at.
+
+Works on text, markdown and code notes — not the canvas types, which have no
+plain text to read. Rich-text content is converted with `DOMParser`, not a tag
+regex.
+
+One landmine for the next reader: `NoteHistoryDialog` is mounted only while
+open. Mounted closed it still ran `useLazyQuery`, which needs an Apollo client
+even when skipped — that blew up three unrelated page tests whose harness
+mocks `useQuery` and `useMutation` but not `useLazyQuery`.
+
 ### NoteGeek — Tidy 400'd, and I caused it
 
 `c5d2e1a7`

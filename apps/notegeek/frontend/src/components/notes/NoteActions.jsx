@@ -6,6 +6,8 @@ import { glow } from '../../theme/tokens';
 import Save from '@mui/icons-material/Save';
 import DeleteOutline from '@mui/icons-material/DeleteOutline';
 import Edit from '@mui/icons-material/Edit';
+import AutoAwesomeMosaic from '@mui/icons-material/AutoAwesomeMosaic';
+import HistoryIcon from '@mui/icons-material/History';
 import Visibility from '@mui/icons-material/Visibility';
 import Check from '@mui/icons-material/Check';
 import ArrowBack from '@mui/icons-material/ArrowBack';
@@ -32,6 +34,12 @@ function NoteActions({
   canDelete = true,
   canToggleEdit = false,
   isEditMode = true,
+  // Compose is offered only when the page can act on the result; no
+  // handler means no button, so a note type that cannot be composed does
+  // not advertise it.
+  onCompose,
+  isComposing = false,
+  onHistory,
   variant = 'inline', // 'inline' | 'bottom-bar'
 }) {
   const theme = useTheme();
@@ -101,6 +109,54 @@ function NoteActions({
       </Tooltip>
     );
 
+  // ── History ───────────────────────────────────────────────────────────
+  const HistoryButton = () => (
+    <Tooltip title="Version history" arrow>
+      <span>
+        <IconButton
+          onClick={onHistory}
+          size="small"
+          aria-label="Version history"
+          sx={{
+            borderRadius: '6px',
+            transition: 'background 120ms ease',
+            '&:hover': { bgcolor: glow(theme).soft },
+            '&:focus-visible': { boxShadow: `0 0 0 3px ${glow(theme).ring}` },
+          }}
+        >
+          <HistoryIcon fontSize="small" />
+        </IconButton>
+      </span>
+    </Tooltip>
+  );
+
+  // ── Compose ───────────────────────────────────────────────────────────
+  // Lives here rather than in one editor so every note type that can be
+  // composed gets it from one implementation.
+  const ComposeButton = () => (
+    <Tooltip title="Compose a document from the scraps in this note" arrow>
+      <span>
+        <IconButton
+          color="primary"
+          onClick={onCompose}
+          disabled={isComposing}
+          size="small"
+          aria-label="Compose a document from this note"
+          sx={{
+            borderRadius: '6px',
+            transition: 'background 120ms ease',
+            '&:hover': { bgcolor: glow(theme).soft },
+            '&:focus-visible': { boxShadow: `0 0 0 3px ${glow(theme).ring}` },
+          }}
+        >
+          {isComposing
+            ? <CircularProgress size={16} color="inherit" />
+            : <AutoAwesomeMosaic fontSize="small" />}
+        </IconButton>
+      </span>
+    </Tooltip>
+  );
+
   // ── Toggle edit/view ──────────────────────────────────────────────────
   const ToggleEditButton = () => (
     <Button
@@ -146,6 +202,9 @@ function NoteActions({
         }}
       >
         {onBack && <BackButton />}
+        {onHistory && <HistoryButton />}
+        {onHistory && <HistoryButton />}
+      {onCompose && <ComposeButton />}
         {canToggleEdit && <ToggleEditButton />}
         {isEditMode && <SaveButton />}
         {canDelete && <DeleteButton />}
@@ -157,6 +216,7 @@ function NoteActions({
   return (
     <>
       {onBack && <BackButton />}
+      {onCompose && <ComposeButton />}
       {canToggleEdit && <ToggleEditButton />}
       {isEditMode && <SaveButton />}
       {canDelete && <DeleteButton />}

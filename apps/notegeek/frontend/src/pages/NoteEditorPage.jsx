@@ -11,7 +11,9 @@ import HandwrittenIcon from '@mui/icons-material/Draw';
 import BackIcon from '@mui/icons-material/ArrowBack';
 import { useQuery, useMutation } from '@apollo/client';
 import { GET_NOTE_BY_ID } from '../graphql/queries';
-import { CREATE_NOTE, UPDATE_NOTE } from '../graphql/mutations';
+import { CREATE_NOTE, UPDATE_NOTE, COMPOSE_NOTE } from '../graphql/mutations';
+import ComposeDialog from '../components/editors/ComposeDialog';
+import NoteHistoryDialog from '../components/notes/NoteHistoryDialog';
 import { useToast } from '@geeksuite/ui';
 import { useAppPreferences } from '@geeksuite/user';
 import { NoteShell, NoteMetaBar, NoteActions, NoteTypeRouter, NOTE_TYPES, SuggestionStrip } from '../components/notes';
@@ -247,6 +249,120 @@ function NoteEditorPage() {
   }, [id, noteToEdit, isNewNote, location.search, resetForm, getTypeFromQuery]);
 
   // Handle save — allow if either title or content has text
+  // ── Compose ─────────────────────────────────────────────────────────────
+  //
+  // Build a document out of the scraps in this note. Nothing is written until
+  // the result has been seen: a compose is lossy by design, and this note may
+  // be the only copy of material pasted in from a chat or an email.
+  const [composeNoteMutation, { loading: isComposing }] = useMutation(COMPOSE_NOTE);
+  const [compose, setCompose] = useState(null);
+  const [historyOpen, setHistoryOpen] = useState(false);
+
+  /**
+   * Types Compose can read.
+   *
+   * `text` is TipTap HTML, so the markup is stripped before it goes out — the
+   * model should see the writing, not the tags, and tags are most of the
+   * tokens. `code` is already plain. A null type is the app's old default and
+   * behaves as text (six of sixteen live notes carry one). `mindmap` and
+   * `handwritten` are excluded: their content is not prose.
+   */
+  const COMPOSABLE = ['text', 'markdown', 'code', null, undefined];
+  const canCompose = COMPOSABLE.includes(noteType);
+
+  const plainTextForCompose = () => {
+    if (noteType !== 'text' && noteType !== null && noteType !== undefined) return content;
+    // A parser, not a regex: stripping tags by pattern mangles anything
+    // containing a literal `<`, which code fragments routinely do.
+    const doc = new DOMParser().parseFromString(content || '', 'text/html');
+    return (doc.body?.textContent || '').trim();
+  };
+
+  const handleCompose = async () => {
+    const source = plainTextForCompose();
+    if (!source || !source.trim() || isComposing) return;
+    setCompose({ open: true, loading: true, markdown: '', stats: null, error: null });
+    try {
+      const { data } = await composeNoteMutation({ variables: { content: source } });
+      const result = data?.composeNote;
+      const reason = result?.provenance?.reason;
+
+      if (reason === 'content_too_long') {
+        setCompose({
+          open: true, loading: false, markdown: '', stats: result?.stats || null,
+          error: 'That is more material than one compose can take. Split it across two notes and compose each.',
+        });
+        return;
+      }
+      if (!result?.markdown?.trim()) {
+        setCompose({
+          open: true, loading: false, markdown: '', stats: result?.stats || null,
+          error: 'Compose is unavailable right now — your note is unchanged.',
+        });
+        return;
+      }
+      setCompose({
+        open: true, loading: false, markdown: result.markdown, stats: result.stats, error: null,
+      });
+    } catch (err) {
+      setCompose({
+        open: true, loading: false, markdown: '', stats: null,
+        error: err?.message || 'Could not compose this note.',
+      });
+    }
+  };
+
+  /** The safe path: a new markdown note, source left exactly as it was. */
+  const handleComposeSaveAsNew = async (markdown) => {
+    setCompose(null);
+    try {
+      const { data } = await createNoteMutation({
+        variables: {
+          title: title ? `${title} (composed)` : 'Composed note',
+          content: markdown,
+          type: 'markdown',
+          tags,
+        },
+      });
+      const created = data?.createNote;
+      notify('Saved as a new note.', { tone: 'success' });
+      if (created?.id) navigate(`/notes/${created.id}`);
+    } catch (err) {
+      notify(err?.message || 'Could not save the composed note.', { tone: 'error' });
+    }
+  };
+
+  /**
+   * Replace this note's body with the composed document.
+   *
+   * Safe only because every note now carries version history — this lands as
+   * one `compose` entry in it and is undoable. It would have been the single
+   * irreversible action in the app otherwise.
+   */
+  const handleComposeReplace = async (markdown) => {
+    setCompose(null);
+    setContent(markdown);
+    setNoteType('markdown');
+    setDirty(true);
+    try {
+      if (savedNoteId) {
+        await updateNoteMutation({
+          variables: {
+            id: savedNoteId,
+            title,
+            content: markdown,
+            type: 'markdown',
+            tags,
+            changeReason: 'compose',
+          },
+        });
+        notify('Replaced. The previous version is in History.', { tone: 'success' });
+      }
+    } catch (err) {
+      notify(err?.message || 'Could not replace the note.', { tone: 'error' });
+    }
+  };
+
   const handleSave = async () => {
     if (discardedRef.current) return;
 
@@ -645,6 +761,9 @@ function NoteEditorPage() {
                 canDelete={!isNewNote || !!savedNoteId}
                 canToggleEdit={isMindMap && !isNewNote && !!savedNoteId}
                 isEditMode={isEditMode}
+                onHistory={savedNoteId ? () => setHistoryOpen(true) : undefined}
+                onCompose={canCompose ? handleCompose : undefined}
+                isComposing={isComposing}
                 variant="inline"
               />
             }
@@ -661,6 +780,9 @@ function NoteEditorPage() {
             canDelete={!isNewNote || !!savedNoteId}
             canToggleEdit={isMindMap && !isNewNote && !!savedNoteId}
             isEditMode={isEditMode}
+            onHistory={savedNoteId ? () => setHistoryOpen(true) : undefined}
+            onCompose={canCompose ? handleCompose : undefined}
+            isComposing={isComposing}
             variant="bottom-bar"
           />
         }
@@ -686,6 +808,39 @@ function NoteEditorPage() {
           />
         </Box>
       </NoteShell>
+
+      {/* Mounted only while open: the dialog's own Apollo hooks have no reason
+          to run on every editor mount, and the list query is network-only. */}
+      {historyOpen && savedNoteId ? (
+        <NoteHistoryDialog
+          open={historyOpen}
+          noteId={savedNoteId}
+          onClose={() => setHistoryOpen(false)}
+          onRestored={(note) => {
+            // Put the restored text on screen without a reload, and mark it
+            // clean: the server has already written it.
+            if (!note) return;
+            setTitle(note.title || '');
+            setContent(note.content || '');
+            setNoteType(note.type || NOTE_TYPES.TEXT);
+            setDirty(false);
+            notify('Restored. The version you replaced is still in History.', { tone: 'success' });
+          }}
+        />
+      ) : null}
+
+      {compose ? (
+        <ComposeDialog
+          open={compose.open}
+          loading={compose.loading}
+          markdown={compose.markdown}
+          stats={compose.stats}
+          error={compose.error}
+          onClose={() => setCompose(null)}
+          onSaveAsNew={() => handleComposeSaveAsNew(compose.markdown)}
+          onReplace={() => handleComposeReplace(compose.markdown)}
+        />
+      ) : null}
 
       <DeleteNoteDialog
         open={isDeleteDialogOpen}
