@@ -14,13 +14,15 @@ and neither I nor the review could build a failing case; act on those only after
 
 ## Status — updated 2026-09-21
 
-Nine findings shipped and verified in production across three commits
-(`f591de2a`, `aaac66e0`, `6b60f92c`).
+Eleven findings shipped across five commits (`f591de2a`, `aaac66e0`,
+`6b60f92c`, `7328d278`, `d747a7ff`).
 
 | Section | Finding | Status |
 | --- | --- | --- |
+| §1.1 | Evening due times land on the wrong day | FIXED |
 | §1.2 | Weekly spread's Sunday column | FIXED |
 | §1.3 | Habit streak reads 0 after 7pm | FIXED |
+| §1.4 | Two disagreeing sort comparators | FIXED |
 | §1.5 | Blocked shelf asserts on a failed query | FIXED |
 | §1.6 | Review marks failed actions as handled | FIXED |
 | §2.1 | Unbounded `all` expansion (2.9M occurrences) | FIXED |
@@ -34,9 +36,14 @@ Nine findings shipped and verified in production across three commits
 now written down in `apps/bujogeek/DOCS/REMINDERS.md` and at the sweep itself,
 with what the fix would take.
 
-**Still open, in the order the last section recommends:** §1.1 (evening due
-times land on the wrong day — the headline), §1.4 (two disagreeing sort
-comparators), then the index work in §3.1 and the UX gaps in §4.
+**All of §1 and §2 are now closed** except the reminder limitation, which is
+documented rather than fixed.
+
+**Still open:** the index work in §3.1 (cheap insurance while the corpus is
+small — the `{createdBy, dueDate}` index and the unbounded override fetch),
+the two N+1s in §3.2, `TaskRow` memoisation in §3.3, the two doors onto the
+blocked state machine in §3.5, the undocumented ownership exception in §3.6,
+and the ten UX gaps in §4.
 
 ---
 
