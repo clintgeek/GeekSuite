@@ -5,6 +5,7 @@ import WeeklySpread from '../components/plan/WeeklySpread';
 import MonthlyCalendar from '../components/plan/MonthlyCalendar';
 import BacklogList from '../components/plan/BacklogList';
 import { colors } from '../theme/colors';
+import useGlobalShortcuts from '../hooks/useGlobalShortcuts';
 
 const SUBVIEWS = [
   { value: 'weekly', label: 'Weekly' },
@@ -18,6 +19,9 @@ const SUBVIEWS = [
  * Motion underline indicator that glides between tabs, not a hard pill swap.
  */
 const PlanPage = () => {
+  // The g-chords (g→t/r/p/s/l/h). Every other page registers these; these
+  // two did not, so a keyboard user could chord IN and not back out.
+  useGlobalShortcuts();
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
   const { subview } = useParams();

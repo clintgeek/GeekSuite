@@ -168,8 +168,21 @@ const HabitsPage = () => {
     }
   };
 
+  // Deleting a habit takes its entire logged history with it — the streak,
+  // every tick, all of it — and this was a plain text button sitting in the
+  // same small row as Cancel, with no confirmation and no undo. Every task
+  // delete in the app asks first; the most destructive delete asked nothing.
+  // Same shape as TemplateList's confirm.
   const handleDelete = async () => {
     if (!editing || editing === 'new') return;
+    // The name is in the prompt because this dialog sits over a grid of
+    // habits and "this habit" is not enough to be sure which one is about to
+    // go. The history is named because that is the part that cannot be
+    // retyped.
+    const name = editing.name || 'this habit';
+    if (!window.confirm(`Delete "${name}" and its entire logged history? This cannot be undone.`)) {
+      return;
+    }
     setSaving(true);
     try {
       await deleteHabit(editing.id);

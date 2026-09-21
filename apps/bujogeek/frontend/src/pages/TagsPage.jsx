@@ -21,10 +21,14 @@ import SkeletonLoader from '../components/shared/SkeletonLoader';
 import { useTaskContext } from '../context/TaskContext';
 import { colors } from '../theme/colors';
 import { domainInk } from '../theme/inks';
+import useGlobalShortcuts from '../hooks/useGlobalShortcuts';
 
 const AUTH_CONFIG = { withCredentials: true };
 
 const TagsPage = () => {
+  // The g-chords (g→t/r/p/s/l/h). Every other page registers these; these
+  // two did not, so a keyboard user could chord IN and not back out.
+  useGlobalShortcuts();
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
   const { updateTaskStatus, deleteTask } = useTaskContext();
