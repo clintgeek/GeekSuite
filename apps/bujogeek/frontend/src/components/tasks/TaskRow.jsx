@@ -80,6 +80,24 @@ const TaskRow = ({
   // interaction — MOBILE_UI_PLAN.md §1.)
   const isMobile  = useMediaQuery(theme.breakpoints.down('md'));
   const [hovered, setHovered] = useState(false);
+  // One toggle at a time. A `virtual_` occurrence keeps its synthetic id
+  // until the first response merges, so a double tap used to send the same id
+  // twice and materialise two override rows for one occurrence.
+  const [toggling, setToggling] = useState(false);
+
+  const handleToggle = async () => {
+    if (toggling) return;
+    setToggling(true);
+    try {
+      await onStatusToggle?.(task);
+    } finally {
+      // The row is often unmounted or re-keyed by the time this resolves
+      // (completing a task can drop it from the view), so this must not
+      // assume it is still mounted — React tolerates the no-op set, and
+      // leaving the flag stuck true would wedge the checkbox if it is not.
+      setToggling(false);
+    }
+  };
   const [sheetOpen, setSheetOpen] = useState(false);
   // Steps start folded. An entry with steps is still one line in the log until
   // you ask it not to be — that is the whole point of a bullet journal.
@@ -296,7 +314,8 @@ const TaskRow = ({
       <Box sx={{ pt: '2px', flexShrink: 0 }}>
         <TaskCheckbox
           checked={isCompleted}
-          onChange={() => onStatusToggle?.(task)}
+          busy={toggling}
+          onChange={handleToggle}
           color={agingColor}
           label={`Mark "${cleanContent(task.content) || 'this entry'}" ${isCompleted ? 'not done' : 'done'}`}
         />

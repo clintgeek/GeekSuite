@@ -79,5 +79,31 @@ taskSchema.index({ createdBy: 1, collectionId: 1 });
 // The blocked list: owner's parked tasks, newest-blocked first.
 taskSchema.index({ createdBy: 1, status: 1, blockedAt: -1 });
 
+// ONE MATERIALISED OVERRIDE PER OCCURRENCE.
+//
+// Completing a `virtual_` occurrence writes an override row. The checkbox had
+// no busy state and a virtual's id does not change until the first response
+// merges, so a double tap sent the same synthetic id twice and
+// `updateStatusInternal` did an unconditional `new Task(...).save()` — two
+// permanent rows for one occurrence, with nothing to stop it. `HabitLog`
+// already guards its equivalent this way.
+//
+// PARTIAL, AND THE FILTER IS `$type`, NOT `$exists`. Both fields declare
+// `default: null`, so every ordinary task carries an explicit
+// `seriesId: null` — `$exists: true` matches all of them, and a plain unique
+// index would see one `(null, null)` pair per non-recurring task and refuse
+// to build. Checked against the live collection: 363 tasks, 363 of them with
+// a null seriesId. `$type` is what excludes those.
+taskSchema.index(
+  { seriesId: 1, originalDueDate: 1 },
+  {
+    unique: true,
+    partialFilterExpression: {
+      seriesId: { $type: 'string' },
+      originalDueDate: { $type: 'date' },
+    },
+  }
+);
+
 const Task = bujoConn.models.Task || bujoConn.model('Task', taskSchema);
 export default Task;

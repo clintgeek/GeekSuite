@@ -22,6 +22,39 @@ The test is `hasDueTime()` in `reminderService.js`. There is deliberately no way
 to ask for a reminder on a date-only task: there would be no defensible instant
 to fire at.
 
+## Recurring tasks get ONE reminder — a known limitation
+
+**A repeating task with a due time notifies on its first occurrence and then
+goes silent, permanently.** This is not configurable and there is no warning in
+the UI. Written down here because a reminder that stops without saying so is
+worse than one that never existed.
+
+Why it happens: the sweep queries real `Task` documents. Future occurrences of a
+series are **virtual** — `virtual_<masterId>_<epochMs>`, expanded per view
+window and never stored — so the only row the sweep can ever match is the series
+*master*. It fires once, `remindedAt` is stamped (`reminderService.js`), and
+nothing clears it: `taskService.updateTask` only resets `remindedAt` when
+`dueDate` actually moves, and a master's never does.
+
+So "take meds, daily, 9:00pm" pushes on day one and never again.
+
+### What fixing it would take
+
+`remindedAt` is a single timestamp meaning "already notified", which is enough
+for a one-shot task and not enough for a series. A fix needs it to mean "the
+occurrence I last notified for", so the sweep can ask *has this occurrence been
+notified* rather than *has this task been notified*:
+
+1. Widen the sweep to consider series masters, computing each one's next
+   occurrence inside the window from its RRULE.
+2. Compare that occurrence against `remindedAt` rather than testing it for null.
+3. Decide what a missed window does — if the app is down over 9pm, does the
+   9pm push arrive late or get skipped? The one-shot path currently fires late.
+
+Not a large change, but it alters the meaning of a stored field and needs a
+decision on (3), so it is deliberately not bundled with the 2026-09-21
+recurrence fixes.
+
 ## Where the scheduler lives
 
 In **basegeek**, not in the browser. basegeek owns the task data and runs 24/7;

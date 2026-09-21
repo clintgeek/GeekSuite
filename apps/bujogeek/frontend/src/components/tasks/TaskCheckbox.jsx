@@ -13,16 +13,32 @@ import { colors } from '../../theme/colors';
  * `button-name`, 28 nodes, 2026-09-05). The fallback below is a floor, not a
  * substitute.
  */
-const TaskCheckbox = ({ checked, onChange, color = colors.aging.fresh, glyph = 22, label }) => {
+/**
+ * `busy` blocks a second toggle while the first is in flight.
+ *
+ * This had no busy state at all, and for a RECURRING occurrence that was a
+ * data bug rather than a cosmetic one: a `virtual_<id>_<epoch>` row keeps its
+ * synthetic id until the first response merges, so a double tap sent the same
+ * id twice and the server materialised two override rows for one occurrence.
+ * A partial unique index on `(seriesId, originalDueDate)` now refuses the
+ * duplicate at the collection, and this stops it being attempted.
+ *
+ * Deliberately NOT `disabled`: an element that disappears from the
+ * accessibility tree mid-interaction loses focus and says nothing about why.
+ * `aria-disabled` keeps it announced and focusable while the handler ignores
+ * the click.
+ */
+const TaskCheckbox = ({ checked, onChange, color = colors.aging.fresh, glyph = 22, label, busy = false }) => {
   const r = glyph / 2 - 1;
   const c = glyph / 2;
   return (
     <Box
       component="button"
       type="button"
-      onClick={onChange}
+      onClick={busy ? undefined : onChange}
       role="checkbox"
       aria-checked={checked}
+      aria-disabled={busy || undefined}
       aria-label={label || (checked ? 'Mark not done' : 'Mark done')}
       tabIndex={0}
       sx={{
@@ -32,7 +48,8 @@ const TaskCheckbox = ({ checked, onChange, color = colors.aging.fresh, glyph = 2
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        cursor: 'pointer',
+        cursor: busy ? 'default' : 'pointer',
+        opacity: busy ? 0.6 : 1,
         border: 'none',
         backgroundColor: 'transparent',
         padding: 0,

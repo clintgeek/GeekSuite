@@ -209,6 +209,21 @@ class ReminderService {
    * reminder is fired once, and a user with no working subscription is a user
    * with no reminders, not a user with a backlog of them.
    */
+
+  /**
+   * RECURRING TASKS GET ONE REMINDER, EVER — see DOCS/REMINDERS.md.
+   *
+   * This sweep matches real `Task` documents. Future occurrences of a series
+   * are virtual (`virtual_<masterId>_<epochMs>`) and have no row, so the only
+   * candidate is the series master: it fires once, `remindedAt` is stamped
+   * below, and nothing clears it — `taskService.updateTask` only resets
+   * `remindedAt` when `dueDate` moves, and a master's never does.
+   *
+   * "Take meds, daily, 9pm" therefore pushes on day one and is silent
+   * afterwards. Known, documented, and not fixed here: the fix changes what
+   * `remindedAt` MEANS (from "notified" to "the occurrence notified for") and
+   * needs a decision about missed windows.
+   */
   async tick(now = new Date()) {
     const upper = now instanceof Date ? now : new Date(now);
     const lower = new Date(upper.getTime() - MISSED_WINDOW_MS);

@@ -61,6 +61,12 @@ export function recurrencePatternToRRule(pattern, startDate) {
 }
 
 class TaskService {
+  /**
+   * How far either side of today the 'all' view expands recurring rules.
+   * See `expansionWindow` for why this exists and what it costs.
+   */
+  static ALL_VIEW_HORIZON_DAYS = 365;
+
   constructor() {
     this.taskModel = Task;
   }
@@ -200,6 +206,62 @@ class TaskService {
     return end;
   }
 
+  /**
+   * The window an RRULE is expanded over for a given view.
+   *
+   * Extracted so it can be asserted without a database — and because the
+   * 'all' branch below is the one that had to be bounded.
+   */
+  expansionWindow(viewType, startOfDayDate, endOfDayDate) {
+    if (viewType === 'daily') {
+      return { viewStart: startOfDayDate, viewEnd: endOfDayDate };
+    }
+    if (viewType === 'weekly') {
+      // The same two helpers the Mongo filter uses — see startOfUtcWeek.
+      const viewStart = this.startOfUtcWeek(startOfDayDate);
+      return { viewStart, viewEnd: this.endOfUtcWeek(viewStart) };
+    }
+    if (viewType === 'monthly') {
+      return {
+        viewStart: new Date(Date.UTC(startOfDayDate.getUTCFullYear(), startOfDayDate.getUTCMonth(), 1, 0, 0, 0, 0)),
+        viewEnd: new Date(Date.UTC(startOfDayDate.getUTCFullYear(), startOfDayDate.getUTCMonth() + 1, 0, 23, 59, 59, 999)),
+      };
+    }
+
+    // THE 'all' VIEW, BOUNDED.
+    //
+    // This was `new Date(0)` to `new Date(8640000000000000)` — the entire
+    // representable date range — handed straight to `rule.between`. One
+    // ordinary open-ended daily rule ("take vitamins", no UNTIL, no COUNT,
+    // which is what `buildRecurrenceRule` emits) expands that to 2,912,443
+    // occurrences in 12.5 seconds, measured. It terminates only because rrule
+    // stops at year 9999.
+    //
+    // `allTasks` feeds Search, Review and the Backlog, and basegeek is the
+    // shared gateway for the whole suite — so one recurring task made three
+    // routes block every app's event loop for twelve seconds and then build,
+    // sort and serialise 2.9 million objects.
+    //
+    // A year either side of today: wide enough that a series is findable in
+    // Search and its recent occurrences are visible to Review, narrow enough
+    // to cap a daily rule at ~730 rows. A deliberate horizon, not a natural
+    // boundary — an occurrence more than a year out will not be found by
+    // Search, though every materialised row still will be.
+    //
+    // Worth revisiting: for Search the right answer may be to return the
+    // SERIES rather than its occurrences, since every occurrence carries
+    // identical text and 730 identical hits is its own bug. That is a
+    // behaviour change, so it is not made here — this fixes the crash without
+    // quietly redefining what Search returns.
+    const viewStart = new Date(startOfDayDate);
+    viewStart.setUTCDate(viewStart.getUTCDate() - TaskService.ALL_VIEW_HORIZON_DAYS);
+    viewStart.setUTCHours(0, 0, 0, 0);
+    const viewEnd = new Date(startOfDayDate);
+    viewEnd.setUTCDate(viewEnd.getUTCDate() + TaskService.ALL_VIEW_HORIZON_DAYS);
+    viewEnd.setUTCHours(23, 59, 59, 999);
+    return { viewStart, viewEnd };
+  }
+
   async getTasksForDateRange({ userId, startDate, endDate, viewType }) {
     this.requireUser(userId);
     const query = { createdBy: userId, isSeriesMaster: { $ne: true } };
@@ -267,20 +329,7 @@ class TaskService {
     const tasksWithDates = tasks.map(t => t.toObject());
 
     // --- RRULE EXPANSION START ---
-    let viewStart, viewEnd;
-    if (viewType === 'daily') {
-      viewStart = startOfDayDate; viewEnd = endOfDayDate;
-    } else if (viewType === 'weekly') {
-      // Same two helpers as the filter above — see startOfUtcWeek's comment
-      // for why this is not written out a second time.
-      viewStart = this.startOfUtcWeek(startOfDayDate);
-      viewEnd = this.endOfUtcWeek(viewStart);
-    } else if (viewType === 'monthly') {
-      viewStart = new Date(Date.UTC(startOfDayDate.getUTCFullYear(), startOfDayDate.getUTCMonth(), 1, 0, 0, 0, 0));
-      viewEnd = new Date(Date.UTC(startOfDayDate.getUTCFullYear(), startOfDayDate.getUTCMonth() + 1, 0, 23, 59, 59, 999));
-    } else {
-      viewStart = new Date(0); viewEnd = new Date(8640000000000000);
-    }
+    const { viewStart, viewEnd } = this.expansionWindow(viewType, startOfDayDate, endOfDayDate);
 
     // A blocked master parks the whole series — like completed/cancelled, it
     // stops producing occurrences. Blocking a single occurrence instead
@@ -488,6 +537,22 @@ class TaskService {
     delete base._id;
     return {
       ...base,
+      // THE OCCURRENCE'S OWN DATE, NOT THE SERIES'.
+      //
+      // `base` is the master spread whole, so it carries the master's
+      // `dueDate` — the series' FIRST date. A status change (complete,
+      // cancel, block) sends no `dueDate` of its own, so the override used to
+      // inherit that one: ticking off Tuesday's occurrence removed the row
+      // from Tuesday (its virtual is suppressed by `overrideMap`, correctly,
+      // on `originalDueDate`) and added a completed row to the series' start
+      // date instead. The task vanished from the day it was done on and
+      // reappeared, wearing the wrong date, weeks earlier.
+      //
+      // This sits BEFORE the `...updateData` spread on purpose: an edit that
+      // genuinely moves the occurrence still wins, because `updateData` will
+      // carry its own `dueDate`. Only the status-change path, which supplies
+      // none, falls through to the occurrence's date.
+      dueDate: originalDueDate,
       ...updateData,
       createdBy: master.createdBy,
       seriesId: String(master._id),
