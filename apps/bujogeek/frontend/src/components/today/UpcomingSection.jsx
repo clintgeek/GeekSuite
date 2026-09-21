@@ -13,6 +13,7 @@ const UpcomingSection = ({
   onDelete,
   onSaveAsNote,
   onCancel,
+  onMoveToTomorrow,
   onBlock,
   focusedTaskId,
   subtaskProps,
@@ -36,6 +37,7 @@ const UpcomingSection = ({
             onEdit={onEdit}
             onDelete={onDelete}
             onSaveAsNote={onSaveAsNote}
+            onMoveToTomorrow={onMoveToTomorrow}
             onCancel={onCancel}
             onBlock={onBlock}
             {...(subtaskProps || {})}

@@ -13,7 +13,8 @@ import { domainInk } from '../../theme/inks';
  * amber left rule; header is a two-row editorial block with an italic
  * Fraunces caption.
  */
-const OverdueSection = ({ tasks, onStatusToggle, onEdit, onDelete, onSaveAsNote, onCancel,
+const OverdueSection = ({ tasks, onStatusToggle, onEdit, onDelete, onSaveAsNote, onCancel, onMoveToTomorrow,
+  onMoveToTomorrow,
   onBlock, focusedTaskId, subtaskProps }) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
@@ -120,6 +121,7 @@ const OverdueSection = ({ tasks, onStatusToggle, onEdit, onDelete, onSaveAsNote,
                 onEdit={onEdit}
                 onDelete={onDelete}
                 onSaveAsNote={onSaveAsNote}
+                onMoveToTomorrow={onMoveToTomorrow}
                 onCancel={onCancel}
                 onBlock={onBlock}
                 {...(subtaskProps || {})}

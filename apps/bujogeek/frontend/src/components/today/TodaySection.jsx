@@ -19,6 +19,7 @@ const TodaySection = ({
   onDelete,
   onSaveAsNote,
   onCancel,
+  onMoveToTomorrow,
   onBlock,
   focusedTaskId,
   onReorder,
@@ -79,6 +80,7 @@ const TodaySection = ({
               onEdit={onEdit}
               onDelete={onDelete}
               onSaveAsNote={onSaveAsNote}
+              onMoveToTomorrow={onMoveToTomorrow}
               onCancel={onCancel}
               onBlock={onBlock}
               {...(subtaskProps || {})}

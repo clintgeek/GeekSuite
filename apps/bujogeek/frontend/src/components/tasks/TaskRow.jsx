@@ -26,6 +26,7 @@ import {
   ChevronDown,
   ListPlus,
   CornerDownRight,
+  CalendarArrowDown,
 } from 'lucide-react';
 import { format, differenceInCalendarDays } from 'date-fns';
 import TaskCheckbox from './TaskCheckbox';
@@ -54,6 +55,7 @@ const getAgingTint = (agingColor, isDark) => {
 const TaskRow = ({
   task,
   onStatusToggle,
+  onMoveToTomorrow,
   onEdit,
   onDelete,
   onSaveAsNote,
@@ -228,6 +230,22 @@ const TaskRow = ({
         hoverColor: colors.primary[500],
       });
     }
+    // Deferring a task is probably the second most common daily decision
+    // after finishing one, and it used to cost: Edit, dialog, find the date
+    // field, save. `ReviewPage` has had the one-tap version since it shipped
+    // (`handleMoveTomorrow`) — it was simply never offered on the screen
+    // where the decision is actually made. Hidden once a task is completed or
+    // cancelled: rescheduling something already resolved is not a thing.
+    if (onMoveToTomorrow && !isSunk) {
+      items.push({
+        key: 'move-tomorrow',
+        label: 'Move to tomorrow',
+        icon: CalendarArrowDown,
+        onClick: () => onMoveToTomorrow(task),
+        color: idleInk,
+        hoverColor: colors.primary[500],
+      });
+    }
     if (onSaveAsNote) {
       items.push({
         key: 'note',
@@ -283,7 +301,7 @@ const TaskRow = ({
       });
     }
     return items;
-  }, [onEdit, onAddSubtask, onSaveAsNote, onCancel, onBlock, onUnblock, onDelete, task, isCancelled, isBlocked, isSunk, staleInk, idleInk]);
+  }, [onEdit, onAddSubtask, onMoveToTomorrow, onSaveAsNote, onCancel, onBlock, onUnblock, onDelete, task, isCancelled, isBlocked, isSunk, staleInk, idleInk]);
 
   return (
     <Box sx={{ position: 'relative' }}>

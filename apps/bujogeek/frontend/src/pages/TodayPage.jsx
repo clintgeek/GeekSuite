@@ -3,6 +3,7 @@ import { Box, Button, useMediaQuery } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { useApolloClient, useMutation } from '@apollo/client';
 import { addDays, format, isWithinInterval, startOfDay } from 'date-fns';
+import { localDateString } from '@geeksuite/utils';
 import { useTaskContext } from '../context/TaskContext';
 import PageHeader from '../components/layout/PageHeader';
 import OverdueSection from '../components/today/OverdueSection';
@@ -54,6 +55,7 @@ const TodayPage = () => {
     loading,
     fetchTasks,
     createTask,
+    updateTask,
     updateTaskStatus,
     blockTask,
     unblockTask,
@@ -138,6 +140,36 @@ const TodayPage = () => {
     fetchUpcoming();
     fetchBlocked();
   }, [updateTaskStatus, fetchUpcoming, fetchBlocked]);
+
+  /**
+   * Defer a task by one day, in one tap.
+   *
+   * The same shape `ReviewPage.handleMoveTomorrow` has always used — new due
+   * date plus `migrated_future`, so the entry reads as moved rather than
+   * silently re-dated and the carry-forward machinery treats it correctly.
+   *
+   * Tomorrow is relative to the DAY BEING VIEWED, not to `new Date()`. Today
+   * has prev/next-day navigation, so "tomorrow" while looking at last Tuesday
+   * means Wednesday; anchoring on the real today would fling the task across
+   * the calendar from a page the user is only visiting.
+   *
+   * `updateTask` throws on failure (unlike updateTaskStatus, which resolves
+   * undefined), so the catch is what stops a failed move from reporting
+   * success.
+   */
+  const handleMoveToTomorrow = useCallback(async (task) => {
+    try {
+      await updateTask((task.id || task._id), {
+        ...task,
+        dueDate: localDateString(addDays(currentDate, 1)),
+        status: 'migrated_future',
+      });
+      notify('Moved to tomorrow', { tone: 'success' });
+      fetchUpcoming();
+    } catch {
+      notify('Could not move that task.', { tone: 'error' });
+    }
+  }, [updateTask, currentDate, notify, fetchUpcoming]);
 
   const handleEdit = useCallback((task) => {
     setEditingTask(task);
@@ -459,6 +491,7 @@ const TodayPage = () => {
             onEdit={handleEdit}
             onDelete={handleDelete}
             onSaveAsNote={handleSaveAsNote}
+            onMoveToTomorrow={handleMoveToTomorrow}
             onCancel={handleCancelToggle}
             onBlock={handleBlockRequest}
             focusedTaskId={focusedTaskId}
@@ -471,6 +504,7 @@ const TodayPage = () => {
             onEdit={handleEdit}
             onDelete={handleDelete}
             onSaveAsNote={handleSaveAsNote}
+            onMoveToTomorrow={handleMoveToTomorrow}
             onCancel={handleCancelToggle}
             onBlock={handleBlockRequest}
             focusedTaskId={focusedTaskId}
@@ -484,6 +518,7 @@ const TodayPage = () => {
             onEdit={handleEdit}
             onDelete={handleDelete}
             onSaveAsNote={handleSaveAsNote}
+            onMoveToTomorrow={handleMoveToTomorrow}
             onCancel={handleCancelToggle}
             onBlock={handleBlockRequest}
             focusedTaskId={focusedTaskId}
