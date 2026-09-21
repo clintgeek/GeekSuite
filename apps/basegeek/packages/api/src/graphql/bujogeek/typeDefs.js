@@ -285,9 +285,20 @@ export const typeDefs = gql`
   type Query {
     tasks(status: String, tags: [String]): [Task!]!
     task(id: ID!): Task
-    dailyTasks(date: String): [Task!]!
-    weeklyTasks(date: String): [Task!]!
-    monthlyTasks(startDate: String, endDate: String): [Task!]!
+    # \`tzOffsetMinutes\` is the CALLER'S UTC offset FOR THE REQUESTED DATE, in
+    # JavaScript's sign convention (minutes west of UTC, so US-Central summer
+    # is 300). Per-date, not per-now, so the browser resolves its own DST
+    # instead of the server guessing.
+    #
+    # Without it these fall back to UTC calendar days, which is right for a
+    # date-only \`dueDate\` and wrong for one carrying a TIME: a task due 8pm
+    # US-Central is stored 01:00Z the next day and appeared on tomorrow's
+    # page, while its reminder fired at 8pm and linked to a page that did not
+    # contain it. Omitting the argument is still valid and still behaves the
+    # old way.
+    dailyTasks(date: String, tzOffsetMinutes: Int): [Task!]!
+    weeklyTasks(date: String, tzOffsetMinutes: Int): [Task!]!
+    monthlyTasks(startDate: String, endDate: String, tzOffsetMinutes: Int): [Task!]!
     allTasks: [Task!]!
     """
     Parked tasks — status 'blocked' — newest-blocked first. Blocked tasks keep

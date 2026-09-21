@@ -64,24 +64,24 @@ export const resolvers = {
       if (!userId) return null;
       return taskService.getTaskById(id, userId);
     },
-    dailyTasks: async (_, { date }, context) => {
+    dailyTasks: async (_, { date, tzOffsetMinutes = null }, context) => {
       const userId = context.user?.id;
       if (!userId) return [];
       const dateStr = date || format(new Date(), 'yyyy-MM-dd');
-      return taskService.getTasksForDateRange({ userId, startDate: dateStr, endDate: dateStr, viewType: 'daily' });
+      return taskService.getTasksForDateRange({ userId, startDate: dateStr, endDate: dateStr, viewType: 'daily', tzOffsetMinutes });
     },
-    weeklyTasks: async (_, { date }, context) => {
+    weeklyTasks: async (_, { date, tzOffsetMinutes = null }, context) => {
       const userId = context.user?.id;
       if (!userId) return [];
       const dateStr = date || format(new Date(), 'yyyy-MM-dd');
-      return taskService.getTasksForDateRange({ userId, startDate: dateStr, endDate: dateStr, viewType: 'weekly' });
+      return taskService.getTasksForDateRange({ userId, startDate: dateStr, endDate: dateStr, viewType: 'weekly', tzOffsetMinutes });
     },
-    monthlyTasks: async (_, { startDate, endDate }, context) => {
+    monthlyTasks: async (_, { startDate, endDate, tzOffsetMinutes = null }, context) => {
       const userId = context.user?.id;
       if (!userId) return [];
       const sDate = startDate || format(new Date(), 'yyyy-MM-dd');
       const eDate = endDate || format(new Date(), 'yyyy-MM-dd');
-      return taskService.getTasksForDateRange({ userId, startDate: sDate, endDate: eDate, viewType: 'monthly' });
+      return taskService.getTasksForDateRange({ userId, startDate: sDate, endDate: eDate, viewType: 'monthly', tzOffsetMinutes });
     },
     allTasks: async (_, __, context) => {
       const userId = context.user?.id;

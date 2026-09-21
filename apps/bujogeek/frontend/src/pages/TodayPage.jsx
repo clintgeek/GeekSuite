@@ -77,6 +77,9 @@ const TodayPage = () => {
         variables: {
           startDate: format(addDays(currentDate, 1), 'yyyy-MM-dd'),
           endDate: format(addDays(currentDate, 7), 'yyyy-MM-dd'),
+          // The browser's offset for that span — without it an evening task
+          // lands in the wrong day's bucket here too.
+          tzOffsetMinutes: addDays(currentDate, 1).getTimezoneOffset(),
         },
         fetchPolicy: 'no-cache',
       });

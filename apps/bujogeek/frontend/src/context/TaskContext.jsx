@@ -232,6 +232,26 @@ const buildOptimisticStatus = (snapshot, taskId, status, completedAt, cancelledA
   };
 };
 
+/**
+ * The caller's UTC offset FOR A GIVEN DATE, in JavaScript's own sign
+ * convention (minutes west of UTC: US-Central summer is 300).
+ *
+ * Per-date on purpose. `new Date().getTimezoneOffset()` is the offset for
+ * NOW, which is the wrong answer when the page is showing a day on the other
+ * side of a DST boundary — and it is the browser, not the gateway, that knows
+ * this zone's rules.
+ *
+ * The gateway needs it because `dueDate` carries two kinds of value: UTC
+ * midnight means a date, anything else is a real instant, and an evening
+ * instant belongs to a different UTC day than the one the user is looking at.
+ */
+const tzOffsetFor = (date) => {
+  const d = date instanceof Date ? date : new Date(date);
+  return Number.isNaN(d.getTime())
+    ? new Date().getTimezoneOffset()
+    : d.getTimezoneOffset();
+};
+
 const TaskContext = createContext();
 
 export const useTaskContext = () => {
@@ -376,7 +396,11 @@ const TaskProvider = ({ children }) => {
 
       const response = await apolloClient.query({
         query: GET_MONTHLY_TASKS, // Reuse monthly for arbitrary range conceptually
-        variables: { startDate: formattedStartDate, endDate: formattedEndDate },
+        variables: {
+          startDate: formattedStartDate,
+          endDate: formattedEndDate,
+          tzOffsetMinutes: tzOffsetFor(startDate),
+        },
         fetchPolicy: 'no-cache'
       });
 
@@ -418,7 +442,7 @@ const TaskProvider = ({ children }) => {
           const dateStr = format(date || new Date(), 'yyyy-MM-dd');
           const dRes = await apolloClient.query({
             query: GET_DAILY_TASKS,
-            variables: { date: dateStr },
+            variables: { tzOffsetMinutes: tzOffsetFor(date || new Date()), date: dateStr },
             fetchPolicy: 'no-cache'
           });
           responseData = dRes.data?.dailyTasks || [];
@@ -434,7 +458,10 @@ const TaskProvider = ({ children }) => {
           const startDate = startOfWeek(date || new Date(), { weekStartsOn: 1 });
           const wRes = await apolloClient.query({
             query: GET_WEEKLY_TASKS,
-            variables: { date: format(startDate, 'yyyy-MM-dd') },
+            variables: {
+              date: format(startDate, 'yyyy-MM-dd'),
+              tzOffsetMinutes: tzOffsetFor(startDate),
+            },
             fetchPolicy: 'no-cache'
           });
           responseData = wRes.data?.weeklyTasks || [];
@@ -447,7 +474,8 @@ const TaskProvider = ({ children }) => {
             query: GET_MONTHLY_TASKS,
             variables: {
               startDate: format(monthStart, 'yyyy-MM-dd'),
-              endDate: format(monthEnd, 'yyyy-MM-dd')
+              endDate: format(monthEnd, 'yyyy-MM-dd'),
+              tzOffsetMinutes: tzOffsetFor(monthStart),
             },
             fetchPolicy: 'no-cache'
           });

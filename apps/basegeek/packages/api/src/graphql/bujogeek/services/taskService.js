@@ -207,6 +207,130 @@ class TaskService {
   }
 
   /**
+   * The `dueDate` clause for a span of the USER'S calendar days.
+   *
+   * WHY THIS IS NOT ONE RANGE
+   * -------------------------
+   * `dueDate` carries two different kinds of value, and the app's own
+   * convention is what tells them apart:
+   *
+   *   - UTC midnight exactly  -> a DATE, with no time of day
+   *   - anything else         -> an INSTANT, a real due time
+   *
+   * The log views used a single UTC-day range for both, which is right for
+   * the first kind and wrong for the second. A task due 8pm US-Central is
+   * stored 01:00Z the NEXT day, so it fell outside today's UTC window and
+   * appeared on tomorrow's page — while its push reminder, which is
+   * instant-based and correct, fired at 8pm and deep-linked to a page that
+   * did not contain it. Anything after 19:00 CDT / 18:00 CST was affected.
+   *
+   * The obvious repair — swap the UTC window for the user's local one —
+   * trades the bug for a worse one. A date-only task for the 21st is stored
+   * 2026-09-21T00:00:00Z, which falls INSIDE the local window for the 20th
+   * in any zone west of UTC, so tomorrow's undated work would pile onto
+   * today. Verified before writing this.
+   *
+   * So the clause is a union of the two readings:
+   *
+   *   1. date-only rows whose UTC midnight is one of the days in the span
+   *   2. timed rows inside the span's LOCAL window, minus the UTC midnights
+   *      that fall in it (those are branch 1's business, and a range cannot
+   *      tell them apart)
+   *
+   * A 24-hour local window contains exactly one UTC midnight, so branch 2's
+   * exclusion is a single `$ne` rather than a scan.
+   *
+   * @param {Date} spanStartUtcMidnight first day of the span, UTC midnight
+   * @param {Date} spanEndUtcMidnight   last day of the span, UTC midnight
+   * @param {number|null} tzOffsetMinutes the CALLER'S offset for that date,
+   *   in JavaScript's sign convention (minutes WEST of UTC, so US-Central
+   *   summer is 300). Null means "no offset supplied" and falls back to the
+   *   old UTC-day behaviour — a caller that sends nothing behaves exactly as
+   *   before, which is what keeps this change safe for anything not updated.
+   * @returns {Object} a mongo clause for `dueDate`
+   */
+  dueDateClauseForDays(spanStartUtcMidnight, spanEndUtcMidnight, tzOffsetMinutes = null) {
+    const spanEndOfDay = new Date(spanEndUtcMidnight);
+    spanEndOfDay.setUTCHours(23, 59, 59, 999);
+
+    if (tzOffsetMinutes === null || tzOffsetMinutes === undefined || !Number.isFinite(tzOffsetMinutes)) {
+      // Unchanged behaviour for callers that do not say where they are.
+      return { dueDate: { $gte: spanStartUtcMidnight, $lte: spanEndOfDay } };
+    }
+
+    const offsetMs = tzOffsetMinutes * 60000;
+    const localStart = new Date(spanStartUtcMidnight.getTime() + offsetMs);
+    const localEnd = new Date(spanEndOfDay.getTime() + offsetMs);
+
+    // EVERY UTC midnight inside the local window, excluded from the timed
+    // branch so no date-only task can leak in through it. A single day's
+    // window contains exactly one; a week's contains seven or eight, and
+    // excluding only the first let the day just past the end of a span match
+    // — which is what the test caught.
+    //
+    // Excluding the span's OWN midnights here is harmless: branch 1 matches
+    // those by enumeration, and a row only has to satisfy one branch.
+    const midnightsInsideLocalWindow = [];
+    const cursor = new Date(localStart);
+    cursor.setUTCHours(0, 0, 0, 0);
+    if (cursor < localStart) cursor.setUTCDate(cursor.getUTCDate() + 1);
+    while (cursor <= localEnd) {
+      midnightsInsideLocalWindow.push(new Date(cursor));
+      cursor.setUTCDate(cursor.getUTCDate() + 1);
+    }
+
+    // Branch 1 ENUMERATES the span's UTC midnights rather than ranging over
+    // it. A range would re-admit exactly what this fixes: 01:00Z on the 21st
+    // (8pm Central on the 20th) sits inside the 21st's UTC day, which is how
+    // it ended up on the wrong page to begin with. Date-only rows ARE the
+    // midnights, so `$in` says that precisely — one entry for a day, seven
+    // for a week, at most thirty-one for a month.
+    const midnights = [];
+    for (
+      let d = new Date(spanStartUtcMidnight);
+      d <= spanEndOfDay;
+      d.setUTCDate(d.getUTCDate() + 1)
+    ) {
+      midnights.push(new Date(d));
+    }
+
+    return {
+      $or: [
+        { dueDate: { $in: midnights } },
+        { dueDate: { $gte: localStart, $lte: localEnd, $nin: midnightsInsideLocalWindow } },
+      ],
+    };
+  }
+
+  /**
+   * The `dueDate` clause for "already past", from the user's point of view.
+   *
+   * The companion to `dueDateClauseForDays`, and it needs the same treatment
+   * for the same reason. Overdue used to mean `dueDate < UTC midnight of the
+   * requested day`, so a task due 8pm yesterday — stored 01:00Z today — was
+   * not less than today's UTC midnight and never became overdue at all. With
+   * the day clause fixed it would have shown on yesterday's page and then
+   * silently vanished rather than carrying forward.
+   *
+   * A task is past if its own day is before the requested one:
+   *
+   *   - timed rows     -> earlier than the start of the user's day
+   *   - date-only rows -> an earlier UTC midnight
+   *
+   * West of UTC the user's day starts AFTER the UTC midnight, so the single
+   * date-only value caught in between is the requested day's own — excluded
+   * by name. East of UTC the day starts before it, so nothing is caught and
+   * the exclusion is a no-op. One `$ne` covers both directions.
+   */
+  overdueBeforeDayClause(dayUtcMidnight, tzOffsetMinutes = null) {
+    if (tzOffsetMinutes === null || tzOffsetMinutes === undefined || !Number.isFinite(tzOffsetMinutes)) {
+      return { $lt: dayUtcMidnight };
+    }
+    const localStart = new Date(dayUtcMidnight.getTime() + tzOffsetMinutes * 60000);
+    return { $lt: localStart, $ne: dayUtcMidnight };
+  }
+
+  /**
    * The window an RRULE is expanded over for a given view.
    *
    * Extracted so it can be asserted without a database — and because the
@@ -262,7 +386,7 @@ class TaskService {
     return { viewStart, viewEnd };
   }
 
-  async getTasksForDateRange({ userId, startDate, endDate, viewType }) {
+  async getTasksForDateRange({ userId, startDate, endDate, viewType, tzOffsetMinutes = null }) {
     this.requireUser(userId);
     const query = { createdBy: userId, isSeriesMaster: { $ne: true } };
     if (viewType !== 'all') {
@@ -279,33 +403,48 @@ class TaskService {
     endOfDayDate.setUTCHours(23, 59, 59, 999);
 
     switch (viewType) {
-      case 'daily':
+      case 'daily': {
+        // `dueDateClauseForDays` rather than a bare UTC range: a dueDate
+        // carrying a TIME is an instant, and an evening one crosses into the
+        // next UTC day. See that method for the full account.
+        const dueOnDay = this.dueDateClauseForDays(startOfDayDate, startOfDayDate, tzOffsetMinutes);
         query.$or = [
-          { dueDate: { $gte: startOfDayDate, $lte: endOfDayDate } },
-          { status: { $in: ['completed', 'cancelled'] }, updatedAt: { $gte: startOfDayDate, $lte: endOfDayDate }, $or: [{ dueDate: { $gte: startOfDayDate, $lte: endOfDayDate } }, { dueDate: null }] },
+          dueOnDay,
+          { status: { $in: ['completed', 'cancelled'] }, updatedAt: { $gte: startOfDayDate, $lte: endOfDayDate }, $or: [dueOnDay, { dueDate: null }] },
           { dueDate: null, status: 'pending', createdAt: { $lte: endOfDayDate } },
-          { dueDate: { $lt: startOfDayDate }, status: { $in: ['pending', 'migrated_future'] } },
+          { dueDate: this.overdueBeforeDayClause(startOfDayDate, tzOffsetMinutes), status: { $in: ['pending', 'migrated_future'] } },
         ];
         break;
+      }
       case 'weekly': {
         const startOfWeekDate = this.startOfUtcWeek(startOfDayDate);
         const endOfWeekDate = this.endOfUtcWeek(startOfWeekDate);
+        // Same two helpers as the daily view — the span is seven days rather
+        // than one, so an evening task on the Sunday is the case that used to
+        // fall out of the week entirely.
+        const lastDayOfWeek = new Date(endOfWeekDate);
+        lastDayOfWeek.setUTCHours(0, 0, 0, 0);
         query.$or = [
-          { dueDate: { $gte: startOfWeekDate, $lte: endOfWeekDate } },
+          this.dueDateClauseForDays(startOfWeekDate, lastDayOfWeek, tzOffsetMinutes),
           { status: { $in: ['completed', 'cancelled'] }, updatedAt: { $gte: startOfWeekDate, $lte: endOfWeekDate } },
           { dueDate: null, status: 'pending', createdAt: { $lte: endOfWeekDate } },
-          { dueDate: { $lt: startOfWeekDate }, status: { $in: ['pending', 'migrated_future'] } },
+          { dueDate: this.overdueBeforeDayClause(startOfWeekDate, tzOffsetMinutes), status: { $in: ['pending', 'migrated_future'] } },
         ];
         break;
       }
       case 'monthly': {
         const startOfMonthDate = new Date(Date.UTC(startOfDayDate.getUTCFullYear(), startOfDayDate.getUTCMonth(), 1, 0, 0, 0, 0));
         const endOfMonthDate = new Date(Date.UTC(startOfDayDate.getUTCFullYear(), startOfDayDate.getUTCMonth() + 1, 0, 23, 59, 59, 999));
+        // Same two helpers again. The month-end evening task is the one this
+        // catches: due 8pm on the 30th is 01:00Z on the 1st, so it used to
+        // fall outside its own month's window and into the next.
+        const lastDayOfMonth = new Date(endOfMonthDate);
+        lastDayOfMonth.setUTCHours(0, 0, 0, 0);
         query.$or = [
-          { dueDate: { $gte: startOfMonthDate, $lte: endOfMonthDate } },
+          this.dueDateClauseForDays(startOfMonthDate, lastDayOfMonth, tzOffsetMinutes),
           { status: { $in: ['completed', 'cancelled'] }, updatedAt: { $gte: startOfMonthDate, $lte: endOfMonthDate } },
           { dueDate: null, status: 'pending', createdAt: { $lte: endOfMonthDate } },
-          { dueDate: { $lt: startOfMonthDate }, status: { $in: ['pending', 'migrated_future'] } },
+          { dueDate: this.overdueBeforeDayClause(startOfMonthDate, tzOffsetMinutes), status: { $in: ['pending', 'migrated_future'] } },
         ];
         break;
       }

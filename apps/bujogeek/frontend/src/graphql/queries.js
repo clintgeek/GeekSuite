@@ -231,8 +231,8 @@ export const GET_ALL_TASKS = gql`
 `;
 
 export const GET_DAILY_TASKS = gql`
-  query GetDailyTasks($date: String) {
-    dailyTasks(date: $date) {
+  query GetDailyTasks($date: String, $tzOffsetMinutes: Int) {
+    dailyTasks(date: $date, tzOffsetMinutes: $tzOffsetMinutes) {
       id
       content
       signifier
@@ -263,8 +263,8 @@ export const GET_DAILY_TASKS = gql`
 `;
 
 export const GET_WEEKLY_TASKS = gql`
-  query GetWeeklyTasks($date: String) {
-    weeklyTasks(date: $date) {
+  query GetWeeklyTasks($date: String, $tzOffsetMinutes: Int) {
+    weeklyTasks(date: $date, tzOffsetMinutes: $tzOffsetMinutes) {
       id
       content
       signifier
@@ -295,8 +295,8 @@ export const GET_WEEKLY_TASKS = gql`
 `;
 
 export const GET_MONTHLY_TASKS = gql`
-  query GetMonthlyTasks($startDate: String, $endDate: String) {
-    monthlyTasks(startDate: $startDate, endDate: $endDate) {
+  query GetMonthlyTasks($startDate: String, $endDate: String, $tzOffsetMinutes: Int) {
+    monthlyTasks(startDate: $startDate, endDate: $endDate, tzOffsetMinutes: $tzOffsetMinutes) {
       id
       content
       signifier
