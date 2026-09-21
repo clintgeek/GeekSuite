@@ -575,23 +575,75 @@ class TaskService {
     return sorted;
   }
 
+  /**
+   * The order tasks come back in — the SAME rules as the frontend's
+   * `compareTasks` (`utils/taskSort.js`), which is the canonical comparator
+   * named by DOCS/SORTING_RULES.md.
+   *
+   * This copy disagreed with it in three ways, and the disagreement was
+   * visible: weekly, monthly and all-task lists render in THIS order on load
+   * and are re-sorted by the canonical comparator on the first mutation, so
+   * the list reordered itself the moment the user ticked anything.
+   *
+   *   - Undated tasks used `(b.priority) - (a.priority)`, which is
+   *     DESCENDING — and 1 is High, 3 is Low, so Low sorted above High. The
+   *     exact bug `TaskList.jsx:105` records having fixed on the client;
+   *     it was still alive down here.
+   *   - Dated tasks had no priority tiebreak at all, against the spec's
+   *     "scheduled tasks sorted by priority".
+   *   - Anything not `pending` sank, so `migrated_back` and `migrated_future`
+   *     dropped below completed work. Only completed and cancelled sink.
+   *
+   * Kept as a copy rather than an import: `@geeksuite/schemas` is the shared
+   * home for this pair of apps and the comparator lives in the bujogeek
+   * frontend's own utils, which the gateway cannot reach. The rules are
+   * restated here with the spec cited, and both sides have tests naming the
+   * same cases.
+   */
   sortTasks(tasks) {
+    const SUNK = new Set(['completed', 'cancelled']);
+    // 1 High, 2 Medium, 3 Low, absent = None and sorts last.
+    const priorityRank = (task) => {
+      const p = Number(task?.priority);
+      return Number.isFinite(p) && p > 0 ? p : Number.MAX_SAFE_INTEGER;
+    };
+    const dueTime = (task) => {
+      if (!task?.dueDate) return null;
+      const t = new Date(task.dueDate).getTime();
+      return Number.isNaN(t) ? null : t;
+    };
+
     return tasks.sort((a, b) => {
-      if (a.status !== b.status) {
-        const aSunk = a.status !== 'pending';
-        const bSunk = b.status !== 'pending';
-        if (aSunk !== bSunk) return aSunk ? 1 : -1;
-        // Within the sunk group, cancelled sits below completed — per
-        // SORTING_RULES.md spirit (completed/cancelled below active); the doc
-        // doesn't specify a relative order for these two, so cancelled last.
-        if (a.status === 'cancelled' && b.status === 'completed') return 1;
-        if (a.status === 'completed' && b.status === 'cancelled') return -1;
-        return a.status === 'pending' ? -1 : 1;
+      const aDone = SUNK.has(a?.status) ? 1 : 0;
+      const bDone = SUNK.has(b?.status) ? 1 : 0;
+      if (aDone !== bDone) return aDone - bDone;
+
+      if (aDone && a?.status !== b?.status) {
+        if (a?.status === 'cancelled') return 1;
+        if (b?.status === 'cancelled') return -1;
       }
-      if (a.dueDate && b.dueDate) return a.dueDate - b.dueDate;
-      if (a.dueDate) return -1;
-      if (b.dueDate) return 1;
-      return (b.priority || 0) - (a.priority || 0);
+
+      const aDue = dueTime(a);
+      const bDue = dueTime(b);
+
+      // Among incomplete tasks, scheduled comes before unscheduled.
+      if (!aDone) {
+        const aScheduled = aDue === null ? 1 : 0;
+        const bScheduled = bDue === null ? 1 : 0;
+        if (aScheduled !== bScheduled) return aScheduled - bScheduled;
+      }
+
+      const aPriority = priorityRank(a);
+      const bPriority = priorityRank(b);
+      if (aPriority !== bPriority) return aPriority - bPriority;
+
+      if (aDue !== bDue) {
+        if (aDue === null) return 1;
+        if (bDue === null) return -1;
+        return aDue - bDue;
+      }
+
+      return 0;
     });
   }
 
