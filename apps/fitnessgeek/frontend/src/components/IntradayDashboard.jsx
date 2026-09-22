@@ -16,9 +16,7 @@ import { influxService } from '../services/influxService';
 import {
   FavoriteBorder as HeartIcon,
   Psychology as StressIcon,
-  BatteryChargingFull as BatteryIcon,
-  TrendingUp as TrendingUpIcon,
-  TrendingDown as TrendingDownIcon
+  BatteryChargingFull as BatteryIcon
 } from '@mui/icons-material';
 import { ResponsiveLine } from '@nivo/line';
 import { buildChartTheme } from './primitives/chartTheme.js';
@@ -104,22 +102,22 @@ function MetricCardWithChart({
   unit,
   data,
   color,
-  trend = null,
   target = null,
   tooltipText = ''
 }) {
   const theme = useTheme();
 
-  // Calculate trend if not provided
-  const calculatedTrend = trend !== null ? trend : (() => {
-    if (!data || data.length < 2) return null;
-    const recent = data.slice(-10);
-    const older = data.slice(-20, -10);
-    if (older.length === 0) return null;
-    const recentAvg = recent.reduce((sum, d) => sum + d.value, 0) / recent.length;
-    const olderAvg = older.reduce((sum, d) => sum + d.value, 0) / older.length;
-    return recentAvg - olderAvg;
-  })();
+  /*
+   * A "trend" chip lived here. It compared the last ten data points with the
+   * ten before them — on an INTRADAY series, so it measured the last few
+   * minutes against the few before, and showed the difference as a bare
+   * number with an arrow beside a card that reads as the day's figure. It was
+   * coloured red for any rise, which is backwards for body battery. It is
+   * gone rather than fixed: a like-for-like day-over-day comparison needs a
+   * second day's data, and a number with no stated window is worse than none.
+   */
+  const latest = data && data.length > 0 ? data[data.length - 1] : null;
+  const asOf = latest ? formatClockTime(latest.time) : '';
 
   return (
     <Tooltip title={tooltipText} arrow>
@@ -134,28 +132,24 @@ function MetricCardWithChart({
                   {label}
                 </Typography>
               </Stack>
-              {calculatedTrend !== null && calculatedTrend !== 0 && (
-                <Chip
-                  icon={calculatedTrend > 0 ? <TrendingUpIcon /> : <TrendingDownIcon />}
-                  label={Math.abs(Math.round(calculatedTrend))}
-                  size="small"
-                  color={calculatedTrend > 0 ? 'error' : 'success'}
-                  variant="outlined"
-                />
-              )}
             </Stack>
 
-            {/* Current Value */}
+            {/* Latest reading, and when it was taken. On a past date that is
+                the last reading of that day, so the time is not decoration —
+                without it the number reads as "now". */}
             <Stack direction="row" spacing={1} alignItems="baseline">
               <Typography variant="h3" component="div" sx={{ color, fontWeight: 'bold' }}>
-                {currentValue}
+                {currentValue == null ? '—' : currentValue}
               </Typography>
-              {unit && (
+              {unit && currentValue != null && (
                 <Typography variant="body1" color="text.secondary">
                   {unit}
                 </Typography>
               )}
             </Stack>
+            <Typography variant="caption" color="text.secondary">
+              {currentValue == null ? 'No readings for this day' : `Latest reading, ${asOf}`}
+            </Typography>
 
             {/* Target indicator */}
             {target && (
@@ -301,15 +295,12 @@ export default function IntradayDashboard({
   }
 
   // Calculate current values (most recent data point)
-  const currentHR = data.heartRate.length > 0
-    ? data.heartRate[data.heartRate.length - 1].value
-    : 0;
-  const currentStress = data.stress.length > 0
-    ? data.stress[data.stress.length - 1].value
-    : 0;
-  const currentBattery = data.bodyBattery.length > 0
-    ? data.bodyBattery[data.bodyBattery.length - 1].value
-    : 0;
+  // The latest reading of each series, or null. These defaulted to 0, which
+  // put "0 bpm" on screen for any day the watch recorded nothing.
+  const latestOf = (series) => (series.length > 0 ? series[series.length - 1].value : null);
+  const currentHR = latestOf(data.heartRate);
+  const currentStress = latestOf(data.stress);
+  const currentBattery = latestOf(data.bodyBattery);
 
   return (
     <Box>
@@ -323,7 +314,7 @@ export default function IntradayDashboard({
             unit="bpm"
             data={data.heartRate}
             color={theme.palette.error.main}
-            tooltipText="Real-time heart rate from your Garmin device"
+            tooltipText="Heart rate from your Garmin device — the latest reading for the day shown"
           />
         </Grid>
         <Grid item xs={12} md={4}>

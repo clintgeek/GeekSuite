@@ -138,3 +138,30 @@ describe('normalizeIntraday', () => {
     expect(EMPTY_INTRADAY).toEqual({ heartRate: [], stress: [], bodyBattery: [], breathing: [] });
   });
 });
+
+describe("Garmin's stress codes are not stress levels", () => {
+  // -1 is "not enough data" and -2 "during activity" — 31 of 480 readings on
+  // 2026-09-21. They drew as dips to -2 and could become the headline number.
+  it('drops -1 and -2 from stress', () => {
+    const out = normalizeIntraday({
+      stress: [
+        { time: '2026-09-21T10:00:00Z', stressLevel: 22 },
+        { time: '2026-09-21T10:03:00Z', stressLevel: -1 },
+        { time: '2026-09-21T10:06:00Z', stressLevel: -2 },
+        { time: '2026-09-21T10:09:00Z', stressLevel: 0 },
+      ],
+    });
+    expect(out.stress.map((p) => p.value)).toEqual([22, 0]);
+  });
+
+  it('keeps a genuine zero', () => {
+    // Zero is a real (very calm) reading. Only the negative codes go.
+    const out = normalizeIntraday({ stress: [{ time: 't', stressLevel: 0 }] });
+    expect(out.stress).toHaveLength(1);
+  });
+
+  it('leaves the other metrics alone', () => {
+    const out = normalizeIntraday({ bodyBattery: [{ time: 't', BodyBatteryLevel: 5 }] });
+    expect(out.bodyBattery.map((p) => p.value)).toEqual([5]);
+  });
+});

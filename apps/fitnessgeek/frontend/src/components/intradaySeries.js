@@ -90,14 +90,27 @@ const METRIC_FIELDS = {
   breathing: 'BreathingRate',
 };
 
+/**
+ * Readings that are codes, not measurements.
+ *
+ * Garmin writes stress as -1 ("not enough data") and -2 ("during activity")
+ * alongside real 0-100 levels — 31 of 480 readings on 2026-09-21. Passed
+ * through, they drew as dips to -2 on the sparkline and could become the
+ * card's headline number. A code is dropped here, once, for every panel that
+ * reads intraday stress.
+ */
+const isSentinel = (metric, value) => metric === 'stress' && typeof value === 'number' && value < 0;
+
 export const normalizeIntraday = (response) => {
   const out = {};
   for (const [metric, field] of Object.entries(METRIC_FIELDS)) {
     const rows = Array.isArray(response?.[metric]) ? response[metric] : [];
-    out[metric] = rows.map((point) => ({
-      time: point?.time,
-      value: point?.[field] ?? point?.value,
-    }));
+    out[metric] = rows
+      .map((point) => ({
+        time: point?.time,
+        value: point?.[field] ?? point?.value,
+      }))
+      .filter((point) => !isSentinel(metric, point.value));
   }
   return out;
 };
