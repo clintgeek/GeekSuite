@@ -125,30 +125,21 @@ the app was down over its due time, should it arrive late or be skipped?
 
 ### FitnessGeek — Health Dashboard
 
-- **The sleep dashboard contradicts the watch.** Investigated 2026-09-22; full
-  evidence in [`FITNESSGEEK_HEALTH_DASHBOARD_FINDINGS.md`](./FITNESSGEEK_HEALTH_DASHBOARD_FINDINGS.md).
-  The data and the Influx queries are fine; the interpretation is not.
-  1. **Sleep stage codes are decoded wrong** (`sleepAnalysisService.js:6`).
-     Garmin uses `0=deep, 1=light, 2=REM, 3=awake`; the service declares
-     `0=awake, 1=light, 2=deep, 3=REM`. Proven against Garmin's own
-     `SleepSummary` — four of four stage totals match exactly under the correct
-     mapping. Deep sleep is reported as time awake, REM as deep. Efficiency,
-     quality score (55 "POOR" against Garmin's 82), deep-sleep HR, HR dip,
-     awakenings and every generated recommendation are all downstream of it.
-     One constant to fix; re-check the score thresholds afterwards against
-     `SleepSummary.sleepScore`, which is a ready oracle in the same database.
-  2. **Three HRV figures are constants.** `hrvDeviation: 0`,
-     `hrvStatus: "BALANCED"`, `recoveryScore: 50` for every user every night,
-     because `healthBaselines.weeklyHRV` is null in every live row and nothing
-     computes it. Derivable from a rolling 7-day mean of
-     `SleepSummary.avgOvernightHrv`.
-  3. **Overview trend chips compare the last 10 MINUTES to the 10 before**
-     (`IntradayDashboard.jsx:114`) on intraday series, and present it where a
-     daily trend is expected. Rising is coloured red for every metric, which is
-     backwards for body battery.
-
-  Meal Impact and Recovery Coach were not examined; Recovery Coach consumes the
-  same sleep metrics and inherits (1).
+- ~~**The sleep dashboard contradicts the watch.**~~ — **fixed 2026-09-22**
+  (`bcf9a12e`, `ebef8178`, `ebbdaad5`). Garmin's stage codes were decoded
+  wrong; fixing that exposed ten more bad numbers downstream, all fixed. The
+  dashboard now matches Garmin's own summary to the minute on every night
+  checked. Full account in
+  [`FITNESSGEEK_HEALTH_DASHBOARD_FINDINGS.md`](./FITNESSGEEK_HEALTH_DASHBOARD_FINDINGS.md).
+- **Still open from that work:**
+  - A real nocturnal HR dip — sleeping HR against waking-hours HR from
+    `HeartRateIntraday`. The old one compared a stage against a time of night
+    and is null until this exists.
+  - The sleep query window is UTC midnight-to-midnight. Fine for US Central
+    sleepers after 7 PM local; splits the night for anyone earlier or further
+    east. The function's own comment says it should widen and doesn't.
+  - Meal Impact and Recovery Coach not examined beyond shared fields.
+  - No mobile-harness scene for the Health Dashboard.
 
 ### NoteGeek
 

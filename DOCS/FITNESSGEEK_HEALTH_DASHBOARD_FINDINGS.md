@@ -6,6 +6,11 @@ influx." Read-only — no code was changed to produce this document. Every
 number below came from the live `datageek_influxdb` and from running the real
 `sleepAnalysisService` inside the running `fitnessgeek` container.*
 
+> **Status, 2026-09-22 (same day): all three findings are fixed**, along with
+> seven more problems found while fixing them — see *What fixing it turned
+> up* at the end. Commits `bcf9a12e` (sleep), `ebef8178` (Overview),
+> `ebbdaad5` (HRV). One claim below was wrong and is corrected in place.
+
 ## The short answer
 
 **The data is real. The interpretation is wrong.**
@@ -163,10 +168,15 @@ chip. A number with no stated window is worse than no number.
 Worth stating plainly, because the investigation started from "is any of this
 real?":
 
-- **The Influx connection and queries are sound.** `SleepIntraday`,
+- **The Influx connection and the sleep queries are sound.** `SleepIntraday`,
   `SleepSummary`, `HRV_Intraday`, `BreathingRateIntraday` and the rest all
-  exist, and every field the queries name exists on the measurement it is
-  selected from. No typos, no missing fields, no silent empty result sets.
+  exist, and every field the *sleep* queries name exists on its measurement.
+
+  **Correction:** this originally said *every* query's fields exist, with "no
+  silent empty result sets". That was true of the sleep queries I checked and
+  false of `getHRVIntraday`, which selects `lastNightAvg` and `weeklyAvg` from
+  `HRV_Intraday` — a measurement whose only field is `hrvValue`. It returned
+  zero rows every time. Found while fixing Finding 2; fixed in `ebbdaad5`.
 - **The data is flowing.** 218–315 sleep heart-rate samples a night for every
   one of the last eight nights, from a Forerunner 965.
 - **`parseSleepData` reads real fields.** Nothing is synthesised, defaulted or
@@ -190,3 +200,46 @@ real?":
 
 Meal Impact and Recovery Coach were not looked at. Recovery Coach consumes the
 same sleep metrics, so it inherits Finding 1 whatever else it does.
+
+---
+
+## What fixing it turned up
+
+Fixing Finding 1's one constant exposed that most of what sat downstream of
+it was also wrong, independently. Everything below was verified on live data
+and fixed in the same three commits. The rule applied throughout: **every
+number is Garmin's own, correct arithmetic over real samples, or removed —
+never a verdict built on an unsound basis.**
+
+| # | What was wrong | What it is now |
+|---|---|---|
+| 4 | `fragmentationIndex` = transitions ÷ segments. Garmin writes one row per segment, so it was (n−1)/n — **92% on every night** — and never earned its score points. | Transitions per hour asleep (2.1–2.7 on live nights). No Good/High verdict: nothing calibrates a threshold for Garmin's granularity. |
+| 5 | `avgDeepSleepHR` paired samples with "a stage row within two minutes". Stage rows are segment **starts** (25 of 25 gaps tile start-to-start), so only a segment's first two minutes ever matched. | Matched by containment. |
+| 6 | `hrDipPercent` compared deep-sleep HR with the **night's** median — a stage against a time of night. Garmin front-loads deep sleep, when HR is still falling from the day, so on live data deep-sleep HR sat *above* the median and the "dip" read 0% or below, warning "check for alcohol, late eating" every night. | `null`, with no warning, until it can be measured against daytime HR. `DailyStats` has no daytime average; this needs `HeartRateIntraday`. |
+| 7 | SpO2 "apnea events" counted **samples**, one a minute. One 27-minute stretch was 27 events; a typical night read "80 potential apnea events" in red. | Counted as episodes — 28 dips on 2026-09-22, longest 27 min — and called dips below 90%. "Apnea event" is a clinical term a wrist sensor cannot measure. |
+| 8 | "Total Sleep" showed time **in bed** (9h 26m) under a tooltip saying time asleep. Stage shares were of time in bed. The final wake-up counted as an awakening. | Time asleep (8h 47m, Garmin's figure); shares of time asleep; awakenings match Garmin's count. |
+| 9 | The home-grown quality score: half its six factors could not work. | Garmin's own `SleepSummary.sleepScore`, with Garmin's bands. No Garmin score means no score. |
+| 10 | Overview headline was the day's last sample under a "real-time" tooltip; a day with no data showed **0 bpm**; Garmin's stress codes **−1/−2** (31 of 480 readings on 09-21) drew as real values. | "Latest reading, <time>"; a dash for no data; codes dropped at the shared normalizer (also fixes Meal Impact). |
+| 11 | HRV: last night and the baseline would have been different measures (Garmin's nightly average vs a raw-sample mean — 26 vs 22 on the same night), manufacturing a deviation. | Both are Garmin's `avgOvernightHrv`; baseline is the seven nights before. |
+| 12 | The HRV card's arrow was red for any rise — backwards for HRV. | Direction-aware. |
+| 13 | Recovery Coach handed the model `restingHR: daily.hrv?.lastNightAvg` — an HRV value in ms labelled as resting heart rate in bpm. | `DailyStats.restingHeartRate`. |
+
+**Result on three live nights:** score 82 / 83 / 76 (was 55 / 45 / —),
+matching Garmin exactly; every stage total, efficiency, awakening count and
+resting HR within a minute of rounding of Garmin's own summary. HRV deviations
+now vary (+4%, −9%, +12% HIGH, −8%) where every night used to read "0%,
+BALANCED".
+
+## Still open
+
+- **A real nocturnal HR dip** (Finding 6): sleeping HR against waking-hours HR
+  from `HeartRateIntraday`. Needs a definition of "waking hours" — a small
+  feature, not a fix.
+- **The sleep window is UTC midnight to midnight.** `getSleepIntraday`'s own
+  comment says it should query a wider range and then doesn't. It works for
+  someone in US Central who sleeps after 7 PM local; anyone going to bed
+  earlier, or further east, would have a night split across two dates.
+- **Meal Impact and Recovery Coach** were not examined beyond the fields they
+  share with the sleep panel.
+- **The Health Dashboard has no mobile-harness scene**, so the harness has
+  never seen any of these panels.

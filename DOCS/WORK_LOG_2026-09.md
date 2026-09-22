@@ -12,6 +12,61 @@ anything a future reader would otherwise have to rediscover.
 
 ## 2026-09-22
 
+### FitnessGeek — the Health Dashboard now agrees with the watch
+
+`bcf9a12e` `ebef8178` `ebbdaad5` · findings in
+[`FITNESSGEEK_HEALTH_DASHBOARD_FINDINGS.md`](./FITNESSGEEK_HEALTH_DASHBOARD_FINDINGS.md) (`7a07e39e`)
+
+Chef: *"The numbers it shows on overview and sleep analysis seem invented
+rather than data from influx."* The data was real; the interpretation was
+not. Investigated read-only first and written up, then — on *"ok, now
+continue"* — fixed.
+
+The root fault was one constant: Garmin encodes sleep stages as 0=deep,
+1=light, 2=REM, 3=awake, and the service declared 0=awake, 1=light, 2=deep,
+3=REM. Proven four-for-four against Garmin's own `SleepSummary` for the same
+night. So deep sleep showed as time awake, REM as deep, and nights the watch
+scored 82–83 were scored 45–55 "POOR".
+
+Fixing it exposed ten more bad numbers in the same path, each wrong on its
+own terms: a fragmentation index that could only ever read 92%, a deep-sleep
+HR matcher that saw two minutes of each segment, an "HR dip" that compared a
+stage against a time of night and warned about alcohol nightly, SpO2 samples
+counted as "apnea events", time in bed labelled as total sleep, an HRV status
+that was a literal constant because its baseline was never computed, a query
+for two HRV fields that don't exist, an HRV value handed to the Recovery Coach
+as resting heart rate, Overview "trends" that measured the last ten minutes,
+and Garmin's −1/−2 stress codes drawn as real readings.
+
+The rule that decided every call: each number is Garmin's own, correct
+arithmetic over real samples, or removed. Where Garmin had already computed
+something — the score, resting HR, overnight HRV, awake count — Garmin's
+figure wins, because a dashboard that disagrees with the wrist about the same
+night is a bug report, not a second opinion.
+
+Two decisions worth knowing:
+
+- **The HR dip is gone, not fixed.** A real one needs waking-hours heart rate
+  and a definition of "waking", which is a feature. Null with no warning beats
+  a nightly warning built on a confound.
+- **Checking the timestamps before trusting the fix.** With the correct
+  mapping, deep-sleep HR came out *higher* than the night's median, which
+  looked like the mapping was still wrong. It wasn't — segments tile
+  start-to-start, and deep sleep is front-loaded into the hours when HR is
+  still coming down. That result is what exposed the dip metric as unsound.
+
+One correction to my own write-up: the findings doc said every queried field
+exists. True of the sleep queries, false of `getHRVIntraday`. Corrected in
+place rather than quietly.
+
+Verified on live data across three nights: score 82 / 83 / 76 matching
+Garmin; every stage total, efficiency, awakening count and resting HR within a
+minute of rounding. HRV deviations +4%, −9%, +12%, −8% where every night used
+to read "0%, BALANCED". The sleep service and Overview had no tests; they have
+42 now across four suites, the key ones confirmed red when reverted. 789
+backend, 241 frontend, build clean. The harness has no Health Dashboard scene,
+so it has not seen these panels.
+
 ### FitnessGeek — the food log opened onto your food catalogue, not your log
 
 Chef: *"the 'Your foods' section is expanded and consumes quite a bit of the
