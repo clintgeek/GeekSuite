@@ -6,8 +6,8 @@
  * panel, recognise a version by what replaced it, read it, put it back.
  *
  * The `reason` chip is asserted deliberately. It is how you tell "I typed over
- * this" from "Tidy replaced this", which is usually the thing you came looking
- * for after an AI action ate something.
+ * this" from "Compose replaced this", which is usually the thing you came
+ * looking for after an AI action ate something.
  */
 import React from 'react';
 import { describe, it, expect, vi } from 'vitest';
@@ -56,9 +56,17 @@ describe('the list', () => {
   });
 
   it('labels each version with what replaced it', async () => {
-    open([listMock([version({ id: 'v1', reason: 'tidy' }), version({ id: 'v2', reason: 'compose' })])]);
-    expect(await screen.findByText('Tidy')).toBeInTheDocument();
+    open([listMock([version({ id: 'v1', reason: 'edit' }), version({ id: 'v2', reason: 'compose' })])]);
+    expect(await screen.findByText('Edit')).toBeInTheDocument();
     expect(screen.getByText('Compose')).toBeInTheDocument();
+  });
+
+  it('renders a reason it has never heard of rather than blanking the chip', async () => {
+    // `tidy` was a known label until that feature was removed on 2026-09-22.
+    // Retiring a label must not make old rows unreadable, and a future feature
+    // must be able to write its own without a frontend change.
+    open([listMock([version({ id: 'v1', reason: 'tidy' })])]);
+    expect(await screen.findByText('tidy')).toBeInTheDocument();
   });
 });
 

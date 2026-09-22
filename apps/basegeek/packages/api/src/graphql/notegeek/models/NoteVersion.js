@@ -61,7 +61,9 @@ const NoteVersionSchema = new mongoose.Schema(
     isLocked: { type: Boolean, default: false },
     isEncrypted: { type: Boolean, default: false },
     /**
-     * What replaced this version — `edit`, `tidy`, `compose`, `restore`.
+     * What replaced this version — `edit`, `compose`, `restore`. (`tidy` was
+     * a member until that feature was removed on 2026-09-22; no stored row
+     * ever carried it, because Tidy wrote through the ordinary save path.)
      * Free-form on purpose: a new AI feature should be able to label its own
      * writes without a schema change, and the value is for the history list's
      * benefit, not for logic.

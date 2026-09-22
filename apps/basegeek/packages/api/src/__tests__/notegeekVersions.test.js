@@ -73,9 +73,9 @@ describe('isMeaningfulChange', () => {
 
 describe('snapshotNote', () => {
   test('keeps the note as it was, with its label', async () => {
-    const stored = await snapshotNote(note(), 'tidy');
+    const stored = await snapshotNote(note(), 'compose');
     expect(stored.content).toBe('call the roofer');
-    expect(stored.reason).toBe('tidy');
+    expect(stored.reason).toBe('compose');
     expect(String(stored.noteId)).toBe(NOTE);
   });
 

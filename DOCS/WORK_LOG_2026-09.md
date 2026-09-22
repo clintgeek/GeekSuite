@@ -12,6 +12,48 @@ anything a future reader would otherwise have to rediscover.
 
 ## 2026-09-22
 
+### NoteGeek — Tidy removed
+
+Chef: *"I think we should remove tidy. I think compose does a better job than
+tidy."* Then, plainly: *"Compose is what I wanted when I asked for tidy."*
+
+I raised one objection before cutting, because on paper they are different
+jobs — Tidy was a FORMATTER (keep your words, fix the markdown), Compose is a
+SYNTHESISER (rewrite into something new). His second message answered it
+completely, so the objection died there rather than becoming a debate.
+
+The record Tidy actually had: it truncated a long note to ~63% and wrote the
+stump back with no undo (2026-09-21), then 400'd on groq because I raised its
+token cap, and even repaired it mostly declines. Against that, "keep my exact
+words, just fix the formatting" is a capability nobody was reaching for.
+
+Gone: `tidy.js`, its suite, the `tidyMarkdown` mutation, `TidyMarkdownResult`,
+`tidyMarkdownArgsSchema`, the toolbar button and its two frontend tests.
+
+Two things deliberately kept:
+
+- **The reasoning, in `compose.js`'s header.** Compose is designed as Tidy's
+  opposite and the contrast is *why* it has the shape it has. The comparisons
+  are now past tense and point at `git log` rather than at a file that is not
+  there.
+- **The unknown-reason fallback in the history panel.** `tidy` left the
+  `changeReason` enum and the label map, and the dialog renders a reason it has
+  never heard of as itself. There is a test for that now, because retiring a
+  label must not make old rows unreadable — and because a future feature should
+  be able to write its own label without a frontend change. (No stored version
+  ever carried `tidy`: Tidy wrote through the ordinary save path, which labels
+  itself `edit`. The label was aspirational all along.)
+
+`DOCS/GRAPHQL.md` was stale by two days, so it got the whole NoteGeek surface
+rather than just the deletion: `noteVersions`, `noteVersion`,
+`restoreNoteVersion`, `composeNote`, `changeReason`, and the new stat fields.
+
+`DOCS/AIGEEK_SIMPLIFICATION.md` still lists `notegeek:tidy_markdown` and was
+left alone on purpose — it is a dated read-only analysis (2026-09-19), and
+editing a snapshot to match today falsifies the record.
+
+2392 gateway tests, 279 notegeek tests, build exits 0.
+
 ### NoteGeek — Compose was routed to a 7B model, and shipped its loop as a document
 
 Chef pasted ~2,400 characters of terminal output into a note, hit Compose, and

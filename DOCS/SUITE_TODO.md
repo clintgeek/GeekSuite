@@ -126,20 +126,18 @@ the app was down over its due time, should it arrive late or be skipped?
 ### NoteGeek
 
 - ~~**No undo for anything.**~~ — **done 2026-09-21.** Every note now carries
-  version history (50 per note), and Tidy, Compose, plain edits and restores
-  are all labelled and reversible. This is also what makes Compose's
-  `Replace this note` defensible.
+  version history (50 per note), and Compose, plain edits and restores are all
+  labelled and reversible. This is also what makes Compose's `Replace this
+  note` defensible.
 
-- **Tidy names no `need` either.** Compose's 2026-09-22 failure was routing:
-  an in-process feature could not say what it needed, so synthesis went to a 7B
-  row. `runFeatureCore` accepts `need:` now and Compose asks for `prose:deep`;
-  **tidy.js still asks for nothing** and is one line from the same fix
-  (`prose:balanced` fits a formatter — a person is waiting). Left alone
-  deliberately: Tidy's length floor already makes a weak model's output safe
-  rather than destructive, so this is a quality change to Chef's existing
-  behaviour, not a bug fix, and it is his call. The other in-gateway features
-  (suggest, review draft, quick-add, what-next, brief) are in the same position
-  and worth a sweep.
+- **The other in-gateway AI features still name no `need`.** Compose's
+  2026-09-22 failure was routing: an in-process feature could not say what it
+  needed, so synthesis went to a 7B row. `runFeatureCore` accepts `need:` now
+  and Compose asks for `prose:deep` — but **suggest, review draft, quick-add,
+  what-next and brief all still ask for nothing** and take whatever rotation
+  offers. Each is a one-line change; the work is deciding the right need per
+  feature, not making it. Worth a sweep, and the first place to look when one
+  of them gives a poor answer.
 
 - **Compose follow-ups** (shipped 2026-09-21, worth watching):
   - Compose is available on text, markdown and code notes. The canvas types
@@ -152,14 +150,16 @@ the app was down over its due time, should it arrive late or be skipped?
   - `MAX_COMPOSE_CHARS` is 96k with 8 batches. No user has hit it yet; if one
     does, the cap is the thing to raise, not the batch size.
 
-- **Tidy's premise needs a decision.** The destructive faults are fixed
-  (2026-09-21): it no longer truncates long notes, no longer accepts a result
-  that lost content, and no longer rewrites notes that are already clean. But
-  it still sends a whole note to a model and overwrites the note with the
-  reply. The undo problem is solved now (a Tidy leaves a `tidy` entry in the
-  note's history), so what is left is only the premise. Options worth weighing:
-  keep as-is now that it is safe; narrow it to a selection rather than the
-  whole note; show a diff and let the user accept; or drop it. Chef's call.
+- ~~**Tidy's premise needs a decision.**~~ — **decided 2026-09-22: removed.**
+  Chef's verdict was "Compose is what I wanted when I asked for tidy." The
+  feature, its mutation, its type and its tests are gone; the reasoning behind
+  its guards survives in `compose.js`'s header, and `git log -- apps/basegeek/
+  packages/api/src/graphql/notegeek/tidy.js` has the code if a formatter is
+  ever wanted again.
+
+  What is genuinely lost: "keep my exact words, just fix the markdown."
+  Compose rewrites. If that turns out to be missed, the thing to build is a
+  formatter that shows a diff and asks — which is what Tidy should have been.
 
 - **`remark-breaks`?** GFM was added 2026-09-21 so pipe tables render. BuJoGeek
   and StoryGeek also pin `remark-breaks`, which turns a single newline into a

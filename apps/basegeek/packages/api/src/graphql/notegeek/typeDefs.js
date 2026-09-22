@@ -15,7 +15,7 @@ export const typeDefs = gql`
     tags: [String!]
     isLocked: Boolean
     isEncrypted: Boolean
-    """What replaced this version: edit, tidy, compose, restore."""
+    """What replaced this version: edit, compose, restore."""
     reason: String
     createdAt: String
   }
@@ -97,11 +97,6 @@ export const typeDefs = gql`
     why: String
   }
 
-  type TidyMarkdownResult {
-    formatted: String!
-    provenance: AIProvenance!
-  }
-
   type NoteSuggestions {
     tags: [SuggestedTag!]!
     related: [RelatedNote!]!
@@ -131,7 +126,7 @@ export const typeDefs = gql`
       type: String
       tags: [String!]
       """
-      Labels the history entry this update creates: edit (default), tidy,
+      Labels the history entry this update creates: edit (default),
       compose, restore. Only affects what the history list shows.
       """
       changeReason: String
@@ -145,6 +140,5 @@ export const typeDefs = gql`
     deleteNote(id: ID!): Boolean!
     renameTag(oldTag: String!, newTag: String!): Boolean!
     deleteTag(tag: String!): Boolean!
-    tidyMarkdown(content: String!): TidyMarkdownResult!
   }
 `;

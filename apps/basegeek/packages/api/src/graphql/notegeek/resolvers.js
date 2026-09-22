@@ -8,13 +8,11 @@ import {
   renameTagArgsSchema,
   deleteTagArgsSchema,
   suggestForNoteArgsSchema,
-  tidyMarkdownArgsSchema,
   composeNoteArgsSchema,
   assertContentCeiling,
 } from './validation.js';
 import { sanitizeNoteArgs } from './sanitize.js';
 import { suggestForNote } from './suggest.js';
-import { tidyMarkdown } from './tidy.js';
 import { composeNote } from './compose.js';
 import {
   snapshotNote,
@@ -30,7 +28,6 @@ const validateDeleteNote = validateInput(deleteNoteArgsSchema);
 const validateRenameTag = validateInput(renameTagArgsSchema);
 const validateDeleteTag = validateInput(deleteTagArgsSchema);
 const validateSuggestForNote = validateInput(suggestForNoteArgsSchema);
-const validateTidyMarkdown = validateInput(tidyMarkdownArgsSchema);
 const validateComposeNote = validateInput(composeNoteArgsSchema);
 
 /** How many search hits one `searchNotes` call may return. */
@@ -328,13 +325,6 @@ export const resolvers = {
       );
       await snapshotNote(current, 'restore');
       return note;
-    },
-
-    tidyMarkdown: async (_, rawArgs, context) => {
-      const userId = context.user?.id;
-      if (!userId) throw new Error('Unauthorized');
-      const { content } = validateTidyMarkdown(rawArgs);
-      return await tidyMarkdown({ content, userId });
     },
 
     /**

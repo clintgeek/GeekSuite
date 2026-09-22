@@ -1,19 +1,21 @@
 /**
  * compose.js — "turn this pile of scraps into a document".
  *
- * The counterpart to `tidy.js`, and deliberately its opposite. Tidy is a
+ * This was built alongside `tidy.js` as its deliberate opposite. Tidy was a
  * FORMATTER: it must not merge, reorder or drop, and a result materially
- * shorter than its input is thrown away. Compose is a SYNTHESISER: merging
+ * shorter than its input was thrown away. Compose is a SYNTHESISER: merging
  * duplicates, reordering into a logical shape and dropping conversational
  * cruft is the entire job, and a good result IS much shorter than its input.
  *
- * Two features rather than two modes of one, on purpose. A single button that
- * sometimes preserves your words and sometimes rewrites them is how a note
- * gets destroyed — which is roughly what the original Tidy was.
+ * **Tidy was removed on 2026-09-22** — Chef's verdict was that Compose is
+ * what he wanted when he asked for Tidy. The comparisons below are kept
+ * because they are the reasoning behind this file's design, not because that
+ * file still exists; `git log -- apps/basegeek/packages/api/src/graphql/
+ * notegeek/tidy.js` has it if a formatter is ever wanted again.
  *
  * ## The safety model inverts
  *
- * Tidy's guarantee is "you will not lose content", enforced by a length
+ * Tidy's guarantee was "you will not lose content", enforced by a length
  * floor. That guarantee is impossible here, so the guarantee is different and
  * stronger:
  *
@@ -26,8 +28,8 @@
  * ## Size, and why this is map-reduce
  *
  * The use case starts where a single call stops. A dump of chat messages plus
- * a model's answer plus email fragments is routinely 30-50k characters, and
- * `tidy.js` refuses anything over 12k. So:
+ * a model's answer plus email fragments is routinely 30-50k characters, well
+ * past what one call can hold. So:
  *
  *   1. SEGMENT the dump into fragments on blank lines, `---` rules and fenced
  *      code blocks, which is where pasted material actually joins.
@@ -72,7 +74,7 @@
  *      produced it. Routing degrades when good rows are cooling, every model
  *      loops on a bad day, and "the model let us down" must never again reach
  *      the user wearing the shape of a finished document. This is the same
- *      lesson as tidy.js's length floor, in the only form available here:
+ *      lesson as Tidy's length floor, in the only form available here:
  *      compose cannot check that content survived, but it can check that the
  *      answer is not the same sentence forty times.
  */
@@ -375,7 +377,8 @@ export async function composeNote({ content, userId, ai = undefined }) {
     };
   }
 
-  // Refused, not truncated — the same rule tidy.js learned the hard way.
+  // Refused, not truncated — the same rule Tidy learned the hard way, when
+  // truncating a long note wrote back a 63% stump with no way to undo it.
   if (raw.length > MAX_COMPOSE_CHARS) {
     return {
       markdown: '',

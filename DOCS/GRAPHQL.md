@@ -112,20 +112,28 @@ these used to assert.
 | `noteTags` | `[String!]!` |
 | `searchNotes(q: String!)` | `[SearchSnippet!]!` |
 | `suggestForNote(noteId: ID, title: String!, excerpt: String!, tags: [String!]!)` | `NoteSuggestions!` — AI tags + related notes, with `provenance` |
+| `noteVersions(noteId: ID!)` | `[NoteVersion!]!` — newest first; `content` is null here by design |
+| `noteVersion(id: ID!)` | `NoteVersion` — one version, with its body |
 
 **Mutations**
 
 | Field | Returns |
 |---|---|
 | `createNote(title, content: String!, type, tags: [String!])` | `Note!` |
-| `updateNote(id!, title, content, type, tags)` | `Note!` |
+| `updateNote(id!, title, content, type, tags, changeReason)` | `Note!` — `changeReason` labels the history entry: `edit` (default), `compose`, `restore` |
+| `restoreNoteVersion(versionId: ID!)` | `Note!` — snapshots the current state first, so a restore is undoable |
+| `composeNote(content: String!)` | `ComposedNote!` — a NEW document built from a pile of scraps; writes nothing |
 | `deleteNote(id!)` | `Boolean!` |
 | `renameTag(oldTag!, newTag!)` | `Boolean!` |
 | `deleteTag(tag!)` | `Boolean!` |
-| `tidyMarkdown(content: String!)` | `TidyMarkdownResult!` — clean, structured markdown with `provenance` |
 
 Types: `Note` (`isLocked`, `isEncrypted`, `tags`), `SearchSnippet` (`score`, `snippet`),
-`SuggestedTag`, `RelatedNote` (`why` only set when a model was consulted), `NoteSuggestions`, `TidyMarkdownResult` (`formatted!`, `provenance!`).
+`SuggestedTag`, `RelatedNote` (`why` only set when a model was consulted), `NoteSuggestions`,
+`NoteVersion` (`reason`, `createdAt`; `content` fetched one at a time),
+`ComposedNote` (`markdown!`, `stats!`, `provenance`), `ComposeStats`
+(`chunksFailed`, `truncated`, `degenerate` — all three are the caller's to report).
+
+`tidyMarkdown` / `TidyMarkdownResult` were removed 2026-09-22 with the Tidy feature; Compose replaced it.
 Content is sanitized on save through `notegeek/sanitize.js` (same DOMPurify profile as the
 client).
 

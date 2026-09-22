@@ -1,9 +1,11 @@
 /**
  * Compose — building a document out of a pile of scraps.
  *
- * The inverse of Tidy, so the invariants are inverted too. Tidy must not lose
- * content; Compose must lose content (that is the job) and must never return
- * something meant to overwrite the source.
+ * Built as the inverse of Tidy, so the invariants are inverted too. Tidy must
+ * not lose content; Compose must lose content (that is the job) and must never
+ * return something meant to overwrite the source. Tidy itself was removed on
+ * 2026-09-22 — Compose turned out to be what it was always wanted for — but
+ * the contrast is still what these tests are checking.
  *
  * The cases that matter here are the ones Tidy and describe-and-log taught:
  * refuse rather than truncate, and report a partial failure rather than
@@ -23,8 +25,8 @@ import {
   COMPOSE_NEED,
 } from '../graphql/notegeek/compose.js';
 
-// Same shape the tidy suite uses: `callAI` returns the string directly and
-// the provider info rides on `lastProviderInfo`.
+// `callAI` returns the string directly and the provider info rides on
+// `lastProviderInfo`, which is the shape the whole gateway's AI tests use.
 const fakeAI = (impl, info = { provider: 'groq', model: 'test-model' }) => ({
   callAI: jest.fn(impl),
   lastProviderInfo: info,
@@ -104,7 +106,7 @@ describe('composeNote refuses rather than truncates', () => {
   });
 
   test('the ceiling is high enough for a real dump', () => {
-    // The use case starts where tidy stops (12k). A 30-50k pile of chat plus
+    // The use case starts where one call stops. A 30-50k pile of chat plus
     // a model answer plus email must fit.
     expect(MAX_COMPOSE_CHARS).toBeGreaterThanOrEqual(50000);
   });

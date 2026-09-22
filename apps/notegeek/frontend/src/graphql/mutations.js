@@ -63,23 +63,6 @@ export const DELETE_TAG = gql`
     }
 `;
 
-export const TIDY_MARKDOWN = gql`
-    mutation TidyMarkdown($content: String!) {
-        tidyMarkdown(content: $content) {
-            formatted
-            provenance {
-                source
-                reason
-                model
-                provider
-                cached
-                callsToday
-                cap
-            }
-        }
-    }
-`;
-
 /**
  * Put a note back to an earlier version.
  *

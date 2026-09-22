@@ -30,13 +30,16 @@ import { RESTORE_NOTE_VERSION } from '../../graphql/mutations';
  * restore to the wrong version is itself undoable.
  *
  * The `reason` chip matters more than it looks: it is how you tell "I typed
- * over this" from "Tidy replaced this" from "Compose replaced this", which is
- * usually the thing you are actually looking for.
+ * over this" from "Compose replaced this", which is usually the thing you are
+ * actually looking for after an AI action.
+ *
+ * Unknown reasons render as themselves (see the lookup's fallback), so a row
+ * written by a label this map has never heard of still reads sensibly — which
+ * is what retiring `tidy` here relies on.
  */
 
 const REASON_LABEL = {
     edit: 'Edit',
-    tidy: 'Tidy',
     compose: 'Compose',
     restore: 'Restore',
 };

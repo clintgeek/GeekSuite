@@ -174,7 +174,11 @@ export const updateNoteArgsSchema = z
     // never be written to the row. Constrained to the labels the history UI
     // knows how to render, rather than left free-form, because an unbounded
     // string on a strict schema is an invitation.
-    changeReason: z.enum(['edit', 'tidy', 'compose', 'restore']).optional(),
+    // `tidy` was a member until 2026-09-22, when the Tidy feature was
+    // removed. It never actually reached a stored version — Tidy wrote through
+    // the ordinary save path, which labels itself `edit` — so nothing in the
+    // history depends on it.
+    changeReason: z.enum(['edit', 'compose', 'restore']).optional(),
   })
   .strict()
   .superRefine(checkContentCeiling({ unknownTypeIsSnapshot: true }));
@@ -231,8 +235,3 @@ export const suggestForNoteArgsSchema = z
   })
   .strict();
 
-export const tidyMarkdownArgsSchema = z
-  .object({
-    content: z.string().max(DOC_CONTENT_MAX),
-  })
-  .strict();

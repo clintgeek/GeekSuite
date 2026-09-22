@@ -38,7 +38,7 @@ export function isMeaningfulChange(previous, payload) {
  * worse. It returns null instead so a caller can log it.
  *
  * @param {object} previous the note document as it was (lean or hydrated)
- * @param {string} reason what replaced it — 'edit', 'tidy', 'compose', 'restore'
+ * @param {string} reason what replaced it — 'edit', 'compose', 'restore'
  * @returns {Promise<object|null>} the stored version, or null
  */
 export async function snapshotNote(previous, reason = 'edit') {
