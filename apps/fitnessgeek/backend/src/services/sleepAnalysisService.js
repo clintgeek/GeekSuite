@@ -2,14 +2,37 @@ import influxService from './influxService.js';
 import logger from '../config/logger.js';
 
 /**
- * Sleep stage constants
+ * Garmin's sleep stage codes, as they arrive in `SleepIntraday.SleepStageLevel`.
+ *
+ * These were declared as `AWAKE: 0, LIGHT: 1, DEEP: 2, REM: 3` until
+ * 2026-09-22, which is not Garmin's encoding — so the dashboard reported deep
+ * sleep as time awake and REM as deep, scored nights "POOR" that the watch
+ * scored in the 80s, and generated its advice from that.
+ *
+ * The proof, from live data for the night of 2026-09-22: minutes per raw level
+ * were 71 / 325 / 131 / 39, and Garmin's own `SleepSummary` for that night
+ * reads deep 71, light 325, REM 131, awake 39. Four of four, exact. If this is
+ * ever in doubt again, that comparison is the test — the summary sits in the
+ * same database.
  */
 const SLEEP_STAGES = {
-  AWAKE: 0,
+  DEEP: 0,
   LIGHT: 1,
-  DEEP: 2,
-  REM: 3
+  REM: 2,
+  AWAKE: 3
 };
+
+/**
+ * Garmin's published sleep-score bands, so the label beside the score says
+ * what the watch says. (The previous bands were 80/70/60 and made up.)
+ */
+function garminScoreLabel(score) {
+  if (score == null) return null;
+  if (score >= 90) return 'EXCELLENT';
+  if (score >= 80) return 'GOOD';
+  if (score >= 60) return 'FAIR';
+  return 'POOR';
+}
 
 /**
  * Calculate percentile from array
@@ -116,6 +139,7 @@ function analyzeSleepArchitecture(stages) {
   if (stages.length === 0) {
     return {
       totalMinutes: 0,
+      asleepMinutes: 0,
       awakeMinutes: 0,
       lightMinutes: 0,
       deepMinutes: 0,
@@ -153,18 +177,27 @@ function analyzeSleepArchitecture(stages) {
   const totalSeconds = awakeSeconds + lightSeconds + deepSeconds + remSeconds;
   const totalMinutes = Math.round(totalSeconds / 60);
   const sleepSeconds = lightSeconds + deepSeconds + remSeconds;
+  const pctOf = (part, whole) => (whole > 0 ? Math.round((part / whole) * 100) : 0);
 
   return {
+    // Time in BED — asleep plus awake. Kept under its old name for callers,
+    // but it is not "total sleep", which is what the page used to label it.
     totalMinutes,
+    // Time ASLEEP. This is Garmin's `sleepTimeSeconds` and what "Total sleep"
+    // means on the watch.
+    asleepMinutes: Math.round(sleepSeconds / 60),
     awakeMinutes: Math.round(awakeSeconds / 60),
     lightMinutes: Math.round(lightSeconds / 60),
     deepMinutes: Math.round(deepSeconds / 60),
     remMinutes: Math.round(remSeconds / 60),
-    awakePercent: totalSeconds > 0 ? Math.round((awakeSeconds / totalSeconds) * 100) : 0,
-    lightPercent: totalSeconds > 0 ? Math.round((lightSeconds / totalSeconds) * 100) : 0,
-    deepPercent: totalSeconds > 0 ? Math.round((deepSeconds / totalSeconds) * 100) : 0,
-    remPercent: totalSeconds > 0 ? Math.round((remSeconds / totalSeconds) * 100) : 0,
-    sleepEfficiency: totalSeconds > 0 ? Math.round((sleepSeconds / totalSeconds) * 100) : 0
+    // Stage shares are of time ASLEEP, which is how Garmin reports them and
+    // what the usual targets (deep 13-23%, REM 20-25%) are expressed against.
+    // Awake is the exception: it only means anything as a share of time in bed.
+    awakePercent: pctOf(awakeSeconds, totalSeconds),
+    lightPercent: pctOf(lightSeconds, sleepSeconds),
+    deepPercent: pctOf(deepSeconds, sleepSeconds),
+    remPercent: pctOf(remSeconds, sleepSeconds),
+    sleepEfficiency: pctOf(sleepSeconds, totalSeconds)
   };
 }
 
@@ -174,7 +207,7 @@ function analyzeSleepArchitecture(stages) {
 function analyzeSleepContinuity(stages) {
   if (stages.length === 0) {
     return {
-      fragmentationIndex: 0,
+      transitionsPerHour: 0,
       wakeAfterSleepOnset: 0,
       awakenings: 0,
       stageTransitions: 0
@@ -185,34 +218,46 @@ function analyzeSleepContinuity(stages) {
   let awakenings = 0;
   let wakeAfterSleepOnset = 0;
   let sleepStarted = false;
+  let asleepSeconds = 0;
 
-  for (let i = 1; i < stages.length; i++) {
-    const prev = stages[i - 1];
+  // The final segment of a night is usually waking up. That is the end of
+  // sleep, not an interruption of it, and counting it made this report one
+  // more awakening than Garmin does.
+  const last = stages.length - 1;
+
+  for (let i = 0; i < stages.length; i++) {
     const curr = stages[i];
+    if (curr.stage !== SLEEP_STAGES.AWAKE) asleepSeconds += curr.durationSeconds || 60;
+    if (i === 0) {
+      if (curr.stage !== SLEEP_STAGES.AWAKE) sleepStarted = true;
+      continue;
+    }
+    const prev = stages[i - 1];
 
-    // Count stage transitions
-    if (prev.stage !== curr.stage) {
-      transitions++;
+    if (prev.stage !== curr.stage) transitions++;
+
+    if (prev.stage !== SLEEP_STAGES.AWAKE && curr.stage === SLEEP_STAGES.AWAKE && sleepStarted && i !== last) {
+      awakenings++;
+      wakeAfterSleepOnset += curr.durationSeconds || 60;
     }
 
-    // Track awakenings after sleep onset
-    if (prev.stage !== SLEEP_STAGES.AWAKE && curr.stage === SLEEP_STAGES.AWAKE) {
-      if (sleepStarted) {
-        awakenings++;
-        wakeAfterSleepOnset += curr.durationSeconds || 60;
-      }
-    }
-
-    // Mark sleep onset
-    if (!sleepStarted && curr.stage !== SLEEP_STAGES.AWAKE) {
-      sleepStarted = true;
-    }
+    if (!sleepStarted && curr.stage !== SLEEP_STAGES.AWAKE) sleepStarted = true;
   }
 
-  const fragmentationIndex = Math.round((transitions / stages.length) * 100);
+  /*
+   * This replaced `fragmentationIndex = transitions / segments * 100`, which
+   * could not vary. Garmin writes one row per SEGMENT, so consecutive rows
+   * almost always differ and the ratio is (n-1)/n — 92% on every night
+   * measured. Transitions per hour asleep does vary. It carries no
+   * "good/high" verdict, because there is no calibrated threshold for
+   * Garmin's segment granularity and inventing one is how the last number
+   * went wrong.
+   */
+  const asleepHours = asleepSeconds / 3600;
+  const transitionsPerHour = asleepHours > 0 ? Math.round((transitions / asleepHours) * 10) / 10 : 0;
 
   return {
-    fragmentationIndex,
+    transitionsPerHour,
     wakeAfterSleepOnset: Math.round(wakeAfterSleepOnset / 60),
     awakenings,
     stageTransitions: transitions
@@ -237,12 +282,20 @@ function analyzeCardiovascularRecovery(heartRates, stages) {
   const avgHeartRate = Math.round(hrValues.reduce((sum, hr) => sum + hr, 0) / hrValues.length);
   const restingHeartRate = Math.round(percentile(hrValues, 10)); // 10th percentile as resting
 
-  // Calculate HR during deep sleep
+  // Heart rate during deep sleep.
+  //
+  // A stage row is a SEGMENT: its time is the segment's start and
+  // `durationSeconds` its length (verified 2026-09-22 — 25 of 25 gaps tile
+  // start-to-start). A sample belongs to the segment that contains it. This
+  // used to pair each sample with "a stage row within two minutes", which
+  // only ever caught the first two minutes of a segment and dropped the rest.
   const deepSleepHRs = [];
   for (const hr of heartRates) {
-    const stage = stages.find(s =>
-      Math.abs(s.time.getTime() - hr.time.getTime()) < 120000 // within 2 minutes
-    );
+    const t = hr.time.getTime();
+    const stage = stages.find(s => {
+      const start = s.time.getTime();
+      return t >= start && t < start + (s.durationSeconds || 60) * 1000;
+    });
     if (stage && stage.stage === SLEEP_STAGES.DEEP) {
       deepSleepHRs.push(hr.value);
     }
@@ -252,11 +305,21 @@ function analyzeCardiovascularRecovery(heartRates, stages) {
     ? Math.round(deepSleepHRs.reduce((sum, hr) => sum + hr, 0) / deepSleepHRs.length)
     : 0;
 
-  // Calculate HR dip (should be 15-25% during deep sleep)
-  const baselineHR = Math.round(percentile(hrValues, 50)); // Median as baseline
-  const hrDipPercent = avgDeepSleepHR > 0
-    ? Math.round(((baselineHR - avgDeepSleepHR) / baselineHR) * 100)
-    : 0;
+  /*
+   * hrDipPercent is null on purpose, and stays null until it can be computed
+   * properly.
+   *
+   * It was (night median - deep-sleep HR) / night median. That compares a
+   * STAGE against a TIME OF NIGHT: Garmin front-loads deep sleep into the
+   * first cycles, when heart rate is still coming down from the day, so on
+   * real data deep-sleep HR sits ABOVE the night's median (71 vs 67 on
+   * 2026-09-22) and the "dip" came out at 0% or below. It then fired "heart
+   * rate did not drop adequately — check for alcohol, late eating" every
+   * night. A real nocturnal dip compares sleeping HR with DAYTIME HR, which
+   * needs waking-hours samples from `HeartRateIntraday`; `DailyStats` has no
+   * daytime average. See DOCS/FITNESSGEEK_HEALTH_DASHBOARD_FINDINGS.md.
+   */
+  const hrDipPercent = null;
 
   const hrVariability = Math.round(stdDev(hrValues));
 
@@ -323,7 +386,9 @@ function analyzeRespiration(respirationValues, spo2Values) {
       respirationVariability: 0,
       avgSpO2: 0,
       minSpO2: 0,
-      apneaIndicators: 0
+      spo2Dips: 0,
+      spo2SamplesBelow90: 0,
+      longestDipMinutes: 0
     };
   }
 
@@ -339,15 +404,43 @@ function analyzeRespiration(respirationValues, spo2Values) {
     : 0;
   const minSpO2 = spo2s.length > 0 ? Math.min(...spo2s) : 0;
 
-  // Detect potential apnea events (SpO2 drops below 90%)
-  const apneaIndicators = spo2s.filter(s => s < 90).length;
+  /*
+   * Dips below 90%, counted as EPISODES.
+   *
+   * This used to count SAMPLES — one a minute — and label each one a
+   * "potential apnea event", so a single 27-minute stretch counted as 27
+   * events and a typical night read "80 potential apnea events" in red. A dip
+   * is a run of consecutive low readings; a gap of more than 90 seconds
+   * between samples ends one. "Apnea event" is also a clinical term with a
+   * definition (airflow stopping for 10s+) a wrist sensor cannot measure, so
+   * the reading is described as what it is: oxygen saturation below 90%.
+   */
+  let spo2Dips = 0;
+  let longestDipMinutes = 0;
+  let run = 0;
+  let prevTime = null;
+  for (const s of spo2Values) {
+    const t = s.time.getTime();
+    const contiguous = prevTime !== null && t - prevTime <= 90000;
+    if (s.value < 90) {
+      run = contiguous && run > 0 ? run + 1 : 1;
+      if (run === 1) spo2Dips++;
+      longestDipMinutes = Math.max(longestDipMinutes, run);
+    } else {
+      run = 0;
+    }
+    prevTime = t;
+  }
+  const spo2SamplesBelow90 = spo2s.filter(v => v < 90).length;
 
   return {
     avgRespirationRate,
     respirationVariability,
     avgSpO2,
     minSpO2,
-    apneaIndicators
+    spo2Dips,
+    spo2SamplesBelow90,
+    longestDipMinutes
   };
 }
 
@@ -378,68 +471,18 @@ function analyzeStressRecovery(stressValues, bodyBatteryValues) {
   };
 }
 
-/**
- * Generate sleep quality score (0-100)
+/*
+ * calculateSleepQualityScore() was removed 2026-09-22. It scored six factors
+ * and half of them could not work: fragmentation was a constant that never
+ * earned its points, the HR dip compared a stage against a time of night, and
+ * HRV recovery was a flat 50 because no baseline existed. Fed the wrong stage
+ * mapping on top, it scored nights 45-55 "POOR" that Garmin scored 82-83.
+ *
+ * The quality score is now Garmin's own `SleepSummary.sleepScore` — computed
+ * on the device from far richer data than reaches this database, and the
+ * number the person sees on their wrist. When Garmin has not scored a night
+ * there is no score, rather than a guess dressed as one.
  */
-function calculateSleepQualityScore(metrics) {
-  let score = 0;
-  let factors = 0;
-
-  // Duration (20 points): 7-9 hours optimal
-  const durationHours = metrics.architecture.totalMinutes / 60;
-  if (durationHours >= 7 && durationHours <= 9) {
-    score += 20;
-  } else if (durationHours >= 6 && durationHours <= 10) {
-    score += 15;
-  } else {
-    score += 5;
-  }
-  factors++;
-
-  // Deep sleep (20 points): 20-25% optimal
-  if (metrics.architecture.deepPercent >= 20 && metrics.architecture.deepPercent <= 25) {
-    score += 20;
-  } else if (metrics.architecture.deepPercent >= 15) {
-    score += 10;
-  }
-  factors++;
-
-  // Sleep efficiency (15 points): >90% good
-  if (metrics.architecture.sleepEfficiency >= 90) {
-    score += 15;
-  } else if (metrics.architecture.sleepEfficiency >= 85) {
-    score += 10;
-  } else if (metrics.architecture.sleepEfficiency >= 80) {
-    score += 5;
-  }
-  factors++;
-
-  // HRV recovery (20 points)
-  if (metrics.hrvRecovery.recoveryScore) {
-    score += Math.round(metrics.hrvRecovery.recoveryScore * 0.2);
-  }
-  factors++;
-
-  // HR dip (15 points): 15-25% optimal
-  if (metrics.cardiovascular.hrDipPercent >= 15 && metrics.cardiovascular.hrDipPercent <= 25) {
-    score += 15;
-  } else if (metrics.cardiovascular.hrDipPercent >= 10) {
-    score += 10;
-  } else if (metrics.cardiovascular.hrDipPercent > 0) {
-    score += 5;
-  }
-  factors++;
-
-  // Fragmentation (10 points): Lower is better
-  if (metrics.continuity.fragmentationIndex < 20) {
-    score += 10;
-  } else if (metrics.continuity.fragmentationIndex < 30) {
-    score += 5;
-  }
-  factors++;
-
-  return Math.min(100, Math.round(score));
-}
 
 /**
  * Generate recommendations based on analysis
@@ -472,23 +515,12 @@ function generateRecommendations(metrics) {
     });
   }
 
-  // Resting HR elevation
-  if (metrics.cardiovascular.restingHeartRate > 0) {
-    // We'd need baseline to compare, but for now check HR dip
-    if (metrics.cardiovascular.hrDipPercent < 10) {
-      warnings.push('Insufficient heart rate recovery during sleep');
-      recommendations.push({
-        priority: 'MEDIUM',
-        category: 'CARDIOVASCULAR',
-        issue: 'Heart rate did not drop adequately during deep sleep',
-        suggestion: 'Check for: late-night eating, alcohol, dehydration, or overtraining',
-        impact: 'Poor HR dip suggests incomplete parasympathetic recovery'
-      });
-    }
-  }
+  // (An "HR did not drop adequately" rule lived here and fired every night.
+  // It read hrDipPercent, which compared a stage against a time of night and
+  // is null until it can be measured against daytime HR. No rule until then.)
 
-  // Sleep duration
-  const durationHours = metrics.architecture.totalMinutes / 60;
+  // Sleep duration — time asleep, not time in bed.
+  const durationHours = metrics.architecture.asleepMinutes / 60;
   if (durationHours < 7) {
     warnings.push('Insufficient sleep duration');
     recommendations.push({
@@ -513,12 +545,13 @@ function generateRecommendations(metrics) {
   }
 
   // Respiratory concerns
-  if (metrics.respiration.apneaIndicators > 0) {
-    warnings.push(`${metrics.respiration.apneaIndicators} potential apnea events`);
+  if (metrics.respiration.spo2Dips > 0) {
+    const r = metrics.respiration;
+    warnings.push(`${r.spo2Dips} SpO2 dip${r.spo2Dips === 1 ? '' : 's'} below 90% (lowest ${r.minSpO2}%)`);
     recommendations.push({
       priority: 'HIGH',
       category: 'RESPIRATORY',
-      issue: 'SpO2 drops detected during sleep',
+      issue: `Blood oxygen fell below 90% ${r.spo2Dips} time${r.spo2Dips === 1 ? '' : 's'}, longest ${r.longestDipMinutes} min`,
       suggestion: 'Consider sleep apnea screening. Try sleeping on side instead of back.',
       impact: 'Sleep apnea severely impairs sleep quality and increases cardiovascular risk'
     });
@@ -544,8 +577,13 @@ function generateRecommendations(metrics) {
  */
 async function analyzeSleep(dateStr, userBaselines = {}) {
   try {
-    // Get raw sleep data
-    const rawData = await influxService.getSleepIntraday(dateStr);
+    // The intraday rows and Garmin's own summary of the same night. The
+    // summary is optional: a night can sync its minute data before its
+    // summary lands, and that must not cost the person the rest of the page.
+    const [rawData, summaryRows] = await Promise.all([
+      influxService.getSleepIntraday(dateStr),
+      influxService.getSleepSummary(dateStr).catch(() => [])
+    ]);
 
     if (!rawData || rawData.length === 0) {
       return {
@@ -555,16 +593,35 @@ async function analyzeSleep(dateStr, userBaselines = {}) {
       };
     }
 
-    // Parse the data
+    const summary = summaryRows?.[0] || null;
     const parsed = parseSleepData(rawData);
 
-    // Calculate all metrics
     const architecture = analyzeSleepArchitecture(parsed.stages);
     const continuity = analyzeSleepContinuity(parsed.stages);
     const cardiovascular = analyzeCardiovascularRecovery(parsed.heartRates, parsed.stages);
     const hrvRecovery = analyzeHRVRecovery(parsed.hrvValues, userBaselines.weeklyHRV);
     const respiration = analyzeRespiration(parsed.respirationValues, parsed.spo2Values);
     const stress = analyzeStressRecovery(parsed.stressValues, parsed.bodyBatteryValues);
+
+    /*
+     * Where Garmin already computed a number, Garmin's number wins.
+     *
+     * The device works from far more than reaches this database, and these
+     * are the figures the person sees on the watch. A dashboard that
+     * disagrees with the wrist about the same night is not a second opinion,
+     * it is a bug report. Each override is a field Garmin reports directly;
+     * the stage minutes are left as computed because, with the stage codes
+     * decoded correctly, they already match the summary to the minute.
+     */
+    const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+    if (summary) {
+      if (num(summary.restingHeartRate) != null) cardiovascular.restingHeartRate = summary.restingHeartRate;
+      if (num(summary.avgOvernightHrv) != null) hrvRecovery.avgHRV = Math.round(summary.avgOvernightHrv);
+      if (num(summary.averageRespirationValue) != null) respiration.avgRespirationRate = Math.round(summary.averageRespirationValue);
+      if (num(summary.averageSpO2Value) != null) respiration.avgSpO2 = Math.round(summary.averageSpO2Value);
+      if (num(summary.lowestSpO2Value) != null) respiration.minSpO2 = summary.lowestSpO2Value;
+      if (num(summary.awakeCount) != null) continuity.awakenings = summary.awakeCount;
+    }
 
     const metrics = {
       architecture,
@@ -575,27 +632,26 @@ async function analyzeSleep(dateStr, userBaselines = {}) {
       stress
     };
 
-    const qualityScore = calculateSleepQualityScore(metrics);
+    const qualityScore = num(summary?.sleepScore);
+    const qualityLabel = garminScoreLabel(qualityScore);
     const { recommendations, warnings } = generateRecommendations(metrics);
-
-    // Determine overall quality label
-    let qualityLabel = 'POOR';
-    if (qualityScore >= 80) qualityLabel = 'EXCELLENT';
-    else if (qualityScore >= 70) qualityLabel = 'GOOD';
-    else if (qualityScore >= 60) qualityLabel = 'FAIR';
 
     return {
       date: dateStr,
       available: true,
       qualityScore,
       qualityLabel,
+      // Says where the headline number came from, so the page can say
+      // "no score from the watch yet" instead of showing a blank as a zero.
+      scoreSource: qualityScore != null ? 'garmin' : null,
       metrics,
       recommendations,
       warnings,
       rawData: {
         stageCount: parsed.stages.length,
         hrCount: parsed.heartRates.length,
-        hrvCount: parsed.hrvValues.length
+        hrvCount: parsed.hrvValues.length,
+        hasGarminSummary: Boolean(summary)
       }
     };
 
@@ -605,5 +661,5 @@ async function analyzeSleep(dateStr, userBaselines = {}) {
   }
 }
 
-export { analyzeSleep, parseSleepData, analyzeSleepArchitecture, analyzeSleepContinuity, analyzeCardiovascularRecovery, analyzeHRVRecovery, analyzeRespiration, analyzeStressRecovery, calculateSleepQualityScore, generateRecommendations };
-export default { analyzeSleep, parseSleepData, analyzeSleepArchitecture, analyzeSleepContinuity, analyzeCardiovascularRecovery, analyzeHRVRecovery, analyzeRespiration, analyzeStressRecovery, calculateSleepQualityScore, generateRecommendations };
+export { analyzeSleep, parseSleepData, analyzeSleepArchitecture, analyzeSleepContinuity, analyzeCardiovascularRecovery, analyzeHRVRecovery, analyzeRespiration, analyzeStressRecovery, generateRecommendations, garminScoreLabel, SLEEP_STAGES };
+export default { analyzeSleep, parseSleepData, analyzeSleepArchitecture, analyzeSleepContinuity, analyzeCardiovascularRecovery, analyzeHRVRecovery, analyzeRespiration, analyzeStressRecovery, generateRecommendations, garminScoreLabel, SLEEP_STAGES };

@@ -40,8 +40,10 @@ import {
  * Quality score color
  */
 function getQualityColor(score) {
+  // Garmin's bands — the label beside this number is Garmin's too, and the
+  // two used to disagree (70-79 was "info" here but GOOD in the label).
+  if (score == null) return 'default';
   if (score >= 80) return 'success';
-  if (score >= 70) return 'info';
   if (score >= 60) return 'warning';
   return 'error';
 }
@@ -241,14 +243,24 @@ export default function SleepAnalysis({ date }) {
               <Typography variant="h5">Sleep Analysis</Typography>
             </Stack>
             <Stack direction="row" spacing={1} alignItems="center">
-              <Typography variant="h4" color={`${getQualityColor(qualityScore)}.main`}>
-                {qualityScore}/100
-              </Typography>
-              <Chip
-                label={`${qualityLabel} ${getQualityEmoji(qualityLabel)}`}
-                color={getQualityColor(qualityScore)}
-                size="large"
-              />
+              {qualityScore != null ? (
+                <>
+                  <Tooltip title="Garmin's sleep score for this night — the same number your watch shows" arrow>
+                    <Typography variant="h4" color={`${getQualityColor(qualityScore)}.main`}>
+                      {qualityScore}/100
+                    </Typography>
+                  </Tooltip>
+                  <Chip
+                    label={`${qualityLabel} ${getQualityEmoji(qualityLabel)}`}
+                    color={getQualityColor(qualityScore)}
+                    size="large"
+                  />
+                </>
+              ) : (
+                <Typography variant="body2" color="text.secondary">
+                  No score from the watch yet
+                </Typography>
+              )}
             </Stack>
           </Stack>
 
@@ -257,10 +269,10 @@ export default function SleepAnalysis({ date }) {
             <Grid item xs={6} sm={3}>
               <MetricCard
                 label="Total Sleep"
-                value={Math.floor(metrics.architecture.totalMinutes / 60)}
-                unit={`h ${metrics.architecture.totalMinutes % 60}m`}
-                color={metrics.architecture.totalMinutes >= 420 ? 'success' : 'warning'}
-                tooltip="Total time asleep (target: 7-9 hours)"
+                value={Math.floor(metrics.architecture.asleepMinutes / 60)}
+                unit={`h ${metrics.architecture.asleepMinutes % 60}m`}
+                color={metrics.architecture.asleepMinutes >= 420 ? 'success' : 'warning'}
+                tooltip="Time asleep, not counting time awake in bed (target: 7-9 hours)"
               />
             </Grid>
             <Grid item xs={6} sm={3}>
@@ -268,8 +280,8 @@ export default function SleepAnalysis({ date }) {
                 label="Deep Sleep"
                 value={metrics.architecture.deepPercent}
                 unit="%"
-                color={metrics.architecture.deepPercent >= 20 ? 'success' : 'error'}
-                tooltip="Deep sleep percentage (target: 20-25%)"
+                color={metrics.architecture.deepPercent >= 15 ? 'success' : 'warning'}
+                tooltip="Share of time asleep spent in deep sleep. Flagged below 15%, the same line the recommendations use."
               />
             </Grid>
             <Grid item xs={6} sm={3}>
@@ -350,14 +362,18 @@ export default function SleepAnalysis({ date }) {
               <Typography variant="subtitle2" gutterBottom>Sleep Quality Factors</Typography>
               <Stack spacing={1}>
                 <Typography variant="body2">
-                  <strong>Total Minutes:</strong> {metrics.architecture.totalMinutes} min ({Math.floor(metrics.architecture.totalMinutes / 60)}h {metrics.architecture.totalMinutes % 60}m)
+                  <strong>Time in bed:</strong> {Math.floor(metrics.architecture.totalMinutes / 60)}h {metrics.architecture.totalMinutes % 60}m
+                  {' · '}<strong>asleep</strong> {Math.floor(metrics.architecture.asleepMinutes / 60)}h {metrics.architecture.asleepMinutes % 60}m
                 </Typography>
                 <Typography variant="body2">
                   <strong>Awakenings:</strong> {metrics.continuity.awakenings} times
                 </Typography>
+                {/* Transitions per hour asleep. There is deliberately no
+                    Good/High chip: nothing calibrates a threshold for Garmin's
+                    segment granularity, and the index this replaced read "92%
+                    · High" on every night because it could not vary. */}
                 <Typography variant="body2">
-                  <strong>Fragmentation Index:</strong> {metrics.continuity.fragmentationIndex}%
-                  <Chip size="small" label={metrics.continuity.fragmentationIndex < 20 ? 'Good' : 'High'} color={metrics.continuity.fragmentationIndex < 20 ? 'success' : 'warning'} sx={{ ml: 1 }} />
+                  <strong>Stage changes:</strong> {metrics.continuity.transitionsPerHour} per hour asleep
                 </Typography>
                 <Typography variant="body2">
                   <strong>Stage Transitions:</strong> {metrics.continuity.stageTransitions}
@@ -400,15 +416,6 @@ export default function SleepAnalysis({ date }) {
             </Grid>
             <Grid item xs={12} sm={6} md={3}>
               <MetricCard
-                label="HR Dip"
-                value={metrics.cardiovascular.hrDipPercent}
-                unit="%"
-                color={metrics.cardiovascular.hrDipPercent >= 15 ? 'success' : 'warning'}
-                tooltip="HR drop during deep sleep (target: 15-25%)"
-              />
-            </Grid>
-            <Grid item xs={12} sm={6} md={3}>
-              <MetricCard
                 label="Deep Sleep HR"
                 value={metrics.cardiovascular.avgDeepSleepHR}
                 unit="bpm"
@@ -416,13 +423,10 @@ export default function SleepAnalysis({ date }) {
               />
             </Grid>
           </Grid>
-          <Box sx={{ mt: 2 }}>
-            <Alert severity={metrics.cardiovascular.hrDipPercent >= 15 ? 'success' : 'warning'}>
-              {metrics.cardiovascular.hrDipPercent >= 15
-                ? '✓ Good HR recovery during sleep indicates proper parasympathetic activation'
-                : '⚠️ Limited HR recovery suggests incomplete relaxation or overtraining'}
-            </Alert>
-          </Box>
+          {/* The HR-dip card and its verdict lived here. The dip compared
+              deep-sleep HR with the night's median — a stage against a time of
+              night — and warned about "limited HR recovery" every night. It
+              returns when it can be measured against daytime heart rate. */}
         </AccordionDetails>
       </Accordion>
 
@@ -540,17 +544,19 @@ export default function SleepAnalysis({ date }) {
             </Grid>
             <Grid item xs={12} sm={6} md={3}>
               <MetricCard
-                label="Apnea Events"
-                value={metrics.respiration.apneaIndicators}
-                color={metrics.respiration.apneaIndicators === 0 ? 'success' : 'error'}
-                tooltip="Number of potential apnea events (SpO2 <90%)"
+                label="SpO2 dips"
+                value={metrics.respiration.spo2Dips}
+                color={metrics.respiration.spo2Dips === 0 ? 'success' : 'warning'}
+                tooltip="Separate stretches with blood oxygen below 90%. A wrist sensor reads low when the arm is pressed or cold, so treat a pattern across nights as the signal, not one night."
               />
             </Grid>
           </Grid>
-          {metrics.respiration.apneaIndicators > 0 && (
-            <Alert severity="error" sx={{ mt: 2 }}>
-              <AlertTitle>Sleep Apnea Warning</AlertTitle>
-              {metrics.respiration.apneaIndicators} potential apnea events detected. Consider:
+          {metrics.respiration.spo2Dips > 0 && (
+            <Alert severity="warning" sx={{ mt: 2 }}>
+              <AlertTitle>Blood oxygen dipped below 90%</AlertTitle>
+              {metrics.respiration.spo2Dips} time{metrics.respiration.spo2Dips === 1 ? '' : 's'}, longest{' '}
+              {metrics.respiration.longestDipMinutes} min, lowest {metrics.respiration.minSpO2}%. If this
+              shows up night after night, consider:
               <ul>
                 <li>Sleeping on your side instead of back</li>
                 <li>Sleep apnea screening with a healthcare provider</li>

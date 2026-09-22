@@ -53,7 +53,8 @@ async function generateRecoveryContext(userId, date) {
       sleep: sleep && sleep.available ? {
         quality: sleep.qualityLabel,
         score: sleep.qualityScore,
-        duration: `${Math.floor(sleep.metrics.architecture.totalMinutes / 60)}h ${sleep.metrics.architecture.totalMinutes % 60}m`,
+        // Time asleep. This read totalMinutes, which is time in bed.
+        duration: `${Math.floor(sleep.metrics.architecture.asleepMinutes / 60)}h ${sleep.metrics.architecture.asleepMinutes % 60}m`,
         deepSleepPercent: sleep.metrics.architecture.deepPercent,
         remSleepPercent: sleep.metrics.architecture.remPercent,
         sleepEfficiency: sleep.metrics.architecture.sleepEfficiency,
