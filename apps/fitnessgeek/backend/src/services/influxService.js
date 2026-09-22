@@ -208,14 +208,52 @@ async function getHRVIntraday(dateStr) {
   const startTime = `'${dateStr} 00:00:00'`;
   const endTime = `'${dateStr} 23:59:59'`;
 
+  // `hrvValue` is the ONLY field this measurement has. This used to select
+  // "lastNightAvg" and "weeklyAvg", which do not exist on it, so the query
+  // returned zero rows every time while ~114 real samples a night sat in the
+  // same window — and the Recovery Coach's "weekly HRV" was always null. The
+  // nightly and weekly figures live in SleepSummary; see getHrvBaseline().
   const queryStr = `
-    SELECT "lastNightAvg", "weeklyAvg"
+    SELECT "hrvValue"
     FROM "HRV_Intraday"
     WHERE time >= ${startTime} AND time <= ${endTime}
     ORDER BY time ASC
   `;
 
   return await query(queryStr);
+}
+
+/** Nights needed before a baseline means anything. */
+const HRV_BASELINE_MIN_NIGHTS = 3;
+
+/**
+ * The person's own HRV baseline: the mean of Garmin's overnight HRV
+ * (`SleepSummary.avgOvernightHrv`) across the seven nights BEFORE `dateStr`.
+ *
+ * Before the night, not including it — a baseline that contains the night
+ * being judged dilutes its own deviation. Fewer than three nights is too few
+ * to call a baseline, so it is reported as absent rather than guessed.
+ *
+ * This replaces `UserSettings.healthBaselines.weeklyHRV`, which nothing ever
+ * computed — it was null in every live row, so every night was reported as
+ * "BALANCED, recovery 50". The data to compute it was in Influx all along.
+ *
+ * @returns {Promise<{ weeklyHRV: number|null, nights: number }>}
+ */
+async function getHrvBaseline(dateStr) {
+  const day = new Date(`${dateStr}T00:00:00Z`);
+  const from = new Date(day.getTime() - 7 * 86400000).toISOString().slice(0, 10);
+  const rows = await query(`
+    SELECT "avgOvernightHrv"
+    FROM "SleepSummary"
+    WHERE time >= '${from} 00:00:00' AND time < '${dateStr} 00:00:00'
+  `);
+  const values = rows
+    .map((r) => r.avgOvernightHrv)
+    .filter((v) => typeof v === 'number' && Number.isFinite(v) && v > 0);
+  if (values.length < HRV_BASELINE_MIN_NIGHTS) return { weeklyHRV: null, nights: values.length };
+  const mean = values.reduce((a, b) => a + b, 0) / values.length;
+  return { weeklyHRV: Math.round(mean * 10) / 10, nights: values.length };
 }
 
 /**
@@ -242,12 +280,12 @@ async function getComprehensiveDaily(dateStr) {
   const [
     dailyStats,
     sleepSummary,
-    hrvData,
+    hrvBaseline,
     steps
   ] = await Promise.allSettled([
     getDailyStats(dateStr),
     getSleepSummary(dateStr),
-    getHRVIntraday(dateStr),
+    getHrvBaseline(dateStr),
     getStepsIntraday(dateStr)
   ]);
 
@@ -261,7 +299,14 @@ async function getComprehensiveDaily(dateStr) {
     date: dateStr,
     dailyStats: dailyStats.status === 'fulfilled' ? dailyStats.value[0] : null,
     sleepSummary: sleepSummary.status === 'fulfilled' ? sleepSummary.value[0] : null,
-    hrv: hrvData.status === 'fulfilled' ? hrvData.value[0] : null,
+    // Same shape the Recovery Coach already reads, now from fields that
+    // exist: last night is Garmin's own overnight average, the week is the
+    // seven nights before it.
+    hrv: {
+      lastNightAvg: sleepSummary.status === 'fulfilled' ? (sleepSummary.value[0]?.avgOvernightHrv ?? null) : null,
+      weeklyAvg: hrvBaseline.status === 'fulfilled' ? hrvBaseline.value.weeklyHRV : null,
+      baselineNights: hrvBaseline.status === 'fulfilled' ? hrvBaseline.value.nights : 0,
+    },
     totalSteps,
     fetchedAt: new Date().toISOString()
   };
@@ -304,5 +349,5 @@ async function ping() {
   }
 }
 
-export { InfluxUnavailableError, query, getSleepIntraday, getSleepSummary, getHeartRateIntraday, getStressIntraday, getBodyBatteryIntraday, getStepsIntraday, getDailyStats, getHRVIntraday, getBreathingRateIntraday, getComprehensiveDaily, getIntradayMetrics, ping };
-export default { InfluxUnavailableError, query, getSleepIntraday, getSleepSummary, getHeartRateIntraday, getStressIntraday, getBodyBatteryIntraday, getStepsIntraday, getDailyStats, getHRVIntraday, getBreathingRateIntraday, getComprehensiveDaily, getIntradayMetrics, ping };
+export { InfluxUnavailableError, query, getSleepIntraday, getSleepSummary, getHeartRateIntraday, getStressIntraday, getBodyBatteryIntraday, getStepsIntraday, getDailyStats, getHRVIntraday, getHrvBaseline, getBreathingRateIntraday, getComprehensiveDaily, getIntradayMetrics, ping };
+export default { InfluxUnavailableError, query, getSleepIntraday, getSleepSummary, getHeartRateIntraday, getStressIntraday, getBodyBatteryIntraday, getStepsIntraday, getDailyStats, getHRVIntraday, getHrvBaseline, getBreathingRateIntraday, getComprehensiveDaily, getIntradayMetrics, ping };

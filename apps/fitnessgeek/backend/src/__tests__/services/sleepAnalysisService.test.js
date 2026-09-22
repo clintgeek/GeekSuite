@@ -18,10 +18,11 @@ const mod = (p) => new URL(p, import.meta.url).pathname;
 
 const getSleepIntraday = jest.fn();
 const getSleepSummary = jest.fn();
+const getHrvBaseline = jest.fn();
 
 jest.unstable_mockModule(mod('../../services/influxService.js'), () => ({
   __esModule: true,
-  default: { getSleepIntraday, getSleepSummary },
+  default: { getSleepIntraday, getSleepSummary, getHrvBaseline },
 }));
 
 const svc = await import('../../services/sleepAnalysisService.js');
@@ -170,6 +171,7 @@ describe('Garmin\'s score bands', () => {
 describe('analyzeSleep agrees with the watch', () => {
   beforeEach(() => {
     getSleepIntraday.mockResolvedValue(night(SEPT_22));
+    getHrvBaseline.mockResolvedValue({ weeklyHRV: null, nights: 0 });
   });
 
   test('the headline score is Garmin\'s own', async () => {
@@ -187,7 +189,7 @@ describe('analyzeSleep agrees with the watch', () => {
     }]);
     const { metrics } = await analyzeSleep('2026-09-22');
     expect(metrics.cardiovascular.restingHeartRate).toBe(64);
-    expect(metrics.hrvRecovery.avgHRV).toBe(26);
+    expect(metrics.hrvRecovery.avgHRV).toBe(26);   // Garmin's, not the intraday mean
     expect(metrics.respiration.avgSpO2).toBe(93);
     expect(metrics.respiration.minSpO2).toBe(83);
     expect(metrics.continuity.awakenings).toBe(2);
@@ -216,5 +218,62 @@ describe('analyzeSleep agrees with the watch', () => {
     const r = await analyzeSleep('2026-09-22');
     expect(r.warnings.join(' ')).not.toMatch(/heart rate recovery|drop adequately/i);
     expect(r.recommendations.find((x) => x.category === 'CARDIOVASCULAR')).toBeUndefined();
+  });
+});
+
+/**
+ * HRV against the person's own baseline.
+ *
+ * Every night used to read "hrvDeviation 0, BALANCED, recoveryScore 50",
+ * because the baseline it compared against (UserSettings.healthBaselines)
+ * was null in every live row and nothing computed it. The baseline now comes
+ * from Garmin's own overnight HRV over the seven nights before.
+ */
+describe('HRV deviation', () => {
+  beforeEach(() => {
+    // Raw intraday HRV samples averaging 22 — deliberately NOT Garmin's 26.
+    const rows = night(SEPT_22).map((r, i) => (r.heartRate ? { ...r, hrvData: i % 2 ? 20 : 24 } : r));
+    getSleepIntraday.mockResolvedValue(rows);
+    getSleepSummary.mockResolvedValue([{ sleepScore: 82, avgOvernightHrv: 26 }]);
+  });
+
+  test('is last night against the baseline, on the same measure', async () => {
+    // 26 vs 24.9 is +4%. Using the intraday mean (22) would have read -12%
+    // and "LOW" — a deviation manufactured by comparing two different things.
+    getHrvBaseline.mockResolvedValue({ weeklyHRV: 24.9, nights: 7 });
+    const { metrics } = await analyzeSleep('2026-09-22');
+    expect(metrics.hrvRecovery).toEqual(expect.objectContaining({
+      avgHRV: 26, baselineHRV: 24.9, baselineNights: 7, hrvDeviation: 4, hrvStatus: 'BALANCED',
+    }));
+  });
+
+  test('beyond ten percent reads as high or low', async () => {
+    getHrvBaseline.mockResolvedValue({ weeklyHRV: 22, nights: 7 });
+    expect((await analyzeSleep('2026-09-22')).metrics.hrvRecovery.hrvStatus).toBe('HIGH');
+    getHrvBaseline.mockResolvedValue({ weeklyHRV: 31, nights: 7 });
+    expect((await analyzeSleep('2026-09-22')).metrics.hrvRecovery.hrvStatus).toBe('LOW');
+  });
+
+  test('no baseline is said plainly — not "BALANCED, 50"', async () => {
+    getHrvBaseline.mockResolvedValue({ weeklyHRV: null, nights: 2 });
+    const { metrics } = await analyzeSleep('2026-09-22');
+    expect(metrics.hrvRecovery.hrvStatus).toBe('NO_BASELINE');
+    expect(metrics.hrvRecovery.hrvDeviation).toBeNull();
+    expect(metrics.hrvRecovery.baselineNights).toBe(2);
+    expect(metrics.hrvRecovery.recoveryScore).toBeUndefined();
+  });
+
+  test('a baseline the person set themselves wins', async () => {
+    getHrvBaseline.mockResolvedValue({ weeklyHRV: 24.9, nights: 7 });
+    const { metrics } = await analyzeSleep('2026-09-22', { weeklyHRV: 20 });
+    expect(metrics.hrvRecovery.baselineHRV).toBe(20);
+    expect(metrics.hrvRecovery.hrvStatus).toBe('HIGH');
+  });
+
+  test('a baseline that fails to load does not fail the analysis', async () => {
+    getHrvBaseline.mockRejectedValue(new Error('influx hiccup'));
+    const r = await analyzeSleep('2026-09-22');
+    expect(r.available).toBe(true);
+    expect(r.metrics.hrvRecovery.hrvStatus).toBe('NO_BASELINE');
   });
 });

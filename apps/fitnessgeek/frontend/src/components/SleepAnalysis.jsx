@@ -64,7 +64,13 @@ function getQualityEmoji(label) {
 /**
  * Metric card for displaying a single value
  */
-function MetricCard({ label, value, unit, color = 'default', trend = null, tooltip = '' }) {
+/**
+ * @param {boolean} higherIsBetter  which way a rising trend should read. The
+ *   arrow used to be red for ANY rise — backwards for HRV, where the only
+ *   caller passing a trend lives, so a strong recovery night showed a red
+ *   up-arrow.
+ */
+function MetricCard({ label, value, unit, color = 'default', trend = null, higherIsBetter = false, tooltip = '' }) {
   return (
     <Tooltip title={tooltip} arrow>
       <Card variant="outlined" sx={{ height: '100%' }}>
@@ -81,8 +87,10 @@ function MetricCard({ label, value, unit, color = 'default', trend = null, toolt
                 {unit}
               </Typography>
             )}
-            {trend && (
-              trend > 0 ? <TrendingUpIcon color="error" /> : <TrendingDownIcon color="success" />
+            {typeof trend === 'number' && trend !== 0 && (
+              trend > 0
+                ? <TrendingUpIcon color={higherIsBetter ? 'success' : 'error'} />
+                : <TrendingDownIcon color={higherIsBetter ? 'error' : 'success'} />
             )}
           </Stack>
         </CardContent>
@@ -287,11 +295,20 @@ export default function SleepAnalysis({ date }) {
             <Grid item xs={6} sm={3}>
               <MetricCard
                 label="HRV"
-                value={metrics.hrvRecovery.avgHRV}
-                unit="ms"
-                color={metrics.hrvRecovery.hrvDeviation >= 0 ? 'success' : 'warning'}
+                value={metrics.hrvRecovery.avgHRV ?? '—'}
+                unit={metrics.hrvRecovery.avgHRV != null ? 'ms' : undefined}
+                color={
+                  metrics.hrvRecovery.hrvStatus === 'LOW' ? 'warning'
+                    : metrics.hrvRecovery.hrvStatus === 'HIGH' ? 'success'
+                    : 'default'
+                }
                 trend={metrics.hrvRecovery.hrvDeviation}
-                tooltip="Heart rate variability - higher is better"
+                higherIsBetter
+                tooltip={
+                  metrics.hrvRecovery.baselineHRV != null
+                    ? `Garmin's overnight HRV, against your ${metrics.hrvRecovery.baselineHRV} ms average over the nights before`
+                    : "Garmin's overnight HRV. A comparison appears once there are three nights to compare against."
+                }
               />
             </Grid>
             <Grid item xs={6} sm={3}>
@@ -449,20 +466,33 @@ export default function SleepAnalysis({ date }) {
                 <Box>
                   <Typography variant="subtitle2" gutterBottom>HRV Metrics</Typography>
                   <Typography variant="body2">
-                    <strong>Average HRV:</strong> {metrics.hrvRecovery.avgHRV} ms
+                    <strong>Last night:</strong> {metrics.hrvRecovery.avgHRV ?? '—'}{metrics.hrvRecovery.avgHRV != null && ' ms'}
                   </Typography>
-                  <Typography variant="body2">
-                    <strong>Baseline Deviation:</strong> {metrics.hrvRecovery.hrvDeviation}%
-                    <Chip
-                      size="small"
-                      label={metrics.hrvRecovery.hrvStatus}
-                      color={metrics.hrvRecovery.hrvStatus === 'HIGH' ? 'success' : metrics.hrvRecovery.hrvStatus === 'BALANCED' ? 'info' : 'warning'}
-                      sx={{ ml: 1 }}
-                    />
-                  </Typography>
-                  <Typography variant="body2">
-                    <strong>Recovery Score:</strong> {metrics.hrvRecovery.recoveryScore}/100
-                  </Typography>
+                  {metrics.hrvRecovery.baselineHRV != null ? (
+                    <>
+                      <Typography variant="body2">
+                        <strong>Your baseline:</strong> {metrics.hrvRecovery.baselineHRV} ms
+                        {metrics.hrvRecovery.baselineNights ? ` (${metrics.hrvRecovery.baselineNights} nights before)` : ''}
+                      </Typography>
+                      <Typography variant="body2">
+                        <strong>Difference:</strong> {metrics.hrvRecovery.hrvDeviation > 0 ? '+' : ''}{metrics.hrvRecovery.hrvDeviation}%
+                        <Chip
+                          size="small"
+                          label={metrics.hrvRecovery.hrvStatus}
+                          color={metrics.hrvRecovery.hrvStatus === 'HIGH' ? 'success' : metrics.hrvRecovery.hrvStatus === 'BALANCED' ? 'info' : 'warning'}
+                          sx={{ ml: 1 }}
+                        />
+                      </Typography>
+                      <Typography variant="caption" color="text.secondary">
+                        Within ±10% of your baseline reads as balanced.
+                      </Typography>
+                    </>
+                  ) : (
+                    <Typography variant="body2" color="text.secondary">
+                      No baseline yet — it needs three nights before this one
+                      {typeof metrics.hrvRecovery.baselineNights === 'number' ? ` (have ${metrics.hrvRecovery.baselineNights})` : ''}.
+                    </Typography>
+                  )}
                 </Box>
                 <Box>
                   <Typography variant="subtitle2" gutterBottom>Body Battery</Typography>

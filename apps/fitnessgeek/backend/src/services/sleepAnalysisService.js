@@ -335,45 +335,45 @@ function analyzeCardiovascularRecovery(heartRates, stages) {
 /**
  * Analyze HRV-based recovery
  */
-function analyzeHRVRecovery(hrvValues, weeklyBaseline = null) {
-  if (hrvValues.length === 0) {
-    return {
-      avgHRV: 0,
-      hrvDeviation: 0,
-      hrvStatus: 'UNKNOWN',
-      recoveryScore: 0
-    };
+/**
+ * Last night's HRV against the person's own baseline.
+ *
+ * `lastNight` is Garmin's `avgOvernightHrv` when the summary has it, and the
+ * baseline is built from that same figure over the prior seven nights
+ * (influxService.getHrvBaseline). Both sides of the comparison MUST be the
+ * same measure: Garmin's nightly average and a plain mean of the raw
+ * intraday samples differ by several ms on the same night (26 vs 22 on
+ * 2026-09-22), and mixing them would manufacture a deviation from nothing.
+ * The intraday mean is only a fallback for a night Garmin has not summarised.
+ *
+ * With no baseline there is no deviation and no status. This used to report
+ * `hrvDeviation: 0, hrvStatus: "BALANCED", recoveryScore: 50` for every user
+ * every night, because the baseline it read was never computed. `recoveryScore`
+ * is gone entirely: it was three hand-picked buckets (30/60/80) presented as
+ * a score out of 100, and the ±10% band it was derived from is still here,
+ * stated as what it is.
+ */
+function analyzeHRVRecovery(hrvValues, weeklyBaseline = null, { lastNight = null, baselineNights = null } = {}) {
+  const samples = hrvValues.map(h => h.value);
+  const intradayMean = samples.length > 0
+    ? Math.round(samples.reduce((sum, v) => sum + v, 0) / samples.length)
+    : null;
+  const avgHRV = lastNight != null ? Math.round(lastNight) : intradayMean;
+
+  const hasBaseline = typeof weeklyBaseline === 'number' && weeklyBaseline > 0;
+  if (avgHRV == null) {
+    return { avgHRV: null, baselineHRV: hasBaseline ? weeklyBaseline : null, baselineNights, hrvDeviation: null, hrvStatus: 'UNKNOWN' };
+  }
+  if (!hasBaseline) {
+    return { avgHRV, baselineHRV: null, baselineNights, hrvDeviation: null, hrvStatus: 'NO_BASELINE' };
   }
 
-  const hrv = hrvValues.map(h => h.value);
-  const avgHRV = Math.round(hrv.reduce((sum, v) => sum + v, 0) / hrv.length);
-
-  // Compare to baseline if available
-  let hrvDeviation = 0;
+  const hrvDeviation = Math.round(((avgHRV - weeklyBaseline) / weeklyBaseline) * 100);
   let hrvStatus = 'BALANCED';
-  let recoveryScore = 50; // Neutral
+  if (hrvDeviation < -10) hrvStatus = 'LOW';
+  else if (hrvDeviation > 10) hrvStatus = 'HIGH';
 
-  if (weeklyBaseline && weeklyBaseline > 0) {
-    hrvDeviation = Math.round(((avgHRV - weeklyBaseline) / weeklyBaseline) * 100);
-
-    if (hrvDeviation < -10) {
-      hrvStatus = 'LOW';
-      recoveryScore = 30;
-    } else if (hrvDeviation > 10) {
-      hrvStatus = 'HIGH';
-      recoveryScore = 80;
-    } else {
-      hrvStatus = 'BALANCED';
-      recoveryScore = 60;
-    }
-  }
-
-  return {
-    avgHRV,
-    hrvDeviation,
-    hrvStatus,
-    recoveryScore
-  };
+  return { avgHRV, baselineHRV: weeklyBaseline, baselineNights, hrvDeviation, hrvStatus };
 }
 
 /**
@@ -580,9 +580,11 @@ async function analyzeSleep(dateStr, userBaselines = {}) {
     // The intraday rows and Garmin's own summary of the same night. The
     // summary is optional: a night can sync its minute data before its
     // summary lands, and that must not cost the person the rest of the page.
-    const [rawData, summaryRows] = await Promise.all([
+    const [rawData, summaryRows, computedBaseline] = await Promise.all([
       influxService.getSleepIntraday(dateStr),
-      influxService.getSleepSummary(dateStr).catch(() => [])
+      influxService.getSleepSummary(dateStr).catch(() => []),
+      // Best-effort, like the summary: no baseline is a state, not an error.
+      (influxService.getHrvBaseline?.(dateStr) ?? Promise.resolve(null)).catch(() => null)
     ]);
 
     if (!rawData || rawData.length === 0) {
@@ -599,7 +601,17 @@ async function analyzeSleep(dateStr, userBaselines = {}) {
     const architecture = analyzeSleepArchitecture(parsed.stages);
     const continuity = analyzeSleepContinuity(parsed.stages);
     const cardiovascular = analyzeCardiovascularRecovery(parsed.heartRates, parsed.stages);
-    const hrvRecovery = analyzeHRVRecovery(parsed.hrvValues, userBaselines.weeklyHRV);
+    // A baseline the person set explicitly wins; otherwise the one computed
+    // from their own last seven nights.
+    const userSet = typeof userBaselines.weeklyHRV === 'number' && userBaselines.weeklyHRV > 0;
+    const hrvRecovery = analyzeHRVRecovery(
+      parsed.hrvValues,
+      userSet ? userBaselines.weeklyHRV : computedBaseline?.weeklyHRV ?? null,
+      {
+        lastNight: typeof summary?.avgOvernightHrv === 'number' ? summary.avgOvernightHrv : null,
+        baselineNights: userSet ? null : computedBaseline?.nights ?? 0,
+      }
+    );
     const respiration = analyzeRespiration(parsed.respirationValues, parsed.spo2Values);
     const stress = analyzeStressRecovery(parsed.stressValues, parsed.bodyBatteryValues);
 
@@ -616,7 +628,6 @@ async function analyzeSleep(dateStr, userBaselines = {}) {
     const num = (v) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
     if (summary) {
       if (num(summary.restingHeartRate) != null) cardiovascular.restingHeartRate = summary.restingHeartRate;
-      if (num(summary.avgOvernightHrv) != null) hrvRecovery.avgHRV = Math.round(summary.avgOvernightHrv);
       if (num(summary.averageRespirationValue) != null) respiration.avgRespirationRate = Math.round(summary.averageRespirationValue);
       if (num(summary.averageSpO2Value) != null) respiration.avgSpO2 = Math.round(summary.averageSpO2Value);
       if (num(summary.lowestSpO2Value) != null) respiration.minSpO2 = summary.lowestSpO2Value;

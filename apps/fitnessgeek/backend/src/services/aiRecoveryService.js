@@ -81,8 +81,13 @@ async function generateRecoveryContext(userId, date) {
       // Daily summary
       daily: daily ? {
         totalSteps: daily.totalSteps,
-        restingHR: daily.hrv?.lastNightAvg || null,
-        weeklyHRV: daily.hrv?.weeklyAvg || null
+        // This was `daily.hrv?.lastNightAvg` — an HRV value in milliseconds,
+        // handed to the model labelled as resting heart rate in bpm.
+        restingHR: daily.dailyStats?.restingHeartRate ?? null,
+        lastNightHRV: daily.hrv?.lastNightAvg ?? null,
+        // Null until 2026-09-22 on every call: it came from a query for two
+        // fields HRV_Intraday does not have. Now the seven nights before.
+        weeklyHRV: daily.hrv?.weeklyAvg ?? null
       } : null
     };
 
