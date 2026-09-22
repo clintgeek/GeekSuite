@@ -36,6 +36,7 @@ import Sidebar from "./components/Sidebar";
 import TopBar from "./components/TopBar";
 import { API_BASE } from "./utils/bookDisplay";
 import { mergeTagList } from "./utils/libraryAssistant";
+import { createRateBook } from "./utils/rateBook";
 import { coverCandidateKey } from "./views/detail/bookFacts";
 import LibraryView from "./views/LibraryView";
 import SettingsView from "./views/SettingsView";
@@ -2106,6 +2107,33 @@ export default function App() {
     }, 400);
   }
 
+  /**
+   * Set a book's rating from the grid or the list — one tap, no dialog.
+   * Optimistic, rolled back on failure, and safe against out-of-order
+   * responses; all of that lives in utils/rateBook.js where it is tested.
+   * `rating` may be null, which clears — how Undo restores "not rated".
+   */
+  const handleRateBook = useMemo(
+    () =>
+      createRateBook({
+        save: async (id, rating) => {
+          const res = await apolloClient.mutate({
+            mutation: UPDATE_BOOK,
+            variables: { id, input: { rating } },
+          });
+          return res.data?.updateBook ?? null;
+        },
+        apply: (id, patch) => {
+          setBooks((prev) => prev.map((b) => ((b.id || b._id) === id ? { ...b, ...patch } : b)));
+          setSelectedBook((sel) => (sel && (sel.id || sel._id) === id ? { ...sel, ...patch } : sel));
+        },
+      }),
+    // Rebuilt only if the Apollo client itself changes, which it does not for
+    // the life of the provider — so the sequence map inside survives renders.
+    // The state setters are stable and need no listing.
+    [apolloClient]
+  );
+
   function clampProgress(value) {
     if (value === "" || value == null) return null;
     const n = Math.round(Number(value));
@@ -2461,6 +2489,7 @@ export default function App() {
             basketError={basketError}
             basketLoading={basketLoading}
             books={books}
+            onRateBook={handleRateBook}
             clearBasket={clearBasket}
             error={error}
             handleCreateDeviceBasket={handleCreateDeviceBasket}

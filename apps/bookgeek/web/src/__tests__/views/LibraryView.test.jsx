@@ -1,4 +1,4 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import LibraryView from '../../views/LibraryView';
@@ -132,5 +132,75 @@ describe('LibraryView', () => {
     await user.click(screen.getByRole('button', { name: 'Cancel' }));
     expect(setSelectMode).toHaveBeenCalledWith(false);
     expect(clearBasket).toHaveBeenCalledTimes(1);
+  });
+});
+
+/**
+ * Grid or list, and rating from either.
+ */
+describe('LibraryView — layout', () => {
+  beforeEach(() => {
+    try { window.localStorage.clear(); } catch { /* storage may be blocked */ }
+  });
+
+  it('starts as covers and switches to a list', async () => {
+    renderWithProviders(<LibraryView {...baseProps()} />);
+    expect(screen.queryAllByTestId('book-row')).toHaveLength(0);
+    await userEvent.click(screen.getByRole('button', { name: 'Show as a list' }));
+    expect(screen.getAllByTestId('book-row')).toHaveLength(BOOKS.length);
+    await userEvent.click(screen.getByRole('button', { name: 'Show as covers' }));
+    expect(screen.queryAllByTestId('book-row')).toHaveLength(0);
+  });
+
+  it('remembers the list next time', async () => {
+    const { unmount } = renderWithProviders(<LibraryView {...baseProps()} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Show as a list' }));
+    unmount();
+    renderWithProviders(<LibraryView {...baseProps()} />);
+    expect(screen.getAllByTestId('book-row')).toHaveLength(BOOKS.length);
+  });
+
+  it('still renders when storage is blocked', async () => {
+    // A private window throws on localStorage access; the library must not.
+    const get = vi.spyOn(Storage.prototype, 'getItem').mockImplementation(() => { throw new Error('blocked'); });
+    const set = vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('blocked'); });
+    renderWithProviders(<LibraryView {...baseProps()} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Show as a list' }));
+    expect(screen.getAllByTestId('book-row')).toHaveLength(BOOKS.length);
+    get.mockRestore();
+    set.mockRestore();
+  });
+});
+
+describe('LibraryView — rating', () => {
+  const read100 = BOOKS[1]; // The Sound of Gravel, read, 5
+
+  it('rates, and offers an undo that restores the old rating', async () => {
+    const onRateBook = vi.fn().mockResolvedValue(true);
+    renderWithProviders(<LibraryView {...baseProps({ onRateBook })} />);
+    screen.getByRole('slider', { name: 'Rate The Sound of Gravel' }).focus();
+    await userEvent.keyboard('3');
+    expect(onRateBook).toHaveBeenCalledWith(read100, 3);
+
+    await userEvent.click(await screen.findByRole('button', { name: 'Undo' }));
+    expect(onRateBook).toHaveBeenLastCalledWith({ ...read100, rating: 3 }, 5);
+  });
+
+  it('says so when a rating fails to save', async () => {
+    const onRateBook = vi.fn().mockResolvedValue(false);
+    renderWithProviders(<LibraryView {...baseProps({ onRateBook })} />);
+    screen.getByRole('slider', { name: 'Rate The Sound of Gravel' }).focus();
+    await userEvent.keyboard('2');
+    expect(await screen.findByText(/couldn't save the rating/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Undo' })).not.toBeInTheDocument();
+  });
+
+  it('rates from the list too', async () => {
+    const onRateBook = vi.fn().mockResolvedValue(true);
+    renderWithProviders(<LibraryView {...baseProps({ onRateBook })} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Show as a list' }));
+    screen.getByRole('slider', { name: 'Rate The Sound of Gravel' }).focus();
+    await userEvent.keyboard('4');
+    expect(onRateBook).toHaveBeenCalledWith(read100, 4);
   });
 });

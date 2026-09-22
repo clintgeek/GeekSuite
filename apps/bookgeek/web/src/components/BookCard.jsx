@@ -6,11 +6,19 @@
  * instead of a separate row, and the shelf state is one 12px caption line
  * ("Reading · 42% ✓") instead of a 9px pill. The per-card basket "+" is gone —
  * bulk basket work happens in Select mode, from the filter sheet's overflow.
+ *
+ * Rateable books (utils/rating.js) carry a star strip across the bottom of the
+ * cover. It is a SIBLING of the card's button, laid over the cover by an
+ * overlay that mirrors the cover's own geometry — not a child of the button,
+ * which would be invalid HTML and would open the book on every star tap. The
+ * select-mode checkbox is placed the same way for the same reason.
  */
 import React from "react";
 import { Box, Card, ButtonBase, Checkbox, Typography, alpha, useTheme } from "@mui/material";
 import { Check as CheckIcon } from "@mui/icons-material";
 import { API_BASE, getCoverUrl } from "../utils/bookDisplay";
+import { canRate } from "../utils/rating";
+import StarRating from "./StarRating";
 
 export default function BookCard({
   book,
@@ -19,6 +27,7 @@ export default function BookCard({
   selected = false,
   onOpen,
   onToggleSelect,
+  onRate,
 }) {
   const theme = useTheme();
   const bookId = book.id || book._id;
@@ -181,6 +190,45 @@ export default function BookCard({
           </Typography>
         )}
       </ButtonBase>
+
+      {/* The star strip. Mirrors the cover box exactly: the button's 8px
+          padding gives the same left/right/top inset, and the same 2:3 aspect
+          ratio then gives the same height — so the strip lands on the cover's
+          bottom edge at every grid width without measuring anything. Hidden in
+          select mode, where a tap on the cover means "select". */}
+      {onRate && !selectMode && canRate(book) && (
+        <Box
+          sx={{
+            position: "absolute",
+            top: theme.spacing(1),
+            left: theme.spacing(1),
+            right: theme.spacing(1),
+            aspectRatio: "2 / 3",
+            borderRadius: "8px",
+            overflow: "hidden",
+            display: "flex",
+            alignItems: "flex-end",
+            pointerEvents: "none",
+            zIndex: 1,
+          }}
+        >
+          <Box
+            sx={{
+              width: "100%",
+              pointerEvents: "auto",
+              px: 0.5,
+              // A scrim, so white outline stars read on a pale cover too.
+              background: `linear-gradient(to top, ${ alpha(theme.palette.common.black, 0.72) }, ${ alpha(theme.palette.common.black, 0) })`,
+            }}
+          >
+            <StarRating
+              value={book.rating}
+              label={title}
+              onChange={(n) => onRate(book, n)}
+            />
+          </Box>
+        </Box>
+      )}
 
       {selectMode && (
         <Checkbox

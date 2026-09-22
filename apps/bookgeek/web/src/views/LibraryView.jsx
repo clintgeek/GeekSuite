@@ -14,10 +14,32 @@ import React, { useEffect, useState } from "react";
 import { Box, Button, Skeleton, Typography } from "@mui/material";
 import { GeekEmptyState, GeekErrorState, geekLayout, useToast } from "@geeksuite/ui";
 import BookCard from "../components/BookCard";
+import BookRow from "../components/BookRow";
 import FilterSheet from "../components/FilterSheet";
 import LibraryToolbar from "../components/LibraryToolbar";
 import ShelfStrip from "../components/ShelfStrip";
 import WhatNextShelf from "../components/WhatNextShelf";
+
+/**
+ * Grid or list, remembered per browser. A per-viewer convenience, so plain
+ * localStorage — and wrapped, because a private window or blocked storage
+ * throws, and the library must still render.
+ */
+const LAYOUT_KEY = "bookgeek.libraryLayout";
+function readLayout() {
+  try {
+    return window.localStorage.getItem(LAYOUT_KEY) === "list" ? "list" : "grid";
+  } catch {
+    return "grid";
+  }
+}
+function writeLayout(value) {
+  try {
+    window.localStorage.setItem(LAYOUT_KEY, value);
+  } catch {
+    // Not remembered this time; the toggle still works.
+  }
+}
 
 export default function LibraryView({
   activeView,
@@ -45,6 +67,9 @@ export default function LibraryView({
   mergeSelectionError,
   onRetry,
   onStartReading,
+  // (book, rating) => Promise<boolean>. App owns the list, so App saves; this
+  // view only decides what to tell the person.
+  onRateBook,
   saveFilterLoading,
   savedFilters,
   savedFiltersError,
@@ -82,6 +107,48 @@ export default function LibraryView({
 }) {
   const [filterOpen, setFilterOpen] = useState(false);
   const { notify } = useToast();
+  const [layout, setLayout] = useState(readLayout);
+
+  const toggleLayout = () => {
+    setLayout((prev) => {
+      const next = prev === "list" ? "grid" : "list";
+      writeLayout(next);
+      return next;
+    });
+  };
+
+  /**
+   * Save a rating, and make a mis-tap cheap to undo.
+   *
+   * The change is already on screen (App applies it optimistically), so the
+   * toast is not confirmation — it is the undo. On a grid you also tap to open
+   * books and scroll with your thumb, and a stray tap that quietly changed a
+   * rating you had set years ago is the failure worth guarding. A failed save
+   * has already been rolled back by App; saying so is this view's job.
+   */
+  const handleRate = async (book, rating) => {
+    if (!onRateBook) return;
+    const previous = typeof book.rating === "number" && book.rating > 0 ? book.rating : null;
+    const title = book.title || "this book";
+    const ok = await onRateBook(book, rating);
+    if (!ok) {
+      notify(`Couldn't save the rating for ${ title }.`, { tone: "error" });
+      return;
+    }
+    notify(`${ rating }★ · ${ title }`, {
+      tone: "success",
+      action: (
+        <Button
+          size="small"
+          color="inherit"
+          onClick={() => onRateBook({ ...book, rating }, previous)}
+          sx={{ textTransform: "none", fontWeight: 600 }}
+        >
+          Undo
+        </Button>
+      ),
+    });
+  };
 
   // Selection-bar action results (merge, device basket): fire-and-forget
   // feedback on a bar that stays on screen regardless, so a toast rather than
@@ -178,6 +245,8 @@ export default function LibraryView({
       ) : null}
 
       <LibraryToolbar
+        view={layout}
+        onToggleView={toggleLayout}
         total={total}
         sortBy={sortBy}
         sortDir={sortDir}
@@ -220,6 +289,28 @@ export default function LibraryView({
               ) : undefined
             }
           />
+        ) : layout === "list" && !loading ? (
+          <Box role="list" aria-label="Books" sx={{ borderTop: 1, borderColor: "divider" }}>
+            {books.map((book) => {
+              const bookId = book.id || book._id;
+              return (
+                <Box role="listitem" key={bookId}>
+                  <BookRow
+                    book={book}
+                    shelves={shelves}
+                    selectMode={selectMode}
+                    selected={isSelected(bookId)}
+                    onToggleSelect={handleToggleSelect}
+                    onRate={onRateBook ? handleRate : undefined}
+                    onOpen={(b) => {
+                      setSelectedBook(b);
+                      setDownloadOpen(false);
+                    }}
+                  />
+                </Box>
+              );
+            })}
+          </Box>
         ) : (
           <Box
             sx={{
@@ -254,6 +345,7 @@ export default function LibraryView({
                     selectMode={selectMode}
                     selected={isSelected(bookId)}
                     onToggleSelect={handleToggleSelect}
+                    onRate={onRateBook ? handleRate : undefined}
                     onOpen={(b) => {
                       setSelectedBook(b);
                       setDownloadOpen(false);

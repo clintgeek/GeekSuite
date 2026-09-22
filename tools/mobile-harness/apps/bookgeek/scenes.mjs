@@ -13,6 +13,26 @@ const bootstrapWithLibraryAssistant = (r) => json(r, {
 export const scenes = [
   { name: '01-library', goto: '/', wait: 1500 },
   {
+    // The list layout. Its star column is a fixed 132px on a phone, beside a
+    // 40px cover and a title — the likeliest place in BookGeek for a row to
+    // push the page into a sideways scroll, so it gets its own scene. The
+    // layout is remembered in localStorage, so the teardown switches back to
+    // covers or every later scene would inherit the list.
+    name: '01b-library-list',
+    goto: '/',
+    async setup(page, h) {
+      const toggle = page.getByRole('button', { name: 'Show as a list' });
+      if (!(await toggle.count())) return false;
+      await toggle.click();
+      await h.settle(600);
+    },
+    async teardown(page, h) {
+      const back = page.getByRole('button', { name: 'Show as covers' });
+      if (await back.count()) await back.click();
+      await h.settle(200);
+    },
+  },
+  {
     name: '02-drawer',
     goto: '/',
     async setup(page, h) {

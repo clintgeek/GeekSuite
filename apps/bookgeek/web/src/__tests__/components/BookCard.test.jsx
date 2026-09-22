@@ -115,3 +115,50 @@ describe('BookCard', () => {
     expect(screen.getByRole('button', { name: 'Lock In' })).toHaveAttribute('aria-pressed', 'true');
   });
 });
+
+/**
+ * Stars on the cover — rate a book without opening it.
+ *
+ * The strip sits BESIDE the card's button, never inside it, so a star tap must
+ * never open the book.
+ */
+describe('BookCard — stars on the cover', () => {
+  it('shows stars on a book you have read', () => {
+    renderWithProviders(<BookCard book={read100} shelves={SHELVES} onRate={vi.fn()} />);
+    expect(screen.getByRole('slider', { name: 'Rate The Sound of Gravel' })).toBeInTheDocument();
+  });
+
+  it('keeps showing a rating on a book that is off the Read shelf', () => {
+    // reading42 is on "reading" but rated 4 — its stars stay visible.
+    renderWithProviders(<BookCard book={reading42} shelves={SHELVES} onRate={vi.fn()} />);
+    expect(screen.getByRole('slider')).toHaveAttribute('aria-valuetext', '4 of 5 stars');
+  });
+
+  it('shows no stars on an unrated book you have not read', () => {
+    renderWithProviders(<BookCard book={wantToRead0} shelves={SHELVES} onRate={vi.fn()} />);
+    expect(screen.queryByRole('slider')).not.toBeInTheDocument();
+  });
+
+  it('hides the stars in select mode, where a tap means "select"', () => {
+    renderWithProviders(<BookCard book={read100} shelves={SHELVES} onRate={vi.fn()} selectMode />);
+    expect(screen.queryByRole('slider')).not.toBeInTheDocument();
+  });
+
+  it('rates without opening the book', async () => {
+    const onRate = vi.fn();
+    const onOpen = vi.fn();
+    renderWithProviders(<BookCard book={read100} shelves={SHELVES} onRate={onRate} onOpen={onOpen} />);
+    const stars = screen.getByRole('slider');
+    stars.focus();
+    await userEvent.keyboard('3');
+    expect(onRate).toHaveBeenCalledWith(read100, 3);
+    expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it('is not nested inside the card\'s button', () => {
+    // A control inside a <button> is invalid HTML, and every star tap would
+    // bubble into "open the book".
+    renderWithProviders(<BookCard book={read100} shelves={SHELVES} onRate={vi.fn()} />);
+    expect(screen.getByRole('slider').closest('button')).toBeNull();
+  });
+});

@@ -1,7 +1,12 @@
 /**
  * LibraryToolbar — one 44px row above the grid (MOBILE_UI_PLAN.md §3.1).
  *
- *   223 books                            [ Title ↑ ]  [ Filter •2 ]
+ *   223 books                     [ Title ↑ ]  [ Filter •2 ]  [▦/☰]
+ *
+ * The last button flips between the cover grid and the list. It is ONE 44px
+ * button showing the view it would switch to, not a two-button group: on a
+ * 360px phone the row has about 330px to work with, and a second 44px button
+ * would push it into a sideways scroll, which the mobile harness fails.
  *
  * Both pills open the same `FilterSheet` (a bottom sheet below `md`, a dialog
  * above it), so sort and filter are one surface at every size instead of the
@@ -9,8 +14,12 @@
  * removable 12px chips, exactly as they did before.
  */
 import React from "react";
-import { Badge, Box, Button, Chip, Typography } from "@mui/material";
-import { FilterList as FilterIcon } from "@mui/icons-material";
+import { Badge, Box, Button, Chip, IconButton, Tooltip, Typography } from "@mui/material";
+import {
+  FilterList as FilterIcon,
+  GridView as GridIcon,
+  ViewList as ListIcon,
+} from "@mui/icons-material";
 import { SORT_LABELS } from "./librarySort";
 
 const pillSx = {
@@ -40,6 +49,8 @@ export default function LibraryToolbar({
   setAuthorFilter,
   tagFilter,
   setTagFilter,
+  view = "grid",
+  onToggleView,
 }) {
   const shelfLabel =
     shelves.find((s) => s.id === shelfFilter)?.label || shelfFilter;
@@ -92,6 +103,17 @@ export default function LibraryToolbar({
               Filter
             </Button>
           </Badge>
+          {onToggleView && (
+            <Tooltip title={view === "list" ? "Show as covers" : "Show as a list"}>
+              <IconButton
+                onClick={onToggleView}
+                aria-label={view === "list" ? "Show as covers" : "Show as a list"}
+                sx={{ width: 44, height: 44, border: 1, borderColor: "divider", borderRadius: "999px" }}
+              >
+                {view === "list" ? <GridIcon sx={{ fontSize: 20 }} /> : <ListIcon sx={{ fontSize: 20 }} />}
+              </IconButton>
+            </Tooltip>
+          )}
         </Box>
       </Box>
 
