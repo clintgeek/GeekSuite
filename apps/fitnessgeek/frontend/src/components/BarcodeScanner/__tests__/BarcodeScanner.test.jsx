@@ -83,10 +83,14 @@ describe('BarcodeScanner (camera-less environment)', () => {
     expect(fitnessGeekService.getFoodByBarcode).not.toHaveBeenCalled();
   });
 
-  test('looks up a well-formed barcode and reports the match back to the caller', async () => {
+  test('looks up a well-formed barcode, reports the match back, and closes once the caller confirms it logged', async () => {
+    // `onBarcodeScanned` now does the actual write and hands back whether it
+    // landed (see BarcodeScanner.jsx's own comment) — finding the product is
+    // not the same thing as logging it, so the scanner only closes once the
+    // caller resolves truthy.
     const food = { id: 'usda_123', name: 'Test Food' };
     fitnessGeekService.getFoodByBarcode.mockResolvedValue(food);
-    const onBarcodeScanned = vi.fn();
+    const onBarcodeScanned = vi.fn().mockResolvedValue(true);
     const onClose = vi.fn();
     const user = userEvent.setup();
 
@@ -98,7 +102,7 @@ describe('BarcodeScanner (camera-less environment)', () => {
 
     await waitFor(() => expect(onBarcodeScanned).toHaveBeenCalledWith(food));
     expect(fitnessGeekService.getFoodByBarcode).toHaveBeenCalledWith('01234567890');
-    expect(onClose).toHaveBeenCalled();
+    await waitFor(() => expect(onClose).toHaveBeenCalled());
   });
 
   test('shows a not-found message and keeps the dialog open when nothing matches', async () => {
@@ -115,6 +119,45 @@ describe('BarcodeScanner (camera-less environment)', () => {
     expect(
       await screen.findByText(/No product found for this barcode/)
     ).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  test('finds the product but keeps the dialog open, with the failure visible, when the caller could not log it', async () => {
+    // The bug this pins: the scanner used to close the moment a product was
+    // found, before the caller had even tried to write the log — a failed
+    // write then closed silently, with no error anywhere. Chef: a partial or
+    // failed log must leave the modal open with the error visible.
+    const food = { id: 'usda_123', name: 'Test Food' };
+    fitnessGeekService.getFoodByBarcode.mockResolvedValue(food);
+    const onBarcodeScanned = vi.fn().mockResolvedValue(false);
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+
+    setup({ onBarcodeScanned, onClose });
+
+    const input = await screen.findByPlaceholderText('Enter 8-14 digit barcode');
+    await user.type(input, '01234567890');
+    await user.click(await screen.findByRole('button', { name: /look up barcode/i }));
+
+    await waitFor(() => expect(onBarcodeScanned).toHaveBeenCalledWith(food));
+    expect(await screen.findByText('Could not log that item. Try again.')).toBeInTheDocument();
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  test('keeps the dialog open when the caller throws instead of resolving', async () => {
+    const food = { id: 'usda_123', name: 'Test Food' };
+    fitnessGeekService.getFoodByBarcode.mockResolvedValue(food);
+    const onBarcodeScanned = vi.fn().mockRejectedValue(new Error('network down'));
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+
+    setup({ onBarcodeScanned, onClose });
+
+    const input = await screen.findByPlaceholderText('Enter 8-14 digit barcode');
+    await user.type(input, '01234567890');
+    await user.click(await screen.findByRole('button', { name: /look up barcode/i }));
+
+    expect(await screen.findByText('Could not log that item. Try again.')).toBeInTheDocument();
     expect(onClose).not.toHaveBeenCalled();
   });
 

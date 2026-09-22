@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react';
-import { Box, Typography } from '@mui/material';
+import { Box, Button, Typography } from '@mui/material';
 import { useToast } from '@geeksuite/ui';
 import { UnifiedFoodSearch } from '../components/FoodSearch';
 import BarcodeScanner from '../components/BarcodeScanner/BarcodeScanner.jsx';
@@ -109,8 +109,32 @@ const FoodSearchPage = () => {
         open={scannerOpen}
         onClose={() => setScannerOpen(false)}
         onBarcodeScanned={async (food) => {
-          setScannerOpen(false);
-          if (food) await logItems([{ ...food, servings: 1 }], mealType);
+          // Report the real write outcome — the scanner only closes itself on
+          // a genuine success (see BarcodeScanner.jsx's own comment); a
+          // failed log stays open with the error visible instead of quietly
+          // closing on "we found the product".
+          try {
+            const result = await logItems([{ ...food, servings: 1 }], mealType);
+            if ((result?.ok ?? 0) > 0) {
+              const logIds = result?.logIds || [];
+              notify(`Logged ${food.name}`, {
+                tone: 'success',
+                action: logIds.length > 0 ? (
+                  <Button
+                    size="small"
+                    sx={{ color: 'inherit', fontWeight: 700 }}
+                    onClick={() => undoLogs(logIds)}
+                  >
+                    Undo
+                  </Button>
+                ) : undefined
+              });
+              return true;
+            }
+            return false;
+          } catch {
+            return false;
+          }
         }}
       />
 
