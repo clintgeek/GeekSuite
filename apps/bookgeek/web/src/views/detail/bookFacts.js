@@ -11,6 +11,35 @@ export function bookId(book) {
 }
 
 /** `★★★★☆` for a 0–5 rating, or `null` when the book is unrated. */
+/**
+ * A reading date — `dateFinished` / `dateStarted` — shown on the right day.
+ *
+ * The gateway declares these instants (`instantField`), and the app may one
+ * day write a real one ("finished just now", 9 PM local). But every such date
+ * in the live library on 2026-09-22 — all 90 — sat at exactly UTC midnight:
+ * calendar dates from the Goodreads import. `formatDate` read those in local
+ * time and showed every finish date a day early west of UTC, and a month early
+ * for the 18 finished on the 1st.
+ *
+ * So the value decides: exactly UTC midnight is a calendar date and is read in
+ * UTC; anything else is an instant and is read in the viewer's timezone. A
+ * genuine instant landing on 00:00:00.000 UTC is a one-in-86-million accident.
+ *
+ * @param {Intl.DateTimeFormatOptions} [options] e.g. `{ month: 'short', year: 'numeric' }`
+ */
+export function formatReadingDate(value, options) {
+  if (!value) return null;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return null;
+  const isCalendarDay =
+    date.getUTCHours() === 0 && date.getUTCMinutes() === 0 &&
+    date.getUTCSeconds() === 0 && date.getUTCMilliseconds() === 0;
+  return date.toLocaleDateString(undefined, {
+    ...options,
+    ...(isCalendarDay ? { timeZone: "UTC" } : null),
+  });
+}
+
 export function starsFor(rating) {
   if (typeof rating !== "number" || Number.isNaN(rating) || rating <= 0) return null;
   const r = Math.max(0, Math.min(5, Math.round(rating)));
@@ -39,10 +68,11 @@ export function formatBytes(bytes) {
 }
 
 /**
- * Locale date for an **instant** — `dateAdded`, `dateFinished`, `dateStarted`.
- * Those are moments in time (`instantField` in the gateway's validation.js),
- * so the viewer's own timezone is the right lens. Do NOT use this for
- * `publishedDate`; see `formatCalendarDate`.
+ * Locale date for an **instant** — `dateAdded`, which is when the record was
+ * created. Do NOT use this for `publishedDate` (see `formatCalendarDate`) or
+ * for the reading dates `dateFinished`/`dateStarted` (see `formatReadingDate`):
+ * those were listed here once, and all 90 live finish dates are UTC-midnight
+ * calendar days that this showed a day early.
  */
 export function formatDate(value) {
   if (!value) return null;

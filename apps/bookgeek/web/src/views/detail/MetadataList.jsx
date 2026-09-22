@@ -8,7 +8,7 @@
 import React from "react";
 import { Box, Typography } from "@mui/material";
 import { GeekChip } from "@geeksuite/ui";
-import { formatBytes, formatCalendarDate, formatDate } from "./bookFacts";
+import { formatBytes, formatCalendarDate, formatDate, formatReadingDate } from "./bookFacts";
 
 function DetailRow({ label, value }) {
   return (
@@ -51,7 +51,7 @@ export default function MetadataList({ book }) {
     ["Language", book.language || null],
     ["Goodreads", book.goodreadsId || null],
     ["Added", formatDate(book.dateAdded)],
-    ["Finished", formatDate(book.dateFinished)],
+    ["Finished", formatReadingDate(book.dateFinished)],
     [
       "Read count",
       typeof book.readCount === "number" && book.readCount > 0 ? String(book.readCount) : null,

@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import {
+  formatReadingDate,
   coverCandidateKey,
   formatCalendarDate,
   formatDate,
@@ -129,5 +130,34 @@ describe('coverCandidateKey', () => {
 
   it('tolerates a missing candidate', () => {
     expect(coverCandidateKey(null)).toBe('cover-');
+  });
+});
+
+describe('formatReadingDate', () => {
+  // Pinned west of UTC. In UTC (as CI runs) a UTC-midnight date reads right
+  // whether or not it is handled, so these would pass without the fix.
+  // Node honours a runtime change to TZ for Dates created afterwards.
+  let savedTz;
+  beforeAll(() => { savedTz = process.env.TZ; process.env.TZ = 'America/Chicago'; });
+  afterAll(() => { process.env.TZ = savedTz; });
+  it('reads a UTC-midnight date as the calendar day it is', () => {
+    // All 90 live finish dates are UTC midnight. Read locally west of UTC,
+    // 2024-03-01 showed as Feb 29.
+    expect(formatReadingDate('2024-03-01T00:00:00.000Z', { month: 'short', day: 'numeric', year: 'numeric' }))
+      .toBe(new Date(Date.UTC(2024, 2, 1)).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }));
+  });
+
+  it('keeps the month right for a book finished on the 1st', () => {
+    expect(formatReadingDate('2026-05-01T00:00:00.000Z', { month: 'short', year: 'numeric' })).toMatch(/May/);
+  });
+
+  it('still reads a real instant in local time', () => {
+    const instant = '2026-09-23T02:30:00.000Z'; // 9:30 PM Central on the 22nd
+    expect(formatReadingDate(instant)).toBe(new Date(instant).toLocaleDateString());
+  });
+
+  it('says nothing for no date', () => {
+    expect(formatReadingDate(null)).toBeNull();
+    expect(formatReadingDate('not a date')).toBeNull();
   });
 });
