@@ -50,6 +50,12 @@ jest.unstable_mockModule(mod('../../models/FoodLog.js'), () => ({
   __esModule: true,
   default: FakeFoodLog
 }));
+// No saved meals, so the saved step matches nothing and these tests exercise
+// history → catalog → estimate. Saved items: describeAndLogSavedItems.test.js.
+jest.unstable_mockModule(mod('../../models/Meal.js'), () => ({
+  __esModule: true,
+  default: { find: () => ({ ...chain([]), populate() { return this; } }) }
+}));
 jest.unstable_mockModule(mod('../../models/DailySummary.js'), () => ({
   __esModule: true,
   default: { updateFromLogs }

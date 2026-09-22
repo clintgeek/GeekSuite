@@ -146,6 +146,11 @@ export function parseMealDescription(text, options = {}) {
         servings: fragment.servings,
         unit: fragment.unit,
         preparation: fragment.preparation,
+        // "homemade", "my", "leftover" — stripped from `dish` because no
+        // catalog indexes them, but kept here because they are exactly what
+        // tells "homemade quesadilla" (his saved meal) apart from a
+        // restaurant one. See savedItemMatcher.
+        qualifiers: fragment.noise,
         mealType,
         isDish: fragment.isDish || endsWithDishNoun(fragment.searchText),
         headNoun: headNounOf(fragment.searchText),
