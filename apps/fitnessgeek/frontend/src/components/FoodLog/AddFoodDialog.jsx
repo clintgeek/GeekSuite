@@ -42,8 +42,14 @@ const AddFoodDialog = ({
       contentSx={{ px: { xs: 1.5, sm: 2.5 } }}
     >
       <Box sx={{ minHeight: 360 }}>
+        {/* Folded here too, not just on the page. On a phone this dialog IS
+            the Food Log's add flow — the thumb-zone "Log food" button and each
+            meal's "+" both open it — so leaving the fold off here meant the
+            fix never reached the place the complaint came from. Typing still
+            shows results immediately; only the idle list folds. */}
         <UnifiedFoodSearch
           mode="dialog"
+          collapseIdleList
           mealType={mealType}
           onMealTypeChange={onMealTypeChange}
           onLogItems={onLogItems}
