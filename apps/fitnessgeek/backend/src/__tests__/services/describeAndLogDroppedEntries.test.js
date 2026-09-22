@@ -46,6 +46,11 @@ jest.unstable_mockModule(mod('../../models/FoodItem.js'), () => ({
   __esModule: true,
   default: { find: emptyQuery, findOne: async () => null, findById: async () => null },
 }));
+// No saved meals: every entry must reach the estimate path under test.
+jest.unstable_mockModule(mod('../../models/Meal.js'), () => ({
+  __esModule: true,
+  default: { find: () => ({ populate: () => ({ sort: () => ({ lean: async () => [] }) }) }) },
+}));
 jest.unstable_mockModule(mod('../../models/DailySummary.js'), () => ({
   __esModule: true,
   default: { updateFromLogs: async () => null },

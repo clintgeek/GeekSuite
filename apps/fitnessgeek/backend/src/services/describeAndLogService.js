@@ -6,6 +6,12 @@
  *
  * Resolution order per dish, cheapest and most trustworthy first:
  *
+ *   0. SAVED     — the text names a meal (or a "homemade" food) he saved on
+ *                  purpose. Chef, 2026-09-22: "if I have homemade quesadilla
+ *                  saved as a meal/food, it should use that before guessing
+ *                  at something else." A saved meal logs as its component
+ *                  foods, exactly as logging it from the meals screen does.
+ *                  Matching is deliberately strict — see savedItemMatcher.
  *   1. HISTORY   — he has logged this before. Reuse his own numbers exactly.
  *                  No model call, no latency, no cost, and his log stays
  *                  internally consistent instead of drifting every time a
@@ -24,6 +30,7 @@
 
 import FoodItem from '../models/FoodItem.js';
 import FoodLog from '../models/FoodLog.js';
+import Meal from '../models/Meal.js';
 import DailySummary from '../models/DailySummary.js';
 import logger from '../config/logger.js';
 import aiFoodService from './aiFoodService.js';
@@ -32,6 +39,7 @@ import { checkEntry } from './foodSanityRails.js';
 import { rankFoodResults, isConfidentMatch } from './foodRanker.js';
 import { parseMealDescription } from './mealDescriptionParser.js';
 import { parseFoodQuery, normalizeQuery, tokenize } from './foodQueryParser.js';
+import { matchSavedItem, matchSavedMealSpans } from './savedItemMatcher.js';
 
 /**
  * How wide the model's own calorie range must be before it is worth asking
@@ -53,6 +61,14 @@ const JUDGE_MATERIAL_RATIO = 0.4;
 
 /** How many of his own foods to consider when looking for a repeat. */
 const HISTORY_CANDIDATES = 200;
+
+/**
+ * The caption a log row written from a saved meal carries. Byte-identical to
+ * the gateway's `logMeal` (and REST's add-to-log before it) on purpose:
+ * FoodLogItem renders `notes` under the food name, so a describe-logged meal
+ * reads exactly like one logged from the meals screen.
+ */
+export const savedMealNote = (mealName) => `Added from meal: ${mealName}`;
 
 const tokenKey = (text) => tokenize(text).slice().sort().join(' ');
 
@@ -101,6 +117,89 @@ export async function findInHistory(userId, description) {
   }
 }
 
+/**
+ * Everything he has saved on purpose that a description could name: his
+ * meals, with their foods populated, and his own foods whose names carry a
+ * "homemade" qualifier (the only saved foods `savedItemMatcher` trusts — see
+ * its header for why the rest stay with `findInHistory`).
+ *
+ * Loaded once per description, not once per dish. Most-recently-updated first,
+ * because that is the tiebreak the matcher applies.
+ *
+ * A failure here is not fatal: it returns nothing saved and every dish takes
+ * the ordinary path. Chef loses the preference for one request; he does not
+ * lose the log.
+ */
+export async function loadSavedItems(userId) {
+  const none = { meals: [], foods: [] };
+  if (!userId) return none;
+
+  try {
+    const [meals, foods] = await Promise.all([
+      Meal.find({ user_id: userId, is_deleted: false })
+        .populate('food_items.food_item_id')
+        .sort({ updated_at: -1 })
+        .lean(),
+      FoodItem.find({
+        user_id: userId,
+        is_deleted: false,
+        name: /home-?made|house-?made/i
+      })
+        .sort({ updated_at: -1 })
+        .limit(HISTORY_CANDIDATES)
+        .lean()
+    ]);
+    return { meals: meals || [], foods: foods || [] };
+  } catch (error) {
+    logger.warn({ err: error, userId }, 'Saved meals/foods lookup failed');
+    return none;
+  }
+}
+
+/**
+ * A saved meal, resolved into what will be written: one row per component
+ * food, each at the meal's servings times the quantity he said. "2 homemade
+ * quesadillas" is two of the meal, so every component doubles.
+ *
+ * A component whose food no longer exists (deleted, or a dangling reference)
+ * is carried as `missing` rather than dropped. The gateway's `logMeal` skips
+ * those with a bare `continue`; here that would be a silent partial log,
+ * which this path promises never to do.
+ */
+function resolveSavedMeal(entry, meal) {
+  const quantity = Number(entry.servings) > 0 ? Number(entry.servings) : 1;
+  const components = [];
+  const missing = [];
+
+  for (const item of meal.food_items || []) {
+    const food = item?.food_item_id;
+    // Unpopulated (a bare ObjectId) or null both mean the food is gone.
+    if (!food || typeof food !== 'object' || !food._id) {
+      missing.push(item);
+      continue;
+    }
+    const perMeal = Number(item.servings) > 0 ? Number(item.servings) : 1;
+    components.push({
+      foodId: String(food._id),
+      name: food.name,
+      nutrition: food.nutrition || {},
+      serving: food.serving,
+      servings: Math.round(perMeal * quantity * 1000) / 1000
+    });
+  }
+
+  return {
+    entry,
+    source: 'saved-meal',
+    name: meal.name,
+    savedMeal: { id: String(meal._id), name: meal.name },
+    components,
+    missing,
+    foodId: null,
+    spread: null
+  };
+}
+
 /** Does this description name a brand? Synchronous — no model call. */
 export function detectBrand(description) {
   try {
@@ -139,12 +238,52 @@ async function findInCatalog(entry, userId) {
  * @returns {Promise<Array<{entry: object, source: string, name: string,
  *          nutrition: object, foodId: string|null, spread: number|null}>>}
  */
-export async function resolveEntries(entries, { userId } = {}) {
+export async function resolveEntries(entries, { userId, saved } = {}) {
   const resolved = new Array(entries.length).fill(null);
   const needsEstimate = [];
+  const savedItems = saved || await loadSavedItems(userId);
+
+  // Saved meals whose names the parser split on `and` ("Fat Boy's Burger and
+  // Fries") are rejoined first, longest run first. The span resolves on its
+  // FIRST entry — so the entry-by-reference bookkeeping in logDescription
+  // still holds — and names the rest in `consumes`, which must be treated as
+  // resolved too or they would be reported as dropped (or estimated twice).
+  const consumed = new Set();
+  for (const span of matchSavedMealSpans(entries, savedItems)) {
+    const run = entries.slice(span.start, span.end + 1);
+    resolved[span.start] = { ...resolveSavedMeal(entries[span.start], span.meal), consumes: run };
+    for (let k = span.start + 1; k <= span.end; k += 1) consumed.add(k);
+  }
 
   for (let i = 0; i < entries.length; i += 1) {
+    if (resolved[i] || consumed.has(i)) continue;
     const entry = entries[i];
+
+    // Before history, because history cannot tell his saved "Homemade
+    // Quesadilla" meal from any old row named "Quesadillas": it strips the
+    // qualifier that is the whole difference, and it never reads meals.
+    const savedMatch = matchSavedItem(entry, savedItems);
+    if (savedMatch?.kind === 'meal') {
+      resolved[i] = resolveSavedMeal(entry, savedMatch.meal);
+      continue;
+    }
+    if (savedMatch?.kind === 'food') {
+      const food = savedMatch.food;
+      resolved[i] = {
+        entry,
+        source: 'saved-food',
+        // No `servingsOverride`: unlike a history row, a food he named
+        // himself is one unit, so "2 homemade tamales" really is two
+        // servings of it. This is the case the matcher's eligibility rule
+        // exists to make safe.
+        name: food.name,
+        nutrition: food.nutrition || {},
+        serving: food.serving,
+        foodId: String(food._id),
+        spread: null
+      };
+      continue;
+    }
 
     const history = await findInHistory(userId, entryKey(entry));
     if (history) {
@@ -322,6 +461,96 @@ async function ensureFoodItem(resolution, userId) {
 }
 
 /**
+ * Write a saved meal as its component foods — the same shape the gateway's
+ * `logMeal` writes when he logs the meal from the meals screen: one FoodLog
+ * per component, pointing at the component's own food row, at its servings,
+ * with its own nutrition, captioned "Added from meal: <name>".
+ *
+ * Differences from `logMeal`, each on purpose:
+ *   - the meal type is the one this description resolved (stated, or guessed
+ *     from the hour) like every other described entry, not the meal's saved
+ *     type — he is telling us when he ate it;
+ *   - every component still goes through the rails, so one corrupt saved food
+ *     cannot write nonsense just because it arrived inside a meal;
+ *   - a component that is gone, rejected, or fails to write is SKIPPED BY
+ *     NAME. `logMeal` drops a dangling component with a bare `continue`;
+ *     here that would be a partial meal reported as a whole one.
+ *
+ * Numbers are never re-estimated and no model is asked anything: this is his
+ * food, as he saved it.
+ */
+async function writeSavedMeal(resolution, { userId, date, entryIndex, entryIndexes = null }) {
+  const logged = [];
+  const skipped = [];
+  const mealName = resolution.savedMeal.name;
+  const from = (name) => `${name || 'an item'} (from ${mealName})`;
+  // Carried on every row, logged or skipped, so a span's later entries are
+  // accounted for even if only one component makes it into the log.
+  const covers = entryIndexes ? { entryIndexes } : {};
+
+  if (resolution.components.length === 0 && resolution.missing.length === 0) {
+    skipped.push({ name: mealName, reason: 'saved-meal-empty', entryIndex, ...covers });
+    return { logged, skipped };
+  }
+
+  for (let i = 0; i < resolution.missing.length; i += 1) {
+    skipped.push({ name: from(null), reason: 'missing-from-saved-meal', entryIndex, ...covers });
+  }
+
+  for (const component of resolution.components) {
+    const rails = checkEntry({
+      name: component.name,
+      servings: component.servings,
+      nutrition: component.nutrition,
+      serving: component.serving
+    });
+    if (rails.severity === 'reject') {
+      logger.warn({ name: component.name, meal: mealName, flags: rails.flags }, 'Saved-meal component rejected by sanity rails');
+      skipped.push({ name: from(component.name), reason: rails.flags[0] || 'failed-sanity-check', entryIndex, ...covers });
+      continue;
+    }
+
+    // His saved row is written as it is. The rails may have a correction to
+    // offer, but "correcting" a food he entered by hand would quietly
+    // overrule him; a reject is the only thing allowed to stop it.
+    const nutrition = component.nutrition;
+
+    try {
+      const log = await new FoodLog({
+        user_id: userId,
+        food_item_id: component.foodId,
+        log_date: date,
+        meal_type: resolution.entry.mealType,
+        servings: component.servings,
+        notes: savedMealNote(mealName),
+        nutrition
+      }).save();
+
+      logged.push({
+        logId: String(log._id),
+        name: component.name,
+        servings: component.servings,
+        loggedServings: component.servings,
+        mealType: resolution.entry.mealType,
+        calories: rails.totals.calories,
+        nutrition,
+        source: 'saved-meal',
+        savedMeal: resolution.savedMeal,
+        flags: rails.flags,
+        needsJudge: false,
+        entryIndex,
+        ...covers
+      });
+    } catch (error) {
+      logger.error({ err: error, name: component.name, meal: mealName }, 'Failed to write saved-meal component');
+      skipped.push({ name: from(component.name), reason: 'write-failed', entryIndex, ...covers });
+    }
+  }
+
+  return { logged, skipped };
+}
+
+/**
  * Is this estimate's range worth putting in front of a person?
  *
  * Both ends have to be real numbers, the low above zero, the high above the
@@ -377,18 +606,41 @@ export async function logDescription(text, { userId, date, hour, ...options } = 
   // reference, so anything parsed but not resolved is a silent drop. They go
   // into `skipped`, which callers already render, rather than into a new field
   // nothing reads.
-  const resolvedEntries = new Set(resolutions.map((r) => r.entry));
+  const resolvedEntries = new Set(resolutions.flatMap((r) => r.consumes || [r.entry]));
   const unresolved = parsed.entries.filter((entry) => !resolvedEntries.has(entry));
+
+  // Every logged and skipped row says which described entry it answers. One
+  // entry is usually one row, but a saved meal is one entry and several rows,
+  // so `logged.length + skipped.length === requested` stops being the check
+  // the moment he names one. The check that survives is per entry: every
+  // index from 0 to requested-1 appears on at least one row — in its
+  // `entryIndex`, or in `entryIndexes` when a saved meal's name spanned
+  // several entries ("fat boy's burger and fries" is entries 0 AND 1).
+  const indexOf = (entry) => parsed.entries.indexOf(entry);
 
   const logged = [];
   const skipped = unresolved.map((entry) => ({
     name: entryKey(entry) || entry.description || 'that item',
-    reason: 'could-not-identify'
+    reason: 'could-not-identify',
+    entryIndex: indexOf(entry)
   }));
   const logIds = [];
   const questions = [];
 
   for (const resolution of resolutions) {
+    if (resolution.source === 'saved-meal') {
+      const rows = await writeSavedMeal(resolution, {
+        userId,
+        date,
+        entryIndex: indexOf(resolution.entry),
+        entryIndexes: resolution.consumes ? resolution.consumes.map(indexOf) : null
+      });
+      logged.push(...rows.logged);
+      skipped.push(...rows.skipped);
+      logIds.push(...rows.logged.map((row) => row.logId));
+      continue;
+    }
+
     const servings = resolution.servingsOverride ?? resolution.entry.servings;
     const candidate = {
       name: resolution.name,
@@ -401,7 +653,11 @@ export async function logDescription(text, { userId, date, hour, ...options } = 
     const rails = checkEntry(candidate);
     if (rails.severity === 'reject') {
       logger.warn({ name: resolution.name, flags: rails.flags }, 'Entry rejected by sanity rails');
-      skipped.push({ name: resolution.name, reason: rails.flags[0] || 'failed-sanity-check' });
+      skipped.push({
+        name: resolution.name,
+        reason: rails.flags[0] || 'failed-sanity-check',
+        entryIndex: indexOf(resolution.entry)
+      });
       continue;
     }
 
@@ -429,7 +685,8 @@ export async function logDescription(text, { userId, date, hour, ...options } = 
         nutrition,
         source: resolution.source,
         flags: rails.flags,
-        needsJudge: rails.severity === 'suspect'
+        needsJudge: rails.severity === 'suspect',
+        entryIndex: indexOf(resolution.entry)
       });
 
       // Worth one question only when the answer moves the day AND the range
@@ -454,7 +711,7 @@ export async function logDescription(text, { userId, date, hour, ...options } = 
 
     } catch (error) {
       logger.error({ err: error, name: resolution.name }, 'Failed to write described log');
-      skipped.push({ name: resolution.name, reason: 'write-failed' });
+      skipped.push({ name: resolution.name, reason: 'write-failed', entryIndex: indexOf(resolution.entry) });
     }
   }
 
@@ -480,8 +737,10 @@ export async function logDescription(text, { userId, date, hour, ...options } = 
   }
 
   // `requested` is the count the user actually described. Every entry is now
-  // accounted for — `logged.length + skipped.length === requested` — so a
-  // caller can assert that rather than trust it.
+  // accounted for — each index below `requested` is the `entryIndex` (or in
+  // the `entryIndexes`) of at least one logged or skipped row — so a caller can assert that rather than
+  // trust it. Without a saved meal in the text that is still exactly
+  // `logged.length + skipped.length === requested`.
   return { logged, skipped, logIds, questions, parsed, requested: parsed.entries.length };
 }
 
@@ -489,6 +748,7 @@ export default {
   logDescription,
   usableRange,
   resolveEntries,
+  loadSavedItems,
   reviewLoggedEntries,
   findInHistory,
   detectBrand,

@@ -186,3 +186,49 @@ golden set's absence showing through: nothing measures whether a structured mode
 *good*, only that it is structured (`DOCS/AIGEEK_CAPABILITY_ROUTING.md` §3.2). The estimates
 are within Chef's stated bar — 500 cal for four pancakes is noise at the week level — but
 this is the argument for building the golden set, written down while it is concrete.
+
+## 9. Saved meals and foods come first (2026-09-22)
+
+> "AI searches should prioritize saved foods/meals. I.e., if I have homemade quesadilla saved
+> as a meal/food, it should use that before guessing at something else." — Chef
+
+**What was true before.** Saved MEALS were read by nothing on this path. Saved foods were
+reached only through `findInHistory`, which treats every user-owned `FoodItem` alike and
+strips "homemade"/"my" as noise — so with a saved meal called "Homemade Quesadilla" in place,
+describing "homemade quesadilla" token-matched an old row called "Quesadillas" (1,680 cal per
+100 g) instead. And "2 homemade quesadillas" missed history entirely (the quantity is part of
+the history key) and went to the model.
+
+**What is true now.** A step 0 runs before history (`savedItemMatcher.js`):
+
+- A saved meal, or a saved food whose name says "homemade", matches when its significant words
+  EQUAL the described entry's (dish + `with` components, order-free, singularised).
+- A "homemade" in the saved name must be in the text, or pointed at with "my". Bare
+  "quesadilla" does not become the homemade one.
+- Equality, not subset: the describe path mints rows called "chicken" and "cheese", and a
+  subset rule would log "chicken caesar salad" as a side of chicken. The cost is that
+  "homemade quesadilla with extra guac" falls through to the normal path. A miss, not a wrong
+  answer.
+- Only "homemade"-named saved foods are eligible, because a describe-minted custom row can
+  hold a TOTAL ("a dozen nachos" → one row) and multiplying it by a new quantity is the double
+  count. Every other saved food is still reached by history, as before.
+- A saved meal logs as its component foods, the way the gateway's `logMeal` does, with the
+  same `notes: "Added from meal: <name>"` caption that FoodLogItem already shows. The quantity
+  multiplies every component. The meal type is the described one. A missing component is
+  skipped by name, never dropped. Response rows carry `source: 'saved-meal'` +
+  `savedMeal: {id, name}`, or `source: 'saved-food'`.
+- One entry can now be several rows, so each logged/skipped row carries `entryIndex`. The
+  invariant is per entry: every index below `requested` appears on at least one row.
+
+**Not done:** the describe toast still says "7 items · N cal" (one per component) for a saved meal rather than
+naming it (frontend, deliberately untouched on this branch); unified *search* still returns
+foods only, never saved meals.
+
+**Names with "and" (same day, second pass).** Half his saved meals have "and" in the name
+("Fat Boy's Burger and Fries", "El P's Rachero and Marg"), and the parser splits a top-level
+`and` before matching. Runs of consecutive entries from the same segment (never across a
+comma or meal word) are now rejoined and matched against meals, longest run first; the rest
+resolve normally, so "fat boy's burger and fries and a coke" is the meal plus a coke. The
+first entry's quantity is the meal's; a quantity on a later entry breaks the span. Rows from a
+span carry `entryIndexes` so every consumed entry stays accounted for. Eating verbs and "i"
+("I had my regular home breakfast") are ignored for saved matching.
