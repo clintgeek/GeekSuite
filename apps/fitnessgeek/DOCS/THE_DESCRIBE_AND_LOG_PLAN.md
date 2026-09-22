@@ -221,6 +221,14 @@ the history key) and went to the model.
   invariant is per entry: every index below `requested` appears on at least one row.
 
 **Not done:** the describe toast still says "7 items · N cal" (one per component) for a saved meal rather than
-naming it (frontend, deliberately untouched on this branch); a saved meal whose name has a
-top-level "and" ("El P's Rachero and Marg") is split into two entries by the parser before
-matching; unified *search* still returns foods only, never saved meals.
+naming it (frontend, deliberately untouched on this branch); unified *search* still returns
+foods only, never saved meals.
+
+**Names with "and" (same day, second pass).** Half his saved meals have "and" in the name
+("Fat Boy's Burger and Fries", "El P's Rachero and Marg"), and the parser splits a top-level
+`and` before matching. Runs of consecutive entries from the same segment (never across a
+comma or meal word) are now rejoined and matched against meals, longest run first; the rest
+resolve normally, so "fat boy's burger and fries and a coke" is the meal plus a coke. The
+first entry's quantity is the meal's; a quantity on a later entry breaks the span. Rows from a
+span carry `entryIndexes` so every consumed entry stays accounted for. Eating verbs and "i"
+("I had my regular home breakfast") are ignored for saved matching.

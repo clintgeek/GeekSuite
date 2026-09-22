@@ -110,7 +110,7 @@ export function parseMealDescription(text, options = {}) {
   // A meal stated once carries forward: "breakfast: eggs, toast, coffee".
   let currentMeal = null;
 
-  for (const segment of segments) {
+  for (const [segmentIndex, segment] of segments.entries()) {
     const { meal, text: foodText } = extractMeal(segment);
     if (meal) currentMeal = meal;
     if (!foodText) continue;
@@ -151,6 +151,11 @@ export function parseMealDescription(text, options = {}) {
         // tells "homemade quesadilla" (his saved meal) apart from a
         // restaurant one. See savedItemMatcher.
         qualifiers: fragment.noise,
+        // Which comma/meal-word segment this came from. Entries sharing one
+        // were separated only by a top-level `and`, which is exactly the
+        // split that tears a saved meal name like "Fat Boy's Burger and
+        // Fries" in two; the saved-meal span check rejoins them.
+        segmentIndex,
         mealType,
         isDish: fragment.isDish || endsWithDishNoun(fragment.searchText),
         headNoun: headNounOf(fragment.searchText),

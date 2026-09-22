@@ -39,7 +39,7 @@ import { checkEntry } from './foodSanityRails.js';
 import { rankFoodResults, isConfidentMatch } from './foodRanker.js';
 import { parseMealDescription } from './mealDescriptionParser.js';
 import { parseFoodQuery, normalizeQuery, tokenize } from './foodQueryParser.js';
-import { matchSavedItem } from './savedItemMatcher.js';
+import { matchSavedItem, matchSavedMealSpans } from './savedItemMatcher.js';
 
 /**
  * How wide the model's own calorie range must be before it is worth asking
@@ -243,7 +243,20 @@ export async function resolveEntries(entries, { userId, saved } = {}) {
   const needsEstimate = [];
   const savedItems = saved || await loadSavedItems(userId);
 
+  // Saved meals whose names the parser split on `and` ("Fat Boy's Burger and
+  // Fries") are rejoined first, longest run first. The span resolves on its
+  // FIRST entry — so the entry-by-reference bookkeeping in logDescription
+  // still holds — and names the rest in `consumes`, which must be treated as
+  // resolved too or they would be reported as dropped (or estimated twice).
+  const consumed = new Set();
+  for (const span of matchSavedMealSpans(entries, savedItems)) {
+    const run = entries.slice(span.start, span.end + 1);
+    resolved[span.start] = { ...resolveSavedMeal(entries[span.start], span.meal), consumes: run };
+    for (let k = span.start + 1; k <= span.end; k += 1) consumed.add(k);
+  }
+
   for (let i = 0; i < entries.length; i += 1) {
+    if (resolved[i] || consumed.has(i)) continue;
     const entry = entries[i];
 
     // Before history, because history cannot tell his saved "Homemade
@@ -466,19 +479,22 @@ async function ensureFoodItem(resolution, userId) {
  * Numbers are never re-estimated and no model is asked anything: this is his
  * food, as he saved it.
  */
-async function writeSavedMeal(resolution, { userId, date, entryIndex }) {
+async function writeSavedMeal(resolution, { userId, date, entryIndex, entryIndexes = null }) {
   const logged = [];
   const skipped = [];
   const mealName = resolution.savedMeal.name;
   const from = (name) => `${name || 'an item'} (from ${mealName})`;
+  // Carried on every row, logged or skipped, so a span's later entries are
+  // accounted for even if only one component makes it into the log.
+  const covers = entryIndexes ? { entryIndexes } : {};
 
   if (resolution.components.length === 0 && resolution.missing.length === 0) {
-    skipped.push({ name: mealName, reason: 'saved-meal-empty', entryIndex });
+    skipped.push({ name: mealName, reason: 'saved-meal-empty', entryIndex, ...covers });
     return { logged, skipped };
   }
 
   for (let i = 0; i < resolution.missing.length; i += 1) {
-    skipped.push({ name: from(null), reason: 'missing-from-saved-meal', entryIndex });
+    skipped.push({ name: from(null), reason: 'missing-from-saved-meal', entryIndex, ...covers });
   }
 
   for (const component of resolution.components) {
@@ -490,7 +506,7 @@ async function writeSavedMeal(resolution, { userId, date, entryIndex }) {
     });
     if (rails.severity === 'reject') {
       logger.warn({ name: component.name, meal: mealName, flags: rails.flags }, 'Saved-meal component rejected by sanity rails');
-      skipped.push({ name: from(component.name), reason: rails.flags[0] || 'failed-sanity-check', entryIndex });
+      skipped.push({ name: from(component.name), reason: rails.flags[0] || 'failed-sanity-check', entryIndex, ...covers });
       continue;
     }
 
@@ -522,11 +538,12 @@ async function writeSavedMeal(resolution, { userId, date, entryIndex }) {
         savedMeal: resolution.savedMeal,
         flags: rails.flags,
         needsJudge: false,
-        entryIndex
+        entryIndex,
+        ...covers
       });
     } catch (error) {
       logger.error({ err: error, name: component.name, meal: mealName }, 'Failed to write saved-meal component');
-      skipped.push({ name: from(component.name), reason: 'write-failed', entryIndex });
+      skipped.push({ name: from(component.name), reason: 'write-failed', entryIndex, ...covers });
     }
   }
 
@@ -589,14 +606,16 @@ export async function logDescription(text, { userId, date, hour, ...options } = 
   // reference, so anything parsed but not resolved is a silent drop. They go
   // into `skipped`, which callers already render, rather than into a new field
   // nothing reads.
-  const resolvedEntries = new Set(resolutions.map((r) => r.entry));
+  const resolvedEntries = new Set(resolutions.flatMap((r) => r.consumes || [r.entry]));
   const unresolved = parsed.entries.filter((entry) => !resolvedEntries.has(entry));
 
   // Every logged and skipped row says which described entry it answers. One
   // entry is usually one row, but a saved meal is one entry and several rows,
   // so `logged.length + skipped.length === requested` stops being the check
   // the moment he names one. The check that survives is per entry: every
-  // index from 0 to requested-1 appears on at least one row.
+  // index from 0 to requested-1 appears on at least one row — in its
+  // `entryIndex`, or in `entryIndexes` when a saved meal's name spanned
+  // several entries ("fat boy's burger and fries" is entries 0 AND 1).
   const indexOf = (entry) => parsed.entries.indexOf(entry);
 
   const logged = [];
@@ -610,7 +629,12 @@ export async function logDescription(text, { userId, date, hour, ...options } = 
 
   for (const resolution of resolutions) {
     if (resolution.source === 'saved-meal') {
-      const rows = await writeSavedMeal(resolution, { userId, date, entryIndex: indexOf(resolution.entry) });
+      const rows = await writeSavedMeal(resolution, {
+        userId,
+        date,
+        entryIndex: indexOf(resolution.entry),
+        entryIndexes: resolution.consumes ? resolution.consumes.map(indexOf) : null
+      });
       logged.push(...rows.logged);
       skipped.push(...rows.skipped);
       logIds.push(...rows.logged.map((row) => row.logId));
@@ -713,8 +737,8 @@ export async function logDescription(text, { userId, date, hour, ...options } = 
   }
 
   // `requested` is the count the user actually described. Every entry is now
-  // accounted for — each index below `requested` is the `entryIndex` of at
-  // least one logged or skipped row — so a caller can assert that rather than
+  // accounted for — each index below `requested` is the `entryIndex` (or in
+  // the `entryIndexes`) of at least one logged or skipped row — so a caller can assert that rather than
   // trust it. Without a saved meal in the text that is still exactly
   // `logged.length + skipped.length === requested`.
   return { logged, skipped, logIds, questions, parsed, requested: parsed.entries.length };

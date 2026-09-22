@@ -74,7 +74,7 @@ jest.unstable_mockModule(mod('../../services/unifiedFoodService.js'), () => ({
 }));
 
 const { logDescription } = await import('../../services/describeAndLogService.js');
-const { matchSavedItem } = await import('../../services/savedItemMatcher.js');
+const { matchSavedItem, matchSavedMealSpans } = await import('../../services/savedItemMatcher.js');
 const { parseMealDescription } = await import('../../services/mealDescriptionParser.js');
 
 const food = (id, name, calories, extra = {}) => ({
@@ -111,7 +111,7 @@ const entryOf = (text) => parseMealDescription(text, { hour: 19 }).entries[0];
 
 /** Every described entry appears on at least one logged or skipped row. */
 const everyEntryAccountedFor = (result) => {
-  const seen = new Set([...result.logged, ...result.skipped].map((row) => row.entryIndex));
+  const seen = new Set([...result.logged, ...result.skipped].flatMap((row) => row.entryIndexes || [row.entryIndex]));
   for (let i = 0; i < result.requested; i += 1) {
     if (!seen.has(i)) return false;
   }
@@ -259,6 +259,120 @@ describe('a saved food in the text', () => {
     expect(result.logged).toHaveLength(1);
     expect(result.logged[0]).toMatchObject({ source: 'saved-food', name: 'Homemade Tamales', loggedServings: 2 });
     expect(savedLogs[0].food_item_id).toBe('f-tamale');
+  });
+});
+
+// Chef's real saved meal names, 2026-09-22. Half contain "and", which the
+// parser splits into separate entries before any matching runs.
+const REAL_MEALS = [
+  'Home Breakfast Sandwich',
+  "El P's Enchiladas Ranchera Plate and a Margarita",
+  "Fat Boy's Burger and Fries",
+  "Fat Boy's Burger and Fries",
+  'Regular Home Breakfast',
+  "El P's Rachero and Marg",
+  'Shake Meal',
+  'Homemade Quesadilla'
+].map((name, i) => ({ _id: `meal-${i}`, name }));
+
+/** What each entry of a sentence resolves to, by name ('-' for no saved meal). */
+const whatMatches = (text) => {
+  const entries = parseMealDescription(text, { hour: 12 }).entries;
+  const out = entries.map(() => '-');
+  const covered = new Set();
+  for (const span of matchSavedMealSpans(entries, { meals: REAL_MEALS })) {
+    for (let k = span.start; k <= span.end; k += 1) { out[k] = span.meal.name; covered.add(k); }
+  }
+  entries.forEach((entry, k) => {
+    if (covered.has(k)) return;
+    const hit = matchSavedItem(entry, { meals: REAL_MEALS });
+    if (hit) out[k] = hit.meal.name;
+  });
+  return out;
+};
+
+describe('his real saved meals', () => {
+  test.each([
+    ["fat boy's burger and fries", ["Fat Boy's Burger and Fries", "Fat Boy's Burger and Fries"]],
+    ["for lunch fat boy's burger and fries", ["Fat Boy's Burger and Fries", "Fat Boy's Burger and Fries"]],
+    ["El P's Rachero and Marg", ["El P's Rachero and Marg", "El P's Rachero and Marg"]],
+    ["el p's enchiladas ranchera plate and a margarita",
+      ["El P's Enchiladas Ranchera Plate and a Margarita", "El P's Enchiladas Ranchera Plate and a Margarita"]]
+  ])('a name with "and" in it is rejoined: %s', (text, expected) => {
+    expect(whatMatches(text)).toEqual(expected);
+  });
+
+  test('a trailing extra item stays its own entry', () => {
+    expect(whatMatches("fat boy's burger and fries and a coke"))
+      .toEqual(["Fat Boy's Burger and Fries", "Fat Boy's Burger and Fries", '-']);
+    expect(whatMatches("a coke and el p's rachero and marg"))
+      .toEqual(['-', "El P's Rachero and Marg", "El P's Rachero and Marg"]);
+  });
+
+  test('eating verbs neither add nor block words', () => {
+    expect(whatMatches('had my regular home breakfast')).toEqual(['Regular Home Breakfast']);
+    expect(whatMatches('I ate a shake meal')).toEqual(['Shake Meal']);
+  });
+
+  test('what already worked still works', () => {
+    expect(whatMatches('homemade quesadilla')).toEqual(['Homemade Quesadilla']);
+    expect(whatMatches('2 homemade quesadillas')).toEqual(['Homemade Quesadilla']);
+    expect(whatMatches('my quesadilla')).toEqual(['Homemade Quesadilla']);
+    expect(whatMatches('home breakfast sandwich')).toEqual(['Home Breakfast Sandwich']);
+    expect(whatMatches('a shake meal and a coffee')).toEqual(['Shake Meal', '-']);
+  });
+
+  test('regression: a bare quesadilla is still not the homemade one', () => {
+    expect(whatMatches('a quesadilla')).toEqual(['-']);
+    expect(whatMatches('had a quesadilla')).toEqual(['-']);
+  });
+
+  test('a span never forms across a comma, and a later quantity breaks it', () => {
+    expect(whatMatches("fat boy's burger, fries")).toEqual(['-', '-']);
+    expect(whatMatches("fat boy's burger and 3 fries")).toEqual(['-', '-']);
+  });
+
+  test('a span logs the meal once, accounts for BOTH entries, and estimates only the rest', async () => {
+    const burger = {
+      _id: 'meal-fb',
+      name: "Fat Boy's Burger and Fries",
+      meal_type: 'lunch',
+      food_items: [
+        { food_item_id: food('f-burger', 'Cheeseburger', 700), servings: 1 },
+        { food_item_id: food('f-fries', 'French Fries', 400), servings: 1 }
+      ]
+    };
+    mealFind.mockImplementation(() => chain([burger]));
+    estimateDishes.mockImplementation(async () => ({ ok: true, dishes: [estimated(0, 'Coke', 140)] }));
+
+    const result = await run("2 fat boy's burger and fries and a coke");
+
+    expect(result.requested).toBe(3);
+    // The model saw only the coke — "fries" was part of the meal's name.
+    expect(estimateDishes).toHaveBeenCalledTimes(1);
+    expect(estimateDishes.mock.calls[0][0].map((e) => e.dish)).toEqual(['coke']);
+    expect(result.logged.map((row) => row.source)).toEqual(['saved-meal', 'saved-meal', 'estimate']);
+    // The first entry's quantity is the meal's.
+    expect(savedLogs.slice(0, 2).map((log) => log.servings)).toEqual([2, 2]);
+    expect(savedLogs[0].notes).toBe("Added from meal: Fat Boy's Burger and Fries");
+    expect(result.logged[0].entryIndexes).toEqual([0, 1]);
+    expect(everyEntryAccountedFor(result)).toBe(true);
+  });
+
+  test('a span whose components all fail still accounts for every entry it consumed', async () => {
+    mealFind.mockImplementation(() => chain([{
+      _id: 'meal-fb',
+      name: "Fat Boy's Burger and Fries",
+      food_items: [{ food_item_id: null, servings: 1 }]
+    }]));
+
+    const result = await run("fat boy's burger and fries");
+
+    expect(result.logged).toHaveLength(0);
+    expect(result.skipped).toHaveLength(1);
+    expect(result.skipped[0]).toMatchObject({ reason: 'missing-from-saved-meal', entryIndexes: [0, 1] });
+    expect(everyEntryAccountedFor(result)).toBe(true);
+    expect(estimateDishes).not.toHaveBeenCalled();
   });
 });
 

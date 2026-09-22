@@ -37,9 +37,34 @@
  *
  * The cost, chosen knowingly: "homemade quesadilla with extra guac" does not
  * match "Homemade Quesadilla" and goes down the normal path (history, then an
- * estimate). So does a saved meal whose name the parser splits apart — "El P's
- * Rachero and Marg" is two entries by the time it gets here, because a
- * top-level `and` separates dishes. Both are misses, not wrong answers.
+ * estimate). A miss, not a wrong answer.
+ *
+ * MEAL NAMES WITH "AND" IN THEM — spans of entries
+ * ------------------------------------------------
+ * Half of Chef's saved meals have an "and" in the name: "Fat Boy's Burger and
+ * Fries", "El P's Rachero and Marg", "El P's Enchiladas Ranchera Plate and a
+ * Margarita". The parser splits a top-level `and` into separate entries
+ * before anything here runs — correctly, for "eggs and toast" — so no single
+ * entry could ever equal those names. `matchSavedMealSpan` rejoins runs of
+ * consecutive entries from the SAME segment (separated only by `and`, never by
+ * a comma or a meal word) and applies the same equality rule, longest run
+ * first. "fat boy's burger and fries and a coke" is the meal plus a coke.
+ *
+ * Spans are for meals only. A saved food is one thing; two dishes joined by
+ * "and" are not one food.
+ *
+ * Quantity for a span is the FIRST entry's ("2 fat boy's burger and fries" is
+ * two of the meal). A quantity on any later entry ("... and 3 fries") means he
+ * is describing something other than the saved meal, so the span does not
+ * match and the entries resolve one by one.
+ *
+ * FILLER WORDS — "had my regular home breakfast"
+ * ----------------------------------------------
+ * A few eating verbs and "i" are ignored on both sides, so the way people
+ * actually say it ("I had my regular home breakfast") neither adds words nor
+ * blocks a match. The trade-off: a saved meal NAMED with one of these words
+ * ("Got Milk Shake") loses that word for matching. A name that depends on an eating verb is implausible enough to
+ * accept that.
  *
  * WHICH SAVED FOODS ARE ELIGIBLE — only ones NAMED with a qualifier
  * ------------------------------------------------------------------
@@ -72,6 +97,18 @@ const HOMEMADE = 'homemade';
 const POSSESSIVE_WORDS = new Set(['my']);
 
 /**
+ * How people say they ate something, not what they ate. See the header for
+ * the trade-off. Deliberately short: every word added here is a word a saved
+ * name can no longer be told apart by.
+ */
+const FILLER_WORDS = new Set([
+  'i', 'had', 'have', 'having', 'ate', 'eat', 'eating', 'got', 'grabbed'
+]);
+
+/** Longest run of `and`-joined entries tried as one meal name. */
+const MAX_SPAN = 4;
+
+/**
  * The significant words of a phrase. Like `foodQueryParser.tokenize`, except
  * that the homemade qualifier survives (canonicalised) instead of being thrown
  * away as noise. Every other noise word ("leftover", "some", "about") still
@@ -88,7 +125,7 @@ export function significantWords(text) {
   for (const word of words) {
     if (HOMEMADE_WORDS.has(word)) { out.add(HOMEMADE); continue; }
     if (POSSESSIVE_WORDS.has(word)) { possessive = true; continue; }
-    if (NOISE_WORDS.has(word) || STOP_TOKENS.has(word)) continue;
+    if (NOISE_WORDS.has(word) || STOP_TOKENS.has(word) || FILLER_WORDS.has(word)) continue;
     out.add(singularize(word));
   }
   return { words: out, possessive };
@@ -158,4 +195,72 @@ export function matchSavedItem(entry, { meals = [], foods = [] } = {}) {
   return null;
 }
 
-export default { matchSavedItem, namesMatch, significantWords, entryWords, isEligibleSavedFood };
+/**
+ * The words of several entries read as ONE name: dishes rejoined with the
+ * `and` the parser split on, plus every entry's components and qualifiers.
+ */
+export function spanWords(entries) {
+  return entryWords({
+    dish: entries.map((e) => e?.dish || e?.description || '').join(' and '),
+    components: entries.flatMap((e) => (Array.isArray(e?.components) ? e.components : [])),
+    qualifiers: entries.flatMap((e) => (Array.isArray(e?.qualifiers) ? e.qualifiers : []))
+  });
+}
+
+/**
+ * Saved meals whose names span several consecutive entries. See the header.
+ *
+ * Returns non-overlapping spans, each `{start, end, meal}` (inclusive indexes
+ * into `entries`), found left to right with the longest run tried first at
+ * each position. Entries without a `segmentIndex` never join a span — only
+ * the parser can say two entries were split by `and` rather than a comma.
+ *
+ * @param {object[]} entries  `parseMealDescription` entries, in order
+ * @param {{meals?: object[]}} saved
+ */
+export function matchSavedMealSpans(entries, { meals = [] } = {}) {
+  const spans = [];
+  if (!Array.isArray(entries) || meals.length === 0) return spans;
+
+  let start = 0;
+  while (start < entries.length) {
+    const segment = entries[start]?.segmentIndex;
+    let found = null;
+
+    if (segment !== undefined && segment !== null) {
+      let last = start;
+      while (
+        last + 1 < entries.length &&
+        last + 1 - start < MAX_SPAN &&
+        entries[last + 1]?.segmentIndex === segment
+      ) last += 1;
+
+      for (let end = last; end > start && !found; end -= 1) {
+        const run = entries.slice(start, end + 1);
+        // A later quantity changes the meal; see the header.
+        if (run.slice(1).some((e) => Number(e?.servings ?? 1) !== 1)) continue;
+        const described = spanWords(run);
+        const meal = meals.find((m) => m?.name && namesMatch(m.name, described));
+        if (meal) found = { start, end, meal };
+      }
+    }
+
+    if (found) {
+      spans.push(found);
+      start = found.end + 1;
+    } else {
+      start += 1;
+    }
+  }
+  return spans;
+}
+
+export default {
+  matchSavedItem,
+  matchSavedMealSpans,
+  namesMatch,
+  significantWords,
+  entryWords,
+  spanWords,
+  isEligibleSavedFood
+};
