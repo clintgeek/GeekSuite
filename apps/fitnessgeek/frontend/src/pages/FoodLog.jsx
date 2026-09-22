@@ -495,11 +495,17 @@ const FoodLog = () => {
 
       {/* The search box, inline. It is the page's main job, so it is on the
           page — not behind a button that opens a dialog that owns a tab that
-          contains a field. Its empty state is favourites and recents, which
-          is what the Quick Add accordion used to be. */}
+          contains a field.
+
+          Its empty state is favourites and recents, which is what the Quick
+          Add accordion used to be — and which is folded here, because on THIS
+          page the meals below are what you came to see. It stays open on the
+          dedicated search page, where it is the content rather than something
+          in front of the content. */}
       <Surface sx={{ p: { xs: 1.5, sm: 2 }, mb: 3 }}>
         <UnifiedFoodSearch
           mode="page"
+          collapseIdleList
           mealType={selectedMealType}
           onMealTypeChange={setSelectedMealType}
           onLogItems={logItems}

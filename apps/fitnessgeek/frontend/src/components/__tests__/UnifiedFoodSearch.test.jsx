@@ -417,3 +417,72 @@ describe('the portion question', () => {
     expect(screen.queryByText(/how big was/i)).toBeNull();
   });
 });
+
+/**
+ * The idle list, folded.
+ *
+ * With no query, `suggest('')` returns up to fifteen of your own foods —
+ * roughly 800px of rows. On the Food Log that sits between the search box and
+ * the meals, so arriving to check what you ate meant scrolling past your whole
+ * food catalogue first.
+ *
+ * The line that must not be crossed: folding applies to the IDLE list only.
+ * The moment there is a query, the results are what was asked for.
+ */
+describe('the idle list is folded where it would bury the page', () => {
+  const mine = [food('Greek yogurt'), food('Rye toast'), food('Cold brew')];
+
+  it('hides your own foods behind the heading, with a count', async () => {
+    suggest.mockResolvedValue(mine);
+    renderBox({ collapseIdleList: true });
+    await vi.advanceTimersByTimeAsync(200);
+
+    // The heading is there and says how many are behind it — folded, that
+    // count is the only thing telling you the list exists.
+    expect(await screen.findByText('Your foods')).toBeInTheDocument();
+    expect(screen.getByText('3')).toBeInTheDocument();
+    expect(screen.queryByText('Greek yogurt')).not.toBeInTheDocument();
+  });
+
+  it('opens on a tap and closes again', async () => {
+    suggest.mockResolvedValue(mine);
+    renderBox({ collapseIdleList: true });
+    await vi.advanceTimersByTimeAsync(200);
+
+    const toggle = screen.getByRole('button', { expanded: false });
+    fireEvent.click(toggle);
+    expect(await screen.findByText('Greek yogurt')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { expanded: true }));
+    await waitFor(() => expect(screen.queryByText('Greek yogurt')).not.toBeInTheDocument());
+  });
+
+  it('NEVER folds what you searched for', async () => {
+    // The whole risk of this change: typing and being shown a folded list.
+    suggest.mockResolvedValue([food('Pancakes')]);
+    renderBox({ collapseIdleList: true });
+    type('pancakes');
+    await vi.advanceTimersByTimeAsync(600);
+
+    expect(await screen.findByText('Pancakes')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { expanded: false })).not.toBeInTheDocument();
+  });
+
+  it('leaves the list open where nothing is underneath it', async () => {
+    // The dedicated search page passes no flag: there the list IS the page.
+    suggest.mockResolvedValue(mine);
+    renderBox();
+    await vi.advanceTimersByTimeAsync(200);
+
+    expect(await screen.findByText('Greek yogurt')).toBeInTheDocument();
+  });
+
+  it('shows the ordinary empty state rather than a heading with nothing behind it', async () => {
+    suggest.mockResolvedValue([]);
+    renderBox({ collapseIdleList: true });
+    await vi.advanceTimersByTimeAsync(200);
+
+    expect(await screen.findByText(/what did you eat/i)).toBeInTheDocument();
+    expect(screen.queryByText('Your foods')).not.toBeInTheDocument();
+  });
+});

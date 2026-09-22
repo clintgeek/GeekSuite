@@ -12,6 +12,42 @@ anything a future reader would otherwise have to rediscover.
 
 ## 2026-09-22
 
+### FitnessGeek — the food log opened onto your food catalogue, not your log
+
+Chef: *"the 'Your foods' section is expanded and consumes quite a bit of the
+page before you see the logs."*
+
+With no query typed, `suggest('')` returns up to fifteen of your own foods.
+On the Food Log that list sits between the search box and the meals — roughly
+800px of rows — so arriving at the page to check what you ate meant scrolling
+past your whole food catalogue first.
+
+The idle list now folds behind its heading, which carries a count so you can
+still see it is there. Two things were deliberate:
+
+- **Only the IDLE list folds.** The moment there is a query, results are what
+  you asked for and are never hidden. That is the one way this change could
+  have made things worse, so it has a test named for it.
+- **Opt-in per caller** (`collapseIdleList`), not keyed off `mode`. The
+  dedicated search page is also `mode="page"` and there the list IS the
+  content, with nothing underneath for it to bury. The Food Log is the only
+  caller that passes the flag.
+
+The folded state is not remembered between visits, on purpose: it describes
+what the page is FOR, not a preference. Opening it once to log a snack should
+not change what you see tomorrow.
+
+Landmine avoided rather than hit: the count started as a small filled `Chip`
+at 0.6875rem — 11px, under the suite's 12px floor, and exactly the chip
+contrast trap already recorded in the mobile-UI notes. It is plain text now,
+which needs neither fix.
+
+226 fitnessgeek tests, build exits 0, mobile harness 24 scenes / 0 violations
+with `--enforce-a11y`. Note the harness fixture has an empty food catalogue,
+so its log scene renders the empty state and never exercises this — it proves
+nothing broke, not that the fold works. The five unit tests do that, two of
+them confirmed red against the unfolded render.
+
 ### NoteGeek — Tidy removed
 
 Chef: *"I think we should remove tidy. I think compose does a better job than

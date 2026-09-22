@@ -1,6 +1,10 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Box, Typography, Alert, Button, Skeleton, LinearProgress, Chip } from '@mui/material';
-import { AddCircleOutline as CreateIcon, AutoAwesome as WandIcon } from '@mui/icons-material';
+import { Box, Typography, Alert, Button, Skeleton, LinearProgress, Chip, Collapse, ButtonBase } from '@mui/material';
+import {
+  AddCircleOutline as CreateIcon,
+  AutoAwesome as WandIcon,
+  ExpandMore as ExpandIcon,
+} from '@mui/icons-material';
 import { useTheme, alpha } from '@mui/material/styles';
 import { useToast, readableOn } from '@geeksuite/ui';
 import SearchBar from './SearchBar';
@@ -75,6 +79,19 @@ const UnifiedFoodSearch = ({
   initialQuery = '',
   ketoMode = false,
   autoFocus = false,
+  /**
+   * Fold the idle list ("Your foods") behind its heading until asked for.
+   *
+   * With no query typed, `suggest('')` returns up to fifteen of your own
+   * foods — roughly 800px of rows. On the dedicated search page that IS the
+   * page and it belongs open. On the Food Log it sits between the search box
+   * and the meals, so arriving at the page to check what you ate means
+   * scrolling past your entire food catalogue first.
+   *
+   * Only the IDLE list folds. The moment there is a query, results are what
+   * was asked for and are always shown.
+   */
+  collapseIdleList = false,
   className
 }) => {
   const theme = useTheme();
@@ -93,6 +110,11 @@ const UnifiedFoodSearch = ({
   const [describing, setDescribing] = useState(false);
   // At most one, and only when the backend judged it worth asking (§3.8).
   const [question, setQuestion] = useState(null);
+
+  // Collapsed on arrival every time, deliberately not remembered: the folded
+  // state is about what the PAGE is for, not a preference. Someone who opened
+  // it once to log a snack still wants to see their log first tomorrow.
+  const [idleListOpen, setIdleListOpen] = useState(false);
 
   const localAbort = useRef(null);
   const deepAbort = useRef(null);
@@ -419,6 +441,53 @@ const UnifiedFoodSearch = ({
     </Typography>
   );
 
+  /**
+   * The same heading, but it opens and closes the list under it.
+   *
+   * Built on the plain one so the two cannot drift apart visually — this is
+   * the identical type, plus a count and a chevron. The count matters: folded,
+   * it is the only thing telling you the list is there at all.
+   */
+  const collapsibleHeading = (text, count, open, onToggle) => (
+    <ButtonBase
+      onClick={onToggle}
+      aria-expanded={open}
+      sx={{
+        width: '100%',
+        justifyContent: 'flex-start',
+        borderRadius: 2,
+        // 44px is the suite's tap floor; the heading's own margins do not
+        // count towards it.
+        minHeight: 44,
+        px: 0.5,
+        '&:hover': { bgcolor: alpha(theme.palette.text.primary, 0.04) },
+      }}
+    >
+      {sectionHeading(text)}
+      {/* A plain number, not a Chip. A small filled chip is the suite's
+          standing trap — it lands under the 12px text floor and its contrast
+          cannot be fixed with `readableOn`. This needs neither. */}
+      <Typography
+        component="span"
+        sx={{ ml: 1, mt: 2, mb: 0.5, color: muted, fontSize: '0.8125rem', fontVariantNumeric: 'tabular-nums' }}
+      >
+        {count}
+      </Typography>
+      <ExpandIcon
+        fontSize="small"
+        sx={{
+          ml: 'auto',
+          mt: 2,
+          mb: 0.5,
+          mr: 1,
+          color: muted,
+          transition: 'transform 150ms ease',
+          transform: open ? 'rotate(180deg)' : 'none',
+        }}
+      />
+    </ButtonBase>
+  );
+
   const renderRow = (food) => (
     <FoodResultRow
       key={identityOf(food)}
@@ -588,10 +657,17 @@ const UnifiedFoodSearch = ({
             {foods.map(renderRow)}
           </Box>
         ))
-      ) : (
+      ) : searching || !collapseIdleList || plain.length === 0 ? (
         <>
           {!searching && plain.length > 0 && sectionHeading('Your foods')}
           {plain.map(renderRow)}
+        </>
+      ) : (
+        <>
+          {collapsibleHeading('Your foods', plain.length, idleListOpen, () => setIdleListOpen((v) => !v))}
+          <Collapse in={idleListOpen} unmountOnExit>
+            {plain.map(renderRow)}
+          </Collapse>
         </>
       )}
 
