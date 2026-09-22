@@ -187,11 +187,28 @@ const BarcodeScanner = ({ open, onClose, onBarcodeScanned }) => {
 
     try {
       const food = await fitnessGeekService.getFoodByBarcode(barcode);
-      if (food) {
-        onBarcodeScanned(food);
+      if (!food) {
+        setError('No product found for this barcode. Try manual entry or a different barcode.');
+        return;
+      }
+
+      // Finding the product is not the same as logging it. `onBarcodeScanned`
+      // does the actual write and reports back whether it landed — this used
+      // to close on the lookup alone, so a failed log still closed the
+      // scanner and showed nothing wrong. Close only on a real success; a
+      // failure keeps the scanner open with the error right here, the same
+      // place the "no product found" message already lives.
+      let logged = false;
+      try {
+        logged = await onBarcodeScanned(food);
+      } catch {
+        logged = false;
+      }
+
+      if (logged) {
         onClose();
       } else {
-        setError('No product found for this barcode. Try manual entry or a different barcode.');
+        setError('Could not log that item. Try again.');
       }
     } catch {
       setError('Failed to lookup barcode.');

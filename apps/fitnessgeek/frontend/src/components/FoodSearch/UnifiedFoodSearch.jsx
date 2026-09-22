@@ -35,7 +35,22 @@ import { foodService } from '../../services/foodService';
  *
  * Tapping a row logs it at its default serving with an undo in the toast; the
  * trailing control opens the serving editor for the adds that need one. From
- * the second item onward a ribbon shows what this sitting has come to.
+ * the second item onward a ribbon shows what this sitting has come to. That
+ * is a *session* — you're picking several things — so the box (and any
+ * dialog it's mounted in) stays open across every one of those taps; only
+ * the person decides when a picking session is done.
+ *
+ * A described meal is a different gesture: one line, one tap, and the whole
+ * thing is written. Chef's own words for the difference: "on the one-tap
+ * [describe] or barcode scan, the modal should close to show it completed
+ * successfully. Clicking individual items is fine with the pop up count/tray
+ * it has." So a *clean* describe-and-log — logged something, nothing was
+ * skipped, nothing needs answering — calls the optional `onClose` prop, which
+ * a caller wires to whatever "done" means for it (AddFoodDialog closes the
+ * sheet; the inline mounts on FoodLog/FoodSearch pass nothing, since clearing
+ * the box, which already happens, IS "closed" when there's no sheet to close).
+ * A partial result (a skip, or a portion question) never closes anything —
+ * there's something on screen the person still needs to see.
  *
  * DESCRIBE IS THE PRIMARY PATH (2026-09-16). Chef does not want to be the
  * search operator — he wants to say what he ate and have it written
@@ -75,6 +90,7 @@ const UnifiedFoodSearch = ({
   onAdjustCalories,    // (logId, nutrition, servings, targetCalories) => Promise<boolean>
   onUndo,              // (logIds) => Promise<void>
   onCreateFood,        // (query) => void
+  onClose,             // () => void — a clean one-shot describe-and-log calls this
   onBarcodeClick,
   initialQuery = '',
   ketoMode = false,
@@ -336,6 +352,16 @@ const UnifiedFoodSearch = ({
             </Button>
           ) : undefined
         });
+
+        // Chef: "the one-tap ... should close to show it completed
+        // successfully." Clean means nothing landed on the cutting-room
+        // floor and nothing needs answering — a skip or a portion question
+        // is something to look at, so those keep the sheet open even though
+        // the log write itself succeeded. The toast above still confirms it,
+        // with its own Undo, for whoever's sheet just closed under them.
+        if (skipped.length === 0 && !asked) {
+          onClose?.();
+        }
       }
 
       // A described line can partly fail: the sanity rails reject one entry
@@ -359,7 +385,7 @@ const UnifiedFoodSearch = ({
     } finally {
       setDescribing(false);
     }
-  }, [query, onDescribe, describing, onUndo, notify]);
+  }, [query, onDescribe, describing, onUndo, onClose, notify]);
 
   /** Answering re-scales the log that was already written. */
   const answerQuestion = useCallback(async (asked, targetCalories) => {

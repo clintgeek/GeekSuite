@@ -133,6 +133,23 @@ describe('one tap logs it', () => {
     fireEvent.click(await screen.findByRole('button', { name: /undo/i }));
     await waitFor(() => expect(onUndo).toHaveBeenCalledWith(['log-1']));
   });
+
+  it('never closes anything on a single tap — building the tray is the point', async () => {
+    // Chef: "Clicking individual items is fine with the pop up count/tray it
+    // has." Picking several results is a session the person ends, not a
+    // single gesture that should whisk the sheet away out from under them.
+    const onClose = vi.fn();
+    const onLogItems = vi.fn().mockResolvedValue({ ok: 1, fail: 0, logIds: ['log-1'] });
+    suggest.mockResolvedValue([food('Pancakes')]);
+
+    renderBox({ onLogItems, onClose });
+    type('pancakes');
+    await vi.advanceTimersByTimeAsync(200);
+    fireEvent.click(await screen.findByText('Pancakes'));
+
+    await waitFor(() => expect(onLogItems).toHaveBeenCalledTimes(1));
+    expect(onClose).not.toHaveBeenCalled();
+  });
 });
 
 describe('dead ends', () => {
@@ -275,6 +292,49 @@ describe('describing a meal', () => {
     expect(await screen.findByText(/skipped Beef flautas/i)).toBeInTheDocument();
   });
 
+  it('closes the sheet on a clean log — Chef: "the one-tap ... should close to show it completed successfully"', async () => {
+    const onClose = vi.fn();
+    renderDescribable({ onClose });
+    say('pancakes');
+    await vi.advanceTimersByTimeAsync(600);
+    fireEvent.click(screen.getByText(/Log “pancakes”/));
+
+    await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+  });
+
+  it('does not close the sheet when an entry was skipped — there is something to read', async () => {
+    describeMeal.mockResolvedValue({
+      ok: 1, fail: 1, logIds: ['log-1'],
+      logged: [logged()],
+      skipped: [{ name: 'Beef flautas', reason: 'portion-insane' }],
+      questions: [], totalCalories: 880
+    });
+    const onClose = vi.fn();
+    renderDescribable({ onClose });
+    say('pancakes and 41 beef flautas');
+    await vi.advanceTimersByTimeAsync(600);
+    fireEvent.click(screen.getByText(/Log “pancakes and 41 beef flautas”/));
+
+    await screen.findByText(/skipped Beef flautas/i);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
+  it('does not close the sheet when nothing at all was logged', async () => {
+    describeMeal.mockResolvedValue({
+      ok: 0, fail: 1, logIds: [],
+      logged: [], skipped: [{ name: 'mystery', reason: 'no-match' }],
+      questions: [], totalCalories: 0
+    });
+    const onClose = vi.fn();
+    renderDescribable({ onClose });
+    say('mystery food');
+    await vi.advanceTimersByTimeAsync(600);
+    fireEvent.click(screen.getByText(/Log “mystery food”/));
+
+    await screen.findByText(/couldn't make sense of that/i);
+    expect(onClose).not.toHaveBeenCalled();
+  });
+
   it('shows the server’s own words when there was no food in the text', async () => {
     const err = new Error('request failed');
     err.response = { data: { error: { message: "I couldn't find any food in that" } } };
@@ -364,6 +424,22 @@ describe('the portion question', () => {
 
     fireEvent.click(screen.getByText(/^Log “/));
     expect(await screen.findByText(/how big was the nachos with beef and cheese/i)).toBeInTheDocument();
+  });
+
+  it('does not close the sheet while a portion question is pending', async () => {
+    // The write already succeeded (ok:1, no skips) — only the question keeps
+    // this from being a "clean" log. Answering it re-scales what's already
+    // on screen, so the sheet has to stay for that to be reachable.
+    const onClose = vi.fn();
+    render(
+      <GeekToastProvider>
+        <UnifiedFoodSearch onLogItems={vi.fn()} onDescribe={describeMeal} onAdjustCalories={adjust} onClose={onClose} />
+      </GeekToastProvider>
+    );
+    await logIt();
+
+    await screen.findByText(/how big was the nachos with beef and cheese/i);
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it('offers the model’s own range rather than a vague bigger/smaller', async () => {
