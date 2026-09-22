@@ -96,8 +96,8 @@ beforeEach(() => {
     data: {
       composeNote: {
         markdown: COMPOSED,
-        stats: { inputChars: 30, fragments: 3, chunks: 1, chunksFailed: 0, strategy: 'single' },
-        provenance: null,
+        stats: { inputChars: 30, fragments: 3, chunks: 1, chunksFailed: 0, strategy: 'single', truncated: false, degenerate: false },
+        provenance: { reason: null, model: 'gemma4:31b' },
       },
     },
   });
@@ -156,6 +156,31 @@ describe('composing a note', () => {
     expect(vars.content).toBe(COMPOSED);
     // Without this the entry is indistinguishable from a hand edit.
     expect(vars.changeReason).toBe('compose');
+    expect(createNote).not.toHaveBeenCalled();
+  });
+
+  it('explains a discarded loop, and offers a retry rather than a document', async () => {
+    // The gateway throws a looping answer away and reports degenerate_output.
+    // The page must not present that as "unavailable" — the user needs to
+    // know it is worth trying again, because routing picks again.
+    composeNote.mockResolvedValue({
+      data: {
+        composeNote: {
+          markdown: '',
+          stats: { inputChars: 2425, fragments: 10, chunks: 1, chunksFailed: 0, strategy: 'single', truncated: false, degenerate: true },
+          provenance: { reason: 'degenerate_output', model: 'allam-2-7b' },
+        },
+      },
+    });
+    renderEditor();
+    const button = (await screen.findAllByRole('button', { name: 'Compose a document from this note' }))[0];
+    await act(async () => { button.click(); });
+
+    expect(await screen.findByText(/stuck repeating itself/i)).toBeInTheDocument();
+    expect(screen.getByText(/try again/i)).toBeInTheDocument();
+    // And the model that did it is named, which is the first thing anyone asks.
+    expect(screen.getByText('allam-2-7b')).toBeInTheDocument();
+    expect(updateNote).not.toHaveBeenCalled();
     expect(createNote).not.toHaveBeenCalled();
   });
 

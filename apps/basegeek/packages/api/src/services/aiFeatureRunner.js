@@ -76,6 +76,51 @@ export const DEFAULT_MAX_TOKENS = 600;
 // redeploy costs at most one extra day's cap. Keyed `app:feature:user:YYYY-MM-DD`.
 const counters = new Map();
 
+/**
+ * Resolved needs, briefly.
+ *
+ * `aiService.resolveNeed` reads the free-tier catalog out of Mongo on every
+ * call. That is fine for one-shot features and wrong for a fan-out: NoteGeek's
+ * Compose issues up to eight MAP calls in parallel plus a REDUCE, which without
+ * this is nine identical catalog queries to answer one question.
+ *
+ * The TTL is short because the catalog is a live thing — rows cool, rate limits
+ * are observed, the discovery run rewrites it every 24h — and a stale pick that
+ * outlived a cooldown is worse than a fresh query. Sixty seconds is long enough
+ * that one fan-out resolves once, which is the case this exists for, and short
+ * enough that nothing else notices.
+ *
+ * A useful side effect, not a guarantee: every call in one fan-out gets the
+ * same row, so a compose's extracts come back in one voice rather than several.
+ */
+const NEED_CACHE_TTL_MS = 60_000;
+const needCache = new Map();
+
+async function resolvePick(ai, need, nowMs = Date.now()) {
+  const hit = needCache.get(need);
+  if (hit && nowMs - hit.at < NEED_CACHE_TTL_MS) return hit.promise;
+
+  // The PROMISE is cached, not the answer. A fan-out starts all its calls in
+  // the same tick, so caching the answer leaves every one of them to miss and
+  // query anyway — the first version of this cached the result and a two-chunk
+  // compose still read the catalog twice. Sharing the in-flight resolution is
+  // what makes "resolve once per fan-out" true rather than nearly true.
+  const promise = Promise.resolve(ai.resolveNeed?.(need)).then((pick) => pick || null);
+  needCache.set(need, { at: nowMs, promise });
+  // A failed resolution must not be remembered for a minute: the next caller
+  // deserves a fresh attempt, and the caller's own catch decides what a
+  // failure costs.
+  promise.catch(() => {
+    if (needCache.get(need)?.promise === promise) needCache.delete(need);
+  });
+  return promise;
+}
+
+/** Test seam: the cache is process-wide and would otherwise leak between suites. */
+export function _resetNeedCache() {
+  needCache.clear();
+}
+
 export function utcDay(now = new Date()) {
   return now.toISOString().slice(0, 10);
 }
@@ -235,6 +280,8 @@ function provenance(source, extra = {}) {
  * @param {string} [opts.model]     the other half. Both or neither.
  * @param {string} [opts.quotaKey]  cap-bucket segment used ONLY when the
  *        credential names no user. See `quotaBucket`.
+ * @param {string} [opts.need]  what this call NEEDS, e.g. `'prose:deep'`,
+ *        resolved against the live catalog (`aiNeedResolver`). See below.
  * @returns {Promise<{ok: boolean, data: any, reason: string|null, provenance: object}>}
  */
 export async function runFeatureCore(opts) {
@@ -259,6 +306,25 @@ export async function runFeatureCore(opts) {
     // turn.
     provider = null,
     model = null,
+    /**
+     * What this call needs, as a capability rather than a model id —
+     * `'prose:deep'`, `'structured:fast'`, `'vision+structured:balanced'`.
+     *
+     * Until 2026-09-22 only the HTTP door could say this; an in-process
+     * feature got whatever the app's routing row's rotation happened to
+     * offer. That is not a theoretical gap. NoteGeek's Compose — multi-
+     * document synthesis, about the hardest thing here asks of a model — was
+     * routed to `groq/allam-2-7b`, a 7B model the need resolver's own header
+     * already documents as having answered an English prompt in Arabic. It
+     * produced a document that repeated one invented line 38 times until it
+     * hit the token ceiling, and shipped it as a success.
+     *
+     * An explicit pin still wins: a pin is a person's choice and a need is a
+     * description. An unresolvable need degrades to the ordinary routing walk
+     * rather than failing the call — the catalog is a live thing and "nothing
+     * measurably meets this today" is a reason to fall back, not to refuse.
+     */
+    need = null,
     maxCallsPerDay = DEFAULT_MAX_CALLS_PER_DAY,
     timeoutMs = DEFAULT_TIMEOUT_MS,
     temperature = 0.2,
@@ -268,7 +334,7 @@ export async function runFeatureCore(opts) {
   } = opts || {};
 
   if (!app || !feature) throw new TypeError('runFeatureCore: app and feature are required');
-  const pinned = typeof provider === 'string' && provider && typeof model === 'string' && model
+  const explicitPin = typeof provider === 'string' && provider && typeof model === 'string' && model
     ? { provider, model }
     : null;
 
@@ -286,6 +352,27 @@ export async function runFeatureCore(opts) {
     logger.info({ app, feature, used, cap: maxCallsPerDay }, '[aiFeature] daily cap reached');
     return refuse('cap', { callsToday: used, cap: maxCallsPerDay });
   }
+
+  // A need is resolved only when nothing was pinned outright, and only ever
+  // best-effort: a resolver that throws must not cost the caller their call.
+  let needInfo = null;
+  let needPin = null;
+  if (!explicitPin && typeof need === 'string' && need.trim()) {
+    try {
+      const pick = await resolvePick(ai, need);
+      if (pick?.provider && pick?.modelId) {
+        needPin = { provider: pick.provider, model: pick.modelId };
+        needInfo = { asked: need, resolved: true, provider: pick.provider, model: pick.modelId, why: pick.why || [] };
+      } else {
+        needInfo = { asked: need, resolved: false, why: ['nothing in the catalog measurably meets this need'] };
+      }
+    } catch (err) {
+      logger.warn({ app, feature, need, err: err?.message }, '[aiFeature] need resolution failed');
+      needInfo = { asked: need, resolved: false, why: ['the need resolver was unavailable'] };
+    }
+  }
+
+  const pinned = explicitPin || needPin;
 
   const caller = internalCaller({ appId: app, userId, feature });
   const label = `${caller.appId}:${caller.feature}`;
@@ -347,6 +434,11 @@ export async function runFeatureCore(opts) {
     cap: maxCallsPerDay,
     costUsd: info.costUsd ?? null,
     hints: Array.isArray(info.hints) ? info.hints : [],
+    // `length` means the model was still talking when it hit `maxTokens`, so
+    // the answer is cut off. A caller that can tell a complete answer from a
+    // truncated one needs to be told which it got.
+    finishReason: info.finishReason ?? null,
+    ...(needInfo ? { need: needInfo } : {}),
   };
 
   let data = content;

@@ -15,7 +15,8 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import ComposeDialog from '../../components/editors/ComposeDialog';
 
 const stats = (over = {}) => ({
-  inputChars: 4000, fragments: 12, chunks: 3, chunksFailed: 0, strategy: 'map_reduce', ...over,
+  inputChars: 4000, fragments: 12, chunks: 3, chunksFailed: 0, strategy: 'map_reduce',
+  truncated: false, degenerate: false, ...over,
 });
 
 const props = (over = {}) => ({
@@ -119,5 +120,37 @@ describe('no result means no way to commit one', () => {
     render(<ComposeDialog {...props({ markdown: '' })} />);
     expect(screen.getByText(/nothing came back/i)).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /replace this note/i })).toBeDisabled();
+  });
+});
+
+/**
+ * Which model wrote this, and did it finish?
+ *
+ * Both added 2026-09-22, after a compose routed to a 7B row returned one
+ * sentence repeated thirty-eight times with nothing on screen to say where it
+ * had come from. The gateway refuses a looping answer outright now; these two
+ * are what the user can see when the result is merely disappointing rather
+ * than broken.
+ */
+describe('attribution and completeness', () => {
+  it('names the model that wrote the document', () => {
+    render(<ComposeDialog {...props({ model: 'gemma4:31b' })} />);
+    expect(screen.getByText('gemma4:31b')).toBeInTheDocument();
+  });
+
+  it('says nothing about a model when none was reported', () => {
+    render(<ComposeDialog {...props()} />);
+    expect(screen.queryByText(/gemma|allam/i)).not.toBeInTheDocument();
+  });
+
+  it('warns when the document stops mid-thought', () => {
+    render(<ComposeDialog {...props({ stats: stats({ truncated: true }) })} />);
+    expect(screen.getByText(/ran out of room/i)).toBeInTheDocument();
+    expect(screen.getByText(/original note is untouched/i)).toBeInTheDocument();
+  });
+
+  it('does not warn when the model finished', () => {
+    render(<ComposeDialog {...props()} />);
+    expect(screen.queryByText(/ran out of room/i)).not.toBeInTheDocument();
   });
 });

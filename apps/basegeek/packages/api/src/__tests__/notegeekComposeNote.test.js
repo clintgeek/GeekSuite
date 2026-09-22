@@ -10,15 +10,17 @@
  * returning a document that silently lacks a batch.
  */
 import { jest } from '@jest/globals';
-import { _resetCounters } from '../services/aiFeatureRunner.js';
+import { _resetCounters, _resetNeedCache } from '../services/aiFeatureRunner.js';
 import {
   composeNote,
   segmentFragments,
   batchFragments,
+  looksDegenerate,
   MAX_COMPOSE_CHARS,
   SINGLE_CALL_CHARS,
   COMPOSE_CHUNK_CHARS,
   COMPOSE_MAX_CHUNKS,
+  COMPOSE_NEED,
 } from '../graphql/notegeek/compose.js';
 
 // Same shape the tidy suite uses: `callAI` returns the string directly and
@@ -28,7 +30,7 @@ const fakeAI = (impl, info = { provider: 'groq', model: 'test-model' }) => ({
   lastProviderInfo: info,
 });
 
-beforeEach(() => _resetCounters());
+beforeEach(() => { _resetCounters(); _resetNeedCache(); });
 
 describe('segmentFragments', () => {
   test('splits on blank lines', () => {
@@ -205,5 +207,203 @@ describe('the prompts say what this is and is not', () => {
     const { COMPOSE_MAP_PROMPT } = await import('../graphql/notegeek/compose.js');
     expect(COMPOSE_MAP_PROMPT).toMatch(/verbatim|exactly/i);
     expect(COMPOSE_MAP_PROMPT).toMatch(/merge duplicates/i);
+  });
+});
+
+/**
+ * The 2026-09-22 failure, and the two defences against it.
+ *
+ * Chef pasted ~2.4k characters of terminal output and Compose handed back a
+ * "document" that repeated one numbered line — with an invented GitHub URL —
+ * thirty-eight times until it hit the token ceiling mid-link. It shipped,
+ * because the only check was `markdown.trim()`.
+ *
+ * Root cause was routing: `runAIFeature` named no `need`, so synthesis went
+ * to `groq/allam-2-7b`, a 7B row. The same input on the row `prose:deep`
+ * resolves to produced a correct 1.7k document. Both halves are tested here,
+ * because the routing fix makes it rare and the guard is what makes it safe.
+ */
+
+/** The live failure, shortened but the same shape: numbered, repeating. */
+const LOOPED = ['# Troubleshooting', '', 'A summary of the issues.', '', '## Next steps', '']
+  .concat(
+    Array.from({ length: 38 }, (_, i) =>
+      `${i + 1}. Confirm the issue: [Issue 1000](https://github.com/notegeek/notegeek/issues/1000)`)
+  )
+  .join('\n');
+
+/** What a good answer to the same material looks like. */
+const REAL_DOCUMENT = `# NoteGeek content length and refusal handling
+
+This covers the refusal handling deployed for long notes.
+
+## Deployment status
+
+Tidy can no longer overwrite a note with a fragment. Long notes come back
+untouched with an explanation instead of being cut at 63%.
+
+| Component | Status |
+| --- | --- |
+| Gateway | both guards, both refusal reasons |
+| Frontend chunk | reads provenance.reason |
+
+## Open questions
+
+- Which specific note was mangled, and when?
+
+## Next steps
+
+- [ ] Identify and recover any mangled notes from the browser cache.
+- [ ] Give Plan's Weekly and Backlog views more than complete-or-delete.
+`.trim(); // the runner trims model output, so the fixture must match what a caller sees
+
+describe('looksDegenerate', () => {
+  test('catches the document that repeated one line 38 times', () => {
+    const verdict = looksDegenerate(LOOPED);
+    expect(verdict).not.toBeNull();
+    expect(verdict.reason).toBe('degenerate_output');
+  });
+
+  test('sees through the numbering, which made every repeat look distinct', () => {
+    // The live failure numbered its repeats 1..38. Comparing raw lines would
+    // have called all thirty-eight unique and passed the loop straight through.
+    expect(looksDegenerate(LOOPED).detail.repeatedLines).toBeGreaterThan(4);
+  });
+
+  test('lets a real document through', () => {
+    expect(looksDegenerate(REAL_DOCUMENT)).toBeNull();
+  });
+
+  test('does not count table rules and checkboxes as repetition', () => {
+    // Real markdown repeats short structural lines constantly. A guard that
+    // counted them would refuse most well-formed documents.
+    const tableHeavy = ['# Costs', '', '| a | b |', '| --- | --- |']
+      .concat(Array.from({ length: 12 }, (_, i) => `| row ${i} | ${i * 10} |`))
+      .concat(['', '## Next steps', ''])
+      .concat(Array.from({ length: 6 }, (_, i) => `- [ ] task number ${i} to do`))
+      .join('\n');
+    expect(looksDegenerate(tableHeavy)).toBeNull();
+  });
+
+  test('says nothing about an answer too short to judge', () => {
+    expect(looksDegenerate('# Title\n\nOne short paragraph of prose here.')).toBeNull();
+  });
+});
+
+describe('a looping answer never reaches the user', () => {
+  test('is discarded rather than offered as a document', async () => {
+    const ai = fakeAI(async () => LOOPED);
+    const r = await composeNote({ content: 'some short pile of scraps', userId: 'u1', ai });
+    // Empty, not "here is your document with a warning". There is no
+    // salvageable part of an answer that says one sentence forty times.
+    expect(r.markdown).toBe('');
+    expect(r.stats.degenerate).toBe(true);
+    expect(r.provenance.reason).toBe('degenerate_output');
+    expect(r.provenance.source).toBe('fallback');
+  });
+
+  test('the same guard applies on the map-reduce path', async () => {
+    // Both paths must hold the same standard — the single-call check being
+    // "applied consistently and simply not enough" is how this shipped.
+    const big = Array.from({ length: 40 }, (_, i) => `fragment ${i} ${'x'.repeat(400)}`).join('\n\n');
+    expect(big.length).toBeGreaterThan(SINGLE_CALL_CHARS);
+    const ai = fakeAI(async (_prompt, opts) => {
+      const system = opts?.messages?.[0]?.content || '';
+      return system.includes('assembling one coherent') ? LOOPED : '- a point';
+    });
+    const r = await composeNote({ content: big, userId: 'u2', ai });
+    expect(r.markdown).toBe('');
+    expect(r.stats.degenerate).toBe(true);
+  });
+
+  test('a good document is returned untouched', async () => {
+    const ai = fakeAI(async () => REAL_DOCUMENT);
+    const r = await composeNote({ content: 'some short pile of scraps', userId: 'u3', ai });
+    expect(r.markdown).toBe(REAL_DOCUMENT);
+    expect(r.stats.degenerate).toBeUndefined();
+  });
+});
+
+describe('an answer cut off at the token ceiling is labelled', () => {
+  test('truncated is true when the model ran out of room', async () => {
+    const ai = fakeAI(async () => REAL_DOCUMENT, {
+      provider: 'ollama', model: 'gemma4:31b', finishReason: 'length',
+    });
+    const r = await composeNote({ content: 'a pile', userId: 'u4', ai });
+    // The document is real and is still returned — it just stops mid-thought,
+    // and only the user can decide whether that will do.
+    expect(r.markdown).toBe(REAL_DOCUMENT);
+    expect(r.stats.truncated).toBe(true);
+  });
+
+  test('and false on a complete answer', async () => {
+    const ai = fakeAI(async () => REAL_DOCUMENT, {
+      provider: 'ollama', model: 'gemma4:31b', finishReason: 'stop',
+    });
+    const r = await composeNote({ content: 'a pile', userId: 'u5', ai });
+    expect(r.stats.truncated).toBe(false);
+  });
+});
+
+describe('compose asks for a model that can do this', () => {
+  test('states a need rather than taking whatever rotation offers', async () => {
+    // The whole root cause: with no need, synthesis went to a 7B row.
+    const resolveNeed = jest.fn(async () => ({
+      provider: 'ollama', modelId: 'gemma4:31b', why: ['golden set 1'],
+    }));
+    const ai = { ...fakeAI(async () => REAL_DOCUMENT), resolveNeed };
+    const r = await composeNote({ content: 'a pile', userId: 'u6', ai });
+
+    expect(resolveNeed).toHaveBeenCalledWith(COMPOSE_NEED);
+    // And the resolved row is what actually got called, not just recorded.
+    expect(ai.callAI).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ provider: 'ollama', model: 'gemma4:31b' })
+    );
+    expect(r.provenance.need).toEqual(
+      expect.objectContaining({ asked: COMPOSE_NEED, resolved: true })
+    );
+  });
+
+  test('an unresolvable need degrades to the ordinary walk rather than failing', async () => {
+    // The catalog is a live thing. "Nothing measurably meets this today" is a
+    // reason to fall back, not to refuse the user their compose.
+    const ai = { ...fakeAI(async () => REAL_DOCUMENT), resolveNeed: jest.fn(async () => null) };
+    const r = await composeNote({ content: 'a pile', userId: 'u7', ai });
+    expect(r.markdown).toBe(REAL_DOCUMENT);
+    expect(r.provenance.need).toEqual(
+      expect.objectContaining({ asked: COMPOSE_NEED, resolved: false })
+    );
+  });
+
+  test('a resolver that throws costs nothing', async () => {
+    const ai = {
+      ...fakeAI(async () => REAL_DOCUMENT),
+      resolveNeed: jest.fn(async () => { throw new Error('catalog down'); }),
+    };
+    const r = await composeNote({ content: 'a pile', userId: 'u8', ai });
+    expect(r.markdown).toBe(REAL_DOCUMENT);
+  });
+});
+
+describe('one fan-out resolves its need once', () => {
+  test('eight MAP calls do not mean eight catalog reads', async () => {
+    // Without the cache this was nine identical Mongo queries to answer one
+    // question — and, less obviously, nine independent picks, so a compose
+    // could come back written in several voices.
+    const resolveNeed = jest.fn(async () => ({
+      provider: 'ollama', modelId: 'gemma4:31b', why: [],
+    }));
+    const big = Array.from({ length: 40 }, (_, i) => `fragment ${i} ${'x'.repeat(400)}`).join('\n\n');
+    const ai = { ...fakeAI(async () => REAL_DOCUMENT), resolveNeed };
+
+    const r = await composeNote({ content: big, userId: 'u9', ai });
+
+    expect(r.stats.chunks).toBeGreaterThan(1);
+    expect(resolveNeed).toHaveBeenCalledTimes(1);
+    // Every call still went to the resolved row, not just the first.
+    for (const call of ai.callAI.mock.calls) {
+      expect(call[1]).toEqual(expect.objectContaining({ provider: 'ollama', model: 'gemma4:31b' }));
+    }
   });
 });

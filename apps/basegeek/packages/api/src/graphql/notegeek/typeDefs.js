@@ -32,9 +32,10 @@ export const typeDefs = gql`
   }
 
   """
-  What the compose actually did. chunksFailed is the important one: a batch
-  that failed means material missing from a document that still looks
-  complete, and the caller is expected to say so.
+  What the compose actually did. Three of these are the caller's problem to
+  report: chunksFailed means material missing from a document that still looks
+  complete, truncated means it stops mid-thought, and degenerate means the
+  model talked in circles and the answer was discarded.
   """
   type ComposeStats {
     inputChars: Int!
@@ -42,6 +43,16 @@ export const typeDefs = gql`
     chunks: Int!
     chunksFailed: Int!
     strategy: String!
+    """
+    The model ran out of room mid-answer, so the document stops mid-thought.
+    It is still a real document; only the user can say whether that will do.
+    """
+    truncated: Boolean
+    """
+    The answer was a loop, not a document, and was thrown away. markdown is
+    empty when this is true.
+    """
+    degenerate: Boolean
   }
 
   type Note {

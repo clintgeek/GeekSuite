@@ -10,6 +10,64 @@ anything a future reader would otherwise have to rediscover.
 
 ---
 
+## 2026-09-22
+
+### NoteGeek — Compose was routed to a 7B model, and shipped its loop as a document
+
+Chef pasted ~2,400 characters of terminal output into a note, hit Compose, and
+got back a "document" that said
+
+```
+N. Confirm the issue: [Issue 1000](https://github.com/notegeek/notegeek/issues/1000)
+```
+
+thirty-eight times — with an invented URL, ending mid-link where it hit the
+token ceiling. Reproduced exactly, from his own paste recovered out of the
+session transcript.
+
+**Root cause: routing, not the prompt.** `runAIFeature` had no way to say what
+a call needs, so Compose — multi-document synthesis, about the hardest thing
+this codebase asks of a model — took whatever the app's rotation offered. That
+was `groq/allam-2-7b`, a 7B row that `aiNeedResolver.js`'s own header already
+records as having answered an English prompt in Arabic. The same input, same
+prompt, on the row `prose:deep` resolves to (`ollama/gemma4:31b`, golden-set
+score 1) produced a correct 1.8k document with a table, a code fence and two
+honest open questions. The prompt was never the problem.
+
+Three changes, in increasing order of how long they will matter:
+
+1. **`need:` reaches in-process features.** Only the HTTP door could resolve a
+   capability into a model; `runFeatureCore` can now too, degrading to the
+   ordinary walk when nothing meets the need and never letting a resolver
+   failure cost the caller their call. This closes part of
+   `AIGEEK_CAPABILITY_ROUTING.md` §3.4 for every in-gateway feature, not just
+   this one. Compose asks for `prose:deep`.
+
+2. **A fan-out resolves its need once.** `resolveNeed` reads the catalog from
+   Mongo each time, and a map-reduce compose issues up to nine calls. The cache
+   holds the *promise*, not the answer — the first version cached the answer and
+   a two-chunk compose still queried twice, because a fan-out starts every call
+   in the same tick and they all miss together.
+
+3. **`looksDegenerate()` — the one that lasts.** A looping answer is now thrown
+   away whatever produced it, because routing degrades when good rows are
+   cooling and every model loops on a bad day. This is tidy.js's length floor in
+   the only form available here: Compose cannot check that content survived, but
+   it can check that the answer is not the same sentence forty times. The guard
+   sees through the numbering that made all thirty-eight repeats look distinct,
+   and ignores short and structural lines so that real tables and checkbox lists
+   pass.
+
+Also: `stats.truncated` (the model ran out of room mid-answer) and the model's
+name in the dialog. "Which model wrote this" is the first question anyone asks
+about a disappointing result, and nothing on screen answered it.
+
+Verified end to end on the live gateway with Chef's original paste: 1,835
+characters, `model: gemma4:31b`, `truncated: false`, no degeneracy — inside the
+existing 25 s timeout, so that was left alone rather than raised on a hunch.
+
+---
+
 ## 2026-09-21
 
 ### NoteGeek — every note gets history, and Compose builds a document from scraps

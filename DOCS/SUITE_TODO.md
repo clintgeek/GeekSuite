@@ -130,6 +130,17 @@ the app was down over its due time, should it arrive late or be skipped?
   are all labelled and reversible. This is also what makes Compose's
   `Replace this note` defensible.
 
+- **Tidy names no `need` either.** Compose's 2026-09-22 failure was routing:
+  an in-process feature could not say what it needed, so synthesis went to a 7B
+  row. `runFeatureCore` accepts `need:` now and Compose asks for `prose:deep`;
+  **tidy.js still asks for nothing** and is one line from the same fix
+  (`prose:balanced` fits a formatter — a person is waiting). Left alone
+  deliberately: Tidy's length floor already makes a weak model's output safe
+  rather than destructive, so this is a quality change to Chef's existing
+  behaviour, not a bug fix, and it is his call. The other in-gateway features
+  (suggest, review draft, quick-add, what-next, brief) are in the same position
+  and worth a sweep.
+
 - **Compose follow-ups** (shipped 2026-09-21, worth watching):
   - Compose is available on text, markdown and code notes. The canvas types
     (sketch, mind map, handwritten) have no plain text to read, so the button

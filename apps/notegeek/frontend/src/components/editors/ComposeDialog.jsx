@@ -32,7 +32,15 @@ import remarkGfm from 'remark-gfm';
  *
  * The stats line is not decoration. `chunksFailed` means a batch of the source
  * never made it into a document that otherwise looks complete, and the user
- * has to know that BEFORE choosing what to do with it.
+ * has to know that BEFORE choosing what to do with it. `truncated` means the
+ * document stops mid-thought, which is the same class of problem.
+ *
+ * The model's name is shown for a reason learned on 2026-09-22: a compose
+ * routed to a 7B row returned one sentence repeated thirty-eight times, and
+ * nothing on screen said which model had produced it. The gateway refuses a
+ * looping answer outright now, but "which model wrote this" is the first
+ * question anyone asks about a disappointing result, and the answer belongs
+ * next to the result.
  */
 export default function ComposeDialog({
     open,
@@ -41,11 +49,13 @@ export default function ComposeDialog({
     markdown,
     stats,
     error,
+    model,
     onSaveAsNew,
     onReplace,
 }) {
     const failed = stats?.chunksFailed || 0;
     const hasResult = Boolean(markdown && markdown.trim());
+    const truncated = Boolean(stats?.truncated);
 
     return (
         <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
@@ -60,6 +70,9 @@ export default function ComposeDialog({
                         />
                         {failed > 0 ? (
                             <Chip size="small" color="warning" label={`${failed} batch${failed === 1 ? '' : 'es'} failed`} />
+                        ) : null}
+                        {model ? (
+                            <Chip size="small" variant="outlined" label={model} sx={{ fontFamily: '"Roboto Mono", monospace' }} />
                         ) : null}
                     </Stack>
                 ) : null}
@@ -84,6 +97,13 @@ export default function ComposeDialog({
                         {failed} batch{failed === 1 ? '' : 'es'} of your material could not be read, so
                         {failed === 1 ? ' it is' : ' they are'} missing from this document. The original
                         note is untouched.
+                    </Alert>
+                ) : null}
+
+                {!loading && !error && truncated ? (
+                    <Alert severity="warning" sx={{ mb: 2 }}>
+                        The model ran out of room before it finished, so this document stops
+                        mid-thought. The original note is untouched.
                     </Alert>
                 ) : null}
 

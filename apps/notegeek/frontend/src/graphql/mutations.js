@@ -120,6 +120,8 @@ export const COMPOSE_NOTE = gql`
                 chunks
                 chunksFailed
                 strategy
+                truncated
+                degenerate
             }
             provenance {
                 source

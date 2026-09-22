@@ -294,6 +294,18 @@ function NoteEditorPage() {
         });
         return;
       }
+      if (reason === 'degenerate_output') {
+        // The gateway threw the answer away because it was a loop, not a
+        // document. Say what happened and that retrying is worth a try —
+        // routing picks again, so a second attempt is not the same attempt.
+        setCompose({
+          open: true, loading: false, markdown: '', stats: result?.stats || null,
+          error: 'The model got stuck repeating itself, so that result was thrown away. '
+            + 'Your note is untouched — try again, and it may land on a better model.',
+          model: result?.provenance?.model || null,
+        });
+        return;
+      }
       if (!result?.markdown?.trim()) {
         setCompose({
           open: true, loading: false, markdown: '', stats: result?.stats || null,
@@ -303,6 +315,7 @@ function NoteEditorPage() {
       }
       setCompose({
         open: true, loading: false, markdown: result.markdown, stats: result.stats, error: null,
+        model: result?.provenance?.model || null,
       });
     } catch (err) {
       setCompose({
@@ -844,6 +857,7 @@ function NoteEditorPage() {
           markdown={compose.markdown}
           stats={compose.stats}
           error={compose.error}
+          model={compose.model}
           onClose={() => setCompose(null)}
           onSaveAsNew={() => handleComposeSaveAsNew(compose.markdown)}
           onReplace={() => handleComposeReplace(compose.markdown)}
