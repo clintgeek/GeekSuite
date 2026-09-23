@@ -12,6 +12,35 @@ anything a future reader would otherwise have to rediscover.
 
 ## 2026-09-23
 
+### FitnessGeek — a Weekender at the safety floor says why, and plans report the rate they really deliver
+
+Chef: "I chose the weekender plan and somehow the goal page still shows the same target
+for every day." Arithmetic was right; the silence wasn't. At 2 lb/week his target
+(2,537 − 1,000) sat under the safety floor (80% of BMR = 1,691) and was clamped up to it;
+a Weekender only moves calories to Fri/Sat by cutting other days, which can't go under
+the floor either — zero room, seven equal days.
+
+- The same clamp hid a worse one: a floored plan **can't deliver the requested rate**
+  (2,537 − 1,691 = 846 kcal/day ≈ 1.7 lb/week, not 2), yet the timeline ("50 weeks",
+  really ~59) and the saved rate the tracker paces against both used 2. Plans now store
+  and display the rate they deliver, with one line saying so; saved plans are re-read the
+  same way.
+- A Weekender with no room says so and offers the fastest slower rate that has room,
+  with its real numbers (Chef: 1.5 lb/week → 1,691 other days, 2,027 Fri/Sat).
+- Schedule math moved to `FitnessGoals/planMath.js`, pinned number-for-number to the old
+  inline version.
+
+### FitnessGeek — the Nextcloud drop is per-user, and the sync client stopped fighting itself
+
+- **Nothing synced down after the reboot:** two copies of the Nextcloud desktop client
+  (systemd user service + an XFCE autostart entry, both since the v34 upgrade) locked each
+  other's sync journal. The autostart copy is stopped and `Hidden=true`; the systemd
+  service stays (it restarts after its boot-time no-display crash).
+- **Per-user folders:** `Files/fitnessgeek-import/<username or email>/`, resolved against
+  `userGeek.users` case-insensitively; a new user needs only a folder. fitnessgeek now
+  mounts only that folder, not all of `Files`. The `folder:userId` config survives as an
+  override.
+
 ### FitnessGeek — weight screens agree after a nine-month gap in logging
 
 Chef: "some show --, some show 308 an old value. It's throwing off the weight goal tracker."

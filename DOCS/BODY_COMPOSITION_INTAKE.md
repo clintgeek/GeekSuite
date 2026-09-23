@@ -431,8 +431,19 @@ section is the design record; the decisions in it are Chef's unless marked other
 
 ### 11.1 Where the files are
 
-- Host path: `/mnt/NextCloud/data/Files/<folder>/` — **one folder per user**. Chef's is
-  `clint-imports`.
+- Host path: `/mnt/NextCloud/data/Files/fitnessgeek-import/<username>/` — **one folder
+  per user, named with their GeekSuite username or email** (case-insensitive; Chef's is
+  `clint@clintgeek.com`). A new user needs only a folder: it is found on the next scan
+  (and at once via a watch on the root), resolved against `userGeek.users`, and an
+  unknown name is warned about once and skipped. (2026-09-23; before that it was one
+  hand-configured `clint-imports` folder.)
+- `/mnt/NextCloud/data` is a **Nextcloud desktop-client sync folder**, not the server's
+  data dir (that is `/mnt/nextcloudServer`, owned by `www-data`). A file saved from the
+  phone reaches it only when the client syncs. On 2026-09-23 two copies of the client ran
+  after a reboot (systemd user service + an XFCE autostart entry, both since the v34
+  upgrade) and locked each other's sync journal — nothing synced down until one was
+  stopped and `~/.config/autostart/Nextcloud.desktop` got `Hidden=true`. Keep exactly
+  one startup route: the systemd service, which restarts after its boot-time crash.
 - Files arrive named like
   `Body Composition-<email>-arboleaf-<YYYYMMDDhhmmss>.xlsx`. The name is not trusted for
   anything: the folder identifies the user and the content identifies the file.
@@ -443,11 +454,11 @@ section is the design record; the decisions in it are Chef's unless marked other
 
 ### 11.2 How the container sees them
 
-- fitnessgeek's compose mounts `/mnt/NextCloud/data/Files:/imports:ro`. **Read-only on
-  purpose.**
-- `BODYCOMP_IMPORT_ROOT=/imports` and
-  `BODYCOMP_IMPORT_FOLDERS=clint-imports:<userId>[,<folder>:<userId>...]` in
-  `.env.production`. Either unset → the watcher is off and says so once at boot.
+- fitnessgeek's compose mounts `/mnt/NextCloud/data/Files/fitnessgeek-import:/imports:ro`.
+  **Read-only on purpose**, and only that folder.
+- `BODYCOMP_IMPORT_ROOT=/imports` in `.env.production` turns it on; unset → off, said once
+  at boot. `BODYCOMP_IMPORT_FOLDERS=<folder>:<userId>[,...]` is an optional override that
+  replaces per-user discovery with a fixed list.
 - A compose change and a new env var both need `docker compose up -d` on the box.
   **A Watchtower redeploy applies neither** (RUNBOOK; the Watchtower env landmine).
 

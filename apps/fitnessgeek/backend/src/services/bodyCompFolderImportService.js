@@ -7,9 +7,11 @@
 // Config, both from `.env.production`:
 //
 //   BODYCOMP_IMPORT_ROOT=/imports
-//   BODYCOMP_IMPORT_FOLDERS=clint-imports:<userId>[,<folder>:<userId>...]
+//   BODYCOMP_IMPORT_FOLDERS=<folder>:<userId>[,...]   (optional override)
 //
-// Either unset -> the importer is off and says so once at boot.
+// Root unset -> the importer is off and says so once at boot. With no
+// FOLDERS override, every subfolder of the root is a user folder named with
+// that user's username or email (§11.1, 2026-09-23).
 //
 // Three triggers, one path:
 //   1. A full scan at boot. Every push to main restarts the fleet and a
@@ -31,6 +33,7 @@ import path from 'path';
 import crypto from 'crypto';
 import BodyCompImportFile from '../models/BodyCompImportFile.js';
 import { importBodyCompXlsxUpload } from './bodyCompXlsxImportService.js';
+import { resolveImportUser } from './importUserResolver.js';
 import logger from '../config/logger.js';
 
 const DEBOUNCE_MS = 2_000;
@@ -169,7 +172,16 @@ export async function processFile({ root, folder, userId, filename, settle }) {
  * Start the importer. Returns `stop()` for graceful shutdown; a no-op when
  * the importer is unconfigured.
  *
- * @param {{root?: string, folders?: string, rescanMs?: number, debounceMs?: number, settle?: Object}} [options]
+ * Two modes (DOCS/BODY_COMPOSITION_INTAKE.md §11.1):
+ *   - PER-USER (default, 2026-09-23): every subfolder of the root is a user,
+ *     named with their username or email; `resolveUser` turns the name into
+ *     an id. A new user's folder is picked up on the next scan with no config
+ *     change, and an unknown name is warned about once and skipped.
+ *   - EXPLICIT: `BODYCOMP_IMPORT_FOLDERS=folder:userId[,...]` — only those
+ *     folders, no lookup. The original mode, kept as an override.
+ *
+ * @param {{root?: string, folders?: string, rescanMs?: number, debounceMs?: number,
+ *   settle?: Object, resolveUser?: (folderName: string) => Promise<string|null>}} [options]
  *   Defaults come from the environment; the overrides exist for tests.
  */
 export function startBodyCompFolderImport({
@@ -178,18 +190,32 @@ export function startBodyCompFolderImport({
   rescanMs = RESCAN_MS,
   debounceMs = DEBOUNCE_MS,
   settle,
+  resolveUser = resolveImportUser,
 } = {}) {
-  const entries = parseImportFolders(folders);
-  if (!root || entries.length === 0) {
-    logger.info('body-comp folder import: off (BODYCOMP_IMPORT_ROOT / BODYCOMP_IMPORT_FOLDERS not set)');
+  const explicit = parseImportFolders(folders);
+  if (!root) {
+    logger.info('body-comp folder import: off (BODYCOMP_IMPORT_ROOT not set)');
     return { stop: async () => {}, idle: () => Promise.resolve() };
   }
+  const perUser = explicit.length === 0;
 
   let stopped = false;
   let queue = Promise.resolve();
   const queued = new Set();
   const debounces = new Map();
-  const watchers = [];
+  const watchers = new Map(); // folder -> fs.FSWatcher
+  const known = new Map(); // folder -> userId, for folders already resolved
+  const warnedUnknown = new Set();
+
+  const debounce = (key, fn) => {
+    clearTimeout(debounces.get(key));
+    const timer = setTimeout(() => {
+      debounces.delete(key);
+      fn();
+    }, debounceMs);
+    timer.unref?.();
+    debounces.set(key, timer);
+  };
 
   const enqueue = (entry, filename) => {
     if (stopped || !isCandidateFile(filename)) return;
@@ -213,26 +239,81 @@ export function startBodyCompFolderImport({
     for (const name of names.sort()) enqueue(entry, name);
   };
 
-  const scanAll = () => Promise.all(entries.map(scan));
-
-  for (const entry of entries) {
+  const watchFolder = (entry) => {
+    if (stopped || watchers.has(entry.folder)) return;
     try {
       const watcher = fs.watch(path.join(root, entry.folder), (_event, filename) => {
         if (!filename) return;
-        const key = `${entry.folder}/${filename}`;
-        clearTimeout(debounces.get(key));
-        debounces.set(key, setTimeout(() => {
-          debounces.delete(key);
-          enqueue(entry, filename.toString());
-        }, debounceMs));
+        const name = filename.toString();
+        debounce(`${entry.folder}/${name}`, () => enqueue(entry, name));
       });
       watcher.on('error', (error) => {
         // The rescan still covers this folder; the watch only made it prompt.
         logger.warn({ folder: entry.folder, err: error }, 'body-comp folder import: watch failed, relying on the periodic rescan');
       });
-      watchers.push(watcher);
+      watchers.set(entry.folder, watcher);
     } catch (error) {
       logger.warn({ folder: entry.folder, code: error?.code }, 'body-comp folder import: cannot watch folder, relying on the periodic rescan');
+    }
+  };
+
+  // The folders to import from right now: the explicit list, or every
+  // subfolder of the root that resolves to a user.
+  const currentEntries = async () => {
+    if (!perUser) return explicit;
+    let dirents;
+    try {
+      dirents = await fsp.readdir(root, { withFileTypes: true });
+    } catch (error) {
+      logger.warn({ root, code: error?.code }, 'body-comp folder import: cannot read the import root');
+      return [];
+    }
+    const entries = [];
+    for (const d of dirents) {
+      if (!d.isDirectory() || d.name.startsWith('.')) continue;
+      let userId = known.get(d.name);
+      if (!userId) {
+        try {
+          userId = await resolveUser(d.name);
+        } catch (error) {
+          logger.warn({ folder: d.name, err: error }, 'body-comp folder import: user lookup failed, will retry on the next scan');
+          continue;
+        }
+        if (!userId) {
+          if (!warnedUnknown.has(d.name)) {
+            warnedUnknown.add(d.name);
+            logger.warn({ folder: d.name }, 'body-comp folder import: no user matches this folder name (username or email), skipping');
+          }
+          continue;
+        }
+        known.set(d.name, userId);
+        warnedUnknown.delete(d.name);
+        logger.info({ folder: d.name, userId }, 'body-comp folder import: folder mapped to a user');
+      }
+      entries.push({ folder: d.name, userId });
+    }
+    return entries;
+  };
+
+  const scanAll = async () => {
+    const entries = await currentEntries();
+    for (const entry of entries) watchFolder(entry);
+    await Promise.all(entries.map(scan));
+  };
+
+  // In per-user mode, watch the root too: a new user's folder is found as
+  // soon as it appears, not only on the next rescan.
+  if (perUser) {
+    try {
+      const rootWatcher = fs.watch(root, () => {
+        debounce('\0root', () => { lastScan = scanAll(); });
+      });
+      rootWatcher.on('error', (error) => {
+        logger.warn({ root, err: error }, 'body-comp folder import: root watch failed, relying on the periodic rescan');
+      });
+      watchers.set('\0root', rootWatcher);
+    } catch (error) {
+      logger.warn({ root, code: error?.code }, 'body-comp folder import: cannot watch the import root, relying on the periodic rescan');
     }
   }
 
@@ -240,12 +321,19 @@ export function startBodyCompFolderImport({
   const rescanTimer = setInterval(() => { lastScan = scanAll(); }, rescanMs);
   rescanTimer.unref();
 
-  logger.info({ root, folders: entries.map((e) => e.folder) }, 'body-comp folder import: watching');
+  logger.info(
+    perUser ? { root, mode: 'per-user' } : { root, mode: 'explicit', folders: explicit.map((e) => e.folder) },
+    'body-comp folder import: watching',
+  );
 
   return {
     // Resolves once everything queued so far has been processed.
     idle: async () => {
-      await lastScan;
+      let scanning;
+      do {
+        scanning = lastScan;
+        await scanning;
+      } while (scanning !== lastScan);
       let current;
       do {
         current = queue;
@@ -257,7 +345,7 @@ export function startBodyCompFolderImport({
       clearInterval(rescanTimer);
       for (const timer of debounces.values()) clearTimeout(timer);
       debounces.clear();
-      for (const watcher of watchers) watcher.close();
+      for (const watcher of watchers.values()) watcher.close();
       await queue;
     },
   };

@@ -157,12 +157,16 @@ describe('processFile', () => {
 });
 
 describe('startBodyCompFolderImport', () => {
-  test('unconfigured -> off, and touches nothing', async () => {
+  test('no root -> off, and touches nothing', async () => {
+    // Since per-user mode (2026-09-23) a root with no FOLDERS override is ON —
+    // every subfolder is a user. Off means no root at all.
     await put('a.xlsx');
-    const importer = startBodyCompFolderImport({ root, folders: '' });
+    const resolveUser = jest.fn(async () => 'user-1');
+    const importer = startBodyCompFolderImport({ root: '', folders: '', resolveUser });
     await importer.idle();
     await importer.stop();
     expect(importBodyCompXlsxUpload).not.toHaveBeenCalled();
+    expect(resolveUser).not.toHaveBeenCalled();
   });
 
   test('the boot scan imports what is already there and ignores in-progress uploads', async () => {
@@ -224,3 +228,65 @@ describe('startBodyCompFolderImport', () => {
     expect(ledger[0]).toMatchObject({ folder: 'no-such-folder-yet', filename: 'late.xlsx' });
   });
 });
+
+describe('per-user mode — every subfolder of the root is a user (§11.1, 2026-09-23)', () => {
+  // Stand-in for the userGeek lookup: username or email, case-insensitive.
+  const USERS = { 'clint@clintgeek.com': 'user-clint', heather: 'user-heather' };
+  const resolveUser = async (name) => USERS[name.toLowerCase()] ?? null;
+
+  const userDir = async (name) => {
+    const d = path.join(root, name);
+    await fs.mkdir(d, { recursive: true });
+    return d;
+  };
+
+  test('imports each known user\'s folder for that user, and skips a folder nobody owns', async () => {
+    await fs.writeFile(path.join(await userDir('clint@clintgeek.com'), 'a.xlsx'), REAL_EXPORT);
+    await fs.writeFile(path.join(await userDir('Heather'), 'h.xlsx'), Buffer.concat([REAL_EXPORT, Buffer.from(' ')]));
+    await fs.writeFile(path.join(await userDir('stranger'), 's.xlsx'), REAL_EXPORT);
+
+    const importer = startBodyCompFolderImport({ root, settle: FAST, debounceMs: 10, resolveUser });
+    await importer.idle();
+    await importer.stop();
+
+    expect(ledger.map((e) => [e.folder, e.userId]).sort()).toEqual([
+      ['Heather', 'user-heather'],
+      ['clint@clintgeek.com', 'user-clint'],
+    ]);
+    expect(importBodyCompXlsxUpload.mock.calls.map(([arg]) => arg.userId).sort()).toEqual(['user-clint', 'user-heather']);
+  });
+
+  test('a user folder created after boot is found and imported without a restart', async () => {
+    const importer = startBodyCompFolderImport({ root, settle: FAST, debounceMs: 10, resolveUser });
+    await importer.idle();
+
+    const d = await userDir('heather');
+    await fs.writeFile(path.join(d, 'late.xlsx'), REAL_EXPORT);
+    await waitFor(() => ledger.length === 1);
+    await importer.stop();
+    expect(ledger[0]).toMatchObject({ folder: 'heather', userId: 'user-heather', filename: 'late.xlsx' });
+  });
+
+  test('a failed lookup skips the folder for now instead of stopping the importer', async () => {
+    await fs.writeFile(path.join(await userDir('clint@clintgeek.com'), 'a.xlsx'), REAL_EXPORT);
+    await userDir('heather');
+    const flaky = async (name) => { if (name === 'heather') throw new Error('mongo down'); return resolveUser(name); };
+    const importer = startBodyCompFolderImport({ root, settle: FAST, resolveUser: flaky });
+    await importer.idle();
+    await importer.stop();
+    expect(ledger.map((e) => e.userId)).toEqual(['user-clint']);
+  });
+
+  test('files loose in the root, and dot-folders, are never treated as users', async () => {
+    await fs.writeFile(path.join(root, 'loose.xlsx'), REAL_EXPORT);
+    await userDir('.sync-cache');
+    const seen = [];
+    const importer = startBodyCompFolderImport({ root, settle: FAST, resolveUser: async (n) => { seen.push(n); return null; } });
+    await importer.idle();
+    await importer.stop();
+    // `root` also holds the explicit-mode fixture folder; only it may be looked up.
+    expect(seen.filter((n) => n !== 'clint-imports')).toEqual([]);
+    expect(ledger).toHaveLength(0);
+  });
+});
+
