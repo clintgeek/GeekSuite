@@ -309,19 +309,31 @@ const FitnessJSONScalar = new GraphQLScalarType({
 
 // --- Report Helpers ---
 
-const METRICS = ['calories', 'protein', 'carbs', 'fat', 'fiber', 'sugar'];
+// `sodium` (mg) and `net_carbs` (g) joined 2026-09-23 (TRENDS_PLAN D6): both
+// were on every log and in the dashboard's daily summary, and Reports never
+// showed either.
+const METRICS = ['calories', 'protein', 'carbs', 'fat', 'fiber', 'sugar', 'sodium', 'net_carbs'];
+
+/** `{ calories: 0, protein: 0, ... }` for every metric. */
+const zeroMetrics = () => Object.fromEntries(METRICS.map((m) => [m, 0]));
 
 const calcNutrition = (log) => {
   const servings = log.servings || 1;
   const stored = log.nutrition || {};
   const fallback = (log.food_item_id && typeof log.food_item_id === 'object') ? log.food_item_id.nutrition || {} : {};
+  const per = (field) => stored[field] ?? fallback[field] ?? 0;
   return {
-    calories: (stored.calories_per_serving ?? fallback.calories_per_serving ?? 0) * servings,
-    protein: (stored.protein_grams ?? fallback.protein_grams ?? 0) * servings,
-    carbs: (stored.carbs_grams ?? fallback.carbs_grams ?? 0) * servings,
-    fat: (stored.fat_grams ?? fallback.fat_grams ?? 0) * servings,
-    fiber: (stored.fiber_grams ?? fallback.fiber_grams ?? 0) * servings,
-    sugar: (stored.sugar_grams ?? fallback.sugar_grams ?? 0) * servings
+    calories: per('calories_per_serving') * servings,
+    protein: per('protein_grams') * servings,
+    carbs: per('carbs_grams') * servings,
+    fat: per('fat_grams') * servings,
+    fiber: per('fiber_grams') * servings,
+    sugar: per('sugar_grams') * servings,
+    sodium: per('sodium_mg') * servings,
+    // Carbs less fiber, floored per log — the same rule as the daily
+    // summary's net_carbs_grams (@geeksuite/schemas dailySummary.js), so the
+    // report and the dashboard can't disagree about the same day.
+    net_carbs: Math.max(0, per('carbs_grams') - per('fiber_grams')) * servings,
   };
 };
 
@@ -330,7 +342,7 @@ const buildDaily = (logs) => {
   logs.forEach(log => {
     const dateKey = new Date(log.log_date).toISOString().split('T')[0];
     if (!map.has(dateKey)) {
-      map.set(dateKey, { date: dateKey, calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sugar: 0, entries: 0 });
+      map.set(dateKey, { date: dateKey, ...zeroMetrics(), entries: 0 });
     }
     const day = map.get(dateKey);
     const nutrition = calcNutrition(log);
@@ -341,7 +353,7 @@ const buildDaily = (logs) => {
 };
 
 const sumTotals = (daily) => {
-  const totals = { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sugar: 0 };
+  const totals = zeroMetrics();
   daily.forEach(day => {
     METRICS.forEach(metric => { totals[metric] += day[metric]; });
   });
@@ -349,7 +361,7 @@ const sumTotals = (daily) => {
 };
 
 const toAverages = (totals, days) => {
-  if (!days) return { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sugar: 0 };
+  if (!days) return zeroMetrics();
   const averages = {};
   METRICS.forEach(metric => {
     averages[metric] = Math.round((totals[metric] / days) * 10) / 10;
@@ -361,7 +373,7 @@ const mealBreakdown = (logs) => {
   const meals = {};
   logs.forEach(log => {
     if (!meals[log.meal_type]) {
-      meals[log.meal_type] = { calories: 0, protein: 0, carbs: 0, fat: 0, fiber: 0, sugar: 0, count: 0 };
+      meals[log.meal_type] = { ...zeroMetrics(), count: 0 };
     }
     const stats = meals[log.meal_type];
     const nutrition = calcNutrition(log);

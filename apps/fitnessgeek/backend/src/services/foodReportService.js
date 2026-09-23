@@ -3,7 +3,9 @@ import FoodLog from '../models/FoodLog.js';
 import NutritionGoals from '../models/NutritionGoals.js';
 import Weight from '../models/Weight.js';
 
-const METRICS = ['calories', 'protein', 'carbs', 'fat', 'fiber', 'sugar'];
+// Mirrors the gateway's report (resolvers.js METRICS); this copy feeds the CSV
+// export. `sodium` (mg) and `net_carbs` joined 2026-09-23 (TRENDS_PLAN D6).
+const METRICS = ['calories', 'protein', 'carbs', 'fat', 'fiber', 'sugar', 'sodium', 'net_carbs'];
 
 class FoodReportService {
   async getOverview(userId, { start, days = 7 } = {}) {
@@ -68,7 +70,7 @@ class FoodReportService {
 
   async export(userId, options = {}) {
     const overview = await this.getOverview(userId, options);
-    const rows = ['Date,Calories,Protein,Carbs,Fat,Fiber,Sugar'];
+    const rows = ['Date,Calories,Protein,Carbs,Fat,Fiber,Sugar,Sodium (mg),Net carbs'];
     overview.daily.forEach(day => {
       rows.push([
         day.date,
@@ -77,7 +79,9 @@ class FoodReportService {
         day.carbs,
         day.fat,
         day.fiber,
-        day.sugar
+        day.sugar,
+        day.sodium,
+        day.net_carbs
       ].join(','));
     });
     return rows.join('\n');
@@ -245,7 +249,10 @@ class FoodReportService {
       carbs: (stored.carbs_grams ?? fallback.carbs_grams ?? 0) * servings,
       fat: (stored.fat_grams ?? fallback.fat_grams ?? 0) * servings,
       fiber: (stored.fiber_grams ?? fallback.fiber_grams ?? 0) * servings,
-      sugar: (stored.sugar_grams ?? fallback.sugar_grams ?? 0) * servings
+      sugar: (stored.sugar_grams ?? fallback.sugar_grams ?? 0) * servings,
+      sodium: (stored.sodium_mg ?? fallback.sodium_mg ?? 0) * servings,
+      // Carbs less fiber, floored per log — as the daily summary computes it.
+      net_carbs: Math.max(0, (stored.carbs_grams ?? fallback.carbs_grams ?? 0) - (stored.fiber_grams ?? fallback.fiber_grams ?? 0)) * servings
     };
   }
 }
