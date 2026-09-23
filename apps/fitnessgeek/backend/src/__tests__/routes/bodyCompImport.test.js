@@ -45,6 +45,16 @@ jest.unstable_mockModule(mod('../../models/BodyComposition.js'), () => {
   return { __esModule: true, default: BodyComposition };
 });
 
+// The Weight sync has its own suite (weightSyncService.test.js); here it is
+// mocked at the boundary so these tests stay about body-comp rows — and so
+// they can assert WHICH readings the import hands it.
+const WEIGHT_SUMMARY = { created: 0, replaced: 0, unchanged: 0, removed: 0, failed: 0 };
+jest.unstable_mockModule(mod('../../services/weightSyncService.js'), () => ({
+  __esModule: true,
+  syncImportedWeights: jest.fn(async () => WEIGHT_SUMMARY),
+  default: {},
+}));
+
 let tempUploadDir;
 beforeAll(async () => {
   tempUploadDir = await fs.mkdtemp(path.join(os.tmpdir(), 'fitnessgeek-body-comp-import-test-'));

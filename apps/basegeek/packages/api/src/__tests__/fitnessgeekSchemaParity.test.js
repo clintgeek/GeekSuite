@@ -142,6 +142,7 @@ const PAIRS = [
       'weight_value',
       'log_date',
       'notes',
+      'source',
       'created_at',
       'updated_at',
     ],

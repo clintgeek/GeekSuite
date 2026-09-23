@@ -287,6 +287,8 @@ They are not interchangeable and both are required.
 | 3 | Share-target manifest entry, POST endpoint, file-picker fallback | landed |
 | 3b | aiGeek image transport + the three `JSON.stringify` fallthroughs above it | landed |
 | 4 | Image prep, extraction service, validation gate, confirm screen | landed |
+| 5 | Arboleaf `.xlsx` export import (file picker + share sheet) | landed 2026-09-18 |
+| 6 | Nextcloud folder import + scale weights into `Weight` (§11) | built 2026-09-22, branch `bodycomp-folder-import` |
 
 ### What still needs a human
 
@@ -320,10 +322,13 @@ They are not interchangeable and both are required.
   `checked > 0` guard still prevents a bad save. Arboleaf exports JPEG, so this is a
   hypothetical.
 
-### Open question for Chef
+### ~~Open question for Chef~~ — answered 2026-09-18
 
-Does the Arboleaf app expose a **data export** (CSV or otherwise)? If it does, it beats
-this entire path and the extraction half of it becomes unnecessary. Nobody has checked.
+~~Does the Arboleaf app expose a data export?~~ **Yes: a full-history `.xlsx`** (53
+columns, every segmental value, exact to the second). It became the primary path in
+`cb4f7265` (`services/bodyCompXlsxImportService.js`, tested against the real
+`DOCS/body_comp.xlsx`). The vision path stays in place for PDF/PNG reports. §11 adds the
+folder import on top of it.
 
 ---
 
@@ -406,3 +411,92 @@ job, before the transport layer.
 
 Note `validate()` passes vacuously when everything was skipped, so read `checked` too —
 a scan where nothing could be verified is not a scan that verified clean.
+
+---
+
+## 11. Folder import — the Nextcloud drop (2026-09-22)
+
+The Arboleaf app uploads its `.xlsx` export straight into a Nextcloud folder on this box.
+FitnessGeek watches that folder and imports new files with no human in the loop. This
+section is the design record; the decisions in it are Chef's unless marked otherwise.
+
+### 11.1 Where the files are
+
+- Host path: `/mnt/NextCloud/data/Files/<folder>/` — **one folder per user**. Chef's is
+  `clint-imports`.
+- Files arrive named like
+  `Body Composition-<email>-arboleaf-<YYYYMMDDhhmmss>.xlsx`. The name is not trusted for
+  anything: the folder identifies the user and the content identifies the file.
+- **An export is a span of history, not one scan**, and spans overlap: the 09-19 file
+  carried 6 scans (09-15..09-18), the 09-22 file 3 (09-18..09-22). Re-importing is expected
+  and harmless: `BodyComposition`'s `(userId, measured_at)` unique index (§7) turns the
+  overlap into `skipped: duplicate`.
+
+### 11.2 How the container sees them
+
+- fitnessgeek's compose mounts `/mnt/NextCloud/data/Files:/imports:ro`. **Read-only on
+  purpose.**
+- `BODYCOMP_IMPORT_ROOT=/imports` and
+  `BODYCOMP_IMPORT_FOLDERS=clint-imports:<userId>[,<folder>:<userId>...]` in
+  `.env.production`. Either unset → the watcher is off and says so once at boot.
+- A compose change and a new env var both need `docker compose up -d` on the box.
+  **A Watchtower redeploy applies neither** (RUNBOOK; the Watchtower env landmine).
+
+### 11.3 Never move, rename or delete the files
+
+Nextcloud keeps its own database of the folder's contents. Changing files behind its back
+leaves ghost entries in the Nextcloud UI until someone runs `occ files:scan`. So the mount
+is read-only and the record of "already imported" lives in Mongo:
+`BodyCompImportFile`, unique on `(userId, sha256)`, holding the filename, status
+(`imported` / `failed`), the row counts and the error if any. A file is keyed by content,
+not name, so a rename is not a new file and an edited file is.
+
+A `failed` file is not retried until its content changes. Retrying the same bytes produces
+the same failure and fills the log.
+
+### 11.4 When it runs
+
+- **At boot, a full scan.** Every push to `main` restarts the fleet, and a watcher does not
+  see files that arrived while it was down. The boot scan is the correctness guarantee;
+  the watcher only makes it prompt.
+- **Then `fs.watch` on each folder**, debounced. Nextcloud writes uploads in pieces, so a
+  file is parsed only once its size has stopped changing between two checks. Dotfiles,
+  `.part` files and anything that isn't `.xlsx` are ignored.
+- **A periodic rescan** (every 15 minutes) as a safety net for any watch event that goes
+  missing. Hashing a ~25 KB file is cheap, and the ledger makes it a no-op.
+
+### 11.5 Scale weights become `Weight` rows
+
+Before this, an xlsx import wrote only `BodyComposition`. The weight sat in that row's
+`weight_value` and the weight history never saw it. Now every xlsx import (folder,
+file picker or share sheet) also writes `Weight`:
+
+- `Weight` gains `source` (`manual` default, `arboleaf_xlsx`) in the shared schema, so an
+  imported weight can be told from a typed one.
+- One weight per UTC day, `log_date` = UTC midnight — the rule both writers already
+  follow.
+- **Several scans on one day → the first scan of that day.** (Sage's call: the usual
+  weigh-in convention, and a later scan the same evening can't move the day's value.)
+- **Chef's rule: when a day has both a manual weight and an import, the import wins.** The
+  day's row is overwritten with the scale value and marked `arboleaf_xlsx`; its notes are
+  kept. If a day somehow has several rows, one is kept and the rest are removed.
+- Only rows that passed the arithmetic gate feed `Weight`, **including rows skipped as
+  duplicates**. Those scans were imported before weights were synced, so skipping them here
+  would leave their days empty.
+- Imported weights are **not** pushed to Garmin. The manual path does that for today's
+  entry; a background import pushing historical values is a separate decision.
+
+### 11.6 Open: the gate is tighter than the scale's own rounding
+
+Found running the two real folder exports through the parser and gate (2026-09-22): the
+09-19 09:42 scan fails on fat-free mass (computed 176.6, printed 176.4) and muscle mass
+(164.2 vs 164.4), each 0.2 lb against a 0.15 tolerance. The scale's printed values disagree
+with **each other** — printed FFM 176.4 − bone 12.4 = 164.0, yet it prints muscle 164.4 —
+so it derives from unrounded internal values (likely kg) and its rounded columns drift.
+Every other real row (8 of 9) passes all 12 checks.
+
+On the xlsx path the gate checks the column mapping, not a reader, and a mis-mapped column
+is off by tens of pounds (the Muscle Mass / Skeletal Muscle transposition is 164 vs 102),
+not tenths. Awaiting Chef's call on widening the tolerance for `arboleaf_xlsx` only; until
+then that scan, and its day's weight, is reported `failed: gate_mismatch` and not saved.
+

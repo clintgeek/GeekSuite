@@ -130,7 +130,7 @@ const PAIRS = [
     factory: 'createWeightSchema',
     specifier: '@geeksuite/schemas/fitnessgeek/weight',
     modelFile: '../../models/Weight.js',
-    expectedPaths: ['userId', 'weight_value', 'log_date', 'notes', 'created_at', 'updated_at'],
+    expectedPaths: ['userId', 'weight_value', 'log_date', 'notes', 'source', 'created_at', 'updated_at'],
     expectedVirtuals: ['formatted_date'],
     serializesVirtuals: true,
     expectedStatics: [],

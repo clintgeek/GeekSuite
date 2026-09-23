@@ -48,6 +48,7 @@ import { validate, LB_TO_KG } from '@geeksuite/schemas/fitnessgeek/bodyCompositi
 import BodyComposition from '../models/BodyComposition.js';
 import logger from '../config/logger.js';
 import { parseBodyCompXlsx } from './bodyCompXlsxParser.js';
+import { syncImportedWeights } from './weightSyncService.js';
 
 /** The `source` value for a row that came in through this path — see bodyComposition.js's enum comment. */
 export const XLSX_SOURCE = 'arboleaf_xlsx';
@@ -247,7 +248,9 @@ export function mapRow(row) {
  *
  * @param {Array<Record<string, string>>} rows - as returned by `parseBodyCompXlsx`.
  * @param {string} userId
- * @returns {Promise<{imported: number, skipped: number, failed: number, results: Array}>}
+ * @returns {Promise<{imported: number, skipped: number, failed: number, results: Array, weights: Object|null}>}
+ *   `weights` is `syncImportedWeights`'s summary (§11.5), or null if the
+ *   sync itself blew up — the body-comp rows are saved either way.
  *   `results` carries one entry per row (1-indexed against the data rows,
  *   i.e. row 1 is the first SCAN row, not the header) for a caller that
  *   wants to say which rows had trouble, not just how many.
@@ -257,6 +260,10 @@ export async function importBodyCompXlsxRows(rows, userId) {
   let skipped = 0;
   let failed = 0;
   const results = [];
+  // Scale readings for the `Weight` sync — every row that passed the gate and
+  // is in the database, INCLUDING duplicates: scans imported before weights
+  // were synced would otherwise never reach the weight history (§11.5).
+  const verifiedReadings = [];
 
   for (let i = 0; i < rows.length; i += 1) {
     const rowNumber = i + 1;
@@ -303,6 +310,7 @@ export async function importBodyCompXlsxRows(rows, userId) {
         extraction: { validation_passed: true, confidence: null, method: 'xlsxImport' },
       });
       imported += 1;
+      verifiedReadings.push({ weight_value: candidate.weight_value, measuredAt });
       results.push({ row: rowNumber, status: 'imported', id: saved._id?.toString?.() });
     } catch (error) {
       if (error?.code === 11000) {
@@ -310,6 +318,7 @@ export async function importBodyCompXlsxRows(rows, userId) {
         // already imported (a re-share of the same export, or overlapping
         // history from two exports). Expected traffic, not a fault — see §7.
         skipped += 1;
+        verifiedReadings.push({ weight_value: candidate.weight_value, measuredAt });
         results.push({ row: rowNumber, status: 'skipped', reason: 'duplicate' });
       } else {
         failed += 1;
@@ -319,7 +328,14 @@ export async function importBodyCompXlsxRows(rows, userId) {
     }
   }
 
-  return { imported, skipped, failed, results };
+  let weights = null;
+  try {
+    weights = await syncImportedWeights(verifiedReadings, userId);
+  } catch (error) {
+    logger.error({ err: error, userId }, 'body-comp xlsx import: weight sync failed; body-comp rows are saved');
+  }
+
+  return { imported, skipped, failed, results, weights };
 }
 
 /**
@@ -327,7 +343,7 @@ export async function importBodyCompXlsxRows(rows, userId) {
  * row. What `bodyCompImportController.js` actually calls.
  *
  * @param {{buffer: Buffer, userId: string}} params
- * @returns {Promise<{imported: number, skipped: number, failed: number, results: Array}>}
+ * @returns {Promise<{imported: number, skipped: number, failed: number, results: Array, weights: Object|null}>}
  */
 export async function importBodyCompXlsxUpload({ buffer, userId }) {
   const rows = await parseBodyCompXlsx(buffer);

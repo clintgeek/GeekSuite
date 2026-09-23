@@ -47,7 +47,18 @@ jest.unstable_mockModule(mod('../../models/BodyComposition.js'), () => {
   return { __esModule: true, default: BodyComposition };
 });
 
+// The Weight sync has its own suite (weightSyncService.test.js); here it is
+// mocked at the boundary so these tests stay about body-comp rows — and so
+// they can assert WHICH readings the import hands it.
+const WEIGHT_SUMMARY = { created: 0, replaced: 0, unchanged: 0, removed: 0, failed: 0 };
+jest.unstable_mockModule(mod('../../services/weightSyncService.js'), () => ({
+  __esModule: true,
+  syncImportedWeights: jest.fn(async () => WEIGHT_SUMMARY),
+  default: {},
+}));
+
 const { default: BodyComposition } = await import('../../models/BodyComposition.js');
+const { syncImportedWeights } = await import('../../services/weightSyncService.js');
 const { mapRow, importBodyCompXlsxRows, importBodyCompXlsxUpload, XLSX_SOURCE } =
   await import('../../services/bodyCompXlsxImportService.js');
 
@@ -62,6 +73,7 @@ beforeEach(() => {
   seenKeys = new Set();
   nextId = 0;
   BodyComposition.create.mockClear();
+  syncImportedWeights.mockClear();
 });
 
 describe('mapRow — the trap this task exists to avoid', () => {
@@ -203,5 +215,52 @@ describe('importBodyCompXlsxRows — bulk import and dedupe', () => {
     expect(result.imported).toBe(6);
     expect(result.skipped).toBe(0);
     expect(result.failed).toBe(0);
+  });
+});
+
+describe('importBodyCompXlsxRows — feeding the Weight sync (§11.5)', () => {
+  test('every verified row reaches the sync, with its weight and instant', async () => {
+    const rows = await readRealRows();
+    const result = await importBodyCompXlsxRows(rows, 'user-1');
+
+    expect(syncImportedWeights).toHaveBeenCalledTimes(1);
+    const [readings, userId] = syncImportedWeights.mock.calls[0];
+    expect(userId).toBe('user-1');
+    expect(readings).toHaveLength(6);
+    for (const r of readings) {
+      expect(Number.isFinite(r.weight_value)).toBe(true);
+      expect(r.measuredAt).toBeInstanceOf(Date);
+    }
+    expect(result.weights).toBe(WEIGHT_SUMMARY);
+  });
+
+  test('rows skipped as duplicates STILL reach the sync — they predate weight syncing', async () => {
+    const rows = await readRealRows();
+    await importBodyCompXlsxRows(rows, 'user-1');
+    syncImportedWeights.mockClear();
+
+    const second = await importBodyCompXlsxRows(rows, 'user-1');
+    expect(second.skipped).toBe(6);
+    expect(syncImportedWeights.mock.calls[0][0]).toHaveLength(6);
+  });
+
+  test('a row that fails the gate does NOT reach the sync', async () => {
+    const rows = await readRealRows();
+    const brokenRows = [...rows];
+    brokenRows[0] = { ...rows[0], 'Bone Mass(lb)': '999' };
+
+    await importBodyCompXlsxRows(brokenRows, 'user-1');
+    const readings = syncImportedWeights.mock.calls[0][0];
+    expect(readings).toHaveLength(5);
+    const { measuredAt: brokenInstant } = mapRow(rows[0]);
+    expect(readings.some((r) => r.measuredAt.getTime() === brokenInstant.getTime())).toBe(false);
+  });
+
+  test('a sync that throws leaves the body-comp result intact, with weights null', async () => {
+    syncImportedWeights.mockImplementationOnce(async () => { throw new Error('mongo down'); });
+    const rows = await readRealRows();
+    const result = await importBodyCompXlsxRows(rows, 'user-1');
+    expect(result.imported).toBe(6);
+    expect(result.weights).toBeNull();
   });
 });
