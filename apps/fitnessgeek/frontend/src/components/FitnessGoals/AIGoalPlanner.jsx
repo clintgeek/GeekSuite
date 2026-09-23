@@ -23,6 +23,7 @@ import {
 import ModeSelector from './ModeSelector';
 import KetoPlanStep from './KetoPlanStep';
 import { BmrSourceNote, PlanComparison, ProteinBasisNote, previewMacros } from './planProvenance.jsx';
+import { minSafeCalories, computeWeeklySchedule, planTarget, weekenderHasRoom, weekenderSuggestion } from './planMath.js';
 
 const CalorieGoalWizard = () => {
   const { user } = useAuth();
@@ -112,6 +113,13 @@ const CalorieGoalWizard = () => {
       if (ng && ng.enabled) {
         const computedWeeklyDeficit = (ng.weight_change_rate || 0) * 500;
         const scheduleDays = buildDaysFromSchedule(ng.weekly_schedule);
+        // A saved plan carries its TDEE and floor, so whether it was clamped
+        // to the floor — and the rate it really delivers — can be recomputed
+        // for display. Plans saved before 2026-09-23 stored the REQUESTED rate
+        // even when the floor made it unreachable.
+        const savedTarget = Number(ng.tdee) > 0 && Number(ng.min_safe_calories) > 0 && Number(ng.weight_change_rate) > 0
+          ? planTarget({ tdee: Number(ng.tdee), requestedRate: ng.weight_change_rate, minSafe: Number(ng.min_safe_calories) })
+          : null;
         const derivedPlan = {
           currentWeight: ng.start_weight || parseFloat(profile.weight) || 0,
           targetWeight: ng.target_weight || 0,
@@ -125,9 +133,14 @@ const CalorieGoalWizard = () => {
           weeklyDeficit: Math.round(computedWeeklyDeficit || 0),
           timeline: ng.timeline_weeks || 0,
           activityLevel: ng.activity_level || profile.activityLevel,
-          weightChangeRate: ng.weight_change_rate || 0,
+          weightChangeRate: savedTarget ? savedTarget.effectiveRate : (ng.weight_change_rate || 0),
+          requestedRate: ng.weight_change_rate || 0,
+          floored: Boolean(savedTarget?.floored),
           planType: ng.plan_type || 'standard',
           schedule: scheduleDays,
+          weekenderSuggestion: savedTarget && ng.plan_type === 'weekender'
+            ? weekenderSuggestion({ tdee: ng.tdee, minSafe: ng.min_safe_calories, currentRate: savedTarget.effectiveRate })
+            : null,
           rules: {
             minSafeCalories: ng.min_safe_calories || 1200,
             capPercent: 20,
@@ -267,55 +280,8 @@ const CalorieGoalWizard = () => {
   // `bmr * undefined` did here before.
   const calculateTDEE = (bmr) => tdeeFromBMR(bmr, profile.activityLevel);
 
-  const getMinSafeCalories = (bmr) => {
-    // Minimum recommended calories: max(1200, BMR - 20%)
-    return Math.max(1200, Math.round(bmr * 0.8));
-  };
-
-  const computeWeeklySchedule = (planType, baseTarget, bmr) => {
-    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    const minCals = getMinSafeCalories(bmr);
-    const capPercent = 0.2; // ±20%
-    const maxCals = Math.round(baseTarget * (1 + capPercent));
-    const minCalsCapped = Math.max(minCals, Math.round(baseTarget * (1 - capPercent)));
-
-    if (planType === 'standard') {
-      return days.map((d) => ({ day: d, calories: Math.round(baseTarget) }));
-    }
-
-    if (planType === 'weekender') {
-      // Extra calories on Fri/Sat (+15% each), reduce other 5 days to maintain weekly average
-      const increasePercent = 0.15;
-      const increaseEach = baseTarget * increasePercent;
-      const initialIncreaseTotal = increaseEach * 2;
-
-      // Compute how much we can reduce on non-weekender days without going under floor
-      const potentialReductionPerWeekday = Math.max(baseTarget - minCalsCapped, 0);
-      const maxReductionTotal = potentialReductionPerWeekday * 5;
-      const actualIncreaseTotal = Math.min(initialIncreaseTotal, maxReductionTotal);
-      const actualIncreaseEach = actualIncreaseTotal / 2;
-      const reductionPerWeekday = actualIncreaseTotal / 5;
-
-      const result = days.map((d, idx) => {
-        const isFri = idx === 4;
-        const isSat = idx === 5;
-        let cals = baseTarget;
-        if (isFri || isSat) cals = baseTarget + actualIncreaseEach;
-        else cals = baseTarget - reductionPerWeekday;
-        cals = Math.round(Math.min(maxCals, Math.max(minCalsCapped, cals)));
-        return { day: d, calories: cals };
-      });
-      return result;
-    }
-
-    if (planType === 'auto') {
-      // Start with standard schedule; runtime auto-adjust happens during logging
-      return days.map((d) => ({ day: d, calories: Math.round(baseTarget) }));
-    }
-
-    // Fallback
-    return days.map((d) => ({ day: d, calories: Math.round(baseTarget) }));
-  };
+  // Floor, schedule and the delivered rate live in planMath.js (pure, tested).
+  const getMinSafeCalories = (bmr) => minSafeCalories(bmr);
 
   const calculateCaloriePlan = () => {
     let bmr = calculateBMR();
@@ -344,10 +310,17 @@ const CalorieGoalWizard = () => {
 
     const tdee = calculateTDEE(bmr);
     const weightToLose = parseFloat(profile.weight) - parseFloat(goal.targetWeight);
-    const weeklyDeficit = parseFloat(goal.weightChangeRate) * 500; // 1 lb = 3500 calories, so 1 lb/week = 500 cal/day deficit
     const minSafe = getMinSafeCalories(bmr);
-    const dailyCalories = Math.max(tdee - weeklyDeficit, minSafe);
-    const timeline = Math.ceil(Math.abs(weightToLose) / parseFloat(goal.weightChangeRate));
+    // When the requested rate would put the target under the safety floor,
+    // the target is clamped UP to it — and then the plan can't deliver the
+    // requested rate. The timeline, the saved rate and the tracker's pace all
+    // use the rate it DOES deliver (planMath.js; Chef, 2026-09-23: "2 lb/week"
+    // at the floor was really ~1.7, so "50 weeks" was ~59).
+    const { dailyCalories, floored, requestedRate, effectiveRate } = planTarget({
+      tdee, requestedRate: goal.weightChangeRate, minSafe,
+    });
+    const weeklyDeficit = Math.round(tdee - dailyCalories);
+    const timeline = effectiveRate > 0 ? Math.ceil(Math.abs(weightToLose) / effectiveRate) : 0;
 
     setGoal(prev => ({
       ...prev,
@@ -381,9 +354,14 @@ const CalorieGoalWizard = () => {
       weeklyDeficit,
       timeline,
       activityLevel: profile.activityLevel,
-      weightChangeRate: parseFloat(goal.weightChangeRate),
+      weightChangeRate: effectiveRate,
+      requestedRate,
+      floored,
       planType: goal.planType,
-      schedule: computeWeeklySchedule(goal.planType, dailyCalories, bmr),
+      schedule: computeWeeklySchedule(goal.planType, dailyCalories, minSafe),
+      weekenderSuggestion: goal.planType === 'weekender'
+        ? weekenderSuggestion({ tdee, minSafe, currentRate: effectiveRate })
+        : null,
       rules: {
         minSafeCalories: minSafe,
         capPercent: 20,
@@ -920,6 +898,18 @@ const CalorieGoalWizard = () => {
                   </Box>
                 ))}
               </Box>
+              {plan.floored && (
+                <Typography variant="body2" data-testid="plan-floor-note" sx={{ color: 'text.secondary', mt: 1.5 }}>
+                  {`Your target is at the safety floor (${plan.rules?.minSafeCalories?.toLocaleString('en-US')} kcal, 80% of your BMR), so this plan loses about ${plan.weightChangeRate} lb/week, not ${plan.requestedRate}. The timeline uses ${plan.weightChangeRate}.`}
+                </Typography>
+              )}
+              {plan.planType === 'weekender' && !weekenderHasRoom(plan.schedule) && (
+                <Typography variant="body2" data-testid="plan-weekender-note" sx={{ color: 'text.secondary', mt: 1 }}>
+                  {plan.weekenderSuggestion
+                    ? `No room for bigger weekends at this rate: every day is already at the floor. At ${plan.weekenderSuggestion.rate} lb/week you'd eat ${plan.weekenderSuggestion.weekday.toLocaleString('en-US')} on other days and ${plan.weekenderSuggestion.weekend.toLocaleString('en-US')} on Fri and Sat.`
+                    : 'No room for bigger weekends: every day is already at the safety floor, even at the slowest rate.'}
+                </Typography>
+              )}
               {plan.rules?.autoAdjust && (
                 <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 1 }}>
                   Auto mode: If you go over on a day, remaining days will adjust while staying above {plan.rules.minSafeCalories} kcal.

@@ -186,3 +186,40 @@ describe('CalorieGoalWizard — old vs new (plan D2)', () => {
     expect(screen.queryByTestId('plan-comparison')).toBeNull();
   });
 });
+
+describe('CalorieGoalWizard — a plan pinned at the safety floor (2026-09-23)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  // Chef's plan as saved that morning: Weekender at 2 lb/week, every day 1,691.
+  const CHEF_FLOORED_PLAN = {
+    enabled: true, mode: 'standard', plan_type: 'weekender',
+    bmr: 2114, bmr_source: 'scan', lean_mass_lb: 178, bmr_calc_version: BMR_CALC_VERSION,
+    tdee: 2537, min_safe_calories: 1691, daily_calorie_target: 1691,
+    weekly_schedule: [1691, 1691, 1691, 1691, 1691, 1691, 1691],
+    start_weight: 318.6, target_weight: 220, weight_change_rate: 2, timeline_weeks: 50,
+  };
+
+  it('says why every day is the same, and what rate would make room for weekends', async () => {
+    setup({ nutrition_goal: CHEF_FLOORED_PLAN });
+    await screen.findByText('Your Personalized Calorie Plan');
+    expect(screen.getByTestId('plan-floor-note').textContent).toBe(
+      'Your target is at the safety floor (1,691 kcal, 80% of your BMR), so this plan loses about 1.7 lb/week, not 2. The timeline uses 1.7.',
+    );
+    expect(screen.getByTestId('plan-weekender-note').textContent).toBe(
+      "No room for bigger weekends at this rate: every day is already at the floor. At 1.5 lb/week you'd eat 1,691 on other days and 2,027 on Fri and Sat.",
+    );
+  });
+
+  it('a plan with real weekend room shows neither note', async () => {
+    setup({
+      nutrition_goal: {
+        ...CHEF_FLOORED_PLAN, weight_change_rate: 1, daily_calorie_target: 2037,
+        weekly_schedule: [1915, 1915, 1915, 1915, 2343, 2343, 1915],
+      },
+    });
+    await screen.findByText('Your Personalized Calorie Plan');
+    expect(screen.queryByTestId('plan-floor-note')).toBeNull();
+    expect(screen.queryByTestId('plan-weekender-note')).toBeNull();
+  });
+});
+
