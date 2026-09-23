@@ -102,6 +102,57 @@ export function mifflinStJeorBMR({ weightLb, heightIn, age, gender }) {
 }
 
 /**
+ * Katch-McArdle BMR, in kcal/day, from lean (fat-free) mass in POUNDS.
+ *
+ *     BMR = 370 + 21.6 · lean_kg
+ *
+ * This is the smart scale's own formula, verified rather than assumed: the
+ * Arboleaf report's printed 2105 kcal reproduces to 2104 from lean mass alone
+ * (DOCS/BODY_COMPOSITION_INTAKE.md §5.4). It needs no height, age or sex,
+ * because the thing those stand in for — how much metabolically active tissue
+ * a body carries — is measured directly.
+ *
+ * Why it matters: Mifflin-St Jeor estimates from total weight and cannot tell
+ * fat from lean, so it runs high for anyone carrying more fat than its
+ * reference population. At 318 lb and 44 % body fat it gives ~2,330 against
+ * Katch-McArdle's ~2,100. See DOCS/FITNESSGEEK_BODY_DATA_PLAN.md D1.
+ *
+ * @param {Object} p
+ * @param {number} p.leanMassLb fat-free mass in POUNDS
+ * @returns {number|null} rounded kcal/day, or null when not calculable.
+ */
+export function katchMcArdleBMR({ leanMassLb }) {
+  const lb = Number(leanMassLb);
+  if (!finitePositive(lb)) return null;
+  return Math.round(370 + 21.6 * lbToKg(lb));
+}
+
+/**
+ * Which BMR a plan should use, and say which.
+ *
+ * Measured lean mass beats an estimate from weight, height, age and sex, so a
+ * usable lean mass wins. "Usable" — recent enough, averaged over enough scans
+ * to be past hydration noise — is the caller's decision, made with
+ * `leanMassForTargets` from `bodyComp.js`; this function only chooses between
+ * the two formulas it is handed inputs for.
+ *
+ * @param {Object} p
+ * @param {number|null} [p.leanMassLb] averaged recent lean mass, or null
+ * @param {Object} [p.mifflin] `mifflinStJeorBMR`'s own inputs
+ * @returns {{bmr: number|null, source: 'scan'|'mifflin', lean_mass_lb: number|null}}
+ *   `source` names the formula that produced `bmr`. When neither is
+ *   calculable `bmr` is null and `source` is 'mifflin' — the fallback that was
+ *   attempted — so a caller never shows "from your scan" for a missing scan.
+ */
+export function resolveBmr({ leanMassLb = null, mifflin = null } = {}) {
+  const scanBmr = katchMcArdleBMR({ leanMassLb });
+  if (scanBmr !== null) {
+    return { bmr: scanBmr, source: 'scan', lean_mass_lb: Math.round(Number(leanMassLb) * 10) / 10 };
+  }
+  return { bmr: mifflin ? mifflinStJeorBMR(mifflin) : null, source: 'mifflin', lean_mass_lb: null };
+}
+
+/**
  * Activity multipliers applied to BMR to reach TDEE.
  *
  * THE KEYS ARE THE APP'S, NOT A TIDIER SET. `very` and `extra` read like

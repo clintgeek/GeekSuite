@@ -7,7 +7,9 @@
   "exports": {
     ".": "./src/index.js",
     "./dates": "./src/dates.js",
-    "./energy": "./src/energy.js"
+    "./energy": "./src/energy.js",
+    "./bodyComp": "./src/bodyComp.js",
+    "./macros": "./src/macros.js"
   },
   "scripts": {
     "test": "vitest run",
