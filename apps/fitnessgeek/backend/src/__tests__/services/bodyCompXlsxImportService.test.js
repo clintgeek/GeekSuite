@@ -59,7 +59,7 @@ jest.unstable_mockModule(mod('../../services/weightSyncService.js'), () => ({
 
 const { default: BodyComposition } = await import('../../models/BodyComposition.js');
 const { syncImportedWeights } = await import('../../services/weightSyncService.js');
-const { mapRow, importBodyCompXlsxRows, importBodyCompXlsxUpload, XLSX_SOURCE } =
+const { mapRow, importBodyCompXlsxRows, importBodyCompXlsxUpload, XLSX_SOURCE, XLSX_TOLERANCES } =
   await import('../../services/bodyCompXlsxImportService.js');
 
 const REAL_EXPORT_PATH = path.resolve(process.cwd(), '../../../DOCS/body_comp.xlsx');
@@ -264,3 +264,68 @@ describe('importBodyCompXlsxRows — feeding the Weight sync (§11.5)', () => {
     expect(result.weights).toBeNull();
   });
 });
+
+describe('the xlsx gate band (§11.6) — the scale\'s own rounding passes, a mis-mapping does not', () => {
+  // Reproduce the real 2026-09-19 09:42 scan's drift on a committed row: the
+  // printed fat-free mass 0.2 lb under the recomputation and muscle mass 0.2
+  // over, exactly the disagreement the scale's own columns showed.
+  async function driftedRow() {
+    const rows = await readRealRows();
+    const { candidate } = mapRow(rows[0]);
+    const ffm = candidate.weight_value - candidate.body_fat_mass_lb;
+    const muscle = ffm - candidate.bone_mass_lb;
+    return {
+      ...rows[0],
+      'Fat-free Body Weight(lb)': (ffm - 0.2).toFixed(1),
+      'Muscle Mass(lb)': (muscle + 0.2).toFixed(1),
+    };
+  }
+
+  test('the default band rejects the drift — which is why this path needs its own', async () => {
+    const { candidate, printed } = mapRow(await driftedRow());
+    expect(validate(candidate, printed).passed).toBe(false);
+  });
+
+  test('the xlsx band accepts it, and the import saves the row', async () => {
+    const row = await driftedRow();
+    const { candidate, printed } = mapRow(row);
+    expect(validate(candidate, printed, { tolerances: XLSX_TOLERANCES }).passed).toBe(true);
+    const result = await importBodyCompXlsxRows([row], 'user-1');
+    expect(result.imported).toBe(1);
+  });
+
+  test('a transposed Muscle Mass / Skeletal Muscle column still fails under the xlsx band', async () => {
+    const rows = await readRealRows();
+    const swapped = {
+      ...rows[0],
+      'Muscle Mass(lb)': rows[0]['Skeleton Muscle Mass(lb)'],
+      'Skeleton Muscle Mass(lb)': rows[0]['Muscle Mass(lb)'],
+    };
+    const result = await importBodyCompXlsxRows([swapped], 'user-1');
+    expect(result.imported).toBe(0);
+    expect(result.results[0]).toMatchObject({ status: 'failed', reason: 'gate_mismatch' });
+  });
+});
+
+describe('mapRow — the device (kept, not a measurement)', () => {
+  test('full scans name the scale; the weight-only quick weigh carries no device and maps to nulls', async () => {
+    const rows = await readRealRows();
+    const mapped = rows.map((row) => mapRow(row).candidate.device);
+    const named = mapped.filter((d) => d.name);
+    // The committed export: five full scans on a CS10K, one quick weigh with
+    // the device columns left blank.
+    expect(named).toHaveLength(5);
+    for (const d of named) {
+      expect(d.name).toBe('CS10K');
+      expect(d.mac).toMatch(/^[0-9A-F]{2}(:[0-9A-F]{2}){5}$/);
+    }
+    expect(mapped.filter((d) => !d.name)).toEqual([{ name: null, mac: null }]);
+  });
+
+  test('a row without device columns maps to nulls, not empty strings', async () => {
+    const rows = await readRealRows();
+    const { 'Device Name': _n, 'Device MAC Address': _m, ...bare } = rows[0];
+    expect(mapRow(bare).candidate.device).toEqual({ name: null, mac: null });
+  });
+});
+

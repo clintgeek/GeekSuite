@@ -44,7 +44,7 @@
 // see `importBodyCompXlsxRows` below.
 
 import { toUtcMidnight } from '@geeksuite/utils';
-import { validate, LB_TO_KG } from '@geeksuite/schemas/fitnessgeek/bodyCompositionDerivation';
+import { validate, LB_TO_KG, TOLERANCES } from '@geeksuite/schemas/fitnessgeek/bodyCompositionDerivation';
 import BodyComposition from '../models/BodyComposition.js';
 import logger from '../config/logger.js';
 import { parseBodyCompXlsx } from './bodyCompXlsxParser.js';
@@ -52,6 +52,23 @@ import { syncImportedWeights } from './weightSyncService.js';
 
 /** The `source` value for a row that came in through this path — see bodyComposition.js's enum comment. */
 export const XLSX_SOURCE = 'arboleaf_xlsx';
+
+/**
+ * The gate's bands for THIS path — wider on masses only. §11.6 of
+ * DOCS/BODY_COMPOSITION_INTAKE.md: the scale derives its printed columns from
+ * unrounded internal values, so its own rounded masses disagree with each
+ * other by up to ~0.2 lb (a real 2026-09-19 scan: printed fat-free mass 176.4
+ * less bone 12.4 is 164.0, yet it prints muscle mass 164.4). The default 0.15
+ * was set for reading a PRINTED report, where both sides of an identity carry
+ * the same one-decimal rounding.
+ *
+ * Here the gate checks the column MAPPING, not a reader, and a mis-mapped
+ * column is off by tens of pounds (Muscle Mass vs Skeletal Muscle is 164 vs
+ * 102), so 0.5 lb loses nothing it exists to catch. Percentages, BMI, SMI and
+ * BMR keep their bands; none of them failed on real data. The vision path
+ * keeps the defaults — a model misreading one digit IS a tenths-sized error.
+ */
+export const XLSX_TOLERANCES = Object.freeze({ ...TOLERANCES, mass_lb: 0.5 });
 
 /**
  * Whole-body primaries: export header -> stored field. Values that need a
@@ -213,6 +230,12 @@ export function mapRow(row) {
     candidate[segment] = candidate[segment] || { muscle_lb: null, fat_lb: null };
   }
 
+  // Not a primary and not a witness — the gate never sees it. See the
+  // schema's `device` comment.
+  const deviceName = (row['Device Name'] || '').trim();
+  const deviceMac = (row['Device MAC Address'] || '').trim();
+  candidate.device = { name: deviceName || null, mac: deviceMac || null };
+
   const printed = {};
   for (const [header, key] of Object.entries(PRINTED_COLUMNS)) {
     printed[key] = numOrNull(row[header]);
@@ -273,7 +296,7 @@ export async function importBodyCompXlsxRows(rows, userId) {
     // where every check was skipped satisfies `validation.passed` by having
     // nothing to disagree with. `checked > 0` is what turns "verified" and
     // "nothing was checked" into two different, distinguishable outcomes.
-    const validation = validate(candidate, printed);
+    const validation = validate(candidate, printed, { tolerances: XLSX_TOLERANCES });
     const verifiedClean = validation.passed && validation.checked > 0;
 
     if (!verifiedClean) {
@@ -350,4 +373,4 @@ export async function importBodyCompXlsxUpload({ buffer, userId }) {
   return importBodyCompXlsxRows(rows, userId);
 }
 
-export default { importBodyCompXlsxUpload, importBodyCompXlsxRows, mapRow, XLSX_SOURCE };
+export default { importBodyCompXlsxUpload, importBodyCompXlsxRows, mapRow, XLSX_SOURCE, XLSX_TOLERANCES };

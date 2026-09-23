@@ -444,10 +444,11 @@ const PAIRS = [
     factory: 'createBodyCompositionSchema',
     specifier: '@geeksuite/schemas/fitnessgeek/bodyComposition',
     modelFile: '../../models/BodyComposition.js',
-    // 28 paths: 9 whole-body/provenance scalars, 10 segmental (5 segments x 2
+    // 30 paths: 9 whole-body/provenance scalars, 10 segmental (5 segments x 2
     // measures, nested OBJECTS so mongoose flattens them into dotted paths —
     // see the shared module's header), measured_at/log_date/source, the
-    // 3-field extraction sub-object, notes, and the two timestamps.
+    // 3-field extraction sub-object, the 2-field device sub-object, notes,
+    // and the two timestamps.
     expectedPaths: [
       'userId',
       'weight_value',
@@ -475,6 +476,8 @@ const PAIRS = [
       'extraction.validation_passed',
       'extraction.confidence',
       'extraction.method',
+      'device.name',
+      'device.mac',
       'notes',
       'created_at',
       'updated_at',

@@ -326,6 +326,21 @@ function bodyCompositionDefinition(mongoose) {
         default: null,
       },
     },
+    // Which scale took the reading. Not a measurement — kept because a scale
+    // swap silently breaks every trend (a different BIA model reads the same
+    // body differently), and this is the only way to tell after the fact.
+    // DOCS/BODY_COMPOSITION_INTAKE.md §5.3. Null on paths that don't carry it
+    // (the printed report has no device line).
+    device: {
+      name: {
+        type: String,
+        default: null,
+      },
+      mac: {
+        type: String,
+        default: null,
+      },
+    },
     notes: {
       type: String,
       maxlength: bodyCompositionBounds.notes.maxlength,

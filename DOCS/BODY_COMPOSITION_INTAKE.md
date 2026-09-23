@@ -185,6 +185,15 @@ Also discarded, permanently:
   dropping it costs nothing.
 - **Waist-hip ratio (1.3).** A scale cannot measure this. It is a model estimate or a
   stale manual entry. Do not import it.
+- **Obesity level, obesity %, health score, target weight, the three "control" columns**
+  (xlsx only) — the same class as metabolic age: vendor composites or recommendations
+  computed from inputs we already store.
+
+**Kept though it is not a measurement: the device** (`device.name`, `device.mac`, xlsx
+only). A different scale reads the same body differently, so a scale swap silently breaks
+every trend; this is the only way to tell afterwards. Added 2026-09-22 under Chef's rule
+"don't toss any data that isn't pure noise" — everything else above is either recomputable
+from what we store or not information about the body.
 
 ### 5.4 The derivation table — verified against the real scan
 
