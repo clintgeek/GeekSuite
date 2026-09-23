@@ -496,6 +496,14 @@ export const typeDefs = gql`
     goal_weight_lbs: Float
     protein_g_per_lb: Float
     fat_g_per_lb: Float
+    # Protein's basis: 'lean_mass' (a recent body scan exists — protein is
+    # protein_g_per_lb_lean x lean_mass_lb), 'goal_weight' (protein_g_per_lb x
+    # goal_weight_lbs) or 'percent' (keto split, no scan). @geeksuite/utils
+    # macros.js; DOCS/FITNESSGEEK_BODY_DATA_PLAN.md D3/D4.
+    protein_basis: String
+    protein_g_per_lb_lean: Float
+    lean_mass_lb: Float
+    keto: Boolean
     calorie_target_mode: String
     activity_eatback_fraction: Float
     activity_eatback_cap_kcal: Float
@@ -520,6 +528,104 @@ export const typeDefs = gql`
     weekly: [MacroDay]
     today: MacroDay
     todayIndex: Int
+  }
+
+  # ---- Body composition (DOCS/FITNESSGEEK_BODY_DATA_PLAN.md §3.2) ----------
+  # Scans are stored as the scale's primaries; everything else is derived on
+  # read by @geeksuite/schemas' derive(). Every AVERAGE and CHANGE below
+  # follows the smoothing rule (@geeksuite/utils bodyComp.js): no field here
+  # is ever the difference between two individual scans.
+
+  type BodyCompSegment {
+    muscle_lb: Float
+    fat_lb: Float
+  }
+
+  type BodyCompDerived {
+    fat_free_mass_lb: Float
+    body_fat_pct: Float
+    body_water_pct: Float
+    skeletal_muscle_pct: Float
+    bmr_kcal: Float
+    bmi: Float
+    smi: Float
+  }
+
+  type BodyComposition {
+    id: ID!
+    # The instant printed on the scan, and the UTC-midnight calendar day it
+    # counts for — two different things (THE_CONTEXT.md §3.1).
+    measured_at: Date!
+    log_date: Date!
+    source: String!
+    weight_value: Float!
+    body_fat_mass_lb: Float
+    body_water_l: Float
+    protein_lb: Float
+    bone_mass_lb: Float
+    skeletal_muscle_lb: Float
+    subcutaneous_fat_lb: Float
+    visceral_fat_index: Float
+    height_cm: Float
+    left_arm: BodyCompSegment
+    right_arm: BodyCompSegment
+    trunk: BodyCompSegment
+    left_leg: BodyCompSegment
+    right_leg: BodyCompSegment
+    device_name: String
+    derived: BodyCompDerived
+  }
+
+  # Means over the scans in a window. \`scans\` is how many; \`from\`/\`to\`
+  # are the first and last scan days actually inside it.
+  type BodyCompWindow {
+    from: Date!
+    to: Date!
+    scans: Int!
+    weight_lb: Float
+    fat_mass_lb: Float
+    lean_mass_lb: Float
+    body_fat_pct: Float
+    skeletal_muscle_lb: Float
+    body_water_pct: Float
+    visceral_fat_index: Float
+    bmr_kcal: Float
+  }
+
+  # 7-day mean vs 7-day mean, window centres at least 14 days apart. When
+  # \`available\` is false every change is null and \`available_from\` says
+  # when the comparison should first appear if scanning continues.
+  type BodyCompChange {
+    available: Boolean!
+    available_from: Date
+    gap_days: Int
+    baseline: BodyCompWindow
+    latest: BodyCompWindow
+    weight_change_lb: Float
+    fat_change_lb: Float
+    lean_change_lb: Float
+  }
+
+  # The BMR a plan made today would use: 'scan' (Katch-McArdle from the 14-day
+  # mean lean mass, latest scan <= 30 days old) or 'mifflin' (no usable scan;
+  # \`bmr\` is null here because Mifflin needs profile inputs the gateway
+  # does not hold — the planner computes it).
+  type BodyCompBmr {
+    bmr: Float
+    source: String!
+    lean_mass_lb: Float
+    scans: Int
+    scan_age_days: Int
+  }
+
+  type BodyCompSummary {
+    total_scans: Int!
+    first_scan_at: Date
+    latest_scan_at: Date
+    # 14-day mean ending at the latest scan.
+    current: BodyCompWindow
+    change: BodyCompChange!
+    bmr: BodyCompBmr!
   }
 
   type BloodPressure {
@@ -686,6 +792,12 @@ export const typeDefs = gql`
     fitnessMedication(id: ID!): FitnessMedication
     bloodPressures: [BloodPressure]
     bloodPressure(id: ID!): BloodPressure
+    # Scans, oldest first, within an inclusive calendar-day window (either end
+    # optional).
+    bodyCompositions(startDate: Date, endDate: Date): [BodyComposition!]!
+    # \`date\` is the caller's local calendar day (YYYY-MM-DD), used only to
+    # age the latest scan for \`bmr\`; without it the server's UTC day is used.
+    bodyCompositionSummary(date: String): BodyCompSummary!
     loginStreak: LoginStreak
     dailySummary(date: String): FitnessDailySummary
     weeklySummary(startDate: String!): FitnessJSON

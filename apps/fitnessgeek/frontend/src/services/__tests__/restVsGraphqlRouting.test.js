@@ -162,3 +162,41 @@ describe('the medication mutations return the whole row', () => {
     expect(selections).toContain('med_type');
   });
 });
+
+describe('body composition reads (DOCS/FITNESSGEEK_BODY_DATA_PLAN.md §3.2)', () => {
+  const queryName = (call) => call.query.definitions[0].name.value;
+
+  it('the summary goes to GraphQL with the browser\'s own calendar day', async () => {
+    await apiService.get('/body-comp/summary');
+    const call = query.mock.calls.at(-1)[0];
+    expect(queryName(call)).toBe('GetBodyCompositionSummary');
+    expect(call.variables.date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+
+  it('scans pass their window through, and no window means the whole history', async () => {
+    await apiService.get('/body-comp/scans?startDate=2026-09-01&endDate=2026-09-22');
+    let call = query.mock.calls.at(-1)[0];
+    expect(queryName(call)).toBe('GetBodyCompositions');
+    expect(call.variables).toEqual({ startDate: '2026-09-01', endDate: '2026-09-22' });
+
+    await apiService.get('/body-comp/scans');
+    call = query.mock.calls.at(-1)[0];
+    expect(call.variables).toEqual({ startDate: null, endDate: null });
+  });
+
+  it('weights carry their source, and an update returns the whole row', async () => {
+    await apiService.get('/weight');
+    expect(query.mock.calls.at(-1)[0].query.loc.source.body).toContain('source');
+    await apiService.put('/weight/w1', { weight_value: 300 });
+    expect(mutate.mock.calls.at(-1)[0].mutation.loc.source.body).toMatch(/updateFitnessWeight\(id: \$id, input: \$input\) \{ id weight_value log_date notes source/);
+  });
+
+  it('settings bring back the plan\'s provenance — bmr_calc_version was never selected before', async () => {
+    await apiService.get('/settings');
+    const body = query.mock.calls.at(-1)[0].query.loc.source.body;
+    for (const f of ['bmr_calc_version', 'bmr_source', 'lean_mass_lb', 'protein_g_per_lb_lean', 'calc_inputs']) {
+      expect(body).toContain(f);
+    }
+  });
+});
+

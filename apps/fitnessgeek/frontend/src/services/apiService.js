@@ -12,7 +12,7 @@ const apolloClient = createApolloClient('fitnessgeek');
 // -------------------------------------------------------------
 
 const GET_USER_SETTINGS = gql`
-  query GetFitnessUserSettings { fitnessUserSettings { id theme influxEnabled dashboard { show_current_weight show_blood_pressure show_calories_today show_login_streak show_nutrition_today show_garmin_summary show_quick_actions show_weight_goal show_nutrition_goal card_order } garmin { enabled username last_connected_at } healthBaselines { weeklyHRV restingHR lastUpdated } notifications { enabled daily_reminder goal_reminders } nutrition_goal { enabled start_date start_weight target_weight activity_level weight_change_rate plan_type calorie_target_mode auto_base_calories fixed_calories activity_eatback_fraction activity_eatback_cap_kcal protein_g_per_lb_goal fat_g_per_lb_goal goal_weight_lbs show_adjustment daily_calorie_target weekly_schedule min_safe_calories bmr tdee timeline_weeks estimated_end_date mode keto { net_carb_limit_g track_net_carbs macro_split { preset fat_pct protein_pct carb_pct } } } weight_goal { enabled startWeight targetWeight startDate goalDate ratePerWeek lastRecalculated unit is_active } units { weight height } ai { enabled features { natural_language_food_logging meal_suggestions nutrition_analysis goal_recommendations } } household { household_id display_name share_food_logs share_weight share_meals } favorite_foods { id name brand } } }
+  query GetFitnessUserSettings { fitnessUserSettings { id theme influxEnabled dashboard { show_current_weight show_blood_pressure show_calories_today show_login_streak show_nutrition_today show_garmin_summary show_quick_actions show_weight_goal show_nutrition_goal card_order } garmin { enabled username last_connected_at } healthBaselines { weeklyHRV restingHR lastUpdated } notifications { enabled daily_reminder goal_reminders } nutrition_goal { enabled start_date start_weight target_weight activity_level weight_change_rate plan_type calorie_target_mode auto_base_calories fixed_calories activity_eatback_fraction activity_eatback_cap_kcal protein_g_per_lb_goal fat_g_per_lb_goal goal_weight_lbs show_adjustment daily_calorie_target weekly_schedule min_safe_calories bmr tdee bmr_calc_version bmr_source lean_mass_lb protein_g_per_lb_lean calc_inputs { weight_lb height_in age gender activity_level } timeline_weeks estimated_end_date mode keto { net_carb_limit_g track_net_carbs macro_split { preset fat_pct protein_pct carb_pct } } } weight_goal { enabled startWeight targetWeight startDate goalDate ratePerWeek lastRecalculated unit is_active } units { weight height } ai { enabled features { natural_language_food_logging meal_suggestions nutrition_analysis goal_recommendations } } household { household_id display_name share_food_logs share_weight share_meals } favorite_foods { id name brand } } }
 `;
 
 const UPDATE_USER_SETTINGS = gql`
@@ -20,15 +20,15 @@ const UPDATE_USER_SETTINGS = gql`
 `;
 
 const GET_WEIGHTS = gql`
-  query GetFitnessWeights { fitnessWeights { id weight_value log_date notes formatted_date } }
+  query GetFitnessWeights { fitnessWeights { id weight_value log_date notes source formatted_date } }
 `;
 
 const ADD_WEIGHT = gql`
-  mutation AddFitnessWeight($input: WeightInput!) { addFitnessWeight(input: $input) { id weight_value log_date notes formatted_date } }
+  mutation AddFitnessWeight($input: WeightInput!) { addFitnessWeight(input: $input) { id weight_value log_date notes source formatted_date } }
 `;
 
 const UPDATE_WEIGHT = gql`
-  mutation UpdateFitnessWeight($id: ID!, $input: WeightInput!) { updateFitnessWeight(id: $id, input: $input) { id } }
+  mutation UpdateFitnessWeight($id: ID!, $input: WeightInput!) { updateFitnessWeight(id: $id, input: $input) { id weight_value log_date notes source formatted_date } }
 `;
 
 const DELETE_WEIGHT = gql`
@@ -173,13 +173,38 @@ const GET_WEEKLY_SUMMARY = gql`
   query GetWeeklySummary($startDate: String!) { weeklySummary(startDate: $startDate) }
 `;
 
+// Body composition — DOCS/FITNESSGEEK_BODY_DATA_PLAN.md §3.2. Every average
+// and change arrives already smoothed by the gateway; the client never
+// subtracts two scans itself.
+const BODY_COMP_WINDOW = 'from to scans weight_lb fat_mass_lb lean_mass_lb body_fat_pct skeletal_muscle_lb body_water_pct visceral_fat_index bmr_kcal';
+
+const GET_BODY_COMP_SUMMARY = gql`
+  query GetBodyCompositionSummary($date: String) {
+    bodyCompositionSummary(date: $date) {
+      total_scans first_scan_at latest_scan_at
+      current { ${BODY_COMP_WINDOW} }
+      change { available available_from gap_days weight_change_lb fat_change_lb lean_change_lb baseline { ${BODY_COMP_WINDOW} } latest { ${BODY_COMP_WINDOW} } }
+      bmr { bmr source lean_mass_lb scans scan_age_days }
+    }
+  }
+`;
+
+const GET_BODY_COMPOSITIONS = gql`
+  query GetBodyCompositions($startDate: Date, $endDate: Date) {
+    bodyCompositions(startDate: $startDate, endDate: $endDate) {
+      id measured_at log_date source weight_value body_fat_mass_lb body_water_l skeletal_muscle_lb visceral_fat_index device_name
+      derived { fat_free_mass_lb body_fat_pct body_water_pct skeletal_muscle_pct bmr_kcal }
+    }
+  }
+`;
+
 const GET_DERIVED_MACROS = gql`
   query GetDerivedMacros($date: String) {
     derivedMacros(date: $date) {
       todayIndex
       calories { daily weekly_schedule }
       fixed { protein_g fat_g protein_kcal fat_kcal }
-      rules { goal_weight_lbs protein_g_per_lb fat_g_per_lb calorie_target_mode activity_eatback_fraction activity_eatback_cap_kcal }
+      rules { goal_weight_lbs protein_g_per_lb fat_g_per_lb protein_basis protein_g_per_lb_lean lean_mass_lb keto calorie_target_mode activity_eatback_fraction activity_eatback_cap_kcal }
       today { dayIndex base_calories activity_add_kcal target_calories protein_g fat_g carbs_g }
       weekly { dayIndex base_calories activity_add_kcal target_calories protein_g fat_g carbs_g }
     }
@@ -465,6 +490,13 @@ function routeRequest(method, url, data) {
     // /user/settings is an alias — same underlying FitnessUserSettings document
     if (base === '/user/settings') return { query: GET_USER_SETTINGS };
     if (base === '/weight') return { query: GET_WEIGHTS };
+    // The browser owns the calendar day — the summary ages the latest scan
+    // against it to decide whether a scan-based BMR is still usable.
+    if (base === '/body-comp/summary') return { query: GET_BODY_COMP_SUMMARY, variables: { date: localDateString() } };
+    if (base === '/body-comp/scans') {
+      const qp = new URLSearchParams(url.split('?')[1] || '');
+      return { query: GET_BODY_COMPOSITIONS, variables: { startDate: qp.get('startDate') || null, endDate: qp.get('endDate') || null } };
+    }
     // The browser owns the calendar day — same rule as /summary and
     // /insights/daily-summary above. Without it the weekly schedule picks the
     // server's UTC weekday and rolls over at 19:00 Central.
