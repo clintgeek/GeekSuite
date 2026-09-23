@@ -12,6 +12,38 @@ anything a future reader would otherwise have to rediscover.
 
 ## 2026-09-22
 
+### FitnessGeek — the body data gets used: lean-mass BMR and protein, a Weight & body page, and a coach that reasons from averages
+
+`97d7f68c` `7bac1840` `c8741408` `d929325c` + the Weight & body commit. Plan and decisions:
+`DOCS/FITNESSGEEK_BODY_DATA_PLAN.md` (Chef delegated the calls; each is marked D1–D9).
+
+- **The finding that matters most: Chef's saved plan predates the 20 Sep BMR unit fix.**
+  BMR 3314 / weekday target 2798; his scans' lean mass (~178 lb) gives a measured BMR of
+  ~2,114. Deliberately **not rewritten overnight** (D2): the dashboard now shows a
+  non-dismissible "needs recalculating" banner, and the wizard shows old vs new before
+  anything is saved.
+- **The smoothing rule is code** (`@geeksuite/utils/bodyComp.js`): current = 14-day mean;
+  a change = 7-day mean vs 7-day mean ≥14 days apart, and until then a date ("around 4
+  Oct"), never a number. Every UI and AI path goes through it.
+- **BMR** is Katch-McArdle from measured lean mass when a scan is ≤30 days old, and the
+  wizard says which formula it used. **Protein** is 1.0 g/lb of lean mass with a scan
+  (178 g for Chef, live). **Keto mode** was ignored by all three copies of the macro math
+  (a keto user was handed hundreds of grams of carbs); now one shared implementation.
+- **Real bugs fixed on the way:** a second weigh-in the same day silently made a duplicate
+  row (every consumer then counted that day twice); the settings query never selected
+  `bmr_calc_version`, so a recalculated plan could never look recalculated; the wizard
+  saved `target_weight` while the macro rules read `goal_weight_lbs` first; the weight
+  card's "rate per week" was never mapped (every goal read "On track"); the chart read
+  UTC-midnight dates as the previous day west of UTC.
+- **AI coach** gets body-comp averages with an explicit noise note, and its weight trend
+  (and the trends report's highlights) are 7-day means, not first-vs-last readings.
+- **Weight & body page**: 14-day summary, fat-vs-lean change card, stacked smoothed
+  fat/lean trend, weight line as a 7-day mean with raw dots, projection only on ≥14 days
+  of span, no per-entry deltas, "Scale" marker, edit dialog. Segmental values are stored,
+  not shown, until there's a baseline (D7).
+- Built by four subagents with disjoint files, each slice verified and committed here;
+  every rule's test confirmed red with its fix reverted; harness 44 scenes, 0 findings.
+
 ### FitnessGeek — Arboleaf exports import themselves from Nextcloud; scale weights reach the weight history
 
 `199b2471` `e650979a`

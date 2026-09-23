@@ -5,16 +5,10 @@ export { default as WeightProgress } from './WeightProgress.jsx';
 export { default as QuickAddWeight } from './QuickAddWeight.jsx';
 export { default as WeightLogList } from './WeightLogList.jsx';
 
-// Legacy components (to be deprecated)
-//
-// Q52a deleted the five chart modules that used to live here —
-// WeightChart / WeightSparkline (Recharts) and their WeightChartNivo /
-// WeightSparklineNivo twins. Nothing imported this barrel, and Weight.jsx's
-// own header explains why that was worse than merely dead: no package in
-// this workspace declares `sideEffects: false`, so rollup kept every
-// re-exported module's top-level side effects and a chart library could ride
-// into a chunk that had shaken its bindings. WeightTimeline is the one
-// weight chart the app renders.
-export { default as WeightProgressRing } from './WeightProgressRing.jsx';
-export { default as ProgressTracker } from './ProgressTracker.jsx';
-export { default as ChartSelector } from './ChartSelector.jsx';
+// Q52a deleted the five legacy chart modules (WeightChart / WeightSparkline
+// and their Nivo twins); the body-data pass (FITNESSGEEK_BODY_DATA_PLAN F10)
+// deleted the last three dead ones — WeightProgressRing, ProgressTracker and
+// ChartSelector — after a grep showed nothing imported them. Weight.jsx
+// imports by file, not through this barrel: no package in this workspace
+// declares `sideEffects: false`, so a chart module re-exported here can ride
+// @nivo/line into a chunk that shook its bindings.

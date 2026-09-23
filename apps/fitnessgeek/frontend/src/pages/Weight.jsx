@@ -3,6 +3,7 @@ import { Box, Typography, CircularProgress } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { useToast } from '@geeksuite/ui';
 import { useWeight } from '../hooks/useWeight.js';
+import { useBodyComp } from '../hooks/useBodyComp.js';
 // Imported by file, not through `../components/Weight`. The barrel used to
 // re-export the legacy WeightChart/WeightChartNivo/WeightSparkline* set, and
 // nothing in this workspace declares `sideEffects: false` — so rollup kept
@@ -14,6 +15,7 @@ import { useWeight } from '../hooks/useWeight.js';
 import WeightProgress from '../components/Weight/WeightProgress.jsx';
 import QuickAddWeight from '../components/Weight/QuickAddWeight.jsx';
 import WeightLogList from '../components/Weight/WeightLogList.jsx';
+import BodyCompositionSection from '../components/BodyComposition/BodyCompositionSection.jsx';
 import { SectionLabel, DisplayHeading, SuspenseSurface } from '../components/primitives';
 
 // The timeline is the only thing on this page that needs Nivo (~530 kB raw
@@ -34,11 +36,14 @@ const Weight = () => {
     error,
     currentWeight,
     addWeightLog,
+    updateWeightLog,
     deleteWeightLog,
-    loadWeightData,
     clearSuccessMessage,
     clearErrorMessage
   } = useWeight();
+  // Body composition is its own hook with its own error state: a failed
+  // body-comp query ends in an error card in that section, never here.
+  const bodyComp = useBodyComp();
   const { notify } = useToast();
 
   // Success/error come from useWeight's own auto-clearing state; forward each
@@ -73,10 +78,10 @@ const Weight = () => {
     <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 960, mx: 'auto' }}>
       {/* Editorial header */}
       <Box sx={{ mb: 3 }}>
-        <SectionLabel sx={{ mb: 0.75 }}>Tracking · Weight</SectionLabel>
-        <DisplayHeading size="page">Weight</DisplayHeading>
+        <SectionLabel sx={{ mb: 0.75 }}>Tracking · Weight &amp; body</SectionLabel>
+        <DisplayHeading size="page">Weight &amp; body</DisplayHeading>
         <Typography sx={{ color: 'text.secondary', mt: 0.5, fontSize: '0.9375rem' }}>
-          Track your weight and reach your goals.
+          Your weight and what it&rsquo;s made of, averaged so one water day doesn&rsquo;t move the needle.
         </Typography>
       </Box>
 
@@ -102,7 +107,19 @@ const Weight = () => {
         </SuspenseSurface>
       </Box>
 
-      {/* Quick Add Weight */}
+      {/* Body composition — summary, change, fat/lean trend */}
+      <Box sx={{ mb: 3 }}>
+        <BodyCompositionSection
+          summary={bodyComp.summary}
+          scans={bodyComp.scans}
+          loading={bodyComp.loading}
+          error={bodyComp.error}
+          scansError={bodyComp.scansError}
+          onRetry={bodyComp.reload}
+        />
+      </Box>
+
+      {/* Quick Add Weight (desktop card; the FAB on phones) */}
       <Box sx={{ mb: 3 }}>
         <QuickAddWeight onAdd={addWeightLog} unit="lbs" />
       </Box>
@@ -112,6 +129,7 @@ const Weight = () => {
         <WeightLogList
           logs={weightLogs}
           onDelete={deleteWeightLog}
+          onUpdate={updateWeightLog}
           unit="lbs"
         />
       </Box>

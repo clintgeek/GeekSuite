@@ -89,7 +89,7 @@ export default function PlanAccuracyBanner({ nutritionGoal, scanBmr }) {
           <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.25 }}>
             {stale
               ? 'It was calculated with a formula error fixed on 20 Sep and is likely too high. Recalculating shows your old and new targets before anything changes.'
-              : `A measured BMR from your body scans is available (≈${fmt(scanBmr.bmr)} kcal vs ${fmt(nutritionGoal.bmr)} in your plan).`}
+              : `From your body scans: ≈${fmt(scanBmr.bmr)} kcal a day, against ${fmt(nutritionGoal.bmr)} in your plan.`}
           </Typography>
           <Button
             component={RouterLink}

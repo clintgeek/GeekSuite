@@ -42,7 +42,7 @@ export const navSections = [
     items: [
       { id: '/dashboard', label: 'Dashboard', to: '/dashboard', icon: <HomeIcon sx={{ fontSize: 18 }} /> },
       { id: '/food-log', label: 'Food Log', to: '/food-log', icon: <RestaurantIcon sx={{ fontSize: 18 }} /> },
-      { id: '/weight', label: 'Weight', to: '/weight', icon: <MonitorWeightIcon sx={{ fontSize: 18 }} /> },
+      { id: '/weight', label: 'Weight & body', to: '/weight', icon: <MonitorWeightIcon sx={{ fontSize: 18 }} /> },
       // Body-composition import, next to Weight because that is the data it
       // lands in. It had NO nav row at all until 2026-09-19: the route
       // existed and the only way to reach it was the Android share target's

@@ -1,6 +1,6 @@
 # FitnessGeek — Using the body data
 
-Status: **in progress** (started 2026-09-22 overnight). Chef's brief, verbatim intent:
+Status: **built and deployed 2026-09-22/23 overnight**; §5 is what's left. Chef's brief, verbatim intent:
 
 > 1–4 [lean-mass BMR, lean-mass protein, fat-vs-lean change, AI coach context]; look at
 > the UI/UX especially surrounding weight and other measurements; make parts of the system
@@ -136,9 +136,9 @@ bodyCompositionSummary(date: String): BodyCompSummary!   # date = caller's local
 | W3 | Gateway: BodyComposition type + two queries; `derivedMacros` + bridge on `deriveMacroTargets` with lean mass; `addFitnessWeight` one-per-day; AI context gains body comp + smoothed weight; `GRAPHQL.md` | done (also: trend-report highlights smoothed) |
 | W4 | REST `goalRoutes /nutrition/macros` on `deriveMacroTargets` | done |
 | W5 | Frontend service layer: GraphQL docs + `bodyCompService` | done `7bac1840` |
-| W6 | Weight & body page: summary, change, smoothed trend; log list without deltas, source chip, edit; chart trend line + projection guard; palette colours; dead code removed | |
-| W7 | Wizard: `resolveBmr`, source shown, old-vs-new; plan saves provenance; dashboard stale/scan banner; dashboard weight stat on 7-day means | |
-| W8 | Harness fixtures + scenes for the new UI; run `--enforce-a11y` | |
+| W6 | Weight & body page: summary, change, smoothed trend; log list without deltas, source chip, edit; chart trend line + projection guard; palette colours; dead code removed | done |
+| W7 | Wizard: `resolveBmr`, source shown, old-vs-new; plan saves provenance; dashboard stale/scan banner; dashboard weight stat on 7-day means | done `d929325c` |
+| W8 | Harness fixtures + scenes for the new UI; run `--enforce-a11y` | done — 44 scenes, 0 findings |
 
 ## 5. Deferred — wanted, not tonight
 

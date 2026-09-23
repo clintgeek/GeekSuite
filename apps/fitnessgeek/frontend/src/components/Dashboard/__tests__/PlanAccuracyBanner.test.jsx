@@ -57,7 +57,7 @@ describe('PlanAccuracyBanner', () => {
 
   it('offers the scan BMR with both numbers, and Update plan → the wizard', () => {
     renderBanner(CURRENT_MIFFLIN, SCAN);
-    expect(screen.getByText(/A measured BMR from your body scans is available \(≈2,104 kcal vs 2,330 in your plan\)/)).toBeInTheDocument();
+    expect(screen.getByText(/From your body scans: ≈2,104 kcal a day, against 2,330 in your plan\./)).toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Update plan' })).toHaveAttribute('href', '/calorie-wizard');
   });
 

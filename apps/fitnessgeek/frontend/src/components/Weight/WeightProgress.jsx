@@ -12,6 +12,8 @@ import {
   ArrowForward as ArrowIcon
 } from '@mui/icons-material';
 import { differenceInWeeks, differenceInDays, parseISO, format } from 'date-fns';
+import { readableOn } from '@geeksuite/ui';
+import { rollingMean, utcDateString } from '@geeksuite/utils';
 import { StatNumber, SectionLabel } from '../primitives';
 
 const WeightProgress = ({
@@ -81,7 +83,21 @@ const WeightProgress = ({
       const firstLog = recentLogs[0];
       const lastLog = recentLogs[recentLogs.length - 1];
       const weeksDiff = differenceInWeeks(parseISO(lastLog.log_date), parseISO(firstLog.log_date)) || 1;
-      const weightChange = lastLog.weight_value - firstLog.weight_value;
+      // 7-day trailing means at both ends, not the two raw readings. The
+      // caption below has always said "6-week average", but this subtracted
+      // one weigh-in from another — a reading-to-reading delta, so a water
+      // day at either end moved the rate by ~0.4 lb/week (BODY_DATA_PLAN §0).
+      // The means use every log, so the first one still sees the days
+      // before the six-week window.
+      const meanByDay = new Map(
+        rollingMean(
+          weightLogs.map((l) => ({ date: utcDateString(l.log_date), value: Number(l.weight_value) })),
+          { windowDays: 7 }
+        ).map((m) => [utcDateString(m.date), m.mean])
+      );
+      const firstMean = meanByDay.get(utcDateString(firstLog.log_date)) ?? firstLog.weight_value;
+      const lastMean = meanByDay.get(utcDateString(lastLog.log_date)) ?? lastLog.weight_value;
+      const weightChange = lastMean - firstMean;
       currentRate = weightChange / weeksDiff;
 
       // If less than 3 weeks of data, use goal rate for projection
@@ -94,8 +110,11 @@ const WeightProgress = ({
 
     // Calculate if on track
     const remainingWeight = Math.abs(goal.targetWeight - currentWeight);
-    const weeksNeeded = Math.abs(remainingWeight / Math.abs(goal.ratePerWeek));
-    const daysAheadBehind = Math.round((weeksToGoal - weeksNeeded) * 7);
+    // No saved goal rate → no ahead/behind verdict (it used to be NaN, which
+    // rendered "On track" beside an off-track projection card).
+    const goalRateAbs = Math.abs(Number(goal.ratePerWeek)) || null;
+    const weeksNeeded = goalRateAbs ? remainingWeight / goalRateAbs : null;
+    const daysAheadBehind = weeksNeeded === null ? 0 : Math.round((weeksToGoal - weeksNeeded) * 7);
 
     // Projected completion date
     let projectedDate;
@@ -188,9 +207,16 @@ const WeightProgress = ({
     );
   }
 
+  // Theme palette only — no hex literals (F10). Status colours are domain
+  // colours: as a fill they are tinted with `alpha`, and as TEXT they go
+  // through `readableOn` against the tint they actually sit on, the way
+  // BPInsights does it.
+  const isDark = theme.palette.mode === 'dark';
+  const paper = theme.palette.background.paper;
+
   const getTrendIcon = () => {
-    if (insights.isAhead) return <TrendingUpIcon sx={{ color: '#10b981' }} />;
-    if (insights.isBehind) return <TrendingDownIcon sx={{ color: '#ef4444' }} />;
+    if (insights.isAhead) return <TrendingUpIcon sx={{ color: theme.palette.success.main }} />;
+    if (insights.isBehind) return <TrendingDownIcon sx={{ color: theme.palette.error.main }} />;
     return <TrendingFlatIcon sx={{ color: theme.palette.primary.main }} />;
   };
 
@@ -199,6 +225,15 @@ const WeightProgress = ({
     if (insights.isBehind) return theme.palette.error.main;
     return theme.palette.primary.main;
   };
+
+  const statusTint = alpha(getStatusColor(), isDark ? 0.14 : 0.08);
+  const statusInk = readableOn(getStatusColor(), statusTint, { under: paper });
+
+  const tileBg = isDark ? alpha(theme.palette.text.primary, 0.04) : theme.palette.background.default;
+
+  const projectionTone = insights.isOnTrack ? theme.palette.success.main : theme.palette.error.main;
+  const projectionTint = alpha(projectionTone, isDark ? 0.12 : 0.06);
+  const projectionMuted = readableOn(theme.palette.text.secondary, projectionTint, { under: paper });
 
   const getStatusText = () => {
     if (insights.isAhead) return `${Math.abs(insights.daysAheadBehind)} days ahead`;
@@ -290,7 +325,7 @@ const WeightProgress = ({
             sx={{
               height: 12,
               borderRadius: '999px',
-              backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.1)' : theme.palette.grey[100],
+              backgroundColor: alpha(theme.palette.text.primary, isDark ? 0.1 : 0.06),
               '& .MuiLinearProgress-bar': {
                 borderRadius: '999px',
                 backgroundColor: theme.palette.primary.main
@@ -305,10 +340,10 @@ const WeightProgress = ({
           <Chip
             label={getStatusText()}
             sx={{
-              backgroundColor: `${getStatusColor()}15`,
-              color: getStatusColor(),
+              backgroundColor: statusTint,
+              color: statusInk,
               fontWeight: 700,
-              border: `1px solid ${getStatusColor()}30`,
+              border: `1px solid ${alpha(getStatusColor(), 0.3)}`,
               borderRadius: '999px'
             }}
           />
@@ -324,7 +359,7 @@ const WeightProgress = ({
           <Box sx={{
             p: 2,
             borderRadius: '12px',
-            backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : theme.palette.background.default,
+            backgroundColor: tileBg,
             border: `1px solid ${theme.palette.divider}`
           }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
@@ -345,7 +380,7 @@ const WeightProgress = ({
           <Box sx={{
             p: 2,
             borderRadius: '12px',
-            backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : theme.palette.background.default,
+            backgroundColor: tileBg,
             border: `1px solid ${theme.palette.divider}`
           }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
@@ -366,22 +401,20 @@ const WeightProgress = ({
           <Box sx={{
             p: 2,
             borderRadius: '12px',
-            backgroundColor: insights.isOnTrack
-              ? (theme.palette.mode === 'dark' ? 'rgba(16, 185, 129, 0.1)' : 'rgba(16, 185, 129, 0.05)')
-              : (theme.palette.mode === 'dark' ? 'rgba(239, 68, 68, 0.1)' : 'rgba(239, 68, 68, 0.05)'),
-            border: `1px solid ${insights.isOnTrack ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)'}`,
+            backgroundColor: projectionTint,
+            border: `1px solid ${alpha(projectionTone, 0.25)}`,
             gridColumn: { xs: '1', sm: 'span 2' }
           }}>
-            <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontWeight: 600, display: 'block', mb: 1 }}>
+            <Typography variant="caption" sx={{ color: projectionMuted, fontWeight: 600, display: 'block', mb: 1 }}>
               Projected Completion
             </Typography>
             <Typography variant="body1" sx={{ fontWeight: 700, color: theme.palette.text.primary }}>
               {insights.projectedDate ? format(insights.projectedDate, 'MMMM dd, yyyy') : 'N/A'}
             </Typography>
-            <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
+            <Typography variant="caption" sx={{ color: projectionMuted }}>
               {insights.useGoalRateForProjection
                 ? `On schedule at goal rate of ${Math.abs(insights.goalRate || 0).toFixed(1)} ${unit}/week`
-                : `Based on 6-week average of ${Math.abs(insights.currentRate || 0).toFixed(1)} ${unit}/week`
+                : `At ${Math.abs(insights.currentRate || 0).toFixed(1)} ${unit}/week, your 7-day average over the last 6 weeks`
               }
             </Typography>
           </Box>

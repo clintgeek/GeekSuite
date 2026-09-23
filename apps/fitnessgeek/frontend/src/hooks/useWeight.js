@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { rollingMean, utcDateString } from '@geeksuite/utils';
 import { weightService } from '../services/weightService';
 // Legacy goals removed
 import { settingsService } from '../services/settingsService.js';
@@ -11,9 +12,11 @@ export const useWeight = () => {
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
 
-  // Load weight data
-  const loadWeightData = async () => {
-    setLoading(true);
+  // Load weight data. `silent` refreshes in place: a reload after a save must
+  // not flip `loading`, or the page swaps to its spinner, unmounts the open
+  // dialog and scrolls the user back to the top for a one-row change.
+  const loadWeightData = async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     try {
       // Load weight logs from database
       const response = await weightService.getWeightLogs();
@@ -40,6 +43,18 @@ export const useWeight = () => {
           || settingsData?.wizard?.weight_goal
           || settingsData?.fitness?.weight_goal;
 
+        // `ratePerWeek` was never mapped, so WeightProgress read `undefined`:
+        // "Goal: 0.0 lbs/week", and a NaN days-ahead that made every goal
+        // "On track" while tinting the projection card as off track. Stored
+        // rates are magnitudes (a loss plan saves `1`), so the sign comes
+        // from the direction of the goal.
+        const signedRate = (rate, start, target) => {
+          const r = Number(rate);
+          if (!Number.isFinite(r) || r === 0) return null;
+          const dir = Math.sign((Number(target) || 0) - (Number(start) || 0)) || 1;
+          return dir * Math.abs(r);
+        };
+
         const mapWeightGoal = (wgCandidate) => {
           if (!wgCandidate) return null;
           const enabled = (wgCandidate.enabled ?? wgCandidate.is_active ?? true) === true;
@@ -47,7 +62,7 @@ export const useWeight = () => {
           const targetWeight = wgCandidate.target_weight ?? wgCandidate.targetWeight ?? null;
           const startDate = wgCandidate.start_date ?? wgCandidate.startDate ?? null;
           const goalDate = wgCandidate.estimated_end_date ?? wgCandidate.goal_date ?? wgCandidate.goalDate ?? null;
-          return { enabled, startWeight, targetWeight, startDate, goalDate };
+          return { enabled, startWeight, targetWeight, startDate, goalDate, ratePerWeek: signedRate(wgCandidate.ratePerWeek, startWeight, targetWeight) };
         };
 
         // Map both weight_goal and nutrition_goal, prefer the one with usable data
@@ -58,7 +73,8 @@ export const useWeight = () => {
           startWeight: ng.start_weight ?? null,
           targetWeight: ng.target_weight ?? null,
           startDate: ng.start_date ?? null,
-          goalDate: ng.estimated_end_date ?? null
+          goalDate: ng.estimated_end_date ?? null,
+          ratePerWeek: signedRate(ng.weight_change_rate, ng.start_weight, ng.target_weight),
         } : null;
 
         logger.debug('[useWeight] mapped goal candidates');
@@ -85,7 +101,7 @@ export const useWeight = () => {
       setAutoCloseMessage('Failed to load weight data', setError);
       logger.error('Error loading weight data:', error);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -99,7 +115,7 @@ export const useWeight = () => {
 
       if (response.success) {
         // Reload weight data to get the updated list
-        await loadWeightData();
+        await loadWeightData({ silent: true });
         setAutoCloseMessage('Weight logged successfully!', setSuccess);
         return true;
       } else {
@@ -113,6 +129,29 @@ export const useWeight = () => {
     }
   };
 
+  // Edit a past weight (value and note; the day is the row and stays put).
+  //
+  // Resolves true only when the server hands back the row it saved.
+  // `apiService.put` answers `{ success: true, data: null }` when a mutation
+  // resolves to null, so `success` alone would call a save that wrote nothing
+  // a success — the failure-that-looks-like-success this app keeps finding.
+  // A rejection propagates so the dialog can show the server's reason.
+  const updateWeightLog = async (logId, data) => {
+    const response = await weightService.updateWeightLog(logId, {
+      weight_value: data.weight_value,
+      notes: data.notes ?? '',
+    });
+    if (!response?.success || !response?.data?.id) {
+      logger.error('Weight update returned no row:', response);
+      return false;
+    }
+    // Show the saved row at once, then refresh behind it.
+    setWeightLogs((prev) => prev.map((l) => (l.id === logId ? { ...l, ...response.data } : l)));
+    await loadWeightData({ silent: true });
+    setAutoCloseMessage('Weight updated', setSuccess);
+    return true;
+  };
+
   // Delete weight log
   const deleteWeightLog = async (logId) => {
     try {
@@ -120,7 +159,7 @@ export const useWeight = () => {
 
       if (response.success) {
         // Reload weight data to get the updated list
-        await loadWeightData();
+        await loadWeightData({ silent: true });
         setAutoCloseMessage('Weight log deleted successfully!', setSuccess);
         return true;
       } else {
@@ -134,14 +173,20 @@ export const useWeight = () => {
     }
   };
 
-  // Get current weight
+  // Current weight = the 7-day trailing mean at the latest log, not the
+  // latest raw reading (BODY_DATA_PLAN §0). WeightProgress's "% complete" and
+  // "to go" are measured from it, and the chart's line ends on the same
+  // number — so one water day no longer moves the progress bar by 2 lb.
   const getCurrentWeight = () => {
     if (weightLogs.length === 0) {
       // If no logs exist, use start weight from goals
       return weightGoal && weightGoal.enabled ? weightGoal.startWeight : null;
     }
-    const sortedLogs = [...weightLogs].sort((a, b) => new Date(b.log_date) - new Date(a.log_date));
-    return sortedLogs[0].weight_value;
+    const smoothed = rollingMean(
+      weightLogs.map((l) => ({ date: utcDateString(l.log_date), value: Number(l.weight_value) })),
+      { windowDays: 7 }
+    );
+    return smoothed.length ? smoothed[smoothed.length - 1].mean : null;
   };
 
   // Clear messages
@@ -172,6 +217,7 @@ export const useWeight = () => {
 
     // Actions
     addWeightLog,
+    updateWeightLog,
     deleteWeightLog,
     loadWeightData,
     clearSuccessMessage,
