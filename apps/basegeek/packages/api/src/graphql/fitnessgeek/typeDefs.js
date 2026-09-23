@@ -669,6 +669,12 @@ export const typeDefs = gql`
     meals: FitnessJSON
     topFoods: [FitnessJSON]
     goalCompliance: FitnessJSON
+    # The plan's daily targets ({ calories, protein, carbs, fat, fiber }), or
+    # null without a plan — what the day ribbon colours against.
+    targets: FitnessJSON
+    # Days in the range with at least one log. \`averages\` divide by this,
+    # not by the range length: an unlogged day is unknown, not zero.
+    days_logged: Int
   }
 
   type FitnessTrendReport {

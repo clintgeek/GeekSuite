@@ -144,9 +144,14 @@ function formatPromptForAI(context) {
       parts.push('  ⚠️ HRV significantly below baseline - incomplete recovery');
     }
     parts.push(`• Resting HR: ${context.sleep.restingHR} bpm`);
-    parts.push(`• HR Dip During Sleep: ${context.sleep.hrDip}% ${context.sleep.hrDip < 15 ? '⚠️ LOW' : '✓'}`);
-    if (context.sleep.hrDip < 15) {
-      parts.push('  ⚠️ Insufficient HR recovery indicates incomplete parasympathetic activation');
+    // hrDip is null until it can be computed honestly (sleepAnalysisService.js
+    // explains why). `null < 15` is `0 < 15` — true — so this used to print
+    // "null% ⚠️ LOW" and an invented warning every night. Unknown is omitted.
+    if (hasHrDip(context)) {
+      parts.push(`• HR Dip During Sleep: ${context.sleep.hrDip}% ${context.sleep.hrDip < 15 ? '⚠️ LOW' : '✓'}`);
+      if (context.sleep.hrDip < 15) {
+        parts.push('  ⚠️ Insufficient HR recovery indicates incomplete parasympathetic activation');
+      }
     }
     parts.push(`• Avg Sleep Stress: ${context.sleep.avgStress}/100`);
     parts.push(`• Body Battery Recovery: ${context.sleep.bodyBatteryChange >= 0 ? '+' : ''}${context.sleep.bodyBatteryChange} points`);
@@ -250,7 +255,7 @@ async function getRecoveryRecommendations(userId, date) {
     }
 
     // HR dip recommendations
-    if (context.sleep && context.sleep.hrDip < 10) {
+    if (hasHrDip(context) && context.sleep.hrDip < 10) {
       recommendations.push({
         priority: 'MEDIUM',
         category: 'CARDIOVASCULAR',
@@ -273,6 +278,11 @@ async function getRecoveryRecommendations(userId, date) {
   }
 }
 
+/** True when the sleep HR dip is an actual number (it is null by design today). */
+function hasHrDip(context) {
+  return typeof context?.sleep?.hrDip === 'number' && Number.isFinite(context.sleep.hrDip);
+}
+
 /**
  * Calculate overall readiness score (0-100)
  */
@@ -291,10 +301,14 @@ function calculateReadinessScore(context) {
   else if (context.sleep.hrvStatus === 'BALANCED') score += 10;
   else score -= 10;
 
-  // HR dip (15 points)
-  if (context.sleep.hrDip >= 15) score += 15;
-  else if (context.sleep.hrDip >= 10) score += 5;
-  else score -= 10;
+  // HR dip (15 points) — only when it is known. With hrDip null every
+  // comparison was false and this fell through to `-= 10`, so every readiness
+  // score shown was 10 points low (2026-09-23). Unknown neither adds nor takes.
+  if (hasHrDip(context)) {
+    if (context.sleep.hrDip >= 15) score += 15;
+    else if (context.sleep.hrDip >= 10) score += 5;
+    else score -= 10;
+  }
 
   // Body battery (15 points)
   if (context.current.bodyBattery >= 70) score += 15;

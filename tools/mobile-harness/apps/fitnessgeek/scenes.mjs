@@ -164,6 +164,17 @@ export const scenes = [
   },
   // Blood pressure, with its FAB.
   { name: '07-bp', goto: '/blood-pressure', wait: 1800 },
+  // Reports: averages coverage line, and the day ribbon WITH targets — its
+  // compliance legend only renders when targets exist (none did until
+  // 2026-09-23), so this is the first time it gets a contrast check.
+  {
+    name: '07r-reports',
+    goto: '/reports',
+    wait: 1800,
+    async setup(page) {
+      await must(page.getByText('Goal:').first(), 'day ribbon compliance legend');
+    },
+  },
   {
     name: '08-bp-dialog',
     goto: '/blood-pressure',

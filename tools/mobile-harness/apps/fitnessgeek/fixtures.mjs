@@ -312,6 +312,40 @@ export const OPS = {
   GetMorningBrief: { fitnessInsightsMorningBrief: null },
   GetDailyInsightSummary: { fitnessInsightsDailySummary: null },
   GetCorrelations: { fitnessInsightsCorrelations: null },
+  // Reports (/reports). Five of seven days logged so the "averages cover N
+  // of 7 days" line shows; targets present so the day ribbon's compliance
+  // edges, macro fills and legend render (they never did before 2026-09-23).
+  GetFoodReportOverview: {
+    fitnessFoodReportOverview: {
+      range: { start: daysAgo(6).slice(0, 10), end: TODAY, days: 7 },
+      totals: {},
+      averages: { calories: 1760, protein: 162, carbs: 148, fat: 71, fiber: 22, sugar: 34 },
+      daily: [6, 5, 3, 1, 0].map((n, i) => ({
+        date: daysAgo(n).slice(0, 10),
+        calories: [1620, 1705, 1690, 1980, 1805][i],
+        protein: [150, 171, 158, 166, 165][i], carbs: [140, 150, 139, 170, 141][i],
+        fat: [66, 70, 69, 80, 70][i], fiber: [20, 24, 19, 25, 22][i], sugar: [30, 36, 29, 41, 34][i],
+      })),
+      meals: {
+        breakfast: { calories: 420, count: 5 }, lunch: { calories: 610, count: 5 },
+        dinner: { calories: 620, count: 5 }, snack: { calories: 110, count: 3 },
+      },
+      topFoods: [
+        { name: 'Greek yogurt, plain', count: 5, calories: 650 },
+        { name: 'Chicken breast, grilled', count: 4, calories: 1100 },
+      ],
+      goalCompliance: { calories: { goal: 1691, daysWithin: 2, percentage: 40 } },
+      targets: { calories: 1691, protein: 178, carbs: 150, fat: 77, fiber: 25 },
+      days_logged: 5,
+    },
+  },
+  GetFoodReportTrends: {
+    fitnessFoodReportTrends: {
+      range: { start: daysAgo(6).slice(0, 10), end: TODAY, days: 7 },
+      daily: [], rolling: [], weights: [],
+      highlights: [],
+    },
+  },
   GetWeeklyInsightReport: { fitnessInsightsWeeklyReport: null },
   GetTrendWatch: { fitnessInsightsTrendWatch: null },
   GetCoaching: { fitnessInsightsCoaching: null },

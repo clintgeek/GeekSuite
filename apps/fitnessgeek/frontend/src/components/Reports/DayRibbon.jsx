@@ -291,7 +291,14 @@ const DayRibbon = ({ daily = [], macroTargets, calorieTarget, title = 'Daily Tot
       {/* Horizontal ribbon */}
       <Box
         ref={scrollRef}
+        // A horizontally scrolling strip must be reachable by keyboard, or its
+        // off-screen days are unreachable without a pointer (axe
+        // scrollable-region-focusable; first checked 2026-09-23).
+        tabIndex={0}
+        role="region"
+        aria-label="Daily totals, scrolls sideways"
         sx={{
+          '&:focus-visible': { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: 2 },
           display: 'flex',
           gap: 1.25,
           px: { xs: 2, sm: 2.5 },

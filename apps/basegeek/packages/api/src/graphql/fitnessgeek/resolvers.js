@@ -1012,10 +1012,27 @@ export const resolvers = {
           goalCompliance[metric] = { goal: goalValue, daysWithin, percentage: daily.length ? Math.round((daysWithin / daily.length) * 100) : 0 };
         });
       }
+      // The day ribbon colours each day against these. Reports.jsx has always
+      // read `targets`, and nothing ever returned it — so the ribbon's
+      // compliance edges, macro fills and legend never once rendered
+      // (found 2026-09-23). Same goal the compliance above is graded against.
+      let targets = null;
+      if (goals) {
+        const t = {
+          calories: goals.calories, protein: goals.protein_grams, carbs: goals.carbs_grams,
+          fat: goals.fat_grams, fiber: goals.fiber_grams,
+        };
+        targets = Object.fromEntries(Object.entries(t).filter(([, v]) => Number.isFinite(Number(v)) && Number(v) > 0));
+        if (!Object.keys(targets).length) targets = null;
+      }
       return {
         range: { start: format(startDate, 'yyyy-MM-dd'), end: format(endDate, 'yyyy-MM-dd'), days },
         totals, averages, daily, meals, topFoods: top,
-        goalCompliance: Object.keys(goalCompliance).length ? goalCompliance : null
+        goalCompliance: Object.keys(goalCompliance).length ? goalCompliance : null,
+        targets,
+        // `averages` divide by the days that HAVE logs, not the range — an
+        // unlogged day is unknown intake, not zero. The page says how many.
+        days_logged: daily.length,
       };
     },
 

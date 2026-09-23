@@ -12,6 +12,23 @@ anything a future reader would otherwise have to rediscover.
 
 ## 2026-09-23
 
+### FitnessGeek — Recovery Coach no longer docks 10 points every night; Reports colours days against the plan
+
+Found mapping what the Health Dashboard and Reports don't show (2026-09-23):
+- **Readiness was 10 points low on every load, for everyone**, and a "Poor HR recovery
+  during sleep" card fired every night. The sleep HR dip is null by design since 09-22,
+  and `null < 10` is `0 < 10`. Unknown now neither scores nor warns; the AI prompt omits
+  the line instead of printing "null% ⚠️ LOW".
+- **The Reports day ribbon had never shown its target colouring.** It read
+  `overview.targets`, which the resolver never returned. The resolver now returns the
+  same goal compliance is graded on, plus `days_logged`; the page says "Averages cover the
+  N of 7 days you logged" when not every day was.
+- Reports had no harness scene at all; its first run caught a keyboard-unreachable
+  horizontal ribbon (axe `scrollable-region-focusable`) — now a focusable region.
+- Open, Chef's call: the sleep analysis adds a HIGH "consider sleep apnea screening"
+  card whenever wrist SpO2 dips — noise for Chef (PCP-reviewed), possibly useful for the
+  other household users.
+
 ### FitnessGeek — a Weekender at the safety floor says why, and plans report the rate they really deliver
 
 Chef: "I chose the weekender plan and somehow the goal page still shows the same target

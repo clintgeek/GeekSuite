@@ -276,6 +276,8 @@ const GET_FOOD_REPORT_OVERVIEW = gql`
       meals
       topFoods
       goalCompliance
+      targets
+      days_logged
     }
   }
 `;

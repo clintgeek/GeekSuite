@@ -252,6 +252,13 @@ const Reports = () => {
         />
       ) : (
         <Box>
+          {/* Averages divide by the days that have logs (an unlogged day is
+              unknown, not zero) — so when that isn't every day, say so. */}
+          {overview && Number.isFinite(overview.days_logged) && overview.days_logged < (overview.range?.days ?? range) && (
+            <Typography data-testid="report-days-logged" variant="body2" sx={{ color: 'text.secondary', mb: 1.5 }}>
+              {`Averages cover the ${overview.days_logged} of ${overview.range?.days ?? range} days you logged.`}
+            </Typography>
+          )}
           {/* Average metrics — compact 6-up grid of Surfaces with StatNumber */}
           <Grid container spacing={2} sx={{ mb: 4 }}>
             {overview && Object.entries(overview.averages || {}).map(([key, value]) => (
