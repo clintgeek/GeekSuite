@@ -93,7 +93,7 @@ Bioimpedance swings 1–2 % body fat day to day with hydration alone; scale weig
   `available_from`; `rollingMean(points, { windowDays: 7 })` for charts.
 
 `macros.js`
-- `deriveMacroTargets({ nutritionGoal, leanMassLb })` → `{ rules, fixed, weekly }` in the
+- `deriveMacroTargets(ng, { leanMassLb })` → `{ rules, fixed, calories, weekly }` in the
   exact shape `derivedMacros` returns today, plus `rules.protein_basis`
   (`lean_mass` / `goal_weight` / `percent`), `rules.lean_mass_lb`,
   `rules.protein_g_per_lb_lean`, `rules.keto`.
@@ -131,11 +131,11 @@ bodyCompositionSummary(date: String): BodyCompSummary!   # date = caller's local
 
 | # | Piece | Status |
 |---|---|---|
-| W1 | Shared math: `katchMcArdleBMR`, `resolveBmr`, `bodyComp.js`, `deriveMacroTargets` + tests | |
-| W2 | Settings schema fields (`bmr_source`, `lean_mass_lb`, `protein_g_per_lb_lean`) through shared schema, zod, GraphQL input/type, parity tests | |
-| W3 | Gateway: BodyComposition type + two queries; `derivedMacros` + bridge on `deriveMacroTargets` with lean mass; `addFitnessWeight` one-per-day; AI context gains body comp + smoothed weight; `GRAPHQL.md` | |
-| W4 | REST `goalRoutes /nutrition/macros` on `deriveMacroTargets` | |
-| W5 | Frontend service layer: GraphQL docs + `bodyCompService` | |
+| W1 | Shared math: `katchMcArdleBMR`, `resolveBmr`, `bodyComp.js`, `deriveMacroTargets` + tests | done `97d7f68c` |
+| W2 | Settings schema fields (`bmr_source`, `lean_mass_lb`, `protein_g_per_lb_lean`) through shared schema, zod, GraphQL input/type, parity tests | done |
+| W3 | Gateway: BodyComposition type + two queries; `derivedMacros` + bridge on `deriveMacroTargets` with lean mass; `addFitnessWeight` one-per-day; AI context gains body comp + smoothed weight; `GRAPHQL.md` | done (also: trend-report highlights smoothed) |
+| W4 | REST `goalRoutes /nutrition/macros` on `deriveMacroTargets` | done |
+| W5 | Frontend service layer: GraphQL docs + `bodyCompService` | done `7bac1840` |
 | W6 | Weight & body page: summary, change, smoothed trend; log list without deltas, source chip, edit; chart trend line + projection guard; palette colours; dead code removed | |
 | W7 | Wizard: `resolveBmr`, source shown, old-vs-new; plan saves provenance; dashboard stale/scan banner; dashboard weight stat on 7-day means | |
 | W8 | Harness fixtures + scenes for the new UI; run `--enforce-a11y` | |

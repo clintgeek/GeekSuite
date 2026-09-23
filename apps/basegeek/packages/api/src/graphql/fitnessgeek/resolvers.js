@@ -17,8 +17,18 @@ import BloodPressure from './models/BloodPressure.js';
 import LoginStreak from './models/LoginStreak.js';
 import DailySummary from './models/DailySummary.js';
 import WeightGoals from './models/WeightGoals.js';
+import BodyComposition from './models/BodyComposition.js';
 import { isValidObjectId } from './ownership.js';
-import { toUtcMidnight, utcDateString, utcDayRange } from '@geeksuite/utils/dates';
+import { toUtcMidnight, utcDateString, utcDayRange, utcMidnightToday } from '@geeksuite/utils/dates';
+import {
+  bodyCompCurrent,
+  bodyCompChange,
+  leanMassForTargets,
+  katchMcArdleBMR,
+  deriveMacroTargets,
+} from '@geeksuite/utils';
+import derivationModule from '@geeksuite/schemas/fitnessgeek/bodyCompositionDerivation';
+import { leanMassFor, loadBodyCompScans, toBodyCompPoint } from './bodyCompPoints.js';
 import { validateFitnessMealsArgs, validateParseFoodEntryArgs } from './validation.js';
 import { runAIFeature } from '../../services/aiFeatureRunner.js';
 import {
@@ -195,6 +205,99 @@ const resolveLogFoodItem = async (input, userId) => {
   return food;
 };
 
+// CommonJS module: default import + destructure (see models/BodyComposition.js).
+const { derive } = derivationModule;
+
+/**
+ * The lean mass a target may use today, or null — and null, logged, when the
+ * scan read itself fails. Every caller (derivedMacros, the goal bridge, the AI
+ * context) has a documented no-scan behaviour — protein from goal weight — so
+ * a failed body-comp read degrades to exactly that rather than taking the
+ * Daily Ticket's macros down with it.
+ *
+ * @param {string} userId
+ * @param {string|Date|null} [today] the caller's calendar day, if it sent one
+ */
+const leanMassOrNull = async (userId, today = null) => {
+  try {
+    return await leanMassFor(userId, today, { BodyComposition });
+  } catch (err) {
+    logger.warn({ err }, '[fitnessgeek] body-composition read failed; macros fall back to goal weight');
+    return null;
+  }
+};
+
+/** Bridge deps: the two goal stores plus the scan-based lean mass. */
+const goalBridgeDeps = () => ({
+  NutritionGoals,
+  UserSettings,
+  leanMassFor: (userId) => leanMassOrNull(userId),
+});
+
+/** A scan segment, or null when the scan carried no segmental data. */
+const toSegment = (seg) => {
+  const muscle = seg?.muscle_lb ?? null;
+  const fat = seg?.fat_lb ?? null;
+  return muscle === null && fat === null ? null : { muscle_lb: muscle, fat_lb: fat };
+};
+
+/**
+ * A stored scan in the GraphQL `BodyComposition` shape: the primaries, the
+ * five segments, the device name, and the subset of `derive()` the type
+ * declares. Derived values are recomputed on read, never stored.
+ */
+const toBodyCompositionType = (doc) => {
+  const d = derive(doc);
+  return {
+    id: String(doc._id),
+    measured_at: doc.measured_at,
+    log_date: doc.log_date,
+    source: doc.source,
+    weight_value: doc.weight_value,
+    body_fat_mass_lb: doc.body_fat_mass_lb ?? null,
+    body_water_l: doc.body_water_l ?? null,
+    protein_lb: doc.protein_lb ?? null,
+    bone_mass_lb: doc.bone_mass_lb ?? null,
+    skeletal_muscle_lb: doc.skeletal_muscle_lb ?? null,
+    subcutaneous_fat_lb: doc.subcutaneous_fat_lb ?? null,
+    visceral_fat_index: doc.visceral_fat_index ?? null,
+    height_cm: doc.height_cm ?? null,
+    left_arm: toSegment(doc.left_arm),
+    right_arm: toSegment(doc.right_arm),
+    trunk: toSegment(doc.trunk),
+    left_leg: toSegment(doc.left_leg),
+    right_leg: toSegment(doc.right_leg),
+    device_name: doc.device?.name ?? null,
+    derived: {
+      fat_free_mass_lb: d.fat_free_mass_lb,
+      body_fat_pct: d.body_fat_pct,
+      body_water_pct: d.body_water_pct,
+      skeletal_muscle_pct: d.skeletal_muscle_pct,
+      bmr_kcal: d.bmr_kcal,
+      bmi: d.bmi,
+      smi: d.smi,
+    },
+  };
+};
+
+/**
+ * The BMR a plan made on `today` would use (plan D1): Katch-McArdle from the
+ * 14-day mean lean mass while the latest scan is ≤ 30 days old, else
+ * 'mifflin' with a null value — Mifflin needs profile inputs (age, height,
+ * sex) the planner holds and the gateway does not.
+ */
+const bmrFromPoints = (points, today) => {
+  const lean = leanMassForTargets(points, { today });
+  if (!lean) return { bmr: null, source: 'mifflin', lean_mass_lb: null, scans: 0, scan_age_days: null };
+  return {
+    bmr: katchMcArdleBMR({ leanMassLb: lean.lean_mass_lb }),
+    source: 'scan',
+    lean_mass_lb: lean.lean_mass_lb,
+    scans: lean.scans,
+    scan_age_days: lean.age_days,
+  };
+};
+
 // FitnessJSON scalar — arbitrary JSON passthrough for settings sub-objects
 const FitnessJSONScalar = new GraphQLScalarType({
   name: 'FitnessJSON',
@@ -303,18 +406,34 @@ const rollingAverage = (daily, window) => {
   return results;
 };
 
-const trendHighlights = (daily, weights) => {
-  if (!daily.length) return [];
+/**
+ * Plain-language highlights for the trends report (and, through
+ * `fitnessInsightsTrendWatch`, for the model).
+ *
+ * Both used to compare ONE day against ONE day — the period's first and last
+ * — so a single big dinner, or a single salty-water morning, became "calorie
+ * intake increased 20%" or "weight changed by 2.4 lbs". Now both compare the
+ * first 7 days' mean with the last 7 days' mean (DOCS/FITNESSGEEK_BODY_DATA_PLAN.md
+ * §0); weight goes through the same `bodyCompChange` as the body page, so it
+ * says nothing until the two windows are about two weeks apart.
+ */
+export const trendHighlights = (daily, weights) => {
   const highlights = [];
-  const last = daily[daily.length - 1];
-  const first = daily[0];
-  if (last.calories > first.calories * 1.2) {
-    highlights.push('Calorie intake increased more than 20% over the period.');
+  const logged = (daily || []).filter((d) => d.calories > 0);
+  if (logged.length >= 14) {
+    const mean = (xs) => xs.reduce((a, d) => a + d.calories, 0) / xs.length;
+    const early = mean(logged.slice(0, 7));
+    const late = mean(logged.slice(-7));
+    if (early > 0 && late > early * 1.2) {
+      highlights.push('Average daily calories in the last week were more than 20% above the first week.');
+    }
   }
   if (weights?.length >= 2) {
-    const delta = weights[weights.length - 1].weight - weights[0].weight;
-    if (Math.abs(delta) >= 2) {
-      highlights.push(`Weight changed by ${ delta.toFixed(1) } lbs.`);
+    const change = bodyCompChange(weights.map((w) => ({ date: w.date, weight_lb: w.weight })));
+    if (change.available && change.weight_change_lb !== null && Math.abs(change.weight_change_lb) >= 2) {
+      highlights.push(
+        `Weight changed by ${ change.weight_change_lb.toFixed(1) } lbs (7-day average vs 7-day average).`,
+      );
     }
   }
   return highlights;
@@ -366,22 +485,129 @@ const getFoodLogContext = async (userId, startDate, endDate) => {
   };
 };
 
+/** Days of weigh-ins the AI weight trend looks back over, whatever the window. */
+const WEIGHT_TREND_LOOKBACK_DAYS = 28;
+
+/**
+ * One weight per calendar day: the most recently written row for each
+ * `log_date` day wins. `addFitnessWeight` now keeps one row per day (plan D8),
+ * but rows written before that — and any race — can still leave two, and a
+ * summary that counts a day twice weights it twice.
+ *
+ * @param {Array<Object>} rows lean Weight rows
+ * @returns {Array<Object>} one row per day, oldest day first
+ */
+export const onePerDay = (rows) => {
+  const byDay = new Map();
+  const stamp = (r) => new Date(r.updated_at || r.created_at || 0).getTime();
+  for (const r of rows || []) {
+    const day = utcDateString(r.log_date);
+    if (!day) continue;
+    const held = byDay.get(day);
+    if (!held || stamp(r) >= stamp(held)) byDay.set(day, r);
+  }
+  return [...byDay.entries()].sort(([a], [b]) => (a < b ? -1 : a > b ? 1 : 0)).map(([, r]) => r);
+};
+
+/**
+ * Weight, for the AI coach.
+ *
+ * THE TREND IS SMOOTHED (plan §0, finding F8). It used to be the first raw
+ * weight in the window against the last — so a salty dinner the night before
+ * the window closed told the coach the user was "gaining". Now it is the
+ * 7-day mean of the latest weigh-ins against the 7-day mean of the earliest,
+ * over the last 28 days whatever the window (a 1-day morning brief still
+ * gets a real trend), through the same `bodyCompChange` the body-comp page
+ * uses: the two windows never overlap and their centres must be ≥ 14 days
+ * apart. Short of that, `trend` is 'insufficient_data', `change` is null, and
+ * `trendNote` says why — never a number built from two readings.
+ *
+ * `entries` / `current` / `min` / `max` / `average` describe the window
+ * itself, over one weight per day.
+ */
 const getWeightContext = async (userId, startDate, endDate) => {
-  const weights = await Weight.find({ userId: userId, log_date: { $gte: startDate, $lte: endDate } }).sort({ log_date: 1 }).lean();
-  if (!weights.length) return null;
-  const values = weights.map(w => w.weight_value);
-  const firstWeight = values[0];
-  const lastWeight = values[values.length - 1];
-  const change = lastWeight - firstWeight;
+  const anchor = toUtcMidnight(endDate);
+  const trendStart = new Date(anchor.getTime() - (WEIGHT_TREND_LOOKBACK_DAYS - 1) * 86400000);
+  const from = trendStart < startDate ? trendStart : startDate;
+  const raw = await Weight.find({ userId: userId, log_date: { $gte: from, $lte: endDate } }).sort({ log_date: 1 }).lean();
+  const days = onePerDay(raw);
+  if (!days.length) return null;
+
+  const inWindow = days.filter((w) => w.log_date >= startDate && w.log_date <= endDate);
+  const trendDays = days.filter((w) => w.log_date >= trendStart);
+  const change = bodyCompChange(trendDays.map((w) => ({ date: w.log_date, weight_lb: w.weight_value })));
+
+  const summaryWindow = (w) => (w ? {
+    from: utcDateString(w.from),
+    to: utcDateString(w.to),
+    weighIns: w.scans,
+    mean: w.weight_lb,
+  } : null);
+
+  let trend = 'insufficient_data';
+  let delta = null;
+  if (change.available && change.weight_change_lb !== null) {
+    delta = change.weight_change_lb;
+    trend = delta < -0.5 ? 'losing' : delta > 0.5 ? 'gaining' : 'stable';
+  }
+
+  const values = inWindow.map((w) => w.weight_value);
+  const latest7 = change.available ? change.latest : null;
   return {
-    entries: weights.length,
-    current: lastWeight,
-    periodStart: firstWeight,
-    change: Math.round(change * 10) / 10,
-    trend: change < -0.5 ? 'losing' : change > 0.5 ? 'gaining' : 'stable',
-    min: Math.min(...values),
-    max: Math.max(...values),
-    average: Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 10) / 10
+    entries: inWindow.length,
+    current: values.length ? values[values.length - 1] : null,
+    min: values.length ? Math.min(...values) : null,
+    max: values.length ? Math.max(...values) : null,
+    average: values.length ? Math.round((values.reduce((a, b) => a + b, 0) / values.length) * 10) / 10 : null,
+    // Smoothed: 7-day mean vs 7-day mean, lb. Null unless `trend` is a direction.
+    change: delta,
+    trend,
+    trendBasis: change.available
+      ? {
+        method: `7-day mean vs 7-day mean over the last ${WEIGHT_TREND_LOOKBACK_DAYS} days`,
+        gapDays: change.gap_days,
+        earlier: summaryWindow(change.baseline),
+        recent: summaryWindow(latest7),
+      }
+      : null,
+    trendNote: change.available
+      ? 'Daily weight swings 2-3 lb with water and food; reason from the 7-day means, not from individual readings.'
+      : `Not enough weigh-ins spread over the last ${WEIGHT_TREND_LOOKBACK_DAYS} days for a smoothed trend ` +
+        '(it needs two 7-day windows about two weeks apart). Do not infer a trend from individual readings.',
+  };
+};
+
+/**
+ * Body composition, for the AI coach — averages only (plan §0): the 14-day
+ * current means, the 7-day-vs-7-day change or when it will exist, and the BMR
+ * a plan made today would use. Null when the user has no scans.
+ *
+ * @param {string} userId
+ * @param {Date} endDate the context's last instant; scans after it are ignored
+ */
+const getBodyCompContext = async (userId, endDate) => {
+  const docs = await loadBodyCompScans(userId, { BodyComposition }, { through: endDate });
+  if (!docs.length) return null;
+  const points = docs.map(toBodyCompPoint);
+  const current = bodyCompCurrent(points);
+  const change = bodyCompChange(points);
+  const { bmr, source } = bmrFromPoints(points, toUtcMidnight(endDate));
+  const { from, to, ...means } = current;
+  return {
+    current: { from: utcDateString(from), to: utcDateString(to), ...means },
+    change: change.available
+      ? {
+        available: true,
+        gap_days: change.gap_days,
+        baseline: { from: utcDateString(change.baseline.from), to: utcDateString(change.baseline.to), scans: change.baseline.scans },
+        latest: { from: utcDateString(change.latest.from), to: utcDateString(change.latest.to), scans: change.latest.scans },
+        weight_change_lb: change.weight_change_lb,
+        fat_change_lb: change.fat_change_lb,
+        lean_change_lb: change.lean_change_lb,
+      }
+      : { available: false, available_from: utcDateString(change.available_from) || null },
+    bmr: { source, value: bmr },
+    note: 'Bioimpedance body composition; individual scans swing 1-2% body fat with hydration — reason only from these averages, never from a single scan.',
   };
 };
 
@@ -428,21 +654,25 @@ const buildUserContext = async (userId, options = {}) => {
     dateRange: { start: utcDateString(startDate), end: utcDateString(endDate), days: daysBack },
     generatedAt: new Date().toISOString()
   };
-  const [nutrition, weight, bloodPressure, goals] = await Promise.allSettled([
+  const [nutrition, weight, bloodPressure, bodyComposition, goals] = await Promise.allSettled([
     getFoodLogContext(userId, startDate, endDate),
     getWeightContext(userId, startDate, endDate),
     getBPContext(userId, startDate, endDate),
+    getBodyCompContext(userId, endDate),
     Promise.all([
       // Bridged — see nutritionGoalBridge.js. Before this, every AI insight
       // reasoned about a user whose targets it could not see, and said so to
       // no one.
-      resolveActiveNutritionGoal(userId, { NutritionGoals, UserSettings }),
+      resolveActiveNutritionGoal(userId, goalBridgeDeps()),
       WeightGoals.getActiveWeightGoals(userId),
     ])
   ]);
   context.nutrition = nutrition.status === 'fulfilled' ? nutrition.value : null;
   context.weight = weight.status === 'fulfilled' ? weight.value : null;
   context.bloodPressure = bloodPressure.status === 'fulfilled' ? bloodPressure.value : null;
+  // Every insight prompt serializes this whole object (JSON.stringify), so
+  // this key reaches the model as-is — note and all.
+  context.bodyComposition = bodyComposition.status === 'fulfilled' ? bodyComposition.value : null;
   if (goals.status === 'fulfilled') {
     const [ng, wg] = goals.value;
     context.goals = {
@@ -510,7 +740,7 @@ export const resolvers = {
       // `UserSettings.nutrition_goal`, so querying `nutritiongoals` alone
       // returned null for every user (that collection held 0 documents on
       // 2026-09-20). See nutritionGoalBridge.js.
-      return resolveActiveNutritionGoal(user.id, { NutritionGoals, UserSettings });
+      return resolveActiveNutritionGoal(user.id, goalBridgeDeps());
     },
     nutritionGoalsHistory: async (_, __, { user }) => {
       if (!user) throw new Error('Unauthorized');
@@ -646,28 +876,14 @@ export const resolvers = {
       const settings = await UserSettings.getOrCreate(user.id);
       const ng = settings?.nutrition_goal || {};
 
-      const goalWeightLbs = ng.goal_weight_lbs ?? ng.target_weight ?? ng.targetWeight;
-      const proteinPerLb = ng.protein_g_per_lb_goal ?? ng.protein_g_per_lb ?? 0.8;
-      const fatPerLb = ng.fat_g_per_lb_goal ?? ng.fat_g_per_lb ?? 0.35;
-      const proteinG = goalWeightLbs ? Math.round(proteinPerLb * goalWeightLbs) : 0;
-      const fatG = goalWeightLbs ? Math.round(fatPerLb * goalWeightLbs) : 0;
-      const proteinKcal = proteinG * 4;
-      const fatKcal = fatG * 9;
-
-      const mode = ng.calorie_target_mode || 'fixed';
-      const dailyCal = ng.daily_calorie_target || ng.auto_base_calories || ng.fixed_calories || null;
-      const weeklyBase = Array.isArray(ng.weekly_schedule) && ng.weekly_schedule.length === 7
-        ? ng.weekly_schedule
-        : (dailyCal ? new Array(7).fill(dailyCal) : [0, 0, 0, 0, 0, 0, 0]);
-
-      const eatFrac = typeof ng.activity_eatback_fraction === 'number' ? ng.activity_eatback_fraction : 0.6;
-      const eatCap = typeof ng.activity_eatback_cap_kcal === 'number' ? ng.activity_eatback_cap_kcal : 500;
-
-      const weekly = weeklyBase.map((baseCal, idx) => {
-        const target = baseCal;
-        const carbsG = Math.max(0, Math.round((target - (proteinKcal + fatKcal)) / 4));
-        return { dayIndex: idx, base_calories: baseCal, activity_add_kcal: 0, target_calories: target, protein_g: proteinG, fat_g: fatG, carbs_g: carbsG };
-      });
+      // The arithmetic lives in @geeksuite/utils (plan D5) — the same
+      // `deriveMacroTargets` the goal bridge and REST `/goals/nutrition/macros`
+      // use. With a scan ≤ 30 days old, protein is per lb of measured lean
+      // mass (D3); keto plans get keto macros (D4). No scan, standard mode:
+      // byte-identical to the inline copy this replaced.
+      const calendarDay = typeof date === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(date) ? date : null;
+      const lean = await leanMassOrNull(user.id, calendarDay);
+      const { rules, fixed, calories, weekly } = deriveMacroTargets(ng, { leanMassLb: lean?.lean_mass_lb ?? null });
 
       // WHICH DAY IS IT FOR THE USER?
       //
@@ -690,13 +906,39 @@ export const resolvers = {
       const todayIndex = (dow + 6) % 7;
       const today = weekly[todayIndex] || null;
 
+      return { rules, fixed, calories, weekly, today, todayIndex };
+    },
+
+    bodyCompositions: async (_, { startDate, endDate } = {}, { user }) => {
+      if (!user) throw new Error('Unauthorized');
+      // Calendar days, inclusive at both ends, read in UTC — `log_date` is
+      // stored at UTC midnight, so a server-local day boundary would drop or
+      // add a day the moment the container got a TZ.
+      const query = { userId: user.id };
+      if (startDate || endDate) {
+        query.log_date = {};
+        if (startDate) query.log_date.$gte = toUtcMidnight(startDate);
+        if (endDate) query.log_date.$lte = utcDayRange(endDate).end;
+      }
+      const docs = await BodyComposition.find(query).sort({ measured_at: 1 }).lean();
+      return docs.map(toBodyCompositionType);
+    },
+
+    bodyCompositionSummary: async (_, { date } = {}, { user }) => {
+      if (!user) throw new Error('Unauthorized');
+      // Optional, unlike dailySummary's: it only ages the latest scan for
+      // `bmr`, where UTC's today is within the 30-day tolerance. But a value
+      // that IS sent must be a calendar date, not silently misread.
+      if (date != null && date !== '') requireCalendarDate(date, 'bodyCompositionSummary');
+      const docs = await loadBodyCompScans(user.id, { BodyComposition });
+      const points = docs.map(toBodyCompPoint);
       return {
-        rules: { goal_weight_lbs: goalWeightLbs, protein_g_per_lb: proteinPerLb, fat_g_per_lb: fatPerLb, calorie_target_mode: mode, activity_eatback_fraction: eatFrac, activity_eatback_cap_kcal: eatCap },
-        fixed: { protein_g: proteinG, fat_g: fatG, protein_kcal: proteinKcal, fat_kcal: fatKcal },
-        calories: { daily: dailyCal, weekly_schedule: weeklyBase },
-        weekly,
-        today,
-        todayIndex,
+        total_scans: docs.length,
+        first_scan_at: docs.length ? docs[0].measured_at : null,
+        latest_scan_at: docs.length ? docs[docs.length - 1].measured_at : null,
+        current: bodyCompCurrent(points),
+        change: bodyCompChange(points),
+        bmr: bmrFromPoints(points, date || utcMidnightToday()),
       };
     },
 
@@ -759,7 +1001,7 @@ export const resolvers = {
       const averages = toAverages(totals, daily.length);
       const meals = mealBreakdown(logs);
       const top = topFoods(logs);
-      const goals = await resolveActiveNutritionGoal(user.id, { NutritionGoals, UserSettings });
+      const goals = await resolveActiveNutritionGoal(user.id, goalBridgeDeps());
       const goalCompliance = {};
       if (goals) {
         METRICS.forEach(metric => {
@@ -788,7 +1030,8 @@ export const resolvers = {
       const daily = buildDaily(logs);
       const rolling = rollingAverage(daily, 7);
       const weightsRaw = await Weight.find({ userId: user.id, log_date: { $gte: startDate, $lte: endDate } }).sort({ log_date: 1 }).lean();
-      const weights = weightsRaw.map(w => ({ date: new Date(w.log_date).toISOString().split('T')[0], weight: w.weight_value }));
+      // One weight per day — a duplicated day would count twice in every mean.
+      const weights = onePerDay(weightsRaw).map(w => ({ date: utcDateString(w.log_date), weight: w.weight_value }));
       return {
         range: { start: format(startDate, 'yyyy-MM-dd'), end: format(endDate, 'yyyy-MM-dd'), days },
         daily, rolling, weights, highlights: trendHighlights(daily, weights)
@@ -1115,13 +1358,64 @@ export const resolvers = {
       const [res] = await Promise.all(promises);
       return res;
     },
+    /**
+     * One weight per calendar day (plan D8, finding F6).
+     *
+     * This used to be a bare `new Weight(input).save()`: a second weigh-in on
+     * the same day — through the real UI, which only ever calls this — made a
+     * second row, and every consumer (chart, AI context, projections) then
+     * counted that day twice. REST's POST refuses with a 409 instead; nothing
+     * reaches REST, and a 409 is the wrong answer to "I weighed again".
+     *
+     * So: the day is normalized exactly as REST normalizes it (UTC midnight
+     * of the calendar day sent — the frontend sends `localDateString()` —
+     * else UTC's today), and if that day already has a row it is UPDATED in
+     * place and any surplus same-day rows are removed. A typed value is a
+     * manual value, so `source` becomes 'manual' either way. The Arboleaf
+     * importer's "import wins" rule still applies the next time an export
+     * containing this day is imported.
+     */
     addFitnessWeight: async (_, { input }, { user }) => {
       if (!user) throw new Error('Unauthorized');
-      return new Weight({ ...input, userId: user.id }).save();
+      const logDate = toUtcMidnight(input.log_date ?? new Date());
+      if (Number.isNaN(logDate.getTime())) throw new Error('addFitnessWeight: `log_date` is not a valid date');
+      // Same rounding as REST's POST /api/weight.
+      const weightValue = parseFloat(parseFloat(input.weight_value).toFixed(1));
+      const { start, end } = utcDayRange(logDate);
+
+      // Oldest first: the surviving row keeps the id a client may already hold.
+      const sameDay = await Weight.find({ userId: user.id, log_date: { $gte: start, $lte: end } })
+        .sort({ created_at: 1, _id: 1 });
+      if (!sameDay.length) {
+        return new Weight({
+          userId: user.id,
+          weight_value: weightValue,
+          log_date: logDate,
+          notes: input.notes ?? '',
+          source: 'manual',
+        }).save();
+      }
+
+      const [row, ...surplus] = sameDay;
+      row.weight_value = weightValue;
+      row.log_date = logDate;
+      if (input.notes != null) row.notes = input.notes;
+      row.source = 'manual';
+      row.updated_at = new Date();
+      await row.save();
+      if (surplus.length) {
+        await Weight.deleteMany({ _id: { $in: surplus.map((w) => w._id) }, userId: user.id });
+      }
+      return row;
     },
     updateFitnessWeight: async (_, { id, input }, { user }) => {
       if (!user) throw new Error('Unauthorized');
-      const w = await Weight.findOneAndUpdate({ _id: id, userId: user.id }, { ...input, updated_at: new Date() }, { new: true });
+      const update = { ...input, updated_at: new Date() };
+      // A typed correction is a manual value, whatever wrote the row first.
+      if (input?.weight_value !== undefined) update.source = 'manual';
+      // Calendar day at UTC midnight, as REST's PUT normalizes it.
+      if (input?.log_date != null) update.log_date = toUtcMidnight(input.log_date);
+      const w = await Weight.findOneAndUpdate({ _id: id, userId: user.id }, update, { new: true });
       if (!w) throw new Error('Weight record not found');
       return w;
     },

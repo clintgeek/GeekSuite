@@ -45,18 +45,25 @@
  *
  * THE MACRO DERIVATION IS THE ONE THE APP ALREADY USES
  * ---------------------------------------------------
- * `deriveGoalFromSettings` reproduces `derivedMacros`' arithmetic exactly —
- * protein and fat from grams-per-pound of goal weight, carbohydrate as the
- * remaining calories divided by 4. Writing a second, subtly different
- * derivation here would mean Reports grading the user against a target the
- * Daily Ticket never showed them, which is a worse failure than the one being
- * fixed.
+ * `deriveGoalFromSettings` is built on `macroRules` + `macrosForCalories`
+ * from `@geeksuite/utils` — the same functions `derivedMacros` and REST
+ * `GET /goals/nutrition/macros` call (plan D5). It used to be a third copy of
+ * that arithmetic with a comment pleading that the copies stay identical;
+ * now they cannot differ. Reports grading the user against a target the
+ * Daily Ticket never showed them would be a worse failure than the one this
+ * module fixed.
+ *
+ * With a recent body scan (`deps.leanMassFor`), protein is per lb of measured
+ * lean mass (plan D3); keto plans get keto macros (plan D4). Without either,
+ * the numbers are exactly what they were.
  *
  * Deliberately NOT derived: `fiber_grams`, `sugar_grams`, `sodium_mg`. Nothing
  * in the plan implies them, and `goalCompliance` skips any goal whose value is
  * falsy, so leaving them absent means "no fiber goal" rather than "your fiber
  * goal is 0" — which would grade every day as a failure.
  */
+
+import { macroRules, macrosForCalories } from '@geeksuite/utils';
 
 /**
  * Project a stored `UserSettings.nutrition_goal` plan into the shape the
@@ -68,12 +75,15 @@
  * `derivedMacros`' own `today` index has.
  *
  * @param {Object|null|undefined} ng a stored `nutrition_goal` sub-document
+ * @param {Object} [opts]
+ * @param {number|null} [opts.leanMassLb] averaged recent lean mass
+ *   (`leanMassForTargets`), or null/absent when no usable scan exists
  * @returns {Object|null} `{ calories, protein_grams, carbs_grams, fat_grams,
  *   source }`, or `null` when the plan is disabled or has no calorie target —
  *   in which case the caller must keep reporting "no goals" rather than invent
  *   one.
  */
-export function deriveGoalFromSettings(ng) {
+export function deriveGoalFromSettings(ng, { leanMassLb = null } = {}) {
   if (!ng || ng.enabled === false) return null;
 
   // Same precedence chain as `derivedMacros`, so the two cannot disagree.
@@ -91,29 +101,47 @@ export function deriveGoalFromSettings(ng) {
 
   if (!calories) return null;
 
-  const goalWeightLbs = ng.goal_weight_lbs ?? ng.target_weight ?? ng.targetWeight;
-  const proteinPerLb = ng.protein_g_per_lb_goal ?? ng.protein_g_per_lb ?? 0.8;
-  const fatPerLb = ng.fat_g_per_lb_goal ?? ng.fat_g_per_lb ?? 0.35;
+  const rules = macroRules(ng, { leanMassLb });
+  const { protein_g: proteinG, fat_g: fatG, carbs_g: carbsG } = macrosForCalories(calories, rules);
 
-  const weight = Number(goalWeightLbs);
-  const hasWeight = Number.isFinite(weight) && weight > 0;
-  const proteinG = hasWeight ? Math.round(proteinPerLb * weight) : 0;
-  const fatG = hasWeight ? Math.round(fatPerLb * weight) : 0;
+  // WHICH GOALS HAVE A BASIS. A macro with nothing to derive it from is left
+  // ABSENT, never 0: `goalCompliance` skips a falsy goal value, whereas a
+  // literal 0 g goal would be graded and fail every day.
+  const goalWeight = Number(rules.goal_weight_lbs);
+  const hasGoalWeight = Number.isFinite(goalWeight) && goalWeight > 0;
+  const hasLean = rules.lean_mass_lb !== null;
+  const ketoSplit = rules.keto && !!rules.keto_split;
+  // Protein is anchored by lean mass, by goal weight, or (keto, no scan) by
+  // the saved split.
+  const proteinBasis = hasLean || hasGoalWeight || ketoSplit;
 
-  // Carbohydrate is whatever calories are left once protein and fat are paid
-  // for. Clamped at zero: a plan whose protein and fat exceed its calorie
-  // target is over-specified, and a negative carb goal would grade every
-  // single day as non-compliant.
-  const carbsG = Math.max(0, Math.round((calories - (proteinG * 4 + fatG * 9)) / 4));
+  let protein;
+  let fat;
+  let carbs;
+  if (rules.keto) {
+    // Keto carbs are the split's share or the lazy-keto cap — always known.
+    // Fat is the split's share, or the remainder once protein is paid for,
+    // which is only meaningful when protein itself has a basis.
+    carbs = carbsG;
+    protein = proteinBasis ? proteinG : undefined;
+    fat = proteinBasis ? fatG : undefined;
+  } else {
+    // Standard: fat is per lb of goal weight and carbs the remainder, so
+    // without a goal weight neither has a basis — only a scan-based protein.
+    protein = proteinBasis ? proteinG : undefined;
+    fat = hasGoalWeight ? fatG : undefined;
+    // Clamped at zero by macrosForCalories: a plan whose protein and fat
+    // exceed its calories is over-specified, and a negative carb goal would
+    // grade every day as non-compliant. 0 is kept here (unlike protein/fat)
+    // because it is a real, computed answer, not an absent basis.
+    carbs = proteinBasis && hasGoalWeight ? carbsG : undefined;
+  }
 
   return {
     calories,
-    // Without a goal weight there is no basis for a macro split, and a `0`
-    // gram goal is skipped by `goalCompliance` rather than graded — which is
-    // the honest outcome, not a silent zero.
-    protein_grams: proteinG || undefined,
-    fat_grams: fatG || undefined,
-    carbs_grams: hasWeight ? carbsG : undefined,
+    protein_grams: protein || undefined,
+    fat_grams: fat || undefined,
+    carbs_grams: carbs,
     source: 'settings_plan',
   };
 }
@@ -125,15 +153,21 @@ export function deriveGoalFromSettings(ng) {
  * @param {Object} deps
  * @param {Object} deps.NutritionGoals model with `getActiveGoals`
  * @param {Object} deps.UserSettings   model with `getOrCreate`
+ * @param {Function} [deps.leanMassFor] `async (userId) => ({ lean_mass_lb }) | null`
+ *   — the lean mass a target may use (bodyCompPoints.js `leanMassFor`). When
+ *   absent, or when it answers null, protein uses the goal-weight rule.
  * @returns {Promise<Object|null>} a `NutritionGoals`-shaped goal, or null
  */
-export async function resolveActiveNutritionGoal(userId, { NutritionGoals, UserSettings }) {
+export async function resolveActiveNutritionGoal(userId, { NutritionGoals, UserSettings, leanMassFor = null }) {
   // An explicitly-entered per-macro goal wins: it is the more specific record,
   // and honouring it keeps `setNutritionGoals` meaningful rather than making
   // this bridge silently override it.
   const explicit = await NutritionGoals.getActiveGoals(userId);
   if (explicit) return explicit;
 
-  const settings = await UserSettings.getOrCreate(userId);
-  return deriveGoalFromSettings(settings?.nutrition_goal);
+  const [settings, lean] = await Promise.all([
+    UserSettings.getOrCreate(userId),
+    leanMassFor ? leanMassFor(userId) : null,
+  ]);
+  return deriveGoalFromSettings(settings?.nutrition_goal, { leanMassLb: lean?.lean_mass_lb ?? null });
 }

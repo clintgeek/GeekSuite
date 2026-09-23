@@ -235,6 +235,7 @@ than a shaped type.
 |---|---|
 | Settings / goals | `fitnessUserSettings`, `activeNutritionGoals`, `nutritionGoalsHistory`, `derivedMacros` |
 | Weight | `fitnessWeights`, `fitnessWeight(id!)` |
+| Body composition | `bodyCompositions(startDate: Date, endDate: Date): [BodyComposition!]!` — scans oldest first, inclusive UTC calendar-day window on `log_date`; each carries its primaries, five segments, `device_name` and `derived` (recomputed on read by `@geeksuite/schemas`' `derive()`, never stored). `bodyCompositionSummary(date: String): BodyCompSummary!` — `total_scans`, first/latest `measured_at`, `current` (14-day mean ending at the latest scan), `change` (7-day mean vs 7-day mean, centres ≥ 14 days apart, else `available_from`), `bmr` (`source: 'scan'` Katch-McArdle while the latest scan is ≤ 30 days old, else `'mifflin'` with a null value). `date` is the caller's local `YYYY-MM-DD`, optional, validated if sent. Averages only — see `DOCS/FITNESSGEEK_BODY_DATA_PLAN.md` §0. |
 | Food | `fitnessFoods(search)`, `fitnessFood(id!)` |
 | Food logs | `foodLogs(date: Date, startDate: Date, endDate: Date, mealType)`, `foodLog(id!)` |
 | Meals | `fitnessMeals(mealType, search)`, `fitnessMeal(id!)` |
@@ -262,6 +263,23 @@ than a shaped type.
 | Household | `createFitnessHousehold(display_name!)`, `joinFitnessHousehold(household_id!, display_name!)`, `updateFitnessHouseholdSettings(input: FitnessJSON!)`, `leaveFitnessHousehold` |
 | AI | `fitnessInsightsChat(message!, history: [ChatMessageInput])` |
 | Garmin | `updateGarminWeight(date, weightLbs: Float!, timezone)` |
+
+**Behaviour worth knowing**
+
+- `derivedMacros(date)`, `activeNutritionGoals`, the report's `goalCompliance` and the AI
+  context all derive macros through `@geeksuite/utils` `deriveMacroTargets` / `macroRules` +
+  `macrosForCalories` (REST `GET /api/goals/nutrition/macros` too). `MacroRules` carries
+  `protein_basis` (`lean_mass` / `goal_weight` / `percent`), `lean_mass_lb`,
+  `protein_g_per_lb_lean` and `keto`. With a scan ≤ 30 days old protein is per lb of lean mass;
+  keto plans get keto macros. No scan, standard mode: the same numbers as before.
+- `addFitnessWeight` keeps **one weight per calendar day**: the day is normalized to UTC
+  midnight and an existing row for it is updated in place (surplus same-day rows removed);
+  the value is `source: 'manual'`. `updateFitnessWeight` with a `weight_value` also sets
+  `source: 'manual'`.
+- The `fitnessInsights*` context (`fitnessInsightsContext` shows it) counts one weight per day;
+  `weight.trend` is 7-day mean vs 7-day mean over the last 28 days (`insufficient_data` when
+  there aren't two separated windows), and `bodyComposition` carries 14-day means, the change
+  rule and the BMR source, or null with no scans.
 
 `FitnessUserSettings` is shared with the REST settings routes through one module — add fields
 there first (see `DOCS/CONTEXT.md`, "Adding a field", and

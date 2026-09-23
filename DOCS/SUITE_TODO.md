@@ -89,6 +89,24 @@ Pull from here when planning the next pass; update as work lands or priorities s
 
 ## 5. Features & Fixes
 
+### FitnessGeek body data — deferred from `DOCS/FITNESSGEEK_BODY_DATA_PLAN.md` §5
+
+Wanted, not built on the 2026-09-22 overnight run:
+- **Segmental view** — the ten limb/trunk values are stored, not shown. Revisit after ~3
+  months of scans or when lifting starts; they need a stability baseline before a left/right
+  difference means anything (plan D7).
+- **"Body" section in Reports** — 7/30-day weight and body-comp averages, mirroring
+  `BPInsights`.
+- **StartGeek glance card** shows no weight at all (`glance/resolvers.js` fitness block).
+- **Garmin push of scale weights** — plumbing exists end to end but nothing calls it; the
+  folder import has no user timezone and the push resolver falls back to
+  America/Los_Angeles (plan D9). Needs a timezone in `UserSettings` first.
+- **Weight on the mobile bottom nav**; "Health Dashboard" is Garmin-only and its name
+  invites confusion with body data.
+- **REST `aiInsightsService.js`** duplicates the gateway's context builder and no client
+  calls it — delete or reconcile.
+- **Household `share_weight`** is a setting nothing honours.
+
 ### Suite MCP server — `DOCS/MCP_PLAN.md`
 
 Proposed 2026-09-22: a `/mcp` route in basegeek so ChatGPT / Claude clients can read suite

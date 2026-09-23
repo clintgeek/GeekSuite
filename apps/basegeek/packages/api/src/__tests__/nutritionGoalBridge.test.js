@@ -136,3 +136,98 @@ describe('resolveActiveNutritionGoal', () => {
     ).resolves.toBeNull();
   });
 });
+
+// ---------------------------------------------------------------------------
+// Lean mass and keto (DOCS/FITNESSGEEK_BODY_DATA_PLAN.md D3/D4) — the bridge
+// now runs on @geeksuite/utils' macroRules + macrosForCalories, the same
+// functions derivedMacros uses.
+// ---------------------------------------------------------------------------
+
+describe('deriveGoalFromSettings — lean mass', () => {
+  test('a recent scan sets protein at 1.0 g per lb of lean mass; fat stays per lb of goal weight', () => {
+    const goal = deriveGoalFromSettings(PLAN, { leanMassLb: 178 });
+    // protein 178 g -> 712 kcal; fat 67 g -> 603 kcal; carbs (2058 - 1315) / 4 = 185.75 -> 186
+    expect(goal).toMatchObject({ calories: 2058, protein_grams: 178, fat_grams: 67, carbs_grams: 186 });
+  });
+
+  test('protein_g_per_lb_lean is honoured', () => {
+    const goal = deriveGoalFromSettings({ ...PLAN, protein_g_per_lb_lean: 1.2 }, { leanMassLb: 150 });
+    expect(goal.protein_grams).toBe(180);
+  });
+
+  test('no scan: exactly the goal-weight numbers', () => {
+    expect(deriveGoalFromSettings(PLAN, { leanMassLb: null })).toEqual(deriveGoalFromSettings(PLAN));
+    expect(deriveGoalFromSettings(PLAN).protein_grams).toBe(152);
+  });
+
+  test('lean mass without a goal weight: protein has a basis, fat and carbs do not', () => {
+    const goal = deriveGoalFromSettings({ enabled: true, daily_calorie_target: 2000 }, { leanMassLb: 178 });
+    expect(goal.protein_grams).toBe(178);
+    expect(goal.fat_grams).toBeUndefined();
+    expect(goal.carbs_grams).toBeUndefined();
+  });
+});
+
+describe('deriveGoalFromSettings — keto', () => {
+  const KETO = { enabled: true, mode: 'keto', daily_calorie_target: 2000, goal_weight_lbs: 190 };
+
+  test('no scan: the saved split — carbs are the split\'s 5 %, not the calorie remainder', () => {
+    // classic 70/25/5 of 2000 kcal: fat 1400/9 = 156, protein 500/4 = 125, carbs 100/4 = 25
+    expect(deriveGoalFromSettings(KETO)).toMatchObject({ protein_grams: 125, fat_grams: 156, carbs_grams: 25 });
+  });
+
+  test('with lean mass: protein from lean mass, carbs from the split, fat the remainder', () => {
+    // protein 178 (712 kcal), carbs 25 (100 kcal), fat (2000 - 812) / 9 = 132
+    expect(deriveGoalFromSettings(KETO, { leanMassLb: 178 })).toMatchObject({
+      protein_grams: 178, carbs_grams: 25, fat_grams: 132,
+    });
+  });
+
+  test('lazy keto with nothing to anchor protein: only the carb cap is a goal', () => {
+    const goal = deriveGoalFromSettings({
+      enabled: true, mode: 'keto', daily_calorie_target: 2000,
+      keto: { macro_split: { preset: 'lazy' }, net_carb_limit_g: 30 },
+    });
+    expect(goal.carbs_grams).toBe(30);
+    expect(goal.protein_grams).toBeUndefined();
+    expect(goal.fat_grams).toBeUndefined();
+  });
+});
+
+describe('resolveActiveNutritionGoal — deps.leanMassFor', () => {
+  const UserSettings = { getOrCreate: jest.fn() };
+  const NutritionGoals = { getActiveGoals: jest.fn() };
+
+  beforeEach(() => {
+    UserSettings.getOrCreate.mockReset();
+    NutritionGoals.getActiveGoals.mockReset();
+  });
+
+  test('uses the lean mass it is handed', async () => {
+    NutritionGoals.getActiveGoals.mockResolvedValue(null);
+    UserSettings.getOrCreate.mockResolvedValue({ nutrition_goal: PLAN });
+    const leanMassFor = jest.fn().mockResolvedValue({ lean_mass_lb: 178, scans: 3 });
+    const goal = await resolveActiveNutritionGoal('u1', { NutritionGoals, UserSettings, leanMassFor });
+    expect(leanMassFor).toHaveBeenCalledWith('u1');
+    expect(goal.protein_grams).toBe(178);
+  });
+
+  test('a null lean mass falls back to the goal-weight rule', async () => {
+    NutritionGoals.getActiveGoals.mockResolvedValue(null);
+    UserSettings.getOrCreate.mockResolvedValue({ nutrition_goal: PLAN });
+    const goal = await resolveActiveNutritionGoal('u1', {
+      NutritionGoals, UserSettings, leanMassFor: async () => null,
+    });
+    expect(goal.protein_grams).toBe(152);
+  });
+
+  test('an explicit row still wins, without reading scans at all', async () => {
+    const explicit = { calories: 1800, protein_grams: 140 };
+    NutritionGoals.getActiveGoals.mockResolvedValue(explicit);
+    const leanMassFor = jest.fn();
+    await expect(
+      resolveActiveNutritionGoal('u1', { NutritionGoals, UserSettings, leanMassFor })
+    ).resolves.toBe(explicit);
+    expect(leanMassFor).not.toHaveBeenCalled();
+  });
+});

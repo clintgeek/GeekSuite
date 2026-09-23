@@ -2,8 +2,15 @@ import express from 'express';
 const router = express.Router();
 import { authenticateToken } from '../middleware/auth.js';
 import UserSettings from '../models/UserSettings.js';
+import BodyComposition from '../models/BodyComposition.js';
 import * as garmin from '../services/garminConnectService.js';
-import { utcDateString } from '@geeksuite/utils';
+import {
+  utcDateString,
+  leanMassLb,
+  leanMassForTargets,
+  deriveMacroTargets,
+  macrosForCalories,
+} from '@geeksuite/utils';
 import { reqLogger } from '../utils/reqLogger.js';
 
 // Get user goals
@@ -137,7 +144,24 @@ router.post('/', authenticateToken, async (req, res) => {
   }
 });
 
+/**
+ * The lean mass a macro target may use (plan D1/D3): the 14-day mean ending at
+ * the latest scan, while that scan is ≤ 30 days old. Same rule, same shared
+ * function, as the gateway's bodyCompPoints.js — only the model differs.
+ */
+async function leanMassForUser(userId, today) {
+  const scans = await BodyComposition.find({ userId }).sort({ measured_at: 1 }).lean();
+  if (!scans.length) return null;
+  const points = scans.map((s) => ({ date: s.log_date, lean_mass_lb: leanMassLb(s) }));
+  return leanMassForTargets(points, { today });
+}
+
 // GET /api/goals/nutrition/macros - derive daily/weekly macro targets from rules
+//
+// Not called by the live frontend (which uses the gateway's `derivedMacros`),
+// but it must not drift: the arithmetic is `deriveMacroTargets` /
+// `macrosForCalories` from @geeksuite/utils — the one implementation (plan D5)
+// — rather than the third hand-copied version this used to carry.
 router.get('/nutrition/macros', authenticateToken, async (req, res) => {
   try {
     const userId = req.user?.id;
@@ -149,40 +173,22 @@ router.get('/nutrition/macros', authenticateToken, async (req, res) => {
       return res.status(400).json({ success: false, error: { message: 'Missing target_weight in nutrition_goal' } });
     }
 
-    const proteinPerLb = ng.protein_g_per_lb_goal ?? ng.protein_g_per_lb ?? 0.8;
-    const fatPerLb = ng.fat_g_per_lb_goal ?? ng.fat_g_per_lb ?? 0.35;
-    const carbStrategy = 'fill';
+    // The server's local calendar day. This route has always used it (no
+    // caller sends one); kept rather than silently changed.
+    const d = new Date();
+    const localYMD = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().split('T')[0];
 
-    const proteinG = Math.round(proteinPerLb * goalWeightLbs);
-    const fatG = Math.round(fatPerLb * goalWeightLbs);
-    const proteinKcal = proteinG * 4;
-    const fatKcal = fatG * 9;
-
-    const mode = ng.calorie_target_mode || (ng.plan_type === 'auto' ? 'auto' : (Array.isArray(ng.weekly_schedule) ? 'weekly' : 'fixed'));
-    const dailyCal = ng.daily_calorie_target || ng.auto_base_calories || ng.fixed_calories || null;
-    const weeklyBase = Array.isArray(ng.weekly_schedule) && ng.weekly_schedule.length === 7
-      ? ng.weekly_schedule
-      : (dailyCal ? new Array(7).fill(dailyCal) : [0,0,0,0,0,0,0]);
-
-    // Activity add rules
-    const eatFrac = typeof ng.activity_eatback_fraction === 'number' ? ng.activity_eatback_fraction : 0.6;
-    const eatCap = typeof ng.activity_eatback_cap_kcal === 'number' ? ng.activity_eatback_cap_kcal : 500;
-
-    const weekly = weeklyBase.map((baseCal, idx) => {
-      // Compute activity add for each preview day as 0 (only today uses live value); caller can enhance later
-      const activityAdd = 0;
-      const target = baseCal + activityAdd;
-      const carbsG = Math.max(0, Math.round((target - (proteinKcal + fatKcal)) / 4));
-      return {
-        dayIndex: idx, // 0 = Monday convention used elsewhere
-        base_calories: baseCal,
-        activity_add_kcal: activityAdd,
-        target_calories: target,
-        protein_g: proteinG,
-        fat_g: fatG,
-        carbs_g: carbsG
-      };
-    });
+    const lean = await leanMassForUser(userId, localYMD);
+    const derived = deriveMacroTargets(ng, { leanMassLb: lean?.lean_mass_lb ?? null });
+    const { fixed, calories, weekly } = derived;
+    const rules = {
+      ...derived.rules,
+      carb_strategy: 'fill',
+      // This route's own mode inference, older than the shared module's.
+      calorie_target_mode: ng.calorie_target_mode || (ng.plan_type === 'auto' ? 'auto' : (Array.isArray(ng.weekly_schedule) ? 'weekly' : 'fixed')),
+    };
+    const weeklyBase = calories.weekly_schedule;
+    const dailyCal = calories.daily;
 
     // Determine today index (0 = Monday)
     const now = new Date();
@@ -193,23 +199,19 @@ router.get('/nutrition/macros', authenticateToken, async (req, res) => {
     // Compute today with live Garmin activity
     let today = weekly[todayIndex] || null;
     try {
-      // Reuse Garmin wrapper (hoisted import; see the ESM migration note in DOCS)
-      const d = new Date();
-      const localYMD = new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().split('T')[0];
       const hrProfile = await garmin.getDaily(req.user.id, localYMD);
       const active = Math.max(0, Number(hrProfile?.activeCalories) || 0);
-      const add = Math.min(eatCap, Math.round(eatFrac * active));
+      const add = Math.min(rules.activity_eatback_cap_kcal, Math.round(rules.activity_eatback_fraction * active));
       const baseCal = weeklyBase[todayIndex] || dailyCal || 0;
       const target = baseCal + add;
-      const carbsG = Math.max(0, Math.round((target - (proteinKcal + fatKcal)) / 4));
+      // That day's grams at its eaten-back calories — in keto the split is a
+      // share of calories, so protein and fat can move too, not just carbs.
       today = {
         dayIndex: todayIndex,
         base_calories: baseCal,
         activity_add_kcal: add,
         target_calories: target,
-        protein_g: proteinG,
-        fat_g: fatG,
-        carbs_g: carbsG
+        ...macrosForCalories(target, rules),
       };
     } catch (e) {
       // keep preview-based today when Garmin unavailable
@@ -217,30 +219,7 @@ router.get('/nutrition/macros', authenticateToken, async (req, res) => {
 
     res.json({
       success: true,
-      data: {
-        rules: {
-          goal_weight_lbs: goalWeightLbs,
-          protein_g_per_lb: proteinPerLb,
-          fat_g_per_lb: fatPerLb,
-          carb_strategy: carbStrategy,
-          calorie_target_mode: mode,
-          activity_eatback_fraction: eatFrac,
-          activity_eatback_cap_kcal: eatCap
-        },
-        fixed: {
-          protein_g: proteinG,
-          fat_g: fatG,
-          protein_kcal: proteinKcal,
-          fat_kcal: fatKcal
-        },
-        calories: {
-          daily: dailyCal,
-          weekly_schedule: weeklyBase
-        },
-        weekly,
-        today,
-        todayIndex
-      }
+      data: { rules, fixed, calories, weekly, today, todayIndex }
     });
   } catch (error) {
     reqLogger(req).error({ err: error }, 'Error deriving nutrition macros');
