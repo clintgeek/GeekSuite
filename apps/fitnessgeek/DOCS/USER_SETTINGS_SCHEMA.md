@@ -496,6 +496,7 @@ declares the path — identical on both sides as of 2026-09-05.
 | `nutrition_goal.activity_level` | String | — | ✅ | ✅ |
 | `nutrition_goal.auto_base_calories` | Number | — | ✅ | ✅ |
 | `nutrition_goal.bmr` | Number | — | ✅ | ✅ |
+| `nutrition_goal.bmr_source` | String | enum: `scan` \| `mifflin`; absent = saved before 2026-09-22 (Mifflin) | ✅ | ✅ |
 | `nutrition_goal.calorie_target_mode` | String | enum: `auto` \| `weekly` \| `fixed` \| `standard`, default `"standard"` | ✅ | ✅ |
 | `nutrition_goal.daily_calorie_target` | Number | — | ✅ | ✅ |
 | `nutrition_goal.enabled` | Boolean | default `false` | ✅ | ✅ |
@@ -509,10 +510,12 @@ declares the path — identical on both sides as of 2026-09-05.
 | `nutrition_goal.keto.macro_split.protein_pct` | Number | default `25` | ✅ | ✅ |
 | `nutrition_goal.keto.net_carb_limit_g` | Number | default `20` | ✅ | ✅ |
 | `nutrition_goal.keto.track_net_carbs` | Boolean | default `true` | ✅ | ✅ |
+| `nutrition_goal.lean_mass_lb` | Number | — (the averaged lean mass a `scan` BMR used) | ✅ | ✅ |
 | `nutrition_goal.min_safe_calories` | Number | — | ✅ | ✅ |
 | `nutrition_goal.mode` | String | enum: `standard` \| `keto`, default `"standard"` | ✅ | ✅ |
 | `nutrition_goal.plan_type` | String | enum: `standard` \| `weekender` \| `auto` \| `fixed` \| `weekly`, default `"standard"` | ✅ | ✅ |
 | `nutrition_goal.protein_g_per_lb_goal` | Number | default `0.8` | ✅ | ✅ |
+| `nutrition_goal.protein_g_per_lb_lean` | Number | — (unset = `DEFAULT_PROTEIN_G_PER_LB_LEAN`, 1.0, in `@geeksuite/utils/macros`) | ✅ | ✅ |
 | `nutrition_goal.show_adjustment` | Boolean | default `true` | ✅ | ✅ |
 | `nutrition_goal.start_date` | Date | — | ✅ | ✅ |
 | `nutrition_goal.start_weight` | Number | — | ✅ | ✅ |

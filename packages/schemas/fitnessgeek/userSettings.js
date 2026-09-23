@@ -231,6 +231,19 @@ function userSettingsDefinition(mongoose) {
       // and `calc_inputs` makes sure this is the LAST time a stored plan is
       // a number with no provenance.
       bmr_calc_version: { type: Number },
+      // WHICH formula produced `bmr` — 'scan' (Katch-McArdle from measured
+      // lean mass) or 'mifflin' (Mifflin-St Jeor from weight/height/age/sex) —
+      // and the averaged lean mass a 'scan' BMR used. Absent on every plan
+      // saved before 2026-09-22, which is read as 'mifflin'.
+      // DOCS/FITNESSGEEK_BODY_DATA_PLAN.md D1.
+      bmr_source: { type: String, enum: ['scan', 'mifflin'] },
+      lean_mass_lb: { type: Number },
+      // Protein per lb of LEAN mass, used instead of `protein_g_per_lb_goal`
+      // whenever a recent scan exists (plan D3). No default on purpose: an
+      // unset value means "the default", which lives in ONE place —
+      // `DEFAULT_PROTEIN_G_PER_LB_LEAN` in @geeksuite/utils/macros — rather
+      // than being frozen into every document at creation.
+      protein_g_per_lb_lean: { type: Number },
       calc_inputs: {
         weight_lb: { type: Number },
         height_in: { type: Number },

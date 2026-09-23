@@ -76,6 +76,11 @@ export const typeDefs = gql`
     # Omitting it here is how a field exists in the database, is written
     # correctly, and still renders as undefined forever.
     bmr_calc_version: Float
+    # 'scan' (Katch-McArdle from lean mass) or 'mifflin'; null = saved before
+    # 2026-09-22, i.e. Mifflin. DOCS/FITNESSGEEK_BODY_DATA_PLAN.md D1.
+    bmr_source: String
+    lean_mass_lb: Float
+    protein_g_per_lb_lean: Float
     calc_inputs: NutritionGoalCalcInputs
     timeline_weeks: Float
     estimated_end_date: Date
