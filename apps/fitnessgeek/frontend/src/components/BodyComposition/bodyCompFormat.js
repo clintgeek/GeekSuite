@@ -17,24 +17,24 @@ const EN_DASH = '–';
 // differently on a phone and in CI.
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-/** "4 Oct" — a calendar date (UTC midnight or YYYY-MM-DD), day-first, read in UTC. */
+/** "Oct 4" — a calendar date (UTC midnight or YYYY-MM-DD), month-first (Chef's call, 2026-09-23), read in UTC. */
 export function formatDay(value, { year = false } = {}) {
   const ymd = utcDateString(value);
   if (!ymd) return '';
   const [y, m, d] = ymd.split('-').map(Number);
-  return `${d} ${MONTHS[m - 1]}${year ? ` ${y}` : ''}`;
+  return `${MONTHS[m - 1]} ${d}${year ? `, ${y}` : ''}`;
 }
 
-/** "22 Sep" for an INSTANT (e.g. `latest_scan_at`), in the viewer's own zone. */
+/** "Sep 22" for an INSTANT (e.g. `latest_scan_at`), in the viewer's own zone. */
 export function formatInstantDay(value) {
   const d = value instanceof Date ? value : new Date(value);
   if (Number.isNaN(d.getTime())) return '';
-  return `${d.getDate()} ${MONTHS[d.getMonth()]}`;
+  return `${MONTHS[d.getMonth()]} ${d.getDate()}`;
 }
 
 /**
- * A window's date span: "16–22 Sep", "28 Aug – 3 Sep", "29 Dec 2025 – 4 Jan 2026",
- * or one day ("22 Sep") when from and to are the same day.
+ * A window's date span: "Sep 16–22", "Aug 28 – Sep 3", "Dec 29, 2025 – Jan 4, 2026",
+ * or one day ("Sep 22") when from and to are the same day.
  */
 export function formatSpan(from, to) {
   const a = utcDateString(from);
@@ -45,7 +45,7 @@ export function formatSpan(from, to) {
   const [by, bm] = b.split('-');
   if (ay !== by) return `${formatDay(a, { year: true })} ${EN_DASH} ${formatDay(b, { year: true })}`;
   if (am !== bm) return `${formatDay(a)} ${EN_DASH} ${formatDay(b)}`;
-  return `${Number(a.slice(8))}${EN_DASH}${formatDay(b)}`;
+  return `${formatDay(a)}${EN_DASH}${Number(b.slice(8))}`;
 }
 
 /** "−7.0 lb" / "+1.0 lb" / "0.0 lb", with a true minus sign. */

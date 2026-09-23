@@ -23,7 +23,7 @@ const win = (from, to, scans, extra = {}) => ({
   skeletal_muscle_lb: 98.1, body_water_pct: 40.3, visceral_fat_index: 18, bmr_kcal: 2107, ...extra,
 });
 
-// Today's real shape: 8 scans 15–22 Sep, change not yet available.
+// Today's real shape: 8 scans Sep 15–22, change not yet available.
 const EARLY = {
   total_scans: 8,
   first_scan_at: '2026-09-15T12:10:00.000Z',
@@ -56,7 +56,7 @@ const renderSection = (props) => render(
 describe('summary card', () => {
   it('names what the numbers are: N scans over a span, and the latest scan', () => {
     renderSection({ summary: EARLY });
-    expect(screen.getByText(/Average of 8 scans · 15–22 Sep · latest scan 22 Sep/)).toBeInTheDocument();
+    expect(screen.getByText(/Average of 8 scans · Sep 15–22 · latest scan Sep 22/)).toBeInTheDocument();
     expect(screen.getByText('44.2')).toBeInTheDocument();
     for (const label of ['Fat mass', 'Lean mass', 'Skeletal muscle', 'Body water', 'Visceral fat index', 'BMR (scale)']) {
       expect(screen.getByText(label)).toBeInTheDocument();
@@ -83,7 +83,7 @@ describe('change card', () => {
   it('before the comparison exists: says when, and shows no number', () => {
     renderSection({ summary: EARLY });
     const card = screen.getByText('Change').closest('div').parentElement;
-    expect(within(card).getByText('Your first comparison appears around 4 Oct.')).toBeInTheDocument();
+    expect(within(card).getByText('Your first comparison appears around Oct 4.')).toBeInTheDocument();
     expect(card.textContent).not.toMatch(/\d+\.\d\s*lb|[−+-]\d/);
   });
 
@@ -94,7 +94,7 @@ describe('change card', () => {
     expect(card.textContent).toContain('−7.0');
     expect(card.textContent).toContain('−1.0');
     expect(card.textContent).toContain('−8.0');
-    expect(card.textContent).toMatch(/Average of 26 Aug – 1 Sep \(7 scans\) against 16–22 Sep \(6 scans\)/);
+    expect(card.textContent).toMatch(/Average of Aug 26 – Sep 1 \(7 scans\) against Sep 16–22 \(6 scans\)/);
   });
 });
 

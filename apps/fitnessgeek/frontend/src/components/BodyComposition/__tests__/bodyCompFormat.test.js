@@ -11,18 +11,18 @@ const ch = (weight, fat, lean) => ({
 
 describe('formatSpan / formatDay', () => {
   it('names a same-month window compactly', () => {
-    expect(formatSpan('2026-09-16T00:00:00.000Z', '2026-09-22T00:00:00.000Z')).toBe('16–22 Sep');
+    expect(formatSpan('2026-09-16T00:00:00.000Z', '2026-09-22T00:00:00.000Z')).toBe('Sep 16–22');
   });
   it('names a window across months and years', () => {
-    expect(formatSpan('2026-08-28', '2026-09-03')).toBe('28 Aug – 3 Sep');
-    expect(formatSpan('2025-12-29', '2026-01-04')).toBe('29 Dec 2025 – 4 Jan 2026');
+    expect(formatSpan('2026-08-28', '2026-09-03')).toBe('Aug 28 – Sep 3');
+    expect(formatSpan('2025-12-29', '2026-01-04')).toBe('Dec 29, 2025 – Jan 4, 2026');
   });
   it('reads a UTC-midnight date as its own day west of UTC', () => {
-    // formatDay forces UTC; a local read would say 3 Oct in the Americas.
-    expect(formatDay('2026-10-04T00:00:00.000Z')).toBe('4 Oct');
+    // formatDay forces UTC; a local read would say Oct 3 in the Americas.
+    expect(formatDay('2026-10-04T00:00:00.000Z')).toBe('Oct 4');
   });
   it('collapses a one-day window', () => {
-    expect(formatSpan('2026-09-22', '2026-09-22')).toBe('22 Sep');
+    expect(formatSpan('2026-09-22', '2026-09-22')).toBe('Sep 22');
   });
 });
 

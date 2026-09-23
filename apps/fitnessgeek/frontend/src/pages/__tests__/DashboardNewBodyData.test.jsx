@@ -88,6 +88,6 @@ describe('DashboardNew — body data', () => {
 
   it('says when the weight trend will exist instead of printing a number', async () => {
     setup({ weight: { totalChange: null, reason: 'insufficient_span', availableFrom: '2026-10-05', latestWeight: 318 } });
-    expect(await screen.findByText('30-day trend from 5 Oct')).toBeInTheDocument();
+    expect(await screen.findByText('30-day trend from Oct 5')).toBeInTheDocument();
   });
 });

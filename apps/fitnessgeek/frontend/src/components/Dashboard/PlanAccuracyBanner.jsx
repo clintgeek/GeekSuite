@@ -17,7 +17,7 @@ import { Surface } from '../primitives';
  * this says so plainly and puts the wizard (which shows old vs new) one tap
  * away. At most one banner, in precedence order:
  *
- *   'stale' — the plan predates the 20 Sep BMR unit fix. An accuracy problem,
+ *   'stale' — the plan predates the Sep 20 BMR unit fix. An accuracy problem,
  *             so it is NOT dismissible; it goes when the plan is re-saved.
  *   'scan'  — a measured (Katch-McArdle) BMR exists and the plan doesn't use
  *             it. An improvement on offer, so it is dismissible, remembered
@@ -88,7 +88,7 @@ export default function PlanAccuracyBanner({ nutritionGoal, scanBmr }) {
           </Typography>
           <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.25 }}>
             {stale
-              ? 'It was calculated with a formula error fixed on 20 Sep and is likely too high. Recalculating shows your old and new targets before anything changes.'
+              ? 'It was calculated with a formula error fixed on Sep 20 and is likely too high. Recalculating shows your old and new targets before anything changes.'
               : `From your body scans: ≈${fmt(scanBmr.bmr)} kcal a day, against ${fmt(nutritionGoal.bmr)} in your plan.`}
           </Typography>
           <Button

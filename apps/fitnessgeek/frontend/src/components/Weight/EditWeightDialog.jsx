@@ -61,11 +61,11 @@ const EditWeightDialog = ({ log, open, onClose, onSave, unit = 'lbs' }) => {
     }
   };
 
-  // Built from the calendar-day string, not `toLocaleDateString('en-GB')`:
+  // Built from the calendar-day string, not `toLocaleDateString()`:
   // newer ICU says "Sept", and the stored value is UTC midnight.
   const ymd = log ? utcDateString(log.log_date) : '';
   const day = ymd
-    ? `${WEEKDAYS[new Date(`${ymd}T00:00:00Z`).getUTCDay()]} ${Number(ymd.slice(8))} ${MONTHS[Number(ymd.slice(5, 7)) - 1]} ${ymd.slice(0, 4)}`
+    ? `${WEEKDAYS[new Date(`${ymd}T00:00:00Z`).getUTCDay()]}, ${MONTHS[Number(ymd.slice(5, 7)) - 1]} ${Number(ymd.slice(8))}, ${ymd.slice(0, 4)}`
     : '';
   const fromScale = log?.source === 'arboleaf_xlsx';
 

@@ -42,7 +42,7 @@ describe('PlanAccuracyBanner', () => {
     renderBanner(STALE, SCAN);
     const banner = screen.getByTestId('plan-accuracy-banner');
     expect(banner).toHaveAttribute('data-kind', 'stale');
-    expect(banner.textContent).toMatch(/formula error fixed on 20 Sep and is likely too high/);
+    expect(banner.textContent).toMatch(/formula error fixed on Sep 20 and is likely too high/);
     expect(screen.getByRole('link', { name: 'Recalculate' })).toHaveAttribute('href', '/calorie-wizard');
     expect(screen.queryByRole('button', { name: 'Dismiss' })).toBeNull();
     // Only one banner, even though a scan BMR is also available.

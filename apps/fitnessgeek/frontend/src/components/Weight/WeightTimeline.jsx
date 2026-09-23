@@ -178,7 +178,7 @@ const WeightTimeline = ({ weightLogs = [], goal = null, unit = 'lbs' }) => {
                   display: 'block',
                 }}
               >
-                {displayCalendarDate(slice.points[0].data.xFormatted, 'en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}
+                {displayCalendarDate(slice.points[0].data.xFormatted, 'en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
               </Typography>
               {slice.points.map((point) => (
                 <Box

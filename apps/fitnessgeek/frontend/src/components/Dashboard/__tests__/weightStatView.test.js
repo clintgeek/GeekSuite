@@ -10,7 +10,7 @@ describe('weightStatView — the dashboard Weight card', () => {
   it('says when the trend will exist instead of printing a number', () => {
     const v = weightStatView({ totalChange: null, reason: 'insufficient_span', availableFrom: '2026-09-29' });
     expect(v.value).toBe('--');
-    expect(v.caption).toBe('30-day trend from 29 Sep');
+    expect(v.caption).toBe('30-day trend from Sep 29');
   });
 
   it('says why there is no number when the log has a gap, or is empty', () => {

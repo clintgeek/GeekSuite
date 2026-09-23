@@ -1,8 +1,8 @@
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-/** '2026-09-29' → '29 Sep' (a calendar date; no Date parsing, no timezone). */
+/** '2026-09-29' → 'Sep 29' (a calendar date; no Date parsing, no timezone). */
 const shortDay = (ymd) => {
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(ymd || '');
-  return m ? `${Number(m[3])} ${MONTHS[Number(m[2]) - 1]}` : null;
+  return m ? `${MONTHS[Number(m[2]) - 1]} ${Number(m[3])}` : null;
 };
 
 /**

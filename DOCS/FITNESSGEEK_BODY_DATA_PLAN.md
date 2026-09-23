@@ -25,7 +25,7 @@ Bioimpedance swings 1–2 % body fat day to day with hydration alone; scale weig
 - "Current" body composition = the **mean of the scans in the 14 days ending at the latest
   scan**, with its scan count and date span shown.
 - A change is shown only as **7-day mean vs 7-day mean, with the window centres at least 14
-  days apart**. Before that exists, say when it will ("available from 29 Sep"), never a
+  days apart**. Before that exists, say when it will ("available from Sep 29"), never a
   number.
 - Weight charts show a **7-day trailing mean as the line**; raw readings are dots.
 

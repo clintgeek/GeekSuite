@@ -88,7 +88,7 @@ export function PlanComparison({ saved, next }) {
       <Row label="BMR" before={saved.bmr} after={next.bmr} />
       <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.5 }}>
         {saved.stale
-          ? 'Your saved plan was calculated with a formula error fixed on 20 Sep. Nothing changes until you save.'
+          ? 'Your saved plan was calculated with a formula error fixed on Sep 20. Nothing changes until you save.'
           : 'Nothing changes until you save.'}
       </Typography>
     </Box>

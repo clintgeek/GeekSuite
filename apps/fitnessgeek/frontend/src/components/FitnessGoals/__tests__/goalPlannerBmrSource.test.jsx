@@ -174,7 +174,7 @@ describe('CalorieGoalWizard — old vs new (plan D2)', () => {
     const newBmr = katchMcArdleBMR({ leanMassLb: 177 });
     expect(cmp.textContent).toContain(`3,314 → ${newBmr.toLocaleString('en-US')} kcal`);
     expect(cmp.textContent).toMatch(/Daily target2,977 → /);
-    expect(cmp.textContent).toMatch(/formula error fixed on 20 Sep/);
+    expect(cmp.textContent).toMatch(/formula error fixed on Sep 20/);
     expect(cmp.textContent).toMatch(/Nothing changes until you save/);
     // Nothing was written by re-running.
     expect(settingsService.updateSettings).not.toHaveBeenCalled();
