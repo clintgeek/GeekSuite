@@ -33,6 +33,27 @@ export const influxService = {
   },
 
   /**
+   * Daily Garmin trends — DOCS/FITNESSGEEK_TRENDS_PLAN.md §3. One point per
+   * calendar day, oldest first, for the `days` ending at `end` (the caller's
+   * local YYYY-MM-DD — the server never guesses "today"):
+   *
+   *   { available: boolean,
+   *     days: [{ date, restingHR, overnightHRV, sleepScore, sleepHours, steps,
+   *              moderateMin, vigorousMin, activeKcal, stressMean,
+   *              bodyBatteryHigh, bodyBatteryLow, fitnessAge }],   // null = no reading
+   *     fitnessAge: { current, chronological, achievable } | null,
+   *     activeKcal30: { mean, days } | null }                      // for the wizard
+   *
+   * Raw daily values only; every average, change and sparkline is smoothed
+   * client-side through @geeksuite/utils bodyComp.js (the smoothing rule).
+   */
+  async getTrends({ days = 90, end } = {}) {
+    const qp = new URLSearchParams({ days: String(days) });
+    if (end) qp.set('end', end);
+    return unwrap(await restApi.get(`/influx/trends?${qp}`));
+  },
+
+  /**
    * Detailed sleep analysis for a single date (HRV, recovery, cardio metrics).
    */
   async getSleepAnalysis(date) {
