@@ -12,6 +12,31 @@ anything a future reader would otherwise have to rediscover.
 
 ## 2026-09-22
 
+### FitnessGeek — Arboleaf exports import themselves from Nextcloud; scale weights reach the weight history
+
+`199b2471` `e650979a`
+
+The Arboleaf app uploads its `.xlsx` export into `clint-imports` on Nextcloud. fitnessgeek
+now mounts the Nextcloud files root read-only and imports new exports unattended: a boot
+scan (the correctness guarantee, since every push restarts the fleet), `fs.watch`, and a
+15-minute rescan. The folder is never written; a `BodyCompImportFile` ledger keyed by
+content hash remembers what was handled. Design: `DOCS/BODY_COMPOSITION_INTAKE.md` §11.
+
+- **Scale weights now write `Weight`.** Before, an xlsx import wrote only
+  `BodyComposition`, so the weight history never saw the scale. One weight per UTC day,
+  the first scan of the day; **on a day with a typed weight the import wins** (Chef's
+  rule), notes kept. `Weight.source` is new (`manual` / `arboleaf_xlsx`).
+- **Production had zero body-comp rows** — the picker import had never been used. The
+  first boot scan imports both exports already in the folder.
+- **The gate was tighter than the scale's own rounding.** One real scan failed by 0.2 lb
+  because the scale's printed columns disagree with each other by that much. xlsx masses
+  get a 0.5 lb band (a mis-mapped column is off by tens of pounds); the vision path keeps
+  0.15.
+- **Exports are spans, not the whole history** (the 09-22 file had 3 scans). Harmless:
+  overlap dedupes.
+- The scan's device (`CS10K` + MAC) is now kept — a scale swap would otherwise silently
+  break every trend.
+
 ### FitnessGeek — saved meals win, clean logs close the sheet, and a barcode bug
 
 `b5ccf92d` `71094860` (agent) `df453058` (agent) `5954048f`

@@ -72,6 +72,15 @@ const weightBounds = Object.freeze({
 });
 
 /**
+ * The `source` enum — where a weight came from. `manual` covers every
+ * pre-existing row (none carries the field, and the default fills it on read)
+ * and anything typed into either writer. `arboleaf_xlsx` is a scale reading
+ * synced from an Arboleaf export by fitnessgeek's `weightSyncService.js`; on a
+ * day that has both, the import wins (DOCS/BODY_COMPOSITION_INTAKE.md §11.5).
+ */
+const WEIGHT_SOURCES = Object.freeze(['manual', 'arboleaf_xlsx']);
+
+/**
  * The field definitions, as a plain object literal.
  *
  * @param {import('mongoose')} mongoose - the caller's mongoose instance.
@@ -104,6 +113,11 @@ function weightDefinition(mongoose) {
       type: String,
       maxlength: weightBounds.notes.maxlength,
       default: ''
+    },
+    source: {
+      type: String,
+      enum: WEIGHT_SOURCES,
+      default: 'manual'
     },
     created_at: {
       type: Date,
@@ -154,6 +168,7 @@ function createWeightSchema(mongoose) {
 }
 
 module.exports = {
+  WEIGHT_SOURCES,
   weightBounds,
   weightDefinition,
   weightOptions,

@@ -189,6 +189,7 @@ export const typeDefs = gql`
     weight_value: Float!
     log_date: Date!
     notes: String
+    source: String
     formatted_date: String
     created_at: Date
     updated_at: Date

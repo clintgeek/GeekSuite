@@ -142,6 +142,7 @@ const PAIRS = [
       'weight_value',
       'log_date',
       'notes',
+      'source',
       'created_at',
       'updated_at',
     ],
@@ -606,7 +607,7 @@ const PAIRS = [
     Rest: BodyCompositionRest,
     GraphQL: BodyCompositionGraphQL,
     createSchema: bodyCompositionShared.createBodyCompositionSchema,
-    // 28 paths: 9 whole-body/provenance scalars, 10 segmental (5 segments x 2
+    // 30 paths: 9 whole-body/provenance scalars, 10 segmental (5 segments x 2
     // measures — nested OBJECTS, dotted paths, same shape as `DailySummary`'s
     // `meals.<type>`), measured_at/log_date/source, the 3-field `extraction`
     // sub-object, notes, and the two timestamps.
@@ -637,6 +638,8 @@ const PAIRS = [
       'extraction.validation_passed',
       'extraction.confidence',
       'extraction.method',
+      'device.name',
+      'device.mac',
       'notes',
       'created_at',
       'updated_at',

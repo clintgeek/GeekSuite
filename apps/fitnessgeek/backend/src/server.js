@@ -6,6 +6,7 @@ import logger from './config/logger.js';
 // at import time, so process.env is populated by the time start() runs.
 import { assertKeyVaultSecret } from './config/keyVault.js';
 import app from './app.js';
+import { startBodyCompFolderImport } from './services/bodyCompFolderImportService.js';
 
 const PORT = process.env.PORT || 3001;
 
@@ -28,6 +29,10 @@ async function start() {
   redisClient.connect().catch(err => {
     logger.warn({ err: err.message }, 'Redis connection failed — caching disabled');
   });
+
+  // Arboleaf exports dropped into Nextcloud — DOCS/BODY_COMPOSITION_INTAKE.md
+  // §11. After Mongo, because the boot scan writes; off unless configured.
+  const folderImport = startBodyCompFolderImport();
 
   const server = app.listen(PORT, '0.0.0.0', () => {
     logger.info(`FitnessGeek API server running on port ${ PORT }`);
@@ -53,6 +58,11 @@ async function start() {
     forceTimer.unref();
 
     server.close(async () => {
+      try {
+        await folderImport.stop();
+      } catch (err) {
+        logger.error({ err }, 'Error stopping the body-comp folder import');
+      }
       try {
         await mongoose.disconnect();
       } catch (err) {
