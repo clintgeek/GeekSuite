@@ -333,9 +333,29 @@ const UnifiedFoodSearch = ({
             : null
         );
 
-        const summary = logged.length === 1
-          ? `${logged[0].name} · ${Math.round(logged[0].calories || 0)} cal`
-          : `${logged.length} items · ${Math.round(result?.totalCalories || 0)} cal`;
+        // Name what he described, not how many rows it became. A saved meal
+        // writes one row per component, so "homemade quesadilla" is seven rows
+        // — and "Logged 7 items" for one quesadilla reads like something went
+        // wrong. Rows from the same saved meal count as the one thing he said.
+        const units = [];
+        const seenMeals = new Set();
+        for (const row of logged) {
+          const mealId = row?.savedMeal?.id;
+          if (mealId) {
+            if (seenMeals.has(mealId)) continue;
+            seenMeals.add(mealId);
+            units.push(row.savedMeal.name);
+          } else {
+            units.push(row.name);
+          }
+        }
+        const what = units.length === 1
+          ? units[0]
+          : units.length === 2 ? `${units[0]} and ${units[1]}` : `${units.length} items`;
+        const calories = logged.length === 1
+          ? logged[0].calories
+          : result?.totalCalories;
+        const summary = `${what} · ${Math.round(calories || 0)} cal`;
 
         notify(`Logged ${summary}`, {
           tone: skipped.length > 0 ? 'warning' : 'success',

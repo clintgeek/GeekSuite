@@ -236,6 +236,42 @@ describe('describing a meal', () => {
     expect(screen.getByText(/Log “4 chocolate chip pancakes homemade”/)).toBeInTheDocument();
   });
 
+  it('names a saved meal in the toast, not its component count', async () => {
+    // A saved meal writes one row per component. "Logged 7 items" for one
+    // homemade quesadilla reads like something went wrong.
+    const meal = { id: 'm1', name: 'Homemade Quesadilla' };
+    const rows = ['Flour tortilla', 'Cheese', 'Chicken', 'Black beans', 'Sour cream', 'Guacamole', 'Cream cheese']
+      .map((name, i) => logged({ logId: `c${i}`, name, calories: 100, source: 'saved-meal', savedMeal: meal }));
+    describeMeal.mockResolvedValue({
+      ok: 7, fail: 0, logIds: rows.map((r) => r.logId), logged: rows, skipped: [], questions: [], totalCalories: 725
+    });
+    renderDescribable();
+    say('homemade quesadilla');
+    await vi.advanceTimersByTimeAsync(600);
+    fireEvent.click(screen.getByText(/Log “homemade quesadilla”/));
+
+    expect(await screen.findByText('Logged Homemade Quesadilla · 725 cal')).toBeInTheDocument();
+    expect(screen.queryByText(/7 items/)).not.toBeInTheDocument();
+  });
+
+  it('names a saved meal alongside what else was said', async () => {
+    const meal = { id: 'm2', name: "Fat Boy's Burger and Fries" };
+    const rows = [
+      logged({ logId: 'b', name: 'Burger', calories: 600, source: 'saved-meal', savedMeal: meal }),
+      logged({ logId: 'f', name: 'Fries', calories: 230, source: 'saved-meal', savedMeal: meal }),
+      logged({ logId: 'k', name: 'Coke', calories: 140 }),
+    ];
+    describeMeal.mockResolvedValue({
+      ok: 3, fail: 0, logIds: ['b', 'f', 'k'], logged: rows, skipped: [], questions: [], totalCalories: 970
+    });
+    renderDescribable();
+    say("fat boy's burger and fries and a coke");
+    await vi.advanceTimersByTimeAsync(600);
+    fireEvent.click(screen.getByText(/Log “fat boy's burger and fries and a coke”/));
+
+    expect(await screen.findByText("Logged Fat Boy's Burger and Fries and Coke · 970 cal")).toBeInTheDocument();
+  });
+
   it('logs on Enter rather than re-running a search that already ran', async () => {
     renderDescribable();
     say('a dozen nachos with beef and cheese');
