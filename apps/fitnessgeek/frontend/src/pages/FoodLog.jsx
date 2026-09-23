@@ -254,6 +254,26 @@ const FoodLog = () => {
     })();
   }, [selectedDate]);
 
+  /**
+   * What "close" means for the search built into this page, which has no sheet
+   * to close. Chef, 2026-09-22: "the one-shot didn't close on mobile" — the box
+   * cleared, but on a phone the keyboard stayed up and the new entries were
+   * below the fold, so nothing visibly said it was done. So: drop the keyboard,
+   * and bring the meal it landed in into view. Only a CLEAN log calls this
+   * (UnifiedFoodSearch decides); a skip or a portion question keeps the
+   * person at the box, where the thing to look at is.
+   */
+  const showLoggedMeal = ({ mealType } = {}) => {
+    if (typeof document === 'undefined') return;
+    document.activeElement?.blur?.();
+    if (!mealType) return;
+    // After the logs refresh, so the section has its new rows when it lands.
+    requestAnimationFrame(() => {
+      document.getElementById(`meal-section-${mealType}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
+
   const handleAddFood = (mealType) => {
     setSelectedMealType(mealType);
     setShowAddDialog(true);
@@ -506,6 +526,7 @@ const FoodLog = () => {
         <UnifiedFoodSearch
           mode="page"
           collapseIdleList
+          onClose={showLoggedMeal}
           mealType={selectedMealType}
           onMealTypeChange={setSelectedMealType}
           onLogItems={logItems}
@@ -520,7 +541,12 @@ const FoodLog = () => {
 
       {/* Meal Sections */}
       {(['breakfast', 'lunch', 'dinner', 'snack']).map((mealType) => (
-        <Box key={mealType} sx={{ mb: 3 }}>
+        <Box
+          key={mealType}
+          id={`meal-section-${mealType}`}
+          // Clears the sticky top bar when a finished log scrolls here.
+          sx={{ mb: 3, scrollMarginTop: 88 }}
+        >
           <MealSection
             mealType={mealType}
             logs={getLogsByMealType(mealType)}

@@ -9,11 +9,18 @@
  * this stays a test of the one line that changed, not of the whole page.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { GeekToastProvider } from '@geeksuite/ui';
 
 vi.mock('../../components/FoodSearch', () => ({
-  UnifiedFoodSearch: ({ mealType }) => <div data-testid="meal-type">{mealType}</div>
+  // The stub exposes onClose as a button, so the page's handling of a
+  // finished one-shot log can be driven without the real search box.
+  UnifiedFoodSearch: ({ mealType, onClose }) => (
+    <div>
+      <div data-testid="meal-type">{mealType}</div>
+      {onClose && <button type="button" onClick={() => onClose({ mealType: 'dinner' })}>finish-log</button>}
+    </div>
+  )
 }));
 
 vi.mock('../../components/FoodLog/NutritionSummary.jsx', () => ({ default: () => null }));
@@ -107,5 +114,37 @@ describe('the inline search box defaults to the clock, not a hardcoded snack', (
       </GeekToastProvider>
     );
     expect(screen.getByTestId('meal-type').textContent).toBe('dinner');
+  });
+});
+
+/**
+ * The page's own search box has no sheet to close. Chef: "the one-shot didn't
+ * close on mobile" — the box cleared, but the keyboard stayed up and the new
+ * entries were below the fold. A clean log now drops the keyboard and brings
+ * the meal it landed in into view.
+ */
+describe('a finished one-shot log on the page shows where it went', () => {
+  it('scrolls the logged meal into view and drops the keyboard', () => {
+    setHour(18);
+    const scrolled = [];
+    Element.prototype.scrollIntoView = vi.fn(function () { scrolled.push(this.id); });
+    const raf = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => { cb(0); return 1; });
+
+    render(
+      <GeekToastProvider>
+        <FoodLog />
+      </GeekToastProvider>
+    );
+    const input = document.createElement('input');
+    document.body.appendChild(input);
+    input.focus();
+    expect(document.activeElement).toBe(input);
+
+    fireEvent.click(screen.getByText('finish-log'));
+
+    expect(scrolled).toEqual(['meal-section-dinner']);
+    expect(document.activeElement).not.toBe(input);
+    raf.mockRestore();
+    input.remove();
   });
 });

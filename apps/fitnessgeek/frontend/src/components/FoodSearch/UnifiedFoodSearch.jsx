@@ -90,7 +90,7 @@ const UnifiedFoodSearch = ({
   onAdjustCalories,    // (logId, nutrition, servings, targetCalories) => Promise<boolean>
   onUndo,              // (logIds) => Promise<void>
   onCreateFood,        // (query) => void
-  onClose,             // () => void — a clean one-shot describe-and-log calls this
+  onClose,             // ({ mealType }) => void — a clean one-shot describe-and-log calls this
   onBarcodeClick,
   initialQuery = '',
   ketoMode = false,
@@ -380,7 +380,9 @@ const UnifiedFoodSearch = ({
         // the log write itself succeeded. The toast above still confirms it,
         // with its own Undo, for whoever's sheet just closed under them.
         if (skipped.length === 0 && !asked) {
-          onClose?.();
+          // Which meal it landed in, so a caller with no sheet to close — the
+          // search built into the Food Log page — can show the result instead.
+          onClose?.({ mealType: logged[0]?.mealType ?? null });
         }
       }
 

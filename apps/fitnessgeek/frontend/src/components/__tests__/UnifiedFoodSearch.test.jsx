@@ -336,6 +336,9 @@ describe('describing a meal', () => {
     fireEvent.click(screen.getByText(/Log “pancakes”/));
 
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
+    // Which meal it landed in — the Food Log page has no sheet to close and
+    // uses this to scroll the logged meal into view instead.
+    expect(onClose).toHaveBeenCalledWith({ mealType: 'breakfast' });
   });
 
   it('does not close the sheet when an entry was skipped — there is something to read', async () => {
