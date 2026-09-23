@@ -18,7 +18,7 @@ INFLUXDB_PROTOCOL=http
 INFLUXDB_HOST=datageek_influxdb
 INFLUXDB_PORT=8086
 INFLUXDB_USERNAME=admin
-INFLUXDB_PASSWORD=csUK5dutiG5XGY
+INFLUXDB_PASSWORD=your_influxdb_password
 INFLUXDB_DATABASE=geekdata
 ```
 
@@ -57,7 +57,7 @@ Add an entry similar to the following to your MCP client configuration:
         "INFLUXDB_HOST": "192.168.1.17",
         "INFLUXDB_PORT": "8086",
         "INFLUXDB_USERNAME": "admin",
-        "INFLUXDB_PASSWORD": "csUK5dutiG5XGY",
+        "INFLUXDB_PASSWORD": "your_influxdb_password",
         "INFLUXDB_DATABASE": "geekdata"
       }
     }

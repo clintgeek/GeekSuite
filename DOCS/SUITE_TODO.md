@@ -23,6 +23,9 @@ Pull from here when planning the next pass; update as work lands or priorities s
 
 ## 2. Cross-Cutting Security
 
+- **Rotate the InfluxDB password** (Chef, found 2026-09-22)
+  - `apps/fitnessgeek/tools/influx-mcp/README.md` shipped the real `INFLUXDB_PASSWORD` in its setup examples since the monorepo import (`a84c1c48`), so it is in public git history. The README now carries a placeholder; the value itself still needs rotating in Influx and in every `.env.production` that sets it.
+
 - **CSRF Protection: Flip `CSRF_TOKEN=enforce`** (Chef item Q18b)
   - Double-submit CSRF protection (`geek_csrf` cookie + `X-CSRF-Token` header) is live across all seven backends in `report` mode.
   - **Enforce Checklist before flipping**:
@@ -85,6 +88,12 @@ Pull from here when planning the next pass; update as work lands or priorities s
 ---
 
 ## 5. Features & Fixes
+
+### Suite MCP server — `DOCS/MCP_PLAN.md`
+
+Proposed 2026-09-22: a `/mcp` route in basegeek so ChatGPT / Claude clients can read suite
+data through curated, read-only tools. Blocked on Chef's three answers in the plan's §6
+(ChatGPT → OAuth; health data in or out; read-only v1), then a spec via `spec-builder`.
 
 ### BuJoGeek — remaining from `DOCS/BUJOGEEK_REVIEW_2026-09.md`
 
