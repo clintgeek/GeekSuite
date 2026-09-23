@@ -493,6 +493,7 @@ declares the path — identical on both sides as of 2026-09-05.
 | `notifications.goal_reminders` | Boolean | default `true` | ✅ | ✅ |
 | `nutrition_goal.activity_eatback_cap_kcal` | Number | default `500` | ✅ | ✅ |
 | `nutrition_goal.activity_eatback_fraction` | Number | default `0.6` | ✅ | ✅ |
+| `health_alerts.sleep_apnea_screening` | Boolean | default `true` — the sleep analysis's "consider screening" card on wrist SpO2 dips | ✅ | ✅ |
 | `nutrition_goal.activity_level` | String | — | ✅ | ✅ |
 | `nutrition_goal.auto_base_calories` | Number | — | ✅ | ✅ |
 | `nutrition_goal.bmr` | Number | — | ✅ | ✅ |

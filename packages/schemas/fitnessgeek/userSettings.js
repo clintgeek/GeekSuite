@@ -178,6 +178,15 @@ function userSettingsDefinition(mongoose) {
         default: null
       }
     },
+    // Which health alerts this user wants. Default ON: a nudge like "consider
+    // sleep apnea screening" can matter to someone who hasn't seen a doctor;
+    // a user who already has can turn it off in Settings.
+    health_alerts: {
+      sleep_apnea_screening: {
+        type: Boolean,
+        default: true
+      }
+    },
     notifications: {
       enabled: {
         type: Boolean,

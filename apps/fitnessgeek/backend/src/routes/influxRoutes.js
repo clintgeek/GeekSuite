@@ -106,7 +106,9 @@ router.get('/sleep-analysis/:date', authenticateToken, checkInfluxEnabled, async
       restingHR: settings.healthBaselines?.restingHR || null
     };
 
-    const analysis = await sleepAnalysisService.analyzeSleep(date, baselines);
+    const analysis = await sleepAnalysisService.analyzeSleep(date, baselines, {
+      sleepApneaAlert: settings.health_alerts?.sleep_apnea_screening !== false,
+    });
     res.json(analysis);
   } catch (err) {
     if (err instanceof InfluxUnavailableError) {

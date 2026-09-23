@@ -22,6 +22,11 @@ export const typeDefs = gql`
     last_connected_at: Date
   }
 
+  # Per-user opt-outs for health alerts (default on).
+  type HealthAlertSettings {
+    sleep_apnea_screening: Boolean
+  }
+
   type HealthBaselines {
     weeklyHRV: Float
     restingHR: Float
@@ -161,6 +166,7 @@ export const typeDefs = gql`
     dashboard: DashboardSettings
     garmin: GarminSettings
     healthBaselines: HealthBaselines
+    health_alerts: HealthAlertSettings
     notifications: NotificationSettings
     nutrition_goal: NutritionGoalSettings
     weight_goal: WeightGoalSettings
@@ -178,6 +184,7 @@ export const typeDefs = gql`
     dashboard: FitnessJSON
     garmin: FitnessJSON
     healthBaselines: FitnessJSON
+    health_alerts: FitnessJSON
     notifications: FitnessJSON
     nutrition_goal: FitnessJSON
     weight_goal: FitnessJSON

@@ -25,9 +25,8 @@ Found mapping what the Health Dashboard and Reports don't show (2026-09-23):
   N of 7 days you logged" when not every day was.
 - Reports had no harness scene at all; its first run caught a keyboard-unreachable
   horizontal ribbon (axe `scrollable-region-focusable`) — now a focusable region.
-- Open, Chef's call: the sleep analysis adds a HIGH "consider sleep apnea screening"
-  card whenever wrist SpO2 dips — noise for Chef (PCP-reviewed), possibly useful for the
-  other household users.
+- The sleep analysis's HIGH "consider sleep apnea screening" card (fired on any wrist
+  SpO2 dip) became a per-user setting, default on.
 
 ### FitnessGeek — a Weekender at the safety floor says why, and plans report the rate they really deliver
 

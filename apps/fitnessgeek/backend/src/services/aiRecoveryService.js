@@ -23,6 +23,8 @@ async function generateRecoveryContext(userId, date) {
       sleepAnalysisService.analyzeSleep(date, {
         weeklyHRV: settings.healthBaselines?.weeklyHRV,
         restingHR: settings.healthBaselines?.restingHR
+      }, {
+        sleepApneaAlert: settings.health_alerts?.sleep_apnea_screening !== false,
       }),
       influxService.getComprehensiveDaily(date),
       influxService.getIntradayMetrics(date, date)

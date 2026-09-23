@@ -487,7 +487,7 @@ function analyzeStressRecovery(stressValues, bodyBatteryValues) {
 /**
  * Generate recommendations based on analysis
  */
-function generateRecommendations(metrics) {
+function generateRecommendations(metrics, { sleepApneaAlert = true } = {}) {
   const recommendations = [];
   const warnings = [];
 
@@ -544,8 +544,10 @@ function generateRecommendations(metrics) {
     });
   }
 
-  // Respiratory concerns
-  if (metrics.respiration.spo2Dips > 0) {
+  // Respiratory concerns — a per-user opt-out (settings.health_alerts
+  // .sleep_apnea_screening, default on). Wrist SpO2 is noisy with movement
+  // and sleep position, so a user can turn the nightly screening card off.
+  if (sleepApneaAlert && metrics.respiration.spo2Dips > 0) {
     const r = metrics.respiration;
     warnings.push(`${r.spo2Dips} SpO2 dip${r.spo2Dips === 1 ? '' : 's'} below 90% (lowest ${r.minSpO2}%)`);
     recommendations.push({
@@ -575,7 +577,7 @@ function generateRecommendations(metrics) {
 /**
  * Main analysis function
  */
-async function analyzeSleep(dateStr, userBaselines = {}) {
+async function analyzeSleep(dateStr, userBaselines = {}, { sleepApneaAlert = true } = {}) {
   try {
     // The intraday rows and Garmin's own summary of the same night. The
     // summary is optional: a night can sync its minute data before its
@@ -645,7 +647,7 @@ async function analyzeSleep(dateStr, userBaselines = {}) {
 
     const qualityScore = num(summary?.sleepScore);
     const qualityLabel = garminScoreLabel(qualityScore);
-    const { recommendations, warnings } = generateRecommendations(metrics);
+    const { recommendations, warnings } = generateRecommendations(metrics, { sleepApneaAlert });
 
     return {
       date: dateStr,

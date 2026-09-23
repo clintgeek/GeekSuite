@@ -6,6 +6,8 @@ const mod = (p) => new URL(p, import.meta.url).pathname;
 import { describe, test, expect, jest } from '@jest/globals';
 
 let hrDipPercent = null;
+let healthAlerts = {};
+const analyzeCalls = [];
 jest.unstable_mockModule(mod('../../services/influxService.js'), () => ({
   __esModule: true,
   default: {
@@ -16,7 +18,7 @@ jest.unstable_mockModule(mod('../../services/influxService.js'), () => ({
 jest.unstable_mockModule(mod('../../services/sleepAnalysisService.js'), () => ({
   __esModule: true,
   default: {
-    analyzeSleep: async () => ({
+    analyzeSleep: async (...args) => (analyzeCalls.push(args), {
       available: true, qualityLabel: 'GOOD', qualityScore: 80, warnings: [], recommendations: [],
       metrics: {
         architecture: { asleepMinutes: 450, deepPercent: 18, remPercent: 20, sleepEfficiency: 90 },
@@ -30,7 +32,7 @@ jest.unstable_mockModule(mod('../../services/sleepAnalysisService.js'), () => ({
 }));
 jest.unstable_mockModule(mod('../../models/UserSettings.js'), () => ({
   __esModule: true,
-  default: { getOrCreate: async () => ({ influxEnabled: true, healthBaselines: {} }) },
+  default: { getOrCreate: async () => ({ influxEnabled: true, healthBaselines: {}, health_alerts: healthAlerts }) },
 }));
 
 const { calculateReadinessScore, formatPromptForAI, getRecoveryRecommendations } = await import('../../services/aiRecoveryService.js');
@@ -80,6 +82,17 @@ describe('recommendations with an unknown HR dip', () => {
   test('the card still fires on a real low dip', async () => {
     hrDipPercent = 6;
     expect(await titles()).toContain('Poor HR recovery during sleep');
+  });
+});
+
+describe('the per-user sleep apnea setting reaches the sleep analysis', () => {
+  test('default on when unset, off when the user turned it off', async () => {
+    healthAlerts = {};
+    await getRecoveryRecommendations('u1', '2026-09-23');
+    expect(analyzeCalls.at(-1)[2]).toEqual({ sleepApneaAlert: true });
+    healthAlerts = { sleep_apnea_screening: false };
+    await getRecoveryRecommendations('u1', '2026-09-23');
+    expect(analyzeCalls.at(-1)[2]).toEqual({ sleepApneaAlert: false });
   });
 });
 

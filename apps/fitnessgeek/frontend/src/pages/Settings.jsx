@@ -17,6 +17,7 @@ import {
   Palette as ThemeIcon,
   Language as LanguageIcon,
   MonitorHeart as BPIcon,
+  HealthAndSafety as HealthAlertIcon,
   AutoAwesome as SparkleIcon,
   Save as SaveIcon,
   RestartAlt as DiscardIcon,
@@ -38,7 +39,7 @@ const isDirty = (current, baseline, passwordSet) => {
   if (!current || !baseline) return false;
   if (passwordSet) return true;
   // Compare the leaf values that the UI touches
-  const keys = ['theme', 'notifications', 'units', 'garmin'];
+  const keys = ['theme', 'notifications', 'units', 'garmin', 'health_alerts'];
   for (const k of keys) {
     if (JSON.stringify(current[k]) !== JSON.stringify(baseline[k])) return true;
   }
@@ -354,6 +355,42 @@ const Settings = () => {
             helperText="Never stored in plain text"
           />
         </Box>
+      </Surface>
+
+      {/* Health alerts — per-user opt-outs (settings.health_alerts, default on) */}
+      <Surface sx={{ mb: 2 }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', mb: 1, gap: 1.25 }}>
+          <HealthAlertIcon sx={{ color: 'primary.main' }} />
+          <Typography
+            sx={{
+              fontFamily: "'DM Serif Display', serif",
+              fontSize: '1.375rem',
+              fontWeight: 400,
+              color: 'text.primary',
+              letterSpacing: '-0.01em',
+            }}
+          >
+            Health alerts
+          </Typography>
+        </Box>
+        <FormControlLabel
+          control={
+            <Switch
+              checked={settings.health_alerts?.sleep_apnea_screening !== false}
+              onChange={(e) =>
+                setSettings((prev) => ({
+                  ...prev,
+                  health_alerts: { ...(prev.health_alerts || {}), sleep_apnea_screening: e.target.checked },
+                }))
+              }
+            />
+          }
+          label="Sleep apnea screening suggestion"
+          sx={{ display: 'flex' }}
+        />
+        <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
+          Suggests screening when your watch records blood-oxygen dips overnight. Wrist readings are noisy with movement and sleep position — turn this off if you've already discussed them with your doctor.
+        </Typography>
       </Surface>
 
       {/* ─── Sticky save bar — only when dirty ─── */}
