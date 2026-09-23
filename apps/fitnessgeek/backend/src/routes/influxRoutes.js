@@ -87,6 +87,51 @@ router.get('/daily/:date', authenticateToken, checkInfluxEnabled, async (req, re
 });
 
 /**
+ * GET /api/influx/trends?days=90&end=YYYY-MM-DD
+ * One point per calendar day for the `days` ending at `end`, oldest first —
+ * DOCS/FITNESSGEEK_TRENDS_PLAN.md §3; the shape is documented on the client
+ * (frontend/src/services/influxService.js getTrends) and on getDailyTrends.
+ *
+ * `days` defaults to 90 and is clamped to 1..365. `end` is the caller's local
+ * day; the client always sends it. Without it the server falls back to its
+ * own UTC date, which can be a day off from the user's.
+ */
+router.get('/trends', authenticateToken, checkInfluxEnabled, async (req, res) => {
+  const { days: rawDays, end: rawEnd } = req.query;
+  let days = 90;
+  if (rawDays !== undefined) {
+    if (typeof rawDays !== 'string' || !/^\d+$/.test(rawDays)) {
+      return res.status(400).json({ error: 'days must be a whole number' });
+    }
+    days = Math.min(365, Math.max(1, Number(rawDays)));
+  }
+  let end;
+  if (rawEnd !== undefined) {
+    const parsed = typeof rawEnd === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(rawEnd)
+      ? new Date(`${rawEnd}T00:00:00Z`) : null;
+    // Round-trip check rejects 2026-02-30 (Date would roll it to March).
+    if (!parsed || Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== rawEnd) {
+      return res.status(400).json({ error: 'Invalid end date. Use YYYY-MM-DD' });
+    }
+    end = rawEnd;
+  } else {
+    end = new Date().toISOString().slice(0, 10);
+  }
+
+  try {
+    const data = await influxService.getDailyTrends(end, days);
+    res.json(data);
+  } catch (err) {
+    if (err instanceof InfluxUnavailableError) {
+      logger.warn({ userId: req.user.id, end, days, message: err.message }, 'Influx unavailable for trends');
+      return res.json(influxUnavailableResponse(err, { end, days: [], fitnessAge: null, activeKcal30: null }));
+    }
+    logger.error({ userId: req.user.id, end, days, error: err.message }, 'Error fetching influx trends');
+    res.status(500).json({ error: 'Failed to fetch trends from InfluxDB' });
+  }
+});
+
+/**
  * GET /api/influx/sleep-analysis/:date
  * Get comprehensive sleep analysis with advanced metrics
  */
