@@ -8,6 +8,7 @@ import {
   ToggleButton,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
+import { previewMacros, ProteinBasisNote } from './planProvenance.jsx';
 
 /**
  * Preset macro split definitions.
@@ -32,8 +33,11 @@ const PRESET_LABELS = {
  *   ketoConfig   — { net_carb_limit_g, track_net_carbs, macro_split: { preset, fat_pct, protein_pct, carb_pct } }
  *   onChange     — (updatedConfig) => void
  *   calorieTarget — number | undefined  (used to derive gram equivalents)
+ *   baseGoal     — the rest of the nutrition_goal about to be saved (target
+ *                  weight, per-lb rules). Merged under mode/keto for the preview.
+ *   leanMassLb   — averaged recent lean mass when a usable scan exists, else null
  */
-const KetoPlanStep = ({ ketoConfig, onChange, calorieTarget }) => {
+const KetoPlanStep = ({ ketoConfig, onChange, calorieTarget, baseGoal = null, leanMassLb = null }) => {
   const theme = useTheme();
 
   const {
@@ -67,15 +71,18 @@ const KetoPlanStep = ({ ketoConfig, onChange, calorieTarget }) => {
     onChange({ ...ketoConfig, track_net_carbs: newValue === 'net' });
   };
 
-  // Gram equivalents from calorie target
-  const gramEquivalents =
+  // Gram equivalents: the same macroRules + macrosForCalories the gateway's
+  // derivedMacros runs (plan D4/D5). This used to be a bare % split of
+  // calories, which stops being what the dashboard serves the moment protein
+  // is anchored to lean mass (protein from the rule, fat the remainder).
+  const preview =
     !isLazy && calorieTarget
-      ? {
-          fat_g:     Math.round((calorieTarget * (fat_pct / 100)) / 9),
-          protein_g: Math.round((calorieTarget * (protein_pct / 100)) / 4),
-          carbs_g:   Math.round((calorieTarget * (carb_pct / 100)) / 4),
-        }
+      ? previewMacros(
+          { ...(baseGoal || {}), mode: 'keto', keto: { ...(ketoConfig || {}), macro_split } },
+          { leanMassLb, calories: calorieTarget }
+        )
       : null;
+  const gramEquivalents = preview ? preview.grams : null;
 
   // ── section label style ────────────────────────────────────────────────────
   const labelSx = {
@@ -228,6 +235,7 @@ const KetoPlanStep = ({ ketoConfig, onChange, calorieTarget }) => {
                 Fat {gramEquivalents.fat_g}g · Protein {gramEquivalents.protein_g}g · Carbs {gramEquivalents.carbs_g}g
               </Typography>
             )}
+            {preview && <ProteinBasisNote rules={preview.rules} />}
           </>
         ) : (
           <Typography variant="caption" color="text.secondary">

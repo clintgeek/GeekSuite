@@ -28,7 +28,7 @@ const formatDateParts = (d = new Date()) => ({
   daysInYear: isLeapYear(d.getFullYear()) ? 366 : 365,
 });
 
-const MacroMicroBar = ({ label, current = 0, goal = 0, color }) => {
+const MacroMicroBar = ({ label, current = 0, goal = 0, color, note = null }) => {
   const theme = useTheme();
   const ink = theme.palette.text.primary;
   const pct = goal > 0 ? Math.min(1, current / goal) : 0;
@@ -100,6 +100,14 @@ const MacroMicroBar = ({ label, current = 0, goal = 0, color }) => {
           }}
         />
       </Box>
+      {note && (
+        <Typography
+          data-testid={`macro-note-${String(label).toLowerCase().replace(/\s+/g, '-')}`}
+          sx={{ fontSize: '0.75rem', color: theme.palette.text.secondary, mt: 0.5, lineHeight: 1.3 }}
+        >
+          {note}
+        </Typography>
+      )}
     </Box>
   );
 };
@@ -123,6 +131,9 @@ const DailyTicket = ({
   mode = 'standard',
   netCarbsConsumed = 0,
   netCarbLimit = 20,
+  // A short caption under the protein target, e.g. "from lean mass" when
+  // derivedMacros set it from a body scan (plan D3).
+  proteinNote = null,
 }) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
@@ -339,6 +350,7 @@ const DailyTicket = ({
               current={protein.current}
               goal={protein.goal}
               color={theme.palette.success.main}
+              note={proteinNote}
             />
             <MacroMicroBar
               label="Net Carbs"
@@ -354,6 +366,7 @@ const DailyTicket = ({
               current={protein.current}
               goal={protein.goal}
               color={theme.palette.success.main}
+              note={proteinNote}
             />
             <MacroMicroBar
               label="Carbs"

@@ -1,5 +1,5 @@
 import { apiService } from './apiService';
-import { localDateString } from '@geeksuite/utils';
+import { localDateString, rollingMean, utcDateString } from '@geeksuite/utils';
 
 const BASE_URL = '/weight';
 
@@ -53,43 +53,83 @@ export const weightService = {
   },
 
   /**
-   * Get weight statistics for the current user.
+   * Weight change over ~`periodDays`, smoothed (DOCS/FITNESSGEEK_BODY_DATA_PLAN.md §0).
+   *
    * Computed client-side from weight logs — no dedicated stats endpoint exists.
-   * Returns { data: { totalChange, latestWeight, referenceWeight, periodDays } }
+   *
+   * A scale reading swings 2–3 lb with water and food, so first-vs-last raw
+   * readings (what this used to return) is mostly that noise: a salty dinner
+   * the night before reads as a month's "gain". The change is instead the
+   * 7-day trailing mean at the latest reading minus the 7-day trailing mean
+   * at the last reading on or before `periodDays` earlier.
+   *
+   * When that comparison can't be made honestly, `totalChange` is null and
+   * `reason` says why — never a raw-reading fallback:
+   *   'no_data'           — no weigh-ins at all
+   *   'insufficient_span' — history is shorter than `periodDays`;
+   *                         `availableFrom` (YYYY-MM-DD) is when it won't be
+   *   'no_baseline'       — history is long enough, but there is no reading
+   *                         within a week before the baseline date, so the
+   *                         only "then" would be a different period entirely
+   *
+   * Backward compatible: `totalChange`, `latestWeight`, `referenceWeight`
+   * (now the baseline MEAN) and `periodDays` keep their names.
    */
-  async getWeightStats({ periodDays = 30 } = {}) {
+  async getWeightStats({ periodDays = 30, windowDays = 7 } = {}) {
     const response = await apiService.get(BASE_URL);
     const logs = response?.data;
+    const empty = {
+      totalChange: null, latestWeight: null, referenceWeight: null, periodDays: null,
+      method: 'rolling_mean', windowDays, reason: 'no_data', availableFrom: null,
+      currentMean: null, referenceDate: null, latestDate: null,
+    };
     if (!Array.isArray(logs) || logs.length === 0) {
-      return { success: true, data: { totalChange: null, latestWeight: null } };
+      return { success: true, data: empty };
     }
 
-    // Sort newest first
-    const sorted = [...logs].sort(
-      (a, b) => new Date(b.log_date) - new Date(a.log_date)
-    );
+    const points = logs
+      .filter((l) => Number.isFinite(Number(l?.weight_value)) && l?.log_date)
+      .map((l) => ({ date: l.log_date, value: Number(l.weight_value) }));
+    const smoothed = rollingMean(points, { windowDays }); // oldest first, one per reading
+    if (smoothed.length === 0) return { success: true, data: empty };
 
-    const latest = sorted[0];
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - periodDays);
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const latest = smoothed[smoothed.length - 1];
+    const first = smoothed[0];
+    const base = {
+      ...empty,
+      reason: null,
+      latestWeight: latest.value,
+      currentMean: latest.mean,
+      latestDate: utcDateString(latest.date),
+    };
 
-    // Find the oldest entry within the period window, fall back to oldest overall
-    const withinPeriod = sorted.filter(l => new Date(l.log_date) >= cutoff);
-    const reference = withinPeriod.length > 1
-      ? withinPeriod[withinPeriod.length - 1]  // oldest within window
-      : sorted[sorted.length - 1];              // oldest available
+    const spanDays = Math.round((latest.date - first.date) / DAY_MS);
+    if (spanDays < periodDays) {
+      return {
+        success: true,
+        data: {
+          ...base,
+          reason: 'insufficient_span',
+          availableFrom: utcDateString(new Date(first.date.getTime() + periodDays * DAY_MS)),
+        },
+      };
+    }
 
-    const totalChange = parseFloat(
-      (latest.weight_value - reference.weight_value).toFixed(1)
-    );
+    const target = latest.date.getTime() - periodDays * DAY_MS;
+    const baseline = [...smoothed].reverse().find((p) => p.date.getTime() <= target);
+    if (!baseline || target - baseline.date.getTime() >= windowDays * DAY_MS) {
+      return { success: true, data: { ...base, reason: 'no_baseline' } };
+    }
 
     return {
       success: true,
       data: {
-        totalChange,
-        latestWeight: latest.weight_value,
-        referenceWeight: reference.weight_value,
-        periodDays: withinPeriod.length > 1 ? periodDays : null,
+        ...base,
+        totalChange: Math.round((latest.mean - baseline.mean) * 10) / 10,
+        referenceWeight: baseline.mean,
+        referenceDate: utcDateString(baseline.date),
+        periodDays,
       },
     };
   },

@@ -2,6 +2,7 @@ import React from 'react';
 import { Box, Typography } from '@mui/material';
 import { TrendingUp, TrendingDown } from '@mui/icons-material';
 import { useTheme, alpha, keyframes } from '@mui/material/styles';
+import { readableOn } from '@geeksuite/ui';
 import { Surface, StatNumber, SectionLabel } from '../primitives';
 
 const statEnter = keyframes`
@@ -22,7 +23,14 @@ const statEnter = keyframes`
  *   unit        : small unit suffix (kcal, bpm, %, etc.)
  *   trend       : 'up' | 'down' | null
  *   trendValue  : string shown next to the trend arrow
- *   color       : accent color for the icon + hover border
+ *   color       : accent color for the icon + hover border. Prefer a
+ *                 theme.palette colour; the icon is measured against its own
+ *                 tint (readableOn, 3:1) so any hue stays visible in both modes.
+ *   caption     : a short neutral line under the value (e.g. what a change
+ *                 is measured against, or why there is no number yet)
+ *   plainValue  : render `value` verbatim instead of animating it as a number
+ *                 — for signed values like "+1.2", which StatNumber would
+ *                 print without the sign
  */
 export default function StatCard({
   icon: IconComponent,
@@ -34,6 +42,8 @@ export default function StatCard({
   color,
   showLabel = true,
   delay = 0,
+  caption = null,
+  plainValue = false,
 }) {
   const theme = useTheme();
 
@@ -51,13 +61,17 @@ export default function StatCard({
   };
 
   const baseColor = resolveColor(color);
+  const paper = theme.palette.background.paper;
   const iconBg = alpha(baseColor, theme.palette.mode === 'dark' ? 0.2 : 0.1);
+  const iconInk = readableOn(baseColor, iconBg, { min: 3, under: paper });
   const showTrend = trend !== null && trendValue !== null && trendValue !== '';
   const isPositive = trend === 'up';
 
   // Determine if value is a plain number that should animate via StatNumber
   const numericValue = typeof value === 'number' ? value : parseFloat(String(value || '').replace(/,/g, ''));
-  const isNumeric = Number.isFinite(numericValue) && String(value).trim() !== '' && !String(value).includes('/');
+  const isNumeric = !plainValue && Number.isFinite(numericValue) && String(value).trim() !== '' && !String(value).includes('/');
+  // 12px trend text on paper: measured to 4.5:1 rather than trusted.
+  const trendInk = readableOn(isPositive ? theme.palette.success.main : theme.palette.error.main, paper);
 
   return (
     <Surface
@@ -95,7 +109,7 @@ export default function StatCard({
             flexShrink: 0,
           }}
         >
-          {IconComponent && <IconComponent sx={{ fontSize: 14, color: baseColor }} />}
+          {IconComponent && <IconComponent sx={{ fontSize: 14, color: iconInk }} />}
         </Box>
         {showLabel && <SectionLabel>{label}</SectionLabel>}
       </Box>
@@ -139,13 +153,13 @@ export default function StatCard({
       {showTrend && (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.25, mt: 0.5 }}>
           {isPositive ? (
-            <TrendingUp sx={{ fontSize: 12, color: theme.palette.success.main }} />
+            <TrendingUp sx={{ fontSize: 12, color: trendInk }} />
           ) : (
-            <TrendingDown sx={{ fontSize: 12, color: theme.palette.error.main }} />
+            <TrendingDown sx={{ fontSize: 12, color: trendInk }} />
           )}
           <Typography
             sx={{
-              color: isPositive ? theme.palette.success.main : theme.palette.error.main,
+              color: trendInk,
               fontWeight: 600,
               fontSize: '0.75rem',
               letterSpacing: '0.02em',
@@ -154,6 +168,15 @@ export default function StatCard({
             {trendValue}
           </Typography>
         </Box>
+      )}
+
+      {caption && (
+        <Typography
+          data-testid="stat-caption"
+          sx={{ color: 'text.secondary', fontSize: '0.75rem', mt: 0.5, lineHeight: 1.3 }}
+        >
+          {caption}
+        </Typography>
       )}
     </Surface>
   );

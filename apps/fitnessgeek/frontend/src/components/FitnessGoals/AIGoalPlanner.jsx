@@ -11,15 +11,18 @@ import {
 import { useToast } from '@geeksuite/ui';
 import { userService } from '../../services/userService.js';
 import { settingsService } from '../../services/settingsService.js';
+import { bodyCompService } from '../../services/bodyCompService.js';
 import { useAuth } from '@geeksuite/auth';
 import {
   mifflinStJeorBMR,
+  resolveBmr,
   tdeeFromBMR,
   BMR_CALC_VERSION,
   isPlanCalculationStale,
 } from '@geeksuite/utils';
 import ModeSelector from './ModeSelector';
 import KetoPlanStep from './KetoPlanStep';
+import { BmrSourceNote, PlanComparison, ProteinBasisNote, previewMacros } from './planProvenance.jsx';
 
 const CalorieGoalWizard = () => {
   const { user } = useAuth();
@@ -59,6 +62,21 @@ const CalorieGoalWizard = () => {
   // Results
   const [plan, setPlan] = useState(null);
   const [hasExistingGoal, setHasExistingGoal] = useState(false);
+  // The stored nutrition_goal, kept apart from `plan` so a re-run can show
+  // saved-vs-new before anything is overwritten (plan D2), and so macro
+  // previews merge the fields the save leaves untouched — the settings
+  // mutation MERGES into nutrition_goal, it does not replace it.
+  const [savedGoal, setSavedGoal] = useState(null);
+
+  // The body-scan BMR summary (`bodyCompositionSummary.bmr`). `source ===
+  // 'scan'` means the server found a usable lean mass: a 14-day mean, latest
+  // scan ≤ 30 days old (plan D1). Anything else — no scans, stale scans, a
+  // failed fetch — means Mifflin-St Jeor, and the card says so.
+  const [scanBmr, setScanBmr] = useState(null);
+  const [scanLoadFailed, setScanLoadFailed] = useState(false);
+  const usableLeanMassLb = scanBmr?.source === 'scan' && Number(scanBmr?.lean_mass_lb) > 0
+    ? Number(scanBmr.lean_mass_lb)
+    : null;
 
   // Set only when a filled-in height fails every format parseHeightToInches
   // knows about. Distinct from "field is empty" (which just disables the
@@ -90,6 +108,7 @@ const CalorieGoalWizard = () => {
       // so it cannot be silently recomputed — the only honest handling is to
       // say so and let the user re-enter three fields.
       setPlanStale(isPlanCalculationStale(ng));
+      setSavedGoal(ng && ng.enabled ? ng : null);
       if (ng && ng.enabled) {
         const computedWeeklyDeficit = (ng.weight_change_rate || 0) * 500;
         const scheduleDays = buildDaysFromSchedule(ng.weekly_schedule);
@@ -98,6 +117,9 @@ const CalorieGoalWizard = () => {
           targetWeight: ng.target_weight || 0,
           weightToLose: ng.start_weight && ng.target_weight ? Math.abs(ng.start_weight - ng.target_weight) : 0,
           bmr: Math.round(ng.bmr || 0),
+          bmrSource: ng.bmr_source === 'scan' ? 'scan' : 'mifflin',
+          leanMassLb: ng.lean_mass_lb ?? null,
+          bmrScans: null,
           tdee: Math.round(ng.tdee || 0),
           dailyCalories: Math.round(ng.daily_calorie_target || 0),
           weeklyDeficit: Math.round(computedWeeklyDeficit || 0),
@@ -132,11 +154,14 @@ const CalorieGoalWizard = () => {
     try {
       setIsLoadingProfile(true);
 
-      // Get user profile from baseGeek
-      const userData = await userService.getProfile();
-
-      // Get latest weight from fitnessGeek logs
-      const latestWeight = await userService.getLatestWeight();
+      // Profile (baseGeek), latest weight (fitnessGeek) and the body-scan
+      // BMR in parallel. The profile step's spinner covers all three, so a
+      // plan can't be calculated before we know whether a scan exists.
+      const [userData, latestWeight] = await Promise.all([
+        userService.getProfile(),
+        userService.getLatestWeight(),
+        loadScanBmr(),
+      ]);
 
       setProfile({
         age: userData.profile?.age || '',
@@ -150,6 +175,21 @@ const CalorieGoalWizard = () => {
       console.error('Failed to load user profile:', error);
     } finally {
       setIsLoadingProfile(false);
+    }
+  };
+
+  const loadScanBmr = async () => {
+    try {
+      const resp = await bodyCompService.getSummary();
+      const summary = resp?.data ?? resp;
+      setScanBmr(summary?.bmr || null);
+      setScanLoadFailed(false);
+    } catch (error) {
+      // Not fatal: Mifflin-St Jeor is the fallback, and the metabolism card
+      // names it (and says the scans couldn't be loaded).
+      console.error('Failed to load body scans:', error);
+      setScanBmr(null);
+      setScanLoadFailed(true);
     }
   };
 
@@ -278,7 +318,7 @@ const CalorieGoalWizard = () => {
   };
 
   const calculateCaloriePlan = () => {
-    const bmr = calculateBMR();
+    let bmr = calculateBMR();
 
     // Belt-and-suspenders: the Step 1 "Next" button is now gated on a
     // parseable height (see the Height TextField below), so in practice this
@@ -291,6 +331,16 @@ const CalorieGoalWizard = () => {
       return;
     }
     setHeightError(false);
+
+    // Plan D1: measured lean mass beats an estimate from weight, height, age
+    // and sex. `resolveBmr` picks Katch-McArdle when handed a usable lean mass
+    // and says so; otherwise the Mifflin figure computed above stands.
+    const resolved = resolveBmr({
+      leanMassLb: usableLeanMassLb,
+      mifflin: bmr > 0 ? { weightLb: profile.weight, heightIn: parseHeightToInches(profile.height), age: profile.age, gender: profile.gender } : null,
+    });
+    const bmrSource = resolved.source;
+    if (bmrSource === 'scan') bmr = resolved.bmr;
 
     const tdee = calculateTDEE(bmr);
     const weightToLose = parseFloat(profile.weight) - parseFloat(goal.targetWeight);
@@ -312,6 +362,9 @@ const CalorieGoalWizard = () => {
       targetWeight: parseFloat(goal.targetWeight),
       weightToLose: Math.abs(weightToLose),
       bmr,
+      bmrSource,
+      leanMassLb: bmrSource === 'scan' ? resolved.lean_mass_lb : null,
+      bmrScans: bmrSource === 'scan' ? (scanBmr?.scans ?? null) : null,
       tdee,
       // Carried so the SAVE can persist what this BMR was computed from.
       // A plan that stores only its outputs cannot be re-derived, audited,
@@ -364,6 +417,29 @@ const CalorieGoalWizard = () => {
       notify('Failed to update profile', { tone: 'error' });
     }
   };
+
+  // What the user has saved today, for the old-vs-new comparison. Null when
+  // there is no saved plan, so a first-time run shows no comparison.
+  const savedSnapshot = savedGoal && Number(savedGoal.daily_calorie_target) > 0
+    ? {
+      dailyCalories: Math.round(savedGoal.daily_calorie_target),
+      bmr: Math.round(savedGoal.bmr || 0) || null,
+      schedule: savedGoal.weekly_schedule,
+      stale: isPlanCalculationStale(savedGoal),
+    }
+    : null;
+
+  // Standard-mode macro grams at the base daily target, as derivedMacros
+  // will serve them after this plan is saved (fixed/weekly use the same
+  // rules; weekender days differ only in carbs).
+  const standardMacroPreview = plan && mode !== 'keto' && plan.dailyCalories > 0
+    ? previewMacros(
+      hasExistingGoal
+        ? { ...(savedGoal || {}), mode: 'standard' }
+        : { ...(savedGoal || {}), mode: 'standard', target_weight: plan.targetWeight, goal_weight_lbs: plan.targetWeight },
+      { leanMassLb: usableLeanMassLb, calories: plan.dailyCalories }
+    )
+    : null;
 
   const steps = ['Your Approach', 'Your Profile', 'Set Your Goal', 'Your Calorie Plan'];
 
@@ -662,10 +738,19 @@ const CalorieGoalWizard = () => {
           <Typography variant="h5" sx={{ fontFamily: '"DM Serif Display", serif', mb: 3 }}>
             Configure Your Keto Plan
           </Typography>
+          <PlanComparison saved={savedSnapshot} next={plan} />
+          <Box sx={{ mb: 3 }}>
+            <Typography variant="body2" sx={{ color: 'text.primary' }}>
+              BMR {plan.bmr} calories/day · daily target {plan.dailyCalories} calories
+            </Typography>
+            <BmrSourceNote source={plan.bmrSource} leanMassLb={plan.leanMassLb} scans={plan.bmrScans} scanLoadFailed={scanLoadFailed} />
+          </Box>
           <KetoPlanStep
             ketoConfig={ketoConfig}
             onChange={setKetoConfig}
             calorieTarget={plan?.dailyCalories}
+            baseGoal={{ ...(savedGoal || {}), target_weight: plan.targetWeight, goal_weight_lbs: plan.targetWeight }}
+            leanMassLb={usableLeanMassLb}
           />
           <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 3 }}>
             <Button onClick={() => setActiveStep(2)}>Back</Button>
@@ -683,6 +768,10 @@ const CalorieGoalWizard = () => {
                       start_date: startDate.toISOString(),
                       start_weight: plan.currentWeight,
                       target_weight: plan.targetWeight,
+                      // The macro rules read goal_weight_lbs BEFORE target_weight
+                      // (@geeksuite/utils macros.js) and the settings write merges, so a
+                      // stale goal_weight_lbs would outlive every new target. Write both.
+                      goal_weight_lbs: plan.targetWeight,
                       activity_level: plan.activityLevel,
                       weight_change_rate: plan.weightChangeRate,
                       plan_type: plan.planType,
@@ -692,6 +781,8 @@ const CalorieGoalWizard = () => {
                       bmr: plan.bmr,
                       tdee: plan.tdee,
                       bmr_calc_version: BMR_CALC_VERSION,
+                      bmr_source: plan.bmrSource,
+                      lean_mass_lb: plan.leanMassLb,
                       calc_inputs: plan.calcInputs,
                       timeline_weeks: plan.timeline,
                       estimated_end_date: estimatedEnd.toISOString(),
@@ -784,6 +875,9 @@ const CalorieGoalWizard = () => {
             Your Personalized Calorie Plan
           </Typography>
 
+          {/* Saved vs new — only while re-running over an existing plan */}
+          {!hasExistingGoal && <PlanComparison saved={savedSnapshot} next={plan} />}
+
           {/* Summary Card */}
           <Card sx={{ mb: 3, bgcolor: 'background.default', border: '2px solid', borderColor: 'primary.main' }}>
             <CardContent>
@@ -801,6 +895,14 @@ const CalorieGoalWizard = () => {
                 <Chip label={`${ plan.timeline } weeks`} variant="outlined" />
                 <Chip label={`${ plan.weightChangeRate } lb/week`} variant="outlined" />
               </Box>
+              {standardMacroPreview && (
+                <Box sx={{ mt: 2 }} data-testid="macro-preview">
+                  <Typography variant="body2" sx={{ color: 'text.primary', fontFamily: "'JetBrains Mono', monospace", fontVariantNumeric: 'tabular-nums' }}>
+                    Protein {standardMacroPreview.grams.protein_g}g · Fat {standardMacroPreview.grams.fat_g}g · Carbs {standardMacroPreview.grams.carbs_g}g
+                  </Typography>
+                  <ProteinBasisNote rules={standardMacroPreview.rules} />
+                </Box>
+              )}
             </CardContent>
           </Card>
 
@@ -836,9 +938,10 @@ const CalorieGoalWizard = () => {
                 <Box sx={{ mb: 2 }}>
                   <Typography variant="body2" sx={{ color: 'text.secondary' }}>Basal Metabolic Rate (BMR)</Typography>
                   <Typography variant="h6">{plan.bmr} calories/day</Typography>
-                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+                  <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
                     Calories your body burns at rest
                   </Typography>
+                  <BmrSourceNote source={plan.bmrSource} leanMassLb={plan.leanMassLb} scans={plan.bmrScans} scanLoadFailed={!hasExistingGoal && scanLoadFailed} />
                 </Box>
                 <Box>
                   <Typography variant="body2" sx={{ color: 'text.secondary' }}>Total Daily Energy Expenditure (TDEE)</Typography>
@@ -990,6 +1093,10 @@ const CalorieGoalWizard = () => {
                           start_date: startDate.toISOString(),
                           start_weight: plan.currentWeight,
                           target_weight: plan.targetWeight,
+                          // The macro rules read goal_weight_lbs BEFORE target_weight
+                          // (@geeksuite/utils macros.js) and the settings write merges, so a
+                          // stale goal_weight_lbs would outlive every new target. Write both.
+                          goal_weight_lbs: plan.targetWeight,
                           activity_level: plan.activityLevel,
                           weight_change_rate: plan.weightChangeRate,
                           plan_type: plan.planType,
@@ -999,6 +1106,8 @@ const CalorieGoalWizard = () => {
                           bmr: plan.bmr,
                           tdee: plan.tdee,
                           bmr_calc_version: BMR_CALC_VERSION,
+                          bmr_source: plan.bmrSource,
+                          lean_mass_lb: plan.leanMassLb,
                           calc_inputs: plan.calcInputs,
                           timeline_weeks: plan.timeline,
                           estimated_end_date: estimatedEnd.toISOString(),

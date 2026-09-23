@@ -12,6 +12,7 @@ import {
   DirectionsWalk as StepsIcon,
   Whatshot as StreakIcon,
 } from '@mui/icons-material';
+import { useTheme } from '@mui/material/styles';
 import { useToast } from '@geeksuite/ui';
 
 // Import new components
@@ -20,6 +21,8 @@ import QuickActionButton from '../components/Dashboard/QuickActionButton.jsx';
 import StatCard from '../components/Dashboard/StatCard.jsx';
 import MealCard from '../components/Dashboard/MealCard.jsx';
 import AIInsightsCard from '../components/Dashboard/AIInsightsCard.jsx';
+import PlanAccuracyBanner from '../components/Dashboard/PlanAccuracyBanner.jsx';
+import { weightStatView } from '../components/Dashboard/weightStatView.js';
 import { Surface, SectionLabel, DisplayHeading, SurfaceSkeleton } from '../components/primitives';
 
 // Import services
@@ -29,10 +32,12 @@ import { weightService } from '../services/weightService.js';
 import { bpService } from '../services/bpService.js';
 import { streakService } from '../services/streakService.js';
 import { settingsService } from '../services/settingsService.js';
+import { bodyCompService } from '../services/bodyCompService.js';
 import { useFoodLogging } from '../hooks/useFoodLogging.js';
 
 const DashboardNew = () => {
   const { notify } = useToast();
+  const theme = useTheme();
   const [loading, setLoading] = useState(true);
   const [removingLogIds, setRemovingLogIds] = useState(new Set());
   // Full log objects (food_item, nutrition snapshot, servings, meal_type) keyed
@@ -49,6 +54,10 @@ const DashboardNew = () => {
   const { logItems } = useFoodLogging({ date: today });
   // Keto mode state
   const [nutritionGoal, setNutritionGoal] = useState(null);
+  // bodyCompositionSummary.bmr — for the "measured BMR available" banner.
+  const [scanBmr, setScanBmr] = useState(null);
+  // derivedMacros.rules.protein_basis — 'lean_mass' captions the protein target.
+  const [proteinBasis, setProteinBasis] = useState(null);
   const [dashboardData, setDashboardData] = useState({
     calories: { consumed: 0, goal: 2000, remaining: 2000 },
     netCarbs: { consumed: 0 },
@@ -58,7 +67,7 @@ const DashboardNew = () => {
       fat: { current: 0, goal: 65 },
     },
     stats: {
-      weight: { value: '--', unit: '', trend: null, trendValue: '' },
+      weight: { value: '--', unit: '', caption: '' },
       bloodPressure: { systolic: null, diastolic: null, trend: null, trendValue: '' },
       steps: { value: null, unit: 'steps', trend: null, trendValue: '' },
       streak: { value: 0, unit: 'days', trend: null, trendValue: '' },
@@ -83,6 +92,12 @@ const DashboardNew = () => {
       setNutritionGoal(data?.nutrition_goal || null);
     }).catch(() => {
       // Non-fatal — standard mode is the safe fallback
+    });
+    bodyCompService.getSummary().then(resp => {
+      const summary = resp?.data ?? resp;
+      setScanBmr(summary?.bmr || null);
+    }).catch(() => {
+      // Non-fatal — without it the only banner possible is the stale one.
     });
   }, []);
 
@@ -228,6 +243,7 @@ const DashboardNew = () => {
         const todayTargets = payload?.today;
         const fallbackFixed = payload?.fixed || {};
         const caloriesInfo = payload?.calories || {};
+        setProteinBasis(payload?.rules?.protein_basis || null);
 
         const resolveNumber = value => (
           typeof value === 'number' && !Number.isNaN(value) ? Math.round(value) : null
@@ -268,26 +284,10 @@ const DashboardNew = () => {
 
       // Process weight data
       if (weightResult.status === 'fulfilled' && weightResult.value?.data) {
-        const weightStats = weightResult.value.data;
-        const totalChange = typeof weightStats.totalChange === 'number' ? weightStats.totalChange : null;
-        const hasDelta = totalChange !== null && !Number.isNaN(totalChange);
-        const deltaDisplay = hasDelta
-          ? `${totalChange > 0 ? '+' : totalChange < 0 ? '-' : ''}${Math.abs(totalChange).toFixed(1)} lbs`
-          : '--';
-        const deltaTrend = hasDelta && totalChange !== 0 ? (totalChange > 0 ? 'up' : 'down') : null;
-        const deltaTrendValue = hasDelta && totalChange !== 0 ? `${Math.abs(totalChange).toFixed(1)} lbs ${totalChange > 0 ? 'gained' : 'lost'}` : '';
-
+        const weight = weightStatView(weightResult.value.data);
         setDashboardData(prev => ({
           ...prev,
-          stats: {
-            ...prev.stats,
-            weight: {
-              value: deltaDisplay,
-              unit: '',
-              trend: deltaTrend,
-              trendValue: deltaTrendValue,
-            },
-          },
+          stats: { ...prev.stats, weight },
         }));
       }
 
@@ -419,6 +419,17 @@ const DashboardNew = () => {
     }
   };
 
+  // Stat accents from the theme, not hex literals: a hex tuned for light
+  // paper drifts in dark mode. The icon sits on a 10-20% tint of this colour,
+  // and StatCard measures it against that tint (readableOn, 3:1 for a
+  // graphical object), so these only pick the hue.
+  const statTone = {
+    weight: theme.palette.primary.main,
+    bp: theme.palette.error.main,
+    steps: theme.palette.success.main,
+    streak: theme.palette.warning.main,
+  };
+
   if (loading) {
     return (
       <Container maxWidth="lg" sx={{ py: { xs: 2, sm: 3, md: 4 }, px: { xs: 2, sm: 3 } }}>
@@ -456,6 +467,10 @@ const DashboardNew = () => {
       {/* Dashboard Grid */}
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
 
+        {/* Is the calorie target trustworthy? (plan D2) — renders nothing
+            when there is no plan or nothing to say. */}
+        <PlanAccuracyBanner nutritionGoal={nutritionGoal} scanBmr={scanBmr} />
+
         {/* ─── Daily Ticket — the editorial hero ─── */}
         <DailyTicket
           consumed={dashboardData.calories.consumed}
@@ -468,6 +483,7 @@ const DashboardNew = () => {
           mode={mode}
           netCarbsConsumed={dashboardData.netCarbs?.consumed ?? 0}
           netCarbLimit={netCarbLimit}
+          proteinNote={proteinBasis === 'lean_mass' ? 'from lean mass' : null}
         />
 
         {/* Stat Cards — 4-up row */}
@@ -483,9 +499,9 @@ const DashboardNew = () => {
             label="Weight"
             value={dashboardData.stats.weight.value ?? '--'}
             unit={dashboardData.stats.weight.unit}
-            trend={dashboardData.stats.weight.trend}
-            trendValue={dashboardData.stats.weight.trendValue}
-            color="#0D9488"
+            caption={dashboardData.stats.weight.caption}
+            plainValue
+            color={statTone.weight}
             delay={40}
           />
           <StatCard
@@ -495,7 +511,7 @@ const DashboardNew = () => {
             unit="mmHg"
             trend={dashboardData.stats.bloodPressure.trend}
             trendValue={dashboardData.stats.bloodPressure.trendValue}
-            color="#ef4444"
+            color={statTone.bp}
             delay={80}
           />
           <StatCard
@@ -504,7 +520,7 @@ const DashboardNew = () => {
             value={dashboardData.stats.steps.value?.toLocaleString() ?? '--'}
             trend={dashboardData.stats.steps.trend}
             trendValue={dashboardData.stats.steps.trendValue}
-            color="#10b981"
+            color={statTone.steps}
             delay={120}
           />
           <StatCard
@@ -512,7 +528,7 @@ const DashboardNew = () => {
             label="Streak"
             value={dashboardData.stats.streak.value}
             unit="days"
-            color="#f59e0b"
+            color={statTone.streak}
             delay={160}
           />
         </Box>

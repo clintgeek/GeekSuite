@@ -39,6 +39,10 @@ vi.mock('../../../services/settingsService.js', () => ({
 vi.mock('@geeksuite/auth', () => ({
   useAuth: () => ({ user: { profile: {} } }),
 }));
+// No scans: these tests are about the Mifflin path.
+vi.mock('../../../services/bodyCompService.js', () => ({
+  bodyCompService: { getSummary: vi.fn(() => Promise.resolve({ success: true, data: { total_scans: 0, bmr: { bmr: null, source: 'mifflin', lean_mass_lb: null, scans: 0 } } })) },
+}));
 
 vi.mock('@geeksuite/ui', async (importOriginal) => {
   const actual = await importOriginal();
