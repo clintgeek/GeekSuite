@@ -117,12 +117,12 @@ describe('BookCard', () => {
 });
 
 /**
- * Stars on the cover — rate a book without opening it.
+ * Stars in the shelf line ("Read ★★★★☆") — rate a book without opening it.
  *
- * The strip sits BESIDE the card's button, never inside it, so a star tap must
+ * The shelf line sits OUTSIDE the card's button, never inside it, so a star tap must
  * never open the book.
  */
-describe('BookCard — stars on the cover', () => {
+describe('BookCard — stars in the shelf line', () => {
   it('shows stars on a book you have read', () => {
     renderWithProviders(<BookCard book={read100} shelves={SHELVES} onRate={vi.fn()} />);
     expect(screen.getByRole('slider', { name: 'Rate The Sound of Gravel' })).toBeInTheDocument();

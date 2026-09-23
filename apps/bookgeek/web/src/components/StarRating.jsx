@@ -34,7 +34,9 @@ export default function StarRating({
   value,
   onChange,
   label,
-  variant = 'cover', // 'cover' — on artwork, over a scrim | 'row' — on the page surface
+  // 'inline' — beside the shelf label on a card | 'row' — the list view's column
+  // | 'cover' — on artwork, over a scrim (kept for any caller that wants it)
+  variant = 'inline',
   sx,
 }) {
   const theme = useTheme();
@@ -133,7 +135,7 @@ export default function StarRating({
           >
             <Icon
               sx={{
-                fontSize: onCover ? 22 : 20,
+                fontSize: onCover ? 22 : variant === 'row' ? 20 : 17,
                 color: fill === 'empty' ? empty : filled,
                 filter: onCover ? 'drop-shadow(0 1px 1px rgba(0,0,0,0.45))' : 'none',
               }}

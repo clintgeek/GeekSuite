@@ -7,11 +7,12 @@
  * ("Reading · 42% ✓") instead of a 9px pill. The per-card basket "+" is gone —
  * bulk basket work happens in Select mode, from the filter sheet's overflow.
  *
- * Rateable books (utils/rating.js) carry a star strip across the bottom of the
- * cover. It is a SIBLING of the card's button, laid over the cover by an
- * overlay that mirrors the cover's own geometry — not a child of the button,
- * which would be invalid HTML and would open the book on every star tap. The
- * select-mode checkbox is placed the same way for the same reason.
+ * Rateable books (utils/rating.js) show their stars in the shelf line, right
+ * after the label: "Read ★★★★☆". (They sat across the bottom of the cover for
+ * one release; Chef meant the info block.) That puts the shelf line OUTSIDE the
+ * card's button, as its own row under the author: a control inside a <button>
+ * is invalid HTML, and every star tap would open the book. The select-mode
+ * checkbox sits outside the button for the same reason.
  */
 import React from "react";
 import { Box, Card, ButtonBase, Checkbox, Typography, alpha, useTheme } from "@mui/material";
@@ -49,6 +50,8 @@ export default function BookCard({
   const shelfLabel = shelf && shelf.id !== "all" ? shelf.label : null;
   const shelfColor =
     theme.palette.shelf?.[book.shelf] ?? theme.palette.shelf?.custom ?? "text.muted";
+
+  const rateable = Boolean(onRate) && !selectMode && canRate(book);
 
   const handleActivate = () => {
     if (selectMode) {
@@ -152,18 +155,28 @@ export default function BookCard({
         <Typography variant="body2" noWrap sx={{ color: "text.secondary" }}>
           {authors}
         </Typography>
-        {(shelfLabel || inProgress || book.owned) && (
+      </ButtonBase>
+
+      {/* The shelf line, as its own row outside the button so the stars can
+          live in it. Its text is not a tap target for opening the book — the
+          cover, title and author above it are. */}
+      {(shelfLabel || inProgress || book.owned || rateable) && (
+        <Box
+          sx={{
+            display: "flex",
+            alignItems: "center",
+            flexWrap: "wrap",
+            columnGap: 0.75,
+            px: 1,
+            pb: rateable ? 0 : 1,
+            mt: rateable ? -0.75 : -0.5,
+            minWidth: 0,
+          }}
+        >
           <Typography
             variant="caption"
             component="p"
-            sx={{
-              mt: 0.25,
-              color: "text.muted",
-              display: "flex",
-              alignItems: "center",
-              gap: 0.5,
-              minWidth: 0,
-            }}
+            sx={{ color: "text.muted", display: "flex", alignItems: "center", gap: 0.5, minWidth: 0 }}
           >
             {shelfLabel && (
               <Box
@@ -181,52 +194,20 @@ export default function BookCard({
             )}
             {shelfLabel && inProgress && <Box component="span">·</Box>}
             {inProgress && <Box component="span">{Math.round(progress)}%</Box>}
-            {book.owned && (
-              <CheckIcon
-                titleAccess="Owned"
-                sx={{ fontSize: 14, ml: shelfLabel || inProgress ? 0 : -0.25 }}
-              />
-            )}
           </Typography>
-        )}
-      </ButtonBase>
-
-      {/* The star strip. Mirrors the cover box exactly: the button's 8px
-          padding gives the same left/right/top inset, and the same 2:3 aspect
-          ratio then gives the same height — so the strip lands on the cover's
-          bottom edge at every grid width without measuring anything. Hidden in
-          select mode, where a tap on the cover means "select". */}
-      {onRate && !selectMode && canRate(book) && (
-        <Box
-          sx={{
-            position: "absolute",
-            top: theme.spacing(1),
-            left: theme.spacing(1),
-            right: theme.spacing(1),
-            aspectRatio: "2 / 3",
-            borderRadius: "8px",
-            overflow: "hidden",
-            display: "flex",
-            alignItems: "flex-end",
-            pointerEvents: "none",
-            zIndex: 1,
-          }}
-        >
-          <Box
-            sx={{
-              width: "100%",
-              pointerEvents: "auto",
-              px: 0.5,
-              // A scrim, so white outline stars read on a pale cover too.
-              background: `linear-gradient(to top, ${ alpha(theme.palette.common.black, 0.72) }, ${ alpha(theme.palette.common.black, 0) })`,
-            }}
-          >
-            <StarRating
-              value={book.rating}
-              label={title}
-              onChange={(n) => onRate(book, n)}
-            />
-          </Box>
+          {rateable && (
+            <Box sx={{ width: 100, flexShrink: 0 }}>
+              <StarRating
+                value={book.rating}
+                label={title}
+                variant="inline"
+                onChange={(n) => onRate(book, n)}
+              />
+            </Box>
+          )}
+          {book.owned && (
+            <CheckIcon titleAccess="Owned" sx={{ fontSize: 14, color: "text.muted" }} />
+          )}
         </Box>
       )}
 
