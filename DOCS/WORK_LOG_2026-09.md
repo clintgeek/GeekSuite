@@ -12,6 +12,70 @@ anything a future reader would otherwise have to rediscover.
 
 ## 2026-09-22
 
+### FitnessGeek — saved meals win, clean logs close the sheet, and a barcode bug
+
+`b5ccf92d` `71094860` (agent) `df453058` (agent) `5954048f`
+
+Three asks from Chef in one message, two of them run by agents in isolated
+worktrees while BookGeek was built in the main checkout; both merged and
+verified here before shipping.
+
+- **"Your foods" folds on mobile too** (`b5ccf92d`). The first fold reached the
+  inline page search only; on a phone the add flow is the Add Food dialog
+  (thumb-zone "Log food", each meal's "+"), which never got the flag. I had
+  reasoned the dialog's only job was picking food and left it open — wrong for
+  how the app is used. Deploy was checked first: current, so it was the code.
+- **A clean one-shot log closes the sheet** (agent, Sonnet). Describe-and-log
+  with nothing skipped and no portion question closes the Add Food sheet;
+  individual taps keep it open with the session tray, as asked. It also found
+  a **failure-as-success bug**: the barcode scanner closed itself the moment the
+  product was FOUND, before the write, with no error handling. It now closes
+  only when the write lands and says so in place when it does not.
+- **Describe-and-log uses saved meals and foods first** (agent, Opus). Saved
+  meals were read by nothing on that path, and the history lookup threw
+  "homemade" away as noise, matching an old 1,680 cal/100 g "Quesadillas" row.
+  Now a saved meal matches when the described words EQUAL its name's words —
+  equality, not "contains", because describe-minted rows called "chicken" and
+  "cheese" would otherwise swallow "chicken caesar salad". "Homemade" in a
+  saved name must be said ("homemade …" or "my …"), so a restaurant
+  quesadilla stays a restaurant quesadilla.
+
+  **Reviewed against the real data, which the tests could not do:** the first
+  version missed 4 of Chef's 8 saved meals — every one with "and" in the name
+  ("Fat Boy's Burger and Fries"), because the parser splits on "and" before
+  matching. Sent back; it now matches runs of "and"-joined items against
+  meals, longest first. Probed with 16 phrasings including precision cases the
+  tests didn't cover ("burger and fries" does NOT become Fat Boy's, "a
+  margarita" does NOT become the El P's plate). Then ran the merged load and
+  resolve path read-only against live Mongo: all 7 live meals load, components
+  populate, "2 homemade quesadillas" resolves to the saved meal ×2.
+- **The toast names the meal** (`5954048f`): a saved meal writes a row per
+  component, so it said "Logged 7 items" for one quesadilla.
+
+814 backend, 256 frontend, harness 24/0.
+
+### BookGeek — rate from the cover, a list view, and finish dates a day early
+
+`492e46cd` `e661f8da`
+
+Chef: *"rating the ones I've read needs to be brainless simple."* Stars on the
+cover, one tap, changeable; plus a list view. One 44px slider-strip rather than
+five buttons, because five 44px stars don't fit a phone cover and the harness
+fails anything smaller. Beside the card's button, never inside it. Halves are
+drawn (five imported books have them); input is whole stars. Tapping the
+current rating does nothing; every change offers Undo. Optimistic and safe
+against out-of-order responses (tested in `utils/rateBook.js`).
+
+Found on the way: **every finish date showed a day early** in the detail view,
+and would have shown the wrong month for 18 books in the new list. All 90 live
+finish dates are UTC-midnight calendar days from the import, but the code read
+them as instants. `formatReadingDate` lets the value decide. Its tests pin a US
+timezone themselves — in UTC, as CI runs, they would have passed without the
+fix.
+
+223 tests, 41 new, each behaviour sabotaged and confirmed red; harness 18/0 with
+a new list-view scene.
+
 ### FitnessGeek — the Health Dashboard now agrees with the watch
 
 `bcf9a12e` `ebef8178` `ebbdaad5` · findings in

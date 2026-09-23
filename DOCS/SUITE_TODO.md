@@ -123,6 +123,22 @@ recommended order:
 what `remindedAt` MEANS and needs a decision: when a push is missed because
 the app was down over its due time, should it arrive late or be skipped?
 
+### FitnessGeek — food logging
+
+- **Search never returns saved meals.** Describe-and-log now uses them
+  (2026-09-22), but typing a meal's name in the search box still only finds
+  foods. Needs UnifiedFoodSearch changes.
+- **Saved meal: whose meal type?** A described saved meal takes the meal type
+  from the sentence or the time of day, not the meal's own saved type. Chef's
+  call which is right.
+- **Saved foods without "homemade" in the name** are still only reached by the
+  history lookup, which misses "2 fage yogurts" (quantity is in its key). Fixing
+  that safely needs a marker on food rows saying whether a person or an
+  estimate created them — a shared-schema change.
+- **Flaky test:** `bloodPressureEdit.test.jsx` times out at 5 s under full-suite
+  concurrency and passes alone. Seen by an agent 2026-09-22; not reproduced in
+  the main checkout's runs.
+
 ### FitnessGeek — Health Dashboard
 
 - ~~**The sleep dashboard contradicts the watch.**~~ — **fixed 2026-09-22**
