@@ -77,9 +77,12 @@ describe('GET /api/influx/trends', () => {
     expect(res.body.days).toEqual([{ date: '2026-03-10' }]);
   });
 
-  test('influx not enabled for the user → 403', async () => {
+  test('influx not enabled for the user → 200 not_enabled, never a 403', async () => {
+    // A 403 makes the shared auth interceptor refresh the token and replay;
+    // Reports calls this for every user, so "not enabled" must be a plain 200.
     settings = { influxEnabled: false };
-    await request(app).get('/api/influx/trends?end=2026-03-10').expect(403);
+    const res = await request(app).get('/api/influx/trends?end=2026-03-10').expect(200);
+    expect(res.body).toEqual({ available: false, reason: 'not_enabled', days: [], fitnessAge: null, activeKcal30: null });
     expect(getDailyTrends).not.toHaveBeenCalled();
   });
 

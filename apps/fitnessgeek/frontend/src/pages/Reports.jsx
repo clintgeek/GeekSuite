@@ -15,6 +15,7 @@ import {
 import { alpha } from '@mui/material/styles';
 import { GeekErrorState, useToast } from '@geeksuite/ui';
 import DayRibbon from '../components/Reports/DayRibbon.jsx';
+import BodyRecoverySection from '../components/Reports/BodyRecoverySection.jsx';
 import { Surface, SectionLabel, DisplayHeading, StatNumber } from '../components/primitives';
 import {
   Download as DownloadIcon,
@@ -35,7 +36,10 @@ const metricLabels = {
   carbs: 'Carbs (g)',
   fat: 'Fat (g)',
   fiber: 'Fiber (g)',
-  sugar: 'Sugar (g)'
+  sugar: 'Sugar (g)',
+  // Joined 2026-09-23 (TRENDS_PLAN D6). Net carbs = carbs less fiber, per log.
+  net_carbs: 'Net carbs (g)',
+  sodium: 'Sodium (mg)'
 };
 
 const SECTION_PADDING = 3;
@@ -239,6 +243,10 @@ const Reports = () => {
           </Button>
         </Box>
       </Box>
+
+      {/* Body & recovery: its own 90-day window and its own loading, so the
+          range toggle and the food report's states never reach it. */}
+      <BodyRecoverySection />
 
       {loading ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 6 }}>

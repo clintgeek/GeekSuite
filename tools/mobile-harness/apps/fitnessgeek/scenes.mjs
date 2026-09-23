@@ -171,8 +171,42 @@ export const scenes = [
     name: '07r-reports',
     goto: '/reports',
     wait: 1800,
-    async setup(page) {
+    async setup(page, h) {
       await must(page.getByText('Goal:').first(), 'day ribbon compliance legend');
+      // Body & recovery now sits above the food report; scroll past it so
+      // this shot is still of the averages and the ribbon.
+      await scrollToSection(page, h, '[data-testid="report-days-logged"]', 96);
+    },
+  },
+  // Reports › Body & recovery (FITNESSGEEK_TRENDS_PLAN D1–D3): 90-day Garmin
+  // trends from GET /api/influx/trends (fixtures' INFLUX_TRENDS), then the
+  // body cards. Three shots, one per group — the section is several screens
+  // tall on a phone. The sparklines are one lazy Nivo island.
+  {
+    name: '07s-reports-body-recovery',
+    goto: '/reports',
+    wait: 2000,
+    async setup(page, h) {
+      await must(page.locator('[data-testid="trend-restingHR"]'), 'resting HR trend card');
+      await scrollToSection(page, h, '#body-recovery', 88);
+    },
+  },
+  {
+    name: '07t-reports-activity',
+    goto: '/reports',
+    wait: 2000,
+    async setup(page, h) {
+      await must(page.locator('[data-testid="trend-intensity"]'), 'intensity minutes card');
+      await scrollToSection(page, h, 'section[aria-label="Activity"]', 88);
+    },
+  },
+  {
+    name: '07u-reports-body',
+    goto: '/reports',
+    wait: 2000,
+    async setup(page, h) {
+      await must(page.locator('[data-testid="trend-bp"]'), 'blood pressure card');
+      await scrollToSection(page, h, 'section[aria-label="Body"]', 88);
     },
   },
   {
@@ -360,6 +394,29 @@ export const scenes = [
       await scrollToSection(page, h, '[data-testid="plan-comparison"]', 120);
     }),
     teardown: (page) => page.unroute('**/graphql'),
+  },
+  {
+    // Body & recovery for a user without the Influx connection: the trends
+    // route answers 403 (settings.influxEnabled false). The body cards stay;
+    // the Garmin groups become one quiet line. Page-scoped route, so last.
+    name: '18-reports-no-influx',
+    async setup(page, h) {
+      await page.route('**/api/influx/trends*', (r) =>
+        // What the endpoint sends a user without Influx (a 200 — a 403 would
+        // make the auth interceptor refresh the token on every visit).
+        json(r, { available: false, reason: 'not_enabled', days: [], fitnessAge: null, activeKcal30: null }));
+      try {
+        await page.goto(h.base + '/reports', { waitUntil: 'networkidle' });
+        await h.settle(1800);
+        await must(page.locator('[data-testid="garmin-not-connected"]'), 'not-connected line');
+        await must(page.locator('[data-testid="trend-weight"]'), 'weight card still shown');
+        await scrollToSection(page, h, '#body-recovery', 88);
+      } catch (err) {
+        await page.unroute('**/api/influx/trends*');
+        throw err;
+      }
+    },
+    teardown: (page) => page.unroute('**/api/influx/trends*'),
   },
 ];
 

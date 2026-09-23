@@ -96,7 +96,21 @@ router.get('/daily/:date', authenticateToken, checkInfluxEnabled, async (req, re
  * day; the client always sends it. Without it the server falls back to its
  * own UTC date, which can be a day off from the user's.
  */
-router.get('/trends', authenticateToken, checkInfluxEnabled, async (req, res) => {
+// Not gated by checkInfluxEnabled's 403: Reports calls this for EVERY user,
+// and the shared auth interceptor (@geeksuite/auth) answers any 401/403 by
+// refreshing the token and replaying — so each Reports visit by a user
+// without Influx cost a token refresh just to learn "not enabled". A user
+// without the integration gets an ordinary 200 saying so.
+router.get('/trends', authenticateToken, async (req, res) => {
+  try {
+    const settings = await UserSettings.getOrCreate(req.user.id);
+    if (!settings.influxEnabled) {
+      return res.json({ available: false, reason: 'not_enabled', days: [], fitnessAge: null, activeKcal30: null });
+    }
+  } catch (err) {
+    logger.error({ userId: req.user.id, error: err.message }, 'Error checking influx status');
+    return res.status(500).json({ error: 'Failed to check InfluxDB status' });
+  }
   const { days: rawDays, end: rawEnd } = req.query;
   let days = 90;
   if (rawDays !== undefined) {

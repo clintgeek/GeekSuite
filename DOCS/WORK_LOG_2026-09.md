@@ -12,6 +12,29 @@ anything a future reader would otherwise have to rediscover.
 
 ## 2026-09-23
 
+### FitnessGeek — Reports gets "Body & recovery": 90-day trends from Garmin, weight, scans and BP
+
+`82a1bb87` `e55c93c8` `3d021200` + this commit. Plan: `DOCS/FITNESSGEEK_TRENDS_PLAN.md`.
+
+- **`GET /api/influx/trends`** — one honest point per calendar day (null where Garmin has
+  nothing), five window-wide queries. Found: DailyStats' `stressPercentage` is
+  time-in-stress, not a stress level — `stressMean` is computed from StressIntraday
+  instead. Garmin writes duplicate points (a "Default" device copy, re-synced sleep);
+  the watch's wins. Users without Influx get a 200 `not_enabled`, not a 403: the shared
+  auth interceptor refreshes the token on every 401/403, so a 403 cost every Reports visit
+  a token round-trip.
+- **Reports "Body & recovery"** — resting HR, overnight HRV, sleep score and hours, weekly
+  intensity minutes (moderate + 2 × vigorous, against 150), steps, fitness age, stress and
+  Body Battery, weight, body composition, blood pressure. Every figure a 7-day mean against
+  a named earlier week, sparklines of 7-day means broken at gaps. No SpO2.
+- **Sodium and net carbs** in the Reports averages and the CSV export (net carbs floored
+  per log, as the daily summary does).
+- **The calorie wizard can use measured activity:** "Measured by Garmin (+N kcal/day)" =
+  BMR + Garmin's 30-day active-kcal mean, not Garmin's own total (built on a weight-only
+  BMR). Errs low; says so. Found: the Activity Level select had no accessible name.
+- Open: the StatNumber primitive `parseFloat`s string values ("124/79" → "124", "8,421"
+  → "8"); the section works around it. The AI coach trends (T6) wait on a decision.
+
 ### FitnessGeek — Recovery Coach no longer docks 10 points every night; Reports colours days against the plan
 
 Found mapping what the Health Dashboard and Reports don't show (2026-09-23):

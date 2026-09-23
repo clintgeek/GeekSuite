@@ -22,6 +22,9 @@ vi.mock('../../services/insightsService.js', () => ({
     getTrendWatch: vi.fn(async () => null),
   },
 }));
+// The Body & recovery section has its own suite; here it would only make
+// real network calls that fail noisily in jsdom.
+vi.mock('../../components/Reports/BodyRecoverySection.jsx', () => ({ default: () => null }));
 vi.mock('@geeksuite/ui', async (importOriginal) => ({
   ...(await importOriginal()),
   useToast: () => ({ notify: vi.fn() }),
@@ -31,7 +34,7 @@ const { default: Reports } = await import('../Reports.jsx');
 const day = (date, calories) => ({ date, calories, protein: 150, carbs: 150, fat: 70, fiber: 20, sugar: 30 });
 const base = {
   range: { start: '2026-09-17', end: '2026-09-23', days: 7 },
-  totals: {}, averages: { calories: 1800, protein: 150, carbs: 150, fat: 70, fiber: 20, sugar: 30 },
+  totals: {}, averages: { calories: 1800, protein: 150, carbs: 150, fat: 70, fiber: 20, sugar: 30, net_carbs: 130, sodium: 2100 },
   daily: [day('2026-09-20', 1700), day('2026-09-21', 1900), day('2026-09-22', 1750), day('2026-09-23', 1850)],
   meals: {}, topFoods: [], goalCompliance: null,
 };
@@ -60,3 +63,13 @@ describe('Reports targets and coverage', () => {
     expect(screen.queryByTestId('report-days-logged')).toBeNull();
   });
 });
+
+describe('Reports averages include sodium and net carbs (TRENDS_PLAN D6)', () => {
+  it('labels both, with units', async () => {
+    overview = { ...base, days_logged: 7, targets: null };
+    renderReports();
+    expect(await screen.findByText('Sodium (mg)')).toBeInTheDocument();
+    expect(screen.getByText('Net carbs (g)')).toBeInTheDocument();
+  });
+});
+

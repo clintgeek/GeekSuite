@@ -2,7 +2,7 @@
 // /graphql (apiService rewrites its REST-looking calls into named Apollo
 // operations) plus the shared session routes, so nearly everything below is
 // keyed by GraphQL operation name.
-import { sessionRoutes, graphqlRoute, DEFAULT_USER } from '../../lib/net.mjs';
+import { sessionRoutes, graphqlRoute, json, DEFAULT_USER } from '../../lib/net.mjs';
 // The same smoothing the gateway runs (FITNESSGEEK_BODY_DATA_PLAN §0), so the
 // summary fixture is exactly what the resolver would say about these scans —
 // not a hand-typed number that could drift from the rule.
@@ -209,6 +209,44 @@ export const BPS = Array.from({ length: 14 }, (_, i) => ({
   notes: null,
 }));
 
+// ── Garmin trends (GET /api/influx/trends, REST — not GraphQL) ───────────
+// 90 invented days, oldest first, shaped as influxService.getTrends documents
+// (FITNESSGEEK_TRENDS_PLAN §3). Resting HR drifts down ~4 bpm and HRV up over
+// the quarter, with day-to-day wobble; the watch was off the wrist at night
+// for 17 days mid-range (sleep, HRV and resting HR are null there), so the
+// sparklines must BREAK rather than draw across the gap.
+const NIGHTS_OFF = new Set(Array.from({ length: 17 }, (_, i) => 48 - i)); // days-ago 32…48
+export const INFLUX_TRENDS = {
+  available: true,
+  days: Array.from({ length: 90 }, (_, i) => {
+    const n = 89 - i; // days ago
+    const t = i / 89; // 0 → 1 across the range
+    const off = NIGHTS_OFF.has(n);
+    const r1 = (k) => Math.round(k);
+    // Deterministic day-to-day scatter in [-1, 1): readings jump around like
+    // real ones, so the 7-day line is visibly calmer than any single day.
+    const z = (k) => { const x = Math.sin(i * 12.9898 + k * 78.233) * 43758.5453; return (x - Math.floor(x)) * 2 - 1; };
+    const weekend = [0, 6].includes(new Date(`${daysAgo(n)}T12:00:00Z`).getUTCDay());
+    return {
+      date: daysAgo(n),
+      restingHR: off ? null : r1(61 - 4 * t + z(1) * 2),
+      overnightHRV: off ? null : r1(38 + 7 * t + z(2) * 6),
+      sleepScore: off ? null : r1(71 + 6 * t + z(3) * 9),
+      sleepHours: off ? null : Math.round((6.6 + 0.5 * t + z(4) * 0.8) * 10) / 10,
+      steps: r1(7200 + 1600 * t + (weekend ? 2500 : 0) + z(5) * 1800),
+      moderateMin: Math.max(0, r1(16 + 8 * t + z(6) * 12)),
+      vigorousMin: weekend ? r1(18 + 10 * t) : 0,
+      activeKcal: r1(420 + 90 * t + z(7) * 150),
+      stressMean: r1(34 - 5 * t + z(8) * 8),
+      bodyBatteryHigh: off ? null : r1(74 + 8 * t + z(9) * 10),
+      bodyBatteryLow: r1(21 + 3 * t + z(10) * 6),
+      fitnessAge: i % 7 === 0 ? (i < 45 ? 49 : 47) : null,
+    };
+  }),
+  fitnessAge: { current: 47, chronological: 44, achievable: 39 },
+  activeKcal30: { mean: 498, days: 30 },
+};
+
 export const DERIVED = {
   __typename: 'DerivedMacros',
   todayIndex: (today.getDay() + 6) % 7,
@@ -372,4 +410,7 @@ export const opsWithPlan = (patch, extra = {}) => ({
 export async function routes(ctx, { base, scheme, viewport } = {}) {
   await sessionRoutes(ctx, USER);
   await graphqlRoute(ctx, OPS);
+  // After sessionRoutes: its catch-all `/api/` answers `{ success, data: {} }`,
+  // and a later route wins. Reports' Body & recovery reads this.
+  await ctx.route('**/api/influx/trends*', (r) => json(r, INFLUX_TRENDS));
 }

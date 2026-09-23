@@ -1,6 +1,6 @@
 # FitnessGeek — Trends: recovery, fitness, measured burn, and body data in Reports
 
-Status: **approved, in progress** (2026-09-23). Follows `DOCS/FITNESSGEEK_BODY_DATA_PLAN.md`; the same
+Status: **T1–T5 shipped 2026-09-23; T6 awaits a decision.** Follows `DOCS/FITNESSGEEK_BODY_DATA_PLAN.md`; the same
 smoothing rule (§0 there) governs every number here.
 
 ## 1. Why
@@ -66,12 +66,12 @@ as a trend anywhere.
 
 | # | Piece |
 |---|---|
-| T1 | Influx trends endpoint + tests (fixture Influx responses) |
-| T2 | Reports "Body & recovery" section: cards + sparklines, harness scene |
-| T3 | Weight / body comp / BP cards in the same section |
-| T4 | Sodium + net carbs in Reports averages |
-| T5 | Wizard: measured-activity TDEE option (★ D4) |
-| T6 | AI coach context: smoothed recovery trends |
+| T1 | Influx trends endpoint + tests (fixture Influx responses) — done `82a1bb87` |
+| T2 | Reports "Body & recovery" section: cards + sparklines, harness scene — done |
+| T3 | Weight / body comp / BP cards in the same section — done |
+| T4 | Sodium + net carbs in Reports averages — done `e55c93c8` |
+| T5 | Wizard: measured-activity TDEE option — done `3d021200` |
+| T6 | AI coach context: smoothed recovery trends — **waiting on Chef:** the coach runs in basegeek, which can't reach the Garmin Influx; copy fitnessgeek's read settings to basegeek, or have basegeek call fitnessgeek's endpoint |
 
 ## 5. Still open elsewhere
 
