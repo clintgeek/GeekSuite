@@ -83,12 +83,21 @@ describe('buildWeightTrend', () => {
     expect(m.projection.points[1].x).toBe('2026-12-31');
   });
 
-  it('needs 14 days of means inside the 28-day fit window, not just a long history', () => {
-    // A long-ago log, a 60-day gap, then one week of logs: span ≥ 14 but the
-    // fit window holds only 6 days of means.
-    const recent = logs(7).map((l, i) => ({ ...l, log_date: day(70 + i) }));
+  it('needs 14 days of means inside the 28-day fit window, not just a long run', () => {
+    // One unbroken run (the 25-day gap is under RUN_GAP_DAYS) spanning 31
+    // days — past the 14-day span gate — but the 28-day fit window holds only
+    // the last week of means, so there is still no slope to project.
+    const recent = logs(7).map((l, i) => ({ ...l, log_date: day(25 + i) }));
     const m = buildWeightTrend([{ log_date: day(0), weight_value: 222 }, ...recent], { goal: GOAL });
     expect(m.spanDays).toBeGreaterThanOrEqual(14);
+    expect(m.projection).toBeNull();
+  });
+
+  it('the span gate counts only the current run: history before a long gap does not unlock a projection', () => {
+    // A reading 70 days back, a gap longer than RUN_GAP_DAYS, one week since.
+    const recent = logs(7).map((l, i) => ({ ...l, log_date: day(70 + i) }));
+    const m = buildWeightTrend([{ log_date: day(0), weight_value: 222 }, ...recent], { goal: GOAL });
+    expect(m.spanDays).toBe(6);
     expect(m.projection).toBeNull();
   });
 });

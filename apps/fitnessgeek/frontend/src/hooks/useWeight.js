@@ -79,14 +79,25 @@ export const useWeight = () => {
 
         logger.debug('[useWeight] mapped goal candidates');
 
-        // Choose goal source:
-        // - If weight_goal has both start/target OR explicitly enabled, use it
-        // - Otherwise if nutrition_goal is enabled (and has targets), use it
-        // - Else, no goal
+        // Choose goal source. Two stores can each hold a goal: `weight_goal`
+        // (the Weight page's goal wizard) and `nutrition_goal` (the Calorie
+        // Wizard, which also sets a start and target weight). When both are
+        // usable, the one STARTED MOST RECENTLY wins — it is the goal the
+        // user set last. This used to prefer weight_goal unconditionally, so
+        // on 2026-09-23 a goal from April (start 307.5, the last weigh-in
+        // before a nine-month gap) outranked the plan Chef had just made
+        // (start 318.6), and the tracker measured him from a stale number.
+        const usable = (g) => g && (g.enabled || (g.startWeight != null && g.targetWeight != null));
+        const startMs = (g) => {
+          const t = g?.startDate ? new Date(g.startDate).getTime() : NaN;
+          return Number.isFinite(t) ? t : -Infinity;
+        };
         let mapped = null;
-        const wgUsable = wgMapped && (wgMapped.enabled || (wgMapped.startWeight != null && wgMapped.targetWeight != null));
-        const ngUsable = ngMapped && (ngMapped.enabled || (ngMapped.startWeight != null && ngMapped.targetWeight != null));
-        if (wgUsable) mapped = wgMapped; else if (ngUsable) mapped = ngMapped;
+        const wgUsable = usable(wgMapped);
+        const ngUsable = usable(ngMapped);
+        if (wgUsable && ngUsable) mapped = startMs(ngMapped) > startMs(wgMapped) ? ngMapped : wgMapped;
+        else if (wgUsable) mapped = wgMapped;
+        else if (ngUsable) mapped = ngMapped;
 
         if (mapped && mapped.enabled) {
           setWeightGoal(mapped);

@@ -10,6 +10,27 @@ anything a future reader would otherwise have to rediscover.
 
 ---
 
+## 2026-09-23
+
+### FitnessGeek — weight screens agree after a nine-month gap in logging
+
+Chef: "some show --, some show 308 an old value. It's throwing off the weight goal tracker."
+Cause: manual weigh-ins stop 2025-12-03 at 307.5; the scale starts 2026-09-15. Every
+consumer that assumed a continuous log went wrong in its own way.
+
+- **The goal tracker measured from a stale April goal.** `useWeight` always preferred
+  `weight_goal` (set 2026-04-09, start 307.5) over the Calorie Wizard's plan Chef had made
+  that morning (start 318.6, 1,691 kcal, scan BMR). Now the most recently STARTED goal
+  wins, whichever store it's in.
+- **The dashboard Weight card said "--"** — no reading near 30 days ago. The value is now
+  always the current 7-day average; the caption carries the 30-day change, or the date it
+  arrives (counted from the start of the current run of weigh-ins: Oct 15 for Chef).
+- **The chart would have been empty under the new plan** (its window started at the goal's
+  start date, after every scan) and drew one line across nine unmeasured months. It now
+  starts at the current run when that's earlier, and the 7-day line breaks at gaps over
+  two weeks. The projection's span gate counts only the current run.
+- Not done with `y: null` points: nivo 0.99 scales a null y to a real position at 0.
+
 ## 2026-09-22
 
 ### FitnessGeek — the body data gets used: lean-mass BMR and protein, a Weight & body page, and a coach that reasons from averages

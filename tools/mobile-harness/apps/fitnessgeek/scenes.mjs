@@ -305,8 +305,8 @@ export const scenes = [
     goto: '/dashboard',
     wait: 1800,
     async setup(page, h) {
-      await must(page.getByText('7-day avg vs 30 days ago').first(), 'weight stat caption');
-      await scrollToSection(page, h, 'text=7-day avg vs 30 days ago', 260);
+      await must(page.getByText(/^7-day avg · /).first(), 'weight stat caption');
+      await scrollToSection(page, h, 'text=/^7-day avg · /', 260);
     },
   },
   {

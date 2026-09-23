@@ -32,6 +32,20 @@ export const PROJECTION_MIN_SPAN_DAYS = 14;
 export const PROJECTION_FIT_DAYS = 28;
 /** …which themselves must span at least this long. */
 export const PROJECTION_MIN_FIT_SPAN_DAYS = 14;
+/**
+ * Two trend points further apart than this are not joined: the line breaks.
+ * A 7-day mean restarts after a week with no readings anyway, and a line drawn
+ * across months with no weigh-ins (Chef: Dec 2025 → Sep 2026) invents a
+ * smooth history nobody measured.
+ */
+export const LINE_BREAK_DAYS = 14;
+/**
+ * The "current run" of weigh-ins: walking back from the latest reading, the
+ * run ends at the first gap longer than this. With a goal, the chart starts at
+ * whichever is earlier — the goal's start or the run's — so the readings that
+ * led up to a newly set goal are not hidden behind its start date.
+ */
+export const RUN_GAP_DAYS = 30;
 
 const dayOf = (ymd) => {
   const [y, m, d] = ymd.split('-').map(Number);
@@ -66,6 +80,32 @@ function slopeOf(pairs) {
  *   spanDays: number,
  * }}
  */
+/**
+ * Split a run of points into the stretches a line may join: a new stretch
+ * starts wherever two neighbours are more than `LINE_BREAK_DAYS` apart.
+ *
+ * Not done with `y: null` points: for an unstacked line nivo (0.99) passes a
+ * null y through the linear scale, which turns it into a real position at 0 —
+ * the line would dive off the chart instead of breaking.
+ *
+ * @template T
+ * @param {T[]} items oldest first
+ * @param {(item: T) => string} ymdOf the item's calendar day, `YYYY-MM-DD`
+ * @returns {T[][]}
+ */
+export function splitAtGaps(items, ymdOfItem) {
+  const out = [];
+  let prevDay = null;
+  for (const item of items || []) {
+    const ymd = ymdOfItem(item);
+    const day = ymd ? dayOf(ymd) : null;
+    if (!out.length || (day !== null && prevDay !== null && day - prevDay > LINE_BREAK_DAYS)) out.push([]);
+    out[out.length - 1].push(item);
+    if (day !== null) prevDay = day;
+  }
+  return out;
+}
+
 export function buildWeightTrend(logs = [], { goal = null } = {}) {
   const valid = (logs || [])
     .map((l) => ({ x: utcDateString(l?.log_date), y: Number(l?.weight_value) }))
@@ -83,17 +123,27 @@ export function buildWeightTrend(logs = [], { goal = null } = {}) {
   }
   const allTrend = [...byDay.entries()].map(([x, y]) => ({ x, y }));
 
-  const firstDay = dayOf(valid[0].x);
   const lastDay = dayOf(valid[valid.length - 1].x);
-  const spanDays = lastDay - firstDay;
+
+  // The current run: back from the latest reading until a gap > RUN_GAP_DAYS.
+  let runStartIdx = valid.length - 1;
+  while (runStartIdx > 0 && dayOf(valid[runStartIdx].x) - dayOf(valid[runStartIdx - 1].x) <= RUN_GAP_DAYS) {
+    runStartIdx -= 1;
+  }
+  const runStart = valid[runStartIdx].x;
+  // Span for the projection gate is the CURRENT run's: nine months of history
+  // before a gap say nothing about this month's slope.
+  const spanDays = lastDay - dayOf(runStart);
 
   const goalOn = Boolean(goal && goal.enabled);
   const gStart = goalOn ? utcDateString(goal.startDate) : '';
   const gEnd = goalOn ? utcDateString(goal.goalDate) : '';
   const hasGoalLine = goalOn && gStart && gEnd && goal.startWeight && goal.targetWeight;
 
-  // With a goal the chart is the goal's window; without one, everything.
-  const inWindow = (p) => !hasGoalLine || (p.x >= gStart && p.x <= gEnd);
+  // With a goal the chart is the goal's window — widened back to the start of
+  // the current run when that is earlier; without one, everything.
+  const windowStart = hasGoalLine && runStart < gStart ? runStart : gStart;
+  const inWindow = (p) => !hasGoalLine || (p.x >= windowStart && p.x <= gEnd);
   const readings = valid.filter(inWindow);
   const trend = allTrend.filter(inWindow);
 

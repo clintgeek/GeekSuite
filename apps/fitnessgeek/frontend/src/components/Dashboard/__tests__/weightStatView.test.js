@@ -2,19 +2,24 @@ import { describe, it, expect } from 'vitest';
 import { weightStatView } from '../weightStatView.js';
 
 describe('weightStatView — the dashboard Weight card', () => {
-  it('prints a signed smoothed change with what it is measured against', () => {
-    expect(weightStatView({ totalChange: -4, reason: null })).toEqual({ value: '−4.0', unit: 'lb', caption: '7-day avg vs 30 days ago' });
-    expect(weightStatView({ totalChange: 1.25, reason: null }).value).toBe('+1.3');
+  it('the value is always the current 7-day average; the change rides in the caption', () => {
+    expect(weightStatView({ currentMean: 319.14, totalChange: -4, reason: null })).toEqual({
+      value: '319.1', unit: 'lb', caption: '7-day avg · −4.0 lb in 30 days',
+    });
+    expect(weightStatView({ currentMean: 300, totalChange: 1.25, reason: null }).caption).toBe('7-day avg · +1.3 lb in 30 days');
   });
 
-  it('says when the trend will exist instead of printing a number', () => {
-    const v = weightStatView({ totalChange: null, reason: 'insufficient_span', availableFrom: '2026-09-29' });
-    expect(v.value).toBe('--');
-    expect(v.caption).toBe('30-day trend from Sep 29');
+  it('with no honest change yet it still shows the weight — never "--" when a weight exists', () => {
+    // Chef on 2026-09-23: scale readings since 09-15, nothing for nine months
+    // before. The card said "--", which read as "no data".
+    const v = weightStatView({ currentMean: 319.1, totalChange: null, reason: 'no_baseline', availableFrom: '2026-10-15' });
+    expect(v).toEqual({ value: '319.1', unit: 'lb', caption: '7-day avg · 30-day change from Oct 15' });
+    expect(weightStatView({ currentMean: 250, totalChange: null, reason: 'insufficient_span', availableFrom: '2026-09-29' }).caption)
+      .toBe('7-day avg · 30-day change from Sep 29');
   });
 
-  it('says why there is no number when the log has a gap, or is empty', () => {
-    expect(weightStatView({ totalChange: null, reason: 'no_baseline' }).caption).toBe('No weigh-ins around 30 days ago');
-    expect(weightStatView({ totalChange: null, reason: 'no_data' }).caption).toBe('No weigh-ins yet');
+  it('"--" only when there is genuinely no weight', () => {
+    expect(weightStatView({ currentMean: null, totalChange: null, reason: 'no_data' })).toEqual({ value: '--', unit: '', caption: 'No weigh-ins yet' });
+    expect(weightStatView(null).value).toBe('--');
   });
 });

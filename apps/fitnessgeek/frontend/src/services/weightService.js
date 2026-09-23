@@ -119,7 +119,23 @@ export const weightService = {
     const target = latest.date.getTime() - periodDays * DAY_MS;
     const baseline = [...smoothed].reverse().find((p) => p.date.getTime() <= target);
     if (!baseline || target - baseline.date.getTime() >= windowDays * DAY_MS) {
-      return { success: true, data: { ...base, reason: 'no_baseline' } };
+      // No reading near the baseline date — typically a long gap in logging
+      // (Chef: nothing between Dec 2025 and Sep 2026). The change becomes
+      // honest `periodDays` after the current unbroken run began, where a run
+      // ends at any gap longer than `windowDays`.
+      let runStart = smoothed[smoothed.length - 1];
+      for (let i = smoothed.length - 1; i > 0; i -= 1) {
+        if (smoothed[i].date - smoothed[i - 1].date > windowDays * DAY_MS) break;
+        runStart = smoothed[i - 1];
+      }
+      return {
+        success: true,
+        data: {
+          ...base,
+          reason: 'no_baseline',
+          availableFrom: utcDateString(new Date(runStart.date.getTime() + periodDays * DAY_MS)),
+        },
+      };
     }
 
     return {

@@ -2,10 +2,10 @@ import React, { useMemo } from 'react';
 import { Box, Typography } from '@mui/material';
 import { useTheme, alpha } from '@mui/material/styles';
 import { ResponsiveLine } from '@nivo/line';
-import { displayCalendarDate } from '@geeksuite/utils';
+import { displayCalendarDate, utcDateString } from '@geeksuite/utils';
 import { readableOn } from '@geeksuite/ui';
 import { Surface, SectionLabel, DisplayHeading, buildChartTheme } from '../primitives';
-import { buildWeightTrend } from './weightTrend.js';
+import { buildWeightTrend, splitAtGaps } from './weightTrend.js';
 
 // Series ids double as legend labels and tooltip names.
 export const SERIES = Object.freeze({
@@ -220,7 +220,21 @@ const WeightTimeline = ({ weightLogs = [], goal = null, unit = 'lbs' }) => {
                 if (id === SERIES.readings) return null;
                 const d = lineGenerator(data.map((p) => p.position));
                 if (id === SERIES.trend) {
-                  return <path key={id} d={d} fill="none" stroke={color} strokeWidth={2.5} />;
+                  // One path per unbroken stretch: months without weigh-ins
+                  // are a gap in the line, not a smooth invented history.
+                  return (
+                    <g key={id} data-testid="weight-trend-line">
+                      {splitAtGaps(data, (p) => (p?.data?.x != null ? utcDateString(p.data.x) : null)).map((stretch, i) => (
+                        <path
+                          key={`${id}-${i}`}
+                          d={lineGenerator(stretch.map((p) => p.position))}
+                          fill="none"
+                          stroke={color}
+                          strokeWidth={2.5}
+                        />
+                      ))}
+                    </g>
+                  );
                 }
                 return (
                   <path

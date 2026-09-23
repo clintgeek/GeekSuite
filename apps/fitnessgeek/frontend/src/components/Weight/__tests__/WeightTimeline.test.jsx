@@ -132,6 +132,19 @@ describe('WeightTimeline — the line is the average, not the readings', () => {
       series: [series('Readings', 3), series('7-day average', 3), series('Goal', 2)],
     }).filter(Boolean);
     expect(out.map((el) => el.key)).toEqual(['7-day average', 'Goal']);
-    expect(out.every((el) => el.type === 'path')).toBe(true);
+    // The average is a group of stretches; everything else a single path.
+    const [avg, goal] = out;
+    expect(avg.type).toBe('g');
+    expect(goal.type).toBe('path');
+  });
+
+  it('breaks the average line across a long gap instead of joining it', () => {
+    render(<WeightTimeline weightLogs={weightLogs} />);
+    const lineLayer = capturedProps.layers.filter((l) => typeof l === 'function')[0];
+    const pt = (x) => ({ data: { x }, position: { x: 0, y: 0 } });
+    const trend = { id: '7-day average', color: '#000', data: [pt('2025-11-24'), pt('2025-12-03'), pt('2026-09-15'), pt('2026-09-16')] };
+    const [avg] = lineLayer({ lineGenerator: (pts) => `M${pts.length}`, series: [trend] }).filter(Boolean);
+    const paths = [].concat(avg.props.children);
+    expect(paths.map((p) => p.props.d)).toEqual(['M2', 'M2']);
   });
 });

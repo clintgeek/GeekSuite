@@ -80,14 +80,15 @@ describe('DashboardNew — body data', () => {
     expect(screen.queryByTestId('macro-note-protein')).toBeNull();
   });
 
-  it('shows the smoothed weight change with its basis', async () => {
-    setup();
-    expect(await screen.findByText('−2.4')).toBeInTheDocument();
-    expect(screen.getByText('7-day avg vs 30 days ago')).toBeInTheDocument();
+  it('shows the current 7-day average, with the smoothed change underneath', async () => {
+    setup({ weight: { totalChange: -2.4, currentMean: 318.2, reason: null } });
+    expect(await screen.findByText('318.2')).toBeInTheDocument();
+    expect(screen.getByText('7-day avg · −2.4 lb in 30 days')).toBeInTheDocument();
   });
 
-  it('says when the weight trend will exist instead of printing a number', async () => {
-    setup({ weight: { totalChange: null, reason: 'insufficient_span', availableFrom: '2026-10-05', latestWeight: 318 } });
-    expect(await screen.findByText('30-day trend from Oct 5')).toBeInTheDocument();
+  it('still shows the weight when the change is not available yet, and says when it will be', async () => {
+    setup({ weight: { totalChange: null, currentMean: 319.1, reason: 'no_baseline', availableFrom: '2026-10-15', latestWeight: 318.6 } });
+    expect(await screen.findByText('319.1')).toBeInTheDocument();
+    expect(screen.getByText('7-day avg · 30-day change from Oct 15')).toBeInTheDocument();
   });
 });
