@@ -15,6 +15,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, waitFor } from '@testing-library/react';
 import { BMR_CALC_VERSION, mifflinStJeorBMR } from '@geeksuite/utils';
 
+vi.mock('../../../services/influxService.js', () => ({ influxService: { getTrends: vi.fn(async () => ({ available: false, days: [], activeKcal30: null })) } }));
 vi.mock('../../../services/settingsService.js', () => ({
   settingsService: { getSettings: vi.fn(), updateSettings: vi.fn() },
 }));

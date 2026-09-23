@@ -23,7 +23,9 @@ import {
 import ModeSelector from './ModeSelector';
 import KetoPlanStep from './KetoPlanStep';
 import { BmrSourceNote, PlanComparison, ProteinBasisNote, previewMacros } from './planProvenance.jsx';
-import { minSafeCalories, computeWeeklySchedule, planTarget, weekenderHasRoom, weekenderSuggestion } from './planMath.js';
+import { minSafeCalories, computeWeeklySchedule, planTarget, weekenderHasRoom, weekenderSuggestion, MEASURED_ACTIVITY, usableMeasuredActivity, tdeeFor } from './planMath.js';
+import { influxService } from '../../services/influxService.js';
+import { localDateString } from '@geeksuite/utils';
 
 const CalorieGoalWizard = () => {
   const { user } = useAuth();
@@ -75,6 +77,9 @@ const CalorieGoalWizard = () => {
   // failed fetch — means Mifflin-St Jeor, and the card says so.
   const [scanBmr, setScanBmr] = useState(null);
   const [scanLoadFailed, setScanLoadFailed] = useState(false);
+  // Garmin's measured active kcal (30-day mean) — offered in place of a
+  // guessed activity multiplier when enough days exist (planMath.js).
+  const [measuredActivity, setMeasuredActivity] = useState(null);
   const usableLeanMassLb = scanBmr?.source === 'scan' && Number(scanBmr?.lean_mass_lb) > 0
     ? Number(scanBmr.lean_mass_lb)
     : null;
@@ -174,6 +179,7 @@ const CalorieGoalWizard = () => {
         userService.getProfile(),
         userService.getLatestWeight(),
         loadScanBmr(),
+        loadMeasuredActivity(),
       ]);
 
       setProfile({
@@ -188,6 +194,17 @@ const CalorieGoalWizard = () => {
       console.error('Failed to load user profile:', error);
     } finally {
       setIsLoadingProfile(false);
+    }
+  };
+
+  // Not fatal and not announced: without Garmin/Influx the option simply
+  // isn't offered (a user without the integration gets a 403 here).
+  const loadMeasuredActivity = async () => {
+    try {
+      const trends = await influxService.getTrends({ days: 30, end: localDateString() });
+      setMeasuredActivity(usableMeasuredActivity(trends?.activeKcal30));
+    } catch {
+      setMeasuredActivity(null);
     }
   };
 
@@ -278,7 +295,7 @@ const CalorieGoalWizard = () => {
   // drift. An unrecognised activity level now falls back to `sedentary` (the
   // smallest factor) rather than producing `NaN`, which is what
   // `bmr * undefined` did here before.
-  const calculateTDEE = (bmr) => tdeeFromBMR(bmr, profile.activityLevel);
+  const calculateTDEE = (bmr) => tdeeFor({ bmr, activityLevel: profile.activityLevel, measured: measuredActivity, tdeeFromBMR });
 
   // Floor, schedule and the delivered rate live in planMath.js (pure, tested).
   const getMinSafeCalories = (bmr) => minSafeCalories(bmr);
@@ -349,6 +366,8 @@ const CalorieGoalWizard = () => {
         age: parseFloat(profile.age),
         gender: profile.gender,
         activity_level: profile.activityLevel,
+        // The measured activity this TDEE was built on, when it was.
+        ...(profile.activityLevel === MEASURED_ACTIVITY && measuredActivity ? { active_kcal: measuredActivity.mean } : {}),
       },
       dailyCalories,
       weeklyDeficit,
@@ -554,8 +573,11 @@ const CalorieGoalWizard = () => {
                 </Select>
               </FormControl>
               <FormControl size="small">
-                <InputLabel>Activity Level</InputLabel>
+                {/* labelId links the label to the select: without it the
+                    control had no accessible name at all. */}
+                <InputLabel id="wizard-activity-level-label">Activity Level</InputLabel>
                 <Select
+                  labelId="wizard-activity-level-label"
                   value={profile.activityLevel}
                   onChange={(e) => setProfile(prev => ({ ...prev, activityLevel: e.target.value }))}
                   label="Activity Level"
@@ -565,8 +587,21 @@ const CalorieGoalWizard = () => {
                   <MenuItem value="moderate">Moderately Active (moderate exercise 3-5 days/week)</MenuItem>
                   <MenuItem value="very">Very Active (hard exercise 6-7 days/week)</MenuItem>
                   <MenuItem value="extra">Extra Active (very hard exercise, physical job)</MenuItem>
+                  {measuredActivity && (
+                    <MenuItem value={MEASURED_ACTIVITY}>
+                      {`Measured by Garmin (+${measuredActivity.mean.toLocaleString('en-US')} kcal/day, last ${measuredActivity.days} days)`}
+                    </MenuItem>
+                  )}
+                  {!measuredActivity && profile.activityLevel === MEASURED_ACTIVITY && (
+                    <MenuItem value={MEASURED_ACTIVITY} disabled>Measured by Garmin (no recent data — pick a level)</MenuItem>
+                  )}
                 </Select>
               </FormControl>
+              {profile.activityLevel === MEASURED_ACTIVITY && measuredActivity && (
+                <Typography variant="caption" data-testid="measured-activity-note" sx={{ color: 'text.secondary', gridColumn: '1 / -1' }}>
+                  Your BMR plus the activity your watch measured. It leaves out digestion (about 10% of what you eat), so it errs low — the safe direction for losing weight.
+                </Typography>
+              )}
             </Box>
           )}
 
@@ -937,7 +972,9 @@ const CalorieGoalWizard = () => {
                   <Typography variant="body2" sx={{ color: 'text.secondary' }}>Total Daily Energy Expenditure (TDEE)</Typography>
                   <Typography variant="h6">{plan.tdee} calories/day</Typography>
                   <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                    Calories you burn with activity level: {plan.activityLevel}
+                    {plan.activityLevel === MEASURED_ACTIVITY
+                      ? 'Your BMR plus the activity your watch measured (30-day average)'
+                      : `Calories you burn with activity level: ${plan.activityLevel}`}
                   </Typography>
                 </Box>
               </CardContent>

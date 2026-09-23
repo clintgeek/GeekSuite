@@ -258,7 +258,10 @@ function userSettingsDefinition(mongoose) {
         height_in: { type: Number },
         age: { type: Number },
         gender: { type: String },
-        activity_level: { type: String }
+        activity_level: { type: String },
+        // Garmin's 30-day mean active kcal, when activity_level is 'measured'
+        // (TDEE = BMR + this; TRENDS_PLAN D4).
+        active_kcal: { type: Number }
       },
       timeline_weeks: { type: Number },
       estimated_end_date: { type: Date },

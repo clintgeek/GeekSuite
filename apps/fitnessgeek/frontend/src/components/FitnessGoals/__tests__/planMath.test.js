@@ -3,7 +3,9 @@
 import { describe, it, expect } from 'vitest';
 import {
   computeWeeklySchedule, planTarget, weekenderHasRoom, weekenderSuggestion, minSafeCalories,
+  usableMeasuredActivity, tdeeFor, MEASURED_ACTIVITY,
 } from '../planMath.js';
+import { tdeeFromBMR } from '@geeksuite/utils';
 
 const TDEE = 2537;
 const FLOOR = minSafeCalories(2114);
@@ -54,3 +56,20 @@ describe('Weekender room', () => {
     expect(weekenderSuggestion({ tdee: 1500, minSafe: 1500, currentRate: 2 })).toBeNull();
   });
 });
+
+describe('measured activity (TRENDS_PLAN D4)', () => {
+  it('needs at least 14 days of Garmin data in the 30', () => {
+    expect(usableMeasuredActivity({ mean: 480.4, days: 14 })).toEqual({ mean: 480, days: 14 });
+    expect(usableMeasuredActivity({ mean: 480, days: 13 })).toBeNull();
+    expect(usableMeasuredActivity(null)).toBeNull();
+    expect(usableMeasuredActivity({ mean: -5, days: 30 })).toBeNull();
+  });
+  it('TDEE is BMR + the measured mean, not a multiplier', () => {
+    expect(tdeeFor({ bmr: 2000, activityLevel: MEASURED_ACTIVITY, measured: { mean: 480, days: 30 }, tdeeFromBMR })).toBe(2480);
+  });
+  it('without usable data a "measured" level falls back to the table (sedentary), never inflates', () => {
+    expect(tdeeFor({ bmr: 2000, activityLevel: MEASURED_ACTIVITY, measured: null, tdeeFromBMR })).toBe(tdeeFromBMR(2000, 'sedentary'));
+    expect(tdeeFor({ bmr: 2000, activityLevel: 'moderate', measured: { mean: 480, days: 30 }, tdeeFromBMR })).toBe(tdeeFromBMR(2000, 'moderate'));
+  });
+});
+

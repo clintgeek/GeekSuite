@@ -9,6 +9,7 @@ import {
   BMR_CALC_VERSION, katchMcArdleBMR, mifflinStJeorBMR, tdeeFromBMR,
 } from '@geeksuite/utils';
 
+vi.mock('../../../services/influxService.js', () => ({ influxService: { getTrends: vi.fn(async () => ({ available: false, days: [], activeKcal30: null })) } }));
 vi.mock('../../../services/settingsService.js', () => ({
   settingsService: { getSettings: vi.fn(), updateSettings: vi.fn(() => Promise.resolve({})) },
 }));
@@ -27,6 +28,7 @@ vi.mock('@geeksuite/ui', async (importOriginal) => ({
 const { settingsService } = await import('../../../services/settingsService.js');
 const { userService } = await import('../../../services/userService.js');
 const { bodyCompService } = await import('../../../services/bodyCompService.js');
+const { influxService } = await import('../../../services/influxService.js');
 const { default: CalorieGoalWizard } = await import('../AIGoalPlanner.jsx');
 
 // Chef's saved plan as found 2026-09-22 (FITNESSGEEK_BODY_DATA_PLAN F1).
@@ -220,6 +222,45 @@ describe('CalorieGoalWizard — a plan pinned at the safety floor (2026-09-23)',
     await screen.findByText('Your Personalized Calorie Plan');
     expect(screen.queryByTestId('plan-floor-note')).toBeNull();
     expect(screen.queryByTestId('plan-weekender-note')).toBeNull();
+  });
+});
+
+describe('CalorieGoalWizard — measured activity (TRENDS_PLAN D4)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('offers Garmin\'s measured activity, builds TDEE as BMR + that mean, and saves it', async () => {
+    influxService.getTrends.mockResolvedValue({ available: true, days: [], activeKcal30: { mean: 480, days: 28 } });
+    setup();
+    fireEvent.click(await screen.findByRole('button', { name: /Continue/i }));
+    await screen.findByLabelText(/^Age$/i);
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: /Activity Level/i }));
+    fireEvent.click(await screen.findByRole('option', { name: /Measured by Garmin \(\+480 kcal\/day, last 28 days\)/ }));
+    expect(screen.getByTestId('measured-activity-note')).toHaveTextContent(/errs low/);
+    const next = screen.getByRole('button', { name: /Next: Set Goal/i });
+    await waitFor(() => expect(next).not.toBeDisabled());
+    fireEvent.click(next);
+    await screen.findByText('Set Your Weight Goal');
+    fireEvent.change(screen.getByLabelText(/Target Weight/i), { target: { value: '250' } });
+    fireEvent.click(screen.getByRole('button', { name: /Calculate My Plan/i }));
+    await screen.findByText('Your Personalized Calorie Plan');
+
+    const bmr = katchMcArdleBMR({ leanMassLb: 177 });
+    expect(screen.getByText(`${bmr + 480} calories/day`)).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /Start Tracking/i }));
+    await waitFor(() => expect(settingsService.updateSettings).toHaveBeenCalled());
+    const ng = settingsService.updateSettings.mock.calls.at(-1)[0].nutrition_goal;
+    expect(ng.tdee).toBe(bmr + 480);
+    expect(ng.calc_inputs).toMatchObject({ activity_level: 'measured', active_kcal: 480 });
+  });
+
+  it('not offered with too few days of Garmin data', async () => {
+    influxService.getTrends.mockResolvedValue({ available: true, days: [], activeKcal30: { mean: 480, days: 9 } });
+    setup();
+    fireEvent.click(await screen.findByRole('button', { name: /Continue/i }));
+    await screen.findByLabelText(/^Age$/i);
+    fireEvent.mouseDown(screen.getByRole('combobox', { name: /Activity Level/i }));
+    await screen.findByRole('option', { name: /Sedentary/ });
+    expect(screen.queryByRole('option', { name: /Measured by Garmin/ })).toBeNull();
   });
 });
 

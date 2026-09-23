@@ -93,3 +93,37 @@ export function weekenderSuggestion({ tdee, minSafe, currentRate }) {
   }
   return null;
 }
+
+/**
+ * Measured activity (TRENDS_PLAN D4, Chef agreed 2026-09-23).
+ *
+ * Instead of a guessed activity multiplier, TDEE = BMR + the mean of Garmin's
+ * active kcal over the last 30 days. NOT Garmin's own total burn: that is
+ * built on Garmin's weight-only BMR, the same kind of estimate a body scan
+ * corrects, and would inflate the target. It errs LOW — Garmin's active kcal
+ * leaves out digestion (roughly 10% of intake) — which is the safe direction
+ * for a weight-loss target.
+ */
+export const MEASURED_ACTIVITY = 'measured';
+/** Days with Garmin data (of the last 30) before the measured option is offered. */
+export const MIN_MEASURED_DAYS = 14;
+
+/** A usable measured-activity mean from getTrends().activeKcal30, or null. */
+export function usableMeasuredActivity(activeKcal30) {
+  const mean = Number(activeKcal30?.mean);
+  const days = Number(activeKcal30?.days);
+  if (!Number.isFinite(mean) || mean < 0 || !Number.isFinite(days) || days < MIN_MEASURED_DAYS) return null;
+  return { mean: Math.round(mean), days };
+}
+
+/**
+ * TDEE for a plan: BMR + measured activity when that is the chosen level and
+ * a usable mean exists; otherwise the multiplier table (`tdeeFromBMR`), whose
+ * unknown-key fallback is sedentary — the smallest, never an inflation.
+ */
+export function tdeeFor({ bmr, activityLevel, measured, tdeeFromBMR }) {
+  if (activityLevel === MEASURED_ACTIVITY && measured && Number(bmr) > 0) {
+    return Math.round(Number(bmr) + measured.mean);
+  }
+  return tdeeFromBMR(bmr, activityLevel);
+}

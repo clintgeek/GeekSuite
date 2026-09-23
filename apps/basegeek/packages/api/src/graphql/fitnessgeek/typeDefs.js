@@ -102,6 +102,8 @@ export const typeDefs = gql`
     age: Float
     gender: String
     activity_level: String
+    # Garmin's 30-day mean active kcal when activity_level is 'measured'.
+    active_kcal: Float
   }
 
   type WeightGoalSettings {
