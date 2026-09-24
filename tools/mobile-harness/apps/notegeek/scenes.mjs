@@ -12,6 +12,25 @@ export const scenes = [
   // Back + Save + Delete (a new note has no Delete). Toolbar + sticky bar.
   { name: '03-editor', goto: '/notes/n1/edit', wait: 1200 },
   {
+    // The navigation drawer with the tag tree. It takes the rest of the
+    // sidebar's height; the LAST tag must be reachable by scrolling.
+    name: '03t-tag-drawer',
+    goto: '/notes',
+    wait: 1200,
+    viewports: ['phone'],
+    async setup(page, h) {
+      const menu = page.getByRole('button', { name: /open (navigation|menu)|menu/i }).first();
+      if (!(await menu.count())) throw new Error('no navigation menu button');
+      await menu.click();
+      await h.settle(500);
+      const last = page.getByRole('link', { name: /zettel/i }).first();
+      if (!(await last.count())) throw new Error('last tag "zettel" not rendered in the drawer');
+      await last.scrollIntoViewIfNeeded();
+      await h.settle(300);
+    },
+    teardown: (page, h) => h.esc(400),
+  },
+  {
     // Delete confirm — GeekDialog mode="window".
     name: '04-delete-dialog',
     goto: '/notes/n1/edit',

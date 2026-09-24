@@ -33,7 +33,12 @@ export const NOTES = [
   note('n6', 'snippet.js', 'code', ['dev'], 'export const x = 1;'),
 ];
 
-export const TAGS = ['work', 'planning', 'recipes', 'product', 'meta', 'dev'];
+// Enough tags (with a nested path) that the sidebar's tree must scroll — the
+// last ones sat hidden below a 40vh cap until 2026-09-24.
+export const TAGS = [
+  'dev', 'dev/frontend', 'dev/infra', 'finance', 'garden', 'health', 'meta', 'planning',
+  'product', 'reading', 'recipes', 'travel', 'work', 'work/meetings', 'writing', 'zettel',
+];
 
 // Tag & link suggestions (DOCS/AI_IDEAS.md #3, Night 2 R116). Opt-in —
 // `appPreferences.notegeek.suggestOnSave` — so no existing scene renders the

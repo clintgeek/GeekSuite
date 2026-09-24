@@ -12,6 +12,16 @@ anything a future reader would otherwise have to rediscover.
 
 ## 2026-09-24
 
+### NoteGeek — the tag tree gets the rest of the sidebar, so new tags are visible
+
+Chef: "the tags on the left panel of notegeek aren't showing new tags like xformative."
+The data and cache were fine (`noteTags` returned it; the sidebar refetched after the
+save). The tree was capped at 40vh behind a 4px, 15%-opacity scrollbar, and `xformative`
+sorts last — below the fold of a box that looked finished. Now `extrasGrow` gives the tree
+the remaining height, the scrollbar is visible and the filter stays pinned. The first
+harness scene ever to open the drawer caught an axe `list` violation (a bare
+ListItemButton `<a>` inside the `<ul>`), fixed.
+
 ### aiGeek — a need falls to the next qualifying model instead of failing (NoteGeek Compose)
 
 Chef: "notegeek keeps kicking back 'compose unavailable right now'." Not aiGeek down: every

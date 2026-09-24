@@ -2,6 +2,7 @@ import React, { useState, useCallback } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
     List,
+    ListItem,
     ListItemButton,
     ListItemIcon,
     ListItemText,
@@ -317,32 +318,14 @@ function Sidebar() {
         <Box sx={{ borderTop: `1px solid ${theme.palette.divider}` }}>
             <SectionLabel>Collections</SectionLabel>
 
-            <Box
-                sx={{
-                    maxHeight: 'clamp(160px, 40vh, 420px)',
-                    overflowY: 'auto',
-                    pb: 1.5,
-                    scrollbarWidth: 'thin',
-                    scrollbarColor: isDark
-                        ? 'rgba(237, 230, 214, 0.15) transparent'
-                        : 'rgba(31, 28, 22, 0.15) transparent',
-                    '&::-webkit-scrollbar': { width: 4 },
-                    '&::-webkit-scrollbar-track': { backgroundColor: 'transparent' },
-                    '&::-webkit-scrollbar-thumb': {
-                        backgroundColor: isDark
-                            ? 'rgba(237, 230, 214, 0.15)'
-                            : 'rgba(31, 28, 22, 0.15)',
-                        borderRadius: 2,
-                        '&:hover': {
-                            backgroundColor: isDark
-                                ? 'rgba(237, 230, 214, 0.25)'
-                                : 'rgba(31, 28, 22, 0.25)',
-                        },
-                    },
-                }}
-            >
-                {/* Tag filter input */}
-                <Box sx={{ px: 1.25, pt: 0.25, pb: 0.75 }}>
+            {/* The tag tree takes the rest of the sidebar's height (extrasGrow
+                below) and scrolls in GeekSidebar's extras body. It used to be
+                capped at 40vh with a 4px, 15%-opacity scrollbar, so the last
+                tags sat below the fold of a box that looked finished — Chef,
+                2026-09-24: "new tags like xformative" weren't showing. */}
+            <Box sx={{ pb: 1.5 }}>
+                {/* Tag filter input — stays put while the tree scrolls under it. */}
+                <Box sx={{ px: 1.25, pt: 0.25, pb: 0.75, position: 'sticky', top: 0, zIndex: 1, backgroundColor: 'background.paper' }}>
                     <TextField
                         size="small"
                         fullWidth
@@ -390,7 +373,11 @@ function Sidebar() {
                 </Box>
 
                 {/* All Notes */}
+                {/* The row is an <li> that CONTAINS the link — a bare
+                    ListItemButton put an <a> straight into the <ul> (axe
+                    `list`), unseen until a scene first opened the drawer. */}
                 <List sx={{ pt: 0, px: 0.75 }}>
+                    <ListItem disablePadding>
                     <ListItemButton
                         component={Link}
                         to="/notes"
@@ -414,6 +401,7 @@ function Sidebar() {
                             }}
                         />
                     </ListItemButton>
+                    </ListItem>
                 </List>
 
                 {/* Tag tree */}
@@ -471,6 +459,19 @@ function Sidebar() {
                 sections={[{ items: [NEW_NOTE_ITEM, ...navSections[0].items] }]}
                 activeId={activeId}
                 extras={collectionsExtras}
+                extrasGrow
+                extrasSx={{
+                    scrollbarWidth: 'thin',
+                    scrollbarColor: isDark
+                        ? 'rgba(237, 230, 214, 0.35) transparent'
+                        : 'rgba(31, 28, 22, 0.3) transparent',
+                    '&::-webkit-scrollbar': { width: 6 },
+                    '&::-webkit-scrollbar-track': { backgroundColor: 'transparent' },
+                    '&::-webkit-scrollbar-thumb': {
+                        backgroundColor: isDark ? 'rgba(237, 230, 214, 0.35)' : 'rgba(31, 28, 22, 0.3)',
+                        borderRadius: 3,
+                    },
+                }}
                 itemSx={{
                     color: 'text.secondary',
                     '& .MuiListItemText-primary': { fontSize: '0.8125rem' },
