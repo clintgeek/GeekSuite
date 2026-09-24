@@ -697,5 +697,14 @@ different provider as `planFreeTierAttempts` does). The runner tries them in ord
 time spent is under one `timeoutMs`: a fast provider failure falls to the next row that
 **also meets the need**; a slow one (a timeout) ends it, so a caller never waits a multiple
 of its timeout. `provenance.need.fellBackFrom` names the rows that failed. An explicit pin is
-never second-guessed. Still no new cooldown tier: repeated soft failures cost one fast failed
-attempt per call, not the feature.
+never second-guessed.
+
+**Same day, second failure mode:** the Nvidia row then stopped failing fast and started
+*hanging* until Compose's 25 s timeout — and a timeout deliberately ends the fallback, so
+every compose still failed. So `aiService` now keeps a few minutes of in-process memory
+(`recentNeedFailures`, `NEED_FAILURE_DEMOTE_MS` = 10 min): a row that fails a need call, fast
+or by timeout, goes to the back of that need's list (demoted, not dropped), and the runner
+drops its cached resolution so the next call re-ranks at once. A success clears it. Worst
+case is one timed-out call per row per ten minutes instead of every call. The catalog's
+health is still untouched — this is not a cooldown tier, it is the resolver not repeating
+itself.

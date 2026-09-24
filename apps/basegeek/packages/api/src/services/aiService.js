@@ -182,8 +182,18 @@ export function normalizeMessages(messages) {
 
 // Cloud-based summarization using existing free AI providers
 
+/** How long a row that failed a need call stays at the back of that need's list (§7.10). */
+export const NEED_FAILURE_DEMOTE_MS = 10 * 60 * 1000;
+
 class AIService {
   constructor() {
+    // Rows that failed a NEED call softly (a 5xx relay, a capacity error, a
+    // timeout) in the last few minutes: `${provider}/${modelId}` -> ms. Soft
+    // failures deliberately cool nothing in the catalog (§7.8), so without
+    // this the need resolver kept ranking an overloaded row first and every
+    // call paid its timeout (§7.10). In-process on purpose: it is a few
+    // minutes of memory, not a health fact.
+    this.recentNeedFailures = new Map();
     // Smart context management - using cloud-based summarization
     this.summarizer = null; // Not used (cloud-based)
     this.summarizationEnabled = true; // Re-enabled with cloud approach
@@ -1389,7 +1399,25 @@ class AIService {
   async resolveNeedCandidates(need, { limit = 3, now = Date.now() } = {}) {
     if (!parseNeed(need)) return [];
     const { live } = await this.selectFreeTierCandidates(now);
-    return this.planFreeTierAttempts(rankNeed(live, need, { now, allowPaid: false }), limit);
+    const ranked = rankNeed(live, need, { now, allowPaid: false });
+    // A row that failed a need call recently goes to the back, order kept —
+    // demoted, not dropped: if nothing else qualifies it is still tried.
+    const failedRecently = (p) => {
+      const at = this.recentNeedFailures.get(`${p.provider}/${p.modelId}`);
+      return at != null && now - at < NEED_FAILURE_DEMOTE_MS;
+    };
+    const ordered = [...ranked.filter((p) => !failedRecently(p)), ...ranked.filter(failedRecently)];
+    return this.planFreeTierAttempts(ordered, limit);
+  }
+
+  /** A need call to this row failed (any failure, soft ones included). */
+  noteNeedFailure(provider, modelId, now = Date.now()) {
+    if (provider && modelId) this.recentNeedFailures.set(`${provider}/${modelId}`, now);
+  }
+
+  /** A need call to this row succeeded — it is not demoted any more. */
+  noteNeedSuccess(provider, modelId) {
+    if (provider && modelId) this.recentNeedFailures.delete(`${provider}/${modelId}`);
   }
 
   /**

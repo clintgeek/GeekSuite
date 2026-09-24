@@ -436,6 +436,7 @@ export async function runFeatureCore(opts) {
     const attemptPin = attemptPins[i];
     try {
       content = await callOnce(attemptPin);
+      if (needPin && attemptPin) ai.noteNeedSuccess?.(attemptPin.provider, attemptPin.model);
       if (i > 0 && needInfo) {
         needInfo = {
           ...needInfo,
@@ -447,7 +448,17 @@ export async function runFeatureCore(opts) {
       break;
     } catch (err) {
       failedPicks.push(attemptPin ? `${attemptPin.provider}/${attemptPin.model}` : 'auto');
-      const outOfTime = Date.now() - startedAt >= timeoutMs;
+      if (needPin && attemptPin) {
+        // Demote the row for this need for a while, and drop the cached
+        // resolution so the NEXT call re-ranks now rather than in a minute:
+        // a row timing out is not a blip the next nine calls should repeat.
+        ai.noteNeedFailure?.(attemptPin.provider, attemptPin.model);
+        needCache.delete(need);
+      }
+      // A timeout ends it outright (withTimeout's own error), and so does
+      // having already spent a timeout's worth on fast failures.
+      const timedOut = /timed out after/.test(String(err?.message || ''));
+      const outOfTime = timedOut || Date.now() - startedAt >= timeoutMs;
       if (i === attemptPins.length - 1 || outOfTime) {
         logger.warn({ app, feature, err: err?.message, tried: failedPicks }, '[aiFeature] model call failed');
         return refuse('unavailable', { callsToday: used + 1, cap: maxCallsPerDay });

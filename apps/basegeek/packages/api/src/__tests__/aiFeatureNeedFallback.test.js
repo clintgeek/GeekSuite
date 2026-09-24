@@ -14,6 +14,8 @@ const PICKS = [
 function fakeAI(callImpl, picks = PICKS) {
   const ai = {
     resolveNeedCandidates: jest.fn(async () => picks),
+    noteNeedFailure: jest.fn(),
+    noteNeedSuccess: jest.fn(),
     callAI: jest.fn(async (prompt, cfg) => {
       const content = await callImpl(cfg);
       ai.lastProviderInfo = { provider: cfg.provider, model: cfg.model };
@@ -87,3 +89,27 @@ describe('rankNeed', () => {
     expect(resolveNeed(rows, 'prose:deep', { now })?.modelId).toBe(ranked[0].modelId);
   });
 });
+
+describe('a row that fails is remembered (§7.10)', () => {
+  test('a timeout notes the failure and drops the cached resolution, so the next call re-ranks', async () => {
+    let calls = 0;
+    const ai = fakeAI(async (cfg) => {
+      calls += 1;
+      if (calls === 1) return new Promise(() => {}); // the slow row times out
+      return 'ok';
+    });
+    const first = await run(ai, { timeoutMs: 50 });
+    expect(first.data).toBe('FALLBACK');
+    expect(ai.noteNeedFailure).toHaveBeenCalledWith('openrouter', 'vendor/big-model:free');
+    // Without the cache drop the second call would reuse the cached list for a minute.
+    await run(ai, { timeoutMs: 50 });
+    expect(ai.resolveNeedCandidates).toHaveBeenCalledTimes(2);
+  });
+
+  test('a success clears the row', async () => {
+    const ai = fakeAI(async () => 'fine');
+    await run(ai);
+    expect(ai.noteNeedSuccess).toHaveBeenCalledWith('openrouter', 'vendor/big-model:free');
+  });
+});
+

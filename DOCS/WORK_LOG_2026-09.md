@@ -20,6 +20,10 @@ is soft by design (§7.8 of `DOCS/AIGEEK_CAPABILITY_ROUTING.md` — a blip must 
 for hours), but a resolved need was a PIN, and a pin is one attempt, so nothing ever moved.
 A need now resolves to up to three ranked rows (different provider preferred for the retry)
 and the runner falls through while inside one timeout. §7.10 records it.
+- Chef, after deploy: "Still not working." The same row then HUNG until the 25 s
+  timeout instead of failing fast — and a timeout ends the fallback by design. Now a row
+  that fails a need call (either way) is demoted for 10 minutes and the cached pick is
+  dropped, so the next call leads with the next qualifying row.
 
 ---
 
