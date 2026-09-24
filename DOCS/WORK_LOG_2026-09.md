@@ -34,6 +34,10 @@ and the runner falls through while inside one timeout. §7.10 records it.
   timeout instead of failing fast — and a timeout ends the fallback by design. Now a row
   that fails a need call (either way) is demoted for 10 minutes and the cached pick is
   dropped, so the next call leads with the next qualifying row.
+- Chef, later: "It worked a couple of times and now failed again." The demotion had
+  expired between composes. Root cause: three candidates tied at quality 1.0 and the tie
+  went to the slow reasoning model. Ties now go to proven rows, then the faster; demotion
+  escalates to 6 h. Live order is now gemma4:31b (0.5 s) → gemini flash-lite → the slow row.
 
 ---
 

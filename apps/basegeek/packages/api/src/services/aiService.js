@@ -182,8 +182,16 @@ export function normalizeMessages(messages) {
 
 // Cloud-based summarization using existing free AI providers
 
-/** How long a row that failed a need call stays at the back of that need's list (§7.10). */
+/** How long a row that failed a need call stays at the back of that need's list (§7.10)… */
 export const NEED_FAILURE_DEMOTE_MS = 10 * 60 * 1000;
+/** …doubling with each further failure without a success in between, up to this. */
+export const NEED_FAILURE_DEMOTE_MAX_MS = 6 * 60 * 60 * 1000;
+
+/** The demotion window after `failures` consecutive need failures. */
+export const needDemoteMs = (failures) => Math.min(
+  NEED_FAILURE_DEMOTE_MAX_MS,
+  NEED_FAILURE_DEMOTE_MS * 2 ** Math.max(0, (failures || 1) - 1),
+);
 
 class AIService {
   constructor() {
@@ -1403,8 +1411,8 @@ class AIService {
     // A row that failed a need call recently goes to the back, order kept —
     // demoted, not dropped: if nothing else qualifies it is still tried.
     const failedRecently = (p) => {
-      const at = this.recentNeedFailures.get(`${p.provider}/${p.modelId}`);
-      return at != null && now - at < NEED_FAILURE_DEMOTE_MS;
+      const f = this.recentNeedFailures.get(`${p.provider}/${p.modelId}`);
+      return f != null && now - f.at < needDemoteMs(f.count);
     };
     const ordered = [...ranked.filter((p) => !failedRecently(p)), ...ranked.filter(failedRecently)];
     return this.planFreeTierAttempts(ordered, limit);
@@ -1412,7 +1420,13 @@ class AIService {
 
   /** A need call to this row failed (any failure, soft ones included). */
   noteNeedFailure(provider, modelId, now = Date.now()) {
-    if (provider && modelId) this.recentNeedFailures.set(`${provider}/${modelId}`, now);
+    if (!provider || !modelId) return;
+    // Escalating: a row that keeps failing stays demoted longer (10, 20, 40
+    // min… up to 6 h), so a user composing every half hour doesn't rediscover
+    // it every time. A success resets it.
+    const key = `${provider}/${modelId}`;
+    const prev = this.recentNeedFailures.get(key);
+    this.recentNeedFailures.set(key, { at: now, count: (prev?.count || 0) + 1 });
   }
 
   /** A need call to this row succeeded — it is not demoted any more. */

@@ -4,7 +4,7 @@ import { describe, test, expect } from '@jest/globals';
 
 const mod = await import('../services/aiService.js');
 const aiService = mod.default;
-const { NEED_FAILURE_DEMOTE_MS } = mod;
+const { NEED_FAILURE_DEMOTE_MS, needDemoteMs, NEED_FAILURE_DEMOTE_MAX_MS } = mod;
 const proto = Object.getPrototypeOf(aiService);
 
 const row = (provider, modelId, score) => ({
@@ -51,3 +51,22 @@ describe('need demotion', () => {
     expect((await order(svc, now + 1000))[0]).toBe('best');
   });
 });
+
+describe('escalating demotion', () => {
+  test('each further failure doubles the window, capped', () => {
+    expect(needDemoteMs(1)).toBe(NEED_FAILURE_DEMOTE_MS);
+    expect(needDemoteMs(2)).toBe(2 * NEED_FAILURE_DEMOTE_MS);
+    expect(needDemoteMs(3)).toBe(4 * NEED_FAILURE_DEMOTE_MS);
+    expect(needDemoteMs(50)).toBe(NEED_FAILURE_DEMOTE_MAX_MS);
+  });
+
+  test('a row that failed twice is still demoted past the first window', async () => {
+    const svc = fake();
+    const now = Date.now();
+    svc.noteNeedFailure('openrouter', 'best', now - 1000);
+    svc.noteNeedFailure('openrouter', 'best', now);
+    // 15 minutes later: past one window (10), inside two (20).
+    expect((await order(svc, now + 15 * 60_000)).at(-1)).toBe('best');
+  });
+});
+

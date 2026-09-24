@@ -195,6 +195,9 @@ export const QUALITY_POINTS = 150;
 /** Where an unscored row sits: between measured-good and measured-bad. */
 export const QUALITY_UNMEASURED = 0.5;
 
+/** A row with a success this recent counts as proven for tie-breaking (rankNeed). */
+export const PROVEN_WINDOW_MS = 7 * 86400_000;
+
 /**
  * The score this need should rank on: the matching class(es) and the
  * overall, averaged.
@@ -380,7 +383,23 @@ export function rankNeed(rows, need, { now = Date.now(), allowPaid = false } = {
     const s = scoreRow(row, parsed, { now, allowPaid });
     if (s) scored.push({ row, scored: s });
   }
-  scored.sort((a, b) => (b.scored.score - a.scored.score) || (b.scored.lastSuccess - a.scored.lastSuccess));
+  // Best score first. On a TIE: a row PROVEN recently (a success in the last
+  // week) before one that isn't — recency is the evidence a row still works;
+  // then, among proven rows, the faster (measured p50); then the most recent
+  // success. `deep` deliberately keeps speed out of the score, and that is
+  // right when quality differs; when it doesn't, speed among working rows is a
+  // free tiebreak, not a trade. 2026-09-24: three prose rows, all proven that
+  // day, tied at quality 1.0, and the tie went to a slow reasoning model that
+  // overran Compose's timeout on real chunks while a 0.5 s row sat second.
+  const proven = (entry) => (now - entry.scored.lastSuccess) < PROVEN_WINDOW_MS;
+  const p50 = (row) => {
+    const v = Number(row.latency?.p50Ms);
+    return Number.isFinite(v) && v > 0 ? v : Infinity;
+  };
+  scored.sort((a, b) => (b.scored.score - a.scored.score)
+    || (Number(proven(b)) - Number(proven(a)))
+    || (proven(a) && proven(b) ? p50(a.row) - p50(b.row) : 0)
+    || (b.scored.lastSuccess - a.scored.lastSuccess));
   return scored.map(({ row }) => pickFor(row, parsed, now));
 }
 

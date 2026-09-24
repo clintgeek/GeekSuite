@@ -708,3 +708,14 @@ drops its cached resolution so the next call re-ranks at once. A success clears 
 case is one timed-out call per row per ten minutes instead of every call. The catalog's
 health is still untouched — this is not a cooldown tier, it is the resolver not repeating
 itself.
+
+**Same day, third look — why that row at all.** All three `prose:deep` candidates were tied
+at measured quality 1.0, and a `deep` tie fell to the most recent success — which happened to
+be the slow reasoning row (p50 ~3 s on probe prompts, 25 s+ on Compose's 12 000-character
+chunks), with a 0.5 s row second. Ten-minute demotion didn't help a user composing every
+half hour: each compose rediscovered the slow row. Two changes:
+- `rankNeed` breaks a quality tie by **proven first** (a success in the last
+  `PROVEN_WINDOW_MS`, 7 days), **then speed among proven rows**, then recency. Recency still
+  beats speed for a stale row (the existing "slow-but-recent vs quick-but-stale" test is
+  unchanged): speed only chooses among rows that are demonstrably working.
+- Demotion escalates — 10, 20, 40 min… capped at 6 h (`needDemoteMs`), reset by a success.

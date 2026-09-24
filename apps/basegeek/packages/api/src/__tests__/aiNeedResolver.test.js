@@ -13,7 +13,7 @@
 import { describe, it, expect } from '@jest/globals';
 
 const {
-  parseNeed, resolveNeed, scoreRow, exclusionFor, NEED_TASKS, NEED_WEIGHTS,
+  parseNeed, resolveNeed, rankNeed, scoreRow, exclusionFor, NEED_TASKS, NEED_WEIGHTS,
 } = await import('../services/aiNeedResolver.js');
 
 const NOW = Date.UTC(2026, 8, 15, 12, 0, 0);
@@ -199,6 +199,15 @@ describe('resolveNeed — structured is the axis with a measurement behind it', 
       row({ modelId: 'quick-but-stale', latency: { p50Ms: 800 }, health: { lastSuccessAt: ago(30 * 86400_000) } }),
     ];
     expect(resolveNeed(rows, 'reasoning:deep', { now: NOW }).modelId).toBe('slow-but-recent');
+  });
+
+  it('on a tie among rows proven this week, the faster wins (2026-09-24, Compose)', () => {
+    const rows = [
+      row({ modelId: 'slow-reasoning', latency: { p50Ms: 2982 }, health: { lastSuccessAt: ago(60_000) } }),
+      row({ modelId: 'quick-proven', latency: { p50Ms: 497 }, health: { lastSuccessAt: ago(3600_000) } }),
+    ];
+    expect(resolveNeed(rows, 'prose:deep', { now: NOW }).modelId).toBe('quick-proven');
+    expect(rankNeed(rows, 'prose:deep', { now: NOW }).map((p) => p.modelId)).toEqual(['quick-proven', 'slow-reasoning']);
   });
 
   it('says so when a task has no measured discriminator', () => {
