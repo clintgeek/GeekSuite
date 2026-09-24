@@ -332,38 +332,10 @@ export function scoreRow(row, need, { now = Date.now(), allowPaid = false } = {}
   return { score, lastSuccess };
 }
 
-/**
- * Pick a model for a need, or return `null` to mean "no opinion".
- *
- * `null` is a real answer and the caller must honour it by falling through to
- * the ordinary rotation: a resolver that always names something would, on a
- * bad day, name the least-bad row and present a guess as a decision.
- *
- * @param {object[]} rows   AIFreeTier-shaped rows (plain objects are fine)
- * @param {string}   need   e.g. 'structured:fast', or a compound like
- *                          'vision+structured:balanced'
- * @returns {{provider, modelId, tasks, weight, why}|null}
- */
-export function resolveNeed(rows, need, { now = Date.now(), allowPaid = false } = {}) {
-  const parsed = parseNeed(need);
-  if (!parsed) return null;
-
-  let best = null;
-  for (const row of rows || []) {
-    const scored = scoreRow(row, parsed, { now, allowPaid });
-    if (!scored) continue;
-    if (
-      !best
-      || scored.score > best.scored.score
-      || (scored.score === best.scored.score && scored.lastSuccess > best.scored.lastSuccess)
-    ) {
-      best = { row, scored };
-    }
-  }
-  if (!best) return null;
-
-  const weightClass = weightClassOf(best.row.latency?.p50Ms) || 'unknown';
-  const quality = qualityFor(best.row, parsed.tasks, now);
+/** The `{provider, modelId, tasks, weight, why}` answer for one scored row. */
+function pickFor(row, parsed, now) {
+  const weightClass = weightClassOf(row.latency?.p50Ms) || 'unknown';
+  const quality = qualityFor(row, parsed.tasks, now);
 
   // One reason per named task, joined — for the common single-task need this
   // is exactly the one string it always was; for a compound it reads as "why
@@ -381,19 +353,51 @@ export function resolveNeed(rows, need, { now = Date.now(), allowPaid = false } 
     taskWhy.join('; '),
     weightClass === 'unknown'
       ? 'speed not measured yet'
-      : `measured p50 ${best.row.latency.p50Ms}ms (${weightClass})`,
+      : `measured p50 ${row.latency.p50Ms}ms (${weightClass})`,
     quality === null
       ? 'golden set not run against this row yet'
-      : `golden set ${Math.round(quality * 100) / 100} (overall ${best.row.quality.score})`,
+      : `golden set ${Math.round(quality * 100) / 100} (overall ${row.quality.score})`,
   ];
 
-  return {
-    provider: best.row.provider,
-    modelId: best.row.modelId,
-    tasks: parsed.tasks,
-    weight: parsed.weight,
-    why,
-  };
+  return { provider: row.provider, modelId: row.modelId, tasks: parsed.tasks, weight: parsed.weight, why };
 }
 
-export default { parseNeed, resolveNeed, scoreRow, exclusionFor, qualityFor, NEED_TASKS, NEED_WEIGHTS };
+/**
+ * Every row that meets a need, best first — the ranking `resolveNeed` takes
+ * the top of. Exists so a caller whose best pick fails at the PROVIDER (a
+ * capacity blip, a 5xx) can try the next row that also meets the need,
+ * instead of failing outright or dropping to a row that doesn't (2026-09-24:
+ * NoteGeek Compose failed for hours because its one `prose:deep` pick was an
+ * OpenRouter model whose upstream, Nvidia, was out of capacity).
+ *
+ * @returns {Array<{provider, modelId, tasks, weight, why}>} empty = no opinion
+ */
+export function rankNeed(rows, need, { now = Date.now(), allowPaid = false } = {}) {
+  const parsed = parseNeed(need);
+  if (!parsed) return [];
+  const scored = [];
+  for (const row of rows || []) {
+    const s = scoreRow(row, parsed, { now, allowPaid });
+    if (s) scored.push({ row, scored: s });
+  }
+  scored.sort((a, b) => (b.scored.score - a.scored.score) || (b.scored.lastSuccess - a.scored.lastSuccess));
+  return scored.map(({ row }) => pickFor(row, parsed, now));
+}
+
+/**
+ * Pick a model for a need, or return `null` to mean "no opinion".
+ *
+ * `null` is a real answer and the caller must honour it by falling through to
+ * the ordinary rotation: a resolver that always names something would, on a
+ * bad day, name the least-bad row and present a guess as a decision.
+ *
+ * @param {object[]} rows   AIFreeTier-shaped rows (plain objects are fine)
+ * @param {string}   need   e.g. 'structured:fast', or a compound like
+ *                          'vision+structured:balanced'
+ * @returns {{provider, modelId, tasks, weight, why}|null}
+ */
+export function resolveNeed(rows, need, { now = Date.now(), allowPaid = false } = {}) {
+  return rankNeed(rows, need, { now, allowPaid })[0] ?? null;
+}
+
+export default { parseNeed, resolveNeed, rankNeed, scoreRow, exclusionFor, qualityFor, NEED_TASKS, NEED_WEIGHTS };

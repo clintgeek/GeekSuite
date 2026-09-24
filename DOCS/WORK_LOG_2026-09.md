@@ -10,6 +10,19 @@ anything a future reader would otherwise have to rediscover.
 
 ---
 
+## 2026-09-24
+
+### aiGeek — a need falls to the next qualifying model instead of failing (NoteGeek Compose)
+
+Chef: "notegeek keeps kicking back 'compose unavailable right now'." Not aiGeek down: every
+Compose went to one OpenRouter row whose upstream (Nvidia) was out of capacity. The failure
+is soft by design (§7.8 of `DOCS/AIGEEK_CAPABILITY_ROUTING.md` — a blip must not cool a row
+for hours), but a resolved need was a PIN, and a pin is one attempt, so nothing ever moved.
+A need now resolves to up to three ranked rows (different provider preferred for the retry)
+and the runner falls through while inside one timeout. §7.10 records it.
+
+---
+
 ## 2026-09-23
 
 ### FitnessGeek — Reports gets "Body & recovery": 90-day trends from Garmin, weight, scans and BP

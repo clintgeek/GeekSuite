@@ -96,6 +96,21 @@ const counters = new Map();
 const NEED_CACHE_TTL_MS = 60_000;
 const needCache = new Map();
 
+/**
+ * The rows a need resolves to, best first — a short list, not one pick, so a
+ * pick that fails at the provider falls to the next row that ALSO meets the
+ * need (see the call loop below). An aiService without
+ * `resolveNeedCandidates` (a test double, an older build) gives a one-row list.
+ */
+async function resolvePicks(ai, need) {
+  if (typeof ai.resolveNeedCandidates === 'function') {
+    const list = await ai.resolveNeedCandidates(need);
+    return Array.isArray(list) ? list.filter((p) => p?.provider && p?.modelId) : [];
+  }
+  const one = await ai.resolveNeed?.(need);
+  return one?.provider && one?.modelId ? [one] : [];
+}
+
 async function resolvePick(ai, need, nowMs = Date.now()) {
   const hit = needCache.get(need);
   if (hit && nowMs - hit.at < NEED_CACHE_TTL_MS) return hit.promise;
@@ -105,7 +120,7 @@ async function resolvePick(ai, need, nowMs = Date.now()) {
   // query anyway — the first version of this cached the result and a two-chunk
   // compose still read the catalog twice. Sharing the in-flight resolution is
   // what makes "resolve once per fan-out" true rather than nearly true.
-  const promise = Promise.resolve(ai.resolveNeed?.(need)).then((pick) => pick || null);
+  const promise = resolvePicks(ai, need);
   needCache.set(need, { at: nowMs, promise });
   // A failed resolution must not be remembered for a minute: the next caller
   // deserves a fresh attempt, and the caller's own catch decides what a
@@ -357,9 +372,11 @@ export async function runFeatureCore(opts) {
   // best-effort: a resolver that throws must not cost the caller their call.
   let needInfo = null;
   let needPin = null;
+  let needPicks = [];
   if (!explicitPin && typeof need === 'string' && need.trim()) {
     try {
-      const pick = await resolvePick(ai, need);
+      needPicks = await resolvePick(ai, need);
+      const pick = needPicks[0];
       if (pick?.provider && pick?.modelId) {
         needPin = { provider: pick.provider, model: pick.modelId };
         needInfo = { asked: need, resolved: true, provider: pick.provider, model: pick.modelId, why: pick.why || [] };
@@ -397,10 +414,50 @@ export async function runFeatureCore(opts) {
   const lastUserContent = [...turns].reverse().find(m => m?.role === 'user')?.content;
   const prompt = lastUserContent != null ? textOnly(lastUserContent) : (user ?? '');
 
+  // One attempt per resolved need pick, while the time spent is still under
+  // one timeout. A need resolves to a pin, and a pin is ONE attempt inside
+  // aiService — so a best pick failing at the provider failed the feature,
+  // for as long as the failure lasted: 2026-09-24, every NoteGeek Compose
+  // hit the same OpenRouter row whose upstream (Nvidia) was out of capacity,
+  // a soft failure that deliberately cools nothing. Falling to the next row
+  // that also meets the need fixes that without dropping to a row that
+  // doesn't. The time budget keeps a SLOW failure from tripling the caller's
+  // wait: fast failures (a 502 in milliseconds) fall through, a timeout ends
+  // it.
+  const attemptPins = needPin && !explicitPin
+    ? needPicks.map((p) => ({ provider: p.provider, model: p.modelId }))
+    : [pinned || null];
+  const startedAt = Date.now();
+  const failedPicks = [];
+
   let content;
-  try {
-    counters.set(key, used + 1);
-    content = await withTimeout(
+  counters.set(key, used + 1);
+  for (let i = 0; i < attemptPins.length; i += 1) {
+    const attemptPin = attemptPins[i];
+    try {
+      content = await callOnce(attemptPin);
+      if (i > 0 && needInfo) {
+        needInfo = {
+          ...needInfo,
+          provider: attemptPin.provider,
+          model: attemptPin.model,
+          fellBackFrom: failedPicks,
+        };
+      }
+      break;
+    } catch (err) {
+      failedPicks.push(attemptPin ? `${attemptPin.provider}/${attemptPin.model}` : 'auto');
+      const outOfTime = Date.now() - startedAt >= timeoutMs;
+      if (i === attemptPins.length - 1 || outOfTime) {
+        logger.warn({ app, feature, err: err?.message, tried: failedPicks }, '[aiFeature] model call failed');
+        return refuse('unavailable', { callsToday: used + 1, cap: maxCallsPerDay });
+      }
+      logger.warn({ app, feature, err: err?.message, failed: failedPicks.at(-1) }, '[aiFeature] need pick failed, trying the next row that meets the need');
+    }
+  }
+
+  async function callOnce(attemptPin) {
+    return withTimeout(
       ai.callAI(prompt, {
         messages: turns,
         // No routing switch. "Nothing at all" is `auto` reading the app's
@@ -412,7 +469,7 @@ export async function runFeatureCore(opts) {
         // reaches this object: it counts a cap and means nothing else.
         userId: caller.userId,
         ...(conversationId ? { conversationId } : {}),
-        ...(pinned || {}),
+        ...(attemptPin || {}),
         temperature,
         maxTokens,
         ...(schema ? { responseFormat: { type: 'json_schema', json_schema: schema } } : {}),
@@ -420,9 +477,6 @@ export async function runFeatureCore(opts) {
       timeoutMs,
       label
     );
-  } catch (err) {
-    logger.warn({ app, feature, err: err?.message }, '[aiFeature] model call failed');
-    return refuse('unavailable', { callsToday: used + 1, cap: maxCallsPerDay });
   }
 
   const info = ai.lastProviderInfo || {};

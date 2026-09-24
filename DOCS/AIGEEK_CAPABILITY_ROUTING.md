@@ -679,3 +679,23 @@ alone: `prose` does not filter, so sending it would add no safety, and
 StoryGeek's own `aiService.js` does not forward a `need` field to aiGeek at all
 today — widening that is future work, not a same-day fix riding along with this
 one.
+
+### 7.10 A need was one attempt, so a soft failure could fail a feature for hours, 2026-09-24
+
+NoteGeek's Compose (`need: 'prose:deep'`) returned "compose unavailable" for hours. Its one
+resolved pick was an OpenRouter row whose upstream, Nvidia, answered every call with
+`ResourceExhausted: Worker local total request limit` (relayed as `http_502`).
+
+§7.8 made that failure **soft** on purpose — a capacity blip must not cost a row six hours
+— and that stays right. The gap was elsewhere: `aiFeatureRunner` turned a resolved need
+into a **pin**, and a pin is exactly one attempt in `aiService.callAI`. With nothing cooled,
+the resolver kept naming the same top row, and every call failed the same way.
+
+Now a need resolves to a short ranked list (`aiNeedResolver.rankNeed`, `resolveNeed` is its
+head, unchanged; `aiService.resolveNeedCandidates` takes up to three, the retry preferring a
+different provider as `planFreeTierAttempts` does). The runner tries them in order while the
+time spent is under one `timeoutMs`: a fast provider failure falls to the next row that
+**also meets the need**; a slow one (a timeout) ends it, so a caller never waits a multiple
+of its timeout. `provenance.need.fellBackFrom` names the rows that failed. An explicit pin is
+never second-guessed. Still no new cooldown tier: repeated soft failures cost one fast failed
+attempt per call, not the feature.

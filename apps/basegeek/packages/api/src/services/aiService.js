@@ -44,7 +44,7 @@ import {
 } from './aiRoute.js';
 import RotationManager from './rotationManager.js';
 import aiModelCapabilitiesService from './aiModelCapabilitiesService.js';
-import { parseNeed, resolveNeed } from './aiNeedResolver.js';
+import { parseNeed, resolveNeed, rankNeed } from './aiNeedResolver.js';
 // The catalog module owns everything this service knows about the outside
 // world's model lists and quota headers. aiService calls it; it never calls
 // back (the job injects `callProvider`), so there is no cycle to reason about.
@@ -1375,6 +1375,21 @@ class AIService {
     if (!parseNeed(need)) return null;
     const { live } = await this.selectFreeTierCandidates(now);
     return resolveNeed(live, need, { now, allowPaid: false });
+  }
+
+  /**
+   * Up to `limit` rows that meet a need, best first, the retry preferring a
+   * different PROVIDER (as `planFreeTierAttempts` does): a provider-level
+   * failure — OpenRouter relaying an Nvidia capacity error — tends to hit that
+   * provider's other rows too. Empty array = no opinion. Free rows only, as
+   * `resolveNeed`.
+   *
+   * @returns {Promise<Array<{provider, modelId, tasks, weight, why}>>}
+   */
+  async resolveNeedCandidates(need, { limit = 3, now = Date.now() } = {}) {
+    if (!parseNeed(need)) return [];
+    const { live } = await this.selectFreeTierCandidates(now);
+    return this.planFreeTierAttempts(rankNeed(live, need, { now, allowPaid: false }), limit);
   }
 
   /**
