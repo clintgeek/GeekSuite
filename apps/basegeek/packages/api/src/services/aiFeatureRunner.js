@@ -1,9 +1,10 @@
 /**
  * aiFeatureRunner — the one door every in-gateway AI feature walks through.
  *
- * The five night-2 features (bujogeek review draft, fitnessgeek quick-add,
- * notegeek suggestions, bookgeek what-next / metadata drafts, startgeek brief)
- * share four obligations that are easy to get slightly different five times:
+ * The night-2 features (bujogeek review draft, fitnessgeek quick-add,
+ * notegeek suggestions, bookgeek what-next / metadata drafts — startgeek's
+ * morning brief was removed 2026-09-25) share four obligations that are easy
+ * to get slightly different each time:
  *
  *   1. Routing. Calls go through aiGeek's App Routing row for the owning app
  *      (`useAppConfig` + `appName`), tagged with a `feature` so the usage

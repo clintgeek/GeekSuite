@@ -321,7 +321,6 @@ there first (see `DOCS/CONTEXT.md`, "Adding a field", and
 | `glanceSearch(query!, limit: Int = 12)` | `[GlanceSearchResult!]!` | Cross-app search; each result carries `app`, `type`, `url` |
 | `glanceAsk(query!, limit: Int = 12)` | `GlanceAsk!` | AI-planned search over the user's own Things. `intent` echoed back as chips; `answer` null unless grounded in context; `citations` are result ids |
 | `glanceDraft(input!, kind!, today)` | `GlanceDraft!` | AI reading of a `>`/`<` capture line the deterministic parser couldn't. Drafting only; `degraded: true` + null draft means carry on as if AI were off |
-| `glanceBrief(date!, localHour!)` | `GlanceBrief!` | Morning brief, three sentences, display-only. `brief` null before 5 a.m. local or if the snapshot failed — not an error |
 | `calendarEvents(sources: [CalendarSourceInput!]!, from: Date, to: Date)` | `[CalendarEvent!]!` | ICS feeds by URL; `CalendarSourceInput { url!, color }` |
 
 ## 5. Guards and tooling

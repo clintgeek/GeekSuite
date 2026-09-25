@@ -60,7 +60,7 @@ const aiAppConfigSchema = new mongoose.Schema({
    * is exhausted or cooling?
    *
    * Default **false**, and it should stay false for anything with a decent
-   * deterministic fallback — a brief, a draft, a quick-add and a suggestion
+   * deterministic fallback — a draft, a quick-add and a suggestion
    * all have one, so a short delay is cheaper than a cent. Turn it on only
    * where a fallback is materially worse than waiting (D8: StoryGeek GM
    * turns, to start).

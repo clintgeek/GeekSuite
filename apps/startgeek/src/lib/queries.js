@@ -81,19 +81,6 @@ export const GLANCE_TODAY = `
   }
 `
 
-export const GLANCE_BRIEF = `
-  query GlanceBrief($date: String!, $localHour: Int!) {
-    glanceBrief(date: $date, localHour: $localHour) {
-      date
-      brief
-      provenance {
-        source
-        model
-      }
-    }
-  }
-`
-
 export const GLANCE_SEARCH = `
   query GlanceSearch($query: String!, $limit: Int) {
     glanceSearch(query: $query, limit: $limit) {

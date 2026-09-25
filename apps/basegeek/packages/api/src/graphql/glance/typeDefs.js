@@ -153,22 +153,6 @@ export const typeDefs = gql`
     degraded: Boolean!
   }
 
-  """
-  StartGeek's morning brief: the day the console already shows, read once as
-  three short sentences. Display-only — there are no actions in it.
-
-  A null brief means there is nothing to show: before 5 a.m. local (the
-  time-of-day gate lives server-side as well as in the client), or when the
-  day's snapshot could not be loaded. A null brief is not an error; the hero
-  simply has no card in it.
-  """
-  type GlanceBrief {
-    date: String!
-    brief: String
-    facts: JSON
-    provenance: AIProvenance!
-  }
-
   input CalendarSourceInput {
     url: String!
     color: String
@@ -189,7 +173,6 @@ export const typeDefs = gql`
     glanceSearch(query: String!, limit: Int = 12): [GlanceSearchResult!]!
     glanceAsk(query: String!, limit: Int = 12): GlanceAsk!
     glanceDraft(input: String!, kind: String!, today: String): GlanceDraft!
-    glanceBrief(date: String!, localHour: Int!): GlanceBrief!
     calendarEvents(sources: [CalendarSourceInput!]!, from: Date, to: Date): [CalendarEvent!]!
   }
 `;

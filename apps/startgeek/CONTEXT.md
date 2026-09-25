@@ -53,12 +53,11 @@ temperature, 400/500 for content, Geist Mono for labels, counts, and streaks.
 
 ## Settings
 
-`SettingsContext` persists `{ backdrop, clock, modules, ask, brief, calendars }` to
+`SettingsContext` persists `{ backdrop, clock, modules, ask, calendars }` to
 `localStorage['startgeek.settings']`. No backend. The sheet opens from the rail
 control or the `,` key. Block list, defaults, and allowed values live in
 `src/config/modules.js` (`weather`, `today` = Tasks, `calendar`, `fitness`,
-`reading`). `ask` is the `??` opt-in, off by default; `brief` is the morning-brief opt-in,
-also off by default; `calendars` is a list of
+`reading`). `ask` is the `??` opt-in, off by default; `calendars` is a list of
 `{ url, color }` ICS feeds, empty by default.
 A block with no data stays hidden even when on. Logged out, only `weather`
 and the backdrop/clock controls show.
@@ -112,7 +111,6 @@ src/
     DateTime.jsx          — Clock (12h/24h from settings)
     WeatherBlock.jsx      — Today's weather panel in the hero; click opens the modal
     WeatherModal.jsx      — Today's details + 7-day range bars; focus-trapped
-    BriefCard.jsx         — The morning brief, closing the hero. Display-only, dismissible
     CommandBox.jsx        — Quick capture / search box
     HelpButton.jsx, HelpModal.jsx, SearchResults.jsx, Toast.jsx
     AnswerCard.jsx        — The `??` answer, above the result list
@@ -133,7 +131,6 @@ src/
   hooks/
     useSettings.js, useTime.js, useWeather.js, useSession.js, useGlance.js
     useCalendarEvents.js  — ICS fetch + localStorage cache + visibility-gated poll
-    useMorningBrief.js    — The brief's single fetch: no poll, no refetch, silent on failure
   services/
     weatherService.js     — Open-Meteo / ipapi client
   lib/
@@ -142,7 +139,6 @@ src/
     commandFailure.js     — isAuthFailure / failureMessage: what a failed capture says
     csrfHeal.js           — shouldHealCsrf / triggerCsrfReloadOnce (+ .test.js)
     captureDraft.js       — When a `>`/`<` line is worth a model call, and the draft round trip
-    morningBrief.js       — The brief's three gates + provenance line (+ .test.js)
     queries.js, basegeek.js, engines.js, commandMode.js, parseTaskInput.js
 ```
 
@@ -275,6 +271,12 @@ below.
 ---
 
 ## Night 2 — 2026-09-06 — the morning brief (stream R118, AI_IDEAS.md #5)
+
+> **Removed 2026-09-25.** Chef: "pretty useless and often misses the models." Everything
+> below is gone: `BriefCard`, `useMorningBrief`, `lib/morningBrief.js`, the `brief`
+> setting, `GLANCE_BRIEF`, the `05-brief` harness scene, and on the gateway
+> `glanceBrief`, `GlanceBrief`, `briefService.js` and its two test files. A stale
+> `brief` key in a browser's `startgeek.settings` is ignored on load. Kept as history.
 
 Three short sentences in the hero, once a day after 5 a.m., dismissible, with
 nothing to tap in them. Built across two trees: `glanceBrief` on basegeek's
