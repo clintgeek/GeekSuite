@@ -10,6 +10,41 @@ anything a future reader would otherwise have to rediscover.
 
 ---
 
+## 2026-09-25
+
+### GameGeek — the library is fed from Playnite
+
+`1663d679` · spec `apps/gamegeek/DOCS/PLAYNITE_IMPORT.md`
+
+Upload the Playnite Library Exporter JSON in Settings, check the dry run, import. One game
+can hold many copies (the same title on Epic and GOG), and Game Pass entries are
+subscription copies. Re-import updates by `playniteId`, never deletes, and never touches
+a shelf or typed hours. Also fixed: editing copies used to strip their Playnite identity.
+
+Chef's real export (931 games), run in a throwaway database: 683 games plus 7 extra copies
+with hidden skipped (878 + 53 with hidden included), 116 games with hours, and an
+immediate re-import changed nothing. The export is gitignored, since the repo is public.
+The demo games were deleted first, at Chef's request. Next: Steam → IGDB → RAWG
+enrichment, then the Nextcloud drop.
+
+### Theme flicker, suite-wide — `5e5d80b0`
+
+`@geeksuite/user`'s ThemeProvider PATCHed dark → system → dark endlessly whenever the
+`geek_theme` cookie disagreed with the account preference. The echo-skip flag was set
+inside a lazy state updater. Now each direction has one trigger. These are the package's
+first client tests, and all four were red on the old code.
+
+### StartGeek — morning brief removed — `936a641b`
+
+Chef: "pretty useless and often misses the models." The client and gateway code, the tests
+and the harness scene are gone. Ask and capture drafts are untouched.
+
+### GameGeek test flake — `acbef8ea`
+
+A leftover `GameProfile` from the Sessions suite failed Ownership's "changed nothing"
+check whenever jest ran them in that order. It was not an auth bug. Reproduced by seeding
+a stray profile.
+
 ## 2026-09-24
 
 ### GameGeek — a new app, live at gamegeek.clintgeek.com overnight
