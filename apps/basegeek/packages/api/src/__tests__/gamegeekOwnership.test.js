@@ -34,6 +34,12 @@ beforeAll(async () => {
   await Promise.all([Game.init(), GamePlayer.init(), GameProfile.init()]);
 }, 60000);
 
+// "Changes nothing" is measured against this test's own starting state, so
+// start from empty collections even if another suite left rows behind.
+beforeEach(async () => {
+  await Promise.all([Game.deleteMany({}), GamePlayer.deleteMany({}), GameProfile.deleteMany({})]);
+});
+
 afterEach(async () => {
   await Promise.all([Game.deleteMany({}), GamePlayer.deleteMany({}), GameProfile.deleteMany({})]);
   await User.collection.deleteMany({ _id: { $in: [ALICE, BOB].map((id) => new mongoose.Types.ObjectId(id)) } });

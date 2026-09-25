@@ -11,6 +11,7 @@ import mongoose from 'mongoose';
 
 const { Game } = await import('../graphql/gamegeek/models/game.js');
 const { GamePlayer } = await import('../graphql/gamegeek/models/gamePlayer.js');
+const { GameProfile } = await import('../graphql/gamegeek/models/profile.js');
 const { resolvers } = await import('../graphql/gamegeek/resolvers.js');
 const { MAX_SESSIONS } = (await import('@geeksuite/schemas/gamegeek/constants')).default;
 
@@ -33,7 +34,9 @@ beforeAll(async () => {
 }, 60000);
 
 afterEach(async () => {
-  await Promise.all([Game.deleteMany({}), GamePlayer.deleteMany({})]);
+  // All three collections: a profile left here (addGameShelf creates one)
+  // leaked into whichever gamegeek suite jest ran next.
+  await Promise.all([Game.deleteMany({}), GamePlayer.deleteMany({}), GameProfile.deleteMany({})]);
 });
 
 afterAll(async () => {
