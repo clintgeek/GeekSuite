@@ -12,6 +12,30 @@ anything a future reader would otherwise have to rediscover.
 
 ## 2026-09-25
 
+### GameGeek — auto-import from Nextcloud, Chef's vocabulary in the UI, registration closed
+
+- **Registration closed** (`3606982e`). `POST /api/auth/register` returns 403 unless
+  `REGISTRATION_MODE=open`, and closed is the default, so a forgotten `compose up -d`
+  fails safe. Verified on production with a fake sign-up. Accounts now come from the
+  admin-only `POST /api/users`.
+- **Stale tabs heal themselves** (`9a36a8dd`). Chef's Firefox kept a pre-deploy bundle
+  whose fragment asked for removed fields, so "Save view" 400'd with
+  `GRAPHQL_VALIDATION_FAILED`. The shared api-client now reloads once per tab per 10 min
+  on that code. Lesson: remove a gateway field one deploy AFTER the frontend stops asking
+  for it.
+- **The taste model** (`29e746ce`). Chef's own shelf and star meanings are in
+  `apps/gamegeek/DOCS/TASTE_MODEL.md`, the ground truth for any recommender, and they
+  now show in the shelf picker, the star rating (live) and Settings.
+- **Nextcloud drop import** (`a40bd69d`). The exporter writes
+  `gamegeek-import/<user>/playnite-library.json`; GameGeek watches it read-only and
+  imports through the upload's own commit path. The first automatic run: 22 new games and
+  3 extra copies, then 21 matched with covers and tags within seconds. Library: 707.
+  The deploy needed `docker compose up -d gamegeek` for the mount.
+- **Process slip:** zsh doesn't word-split `$VAR`, so a staged-nothing commit let the
+  next `git add` sweep the drop import's frontend into the taste-model commit. The
+  following commit shipped the backend it called. The scope gate now also requires a
+  non-empty staged set.
+
 ### GameGeek — tags, faceted filters, and edits keep your place — `96070afc`, `f9113ed9`
 
 Spec: `apps/gamegeek/DOCS/TAGS_AND_FILTERS.md`.
