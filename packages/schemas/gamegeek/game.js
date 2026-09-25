@@ -25,6 +25,23 @@ function gameDefinition(mongoose) {
       storefront: { type: String, enum: STOREFRONTS, default: null },
       acquiredAt: { type: Date, default: null }, // calendar date, UTC midnight
       notes: { type: String, maxlength: 500, default: '' },
+      // Set when the copy came from a Playnite export (DOCS/GameGeekPlan.md §15).
+      // playniteId is the stable key a re-import updates by; one Game can hold
+      // several Playnite entries (the same title owned on Epic and GOG).
+      playnite: {
+        type: new Schema(
+          {
+            playniteId: { type: String, required: true },
+            providerGameId: { type: String, default: null },
+            sourceName: { type: String, default: null },
+            playtimeSeconds: { type: Number, default: 0 },
+            lastActivity: { type: Date, default: null },
+            hidden: { type: Boolean, default: false },
+          },
+          { _id: false }
+        ),
+        default: null,
+      },
     },
     { _id: true }
   );
@@ -78,7 +95,10 @@ function createGameSchema(mongoose) {
   const schema = new mongoose.Schema(gameDefinition(mongoose), { timestamps: true });
 
   schema.pre('validate', function gameDerived(next) {
-    if (this.isModified('title') || !this.sortTitle) this.sortTitle = computeSortTitle(this.title);
+    // A new document keeps a sortTitle its writer supplied (the Playnite import
+    // carries the store's own `sortingName`); a rename always recomputes it.
+    const keepSupplied = this.isNew && this.sortTitle;
+    if (!keepSupplied && (this.isModified('title') || !this.sortTitle)) this.sortTitle = computeSortTitle(this.title);
     this.owned = Array.isArray(this.copies) && this.copies.length > 0;
     next();
   });
@@ -90,6 +110,10 @@ function createGameSchema(mongoose) {
   schema.index(
     { householdId: 1, 'externalIds.steamAppId': 1 },
     { unique: true, partialFilterExpression: { 'externalIds.steamAppId': { $type: 'string' } } }
+  );
+  schema.index(
+    { householdId: 1, 'copies.playnite.playniteId': 1 },
+    { partialFilterExpression: { 'copies.playnite.playniteId': { $type: 'string' } } }
   );
   schema.index(
     { householdId: 1, 'externalIds.igdb': 1 },

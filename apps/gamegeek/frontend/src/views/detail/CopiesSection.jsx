@@ -2,6 +2,7 @@
 import React from 'react';
 import { Box, Button, Typography } from '@mui/material';
 import PlatformGlyph from '../../components/PlatformGlyph';
+import { formatHours } from '../../utils/dates';
 import { formatLabel, platformLabel, storefrontLabel } from '../../utils/vocab';
 import Section from './Section';
 
@@ -28,9 +29,38 @@ export default function CopiesSection({ copies = [], onEdit }) {
                 <PlatformGlyph platform={c.platform} sx={{ fontSize: 18 }} />
               </Box>
               <Box sx={{ minWidth: 0 }}>
-                <Typography sx={{ fontSize: '0.875rem', fontWeight: 600 }}>{platformLabel(c.platform)}</Typography>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.625 }}>
+                  <Typography sx={{ fontSize: '0.875rem', fontWeight: 600 }}>{platformLabel(c.platform)}</Typography>
+                  {c.fromPlaynite ? (
+                    <Box
+                      component="span"
+                      sx={{
+                        fontSize: '0.75rem',
+                        fontWeight: 700,
+                        letterSpacing: '0.04em',
+                        textTransform: 'uppercase',
+                        color: 'text.secondary',
+                        bgcolor: 'background.raised',
+                        border: 1,
+                        borderColor: 'divider',
+                        borderRadius: '4px',
+                        px: 0.5,
+                        py: 0.125,
+                        lineHeight: 1.4,
+                      }}
+                    >
+                      Playnite
+                    </Box>
+                  ) : null}
+                </Box>
                 <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
-                  {[c.format && formatLabel(c.format), c.storefront && storefrontLabel(c.storefront)].filter(Boolean).join(' · ') || 'Format not recorded'}
+                  {[
+                    c.format && formatLabel(c.format),
+                    c.storefront && storefrontLabel(c.storefront),
+                    formatHours(c.playtimeHours) || null,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ') || 'Format not recorded'}
                 </Typography>
               </Box>
             </Box>

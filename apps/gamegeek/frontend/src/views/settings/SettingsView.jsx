@@ -6,6 +6,7 @@ import { useGameProfile, useVocabulary } from '../../hooks/useGameMeta';
 import { visuallyHidden } from '../../utils/a11y';
 import { AccountCard, AppearanceCard } from './AppearanceAccountCards';
 import PlatformsCard from './PlatformsCard';
+import PlayniteImportCard from './PlayniteImportCard';
 import ShelvesCard from './ShelvesCard';
 import SteamImportCard from './SteamImportCard';
 import StorefrontsCard from './StorefrontsCard';
@@ -15,7 +16,8 @@ export default function SettingsView({ user, onSignOut }) {
   const vocab = useVocabulary();
   const location = useLocation();
 
-  // /settings#steam (from the empty library) lands on the Steam card.
+  // /settings#playnite (from the empty library, the Add dialog) lands on the
+  // Playnite card; /settings#steam still works for the demoted Steam card.
   useEffect(() => {
     if (!location.hash) return;
     const el = document.getElementById(location.hash.slice(1));
@@ -32,10 +34,11 @@ export default function SettingsView({ user, onSignOut }) {
           Your platforms, shelves and imports. The library itself is shared with the household.
         </Typography>
       </Box>
+      <PlayniteImportCard profile={profile} />
       <PlatformsCard profile={profile} vocab={vocab} />
       <ShelvesCard profile={profile} />
-      <SteamImportCard profile={profile} />
       <StorefrontsCard />
+      <SteamImportCard profile={profile} />
       <AppearanceCard />
       <AccountCard user={user} onSignOut={onSignOut} />
     </Box>

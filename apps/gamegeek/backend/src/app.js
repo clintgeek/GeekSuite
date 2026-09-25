@@ -11,6 +11,7 @@ import authRoutes from './routes/authRoutes.js';
 import metadataRoutes from './routes/metadataRoutes.js';
 import coverRoutes from './routes/coverRoutes.js';
 import importRoutes from './routes/importRoutes.js';
+import playniteRoutes, { PLAYNITE_IMPORT_PATH } from './routes/playniteRoutes.js';
 import { authenticate } from './middleware/authMiddleware.js';
 import { csrfGuard, meHandler } from '@geeksuite/user/server';
 
@@ -64,7 +65,13 @@ export function createApp() {
     },
     credentials: true,
   }));
-  app.use(express.json());
+  // Default 100 kB JSON limit for everything — except the Playnite import,
+  // whose export can be several MB. That route reads its own body with a
+  // 20 MB limit, AFTER auth (routes/playniteRoutes.js), so the limit is not
+  // loosened for any other route and an anonymous caller can't make us parse
+  // a large body.
+  const defaultJson = express.json();
+  app.use((req, res, next) => (req.path.replace(/\/+$/, '').toLowerCase() === PLAYNITE_IMPORT_PATH ? next() : defaultJson(req, res, next)));
 
   // Attach request ID and structured logger to every request
   const httpLogger = createHttpLogger(logger);
@@ -91,6 +98,7 @@ export function createApp() {
   app.use('/api/metadata', metadataRoutes);
   app.use('/api/games', coverRoutes);
   app.use('/api/import', importRoutes);
+  app.use('/api/import', playniteRoutes);
 
   // Health check endpoint — no auth, so Watchtower/nginx healthchecks and
   // uptime monitors don't need a session.

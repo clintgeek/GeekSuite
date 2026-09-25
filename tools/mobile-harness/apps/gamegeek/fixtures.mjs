@@ -58,7 +58,17 @@ export const GAMES = ROWS.map(([id, title, year, dev, shelf, rating, hours, prog
   updatedAt: T('2026-09-20'),
   createdAt: T(`2026-0${(i % 8) + 1}-10`),
   copies: copies.map(([platform, format, storefront], j) => ({
-    __typename: 'GameCopy', id: `${id}-c${j}`, platform, format, storefront, acquiredAt: null, notes: null,
+    __typename: 'GameCopy',
+    id: `${id}-c${j}`,
+    platform,
+    format,
+    storefront,
+    acquiredAt: null,
+    notes: null,
+    // g1's PC copy came in from Playnite — the one copy in the fixtures that
+    // shows the badge and per-copy hours in the Copies section.
+    fromPlaynite: id === 'g1' && platform === 'pc',
+    playtimeHours: id === 'g1' && platform === 'pc' ? 41.5 : null,
   })),
   parentId: null,
   series: null,
@@ -82,7 +92,7 @@ export const GAMES = ROWS.map(([id, title, year, dev, shelf, rating, hours, prog
         notes: '',
         progress,
         hoursPlayed: hours,
-        hoursSource: id === 'g7' || id === 'g14' ? 'steam' : 'manual',
+        hoursSource: id === 'g1' ? 'playnite' : id === 'g7' || id === 'g14' ? 'steam' : 'manual',
         favorite: id === 'g1' || id === 'g3',
         lastPlayedAt: shelf === 'playing' ? T('2026-09-23') : null,
         playthroughs: playthroughsFor(id),
@@ -118,6 +128,9 @@ export const PROFILE = {
   defaultPlatform: 'switch',
   steamId: '',
   lastSteamSyncAt: null,
+  playniteLastImportAt: T('2026-09-24'),
+  playniteLastGeneratedAtUtc: '2026-09-24T16:21:03.000Z',
+  playniteLastTotal: 931,
 };
 
 export const VOCAB = {
@@ -157,6 +170,27 @@ export const OPS = {
   GetGameProfile: { gameProfile: PROFILE },
   GetGameVocabulary: { gameVocabulary: VOCAB },
   SaveGameProfile: (v) => ({ saveGameProfile: { ...PROFILE, ...v.input } }),
+};
+
+export const PLAYNITE_DRY_RUN = {
+  schemaVersion: 1,
+  generatedAtUtc: '2026-09-25T16:21:03Z',
+  total: 931,
+  counts: { create: 42, addCopy: 6, update: 178, unchanged: 691, skippedHidden: 241, notInFile: 3, invalid: 0 },
+  samples: {
+    create: [
+      { title: 'Outer Wilds', storefront: 'epic' },
+      { title: 'Return of the Obra Dinn', storefront: 'gog' },
+      { title: 'It Takes Two', storefront: 'ea' },
+    ],
+    addCopy: [{ title: "Baldur's Gate 3", storefront: 'gog' }],
+    update: [
+      { title: 'Hades', hoursBefore: 38.2, hoursAfter: 41.5 },
+      { title: 'Stardew Valley', hoursBefore: 200.1, hoursAfter: 212.4 },
+    ],
+    notInFile: [{ title: 'Celeste' }],
+  },
+  committed: false,
 };
 
 export const STEAM_DRY_RUN = {
@@ -205,5 +239,14 @@ export async function routes(ctx) {
     return svg(r, coverSvg(g.title, g.coverColor || '#333'));
   });
   await ctx.route('**/api/import/steam', (r) => json(r, STEAM_DRY_RUN));
+  await ctx.route('**/api/import/playnite', (r) => {
+    // Multipart body — sniff the raw form data for the includeHidden field
+    // rather than parsing it properly; good enough for a stubbed preview.
+    const raw = r.request().postData() || '';
+    const includeHidden = /name="includeHidden"[\s\S]*?\r?\n\r?\n\s*true/i.test(raw);
+    if (!includeHidden) return json(r, PLAYNITE_DRY_RUN);
+    const { create, skippedHidden } = PLAYNITE_DRY_RUN.counts;
+    return json(r, { ...PLAYNITE_DRY_RUN, counts: { ...PLAYNITE_DRY_RUN.counts, create: create + skippedHidden, skippedHidden: 0 } });
+  });
   await graphqlRoute(ctx, OPS);
 }

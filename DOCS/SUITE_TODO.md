@@ -137,10 +137,14 @@ Wanted, not built on the 2026-09-22 overnight run:
   rules engine + Stats, free-walk AI (cuttable), backlog goal/wishlist/loans/scan-to-add/MCP.
   Full phase table and done-when criteria: [`DOCS/GameGeekPlan.md`](GameGeekPlan.md) §11.
   Blocked on P0 prep and Chef's answers in §13.
-- **GameGeek storefront import — the file importer, next after tonight's Steam API + manual
-  paste**: Playnite JSON/CSV export, Heroic's library cache JSON, GOG Galaxy 2.0's local
-  SQLite DB, deduped against IGDB `external_games`. Research and per-storefront feasibility:
-  [`DOCS/GAMEGEEK_STOREFRONT_IMPORTS.md`](GAMEGEEK_STOREFRONT_IMPORTS.md).
+- **GameGeek library feed = Playnite** (Chef, 2026-09-25). The library is fed and updated
+  from the Playnite Library Exporter JSON; Steam is for metadata, not the library. In
+  order: (1) manual upload with a dry run (**building 2026-09-25**); (2) metadata and
+  cover enrichment from Steam → IGDB → RAWG, filling empty fields only; (3) automatic
+  import from a Nextcloud `gamegeek-import/<user>/` drop, the FitnessGeek body-comp
+  pattern. Spec: [`apps/gamegeek/DOCS/PLAYNITE_IMPORT.md`](../apps/gamegeek/DOCS/PLAYNITE_IMPORT.md).
+  Heroic and GOG Galaxy importers are shelved, since Playnite already aggregates those
+  stores ([`DOCS/GAMEGEEK_STOREFRONT_IMPORTS.md`](GAMEGEEK_STOREFRONT_IMPORTS.md)).
 
 ### Suite MCP server — `DOCS/MCP_PLAN.md`
 

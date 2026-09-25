@@ -190,7 +190,16 @@ function dedupeList(list) {
   return out;
 }
 
-function copyFromInput(input, existingIds) {
+/**
+ * A GameCopyInput → a copy subdoc. `existingById` maps the game's current
+ * copies by id: a known id keeps its _id AND its `playnite` subdoc. That
+ * subdoc is not in GameCopyInput (only the Playnite import writes it), so
+ * without this carry-over every copy edit in the UI would silently strip it
+ * and the next import would re-add the copy as a duplicate
+ * (apps/gamegeek/DOCS/PLAYNITE_IMPORT.md §Matching, rule 1). An unknown id is
+ * simply a new copy; a copy left out of the input is removed, as before.
+ */
+function copyFromInput(input, existingById) {
   const copy = {
     platform: input.platform,
     format: input.format ?? 'digital',
@@ -198,8 +207,11 @@ function copyFromInput(input, existingIds) {
     acquiredAt: input.acquiredAt ?? null,
     notes: input.notes ?? '',
   };
-  // Keep an existing copy's id; an unknown id is simply a new copy.
-  if (input.id && existingIds.has(String(input.id))) copy._id = input.id;
+  const existing = input.id ? existingById.get(String(input.id)) : null;
+  if (existing) {
+    copy._id = input.id;
+    if (existing.playnite) copy.playnite = existing.playnite;
+  }
   return copy;
 }
 
@@ -211,7 +223,7 @@ function gameDocFromInput(input) {
   if (doc.description === null) doc.description = '';
   for (const f of NESTED_FIELDS) if (input[f]) doc[f] = { ...input[f] };
   if (input.parentId) doc.parentId = input.parentId;
-  doc.copies = (input.copies || []).map((c) => copyFromInput(c, new Set()));
+  doc.copies = (input.copies || []).map((c) => copyFromInput(c, new Map()));
   doc.owned = doc.copies.length > 0;
   if (!doc.source) doc.source = 'manual';
   return doc;
@@ -473,6 +485,10 @@ export const resolvers = {
   },
   GameCopy: {
     id: (c) => String(c._id ?? c.id),
+    // Set by the gamegeek backend's Playnite import (copy.playnite subdoc).
+    fromPlaynite: (c) => Boolean(c.playnite?.playniteId),
+    playtimeHours: (c) =>
+      c.playnite?.playniteId ? Math.round(((Number(c.playnite.playtimeSeconds) || 0) / 3600) * 10) / 10 : null,
   },
   GamePlaythrough: {
     id: (p) => String(p._id ?? p.id),
@@ -495,6 +511,9 @@ export const resolvers = {
     customShelves: (p) => p?.customShelves ?? [],
     savedFilters: (p) => p?.savedFilters ?? [],
     platformsOwned: (p) => p?.platformsOwned ?? [],
+    playniteLastImportAt: (p) => p?.playnite?.lastImportAt ?? null,
+    playniteLastGeneratedAtUtc: (p) => p?.playnite?.lastGeneratedAtUtc ?? null,
+    playniteLastTotal: (p) => p?.playnite?.lastTotal ?? null,
   },
 
   Query: {
@@ -656,8 +675,10 @@ export const resolvers = {
         for (const [k, v] of Object.entries(input[f])) if (v !== undefined) game.set(`${f}.${k}`, v);
       }
       if (input.copies !== undefined) {
-        const existingIds = new Set((game.copies ?? []).map((c) => String(c._id)));
-        game.copies = (input.copies ?? []).map((c) => copyFromInput(c, existingIds));
+        const existingById = new Map(
+          (game.copies ?? []).map((c) => [String(c._id), { playnite: c.playnite ? c.playnite.toObject?.() ?? c.playnite : null }])
+        );
+        game.copies = (input.copies ?? []).map((c) => copyFromInput(c, existingById));
       }
       await game.save();
 

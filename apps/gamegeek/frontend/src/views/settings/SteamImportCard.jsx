@@ -63,8 +63,8 @@ export default function SteamImportCard({ profile }) {
   return (
     <SettingsCard
       id="steam"
-      title="Import from Steam"
-      description="Brings in every game on your Steam account with its playtime. You'll see exactly what changes before anything is written."
+      title="Steam (optional)"
+      description="Playnite is the library. Steam is here for metadata and playtime later — cover art, genres, and hours for anything Playnite couldn't tell us."
     >
       {unavailable ? (
         <Alert severity="info" sx={{ mb: 2 }}>

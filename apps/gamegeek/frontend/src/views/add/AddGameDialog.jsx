@@ -135,6 +135,7 @@ export default function AddGameDialog() {
               setFromSearch(false);
               setForm(emptyForm({ profile, title }));
             }}
+            onImportPlaynite={() => navigate('/settings#playnite')}
           />
         )}
       </Box>

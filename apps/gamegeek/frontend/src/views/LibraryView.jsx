@@ -124,7 +124,7 @@ export default function LibraryView() {
         shelves={shelves}
         onAdd={openAdd}
         onClear={() => patch({ q: '', platform: '', owned: 'all', shelf: 'all' })}
-        onImport={() => navigate('/settings#steam')}
+        onImport={() => navigate('/settings#playnite')}
       />
     );
   } else if (view === 'list') {

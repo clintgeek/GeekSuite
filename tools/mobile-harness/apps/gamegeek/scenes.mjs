@@ -118,6 +118,26 @@ export const scenes = [
       await h.settle(300);
     },
   },
+  {
+    // The Playnite dry run: it fires as soon as a file is picked, no button
+    // to click. A tiny in-memory JSON stands in for a real export — the stub
+    // route answers regardless of what's actually in it.
+    name: '11-playnite-preview',
+    goto: '/settings#playnite',
+    wait: 1400,
+    async setup(page, h) {
+      const input = page.getByTestId('playnite-file-input');
+      if (!(await input.count())) return false;
+      await input.setInputFiles({
+        name: 'playnite-library.json',
+        mimeType: 'application/json',
+        buffer: Buffer.from(JSON.stringify({ schemaVersion: 1, generatedAtUtc: '2026-09-25T16:21:03Z', games: [] })),
+      });
+      await h.settle(900);
+      await page.getByTestId('playnite-preview').scrollIntoViewIfNeeded();
+      await h.settle(300);
+    },
+  },
 ];
 
 // Known, ticketed violations. The list starts empty and stays that way.

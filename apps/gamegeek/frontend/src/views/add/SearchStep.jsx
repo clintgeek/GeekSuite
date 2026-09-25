@@ -26,7 +26,7 @@ function Thumb({ candidate }) {
   );
 }
 
-export default function SearchStep({ initialQuery = '', onPick, onManual }) {
+export default function SearchStep({ initialQuery = '', onPick, onManual, onImportPlaynite }) {
   const providers = useProviders();
   const [q, setQ] = useState(initialQuery);
   const [state, setState] = useState({ loading: false, results: null, provider: null, error: null });
@@ -140,6 +140,16 @@ export default function SearchStep({ initialQuery = '', onPick, onManual }) {
       >
         {q.trim() ? `Enter “${q.trim().slice(0, 30)}” manually` : 'Enter a game manually'}
       </Button>
+
+      {onImportPlaynite ? (
+        <Button
+          variant="text"
+          onClick={onImportPlaynite}
+          sx={{ alignSelf: 'flex-start', color: 'text.secondary', fontSize: '0.8125rem', minHeight: 44, px: 0.5 }}
+        >
+          Got a big library? Import from Playnite instead.
+        </Button>
+      ) : null}
     </Box>
   );
 }

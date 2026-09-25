@@ -38,6 +38,13 @@ function profileDefinition(mongoose) {
     defaultPlatform: { type: String, enum: [...PLATFORMS, null], default: null },
     steamId: { type: String, default: null }, // 64-bit SteamID, digits only
     lastSteamSyncAt: { type: Date, default: null },
+    // Last Playnite library import (apps/gamegeek/DOCS/PLAYNITE_IMPORT.md §Profile):
+    // when it ran, when the export itself was generated, and how many entries it had.
+    playnite: {
+      lastImportAt: { type: Date, default: null },
+      lastGeneratedAtUtc: { type: Date, default: null },
+      lastTotal: { type: Number, default: null },
+    },
   };
 }
 

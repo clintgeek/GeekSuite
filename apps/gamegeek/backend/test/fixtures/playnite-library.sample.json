@@ -1,0 +1,387 @@
+{
+  "schemaVersion": 1,
+  "generatedAtUtc": "2026-09-25T16:21:03Z",
+  "generator": {
+    "name": "Playnite Library Exporter",
+    "version": "1.0.0.0"
+  },
+  "playnite": {
+    "databaseGameCount": 931
+  },
+  "export": {
+    "totalGames": 14,
+    "databaseGameCount": 931,
+    "excludedGameCount": 0,
+    "steamAppIdCount": 38,
+    "formats": [
+      "json"
+    ],
+    "automatic": false,
+    "trigger": "manual"
+  },
+  "games": [
+    {
+      "playniteId": "9b300d0f-c3f4-4bb1-a8b8-29a4588d5279",
+      "name": "Arcade Paradise",
+      "providerGameId": "888fabb7d07b430691ae22796f2cb530",
+      "pluginId": "00000002-dbd1-46c6-b5d0-b1ba559d10e4",
+      "sourceId": "4ce52efd-b4da-405f-acb6-1f016ac35991",
+      "sourceName": "Epic",
+      "steamAppIdConfidence": "none",
+      "isInstalled": false,
+      "hidden": false,
+      "favorite": false,
+      "platforms": [
+        "PC (Windows)"
+      ],
+      "genres": [
+        "Adventure",
+        "Arcade",
+        "Indie",
+        "Puzzle",
+        "Simulator",
+        "Strategy"
+      ],
+      "categories": [],
+      "tags": [],
+      "playtimeSeconds": 0,
+      "added": "2026-07-28T18:34:13Z",
+      "modified": "2026-07-28T18:37:00Z",
+      "releaseDate": "2022-8-11"
+    },
+    {
+      "playniteId": "fc74977e-5369-4cd2-a230-c582c05f2d3a",
+      "name": "Arcade Paradise",
+      "providerGameId": "1645177204",
+      "pluginId": "aebe8b7c-6dc3-4a66-af31-e7375c6b5e9e",
+      "sourceId": "d68b4e4e-2d1f-472e-abda-9b0c6b1e56eb",
+      "sourceName": "GOG",
+      "steamAppIdConfidence": "none",
+      "isInstalled": false,
+      "hidden": true,
+      "favorite": false,
+      "platforms": [
+        "PC (Windows)"
+      ],
+      "genres": [
+        "Adventure",
+        "Arcade",
+        "Indie",
+        "Puzzle",
+        "Simulator",
+        "Strategy"
+      ],
+      "categories": [],
+      "tags": [],
+      "playtimeSeconds": 0,
+      "added": "2026-07-28T18:34:19Z",
+      "modified": "2026-07-28T18:37:58Z",
+      "releaseDate": "2022-8-11"
+    },
+    {
+      "playniteId": "3d28aefd-87b0-490f-a29c-7eac421ddaa2",
+      "name": "Albion Online",
+      "providerGameId": "761890",
+      "pluginId": "cb91dfc9-b977-43bf-8e70-55f46e410fab",
+      "sourceId": "f7a9d48f-5f9c-4b0c-9d23-6274f9f9f5c7",
+      "sourceName": "Steam",
+      "steamAppId": 761890,
+      "steamAppIdSource": "playnite-provider-game-id",
+      "steamAppIdConfidence": "exact",
+      "isInstalled": false,
+      "hidden": false,
+      "favorite": false,
+      "platforms": [
+        "PC (Windows)"
+      ],
+      "genres": [
+        "Role-playing (RPG)"
+      ],
+      "categories": [],
+      "tags": [],
+      "lastActivity": "2024-09-28T03:06:39Z",
+      "playtimeSeconds": 2700,
+      "added": "2026-07-28T18:56:12Z",
+      "modified": "2026-07-28T18:56:44Z",
+      "releaseDate": "2017-7-17"
+    },
+    {
+      "playniteId": "e57a514a-6efa-484b-9f21-b000de501785",
+      "name": "DEATH STRANDING DIRECTOR'S CUT",
+      "providerGameId": "KOJIMAPRODUCTIONSCo.Ltd.DSDC_98qq2hk7wynyj",
+      "pluginId": "7e4fbb5e-2ae3-48d4-8ba0-6b30e7a4e287",
+      "sourceId": "af71200f-143e-43da-9b96-8fafe4bf3b04",
+      "sourceName": "Xbox Game Pass",
+      "steamAppIdConfidence": "none",
+      "isInstalled": false,
+      "hidden": false,
+      "favorite": false,
+      "platforms": [
+        "PC (Windows)"
+      ],
+      "genres": [],
+      "categories": [],
+      "tags": [
+        "Game Pass"
+      ],
+      "playtimeSeconds": 0,
+      "added": "2026-07-28T23:13:53Z",
+      "modified": "2026-07-28T23:13:53Z",
+      "releaseDate": "2024-11-7"
+    },
+    {
+      "playniteId": "e20aabdb-a41e-43fb-9548-586b3786ec60",
+      "name": "Ace Attorney Investigations Collection",
+      "providerGameId": "F024294D.3453250F4FDD_8fty0by30jkny",
+      "pluginId": "7e4fbb5e-2ae3-48d4-8ba0-6b30e7a4e287",
+      "sourceId": "7b959f77-39c9-4d00-b990-f816c2eb5017",
+      "sourceName": "Xbox",
+      "steamAppIdConfidence": "none",
+      "isInstalled": false,
+      "hidden": true,
+      "favorite": false,
+      "platforms": [
+        "Microsoft Xbox One",
+        "Microsoft Xbox Series",
+        "PC (Windows)"
+      ],
+      "genres": [],
+      "categories": [],
+      "tags": [],
+      "lastActivity": "2024-09-11T18:25:13Z",
+      "playtimeSeconds": 43680,
+      "added": "2026-07-28T18:59:19Z",
+      "modified": "2026-07-28T18:59:35Z",
+      "releaseDate": "2024-9-6"
+    },
+    {
+      "playniteId": "3cd47f33-fcaf-4402-85f2-7bf0f4edc6ab",
+      "name": "3 Count Bout",
+      "providerGameId": "amzn1.adg.product.6463784a-5716-481d-b006-e19c26e9214c",
+      "pluginId": "402674cd-4af6-4886-b6ec-0e695bfa0688",
+      "sourceId": "5f3e7a6e-8ace-43c7-9408-563ff46f493f",
+      "sourceName": "Amazon",
+      "steamAppIdConfidence": "none",
+      "isInstalled": false,
+      "hidden": true,
+      "favorite": false,
+      "platforms": [
+        "PC (Windows)"
+      ],
+      "genres": [
+        "Arcade",
+        "Fighting",
+        "Sport"
+      ],
+      "categories": [],
+      "tags": [],
+      "playtimeSeconds": 0,
+      "added": "2026-07-28T18:33:18Z",
+      "modified": "2026-07-28T18:34:38Z",
+      "releaseDate": "1993-3-25"
+    },
+    {
+      "playniteId": "c08882dd-c1af-43e1-9e97-384cea88aaf9",
+      "name": "ANYU",
+      "providerGameId": "2431310",
+      "pluginId": "cb91dfc9-b977-43bf-8e70-55f46e410fab",
+      "sourceId": "f7a9d48f-5f9c-4b0c-9d23-6274f9f9f5c7",
+      "sourceName": "Steam",
+      "steamAppId": 2431310,
+      "steamAppIdSource": "playnite-provider-game-id",
+      "steamAppIdConfidence": "exact",
+      "isInstalled": false,
+      "hidden": false,
+      "favorite": false,
+      "platforms": [
+        "PC (Windows)"
+      ],
+      "genres": [
+        "Adventure"
+      ],
+      "categories": [],
+      "tags": [],
+      "lastActivity": "2026-07-31T03:23:59Z",
+      "playtimeSeconds": 698,
+      "added": "2026-07-28T18:56:12Z",
+      "modified": "2026-07-28T18:57:13Z",
+      "releaseDate": "2023-6-16"
+    },
+    {
+      "playniteId": "0bf3ec0c-545a-4a94-926d-329fa2771c20",
+      "name": "Fallout: New Vegas",
+      "providerGameId": "a6bc4a025303d0f18ef4d344c4dd76d6",
+      "pluginId": "00000000-0000-0000-0000-000000000000",
+      "sourceId": "00000000-0000-0000-0000-000000000000",
+      "steamAppIdConfidence": "none",
+      "isInstalled": true,
+      "hidden": false,
+      "favorite": false,
+      "platforms": [
+        "PC (Windows)"
+      ],
+      "genres": [
+        "Role-playing (RPG)",
+        "Shooter"
+      ],
+      "categories": [],
+      "tags": [],
+      "playtimeSeconds": 0,
+      "added": "2026-09-07T18:54:18Z",
+      "modified": "2026-09-07T18:54:19Z",
+      "releaseDate": "2010-10-19"
+    },
+    {
+      "playniteId": "09f9b403-9eaa-487a-ad94-f22444ac67f2",
+      "name": "AK-xolotl: Together",
+      "providerGameId": "d578a8f36f8c49dc8c952c30f7dd049f",
+      "pluginId": "00000002-dbd1-46c6-b5d0-b1ba559d10e4",
+      "sourceId": "4ce52efd-b4da-405f-acb6-1f016ac35991",
+      "sourceName": "Epic",
+      "steamAppIdConfidence": "none",
+      "isInstalled": false,
+      "hidden": false,
+      "favorite": false,
+      "platforms": [
+        "PC (Windows)"
+      ],
+      "genres": [],
+      "categories": [],
+      "tags": [],
+      "playtimeSeconds": 0,
+      "added": "2026-07-28T18:34:13Z",
+      "modified": "2026-07-28T18:37:19Z"
+    },
+    {
+      "playniteId": "15e19a8e-65d1-43c9-b57f-eadd999d6d49",
+      "name": "BioShock 2 Remastered",
+      "sortingName": "BioShock 02 Remastered",
+      "providerGameId": "1482265668",
+      "pluginId": "aebe8b7c-6dc3-4a66-af31-e7375c6b5e9e",
+      "sourceId": "d68b4e4e-2d1f-472e-abda-9b0c6b1e56eb",
+      "sourceName": "GOG",
+      "steamAppIdConfidence": "none",
+      "isInstalled": false,
+      "hidden": false,
+      "favorite": true,
+      "platforms": [
+        "PC (Windows)"
+      ],
+      "genres": [
+        "Role-playing (RPG)",
+        "Shooter"
+      ],
+      "categories": [],
+      "tags": [],
+      "playtimeSeconds": 0,
+      "added": "2026-07-28T18:34:19Z",
+      "modified": "2026-07-28T18:38:15Z",
+      "releaseDate": "2016-9-14"
+    },
+    {
+      "playniteId": "55f1fad9-a13b-4908-b75a-4dec345fdfdc",
+      "name": "Diablo II: Resurrected",
+      "sortingName": "Diablo 02: Resurrected",
+      "providerGameId": "OSI",
+      "pluginId": "e3c26a3d-d695-4cb7-a769-5ff7612c7edd",
+      "sourceId": "5e0fa124-1c73-4d50-b7ab-497d2880ce3c",
+      "sourceName": "Battle.net",
+      "steamAppIdConfidence": "none",
+      "isInstalled": false,
+      "hidden": false,
+      "favorite": true,
+      "platforms": [
+        "PC (Windows)"
+      ],
+      "genres": [
+        "Adventure",
+        "Hack and slash/Beat 'em up",
+        "Role-playing (RPG)"
+      ],
+      "categories": [],
+      "tags": [],
+      "playtimeSeconds": 0,
+      "added": "2026-07-28T18:33:22Z",
+      "modified": "2026-07-28T18:35:42Z",
+      "releaseDate": "2021-9-22"
+    },
+    {
+      "playniteId": "15b41245-0fcb-4040-b518-e16b91e32f36",
+      "name": "Anno 1800",
+      "providerGameId": "4553",
+      "pluginId": "c2f038e5-8b92-4877-91f1-da9094155fc5",
+      "sourceId": "500318af-eaf3-45dd-8260-41e933c05fe2",
+      "sourceName": "Ubisoft Connect",
+      "steamAppIdConfidence": "none",
+      "isInstalled": false,
+      "hidden": false,
+      "favorite": false,
+      "platforms": [
+        "PC (Windows)"
+      ],
+      "genres": [],
+      "categories": [],
+      "tags": [],
+      "playtimeSeconds": 0,
+      "added": "2026-09-25T00:06:09Z",
+      "modified": "2026-09-25T00:06:09Z"
+    },
+    {
+      "playniteId": "a0abca82-a7c1-48d7-a4e9-6eb1dcf772b8",
+      "name": "The Abandoned Planet",
+      "sortingName": "Abandoned Planet",
+      "providerGameId": "amzn1.adg.product.03e49736-1880-4850-a59f-012b70e7dc96",
+      "pluginId": "402674cd-4af6-4886-b6ec-0e695bfa0688",
+      "sourceId": "5f3e7a6e-8ace-43c7-9408-563ff46f493f",
+      "sourceName": "Amazon",
+      "steamAppIdConfidence": "none",
+      "isInstalled": false,
+      "hidden": true,
+      "favorite": false,
+      "platforms": [
+        "PC (Windows)"
+      ],
+      "genres": [
+        "Adventure",
+        "Indie",
+        "Point-and-click",
+        "Puzzle"
+      ],
+      "categories": [],
+      "tags": [],
+      "playtimeSeconds": 0,
+      "added": "2026-07-28T18:33:18Z",
+      "modified": "2026-07-28T18:35:36Z",
+      "releaseDate": "2024-8-29"
+    },
+    {
+      "playniteId": "1a16aafc-e012-4bee-8c35-35ef08573ecc",
+      "name": "The Almost Gone",
+      "sortingName": "Almost Gone",
+      "providerGameId": "amzn1.adg.product.38c74617-0495-40dd-aae7-29e2e8b24955",
+      "pluginId": "402674cd-4af6-4886-b6ec-0e695bfa0688",
+      "sourceId": "5f3e7a6e-8ace-43c7-9408-563ff46f493f",
+      "sourceName": "Amazon",
+      "steamAppIdConfidence": "none",
+      "isInstalled": false,
+      "hidden": false,
+      "favorite": false,
+      "platforms": [
+        "PC (Windows)"
+      ],
+      "genres": [
+        "Adventure",
+        "Indie",
+        "Point-and-click",
+        "Puzzle",
+        "Simulator"
+      ],
+      "categories": [],
+      "tags": [],
+      "playtimeSeconds": 0,
+      "added": "2026-07-28T18:33:18Z",
+      "modified": "2026-07-28T18:34:37Z",
+      "releaseDate": "2020-5-5"
+    }
+  ]
+}

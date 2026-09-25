@@ -50,18 +50,18 @@ export default function LibraryEmpty({ narrowed, libraryEmpty, shelf, shelves, o
           A blank save file
         </Typography>
         <Typography sx={{ color: 'text.secondary', mb: 3, lineHeight: 1.6 }}>
-          Add the first game by searching its title, or bring your whole Steam library in at once — hours and all.
+          Add the first game by searching its title, or bring your whole Playnite library in at once — hours and all.
         </Typography>
         <Box sx={{ display: 'flex', gap: 1.5, justifyContent: 'center', flexWrap: 'wrap' }}>
           <Button variant="contained" startIcon={<AddIcon />} onClick={onAdd}>
             Add a game
           </Button>
           <Button variant="outlined" startIcon={<ImportIcon />} onClick={onImport} sx={{ color: 'text.primary' }}>
-            Import from Steam
+            Import from Playnite
           </Button>
         </Box>
         <Typography sx={{ color: 'text.secondary', fontSize: '0.8125rem', mt: 3 }}>
-          On GOG, Epic, Amazon or Luna? Add game → <b>Paste a list</b> takes a whole library of titles at once.
+          On GOG, Epic, Amazon or Luna and not on Playnite? Add game → <b>Paste a list</b> takes a whole library of titles at once.
         </Typography>
       </Frame>
     );

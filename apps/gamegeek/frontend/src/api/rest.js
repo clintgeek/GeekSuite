@@ -78,3 +78,16 @@ export function importSteam({ steamId, dryRun }) {
   if (steamId && steamId.trim()) body.steamId = steamId.trim();
   return request('/import/steam', { method: 'POST', body });
 }
+
+/**
+ * Playnite: upload a Playnite Library Exporter export (schema v1). Multipart
+ * — field `file`, flags as form fields so the same request works whether the
+ * backend reads them as query params or multipart fields.
+ */
+export function importPlaynite(file, { dryRun = true, includeHidden = false } = {}) {
+  const form = new FormData();
+  form.append('file', file);
+  form.append('dryRun', String(Boolean(dryRun)));
+  form.append('includeHidden', String(Boolean(includeHidden)));
+  return request('/import/playnite', { method: 'POST', body: form });
+}

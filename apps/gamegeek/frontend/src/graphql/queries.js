@@ -68,6 +68,8 @@ export const GAME_DETAIL_FIELDS = gql`
       storefront
       acquiredAt
       notes
+      fromPlaynite
+      playtimeHours
     }
     source
     createdAt
@@ -197,6 +199,9 @@ export const GAME_PROFILE_FIELDS = gql`
     defaultPlatform
     steamId
     lastSteamSyncAt
+    playniteLastImportAt
+    playniteLastGeneratedAtUtc
+    playniteLastTotal
   }
 `;
 

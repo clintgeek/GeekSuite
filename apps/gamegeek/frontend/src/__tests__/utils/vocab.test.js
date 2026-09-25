@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 import {
   completionLabel,
   defaultStorefrontFor,
+  formatLabel,
+  hoursSourceLabel,
   humanize,
   modeLabel,
   platformLabel,
@@ -45,5 +47,20 @@ describe('vocab labels', () => {
     expect(defaultStorefrontFor('steam-deck')).toBe('steam');
     expect(defaultStorefrontFor('switch')).toBe('nintendo');
     expect(defaultStorefrontFor('nes')).toBe('');
+  });
+
+  it('names the storefronts a Playnite import can hand back', () => {
+    expect(storefrontLabel('ubisoft')).toBe('Ubisoft Connect');
+    expect(storefrontLabel('battle-net')).toBe('Battle.net');
+    expect(storefrontLabel('xbox')).toBe('Xbox / Game Pass');
+    expect(storefrontLabel('amazon')).toBe('Amazon / Prime Gaming');
+    expect(storefrontLabel('other')).toBe('Other');
+    expect(formatLabel('subscription')).toBe('Game Pass / subscription');
+  });
+
+  it('says where Playnite hours came from', () => {
+    expect(hoursSourceLabel('playnite')).toBe('From Playnite');
+    expect(hoursSourceLabel('steam')).toBe('From Steam');
+    expect(hoursSourceLabel('manual')).toBe('Logged by you');
   });
 });

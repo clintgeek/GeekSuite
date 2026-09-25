@@ -36,6 +36,10 @@ export const typeDefs = gql`
     storefront: String
     acquiredAt: Date
     notes: String
+    # True when the copy came from a Playnite import (the import updates it by its Playnite id).
+    fromPlaynite: Boolean!
+    # Playnite's playtime for this copy, in hours (0.1). Null for a copy not from Playnite.
+    playtimeHours: Float
   }
 
   type GamePlaythrough {
@@ -156,6 +160,10 @@ export const typeDefs = gql`
     defaultPlatform: String
     steamId: String
     lastSteamSyncAt: Date
+    # Last Playnite library import: when it ran, when the export was generated, entries in it.
+    playniteLastImportAt: Date
+    playniteLastGeneratedAtUtc: Date
+    playniteLastTotal: Int
   }
 
   type GameVocabulary {

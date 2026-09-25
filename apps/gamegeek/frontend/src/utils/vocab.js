@@ -119,7 +119,7 @@ const STOREFRONT_LABELS = {
   other: 'Other',
 };
 
-const FORMAT_LABELS = { physical: 'Physical', digital: 'Digital', subscription: 'Subscription' };
+const FORMAT_LABELS = { physical: 'Physical', digital: 'Digital', subscription: 'Game Pass / subscription' };
 
 const MODE_LABELS = {
   single: 'Single-player',
@@ -131,7 +131,7 @@ const MODE_LABELS = {
 
 const COMPLETION_LABELS = { story: 'Story', extra: 'Story + extras', complete: '100%' };
 
-const HOURS_SOURCE_LABELS = { manual: 'Logged by you', steam: 'From Steam' };
+const HOURS_SOURCE_LABELS = { manual: 'Logged by you', steam: 'From Steam', playnite: 'From Playnite' };
 
 /** Title-case a slug: "retro-other" → "Retro Other", "ps5" → "Ps5". */
 export function humanize(id) {

@@ -20,3 +20,6 @@ dev-dist
 # Personal health-scan source files — see DOCS/BODY_COMPOSITION_INTAKE.md.
 # Numbers live in test fixtures; the raw reports carry name/ID and stay untracked.
 DOCS/screenshots/arboleaf.*
+
+# Chef's real Playnite export — personal data, never commit (public repo)
+DOCS/playnite-library.json

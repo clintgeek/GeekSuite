@@ -93,10 +93,12 @@ const GAME_SOURCES = Object.freeze([
   'steam-import',
   'csv-import',
   'paste-list',
+  'playnite-import',
   'sample',
 ]);
 
-const HOURS_SOURCES = Object.freeze(['manual', 'steam']);
+// 'playnite' hours are the sum of a game's Playnite copies' playtime.
+const HOURS_SOURCES = Object.freeze(['manual', 'steam', 'playnite']);
 
 const COMPLETION_LEVELS = Object.freeze(['story', 'extra', 'complete']);
 
