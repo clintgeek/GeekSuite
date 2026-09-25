@@ -23,6 +23,9 @@ import { resolvers as fitnessResolvers } from './fitnessgeek/resolvers.js';
 import { typeDefs as bookTypeDefs } from './bookgeek/typeDefs.js';
 import { resolvers as bookResolvers } from './bookgeek/resolvers.js';
 
+import { typeDefs as gameTypeDefs } from './gamegeek/typeDefs.js';
+import { resolvers as gameResolvers } from './gamegeek/resolvers.js';
+
 import { typeDefs as glanceTypeDefs } from './glance/typeDefs.js';
 import { resolvers as glanceResolvers } from './glance/resolvers.js';
 
@@ -80,6 +83,7 @@ export const typeDefs = mergeTypeDefs([
   flockTypeDefs,
   fitnessTypeDefs,
   bookTypeDefs,
+  gameTypeDefs,
   glanceTypeDefs,
 ]);
 
@@ -91,5 +95,6 @@ export const resolvers = mergeResolvers([
   flockResolvers,
   fitnessResolvers,
   bookResolvers,
+  gameResolvers,
   glanceResolvers,
 ]);

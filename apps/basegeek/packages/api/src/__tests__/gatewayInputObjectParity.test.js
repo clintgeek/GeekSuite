@@ -537,7 +537,23 @@ const FIXTURES = {
  * fixture gap instead of a silent hole. If a caller is ever added, move this
  * entry to FIXTURES with that caller's real payload.
  */
-const NO_FRONTEND_CALLER = new Set(['Mutation.setNutritionGoals']);
+//
+// The gamegeek entries (2026-09-24) are the gateway landing before the
+// frontend that calls it: apps/gamegeek/frontend declares the documents in
+// src/graphql/mutations.js, but no page builds a payload yet, so there is no
+// real payload to copy. Move each to FIXTURES with its real call site as the
+// pages land (DOCS/GameGeekPlan.md).
+const NO_FRONTEND_CALLER = new Set([
+  'Mutation.setNutritionGoals',
+  'Mutation.createGame',
+  'Mutation.createGames',
+  'Mutation.updateGame',
+  'Mutation.setGameState',
+  'Mutation.logGameSession',
+  'Mutation.saveGamePlaythrough',
+  'Mutation.saveGameProfile',
+  'Mutation.saveGameFilter',
+]);
 
 describe('every input-object-taking root field is enumerated and accounted for', () => {
   test('the coverage lists match the schema exactly', () => {
@@ -553,8 +569,9 @@ describe('every input-object-taking root field is enumerated and accounted for',
   // 23 until Phase 3 (2026-09-07), when `bulkUpdateFreeTiers` and its
   // `FreeTierUpdateInput` went with the Catalog tab's Save-all
   // (apps/basegeek/DOCS/AIGEEK_STATUS_PAGE.md §3).
-  test('the count matches the audit: 22 root fields take an input-object argument', () => {
-    expect(inputObjectRootFields()).toHaveLength(22);
+  // 30 from 2026-09-24: gamegeek's eight input-object mutations.
+  test('the count matches the audit: 30 root fields take an input-object argument', () => {
+    expect(inputObjectRootFields()).toHaveLength(30);
   });
 
   test('FIXTURES and NO_FRONTEND_CALLER never claim the same field', () => {

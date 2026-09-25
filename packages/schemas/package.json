@@ -18,7 +18,12 @@
     "./fitnessgeek/nutritionGoals": "./fitnessgeek/nutritionGoals.js",
     "./fitnessgeek/userSettings": "./fitnessgeek/userSettings.js",
     "./fitnessgeek/weight": "./fitnessgeek/weight.js",
-    "./fitnessgeek/weightGoals": "./fitnessgeek/weightGoals.js"
+    "./fitnessgeek/weightGoals": "./fitnessgeek/weightGoals.js",
+    "./gamegeek/constants": "./gamegeek/constants.js",
+    "./gamegeek/household": "./gamegeek/household.js",
+    "./gamegeek/game": "./gamegeek/game.js",
+    "./gamegeek/gamePlayer": "./gamegeek/gamePlayer.js",
+    "./gamegeek/profile": "./gamegeek/profile.js"
   },
   "scripts": {
     "lint": "eslint ."
@@ -34,6 +39,8 @@
     "mongoose": ">=7"
   },
   "peerDependenciesMeta": {
-    "mongoose": { "optional": true }
+    "mongoose": {
+      "optional": true
+    }
   }
 }
