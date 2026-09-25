@@ -5,6 +5,7 @@
 // frontend build smoke job in ci.yml follows).
 export const APPS = {
   bookgeek: { dir: 'apps/bookgeek/web', pkg: 'bookgeek-web', pm: 'pnpm', devBase: 'http://localhost:1801' },
+  gamegeek: { dir: 'apps/gamegeek/frontend', pkg: 'gamegeek-frontend', pm: 'pnpm', devBase: 'http://localhost:1811' },
   fitnessgeek: { dir: 'apps/fitnessgeek/frontend', pkg: 'fitnessgeek-frontend', pm: 'pnpm', devBase: 'http://localhost:1821' },
   bujogeek: { dir: 'apps/bujogeek/frontend', pkg: 'bujogeek-client', pm: 'pnpm', devBase: 'http://localhost:1851' },
   notegeek: { dir: 'apps/notegeek/frontend', pkg: 'notegeek-frontend', pm: 'pnpm', devBase: 'http://localhost:1861' },

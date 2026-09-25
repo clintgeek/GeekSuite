@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" shape-rendering="crispEdges">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#1D2530"/><stop offset="1" stop-color="#0B0E13"/></linearGradient>
+    <radialGradient id="glow" cx="0.5" cy="0.66" r="0.5"><stop offset="0" stop-color="#FFB547" stop-opacity="0.30"/><stop offset="1" stop-color="#FFB547" stop-opacity="0"/></radialGradient>
+    <pattern id="scan" width="4" height="4" patternUnits="userSpaceOnUse"><rect width="4" height="1" fill="#FFFFFF" fill-opacity="0.025"/></pattern>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
+  <rect width="512" height="512" rx="112" fill="url(#scan)"/>
+  <rect width="512" height="512" rx="112" fill="url(#glow)"/>
+  <rect x="117.12" y="117.12" width="277.76" height="277.76" fill="#3A4557" />
+  <rect x="117.12" y="117.12" width="277.76" height="19.84" fill="#4A566B" />
+  <rect x="176.64" y="117.12" width="158.72" height="99.2" fill="#9AA5B6" />
+  <rect x="275.84000000000003" y="136.96" width="39.68" height="59.519999999999996" fill="#3A4557" />
+  <rect x="156.8" y="256" width="198.4" height="119.03999999999999" fill="#FFB547" />
+  <rect x="176.64" y="295.68" width="119.03999999999999" height="19.84" fill="#3A4557" fill-opacity="0.6"/>
+  <rect x="176.64" y="335.36" width="79.36" height="19.84" fill="#3A4557" fill-opacity="0.6"/>
+  <rect x="375.03999999999996" y="375.03999999999996" width="19.84" height="19.84" fill="#0B0E13" />
+</svg>

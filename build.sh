@@ -22,6 +22,7 @@ APPS=(
   bujogeek
   fitnessgeek
   flockgeek
+  gamegeek
   musicgeek
   notegeek
   photogeek

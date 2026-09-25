@@ -1,0 +1,42 @@
+/** The household's copies of this game — where we can actually play it. */
+import React from 'react';
+import { Box, Button, Typography } from '@mui/material';
+import PlatformGlyph from '../../components/PlatformGlyph';
+import { formatLabel, platformLabel, storefrontLabel } from '../../utils/vocab';
+import Section from './Section';
+
+export default function CopiesSection({ copies = [], onEdit }) {
+  return (
+    <Section
+      title="Copies"
+      id="copies"
+      action={
+        <Button onClick={onEdit} sx={{ color: 'text.primary', minHeight: 44 }}>
+          {copies.length ? 'Edit' : 'Add'}
+        </Button>
+      }
+    >
+      {copies.length === 0 ? (
+        <Typography sx={{ fontSize: '0.875rem', color: 'text.secondary', lineHeight: 1.6 }}>
+          Not owned yet — or not recorded. Add the platform and store it lives on (Steam, GOG, Epic, Amazon, Luna, a cartridge on the shelf…).
+        </Typography>
+      ) : (
+        <Box component="ul" sx={{ m: 0, p: 0, display: 'flex', flexDirection: 'column', gap: 0.75 }}>
+          {copies.map((c) => (
+            <Box component="li" key={c.id} sx={{ listStyle: 'none', display: 'flex', alignItems: 'center', gap: 1.25, minHeight: 36 }}>
+              <Box sx={{ width: 32, height: 32, borderRadius: '8px', display: 'grid', placeItems: 'center', bgcolor: 'background.raised', color: 'text.secondary', flexShrink: 0 }}>
+                <PlatformGlyph platform={c.platform} sx={{ fontSize: 18 }} />
+              </Box>
+              <Box sx={{ minWidth: 0 }}>
+                <Typography sx={{ fontSize: '0.875rem', fontWeight: 600 }}>{platformLabel(c.platform)}</Typography>
+                <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
+                  {[c.format && formatLabel(c.format), c.storefront && storefrontLabel(c.storefront)].filter(Boolean).join(' · ') || 'Format not recorded'}
+                </Typography>
+              </Box>
+            </Box>
+          ))}
+        </Box>
+      )}
+    </Section>
+  );
+}

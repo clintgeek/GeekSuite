@@ -63,6 +63,11 @@ const FAKE_ENV = {
 
 const TARGETS = [
   {
+    app: 'gamegeek',
+    modules: ['apps/gamegeek/backend/src/app.js'],
+    note: "app.js exports createApp() and is split from server.js (the bujogeek shape) so it imports without connecting Mongo or listening.",
+  },
+  {
     app: 'bujogeek',
     modules: ['apps/bujogeek/backend/src/app.js'],
     note: "app.js exports createApp() and is split from server.js precisely so it can be imported without connecting Mongo or listening; its route imports run at module scope, so a plain import already exercises them.",
