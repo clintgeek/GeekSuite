@@ -12,6 +12,22 @@ anything a future reader would otherwise have to rediscover.
 
 ## 2026-09-25
 
+### GameGeek — tags, faceted filters, and edits keep your place — `96070afc`, `f9113ed9`
+
+Spec: `apps/gamegeek/DOCS/TAGS_AND_FILTERS.md`.
+- **Tags:** a curated 91-tag vocabulary. IGDB and RAWG terms map through a synonym
+  table, and anything outside it is dropped (no model involved). Live: 621 of 641 matched
+  games tagged, 84 distinct tags in use.
+- **Genres:** canonicalized on write plus a boot migration. 453 games normalized, down
+  to 26 genres.
+- **Filters:** a facet panel on desktop and a sheet on phones, storefront-style counts,
+  chips, saved views, and all state in the URL.
+- **Scroll bug:** edits refetched the paginated list, which collapsed it to page one and
+  snapped the scroll to the top. Now there's one cached list per filter, deletes evict,
+  and the position is remembered per view.
+- **Playnite-only imports (Chef's call):** the Steam library import and Paste-a-list
+  were removed, 1,278 lines. Steam stays as a keyless metadata source.
+
 ### GameGeek — metadata and covers fill themselves in
 
 `64c508a3` · spec `apps/gamegeek/DOCS/METADATA_ENRICHMENT.md`
