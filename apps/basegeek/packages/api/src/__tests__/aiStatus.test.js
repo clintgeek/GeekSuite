@@ -206,7 +206,7 @@ describe('a clean catalog needs nobody', () => {
       paidCallsMonth: 0, byApp: [],
     });
     expect(result.apps).toEqual([{
-      app: 'storygeek', tier: 'auto', sticky: 'per-conversation', allowPaid: false,
+      app: 'storygeek', tier: 'auto', sticky: 'per-conversation', allowPaid: false, paidFirst: null,
       dailyCap: null, seenInTraffic: false, hasRow: true, keys: 1, lastCallAt: hoursAgo(3),
     }]);
   });
@@ -779,7 +779,7 @@ describe('apps', () => {
     });
 
     expect(result.apps).toEqual([{
-      app: 'flockgeek', tier: null, sticky: null, allowPaid: false, dailyCap: null,
+      app: 'flockgeek', tier: null, sticky: null, allowPaid: false, paidFirst: null, dailyCap: null,
       seenInTraffic: true, hasRow: false, keys: 0,
       lastCallAt: new Date(`${dayKey(daysAgo(1))}T00:00:00.000Z`),
     }]);

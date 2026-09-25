@@ -73,6 +73,28 @@ const aiAppConfigSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  /**
+   * Paid-first: try `paidProvider/paidModel` BEFORE the free walk, as a
+   * governed paid attempt (priced, capped by `AI_PAID_PER_*_USD`, a refusal
+   * falls through to the free rows). Needs `allowPaid` too — this names the
+   * model, `allowPaid` is still the permission.
+   *
+   * 2026-09-24: NoteGeek and FitnessGeek, the two apps in daily use, moved to
+   * a cheap OpenRouter model on credit after a week of free rows failing
+   * Compose. Everything else stays free. Reversible: flip `paidFirst` off.
+   */
+  paidFirst: {
+    type: Boolean,
+    default: false
+  },
+  paidProvider: {
+    type: String,
+    default: null
+  },
+  paidModel: {
+    type: String,
+    default: null
+  },
   // Only used when tier = "specific"
   provider: {
     type: String,

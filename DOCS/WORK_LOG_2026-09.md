@@ -12,6 +12,22 @@ anything a future reader would otherwise have to rediscover.
 
 ## 2026-09-24
 
+### aiGeek — NoteGeek and FitnessGeek go paid-first on OpenRouter credit
+
+Chef, after a third round of Compose failures on free rows: "just put it on the $10 credit.
+It and the FitnessGeek stuff... Let that stuff exist for toys and experiments." Stage 1 of
+`DOCS/AIGEEK_SIMPLIFICATION.md` §6, done as the "small change" variant rather than a pin: a
+routing row can now name `paidFirst` + `paidProvider`/`paidModel`, and that model is tried
+FIRST as a *governed* paid attempt (priced from `AIPricing`, capped by
+`AI_PAID_PER_CALL_USD`/`AI_PAID_PER_DAY_USD`, a refusal falls through), with the free rows
+after it. A pin (`tier: 'specific'`) would have skipped the governor entirely. Capability
+calls (`need:`) get the same treatment in the feature runner: a paid-only call first, then
+the need's own qualifying picks, so a vision need still falls back to vision rows. Unpriced
+paid model → not attempted. `allowPaid` stays the permission, and a free signal still vetoes
+it. The admin save writes the new fields only when sent, so the existing UI can't wipe them.
+Both rows → `openrouter/openai/gpt-4.1-mini` ($0.40/$1.60 per 1M, ~1–2¢ a big Compose).
+Governor caps raised to $0.05/call and $0.50/day. Reversible: `paidFirst: false`.
+
 ### NoteGeek — the tag tree gets the rest of the sidebar, so new tags are visible
 
 Chef: "the tags on the left panel of notegeek aren't showing new tags like xformative."

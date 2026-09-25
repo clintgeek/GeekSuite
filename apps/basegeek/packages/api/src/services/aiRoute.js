@@ -74,7 +74,7 @@ export const PAID_PER_DAY_USD_DEFAULT = 0.05;
 export const PAID_PER_CALL_USD_DEFAULT = 0.01;
 
 /** A Route with every field present, so no reader has to guard for absence. */
-function route({ mode, provider = null, model = null, allowPaid = false, singleAttempt = false, sticky = null, hints = [] }) {
+function route({ mode, provider = null, model = null, allowPaid = false, singleAttempt = false, sticky = null, paidFirst = null, paidOnly = false, hints = [] }) {
   return {
     mode,
     provider,
@@ -82,6 +82,11 @@ function route({ mode, provider = null, model = null, allowPaid = false, singleA
     allowPaid: !!allowPaid,
     singleAttempt: !!singleAttempt,
     sticky: sticky ?? null,
+    // `{ provider, model }` — try this paid model FIRST, governed, then the
+    // ordinary walk (2026-09-24: NoteGeek and FitnessGeek on OpenRouter
+    // credit). `paidOnly` drops the walk: the caller has its own fallback.
+    paidFirst: paidFirst ?? null,
+    paidOnly: !!(paidFirst && paidOnly),
     // Deduped and ordered: hints go into log lines, and a line that says
     // `free` twice reads like two decisions were made.
     hints: [...new Set(hints.filter(Boolean))]
@@ -267,13 +272,23 @@ export function resolveRoute(config = {}, appRow = null, ctx = {}) {
   }
   if (!appRow) hints.push('no_row');
 
+  const allowPaid = appRow?.allowPaid === true && !free;
+  // Paid-first: the row names one paid model to try before the free walk.
+  // Only with allowPaid — the same money gate — and never on a free signal.
+  const paidFirst = allowPaid && appRow?.paidFirst === true && appRow.paidProvider && appRow.paidModel
+    ? { provider: appRow.paidProvider, model: appRow.paidModel }
+    : null;
+  if (paidFirst) hints.push(cfg.paidOnly ? 'paid_first_only' : 'paid_first');
+
   return route({
     mode: 'auto',
     // A free signal is a veto on money, whatever the row says: a caller that
     // asked for the free tier by name did not ask to be billed.
-    allowPaid: appRow?.allowPaid === true && !free,
+    allowPaid,
     singleAttempt,
     sticky: stickyFor(appRow, appId, conversationId),
+    paidFirst,
+    paidOnly: cfg.paidOnly === true,
     hints
   });
 }

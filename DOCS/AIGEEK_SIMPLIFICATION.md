@@ -508,6 +508,14 @@ captures nearly all of the "paid model handles the work that matters" goal**
 for the features that actually have live traffic, at a cost too small to
 budget.
 
+> **Status 2026-09-24: done for NoteGeek and FitnessGeek.** Taken as the "small change"
+> variant, not `tier: 'specific'` — a pin is planned unpaid and skips the governor. Routing
+> rows gained `paidFirst`, `paidProvider` and `paidModel`: that model is tried first as a
+> governed paid attempt, then the free walk. For `need:` calls the runner makes a paid-only
+> call and then goes to the need's own picks. Both rows point at
+> `openrouter/openai/gpt-4.1-mini`, with caps of $0.05/call and $0.50/day. Every other app is
+> still free. Tests: `__tests__/aiPaidFirst.test.js`.
+
 ### Stage 2 — shrink the catalog to a shortlist, and re-scope the golden set
 
 Once Stage 1 has run long enough to trust the spend numbers, retire the

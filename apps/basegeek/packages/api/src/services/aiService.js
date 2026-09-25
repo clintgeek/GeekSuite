@@ -1472,6 +1472,24 @@ class AIService {
    * Never throws: a routing row we cannot read is a reason to fall back to
    * plain `auto`, not a reason to fail the call.
    */
+  /**
+   * The paid-first model this app's row names, or null. Read-only — the
+   * feature runner asks this before deciding whether a need becomes a free
+   * pin, so it must not upsert or touch `lastSeen` the way `routingRowFor`
+   * does. Same gate as `resolveRoute`: `allowPaid` AND `paidFirst` AND a model.
+   */
+  async paidFirstFor(appId) {
+    try {
+      const row = await this.findAppConfig(appId);
+      if (row?.allowPaid === true && row.paidFirst === true && row.paidProvider && row.paidModel) {
+        return { provider: row.paidProvider, model: row.paidModel };
+      }
+    } catch {
+      // A lookup failure is "no paid-first", never a failed call.
+    }
+    return null;
+  }
+
   async routingRowFor(appId) {
     try {
       const row = await this.findAppConfig(appId);
@@ -1587,6 +1605,41 @@ class AIService {
     const limit = route.singleAttempt ? 1 : MAX_FREE_TIER_ATTEMPTS;
     const hints = [];
     const attempts = [];
+
+    // ── 0. paid-first ─────────────────────────────────────────────────────
+    // The row's named paid model, as a GOVERNED paid attempt (the governor
+    // prices it at dispatch and a refusal falls through), ahead of every free
+    // row. A pin would skip the governor entirely — `planPinAttempt` marks
+    // nothing paid — which is why this is not `tier: 'specific'`.
+    if (route.paidFirst) {
+      let pricing = null;
+      try {
+        const row = await AIPricing.findOne({ provider: route.paidFirst.provider, modelId: route.paidFirst.model }).lean();
+        const n = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
+        if (row && (n(row.inputPrice) !== null || n(row.outputPrice) !== null)) {
+          pricing = { inputPrice: n(row.inputPrice) ?? 0, outputPrice: n(row.outputPrice) ?? 0 };
+        }
+      } catch {
+        pricing = null;
+      }
+      // Unpriced is not free: without a price the governor cannot cap it, so
+      // the paid attempt is not planned at all (Phase 1's rule).
+      if (pricing) {
+        attempts.push({
+          provider: route.paidFirst.provider,
+          modelId: route.paidFirst.model,
+          freeRow: null,
+          paid: true,
+          sticky: false,
+          pricing,
+        });
+        hints.push('paid_first_planned');
+      } else {
+        hints.push('paid_first_unpriced');
+        logger.warn({ appId, model: `${route.paidFirst.provider}/${route.paidFirst.model}` }, '[Paid] paid-first model has no price — not attempted');
+      }
+      if (route.paidOnly) return { attempts, hints };
+    }
 
     let live = [];
     let cooling = [];

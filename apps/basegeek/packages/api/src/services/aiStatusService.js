@@ -760,6 +760,9 @@ export async function buildStatus({ now = new Date(), deps = {} } = {}) {
         tier: row?.tier ?? null,
         sticky: row?.sticky ?? null,
         allowPaid: row?.allowPaid === true,
+        paidFirst: row?.allowPaid === true && row?.paidFirst === true && row?.paidProvider && row?.paidModel
+          ? `${row.paidProvider}/${row.paidModel}`
+          : null,
         dailyCap: Number.isFinite(Number(row?.dailyCap)) && Number(row.dailyCap) > 0
           ? Math.floor(Number(row.dailyCap))
           : null,

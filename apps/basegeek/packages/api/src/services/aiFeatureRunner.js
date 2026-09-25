@@ -427,6 +427,21 @@ export async function runFeatureCore(opts) {
   const attemptPins = needPin && !explicitPin
     ? needPicks.map((p) => ({ provider: p.provider, model: p.modelId }))
     : [pinned || null];
+  // Paid-first (2026-09-24): an app whose row names a paid model tries it
+  // BEFORE the need's free picks. `paidOnly` makes that one call plan only
+  // the governed paid attempt — a budget refusal or an unpriced model fails
+  // it in milliseconds — so the fallback is still the need's own qualifying
+  // rows (vision rows for a vision need), not the app's general free walk.
+  // A call with no need already goes `auto`, which plans paid-first itself.
+  let paidFirst = null;
+  if (needPin && !explicitPin) {
+    try {
+      paidFirst = (await ai.paidFirstFor?.(caller.appId)) ?? null;
+    } catch {
+      paidFirst = null;
+    }
+    if (paidFirst) attemptPins.unshift({ paidOnly: true });
+  }
   const startedAt = Date.now();
   const failedPicks = [];
 
@@ -436,8 +451,10 @@ export async function runFeatureCore(opts) {
     const attemptPin = attemptPins[i];
     try {
       content = await callOnce(attemptPin);
-      if (needPin && attemptPin) ai.noteNeedSuccess?.(attemptPin.provider, attemptPin.model);
-      if (i > 0 && needInfo) {
+      if (needPin && attemptPin?.provider) ai.noteNeedSuccess?.(attemptPin.provider, attemptPin.model);
+      if (attemptPin?.paidOnly && needInfo) {
+        needInfo = { ...needInfo, provider: paidFirst.provider, model: paidFirst.model, paidFirst: true };
+      } else if (i > 0 && needInfo) {
         needInfo = {
           ...needInfo,
           provider: attemptPin.provider,
@@ -447,8 +464,10 @@ export async function runFeatureCore(opts) {
       }
       break;
     } catch (err) {
-      failedPicks.push(attemptPin ? `${attemptPin.provider}/${attemptPin.model}` : 'auto');
-      if (needPin && attemptPin) {
+      failedPicks.push(attemptPin?.paidOnly
+        ? `paid:${paidFirst.provider}/${paidFirst.model}`
+        : attemptPin ? `${attemptPin.provider}/${attemptPin.model}` : 'auto');
+      if (needPin && attemptPin?.provider) {
         // Demote the row for this need for a while, and drop the cached
         // resolution so the NEXT call re-ranks now rather than in a minute:
         // a row timing out is not a blip the next nine calls should repeat.

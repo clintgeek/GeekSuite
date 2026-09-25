@@ -566,6 +566,12 @@ export const resolvers = {
         notes: config.notes || '',
         enabled: config.enabled !== false
       };
+      // Paid-first (2026-09-24) is written only when the caller sent it: the
+      // admin UI predates it, and a save from there must not switch a
+      // paid-first app back to free by omission.
+      if ('paidFirst' in config) update.paidFirst = config.paidFirst === true;
+      if ('paidProvider' in config) update.paidProvider = config.paidProvider || null;
+      if ('paidModel' in config) update.paidModel = config.paidModel || null;
       const result = await AIAppConfig.findOneAndUpdate(
         { appName: appName.trim() },
         update,
