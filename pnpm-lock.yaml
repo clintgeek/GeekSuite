@@ -1647,16 +1647,28 @@ importers:
       mongoose:
         specifier: '>=7'
         version: 8.23.0(@aws-sdk/credential-providers@3.990.0)(socks@2.8.7)
-      react:
-        specifier: ^18.3.1
-        version: 18.3.1
     devDependencies:
       '@geeksuite/eslint-config':
         specifier: workspace:*
         version: link:../eslint-config
+      '@testing-library/react':
+        specifier: ^16.3.2
+        version: 16.3.2(@testing-library/dom@10.4.1)(@types/react-dom@18.3.7(@types/react@19.2.14))(@types/react@19.2.14)(react-dom@18.3.1(react@18.3.1))(react@18.3.1)
       eslint:
         specifier: ^9.39.2
         version: 9.39.2(jiti@1.21.7)
+      jsdom:
+        specifier: ^28.1.0
+        version: 28.1.0(@noble/hashes@1.8.0)
+      react:
+        specifier: ^18.3.1
+        version: 18.3.1
+      react-dom:
+        specifier: ^18.3.1
+        version: 18.3.1(react@18.3.1)
+      vitest:
+        specifier: ^4.0.18
+        version: 4.0.18(@opentelemetry/api@1.9.0)(@types/node@25.2.3)(jiti@1.21.7)(jsdom@28.1.0(@noble/hashes@1.8.0))(sass@1.97.3)(sugarss@5.0.1(postcss@8.5.6))(terser@5.46.0)(yaml@2.8.2)
 
   packages/utils:
     devDependencies:
