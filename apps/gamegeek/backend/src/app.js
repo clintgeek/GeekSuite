@@ -12,6 +12,7 @@ import metadataRoutes from './routes/metadataRoutes.js';
 import coverRoutes from './routes/coverRoutes.js';
 import importRoutes from './routes/importRoutes.js';
 import playniteRoutes, { PLAYNITE_IMPORT_PATH } from './routes/playniteRoutes.js';
+import { enrichmentRouter, gameMetadataRouter } from './routes/enrichmentRoutes.js';
 import { authenticate } from './middleware/authMiddleware.js';
 import { csrfGuard, meHandler } from '@geeksuite/user/server';
 
@@ -95,7 +96,9 @@ export function createApp() {
   // Routes
   app.use('/api/auth', authRoutes);
   app.get('/api/me', authenticate, meHandler());
+  app.use('/api/metadata/enrich', enrichmentRouter);
   app.use('/api/metadata', metadataRoutes);
+  app.use('/api/games', gameMetadataRouter);
   app.use('/api/games', coverRoutes);
   app.use('/api/import', importRoutes);
   app.use('/api/import', playniteRoutes);

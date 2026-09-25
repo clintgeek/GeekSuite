@@ -25,6 +25,28 @@ export const IGDB_GAME_FIELDS = [
   'external_games.uid',
 ].join(',');
 
+/**
+ * The enrichment detail fetch (one game by id). `external_games.*` and
+ * `multiplayer_modes.*` are wildcards on purpose: IGDB renamed
+ * `external_games.category` to `external_game_source` in 2025 and an
+ * explicitly named field that no longer exists 400s the whole query. The
+ * normalizer reads whichever of the two is present.
+ */
+export const IGDB_DETAIL_FIELDS = [
+  'name',
+  'first_release_date',
+  'summary',
+  'cover.image_id',
+  'genres.name',
+  'game_modes.name',
+  'platforms.name',
+  'involved_companies.company.name',
+  'involved_companies.developer',
+  'involved_companies.publisher',
+  'external_games.*',
+  'multiplayer_modes.*',
+].join(',');
+
 /** Unix seconds (IGDB's `first_release_date`) → ISO UTC-midnight date, or null. */
 export function unixSecondsToUtcMidnightIso(unixSeconds) {
   if (!Number.isFinite(unixSeconds)) return null;
@@ -46,7 +68,9 @@ function companiesByRole(involvedCompanies, role) {
 
 function findSteamAppId(externalGames) {
   if (!Array.isArray(externalGames)) return null;
-  const match = externalGames.find((eg) => eg?.category === IGDB_EXTERNAL_CATEGORY_STEAM && eg?.uid);
+  const isSteam = (eg) =>
+    eg?.category === IGDB_EXTERNAL_CATEGORY_STEAM || eg?.external_game_source === IGDB_EXTERNAL_CATEGORY_STEAM;
+  const match = externalGames.find((eg) => isSteam(eg) && /^\d+$/.test(String(eg?.uid ?? '')));
   return match ? String(match.uid) : null;
 }
 
@@ -81,6 +105,58 @@ export function normalizeIgdbGame(game) {
   };
 }
 
+const secondsToHours = (s) => (Number.isFinite(s) && s > 0 ? Math.round((s / 3600) * 10) / 10 : null);
+
+/**
+ * `game_time_to_beats` row → {main, extra, complete} hours:
+ * hastily → main, normally → extra, completely → complete.
+ */
+export function normalizeIgdbTimeToBeat(rows) {
+  const row = Array.isArray(rows) ? rows[0] : rows;
+  if (!row) return { main: null, extra: null, complete: null };
+  return {
+    main: secondsToHours(row.hastily),
+    extra: secondsToHours(row.normally),
+    complete: secondsToHours(row.completely),
+  };
+}
+
+/** multiplayer_modes[] → extra modes and the biggest couch player count. */
+function fromMultiplayerModes(list) {
+  const modes = [];
+  let maxLocal = null;
+  for (const mm of Array.isArray(list) ? list : []) {
+    if (!mm || typeof mm !== 'object') continue;
+    if (mm.offlinecoop && !modes.includes('coop-local')) modes.push('coop-local');
+    if (mm.onlinecoop && !modes.includes('coop-online')) modes.push('coop-online');
+    for (const n of [mm.offlinecoopmax, mm.offlinemax]) {
+      if (Number.isInteger(n) && n > 1 && (maxLocal == null || n > maxLocal)) maxLocal = n;
+    }
+  }
+  return { modes, maxLocal };
+}
+
+/**
+ * The full enrichment candidate: normalizeIgdbGame + multiplayer modes,
+ * max local players, time-to-beat and the cover download list.
+ */
+export function normalizeIgdbDetail(game, timeToBeatRows = []) {
+  const base = normalizeIgdbGame(game);
+  const mp = fromMultiplayerModes(game?.multiplayer_modes);
+  const modes = [...base.modes];
+  for (const m of mp.modes) if (!modes.includes(m)) modes.push(m);
+  const coverBig = game?.cover?.image_id
+    ? `https://images.igdb.com/igdb/image/upload/t_cover_big_2x/${game.cover.image_id}.jpg`
+    : null;
+  return {
+    ...base,
+    modes,
+    maxLocalPlayers: mp.maxLocal,
+    timeToBeat: normalizeIgdbTimeToBeat(timeToBeatRows),
+    coverUrls: [coverBig, base.coverUrl].filter(Boolean),
+  };
+}
+
 /** @param {object[]} games the IGDB `/games` response array. */
 export function normalizeIgdbSearchResults(games) {
   if (!Array.isArray(games)) return [];
@@ -90,7 +166,10 @@ export function normalizeIgdbSearchResults(games) {
 export default {
   IGDB_EXTERNAL_CATEGORY_STEAM,
   IGDB_GAME_FIELDS,
+  IGDB_DETAIL_FIELDS,
   unixSecondsToUtcMidnightIso,
+  normalizeIgdbTimeToBeat,
+  normalizeIgdbDetail,
   normalizeIgdbGame,
   normalizeIgdbSearchResults,
 };

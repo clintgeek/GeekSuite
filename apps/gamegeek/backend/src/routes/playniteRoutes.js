@@ -22,6 +22,7 @@ import householdModule from '@geeksuite/schemas/gamegeek/household';
 import { parseExport, parseJsonText, PlayniteFileError } from '../playnite/parse.js';
 import { planPlayniteImport } from '../playnite/importPlanner.js';
 import { commitPlayniteImport } from '../playnite/commit.js';
+import { triggerEnrichment } from '../enrichment/service.js';
 
 const { resolveHouseholdId } = householdModule;
 
@@ -144,6 +145,9 @@ router.post('/playnite', authenticate, readBody, async (req, res, next) => {
       },
       { upsert: true }
     );
+
+    // New games want covers and metadata; the worker runs in the background.
+    triggerEnrichment('playnite-commit');
 
     return res.json({ ...body, committed: true });
   } catch (err) {

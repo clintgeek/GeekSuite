@@ -5,6 +5,7 @@ import { fileURLToPath } from 'url';
 import logger from './src/lib/logger.js';
 import createApp from './src/app.js';
 import { ensureCoversDir } from './src/lib/coverStorage.js';
+import { startEnrichmentSchedule } from './src/enrichment/service.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -75,6 +76,10 @@ async function start() {
   server = app.listen(PORT, '0.0.0.0', () => {
     logger.info('GameGeek API server running on port ' + PORT);
   });
+
+  // Metadata enrichment: boot run after ~30 s, then every 6 h — production
+  // (or ENRICHMENT_AUTORUN=1) only; ENRICHMENT_DISABLED=1 turns it off.
+  startEnrichmentSchedule();
 }
 
 start();

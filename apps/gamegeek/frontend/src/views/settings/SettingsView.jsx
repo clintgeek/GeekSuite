@@ -5,6 +5,7 @@ import { useLocation } from 'react-router-dom';
 import { useGameProfile, useVocabulary } from '../../hooks/useGameMeta';
 import { visuallyHidden } from '../../utils/a11y';
 import { AccountCard, AppearanceCard } from './AppearanceAccountCards';
+import MetadataCard from './MetadataCard';
 import PlatformsCard from './PlatformsCard';
 import PlayniteImportCard from './PlayniteImportCard';
 import ShelvesCard from './ShelvesCard';
@@ -35,6 +36,7 @@ export default function SettingsView({ user, onSignOut }) {
         </Typography>
       </Box>
       <PlayniteImportCard profile={profile} />
+      <MetadataCard />
       <PlatformsCard profile={profile} vocab={vocab} />
       <ShelvesCard profile={profile} />
       <StorefrontsCard />

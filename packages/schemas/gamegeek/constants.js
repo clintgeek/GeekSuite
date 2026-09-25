@@ -102,6 +102,10 @@ const HOURS_SOURCES = Object.freeze(['manual', 'steam', 'playnite']);
 
 const COMPLETION_LEVELS = Object.freeze(['story', 'extra', 'complete']);
 
+/** Metadata enrichment — apps/gamegeek/DOCS/METADATA_ENRICHMENT.md. */
+const ENRICHMENT_STATUSES = Object.freeze(['pending', 'matched', 'no-match', 'ambiguous', 'error', 'unlinked']);
+const ENRICHMENT_PROVIDERS = Object.freeze(['steam', 'igdb', 'rawg']);
+
 /** Sessions kept per GamePlayer row; older ones are already counted in hoursPlayed. */
 const MAX_SESSIONS = 200;
 
@@ -127,6 +131,8 @@ module.exports = {
   GAME_SOURCES,
   HOURS_SOURCES,
   COMPLETION_LEVELS,
+  ENRICHMENT_STATUSES,
+  ENRICHMENT_PROVIDERS,
   MAX_SESSIONS,
   bounds,
 };

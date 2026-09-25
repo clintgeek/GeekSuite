@@ -5,6 +5,7 @@
  * test/fixtures/, never live.
  */
 import { mapNames, STEAM_MODE_MAP } from './platformMap.js';
+import { toPlainText } from '../enrichment/text.js';
 
 /** `library_600x900` is the portrait asset the plan calls for. */
 export function steamLibraryCoverUrl(appId) {
@@ -29,7 +30,8 @@ export function normalizeSteamSearchItem(item) {
     publishers: [],
     genres: [],
     description: '',
-    platforms: ['pc'],
+    // storesearch items carry {windows, mac, linux}; older shapes don't — assume pc.
+    platforms: item.platforms ? steamPlatformList(item.platforms) : ['pc'],
     modes: [],
     coverUrl: steamLibraryCoverUrl(appId),
     externalIds: { steamAppId: appId },
@@ -113,8 +115,22 @@ function steamPlatformList(platforms) {
  * @returns {object|null} MetadataCandidate, or null when Steam reports
  *   `success: false` (delisted/invalid app id) or the shape is unexpected.
  */
+/**
+ * The appdetails entry for `appId`. Steam usually keys the body by the
+ * requested id, but not always: asking for 620 (Portal 2) has been answered
+ * as `{"323180": {success, data: {steam_appid: 620, ...}}}` (recorded
+ * 2026-09-25, test/fixtures/steam-appdetails-portal2.json). So fall back to
+ * the entry whose `data.steam_appid` is the one asked for.
+ */
+function findAppEntry(appId, response) {
+  if (!response || typeof response !== 'object') return null;
+  const id = String(appId);
+  if (response[id]) return response[id];
+  return Object.values(response).find((e) => e?.data && String(e.data.steam_appid) === id) ?? null;
+}
+
 export function normalizeSteamAppDetails(appId, response) {
-  const entry = response?.[String(appId)];
+  const entry = findAppEntry(appId, response);
   if (!entry?.success || !entry?.data) return null;
   const data = entry.data;
 
@@ -129,10 +145,14 @@ export function normalizeSteamAppDetails(appId, response) {
     developers: Array.isArray(data.developers) ? data.developers : [],
     publishers: Array.isArray(data.publishers) ? data.publishers : [],
     genres,
-    description: data.short_description || '',
+    // short_description holds HTML tags and entities (&quot;…&quot;).
+    description: toPlainText(data.short_description || ''),
     platforms: steamPlatformList(data.platforms),
     modes: mapNames(categoryNames, STEAM_MODE_MAP),
     coverUrl: data.header_image || steamLibraryCoverUrl(appId),
+    // Enrichment's download order: the 600x900 portrait first, then the
+    // landscape header (newer apps often 404 the legacy portrait path).
+    coverUrls: [steamLibraryCoverUrl(appId), data.header_image].filter(Boolean),
     externalIds: { steamAppId: String(appId) },
   };
 }

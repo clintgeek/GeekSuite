@@ -91,3 +91,24 @@ export function importPlaynite(file, { dryRun = true, includeHidden = false } = 
   form.append('includeHidden', String(Boolean(includeHidden)));
   return request('/import/playnite', { method: 'POST', body: form });
 }
+
+/**
+ * Metadata & cover enrichment (DOCS/METADATA_ENRICHMENT.md). The worker runs
+ * per household in the gamegeek backend; these calls read its status, kick
+ * it off, and let a person fix a game it got wrong or hasn't reached yet.
+ */
+export const getEnrichStatus = () => request('/metadata/enrich/status');
+
+export const runEnrich = () => request('/metadata/enrich/run', { method: 'POST' });
+
+export const refreshGameMetadata = (gameId) =>
+  request(`/games/${encodeURIComponent(gameId)}/metadata/refresh`, { method: 'POST' });
+
+export const getMetadataCandidates = (gameId) =>
+  request(`/games/${encodeURIComponent(gameId)}/metadata/candidates`);
+
+export const applyMetadataCandidate = (gameId, { provider, providerId }) =>
+  request(`/games/${encodeURIComponent(gameId)}/metadata/apply`, { method: 'POST', body: { provider, providerId } });
+
+export const unlinkMetadata = (gameId) =>
+  request(`/games/${encodeURIComponent(gameId)}/metadata/unlink`, { method: 'POST' });

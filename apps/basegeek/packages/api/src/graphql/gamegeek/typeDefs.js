@@ -106,6 +106,9 @@ export const typeDefs = gql`
     # Relative URL served by the gamegeek backend, cache-busted by updatedAt. Null = no cover.
     coverUrl: String
     externalIds: GameExternalIds
+    # Metadata/cover enrichment record, written by the gamegeek backend
+    # (apps/gamegeek/DOCS/METADATA_ENRICHMENT.md). Read-only; null = never tried.
+    enrichment: GameEnrichment
     copies: [GameCopy!]!
     owned: Boolean!
     source: String
@@ -113,6 +116,21 @@ export const typeDefs = gql`
     updatedAt: Date
     me: GameMyState
     household: [GameHouseholdEntry!]!
+  }
+
+  type GameEnrichment {
+    # pending | matched | no-match | ambiguous | error | unlinked
+    status: String!
+    # steam | igdb | rawg
+    provider: String
+    providerId: String
+    # What the provider calls the game — "matched as 'X'".
+    matchedTitle: String
+    matchedAt: Date
+    attempts: Int
+    error: String
+    # True when a person picked the match (the worker leaves it alone).
+    manual: Boolean
   }
 
   type GamePage {

@@ -138,6 +138,36 @@ export const scenes = [
       await h.settle(300);
     },
   },
+  {
+    // Metadata enrichment (DOCS/METADATA_ENRICHMENT.md): the fixture status
+    // is fixed at running=true with IGDB/RAWG off, so this is always the
+    // "worker is going, keys are missing" state — counts, provider chips,
+    // the no-blame key line and live progress.
+    name: '12-metadata-card',
+    goto: '/settings#metadata',
+    wait: 1400,
+  },
+  {
+    // Detail → ⋯ More → "Find metadata…": every provider's candidates for
+    // Hades, with the Steam one marked as the best match.
+    name: '13-find-metadata',
+    goto: '/game/g1',
+    wait: 1600,
+    async setup(page, h) {
+      const more = page.getByRole('button', { name: 'More actions' });
+      if (!(await more.count())) return false;
+      await more.click();
+      await h.settle(500);
+      const find = page.getByRole('button', { name: /Find metadata/ });
+      if (!(await find.count())) return false;
+      await find.click();
+      await h.settle(900);
+    },
+    teardown: async (page, h) => {
+      await h.esc();
+      await h.esc();
+    },
+  },
 ];
 
 // Known, ticketed violations. The list starts empty and stays that way.

@@ -27,6 +27,7 @@ import CoverToolsDialog from './CoverToolsDialog';
 import DetailHero from './DetailHero';
 import DetailsSection from './DetailsSection';
 import EditGameDialog from './EditGameDialog';
+import FindMetadataDialog from './FindMetadataDialog';
 import HouseholdSection from './HouseholdSection';
 import LogSessionSheet from './LogSessionSheet';
 import MoreSheet from './MoreSheet';
@@ -36,6 +37,7 @@ import RatingSection from './RatingSection';
 import SessionsSection from './SessionsSection';
 import ShelfSheet from './ShelfSheet';
 import StatusSection from './StatusSection';
+import UnlinkMetadataDialog from './UnlinkMetadataDialog';
 import { useDetailActions } from './useDetailActions';
 
 
@@ -44,7 +46,7 @@ export default function GameDetail() {
   const navigate = useNavigate();
   const location = useLocation();
   const { notify } = useToast();
-  const [panel, setPanel] = useState(null); // shelf | log | more | edit | cover | copies | delete
+  const [panel, setPanel] = useState(null); // shelf | log | more | edit | cover | copies | metadata | unlink-metadata | delete
   const ratingRef = useRef(null);
 
   const { data, loading, error, refetch } = useQuery(GET_GAME, {
@@ -140,7 +142,7 @@ export default function GameDetail() {
           <Box sx={{ display: 'grid', gap: 1.5, minWidth: 0 }}>
             <CopiesSection copies={game.copies ?? []} onEdit={() => setPanel('copies')} />
             <NotesSection game={game} />
-            <DetailsSection game={game} />
+            <DetailsSection game={game} onFindMetadata={() => setPanel('metadata')} />
             <HouseholdSection entries={game.household ?? []} />
           </Box>
         </Box>
@@ -206,9 +208,44 @@ export default function GameDetail() {
             onEdit={() => setPanel('edit')}
             onCover={() => setPanel('cover')}
             onCopies={() => setPanel('copies')}
+            onFindMetadata={() => setPanel('metadata')}
+            onRefreshMetadata={async () => {
+              try {
+                await actions.refreshMetadata();
+                notify(`Looking up details for ${game.title}…`, { tone: 'success' });
+              } catch (err) {
+                notify(err?.message || "Couldn't refresh metadata.", { tone: 'error' });
+              }
+            }}
+            onUnlinkMetadata={() => setPanel('unlink-metadata')}
+            enrichmentStatus={game.enrichment?.status}
             onDelete={() => setPanel('delete')}
           />
           <EditGameDialog open={panel === 'edit'} onClose={closePanel} game={game} vocab={vocab} onSave={(input) => actions.updateGame(input)} />
+          <FindMetadataDialog
+            open={panel === 'metadata'}
+            onClose={closePanel}
+            game={game}
+            onApply={(candidate) => actions.applyMetadataCandidate(candidate)}
+            onApplied={(candidate) => {
+              const provider = candidate.provider === 'igdb' ? 'IGDB' : candidate.provider === 'rawg' ? 'RAWG' : 'Steam';
+              notify(`Details from ${provider} applied.`, { tone: 'success' });
+            }}
+          />
+          <UnlinkMetadataDialog
+            open={panel === 'unlink-metadata'}
+            onClose={closePanel}
+            title={game.title}
+            onConfirm={async () => {
+              try {
+                await actions.unlinkMetadata();
+                closePanel();
+                notify('Metadata unlinked.', { tone: 'success' });
+              } catch (err) {
+                notify(err?.message || "Couldn't unlink metadata.", { tone: 'error' });
+              }
+            }}
+          />
           <CopiesDialog
             open={panel === 'copies'}
             onClose={closePanel}

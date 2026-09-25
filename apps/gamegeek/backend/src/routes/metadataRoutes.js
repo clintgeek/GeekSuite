@@ -6,6 +6,8 @@ import { normalizeIgdbSearchResults } from '../metadata/igdb.js';
 import { searchSteamStore, fetchSteamAppDetails } from '../metadata/steamClient.js';
 import { normalizeSteamSearchResults, normalizeSteamAppDetails } from '../metadata/steam.js';
 import { isSteamImportConfigured } from '../metadata/steamWebApi.js';
+import { isRawgConfigured, searchRawgGames } from '../metadata/rawgClient.js';
+import { normalizeRawgSearchResults } from '../metadata/rawg.js';
 
 const router = express.Router();
 
@@ -23,6 +25,7 @@ const steamAppIdParamSchema = z.object({
 router.get('/providers', authenticate, (req, res) => {
   res.json({
     igdb: isIgdbConfigured(),
+    rawg: isRawgConfigured(),
     steamStore: true,
     steamImport: isSteamImportConfigured(),
   });
@@ -40,6 +43,11 @@ router.get('/search', authenticate, async (req, res) => {
     if (isIgdbConfigured()) {
       const raw = await searchIgdbGames(q, effectiveLimit);
       return res.json({ provider: 'igdb', results: normalizeIgdbSearchResults(raw) });
+    }
+
+    if (isRawgConfigured()) {
+      const raw = await searchRawgGames(q, { pageSize: effectiveLimit });
+      return res.json({ provider: 'rawg', results: normalizeRawgSearchResults(raw) });
     }
 
     const raw = await searchSteamStore(q);

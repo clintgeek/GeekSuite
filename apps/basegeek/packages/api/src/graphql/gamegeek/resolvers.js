@@ -459,6 +459,7 @@ export const resolvers = {
     tags: (g) => g.tags ?? [],
     modes: (g) => g.modes ?? [],
     platformsAvailable: (g) => g.platformsAvailable ?? [],
+    enrichment: (g) => g.enrichment ?? null,
     copies: (g) => g.copies ?? [],
     owned: (g) => Boolean(g.owned ?? (Array.isArray(g.copies) && g.copies.length > 0)),
     releaseYear: (g) => {
@@ -482,6 +483,14 @@ export const resolvers = {
       const householdId = resolveHouseholdId(context.user);
       return (await householdLoader(context, userId, householdId).load(g._id)) ?? [];
     },
+  },
+  // Written only by the gamegeek backend's enrichment worker; the gateway
+  // never writes it (GameInput has no enrichment, and updateGame saves only
+  // the paths it modified).
+  GameEnrichment: {
+    status: (e) => e.status || 'pending',
+    attempts: (e) => e.attempts ?? 0,
+    manual: (e) => Boolean(e.manual),
   },
   GameCopy: {
     id: (c) => String(c._id ?? c.id),

@@ -6,6 +6,9 @@ import {
   EditOutlined as EditIcon,
   ImageOutlined as CoverIcon,
   Inventory2Outlined as CopiesIcon,
+  LinkOff as UnlinkIcon,
+  ManageSearchOutlined as FindMetadataIcon,
+  RefreshOutlined as RefreshMetadataIcon,
 } from '@mui/icons-material';
 import { GeekSheet } from '@geeksuite/ui';
 
@@ -26,7 +29,19 @@ function Row({ icon, label, hint, onClick, danger }) {
   );
 }
 
-export default function MoreSheet({ open, onClose, title, onEdit, onCover, onCopies, onDelete }) {
+export default function MoreSheet({
+  open,
+  onClose,
+  title,
+  onEdit,
+  onCover,
+  onCopies,
+  onFindMetadata,
+  onRefreshMetadata,
+  onUnlinkMetadata,
+  enrichmentStatus,
+  onDelete,
+}) {
   const pick = (fn) => () => {
     onClose();
     fn();
@@ -37,6 +52,15 @@ export default function MoreSheet({ open, onClose, title, onEdit, onCover, onCop
         <Row icon={<EditIcon />} label="Edit details" hint="Title, dates, developers, genres, description" onClick={pick(onEdit)} />
         <Row icon={<CoverIcon />} label="Cover art" hint="Find art, upload your own, or remove it" onClick={pick(onCover)} />
         <Row icon={<CopiesIcon />} label="Copies" hint="Platforms, formats and storefronts we own" onClick={pick(onCopies)} />
+        {onFindMetadata ? (
+          <Row icon={<FindMetadataIcon />} label="Find metadata…" hint="Pick a match from Steam, IGDB or RAWG" onClick={pick(onFindMetadata)} />
+        ) : null}
+        {onRefreshMetadata ? (
+          <Row icon={<RefreshMetadataIcon />} label="Refresh metadata" hint="Look this game up again now" onClick={pick(onRefreshMetadata)} />
+        ) : null}
+        {onUnlinkMetadata && enrichmentStatus === 'matched' ? (
+          <Row icon={<UnlinkIcon />} label="Wrong match? Unlink" hint="Removes the auto-filled details and cover" onClick={pick(onUnlinkMetadata)} />
+        ) : null}
         <Row icon={<DeleteIcon />} label="Delete game" hint="Removes it for the whole household" onClick={pick(onDelete)} danger />
       </Box>
     </GeekSheet>

@@ -13,7 +13,14 @@ import {
   SAVE_GAME_PLAYTHROUGH,
   UPDATE_GAME,
 } from '../../graphql/mutations';
-import { deleteCover, fetchCover, uploadCover } from '../../api/rest';
+import {
+  applyMetadataCandidate,
+  deleteCover,
+  fetchCover,
+  refreshGameMetadata,
+  unlinkMetadata,
+  uploadCover,
+} from '../../api/rest';
 
 const LISTS = ['GetGames', 'GetGameShelves'];
 
@@ -58,6 +65,21 @@ export function useDetailActions(gameId) {
     },
     removeCover: async () => {
       await deleteCover(gameId);
+      await refetchGame();
+    },
+    // Metadata enrichment (DOCS/METADATA_ENRICHMENT.md): all three write on
+    // the gamegeek REST backend, not the gateway, and the game's fields
+    // (cover included) only settle in the cache once it refetches.
+    refreshMetadata: async () => {
+      await refreshGameMetadata(gameId);
+      await refetchGame();
+    },
+    applyMetadataCandidate: async (candidate) => {
+      await applyMetadataCandidate(gameId, { provider: candidate.provider, providerId: candidate.providerId });
+      await refetchGame();
+    },
+    unlinkMetadata: async () => {
+      await unlinkMetadata(gameId);
       await refetchGame();
     },
   };

@@ -10,7 +10,7 @@
  *
  * Personal state (shelf, rating, hours) is NOT here — see gamePlayer.js.
  */
-const { PLATFORMS, STOREFRONTS, COPY_FORMATS, GAME_MODES, GAME_SOURCES, bounds } = require('./constants.js');
+const { PLATFORMS, STOREFRONTS, COPY_FORMATS, GAME_MODES, GAME_SOURCES, ENRICHMENT_STATUSES, ENRICHMENT_PROVIDERS, bounds } = require('./constants.js');
 
 function gameDefinition(mongoose) {
   if (!mongoose || !mongoose.Schema) {
@@ -81,6 +81,34 @@ function gameDefinition(mongoose) {
     owned: { type: Boolean, default: false },
     source: { type: String, enum: GAME_SOURCES, default: 'manual' },
     createdBy: { type: String, default: null },
+    // Metadata/cover enrichment record — apps/gamegeek/DOCS/METADATA_ENRICHMENT.md.
+    // `filled` names exactly the fields enrichment wrote, so an unlink can undo them.
+    enrichment: {
+      type: new Schema(
+        {
+          status: { type: String, enum: ENRICHMENT_STATUSES, default: 'pending' },
+          provider: { type: String, enum: [...ENRICHMENT_PROVIDERS, null], default: null },
+          providerId: { type: String, default: null },
+          matchedTitle: { type: String, default: null },
+          filled: { type: [String], default: [] },
+          // { <field path>: sha256-16 of the value enrichment wrote }. An unlink
+          // clears a filled field only while it still hashes the same, so an
+          // edit made after the match survives the unlink.
+          filledHashes: { type: Schema.Types.Mixed, default: null },
+          // Platforms enrichment unioned into platformsAvailable (unlink pulls them).
+          addedPlatforms: { type: [String], default: [] },
+          coverFromEnrichment: { type: Boolean, default: false },
+          manual: { type: Boolean, default: false },
+          attempts: { type: Number, default: 0 },
+          lastTriedAt: { type: Date, default: null },
+          matchedAt: { type: Date, default: null },
+          error: { type: String, maxlength: 300, default: null },
+          providersTried: { type: [String], default: [] },
+        },
+        { _id: false }
+      ),
+      default: null,
+    },
   };
 }
 
@@ -107,6 +135,7 @@ function createGameSchema(mongoose) {
   // never globally — two households can own the same game.
   schema.index({ householdId: 1, sortTitle: 1 });
   schema.index({ householdId: 1, createdAt: -1 });
+  schema.index({ householdId: 1, 'enrichment.status': 1 });
   schema.index(
     { householdId: 1, 'externalIds.steamAppId': 1 },
     { unique: true, partialFilterExpression: { 'externalIds.steamAppId': { $type: 'string' } } }

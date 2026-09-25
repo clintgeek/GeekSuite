@@ -43,6 +43,51 @@ export const IGDB_PLATFORM_MAP = {
   'Atari 2600': 'atari-2600',
 };
 
+/** RAWG `platforms[].platform.name` → our PLATFORMS. */
+export const RAWG_PLATFORM_MAP = {
+  PC: 'pc',
+  macOS: 'mac',
+  Linux: 'linux',
+  'Nintendo Switch': 'switch',
+  'PlayStation 5': 'ps5',
+  'PlayStation 4': 'ps4',
+  'PlayStation 3': 'ps3',
+  'PlayStation 2': 'ps2',
+  PlayStation: 'ps1',
+  'PS Vita': 'vita',
+  PSP: 'psp',
+  'Xbox Series S/X': 'xbox-series',
+  'Xbox One': 'xbox-one',
+  'Xbox 360': 'xbox-360',
+  iOS: 'ios',
+  Android: 'android',
+  'Wii U': 'wii-u',
+  Wii: 'wii',
+  GameCube: 'gamecube',
+  'Nintendo 64': 'n64',
+  'Game Boy Advance': 'gba',
+  'Game Boy': 'game-boy',
+  'Nintendo DS': 'ds',
+  'Nintendo 3DS': '3ds',
+  SNES: 'snes',
+  NES: 'nes',
+  Genesis: 'genesis',
+  'Atari 2600': 'atari-2600',
+};
+
+/** RAWG `tags[].slug` → our GAME_MODES. RAWG has no mode field; these tags are the closest. */
+export const RAWG_MODE_TAG_MAP = {
+  singleplayer: 'single',
+  'co-op': 'coop-online',
+  'online-co-op': 'coop-online',
+  'local-co-op': 'coop-local',
+  'split-screen': 'coop-local',
+  pvp: 'pvp-online',
+  'online-pvp': 'pvp-online',
+  'local-pvp': 'pvp-local',
+  multiplayer: 'pvp-online',
+};
+
 /** IGDB `game_modes[].name` (fields=game_modes.name) → our GAME_MODES. Best effort. */
 export const IGDB_MODE_MAP = {
   'Single player': 'single',
@@ -83,4 +128,4 @@ export function mapNames(names, map) {
   return out;
 }
 
-export default { IGDB_PLATFORM_MAP, IGDB_MODE_MAP, STEAM_MODE_MAP, mapNames };
+export default { IGDB_PLATFORM_MAP, IGDB_MODE_MAP, STEAM_MODE_MAP, RAWG_PLATFORM_MAP, RAWG_MODE_TAG_MAP, mapNames };

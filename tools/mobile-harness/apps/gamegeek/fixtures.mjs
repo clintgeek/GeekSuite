@@ -25,6 +25,19 @@ const ROWS = [
   ['g14', 'Portal 2', 2011, 'Valve', 'finished', 5, 11, 100, [['pc', 'digital', 'steam']], null, ['Puzzle']],
 ];
 
+// Metadata enrichment (DOCS/METADATA_ENRICHMENT.md) — a mix of every status
+// so the provenance line and the ⋯ More rows exercise every branch. Games not
+// listed here get `enrichment: null` (the worker hasn't reached them yet).
+const ENRICHMENT = {
+  g1: { status: 'matched', provider: 'steam', providerId: '1145360', matchedTitle: 'Hades', matchedAt: T('2026-09-24'), attempts: 1, error: null, manual: false },
+  g2: { status: 'pending', provider: null, providerId: null, matchedTitle: null, matchedAt: null, attempts: 0, error: null, manual: false },
+  g3: { status: 'matched', provider: 'igdb', providerId: '17000', matchedTitle: 'Stardew Valley', matchedAt: T('2026-09-20'), attempts: 1, error: null, manual: true },
+  g4: { status: 'no-match', provider: null, providerId: null, matchedTitle: null, matchedAt: null, attempts: 2, error: null, manual: false },
+  g5: { status: 'ambiguous', provider: null, providerId: null, matchedTitle: null, matchedAt: null, attempts: 1, error: null, manual: false },
+  g6: { status: 'error', provider: null, providerId: null, matchedTitle: null, matchedAt: null, attempts: 3, error: 'Steam search timed out', manual: false },
+  g7: { status: 'unlinked', provider: null, providerId: null, matchedTitle: null, matchedAt: null, attempts: 1, error: null, manual: false },
+};
+
 const sessionsFor = (id) =>
   id === 'g1'
     ? [
@@ -82,6 +95,7 @@ export const GAMES = ROWS.map(([id, title, year, dev, shelf, rating, hours, prog
   maxLocalPlayers: id === 'g8' ? 4 : null,
   timeToBeat: id === 'g1' ? { __typename: 'GameTimeToBeat', main: 22, extra: 48, complete: 95 } : null,
   externalIds: id === 'g1' ? { __typename: 'GameExternalIds', igdb: '113112', steamAppId: '1145360', rawg: null, gog: null, epic: null } : null,
+  enrichment: ENRICHMENT[id] ? { __typename: 'GameEnrichment', ...ENRICHMENT[id] } : null,
   source: 'igdb',
   me: shelf
     ? {
@@ -214,6 +228,25 @@ export const SEARCH_RESULTS = {
   ],
 };
 
+// Metadata & cover enrichment (DOCS/METADATA_ENRICHMENT.md). Status is fixed
+// at running=true with IGDB/RAWG off — the scene the harness cares about is
+// what live progress and a no-key notice look like, not a real worker.
+export const METADATA_STATUS = {
+  running: true,
+  queued: 812,
+  counts: { matched: 2, pending: 1, noMatch: 1, ambiguous: 1, error: 1, unlinked: 1 },
+  providers: { steam: true, igdb: false, rawg: false },
+  lastRunAt: T('2026-09-24'),
+};
+
+export const METADATA_CANDIDATES = {
+  candidates: [
+    { provider: 'steam', providerId: '1145360', title: 'Hades', year: 2020, coverUrl: '/harness-art/hades.svg', platforms: ['pc', 'switch', 'ps5', 'xbox-series'], wouldMatch: true },
+    { provider: 'igdb', providerId: '113112', title: 'Hades', year: 2020, coverUrl: '/harness-art/hades.svg', platforms: ['pc', 'switch'], wouldMatch: false },
+    { provider: 'rawg', providerId: '58990', title: 'Hades: Battle Out of Hell', year: 2018, coverUrl: null, platforms: ['pc'], wouldMatch: false },
+  ],
+};
+
 // Stand-in box art: bold, flat, clearly "a real cover" next to the plates.
 function coverSvg(title, color) {
   const t = title.replace(/&/g, '&amp;').replace(/</g, '&lt;');
@@ -238,6 +271,14 @@ export async function routes(ctx) {
     const g = GAMES.find((x) => x.id === id) || GAMES[1];
     return svg(r, coverSvg(g.title, g.coverColor || '#333'));
   });
+  await ctx.route('**/api/metadata/enrich/status', (r) => json(r, METADATA_STATUS));
+  await ctx.route('**/api/metadata/enrich/run', (r) => json(r, { started: true }, 202));
+  await ctx.route(/\/api\/games\/([^/]+)\/metadata\/candidates/, (r) => json(r, METADATA_CANDIDATES));
+  await ctx.route(/\/api\/games\/([^/]+)\/metadata\/refresh/, (r) => json(r, { enrichment: { __typename: 'GameEnrichment', ...ENRICHMENT.g1, status: 'pending' } }));
+  await ctx.route(/\/api\/games\/([^/]+)\/metadata\/apply/, (r) => json(r, { enrichment: { __typename: 'GameEnrichment', ...ENRICHMENT.g1, manual: true } }));
+  await ctx.route(/\/api\/games\/([^/]+)\/metadata\/unlink/, (r) =>
+    json(r, { enrichment: { __typename: 'GameEnrichment', status: 'unlinked', provider: null, providerId: null, matchedTitle: null, matchedAt: null, attempts: 1, error: null, manual: false } })
+  );
   await ctx.route('**/api/import/steam', (r) => json(r, STEAM_DRY_RUN));
   await ctx.route('**/api/import/playnite', (r) => {
     // Multipart body — sniff the raw form data for the includeHidden field

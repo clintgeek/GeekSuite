@@ -61,6 +61,16 @@ export const GAME_DETAIL_FIELDS = gql`
       gog
       epic
     }
+    enrichment {
+      status
+      provider
+      providerId
+      matchedTitle
+      matchedAt
+      attempts
+      error
+      manual
+    }
     copies {
       id
       platform

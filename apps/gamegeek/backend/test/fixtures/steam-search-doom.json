@@ -1,0 +1,188 @@
+{
+  "total": 10,
+  "items": [
+    {
+      "type": "app",
+      "name": "DOOM: The Dark Ages",
+      "id": 3017860,
+      "price": {
+        "currency": "USD",
+        "initial": 4999,
+        "final": 4999
+      },
+      "tiny_image": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/3017860/4b39d554fb3b3a48ff02e2f05bba7186a58052ce/capsule_231x87.jpg?t=1789406231",
+      "metascore": "",
+      "platforms": {
+        "windows": true,
+        "mac": false,
+        "linux": false
+      },
+      "streamingvideo": false,
+      "controller_support": "full"
+    },
+    {
+      "type": "app",
+      "name": "DOOM Eternal",
+      "id": 782330,
+      "price": {
+        "currency": "USD",
+        "initial": 2999,
+        "final": 2999
+      },
+      "tiny_image": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/782330/be02ce48d58d1eae221b25096a54771764238af9/capsule_231x87.jpg?t=1783432602",
+      "metascore": "88",
+      "platforms": {
+        "windows": true,
+        "mac": false,
+        "linux": false
+      },
+      "streamingvideo": false
+    },
+    {
+      "type": "app",
+      "name": "DOOM + DOOM II",
+      "id": 2280,
+      "price": {
+        "currency": "USD",
+        "initial": 999,
+        "final": 999
+      },
+      "tiny_image": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/2280/capsule_231x87.jpg?t=1790284857",
+      "metascore": "",
+      "platforms": {
+        "windows": true,
+        "mac": false,
+        "linux": false
+      },
+      "streamingvideo": false,
+      "controller_support": "full"
+    },
+    {
+      "type": "app",
+      "name": "DOOM: The Dark Ages | Revelations",
+      "id": 3469450,
+      "price": {
+        "currency": "USD",
+        "initial": 1999,
+        "final": 1999
+      },
+      "tiny_image": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/3469450/8e94c2ef4bb2cb63105755d0a0fd3233f20922a5/capsule_231x87.jpg?t=1785785087",
+      "metascore": "",
+      "platforms": {
+        "windows": true,
+        "mac": false,
+        "linux": false
+      },
+      "streamingvideo": false,
+      "controller_support": "full"
+    },
+    {
+      "type": "app",
+      "name": "DOOM",
+      "id": 379720,
+      "price": {
+        "currency": "USD",
+        "initial": 1999,
+        "final": 1999
+      },
+      "tiny_image": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/379720/capsule_231x87.jpg?t=1750784856",
+      "metascore": "85",
+      "platforms": {
+        "windows": true,
+        "mac": false,
+        "linux": false
+      },
+      "streamingvideo": false
+    },
+    {
+      "type": "app",
+      "name": "DOOM 3",
+      "id": 208200,
+      "price": {
+        "currency": "USD",
+        "initial": 999,
+        "final": 999
+      },
+      "tiny_image": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/208200/capsule_231x87.jpg?t=1664292843",
+      "metascore": "",
+      "platforms": {
+        "windows": true,
+        "mac": false,
+        "linux": false
+      },
+      "streamingvideo": false
+    },
+    {
+      "type": "app",
+      "name": "DOOM 64",
+      "id": 1148590,
+      "price": {
+        "currency": "USD",
+        "initial": 499,
+        "final": 499
+      },
+      "tiny_image": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/1148590/capsule_231x87.jpg?t=1750784988",
+      "metascore": "",
+      "platforms": {
+        "windows": true,
+        "mac": false,
+        "linux": false
+      },
+      "streamingvideo": false
+    },
+    {
+      "type": "app",
+      "name": "Maestro: Doom Bound",
+      "id": 3645630,
+      "price": {
+        "currency": "USD",
+        "initial": 899,
+        "final": 899
+      },
+      "tiny_image": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/3645630/85a3365ffe3a8a533a2db0f90dcf0b922f97342a/capsule_231x87.jpg?t=1744395207",
+      "metascore": "",
+      "platforms": {
+        "windows": true,
+        "mac": false,
+        "linux": false
+      },
+      "streamingvideo": false
+    },
+    {
+      "type": "app",
+      "name": "DOOM VFR",
+      "id": 650000,
+      "price": {
+        "currency": "USD",
+        "initial": 1499,
+        "final": 1499
+      },
+      "tiny_image": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/650000/capsule_231x87.jpg?t=1569613157",
+      "metascore": "69",
+      "platforms": {
+        "windows": true,
+        "mac": false,
+        "linux": false
+      },
+      "streamingvideo": false
+    },
+    {
+      "type": "app",
+      "name": "DOOM Soundtrack",
+      "id": 1195480,
+      "price": {
+        "currency": "USD",
+        "initial": 999,
+        "final": 999
+      },
+      "tiny_image": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/1195480/capsule_231x87.jpg?t=1581558348",
+      "metascore": "",
+      "platforms": {
+        "windows": true,
+        "mac": true,
+        "linux": true
+      },
+      "streamingvideo": false
+    }
+  ]
+}

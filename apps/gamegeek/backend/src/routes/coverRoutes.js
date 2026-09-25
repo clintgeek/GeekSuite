@@ -112,6 +112,8 @@ async function saveCoverBuffer(game, buffer) {
   }
 
   game.coverPath = newFilename; // `timestamps: true` bumps updatedAt on save.
+  // A person's cover is theirs: an enrichment unlink must not delete it.
+  if (game.enrichment?.coverFromEnrichment) game.enrichment.coverFromEnrichment = false;
   await game.save();
   return sniffed;
 }
@@ -162,6 +164,7 @@ router.delete('/:id/cover', authenticate, async (req, res) => {
       // Stored filename didn't resolve to a safe path — nothing to clean up.
     }
     game.coverPath = null;
+    if (game.enrichment?.coverFromEnrichment) game.enrichment.coverFromEnrichment = false;
     await game.save();
   }
   return res.status(204).end();

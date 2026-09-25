@@ -1,0 +1,28 @@
+{
+  "game": {
+    "id": 1020,
+    "name": "Portal 2",
+    "first_release_date": 1303084800,
+    "summary": "Sequel to the acclaimed Portal (2007), Portal 2 pits the protagonist against GLaDOS.",
+    "cover": { "id": 1, "image_id": "co1rs4" },
+    "genres": [{ "id": 9, "name": "Puzzle" }, { "id": 5, "name": "Shooter" }],
+    "game_modes": [{ "id": 1, "name": "Single player" }, { "id": 3, "name": "Co-operative" }],
+    "platforms": [{ "id": 6, "name": "PC (Microsoft Windows)" }, { "id": 9, "name": "PlayStation 3" }, { "id": 12, "name": "Xbox 360" }, { "id": 3, "name": "Linux" }],
+    "involved_companies": [
+      { "id": 1, "company": { "id": 1, "name": "Valve" }, "developer": true, "publisher": false },
+      { "id": 2, "company": { "id": 2, "name": "Electronic Arts" }, "developer": false, "publisher": true },
+      { "id": 3, "company": { "id": 1, "name": "Valve" }, "developer": false, "publisher": true }
+    ],
+    "external_games": [
+      { "id": 11, "external_game_source": 5, "uid": "1234567890" },
+      { "id": 12, "external_game_source": 1, "uid": "620", "name": "Portal 2" }
+    ],
+    "multiplayer_modes": [
+      { "id": 21, "offlinecoop": true, "offlinecoopmax": 2, "offlinemax": 2, "onlinecoop": true, "onlinecoopmax": 2, "splitscreen": true, "platform": 6 },
+      { "id": 22, "offlinecoop": false, "offlinemax": 0, "onlinecoop": false, "splitscreen": false, "platform": 9 }
+    ]
+  },
+  "timeToBeat": [
+    { "id": 5, "game_id": 1020, "hastily": 30240, "normally": 45360, "completely": 81000, "count": 812 }
+  ]
+}
