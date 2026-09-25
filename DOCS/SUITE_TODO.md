@@ -137,6 +137,24 @@ Wanted, not built on the 2026-09-22 overnight run:
   rules engine + Stats, free-walk AI (cuttable), backlog goal/wishlist/loans/scan-to-add/MCP.
   Full phase table and done-when criteria: [`DOCS/GameGeekPlan.md`](GameGeekPlan.md) §11.
   Blocked on P0 prep and Chef's answers in §13.
+- **GameGeek: Playing follows Playnite's `isInstalled`** (Chef approved 2026-09-25; the
+  semantics are in `apps/gamegeek/DOCS/TASTE_MODEL.md`: "Playing = installed on the laptop,
+  ready to go"). On every Playnite import, installed games move to Playing from Backlog, On
+  hold or unshelved. Finished and Abandoned are never auto-moved. A Playing game that is no
+  longer installed is **flagged, not moved** ("not installed anymore: Finished, On hold or
+  Abandoned?"). That needs a per-user flag, a quick-decision UI and a cleanup filter.
+  **Chef's caveat (2026-09-25): Playnite only judges what it knows.** He adds a few
+  Android and Switch games by hand, and "the playnite import [must not] kick them out of
+  my playing section":
+  - A game with **no Playnite copy** is never moved or flagged by any import, ever.
+  - A game with **any non-Playnite copy** (for example a manual Switch copy beside a
+    Playnite PC copy) is never flagged "not installed", because he may be playing it
+    there.
+  - The flag needs **every** copy to be a Playnite copy and **none** of them installed.
+  - "Installed → Playing" applies only to games that have an installed Playnite copy.
+  - Tests must pin all four cases.
+  **Queued right after the Nextcloud auto-import lands**, since both touch the Playnite
+  planner.
 - **GameGeek library feed = Playnite** (Chef, 2026-09-25). The library is fed and updated
   from the Playnite Library Exporter JSON; Steam is for metadata, not the library. In
   order: (1) manual upload with a dry run (**building 2026-09-25**); (2) metadata and

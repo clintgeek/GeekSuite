@@ -14,17 +14,28 @@ import React, { useRef, useState } from 'react';
 import { Box, useTheme } from '@mui/material';
 import { Star as StarFull, StarHalf, StarBorder as StarEmpty } from '@mui/icons-material';
 import { starFill } from '../utils/rateGame';
+import { ratingMeaningFor, ratingMeaningLine } from '../utils/tasteModel';
 
 const ICONS = { full: StarFull, half: StarHalf, empty: StarEmpty };
 const SIZES = { inline: 17, row: 20, hero: 28 };
 
-export default function StarRating({ value, onChange, label, variant = 'inline', allowClear = false, sx }) {
+export default function StarRating({ value, onChange, onPreview, label, variant = 'inline', allowClear = false, sx }) {
   const theme = useTheme();
   const ref = useRef(null);
-  const [hover, setHover] = useState(null);
+  const [hover, setHoverState] = useState(null);
+
+  const setHover = (n) => {
+    setHoverState(n);
+    onPreview?.(n);
+  };
 
   const rated = typeof value === 'number' && value > 0;
   const shown = hover ?? (rated ? value : 0);
+  // Native tooltip for compact contexts (library cards, rows) — visible text
+  // stays out of the card; a hover/focus title is enough there. The hero
+  // variant also gets it for free; RatingSection additionally renders a
+  // visible live line for that case.
+  const title = shown ? ratingMeaningLine(shown) : 'Not rated';
 
   const starAt = (clientX) => {
     const r = ref.current?.getBoundingClientRect();
@@ -70,7 +81,8 @@ export default function StarRating({ value, onChange, label, variant = 'inline',
       aria-valuemin={0}
       aria-valuemax={5}
       aria-valuenow={rated ? value : 0}
-      aria-valuetext={rated ? `${value} of 5 stars` : 'Not rated'}
+      aria-valuetext={rated ? `${value} of 5 stars — ${ratingMeaningFor(value)?.short ?? ''}` : 'Not rated'}
+      title={title}
       data-testid="star-rating"
       onClick={(e) => {
         e.stopPropagation();

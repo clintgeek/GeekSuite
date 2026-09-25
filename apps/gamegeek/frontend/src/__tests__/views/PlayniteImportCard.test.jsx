@@ -1,12 +1,12 @@
 import React from 'react';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { MockedProvider } from '@apollo/client/testing';
 import PlayniteImportCard from '../../views/settings/PlayniteImportCard';
-import { importPlaynite } from '../../api/rest';
+import { importPlaynite, getPlayniteDropStatus } from '../../api/rest';
 import { renderWithProviders } from '../testUtils';
 
-vi.mock('../../api/rest', () => ({ importPlaynite: vi.fn() }));
+vi.mock('../../api/rest', () => ({ importPlaynite: vi.fn(), getPlayniteDropStatus: vi.fn() }));
 
 const ApolloWrapper = ({ children }) => <MockedProvider mocks={[]}>{children}</MockedProvider>;
 
@@ -38,6 +38,10 @@ function renderCard(profile = null) {
 
 describe('PlayniteImportCard', () => {
   afterEach(() => vi.clearAllMocks());
+
+  beforeEach(() => {
+    getPlayniteDropStatus.mockResolvedValue({ enabled: false, watching: false, folder: null, lastFile: null });
+  });
 
   it('runs a dry run automatically on file pick and shows its counts', async () => {
     importPlaynite.mockResolvedValueOnce(dryRunFixture());
@@ -100,5 +104,75 @@ describe('PlayniteImportCard', () => {
       expect(screen.getByTestId('playnite-error')).toHaveTextContent("That file isn't a Playnite Library Exporter export (schema v1).")
     );
     expect(screen.queryByTestId('playnite-preview')).not.toBeInTheDocument();
+  });
+
+  describe('the Nextcloud auto-import line', () => {
+    it('shows nothing when the drop importer is not enabled', async () => {
+      getPlayniteDropStatus.mockResolvedValue({ enabled: false, watching: false, folder: null, lastFile: null });
+      renderCard();
+      await waitFor(() => expect(getPlayniteDropStatus).toHaveBeenCalled());
+      expect(screen.queryByTestId('playnite-auto-import')).not.toBeInTheDocument();
+    });
+
+    it('says it is waiting for the folder when enabled but this user has none yet', async () => {
+      getPlayniteDropStatus.mockResolvedValue({ enabled: true, watching: false, folder: 'gamegeek-import/chef/', lastFile: null });
+      renderCard();
+      await waitFor(() =>
+        expect(screen.getByTestId('playnite-auto-import')).toHaveTextContent('Auto-import: waiting for a gamegeek-import/chef/ folder in Nextcloud.')
+      );
+    });
+
+    it('reports the last imported export with new/updated counts', async () => {
+      getPlayniteDropStatus.mockResolvedValue({
+        enabled: true,
+        watching: true,
+        folder: 'gamegeek-import/chef/',
+        lastFile: {
+          name: 'playnite-library.json',
+          status: 'imported',
+          processedAt: new Date().toISOString(),
+          generatedAtUtc: '2026-09-25T16:21:03Z',
+          counts: { create: 3, addCopy: 0, update: 5, unchanged: 900, skippedHidden: 200, notInFile: 0, invalid: 0 },
+          error: null,
+        },
+      });
+      renderCard();
+      await waitFor(() =>
+        expect(screen.getByTestId('playnite-auto-import')).toHaveTextContent(
+          'Auto-import: watching gamegeek-import/chef/ in Nextcloud — last export imported Today (3 new, 5 updated)'
+        )
+      );
+    });
+
+    it('shows a failed last export quietly, with its error', async () => {
+      getPlayniteDropStatus.mockResolvedValue({
+        enabled: true,
+        watching: true,
+        folder: 'gamegeek-import/chef/',
+        lastFile: {
+          name: 'playnite-library.json',
+          status: 'failed',
+          processedAt: new Date().toISOString(),
+          generatedAtUtc: null,
+          counts: null,
+          error: 'Unsupported Playnite export schemaVersion (2); expected 1',
+        },
+      });
+      renderCard();
+      await waitFor(() =>
+        expect(screen.getByTestId('playnite-auto-import')).toHaveTextContent(
+          'the last export failed: Unsupported Playnite export schemaVersion (2); expected 1'
+        )
+      );
+    });
+
+    it('never blocks the manual upload path when the status fetch fails', async () => {
+      getPlayniteDropStatus.mockRejectedValue(new Error('network blip'));
+      importPlaynite.mockResolvedValueOnce(dryRunFixture());
+      renderCard();
+      selectFile();
+      await waitFor(() => expect(screen.getByTestId('playnite-preview')).toBeInTheDocument());
+      expect(screen.queryByTestId('playnite-auto-import')).not.toBeInTheDocument();
+    });
   });
 });

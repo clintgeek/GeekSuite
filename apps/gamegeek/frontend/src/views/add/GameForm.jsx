@@ -9,6 +9,7 @@ import CopyRowsEditor from '../../components/CopyRowsEditor';
 import GameCover from '../../components/GameCover';
 import { platformLabel } from '../../utils/vocab';
 import { selectChipSx } from '../../theme/chipStyles';
+import { shelfMeaning } from '../../utils/tasteModel';
 
 
 function Label({ children }) {
@@ -51,8 +52,28 @@ export default function GameForm({ form, setForm, vocab, shelves, profile, onBac
         <TextField type="date" label="Release date" value={form.releaseDate} onChange={set('releaseDate')} InputLabelProps={{ shrink: true }} />
         <FormControl fullWidth>
           <InputLabel id="add-shelf">Shelf</InputLabel>
-          <Select labelId="add-shelf" label="Shelf" value={form.shelf} onChange={set('shelf')}>
-            {shelves.map((s) => <MenuItem key={s.id} value={s.id}>{s.label}</MenuItem>)}
+          <Select
+            labelId="add-shelf"
+            label="Shelf"
+            value={form.shelf}
+            onChange={set('shelf')}
+            renderValue={(val) => shelves.find((s) => s.id === val)?.label || val}
+          >
+            {shelves.map((s) => {
+              const meaning = shelfMeaning(s.id);
+              return (
+                <MenuItem key={s.id} value={s.id} sx={{ alignItems: 'flex-start', py: meaning ? 1 : 1.25 }}>
+                  <Box sx={{ minWidth: 0 }}>
+                    <Typography component="span" sx={{ display: 'block', fontSize: '0.9375rem' }}>{s.label}</Typography>
+                    {meaning ? (
+                      <Typography component="span" sx={{ display: 'block', fontSize: '0.75rem', color: 'text.secondary', lineHeight: 1.35, mt: 0.125 }}>
+                        {meaning.short}
+                      </Typography>
+                    ) : null}
+                  </Box>
+                </MenuItem>
+              );
+            })}
           </Select>
         </FormControl>
         <TextField label="Developer" helperText="Comma-separated if more than one" value={form.developers} onChange={set('developers')} />

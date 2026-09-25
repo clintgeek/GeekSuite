@@ -10,6 +10,7 @@ import PlatformsCard from './PlatformsCard';
 import PlayniteImportCard from './PlayniteImportCard';
 import ShelvesCard from './ShelvesCard';
 import StorefrontsCard from './StorefrontsCard';
+import TasteModelCard from './TasteModelCard';
 
 export default function SettingsView({ user, onSignOut }) {
   const { profile } = useGameProfile();
@@ -38,6 +39,7 @@ export default function SettingsView({ user, onSignOut }) {
       <MetadataCard />
       <PlatformsCard profile={profile} vocab={vocab} />
       <ShelvesCard profile={profile} />
+      <TasteModelCard />
       <StorefrontsCard />
       <AppearanceCard />
       <AccountCard user={user} onSignOut={onSignOut} />

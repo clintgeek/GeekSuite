@@ -87,6 +87,14 @@ export function importPlaynite(file, { dryRun = true, includeHidden = false } = 
 }
 
 /**
+ * The Nextcloud auto-import's state for this user
+ * (apps/gamegeek/DOCS/PLAYNITE_IMPORT.md, folder import): whether it's
+ * running, whether this user's folder is being watched, and the last file it
+ * touched. The manual upload above stays the fallback either way.
+ */
+export const getPlayniteDropStatus = () => request('/import/playnite/drop/status');
+
+/**
  * Metadata & cover enrichment (DOCS/METADATA_ENRICHMENT.md). The worker runs
  * per household in the gamegeek backend; these calls read its status, kick
  * it off, and let a person fix a game it got wrong or hasn't reached yet.

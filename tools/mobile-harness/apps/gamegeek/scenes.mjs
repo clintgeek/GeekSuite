@@ -68,7 +68,18 @@ export const scenes = [
       await h.esc();
     },
   },
-  { name: '06-settings', goto: '/settings', wait: 1400 },
+  {
+    // Settings: the Playnite card now also carries the Nextcloud auto-import
+    // line (apps/gamegeek/DOCS/PLAYNITE_IMPORT.md, folder import) above the
+    // manual upload, which is still the fallback either way.
+    name: '06-settings',
+    goto: '/settings',
+    wait: 1400,
+    async setup(page, h) {
+      await page.getByTestId('playnite-auto-import').waitFor({ timeout: 3000 }).catch(() => {});
+      await h.settle(200);
+    },
+  },
   {
     name: '07-account-menu',
     goto: '/',
@@ -250,6 +261,20 @@ export const scenes = [
       const back = await top();
       if (Math.abs(back - before) > 4) throw new Error(`scroll not restored: ${before} → ${back}`);
     },
+  },
+  {
+    // The taste model (DOCS/TASTE_MODEL.md), at the moment Chef enters data:
+    // the shelf picker's second line, one per row.
+    name: '20-shelf-sheet',
+    goto: '/game/g1',
+    wait: 1500,
+    async setup(page, h) {
+      const status = page.getByTestId('detail-actions').getByRole('button', { name: /^Status:/ });
+      if (!(await status.count())) return false;
+      await status.click();
+      await h.settle(500);
+    },
+    teardown: (page, h) => h.esc(),
   },
 ];
 

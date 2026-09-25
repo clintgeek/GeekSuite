@@ -3,12 +3,12 @@
  * runs automatically, then commit. Steam (below, demoted) stays around for
  * metadata later — this is where the games actually come from.
  */
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Box, Button, CircularProgress, Typography } from '@mui/material';
 import { UploadFile as UploadIcon } from '@mui/icons-material';
 import { useApolloClient } from '@apollo/client';
 import { useToast } from '@geeksuite/ui';
-import { importPlaynite } from '../../api/rest';
+import { importPlaynite, getPlayniteDropStatus } from '../../api/rest';
 import { formatCalendarDate, relativeDay } from '../../utils/dates';
 import { visuallyHidden } from '../../utils/a11y';
 import SettingsCard from './SettingsCard';
@@ -29,6 +29,33 @@ function errorMessage(err) {
   return err?.message || 'The Playnite import failed.';
 }
 
+/**
+ * The Nextcloud auto-import line under the manual upload
+ * (apps/gamegeek/DOCS/PLAYNITE_IMPORT.md, folder import). The upload above is
+ * the fallback either way, so this is informational only — never a control.
+ */
+export function dropStatusMessage(status) {
+  if (!status?.enabled) return null;
+  const { watching, folder, lastFile } = status;
+  if (!watching) return `Auto-import: waiting for a ${folder} folder in Nextcloud.`;
+
+  const base = `Auto-import: watching ${folder} in Nextcloud`;
+  if (!lastFile) return `${base} — no export received yet.`;
+
+  const when = relativeDay(lastFile.processedAt);
+  if (lastFile.status === 'imported') {
+    const c = lastFile.counts || {};
+    const parts = [];
+    if (c.create) parts.push(`${c.create} new`);
+    if (c.update) parts.push(`${c.update} updated`);
+    const detail = parts.length ? ` (${parts.join(', ')})` : ' (no changes)';
+    return `${base} — last export imported ${when}${detail}`;
+  }
+  if (lastFile.status === 'skipped-older') return `${base} — the last export was older than what's already imported, so it was skipped.`;
+  if (lastFile.status === 'skipped-duplicate') return `${base} — last export ${when} matched what's already imported.`;
+  return `${base} — the last export failed: ${lastFile.error || 'unknown error'}`;
+}
+
 export default function PlayniteImportCard({ profile }) {
   const client = useApolloClient();
   const { notify } = useToast();
@@ -40,6 +67,15 @@ export default function PlayniteImportCard({ profile }) {
   const [hiddenCount, setHiddenCount] = useState(null);
   const [busy, setBusy] = useState(null); // 'dryRun' | 'commit' | null
   const [error, setError] = useState(null);
+  const [dropStatus, setDropStatus] = useState(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getPlayniteDropStatus()
+      .then((s) => { if (!cancelled) setDropStatus(s); })
+      .catch(() => { if (!cancelled) setDropStatus(null); });
+    return () => { cancelled = true; };
+  }, []);
 
   const runDryRun = async (f, hidden) => {
     setBusy('dryRun');
@@ -141,6 +177,12 @@ export default function PlayniteImportCard({ profile }) {
           Last imported {relativeDay(profile.playniteLastImportAt)}
           {profile.playniteLastGeneratedAtUtc ? ` · export made ${formatCalendarDate(profile.playniteLastGeneratedAtUtc)}` : ''}
           {profile.playniteLastTotal ? ` · ${profile.playniteLastTotal} games` : ''}
+        </Typography>
+      ) : null}
+
+      {dropStatusMessage(dropStatus) ? (
+        <Typography data-testid="playnite-auto-import" sx={{ fontSize: '0.75rem', color: 'text.secondary', mt: 0.5 }}>
+          {dropStatusMessage(dropStatus)}
         </Typography>
       ) : null}
 
