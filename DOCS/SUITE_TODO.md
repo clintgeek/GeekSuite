@@ -49,7 +49,7 @@ Pull from here when planning the next pass; update as work lands or priorities s
   - Verify no client frontend attempts to read `document.cookie` directly for `geek_token` or `geek_refresh_token`.
   - Confirm all auth hydration flows exclusively through `/api/users/me` or `@geeksuite/user`.
 
-- **Registration is public, and BookGeek (plus GameGeek's default household) is shared by
+- ✅ **DONE 2026-09-25 — public registration closed (`REGISTRATION_MODE`, default closed).** Was: **Registration is public, and BookGeek (plus GameGeek's default household) is shared by
   every account** — found 2026-09-24 while designing GameGeek's tenancy. Any sign-up can read,
   edit and delete the whole household library today. Plan and recommendation (ship
   `REGISTRATION_MODE=closed` now, `invite` mode later):

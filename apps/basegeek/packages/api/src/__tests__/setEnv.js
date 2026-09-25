@@ -23,6 +23,10 @@ process.env.KEY_VAULT_SECRET    = 'a'.repeat(64);
 
 // ── Environment ───────────────────────────────────────────────────────────────
 process.env.NODE_ENV = 'test';
+// Public registration defaults to CLOSED in production code; the existing
+// suites exercise the register route, so they run with it open. The closed
+// behaviour has its own suite (registrationGate.test.js).
+process.env.REGISTRATION_MODE = 'open';
 
 // ── MongoDB URIs ──────────────────────────────────────────────────────────────
 // Read from the run-unique sidecar written by globalSetup so every model file

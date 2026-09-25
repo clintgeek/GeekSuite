@@ -1,6 +1,18 @@
 # Registration Gate — Plan
 
-Status: **proposal awaiting Chef's call. NOT implemented.** Written 2026-09-24. Source:
+Status: **`closed` shipped 2026-09-25**, and it is the default. `invite` is not built,
+since there's no need yet. Written 2026-09-24.
+
+> **What shipped** (Chef: "Let's fix 0"):
+> - `REGISTRATION_MODE` is read on every request. Only the exact value `open` allows
+>   sign-up; unset, `closed` or anything else returns 403 `REGISTRATION_CLOSED`.
+> - **Deviation from §5 below:** the default is **closed**, not open. With an open
+>   default, forgetting the `compose up -d` (the Watchtower env landmine) would leave the
+>   hole silently open. With a closed default, forgetting it is harmless.
+> - New accounts come from an admin through `POST /api/users` (admin-only, already
+>   existed).
+> - Tests: `registrationGate.test.js`, red with the gate removed. Every other suite runs
+>   with `REGISTRATION_MODE=open` set in `setEnv.js`. Source:
 `DOCS/GameGeekPlan.md` §2.1a and §13 open question 1a, which first flagged this as a
 suite-level issue found while designing GameGeek's tenancy, not a GameGeek fix.
 

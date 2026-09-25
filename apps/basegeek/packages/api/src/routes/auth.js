@@ -245,10 +245,28 @@ router.get('/profile', authenticateToken, async (req, res) => {
     }
 });
 
+// Public sign-up is CLOSED unless REGISTRATION_MODE=open (DOCS/REGISTRATION_GATE_PLAN.md).
+// BookGeek and GameGeek are shared by every account in the household, so an
+// open door let any stranger read and delete the family's libraries. The
+// default is deliberately closed: this setting arrives through .env.production,
+// which Watchtower never re-reads — a forgotten `compose up -d` must leave the
+// door shut, not open. Accounts are created by an admin via POST /api/users.
+export function registrationMode(env = process.env) {
+    const raw = String(env.REGISTRATION_MODE || '').trim().toLowerCase();
+    return raw === 'open' ? 'open' : 'closed';
+}
+
 // @desc    Register new user
 // @route   POST /api/auth/register
-// @access  Public
+// @access  Public when REGISTRATION_MODE=open; otherwise 403
 router.post('/register', registerLimiter, async (req, res) => {
+    if (registrationMode() !== 'open') {
+        req.log.warn({ ip: req.ip }, 'Registration attempt while registration is closed');
+        return res.status(403).json({
+            message: 'Registration is closed. Ask the household admin for an account.',
+            code: 'REGISTRATION_CLOSED'
+        });
+    }
     try {
         const { username, email, password, app } = req.body;
 
