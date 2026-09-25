@@ -60,7 +60,48 @@ import { logout, loginRedirect, csrfHeaders, isCsrfFailure, triggerCsrfReloadOnc
  * axios interceptor uses, so a tab that trips this from both a GraphQL call
  * and a REST call still only reloads once.
  */
+/**
+ * A tab whose JavaScript is older than the gateway's schema asks for fields
+ * that no longer exist, and the gateway rejects the whole operation with
+ * `GRAPHQL_VALIDATION_FAILED` (HTTP 400). Nothing about the session is wrong,
+ * and retrying cannot help: the page has to load the new bundle. Found
+ * 2026-09-25 when a Firefox tab kept a pre-deploy GameGeek bundle and every
+ * "Save view" failed silently after `GameProfile.steamId` was removed.
+ *
+ * Reload at most once per STALE_RELOAD_WINDOW_MS per tab. A real mismatch that
+ * a reload cannot fix (a new frontend briefly ahead of basegeek during a
+ * deploy) must not become a reload loop.
+ */
+export const STALE_RELOAD_KEY = 'geeksuite:stale-bundle-reload-at';
+export const STALE_RELOAD_WINDOW_MS = 10 * 60 * 1000;
+
+export function isSchemaMismatch(graphQLErrors, networkError) {
+    const hit = (errs) => Array.isArray(errs)
+        && errs.some((e) => e?.extensions?.code === 'GRAPHQL_VALIDATION_FAILED');
+    return hit(graphQLErrors) || hit(networkError?.result?.errors);
+}
+
+export function reloadForStaleBundleOnce(now = Date.now()) {
+    if (typeof window === 'undefined' || !window.location) return false;
+    try {
+        const last = Number(window.sessionStorage?.getItem(STALE_RELOAD_KEY) || 0);
+        if (last && now - last < STALE_RELOAD_WINDOW_MS) return false;
+        window.sessionStorage?.setItem(STALE_RELOAD_KEY, String(now));
+    } catch {
+        // No sessionStorage (private mode, blocked storage): without a guard
+        // a reload could loop, so don't reload at all.
+        return false;
+    }
+    window.location.reload();
+    return true;
+}
+
 export const errorLink = (appName) => onError(({ graphQLErrors, networkError, operation, forward }) => {
+    if (isSchemaMismatch(graphQLErrors, networkError)) {
+        reloadForStaleBundleOnce();
+        return;
+    }
+
     if (networkError && isCsrfFailure(networkError.statusCode, networkError.result)) {
         return new Observable((observer) => {
             const sub = forward(operation).subscribe({

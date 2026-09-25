@@ -234,3 +234,62 @@ describe('errorLink CSRF heal', () => {
     expect(globalThis.fetch).toHaveBeenCalled();
   });
 });
+
+// ── Stale bundle: the tab's JS is older than the gateway's schema ───────────
+import { STALE_RELOAD_KEY, STALE_RELOAD_WINDOW_MS, reloadForStaleBundleOnce } from '../index.js';
+
+function validationNetworkError() {
+  const err = new Error('Response not successful: Received status code 400');
+  err.statusCode = 400;
+  err.result = { errors: [{ message: 'Cannot query field "steamId" on type "GameProfile".', extensions: { code: 'GRAPHQL_VALIDATION_FAILED' } }] };
+  return err;
+}
+
+describe('errorLink stale-bundle heal', () => {
+  it('reloads once when the gateway rejects the operation as GRAPHQL_VALIDATION_FAILED (the 400 shape)', async () => {
+    const reloads = setBrowserEnv();
+    const link = errorLink('gamegeek');
+    await run(link, makeOperation(), makeForward([{ error: validationNetworkError() }])).catch(() => {});
+    expect(reloads.length).toBe(1);
+    expect(window.sessionStorage.getItem(STALE_RELOAD_KEY)).toBeTruthy();
+  });
+
+  it('also heals the graphQLErrors shape', async () => {
+    const reloads = setBrowserEnv();
+    const link = errorLink('gamegeek');
+    const forward = makeForward([{ result: { errors: [{ message: 'x', extensions: { code: 'GRAPHQL_VALIDATION_FAILED' } }] } }]);
+    await run(link, makeOperation(), forward).catch(() => {});
+    expect(reloads.length).toBe(1);
+  });
+
+  it('never loops: a second mismatch inside the window does not reload again', async () => {
+    const reloads = setBrowserEnv();
+    const link = errorLink('gamegeek');
+    await run(link, makeOperation(), makeForward([{ error: validationNetworkError() }])).catch(() => {});
+    await run(link, makeOperation(), makeForward([{ error: validationNetworkError() }])).catch(() => {});
+    expect(reloads.length).toBe(1);
+  });
+
+  it('may reload again once the window has passed', () => {
+    const reloads = setBrowserEnv();
+    expect(reloadForStaleBundleOnce(1_000_000)).toBe(true);
+    expect(reloadForStaleBundleOnce(1_000_000 + STALE_RELOAD_WINDOW_MS - 1)).toBe(false);
+    expect(reloadForStaleBundleOnce(1_000_000 + STALE_RELOAD_WINDOW_MS + 1)).toBe(true);
+    expect(reloads.length).toBe(2);
+  });
+
+  it('does not reload without sessionStorage (no guard, no reload)', () => {
+    const reloads = setBrowserEnv({ sessionStorage: null });
+    Object.defineProperty(window, 'sessionStorage', { get() { throw new Error('blocked'); } });
+    expect(reloadForStaleBundleOnce()).toBe(false);
+    expect(reloads.length).toBe(0);
+  });
+
+  it('an ordinary 400 (not a validation failure) does not reload and does not log out', async () => {
+    const reloads = setBrowserEnv();
+    const link = errorLink('gamegeek');
+    const err = new Error('bad'); err.statusCode = 400; err.result = { errors: [{ message: 'nope', extensions: { code: 'BAD_USER_INPUT' } }] };
+    await run(link, makeOperation(), makeForward([{ error: err }])).catch(() => {});
+    expect(reloads.length).toBe(0);
+  });
+});
