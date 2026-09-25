@@ -10,7 +10,6 @@ import logger from './lib/logger.js';
 import authRoutes from './routes/authRoutes.js';
 import metadataRoutes from './routes/metadataRoutes.js';
 import coverRoutes from './routes/coverRoutes.js';
-import importRoutes from './routes/importRoutes.js';
 import playniteRoutes, { PLAYNITE_IMPORT_PATH } from './routes/playniteRoutes.js';
 import { enrichmentRouter, gameMetadataRouter } from './routes/enrichmentRoutes.js';
 import { authenticate } from './middleware/authMiddleware.js';
@@ -100,7 +99,6 @@ export function createApp() {
   app.use('/api/metadata', metadataRoutes);
   app.use('/api/games', gameMetadataRouter);
   app.use('/api/games', coverRoutes);
-  app.use('/api/import', importRoutes);
   app.use('/api/import', playniteRoutes);
 
   // Health check endpoint — no auth, so Watchtower/nginx healthchecks and

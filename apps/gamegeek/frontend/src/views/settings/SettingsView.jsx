@@ -9,7 +9,6 @@ import MetadataCard from './MetadataCard';
 import PlatformsCard from './PlatformsCard';
 import PlayniteImportCard from './PlayniteImportCard';
 import ShelvesCard from './ShelvesCard';
-import SteamImportCard from './SteamImportCard';
 import StorefrontsCard from './StorefrontsCard';
 
 export default function SettingsView({ user, onSignOut }) {
@@ -18,7 +17,7 @@ export default function SettingsView({ user, onSignOut }) {
   const location = useLocation();
 
   // /settings#playnite (from the empty library, the Add dialog) lands on the
-  // Playnite card; /settings#steam still works for the demoted Steam card.
+  // Playnite card.
   useEffect(() => {
     if (!location.hash) return;
     const el = document.getElementById(location.hash.slice(1));
@@ -40,7 +39,6 @@ export default function SettingsView({ user, onSignOut }) {
       <PlatformsCard profile={profile} vocab={vocab} />
       <ShelvesCard profile={profile} />
       <StorefrontsCard />
-      <SteamImportCard profile={profile} />
       <AppearanceCard />
       <AccountCard user={user} onSignOut={onSignOut} />
     </Box>

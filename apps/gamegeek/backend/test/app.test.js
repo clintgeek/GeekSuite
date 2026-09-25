@@ -33,11 +33,6 @@ describe('auth is required on the routes this backend owns', () => {
     assert.equal(res.status, 401);
   });
 
-  test('POST /api/import/steam with no session -> 401', async () => {
-    const res = await request(app).post('/api/import/steam').send({ dryRun: true });
-    assert.equal(res.status, 401);
-  });
-
   test('GET /api/me with no session -> 401', async () => {
     const res = await request(app).get('/api/me');
     assert.equal(res.status, 401);

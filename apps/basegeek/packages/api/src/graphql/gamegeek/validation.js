@@ -57,7 +57,6 @@ export const GAME_SORTS = Object.freeze([
   'random',
 ]);
 export const SORT_DIRS = Object.freeze(['asc', 'desc']);
-export const CREATE_GAMES_MAX = 200;
 export const MAX_CUSTOM_SHELF_LABEL = 40;
 
 const LIST_MAX = bounds.listMax.max;
@@ -157,15 +156,6 @@ export const createGameInput = z.object({ title: titleRequired, ...gameFields })
 export const updateGameInput = z.object({ title: titleRequired.optional(), ...gameFields }).strict();
 
 export const createGameArgsSchema = z.object({ input: createGameInput, shelf: shelfArg }).strict();
-
-export const createGamesArgsSchema = z
-  .object({
-    inputs: z.array(createGameInput).min(1).max(CREATE_GAMES_MAX, {
-      message: `at most ${CREATE_GAMES_MAX} games per call`,
-    }),
-    shelf: shelfArg,
-  })
-  .strict();
 
 export const updateGameArgsSchema = z.object({ id: idString, input: updateGameInput }).strict();
 export const gameIdArgsSchema = z.object({ id: idString }).strict();
@@ -321,13 +311,6 @@ export const saveGameProfileArgsSchema = z
       .object({
         platformsOwned: z.array(enumOf(PLATFORMS)).max(PLATFORMS.length).nullable().optional(),
         defaultPlatform: z.union([enumOf(PLATFORMS), z.literal('')]).nullable().optional(),
-        // A 64-bit SteamID: exactly 17 digits. '' or null clears.
-        steamId: z
-          .string()
-          .trim()
-          .refine((v) => v === '' || /^\d{17}$/.test(v), { message: 'steamId must be 17 digits' })
-          .nullable()
-          .optional(),
       })
       .strict(),
   })

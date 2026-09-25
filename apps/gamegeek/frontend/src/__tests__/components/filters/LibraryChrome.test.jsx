@@ -115,8 +115,6 @@ describe('SaveViewDialog', () => {
           savedFilters: [{ __typename: 'GameSavedFilter', id: 'v1', name: input.name, filter, sortBy: 'timeToBeat', sortDir: 'asc', searchQuery: null, shelfFilter: null, platformFilter: null, ownedFilter: null }],
           platformsOwned: [],
           defaultPlatform: null,
-          steamId: null,
-          lastSteamSyncAt: null,
           playniteLastImportAt: null,
           playniteLastGeneratedAtUtc: null,
           playniteLastTotal: null,

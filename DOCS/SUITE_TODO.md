@@ -145,8 +145,8 @@ Wanted, not built on the 2026-09-22 overnight run:
   pattern. Spec: [`apps/gamegeek/DOCS/PLAYNITE_IMPORT.md`](../apps/gamegeek/DOCS/PLAYNITE_IMPORT.md).
   **Playnite is the only import GameGeek supports** (Chef, 2026-09-25: "I'm not going to
   build 8 API systems just to get game listings… when Playnite already solved that").
-  The Steam library import and Paste-a-list are **to be removed**, right after the
-  tags/filters work lands. Single "Add game" stays. Heroic, GOG Galaxy, Epic and Amazon
+  ~~The Steam library import and Paste-a-list are **to be removed**, right after the
+  tags/filters work lands.~~ **Done 2026-09-25.** Single "Add game" stays. Heroic, GOG Galaxy, Epic and Amazon
   importers are **not planned**
   ([`DOCS/GAMEGEEK_STOREFRONT_IMPORTS.md`](GAMEGEEK_STOREFRONT_IMPORTS.md) is research
   only now).

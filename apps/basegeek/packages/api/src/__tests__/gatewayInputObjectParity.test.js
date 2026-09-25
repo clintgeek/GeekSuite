@@ -594,7 +594,6 @@ const FIXTURES = {
 const NO_FRONTEND_CALLER = new Set([
   'Mutation.setNutritionGoals',
   'Mutation.createGame',
-  'Mutation.createGames',
   'Mutation.updateGame',
   'Mutation.setGameState',
   'Mutation.logGameSession',
@@ -620,8 +619,10 @@ describe('every input-object-taking root field is enumerated and accounted for',
   // 30 from 2026-09-24: gamegeek's eight input-object mutations.
   // 32 from 2026-09-25: games(filter) and gameFacets(filter) take GameFilterInput
   // (apps/gamegeek/DOCS/TAGS_AND_FILTERS.md §B1).
-  test('the count matches the audit: 32 root fields take an input-object argument', () => {
-    expect(inputObjectRootFields()).toHaveLength(32);
+  // 31 from 2026-09-25 (later same day): createGames (paste-a-list) removed —
+  // Playnite is the only supported import (Chef's call).
+  test('the count matches the audit: 31 root fields take an input-object argument', () => {
+    expect(inputObjectRootFields()).toHaveLength(31);
   });
 
   test('FIXTURES and NO_FRONTEND_CALLER never claim the same field', () => {

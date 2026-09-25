@@ -10,13 +10,11 @@ import { effectiveFilter, buildConditions, matchOf, lookupMeStages, facetsPipeli
 import {
   validateInput,
   GAME_SORTS,
-  CREATE_GAMES_MAX,
   MAX_CUSTOM_SHELF_LABEL,
   gamesArgsSchema,
   gameFacetsArgsSchema,
   gameIdArgsSchema,
   createGameArgsSchema,
-  createGamesArgsSchema,
   updateGameArgsSchema,
   setGameStateArgsSchema,
   logGameSessionArgsSchema,
@@ -80,7 +78,6 @@ const validateGames = validateInput(gamesArgsSchema);
 const validateGameFacets = validateInput(gameFacetsArgsSchema);
 const validateGameId = validateInput(gameIdArgsSchema);
 const validateCreateGame = validateInput(createGameArgsSchema);
-const validateCreateGames = validateInput(createGamesArgsSchema);
 const validateUpdateGame = validateInput(updateGameArgsSchema);
 const validateSetGameState = validateInput(setGameStateArgsSchema);
 const validateLogGameSession = validateInput(logGameSessionArgsSchema);
@@ -116,10 +113,6 @@ const notFound = (what = 'Game') => userError(`${what} not found`, 'NOT_FOUND');
 /** A malformed id is "not found", never a CastError. */
 function validObjectId(id) {
   return (typeof id === 'string' && /^[0-9a-fA-F]{24}$/.test(id)) || id instanceof mongoose.Types.ObjectId;
-}
-
-function escapeExact(value) {
-  return String(value).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function generateId() {
@@ -634,39 +627,6 @@ export const resolvers = {
       return withMe(game, player);
     },
 
-    createGames: async (_, rawArgs, { user } = {}) => {
-      const userId = requireUser(user);
-      const householdId = resolveHouseholdId(user);
-      const { inputs, shelf } = validateCreateGames(rawArgs);
-      const targetShelf = (await resolveShelf(userId, shelf)) ?? 'backlog';
-
-      // Case-insensitive exact title match against this household only.
-      const titles = inputs.map((i) => i.title);
-      const existing = await Game.find(
-        { householdId, title: { $in: titles.map((t) => new RegExp(`^${escapeExact(t)}$`, 'i')) } },
-        { title: 1 }
-      ).lean();
-      const taken = new Set(existing.map((g) => g.title.toLowerCase()));
-
-      const fresh = [];
-      for (const input of inputs) {
-        const key = input.title.toLowerCase();
-        if (taken.has(key)) continue;
-        taken.add(key); // also dedupes within the batch
-        if (input.parentId) await checkParent(householdId, input.parentId);
-        fresh.push({ ...gameDocFromInput(input), householdId, createdBy: userId });
-      }
-      if (fresh.length === 0) return [];
-      if (fresh.length > CREATE_GAMES_MAX) throw userError(`at most ${CREATE_GAMES_MAX} games per call`);
-
-      const games = await Game.insertMany(fresh);
-      const players = await GamePlayer.insertMany(
-        games.map((g) => ({ householdId, userId, gameId: g._id, shelf: targetShelf }))
-      );
-      const byGame = new Map(players.map((p) => [String(p.gameId), p]));
-      return games.map((g) => withMe(g, byGame.get(String(g._id))));
-    },
-
     updateGame: async (_, rawArgs, { user } = {}) => {
       const userId = requireUser(user);
       const householdId = resolveHouseholdId(user);
@@ -839,7 +799,6 @@ export const resolvers = {
       const set = {};
       if (input.platformsOwned !== undefined) set.platformsOwned = [...new Set(input.platformsOwned ?? [])];
       if (input.defaultPlatform !== undefined) set.defaultPlatform = input.defaultPlatform || null;
-      if (input.steamId !== undefined) set.steamId = input.steamId || null;
 
       const update = { $setOnInsert: { householdId } };
       if (Object.keys(set).length) update.$set = set;

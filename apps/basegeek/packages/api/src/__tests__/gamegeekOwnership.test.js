@@ -64,7 +64,6 @@ describe('gamegeek — authentication required', () => {
     };
     const mutationCalls = {
       createGame: () => Mutation.createGame(null, { input: { title: 'x' } }, ctx(null)),
-      createGames: () => Mutation.createGames(null, { inputs: [{ title: 'x' }] }, ctx(null)),
       updateGame: () => Mutation.updateGame(null, { id, input: { title: 'pwned' } }, ctx(null)),
       deleteGame: () => Mutation.deleteGame(null, { id }, ctx(null)),
       setGameState: () => Mutation.setGameState(null, { gameId: id, input: { rating: 1 } }, ctx(null)),
@@ -73,7 +72,7 @@ describe('gamegeek — authentication required', () => {
       deleteGameSession: () => Mutation.deleteGameSession(null, { gameId: id, sessionId: id }, ctx(null)),
       saveGamePlaythrough: () => Mutation.saveGamePlaythrough(null, { gameId: id, input: {} }, ctx(null)),
       deleteGamePlaythrough: () => Mutation.deleteGamePlaythrough(null, { gameId: id, playthroughId: id }, ctx(null)),
-      saveGameProfile: () => Mutation.saveGameProfile(null, { input: { steamId: null } }, ctx(null)),
+      saveGameProfile: () => Mutation.saveGameProfile(null, { input: { defaultPlatform: null } }, ctx(null)),
       addGameShelf: () => Mutation.addGameShelf(null, { label: 'Couch' }, ctx(null)),
       removeGameShelf: () => Mutation.removeGameShelf(null, { id: 'custom-couch' }, ctx(null)),
       saveGameFilter: () => Mutation.saveGameFilter(null, { input: { name: 'x' } }, ctx(null)),

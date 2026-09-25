@@ -237,7 +237,7 @@ dropped. Both its name and its slug are offered to the mapper.
 
 **Genres.**
 - `canonicalGenres()` runs on the Playnite mapping, enrichment's `planFill`, and the
-  gateway's `createGame`, `createGames` and `updateGame`.
+  gateway's `createGame` and `updateGame`.
 - The boot migration (`src/migrations/genres.js`) runs before `listen`, so before the worker
   is scheduled. It's idempotent.
 - Each update is scoped `{_id, householdId}` and guarded on the exact array it read.

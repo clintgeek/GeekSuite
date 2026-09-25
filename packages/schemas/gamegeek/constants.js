@@ -93,7 +93,6 @@ const GAME_SOURCES = Object.freeze([
   'steam-store',
   'steam-import',
   'csv-import',
-  'paste-list',
   'playnite-import',
   'sample',
 ]);

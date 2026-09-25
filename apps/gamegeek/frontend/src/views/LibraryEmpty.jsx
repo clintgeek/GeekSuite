@@ -60,9 +60,6 @@ export default function LibraryEmpty({ narrowed, libraryEmpty, shelf, shelves, o
             Import from Playnite
           </Button>
         </Box>
-        <Typography sx={{ color: 'text.secondary', fontSize: '0.8125rem', mt: 3 }}>
-          On GOG, Epic, Amazon or Luna and not on Playnite? Add game → <b>Paste a list</b> takes a whole library of titles at once.
-        </Typography>
       </Frame>
     );
   }

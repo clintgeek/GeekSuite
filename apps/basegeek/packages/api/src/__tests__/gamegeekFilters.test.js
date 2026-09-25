@@ -368,11 +368,9 @@ describe('saved filters carry the whole filter', () => {
 });
 
 describe('canonical genres on write', () => {
-  test('createGame, createGames and updateGame canonicalize and dedupe', async () => {
+  test('createGame and updateGame canonicalize and dedupe', async () => {
     const g = await Mutation.createGame(null, { input: { title: 'Disco', genres: ['Role-playing (RPG)', 'RPG', 'Point-and-click'] } }, ctx(ALICE));
     expect(g.genres).toEqual(['RPG', 'Point & Click']);
-    const many = await Mutation.createGames(null, { inputs: [{ title: 'Portal', genres: ['Platform', 'Puzzle'] }] }, ctx(ALICE));
-    expect(many[0].genres).toEqual(['Platformer', 'Puzzle']);
     const u = await Mutation.updateGame(null, { id: String(g._id), input: { genres: ['Simulator', 'Simulation', 'Sport'] } }, ctx(ALICE));
     expect(u.genres).toEqual(['Simulation', 'Sports']);
     expect((await Game.findById(g._id).lean()).genres).toEqual(['Simulation', 'Sports']);

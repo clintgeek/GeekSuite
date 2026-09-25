@@ -11,7 +11,7 @@ export function useProviders() {
     if (cached) return undefined;
     let live = true;
     inflight = inflight || getProviders().then((p) => {
-      cached = { igdb: Boolean(p?.igdb), steamStore: Boolean(p?.steamStore), steamImport: Boolean(p?.steamImport) };
+      cached = { igdb: Boolean(p?.igdb), steamStore: Boolean(p?.steamStore) };
       return cached;
     }).catch(() => {
       inflight = null;

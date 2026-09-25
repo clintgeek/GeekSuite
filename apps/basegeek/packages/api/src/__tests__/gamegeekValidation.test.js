@@ -3,9 +3,8 @@
  *
  * The closed vocabularies from @geeksuite/schemas/gamegeek/constants are
  * enforced at the gateway (platform, storefront, copy format, mode,
- * completion, source), bounds come from the same module, shelves must be a
- * built-in or a custom shelf that exists on the caller's profile, and bulk
- * create is capped and deduplicated per household.
+ * completion, source), bounds come from the same module, and shelves must be
+ * a built-in or a custom shelf that exists on the caller's profile.
  */
 
 import mongoose from 'mongoose';
@@ -77,21 +76,16 @@ describe('enums', () => {
     expect(ok.__me.playthroughs[0].finishedAt.toISOString()).toBe('1998-06-01T00:00:00.000Z');
   });
 
-  test('profile platforms and steamId', async () => {
+  test('profile platforms', async () => {
     await rejectsBadInput(Mutation.saveGameProfile(null, { input: { platformsOwned: ['toaster'] } }, ctx));
     await rejectsBadInput(Mutation.saveGameProfile(null, { input: { defaultPlatform: 'toaster' } }, ctx));
-    for (const steamId of ['123', 'abcdefghijklmnopq', '7656119800000000012', ' 7656119800000000 ']) {
-      await rejectsBadInput(Mutation.saveGameProfile(null, { input: { steamId } }, ctx));
-    }
     const p = await Mutation.saveGameProfile(
       null,
-      { input: { platformsOwned: ['pc', 'switch', 'pc'], defaultPlatform: 'switch', steamId: '76561198000000001' } },
+      { input: { platformsOwned: ['pc', 'switch', 'pc'], defaultPlatform: 'switch' } },
       ctx
     );
-    expect(p).toMatchObject({ platformsOwned: ['pc', 'switch'], defaultPlatform: 'switch', steamId: '76561198000000001' });
-    const cleared = await Mutation.saveGameProfile(null, { input: { steamId: '' } }, ctx);
-    expect(cleared.steamId).toBeNull();
-    expect(cleared.householdId).toBe('default');
+    expect(p).toMatchObject({ platformsOwned: ['pc', 'switch'], defaultPlatform: 'switch' });
+    expect(p.householdId).toBe('default');
   });
 
   test('gameVocabulary is the constants module', async () => {
@@ -261,38 +255,5 @@ describe('saved filters', () => {
     expect(p2.savedFilters[0]).toMatchObject({ id, name: 'Couch night', sortBy: 'rating' });
     const p3 = await Mutation.deleteGameFilter(null, { id }, ctx);
     expect(p3.savedFilters).toEqual([]);
-  });
-});
-
-describe('createGames: capped at 200, deduplicated per household', () => {
-  test('more than 200 is rejected and nothing is written', async () => {
-    const inputs = Array.from({ length: 201 }, (_, i) => ({ title: `Game ${i}` }));
-    await rejectsBadInput(Mutation.createGames(null, { inputs }, ctx));
-    expect(await Game.countDocuments({})).toBe(0);
-    const ok = await Mutation.createGames(null, { inputs: inputs.slice(0, 200) }, ctx);
-    expect(ok).toHaveLength(200);
-  });
-
-  test('skips titles already in the household (case-insensitive, exact) and in-batch duplicates', async () => {
-    await create({ title: 'Hades' });
-    await Game.collection.insertOne({ householdId: 'other-household', title: 'Celeste', sortTitle: 'celeste' });
-    const created = await Mutation.createGames(
-      null,
-      {
-        inputs: [{ title: 'hades' }, { title: 'Hades II' }, { title: 'Celeste' }, { title: 'CELESTE' }, { title: 'H.des' }],
-        shelf: 'wishlist',
-      },
-      ctx
-    );
-    // 'Celeste' in ANOTHER household does not block this one; 'H.des' is not a regex.
-    expect(created.map((g) => g.title)).toEqual(['Hades II', 'Celeste', 'H.des']);
-    expect(created.every((g) => g.__me.shelf === 'wishlist')).toBe(true);
-    expect(await Game.countDocuments({ householdId: 'default' })).toBe(4);
-    const again = await Mutation.createGames(null, { inputs: [{ title: 'HADES II' }] }, ctx);
-    expect(again).toEqual([]);
-  });
-
-  test('an empty list is rejected', async () => {
-    await rejectsBadInput(Mutation.createGames(null, { inputs: [] }, ctx));
   });
 });

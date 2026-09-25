@@ -5,7 +5,6 @@ import { isIgdbConfigured, searchIgdbGames } from '../metadata/igdbClient.js';
 import { normalizeIgdbSearchResults } from '../metadata/igdb.js';
 import { searchSteamStore, fetchSteamAppDetails } from '../metadata/steamClient.js';
 import { normalizeSteamSearchResults, normalizeSteamAppDetails } from '../metadata/steam.js';
-import { isSteamImportConfigured } from '../metadata/steamWebApi.js';
 import { isRawgConfigured, searchRawgGames } from '../metadata/rawgClient.js';
 import { normalizeRawgSearchResults } from '../metadata/rawg.js';
 
@@ -27,7 +26,6 @@ router.get('/providers', authenticate, (req, res) => {
     igdb: isIgdbConfigured(),
     rawg: isRawgConfigured(),
     steamStore: true,
-    steamImport: isSteamImportConfigured(),
   });
 });
 

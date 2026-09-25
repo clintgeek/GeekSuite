@@ -81,33 +81,6 @@ export const scenes = [
     teardown: (page, h) => h.esc(),
   },
   {
-    name: '09-add-paste-list',
-    goto: '/add?tab=paste',
-    wait: 1200,
-    async setup(page, h) {
-      const field = page.getByLabel('Titles');
-      if (!(await field.count())) return false;
-      await field.fill('Disco Elysium\n- Celeste\nInscryption\ncelESTE\n\nPentiment');
-      await h.settle(400);
-    },
-    teardown: (page, h) => h.esc(),
-  },
-  {
-    // The Steam dry run: counts, the first titles, and the commit button.
-    name: '10-steam-preview',
-    goto: '/settings#steam',
-    wait: 1400,
-    async setup(page, h) {
-      const field = page.getByLabel('Steam ID, custom URL name, or profile link');
-      if (!(await field.count())) return false;
-      await field.fill('chefcrocker');
-      await page.getByRole('button', { name: 'Preview import' }).click();
-      await h.settle(900);
-      await page.getByTestId('steam-preview').scrollIntoViewIfNeeded();
-      await h.settle(300);
-    },
-  },
-  {
     // The Playnite dry run: it fires as soon as a file is picked, no button
     // to click. A tiny in-memory JSON stands in for a real export — the stub
     // route answers regardless of what's actually in it.

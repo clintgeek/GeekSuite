@@ -241,8 +241,6 @@ export const typeDefs = gql`
     savedFilters: [GameSavedFilter!]!
     platformsOwned: [String!]!
     defaultPlatform: String
-    steamId: String
-    lastSteamSyncAt: Date
     # Last Playnite library import: when it ran, when the export was generated, entries in it.
     playniteLastImportAt: Date
     playniteLastGeneratedAtUtc: Date
@@ -345,7 +343,6 @@ export const typeDefs = gql`
   input GameProfileInput {
     platformsOwned: [String!]
     defaultPlatform: String
-    steamId: String
   }
 
   input GameSavedFilterInput {
@@ -389,9 +386,6 @@ export const typeDefs = gql`
   extend type Mutation {
     # Creates the household game AND the caller's state row (shelf defaults to "backlog").
     createGame(input: GameInput!, shelf: String): Game!
-    # Bulk add (paste-a-list, sample seeding). Max 200. Skips titles that already
-    # exist in the household (case-insensitive exact title match) and returns only created games.
-    createGames(inputs: [GameInput!]!, shelf: String): [Game!]!
     updateGame(id: ID!, input: GameInput!): Game!
     # Deletes the household game and every member's state for it.
     deleteGame(id: ID!): DeleteResponse!

@@ -1,16 +1,15 @@
 /**
- * `/add` — Add a game, over the library. Two ways in:
- *   Search:        title → pick a result → prefilled form → Add
- *                  (or "Enter manually" → the same form, empty)
- *   Paste a list:  many titles at once, for stores with no API
+ * `/add` — Add a game, over the library.
+ *   Search: title → pick a result → prefilled form → Add
+ *           (or "Enter manually" → the same form, empty)
  *
- * `/add?tab=paste` deep-links the second tab (the empty library and Settings
- * point there). After an add from search the sheet lands on the new game.
+ * After an add from search the sheet lands on the new game. Bulk imports
+ * (a whole library at once) are Playnite's job — see Settings.
  */
 import React, { useState } from 'react';
-import { Box, Button, Tab, Tabs } from '@mui/material';
+import { Box, Button } from '@mui/material';
 import { useMutation } from '@apollo/client';
-import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { GeekSheet, useToast } from '@geeksuite/ui';
 import { fetchCover } from '../../api/rest';
 import { CREATE_GAME } from '../../graphql/mutations';
@@ -19,26 +18,16 @@ import { useRefreshLibraryList } from '../../hooks/useRefreshLibraryList';
 import { gamePath, libraryPath } from '../../components/navConfig';
 import { candidateToForm, emptyForm, formToCreateInput } from './candidate';
 import GameForm from './GameForm';
-import PasteListStep from './PasteListStep';
 import SearchStep from './SearchStep';
-
-function withoutTab(search) {
-  const p = new URLSearchParams(search);
-  p.delete('tab');
-  const s = p.toString();
-  return s ? `?${s}` : '';
-}
 
 export default function AddGameDialog() {
   const navigate = useNavigate();
   const location = useLocation();
-  const [params, setParams] = useSearchParams();
   const { notify } = useToast();
   const vocab = useVocabulary();
   const { profile } = useGameProfile();
   const shelves = useShelfList();
 
-  const tab = params.get('tab') === 'paste' ? 'paste' : 'search';
   const [form, setForm] = useState(null); // null = searching
   const [fromSearch, setFromSearch] = useState(false);
   const [lastQuery, setLastQuery] = useState('');
@@ -47,19 +36,8 @@ export default function AddGameDialog() {
   const [createGame, { loading }] = useMutation(CREATE_GAME, { refetchQueries: ['GetGameShelves', 'GetGameFacets'] });
   const refreshList = useRefreshLibraryList();
 
-  const librarySearch = withoutTab(location.search);
+  const librarySearch = location.search;
   const close = () => navigate(libraryPath(librarySearch));
-
-  const setTab = (next) =>
-    setParams(
-      (prev) => {
-        const p = new URLSearchParams(prev);
-        if (next === 'paste') p.set('tab', 'paste');
-        else p.delete('tab');
-        return p;
-      },
-      { replace: true }
-    );
 
   const submit = async () => {
     if (!form?.title.trim()) {
@@ -84,7 +62,7 @@ export default function AddGameDialog() {
     }
   };
 
-  const showForm = tab === 'search' && form;
+  const showForm = Boolean(form);
 
   return (
     <GeekSheet
@@ -103,21 +81,8 @@ export default function AddGameDialog() {
         ) : undefined
       }
     >
-      <Tabs
-        value={tab}
-        onChange={(_e, v) => setTab(v)}
-        aria-label="How to add"
-        variant="fullWidth"
-        sx={{ mb: 2, borderBottom: 1, borderColor: 'divider', '& .MuiTab-root': { color: 'text.secondary' }, '& .Mui-selected': { color: 'text.primary' } }}
-      >
-        <Tab value="search" label="Search" />
-        <Tab value="paste" label="Paste a list" />
-      </Tabs>
-
       <Box sx={{ pb: 3 }}>
-        {tab === 'paste' ? (
-          <PasteListStep vocab={vocab} shelves={shelves} profile={profile} onDone={close} />
-        ) : form ? (
+        {form ? (
           <GameForm
             form={form}
             setForm={setForm}

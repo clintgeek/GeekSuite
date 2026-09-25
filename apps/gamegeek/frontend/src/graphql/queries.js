@@ -258,8 +258,6 @@ export const GAME_PROFILE_FIELDS = gql`
     }
     platformsOwned
     defaultPlatform
-    steamId
-    lastSteamSyncAt
     playniteLastImportAt
     playniteLastGeneratedAtUtc
     playniteLastTotal

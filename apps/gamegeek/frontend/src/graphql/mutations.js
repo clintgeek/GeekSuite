@@ -13,15 +13,6 @@ export const CREATE_GAME = gql`
   ${GAME_DETAIL_FIELDS}
 `;
 
-export const CREATE_GAMES = gql`
-  mutation CreateGames($inputs: [GameInput!]!, $shelf: String) {
-    createGames(inputs: $inputs, shelf: $shelf) {
-      id
-      title
-    }
-  }
-`;
-
 export const UPDATE_GAME = gql`
   mutation UpdateGame($id: ID!, $input: GameInput!) {
     updateGame(id: $id, input: $input) {

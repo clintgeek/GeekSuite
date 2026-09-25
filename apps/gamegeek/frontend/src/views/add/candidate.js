@@ -97,14 +97,4 @@ export function formToCreateInput(form) {
   return input;
 }
 
-/** For the paste-a-list import: one GameInput per title. */
-export function pasteInputs(titles, { platform, format, storefront }) {
-  return titles.map((title) => ({
-    title,
-    source: 'paste-list',
-    platformsAvailable: platform ? [platform] : [],
-    copies: platform ? [{ platform, ...(format ? { format } : {}), ...(storefront ? { storefront } : {}) }] : [],
-  }));
-}
-
 export { todayInputValue };

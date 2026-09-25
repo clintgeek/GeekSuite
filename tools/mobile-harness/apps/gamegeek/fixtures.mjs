@@ -197,8 +197,6 @@ export const PROFILE = {
   ],
   platformsOwned: ['pc', 'steam-deck', 'switch', 'ps5', 'ios'],
   defaultPlatform: 'switch',
-  steamId: '',
-  lastSteamSyncAt: null,
   playniteLastImportAt: T('2026-09-24'),
   playniteLastGeneratedAtUtc: '2026-09-24T16:21:03.000Z',
   playniteLastTotal: 931,
@@ -352,18 +350,6 @@ export const PLAYNITE_DRY_RUN = {
   committed: false,
 };
 
-export const STEAM_DRY_RUN = {
-  configured: true,
-  total: 184,
-  toCreate: [
-    ['620', 'Portal 2', 0], ['413150', 'Stardew Valley', 212.4], ['1145360', 'Hades', 41.5], ['367520', 'Hollow Knight', 0],
-    ['1794680', 'Vampire Survivors', 18.2], ['588650', 'Dead Cells', 7], ['646570', 'Slay the Spire', 96], ['1086940', "Baldur's Gate 3", 3.5],
-    ['504230', 'Celeste', 14],
-  ].map(([steamAppId, title, hours]) => ({ steamAppId, title, hours })),
-  toUpdateHours: [{ gameId: 'g7', title: "Baldur's Gate 3", hours: 5.2 }],
-  unchanged: 12,
-};
-
 export const SEARCH_RESULTS = {
   provider: 'steam-store',
   results: [
@@ -405,7 +391,7 @@ function coverSvg(title, color) {
 
 export async function routes(ctx) {
   await sessionRoutes(ctx);
-  await ctx.route('**/api/metadata/providers', (r) => json(r, { igdb: false, steamStore: true, steamImport: true }));
+  await ctx.route('**/api/metadata/providers', (r) => json(r, { igdb: false, steamStore: true }));
   await ctx.route(/\/api\/metadata\/search/, (r) => json(r, SEARCH_RESULTS));
   await ctx.route(/\/harness-art\/([a-z]+)\.svg/, (r) => {
     const name = /\/harness-art\/([a-z]+)\.svg/.exec(r.request().url())[1];
@@ -424,7 +410,6 @@ export async function routes(ctx) {
   await ctx.route(/\/api\/games\/([^/]+)\/metadata\/unlink/, (r) =>
     json(r, { enrichment: { __typename: 'GameEnrichment', status: 'unlinked', provider: null, providerId: null, matchedTitle: null, matchedAt: null, attempts: 1, error: null, manual: false } })
   );
-  await ctx.route('**/api/import/steam', (r) => json(r, STEAM_DRY_RUN));
   await ctx.route('**/api/import/playnite', (r) => {
     // Multipart body — sniff the raw form data for the includeHidden field
     // rather than parsing it properly; good enough for a stubbed preview.

@@ -73,12 +73,6 @@ export const fetchCover = (gameId, url) =>
 export const deleteCover = (gameId) =>
   request(`/games/${encodeURIComponent(gameId)}/cover`, { method: 'DELETE' });
 
-export function importSteam({ steamId, dryRun }) {
-  const body = { dryRun: Boolean(dryRun) };
-  if (steamId && steamId.trim()) body.steamId = steamId.trim();
-  return request('/import/steam', { method: 'POST', body });
-}
-
 /**
  * Playnite: upload a Playnite Library Exporter export (schema v1). Multipart
  * — field `file`, flags as form fields so the same request works whether the

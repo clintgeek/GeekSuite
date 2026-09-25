@@ -4,8 +4,8 @@
  * filter they had scrolled).
  *
  *   - Positions live in sessionStorage (per tab, gone when it closes), keyed
- *     by the library's own query string — foreign params like `?tab=paste`
- *     are not part of the key, so opening Add over the library changes nothing.
+ *     by the library's own query string — foreign params like the Add sheet's
+ *     own are not part of the key, so opening Add over the library changes nothing.
  *   - A view with no remembered position starts at the top: a new filter is a
  *     new list, not the old one's scroll offset.
  *   - Restoring waits for enough rows: it scrolls as far as it can, which

@@ -684,3 +684,11 @@ Glance, MCP. The tenancy and registration-gate work is planned in
 
 Finding while seeding: userGeek has **four** accounts, not two. All of them are in GameGeek's
 default household (and share BookGeek) until suite households exist.
+
+**Removed 2026-09-25:** the Steam library import (`POST /api/import/steam`, `STEAM_API_KEY`,
+`Profile.steamId`/`lastSteamSyncAt`) and Paste-a-list (`createGames`, the Add dialog's second
+tab) — Chef: "Playnite is the only sane way to do imports and all I wish to support at this
+time. I'm not going to build 8 API systems just to get game listings from GOG, Epic, Amazon,
+etc. when Playnite already solved that." Steam stays as a metadata source (search, appdetails,
+cover art); single "Add game" (search + manual) stays. See
+`apps/gamegeek/DOCS/PLAYNITE_IMPORT.md`.
