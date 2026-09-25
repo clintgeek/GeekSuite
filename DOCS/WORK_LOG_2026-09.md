@@ -12,6 +12,40 @@ anything a future reader would otherwise have to rediscover.
 
 ## 2026-09-24
 
+### GameGeek — a new app, live at gamegeek.clintgeek.com overnight
+
+`70ca9142` gateway · `2108eddb` backend · `f1d4afb5` frontend · `d4c894c5` docs
+
+The household video-game library, BookGeek's sibling. Plan and build log:
+`DOCS/GameGeekPlan.md` (§14 records every place the build deviates from the plan).
+
+- **Tenancy from day one.** Every document carries `householdId`, and every resolver
+  scopes by it through `resolveHouseholdId` (`packages/schemas/gamegeek/household.js`),
+  which returns `'default'` until suite households exist. Cross-household ownership tests
+  went red with the scope removed.
+- **One schema for both writers.** The gateway and the backend both build their models
+  from `@geeksuite/schemas/gamegeek`, so BookGeek's hand-synced `Book` drift can't
+  happen here.
+- **Personal state is personal.** Shelf, rating, hours, sessions and playthroughs live
+  per user in `GamePlayer`. The catalog entry and the copies belong to the household.
+- **Storefronts.** Steam imports automatically once `STEAM_API_KEY` is set. GOG, Epic and
+  Amazon go through "Paste a list". Luna no longer has owned games at all
+  (`DOCS/GAMEGEEK_STOREFRONT_IMPORTS.md`).
+- **Metadata.** Steam store search is keyless and live. IGDB activates when a Twitch
+  app's `IGDB_CLIENT_ID`/`IGDB_CLIENT_SECRET` go in `apps/gamegeek/.env.production`
+  (then `docker compose up -d gamegeek`; Watchtower won't pick up new env).
+- **Checks.** Gateway 61 tests (full basegeek 2523 green), backend 82, frontend 40.
+  Mobile harness 42 scenes with 0 violations. Verified signed-in on production in both
+  themes.
+- **First deploy was `docker compose up -d`.** Watchtower never creates containers. The
+  nginx vhost is `clintgeek.com_gameGeek.conf` (not in the repo). Volumes are
+  `apps/gamegeek/data/`, because `/mnt/extra_space` is root-owned.
+- **Seeded** six sample games on Chef's shelves (`backend/scripts/seed-samples.js`,
+  idempotent).
+- **Found, not fixed:** registration is public, and userGeek has four accounts. Every
+  account shares BookGeek and GameGeek's default household. See
+  `DOCS/REGISTRATION_GATE_PLAN.md`.
+
 ### aiGeek — NoteGeek and FitnessGeek go paid-first on OpenRouter credit
 
 Chef, after a third round of Compose failures on free rows: "just put it on the $10 credit.
