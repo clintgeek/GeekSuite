@@ -49,6 +49,25 @@ Pull from here when planning the next pass; update as work lands or priorities s
   - Verify no client frontend attempts to read `document.cookie` directly for `geek_token` or `geek_refresh_token`.
   - Confirm all auth hydration flows exclusively through `/api/users/me` or `@geeksuite/user`.
 
+- **Registration is public, and BookGeek (plus GameGeek's default household) is shared by
+  every account** — found 2026-09-24 while designing GameGeek's tenancy. Any sign-up can read,
+  edit and delete the whole household library today. Plan and recommendation (ship
+  `REGISTRATION_MODE=closed` now, `invite` mode later):
+  [`DOCS/REGISTRATION_GATE_PLAN.md`](REGISTRATION_GATE_PLAN.md). **Proposal, not implemented.**
+
+- **Suite-wide households / multi-tenancy** — the real fix the registration gate is a stopgap
+  for. `households` collection in `userGeek`, expiring single-use invites, server-side
+  resolution (not a JWT claim), per-app migration table (BookGeek backfill, GameGeek's
+  `resolveHouseholdId` swap, FitnessGeek's household becomes a layer over it). Phased H0–H5:
+  [`DOCS/SUITE_HOUSEHOLDS_PLAN.md`](SUITE_HOUSEHOLDS_PLAN.md). **Proposal, not started.**
+
+- **nginx `client_max_body_size` has no suite-wide documented home.** Its absence 413'd every
+  basegeek AI call carrying an image (found 2026-09-something, recorded only in agent memory,
+  not in `DOCS/RUNBOOK.md`'s landmine table). The nginx config itself isn't in the repo, so
+  this recurs for any new app that uploads images (GameGeek's cover uploads, `/mcp`'s image
+  tools if any land) unless someone remembers by word of mouth. Worth a line in RUNBOOK's
+  landmine table the next time this bites, so it stops being tribal knowledge.
+
 ---
 
 ## 3. UI / UX & Design Language
@@ -106,6 +125,22 @@ Wanted, not built on the 2026-09-22 overnight run:
 - **REST `aiInsightsService.js`** duplicates the gateway's context builder and no client
   calls it — delete or reconcile.
 - **Household `share_weight`** is a setting nothing honours.
+
+### GameGeek
+
+- **BookGeek prep** — the deletion pass (dead REST CRUD, `/kindle-test*`, dead models),
+  `CONTEXT.md` fixes, and the `@geeksuite/collection` extraction (BookGeek and GameGeek
+  consolidated onto it together, since GameGeek is shipping tonight with its own copies of
+  the library components to move fast). Step-by-step, verified per step:
+  [`DOCS/BOOKGEEK_PREP_PLAN.md`](BOOKGEEK_PREP_PLAN.md). **Proposal, not started.**
+- **GameGeek phases G2–G6** — `GamePlayer` split/sessions/Journal, Steam+CSV imports, Tonight
+  rules engine + Stats, free-walk AI (cuttable), backlog goal/wishlist/loans/scan-to-add/MCP.
+  Full phase table and done-when criteria: [`DOCS/GameGeekPlan.md`](GameGeekPlan.md) §11.
+  Blocked on P0 prep and Chef's answers in §13.
+- **GameGeek storefront import — the file importer, next after tonight's Steam API + manual
+  paste**: Playnite JSON/CSV export, Heroic's library cache JSON, GOG Galaxy 2.0's local
+  SQLite DB, deduped against IGDB `external_games`. Research and per-storefront feasibility:
+  [`DOCS/GAMEGEEK_STOREFRONT_IMPORTS.md`](GAMEGEEK_STOREFRONT_IMPORTS.md).
 
 ### Suite MCP server — `DOCS/MCP_PLAN.md`
 
@@ -183,6 +218,13 @@ the app was down over its due time, should it arrive late or be skipped?
     east. The function's own comment says it should widen and doesn't.
   - Meal Impact and Recovery Coach not examined beyond shared fields.
   - No mobile-harness scene for the Health Dashboard.
+
+- **Eighteen mobile-harness scenes, 144 violations — still held.** Branch
+  `fitnessgeek-review-fixes` (commit `e9a14922`), unmerged on purpose. Covers nine FitnessGeek
+  screens the gate had never seen. Violations are real, deterministic across builds, identical
+  in both themes — mostly text under the 12px floor (the Reports macro spine is 9px) plus four
+  tap targets under 44px. Merging turns CI red. Fixing means changing type sizes on the
+  densest chart screens: **Chef's design call, not a mechanical edit.**
 
 ### NoteGeek
 
@@ -275,3 +317,63 @@ the app was down over its due time, should it arrive late or be skipped?
   - Extract duplicated date formatting functions across three files to `frontend/src/utils/dateUtils.js`.
 - **Gateway BroadcastChannel Logout**:
   - Add `geeksuite-auth`/`LOGOUT` broadcast message to any remaining non-standard logout routes.
+
+---
+
+## 8. Suite Tenancy & GameGeek (plans written 2026-09-24)
+
+- **Suite households** — `DOCS/SUITE_HOUSEHOLDS_PLAN.md`. Proposal, not started. The
+  suite-wide multi-tenancy model (a `households` collection in `userGeek`, server-side
+  `requireHousehold(user)` resolution, expiring single-use invites). BookGeek and GameGeek
+  both need this before a third user can safely exist; FitnessGeek's app-local household
+  becomes a thin layer over it. See that doc's phased rollout (H0–H4).
+- **Registration gate** — `DOCS/REGISTRATION_GATE_PLAN.md`. Proposal awaiting Chef's call, NOT
+  implemented. `POST /api/auth/register` is public and rate-limited but not gated, and
+  BookGeek's shared library (plus GameGeek's default household) means any sign-up can read,
+  edit, or delete it today. Recommended stopgap: `REGISTRATION_MODE=closed` (one-line), ahead
+  of the full suite-households plan.
+- **BookGeek prep** — `DOCS/BOOKGEEK_PREP_PLAN.md`. Proposal, not started. The deletion pass
+  (dead REST CRUD in `apps/bookgeek/api/src/server.js`, dead models, stale `CONTEXT.md`) plus
+  the `@geeksuite/collection` extraction. Sequencing updated 2026-09-24: GameGeek is shipping
+  tonight with its own local copies of BookGeek-modelled components, so the extraction now
+  consolidates **both** apps onto the shared package in one pass rather than BookGeek alone.
+- **GameGeek phases G2–G6** — `DOCS/GameGeekPlan.md` §11. Proposal, not started beyond
+  G0/G1-ish work happening now. G2 (`GamePlayer` split, sessions, playthroughs, Journal), G3
+  (Steam + CSV imports), G4 (Tonight + Stats + Glance), G5 (free-walk AI, golden-set entries),
+  G6 (backlog goal, wishlist, loans, scan-to-add, MCP tools). Each phase's done-when is in the
+  plan's table; G5 is explicitly cuttable if rules-based Tonight feels good without it.
+- **GameGeek storefront file importer** — `DOCS/GAMEGEEK_STOREFRONT_IMPORTS.md`. Research
+  proposal, not started. Steam API import and manual paste-a-list are being built tonight;
+  next up is a file importer for Playnite JSON/CSV, Heroic's library cache JSON, and a GOG
+  Galaxy 2.0 DB export, deduped against IGDB's `external_games`.
+
+## 9. From the memory audit, 2026-09-24
+
+Found while cross-checking session memory against `DOCS/*.md` — genuinely open items with no
+existing doc home, not just history:
+
+- **Container DNS / Tailscale landmine has no durable fix yet.** Docker's embedded resolver
+  snapshots the host's DNS upstream at container start; it broke twice (2026-09-11 when
+  Tailscale was removed, causing `/api/me` 503s across the fleet; 2026-09-17 when Watchtower
+  itself held a stale Tailscale DNS entry and silently deployed nothing suite-wide,
+  `updated=0 failed=0` looking healthy). Both times were fixed with a manual `docker restart`.
+  The durable fix — `dns:` in every compose file, or `"dns"` in `/etc/docker/daemon.json`
+  (the latter needs a whole-box daemon restart, Chef's call) — has not been applied. Not
+  currently in `DOCS/RUNBOOK.md`'s landmine tables; worth adding there when the durable fix
+  lands, or sooner so the next occurrence is faster to diagnose.
+- **basegeek's nginx `client_max_body_size` fix has no doc home, and its own "tidier fix" is
+  still undone.** `clintgeek.com_baseGeek.conf` had no `client_max_body_size`, so nginx's 1 MB
+  default 413'd any AI call carrying an image before basegeek's own 8 MB guard was ever
+  reached — surfaced as a useless "assistant isn't available" in FitnessGeek. Fixed 2026-09-17
+  by adding `client_max_body_size 12m;`. Nginx config lives at `/mnt/Media/Docker/nginx` and is
+  **not in this repo**, so nothing in git records even the applied fix. The tidier fix noted at
+  the time — point container-to-container AI calls (`BASEGEEK_URL`) at basegeek's internal
+  address so they skip the edge proxy entirely, instead of round-tripping through nginx — is
+  still not done (it needs an env change and `docker compose up -d`, not a Watchtower restart).
+- **18 FitnessGeek mobile-harness scenes, 144 a11y violations, still held.** Branch
+  `fitnessgeek-review-fixes` (commit `e9a14922`), deliberately unmerged — merging turns CI red.
+  Violations are real and deterministic across three builds in both themes: mostly text under
+  the 12px floor (the Reports macro spine is 9px) plus four tap targets under 44px. Fixing
+  means changing type sizes on the densest chart screens — **Chef's design call, not a
+  mechanical edit.** (Separately, BP's `measured_at` backfill this branch also covers already
+  shipped 2026-09-20 on `main`, `57fcfe9c` — only the harness scenes remain held.)
