@@ -119,25 +119,66 @@ Never overwrite the title or any field someone edited.
 
 ## Profile
 
-`GameProfile.playnite = { lastImportAt, lastGeneratedAtUtc, lastTotal }`, exposed on
-`gameProfile` so Settings can say "Last imported … from an export made …".
+`GameProfile.playnite = { lastImportAt, lastGeneratedAtUtc, lastTotal, lastSource }`,
+exposed on `gameProfile` so Settings can say "Last imported … from an export made …".
+`lastSource` is `'upload'` or `'folder'` (added with the folder import, below) — which
+front door produced the most recent import.
 
-## Later (decided 2026-09-25)
+## Folder import — the Nextcloud drop (built 2026-09-25)
 
-- **Metadata and covers come from Steam, IGDB and RAWG** (Chef's pick). A separate
-  enrichment pass fills empty fields only, never overwriting anything someone edited:
+Chef's Playnite exporter writes automatically, same filename every time, into
+`/mnt/NextCloud/data/Files/gamegeek-import/<username>/playnite-library.json` on the host —
+a Nextcloud **desktop-client** sync folder, never touched or renamed by GameGeek (ghost
+files in the Nextcloud UI otherwise). The compose mount brings the parent in read-only at
+`/playnite-drop`. No env var is required in production: the watcher turns on when
+`PLAYNITE_DROP_ROOT` is set OR `/playnite-drop` exists, so the mount alone is enough;
+`PLAYNITE_DROP_DISABLED=1` is the kill switch.
+
+- **Folder → user.** Every subfolder of the root is a user, matched case-insensitively
+  against username or email in basegeek's `userGeek.users` (the same approach as
+  FitnessGeek's `DOCS/BODY_COMPOSITION_INTAKE.md` §11.1). A new user's folder is picked up
+  without a restart; an unknown folder name is warned about once and skipped.
+- **When it runs:** a full scan at boot (after Mongo connects — the correctness
+  guarantee, since a watcher can't see files that arrived while the app was down),
+  `fs.watch` on the root (for a new user's folder) and on each known user folder, and a
+  rescan every 15 minutes as a safety net. All three feed one queue, so files import one
+  at a time.
+- **Stability.** A file is only read once its size and mtime are unchanged across two
+  checks at least 5s apart, AND the settled bytes parse as JSON — Nextcloud writes files
+  in place, so a half-written file is retried on the next pass, never ledgered as failed.
+- **The ledger** is `PlayniteDropFile` (`gamegeek.playnitedropfiles`,
+  `@geeksuite/schemas/gamegeek/playniteDropFile`), one row per `(userId, relPath)`,
+  upserted in place — the drop folder always has the same filename, so this is "the
+  current state of that slot", not a log of every scan:
+  - Same `sha256` at the same slot as last time → a cheap no-op (`unchanged`); this is
+    what makes every 15-minute rescan of an untouched export a single read.
+  - Same `sha256` already imported under some other path → `skipped-duplicate`.
+  - `generatedAtUtc` no newer than the profile's `playnite.lastGeneratedAtUtc` →
+    `skipped-older` — an older export never overwrites a newer one.
+  - Otherwise the import runs — **exactly** this endpoint's commit path
+    (`playnite/runCommit.js`, shared with the upload route), always with
+    `includeHidden: false` (hidden games are never imported by the auto path; there is no
+    setting for it) — and the row becomes `imported`, with the plan's `counts`.
+  - A parse or commit failure is ledgered `failed` with the error message, and is not
+    retried until the file's `sha256` changes (retrying identical bytes reproduces the
+    identical failure).
+- **Serialization.** The upload route and the folder watcher share one process-wide mutex
+  (`playnite/importLock.js`), so an upload landing mid-drop-import can't interleave writes
+  with it.
+- **Status:** `GET /api/import/playnite/drop/status` (auth, scoped to the caller) →
+  `{ enabled, watching, folder: 'gamegeek-import/<username>/', lastFile: {name, status,
+  processedAt, generatedAtUtc, counts, error} | null }`. The Settings card shows a line
+  under the manual upload (still the fallback either way): watching + last import, a
+  quiet skipped/failed note, or nothing when the importer isn't enabled.
+- Not built: a push-with-token path from the exporter — the Nextcloud drop replaces it.
+
+## Later
+
+- **Metadata and covers come from Steam, IGDB and RAWG** (Chef's pick, 2026-09-25). A
+  separate enrichment pass fills empty fields only, never overwriting anything someone
+  edited:
   - Steam appdetails (keyless) for games with an exact `steamAppId`.
   - IGDB (Twitch client credentials) as the main source for the rest, since it covers every
     store and maps cross-store ids through `external_games`.
   - RAWG (API key) as a fallback when IGDB has no match.
   - Covers are cached locally through `coverFetch`'s allow-list, like today.
-- **Automatic import from Nextcloud**, the FitnessGeek pattern
-  (`DOCS/BODY_COMPOSITION_INTAKE.md` §11):
-  - The Playnite exporter writes its JSON into a Nextcloud folder, one folder per user
-    under a `gamegeek-import/` root, mounted read-only into the container.
-  - GameGeek scans it at boot, watches it with `fs.watch`, and rescans every 15 minutes.
-  - A sha256 ledger means a file imports once. The latest export by `generatedAtUtc` wins.
-  - The import is exactly this endpoint's commit path, with `includeHidden` from the
-    user's saved preference. GameGeek never writes to the folder (Nextcloud ghost files).
-- Not planned: a push-with-token path from the exporter. The Nextcloud drop replaces it.
-- **Order:** manual upload works first (this doc), then enrichment, then the Nextcloud drop.

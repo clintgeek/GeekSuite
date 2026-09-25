@@ -43,6 +43,10 @@ services:
     volumes:
       - ./data/covers:/data/covers
       - ./data/imports:/data/imports
+      # Chef's Playnite exporter writes into this Nextcloud folder
+      # automatically (apps/gamegeek/DOCS/PLAYNITE_IMPORT.md, folder import).
+      # Read-only — the folder is Nextcloud's, never gamegeek's, to write to.
+      - /mnt/NextCloud/data/Files/gamegeek-import:/playnite-drop:ro
 
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:1810/api/health"]

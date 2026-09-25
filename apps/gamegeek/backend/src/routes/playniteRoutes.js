@@ -13,15 +13,16 @@
  */
 import express from 'express';
 import multer from 'multer';
-import mongoose from 'mongoose';
 import { authenticate } from '../middleware/authMiddleware.js';
 import Game from '../models/Game.js';
 import GamePlayer from '../models/GamePlayer.js';
 import Profile from '../models/Profile.js';
+import PlayniteDropFile from '../models/PlayniteDropFile.js';
 import householdModule from '@geeksuite/schemas/gamegeek/household';
 import { parseExport, parseJsonText, PlayniteFileError } from '../playnite/parse.js';
-import { planPlayniteImport } from '../playnite/importPlanner.js';
-import { commitPlayniteImport } from '../playnite/commit.js';
+import { buildPlaynitePlan, commitPlaynitePlan } from '../playnite/runCommit.js';
+import { withImportLock } from '../playnite/importLock.js';
+import { getPlayniteDropStatus, folderNameFor, DROP_DISPLAY_PREFIX } from '../playnite/dropWatcher.js';
 import { triggerEnrichment } from '../enrichment/service.js';
 
 const { resolveHouseholdId } = householdModule;
@@ -66,9 +67,6 @@ export function parseFlag(value, fallback) {
   return fallback;
 }
 
-const GAME_FIELDS = { title: 1, genres: 1, releaseDate: 1, platformsAvailable: 1, externalIds: 1, copies: 1 };
-const PLAYER_FIELDS = { gameId: 1, hoursPlayed: 1, hoursSource: 1, lastPlayedAt: 1 };
-
 router.post('/playnite', authenticate, readBody, async (req, res, next) => {
   const isMultipart = req.is('multipart/form-data');
   const fields = isMultipart ? req.body ?? {} : {};
@@ -95,21 +93,8 @@ router.post('/playnite', authenticate, readBody, async (req, res, next) => {
   const userId = req.user.id;
 
   try {
-    const [existingGames, existingPlayers] = await Promise.all([
-      Game.find({ householdId }, GAME_FIELDS).lean(),
-      GamePlayer.find({ userId, householdId }, PLAYER_FIELDS).lean(),
-    ]);
-
-    const plan = planPlayniteImport({
-      entries: parsed.entries,
-      existingGames,
-      existingPlayers,
-      userId,
-      includeHidden,
-      now: new Date(),
-      seenPlayniteIds: parsed.seenPlayniteIds,
-      invalid: parsed.invalid,
-      total: parsed.total,
+    const plan = await buildPlaynitePlan({
+      parsed, householdId, userId, includeHidden, now: new Date(), Game, GamePlayer,
     });
 
     const body = {
@@ -122,28 +107,12 @@ router.post('/playnite', authenticate, readBody, async (req, res, next) => {
     };
     if (dryRun) return res.json(body);
 
-    await commitPlayniteImport({
-      plan,
-      householdId,
-      userId,
-      Game,
-      GamePlayer,
-      newId: () => new mongoose.Types.ObjectId(),
-    });
-
-    const generated = parsed.generatedAtUtc ? new Date(parsed.generatedAtUtc) : null;
-    await Profile.findOneAndUpdate(
-      { userId },
-      {
-        $set: {
-          householdId,
-          userId,
-          'playnite.lastImportAt': new Date(),
-          'playnite.lastGeneratedAtUtc': generated && !Number.isNaN(generated.getTime()) ? generated : null,
-          'playnite.lastTotal': plan.total,
-        },
-      },
-      { upsert: true }
+    // Serialized against the Nextcloud drop watcher (importLock.js) — an
+    // upload landing mid-drop-import must not interleave writes with it.
+    await withImportLock(() =>
+      commitPlaynitePlan({
+        plan, householdId, userId, generatedAtUtc: parsed.generatedAtUtc, source: 'upload', Game, GamePlayer, Profile,
+      })
     );
 
     // New games want covers and metadata; the worker runs in the background.
@@ -153,6 +122,39 @@ router.post('/playnite', authenticate, readBody, async (req, res, next) => {
   } catch (err) {
     req.log?.error?.({ err: err?.message }, 'playnite import failed');
     return res.status(500).json({ message: 'Playnite import failed', code: 'PLAYNITE_IMPORT_ERROR' });
+  }
+});
+
+/**
+ * GET /api/import/playnite/drop/status — the Nextcloud auto-import's state
+ * for the calling user (apps/gamegeek/DOCS/PLAYNITE_IMPORT.md, folder
+ * import). Household-scoped by construction: the ledger row and the profile
+ * stamp are both keyed by this user's own id.
+ */
+router.get('/playnite/drop/status', authenticate, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { enabled } = getPlayniteDropStatus();
+    const username = req.user.username || req.user.email || null;
+    const folder = enabled && username ? `${DROP_DISPLAY_PREFIX}/${username}/` : null;
+    const watching = enabled && Boolean(folderNameFor(userId));
+
+    const row = await PlayniteDropFile.findOne({ userId }).sort({ processedAt: -1 }).lean();
+    const lastFile = row
+      ? {
+          name: row.relPath ? row.relPath.split('/').pop() : null,
+          status: row.status,
+          processedAt: row.processedAt ?? null,
+          generatedAtUtc: row.generatedAtUtc ?? null,
+          counts: row.counts ?? null,
+          error: row.error ?? null,
+        }
+      : null;
+
+    return res.json({ enabled, watching, folder, lastFile });
+  } catch (err) {
+    req.log?.error?.({ err: err?.message }, 'playnite drop status failed');
+    return res.status(500).json({ message: 'Could not read the Playnite auto-import status', code: 'PLAYNITE_DROP_STATUS_ERROR' });
   }
 });
 

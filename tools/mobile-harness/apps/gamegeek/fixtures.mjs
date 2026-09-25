@@ -329,6 +329,24 @@ export const OPS = {
   },
 };
 
+// The Nextcloud auto-import status (apps/gamegeek/DOCS/PLAYNITE_IMPORT.md,
+// folder import). Fixed at "watching, last export imported a few hours ago"
+// — the scene the harness cares about is the Settings card's steady state,
+// not a live watcher.
+export const PLAYNITE_DROP_STATUS = {
+  enabled: true,
+  watching: true,
+  folder: 'gamegeek-import/chef/',
+  lastFile: {
+    name: 'playnite-library.json',
+    status: 'imported',
+    processedAt: T('2026-09-25'),
+    generatedAtUtc: '2026-09-25T16:21:03Z',
+    counts: { create: 3, addCopy: 0, update: 5, unchanged: 923, skippedHidden: 241, notInFile: 0, invalid: 0 },
+    error: null,
+  },
+};
+
 export const PLAYNITE_DRY_RUN = {
   schemaVersion: 1,
   generatedAtUtc: '2026-09-25T16:21:03Z',
@@ -410,6 +428,9 @@ export async function routes(ctx) {
   await ctx.route(/\/api\/games\/([^/]+)\/metadata\/unlink/, (r) =>
     json(r, { enrichment: { __typename: 'GameEnrichment', status: 'unlinked', provider: null, providerId: null, matchedTitle: null, matchedAt: null, attempts: 1, error: null, manual: false } })
   );
+  // Routes match newest-first (see net.mjs's header comment), so the more
+  // specific /drop/status path is registered AFTER the general /playnite one
+  // to make sure it wins if the two globs ever overlap.
   await ctx.route('**/api/import/playnite', (r) => {
     // Multipart body — sniff the raw form data for the includeHidden field
     // rather than parsing it properly; good enough for a stubbed preview.
@@ -419,5 +440,6 @@ export async function routes(ctx) {
     const { create, skippedHidden } = PLAYNITE_DRY_RUN.counts;
     return json(r, { ...PLAYNITE_DRY_RUN, counts: { ...PLAYNITE_DRY_RUN.counts, create: create + skippedHidden, skippedHidden: 0 } });
   });
+  await ctx.route('**/api/import/playnite/drop/status', (r) => json(r, PLAYNITE_DROP_STATUS));
   await graphqlRoute(ctx, OPS);
 }

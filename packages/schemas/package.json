@@ -23,7 +23,8 @@
     "./gamegeek/household": "./gamegeek/household.js",
     "./gamegeek/game": "./gamegeek/game.js",
     "./gamegeek/gamePlayer": "./gamegeek/gamePlayer.js",
-    "./gamegeek/profile": "./gamegeek/profile.js"
+    "./gamegeek/profile": "./gamegeek/profile.js",
+    "./gamegeek/playniteDropFile": "./gamegeek/playniteDropFile.js"
   },
   "scripts": {
     "lint": "eslint ."

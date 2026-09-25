@@ -40,11 +40,13 @@ function profileDefinition(mongoose) {
     platformsOwned: { type: [{ type: String, enum: PLATFORMS }], default: [] },
     defaultPlatform: { type: String, enum: [...PLATFORMS, null], default: null },
     // Last Playnite library import (apps/gamegeek/DOCS/PLAYNITE_IMPORT.md §Profile):
-    // when it ran, when the export itself was generated, and how many entries it had.
+    // when it ran, when the export itself was generated, how many entries it
+    // had, and whether it came from the manual upload or the Nextcloud drop.
     playnite: {
       lastImportAt: { type: Date, default: null },
       lastGeneratedAtUtc: { type: Date, default: null },
       lastTotal: { type: Number, default: null },
+      lastSource: { type: String, enum: ['upload', 'folder', null], default: null },
     },
   };
 }

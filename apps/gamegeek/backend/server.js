@@ -6,6 +6,7 @@ import logger from './src/lib/logger.js';
 import createApp from './src/app.js';
 import { ensureCoversDir } from './src/lib/coverStorage.js';
 import { startEnrichmentSchedule } from './src/enrichment/service.js';
+import { startPlayniteDropImport } from './src/playnite/dropWatcher.js';
 import Game from './src/models/Game.js';
 import { migrateGenres } from './src/migrations/genres.js';
 
@@ -27,6 +28,7 @@ const connectDB = async () => {
 
 let shuttingDown = false;
 let server;
+let dropWatcher = { stop: async () => {} };
 
 const shutdown = (signal) => {
   if (shuttingDown) {
@@ -47,6 +49,11 @@ const shutdown = (signal) => {
   // dereferencing it turned a clean SIGTERM into a TypeError and a non-zero
   // exit.
   const closed = async () => {
+    try {
+      await dropWatcher.stop();
+    } catch (err) {
+      logger.error({ err }, 'Error stopping the Playnite drop import');
+    }
     try {
       await mongoose.disconnect();
     } catch (err) {
@@ -82,6 +89,11 @@ async function start() {
   } catch (err) {
     logger.error({ err: err?.message }, 'genre migration failed');
   }
+
+  // Playnite exports dropped into Nextcloud (DOCS/PLAYNITE_IMPORT.md). After
+  // Mongo, because the boot scan writes; a no-op unless a root is configured
+  // or mounted.
+  dropWatcher = startPlayniteDropImport();
 
   server = app.listen(PORT, '0.0.0.0', () => {
     logger.info('GameGeek API server running on port ' + PORT);
