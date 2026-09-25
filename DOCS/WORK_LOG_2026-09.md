@@ -12,6 +12,23 @@ anything a future reader would otherwise have to rediscover.
 
 ## 2026-09-25
 
+### GameGeek — metadata and covers fill themselves in
+
+`64c508a3` · spec `apps/gamegeek/DOCS/METADATA_ENRICHMENT.md`
+
+A background worker looks each game up in order: Steam appdetails for known ids, then
+IGDB, then RAWG, then a keyless Steam title search. It fills only empty fields and never
+overwrites anything a person typed; writes are guarded per field. Matching is strict:
+titles must be equal after normalizing, years within one, and exactly one candidate
+may pass. A tie is "needs a choice". Settings shows progress. Each game can "Find
+metadata…" or "Wrong match? Unlink", and unlink clears only what enrichment wrote.
+
+Went live with Steam only (no IGDB/RAWG keys yet): 17 of the first 21 games matched with
+covers, about 14 games a minute, so the first full pass over 683 games takes about 50
+minutes. Adding `IGDB_CLIENT_ID`/`IGDB_CLIENT_SECRET`/`RAWG_API_KEY` retries exactly the
+games those providers haven't tried. The worker only logs at the end of a run, so to
+watch progress, read `enrichment.status` in the DB or the Settings card.
+
 ### GameGeek — the library is fed from Playnite
 
 `1663d679` · spec `apps/gamegeek/DOCS/PLAYNITE_IMPORT.md`
