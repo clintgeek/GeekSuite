@@ -10,7 +10,8 @@ import { SET_GAME_STATE } from '../graphql/mutations';
 import { createRateGame } from '../utils/rateGame';
 import { shelfLabel } from '../utils/vocab';
 
-const REFRESH_LISTS = ['GetGames', 'GetGameShelves'];
+// Never 'GetGames': the list updates from the cache (see views/detail/useDetailActions.js).
+const REFRESH_AGGREGATES = ['GetGameShelves', 'GetGameFacets'];
 
 function writeMyField(cache, id, patch) {
   cache.modify({
@@ -35,8 +36,8 @@ function UndoButton({ onClick }) {
 export function useSetGameState() {
   const [mutate] = useMutation(SET_GAME_STATE);
   return useCallback(
-    (gameId, input, { refetchLists = false } = {}) =>
-      mutate({ variables: { gameId, input }, refetchQueries: refetchLists ? REFRESH_LISTS : [] }).then((r) => r.data?.setGameState),
+    (gameId, input, { refetchCounts = false } = {}) =>
+      mutate({ variables: { gameId, input }, refetchQueries: refetchCounts ? REFRESH_AGGREGATES : [] }).then((r) => r.data?.setGameState),
     [mutate]
   );
 }
@@ -88,7 +89,7 @@ export function useSetShelf(customShelves = []) {
       const previous = game.me?.shelf ?? null;
       if (previous === shelf) return true;
       try {
-        await setState(game.id, { shelf }, { refetchLists: true });
+        await setState(game.id, { shelf }, { refetchCounts: true });
       } catch {
         notify(`Couldn't move ${game.title}.`, { tone: 'error' });
         return false;

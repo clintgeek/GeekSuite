@@ -14,7 +14,7 @@ import constantsModule from '@geeksuite/schemas/gamegeek/constants';
 import { cleanList } from '../playnite/mapping.js';
 import { toPlainText } from './text.js';
 
-const { PLATFORMS, GAME_MODES } = constantsModule;
+const { PLATFORMS, GAME_MODES, canonicalGenres } = constantsModule;
 
 const MAX_LOCAL_PLAYERS = 64;
 const MAX_HOURS = 100000;
@@ -45,7 +45,7 @@ export const FILL_FIELDS = Object.freeze([
   { path: 'description', kind: 'string', from: (d) => toPlainText(d.description) },
   { path: 'developers', kind: 'list', from: (d) => cleanList(d.developers, { maxLength: 200 }) },
   { path: 'publishers', kind: 'list', from: (d) => cleanList(d.publishers, { maxLength: 200 }) },
-  { path: 'genres', kind: 'list', from: (d) => cleanList(d.genres) },
+  { path: 'genres', kind: 'list', from: (d) => canonicalGenres(cleanList(d.genres)) },
   { path: 'releaseDate', kind: 'scalar', from: (d) => toDateOrNull(d.releaseDate) },
   { path: 'modes', kind: 'list', from: (d) => (d.modes ?? []).filter((m, i, a) => GAME_MODES.includes(m) && a.indexOf(m) === i) },
   {
@@ -64,6 +64,9 @@ export const FILL_FIELDS = Object.freeze([
 const KIND_BY_PATH = Object.freeze({
   ...Object.fromEntries(FILL_FIELDS.map((f) => [f.path, f.kind])),
   coverPath: 'scalar',
+  // Written by the tags pass (tagsPass.js), fingerprinted the same way, so an
+  // unlink clears autoTags only while they are still what enrichment wrote.
+  autoTags: 'list',
 });
 
 export function isEmptyValue(kind, value) {

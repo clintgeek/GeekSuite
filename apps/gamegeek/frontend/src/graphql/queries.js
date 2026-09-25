@@ -47,6 +47,7 @@ export const GAME_DETAIL_FIELDS = gql`
     description
     genres
     tags
+    autoTags
     modes
     maxLocalPlayers
     timeToBeat {
@@ -123,27 +124,22 @@ export const GAME_DETAIL_FIELDS = gql`
   ${GAME_CARD_FIELDS}
 `;
 
+/**
+ * The library page. Every narrowing travels in `filter` (GameFilterInput,
+ * DOCS/TAGS_AND_FILTERS.md §B1); `seed` keeps a shuffle stable across pages;
+ * `owned` is the one legacy argument with no filter field, kept for old links.
+ */
 export const GET_GAMES = gql`
   query GetGames(
     $page: Int
     $limit: Int
-    $q: String
-    $shelf: String
-    $platform: String
     $owned: String
     $sort: String
     $sortDir: String
+    $filter: GameFilterInput
+    $seed: Int
   ) {
-    games(
-      page: $page
-      limit: $limit
-      q: $q
-      shelf: $shelf
-      platform: $platform
-      owned: $owned
-      sort: $sort
-      sortDir: $sortDir
-    ) {
+    games(page: $page, limit: $limit, owned: $owned, sort: $sort, sortDir: $sortDir, filter: $filter, seed: $seed) {
       games {
         ...GameCardFields
       }
@@ -153,6 +149,60 @@ export const GET_GAMES = gql`
     }
   }
   ${GAME_CARD_FIELDS}
+`;
+
+/** Live counts for every filter-panel section. Each facet excludes its own selections (server rule). */
+export const GET_GAME_FACETS = gql`
+  query GetGameFacets($filter: GameFilterInput) {
+    gameFacets(filter: $filter) {
+      total
+      shelves {
+        value
+        count
+      }
+      genres {
+        value
+        count
+      }
+      tags {
+        value
+        count
+      }
+      storefronts {
+        value
+        count
+      }
+      platforms {
+        value
+        count
+      }
+      formats {
+        value
+        count
+      }
+      modes {
+        value
+        count
+      }
+      played {
+        value
+        count
+      }
+      lengths {
+        value
+        count
+      }
+      metadata {
+        value
+        count
+      }
+      releaseYears {
+        year
+        count
+      }
+      favorites
+    }
+  }
 `;
 
 export const GET_GAME = gql`
@@ -198,6 +248,7 @@ export const GAME_PROFILE_FIELDS = gql`
     savedFilters {
       id
       name
+      filter
       sortBy
       sortDir
       searchQuery

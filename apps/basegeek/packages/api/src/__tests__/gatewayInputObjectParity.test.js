@@ -109,6 +109,54 @@ function inputObjectRootFields() {
  * actually crosses the wire, not the raw form state.
  */
 const FIXTURES = {
+  // ── gamegeek ───────────────────────────────────────────────────────────
+  'Query.games': {
+    // apps/gamegeek/frontend/src/graphql/queries.js GET_GAMES, variables from
+    // src/utils/libraryFilter.js buildGamesVariables() / toFilterInput()
+    // (apps/gamegeek/DOCS/TAGS_AND_FILTERS.md §B1: every GameFilterInput field).
+    source: `
+      query GetGames($page: Int, $limit: Int, $owned: String, $sort: String, $sortDir: String, $filter: GameFilterInput, $seed: Int) {
+        games(page: $page, limit: $limit, owned: $owned, sort: $sort, sortDir: $sortDir, filter: $filter, seed: $seed) { __typename }
+      }
+    `,
+    rootValue: { games: () => ({}) },
+    variables: {
+      page: 2,
+      limit: 48,
+      sort: 'random',
+      sortDir: 'asc',
+      seed: 12345,
+      owned: 'true',
+      filter: {
+        q: 'hades',
+        shelves: ['backlog', 'unshelved'],
+        genres: ['RPG'],
+        tags: ['Roguelike', 'Cozy'],
+        tagMatch: 'all',
+        storefronts: ['epic'],
+        platforms: ['pc'],
+        formats: ['subscription'],
+        modes: ['single'],
+        played: 'recent',
+        favorite: true,
+        releaseYearMin: 2015,
+        releaseYearMax: 2020,
+        lengths: ['short', 'unknown'],
+        metadata: ['no-match', 'ambiguous'],
+        hasCover: false,
+      },
+    },
+  },
+  'Query.gameFacets': {
+    // apps/gamegeek/frontend/src/graphql/queries.js GET_GAME_FACETS — the same toFilterInput() filter.
+    source: `
+      query GetGameFacets($filter: GameFilterInput) {
+        gameFacets(filter: $filter) { __typename }
+      }
+    `,
+    rootValue: { gameFacets: () => ({}) },
+    variables: { filter: { storefronts: ['epic', 'gog'], played: 'never', tags: ['Horror'] } },
+  },
   // ── fitnessgeek ────────────────────────────────────────────────────────
   'Mutation.addFitnessMedication': {
     // apps/fitnessgeek/frontend/src/pages/Medications.jsx buildPayload()
@@ -570,8 +618,10 @@ describe('every input-object-taking root field is enumerated and accounted for',
   // `FreeTierUpdateInput` went with the Catalog tab's Save-all
   // (apps/basegeek/DOCS/AIGEEK_STATUS_PAGE.md §3).
   // 30 from 2026-09-24: gamegeek's eight input-object mutations.
-  test('the count matches the audit: 30 root fields take an input-object argument', () => {
-    expect(inputObjectRootFields()).toHaveLength(30);
+  // 32 from 2026-09-25: games(filter) and gameFacets(filter) take GameFilterInput
+  // (apps/gamegeek/DOCS/TAGS_AND_FILTERS.md §B1).
+  test('the count matches the audit: 32 root fields take an input-object argument', () => {
+    expect(inputObjectRootFields()).toHaveLength(32);
   });
 
   test('FIXTURES and NO_FRONTEND_CALLER never claim the same field', () => {

@@ -7,8 +7,10 @@ import React, { useMemo, useState } from 'react';
 import { Box, Button, FormControl, InputLabel, MenuItem, Select, TextField, Typography } from '@mui/material';
 import { CheckCircleOutline as DoneIcon } from '@mui/icons-material';
 import { useMutation } from '@apollo/client';
+import { useLocation } from 'react-router-dom';
 import { useToast } from '@geeksuite/ui';
 import { CREATE_GAMES } from '../../graphql/mutations';
+import { useRefreshLibraryList } from '../../hooks/useRefreshLibraryList';
 import { PASTE_LIST_MAX, parsePasteList } from '../../utils/pasteList';
 import { defaultStorefrontFor, formatLabel, platformLabel, storefrontLabel } from '../../utils/vocab';
 import { pasteInputs } from './candidate';
@@ -37,7 +39,11 @@ export default function PasteListStep({ vocab, shelves, profile, onDone }) {
   const [storefront, setStorefront] = useState('gog');
   const [shelf, setShelf] = useState('backlog');
   const [result, setResult] = useState(null);
-  const [createGames, { loading }] = useMutation(CREATE_GAMES, { refetchQueries: ['GetGames', 'GetGameShelves'] });
+  const location = useLocation();
+  // Not 'GetGames' (it would collapse the scrolled library underneath): the
+  // list refreshes in place once the games exist.
+  const [createGames, { loading }] = useMutation(CREATE_GAMES, { refetchQueries: ['GetGameShelves', 'GetGameFacets'] });
+  const refreshList = useRefreshLibraryList();
 
   const parsed = useMemo(() => parsePasteList(text), [text]);
 
@@ -54,6 +60,7 @@ export default function PasteListStep({ vocab, shelves, profile, onDone }) {
       const res = await createGames({ variables: { inputs: pasteInputs(parsed.titles, { platform, format, storefront }), shelf } });
       const created = res.data?.createGames?.length ?? 0;
       setResult({ created, skipped: parsed.titles.length - created });
+      if (created) refreshList(location.search).catch(() => {});
       setText('');
     } catch (err) {
       notify(err?.message || 'That list did not import.', { tone: 'error' });

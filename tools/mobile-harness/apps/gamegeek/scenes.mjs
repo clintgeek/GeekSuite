@@ -81,17 +81,6 @@ export const scenes = [
     teardown: (page, h) => h.esc(),
   },
   {
-    name: '08-filter-sheet',
-    goto: '/?shelf=finished',
-    async setup(page, h) {
-      const filter = page.getByRole('button', { name: /^Filter/ });
-      if (!(await filter.count())) return false;
-      await filter.first().click();
-      await h.settle(700);
-    },
-    teardown: (page, h) => h.esc(),
-  },
-  {
     name: '09-add-paste-list',
     goto: '/add?tab=paste',
     wait: 1200,
@@ -166,6 +155,127 @@ export const scenes = [
     teardown: async (page, h) => {
       await h.esc();
       await h.esc();
+    },
+  },
+  {
+    // The desktop filter panel (DOCS/TAGS_AND_FILTERS.md §B2) with a few
+    // filters on: counts beside every option, the selected ones checked, the
+    // year histogram under its range, the chips row above the grid.
+    name: '14-filters-desktop',
+    goto: '/?platform=pc&tag=Difficult&year=2015-2022',
+    viewports: ['desktop'],
+    wait: 1600,
+  },
+  {
+    // Further down the same panel: Tags, grouped by the vocabulary, with the
+    // search box and "Show all".
+    name: '14b-filters-tags',
+    goto: '/?platform=pc&tag=Difficult&year=2015-2022',
+    viewports: ['desktop'],
+    wait: 1600,
+    async setup(page, h) {
+      const tags = page.locator('[data-facet="tags"]');
+      if (!(await tags.count())) return false;
+      await tags.evaluate((el) => el.scrollIntoView({ block: 'start' }));
+      await h.settle(400);
+    },
+  },
+  {
+    // The bottom of the panel: Release year's range over its histogram,
+    // Format, Favorites, and the quiet Metadata cleanup section.
+    name: '14c-filters-year',
+    goto: '/?platform=pc&tag=Difficult&year=2015-2022',
+    viewports: ['desktop'],
+    wait: 1600,
+    async setup(page, h) {
+      const year = page.locator('[data-facet="year"]');
+      if (!(await year.count())) return false;
+      await year.evaluate((el) => el.scrollIntoView({ block: 'start' }));
+      await h.settle(400);
+    },
+  },
+  {
+    // The phone's full-height filters sheet with its "Show N games" footer.
+    name: '15-filters-sheet',
+    goto: '/?tag=Cozy',
+    viewports: ['phone'],
+    wait: 1400,
+    async setup(page, h) {
+      const btn = page.getByTestId('filters-button');
+      if (!(await btn.count())) return false;
+      await btn.click();
+      await h.settle(800);
+    },
+    teardown: (page, h) => h.esc(),
+  },
+  {
+    // Five active filters: on a phone the chips scroll inside their own strip
+    // (the page must not scroll sideways); at md+ they wrap.
+    name: '16-active-chips',
+    goto: '/?shelf=backlog&shelf=finished&genre=Puzzle&year=2010-&format=digital',
+    wait: 1500,
+  },
+  {
+    name: '17-sort-menu',
+    goto: '/?sort=timeToBeat',
+    wait: 1200,
+    async setup(page, h) {
+      const sort = page.getByRole('button', { name: /^Sort:/ });
+      if (!(await sort.count())) return false;
+      await sort.first().click();
+      await h.settle(500);
+    },
+    teardown: (page, h) => h.esc(),
+  },
+  {
+    // Detail → Details: genres and tags are links into the filtered library;
+    // enrichment's autoTags are the dashed, lighter ones.
+    name: '18-detail-tags',
+    goto: '/game/g1',
+    wait: 1600,
+    async setup(page, h) {
+      const details = page.locator('#details-heading');
+      if (!(await details.count())) return false;
+      await details.evaluate((el) => el.scrollIntoView({ block: 'start' }));
+      await h.settle(400);
+    },
+    teardown: (page, h) => h.esc(),
+  },
+  {
+    // The scroll-to-top regression (2026-09-25): scroll the library, edit a
+    // game in the detail sheet, close it — still where you were; go to
+    // Settings and back — restored. The scene throws (an ERROR in the run)
+    // if either lands anywhere else; the screenshot is the restored library.
+    name: '19-scroll-restore',
+    goto: '/',
+    viewports: ['desktop'],
+    wait: 1500,
+    async setup(page, h) {
+      const main = page.locator('main');
+      const top = () => main.evaluate((el) => el.scrollTop);
+      await main.evaluate((el) => el.scrollTo(0, 700));
+      await h.settle(400);
+      if ((await top()) < 600) return false; // not tall enough to prove anything here
+
+      // Playwright scrolls a target into view before clicking it, so the
+      // baseline is taken once the sheet is open over the library.
+      await page.getByRole('button', { name: 'Portal 2' }).first().click();
+      await h.settle(900);
+      const before = await top();
+      const fav = page.getByLabel('Favourite');
+      if (!(await fav.count())) throw new Error('no Favourite control to edit');
+      await fav.first().click();
+      await h.settle(600);
+      await h.esc(700);
+      const afterEdit = await top();
+      if (Math.abs(afterEdit - before) > 4) throw new Error(`edit moved the library: ${before} → ${afterEdit}`);
+
+      await page.locator('[data-geek-sidebar="footer"] a[href="/settings"], a[href="/settings"]').first().click();
+      await h.settle(900);
+      await page.locator('[data-geek-nav-item="library"]').first().click();
+      await h.settle(1200);
+      const back = await top();
+      if (Math.abs(back - before) > 4) throw new Error(`scroll not restored: ${before} → ${back}`);
     },
   },
 ];

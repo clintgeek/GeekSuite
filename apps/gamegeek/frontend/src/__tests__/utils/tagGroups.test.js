@@ -1,0 +1,19 @@
+import { createRequire } from 'node:module';
+import { describe, expect, it } from 'vitest';
+import { TAG_GROUPS, USER_TAG_GROUP, groupTagOptions, tagGroupOf } from '../../utils/tagGroups';
+
+const require = createRequire(import.meta.url);
+
+describe('tag groups', () => {
+  it('mirror the server vocabulary exactly (packages/schemas/gamegeek/tags.js)', () => {
+    const server = require('../../../../../../packages/schemas/gamegeek/tags.js');
+    expect(TAG_GROUPS).toEqual(JSON.parse(JSON.stringify(server.TAG_GROUPS)));
+  });
+
+  it('put unknown tags under “Your tags”, case-insensitively matching known ones', () => {
+    expect(tagGroupOf('cozy')).toBe('Story & mood');
+    expect(tagGroupOf('Couch night')).toBe(USER_TAG_GROUP);
+    const groups = groupTagOptions([{ value: 'Pixel Art' }, { value: 'Game Pass' }, { value: 'Roguelike' }]);
+    expect(groups.map((g) => g.group)).toEqual(['Gameplay', 'Look & view', USER_TAG_GROUP]);
+  });
+});

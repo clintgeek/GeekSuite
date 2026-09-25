@@ -45,7 +45,20 @@ export const IGDB_DETAIL_FIELDS = [
   'involved_companies.publisher',
   'external_games.*',
   'multiplayer_modes.*',
+  'themes.name',
+  'keywords.name',
+  'player_perspectives.name',
 ].join(',');
+
+/** The tags pass's batched fetch (apps/gamegeek/DOCS/TAGS_AND_FILTERS.md §A2). */
+export const IGDB_TAG_FIELDS = ['themes.name', 'keywords.name', 'player_perspectives.name'].join(',');
+
+/**
+ * `/external_games` lookup by Steam app id. Confirmed live 2026-09-25: rows
+ * carry `game` (the IGDB game id), `uid` (the Steam app id as a string) and
+ * `external_game_source` (1 = Steam); `category` is gone from the response.
+ */
+export const IGDB_EXTERNAL_GAME_FIELDS = ['game', 'uid', 'external_game_source'].join(',');
 
 /** Unix seconds (IGDB's `first_release_date`) → ISO UTC-midnight date, or null. */
 export function unixSecondsToUtcMidnightIso(unixSeconds) {
@@ -153,8 +166,50 @@ export function normalizeIgdbDetail(game, timeToBeatRows = []) {
     modes,
     maxLocalPlayers: mp.maxLocal,
     timeToBeat: normalizeIgdbTimeToBeat(timeToBeatRows),
+    tagTerms: igdbTagTerms(game),
     coverUrls: [coverBig, base.coverUrl].filter(Boolean),
   };
+}
+
+const namesOf = (list) => (Array.isArray(list) ? list.map((x) => x?.name).filter((n) => typeof n === 'string' && n) : []);
+
+/**
+ * A game's raw tag terms, in the order the mapper should see them: themes
+ * (the most deliberate), then keywords, then player perspectives.
+ */
+export function igdbTagTerms(game) {
+  return [...namesOf(game?.themes), ...namesOf(game?.keywords), ...namesOf(game?.player_perspectives)];
+}
+
+/** `/games` rows from the batched tag fetch → Map<igdb id string, terms[]>. */
+export function normalizeIgdbTagRows(rows) {
+  const out = new Map();
+  for (const row of Array.isArray(rows) ? rows : []) {
+    if (row?.id == null) continue;
+    out.set(String(row.id), igdbTagTerms(row));
+  }
+  return out;
+}
+
+/**
+ * `/external_games` rows → Map<steam app id, igdb game id>. A Steam id that
+ * points at more than one IGDB game is ambiguous and left out: guessing
+ * would attach the wrong game's id.
+ */
+export function normalizeIgdbSteamLookup(rows) {
+  const byUid = new Map();
+  for (const row of Array.isArray(rows) ? rows : []) {
+    const source = row?.external_game_source ?? row?.category;
+    if (source !== IGDB_EXTERNAL_CATEGORY_STEAM) continue;
+    const uid = String(row?.uid ?? '');
+    const game = typeof row?.game === 'object' && row.game ? row.game.id : row?.game;
+    if (!/^\d+$/.test(uid) || !Number.isInteger(Number(game)) || game == null) continue;
+    if (!byUid.has(uid)) byUid.set(uid, new Set());
+    byUid.get(uid).add(String(game));
+  }
+  const out = new Map();
+  for (const [uid, games] of byUid) if (games.size === 1) out.set(uid, [...games][0]);
+  return out;
 }
 
 /** @param {object[]} games the IGDB `/games` response array. */
@@ -167,6 +222,11 @@ export default {
   IGDB_EXTERNAL_CATEGORY_STEAM,
   IGDB_GAME_FIELDS,
   IGDB_DETAIL_FIELDS,
+  IGDB_TAG_FIELDS,
+  IGDB_EXTERNAL_GAME_FIELDS,
+  igdbTagTerms,
+  normalizeIgdbTagRows,
+  normalizeIgdbSteamLookup,
   unixSecondsToUtcMidnightIso,
   normalizeIgdbTimeToBeat,
   normalizeIgdbDetail,

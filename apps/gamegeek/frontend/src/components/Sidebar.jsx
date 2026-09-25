@@ -2,7 +2,10 @@
  * GameGeek sidebar — identity wrapper around the suite GeekSidebar.
  *
  * Shelves are the app's navigation, so they are `sections` rows with count
- * badges (links to `/?shelf=…`, which the library reads). The shell owns the
+ * badges (links to `/?shelf=…`, which the library reads). Saved views follow
+ * directly under them (SavedViews, as `extras`: they need a ⋯ menu the
+ * section rows have no slot for). A view that matches the URL exactly takes
+ * the highlight from the shelf row it might also match. The shell owns the
  * breakpoint: a permanent rail at md+, the drawer below it. The footer gives
  * the drawer its Settings and Sign out.
  */
@@ -22,9 +25,11 @@ import {
 import { useLocation } from 'react-router-dom';
 import { GeekSidebar } from '@geeksuite/ui';
 import { DISPLAY_FONT } from '../theme/theme';
-import { shelfCount } from '../hooks/useGameMeta';
+import { shelfCount, useGameProfile } from '../hooks/useGameMeta';
+import { canonicalSearch, savedViewSearch } from '../utils/libraryFilter';
 import { displayNameFrom, initialsFrom, secondaryFrom } from '../utils/userDisplay';
-import { APP_NAME, LIBRARY_NAV_ID, activeNavId, shelfNavId } from './navConfig';
+import { APP_NAME, LIBRARY_NAV_ID, activeNavId, isLibraryPath, shelfNavId } from './navConfig';
+import SavedViews from './SavedViews';
 import SavePointMark from './SavePointMark';
 
 const SHELF_ICONS = {
@@ -55,7 +60,11 @@ function Brand() {
 export default function Sidebar({ user, shelves, stats, onSignOut }) {
   const theme = useTheme();
   const location = useLocation();
+  const { profile } = useGameProfile();
   const accent = theme.palette.primary.main;
+  const views = profile?.savedFilters ?? [];
+  const here = isLibraryPath(location.pathname) ? canonicalSearch(location.search) : null;
+  const activeView = here ? views.find((v) => canonicalSearch(savedViewSearch(v)) === here) : null;
 
   const badgeProps = {
     sx: { color: 'text.secondary', backgroundColor: 'background.raised', fontVariantNumeric: 'tabular-nums' },
@@ -81,6 +90,32 @@ export default function Sidebar({ user, shelves, stats, onSignOut }) {
     });
   }
 
+  const itemSx = {
+    mb: 0.25,
+    color: 'text.secondary',
+    '& .MuiListItemText-primary': { fontSize: '0.875rem', fontWeight: 500 },
+    '& .MuiListItemIcon-root .MuiSvgIcon-root': { fontSize: 20 },
+    '&:hover': { bgcolor: alpha(accent, 0.08), color: 'text.primary' },
+    '&.Mui-selected': {
+      position: 'relative',
+      bgcolor: alpha(accent, 0.12),
+      color: 'text.primary',
+      '& .MuiListItemIcon-root': { color: theme.palette.mode === 'dark' ? accent : theme.palette.primary.main },
+      '& .MuiListItemText-primary': { fontWeight: 600 },
+      '&::before': {
+        content: '""',
+        position: 'absolute',
+        left: 0,
+        top: 10,
+        bottom: 10,
+        width: 3,
+        borderRadius: 2,
+        bgcolor: theme.palette.phosphor?.main ?? accent,
+      },
+      '&:hover': { bgcolor: alpha(accent, 0.18) },
+    },
+  };
+
   const sections = [
     {
       items: [
@@ -94,7 +129,8 @@ export default function Sidebar({ user, shelves, stats, onSignOut }) {
     <GeekSidebar
       brand={<Brand />}
       sections={sections}
-      activeId={activeNavId(location.pathname, location.search)}
+      activeId={activeView ? `view:${activeView.id}` : activeNavId(location.pathname, location.search)}
+      extras={views.length ? <SavedViews views={views} activeId={activeView?.id ?? null} itemSx={itemSx} /> : undefined}
       footer={{
         user: user
           ? { name: displayNameFrom(user), secondary: secondaryFrom(user), initials: initialsFrom(user) }
@@ -104,31 +140,7 @@ export default function Sidebar({ user, shelves, stats, onSignOut }) {
       }}
       aria-label={`${APP_NAME} navigation`}
       sx={{ bgcolor: 'background.paper' }}
-      itemSx={{
-        mb: 0.25,
-        color: 'text.secondary',
-        '& .MuiListItemText-primary': { fontSize: '0.875rem', fontWeight: 500 },
-        '& .MuiListItemIcon-root .MuiSvgIcon-root': { fontSize: 20 },
-        '&:hover': { bgcolor: alpha(accent, 0.08), color: 'text.primary' },
-        '&.Mui-selected': {
-          position: 'relative',
-          bgcolor: alpha(accent, 0.12),
-          color: 'text.primary',
-          '& .MuiListItemIcon-root': { color: theme.palette.mode === 'dark' ? accent : theme.palette.primary.main },
-          '& .MuiListItemText-primary': { fontWeight: 600 },
-          '&::before': {
-            content: '""',
-            position: 'absolute',
-            left: 0,
-            top: 10,
-            bottom: 10,
-            width: 3,
-            borderRadius: 2,
-            bgcolor: theme.palette.phosphor?.main ?? accent,
-          },
-          '&:hover': { bgcolor: alpha(accent, 0.18) },
-        },
-      }}
+      itemSx={itemSx}
     />
   );
 }

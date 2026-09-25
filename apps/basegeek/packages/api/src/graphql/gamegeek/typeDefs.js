@@ -98,7 +98,11 @@ export const typeDefs = gql`
     releaseYear: Int
     description: String
     genres: [String!]!
+    # The person's own tags (and Playnite categories).
     tags: [String!]!
+    # Enrichment-derived tags from the canonical vocabulary (read-only;
+    # apps/gamegeek/DOCS/TAGS_AND_FILTERS.md §A3). Filters read tags ∪ autoTags.
+    autoTags: [String!]!
     modes: [String!]!
     maxLocalPlayers: Int
     platformsAvailable: [String!]!
@@ -169,6 +173,67 @@ export const typeDefs = gql`
     shelfFilter: String
     platformFilter: String
     ownedFilter: String
+    # The whole GameFilterInput this view was saved with; null for views saved before it existed.
+    filter: JSON
+  }
+
+  # apps/gamegeek/DOCS/TAGS_AND_FILTERS.md §B1. Every list is any-of.
+  input GameFilterInput {
+    q: String
+    # any-of; "unshelved" allowed
+    shelves: [String!]
+    genres: [String!]
+    # matches tags ∪ autoTags
+    tags: [String!]
+    # "any" (default) | "all" — applies to genres AND tags
+    tagMatch: String
+    # any-of over copies.storefront
+    storefronts: [String!]
+    # any-of over copies.platform
+    platforms: [String!]
+    # any-of over copies.format (subscription = Game Pass)
+    formats: [String!]
+    modes: [String!]
+    # "never" | "played" | "recent" — the caller's; recent = lastPlayed ≤ 30 days
+    played: String
+    # the caller's
+    favorite: Boolean
+    releaseYearMin: Int
+    releaseYearMax: Int
+    # time-to-beat main: "short" <5h | "medium" 5–15 | "long" 15–40 | "epic" 40+ | "unknown"
+    lengths: [String!]
+    # enrichment status: matched | no-match | ambiguous | pending | error | unlinked
+    metadata: [String!]
+    hasCover: Boolean
+  }
+
+  type GameFacetValue {
+    value: String!
+    count: Int!
+  }
+
+  type GameYearBucket {
+    year: Int!
+    count: Int!
+  }
+
+  # Each facet's counts apply every active filter EXCEPT its own.
+  type GameFacets {
+    # games matching the full filter
+    total: Int!
+    shelves: [GameFacetValue!]!
+    genres: [GameFacetValue!]!
+    tags: [GameFacetValue!]!
+    storefronts: [GameFacetValue!]!
+    platforms: [GameFacetValue!]!
+    formats: [GameFacetValue!]!
+    modes: [GameFacetValue!]!
+    # never / played / recent
+    played: [GameFacetValue!]!
+    lengths: [GameFacetValue!]!
+    metadata: [GameFacetValue!]!
+    releaseYears: [GameYearBucket!]!
+    favorites: Int!
   }
 
   type GameProfile {
@@ -292,12 +357,16 @@ export const typeDefs = gql`
     shelfFilter: String
     platformFilter: String
     ownedFilter: String
+    # The whole GameFilterInput, validated like the games query's filter.
+    filter: JSON
   }
 
   extend type Query {
-    # sort: title | dateAdded | releaseDate | rating | lastPlayed | hoursPlayed
-    # (rating/lastPlayed/hoursPlayed are the CALLER's values). sortDir: asc | desc.
+    # sort: title | dateAdded | releaseDate | rating | lastPlayed | hoursPlayed | timeToBeat | random
+    # (rating/lastPlayed/hoursPlayed are the CALLER's values; timeToBeat is main,
+    # nulls last; random is ordered by seed, stable across pages). sortDir: asc | desc.
     # shelf: a shelf id, or "unshelved". owned: "true" | "false" | omitted.
+    # filter is additive and wins where both it and q/shelf/platform are given.
     games(
       page: Int = 1
       limit: Int = 48
@@ -307,7 +376,10 @@ export const typeDefs = gql`
       owned: String
       sort: String = "title"
       sortDir: String = "asc"
+      filter: GameFilterInput
+      seed: Int
     ): GamePage!
+    gameFacets(filter: GameFilterInput): GameFacets!
     game(id: ID!): Game
     gameShelves: GameShelfStats!
     gameProfile: GameProfile!

@@ -1,0 +1,459 @@
+[
+  {
+    "id": 13554,
+    "slug": "fallout-a-post-nuclear-role-playing-game",
+    "name": "Fallout",
+    "released": "1997-09-30",
+    "tags": [
+      {
+        "id": 31,
+        "name": "Singleplayer",
+        "slug": "singleplayer",
+        "language": "eng",
+        "games_count": 252230
+      },
+      {
+        "id": 40849,
+        "name": "Steam Cloud",
+        "slug": "steam-cloud",
+        "language": "eng",
+        "games_count": 26190
+      },
+      {
+        "id": 13,
+        "name": "Atmospheric",
+        "slug": "atmospheric",
+        "language": "eng",
+        "games_count": 40076
+      },
+      {
+        "id": 24,
+        "name": "RPG",
+        "slug": "rpg",
+        "language": "eng",
+        "games_count": 26899
+      },
+      {
+        "id": 36,
+        "name": "Open World",
+        "slug": "open-world",
+        "language": "eng",
+        "games_count": 9346
+      },
+      {
+        "id": 45,
+        "name": "2D",
+        "slug": "2d",
+        "language": "eng",
+        "games_count": 208476
+      },
+      {
+        "id": 32,
+        "name": "Sci-fi",
+        "slug": "sci-fi",
+        "language": "eng",
+        "games_count": 22203
+      },
+      {
+        "id": 6,
+        "name": "Exploration",
+        "slug": "exploration",
+        "language": "eng",
+        "games_count": 29533
+      },
+      {
+        "id": 49,
+        "name": "Difficult",
+        "slug": "difficult",
+        "language": "eng",
+        "games_count": 14362
+      },
+      {
+        "id": 193,
+        "name": "Classic",
+        "slug": "classic",
+        "language": "eng",
+        "games_count": 1843
+      },
+      {
+        "id": 37,
+        "name": "Sandbox",
+        "slug": "sandbox",
+        "language": "eng",
+        "games_count": 8605
+      },
+      {
+        "id": 80,
+        "name": "Tactical",
+        "slug": "tactical",
+        "language": "eng",
+        "games_count": 6704
+      },
+      {
+        "id": 74,
+        "name": "Retro",
+        "slug": "retro",
+        "language": "eng",
+        "games_count": 44824
+      },
+      {
+        "id": 468,
+        "name": "role-playing",
+        "slug": "role-playing",
+        "language": "eng",
+        "games_count": 1657
+      },
+      {
+        "id": 43,
+        "name": "Post-apocalyptic",
+        "slug": "post-apocalyptic",
+        "language": "eng",
+        "games_count": 4981
+      },
+      {
+        "id": 102,
+        "name": "Turn-Based",
+        "slug": "turn-based",
+        "language": "eng",
+        "games_count": 5620
+      },
+      {
+        "id": 99,
+        "name": "Isometric",
+        "slug": "isometric",
+        "language": "eng",
+        "games_count": 5343
+      },
+      {
+        "id": 218,
+        "name": "Multiple Endings",
+        "slug": "multiple-endings",
+        "language": "eng",
+        "games_count": 11710
+      },
+      {
+        "id": 243,
+        "name": "1990's",
+        "slug": "1990s",
+        "language": "eng",
+        "games_count": 4110
+      },
+      {
+        "id": 175,
+        "name": "Turn-Based Combat",
+        "slug": "turn-based-combat",
+        "language": "eng",
+        "games_count": 6420
+      },
+      {
+        "id": 238,
+        "name": "CRPG",
+        "slug": "crpg",
+        "language": "eng",
+        "games_count": 1575
+      },
+      {
+        "id": 91617,
+        "name": "gameplay feature: multiple endings",
+        "slug": "gameplay-feature-multiple-endings",
+        "language": "eng",
+        "games_count": 2
+      },
+      {
+        "id": 91634,
+        "name": "gameplay feature: drug addiction",
+        "slug": "gameplay-feature-drug-addiction",
+        "language": "eng",
+        "games_count": 1
+      },
+      {
+        "id": 91635,
+        "name": "gameplay feature: gambling",
+        "slug": "gameplay-feature-gambling",
+        "language": "eng",
+        "games_count": 1
+      },
+      {
+        "id": 91636,
+        "name": "gameplay feature: karma meter",
+        "slug": "gameplay-feature-karma-meter",
+        "language": "eng",
+        "games_count": 1
+      },
+      {
+        "id": 91637,
+        "name": "gameplay feature: radiation / radioactive poisoning",
+        "slug": "gameplay-feature-radiation-radioactive-poisoning",
+        "language": "eng",
+        "games_count": 1
+      },
+      {
+        "id": 91638,
+        "name": "gameplay feature: targeting system",
+        "slug": "gameplay-feature-targeting-system",
+        "language": "eng",
+        "games_count": 1
+      },
+      {
+        "id": 91639,
+        "name": "wasteland universe",
+        "slug": "wasteland-universe",
+        "language": "eng",
+        "games_count": 1
+      },
+      {
+        "id": 91640,
+        "name": "weapon: minigun",
+        "slug": "weapon-minigun",
+        "language": "eng",
+        "games_count": 1
+      },
+      {
+        "id": 91629,
+        "name": "fallout games",
+        "slug": "fallout-games",
+        "language": "eng",
+        "games_count": 1
+      },
+      {
+        "id": 91630,
+        "name": "game feature: hexagonal map",
+        "slug": "game-feature-hexagonal-map",
+        "language": "eng",
+        "games_count": 1
+      },
+      {
+        "id": 91631,
+        "name": "gameplay feature: auto-mapping",
+        "slug": "gameplay-feature-auto-mapping",
+        "language": "eng",
+        "games_count": 1
+      },
+      {
+        "id": 91632,
+        "name": "gameplay feature: character development - skill distribution",
+        "slug": "gameplay-feature-character-development-skill-distr",
+        "language": "eng",
+        "games_count": 1
+      },
+      {
+        "id": 91633,
+        "name": "gameplay feature: day / night cycle",
+        "slug": "gameplay-feature-day-night-cycle",
+        "language": "eng",
+        "games_count": 1
+      }
+    ]
+  },
+  {
+    "id": 58764,
+    "slug": "outer-wilds",
+    "name": "Outer Wilds",
+    "released": "2019-05-29",
+    "tags": [
+      {
+        "id": 25,
+        "name": "Space",
+        "slug": "space",
+        "language": "eng",
+        "games_count": 44314
+      },
+      {
+        "id": 46,
+        "name": "Surreal",
+        "slug": "surreal",
+        "language": "eng",
+        "games_count": 6700
+      },
+      {
+        "id": 62349,
+        "name": "vr mod",
+        "slug": "vr-mod",
+        "language": "eng",
+        "games_count": 17
+      },
+      {
+        "id": 8182,
+        "name": "planetary",
+        "slug": "planetary",
+        "language": "eng",
+        "games_count": 11
+      }
+    ]
+  },
+  {
+    "id": 669363,
+    "slug": "dagon-by-h-p-lovecraft",
+    "name": "Dagon: by H. P. Lovecraft",
+    "tags": [
+      {
+        "id": 31,
+        "name": "Singleplayer",
+        "slug": "singleplayer",
+        "language": "eng",
+        "games_count": 252230
+      },
+      {
+        "id": 40847,
+        "name": "Steam Achievements",
+        "slug": "steam-achievements",
+        "language": "eng",
+        "games_count": 52481
+      },
+      {
+        "id": 40836,
+        "name": "Full controller support",
+        "slug": "full-controller-support",
+        "language": "eng",
+        "games_count": 24413
+      },
+      {
+        "id": 40849,
+        "name": "Steam Cloud",
+        "slug": "steam-cloud",
+        "language": "eng",
+        "games_count": 26190
+      },
+      {
+        "id": 13,
+        "name": "Atmospheric",
+        "slug": "atmospheric",
+        "language": "eng",
+        "games_count": 40076
+      },
+      {
+        "id": 118,
+        "name": "Story Rich",
+        "slug": "story-rich",
+        "language": "eng",
+        "games_count": 27502
+      },
+      {
+        "id": 8,
+        "name": "First-Person",
+        "slug": "first-person",
+        "language": "eng",
+        "games_count": 37675
+      },
+      {
+        "id": 16,
+        "name": "Horror",
+        "slug": "horror",
+        "language": "eng",
+        "games_count": 49415
+      },
+      {
+        "id": 41,
+        "name": "Dark",
+        "slug": "dark",
+        "language": "eng",
+        "games_count": 18875
+      },
+      {
+        "id": 141,
+        "name": "Point & Click",
+        "slug": "point-click",
+        "language": "eng",
+        "games_count": 15662
+      },
+      {
+        "id": 117,
+        "name": "Mystery",
+        "slug": "mystery",
+        "language": "eng",
+        "games_count": 16634
+      },
+      {
+        "id": 77,
+        "name": "Realistic",
+        "slug": "realistic",
+        "language": "eng",
+        "games_count": 9300
+      },
+      {
+        "id": 91,
+        "name": "Walking Simulator",
+        "slug": "walking-simulator",
+        "language": "eng",
+        "games_count": 9048
+      },
+      {
+        "id": 90,
+        "name": "Visual Novel",
+        "slug": "visual-novel",
+        "language": "eng",
+        "games_count": 10144
+      },
+      {
+        "id": 200,
+        "name": "Narration",
+        "slug": "narration",
+        "language": "eng",
+        "games_count": 3048
+      },
+      {
+        "id": 205,
+        "name": "Lore-Rich",
+        "slug": "lore-rich",
+        "language": "eng",
+        "games_count": 2277
+      },
+      {
+        "id": 572,
+        "name": "Emotional",
+        "slug": "emotional",
+        "language": "eng",
+        "games_count": 4640
+      },
+      {
+        "id": 222,
+        "name": "Choose Your Own Adventure",
+        "slug": "choose-your-own-adventure",
+        "language": "eng",
+        "games_count": 5201
+      },
+      {
+        "id": 288,
+        "name": "Interactive Fiction",
+        "slug": "interactive-fiction",
+        "language": "eng",
+        "games_count": 5105
+      },
+      {
+        "id": 47,
+        "name": "Lovecraftian",
+        "slug": "lovecraftian",
+        "language": "eng",
+        "games_count": 974
+      },
+      {
+        "id": 303,
+        "name": "Text-Based",
+        "slug": "text-based",
+        "language": "eng",
+        "games_count": 3701
+      }
+    ]
+  },
+  {
+    "id": 389851,
+    "slug": "the-falconeer",
+    "name": "The Falconeer",
+    "tags": [
+      {
+        "id": 31,
+        "name": "Singleplayer",
+        "slug": "singleplayer",
+        "language": "eng",
+        "games_count": 252230
+      },
+      {
+        "id": 24,
+        "name": "RPG",
+        "slug": "rpg",
+        "language": "eng",
+        "games_count": 26899
+      }
+    ]
+  }
+]

@@ -14,6 +14,7 @@ import { runEnrich } from '../../api/rest';
 import { useMetadataStatus } from '../../hooks/useMetadataEnrichment';
 import { relativeDay } from '../../utils/dates';
 import SettingsCard from './SettingsCard';
+import { resetLibraryLists } from '../../graphql/cachePolicies';
 
 const STATS = [
   ['matched', 'Matched'],
@@ -67,7 +68,12 @@ export default function MetadataCard() {
   const [starting, setStarting] = useState(false);
 
   const refetchLibrary = useCallback(
-    () => client.refetchQueries({ include: ['GetGames', 'GetGameShelves', 'GetGameProfile'] }),
+    () => {
+      // A finished run changed covers and details across the library: drop the
+      // cached lists (they reload fresh) rather than refetch page 1 over them.
+      resetLibraryLists(client);
+      return client.refetchQueries({ include: ['GetGameShelves', 'GetGameProfile'] });
+    },
     [client]
   );
   const { status, error, reload } = useMetadataStatus({ onFinished: refetchLibrary });

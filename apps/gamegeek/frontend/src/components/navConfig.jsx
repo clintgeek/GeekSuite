@@ -50,15 +50,15 @@ export function isLibraryPath(pathname) {
  * The sidebar row that owns the current location:
  *   /settings                  → Settings
  *   library, no shelf (or all) → Library
- *   library, ?shelf=backlog    → that shelf's row
+ *   library, ?shelf=backlog    → that shelf's row (exactly one shelf)
  */
 export function activeNavId(pathname, search = '') {
   const route = routeFor(pathname);
   if (!route) return null;
   if (route.navId !== LIBRARY_NAV_ID) return route.navId;
-  const shelf = new URLSearchParams(search).get('shelf');
-  if (!shelf || shelf === 'all') return LIBRARY_NAV_ID;
-  return shelfNavId(shelf);
+  // One shelf lights its row; none, or several (a multi-shelf filter), is the library.
+  const shelves = new URLSearchParams(search).getAll('shelf').filter((s) => s && s !== 'all');
+  return shelves.length === 1 ? shelfNavId(shelves[0]) : LIBRARY_NAV_ID;
 }
 
 /** `/game/:id` keeping the library's query string, so closing returns to it. */

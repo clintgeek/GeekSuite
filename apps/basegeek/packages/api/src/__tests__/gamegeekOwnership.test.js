@@ -58,6 +58,7 @@ describe('gamegeek — authentication required', () => {
       games: () => Query.games(null, {}, ctx(null)),
       game: () => Query.game(null, { id }, ctx(null)),
       gameShelves: () => Query.gameShelves(null, {}, ctx(null)),
+      gameFacets: () => Query.gameFacets(null, {}, ctx(null)),
       gameProfile: () => Query.gameProfile(null, {}, ctx(null)),
       gameVocabulary: () => Query.gameVocabulary(null, {}, ctx(null)),
     };

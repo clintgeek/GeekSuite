@@ -13,6 +13,7 @@ import { formatCalendarDate, relativeDay } from '../../utils/dates';
 import { visuallyHidden } from '../../utils/a11y';
 import SettingsCard from './SettingsCard';
 import PlaynitePreview, { previewSummary } from './PlaynitePreview';
+import { resetLibraryLists } from '../../graphql/cachePolicies';
 
 function fileSizeLabel(bytes) {
   if (!Number.isFinite(bytes)) return '';
@@ -87,7 +88,9 @@ export default function PlayniteImportCard({ profile }) {
       setIncludeHidden(false);
       setHiddenCount(null);
       if (inputRef.current) inputRef.current.value = '';
-      await client.refetchQueries({ include: ['GetGames', 'GetGameShelves', 'GetGameProfile'] });
+      // A bulk change: drop the cached lists (they reload fresh) and refresh the rest.
+      resetLibraryLists(client);
+      await client.refetchQueries({ include: ['GetGameShelves', 'GetGameProfile'] });
     } catch (err) {
       notify(errorMessage(err), { tone: 'error' });
     } finally {

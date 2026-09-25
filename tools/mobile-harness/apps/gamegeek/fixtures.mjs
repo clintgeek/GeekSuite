@@ -23,7 +23,55 @@ const ROWS = [
   ['g12', 'Super Metroid', 1994, 'Nintendo R&D1', 'backlog', 0, 0, 0, [['snes', 'physical', 'retail']], null, ['Metroidvania']],
   ['g13', 'Animal Crossing: New Horizons', 2020, 'Nintendo EPD', 'custom-couch-coop', 3, 140, 0, [['switch', 'physical', 'retail']], null, ['Life sim']],
   ['g14', 'Portal 2', 2011, 'Valve', 'finished', 5, 11, 100, [['pc', 'digital', 'steam']], null, ['Puzzle']],
+  ['g15', 'Slay the Spire', 2019, 'Mega Crit', 'finished', 5, 96, 100, [['pc', 'digital', 'steam']], '#3b2a4f', ['Card & Board', 'Strategy']],
+  ['g16', 'Vampire Survivors', 2022, 'poncle', 'playing', 4, 18.2, 0, [['pc', 'digital', 'steam'], ['xbox-series', 'subscription', 'xbox']], null, ['Action', 'Roguelike']],
+  ['g17', 'Return of the Obra Dinn', 2018, 'Lucas Pope', 'backlog', 0, 0, 0, [['pc', 'digital', 'gog']], '#51483a', ['Adventure', 'Puzzle']],
+  ['g18', 'Pentiment', 2022, 'Obsidian Entertainment', 'backlog', 0, 0, 0, [['xbox-series', 'subscription', 'xbox']], null, ['Adventure', 'RPG']],
+  ['g19', 'Dead Cells', 2018, 'Motion Twin', 'on-hold', 3, 7, 30, [['pc', 'digital', 'steam'], ['switch', 'digital', 'nintendo']], null, ['Action', 'Platformer']],
+  ['g20', 'Divinity: Original Sin 2', 2017, 'Larian Studios', 'backlog', 0, 12, 10, [['pc', 'digital', 'gog']], '#3a2c1c', ['RPG', 'Strategy']],
+  ['g21', 'Inscryption', 2021, 'Daniel Mullins Games', 'finished', 5, 16, 100, [['pc', 'digital', 'steam']], null, ['Card & Board', 'Puzzle']],
+  ['g22', 'Control', 2019, 'Remedy Entertainment', 'backlog', 0, 0, 0, [['pc', 'digital', 'epic']], null, ['Action', 'Shooter']],
+  ['g23', 'Unpacking', 2021, 'Witch Beam', 'finished', 4, 4.5, 100, [['switch', 'digital', 'nintendo']], null, ['Puzzle', 'Simulation']],
+  ['g24', 'Halo Infinite', 2021, '343 Industries', 'abandoned', 2, 9, 15, [['xbox-series', 'subscription', 'xbox']], null, ['Shooter']],
+  ['g25', 'Civilization VI', 2016, 'Firaxis Games', 'on-hold', 4, 140, 0, [['pc', 'digital', 'epic']], null, ['Strategy', 'Turn-based Strategy']],
+  ['g26', 'Chrono Trigger', 1995, 'Square', 'wishlist', 0, 0, 0, [], null, ['RPG']],
+  ['g27', 'Overcooked! 2', 2018, 'Ghost Town Games', 'custom-couch-coop', 4, 22, 0, [['switch', 'physical', 'retail']], null, ['Simulation', 'Party']],
+  ['g28', 'Tunic', 2022, 'Andrew Shouldice', 'backlog', 0, 1.5, 5, [['pc', 'digital', 'steam']], '#1f5c5a', ['Action', 'Adventure']],
 ];
+
+// Tags (DOCS/TAGS_AND_FILTERS.md §A3): `tags` are the person's own and
+// Playnite's categories, `autoTags` come from enrichment. The Tags facet is
+// the union. [tags, autoTags, timeToBeat.main, modes]
+const META = {
+  g1: [['Couch night'], ['Roguelike', 'Mythology', 'Hand-drawn', 'Isometric', 'Difficult', 'Story Rich'], 22, ['single']],
+  g2: [[], ['Open World', 'Exploration', 'Crafting', 'Fantasy', 'Physics', 'Third-person'], 59, ['single']],
+  g3: [['Comfort'], ['Farming', 'Cozy', 'Relaxing', 'Pixel Art', 'Crafting', 'Top-down'], 53, ['single', 'coop-online', 'coop-local']],
+  g4: [[], ['Difficult', 'Pixel Art', 'Emotional', '2D', 'Side-scroller'], 8, ['single']],
+  g5: [[], ['Story Rich', 'Choices Matter', 'Detective', 'Isometric', 'Dark'], 23, ['single']],
+  g6: [[], ['Metroidvania', 'Difficult', 'Hand-drawn', 'Atmospheric', '2D', 'Dark Fantasy'], 27, ['single']],
+  g7: [['Couch night'], ['Choices Matter', 'Fantasy', 'Turn-Based', 'Tactics', 'Story Rich', 'Isometric'], 75, ['single', 'coop-online']],
+  g8: [['Couch night'], ['Driving', 'Party', 'Cartoony', '3D'], 12, ['single', 'coop-local', 'pvp-online']],
+  g9: [[], ['Exploration', 'Space', 'Mystery', 'Atmospheric', 'First-person'], 22, ['single']],
+  g10: [['Couch night'], ['Platformer', 'Comedy', 'Emotional', 'Third-person'], 13, ['coop-local', 'coop-online']],
+  g11: [[], ['Roguelike', 'Deckbuilder', 'Pixel Art', 'Relaxing'], 11, ['single']],
+  g12: [['Retro night'], ['Metroidvania', 'Sci-fi', 'Retro', 'Pixel Art', 'Side-scroller'], 7, ['single']],
+  g13: [['Comfort'], ['Cozy', 'Relaxing', 'Fishing', 'Crafting', 'Cartoony'], 60, ['single', 'coop-local', 'pvp-online']],
+  g14: [[], ['Physics', 'Comedy', 'Sci-fi', 'First-person'], 8, ['single', 'coop-online']],
+  g15: [[], ['Roguelike', 'Deckbuilder', 'Turn-Based', 'Difficult'], 12, ['single']],
+  g16: [['Game Pass'], ['Roguelite', 'Bullet Hell', 'Pixel Art', 'Top-down', 'Idle'], 15, ['single']],
+  g17: [[], ['Mystery', 'Detective', 'Pirates', 'Low-poly', 'First-person'], 9, ['single']],
+  g18: [['Game Pass'], ['Story Rich', 'Historical', 'Choices Matter', 'Hand-drawn', 'Mystery'], 16, ['single']],
+  g19: [[], ['Roguelite', 'Metroidvania', 'Pixel Art', 'Difficult', 'Side-scroller'], 17, ['single']],
+  g20: [[], ['Turn-Based', 'Tactics', 'Fantasy', 'Choices Matter', 'Isometric'], 60, ['single', 'coop-online', 'coop-local']],
+  g21: [[], ['Deckbuilder', 'Psychological Horror', 'Mystery', 'Atmospheric'], 12, ['single']],
+  g22: [[], ['Atmospheric', 'Sci-fi', 'Third-person', 'Mystery'], 12, ['single']],
+  g23: [['Comfort'], ['Cozy', 'Relaxing', 'Emotional', 'Pixel Art'], 3, ['single']],
+  g24: [['Game Pass'], ['Sci-fi', 'Military', 'First-person', 'Open World'], 11, ['single', 'coop-online', 'pvp-online']],
+  g25: [[], ['4X', 'Turn-Based', 'Historical', 'Grand Strategy', 'Isometric'], null, ['single', 'pvp-online']],
+  g26: [['Retro night'], ['Fantasy', 'Turn-Based', 'Retro', 'Pixel Art', 'Multiple Endings'], 23, ['single']],
+  g27: [['Couch night'], ['Party', 'Cartoony', 'Management', 'Top-down'], 7, ['coop-local', 'coop-online']],
+  g28: [[], ['Exploration', 'Soulslike', 'Isometric', 'Low-poly', 'Mystery'], null, ['single']],
+};
 
 // Metadata enrichment (DOCS/METADATA_ENRICHMENT.md) — a mix of every status
 // so the provenance line and the ⋯ More rows exercise every branch. Games not
@@ -69,7 +117,7 @@ export const GAMES = ROWS.map(([id, title, year, dev, shelf, rating, hours, prog
   owned: copies.length > 0,
   platformsAvailable: [...new Set(copies.map((c) => c[0]))],
   updatedAt: T('2026-09-20'),
-  createdAt: T(`2026-0${(i % 8) + 1}-10`),
+  createdAt: T(`2026-0${(i % 9) + 1}-1${i % 10}`),
   copies: copies.map(([platform, format, storefront], j) => ({
     __typename: 'GameCopy',
     id: `${id}-c${j}`,
@@ -90,10 +138,16 @@ export const GAMES = ROWS.map(([id, title, year, dev, shelf, rating, hours, prog
       ? 'Defy the god of the dead as you hack and slash out of the Underworld in this rogue-like dungeon crawler from the creators of Bastion, Transistor and Pyre.\n\nEach escape attempt is different, and every death sends you home a little stronger.'
       : '',
   genres,
-  tags: [],
-  modes: id === 'g8' || id === 'g13' ? ['single', 'coop-local', 'pvp-online'] : ['single'],
+  tags: META[id]?.[0] ?? [],
+  autoTags: META[id]?.[1] ?? [],
+  modes: META[id]?.[3] ?? ['single'],
   maxLocalPlayers: id === 'g8' ? 4 : null,
-  timeToBeat: id === 'g1' ? { __typename: 'GameTimeToBeat', main: 22, extra: 48, complete: 95 } : null,
+  timeToBeat:
+    id === 'g1'
+      ? { __typename: 'GameTimeToBeat', main: 22, extra: 48, complete: 95 }
+      : META[id]?.[2]
+        ? { __typename: 'GameTimeToBeat', main: META[id][2], extra: null, complete: null }
+        : null,
   externalIds: id === 'g1' ? { __typename: 'GameExternalIds', igdb: '113112', steamAppId: '1145360', rawg: null, gog: null, epic: null } : null,
   enrichment: ENRICHMENT[id] ? { __typename: 'GameEnrichment', ...ENRICHMENT[id] } : null,
   source: 'igdb',
@@ -108,7 +162,7 @@ export const GAMES = ROWS.map(([id, title, year, dev, shelf, rating, hours, prog
         hoursPlayed: hours,
         hoursSource: id === 'g1' ? 'playnite' : id === 'g7' || id === 'g14' ? 'steam' : 'manual',
         favorite: id === 'g1' || id === 'g3',
-        lastPlayedAt: shelf === 'playing' ? T('2026-09-23') : null,
+        lastPlayedAt: shelf === 'playing' ? T('2026-09-23') : hours > 0 ? T(`2026-0${(i % 6) + 1}-02`) : null,
         playthroughs: playthroughsFor(id),
         sessions: sessionsFor(id),
       }
@@ -129,7 +183,7 @@ export const SHELF_STATS = {
   shelves: ['playing', 'backlog', 'finished', 'on-hold', 'abandoned', 'wishlist', 'custom-couch-coop'].map((shelf) => ({
     __typename: 'GameShelfCount', shelf, count: count(shelf),
   })),
-  platforms: ['pc', 'steam-deck', 'switch', 'ps5', 'ios', 'snes'].map((p) => ({
+  platforms: ['pc', 'steam-deck', 'switch', 'ps5', 'xbox-series', 'ios', 'snes'].map((p) => ({
     __typename: 'GameShelfCount', shelf: p, count: GAMES.filter((g) => g.copies.some((c) => c.platform === p)).length,
   })),
 };
@@ -137,7 +191,10 @@ export const SHELF_STATS = {
 export const PROFILE = {
   __typename: 'GameProfile',
   customShelves: [{ __typename: 'GameCustomShelf', id: 'custom-couch-coop', label: 'Couch co-op' }],
-  savedFilters: [],
+  savedFilters: [
+    { __typename: 'GameSavedFilter', id: 'v1', name: 'Short tonight', filter: { lengths: ['short'], played: 'never' }, sortBy: 'timeToBeat', sortDir: 'asc', searchQuery: null, shelfFilter: null, platformFilter: null, ownedFilter: null },
+    { __typename: 'GameSavedFilter', id: 'v2', name: 'Couch co-op on Switch', filter: { platforms: ['switch'], modes: ['coop-local'] }, sortBy: 'title', sortDir: 'asc', searchQuery: null, shelfFilter: null, platformFilter: null, ownedFilter: null },
+  ],
   platformsOwned: ['pc', 'steam-deck', 'switch', 'ps5', 'ios'],
   defaultPlatform: 'switch',
   steamId: '',
@@ -159,6 +216,7 @@ export const VOCAB = {
 
 const strip = ({ coverColor, ...g }) => g; // eslint-disable-line no-unused-vars
 
+const ttb = (g) => g.timeToBeat?.main ?? null;
 const SORTERS = {
   title: (a, b) => a.sortTitle.localeCompare(b.sortTitle),
   dateAdded: (a, b) => a.createdAt.localeCompare(b.createdAt),
@@ -166,24 +224,111 @@ const SORTERS = {
   rating: (a, b) => (a.me?.rating || 0) - (b.me?.rating || 0),
   lastPlayed: (a, b) => String(a.me?.lastPlayedAt || '').localeCompare(String(b.me?.lastPlayedAt || '')),
   hoursPlayed: (a, b) => (a.me?.hoursPlayed || 0) - (b.me?.hoursPlayed || 0),
+  timeToBeat: (a, b) => (ttb(a) ?? 1e9) - (ttb(b) ?? 1e9),
 };
+
+// A small stand-in for the gateway's filter (DOCS/TAGS_AND_FILTERS.md §B1),
+// faithful enough that the counts beside every option are the counts the
+// grid would really show.
+const NOW = Date.parse('2026-09-25T12:00:00Z');
+const lengthOf = (g) => {
+  const h = ttb(g);
+  if (h == null) return 'unknown';
+  return h < 5 ? 'short' : h < 15 ? 'medium' : h < 40 ? 'long' : 'epic';
+};
+const playedOf = (g) => {
+  const last = g.me?.lastPlayedAt ? Date.parse(g.me.lastPlayedAt) : null;
+  const buckets = [];
+  if (!(g.me?.hoursPlayed > 0) && !last) buckets.push('never');
+  else buckets.push('played');
+  if (last && NOW - last <= 30 * 86400000) buckets.push('recent');
+  return buckets;
+};
+const tagsOf = (g) => [...new Set([...(g.tags || []), ...(g.autoTags || [])])];
+const VALUES = {
+  shelves: (g) => [g.me?.shelf || 'unshelved'],
+  genres: (g) => g.genres || [],
+  tags: tagsOf,
+  storefronts: (g) => g.copies.map((c) => c.storefront),
+  platforms: (g) => g.copies.map((c) => c.platform),
+  formats: (g) => g.copies.map((c) => c.format),
+  modes: (g) => g.modes || [],
+  played: playedOf,
+  lengths: (g) => [lengthOf(g)],
+  metadata: (g) => [g.enrichment?.status || 'pending'],
+};
+
+function matches(g, f = {}, skip = null) {
+  const has = (key, wanted, all = false) => {
+    if (skip === key || !wanted?.length) return true;
+    const vals = VALUES[key](g);
+    return all ? wanted.every((w) => vals.includes(w)) : wanted.some((w) => vals.includes(w));
+  };
+  if (f.q && !g.title.toLowerCase().includes(String(f.q).toLowerCase())) return false;
+  const all = f.tagMatch === 'all';
+  if (!has('shelves', f.shelves) || !has('genres', f.genres, all) || !has('tags', f.tags, all)) return false;
+  if (!has('storefronts', f.storefronts) || !has('platforms', f.platforms) || !has('formats', f.formats)) return false;
+  if (!has('modes', f.modes) || !has('lengths', f.lengths) || !has('metadata', f.metadata)) return false;
+  if (skip !== 'played' && f.played && !playedOf(g).includes(f.played)) return false;
+  if (skip !== 'favorites' && f.favorite != null && Boolean(g.me?.favorite) !== f.favorite) return false;
+  if (skip !== 'releaseYears') {
+    if (f.releaseYearMin != null && !(g.releaseYear >= f.releaseYearMin)) return false;
+    if (f.releaseYearMax != null && !(g.releaseYear <= f.releaseYearMax)) return false;
+  }
+  if (f.hasCover != null && Boolean(g.coverUrl) !== f.hasCover) return false;
+  return true;
+}
+
+function facets(f = {}) {
+  const tally = (key) => {
+    const counts = new Map();
+    GAMES.filter((g) => matches(g, f, key)).forEach((g) => [...new Set(VALUES[key](g))].forEach((v) => counts.set(v, (counts.get(v) || 0) + 1)));
+    return [...counts].map(([value, count]) => ({ __typename: 'GameFacetValue', value, count })).sort((a, b) => b.count - a.count);
+  };
+  const years = new Map();
+  GAMES.filter((g) => matches(g, f, 'releaseYears')).forEach((g) => years.set(g.releaseYear, (years.get(g.releaseYear) || 0) + 1));
+  return {
+    __typename: 'GameFacets',
+    total: GAMES.filter((g) => matches(g, f)).length,
+    ...Object.fromEntries(Object.keys(VALUES).map((k) => [k, tally(k)])),
+    releaseYears: [...years].sort((a, b) => a[0] - b[0]).map(([year, count]) => ({ __typename: 'GameYearBucket', year, count })),
+    favorites: GAMES.filter((g) => matches(g, f, 'favorites') && g.me?.favorite).length,
+  };
+}
+
+let savedFilters = [...PROFILE.savedFilters];
 
 export const OPS = {
   GetGames: (v) => {
-    let items = GAMES;
-    if (v.shelf) items = items.filter((g) => (v.shelf === 'unshelved' ? !g.me?.shelf : g.me?.shelf === v.shelf));
-    if (v.platform) items = items.filter((g) => g.copies.some((c) => c.platform === v.platform));
+    let items = GAMES.filter((g) => matches(g, v.filter || {}));
     if (v.owned) items = items.filter((g) => String(g.owned) === v.owned);
-    if (v.q) items = items.filter((g) => g.title.toLowerCase().includes(String(v.q).toLowerCase()));
-    items = [...items].sort(SORTERS[v.sort] || SORTERS.title);
-    if (v.sortDir === 'desc') items.reverse();
+    if (v.sort === 'random') {
+      const seed = Number(v.seed) || 1;
+      items = [...items].sort((a, b) => ((Number(a.id.slice(1)) * seed) % 97) - ((Number(b.id.slice(1)) * seed) % 97));
+    } else {
+      items = [...items].sort(SORTERS[v.sort] || SORTERS.title);
+      if (v.sortDir === 'desc') items.reverse();
+    }
     return { games: { __typename: 'GamePage', games: items.map(strip), total: items.length, page: 1, pages: 1 } };
+  },
+  GetGameFacets: (v) => ({ gameFacets: facets(v.filter || {}) }),
+  SetGameState: (v) => {
+    const g = GAMES.find((x) => x.id === v.gameId) || GAMES[0];
+    return { setGameState: strip({ ...g, me: { ...g.me, ...v.input } }) };
   },
   GetGame: (v) => ({ game: strip(GAMES.find((g) => g.id === v.id) || GAMES[0]) }),
   GetGameShelves: { gameShelves: SHELF_STATS },
-  GetGameProfile: { gameProfile: PROFILE },
+  GetGameProfile: () => ({ gameProfile: { ...PROFILE, savedFilters } }),
   GetGameVocabulary: { gameVocabulary: VOCAB },
-  SaveGameProfile: (v) => ({ saveGameProfile: { ...PROFILE, ...v.input } }),
+  SaveGameProfile: (v) => ({ saveGameProfile: { ...PROFILE, savedFilters, ...v.input } }),
+  SaveGameFilter: (v) => {
+    savedFilters = [...savedFilters, { __typename: 'GameSavedFilter', id: `v${savedFilters.length + 1}`, searchQuery: null, shelfFilter: null, platformFilter: null, ownedFilter: null, ...v.input }];
+    return { saveGameFilter: { ...PROFILE, savedFilters } };
+  },
+  DeleteGameFilter: (v) => {
+    savedFilters = savedFilters.filter((x) => x.id !== v.id);
+    return { deleteGameFilter: { ...PROFILE, savedFilters } };
+  },
 };
 
 export const PLAYNITE_DRY_RUN = {

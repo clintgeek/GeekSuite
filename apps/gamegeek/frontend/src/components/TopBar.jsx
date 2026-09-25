@@ -14,7 +14,7 @@ import { useThemeMode } from '@geeksuite/user';
 import { GeekSearchField, GeekTopBar } from '@geeksuite/ui';
 import { useDebouncedCallback } from '../hooks/useDebouncedCallback';
 import { DISPLAY_FONT } from '../theme/theme';
-import { writeLibraryParams } from '../utils/librarySort';
+import { writeLibraryState } from '../utils/libraryFilter';
 import { displayNameFrom, initialsFrom, secondaryFrom } from '../utils/userDisplay';
 import { APP_ID, isLibraryPath, titleFor } from './navConfig';
 
@@ -47,7 +47,7 @@ export default function TopBar({ user, onSignOut }) {
 
   const pushQuery = useDebouncedCallback((value) => {
     lastWritten.current = value.trim() ? value : '';
-    setParams((prev) => writeLibraryParams(prev, { q: value }), { replace: true });
+    setParams((prev) => writeLibraryState(prev, { q: value }), { replace: true });
   }, 300);
 
   const onChange = (value) => {

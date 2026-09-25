@@ -15,6 +15,7 @@ import { GeekSheet, useToast } from '@geeksuite/ui';
 import { fetchCover } from '../../api/rest';
 import { CREATE_GAME } from '../../graphql/mutations';
 import { useGameProfile, useShelfList, useVocabulary } from '../../hooks/useGameMeta';
+import { useRefreshLibraryList } from '../../hooks/useRefreshLibraryList';
 import { gamePath, libraryPath } from '../../components/navConfig';
 import { candidateToForm, emptyForm, formToCreateInput } from './candidate';
 import GameForm from './GameForm';
@@ -41,7 +42,10 @@ export default function AddGameDialog() {
   const [form, setForm] = useState(null); // null = searching
   const [fromSearch, setFromSearch] = useState(false);
   const [lastQuery, setLastQuery] = useState('');
-  const [createGame, { loading }] = useMutation(CREATE_GAME, { refetchQueries: ['GetGames', 'GetGameShelves'] });
+  // Not 'GetGames': a refetch would collapse the scrolled library underneath.
+  // The list refreshes in place once the game exists (useRefreshLibraryList).
+  const [createGame, { loading }] = useMutation(CREATE_GAME, { refetchQueries: ['GetGameShelves', 'GetGameFacets'] });
+  const refreshList = useRefreshLibraryList();
 
   const librarySearch = withoutTab(location.search);
   const close = () => navigate(libraryPath(librarySearch));
@@ -67,6 +71,7 @@ export default function AddGameDialog() {
       const game = res.data?.createGame;
       if (!game) throw new Error('Nothing came back');
       notify(`Added ${game.title}.`, { tone: 'success' });
+      refreshList(librarySearch).catch(() => {});
       if (form.coverUrl) {
         // Not awaited: the game exists either way, the art can follow.
         fetchCover(game.id, form.coverUrl).catch(() =>

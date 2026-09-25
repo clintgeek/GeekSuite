@@ -15,10 +15,23 @@
  */
 import { searchSteamStore, fetchSteamAppDetails } from '../metadata/steamClient.js';
 import { normalizeSteamSearchResults, normalizeSteamAppDetails } from '../metadata/steam.js';
-import { isIgdbConfigured, searchIgdbGames, fetchIgdbGame, fetchIgdbTimeToBeat } from '../metadata/igdbClient.js';
-import { normalizeIgdbSearchResults, normalizeIgdbDetail } from '../metadata/igdb.js';
+import {
+  isIgdbConfigured,
+  searchIgdbGames,
+  fetchIgdbGame,
+  fetchIgdbTimeToBeat,
+  fetchIgdbTagsById,
+  fetchIgdbExternalGamesBySteam,
+  IGDB_BATCH_MAX,
+} from '../metadata/igdbClient.js';
+import {
+  normalizeIgdbSearchResults,
+  normalizeIgdbDetail,
+  normalizeIgdbTagRows,
+  normalizeIgdbSteamLookup,
+} from '../metadata/igdb.js';
 import { isRawgConfigured, searchRawgGames, fetchRawgGame } from '../metadata/rawgClient.js';
-import { normalizeRawgSearchResults, normalizeRawgGame } from '../metadata/rawg.js';
+import { normalizeRawgSearchResults, normalizeRawgGame, rawgTagTerms } from '../metadata/rawg.js';
 import { getSteamPacer, pacedWithBackoff } from './pacing.js';
 
 const SEARCH_LIMIT = 10;
@@ -91,6 +104,45 @@ export function createProviders({ fetchImpl = fetch, env = process.env, steamPac
     detail: steamDetail,
   };
 
+  const chunk = (list, n) => {
+    const out = [];
+    for (let i = 0; i < list.length; i += n) out.push(list.slice(i, i + n));
+    return out;
+  };
+
+  /**
+   * The tags pass's sources (apps/gamegeek/DOCS/TAGS_AND_FILTERS.md §A4).
+   * IGDB calls batch IGDB_BATCH_MAX ids per request behind the IGDB limiter;
+   * RAWG is one detail call per game behind the RAWG limiter.
+   */
+  const tags = {
+    igdbConfigured: () => igdb.isConfigured(),
+    rawgConfigured: () => rawg.isConfigured(),
+    /** @returns {Promise<Map<string, string[]>>} igdb id → raw terms (ids IGDB doesn't know are absent). */
+    async igdbTagsByIds(ids) {
+      const out = new Map();
+      for (const part of chunk([...new Set(ids.map(String))], IGDB_BATCH_MAX)) {
+        for (const [id, terms] of normalizeIgdbTagRows(await fetchIgdbTagsById(part, { fetchImpl, env }))) out.set(id, terms);
+      }
+      return out;
+    },
+    /** @returns {Promise<Map<string, string>>} steam app id → igdb id (unambiguous hits only). */
+    async igdbIdsBySteam(uids) {
+      const out = new Map();
+      for (const part of chunk([...new Set(uids.map(String))], IGDB_BATCH_MAX)) {
+        for (const [uid, id] of normalizeIgdbSteamLookup(await fetchIgdbExternalGamesBySteam(part, { fetchImpl, env }))) out.set(uid, id);
+      }
+      return out;
+    },
+    /** @returns {Promise<string[]|null>} English RAWG tag terms, or null when RAWG doesn't know the id. */
+    async rawgTags(id) {
+      const body = await fetchRawgGame(id, { fetchImpl, env });
+      return body ? rawgTagTerms(body.tags) : null;
+    },
+    /** Strict-matchable IGDB title search (same candidates the enrichment matcher sees). */
+    igdbSearch: (title) => igdb.search(title),
+  };
+
   const ordered = [steamAppDetails, igdb, rawg, steamStoreSearch];
   return {
     /** The enrichment order. */
@@ -100,6 +152,8 @@ export function createProviders({ fetchImpl = fetch, env = process.env, steamPac
     /** Detail fetch by the record's provider name, for apply. */
     byName: { steam: steamStoreSearch, igdb, rawg },
     configured: () => ({ steam: true, igdb: igdb.isConfigured(), rawg: rawg.isConfigured() }),
+    /** Tag sources for the tags pass. */
+    tags,
   };
 }
 

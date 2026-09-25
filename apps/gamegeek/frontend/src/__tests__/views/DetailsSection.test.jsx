@@ -76,3 +76,16 @@ describe('DetailsSection — metadata provenance line', () => {
     expect(screen.queryByRole('button', { name: 'Find metadata…' })).not.toBeInTheDocument();
   });
 });
+
+describe('DetailsSection — genre and tag links', () => {
+  it('genres and tags (own + auto) link into the library with that value added', () => {
+    const game = makeDetailGame({ genres: ['RPG'], tags: ['Couch night', 'Cozy'], autoTags: ['Cozy', 'Roguelike'] });
+    renderWithProviders(<DetailsSection game={game} />, { initialEntries: ['/game/g1?store=steam'] });
+    expect(screen.getByRole('link', { name: 'Show games with the genre RPG' })).toHaveAttribute('href', '/?store=steam&genre=RPG');
+    expect(screen.getByRole('link', { name: 'Show games with the tag Couch night' })).toHaveAttribute('href', '/?store=steam&tag=Couch+night');
+    // Cozy is the person's own tag too, so it shows once, as theirs.
+    expect(screen.getAllByRole('link', { name: /tag Cozy/ })).toHaveLength(1);
+    const auto = screen.getByRole('link', { name: 'Show games with the tag Roguelike (added automatically)' });
+    expect(auto).toHaveAttribute('data-auto-tag', 'true');
+  });
+});

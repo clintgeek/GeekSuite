@@ -28,6 +28,9 @@ function profileDefinition(mongoose) {
             shelfFilter: String,
             platformFilter: String,
             ownedFilter: String,
+            // The whole GameFilterInput (apps/gamegeek/DOCS/TAGS_AND_FILTERS.md §B1),
+            // validated by the gateway. Absent on filters saved before it existed.
+            filter: { type: Schema.Types.Mixed, default: undefined },
           },
           { _id: false }
         ),

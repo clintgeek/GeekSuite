@@ -9,6 +9,7 @@ import { useProviders } from '../../hooks/useProviders';
 import { formatCalendarDate } from '../../utils/dates';
 import SettingsCard from './SettingsCard';
 import SteamPreview, { importSummary } from './SteamPreview';
+import { resetLibraryLists } from '../../graphql/cachePolicies';
 
 export default function SteamImportCard({ profile }) {
   const client = useApolloClient();
@@ -49,7 +50,9 @@ export default function SteamImportCard({ profile }) {
       const updated = result?.hoursUpdated ?? s.hours;
       notify(`Steam import done — ${created} added, ${updated} hours updated.`, { tone: 'success' });
       setPreview(null);
-      await client.refetchQueries({ include: ['GetGames', 'GetGameShelves', 'GetGameProfile'] });
+      // A bulk change: drop the cached lists (they reload fresh) and refresh the rest.
+      resetLibraryLists(client);
+      await client.refetchQueries({ include: ['GetGameShelves', 'GetGameProfile'] });
     } catch (err) {
       notify(err?.message || 'The Steam import failed.', { tone: 'error' });
     } finally {

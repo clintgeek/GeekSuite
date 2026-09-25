@@ -6,12 +6,14 @@ import { GameProfile } from './models/profile.js';
 import householdModule from '@geeksuite/schemas/gamegeek/household';
 import constantsModule from '@geeksuite/schemas/gamegeek/constants';
 import gameSchemaModule from '@geeksuite/schemas/gamegeek/game';
+import { effectiveFilter, buildConditions, matchOf, lookupMeStages, facetsPipeline, shapeFacets } from './filters.js';
 import {
   validateInput,
   GAME_SORTS,
   CREATE_GAMES_MAX,
   MAX_CUSTOM_SHELF_LABEL,
   gamesArgsSchema,
+  gameFacetsArgsSchema,
   gameIdArgsSchema,
   createGameArgsSchema,
   createGamesArgsSchema,
@@ -55,18 +57,27 @@ import {
  */
 
 const { resolveHouseholdId } = householdModule;
-const { BUILT_IN_SHELVES, PLATFORMS, STOREFRONTS, COPY_FORMATS, GAME_MODES, COMPLETION_LEVELS, MAX_SESSIONS, bounds } =
-  constantsModule;
+const {
+  BUILT_IN_SHELVES,
+  PLATFORMS,
+  STOREFRONTS,
+  COPY_FORMATS,
+  GAME_MODES,
+  COMPLETION_LEVELS,
+  MAX_SESSIONS,
+  canonicalGenres,
+  bounds,
+} = constantsModule;
 const { computeSortTitle } = gameSchemaModule;
 
 const CUSTOM_SHELF_PREFIX = 'custom-';
 const MAX_CUSTOM_SHELVES = 20;
 const MAX_SAVED_FILTERS = 30;
-const SEARCH_TERM_MAX = 200;
 /** Shelves a logged session promotes to "playing". */
 const AUTO_PLAYING_FROM = [null, 'backlog', 'on-hold'];
 
 const validateGames = validateInput(gamesArgsSchema);
+const validateGameFacets = validateInput(gameFacetsArgsSchema);
 const validateGameId = validateInput(gameIdArgsSchema);
 const validateCreateGame = validateInput(createGameArgsSchema);
 const validateCreateGames = validateInput(createGamesArgsSchema);
@@ -105,13 +116,6 @@ const notFound = (what = 'Game') => userError(`${what} not found`, 'NOT_FOUND');
 /** A malformed id is "not found", never a CastError. */
 function validObjectId(id) {
   return (typeof id === 'string' && /^[0-9a-fA-F]{24}$/.test(id)) || id instanceof mongoose.Types.ObjectId;
-}
-
-/** Escaped + bounded, so a user search term is a literal, not a ReDoS. */
-function searchRegex(value) {
-  return String(value)
-    .slice(0, SEARCH_TERM_MAX)
-    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
 function escapeExact(value) {
@@ -178,6 +182,11 @@ const LIST_FIELDS = ['developers', 'publishers', 'genres', 'tags', 'modes', 'pla
 const SCALAR_FIELDS = ['description', 'maxLocalPlayers', 'releaseDate', 'source'];
 const NESTED_FIELDS = ['series', 'timeToBeat', 'externalIds'];
 
+/** Genres are canonical on write (apps/gamegeek/DOCS/TAGS_AND_FILTERS.md §A5). */
+function listFieldValue(field, list) {
+  return field === 'genres' ? canonicalGenres(list ?? []) : dedupeList(list ?? []);
+}
+
 function dedupeList(list) {
   const seen = new Set();
   const out = [];
@@ -218,7 +227,7 @@ function copyFromInput(input, existingById) {
 /** Validated create input → a Game document body (no tenant keys). */
 function gameDocFromInput(input) {
   const doc = { title: input.title, sortTitle: computeSortTitle(input.title) };
-  for (const f of LIST_FIELDS) if (input[f] != null) doc[f] = dedupeList(input[f]);
+  for (const f of LIST_FIELDS) if (input[f] != null) doc[f] = listFieldValue(f, input[f]);
   for (const f of SCALAR_FIELDS) if (input[f] !== undefined) doc[f] = input[f];
   if (doc.description === null) doc.description = '';
   for (const f of NESTED_FIELDS) if (input[f]) doc[f] = { ...input[f] };
@@ -337,7 +346,18 @@ const SORT_FIELDS = {
   rating: '$__me.rating',
   lastPlayed: '$__me.lastPlayedAt',
   hoursPlayed: '$__me.hoursPlayed',
+  timeToBeat: '$timeToBeat.main',
+  // Computed per request from the seed (randomSortKey); listed so the tripwire sees an arm.
+  random: '$__random',
 };
+
+/**
+ * The `random` sort key: a hash of the game's id and the client's seed, so
+ * the order is shuffled per seed yet identical on every page of it.
+ */
+function randomSortKey(seed) {
+  return { $toHashedIndexKey: { $concat: [{ $toString: '$_id' }, ':', String(seed ?? 0)] } };
+}
 // Tripwire: an advertised sort without an arm here is exactly BookGeek's
 // silent-no-op bug. Fail at import, not in production.
 for (const s of GAME_SORTS) {
@@ -345,56 +365,35 @@ for (const s of GAME_SORTS) {
 }
 
 async function queryGames({ userId, householdId, args }) {
-  const { page, limit, q, shelf, platform, owned, sort, sortDir } = args;
+  const { page, limit, owned, sort, sortDir, seed } = args;
   const pageNum = Math.max(1, page ?? 1);
   const limitNum = Math.max(1, Math.min(100, limit ?? 48));
   const dir = (sortDir ?? 'asc') === 'desc' ? -1 : 1;
   const sortKey = sort ?? 'title';
 
+  // `filter` wins per field; the old q/shelf/platform args fill in (filters.js).
+  const conditions = buildConditions(effectiveFilter(args));
+
   // The tenant is a literal in the first stage — never conditional.
   const gameMatch = { householdId };
   const and = [];
-  if (platform) and.push({ 'copies.platform': platform });
   if (owned === 'true') and.push({ owned: true });
   else if (owned === 'false') and.push({ owned: false });
-  if (q && q.trim()) {
-    const needle = searchRegex(q.trim());
-    and.push({
-      $or: ['title', 'developers', 'publishers', 'tags', 'genres'].map((f) => ({
-        [f]: { $regex: needle, $options: 'i' },
-      })),
-    });
-  }
+  const gameStage = matchOf(conditions, { stage: 'game' });
+  if (gameStage.$and) and.push(...gameStage.$and);
   if (and.length) gameMatch.$and = and;
 
   const pipeline = [
     { $match: gameMatch },
-    {
-      $lookup: {
-        from: GamePlayer.collection.name,
-        let: { gid: '$_id' },
-        pipeline: [
-          { $match: { userId, householdId, $expr: { $eq: ['$gameId', '$$gid'] } } },
-          { $limit: 1 },
-        ],
-        as: '__meArr',
-      },
-    },
-    { $addFields: { __me: { $ifNull: [{ $arrayElemAt: ['$__meArr', 0] }, null] } } },
-    { $project: { __meArr: 0 } },
+    ...lookupMeStages({ userId, householdId, collection: GamePlayer.collection.name }),
   ];
-
-  if (shelf === 'unshelved') {
-    // No row for me, or a row with no shelf — both are `__me.shelf: null`.
-    pipeline.push({ $match: { '__me.shelf': null } });
-  } else if (shelf) {
-    pipeline.push({ $match: { '__me.shelf': shelf } });
-  }
+  const playerStage = matchOf(conditions, { stage: 'player' });
+  if (playerStage.$and) pipeline.push({ $match: playerStage });
 
   // Nulls last in BOTH directions, then a stable tiebreak: sortTitle, _id.
   pipeline.push({
     $addFields: {
-      __sortKey: { $ifNull: [SORT_FIELDS[sortKey], null] },
+      __sortKey: sortKey === 'random' ? randomSortKey(seed) : { $ifNull: [SORT_FIELDS[sortKey], null] },
     },
   });
   pipeline.push({
@@ -457,6 +456,7 @@ export const resolvers = {
     publishers: (g) => g.publishers ?? [],
     genres: (g) => g.genres ?? [],
     tags: (g) => g.tags ?? [],
+    autoTags: (g) => g.autoTags ?? [],
     modes: (g) => g.modes ?? [],
     platformsAvailable: (g) => g.platformsAvailable ?? [],
     enrichment: (g) => g.enrichment ?? null,
@@ -516,6 +516,9 @@ export const resolvers = {
   GameHouseholdEntry: {
     userId: (e) => String(e.userId),
   },
+  GameSavedFilter: {
+    filter: (f) => f?.filter ?? null,
+  },
   GameProfile: {
     customShelves: (p) => p?.customShelves ?? [],
     savedFilters: (p) => p?.savedFilters ?? [],
@@ -531,6 +534,15 @@ export const resolvers = {
       const householdId = resolveHouseholdId(user);
       const args = validateGames(rawArgs ?? {});
       return queryGames({ userId, householdId, args });
+    },
+
+    gameFacets: async (_, rawArgs, { user } = {}) => {
+      const userId = requireUser(user);
+      const householdId = resolveHouseholdId(user);
+      const { filter } = validateGameFacets(rawArgs ?? {});
+      const pipeline = facetsPipeline({ householdId, userId, collection: GamePlayer.collection.name, filter: filter ?? {} });
+      const [result] = await Game.aggregate(pipeline);
+      return shapeFacets(result, filter ?? {});
     },
 
     game: async (_, rawArgs, { user } = {}) => {
@@ -668,7 +680,7 @@ export const resolvers = {
         game.parentId = input.parentId;
       }
       if (input.title !== undefined) game.title = input.title;
-      for (const f of LIST_FIELDS) if (input[f] !== undefined) game[f] = dedupeList(input[f] ?? []);
+      for (const f of LIST_FIELDS) if (input[f] !== undefined) game[f] = listFieldValue(f, input[f]);
       for (const f of SCALAR_FIELDS) if (input[f] !== undefined) game[f] = input[f];
       if (input.description === null) game.description = '';
       if (input.source === null) game.source = 'manual';
@@ -892,6 +904,7 @@ export const resolvers = {
         shelfFilter: input.shelfFilter ?? '',
         platformFilter: input.platformFilter ?? '',
         ownedFilter: input.ownedFilter || 'all',
+        filter: input.filter ?? null,
       };
 
       const profile = await getOrCreateProfile(userId, householdId);

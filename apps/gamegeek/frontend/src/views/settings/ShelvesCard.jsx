@@ -2,17 +2,24 @@
 import React, { useState } from 'react';
 import { Box, Button, IconButton, TextField, Typography } from '@mui/material';
 import { DeleteOutline as DeleteIcon } from '@mui/icons-material';
-import { useMutation } from '@apollo/client';
+import { useApolloClient, useMutation } from '@apollo/client';
 import { useToast } from '@geeksuite/ui';
 import { ADD_GAME_SHELF, REMOVE_GAME_SHELF } from '../../graphql/mutations';
 import { GET_GAME_PROFILE } from '../../graphql/queries';
+import { resetLibraryLists } from '../../graphql/cachePolicies';
 import SettingsCard from './SettingsCard';
 
 export default function ShelvesCard({ profile }) {
   const { notify } = useToast();
   const [label, setLabel] = useState('');
   const [addShelf, { loading: adding }] = useMutation(ADD_GAME_SHELF, { refetchQueries: ['GetGameShelves'] });
-  const [removeShelf] = useMutation(REMOVE_GAME_SHELF, { refetchQueries: [{ query: GET_GAME_PROFILE }, 'GetGameShelves', 'GetGames'] });
+  const client = useApolloClient();
+  // Removing a shelf unshelves its games across the library: a bulk change,
+  // so the cached lists are dropped (they reload fresh) rather than refetched.
+  const [removeShelf] = useMutation(REMOVE_GAME_SHELF, {
+    refetchQueries: [{ query: GET_GAME_PROFILE }, 'GetGameShelves'],
+    onCompleted: () => resetLibraryLists(client),
+  });
   const shelves = profile?.customShelves ?? [];
 
   const add = async (e) => {

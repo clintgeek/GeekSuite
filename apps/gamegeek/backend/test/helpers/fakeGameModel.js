@@ -160,6 +160,17 @@ export function createFakeGameModel(initialDocs = [], hooks = {}) {
       Object.assign(doc, next);
       return { matchedCount: 1, modifiedCount: 1 };
     },
+    /** updateOne ops only (the genre migration's shape). */
+    async bulkWrite(ops) {
+      calls.bulkWrite = [...(calls.bulkWrite ?? []), clone(ops)];
+      let modifiedCount = 0;
+      for (const op of ops) {
+        if (!op.updateOne) throw new Error('fakeGameModel.bulkWrite: only updateOne ops');
+        const res = await model.updateOne(op.updateOne.filter, op.updateOne.update);
+        modifiedCount += res.modifiedCount;
+      }
+      return { modifiedCount, matchedCount: modifiedCount };
+    },
     /** Test helper: mutate a stored doc as a concurrent writer would (bumps updatedAt). */
     touch(id, mutate) {
       const doc = docs.find((d) => String(d._id) === String(id));

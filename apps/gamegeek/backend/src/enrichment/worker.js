@@ -10,6 +10,7 @@
  * run endpoint).
  */
 import { enrichGame } from './enrichGame.js';
+import { runTagsPass, tagsSelectionFilter } from './tagsPass.js';
 
 /** Error retry backoff: attempts n → wait BASE × 2^(n-1) since lastTriedAt. */
 export const ERROR_BACKOFF_BASE_MS = 10 * 60 * 1000;
@@ -98,6 +99,11 @@ export function createWorker(deps) {
         }
         if (deps.isDisabled?.()) break;
       }
+      // Then the tags pass over matched games that have none yet
+      // (TAGS_AND_FILTERS.md §A4). New matches above were tagged inline.
+      if (!deps.isDisabled?.()) {
+        tally.tags = await runTagsPass(deps, { isDisabled: deps.isDisabled });
+      }
     } catch (err) {
       logger?.error?.({ err: err?.message }, 'enrichment: run aborted');
     } finally {
@@ -108,7 +114,8 @@ export function createWorker(deps) {
       running = false;
       logger?.info?.(
         lastSummary,
-        `enrichment run (${trigger}): ${tally.processed} processed, ${tally.matched} matched, ${tally.noMatch} no-match, ${tally.ambiguous} ambiguous, ${tally.error} error`
+        `enrichment run (${trigger}): ${tally.processed} processed, ${tally.matched} matched, ${tally.noMatch} no-match, ${tally.ambiguous} ambiguous, ${tally.error} error` +
+          (tally.tags ? `; tags: ${tally.tags.tagged} tagged, ${tally.tags.untagged} untagged, ${tally.tags.error} error` : '')
       );
     }
     return lastSummary;
@@ -130,9 +137,11 @@ export function createWorker(deps) {
       Object.entries(STATUS_COUNT_FILTERS).map(async ([k, f]) => [k, await Game.countDocuments(scoped(f))])
     );
     const queued = await Game.countDocuments(scoped(selectionFilter({ configured: providers.configured(), now: now() })));
+    const tagsQueued = await Game.countDocuments(scoped(tagsSelectionFilter()));
     return {
       running,
       queued,
+      tagsQueued,
       counts: Object.fromEntries(entries),
       providers: providers.configured(),
       lastRunAt,

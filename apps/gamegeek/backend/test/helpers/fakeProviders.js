@@ -68,3 +68,38 @@ export function detailOf(provider, providerId, title, extra = {}) {
 }
 
 export const searchHit = (provider, providerId, title, releaseDate = null) => ({ provider, providerId: String(providerId), title, releaseDate });
+
+/**
+ * A fake `providers.tags` (src/enrichment/providers.js) backed by tables:
+ *   igdb: { <igdb id>: terms[] }   steam: { <steam uid>: <igdb id> }
+ *   rawg: { <rawg id>: terms[] }   search: { <title>: candidates[] }
+ * `throws: { igdb?, steam?, rawg?, search? }` makes that source fail.
+ */
+export function fakeTagSource({ igdb = {}, steam = {}, rawg = {}, search = {}, igdbOn = true, rawgOn = true, throws = {} } = {}) {
+  const calls = { igdbTagsByIds: [], igdbIdsBySteam: [], rawgTags: [], igdbSearch: [] };
+  return {
+    calls,
+    igdbConfigured: () => igdbOn,
+    rawgConfigured: () => rawgOn,
+    async igdbTagsByIds(ids) {
+      calls.igdbTagsByIds.push([...ids]);
+      if (throws.igdb) throw throws.igdb;
+      return new Map(ids.filter((id) => igdb[id]).map((id) => [String(id), igdb[id]]));
+    },
+    async igdbIdsBySteam(uids) {
+      calls.igdbIdsBySteam.push([...uids]);
+      if (throws.steam) throw throws.steam;
+      return new Map(uids.filter((u) => steam[u]).map((u) => [String(u), String(steam[u])]));
+    },
+    async rawgTags(id) {
+      calls.rawgTags.push(id);
+      if (throws.rawg) throw throws.rawg;
+      return rawg[id] ?? null;
+    },
+    async igdbSearch(title) {
+      calls.igdbSearch.push(title);
+      if (throws.search) throw throws.search;
+      return search[title] ?? [];
+    },
+  };
+}

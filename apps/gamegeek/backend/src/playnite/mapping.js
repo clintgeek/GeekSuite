@@ -8,7 +8,7 @@ import gameSchemaModule from '@geeksuite/schemas/gamegeek/game';
 import constantsModule from '@geeksuite/schemas/gamegeek/constants';
 
 const { computeSortTitle } = gameSchemaModule;
-const { bounds } = constantsModule;
+const { bounds, canonicalGenres } = constantsModule;
 
 export const LIST_CAP = bounds.listMax.max; // 50
 const TAG_MAX = bounds.tag.maxlength; // 60
@@ -153,7 +153,8 @@ export function mapEntry(entry) {
     format: formatFor(sourceName),
     copyPlatform: copyPlatformFor(sourceName, platforms),
     platforms,
-    genres: cleanList(entry.genres),
+    // Canonical names (TAGS_AND_FILTERS.md §A5): "Role-playing (RPG)" → "RPG".
+    genres: canonicalGenres(cleanList(entry.genres)),
     tags: cleanList([...(entry.categories ?? []), ...(entry.tags ?? [])]),
     releaseDate: parseReleaseDate(entry.releaseDate),
     steamAppId,

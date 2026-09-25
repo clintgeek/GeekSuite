@@ -61,6 +61,10 @@ function gameDefinition(mongoose) {
     description: { type: String, maxlength: bounds.description.maxlength, default: '' },
     genres: { type: [String], default: [] },
     tags: { type: [String], default: [] },
+    // Enrichment-derived tags from the canonical vocabulary (./tags.js) — never
+    // the user's own; apps/gamegeek/DOCS/TAGS_AND_FILTERS.md §A3. Filters and
+    // the Tags facet read tags ∪ autoTags.
+    autoTags: { type: [String], default: [] },
     modes: { type: [{ type: String, enum: GAME_MODES }], default: [] },
     maxLocalPlayers: { type: Number, default: null },
     platformsAvailable: { type: [String], default: [] },
@@ -104,6 +108,10 @@ function gameDefinition(mongoose) {
           matchedAt: { type: Date, default: null },
           error: { type: String, maxlength: 300, default: null },
           providersTried: { type: [String], default: [] },
+          // The tags pass (TAGS_AND_FILTERS.md §A4): when it last ran for this
+          // match, and which providers supplied terms.
+          tagsFetchedAt: { type: Date, default: null },
+          tagSources: { type: [String], default: [] },
         },
         { _id: false }
       ),

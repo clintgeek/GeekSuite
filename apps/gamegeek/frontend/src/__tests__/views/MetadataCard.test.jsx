@@ -83,7 +83,7 @@ describe('MetadataCard', () => {
     await waitFor(() => expect(getEnrichStatus).toHaveBeenCalledTimes(3));
   });
 
-  it('stops polling once running flips to false and refetches the library', async () => {
+  it('stops polling once running flips to false and refreshes the library', async () => {
     const refetchSpy = vi.spyOn(ApolloClient.prototype, 'refetchQueries').mockResolvedValue([]);
 
     getEnrichStatus.mockResolvedValueOnce(statusFixture({ running: true, queued: 5 }));
@@ -95,8 +95,11 @@ describe('MetadataCard', () => {
     await waitFor(() => expect(screen.queryByTestId('metadata-running')).not.toBeInTheDocument());
 
     expect(refetchSpy).toHaveBeenCalledWith(
-      expect.objectContaining({ include: expect.arrayContaining(['GetGames', 'GetGameShelves', 'GetGameProfile']) })
+      expect.objectContaining({ include: expect.arrayContaining(['GetGameShelves', 'GetGameProfile']) })
     );
+    // The paginated list is never refetched (that collapses a scrolled
+    // library); a finished run drops the cached lists instead.
+    expect(refetchSpy.mock.calls.flatMap(([opts]) => opts.include)).not.toContain('GetGames');
 
     // No further polling once it's no longer running.
     const callsSoFar = getEnrichStatus.mock.calls.length;

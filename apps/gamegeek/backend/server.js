@@ -6,6 +6,8 @@ import logger from './src/lib/logger.js';
 import createApp from './src/app.js';
 import { ensureCoversDir } from './src/lib/coverStorage.js';
 import { startEnrichmentSchedule } from './src/enrichment/service.js';
+import Game from './src/models/Game.js';
+import { migrateGenres } from './src/migrations/genres.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -71,6 +73,14 @@ async function start() {
   } catch (err) {
     logger.error({ err }, 'Failed to connect to MongoDB');
     process.exit(1);
+  }
+
+  // Canonical genre names (DOCS/TAGS_AND_FILTERS.md §A5). Idempotent, runs
+  // before the enrichment worker is scheduled; a failure is logged, never fatal.
+  try {
+    await migrateGenres({ Game, logger });
+  } catch (err) {
+    logger.error({ err: err?.message }, 'genre migration failed');
   }
 
   server = app.listen(PORT, '0.0.0.0', () => {

@@ -6,7 +6,7 @@
  * and is deliberately thin so the fixture tests never need to touch it.
  */
 import { createRateLimiter } from '../lib/rateLimiter.js';
-import { IGDB_GAME_FIELDS, IGDB_DETAIL_FIELDS } from './igdb.js';
+import { IGDB_GAME_FIELDS, IGDB_DETAIL_FIELDS, IGDB_TAG_FIELDS, IGDB_EXTERNAL_GAME_FIELDS } from './igdb.js';
 
 const TWITCH_TOKEN_URL = 'https://id.twitch.tv/oauth2/token';
 const IGDB_BASE_URL = 'https://api.igdb.com/v4';
@@ -128,4 +128,45 @@ export async function fetchIgdbTimeToBeat(id, options = {}) {
   return Array.isArray(rows) ? rows : [];
 }
 
-export default { isIgdbConfigured, resetIgdbTokenCache, searchIgdbGames, fetchIgdbGame, fetchIgdbTimeToBeat };
+/** IGDB's apicalypse `where x = (a,b,…)` list: at most this many ids per request. */
+export const IGDB_BATCH_MAX = 10;
+
+/**
+ * Themes, keywords and player perspectives for up to IGDB_BATCH_MAX games in
+ * ONE request. @returns {Promise<object[]>} raw `/games` rows (id + the three lists).
+ */
+export async function fetchIgdbTagsById(ids, options = {}) {
+  const list = [...new Set((ids ?? []).map(String))];
+  if (!list.length) return [];
+  if (list.length > IGDB_BATCH_MAX) throw new Error(`at most ${IGDB_BATCH_MAX} IGDB ids per request`);
+  list.forEach(assertIgdbId);
+  return igdbQuery('games', `fields ${IGDB_TAG_FIELDS}; where id = (${list.join(',')}); limit ${list.length};`, options);
+}
+
+/**
+ * `/external_games` rows for up to IGDB_BATCH_MAX Steam app ids in ONE
+ * request (source 1 = Steam). @returns {Promise<object[]>} raw rows.
+ */
+export async function fetchIgdbExternalGamesBySteam(uids, options = {}) {
+  const list = [...new Set((uids ?? []).map(String))];
+  if (!list.length) return [];
+  if (list.length > IGDB_BATCH_MAX) throw new Error(`at most ${IGDB_BATCH_MAX} Steam ids per request`);
+  for (const uid of list) if (!/^\d+$/.test(uid)) throw new Error('Steam app id must be digits');
+  const quoted = list.map((u) => `"${u}"`).join(',');
+  return igdbQuery(
+    'external_games',
+    `fields ${IGDB_EXTERNAL_GAME_FIELDS}; where external_game_source = 1 & uid = (${quoted}); limit ${list.length * 5};`,
+    options
+  );
+}
+
+export default {
+  isIgdbConfigured,
+  resetIgdbTokenCache,
+  searchIgdbGames,
+  fetchIgdbGame,
+  fetchIgdbTimeToBeat,
+  fetchIgdbTagsById,
+  fetchIgdbExternalGamesBySteam,
+  IGDB_BATCH_MAX,
+};

@@ -1,8 +1,14 @@
-/** Catalogue facts: genres, modes, time to beat, the description, and where else it lives. */
+/**
+ * Catalogue facts: genres, modes, time to beat, the description, and where
+ * else it lives. Genres and tags are links into the filtered library.
+ */
 import React, { useState } from 'react';
-import { Box, Button, Link, Typography } from '@mui/material';
+import { Box, Button, ButtonBase, Link, Tooltip, Typography, alpha } from '@mui/material';
 import { OpenInNew as ExternalIcon } from '@mui/icons-material';
+import { Link as RouterLink, useLocation } from 'react-router-dom';
+import { libraryPath } from '../../components/navConfig';
 import { formatCalendarDate } from '../../utils/dates';
+import { librarySearchWith } from '../../utils/libraryFilter';
 import { modeLabel } from '../../utils/vocab';
 import Section from './Section';
 
@@ -42,9 +48,87 @@ export function enrichmentLine(enrichment) {
 function Fact({ label, children }) {
   if (!children || (Array.isArray(children) && !children.length)) return null;
   return (
-    <Box sx={{ display: 'grid', gridTemplateColumns: '112px minmax(0, 1fr)', gap: 1.5, py: 0.75, borderBottom: 1, borderColor: 'divider' }}>
+    <Box sx={{ display: 'grid', gridTemplateColumns: '112px minmax(0, 1fr)', alignItems: 'baseline', gap: 1.5, py: 0.75, borderBottom: 1, borderColor: 'divider' }}>
       <Typography component="dt" sx={{ fontSize: '0.8125rem', color: 'text.secondary' }}>{label}</Typography>
       <Typography component="dd" sx={{ m: 0, fontSize: '0.875rem', overflowWrap: 'anywhere' }}>{children}</Typography>
+    </Box>
+  );
+}
+
+/**
+ * The game's tags as one list: the person's own (and Playnite's) first, then
+ * the enrichment-derived ones not already there, marked `auto`
+ * (DOCS/TAGS_AND_FILTERS.md §A3 — one Tags facet over tags ∪ autoTags).
+ */
+export function tagList(game) {
+  const own = game.tags || [];
+  const seen = new Set(own.map((t) => t.toLowerCase()));
+  const auto = (game.autoTags || []).filter((t) => !seen.has(t.toLowerCase()));
+  return [...own.map((value) => ({ value, auto: false })), ...auto.map((value) => ({ value, auto: true }))];
+}
+
+/**
+ * A genre or tag as a link: tapping it opens the library with that value
+ * ADDED to the filter the sheet was opened from (the detail URL carries it).
+ * The painted pill is 28px; the link around it is the 44px target on a
+ * phone (36px at md+, where a pointer is precise and the rows sit tighter).
+ */
+function FilterChip({ filterKey, value, auto = false }) {
+  const location = useLocation();
+  const to = libraryPath(librarySearchWith(location.search, filterKey, value));
+  const noun = filterKey === 'genres' ? 'genre' : 'tag';
+  const chip = (
+    <ButtonBase
+      component={RouterLink}
+      to={to}
+      aria-label={`Show games with the ${noun} ${value}${auto ? ' (added automatically)' : ''}`}
+      data-auto-tag={auto ? 'true' : undefined}
+      sx={{
+        minHeight: { xs: 44, md: 36 },
+        borderRadius: '999px',
+        '&.Mui-focusVisible > span': { outline: 2, outlineStyle: 'solid', outlineColor: 'primary.main', outlineOffset: 1 },
+        '&:hover > span': { borderColor: 'primary.main', color: 'text.primary' },
+      }}
+    >
+      <Box
+        component="span"
+        sx={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 0.5,
+          height: 28,
+          px: 1.25,
+          borderRadius: '999px',
+          border: 1,
+          fontSize: '0.8125rem',
+          fontWeight: auto ? 400 : 500,
+          transition: 'border-color 120ms, color 120ms',
+          ...(auto
+            ? { borderStyle: 'dashed', borderColor: 'border', color: 'text.secondary', bgcolor: 'transparent' }
+            : { borderColor: 'border', color: 'text.primary', bgcolor: (t) => alpha(t.palette.text.primary, 0.04) }),
+        }}
+      >
+        {value}
+      </Box>
+    </ButtonBase>
+  );
+  return auto ? (
+    <Tooltip title="Added automatically from game metadata" describeChild>
+      {chip}
+    </Tooltip>
+  ) : (
+    chip
+  );
+}
+
+function ChipList({ filterKey, items }) {
+  return (
+    <Box component="ul" sx={{ listStyle: 'none', m: 0, p: 0, display: 'flex', flexWrap: 'wrap', columnGap: 0.75, my: { xs: -1, md: -0.5 } }}>
+      {items.map((it) => (
+        <Box component="li" key={it.value}>
+          <FilterChip filterKey={filterKey} value={it.value} auto={it.auto} />
+        </Box>
+      ))}
     </Box>
   );
 }
@@ -66,6 +150,7 @@ export default function DetailsSection({ game, onFindMetadata }) {
   const long = description.length > 420;
   const links = externalLinks(game);
   const provenance = enrichmentLine(game.enrichment);
+  const tags = tagList(game);
 
   return (
     <Section title="Details" id="details">
@@ -106,12 +191,14 @@ export default function DetailsSection({ game, onFindMetadata }) {
       ) : null}
       <Box component="dl" sx={{ m: 0 }}>
         <Fact label="Released">{game.releaseDate ? formatCalendarDate(game.releaseDate) : null}</Fact>
-        <Fact label="Genres">{(game.genres || []).join(', ')}</Fact>
+        <Fact label="Genres">
+          {(game.genres || []).length ? <ChipList filterKey="genres" items={game.genres.map((value) => ({ value }))} /> : null}
+        </Fact>
         <Fact label="Modes">{(game.modes || []).map(modeLabel).join(', ')}</Fact>
         <Fact label="Couch players">{game.maxLocalPlayers ? `Up to ${game.maxLocalPlayers}` : null}</Fact>
         <Fact label="Time to beat">{ttbText}</Fact>
         <Fact label="Series">{game.series?.name ? `${game.series.name}${game.series.index ? ` #${game.series.index}` : ''}` : null}</Fact>
-        <Fact label="Tags">{(game.tags || []).join(', ')}</Fact>
+        <Fact label="Tags">{tags.length ? <ChipList filterKey="tags" items={tags} /> : null}</Fact>
         <Fact label="Steam app">{game.externalIds?.steamAppId}</Fact>
       </Box>
       {links.length ? (

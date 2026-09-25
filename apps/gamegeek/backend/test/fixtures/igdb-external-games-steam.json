@@ -1,0 +1,37 @@
+[
+  {
+    "id": 13292,
+    "created_at": 1494680162,
+    "game": 537,
+    "name": "Assassin's Creed Revelations",
+    "uid": "201870",
+    "updated_at": 1757038834,
+    "url": "https://store.steampowered.com/app/201870",
+    "checksum": "e7e6f402-1e05-ab09-fbfd-e231d161a70c",
+    "external_game_source": 1
+  },
+  {
+    "id": 323909,
+    "created_at": 1521385123,
+    "game": 11737,
+    "name": "Outer Wilds",
+    "uid": "753640",
+    "updated_at": 1770862957,
+    "url": "https://store.steampowered.com/app/753640",
+    "year": 2020,
+    "checksum": "bc698296-b9ed-5920-2bdd-a79c80bbfff7",
+    "external_game_source": 1
+  },
+  {
+    "id": 12245,
+    "created_at": 1494642573,
+    "game": 4848,
+    "name": "Max: The Curse of Brotherhood",
+    "uid": "255390",
+    "updated_at": 1769663742,
+    "url": "https://store.steampowered.com/app/255390",
+    "year": 2014,
+    "checksum": "546f78c7-733c-6056-3cd5-08503292002c",
+    "external_game_source": 1
+  }
+]

@@ -23,6 +23,7 @@
  */
 import { matchCandidates, yearOf, yearsCompatible } from './match.js';
 import { planFill, planUnlink, emptyFilter } from './plan.js';
+import { tagGame, prefetchedFromMatch } from './tagsPass.js';
 
 export const MAX_WRITE_ATTEMPTS = 3;
 const ERROR_MAX = 300;
@@ -210,7 +211,22 @@ export function defaultEnrichment() {
     matchedAt: null,
     error: null,
     providersTried: [],
+    tagsFetchedAt: null,
+    tagSources: [],
   };
+}
+
+/**
+ * A new match gets its tags inline (TAGS_AND_FILTERS.md §A4), reusing the
+ * terms the matched detail already carries. Never fails the match itself.
+ */
+async function tagAfterMatch(game, providerName, detail, deps) {
+  if (!deps.providers?.tags) return;
+  try {
+    await tagGame(game, deps, { prefetched: prefetchedFromMatch(providerName, detail), force: true });
+  } catch (err) {
+    deps.logger?.warn?.({ gameId: String(game?._id), err: shortError(err) }, 'enrichment: inline tags failed');
+  }
 }
 
 /**
@@ -268,6 +284,7 @@ export async function enrichGame(gameRef, deps, { mode = 'worker' } = {}) {
 
   if (match) {
     const enrichment = await applyMatch(game, match.name, match.detail, deps, { providersTried: tried });
+    if (enrichment) await tagAfterMatch(game, match.name, match.detail, deps);
     return { outcome: enrichment ? 'matched' : 'conflict', enrichment };
   }
 
@@ -298,6 +315,7 @@ export async function applyCandidate(gameRef, { provider, providerId }, deps) {
     manual: true,
     providersTried: union(game.enrichment?.providersTried, [p.name]),
   });
+  if (enrichment) await tagAfterMatch(game, p.name, detail, deps);
   return enrichment ? { enrichment } : { error: 'conflict' };
 }
 

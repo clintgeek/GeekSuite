@@ -1,7 +1,14 @@
 /**
  * Every write the detail sheet makes, in one place, with the refetches each
- * one needs. Game-returning mutations update `Game:<id>` through the cache;
- * the lists only refetch when a write can move a game between them.
+ * one needs.
+ *
+ * Game-returning mutations update `Game:<id>` through the cache, so the card
+ * behind the sheet changes in place. The paginated library list is NEVER
+ * refetched after an edit: a page-1 refetch used to collapse three loaded
+ * pages to one and throw the reader back to the top (2026-09-25). A game an
+ * edit moves out of the current filter (Backlog → Playing while viewing
+ * Backlog) stays put until the next filter change — no jump, and Undo still
+ * has something to point at. Only the cheap aggregates refetch.
  */
 import { useCallback } from 'react';
 import { useApolloClient, useMutation } from '@apollo/client';
@@ -21,8 +28,10 @@ import {
   unlinkMetadata,
   uploadCover,
 } from '../../api/rest';
+import { removeGameFromLists } from '../../graphql/cachePolicies';
 
-const LISTS = ['GetGames', 'GetGameShelves'];
+/** The aggregates an edit can change: shelf counts and the filter panel's counts. */
+export const AGGREGATES = ['GetGameShelves', 'GetGameFacets'];
 
 export function useDetailActions(gameId) {
   const client = useApolloClient();
@@ -34,23 +43,22 @@ export function useDetailActions(gameId) {
   const [deleteGame] = useMutation(DELETE_GAME);
 
   const refetchGame = useCallback(
-    () => client.refetchQueries({ include: ['GetGame', ...LISTS] }),
+    () => client.refetchQueries({ include: ['GetGame', ...AGGREGATES] }),
     [client]
   );
 
   return {
-    // Logging can move a backlog game to Playing, so the lists refetch.
-    logSession: (input) => logSession({ variables: { gameId, input }, refetchQueries: LISTS }),
-    deleteSession: (sessionId) => deleteSession({ variables: { gameId, sessionId }, refetchQueries: LISTS }),
+    // Logging can move a backlog game to Playing: the shelf counts refetch.
+    logSession: (input) => logSession({ variables: { gameId, input }, refetchQueries: AGGREGATES }),
+    deleteSession: (sessionId) => deleteSession({ variables: { gameId, sessionId }, refetchQueries: AGGREGATES }),
     savePlaythrough: (input) => savePlaythrough({ variables: { gameId, input } }),
     deletePlaythrough: (playthroughId) => deletePlaythrough({ variables: { gameId, playthroughId } }),
-    updateGame: (input) => updateGame({ variables: { id: gameId, input }, refetchQueries: LISTS }),
+    updateGame: (input) => updateGame({ variables: { id: gameId, input }, refetchQueries: AGGREGATES }),
     deleteGame: async () => {
       const res = await deleteGame({ variables: { id: gameId } });
       if (!res.data?.deleteGame?.success) throw new Error(res.data?.deleteGame?.message || 'Delete failed');
-      client.cache.evict({ id: client.cache.identify({ __typename: 'Game', id: gameId }) });
-      client.cache.gc();
-      await client.refetchQueries({ include: LISTS });
+      removeGameFromLists(client.cache, gameId);
+      await client.refetchQueries({ include: AGGREGATES });
       return true;
     },
     // Covers are bytes on the gamegeek backend; the gateway's coverUrl

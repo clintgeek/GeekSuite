@@ -22,6 +22,21 @@ export function parseRawgDate(value) {
 const names = (list, pick = (x) => x?.name) => (Array.isArray(list) ? list.map(pick).filter(Boolean) : []);
 
 /**
+ * RAWG tags → raw tag terms, English only (`language === 'eng'`,
+ * apps/gamegeek/DOCS/TAGS_AND_FILTERS.md §A2). Each tag contributes its name
+ * and its slug; the mapper normalizes both to the same key and dedupes.
+ */
+export function rawgTagTerms(tags) {
+  const out = [];
+  for (const t of Array.isArray(tags) ? tags : []) {
+    if (!t || t.language !== 'eng') continue;
+    if (typeof t.name === 'string' && t.name) out.push(t.name);
+    if (typeof t.slug === 'string' && t.slug) out.push(t.slug);
+  }
+  return out;
+}
+
+/**
  * One element of `/games?search=` `results`, or the `/games/{id}` body.
  * The detail body adds description/developers/publishers/tags; a search
  * result simply leaves those empty.
@@ -47,6 +62,7 @@ export function normalizeRawgGame(game) {
     coverUrl: cover,
     coverUrls: cover ? [cover] : [],
     coverIsLandscape: true,
+    tagTerms: rawgTagTerms(game?.tags),
     externalIds: { rawg: id },
   };
 }
@@ -57,4 +73,4 @@ export function normalizeRawgSearchResults(response) {
   return results.filter((g) => g && g.id != null).map(normalizeRawgGame);
 }
 
-export default { parseRawgDate, normalizeRawgGame, normalizeRawgSearchResults };
+export default { parseRawgDate, rawgTagTerms, normalizeRawgGame, normalizeRawgSearchResults };

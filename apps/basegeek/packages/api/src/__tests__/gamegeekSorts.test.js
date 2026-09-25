@@ -87,8 +87,17 @@ async function seed() {
 describe('every advertised sort orders for real', () => {
   beforeEach(seed);
 
-  test('the advertised list is exactly the six sorts tested below', () => {
-    expect([...GAME_SORTS].sort()).toEqual(['dateAdded', 'hoursPlayed', 'lastPlayed', 'rating', 'releaseDate', 'title']);
+  test('the advertised list is exactly the eight sorts tested in this file', () => {
+    expect([...GAME_SORTS].sort()).toEqual([
+      'dateAdded',
+      'hoursPlayed',
+      'lastPlayed',
+      'random',
+      'rating',
+      'releaseDate',
+      'timeToBeat',
+      'title',
+    ]);
   });
 
   test('title sorts by sortTitle (leading article moved), both directions', async () => {
@@ -158,6 +167,56 @@ describe('every advertised sort orders for real', () => {
       'Outer Wilds',
     ]);
     expect(await titles('title', 'asc', ALICE, { shelf: 'unshelved' })).toEqual(['A Short Hike']);
+  });
+});
+
+describe('timeToBeat and random (apps/gamegeek/DOCS/TAGS_AND_FILTERS.md §B1)', () => {
+  /** 12 games; timeToBeat.main in a non-alphabetical order, two with none. */
+  async function seedMany() {
+    const hh = 'default';
+    const mains = [30, null, 2, 12, 50, 7, null, 1, 18, 4, 9, 25];
+    const rows = mains.map((main, i) => ({
+      householdId: hh,
+      title: `Game ${String.fromCharCode(65 + i)}`,
+      sortTitle: `game ${String.fromCharCode(97 + i)}`,
+      copies: [],
+      timeToBeat: { main, extra: null, complete: null },
+      createdAt: new Date(),
+    }));
+    await Game.collection.insertMany(rows);
+    return rows;
+  }
+
+  test('timeToBeat sorts by main hours, nulls last in both directions', async () => {
+    const rows = await seedMany();
+    const known = rows.filter((r) => r.timeToBeat.main != null);
+    const byMain = [...known].sort((a, b) => a.timeToBeat.main - b.timeToBeat.main).map((r) => r.title);
+    const nulls = ['Game B', 'Game G'];
+    expect(await titles('timeToBeat')).toEqual([...byMain, ...nulls]);
+    expect(await titles('timeToBeat', 'desc')).toEqual([...[...byMain].reverse(), ...nulls]);
+  });
+
+  test('random: same seed → the same order on every page; another seed → another order', async () => {
+    await seedMany();
+    const walk = async (seed) => {
+      const out = [];
+      for (let page = 1; page <= 3; page += 1) {
+        const p = await resolvers.Query.games(null, { sort: 'random', seed, limit: 5, page }, ctx(ALICE));
+        out.push(...p.games.map((g) => g.title));
+      }
+      return out;
+    };
+    const a = await walk(42);
+    expect(a).toHaveLength(12);
+    expect(new Set(a).size).toBe(12); // every game exactly once across the pages
+    expect(await walk(42)).toEqual(a); // stable
+    const alpha = (await titles('title')).slice();
+    expect(a).not.toEqual(alpha);
+    const b = await walk(7);
+    expect(b).not.toEqual(a);
+    expect([...b].sort()).toEqual([...a].sort());
+    // No seed is seed 0: still deterministic.
+    expect(await titles('random')).toEqual(await titles('random'));
   });
 });
 

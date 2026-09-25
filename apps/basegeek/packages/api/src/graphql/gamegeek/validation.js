@@ -38,11 +38,24 @@ const {
   GAME_MODES,
   GAME_SOURCES,
   COMPLETION_LEVELS,
+  ENRICHMENT_STATUSES,
+  FILTER_PLAYED,
+  LENGTH_BUCKETS,
+  TAG_MATCH_MODES,
   bounds,
 } = constantsModule;
 
 /** The advertised `games` sorts. Each has a resolver arm AND an order test. */
-export const GAME_SORTS = Object.freeze(['title', 'dateAdded', 'releaseDate', 'rating', 'lastPlayed', 'hoursPlayed']);
+export const GAME_SORTS = Object.freeze([
+  'title',
+  'dateAdded',
+  'releaseDate',
+  'rating',
+  'lastPlayed',
+  'hoursPlayed',
+  'timeToBeat',
+  'random',
+]);
 export const SORT_DIRS = Object.freeze(['asc', 'desc']);
 export const CREATE_GAMES_MAX = 200;
 export const MAX_CUSTOM_SHELF_LABEL = 40;
@@ -157,6 +170,52 @@ export const createGamesArgsSchema = z
 export const updateGameArgsSchema = z.object({ id: idString, input: updateGameInput }).strict();
 export const gameIdArgsSchema = z.object({ id: idString }).strict();
 
+// ── Filters (apps/gamegeek/DOCS/TAGS_AND_FILTERS.md §B1) ─────────────────────
+
+/** A shelf as a filter value: built-in, custom-<slug>, or "unshelved". */
+const shelfFilterValue = z
+  .string()
+  .trim()
+  .max(100)
+  .refine((v) => v === 'unshelved' || BUILT_IN_SHELVES.includes(v) || CUSTOM_SHELF_PATTERN.test(v), {
+    message: 'unknown shelf filter',
+  });
+
+const enumList = (values) => z.array(enumOf(values)).max(LIST_MAX).nullable().optional();
+const filterYear = z.number().int().min(1000).max(3000).nullable().optional();
+
+/**
+ * GameFilterInput. Genres and tags are free strings (a household's own tags
+ * are open vocabulary), bounded like every other tag: ≤ 60 chars, ≤ 50 items.
+ * Every other list is a closed vocabulary from the shared constants.
+ */
+export const gameFilterInput = z
+  .object({
+    q: optionalText(200),
+    shelves: z.array(shelfFilterValue).max(LIST_MAX).nullable().optional(),
+    genres: stringList(bounds.tag.maxlength),
+    tags: stringList(bounds.tag.maxlength),
+    tagMatch: nullableEnum(TAG_MATCH_MODES),
+    storefronts: enumList(STOREFRONTS),
+    platforms: enumList(PLATFORMS),
+    formats: enumList(COPY_FORMATS),
+    modes: enumList(GAME_MODES),
+    played: nullableEnum(FILTER_PLAYED),
+    favorite: z.boolean().nullable().optional(),
+    releaseYearMin: filterYear,
+    releaseYearMax: filterYear,
+    lengths: enumList(LENGTH_BUCKETS),
+    metadata: enumList(ENRICHMENT_STATUSES),
+    hasCover: z.boolean().nullable().optional(),
+  })
+  .strict()
+  .refine((f) => f.releaseYearMin == null || f.releaseYearMax == null || f.releaseYearMin <= f.releaseYearMax, {
+    message: 'releaseYearMin must not be after releaseYearMax',
+    path: ['releaseYearMax'],
+  });
+
+export const gameFacetsArgsSchema = z.object({ filter: gameFilterInput.nullable().optional() }).strict();
+
 // ── Queries ──────────────────────────────────────────────────────────────────
 
 export const gamesArgsSchema = z
@@ -188,6 +247,10 @@ export const gamesArgsSchema = z
       .pipe(enumOf(SORT_DIRS))
       .nullable()
       .optional(),
+    // Additive (TAGS_AND_FILTERS.md §B1): wins over q/shelf/platform where both are given.
+    filter: gameFilterInput.nullable().optional(),
+    // The `random` sort's seed: same seed → same order on every page.
+    seed: z.number().int().nullable().optional(),
   })
   .strict();
 
@@ -285,6 +348,8 @@ export const saveGameFilterArgsSchema = z
         shelfFilter: optionalText(100),
         platformFilter: optionalText(40),
         ownedFilter: z.enum(['true', 'false', 'all', '']).nullable().optional(),
+        // The whole GameFilterInput, checked by the same schema as the query's.
+        filter: gameFilterInput.nullable().optional(),
       })
       .strict(),
   })
