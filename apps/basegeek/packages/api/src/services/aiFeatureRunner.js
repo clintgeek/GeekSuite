@@ -453,7 +453,7 @@ export async function runFeatureCore(opts) {
       content = await callOnce(attemptPin);
       if (needPin && attemptPin?.provider) ai.noteNeedSuccess?.(attemptPin.provider, attemptPin.model);
       if (attemptPin?.paidOnly && needInfo) {
-        needInfo = { ...needInfo, provider: paidFirst.provider, model: paidFirst.model, paidFirst: true };
+        needInfo = { ...needInfo, provider: paidFirst.provider, model: paidFirst.model, paidFirst: true, why: ['the app\'s paid-first model'] };
       } else if (i > 0 && needInfo) {
         needInfo = {
           ...needInfo,

@@ -106,7 +106,7 @@ describe('runAIFeature — paid-first ahead of the need picks', () => {
     const cfg = ai.callAI.mock.calls[0][1];
     expect(cfg.paidOnly).toBe(true);
     expect(cfg.provider).toBeUndefined();
-    expect(r.provenance.need).toMatchObject({ provider: 'openrouter', model: 'vendor/cheap-paid', paidFirst: true });
+    expect(r.provenance.need).toMatchObject({ provider: 'openrouter', model: 'vendor/cheap-paid', paidFirst: true, why: ["the app's paid-first model"] });
   });
 
   test('the paid call fails (budget refused, say) → the need\'s own picks, and no need row is blamed for it', async () => {
