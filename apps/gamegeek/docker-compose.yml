@@ -1,0 +1,61 @@
+services:
+  gamegeek:
+    image: ghcr.io/clintgeek/gamegeek:latest
+    container_name: gamegeek
+    restart: unless-stopped
+
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+
+    networks:
+      - datageek_network
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    # Containers pin the host's DNS resolver at start; a Tailscale DNS
+    # change afterward leaves them stuck on a dead resolver until restarted
+    # (see the suite's container-DNS landmine notes). Pinned here so a
+    # config change is what fixes it, not a manual restart every time.
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+
+    # All runtime env (MONGODB_URI, JWT_SECRET, BASEGEEK_URL, IGDB_*,
+    # STEAM_API_KEY, etc.) is loaded from .env.production by env_file. Don't
+    # list those vars here as ${VAR} substitutions — that pulls from docker
+    # compose's own .env file (a different lookup path) and breaks when only
+    # .env.production exists.
+    env_file:
+      - .env.production
+
+    # Compose-fixed values that don't vary per environment.
+    environment:
+      NODE_ENV: production
+      PORT: 1810
+      COVERS_PATH: /data/covers
+
+    ports:
+      - "1810:1810"
+
+    # /mnt/extra_space is root-owned on this box — app-local, gitignored
+    # volumes instead (DEPLOY.md convention).
+    volumes:
+      - ./data/covers:/data/covers
+      - ./data/imports:/data/imports
+
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:1810/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  datageek_network:
+    external: true

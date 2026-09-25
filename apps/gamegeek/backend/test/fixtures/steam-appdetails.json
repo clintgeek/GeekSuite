@@ -1,0 +1,25 @@
+{
+  "1145360": {
+    "success": true,
+    "data": {
+      "name": "Hades",
+      "short_description": "A rogue-like dungeon crawler from the creators of Bastion, Transistor, and Pyre.",
+      "developers": ["Supergiant Games"],
+      "publishers": ["Supergiant Games"],
+      "genres": [
+        { "id": "3", "description": "Adventure" },
+        { "id": "25", "description": "Indie" }
+      ],
+      "categories": [
+        { "id": 2, "description": "Single-player" },
+        { "id": 22, "description": "Steam Achievements" }
+      ],
+      "release_date": { "coming_soon": false, "date": "17 Sep, 2020" },
+      "header_image": "https://cdn.akamai.steamstatic.com/steam/apps/1145360/header.jpg",
+      "platforms": { "windows": true, "mac": true, "linux": false }
+    }
+  },
+  "9999999": {
+    "success": false
+  }
+}

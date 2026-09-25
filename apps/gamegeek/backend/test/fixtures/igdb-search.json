@@ -1,0 +1,33 @@
+[
+  {
+    "id": 113112,
+    "name": "Hades",
+    "first_release_date": 1608940800,
+    "summary": "A rogue-like dungeon crawler from the creators of Bastion, Transistor, and Pyre.",
+    "cover": { "image_id": "co39hs" },
+    "genres": [
+      { "name": "Role-playing (RPG)" },
+      { "name": "Hack and slash/Beat 'em up" }
+    ],
+    "game_modes": [{ "name": "Single player" }],
+    "platforms": [
+      { "name": "PC (Microsoft Windows)" },
+      { "name": "Nintendo Switch" },
+      { "name": "Mac" },
+      { "name": "Some Platform IGDB Just Added" }
+    ],
+    "involved_companies": [
+      { "company": { "name": "Supergiant Games" }, "developer": true, "publisher": true }
+    ],
+    "external_games": [{ "category": 1, "uid": "1145360" }]
+  },
+  {
+    "id": 999,
+    "name": "No Cover No Company",
+    "first_release_date": null,
+    "summary": "",
+    "genres": [],
+    "game_modes": [],
+    "platforms": []
+  }
+]
