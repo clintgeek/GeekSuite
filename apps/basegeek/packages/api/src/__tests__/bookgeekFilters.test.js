@@ -25,6 +25,8 @@ import mongoose from 'mongoose';
 const { Book } = await import('../graphql/bookgeek/models/book.js');
 const { Profile } = await import('../graphql/bookgeek/models/profile.js');
 const { resolvers } = await import('../graphql/bookgeek/resolvers.js');
+const { default: bookShared } = await import('@geeksuite/schemas/bookgeek/book');
+const { deriveTagFields } = bookShared.tagVocabulary;
 
 const { Query, Mutation } = resolvers;
 const ALICE = String(new mongoose.Types.ObjectId());
@@ -59,8 +61,12 @@ const file = (format) => ({ format, path: `/lib/x.${format.toLowerCase()}`, size
  *   Gravel           Ruth Wariner            custom-memoirs —          memoir               —            en   —     2      2022
  *   Hyperion         Dan Simmons             want-to-read   —          sf, classic          pdf          en   true  —      —
  */
+// Seeded as every write path stores a book since the tag vocabulary
+// (apps/bookgeek/DOCS/TAGS.md): raw `tags` plus the derived fields. `sf`,
+// `philosophy`, `history`, `fantasy` and `memoir` map; `classic` stays Unsorted.
+const derived = (docs) => docs.map((d) => ({ ...d, ...deriveTagFields(d.tags) }));
 const seedLibrary = () =>
-  Book.create([
+  Book.create(derived([
     { title: 'Anathem', authors: ['Neal Stephenson'], shelf: 'read', tags: ['sf', 'philosophy'], files: [file('EPUB')], language: 'en', owned: true, rating: 5, dateFinished: at(2021), readCount: 1, dateAdded: at(2020, 1) },
     { title: 'Cryptonomicon', authors: ['Neal Stephenson'], tags: ['sf', 'history'], files: [file('epub'), file('PDF')], language: 'en', rating: 3.5, dateFinished: at(2022), dateAdded: at(2020, 2) },
     { title: 'Dune', authors: ['Frank Herbert'], shelf: 'unread', series: { name: 'Dune', index: 1 }, tags: ['sf'], language: 'en', owned: true, dateAdded: at(2020, 3) },
@@ -69,7 +75,7 @@ const seedLibrary = () =>
     { title: 'The Farthest Shore', authors: ['Ursula K. Le Guin'], shelf: 'unread', series: { name: 'Earthsea', index: 3 }, tags: ['fantasy', 'classic'], files: [file('mobi')], language: 'en', owned: true, readCount: 2, dateAdded: at(2020, 6) },
     { title: 'The Sound of Gravel', authors: ['Ruth Wariner'], shelf: 'custom-memoirs', tags: ['memoir'], language: 'en', rating: 2, dateFinished: at(2022, 9), dateAdded: at(2020, 7) },
     { title: 'Hyperion', authors: ['Dan Simmons'], shelf: 'want-to-read', tags: ['sf', 'classic'], files: [file('pdf')], language: 'en', owned: true, dateAdded: at(2020, 8) },
-  ]);
+  ]));
 
 const facets = (filter, who = ALICE) => Query.bookFacets(null, filter === undefined ? {} : { filter }, ctx(who));
 const titles = async (args) => (await Query.books(null, { limit: 100, ...args }, ctx(ALICE))).items.map((b) => b.title);
@@ -86,9 +92,11 @@ describe('bookFacets — every facet, unfiltered', () => {
     expect(counts(f.shelves)).toEqual({ unread: 2, read: 1, reading: 1, 'custom-memoirs': 1, 'want-to-read': 1 });
     expect(counts(f.authors)).toEqual({ 'Neal Stephenson': 2, 'Frank Herbert': 2, 'Ursula K. Le Guin': 2, 'Ruth Wariner': 1, 'Dan Simmons': 1 });
     expect(counts(f.series)).toEqual({ Dune: 2, Earthsea: 2 });
-    expect(counts(f.tags)).toEqual({ sf: 5, classic: 2, fantasy: 2, history: 1, memoir: 1, philosophy: 1 });
+    // The canonical tags plus the Unsorted `classic`; raw spellings are gone.
+    expect(counts(f.tags)).toEqual({ 'Sci-fi': 5, classic: 2, Fantasy: 2, History: 1, Memoir: 1, Philosophy: 1 });
     // Sorted by count, then value.
-    expect(f.tags.map((t) => t.value)).toEqual(['sf', 'classic', 'fantasy', 'history', 'memoir', 'philosophy']);
+    expect(f.tags.map((t) => t.value)).toEqual(['Sci-fi', 'Fantasy', 'classic', 'History', 'Memoir', 'Philosophy']);
+    expect(f.myTags).toEqual([]);
   });
 
   test('formats (lowercased, once per book), languages, read years, ratings (half stars floor), owned, has a file', async () => {
@@ -117,7 +125,7 @@ describe('bookFacets — each facet excludes its own filter', () => {
     // Its own facet ignores its own choice…
     expect(counts(f.authors)).toEqual({ 'Neal Stephenson': 2, 'Frank Herbert': 2, 'Ursula K. Le Guin': 2, 'Ruth Wariner': 1, 'Dan Simmons': 1 });
     // …every other facet is under it.
-    expect(counts(f.tags)).toEqual({ sf: 2, philosophy: 1, history: 1 });
+    expect(counts(f.tags)).toEqual({ 'Sci-fi': 2, Philosophy: 1, History: 1 });
     expect(counts(f.formats)).toEqual({ epub: 2, pdf: 1 });
     expect(f.owned).toBe(1);
   });
@@ -127,8 +135,9 @@ describe('bookFacets — each facet excludes its own filter', () => {
     expect(f.total).toBe(2);
     // Shelves under tags=sf only: Anathem read, Dune + Dune Messiah unread, Hyperion want (Cryptonomicon on none).
     expect(counts(f.shelves)).toEqual({ read: 1, unread: 2, 'want-to-read': 1 });
-    // Tags under shelf=unread only: Dune, Dune Messiah.
-    expect(counts(f.tags)).toEqual({ sf: 2 });
+    // Tags under shelf=unread only: Dune, Dune Messiah. (The raw `sf` of an
+    // old link filters through the vocabulary; the facet names it Sci-fi.)
+    expect(counts(f.tags)).toEqual({ 'Sci-fi': 2, sf: 0 });
   });
 
   test('a selected value with no books still comes back, at zero', async () => {

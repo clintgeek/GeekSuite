@@ -20,7 +20,14 @@ export const typeDefs = gql`
     pageCount: Int
     description: String
     language: String
+    # The tags as imported (Calibre, enrich) — the book page's "source tags".
     tags: [String]
+    # Canonical vocabulary tags derived from tags (apps/bookgeek/DOCS/TAGS.md).
+    libraryTags: [String!]!
+    # Raw tags neither mapped nor dropped, as written.
+    unsortedTags: [String!]!
+    # Tags added in BookGeek; never touched by an import.
+    myTags: [String!]!
     files: [BookFile]
     coverPath: String
     owned: Boolean
@@ -72,6 +79,8 @@ export const typeDefs = gql`
     authorText: String
     # series.name
     series: [String!]
+    # canonical, My and Unsorted tag values (the tags facet); a raw tag also
+    # matches through the vocabulary
     tags: [String!]
     # "any" (default) | "all" — over tags
     tagMatch: String
@@ -111,7 +120,10 @@ export const typeDefs = gql`
     shelves: [BookFacetValue!]!
     authors: [BookFacetValue!]!
     series: [BookFacetValue!]!
+    # canonical ∪ My ∪ Unsorted tags
     tags: [BookFacetValue!]!
+    # the subset of tag values that are someone's own (the "My tags" group)
+    myTags: [BookFacetValue!]!
     # lowercased
     formats: [BookFacetValue!]!
     languages: [BookFacetValue!]!
@@ -150,7 +162,9 @@ export const typeDefs = gql`
     owned: Boolean
     rating: Float
     review: String
+    # Still accepted for old tabs; the web edits myTags. Rederives libraryTags/unsortedTags.
     tags: [String]
+    myTags: [String]
     language: String
     publisher: String
     publishedDate: Date
@@ -205,6 +219,9 @@ export const typeDefs = gql`
     ownedFilter: String
     # The whole BookFilterInput this view was saved with; null for views saved before it existed.
     filter: JSON
+    # The view's tags (filter.tags, or the legacy tagFilter) as the library names them now:
+    # raw tags mapped through the vocabulary. Nothing is stored; see apps/bookgeek/DOCS/TAGS.md.
+    viewTags: [String!]!
   }
 
   type RemoveBookShelfResult {

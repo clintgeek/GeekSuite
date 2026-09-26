@@ -158,6 +158,8 @@ export const updateBookArgsSchema = z
         rating: ratingSchema,
         review: reviewSchema,
         tags: tagsSchema,
+        // The person's own tags (apps/bookgeek/DOCS/TAGS.md §4) — same bounds as `tags`.
+        myTags: tagsSchema,
         language: languageSchema,
         publisher: publisherSchema,
         publishedDate: historicalDateField({ required: false }),
@@ -199,8 +201,9 @@ export const saveBookProfileArgsSchema = z
 //
 // BookFilterInput, for `books(filter:)`, `bookFacets(filter:)` and the saved
 // view's `filter` JSON — one schema, so a view can only store what the query
-// accepts. Authors, series, tags and languages are open vocabulary (Calibre
-// tags are user-curated), bounded like the fields they filter on.
+// accepts. Authors, series, tags and languages are open vocabulary, bounded
+// like the fields they filter on: `tags` carries canonical names, My tags
+// and Unsorted raw tags alike (apps/bookgeek/DOCS/TAGS.md).
 
 const LIST_MAX = 50;
 const filterList = (max) => z.array(z.string().trim().min(1).max(max)).max(LIST_MAX).nullable().optional();

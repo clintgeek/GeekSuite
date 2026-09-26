@@ -1,5 +1,6 @@
 import { Book } from "./models/book.js";
 import { Profile } from "./models/profile.js";
+import bookSchemaModule from "@geeksuite/schemas/bookgeek/book";
 import AIConfig from "../../models/AIConfig.js";
 import mongoose from "mongoose";
 import * as library from "./library.js";
@@ -20,6 +21,30 @@ import {
   booksFilterArgsSchema,
   bookFacetsArgsSchema,
 } from "./validation.js";
+
+// The tag vocabulary (apps/bookgeek/DOCS/TAGS.md). The shared module is
+// CommonJS, hence the default import.
+const { deriveTagFields, cleanMyTags, mapViewTags } = bookSchemaModule.tagVocabulary;
+
+/**
+ * A book's derived tag fields. Stored on every write; for a document written
+ * before they existed (until bookgeek's boot migration has run) they are
+ * derived from `tags` on read, so the book page never shows a blank.
+ */
+function derivedTags(parent) {
+  if (Array.isArray(parent?.libraryTags) && Array.isArray(parent?.unsortedTags)) {
+    return { libraryTags: parent.libraryTags, unsortedTags: parent.unsortedTags };
+  }
+  return deriveTagFields(parent?.tags);
+}
+
+/** A saved view's tag list: its filter's, else its legacy single tag. */
+function savedViewTags(view) {
+  const filterTags = view?.filter && typeof view.filter === "object" ? view.filter.tags : null;
+  if (Array.isArray(filterTags)) return filterTags;
+  const legacy = typeof view?.tagFilter === "string" ? view.tagFilter.trim() : "";
+  return legacy ? [legacy] : [];
+}
 
 // Input validation runs AFTER `requireUser` in every mutation below: an
 // anonymous caller must still see `Unauthorized`, never a field-level
@@ -144,6 +169,9 @@ export const resolvers = {
     rating: (parent) => toNumber(parent.rating, "float"),
     readingProgress: (parent) => toNumber(parent.readingProgress, "float"),
     owned: (parent) => toBool(parent.owned),
+    libraryTags: (parent) => derivedTags(parent).libraryTags,
+    unsortedTags: (parent) => derivedTags(parent).unsortedTags,
+    myTags: (parent) => (Array.isArray(parent.myTags) ? parent.myTags : []),
     // Date fields are passed through raw; the shared Date scalar serializes
     // them safely, coercing strings/numbers to ISO-8601.
     publishedDate: (parent) => parent.publishedDate,
@@ -363,6 +391,9 @@ export const resolvers = {
         owned: input.owned || false,
         dateAdded: new Date(),
         source: "manual",
+        // No tags on create, but the derived fields are written anyway so
+        // every book carries them (the facet and filters read them stored).
+        ...deriveTagFields([]),
       };
 
       const book = await Book.create(doc);
@@ -372,9 +403,17 @@ export const resolvers = {
       requireUser(user);
       const { id, input } = validateUpdateBook(rawArgs);
       if (!validObjectId(id)) return null;
+      // `tags` is the import's; a write to it (an old tab) rederives the
+      // canonical and Unsorted fields in the same $set. `myTags` is the
+      // person's own, stored as typed (trimmed, deduped), never mapped.
+      const set = { ...input };
+      if (Array.isArray(input.tags)) Object.assign(set, deriveTagFields(input.tags));
+      else if (input.tags === null) Object.assign(set, deriveTagFields([]));
+      if (Array.isArray(input.myTags)) set.myTags = cleanMyTags(input.myTags);
+      else if (input.myTags === null) set.myTags = [];
       const updated = await Book.findByIdAndUpdate(
         id,
-        { $set: input },
+        { $set: set },
         { new: true, lean: true }
       );
       return updated;
@@ -543,6 +582,11 @@ export const resolvers = {
 
       return { profile, clearedBooks: cleared?.modifiedCount ?? 0 };
     },
+  },
+  BookSavedFilter: {
+    // Mapped when the view loads, never stored: the saved view keeps what
+    // it was saved with, and a later vocabulary change maps it again.
+    viewTags: (parent) => mapViewTags(savedViewTags(parent)),
   },
   BookProfile: {
     customShelves: (parent) =>

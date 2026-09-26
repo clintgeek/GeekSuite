@@ -54,6 +54,8 @@ const PAIRS = [
       'title', 'authors', 'series', 'isbn', 'isbn13',
       'goodreadsId', 'openLibraryId', 'asin', 'googleBooksId',
       'publisher', 'publishedDate', 'pageCount', 'description', 'language', 'tags',
+      // 2026-09-26: the tag vocabulary's derived fields and the person's own (apps/bookgeek/DOCS/TAGS.md).
+      'libraryTags', 'unsortedTags', 'myTags',
       'files', 'coverPath', 'owned', 'shelf',
       'rating', 'review', 'dateAdded', 'dateStarted', 'dateFinished', 'readCount', 'readingProgress',
       'source', 'createdAt', 'updatedAt',
@@ -80,6 +82,9 @@ const PAIRS = [
       description: 'probe',
       language: 'en',
       tags: ['sf'],
+      libraryTags: ['Sci-fi'],
+      unsortedTags: ['probe-unsorted'],
+      myTags: ['probe-mine'],
       files: [{ format: 'epub', path: 'Frank Herbert/Dune/dune.epub', size: 1234, addedAt: new Date('2026-09-25T00:00:00.000Z') }],
       coverPath: 'Frank Herbert/Dune/cover.jpg',
       owned: true,

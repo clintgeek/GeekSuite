@@ -14,6 +14,11 @@ import {
   yearHistogramStages,
   yearRange,
 } from '@geeksuite/collection/server';
+// Default import + destructure: the shared module is CommonJS. The tag
+// vocabulary rides on the book module (see its note).
+import bookSchemaModule from '@geeksuite/schemas/bookgeek/book';
+
+const { canonicalTagName, canonicalTagsFor } = bookSchemaModule.tagVocabulary;
 
 /**
  * BookFilterInput → Mongo, and the faceted counts behind `bookFacets`
@@ -28,8 +33,10 @@ import {
  * The generic machinery is `@geeksuite/collection/server`. What is BookGeek's
  * here: the field paths, the `unread` shelf rule (it has to match the
  * resolver's `shelfMatch()` exactly), case-insensitive file formats, the
- * half-star-tolerant rating buckets, and the legacy author "contains" search
- * old saved filters still carry.
+ * half-star-tolerant rating buckets, the legacy author "contains" search
+ * old saved filters still carry, and the tag vocabulary
+ * (apps/bookgeek/DOCS/TAGS.md): the Tags facet over canonical ∪ My ∪
+ * Unsorted tags, raw values from old links still matching, and `tag:`.
  *
  * No tenant stage: BookGeek's library is household-SHARED — `Book` has no
  * owner field (see resolvers.js `requireUser`). The resolver authenticates;
@@ -39,8 +46,83 @@ import {
 /** Built-in shelves (resolvers.js `shelfNames`, the web's BUILT_IN_SHELVES). */
 export const SHELF_NAMES = ['unread', 'reading', 'on-reader', 'read', 'want-to-read', 'abandoned', 'need-to-find'];
 
-/** The fields a library search looks in — the same three the old `q` arg searched. */
-export const SEARCH_FIELDS = ['title', 'authors', 'tags'];
+/**
+ * The fields a library search looks in: the three the old `q` arg searched
+ * (raw `tags` stays, so a saved "Must Read" search still finds its books),
+ * plus the canonical and the person's own tags (apps/bookgeek/DOCS/TAGS.md).
+ */
+export const SEARCH_FIELDS = ['title', 'authors', 'tags', 'libraryTags', 'myTags'];
+
+/**
+ * The value set the Tags facet counts and the `tags` filter matches: the
+ * canonical tags, the person's own and the Unsorted raw ones. A value is
+ * the same value wherever it comes from ("Fantasy" typed as a My tag is
+ * the canonical Fantasy).
+ */
+const tagUnionExpr = {
+  $setUnion: [{ $ifNull: ['$libraryTags', []] }, { $ifNull: ['$myTags', []] }, { $ifNull: ['$unsortedTags', []] }],
+};
+
+/**
+ * One chosen tag as a query. A canonical name matches the canonical tags
+ * and anyone's My tag of the same name — exactly what the facet counted.
+ * Anything else (an Unsorted tag, a My tag, or a raw tag from an old link
+ * or saved view) matches My tags and the raw tags as written, plus the
+ * canonical tags it maps to, so "Thrillers" from a pre-vocabulary view
+ * still finds every thriller.
+ */
+export function tagValueMatch(value) {
+  if (canonicalTagName(value) === value) return { $or: [{ libraryTags: value }, { myTags: value }] };
+  const mapped = canonicalTagsFor(value);
+  const or = [{ myTags: value }, { tags: value }];
+  if (mapped.length) or.unshift({ libraryTags: { $in: mapped } });
+  return { $or: or };
+}
+
+/** The `tags` filter: any-of, or every-of under tagMatch "all". */
+export function tagsMatch(values, { all = false } = {}) {
+  const list = [...new Set(values)];
+  if (list.length === 1) return tagValueMatch(list[0]);
+  const each = list.map(tagValueMatch);
+  return all ? { $and: each } : { $or: each };
+}
+
+/**
+ * `tag:` in a search: `tag:sf`, `tag:"science fiction"`, `tag:kurt`. The
+ * term matches the canonical tags it names or maps to (canonical names and
+ * their synonyms), and otherwise the raw and My tags equal to it, ignoring
+ * case. The term reaches mongod as an escaped, bounded literal
+ * (`searchRegex`) — the ReDoS rule every search here keeps.
+ */
+const TAG_TOKEN = /(?:^|\s)tag:(?:"([^"]*)"|(\S+))/gi;
+
+export function parseTagSearch(q) {
+  const tags = [];
+  const rest = String(q ?? '').replace(TAG_TOKEN, (_m, quoted, bare) => {
+    const term = String(quoted ?? bare ?? '').trim();
+    if (term) tags.push(term);
+    return ' ';
+  });
+  return { text: rest.replace(/\s+/g, ' ').trim(), tags };
+}
+
+export function tagSearchMatch(term) {
+  const exact = { $regex: `^${searchRegex(term)}$`, $options: 'i' };
+  const or = [{ tags: exact }, { myTags: exact }];
+  const mapped = canonicalTagsFor(term);
+  if (mapped.length) or.unshift({ libraryTags: { $in: mapped } });
+  return { $or: or };
+}
+
+/** A whole `q`: its `tag:` terms (each must match) and the free text. Null when blank. */
+export function searchMatch(q) {
+  const { text, tags } = parseTagSearch(q);
+  const and = tags.map(tagSearchMatch);
+  const free = text ? buildSearchFilter(text, SEARCH_FIELDS) : null;
+  if (free) and.push(free);
+  if (!and.length) return null;
+  return and.length === 1 ? and[0] : { $and: and };
+}
 
 const has = (list) => Array.isArray(list) && list.length > 0;
 const given = (v) => v !== undefined && v !== null;
@@ -116,7 +198,7 @@ export function buildConditions(filter = {}) {
   const c = {};
   const all = filter.tagMatch === 'all';
 
-  const search = filter.q ? buildSearchFilter(filter.q, SEARCH_FIELDS) : null;
+  const search = filter.q ? searchMatch(filter.q) : null;
   if (search) c.q = { match: search };
   // The old `author` arg's "contains" (saved filters from before C2 carry it).
   const byText = filter.authorText ? String(filter.authorText).trim() : '';
@@ -128,7 +210,7 @@ export function buildConditions(filter = {}) {
   }
   if (has(filter.authors)) c.authors = { match: inList('authors', filter.authors) };
   if (has(filter.series)) c.series = { match: inList('series.name', filter.series) };
-  if (has(filter.tags)) c.tags = { match: inList('tags', filter.tags, { all }) };
+  if (has(filter.tags)) c.tags = { match: tagsMatch(filter.tags, { all }) };
   if (has(filter.formats)) c.formats = { match: { 'files.format': { $in: filter.formats.map(formatRegex) } } };
   if (has(filter.languages)) c.languages = { match: inList('language', filter.languages) };
   if (given(filter.owned)) c.owned = { match: filter.owned ? { owned: true } : { owned: { $ne: true } } };
@@ -159,7 +241,10 @@ export function facetsPipeline(filter = {}) {
         { $match: { 'series.name': { $type: 'string', $nin: [''] } } },
         { $group: { _id: '$series.name', n: { $sum: 1 } } },
       ],
-      tags: (match) => valuesFacetStages(match, '$tags'),
+      tags: (match) => valuesFacetStages(match, tagUnionExpr),
+      // Which of those values are someone's own (the web groups them under
+      // "My tags"); counted under the same match, so it excludes `tags` too.
+      myTags: { exclude: 'tags', stages: (match) => valuesFacetStages(match, '$myTags') },
       formats: (match) => valuesFacetStages(match, formatsExpr),
       languages: (match) => [
         { $match: match },
@@ -184,6 +269,7 @@ export function shapeFacets(result, filter = {}) {
     authors: shapeOpenFacet(r.authors, filter.authors),
     series: shapeOpenFacet(r.series, filter.series),
     tags: shapeOpenFacet(r.tags, filter.tags),
+    myTags: shapeOpenFacet(r.myTags),
     formats: shapeOpenFacet(r.formats, (filter.formats ?? []).map((f) => String(f).toLowerCase())),
     languages: shapeOpenFacet(r.languages, filter.languages),
     readYears: shapeHistogram(r.readYears, 'year'),
@@ -207,7 +293,7 @@ export function legacyConditions({ author, tag, shelf, owned, q } = {}) {
   if (shelf) and.push(shelfMatch(shelf));
   if (owned === 'true') and.push({ owned: true });
   else if (owned === 'false') and.push({ owned: false });
-  const search = q ? buildSearchFilter(q, SEARCH_FIELDS) : null;
+  const search = q ? searchMatch(q) : null;
   if (search) and.push(search);
   return and;
 }
