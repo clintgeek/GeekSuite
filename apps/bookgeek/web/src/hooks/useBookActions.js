@@ -16,6 +16,7 @@ import {
   removeBookFromLists,
   writeRestBook,
 } from "../graphql/cachePolicies.js";
+import { authFetch, restErrorMessage } from "../utils/authFetch";
 import { createRateBook } from "../utils/rateBook";
 
 export const bookIdOf = (book) => book?.id || book?._id || null;
@@ -30,13 +31,25 @@ export async function refreshShelfSummary(client) {
 }
 
 /**
- * Delete a book through the gateway's `deleteBook`. Resolves to the deleted
- * id; throws with a message the confirm dialog shows.
+ * Delete a book. "Also delete files" goes to bookgeek's own
+ * `DELETE /api/books/:id?deleteFiles=true` — the only code that removes a
+ * book's files from disk (confined to LIBRARY_PATH by libraryPaths.js), and
+ * it deletes the record too. Without it, the gateway's `deleteBook`, which
+ * only ever deletes the record (it ignores `deleteFiles`). Resolves to the
+ * deleted id; throws with a message the confirm dialog shows.
  */
 export async function deleteBookRecord(client, bookId, { deleteFiles = false } = {}) {
+  if (deleteFiles) {
+    const res = await authFetch(`/books/${ encodeURIComponent(bookId) }?deleteFiles=true`, { method: "DELETE" });
+    const json = await res.json().catch(() => null);
+    if (!res.ok || !json || json.success === false) {
+      throw new Error(restErrorMessage(json, "Delete failed"));
+    }
+    return String(json.data?.deletedId || bookId);
+  }
   const apolloRes = await client.mutate({
     mutation: DELETE_BOOK,
-    variables: { id: bookId, deleteFiles },
+    variables: { id: bookId, deleteFiles: false },
   });
   if (!apolloRes.data?.deleteBook?.success) {
     throw new Error("Delete failed");
