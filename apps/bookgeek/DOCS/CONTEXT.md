@@ -960,3 +960,142 @@ When the box is unchecked, the gateway path is used as before. Tests:
   `__typename` and `GetBook`.
 - **Repo tools:** boot-smoke is OK and now covers `app.js`. syntax-check is
   clean, and gql-arg-audit is clean.
+
+## Phase C2 (2026-09-26): the library runs on `@geeksuite/collection`
+
+BookGeek browses the way GameGeek does, with the same code. That means the
+facet panel at md+, the Filters sheet on a phone, live counts that exclude
+their own facet, active chips, the sort menu, saved views in the sidebar, URL
+state, the paged list that never collapses, and scroll memory. All of it
+comes from `packages/collection`. What stays in BookGeek is configuration.
+The spec is `DOCS/BOOKGEEK_CLEANUP_PLAN.md` Phase C.
+
+### Where things are
+
+| Piece | File |
+|---|---|
+| Codec schema, sorts, GetBooks variables, saved-view mapping | `web/src/utils/libraryFilter.js` |
+| Sections, labels, chips | `web/src/utils/facets.js` |
+| The noun "book", DM Serif Display at weight 400 | `web/src/utils/collectionConfig.js` (`CollectionProvider` in `App.jsx` `SignedIn` and in the test render helper) |
+| URL state for the shell and the routes | `web/src/hooks/useLibraryParams.jsx`, wrapping `useCollectionFilter`, plus the top bar's search draft, `showShelf` and `setActiveView` |
+| The list and the counts | `web/src/hooks/useLibrary.js` (`usePagedList`, and `useFacetQuery` as `useBookFacets`) |
+| Saved views | `web/src/hooks/useSavedViews.js` (the Apollo cache), `components/SaveLibraryView.jsx`, and the `SavedViews` rows in `components/Sidebar.jsx` |
+| The ⋯ menu (export CSV, select books, the phone's covers/list switch) | `web/src/components/LibraryActions.jsx` |
+| Gateway filter and facets | `apps/basegeek/packages/api/src/graphql/bookgeek/filters.js` |
+
+### Facets and sorts
+
+- **Shelf** lists the built-in shelves in sidebar order, then the reader's
+  custom shelves. It uses the resolver's `unread` rule: the shelf is
+  `unread` or empty, and the book is not finished. The counts use the same
+  rule as an aggregation expression. A custom shelf that belongs to another
+  household member reads from its id ("custom-beach-reads" → "Beach reads").
+- **Author**, **Series** and **Tags** are each one searchable list. Tags have
+  no vocabulary mapping and no groups, because Calibre tags are user-curated.
+  Tags have Any/All.
+- **Format** comes from `files[].format`, lowercased. Calibre writes "EPUB",
+  so the match is case-insensitive.
+- **Language** shows only when the library has more than one language.
+- The **Copy** section has two switches, "Books I own" and "Has a file".
+- **Year read** is a histogram and range over `dateFinished`. **My rating**
+  covers 1–5 stars. A half star counts under its floor, so 3.5 is a 3.
+- **Sorts:** every earlier sort is still there, plus a seeded Shuffle. New
+  sorts start in their natural direction: dates and ratings newest or
+  highest first, page count shortest first. Before C2, every sort opened
+  ascending. So a Phase B link like `?sort=dateAdded` with no `dir` now opens
+  newest first. Saved views always stored `sortDir`, so they are unaffected.
+
+### Gateway (additive; nothing was removed)
+
+- `books` gained `filter: BookFilterInput` and `seed`. `bookFacets(filter)` is
+  new. The flat args (`q`, `author`, `tag`, `shelf`, `owned`) keep their exact
+  old semantics for old tabs. When a call sends both the flat args and
+  `filter`, both apply.
+- `BookSavedFilter.filter: JSON` and `SaveLibraryFilterInput.filter` were
+  added. The field is in `@geeksuite/schemas/bookgeek/profile` as `Mixed`.
+- `filter` and `seed` are checked with zod (`validation.js`
+  `bookFilterInput`), and the saved view's JSON goes through the same schema.
+  The flat args stay as permissive as they were.
+- The library is still household-shared. `requireUser` is the only gate, and
+  no user narrowing was added.
+
+### Saved views: the legacy mapping
+
+A view saved before C2 has only `searchQuery/authorFilter/tagFilter/
+shelfFilter/sortBy/sortDir`. `savedViewSearch` opens it as the same list the
+old "apply" showed:
+- `authorFilter` maps to `authorText`, a "contains" search (`?by=`). It does
+  not map to the exact-name author facet, because the old filter was a
+  contains match. The chip reads "Author contains".
+- `ownedFilter`/`ownedOnly` are not mapped. The old library stored them but
+  never applied them, so honouring them now would open a different list
+  under the same name.
+
+New views save the whole filter plus the sort. They also write the legacy
+fields: the first shelf, the first tag and the search. That lets a tab still
+running the old bundle open something close.
+
+### Deleted
+
+These are replaced by the package:
+- `components/FilterSheet.jsx`, `components/LibraryToolbar.jsx` and
+  `components/librarySort.js`
+- `utils/libraryParams.js` (the old codec) and `hooks/useSavedFilters.js`
+  (local-state saved filters and `window.prompt`)
+- `mergeBooksPage` and `refreshLibraryHead` in `graphql/cachePolicies.js`.
+  They are now `pagedListPolicy`, `refreshPagedList` (`refreshLibraryList`)
+  and `removeFromPagedLists`.
+- The sidebar's "Clear all filters" button. Clear all now lives in the panel,
+  the sheet and the chips.
+- The hand-rolled IntersectionObserver in `useLibrary`. It is now
+  `useInfiniteSentinel`, rooted in `AppMain`'s scroll box (`useScrollRoot`).
+- The tests for all of the above.
+
+### Kept on purpose
+
+- **ShelfStrip, phone only:** the shelf is how BookGeek is read ("what am I
+  reading", "what's on the Kindle"). On a phone the strip is one tap, while
+  the sheet and the drawer are two. GameGeek kept its strip for the same
+  reason. A single shelf picked in the strip gets no duplicate chip.
+- **Sidebar shelf rows** still set the shelf and keep the other filters, as
+  they always did. Saved-view rows replace the whole filter.
+
+### Theme
+
+- `palette.border` was added. The package draws unchecked boxes, pills and
+  chips in it, and BookGeek had no such token, so unchecked facet checkboxes
+  had no outline. The value is about 3:1 on the page in both modes.
+- `displayWeight: 400` is set, because DM Serif Display has one weight and
+  the package's 600/700 would fake a bold.
+
+### Layout
+
+Each route now lays out its own page. The library's filter panel sits flush
+against the sidebar, and Settings keeps its centred 1200px column in
+`SettingsRoute`.
+
+### Verification (2026-09-26)
+
+- **web:** vitest passes 263 tests in 25 files. eslint has 0 errors, and
+  `vite build` is green.
+  - Red/green: the legacy view round trip (`utils/libraryFilter.test.js`
+    and `views/savedViews.test.jsx`) goes red when `authorFilter` maps to
+    the exact author facet.
+  - The test link now answers on a macrotask, like a network. When it
+    answered in microtasks, React batched `loadingMore` true→false into one
+    render, and the package's sentinel never saw it drop.
+- **gateway:** `bookgeekFilters.test.js` (18 tests) covers every facet count
+  with exclude-own, every filter field, the old args, random stable per seed,
+  escaping, validation and saved-view JSON.
+  - Exclude-own is red/green: it goes red when the authors facet stops
+    excluding its own filter.
+  - The legacy round trip is red/green: it goes red when `authorText` is
+    exact.
+  - The full basegeek suite is green.
+- **harness:** 58 scenes, 0 violations, 0 a11y findings.
+  - New scenes `06b`–`06j` cover the panel (top and lower), the sheet,
+    chips, the sort menu, saved views (desktop and drawer), Save view and
+    scroll restore.
+  - `06j` is red/green: without `useScrollMemory` it errors
+    `600 → 0`.
+  - `01b` now finds the list switch in the ⋯ menu on a phone.

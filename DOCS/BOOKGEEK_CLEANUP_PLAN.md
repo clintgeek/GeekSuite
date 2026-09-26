@@ -79,7 +79,7 @@ re-verified.
 - 256 web tests and 215 api tests. The harness ran 34 scenes with 0
   violations and 0 a11y findings.
 
-## Phase C — parity with GameGeek — **approved 2026-09-25**; C1 (extract from GameGeek into `packages/collection`, with GameGeek moved onto it) is running in parallel with Phase A; C2 (BookGeek adopts it) comes after Phase B
+## Phase C — parity with GameGeek — **approved 2026-09-25**; C1 (extract from GameGeek into `packages/collection`, with GameGeek moved onto it) **done 2026-09-25**; C2 (BookGeek adopts it) **done 2026-09-26**
 
 - **Extract `@geeksuite/collection` from GameGeek:** the facet panel and sheet, active
   chips, sort menu, saved views, the URL filter codec, the paginated-list cache policy,
@@ -185,6 +185,62 @@ resolver puts its household/user `$match` first.
   and do it in the test render helper too.
 - The package's own tests already run a books-shaped config
   (`packages/collection/src/__tests__/fixtures.js`), so that is a starting point.
+
+### C2 — done 2026-09-26 (uncommitted at time of writing): BookGeek on the package
+
+BookGeek's library browses like GameGeek's, and uses the same code. On
+desktop it has the facet panel, on a phone the Filters sheet (the shelf strip
+stays too, phone only). It has live counts that exclude their own facet,
+active chips, the sort menu (every old sort plus a seeded Shuffle), saved
+views in the sidebar, URL state, the paged list that never collapses, and
+scroll memory. The details are in `apps/bookgeek/DOCS/CONTEXT.md` → "Phase C2".
+
+**Facets:** shelf (built-ins, then custom shelves, using the resolver's
+`unread` rule), author, series, tags (one searchable list with no vocabulary
+mapping, plus Any/All), format (from `files[].format`, case-insensitive),
+language (only once there are two), owned and has-file switches, a read-year
+range over `dateFinished`, and a rating range from 1–5 (a half star floors).
+
+**Gateway (additive, nothing removed):** `books(filter: BookFilterInput,
+seed: Int)`, `bookFacets(filter)`, and `filter: JSON` on `BookSavedFilter` /
+`SaveLibraryFilterInput` (it is also in `@geeksuite/schemas/bookgeek/profile`).
+The flat `books` args keep their exact semantics. The library is still
+household-shared, and `requireUser` is the only gate. The code is in
+`graphql/bookgeek/filters.js`, built on `@geeksuite/collection/server`.
+
+**Saved views:** legacy views open through `savedViewSearch` as the list their
+old "apply" showed. `authorFilter` maps to a new `authorText` "contains"
+field, not to the exact author facet. `ownedFilter` is not mapped, because
+the old UI never applied it. New views store the whole filter and also write
+the legacy fields, so an old tab can still open them.
+
+**Deleted from BookGeek:** `FilterSheet`, `LibraryToolbar`, `librarySort`,
+`utils/libraryParams`, `useSavedFilters`, `mergeBooksPage` /
+`refreshLibraryHead`, the hand-rolled sentinel, the sidebar's "Clear all
+filters", and their tests.
+
+**Package changes (additive; GameGeek re-verified):**
+- `CollectionProvider` takes an optional `displayWeight` for a display face
+  cut in one weight. DM Serif Display is 400 only.
+- `LibraryHeader` takes an optional `actions` slot, for BookGeek's ⋯ menu.
+- `LibraryHeader` renders the covers/list toggle only when `onToggleView` is
+  given. BookGeek moves it into the ⋯ menu on a 390px phone row.
+- Defaults are unchanged, so GameGeek (and ThingGeek, when it adopts) see no
+  difference. The package has 77 tests; the new ones are red/green checked.
+  GameGeek's frontend has 131 tests, lint has 0 errors, and its harness ran
+  72 scenes with 0 violations and 0 a11y findings, the same as C1.
+
+**Verification:**
+- **web:** vitest passes 263 tests in 25 files (up from 256); eslint has 0 errors; `vite build` is green.
+- **gateway:** `bookgeekFilters.test.js` (18 tests). Exclude-own and the
+  legacy round trip are red/green checked. `gatewayInputObjectParity` has
+  fixtures for `books` and `bookFacets` (43 fields). The full basegeek suite
+  is green (123 suites).
+- **bookgeek api:** 212 pass, 3 skipped.
+- **repo tools:** boot-smoke, syntax-check and gql-arg-audit are clean.
+- **harness:** `--app bookgeek --enforce-a11y --desktop` ran 58 scenes (up
+  from 34) with 0 violations and 0 a11y findings. New scenes are `06b`–`06j`,
+  and `06j` (scroll restore) is red/green checked.
 
 ## Later, not in this plan
 
