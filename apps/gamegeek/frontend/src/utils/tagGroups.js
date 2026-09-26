@@ -61,10 +61,3 @@ const GROUP_OF = new Map(TAG_GROUPS.flatMap((g) => g.tags.map((t) => [t.toLowerC
 export function tagGroupOf(tag) {
   return GROUP_OF.get(String(tag).toLowerCase()) || USER_TAG_GROUP;
 }
-
-/** Options (`{ value, … }`) bucketed by group, in group order; empty groups dropped. */
-export function groupTagOptions(options) {
-  const buckets = new Map(TAG_GROUP_ORDER.map((g) => [g, []]));
-  options.forEach((o) => buckets.get(tagGroupOf(o.value)).push(o));
-  return TAG_GROUP_ORDER.map((group) => ({ group, options: buckets.get(group) })).filter((g) => g.options.length);
-}

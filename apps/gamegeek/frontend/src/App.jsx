@@ -14,6 +14,7 @@ import { useApolloClient } from '@apollo/client';
 import { getMe, loginRedirect, logout as logoutRequest, onLogout, startRefreshTimer, stopRefreshTimer } from '@geeksuite/auth';
 import { useUser } from '@geeksuite/user';
 import { GeekShell, GeekToastProvider, LoginSplash } from '@geeksuite/ui';
+import { CollectionProvider } from '@geeksuite/collection';
 import { installGamePolicies } from './graphql/cachePolicies';
 import { useShelfList, useShelfStats } from './hooks/useGameMeta';
 import AppMain from './components/AppMain';
@@ -21,6 +22,7 @@ import SavePointMark from './components/SavePointMark';
 import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
 import { APP_ID, isLibraryPath } from './components/navConfig';
+import { GAME_COLLECTION } from './utils/collectionConfig';
 import LibraryView from './views/LibraryView';
 import GameDetail from './views/detail/GameDetail';
 
@@ -63,38 +65,40 @@ function SignedIn({ user, onSignOut }) {
   const onLibrary = isLibraryPath(location.pathname);
 
   return (
-    <GeekShell
-      nav={<Sidebar user={user} shelves={shelves} stats={stats} onSignOut={onSignOut} />}
-      navSx={{ bgcolor: 'background.paper' }}
-      topBar={<TopBar user={user} onSignOut={onSignOut} />}
-    >
-      <GeekToastProvider>
-        <AppMain transitionKey={onLibrary ? 'library' : location.pathname}>
-          <Routes>
-            <Route path="/" element={<LibraryView />}>
-              <Route path="game/:id" element={<GameDetail />} />
+    <CollectionProvider value={GAME_COLLECTION}>
+      <GeekShell
+        nav={<Sidebar user={user} shelves={shelves} stats={stats} onSignOut={onSignOut} />}
+        navSx={{ bgcolor: 'background.paper' }}
+        topBar={<TopBar user={user} onSignOut={onSignOut} />}
+      >
+        <GeekToastProvider>
+          <AppMain transitionKey={onLibrary ? 'library' : location.pathname}>
+            <Routes>
+              <Route path="/" element={<LibraryView />}>
+                <Route path="game/:id" element={<GameDetail />} />
+                <Route
+                  path="add"
+                  element={
+                    <Suspense fallback={null}>
+                      <AddGameDialog />
+                    </Suspense>
+                  }
+                />
+              </Route>
               <Route
-                path="add"
+                path="/settings"
                 element={
-                  <Suspense fallback={null}>
-                    <AddGameDialog />
+                  <Suspense fallback={<RouteFallback />}>
+                    <SettingsView user={user} onSignOut={onSignOut} />
                   </Suspense>
                 }
               />
-            </Route>
-            <Route
-              path="/settings"
-              element={
-                <Suspense fallback={<RouteFallback />}>
-                  <SettingsView user={user} onSignOut={onSignOut} />
-                </Suspense>
-              }
-            />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
-        </AppMain>
-      </GeekToastProvider>
-    </GeekShell>
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </AppMain>
+        </GeekToastProvider>
+      </GeekShell>
+    </CollectionProvider>
   );
 }
 

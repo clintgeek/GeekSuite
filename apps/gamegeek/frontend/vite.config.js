@@ -129,10 +129,21 @@ export default defineConfig({
   resolve: {
     alias: {
       '@geeksuite/ui': path.resolve(__dirname, '../../../packages/ui/src/index.js'),
+      // The library machinery (filters, URL state, paged list), from source
+      // like packages/ui. Its /server entry is gateway-only and never imported here.
+      '@geeksuite/collection': path.resolve(__dirname, '../../../packages/collection/src/index.js'),
     },
-    // MANDATORY. packages/ui is compiled from source (alias above) and pnpm
-    // materializes a private @mui/material for its peer range; two MUI copies
-    // split the theme context and the shell renders unthemed. Force one copy.
-    dedupe: ['@mui/material', '@emotion/react', '@emotion/styled', 'react', 'react-dom'],
+    // MANDATORY. packages/ui and packages/collection are compiled from source
+    // (aliases above) and pnpm can materialize a private @mui/material for a
+    // package's peer range; two MUI copies split the theme context and the
+    // shell renders unthemed. Force one copy of MUI, React and the router.
+    //
+    // @apollo/client is deliberately NOT here (yet): packages/collection
+    // already resolves the app's own copy, but @geeksuite/api-client resolves
+    // a second one (a graphql@16.13.0 peer variant), and deduping would fold
+    // it in — a real bundle change (-27 kB) that belongs in its own commit,
+    // not in a behaviour-identical extraction. They share Apollo's global
+    // context symbol, which is why two copies work today.
+    dedupe: ['@mui/material', '@mui/icons-material', '@emotion/react', '@emotion/styled', 'react', 'react-dom', 'react-router-dom'],
   },
 });

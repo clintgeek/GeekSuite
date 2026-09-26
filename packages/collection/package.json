@@ -1,0 +1,48 @@
+{
+  "name": "@geeksuite/collection",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Library/collection building blocks shared by GameGeek and BookGeek: facet filters, URL filter state, saved views, paginated list cache, scroll memory (client) and search/facet query helpers (server). DOCS/BOOKGEEK_CLEANUP_PLAN.md Phase C.",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js",
+    "./server": "./src/server/index.js"
+  },
+  "peerDependencies": {
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
+    "@mui/material": "^5.0.0",
+    "@mui/icons-material": "^5.0.0",
+    "@emotion/react": "^11.0.0",
+    "@emotion/styled": "^11.0.0",
+    "@apollo/client": "^3.0.0",
+    "react-router-dom": "^6.0.0"
+  },
+  "peerDependenciesMeta": {
+    "react": { "optional": true },
+    "react-dom": { "optional": true },
+    "@mui/material": { "optional": true },
+    "@mui/icons-material": { "optional": true },
+    "@emotion/react": { "optional": true },
+    "@emotion/styled": { "optional": true },
+    "@apollo/client": { "optional": true },
+    "react-router-dom": { "optional": true }
+  },
+  "dependencies": {
+    "@geeksuite/ui": "workspace:*"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "@geeksuite/eslint-config": "workspace:*",
+    "@testing-library/react": "^16.3.2",
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/user-event": "^14.6.1",
+    "jsdom": "^28.1.0",
+    "eslint": "^9.39.2",
+    "vitest": "^4.0.18"
+  }
+}

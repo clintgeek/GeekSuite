@@ -6,6 +6,7 @@ import { GameProfile } from './models/profile.js';
 import householdModule from '@geeksuite/schemas/gamegeek/household';
 import constantsModule from '@geeksuite/schemas/gamegeek/constants';
 import gameSchemaModule from '@geeksuite/schemas/gamegeek/game';
+import { nullsLastSort, pageArgs, pageFacetStage, randomSortKey, shapePage } from '@geeksuite/collection/server';
 import { effectiveFilter, buildConditions, matchOf, lookupMeStages, facetsPipeline, shapeFacets } from './filters.js';
 import {
   validateInput,
@@ -360,13 +361,9 @@ const SORT_FIELDS = {
   random: '$__random',
 };
 
-/**
- * The `random` sort key: a hash of the game's id and the client's seed, so
- * the order is shuffled per seed yet identical on every page of it.
- */
-function randomSortKey(seed) {
-  return { $toHashedIndexKey: { $concat: [{ $toString: '$_id' }, ':', String(seed ?? 0)] } };
-}
+// The `random` sort key (randomSortKey, @geeksuite/collection/server) is a
+// hash of the game's id and the client's seed, so the order is shuffled per
+// seed yet identical on every page of it.
 // Tripwire: an advertised sort without an arm here is exactly BookGeek's
 // silent-no-op bug. Fail at import, not in production.
 for (const s of GAME_SORTS) {
@@ -374,9 +371,8 @@ for (const s of GAME_SORTS) {
 }
 
 async function queryGames({ userId, householdId, args }) {
-  const { page, limit, owned, sort, sortDir, seed } = args;
-  const pageNum = Math.max(1, page ?? 1);
-  const limitNum = Math.max(1, Math.min(100, limit ?? 48));
+  const { owned, sort, sortDir, seed } = args;
+  const { page: pageNum, limit: limitNum } = pageArgs(args, { defaultLimit: 48, maxLimit: 100 });
   const dir = (sortDir ?? 'asc') === 'desc' ? -1 : 1;
   const sortKey = sort ?? 'title';
 
@@ -400,38 +396,17 @@ async function queryGames({ userId, householdId, args }) {
   if (playerStage.$and) pipeline.push({ $match: playerStage });
 
   // Nulls last in BOTH directions, then a stable tiebreak: sortTitle, _id.
-  pipeline.push({
-    $addFields: {
-      __sortKey: sortKey === 'random' ? randomSortKey(seed) : { $ifNull: [SORT_FIELDS[sortKey], null] },
-    },
+  const order = nullsLastSort({
+    key: sortKey === 'random' ? randomSortKey(seed) : { $ifNull: [SORT_FIELDS[sortKey], null] },
+    dir,
+    tiebreak: sortKey !== 'title' ? { sortTitle: 1, _id: 1 } : { _id: 1 },
   });
-  pipeline.push({
-    $addFields: { __sortNull: { $cond: [{ $eq: ['$__sortKey', null] }, 1, 0] } },
-  });
-  const sortStage = { __sortNull: 1, __sortKey: dir };
-  if (sortKey !== 'title') sortStage.sortTitle = 1;
-  sortStage._id = 1;
-
-  pipeline.push({
-    $facet: {
-      items: [
-        { $sort: sortStage },
-        { $skip: (pageNum - 1) * limitNum },
-        { $limit: limitNum },
-        { $project: { __sortKey: 0, __sortNull: 0 } },
-      ],
-      total: [{ $count: 'n' }],
-    },
-  });
+  pipeline.push(...order.stages);
+  pipeline.push(pageFacetStage({ sort: order.sort, page: pageNum, limit: limitNum, project: order.project }));
 
   const [result] = await Game.aggregate(pipeline);
-  const total = result?.total?.[0]?.n ?? 0;
-  return {
-    games: result?.items ?? [],
-    total,
-    page: pageNum,
-    pages: Math.max(1, Math.ceil(total / limitNum)),
-  };
+  const { items, total, page, pages } = shapePage(result, { page: pageNum, limit: limitNum });
+  return { games: items, total, page, pages };
 }
 
 // ── Player-row helpers ───────────────────────────────────────────────────────

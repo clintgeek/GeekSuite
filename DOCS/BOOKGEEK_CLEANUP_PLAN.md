@@ -77,6 +77,101 @@ re-verified.
 - Genre and tag normalization for books if Calibre's tags need it (they're user-curated,
   so likely **no** vocabulary mapping).
 
+### C1 — done 2026-09-25 (uncommitted at time of writing): what moved, and the package's API
+
+GameGeek runs on `@geeksuite/collection` now, and no second copy is left in
+`apps/gamegeek`. The behaviour is unchanged. The facet `$facet` pipeline and the
+conditions are byte-identical to the old ones across 20 filter shapes (JSON-compared
+against the pre-change module). The harness shows 72 scenes, 0 violations and 0 a11y
+findings with `--enforce-a11y --desktop`, the same as the baseline run taken just before.
+
+**Deleted from GameGeek:**
+- `components/filters/*`, all 12 files: FacetSection, FacetOptions, TagFacet,
+  YearRangeFacet, FilterSections, FilterPanel, FiltersSheet, ActiveChips, SortMenu,
+  SaveViewDialog, LibraryHeader and filterUi.
+- `components/SavedViews.jsx`.
+- Seven hooks: `useLibraryFilter`, `useGameFacets`, `useGamePages`,
+  `useRefreshLibraryList`, `useLibraryScrollMemory`, `useInfiniteSentinel` and
+  `useDebouncedValue`.
+- `mergeGamesPage`, and `groupTagOptions` (replaced by the package's `groupOptions`).
+- The codec bodies in `utils/libraryFilter.js`, and `buildOptions`, `visibleOptions`
+  and the chip builder in `utils/facets.js`.
+- In the gateway, `gamegeek/filters.js` lost its own `searchRegex`, `matchOf`, value
+  facet, open/fixed shapers and year-range code. `resolvers.js` lost its own random key,
+  nulls-last sort and page `$facet`.
+
+**What stays in GameGeek, as configuration:**
+- `utils/libraryFilter.js`: the codec schema (URL keys, vocabularies), `SORTS`,
+  `buildGamesVariables`, and `savedViewSearch`, which maps legacy views.
+- `utils/facets.js`: `SECTIONS`, `CHIP_SPECS`, value labels and hints, and the Cleanup
+  section.
+- `utils/tagGroups.js`, the tag-vocabulary mirror.
+- `utils/collectionConfig.js`: the noun is "game", in the display font.
+- `hooks/useLibrary.js`: binds the package to `GetGames` and `GetGameFacets`.
+- `components/SaveLibraryView.jsx`: binds `saveGameFilter`.
+- In `Sidebar.jsx`, `SavedViews` is bound to `deleteGameFilter`.
+- `graphql/cachePolicies.js`, the Game type policies.
+- In the gateway: the played, length, metadata and needsDecision semantics, the tags ∪
+  autoTags match, the `__me` GamePlayer join, `effectiveFilter`, and `SORT_FIELDS`.
+- GameCard, GameRow and ShelfStrip, plus everything for install, Playnite and enrichment.
+
+**Client API** (`import … from '@geeksuite/collection'`):
+
+| Export | What it is |
+|---|---|
+| `createFilterCodec(schema)` | Builds a URL codec. `schema.fields` is an ordered list. Each field has a `key`, a `param`, and a `type`: `search`, `list` (with `drop` and `values`), `enum` (with `values`, `default`, `counts: false` and `requires`), `boolean` (1/0), `flag` (only true is written), or `range` (with `minKey`, `maxKey` and `parse`). `schema.state` lists fields that live outside the filter (GameGeek's `owned`). `schema.sorts` is `{ order, default, random, defaultDir }`. Optional: `params` renames `sort`, `dir` and `seed`; `legacy(params, state)` reads old links. The codec returns `read`, `toParams`, `write(params, patch)`, `toFilterInput`, `activeCount`, `isNarrowed`, `viewSearch(view)`, `canonicalSearch`, `searchWith(search, key, value)`, `clearPatch`, `EMPTY_FILTER` and `DEFAULT_STATE`. |
+| `integerBetween(lo, hi)`, `newSeed()` | A parser for one side of a range, and a shuffle seed. |
+| `useCollectionFilter(codec, { buildVariables })` | The URL-backed state: `{ state, filterInput, activeCount, variables(page), ready, update, toggle, remove, clearAll, setSort, reshuffle }`. It mints a missing random seed in place. |
+| `CollectionProvider`, `useCollectionConfig` | App-wide `{ noun: { one, many }, displayFont }`. Pass a module-level constant. |
+| `buildFacetOptions`, `visibleOptions`, `groupOptions`, `sectionOptions`, `sectionActiveCount` | Pure option building. `base` fixes the order and `current` gives live counts. A selected value always shows. |
+| `buildActiveChips(codec, state, specs, context)`, `rangeLabel`, `suggestViewName` | Chips from an ordered spec list. Each spec has a kind: `search`, `list`, `single` (use `scope: 'state'` for state fields), `boolean`, `flag`, `range` or `custom`. Every chip carries the `patch` that removes it. |
+| `FilterSections`, `FilterPanel`, `FiltersSheet` | The panel body, rendered from a `sections` config. The desktop column is collapsible. The phone sheet has a sticky "Show N" footer. Each takes `sections`, `lib`, `facets` and `context`. |
+| `FacetSection`, `FacetOptions` / `OptionRow` / `ShowMoreButton`, `GroupedFacetOptions`, `RangeFacet`, `MatchToggle`, `SwitchRow` | The building blocks, for a `custom` section. |
+| `ActiveChips`, `SortMenu` (`sorts`), `LibraryHeader` (`sorts`), `FiltersButton`, `SaveViewDialog` (`onSave(name)`), `SavedViews` (`hrefFor`, `onDelete`) | The chrome above the list. |
+| `pillSx`, `countText`, `showLabel`, `useSectionOpen(storageKey, defaults)` | UI helpers. |
+| `useDebouncedValue`, `useFacetQuery(query, filterInput, { field })`, `usePagedList(query, { variables, ready, field, itemsField, pageSize })`, `useScrollMemory(root, key, { rows, hasMore, storageKey })`, `useInfiniteSentinel` | Hooks. |
+| `pagedListPolicy({ keyArgs, itemsField })`, `mergePagedList`, `refreshPagedList`, `removeFromPagedLists`, `evictRootFields`, `installTypePoliciesOnce` | The paginated-list cache. It keeps one list per filter and sort, and never collapses it on a refresh. |
+
+**Server API** (`@geeksuite/collection/server`) never scopes a tenant. The app's
+resolver puts its household/user `$match` first.
+
+| Export | What it is |
+|---|---|
+| `searchRegex`, `buildSearchFilter(q, fields)` | An escaped, bounded, case-insensitive contains-search over the given fields. |
+| `inList`, `yearRange`, `numberRange`, `matchOf(conditions, { stage, except })` | Condition building. Conditions are `{ key: { stage?, match } }`. |
+| `buildFacetStage(conditions, { name: (match) => stages })` | One `$facet` in which each facet excludes its own condition (or its `exclude` key). A `total` facet comes first. |
+| `valuesFacetStages`, `groupFacetStages`, `countFacetStages`, `histogramStages`, `yearHistogramStages` | Facet bodies. |
+| `shapeOpenFacet`, `shapeFixedFacet`, `shapeHistogram`, `shapeCount` | Shape the `$facet` results for GraphQL. |
+| `randomSortKey(seed)`, `nullsLastSort({ key, dir, tiebreak })`, `pageArgs`, `pageFacetStage`, `shapePage` | Sorts and paging. |
+
+**Notes for C2 (BookGeek adoption):**
+- Write `utils/libraryFilter.js` as a codec schema. For example: `shelf` (list),
+  `author` (list), `series` (list), `tag` (list) with `match` (an enum that `requires`
+  tags), `format` (a list with `values`), `owned` (boolean), `file` (flag), `read` (a
+  range over `readYearMin`/`readYearMax`) and `stars` (a range with
+  `integerBetween(1, 5)`).
+- Old `savedFilters` map through `codec.viewSearch({ filter, sort, dir })` the way
+  GameGeek's `savedViewSearch` maps its legacy fields.
+- Write `SECTIONS` in panel order. Use `list` for shelf, author, series and format, with
+  `limit` for long lists. Tags can be `grouped` without `groupOf`, which makes one
+  searchable list, or with groups if Chef wants them. Use `range` for read year (bucket
+  key to taste) and rating, and a `switch` for owned and has-file. Use `label(v, context)`
+  to word values, and pass per-user data (custom shelves) through `context`.
+- The gateway side for `bookFacets`: build `conditions` per filter key, then
+  `buildFacetStage` with `valuesFacetStages` for authors, series and tags,
+  `groupFacetStages` for shelf and format, `yearHistogramStages('readAt')`, and
+  `countFacetStages` for owned and has-file. Shape with `shapeOpenFacet` and friends.
+- The book list uses `pagedListPolicy` with `keyArgs` taken from filter and sort. It is
+  refreshed with `refreshPagedList` after a create and `removeFromPagedLists` after a
+  delete, and never with `refetch()`.
+- In `vite.config`, alias `@geeksuite/collection` to its `src/index.js` like
+  `@geeksuite/ui`, and keep MUI, React and `react-router-dom` in `dedupe`.
+  BookGeek-web's vitest needs `/@geeksuite/` in `server.deps.inline` (GameGeek has it).
+- Wrap the app in `CollectionProvider` with `{ noun: { one: 'book', many: 'books' } }`,
+  and do it in the test render helper too.
+- The package's own tests already run a books-shaped config
+  (`packages/collection/src/__tests__/fixtures.js`), so that is a starting point.
+
 ## Later, not in this plan
 
 - Suite households (`DOCS/SUITE_HOUSEHOLDS_PLAN.md`): BookGeek is the app with the real

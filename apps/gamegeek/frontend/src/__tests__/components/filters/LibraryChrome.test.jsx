@@ -2,13 +2,11 @@ import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { MockedProvider } from '@apollo/client/testing';
-import ActiveChips from '../../../components/filters/ActiveChips';
-import FiltersSheet from '../../../components/filters/FiltersSheet';
-import LibraryHeader from '../../../components/filters/LibraryHeader';
-import SaveViewDialog from '../../../components/filters/SaveViewDialog';
+import { ActiveChips, FiltersSheet, LibraryHeader } from '@geeksuite/collection';
+import SaveLibraryView from '../../../components/SaveLibraryView';
 import { SAVE_GAME_FILTER } from '../../../graphql/mutations';
-import { activeChips } from '../../../utils/facets';
-import { DEFAULT_STATE, EMPTY_FILTER, readLibraryState, writeLibraryState } from '../../../utils/libraryFilter';
+import { SECTIONS, activeChips } from '../../../utils/facets';
+import { DEFAULT_STATE, EMPTY_FILTER, SORTS, readLibraryState, writeLibraryState } from '../../../utils/libraryFilter';
 import { renderWithProviders } from '../../testUtils';
 
 const stateOf = (filter, extra = {}) => ({ ...DEFAULT_STATE, ...extra, filter: { ...EMPTY_FILTER, ...filter } });
@@ -51,7 +49,7 @@ describe('LibraryHeader', () => {
   };
 
   it('announces the result count politely', () => {
-    renderWithProviders(<LibraryHeader isDesktop total={124} lib={lib()} chips={[]} panelOpen onSave={() => {}} view="grid" onToggleView={() => {}} />);
+    renderWithProviders(<LibraryHeader sorts={SORTS} isDesktop total={124} lib={lib()} chips={[]} panelOpen onSave={() => {}} view="grid" onToggleView={() => {}} />);
     const count = screen.getByTestId('result-count');
     expect(count).toHaveTextContent('124 games');
     expect(count).toHaveAttribute('aria-live', 'polite');
@@ -60,7 +58,7 @@ describe('LibraryHeader', () => {
   it('the phone header shows "Filters · N" and opens the sheet', () => {
     const onOpenSheet = vi.fn();
     renderWithProviders(
-      <LibraryHeader isDesktop={false} total={3} lib={lib({ genres: ['RPG'] })} chips={[]} onOpenSheet={onOpenSheet} onSave={() => {}} view="grid" onToggleView={() => {}} />
+      <LibraryHeader sorts={SORTS} isDesktop={false} total={3} lib={lib({ genres: ['RPG'] })} chips={[]} onOpenSheet={onOpenSheet} onSave={() => {}} view="grid" onToggleView={() => {}} />
     );
     const btn = screen.getByRole('button', { name: 'Filters, 1 active' });
     expect(btn).toHaveTextContent('Filters· 1');
@@ -70,7 +68,7 @@ describe('LibraryHeader', () => {
 
   it('the sort menu offers length and shuffle, with direction in words', () => {
     const l = lib();
-    renderWithProviders(<LibraryHeader isDesktop total={3} lib={l} chips={[]} panelOpen onSave={() => {}} view="grid" onToggleView={() => {}} />);
+    renderWithProviders(<LibraryHeader sorts={SORTS} isDesktop total={3} lib={l} chips={[]} panelOpen onSave={() => {}} view="grid" onToggleView={() => {}} />);
     fireEvent.click(screen.getByRole('button', { name: 'Sort: Title, A → Z' }));
     fireEvent.click(screen.getByRole('menuitemradio', { name: 'Length' }));
     expect(l.setSort).toHaveBeenCalledWith('timeToBeat');
@@ -85,7 +83,7 @@ describe('FiltersSheet', () => {
     const onClose = vi.fn();
     const lib = { state: stateOf({ genres: ['RPG'] }), activeCount: 1, toggle: vi.fn(), update: vi.fn(), clearAll: vi.fn() };
     renderWithProviders(
-      <FiltersSheet open onClose={onClose} lib={lib} facets={{ base: null, current: null }} sectionsOpen={{}} onToggleSection={() => {}} total={124} />
+      <FiltersSheet open onClose={onClose} sections={SECTIONS} lib={lib} facets={{ base: null, current: null }} sectionsOpen={{}} onToggleSection={() => {}} total={124} />
     );
     const show = screen.getByTestId('filters-sheet-show');
     expect(show).toHaveTextContent('Show 124 games');
@@ -96,7 +94,7 @@ describe('FiltersSheet', () => {
   it('Escape closes it', () => {
     const onClose = vi.fn();
     const lib = { state: stateOf({}), activeCount: 0, toggle: vi.fn(), update: vi.fn(), clearAll: vi.fn() };
-    renderWithProviders(<FiltersSheet open onClose={onClose} lib={lib} facets={{ base: null, current: null }} sectionsOpen={{}} onToggleSection={() => {}} total={1} />);
+    renderWithProviders(<FiltersSheet open onClose={onClose} sections={SECTIONS} lib={lib} facets={{ base: null, current: null }} sectionsOpen={{}} onToggleSection={() => {}} total={1} />);
     expect(screen.getByTestId('filters-sheet-show')).toHaveTextContent('Show 1 game');
     fireEvent.keyDown(screen.getByTestId('filters-sheet-show'), { key: 'Escape' });
     expect(onClose).toHaveBeenCalled();
@@ -123,7 +121,7 @@ describe('SaveViewDialog', () => {
     }));
     const onClose = vi.fn();
     renderWithProviders(
-      <SaveViewDialog open onClose={onClose} filterInput={filter} sort="timeToBeat" dir="asc" chips={activeChips(stateOf(filter))} sortLabel="Length" />,
+      <SaveLibraryView open onClose={onClose} filterInput={filter} sort="timeToBeat" dir="asc" chips={activeChips(stateOf(filter))} />,
       { wrapper: ({ children }) => <MockedProvider mocks={[{ request: { query: SAVE_GAME_FILTER, variables: { input } }, result: saved }]}>{children}</MockedProvider> }
     );
     const name = screen.getByLabelText('Name');

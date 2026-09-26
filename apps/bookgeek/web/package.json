@@ -29,7 +29,8 @@
     "@fontsource/dm-serif-display": "^5.0.0",
     "@fontsource/jetbrains-mono": "^5.0.0",
     "epubjs": "^0.3.93",
-    "axios": "^1.7.2"
+    "axios": "^1.7.2",
+    "@geeksuite/collection": "workspace:*"
   },
   "devDependencies": {
     "@geeksuite/eslint-config": "workspace:*",

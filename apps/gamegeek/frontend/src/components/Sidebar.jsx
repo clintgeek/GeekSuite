@@ -23,13 +23,15 @@ import {
   SportsEsportsOutlined as AllIcon,
 } from '@mui/icons-material';
 import { useLocation } from 'react-router-dom';
+import { useMutation } from '@apollo/client';
 import { GeekSidebar } from '@geeksuite/ui';
+import { SavedViews } from '@geeksuite/collection';
+import { DELETE_GAME_FILTER } from '../graphql/mutations';
 import { DISPLAY_FONT } from '../theme/theme';
 import { shelfCount, useGameProfile } from '../hooks/useGameMeta';
 import { canonicalSearch, savedViewSearch } from '../utils/libraryFilter';
 import { displayNameFrom, initialsFrom, secondaryFrom } from '../utils/userDisplay';
 import { APP_NAME, LIBRARY_NAV_ID, activeNavId, isLibraryPath, shelfNavId } from './navConfig';
-import SavedViews from './SavedViews';
 import SavePointMark from './SavePointMark';
 
 const SHELF_ICONS = {
@@ -65,6 +67,7 @@ export default function Sidebar({ user, shelves, stats, onSignOut }) {
   const views = profile?.savedFilters ?? [];
   const here = isLibraryPath(location.pathname) ? canonicalSearch(location.search) : null;
   const activeView = here ? views.find((v) => canonicalSearch(savedViewSearch(v)) === here) : null;
+  const [removeView] = useMutation(DELETE_GAME_FILTER);
 
   const badgeProps = {
     sx: { color: 'text.secondary', backgroundColor: 'background.raised', fontVariantNumeric: 'tabular-nums' },
@@ -130,7 +133,17 @@ export default function Sidebar({ user, shelves, stats, onSignOut }) {
       brand={<Brand />}
       sections={sections}
       activeId={activeView ? `view:${activeView.id}` : activeNavId(location.pathname, location.search)}
-      extras={views.length ? <SavedViews views={views} activeId={activeView?.id ?? null} itemSx={itemSx} /> : undefined}
+      extras={
+        views.length ? (
+          <SavedViews
+            views={views}
+            activeId={activeView?.id ?? null}
+            hrefFor={(view) => `/${savedViewSearch(view)}`}
+            onDelete={(view) => removeView({ variables: { id: view.id } })}
+            itemSx={itemSx}
+          />
+        ) : undefined
+      }
       footer={{
         user: user
           ? { name: displayNameFrom(user), secondary: secondaryFrom(user), initials: initialsFrom(user) }

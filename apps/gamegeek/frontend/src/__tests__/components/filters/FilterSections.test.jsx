@@ -1,8 +1,8 @@
 import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, within } from '@testing-library/react';
-import FilterSections from '../../../components/filters/FilterSections';
-import { DEFAULT_OPEN } from '../../../utils/facets';
+import { FilterSections } from '@geeksuite/collection';
+import { DEFAULT_OPEN, SECTIONS } from '../../../utils/facets';
 import { DEFAULT_STATE, EMPTY_FILTER } from '../../../utils/libraryFilter';
 import { renderWithProviders } from '../../testUtils';
 
@@ -34,7 +34,7 @@ function lib(filter = {}) {
 
 function renderSections(l, current = BASE) {
   return renderWithProviders(
-    <FilterSections lib={l} facets={{ base: BASE, current }} open={{ ...DEFAULT_OPEN, modes: true, format: true, metadata: true }} onToggleSection={() => {}} />
+    <FilterSections sections={SECTIONS} lib={l} facets={{ base: BASE, current }} open={{ ...DEFAULT_OPEN, modes: true, format: true, metadata: true }} onToggleSection={() => {}} />
   );
 }
 
@@ -81,7 +81,7 @@ describe('FilterSections', () => {
   it('section headings are buttons that report and flip their state', () => {
     const onToggle = vi.fn();
     renderWithProviders(
-      <FilterSections lib={lib({ storefronts: ['steam'] })} facets={{ base: BASE, current: BASE }} open={{ store: true }} onToggleSection={onToggle} />
+      <FilterSections sections={SECTIONS} lib={lib({ storefronts: ['steam'] })} facets={{ base: BASE, current: BASE }} open={{ store: true }} onToggleSection={onToggle} />
     );
     const store = screen.getByRole('button', { name: /^Store/ });
     expect(store).toHaveAttribute('aria-expanded', 'true');

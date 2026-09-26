@@ -11,7 +11,7 @@ import { MockedProvider } from '@apollo/client/testing';
 import { InMemoryCache, useQuery } from '@apollo/client';
 import InstallDecisionBanner from '../../views/detail/InstallDecisionBanner';
 import CopiesSection from '../../views/detail/CopiesSection';
-import FilterSections from '../../components/filters/FilterSections';
+import { FilterSections } from '@geeksuite/collection';
 import PlaynitePreview from '../../views/settings/PlaynitePreview';
 import { dropStatusMessage } from '../../views/settings/PlayniteImportCard';
 import { useResolveInstallFlag } from '../../hooks/useGameActions';
@@ -19,7 +19,7 @@ import { GET_GAME } from '../../graphql/queries';
 import { RESOLVE_INSTALL_FLAG } from '../../graphql/mutations';
 import { GAME_TYPE_POLICIES } from '../../graphql/cachePolicies';
 import { createResolveInstallFlag, isFlagged, patchFor } from '../../utils/installDecision';
-import { activeChips, DEFAULT_OPEN } from '../../utils/facets';
+import { activeChips, DEFAULT_OPEN, SECTIONS } from '../../utils/facets';
 import { DEFAULT_STATE, EMPTY_FILTER, readLibraryState, stateToParams, toFilterInput } from '../../utils/libraryFilter';
 import { makeDetailGame } from '../fixtures';
 import { renderWithProviders } from '../testUtils';
@@ -166,14 +166,14 @@ describe('the Cleanup filter: "Not installed anymore (N)"', () => {
   it('shows the count on the switch and in the closed section heading; toggling filters', () => {
     const l = lib();
     const { rerender } = renderWithProviders(
-      <FilterSections lib={l} facets={{ base: facets, current: facets }} open={{ ...DEFAULT_OPEN, metadata: true }} onToggleSection={() => {}} />
+      <FilterSections sections={SECTIONS} lib={l} facets={{ base: facets, current: facets }} open={{ ...DEFAULT_OPEN, metadata: true }} onToggleSection={() => {}} />
     );
     const row = screen.getByRole('checkbox', { name: 'Not installed anymore, 3 games' });
     fireEvent.click(row);
     expect(l.update).toHaveBeenCalledWith({ needsDecision: true });
     expect(screen.getByRole('group', { name: 'Metadata' })).toBeInTheDocument();
 
-    rerender(<FilterSections lib={l} facets={{ base: facets, current: facets }} open={{}} onToggleSection={() => {}} />);
+    rerender(<FilterSections sections={SECTIONS} lib={l} facets={{ base: facets, current: facets }} open={{}} onToggleSection={() => {}} />);
     expect(screen.getByRole('button', { name: /^Cleanup/ })).toHaveTextContent('3 not installed anymore');
   });
 

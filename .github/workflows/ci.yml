@@ -213,6 +213,25 @@ jobs:
         working-directory: packages/ui
         run: npx vitest run
 
+  test-collection:
+    name: shared collection tests (filters, URL state, paged list, query helpers)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # @geeksuite/collection: GameGeek's library machinery, shared with
+      # BookGeek (DOCS/BOOKGEEK_CLEANUP_PLAN.md Phase C). Its tests run a
+      # books-shaped config; each app's suite proves its own configuration.
+      - name: Run vitest
+        working-directory: packages/collection
+        run: npx vitest run
+
   test-utils:
     name: shared utils tests (dates)
     runs-on: ubuntu-latest

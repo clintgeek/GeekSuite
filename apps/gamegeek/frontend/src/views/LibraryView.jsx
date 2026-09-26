@@ -6,6 +6,9 @@
  *   - `games(filter:…)`, one page at a time, infinite scroll (useGamePages;
  *     the pages merge in the cache, so an edit never collapses the list);
  *   - `gameFacets(filter)`, the counts beside every option (debounced).
+ * The machinery is `@geeksuite/collection` (hooks/useLibrary.js binds it to
+ * GameGeek's queries; utils/libraryFilter.js and utils/facets.js are the
+ * config); this view lays it out around GameGeek's cards.
  * While either reloads, the previous answer stays on screen — results dim a
  * touch under a hairline progress bar instead of flashing to empty.
  *
@@ -14,7 +17,7 @@
  * the shelf strip stays as the one-tap shelf switcher (the drawer is two taps
  * away, and "show me what I'm playing" is the phone's commonest question).
  *
- * The scroll position is remembered per view (useLibraryScrollMemory), so
+ * The scroll position is remembered per view (useScrollMemory), so
  * coming back from Settings lands where the reader left.
  *
  * `/game/:id` and `/add` are child routes rendered into the <Outlet/>, so the
@@ -25,30 +28,24 @@ import { Box, CircularProgress, LinearProgress, Skeleton, useMediaQuery, useThem
 import { Add as AddIcon } from '@mui/icons-material';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { GeekErrorState, useGeekPrimaryAction } from '@geeksuite/ui';
+import { FilterPanel, FiltersSheet, LibraryHeader, useInfiniteSentinel, useScrollMemory, useSectionOpen } from '@geeksuite/collection';
 import { useGameProfile, useShelfList, useShelfStats } from '../hooks/useGameMeta';
-import { useGameFacets } from '../hooks/useGameFacets';
-import { useGamePages } from '../hooks/useGamePages';
-import { useInfiniteSentinel } from '../hooks/useInfiniteSentinel';
-import { useLibraryFilter } from '../hooks/useLibraryFilter';
-import { useLibraryScrollMemory } from '../hooks/useLibraryScrollMemory';
+import { useGameFacets, useGamePages, useLibraryFilter } from '../hooks/useLibrary';
 import { useRateGame } from '../hooks/useGameActions';
 import { useScrollRoot } from '../components/AppMain';
 import GameCard from '../components/GameCard';
 import GameRow from '../components/GameRow';
 import ShelfStrip from '../components/ShelfStrip';
-import FilterPanel from '../components/filters/FilterPanel';
-import FiltersSheet from '../components/filters/FiltersSheet';
-import LibraryHeader from '../components/filters/LibraryHeader';
-import SaveViewDialog from '../components/filters/SaveViewDialog';
-import { useSectionOpen } from '../components/filters/filterUi';
+import SaveLibraryView from '../components/SaveLibraryView';
 import { gamePath, isFabVisible } from '../components/navConfig';
-import { activeChips } from '../utils/facets';
-import { SORT_LABELS, isNarrowed, stateToParams } from '../utils/libraryFilter';
+import { DEFAULT_OPEN, SECTIONS, SECTIONS_OPEN_KEY, activeChips } from '../utils/facets';
+import { SORTS, isNarrowed, stateToParams } from '../utils/libraryFilter';
 import { readPref, writePref } from '../utils/storage';
 import LibraryEmpty from './LibraryEmpty';
 
 const VIEW_KEY = 'gamegeek.libraryView';
 const PANEL_KEY = 'gamegeek.filterPanel';
+const SCROLL_KEY = 'gamegeek.libraryScroll';
 
 const GRID_SX = {
   display: 'grid',
@@ -93,7 +90,7 @@ export default function LibraryView() {
   });
   const [sheetOpen, setSheetOpen] = useState(false);
   const [saveOpen, setSaveOpen] = useState(false);
-  const [sectionsOpen, toggleSection] = useSectionOpen();
+  const [sectionsOpen, toggleSection] = useSectionOpen(SECTIONS_OPEN_KEY, DEFAULT_OPEN);
   const filtersButtonRef = useRef(null);
 
   const shelves = useShelfList();
@@ -102,13 +99,14 @@ export default function LibraryView() {
   const rate = useRateGame();
   const scrollRoot = useScrollRoot();
   const customShelves = useMemo(() => profile?.customShelves ?? [], [profile]);
+  const facetContext = useMemo(() => ({ customShelves }), [customShelves]);
 
   const { page, games, hasMore, loading, refreshing, loadingMore, loadMore, error, refetch } = useGamePages(lib);
   const facets = useGameFacets(lib.filterInput);
   const total = page?.total ?? facets.current?.total ?? null;
 
   const sentinelRef = useInfiniteSentinel(loadMore, { enabled: hasMore, busy: loadingMore, root: scrollRoot });
-  useLibraryScrollMemory(scrollRoot, stateToParams(state).toString(), { rows: games.length, hasMore });
+  useScrollMemory(scrollRoot, stateToParams(state).toString(), { rows: games.length, hasMore, storageKey: SCROLL_KEY });
 
   const openGame = useCallback((game) => navigate(gamePath(game.id, location.search)), [navigate, location.search]);
   const openAdd = useCallback(() => navigate(`/add${location.search}`), [navigate, location.search]);
@@ -182,9 +180,10 @@ export default function LibraryView() {
       <Box sx={{ display: 'flex', alignItems: 'flex-start', minWidth: 0 }}>
         {isDesktop && panelOpen ? (
           <FilterPanel
+            sections={SECTIONS}
             lib={lib}
             facets={facets}
-            customShelves={customShelves}
+            context={facetContext}
             open={sectionsOpen}
             onToggleSection={toggleSection}
             onHide={() => setPanel(false)}
@@ -204,6 +203,7 @@ export default function LibraryView() {
           ) : null}
           <Box sx={{ px: { xs: 2, md: 3 }, pb: { xs: 12, md: 6 }, pt: { xs: 0.5, md: 2 }, maxWidth: 1400, mx: 'auto' }}>
             <LibraryHeader
+              sorts={SORTS}
               isDesktop={isDesktop}
               total={total}
               lib={lib}
@@ -260,23 +260,23 @@ export default function LibraryView() {
             // close that races the transition (Escape mid-slide).
             requestAnimationFrame(() => filtersButtonRef.current?.focus());
           }}
+          sections={SECTIONS}
           lib={lib}
           facets={facets}
-          customShelves={customShelves}
+          context={facetContext}
           sectionsOpen={sectionsOpen}
           onToggleSection={toggleSection}
           total={total}
         />
       ) : null}
 
-      <SaveViewDialog
+      <SaveLibraryView
         open={saveOpen}
         onClose={() => setSaveOpen(false)}
         filterInput={lib.filterInput}
         sort={state.sort}
         dir={state.dir}
         chips={allChips}
-        sortLabel={SORT_LABELS[state.sort]}
       />
 
       <Outlet />

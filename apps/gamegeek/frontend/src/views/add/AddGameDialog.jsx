@@ -14,7 +14,7 @@ import { GeekSheet, useToast } from '@geeksuite/ui';
 import { fetchCover } from '../../api/rest';
 import { CREATE_GAME } from '../../graphql/mutations';
 import { useGameProfile, useShelfList, useVocabulary } from '../../hooks/useGameMeta';
-import { useRefreshLibraryList } from '../../hooks/useRefreshLibraryList';
+import { useRefreshLibraryList } from '../../hooks/useLibrary';
 import { gamePath, libraryPath } from '../../components/navConfig';
 import { candidateToForm, emptyForm, formToCreateInput } from './candidate';
 import GameForm from './GameForm';
@@ -32,7 +32,7 @@ export default function AddGameDialog() {
   const [fromSearch, setFromSearch] = useState(false);
   const [lastQuery, setLastQuery] = useState('');
   // Not 'GetGames': a refetch would collapse the scrolled library underneath.
-  // The list refreshes in place once the game exists (useRefreshLibraryList).
+  // The list refreshes in place once the game exists (hooks/useLibrary.js).
   const [createGame, { loading }] = useMutation(CREATE_GAME, { refetchQueries: ['GetGameShelves', 'GetGameFacets'] });
   const refreshList = useRefreshLibraryList();
 

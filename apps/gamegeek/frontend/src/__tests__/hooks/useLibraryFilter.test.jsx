@@ -2,7 +2,7 @@ import React from 'react';
 import { describe, expect, it } from 'vitest';
 import { act, render, screen } from '@testing-library/react';
 import { MemoryRouter, useLocation } from 'react-router-dom';
-import { useLibraryFilter } from '../../hooks/useLibraryFilter';
+import { useLibraryFilter } from '../../hooks/useLibrary';
 
 let api;
 function Probe() {

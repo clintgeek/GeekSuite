@@ -1,4 +1,20 @@
 import constantsModule from '@geeksuite/schemas/gamegeek/constants';
+import {
+  buildSearchFilter,
+  buildFacetStage,
+  countFacetStages,
+  groupFacetStages,
+  inList,
+  matchOf,
+  searchRegex,
+  shapeCount,
+  shapeFixedFacet,
+  shapeHistogram,
+  shapeOpenFacet,
+  valuesFacetStages,
+  yearHistogramStages,
+  yearRange,
+} from '@geeksuite/collection/server';
 
 /**
  * GameFilterInput → Mongo, and the faceted counts
@@ -14,21 +30,24 @@ import constantsModule from '@geeksuite/schemas/gamegeek/constants';
  * own, so picking "Epic" still shows what GOG would give. The whole thing is
  * a single `$facet` aggregation over the caller's household.
  *
+ * The generic machinery (escaped search, the exclude-own `$facet`, the
+ * value/histogram/count facets and their shapers) is
+ * `@geeksuite/collection/server`; what stays here is GameGeek's: the field
+ * paths, the played/length/metadata/needsDecision semantics, and the
+ * caller's GamePlayer join.
+ *
  * Nothing here takes a householdId from the filter: the caller passes the
  * session's, and it is the literal first stage of every pipeline.
  */
 
 const { ENRICHMENT_STATUSES, LENGTH_BUCKETS, LENGTH_BOUNDS, FILTER_PLAYED, RECENT_PLAYED_DAYS } = constantsModule;
 
-const SEARCH_TERM_MAX = 200;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** Escaped + bounded, so a user search term is a literal, not a ReDoS. */
-export function searchRegex(value) {
-  return String(value)
-    .slice(0, SEARCH_TERM_MAX)
-    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
+/** The fields a library search looks in. */
+const SEARCH_FIELDS = ['title', 'developers', 'publishers', 'tags', 'autoTags', 'genres'];
+
+export { searchRegex, matchOf };
 
 const has = (list) => Array.isArray(list) && list.length > 0;
 const given = (v) => v !== undefined && v !== null;
@@ -83,16 +102,9 @@ export function buildConditions(filter = {}, { now = new Date() } = {}) {
   const c = {};
   const all = filter.tagMatch === 'all';
 
-  if (filter.q && String(filter.q).trim()) {
-    const needle = searchRegex(String(filter.q).trim());
-    c.q = {
-      stage: 'game',
-      match: { $or: ['title', 'developers', 'publishers', 'tags', 'autoTags', 'genres'].map((f) => ({ [f]: { $regex: needle, $options: 'i' } })) },
-    };
-  }
-  if (has(filter.genres)) {
-    c.genres = { stage: 'game', match: { genres: all ? { $all: filter.genres } : { $in: filter.genres } } };
-  }
+  const search = filter.q ? buildSearchFilter(filter.q, SEARCH_FIELDS) : null;
+  if (search) c.q = { stage: 'game', match: search };
+  if (has(filter.genres)) c.genres = { stage: 'game', match: inList('genres', filter.genres, { all }) };
   if (has(filter.tags)) {
     const either = (t) => ({ $or: [{ tags: t }, { autoTags: t }] });
     c.tags = {
@@ -100,16 +112,12 @@ export function buildConditions(filter = {}, { now = new Date() } = {}) {
       match: all ? { $and: filter.tags.map(either) } : { $or: [{ tags: { $in: filter.tags } }, { autoTags: { $in: filter.tags } }] },
     };
   }
-  if (has(filter.storefronts)) c.storefronts = { stage: 'game', match: { 'copies.storefront': { $in: filter.storefronts } } };
-  if (has(filter.platforms)) c.platforms = { stage: 'game', match: { 'copies.platform': { $in: filter.platforms } } };
-  if (has(filter.formats)) c.formats = { stage: 'game', match: { 'copies.format': { $in: filter.formats } } };
-  if (has(filter.modes)) c.modes = { stage: 'game', match: { modes: { $in: filter.modes } } };
-  if (given(filter.releaseYearMin) || given(filter.releaseYearMax)) {
-    const range = {};
-    if (given(filter.releaseYearMin)) range.$gte = new Date(Date.UTC(filter.releaseYearMin, 0, 1));
-    if (given(filter.releaseYearMax)) range.$lt = new Date(Date.UTC(filter.releaseYearMax + 1, 0, 1));
-    c.releaseYears = { stage: 'game', match: { releaseDate: range } };
-  }
+  if (has(filter.storefronts)) c.storefronts = { stage: 'game', match: inList('copies.storefront', filter.storefronts) };
+  if (has(filter.platforms)) c.platforms = { stage: 'game', match: inList('copies.platform', filter.platforms) };
+  if (has(filter.formats)) c.formats = { stage: 'game', match: inList('copies.format', filter.formats) };
+  if (has(filter.modes)) c.modes = { stage: 'game', match: inList('modes', filter.modes) };
+  const years = yearRange('releaseDate', filter.releaseYearMin, filter.releaseYearMax);
+  if (years) c.releaseYears = { stage: 'game', match: years };
   if (has(filter.lengths)) c.lengths = { stage: 'game', match: { $or: filter.lengths.map(lengthClause) } };
   if (has(filter.metadata)) {
     // A game never enriched (enrichment null) counts as pending.
@@ -141,14 +149,6 @@ export function buildConditions(filter = {}, { now = new Date() } = {}) {
   return c;
 }
 
-/** `{$and: [...]}` of the chosen dimensions, or `{}` when none. */
-export function matchOf(conditions, { stage, except } = {}) {
-  const and = Object.entries(conditions)
-    .filter(([key, cond]) => key !== except && (!stage || cond.stage === stage))
-    .map(([, cond]) => cond.match);
-  return and.length ? { $and: and } : {};
-}
-
 /** The caller's GamePlayer row joined as `__me` (null when they have none). */
 export function lookupMeStages({ userId, householdId, collection }) {
   return [
@@ -166,17 +166,6 @@ export function lookupMeStages({ userId, householdId, collection }) {
 }
 
 // ── Facets ───────────────────────────────────────────────────────────────────
-
-const setOf = (expr) => ({ $setUnion: [{ $ifNull: [expr, []] }, []] });
-
-/** Count distinct values of an array expression, one per game. */
-const valuesFacet = (match, arrayExpr) => [
-  { $match: match },
-  { $project: { v: setOf(arrayExpr) } },
-  { $unwind: '$v' },
-  { $match: { v: { $nin: [null, ''] } } },
-  { $group: { _id: '$v', n: { $sum: 1 } } },
-];
 
 function playedGroupExprs(cutoff) {
   const hours = { $ifNull: ['$__me.hoursPlayed', 0] };
@@ -210,7 +199,6 @@ function lengthBucketExpr() {
  */
 export function facetsPipeline({ householdId, userId, collection, filter = {}, now = new Date() }) {
   const conditions = buildConditions(filter, { now });
-  const except = (key) => matchOf(conditions, { except: key });
   const cutoff = new Date(now.getTime() - RECENT_PLAYED_DAYS * DAY_MS);
   const unshelvedExpr = {
     $cond: [{ $in: [{ $ifNull: ['$__me.shelf', ''] }, ['']] }, 'unshelved', '$__me.shelf'],
@@ -220,47 +208,22 @@ export function facetsPipeline({ householdId, userId, collection, filter = {}, n
     // The tenant is a literal in the first stage — never conditional.
     { $match: { householdId } },
     ...lookupMeStages({ userId, householdId, collection }),
-    {
-      $facet: {
-        total: [{ $match: matchOf(conditions) }, { $count: 'n' }],
-        shelves: [{ $match: except('shelves') }, { $group: { _id: unshelvedExpr, n: { $sum: 1 } } }],
-        genres: valuesFacet(except('genres'), '$genres'),
-        tags: valuesFacet(except('tags'), { $setUnion: [{ $ifNull: ['$tags', []] }, { $ifNull: ['$autoTags', []] }] }),
-        storefronts: valuesFacet(except('storefronts'), '$copies.storefront'),
-        platforms: valuesFacet(except('platforms'), '$copies.platform'),
-        formats: valuesFacet(except('formats'), '$copies.format'),
-        modes: valuesFacet(except('modes'), '$modes'),
-        played: [{ $match: except('played') }, { $group: { _id: null, ...playedGroupExprs(cutoff) } }],
-        lengths: [{ $match: except('lengths') }, { $group: { _id: lengthBucketExpr(), n: { $sum: 1 } } }],
-        metadata: [{ $match: except('metadata') }, { $group: { _id: { $ifNull: ['$enrichment.status', 'pending'] }, n: { $sum: 1 } } }],
-        releaseYears: [
-          { $match: except('releaseYears') },
-          { $match: { releaseDate: { $type: 'date' } } },
-          { $group: { _id: { $year: '$releaseDate' }, n: { $sum: 1 } } },
-          { $sort: { _id: 1 } },
-        ],
-        favorites: [{ $match: except('favorites') }, { $match: { '__me.favorite': true } }, { $count: 'n' }],
-        needsDecision: [{ $match: except('needsDecision') }, { $match: { '__me.installFlag': 'uninstalled' } }, { $count: 'n' }],
-      },
-    },
+    buildFacetStage(conditions, {
+      shelves: (match) => groupFacetStages(match, unshelvedExpr),
+      genres: (match) => valuesFacetStages(match, '$genres'),
+      tags: (match) => valuesFacetStages(match, { $setUnion: [{ $ifNull: ['$tags', []] }, { $ifNull: ['$autoTags', []] }] }),
+      storefronts: (match) => valuesFacetStages(match, '$copies.storefront'),
+      platforms: (match) => valuesFacetStages(match, '$copies.platform'),
+      formats: (match) => valuesFacetStages(match, '$copies.format'),
+      modes: (match) => valuesFacetStages(match, '$modes'),
+      played: (match) => [{ $match: match }, { $group: { _id: null, ...playedGroupExprs(cutoff) } }],
+      lengths: (match) => groupFacetStages(match, lengthBucketExpr()),
+      metadata: (match) => groupFacetStages(match, { $ifNull: ['$enrichment.status', 'pending'] }),
+      releaseYears: (match) => yearHistogramStages(match, 'releaseDate'),
+      favorites: (match) => countFacetStages(match, { '__me.favorite': true }),
+      needsDecision: (match) => countFacetStages(match, { '__me.installFlag': 'uninstalled' }),
+    }),
   ];
-}
-
-/** Open-vocabulary facet: values with a count, plus every selected value (0 if none), count desc then value. */
-function openFacet(rows, selected = []) {
-  const counts = new Map((rows ?? []).map((r) => [String(r._id), r.n]));
-  for (const s of selected ?? []) if (!counts.has(s)) counts.set(s, 0);
-  return [...counts.entries()]
-    .map(([value, count]) => ({ value, count }))
-    .sort((a, b) => b.count - a.count || (a.value < b.value ? -1 : a.value > b.value ? 1 : 0));
-}
-
-/** Closed-vocabulary facet: every value, in vocabulary order, zeros included. */
-function fixedFacet(rows, order) {
-  const counts = new Map((rows ?? []).map((r) => [String(r._id), r.n]));
-  const out = order.map((value) => ({ value, count: counts.get(value) ?? 0 }));
-  for (const [value, count] of counts) if (!order.includes(value)) out.push({ value, count });
-  return out;
 }
 
 /** The `$facet` result → the GameFacets shape. */
@@ -268,20 +231,20 @@ export function shapeFacets(result, filter = {}) {
   const r = result ?? {};
   const playedRow = r.played?.[0] ?? {};
   return {
-    total: r.total?.[0]?.n ?? 0,
-    shelves: openFacet(r.shelves, filter.shelves),
-    genres: openFacet(r.genres, filter.genres),
-    tags: openFacet(r.tags, filter.tags),
-    storefronts: openFacet(r.storefronts, filter.storefronts),
-    platforms: openFacet(r.platforms, filter.platforms),
-    formats: openFacet(r.formats, filter.formats),
-    modes: openFacet(r.modes, filter.modes),
+    total: shapeCount(r.total),
+    shelves: shapeOpenFacet(r.shelves, filter.shelves),
+    genres: shapeOpenFacet(r.genres, filter.genres),
+    tags: shapeOpenFacet(r.tags, filter.tags),
+    storefronts: shapeOpenFacet(r.storefronts, filter.storefronts),
+    platforms: shapeOpenFacet(r.platforms, filter.platforms),
+    formats: shapeOpenFacet(r.formats, filter.formats),
+    modes: shapeOpenFacet(r.modes, filter.modes),
     played: FILTER_PLAYED.map((value) => ({ value, count: playedRow[value] ?? 0 })),
-    lengths: fixedFacet(r.lengths, LENGTH_BUCKETS),
-    metadata: fixedFacet(r.metadata, ENRICHMENT_STATUSES),
-    releaseYears: (r.releaseYears ?? []).filter((y) => Number.isInteger(y._id)).map((y) => ({ year: y._id, count: y.n })),
-    favorites: r.favorites?.[0]?.n ?? 0,
-    needsDecision: r.needsDecision?.[0]?.n ?? 0,
+    lengths: shapeFixedFacet(r.lengths, LENGTH_BUCKETS),
+    metadata: shapeFixedFacet(r.metadata, ENRICHMENT_STATUSES),
+    releaseYears: shapeHistogram(r.releaseYears, 'year'),
+    favorites: shapeCount(r.favorites),
+    needsDecision: shapeCount(r.needsDecision),
   };
 }
 

@@ -49,7 +49,8 @@
     "rrule": "^2.8.1",
     "tiktoken": "^1.0.14",
     "web-push": "^3.6.7",
-    "zod": "3.25.76"
+    "zod": "3.25.76",
+    "@geeksuite/collection": "workspace:*"
   },
   "devDependencies": {
     "jest": "^29.7.0",
