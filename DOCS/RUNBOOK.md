@@ -423,6 +423,7 @@ some of these may differ once the in-flight work lands).
 | An app crash-loops in production with a plain `SyntaxError` even though CI was green | A module no jest/vitest suite imports (e.g. a `typeDefs.js`) had a parse error — nothing ever loaded it to notice | Fixed by the `syntax` CI job / `pnpm check:syntax` (§5) added 2026-09-05 after exactly this happened to `apps/basegeek/packages/api/src/graphql/bujogeek/typeDefs.js` (`61d3109`) |
 | basegeek opens Mongo/Postgres/Redis/Influx connections before those containers are ready, on a full `up -d` | `apps/basegeek/docker-compose.yml`'s four datastore services had no `healthcheck:` and basegeek's `depends_on:` was short-form (waits for *started*, not *ready*) — BURN_REVIEW_2 #12 | Fixed 2026-09-05: mongodb (`mongosh --eval "db.adminCommand('ping').ok"`), postgres (`pg_isready -U $POSTGRES_USER`), redis (`redis-cli ping`), influxdb (`curl` against `/ping`) all got healthchecks with a 20s `start_period`; basegeek's `depends_on:` is now long-form with `condition: service_healthy` for all four, and its own healthcheck gained a 30s `start_period` to match its observed ~15-25s boot time. **Not yet applied** — needs a `docker compose up -d` from `apps/basegeek/` that recreates the whole datastore set; see `DEPLOY.md` "Applying the #10/#12 fix" for the exact command and expected blip. |
 | Datastore containers (`datageek_mongodb`/`datageek_postgres`) briefly carried all ~40 basegeek secrets via `env_file: .env.production` | BURN_REVIEW_2 #10 — a same-night fix for blank root creds on force-recreate over-corrected to the app's full env file | Fixed 2026-09-05: `apps/basegeek/.env` is now a symlink to `.env.production` (compose reads `${VAR}` substitution from `.env` automatically, no `env_file:` needed for that), and mongodb/postgres declare only their own vars explicitly (`MONGO_INITDB_ROOT_USERNAME/PASSWORD`, `POSTGRES_USER/PASSWORD/DB`). See `DEPLOY.md` "Datastore env convention" for the pattern and the keys-only verification command — never pipe `docker compose config`'s raw output anywhere, it prints resolved secret values. |
+| A Duplicati job reports "N files missing from the remote storage, please run repair", but the files are visibly on the share | The share (e.g. CIFS `/mnt/network_backup`) was mounted **after** the `duplicati` container started. The bind mount still shows the empty directory underneath it. Seen 2026-09-25: the Network job had failed nightly since 2026-05-13 | Restart `duplicati` once the share is mounted. **Don't** Repair or recreate the Duplicati DB. `scripts/backup/check-duplicati.sh` detects it — §14 |
 | The box slows or OOMs mid-burn, and `ps` shows old `vite`/`vitest`/`serve`/`jest`/`playwright` processes with no live agent attached | A stopped or crashed agent's dev server, test worker, or headless browser never got torn down (multi-agent sessions on this box each spawn their own) | `node tools/kill-orphans.mjs` (list mode) to see what's there, then `node tools/kill-orphans.mjs --kill` to terminate it — see below |
 
 ---
@@ -717,3 +718,28 @@ output names variables and files, never values.
 - **Least privilege is still open.** Every app connects as this one admin-privileged user with
   `authSource=admin`. Per-app users with per-database roles is the right shape and is not what we
   have; rotating the shared credential doesn't change that.
+
+---
+
+## 14. Backups (built 2026-09-25)
+
+Full doc: **`DOCS/BACKUP_AND_RESTORE.md`**. It covers what's covered and what isn't, the restore
+steps, key custody, and the "Fix now" Duplicati items. The short version:
+
+- **Nightly job:** `scripts/backup/backup.sh`, cron at 00:40. It writes one encrypted, restore-drilled set to `/mnt/Media/Projects/GeekSuite-backups/sets/<stamp>/`:
+  - `mongodump` of all DBs
+  - `pg_dumpall`
+  - `influxd backup -portable`
+  - every `apps/*/.env.production`
+  - `MANIFEST.json`
+
+  It also mirrors the BookGeek library to `…/library/`. The last 7 sets are kept locally. Duplicati's `/projects/` jobs carry the tree off the disk and keep the history.
+- **Verify:** `scripts/backup/verify-latest.sh`, cron at 01:15.
+  - Staleness alarm at 26 h.
+  - sha256 check, then age-decrypt with `~/.config/geeksuite/backup-key.age` and restore into throwaway `--network none` containers.
+  - Counts must equal MANIFEST.
+  - Then it runs `scripts/backup/check-duplicati.sh`, which reads Duplicati's server DB read-only via a temp copy, alerts on stale/failed jobs and stale bind mounts, and warns at ≥90% target disk. It also runs standalone at 07:30.
+- **Restore:** `scripts/backup/restore.sh --list | --set S --verify | --component mongo|postgres|influx|env|library --target scratch|live [--db NAME] [--dry-run|--yes]`.
+- **Alarm config:** `~/.config/geeksuite/backup.env` holds `HEALTHCHECK_URL`, `VERIFY_HEALTHCHECK_URL`, `DUPLICATI_HEALTHCHECK_URL` and `ALERT_WEBHOOK`. It stores names only until Chef fills in the values.
+- **The private key must also live off-box** (Bitwarden). Without it, every set is ciphertext.
+- **Redis is deliberately not backed up** (transient session/rate-limit state).

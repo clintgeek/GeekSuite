@@ -341,6 +341,19 @@ the app was down over its due time, should it arrive late or be skipped?
 
 ## 6. Tests & Observability
 
+- **Backups: off-site copy of GeekSuite** (found 2026-09-25, with the backup build — see [`DOCS/BACKUP_AND_RESTORE.md`](BACKUP_AND_RESTORE.md)).
+  - What exists: nightly verified, encrypted sets go to `/mnt/Media/Projects/GeekSuite-backups`. Duplicati carries them to int_backup (sdc), ext_backup (sdf) and the Network share.
+  - The gap: the Network job is the only copy outside this building, and it has been broken since 2026-05-13 (stale bind mount; the doc's "Fix now" #1). GoogleDrive doesn't include `/projects/` at all.
+  - Cheapest fix: add `/projects/GeekSuite-backups/` to the GoogleDrive job ("Fix now" #4).
+  - If we want an independent path, not built: `rclone copy` of `sets/` to B2 or similar after `backup.sh`, the way RallyCenter's `RCLONE_REMOTE` hook works. The sets are already age-encrypted, so the remote never sees plaintext.
+- **Backups: free `/mnt/ext_backup`** (sdf, 458 GB, 99% full on 2026-09-25).
+  - The Ext Duplicati job still succeeds, with warnings, but is one large night from failing.
+  - Options: Smart retention + Compact on the Ext job, or a bigger disk. `check-duplicati.sh` warns at ≥90% every night.
+- **Backups: exclude raw datastore files from Duplicati once dumps have proven themselves** (a few weeks of green `verify-latest.sh`).
+  - `apps/basegeek/data/{mongodb,postgres,influxdb}` are copied live, so they can be torn (FileLocked warnings). The dumps are the restorable copy.
+- **Backups: `/mnt/network_backup` boot race.**
+  - The fstab line has no `_netdev`/`nofail`, and the Duplicati bind mount has no `propagation: rslave`. A late CIFS mount is therefore invisible to the container until it restarts.
+
 - **Input Validation (Zod)**:
   - Migrate remaining ad-hoc `if (!field)` route checks to Zod schemas.
   - Priority: FlockGeek REST routes (if retained per Q22) and NoteGeek gateway resolvers.
