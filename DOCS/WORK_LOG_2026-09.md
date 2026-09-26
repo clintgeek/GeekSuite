@@ -12,6 +12,65 @@ anything a future reader would otherwise have to rediscover.
 
 ## 2026-09-26
 
+### ThingGeek — containment: everything is a Thing, `parentId` says where it is
+
+`39b5775e`. Spec: [`THINGGEEK_PLAN.md`](THINGGEEK_PLAN.md), "Containment".
+
+- **Why:** Chef: "The Van has a VIN, but it might also contain an aftermarket stereo, or
+  maybe I just want to remember where my damn jumper cables are."
+- **The model:** the Place tree is gone. Each type has a `kind`:
+  - `location`: not inventory; out of the insurance report, totals and needs-attention.
+  - `container`: inventory that holds things (van, boat, safe).
+  - `item`: ordinary inventory.
+- **Gateway rules:**
+  - no cycles;
+  - depth is capped at 16;
+  - the parent must be in the same household and not in the Trash;
+  - a type can't change to `item` while its things hold things.
+- **Purge** moves a thing's contents up to its parent.
+- **Migrated on production** with `scripts/migrate-containment.js`: dry run, then `--apply`,
+  then `--apply --drop-places`. Chef's 10 places became location things, keeping their ids.
+  Verified as Chef: 10 tree nodes and 11 types with kinds. A non-member is still refused
+  with `NOT_A_MEMBER`.
+- **Open:** the migration tests skip when there's no `mongod` binary, which is probably
+  the case on CI. `thingTree` has no size cap, which is fine at household size.
+
+### GameGeek — "Arcade Sticker"
+
+`3c903e43`. Chef: "GameGeek should be fun, wild … BookGeek is perfect like it is, a reserved
+library." It's neo-brutalist arcade now:
+- ink outlines and hard colour shadows;
+- cards that lift and lean on hover;
+- sticker shelves, Bungee type, a marquee wordmark;
+- flat colour-block covers.
+
+The shared collection UI is restyled from GameGeek's own theme, so no package changed.
+Chef: "I LOVE the new design." Offered and not yet decided: remove hours from the cards,
+straighten the empty-state tilt, redraw the PWA icon.
+
+### BookGeek — covers that look like books
+
+`723027ce`. The quiet counterpart:
+- square corners and a spine crease;
+- cloth-bound jackets for books without art;
+- a bookmark ribbon instead of the progress bar;
+- serif titles;
+- dark mode on one navy.
+
+**Real bug found on the way:** a coverless book in production showed a blank dark box. The
+gradient "covers" existed only in the harness fixtures.
+
+### Backups — each healthcheck answers one question
+
+`6837d98f`, `d6eb232c`.
+- **The restore-test check went red on a night every restore matched.** verify had also
+  failed the run on Duplicati's health, so it now only logs Duplicati's state.
+- **The helper run pinged the Duplicati check's `/fail`,** because `lib.sh` re-sources
+  `backup.env` and blanking the URLs didn't work. `GS_QUIET_PINGS=1` now silences it.
+- **A `/fail` ping that fails is logged,** never swallowed.
+- **Ext's disk warning is at 100%:** that drive is full by design. Chef is moving Ext to
+  30-day retention; revisit the threshold once usage settles.
+
 ### ThingGeek — the household inventory, live at thinggeek.clintgeek.com
 
 `1f46e6fd`. Spec: [`THINGGEEK_PLAN.md`](THINGGEEK_PLAN.md).
