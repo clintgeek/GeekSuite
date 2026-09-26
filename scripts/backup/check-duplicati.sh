@@ -98,8 +98,12 @@ for jid, name in jobs:
         problems.append(f"last success {fmt(fin)} is {int((now - fin) / 3600)}h old (limit {int(max_age_h)}h)")
     if err and (fin is None or err > fin):
         problems.append(f"last run FAILED at {fmt(err)}: {clean(md.get('LastErrorMessage'))}")
-    if note and note[0] == "Error":
-        msg = f"newest notification is an Error ({fmt(note[3])})"
+    # An Error notification only matters if nothing has succeeded since it:
+    # a job that failed on the 19th and has succeeded every night after is
+    # healthy (the first live run flagged GoogleDrive for exactly that).
+    note_t = float(note[3]) if note and str(note[3]).lstrip("-").isdigit() else None
+    if note and note[0] == "Error" and (fin is None or note_t is None or note_t > fin):
+        msg = f"newest notification is an Error ({fmt(note_t)})"
         if not any("FAILED" in p for p in problems): msg += f": {clean(note[2] or note[1])}"
         problems.append(msg)
     if problems:
@@ -107,7 +111,7 @@ for jid, name in jobs:
         print(f"ALERT\t{name}: " + "; ".join(problems))
     else:
         print(f"OK\t{name}: last success {fmt(fin)}")
-    if note and note[0] == "Warning":
+    if note and note[0] == "Warning" and (fin is None or note_t is None or note_t >= fin - 86400):
         warns += 1
         print(f"WARN\t{name}: newest notification is a Warning ({fmt(note[3])}): {clean(note[2] or note[1])}")
 sys.exit(1 if alarms else 0)
