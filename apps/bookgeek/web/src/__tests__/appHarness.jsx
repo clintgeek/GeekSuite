@@ -10,7 +10,7 @@
  * load-more sentinel into view.
  */
 import React from "react";
-import { act, render } from "@testing-library/react";
+import { act, render, waitFor } from "@testing-library/react";
 import { ThemeProvider } from "@mui/material/styles";
 import { MemoryRouter, useLocation, useNavigate } from "react-router-dom";
 import { ApolloClient, ApolloLink, ApolloProvider, InMemoryCache, Observable } from "@apollo/client";
@@ -59,12 +59,44 @@ export function makeBook(i, over = {}) {
   };
 }
 
-/** A server-side library: pages of `books`, filtered by shelf like the gateway. */
+/**
+ * A server-side library: pages of `books`, filtered by shelf (the flat `shelf`
+ * arg or `filter.shelves`) and `filter.q` like the gateway, with facet counts
+ * for the panel (shelves only — enough for the counts to be real).
+ */
 export function libraryServer(books) {
   const db = { books: [...books] };
+  const matches = (b, v = {}, { except } = {}) => {
+    const f = v.filter || {};
+    const shelves = f.shelves?.length ? f.shelves : v.shelf ? [v.shelf] : [];
+    if (except !== "shelves" && shelves.length && !shelves.includes(b.shelf)) return false;
+    if (f.q && !b.title.toLowerCase().includes(String(f.q).toLowerCase())) return false;
+    return true;
+  };
   const handlers = {
+    GetBookFacets: (v) => {
+      const counts = new Map();
+      db.books.filter((b) => matches(b, v, { except: "shelves" })).forEach((b) => counts.set(b.shelf, (counts.get(b.shelf) || 0) + 1));
+      const none = [];
+      return {
+        bookFacets: {
+          __typename: "BookFacets",
+          total: db.books.filter((b) => matches(b, v)).length,
+          shelves: [...counts].map(([value, count]) => ({ __typename: "BookFacetValue", value, count })),
+          authors: none,
+          series: none,
+          tags: none,
+          formats: none,
+          languages: none,
+          readYears: none,
+          ratings: none,
+          owned: 0,
+          hasFile: 0,
+        },
+      };
+    },
     GetBooks: (v) => {
-      const rows = v.shelf ? db.books.filter((b) => b.shelf === v.shelf) : db.books;
+      const rows = db.books.filter((b) => matches(b, v));
       const page = v.page || 1;
       const limit = v.limit || PAGE;
       return {
@@ -106,7 +138,11 @@ export function createTestClient(handlers) {
         const name = operation.operationName;
         calls.push({ name, variables: operation.variables });
         const handler = handlers[name];
-        Promise.resolve()
+        // A macrotask, like a network reply: answered in microtasks, React
+        // batches a load's `loadingMore` true→false into one render, and the
+        // infinite-scroll sentinel (released when that flag drops) never
+        // sees it drop.
+        new Promise((resolve) => setTimeout(resolve, 0))
           .then(() => {
             if (!handler) throw new Error(`unstubbed operation ${ name }`);
             return handler(operation.variables);
@@ -143,7 +179,13 @@ export function stubIntersectionObserver() {
   }
   vi.stubGlobal("IntersectionObserver", IO);
   return {
+    // The sentinel (@geeksuite/collection useInfiniteSentinel) disconnects
+    // while a page loads and observes afresh once it lands — a real observer
+    // then reports at once. So wait for a live one before "scrolling" to it.
     async scrollSentinel() {
+      await waitFor(() => {
+        if (![...live].some((io) => io.targets.length)) throw new Error("no live sentinel yet");
+      });
       await act(async () => {
         for (const io of [...live]) {
           if (io.targets.length) io.cb([{ isIntersecting: true, target: io.targets[0] }]);

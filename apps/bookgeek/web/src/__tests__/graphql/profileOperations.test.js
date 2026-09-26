@@ -24,11 +24,13 @@ import {
 const operationOf = (doc) => doc.definitions.find((d) => d.kind === 'OperationDefinition');
 const rootFieldOf = (doc) => operationOf(doc).selectionSet.selections[0].name.value;
 
-// The saved-filter shape App.jsx hands straight to the filter pills and the
-// FilterSheet; dropping one silently un-restores that part of a preset.
+// The saved-view shape the sidebar opens through utils/libraryFilter.js
+// `savedViewSearch`: `filter` for views saved since Phase C2, the legacy
+// fields for every one before it; dropping one silently un-restores that part
+// of a view.
 const SAVED_FILTER_FIELDS = [
   'id', 'name', 'sortBy', 'sortDir', 'searchQuery',
-  'authorFilter', 'tagFilter', 'shelfFilter', 'ownedOnly', 'ownedFilter',
+  'authorFilter', 'tagFilter', 'shelfFilter', 'ownedOnly', 'ownedFilter', 'filter',
 ];
 
 describe('profile GraphQL operations', () => {

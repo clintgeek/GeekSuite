@@ -8,10 +8,9 @@ import { useEffect, useState } from "react";
 import { useApolloClient } from "@apollo/client";
 import { useNavigate } from "react-router-dom";
 import { CREATE_BOOK } from "../graphql/mutations.js";
-import { refreshLibraryHead, writeRestBook } from "../graphql/cachePolicies.js";
+import { refreshLibraryList, writeRestBook } from "../graphql/cachePolicies.js";
 import { authFetch } from "../utils/authFetch";
 import { bookPath } from "../components/navConfig";
-import { booksVariables } from "../utils/libraryParams";
 
 export function useAddBook({ params }) {
   const apolloClient = useApolloClient();
@@ -101,7 +100,7 @@ export function useAddBook({ params }) {
       setAddBookFile(null);
 
       // The new book joins the current list where the server sorts it.
-      await refreshLibraryHead(apolloClient, booksVariables(params)).catch(() => {});
+      await refreshLibraryList(apolloClient, params.search).catch(() => {});
 
       if (createdId) navigate(bookPath(createdId, params.search), { state: { fromLibrary: true } });
     } catch (err) {

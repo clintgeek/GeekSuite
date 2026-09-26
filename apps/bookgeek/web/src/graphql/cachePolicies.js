@@ -1,75 +1,41 @@
 /**
  * Type policies for BookGeek's slice of the shared Apollo cache — the book
- * list lives here now, not in a hand-managed `setBooks` array.
- *
- * `GeekSuiteApolloProvider` builds a plain InMemoryCache the app cannot
- * configure up front, so these are added at runtime with
- * `cache.policies.addTypePolicies` — before the first query writes anything
- * (App.jsx). The shape follows GameGeek's `graphql/cachePolicies.js`:
+ * list lives here, not in a hand-managed `setBooks` array. The paginated-list
+ * machinery is `@geeksuite/collection`'s (cache/pagedList.js), the same one
+ * GameGeek runs on:
  *
  *   - `Query.books` is ONE list per filter + sort (keyArgs leave out `page`
  *     and `limit`); page 1 refreshes its head, later pages append
- *     (`mergeBooksPage`). Edits never refetch it: every Book-returning
+ *     (`pagedListPolicy`). Edits never refetch it: every Book-returning
  *     mutation updates `Book:<id>` in place, and REST replies (enrich,
  *     covers, file upload) are written with `writeRestBook`. A create
- *     refreshes page 1 IN PLACE with one `client.query` (`refreshLibraryHead`).
- *     `refetch()` would not do: Apollo writes a refetch with `overwrite`, so
- *     the merge sees no existing list and three loaded pages collapse to one —
- *     GameGeek's scroll-to-top bug of 2026-09-25.
+ *     refreshes the list IN PLACE (`refreshLibraryList`, one request as long
+ *     as what is loaded). `refetch()` would not do: Apollo writes a refetch
+ *     with `overwrite`, so three loaded pages collapse to one — GameGeek's
+ *     scroll-to-top bug of 2026-09-25.
  *   - `Query.book` reads through to a `Book:<id>` the library already holds,
  *     so a card tap shows the sheet instantly; a deep link fetches.
- *   - A shelf move takes the book out of any cached list whose shelf filter it
- *     no longer matches (`applyShelfChangeToLists`). That replaces the old
- *     "reload page 1 after every shelf move", which collapsed the list.
- */
-import { BOOK_FIELDS, GET_BOOKS } from "./queries.js";
-
-const keyOf = (ref) => ref?.__ref ?? ref?.id;
-
-/**
- * Merge one incoming `BookPage` into the cached list for its filter + sort.
+ *   - A shelf move takes the book out of any cached list whose shelf filter
+ *     it no longer matches (`applyShelfChangeToLists`), instead of reloading.
  *
- *   - page 1 is a refresh: its rows replace the head of the list. Rows already
- *     loaded beyond it stay — everything after the last row the fresh head
- *     shares with the old list — so a create, a delete elsewhere, or a
- *     revisit of a filter never collapses what is loaded. With no overlap at
- *     all the list changed wholesale and the fresh head stands alone.
- *   - a later page appends the rows the list does not have yet.
- * Either way a book is in the list once.
+ * `GeekSuiteApolloProvider` builds a plain InMemoryCache the app cannot
+ * configure up front, so these are added at runtime — before the first query
+ * writes anything (App.jsx).
  */
-export function mergeBooksPage(existing, incoming, { args } = {}) {
-  if (!incoming) return existing;
-  const old = existing?.items ?? [];
-  const fresh = incoming.items ?? [];
-  const page = args?.page ?? 1;
-  let ordered;
-  if (page <= 1) {
-    const freshKeys = new Set(fresh.map(keyOf));
-    let lastShared = -1;
-    old.forEach((ref, i) => {
-      if (freshKeys.has(keyOf(ref))) lastShared = i;
-    });
-    ordered = lastShared === -1 ? fresh : [...fresh, ...old.slice(lastShared + 1)];
-  } else {
-    ordered = [...old, ...fresh];
-  }
-  const seen = new Set();
-  const items = ordered.filter((ref) => {
-    const key = keyOf(ref);
-    if (!ref || seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-  return { ...incoming, items };
-}
+import { installTypePoliciesOnce, pagedListPolicy, refreshPagedList, removeFromPagedLists } from "@geeksuite/collection";
+import { BOOK_FIELDS, GET_BOOKS } from "./queries.js";
+import { PAGE_SIZE, booksVariablesFor } from "../utils/libraryFilter.js";
 
 export const BOOK_TYPE_POLICIES = {
   Query: {
     fields: {
-      books: {
-        keyArgs: ["q", "author", "tag", "shelf", "owned", "sort", "sortDir"],
-        merge: mergeBooksPage,
-      },
+      // `filter` + `seed` are the faceted library's; the flat args are kept
+      // so a list asked for the old way (the CSV export walks `no-cache`, but
+      // anything else) still gets its own list.
+      books: pagedListPolicy({
+        keyArgs: ["q", "author", "tag", "shelf", "owned", "filter", "sort", "sortDir", "seed"],
+        itemsField: "items",
+      }),
       book: {
         read(existing, { args, toReference }) {
           return existing ?? (args?.id ? toReference({ __typename: "Book", id: args.id }) : undefined);
@@ -79,13 +45,8 @@ export const BOOK_TYPE_POLICIES = {
   },
 };
 
-const installed = new WeakSet();
-
 export function installBookPolicies(client) {
-  const cache = client?.cache;
-  if (!cache?.policies || installed.has(cache)) return;
-  cache.policies.addTypePolicies(BOOK_TYPE_POLICIES);
-  installed.add(cache);
+  installTypePoliciesOnce(client, BOOK_TYPE_POLICIES);
 }
 
 /** The key args a cached `books` list was stored under (`books:{"shelf":…}`). */
@@ -123,19 +84,13 @@ export function matchesShelfFilter(book, shelf) {
  * refetch — and drop the `Book:<id>` entity so the detail route reads nothing.
  */
 export function removeBookFromLists(cache, bookId) {
-  cache.modify({
-    id: "ROOT_QUERY",
-    fields: {
-      books(existing, { readField }) {
-        if (!existing?.items) return existing;
-        const items = existing.items.filter((ref) => (readField("id", ref) ?? ref?.id) !== bookId);
-        if (items.length === existing.items.length) return existing;
-        return { ...existing, items, total: Math.max(0, (existing.total ?? 1) - 1) };
-      },
-    },
-  });
-  cache.evict({ id: cache.identify({ __typename: "Book", id: bookId }) });
-  cache.gc();
+  removeFromPagedLists(cache, { field: "books", itemsField: "items", typename: "Book", id: bookId });
+}
+
+/** The shelves a cached list is filtered to: `filter.shelves`, or the flat `shelf` arg. [] = any. */
+export function listShelves(args = {}) {
+  if (Array.isArray(args.filter?.shelves) && args.filter.shelves.length) return args.filter.shelves;
+  return args.shelf && args.shelf !== "all" ? [args.shelf] : [];
 }
 
 /**
@@ -152,8 +107,8 @@ export function applyShelfChangeToLists(cache, book) {
     fields: {
       books(existing, { readField, storeFieldName }) {
         if (!existing?.items) return existing;
-        const { shelf } = listArgs(storeFieldName);
-        if (!shelf || shelf === "all" || matchesShelfFilter(book, shelf)) return existing;
+        const shelves = listShelves(listArgs(storeFieldName));
+        if (!shelves.length || shelves.some((shelf) => matchesShelfFilter(book, shelf))) return existing;
         const items = existing.items.filter((ref) => (readField("id", ref) ?? ref?.id) !== bookId);
         if (items.length === existing.items.length) return existing;
         return { ...existing, items, total: Math.max(0, (existing.total ?? 1) - 1) };
@@ -222,9 +177,17 @@ export function patchBook(cache, bookId, patch) {
 }
 
 /**
- * Refresh page 1 of the current list IN PLACE (after a create): one request,
- * written through `mergeBooksPage`, so what is loaded stays loaded.
+ * Bring the list a query string shows up to date IN PLACE (after a create):
+ * one request as long as what is loaded, merged over the cached list, so the
+ * reader keeps every row and their scroll position and the new book shows up
+ * where it sorts.
  */
-export function refreshLibraryHead(client, variables) {
-  return client.query({ query: GET_BOOKS, variables: { ...variables, page: 1 }, fetchPolicy: "network-only" });
+export function refreshLibraryList(client, search = "") {
+  return refreshPagedList(client, {
+    query: GET_BOOKS,
+    variables: booksVariablesFor(search, 1),
+    field: "books",
+    itemsField: "items",
+    pageSize: PAGE_SIZE,
+  });
 }

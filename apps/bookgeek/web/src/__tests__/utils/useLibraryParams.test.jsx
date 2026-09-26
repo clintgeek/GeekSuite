@@ -8,29 +8,16 @@ import { RouterProbe } from "../appHarness";
 
 function Controls() {
   const p = useLibraryParams();
+  const f = p.lib.state.filter;
   return (
     <>
-      <span data-testid="state">{`${ p.activeView }|${ p.shelfFilter }|${ p.searchQuery }|${ p.tagFilter }`}</span>
-      {/* "Clear filters" is four setter calls in one handler. */}
-      <button
-        onClick={() => {
-          p.setSearchQuery("");
-          p.setAuthorFilter("");
-          p.setTagFilter("");
-          p.setShelfFilter("all");
-        }}
-      >
-        clear
-      </button>
-      {/* A sidebar shelf row: a shelf AND "go to the library". */}
-      <button
-        onClick={() => {
-          p.setShelfFilter("read");
-          p.setActiveView("library");
-        }}
-      >
-        shelf
-      </button>
+      <span data-testid="state">{`${ p.activeView }|${ p.shelfFilter }|${ p.searchQuery }|${ f.tags.join(",") }`}</span>
+      {/* "Clear filters": every narrowing off in one navigation. */}
+      <button onClick={() => p.lib.clearAll()}>clear</button>
+      {/* A sidebar / strip shelf row. */}
+      <button onClick={() => p.showShelf("read")}>shelf</button>
+      <button onClick={() => p.showShelf("all")}>all</button>
+      <button onClick={() => p.lib.toggle("shelves", "abandoned")}>also abandoned</button>
       <button onClick={() => p.setActiveView("profile")}>settings</button>
       <input aria-label="search" value={p.searchQuery} onChange={(e) => p.setSearchQuery(e.target.value)} />
     </>
@@ -51,11 +38,12 @@ function renderAt(url) {
 }
 
 describe("useLibraryParams", () => {
-  it("several setters in one handler land in ONE navigation, none lost", async () => {
-    const router = renderAt("/?q=dune&tag=sf&shelf=reading");
+  it("Clear all drops every filter in ONE navigation, sort kept", async () => {
+    const router = renderAt("/?q=dune&tag=sf&shelf=reading&sort=author");
+    expect(screen.getByTestId("state").textContent).toBe("library|reading|dune|sf");
     await act(async () => screen.getByText("clear").click());
     expect(router.location.pathname).toBe("/");
-    expect(router.location.search).toBe("");
+    expect(router.location.search).toBe("?sort=author");
     expect(screen.getByTestId("state").textContent).toBe("library|all||");
   });
 
@@ -74,6 +62,22 @@ describe("useLibraryParams", () => {
     expect(router.location.search).toBe("?shelf=read");
   });
 
+  it("a shelf row replaces the shelves and keeps the other filters; All clears only the shelf", async () => {
+    const router = renderAt("/?shelf=reading&shelf=unread&tag=sf");
+    expect(screen.getByTestId("state").textContent).toBe("library|null||sf");
+    await act(async () => screen.getByText("shelf").click());
+    expect(router.location.search).toBe("?shelf=read&tag=sf");
+    await act(async () => screen.getByText("all").click());
+    expect(router.location.search).toBe("?tag=sf");
+  });
+
+  it("the panel's shelf checkbox adds a shelf, as a repeated param", async () => {
+    const router = renderAt("/?shelf=read");
+    await act(async () => screen.getByText("also abandoned").click());
+    expect(router.location.search).toBe("?shelf=read&shelf=abandoned");
+    expect(screen.getByTestId("state").textContent).toBe("library|null||");
+  });
+
   it("Settings is a pushed path that keeps the filters", async () => {
     const router = renderAt("/?shelf=read");
     await act(async () => screen.getByText("settings").click());
@@ -88,10 +92,8 @@ describe("useLibraryParams", () => {
     const box = screen.getByLabelText("search");
     await userEvent.type(box, "dune");
     expect(box).toHaveValue("dune");
-    expect(router.location.search).toBe("?shelf=read&q=dune");
-    // (The caret-jump this state exists for is browser-only: jsdom passes
-    // with or without it, so it is not asserted here.)
-    // …and the URL moving on its own (Back) moves the box.
+    expect(router.location.search).toBe("?q=dune&shelf=read");
+    // …and the URL moving on its own (Back, a saved view) moves the box.
     await act(async () => router.navigate("/?q=other"));
     expect(box).toHaveValue("other");
   });

@@ -1,8 +1,14 @@
 import { gql } from '@apollo/client';
 
+/**
+ * The library list. The faceted library sends `filter` (BookFilterInput, from
+ * utils/libraryFilter.js `buildBooksVariables`) and `seed` for the shuffle;
+ * the flat args stay declared for the CSV export's and any caller's use and
+ * are what old tabs still send.
+ */
 export const GET_BOOKS = gql`
-  query GetBooks($page: Int, $limit: Int, $sort: String, $sortDir: String, $author: String, $tag: String, $shelf: String, $owned: String, $q: String) {
-    books(page: $page, limit: $limit, sort: $sort, sortDir: $sortDir, author: $author, tag: $tag, shelf: $shelf, owned: $owned, q: $q) {
+  query GetBooks($page: Int, $limit: Int, $sort: String, $sortDir: String, $author: String, $tag: String, $shelf: String, $owned: String, $q: String, $filter: BookFilterInput, $seed: Int) {
+    books(page: $page, limit: $limit, sort: $sort, sortDir: $sortDir, author: $author, tag: $tag, shelf: $shelf, owned: $owned, q: $q, filter: $filter, seed: $seed) {
       items {
         id
         title
@@ -113,6 +119,53 @@ export const GET_BOOK = gql`
   ${BOOK_FIELDS}
 `;
 
+/**
+ * The filter panel's counts (`@geeksuite/collection` useFacetQuery): each
+ * facet applies every active filter EXCEPT its own. Asked twice — once with
+ * no filter (the order and universe of options) and once with the live one.
+ */
+export const GET_BOOK_FACETS = gql`
+  query GetBookFacets($filter: BookFilterInput) {
+    bookFacets(filter: $filter) {
+      total
+      shelves {
+        value
+        count
+      }
+      authors {
+        value
+        count
+      }
+      series {
+        value
+        count
+      }
+      tags {
+        value
+        count
+      }
+      formats {
+        value
+        count
+      }
+      languages {
+        value
+        count
+      }
+      readYears {
+        year
+        count
+      }
+      ratings {
+        rating
+        count
+      }
+      owned
+      hasFile
+    }
+  }
+`;
+
 export const GET_SHELVES = gql`
   query GetShelves {
     shelves {
@@ -145,6 +198,7 @@ export const SAVED_FILTER_FIELDS = `
   shelfFilter
   ownedOnly
   ownedFilter
+  filter
 `;
 
 export const GET_BOOK_PROFILE = gql`

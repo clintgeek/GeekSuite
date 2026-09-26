@@ -1,27 +1,32 @@
 /**
- * The library's book list for the filters in the URL — in the Apollo cache
- * (`Query.books`, graphql/cachePolicies.js), not a hand-managed array.
+ * The library's data: the book list and the filter panel's counts for the
+ * filters in the URL — BookGeek's binding of `@geeksuite/collection`
+ * (`usePagedList` over `GetBooks`, `useFacetQuery` over `GetBookFacets`; the
+ * list lives in the Apollo cache, graphql/cachePolicies.js).
  *
  * One list per filter + sort; pages merge into it, so an edit anywhere
  * (rate, shelf, progress, metadata, cover) patches the row in place and never
  * collapses three loaded pages back to one. Revisiting a filter shows its
- * cached rows at once and refreshes the head behind them.
+ * cached rows at once and refreshes the head behind them; a new filter keeps
+ * the previous rows on screen (dimmed, `refreshing`) until its own arrive.
  *
- * Also here, because they are the library's and nobody else's: the infinite-
- * scroll sentinel, the `/api/health` check that gates the grid, the CSV
- * export of everything the filters match, and the (disabled) merge selection.
+ * Also here, because they are the library's and nobody else's: the
+ * `/api/health` check that gates the grid, a load-more that says when it
+ * failed, the CSV export of everything the filters match, and the (disabled)
+ * merge selection.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
-import { useApolloClient, useQuery } from "@apollo/client";
-import { GET_BOOKS } from "../graphql/queries.js";
+import { useCallback, useEffect, useState } from "react";
+import { useApolloClient } from "@apollo/client";
+import { useFacetQuery, usePagedList } from "@geeksuite/collection";
+import { GET_BOOKS, GET_BOOK_FACETS } from "../graphql/queries.js";
 import { writeRestBook, removeBookFromLists } from "../graphql/cachePolicies.js";
 import { API_BASE } from "../utils/bookDisplay";
 import { authFetch } from "../utils/authFetch";
 import { buildBooksCsv, booksCsvFilename, UTF8_BOM } from "../utils/exportBooksCsv.js";
-import { booksVariables } from "../utils/libraryParams";
+import { PAGE_SIZE } from "../utils/libraryFilter";
 import { refreshShelfSummary } from "./useBookActions";
 
-export const LIBRARY_PAGE_SIZE = 50;
+export const LIBRARY_PAGE_SIZE = PAGE_SIZE;
 const showMergeUi = false;
 
 /**
@@ -34,29 +39,29 @@ async function checkHealth() {
   if (!res.ok) throw new Error(`Health check failed (${ res.status })`);
 }
 
-export function useLibrary({ params }) {
+/** The panel's counts: `{ base, current, loading, error }`. */
+export function useBookFacets(filterInput) {
+  return useFacetQuery(GET_BOOK_FACETS, filterInput, { field: "bookFacets" });
+}
+
+/** `lib` is hooks/useLibraryParams's — the package's URL-backed filter state. */
+export function useLibrary({ lib }) {
   const apolloClient = useApolloClient();
-  const variables = booksVariables(params, { limit: LIBRARY_PAGE_SIZE });
+  const list = usePagedList(GET_BOOKS, {
+    variables: lib.variables,
+    ready: lib.ready,
+    field: "books",
+    itemsField: "items",
+    pageSize: PAGE_SIZE,
+  });
+  const variables = lib.variables(1);
   const variablesKey = JSON.stringify(variables);
 
-  const { data, loading: queryLoading, error: queryError, fetchMore, refetch } = useQuery(GET_BOOKS, {
-    variables: { ...variables, page: 1 },
-    fetchPolicy: "cache-and-network",
-    nextFetchPolicy: "cache-first",
-    notifyOnNetworkStatusChange: false,
-  });
-
   const [healthError, setHealthError] = useState(null);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [loadMoreError, setLoadMoreError] = useState(null);
   // A page that brought nothing new (a server that ignores `page`) stops the
   // sentinel for this filter instead of asking for the same page forever.
   const [exhaustedKey, setExhaustedKey] = useState(null);
-  // `loadingMore` is state, so the IntersectionObserver callback closes over
-  // whatever it was when the observer was built. A ref is read live, which is
-  // what stops two rapid intersections from both appending the same page.
-  const loadingMoreRef = useRef(false);
-  const loadMoreRef = useRef(null);
 
   // Health, and the shelf counts, on every filter change — as the old
   // page-1 load did.
@@ -73,61 +78,32 @@ export function useLibrary({ params }) {
     };
   }, [variablesKey, apolloClient]);
 
-  // While a new filter loads, a list is only shown if it is this filter's
-  // (no `previousData`): the old rows under the new filter's name would lie.
-  const page = data?.books ?? null;
-  const books = page?.items?.filter(Boolean) ?? [];
-  const total = typeof page?.total === "number" ? page.total : books.length;
-  const loading = queryLoading && !page;
-  const error = healthError || (queryError && !page ? queryError.message || "Failed to load data" : null);
-  // Paging is by what is loaded, not by the last page number: after a delete
-  // or an in-place refresh the list is not a whole number of pages, and the
-  // merge policy dedupes any overlap.
-  const hasMore = Boolean(page) && books.length < total && exhaustedKey !== variablesKey && !error;
+  const page = list.page;
+  const books = list.items.filter(Boolean);
+  const total = typeof page?.total === "number" ? page.total : null;
+  const loading = !page && (list.loading || !lib.ready);
+  const error = healthError || (list.error && !page ? list.error.message || "Failed to load data" : null);
+  const hasMore = list.hasMore && exhaustedKey !== variablesKey && !error;
 
+  const { loadMore: loadNextPage } = list;
   const loadMore = useCallback(async () => {
-    if (loadingMoreRef.current) return;
-    loadingMoreRef.current = true;
-    setLoadingMore(true);
     setLoadMoreError(null);
     const before = books.length;
     try {
       await checkHealth();
-      const res = await fetchMore({
-        variables: { ...variables, page: Math.floor(before / LIBRARY_PAGE_SIZE) + 1 },
-      });
-      const got = res?.data?.books?.items?.length ?? 0;
-      const after = apolloClient.cache.readQuery({ query: GET_BOOKS, variables: { ...variables, page: 1 } })?.books?.items?.length ?? before;
-      if (got === 0 || after <= before) setExhaustedKey(variablesKey);
+      await loadNextPage();
+      const after =
+        apolloClient.cache.readQuery({ query: GET_BOOKS, variables })?.books?.items?.length ?? before;
+      if (after <= before) setExhaustedKey(variablesKey);
     } catch (err) {
       // One transient append failure used to set `hasMore` false for the
       // rest of the session, permanently killing infinite scroll.
       setLoadMoreError(err.message || "Failed to load more books");
-    } finally {
-      loadingMoreRef.current = false;
-      setLoadingMore(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- `variables` is keyed by `variablesKey`
-  }, [books.length, fetchMore, variablesKey, apolloClient]);
+  }, [books.length, loadNextPage, variablesKey, apolloClient]);
 
-  useEffect(() => {
-    if (typeof window === "undefined" || typeof window.IntersectionObserver !== "function") return undefined;
-    if (!hasMore || loadingMore || loading) return undefined;
-
-    const observer = new IntersectionObserver((entries) => {
-      const [entry] = entries;
-      if (entry.isIntersecting && !loadingMoreRef.current) loadMore();
-    });
-
-    const target = loadMoreRef.current;
-    if (target) observer.observe(target);
-
-    return () => {
-      if (target) observer.unobserve(target);
-      observer.disconnect();
-    };
-  }, [hasMore, loading, loadingMore, loadMore]);
-
+  const { refetch } = list;
   const onRetry = useCallback(async () => {
     setHealthError(null);
     try {
@@ -166,7 +142,7 @@ export function useLibrary({ params }) {
     if (exportingCsv) return;
     setExportingCsv(true);
     try {
-      const { limit: _limit, sort, sortDir, ...filters } = variables;
+      const { limit: _limit, page: _page, sort, sortDir, ...filters } = variables;
 
       const PAGE_SIZE = 100;
       const collected = [];
@@ -196,7 +172,13 @@ export function useLibrary({ params }) {
       }
 
       const csv = buildBooksCsv(collected);
-      const filename = booksCsvFilename(filters);
+      const f = filters.filter ?? {};
+      const filename = booksCsvFilename({
+        shelf: f.shelves?.length === 1 ? f.shelves[0] : undefined,
+        author: f.authors?.[0] ?? f.authorText,
+        tag: f.tags?.[0],
+        q: f.q,
+      });
 
       // The BOM is what makes Excel read this as UTF-8 rather than the local
       // codepage; see the util's header.
@@ -305,11 +287,11 @@ export function useLibrary({ params }) {
     books,
     total,
     loading,
+    refreshing: list.refreshing,
     error,
     hasMore,
-    loadingMore,
+    loadingMore: list.loadingMore,
     loadMoreError,
-    loadMoreRef,
     loadMore,
     onRetry,
     exportingCsv,

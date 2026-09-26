@@ -134,7 +134,8 @@ export function useSettings({ session, params }) {
         variables: { id: shelfId },
       });
       setProfile(data?.removeBookShelf?.profile || null);
-      if (params.shelfFilter === shelfId) params.setShelfFilter("all");
+      const shelves = params.lib.state.filter.shelves;
+      if (shelves.includes(shelfId)) params.lib.update({ shelves: shelves.filter((s) => s !== shelfId) });
       await prefs.resetDefaultShelfIf(shelfId);
       await refreshShelfSummary(apolloClient);
     } catch (err) {

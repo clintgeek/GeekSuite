@@ -102,7 +102,6 @@ export default function SettingsView({
   setDeviceWordInput,
   setKindleEmailInput,
   setNewShelfLabel,
-  setShelfFilter, // eslint-disable-line no-unused-vars -- was only used by the removed "back to library" button
   shelfEditError,
   shelfEditLoading,
   shelves,

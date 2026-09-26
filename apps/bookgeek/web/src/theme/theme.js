@@ -53,6 +53,11 @@ function buildBookOverrides(mode) {
         muted:     isDark ? "#9aa4b2" : "#5b6472",
       },
       divider: colors.border,
+      // A control's outline — an unchecked facet box, a pill, a chip
+      // (@geeksuite/collection draws them in `palette.border`). Stronger than
+      // the hairline divider: an empty checkbox is a control and must read
+      // as one (≈3:1 on the page in both modes).
+      border: isDark ? "rgba(148, 163, 184, 0.6)" : "rgba(15, 23, 42, 0.5)",
       // Identity tones, not semantics. `progress` is the one amber in the app
       // (reading progress on covers and the detail slider); `shelf` colors the
       // shelf state of a book everywhere it appears. Light mode steps each

@@ -11,9 +11,8 @@ describe('ShelfStrip', () => {
       <ShelfStrip
         shelves={SHELVES}
         shelfSummary={SHELF_SUMMARY}
-        shelfFilter="all"
-        setShelfFilter={vi.fn()}
-        setActiveView={vi.fn()}
+        value="all"
+        onChange={vi.fn()}
       />
     );
     const tabs = screen.getAllByRole('tab');
@@ -30,9 +29,8 @@ describe('ShelfStrip', () => {
       <ShelfStrip
         shelves={SHELVES}
         shelfSummary={SHELF_SUMMARY}
-        shelfFilter="reading"
-        setShelfFilter={vi.fn()}
-        setActiveView={vi.fn()}
+        value="reading"
+        onChange={vi.fn()}
       />
     );
     const readingTab = screen.getByRole('tab', { name: /Reading/ });
@@ -46,9 +44,8 @@ describe('ShelfStrip', () => {
       <ShelfStrip
         shelves={SHELVES}
         shelfSummary={SHELF_SUMMARY}
-        shelfFilter="all"
-        setShelfFilter={vi.fn()}
-        setActiveView={vi.fn()}
+        value="all"
+        onChange={vi.fn()}
       />
     );
     // "Comfort reads" (custom-comfort-reads) has count 1 in the summary, so
@@ -56,21 +53,16 @@ describe('ShelfStrip', () => {
     expect(screen.queryByText('need-to-find')).not.toBeInTheDocument();
   });
 
-  it('clicking a shelf chip sets the shelf filter and switches to the library view', async () => {
+  it('clicking a shelf chip picks that shelf', async () => {
     const user = userEvent.setup();
-    const setShelfFilter = vi.fn();
-    const setActiveView = vi.fn();
-    renderWithProviders(
-      <ShelfStrip
-        shelves={SHELVES}
-        shelfSummary={SHELF_SUMMARY}
-        shelfFilter="all"
-        setShelfFilter={setShelfFilter}
-        setActiveView={setActiveView}
-      />
-    );
+    const onChange = vi.fn();
+    renderWithProviders(<ShelfStrip shelves={SHELVES} shelfSummary={SHELF_SUMMARY} value="all" onChange={onChange} />);
     await user.click(screen.getByRole('tab', { name: /Reading/ }));
-    expect(setShelfFilter).toHaveBeenCalledWith('reading');
-    expect(setActiveView).toHaveBeenCalledWith('library');
+    expect(onChange).toHaveBeenCalledWith('reading');
+  });
+
+  it('lights no chip when several shelves are picked in the sheet', () => {
+    renderWithProviders(<ShelfStrip shelves={SHELVES} shelfSummary={SHELF_SUMMARY} value={null} onChange={vi.fn()} />);
+    expect(screen.getAllByRole('tab').every((t) => t.getAttribute('aria-selected') === 'false')).toBe(true);
   });
 });

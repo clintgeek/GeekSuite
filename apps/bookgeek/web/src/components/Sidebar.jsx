@@ -10,18 +10,21 @@
  * Shelves are the app's real navigation, so they are `sections` rows with
  * count badges rather than an `extras` widget — they get the scrollable body
  * and, on mobile, the drawer closes when one is picked (the primitive calls
- * `closeNav` after every item's `onClick`). Saved filters and "clear filters"
- * are controls, not destinations, so they stay in `extras`.
+ * `closeNav` after every item's `onClick`). A shelf row puts the list on that
+ * shelf and keeps the other filters (hooks/useLibraryParams `showShelf`).
+ *
+ * Saved views follow directly under the shelves (`@geeksuite/collection`
+ * SavedViews, as `extras`: they need a ⋯ menu the section rows have no slot
+ * for). A view that matches the URL exactly takes the highlight from the
+ * shelf row it might also match. Clearing filters lives with the filters
+ * now (the panel's and the chips' "Clear all"), not here.
  *
  * `GeekShell nav={…}` owns the breakpoint, the drawer and the column width,
  * so there is no width, height, border or `isMobile` plumbing here.
  */
 import React from 'react';
 import {
-  Box,
-  Button,
   ButtonBase,
-  IconButton,
   Typography,
   alpha,
   useTheme
@@ -36,9 +39,12 @@ import {
   DoNotDisturbAltOutlined as AbandonedIcon,
   TravelExploreOutlined as NeedToFindIcon,
   BookOutlined as ShelfIcon,
-  DeleteOutline as DeleteIcon,
 } from '@mui/icons-material';
+import { useLocation } from 'react-router-dom';
 import { GeekSidebar, readableAcross, useGeekShell } from '@geeksuite/ui';
+import { SavedViews } from '@geeksuite/collection';
+import { useSavedViews } from '../hooks/useSavedViews';
+import { canonicalSearch, savedViewSearch } from '../utils/libraryFilter';
 import {
   LIBRARY_NAV_ID,
   activeNavId,
@@ -61,7 +67,7 @@ const SHELF_ICONS = {
  * Brand block — BookGeek's identity, so it is passed as a node rather than the
  * primitive's `{ monogram, name }` object: the DM Serif Display wordmark with
  * no monogram chip is the app's mark. "Home" is a `setActiveView` click (the
- * URL-backed setter from hooks/useLibraryParams), and the caller closes the mobile drawer by hand (the
+ * URL-backed `showShelf` from hooks/useLibraryParams), and the caller closes the mobile drawer by hand (the
  * primitive only auto-closes for `to`/`href` brands and for `onClick` rows).
  */
 const Brand = ({ onHome }) => {
@@ -98,24 +104,14 @@ const Brand = ({ onHome }) => {
 const Sidebar = ({
   shelves,
   shelfFilter,
-  setShelfFilter,
+  showShelf,
   shelfSummary,
   activeView,
-  setActiveView,
-  searchQuery,
-  setSearchQuery,
-  authorFilter,
-  setAuthorFilter,
-  tagFilter,
-  setTagFilter,
-  savedFilters,
-  savedFiltersError,
-  applySavedFilter,
-  handleDeleteSavedFilter,
-  deleteFilterLoadingId
 }) => {
   const theme = useTheme();
+  const location = useLocation();
   const { closeNav } = useGeekShell();
+  const { views, error: viewsError, remove } = useSavedViews();
   const accent = theme.palette.primary.main;
   // The selected row's label is the accent on an accent tint over the panel's
   // paper, at rest (12%) and hovered (18%). sky-600 read 3.52:1 there in light
@@ -128,24 +124,14 @@ const Sidebar = ({
     { tint: alpha(accent, 0.18) }
   );
 
-  const showLibrary = (shelfId) => {
-    setShelfFilter(shelfId);
-    setActiveView("library");
-  };
+  // The library (or a sheet over it) showing exactly a saved view lights it.
+  const here = activeView === "library" ? canonicalSearch(location.search) : null;
+  const activeSavedView = here != null ? views.find((v) => canonicalSearch(savedViewSearch(v)) === here) : null;
 
-  // The primitive closes the mobile drawer after every `sections` / footer
-  // click, but `extras` and the brand node are ours, so they close it here.
   const showLibraryAndClose = (shelfId) => {
-    showLibrary(shelfId);
+    showShelf(shelfId);
     closeNav();
   };
-
-  const hasAnyFilter = Boolean(
-    searchQuery.trim() ||
-    authorFilter.trim() ||
-    tagFilter.trim() ||
-    shelfFilter !== "all"
-  );
 
   // "All books" is not repeated as a shelf row: the Library row *is* the
   // unfiltered library, so picking it clears the shelf filter.
@@ -156,7 +142,7 @@ const Sidebar = ({
       label: shelf.label,
       icon: SHELF_ICONS[shelf.id] ?? <ShelfIcon />,
       badge: shelfCount(shelfSummary, shelf.id),
-      onClick: () => showLibrary(shelf.id)
+      onClick: () => showShelf(shelf.id)
     }));
 
   const sections = [
@@ -167,122 +153,58 @@ const Sidebar = ({
           label: "Library",
           icon: <LibraryIcon />,
           badge: shelfCount(shelfSummary, "all"),
-          onClick: () => showLibrary("all")
+          onClick: () => showShelf("all")
         }
       ]
     },
     { label: "Shelves", items: shelfItems }
   ];
 
-  const extras = (hasAnyFilter || savedFilters.length > 0 || savedFiltersError) ? (
-    <Box sx={{ maxHeight: 220, overflowY: 'auto' }}>
-      {hasAnyFilter && (
-        <Button
-          fullWidth
-          variant="outlined"
-          color="inherit"
-          size="small"
-          onClick={() => {
-            setSearchQuery("");
-            setAuthorFilter("");
-            setTagFilter("");
-            setShelfFilter("all");
-            closeNav();
-          }}
-          sx={{ mb: savedFilters.length > 0 ? 2 : 0, fontSize: '0.75rem', py: 0.5 }}
-        >
-          Clear all filters
-        </Button>
-      )}
+  const itemSx = {
+    mb: 0.25,
+    color: 'text.secondary',
+    '& .MuiListItemText-primary': { fontSize: '0.8125rem', fontWeight: 400 },
+    '&:hover': {
+      bgcolor: alpha(accent, 0.08),
+      color: 'text.primary'
+    },
+    '&.Mui-selected': {
+      bgcolor: alpha(accent, 0.12),
+      color: selectedInk,
+      '& .MuiListItemText-primary': { fontWeight: 600 },
+      '&:hover': { bgcolor: alpha(accent, 0.18) }
+    }
+  };
 
-      {savedFilters.length > 0 && (
-        <>
-          <Typography
-            variant="overline"
-            sx={{ mb: 1, color: 'text.secondary', fontWeight: 700, display: 'block' }}
-          >
-            Saved Filters
-          </Typography>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-            {savedFilters.map((preset) => (
-              <Box key={preset.id} sx={{ display: 'flex', gap: 0.5, alignItems: 'center' }}>
-                <Button
-                  fullWidth
-                  variant="contained"
-                  sx={{
-                    justifyContent: 'flex-start',
-                    fontSize: '0.75rem',
-                    bgcolor: alpha(theme.palette.divider, 0.05),
-                    color: 'text.primary',
-                    border: `1px solid ${theme.palette.divider}`,
-                    boxShadow: 'none',
-                    '&:hover': {
-                      bgcolor: alpha(theme.palette.divider, 0.1),
-                      boxShadow: 'none'
-                    }
-                  }}
-                  size="small"
-                  onClick={() => {
-                    applySavedFilter(preset);
-                    closeNav();
-                  }}
-                >
-                  <Box
-                    component="span"
-                    sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
-                  >
-                    {preset.name || "(unnamed)"}
-                  </Box>
-                </Button>
-                <IconButton
-                  size="small"
-                  onClick={() => handleDeleteSavedFilter(preset.id)}
-                  disabled={deleteFilterLoadingId === preset.id}
-                  aria-label={`Delete saved filter ${ preset.name || "(unnamed)" }`}
-                  sx={{ p: 0.5, '&:hover': { color: 'error.main' } }}
-                >
-                  <DeleteIcon sx={{ fontSize: 14 }} />
-                </IconButton>
-              </Box>
-            ))}
-          </Box>
-        </>
-      )}
-
-      {savedFiltersError && (
-        <Typography variant="caption" color="error" sx={{ mt: 1, fontSize: '0.625rem' }}>
-          {savedFiltersError}
+  const extras = views.length || viewsError ? (
+    <>
+      <SavedViews
+        views={views}
+        activeId={activeSavedView?.id ?? null}
+        hrefFor={(view) => `/${ savedViewSearch(view) }`}
+        onDelete={remove}
+        itemSx={itemSx}
+      />
+      {viewsError ? (
+        <Typography role="status" sx={{ px: 1.5, pt: 0.5, fontSize: '0.75rem', color: 'text.secondary' }}>
+          Saved views did not load.
         </Typography>
-      )}
-    </Box>
+      ) : null}
+    </>
   ) : null;
 
   return (
     <GeekSidebar
       brand={<Brand onHome={() => showLibraryAndClose("all")} />}
       sections={sections}
-      activeId={activeNavId({ activeView, shelfFilter })}
+      activeId={activeSavedView ? `view:${ activeSavedView.id }` : activeNavId({ activeView, shelfFilter })}
       // Filters sit directly under the shelf list (extras grows, sections don't),
       // and there is no sidebar footer: the header avatar menu is the single
       // account entry in BookGeek, so a footer chip would duplicate it.
       extras={extras}
       extrasGrow
       sx={{ bgcolor: 'background.paper' }}
-      itemSx={{
-        mb: 0.25,
-        color: 'text.secondary',
-        '& .MuiListItemText-primary': { fontSize: '0.8125rem', fontWeight: 400 },
-        '&:hover': {
-          bgcolor: alpha(accent, 0.08),
-          color: 'text.primary'
-        },
-        '&.Mui-selected': {
-          bgcolor: alpha(accent, 0.12),
-          color: selectedInk,
-          '& .MuiListItemText-primary': { fontWeight: 600 },
-          '&:hover': { bgcolor: alpha(accent, 0.18) }
-        }
-      }}
+      itemSx={itemSx}
     />
   );
 };

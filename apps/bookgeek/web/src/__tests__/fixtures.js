@@ -112,7 +112,7 @@ export const BOOKS = [
   },
 ];
 
-/** `shelves` prop shape used by BookCard, ShelfStrip, LibraryToolbar, ShelfSheet,
+/** `shelves` prop shape used by BookCard, ShelfStrip, the filter panel's Shelf section, ShelfSheet,
  * DetailHero and SettingsView: `{ id, label }`, "All books" first. */
 export const SHELVES = [
   { id: 'all', label: 'All books' },
@@ -123,7 +123,7 @@ export const SHELVES = [
   { id: 'want-to-read', label: 'Want to read' },
   { id: 'abandoned', label: 'Abandoned' },
   { id: 'need-to-find', label: 'Need to find' },
-  { id: 'custom-comfort-reads', label: 'Comfort reads' },
+  { id: 'custom-comfort-reads', label: 'Comfort reads', custom: true },
 ];
 
 /** `shelfSummary` shape used by ShelfStrip/navConfig's `shelfCount`. */
@@ -143,7 +143,42 @@ export const SHELF_SUMMARY = {
   ],
 };
 
+/**
+ * Saved views as the gateway returns them: two from before Phase C2 (legacy
+ * fields only, exactly what old profiles hold) and one saved with the whole
+ * BookFilterInput as `filter`.
+ */
 export const SAVED_FILTERS = [
-  { id: 'f1', name: 'Kindle queue', filters: { shelf: 'on-reader' } },
-  { id: 'f2', name: 'Unread sci-fi', filters: { shelf: 'unread', tag: 'science fiction' } },
+  {
+    __typename: 'BookSavedFilter', id: 'f1', name: 'Kindle queue', sortBy: 'title', sortDir: 'asc',
+    searchQuery: '', authorFilter: '', tagFilter: '', shelfFilter: 'on-reader', ownedOnly: false, ownedFilter: 'all', filter: null,
+  },
+  {
+    __typename: 'BookSavedFilter', id: 'f2', name: 'Unread sci-fi', sortBy: 'dateAdded', sortDir: 'desc',
+    searchQuery: 'robot', authorFilter: 'Asimov', tagFilter: 'science fiction', shelfFilter: 'unread', ownedOnly: true, ownedFilter: 'owned', filter: null,
+  },
+  {
+    __typename: 'BookSavedFilter', id: 'f3', name: 'Five-star fantasy', sortBy: 'rating', sortDir: 'desc',
+    searchQuery: '', authorFilter: '', tagFilter: 'fantasy', shelfFilter: 'all', ownedOnly: false, ownedFilter: 'all',
+    filter: { tags: ['fantasy'], ratingMin: 5 },
+  },
 ];
+
+const fv = (pairs) => pairs.map(([value, count]) => ({ __typename: 'BookFacetValue', value, count }));
+
+/** A `bookFacets` answer for BOOKS-ish data (the counts need not add up; the panel only shows them). */
+export const FACETS = {
+  __typename: 'BookFacets',
+  total: 4,
+  shelves: fv([['read', 118], ['unread', 61], ['want-to-read', 27], ['on-reader', 7], ['reading', 2], ['custom-comfort-reads', 1]]),
+  authors: fv([['John Scalzi', 3], ['Ursula K. Le Guin', 2], ['Philip K. Dick', 1]]),
+  series: fv([['Earthsea', 2]]),
+  tags: fv([['science fiction', 4], ['fantasy', 3], ['memoir', 1]]),
+  formats: fv([['epub', 4], ['pdf', 1]]),
+  languages: fv([['en', 4]]),
+  readYears: [2021, 2022, 2024].map((year, i) => ({ __typename: 'BookYearBucket', year, count: i + 1 })),
+  ratings: [3, 4, 5].map((rating, i) => ({ __typename: 'BookRatingBucket', rating, count: i + 1 })),
+  owned: 3,
+  hasFile: 4,
+};
+

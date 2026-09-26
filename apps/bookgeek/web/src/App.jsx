@@ -7,10 +7,12 @@
  *   /book/:id    views/BookDetailRoute.jsx hooks/useBookDetail (child route over the library)
  *   /settings    views/SettingsRoute.jsx   hooks/useSettings
  *
- * What more than one route reads — profile and shelves, saved filters,
- * preferences, the device basket, the Add-book dialog — is session state in
+ * What more than one route reads — profile and shelves, preferences, the
+ * device basket, the Add-book dialog — is session state in
  * hooks/useBookGeek.jsx; the library's filters are the URL
- * (hooks/useLibraryParams.jsx).
+ * (hooks/useLibraryParams.jsx, `@geeksuite/collection` underneath, worded
+ * for books by `CollectionProvider`); saved views are in the Apollo cache
+ * (hooks/useSavedViews.js).
  *
  * Session rules (suite): getMe() on load; a null user shows the splash; the
  * refresh timer keeps the session warm; a 401 from bookgeek's own API signs
@@ -23,6 +25,8 @@ import { useApolloClient } from "@apollo/client";
 import { getMe, loginRedirect, logout as logoutRequest, onLogout, startRefreshTimer, stopRefreshTimer } from "@geeksuite/auth";
 import { useUser } from "@geeksuite/user";
 import { GeekFab, GeekShell, GeekToastProvider, LoginSplash } from "@geeksuite/ui";
+import { CollectionProvider } from "@geeksuite/collection";
+import { BOOK_COLLECTION } from "./utils/collectionConfig";
 import { registerReset, reset as resetUserStore } from "./utils/resetUserStore";
 import { setUnauthorizedHandler } from "./utils/authFetch";
 import { installBookPolicies } from "./graphql/cachePolicies";
@@ -58,32 +62,18 @@ export function BookGeekRoutes() {
 // stay siblings of the shell (all of them are portals or `fixed` overlays).
 function Shell() {
   const params = useLibraryParams();
-  const { user, onSignOut, shelves, shelfSummary, savedFilters, basket, addBook, profile } = useBookGeek();
+  const { user, onSignOut, shelves, shelfSummary, basket, addBook, profile } = useBookGeek();
 
   return (
     <>
       <GeekShell
         nav={
           <Sidebar
-            user={user}
             shelves={shelves}
             shelfFilter={params.shelfFilter}
-            setShelfFilter={params.setShelfFilter}
+            showShelf={params.showShelf}
             shelfSummary={shelfSummary}
             activeView={params.activeView}
-            setActiveView={params.setActiveView}
-            searchQuery={params.searchQuery}
-            setSearchQuery={params.setSearchQuery}
-            authorFilter={params.authorFilter}
-            setAuthorFilter={params.setAuthorFilter}
-            tagFilter={params.tagFilter}
-            setTagFilter={params.setTagFilter}
-            savedFilters={savedFilters.savedFilters}
-            savedFiltersError={savedFilters.savedFiltersError}
-            applySavedFilter={savedFilters.applySavedFilter}
-            handleDeleteSavedFilter={savedFilters.handleDeleteSavedFilter}
-            deleteFilterLoadingId={savedFilters.deleteFilterLoadingId}
-            onSignOut={onSignOut}
           />
         }
         navSx={{ bgcolor: "background.paper" }}
@@ -101,16 +91,10 @@ function Shell() {
       >
         <GeekToastProvider>
           {/* Not GeekAppFrame: it would remount the library under /book/:id (components/AppMain.jsx). */}
+          {/* Each route lays out its own page: the library's filter panel
+              sits flush against the sidebar, Settings is a centred column. */}
           <AppMain transitionKey={params.activeView}>
-            <Box
-              sx={{
-                p: { xs: 2, md: 3 },
-                maxWidth: "1200px",
-                mx: "auto",
-              }}
-            >
-              <BookGeekRoutes />
-            </Box>
+            <BookGeekRoutes />
           </AppMain>
         </GeekToastProvider>
 
@@ -148,11 +132,13 @@ function Shell() {
 /** Everything behind the session gate. Unmounts on sign-out, taking all session state with it. */
 export function SignedIn({ user, onSignOut }) {
   return (
-    <LibraryParamsProvider>
-      <BookGeekProvider user={user} onSignOut={onSignOut}>
-        <Shell />
-      </BookGeekProvider>
-    </LibraryParamsProvider>
+    <CollectionProvider value={BOOK_COLLECTION}>
+      <LibraryParamsProvider>
+        <BookGeekProvider user={user} onSignOut={onSignOut}>
+          <Shell />
+        </BookGeekProvider>
+      </LibraryParamsProvider>
+    </CollectionProvider>
   );
 }
 

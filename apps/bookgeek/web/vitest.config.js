@@ -17,7 +17,9 @@ export default defineConfig({
         include: ['src/**/*.test.{js,jsx}'],
         server: {
             deps: {
-                inline: [/@mui/, /@emotion/],
+                // @geeksuite: packages/collection and packages/ui ship JSX
+                // source and must share this run's one MUI/React/router.
+                inline: [/@mui/, /@emotion/, /@geeksuite/],
             },
         },
         coverage: {

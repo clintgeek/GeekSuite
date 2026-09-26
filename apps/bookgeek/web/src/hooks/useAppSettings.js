@@ -15,7 +15,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { useAppPreferences } from "@geeksuite/user";
-import { hasShelfParam } from "../utils/libraryParams";
+import { hasShelfParam } from "../utils/libraryFilter";
 
 export function useAppSettings({ params }) {
   const { preferences: appPrefs, updateAppPreferences, loaded: appPrefsLoaded } = useAppPreferences("bookgeek");
@@ -30,7 +30,8 @@ export function useAppSettings({ params }) {
   // The URL as the session found it: a deep link's shelf beats the default.
   const initialSearchRef = useRef(location.search);
 
-  const { setShelfFilter } = params;
+  const { lib } = params;
+  const { update } = lib;
   useEffect(() => {
     if (!appPrefsLoaded) return;
     const preferredShelf = appPrefs?.defaultShelfFilter;
@@ -38,13 +39,16 @@ export function useAppSettings({ params }) {
       setDefaultShelfPref(preferredShelf);
       if (!defaultShelfAppliedRef.current) {
         defaultShelfAppliedRef.current = true;
-        if (!hasShelfParam(initialSearchRef.current)) setShelfFilter(preferredShelf);
+        // Replace, not push: the default is where the library opens, not a step.
+        if (!hasShelfParam(initialSearchRef.current) && preferredShelf !== "all") {
+          update({ shelves: [preferredShelf] }, { replace: true });
+        }
       }
     }
     // Anything but an explicit `true` is off — an absent key, a stale
     // string, a half-written preference document.
     setLibraryAssistantPref(appPrefs?.libraryAssistant === true);
-  }, [appPrefsLoaded, appPrefs, setShelfFilter]);
+  }, [appPrefsLoaded, appPrefs, update]);
 
   function clearPrefMessages() {
     setPrefSaveError(null);

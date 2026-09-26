@@ -4,6 +4,12 @@
  * A horizontally scrolling chip row under the top bar: All · Reading · On
  * Reader · … with counts from the shelf summary. Mobile only — at `md`+ the
  * sidebar already lists the shelves, so this hides rather than duplicating it.
+ *
+ * Kept beside the Filters sheet (Phase C2), as GameGeek kept its strip: the
+ * shelf is how BookGeek is read ("what am I reading", "what's on the
+ * Kindle"), and on a phone the sheet and the drawer are both two taps away
+ * where this is one. `value` is the one shelf on ("all" for none, null when
+ * several are picked in the sheet — then no chip lights).
  */
 import React from "react";
 import { Box, ButtonBase, Chip } from "@mui/material";
@@ -12,9 +18,8 @@ import { shelfCount } from "./navConfig";
 export default function ShelfStrip({
   shelves,
   shelfSummary,
-  shelfFilter,
-  setShelfFilter,
-  setActiveView,
+  value,
+  onChange,
 }) {
   const entries = [
     { id: "all", label: "All" },
@@ -38,7 +43,7 @@ export default function ShelfStrip({
       }}
     >
       {entries.map((shelf) => {
-        const active = shelfFilter === shelf.id;
+        const active = value === shelf.id;
         const count = shelfCount(shelfSummary, shelf.id);
         return (
           // The visible chip stays 32px tall; the ButtonBase around it is the
@@ -49,10 +54,7 @@ export default function ShelfStrip({
             key={shelf.id}
             role="tab"
             aria-selected={active}
-            onClick={() => {
-              setShelfFilter(shelf.id);
-              setActiveView("library");
-            }}
+            onClick={() => onChange(shelf.id)}
             sx={{
               flex: "0 0 auto",
               minHeight: 44,

@@ -4,7 +4,6 @@
  *   - the user and sign-out;
  *   - the profile and the shelf list built from it (hooks/useProfile.js);
  *   - the shelf counts (`shelves` query, in the Apollo cache);
- *   - saved filters (sidebar + filter sheet);
  *   - app preferences: the default shelf and the library-assistant switch;
  *   - the device basket and select mode (library + detail + the FAB);
  *   - the Add-book dialog (top bar + FAB, over any route);
@@ -25,7 +24,6 @@ import { useRateBook } from "./useBookActions";
 import { useDeviceBasket } from "./useDeviceBasket";
 import { useLibraryParams } from "./useLibraryParams";
 import { useProfile } from "./useProfile";
-import { useSavedFilters } from "./useSavedFilters";
 import { evictWhatNext } from "./useWhatNext";
 
 const BookGeekContext = createContext(null);
@@ -34,7 +32,6 @@ export function BookGeekProvider({ user, onSignOut, children }) {
   const params = useLibraryParams();
   const profile = useProfile();
   const { data: shelvesData, client } = useQuery(GET_SHELVES, { fetchPolicy: "cache-and-network" });
-  const savedFilters = useSavedFilters({ params, shelves: profile.shelves });
   const settings = useAppSettings({ params });
   const basket = useDeviceBasket();
   const addBook = useAddBook({ params });
@@ -47,7 +44,6 @@ export function BookGeekProvider({ user, onSignOut, children }) {
       onSignOut,
       ...profile,
       shelfSummary: shelvesData?.shelves ?? null,
-      savedFilters,
       settings: {
         ...settings,
         // Switching the assistant off forgets the strip, so switching it back
@@ -61,7 +57,7 @@ export function BookGeekProvider({ user, onSignOut, children }) {
       addBook,
       rateBook,
     }),
-    [user, onSignOut, profile, shelvesData, savedFilters, settings, toggleLibraryAssistant, client, basket, addBook, rateBook]
+    [user, onSignOut, profile, shelvesData, settings, toggleLibraryAssistant, client, basket, addBook, rateBook]
   );
 
   return <BookGeekContext.Provider value={value}>{children}</BookGeekContext.Provider>;

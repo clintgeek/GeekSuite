@@ -91,12 +91,19 @@ export default defineConfig(({ mode }) => {
     },
     resolve: {
       alias: {
-        '@geeksuite/ui': path.resolve(__dirname, '../../../packages/ui/src/index.js')
+        '@geeksuite/ui': path.resolve(__dirname, '../../../packages/ui/src/index.js'),
+        // The library machinery (facets, URL state, saved views, paged list),
+        // from source like packages/ui. Its /server entry is gateway-only and
+        // never imported here.
+        '@geeksuite/collection': path.resolve(__dirname, '../../../packages/collection/src/index.js')
       },
-      // packages/ui is compiled from source (alias above) and pnpm materializes
-      // a private @mui/material for its peer range; two MUI copies split the
-      // theme context (shell renders unthemed). Force the app's single copy.
-      dedupe: ['@mui/material', '@emotion/react', '@emotion/styled', 'react', 'react-dom']
+      // MANDATORY. packages/ui and packages/collection are compiled from
+      // source (aliases above) and pnpm can materialize a private
+      // @mui/material for a package's peer range; two MUI copies split the
+      // theme context (shell renders unthemed). Force the app's single copy of
+      // MUI, its icons, React and the router (collection's URL state must use
+      // the app's router context).
+      dedupe: ['@mui/material', '@mui/icons-material', '@emotion/react', '@emotion/styled', 'react', 'react-dom', 'react-router-dom']
     }
   };
 });

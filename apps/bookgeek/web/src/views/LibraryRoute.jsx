@@ -1,10 +1,11 @@
 /**
- * `/` — the library route. Wires the URL filters (hooks/useLibraryParams),
- * the cached book list (hooks/useLibrary), the What-next strip
- * (hooks/useWhatNext) and the session's basket/saved filters into
- * `LibraryView`, whose props are unchanged. `/book/:id` renders into the
- * <Outlet/> over it, so opening a book never unmounts the grid: the scroll
- * position and every loaded page are still there when the sheet closes.
+ * `/` — the library route. Wires the URL filter state (hooks/useLibraryParams,
+ * `@geeksuite/collection`'s `useCollectionFilter` underneath), the cached
+ * book list and the panel's counts (hooks/useLibrary), the What-next strip
+ * (hooks/useWhatNext) and the session's basket into `LibraryView`.
+ * `/book/:id` renders into the <Outlet/> over it, so opening a book never
+ * unmounts the grid: the scroll position and every loaded page are still
+ * there when the sheet closes.
  */
 import React, { useCallback } from "react";
 import { Outlet, useNavigate } from "react-router-dom";
@@ -12,19 +13,21 @@ import { useToast } from "@geeksuite/ui";
 import { bookPath } from "../components/navConfig";
 import { useBookActions } from "../hooks/useBookActions";
 import { useBookGeek } from "../hooks/useBookGeek";
-import { useLibrary } from "../hooks/useLibrary";
+import { useBookFacets, useLibrary } from "../hooks/useLibrary";
 import { useLibraryParams } from "../hooks/useLibraryParams";
 import { useWhatNext } from "../hooks/useWhatNext";
 import LibraryView from "./LibraryView";
 
 export default function LibraryRoute() {
   const params = useLibraryParams();
+  const { lib } = params;
   const session = useBookGeek();
-  const library = useLibrary({ params });
+  const library = useLibrary({ lib });
+  const facets = useBookFacets(lib.filterInput);
   const actions = useBookActions();
   const navigate = useNavigate();
   const { notify } = useToast();
-  const { basket, savedFilters, shelves, shelfSummary, rateBook } = session;
+  const { basket, shelves, shelfSummary, rateBook } = session;
 
   const openBook = useCallback(
     (book) => {
@@ -52,58 +55,41 @@ export default function LibraryRoute() {
   return (
     <>
       <LibraryView
-        activeView={params.activeView}
-        applySavedFilter={savedFilters.applySavedFilter}
         {...whatNext}
-        authorFilter={params.authorFilter}
+        lib={lib}
+        facets={facets}
+        shelves={shelves}
+        shelfSummary={shelfSummary}
+        books={library.books}
+        total={library.total}
+        loading={library.loading}
+        refreshing={library.refreshing}
+        error={library.error}
+        hasMore={library.hasMore}
+        loadingMore={library.loadingMore}
+        loadMoreError={library.loadMoreError}
+        onLoadMore={library.loadMore}
+        onRetry={library.onRetry}
         basketBookIds={basket.basketBookIds}
         basketError={basket.basketError}
         basketLoading={basket.basketLoading}
-        books={library.books}
-        onRateBook={rateBook}
         clearBasket={basket.clearBasket}
-        error={library.error}
         handleCreateDeviceBasket={basket.handleCreateDeviceBasket}
+        selectMode={basket.selectMode}
+        setSelectMode={basket.setSelectMode}
+        toggleBasket={basket.toggleBasket}
+        showMergeUi={library.showMergeUi}
+        selectedBookIds={library.selectedBookIds}
+        toggleBookSelection={library.toggleBookSelection}
         handleMergeSelectedBooks={library.handleMergeSelectedBooks}
+        mergeLoading={library.mergeLoading}
+        mergeSelectionError={library.mergeSelectionError}
         handleExportCsv={library.handleExportCsv}
         exportingCsv={library.exportingCsv}
         exportError={library.exportError}
         exportNotice={library.exportNotice}
-        handleSaveCurrentFilter={savedFilters.handleSaveCurrentFilter}
-        hasMore={library.hasMore}
-        loadMoreError={library.loadMoreError}
-        loadMoreRef={library.loadMoreRef}
-        loading={library.loading}
-        loadingMore={library.loadingMore}
-        mergeLoading={library.mergeLoading}
-        mergeSelectionError={library.mergeSelectionError}
-        onRetry={library.onRetry}
-        saveFilterLoading={savedFilters.saveFilterLoading}
-        savedFilters={savedFilters.savedFilters}
-        savedFiltersError={savedFilters.savedFiltersError}
-        searchQuery={params.searchQuery}
-        selectMode={basket.selectMode}
-        selectedBookIds={library.selectedBookIds}
-        setActiveView={params.setActiveView}
-        setAuthorFilter={params.setAuthorFilter}
-        setDownloadOpen={() => {}}
-        setSearchQuery={params.setSearchQuery}
-        setSelectMode={basket.setSelectMode}
+        onRateBook={rateBook}
         setSelectedBook={openBook}
-        setShelfFilter={params.setShelfFilter}
-        setSortBy={params.setSortBy}
-        setSortDir={params.setSortDir}
-        setTagFilter={params.setTagFilter}
-        shelfFilter={params.shelfFilter}
-        shelfSummary={shelfSummary}
-        shelves={shelves}
-        showMergeUi={library.showMergeUi}
-        sortBy={params.sortBy}
-        sortDir={params.sortDir}
-        tagFilter={params.tagFilter}
-        toggleBasket={basket.toggleBasket}
-        toggleBookSelection={library.toggleBookSelection}
-        total={library.total}
       />
       <Outlet />
     </>
