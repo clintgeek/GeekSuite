@@ -9,14 +9,53 @@
  *   accessible name, itemNoun → { one: 'tag', many: 'tags' } for the search
  *   box and "Show all 24 tags". Without groupOf the options are one
  *   unlabelled list.
+ *
+ *   collapsedGroups → headings (from groupOrder) whose options sit folded
+ *   behind a disclosure row at the end ("Unsorted · 212"): outside the
+ *   `limit` and "Show all", listed whole once opened. A selected value in a
+ *   folded group still shows under its heading, and a search looks inside
+ *   folded groups too. Empty (the default) changes nothing.
  */
 import React, { useId, useState } from 'react';
-import { Box, IconButton, InputBase, alpha } from '@mui/material';
-import { Close as CloseIcon, Search as SearchIcon } from '@mui/icons-material';
+import { Box, ButtonBase, IconButton, InputBase, alpha } from '@mui/material';
+import { Close as CloseIcon, ExpandMore as ExpandMoreIcon, Search as SearchIcon } from '@mui/icons-material';
 import { groupOptions, visibleOptions } from '../facets/options';
 import { OptionRow, ShowMoreButton } from './FacetOptions';
 
 const DEFAULT_NOUN = { one: 'value', many: 'values' };
+const NO_GROUPS = [];
+
+const headingSx = { px: 1, pt: 0.5, pb: 0.25, fontSize: '0.75rem', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'text.secondary' };
+
+/** A folded group's heading: a disclosure row that says how many it holds. */
+function FoldedGroupToggle({ group, count, open, controls, noun, onClick }) {
+  return (
+    <ButtonBase
+      onClick={onClick}
+      aria-expanded={open ? 'true' : 'false'}
+      aria-controls={controls}
+      aria-label={`${group}, ${count} ${count === 1 ? noun.one : noun.many}`}
+      sx={{
+        ...headingSx,
+        pt: 0,
+        pb: 0,
+        width: '100%',
+        minHeight: { xs: 44, md: 34 },
+        justifyContent: 'flex-start',
+        gap: 0.75,
+        borderRadius: '8px',
+        '&:hover': { color: 'text.primary' },
+        '&.Mui-focusVisible': { outline: 2, outlineColor: 'primary.main', outlineStyle: 'solid', outlineOffset: -2 },
+      }}
+    >
+      <Box component="span">{group}</Box>
+      <Box component="span" sx={{ fontWeight: 400, letterSpacing: 0, fontVariantNumeric: 'tabular-nums' }}>
+        {count}
+      </Box>
+      <ExpandMoreIcon aria-hidden="true" sx={{ fontSize: 18, ml: 'auto', transition: 'transform 150ms', transform: open ? 'rotate(180deg)' : 'none' }} />
+    </ButtonBase>
+  );
+}
 
 export default function GroupedFacetOptions({
   options,
@@ -27,18 +66,42 @@ export default function GroupedFacetOptions({
   groupLabel = (g) => g,
   itemNoun = DEFAULT_NOUN,
   emptyText = 'Nothing here yet.',
+  collapsedGroups = NO_GROUPS,
 }) {
   const [query, setQuery] = useState('');
   const [expanded, setExpanded] = useState(false);
+  const [openFolds, setOpenFolds] = useState(() => new Set());
   const inputId = useId();
+  const foldId = useId();
 
   if (!options.length) {
     return <Box sx={{ px: 1, py: 0.5, fontSize: '0.8125rem', color: 'text.secondary', lineHeight: 1.5 }}>{emptyText}</Box>;
   }
 
   const q = query.trim().toLowerCase();
-  const pool = q ? options.filter((o) => o.selected || o.label.toLowerCase().includes(q)) : visibleOptions(options, limit, expanded);
-  const groups = groupOf && groupOrder.length ? groupOptions(pool, groupOf, groupOrder) : pool.length ? [{ group: null, options: pool }] : [];
+  const grouped = Boolean(groupOf && groupOrder.length);
+  const foldable = grouped ? collapsedGroups.filter((g) => groupOrder.includes(g)) : NO_GROUPS;
+  // The group a value lands in, exactly as groupOptions places it.
+  const placed = (value) => {
+    const g = groupOf(value);
+    return groupOrder.includes(g) ? g : groupOrder[groupOrder.length - 1];
+  };
+  const folded = foldable.length ? options.filter((o) => foldable.includes(placed(o.value))) : NO_GROUPS;
+  const main = folded.length ? options.filter((o) => !folded.includes(o)) : options;
+
+  const pool = q ? options.filter((o) => o.selected || o.label.toLowerCase().includes(q)) : visibleOptions(main, limit, expanded);
+  const groups = grouped ? groupOptions(pool, groupOf, groupOrder) : pool.length ? [{ group: null, options: pool }] : [];
+  // Folded groups, when not searching: each with every option it holds.
+  const folds = !q && folded.length
+    ? foldable.map((group) => ({ group, options: folded.filter((o) => placed(o.value) === group) })).filter((f) => f.options.length)
+    : NO_GROUPS;
+  const toggleFold = (group) =>
+    setOpenFolds((prev) => {
+      const next = new Set(prev);
+      if (next.has(group)) next.delete(group);
+      else next.add(group);
+      return next;
+    });
 
   return (
     <Box>
@@ -82,14 +145,11 @@ export default function GroupedFacetOptions({
         </Box>
       ) : null}
 
-      {groups.length ? (
+      {groups.length || folds.length ? (
         groups.map(({ group, options: groupOptionsList }) => (
           <Box key={group ?? 'all'} role="group" aria-label={group == null ? undefined : groupLabel(group)} sx={{ '& + &': { mt: 1 } }}>
             {group != null ? (
-              <Box
-                aria-hidden="true"
-                sx={{ px: 1, pt: 0.5, pb: 0.25, fontSize: '0.75rem', fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: 'text.secondary' }}
-              >
+              <Box aria-hidden="true" sx={headingSx}>
                 {group}
               </Box>
             ) : null}
@@ -104,9 +164,32 @@ export default function GroupedFacetOptions({
         </Box>
       )}
 
-      {!q && options.length > limit ? (
-        <ShowMoreButton expanded={expanded} total={options.length} noun={itemNoun.many} onClick={() => setExpanded((v) => !v)} />
+      {!q && main.length > limit ? (
+        <ShowMoreButton expanded={expanded} total={main.length} noun={itemNoun.many} onClick={() => setExpanded((v) => !v)} />
       ) : null}
+
+      {folds.map(({ group, options: foldOptions }, i) => {
+        const open = openFolds.has(group);
+        const shown = open ? foldOptions : foldOptions.filter((o) => o.selected);
+        const listId = `${foldId}-${i}`;
+        return (
+          <Box key={group} sx={{ mt: 1 }}>
+            <FoldedGroupToggle
+              group={group}
+              count={foldOptions.length}
+              open={open}
+              controls={listId}
+              noun={itemNoun}
+              onClick={() => toggleFold(group)}
+            />
+            <Box id={listId} role="group" aria-label={groupLabel(group)}>
+              {shown.map((o) => (
+                <OptionRow key={o.value} option={o} onChange={onChange} />
+              ))}
+            </Box>
+          </Box>
+        );
+      })}
     </Box>
   );
 }

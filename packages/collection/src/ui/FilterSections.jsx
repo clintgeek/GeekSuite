@@ -16,7 +16,8 @@
  *            `emptyText`.
  *   single   radios with "Any" (`anyLabel`) first, for a one-value key.
  *   grouped  a searchable, grouped long list (GroupedFacetOptions):
- *            `groupOf`, `groupOrder`, `groupLabel`, `itemNoun`, `emptyText`.
+ *            `groupOf`, `groupOrder`, `groupLabel`, `itemNoun`, `emptyText`,
+ *            `collapsedGroups` (headings folded behind a disclosure, last).
  *            `match: { key, over: [listKeys], text }` shows an Any/All toggle
  *            once more than one value across `over` is chosen.
  *   range    RangeFacet over `facets[facet]` buckets, writing `minKey` /
@@ -166,6 +167,7 @@ export default function FilterSections({ sections, lib, facets, context = {}, op
               groupLabel={section.groupLabel}
               itemNoun={section.itemNoun}
               emptyText={section.emptyText}
+              collapsedGroups={section.collapsedGroups}
             />
           </>
         );

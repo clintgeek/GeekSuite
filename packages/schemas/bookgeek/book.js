@@ -20,6 +20,10 @@
  * no indexes, no virtuals, no toJSON options, `timestamps: true`, and the
  * `files`/`series` sub-documents without their own `_id`.
  *
+ * 2026-09-26 (tags, apps/bookgeek/DOCS/TAGS.md): `libraryTags`,
+ * `unsortedTags` and `myTags` added — additive; old documents lack them until
+ * the api's boot migration derives the first two.
+ *
  * Takes the caller's mongoose (bookgeek's api is on 7.x, basegeek on 8.x) and
  * neither opens a connection nor registers a model.
  */
@@ -73,7 +77,17 @@ function bookDefinition(mongoose) {
     pageCount: { type: Number },
     description: { type: String },
     language: { type: String },
+    // The tags as imported (Calibre, enrich). Never rewritten by BookGeek's
+    // own edits — see ./tags.js and apps/bookgeek/DOCS/TAGS.md.
     tags: [{ type: String }],
+    // Derived from `tags` on every write (deriveTagFields in ./tags.js) and
+    // by the api's boot migration: the canonical vocabulary tags, and the raw
+    // tags that are neither mapped nor dropped.
+    libraryTags: [{ type: String }],
+    unsortedTags: [{ type: String }],
+    // Tags a person added in BookGeek (TAGS.md §4). Never touched by an
+    // import, never mapped; shown as-is under "My tags".
+    myTags: [{ type: String }],
 
     files: [createBookFileSchema(mongoose)],
     coverPath: { type: String },
@@ -99,7 +113,13 @@ function createBookSchema(mongoose) {
   return new mongoose.Schema(bookDefinition(mongoose), { ...bookSchemaOptions });
 }
 
+// The tag vocabulary rides along on this module so the gateway can reach it
+// through the package's existing `./bookgeek/book` export (the same trick as
+// gamegeek/constants re-exporting gamegeek/tags).
+const tagVocabulary = require('./tags');
+
 module.exports = {
+  tagVocabulary,
   bookDefinition,
   bookSchemaOptions,
   createBookFileSchema,

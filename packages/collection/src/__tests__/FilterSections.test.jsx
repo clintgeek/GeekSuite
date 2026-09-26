@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, screen, within } from '@testing-library/react';
+import { cleanup, fireEvent, screen, within } from '@testing-library/react';
 import FilterSections from '../ui/FilterSections';
 import FilterPanel from '../ui/FilterPanel';
 import { BOOK_CODEC, fv } from './fixtures';
@@ -88,6 +88,36 @@ describe('FilterSections (books config)', () => {
     expect(screen.getByText('of the chosen tags')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'All' }));
     expect(l.update).toHaveBeenCalledWith({ tagMatch: 'all' });
+  });
+
+  it('collapsedGroups: a folded heading sits last, outside the limit, and opens whole', () => {
+    // Unset, "Mine" is an ordinary group (the test above); folded, Homebrew
+    // leaves the top-2 pool and "Show all" counts only the unfolded three.
+    const folded = SECTIONS.map((s) => (s.id === 'tags' ? { ...s, collapsedGroups: ['Mine'] } : s));
+    const l = lib();
+    renderSections(l, { sections: folded });
+    const toggle = screen.getByRole('button', { name: 'Mine, 1 tag' });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('checkbox', { name: /Homebrew/ })).toBeNull();
+    expect(screen.getByRole('button', { name: 'Show all 3 tags' })).toBeInTheDocument();
+    // Folded rows come after "Show all".
+    expect(screen.getByRole('button', { name: 'Show all 3 tags' }).compareDocumentPosition(toggle) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(within(screen.getByRole('group', { name: 'Mine shelf' })).getByRole('checkbox', { name: /Homebrew/ })).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('checkbox', { name: /Homebrew/ }));
+    expect(l.toggle).toHaveBeenCalledWith('tags', 'Homebrew');
+  });
+
+  it('collapsedGroups: a selected value shows while folded, and a search looks inside', () => {
+    const folded = SECTIONS.map((s) => (s.id === 'tags' ? { ...s, collapsedGroups: ['Mine'] } : s));
+    renderSections(lib({ tags: ['Homebrew'] }), { sections: folded });
+    expect(screen.getByRole('button', { name: 'Mine, 1 tag' })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByRole('checkbox', { name: /Homebrew/ })).toBeChecked();
+    cleanup();
+    renderSections(lib(), { sections: folded });
+    fireEvent.change(screen.getByRole('searchbox', { name: 'Search tags' }), { target: { value: 'home' } });
+    expect(screen.getByRole('checkbox', { name: /Homebrew/ })).toBeInTheDocument();
   });
 
   it('a search that matches nothing says so, in the app’s noun', () => {
