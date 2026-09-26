@@ -113,8 +113,12 @@ function computeReadable(color, surface, min, under) {
   return lift ? '#FFFFFF' : '#000000';
 }
 
-/** Composite a possibly-translucent color over an opaque one. */
-function flattenOver(color, base) {
+/**
+ * Composite a possibly-translucent color over an opaque one, returning an
+ * opaque `rgb()`. Exported so shared chrome can build the real ground under a
+ * nested tint (a badge inside a selected row).
+ */
+export function flattenOver(color, base) {
   const parts = decomposeColor(color);
   if (parts.values.length < 4) return recomposeColor(parts);
 
@@ -129,4 +133,38 @@ function flattenOver(color, base) {
       .slice(0, 3)
       .map((v, i) => Math.round(v * alpha + under[i] * (1 - alpha))),
   });
+}
+
+/* ── readableAcross ────────────────────────────────────────────────────── */
+
+/**
+ * `readableOn` folded over several grounds: one ink that clears `min` on
+ * every surface in `surfaces`.
+ *
+ * Shared chrome does not know which of the palette's surfaces it will sit on.
+ * A sidebar row can be on the paper or the canvas, and an app may declare a
+ * third. So it takes the ink that survives all of them. This is the same fold
+ * the focused form label uses in `createGeekSuiteTheme`.
+ *
+ * `tint` covers the accent-on-accent-tint case: a selected nav row, a count
+ * badge, a monogram chip. There the ground is not a surface but
+ * `alpha(accent, n)` *over* one, so each surface becomes the `under` of that
+ * tint. The ink is the accent, not white, so walking the ink is the right fix
+ * here. For a white label on a filled chip, move the fill instead
+ * (DOCS/GEEK_SUITE_DESIGN_LANGUAGE.md). Found 2026-09-25: bookgeek's selected
+ * row and shelf-count badges read 3.4–3.5:1 in light mode.
+ *
+ * @param {string} color      the ink
+ * @param {string[]} surfaces opaque grounds; non-strings are ignored
+ * @param {{min?: number, tint?: string}} [options]
+ * @returns {string} `color` untouched when it already clears every ground
+ */
+export function readableAcross(color, surfaces, { min = 4.5, tint } = {}) {
+  return (surfaces ?? [])
+    .filter((surface) => typeof surface === 'string')
+    .reduce(
+      (ink, surface) =>
+        tint ? readableOn(ink, tint, { min, under: surface }) : readableOn(ink, surface, { min }),
+      color
+    );
 }

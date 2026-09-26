@@ -1,5 +1,5 @@
 import { alpha, createTheme, lighten } from '@mui/material/styles';
-import { readableOn } from './color.js';
+import { readableAcross, readableOn } from './color.js';
 import { geekDesignTokens } from './designTokens.js';
 
 const {
@@ -110,6 +110,19 @@ function buildComponents(themePalette) {
   const focusedLabelColor = Object.values(themePalette.background)
     .filter((value) => typeof value === 'string')
     .reduce((ink, surface) => readableOn(ink, surface), themePalette.primary.main);
+
+  // A selected list row (the sidebar's active nav item, above all) is painted
+  // with the accent on a 12% accent tint. That tint is not the paper, and the
+  // label is 13–14px copy, so it owes AA. bookgeek's sky-600 measured 3.52:1
+  // there in light mode (2026-09-25 desktop harness pass; axe filed it as
+  // "incomplete", so no gate saw it). Same fold as the focused label, one layer
+  // down: the tint over every declared surface.
+  const selectedTint = alpha(themePalette.primary.main, interaction.activeOpacity);
+  const selectedInk = readableAcross(
+    themePalette.primary.main,
+    Object.values(themePalette.background),
+    { tint: selectedTint }
+  );
 
   const tooltipBg = isDark
     ? lighten(themePalette.background.paper, 0.16)
@@ -319,10 +332,10 @@ function buildComponents(themePalette) {
             backgroundColor: alpha(themePalette.primary.main, interaction.hoverOpacity),
           },
           '&.Mui-selected': {
-            backgroundColor: alpha(themePalette.primary.main, interaction.activeOpacity),
-            color: themePalette.primary.main,
+            backgroundColor: selectedTint,
+            color: selectedInk,
             '&:hover': {
-              backgroundColor: alpha(themePalette.primary.main, interaction.activeOpacity),
+              backgroundColor: selectedTint,
             },
           },
         },

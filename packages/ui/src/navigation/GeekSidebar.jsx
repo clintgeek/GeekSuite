@@ -35,7 +35,9 @@
  * sections shrink to content (`flex: '0 0 auto'`) instead. Item `badge`
  * accepts a string as-is, a node, or a number — a `0` is suppressed unless
  * `badgeProps.showZero` is set; `badgeProps` otherwise passes through to the
- * badge's `Box` (sx merges last).
+ * badge's `Box` (sx merges last). The badge and monogram ink is the accent,
+ * measured onto its tint over every palette surface (`sidebarInk.js`), not a
+ * raw `primary.main`.
  *
  * Legacy: the pre-2026-09 API (`appName`, flat `items`, a `footer` *element*,
  * `variant="permanent" | "temporary"` with `mobileOpen`/`onMobileClose`) still
@@ -57,6 +59,7 @@ import ListItemText from '@mui/material/ListItemText';
 import Typography from '@mui/material/Typography';
 import { alpha } from '@mui/material/styles';
 import { geekLayout, geekShape } from '../designTokens.js';
+import { SIDEBAR_CHIP_TINT, sidebarChipInk } from './sidebarInk.js';
 import { initialsFrom } from './navUtils.js';
 import { useGeekShell } from './shellContext.js';
 
@@ -142,8 +145,8 @@ function Badge({ value, badgeProps }) {
         fontSize: '0.75rem',
         fontWeight: 600,
         lineHeight: '18px',
-        color: 'primary.main',
-        backgroundColor: (theme) => alpha(theme.palette.primary.main, 0.14),
+        color: sidebarChipInk,
+        backgroundColor: (theme) => alpha(theme.palette.primary.main, SIDEBAR_CHIP_TINT),
         ...badgeSx,
       }}
       {...restBadgeProps}
@@ -246,8 +249,8 @@ export const GeekSidebar = forwardRef(function GeekSidebar(
               alignItems: 'center',
               justifyContent: 'center',
               borderRadius: `${geekShape.radius.chip}px`,
-              backgroundColor: (theme) => alpha(theme.palette.primary.main, 0.14),
-              color: 'primary.main',
+              backgroundColor: (theme) => alpha(theme.palette.primary.main, SIDEBAR_CHIP_TINT),
+              color: sidebarChipInk,
               fontSize: '0.75rem',
               fontWeight: 600,
               letterSpacing: '0.02em',

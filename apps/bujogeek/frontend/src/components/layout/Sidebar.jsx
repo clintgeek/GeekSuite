@@ -15,27 +15,11 @@ import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { Bell, BellOff } from 'lucide-react';
 import { GeekSidebar } from '@geeksuite/ui';
 import usePushReminders from '../../hooks/usePushReminders';
-import { colors } from '../../theme/colors';
+import { chrome } from '../../theme/chrome';
 import { navSections, activeNavId } from './navConfig';
 
-// Chrome palette — dark tobacco, warm and grounded.
-// Consistent between light/dark app modes so the sidebar is always a dark anchor.
-export const chrome = {
-  bg:           '#252018',  // deeper tobacco — more luxurious than before
-  bgHover:      '#2E2820',
-  active:       '#1E1B14',  // sunken active state
-  border:       'rgba(255, 245, 220, 0.07)',
-  text:         'rgba(255, 245, 220, 0.85)',
-  textMuted:    'rgba(255, 245, 220, 0.38)',
-  textDisabled: 'rgba(255, 245, 220, 0.5)',
-  accent:       colors.primary[400],
-  accentBg:     'rgba(96, 152, 204, 0.1)',
-  danger:       'rgba(184, 60, 52, 0.75)',
-  dangerBg:     'rgba(184, 60, 52, 0.08)',
-  logo:         'rgba(255, 245, 220, 0.78)',
-  logoAccent:   colors.primary[400],
-  divider:      'rgba(255, 245, 220, 0.06)',
-};
+// The chrome palette lives in theme/chrome.js (solid inks, measured, asserted
+// in packages/ui's themeContrast.test.js).
 
 /**
  * The reminders toggle — the app's only push preference, so it lives in the
@@ -108,8 +92,8 @@ const Brand = () => (
   >
     <Box
       sx={{
-        width:          26,
-        height:         26,
+        width:          28,
+        height:         28,
         borderRadius:   '5px',
         border:         `1.5px solid ${chrome.logoAccent}`,
         display:        'flex',
@@ -123,10 +107,12 @@ const Brand = () => (
       <Typography
         sx={{
           fontFamily:    '"IBM Plex Mono", monospace',
-          fontSize:      '0.625rem',
+          // 12px is the suite's text floor. At 10px the mark read as a
+          // readable string under it (desktop harness, 2026-09-25).
+          fontSize:      '0.75rem',
           fontWeight:    700,
           color:         chrome.logoAccent,
-          letterSpacing: '0.04em',
+          letterSpacing: '0.02em',
           lineHeight:    1,
         }}
       >
@@ -176,15 +162,16 @@ const Sidebar = () => {
       extras={<RemindersToggle />}
       sx={{
         bgcolor: chrome.bg,
-        // `component="section"` wraps only nav groups, not the footer band, so
-        // this reaches the section labels ("Journal" / "Library") without
-        // touching the footer's user-email caption.
-        '& section .MuiTypography-caption': {
-          fontFamily: '"IBM Plex Mono", monospace',
-          fontSize: '0.5625rem',
-          fontWeight: 700,
-          color: chrome.textDisabled,
-        },
+      }}
+      // Section captions ("Journal" / "Library"): the IBM Plex Mono eyebrow,
+      // at the 12px floor. They were 9px, and the letter-spacing is eased to
+      // keep the same quiet weight at the bigger size.
+      sectionLabelSx={{
+        fontFamily:    '"IBM Plex Mono", monospace',
+        fontSize:      '0.75rem',
+        fontWeight:    600,
+        letterSpacing: '0.06em',
+        color:         chrome.textDisabled,
       }}
       brandSx={{ height: 56, minHeight: 56, px: 2.25, borderBottom: `1px solid ${chrome.border}` }}
       itemSx={{
@@ -197,9 +184,13 @@ const Sidebar = () => {
           fontFamily:    '"Source Sans 3", sans-serif',
           fontSize:      '0.875rem',
         },
+        // The row description ("Daily log") takes the chrome's own ink. The
+        // theme's text.secondary follows the app mode, so in light mode it
+        // was dark ink on dark tobacco (2.32:1).
+        '& .MuiListItemText-secondary': { color: chrome.caption },
         '&:hover': {
           backgroundColor: chrome.bgHover,
-          color:           'rgba(255, 245, 220, 0.72)',
+          color:           chrome.textHover,
         },
         '&.Mui-selected': {
           backgroundColor: chrome.active,

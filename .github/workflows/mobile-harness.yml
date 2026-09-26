@@ -12,6 +12,12 @@ name: Mobile harness
 # still printed and written to tools/mobile-harness/out/ci/SUMMARY.md
 # (uploaded with the screenshots). The burn-down that earned the flip went
 # 112 -> 39 -> 0 with no waivers (DOCS/MOBILE_UI_PLAN.md §2).
+#
+# Since 2026-09-25 it also gates the 1280x900 desktop contexts, dark and light
+# (--desktop runs phone AND desktop, not desktop alone). Desktop is where the
+# permanent sidebar lives, and it had 46 findings that no gate saw because the
+# phone drawer is closed in every phone scene. The job went from ~17 to ~28
+# minutes (220 -> 380 scenes), still inside the 45-minute timeout.
 on:
   push:
     branches: [main]
@@ -68,7 +74,11 @@ jobs:
         # green since 2026-09-05 14:54; the axe-core a11y category joined them
         # later the same day at 0 findings across all eight apps. Drop
         # `-- --enforce-a11y` only to deliberately un-gate a11y, and say why.
-        run: pnpm --filter @geeksuite/mobile-harness run ci -- --enforce-a11y
+        # `--desktop` adds the desktop contexts to the phone ones (ci.mjs:
+        # ALL_VIEWPORTS). It has been enforcing since 2026-09-25, when the
+        # desktop pass reached 0. Drop it only to deliberately un-gate
+        # desktop, and say why.
+        run: pnpm --filter @geeksuite/mobile-harness run ci -- --enforce-a11y --desktop
 
       - name: Upload screenshots and SUMMARY.md
         if: always()

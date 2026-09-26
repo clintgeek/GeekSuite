@@ -14,11 +14,7 @@ import { Box, Typography } from '@mui/material';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { GeekSidebar, geekLayout } from '@geeksuite/ui';
 import { activeNavId, navSections } from './navConfig.jsx';
-
-const INK = '#F5F5F4';
-const MUTED = '#A8A29E';
-const ACCENT = '#2DD4BF';
-const CHROME_BG = '#0C0A09';
+import { ACCENT, CHROME_BG, INK, MUTED } from './chrome.js';
 
 /**
  * Brand block, passed as a node rather than the primitive's
@@ -68,6 +64,11 @@ const Sidebar = () => {
       activeId={activeNavId(location.pathname)}
       sx={{ bgcolor: CHROME_BG }}
       chromeSx={{ flexShrink: 0 }}
+      // The primitive's caption ink is `text.secondary`, which follows the app
+      // mode. On this always-dark panel, light mode's secondary is dark ink
+      // (4.12:1). Captions use the chrome's own muted ink in both modes, which
+      // is what dark mode already showed.
+      sectionLabelSx={{ color: MUTED }}
       itemSx={{
         color: MUTED,
         transition: 'background-color 0.15s ease, color 0.15s ease',

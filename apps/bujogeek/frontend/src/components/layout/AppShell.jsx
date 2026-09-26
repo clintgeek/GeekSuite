@@ -19,7 +19,8 @@ import { useMediaQuery } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { GeekShell, GeekAppFrame, GeekToastProvider } from '@geeksuite/ui';
 import { useAuth } from '../../context/AuthContext';
-import Sidebar, { chrome } from './Sidebar';
+import Sidebar from './Sidebar';
+import { chrome } from '../../theme/chrome';
 import TopBar from './TopBar';
 import MobileTabBar from './MobileTabBar';
 

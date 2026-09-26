@@ -38,7 +38,7 @@ import {
   BookOutlined as ShelfIcon,
   DeleteOutline as DeleteIcon,
 } from '@mui/icons-material';
-import { GeekSidebar, useGeekShell } from '@geeksuite/ui';
+import { GeekSidebar, readableAcross, useGeekShell } from '@geeksuite/ui';
 import {
   LIBRARY_NAV_ID,
   activeNavId,
@@ -117,6 +117,16 @@ const Sidebar = ({
   const theme = useTheme();
   const { closeNav } = useGeekShell();
   const accent = theme.palette.primary.main;
+  // The selected row's label is the accent on an accent tint over the panel's
+  // paper, at rest (12%) and hovered (18%). sky-600 read 3.52:1 there in light
+  // mode (2026-09-25; axe files sidebar rows as "incomplete", so no gate saw
+  // it). Walk the ink until it clears both tints.
+  const paper = [theme.palette.background.paper];
+  const selectedInk = readableAcross(
+    readableAcross(accent, paper, { tint: alpha(accent, 0.12) }),
+    paper,
+    { tint: alpha(accent, 0.18) }
+  );
 
   const showLibrary = (shelfId) => {
     setShelfFilter(shelfId);
@@ -268,7 +278,7 @@ const Sidebar = ({
         },
         '&.Mui-selected': {
           bgcolor: alpha(accent, 0.12),
-          color: 'primary.main',
+          color: selectedInk,
           '& .MuiListItemText-primary': { fontWeight: 600 },
           '&:hover': { bgcolor: alpha(accent, 0.18) }
         }

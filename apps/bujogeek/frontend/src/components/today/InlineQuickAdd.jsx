@@ -391,7 +391,12 @@ const InlineQuickAdd = ({
                 fontSize: { xs: '0.75rem', sm: '0.8125rem' },
                 fontWeight: 400,
                 fontStyle: 'italic',
-                color: isDark ? 'rgba(255,255,255,0.25)' : colors.ink[300],
+                // The third text tier, not a low-alpha white or ink[300] (2.27:1 dark,
+                // 1.84:1 light as 13px copy, desktop harness 2026-09-25). On the
+                // unfocused ground it clears AA in both modes: 4.50:1 on
+                // parchment.warm and 5.22:1 in dark. The pair is pinned in
+                // packages/ui's themeContrast.test.js.
+                color: theme.palette.text.muted,
                 letterSpacing: '0.01em',
                 lineHeight: 1,
                 userSelect: 'none',

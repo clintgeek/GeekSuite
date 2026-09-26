@@ -16,7 +16,7 @@
  *        though inert controls are exempt from AA.
  */
 import { describe, expect, it } from 'vitest';
-import { decomposeColor, getContrastRatio, recomposeColor } from '@mui/material/styles';
+import { alpha, decomposeColor, getContrastRatio, recomposeColor } from '@mui/material/styles';
 
 import { createGeekSuiteTheme } from '../createGeekSuiteTheme.js';
 import { createBuJoTheme } from '../../../../apps/bujogeek/frontend/src/theme/theme.js';
@@ -26,6 +26,10 @@ import { createFlockTheme } from '../../../../apps/flockgeek/frontend/src/theme/
 import { createStoryTheme } from '../../../../apps/storygeek/frontend/src/theme/theme.js';
 import createBookTheme from '../../../../apps/bookgeek/web/src/theme/theme.js';
 import { createBaseGeekTheme } from '../../../../apps/basegeek/packages/ui/src/theme.js';
+import { SIDEBAR_CHIP_TINT, sidebarChipInk } from '../navigation/sidebarInk.js';
+import { geekInteraction } from '../designTokens.js';
+import { chrome as bujoChrome } from '../../../../apps/bujogeek/frontend/src/theme/chrome.js';
+import * as fitnessChrome from '../../../../apps/fitnessgeek/frontend/src/components/Layout/chrome.js';
 
 /* ── color helpers ─────────────────────────────────────────────────────── */
 
@@ -49,8 +53,8 @@ function flatten(color, surface) {
   return recomposeColor({ type: 'rgb', values: blended });
 }
 
-function ratio(fg, bg) {
-  const surface = flatten(bg, '#FFFFFF');
+function ratio(fg, bg, under = '#FFFFFF') {
+  const surface = flatten(bg, under);
   return getContrastRatio(flatten(fg, surface), surface);
 }
 
@@ -85,8 +89,8 @@ function pairsFor(theme) {
     .sort(([a], [b]) => a.localeCompare(b));
 
   const pairs = [];
-  const add = (label, fg, bgLabel, bg, min) =>
-    pairs.push({ label: `${label} on ${bgLabel}`, fg, bg, min });
+  const add = (label, fg, bgLabel, bg, min, under) =>
+    pairs.push({ label: `${label} on ${bgLabel}`, fg, bg, min, under });
 
   // Body copy: AA on both the canvas and the cards sitting on it.
   for (const tier of ['primary', 'secondary', 'muted']) {
@@ -136,6 +140,29 @@ function pairsFor(theme) {
     for (const [bgLabel, bg] of surfaces) {
       add('MuiFormLabel Mui-focused color', focusedLabel.color, bgLabel, bg, 4.5);
     }
+  }
+
+  // A selected list row (the sidebar's active nav item) is accent text on an
+  // accent tint over whichever surface the list sits on. It is copy, so it owes
+  // AA. bookgeek's measured 3.52:1 in light mode on 2026-09-25, found only
+  // because axe files every sidebar row as "incomplete". Read off the built
+  // override, like the focused label.
+  const selectedRow = theme.components?.MuiListItemButton?.styleOverrides?.root?.['&.Mui-selected'];
+  if (selectedRow?.color && selectedRow?.backgroundColor) {
+    for (const [bgLabel, bg] of surfaces) {
+      add('MuiListItemButton Mui-selected color', selectedRow.color, `selected tint over ${bgLabel}`, selectedRow.backgroundColor, 4.5, bg);
+    }
+  }
+
+  // GeekSidebar's count badge and monogram: 12px accent text on a 14% accent
+  // tint, both bare and inside a selected row (3.43:1 in bookgeek light,
+  // 2026-09-25).
+  const chipInk = sidebarChipInk(theme);
+  const chipTint = alpha(p.primary.main, SIDEBAR_CHIP_TINT);
+  const rowTint = alpha(p.primary.main, geekInteraction.activeOpacity);
+  for (const [bgLabel, bg] of surfaces) {
+    add('GeekSidebar badge ink', chipInk, `chip tint over ${bgLabel}`, chipTint, 4.5, bg);
+    add('GeekSidebar badge ink', chipInk, `chip tint over selected row over ${bgLabel}`, chipTint, 4.5, flatten(rowTint, bg));
   }
 
   if (tooltip?.backgroundColor && tooltip?.color) {
@@ -192,8 +219,8 @@ describe.each(cases)('$app / $mode', ({ app, mode, theme }) => {
     return { ...pair, floor, name: floor ? `KNOWN GAP: ${pair.label}` : pair.label };
   });
 
-  it.each(pairs)('$name >= $min:1', ({ label, fg, bg, min, floor }) => {
-    const measured = ratio(fg, bg);
+  it.each(pairs)('$name >= $min:1', ({ label, fg, bg, min, floor, under }) => {
+    const measured = ratio(fg, bg, under);
     const rounded = Number(measured.toFixed(2));
 
     if (floor === undefined) {
@@ -217,5 +244,49 @@ describe.each(cases)('$app / $mode', ({ app, mode, theme }) => {
       `${label}: ${fg} on ${bg} now measures ${rounded}:1 and clears ${min}:1 — ` +
         `remove "${app}/${mode}/${label}" from KNOWN_GAPS`
     ).toBeLessThan(min);
+  });
+});
+
+/* ── grounds that are not palette surfaces ─────────────────────────────── */
+
+/**
+ * Some text sits on a ground the palette never declares, so the matrix above
+ * cannot see it. Examples: an always-dark sidebar chrome that ignores the app
+ * mode, or a component's own tint. The 2026-09-25 desktop harness pass found
+ * five of these (FitnessGeek's section captions, BuJoGeek's nav rows, section
+ * captions, quick-add prompt and out-of-month day numbers). The chrome inks
+ * are imported from the modules the sidebars paint with, so retuning one
+ * re-runs its pair here.
+ */
+const bujoLight = createBuJoTheme('light');
+const bujoDark = createBuJoTheme('dark');
+
+const GROUND_PAIRS = [
+  // BuJoGeek sidebar: dark tobacco in both app modes.
+  ['bujogeek chrome: active row title', bujoChrome.text, bujoChrome.active, 4.5],
+  ['bujogeek chrome: hovered row title', bujoChrome.textHover, bujoChrome.bgHover, 4.5],
+  ['bujogeek chrome: inactive row title', bujoChrome.textMuted, bujoChrome.bg, 4.5],
+  ['bujogeek chrome: row description', bujoChrome.caption, bujoChrome.bg, 4.5],
+  ['bujogeek chrome: row description (hovered)', bujoChrome.caption, bujoChrome.bgHover, 4.5],
+  ['bujogeek chrome: row description (active)', bujoChrome.caption, bujoChrome.active, 4.5],
+  ['bujogeek chrome: section caption', bujoChrome.textDisabled, bujoChrome.bg, 4.5],
+  ['bujogeek chrome: wordmark', bujoChrome.logo, bujoChrome.bg, 4.5],
+  ['bujogeek chrome: "BJ" mark / accent (12px)', bujoChrome.logoAccent, bujoChrome.bg, 4.5],
+  ['bujogeek chrome: reminders-on toggle (hovered)', bujoChrome.accent, flatten(bujoChrome.accentBg, bujoChrome.bgHover), 4.5],
+  // FitnessGeek sidebar: #0C0A09 in both app modes.
+  ['fitnessgeek chrome: row / section caption', fitnessChrome.MUTED, fitnessChrome.CHROME_BG, 4.5],
+  ['fitnessgeek chrome: hovered row', fitnessChrome.INK, flatten('rgba(255, 255, 255, 0.04)', fitnessChrome.CHROME_BG), 4.5],
+  ['fitnessgeek chrome: active row', fitnessChrome.INK, flatten('rgba(45, 212, 191, 0.12)', fitnessChrome.CHROME_BG), 4.5],
+  // BuJoGeek components on their own grounds.
+  ['bujogeek/light quick-add prompt: text.muted on parchment.warm', bujoLight.palette.text.muted, '#F4EFE8', 4.5],
+  ['bujogeek/dark quick-add prompt: text.muted on 2% white over background.default', bujoDark.palette.text.muted, flatten('rgba(255,255,255,0.02)', bujoDark.palette.background.default), 4.5],
+  ['bujogeek/light month grid, outside day: text.muted on 1.5% black over background.default', bujoLight.palette.text.muted, flatten('rgba(0,0,0,0.015)', bujoLight.palette.background.default), 4.5],
+  ['bujogeek/dark month grid, outside day: text.muted on 15% black over background.default', bujoDark.palette.text.muted, flatten('rgba(0,0,0,0.15)', bujoDark.palette.background.default), 4.5],
+].map(([label, fg, bg, min]) => ({ label, fg, bg, min }));
+
+describe('grounds outside the palette', () => {
+  it.each(GROUND_PAIRS)('$label >= $min:1', ({ fg, bg, min }) => {
+    const rounded = Number(ratio(fg, bg).toFixed(2));
+    expect(rounded, `${fg} on ${bg} measured ${rounded}:1, needs ${min}:1`).toBeGreaterThanOrEqual(min);
   });
 });

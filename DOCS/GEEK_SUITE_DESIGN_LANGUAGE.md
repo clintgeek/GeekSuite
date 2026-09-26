@@ -238,6 +238,31 @@ The rules that fell out of that burn-down:
 - **The ratchet is the record.** Every pair the suite asserts lives in
   `themeContrast.test.js`, `KNOWN_GAPS` is empty, and it stays empty.
 
+Added 2026-09-25, from the desktop harness pass:
+
+- **A chrome that ignores the app mode owns its inks.** bujogeek's tobacco
+  sidebar and fitnessgeek's `#0C0A09` sidebar are dark in *both* modes, but
+  `text.*` follow the mode. So in light mode `text.secondary` is dark ink on a
+  dark panel (fitnessgeek's section captions measured 4.12:1, bujogeek's row
+  descriptions 2.32:1). This kind of chrome keeps solid inks in a plain module
+  (`theme/chrome.js`, `Layout/chrome.js`). It passes them to every slot that
+  would otherwise inherit a token (`sectionLabelSx`, and
+  `.MuiListItemText-secondary` in `itemSx`). It also asserts them in the
+  ratchet's "grounds outside the palette" block.
+- **Accent text on an accent tint is walked with `readableAcross`.** A selected
+  row or a count badge is `primary.main` on `alpha(primary.main, n)` over the
+  surface. Here the ink is the accent, so moving the ink is correct:
+  `readableAcross(ink, surfaces, { tint })`, which is `readableOn` folded over
+  every palette surface with the tint composited on each. This is the
+  opposite of the white-label-on-filled-chip case, where the fill has to
+  move.
+- **axe cannot see sidebar rows.** It files the text inside GeekSidebar's
+  `ListItemButton` rows as *incomplete* ("background could not be determined
+  because it is overlapped", observed in bujogeek and bookgeek on 2026-09-25), not as a
+  violation.
+  So every nav row, badge and selected label passes the harness however it
+  measures. For those pairs the ratchet is the only gate. Assert them there.
+
 ## 🔖 Branding & Iconography
 
 ### Logo

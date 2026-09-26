@@ -18,6 +18,7 @@ import {
   subWeeks,
 } from 'date-fns';
 import { useNavigate } from 'react-router-dom';
+import { readableOn } from '@geeksuite/ui';
 import { useTaskContext } from '../../context/TaskContext';
 import { normalizeTasks } from '../../utils/normalizeTasks';
 import { dueDayKey, dueDayStart, hasDueTime } from '../../utils/dueDate';
@@ -162,6 +163,22 @@ const MonthlyCalendar = () => {
   const mutedInk = theme.palette.text.secondary;
   const captionInk = theme.palette.text.muted;
   const primaryInk = theme.palette.text.primary;
+
+  // Today is inked with the accent, which is a domain colour used as text, so
+  // it goes through `readableOn` against the tint it actually sits on (the
+  // highlight over the page). primary[600] at 16px measured 3.98:1 on
+  // parchment.warm, and the 12px "today" tag at primary[500] measured 2.67:1
+  // (desktop harness, 2026-09-25). Days outside the month used a low-alpha
+  // white / ink[300] (1.9:1). They take the muted text tier now: still a step
+  // below the month's own days, and readable.
+  const page = theme.palette.background.default;
+  const todayAccent = isDark ? colors.primary[300] : colors.primary[600];
+  const todayInkOn = (ground) => readableOn(todayAccent, ground, { under: page });
+  const gridTodayGround = isDark ? 'rgba(96, 152, 204, 0.1)' : colors.parchment.warm;
+  const stripSelectedGround = isDark ? 'rgba(96,152,204,0.16)' : colors.parchment.warm;
+  const gridTodayInk = todayInkOn(gridTodayGround);
+  const gridTodayTagInk = readableOn(colors.primary[500], gridTodayGround, { under: page });
+  const outsideMonthInk = captionInk;
 
   // Stable key for AnimatePresence — one per month
   const monthKey = format(currentMonth, 'yyyy-MM');
@@ -365,7 +382,7 @@ const MonthlyCalendar = () => {
                         fontStyle: 'italic',
                         fontSize: '0.75rem',
                         fontWeight: 400,
-                        color: today ? (isDark ? colors.primary[300] : colors.primary[600]) : mutedInk,
+                        color: today ? todayInkOn(selected ? stripSelectedGround : page) : mutedInk,
                         lineHeight: 1,
                       }}
                     >
@@ -379,7 +396,7 @@ const MonthlyCalendar = () => {
                         fontWeight: today || selected ? 600 : 500,
                         lineHeight: 1.1,
                         color: today
-                          ? (isDark ? colors.primary[300] : colors.primary[600])
+                          ? todayInkOn(selected ? stripSelectedGround : page)
                           : primaryInk,
                       }}
                     >
@@ -623,10 +640,10 @@ const MonthlyCalendar = () => {
                         fontWeight: today ? 600 : inMonth ? 500 : 400,
                         lineHeight: 1,
                         color: today
-                          ? (isDark ? colors.primary[300] : colors.primary[600])
+                          ? gridTodayInk
                           : inMonth
                           ? primaryInk
-                          : (isDark ? 'rgba(255,255,255,0.2)' : colors.ink[300]),
+                          : outsideMonthInk,
                         letterSpacing: '-0.01em',
                       }}
                     >
@@ -642,7 +659,7 @@ const MonthlyCalendar = () => {
                           fontWeight: 600,
                           textTransform: 'uppercase',
                           letterSpacing: '0.1em',
-                          color: colors.primary[500],
+                          color: gridTodayTagInk,
                           mt: 0.125,
                           lineHeight: 1,
                           display: { xs: 'none', sm: 'block' },

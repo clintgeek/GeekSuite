@@ -137,17 +137,28 @@ Wanted, not built on the 2026-09-22 overnight run:
   rules engine + Stats, free-walk AI (cuttable), backlog goal/wishlist/loans/scan-to-add/MCP.
   Full phase table and done-when criteria: [`DOCS/GameGeekPlan.md`](GameGeekPlan.md) §11.
   Blocked on P0 prep and Chef's answers in §13.
-- **Desktop harness findings in BuJoGeek and FitnessGeek** (found 2026-09-25 by the `/`
-  work, pre-existing, not gated by CI because CI runs phone viewports only). There are 46
-  findings under `ci.mjs --enforce-a11y --desktop`:
-  - FitnessGeek sidebar section labels ("TRACK" …) fail contrast.
-  - BuJoGeek sidebar section labels are 9px, below the 12px floor.
-  - BuJoGeek's "BJ" brand mark is 10px.
-  - BuJoGeek's quick-add "Plan your day" prompt is at contrast 2.27 in dark mode.
-  - BuJoGeek's monthly-plan day numbers.
-
-  These need a design pass in GeekSidebar and BuJoGeek's styles. After that, consider
-  adding `--desktop` to the CI harness job so desktop regressions gate too.
+- ✅ **DONE 2026-09-25: desktop harness findings, and CI now gates desktop.** Was: 46 findings
+  under `ci.mjs --enforce-a11y --desktop` (18 grammar in bujogeek, and 28 a11y findings over 102
+  nodes in fitnessgeek and bujogeek). All pre-existing; CI ran phone only. Now **0 / 0 / 0 waived across
+  380 scenes, phone and desktop**, and `.github/workflows/mobile-harness.yml` passes `--desktop`
+  (the job goes from ~17 to ~28 minutes). The fixes:
+  - FitnessGeek section captions pin the chrome's own `MUTED` (`Layout/chrome.js`). Light mode's
+    `text.secondary` measured 4.12:1 on the always-dark `#0C0A09`.
+  - BuJoGeek sidebar: solid inks in `theme/chrome.js` instead of `rgba(…, α)`. Section captions
+    and the "BJ" mark are at 12px. Row descriptions take a chrome ink, not the mode-following
+    token.
+  - BuJoGeek quick-add prompt uses `text.muted`. Monthly plan: days outside the month use
+    `text.muted`, and today's number and "today" tag go through `readableOn`.
+  - Found by measuring, because axe files sidebar rows as *incomplete*: BuJo's inactive rows were
+    3.34:1, and the shared selected-row and badge accent ink failed in several themes (BookGeek
+    light 3.4–3.5:1). The fix is `readableAcross` in `@geeksuite/ui`, used by the
+    `MuiListItemButton` selected override, GeekSidebar's badge and monogram, and BookGeek's own
+    `itemSx`.
+  - `themeContrast.test.js` asserts all of it, including a new "grounds outside the palette"
+    block. The rules are recorded in GEEK_SUITE_DESIGN_LANGUAGE.md ("Added 2026-09-25").
+  - Follow-up, not done: the harness cannot see sidebar-row contrast (axe `incomplete`). A probe
+    rule that measures `[data-geek-sidebar]` text itself would close that gap. BookGeek's
+    `itemSx` ink is not in the ratchet, because it is computed in the component.
 - **GameGeek: Playing follows Playnite's `isInstalled`** (Chef approved 2026-09-25; the
   semantics are in `apps/gamegeek/DOCS/TASTE_MODEL.md`: "Playing = installed on the laptop,
   ready to go"). On every Playnite import, installed games move to Playing from Backlog, On
