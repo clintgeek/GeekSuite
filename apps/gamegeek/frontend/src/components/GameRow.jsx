@@ -51,8 +51,8 @@ export default function GameRow({ game, onOpen, onRate, showShelf = true, custom
             {metaLine(game) || ' '}
           </Typography>
           {(shelf || detail) && (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0 }}>
-              {shelf ? <ShelfTag shelf={me.shelf} label={shelf} surface="default" sx={{ flexShrink: 0 }} /> : null}
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75, minWidth: 0, mt: 0.25 }}>
+              {shelf ? <ShelfTag shelf={me.shelf} label={shelf} sx={{ flexShrink: 0, mr: 0.5 }} /> : null}
               {detail ? (
                 <Typography noWrap component="span" sx={{ fontSize: '0.75rem', color: 'text.muted', minWidth: 0 }}>
                   {detail}

@@ -1,28 +1,30 @@
 /**
- * The generated cover for a game with no art: a slate plate keyed by a hash
- * of its title, so the same game always gets the same plate and a shelf of
- * them reads as a set rather than as missing images.
+ * The generated cover for a game with no art: an arcade sticker keyed by a
+ * hash of its title, so the same game always gets the same plate and a shelf
+ * of them reads as a set rather than as missing images.
  *
- * The hues are deliberately low-chroma and dark — ink on slate, not candy —
- * so the amber rule and the cream title carry the identity. Every ground is
- * dark enough that the plate's cream (#F3EBDD) text clears AA on its lightest
- * stop in either theme; the plate does not change with the mode, a box on a
- * shelf does not either.
+ * Each plate is a flat LOUD ground with a second "pop" colour for the stripe,
+ * and INK type. Every ground clears 6:1 against the ink (#0C0A12; the lowest
+ * is magenta at 6.07:1), and the title only ever sits on the ground itself —
+ * never on the stripe or the dots — so the plate reads in either theme. The
+ * plate does not change with the mode; a box on a shelf does not either.
  */
-export const PLATE_INK = '#F3EBDD';
-export const PLATE_SUBINK = '#E2D8C6';
+import { ARCADE } from '../theme/theme';
 
+export const PLATE_INK = ARCADE.ink;
+/** The platform banner: cream on ink, like the black band across a game box. */
+export const PLATE_BANNER = { bg: ARCADE.ink, fg: ARCADE.paperInk };
+
+/** [ground, pop] — the pop is the stripe, never behind text. */
 export const PLATE_GROUNDS = [
-  ['#27344A', '#141B27'], // harbour slate
-  ['#2F3D3A', '#161F1D'], // moss slate
-  ['#3A2E44', '#1B1522'], // plum
-  ['#442C2C', '#211515'], // oxblood
-  ['#2B3A4A', '#121A22'], // deep sea
-  ['#4A2F24', '#1F1410'], // ember
-  ['#2E2F4A', '#151624'], // indigo
-  ['#3D3230', '#1E1817'], // umber
-  ['#243B3F', '#11201F'], // teal night
-  ['#3A3340', '#1A171E'], // graphite violet
+  [ARCADE.magenta, ARCADE.lime],
+  [ARCADE.cyan, ARCADE.magenta],
+  [ARCADE.lime, ARCADE.violet],
+  [ARCADE.orange, ARCADE.cyan],
+  [ARCADE.violet, ARCADE.yellow],
+  [ARCADE.yellow, ARCADE.magenta],
+  [ARCADE.mint, ARCADE.orange],
+  [ARCADE.coral, ARCADE.cyan],
 ];
 
 /** FNV-1a, 32-bit. Stable across sessions and machines. */
@@ -38,16 +40,18 @@ export function hashString(value) {
 
 export function plateFor(title) {
   const h = hashString((title || '').trim().toLowerCase());
-  const [from, to] = PLATE_GROUNDS[h % PLATE_GROUNDS.length];
-  // A second, independent pick for the angle so neighbours with the same
-  // ground still differ a little.
-  const angle = 150 + ((h >>> 8) % 5) * 10;
-  return { from, to, angle, index: h % PLATE_GROUNDS.length };
+  const index = h % PLATE_GROUNDS.length;
+  const [ground, pop] = PLATE_GROUNDS[index];
+  // Independent picks so neighbours with the same ground still differ: the
+  // stripe's angle, and which way the card leans when it lifts.
+  const angle = -18 + ((h >>> 8) % 5) * 6;
+  const lean = (h >>> 12) % 2 === 0 ? -1 : 1;
+  return { ground, pop, angle, lean, index, from: ground, to: pop };
 }
 
-/** Font size for the plate title, stepped by length so long names still fit. */
+/** Font size for the plate title, stepped by length so long names still fit (Bungee runs wide). */
 export function plateTitleSize(title, { compact = false } = {}) {
   const n = (title || '').length;
-  const base = n <= 12 ? 1.35 : n <= 22 ? 1.15 : n <= 36 ? 1 : 0.875;
+  const base = n <= 8 ? 1.3 : n <= 14 ? 1.05 : n <= 24 ? 0.9 : 0.78;
   return `${compact ? Math.max(0.75, base * 0.62) : base}rem`;
 }

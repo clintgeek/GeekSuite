@@ -173,7 +173,7 @@ export default function App() {
         error={error}
         logoColor="text.primary"
         logoSuffixColor="primary.main"
-        inkColors={['rgba(255, 181, 71, 0.10)', 'rgba(71, 85, 105, 0.16)']}
+        inkColors={['rgba(255, 61, 168, 0.14)', 'rgba(34, 228, 255, 0.12)']}
       />
     );
   }

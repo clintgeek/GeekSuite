@@ -15,9 +15,11 @@
     "@apollo/client": "^3.11.4",
     "@emotion/react": "^11.13.3",
     "@emotion/styled": "^11.13.0",
+    "@fontsource/bungee": "^5.3.0",
     "@fontsource/space-grotesk": "^5.0.0",
     "@geeksuite/api-client": "workspace:*",
     "@geeksuite/auth": "workspace:*",
+    "@geeksuite/collection": "workspace:*",
     "@geeksuite/ui": "workspace:*",
     "@geeksuite/user": "workspace:*",
     "@mui/icons-material": "^5.16.7",
@@ -26,8 +28,7 @@
     "graphql": "^16.10.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
-    "react-router-dom": "^6.26.0",
-    "@geeksuite/collection": "workspace:*"
+    "react-router-dom": "^6.26.0"
   },
   "devDependencies": {
     "@geeksuite/eslint-config": "workspace:*",

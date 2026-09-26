@@ -27,7 +27,7 @@ import { useMutation } from '@apollo/client';
 import { GeekSidebar } from '@geeksuite/ui';
 import { SavedViews } from '@geeksuite/collection';
 import { DELETE_GAME_FILTER } from '../graphql/mutations';
-import { DISPLAY_FONT } from '../theme/theme';
+import { DISPLAY_FONT, DISPLAY_WEIGHT, hardShadow } from '../theme/theme';
 import { shelfCount, useGameProfile } from '../hooks/useGameMeta';
 import { canonicalSearch, savedViewSearch } from '../utils/libraryFilter';
 import { displayNameFrom, initialsFrom, secondaryFrom } from '../utils/userDisplay';
@@ -44,16 +44,38 @@ const SHELF_ICONS = {
   unshelved: <UnshelvedIcon />,
 };
 
-function Brand() {
+/**
+ * The wordmark as an arcade marquee: an ink sign with a magenta frame and a
+ * hard cyan shadow, the same in both modes (a marquee is lit, not themed).
+ * GAME in cream, GEEK in lime — both clear 15:1 on the ink.
+ */
+export function Brand({ size = 'md' }) {
+  const theme = useTheme();
+  const a = theme.palette.arcade;
+  const big = size === 'lg';
   return (
-    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, minWidth: 0 }}>
-      <SavePointMark size={26} />
+    <Box
+      sx={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 0.875,
+        minWidth: 0,
+        px: 1,
+        py: 0.5,
+        bgcolor: a.ink,
+        border: `2px solid ${a.magenta}`,
+        borderRadius: '6px',
+        boxShadow: hardShadow(3, a.cyan),
+        transform: 'rotate(-1.5deg)',
+      }}
+    >
+      <SavePointMark size={big ? 30 : 22} />
       <Typography
         component="span"
         noWrap
-        sx={{ fontFamily: DISPLAY_FONT, fontWeight: 700, fontSize: '1.2rem', letterSpacing: '-0.02em', color: 'text.primary' }}
+        sx={{ fontFamily: DISPLAY_FONT, fontWeight: DISPLAY_WEIGHT, fontSize: big ? '1.5rem' : '1.0625rem', lineHeight: 1.1, letterSpacing: '0.02em', color: a.paperInk }}
       >
-        Game<Box component="span" sx={{ color: 'primary.main' }}>Geek</Box>
+        Game<Box component="span" sx={{ color: a.lime }}>Geek</Box>
       </Typography>
     </Box>
   );
@@ -93,29 +115,26 @@ export default function Sidebar({ user, shelves, stats, onSignOut }) {
     });
   }
 
+  // The selected row is a lime sticker: ink outline, ink label, hard shadow.
+  // The fill is opaque, so the label's contrast is ink on lime (17:1) in
+  // either mode, never an accent on a tint.
+  const a = theme.palette.arcade;
   const itemSx = {
     mb: 0.25,
     color: 'text.secondary',
+    border: '2px solid transparent',
     '& .MuiListItemText-primary': { fontSize: '0.875rem', fontWeight: 500 },
     '& .MuiListItemIcon-root .MuiSvgIcon-root': { fontSize: 20 },
-    '&:hover': { bgcolor: alpha(accent, 0.08), color: 'text.primary' },
+    '&:hover': { bgcolor: alpha(accent, 0.1), color: 'text.primary' },
     '&.Mui-selected': {
-      position: 'relative',
-      bgcolor: alpha(accent, 0.12),
-      color: 'text.primary',
-      '& .MuiListItemIcon-root': { color: theme.palette.mode === 'dark' ? accent : theme.palette.primary.main },
-      '& .MuiListItemText-primary': { fontWeight: 600 },
-      '&::before': {
-        content: '""',
-        position: 'absolute',
-        left: 0,
-        top: 10,
-        bottom: 10,
-        width: 3,
-        borderRadius: 2,
-        bgcolor: theme.palette.phosphor?.main ?? accent,
-      },
-      '&:hover': { bgcolor: alpha(accent, 0.18) },
+      bgcolor: a.lime,
+      color: a.ink,
+      borderColor: a.ink,
+      boxShadow: hardShadow(3, theme.palette.mode === 'dark' ? a.magenta : a.ink),
+      '& .MuiListItemIcon-root': { color: a.ink },
+      '& .MuiListItemText-primary': { fontWeight: 800 },
+      '& [data-geek-sidebar="badge"]': { color: a.ink, bgcolor: 'transparent', boxShadow: `inset 0 0 0 1.5px ${a.ink}`, fontWeight: 800 },
+      '&:hover': { bgcolor: a.lime },
     },
   };
 

@@ -317,24 +317,99 @@ normalizes providers into one `MetadataCandidate` shape.
 
 ## 5. UI / UX
 
-### 5.1 Identity: "Save Point"
+### 5.1 Identity: "Arcade Sticker"
 
-BookGeek is "Midnight Reader". GameGeek gets its own personality inside the shared shell:
-**deep slate surfaces with an amber-phosphor accent** (CRT warmth, not neon-gamer RGB), and a
-geometric display face (self-hosted `@fontsource/space-grotesk`) for headings, with Roboto
-for body text. A pixel save-icon motif appears only in empty states and the login splash,
-never in chrome.
+*Revised 2026-09-26. The first identity, "Save Point" (slate surfaces, an amber-phosphor
+accent, "not neon-gamer RGB"), looked too much like BookGeek. Chef reversed it: GameGeek is
+loud and fun; BookGeek stays the reserved library.*
+
+BookGeek is "Midnight Reader": navy slate, hairline borders, soft rounded cards, a serif
+display face, a sky-blue accent. GameGeek is its opposite **in structure, not just colour**:
+neo-brutalist arcade.
+
+- **Ink outlines**: 2px on cards, pills, checkboxes, panels, the top bar and the drawer
+  edge. In light mode the line is ink (#14111A); in dark mode it is lavender (#8E83B3).
+- **Hard offset shadows**: no blur, ever (`hardShadow(x, colour)` in `theme.js`). A library
+  card casts its own **pop colour**, keyed by a hash of the title (magenta, cyan, lime,
+  violet, orange). Dark mode shows that colour at rest; light mode shows an ink shadow at
+  rest and the colour on hover.
+- **Lift and tilt**: on a real pointer, a card lifts and leans about 1° toward its own side.
+  This only happens under `(hover: hover) and (prefers-reduced-motion: no-preference)`:
+  there is no motion on touch, and none for anyone who asked for less.
+- **Stickers**: shelves are filled stickers (fill, ink outline, ink shadow, rotated ±2°,
+  and each shelf always leans the same way). Other stickers:
+  - the selected sidebar row and the active shelf-strip chip (lime);
+  - the active filter chips (cyan);
+  - the selected select-chips (lime);
+  - checked filter boxes (lime, with a hard shadow).
+- **The arcade button**: every contained button has a loud fill, an ink label, an ink
+  outline and a hard shadow that collapses as the button goes down (`translate(3px,3px)`).
+  "Add game" and the FAB are magenta.
+- **Type**:
+  - **Bungee** (self-hosted `@fontsource/bungee`, a single 400 weight: never ask it for
+    bold) sets the wordmark, h1–h3, the top-bar title, the filter headings, the cover
+    plates, and the detail section labels.
+  - Space Grotesk stays for h4–h6.
+  - Roboto is the body face.
+- **Wordmark**: an arcade marquee. It is an ink sign with a magenta frame and a hard cyan
+  shadow, tilted −1.5°, with GAME in cream and GEEK in lime, and it looks the same in both
+  modes. The pixel save-icon mark (now cyan, cream and magenta with an ink keyline) sits
+  inside it.
+- **Cover plates** (for games with no art): a flat loud ground with a fat stripe in a second
+  colour and ink edges across the top, a halftone-dot corner, the platform on an ink banner,
+  and the title in Bungee in ink. The title sits on its own patch of solid ground, so it
+  never overlaps the stripe or the dots.
+- **Empty states**: a tilted sticker frame with a magenta shadow, and an attract-mode tag
+  ("PLAYER 1 · PRESS START_", "CONTINUE?_") whose cursor blinks. The blink stops under
+  reduced motion.
 
 ```js
-createGameTheme(mode) = createGeekSuiteTheme({ mode, accent: PHOSPHOR, overrides: {
-  palette: { shelf: {...}, platform: {...} },      // semantic tokens
-  typography: { h1..h4: { fontFamily: DISPLAY } },
+createGameTheme(mode) = createGeekSuiteTheme({ mode, accent: MAGENTA[mode], overrides: {
+  palette: { border: line, shelf: SHELF_FILLS, arcade: ARCADE, star, … },
+  typography: { h1..h3: Bungee 400, h4..h6: Space Grotesk 700 },
+  components: { MuiCard, MuiButton, MuiDialog, MuiPopover, … hard shadows + 2px ink,
+                MuiCssBaseline: the @geeksuite/collection skin (below) },
 }})
 ```
 
-Amber is a contrast trap in light mode, so every accent used as text goes through
-`readableOn` against its **real** surface. Platform and shelf chips follow the 12px
-filled-chip rule, verified by the harness.
+**Palette**
+
+| Token | Dark | Light |
+|---|---|---|
+| page / paper / card / raised | #0C0A12 / #17131F / #1D1829 / #262036 | #FFF1D0 / #FFFBF0 / #FFFDF7 / #FFF4DC |
+| text / secondary / muted | #F6F1FF / #C9C0DD / #A89FC2 | #14111A / #3F3849 / #5A5266 |
+| primary.main (as text) | magenta #FF3DA8 | deep magenta #B8005F |
+| line (outline) | #8E83B3 | #14111A |
+| stars | lime #D7FF3D | magenta #E0007A |
+
+The arcade fills are the same in both modes: magenta #FF3DA8, cyan #22E4FF,
+lime #D7FF3D, violet #B89CFF, orange #FF8A3D, coral #FF6B5A, mint #3DFFA0 and
+yellow #FFE03D. Ink is #0C0A12.
+
+**"Wild but readable": the contrast rules**
+
+- The loud colours are fills with ink text on them, in both modes. Every fill clears 6:1
+  against the ink; the lowest is magenta at 6.07:1. That is how the 12px filled-chip rule is
+  met: the label is measured against the fill itself. `readableOn` only knows the surface
+  under a chip, so it is the wrong tool here.
+- In light mode no neon is ever text. On cream, magenta measures about 3:1 and lime and cyan
+  about 1.1:1, so light mode's `primary.main` is deep magenta #B8005F: at least 5.7:1 on
+  every cream surface, with a white label when it is a fill. The loud colours appear there
+  only as fills, outlines and graphics.
+- Dark mode's magenta works as text on every dark surface: 4.83:1 on the raised surface
+  (its lowest), 5.34:1 on the card,
+  6.07:1 on the page.
+- Any domain colour that is painted as text still goes through `readableOn` against its
+  real surface.
+- The mobile harness enforces all of this (`--enforce-a11y --desktop`).
+
+**Shared UI without touching the package.** `@geeksuite/collection` (the filters, chips,
+facet panel and sort) is shared with BookGeek and ThingGeek, so GameGeek re-skins it from
+its own `MuiCssBaseline`, keyed off the package's data attributes (`data-facet-option`,
+`data-facet`, `data-testid="active-chips"`, `data-testid="filter-panel"`,
+`data-geek-fab`), and by pointing `palette.border` at the arcade line. Those selectors
+exist only in GameGeek's stylesheet, so no package change is needed and the other apps
+are unaffected.
 
 ### 5.2 Navigation
 
@@ -637,7 +712,8 @@ Each phase ships and is verified in the real app, not just green in CI.
    scheduled job (nightly)?
 4. **Prep phase scope**: do the deletion pass (§1.1 steps 1–2) now on its own, whether or
    not GameGeek starts soon?
-5. **Port 1810 and the "Save Point" slate + amber identity**: fine?
+5. **Port 1810 and the "Save Point" slate + amber identity**: fine? *(Identity answered
+   2026-09-26: replaced by "Arcade Sticker", §5.1.)*
 
 Once these are answered, the next step is turning §2–§7 into `apps/gamegeek/DOCS/SPEC.md`
 (acceptance criteria per phase) and starting prep phase P0.

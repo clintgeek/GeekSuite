@@ -6,7 +6,10 @@ import { BrowserRouter } from 'react-router-dom';
 import { registerSW } from 'virtual:pwa-register';
 import { ThemeProvider as UserThemeProvider, useThemeMode } from '@geeksuite/user';
 import { GeekSuiteApolloProvider } from '@geeksuite/api-client';
-// The display face, self-hosted so headings and the wordmark render offline.
+// The display faces, self-hosted so headings and the wordmark render offline:
+// Bungee (the arcade marquee: wordmark, h1–h3, cover plates) and Space
+// Grotesk (h4–h6 and the mid-level labels).
+import '@fontsource/bungee/400.css';
 import '@fontsource/space-grotesk/500.css';
 import '@fontsource/space-grotesk/600.css';
 import '@fontsource/space-grotesk/700.css';

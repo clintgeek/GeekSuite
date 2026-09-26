@@ -1,9 +1,15 @@
 /**
  * The library's empty states. Three different situations, three different
  * sentences — "you have no games" is not the same as "nothing matches".
+ *
+ * Arcade Sticker: the frame is a tilted sticker card with a hard magenta
+ * shadow and a blinking-cursor "attract mode" tag above the headline (the
+ * blink stops under prefers-reduced-motion). The tag is decoration, so it is
+ * aria-hidden; the sentences below it carry the meaning.
  */
 import React from 'react';
-import { Box, Button, Typography } from '@mui/material';
+import { Box, Button, Typography, useTheme } from '@mui/material';
+import { DISPLAY_FONT, hardShadow } from '../theme/theme';
 import { Add as AddIcon, CloudDownloadOutlined as ImportIcon } from '@mui/icons-material';
 import SavePointMark from '../components/SavePointMark';
 import { shelfLabel } from '../utils/vocab';
@@ -19,21 +25,58 @@ const SHELF_HINTS = {
 };
 
 function Frame({ children }) {
+  const theme = useTheme();
+  const a = theme.palette.arcade;
   return (
     <Box
+      data-testid="library-empty"
       sx={{
         mx: 'auto',
-        mt: { xs: 2, md: 6 },
+        mt: { xs: 3, md: 6 },
         maxWidth: 460,
         textAlign: 'center',
         px: 3,
         py: { xs: 4, md: 5 },
-        borderRadius: 3,
-        border: 1,
-        borderColor: 'divider',
+        borderRadius: '12px',
+        border: `2px solid ${theme.palette.border}`,
         bgcolor: 'background.paper',
-        backgroundImage: (t) =>
-          `radial-gradient(120% 70% at 50% 0%, ${t.palette.phosphor?.glow ?? 'transparent'}, transparent 70%)`,
+        boxShadow: hardShadow(6, a.magenta),
+        transform: 'rotate(-0.6deg)',
+        backgroundImage: `radial-gradient(${theme.palette.mode === 'dark' ? 'rgba(34,228,255,0.10)' : 'rgba(20,17,26,0.06)'} 1.2px, transparent 1.6px)`,
+        backgroundSize: '14px 14px',
+      }}
+    >
+      {children}
+    </Box>
+  );
+}
+
+/** "PRESS START_" — an arcade attract-mode tag. Ink on lime, 17:1. */
+function AttractTag({ children }) {
+  const theme = useTheme();
+  const a = theme.palette.arcade;
+  return (
+    <Box
+      aria-hidden="true"
+      sx={{
+        display: 'inline-block',
+        mb: 2,
+        px: 1.25,
+        py: 0.5,
+        fontFamily: DISPLAY_FONT,
+        fontSize: '0.8125rem',
+        letterSpacing: '0.08em',
+        color: a.ink,
+        bgcolor: a.lime,
+        border: `2px solid ${a.ink}`,
+        borderRadius: '4px',
+        boxShadow: hardShadow(3, a.ink),
+        transform: 'rotate(2deg)',
+        '&::after': {
+          content: '"_"',
+          animation: 'gg-blink 1s steps(1) infinite',
+          '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
+        },
       }}
     >
       {children}
@@ -45,7 +88,8 @@ export default function LibraryEmpty({ narrowed, libraryEmpty, shelf, shelves, o
   if (libraryEmpty && !narrowed) {
     return (
       <Frame>
-        <SavePointMark size={56} sx={{ mx: 'auto', mb: 2.5 }} />
+        <SavePointMark size={56} sx={{ mx: 'auto', mb: 2 }} />
+        <AttractTag>Player 1 · press start</AttractTag>
         <Typography variant="h2" component="h2" sx={{ fontSize: '1.5rem', mb: 1 }}>
           A blank save file
         </Typography>
@@ -70,6 +114,7 @@ export default function LibraryEmpty({ narrowed, libraryEmpty, shelf, shelves, o
   return (
     <Frame>
       <SavePointMark size={44} sx={{ mx: 'auto', mb: 2 }} />
+      <AttractTag>{onlyShelf ? 'Empty shelf' : 'Continue?'}</AttractTag>
       <Typography variant="h3" component="h2" sx={{ mb: 1 }}>
         {onlyShelf ? `Nothing on ${label} yet` : 'No games match'}
       </Typography>

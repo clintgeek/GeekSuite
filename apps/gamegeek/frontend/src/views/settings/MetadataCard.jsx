@@ -12,6 +12,7 @@ import { useApolloClient } from '@apollo/client';
 import { useToast } from '@geeksuite/ui';
 import { runEnrich } from '../../api/rest';
 import { useMetadataStatus } from '../../hooks/useMetadataEnrichment';
+import { DISPLAY_FONT, DISPLAY_WEIGHT } from '../../theme/theme';
 import { relativeInstant } from '../../utils/dates';
 import SettingsCard from './SettingsCard';
 import { resetLibraryLists } from '../../graphql/cachePolicies';
@@ -28,8 +29,9 @@ const PROVIDER_LABELS = { steam: 'Steam', igdb: 'IGDB', rawg: 'RAWG' };
 
 function Stat({ value, label }) {
   return (
-    <Box sx={{ minWidth: 0, p: 1.25, borderRadius: 2, bgcolor: 'background.raised', border: 1, borderColor: 'divider' }}>
-      <Typography sx={{ fontSize: '1.375rem', fontWeight: 700, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>
+    // Arcade Sticker: a scoreboard tile — 2px outline, Bungee digits.
+    <Box sx={{ minWidth: 0, p: 1.25, borderRadius: '8px', bgcolor: 'background.raised', border: '2px solid', borderColor: 'border' }}>
+      <Typography sx={{ fontFamily: DISPLAY_FONT, fontWeight: DISPLAY_WEIGHT, fontSize: '1.375rem', lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>
         {value ?? 0}
       </Typography>
       <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', mt: 0.25 }}>{label}</Typography>
@@ -49,8 +51,8 @@ function ProviderChip({ id, on }) {
         alignItems: 'center',
         borderRadius: '6px',
         bgcolor: 'background.raised',
-        border: 1,
-        borderColor: on ? 'success.main' : 'divider',
+        border: '2px solid',
+        borderColor: on ? 'success.main' : 'border',
         fontSize: '0.75rem',
         fontWeight: 600,
         color: on ? 'text.primary' : 'text.secondary',

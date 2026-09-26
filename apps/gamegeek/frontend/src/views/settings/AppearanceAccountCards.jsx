@@ -1,14 +1,16 @@
 import React from 'react';
-import { Avatar, Box, Button, ToggleButton, ToggleButtonGroup, Typography, alpha } from '@mui/material';
+import { Avatar, Box, Button, ToggleButton, ToggleButtonGroup, Typography } from '@mui/material';
 import { Logout as LogoutIcon } from '@mui/icons-material';
 import { useThemeMode } from '@geeksuite/user';
 import { displayNameFrom, initialsFrom, secondaryFrom } from '../../utils/userDisplay';
+import { ARCADE } from '../../theme/theme';
 import SettingsCard from './SettingsCard';
 
 const toggleSx = {
   minHeight: 44,
   minWidth: 44, px: 2, textTransform: 'none', fontSize: '0.875rem', color: 'text.secondary', borderColor: 'border',
-  '&.Mui-selected, &.Mui-selected:hover': { bgcolor: (t) => alpha(t.palette.primary.main, t.palette.mode === 'dark' ? 0.16 : 0.1), color: 'text.primary', fontWeight: 600 },
+  // The selected mode is a lime sticker, ink on an opaque fill (17:1).
+  '&.Mui-selected, &.Mui-selected:hover': { bgcolor: ARCADE.lime, color: ARCADE.ink, fontWeight: 800 },
 };
 
 export function AppearanceCard() {

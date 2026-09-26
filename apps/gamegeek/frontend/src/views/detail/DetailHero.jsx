@@ -5,18 +5,22 @@
  *
  * Text never sits on the backdrop: it fades to the paper before the title
  * starts, so every line is measured against a solid surface.
+ *
+ * Arcade Sticker: with no art, the backdrop is the plate's own ground with
+ * fat diagonal racing stripes in its pop colour; the cover is tilted a
+ * degree and casts a hard shadow; the title is set in Bungee.
  */
 import React from 'react';
 import { Box, Typography } from '@mui/material';
 import { Favorite as FavoriteIcon } from '@mui/icons-material';
 import GameCover from '../../components/GameCover';
 import PlatformChips, { copyPlatforms } from '../../components/PlatformChips';
-import { DISPLAY_FONT } from '../../theme/theme';
+import { DISPLAY_FONT, DISPLAY_WEIGHT, hardShadow } from '../../theme/theme';
 import { yearOf } from '../../utils/dates';
 import { plateFor } from '../../utils/titlePlate';
 
 function Backdrop({ game }) {
-  const { from, to } = plateFor(game?.title);
+  const { ground, pop } = plateFor(game?.title);
   return (
     <Box aria-hidden="true" sx={{ position: 'absolute', inset: 0, height: { xs: 190, md: 220 }, overflow: 'hidden', zIndex: 0 }}>
       {game?.coverUrl ? (
@@ -27,7 +31,15 @@ function Backdrop({ game }) {
           sx={{ position: 'absolute', inset: '-20%', width: '140%', height: '140%', objectFit: 'cover', filter: 'blur(28px) saturate(1.1)', opacity: 0.55 }}
         />
       ) : (
-        <Box sx={{ position: 'absolute', inset: 0, background: `linear-gradient(160deg, ${from}, ${to})`, opacity: (t) => (t.palette.mode === 'dark' ? 0.9 : 0.55) }} />
+        <Box
+          sx={{
+            position: 'absolute',
+            inset: 0,
+            bgcolor: ground,
+            backgroundImage: `repeating-linear-gradient(-35deg, transparent 0 34px, ${pop} 34px 52px, #0C0A12 52px 55px, transparent 55px 90px)`,
+            opacity: (t) => (t.palette.mode === 'dark' ? 0.75 : 0.9),
+          }}
+        />
       )}
       <Box
         sx={{
@@ -60,14 +72,21 @@ export default function DetailHero({ game }) {
           textAlign: { xs: 'center', sm: 'left' },
         }}
       >
-        <Box sx={{ width: { xs: 148, sm: 168, md: 190 }, flexShrink: 0 }}>
-          <GameCover game={game} variant="hero" radius={10} />
+        <Box
+          sx={{
+            width: { xs: 148, sm: 168, md: 190 },
+            flexShrink: 0,
+            transform: 'rotate(-2deg)',
+            '& > div': { boxShadow: (t) => hardShadow(6, t.palette.arcade.ink) },
+          }}
+        >
+          <GameCover game={game} variant="hero" radius={8} />
         </Box>
         <Box sx={{ minWidth: 0, pb: { sm: 0.5 } }}>
           <Typography
             variant="h1"
             component="h2"
-            sx={{ fontFamily: DISPLAY_FONT, fontSize: { xs: '1.625rem', md: '2rem' }, lineHeight: 1.12, overflowWrap: 'anywhere' }}
+            sx={{ fontFamily: DISPLAY_FONT, fontWeight: DISPLAY_WEIGHT, fontSize: { xs: '1.5rem', md: '1.875rem' }, lineHeight: 1.1, overflowWrap: 'anywhere' }}
           >
             {game.title}
             {game.me?.favorite ? (

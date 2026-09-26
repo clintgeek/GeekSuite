@@ -4,11 +4,18 @@
  * The cover, title and meta are one button (the whole card opens the game).
  * The shelf + stars line sits OUTSIDE that button as its own row — a control
  * inside a <button> is invalid HTML and every star tap would open the game.
+ *
+ * Arcade Sticker: 2px outline, a hard offset shadow in the card's own pop
+ * colour (keyed by title, so a grid reads as a set of colours), and on a real
+ * pointer the card lifts and leans a degree toward its own side. No lift on
+ * touch (hover: none) and none at all under prefers-reduced-motion.
  */
 import React from 'react';
-import { Box, ButtonBase, Card, Typography, alpha, useTheme } from '@mui/material';
+import { Box, ButtonBase, Card, Typography, useTheme } from '@mui/material';
 import { AccessTime as ClockIcon, Favorite as FavoriteIcon } from '@mui/icons-material';
+import { hardShadow, POP_COLOURS } from '../theme/theme';
 import { formatHours } from '../utils/dates';
+import { plateFor } from '../utils/titlePlate';
 import { shelfLabel } from '../utils/vocab';
 import GameCover from './GameCover';
 import PlatformChips, { copyPlatforms } from './PlatformChips';
@@ -25,6 +32,12 @@ export default function GameCard({ game, onOpen, onRate, showShelf = true, custo
   const rateable = Boolean(onRate) && canRate(game);
   const shelf = showShelf && me.shelf ? shelfLabel(me.shelf, customShelves) : null;
   const meta = metaLine(game);
+  const arcade = theme.palette.arcade;
+  const { index, lean } = plateFor(title);
+  const pop = POP_COLOURS[index % POP_COLOURS.length];
+  const isDark = theme.palette.mode === 'dark';
+  // Dark: the shadow IS the colour. Light: ink at rest, colour when lifted.
+  const rest = hardShadow(4, isDark ? pop : arcade.shadow);
 
   return (
     <Card
@@ -35,12 +48,13 @@ export default function GameCard({ game, onOpen, onRate, showShelf = true, custo
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
-        transition: theme.transitions.create(['transform', 'border-color', 'box-shadow'], { duration: 160 }),
+        boxShadow: rest,
         '@media (hover: hover)': {
-          '&:hover': {
-            transform: 'translateY(-2px)',
-            borderColor: alpha(theme.palette.primary.main, 0.45),
-          },
+          '&:hover, &:focus-within': { boxShadow: hardShadow(6, pop) },
+        },
+        '@media (hover: hover) and (prefers-reduced-motion: no-preference)': {
+          transition: 'transform 140ms cubic-bezier(.3,1.6,.6,1), box-shadow 140ms ease-out',
+          '&:hover': { transform: `translate(-2px, -3px) rotate(${lean * 0.9}deg)` },
         },
       }}
     >
@@ -54,16 +68,17 @@ export default function GameCard({ game, onOpen, onRate, showShelf = true, custo
             <Box
               aria-hidden="true"
               sx={{
-                position: 'absolute', top: 6, right: 6, width: 24, height: 24, borderRadius: '50%',
-                display: 'grid', placeItems: 'center', bgcolor: 'rgba(14,17,22,0.72)', color: '#FF8FA3',
+                position: 'absolute', top: 6, right: 6, width: 26, height: 26, borderRadius: '50%',
+                display: 'grid', placeItems: 'center', bgcolor: arcade.magenta, color: arcade.ink,
+                border: `2px solid ${arcade.ink}`, boxShadow: hardShadow(2, arcade.ink), zIndex: 2,
               }}
             >
               <FavoriteIcon sx={{ fontSize: 14 }} />
             </Box>
           ) : null}
           {progress > 0 ? (
-            <Box aria-hidden="true" sx={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 3, bgcolor: 'rgba(0,0,0,0.45)' }}>
-              <Box sx={{ height: '100%', width: `${progress}%`, bgcolor: '#FFB547', boxShadow: '0 0 8px rgba(255,181,71,0.6)' }} />
+            <Box aria-hidden="true" sx={{ position: 'absolute', left: 0, right: 0, bottom: 0, height: 6, bgcolor: arcade.ink, zIndex: 2 }}>
+              <Box sx={{ height: '100%', width: `${progress}%`, bgcolor: arcade.lime, borderRight: progress < 100 ? `2px solid ${arcade.ink}` : 0 }} />
             </Box>
           ) : null}
         </GameCover>
@@ -72,9 +87,9 @@ export default function GameCard({ game, onOpen, onRate, showShelf = true, custo
           component="h3"
           sx={{
             mt: 1,
-            fontSize: '0.875rem',
-            fontWeight: 600,
-            lineHeight: 1.3,
+            fontSize: '0.9375rem',
+            fontWeight: 800,
+            lineHeight: 1.25,
             color: 'text.primary',
             display: '-webkit-box',
             WebkitLineClamp: 2,

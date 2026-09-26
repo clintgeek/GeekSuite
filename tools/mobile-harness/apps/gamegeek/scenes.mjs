@@ -291,6 +291,31 @@ export const scenes = [
     },
     teardown: (page, h) => h.esc(),
   },
+  {
+    // Arcade Sticker (DOCS/GameGeekPlan.md §5.1): the "nothing matches"
+    // empty state — the tilted sticker frame and its attract-mode tag.
+    name: '22-no-match',
+    goto: '/?q=zzzz-no-such-game',
+    wait: 1500,
+    async setup(page, h) {
+      await page.getByTestId('library-empty').waitFor({ timeout: 3000 }).catch(() => {});
+      await h.settle(200);
+    },
+  },
+  {
+    // Arcade Sticker: a card under a real pointer lifts, leans and swaps its
+    // ink shadow for its colour. Desktop only — hover is (hover: hover) only.
+    name: '23-card-hover',
+    goto: '/',
+    viewports: ['desktop'],
+    wait: 1500,
+    async setup(page, h) {
+      const card = page.getByTestId('game-card').nth(1);
+      if (!(await card.count())) return false;
+      await card.hover({ position: { x: 40, y: 60 } });
+      await h.settle(400);
+    },
+  },
 ];
 
 // Known, ticketed violations. The list starts empty and stays that way.

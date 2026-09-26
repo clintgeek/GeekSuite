@@ -5,10 +5,12 @@
  * something in it.
  *
  * The chip is paint; the ButtonBase around it is the 44px target and the one
- * element with role="tab".
+ * element with role="tab". Arcade Sticker: 2px outlines; the active shelf is
+ * a lime sticker with ink text and a hard shadow (ink on lime is 17:1, so the
+ * 12px count clears AA against the fill itself).
  */
 import React, { useEffect, useRef } from 'react';
-import { Box, ButtonBase } from '@mui/material';
+import { Box, ButtonBase, useTheme } from '@mui/material';
 import { shelfCount } from '../hooks/useGameMeta';
 
 export function stripEntries(shelves, stats) {
@@ -18,6 +20,8 @@ export function stripEntries(shelves, stats) {
 }
 
 export default function ShelfStrip({ shelves, stats, value, onChange }) {
+  const theme = useTheme();
+  const a = theme.palette.arcade;
   const activeRef = useRef(null);
   const entries = stripEntries(shelves, stats);
 
@@ -34,6 +38,7 @@ export default function ShelfStrip({ shelves, stats, value, onChange }) {
         gap: 0.75,
         px: 2,
         py: 0.5,
+        pb: 1,
         overflowX: 'auto',
         scrollSnapType: 'x proximity',
         scrollbarWidth: 'none',
@@ -61,20 +66,19 @@ export default function ShelfStrip({ shelves, stats, value, onChange }) {
                 gap: 0.75,
                 height: 32,
                 px: 1.5,
-                borderRadius: '999px',
-                border: 1,
+                borderRadius: '8px',
+                border: '2px solid',
                 fontSize: '0.8125rem',
-                fontWeight: active ? 600 : 500,
+                fontWeight: active ? 800 : 600,
                 whiteSpace: 'nowrap',
-                transition: 'background-color 140ms, color 140ms, border-color 140ms',
                 ...(active
-                  ? { bgcolor: 'primary.main', borderColor: 'primary.main', color: 'primary.contrastText' }
-                  : { bgcolor: 'transparent', borderColor: 'border', color: 'text.secondary' }),
+                  ? { bgcolor: a.lime, borderColor: a.ink, color: a.ink, boxShadow: `3px 3px 0 0 ${theme.palette.mode === 'dark' ? a.magenta : a.ink}` }
+                  : { bgcolor: 'background.paper', borderColor: 'border', color: 'text.secondary' }),
               }}
             >
               {shelf.label}
               {count ? (
-                <Box component="span" sx={{ fontSize: '0.75rem', fontWeight: 500, fontVariantNumeric: 'tabular-nums', color: active ? 'primary.contrastText' : 'text.muted' }}>
+                <Box component="span" sx={{ fontSize: '0.75rem', fontWeight: 500, fontVariantNumeric: 'tabular-nums', color: active ? a.ink : 'text.muted' }}>
                   {count}
                 </Box>
               ) : null}

@@ -3,7 +3,8 @@
  *
  * Filled chips with 12px text are the harness's favourite contrast trap, so
  * the fill is the raised surface and the label is a TEXT token — never an
- * accent on its own tint.
+ * accent on its own tint. Arcade Sticker: a squared tile with a 1.5px
+ * outline in the arcade line, bold caps.
  */
 import React from 'react';
 import { Box } from '@mui/material';
@@ -23,15 +24,16 @@ export default function PlatformChips({ platforms = [], max = 3, long = false, s
     alignItems: 'center',
     height: 22,
     px: 0.875,
-    borderRadius: '6px',
+    borderRadius: '4px',
     fontSize: '0.75rem',
-    fontWeight: 500,
+    fontWeight: 700,
+    letterSpacing: '0.02em',
     lineHeight: 1,
     whiteSpace: 'nowrap',
     bgcolor: 'background.raised',
     color: 'text.secondary',
-    border: 1,
-    borderColor: 'divider',
+    border: '1.5px solid',
+    borderColor: 'border',
   };
   return (
     <Box

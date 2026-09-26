@@ -2,12 +2,13 @@
  * The selectable pill used by every multi- or single-select chip group
  * (sort, platform, session length, owned platforms…).
  *
- * Selected is a phosphor TINT with an accent border and TEXT-token ink — not
- * a solid amber slab. A dozen solid amber pills in a row shout; a tint reads
- * as "on". Ink stays on text.primary so contrast never depends on the accent
- * (the 12px filled-chip landmine). 44px in both axes.
+ * Arcade Sticker: a 2px-outlined tile; selected is a solid LIME sticker with
+ * ink text, an ink outline and a hard shadow. The fill is opaque and the ink
+ * clears 17:1 on it, so the 13px label passes against the chip fill itself
+ * (the 12px filled-chip landmine: never an accent tint, never readableOn
+ * against the page). 44px in both axes.
  */
-import { alpha } from '@mui/material/styles';
+import { ARCADE, hardShadow } from './theme';
 
 export const selectChipSx = {
   flex: '0 0 auto',
@@ -15,18 +16,19 @@ export const selectChipSx = {
   minWidth: 44,
   px: 1.75,
   ml: '0 !important',
-  borderRadius: '999px !important',
-  border: '1px solid !important',
+  borderRadius: '8px !important',
+  border: '2px solid !important',
   borderColor: (t) => `${t.palette.border} !important`,
   textTransform: 'none',
   fontSize: '0.8125rem',
-  fontWeight: 500,
+  fontWeight: 600,
   color: 'text.secondary',
   '&.Mui-selected, &.Mui-selected:hover': {
-    bgcolor: (t) => alpha(t.palette.primary.main, t.palette.mode === 'dark' ? 0.16 : 0.1),
-    borderColor: (t) => `${t.palette.primary.main} !important`,
-    color: 'text.primary',
-    fontWeight: 600,
+    bgcolor: ARCADE.lime,
+    borderColor: `${ARCADE.ink} !important`,
+    color: ARCADE.ink,
+    fontWeight: 800,
+    boxShadow: (t) => hardShadow(2, t.palette.mode === 'dark' ? ARCADE.magenta : ARCADE.ink),
   },
 };
 

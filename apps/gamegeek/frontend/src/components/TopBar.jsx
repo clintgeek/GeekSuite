@@ -17,7 +17,7 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useThemeMode } from '@geeksuite/user';
 import { GeekSearchField, GeekTopBar } from '@geeksuite/ui';
 import { useDebouncedCallback } from '../hooks/useDebouncedCallback';
-import { DISPLAY_FONT } from '../theme/theme';
+import { DISPLAY_FONT, DISPLAY_WEIGHT } from '../theme/theme';
 import { writeLibraryState } from '../utils/libraryFilter';
 import { displayNameFrom, initialsFrom, secondaryFrom } from '../utils/userDisplay';
 import { APP_ID, isLibraryPath, titleFor } from './navConfig';
@@ -124,7 +124,7 @@ export default function TopBar({ user, onSignOut }) {
             variant="contained"
             startIcon={<AddIcon />}
             onClick={() => navigate(`/add${location.search}`)}
-            sx={{ fontWeight: 600, px: 2, whiteSpace: 'nowrap' }}
+            sx={{ fontFamily: DISPLAY_FONT, fontWeight: DISPLAY_WEIGHT, letterSpacing: '0.03em', px: 2, whiteSpace: 'nowrap' }}
           >
             Add game
           </Button>
@@ -156,14 +156,15 @@ export default function TopBar({ user, onSignOut }) {
       }
       sx={{
         backgroundColor: theme.palette.background.paper,
-        borderBottom: `1px solid ${theme.palette.divider}`,
+        borderBottom: `2px solid ${theme.palette.border}`,
         boxShadow: 'none',
         color: 'text.primary',
         '& [data-geek-topbar="title"]': {
           fontFamily: DISPLAY_FONT,
-          fontWeight: 600,
-          fontSize: '1.2rem',
-          letterSpacing: '-0.015em',
+          fontWeight: DISPLAY_WEIGHT,
+          fontSize: '1.25rem',
+          letterSpacing: '0.02em',
+          textTransform: 'uppercase',
         },
         '& [data-geek-topbar="theme"], & [data-geek-topbar="switcher"]': {
           color: 'text.primary',

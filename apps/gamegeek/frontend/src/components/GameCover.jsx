@@ -1,7 +1,7 @@
 /**
  * A game's box art at 3:4, or its title plate when there is none (or when the
  * image fails to load — a broken cover falls back to the plate, never to an
- * empty box).
+ * empty box). Drawn with a 2px ink keyline, the sticker's die-cut edge.
  */
 import React, { useEffect, useState } from 'react';
 import { Box } from '@mui/material';
@@ -12,7 +12,7 @@ export function primaryPlatform(game) {
   return game?.copies?.[0]?.platform || game?.platformsAvailable?.[0] || null;
 }
 
-export default function GameCover({ game, variant = 'card', radius = 8, sx, children }) {
+export default function GameCover({ game, variant = 'card', radius = 6, sx, children }) {
   const url = game?.coverUrl || null;
   const [failed, setFailed] = useState(false);
   useEffect(() => setFailed(false), [url]);
@@ -27,7 +27,8 @@ export default function GameCover({ game, variant = 'card', radius = 8, sx, chil
         borderRadius: `${radius}px`,
         overflow: 'hidden',
         bgcolor: 'background.raised',
-        boxShadow: (t) => (t.palette.mode === 'dark' ? '0 8px 20px rgba(0,0,0,0.45)' : '0 6px 16px rgba(21,26,34,0.14)'),
+        // Arcade Sticker: the box art gets an ink keyline, not a soft drop.
+        border: (t) => `2px solid ${t.palette.arcade?.ink ?? '#000'}`,
         ...sx,
       }}
     >
