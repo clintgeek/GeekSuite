@@ -39,14 +39,15 @@ describe("saved views", () => {
     const link = await within(nav).findByRole("link", { name: "Unread sci-fi" });
 
     await user.click(link);
-    expect(router.location.search).toBe("?q=robot&shelf=unread&tag=science+fiction&by=Asimov&sort=dateAdded");
+    // The saved raw "science fiction" opens as the gateway maps it (viewTags).
+    expect(router.location.search).toBe("?q=robot&shelf=unread&tag=Sci-fi&by=Asimov&sort=dateAdded");
     await waitFor(() =>
       expect(calls.filter((c) => c.name === "GetBooks").at(-1).variables).toEqual({
         page: 1,
         limit: 50,
         sort: "dateAdded",
         sortDir: "desc",
-        filter: { q: "robot", shelves: ["unread"], tags: ["science fiction"], authorText: "Asimov" },
+        filter: { q: "robot", shelves: ["unread"], tags: ["Sci-fi"], authorText: "Asimov" },
       })
     );
     expect(within(nav).getByRole("link", { name: "Unread sci-fi" })).toHaveAttribute("aria-current", "page");

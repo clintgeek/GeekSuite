@@ -239,10 +239,26 @@ describe('LibraryView — desktop: the filter panel', () => {
     const { router } = renderView({}, { url: '/?sort=author' });
     const panel = screen.getByTestId('filter-panel');
     await user.click(within(panel).getByRole('checkbox', { name: 'John Scalzi, 3 books' }));
-    await user.click(within(panel).getByRole('checkbox', { name: 'science fiction, 4 books' }));
-    expect(router.location.search).toBe('?author=John+Scalzi&tag=science+fiction&sort=author');
+    await user.click(within(panel).getByRole('checkbox', { name: 'Sci-fi, 4 books' }));
+    expect(router.location.search).toBe('?author=John+Scalzi&tag=Sci-fi&sort=author');
     await user.click(screen.getByRole('button', { name: 'Remove Author: John Scalzi' }));
-    expect(router.location.search).toBe('?tag=science+fiction&sort=author');
+    expect(router.location.search).toBe('?tag=Sci-fi&sort=author');
+  });
+
+  it('Tags are grouped: My tags first, the vocabulary, Unsorted folded last (DOCS/TAGS.md)', async () => {
+    const user = userEvent.setup();
+    const { router } = renderView();
+    const panel = screen.getByTestId('filter-panel');
+    expect(within(within(panel).getByRole('group', { name: 'My tags' })).getByRole('checkbox', { name: 'Book club pick, 1 book' })).toBeInTheDocument();
+    expect(within(within(panel).getByRole('group', { name: 'Genre tags' })).getByRole('checkbox', { name: 'Sci-fi, 4 books' })).toBeInTheDocument();
+    expect(within(panel).getByRole('group', { name: 'Nonfiction tags' })).toHaveTextContent('Memoir');
+    // Unsorted: folded, still filterable once opened.
+    const unsorted = within(panel).getByRole('button', { name: 'Unsorted, 1 tag' });
+    expect(unsorted).toHaveAttribute('aria-expanded', 'false');
+    expect(within(panel).queryByRole('checkbox', { name: /Must Read/ })).toBeNull();
+    await user.click(unsorted);
+    await user.click(within(within(panel).getByRole('group', { name: 'Unsorted tags' })).getByRole('checkbox', { name: 'Must Read, 2 books' }));
+    expect(router.location.search).toBe('?tag=Must+Read');
   });
 
   it('the Language section appears once there is a choice of languages', () => {

@@ -14,7 +14,10 @@ export const BOOKS = [
     pageCount: 336,
     publishedDate: '2014-08-26',
     readingProgress: 42,
-    tags: ['science fiction', 'mystery'],
+    tags: ['science fiction', 'mystery', 'Must Read'],
+    libraryTags: ['Sci-fi', 'Mystery'],
+    unsortedTags: ['Must Read'],
+    myTags: [],
     publisher: 'Tor Books',
     isbn: '9780765375865',
     isbn13: null,
@@ -42,6 +45,9 @@ export const BOOKS = [
     publishedDate: '2016-01-05',
     readingProgress: 100,
     tags: ['memoir'],
+    libraryTags: ['Memoir'],
+    unsortedTags: [],
+    myTags: ['Book club pick'],
     publisher: 'Flatiron Books',
     isbn: '9780765375865',
     isbn13: null,
@@ -68,6 +74,9 @@ export const BOOKS = [
     publishedDate: '2017-04-11',
     readingProgress: 0,
     tags: ['history'],
+    libraryTags: ['History'],
+    unsortedTags: [],
+    myTags: [],
     publisher: 'Simon & Schuster',
     isbn: '9780765375865',
     isbn13: null,
@@ -94,6 +103,9 @@ export const BOOKS = [
     publishedDate: '2023-03-01',
     readingProgress: 0,
     tags: ['fantasy'],
+    libraryTags: ['Fantasy'],
+    unsortedTags: [],
+    myTags: [],
     publisher: 'Independent',
     isbn: '9780765375865',
     isbn13: null,
@@ -151,16 +163,19 @@ export const SHELF_SUMMARY = {
 export const SAVED_FILTERS = [
   {
     __typename: 'BookSavedFilter', id: 'f1', name: 'Kindle queue', sortBy: 'title', sortDir: 'asc',
-    searchQuery: '', authorFilter: '', tagFilter: '', shelfFilter: 'on-reader', ownedOnly: false, ownedFilter: 'all', filter: null,
+    searchQuery: '', authorFilter: '', tagFilter: '', shelfFilter: 'on-reader', ownedOnly: false, ownedFilter: 'all', filter: null, viewTags: [],
   },
   {
     __typename: 'BookSavedFilter', id: 'f2', name: 'Unread sci-fi', sortBy: 'dateAdded', sortDir: 'desc',
     searchQuery: 'robot', authorFilter: 'Asimov', tagFilter: 'science fiction', shelfFilter: 'unread', ownedOnly: true, ownedFilter: 'owned', filter: null,
+    // The gateway maps the saved raw tag when the view loads (BookSavedFilter.viewTags).
+    viewTags: ['Sci-fi'],
   },
   {
     __typename: 'BookSavedFilter', id: 'f3', name: 'Five-star fantasy', sortBy: 'rating', sortDir: 'desc',
     searchQuery: '', authorFilter: '', tagFilter: 'fantasy', shelfFilter: 'all', ownedOnly: false, ownedFilter: 'all',
     filter: { tags: ['fantasy'], ratingMin: 5 },
+    viewTags: ['Fantasy'],
   },
 ];
 
@@ -173,7 +188,9 @@ export const FACETS = {
   shelves: fv([['read', 118], ['unread', 61], ['want-to-read', 27], ['on-reader', 7], ['reading', 2], ['custom-comfort-reads', 1]]),
   authors: fv([['John Scalzi', 3], ['Ursula K. Le Guin', 2], ['Philip K. Dick', 1]]),
   series: fv([['Earthsea', 2]]),
-  tags: fv([['science fiction', 4], ['fantasy', 3], ['memoir', 1]]),
+  // canonical ∪ My ∪ Unsorted, as the gateway counts them (DOCS/TAGS.md)
+  tags: fv([['Sci-fi', 4], ['Fantasy', 3], ['Must Read', 2], ['Book club pick', 1], ['Memoir', 1]]),
+  myTags: fv([['Book club pick', 1]]),
   formats: fv([['epub', 4], ['pdf', 1]]),
   languages: fv([['en', 4]]),
   readYears: [2021, 2022, 2024].map((year, i) => ({ __typename: 'BookYearBucket', year, count: i + 1 })),

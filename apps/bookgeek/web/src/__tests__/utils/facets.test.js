@@ -33,10 +33,25 @@ describe("sections", () => {
     expect(options.map((o) => o.label)).toEqual(["Reading", "On Reader", "Unread", "Read", "Want to read", "Comfort reads"]);
   });
 
-  it("tags are one searchable list — no vocabulary groups", () => {
-    const tags = SECTIONS.find((s) => s.id === "tags");
+  it("tags are grouped: My tags, the vocabulary groups, then Unsorted folded last", () => {
+    const tags = sectionsFor({ base: FACETS, current: FACETS }).find((s) => s.id === "tags");
     expect(tags.kind).toBe("grouped");
-    expect(tags.groupOf).toBeUndefined();
+    expect(tags.groupOrder).toEqual(["My tags", "Genre", "Nonfiction", "Audience", "Flavour", "Unsorted"]);
+    expect(tags.collapsedGroups).toEqual(["Unsorted"]);
+    // The facet's `myTags` answer decides which values are someone's own.
+    expect(tags.groupOf("Book club pick")).toBe("My tags");
+    expect(tags.groupOf("Sci-fi")).toBe("Genre");
+    expect(tags.groupOf("Must Read")).toBe("Unsorted");
+    expect(tags.groupLabel("Genre")).toBe("Genre tags");
+    expect(tags.groupLabel("My tags")).toBe("My tags");
+    // The static config has no groupOf until sectionsFor adds one.
+    expect(SECTIONS.find((s) => s.id === "tags").groupOf).toBeUndefined();
+  });
+
+  it("a My tag seen only in the live answer still groups as mine", () => {
+    const current = { ...FACETS, myTags: [{ value: "Fresh", count: 1 }] };
+    const tags = sectionsFor({ base: { ...FACETS, myTags: [] }, current }).find((s) => s.id === "tags");
+    expect(tags.groupOf("Fresh")).toBe("My tags");
   });
 
   it("Language shows only when there is a choice to make", () => {

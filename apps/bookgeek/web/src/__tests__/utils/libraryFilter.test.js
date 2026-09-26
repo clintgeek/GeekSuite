@@ -122,6 +122,18 @@ describe("saved views", () => {
     });
   });
 
+  it("a view's raw tags open as the gateway maps them (viewTags), legacy and C2 alike", () => {
+    // "Unread sci-fi": saved as the raw "science fiction".
+    expect(savedViewSearch({ ...LEGACY_VIEW, viewTags: ["Sci-fi"] })).toBe("?q=robot&shelf=unread&tag=Sci-fi&by=Asimov&sort=dateAdded");
+    // "Five-star memoirs": C2 filter JSON naming the raw "memoir".
+    const memoirs = { sortBy: "rating", sortDir: "desc", tagFilter: "memoir", filter: { tags: ["memoir"], ratingMin: 5 }, viewTags: ["Memoir"] };
+    expect(savedViewSearch(memoirs)).toBe("?tag=Memoir&stars=5-&sort=rating");
+    // One raw tag can open on two.
+    expect(savedViewSearch({ sortBy: "title", filter: { tags: ["Science Fiction Fantasy"] }, viewTags: ["Sci-fi", "Fantasy"] })).toBe("?tag=Sci-fi&tag=Fantasy");
+    // A view with no tags stays tagless.
+    expect(savedViewSearch({ sortBy: "title", filter: { shelves: ["read"] }, viewTags: [] })).toBe("?shelf=read");
+  });
+
   it("a legacy view with nothing but a shelf, and one on 'all'", () => {
     const base = { sortBy: "title", sortDir: "asc", searchQuery: "", authorFilter: "", tagFilter: "" };
     expect(savedViewSearch({ ...base, shelfFilter: "on-reader" })).toBe("?shelf=on-reader");

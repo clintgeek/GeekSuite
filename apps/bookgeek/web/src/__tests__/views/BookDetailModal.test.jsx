@@ -98,6 +98,21 @@ describe('BookDetailModal', () => {
     expect(screen.getByText('Reading')).toBeInTheDocument();
   });
 
+  it('shows the canonical tags and My tags; the raw tags sit behind "Source tags" (DOCS/TAGS.md §5)', async () => {
+    const tagged = { ...book, tags: ['science fiction', 'Must Read', 'AUTO'], libraryTags: ['Sci-fi', 'Mystery'], unsortedTags: ['Must Read'], myTags: ['Beach read'] };
+    renderWithProviders(<BookDetailModal {...baseProps({ selectedBook: tagged })} />);
+    const canonical = screen.getByRole('region', { name: 'Tags' });
+    expect(within(canonical).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Sci-fi', 'Mystery']);
+    expect(within(screen.getByRole('region', { name: 'My tags' })).getByText('Beach read')).toBeInTheDocument();
+    // The raw tags are folded, not gone.
+    const toggle = screen.getByRole('button', { name: /Source tags/ });
+    expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByText(/science fiction · Must Read · AUTO/)).not.toBeInTheDocument();
+    await userEvent.click(toggle);
+    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByText('science fiction · Must Read · AUTO')).toBeInTheDocument();
+  });
+
   it('enables Read when the book has an epub file', () => {
     renderWithProviders(<BookDetailModal {...baseProps()} />);
     // Exact name, not a substring match — the description's own "Read more"

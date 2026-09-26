@@ -39,7 +39,9 @@ export function useBookEdit({ selectedBook, updateBook }) {
       isbn: selectedBook.isbn || "",
       isbn13: selectedBook.isbn13 || "",
       goodreadsId: selectedBook.goodreadsId || "",
-      tags: Array.isArray(selectedBook.tags) ? selectedBook.tags.join(", ") : "",
+      // The reader's own tags (DOCS/TAGS.md §4). The imported `tags` are not
+      // editable here: Calibre owns them, and a re-import would undo an edit.
+      myTags: Array.isArray(selectedBook.myTags) ? selectedBook.myTags.join(", ") : "",
       review: selectedBook.review || "",
       rating:
         typeof selectedBook.rating === "number" && !Number.isNaN(selectedBook.rating)
@@ -96,7 +98,7 @@ export function useBookEdit({ selectedBook, updateBook }) {
       goodreadsId: editDraft.goodreadsId || null,
       review: editDraft.review || null,
       authors: splitList(editDraft.authors),
-      tags: splitList(editDraft.tags),
+      myTags: splitList(editDraft.myTags),
     };
 
     if (editDraft.rating !== undefined) {
@@ -118,7 +120,7 @@ export function useBookEdit({ selectedBook, updateBook }) {
   }
 
   /**
-   * Fill the edit dialog's Description and Tags from `draftBookMetadata`.
+   * Fill the edit dialog's Description and My tags from `draftBookMetadata`.
    * Nothing is written here — the user reviews the draft and saves it through
    * the same `updateBook` the form has always used.
    */
@@ -139,7 +141,9 @@ export function useBookEdit({ selectedBook, updateBook }) {
         // A drafted description replaces a blank field, never a written one:
         // the point is filling gaps an import left, not overwriting prose.
         description: (prev?.description || "").trim() ? prev.description : (draft.description || ""),
-        tags: mergeTagList(prev?.tags, draft.tags),
+        // Drafted tags join the reader's own: nothing is saved until they
+        // save, and what they save is theirs.
+        myTags: mergeTagList(prev?.myTags, draft.tags),
       }));
       setMetadataDraftProvenance(draft.provenance || null);
     } catch (err) {

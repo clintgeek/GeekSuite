@@ -36,6 +36,9 @@ export const UPDATE_BOOK = gql`
       description
       language
       tags
+      libraryTags
+      unsortedTags
+      myTags
       files {
         format
         path

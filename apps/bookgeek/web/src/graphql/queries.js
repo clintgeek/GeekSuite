@@ -29,6 +29,9 @@ export const GET_BOOKS = gql`
         description
         language
         tags
+        libraryTags
+        unsortedTags
+        myTags
         files {
           format
           path
@@ -84,6 +87,9 @@ export const BOOK_FIELDS = gql`
     description
     language
     tags
+    libraryTags
+    unsortedTags
+    myTags
     files {
       format
       path
@@ -144,6 +150,10 @@ export const GET_BOOK_FACETS = gql`
         value
         count
       }
+      myTags {
+        value
+        count
+      }
       formats {
         value
         count
@@ -199,6 +209,7 @@ export const SAVED_FILTER_FIELDS = `
   ownedOnly
   ownedFilter
   filter
+  viewTags
 `;
 
 export const GET_BOOK_PROFILE = gql`

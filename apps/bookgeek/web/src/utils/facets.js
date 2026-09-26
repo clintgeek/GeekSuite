@@ -6,9 +6,9 @@
  *
  * What is BookGeek's here: which sections and in what order, their wording,
  * the shelf order (built-ins, then the reader's own shelves), and the chip
- * order. Tags are ONE searchable list: Calibre tags are user-curated, so
- * there is no vocabulary to group them under (DOCS/BOOKGEEK_CLEANUP_PLAN.md
- * Phase C — "likely no vocabulary mapping").
+ * order. Tags are grouped by the tag vocabulary (DOCS/TAGS.md): the
+ * person's own tags first, then Genre, Nonfiction, Audience and Flavour,
+ * then the raw tags the vocabulary leaves Unsorted — last, and folded.
  *
  * The `context` every label/fixed function gets is `{ shelves }` — the
  * profile's composed shelf list (hooks/useProfile.js `composeShelves`), so a
@@ -17,6 +17,7 @@
 import { buildActiveChips } from "@geeksuite/collection";
 import { BUILT_IN_SHELVES } from "../hooks/useProfile";
 import { LIBRARY_CODEC } from "./libraryFilter";
+import { MY_TAGS_GROUP, TAG_GROUP_ORDER, UNSORTED_GROUP, tagGroupOf } from "./tagGroups";
 
 const BUILT_IN_ORDER = BUILT_IN_SHELVES.map((s) => s.id).filter((id) => id !== "all");
 
@@ -108,14 +109,19 @@ const SECTION_DEFS = [
     emptyText: "No series recorded yet. Calibre imports bring them in.",
   },
   {
+    // My tags, the vocabulary's groups, then Unsorted folded at the end.
+    // `groupOf` needs the facet's `myTags` answer, so `sectionsFor` fills it in.
     id: "tags",
     title: "Tags",
     kind: "grouped",
     key: "tags",
     facet: "tags",
     limit: 12,
+    groupOrder: TAG_GROUP_ORDER,
+    groupLabel: (group) => (group === MY_TAGS_GROUP ? group : `${ group } tags`),
+    collapsedGroups: [UNSORTED_GROUP],
     itemNoun: { one: "tag", many: "tags" },
-    emptyText: "No tags yet. Calibre imports bring your tags in, and tags you add show here too.",
+    emptyText: "No tags yet. Calibre imports bring tags in, and tags you add show here too.",
     match: { key: "tagMatch", over: ["tags"], text: "of the chosen tags" },
   },
   {
@@ -181,8 +187,10 @@ export const SECTIONS = SECTION_DEFS.map((s) =>
  */
 export function sectionsFor(facets, filter = {}) {
   const languages = facets?.base?.languages?.length ?? 0;
-  if (languages > 1 || filter.languages?.length) return SECTIONS;
-  return SECTIONS.filter((s) => s.id !== "language");
+  const shown = languages > 1 || filter.languages?.length ? SECTIONS : SECTIONS.filter((s) => s.id !== "language");
+  const mine = [...(facets?.base?.myTags ?? []), ...(facets?.current?.myTags ?? [])].map((v) => v.value);
+  const groupOf = tagGroupOf(mine);
+  return shown.map((s) => (s.id === "tags" ? { ...s, groupOf } : s));
 }
 
 /** Sections open until the person closes them. The rest start closed. */

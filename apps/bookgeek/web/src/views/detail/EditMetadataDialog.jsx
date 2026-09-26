@@ -6,7 +6,7 @@
  * same App handlers; the ✕ cancels too, and is suppressed while saving.
  *
  * "Draft description & tags" (AI idea #4, behind the Library assistant switch)
- * fills the Description and Tags fields from `draftBookMetadata` and marks them
+ * fills the Description and My tags fields from `draftBookMetadata` and marks them
  * AI-drafted. It writes nothing: the draft lands in the form, the user edits
  * it, and Save goes through the same `updateBook` mutation a hand-typed edit
  * does.
@@ -129,10 +129,10 @@ export default function EditMetadataDialog({
           minRows={3}
         />
         <TextField
-          label="Tags"
-          helperText="Comma-separated"
-          value={draft.tags || ""}
-          onChange={setField("tags")}
+          label="My tags"
+          helperText="Comma-separated. Yours, shown as you type them; an import never changes them."
+          value={draft.myTags || ""}
+          onChange={setField("myTags")}
           fullWidth
         />
 

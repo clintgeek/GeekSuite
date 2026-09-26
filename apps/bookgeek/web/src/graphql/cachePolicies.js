@@ -125,6 +125,9 @@ const BOOK_SCALARS = [
   "source", "createdAt", "updatedAt",
 ];
 
+/** The derived and personal tag lists (apps/bookgeek/DOCS/TAGS.md). */
+const BOOK_TAG_LISTS = ["libraryTags", "unsortedTags", "myTags"];
+
 /** A REST (Mongo) book as a complete `Book` the cache can hold. */
 export function restBookToEntity(raw) {
   if (!raw) return null;
@@ -132,6 +135,9 @@ export function restBookToEntity(raw) {
   if (!id) return null;
   const entity = { __typename: "Book", id: String(id) };
   for (const key of BOOK_SCALARS) entity[key] = raw[key] ?? null;
+  // Non-null lists at the gateway (Book.libraryTags etc.); a REST book
+  // written before the tag migration has none of them yet.
+  for (const key of BOOK_TAG_LISTS) entity[key] = Array.isArray(raw[key]) ? raw[key] : [];
   entity.series = raw.series
     ? { __typename: "BookSeries", name: raw.series.name ?? null, index: raw.series.index ?? null }
     : null;

@@ -7,7 +7,7 @@ import { renderWithProviders } from '../testUtils';
 function props(over = {}) {
   return {
     open: true,
-    editDraft: { title: 'Lock In', authors: 'John Scalzi', description: '', tags: '' },
+    editDraft: { title: 'Lock In', authors: 'John Scalzi', description: '', myTags: '' },
     editError: null,
     editSaving: false,
     setEditDraft: vi.fn(),
@@ -86,5 +86,21 @@ describe('EditMetadataDialog — the metadata draft button', () => {
     const field = screen.getByLabelText('Description');
     await userEvent.type(field, 'A');
     expect(setEditDraft).toHaveBeenCalled();
+  });
+});
+
+describe('EditMetadataDialog — tags (DOCS/TAGS.md §4)', () => {
+  it('edits the reader’s own tags, never the imported ones', async () => {
+    const setEditDraft = vi.fn();
+    renderWithProviders(<EditMetadataDialog {...props({ setEditDraft, editDraft: { title: 'Lock In', myTags: 'Beach read' } })} />);
+    const field = screen.getByRole('textbox', { name: 'My tags' });
+    expect(field).toHaveValue('Beach read');
+    expect(screen.queryByRole('textbox', { name: /^Tags/ })).not.toBeInTheDocument();
+    await userEvent.type(field, 'x');
+    // The field writes `myTags` in the draft (the value is read from the
+    // controlled input, which this stub never updates) and never `tags`.
+    const next = setEditDraft.mock.calls.at(-1)[0]({ title: 'Lock In', myTags: 'Beach read' });
+    expect(next).toHaveProperty('myTags');
+    expect(next).not.toHaveProperty('tags');
   });
 });

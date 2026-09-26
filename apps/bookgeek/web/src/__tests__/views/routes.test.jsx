@@ -135,6 +135,26 @@ describe("the cached book list", () => {
     expect(count("GetBooks")).toBe(3);
   });
 
+  it("Edit metadata saves the reader's own tags as myTags and never sends the imported tags (DOCS/TAGS.md §4)", async () => {
+    stubFetch();
+    const tagged = makeBook(1, { tags: ["Science Fiction"], libraryTags: ["Sci-fi"], myTags: ["mine"] });
+    const { handlers } = libraryServer([tagged]);
+    const { client, calls } = createTestClient(handlers);
+    const user = userEvent.setup();
+    renderSignedIn({ client, initialEntries: ["/book/b001"] });
+
+    await openMore(user);
+    await user.click(await screen.findByText("Edit metadata"));
+    const field = await screen.findByRole("textbox", { name: /My tags/ });
+    expect(field).toHaveValue("mine");
+    fireEvent.change(field, { target: { value: "mine, Beach read" } });
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    await waitFor(() => expect(calls.filter((c) => c.name === "UpdateBook")).toHaveLength(1));
+    const { input } = calls.find((c) => c.name === "UpdateBook").variables;
+    expect(input.myTags).toEqual(["mine", "Beach read"]);
+    expect(input).not.toHaveProperty("tags");
+  });
+
   it("a rating from the grid updates the row in place with no list request", async () => {
     stubFetch();
     const { handlers } = libraryServer(Array.from({ length: 60 }, (_, i) => makeBook(i + 1)));

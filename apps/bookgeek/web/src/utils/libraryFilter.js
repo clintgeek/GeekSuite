@@ -201,7 +201,13 @@ export function legacyViewFilter(view) {
  */
 export function savedViewSearch(view) {
   if (!view) return "";
-  const filter = view.filter && typeof view.filter === "object" ? view.filter : legacyViewFilter(view);
+  const saved = view.filter && typeof view.filter === "object" ? view.filter : legacyViewFilter(view);
+  // A view names the tags it was saved with, raw ones included ("science
+  // fiction"). The gateway maps them through the vocabulary as the view
+  // loads (`viewTags`, DOCS/TAGS.md §5), so it opens on "Sci-fi" — the value
+  // the Tags facet shows. Without `viewTags` (an older gateway) the saved
+  // tags are used as they are; the gateway's filter still matches them.
+  const filter = Array.isArray(view.viewTags) ? { ...saved, tags: view.viewTags } : saved;
   return LIBRARY_CODEC.viewSearch({ filter, sort: view.sortBy, dir: view.sortDir });
 }
 
