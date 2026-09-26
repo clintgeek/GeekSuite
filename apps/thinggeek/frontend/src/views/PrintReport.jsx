@@ -11,7 +11,7 @@ import { makeModel } from '../utils/attributes';
 import { formatCalendarDate } from '../utils/dates';
 import { hasReceipt } from '../utils/insuranceCsv';
 import { formatMoney, moneyAmount } from '../utils/money';
-import { placeLabel } from '../utils/places';
+import { whereLabel } from '../utils/where';
 import { hasValue } from '../utils/identifiers';
 import { coverSrc } from '../components/thingDisplay';
 
@@ -55,7 +55,7 @@ export function PrintThing({ thing }) {
             </Box>
           </Fact>
         ))}
-        {thing.place ? <Fact label="Kept at">{placeLabel(thing.place)}</Fact> : null}
+        {whereLabel(thing) ? <Fact label="Kept at">{whereLabel(thing)}</Fact> : null}
         <Fact label="Acquired">
           {thing.acquired?.date ? formatCalendarDate(thing.acquired.date) : 'Unknown'}
           {price !== null ? ` · paid ${formatMoney(price, thing.acquired?.price?.currency)}` : ''}

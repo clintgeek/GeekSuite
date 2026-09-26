@@ -1,8 +1,9 @@
 /**
- * Relationships as sentences, grouped by kind and direction:
- *   Equipped with: Garmin Striker 4 · Minn Kota Endura
- *   Equipped on:   Wendy
+ * Accessories as sentences, grouped by kind and direction:
+ *   Accessory for: Sony A7 IV            (on the lens)
+ *   Accessories:   50mm lens · battery   (on the camera)
  * Each thing is a link to its own page (keeping the library's query string).
+ * Where a thing IS is not here — that is the breadcrumb and Contains.
  */
 import React from 'react';
 import { Box, Button, ButtonBase, Typography } from '@mui/material';
@@ -18,7 +19,7 @@ export default function RelationshipsSection({ relationships = [], onEdit }) {
   return (
     <Section
       id="relationships"
-      title="Relationships"
+      title="Accessories"
       action={
         <Button size="small" onClick={onEdit} sx={{ color: 'text.primary', fontWeight: 600 }}>
           {groups.length ? 'Edit' : 'Link a thing'}
@@ -67,7 +68,7 @@ export default function RelationshipsSection({ relationships = [], onEdit }) {
         </Box>
       ) : (
         <Typography sx={{ fontSize: '0.875rem', color: 'text.secondary' }}>
-          What's attached, what it's part of, what it's stored with — “Wendy is equipped with the fish finder.”
+          What belongs with it wherever it's kept — “the 50mm lens is an accessory for the camera.”
         </Typography>
       )}
     </Section>

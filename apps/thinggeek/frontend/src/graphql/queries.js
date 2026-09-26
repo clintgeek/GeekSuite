@@ -10,6 +10,7 @@ export const THING_TYPE_FIELDS = gql`
     key
     name
     icon
+    kind
     builtIn
     thingCount
     fields {
@@ -24,17 +25,20 @@ export const THING_TYPE_FIELDS = gql`
   }
 `;
 
-export const PLACE_FIELDS = gql`
-  fragment PlaceFields on Place {
+/** One row of the containment tree (the Where page, the pickers, the Where facet's labels). */
+export const THING_NODE_FIELDS = gql`
+  fragment ThingNodeFields on ThingNode {
     id
     name
     parentId
-    notes
-    directCount
-    totalCount
-    path {
+    parentInTrash
+    kind
+    childCount
+    itemCount
+    type {
       id
       name
+      icon
     }
   }
 `;
@@ -48,20 +52,21 @@ export const THING_CARD_FIELDS = gql`
     missing
     createdAt
     updatedAt
+    kind
+    parentId
     type {
       id
       key
       name
       icon
+      kind
     }
-    place {
+    # Where it is: root → parent (House › Garage › Van).
+    path {
       id
       name
-      parentId
-      path {
-        id
-        name
-      }
+      kind
+      inTrash
     }
     coverPhoto {
       id
@@ -203,7 +208,11 @@ export const GET_THING_FACETS = gql`
         value
         count
       }
-      places {
+      where {
+        value
+        count
+      }
+      kinds {
         value
         count
       }
@@ -225,10 +234,15 @@ export const GET_THING_FACETS = gql`
   }
 `;
 
+/** The thing page: the detail fragment, plus what is directly inside it (Contains). */
 export const GET_THING = gql`
   query GetThing($id: ID!) {
     thing(id: $id) {
       ...ThingDetailFields
+      contentsCount
+      contents {
+        ...ThingCardFields
+      }
     }
   }
   ${THING_DETAIL_FIELDS}
@@ -243,13 +257,13 @@ export const GET_THING_TYPES = gql`
   ${THING_TYPE_FIELDS}
 `;
 
-export const GET_PLACES = gql`
-  query GetPlaces {
-    places {
-      ...PlaceFields
+export const GET_THING_TREE = gql`
+  query GetThingTree {
+    thingTree {
+      ...ThingNodeFields
     }
   }
-  ${PLACE_FIELDS}
+  ${THING_NODE_FIELDS}
 `;
 
 export const GET_THING_ATTENTION = gql`
@@ -293,6 +307,7 @@ export const GET_THING_VOCABULARY = gql`
       photoRoles
       documentRoles
       relationshipKinds
+      thingKinds
       missingKeys
       trashDays
     }
@@ -322,7 +337,7 @@ export const GET_THING_INSURANCE_TOTALS = gql`
   }
 `;
 
-/** The relationship editor's picker: names only, searched on the server. */
+/** The relationship editor's picker: names only, searched on the server (inventory only — no location is an accessory). */
 export const SEARCH_THINGS = gql`
   query SearchThings($filter: ThingFilterInput, $limit: Int) {
     things(page: 1, limit: $limit, filter: $filter, sort: "name", sortDir: "asc") {

@@ -4,6 +4,8 @@
  * from every normal read — list, search, thing(id), facets, attention,
  * totals, counts, relationships — and appears in trashedThings (newest
  * first) until restoreThing brings it back. Purging is the backend's job.
+ * What is INSIDE a trashed thing stays put: it shows the trashed ancestor in
+ * its path (inTrash), and restoring brings the path back.
  *
  * Also here: saved views on the caller's profile, and the vocabulary.
  */
@@ -16,7 +18,8 @@ import {
   errorCode,
   starterTypes,
   createThing,
-  createPlace,
+  createLocation,
+  move,
   names,
   dayFromToday,
   Thing,
@@ -38,15 +41,16 @@ afterAll(async () => {
 const DELETE = `mutation($id: ID!) { deleteThing(id: $id) { success message } }`;
 const RESTORE = `mutation($id: ID!) { restoreThing(id: $id) { id name deletedAt } }`;
 const TRASH = `query { trashedThings { id name deletedAt } }`;
+const CREATE_THING_Q = `mutation($input: ThingInput!) { createThing(input: $input) { id } }`;
 
 describe('soft delete', () => {
   test('a deleted thing is excluded everywhere, listed in Trash, and restorable', async () => {
     const types = await starterTypes();
-    const garage = await createPlace('Garage');
-    const keep = await createThing({ name: 'Keep', typeId: types.tool.id, placeId: garage.id, tags: ['t'], value: { amount: 10 } });
+    const garage = await createLocation('Garage');
+    const keep = await createThing({ name: 'Keep', typeId: types.tool.id, parentId: garage.id, tags: ['t'], value: { amount: 10 } });
     const gone = await createThing({
-      name: 'Gone', typeId: types.tool.id, placeId: garage.id, tags: ['t'], value: { amount: 99 },
-      dates: [{ kind: 'warranty', date: dayFromToday(-1) }], relationships: [{ kind: 'stored-with', thingId: keep.id }],
+      name: 'Gone', typeId: types.tool.id, parentId: garage.id, tags: ['t'], value: { amount: 99 },
+      dates: [{ kind: 'warranty', date: dayFromToday(-1) }], relationships: [{ kind: 'accessory-of', thingId: keep.id }],
     });
 
     const res = (await ok(DELETE, { id: gone.id })).deleteThing;
@@ -62,7 +66,10 @@ describe('soft delete', () => {
     expect(f.due[0]).toEqual({ value: 'overdue', count: 0 });
     expect((await ok(`query { thingAttention { overdue { name } missingPhoto } }`)).thingAttention).toEqual({ overdue: [], missingPhoto: 1 });
     expect((await ok(`query { thingInsuranceTotals { count totalValue } }`)).thingInsuranceTotals).toEqual({ count: 1, totalValue: 10 });
-    expect((await ok(`query { places { directCount totalCount } }`)).places).toEqual([{ directCount: 1, totalCount: 1 }]);
+    expect((await ok(`query { thingTree { name childCount itemCount } }`)).thingTree).toEqual([
+      { name: 'Garage', childCount: 1, itemCount: 1 },
+      { name: 'Keep', childCount: 0, itemCount: 0 },
+    ]);
     expect((await ok(`query { thingTypes { key thingCount } }`)).thingTypes.find((t) => t.key === 'tool').thingCount).toBe(1);
     // Its stored relationship no longer shows as an inverse on Keep.
     expect((await ok(`query($id: ID!) { thing(id: $id) { relationships { id } } }`, { id: keep.id })).thing.relationships).toEqual([]);
@@ -99,7 +106,49 @@ describe('soft delete', () => {
     const a = await createThing({ name: 'A' });
     const b = await createThing({ name: 'B' });
     await ok(DELETE, { id: b.id });
-    expect(await errorCode(UPDATE_THING, { id: a.id, input: { relationships: [{ kind: 'part-of', thingId: b.id }] } })).toBe('BAD_USER_INPUT');
+    expect(await errorCode(UPDATE_THING, { id: a.id, input: { relationships: [{ kind: 'accessory-of', thingId: b.id }] } })).toBe('BAD_USER_INPUT');
+  });
+});
+
+describe('trash and containment', () => {
+  const PATH = `query($id: ID!) { thing(id: $id) { path { name inTrash } } }`;
+
+  test('trashing a container leaves its contents in place, inside something in the Trash; restore brings the path back', async () => {
+    const types = await starterTypes();
+    const house = await createLocation('House');
+    const garage = await createLocation('Garage', house.id);
+    const van = await createThing({ name: 'Van', typeId: types.vehicle.id, parentId: garage.id });
+    const cables = await createThing({ name: 'Jumper cables', typeId: types.tool.id, parentId: van.id });
+    await ok(DELETE, { id: van.id });
+
+    // Still in the Van: the path shows it, flagged.
+    expect((await Thing.findById(cables.id).lean()).parentId.toString()).toBe(van.id);
+    expect((await ok(PATH, { id: cables.id })).thing.path).toEqual([
+      { name: 'House', inTrash: false },
+      { name: 'Garage', inTrash: false },
+      { name: 'Van', inTrash: true },
+    ]);
+    // Still found "in the garage" (it is), and counted there, through the trashed Van.
+    expect(await names({ q: 'in:garage' })).toEqual(['Jumper cables']);
+    const tree = (await ok(`query { thingTree { name parentInTrash itemCount } }`)).thingTree;
+    expect(tree).toEqual([
+      { name: 'House', parentInTrash: false, itemCount: 1 },
+      { name: 'Garage', parentInTrash: false, itemCount: 1 },
+      { name: 'Jumper cables', parentInTrash: true, itemCount: 0 },
+    ]);
+    // The Van cannot receive anything while trashed…
+    const res = await move(cables.id, van.id);
+    expect(res.errors[0].extensions).toMatchObject({ code: 'BAD_USER_INPUT', details: [{ path: 'input.parentId', message: 'that thing is in the Trash' }] });
+    expect(await errorCode(CREATE_THING_Q, { input: { name: 'Flares', parentId: van.id } })).toBe('BAD_USER_INPUT');
+
+    await ok(RESTORE, { id: van.id });
+    expect((await ok(PATH, { id: cables.id })).thing.path).toEqual([
+      { name: 'House', inTrash: false },
+      { name: 'Garage', inTrash: false },
+      { name: 'Van', inTrash: false },
+    ]);
+    // …and can again once restored.
+    expect((await move(cables.id, van.id)).errors).toBeNull();
   });
 });
 
@@ -131,9 +180,11 @@ describe('saved views', () => {
 });
 
 test('thingVocabulary returns the shared constants', async () => {
-  const v = (await ok(`query { thingVocabulary { fieldKinds dateKinds photoRoles documentRoles relationshipKinds missingKeys trashDays } }`)).thingVocabulary;
+  const v = (await ok(`query { thingVocabulary { fieldKinds dateKinds photoRoles documentRoles relationshipKinds thingKinds missingKeys trashDays } }`)).thingVocabulary;
   expect(v.missingKeys).toEqual([...MISSING_KEYS]);
   expect(v.trashDays).toBe(TRASH_DAYS);
   expect(v.fieldKinds).toContain('money');
-  expect(v.relationshipKinds).toEqual(['equipped-with', 'part-of', 'accessory-of', 'stored-with']);
+  // Location is parentId only (DOCS/THINGGEEK_PLAN.md "Containment").
+  expect(v.relationshipKinds).toEqual(['accessory-of']);
+  expect(v.thingKinds).toEqual(['location', 'container', 'item']);
 });

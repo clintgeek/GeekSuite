@@ -16,6 +16,9 @@ function profileDefinition(mongoose) {
       default: [],
     },
     starterTypesSeededAt: { type: Date, default: null },
+    // The STARTER_TYPES_VERSION this household's types were seeded or upgraded
+    // to. Unset on a profile seeded before containment (= version 1).
+    starterTypesVersion: { type: Number, default: null },
   };
 }
 function createThingProfileSchema(mongoose) {

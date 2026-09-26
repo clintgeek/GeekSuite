@@ -9,6 +9,9 @@
  *
  * Everything under the header is keyed by the thing's id, so a revealed
  * serial re-masks the moment you move to another thing (or close the sheet).
+ *
+ * Where it is: the header's breadcrumb (House › Garage › Van) and "Move
+ * to…"; a location or container also lists what it Contains, with Add here.
  */
 import React, { useRef, useState } from 'react';
 import { Box, Button, CircularProgress, Typography } from '@mui/material';
@@ -21,12 +24,15 @@ import { useVocabulary } from '../../hooks/useThingMeta';
 import { useUploads } from '../../hooks/useUploads';
 import { isNotMemberError, reportNotMember } from '../../membership';
 import TagMark from '../../components/TagMark';
+import { MoveSheet } from '../../components/WherePicker';
 import { libraryPath } from '../../components/navConfig';
 import { visuallyHidden } from '../../utils/a11y';
 import EditThingDialog from '../edit/EditThingDialog';
 import ActionBar from './ActionBar';
 import AddFileSheet from './AddFileSheet';
 import ConfirmTrashDialog from './ConfirmTrashDialog';
+import ContainsSection from './ContainsSection';
+import { showsContents } from '../../utils/where';
 import DatesSection from './DatesSection';
 import DetailHeader from './DetailHeader';
 import DetailsSection from './DetailsSection';
@@ -45,7 +51,7 @@ export function ThingDetailBody({ thing, onPanel, onFix, uploads, onRetry }) {
   return (
     <>
       <Gallery thing={thing} uploads={photoUploads} onAddPhoto={() => onPanel('photo')} onRetry={onRetry} />
-      <DetailHeader thing={thing} />
+      <DetailHeader thing={thing} onMove={() => onPanel('move')} />
       <ActionBar onEdit={edit()} onAddPhoto={() => onPanel('photo')} onAddDocument={() => onPanel('document')} onMore={() => onPanel('more')} />
       <Box
         key={thing.id}
@@ -59,6 +65,7 @@ export function ThingDetailBody({ thing, onPanel, onFix, uploads, onRetry }) {
         }}
       >
         <Box sx={{ display: 'grid', gap: 1.5, minWidth: 0 }}>
+          {showsContents(thing) ? <ContainsSection thing={thing} /> : null}
           <DetailsSection thing={thing} onEdit={edit('details')} />
           <DatesSection dates={thing.dates ?? []} onEdit={edit('dates')} />
           <RelationshipsSection relationships={thing.relationships ?? []} onEdit={edit('relationships')} />
@@ -82,7 +89,7 @@ export default function ThingDetail() {
   const vocab = useVocabulary();
   const { trashThing } = useThingActions();
   const uploads = useUploads(id);
-  const [panel, setPanel] = useState(null); // edit | photo | document | more | trash
+  const [panel, setPanel] = useState(null); // edit | photo | document | more | trash | move
   const [panelArg, setPanelArg] = useState(null);
   const cameraRef = useRef(null);
   const cameraRole = useRef('overview');
@@ -201,6 +208,7 @@ export default function ThingDetail() {
       {complete ? (
         <>
           <EditThingDialog open={panel === 'edit'} onClose={closePanel} thing={thing} focus={panelArg} />
+          <MoveSheet open={panel === 'move'} onClose={closePanel} thing={thing} />
           <AddFileSheet
             open={panel === 'photo'}
             kind="photo"
@@ -233,6 +241,8 @@ export default function ThingDetail() {
             onClose={closePanel}
             title={thing.name}
             trashDays={vocab.trashDays}
+            contentsCount={thing.contentsCount ?? 0}
+            parentName={thing.path?.length ? thing.path[thing.path.length - 1].name : null}
             onConfirm={async () => {
               try {
                 await trashThing(thing.id);

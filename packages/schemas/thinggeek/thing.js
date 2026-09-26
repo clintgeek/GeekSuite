@@ -19,7 +19,11 @@ function thingDefinition(mongoose) {
     sortName: { type: String, default: '' },
     typeId: { type: Schema.Types.ObjectId, default: null },
     tags: { type: [String], default: [] },
-    placeId: { type: Schema.Types.ObjectId, default: null },
+    // WHERE it is: another Thing in the household (a location, a container,
+    // or — via Move — any thing), or null at the top level. "Containment" in
+    // DOCS/THINGGEEK_PLAN.md: no cycles, at most bounds.containDepth deep,
+    // never a trashed parent (all enforced by the gateway, the only writer).
+    parentId: { type: Schema.Types.ObjectId, default: null },
     acquired: {
       date: { type: Date, default: null },         // calendar date, UTC midnight
       from: { type: String, maxlength: 200, default: '' },
@@ -84,7 +88,7 @@ function createThingSchema(mongoose) {
   // Every index leads with the tenant.
   schema.index({ householdId: 1, sortName: 1 });
   schema.index({ householdId: 1, typeId: 1 });
-  schema.index({ householdId: 1, placeId: 1 });
+  schema.index({ householdId: 1, parentId: 1 });
   schema.index({ householdId: 1, tags: 1 });
   schema.index({ householdId: 1, 'dates.date': 1 });
   schema.index({ householdId: 1, 'relationships.thingId': 1 });

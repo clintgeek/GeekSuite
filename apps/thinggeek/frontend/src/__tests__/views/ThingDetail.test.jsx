@@ -4,7 +4,7 @@ import { fireEvent, screen, within, waitFor } from '@testing-library/react';
 import { ThingDetailBody } from '../../views/detail/ThingDetail';
 import ReadinessPanel from '../../views/detail/ReadinessPanel';
 import { renderWithProviders } from '../testUtils';
-import { date, makeRifle, makeThing, typeRef } from '../fixtures';
+import { crumbs, date, makeRifle, makeThing, typeRef } from '../fixtures';
 
 const body = (thing, props = {}) => <ThingDetailBody thing={thing} onPanel={() => {}} onFix={() => {}} uploads={[]} onRetry={() => {}} {...props} />;
 
@@ -58,29 +58,79 @@ describe('identifier masking', () => {
   });
 });
 
-describe('relationships read as sentences from both ends', () => {
-  it('the boat: "Equipped with"', () => {
+describe('accessories read as sentences from both ends', () => {
+  it('the boat: "Accessories"', () => {
     renderWithProviders(body(makeThing()));
     const group = screen.getByTestId('relationship-group');
-    expect(within(group).getByText('Equipped with:')).toBeInTheDocument();
+    expect(within(group).getByText('Accessories:')).toBeInTheDocument();
     expect(within(group).getByRole('link', { name: 'Garmin Striker 4' })).toHaveAttribute('href', '/thing/t-garmin');
   });
 
-  it('the fish finder: "Equipped on"', () => {
+  it('the fish finder: "Accessory for"', () => {
     const finder = makeThing({
       id: 't-garmin',
       name: 'Garmin Striker 4',
       type: typeRef('ty-general'),
+      kind: 'item',
       fields: [],
       relationships: [
-        { __typename: 'ThingRelationship', id: 'r1-in', kind: 'equipped-with', direction: 'in', thing: { __typename: 'ThingSummary', id: 't-wendy', name: 'Wendy', coverThumbUrl: null, type: { __typename: 'ThingType', id: 'ty-boat', name: 'Boat', icon: 'DirectionsBoat' } } },
+        { __typename: 'ThingRelationship', id: 'r1', kind: 'accessory-of', direction: 'out', thing: { __typename: 'ThingSummary', id: 't-wendy', name: 'Wendy', coverThumbUrl: null, type: { __typename: 'ThingType', id: 'ty-boat', name: 'Boat', icon: 'DirectionsBoat' } } },
       ],
     });
     renderWithProviders(body(finder));
     const group = screen.getByTestId('relationship-group');
-    expect(within(group).getByText('Equipped on:')).toBeInTheDocument();
+    expect(within(group).getByText('Accessory for:')).toBeInTheDocument();
     expect(within(group).getByRole('link', { name: 'Wendy' })).toBeInTheDocument();
-    expect(screen.queryByText('Equipped with:')).toBeNull();
+    expect(screen.queryByText('Accessories:')).toBeNull();
+  });
+});
+
+describe('where it is', () => {
+  const cables = () =>
+    makeThing({ id: 't-cables', name: 'Jumper cables', type: typeRef('ty-tool'), kind: 'item', parentId: 'n-van', path: crumbs('n-house', 'n-garage', 'n-van'), fields: [], relationships: [] });
+
+  it('a breadcrumb, root → parent, each crumb a link to that thing, with Move to…', () => {
+    const onPanel = vi.fn();
+    renderWithProviders(body(cables(), { onPanel }));
+    const crumbsNav = screen.getByRole('navigation', { name: 'Where it is' });
+    expect(within(crumbsNav).getAllByRole('link').map((a) => [a.textContent, a.getAttribute('href')])).toEqual([
+      ['House', '/thing/n-house'],
+      ['Garage', '/thing/n-garage'],
+      ['Van', '/thing/n-van'],
+    ]);
+    fireEvent.click(screen.getByRole('button', { name: 'Move to…' }));
+    expect(onPanel).toHaveBeenCalledWith('move');
+  });
+
+  it('inside something in the Trash: that crumb is not a link, and the page says so', () => {
+    const path = crumbs('n-house', 'n-garage', 'n-van');
+    path[2] = { ...path[2], inTrash: true };
+    renderWithProviders(body({ ...cables(), path }));
+    const crumbsNav = screen.getByRole('navigation', { name: 'Where it is' });
+    expect(within(crumbsNav).getAllByRole('link').map((a) => a.textContent)).toEqual(['House', 'Garage']);
+    expect(within(crumbsNav).getByText('Van (in the Trash)')).toBeInTheDocument();
+    expect(screen.getByTestId('inside-trash')).toHaveTextContent('inside something in the Trash');
+  });
+
+  it('a container lists what it contains, each a link, with Add here', () => {
+    const van = makeThing({
+      id: 'n-van', name: 'Van', type: typeRef('ty-vehicle'), kind: 'container', fields: [], relationships: [], contentsCount: 1,
+      contents: [makeThing({ id: 't-cables', name: 'Jumper cables', type: typeRef('ty-tool'), kind: 'item' })],
+    });
+    renderWithProviders(body(van));
+    const section = screen.getByRole('region', { name: 'Contains · 1' });
+    expect(within(section).getByRole('link', { name: /Jumper cables/ })).toHaveAttribute('href', '/thing/t-cables');
+    expect(within(section).getByRole('button', { name: 'Add here' })).toBeInTheDocument();
+  });
+
+  it('an empty item has no Contains section; a location always does', () => {
+    renderWithProviders(body(cables()));
+    expect(screen.queryByTestId('add-here')).toBeNull();
+  });
+
+  it('a location says it is empty', () => {
+    renderWithProviders(body(makeThing({ id: 'n-shelf', name: 'Shelf 2', type: typeRef('ty-location'), kind: 'location', fields: [], relationships: [] })));
+    expect(screen.getByRole('region', { name: 'Contains' })).toHaveTextContent('Nothing inside yet.');
   });
 });
 

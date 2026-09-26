@@ -4,6 +4,7 @@ import {
   filterInputFromSearch,
   libraryLinkWith,
   readLibraryState,
+  reportFilterInputFromSearch,
   savedViewSearch,
   stateToParams,
   toFilterInput,
@@ -14,11 +15,12 @@ const read = (s) => readLibraryState(new URLSearchParams(s));
 
 describe('library codec', () => {
   it('reads every filter key from the URL', () => {
-    const s = read('?type=ty-boat&type=ty-firearm&in=pl-garage&due=overdue&due=30d&tag=fishing&tag=lake&match=all&missing=receipt&photos=1&docs=0&year=2015-2022&value=500-2000&q=wendy');
+    const s = read('?type=ty-boat&type=ty-firearm&in=n-garage&kind=location&kind=container&due=overdue&due=30d&tag=fishing&tag=lake&match=all&missing=receipt&photos=1&docs=0&year=2015-2022&value=500-2000&q=wendy');
     expect(s.filter).toMatchObject({
       q: 'wendy',
       types: ['ty-boat', 'ty-firearm'],
-      places: ['pl-garage'],
+      within: ['n-garage'],
+      kinds: ['location', 'container'],
       due: ['overdue', '30d'],
       tags: ['fishing', 'lake'],
       tagMatch: 'all',
@@ -39,7 +41,7 @@ describe('library codec', () => {
   });
 
   it('round-trips and never writes defaults', () => {
-    const search = 'type=ty-boat&in=pl-garage&missing=receipt&photos=1&year=2015-&value=-2000&sort=value&dir=asc';
+    const search = 'type=ty-boat&in=n-garage&missing=receipt&photos=1&year=2015-&value=-2000&sort=value&dir=asc';
     expect(stateToParams(read(`?${search}`)).toString()).toBe(search);
     expect(stateToParams(read('?sort=name&dir=asc&match=any')).toString()).toBe('');
   });
@@ -66,6 +68,14 @@ describe('library codec', () => {
     expect(savedViewSearch({ filter: { types: ['ty-boat'] }, sortBy: 'value', sortDir: 'desc' })).toBe('?type=ty-boat&sort=value');
     expect(savedViewSearch(null)).toBe('');
     expect(libraryLinkWith('missing', 'receipt')).toBe('/?missing=receipt');
-    expect(filterInputFromSearch('?in=pl-shelf')).toEqual({ places: ['pl-shelf'] });
+    expect(filterInputFromSearch('?in=n-shelf')).toEqual({ within: ['n-shelf'] });
+  });
+
+  it('the insurance report never asks for locations', () => {
+    expect(reportFilterInputFromSearch('?in=n-garage&kind=location&kind=container')).toEqual({ within: ['n-garage'], kinds: ['container'] });
+    // Locations only → the default (containers + items), not "nothing".
+    expect(reportFilterInputFromSearch('?kind=location')).toBeNull();
+    expect(reportFilterInputFromSearch('?tag=boat&kind=location')).toEqual({ tags: ['boat'] });
+    expect(reportFilterInputFromSearch('?kind=item')).toEqual({ kinds: ['item'] });
   });
 });

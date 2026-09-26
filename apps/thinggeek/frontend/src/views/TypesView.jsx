@@ -6,6 +6,10 @@
  *   - identifier — a serial, VIN, hull or registration: masked on screen
  *     until revealed and NEVER sent to an AI provider;
  *   - required.
+ * And a KIND — its things' role in where things are (utils/where.js): a
+ * location (house, shelf; never inventory), a container (van, safe; inventory
+ * that holds things) or an item. The gateway refuses turning a type into an
+ * item while any of its things hold something; its message is shown as is.
  * The starter types (Boat, Vehicle, Firearm…) are seeded once and editable.
  * A type still used by a thing can't be deleted (the gateway refuses; this
  * says so before you try).
@@ -36,9 +40,10 @@ import { resetCounts } from '../graphql/cachePolicies';
 import { useThingTypes, useVocabulary } from '../hooks/useThingMeta';
 import { move } from './edit/MediaEditor';
 import { fieldKindLabel } from '../utils/vocab';
+import { KIND_LABELS, THING_KINDS } from '../utils/where';
 import { DISPLAY_FONT } from '../theme/theme';
 
-const REFETCH = { refetchQueries: [{ query: GET_THING_TYPES }], awaitRefetchQueries: true };
+const REFETCH = { refetchQueries: [{ query: GET_THING_TYPES }, 'GetThingTree'], awaitRefetchQueries: true };
 const UNIT_KINDS = new Set(['text', 'number']);
 
 /** "Hull number" → "hullNumber", unique among `taken`. */
@@ -62,6 +67,7 @@ export function typeToForm(type) {
   return {
     name: type?.name ?? '',
     icon: type?.icon ?? DEFAULT_TYPE_ICON,
+    kind: type?.kind ?? 'item',
     fields: (type?.fields ?? []).map((f) => ({ ...f, tmpKey: f.key, choicesText: (f.choices ?? []).join(', '), unit: f.unit ?? '', isNew: false })),
   };
 }
@@ -85,7 +91,7 @@ export function formToTypeInput(form) {
         required: Boolean(f.required),
       };
     });
-  return { name: form.name.trim(), icon: form.icon, fields };
+  return { name: form.name.trim(), icon: form.icon, kind: form.kind || 'item', fields };
 }
 
 function FieldEditor({ field, index, count, kinds, onChange, onMove, onRemove }) {
@@ -236,6 +242,32 @@ export function TypeEditorDialog({ open, type, onClose }) {
       <Box data-testid="type-editor">
         <TextField fullWidth label="Name *" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} inputProps={{ maxLength: 60 }} placeholder="Trailer" />
 
+        <Typography component="h3" id="type-kind-label" sx={{ fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'text.secondary', mt: 3, mb: 1 }}>
+          What it is
+        </Typography>
+        <Box role="radiogroup" aria-labelledby="type-kind-label" sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' }, gap: 1 }}>
+          {THING_KINDS.map((k) => {
+            const on = form.kind === k;
+            return (
+              <ButtonBase
+                key={k}
+                role="radio"
+                aria-checked={on ? 'true' : 'false'}
+                data-testid={`type-kind-${k}`}
+                onClick={() => setForm((f) => ({ ...f, kind: k }))}
+                sx={{ display: 'block', textAlign: 'left', p: 1.25, borderRadius: 2, border: 1, borderColor: on ? 'primary.main' : 'divider', bgcolor: on ? 'action.selected' : 'background.card', boxShadow: on ? (t) => `inset 0 0 0 1px ${t.palette.primary.main}` : 'none' }}
+              >
+                <Typography component="span" sx={{ display: 'block', fontWeight: 700, fontSize: '0.9375rem', color: 'text.primary' }}>
+                  {KIND_LABELS[k].one}
+                </Typography>
+                <Typography component="span" sx={{ display: 'block', fontSize: '0.8125rem', color: 'text.secondary', mt: 0.25 }}>
+                  {KIND_LABELS[k].hint}
+                </Typography>
+              </ButtonBase>
+            );
+          })}
+        </Box>
+
         <Typography component="h3" id="type-icon-label" sx={{ fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'text.secondary', mt: 3, mb: 1 }}>
           Icon
         </Typography>
@@ -347,6 +379,7 @@ export default function TypesView() {
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <Typography sx={{ fontFamily: DISPLAY_FONT, fontWeight: 800, fontSize: '1.0625rem', color: 'text.primary' }}>{t.name}</Typography>
                       {t.builtIn ? <Chip label="Starter" size="small" variant="outlined" sx={{ height: 22, color: 'text.secondary', borderColor: 'border' }} /> : null}
+                      {t.kind && t.kind !== 'item' ? <Chip label={KIND_LABELS[t.kind]?.one ?? t.kind} size="small" variant="outlined" sx={{ height: 22, color: 'text.secondary', borderColor: 'border' }} /> : null}
                     </Box>
                     <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary', mt: 0.25 }}>
                       {t.fields.length ? t.fields.map((f) => f.label).join(', ') : 'No fields — just the basics'}

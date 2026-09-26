@@ -18,12 +18,11 @@ import { ApolloServer } from '@apollo/server';
 const { typeDefs, resolvers } = await import('../graphql/index.js');
 const { Thing } = await import('../graphql/thinggeek/models/thing.js');
 const { ThingType } = await import('../graphql/thinggeek/models/thingType.js');
-const { Place } = await import('../graphql/thinggeek/models/place.js');
 const { ThingFile } = await import('../graphql/thinggeek/models/file.js');
 const { ThingProfile } = await import('../graphql/thinggeek/models/profile.js');
 const thingResolvers = (await import('../graphql/thinggeek/resolvers.js')).resolvers;
 
-export { Thing, ThingType, Place, ThingFile, ThingProfile, thingResolvers };
+export { Thing, ThingType, ThingFile, ThingProfile, thingResolvers };
 
 export const CHEF = '6818c2bddcf626909f6a93a1';
 export const HEATHER = '689931bbe8828efb78d11bab';
@@ -36,7 +35,7 @@ let server;
 
 export async function startHarness() {
   await Thing.db.asPromise();
-  await Promise.all([Thing.init(), ThingType.init(), Place.init(), ThingFile.init(), ThingProfile.init()]);
+  await Promise.all([Thing.init(), ThingType.init(), ThingFile.init(), ThingProfile.init()]);
   server = new ApolloServer({ typeDefs, resolvers });
   await server.start();
 }
@@ -52,7 +51,6 @@ export async function cleanAll() {
   await Promise.all([
     Thing.deleteMany({}),
     ThingType.deleteMany({}),
-    Place.deleteMany({}),
     ThingFile.deleteMany({}),
     ThingProfile.deleteMany({}),
   ]);
@@ -80,8 +78,9 @@ export async function errorCode(query, variables = {}, userId = CHEF) {
 
 export const THING_FIELDS = `
   id name tags notes missing deletedAt createdAt
-  type { id key name }
-  place { id name }
+  type { id key name kind }
+  kind parentId contentsCount
+  path { id name kind inTrash }
   acquired { date from price { amount currency } }
   value { amount currency asOf }
   dates { id kind label date recurEveryMonths daysUntil status }
@@ -99,7 +98,7 @@ export const UPDATE_THING = `mutation($id: ID!, $input: ThingInput!) { updateThi
 export const THINGS = `query($filter: ThingFilterInput, $sort: String, $sortDir: String, $seed: Int, $page: Int, $limit: Int) {
   things(filter: $filter, sort: $sort, sortDir: $sortDir, seed: $seed, page: $page, limit: $limit) { total page pages things { id name } }
 }`;
-export const TYPES = `query { thingTypes { id key name icon builtIn thingCount fields { key label kind choices unit identifier required } } }`;
+export const TYPES = `query { thingTypes { id key name icon kind builtIn thingCount fields { key label kind choices unit identifier required } } }`;
 
 /** Seed the starter types (as CHEF) and return them keyed by key. */
 export async function starterTypes(userId = CHEF) {
@@ -116,9 +115,19 @@ export async function names(filter = {}, extra = {}, userId = CHEF) {
   return data.things.things.map((t) => t.name);
 }
 
-export async function createPlace(name, parentId = null, userId = CHEF) {
-  const data = await ok(`mutation($input: PlaceInput!) { createPlace(input: $input) { id name } }`, { input: { name, parentId } }, userId);
-  return data.createPlace;
+/** A thing of the household's Location type (House, Garage, Shelf) — seeding the starter types if need be. */
+export async function createLocation(name, parentId = null, userId = CHEF) {
+  let type = await ThingType.findOne({ householdId: 'default', key: 'location' }).lean();
+  if (!type) {
+    await starterTypes(userId);
+    type = await ThingType.findOne({ householdId: 'default', key: 'location' }).lean();
+  }
+  return createThing({ name, typeId: String(type._id), parentId }, userId);
+}
+
+/** Move a thing (updateThing's parentId); returns `{ data, errors }`. */
+export async function move(id, parentId, userId = CHEF) {
+  return run(`mutation($id: ID!, $input: ThingInput!) { updateThing(id: $id, input: $input) { id parentId } }`, { id, input: { parentId } }, userId);
 }
 
 /** UTC calendar day `n` days from today, as YYYY-MM-DD. */

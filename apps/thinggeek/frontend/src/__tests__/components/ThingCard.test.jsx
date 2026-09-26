@@ -11,9 +11,9 @@ describe('ThingCard', () => {
     const onOpen = vi.fn();
     const thing = makeThing();
     renderWithProviders(<ThingCard thing={thing} onOpen={onOpen} />);
-    const card = screen.getByRole('button', { name: 'Wendy, Boat · Garage › Shelf 2' });
+    const card = screen.getByRole('button', { name: 'Wendy, Boat · House › Garage' });
     expect(within(card).getByRole('heading', { name: 'Wendy' })).toBeInTheDocument();
-    expect(within(card).getByText('Boat · Garage › Shelf 2')).toBeInTheDocument();
+    expect(within(card).getByText('Boat · House › Garage')).toBeInTheDocument();
     expect(screen.getByTestId('due-line')).toHaveTextContent('Due in 12 days · Registration');
     expect(screen.getByText('fishing')).toBeInTheDocument();
     fireEvent.click(card);

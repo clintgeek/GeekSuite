@@ -7,8 +7,8 @@
  *      before validation, before any read — and nothing changes.
  *   3. Field resolvers gate too (a Thing handed to a field resolver with a
  *      non-member context still refuses).
- *   4. Another household's things, types, places and files are never
- *      visible, countable, editable or relatable.
+ *   4. Another household's things, types and files are never visible,
+ *      countable, editable, relatable — or usable as a parent.
  */
 import mongoose from 'mongoose';
 import {
@@ -20,13 +20,13 @@ import {
   errorCode,
   starterTypes,
   createThing,
-  createPlace,
+  createLocation,
+  move,
   insertFile,
   attach,
   names,
   Thing,
   ThingType,
-  Place,
   ThingProfile,
   thingResolvers,
   ctx,
@@ -39,6 +39,7 @@ import {
 } from './thinggeekHarness.js';
 
 const { Query, Mutation } = thingResolvers;
+const CREATE = `mutation($input: ThingInput!) { createThing(input: $input) { id } }`;
 
 beforeAll(startHarness, 60000);
 beforeEach(cleanAll);
@@ -50,13 +51,13 @@ afterAll(async () => {
 /** One call per root resolver, for `userId` (null = anonymous). */
 function everyCall(userId, ids) {
   const c = ctx(userId);
-  const { thingId, typeId, placeId } = ids;
+  const { thingId, typeId } = ids;
   const queryCalls = {
     things: () => Query.things(null, {}, c),
     thing: () => Query.thing(null, { id: thingId }, c),
     thingFacets: () => Query.thingFacets(null, {}, c),
     thingTypes: () => Query.thingTypes(null, {}, c),
-    places: () => Query.places(null, {}, c),
+    thingTree: () => Query.thingTree(null, {}, c),
     thingAttention: () => Query.thingAttention(null, {}, c),
     thingProfile: () => Query.thingProfile(null, {}, c),
     thingVocabulary: () => Query.thingVocabulary(null, {}, c),
@@ -71,9 +72,6 @@ function everyCall(userId, ids) {
     createThingType: () => Mutation.createThingType(null, { input: { name: 'x' } }, c),
     updateThingType: () => Mutation.updateThingType(null, { id: typeId, input: { name: 'pwned' } }, c),
     deleteThingType: () => Mutation.deleteThingType(null, { id: typeId }, c),
-    createPlace: () => Mutation.createPlace(null, { input: { name: 'x' } }, c),
-    updatePlace: () => Mutation.updatePlace(null, { id: placeId, input: { name: 'pwned' } }, c),
-    deletePlace: () => Mutation.deletePlace(null, { id: placeId }, c),
     saveThingFilter: () => Mutation.saveThingFilter(null, { input: { name: 'x' } }, c),
     deleteThingFilter: () => Mutation.deleteThingFilter(null, { id: 'x' }, c),
   };
@@ -82,9 +80,9 @@ function everyCall(userId, ids) {
 
 async function seedMine() {
   const types = await starterTypes();
-  const place = await createPlace('Garage');
-  const thing = await createThing({ name: 'Glock 19', typeId: types.firearm.id, placeId: place.id, attributes: { serial: 'ABC123' } });
-  return { thingId: thing.id, typeId: types.general.id, placeId: place.id };
+  const garage = await createLocation('Garage');
+  const thing = await createThing({ name: 'Glock 19', typeId: types.firearm.id, parentId: garage.id, attributes: { serial: 'ABC123' } });
+  return { thingId: thing.id, typeId: types.general.id, garageId: garage.id };
 }
 
 async function snapshot() {
@@ -92,7 +90,6 @@ async function snapshot() {
   return strip([
     await Thing.find({}).sort({ _id: 1 }).lean(),
     await ThingType.find({}).sort({ _id: 1 }).lean(),
-    await Place.find({}).sort({ _id: 1 }).lean(),
     await ThingProfile.find({}, { savedFilters: 1, userId: 1 }).sort({ _id: 1 }).lean(),
   ]);
 }
@@ -144,7 +141,7 @@ describe('thinggeek — the member gate', () => {
   test('field resolvers gate as well (a thing handed over with a non-member context)', async () => {
     const ids = await seedMine();
     const raw = await Thing.findById(ids.thingId).lean();
-    for (const field of ['type', 'place', 'attributes', 'fields', 'photos', 'coverPhoto', 'documents', 'relationships', 'missing']) {
+    for (const field of ['type', 'kind', 'path', 'contents', 'contentsCount', 'attributes', 'fields', 'photos', 'coverPhoto', 'documents', 'relationships', 'missing']) {
       await expect(Promise.resolve().then(() => thingResolvers.Thing[field](raw, {}, ctx(OUTSIDER)))).rejects.toMatchObject({
         extensions: { code: 'NOT_A_MEMBER' },
       });
@@ -153,16 +150,24 @@ describe('thinggeek — the member gate', () => {
     await expect(Promise.resolve().then(() => thingResolvers.ThingType.thingCount(type, {}, ctx(OUTSIDER)))).rejects.toMatchObject({
       extensions: { code: 'NOT_A_MEMBER' },
     });
-    const place = await Place.findById(ids.placeId).lean();
-    await expect(Promise.resolve().then(() => thingResolvers.Place.totalCount(place, {}, ctx(OUTSIDER)))).rejects.toMatchObject({
-      extensions: { code: 'NOT_A_MEMBER' },
-    });
+    const garage = await Thing.findById(ids.garageId).lean();
+    for (const field of ['kind', 'type', 'parentInTrash', 'childCount', 'itemCount']) {
+      await expect(Promise.resolve().then(() => thingResolvers.ThingNode[field](garage, {}, ctx(OUTSIDER)))).rejects.toMatchObject({
+        extensions: { code: 'NOT_A_MEMBER' },
+      });
+    }
+    for (const field of ['type', 'kind', 'coverThumbUrl']) {
+      await expect(Promise.resolve().then(() => thingResolvers.ThingSummary[field](garage, {}, ctx(OUTSIDER)))).rejects.toMatchObject({
+        extensions: { code: 'NOT_A_MEMBER' },
+      });
+    }
   });
 
   test('both named members are in, and share one household', async () => {
     await seedMine();
     expect(await names({}, {}, CHEF)).toEqual(['Glock 19']);
     expect(await names({}, {}, HEATHER)).toEqual(['Glock 19']);
+    expect((await ok(`query { thingTree { name } }`, {}, HEATHER)).thingTree.map((n) => n.name)).toEqual(['Garage', 'Glock 19']);
   });
 });
 
@@ -170,16 +175,16 @@ describe('thinggeek — another household is invisible and untouchable', () => {
   let mine;
   let foreign;
   let foreignType;
-  let foreignPlace;
+  let foreignGarage;
   let types;
 
   beforeEach(async () => {
     types = await starterTypes();
-    const garage = await createPlace('Garage');
-    mine = await createThing({ name: 'Wendy', typeId: types.boat.id, placeId: garage.id, tags: ['fishing'], value: { amount: 1000 } });
+    const garage = await createLocation('Garage');
+    mine = await createThing({ name: 'Wendy', typeId: types.boat.id, parentId: garage.id, tags: ['fishing'], value: { amount: 1000 } });
 
-    foreignType = (await ThingType.collection.insertOne({ householdId: OTHER_HOUSEHOLD, key: 'boat', name: 'Boat', fields: [] })).insertedId;
-    foreignPlace = (await Place.collection.insertOne({ householdId: OTHER_HOUSEHOLD, name: 'Garage', parentId: null })).insertedId;
+    foreignType = (await ThingType.collection.insertOne({ householdId: OTHER_HOUSEHOLD, key: 'boat', name: 'Boat', kind: 'container', fields: [] })).insertedId;
+    foreignGarage = (await Thing.collection.insertOne({ householdId: OTHER_HOUSEHOLD, name: 'Garage', sortName: 'garage', parentId: null, deletedAt: null })).insertedId;
     const theirFile = await insertFile({ householdId: OTHER_HOUSEHOLD });
     foreign = (
       await Thing.collection.insertOne({
@@ -187,7 +192,7 @@ describe('thinggeek — another household is invisible and untouchable', () => {
         name: 'Wendy II',
         sortName: 'wendy ii',
         typeId: foreignType,
-        placeId: foreignPlace,
+        parentId: foreignGarage,
         tags: ['fishing'],
         value: { amount: 99999, currency: 'USD' },
         attributes: { serial: 'THEIRS' },
@@ -195,7 +200,7 @@ describe('thinggeek — another household is invisible and untouchable', () => {
         documents: [],
         dates: [{ _id: new mongoose.Types.ObjectId(), kind: 'warranty', date: new Date() }],
         // Points at MY thing: must not appear as an inverse relationship.
-        relationships: [{ _id: new mongoose.Types.ObjectId(), kind: 'equipped-with', thingId: new mongoose.Types.ObjectId(mine.id) }],
+        relationships: [{ _id: new mongoose.Types.ObjectId(), kind: 'accessory-of', thingId: new mongoose.Types.ObjectId(mine.id) }],
         deletedAt: null,
         createdAt: new Date(),
         updatedAt: new Date(),
@@ -211,11 +216,11 @@ describe('thinggeek — another household is invisible and untouchable', () => {
       const got = await names({ q });
       expect(got).not.toContain('Wendy II');
     }
-    const facets = (await ok(`query { thingFacets { total tags { value count } types { value count } places { value count } due { value count } } }`)).thingFacets;
+    const facets = (await ok(`query { thingFacets { total tags { value count } types { value count } where { value count } due { value count } } }`)).thingFacets;
     expect(facets.total).toBe(1);
     expect(facets.tags).toEqual([{ value: 'fishing', count: 1 }]);
     expect(facets.types.map((t) => t.value)).not.toContain(String(foreignType));
-    expect(facets.places.map((p) => p.value)).not.toContain(String(foreignPlace));
+    expect(facets.where.map((p) => p.value)).not.toContain(String(foreignGarage));
     expect(facets.due.find((d) => d.value === '30d').count).toBe(0);
 
     const totals = (await ok(`query { thingInsuranceTotals { count totalValue } }`)).thingInsuranceTotals;
@@ -224,9 +229,10 @@ describe('thinggeek — another household is invisible and untouchable', () => {
     expect(attention.dueSoon).toEqual([]);
     expect(attention.missingPhoto).toBe(1);
     expect((await ok(`query { trashedThings { name } }`)).trashedThings).toEqual([]);
-    expect((await ok(`query { places { name } }`)).places.map((p) => p.name)).toEqual(['Garage']);
-    // A foreign place id as a filter matches nothing (not their things, not mine).
-    expect(await names({ places: [String(foreignPlace)] })).toEqual([]);
+    expect((await ok(`query { thingTree { name } }`)).thingTree.map((p) => p.name)).toEqual(['Garage', 'Wendy']);
+    // A foreign thing's id as a filter or an in: matches nothing (not their things, not mine).
+    expect(await names({ within: [String(foreignGarage)] })).toEqual([]);
+    expect(await names({ q: `in:${foreignGarage}` })).toEqual([]);
     expect(await names({ types: [String(foreignType)] })).toEqual([]);
   });
 
@@ -248,25 +254,31 @@ describe('thinggeek — another household is invisible and untouchable', () => {
     expect((await Thing.collection.findOne({ name: 'Their trash' })).deletedAt).toBeInstanceOf(Date);
   });
 
-  test('a foreign thing, type or place cannot be referenced', async () => {
+  test('a foreign thing or type cannot be referenced — nor be a parent', async () => {
     const UPDATE = `mutation($id: ID!, $input: ThingInput!) { updateThing(id: $id, input: $input) { id } }`;
-    expect(await errorCode(UPDATE, { id: mine.id, input: { relationships: [{ kind: 'stored-with', thingId: String(foreign) }] } })).toBe(
+    expect(await errorCode(UPDATE, { id: mine.id, input: { relationships: [{ kind: 'accessory-of', thingId: String(foreign) }] } })).toBe(
       'BAD_USER_INPUT'
     );
     expect(await errorCode(UPDATE, { id: mine.id, input: { typeId: String(foreignType) } })).toBe('BAD_USER_INPUT');
-    expect(await errorCode(UPDATE, { id: mine.id, input: { placeId: String(foreignPlace) } })).toBe('BAD_USER_INPUT');
-    expect(await errorCode(`mutation($input: PlaceInput!) { createPlace(input: $input) { id } }`, { input: { name: 'x', parentId: String(foreignPlace) } })).toBe(
-      'BAD_USER_INPUT'
-    );
-    expect(await errorCode(`mutation($id: ID!) { updatePlace(id: $id, input: { name: "pwned" }) { id } }`, { id: String(foreignPlace) })).toBe(
-      'NOT_FOUND'
-    );
-    expect((await ok(`mutation($id: ID!) { deletePlace(id: $id) { success } }`, { id: String(foreignPlace) })).deletePlace.success).toBe(false);
-    expect(await Place.collection.countDocuments({ householdId: OTHER_HOUSEHOLD })).toBe(1);
-    // Deleting MY garage leaves their thing's placeId alone.
-    const myGarage = (await ok(`query { places { id } }`)).places[0].id;
-    await ok(`mutation($id: ID!) { deletePlace(id: $id) { success } }`, { id: myGarage });
-    expect(String((await Thing.collection.findOne({ _id: foreign })).placeId)).toBe(String(foreignPlace));
+    // The household rule: their Garage is "not found", for a move and for a create.
+    const res = await move(mine.id, String(foreignGarage));
+    expect(res.errors[0].extensions).toMatchObject({ code: 'BAD_USER_INPUT', details: [{ path: 'input.parentId', message: 'thing not found' }] });
+    expect(await errorCode(CREATE, { input: { name: 'x', parentId: String(foreignGarage) } })).toBe('BAD_USER_INPUT');
+    expect(await errorCode(CREATE, { input: { name: 'x', parentId: String(foreign) } })).toBe('BAD_USER_INPUT');
+    expect(await Thing.countDocuments({ householdId: 'default', name: 'x' })).toBe(0);
+    expect((await Thing.findById(mine.id).lean()).parentId).not.toBeNull();
+    // Their thing inside their garage: not in my tree, and my path never walks into theirs.
+    expect(String((await Thing.collection.findOne({ _id: foreign })).parentId)).toBe(String(foreignGarage));
+  });
+
+  test('a stored parentId pointing into another household renders as the top level', async () => {
+    await Thing.collection.updateOne({ _id: new mongoose.Types.ObjectId(mine.id) }, { $set: { parentId: foreignGarage } });
+    const t = (await ok(`query($id: ID!) { thing(id: $id) { path { name } } }`, { id: mine.id })).thing;
+    expect(t.path).toEqual([]);
+    expect((await ok(`query { thingTree { name parentInTrash } }`)).thingTree).toEqual([
+      { name: 'Garage', parentInTrash: false },
+      { name: 'Wendy', parentInTrash: false },
+    ]);
   });
 
   test("another household's file record never lends metadata to my photo", async () => {
@@ -281,6 +293,7 @@ describe('thinggeek — another household is invisible and untouchable', () => {
     await expect(Mutation.createThing(null, { input: { name: 'x', householdId: OTHER_HOUSEHOLD } }, ctx(CHEF))).rejects.toMatchObject({
       extensions: { code: 'BAD_USER_INPUT' },
     });
-    expect(await Thing.countDocuments({ householdId: OTHER_HOUSEHOLD })).toBe(2);
+    // Theirs: Wendy II, their trash and their Garage — nothing new.
+    expect(await Thing.countDocuments({ householdId: OTHER_HOUSEHOLD })).toBe(3);
   });
 });

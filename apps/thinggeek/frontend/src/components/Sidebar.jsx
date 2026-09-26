@@ -2,7 +2,7 @@
  * ThingGeek sidebar — identity wrapper around the suite GeekSidebar.
  *
  *   Library · Needs attention (N)
- *   INVENTORY   Places · Types
+ *   INVENTORY   Where · Types
  *   RECORDS     Insurance report · Trash
  *   Saved views (SavedViews, as `extras`: they need a ⋯ menu)
  *   footer: user · Settings · Sign out
@@ -108,7 +108,7 @@ export default function Sidebar({ user, onSignOut }) {
     {
       label: 'Inventory',
       items: [
-        { id: NAV.places, label: 'Places', icon: <PlacesIcon />, to: '/places' },
+        { id: NAV.where, label: 'Where', icon: <PlacesIcon />, to: '/where' },
         { id: NAV.types, label: 'Types', icon: <TypesIcon />, to: '/types' },
       ],
     },

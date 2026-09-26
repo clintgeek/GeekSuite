@@ -32,9 +32,12 @@ import { DUE_BUCKETS, dueBucketClause, dueWithinClause, occurrenceStages, todayU
  *
  *   type:<key or name>   the type's key or name, case-insensitive
  *   tag:<t>              a tag, case-insensitive exact
- *   in:<place>           a place id, or a name path ("garage", "house/garage",
+ *   in:<thing>           a thing's id, or a name path ("garage", "house/garage",
  *                        "House > Garage"; the path matches the END of the
- *                        place's root→self path), descendants included
+ *                        thing's root→self path). Any live thing may be named
+ *                        — a location, a container, or an item something was
+ *                        moved into — and everything inside it, at any depth,
+ *                        matches (not the thing itself).
  *   before:<period>      acquired strictly before the period starts
  *   after:<period>       acquired strictly after the period ends
  *                        (period = YYYY | YYYY-MM | YYYY-MM-DD, UTC)
@@ -60,14 +63,21 @@ import { DUE_BUCKETS, dueBucketClause, dueWithinClause, occurrenceStages, todayU
  *
  * ## Structured lists
  *
- * A list in the filter (types, places, due, missing) is ANY-of, like every
- * facet in the suite; tags honour tagMatch.
+ * A list in the filter (types, within, due, missing, kinds) is ANY-of, like
+ * every facet in the suite; tags honour tagMatch.
+ *
+ * ## Kinds: locations are not inventory
+ *
+ * With no `kinds`, the filter is container + item: a house or a shelf is
+ * never a row in the library, the insurance report or a count — unless a
+ * location TYPE is asked for by name (types / type:), which brings its kind
+ * in. `missing` never matches a location (it has nothing to be missing).
  *
  * Nothing here takes a householdId from the filter: the resolver puts the
  * session's in the literal first stage of every pipeline.
  */
 
-const { MISSING_KEYS } = constantsModule;
+const { MISSING_KEYS, THING_KINDS, DEFAULT_THING_KIND, PARENT_KINDS } = constantsModule;
 
 const MATCH_NOTHING = Object.freeze({ _id: { $in: [] } });
 const TOKEN_KEYS = new Set(['type', 'tag', 'in', 'before', 'after', 'expiring', 'due', 'missing', 'has']);
@@ -135,22 +145,33 @@ function parseDays(value) {
   return n <= MAX_DUE_DAYS ? n : null;
 }
 
-// ── The place tree ───────────────────────────────────────────────────────────
+// ── The containment tree ─────────────────────────────────────────────────────
+
+/** A type's kind; a thing with no (or a deleted) type is an item. */
+export const kindOfType = (type) => type?.kind || DEFAULT_THING_KIND;
 
 /**
- * The household's places as a tree: byId, children, and each place's
- * root→self path. Cycles (which the resolvers refuse to create) are cut
- * rather than looped on.
+ * The household's things as a tree, from `[{ _id, name, parentId, typeId,
+ * deletedAt }]` — EVERY thing, trashed ones included, because a thing in the
+ * Trash keeps its contents where they are: the jumper cables in a trashed Van
+ * are still in the Garage. A parentId naming no known thing is the top level.
+ * Cycles (which the resolvers refuse to create) are cut rather than looped on.
  */
-export function buildPlaceTree(places) {
-  const byId = new Map((places ?? []).map((p) => [String(p._id), p]));
+export function buildThingTree(nodes) {
+  const byId = new Map((nodes ?? []).map((n) => [String(n._id), n]));
   const children = new Map();
-  for (const p of byId.values()) {
-    const parent = p.parentId && byId.has(String(p.parentId)) ? String(p.parentId) : null;
+  const parentOf = (n) => (n.parentId && byId.has(String(n.parentId)) ? String(n.parentId) : null);
+  for (const n of byId.values()) {
+    const parent = parentOf(n);
     if (!children.has(parent)) children.set(parent, []);
-    children.get(parent).push(String(p._id));
+    children.get(parent).push(String(n._id));
   }
+  const isLive = (id) => {
+    const n = byId.get(String(id));
+    return Boolean(n && !n.deletedAt);
+  };
   const pathCache = new Map();
+  /** Root → self. */
   function pathOf(id) {
     if (pathCache.has(id)) return pathCache.get(id);
     const chain = [];
@@ -159,11 +180,13 @@ export function buildPlaceTree(places) {
     while (cur && !seen.has(String(cur._id))) {
       seen.add(String(cur._id));
       chain.unshift(cur);
-      cur = cur.parentId ? byId.get(String(cur.parentId)) : null;
+      const parent = parentOf(cur);
+      cur = parent ? byId.get(parent) : null;
     }
     pathCache.set(id, chain);
     return chain;
   }
+  /** Self and everything inside it, at any depth. */
   function descendantsOf(id) {
     const out = [];
     const stack = [String(id)];
@@ -177,7 +200,12 @@ export function buildPlaceTree(places) {
     }
     return out;
   }
-  /** Direct counts (placeId → n) → totals including descendants. */
+  /** How many levels hang below it (0 = it contains nothing). */
+  function heightOf(id) {
+    const base = pathOf(String(id)).length;
+    return Math.max(0, ...descendantsOf(id).map((d) => pathOf(d).length - base));
+  }
+  /** Direct counts (parentId → n) → totals including everything inside. */
   function totals(direct) {
     const out = new Map();
     for (const id of byId.keys()) {
@@ -200,11 +228,12 @@ export function buildPlaceTree(places) {
     walk(null, new Set());
     return out;
   }
-  return { byId, children, pathOf, descendantsOf, totals, ordered };
+  return { byId, children, isLive, pathOf, descendantsOf, heightOf, totals, ordered };
 }
 
-function placeIdsFor(tree, value) {
-  if (tree.byId.has(value)) return tree.descendantsOf(value);
+/** in:<value> → the parentIds whose children match (the named things and everything inside them). */
+function containerIdsFor(tree, value) {
+  if (tree.isLive(value)) return tree.descendantsOf(value);
   const segs = value
     .split(/\s*(?:\/|>|›)\s*/)
     .map((s) => s.trim().toLowerCase())
@@ -212,6 +241,7 @@ function placeIdsFor(tree, value) {
   if (!segs.length) return [];
   const out = new Set();
   for (const [id] of tree.byId) {
+    if (!tree.isLive(id)) continue;
     const names = tree.pathOf(id).map((p) => String(p.name).trim().toLowerCase());
     if (names.length < segs.length) continue;
     const tail = names.slice(names.length - segs.length);
@@ -219,6 +249,31 @@ function placeIdsFor(tree, value) {
   }
   return [...out];
 }
+
+/** Type ids per kind: `{ location: [ObjectId], container: [ObjectId] }` (items are "neither"). */
+function typeIdsByKind(types) {
+  const out = { location: [], container: [] };
+  for (const t of types ?? []) {
+    const k = kindOfType(t);
+    if (out[k]) out[k].push(t._id);
+  }
+  return out;
+}
+
+/** The match for "its kind is one of `kinds`", or null when that is every kind. */
+export function kindClause(kinds, types) {
+  const want = new Set(kinds);
+  const ids = typeIdsByKind(types);
+  const parts = [];
+  if (!want.has('location')) parts.push({ typeId: { $nin: ids.location } });
+  if (!want.has('container')) parts.push({ typeId: { $nin: ids.container } });
+  if (!want.has('item')) parts.push({ typeId: { $in: [...ids.location, ...ids.container] } });
+  if (!parts.length) return null;
+  return parts.length === 1 ? parts[0] : { $and: parts };
+}
+
+/** Inventory only: anything but a location (insurance, needs-attention, missing). */
+export const notLocation = (types) => kindClause(['container', 'item'], types);
 
 // ── Missing ──────────────────────────────────────────────────────────────────
 
@@ -305,33 +360,37 @@ export const HELPER_FIELDS = Object.freeze({ __occ: 0, __nextDue: 0, [ATTR_TEXT]
 /**
  * The active dimensions of a filter + its q tokens.
  * @param {object} filter validated ThingFilterInput
- * @param {{ types: object[], places: object[], today?: Date }} ctx the household's types and places
+ * @param {{ types: object[], tree?: ReturnType<typeof buildThingTree>, today?: Date }} ctx the household's types and containment tree
  * @returns {{ conditions: Record<string, {match: object}>, stages: object[] }} `stages` must run
  *   (after the household match) before any condition.
  */
-export function buildConditions(filter = {}, { types = [], places = [], today = todayUtc() } = {}) {
+export function buildConditions(filter = {}, { types = [], tree = buildThingTree([]), today = todayUtc() } = {}) {
   const c = {};
   const add = (key, match) => {
     if (!match) return;
     c[key] = c[key] ? { match: { $and: [c[key].match, match] } } : { match };
   };
   const idTypes = identifierTypes(types);
-  const tree = buildPlaceTree(places);
+  const inventory = notLocation(types);
+  const missingOnly = (clause) => ({ $and: [inventory, clause] });
   const all = filter.tagMatch === 'all';
+  // Type ids asked for by name or id — a location type among them brings locations in.
+  const askedTypes = [];
 
   // Structured fields.
   if (has(filter.types)) {
     const ids = toObjectIds(filter.types);
+    askedTypes.push(...ids.map(String));
     add('types', ids.length ? { typeId: { $in: ids } } : MATCH_NOTHING);
   }
   if (has(filter.tags)) add('tags', inList('tags', filter.tags, { all }));
-  if (has(filter.places)) {
+  if (has(filter.within)) {
     const ids = new Set();
-    for (const p of filter.places) for (const d of tree.byId.has(String(p)) ? tree.descendantsOf(String(p)) : []) ids.add(d);
-    add('places', ids.size ? { placeId: { $in: toObjectIds([...ids]) } } : MATCH_NOTHING);
+    for (const p of filter.within) for (const d of tree.isLive(String(p)) ? tree.descendantsOf(String(p)) : []) ids.add(d);
+    add('where', ids.size ? { parentId: { $in: toObjectIds([...ids]) } } : MATCH_NOTHING);
   }
   if (has(filter.due)) add('due', { $or: filter.due.map((b) => dueBucketClause(b, today)) });
-  if (has(filter.missing)) add('missing', { $or: filter.missing.map((k) => missingClause(k, idTypes)) });
+  if (has(filter.missing)) add('missing', missingOnly({ $or: filter.missing.map((k) => missingClause(k, idTypes)) }));
   if (given(filter.hasPhotos)) add('hasPhotos', { 'photos.0': { $exists: Boolean(filter.hasPhotos) } });
   if (given(filter.hasDocuments)) add('hasDocuments', { 'documents.0': { $exists: Boolean(filter.hasDocuments) } });
   add('acquiredYears', yearRange('acquired.date', filter.acquiredYearMin, filter.acquiredYearMax));
@@ -365,7 +424,7 @@ export function buildConditions(filter = {}, { types = [], places = [], today = 
       case 'missing': {
         const key = v.toLowerCase();
         if (!MISSING_KEYS.includes(key)) words.push(t.raw);
-        else add('missing', missingClause(key, idTypes));
+        else add('missing', missingOnly(missingClause(key, idTypes)));
         break;
       }
       case 'has': {
@@ -383,6 +442,7 @@ export function buildConditions(filter = {}, { types = [], places = [], today = 
     const ids = types
       .filter((ty) => wanted.includes(String(ty.key).toLowerCase()) || wanted.includes(String(ty.name).toLowerCase()))
       .map((ty) => ty._id);
+    askedTypes.push(...ids.map(String));
     add('types', ids.length ? { typeId: { $in: ids } } : MATCH_NOTHING);
   }
   if (grouped.tag.length) {
@@ -391,9 +451,16 @@ export function buildConditions(filter = {}, { types = [], places = [], today = 
   }
   if (grouped.in.length) {
     const ids = new Set();
-    for (const v of grouped.in) for (const id of placeIdsFor(tree, v)) ids.add(id);
-    add('places', ids.size ? { placeId: { $in: toObjectIds([...ids]) } } : MATCH_NOTHING);
+    for (const v of grouped.in) for (const id of containerIdsFor(tree, v)) ids.add(id);
+    add('where', ids.size ? { parentId: { $in: toObjectIds([...ids]) } } : MATCH_NOTHING);
   }
+
+  // Kinds last: the default (no `kinds`) depends on which types were asked for.
+  let kinds = has(filter.kinds) ? filter.kinds : ['container', 'item'];
+  if (!has(filter.kinds) && types.some((t) => kindOfType(t) === 'location' && askedTypes.includes(String(t._id)))) {
+    kinds = [...kinds, 'location'];
+  }
+  add('kinds', kindClause(kinds, types));
 
   const stages = [...occurrenceStages(today)];
   if (words.length) {
@@ -420,39 +487,51 @@ export function filteredStages(householdId, filter, ctx) {
 
 const missingFacetName = (k) => `missing:${k}`;
 const dueFacetName = (b) => `due:${b}`;
+const kindFacetName = (k) => `kind:${k}`;
 
 /** The single aggregation behind `thingFacets`. */
-export function facetsPipeline({ householdId, filter = {}, types, places, today = todayUtc() }) {
-  const { conditions, stages } = buildConditions(filter, { types, places, today });
+export function facetsPipeline({ householdId, filter = {}, types, tree, today = todayUtc() }) {
+  const { conditions, stages } = buildConditions(filter, { types, tree, today });
   const idTypes = identifierTypes(types);
+  const inventory = notLocation(types);
   const facets = {
     types: (m) => [{ $match: m }, { $match: { typeId: { $ne: null } } }, { $group: { _id: '$typeId', n: { $sum: 1 } } }],
     tags: (m) => valuesFacetStages(m, '$tags'),
-    places: (m) => [{ $match: m }, { $match: { placeId: { $ne: null } } }, { $group: { _id: '$placeId', n: { $sum: 1 } } }],
+    // Direct counts per parent; shapeFacets rolls them up the tree.
+    where: (m) => [{ $match: m }, { $match: { parentId: { $ne: null } } }, { $group: { _id: '$parentId', n: { $sum: 1 } } }],
     acquiredYears: (m) => yearHistogramStages(m, 'acquired.date'),
     hasPhotos: (m) => countFacetStages(m, { 'photos.0': { $exists: true } }),
     hasDocuments: (m) => countFacetStages(m, { 'documents.0': { $exists: true } }),
   };
   for (const b of DUE_BUCKETS) facets[dueFacetName(b)] = { exclude: 'due', stages: (m) => countFacetStages(m, dueBucketClause(b, today)) };
   for (const k of MISSING_KEYS) {
-    facets[missingFacetName(k)] = { exclude: 'missing', stages: (m) => countFacetStages(m, missingClause(k, idTypes)) };
+    facets[missingFacetName(k)] = { exclude: 'missing', stages: (m) => countFacetStages(m, { $and: [inventory, missingClause(k, idTypes)] }) };
+  }
+  for (const k of THING_KINDS) {
+    facets[kindFacetName(k)] = { exclude: 'kinds', stages: (m) => countFacetStages(m, kindClause([k], types) ?? {}) };
   }
   return [baseMatch(householdId), ...stages, buildFacetStage(conditions, facets)];
 }
 
-/** The `$facet` result → the ThingFacets shape. Place counts include descendants (via the tree). */
-export function shapeFacets(result, filter = {}, { places = [] } = {}) {
+/**
+ * The `$facet` result → the ThingFacets shape. A Where count includes
+ * everything inside (via the tree, through things in the Trash); only live
+ * locations and containers are offered.
+ */
+export function shapeFacets(result, filter = {}, { types = [], tree = buildThingTree([]) } = {}) {
   const r = result ?? {};
-  const tree = buildPlaceTree(places);
-  const direct = new Map((r.places ?? []).map((row) => [String(row._id), row.n]));
+  const typeById = new Map(types.map((t) => [String(t._id), t]));
+  const offered = (id) => tree.isLive(id) && PARENT_KINDS.includes(kindOfType(typeById.get(String(tree.byId.get(id).typeId))));
+  const direct = new Map((r.where ?? []).map((row) => [String(row._id), row.n]));
   const totals = tree.totals(direct);
-  const placeRows = [...totals.entries()].filter(([, n]) => n > 0).map(([id, n]) => ({ _id: id, n }));
-  const selectedPlaces = (filter.places ?? []).filter((id) => tree.byId.has(String(id)));
+  const whereRows = [...totals.entries()].filter(([id, n]) => n > 0 && offered(id)).map(([id, n]) => ({ _id: id, n }));
+  const selectedWhere = (filter.within ?? []).filter((id) => tree.isLive(String(id)));
   return {
     total: shapeCount(r.total),
     types: shapeOpenFacet((r.types ?? []).map((row) => ({ _id: String(row._id), n: row.n })), filter.types ?? []),
     tags: shapeOpenFacet(r.tags, filter.tags ?? []),
-    places: shapeOpenFacet(placeRows, selectedPlaces),
+    where: shapeOpenFacet(whereRows, selectedWhere),
+    kinds: shapeFixedFacet(THING_KINDS.map((k) => ({ _id: k, n: shapeCount(r[kindFacetName(k)]) })), THING_KINDS),
     due: shapeFixedFacet(DUE_BUCKETS.map((b) => ({ _id: b, n: shapeCount(r[dueFacetName(b)]) })), DUE_BUCKETS),
     missing: shapeFixedFacet(MISSING_KEYS.map((k) => ({ _id: k, n: shapeCount(r[missingFacetName(k)]) })), MISSING_KEYS),
     acquiredYears: shapeHistogram(r.acquiredYears, 'year'),

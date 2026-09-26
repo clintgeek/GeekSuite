@@ -31,9 +31,9 @@
     "./thinggeek/household": "./thinggeek/household.js",
     "./thinggeek/thing": "./thinggeek/thing.js",
     "./thinggeek/thingType": "./thinggeek/thingType.js",
-    "./thinggeek/place": "./thinggeek/place.js",
     "./thinggeek/file": "./thinggeek/file.js",
-    "./thinggeek/profile": "./thinggeek/profile.js"
+    "./thinggeek/profile": "./thinggeek/profile.js",
+    "./thinggeek/starterTypes": "./thinggeek/starterTypes.js"
   },
   "scripts": {
     "lint": "eslint ."

@@ -29,7 +29,7 @@ export default function MoreSheet({ open, onClose, title, onEdit, onReport, onTr
   return (
     <GeekSheet open={open} onClose={onClose} title="More" description={title}>
       <Box component="ul" sx={{ m: 0, p: 0, pb: 1 }}>
-        <Row icon={<EditIcon />} label="Edit everything" hint="Fields, dates, value, relationships, photos and documents" onClick={pick(onEdit)} />
+        <Row icon={<EditIcon />} label="Edit everything" hint="Fields, dates, value, accessories, photos and documents" onClick={pick(onEdit)} />
         <Row icon={<ReportIcon />} label="Insurance report" hint="Print or export the whole ledger" onClick={pick(onReport)} />
         <Row icon={<TrashIcon />} label="Move to Trash" hint={`Kept for ${trashDays} days, then purged with its files`} onClick={pick(onTrash)} danger />
       </Box>

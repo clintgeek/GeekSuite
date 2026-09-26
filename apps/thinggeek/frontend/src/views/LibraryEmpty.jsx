@@ -47,7 +47,7 @@ export default function LibraryEmpty({ firstRun, onAdd, onClear }) {
           Start the household ledger
         </Typography>
         <Typography sx={{ color: 'text.secondary', mb: 3, lineHeight: 1.6, fontSize: '1rem', maxWidth: 460, mx: 'auto' }}>
-          Start with the things you'd hate to lose — the boat, the guns, the good tools. A photo and a place is enough to begin.
+          Start with the things you'd hate to lose — the boat, the guns, the good tools. A photo and where it is is enough to begin.
         </Typography>
         <Box
           component="ol"
@@ -76,8 +76,8 @@ export default function LibraryEmpty({ firstRun, onAdd, onClear }) {
           Add a thing
         </Button>
         <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center', flexWrap: 'wrap', mt: 2 }}>
-          <Button component={RouterLink} to="/places" startIcon={<PlacesIcon />} sx={{ color: 'text.primary' }}>
-            Set up places first
+          <Button component={RouterLink} to="/where" startIcon={<PlacesIcon />} sx={{ color: 'text.primary' }}>
+            Set up where things go
           </Button>
           <Button component={RouterLink} to="/types" startIcon={<TypesIcon />} sx={{ color: 'text.primary' }}>
             See the types

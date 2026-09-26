@@ -4,13 +4,17 @@
  * written IN FULL — this file is for the insurer (the screen masks them;
  * the export is the one place they're meant to leave the app whole).
  *
+ * Locations are never rows (the report is inventory); each row's "Where"
+ * is the whole path — House › Garage › Van — which is what you want on a
+ * bad day, when the Garage is the claim.
+ *
  * UTF-8 with a BOM (so Excel reads "Café" and "—" correctly), CRLF line
  * ends, RFC 4180 quoting. Calendar dates are written as YYYY-MM-DD in UTC
  * (they are UTC-midnight days); money as plain numbers.
  */
 import { dueDateOf, utcIsoToInputValue } from './dates';
 import { moneyAmount } from './money';
-import { placeLabel } from './places';
+import { whereLabel } from './where';
 import { dateKindLabel } from './vocab';
 import { hasValue } from './identifiers';
 
@@ -19,7 +23,7 @@ export const BOM = '﻿';
 const CORE_COLUMNS = [
   ['Name', (t) => t.name],
   ['Type', (t) => t.type?.name ?? ''],
-  ['Place', (t) => (t.place ? placeLabel(t.place) : '')],
+  ['Where', (t) => whereLabel(t)],
   ['Tags', (t) => (t.tags ?? []).join('; ')],
   ['Current value', (t) => moneyAmount(t.value) ?? ''],
   ['Currency', (t) => (moneyAmount(t.value) !== null ? t.value?.currency || 'USD' : '')],

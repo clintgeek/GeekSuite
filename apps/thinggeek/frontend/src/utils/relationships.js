@@ -1,23 +1,21 @@
 /**
  * Relationships as sentences. A relationship is stored once, on the thing
- * that says it ("Wendy is equipped with the Striker 4"); the gateway derives
- * the inverse at read time (`direction: 'in'` on the fish finder). Each kind
- * reads differently from each end.
+ * that says it ("the lens is an accessory for the camera"); the gateway
+ * derives the inverse at read time (`direction: 'in'` on the camera). Each
+ * kind reads differently from each end.
+ *
+ * WHERE a thing is is not a relationship — that is its parent (utils/
+ * where.js). Since containment (2026-09-26) the only kind is accessory-of:
+ * the lens that belongs to the camera but lives in a drawer.
  */
 
 export const RELATIONSHIP_PHRASES = {
-  'equipped-with': { out: 'Equipped with', in: 'Equipped on' },
-  'part-of': { out: 'Part of', in: 'Made up of' },
   'accessory-of': { out: 'Accessory for', in: 'Accessories' },
-  'stored-with': { out: 'Stored with', in: 'Stored with' },
 };
 
 /** The editor's words for choosing a kind: "This thing is … [other thing]". */
 export const RELATIONSHIP_KIND_LABELS = {
-  'equipped-with': 'is equipped with',
-  'part-of': 'is part of',
   'accessory-of': 'is an accessory for',
-  'stored-with': 'is stored with',
 };
 
 export function relationshipPhrase(kind, direction = 'out') {
@@ -28,14 +26,13 @@ export function relationshipPhrase(kind, direction = 'out') {
 
 /**
  * Relationships → `[{ key, phrase, kind, direction, things: [summary] }]`,
- * in kind order then outgoing before incoming. "stored-with" reads the same
- * both ways, so its two directions share one sentence.
+ * in kind order then outgoing before incoming.
  */
 export function groupRelationships(relationships = [], kindOrder = Object.keys(RELATIONSHIP_PHRASES)) {
   const groups = new Map();
   for (const r of relationships) {
     if (!r?.thing) continue;
-    const direction = r.kind === 'stored-with' ? 'out' : r.direction === 'in' ? 'in' : 'out';
+    const direction = r.direction === 'in' ? 'in' : 'out';
     const key = `${r.kind}:${direction}`;
     if (!groups.has(key)) groups.set(key, { key, kind: r.kind, direction, phrase: relationshipPhrase(r.kind, direction), things: [] });
     const g = groups.get(key);
@@ -48,7 +45,7 @@ export function groupRelationships(relationships = [], kindOrder = Object.keys(R
   return [...groups.values()].sort((a, b) => rank(a) - rank(b));
 }
 
-/** "Equipped with: Garmin Striker 4 and Minn Kota trolling motor" — one line, for screen readers and CSV. */
+/** "Accessories: 50mm lens and spare battery" — one line, for screen readers and CSV. */
 export function relationshipSentence(group) {
   const names = group.things.map((t) => t.name);
   const list = names.length <= 2 ? names.join(' and ') : `${names.slice(0, -1).join(', ')} and ${names[names.length - 1]}`;

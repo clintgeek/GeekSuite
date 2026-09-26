@@ -53,13 +53,13 @@ export default function SettingsView({ user, onSignOut }) {
         </Box>
       </SettingsCard>
 
-      <SettingsCard id="setup" title="The household's setup" description={`Types and places are shared by everyone here. Trashed things are kept ${trashDays} days.`}>
+      <SettingsCard id="setup" title="The household's setup" description={`Types and the Where tree are shared by everyone here. Trashed things are kept ${trashDays} days.`}>
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1 }}>
           <Button component={RouterLink} to="/types" variant="outlined" startIcon={<TypesIcon />} sx={{ justifyContent: 'flex-start', color: 'text.primary' }}>
             Types & their fields
           </Button>
-          <Button component={RouterLink} to="/places" variant="outlined" startIcon={<PlacesIcon />} sx={{ justifyContent: 'flex-start', color: 'text.primary' }}>
-            Places
+          <Button component={RouterLink} to="/where" variant="outlined" startIcon={<PlacesIcon />} sx={{ justifyContent: 'flex-start', color: 'text.primary' }}>
+            Where things are
           </Button>
           <Button component={RouterLink} to="/insurance" variant="outlined" startIcon={<InsuranceIcon />} sx={{ justifyContent: 'flex-start', color: 'text.primary' }}>
             Insurance report

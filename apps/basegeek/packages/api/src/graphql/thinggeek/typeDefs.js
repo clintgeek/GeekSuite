@@ -6,7 +6,12 @@ import { gql } from 'graphql-tag';
 // @geeksuite/schemas/thinggeek/household, which also enforces the MEMBER
 // GATE (only the accounts Chef named; others get NOT_A_MEMBER). Nothing here
 // accepts a householdId from the client. Deleted things (deletedAt set) are
-// excluded everywhere except trashedThings.
+// excluded everywhere except trashedThings (and a thing's path, where an
+// ancestor in the Trash shows as inTrash).
+//
+// WHERE a thing is: its parentId, pointing at another Thing ("Containment" in
+// the plan). A type's kind decides the role: location (house, room, shelf —
+// never inventory), container (van, safe — inventory AND a place), item.
 export const typeDefs = gql`
   type ThingMoney {
     amount: Float
@@ -28,21 +33,10 @@ export const typeDefs = gql`
     key: String!
     name: String!
     icon: String!
+    kind: String!          # location | container | item
     fields: [ThingTypeField!]!
     builtIn: Boolean!
     thingCount: Int!
-  }
-
-  type Place {
-    id: ID!
-    name: String!
-    parentId: ID
-    notes: String
-    # Root → this place, e.g. [House, Garage, Shelf 2].
-    path: [Place!]!
-    # Things directly here / here or in any descendant.
-    directCount: Int!
-    totalCount: Int!
   }
 
   type ThingDate {
@@ -96,14 +90,16 @@ export const typeDefs = gql`
     id: ID!
     name: String!
     type: ThingType
+    kind: String!          # its type's kind; item when it has none
     coverThumbUrl: String
+    inTrash: Boolean!      # only ever true on a path crumb
   }
 
   type ThingRelationship {
     id: ID!
-    kind: String!          # equipped-with | part-of | accessory-of | stored-with
-    # out = stored on this thing ("Wendy is equipped with X");
-    # in  = derived from another thing pointing here ("X is equipped on Wendy").
+    kind: String!          # accessory-of
+    # out = stored on this thing ("the lens is an accessory of the camera");
+    # in  = derived from another thing pointing here ("the camera's accessories").
     direction: String!
     thing: ThingSummary!
   }
@@ -124,8 +120,18 @@ export const typeDefs = gql`
     id: ID!
     name: String!
     type: ThingType
+    kind: String!          # its type's kind; item when it has none
     tags: [String!]!
-    place: Place
+    # Where it is: the thing it is directly inside (null = the top level).
+    parentId: ID
+    # Root → parent: [House, Garage, Van] for the jumper cables. An ancestor
+    # in the Trash stays in the path, inTrash: true ("inside something in the
+    # Trash"); restoring it needs nothing else.
+    path: [ThingSummary!]!
+    # What is directly inside it (live things): locations, containers, then
+    # items, each by name.
+    contents: [Thing!]!
+    contentsCount: Int!
     acquired: ThingAcquired!
     value: ThingValue!
     dates: [ThingDate!]!
@@ -139,6 +145,7 @@ export const typeDefs = gql`
     relationships: [ThingRelationship!]!
     notes: String
     # Computed gaps: photo | id-plate | receipt | serial | value (serial = an identifier field is empty).
+    # Always empty for a location: it is not inventory.
     missing: [String!]!
     deletedAt: Date
     createdAt: Date
@@ -153,13 +160,26 @@ export const typeDefs = gql`
   }
 
   type ThingFacetValue { value: String!  count: Int! }
+
+  # One row of the containment tree (every live thing in the household).
+  type ThingNode {
+    id: ID!
+    name: String!
+    parentId: ID           # as stored: may name a thing in the Trash (parentInTrash)
+    parentInTrash: Boolean!
+    kind: String!
+    type: ThingType
+    childCount: Int!       # live things directly inside
+    itemCount: Int!        # live inventory (not locations) anywhere inside
+  }
   type ThingYearBucket { year: Int!  count: Int! }
 
   type ThingFacets {
     total: Int!
     types: [ThingFacetValue!]!       # value = type id
     tags: [ThingFacetValue!]!
-    places: [ThingFacetValue!]!      # value = place id; counts include descendants
+    where: [ThingFacetValue!]!       # value = a location's or container's id; counts include everything inside
+    kinds: [ThingFacetValue!]!       # location | container | item (fixed order)
     due: [ThingFacetValue!]!         # overdue | 30d | 90d | year (fixed order)
     missing: [ThingFacetValue!]!     # photo | id-plate | receipt | serial | value (fixed order)
     acquiredYears: [ThingYearBucket!]!
@@ -204,6 +224,7 @@ export const typeDefs = gql`
     photoRoles: [String!]!
     documentRoles: [String!]!
     relationshipKinds: [String!]!
+    thingKinds: [String!]!
     missingKeys: [String!]!
     trashDays: Int!
   }
@@ -221,7 +242,9 @@ export const typeDefs = gql`
     name: String
     typeId: ID
     tags: [String!]
-    placeId: ID
+    # Move: any live thing in the household but itself or something inside
+    # it, at most bounds.containDepth deep; null = the top level.
+    parentId: ID
     acquired: ThingAcquiredInput
     value: ThingValueInput
     dates: [ThingDateInput!]
@@ -245,13 +268,8 @@ export const typeDefs = gql`
   input ThingTypeInput {
     name: String
     icon: String
+    kind: String           # location | container | item (create default: item)
     fields: [ThingTypeFieldInput!]
-  }
-
-  input PlaceInput {
-    name: String
-    parentId: ID
-    notes: String
   }
 
   # The search box's tokens (type:, tag:, in:, before:, after:, expiring:, due:,
@@ -262,7 +280,10 @@ export const typeDefs = gql`
     types: [ID!]
     tags: [String!]
     tagMatch: String       # any (default) | all
-    places: [ID!]          # includes descendants
+    within: [ID!]          # inside any of these things, at any depth
+    # location | container | item. Omitted = container + item: locations are
+    # not inventory (unless a location type is asked for by types/type:).
+    kinds: [String!]
     due: [String!]         # overdue | 30d | 90d | year
     missing: [String!]
     hasPhotos: Boolean
@@ -288,7 +309,8 @@ export const typeDefs = gql`
     thingFacets(filter: ThingFilterInput): ThingFacets!
     # Seeds the starter types on first call for the household.
     thingTypes: [ThingType!]!
-    places: [Place!]!
+    # The whole containment tree: every live thing, depth-first, siblings by name.
+    thingTree: [ThingNode!]!
     thingAttention: ThingAttention!
     thingProfile: ThingProfile!
     thingVocabulary: ThingVocabulary!
@@ -299,18 +321,14 @@ export const typeDefs = gql`
   extend type Mutation {
     createThing(input: ThingInput!): Thing!
     updateThing(id: ID!, input: ThingInput!): Thing!
-    # Soft delete → Trash for trashDays. restoreThing brings it back.
+    # Soft delete → Trash for trashDays; what is inside it stays put. restoreThing brings it back.
     deleteThing(id: ID!): DeleteResponse!
     restoreThing(id: ID!): Thing!
     createThingType(input: ThingTypeInput!): ThingType!
+    # kind → item is refused (CONFLICT) while any of its things contain things.
     updateThingType(id: ID!, input: ThingTypeInput!): ThingType!
     # Refused while any (non-trashed) thing uses the type.
     deleteThingType(id: ID!): DeleteResponse!
-    createPlace(input: PlaceInput!): Place!
-    # Moving under a descendant (a cycle) is refused.
-    updatePlace(id: ID!, input: PlaceInput!): Place!
-    # Children move up to the deleted place's parent; its things become place-less.
-    deletePlace(id: ID!): DeleteResponse!
     saveThingFilter(input: ThingSavedFilterInput!): ThingProfile!
     deleteThingFilter(id: ID!): ThingProfile!
   }

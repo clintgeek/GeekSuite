@@ -2,7 +2,8 @@
  * An in-memory stand-in for a mongoose model — just the calls this backend
  * makes (mongodb-memory-server is not resolvable from this package):
  * findOne / find (+ sort, limit, lean) / exists / distinct / create /
- * updateOne / updateMany / findOneAndUpdate / deleteOne / deleteMany.
+ * updateOne / updateMany / findOneAndUpdate / findOneAndDelete / deleteOne /
+ * deleteMany / insertMany.
  *
  * Query language: equality on dotted paths (null matches missing, arrays
  * match by element containment, numeric segments index arrays), $in, $ne,
@@ -208,6 +209,14 @@ export function createFakeModel(initialDocs = [], { hooks = {}, now = () => new 
         if (options.timestamps !== false) d.updatedAt = now();
         return d;
       });
+    },
+    async findOneAndDelete(filter) {
+      calls.push(['findOneAndDelete', filter]);
+      await hooks.beforeDelete?.(filter, model);
+      const i = docs.findIndex((x) => matches(x, filter));
+      if (i === -1) return null;
+      const [row] = docs.splice(i, 1);
+      return cloneDoc(row);
     },
     async deleteOne(filter) {
       calls.push(['deleteOne', filter]);

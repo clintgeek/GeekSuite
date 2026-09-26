@@ -660,8 +660,8 @@ const NO_FRONTEND_CALLER = new Set([
   'Mutation.updateThing',
   'Mutation.createThingType',
   'Mutation.updateThingType',
-  'Mutation.createPlace',
-  'Mutation.updatePlace',
+  // createPlace / updatePlace removed 2026-09-26: places became things
+  // (containment — a move is updateThing's parentId).
   'Mutation.saveThingFilter',
 ]);
 
@@ -688,8 +688,11 @@ describe('every input-object-taking root field is enumerated and accounted for',
   // thingInsuranceTotals (ThingFilterInput) and seven input-object mutations.
   // 43 from 2026-09-25 (night): bookgeek's books(filter) and bookFacets(filter)
   // take BookFilterInput (DOCS/BOOKGEEK_CLEANUP_PLAN.md Phase C2).
-  test('the count matches the audit: 43 root fields take an input-object argument', () => {
-    expect(inputObjectRootFields()).toHaveLength(43);
+  // 41 from 2026-09-26: thinggeek's createPlace and updatePlace (PlaceInput)
+  // removed — the Place tree became the containment graph
+  // (DOCS/THINGGEEK_PLAN.md "Containment").
+  test('the count matches the audit: 41 root fields take an input-object argument', () => {
+    expect(inputObjectRootFields()).toHaveLength(41);
   });
 
   test('FIXTURES and NO_FRONTEND_CALLER never claim the same field', () => {

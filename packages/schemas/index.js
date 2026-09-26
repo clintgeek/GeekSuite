@@ -32,9 +32,9 @@ module.exports = {
     household: require('./thinggeek/household.js'),
     thing: require('./thinggeek/thing.js'),
     thingType: require('./thinggeek/thingType.js'),
-    place: require('./thinggeek/place.js'),
     file: require('./thinggeek/file.js'),
     profile: require('./thinggeek/profile.js'),
+    starterTypes: require('./thinggeek/starterTypes.js'),
   },
   gamegeek: {
     constants: require('./gamegeek/constants.js'),

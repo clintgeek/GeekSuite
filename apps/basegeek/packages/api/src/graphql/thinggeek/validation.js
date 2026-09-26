@@ -15,16 +15,17 @@ export { validateInput };
  * Every vocabulary is an enum from @geeksuite/schemas/thinggeek/constants.
  * Every schema is `.strict()`: a smuggled `householdId` is a rejection.
  *
- * What zod cannot know — whether a typeId/placeId/thingId belongs to the
- * household, and whether `attributes` fit the Thing's type — is checked by
- * the resolver against the database (`validateAttributes` below does the
- * type check once the type is loaded).
+ * What zod cannot know — whether a typeId/parentId/thingId belongs to the
+ * household, whether a move makes a cycle or goes too deep, and whether
+ * `attributes` fit the Thing's type — is checked by the resolver against the
+ * database (`validateAttributes` below does the type check once the type is
+ * loaded).
  *
  * Dates are calendar days (UTC midnight) with the historical floor: a 1987
  * purchase or a long-expired warranty is a fact, not a typo.
  */
 
-const { FIELD_KINDS, DATE_KINDS, PHOTO_ROLES, DOCUMENT_ROLES, RELATIONSHIP_KINDS, MISSING_KEYS, bounds } = constantsModule;
+const { FIELD_KINDS, DATE_KINDS, PHOTO_ROLES, DOCUMENT_ROLES, RELATIONSHIP_KINDS, THING_KINDS, MISSING_KEYS, bounds } = constantsModule;
 
 /** The advertised `things` sorts. Each has a resolver arm AND an order test. */
 export const THING_SORTS = Object.freeze(['name', 'recentlyAdded', 'acquired', 'value', 'nextDue', 'random']);
@@ -86,7 +87,7 @@ const tagList = z.array(z.string().trim().min(1).max(bounds.tag.maxlength)).max(
 const thingFields = {
   typeId: idString.nullable().optional(),
   tags: tagList.nullable().optional(),
-  placeId: idString.nullable().optional(),
+  parentId: idString.nullable().optional(),
   acquired: acquiredInput.nullable().optional(),
   value: valueInput.nullable().optional(),
   dates: z.array(dateInput).max(LIST_MAX).nullable().optional(),
@@ -137,26 +138,28 @@ const typeIcon = z.string().trim().min(1).max(60).regex(/^[A-Za-z0-9]+$/, { mess
 
 export const createThingTypeArgsSchema = z
   .object({
-    input: z.object({ name: typeName, icon: typeIcon.nullable().optional(), fields: typeFields.nullable().optional() }).strict(),
+    input: z
+      .object({
+        name: typeName,
+        icon: typeIcon.nullable().optional(),
+        kind: nullableEnum(THING_KINDS),
+        fields: typeFields.nullable().optional(),
+      })
+      .strict(),
   })
   .strict();
 export const updateThingTypeArgsSchema = z
   .object({
     id: idString,
-    input: z.object({ name: typeName.optional(), icon: typeIcon.nullable().optional(), fields: typeFields.nullable().optional() }).strict(),
-  })
-  .strict();
-
-// ── Places ───────────────────────────────────────────────────────────────────
-
-const placeName = z.string().trim().min(1, { message: 'name is required' }).max(120);
-export const createPlaceArgsSchema = z
-  .object({ input: z.object({ name: placeName, parentId: idString.nullable().optional(), notes: optionalText(2000) }).strict() })
-  .strict();
-export const updatePlaceArgsSchema = z
-  .object({
-    id: idString,
-    input: z.object({ name: placeName.optional(), parentId: idString.nullable().optional(), notes: optionalText(2000) }).strict(),
+    input: z
+      .object({
+        name: typeName.optional(),
+        icon: typeIcon.nullable().optional(),
+        // Never null on update (ThingType.kind: String!): omit it to keep it.
+        kind: enumOf(THING_KINDS).optional(),
+        fields: typeFields.nullable().optional(),
+      })
+      .strict(),
   })
   .strict();
 
@@ -172,7 +175,8 @@ export const thingFilterInput = z
     types: z.array(idString).max(LIST_MAX).nullable().optional(),
     tags: tagList.nullable().optional(),
     tagMatch: nullableEnum(TAG_MATCH_MODES),
-    places: z.array(idString).max(LIST_MAX).nullable().optional(),
+    within: z.array(idString).max(LIST_MAX).nullable().optional(),
+    kinds: z.array(enumOf(THING_KINDS)).max(THING_KINDS.length).nullable().optional(),
     due: z.array(enumOf(DUE_BUCKETS)).max(DUE_BUCKETS.length).nullable().optional(),
     missing: z.array(enumOf(MISSING_KEYS)).max(MISSING_KEYS.length).nullable().optional(),
     hasPhotos: z.boolean().nullable().optional(),

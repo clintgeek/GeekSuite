@@ -12,7 +12,8 @@ export const DEFAULT_VOCAB = Object.freeze({
   dateKinds: ['warranty', 'registration', 'insurance', 'license', 'maintenance', 'other'],
   photoRoles: ['overview', 'id-plate', 'receipt', 'detail', 'other'],
   documentRoles: ['receipt', 'manual', 'warranty', 'registration', 'insurance', 'other'],
-  relationshipKinds: ['equipped-with', 'part-of', 'accessory-of', 'stored-with'],
+  relationshipKinds: ['accessory-of'],
+  thingKinds: ['location', 'container', 'item'],
   missingKeys: ['photo', 'id-plate', 'receipt', 'serial', 'value'],
   trashDays: 30,
 });

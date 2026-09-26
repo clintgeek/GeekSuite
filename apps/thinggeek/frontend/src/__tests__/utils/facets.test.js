@@ -1,27 +1,36 @@
 import { describe, expect, it } from 'vitest';
 import { activeChips, SECTIONS, valueLabel, valueRangeLabel } from '../../utils/facets';
 import { readLibraryState } from '../../utils/libraryFilter';
-import { PLACES, TYPES } from '../fixtures';
-import { placeOrder } from '../../utils/places';
+import { NODES, TYPES } from '../fixtures';
+import { whereOrder } from '../../utils/where';
 
 const context = {
   typesById: new Map(TYPES.map((t) => [t.id, t])),
-  placesById: new Map(PLACES.map((p) => [p.id, p])),
-  placeOrder: placeOrder(PLACES),
+  nodesById: new Map(NODES.map((n) => [n.id, n])),
+  whereOrder: whereOrder(NODES),
 };
 
 describe('facet config', () => {
-  it('labels types and places from the household data', () => {
+  it('labels types and where from the household data', () => {
     expect(valueLabel('types', 'ty-boat', context)).toBe('Boat');
-    expect(valueLabel('places', 'pl-shelf', context)).toBe('Garage › Shelf 2');
-    expect(valueLabel('places', 'nope', context)).toBe('Unknown place');
+    expect(valueLabel('within', 'n-shelf', context)).toBe('Garage › Shelf 2');
+    expect(valueLabel('within', 'n-van', context)).toBe('Garage › Van');
+    expect(valueLabel('within', 'nope', context)).toBe('Unknown place');
+    expect(valueLabel('kinds', 'location')).toBe('Locations');
     expect(valueLabel('due', '30d')).toBe('Next 30 days');
     expect(valueLabel('missing', 'id-plate')).toBe('No ID-plate photo');
   });
 
-  it('places are in tree order', () => {
-    const place = SECTIONS.find((s) => s.id === 'place');
-    expect(place.fixed(context)).toEqual(['pl-house', 'pl-garage', 'pl-shelf', 'pl-truck']);
+  it('Where lists locations and containers in tree order — never a plain item', () => {
+    const where = SECTIONS.find((s) => s.id === 'where');
+    expect(where.key).toBe('within');
+    expect(where.fixed(context)).toEqual(['n-house', 'n-garage', 'n-shelf', 'n-van', 't-wendy']);
+  });
+
+  it('Kind is a closed list; picking Locations is how the library shows them', () => {
+    const kind = SECTIONS.find((s) => s.id === 'kind');
+    expect(kind.fixed).toEqual(['container', 'item', 'location']);
+    expect(kind.closedList).toBe(true);
   });
 
   it('missing is a closed list of the five gaps', () => {
@@ -37,9 +46,9 @@ describe('facet config', () => {
   });
 
   it('chips name what is on, each with the patch that removes it', () => {
-    const state = readLibraryState(new URLSearchParams('?type=ty-boat&in=pl-shelf&value=500-2000&photos=0'));
+    const state = readLibraryState(new URLSearchParams('?type=ty-boat&in=n-shelf&kind=location&value=500-2000&photos=0'));
     const chips = activeChips(state, context);
-    expect(chips.map((c) => `${c.group}: ${c.label}`)).toEqual(['Type: Boat', 'In: Garage › Shelf 2', 'Photos: None', 'Value: $500 – $2,000']);
+    expect(chips.map((c) => `${c.group}: ${c.label}`)).toEqual(['Type: Boat', 'In: Garage › Shelf 2', 'Kind: Locations', 'Photos: None', 'Value: $500 – $2,000']);
     expect(chips.find((c) => c.group === 'Value').patch).toEqual({ valueMin: null, valueMax: null });
   });
 });

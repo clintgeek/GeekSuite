@@ -18,7 +18,7 @@ function wendyWithEverything() {
     documents: [{ __typename: 'ThingDocument', id: 'doc1', fileId: 'f3', role: 'receipt', title: 'Receipt', url: '/f3', mime: 'application/pdf', size: 10, originalName: 'r.pdf' }],
     relationships: [
       ...makeThing().relationships,
-      { __typename: 'ThingRelationship', id: 'r-in', kind: 'stored-with', direction: 'in', thing: { __typename: 'ThingSummary', id: 't-trailer', name: 'Trailer', coverThumbUrl: null, type: null } },
+      { __typename: 'ThingRelationship', id: 'r-out', kind: 'accessory-of', direction: 'out', thing: { __typename: 'ThingSummary', id: 't-truck', name: 'Tow truck', coverThumbUrl: null, type: null } },
     ],
   });
 }
@@ -29,7 +29,7 @@ describe('thing ↔ form', () => {
     expect(f).toMatchObject({
       name: 'Wendy',
       typeId: 'ty-boat',
-      placeId: 'pl-shelf',
+      parentId: 'n-garage',
       tags: ['fishing', 'lake'],
       valueAmount: '18500',
       valueAsOf: '2026-01-15',
@@ -38,8 +38,8 @@ describe('thing ↔ form', () => {
       acquiredPrice: '21000',
     });
     expect(f.attrs).toMatchObject({ manufacturer: 'Tracker', lengthFt: '18', hullNumber: 'ABC1234567' });
-    // Only what THIS thing says: the trailer's "stored with" is derived.
-    expect(f.relationships.map((r) => r.thing.name)).toEqual(['Garmin Striker 4']);
+    // Only what THIS thing says: the Garmin's "accessory for Wendy" is derived.
+    expect(f.relationships.map((r) => r.thing.name)).toEqual(['Tow truck']);
     expect(f.dates.map((d) => d.id)).toEqual(['d1', 'd2']);
   });
 
@@ -47,13 +47,13 @@ describe('thing ↔ form', () => {
     const thing = wendyWithEverything();
     const f = thingToForm(thing);
     f.attrs = { ...f.attrs, hullNumber: '', lengthFt: '19' };
-    f.placeId = null;
+    f.parentId = null;
     f.dates = [{ ...f.dates[0], recurEveryMonths: 0 }, { key: 'new-1', id: null, kind: 'insurance', label: '', date: '2027-01-01', recurEveryMonths: 12, notes: '' }, { key: 'new-2', id: null, kind: 'other', label: '', date: '', recurEveryMonths: 0, notes: '' }];
     f.photos = f.photos.map((p) => (p.id === 'p2' ? { ...p, removed: true } : p));
     f.documents = [{ ...f.documents[0], title: '  ' }];
     const input = formToInput(f, boat, thing.attributes);
     expect(input.attributes).toEqual({ hullNumber: null, lengthFt: 19 });
-    expect(input.placeId).toBeNull();
+    expect(input.parentId).toBeNull();
     expect(input.typeId).toBe('ty-boat');
     expect(input.value).toEqual({ amount: 18500, currency: 'USD', asOf: '2026-01-15T00:00:00.000Z' });
     expect(input.acquired).toEqual({ date: '2021-05-01T00:00:00.000Z', from: 'Bass Pro Shops', price: { amount: 21000, currency: 'USD' } });
@@ -61,9 +61,17 @@ describe('thing ↔ form', () => {
       { id: 'd1', kind: 'registration', label: null, date: '2026-10-07T00:00:00.000Z', recurEveryMonths: null, notes: null },
       { kind: 'insurance', label: null, date: '2027-01-01T00:00:00.000Z', recurEveryMonths: 12, notes: null },
     ]);
-    expect(input.relationships).toEqual([{ kind: 'equipped-with', thingId: 't-garmin' }]);
+    expect(input.relationships).toEqual([{ kind: 'accessory-of', thingId: 't-truck' }]);
     expect(input.photos).toEqual([{ id: 'p1', role: 'overview', caption: 'Port side' }]);
     expect(input.documents).toEqual([{ id: 'doc1', role: 'receipt', title: null }]);
+  });
+
+  it('sends parentId only when it changed (an unchanged parent in the Trash would block the save)', () => {
+    const thing = makeThing();
+    const f = thingToForm(thing);
+    expect('parentId' in formToInput(f, boat, thing.attributes)).toBe(false);
+    f.parentId = 'n-van';
+    expect(formToInput(f, boat, thing.attributes).parentId).toBe('n-van');
   });
 
   it('an untouched form sends no attribute changes', () => {

@@ -20,7 +20,7 @@ import { GeekErrorState } from '@geeksuite/ui';
 import PageHeader, { PageFrame } from '../components/PageHeader';
 import ThingPhoto from '../components/ThingPhoto';
 import { statusTone } from '../components/DueLine';
-import { coverSrc, thingPlaceText } from '../components/thingDisplay';
+import { coverSrc, thingWhereText } from '../components/thingDisplay';
 import { thingPath } from '../components/navConfig';
 import { useAttention } from '../hooks/useThingMeta';
 import { DISPLAY_FONT } from '../theme/theme';
@@ -55,7 +55,7 @@ function DueRow({ thing }) {
           <Typography noWrap sx={{ fontWeight: 700, fontSize: '0.9375rem' }}>{thing.name}</Typography>
           <Typography noWrap sx={{ fontSize: '0.8125rem', color: 'text.secondary' }}>
             {due ? `${due.label || dateKindLabel(due.kind)} · ${formatCalendarDate(dueDateOf(due))}` : ''}
-            {thingPlaceText(thing) ? ` · ${thingPlaceText(thing)}` : ''}
+            {thingWhereText(thing) ? ` · ${thingWhereText(thing)}` : ''}
           </Typography>
         </Box>
         {due ? (

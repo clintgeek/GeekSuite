@@ -9,7 +9,8 @@
  *
  *   ?type=<typeId>&type=<typeId>   multi-values are REPEATED params
  *   &tag=fishing&match=all         tagMatch (any is the default)
- *   &in=<placeId>                  places (the server includes descendants)
+ *   &in=<thingId>                  within: inside that location or container, at any depth
+ *   &kind=location                 kinds (none = containers + items: locations aren't inventory)
  *   &due=overdue&due=30d
  *   &missing=receipt&missing=serial
  *   &photos=1&docs=0               hasPhotos / hasDocuments
@@ -20,6 +21,7 @@
  *   &sort=value&dir=asc / &sort=random&seed=812
  */
 import { createFilterCodec, integerBetween } from '@geeksuite/collection';
+import { THING_KINDS } from './where';
 
 export const PAGE_SIZE = 48;
 
@@ -85,7 +87,8 @@ export const LIBRARY_CODEC = createFilterCodec({
   fields: [
     { key: 'q', type: 'search', param: 'q' },
     { key: 'types', type: 'list', param: 'type' },
-    { key: 'places', type: 'list', param: 'in' },
+    { key: 'within', type: 'list', param: 'in' },
+    { key: 'kinds', type: 'list', param: 'kind', values: THING_KINDS },
     { key: 'due', type: 'list', param: 'due', values: DUE_VALUES },
     { key: 'tags', type: 'list', param: 'tag' },
     { key: 'tagMatch', type: 'enum', param: 'match', values: ['any', 'all'], default: 'any', counts: false, requires: ['tags'] },
@@ -126,6 +129,21 @@ export function buildThingsVariables(state, page = 1) {
 /** The `ThingFilterInput` a query string describes (the insurance report reads the library's). */
 export function filterInputFromSearch(search = '') {
   return toFilterInput(readLibraryState(new URLSearchParams(search)).filter);
+}
+
+/**
+ * The insurance report's filter: the library's, but never locations — a
+ * report of houses and shelves means nothing to an adjuster. Asking for
+ * locations only falls back to the default (containers + items).
+ */
+export function reportFilterInputFromSearch(search = '') {
+  const filter = filterInputFromSearch(search);
+  if (!filter?.kinds) return filter;
+  const kinds = filter.kinds.filter((k) => k !== 'location');
+  const next = { ...filter };
+  if (kinds.length) next.kinds = kinds;
+  else delete next.kinds;
+  return Object.keys(next).length ? next : null;
 }
 
 /** A saved view → the search string that applies it. A shuffled view reshuffles each time. */

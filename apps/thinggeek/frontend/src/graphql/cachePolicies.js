@@ -50,7 +50,7 @@ export function removeThingFromLists(cache, thingId) {
 
 /**
  * After a change the counts cannot follow in place (a create, a trash, a
- * restore, a type or place edit): drop the counts and summaries so the next
+ * restore, a type edit or a move): drop the counts and summaries so the next
  * view asks again. The list itself is kept — it is refreshed in place.
  */
 export function resetCounts(client) {

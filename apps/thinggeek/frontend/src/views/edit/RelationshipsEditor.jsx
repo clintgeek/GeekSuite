@@ -1,7 +1,7 @@
 /**
- * The relationships editor. A relationship is stored once, on the thing
- * that says it; this edits the ones THIS thing says ("Wendy is equipped
- * with …"). The ones other things say about it ("… is part of Wendy") are
+ * The accessories editor. A relationship is stored once, on the thing that
+ * says it; this edits the ones THIS thing says ("the lens is an accessory
+ * for …"). The ones other things say about it ("Accessories: the lens") are
  * listed read-only with where to change them — they are derived, and
  * editing them here would store them twice.
  */
@@ -62,7 +62,7 @@ function ThingSearch({ excludeIds, onPick }) {
 let tmp = 0;
 
 export default function RelationshipsEditor({ thingId, rows, onChange, incoming = [], kinds }) {
-  const [kind, setKind] = useState(kinds[0] ?? 'equipped-with');
+  const [kind, setKind] = useState(kinds[0] ?? 'accessory-of');
   const excludeIds = useMemo(() => new Set([thingId, ...rows.filter((r) => r.kind === kind).map((r) => r.thing.id)]), [thingId, rows, kind]);
 
   const add = (thing) => {

@@ -39,7 +39,7 @@ describe('things', () => {
   test('trashed longer than TRASH_DAYS → hard-deleted; young trash and live things kept', async () => {
     const old = thing({ deletedAt: daysAgo(31) });
     const young = thing({ deletedAt: daysAgo(5) });
-    const live = thing({ relationships: [{ _id: newId(), kind: 'equipped-with', thingId: old._id }, { _id: newId(), kind: 'stored-with', thingId: young._id }] });
+    const live = thing({ relationships: [{ _id: newId(), kind: 'accessory-of', thingId: old._id }, { _id: newId(), kind: 'accessory-of', thingId: young._id }] });
     const { Thing, ThingFile } = models([old, young, live], []);
     const out = await runPurge({ Thing, ThingFile, filesRoot: root, now });
     assert.equal(out.things, 1);
@@ -68,9 +68,67 @@ describe('things', () => {
     const { Thing, ThingFile } = models([mine, theirs], []);
     const out = await runPurge({ Thing, ThingFile, filesRoot: root, now });
     assert.equal(out.things, 2);
-    for (const call of Thing.calls.filter(([op]) => ['find', 'deleteMany', 'updateMany', 'exists'].includes(op))) {
+    for (const call of Thing.calls.filter(([op]) => ['find', 'findOneAndDelete', 'deleteMany', 'updateMany', 'exists'].includes(op))) {
       assert.ok(call[1].householdId, `${call[0]} must be household-scoped`);
     }
+  });
+});
+
+describe('containment: a purged thing\'s contents move up', () => {
+  const parentOf = (Thing, doc) => {
+    const row = Thing.docs.find((d) => String(d._id) === String(doc._id));
+    return row.parentId == null ? null : String(row.parentId);
+  };
+
+  test('children (live and trashed) move to the purged thing\'s parent', async () => {
+    const garage = thing({ name: 'Garage' });
+    const van = thing({ name: 'Van', parentId: garage._id, deletedAt: daysAgo(40) });
+    const cables = thing({ name: 'Cables', parentId: van._id });
+    const stereo = thing({ name: 'Stereo', parentId: van._id, deletedAt: daysAgo(3) });
+    const { Thing, ThingFile } = models([garage, van, cables, stereo], []);
+    const out = await runPurge({ Thing, ThingFile, filesRoot: root, now });
+    assert.equal(out.things, 1);
+    assert.equal(parentOf(Thing, cables), String(garage._id));
+    assert.equal(parentOf(Thing, stereo), String(garage._id));
+    assert.equal(parentOf(Thing, garage), null);
+  });
+
+  test('a chain purged in one pass ends at the nearest surviving ancestor', async () => {
+    // Both orders: the purge (sorted by _id) meets the Van first, then the Garage first.
+    for (const vanFirst of [true, false]) {
+      const [a, b] = [newId(), newId()];
+      const [vanId, garageId] = vanFirst ? [a, b] : [b, a];
+      const house = thing({ name: 'House' });
+      const van = thing({ _id: vanId, name: 'Van', parentId: garageId, deletedAt: daysAgo(40) });
+      const garage = thing({ _id: garageId, name: 'Garage', parentId: house._id, deletedAt: daysAgo(40) });
+      const cables = thing({ name: 'Cables', parentId: vanId });
+      const { Thing, ThingFile } = models([house, van, garage, cables], []);
+      const out = await runPurge({ Thing, ThingFile, filesRoot: root, now, batchSize: 1 });
+      assert.equal(out.things, 2);
+      assert.equal(parentOf(Thing, cables), String(house._id), vanFirst ? 'van first' : 'garage first');
+    }
+  });
+
+  test('a top-level purged thing\'s contents go to the top level', async () => {
+    const shed = thing({ name: 'Shed', deletedAt: daysAgo(40) });
+    const mower = thing({ name: 'Mower', parentId: shed._id });
+    const { Thing, ThingFile } = models([shed, mower], []);
+    await runPurge({ Thing, ThingFile, filesRoot: root, now });
+    assert.equal(parentOf(Thing, mower), null);
+  });
+
+  test('young trash keeps its contents; another household\'s things are untouched', async () => {
+    const young = thing({ name: 'Safe', deletedAt: daysAgo(5) });
+    const gun = thing({ name: 'Gun', parentId: young._id });
+    const theirs = thing({ householdId: 'other', name: 'Their thing' });
+    const old = thing({ name: 'Old', deletedAt: daysAgo(40) });
+    // Their row claims to be inside MY purged thing: it must not be moved.
+    const intruder = thing({ householdId: 'other', name: 'Intruder', parentId: old._id });
+    const { Thing, ThingFile } = models([young, gun, theirs, old, intruder], []);
+    await runPurge({ Thing, ThingFile, filesRoot: root, now });
+    assert.equal(parentOf(Thing, gun), String(young._id));
+    assert.equal(parentOf(Thing, intruder), String(old._id));
+    assert.equal(parentOf(Thing, theirs), null);
   });
 });
 

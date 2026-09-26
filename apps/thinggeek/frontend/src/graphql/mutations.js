@@ -1,5 +1,5 @@
 import { gql } from '@apollo/client';
-import { PLACE_FIELDS, THING_DETAIL_FIELDS, THING_TYPE_FIELDS } from './queries';
+import { THING_DETAIL_FIELDS, THING_TYPE_FIELDS } from './queries';
 
 // Every Thing-returning mutation selects the full detail fragment, so the
 // answer updates `Thing:<id>` everywhere (card, row, sheet) with no refetch.
@@ -61,33 +61,6 @@ export const UPDATE_THING_TYPE = gql`
 export const DELETE_THING_TYPE = gql`
   mutation DeleteThingType($id: ID!) {
     deleteThingType(id: $id) {
-      success
-      message
-    }
-  }
-`;
-
-export const CREATE_PLACE = gql`
-  mutation CreatePlace($input: PlaceInput!) {
-    createPlace(input: $input) {
-      ...PlaceFields
-    }
-  }
-  ${PLACE_FIELDS}
-`;
-
-export const UPDATE_PLACE = gql`
-  mutation UpdatePlace($id: ID!, $input: PlaceInput!) {
-    updatePlace(id: $id, input: $input) {
-      ...PlaceFields
-    }
-  }
-  ${PLACE_FIELDS}
-`;
-
-export const DELETE_PLACE = gql`
-  mutation DeletePlace($id: ID!) {
-    deletePlace(id: $id) {
       success
       message
     }

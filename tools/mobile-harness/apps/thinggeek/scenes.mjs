@@ -1,4 +1,7 @@
-// ThingGeek — every surface of the MVP (DOCS/THINGGEEK_PLAN.md "Screens").
+// ThingGeek — every surface of the MVP (DOCS/THINGGEEK_PLAN.md "Screens"),
+// including where things are: the Where tree, a thing's breadcrumb, Move
+// to…, and Contains (the fixtures are a containment graph — House › Garage ›
+// Van › Jumper cables).
 // Deep links wherever the app has one (/thing/:id, /add, /attention…);
 // every scene navigates for itself. Two fixture modes ride on the URL:
 // ?__fixture=empty (first run) and ?__fixture=nonmember (the member gate).
@@ -49,7 +52,7 @@ export const scenes = [
     teardown: (page, h) => h.esc(),
   },
   {
-    // Desktop filter panel with a few filters on: counts, chips, the tree-aware place labels.
+    // Desktop filter panel with a few filters on: counts, chips, the Where facet's tree labels.
     name: '03-filters-desktop',
     goto: '/?in=p-house&missing=receipt',
     viewports: ['desktop'],
@@ -69,6 +72,12 @@ export const scenes = [
     },
   },
   {
+    // Locations aren't inventory: the Kind facet is how the library shows them.
+    name: '03c-library-locations',
+    goto: '/?kind=location',
+    wait: 1600,
+  },
+  {
     name: '04-filters-sheet',
     goto: '/?tag=fishing',
     viewports: ['phone'],
@@ -79,14 +88,14 @@ export const scenes = [
     teardown: (page, h) => h.esc(),
   },
   {
-    // Deep link: the library underneath, Wendy's page on top — gallery, readiness, dates, relationships.
+    // Deep link: the library underneath, Wendy's page on top — gallery, breadcrumb, Contains, readiness.
     name: '05-detail',
     goto: '/thing/th1',
     wait: 1800,
     teardown: (page, h) => h.esc(),
   },
   {
-    // Further down Wendy's page: Details (masked hull + registration), Dates, Relationships.
+    // Further down Wendy's page: Details (masked hull + registration), Dates, Accessories.
     name: '05b-detail-sections',
     goto: '/thing/th1',
     wait: 1800,
@@ -126,9 +135,85 @@ export const scenes = [
     teardown: (page, h) => h.esc(),
   },
   {
-    // The fish finder: the inverse relationship ("Equipped on: Wendy") and its gaps.
-    name: '06c-detail-inverse',
-    goto: '/thing/th2',
+    // The Van: breadcrumb House › Garage, Move to…, and what it Contains.
+    name: '05c-detail-container',
+    goto: '/thing/th13',
+    wait: 1800,
+    teardown: (page, h) => h.esc(),
+  },
+  {
+    // The jumper cables: House › Garage › Van, each crumb a link.
+    name: '05d-detail-breadcrumb',
+    goto: '/thing/th14',
+    wait: 1800,
+    async setup(page) {
+      if (!(await page.getByRole('navigation', { name: 'Where it is' }).count())) throw new Error('no breadcrumb');
+    },
+    teardown: (page, h) => h.esc(),
+  },
+  {
+    // A location's own page: the Garage and everything directly in it.
+    name: '05e-detail-location',
+    goto: '/thing/p-garage',
+    wait: 1800,
+    async setup(page, h) {
+      const d = page.locator('#contains-heading');
+      if (!(await d.count())) return false;
+      await d.evaluate((el) => el.scrollIntoView({ block: 'start' }));
+      await h.settle(300);
+    },
+    teardown: (page, h) => h.esc(),
+  },
+  {
+    // Move to…: every thing but the Van and what's inside it.
+    name: '05f-move-picker',
+    goto: '/thing/th13',
+    wait: 1800,
+    async setup(page, h) {
+      if (!(await click(page, h, page.getByTestId('move-to'), 800))) return false;
+      if (!(await page.getByTestId('move-list').count())) throw new Error('the move picker did not open');
+    },
+    teardown: async (page, h) => {
+      await h.esc();
+      await h.esc();
+    },
+  },
+  {
+    // Inside something in the Trash: the lures stay in the trashed tackle box.
+    name: '05g-inside-trash',
+    goto: '/thing/th17',
+    wait: 1800,
+    async setup(page) {
+      if (!(await page.getByTestId('inside-trash').count())) throw new Error('no inside-the-Trash note');
+    },
+    teardown: (page, h) => h.esc(),
+  },
+  {
+    // The gun safe: a container inside the Office, holding the firearms.
+    name: '05h-detail-safe',
+    goto: '/thing/p-safe',
+    wait: 1800,
+    teardown: (page, h) => h.esc(),
+  },
+  {
+    // Trashing a container says what happens to what's inside.
+    name: '05i-trash-container',
+    goto: '/thing/th13',
+    wait: 1800,
+    async setup(page, h) {
+      if (!(await click(page, h, page.getByRole('button', { name: 'More actions' }), 700))) return false;
+      if (!(await click(page, h, page.getByText('Move to Trash', { exact: true }), 700))) return false;
+      if (!(await page.getByTestId('trash-contents-note').count())) throw new Error('no contents note');
+    },
+    teardown: async (page, h) => {
+      await h.esc();
+      await h.esc();
+    },
+  },
+  {
+    // The lens: an accessory of the camera, wherever each is kept.
+    name: '06c-detail-accessory',
+    goto: '/thing/th16',
     wait: 1800,
     async setup(page, h) {
       const d = page.locator('#relationships-heading');
@@ -185,6 +270,34 @@ export const scenes = [
     teardown: (page, h) => h.esc(),
   },
   {
+    // The add flow's where step: locations and containers only, with a new location inline.
+    name: '07d-add-where-step',
+    goto: '/add',
+    wait: 1200,
+    async setup(page, h) {
+      if (!(await click(page, h, page.getByRole('button', { name: /Skip — no photo yet/ }), 500))) return false;
+      if (!(await click(page, h, page.getByTestId('type-card').filter({ hasText: 'Tool' }), 600))) return false;
+      if (!(await click(page, h, page.getByRole('button', { name: /^Where it is: / }), 700))) return false;
+    },
+    teardown: async (page, h) => {
+      await h.esc();
+      await h.esc();
+    },
+  },
+  {
+    // "Add here" from the Van: the add flow arrives already pointed at it.
+    name: '07e-add-here',
+    goto: '/thing/th13',
+    wait: 1800,
+    async setup(page, h) {
+      if (!(await click(page, h, page.getByTestId('add-here'), 800))) return false;
+      if (!(await click(page, h, page.getByRole('button', { name: /Skip — no photo yet/ }), 500))) return false;
+      if (!(await click(page, h, page.getByTestId('type-card').filter({ hasText: 'Tool' }), 600))) return false;
+      if (!(await page.getByRole('button', { name: 'Where it is: House › Garage › Van. Change' }).count())) throw new Error('Add here did not preset the Van');
+    },
+    teardown: (page, h) => h.esc(),
+  },
+  {
     name: '08-edit-form',
     goto: '/thing/th1',
     wait: 1800,
@@ -214,14 +327,46 @@ export const scenes = [
     },
   },
   { name: '09-attention', goto: '/attention', wait: 1500 },
-  { name: '10-places', goto: '/places', wait: 1400 },
+  // Where: the containment tree (it replaced Places; /places redirects here).
+  { name: '10-where', goto: '/where', wait: 1400 },
   {
-    name: '10b-place-delete',
-    goto: '/places',
+    // Expanded to the items kept directly in the Van and the safe; the two groups below opened.
+    name: '10b-where-expanded',
+    goto: '/where',
+    wait: 1400,
+    async setup(page, h) {
+      if (!(await click(page, h, page.getByRole('button', { name: /^Show .* kept directly in Van$/ }), 400))) return false;
+      await click(page, h, page.getByRole('button', { name: /^Show .* kept directly in Gun safe$/ }), 400);
+      await click(page, h, page.getByTestId('where-nowhere').getByRole('button').first(), 300);
+      await click(page, h, page.getByTestId('where-in-trash').getByRole('button').first(), 300);
+    },
+  },
+  {
+    name: '10c-where-menu',
+    goto: '/where',
+    wait: 1400,
+    async setup(page, h) {
+      if (!(await click(page, h, page.getByRole('button', { name: 'Garage: more' }), 500))) return false;
+    },
+    teardown: (page, h) => h.esc(),
+  },
+  {
+    name: '10d-where-move',
+    goto: '/where',
+    wait: 1400,
+    async setup(page, h) {
+      if (!(await click(page, h, page.getByRole('button', { name: 'Van: more' }), 400))) return false;
+      if (!(await click(page, h, page.getByRole('menuitem', { name: 'Move to…' }), 700))) return false;
+    },
+    teardown: (page, h) => h.esc(),
+  },
+  {
+    name: '10e-where-add-location',
+    goto: '/where',
     wait: 1400,
     async setup(page, h) {
       if (!(await click(page, h, page.getByRole('button', { name: 'Garage: more' }), 400))) return false;
-      if (!(await click(page, h, page.getByRole('menuitem', { name: 'Delete' }), 600))) return false;
+      if (!(await click(page, h, page.getByRole('menuitem', { name: 'Add a location inside' }), 600))) return false;
     },
     teardown: (page, h) => h.esc(),
   },

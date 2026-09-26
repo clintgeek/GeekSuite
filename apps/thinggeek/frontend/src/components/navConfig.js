@@ -15,7 +15,7 @@ export const APP_ID = 'thinggeek';
 export const NAV = {
   library: 'library',
   attention: 'attention',
-  places: 'places',
+  where: 'where',
   types: 'types',
   insurance: 'insurance',
   trash: 'trash',
@@ -28,7 +28,7 @@ export const ROUTES = [
   { path: '/thing/:id', navId: NAV.library, title: 'Library', library: true, overlay: 'detail' },
   { path: '/add', navId: NAV.library, title: 'Library', library: true, overlay: 'add' },
   { path: '/attention', navId: NAV.attention, title: 'Needs attention' },
-  { path: '/places', navId: NAV.places, title: 'Places' },
+  { path: '/where', navId: NAV.where, title: 'Where' },
   { path: '/types', navId: NAV.types, title: 'Types' },
   { path: '/insurance', navId: NAV.insurance, title: 'Insurance report' },
   { path: '/trash', navId: NAV.trash, title: 'Trash' },

@@ -6,8 +6,9 @@
  *   - changing typeId keeps attributes the new type also defines, drops the rest;
  *   - relationships: foreign / trashed / self targets rejected, duplicates collapse;
  *   - photos/documents input only edits existing entries;
- *   - places: parent in household, depth ≤ bounds.placeDepth, no cycles;
- *     deletePlace lifts children and un-places things;
+ *   - containment (parentId): the parent is a live thing of the household,
+ *     never itself or anything inside it (no cycles), depth ≤
+ *     bounds.containDepth; path root→parent; contents by kind then name;
  *   - rendered output: fields in type order, identifier flag, missing[], URLs.
  */
 import mongoose from 'mongoose';
@@ -21,11 +22,11 @@ import {
   errorCode,
   starterTypes,
   createThing,
-  createPlace,
+  createLocation,
+  move,
   insertFile,
   attach,
   Thing,
-  Place,
   CREATE_THING,
   UPDATE_THING,
   THING_FIELDS,
@@ -176,13 +177,13 @@ describe('relationships', () => {
     const finder = await createThing({ name: 'Fish finder' });
     const file = await insertFile();
     await attach(finder.id, { photos: [{ fileId: file._id, role: 'overview' }] });
-    const w = (await ok(UPDATE_THING, { id: wendy.id, input: { relationships: [{ kind: 'equipped-with', thingId: finder.id }] } })).updateThing;
+    const w = (await ok(UPDATE_THING, { id: wendy.id, input: { relationships: [{ kind: 'accessory-of', thingId: finder.id }] } })).updateThing;
     expect(w.relationships).toEqual([
-      expect.objectContaining({ kind: 'equipped-with', direction: 'out', thing: expect.objectContaining({ name: 'Fish finder', coverThumbUrl: `/api/files/${file._id}/thumb` }) }),
+      expect.objectContaining({ kind: 'accessory-of', direction: 'out', thing: expect.objectContaining({ name: 'Fish finder', coverThumbUrl: `/api/files/${file._id}/thumb` }) }),
     ]);
     const f = (await ok(`query($id: ID!) { thing(id: $id) { ${THING_FIELDS} } }`, { id: finder.id })).thing;
     expect(f.relationships).toEqual([
-      { id: expect.stringMatching(/^in-/), kind: 'equipped-with', direction: 'in', thing: { id: wendy.id, name: 'Wendy', coverThumbUrl: null, type: null } },
+      { id: expect.stringMatching(/^in-/), kind: 'accessory-of', direction: 'in', thing: { id: wendy.id, name: 'Wendy', coverThumbUrl: null, type: null } },
     ]);
   });
 
@@ -192,21 +193,24 @@ describe('relationships', () => {
     const gone = await createThing({ name: 'Gone' });
     await ok(`mutation($id: ID!) { deleteThing(id: $id) { success } }`, { id: gone.id });
     for (const thingId of [a.id, gone.id, String(new mongoose.Types.ObjectId()), 'not-an-id']) {
-      expect(await errorCode(UPDATE_THING, { id: a.id, input: { relationships: [{ kind: 'stored-with', thingId }] } })).toBe('BAD_USER_INPUT');
+      expect(await errorCode(UPDATE_THING, { id: a.id, input: { relationships: [{ kind: 'accessory-of', thingId }] } })).toBe('BAD_USER_INPUT');
     }
-    expect(await errorCode(UPDATE_THING, { id: a.id, input: { relationships: [{ kind: 'married-to', thingId: b.id }] } })).toBe('BAD_USER_INPUT');
+    // The kinds retired with containment (2026-09-26) are unknown now.
+    for (const kind of ['married-to', 'equipped-with', 'part-of', 'stored-with']) {
+      expect(await errorCode(UPDATE_THING, { id: a.id, input: { relationships: [{ kind, thingId: b.id }] } })).toBe('BAD_USER_INPUT');
+    }
     const dup = (await ok(UPDATE_THING, {
       id: a.id,
-      input: { relationships: [{ kind: 'stored-with', thingId: b.id }, { kind: 'stored-with', thingId: b.id }, { kind: 'part-of', thingId: b.id }] },
+      input: { relationships: [{ kind: 'accessory-of', thingId: b.id }, { kind: 'accessory-of', thingId: b.id }] },
     })).updateThing;
-    expect(dup.relationships.map((r) => r.kind)).toEqual(['stored-with', 'part-of']);
-    expect((await createErr({ name: 'C', relationships: [{ kind: 'part-of', thingId: gone.id }] })).extensions.code).toBe('BAD_USER_INPUT');
+    expect(dup.relationships.map((r) => r.kind)).toEqual(['accessory-of']);
+    expect((await createErr({ name: 'C', relationships: [{ kind: 'accessory-of', thingId: gone.id }] })).extensions.code).toBe('BAD_USER_INPUT');
   });
 
   test('a relationship whose target is later trashed is hidden, and returns on restore', async () => {
     const a = await createThing({ name: 'A' });
     const b = await createThing({ name: 'B' });
-    await ok(UPDATE_THING, { id: a.id, input: { relationships: [{ kind: 'stored-with', thingId: b.id }] } });
+    await ok(UPDATE_THING, { id: a.id, input: { relationships: [{ kind: 'accessory-of', thingId: b.id }] } });
     await ok(`mutation($id: ID!) { deleteThing(id: $id) { success } }`, { id: b.id });
     const q = `query($id: ID!) { thing(id: $id) { relationships { direction thing { name } } } }`;
     expect((await ok(q, { id: a.id })).thing.relationships).toEqual([]);
@@ -264,71 +268,112 @@ describe('photos, documents and missing[]', () => {
   });
 });
 
-describe('places', () => {
-  const PLACES = `query { places { id name parentId path { name } directCount totalCount } }`;
-  const UPDATE_PLACE = `mutation($id: ID!, $input: PlaceInput!) { updatePlace(id: $id, input: $input) { id parentId } }`;
+describe('containment', () => {
+  const TREE = `query { thingTree { name parentId kind childCount itemCount } }`;
+  const detailsOf = (res) => res.errors?.[0]?.extensions?.details ?? null;
 
-  test('path root→self, and counts include descendants but not trashed things', async () => {
-    const house = await createPlace('House');
-    const garage = await createPlace('Garage', house.id);
-    const shelf = await createPlace('Shelf 2', garage.id);
-    await createThing({ name: 'Drill', placeId: shelf.id });
-    await createThing({ name: 'Car', placeId: garage.id });
-    const gone = await createThing({ name: 'Old', placeId: garage.id });
+  test('path is root → parent; contents are live things directly inside, locations, containers, then items', async () => {
+    const types = await starterTypes();
+    const house = await createLocation('House');
+    const garage = await createLocation('Garage', house.id);
+    const van = await createThing({ name: 'Van', typeId: types.vehicle.id, parentId: garage.id });
+    const cables = await createThing({ name: 'Jumper cables', typeId: types.tool.id, parentId: van.id });
+    await createThing({ name: 'Aftermarket stereo', typeId: types.electronics.id, parentId: van.id });
+    await createThing({ name: 'Axe', typeId: types.tool.id, parentId: garage.id });
+    await createLocation('Shelf', garage.id);
+    const gone = await createThing({ name: 'Old rake', parentId: garage.id });
     await ok(`mutation($id: ID!) { deleteThing(id: $id) { success } }`, { id: gone.id });
-    const places = (await ok(PLACES)).places;
-    expect(places.map((p) => [p.name, p.path.map((x) => x.name).join(' > '), p.directCount, p.totalCount])).toEqual([
-      ['House', 'House', 0, 2],
-      ['Garage', 'House > Garage', 1, 2],
-      ['Shelf 2', 'House > Garage > Shelf 2', 1, 1],
+
+    expect(cables.path.map((p) => [p.name, p.kind])).toEqual([
+      ['House', 'location'],
+      ['Garage', 'location'],
+      ['Van', 'container'],
     ]);
-    const t = (await ok(`query($id: ID!) { thing(id: $id) { place { name totalCount path { name } } } }`, { id: (await Thing.findOne({ name: 'Drill' }))._id.toString() })).thing;
-    expect(t.place).toEqual({ name: 'Shelf 2', totalCount: 1, path: [{ name: 'House' }, { name: 'Garage' }, { name: 'Shelf 2' }] });
+    expect(cables).toMatchObject({ kind: 'item', parentId: van.id, contentsCount: 0 });
+    const g = (await ok(`query($id: ID!) { thing(id: $id) { kind missing contentsCount contents { name kind } } }`, { id: garage.id })).thing;
+    expect(g.kind).toBe('location');
+    // Not inventory: no photo, no value, no receipt — and nothing "missing".
+    expect(g.missing).toEqual([]);
+    expect(g.contentsCount).toBe(3);
+    expect(g.contents).toEqual([
+      { name: 'Shelf', kind: 'location' },
+      { name: 'Van', kind: 'container' },
+      { name: 'Axe', kind: 'item' },
+    ]);
+    // The tree: every live thing, depth-first; itemCount is inventory inside (not the Shelf).
+    expect((await ok(TREE)).thingTree.map((n) => [n.name, n.kind, n.childCount, n.itemCount])).toEqual([
+      ['House', 'location', 1, 4],
+      ['Garage', 'location', 3, 4],
+      ['Axe', 'item', 0, 0],
+      ['Shelf', 'location', 0, 0],
+      ['Van', 'container', 2, 2],
+      ['Aftermarket stereo', 'item', 0, 0],
+      ['Jumper cables', 'item', 0, 0],
+    ]);
   });
 
-  test('cycles are refused (self and descendant)', async () => {
-    const a = await createPlace('A');
-    const b = await createPlace('B', a.id);
-    const c = await createPlace('C', b.id);
-    expect(await errorCode(UPDATE_PLACE, { id: a.id, input: { parentId: a.id } })).toBe('BAD_USER_INPUT');
-    expect(await errorCode(UPDATE_PLACE, { id: a.id, input: { parentId: c.id } })).toBe('BAD_USER_INPUT');
-    expect((await Place.findById(a.id).lean()).parentId).toBeNull();
-    // A legal move: C up to the root, then under A.
-    expect((await ok(UPDATE_PLACE, { id: c.id, input: { parentId: null } })).updatePlace.parentId).toBeNull();
-    expect((await ok(UPDATE_PLACE, { id: c.id, input: { parentId: a.id } })).updatePlace.parentId).toBe(a.id);
+  test('moving a container moves everything in it', async () => {
+    const types = await starterTypes();
+    const house = await createLocation('House');
+    const garage = await createLocation('Garage', house.id);
+    const driveway = await createLocation('Driveway', house.id);
+    const van = await createThing({ name: 'Van', typeId: types.vehicle.id, parentId: garage.id });
+    const cables = await createThing({ name: 'Jumper cables', typeId: types.tool.id, parentId: van.id });
+    expect((await move(van.id, driveway.id)).errors).toBeNull();
+    const t = (await ok(`query($id: ID!) { thing(id: $id) { path { name } } }`, { id: cables.id })).thing;
+    expect(t.path.map((p) => p.name)).toEqual(['House', 'Driveway', 'Van']);
+    // Anything may be a parent via Move — even an item — and null is the top level.
+    const drill = await createThing({ name: 'Drill', typeId: types.tool.id });
+    expect((await move(cables.id, drill.id)).errors).toBeNull();
+    expect((await move(cables.id, null)).data.updateThing.parentId).toBeNull();
   });
 
-  test(`depth is bounded at ${bounds.placeDepth.max}, for creates and for moving a subtree`, async () => {
+  test('no cycles: not into itself, not into anything inside it', async () => {
+    const a = await createLocation('A');
+    const b = await createLocation('B', a.id);
+    const c = await createLocation('C', b.id);
+    const self = await move(a.id, a.id);
+    expect(detailsOf(self)).toEqual([{ path: 'input.parentId', message: 'a thing cannot be inside itself' }]);
+    const down = await move(a.id, c.id);
+    expect(detailsOf(down)).toEqual([{ path: 'input.parentId', message: 'a thing cannot move inside something it contains' }]);
+    expect(detailsOf(await move(a.id, b.id))).toEqual([{ path: 'input.parentId', message: 'a thing cannot move inside something it contains' }]);
+    expect((await Thing.findById(a.id).lean()).parentId).toBeNull();
+    // A legal move: C up to the top, then under A.
+    expect((await move(c.id, null)).errors).toBeNull();
+    expect((await move(c.id, a.id)).data.updateThing.parentId).toBe(a.id);
+  });
+
+  test(`depth is capped at ${bounds.containDepth.max}, for creates and for moving a subtree`, async () => {
     let parent = null;
     const chain = [];
-    for (let i = 1; i <= bounds.placeDepth.max; i += 1) {
-      parent = await createPlace(`L${i}`, parent?.id ?? null);
+    for (let i = 1; i <= bounds.containDepth.max; i += 1) {
+      parent = await createLocation(`L${i}`, parent?.id ?? null);
       chain.push(parent);
     }
-    expect(await errorCode(`mutation($input: PlaceInput!) { createPlace(input: $input) { id } }`, { input: { name: 'too deep', parentId: parent.id } })).toBe(
-      'BAD_USER_INPUT'
-    );
-    // A two-level subtree can hang at most at depth max-2.
-    const top = await createPlace('Box');
-    await createPlace('Inner', top.id);
-    expect(await errorCode(UPDATE_PLACE, { id: top.id, input: { parentId: chain[bounds.placeDepth.max - 2].id } })).toBe('BAD_USER_INPUT');
-    expect((await ok(UPDATE_PLACE, { id: top.id, input: { parentId: chain[bounds.placeDepth.max - 3].id } })).updatePlace.parentId).toBe(
-      chain[bounds.placeDepth.max - 3].id
-    );
+    const tooDeep = await run(CREATE_THING, { input: { name: 'too deep', parentId: parent.id } });
+    expect(tooDeep.errors[0].extensions.details).toEqual([
+      { path: 'input.parentId', message: `things nest at most ${bounds.containDepth.max} deep` },
+    ]);
+    // A two-level subtree can hang at most under depth max-2.
+    const box = await createLocation('Box');
+    await createLocation('Inner', box.id);
+    expect(await errorCode(UPDATE_THING, { id: box.id, input: { parentId: chain[bounds.containDepth.max - 2].id } })).toBe('BAD_USER_INPUT');
+    expect((await move(box.id, chain[bounds.containDepth.max - 3].id)).data.updateThing.parentId).toBe(chain[bounds.containDepth.max - 3].id);
   });
 
-  test('deletePlace lifts children to its parent and un-places its things (trashed too)', async () => {
-    const house = await createPlace('House');
-    const garage = await createPlace('Garage', house.id);
-    const shelf = await createPlace('Shelf', garage.id);
-    const car = await createThing({ name: 'Car', placeId: garage.id });
-    const old = await createThing({ name: 'Old', placeId: garage.id });
-    const drill = await createThing({ name: 'Drill', placeId: shelf.id });
-    await ok(`mutation($id: ID!) { deleteThing(id: $id) { success } }`, { id: old.id });
-    expect((await ok(`mutation($id: ID!) { deletePlace(id: $id) { success } }`, { id: garage.id })).deletePlace.success).toBe(true);
-    expect(String((await Place.findById(shelf.id).lean()).parentId)).toBe(house.id);
-    expect((await Thing.findById(car.id).lean()).placeId).toBeNull();
-    expect((await Thing.findById(old.id).lean()).placeId).toBeNull();
-    expect(String((await Thing.findById(drill.id).lean()).placeId)).toBe(shelf.id);
+  test('the parent must exist and not be in the Trash', async () => {
+    const t = await createThing({ name: 'Cables' });
+    const van = await createThing({ name: 'Van' });
+    await ok(`mutation($id: ID!) { deleteThing(id: $id) { success } }`, { id: van.id });
+    for (const [parentId, message] of [
+      [van.id, 'that thing is in the Trash'],
+      [String(new mongoose.Types.ObjectId()), 'thing not found'],
+      ['not-an-id', null],
+    ]) {
+      const res = await move(t.id, parentId);
+      expect(res.errors[0].extensions.code).toBe('BAD_USER_INPUT');
+      if (message) expect(detailsOf(res)).toEqual([{ path: 'input.parentId', message }]);
+    }
+    expect((await Thing.findById(t.id).lean()).parentId).toBeNull();
   });
 });

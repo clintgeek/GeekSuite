@@ -5,7 +5,10 @@
  *              say what the photo shows (overview / ID plate / receipt).
  *              Optional — "Skip, no photo yet".
  *   2. Type    a grid of the household's types (the starter types to begin).
- *   3. Name    + where it lives (the tree picker, with create-inline) + tags.
+ *   3. Name    + where it is (locations and containers only, with a new
+ *              location made inline) + tags. "Add here" on a thing page or
+ *              the Where page arrives with it already chosen
+ *              (location.state.parentId).
  *
  * Create → the thing is made, the sheet lands on its page, and the photo
  * uploads there with a progress bar (hooks/useUploads.jsx — it keeps going
@@ -22,7 +25,7 @@ import {
 } from '@mui/icons-material';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { GeekDialog, useToast } from '@geeksuite/ui';
-import PlacePicker from '../../components/PlacePicker';
+import WherePicker from '../../components/WherePicker';
 import RoleChips from '../../components/RoleChips';
 import TagInput from '../../components/TagInput';
 import TypeIcon from '../../components/TypeIcon';
@@ -37,7 +40,7 @@ import { hasValue } from '../../utils/identifiers';
 import AttributeField from '../edit/AttributeField';
 import { PHOTO_ACCEPT } from '../detail/AddFileSheet';
 
-const STEPS = ['Photo', 'Type', 'Name & place'];
+const STEPS = ['Photo', 'Type', 'Name & where'];
 const ADD_ROLES = ['overview', 'id-plate', 'receipt'];
 
 function StepHeader({ step }) {
@@ -197,7 +200,7 @@ export function TypeStep({ types, loading, value, onPick }) {
   );
 }
 
-export function NameStep({ type, name, onName, placeId, onPlace, tags, onTags, error, attrs = {}, onAttr, attrErrors = {} }) {
+export function NameStep({ type, name, onName, parentId, onParent, tags, onTags, error, attrs = {}, onAttr, attrErrors = {} }) {
   const required = (type?.fields ?? []).filter((f) => f.required);
   return (
     <>
@@ -216,7 +219,7 @@ export function NameStep({ type, name, onName, placeId, onPlace, tags, onTags, e
         {required.map((f) => (
           <AttributeField key={f.key} field={f} value={attrs[f.key]} onChange={(v) => onAttr(f.key, v)} error={attrErrors[f.key]} />
         ))}
-        <PlacePicker value={placeId} onChange={onPlace} />
+        <WherePicker value={parentId} onChange={onParent} />
         <TagInput value={tags} onChange={onTags} />
       </Box>
     </>
@@ -235,7 +238,7 @@ export default function AddThing() {
   const [role, setRole] = useState('overview');
   const [typeId, setTypeId] = useState(null);
   const [name, setName] = useState('');
-  const [placeId, setPlaceId] = useState(null);
+  const [parentId, setParentId] = useState(() => location.state?.parentId ?? null);
   const [tags, setTags] = useState([]);
   const [busy, setBusy] = useState(false);
   const [nameError, setNameError] = useState('');
@@ -263,7 +266,7 @@ export default function AddThing() {
     if (Object.keys(missingRequired).length) return;
     setBusy(true);
     try {
-      const input = { name: name.trim(), typeId: typeId || null, placeId: placeId || null, tags };
+      const input = { name: name.trim(), typeId: typeId || null, parentId: parentId || null, tags };
       if (required.length) input.attributes = buildAttributes(required, attrs);
       const thing = await createThing(input, { search: location.search });
       if (!thing?.id) throw new Error("That didn't save. Try again.");
@@ -347,8 +350,8 @@ export default function AddThing() {
               setName(v);
               if (nameError) setNameError('');
             }}
-            placeId={placeId}
-            onPlace={setPlaceId}
+            parentId={parentId}
+            onParent={setParentId}
             tags={tags}
             onTags={setTags}
             error={nameError}

@@ -2,8 +2,13 @@
  * The Trash purge — the ONLY place ThingGeek deletes bytes
  * (DOCS/THINGGEEK_PLAN.md: a deleted Thing sits in Trash for TRASH_DAYS).
  *
- *   (a) Things whose deletedAt is older than TRASH_DAYS are hard-deleted, and
- *       other things' relationship edges pointing at them are pulled.
+ *   (a) Things whose deletedAt is older than TRASH_DAYS are hard-deleted,
+ *       other things' relationship edges pointing at them are pulled, and
+ *       their contents (things whose parentId is the purged thing, trashed
+ *       or not) move up to the purged thing's parent — "Containment" in the
+ *       plan: purging the Van leaves the jumper cables in the Garage. A chain
+ *       purged in one pass ends at the nearest surviving ancestor (or the
+ *       top level).
  *   (b) File records that NO thing in the household references (trashed
  *       things included — they own their files until they are purged) and
  *       that have not been touched for TRASH_DAYS are deleted, record first,
@@ -49,15 +54,26 @@ async function purgeThings({ Thing, householdId, cutoff, batchSize }) {
     const stale = { householdId, deletedAt: { $ne: null, $lt: cutoff } };
     const batch = await Thing.find(stale, { _id: 1 }).sort({ _id: 1 }).limit(batchSize).lean();
     if (!batch.length) break;
-    const ids = batch.map((t) => t._id);
-    // The filter re-asserts "still trashed, still old": a restore that landed
-    // since the find is honoured.
-    const res = await Thing.deleteMany({ ...stale, _id: { $in: ids } });
-    deleted += res?.deletedCount || 0;
-    await Thing.updateMany(
-      { householdId, 'relationships.thingId': { $in: ids } },
-      { $pull: { relationships: { thingId: { $in: ids } } } },
-    );
+    const ids = [];
+    // One at a time, so a chain purged in the same pass (Garage and the Van
+    // in it) is right: each delete reads the thing's CURRENT parent, which an
+    // earlier delete in this pass may already have moved up.
+    for (const { _id } of batch) {
+      // The filter re-asserts "still trashed, still old": a restore that
+      // landed since the find is honoured.
+      const gone = await Thing.findOneAndDelete({ ...stale, _id }, { projection: { _id: 1, parentId: 1 } });
+      if (!gone) continue;
+      deleted += 1;
+      ids.push(gone._id);
+      // Its contents (trashed or not) move up to where it was.
+      await Thing.updateMany({ householdId, parentId: gone._id }, { $set: { parentId: gone.parentId ?? null } });
+    }
+    if (ids.length) {
+      await Thing.updateMany(
+        { householdId, 'relationships.thingId': { $in: ids } },
+        { $pull: { relationships: { thingId: { $in: ids } } } },
+      );
+    }
     if (batch.length < batchSize) break;
   }
   return deleted;

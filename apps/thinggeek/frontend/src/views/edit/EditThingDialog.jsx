@@ -12,11 +12,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Button, InputAdornment, MenuItem, TextField, Typography } from '@mui/material';
 import { GeekDialog, useToast } from '@geeksuite/ui';
-import PlacePicker from '../../components/PlacePicker';
+import WherePicker from '../../components/WherePicker';
 import TagInput from '../../components/TagInput';
 import TypeIcon from '../../components/TypeIcon';
 import { useThingActions } from '../../hooks/useThingActions';
-import { useThingTypes, useVocabulary } from '../../hooks/useThingMeta';
+import { useThingTree, useThingTypes, useVocabulary } from '../../hooks/useThingMeta';
+import { subtreeIds } from '../../utils/where';
 import { attributeToForm, buildAttributePatch } from '../../utils/attributes';
 import { calendarDateToUtcIso, utcIsoToInputValue } from '../../utils/dates';
 import { moneyAmount, parseMoneyInput } from '../../utils/money';
@@ -39,7 +40,8 @@ export function thingToForm(thing) {
   return {
     name: thing?.name ?? '',
     typeId: thing?.type?.id ?? '',
-    placeId: thing?.place?.id ?? null,
+    parentId: thing?.parentId ?? null,
+    originalParentId: thing?.parentId ?? null,
     tags: thing?.tags ?? [],
     attrs,
     valueAmount: moneyText(thing?.value),
@@ -76,7 +78,9 @@ export function formToInput(form, type, original = {}) {
   return {
     name: form.name.trim(),
     typeId: form.typeId || null,
-    placeId: form.placeId || null,
+    // Only when it changed: re-sending an unchanged parent would be refused
+    // while that parent is in the Trash, and block saving anything else.
+    ...((form.parentId || null) !== (form.originalParentId || null) ? { parentId: form.parentId || null } : {}),
     tags: form.tags,
     attributes: buildAttributePatch(type?.fields ?? [], form.attrs, original),
     value: { amount: value, currency: 'USD', asOf: calendarDateToUtcIso(form.valueAsOf) },
@@ -132,6 +136,9 @@ export default function EditThingDialog({ open, onClose, thing, focus }) {
   const { notify } = useToast();
   const vocab = useVocabulary();
   const { types, typesById } = useThingTypes();
+  const { nodes } = useThingTree();
+  // Not inside itself or anything it holds (the gateway refuses a cycle too).
+  const exclude = useMemo(() => (thing?.id ? subtreeIds(nodes, thing.id) : undefined), [nodes, thing?.id]);
   const { updateThing } = useThingActions();
   const [form, setForm] = useState(() => thingToForm(thing));
   const [busy, setBusy] = useState(false);
@@ -232,7 +239,7 @@ export default function EditThingDialog({ open, onClose, thing, focus }) {
                 ))}
                 {!types.length && thing?.type ? <MenuItem value={thing.type.id}>{thing.type.name}</MenuItem> : null}
               </TextField>
-              <PlacePicker value={form.placeId} onChange={set('placeId')} />
+              <WherePicker value={form.parentId} onChange={set('parentId')} exclude={exclude} />
             </Box>
             {droppedOnSwitch.length ? (
               <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary' }}>
@@ -269,7 +276,7 @@ export default function EditThingDialog({ open, onClose, thing, focus }) {
           <DatesEditor rows={form.dates} onChange={set('dates')} kinds={vocab.dateKinds} />
         </Group>
 
-        <Group id="relationships" title="Relationships">
+        <Group id="relationships" title="Accessories">
           <RelationshipsEditor
             thingId={thing?.id}
             rows={form.relationships}

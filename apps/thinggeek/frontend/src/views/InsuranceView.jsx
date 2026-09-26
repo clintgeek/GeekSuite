@@ -39,9 +39,9 @@ import { formatCalendarDate } from '../utils/dates';
 import { activeChips } from '../utils/facets';
 import { buildInsuranceCsv, downloadCsv, fetchAllThings, hasReceipt } from '../utils/insuranceCsv';
 import { lastLibrarySearch } from '../utils/lastLibrary';
-import { filterInputFromSearch, isNarrowed, readLibraryState } from '../utils/libraryFilter';
+import { isNarrowed, readLibraryState, reportFilterInputFromSearch } from '../utils/libraryFilter';
 import { formatMoney, moneyAmount } from '../utils/money';
-import { placeLabel } from '../utils/places';
+import { whereLabel } from '../utils/where';
 import { hasValue } from '../utils/identifiers';
 import PrintReport from './PrintReport';
 
@@ -75,7 +75,7 @@ function ReportRow({ thing }) {
           {thing.name}
         </Link>
         <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary' }}>{[thing.type?.name, mm].filter(Boolean).join(' · ') || '—'}</Typography>
-        {thing.place ? <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>{placeLabel(thing.place)}</Typography> : null}
+        {whereLabel(thing) ? <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>{whereLabel(thing)}</Typography> : null}
         <Box sx={{ display: { xs: 'block', md: 'none' }, mt: 0.75 }}>
           <RowFacts ids={ids} value={value} thing={thing} price={price} receipt={receipt} />
         </Box>
@@ -163,7 +163,8 @@ export default function InsuranceView() {
   const lastSearch = lastLibrarySearch();
   const lastNarrowed = lastSearch ? isNarrowed(readLibraryState(new URLSearchParams(lastSearch))) : false;
   const search = ownNarrowed ? location.search : '';
-  const filter = useMemo(() => filterInputFromSearch(search), [search]);
+  // The library's filter, minus locations: the report is inventory (the gateway's totals insist too).
+  const filter = useMemo(() => reportFilterInputFromSearch(search), [search]);
   const scopeChips = useMemo(() => activeChips(readLibraryState(new URLSearchParams(search)), facetContext), [search, facetContext]);
   const lastChips = useMemo(() => (lastNarrowed ? activeChips(readLibraryState(new URLSearchParams(lastSearch)), facetContext) : []), [lastNarrowed, lastSearch, facetContext]);
 

@@ -3,7 +3,10 @@
  *
  *   - exclude-own-filter: each facet applies every active dimension except
  *     its own (q tokens count as their dimension: tag: is the tags facet's);
- *   - place counts include descendants (via the household's place tree);
+ *   - Where counts include everything inside (via the containment tree),
+ *     and only locations and containers are offered;
+ *   - kinds: locations are counted there but nowhere else — not in the total,
+ *     types, missing, or the insurance totals;
  *   - due buckets (overdue | 30d | 90d | year) and missing keys come in a
  *     fixed order, zeros included;
  *   - trashed things never count.
@@ -15,7 +18,7 @@ import {
   ok,
   starterTypes,
   createThing,
-  createPlace,
+  createLocation,
   insertFile,
   attach,
   dayFromToday,
@@ -28,7 +31,7 @@ afterAll(async () => {
 });
 
 const FACETS = `query($filter: ThingFilterInput) { thingFacets(filter: $filter) {
-  total types { value count } tags { value count } places { value count }
+  total types { value count } tags { value count } where { value count } kinds { value count }
   due { value count } missing { value count } acquiredYears { year count } hasPhotos hasDocuments
 } }`;
 
@@ -39,49 +42,64 @@ const asMap = (rows) => Object.fromEntries(rows.map((r) => [r.value, r.count]));
 
 /**
  *  Wendy    boat         Boathouse           fishing, boat  2019  reg +20d     value, overview photo
- *  Finder   electronics  Boathouse           fishing        2023  —
+ *  Finder   electronics  Boathouse>Wendy     fishing        2023  —
  *  Glock    firearm      House>Garage>Shelf  range          2020  warr -5d     serial, id-plate photo, receipt doc
  *  Drill    tool         House>Garage        —              2023  maint +80d
  *  Toaster  appliance    (none)              —              —     warr +200d
  *  (Trashed tool in Garage, tag fishing, due +1d — never counted)
+ *  House, Garage, Shelf, Boathouse are Location things; Garage has a value
+ *  and a due date — neither ever counts.
  */
 beforeAll(async () => {
   await cleanAll();
   types = await starterTypes();
-  const house = await createPlace('House');
-  const garage = await createPlace('Garage', house.id);
-  const shelf = await createPlace('Shelf', garage.id);
-  const boathouse = await createPlace('Boathouse');
+  const house = await createLocation('House');
+  const garage = await createLocation('Garage', house.id);
+  await ok(`mutation($id: ID!, $input: ThingInput!) { updateThing(id: $id, input: $input) { id } }`, {
+    id: garage.id,
+    input: { value: { amount: 50000 }, dates: [{ kind: 'insurance', date: dayFromToday(3) }] },
+  });
+  const shelf = await createLocation('Shelf', garage.id);
+  const boathouse = await createLocation('Boathouse');
   places = { house, garage, shelf, boathouse };
 
   const wendy = await createThing({
-    name: 'Wendy', typeId: types.boat.id, placeId: boathouse.id, tags: ['fishing', 'boat'],
+    name: 'Wendy', typeId: types.boat.id, parentId: boathouse.id, tags: ['fishing', 'boat'],
     acquired: { date: '2019-05-01' }, dates: [{ kind: 'registration', date: dayFromToday(20) }], value: { amount: 1000 },
   });
   await attach(wendy.id, { photos: [{ fileId: (await insertFile())._id, role: 'overview' }] });
-  await createThing({ name: 'Finder', typeId: types.electronics.id, placeId: boathouse.id, tags: ['fishing'], acquired: { date: '2023-01-01' } });
+  places.wendy = wendy;
+  await createThing({ name: 'Finder', typeId: types.electronics.id, parentId: wendy.id, tags: ['fishing'], acquired: { date: '2023-01-01' } });
   const glock = await createThing({
-    name: 'Glock', typeId: types.firearm.id, placeId: shelf.id, tags: ['range'], acquired: { date: '2020-01-01' },
+    name: 'Glock', typeId: types.firearm.id, parentId: shelf.id, tags: ['range'], acquired: { date: '2020-01-01' },
     dates: [{ kind: 'warranty', date: dayFromToday(-5) }], attributes: { serial: 'S1' },
   });
   await attach(glock.id, {
     photos: [{ fileId: (await insertFile())._id, role: 'id-plate' }],
     documents: [{ fileId: (await insertFile({ kind: 'document' }))._id, role: 'receipt' }],
   });
-  await createThing({ name: 'Drill', typeId: types.tool.id, placeId: garage.id, acquired: { date: '2023-06-01' }, dates: [{ kind: 'maintenance', date: dayFromToday(80) }] });
+  await createThing({ name: 'Drill', typeId: types.tool.id, parentId: garage.id, acquired: { date: '2023-06-01' }, dates: [{ kind: 'maintenance', date: dayFromToday(80) }] });
   await createThing({ name: 'Toaster', typeId: types.appliance.id, dates: [{ kind: 'warranty', date: dayFromToday(200) }] });
-  const gone = await createThing({ name: 'Gone', typeId: types.tool.id, placeId: garage.id, tags: ['fishing'], dates: [{ kind: 'other', date: dayFromToday(1) }] });
+  const gone = await createThing({ name: 'Gone', typeId: types.tool.id, parentId: garage.id, tags: ['fishing'], dates: [{ kind: 'other', date: dayFromToday(1) }] });
   await ok(`mutation($id: ID!) { deleteThing(id: $id) { success } }`, { id: gone.id });
 }, 60000);
 
-test('unfiltered: every facet, trashed excluded, places include descendants', async () => {
+test('unfiltered: every facet, trashed excluded, Where includes everything inside', async () => {
   const f = await facets();
   expect(f.total).toBe(5);
   expect(asMap(f.types)).toEqual({
     [types.boat.id]: 1, [types.electronics.id]: 1, [types.firearm.id]: 1, [types.tool.id]: 1, [types.appliance.id]: 1,
   });
   expect(f.tags).toEqual([{ value: 'fishing', count: 2 }, { value: 'boat', count: 1 }, { value: 'range', count: 1 }]);
-  expect(asMap(f.places)).toEqual({ [places.boathouse.id]: 2, [places.house.id]: 2, [places.garage.id]: 2, [places.shelf.id]: 1 });
+  // Wendy is a container: offered, holding the Finder.
+  expect(asMap(f.where)).toEqual({
+    [places.boathouse.id]: 2, [places.wendy.id]: 1, [places.house.id]: 2, [places.garage.id]: 2, [places.shelf.id]: 1,
+  });
+  expect(f.kinds).toEqual([
+    { value: 'location', count: 4 },
+    { value: 'container', count: 1 },
+    { value: 'item', count: 4 },
+  ]);
   expect(f.due).toEqual([
     { value: 'overdue', count: 1 },
     { value: '30d', count: 1 },
@@ -105,19 +123,30 @@ test('exclude-own: a tag filter narrows every facet but tags', async () => {
   expect(f.total).toBe(2);
   expect(f.tags).toEqual([{ value: 'fishing', count: 2 }, { value: 'boat', count: 1 }, { value: 'range', count: 1 }]);
   expect(asMap(f.types)).toEqual({ [types.boat.id]: 1, [types.electronics.id]: 1 });
-  expect(asMap(f.places)).toEqual({ [places.boathouse.id]: 2 });
+  expect(asMap(f.where)).toEqual({ [places.boathouse.id]: 2, [places.wendy.id]: 1 });
   expect(f.hasPhotos).toBe(1);
 });
 
-test('exclude-own: a place filter keeps the whole place tree counted', async () => {
-  const f = await facets({ places: [places.garage.id] });
+test('exclude-own: a Where filter keeps the whole tree counted', async () => {
+  const f = await facets({ within: [places.garage.id] });
   expect(f.total).toBe(2);
-  expect(asMap(f.places)).toEqual({ [places.boathouse.id]: 2, [places.house.id]: 2, [places.garage.id]: 2, [places.shelf.id]: 1 });
+  expect(asMap(f.where)).toEqual({
+    [places.boathouse.id]: 2, [places.wendy.id]: 1, [places.house.id]: 2, [places.garage.id]: 2, [places.shelf.id]: 1,
+  });
   expect(asMap(f.types)).toEqual({ [types.firearm.id]: 1, [types.tool.id]: 1 });
   // The same through the in: token.
   const g = await facets({ q: 'in:garage' });
   expect(g.total).toBe(2);
-  expect(asMap(g.places)).toEqual(asMap(f.places));
+  expect(asMap(g.where)).toEqual(asMap(f.where));
+});
+
+test('exclude-own: a kinds filter keeps every kind counted; locations show only there', async () => {
+  const f = await facets({ kinds: ['location'] });
+  expect(f.total).toBe(4);
+  expect(asMap(f.kinds)).toEqual({ location: 4, container: 1, item: 4 });
+  // Locations are counted as locations — but nothing is ever "missing" on one.
+  expect(asMap(f.missing)).toEqual({ photo: 0, 'id-plate': 0, receipt: 0, serial: 0, value: 0 });
+  expect(asMap(f.where)).toEqual({ [places.house.id]: 2, [places.garage.id]: 1 });
 });
 
 test('exclude-own: due and missing buckets', async () => {
@@ -157,7 +186,20 @@ test('a selected value with no matches still appears, at zero', async () => {
 test('insurance totals follow the same filter', async () => {
   const q = `query($filter: ThingFilterInput) { thingInsuranceTotals(filter: $filter) { count totalValue currency withSerial withReceipt withPhoto } }`;
   expect((await ok(q, {})).thingInsuranceTotals).toEqual({ count: 5, totalValue: 1000, currency: 'USD', withSerial: 1, withReceipt: 1, withPhoto: 2 });
+  // Never a location — the Garage's $50,000 is not inventory — whatever kinds asks for.
+  expect((await ok(q, { filter: { kinds: ['location', 'container', 'item'] } })).thingInsuranceTotals).toMatchObject({ count: 5, totalValue: 1000 });
+  expect((await ok(q, { filter: { kinds: ['location'] } })).thingInsuranceTotals).toMatchObject({ count: 0, totalValue: 0 });
   expect((await ok(q, { filter: { tags: ['fishing'] } })).thingInsuranceTotals).toEqual({
     count: 2, totalValue: 1000, currency: 'USD', withSerial: 0, withReceipt: 0, withPhoto: 1,
   });
+});
+
+test('needs attention never lists or counts a location', async () => {
+  const a = (await ok(`query { thingAttention { overdue { name } dueSoon { name } missingPhoto missingValue missingReceipt } }`)).thingAttention;
+  // The Garage's insurance date (+3d) is not "due soon"; Wendy's registration (+20d) is.
+  expect(a.dueSoon.map((t) => t.name)).toEqual(['Wendy']);
+  expect(a.overdue.map((t) => t.name)).toEqual(['Glock']);
+  expect(a.missingPhoto).toBe(3);
+  expect(a.missingValue).toBe(4);
+  expect(a.missingReceipt).toBe(4);
 });

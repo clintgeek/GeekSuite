@@ -69,7 +69,8 @@ describe('insurance CSV', () => {
     expect(col(rows[1], 'Current value')).toBe('18500');
     expect(col(rows[1], 'Purchase price')).toBe('21000');
     expect(col(rows[1], 'Acquired')).toBe('2021-05-01');
-    expect(col(rows[1], 'Place')).toBe('House › Garage › Shelf 2');
+    // The whole path, for a bad day.
+    expect(col(rows[1], 'Where')).toBe('House › Garage');
     expect(col(rows[1], 'Tags')).toBe('fishing; lake');
     expect(col(rows[1], 'Receipt on file')).toBe('Yes');
     expect(col(rows[2], 'Receipt on file')).toBe('No');

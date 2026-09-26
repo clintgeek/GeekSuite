@@ -6,6 +6,10 @@
  * attribute values — identifiers included), tagMatch, the structured
  * ThingFilterInput fields, and the rule that tokens AND with structured
  * fields. See graphql/thinggeek/filters.js for the grammar.
+ *
+ * Containment: in: names any ancestor — a location, or a container like the
+ * boat — and matches everything inside it at any depth; locations themselves
+ * are never results unless `kinds` (or a location type) asks for them.
  */
 import {
   startHarness,
@@ -14,7 +18,7 @@ import {
   errorCode,
   starterTypes,
   createThing,
-  createPlace,
+  createLocation,
   insertFile,
   attach,
   names,
@@ -32,27 +36,29 @@ let types;
 let places;
 
 /**
- *  name          type         place                 tags             acquired     value  dates           notes / attrs
+ *  name          type         inside                tags             acquired     value  dates           notes / attrs
  *  Wendy         boat         Boathouse             fishing, boat    2019-06-15   20000  reg +20d        "the family boat"; Lund, hull LUND1234
- *  Fish finder   electronics  Boathouse             fishing          2023-07-02   —      —               Garmin Striker 4, serial GRM-998; overview photo
+ *  Fish finder   electronics  Boathouse>Wendy       fishing          2023-07-02   —      —               Garmin Striker 4, serial GRM-998; overview photo
  *  Glock 19      firearm      House>Garage>Shelf 2  range            2020-01-10   500    warranty -5d    serial ABC123; id-plate photo, receipt doc
  *  Drill         tool         House>Garage          Power            2023-06-10   —      maint +80d      DeWalt, Battery
  *  Toaster       appliance    House>Kitchen         —                —            —      —               "Breville 4-slice"
+ *
+ * House, Garage, Shelf 2, Kitchen and Boathouse are Location things.
  */
 beforeAll(async () => {
   await cleanAll();
   types = await starterTypes();
-  const house = await createPlace('House');
-  const garage = await createPlace('Garage', house.id);
-  const shelf = await createPlace('Shelf 2', garage.id);
-  const kitchen = await createPlace('Kitchen', house.id);
-  const boathouse = await createPlace('Boathouse');
+  const house = await createLocation('House');
+  const garage = await createLocation('Garage', house.id);
+  const shelf = await createLocation('Shelf 2', garage.id);
+  const kitchen = await createLocation('Kitchen', house.id);
+  const boathouse = await createLocation('Boathouse');
   places = { house, garage, shelf, kitchen, boathouse };
 
-  await createThing({
+  const wendy = await createThing({
     name: 'Wendy',
     typeId: types.boat.id,
-    placeId: boathouse.id,
+    parentId: boathouse.id,
     tags: ['fishing', 'boat'],
     acquired: { date: '2019-06-15' },
     value: { amount: 20000 },
@@ -63,7 +69,7 @@ beforeAll(async () => {
   const finder = await createThing({
     name: 'Fish finder',
     typeId: types.electronics.id,
-    placeId: boathouse.id,
+    parentId: wendy.id,
     tags: ['fishing'],
     acquired: { date: '2023-07-02' },
     attributes: { brand: 'Garmin', model: 'Striker 4', serial: 'GRM-998' },
@@ -72,7 +78,7 @@ beforeAll(async () => {
   const glock = await createThing({
     name: 'Glock 19',
     typeId: types.firearm.id,
-    placeId: shelf.id,
+    parentId: shelf.id,
     tags: ['range'],
     acquired: { date: '2020-01-10' },
     value: { amount: 500 },
@@ -86,13 +92,13 @@ beforeAll(async () => {
   await createThing({
     name: 'Drill',
     typeId: types.tool.id,
-    placeId: garage.id,
+    parentId: garage.id,
     tags: ['Power'],
     acquired: { date: '2023-06-10' },
     dates: [{ kind: 'maintenance', date: dayFromToday(80) }],
     attributes: { brand: 'DeWalt', power: 'Battery' },
   });
-  await createThing({ name: 'Toaster', typeId: types.appliance.id, placeId: kitchen.id, notes: 'Breville 4-slice' });
+  await createThing({ name: 'Toaster', typeId: types.appliance.id, parentId: kitchen.id, notes: 'Breville 4-slice' });
 }, 60000);
 
 const q = (text, extra = {}) => names({ q: text, ...extra });
@@ -122,6 +128,15 @@ describe('tokens', () => {
     expect(await q(`in:${places.garage.id}`)).toEqual(['Drill', 'Glock 19']);
     expect(await q('in:kitchen/garage')).toEqual([]);
     expect(await q('in:attic')).toEqual([]);
+  });
+
+  test('in: a container (the boat) matches what is inside it, not the boat; through it from the location above', async () => {
+    expect(await q('in:wendy')).toEqual(['Fish finder']);
+    expect(await q('in:boathouse/wendy')).toEqual(['Fish finder']);
+    expect(await q('in:boathouse')).toEqual(['Fish finder', 'Wendy']);
+    // Search input is data, never a pattern.
+    expect(await q('in:"(a+)+"')).toEqual([]);
+    expect(await q('in:.*')).toEqual([]);
   });
 
   test('before: / after: are strict, over the whole period', async () => {
@@ -199,8 +214,8 @@ describe('structured filter fields', () => {
     expect(await names({ types: [types.boat.id, types.tool.id] })).toEqual(['Drill', 'Wendy']);
     expect(await names({ tags: ['fishing', 'range'] })).toEqual(['Fish finder', 'Glock 19', 'Wendy']);
     expect(await names({ tags: ['fishing', 'boat'], tagMatch: 'all' })).toEqual(['Wendy']);
-    expect(await names({ places: [places.house.id] })).toEqual(['Drill', 'Glock 19', 'Toaster']);
-    expect(await names({ places: [places.shelf.id, places.boathouse.id] })).toEqual(['Fish finder', 'Glock 19', 'Wendy']);
+    expect(await names({ within: [places.house.id] })).toEqual(['Drill', 'Glock 19', 'Toaster']);
+    expect(await names({ within: [places.shelf.id, places.boathouse.id] })).toEqual(['Fish finder', 'Glock 19', 'Wendy']);
     expect(await names({ due: ['overdue'] })).toEqual(['Glock 19']);
     expect(await names({ due: ['30d'] })).toEqual(['Wendy']);
     expect(await names({ due: ['90d'] })).toEqual(['Drill', 'Wendy']);
@@ -218,12 +233,38 @@ describe('structured filter fields', () => {
   test('tokens AND with the structured field of the same dimension', async () => {
     expect(await names({ types: [types.firearm.id], q: 'type:boat' })).toEqual([]);
     expect(await names({ types: [types.boat.id, types.firearm.id], q: 'type:boat' })).toEqual(['Wendy']);
-    expect(await names({ places: [places.house.id], q: 'in:garage' })).toEqual(['Drill', 'Glock 19']);
+    expect(await names({ within: [places.house.id], q: 'in:garage' })).toEqual(['Drill', 'Glock 19']);
   });
 
   test('closed vocabularies are validated', async () => {
-    for (const filter of [{ tagMatch: 'some' }, { due: ['7d'] }, { missing: ['hat'] }, { acquiredYearMin: 2024, acquiredYearMax: 2020 }, { householdId: 'x' }]) {
+    for (const filter of [{ tagMatch: 'some' }, { due: ['7d'] }, { missing: ['hat'] }, { kinds: ['room'] }, { acquiredYearMin: 2024, acquiredYearMax: 2020 }, { householdId: 'x' }]) {
       expect(await errorCode(THINGS, { filter })).toBe('BAD_USER_INPUT');
     }
+  });
+});
+
+describe('kinds: locations are not inventory', () => {
+  const LOCATIONS = ['Boathouse', 'Garage', 'House', 'Kitchen', 'Shelf 2'];
+
+  test('by default no location is a result — not by name, not by any token', async () => {
+    expect(await names()).toEqual(['Drill', 'Fish finder', 'Glock 19', 'Toaster', 'Wendy']);
+    expect(await q('garage')).toEqual([]);
+    expect(await q('in:house')).not.toContain('Garage');
+    expect(await q('missing:photo')).not.toContain('House');
+  });
+
+  test('kinds picks them; a location type asked for by name or id brings them in', async () => {
+    expect(await names({ kinds: ['location'] })).toEqual(LOCATIONS);
+    expect(await names({ kinds: ['container'] })).toEqual(['Wendy']);
+    expect(await names({ kinds: ['item'] })).toEqual(['Drill', 'Fish finder', 'Glock 19', 'Toaster']);
+    expect(await names({ kinds: ['location'], q: 'in:house' })).toEqual(['Garage', 'Kitchen', 'Shelf 2']);
+    expect(await q('type:location')).toEqual(LOCATIONS);
+    expect(await names({ types: [types.location.id] })).toEqual(LOCATIONS);
+  });
+
+  test('missing never matches a location, even when locations are asked for', async () => {
+    const every = ['location', 'container', 'item'];
+    expect(await names({ kinds: every, missing: ['photo'] })).toEqual(['Drill', 'Toaster', 'Wendy']);
+    expect(await names({ kinds: every, q: 'missing:value' })).toEqual(['Drill', 'Fish finder', 'Toaster']);
   });
 });

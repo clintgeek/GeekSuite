@@ -2,20 +2,22 @@ import mongoose from 'mongoose';
 import { GraphQLError } from 'graphql';
 import { Thing } from './models/thing.js';
 import { ThingType } from './models/thingType.js';
-import { Place } from './models/place.js';
 import { ThingFile } from './models/file.js';
 import { ThingProfile } from './models/profile.js';
 import householdModule from '@geeksuite/schemas/thinggeek/household';
 import constantsModule from '@geeksuite/schemas/thinggeek/constants';
+import starterTypesModule from '@geeksuite/schemas/thinggeek/starterTypes';
 import { nullsLastSort, pageArgs, pageFacetStage, randomSortKey, shapePage } from '@geeksuite/collection/server';
 import {
-  buildPlaceTree,
+  buildThingTree,
   baseMatch,
   facetsPipeline,
   filteredStages,
   HELPER_FIELDS,
   identifierTypes,
+  kindOfType,
   missingClause,
+  notLocation,
   shapeFacets,
 } from './filters.js';
 import { SOON_DAYS, addDays, dueBucketClause, nextDueOf, occurrenceIn, occurrenceStages, renderDate, todayUtc } from './dates.js';
@@ -32,8 +34,6 @@ import {
   updateThingArgsSchema,
   createThingTypeArgsSchema,
   updateThingTypeArgsSchema,
-  createPlaceArgsSchema,
-  updatePlaceArgsSchema,
   saveThingFilterArgsSchema,
 } from './validation.js';
 
@@ -48,20 +48,31 @@ import {
  *     const householdId = resolveHouseholdId(user);
  * `resolveHouseholdId` (below, wrapping @geeksuite/schemas/thinggeek/household)
  * throws NOT_A_MEMBER for any signed-in account not on the member list —
- * before input validation, before any read. Every Thing/ThingType/Place/
+ * before input validation, before any read. Every Thing/ThingType/
  * ThingFile filter carries `householdId` as a literal; Thing reads also carry
- * `deletedAt: null` except trashedThings/restoreThing. No input accepts a
- * householdId (every zod schema is strict).
+ * `deletedAt: null` except trashedThings/restoreThing and the containment
+ * tree. No input accepts a householdId (every zod schema is strict).
  *
- * References (typeId, placeId, relationship thingIds) are checked against
+ * References (typeId, parentId, relationship thingIds) are checked against
  * the household before they are written, and re-scoped when read: a stored
  * id that points outside the household (or at a trashed thing) renders as
  * nothing rather than as someone else's data.
  *
+ * ## Containment
+ *
+ * WHERE a thing is is its `parentId` — another Thing (DOCS/THINGGEEK_PLAN.md
+ * "Containment"). Moves are checked here, the only writer: the parent is a
+ * live thing of this household, never the thing itself or anything inside it
+ * (no cycles), and no thing ends up more than bounds.containDepth deep.
+ * Trashing a thing leaves its contents in place; the backend's purge moves
+ * them up to the purged thing's parent. A type's `kind` (location |
+ * container | item) decides whether its things are inventory at all.
+ *
  * ## Per-request caching
  *
- * The household's types and places (small, and needed by nearly every
- * field), file records, relationship targets and counts are loaded once per
+ * The household's types and containment tree (every thing's id, name,
+ * parent, type and trash state — needed by nearly every field), file
+ * records, relationship targets and counts are loaded once per
  * request and hung off the GraphQL context (a WeakMap). Every mutation drops
  * that cache before returning, so the fields of the thing it returns are
  * resolved against what it just wrote.
@@ -74,11 +85,14 @@ const {
   PHOTO_ROLES,
   DOCUMENT_ROLES,
   RELATIONSHIP_KINDS,
+  THING_KINDS,
   MISSING_KEYS,
+  DEFAULT_THING_KIND,
   STARTER_TYPES,
   TRASH_DAYS,
   bounds,
 } = constantsModule;
+const { STARTER_TYPES_VERSION, starterTypeDoc, starterTypeUpgrade } = starterTypesModule;
 
 const validateThings = validateInput(thingsArgsSchema);
 const validateFilterArgs = validateInput(filterArgsSchema);
@@ -87,8 +101,6 @@ const validateCreateThing = validateInput(createThingArgsSchema);
 const validateUpdateThing = validateInput(updateThingArgsSchema);
 const validateCreateThingType = validateInput(createThingTypeArgsSchema);
 const validateUpdateThingType = validateInput(updateThingTypeArgsSchema);
-const validateCreatePlace = validateInput(createPlaceArgsSchema);
-const validateUpdatePlace = validateInput(updatePlaceArgsSchema);
 const validateSaveThingFilter = validateInput(saveThingFilterArgsSchema);
 
 const TRASH_LIST_MAX = 500;
@@ -206,23 +218,36 @@ function typesById(context, householdId) {
   });
 }
 
-/** The household's place tree. */
-function placeTreeFor(context, householdId) {
-  return cached(context, `places:${householdId}`, async () => buildPlaceTree(await Place.find({ householdId }).lean()));
+/** Every thing of the household (trashed too) as the containment tree — see filters.js buildThingTree. */
+const TREE_PROJECTION = Object.freeze({ name: 1, parentId: 1, typeId: 1, deletedAt: 1, 'photos.fileId': 1, 'photos.role': 1 });
+
+function loadTree(householdId) {
+  return Thing.find({ householdId }, TREE_PROJECTION).lean().then(buildThingTree);
 }
 
-/** Direct (non-trashed) thing counts per place, and per-place totals via the tree. */
-function placeCounts(context, householdId) {
-  return cached(context, `placeCounts:${householdId}`, async () => {
-    const [tree, rows] = await Promise.all([
-      placeTreeFor(context, householdId),
-      Thing.aggregate([
-        { $match: { householdId, deletedAt: null, placeId: { $ne: null } } },
-        { $group: { _id: '$placeId', n: { $sum: 1 } } },
-      ]),
-    ]);
-    const direct = new Map(rows.map((r) => [String(r._id), r.n]));
-    return { direct, total: tree.totals(direct) };
+function treeFor(context, householdId) {
+  return cached(context, `tree:${householdId}`, () => loadTree(householdId));
+}
+
+/**
+ * Per live thing: `childCount` (live things directly inside) and `itemCount`
+ * (live inventory — not locations — anywhere inside, through things in the
+ * Trash). One walk up from each live thing: depth is capped, so O(n·depth).
+ */
+function treeCounts(context, householdId) {
+  return cached(context, `treeCounts:${householdId}`, async () => {
+    const [tree, types] = await Promise.all([treeFor(context, householdId), typesById(context, householdId)]);
+    const childCount = new Map();
+    const itemCount = new Map();
+    const bump = (map, id) => map.set(id, (map.get(id) ?? 0) + 1);
+    for (const [id, node] of tree.byId) {
+      if (node.deletedAt) continue;
+      const path = tree.pathOf(id);
+      if (path.length > 1) bump(childCount, String(path[path.length - 2]._id));
+      if (kindOfType(types.get(String(node.typeId))) === 'location') continue;
+      for (const ancestor of path.slice(0, -1)) bump(itemCount, String(ancestor._id));
+    }
+    return { childCount, itemCount };
   });
 }
 
@@ -252,6 +277,21 @@ function liveThingLoader(context, householdId) {
       { name: 1, typeId: 1, photos: 1 }
     ).lean();
     return new Map(rows.map((t) => [String(t._id), t]));
+  });
+}
+
+/** Live things directly inside each id — Thing.contents. */
+function contentsLoader(context, householdId) {
+  return loader(context, `contents:${householdId}`, async (ids) => {
+    const parents = ids.filter(validObjectId).map(oid);
+    const rows = await Thing.find({ householdId, deletedAt: null, parentId: { $in: parents } }).sort({ sortName: 1, _id: 1 }).lean();
+    const out = new Map();
+    for (const row of rows) {
+      const key = String(row.parentId);
+      if (!out.has(key)) out.set(key, []);
+      out.get(key).push(row);
+    }
+    return out;
   });
 }
 
@@ -306,10 +346,13 @@ async function typeOf(thing, context, householdId) {
   return (await typesById(context, householdId)).get(String(thing.typeId)) ?? null;
 }
 
+const KIND_ORDER = Object.fromEntries(THING_KINDS.map((k, i) => [k, i]));
+
 const identifierKeys = (type) => (type?.fields ?? []).filter((f) => f.identifier).map((f) => f.key);
 
-/** Thing.missing — the same rules as filters.js missingClause, in JS. */
+/** Thing.missing — the same rules as filters.js missingClause, in JS. A location is not inventory: nothing is missing. */
 export function missingOf(thing, type) {
+  if (kindOfType(type) === 'location') return [];
   const out = [];
   const photos = thing.photos ?? [];
   const docs = thing.documents ?? [];
@@ -325,7 +368,7 @@ export function missingOf(thing, type) {
 /** An attribute value as JSON: a date is its ISO string (identical in-process and over the wire). */
 const jsonValue = (v) => (v instanceof Date ? v.toISOString() : v ?? null);
 
-const summaryOf = (t) => ({ __summary: true, _id: t._id, name: t.name, typeId: t.typeId, photos: t.photos ?? [] });
+const summaryOf = (t) => ({ __summary: true, _id: t._id, name: t.name, typeId: t.typeId, photos: t.photos ?? [], inTrash: Boolean(t.deletedAt) });
 
 // ── Scoped lookups ───────────────────────────────────────────────────────────
 
@@ -352,11 +395,35 @@ async function resolveType(householdId, typeId) {
   return type;
 }
 
-async function resolvePlaceId(householdId, placeId) {
-  if (placeId === null) return null;
-  const place = validObjectId(placeId) ? await Place.findOne({ _id: placeId, householdId }, { _id: 1 }).lean() : null;
-  if (!place) throw inputError('input.placeId', 'place not found');
-  return place._id;
+/**
+ * A parentId from input → the ObjectId to store (null = the top level), or
+ * BAD_USER_INPUT. The containment rules ("Containment" in the plan):
+ *   - the parent is a thing of THIS household (else "not found", as for any
+ *     foreign reference) and not in the Trash;
+ *   - not the thing itself, nor anything inside it (a cycle);
+ *   - nothing ends up more than bounds.containDepth deep, counting the top
+ *     level as 1 (House › Garage › Van › Jumper cables is 4): the parent's
+ *     root→self path + the thing + the tallest chain hanging below it.
+ * `selfId` is null on create (a new thing contains nothing).
+ */
+async function resolveParent(householdId, parentId, selfId) {
+  if (parentId === null) return null;
+  const tree = await loadTree(householdId);
+  const parent = validObjectId(parentId) ? tree.byId.get(String(parentId)) : null;
+  if (!parent) throw inputError('input.parentId', 'thing not found');
+  if (parent.deletedAt) throw inputError('input.parentId', 'that thing is in the Trash');
+  if (selfId) {
+    const self = String(selfId);
+    if (String(parent._id) === self) throw inputError('input.parentId', 'a thing cannot be inside itself');
+    if (tree.pathOf(String(parent._id)).some((a) => String(a._id) === self)) {
+      throw inputError('input.parentId', 'a thing cannot move inside something it contains');
+    }
+  }
+  const depth = tree.pathOf(String(parent._id)).length + 1 + (selfId ? tree.heightOf(String(selfId)) : 0);
+  if (depth > bounds.containDepth.max) {
+    throw inputError('input.parentId', `things nest at most ${bounds.containDepth.max} deep`);
+  }
+  return parent._id;
 }
 
 /** Relationship input → stored rows. Targets must be live things in this household; no self; duplicates collapse. */
@@ -483,38 +550,46 @@ const isDuplicateKey = (err) =>
  * deleted stays deleted when the second member first opens the app). Two
  * concurrent first calls are made safe by the unique {householdId,key}
  * index: the loser's inserts are duplicate-key no-ops.
+ *
+ * A household seeded at an older STARTER_TYPES_VERSION is UPGRADED instead
+ * (starterTypeUpgrade: a kind for every type that has none; the starter
+ * types added since, unless the household already has that key) — the same
+ * step the backend's scripts/migrate-containment.js runs. The version lands
+ * on the caller's profile, so each member pays for this once.
  */
 async function ensureStarterTypes(userId, householdId) {
-  const mine = await ThingProfile.findOne({ userId }, { starterTypesSeededAt: 1 }).lean();
-  if (mine?.starterTypesSeededAt) return;
-  const seeded = await ThingProfile.exists({ householdId, starterTypesSeededAt: { $ne: null } });
-  if (!seeded) {
-    await typeIndexesReady();
-    const docs = STARTER_TYPES.map((t) => ({
-      householdId,
-      key: t.key,
-      name: t.name,
-      icon: t.icon,
-      builtIn: true,
-      fields: t.fields.map((f) => ({
-        key: f.key,
-        label: f.label,
-        kind: f.kind,
-        choices: f.choices ?? [],
-        unit: f.unit ?? null,
-        identifier: Boolean(f.identifier),
-        required: Boolean(f.required),
-      })),
-    }));
+  const mine = await ThingProfile.findOne({ userId }, { starterTypesSeededAt: 1, starterTypesVersion: 1 }).lean();
+  if (mine?.starterTypesSeededAt && (mine.starterTypesVersion ?? 1) >= STARTER_TYPES_VERSION) return;
+  const seeded = await ThingProfile.find({ householdId, starterTypesSeededAt: { $ne: null } }, { starterTypesVersion: 1 }).lean();
+  await typeIndexesReady();
+  const insert = async (starters) => {
+    if (!starters.length) return;
     try {
-      await ThingType.insertMany(docs, { ordered: false });
+      await ThingType.insertMany(starters.map((t) => starterTypeDoc(t, householdId)), { ordered: false });
     } catch (err) {
       if (!isDuplicateKey(err)) throw err;
+    }
+  };
+  if (!seeded.length) {
+    await insert(STARTER_TYPES);
+  } else {
+    const version = Math.max(...seeded.map((p) => p.starterTypesVersion ?? 1));
+    if (version < STARTER_TYPES_VERSION) {
+      const existing = await ThingType.find({ householdId }, { key: 1, kind: 1 }).lean();
+      const plan = starterTypeUpgrade(existing, version);
+      for (const { _id, kind } of plan.setKind) {
+        // Only where still unset: a kind someone chose meanwhile wins.
+        await ThingType.updateOne({ _id, householdId, kind: { $in: [null, ''] } }, { $set: { kind } });
+      }
+      await insert(plan.insert);
     }
   }
   await ThingProfile.updateOne(
     { userId },
-    { $setOnInsert: { householdId }, $set: { starterTypesSeededAt: new Date() } },
+    {
+      $setOnInsert: { householdId },
+      $set: { starterTypesSeededAt: mine?.starterTypesSeededAt ?? new Date(), starterTypesVersion: STARTER_TYPES_VERSION },
+    },
     { upsert: true }
   );
 }
@@ -560,8 +635,8 @@ for (const s of THING_SORTS) {
 }
 
 async function householdContext(context, householdId) {
-  const [types, tree] = await Promise.all([typesById(context, householdId), placeTreeFor(context, householdId)]);
-  return { types: [...types.values()], places: [...tree.byId.values()] };
+  const [types, tree] = await Promise.all([typesById(context, householdId), treeFor(context, householdId)]);
+  return { types: [...types.values()], tree };
 }
 
 async function queryThings({ householdId, args, context }) {
@@ -595,10 +670,24 @@ export const resolvers = {
     id: (t) => String(t._id),
     tags: (t) => t.tags ?? [],
     type: (t, _a, context) => typeOf(t, context, scopeOf(context).householdId),
-    place: async (t, _a, context) => {
+    kind: async (t, _a, context) => kindOfType(await typeOf(t, context, scopeOf(context).householdId)),
+    parentId: (t) => (t.parentId ? String(t.parentId) : null),
+    path: async (t, _a, context) => {
       const { householdId } = scopeOf(context);
-      if (!t.placeId) return null;
-      return (await placeTreeFor(context, householdId)).byId.get(String(t.placeId)) ?? null;
+      if (!t.parentId) return [];
+      // Through the tree, so a stored parentId outside the household renders as the top level.
+      return (await treeFor(context, householdId)).pathOf(String(t.parentId)).map(summaryOf);
+    },
+    contents: async (t, _a, context) => {
+      const { householdId } = scopeOf(context);
+      const [rows, types] = await Promise.all([contentsLoader(context, householdId).load(t._id), typesById(context, householdId)]);
+      const rank = (row) => KIND_ORDER[kindOfType(types.get(String(row.typeId)))];
+      // Stable: rows arrive by sortName, so equal kinds keep name order.
+      return [...(rows ?? [])].sort((a, b) => rank(a) - rank(b));
+    },
+    contentsCount: async (t, _a, context) => {
+      const { householdId } = scopeOf(context);
+      return (await treeCounts(context, householdId)).childCount.get(String(t._id)) ?? 0;
     },
     acquired: (t) => {
       const a = t.acquired ?? {};
@@ -686,6 +775,8 @@ export const resolvers = {
   ThingSummary: {
     id: (s) => String(s._id),
     type: (s, _a, context) => typeOf(s, context, scopeOf(context).householdId),
+    kind: async (s, _a, context) => kindOfType(await typeOf(s, context, scopeOf(context).householdId)),
+    inTrash: (s) => Boolean(s.inTrash),
     coverThumbUrl: async (s, _a, context) => {
       const { householdId } = scopeOf(context);
       const cover = coverOf(s);
@@ -697,6 +788,7 @@ export const resolvers = {
   ThingType: {
     id: (t) => String(t._id),
     icon: (t) => t.icon || 'Inventory2',
+    kind: (t) => kindOfType(t),
     fields: (t) =>
       (t.fields ?? []).map((f) => ({
         ...f,
@@ -712,21 +804,23 @@ export const resolvers = {
     },
   },
 
-  Place: {
-    id: (p) => String(p._id),
-    parentId: (p) => (p.parentId ? String(p.parentId) : null),
-    notes: (p) => p.notes ?? '',
-    path: async (p, _a, context) => {
+  ThingNode: {
+    id: (n) => String(n._id),
+    parentId: (n) => (n.parentId ? String(n.parentId) : null),
+    parentInTrash: async (n, _a, context) => {
       const { householdId } = scopeOf(context);
-      return (await placeTreeFor(context, householdId)).pathOf(String(p._id));
+      const tree = await treeFor(context, householdId);
+      return Boolean(n.parentId && tree.byId.has(String(n.parentId)) && !tree.isLive(String(n.parentId)));
     },
-    directCount: async (p, _a, context) => {
+    kind: async (n, _a, context) => kindOfType(await typeOf(n, context, scopeOf(context).householdId)),
+    type: (n, _a, context) => typeOf(n, context, scopeOf(context).householdId),
+    childCount: async (n, _a, context) => {
       const { householdId } = scopeOf(context);
-      return (await placeCounts(context, householdId)).direct.get(String(p._id)) ?? 0;
+      return (await treeCounts(context, householdId)).childCount.get(String(n._id)) ?? 0;
     },
-    totalCount: async (p, _a, context) => {
+    itemCount: async (n, _a, context) => {
       const { householdId } = scopeOf(context);
-      return (await placeCounts(context, householdId)).total.get(String(p._id)) ?? 0;
+      return (await treeCounts(context, householdId)).itemCount.get(String(n._id)) ?? 0;
     },
   },
 
@@ -772,10 +866,10 @@ export const resolvers = {
       return ThingType.find({ householdId }).sort({ name: 1, _id: 1 }).lean();
     },
 
-    places: async (_, __, context = {}) => {
+    thingTree: async (_, __, context = {}) => {
       requireUser(context.user);
       const householdId = resolveHouseholdId(context.user);
-      return (await placeTreeFor(context, householdId)).ordered();
+      return (await treeFor(context, householdId)).ordered().filter((n) => !n.deletedAt);
     },
 
     thingAttention: async (_, __, context = {}) => {
@@ -789,6 +883,8 @@ export const resolvers = {
       const firstOcc = (cond) => ({ $min: { $filter: { input: '$__occ', as: 'o', cond } } });
       const [r] = await Thing.aggregate([
         baseMatch(householdId),
+        // Locations are not inventory: nothing about a shelf needs attention.
+        { $match: notLocation(types) },
         ...occurrenceStages(today),
         {
           $facet: {
@@ -840,6 +936,7 @@ export const resolvers = {
         photoRoles: [...PHOTO_ROLES],
         documentRoles: [...DOCUMENT_ROLES],
         relationshipKinds: [...RELATIONSHIP_KINDS],
+        thingKinds: [...THING_KINDS],
         missingKeys: [...MISSING_KEYS],
         trashDays: TRASH_DAYS,
       };
@@ -865,6 +962,8 @@ export const resolvers = {
         : { _id: { $in: [] } };
       const [r] = await Thing.aggregate([
         ...filteredStages(householdId, filter ?? {}, ctx),
+        // Never a location, whatever `kinds` asked for: the report is inventory.
+        { $match: notLocation(ctx.types) },
         {
           $facet: {
             count: [{ $count: 'n' }],
@@ -893,7 +992,7 @@ export const resolvers = {
       const { input } = validateCreateThing(rawArgs ?? {});
 
       const type = input.typeId ? await resolveType(householdId, input.typeId) : null;
-      const placeId = input.placeId ? await resolvePlaceId(householdId, input.placeId) : null;
+      const parentId = input.parentId ? await resolveParent(householdId, input.parentId, null) : null;
       // A new thing has no photos/documents yet: uploads attach them via the backend.
       if (input.photos?.length) throw inputError('input.photos.0.id', "not one of this thing's photos");
       if (input.documents?.length) throw inputError('input.documents.0.id', "not one of this thing's documents");
@@ -906,7 +1005,7 @@ export const resolvers = {
         name: input.name,
         typeId: type?._id ?? null,
         tags: dedupeTags(input.tags),
-        placeId,
+        parentId,
         acquired: acquiredValue(input.acquired ?? {}),
         value: valueValue(input.value ?? {}),
         dates: datesValue(input.dates ?? []),
@@ -958,7 +1057,7 @@ export const resolvers = {
 
       if (input.name !== undefined) thing.name = input.name;
       if (input.tags !== undefined) thing.tags = dedupeTags(input.tags ?? []);
-      if (input.placeId !== undefined) thing.placeId = await resolvePlaceId(householdId, input.placeId);
+      if (input.parentId !== undefined) thing.parentId = await resolveParent(householdId, input.parentId, thing._id);
       if (input.acquired !== undefined) thing.acquired = acquiredValue(input.acquired, current.acquired);
       if (input.value !== undefined) thing.value = valueValue(input.value, current.value);
       if (input.dates !== undefined) thing.dates = datesValue(input.dates ?? [], current.dates ?? []);
@@ -978,6 +1077,7 @@ export const resolvers = {
       return thing.toObject();
     },
 
+    /** Trash. What is inside stays where it is ("inside something in the Trash"); restore brings the path back. */
     deleteThing: async (_, rawArgs, context = {}) => {
       requireUser(context.user);
       const householdId = resolveHouseholdId(context.user);
@@ -1023,6 +1123,7 @@ export const resolvers = {
             key,
             name: input.name,
             icon: input.icon || 'Inventory2',
+            kind: input.kind || DEFAULT_THING_KIND,
             fields: typeFieldsValue(input.fields),
             builtIn: false,
           });
@@ -1036,7 +1137,12 @@ export const resolvers = {
       throw userError('Could not pick a unique key for this type', 'CONFLICT');
     },
 
-    /** The key never changes. A field edit does not rewrite existing things' stored values. */
+    /**
+     * The key never changes. A field edit does not rewrite existing things'
+     * stored values. `kind` → item is refused (CONFLICT) while any of its
+     * live things has live things inside: move those out first, or the Van
+     * would vanish from the "where is it?" picker with the jumper cables in it.
+     */
     updateThingType: async (_, rawArgs, context = {}) => {
       requireUser(context.user);
       const householdId = resolveHouseholdId(context.user);
@@ -1045,6 +1151,23 @@ export const resolvers = {
       const set = {};
       if (input.name !== undefined) set.name = input.name;
       if (input.icon !== undefined) set.icon = input.icon || 'Inventory2';
+      if (input.kind !== undefined) {
+        const current = await ThingType.findOne({ _id: id, householdId }, { kind: 1 }).lean();
+        if (!current) throw notFound('Type');
+        if (input.kind === 'item' && kindOfType(current) !== 'item') {
+          const holders = await Thing.find({ householdId, typeId: current._id, deletedAt: null }, { _id: 1 }).lean();
+          const holding = holders.length
+            ? await Thing.distinct('parentId', { householdId, deletedAt: null, parentId: { $in: holders.map((h) => h._id) } })
+            : [];
+          if (holding.length) {
+            throw userError(
+              `${holding.length} thing${holding.length === 1 ? '' : 's'} of this type ${holding.length === 1 ? 'has' : 'have'} things inside. Move them out first.`,
+              'CONFLICT'
+            );
+          }
+        }
+        set.kind = input.kind;
+      }
       if (input.fields !== undefined) set.fields = typeFieldsValue(input.fields ?? []);
       const type = Object.keys(set).length
         ? await ThingType.findOneAndUpdate({ _id: id, householdId }, { $set: set }, { new: true, lean: true, runValidators: true })
@@ -1067,74 +1190,6 @@ export const resolvers = {
       if (used > 0) throw userError(`This type is used by ${used} thing${used === 1 ? '' : 's'}`, 'CONFLICT');
       await ThingType.deleteOne({ _id: type._id, householdId });
       return { success: true, message: 'Type deleted' };
-    },
-
-    createPlace: async (_, rawArgs, context = {}) => {
-      requireUser(context.user);
-      const householdId = resolveHouseholdId(context.user);
-      const { input } = validateCreatePlace(rawArgs ?? {});
-      const tree = buildPlaceTree(await Place.find({ householdId }).lean());
-      let parentId = null;
-      if (input.parentId) {
-        if (!tree.byId.has(String(input.parentId))) throw inputError('input.parentId', 'place not found');
-        if (tree.pathOf(String(input.parentId)).length + 1 > bounds.placeDepth.max) {
-          throw inputError('input.parentId', `places nest at most ${bounds.placeDepth.max} deep`);
-        }
-        parentId = oid(input.parentId);
-      }
-      const place = await Place.create({ householdId, name: input.name, parentId, notes: input.notes ?? '' });
-      resetRequestCache(context);
-      return place.toObject();
-    },
-
-    updatePlace: async (_, rawArgs, context = {}) => {
-      requireUser(context.user);
-      const householdId = resolveHouseholdId(context.user);
-      const { id, input } = validateUpdatePlace(rawArgs ?? {});
-      if (!validObjectId(id)) throw notFound('Place');
-      const tree = buildPlaceTree(await Place.find({ householdId }).lean());
-      if (!tree.byId.has(String(id))) throw notFound('Place');
-
-      const set = {};
-      if (input.name !== undefined) set.name = input.name;
-      if (input.notes !== undefined) set.notes = input.notes ?? '';
-      if (input.parentId !== undefined) {
-        if (input.parentId === null) {
-          set.parentId = null;
-        } else {
-          const parent = String(input.parentId);
-          if (!tree.byId.has(parent)) throw inputError('input.parentId', 'place not found');
-          const subtree = tree.descendantsOf(String(id));
-          if (subtree.includes(parent)) throw inputError('input.parentId', 'a place cannot move inside itself');
-          const selfDepth = tree.pathOf(String(id)).length;
-          const height = Math.max(...subtree.map((d) => tree.pathOf(d).length - selfDepth + 1));
-          if (tree.pathOf(parent).length + height > bounds.placeDepth.max) {
-            throw inputError('input.parentId', `places nest at most ${bounds.placeDepth.max} deep`);
-          }
-          set.parentId = oid(parent);
-        }
-      }
-      const place = Object.keys(set).length
-        ? await Place.findOneAndUpdate({ _id: id, householdId }, { $set: set }, { new: true, lean: true, runValidators: true })
-        : await Place.findOne({ _id: id, householdId }).lean();
-      if (!place) throw notFound('Place');
-      resetRequestCache(context);
-      return place;
-    },
-
-    /** Children move up to its parent; every thing there (trashed ones too) becomes place-less. */
-    deletePlace: async (_, rawArgs, context = {}) => {
-      requireUser(context.user);
-      const householdId = resolveHouseholdId(context.user);
-      const { id } = validateId(rawArgs ?? {});
-      resetRequestCache(context);
-      if (!validObjectId(id)) return { success: false, message: 'Place not found' };
-      const place = await Place.findOne({ _id: id, householdId }).lean();
-      if (!place) return { success: false, message: 'Place not found' };
-      await Place.updateMany({ householdId, parentId: place._id }, { $set: { parentId: place.parentId ?? null } });
-      await Thing.updateMany({ householdId, placeId: place._id }, { $set: { placeId: null } });
-      await Place.deleteOne({ _id: place._id, householdId });
-      return { success: true, message: 'Place deleted' };
     },
 
     saveThingFilter: async (_, rawArgs, context = {}) => {

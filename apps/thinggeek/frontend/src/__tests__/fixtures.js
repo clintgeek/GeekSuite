@@ -1,5 +1,6 @@
-// A small, realistic household: House › Garage › Shelf 2, Wendy the boat
-// equipped with a Garmin Striker 4, a rifle with a serial, a keyboard.
+// A small, realistic household: House › Garage › Shelf 2 (locations), the
+// Van in the Garage holding the jumper cables, Wendy the boat in the Garage
+// with a Garmin Striker 4 as an accessory, a rifle with a serial, a keyboard.
 const T = (s) => `${s}T00:00:00.000Z`;
 
 export const field = (key, label, kind = 'text', over = {}) => ({
@@ -7,35 +8,54 @@ export const field = (key, label, kind = 'text', over = {}) => ({
 });
 
 export const TYPES = [
+  { __typename: 'ThingType', id: 'ty-location', key: 'location', name: 'Location', icon: 'Place', kind: 'location', builtIn: true, thingCount: 3, fields: [] },
   {
-    __typename: 'ThingType', id: 'ty-boat', key: 'boat', name: 'Boat', icon: 'DirectionsBoat', builtIn: true, thingCount: 1,
+    __typename: 'ThingType', id: 'ty-vehicle', key: 'vehicle', name: 'Vehicle', icon: 'DirectionsCar', kind: 'container', builtIn: true, thingCount: 1,
+    fields: [field('make', 'Make'), field('vin', 'VIN', 'text', { identifier: true })],
+  },
+  {
+    __typename: 'ThingType', id: 'ty-boat', key: 'boat', name: 'Boat', icon: 'DirectionsBoat', kind: 'container', builtIn: true, thingCount: 1,
     fields: [field('manufacturer', 'Manufacturer'), field('lengthFt', 'Length', 'number', { unit: 'ft' }), field('hullNumber', 'Hull number', 'text', { identifier: true })],
   },
   {
-    __typename: 'ThingType', id: 'ty-firearm', key: 'firearm', name: 'Firearm', icon: 'GpsFixed', builtIn: true, thingCount: 1,
+    __typename: 'ThingType', id: 'ty-firearm', key: 'firearm', name: 'Firearm', icon: 'GpsFixed', kind: 'item', builtIn: true, thingCount: 1,
     fields: [field('manufacturer', 'Manufacturer'), field('model', 'Model'), field('serial', 'Serial number', 'text', { identifier: true })],
   },
-  { __typename: 'ThingType', id: 'ty-keyboard', key: 'keyboard', name: 'Keyboard', icon: 'Keyboard', builtIn: true, thingCount: 1, fields: [field('switches', 'Switches')] },
-  { __typename: 'ThingType', id: 'ty-general', key: 'general', name: 'General', icon: 'Inventory2', builtIn: true, thingCount: 0, fields: [] },
+  { __typename: 'ThingType', id: 'ty-keyboard', key: 'keyboard', name: 'Keyboard', icon: 'Keyboard', kind: 'item', builtIn: true, thingCount: 1, fields: [field('switches', 'Switches')] },
+  { __typename: 'ThingType', id: 'ty-tool', key: 'tool', name: 'Tool', icon: 'Handyman', kind: 'item', builtIn: true, thingCount: 1, fields: [] },
+  { __typename: 'ThingType', id: 'ty-general', key: 'general', name: 'General', icon: 'Inventory2', kind: 'item', builtIn: true, thingCount: 0, fields: [] },
 ];
 
-const pathOf = (...names) => names.map(([id, name]) => ({ __typename: 'Place', id, name }));
-
-export const PLACES = [
-  { __typename: 'Place', id: 'pl-house', name: 'House', parentId: null, notes: null, directCount: 1, totalCount: 5, path: pathOf(['pl-house', 'House']) },
-  { __typename: 'Place', id: 'pl-garage', name: 'Garage', parentId: 'pl-house', notes: null, directCount: 2, totalCount: 4, path: pathOf(['pl-house', 'House'], ['pl-garage', 'Garage']) },
-  { __typename: 'Place', id: 'pl-shelf', name: 'Shelf 2', parentId: 'pl-garage', notes: null, directCount: 2, totalCount: 2, path: pathOf(['pl-house', 'House'], ['pl-garage', 'Garage'], ['pl-shelf', 'Shelf 2']) },
-  { __typename: 'Place', id: 'pl-truck', name: 'Truck', parentId: null, notes: null, directCount: 0, totalCount: 0, path: pathOf(['pl-truck', 'Truck']) },
-];
-
-export const placeRef = (id) => {
-  const p = PLACES.find((x) => x.id === id);
-  return { __typename: 'Place', id: p.id, name: p.name, parentId: p.parentId, path: p.path };
+const nodeType = (id) => {
+  const t = TYPES.find((x) => x.id === id);
+  return { __typename: 'ThingType', id: t.id, name: t.name, icon: t.icon };
 };
+const node = (id, name, parentId, typeId, over = {}) => ({
+  __typename: 'ThingNode', id, name, parentId, parentInTrash: false, kind: TYPES.find((t) => t.id === typeId).kind, childCount: 0, itemCount: 0, type: nodeType(typeId), ...over,
+});
+
+/** `thingTree`: every live thing as a node. */
+export const NODES = [
+  node('n-house', 'House', null, 'ty-location', { childCount: 2, itemCount: 5 }),
+  node('n-garage', 'Garage', 'n-house', 'ty-location', { childCount: 3, itemCount: 4 }),
+  node('n-shelf', 'Shelf 2', 'n-garage', 'ty-location'),
+  node('n-van', 'Van', 'n-garage', 'ty-vehicle', { childCount: 1, itemCount: 1 }),
+  node('t-cables', 'Jumper cables', 'n-van', 'ty-tool'),
+  node('t-wendy', 'Wendy', 'n-garage', 'ty-boat'),
+  node('t-rifle', 'Ruger 10/22', 'n-house', 'ty-firearm'),
+  node('t-keyboard', 'Keyboard', null, 'ty-keyboard'),
+];
+
+/** A thing's `path`: root → parent crumbs, from node ids. */
+export const crumbs = (...ids) =>
+  ids.map((id) => {
+    const n = NODES.find((x) => x.id === id);
+    return { __typename: 'ThingSummary', id: n.id, name: n.name, kind: n.kind, inTrash: false };
+  });
 
 export const typeRef = (id) => {
   const t = TYPES.find((x) => x.id === id);
-  return { __typename: 'ThingType', id: t.id, key: t.key, name: t.name, icon: t.icon };
+  return { __typename: 'ThingType', id: t.id, key: t.key, name: t.name, icon: t.icon, kind: t.kind };
 };
 
 export const date = (over = {}) => ({
@@ -55,7 +75,11 @@ export function makeThing(over = {}) {
     createdAt: '2026-09-01T15:00:00.000Z',
     updatedAt: '2026-09-20T15:00:00.000Z',
     type: typeRef('ty-boat'),
-    place: placeRef('pl-shelf'),
+    kind: 'container',
+    parentId: 'n-garage',
+    path: crumbs('n-house', 'n-garage'),
+    contentsCount: 0,
+    contents: [],
     coverPhoto: null,
     nextDue: date(),
     value: { __typename: 'ThingValue', amount: 18500, currency: 'USD', asOf: T('2026-01-15') },
@@ -73,7 +97,7 @@ export function makeThing(over = {}) {
     documents: [],
     relationships: [
       {
-        __typename: 'ThingRelationship', id: 'r1', kind: 'equipped-with', direction: 'out',
+        __typename: 'ThingRelationship', id: 'r1', kind: 'accessory-of', direction: 'in',
         thing: { __typename: 'ThingSummary', id: 't-garmin', name: 'Garmin Striker 4', coverThumbUrl: null, type: { __typename: 'ThingType', id: 'ty-general', name: 'General', icon: 'Inventory2' } },
       },
     ],
@@ -87,7 +111,9 @@ export function makeRifle(over = {}) {
     name: 'Ruger 10/22',
     tags: ['hunting'],
     type: typeRef('ty-firearm'),
-    place: placeRef('pl-house'),
+    kind: 'item',
+    parentId: 'n-house',
+    path: crumbs('n-house'),
     nextDue: null,
     dates: [],
     relationships: [],

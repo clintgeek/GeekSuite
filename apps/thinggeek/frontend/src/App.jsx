@@ -36,7 +36,7 @@ import ThingDetail from './views/detail/ThingDetail';
 
 const AddThing = lazy(() => import('./views/add/AddThing'));
 const AttentionView = lazy(() => import('./views/AttentionView'));
-const PlacesView = lazy(() => import('./views/PlacesView'));
+const WhereView = lazy(() => import('./views/WhereView'));
 const TypesView = lazy(() => import('./views/TypesView'));
 const InsuranceView = lazy(() => import('./views/InsuranceView'));
 const TrashView = lazy(() => import('./views/TrashView'));
@@ -115,7 +115,9 @@ function SignedIn({ user, onSignOut }) {
                   />
                 </Route>
                 <Route path="/attention" element={lazyRoute(<AttentionView />)} />
-                <Route path="/places" element={lazyRoute(<PlacesView />)} />
+                <Route path="/where" element={lazyRoute(<WhereView />)} />
+                {/* The Places page became Where (2026-09-26); an old bookmark still lands. */}
+                <Route path="/places" element={<Navigate to="/where" replace />} />
                 <Route path="/types" element={lazyRoute(<TypesView />)} />
                 <Route path="/insurance" element={lazyRoute(<InsuranceView />)} />
                 <Route path="/trash" element={lazyRoute(<TrashView />)} />

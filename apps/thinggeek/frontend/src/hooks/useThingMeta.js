@@ -1,14 +1,14 @@
 /**
  * The small, household-wide reference data every screen reads: the
- * vocabulary, the types, the places, the caller's saved views and the
- * attention summary. Each is its own cached query; this names them once and
+ * vocabulary, the types, the containment tree (every live thing as a node —
+ * utils/where.js), the caller's saved views and the attention summary. Each is its own cached query; this names them once and
  * derives the maps the pickers, labels and facets share.
  */
 import { useMemo } from 'react';
 import { useQuery } from '@apollo/client';
-import { GET_PLACES, GET_THING_ATTENTION, GET_THING_PROFILE, GET_THING_TYPES, GET_THING_VOCABULARY } from '../graphql/queries';
+import { GET_THING_ATTENTION, GET_THING_PROFILE, GET_THING_TREE, GET_THING_TYPES, GET_THING_VOCABULARY } from '../graphql/queries';
 import { DEFAULT_VOCAB } from '../utils/vocab';
-import { placeOrder } from '../utils/places';
+import { whereOrder } from '../utils/where';
 
 export function useVocabulary() {
   const { data } = useQuery(GET_THING_VOCABULARY, { fetchPolicy: 'cache-first' });
@@ -22,6 +22,7 @@ export function useVocabulary() {
       photoRoles: pick('photoRoles'),
       documentRoles: pick('documentRoles'),
       relationshipKinds: pick('relationshipKinds'),
+      thingKinds: pick('thingKinds'),
       missingKeys: pick('missingKeys'),
       trashDays: Number.isFinite(v.trashDays) ? v.trashDays : DEFAULT_VOCAB.trashDays,
     };
@@ -36,11 +37,18 @@ export function useThingTypes() {
   }, [data, loading, error, refetch]);
 }
 
-export function usePlaces() {
-  const { data, loading, error, refetch } = useQuery(GET_PLACES, { fetchPolicy: 'cache-and-network' });
+/** The household's Location type (the starter one first), or null if it was deleted. */
+export function useLocationType() {
+  const { types } = useThingTypes();
+  return types.find((t) => t.key === 'location') ?? types.find((t) => t.kind === 'location') ?? null;
+}
+
+/** The containment tree: `nodes` (every live thing), `nodesById`, and the Where facet's `order`. */
+export function useThingTree() {
+  const { data, loading, error, refetch } = useQuery(GET_THING_TREE, { fetchPolicy: 'cache-and-network' });
   return useMemo(() => {
-    const places = data?.places ?? [];
-    return { places, placesById: new Map(places.map((p) => [p.id, p])), order: placeOrder(places), loading: loading && !data, error, refetch };
+    const nodes = data?.thingTree ?? [];
+    return { nodes, nodesById: new Map(nodes.map((n) => [n.id, n])), order: whereOrder(nodes), loading: loading && !data, error, refetch };
   }, [data, loading, error, refetch]);
 }
 
@@ -59,6 +67,6 @@ export function useAttention() {
 /** The `context` the facet labels and fixed orders read (utils/facets.jsx). */
 export function useFacetContext() {
   const { typesById } = useThingTypes();
-  const { placesById, order } = usePlaces();
-  return useMemo(() => ({ typesById, placesById, placeOrder: order }), [typesById, placesById, order]);
+  const { nodesById, order } = useThingTree();
+  return useMemo(() => ({ typesById, nodesById, whereOrder: order }), [typesById, nodesById, order]);
 }

@@ -1,14 +1,15 @@
 /** Small shared read-outs of a thing, so a card, a row and a report say it the same way. */
-import { shortPlaceLabel } from '../utils/places';
+import { shortWhereLabel } from '../utils/where';
 import { formatMoney, moneyAmount } from '../utils/money';
 
-export function thingPlaceText(thing) {
-  return thing?.place ? shortPlaceLabel(thing.place) : '';
+/** Where it is, short: "Garage › Van" (its parent and that one's parent). */
+export function thingWhereText(thing) {
+  return shortWhereLabel(thing);
 }
 
-/** "Boat · Garage › Shelf 2" — or whichever half exists. */
+/** "Boat · Garage › Van" — or whichever half exists. */
 export function thingMetaLine(thing) {
-  return [thing?.type?.name, thingPlaceText(thing)].filter(Boolean).join(' · ');
+  return [thing?.type?.name, thingWhereText(thing)].filter(Boolean).join(' · ');
 }
 
 export function thingValueText(thing) {

@@ -4,25 +4,23 @@ import { groupRelationships, relationshipSentence } from '../../utils/relationsh
 const t = (id, name) => ({ id, name });
 
 describe('relationships as sentences', () => {
-  it('reads each kind from each end', () => {
+  it('accessory-of reads from each end', () => {
     const groups = groupRelationships([
-      { id: '1', kind: 'equipped-with', direction: 'out', thing: t('g', 'Garmin Striker 4') },
-      { id: '2', kind: 'equipped-with', direction: 'out', thing: t('m', 'Minn Kota Endura') },
-      { id: '3', kind: 'equipped-with', direction: 'in', thing: t('w', 'Wendy') },
-      { id: '4', kind: 'part-of', direction: 'out', thing: t('k', 'Fishing kit') },
+      { id: '1', kind: 'accessory-of', direction: 'in', thing: t('l', '50mm lens') },
+      { id: '2', kind: 'accessory-of', direction: 'in', thing: t('b', 'Spare battery') },
+      { id: '3', kind: 'accessory-of', direction: 'out', thing: t('k', 'Camera bag') },
     ]);
-    expect(groups.map((g) => g.phrase)).toEqual(['Equipped with', 'Equipped on', 'Part of']);
-    expect(relationshipSentence(groups[0])).toBe('Equipped with: Garmin Striker 4 and Minn Kota Endura');
-    expect(relationshipSentence(groups[1])).toBe('Equipped on: Wendy');
+    expect(groups.map((g) => g.phrase)).toEqual(['Accessory for', 'Accessories']);
+    expect(relationshipSentence(groups[0])).toBe('Accessory for: Camera bag');
+    expect(relationshipSentence(groups[1])).toBe('Accessories: 50mm lens and Spare battery');
   });
 
-  it('stored-with is one sentence both ways, deduped', () => {
+  it('dedupes one thing listed twice in the same sentence', () => {
     const groups = groupRelationships([
-      { id: '1', kind: 'stored-with', direction: 'out', thing: t('a', 'Tackle box') },
-      { id: '2', kind: 'stored-with', direction: 'in', thing: t('b', 'Rod case') },
-      { id: '3', kind: 'stored-with', direction: 'in', thing: t('a', 'Tackle box') },
+      { id: '1', kind: 'accessory-of', direction: 'in', thing: t('a', 'Lens') },
+      { id: '2', kind: 'accessory-of', direction: 'in', thing: t('a', 'Lens') },
     ]);
     expect(groups).toHaveLength(1);
-    expect(relationshipSentence(groups[0])).toBe('Stored with: Tackle box and Rod case');
+    expect(relationshipSentence(groups[0])).toBe('Accessories: Lens');
   });
 });

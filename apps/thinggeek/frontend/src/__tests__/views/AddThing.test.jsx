@@ -5,27 +5,28 @@ import { Route, Routes, useParams } from 'react-router-dom';
 import AddThing from '../../views/add/AddThing';
 import { UploadsProvider } from '../../hooks/useUploads';
 import { CREATE_THING } from '../../graphql/mutations';
-import { GET_PLACES, GET_THING, GET_THINGS, GET_THING_FACETS, GET_THING_TYPES } from '../../graphql/queries';
+import { GET_THING, GET_THINGS, GET_THING_FACETS, GET_THING_TREE, GET_THING_TYPES } from '../../graphql/queries';
 import { renderWithProviders } from '../testUtils';
-import { PLACES, TYPES, makeThing } from '../fixtures';
+import { NODES, TYPES, makeThing } from '../fixtures';
 
 const many = (m) => ({ ...m, maxUsageCount: 20 });
 
 const facets = {
-  __typename: 'ThingFacets', total: 0, types: [], tags: [{ __typename: 'ThingFacetValue', value: 'fishing', count: 1 }], places: [], due: [], missing: [], acquiredYears: [], hasPhotos: 0, hasDocuments: 0,
+  __typename: 'ThingFacets', total: 0, types: [], tags: [{ __typename: 'ThingFacetValue', value: 'fishing', count: 1 }], where: [], kinds: [], due: [], missing: [], acquiredYears: [], hasPhotos: 0, hasDocuments: 0,
 };
 
-function setup() {
-  const created = makeThing({ id: 't-new', name: 'Wendy', place: null, tags: [], relationships: [], dates: [], nextDue: null });
+function setup({ entry = '/add', parentId = null } = {}) {
+  const created = makeThing({ id: 't-new', name: 'Wendy', parentId: null, path: [], tags: [], relationships: [], dates: [], nextDue: null });
   const createResult = vi.fn(() => ({ data: { createThing: created } }));
   const mocks = [
     many({ request: { query: GET_THING_TYPES }, result: { data: { thingTypes: TYPES } } }),
-    many({ request: { query: GET_PLACES }, result: { data: { places: PLACES } } }),
+    many({ request: { query: GET_THING_TREE }, result: { data: { thingTree: NODES } } }),
     many({ request: { query: GET_THING_FACETS }, result: { data: { thingFacets: facets } } }),
     many({ request: { query: GET_THING, variables: { id: 't-new' } }, result: { data: { thing: created } } }),
     // The in-place list refresh after a create (hooks/useLibrary.js refreshLibraryList).
     many({ request: { query: GET_THINGS, variables: { page: 1, limit: 48, sort: 'name', sortDir: 'asc' } }, result: { data: { things: { __typename: 'ThingPage', total: 1, page: 1, pages: 1, things: [created] } } } }),
-    { request: { query: CREATE_THING, variables: { input: { name: 'Wendy', typeId: 'ty-boat', placeId: null, tags: [] } } }, result: createResult },
+    { request: { query: CREATE_THING, variables: { input: { name: 'Wendy', typeId: 'ty-boat', parentId, tags: [] } } }, result: createResult },
+    many({ request: { query: GET_THING_TREE }, result: { data: { thingTree: NODES } } }),
   ];
   const upload = vi.fn(async () => ({ file: { id: 'f1' }, entry: { id: 'p1' } }));
   const order = [];
@@ -48,7 +49,7 @@ function setup() {
       <Route path="/add" element={<AddThing />} />
       <Route path="/thing/:id" element={<Landed />} />
     </Routes>,
-    { initialEntries: ['/add'], mocks, wrapper: Wrapper }
+    { initialEntries: [entry], mocks, wrapper: Wrapper }
   );
   return { createResult, upload, order };
 }
@@ -98,5 +99,16 @@ describe('add a thing', () => {
     expect(upload.mock.calls[0][0]).toBe('t-new');
     expect(upload.mock.calls[0][1]).toMatchObject({ file, kind: 'photo', role: 'id-plate' });
     expect(order).toEqual(['create', 'upload']);
+  });
+
+  it('"Add here" arrives with where it is already chosen, and creates it there', async () => {
+    const { createResult } = setup({ entry: { pathname: '/add', state: { parentId: 'n-van' } }, parentId: 'n-van' });
+    fireEvent.click(screen.getByRole('button', { name: 'Skip — no photo yet' }));
+    const name = await toNameStep();
+    expect(await screen.findByRole('button', { name: 'Where it is: House › Garage › Van. Change' })).toBeInTheDocument();
+    fireEvent.change(name, { target: { value: 'Wendy' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create' }));
+    expect(await screen.findByText('Landed on t-new')).toBeInTheDocument();
+    expect(createResult).toHaveBeenCalledTimes(1);
   });
 });
