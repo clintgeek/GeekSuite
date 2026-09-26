@@ -137,6 +137,17 @@ Wanted, not built on the 2026-09-22 overnight run:
   rules engine + Stats, free-walk AI (cuttable), backlog goal/wishlist/loans/scan-to-add/MCP.
   Full phase table and done-when criteria: [`DOCS/GameGeekPlan.md`](GameGeekPlan.md) §11.
   Blocked on P0 prep and Chef's answers in §13.
+- **Desktop harness findings in BuJoGeek and FitnessGeek** (found 2026-09-25 by the `/`
+  work, pre-existing, not gated by CI because CI runs phone viewports only). There are 46
+  findings under `ci.mjs --enforce-a11y --desktop`:
+  - FitnessGeek sidebar section labels ("TRACK" …) fail contrast.
+  - BuJoGeek sidebar section labels are 9px, below the 12px floor.
+  - BuJoGeek's "BJ" brand mark is 10px.
+  - BuJoGeek's quick-add "Plan your day" prompt is at contrast 2.27 in dark mode.
+  - BuJoGeek's monthly-plan day numbers.
+
+  These need a design pass in GeekSidebar and BuJoGeek's styles. After that, consider
+  adding `--desktop` to the CI harness job so desktop regressions gate too.
 - **GameGeek: Playing follows Playnite's `isInstalled`** (Chef approved 2026-09-25; the
   semantics are in `apps/gamegeek/DOCS/TASTE_MODEL.md`: "Playing = installed on the laptop,
   ready to go"). On every Playnite import, installed games move to Playing from Backlog, On
