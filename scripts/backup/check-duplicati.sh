@@ -23,7 +23,7 @@
 #     the container while the host path has files — a stale mount (see below)
 # WARN (reported, exit unaffected) when:
 #   - the job's newest Notification is Type=Warning
-#   - a backup target mounted here (/mnt/int_backup, /mnt/ext_backup, /mnt/network_backup) is ≥ DISK_WARN_PCT (90) full
+#   - a backup target mounted here (/mnt/int_backup, /mnt/ext_backup, /mnt/network_backup) is ≥ DISK_WARN_PCT (90) full (ext_backup: EXT_DISK_WARN_PCT, 100 — full by design)
 #
 # Output: job names, timestamps, truncated error text with anything URL- or
 # path-with-credentials-like stripped, disk percentages. Nothing else.
@@ -39,6 +39,9 @@ GS_HC_URL="${DUPLICATI_HEALTHCHECK_URL:-}"
 DUPLICATI_CONTAINER="${DUPLICATI_CONTAINER:-duplicati}"
 DUPLICATI_DB_PATH="${DUPLICATI_DB_PATH:-/data/Duplicati/Duplicati-server.sqlite}"
 DISK_WARN_PCT="${DISK_WARN_PCT:-90}"
+# Ext is full by design (Chef, 2026-09-26): smart retention keeps versions in
+# whatever room it has, so it has sat at 99% for ages. Warn only at truly full.
+EXT_DISK_WARN_PCT="${EXT_DISK_WARN_PCT:-100}"
 TARGET_MOUNTS="${TARGET_MOUNTS:-/mnt/int_backup /mnt/ext_backup /mnt/network_backup}"
 
 mkdir -p "${LOG_DIR}" "${WORK_ROOT}"
@@ -153,8 +156,9 @@ done < <(docker inspect "${DUPLICATI_CONTAINER}" --format '{{range .Mounts}}{{.S
 for m in ${TARGET_MOUNTS}; do
   if mountpoint -q "$m"; then
     pct="$(df --output=pcent "$m" | tail -n1 | tr -dc '0-9')"
-    if [ "${pct}" -ge "${DISK_WARN_PCT}" ]; then
-      warn "backup target ${m} is ${pct}% full (warn at ${DISK_WARN_PCT}%)"
+    limit="${DISK_WARN_PCT}"; [ "$m" = /mnt/ext_backup ] && limit="${EXT_DISK_WARN_PCT}"
+    if [ "${pct}" -ge "${limit}" ]; then
+      warn "backup target ${m} is ${pct}% full (warn at ${limit}%)"
     else
       log "backup target ${m} is ${pct}% full"
     fi

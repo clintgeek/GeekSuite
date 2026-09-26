@@ -52,16 +52,20 @@ state at start.
    - Add `_netdev,nofail,x-systemd.after=network-online.target` to the `/mnt/network_backup` line in `/etc/fstab`, so boot waits for the network.
    - In Duplicati's compose, give that volume `bind: { propagation: rslave }`, so a late mount still reaches the container.
 
-### 2. Ext job: `/mnt/ext_backup` (sdf, 458 GB) is 99% full
+### 2. Ext job: `/mnt/ext_backup` (sdf, 458 GB) is full by design
 
-The job still succeeds, with warnings, but it is one fat night away from failing.
+Chef, 2026-09-26: that drive exists only to hold as many versions as fit, on smart
+retention, and has sat at 99% for ages. So `check-duplicati.sh` warns about it only at
+100% (`EXT_DISK_WARN_PCT`); the other targets warn at 90%.
 
-In the Duplicati UI:
-1. Open **DockerNextCloudProjects Ext** → **Edit** → step **5 Options** → **Backup retention**.
-2. Choose **Smart backup retention**, or "Delete backups older than" a shorter window. Save.
-3. On the job, choose **Advanced → Compact now** to reclaim the space.
-
-Or move the job to a larger disk. Freeing ext_backup is also on `DOCS/SUITE_TODO.md`.
+- **Smart retention prunes by age, not by free space.** If the data outgrows the drive,
+  the prune can fail partway through. The 2026-09-25 error "…after removing remote
+  volumes, rolling back" looks like that.
+- **To free space, delete through Duplicati, never by hand.** Either tighten the job's
+  retention and run **Compact now**, or run `delete` with `--version=` on the job's
+  Commandline screen. Removing files from the drive yourself leaves Duplicati's
+  database listing files that no longer exist, which is the "missing remote files"
+  failure the Network job had.
 
 ### 3. Give Duplicati its own alarm
 
