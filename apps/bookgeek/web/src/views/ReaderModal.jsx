@@ -125,7 +125,7 @@ export default function ReaderModal({
   }, [fontPct, readerRenditionRef]);
 
   // Progress rail: epub.js exposes `relocated` on the rendition, but the
-  // rendition is created asynchronously by the effect in App.jsx (and may
+  // rendition is created asynchronously by the effect in hooks/useReader.js (and may
   // never appear at all if the EPUB fails to load). Poll briefly for it,
   // then listen for page turns; if it never shows up, leave the rail hidden.
   useEffect(() => {
@@ -264,7 +264,7 @@ export default function ReaderModal({
   const hairline = alpha(palette.ink, 0.14);
 
   return (
-    // `disablePortal`: the epub.js effect in App.jsx (which this file cannot
+    // `disablePortal`: the epub.js effect in hooks/useReader.js (which this file cannot
     // edit) mounts synchronously on `readerOpen` with a one-shot guard —
     // `if (!readerContainerRef.current) return;`, never retried. MUI's
     // default Modal portal resolves its mount node one tick after the first

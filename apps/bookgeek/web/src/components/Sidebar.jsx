@@ -46,7 +46,7 @@ import {
   shelfNavId
 } from './navConfig';
 
-/** One glyph per built-in shelf in `App.jsx`'s `BUILT_IN_SHELVES`; custom shelves fall back to `ShelfIcon`. */
+/** One glyph per built-in shelf in hooks/useProfile.js's `BUILT_IN_SHELVES`; custom shelves fall back to `ShelfIcon`. */
 const SHELF_ICONS = {
   reading: <ReadingIcon />,
   'on-reader': <OnReaderIcon />,
@@ -60,8 +60,8 @@ const SHELF_ICONS = {
 /**
  * Brand block — BookGeek's identity, so it is passed as a node rather than the
  * primitive's `{ monogram, name }` object: the DM Serif Display wordmark with
- * no monogram chip is the app's mark. There is no router, so "home" is a
- * `setActiveView` click, and the caller closes the mobile drawer by hand (the
+ * no monogram chip is the app's mark. "Home" is a `setActiveView` click (the
+ * URL-backed setter from hooks/useLibraryParams), and the caller closes the mobile drawer by hand (the
  * primitive only auto-closes for `to`/`href` brands and for `onClick` rows).
  */
 const Brand = ({ onHome }) => {

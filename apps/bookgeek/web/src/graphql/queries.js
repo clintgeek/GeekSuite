@@ -50,6 +50,69 @@ export const GET_BOOKS = gql`
   }
 `;
 
+/**
+ * Every field a library row or the detail sheet reads — the same selection as
+ * `GET_BOOKS`' items and `UPDATE_BOOK`'s result, so the detail query can be
+ * answered from a row the library already loaded, and a REST reply (enrich,
+ * cover, upload) can be written into the cache as a whole Book
+ * (`graphql/cachePolicies.js` → `writeRestBook`).
+ */
+export const BOOK_FIELDS = gql`
+  fragment BookFields on Book {
+    id
+    title
+    authors
+    series {
+      name
+      index
+    }
+    isbn
+    isbn13
+    goodreadsId
+    openLibraryId
+    asin
+    googleBooksId
+    publisher
+    publishedDate
+    pageCount
+    description
+    language
+    tags
+    files {
+      format
+      path
+      size
+      addedAt
+    }
+    coverPath
+    owned
+    shelf
+    rating
+    review
+    dateAdded
+    dateStarted
+    dateFinished
+    readCount
+    readingProgress
+    source
+    createdAt
+    updatedAt
+  }
+`;
+
+/**
+ * One book, for `/book/:id`. A card tap reads it straight from the row the
+ * library holds (`Query.book`'s read policy); a deep link fetches it.
+ */
+export const GET_BOOK = gql`
+  query GetBook($id: ID!) {
+    book(id: $id) {
+      ...BookFields
+    }
+  }
+  ${BOOK_FIELDS}
+`;
+
 export const GET_SHELVES = gql`
   query GetShelves {
     shelves {

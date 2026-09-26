@@ -11,7 +11,8 @@
  * Read · Send · Shelf · ⋯ — with the rest moved into the More sheet, the shelf
  * sheet, the cover sheet, the download sheet and the edit dialog. Behavior is
  * unchanged: every handler, request and state transition the old overlay
- * performed still happens, and all state still lives in `App.jsx`.
+ * performed still happens. Its state lives in hooks/useBookDetail.js, mounted
+ * per book by the `/book/:id` route (views/BookDetailRoute.jsx).
  */
 import React, { useEffect, useState } from "react";
 import {
@@ -149,7 +150,7 @@ export default function BookDetailModal({
     if (enrichError) notify(enrichError, { tone: "error" });
   }, [enrichError, notify]);
   // Same shape: a failed shelf move used to be a console.error and nothing
-  // the user could see. App.jsx clears it before each attempt, so a fresh
+  // the user could see. useBookDetail clears it before each attempt, so a fresh
   // value is always a real transition.
   useEffect(() => {
     if (shelfError) notify(shelfError, { tone: "error" });

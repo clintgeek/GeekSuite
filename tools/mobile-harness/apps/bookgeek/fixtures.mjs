@@ -16,6 +16,10 @@ const BOOK_ROWS = [
 
 export const BOOKS = BOOK_ROWS.map(
   ([id, title, authors, shelf, rating, pageCount, publishedDate, readingProgress, tags, publisher, color]) => ({
+    // `__typename` because the library list lives in the Apollo cache since
+    // BookGeek's Phase B (web/src/graphql/cachePolicies.js): a `Book` is
+    // normalized by type + id, and the detail route reads it back by id.
+    __typename: 'Book',
     id, title, authors, shelf, rating, pageCount, publishedDate, readingProgress, tags, publisher, color,
     isbn: '9780765375865', isbn13: null, goodreadsId: '21418013', language: 'en',
     owned: shelf !== 'want-to-read',
@@ -23,7 +27,7 @@ export const BOOKS = BOOK_ROWS.map(
       'Fifteen years from now, a new virus sweeps the globe. 95% of those afflicted experience nothing worse ' +
       'than fever and headaches. Four percent suffer acute meningitis. And one percent find themselves ' +
       '"locked in" — fully awake and aware, but unable to move or respond to stimulus.\n\nA gripping near-future thriller.',
-    files: [{ format: 'epub', path: `/data/library/${id}.epub`, size: 1200000, addedAt: '2026-03-03' }],
+    files: [{ __typename: 'BookFile', format: 'epub', path: `/data/library/${id}.epub`, size: 1200000, addedAt: '2026-03-03' }],
     coverPath: `covers/${id}.jpg`, review: '', dateAdded: '2026-03-03', dateStarted: null,
     dateFinished: shelf === 'read' ? '2026-05-01' : null,
     readCount: shelf === 'read' ? 1 : 0, series: null, openLibraryId: null, asin: null,
@@ -32,6 +36,7 @@ export const BOOKS = BOOK_ROWS.map(
 );
 
 export const SHELVES = {
+  __typename: 'ShelfStats',
   total: 223, owned: 190, unowned: 33,
   shelves: [
     { id: 'reading', count: 2 },
@@ -42,7 +47,7 @@ export const SHELVES = {
     { id: 'abandoned', count: 4 },
     { id: 'need-to-find', count: 3 },
     { id: 'custom-comfort-reads', count: 1 },
-  ],
+  ].map((entry) => ({ __typename: 'ShelfCount', ...entry })),
 };
 
 const SAVED_FILTER = (id, name, over = {}) => ({
@@ -97,7 +102,7 @@ export const WHAT_NEXT_PICKS = [
   { bookId: 'b5', why: 'Already on the reader — a five-star average from books you rated this high.', book: BOOKS.find((b) => b.id === 'b5') },
   { bookId: 'b3', why: 'Philip K. Dick is your most-reread author.', book: BOOKS.find((b) => b.id === 'b3') },
   { bookId: 'b6', why: 'A short read that matches the satire tag on your recent five-star ratings.', book: BOOKS.find((b) => b.id === 'b6') },
-].map((p) => ({ __typename: 'WhatNextPick', ...p, book: { __typename: 'Book', ...p.book } }));
+].map((p) => ({ __typename: 'WhatNextPick', ...p, book: { ...p.book, __typename: 'Book' } }));
 
 export const DRAFT_BOOK_METADATA = {
   __typename: 'BookMetadataDraft',
@@ -130,8 +135,10 @@ export const OPS = {
     if (v.shelf) items = items.filter((b) => b.shelf === v.shelf);
     if (v.q) items = items.filter((b) => (b.title + b.authors.join()).toLowerCase().includes(String(v.q).toLowerCase()));
     if (v.tag) items = items.filter((b) => b.tags.includes(v.tag));
-    return { books: { items, total: v.shelf || v.q || v.tag ? items.length : 223, page: 1, pageSize: 50 } };
+    return { books: { __typename: 'BookPage', items, total: v.shelf || v.q || v.tag ? items.length : 223, page: 1, pageSize: 50 } };
   },
+  // `/book/:id` deep links (and any row the cache holds only partly).
+  GetBook: (v) => ({ book: BOOKS.find((b) => b.id === v.id) ?? null }),
 };
 
 export async function routes(ctx) {

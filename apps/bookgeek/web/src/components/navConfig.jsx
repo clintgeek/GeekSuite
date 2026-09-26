@@ -1,13 +1,36 @@
 /**
- * BookGeek navigation config — one source of truth for the sidebar's nav ids
- * and the top bar's page title.
+ * BookGeek navigation config — one source of truth for the routes, the
+ * sidebar's nav ids and the top bar's page title.
  *
- * BookGeek has no router: views are `activeView` state ("library" | "profile")
- * and the shelf being browsed is `shelfFilter`. So the sidebar's `activeId` is
- * derived from that pair here, and the top bar title is derived from the same
- * map, so a view can never be named one thing in one surface and another in
- * the other (THE_UI_UNIFICATION_PLAN.md §3).
+ * Routes (App.jsx), since Phase B of DOCS/BOOKGEEK_CLEANUP_PLAN.md:
+ *   /            the library (filters in the query string — hooks/useLibraryParams)
+ *   /book/:id    the detail sheet, a child route OVER the mounted library
+ *   /settings    Settings
+ * The views still speak the old two names — `activeView` "library" |
+ * "profile" — so `viewForPath` maps a path onto them, and the sidebar's
+ * `activeId` and the title are derived from that pair here, so a view can
+ * never be named one thing in one surface and another in the other
+ * (THE_UI_UNIFICATION_PLAN.md §3).
  */
+import { matchPath } from "react-router-dom";
+
+export const LIBRARY_PATH = "/";
+export const SETTINGS_PATH = "/settings";
+export const BOOK_PATH = "/book/:id";
+
+/** "profile" on /settings; everything else (the library, a sheet over it) is "library". */
+export function viewForPath(pathname = "/") {
+  return matchPath({ path: SETTINGS_PATH, end: true }, pathname) ? "profile" : "library";
+}
+
+/** `/book/:id`, keeping the library's query string so closing returns to it. */
+export function bookPath(id, search = "") {
+  return `/book/${ encodeURIComponent(id) }${ search || "" }`;
+}
+
+export function libraryPath(search = "") {
+  return `${ LIBRARY_PATH }${ search || "" }`;
+}
 
 export const APP_NAME = "BookGeek";
 

@@ -14,7 +14,7 @@
  *
  * Every card carries its `why`, the strip header carries one "AI-drafted" chip
  * and one provenance line, and "Start reading" goes through the ordinary shelf
- * mutation in `App.jsx` — nothing on this strip writes on its own.
+ * mutation (hooks/useWhatNext.js) — nothing on this strip writes on its own.
  */
 import React from "react";
 import { Box, Button, Chip, Skeleton, Typography } from "@mui/material";

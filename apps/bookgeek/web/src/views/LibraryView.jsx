@@ -7,8 +7,9 @@
  * "Add book" primary action out in the FAB. Search moved to the top bar, so
  * it is gone from here; the dev-facing status lines are gone with it.
  *
- * All state still lives in `App`; the only hook here is the sheet's open flag,
- * which nothing outside this view needs to read.
+ * State lives in the hooks `views/LibraryRoute.jsx` wires in (the list in the
+ * Apollo cache, the filters in the URL); the only hooks here are the sheet's
+ * open flag and the grid/list layout, which nothing outside this view reads.
  */
 import React, { useEffect, useState } from "react";
 import { Box, Button, Skeleton, Typography } from "@mui/material";
@@ -67,7 +68,7 @@ export default function LibraryView({
   mergeSelectionError,
   onRetry,
   onStartReading,
-  // (book, rating) => Promise<boolean>. App owns the list, so App saves; this
+  // (book, rating) => Promise<boolean>. The session saves (hooks/useBookActions useRateBook); this
   // view only decides what to tell the person.
   onRateBook,
   saveFilterLoading,
@@ -120,11 +121,11 @@ export default function LibraryView({
   /**
    * Save a rating, and make a mis-tap cheap to undo.
    *
-   * The change is already on screen (App applies it optimistically), so the
+   * The change is already on screen (applied optimistically in the cache), so the
    * toast is not confirmation — it is the undo. On a grid you also tap to open
    * books and scroll with your thumb, and a stray tap that quietly changed a
    * rating you had set years ago is the failure worth guarding. A failed save
-   * has already been rolled back by App; saying so is this view's job.
+   * has already been rolled back in the cache; saying so is this view's job.
    */
   const handleRate = async (book, rating) => {
     if (!onRateBook) return;
