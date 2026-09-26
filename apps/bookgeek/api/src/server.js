@@ -24,6 +24,17 @@ async function start() {
       serverSelectionTimeoutMS: 5000,
     });
     logger.info("MongoDB connected");
+
+    // Derived tags (DOCS/TAGS.md §4): libraryTags/unsortedTags from each
+    // book's raw tags, so a vocabulary change reaches stored books on the
+    // next deploy. Idempotent, before listen; a failure is logged, never fatal.
+    try {
+      const { migrateTags } = await import("./migrations/tags.js");
+      const { Book } = await import("./models/book.js");
+      await migrateTags({ Book, logger });
+    } catch (err) {
+      logger.error({ err: err?.message }, "tag migration failed");
+    }
   }
 
   const server = app.listen(API_PORT, "0.0.0.0", () => {

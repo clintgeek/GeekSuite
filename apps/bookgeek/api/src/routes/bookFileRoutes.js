@@ -48,6 +48,7 @@ import {
   shouldReplaceDescription,
   tryCalibreEnrich,
 } from "../services/enrichment.js";
+import { cleanMyTags, deriveTagFields } from "../tags.js";
 
 const router = express.Router();
 
@@ -426,6 +427,14 @@ router.post("/api/books/merge", authenticateToken, validate({ body: mergeBodySch
 
     if (!primary.goodreadsId && secondary.goodreadsId) {
       update.goodreadsId = secondary.goodreadsId;
+    }
+
+    // Tags a person added in BookGeek are theirs wherever they were added:
+    // the merged book keeps both books' (DOCS/TAGS.md §4).
+    const primaryMine = Array.isArray(primary.myTags) ? [...primary.myTags] : [];
+    const mergedMine = cleanMyTags([...primaryMine, ...(Array.isArray(secondary.myTags) ? secondary.myTags : [])]);
+    if (mergedMine.length !== primaryMine.length) {
+      update.myTags = mergedMine;
     }
 
     let updatedPrimary = primary;
@@ -1064,6 +1073,11 @@ router.post("/api/books/:id/enrich", authenticateToken, validate({ params: bookI
         },
       });
     }
+
+    // Enrich merges provider subjects into the raw `tags` (they are an
+    // import, like Calibre's); the canonical and Unsorted fields follow in
+    // the same $set (DOCS/TAGS.md).
+    if (Array.isArray(update.tags)) Object.assign(update, deriveTagFields(update.tags));
 
     await Book.updateOne({ _id: book._id }, { $set: update }).exec();
     const updatedBook = await Book.findById(book._id).lean();

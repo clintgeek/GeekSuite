@@ -11,6 +11,7 @@ import { resolveInLibrary } from "../libraryPaths.js";
 import { authenticateToken } from "../middleware/auth.js";
 import { validate } from "../validation/validate.js";
 import { calibreRescanQuerySchema } from "../validation/schemas/importJobs.js";
+import { carryOverMyTags, withDerivedTags } from "../tags.js";
 
 const router = express.Router();
 
@@ -52,8 +53,15 @@ router.post("/calibre", authenticateToken, async (req, res) => {
       });
     }
 
-    // Reset any previous Calibre-imported books so this route can be safely re-run
-    await Book.deleteMany({ source: "calibre-import" });
+    // This route replaces every Calibre-imported book (the delete is below,
+    // just before the insert). Tags a person added in BookGeek (`myTags`)
+    // live only on those documents, so they are read first and carried onto
+    // the re-imported books (DOCS/TAGS.md §4: an edit in BookGeek is never
+    // lost to a Calibre re-import).
+    const previousWithMyTags = await Book.find(
+      { source: "calibre-import", "myTags.0": { $exists: true } },
+      { title: 1, authors: 1, isbn: 1, isbn13: 1, goodreadsId: 1, myTags: 1 }
+    ).lean();
 
     const baseQuery = db.prepare(`
       SELECT
@@ -431,17 +439,27 @@ function parseEbookMetaOutput(text) {
         source: "calibre-import",
       };
 
-      docs.push(doc);
+      // `tags` exactly as Calibre has them; the canonical and Unsorted
+      // fields are derived from it (DOCS/TAGS.md).
+      docs.push(withDerivedTags(doc));
     }
 
     db.close();
 
-    const result = await Book.insertMany(docs, { ordered: false });
+    // Reset any previous Calibre-imported books so this route can be safely
+    // re-run — except one that carries myTags and is no longer in Calibre,
+    // which is kept rather than losing its owner's tags.
+    const carried = carryOverMyTags(previousWithMyTags, docs);
+    await Book.deleteMany({ source: "calibre-import", _id: { $nin: carried.keepIds } });
+
+    const result = await Book.insertMany(carried.docs, { ordered: false });
 
     return res.json({
       success: true,
       imported: result.length,
       skippedUnsafePaths,
+      myTagsCarried: carried.carried,
+      keptForMyTags: carried.keepIds.length,
     });
   } catch (error) {
     console.error("Calibre import failed", error);
@@ -817,7 +835,7 @@ router.post("/calibre/rescan", authenticateToken, validate({ query: calibreResca
         source: "calibre-import",
       };
 
-      await Book.create(doc);
+      await Book.create(withDerivedTags(doc));
       createdNew += 1;
     }
 
