@@ -54,7 +54,7 @@ re-verified.
 - Step 3 **done**: CONTEXT.md stack paragraph, the sorts line, and the stale
   "still live" and "Chef's call" notes.
 
-## Phase B — structure — **approved by Chef 2026-09-25** ("B and C need to be done, for sure"); starts after Phase A lands
+## Phase B — structure — **approved by Chef 2026-09-25** ("B and C need to be done, for sure") — **done 2026-09-25**
 
 - **`App.jsx` → routes and per-view state.** Real routes (`/`, `/book/:id`, `/settings`,
   deep-linkable like GameGeek), state moved into hooks per view, and the book list moved
@@ -64,6 +64,20 @@ re-verified.
   it instead of three routers.
 - Behaviour-preserving, one module per commit, with BookGeek's 224 web tests, api tests
   and harness scenes green at every step.
+
+**Progress (2026-09-25): done, awaiting commit.** Details are in
+`apps/bookgeek/DOCS/CONTEXT.md` under "Phase B cleanup (2026-09-25)".
+- **B1:** `server.js` went from 2,447 to 66 lines, split into `app.js`
+  (`createApp()`) and route modules. boot-smoke now imports `app.js`. The old
+  and new servers answered 170 probes identically.
+- **B2:** `App.jsx` went from 2,730 to 281 lines. It has real routes (`/`,
+  `/book/:id` over the mounted library, `/settings`), the filters are in the
+  URL, the list is in the Apollo cache with a paginated field policy, and the
+  state lives in `hooks/*`. Edits, shelf moves and deletes change the cache in
+  place and never refetch the list.
+- **Bug fix:** "Also delete files" now goes to `DELETE /api/books/:id?deleteFiles=true`.
+- 256 web tests and 215 api tests. The harness ran 34 scenes with 0
+  violations and 0 a11y findings.
 
 ## Phase C — parity with GameGeek — **approved 2026-09-25**; C1 (extract from GameGeek into `packages/collection`, with GameGeek moved onto it) is running in parallel with Phase A; C2 (BookGeek adopts it) comes after Phase B
 

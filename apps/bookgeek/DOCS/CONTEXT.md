@@ -799,3 +799,164 @@ and the api on its default connection (mongoose 7).
   `apps/bookgeek/api/test/sharedSchema.test.js` (hermetic). Both went red when a
   writer was pointed back at a local copy, and green again when restored.
 
+
+---
+
+## Phase B cleanup (2026-09-25): structure, and "Also delete files" fixed
+
+Phase B of `DOCS/BOOKGEEK_CLEANUP_PLAN.md`. The structure changed; the
+behaviour is the same, with the exceptions listed at the end.
+
+### API: `server.js` is now `app.js` plus route modules
+
+`api/src/server.js` went from 2,447 to 66 lines. All it does now is run
+dotenv, connect to Mongo, listen, and shut down cleanly. `createApp()` is in
+`api/src/app.js`. It does not listen or connect, so tests and
+`tools/boot-smoke.mjs` import the whole API rather than three routers.
+
+The routes are split across these modules:
+- `routes/kindleRoutes.js`: `/kindle*`. Its PIN cookie and page helpers are in
+  `kindleUi.js`.
+- `routes/healthRoutes.js`: `/api/health` and `/api/me`.
+- `routes/bookFileRoutes.js`: cover, upload, download, search-covers, enrich,
+  merge, send-to-kindle, and `DELETE /api/books/:id`.
+- `services/enrichment.js` and `services/coverFiles.js`: the helpers those
+  routes use.
+- `config.js`: reads env when a value is asked for, not at import time.
+  `dbConnected()` is the 503 check.
+- `authRoutes`, `importRoutes` and `deviceBasket.js` are unchanged.
+
+The middleware and routes are registered in the same order as before:
+1. trust proxy
+2. csrfGuard, before cors
+3. cors
+4. the body parsers
+5. the http logger
+6. auth and import
+7. kindle
+8. health
+9. book files
+10. device baskets
+11. static
+12. the SPA fallback, last, with its extension-404 guard
+
+**Proof.** HEAD's `server.js` and the new one were booted side by side
+without Mongo and sent the same 85 probes, once with `KINDLE_UI_PIN` set and
+once without. All 170 answers were identical in status, Set-Cookie flags,
+CORS headers, cache-control, content-type and body. The probes covered every
+`/api/books/*` route, the kindle PIN flow, `/download-basket`, CSRF, the
+OPTIONS preflight, and the SPA fallback plus its 404s.
+
+Two quirks behave the same on HEAD and now, and were left alone:
+- `POST /api/import/goodreads/dedupe` hangs when there is no database. It has
+  no 503 check.
+- `/kindle-test` falls through to the SPA.
+
+### Web: real routes, and the book list in the Apollo cache
+
+`web/src/App.jsx` went from 2,730 to 281 lines. It now holds only the session
+gate, the shell and the route table, in the same shape as GameGeek's.
+
+| Route | View | State |
+|---|---|---|
+| `/` | `views/LibraryRoute.jsx` | `hooks/useLibrary.js` (the list), `hooks/useWhatNext.js` |
+| `/book/:id` | `views/BookDetailRoute.jsx`, a child route over the library | `hooks/useBookDetail.js`, which uses `useCoverTools`, `useBookEdit` and `useReader` |
+| `/settings` | `views/SettingsRoute.jsx` | `hooks/useSettings.js` |
+
+- **Filters are in the URL:** `/?q=&shelf=&author=&tag=&sort=&dir=`, with
+  default values left out (`hooks/useLibraryParams.jsx` and
+  `utils/libraryParams.js`). All the setters called in one tick go into a
+  single navigation. Without that, "Clear filters", which is four setter
+  calls, would lose three of them to react-router's stale closure. The
+  saved default shelf applies once per session, and only when the URL names
+  no shelf.
+- **Session state** that more than one route reads is in
+  `hooks/useBookGeek.jsx`: the profile and shelves, saved filters,
+  preferences, the device basket and select mode, the Add-book dialog, and
+  `rateBook`. The provider unmounts on sign-out, and sign-out also clears the
+  Apollo store.
+- **The list lives in the Apollo cache** (`graphql/cachePolicies.js`).
+  `Query.books` has one list per filter and sort (keyArgs leave out
+  `page`/`limit`):
+  - Page 1 refreshes the head of the list and keeps everything loaded after
+    it. Later pages append.
+  - Edits never refetch the list. Mutations update `Book:<id>` in place, and
+    REST replies go through `writeRestBook`.
+  - A shelf move takes the book out of any cached list whose shelf filter it
+    no longer matches. `matchesShelfFilter` is the gateway's `shelfMatch()`.
+  - A delete evicts the book.
+  - A create refreshes page 1 in place.
+  - `refetch()` is never used after an edit. It overwrites the list, and
+    three loaded pages collapse to one, which was GameGeek's bug.
+- **Not `GeekAppFrame`.** The frame keys its transition on the top-level path
+  segment, so `/` → `/book/:id` would unmount the library under the sheet.
+  `components/AppMain.jsx` keeps the frame's scroll box and fade but keys on
+  the view instead. This is the same call GameGeek made.
+- **Per-book state can no longer leak.** The detail route mounts
+  `useBookDetail` once per book id. Before, `closeBookModal` had to reset
+  every piece of state by hand.
+- **The search box** is local state that mirrors `?q=`, so the controlled
+  input never waits a microtask for the URL (the caret-jump problem).
+- `authFetch` moved to `utils/authFetch.js`. A 401 still signs the user out.
+- The view components (`LibraryView`, `BookDetailModal`, `SettingsView`,
+  `Sidebar`, `TopBar`) keep their props. The hooks return values under the
+  old prop names. The "Feedback primitives" note above no longer holds:
+  route components can call `useToast()`. The views still fire toasts from
+  effects, as before.
+- The harness fixtures (`tools/mobile-harness/apps/bookgeek/fixtures.mjs`)
+  now carry `__typename`s, because a normalized cache needs them, and stub
+  `GetBook` for deep links.
+
+### Bug fix: "Also delete files"
+
+The checkbox did nothing, because the gateway's `deleteBook` ignores
+`deleteFiles`. When it is checked, the sheet now calls
+`DELETE /api/books/:id?deleteFiles=true` (`hooks/useBookActions.js` →
+`deleteBookRecord`). That route:
+- deletes the record as well as the files;
+- requires `authenticateToken` (any signed-in member, the same shared-library
+  rule as the gateway), and csrfGuard covers it;
+- passes every path through `resolveInLibrary`, so nothing outside
+  `LIBRARY_PATH` is touched. Anything that isn't a regular file is skipped,
+  and a symlink is unlinked, not its target.
+
+When the box is unchecked, the gateway path is used as before. Tests:
+`web/src/__tests__/views/deleteFiles.test.jsx`, red/green verified.
+
+### Behaviour that changed, deliberately
+
+- A shelf move no longer reloads page 1 (which collapsed the list). The row
+  updates in place, and it leaves a list it no longer matches.
+- Opening a book from a card uses the row the list already holds, with no
+  request. A deep link fetches `book(id)`.
+- A failed "Start reading" on the What-next shelf is now a toast. Before, it
+  was silent unless the sheet happened to be open.
+- A deleted book is also dropped from the device basket, and a delete
+  refreshes the shelf counts.
+- Revisiting a filter shows its cached rows at once and refreshes the head
+  behind them. Before, it showed a skeleton each time.
+
+### Left for Phase C2
+
+- `useSavedFilters` stays as it is (the profile's `savedFilters`) until the
+  `@geeksuite/collection` saved views replace it.
+- The filter sheet, sort menu and URL codec are still BookGeek's own.
+- There is no scroll memory across `/settings` round trips. The library
+  unmounts there, as GameGeek's does. The cache keeps every loaded page, but
+  the scroll offset is not kept.
+
+### Verification
+
+- **api:** `npm test` passes 212, fails 0, skips 3 (215 tests, up from 207).
+  The new `test/createApp.test.js` was red/green checked.
+- **web:** `npx vitest run` passes 256 (up from 224). Also run:
+  - the no-collapse test, red/green: it goes red (150 → 50 rows) when edits
+    refetch the list;
+  - the delete-files test, red/green;
+  - eslint: 0 errors;
+  - `vite build`: green.
+- **Harness:** `--app bookgeek --enforce-a11y --desktop` ran 34 scenes with
+  0 violations and 0 a11y findings. No scene was changed. The fixtures gained
+  `__typename` and `GetBook`.
+- **Repo tools:** boot-smoke is OK and now covers `app.js`. syntax-check is
+  clean, and gql-arg-audit is clean.
