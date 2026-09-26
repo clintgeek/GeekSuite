@@ -157,6 +157,52 @@ const FIXTURES = {
     rootValue: { gameFacets: () => ({}) },
     variables: { filter: { storefronts: ['epic', 'gog'], played: 'never', tags: ['Horror'] } },
   },
+  // ── bookgeek (library) ─────────────────────────────────────────────────
+  'Query.books': {
+    // apps/bookgeek/web/src/graphql/queries.js GET_BOOKS, variables from
+    // src/utils/libraryFilter.js buildBooksVariables() / the codec's
+    // toFilterInput() — every BookFilterInput field (Phase C2).
+    source: `
+      query GetBooks($page: Int, $limit: Int, $sort: String, $sortDir: String, $author: String, $tag: String, $shelf: String, $owned: String, $q: String, $filter: BookFilterInput, $seed: Int) {
+        books(page: $page, limit: $limit, sort: $sort, sortDir: $sortDir, author: $author, tag: $tag, shelf: $shelf, owned: $owned, q: $q, filter: $filter, seed: $seed) { __typename }
+      }
+    `,
+    rootValue: { books: () => ({}) },
+    variables: {
+      page: 2,
+      limit: 50,
+      sort: 'random',
+      sortDir: 'asc',
+      seed: 81234,
+      filter: {
+        q: 'earth',
+        shelves: ['read', 'custom-comfort-reads'],
+        authors: ['Ursula K. Le Guin'],
+        authorText: 'guin',
+        series: ['Earthsea'],
+        tags: ['fantasy', 'classic'],
+        tagMatch: 'all',
+        formats: ['epub'],
+        languages: ['en'],
+        owned: true,
+        hasFile: true,
+        readYearMin: 2020,
+        readYearMax: 2024,
+        ratingMin: 4,
+        ratingMax: 5,
+      },
+    },
+  },
+  'Query.bookFacets': {
+    // apps/bookgeek/web/src/graphql/queries.js GET_BOOK_FACETS — the same toFilterInput() filter.
+    source: `
+      query GetBookFacets($filter: BookFilterInput) {
+        bookFacets(filter: $filter) { __typename }
+      }
+    `,
+    rootValue: { bookFacets: () => ({}) },
+    variables: { filter: { shelves: ['unread'], tags: ['science fiction'], ratingMin: 3 } },
+  },
   // ── fitnessgeek ────────────────────────────────────────────────────────
   'Mutation.addFitnessMedication': {
     // apps/fitnessgeek/frontend/src/pages/Medications.jsx buildPayload()
@@ -475,7 +521,9 @@ const FIXTURES = {
     variables: { input: { kindleEmail: 'reader@kindle.com', deviceWord: 'bramble' } },
   },
   'Mutation.saveLibraryFilter': {
-    // apps/bookgeek/web/src/App.jsx handleSaveCurrentFilter()
+    // apps/bookgeek/web/src/hooks/useSavedViews.js save() — the whole
+    // BookFilterInput as `filter` plus the sort, with the legacy fields an old
+    // tab can still open (utils/libraryFilter.js legacyFieldsFor).
     //
     // Returns `[BookSavedFilter!]!` — non-null list; same `rootValue` fix as
     // `savePushSubscription` below, with an empty list rather than an object.
@@ -486,10 +534,11 @@ const FIXTURES = {
     variables: {
       input: {
         name: 'Unread SciFi',
+        filter: { q: 'dune', shelves: ['want-to-read'], tags: ['scifi'], ratingMin: 4 },
         sortBy: 'title',
         sortDir: 'asc',
         searchQuery: 'dune',
-        authorFilter: 'Herbert',
+        authorFilter: '',
         tagFilter: 'scifi',
         shelfFilter: 'want-to-read',
       },
@@ -637,8 +686,10 @@ describe('every input-object-taking root field is enumerated and accounted for',
   // Playnite is the only supported import (Chef's call).
   // 41 from 2026-09-25 (night): thinggeek's ten — things/thingFacets/
   // thingInsuranceTotals (ThingFilterInput) and seven input-object mutations.
-  test('the count matches the audit: 41 root fields take an input-object argument', () => {
-    expect(inputObjectRootFields()).toHaveLength(41);
+  // 43 from 2026-09-25 (night): bookgeek's books(filter) and bookFacets(filter)
+  // take BookFilterInput (DOCS/BOOKGEEK_CLEANUP_PLAN.md Phase C2).
+  test('the count matches the audit: 43 root fields take an input-object argument', () => {
+    expect(inputObjectRootFields()).toHaveLength(43);
   });
 
   test('FIXTURES and NO_FRONTEND_CALLER never claim the same field', () => {

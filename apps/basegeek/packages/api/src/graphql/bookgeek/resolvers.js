@@ -3,6 +3,8 @@ import { Profile } from "./models/profile.js";
 import AIConfig from "../../models/AIConfig.js";
 import mongoose from "mongoose";
 import * as library from "./library.js";
+import { randomSortKey, pageFacetStage, shapePage } from "@geeksuite/collection/server";
+import { SHELF_NAMES, shelfMatch, buildConditions, facetsPipeline, shapeFacets, legacyConditions } from "./filters.js";
 import {
   validateInput,
   createBookArgsSchema,
@@ -15,6 +17,8 @@ import {
   removeBookShelfArgsSchema,
   whatNextArgsSchema,
   draftBookMetadataArgsSchema,
+  booksFilterArgsSchema,
+  bookFacetsArgsSchema,
 } from "./validation.js";
 
 // Input validation runs AFTER `requireUser` in every mutation below: an
@@ -30,46 +34,15 @@ const validateAddBookShelf = validateInput(addBookShelfArgsSchema);
 const validateRemoveBookShelf = validateInput(removeBookShelfArgsSchema);
 const validateWhatNext = validateInput(whatNextArgsSchema);
 const validateDraftBookMetadata = validateInput(draftBookMetadataArgsSchema);
+const validateBooksFilter = validateInput(booksFilterArgsSchema);
+const validateBookFacets = validateInput(bookFacetsArgsSchema);
 
 // Built-in shelves. Users can also define custom shelves (ids prefixed
 // "custom-", stored on their bookgeek Profile); those are counted below by
-// aggregating whatever other shelf values exist on books.
-const shelfNames = [
-  "unread",
-  "reading",
-  "on-reader",
-  "read",
-  "want-to-read",
-  "abandoned",
-  "need-to-find",
-];
-
-// Ensure a book on the "unread" shelf is not actually finished/abandoned.
-function shelfMatch(name) {
-  if (name === "unread") {
-    return {
-      $and: [
-        {
-          $or: [
-            { shelf: "unread" },
-            { shelf: { $exists: false } },
-            { shelf: null },
-            { shelf: "" },
-          ],
-        },
-        {
-          $nor: [
-            { shelf: "read" },
-            { shelf: "abandoned" },
-            { readCount: { $gt: 0 } },
-            { dateFinished: { $exists: true, $ne: null } },
-          ],
-        },
-      ],
-    };
-  }
-  return { shelf: name };
-}
+// aggregating whatever other shelf values exist on books. The list and
+// `shelfMatch()` (the "unread" rule) live in filters.js, shared with
+// `books(filter:)` and `bookFacets`.
+const shelfNames = SHELF_NAMES;
 
 function toNumber(value, type = "float") {
   if (value == null || value === "") return null;
@@ -163,19 +136,6 @@ function savedFiltersOf(profile) {
   return Array.isArray(profile?.savedFilters) ? profile.savedFilters : [];
 }
 
-/**
- * A client search term, safe to hand to mongod as a regex.
- *
- * Escaped so every metacharacter means itself, and bounded so an enormous
- * needle cannot be used to make the engine work hard on every document.
- */
-const SEARCH_TERM_MAX = 200;
-function searchRegex(value) {
-  return String(value)
-    .slice(0, SEARCH_TERM_MAX)
-    .replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-}
-
 export const resolvers = {
   Book: {
     id: (parent) => parent._id?.toString(),
@@ -201,40 +161,45 @@ export const resolvers = {
     size: (parent) => toNumber(parent.size, "int"),
   },
   Query: {
-    books: async (_, { page = 1, limit = 50, sort = "title", sortDir = "asc", author, tag, shelf, owned, q }, { user }) => {
-      // `books` is the one query with no zod layer, and `q`/`author` reach
-      // mongod as regex source. Unescaped, ordinary titles broke the whole
-      // library page — `Dune (Deluxe` is "Unterminated group", `C++` is
-      // "Nothing to repeat" — and a crafted `(a+)+$` was a ReDoS evaluated
-      // per document. notegeek escapes the same way at
-      // graphql/notegeek/resolvers.js:33.
+    books: async (_, args, { user }) => {
+      // `q`/`author` reach mongod as regex source, so they are escaped and
+      // bounded (filters.js → @geeksuite/collection/server `searchRegex`).
+      // Unescaped, ordinary titles broke the whole library page — `Dune
+      // (Deluxe` is "Unterminated group", `C++` is "Nothing to repeat" — and a
+      // crafted `(a+)+$` was a ReDoS evaluated per document.
+      //
+      // The flat args (`author`, `tag`, `shelf`, `owned`, `q`) are the pre-C2
+      // library's and keep their exact semantics for old tabs; `filter` is the
+      // faceted library's BookFilterInput (zod-checked below). Given both,
+      // every one narrows.
       requireUser(user);
-      const pageNum = Math.max(1, page);
-      const limitNum = Math.max(1, Math.min(100, limit));
+      const { page = 1, limit = 50, sort = "title", sortDir = "asc" } = args;
+      const { filter: filterInput, seed } = validateBooksFilter({ filter: args.filter, seed: args.seed });
+      const pageNum = Math.max(1, page ?? 1);
+      const limitNum = Math.max(1, Math.min(100, limit ?? 50));
 
-      const andConds = [];
-      if (author) andConds.push({ authors: { $regex: searchRegex(author), $options: "i" } });
-      if (tag) andConds.push({ tags: tag });
-      if (shelf) andConds.push(shelfMatch(shelf));
-
-      if (owned === "true") andConds.push({ owned: true });
-      else if (owned === "false") andConds.push({ owned: false });
-
-      if (q) {
-        const needle = searchRegex(q);
-        andConds.push({
-          $or: [
-            { title: { $regex: needle, $options: "i" } },
-            { authors: { $regex: needle, $options: "i" } },
-            { tags: { $regex: needle, $options: "i" } },
-          ],
-        });
-      }
+      const andConds = [
+        ...legacyConditions(args),
+        ...Object.values(buildConditions(filterInput ?? {})).map((c) => c.match),
+      ];
 
       const filter = andConds.length > 0 ? { $and: andConds } : {};
-      const sortObj = {};
-      const dir = sortDir.toLowerCase() === "desc" ? -1 : 1;
       const sortKey = (sort || "title").toLowerCase();
+
+      // A seeded shuffle: the same order on every page of one seed, a new one
+      // per seed (@geeksuite/collection/server `randomSortKey`).
+      if (sortKey === "random") {
+        const [result] = await Book.aggregate([
+          { $match: filter },
+          { $addFields: { __shuffle: randomSortKey(seed ?? 0) } },
+          pageFacetStage({ sort: { __shuffle: 1, _id: 1 }, page: pageNum, limit: limitNum, project: { __shuffle: 0 } }),
+        ]);
+        const { items, total } = shapePage(result, { page: pageNum, limit: limitNum });
+        return { items, total, page: pageNum, pageSize: limitNum };
+      }
+
+      const sortObj = {};
+      const dir = String(sortDir || "asc").toLowerCase() === "desc" ? -1 : 1;
 
       switch (sortKey) {
         case "author":
@@ -249,7 +214,8 @@ export const resolvers = {
           sortObj["dateAdded"] = dir;
           sortObj["title"] = 1;
           break;
-        // The four arms below are the ones `components/librarySort.js` has
+        // The four arms below are the ones the web's sort list (now
+        // utils/libraryFilter.js SORT_ORDER) has
         // always offered and this resolver used to `default:` to title — so
         // "Page count ↑" returned an alphabetical list under a toolbar pill
         // that said "Page count ↑". Field names, direction and the
@@ -293,6 +259,14 @@ export const resolvers = {
         page: pageNum,
         pageSize: limitNum,
       };
+    },
+    // Each facet's counts apply every active filter EXCEPT its own
+    // (filters.js). Household-shared like `books`: no user narrowing.
+    bookFacets: async (_, rawArgs, { user }) => {
+      requireUser(user);
+      const { filter } = validateBookFacets(rawArgs ?? {});
+      const [result] = await Book.aggregate(facetsPipeline(filter ?? {}));
+      return shapeFacets(result, filter ?? {});
     },
     book: async (_, { id }, { user }) => {
       requireUser(user);
@@ -490,6 +464,9 @@ export const resolvers = {
         ownedOnly:
           ownedFilter === "owned" ? true : ownedFilter === "unowned" ? false : !!input?.ownedOnly,
       };
+      // The whole BookFilterInput (C2), checked by the same schema as the
+      // query's. Views saved without one open through the legacy fields.
+      if (input?.filter && typeof input.filter === "object") preset.filter = input.filter;
 
       const profile = await Profile.findOneAndUpdate(
         { userId },

@@ -1,7 +1,9 @@
 /**
  * bookgeekLibrarySorts.test.js
  *
- * Q60. `components/librarySort.js` offers eight library sorts; the gateway's
+ * Q60. The web library offers eight library sorts (then `components/librarySort.js`,
+ * since Phase C2 `utils/libraryFilter.js` SORT_ORDER, plus a seeded
+ * `random` — bookgeekFilters.test.js); the gateway's
  * `books` resolver had cases for four of them and `default`ed the rest to
  * title — so "Page count ↑" returned an alphabetical list under a toolbar pill
  * that said "Page count ↑". bookgeek's own REST `/api/books` handled all eight

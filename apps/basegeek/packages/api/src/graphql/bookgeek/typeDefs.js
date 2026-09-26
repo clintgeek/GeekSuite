@@ -56,6 +56,75 @@ export const typeDefs = gql`
     pageSize: Int!
   }
 
+  # ---------------------------------------------------------------------------
+  # The faceted library (Phase C2, DOCS/BOOKGEEK_CLEANUP_PLAN.md; filters.js).
+  # Every list is any-of, except tags under tagMatch "all".
+  # ---------------------------------------------------------------------------
+
+  input BookFilterInput {
+    # title / authors / tags contain it (escaped, case-insensitive)
+    q: String
+    # built-in shelves and custom-<slug>; "unread" = unread or no shelf, and not finished
+    shelves: [String!]
+    # exact author names (the authors facet's values)
+    authors: [String!]
+    # authors contain it — the pre-C2 author filter, carried by old saved views
+    authorText: String
+    # series.name
+    series: [String!]
+    tags: [String!]
+    # "any" (default) | "all" — over tags
+    tagMatch: String
+    # files[].format, case-insensitive (epub, azw3, mobi, pdf, …)
+    formats: [String!]
+    languages: [String!]
+    owned: Boolean
+    # has at least one file (true) / none (false)
+    hasFile: Boolean
+    # calendar year of dateFinished (UTC)
+    readYearMin: Int
+    readYearMax: Int
+    # whole stars 1–5; a half star counts under its floor (3.5 is a 3)
+    ratingMin: Int
+    ratingMax: Int
+  }
+
+  type BookFacetValue {
+    value: String!
+    count: Int!
+  }
+
+  type BookYearBucket {
+    year: Int!
+    count: Int!
+  }
+
+  type BookRatingBucket {
+    rating: Int!
+    count: Int!
+  }
+
+  # Each facet's counts apply every active filter EXCEPT its own.
+  type BookFacets {
+    # books matching the full filter
+    total: Int!
+    shelves: [BookFacetValue!]!
+    authors: [BookFacetValue!]!
+    series: [BookFacetValue!]!
+    tags: [BookFacetValue!]!
+    # lowercased
+    formats: [BookFacetValue!]!
+    languages: [BookFacetValue!]!
+    # books finished per year
+    readYears: [BookYearBucket!]!
+    # rated books per whole star
+    ratings: [BookRatingBucket!]!
+    # books owned
+    owned: Int!
+    # books with at least one file
+    hasFile: Int!
+  }
+
   type ShelfStats {
     total: Int!
     owned: Int!
@@ -134,6 +203,8 @@ export const typeDefs = gql`
     shelfFilter: String
     ownedOnly: Boolean
     ownedFilter: String
+    # The whole BookFilterInput this view was saved with; null for views saved before it existed.
+    filter: JSON
   }
 
   type RemoveBookShelfResult {
@@ -167,6 +238,8 @@ export const typeDefs = gql`
     shelfFilter: String
     ownedOnly: Boolean
     ownedFilter: String
+    # The whole BookFilterInput, validated like the books query's filter.
+    filter: JSON
   }
 
   # ---------------------------------------------------------------------------
@@ -202,7 +275,10 @@ export const typeDefs = gql`
   }
 
   type Query {
-    books(page: Int, limit: Int, sort: String, sortDir: String, author: String, tag: String, shelf: String, owned: String, q: String): BookPage!
+    # The flat args are the pre-C2 library's and keep working unchanged; "filter" is the faceted
+    # library's. sort adds "random" (seeded by "seed", stable across pages).
+    books(page: Int, limit: Int, sort: String, sortDir: String, author: String, tag: String, shelf: String, owned: String, q: String, filter: BookFilterInput, seed: Int): BookPage!
+    bookFacets(filter: BookFilterInput): BookFacets!
     book(id: ID!): Book
     shelves: ShelfStats!
     bookProfile: BookProfile

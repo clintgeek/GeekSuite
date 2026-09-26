@@ -195,6 +195,64 @@ export const saveBookProfileArgsSchema = z
   })
   .strict();
 
+// ── Library filter (Phase C2, DOCS/BOOKGEEK_CLEANUP_PLAN.md) ────────────────
+//
+// BookFilterInput, for `books(filter:)`, `bookFacets(filter:)` and the saved
+// view's `filter` JSON — one schema, so a view can only store what the query
+// accepts. Authors, series, tags and languages are open vocabulary (Calibre
+// tags are user-curated), bounded like the fields they filter on.
+
+const LIST_MAX = 50;
+const filterList = (max) => z.array(z.string().trim().min(1).max(max)).max(LIST_MAX).nullable().optional();
+const filterYear = z.number().int().min(1000).max(3000).nullable().optional();
+const filterStars = z.number().int().min(1).max(5).nullable().optional();
+
+export const bookFilterInput = z
+  .object({
+    q: z.string().max(500).nullable().optional(),
+    shelves: filterList(100),
+    authors: filterList(500),
+    // The old `author` arg's "contains" search — legacy saved filters carry it.
+    authorText: z.string().max(500).nullable().optional(),
+    series: filterList(500),
+    tags: filterList(100),
+    tagMatch: z.enum(['any', 'all']).nullable().optional(),
+    // epub, azw3, mobi, pdf, … — whatever Calibre wrote; matched case-insensitively.
+    formats: filterList(20),
+    languages: filterList(100),
+    owned: z.boolean().nullable().optional(),
+    hasFile: z.boolean().nullable().optional(),
+    readYearMin: filterYear,
+    readYearMax: filterYear,
+    ratingMin: filterStars,
+    ratingMax: filterStars,
+  })
+  .strict()
+  .refine((f) => f.readYearMin == null || f.readYearMax == null || f.readYearMin <= f.readYearMax, {
+    message: 'readYearMin must not be after readYearMax',
+    path: ['readYearMax'],
+  })
+  .refine((f) => f.ratingMin == null || f.ratingMax == null || f.ratingMin <= f.ratingMax, {
+    message: 'ratingMin must not be above ratingMax',
+    path: ['ratingMax'],
+  });
+
+/**
+ * The new `books` args only. The flat pre-C2 args (`q`, `author`, `tag`,
+ * `shelf`, `owned`, `page`, `limit`, `sort`, `sortDir`) stay exactly as
+ * permissive as they always were — old tabs send them, and clamping `limit`
+ * rather than rejecting it is part of their contract.
+ */
+export const booksFilterArgsSchema = z
+  .object({
+    filter: bookFilterInput.nullable().optional(),
+    // The random sort's seed: a positive 31-bit int from the client.
+    seed: z.number().int().min(0).max(2147483647).nullable().optional(),
+  })
+  .strict();
+
+export const bookFacetsArgsSchema = z.object({ filter: bookFilterInput.nullable().optional() }).strict();
+
 // ── Profile: saved library filters ──────────────────────────────────────────
 
 export const saveLibraryFilterArgsSchema = z
@@ -215,6 +273,8 @@ export const saveLibraryFilterArgsSchema = z
         // "all" rather than rejecting it (`bookgeekProfile.test.js`'s
         // "ownedFilter drives ownedOnly" case sends `'nonsense'` on purpose).
         ownedFilter: z.string().max(20).nullable().optional(),
+        // The whole BookFilterInput (C2), checked like the query's filter.
+        filter: bookFilterInput.nullable().optional(),
       })
       .strict(),
   })
