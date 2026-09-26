@@ -44,8 +44,14 @@ Exclusive Shelf, My Review, Spoiler, Private Notes, Read Count, Owned Copies
 
 - **Runtime:** node:20-alpine (build stage) / node:20-slim (production stage) — see Dockerfile
 - **Language:** JavaScript (not TypeScript)
-- **Backend:** Bun + Express
-- **Frontend:** React + Tailwind + shadcn/ui (Bun bundler)
+- **Backend:** Node + Express 4 (`apps/bookgeek/api`, ESM, mongoose 7, zod,
+  multer, better-sqlite3 for the Calibre `metadata.db`); tests are `node:test`
+  (`npm test`)
+- **Frontend:** Vite 5 + React 18 + MUI 5 (`apps/bookgeek/web`, Emotion,
+  Apollo Client 3 against basegeek's gateway, `@geeksuite/ui` shell); tests are
+  vitest (`npx vitest run`)
+- **Shared schemas:** `Book` and `Profile` come from
+  `packages/schemas/bookgeek/` — see "Phase A cleanup (2026-09-25)" below
 - **Database:** MongoDB via baseGeek
 - **Caching:** Redis via baseGeek
 - **Auth:** User management via baseGeek
@@ -157,13 +163,14 @@ read and write is scoped to `userId`. Both use the same `requireUser()` guard.
 Covered by `__tests__/bookgeekOwnership.test.js` (shared) and
 `__tests__/bookgeekProfile.test.js` (per-user).
 
-**Schema-drift tripwire.** `Profile` is now modelled on both sides against the
-same `profiles` collection — `apps/bookgeek/api/src/models/profile.js` and
-`apps/basegeek/packages/api/src/graphql/bookgeek/models/profile.js`. Mongoose
-strict mode silently *drops* unknown fields on write rather than erroring (this
-is how fitnessgeek lost keto config in April 2026), so the two must stay
-field-for-field identical. Add a field to both in the same commit;
-`bookgeekProfile.test.js` asserts the gateway copy still has every path.
+**Schema-drift tripwire.** `Profile` (and `Book`) are modelled on both sides
+against the same collections — `apps/bookgeek/api/src/models/` and
+`apps/basegeek/packages/api/src/graphql/bookgeek/models/`. Mongoose strict mode
+silently *drops* unknown fields on write rather than erroring (this is how
+fitnessgeek lost keto config in April 2026). Since 2026-09-25 both sides build
+from one definition in `packages/schemas/bookgeek/{book,profile}.js`: **add a
+field there, never in either model.** `bookgeekSchemaParity.test.js` (gateway)
+and `test/sharedSchema.test.js` (api) fail if either side stops doing so.
 
 **`bookAiStatus` is not a literal port.** The old REST route reported on
 bookgeek's own `AIGEEK_API_KEY` env var — the key it used to call basegeek. At
@@ -294,7 +301,8 @@ suite proving the 400 envelope through a real app in
 `test/validationRoute.test.js`. Full route inventory and the reasoning behind
 each bound: see the TODO #22 report.
 
-**Left alone, deliberately:** the plain book-CRUD REST handlers
+**Left alone, deliberately** *(superseded 2026-09-25 — the CRUD handlers
+below are deleted except `DELETE /api/books/:id`; see "Phase A cleanup")*: the plain book-CRUD REST handlers
 (`GET/POST /api/books`, `GET/PATCH/DELETE /api/books/:id`, `GET
 /api/shelves`) still physically exist in `server.js` even though "Which calls
 go where" above documents them as replaced by basegeek's gateway
@@ -444,6 +452,7 @@ src` 18 warnings → 18; `npm run build` green; mobile harness
   unauthenticated** and streamed a real library file to anyone. Now behind
   `requireKindleAuth`, the same PIN the rest of `/kindle` uses. They are still
   marked "throwaway, delete after Phase 0" — deleting them is Chef's call.
+  *(Deleted 2026-09-25, Phase A cleanup.)*
 - **P1 `app.set("trust proxy", 1)` was missing.** Behind the suite's nginx
   `req.ip` was the proxy for every caller, which collapsed `deviceBasket.js`'s
   per-IP secret-word rate limit into one global bucket (ten wrong guesses from
@@ -522,18 +531,15 @@ src` 18 warnings → 18; `npm run build` green; mobile harness
 
 ### Left in place, with reasons
 
-- **Four of the eight library sorts do nothing.** `components/librarySort.js`
-  offers `title, author, dateAdded, rating, dateFinished, pageCount,
-  publishedDate, owned`; the gateway's `books` resolver
-  (`apps/basegeek/packages/api/src/graphql/bookgeek/resolvers.js:233`) has
-  cases for only the first four and `default`s the rest to title — so "Page
-  count ↑" returns an alphabetical list while the toolbar pill says "Page
-  count ↑". bookgeek's own REST `/api/books` handles all eight; the two
-  drifted when the read moved to the gateway. The fix is four `case` arms in
-  basegeek, which is outside this tree. Trimming the frontend list instead
-  would delete working-looking features — reported, not done.
+- ~~Four of the eight library sorts do nothing.~~ **Fixed** in `f7ccbfec`: the
+  gateway's `books` resolver now handles all eight sorts in
+  `components/librarySort.js` (`title, author, dateAdded, rating,
+  dateFinished, pageCount, publishedDate, owned`), covered by
+  `apps/basegeek/packages/api/src/__tests__/bookgeekLibrarySorts.test.js`.
 - **`POST /api/import/calibre` and `/kindle-test*` are gated, not deleted.**
   Both look like one-time/throwaway legacy; deleting a feature is Chef's call.
+  *(2026-09-25: `/kindle-test*` deleted in the Phase A cleanup;
+  `POST /api/import/calibre` is still mounted and gated.)*
 - **`bookify`-adjacent notes from BURN_REVIEW (o), (p), (x)** re-verified as
   still accurate and still deliberate — no change.
 - **The Calibre paths cannot be exercised on this box.** `better-sqlite3` is a
@@ -547,6 +553,8 @@ src` 18 warnings → 18; `npm run build` green; mobile harness
 - **`GET /api/books`, `POST /api/books`, `PATCH/DELETE /api/books/:id`,
   `GET /api/shelves` are still live REST** with no zod schemas, duplicating
   the gateway. Unchanged from the note above; still worth a deletion pass.
+  *(2026-09-25: deleted in the Phase A cleanup, except `DELETE
+  /api/books/:id` — see that entry.)*
 
 ---
 
@@ -711,6 +719,7 @@ from the per-user Profile (Kindle address, device word, saved filters).
 - **`UpdateBookInput.description` is new, so the REST twin never had it either.**
   `apps/bookgeek/api/src/server.js`'s surviving `PATCH /api/books/:id` is a
   different (and per `SUITE_TODO` probably dead) path; it was not touched.
+  *(It was dead; deleted 2026-09-25, Phase A cleanup.)*
 - **The mobile harness fixtures do not stub `GetWhatNext`.** They do not need
   to — the switch is off in the harness session, so the query is never sent and
   the shelf never renders. A future harness scene for the shelf means adding the
@@ -728,3 +737,65 @@ Gateway `npm test` 1449 → 1641 passing (67 → 77 suites; the 18 new ones are
 clean (182 documents, 179 operations). Web `npx vitest run` 121 → 145 passing,
 `npx eslint src` 18 → 18 warnings / 0 errors, `pnpm build` green, mobile harness
 `--app bookgeek --enforce-a11y --viewports phone` 12 scenes, **0/0/0**.
+
+---
+
+## Phase A cleanup (2026-09-25) — rot removed, one schema
+
+Phase A of `DOCS/BOOKGEEK_CLEANUP_PLAN.md`. No behaviour change.
+
+### Deleted
+
+- **Dead REST CRUD in `api/src/server.js`:** `GET /api/books`,
+  `POST /api/books`, `GET /api/books/:id`, `PATCH /api/books/:id`,
+  `GET /api/shelves`, plus the three `/kindle-test*` routes and their helpers
+  (2,902 → 2,447 lines). Before deleting, a repo-wide grep found zero callers.
+  The web app does all plain data through the gateway, `startgeek` only loads
+  `/api/books/:id/cover`, the harness stubs only `/cover`, and
+  `test/csrfGuard.test.js`'s `/api/books` routes are its own stubs. A boot
+  probe of old vs new `server.js` shows those eight now 404 and every other
+  route answers exactly as before.
+- **Dead models `IngestionJob` and `Recommendation`**, on both sides
+  (`api/src/models/` and the gateway's `graphql/bookgeek/models/`). Nothing
+  imported any of the four files.
+
+### Kept, deliberately: `DELETE /api/books/:id`
+
+Nothing calls it, but it is the **only code that deletes a book's files from
+disk**. The detail sheet's "Also delete files" checkbox sends `deleteFiles` to
+the gateway's `deleteBook`, which ignores it ("Simplification: only deleting the
+book record"). So today the
+checkbox does nothing, and files of deleted books stay in the library. The fix
+is to route `deleteFiles: true` to this REST route. Until then, deleting the
+route would throw away the fix. Chef's call.
+
+### One `Book` / `Profile` definition
+
+`packages/schemas/bookgeek/book.js` and `profile.js` (factories taking the
+caller's mongoose, the gamegeek/fitnessgeek pattern) reproduce the two
+hand-kept copies exactly. Diffed first, the two copies were identical: same
+fields, defaults, bounds, `_id: false` on `files[]`/`series`, `timestamps`,
+no indexes or virtuals on `Book`, and `userId` unique plus `deviceWord`
+unique+sparse on `Profile`. Both writers build from the factories and keep
+their own connection: the gateway on `getAppConnection('bookgeek')` (mongoose 8)
+and the api on its default connection (mongoose 7).
+
+- **The api imports the factory by relative path**
+  (`../../../../../packages/schemas/bookgeek/book.js`), not
+  `@geeksuite/schemas/...`. The api does not declare the package yet, and
+  adding it needs a `pnpm-lock.yaml` update (the Docker build is
+  `--frozen-lockfile`). The path resolves the same in the Docker image, which
+  copies `packages/` beside `apps/bookgeek/api`. To switch, add the dependency,
+  run `pnpm install`, and change the two import lines.
+- **Checked against production, read-only:** all 554 books and the one
+  profile cast through the new schemas with 0 dropped, 0 altered and 0 invalid
+  paths. A control run with two fields removed reported 176 and 16 drops, so
+  the check can fail. The live indexes match the declared ones exactly (`books`:
+  `_id_` only; `profiles`: `_id_`, `userId_1` unique, `deviceWord_1`
+  unique+sparse), so a deploy builds no new index.
+- **Tripwires:** `apps/basegeek/packages/api/src/__tests__/bookgeekSchemaParity.test.js`
+  (paths including nested, indexes, options, collection, a source check, and a
+  real mongoose-7 ⇄ mongoose-8 write-through on one in-memory Mongo) and
+  `apps/bookgeek/api/test/sharedSchema.test.js` (hermetic). Both went red when a
+  writer was pointed back at a local copy, and green again when restored.
+
