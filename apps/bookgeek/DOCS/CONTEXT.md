@@ -1011,8 +1011,9 @@ The spec is `DOCS/BOOKGEEK_CLEANUP_PLAN.md` Phase C.
   rule as an aggregation expression. A custom shelf that belongs to another
   household member reads from its id ("custom-beach-reads" → "Beach reads").
 - **Author**, **Series** and **Tags** are each one searchable list. Tags have
-  no vocabulary mapping and no groups, because Calibre tags are user-curated.
-  Tags have Any/All.
+  Any/All. *(Superseded 2026-09-26: Tags are now grouped by a curated
+  vocabulary, with My tags first and Unsorted folded last. See
+  `DOCS/TAGS.md`.)*
 - **Format** comes from `files[].format`, lowercased. Calibre writes "EPUB",
   so the match is case-insensitive.
 - **Language** shows only when the library has more than one language.

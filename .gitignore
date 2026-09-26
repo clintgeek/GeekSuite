@@ -23,3 +23,6 @@ DOCS/screenshots/arboleaf.*
 
 # Chef's real Playnite export — personal data, never commit (public repo)
 DOCS/playnite-library.json
+
+# BookGeek tag review worksheet: built from Chef's real tags, kept local (regenerate: node apps/bookgeek/api/scripts/tags-review.mjs)
+apps/bookgeek/DOCS/TAGS_REVIEW.md

@@ -201,6 +201,13 @@ Live since 2026-09-26.
 - **Its MCP tools**, once the suite MCP server exists.
 - **A PDF insurance report** with embedded photos.
 
+### BookGeek — audiobooks?
+
+Chef, 2026-09-26: "I have audiobooks but I never thought to manage them in bookgeek and I
+don't really use them." BookGeek has no audio files: the 180 books tagged "Audiobook" were
+ebooks with Goodreads metadata. The tag is removed (`apps/bookgeek/DOCS/TAGS.md`). Revisit
+whether BookGeek should hold audiobooks.
+
 ### Suite MCP server — `DOCS/MCP_PLAN.md`
 
 **Next up after ThingGeek** (Chef, 2026-09-25), built together with Chef while he's awake,
