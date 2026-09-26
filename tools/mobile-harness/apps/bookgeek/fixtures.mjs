@@ -1,33 +1,43 @@
 // BookGeek fixtures. Titles are Chef's real Goodreads export, because a
 // library of "Book One / Book Two" hides exactly the bugs this harness is
 // looking for: two-line clamps, long-title truncation, serif metrics.
+import { createRequire } from 'node:module';
 import { svg, sessionRoutes, graphqlRoute } from '../../lib/net.mjs';
 
+// The real tag vocabulary (apps/bookgeek/DOCS/TAGS.md), so the fixture books
+// carry exactly the libraryTags/unsortedTags every write path would store,
+// and the Tags facet groups the way it does on production.
+const tagVocabulary = createRequire(import.meta.url)('../../../../packages/schemas/bookgeek/tags.js');
+const { deriveTagFields, canonicalTagName, canonicalTagsFor, mapViewTags } = tagVocabulary;
+
 const BOOK_ROWS = [
-  ['b1', 'Lock In', ['John Scalzi'], 'reading', 4, 336, '2014-08-26', 42, ['science fiction', 'mystery'], 'Tor Books', '#0c4a6e'],
-  ['b2', 'The Sound of Gravel', ['Ruth Wariner'], 'read', 5, 336, '2016-01-05', 100, ['memoir'], 'Flatiron Books', '#3b2f2f'],
-  ['b3', 'Flow My Tears, the Policeman Said', ['Philip K. Dick'], 'read', 4, 204, '1974-01-01', 100, ['science fiction'], 'Doubleday', '#4c1d95'],
-  ['b4', 'The Road to Jonestown: Jim Jones and Peoples Temple', ['Jeff Guinn'], 'want-to-read', 0, 454, '2017-04-11', 0, ['history'], 'Simon & Schuster', '#7c2d12'],
-  ['b5', "The Dryad's Crown", ['David Hopkins'], 'on-reader', 5, 569, '2023-03-01', 0, ['fantasy'], 'Independent', '#14532d'],
-  ['b6', 'God Bless You, Mr. Rosewater', ['Kurt Vonnegut Jr.'], 'read', 3, 290, '1965-01-01', 100, ['satire'], 'Dial Press', '#334155'],
-  ['b7', 'A Year and a Day on Just a Few Acres', ['Peter Larson'], 'unread', 0, 294, '2014-01-01', 0, ['homesteading'], 'Independent', '#78350f'],
-  ['b8', 'Breaking Free', ['Rachel Jeffs'], 'read', 0, 400, '2017-11-14', 100, ['memoir'], 'Harper', '#1e3a5f'],
+  ['b1', 'Lock In', ['John Scalzi'], 'reading', 4, 336, '2014-08-26', 42, ['Science Fiction', 'Fiction', 'Mystery', 'Thriller', 'AUTO', 'Audiobook', 'Suspense', 'Disability'], 'Tor Books', '#0c4a6e'],
+  ['b2', 'The Sound of Gravel', ['Ruth Wariner'], 'read', 5, 336, '2016-01-05', 100, ['Memoir', 'Biography Memoir', 'Nonfiction', 'Cults', 'FLDS', 'Polygamy', 'Religion', 'Autobiography', 'growing-up-poor'], 'Flatiron Books', '#3b2f2f'],
+  ['b3', 'Flow My Tears, the Policeman Said', ['Philip K. Dick'], 'read', 4, 204, '1974-01-01', 100, ['Science Fiction', 'Fiction', 'Classics', 'Dystopia', 'sf_social', 'Novels', 'Hugo Award Winner'], 'Doubleday', '#4c1d95'],
+  ['b4', 'The Road to Jonestown: Jim Jones and Peoples Temple', ['Jeff Guinn'], 'want-to-read', 0, 454, '2017-04-11', 0, ['History', 'Nonfiction', 'True Crime', 'Cults', 'jonestown', 'Religion / Cults', 'peoples temple', 'Audiobook'], 'Simon & Schuster', '#7c2d12'],
+  ['b5', "The Dryad's Crown", ['David Hopkins'], 'on-reader', 5, 569, '2023-03-01', 0, ['Fantasy', 'Epic Fantasy', 'Magic', 'Fiction', 'Dragons', 'Adventure'], 'Independent', '#14532d'],
+  ['b6', 'God Bless You, Mr. Rosewater', ['Kurt Vonnegut Jr.'], 'read', 3, 290, '1965-01-01', 100, ['Fiction', 'Classics', 'Humor', 'Satire', 'Literature', 'American', 'kurt', 'Vonnegut', 'Literary Fiction'], 'Dial Press', '#334155'],
+  ['b7', 'A Year and a Day on Just a Few Acres', ['Peter Larson'], 'unread', 0, 294, '2014-01-01', 0, ['Nonfiction', 'Agriculture', 'Self-Help', 'Food', 'homesteading', 'preppers'], 'Independent', '#78350f'],
+  ['b8', 'Breaking Free', ['Rachel Jeffs'], 'read', 0, 400, '2017-11-14', 100, ['Memoir', 'Biography', 'FLDS', 'Cults', 'Religious Cults', 'Book Club', 'Must Read', 'Fundamentalist Church of Jesus Christ of Latter Day Saints'], 'Harper', '#1e3a5f'],
 ];
 
 // Per-book extras the filter panel needs to show something real: formats as
 // Calibre writes them (upper case), a couple of series, finished dates spread
 // over a few years, one book in French and one with no file. Two have no cover
 // art (`noCover`): their cover request 404s, as the real API does, so the
-// grid shows BookGeek's cloth-bound placeholder beside real jackets.
+// grid shows BookGeek's cloth-bound placeholder beside real jackets. Raw
+// tags are the shapes production has (Goodreads genres, AUTO/Audiobook
+// markers, catalogue headings, Chef's lowercase ones); `myTags` are tags
+// added in BookGeek.
 const EXTRAS = {
-  b1: { files: ['EPUB', 'AZW3'], series: { name: 'Lock In', index: 1 } },
-  b2: { files: ['EPUB'], dateFinished: '2024-03-10' },
+  b1: { files: ['EPUB', 'AZW3'], series: { name: 'Lock In', index: 1 }, myTags: ['Heather rec'] },
+  b2: { files: ['EPUB'], dateFinished: '2024-03-10', myTags: ['Must reread'] },
   b3: { files: ['EPUB', 'PDF'], dateFinished: '2021-11-02' },
   b4: { files: [], noCover: true },
   b5: { files: ['EPUB'], series: { name: "The Dryad's Crown", index: 1 }, language: 'fr' },
   b6: { files: ['MOBI'], dateFinished: '2022-07-19' },
   b7: { files: ['PDF'], noCover: true },
-  b8: { files: ['EPUB'], dateFinished: '2024-01-28' },
+  b8: { files: ['EPUB'], dateFinished: '2024-01-28', myTags: ['Must reread'] },
 };
 
 export const BOOKS = BOOK_ROWS.map(
@@ -37,6 +47,8 @@ export const BOOKS = BOOK_ROWS.map(
     // normalized by type + id, and the detail route reads it back by id.
     __typename: 'Book',
     id, title, authors, shelf, rating, pageCount, publishedDate, readingProgress, tags, publisher, color,
+    ...deriveTagFields(tags),
+    myTags: EXTRAS[id].myTags ?? [],
     isbn: '9780765375865', isbn13: null, goodreadsId: '21418013', language: 'en',
     owned: shelf !== 'want-to-read',
     description:
@@ -71,11 +83,17 @@ export const SHELVES = {
   ].map((entry) => ({ __typename: 'ShelfCount', ...entry })),
 };
 
-const SAVED_FILTER = (id, name, over = {}) => ({
-  __typename: 'BookSavedFilter',
-  id, name, sortBy: 'title', sortDir: 'asc', searchQuery: '', authorFilter: '',
-  tagFilter: '', shelfFilter: 'all', ownedOnly: false, ownedFilter: 'all', filter: null, ...over,
-});
+// `viewTags` as the gateway resolves it: the view's tags (its filter's, else
+// the legacy tagFilter) mapped through the vocabulary when it loads.
+const SAVED_FILTER = (id, name, over = {}) => {
+  const view = {
+    __typename: 'BookSavedFilter',
+    id, name, sortBy: 'title', sortDir: 'asc', searchQuery: '', authorFilter: '',
+    tagFilter: '', shelfFilter: 'all', ownedOnly: false, ownedFilter: 'all', filter: null, ...over,
+  };
+  const saved = Array.isArray(view.filter?.tags) ? view.filter.tags : view.tagFilter ? [view.tagFilter] : [];
+  return { ...view, viewTags: mapViewTags(saved) };
+};
 
 export const PROFILE = {
   userId: 'chef',
@@ -84,6 +102,7 @@ export const PROFILE = {
   customShelves: [{ id: 'custom-comfort-reads', label: 'Comfort reads' }],
   savedFilters: [
     SAVED_FILTER('f1', 'Kindle queue', { shelfFilter: 'on-reader' }),
+    // Saved before the vocabulary with the raw "science fiction"; opens on Sci-fi.
     SAVED_FILTER('f2', 'Unread sci-fi', { shelfFilter: 'unread', tagFilter: 'science fiction' }),
     // Saved since Phase C2: the whole filter as JSON.
     SAVED_FILTER('f3', 'Five-star memoirs', { sortBy: 'rating', sortDir: 'desc', tagFilter: 'memoir', filter: { tags: ['memoir'], ratingMin: 5 } }),
@@ -156,17 +175,25 @@ const VALUES = {
   shelves: (b) => [b.shelf],
   authors: (b) => b.authors,
   series: (b) => (b.series ? [b.series.name] : []),
-  tags: (b) => b.tags,
+  // The gateway's Tags facet: canonical ∪ My ∪ Unsorted.
+  tags: (b) => [...new Set([...b.libraryTags, ...b.myTags, ...b.unsortedTags])],
   formats: formatsOf,
   languages: (b) => [b.language],
 };
+// One chosen tag, as the gateway's tagValueMatch: a canonical name matches
+// the canonical and My tags; anything else My tags, the raw tags, or the
+// canonical tags it maps to.
+function tagMatches(b, value) {
+  if (canonicalTagName(value) === value) return b.libraryTags.includes(value) || b.myTags.includes(value);
+  return b.myTags.includes(value) || b.tags.includes(value) || canonicalTagsFor(value).some((t) => b.libraryTags.includes(t));
+}
 function matches(b, f, except) {
   const any = (key, list) => except === key || !list?.length || VALUES[key](b).some((v) => list.includes(v));
   if (f.q && !(b.title + b.authors.join()).toLowerCase().includes(f.q.toLowerCase())) return false;
   if (f.authorText && !b.authors.join().toLowerCase().includes(f.authorText.toLowerCase())) return false;
   if (!any('shelves', f.shelves) || !any('authors', f.authors) || !any('series', f.series) || !any('languages', f.languages)) return false;
   if (!any('formats', f.formats?.map((x) => x.toLowerCase()))) return false;
-  if (except !== 'tags' && f.tags?.length && !(f.tagMatch === 'all' ? f.tags.every((t) => b.tags.includes(t)) : f.tags.some((t) => b.tags.includes(t)))) return false;
+  if (except !== 'tags' && f.tags?.length && !(f.tagMatch === 'all' ? f.tags.every((t) => tagMatches(b, t)) : f.tags.some((t) => tagMatches(b, t)))) return false;
   if (except !== 'owned' && f.owned != null && Boolean(b.owned) !== f.owned) return false;
   if (except !== 'hasFile' && f.hasFile != null && (b.files.length > 0) !== f.hasFile) return false;
   const y = year(b.dateFinished);
@@ -198,6 +225,12 @@ function facets(f = {}) {
     __typename: 'BookFacets',
     total: BOOKS.filter((b) => matches(b, f)).length,
     ...Object.fromEntries(Object.keys(VALUES).map((k) => [k, tally(k)])),
+    // Which tag values are someone's own, under the tags facet's own match.
+    myTags: (() => {
+      const counts = new Map();
+      BOOKS.filter((b) => matches(b, f, 'tags')).forEach((b) => b.myTags.forEach((v) => counts.set(v, (counts.get(v) || 0) + 1)));
+      return [...counts].map(([value, count]) => ({ __typename: 'BookFacetValue', value, count }));
+    })(),
     readYears: hist('readYears', (b) => year(b.dateFinished), 'year'),
     ratings: hist('ratings', (b) => (b.rating >= 1 ? Math.floor(b.rating) : null), 'rating'),
     owned: BOOKS.filter((b) => matches(b, f, 'owned') && b.owned).length,

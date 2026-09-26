@@ -1,6 +1,7 @@
 // BookGeek — the M1 pilot surfaces (MOBILE_UI_PLAN.md §3), the Night 2
 // AI library-assistant scenes (R117/R126), and the faceted library of
-// Phase C2 (DOCS/BOOKGEEK_CLEANUP_PLAN.md: @geeksuite/collection, 06b–06j).
+// Phase C2 (DOCS/BOOKGEEK_CLEANUP_PLAN.md: @geeksuite/collection, 06b–06j),
+// and the tag vocabulary (DOCS/TAGS.md: 03b, 06k–06m).
 import { json, graphqlRoute } from '../../lib/net.mjs';
 import { OPS, WHAT_NEXT_PICKS, DRAFT_BOOK_METADATA } from './fixtures.mjs';
 
@@ -71,6 +72,25 @@ export const scenes = [
     teardown: (page, h) => h.esc(),
   },
   {
+    // The book page's tags (DOCS/TAGS.md §5): canonical and My tags as
+    // chips, the raw import tags opened under "Source tags".
+    name: '03b-detail-source-tags',
+    goto: '/',
+    async setup(page, h) {
+      const card = page.getByText('The Sound of Gravel', { exact: true }).first();
+      if (!(await card.count())) return false;
+      await card.click();
+      await h.settle(1000);
+      const toggle = page.getByRole('button', { name: /^Source tags/ });
+      if (!(await toggle.count())) return false;
+      await toggle.first().click();
+      await h.settle(400);
+      await toggle.first().evaluate((el) => el.scrollIntoView({ block: 'center' }));
+      await h.settle(400);
+    },
+    teardown: (page, h) => h.esc(),
+  },
+  {
     name: '04-add',
     goto: '/',
     async setup(page, h) {
@@ -112,7 +132,7 @@ export const scenes = [
     // option (each facet under every filter but its own), the chosen ones
     // checked, the chips and the sort above the list.
     name: '06b-filters-desktop',
-    goto: '/?shelf=read&tag=memoir&read=2022-2024',
+    goto: '/?shelf=read&tag=Memoir&read=2022-2024',
     viewports: ['desktop'],
     wait: 1600,
   },
@@ -120,7 +140,7 @@ export const scenes = [
     // Further down the same panel: Format, the Copy switches, Year read's
     // range over its histogram, and My rating.
     name: '06c-filters-desktop-lower',
-    goto: '/?shelf=read&tag=memoir&read=2022-2024',
+    goto: '/?shelf=read&tag=Memoir&read=2022-2024',
     viewports: ['desktop'],
     wait: 1600,
     async setup(page, h) {
@@ -133,7 +153,7 @@ export const scenes = [
   {
     // The phone's full-height Filters sheet, with its "Show N books" footer.
     name: '06d-filters-sheet',
-    goto: '/?tag=science+fiction',
+    goto: '/?tag=Sci-fi',
     viewports: ['phone'],
     wait: 1400,
     async setup(page, h) {
@@ -141,6 +161,64 @@ export const scenes = [
       if (!(await btn.count())) return false;
       await btn.click();
       await h.settle(800);
+    },
+    teardown: (page, h) => h.esc(),
+  },
+  // ── Tags: the vocabulary's groups (DOCS/TAGS.md) ───────────────────────
+  {
+    // The desktop panel's Tags section: My tags, Genre, Nonfiction,
+    // Audience, Flavour, then Unsorted folded at the end; one tag chosen.
+    name: '06k-tags-panel',
+    goto: '/?tag=Cults',
+    viewports: ['desktop'],
+    wait: 1600,
+    async setup(page, h) {
+      const section = page.locator('[data-facet="tags"]').first();
+      if (!(await section.count())) return false;
+      await section.evaluate((el) => el.scrollIntoView({ block: 'start' }));
+      await h.settle(400);
+    },
+  },
+  {
+    // The same section in the phone's Filters sheet.
+    name: '06l-tags-sheet',
+    goto: '/?tag=Cults',
+    viewports: ['phone'],
+    wait: 1400,
+    async setup(page, h) {
+      const btn = page.getByTestId('filters-button');
+      if (!(await btn.count())) return false;
+      await btn.click();
+      await h.settle(800);
+      const section = page.locator('[role="dialog"] [data-facet="tags"]').first();
+      if (!(await section.count())) return false;
+      await section.evaluate((el) => el.scrollIntoView({ block: 'start' }));
+      await h.settle(400);
+    },
+    teardown: (page, h) => h.esc(),
+  },
+  {
+    // Unsorted opened: the raw tags the vocabulary neither maps nor drops,
+    // still filterable (a long catalogue name included, for truncation).
+    name: '06m-tags-unsorted',
+    goto: '/',
+    wait: 1400,
+    async setup(page, h) {
+      // A phone opens the Filters sheet; md+ has the panel beside the grid.
+      const phone = (page.viewportSize()?.width ?? 1280) < 900;
+      if (phone) {
+        const btn = page.getByTestId('filters-button');
+        if (!(await btn.count())) return false;
+        await btn.click();
+        await h.settle(800);
+      }
+      const scope = phone ? page.locator('[role="dialog"]') : page.getByTestId('filter-panel');
+      const toggle = scope.getByRole('button', { name: /^Unsorted, \d+ tags?$/ }).first();
+      if (!(await toggle.count())) return false;
+      await toggle.click();
+      await h.settle(400);
+      await toggle.evaluate((el) => el.scrollIntoView({ block: 'start' }));
+      await h.settle(400);
     },
     teardown: (page, h) => h.esc(),
   },
@@ -165,17 +243,18 @@ export const scenes = [
   },
   {
     // Saved views under the shelves, the legacy "Unread sci-fi" lit because
-    // the list is showing exactly it (a view saved before C2, opened through
-    // its legacy fields).
+    // the list is showing exactly it (a view saved before C2 with the raw
+    // tag "science fiction", opened through its legacy fields and mapped to
+    // Sci-fi by the gateway's viewTags).
     name: '06g-saved-views',
-    goto: '/?shelf=unread&tag=science+fiction',
+    goto: '/?shelf=unread&tag=Sci-fi',
     viewports: ['desktop'],
     wait: 1500,
   },
   {
     // The same list in the phone's drawer.
     name: '06h-saved-views-drawer',
-    goto: '/?shelf=unread&tag=science+fiction',
+    goto: '/?shelf=unread&tag=Sci-fi',
     viewports: ['phone'],
     async setup(page, h) {
       const menu = page.locator('[data-geek-topbar="menu"]');
@@ -192,7 +271,7 @@ export const scenes = [
   {
     // "Save view", named from the chips.
     name: '06i-save-view',
-    goto: '/?shelf=read&tag=memoir',
+    goto: '/?shelf=read&tag=Memoir',
     wait: 1400,
     async setup(page, h) {
       const save = page.getByRole('button', { name: 'Save view' });
