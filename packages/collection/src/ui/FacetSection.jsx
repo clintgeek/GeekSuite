@@ -13,7 +13,7 @@ import { useCollectionConfig } from '../config';
 import { visuallyHidden } from '../internal/a11y';
 
 export default function FacetSection({ id, title, caption, open, onToggle, activeCount = 0, quiet = false, children }) {
-  const { displayFont } = useCollectionConfig();
+  const { displayFont, displayWeight } = useCollectionConfig();
   const uid = useId();
   const headId = `facet-${id}-${uid}`;
   const bodyId = `facet-${id}-body-${uid}`;
@@ -45,7 +45,7 @@ export default function FacetSection({ id, title, caption, open, onToggle, activ
               minWidth: 0,
               fontFamily: displayFont,
               fontSize: '0.875rem',
-              fontWeight: 600,
+              fontWeight: displayWeight ?? 600,
               letterSpacing: '-0.005em',
               color: quiet ? 'text.secondary' : 'text.primary',
             }}

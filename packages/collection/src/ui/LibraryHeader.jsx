@@ -10,6 +10,10 @@
  *             124 games
  *             ← Genre RPG ×  Store Steam ×  Clear all →   (its own scrolling strip)
  *
+ * `actions` (optional) is the app's own control(s), placed just before the
+ * grid/list toggle in both layouts — BookGeek's ⋯ menu (export, select).
+ * Without `onToggleView` there is no toggle (the app shows it elsewhere).
+ *
  * The count is a polite live region: it is how a screen reader hears that a
  * filter did something. It keeps its last value while the next answer loads,
  * so it never announces "0" on the way to "124".
@@ -68,9 +72,10 @@ export default function LibraryHeader({
   onSave,
   view,
   onToggleView,
+  actions = null,
 }) {
   const { state } = lib;
-  const { displayFont, noun } = useCollectionConfig();
+  const { displayFont, displayWeight, noun } = useCollectionConfig();
   const count = (
     <Typography
       component="p"
@@ -82,7 +87,7 @@ export default function LibraryHeader({
         minWidth: 0,
         fontVariantNumeric: 'tabular-nums',
         ...(isDesktop
-          ? { fontFamily: displayFont, fontSize: '1.125rem', fontWeight: 600, letterSpacing: '-0.01em', color: 'text.primary' }
+          ? { fontFamily: displayFont, fontSize: '1.125rem', fontWeight: displayWeight ?? 600, letterSpacing: '-0.01em', color: 'text.primary' }
           : { fontSize: '0.8125rem', color: 'text.secondary' }),
       }}
       noWrap
@@ -91,11 +96,13 @@ export default function LibraryHeader({
     </Typography>
   );
 
-  const viewToggle = (
+  // Optional: an app that moves the toggle into its own menu on a narrow
+  // phone row (BookGeek) passes no `onToggleView`.
+  const viewToggle = onToggleView ? (
     <IconButton onClick={onToggleView} aria-label={view === 'list' ? 'Show as covers' : 'Show as a list'} sx={roundIconSx}>
       {view === 'list' ? <GridIcon sx={{ fontSize: 20 }} /> : <ListIcon sx={{ fontSize: 20 }} />}
     </IconButton>
-  );
+  ) : null;
 
   const sort = (
     <SortMenu sorts={sorts} sort={state.sort} dir={state.dir} onSort={lib.setSort} onReshuffle={lib.reshuffle} compact={!isDesktop} />
@@ -126,6 +133,7 @@ export default function LibraryHeader({
             Save view
           </Button>
           {sort}
+          {actions}
           {viewToggle}
         </Box>
         {chips.length ? (
@@ -150,6 +158,7 @@ export default function LibraryHeader({
             </IconButton>
           </Tooltip>
         ) : null}
+        {actions}
         {viewToggle}
       </Box>
       <Box sx={{ mt: 0.5 }}>{count}</Box>

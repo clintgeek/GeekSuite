@@ -17,7 +17,7 @@ import FilterSections from './FilterSections';
 export const PANEL_WIDTH = 280;
 
 export default function FilterPanel({ sections, lib, facets, context, open, onToggleSection, onHide, title = 'Filters' }) {
-  const { displayFont } = useCollectionConfig();
+  const { displayFont, displayWeight } = useCollectionConfig();
   return (
     <Box
       component="aside"
@@ -57,7 +57,7 @@ export default function FilterPanel({ sections, lib, facets, context, open, onTo
           borderColor: 'divider',
         }}
       >
-        <Typography component="h2" sx={{ flex: 1, fontFamily: displayFont, fontWeight: 700, fontSize: '1.0625rem', letterSpacing: '-0.015em' }}>
+        <Typography component="h2" sx={{ flex: 1, fontFamily: displayFont, fontWeight: displayWeight ?? 700, fontSize: '1.0625rem', letterSpacing: '-0.015em' }}>
           {title}
         </Typography>
         {lib.activeCount ? (

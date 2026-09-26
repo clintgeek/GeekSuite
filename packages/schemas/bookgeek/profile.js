@@ -20,6 +20,9 @@
  *
  * Takes the caller's mongoose and neither opens a connection nor registers a
  * model.
+ *
+ * 2026-09-25 (C2): `savedFilters[].filter` added — additive; old documents
+ * simply lack it.
  */
 
 function profileDefinition(mongoose) {
@@ -52,6 +55,11 @@ function profileDefinition(mongoose) {
         shelfFilter: { type: String },
         ownedOnly: { type: Boolean },
         ownedFilter: { type: String },
+        // The whole BookFilterInput the view was saved with (Phase C2 of
+        // DOCS/BOOKGEEK_CLEANUP_PLAN.md), validated by the gateway. Absent on
+        // views saved before it existed — those still open through the legacy
+        // fields above (web/src/utils/libraryFilter.js `savedViewSearch`).
+        filter: { type: mongoose.Schema.Types.Mixed, default: undefined },
       },
     ],
   };

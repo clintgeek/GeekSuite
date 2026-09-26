@@ -100,6 +100,36 @@ describe('LibraryHeader', () => {
     expect(screen.queryByRole('button', { name: 'Save view' })).toBeNull();
     expect(screen.getByRole('button', { name: 'Show as a list' })).toBeInTheDocument();
   });
+
+  it('an app control sits in `actions` beside the sort; without onToggleView there is no toggle', () => {
+    for (const isDesktop of [true, false]) {
+      const { unmount } = renderUi(
+        <LibraryHeader
+          {...base}
+          onToggleView={undefined}
+          isDesktop={isDesktop}
+          total={3}
+          lib={lib()}
+          actions={<button type="button">Library actions</button>}
+        />
+      );
+      expect(screen.getByRole('button', { name: 'Library actions' })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Show as a list' })).toBeNull();
+      unmount();
+    }
+  });
+
+  it('displayWeight sets the display headings’ weight (a one-weight face); unset keeps the package’s', () => {
+    const weight = () => window.getComputedStyle(screen.getByTestId('result-count')).fontWeight;
+    const { unmount } = renderUi(<LibraryHeader {...base} isDesktop total={3} lib={lib()} panelOpen />, {
+      config: { noun: NOUN, displayFont: 'Georgia', displayWeight: 400 },
+    });
+    expect(weight()).toBe('400');
+    expect(window.getComputedStyle(screen.getByTestId('result-count')).fontFamily).toBe('Georgia');
+    unmount();
+    renderUi(<LibraryHeader {...base} isDesktop total={3} lib={lib()} panelOpen />, { config: { noun: NOUN, displayFont: 'Georgia' } });
+    expect(weight()).toBe('600');
+  });
 });
 
 describe('FiltersSheet', () => {
