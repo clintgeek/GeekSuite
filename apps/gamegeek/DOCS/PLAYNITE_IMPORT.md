@@ -151,9 +151,13 @@ flagged again, refused unless the game is Playnite-only and uninstalled everywhe
 facet excludes its own filter). UI: the detail sheet's "Not installed anymore — how did it
 end?" banner, the library's Cleanup filter section, and "Installed" on the copy.
 
-Known consequence (Chef's call if it grates): an installed game he moves to Backlog or
-On hold by hand goes back to Playing on the next import, since the rule reads the shelf
-and the install state, not what changed.
+**A manual move sticks** (Chef, 2026-09-25: "I agree it stays"). Promotion to Playing
+happens only at the **moment** a copy becomes installed: an existing copy flipping from
+not installed to installed, or a new copy that arrives installed on an existing game (a
+game the import creates takes its shelf from the creation rule). The first recording of an
+unknown install state is not a transition. After a promotion, a shelf Chef picks by hand
+stays on every later import. Pinned in `test/playnite.installed.test.js`, "promotion
+happens only at the moment a copy becomes installed".
 
 ## Catalog fields on re-import
 

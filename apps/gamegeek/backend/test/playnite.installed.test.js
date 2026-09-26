@@ -329,7 +329,7 @@ describe('rule 2e — the flag clears, and a dismissal sticks until reinstall �
 describe('rule 2f — idempotent', () => {
   test('the same export twice: the first run moves and flags, the second changes nothing', () => {
     const games = [
-      game('toMove', [pcCopy('pid-1', undefined)]),
+      game('toMove', [pcCopy('pid-1', false)]), // known uninstalled → installed: a real flip
       game('toFlag', [pcCopy('pid-2', undefined)]),
       game('manual', [switchCopy()]),
       game('mixed', [pcCopy('pid-3', undefined), switchCopy()]),
@@ -425,3 +425,57 @@ describe('rule 2g — commit writes are guarded, scoped, and touch only shelf + 
     }
   });
 });
+
+// ── Chef, 2026-09-25: a manual move of an installed game sticks ──────────────
+describe('promotion happens only at the moment a copy becomes installed', () => {
+  test('an installed game Chef moved to Backlog by hand stays there on the next import', () => {
+    const games = [game('g', [pcCopy('pid-1', true)])];
+    const players = [row('g', 'backlog')];
+    const p = plan({ entries: [entry({ playniteId: 'pid-1', name: 'g', isInstalled: true })], games, players, now: T2 });
+    assert.equal(p.counts.movedToPlaying, 0);
+    assert.equal(p.ops.installUpdates.length, 0);
+  });
+
+  test('...and On hold too', () => {
+    const games = [game('g', [pcCopy('pid-1', true)])];
+    const p = plan({ entries: [entry({ playniteId: 'pid-1', name: 'g', isInstalled: true })], games, players: [row('g', 'on-hold')], now: T2 });
+    assert.equal(p.counts.movedToPlaying, 0);
+  });
+
+  test('uninstalled → installed promotes once; moving it back by hand then sticks', () => {
+    const games = [game('g', [pcCopy('pid-1', false)])];
+    const entries = [entry({ playniteId: 'pid-1', name: 'g', isInstalled: true })];
+    const first = plan({ entries, games, players: [row('g', 'backlog')], now: T1 });
+    assert.equal(first.counts.movedToPlaying, 1);
+    const state = applyPlan(first, { games, players: [row('g', 'backlog')] });
+    assert.equal(state.players[0].shelf, 'playing');
+    state.players[0].shelf = 'backlog'; // Chef moves it by hand
+    const again = plan({ entries, ...state, now: T2 });
+    assert.equal(again.counts.movedToPlaying, 0);
+    assert.equal(again.ops.installUpdates.length, 0);
+  });
+
+  test('a new copy that arrives installed on an existing game promotes', () => {
+    const games = [game('g', [pcCopy('pid-1', false)], 'Hades')];
+    const entries = [
+      entry({ playniteId: 'pid-1', name: 'Hades', isInstalled: false }),
+      entry({ playniteId: 'pid-2', name: 'Hades', sourceName: 'GOG', isInstalled: true }),
+    ];
+    const p = plan({ entries, games, players: [row('g', 'backlog')], now: T2 });
+    assert.equal(p.counts.addCopy, 1);
+    assert.equal(p.counts.movedToPlaying, 1);
+  });
+
+  test('the first recording of an unknown install state is not a transition', () => {
+    const games = [game('g', [pcCopy('pid-1', undefined)])];
+    const p = plan({ entries: [entry({ playniteId: 'pid-1', name: 'g', isInstalled: true })], games, players: [row('g', 'backlog')], now: T2 });
+    assert.equal(p.counts.movedToPlaying, 0);
+  });
+
+  test('installDecision defaults to no promotion without a transition', () => {
+    const d = installDecision({ playniteCopies: [{ isInstalled: true }], player: { shelf: 'backlog' } });
+    assert.equal(d.moveToPlaying, false);
+    assert.equal(installDecision({ playniteCopies: [{ isInstalled: true }], player: { shelf: 'backlog' }, becameInstalled: true }).moveToPlaying, true);
+  });
+});
+

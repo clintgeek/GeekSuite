@@ -57,7 +57,9 @@ export function inferShelf({ playtimeSeconds, installed }) {
  * (PLAYNITE_IMPORT.md §Installed → Playing). Pure.
  *
  *   - Any Playnite copy installed and the shelf is backlog / on-hold /
- *     unshelved → move to playing. Finished, abandoned, wishlist and custom
+ *     unshelved → move to playing, but ONLY at the moment a copy becomes
+ *     installed (a flip, or a new copy that arrives installed); a manual
+ *     move afterwards sticks. Finished, abandoned, wishlist and custom
  *     shelves are never moved (reinstalling a finished game is not a claim
  *     he's back in it).
  *   - Flag "not installed anymore" ONLY when the shelf is playing AND every
@@ -76,7 +78,7 @@ export function inferShelf({ playtimeSeconds, installed }) {
  * @param {object} p.player `{ shelf, installFlag, installFlagDismissedAt }`
  * @returns {{ moveToPlaying: boolean, flag: 'set'|'clear'|null, lastChange: Date|null }}
  */
-export function installDecision({ playniteCopies, otherCopies = 0, player }) {
+export function installDecision({ playniteCopies, otherCopies = 0, player, becameInstalled = false }) {
   const list = Array.isArray(playniteCopies) ? playniteCopies : [];
   const out = { moveToPlaying: false, flag: null, lastChange: null };
   if (!player) return out;
@@ -95,7 +97,10 @@ export function installDecision({ playniteCopies, otherCopies = 0, player }) {
   const dismissedAt = time(player.installFlagDismissedAt);
   const dismissed = dismissedAt !== null && !(lastChange !== null && lastChange > dismissedAt);
 
-  out.moveToPlaying = anyInstalled && INSTALL_PROMOTES_FROM.includes(shelf);
+  // Promote only when THIS import saw a copy become installed (a flip, or a
+  // new copy arriving installed). An installed game Chef moved to Backlog or
+  // On hold by hand stays there on every later import.
+  out.moveToPlaying = becameInstalled && anyInstalled && INSTALL_PROMOTES_FROM.includes(shelf);
   const shouldFlag = shelf === 'playing' && otherCopies === 0 && noneInstalled && !dismissed;
   if (shouldFlag && !flagged) out.flag = 'set';
   else if (!shouldFlag && flagged) out.flag = 'clear';
@@ -261,6 +266,9 @@ export function planPlayniteImport({
       // imported before isInstalled existed (null → a value) is not one.
       const flipped = typeof before.isInstalled === 'boolean' && before.isInstalled !== m.playnite.isInstalled;
       const after = { ...m.playnite, installedChangedAt: flipped ? now : before.installedChangedAt ?? null };
+      // Only the MOMENT a copy becomes installed promotes to Playing; after
+      // that a shelf Chef picks by hand sticks (Chef, 2026-09-25: "it stays").
+      if (flipped && m.playnite.isInstalled === true) hit.becameInstalled = true;
       const changed = playniteDiffers(before, after);
       if (changed) {
         copyUpdates.push({ gameId: hit.gameId, playniteId: m.playniteId, set: after });
@@ -288,6 +296,7 @@ export function planPlayniteImport({
       target.touched = true;
       target.mapped.push(m);
       target.entryKinds.push({ kind: 'addCopy' });
+      if (!target.isNew && m.playnite.isInstalled === true) target.becameInstalled = true;
       counts.addCopy += 1;
       pushSample(samples.addCopy, { title: target.isNew ? target.doc.title : target.title, storefront: m.storefront });
       // Fill-only-empty steamAppId on an existing game, if no other game holds it.
@@ -446,7 +455,7 @@ export function planPlayniteImport({
     const player = playersByGameId.get(w.gameId);
     if (!player) continue;
     const otherCopies = (w.game.copies ?? []).filter((c) => !c?.playnite?.playniteId).length;
-    const d = installDecision({ playniteCopies: [...w.playniteCopies.values()], otherCopies, player });
+    const d = installDecision({ playniteCopies: [...w.playniteCopies.values()], otherCopies, player, becameInstalled: !!w.becameInstalled });
     if (!d.moveToPlaying && !d.flag) continue;
     const op = { gameId: w.gameId };
     if (d.moveToPlaying) {
