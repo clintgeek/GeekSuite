@@ -117,7 +117,7 @@ export default function CoverTools({
                       p: 0,
                       cursor: "pointer",
                       overflow: "hidden",
-                      borderRadius: 1,
+                      borderRadius: "2px",
                       border: (t) => `1px solid ${t.palette.divider}`,
                       bgcolor: "background.default",
                       minHeight: 44,

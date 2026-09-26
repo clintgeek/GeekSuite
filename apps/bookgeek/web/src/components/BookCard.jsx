@@ -2,8 +2,9 @@
  * BookGeek library card — one book in the grid.
  *
  * The Pocket Pass rules (DOCS/MOBILE_UI_PLAN.md §3.1): the whole card is the
- * tap target, the cover carries the amber progress bar on its bottom edge
- * instead of a separate row, and the shelf state is one 12px caption line
+ * tap target, a book in progress carries a bookmark ribbon on its cover
+ * (BookCover; it replaced the amber bar on the bottom edge in 2026-09) instead
+ * of a separate row, and the shelf state is one 12px caption line
  * ("Reading · 42% ✓") instead of a 9px pill. The per-card basket "+" is gone —
  * bulk basket work happens in Select mode, from the filter sheet's overflow.
  *
@@ -20,6 +21,7 @@ import { Check as CheckIcon } from "@mui/icons-material";
 import { API_BASE, getCoverUrl } from "../utils/bookDisplay";
 import { canRate } from "../utils/rating";
 import StarRating from "./StarRating";
+import BookCover from "./BookCover";
 
 export default function BookCard({
   book,
@@ -42,9 +44,11 @@ export default function BookCard({
     ? Math.min(100, Math.max(0, book.readingProgress))
     : 0;
   // A finished book's "100%" is noise next to its "Read" label; the caption
-  // shows the percentage only while a book is in progress. The cover bar
-  // still fills, which is the quiet way to say the same thing.
+  // shows the percentage only while a book is in progress.
   const inProgress = progress > 0 && progress < 100;
+  // The bookmark ribbon marks a book you are in the middle of: any progress
+  // short of the end, or on the Reading shelf before the first page is logged.
+  const bookmarked = inProgress || (book.shelf === "reading" && progress < 100);
 
   const shelf = shelves.find((s) => s.id === book.shelf);
   const shelfLabel = shelf && shelf.id !== "all" ? shelf.label : null;
@@ -88,62 +92,26 @@ export default function BookCard({
           borderRadius: "inherit",
         }}
       >
-        <Box
-          sx={{
-            position: "relative",
-            aspectRatio: "2 / 3",
-            width: "100%",
-            borderRadius: "8px",
-            overflow: "hidden",
-            bgcolor: "background.default",
-            mb: 1,
-          }}
-        >
-          {bookId ? (
-            <Box
-              component="img"
-              src={getCoverUrl(book) || `${ API_BASE }/books/${ bookId }/cover`}
-              alt=""
-              loading="lazy"
-              onLoad={(e) => {
-                e.currentTarget.style.visibility = "visible";
-              }}
-              onError={(e) => {
-                e.currentTarget.style.visibility = "hidden";
-              }}
-              sx={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-            />
-          ) : null}
-          {progress > 0 && (
-            <Box
-              aria-hidden="true"
-              data-testid="book-card-progress"
-              sx={{
-                position: "absolute",
-                left: 0,
-                right: 0,
-                bottom: 0,
-                height: "3px",
-                bgcolor: alpha(theme.palette.common.black, 0.4),
-              }}
-            >
-              <Box
-                sx={{
-                  height: "100%",
-                  width: `${ progress }%`,
-                  bgcolor: "progress.main",
-                }}
-              />
-            </Box>
-          )}
-        </Box>
+        <BookCover
+          book={book}
+          src={bookId ? getCoverUrl(book) || `${ API_BASE }/books/${ bookId }/cover` : null}
+          size="card"
+          ribbon={bookmarked}
+          ribbonTestId="book-card-ribbon"
+          sx={{ mb: 1 }}
+        />
 
         <Typography
           variant="body1"
           sx={{
-            fontWeight: 500,
+            // The display serif, at its one weight (DM Serif Display ships
+            // 400 only; a faked bold smears it). A touch larger than the sans
+            // it replaced, since the serif sets small.
+            fontFamily: theme.typography.h1.fontFamily,
+            fontWeight: 400,
+            fontSize: "1.0625rem",
             color: "text.primary",
-            lineHeight: 1.3,
+            lineHeight: 1.25,
             display: "-webkit-box",
             WebkitLineClamp: 2,
             WebkitBoxOrient: "vertical",

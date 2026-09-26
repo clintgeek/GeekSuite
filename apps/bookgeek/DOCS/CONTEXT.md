@@ -61,6 +61,26 @@ Exclusive Shelf, My Review, Spoiler, Private Notes, Read Count, Owned Copies
 - **Deployment:** Docker (API: 1800, Frontend: 1801)
 - **UI:** Dark mode default, Inter/Geist fonts
 
+### Visual identity — "Midnight Reader" (2026-09-26)
+
+A reserved library: DM Serif Display (weight 400 only — never bold it) for
+headings and card titles, Inter for everything else, sky accent, amber for
+stars and reading progress, navy surfaces. Its material is **paper, cloth and a
+bit of craft** — quiet on purpose, the opposite of GameGeek's loud "Arcade
+Sticker". No hard shadows, stickers, tilts or neon.
+
+- **Covers are books** (`web/src/components/BookCover.jsx`, used by the card,
+  the list row and the detail hero): 2px corners, a faint spine crease on the
+  left edge (a translucent overlay, so real art keeps its colours).
+- **No art → cloth board**: a muted bookcloth hashed from the book id, a CSS
+  linen weave, a thin gold rule, serif title and small-caps author. Cream
+  `#f4ecdb` title ≥7:1 and gold `#dcc796` author ≥5:1 on every cloth.
+- **In progress → bookmark ribbon** hanging from the top edge
+  (`palette.progress.ribbon`); the percentage stays as text on the card. The
+  detail slider stays a slider.
+- **Dark mode is one night**: page `#0b1222` → surface `#0f172a` → card
+  `#151e2f`, all one navy family.
+
 ---
 
 ## Storage Paths

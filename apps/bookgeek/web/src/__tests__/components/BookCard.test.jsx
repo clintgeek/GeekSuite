@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { fireEvent, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import BookCard from '../../components/BookCard';
 import { BOOKS, SHELVES } from '../fixtures';
@@ -32,16 +32,39 @@ describe('BookCard', () => {
     expect(screen.getByText('Read')).toBeInTheDocument();
   });
 
-  it('renders the cover progress fill for any nonzero progress, including 100%', () => {
+  it('hangs the bookmark ribbon on a book in progress, and not on a finished one', () => {
     const { rerender } = renderWithProviders(<BookCard book={reading42} shelves={SHELVES} />);
-    expect(screen.getByTestId('book-card-progress')).toBeInTheDocument();
+    expect(screen.getByTestId('book-card-ribbon')).toBeInTheDocument();
     rerender(<BookCard book={read100} shelves={SHELVES} />);
-    expect(screen.getByTestId('book-card-progress')).toBeInTheDocument();
+    expect(screen.queryByTestId('book-card-ribbon')).not.toBeInTheDocument();
   });
 
-  it('omits the cover progress fill entirely at 0%', () => {
+  it('hangs the ribbon on a Reading-shelf book before any progress is logged', () => {
+    renderWithProviders(<BookCard book={{ ...wantToRead0, shelf: 'reading' }} shelves={SHELVES} />);
+    expect(screen.getByTestId('book-card-ribbon')).toBeInTheDocument();
+  });
+
+  it('omits the ribbon entirely at 0% off the Reading shelf', () => {
     renderWithProviders(<BookCard book={wantToRead0} shelves={SHELVES} />);
-    expect(screen.queryByTestId('book-card-progress')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('book-card-ribbon')).not.toBeInTheDocument();
+  });
+
+  it('keeps the ribbon decorative: hidden from assistive tech', () => {
+    renderWithProviders(<BookCard book={reading42} shelves={SHELVES} />);
+    expect(screen.getByTestId('book-card-ribbon')).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('binds a book with no cover art in cloth, with its title and author on the board', () => {
+    renderWithProviders(<BookCard book={reading42} shelves={SHELVES} />);
+    const cover = screen.getByTestId('book-cover');
+    const img = cover.querySelector('img');
+    expect(img).not.toBeNull();
+    fireEvent.error(img);
+    expect(cover.querySelector('img')).toBeNull();
+    // The board repeats the title and author, hidden from assistive tech
+    // (the card's own text already carries them).
+    expect(within(cover).getByText('Lock In').closest('[aria-hidden="true"]')).not.toBeNull();
+    expect(within(cover).getByText('John Scalzi')).toBeInTheDocument();
   });
 
   it('shows an "Owned" tick only for owned books', () => {

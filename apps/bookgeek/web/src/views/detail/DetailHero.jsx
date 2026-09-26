@@ -12,6 +12,7 @@ import { Box, IconButton, Typography } from "@mui/material";
 import { alpha, useTheme } from "@mui/material/styles";
 import { Close as CloseIcon } from "@mui/icons-material";
 import { API_BASE, getCoverUrl } from "../../utils/bookDisplay";
+import BookCover from "../../components/BookCover";
 import { bookId, publishedYear, shelfColor, shelfLabel, starsFor } from "./bookFacts";
 
 export default function DetailHero({ book, shelves, onClose, showClose = false }) {
@@ -23,6 +24,10 @@ export default function DetailHero({ book, shelves, onClose, showClose = false }
   const stars = starsFor(book.rating);
   const year = publishedYear(book.publishedDate);
   const shelfName = shelfLabel(shelves, book.shelf);
+  // The same bookmark the library card carries (BookCard): in progress, or on
+  // the Reading shelf before the first page is logged.
+  const progress = Number.isFinite(book.readingProgress) ? book.readingProgress : 0;
+  const bookmarked = (progress > 0 && progress < 100) || (book.shelf === "reading" && progress < 100);
 
   const metaParts = [
     stars ? { key: "rating", node: stars } : null,
@@ -104,25 +109,19 @@ export default function DetailHero({ book, shelves, onClose, showClose = false }
           sx={{
             width: { xs: 160, md: 200 },
             mx: "auto",
-            aspectRatio: "2 / 3",
-            borderRadius: 1.5,
-            overflow: "hidden",
-            bgcolor: "background.default",
-            border: (t) => `1px solid ${t.palette.divider}`,
-            boxShadow: 6,
+            // A soft shadow under the board, as a book lies on a table.
+            filter: "drop-shadow(0 10px 18px rgba(0,0,0,0.35))",
           }}
         >
-          {coverUrl ? (
-            <Box
-              component="img"
-              src={coverUrl}
-              alt={book.title || "Book cover"}
-              sx={{ display: "block", width: "100%", height: "100%", objectFit: "cover" }}
-              onError={(e) => {
-                e.currentTarget.style.visibility = "hidden";
-              }}
-            />
-          ) : null}
+          <BookCover
+            book={book}
+            src={coverUrl}
+            size="hero"
+            alt={book.title || "Book cover"}
+            loading="eager"
+            ribbon={bookmarked}
+            ribbonTestId="detail-cover-ribbon"
+          />
         </Box>
 
         <Typography

@@ -16,6 +16,7 @@ import { API_BASE, getCoverUrl } from "../utils/bookDisplay";
 import { canRate } from "../utils/rating";
 import { formatReadingDate } from "../views/detail/bookFacts";
 import StarRating from "./StarRating";
+import BookCover from "./BookCover";
 
 /**
  * "Mar 2024". Through formatReadingDate, not a plain local format: live finish
@@ -96,37 +97,23 @@ export default function BookRow({
           borderRadius: "8px",
         }}
       >
-        <Box
-          sx={{
-            width: 40,
-            aspectRatio: "2 / 3",
-            flexShrink: 0,
-            borderRadius: "4px",
-            overflow: "hidden",
-            bgcolor: "background.default",
-          }}
-        >
-          {bookId ? (
-            <Box
-              component="img"
-              src={getCoverUrl(book) || `${ API_BASE }/books/${ bookId }/cover`}
-              alt=""
-              loading="lazy"
-              onError={(e) => {
-                e.currentTarget.style.visibility = "hidden";
-              }}
-              sx={{ width: "100%", height: "100%", objectFit: "cover", display: "block" }}
-            />
-          ) : null}
-        </Box>
+        <BookCover
+          book={book}
+          src={bookId ? getCoverUrl(book) || `${ API_BASE }/books/${ bookId }/cover` : null}
+          size="row"
+          sx={{ width: 40, flexShrink: 0 }}
+        />
 
         <Box sx={{ minWidth: 0, flex: 1 }}>
           <Typography
             variant="body1"
             sx={{
-              fontWeight: 500,
+              // The display serif at its one weight, as on the cards.
+              fontFamily: theme.typography.h1.fontFamily,
+              fontWeight: 400,
+              fontSize: "1.0625rem",
               color: "text.primary",
-              lineHeight: 1.3,
+              lineHeight: 1.25,
               display: "-webkit-box",
               WebkitLineClamp: 2,
               WebkitBoxOrient: "vertical",

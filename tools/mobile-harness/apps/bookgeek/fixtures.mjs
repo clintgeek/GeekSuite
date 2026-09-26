@@ -16,15 +16,17 @@ const BOOK_ROWS = [
 
 // Per-book extras the filter panel needs to show something real: formats as
 // Calibre writes them (upper case), a couple of series, finished dates spread
-// over a few years, one book in French and one with no file.
+// over a few years, one book in French and one with no file. Two have no cover
+// art (`noCover`): their cover request 404s, as the real API does, so the
+// grid shows BookGeek's cloth-bound placeholder beside real jackets.
 const EXTRAS = {
   b1: { files: ['EPUB', 'AZW3'], series: { name: 'Lock In', index: 1 } },
   b2: { files: ['EPUB'], dateFinished: '2024-03-10' },
   b3: { files: ['EPUB', 'PDF'], dateFinished: '2021-11-02' },
-  b4: { files: [] },
+  b4: { files: [], noCover: true },
   b5: { files: ['EPUB'], series: { name: "The Dryad's Crown", index: 1 }, language: 'fr' },
   b6: { files: ['MOBI'], dateFinished: '2022-07-19' },
-  b7: { files: ['PDF'] },
+  b7: { files: ['PDF'], noCover: true },
   b8: { files: ['EPUB'], dateFinished: '2024-01-28' },
 };
 
@@ -44,7 +46,7 @@ export const BOOKS = BOOK_ROWS.map(
     files: EXTRAS[id].files.map((format) => ({
       __typename: 'BookFile', format, path: `/data/library/${id}.${format.toLowerCase()}`, size: 1200000, addedAt: '2026-03-03',
     })),
-    coverPath: `covers/${id}.jpg`, review: '', dateAdded: '2026-03-03', dateStarted: null,
+    coverPath: EXTRAS[id].noCover ? null : `covers/${id}.jpg`, review: '', dateAdded: '2026-03-03', dateStarted: null,
     dateFinished: EXTRAS[id].dateFinished ?? null,
     readCount: shelf === 'read' ? 1 : 0,
     series: EXTRAS[id].series ? { __typename: 'BookSeries', ...EXTRAS[id].series } : null,
@@ -254,7 +256,9 @@ export async function routes(ctx) {
   await sessionRoutes(ctx);
   await ctx.route(/\/api\/books\/([^/]+)\/cover/, (r) => {
     const id = /\/api\/books\/([^/]+)\/cover/.exec(r.request().url())[1];
-    return svg(r, coverSvg(BOOKS.find((b) => b.id === id) || BOOKS[0]));
+    const book = BOOKS.find((b) => b.id === id) || BOOKS[0];
+    if (!book.coverPath) return r.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"Cover not found"}' });
+    return svg(r, coverSvg(book));
   });
   await graphqlRoute(ctx, OPS);
 }

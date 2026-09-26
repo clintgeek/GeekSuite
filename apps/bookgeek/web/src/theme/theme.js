@@ -19,8 +19,11 @@ const skyLight = { main: "#0284c7", light: "#0ea5e9", dark: "#0369a1", contrastT
 
 const accentFor = (mode) => (mode === "dark" ? skyDark : skyLight);
 
+// One night, not two. The page was near-black (#010409) beside a navy sidebar
+// and top bar — two unrelated darks side by side. Now page, chrome and cards
+// are one navy family, stepped: page #0b1222 → surface #0f172a → card #151e2f.
 const darkColors = {
-  page:    "#010409",
+  page:    "#0b1222",
   surface: "#0f172a",
   card:    "#151e2f",
   text:    "#f1f5f9",
@@ -59,11 +62,15 @@ function buildBookOverrides(mode) {
       // as one (≈3:1 on the page in both modes).
       border: isDark ? "rgba(148, 163, 184, 0.6)" : "rgba(15, 23, 42, 0.5)",
       // Identity tones, not semantics. `progress` is the one amber in the app
-      // (reading progress on covers and the detail slider); `shelf` colors the
+      // (the bookmark ribbon on covers and the detail slider); `shelf` colors the
       // shelf state of a book everywhere it appears. Light mode steps each
       // hue down so it clears 3:1 as a graphic on white.
       progress: {
         main: isDark ? "#f59e0b" : "#b45309",
+        // The bookmark ribbon on an in-progress cover (components/BookCover):
+        // the same amber, one step deeper, so it reads as silk and not a
+        // warning light. Decorative — it carries no text.
+        ribbon: isDark ? "#d97706" : "#b45309",
         contrastText: "#0b1220",
       },
       shelf: isDark
