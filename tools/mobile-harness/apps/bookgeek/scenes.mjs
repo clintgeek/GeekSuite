@@ -1,7 +1,27 @@
-// BookGeek — the M1 pilot surfaces (MOBILE_UI_PLAN.md §3), plus the Night 2
-// AI library-assistant scenes (R117/R126).
+// BookGeek — the M1 pilot surfaces (MOBILE_UI_PLAN.md §3), the Night 2
+// AI library-assistant scenes (R117/R126), and the faceted library of
+// Phase C2 (DOCS/BOOKGEEK_CLEANUP_PLAN.md: @geeksuite/collection, 06b–06j).
 import { json, graphqlRoute } from '../../lib/net.mjs';
 import { OPS, WHAT_NEXT_PICKS, DRAFT_BOOK_METADATA } from './fixtures.mjs';
+
+// The covers/list switch: its own button at md+, a row in the ⋯ menu on a
+// phone (the header row has no room for it there).
+async function chooseLayout(page, h, name) {
+  const button = page.getByRole('button', { name });
+  if (await button.count()) {
+    await button.first().click();
+  } else {
+    const more = page.getByRole('button', { name: 'Library actions' });
+    if (!(await more.count())) return false;
+    await more.click();
+    await h.settle(300);
+    const item = page.getByRole('menuitem', { name });
+    if (!(await item.count())) return false;
+    await item.click();
+  }
+  await h.settle(600);
+  return true;
+}
 
 const bootstrapWithLibraryAssistant = (r) => json(r, {
   identity: { username: 'chef', email: 'chef@example.com' },
@@ -21,14 +41,10 @@ export const scenes = [
     name: '01b-library-list',
     goto: '/',
     async setup(page, h) {
-      const toggle = page.getByRole('button', { name: 'Show as a list' });
-      if (!(await toggle.count())) return false;
-      await toggle.click();
-      await h.settle(600);
+      if (!(await chooseLayout(page, h, 'Show as a list'))) return false;
     },
     async teardown(page, h) {
-      const back = page.getByRole('button', { name: 'Show as covers' });
-      if (await back.count()) await back.click();
+      await chooseLayout(page, h, 'Show as covers');
       await h.settle(200);
     },
   },
@@ -88,6 +104,133 @@ export const scenes = [
       if (!(await settings.count())) return false;
       await settings.click();
       await h.settle(900);
+    },
+  },
+  // ── The faceted library (Phase C2) ────────────────────────────────────
+  {
+    // The desktop filter panel beside the grid: live counts beside every
+    // option (each facet under every filter but its own), the chosen ones
+    // checked, the chips and the sort above the list.
+    name: '06b-filters-desktop',
+    goto: '/?shelf=read&tag=memoir&read=2022-2024',
+    viewports: ['desktop'],
+    wait: 1600,
+  },
+  {
+    // Further down the same panel: Format, the Copy switches, Year read's
+    // range over its histogram, and My rating.
+    name: '06c-filters-desktop-lower',
+    goto: '/?shelf=read&tag=memoir&read=2022-2024',
+    viewports: ['desktop'],
+    wait: 1600,
+    async setup(page, h) {
+      const section = page.locator('[data-facet="format"]');
+      if (!(await section.count())) return false;
+      await section.evaluate((el) => el.scrollIntoView({ block: 'start' }));
+      await h.settle(400);
+    },
+  },
+  {
+    // The phone's full-height Filters sheet, with its "Show N books" footer.
+    name: '06d-filters-sheet',
+    goto: '/?tag=science+fiction',
+    viewports: ['phone'],
+    wait: 1400,
+    async setup(page, h) {
+      const btn = page.getByTestId('filters-button');
+      if (!(await btn.count())) return false;
+      await btn.click();
+      await h.settle(800);
+    },
+    teardown: (page, h) => h.esc(),
+  },
+  {
+    // Six active filters: on a phone the chips scroll inside their own strip
+    // (the page must not scroll sideways); at md+ they wrap.
+    name: '06e-active-chips',
+    goto: '/?shelf=read&shelf=want-to-read&author=Philip+K.+Dick&author=Jeff+Guinn&format=epub&stars=3-5&read=2021-',
+    wait: 1500,
+  },
+  {
+    name: '06f-sort-menu',
+    goto: '/?sort=pageCount',
+    wait: 1200,
+    async setup(page, h) {
+      const sort = page.getByRole('button', { name: /^Sort:/ });
+      if (!(await sort.count())) return false;
+      await sort.first().click();
+      await h.settle(500);
+    },
+    teardown: (page, h) => h.esc(),
+  },
+  {
+    // Saved views under the shelves, the legacy "Unread sci-fi" lit because
+    // the list is showing exactly it (a view saved before C2, opened through
+    // its legacy fields).
+    name: '06g-saved-views',
+    goto: '/?shelf=unread&tag=science+fiction',
+    viewports: ['desktop'],
+    wait: 1500,
+  },
+  {
+    // The same list in the phone's drawer.
+    name: '06h-saved-views-drawer',
+    goto: '/?shelf=unread&tag=science+fiction',
+    viewports: ['phone'],
+    async setup(page, h) {
+      const menu = page.locator('[data-geek-topbar="menu"]');
+      if (!(await menu.count())) return false;
+      await menu.click();
+      await h.settle(600);
+      const views = page.locator('#saved-views-label');
+      if (!(await views.count())) return false;
+      await views.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+      await h.settle(300);
+    },
+    teardown: (page, h) => h.esc(),
+  },
+  {
+    // "Save view", named from the chips.
+    name: '06i-save-view',
+    goto: '/?shelf=read&tag=memoir',
+    wait: 1400,
+    async setup(page, h) {
+      const save = page.getByRole('button', { name: 'Save view' });
+      if (!(await save.count())) return false;
+      await save.first().click();
+      await h.settle(600);
+    },
+    teardown: (page, h) => h.esc(),
+  },
+  {
+    // Scroll memory (@geeksuite/collection useScrollMemory): scroll the
+    // library, go to Settings (read it from the top), come Back — the same
+    // place. The scene throws
+    // (an ERROR in the run) if it lands anywhere else. Phone: the only
+    // viewport where eight fixture books are taller than the screen.
+    name: '06j-scroll-restore',
+    goto: '/',
+    viewports: ['phone'],
+    wait: 1500,
+    async setup(page, h) {
+      const main = page.locator('main').first();
+      const top = () => main.evaluate((el) => el.scrollTop);
+      await main.evaluate((el) => el.scrollTo(0, 600));
+      await h.settle(500);
+      const before = await top();
+      if (before < 400) return false; // not tall enough to prove anything here
+      await page.locator('[data-geek-topbar="account"]').click();
+      await h.settle(400);
+      await page.locator('[data-geek-topbar-menu="settings"]').click();
+      await h.settle(900);
+      // Read Settings from the top: the shell's <main> is shared, so without
+      // this it would simply keep the library's offset and prove nothing.
+      await main.evaluate((el) => el.scrollTo(0, 0));
+      await h.settle(400);
+      await page.goBack();
+      await h.settle(1500);
+      const back = await top();
+      if (Math.abs(back - before) > 4) throw new Error(`scroll not restored: ${before} → ${back}`);
     },
   },
   {
