@@ -94,12 +94,8 @@ const TARGETS = [
   },
   {
     app: 'bookgeek',
-    modules: [
-      'apps/bookgeek/api/src/routes/authRoutes.js',
-      'apps/bookgeek/api/src/routes/importRoutes.js',
-      'apps/bookgeek/api/src/deviceBasket.js',
-    ],
-    note: "FALLBACK — apps/bookgeek/api/src/server.js is a ~2800-line monolith that mongoose.connect()s and app.listen()s unconditionally with no guard; its own test/csrfGuard.test.js documents this exact problem (\"server.js itself calls start() at import time ... so it cannot be imported here\"). These three router modules are the only route logic bookgeek split into separate files — the bulk of its routes (~2700 lines: books, profile, kindle, enrichment, etc.) live inline in server.js and are NOT covered by this smoke test. Closing that gap means splitting server.js into an app.js, which is app-code work out of this task's scope.",
+    modules: ['apps/bookgeek/api/src/app.js'],
+    note: "app.js exports createApp() and is split from server.js (Phase B, 2026-09-25) so the whole API — auth, import, kindle, book files, device baskets, static + SPA fallback — imports without connecting Mongo or listening.",
   },
   {
     app: 'basegeek',
