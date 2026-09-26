@@ -7,7 +7,7 @@ import {
   AccordionSummary, AccordionDetails, List, ListItem, ListItemText,
   IconButton, Stack
 } from "@mui/material";
-import { GeekEmptyState, GeekErrorState, useToast } from "@geeksuite/ui";
+import { GeekEmptyState, GeekErrorState, GeekSlashHint, slashFocusProps, useToast } from "@geeksuite/ui";
 import LedgerDialog from "../components/primitives/LedgerDialog";
 import AddIcon from "@mui/icons-material/Add";
 import DeleteIcon from "@mui/icons-material/Delete";
@@ -164,7 +164,7 @@ const GroupsPage = () => {
 
       <Paper sx={{ p: 2, mb: 3 }}>
         <Box sx={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))", gap: 2 }}>
-          <TextField label="Search" size="small" placeholder="Group name" value={filters.q}
+          <TextField label="Search" size="small" {...slashFocusProps(20)} InputProps={{ endAdornment: <GeekSlashHint /> }} placeholder="Group name" value={filters.q}
             onChange={(e) => setFilters(p => ({ ...p, q: e.target.value }))} />
           <TextField select label="Purpose" size="small" value={filters.purpose}
             onChange={(e) => setFilters(p => ({ ...p, purpose: e.target.value }))}>

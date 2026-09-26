@@ -11,7 +11,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import ResponsiveTable from "../components/primitives/ResponsiveTable";
 import LedgerDialog from "../components/primitives/LedgerDialog";
-import { useToast } from "@geeksuite/ui";
+import { GeekSlashHint, slashFocusProps, useToast } from "@geeksuite/ui";
 import { displayCalendarDate, utcDateString } from "@geeksuite/utils";
 import { GET_BIRDS, GET_LOCATIONS, GET_FLOCK_GROUPS, GET_GROUP_MEMBERSHIPS, GET_PAIRINGS } from "../graphql/queries";
 import { CREATE_BIRD, UPDATE_BIRD, DELETE_ENTITY } from "../graphql/mutations";
@@ -554,7 +554,7 @@ const BirdsPage = () => {
    */
   const filterFields = (
     <>
-      <TextField label="Search" size="small" placeholder="Name or Tag ID" value={filters.q}
+      <TextField label="Search" size="small" {...slashFocusProps(20)} InputProps={{ endAdornment: <GeekSlashHint /> }} placeholder="Name or Tag ID" value={filters.q}
         onChange={(e) => { setFilters(p => ({ ...p, q: e.target.value })); setPage(0); }} />
       <TextField select label="Status" size="small" value={filters.status}
         onChange={(e) => { setFilters(p => ({ ...p, status: e.target.value })); setPage(0); }}>

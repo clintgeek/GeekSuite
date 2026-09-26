@@ -7,7 +7,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import ResponsiveTable from "../components/primitives/ResponsiveTable";
 import LedgerDialog from "../components/primitives/LedgerDialog";
-import { useToast } from "@geeksuite/ui";
+import { GeekSlashHint, slashFocusProps, useToast } from "@geeksuite/ui";
 import { GET_PAIRINGS } from "../graphql/queries";
 import { CREATE_PAIRING, UPDATE_PAIRING, DELETE_ENTITY } from "../graphql/mutations";
 
@@ -140,7 +140,7 @@ const PairingsPage = () => {
   /** Framed by `ResponsiveTable`: a Paper at `md`+, a sheet below it. */
   const filterFields = (
     <>
-      <TextField label="Search" size="small" placeholder="Pairing name" value={filters.q}
+      <TextField label="Search" size="small" {...slashFocusProps(20)} InputProps={{ endAdornment: <GeekSlashHint /> }} placeholder="Pairing name" value={filters.q}
         onChange={(e) => { setFilters(p => ({ ...p, q: e.target.value })); setPage(0); }} />
       <TextField select label="Status" size="small" value={filters.active}
         onChange={(e) => { setFilters(p => ({ ...p, active: e.target.value })); setPage(0); }}>

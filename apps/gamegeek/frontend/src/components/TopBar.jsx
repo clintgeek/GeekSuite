@@ -5,6 +5,10 @@
  * phone that swaps the title for a full-width field), typing is debounced
  * into the URL's `q`, and it only exists on the library — Settings has
  * nothing to search. "Add game" is a desktop action; the phone has the FAB.
+ *
+ * `/` (suite slash focus) lands in the library search — priority 20, the
+ * library's most important box. GeekSearchField marks itself and shows the
+ * `/` keycap while the field is empty.
  */
 import React, { useEffect, useRef, useState } from 'react';
 import { Button, IconButton, InputAdornment, alpha, useMediaQuery, useTheme } from '@mui/material';
@@ -66,6 +70,7 @@ export default function TopBar({ user, onSignOut }) {
     <GeekSearchField
       fullWidth
       placeholder="Search your games"
+      slashFocus={20}
       value={text}
       inputRef={fieldRef}
       onChange={(e) => onChange(e.target.value)}

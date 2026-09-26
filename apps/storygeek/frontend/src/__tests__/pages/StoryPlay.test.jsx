@@ -5,7 +5,7 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { lightTheme } from '../testUtils';
 import api from '../../api';
 import StoryPlay from '../../pages/StoryPlay';
-import { GeekToastProvider } from '@geeksuite/ui';
+import { GeekToastProvider, SlashFocusProvider } from '@geeksuite/ui';
 
 // The named exports matter: StoryPlay imports `LONG_REQUEST_TIMEOUT_MS` and
 // `messageFromBlobError` alongside the default, and a vitest ESM mock that
@@ -135,6 +135,28 @@ describe('StoryPlay composer', () => {
 // axe findings on 04-play/08-composer; both are named contracts now, not
 // incidental markup.
 describe('StoryPlay accessibility', () => {
+  it('"/" from the transcript focuses the composer', async () => {
+    render(
+      <SlashFocusProvider>
+        <ThemeProvider theme={lightTheme}>
+          <MemoryRouter initialEntries={['/play/story-1']}>
+            <GeekToastProvider>
+              <Routes>
+                <Route path="/play/:storyId" element={<StoryPlay />} />
+              </Routes>
+            </GeekToastProvider>
+          </MemoryRouter>
+        </ThemeProvider>
+      </SlashFocusProvider>
+    );
+    const input = await screen.findByPlaceholderText('What do you do?');
+    // The page may focus the composer on load; start from outside it.
+    input.blur();
+    expect(input).not.toHaveFocus();
+    fireEvent.keyDown(document.body, { key: '/' });
+    expect(input).toHaveFocus();
+  });
+
   it('names the icon-only send button', async () => {
     renderStoryPlay();
     await screen.findByPlaceholderText('What do you do?');

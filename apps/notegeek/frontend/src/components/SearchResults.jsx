@@ -11,7 +11,7 @@ import {
     Divider,
     useTheme,
 } from '@mui/material';
-import { GeekEmptyState, GeekErrorState } from '@geeksuite/ui';
+import { GeekEmptyState, GeekErrorState, GeekSlashHint, slashFocusProps } from '@geeksuite/ui';
 // Deep-import (see RichTextEditor.jsx for why) instead of the
 // '@mui/icons-material' barrel.
 import SearchIcon from '@mui/icons-material/Search';
@@ -68,6 +68,8 @@ function SearchResults() {
                 variant="outlined"
                 placeholder="Search titles, content, tags…"
                 autoFocus
+                // The page's own search outranks the header's on this route.
+                {...slashFocusProps(20)}
                 size="small"
                 sx={{ mb: 2.5 }}
                 InputProps={{
@@ -87,7 +89,11 @@ function SearchResults() {
                                 <ClearIcon sx={{ fontSize: 15 }} />
                             </IconButton>
                         </InputAdornment>
-                    ) : null,
+                    ) : (
+                        <InputAdornment position="end" aria-hidden="true">
+                            <GeekSlashHint />
+                        </InputAdornment>
+                    ),
                 }}
             />
 

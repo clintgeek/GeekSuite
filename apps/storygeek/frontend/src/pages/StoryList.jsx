@@ -9,7 +9,7 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '@mui/material/styles';
 import { useAuth } from '@geeksuite/auth';
-import { GeekEmptyState, GeekErrorState, toneForMode, useGeekPrimaryAction, useToast } from '@geeksuite/ui';
+import { GeekEmptyState, GeekErrorState, slashFocusProps, toneForMode, useGeekPrimaryAction, useToast } from '@geeksuite/ui';
 import api from '../api';
 import CodexDialog from '../components/primitives/CodexDialog';
 
@@ -343,6 +343,8 @@ function StoryList() {
             onChange={(e) => setStartForm(p => ({ ...p, prompt: e.target.value }))}
             multiline rows={4} placeholder="A wanderer arrives at a fog-shrouded crossroads..."
             required sx={{ mb: 2 }}
+            // The dialog's `/` target (the page behind it is aria-hidden).
+            inputProps={slashFocusProps(10, { select: false })}
           />
           <Grid container columnSpacing={2} rowSpacing={3}>
             <Grid item xs={12} sm={6}>

@@ -12,7 +12,21 @@ export {
   useToast,
 } from './feedback';
 export { FocusModeToggle, GlobalSearchButton, QuickCaptureButton } from './features';
-export { FocusModeProvider, useFocusMode } from './focus';
+export {
+  DEFAULT_SLASH_PRIORITY,
+  FocusModeProvider,
+  GeekSlashHint,
+  SLASH_FOCUS_ATTR,
+  SLASH_SELECT_ATTR,
+  SlashFocusProvider,
+  findSlashFocusTarget,
+  focusSlashTarget,
+  installSlashFocus,
+  isEditableTarget,
+  slashFocusProps,
+  useFocusMode,
+  useSlashFocus,
+} from './focus';
 export {
   GEEKSUITE_APPS,
   GEEK_BOTTOM_NAV_MAX_ITEMS,

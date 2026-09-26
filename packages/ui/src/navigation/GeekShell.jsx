@@ -22,6 +22,9 @@
  * `GeekFab` here, as a *sibling* of the content column — `GeekAppFrame`'s route
  * transition is a motion element and would capture a fixed child. No page
  * registered → no FAB, and apps that mount their own `GeekFab` are unaffected.
+ *
+ * And it owns `/`: the shell installs the one slash-focus listener, and pages
+ * mark their boxes with `data-geek-slash-focus` (see focus/slashFocus.js).
  */
 import { useCallback, useMemo, useState } from 'react';
 import Box from '@mui/material/Box';
@@ -30,6 +33,7 @@ import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import { geekLayout } from '../designTokens.js';
 import { useFocusMode } from '../focus/index.js';
+import { useSlashFocus } from '../focus/SlashFocus.jsx';
 import { GeekFab } from '../surfaces/GeekFab.jsx';
 import { GeekPrimaryActionContext, useGeekPrimaryActionState } from './primaryActionContext.js';
 import { GeekShellContext } from './shellContext.js';
@@ -65,8 +69,12 @@ export function GeekShell({
   bottomNav,
   children,
   focusMode: focusModeOverride,
+  // `/` focuses the page's most important text box (focus/slashFocus.js).
+  // On by default; the listener is shared, so a nested shell adds nothing.
+  slashFocus = true,
   sx,
 }) {
+  useSlashFocus(slashFocus);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down(geekLayout.navBreakpoint));
   const [mobileOpen, setMobileOpen] = useState(false);

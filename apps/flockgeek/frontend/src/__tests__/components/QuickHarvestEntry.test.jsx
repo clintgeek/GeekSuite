@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor } from '@testing-library/react';
+import { screen, waitFor, fireEvent } from '@testing-library/react';
+import { SlashFocusProvider } from '@geeksuite/ui';
 import userEvent from '@testing-library/user-event';
 import QuickHarvestEntry from '../../components/QuickHarvestEntry';
 import { renderWithProviders } from '../testUtils';
@@ -24,6 +25,16 @@ vi.mock('@apollo/client', async (importOriginal) => {
 describe('QuickHarvestEntry', () => {
   beforeEach(() => {
     mockRecordEggProduction.mockClear();
+  });
+
+  it('"/" focuses the egg count — the home page\'s capture box', () => {
+    renderWithProviders(
+      <SlashFocusProvider>
+        <QuickHarvestEntry locations={[]} />
+      </SlashFocusProvider>
+    );
+    fireEvent.keyDown(document.body, { key: '/' });
+    expect(screen.getByLabelText('Eggs collected')).toHaveFocus();
   });
 
   it('changes the egg count with the +/- steppers', async () => {

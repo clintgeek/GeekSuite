@@ -22,6 +22,10 @@
  * is an account menu to fold into), and `actions` is reduced to its first
  * child unless the app passes `mobileActions` to choose what survives.
  *
+ * The `search` slot is a `/` target by default (`searchSlashFocus`, priority
+ * 10): the wrapper carries `data-geek-slash-focus` and resolves to the first
+ * visible input inside it, so a desktop-only field hidden on mobile drops out.
+ *
  * Legacy `showSuiteControls`, `settings`, `profile` and `appName` still work;
  * the legacy slots render after the cluster.
  */
@@ -37,6 +41,7 @@ import Toolbar from '@mui/material/Toolbar';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import { geekLayout, geekShape } from '../designTokens.js';
+import { DEFAULT_SLASH_PRIORITY, slashFocusProps } from '../focus/slashFocus.js';
 import { GeekAppSwitcher } from './GeekAppSwitcher.jsx';
 import { GeekThemeToggle } from './GeekThemeToggle.jsx';
 import { initialsFrom } from './navUtils.js';
@@ -290,6 +295,9 @@ export const GeekTopBar = forwardRef(function GeekTopBar(
     leading,
     menuLabel = 'Open navigation',
     search,
+    // Priority of the search slot as a `/` target (focus/slashFocus.js); the
+    // slot resolves to its first visible input. `false` opts out.
+    searchSlashFocus = DEFAULT_SLASH_PRIORITY,
     actions,
     // What survives of `actions` below the nav breakpoint. Defaults to the
     // first child of `actions`; pass `null` to show none on mobile.
@@ -383,7 +391,11 @@ export const GeekTopBar = forwardRef(function GeekTopBar(
             title ?? null
           )}
         </Box>
-        {search ? <Box sx={{ flex: 1, minWidth: 160 }}>{search}</Box> : null}
+        {search ? (
+          <Box sx={{ flex: 1, minWidth: 160 }} {...slashFocusProps(searchSlashFocus)}>
+            {search}
+          </Box>
+        ) : null}
         <Box
           sx={{
             display: 'flex',

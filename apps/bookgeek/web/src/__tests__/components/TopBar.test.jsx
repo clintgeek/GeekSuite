@@ -1,7 +1,7 @@
 import { describe, it, expect, vi, afterEach } from 'vitest';
-import { screen } from '@testing-library/react';
+import { screen, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { GeekShellContext } from '@geeksuite/ui';
+import { GeekShellContext, SlashFocusProvider } from '@geeksuite/ui';
 import TopBar from '../../components/TopBar';
 import { renderWithProviders, mockMatchMediaMatches } from '../testUtils';
 
@@ -52,6 +52,19 @@ describe('TopBar', () => {
     renderWithProviders(<TopBar {...baseProps()} />);
     expect(screen.getByText('Library')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /Add book/i })).toBeInTheDocument();
+  });
+
+  it('"/" focuses the library search and selects the query (desktop)', () => {
+    restoreMatchMedia = mockMatchMediaMatches(false);
+    renderWithProviders(
+      <SlashFocusProvider>
+        <TopBar {...baseProps({ searchQuery: 'dune' })} />
+      </SlashFocusProvider>
+    );
+    fireEvent.keyDown(document.body, { key: '/' });
+    const box = screen.getByRole('searchbox', { name: 'Search title / author / tag' });
+    expect(box).toHaveFocus();
+    expect([box.selectionStart, box.selectionEnd]).toEqual([0, 4]);
   });
 
   it('opens the mobile search field on tap, without disturbing the query', async () => {

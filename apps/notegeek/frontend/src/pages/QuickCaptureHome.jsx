@@ -10,7 +10,7 @@ import {
   Divider,
   useTheme,
 } from '@mui/material';
-import { GeekEmptyState, useToast } from '@geeksuite/ui';
+import { GeekEmptyState, slashFocusProps, useToast } from '@geeksuite/ui';
 import ArrowForward from '@mui/icons-material/ArrowForward';
 import { NOTE_TYPES } from '../components/notes/NoteTypeRouter';
 import NoteRow from '../components/notes/NoteRow';
@@ -127,7 +127,9 @@ function QuickCaptureHome() {
           fullWidth
           variant="standard"
           InputProps={{ disableUnderline: true }}
-          inputProps={{ 'aria-label': 'Quick capture' }}
+          // `/` lands here, not in the header search: this page exists to catch a
+          // thought. No select — a half-typed thought is not a query to replace.
+          inputProps={{ 'aria-label': 'Quick capture', ...slashFocusProps(30, { select: false }) }}
           sx={{
             '& .MuiInputBase-root': {
               fontFamily: theme.typography.fontFamilyMono,

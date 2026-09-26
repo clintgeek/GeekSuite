@@ -57,6 +57,8 @@ const TopBar = ({
     <GeekSearchField
       fullWidth
       placeholder="Search title / author / tag"
+      // `/` (suite slash focus) lands here: the library is the app.
+      slashFocus={20}
       value={searchQuery}
       onChange={(e) => setSearchQuery?.(e.target.value)}
       // `type="search"` brings WebKit's own clear glyph; ours is the one with

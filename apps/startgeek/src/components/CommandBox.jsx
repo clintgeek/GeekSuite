@@ -22,6 +22,7 @@ import SearchResults from './SearchResults'
 import AnswerCard from './AnswerCard'
 import DraftPreview from './DraftPreview'
 import Toast from './Toast'
+import { slashFocusAction } from '../lib/slashFocus'
 
 const ENGINE_STORAGE_KEY = 'startgeek.engine'
 const SUITE_DEBOUNCE_MS = 250
@@ -143,31 +144,24 @@ const CommandBox = ({ onOpenSettings }) => {
     return () => window.removeEventListener('focus', handleWindowFocus)
   }, [helpOpen])
 
-  // '/' focuses the box from anywhere, unless a modifier is held or the
-  // user is already in an editable field.
+  // '/' focuses the box from anywhere — the suite rule, StartGeek's own copy
+  // (lib/slashFocus.js). Not from inside a field, not with Ctrl/Meta/Alt, and
+  // not while the settings sheet or weather modal is over the box.
   useEffect(() => {
     const handleKey = (e) => {
-      if (e.key !== '/') return
-      if (e.ctrlKey || e.altKey || e.metaKey || e.shiftKey) return
-
-      const target = e.target
-      if (
-        target &&
-        (target.tagName === 'INPUT' ||
-          target.tagName === 'TEXTAREA' ||
-          target.isContentEditable)
-      ) {
-        return
-      }
-
+      const otherModalOpen = Array.from(
+        document.querySelectorAll('[role="dialog"][aria-modal="true"]')
+      ).some((dialog) => dialog.getAttribute('aria-label') !== 'Command box help')
+      const action = slashFocusAction(e, { helpOpen, otherModalOpen })
+      if (!action) return
       e.preventDefault()
-      setHelpOpen(false)
+      if (action === 'close-help') setHelpOpen(false)
       inputRef.current?.focus()
     }
 
     document.addEventListener('keydown', handleKey)
     return () => document.removeEventListener('keydown', handleKey)
-  }, [])
+  }, [helpOpen])
 
   // Esc closes modals / dropdowns and blurs the input
   useEffect(() => {

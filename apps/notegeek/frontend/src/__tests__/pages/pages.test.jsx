@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
+import { SlashFocusProvider } from '@geeksuite/ui';
 import { MemoryRouter } from 'react-router-dom';
 import { MantineProvider } from '@mantine/core';
 import ThemeModeProvider from '../../theme/ThemeModeProvider';
@@ -83,6 +84,17 @@ describe('Page Tests', () => {
         it('renders quick capture fields', () => {
             render(<QuickCaptureHome />, { wrapper: AllProviders });
             expect(screen.getByText(/Nothing here yet/i)).toBeInTheDocument();
+        });
+
+        it('"/" focuses the quick-capture box (the page\'s reason to exist)', () => {
+            render(
+                <SlashFocusProvider>
+                    <QuickCaptureHome />
+                </SlashFocusProvider>,
+                { wrapper: AllProviders }
+            );
+            fireEvent.keyDown(document.body, { key: '/' });
+            expect(screen.getByLabelText('Quick capture')).toHaveFocus();
         });
     });
 });

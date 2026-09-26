@@ -26,6 +26,7 @@ const SHORTCUT_GROUPS = [
       { keys: ['g', 'l'], desc: 'Go to Collections' },
       { keys: ['g', 'h'], desc: 'Go to Habits' },
       { keys: ['⌘', 'N'], desc: 'Focus quick-add input' },
+      { keys: ['/'], desc: 'Focus quick-add (Today) or search' },
     ],
   },
   {

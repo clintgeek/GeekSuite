@@ -11,7 +11,7 @@ import {
 } from '@mui/icons-material';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '@geeksuite/auth';
-import { GeekErrorState, GeekSheet, useToast } from '@geeksuite/ui';
+import { GeekErrorState, GeekSheet, slashFocusProps, useToast } from '@geeksuite/ui';
 import CodexDialog from '../components/primitives/CodexDialog';
 import Narration from '../components/Narration';
 import useAISettingsStore from '../store/aiSettingsStore';
@@ -750,6 +750,10 @@ function StoryPlay() {
             }}
             placeholder="What do you do?"
             disabled={loading} inputRef={inputRef}
+            // `/` (suite slash focus) lands here — the turn is the page. No
+            // select: a half-written action is not a query to replace. A `/`
+            // typed *in* the box is still the start of /recall, /end, etc.
+            inputProps={slashFocusProps(30, { select: false })}
             multiline maxRows={4}
             sx={{ '& .MuiOutlinedInput-root': { fontFamily: '"Crimson Pro", serif', fontSize: '1rem' } }}
           />

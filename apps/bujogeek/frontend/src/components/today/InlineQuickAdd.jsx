@@ -8,7 +8,7 @@ import TaskInputHelpButton from '../tasks/TaskInputHelpButton';
 import parseTaskInput from '../../utils/parseTaskInput';
 import useTaskTags from '../../hooks/useTaskTags';
 import { CREATE_NOTE } from '../../graphql/notegeekMutations';
-import { useToast } from '@geeksuite/ui';
+import { slashFocusProps, useToast } from '@geeksuite/ui';
 
 /* ---------- tokenizer ---------- */
 
@@ -500,6 +500,9 @@ const InlineQuickAdd = ({
               inputProps={{
                 'aria-label': collectionId ? 'Add an entry to this collection' : 'Add a task for today',
                 'data-quickadd': true,
+                // `/` (suite slash focus) lands here — the rapid log is the
+                // page. No select: a half-written task is not a query.
+                ...slashFocusProps(30, { select: false }),
               }}
             />
 

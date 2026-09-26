@@ -22,7 +22,7 @@ import RemoveIcon from "@mui/icons-material/Remove";
 import EggIcon from "@mui/icons-material/EggAlt";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
-import { useToast } from "@geeksuite/ui";
+import { slashFocusProps, useToast } from "@geeksuite/ui";
 import { GET_EGG_PRODUCTIONS } from "../graphql/queries";
 import { RECORD_EGG_PRODUCTION } from "../graphql/mutations";
 
@@ -181,7 +181,8 @@ const QuickHarvestEntry = ({ onSuccess, locations = [], variant = "panel" }) => 
           type="number"
           value={eggCount}
           onChange={(e) => setEggCount(Math.max(0, parseInt(e.target.value) || 0))}
-          inputProps={{ min: 0, 'aria-label': 'Eggs collected', style: { textAlign: "center", fontSize: "2rem", fontWeight: 700, width: "80px" } }}
+          // `/` (suite slash focus) lands here: logging eggs is the home page's job.
+          inputProps={{ min: 0, 'aria-label': 'Eggs collected', ...slashFocusProps(30), style: { textAlign: "center", fontSize: "2rem", fontWeight: 700, width: "80px" } }}
           sx={{ "& .MuiOutlinedInput-root": { backgroundColor: "background.paper" } }}
         />
 

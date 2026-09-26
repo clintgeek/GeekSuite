@@ -3,6 +3,7 @@ import { Box, FormControl, InputLabel, Select, MenuItem, Checkbox, ListItemText,
 import useMediaQuery from '@mui/material/useMediaQuery';
 import CloseIcon from '@mui/icons-material/Close';
 import FilterListIcon from '@mui/icons-material/FilterList';
+import { GeekSlashHint, slashFocusProps } from '@geeksuite/ui';
 import { useTaskContext } from '../../context/TaskContext';
 
 export const FiltersButton = ({ onClick }) => (
@@ -79,6 +80,8 @@ const TaskFilters = ({ openDrawer, setDrawerOpen }) => {
         onChange={(e) => setSearchInput(e.target.value)}
         placeholder="Search content, notes, tags..."
         sx={{ minWidth: 240 }}
+        {...slashFocusProps(20)}
+        InputProps={{ endAdornment: <GeekSlashHint /> }}
       />
 
       <FormControl size="small" sx={{ minWidth: 120 }}>

@@ -14,6 +14,7 @@ import {
   SmartToy as AIIcon,
   Clear as ClearIcon
 } from '@mui/icons-material';
+import { GeekSlashHint, slashFocusProps } from '@geeksuite/ui';
 
 /**
  * The box.
@@ -22,6 +23,10 @@ import {
  * own catalog, 400ms to the food databases), so a button that means "now
  * actually search" is a button that means "the last four seconds of typing did
  * nothing". Enter still works — it skips the second wait.
+ *
+ * It is the `/` target wherever it appears (suite slash focus, priority 30):
+ * on the food log and the food search page it is the page's main job, and
+ * inside the add-food dialog the dialog's own box is the only one reachable.
  */
 const SearchBar = ({
   value,
@@ -64,6 +69,7 @@ const SearchBar = ({
         onKeyDown={handleKeyDown}
         placeholder={placeholder}
         autoFocus={autoFocus}
+        {...slashFocusProps(30)}
         onFocus={() => setIsFocused(true)}
         onBlur={() => setIsFocused(false)}
         InputProps={{
@@ -104,6 +110,7 @@ const SearchBar = ({
                     <ClearIcon fontSize="small" />
                   </IconButton>
                 )}
+                {!value && !loading && <GeekSlashHint />}
                 {onBarcodeClick && (
                   <Tooltip title="Scan Barcode" arrow>
                     <IconButton

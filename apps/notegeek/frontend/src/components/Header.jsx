@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef } from 'react';
 import {
   Box,
   IconButton,
@@ -21,8 +21,9 @@ import { displayNameFrom, initialsFrom, secondaryFrom } from '../utils/userDispl
  * Header — thin identity wrapper around the suite `GeekTopBar`.
  *
  * Brand moved out to the sidebar (`Sidebar`'s `Brand`); this now carries a
- * real, route-derived page title, the search box (still with the `/`
- * shortcut and its own desktop/mobile forms), and the account menu that
+ * real, route-derived page title, the search box (its own desktop/mobile
+ * forms; `/` reaches it through the suite's slash focus — GeekShell installs
+ * the listener and GeekTopBar marks the search slot), and the account menu that
  * used to have nowhere to live. The mobile hamburger comes from
  * `GeekTopBar`'s default leading slot — there is no local `onMenuClick`
  * plumbing any more.
@@ -37,21 +38,6 @@ function Header() {
   const { clearTags } = useTagStore();
   const [searchQuery, setSearchQuery] = useState('');
   const searchRef = useRef(null);
-
-  // Global keyboard shortcut: "/" focuses search
-  useEffect(() => {
-    const handleKeyDown = (e) => {
-      if (
-        e.key === '/' &&
-        !['INPUT', 'TEXTAREA'].includes(document.activeElement?.tagName)
-      ) {
-        e.preventDefault();
-        searchRef.current?.querySelector('input')?.focus();
-      }
-    };
-    document.addEventListener('keydown', handleKeyDown);
-    return () => document.removeEventListener('keydown', handleKeyDown);
-  }, []);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
