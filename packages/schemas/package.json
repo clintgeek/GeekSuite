@@ -6,6 +6,8 @@
   "main": "index.js",
   "exports": {
     ".": "./index.js",
+    "./bookgeek/book": "./bookgeek/book.js",
+    "./bookgeek/profile": "./bookgeek/profile.js",
     "./fitnessgeek/bloodPressure": "./fitnessgeek/bloodPressure.js",
     "./fitnessgeek/bodyComposition": "./fitnessgeek/bodyComposition.js",
     "./fitnessgeek/bodyCompositionDerivation": "./fitnessgeek/bodyCompositionDerivation.js",

@@ -8,6 +8,10 @@
 // the schema with its own mongoose and binds it to its own connection.
 
 module.exports = {
+  bookgeek: {
+    book: require('./bookgeek/book.js'),
+    profile: require('./bookgeek/profile.js'),
+  },
   fitnessgeek: {
     bloodPressure: require('./fitnessgeek/bloodPressure.js'),
     bodyComposition: require('./fitnessgeek/bodyComposition.js'),
