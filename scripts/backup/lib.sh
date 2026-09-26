@@ -60,22 +60,29 @@ warn() { log "WARNING: $*"; }
 # alert: log, POST to ALERT_WEBHOOK, and tell the dead-man's switch this run
 # failed (so it alerts now rather than after the grace period). $GS_HC_URL is
 # set by each entrypoint to the healthcheck that belongs to it.
+# GS_QUIET_PINGS=1 (set by a caller that runs another entrypoint as a helper)
+# silences the webhook and the healthcheck. Blanking the URLs in the caller's
+# env doesn't work, because this file re-sources backup.env and restores them.
 alert() {
   local msg="$1"
   log "ALERT: ${msg}"
+  [ "${GS_QUIET_PINGS:-0}" = 1 ] && return 0
   if [ -n "${ALERT_WEBHOOK:-}" ]; then
     curl -fsS --max-time 20 -X POST -H 'Content-Type: text/plain' \
       --data-binary "GeekSuite backup alert: ${msg}" "${ALERT_WEBHOOK}" \
       >/dev/null 2>&1 || log "WARNING: alert webhook POST failed"
   fi
   if [ -n "${GS_HC_URL:-}" ]; then
-    curl -fsS --max-time 20 -o /dev/null "${GS_HC_URL}/fail" >/dev/null 2>&1 || true
+    # Never silent: a fail ping that doesn't land is the alarm not ringing.
+    curl -fsS --max-time 20 -o /dev/null "${GS_HC_URL}/fail" \
+      || log "WARNING: healthcheck /fail ping did not land"
   fi
 }
 
 die() { alert "$1"; exit "${2:-1}"; }
 
 hc_success() {
+  [ "${GS_QUIET_PINGS:-0}" = 1 ] && return 0
   if [ -n "${GS_HC_URL:-}" ]; then
     curl -fsS --max-time 20 -o /dev/null "${GS_HC_URL}" \
       || warn "healthcheck ping failed (the run itself succeeded)"

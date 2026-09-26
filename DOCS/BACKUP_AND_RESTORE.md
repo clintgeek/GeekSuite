@@ -164,12 +164,14 @@ The scripts source `~/.config/geeksuite/backup.env` themselves, so the cron line
 | Script | 0 | 1 | 2 | 3 |
 |---|---|---|---|---|
 | `backup.sh` | set written | failed (partial removed, alerted) | config/tooling | another run holds the lock (no-op) |
-| `verify-latest.sh` | newest set fresh, intact, restores with matching counts, Duplicati healthy | stale / missing / corrupt / count mismatch / Duplicati problem | no key / tools | — |
+| `verify-latest.sh` | newest set fresh, intact, restores with matching counts | stale / missing / corrupt / count mismatch | no key / tools | — |
 | `check-duplicati.sh` | all jobs healthy (warnings allowed) | a job is stale, its last run failed, its newest notification is an Error, or a target bind mount is stale | can't read Duplicati | — |
 
 - On failure: POST to `ALERT_WEBHOOK`, and ping `<healthcheck>/fail`.
 - On success: ping `<healthcheck>`. The dead-man's switch is the only alarm that fires if cron never starts us at all.
-- `verify-latest.sh` **will exit 1 every night until Fix now #1 is done.** That is intended.
+- **Each check answers one question.** `verify-latest.sh` asks "do our dumps restore?" It logs Duplicati's state for context but never fails on it; `check-duplicati.sh` (07:30) owns that alarm. Until 2026-09-26 verify also failed on Duplicati, so the restore-test check went red on a night when every restore matched.
+- A script that runs another as a helper sets `GS_QUIET_PINGS=1`. Blanking the URLs doesn't work, because `lib.sh` re-sources `backup.env` and restores them (the helper pinged the Duplicati check's `/fail` at 01:15).
+- A `/fail` ping that doesn't land is logged, never swallowed.
 - **check-duplicati reads Duplicati read-only:**
   - It `docker cp`s the live server DB into a mode-700 temp dir, opens it read-only, and deletes the copy.
   - It selects only job names, `Metadata` `Last*` timestamps/messages, and `Notification`.

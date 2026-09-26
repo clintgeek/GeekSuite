@@ -16,11 +16,13 @@
 #        influx   → influxd restore, per-DB series + field-value counts must
 #                   equal the ones recorded at backup time
 #        env      → decrypt + gzip/tar listing; file list must equal MANIFEST
-#   4. runs check-duplicati.sh — the sets only leave this disk via Duplicati
+#   4. logs check-duplicati.sh's view for context. It does NOT fail this run:
+#      Duplicati has its own 07:30 check and healthcheck. Coupling them made the
+#      restore-test check go red on nights every restore matched (2026-09-26).
 #
 # Alerts: ALERT_WEBHOOK (POST) and VERIFY_HEALTHCHECK_URL/fail. Success pings
-# VERIFY_HEALTHCHECK_URL. Exit codes: 0 ok · 1 alarm (stale/corrupt/mismatch/
-# Duplicati) · 2 config error (no key, no tools).
+# VERIFY_HEALTHCHECK_URL. Exit codes: 0 ok · 1 alarm (stale/corrupt/mismatch)
+# · 2 config error (no key, no tools).
 # ==============================================================================
 set -euo pipefail
 umask 077
@@ -150,11 +152,12 @@ fi
 LIB_N="$(find "${LIBRARY_MIRROR}" -type f 2>/dev/null | wc -l)"
 [ "${LIB_N}" -gt 0 ] && log "library mirror: ${LIB_N} files" || fail "library mirror ${LIBRARY_MIRROR} is empty or missing"
 
-# 4. Duplicati — the only thing that takes these sets off this disk
+# 4. Duplicati, for context only: its own 07:30 check owns that alarm, so a
+#    Duplicati problem never turns the restore-test check red.
 if [ "${DUPLICATI}" = 1 ]; then
-  if ! GS_LOG_FILE_OVERRIDE="${GS_LOG_FILE}" DUPLICATI_HEALTHCHECK_URL="" ALERT_WEBHOOK="" \
+  if ! GS_LOG_FILE_OVERRIDE="${GS_LOG_FILE}" GS_QUIET_PINGS=1 \
        "$(dirname "$(realpath "$0")")/check-duplicati.sh"; then
-    fail "Duplicati is not carrying the backups off-disk (see check above)"
+    log "note: Duplicati has problems (above); reported by check-duplicati.sh, not by this check"
   fi
 fi
 
