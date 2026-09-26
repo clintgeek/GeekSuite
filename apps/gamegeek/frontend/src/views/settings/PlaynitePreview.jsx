@@ -8,7 +8,7 @@
 import React, { useState } from 'react';
 import { Box, FormControlLabel, Switch, Typography } from '@mui/material';
 import { formatHours } from '../../utils/dates';
-import { storefrontLabel } from '../../utils/vocab';
+import { shelfLabel, storefrontLabel } from '../../utils/vocab';
 
 /** Flatten a dry-run response into the numbers the card and its tests read. */
 export function previewSummary(preview) {
@@ -20,6 +20,10 @@ export function previewSummary(preview) {
   const skippedHidden = counts.skippedHidden || 0;
   const notInFile = counts.notInFile || 0;
   const invalid = counts.invalid || 0;
+  // Playing follows isInstalled (PLAYNITE_IMPORT.md §Installed → Playing):
+  // per-user outcomes, outside the entry buckets.
+  const movedToPlaying = counts.movedToPlaying || 0;
+  const flaggedUninstalled = counts.flaggedUninstalled || 0;
   return {
     total: preview?.total ?? 0,
     create,
@@ -29,7 +33,11 @@ export function previewSummary(preview) {
     skippedHidden,
     notInFile,
     invalid,
+    movedToPlaying,
+    flaggedUninstalled,
     actionable: create + addCopy + update,
+    // A shelf move or a flag alone (no catalog change) is still worth committing.
+    shelfChanges: movedToPlaying + flaggedUninstalled,
   };
 }
 
@@ -118,6 +126,20 @@ export default function PlaynitePreview({ preview, includeHidden, onToggleInclud
         </Typography>
       ) : null}
 
+      {s.movedToPlaying > 0 || s.flaggedUninstalled > 0 ? (
+        <Typography data-testid="playnite-install-summary" sx={{ fontSize: '0.8125rem', color: 'text.secondary', mt: 1.5, lineHeight: 1.6 }}>
+          {[
+            s.movedToPlaying > 0 ? `${s.movedToPlaying} installed ${s.movedToPlaying === 1 ? 'game moves' : 'games move'} to Playing` : null,
+            s.flaggedUninstalled > 0
+              ? `${s.flaggedUninstalled} Playing ${s.flaggedUninstalled === 1 ? 'game is' : 'games are'} not installed anymore — ${s.flaggedUninstalled === 1 ? 'it stays' : 'they stay'} on Playing and ${s.flaggedUninstalled === 1 ? 'asks' : 'ask'} how it ended`
+              : null,
+          ]
+            .filter(Boolean)
+            .join('. ')}
+          .
+        </Typography>
+      ) : null}
+
       {s.invalid > 0 ? (
         <Typography sx={{ fontSize: '0.8125rem', color: 'warning.main', mt: 1, lineHeight: 1.6 }}>
           {s.invalid} {s.invalid === 1 ? 'entry' : 'entries'} in the file could not be read and {s.invalid === 1 ? 'was' : 'were'} skipped.
@@ -132,6 +154,8 @@ export default function PlaynitePreview({ preview, includeHidden, onToggleInclud
         items={samples.update}
         render={(g) => `${formatHours(g.hoursBefore) || '0 h'} → ${formatHours(g.hoursAfter) || '0 h'}`}
       />
+      <SampleList id="playnite-sample-moved" title="Moving to Playing" items={samples.movedToPlaying} render={(g) => (g.shelfBefore ? shelfLabel(g.shelfBefore) : 'Unshelved')} />
+      <SampleList id="playnite-sample-flagged" title="Not installed anymore" items={samples.flaggedUninstalled} render={() => 'Playing'} />
     </Box>
   );
 }

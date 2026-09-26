@@ -164,7 +164,7 @@ describe('processFile', () => {
     assert.match(ledger[0].sha256, /^[0-9a-f]{64}$/);
     assert.equal(ledger[0].status, 'imported');
     assert.equal(ledger[0].relPath, 'clint@clintgeek.com/playnite-library.json');
-    assert.deepEqual(ledger[0].counts, { create: 1, addCopy: 0, update: 0, unchanged: 0, skippedHidden: 0, notInFile: 0, invalid: 0 });
+    assert.deepEqual(ledger[0].counts, { create: 1, addCopy: 0, update: 0, unchanged: 0, skippedHidden: 0, notInFile: 0, invalid: 0, movedToPlaying: 0, flaggedUninstalled: 0 });
     assert.equal(profiles.get('user-1').playnite.lastSource, 'folder');
     assert.equal(profiles.get('user-1').playnite.lastTotal, 1);
   });
@@ -173,7 +173,7 @@ describe('processFile', () => {
     await put('playnite-library.json', exportJson([entry({ hidden: true })]));
     const outcome = await call('playnite-library.json');
     assert.equal(outcome, 'imported');
-    assert.deepEqual(ledger[0].counts, { create: 0, addCopy: 0, update: 0, unchanged: 0, skippedHidden: 1, notInFile: 0, invalid: 0 });
+    assert.deepEqual(ledger[0].counts, { create: 0, addCopy: 0, update: 0, unchanged: 0, skippedHidden: 1, notInFile: 0, invalid: 0, movedToPlaying: 0, flaggedUninstalled: 0 });
   });
 
   test('re-processing the exact same bytes is a cheap no-op ("unchanged")', async () => {

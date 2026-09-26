@@ -85,6 +85,8 @@ function FilterChip({ filterKey, value, auto = false }) {
       data-auto-tag={auto ? 'true' : undefined}
       sx={{
         minHeight: { xs: 44, md: 36 },
+        // A short tag ("Idle", "2D") must still be a full target, not just a tall one.
+        minWidth: { xs: 44, md: 36 },
         borderRadius: '999px',
         '&.Mui-focusVisible > span': { outline: 2, outlineStyle: 'solid', outlineColor: 'primary.main', outlineOffset: 1 },
         '&:hover > span': { borderColor: 'primary.main', color: 'text.primary' },

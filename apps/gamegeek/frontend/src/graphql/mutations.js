@@ -120,3 +120,16 @@ export const DELETE_GAME_FILTER = gql`
   }
   ${GAME_PROFILE_FIELDS}
 `;
+
+/**
+ * "Not installed anymore — how did it end?" (apps/gamegeek/DOCS/PLAYNITE_IMPORT.md
+ * §Installed → Playing). action: finished | on-hold | abandoned | still-playing | undo.
+ */
+export const RESOLVE_INSTALL_FLAG = gql`
+  mutation ResolveInstallFlag($gameId: ID!, $action: String!) {
+    resolveInstallFlag(gameId: $gameId, action: $action) {
+      ...GameDetailFields
+    }
+  }
+  ${GAME_DETAIL_FIELDS}
+`;

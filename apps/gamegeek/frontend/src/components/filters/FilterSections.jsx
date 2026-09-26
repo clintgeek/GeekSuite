@@ -8,7 +8,7 @@
  */
 import React, { useId } from 'react';
 import { Box, Switch, ToggleButton, ToggleButtonGroup, alpha } from '@mui/material';
-import { SECTIONS, buildOptions } from '../../utils/facets';
+import { NEEDS_DECISION_LABEL, SECTIONS, buildOptions } from '../../utils/facets';
 import FacetOptions from './FacetOptions';
 import FacetSection from './FacetSection';
 import TagFacet from './TagFacet';
@@ -51,7 +51,7 @@ function MatchToggle({ value, onChange }) {
   );
 }
 
-function FavoritesRow({ checked, count, onChange }) {
+function SwitchRow({ label, checked, count, onChange }) {
   return (
     <Box
       component="label"
@@ -67,7 +67,7 @@ function FavoritesRow({ checked, count, onChange }) {
       }}
     >
       <Box component="span" sx={{ flex: 1, fontSize: '0.875rem', fontWeight: checked ? 600 : 400, color: 'text.primary' }}>
-        Only favorites
+        {label}
       </Box>
       <Box component="span" sx={{ fontSize: '0.75rem', color: 'text.secondary', fontVariantNumeric: 'tabular-nums' }}>
         {count ?? ''}
@@ -75,10 +75,15 @@ function FavoritesRow({ checked, count, onChange }) {
       <Switch
         checked={checked}
         onChange={(e) => onChange(e.target.checked)}
-        inputProps={{ 'aria-label': count == null ? 'Only favorites' : `Only favorites, ${count} ${count === 1 ? 'game' : 'games'}` }}
+        inputProps={{ 'aria-label': count == null ? label : `${label}, ${count} ${count === 1 ? 'game' : 'games'}` }}
       />
     </Box>
   );
+}
+
+/** A closed Cleanup section still says when games are waiting on a decision. */
+function cleanupCaption(n) {
+  return n > 0 ? `${n} not installed anymore` : undefined;
 }
 
 export default function FilterSections({ lib, facets, customShelves = [], open, onToggleSection }) {
@@ -133,11 +138,29 @@ export default function FilterSections({ lib, facets, customShelves = [], open, 
         );
       case 'switch':
         return (
-          <FavoritesRow
+          <SwitchRow
+            label="Only favorites"
             checked={f.favorite === true}
             count={current?.favorites ?? base?.favorites ?? null}
             onChange={(on) => update({ favorite: on ? true : null })}
           />
+        );
+      case 'cleanup':
+        return (
+          <>
+            <SwitchRow
+              label={NEEDS_DECISION_LABEL}
+              checked={f.needsDecision === true}
+              count={current?.needsDecision ?? base?.needsDecision ?? null}
+              onChange={(on) => update({ needsDecision: on ? true : null })}
+            />
+            <FacetOptions
+              label="Metadata"
+              options={optionsFor(section)}
+              onChange={(v) => toggle(section.key, v)}
+              emptyText="Every game is matched."
+            />
+          </>
         );
       default:
         return (
@@ -160,6 +183,8 @@ export default function FilterSections({ lib, facets, customShelves = [], open, 
         return f.releaseYearMin != null || f.releaseYearMax != null ? 1 : 0;
       case 'switch':
         return f.favorite !== null ? 1 : 0;
+      case 'cleanup':
+        return f[section.key].length + (f.needsDecision === true ? 1 : 0);
       default:
         return f[section.key].length;
     }
@@ -172,7 +197,7 @@ export default function FilterSections({ lib, facets, customShelves = [], open, 
           key={section.id}
           id={section.id}
           title={section.title}
-          caption={section.quiet ? 'for cleanup' : undefined}
+          caption={section.kind === 'cleanup' ? cleanupCaption(current?.needsDecision ?? base?.needsDecision) : undefined}
           quiet={section.quiet}
           open={Boolean(open[section.id])}
           onToggle={onToggleSection}

@@ -77,6 +77,7 @@ describe('gamegeek — authentication required', () => {
       removeGameShelf: () => Mutation.removeGameShelf(null, { id: 'custom-couch' }, ctx(null)),
       saveGameFilter: () => Mutation.saveGameFilter(null, { input: { name: 'x' } }, ctx(null)),
       deleteGameFilter: () => Mutation.deleteGameFilter(null, { id: 'x' }, ctx(null)),
+      resolveInstallFlag: () => Mutation.resolveInstallFlag(null, { gameId: id, action: 'finished' }, ctx(null)),
     };
     // Completeness: a new resolver must be added here.
     expect(Object.keys(queryCalls).sort()).toEqual(Object.keys(Query).sort());
@@ -185,6 +186,7 @@ describe('gamegeek — a game in another household is invisible and untouchable'
     await expect(
       Mutation.deleteGamePlaythrough(null, { gameId: foreignId, playthroughId: foreignId }, ctx(BOB))
     ).rejects.toMatchObject(notFound);
+    await expect(Mutation.resolveInstallFlag(null, { gameId: foreignId, action: 'abandoned' }, ctx(BOB))).rejects.toMatchObject(notFound);
 
     const after = await Game.collection.findOne({ _id: new mongoose.Types.ObjectId(foreignId) });
     expect(after).toEqual(before);
@@ -285,6 +287,9 @@ describe('gamegeek — malformed ids are not found', () => {
         extensions: expect.objectContaining({ code: 'NOT_FOUND' }),
       });
       await expect(Mutation.setGameState(null, { gameId: bad, input: {} }, ctx(ALICE))).rejects.toMatchObject({
+        extensions: expect.objectContaining({ code: 'NOT_FOUND' }),
+      });
+      await expect(Mutation.resolveInstallFlag(null, { gameId: bad, action: 'finished' }, ctx(ALICE))).rejects.toMatchObject({
         extensions: expect.objectContaining({ code: 'NOT_FOUND' }),
       });
     }

@@ -42,6 +42,7 @@ const {
   FILTER_PLAYED,
   LENGTH_BUCKETS,
   TAG_MATCH_MODES,
+  INSTALL_FLAG_ACTIONS,
   bounds,
 } = constantsModule;
 
@@ -197,6 +198,7 @@ export const gameFilterInput = z
     lengths: enumList(LENGTH_BUCKETS),
     metadata: enumList(ENRICHMENT_STATUSES),
     hasCover: z.boolean().nullable().optional(),
+    needsDecision: z.boolean().nullable().optional(),
   })
   .strict()
   .refine((f) => f.releaseYearMin == null || f.releaseYearMax == null || f.releaseYearMin <= f.releaseYearMax, {
@@ -339,3 +341,12 @@ export const saveGameFilterArgsSchema = z
   .strict();
 
 export const deleteGameFilterArgsSchema = z.object({ id: idString }).strict();
+
+// ── Playing follows isInstalled (apps/gamegeek/DOCS/PLAYNITE_IMPORT.md) ─────
+
+/** The four answers, plus `undo` (the toast's way back to "flagged"). */
+export const RESOLVE_INSTALL_ACTIONS = Object.freeze([...INSTALL_FLAG_ACTIONS, 'undo']);
+
+export const resolveInstallFlagArgsSchema = z
+  .object({ gameId: idString, action: enumOf(RESOLVE_INSTALL_ACTIONS) })
+  .strict();

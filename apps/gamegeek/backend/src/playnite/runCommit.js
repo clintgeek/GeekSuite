@@ -10,7 +10,9 @@ import { planPlayniteImport } from './importPlanner.js';
 import { commitPlayniteImport } from './commit.js';
 
 export const GAME_FIELDS = { title: 1, genres: 1, releaseDate: 1, platformsAvailable: 1, externalIds: 1, copies: 1 };
-export const PLAYER_FIELDS = { gameId: 1, hoursPlayed: 1, hoursSource: 1, lastPlayedAt: 1 };
+export const PLAYER_FIELDS = {
+  gameId: 1, shelf: 1, hoursPlayed: 1, hoursSource: 1, lastPlayedAt: 1, installFlag: 1, installFlagDismissedAt: 1,
+};
 
 /**
  * Read the household/user's current state and compute the plan a commit

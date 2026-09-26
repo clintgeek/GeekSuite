@@ -76,7 +76,8 @@ function playedClause(value, cutoff) {
  * The active dimensions of a filter.
  * @returns {Record<string, {stage: 'game'|'player', match: object}>} keyed by
  *   the facet each one belongs to (releaseYears for the year range,
- *   favorites for favorite; q and hasCover belong to no facet).
+ *   favorites for favorite, needsDecision for itself; q and hasCover belong
+ *   to no facet).
  */
 export function buildConditions(filter = {}, { now = new Date() } = {}) {
   const c = {};
@@ -130,6 +131,12 @@ export function buildConditions(filter = {}, { now = new Date() } = {}) {
   }
   if (given(filter.favorite)) {
     c.favorites = { stage: 'player', match: filter.favorite ? { '__me.favorite': true } : { '__me.favorite': { $ne: true } } };
+  }
+  if (given(filter.needsDecision)) {
+    c.needsDecision = {
+      stage: 'player',
+      match: filter.needsDecision ? { '__me.installFlag': 'uninstalled' } : { '__me.installFlag': { $ne: 'uninstalled' } },
+    };
   }
   return c;
 }
@@ -233,6 +240,7 @@ export function facetsPipeline({ householdId, userId, collection, filter = {}, n
           { $sort: { _id: 1 } },
         ],
         favorites: [{ $match: except('favorites') }, { $match: { '__me.favorite': true } }, { $count: 'n' }],
+        needsDecision: [{ $match: except('needsDecision') }, { $match: { '__me.installFlag': 'uninstalled' } }, { $count: 'n' }],
       },
     },
   ];
@@ -273,6 +281,7 @@ export function shapeFacets(result, filter = {}) {
     metadata: fixedFacet(r.metadata, ENRICHMENT_STATUSES),
     releaseYears: (r.releaseYears ?? []).filter((y) => Number.isInteger(y._id)).map((y) => ({ year: y._id, count: y.n })),
     favorites: r.favorites?.[0]?.n ?? 0,
+    needsDecision: r.needsDecision?.[0]?.n ?? 0,
   };
 }
 

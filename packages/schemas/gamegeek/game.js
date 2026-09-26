@@ -37,6 +37,14 @@ function gameDefinition(mongoose) {
             playtimeSeconds: { type: Number, default: 0 },
             lastActivity: { type: Date, default: null },
             hidden: { type: Boolean, default: false },
+            // Playnite's own "installed on this machine" (PLAYNITE_IMPORT.md
+            // §Installed → Playing). null = not yet known (imported before
+            // the field existed); the next import fills it.
+            isInstalled: { type: Boolean, default: null },
+            // When an import last saw isInstalled flip (either way). Compared
+            // against GamePlayer.installFlagDismissedAt so "Still playing" is
+            // not re-flagged until the game is installed-then-uninstalled again.
+            installedChangedAt: { type: Date, default: null },
           },
           { _id: false }
         ),

@@ -48,6 +48,8 @@ export function dropStatusMessage(status) {
     const parts = [];
     if (c.create) parts.push(`${c.create} new`);
     if (c.update) parts.push(`${c.update} updated`);
+    if (c.movedToPlaying) parts.push(`${c.movedToPlaying} moved to Playing`);
+    if (c.flaggedUninstalled) parts.push(`${c.flaggedUninstalled} not installed anymore`);
     const detail = parts.length ? ` (${parts.join(', ')})` : ' (no changes)';
     return `${base} — last export imported ${when}${detail}`;
   }
@@ -135,7 +137,7 @@ export default function PlayniteImportCard({ profile }) {
   };
 
   const s = previewSummary(preview);
-  const canCommit = preview && !error && s.actionable > 0;
+  const canCommit = preview && !error && (s.actionable > 0 || s.shelfChanges > 0);
 
   return (
     <SettingsCard
@@ -205,7 +207,11 @@ export default function PlayniteImportCard({ profile }) {
 
       {canCommit ? (
         <Button variant="contained" onClick={handleCommit} disabled={Boolean(busy)} sx={{ mt: 2 }}>
-          {busy === 'commit' ? 'Importing…' : `Import ${s.actionable} ${s.actionable === 1 ? 'game' : 'games'}`}
+          {busy === 'commit'
+            ? 'Importing…'
+            : s.actionable > 0
+              ? `Import ${s.actionable} ${s.actionable === 1 ? 'game' : 'games'}`
+              : 'Apply shelf changes'}
         </Button>
       ) : null}
     </SettingsCard>

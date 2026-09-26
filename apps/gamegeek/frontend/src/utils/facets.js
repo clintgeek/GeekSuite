@@ -58,8 +58,13 @@ export const SECTIONS = [
   { id: 'year', title: 'Release year', kind: 'year' },
   { id: 'format', title: 'Format', kind: 'list', key: 'formats', facet: 'formats', fixed: DEFAULT_VOCAB.copyFormats },
   { id: 'favorites', title: 'Favorites', kind: 'switch' },
-  { id: 'metadata', title: 'Metadata', kind: 'list', key: 'metadata', facet: 'metadata', fixed: ['no-match', 'ambiguous'], closedList: true, quiet: true },
+  // The quiet cleanup section: "Not installed anymore" (PLAYNITE_IMPORT.md
+  // §Installed → Playing) above the metadata problems. The id stays
+  // 'metadata' so a remembered open/closed state survives the rename.
+  { id: 'metadata', title: 'Cleanup', kind: 'cleanup', key: 'metadata', facet: 'metadata', fixed: ['no-match', 'ambiguous'], closedList: true, quiet: true },
 ];
+
+export const NEEDS_DECISION_LABEL = 'Not installed anymore';
 
 /** Sections open until the person closes them. The rest start closed. */
 export const DEFAULT_OPEN = { shelf: true, played: true, store: true, platform: true, genre: true, tags: true, length: true, year: true, favorites: true };
@@ -148,6 +153,7 @@ export function visibleOptions(options, limit, expanded) {
 
 const GROUP_TITLE = Object.fromEntries(SECTIONS.filter((s) => s.key).map((s) => [s.key, s.title]));
 GROUP_TITLE.shelves = 'Shelf';
+GROUP_TITLE.metadata = 'Metadata';
 
 function yearLabel(min, max) {
   if (min != null && max != null) return min === max ? String(min) : `${min}–${max}`;
@@ -187,6 +193,9 @@ export function activeChips(state, { customShelves = [] } = {}) {
   }
   list('formats');
   if (f.favorite !== null) chips.push({ id: 'favorite', group: 'Favorites', label: f.favorite ? 'Only' : 'Excluded', patch: { favorite: null } });
+  if (f.needsDecision === true) {
+    chips.push({ id: 'needsDecision', group: 'Cleanup', label: NEEDS_DECISION_LABEL, patch: { needsDecision: null } });
+  }
   list('metadata');
   if (f.hasCover !== null) chips.push({ id: 'hasCover', group: 'Cover', label: f.hasCover ? 'Has one' : 'Missing', patch: { hasCover: null } });
   if (state.owned === 'true' || state.owned === 'false') {

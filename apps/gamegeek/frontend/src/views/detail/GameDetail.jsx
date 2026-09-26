@@ -14,7 +14,8 @@ import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { GeekEmptyState, GeekSheet, useToast } from '@geeksuite/ui';
 import { GET_GAME } from '../../graphql/queries';
 import { useGameProfile, useShelfList, useVocabulary } from '../../hooks/useGameMeta';
-import { useRateGame, useSetShelf } from '../../hooks/useGameActions';
+import { useRateGame, useResolveInstallFlag, useSetShelf } from '../../hooks/useGameActions';
+import { isFlagged } from '../../utils/installDecision';
 import SavePointMark from '../../components/SavePointMark';
 import { libraryPath } from '../../components/navConfig';
 import { shelfLabel, sortPlatforms } from '../../utils/vocab';
@@ -29,6 +30,7 @@ import DetailsSection from './DetailsSection';
 import EditGameDialog from './EditGameDialog';
 import FindMetadataDialog from './FindMetadataDialog';
 import HouseholdSection from './HouseholdSection';
+import InstallDecisionBanner from './InstallDecisionBanner';
 import LogSessionSheet from './LogSessionSheet';
 import MoreSheet from './MoreSheet';
 import NotesSection from './NotesSection';
@@ -62,6 +64,7 @@ export default function GameDetail() {
   const customShelves = profile?.customShelves ?? [];
   const rate = useRateGame();
   const setShelf = useSetShelf(customShelves);
+  const resolveInstallFlag = useResolveInstallFlag();
   const actions = useDetailActions(id);
 
   const close = () => navigate(libraryPath(location.search));
@@ -123,6 +126,11 @@ export default function GameDetail() {
             pb: 'calc(24px + env(safe-area-inset-bottom))',
           }}
         >
+          {isFlagged(game) ? (
+            <Box sx={{ gridColumn: '1 / -1', minWidth: 0 }}>
+              <InstallDecisionBanner game={game} onResolve={(action) => resolveInstallFlag(game, action)} />
+            </Box>
+          ) : null}
           <Box sx={{ display: 'grid', gap: 1.5, minWidth: 0 }}>
             <StatusSection game={game} customShelves={customShelves} onChangeShelf={() => setPanel('shelf')} />
             <RatingSection ref={ratingRef} game={game} onRate={rate} />

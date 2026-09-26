@@ -14,6 +14,10 @@
  * Models are passed in so the writer can be exercised with fakes.
  */
 
+import constantsModule from '@geeksuite/schemas/gamegeek/constants';
+
+const { INSTALL_PROMOTES_FROM } = constantsModule;
+
 export const BATCH_SIZE = 500;
 
 function chunks(list, size) {
@@ -63,7 +67,7 @@ async function bulkInBatches(Model, ops, batchSize) {
  * @param {number} [params.batchSize]
  */
 export async function commitPlayniteImport({ plan, householdId, userId, Game, GamePlayer, newId, batchSize = BATCH_SIZE }) {
-  const { creates, gameUpdates, copyUpdates, playerCreates, playerUpdates } = plan.ops;
+  const { creates, gameUpdates, copyUpdates, playerCreates, playerUpdates, installUpdates = [] } = plan.ops;
   const idByKey = new Map();
 
   // 1. New games. _ids are assigned here so player rows can reference them.
@@ -162,6 +166,41 @@ export async function commitPlayniteImport({ plan, householdId, userId, Game, Ga
       });
     }
   }
+  // 5. Playing follows isInstalled (importPlanner.js installDecision). Each
+  //    write repeats its condition in the filter, so a shelf the user changed
+  //    since the plan was read (finished, a custom shelf) is never moved and a
+  //    flag is never set on a row that left Playing or was just dismissed.
+  //    Only shelf and the install-flag fields are written — never hours or ratings.
+  for (const u of installUpdates) {
+    const key = { userId, householdId, gameId: u.gameId };
+    if (u.moveToPlaying) {
+      playerOps.push({
+        updateOne: {
+          filter: { ...key, shelf: { $in: [...INSTALL_PROMOTES_FROM] } },
+          update: { $set: { shelf: 'playing', installFlag: null, installFlagAt: null } },
+        },
+      });
+    }
+    if (u.flag === 'set') {
+      const notDismissedSince = u.lastChange
+        ? { $or: [{ installFlagDismissedAt: null }, { installFlagDismissedAt: { $lt: u.lastChange } }] }
+        : { installFlagDismissedAt: null };
+      playerOps.push({
+        updateOne: {
+          filter: { ...key, shelf: 'playing', installFlag: { $ne: 'uninstalled' }, ...notDismissedSince },
+          update: { $set: { installFlag: 'uninstalled', installFlagAt: u.flagAt } },
+        },
+      });
+    } else if (u.flag === 'clear') {
+      playerOps.push({
+        updateOne: {
+          filter: { ...key, installFlag: 'uninstalled' },
+          update: { $set: { installFlag: null, installFlagAt: null } },
+        },
+      });
+    }
+  }
+
   // A duplicate here is two upserts racing on (userId, gameId): the row exists, which is the goal.
   await bulkInBatches(GamePlayer, playerOps, batchSize);
 
@@ -172,6 +211,7 @@ export async function commitPlayniteImport({ plan, householdId, userId, Game, Ga
     copiesUpdated: copyUpdates.length,
     playersCreated: playerCreates.length,
     playersUpdated: playerUpdates.length,
+    installUpdates: installUpdates.length,
   };
 }
 

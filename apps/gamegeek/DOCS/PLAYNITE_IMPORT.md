@@ -46,18 +46,24 @@ Response (dry run and commit have the same shape; commit adds `committed: true`)
   "generatedAtUtc": "2026-09-25T16:21:03Z",
   "total": 931,
   "counts": { "create": 0, "addCopy": 0, "update": 0, "unchanged": 0,
-              "skippedHidden": 0, "notInFile": 0, "invalid": 0 },
+              "skippedHidden": 0, "notInFile": 0, "invalid": 0,
+              "movedToPlaying": 0, "flaggedUninstalled": 0 },
   "samples": {
     "create":   [{ "title": "…", "storefront": "epic" }],
     "addCopy":  [{ "title": "…", "storefront": "gog" }],
     "update":   [{ "title": "…", "hoursBefore": 1.2, "hoursAfter": 3.4 }],
-    "notInFile":[{ "title": "…" }]
+    "notInFile":[{ "title": "…" }],
+    "movedToPlaying":     [{ "title": "…", "shelfBefore": "backlog" }],
+    "flaggedUninstalled": [{ "title": "…" }]
   },
   "committed": false
 }
 ```
 
-Each sample list is capped at 20. Errors are `{message, code}`: 400 `PLAYNITE_BAD_FILE` for
+Each sample list is capped at 20. `movedToPlaying` and `flaggedUninstalled` are per-user
+outcomes (§Installed → Playing), not entry buckets: they are outside the
+`create + addCopy + update + unchanged + skippedHidden + invalid = total` sum, and a row the
+import creates is never counted as "moved". Errors are `{message, code}`: 400 `PLAYNITE_BAD_FILE` for
 unparseable JSON or an unknown `schemaVersion`, 413 when the body is too large.
 
 ## Mapping
@@ -76,7 +82,8 @@ unparseable JSON or an unknown `schemaVersion`, 413 when the body is too large.
 | `categories` + `tags` | `tags` (deduped, capped) |
 | `releaseDate` `Y-M-D` | `releaseDate` at UTC midnight; unparseable → null |
 | `steamAppId` when confidence `exact` | `externalIds.steamAppId` |
-| `playniteId`, `providerGameId`, `sourceName`, `playtimeSeconds`, `lastActivity`, `hidden` | `copy.playnite.*` |
+| `playniteId`, `providerGameId`, `sourceName`, `playtimeSeconds`, `lastActivity`, `hidden`, `isInstalled` | `copy.playnite.*` (`isInstalled` missing → `false`) |
+| *(derived)* | `copy.playnite.installedChangedAt`: the import time at which `isInstalled` last flipped (either way); `null` until it first does. Filling a copy imported before the field existed (unknown → a value) is not a flip. |
 
 ## Matching (one Game, many copies)
 
@@ -94,14 +101,59 @@ Re-importing the same file is a no-op: 0 create, 0 addCopy, everything `unchange
 ## Per-user state (the importing user's `GamePlayer`)
 
 - **On first creation of the row:**
-  - shelf: `backlog` if the summed playtime is 0; `playing` if `lastActivity` is within
-    30 days; otherwise `on-hold`
+  - shelf: `playing` if any of the game's Playnite copies is installed (Playing means
+    "installed on the laptop, ready to go" — `TASTE_MODEL.md`); otherwise `backlog` if the
+    summed playtime is 0; otherwise `on-hold`. Recent `lastActivity` no longer means
+    playing (changed 2026-09-25).
   - `favorite` from Playnite
 - **Hours:** the sum of the game's Playnite copies' `playtimeSeconds` / 3600, rounded to
   0.1, with `hoursSource: 'playnite'`. It overwrites only when the current source is
   `playnite` or `steam`, or hours are 0. **Hours a person typed are never overwritten.**
 - `lastPlayedAt` = the later of the existing value and the newest `lastActivity`.
-- After creation, an import **never changes the shelf or favorite**. GameGeek owns them.
+- After creation, an import **never changes favorite**, and changes the shelf only as
+  §Installed → Playing below says. Hours and ratings are never touched by that rule.
+
+## Installed → Playing (built 2026-09-25)
+
+Chef, 2026-09-25: Playing = "installed on the laptop, ready to go", so Playing follows
+Playnite's `isInstalled`. **Caveat: Playnite only judges what it knows** — he adds a few
+Android and Switch games by hand, and the import must not kick them out of Playing.
+
+After every import (upload or Nextcloud drop — both run `runCommit.js`), for every household
+game the importing user has a `GamePlayer` row for (`importPlanner.js` `installDecision`):
+
+1. **Move to Playing:** any of the game's Playnite copies is installed AND the shelf is
+   `backlog`, `on-hold` or unshelved → `playing`. Never from `finished`, `abandoned`,
+   `wishlist` or a custom shelf (reinstalling a finished game is not a claim he's back in it).
+2. **Flag, never move:** `GamePlayer.installFlag = 'uninstalled'` (+ `installFlagAt`) ONLY
+   when the shelf is `playing` AND the game has at least one copy AND **every** copy is a
+   Playnite copy AND **each** is known to be not installed. A copy whose `isInstalled` is
+   still unknown (imported before the field existed and not in this file) never counts as
+   uninstalled.
+3. A game with **no Playnite copy** is never moved or flagged. A game with **any
+   non-Playnite copy** (a manual Switch copy beside a Playnite PC copy) is never flagged.
+4. **The flag clears** when the game is installed again, when the condition in (2) stops
+   holding (e.g. a Switch copy was added — the gateway's `updateGame` also clears it for
+   every member of the household), when the user moves it off Playing (`setGameState`),
+   or when the user answers it (`resolveInstallFlag`).
+5. **"Still playing"** keeps the game on Playing, clears the flag and stores
+   `installFlagDismissedAt`. The import does not flag it again until some copy's
+   `installedChangedAt` is newer than that — i.e. it was installed, then uninstalled again.
+6. Idempotent: the same export twice changes nothing the second time. Every write repeats
+   its condition in the Mongo filter (the from-shelf list, `shelf: 'playing'`, the
+   dismissal) and carries `userId` + `householdId`.
+
+Gateway: `GameCopy.installed` (null for a non-Playnite copy or an unknown one),
+`GameMyState.installFlag` / `installFlagAt`, `resolveInstallFlag(gameId, action)` with
+`finished | on-hold | abandoned | still-playing`, plus `undo` (the toast's way back: Playing +
+flagged again, refused unless the game is Playnite-only and uninstalled everywhere).
+`GameFilterInput.needsDecision` and `GameFacets.needsDecision` (the caller's flags; the
+facet excludes its own filter). UI: the detail sheet's "Not installed anymore — how did it
+end?" banner, the library's Cleanup filter section, and "Installed" on the copy.
+
+Known consequence (Chef's call if it grates): an installed game he moves to Backlog or
+On hold by hand goes back to Playing on the next import, since the rule reads the shelf
+and the install state, not what changed.
 
 ## Catalog fields on re-import
 

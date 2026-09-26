@@ -44,8 +44,8 @@ export const makeDetailGame = (over = {}) => {
     source: 'manual',
     createdAt: '2026-09-01T00:00:00.000Z',
     household: [],
-    copies: base.copies.map((c) => ({ ...c, acquiredAt: null, notes: null, fromPlaynite: false, playtimeHours: null })),
-    me: { ...base.me, review: '', notes: '', playthroughs: [], sessions: [] },
+    copies: base.copies.map((c) => ({ ...c, acquiredAt: null, notes: null, fromPlaynite: false, playtimeHours: null, installed: null })),
+    me: { ...base.me, review: '', notes: '', installFlag: null, installFlagAt: null, playthroughs: [], sessions: [] },
     ...over,
   };
 };

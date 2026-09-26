@@ -18,6 +18,7 @@
  *   &length=short&meta=no-match
  *   &match=all                     tagMatch (any is the default)
  *   &played=recent&fav=1&cover=0
+ *   &decide=1                      needsDecision: "not installed anymore" (only true is written)
  *   &year=2010-2020                releaseYearMin–Max; "2010-" / "-2020" for one side
  *   &q=zelda
  *   &sort=random&seed=81234        seed only for random, so page 2 continues page 1
@@ -114,6 +115,7 @@ export const EMPTY_FILTER = Object.freeze({
   lengths: [],
   metadata: [],
   hasCover: null,
+  needsDecision: null,
 });
 
 export const DEFAULT_STATE = Object.freeze({
@@ -155,6 +157,7 @@ export function readLibraryState(params) {
   filter.played = PLAYED_VALUES.includes(get('played')) ? get('played') : '';
   filter.favorite = toBool(get('fav'));
   filter.hasCover = toBool(get('cover'));
+  filter.needsDecision = toBool(get('decide')) === true ? true : null;
 
   const [lo = '', hi = ''] = get('year').split('-');
   let min = toYear(lo);
@@ -173,7 +176,7 @@ export function readLibraryState(params) {
 }
 
 /** Every param this codec owns; anything else in the URL is left alone. */
-const OWN_PARAMS = ['q', ...Object.values(LIST_KEYS), 'match', 'played', 'fav', 'cover', 'year', 'sort', 'dir', 'seed', 'owned'];
+const OWN_PARAMS = ['q', ...Object.values(LIST_KEYS), 'match', 'played', 'fav', 'cover', 'decide', 'year', 'sort', 'dir', 'seed', 'owned'];
 
 /** Library state → params, on top of `base` (whose foreign params survive). */
 export function stateToParams(state, base = new URLSearchParams()) {
@@ -189,6 +192,7 @@ export function stateToParams(state, base = new URLSearchParams()) {
   if (PLAYED_VALUES.includes(f.played)) next.set('played', f.played);
   if (f.favorite === true || f.favorite === false) next.set('fav', f.favorite ? '1' : '0');
   if (f.hasCover === true || f.hasCover === false) next.set('cover', f.hasCover ? '1' : '0');
+  if (f.needsDecision === true) next.set('decide', '1');
   if (f.releaseYearMin != null || f.releaseYearMax != null) {
     next.set('year', `${f.releaseYearMin ?? ''}-${f.releaseYearMax ?? ''}`);
   }
@@ -245,6 +249,7 @@ export function toFilterInput(filter) {
   if (f.releaseYearMin != null) out.releaseYearMin = f.releaseYearMin;
   if (f.releaseYearMax != null) out.releaseYearMax = f.releaseYearMax;
   if (f.hasCover === true || f.hasCover === false) out.hasCover = f.hasCover;
+  if (f.needsDecision === true) out.needsDecision = true;
   return Object.keys(out).length ? out : null;
 }
 
@@ -273,6 +278,7 @@ export function activeFilterCount(state) {
   if (f.favorite !== null) n += 1;
   if (f.releaseYearMin != null || f.releaseYearMax != null) n += 1;
   if (f.hasCover !== null) n += 1;
+  if (f.needsDecision === true) n += 1;
   if (state.owned && state.owned !== 'all') n += 1;
   return n;
 }

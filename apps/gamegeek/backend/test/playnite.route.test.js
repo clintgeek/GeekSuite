@@ -74,8 +74,8 @@ describe('POST /api/import/playnite', () => {
     assert.equal(res.body.committed, false);
     assert.equal(res.body.schemaVersion, 1);
     assert.equal(res.body.total, 14);
-    assert.deepEqual(res.body.counts, { create: 10, addCopy: 0, update: 0, unchanged: 0, skippedHidden: 4, notInFile: 0, invalid: 0 });
-    assert.deepEqual(Object.keys(res.body.samples).sort(), ['addCopy', 'create', 'notInFile', 'update']);
+    assert.deepEqual(res.body.counts, { create: 10, addCopy: 0, update: 0, unchanged: 0, skippedHidden: 4, notInFile: 0, invalid: 0, movedToPlaying: 0, flaggedUninstalled: 0 });
+    assert.deepEqual(Object.keys(res.body.samples).sort(), ['addCopy', 'create', 'flaggedUninstalled', 'movedToPlaying', 'notInFile', 'update']);
     assert.equal(writes.game.length + writes.player.length + writes.profile.length, 0);
     // Scoped to the caller's household and user.
     assert.deepEqual(Game.find.mock.calls[0].arguments[0], { householdId: 'default' });

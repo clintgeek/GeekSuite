@@ -276,6 +276,21 @@ export const scenes = [
     },
     teardown: (page, h) => h.esc(),
   },
+  {
+    // Playing follows Playnite's isInstalled (apps/gamegeek/DOCS/PLAYNITE_IMPORT.md
+    // §Installed → Playing): Vampire Survivors is on Playing, both copies are
+    // Playnite's and neither is installed any more — the calm banner asks how
+    // it ended, four answers with their taste-model meanings.
+    name: '21-install-decision',
+    goto: '/game/g16',
+    wait: 1600,
+    async setup(page, h) {
+      const banner = page.getByTestId('install-decision');
+      if (!(await banner.count())) throw new Error('the "not installed anymore" banner did not render for a flagged game');
+      await h.settle(300);
+    },
+    teardown: (page, h) => h.esc(),
+  },
 ];
 
 // Known, ticketed violations. The list starts empty and stays that way.

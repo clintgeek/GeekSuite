@@ -166,6 +166,18 @@ const TAG_MATCH_MODES = Object.freeze(['any', 'all']);
 /** Sessions kept per GamePlayer row; older ones are already counted in hoursPlayed. */
 const MAX_SESSIONS = 200;
 
+/**
+ * Playing follows Playnite's isInstalled (apps/gamegeek/DOCS/PLAYNITE_IMPORT.md
+ * §Installed → Playing). An import moves an installed game to Playing only from
+ * these shelves (null = unshelved); finished, abandoned, wishlist and custom
+ * shelves are never moved.
+ */
+const INSTALL_PROMOTES_FROM = Object.freeze(['backlog', 'on-hold', null, '']);
+/** GamePlayer.installFlag values. null = no flag. */
+const INSTALL_FLAGS = Object.freeze(['uninstalled']);
+/** resolveInstallFlag actions: a shelf to move to, or keep Playing and dismiss. */
+const INSTALL_FLAG_ACTIONS = Object.freeze(['finished', 'on-hold', 'abandoned', 'still-playing']);
+
 const bounds = Object.freeze({
   title: Object.freeze({ maxlength: 300 }),
   description: Object.freeze({ maxlength: 5000 }),
@@ -198,6 +210,9 @@ module.exports = {
   LENGTH_BUCKETS,
   LENGTH_BOUNDS,
   TAG_MATCH_MODES,
+  INSTALL_PROMOTES_FROM,
+  INSTALL_FLAGS,
+  INSTALL_FLAG_ACTIONS,
   // The tag vocabulary lives in tags.js; re-exported so every consumer can
   // reach it through the package's existing `gamegeek/constants` export.
   TAG_GROUPS: tags.TAG_GROUPS,

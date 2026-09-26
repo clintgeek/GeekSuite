@@ -52,6 +52,11 @@ export default function CopiesSection({ copies = [], onEdit }) {
                       Playnite
                     </Box>
                   ) : null}
+                  {c.fromPlaynite && c.installed === true ? (
+                    <Typography component="span" sx={{ fontSize: '0.75rem', fontWeight: 600, color: 'text.secondary' }}>
+                      · Installed
+                    </Typography>
+                  ) : null}
                 </Box>
                 <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>
                   {[

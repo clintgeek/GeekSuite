@@ -36,6 +36,7 @@ const entrySchema = z.object({
   steamAppIdConfidence: shortText(40).nullish(),
   steamAppId: z.union([z.number().int().nonnegative(), z.string().regex(/^\d{1,12}$/)]).nullish(),
   hidden: z.boolean().nullish(),
+  isInstalled: z.boolean().nullish(),
   favorite: z.boolean().nullish(),
   platforms: stringList,
   genres: stringList,

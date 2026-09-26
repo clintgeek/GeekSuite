@@ -81,6 +81,7 @@ export const GAME_DETAIL_FIELDS = gql`
       notes
       fromPlaynite
       playtimeHours
+      installed
     }
     source
     createdAt
@@ -94,6 +95,8 @@ export const GAME_DETAIL_FIELDS = gql`
       hoursSource
       favorite
       lastPlayedAt
+      installFlag
+      installFlagAt
       playthroughs {
         id
         startedAt
@@ -201,6 +204,7 @@ export const GET_GAME_FACETS = gql`
         count
       }
       favorites
+      needsDecision
     }
   }
 `;

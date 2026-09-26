@@ -167,6 +167,8 @@ export function mapEntry(entry) {
       playtimeSeconds: Math.max(0, Math.round(Number(entry.playtimeSeconds) || 0)),
       lastActivity: parseInstant(entry.lastActivity),
       hidden: entry.hidden === true,
+      // Playnite's "installed on this machine" — PLAYNITE_IMPORT.md §Installed → Playing.
+      isInstalled: entry.isInstalled === true,
     },
   };
 }

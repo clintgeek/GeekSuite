@@ -86,6 +86,14 @@ const ENRICHMENT = {
   g7: { status: 'unlinked', provider: null, providerId: null, matchedTitle: null, matchedAt: null, attempts: 1, error: null, manual: false },
 };
 
+// Playing follows Playnite's isInstalled (apps/gamegeek/DOCS/PLAYNITE_IMPORT.md
+// §Installed → Playing). g1's PC copy is an installed Playnite copy (the
+// "Installed" mark); g16 is on Playing with BOTH copies from Playnite (Steam,
+// and Xbox Game Pass — Playnite's Game Pass source) and neither installed any
+// more, so the import has flagged it "not installed anymore".
+const PLAYNITE_COPIES = { g1: { pc: true }, g16: { pc: false, 'xbox-series': false } };
+const FLAGGED = { g16: T('2026-09-25') };
+
 const sessionsFor = (id) =>
   id === 'g1'
     ? [
@@ -126,10 +134,11 @@ export const GAMES = ROWS.map(([id, title, year, dev, shelf, rating, hours, prog
     storefront,
     acquiredAt: null,
     notes: null,
-    // g1's PC copy came in from Playnite — the one copy in the fixtures that
-    // shows the badge and per-copy hours in the Copies section.
-    fromPlaynite: id === 'g1' && platform === 'pc',
-    playtimeHours: id === 'g1' && platform === 'pc' ? 41.5 : null,
+    // g1's PC copy came in from Playnite — the badge, per-copy hours and the
+    // "Installed" mark in the Copies section. g16's copies are Playnite's too.
+    fromPlaynite: platform in (PLAYNITE_COPIES[id] || {}),
+    playtimeHours: id === 'g1' && platform === 'pc' ? 41.5 : id === 'g16' ? 9.1 : null,
+    installed: platform in (PLAYNITE_COPIES[id] || {}) ? PLAYNITE_COPIES[id][platform] : null,
   })),
   parentId: null,
   series: null,
@@ -163,6 +172,8 @@ export const GAMES = ROWS.map(([id, title, year, dev, shelf, rating, hours, prog
         hoursSource: id === 'g1' ? 'playnite' : id === 'g7' || id === 'g14' ? 'steam' : 'manual',
         favorite: id === 'g1' || id === 'g3',
         lastPlayedAt: shelf === 'playing' ? T('2026-09-23') : hours > 0 ? T(`2026-0${(i % 6) + 1}-02`) : null,
+        installFlag: FLAGGED[id] ? 'uninstalled' : null,
+        installFlagAt: FLAGGED[id] ?? null,
         playthroughs: playthroughsFor(id),
         sessions: sessionsFor(id),
       }
@@ -274,6 +285,7 @@ function matches(g, f = {}, skip = null) {
     if (f.releaseYearMax != null && !(g.releaseYear <= f.releaseYearMax)) return false;
   }
   if (f.hasCover != null && Boolean(g.coverUrl) !== f.hasCover) return false;
+  if (skip !== 'needsDecision' && f.needsDecision != null && (g.me?.installFlag === 'uninstalled') !== f.needsDecision) return false;
   return true;
 }
 
@@ -291,6 +303,7 @@ function facets(f = {}) {
     ...Object.fromEntries(Object.keys(VALUES).map((k) => [k, tally(k)])),
     releaseYears: [...years].sort((a, b) => a[0] - b[0]).map(([year, count]) => ({ __typename: 'GameYearBucket', year, count })),
     favorites: GAMES.filter((g) => matches(g, f, 'favorites') && g.me?.favorite).length,
+    needsDecision: GAMES.filter((g) => matches(g, f, 'needsDecision') && g.me?.installFlag === 'uninstalled').length,
   };
 }
 
@@ -315,6 +328,12 @@ export const OPS = {
     return { setGameState: strip({ ...g, me: { ...g.me, ...v.input } }) };
   },
   GetGame: (v) => ({ game: strip(GAMES.find((g) => g.id === v.id) || GAMES[0]) }),
+  ResolveInstallFlag: (v) => {
+    const g = GAMES.find((x) => x.id === v.gameId) || GAMES[0];
+    const shelf = v.action === 'still-playing' || v.action === 'undo' ? 'playing' : v.action;
+    const flagged = v.action === 'undo';
+    return { resolveInstallFlag: strip({ ...g, me: { ...g.me, shelf, installFlag: flagged ? 'uninstalled' : null, installFlagAt: flagged ? T('2026-09-25') : null } }) };
+  },
   GetGameShelves: { gameShelves: SHELF_STATS },
   GetGameProfile: () => ({ gameProfile: { ...PROFILE, savedFilters } }),
   GetGameVocabulary: { gameVocabulary: VOCAB },
@@ -342,7 +361,7 @@ export const PLAYNITE_DROP_STATUS = {
     status: 'imported',
     processedAt: T('2026-09-25'),
     generatedAtUtc: '2026-09-25T16:21:03Z',
-    counts: { create: 3, addCopy: 0, update: 5, unchanged: 923, skippedHidden: 241, notInFile: 0, invalid: 0 },
+    counts: { create: 3, addCopy: 0, update: 5, unchanged: 923, skippedHidden: 241, notInFile: 0, invalid: 0, movedToPlaying: 1, flaggedUninstalled: 1 },
     error: null,
   },
 };
@@ -351,7 +370,7 @@ export const PLAYNITE_DRY_RUN = {
   schemaVersion: 1,
   generatedAtUtc: '2026-09-25T16:21:03Z',
   total: 931,
-  counts: { create: 42, addCopy: 6, update: 178, unchanged: 691, skippedHidden: 241, notInFile: 3, invalid: 0 },
+  counts: { create: 42, addCopy: 6, update: 178, unchanged: 691, skippedHidden: 241, notInFile: 3, invalid: 0, movedToPlaying: 2, flaggedUninstalled: 1 },
   samples: {
     create: [
       { title: 'Outer Wilds', storefront: 'epic' },
@@ -364,6 +383,8 @@ export const PLAYNITE_DRY_RUN = {
       { title: 'Stardew Valley', hoursBefore: 200.1, hoursAfter: 212.4 },
     ],
     notInFile: [{ title: 'Celeste' }],
+    movedToPlaying: [{ title: 'Control', shelfBefore: 'backlog' }, { title: 'Civilization VI', shelfBefore: 'on-hold' }],
+    flaggedUninstalled: [{ title: 'Vampire Survivors' }],
   },
   committed: false,
 };

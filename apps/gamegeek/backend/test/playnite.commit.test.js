@@ -129,6 +129,8 @@ describe('commitPlayniteImport', () => {
     assert.deepEqual(upd.arrayFilters, [{ 'c.playnite.playniteId': 'pid-1' }]);
     assert.deepEqual(Object.keys(upd.update.$set).sort(), [
       'copies.$[c].playnite.hidden',
+      'copies.$[c].playnite.installedChangedAt',
+      'copies.$[c].playnite.isInstalled',
       'copies.$[c].playnite.lastActivity',
       'copies.$[c].playnite.playtimeSeconds',
       'copies.$[c].playnite.providerGameId',

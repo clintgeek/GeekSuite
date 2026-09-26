@@ -202,7 +202,10 @@ describe('mapping tables', () => {
       playtimeSeconds: 3600,
       lastActivity: new Date('2026-09-01T10:00:00Z'),
       hidden: true,
+      isInstalled: false,
     });
+    assert.equal(mapEntry(entry({ isInstalled: true })).playnite.isInstalled, true);
+    assert.equal(mapEntry(entry({ isInstalled: null })).playnite.isInstalled, false);
   });
 });
 

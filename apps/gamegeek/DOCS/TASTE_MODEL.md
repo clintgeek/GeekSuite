@@ -43,5 +43,5 @@ their generic dictionary meaning.*
 1. The shelf picker and the star rating show these definitions, so entering data stays
    consistent with this model.
 2. Import: Playnite's `isInstalled` is exactly "installed, ready to go", so installed games
-   could map to **Playing**. See the open question.
+   map to **Playing** — built 2026-09-25, see `PLAYNITE_IMPORT.md` §Installed → Playing.
 3. Hours are not a signal (Chef has Playnite's tracking off). Nothing here uses them.

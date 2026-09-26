@@ -149,14 +149,14 @@ describe('planPlayniteImport — against the fixture', () => {
     assert.equal(playerFor(p, 'Anno 1800').favorite, false);
   });
 
-  test('shelf inference with a fixed now: backlog / playing / on-hold', () => {
+  test('shelf inference on creation defers to isInstalled: installed → playing; else backlog / on-hold (rule 2h)', () => {
     const p = plan({ includeHidden: true });
+    assert.equal(playerFor(p, 'Fallout: New Vegas').shelf, 'playing'); // isInstalled, 0 playtime
     assert.equal(playerFor(p, 'Anno 1800').shelf, 'backlog'); // 0 playtime
-    assert.equal(playerFor(p, 'ANYU').shelf, 'playing'); // played 2026-07-31, 15 days before NOW
+    // Played 2026-07-31, 15 days before NOW — recent activity no longer means playing.
+    assert.equal(playerFor(p, 'ANYU').shelf, 'on-hold');
     assert.equal(playerFor(p, 'Albion Online').shelf, 'on-hold'); // last played 2024
     assert.equal(playerFor(p, 'Ace Attorney Investigations Collection').shelf, 'on-hold');
-    // A month later ANYU is on hold too.
-    assert.equal(playerFor(plan({ now: new Date('2026-09-25T00:00:00Z') }), 'ANYU').shelf, 'on-hold');
   });
 
   test('hours: summed seconds / 3600, rounded to 0.1, source playnite; lastPlayedAt = newest', () => {
@@ -197,6 +197,7 @@ describe('planPlayniteImport — re-import', () => {
       assert.equal(again.counts.skippedHidden, first.counts.skippedHidden);
       assert.equal(again.ops.creates.length + again.ops.gameUpdates.length + again.ops.copyUpdates.length, 0);
       assert.equal(again.ops.playerCreates.length + again.ops.playerUpdates.length, 0);
+      assert.equal(again.ops.installUpdates.length, 0);
     }
   });
 
@@ -263,9 +264,11 @@ describe('planPlayniteImport — hours never overwrite what a person typed', () 
     assert.equal(mayOverwriteHours({ hoursSource: 'steam', hoursPlayed: 5 }, 0), false); // a 0 never erases hours
   });
 
-  test('inferShelf: backlog when no playtime, even if recently launched', () => {
-    assert.equal(inferShelf({ playtimeSeconds: 0, lastActivity: NOW, now: NOW }), 'backlog');
-    assert.equal(inferShelf({ playtimeSeconds: 60, lastActivity: null, now: NOW }), 'on-hold');
+  test('inferShelf: installed → playing; no playtime → backlog; else on-hold', () => {
+    assert.equal(inferShelf({ playtimeSeconds: 0, installed: false }), 'backlog');
+    assert.equal(inferShelf({ playtimeSeconds: 60, installed: false }), 'on-hold');
+    assert.equal(inferShelf({ playtimeSeconds: 0, installed: true }), 'playing');
+    assert.equal(inferShelf({ playtimeSeconds: 99999, installed: true }), 'playing');
   });
 });
 
@@ -285,7 +288,7 @@ describe('planPlayniteImport — matching an existing library', () => {
       ],
       games,
     });
-    assert.deepEqual(p.counts, { create: 1, addCopy: 2, update: 1, unchanged: 0, skippedHidden: 0, notInFile: 0, invalid: 0 });
+    assert.deepEqual(p.counts, { create: 1, addCopy: 2, update: 1, unchanged: 0, skippedHidden: 0, notInFile: 0, invalid: 0, movedToPlaying: 0, flaggedUninstalled: 0 });
     const pushedTo = Object.fromEntries(p.ops.gameUpdates.filter((u) => u.pushCopies.length).map((u) => [u.gameId, u.pushCopies[0].playnite.playniteId]));
     assert.deepEqual(pushedTo, { bySteam: 'pid-B', byTitle: 'pid-C' });
   });
@@ -299,7 +302,7 @@ describe('planPlayniteImport — matching an existing library', () => {
     assert.equal(p.counts.notInFile, 1);
     assert.deepEqual(p.samples.notInFile, [{ title: 'Gone Game' }]);
     // The plan has no delete of any kind: every op is a create, a push, or a $set.
-    assert.deepEqual(Object.keys(p.ops).sort(), ['copyUpdates', 'creates', 'gameUpdates', 'playerCreates', 'playerUpdates']);
+    assert.deepEqual(Object.keys(p.ops).sort(), ['copyUpdates', 'creates', 'gameUpdates', 'installUpdates', 'playerCreates', 'playerUpdates']);
     for (const u of p.ops.gameUpdates) assert.equal(u.gameId === 'g1', false);
   });
 
@@ -350,7 +353,10 @@ describe('planPlayniteImport — matching an existing library', () => {
   test('an existing game this user has no row for gets one, with an inferred shelf', () => {
     const games = [{ _id: 'g1', title: 'Hades', copies: [], genres: ['x'], releaseDate: new Date(), platformsAvailable: ['pc'] }];
     const p = plan({ entries: [entry({ playtimeSeconds: 600, lastActivity: '2026-08-10T00:00:00Z' })], games, players: [] });
-    assert.deepEqual(p.ops.playerCreates.map((c) => [c.gameId, c.doc.shelf]), [['g1', 'playing']]);
+    assert.deepEqual(p.ops.playerCreates.map((c) => [c.gameId, c.doc.shelf]), [['g1', 'on-hold']]);
+    const installed = plan({ entries: [entry({ playtimeSeconds: 600, isInstalled: true })], games, players: [] });
+    assert.deepEqual(installed.ops.playerCreates.map((c) => [c.gameId, c.doc.shelf]), [['g1', 'playing']]);
+    assert.equal(installed.counts.movedToPlaying, 0); // a new row is not a "move"
   });
 
   test('lastPlayedAt only moves forward', () => {

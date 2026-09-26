@@ -26,6 +26,7 @@ import {
   removeGameShelfArgsSchema,
   saveGameFilterArgsSchema,
   deleteGameFilterArgsSchema,
+  resolveInstallFlagArgsSchema,
 } from './validation.js';
 
 /**
@@ -89,6 +90,21 @@ const validateAddGameShelf = validateInput(addGameShelfArgsSchema);
 const validateRemoveGameShelf = validateInput(removeGameShelfArgsSchema);
 const validateSaveGameFilter = validateInput(saveGameFilterArgsSchema);
 const validateDeleteGameFilter = validateInput(deleteGameFilterArgsSchema);
+const validateResolveInstallFlag = validateInput(resolveInstallFlagArgsSchema);
+
+/** The flag fields cleared whenever the "not installed anymore" question is answered or moot. */
+const CLEAR_INSTALL_FLAG = Object.freeze({ installFlag: null, installFlagAt: null });
+
+/**
+ * Would the Playnite import flag this game "not installed anymore"? Every
+ * copy is a Playnite copy and each is known to be not installed
+ * (apps/gamegeek/DOCS/PLAYNITE_IMPORT.md §Installed → Playing; the same
+ * rule as the backend's installDecision, minus shelf and dismissal).
+ */
+function uninstalledEverywhere(game) {
+  const copies = game?.copies ?? [];
+  return copies.length > 0 && copies.every((c) => c?.playnite?.playniteId && c.playnite.isInstalled === false);
+}
 
 // ── Errors ───────────────────────────────────────────────────────────────────
 
@@ -491,6 +507,8 @@ export const resolvers = {
     fromPlaynite: (c) => Boolean(c.playnite?.playniteId),
     playtimeHours: (c) =>
       c.playnite?.playniteId ? Math.round(((Number(c.playnite.playtimeSeconds) || 0) / 3600) * 10) / 10 : null,
+    // null for a non-Playnite copy, and for one imported before isInstalled was stored.
+    installed: (c) => (c.playnite?.playniteId && typeof c.playnite.isInstalled === 'boolean' ? c.playnite.isInstalled : null),
   },
   GamePlaythrough: {
     id: (p) => String(p._id ?? p.id),
@@ -505,6 +523,8 @@ export const resolvers = {
       return sortSessions(p.sessions ?? []).slice(0, n);
     },
     hoursPlayed: (p) => (p.hoursPlayed == null ? null : roundHours(p.hoursPlayed)),
+    installFlag: (p) => (p.installFlag === 'uninstalled' ? 'uninstalled' : null),
+    installFlagAt: (p) => (p.installFlag === 'uninstalled' ? p.installFlagAt ?? null : null),
   },
   GameHouseholdEntry: {
     userId: (e) => String(e.userId),
@@ -662,6 +682,12 @@ export const resolvers = {
         game.copies = (input.copies ?? []).map((c) => copyFromInput(c, existingById));
       }
       await game.save();
+      // A copy edit can make "not installed anymore" moot (a Switch copy was
+      // added, the last Playnite copy removed). Every member's flag on this
+      // game is about the same copies, so clear them all — household-scoped.
+      if (input.copies !== undefined && !uninstalledEverywhere(game)) {
+        await GamePlayer.updateMany({ householdId, gameId: game._id, installFlag: 'uninstalled' }, { $set: CLEAR_INSTALL_FLAG });
+      }
 
       const me = await GamePlayer.findOne({ userId, householdId, gameId: game._id }).lean();
       return withMe(game, me);
@@ -687,6 +713,8 @@ export const resolvers = {
 
       const set = {};
       if (input.shelf !== undefined) set.shelf = await resolveShelf(userId, input.shelf);
+      // Leaving Playing answers "not installed anymore" (PLAYNITE_IMPORT.md).
+      if (input.shelf !== undefined && set.shelf !== 'playing') Object.assign(set, CLEAR_INSTALL_FLAG);
       if (input.rating !== undefined) set.rating = input.rating;
       if (input.review !== undefined) set.review = input.review ?? '';
       if (input.notes !== undefined) set.notes = input.notes ?? '';
@@ -730,6 +758,7 @@ export const resolvers = {
       doc.hoursPlayed = roundHours((doc.hoursPlayed ?? 0) + input.minutes / 60);
       doc.lastPlayedAt = new Date();
       if (AUTO_PLAYING_FROM.includes(doc.shelf ?? null)) doc.shelf = 'playing';
+      if (doc.shelf !== 'playing' && doc.installFlag) Object.assign(doc, CLEAR_INSTALL_FLAG);
       await doc.save();
       return withMe(game, doc);
     },
@@ -880,6 +909,36 @@ export const resolvers = {
         throw userError(`You can have up to ${MAX_SAVED_FILTERS} saved filters`);
       }
       return GameProfile.findOneAndUpdate({ userId }, { $push: { savedFilters: preset } }, { new: true, lean: true });
+    },
+
+    /**
+     * "Not installed anymore — how did it end?" (apps/gamegeek/DOCS/PLAYNITE_IMPORT.md
+     * §Installed → Playing). The caller's own row only; hours and ratings are
+     * never touched. `undo` restores the question the toast just answered.
+     */
+    resolveInstallFlag: async (_, rawArgs, { user } = {}) => {
+      const userId = requireUser(user);
+      const householdId = resolveHouseholdId(user);
+      const { gameId, action } = validateResolveInstallFlag(rawArgs);
+      const game = await requireGame(householdId, gameId);
+      const filter = { userId, householdId, gameId: game._id };
+
+      const existing = await GamePlayer.findOne(filter, { _id: 1 }).lean();
+      if (!existing) throw notFound('Game state');
+
+      let set;
+      if (action === 'still-playing') {
+        set = { shelf: 'playing', ...CLEAR_INSTALL_FLAG, installFlagDismissedAt: new Date() };
+      } else if (action === 'undo') {
+        // Only a game the import itself would flag can be put back — the
+        // undo can't be used to flag a manual Switch game or an installed one.
+        if (!uninstalledEverywhere(game)) throw userError('This game has an installed or non-Playnite copy, so there is nothing to put back');
+        set = { shelf: 'playing', installFlag: 'uninstalled', installFlagAt: new Date(), installFlagDismissedAt: null };
+      } else {
+        set = { shelf: action, ...CLEAR_INSTALL_FLAG };
+      }
+      const player = await GamePlayer.findOneAndUpdate(filter, { $set: set }, { new: true, lean: true, runValidators: true });
+      return withMe(game, player);
     },
 
     deleteGameFilter: async (_, rawArgs, { user } = {}) => {

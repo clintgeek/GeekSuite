@@ -40,6 +40,9 @@ export const typeDefs = gql`
     fromPlaynite: Boolean!
     # Playnite's playtime for this copy, in hours (0.1). Null for a copy not from Playnite.
     playtimeHours: Float
+    # Playnite's isInstalled for this copy. Null for a copy not from Playnite, or one
+    # imported before the field was stored (apps/gamegeek/DOCS/PLAYNITE_IMPORT.md).
+    installed: Boolean
   }
 
   type GamePlaythrough {
@@ -72,6 +75,10 @@ export const typeDefs = gql`
     hoursSource: String
     favorite: Boolean
     lastPlayedAt: Date
+    # null | "uninstalled": a Playing game no Playnite copy of which is installed any
+    # more — "how did it end?". Set by the Playnite import only; see resolveInstallFlag.
+    installFlag: String
+    installFlagAt: Date
     playthroughs: [GamePlaythrough!]!
     # Newest first, capped by the resolver (default 20).
     sessions(limit: Int = 20): [GameSession!]!
@@ -205,6 +212,8 @@ export const typeDefs = gql`
     # enrichment status: matched | no-match | ambiguous | pending | error | unlinked
     metadata: [String!]
     hasCover: Boolean
+    # the caller's: true = flagged "not installed anymore" (installFlag = "uninstalled")
+    needsDecision: Boolean
   }
 
   type GameFacetValue {
@@ -234,6 +243,8 @@ export const typeDefs = gql`
     metadata: [GameFacetValue!]!
     releaseYears: [GameYearBucket!]!
     favorites: Int!
+    # the caller's games flagged "not installed anymore"
+    needsDecision: Int!
   }
 
   type GameProfile {
@@ -399,5 +410,11 @@ export const typeDefs = gql`
     removeGameShelf(id: ID!): RemoveGameShelfResult!
     saveGameFilter(input: GameSavedFilterInput!): GameProfile!
     deleteGameFilter(id: ID!): GameProfile!
+    # Answer "not installed anymore — how did it end?" for the caller's own row.
+    # action: finished | on-hold | abandoned (move there, clear the flag) |
+    # still-playing (stay on Playing, clear the flag, not re-flagged until the game is
+    # installed then uninstalled again) | undo (put the flag back: Playing + flagged;
+    # only while no copy is installed and every copy is a Playnite copy).
+    resolveInstallFlag(gameId: ID!, action: String!): Game!
   }
 `;

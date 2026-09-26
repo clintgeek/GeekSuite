@@ -6,7 +6,8 @@ import { useCallback, useMemo } from 'react';
 import { Button } from '@mui/material';
 import { useApolloClient, useMutation } from '@apollo/client';
 import { useToast } from '@geeksuite/ui';
-import { SET_GAME_STATE } from '../graphql/mutations';
+import { RESOLVE_INSTALL_FLAG, SET_GAME_STATE } from '../graphql/mutations';
+import { answeredMessage, createResolveInstallFlag } from '../utils/installDecision';
 import { createRateGame } from '../utils/rateGame';
 import { shelfLabel } from '../utils/vocab';
 
@@ -107,4 +108,46 @@ export function useSetShelf(customShelves = []) {
   );
 
   return setShelf;
+}
+
+/**
+ * Answer "not installed anymore — how did it end?" optimistically, with an
+ * Undo toast that puts the question back (resolveInstallFlag's `undo`).
+ * Returns `(game, action) => Promise<boolean>`.
+ */
+export function useResolveInstallFlag() {
+  const client = useApolloClient();
+  const [resolveMutation] = useMutation(RESOLVE_INSTALL_FLAG);
+  const { notify } = useToast();
+
+  const resolveFlag = useMemo(
+    () =>
+      createResolveInstallFlag({
+        save: (gameId, action) =>
+          resolveMutation({ variables: { gameId, action }, refetchQueries: REFRESH_AGGREGATES }).then((r) => r.data?.resolveInstallFlag),
+        apply: (id, patch) => writeMyField(client.cache, id, patch),
+      }),
+    [client, resolveMutation]
+  );
+
+  const resolve = useCallback(
+    async (game, action, { quiet = false } = {}) => {
+      const { ok } = await resolveFlag(game, action);
+      if (!ok) {
+        notify(action === 'undo' ? `Couldn't undo that for ${game.title}.` : `Couldn't save that for ${game.title}.`, { tone: 'error' });
+        return false;
+      }
+      if (!quiet) {
+        const undoTarget = { ...game, me: { ...(game.me || {}), installFlag: null } };
+        notify(answeredMessage(game.title, action), {
+          tone: 'success',
+          action: <UndoButton onClick={() => resolve(undoTarget, 'undo', { quiet: true })} />,
+        });
+      }
+      return true;
+    },
+    [resolveFlag, notify]
+  );
+
+  return resolve;
 }

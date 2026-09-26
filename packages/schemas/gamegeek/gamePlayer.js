@@ -5,7 +5,7 @@
  * Unique on (userId, gameId). Always carries householdId so household views
  * ("who else has this") never cross a tenant.
  */
-const { HOURS_SOURCES, COMPLETION_LEVELS, bounds } = require('./constants.js');
+const { HOURS_SOURCES, COMPLETION_LEVELS, INSTALL_FLAGS, bounds } = require('./constants.js');
 
 function gamePlayerDefinition(mongoose) {
   if (!mongoose || !mongoose.Schema) {
@@ -51,6 +51,15 @@ function gamePlayerDefinition(mongoose) {
     lastPlayedAt: { type: Date, default: null }, // instant
     playthroughs: { type: [playthroughSchema], default: [] },
     sessions: { type: [sessionSchema], default: [] },
+    // 'uninstalled' = a Playing game whose every copy is a Playnite copy and
+    // none is installed any more: "how did it end?" (apps/gamegeek/DOCS/
+    // PLAYNITE_IMPORT.md §Installed → Playing). Set only by the Playnite
+    // import; cleared by the import (installed again), by moving the game off
+    // Playing, or by resolveInstallFlag. The shelf is never moved for it.
+    installFlag: { type: String, enum: [...INSTALL_FLAGS, null], default: null },
+    installFlagAt: { type: Date, default: null },
+    // "Still playing": not re-flagged until a copy's installedChangedAt is newer.
+    installFlagDismissedAt: { type: Date, default: null },
   };
 }
 
