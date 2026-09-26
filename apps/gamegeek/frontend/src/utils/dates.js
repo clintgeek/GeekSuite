@@ -61,6 +61,29 @@ export function relativeDay(value, now = new Date()) {
   return formatCalendarDate(value, { month: 'short', day: 'numeric', year: d.getUTCFullYear() === now.getFullYear() ? undefined : 'numeric' });
 }
 
+/**
+ * "Today", "Yesterday", "3 days ago", else a date — for an INSTANT (an import
+ * time, a last-played timestamp), read in the viewer's own timezone.
+ *
+ * relativeDay() above is for calendar days stored as UTC midnight and must
+ * not be used here: after 7 PM in Chicago an instant's UTC date is already
+ * tomorrow, so an import from five minutes ago read as "Sep 26" (2026-09-25,
+ * caught by CI running in the evening).
+ */
+export function relativeInstant(value, now = new Date()) {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+  const localDay = (x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+  const diff = Math.round((localDay(now) - localDay(d)) / 86400000);
+  if (diff === 0) return 'Today';
+  if (diff === 1) return 'Yesterday';
+  if (diff > 1 && diff < 7) return `${diff} days ago`;
+  return d.toLocaleDateString(undefined, {
+    month: 'short', day: 'numeric', year: d.getFullYear() === now.getFullYear() ? undefined : 'numeric',
+  });
+}
+
 /** Minutes → "1h 30m", "45m", "2h". */
 export function formatMinutes(minutes) {
   const m = Math.max(0, Math.round(Number(minutes) || 0));

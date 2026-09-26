@@ -9,7 +9,7 @@ import { UploadFile as UploadIcon } from '@mui/icons-material';
 import { useApolloClient } from '@apollo/client';
 import { useToast } from '@geeksuite/ui';
 import { importPlaynite, getPlayniteDropStatus } from '../../api/rest';
-import { formatCalendarDate, relativeDay } from '../../utils/dates';
+import { formatCalendarDate, relativeInstant } from '../../utils/dates';
 import { visuallyHidden } from '../../utils/a11y';
 import SettingsCard from './SettingsCard';
 import PlaynitePreview, { previewSummary } from './PlaynitePreview';
@@ -42,7 +42,7 @@ export function dropStatusMessage(status) {
   const base = `Auto-import: watching ${folder} in Nextcloud`;
   if (!lastFile) return `${base} — no export received yet.`;
 
-  const when = relativeDay(lastFile.processedAt);
+  const when = relativeInstant(lastFile.processedAt);
   if (lastFile.status === 'imported') {
     const c = lastFile.counts || {};
     const parts = [];
@@ -176,7 +176,7 @@ export default function PlayniteImportCard({ profile }) {
 
       {profile?.playniteLastImportAt ? (
         <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', mt: 1 }}>
-          Last imported {relativeDay(profile.playniteLastImportAt)}
+          Last imported {relativeInstant(profile.playniteLastImportAt)}
           {profile.playniteLastGeneratedAtUtc ? ` · export made ${formatCalendarDate(profile.playniteLastGeneratedAtUtc)}` : ''}
           {profile.playniteLastTotal ? ` · ${profile.playniteLastTotal} games` : ''}
         </Typography>

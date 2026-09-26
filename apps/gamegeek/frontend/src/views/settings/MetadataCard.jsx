@@ -12,7 +12,7 @@ import { useApolloClient } from '@apollo/client';
 import { useToast } from '@geeksuite/ui';
 import { runEnrich } from '../../api/rest';
 import { useMetadataStatus } from '../../hooks/useMetadataEnrichment';
-import { relativeDay } from '../../utils/dates';
+import { relativeInstant } from '../../utils/dates';
 import SettingsCard from './SettingsCard';
 import { resetLibraryLists } from '../../graphql/cachePolicies';
 
@@ -149,7 +149,7 @@ export default function MetadataCard() {
 
       {status?.lastRunAt ? (
         <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', mt: 1.5 }}>
-          Last ran {relativeDay(status.lastRunAt)}
+          Last ran {relativeInstant(status.lastRunAt)}
         </Typography>
       ) : null}
     </SettingsCard>

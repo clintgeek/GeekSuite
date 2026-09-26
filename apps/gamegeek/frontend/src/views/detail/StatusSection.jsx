@@ -8,7 +8,7 @@ import { useToast } from '@geeksuite/ui';
 import ShelfTag from '../../components/ShelfTag';
 import { useDebouncedCallback } from '../../hooks/useDebouncedCallback';
 import { useSetGameState } from '../../hooks/useGameActions';
-import { formatHours, relativeDay } from '../../utils/dates';
+import { formatHours, relativeInstant } from '../../utils/dates';
 import { hoursSourceLabel, shelfLabel } from '../../utils/vocab';
 import Section from './Section';
 
@@ -126,7 +126,7 @@ export default function StatusSection({ game, customShelves, onChangeShelf }) {
       )}
 
       <Row label="Last played">
-        <Typography sx={{ fontSize: '0.875rem' }}>{me.lastPlayedAt ? relativeDay(me.lastPlayedAt) : 'Not yet'}</Typography>
+        <Typography sx={{ fontSize: '0.875rem' }}>{me.lastPlayedAt ? relativeInstant(me.lastPlayedAt) : 'Not yet'}</Typography>
       </Row>
 
       <FormControlLabel
