@@ -74,4 +74,14 @@ describe('seedMissingApps', () => {
       healthEndpoint: '/',
     });
   });
+
+  it('includes thinggeek (household inventory), with a unique sortOrder', () => {
+    expect(DEFAULT_APPS.find((a) => a.name === 'thinggeek')).toMatchObject({
+      displayName: 'thingGeek',
+      icon: 'Inventory2',
+      url: 'https://thinggeek.clintgeek.com',
+    });
+    const orders = DEFAULT_APPS.map((a) => a.sortOrder);
+    expect(new Set(orders).size).toBe(orders.length);
+  });
 });

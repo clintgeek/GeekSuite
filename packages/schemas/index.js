@@ -27,6 +27,15 @@ module.exports = {
     weight: require('./fitnessgeek/weight.js'),
     weightGoals: require('./fitnessgeek/weightGoals.js'),
   },
+  thinggeek: {
+    constants: require('./thinggeek/constants.js'),
+    household: require('./thinggeek/household.js'),
+    thing: require('./thinggeek/thing.js'),
+    thingType: require('./thinggeek/thingType.js'),
+    place: require('./thinggeek/place.js'),
+    file: require('./thinggeek/file.js'),
+    profile: require('./thinggeek/profile.js'),
+  },
   gamegeek: {
     constants: require('./gamegeek/constants.js'),
     household: require('./gamegeek/household.js'),

@@ -18,6 +18,7 @@ export const DEFAULT_APPS = [
   { name: 'geekpr', displayName: 'geekPR', description: 'Autonomous code reviewer', icon: 'RateReview', color: '#8ba3d4', url: 'https://geekpr.clintgeek.com', tag: 'tools', sortOrder: 7 },
   { name: 'bookgeek', displayName: 'bookGeek', description: 'Library & reading', icon: 'MenuBook', color: '#5fa8d3', url: 'https://bookgeek.clintgeek.com', tag: 'reading', sortOrder: 8 },
   { name: 'gamegeek', displayName: 'gameGeek', description: 'Video game library', icon: 'SportsEsports', color: '#d9a441', url: 'https://gamegeek.clintgeek.com', tag: 'library', sortOrder: 10 },
+  { name: 'thinggeek', displayName: 'thingGeek', description: 'Household inventory', icon: 'Inventory2', color: '#6fa89a', url: 'https://thinggeek.clintgeek.com', tag: 'household', sortOrder: 11 },
   // Static bundle behind `serve`: no /api/health, so probe the root.
   { name: 'startgeek', displayName: 'startGeek', description: 'Start page & launcher', icon: 'RocketLaunch', color: '#e6b35a', url: 'https://start.clintgeek.com', healthEndpoint: '/', tag: 'launcher', sortOrder: 9 },
 ];

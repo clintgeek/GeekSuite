@@ -26,7 +26,14 @@
     "./gamegeek/game": "./gamegeek/game.js",
     "./gamegeek/gamePlayer": "./gamegeek/gamePlayer.js",
     "./gamegeek/profile": "./gamegeek/profile.js",
-    "./gamegeek/playniteDropFile": "./gamegeek/playniteDropFile.js"
+    "./gamegeek/playniteDropFile": "./gamegeek/playniteDropFile.js",
+    "./thinggeek/constants": "./thinggeek/constants.js",
+    "./thinggeek/household": "./thinggeek/household.js",
+    "./thinggeek/thing": "./thinggeek/thing.js",
+    "./thinggeek/thingType": "./thinggeek/thingType.js",
+    "./thinggeek/place": "./thinggeek/place.js",
+    "./thinggeek/file": "./thinggeek/file.js",
+    "./thinggeek/profile": "./thinggeek/profile.js"
   },
   "scripts": {
     "lint": "eslint ."

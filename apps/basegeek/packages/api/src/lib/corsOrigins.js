@@ -28,6 +28,7 @@ export const productionOrigins = [
   'https://bujogeek.clintgeek.com',  // BujoGeek production
   'https://bookgeek.clintgeek.com',  // epub library
   'https://gamegeek.clintgeek.com',  // GameGeek — video game library
+  'https://thinggeek.clintgeek.com', // ThingGeek — household inventory (member-gated)
   'https://storygeek.clintgeek.com',  // StoryGeek production
   'https://flockgeek.clintgeek.com',  // FlockGeek production
   'https://dash.clintgeek.com',       // DashGeek production

@@ -137,6 +137,7 @@ describe('the resolved allow-list', () => {
       'https://storygeek.clintgeek.com',
       'https://flockgeek.clintgeek.com',
       'https://bookgeek.clintgeek.com',
+      'https://thinggeek.clintgeek.com',
       'https://start.clintgeek.com',
     ]) {
       expect(prod).toContain(origin);

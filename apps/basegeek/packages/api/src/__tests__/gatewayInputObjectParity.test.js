@@ -600,6 +600,20 @@ const NO_FRONTEND_CALLER = new Set([
   'Mutation.saveGamePlaythrough',
   'Mutation.saveGameProfile',
   'Mutation.saveGameFilter',
+  // thinggeek (2026-09-25): the gateway lands the same night as
+  // apps/thinggeek/frontend, whose pages are being built alongside it — no
+  // real payload to copy yet. Move each to FIXTURES with its real call site
+  // as the pages land (DOCS/THINGGEEK_PLAN.md).
+  'Query.things',
+  'Query.thingFacets',
+  'Query.thingInsuranceTotals',
+  'Mutation.createThing',
+  'Mutation.updateThing',
+  'Mutation.createThingType',
+  'Mutation.updateThingType',
+  'Mutation.createPlace',
+  'Mutation.updatePlace',
+  'Mutation.saveThingFilter',
 ]);
 
 describe('every input-object-taking root field is enumerated and accounted for', () => {
@@ -621,8 +635,10 @@ describe('every input-object-taking root field is enumerated and accounted for',
   // (apps/gamegeek/DOCS/TAGS_AND_FILTERS.md §B1).
   // 31 from 2026-09-25 (later same day): createGames (paste-a-list) removed —
   // Playnite is the only supported import (Chef's call).
-  test('the count matches the audit: 31 root fields take an input-object argument', () => {
-    expect(inputObjectRootFields()).toHaveLength(31);
+  // 41 from 2026-09-25 (night): thinggeek's ten — things/thingFacets/
+  // thingInsuranceTotals (ThingFilterInput) and seven input-object mutations.
+  test('the count matches the audit: 41 root fields take an input-object argument', () => {
+    expect(inputObjectRootFields()).toHaveLength(41);
   });
 
   test('FIXTURES and NO_FRONTEND_CALLER never claim the same field', () => {

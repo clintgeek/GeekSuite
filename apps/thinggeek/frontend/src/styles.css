@@ -1,0 +1,17 @@
+html, body, #root { height: 100%; }
+body { margin: 0; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+@keyframes tg-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+}
+
+/* The insurance report prints from its own portal (views/InsuranceView.jsx):
+   the app shell is hidden entirely, so nothing about its fixed-height,
+   scrolling layout can clip the printout to one page. */
+#tg-print-root { display: none; }
+@media print {
+  @page { margin: 14mm 12mm; }
+  html, body { height: auto !important; background: #fff !important; }
+  body.tg-printing > #root { display: none !important; }
+  body.tg-printing > #tg-print-root { display: block !important; }
+}

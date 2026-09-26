@@ -1,0 +1,60 @@
+services:
+  thinggeek:
+    image: ghcr.io/clintgeek/thinggeek:latest
+    container_name: thinggeek
+    restart: unless-stopped
+
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+
+    networks:
+      - datageek_network
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    # Containers pin the host's DNS resolver at start; a Tailscale DNS change
+    # afterward leaves them stuck on a dead resolver until restarted (the
+    # suite's container-DNS landmine). Pinned so config, not a manual
+    # restart, is the fix.
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+
+    # All runtime secrets/config (MONGODB_URI, JWT_SECRET, BASEGEEK_URL, …)
+    # come from .env.production via env_file. Don't list them here as ${VAR}
+    # substitutions — that reads compose's own .env, a different file.
+    # NOTE: a Watchtower redeploy does not pick up NEW .env.production vars;
+    # that needs `docker compose up -d`.
+    env_file:
+      - .env.production
+
+    # Compose-fixed values that don't vary per environment.
+    environment:
+      NODE_ENV: production
+      PORT: 1820
+      FILES_PATH: /data/files
+
+    ports:
+      - "1820:1820"
+
+    # App storage on the box (DOCS/THINGGEEK_PLAN.md "Decisions": Files) —
+    # app-local and gitignored, not Nextcloud.
+    volumes:
+      - ./data/files:/data/files
+
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:1820/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  datageek_network:
+    external: true

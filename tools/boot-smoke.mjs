@@ -63,6 +63,11 @@ const FAKE_ENV = {
 
 const TARGETS = [
   {
+    app: 'thinggeek',
+    modules: ['apps/thinggeek/backend/src/app.js'],
+    note: "app.js exports createApp() (the GameGeek/bujogeek shape) so it imports without connecting Mongo or listening.",
+  },
+  {
     app: 'gamegeek',
     modules: ['apps/gamegeek/backend/src/app.js'],
     note: "app.js exports createApp() and is split from server.js (the bujogeek shape) so it imports without connecting Mongo or listening.",

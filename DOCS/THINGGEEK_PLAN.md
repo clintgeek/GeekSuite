@@ -32,8 +32,9 @@ firearms, tools, electronics, keyboards, appliances. The payoff moments are:
 - **Schemas once:** `@geeksuite/schemas/thinggeek/*`, shared by the gateway and the
   backend.
 - **Backend** `apps/thinggeek/backend` owns bytes and jobs: photo and document upload,
-  thumbnails, serving files (auth plus household-scoped), the CSV export, and the
-  printable-report data.
+  thumbnails, serving files (auth plus household-scoped), and the trash purge job.
+  *As built:* the CSV export and the printable insurance report are assembled
+  **client-side** from the gateway's `things` query, so the backend doesn't serve them.
 - **Frontend** `apps/thinggeek/frontend`: React 18, MUI 5, `@geeksuite/ui` shell,
   **`@geeksuite/collection`** for browse, filters and saved views (its third consumer),
   `/` focus, VitePWA.

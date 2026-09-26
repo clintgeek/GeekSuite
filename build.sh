@@ -28,6 +28,7 @@ APPS=(
   photogeek
   startgeek
   storygeek
+  thinggeek
 )
 
 RED='\033[0;31m'

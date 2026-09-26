@@ -101,6 +101,38 @@ jobs:
         working-directory: apps/gamegeek/frontend
         run: npx vitest run
 
+  test-thinggeek:
+    name: thinggeek backend tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Run node --test
+        working-directory: apps/thinggeek/backend
+        run: npm test
+
+  test-thinggeek-web:
+    name: thinggeek frontend tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Run vitest
+        working-directory: apps/thinggeek/frontend
+        run: npx vitest run
+
   test-notegeek:
     name: notegeek frontend tests
     runs-on: ubuntu-latest
@@ -498,6 +530,8 @@ jobs:
             dir: apps/bookgeek/web
           - app: gamegeek
             dir: apps/gamegeek/frontend
+          - app: thinggeek
+            dir: apps/thinggeek/frontend
           - app: fitnessgeek
             dir: apps/fitnessgeek/frontend
           - app: storygeek
