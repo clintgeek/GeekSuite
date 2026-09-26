@@ -191,7 +191,20 @@ Wanted, not built on the 2026-09-22 overnight run:
   ([`DOCS/GAMEGEEK_STOREFRONT_IMPORTS.md`](GAMEGEEK_STOREFRONT_IMPORTS.md) is research
   only now).
 
+### ThingGeek — phase 2 (`DOCS/THINGGEEK_PLAN.md`)
+
+Live since 2026-09-26.
+- **The first real add is the upload test:** a photo from a phone, including HEIC,
+  hasn't been uploaded on production yet.
+- **AI Ask (`??`):** needs the AI tier decided first. Under the privacy rule, identifiers,
+  document contents and values never go to a provider.
+- **Its MCP tools**, once the suite MCP server exists.
+- **A PDF insurance report** with embedded photos.
+
 ### Suite MCP server — `DOCS/MCP_PLAN.md`
+
+**Next up after ThingGeek** (Chef, 2026-09-25), built together with Chef while he's awake,
+not overnight.
 
 Proposed 2026-09-22: a `/mcp` route in basegeek so ChatGPT / Claude clients can read suite
 data through curated, read-only tools. Blocked on Chef's three answers in the plan's §6

@@ -10,6 +10,57 @@ anything a future reader would otherwise have to rediscover.
 
 ---
 
+## 2026-09-26
+
+### ThingGeek — the household inventory, live at thinggeek.clintgeek.com
+
+`1f46e6fd`. Spec: [`THINGGEEK_PLAN.md`](THINGGEEK_PLAN.md).
+
+- **What it holds:** things, editable types (nine starter types, with identifier fields
+  flagged), a tree of places, photos and documents, and dates that drive "expiring / due".
+  It also has a Needs-attention view and the insurance report (a printable page plus CSV,
+  both built client-side from the gateway).
+- **The member gate:** Chef and Heather only. Enforced at three doors, and verified on
+  production with a real non-member account: 403 `NOT_A_MEMBER` on `/api/me`, the same code
+  on every gateway resolver, and 403 on file serving. Anonymous requests get 401. Chef gets
+  the nine starter types, seeded on the first query.
+- **Files:** app storage in `apps/thinggeek/data/files`, 25 MB per file. The nginx vhost
+  `clintgeek.com_thingGeek.conf` allows 30m; a 26 MB unauthenticated upload reaches the
+  backend (401, not 413). Thumbnails have EXIF stripped; HEIC is stored without a thumbnail.
+  Served `Cache-Control: private`.
+- **Deploy:** port 1820, `dns:` pinned, Watchtower label. The first start was
+  `docker compose up -d`.
+- **Tests:** 110 gateway tests, 77 backend, 170 frontend; 112 harness scenes, a11y-enforced,
+  phone and desktop.
+- **Not yet:**
+  - AI Ask is phase 2, under the privacy rule: identifiers, documents and values never go
+    to a provider.
+  - The MCP tools.
+  - Upload hasn't been exercised on production with a real photo. The first real add is
+    that test.
+- **Landmines:**
+  - `gh run list --commit` needs the full SHA; a short one silently matches nothing.
+  - A new vhost must not repeat `map $http_upgrade`, which gameGeek's conf already declares.
+
+### BookGeek — Phase C2: the library runs on `@geeksuite/collection`
+
+`218ff25c` `cf83cd3d` `f95bfef5` `0a241fe1` `bdafbd67`. Record in
+[`BOOKGEEK_CLEANUP_PLAN.md`](BOOKGEEK_CLEANUP_PLAN.md).
+
+- **What BookGeek gained:** the facet panel and phone sheet (shelf, author, series, tags
+  any/all, format, language, own/has-file, year read, rating), live counts, chips, a sort
+  menu with Shuffle, saved views, URL state, a list that never collapses, and scroll memory.
+- **Gateway:** `books(filter, seed)` and `bookFacets` added, nothing removed; the old flat
+  args are untouched for old tabs.
+- **Saved views:** views from before C2 open the same list their old "apply" showed. The old
+  author filter was a "contains" match, so it maps to `authorText`, not to the exact facet.
+- **One visible change:** new sorts open in their natural direction, so a Phase B link like
+  `?sort=dateAdded` without `dir` now opens newest first.
+- **Fixed on the way:** BookGeek's theme had no `palette.border`, so unchecked facet boxes
+  had no outline.
+- **Tests:** 263 web tests; 58 harness scenes, up from 34. The package changes are
+  additive: GameGeek's 131 and ThingGeek's 170 tests are unchanged.
+
 ## 2026-09-25
 
 ### GameGeek — auto-import from Nextcloud, Chef's vocabulary in the UI, registration closed
