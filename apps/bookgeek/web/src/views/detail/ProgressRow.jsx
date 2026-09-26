@@ -25,7 +25,7 @@ export default function ProgressRow({
   const pageCount = Number(book.pageCount) || 0;
 
   return (
-    <Box sx={{ px: 2, pt: 1, pb: 2 }}>
+    <Box sx={{ px: { xs: 2, md: 4 }, pt: 4, pb: 5 }}>
       <Typography
         variant="caption"
         component="h3"
@@ -35,13 +35,13 @@ export default function ProgressRow({
           letterSpacing: "0.08em",
           fontWeight: 600,
           color: "text.muted",
-          mb: 0.5,
+          mb: 3,
         }}
       >
         Progress
       </Typography>
 
-      <Box sx={{ display: "flex", alignItems: "center", gap: 2 }}>
+      <Box sx={{ display: "flex", alignItems: "center", gap: 4 }}>
         <Slider
           min={0}
           max={100}
@@ -54,7 +54,10 @@ export default function ProgressRow({
             scheduleProgressCommit(book, next);
           }}
           onChangeCommitted={(event, next) => handleUpdateProgress(book, next)}
-          sx={{ flex: 1, color: "progress.main" }}
+          // mx (10px, the thumb's radius; the suite unit is 4px) keeps the
+          // thumb inside the column at 0% and 100%. MUI centres it on the
+          // rail's end, so without it the thumb overhangs.
+          sx={{ flex: 1, mx: 2.5, color: "progress.main" }}
         />
         <Typography
           sx={{
@@ -70,7 +73,7 @@ export default function ProgressRow({
         </Typography>
       </Box>
 
-      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1.5, mt: 0.25 }}>
+      <Box sx={{ display: "flex", flexWrap: "wrap", gap: 1.5, mt: 2 }}>
         {pageCount > 0 ? (
           <Typography variant="caption" sx={{ color: "text.muted" }}>
             about p. {Math.round((value / 100) * pageCount)} of {pageCount}
