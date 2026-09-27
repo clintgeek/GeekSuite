@@ -218,34 +218,64 @@ if (url.pathname.startsWith("/api/")) {
 }
 ```
 
-### 3. Web App Manifest (per app)
+### 3. Web App Manifest, icons and `index.html` (per app) — revised 2026-09-27
 
-Every app needs a `manifest.json` in its public directory with:
+**Icons live in `<publicDir>/icons/` in every app**, as three hand-written SVG
+masters plus the PNGs rendered from them by `node tools/pwa-icons.mjs`
+(sharp/librsvg from `apps/thinggeek/backend` — no new dependency; deterministic,
+so `--check` exits 1 if a committed PNG is stale):
+
+| File | What | Rendered into |
+|------|------|---------------|
+| `favicon.svg` | tab icon, drawn for 16–32px, readable on light and dark tab strips; served as-is | (notegeek only: `/favicon.ico` 16/32/48) |
+| `icon.svg` | the mark on its rounded tile ("any") | `icon-192.png`, `icon-512.png` |
+| `icon-maskable.svg` | full-bleed background, mark inside the central 80% circle | `icon-maskable-512.png`, `apple-touch-icon.png` (180, opaque) |
+
+Never edit the PNGs by hand; edit a master and re-run the script. No `<text>`
+in masters (glyphs would depend on the machine's fonts). `node tools/pwa-icons.mjs
+--sheet out.png` renders a contact sheet of every app at 16/32/180px plus the
+maskable crops.
+
+Manifest (either `public/manifest.json` or VitePWA's inline `manifest` — notegeek
+and basegeek use the inline one; don't have both):
 
 ```json
 {
-  "name": "AppName",
-  "short_name": "AppName",
-  "description": "...",
-  "start_url": "/",
-  "display": "standalone",
-  "background_color": "#...",
-  "theme_color": "#...",
-  "orientation": "portrait-primary",
-  "scope": "/",
+  "id": "/", "name": "AppName", "short_name": "AppName", "description": "...",
+  "start_url": "/", "scope": "/", "display": "standalone",
+  "background_color": "#...", "theme_color": "#...",
   "icons": [
-    { "src": "/icons/icon-192.svg", "sizes": "192x192", "type": "image/svg+xml", "purpose": "any" },
-    { "src": "/icons/icon-512.svg", "sizes": "512x512", "type": "image/svg+xml", "purpose": "any" }
+    { "src": "/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/icons/icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
   ]
 }
 ```
 
-And `index.html` must include:
+Never `"purpose": "any maskable"` on one icon — the "any" rendering then gets
+cropped. `theme_color` must equal one of `index.html`'s theme-color metas.
+
+`index.html`:
 ```html
-<meta name="theme-color" content="#..." />
-<link rel="manifest" href="/manifest.json" />
-<link rel="apple-touch-icon" href="/icons/icon-192.svg" />
+<meta name="theme-color" media="(prefers-color-scheme: light)" content="#..." />
+<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#..." />
+<link rel="icon" type="image/svg+xml" href="/icons/favicon.svg" />
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />  <!-- PNG: iOS ignores SVG -->
+<link rel="manifest" href="/manifest.json" />  <!-- omit when VitePWA injects it -->
 ```
+
+VitePWA (flavour A) apps with `injectRegister: false` must set `skipWaiting:
+true` and `clientsClaim: true` themselves: the plugin only turns them on for
+`injectRegister: 'auto'`, and `registerSW()` in `autoUpdate` mode never sends
+SKIP_WAITING — without them a deploy's new SW waits until every tab closes.
+Every flavour-A `navigateFallbackDenylist` carries
+`[/^\/api\//, /^\/graphql/, /\/[^/?]+\.[^/]+$/]` (plus app-specific ones).
+
+**`node tools/pwa-audit.mjs [--app x]`** checks all of the above against each
+app's built `dist/` (plus: every hashed chunk and woff2 is precached or
+runtime-covered, offline.html precached, the SW is registered, no `vite.svg`).
+CI runs it per app in the `pwa-audit` job after a build.
 
 ### 4. Offline Behavior (v1)
 

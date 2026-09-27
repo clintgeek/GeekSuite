@@ -553,3 +553,52 @@ jobs:
       - name: Build ${{ matrix.app }}
         working-directory: ${{ matrix.dir }}
         run: npm run build
+
+  pwa-audit:
+    name: pwa audit (${{ matrix.app }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - app: bujogeek
+            dir: apps/bujogeek/frontend
+          - app: notegeek
+            dir: apps/notegeek/frontend
+          - app: bookgeek
+            dir: apps/bookgeek/web
+          - app: gamegeek
+            dir: apps/gamegeek/frontend
+          - app: thinggeek
+            dir: apps/thinggeek/frontend
+          - app: fitnessgeek
+            dir: apps/fitnessgeek/frontend
+          - app: storygeek
+            dir: apps/storygeek/frontend
+          - app: flockgeek
+            dir: apps/flockgeek/frontend
+          - app: basegeek
+            dir: apps/basegeek/packages/ui
+          - app: startgeek
+            dir: apps/startgeek
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build ${{ matrix.app }}
+        working-directory: ${{ matrix.dir }}
+        run: npm run build
+      # Checks the BUILT output: one manifest link; manifest fields; every
+      # icon exists at its declared pixel size, incl. a 512 maskable; an opaque
+      # 180px apple-touch PNG; theme colours; the service worker is registered,
+      # bypasses auth, precaches every hashed chunk (and woff2, or has a font
+      # rule), and its navigateFallback denylist keeps the SPA shell off /api,
+      # /graphql and file-extension paths. No network, no deps — see
+      # tools/pwa-audit.mjs and DOCS/PWA_STANDARD.md.
+      - name: PWA audit ${{ matrix.app }}
+        run: node tools/pwa-audit.mjs --app ${{ matrix.app }}
