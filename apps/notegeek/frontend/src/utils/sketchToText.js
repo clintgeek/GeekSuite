@@ -9,6 +9,13 @@ import { noteLinkMarkup } from './noteLinks';
 
 const sketchLabel = (sketchTitle) => String(sketchTitle || '').trim() || 'Untitled sketch';
 
+/**
+ * Where the text came from: a sketch (§2), or photographed pages kept as a
+ * photo sketch note (§3). Only the words change; the shape is the same.
+ */
+const PREFIX = { sketch: 'From sketch', photo: 'From photos' };
+const prefixFor = (source) => PREFIX[source] || PREFIX.sketch;
+
 /** The text of the first Markdown heading (any level), or null. */
 export function firstHeading(markdown) {
   const m = /^[ \t]{0,3}#{1,6}[ \t]+(.+?)[ \t#]*$/m.exec(markdown || '');
@@ -17,16 +24,17 @@ export function firstHeading(markdown) {
 
 /**
  * The new note's title: the composed document's first heading, or
- * "From sketch: <sketch title>" (always that for the plain-text path).
+ * "From sketch: <sketch title>" (always that for the plain-text path;
+ * "From photos: …" for photographed pages).
  */
-export function derivedNoteTitle({ sketchTitle, body, composed }) {
+export function derivedNoteTitle({ sketchTitle, body, composed, source = 'sketch' }) {
   const heading = composed ? firstHeading(body) : null;
-  return (heading || `From sketch: ${sketchLabel(sketchTitle)}`).slice(0, 500);
+  return (heading || `${prefixFor(source)}: ${sketchLabel(sketchTitle)}`).slice(0, 500);
 }
 
 /** The first line: a link back to the sketch, in NoteGeek's markdown link convention. */
-export function backLinkLine({ sketchId, sketchTitle }) {
-  return `From sketch: ${noteLinkMarkup('markdown', { id: sketchId, title: sketchLabel(sketchTitle) })}`;
+export function backLinkLine({ sketchId, sketchTitle, source = 'sketch' }) {
+  return `${prefixFor(source)}: ${noteLinkMarkup('markdown', { id: sketchId, title: sketchLabel(sketchTitle) })}`;
 }
 
 /**
@@ -50,7 +58,7 @@ export function plainTextAsMarkdown(text) {
 }
 
 /** The whole body of the new note: back-link, blank line, then the text. */
-export function derivedNoteContent({ sketchId, sketchTitle, body, composed }) {
+export function derivedNoteContent({ sketchId, sketchTitle, body, composed, source = 'sketch' }) {
   const text = composed ? String(body || '').trim() : plainTextAsMarkdown(body);
-  return `${backLinkLine({ sketchId, sketchTitle })}\n\n${text}\n`;
+  return `${backLinkLine({ sketchId, sketchTitle, source })}\n\n${text}\n`;
 }

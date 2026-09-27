@@ -18,7 +18,7 @@ import { useAppPreferences } from '@geeksuite/user';
 import { NoteShell, NoteMetaBar, NoteActions, NoteTypeRouter, NOTE_TYPES, SuggestionStrip } from '../components/notes';
 import { BackButton } from '../components/notes/NoteActions';
 import SaveStamp from '../components/notes/SaveStamp';
-import { NOTE_TYPE_META, NOTE_TYPE_ORDER } from '../components/notes/noteTypeMeta';
+import { NOTE_TYPE_META, NOTE_TYPE_ORDER, PHOTO_ENTRY } from '../components/notes/noteTypeMeta';
 import { toDate } from '../utils/dateUtils';
 import DeleteNoteDialog from '../components/DeleteNoteDialog';
 import { onNoteCreated, onNoteUpdated } from '../graphql/cacheUpdates';
@@ -28,11 +28,12 @@ import { dotGridBackground, noteTypeInk, stampFill, surfaces, layout } from '../
 
 // Type card — one row per note type, carrying the same glyph and ink as
 // its stamp everywhere else (TypeStamp.jsx is the source of truth).
-function TypeCard({ type, onSelect }) {
+// `meta` is for an entry that is not a type (PHOTO_ENTRY, HANDWRITING.md §3).
+function TypeCard({ type, onSelect, meta: metaOverride = null }) {
   const theme = useTheme();
-  const meta = NOTE_TYPE_META[type];
+  const meta = metaOverride || NOTE_TYPE_META[type];
   const Icon = meta.Icon;
-  const ink = noteTypeInk(theme, type);
+  const ink = noteTypeInk(theme, metaOverride?.inkType || type);
 
   return (
     <Box
@@ -823,6 +824,11 @@ function NoteEditorPage() {
                 }}
               />
             ))}
+            <TypeCard
+              type={PHOTO_ENTRY.key}
+              meta={PHOTO_ENTRY}
+              onSelect={() => navigate(PHOTO_ENTRY.path, { replace: true })}
+            />
           </Stack>
         </Box>
       </Box>

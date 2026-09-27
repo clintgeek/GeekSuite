@@ -219,3 +219,229 @@ Chef: "Can we make that thin writing line even thinner?"
   `getSvgJsx` appends `scale(props.scale)` to its page transform, and the two cancel. This
   was checked in the browser: a Fine stroke exports at its on-canvas size. An earlier
   "correction" for this halved it and was removed.
+
+## 3. A photographed notebook page (Chef, 2026-09-27)
+
+Chef: "we have sketch on Notegeek now, can we do some sort of 'take a photo of a notebook
+page' and have it process the same way it will the sketch->text?"
+
+**Chef's decisions:**
+- **The photo is kept as a sketch note:** the page image on a canvas you can mark up with
+  the S Pen. The Markdown note links back to it, exactly like the sketch flow.
+- **Several pages go into one note:** "Add another page" before transcribing.
+
+### The flow
+1. **Where it starts:** a **"Photo of a page"** entry in the new-note picker, and a Photo
+   chip beside the five type chips on Home. On a phone it opens the camera
+   (`<input type="file" accept="image/*" capture="environment">`); on desktop it's a file
+   picker or drag and drop.
+2. **The page tray:** each photo becomes a page thumbnail. Per page: **rotate** (90° steps)
+   and **remove**. There's also **Add another page**, and pages can be reordered. At most
+   **8 pages** per note, because the snapshot ceiling is 5 MB (see "Size").
+3. **Preparing each page on the client:**
+   - Decode with `createImageBitmap(file, { imageOrientation: 'from-image' })` so the
+     photo's EXIF rotation is honoured.
+   - Apply the chosen rotation, and scale down to at most **2000px** on the longest edge.
+   - Re-encode as **JPEG at quality 0.85**, aiming for ~300–700 KB.
+   - If the browser can't decode a format (some HEIC), say so plainly.
+4. **Transcribing:** `transcribeSketch` gains an optional `source: 'sketch' | 'photo'`
+   argument (a validated scalar, so the parity count is unchanged).
+   - The **photo prompt** is the sketch prompt plus photo rules: transcribe the handwritten
+     ink only; ignore ruled lines, margins, page edges, holes, shadows, the desk, and
+     anything **printed** on the notebook (headers, dates, logos); cope with slight skew.
+   - Pages go **one call each**, in order, with progress ("Page 2 of 4"). Every page counts
+     against the daily cap of 40.
+5. **Review:** the same review step. A strip of page images sits beside one editable
+   transcript, with `--- page N ---` markers.
+6. **Result:**
+   - **A photo sketch note** is created. Each page is a tldraw **image shape** (the asset is
+     embedded in the snapshot), stacked top to bottom. It's titled "Photos · <date>" (or the
+     user's title), tagged like the result, and can be marked up with the S Pen.
+   - **Compose** (or keep plain text) makes a **new Markdown note**, whose first line links
+     back to the photo sketch note. As with sketches, nothing is ever replaced.
+
+### Size
+A page is ~300–700 KB as JPEG, or ~0.4–1 MB base64 in the snapshot. Eight pages fit
+under the 5 MB snapshot ceiling (`SNAPSHOT_CONTENT_MAX`, `utils/saveGuards.js`), and each
+transcription request fits under the 8 MB gateway cap and nginx's 12m. If a set of pages
+would push the snapshot over the ceiling, say so before creating anything.
+
+### Done when
+- Two pages photographed on a phone become one photo sketch note plus one Markdown note
+  linking to it, and the transcript shows both pages in order.
+- The resolver's `source: 'photo'` prompt includes the ignore-printed-text and
+  ignore-ruled-lines rules, checked red/green like the sketch prompt.
+- Tests cover EXIF orientation, rotation, downscaling, the page limit and the size guard,
+  the per-page calls in order, and the new-notes-only result.
+- A harness scene shows the page tray and the review step on a phone, a11y-clean.
+
+### As built (2026-09-27) — §3
+
+**Gateway** (`transcribe.js`, `validation.js`, `typeDefs.js`, `resolvers.js`):
+
+- `transcribeSketch(image: String!, mediaType: String!, source: String)`. `source` is a
+  plain `String` (so the input-object parity count is unchanged), validated by zod as
+  `sketch | photo` ("source must be sketch or photo."), and `null` or absent means
+  `sketch`. Validation still runs before any model is asked or the cap counts, and a
+  photo page counts against the same 40 a day.
+- The seven sketch rules are one shared constant (`TRANSCRIBE_RULES`), so the photo
+  prompt cannot drift from them. `TRANSCRIBE_PROMPT` is byte-identical to the §2 prompt.
+  `TRANSCRIBE_PHOTO_PROMPT` has its own first line ("a photograph of a page from a paper
+  notebook, written in pen or pencil"), the same seven rules, and four more:
+  8 HANDWRITTEN INK ONLY, 9 IGNORE THE PAPER AND THE PHOTO (ruled, grid and margin lines,
+  page edges, holes, binding, creases, shadows, glare, fingers, the desk; "a ruled line is
+  never an underline, a dash or a list marker"), 10 IGNORE PRINTED TEXT (headers, printed
+  dates and "Date: ____" fields, page numbers, brands, logos; what the writer wrote into
+  such a field *is* transcribed), 11 COPE WITH SKEW. The user turn says "photographed
+  notebook page" too.
+
+**Where it starts:** the route is `/notes/photo` (`pages/PhotoPagesPage.jsx`; a static
+segment, so it outranks `/notes/:id`). "Photo of a page" is a card after the five type
+cards in the picker, and a Photo stamp after the five on Home. It is not a sixth type:
+`PHOTO_ENTRY` in `noteTypeMeta.js` borrows the sketch's ink (the stamp contrast is the
+sketch's, already tuned) with a camera glyph. `TypeStamp` and the picker's `TypeCard`
+take a `meta` override for it.
+
+**The tray:**
+
+- "Take a photo" (the `capture="environment"` input) shows below `md` or on a coarse
+  pointer. "Choose photos" (`multiple`) is always there, and the empty tray on desktop
+  also takes a drop. Both inputs are hidden, with no tab stop; the buttons open them.
+- Each page: thumbnail, "Page N", its prepared size in mono ("1500×2000 · 480 KB"), and
+  four 44px buttons: Rotate (clockwise quarter turn), Move up, Move down, Remove.
+  Reordering is by buttons rather than dragging, which works with a thumb, a keyboard
+  and a screen reader alike.
+- Pages are prepared as they arrive, **one at a time** (a queue). Decoding several 12 MP
+  photos at once is how a phone tab runs out of memory. Rotate re-prepares from the
+  original file, never from the already-encoded JPEG, so turning a page four times costs
+  no quality. A stale preparation (the page was turned again or removed) is dropped.
+- Over 8, the extra photos are not added, and a notice says how many. A photo that
+  can't be decoded shows its message on its own row and blocks reading until removed.
+- Title (optional; the placeholder shows the default "Photos · 27 Sep 2026") and tags
+  (the existing `TagSelector`). Both notes get the tags. The date is formatted by hand,
+  not with `toLocaleDateString`, because ICU versions disagree ("Sep" or "Sept").
+- The meter reads "2 of 8 pages · 1.2 of 5.0 MB". Over the ceiling it shows the error
+  and "Read N pages" is disabled. So "too big" is said before anything is read or
+  created.
+
+**Preparing a page** (`utils/photoPages.js`):
+
+- `createImageBitmap(file, { imageOrientation: 'from-image' })`. A `TypeError` (a browser
+  that rejects the option) retries without the options bag. Anything else, or no
+  `createImageBitmap` at all, falls back to an `<img>`, which applies EXIF by default.
+  If nothing decodes it: "This browser can't open HEIC photos (name). Set the camera to
+  save JPEG ("Most compatible"), or take the photo from here." (for HEIC/HEIF by type or
+  name), else "This browser can't open that image (name). Try a JPEG or PNG photo."
+- It scales to fit 2000px first, then turns (the longest edge is the same either way),
+  drawn about the canvas centre. The canvas is filled with white first, because JPEG has
+  no alpha. It encodes JPEG at 0.85. The same prepared JPEG is what the model reads and
+  what the photo sketch note keeps.
+
+**Reading:**
+
+- One `TranscribeSketch` call per page, `source: 'photo'`, `mediaType: 'image/jpeg'`,
+  awaited in tray order. The next page is not sent until the previous one answers.
+  Progress reads "Reading page 2 of 3…".
+- Readings are kept per page and rotation. A failure stops the run with "Page 2 of 3:
+  <reason>. Pages 1–1 are read; Try again carries on from page 2." A retry, and a return
+  from the review, re-read only pages that are new or turned, so the cap isn't spent
+  twice.
+- One page has no marker. Two or more are joined as `--- page N ---\n<text>`, with a
+  blank line between.
+- The review is the §2 `TranscribeDialog` with `source="photo"`: the title "Photographed
+  pages to text", "An approximation · check it against the pages", and a page strip. On
+  a phone the strip is a row that scrolls sideways inside itself, each page 28vh tall at
+  its own aspect; from `md` it is a column. It's focusable, labelled "The pages that
+  were read", and each page's alt is "Page N as photographed". Discard reads **Back to
+  pages**, and coming back with the same pages restores the corrected transcript instead
+  of reading again.
+
+**The result** (both notes are created only when the writer keeps the result):
+
+1. **The photo sketch note first**, because the Markdown note links to its id:
+   `type: 'handwritten'`, the title, the tags.
+2. **Then the Markdown note:** the §2 helpers with `source: 'photo'`. The first line is
+   `From photos: [<photo note title>](/notes/<id>)`; the title is the composed first
+   heading, or "From photos: <title>". Keep as plain text gets the §2 hard breaks.
+   Compose is opened with no Replace, and its Discard reads "Back to transcript".
+- If only the Markdown note fails, the toast says the photos are saved, and a retry
+  reuses that photo note rather than making a second. The photo note is keyed to the
+  exact page set; if the pages change, a new one is made.
+- Nothing on this path calls `updateNote`.
+
+**The snapshot** (`utils/photoSketchSnapshot.js`, loaded with a dynamic `import()`, so
+tldraw stays out of the page's chunk):
+
+- Built by tldraw, never by hand. `createTLStore({ shapeUtils: defaultShapeUtils,
+  bindingUtils: defaultBindingUtils })` gives the same schema `<Tldraw>` uses.
+  `ensureStoreIsUsable()` makes the document and page records. `AssetRecordType.create`
+  makes an image asset per page: a data URL, pixel w/h, `image/jpeg`, `fileSize`.
+  `store.schema.types.shape.create` makes an image shape per page, with the shape
+  validated on `store.put`. `getStoreSnapshot()` serialises it: the same
+  `{ store, schema }` as the editor's `store.getSnapshot()`, without its deprecation
+  warning.
+- Before it's saved, the JSON is loaded into a second fresh store with
+  `loadStoreSnapshot` (tldraw's own open path, migrations included). A body that would
+  not open is refused, not saved. Then the exact length is checked against
+  `SNAPSHOT_CONTENT_MAX`.
+- Layout: every page is 1000 page units wide, its height by aspect, stacked at x 0 with
+  a 48-unit gap, in index order (`getIndices`). `meta.photoPage` is N.
+- **The images are locked.** tldraw's eraser, which is the S Pen's side button (§1),
+  skips locked shapes, and so do selecting and dragging. Marking up a page never rubs
+  out or moves the photo under it. To delete a page from the note, unlock it from the
+  context menu.
+- **Opening it:** `HandwrittenEditor` fits the first image shape into view (at most
+  100%) the first time a sketch with image shapes loads. The fit waits for our first
+  `updateViewportScreenBounds`: until then tldraw assumes a 1080×720 viewport, and an
+  earlier version that fitted at mount opened the page at 100%, off to one side (found
+  in the harness). It moves the camera only (session state), so it never dirties the
+  note. Sketches without images open as before. No `<Tldraw>` prop, listener or
+  before-create handler changed.
+- List thumbnails draw image shapes as their outlines (`utils/thumbnails.js`), so a
+  photo note's row isn't blank.
+
+**Size, measured in the harness's Chromium:**
+
+- **The fixture pages** (1200px notebook JPEGs, `tools/mobile-harness/apps/notegeek/`):
+  111,188 and 92,228 bytes after preparation. **Two pages make a 273,375-character
+  snapshot**; tldraw's own overhead is about 2 KB.
+- **Eight synthetic camera frames**: 4000×3000, 3.36 MB each, with lit paper, ruled
+  lines, ink and sensor noise. Each prepared to 2000×1500 at **~492 KB**, and **8 pages
+  come to ~5.3 MB of snapshot, over the 5 MB ceiling**. The guard refused them before
+  anything was read or created.
+- **§3's "Eight pages fit" holds only below ~470 KB a page.** At 700 KB a page, 8 pages
+  are ~7.5 MB of base64. What real S26 photos of Chef's notebook weigh is the number
+  that decides it. If they land near 500 KB, the options are fewer pages per note, or
+  keeping a smaller copy (for example 1600px) in the note than the one the model reads.
+  That is a call for Chef, not made here.
+- The estimate (`estimateSnapshotChars`: 4,000 + 1,000 a page + each data URL) is held
+  by a test to be never below the real snapshot.
+
+**Harness** (`tools/mobile-harness/apps/notegeek/`):
+
+- `13a-photo-entry`: the picker card, then Home's Photo stamp to the empty tray.
+- `13b-photo-tray`: two real JPEGs through the real preparation. It checks that page 2
+  (stored 1600×1200, EXIF 6) comes out portrait.
+- `13c-photo-review`: two calls, `source: 'photo'`, bare base64 JPEG, both pages in the
+  strip, and the marked transcript.
+- `13d-photo-note`, phone only: the page keeps the result. The photo note's content is
+  taken from **its own CreateNote call** and opened. The scene fails on our error
+  boundary, `.tl-error-boundary`, or `.tl-shape-error-boundary`, and requires two
+  rendered image shapes.
+- `13e-photo-markdown`: the Markdown note, with its back-link.
+- `13f-photo-size`: the synthetic eight, printed.
+- The fixtures come from `make-photo-fixtures.cjs` (thinggeek's `sharp`), at 91 KB and
+  84 KB.
+- **New waiver:** `image-alt` on `img.tl-image`, scene `13d-photo-note` only. tldraw
+  2.4.6's image shape renders `<img>` with no `alt`, has no alt-text prop, and refuses a
+  replacement `image` util ("defined more than once"). It's the same call as the slider
+  waiver; drop it on tldraw 3 (`altText`).
+
+**Only a phone can confirm:**
+
+- The camera opening from `capture="environment"` in Samsung's Chrome.
+- The S26 camera's EXIF orientation arriving upright. It's tested with a flag-6 JPEG in
+  Chromium, not with a Samsung file.
+- Whether its HEIC setting decodes in Chrome on Android.
+- The real per-page size, which is the number that settles 8 pages (see Size).
+- Writing over a locked photo with the S Pen, and the eraser sparing it.

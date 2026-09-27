@@ -128,8 +128,121 @@ async function reviewTranscript(page, h) {
   return box;
 }
 
+import { fileURLToPath } from 'node:url';
 import { json, graphqlRoute } from '../../lib/net.mjs';
 import { OPS, NOTE_SUGGESTIONS, NOTE_CODE, NOTE_MINDMAP, NOTE_SKETCH, NOTE_WIDE_TABLE } from './fixtures.mjs';
+
+// ── Photo of a page (DOCS/HANDWRITING.md §3) ────────────────────────────────
+//
+// Two real notebook-page JPEGs (make-photo-fixtures.cjs): page 1 upright and
+// slightly skewed, page 2 stored on its side with EXIF orientation 6, the way
+// a phone saves a portrait shot. They go through the page's real preparation
+// in Chromium (createImageBitmap, canvas, JPEG 0.85); only the gateway is
+// stubbed. The photo sketch note the page creates is captured from its
+// CreateNote call and then OPENED, so the snapshot tldraw loads is the one the
+// page actually built, not a fixture.
+const PHOTO_FILES = ['photo-page-1.jpg', 'photo-page-2-exif6.jpg'].map((f) => fileURLToPath(new URL(`./${f}`, import.meta.url)));
+const PHOTO_READINGS = [
+  'Kitchen plan\n- tiles: grey, matte\n- lights over the island\n-> ask Heather re: budget\n[ ] measure the window\n[x] call the plumber',
+  'Page two\norder: 40 tiles + 10%\ngrout colour: ash\nring Mike on Tues\n- [?] the extractor',
+];
+const PROV = { source: 'model', reason: null, model: 'openai/gpt-4.1-mini', provider: 'openrouter', cached: false, callsToday: 1, cap: 40 };
+const photoNote = (id, title, type, content, tags = []) => ({
+  __typename: 'Note', id, title, content, type, tags,
+  isLocked: false, isEncrypted: false,
+  createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+});
+const b64Bytes = (s) => Math.floor(s.length * 3 / 4) - (s.endsWith('==') ? 2 : s.endsWith('=') ? 1 : 0);
+
+async function bootstrapChef(page) {
+  await page.route('**/api/users/bootstrap', (r) => json(r, {
+    identity: { username: 'chef', email: 'chef@example.com' },
+    profile: { displayName: 'Chef Crocker' },
+    preferences: {},
+    appPreferences: { notegeek: { suggestOnSave: false } },
+  }));
+}
+
+async function stubPhotoGateway(page) {
+  const calls = { transcribe: [], create: [] };
+  await graphqlRoute(page, {
+    ...OPS,
+    TranscribeSketch: (vars) => {
+      calls.transcribe.push(vars);
+      return { transcribeSketch: { text: PHOTO_READINGS[calls.transcribe.length - 1] ?? 'more writing', provenance: PROV } };
+    },
+    CreateNote: (vars) => {
+      calls.create.push(vars);
+      const id = vars.type === 'handwritten' ? 'photo1' : 'md1';
+      return { createNote: photoNote(id, vars.title, vars.type, vars.content, vars.tags || []) };
+    },
+  });
+  return calls;
+}
+
+const readButton = (page, n) => page.getByRole('button', { name: n > 1 ? `Read ${n} pages` : 'Read the page' });
+
+async function waitEnabled(locator, timeout = 30000) {
+  const deadline = Date.now() + timeout;
+  while (Date.now() < deadline) {
+    if ((await locator.count()) && (await locator.isEnabled())) return;
+    await new Promise((r) => setTimeout(r, 150));
+  }
+  throw new Error('timed out waiting for an enabled button');
+}
+
+async function openPhotoTray(page, h) {
+  await bootstrapChef(page);
+  const calls = await stubPhotoGateway(page);
+  await page.goto(h.base + '/notes/photo', { waitUntil: 'networkidle' });
+  await h.settle(800);
+  await page.locator('input[data-photo-input="files"]').setInputFiles(PHOTO_FILES);
+  await waitEnabled(readButton(page, 2));
+  const dims = await page.getByText(/^\d+×\d+ · \d+ KB$/).allTextContents();
+  if (dims.length !== 2) throw new Error(`expected two prepared pages, saw ${dims.length}`);
+  const [w2, h2] = dims[1].split(' ')[0].split('×').map(Number);
+  // EXIF honoured: page 2 is stored 1600×1200 with orientation 6; upright it
+  // is portrait. Landscape here means the flag was ignored.
+  if (!(w2 < h2)) throw new Error(`page 2 prepared as ${w2}×${h2}: the EXIF orientation was not applied`);
+  console.log(`  [photo tray] ${h.viewport}: ${dims.join(' | ')}`);
+  return calls;
+}
+
+async function reviewPhotos(page, h) {
+  const calls = await openPhotoTray(page, h);
+  await readButton(page, 2).click();
+  const box = page.getByRole('textbox', { name: 'Transcript' });
+  await box.waitFor({ timeout: 20000 });
+  if (calls.transcribe.length !== 2) throw new Error(`expected two transcribeSketch calls, saw ${calls.transcribe.length}`);
+  for (const [i, v] of calls.transcribe.entries()) {
+    if (v.source !== 'photo') throw new Error(`page ${i + 1} sent source ${v.source}`);
+    if (v.mediaType !== 'image/jpeg' || !/^\/9j\//.test(v.image)) throw new Error(`page ${i + 1} is not bare base64 JPEG`);
+    if (v.image.length > 8 * 1024 * 1024) throw new Error(`page ${i + 1} is over the gateway ceiling`);
+  }
+  console.log(`  [photo pages] ${h.viewport}: ${calls.transcribe.map((v) => `${b64Bytes(v.image)} bytes JPEG`).join(', ')}`);
+  const expected = `--- page 1 ---\n${PHOTO_READINGS[0]}\n\n--- page 2 ---\n${PHOTO_READINGS[1]}`;
+  if ((await box.inputValue()) !== expected) throw new Error('the transcript is not both pages, in order, with markers');
+  const strip = page.getByRole('group', { name: 'The pages that were read' });
+  if ((await strip.getByRole('img').count()) !== 2) throw new Error('the review does not show both pages');
+  await h.settle(600);
+  return { calls, box };
+}
+
+async function savePhotos(page, h) {
+  const { calls } = await reviewPhotos(page, h);
+  await page.getByRole('button', { name: 'Keep as plain text' }).click();
+  await page.waitForURL(/\/notes\/md1$/, { timeout: 20000 });
+  const [photo, md] = calls.create;
+  if (calls.create.length !== 2 || photo?.type !== 'handwritten' || md?.type !== 'markdown') {
+    throw new Error(`expected a photo sketch note then a markdown note, saw ${calls.create.map((c) => c.type).join(', ')}`);
+  }
+  if (!md.content.startsWith(`From photos: [${photo.title}](/notes/photo1)`)) throw new Error('the markdown note does not link back to the photo note');
+  const content = JSON.parse(photo.content);
+  const images = Object.values(content.store).filter((r) => r.typeName === 'shape' && r.type === 'image');
+  if (images.length !== 2) throw new Error(`the photo note has ${images.length} image shapes`);
+  console.log(`  [photo snapshot] ${h.viewport}: 2 pages -> ${photo.content.length} chars`);
+  return { photo, md };
+}
 
 export const scenes = [
   // Home (QuickCaptureHome) — bottom nav visible with mono labels + ink-stamp.
@@ -397,6 +510,153 @@ export const scenes = [
     },
     teardown: (page, h) => h.esc(400),
   },
+  {
+    // The way in: "Photo of a page" in the new-note picker, and the Photo
+    // chip on Home, which opens the (empty) page tray.
+    name: '13a-photo-entry',
+    async setup(page, h) {
+      await bootstrapChef(page);
+      await graphqlRoute(page, OPS);
+      await page.goto(h.base + '/notes/new', { waitUntil: 'networkidle' });
+      await h.settle(600);
+      if (!(await page.getByRole('button', { name: /photo of a page/i }).count())) throw new Error('the new-note picker has no "Photo of a page"');
+      await page.goto(h.base + '/', { waitUntil: 'networkidle' });
+      await h.settle(800);
+      await page.getByRole('button', { name: 'New note from a photo of a page' }).click();
+      await page.waitForURL(/\/notes\/photo$/);
+      await h.settle(600);
+    },
+  },
+  {
+    // The page tray: two photos, each upright (page 2 via its EXIF flag),
+    // with rotate / move / remove, the count and the size meter.
+    name: '13b-photo-tray',
+    async setup(page, h) {
+      await openPhotoTray(page, h);
+      await h.settle(400);
+    },
+  },
+  {
+    // The review step with two pages: the strip beside one transcript, with
+    // page markers. Two calls, source photo, in page order.
+    name: '13c-photo-review',
+    async setup(page, h) {
+      await reviewPhotos(page, h);
+    },
+    teardown: (page, h) => h.esc(400),
+  },
+  {
+    // The photo sketch note the page created, opened: tldraw must load the
+    // snapshot the page built (no error screen, ours or tldraw's) and draw
+    // both pages as images. Phone only: on desktop tldraw's style panel
+    // brings the unlabelled-slider waiver with it, and the load is the same.
+    name: '13d-photo-note',
+    viewports: ['phone'],
+    async setup(page, h) {
+      const { photo } = await savePhotos(page, h);
+      await graphqlRoute(page, { ...OPS, GetNoteById: { note: photoNote('photo1', photo.title, 'handwritten', photo.content, photo.tags) } });
+      await page.goto(h.base + '/notes/photo1', { waitUntil: 'networkidle' });
+      await h.settle(1800);
+      if (await page.getByText(/something went wrong|failed to load/i).count()) throw new Error('the photo note rendered our error boundary');
+      if (await page.locator('.tl-error-boundary').count()) throw new Error('tldraw rendered its own error screen for the photo note');
+      if (await page.locator('.tl-shape-error-boundary').count()) throw new Error('tldraw could not render a photo page (shape error fallback)');
+      const drawn = await page.locator('.tl-shape:not(.tl-shape-background)[data-shape-type="image"]').count();
+      if (drawn !== 2) throw new Error(`tldraw drew ${drawn} image shapes, expected 2`);
+      const loaded = await page.evaluate(() => [...document.querySelectorAll('.tl-shape:not(.tl-shape-background)[data-shape-type="image"] img')].filter((i) => i.complete && i.naturalWidth > 0).length);
+      console.log(`  [photo note] ${h.viewport}: ${drawn} image shapes, ${loaded} decoded`);
+    },
+  },
+  {
+    // The Markdown note it made: first line links back to the photos.
+    name: '13e-photo-markdown',
+    async setup(page, h) {
+      const { md } = await savePhotos(page, h);
+      await graphqlRoute(page, { ...OPS, GetNoteById: { note: photoNote('md1', md.title, 'markdown', md.content, md.tags) } });
+      await page.goto(h.base + '/notes/md1', { waitUntil: 'networkidle' });
+      await h.settle(1200);
+      if (!(await page.getByRole('link', { name: /^Photos · / }).count())) throw new Error('the markdown note has no link back to the photos');
+    },
+  },
+  {
+    // What real-sized photos weigh: eight 4000×3000 camera-like JPEGs (made
+    // in the page: lit paper, ruled lines, ink, sensor noise) through the
+    // page's own preparation. Prints bytes per prepared page and the
+    // snapshot estimate; if eight fit, reads and saves them and prints the
+    // exact snapshot. Synthetic, so the numbers are a guide, not a promise.
+    name: '13f-photo-size',
+    viewports: ['phone'],
+    async setup(page, h) {
+      await bootstrapChef(page);
+      const calls = await stubPhotoGateway(page);
+      await page.goto(h.base + '/notes/photo', { waitUntil: 'networkidle' });
+      await h.settle(600);
+      await page.evaluate(async () => {
+        const make = async (seed) => {
+          let x = seed;
+          const rand = () => ((x = (x * 1103515245 + 12345) >>> 0) / 4294967296);
+          const c = document.createElement('canvas');
+          c.width = 4000; c.height = 3000;
+          const ctx = c.getContext('2d');
+          const g = ctx.createRadialGradient(1900, 1400, 300, 2000, 1500, 2700);
+          g.addColorStop(0, '#f6f1e6'); g.addColorStop(1, '#b9b09f');
+          ctx.fillStyle = g; ctx.fillRect(0, 0, 4000, 3000);
+          ctx.strokeStyle = '#9db8d9'; ctx.lineWidth = 4;
+          for (let y = 330; y < 3000; y += 92) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(4000, y + 18); ctx.stroke(); }
+          ctx.strokeStyle = '#1d2b5c'; ctx.lineWidth = 7; ctx.lineCap = 'round';
+          for (let line = 0; line < 24; line += 1) {
+            let px = 420; const py = 310 + line * 92;
+            ctx.beginPath(); ctx.moveTo(px, py);
+            while (px < 3500) {
+              const nx = px + 30 + rand() * 60;
+              ctx.bezierCurveTo(px + 10, py - 60 * rand(), nx - 10, py + 20 * rand(), nx, py - 10 + 20 * rand());
+              px = nx;
+              if (rand() < 0.12) { px += 40; ctx.moveTo(px, py); }
+            }
+            ctx.stroke();
+          }
+          const img = ctx.getImageData(0, 0, 4000, 3000);
+          const d = img.data;
+          for (let i = 0; i < d.length; i += 4) {
+            const n = (rand() + rand() - 1) * 10;
+            d[i] += n; d[i + 1] += n; d[i + 2] += n;
+          }
+          ctx.putImageData(img, 0, 0);
+          return new Promise((r) => c.toBlob(r, 'image/jpeg', 0.92));
+        };
+        const a = await make(7);
+        const b = await make(11);
+        window.__photoSourceBytes = [a.size, b.size];
+        const dt = new DataTransfer();
+        for (let i = 0; i < 8; i += 1) dt.items.add(new File([i % 2 ? b : a], `camera-${i + 1}.jpg`, { type: 'image/jpeg' }));
+        const input = document.querySelector('input[data-photo-input="files"]');
+        input.files = dt.files;
+        input.dispatchEvent(new Event('change', { bubbles: true }));
+      });
+      const deadline = Date.now() + 90000;
+      while ((await page.getByText(/^\d+×\d+ · /).count()) < 8) {
+        if (Date.now() > deadline) throw new Error('the eight pages were not prepared in time');
+        await h.settle(300);
+      }
+      const sources = await page.evaluate(() => window.__photoSourceBytes);
+      const dims = await page.getByText(/^\d+×\d+ · /).allTextContents();
+      const meter = await page.getByText(/^8 of 8 pages · /).textContent();
+      console.log(`  [photo size] camera JPEGs ${sources.join(' / ')} bytes -> prepared ${[...new Set(dims)].join(' / ')}; ${meter}`);
+      const read = readButton(page, 8);
+      if (await read.isEnabled()) {
+        await read.click();
+        await page.getByRole('textbox', { name: 'Transcript' }).waitFor({ timeout: 60000 });
+        const bytes = calls.transcribe.map((v) => b64Bytes(v.image));
+        console.log(`  [photo size] 8 pages sent: ${bytes.join(', ')} bytes`);
+        await page.getByRole('button', { name: 'Keep as plain text' }).click();
+        await page.waitForURL(/\/notes\/md1$/, { timeout: 30000 });
+        console.log(`  [photo size] 8-page snapshot: ${calls.create[0].content.length} chars`);
+      } else {
+        const why = await page.getByText(/too big for one note/).textContent();
+        console.log(`  [photo size] 8 pages refused before anything was read or created: ${why}`);
+        if (calls.transcribe.length || calls.create.length) throw new Error('the size guard let a call through');
+      }
+    },
+  },
 ];
 
 // Known, ticketed violations. Each one should die when the app is fixed —
@@ -412,5 +672,18 @@ export const waivers = [
     match: 'tlui-slider__thumb',
     scenes: ['03s-sketch-new', '10-editor-sketch'],
     reason: 'tldraw 2.4 style-panel slider thumb is unlabelled (third-party UI)',
+  },
+  {
+    // tldraw's image shape (a photo sketch note's pages, HANDWRITING.md §3)
+    // renders <img class="tl-image"> with no alt. 2.4.6 has no alt-text prop
+    // for images, and a replacement `image` shape util is refused
+    // ("defined more than once"), so the only fix from outside is patching
+    // tldraw's DOM — the same call as the slider above. Scoped to this rule,
+    // this element and the photo-note scene. Drop it on tldraw 3, whose image
+    // shape has `altText`.
+    rule: 'image-alt',
+    match: 'tl-image',
+    scenes: ['13d-photo-note'],
+    reason: 'tldraw 2.4 image shape <img> has no alt and no way to set one (third-party UI)',
   },
 ];

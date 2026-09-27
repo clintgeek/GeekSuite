@@ -19,7 +19,7 @@ import { formatRelativeTime } from '../utils/dateUtils';
 import { greetingNameFrom } from '../utils/userDisplay';
 import { previewText } from '../utils/previewText';
 import TypeStamp from '../components/notes/TypeStamp';
-import { NOTE_TYPE_META, NOTE_TYPE_ORDER } from '../components/notes/noteTypeMeta';
+import { NOTE_TYPE_META, NOTE_TYPE_ORDER, PHOTO_ENTRY } from '../components/notes/noteTypeMeta';
 import { CodePreview, NoteThumb } from '../components/notes/NotePreview';
 import { border, glow, stampInk, surfaces, layout, dotGridBackground } from '../theme/tokens';
 
@@ -298,6 +298,15 @@ function QuickCaptureHome() {
             onClick={() => navigate(`/notes/new?type=${encodeURIComponent(type)}`)}
           />
         ))}
+        {/* Photo of a page (HANDWRITING.md §3): makes a sketch note, so it
+            wears the sketch's ink with its own glyph. */}
+        <TypeStamp
+          type={PHOTO_ENTRY.key}
+          meta={PHOTO_ENTRY}
+          size="md"
+          aria-label="New note from a photo of a page"
+          onClick={() => navigate(PHOTO_ENTRY.path)}
+        />
       </Box>
 
       {/* ── Notes ────────────────────────────────────────────────────── */}

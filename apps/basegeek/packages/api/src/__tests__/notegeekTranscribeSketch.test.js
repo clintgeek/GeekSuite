@@ -19,6 +19,7 @@ import {
   TRANSCRIBE_NEED,
   TRANSCRIBE_DAILY_CAP,
   TRANSCRIBE_PROMPT,
+  TRANSCRIBE_PHOTO_PROMPT,
 } from '../graphql/notegeek/transcribe.js';
 import {
   transcribeSketchArgsSchema,
@@ -62,7 +63,7 @@ beforeEach(() => { _resetCounters(); _resetNeedCache(); });
 
 describe('transcribeSketch input validation', () => {
   test('accepts a PNG and a JPEG', () => {
-    expect(validate({ image: PNG, mediaType: 'image/png' })).toEqual({ image: PNG, mediaType: 'image/png' });
+    expect(validate({ image: PNG, mediaType: 'image/png' })).toEqual({ image: PNG, mediaType: 'image/png', source: 'sketch' });
     expect(validate({ image: JPEG, mediaType: 'image/jpeg' }).mediaType).toBe('image/jpeg');
   });
 
@@ -196,5 +197,101 @@ describe('transcribeSketch failures are errors, never an empty transcript', () =
     const ai = fakeAI(async () => '```\n- [ ] call roofer\n-> quote by Fri\n```');
     const { text } = await transcribeSketch({ image: PNG, mediaType: 'image/png', userId: 'u1', ai });
     expect(text).toBe('- [ ] call roofer\n-> quote by Fri');
+  });
+});
+
+// ── HANDWRITING.md §3: a photographed notebook page ─────────────────────────
+
+describe('transcribeSketch source', () => {
+  test('is optional and means a sketch when absent or null', () => {
+    expect(validate({ image: PNG, mediaType: 'image/png' }).source).toBe('sketch');
+    expect(validate({ image: PNG, mediaType: 'image/png', source: null }).source).toBe('sketch');
+    expect(validate({ image: JPEG, mediaType: 'image/jpeg', source: 'photo' }).source).toBe('photo');
+    expect(validate({ image: PNG, mediaType: 'image/png', source: 'sketch' }).source).toBe('sketch');
+  });
+
+  test('anything else is refused, by name', () => {
+    expectBadInput(() => validate({ image: JPEG, mediaType: 'image/jpeg', source: 'scan' }), /source must be sketch or photo/);
+    expectBadInput(() => validate({ image: JPEG, mediaType: 'image/jpeg', source: 'PHOTO' }), /source/);
+    expectBadInput(() => validate({ image: JPEG, mediaType: 'image/jpeg', source: '' }), /source/);
+  });
+
+  test('a bad source is refused before the AI runner or the cap', async () => {
+    const context = { user: { id: 'u-src' } };
+    const err = await rejection(
+      resolvers.Mutation.transcribeSketch(null, { image: JPEG, mediaType: 'image/jpeg', source: 'scan' }, context)
+    );
+    expect(err.extensions.code).toBe('BAD_USER_INPUT');
+    expect(callsToday({ app: 'notegeek', feature: 'transcribe', userId: 'u-src' })).toBe(0);
+  });
+
+  test('a photo is read with the photo prompt; a sketch (or no source) with the sketch prompt', async () => {
+    const ai = fakeAI(async () => 'text');
+    await transcribeSketch({ image: JPEG, mediaType: 'image/jpeg', source: 'photo', userId: 'u1', ai });
+    await transcribeSketch({ image: PNG, mediaType: 'image/png', source: 'sketch', userId: 'u1', ai });
+    await transcribeSketch({ image: PNG, mediaType: 'image/png', userId: 'u1', ai });
+    const systems = ai.callAI.mock.calls.map(([, opts]) => opts.messages[0]);
+    expect(systems[0]).toEqual({ role: 'system', content: TRANSCRIBE_PHOTO_PROMPT });
+    expect(systems[1]).toEqual({ role: 'system', content: TRANSCRIBE_PROMPT });
+    expect(systems[2]).toEqual({ role: 'system', content: TRANSCRIBE_PROMPT });
+  });
+
+  test('a photo counts against the same cap of 40, and asks the same need', async () => {
+    const resolveNeedCandidates = jest.fn(async () => [{ provider: 'openrouter', modelId: 'openai/gpt-4.1-mini' }]);
+    const ai = fakeAI(async () => 'a line', { resolveNeedCandidates });
+    for (let i = 0; i < 20; i += 1) {
+      await transcribeSketch({ image: JPEG, mediaType: 'image/jpeg', source: 'photo', userId: 'u-mix', ai });
+      await transcribeSketch({ image: PNG, mediaType: 'image/png', source: 'sketch', userId: 'u-mix', ai });
+    }
+    expect(resolveNeedCandidates).toHaveBeenCalledWith('vision+prose:balanced');
+    const err = await rejection(transcribeSketch({ image: JPEG, mediaType: 'image/jpeg', source: 'photo', userId: 'u-mix', ai }));
+    expect(err.extensions.code).toBe('AI_CAP');
+    expect(ai.callAI).toHaveBeenCalledTimes(40);
+  });
+});
+
+describe('the photo prompt', () => {
+  test('keeps every rule of the sketch prompt, word for word', () => {
+    const sketchRules = TRANSCRIBE_PROMPT.slice(TRANSCRIBE_PROMPT.indexOf('Rules:\n'));
+    expect(sketchRules.length).toBeGreaterThan(500);
+    expect(TRANSCRIBE_PHOTO_PROMPT).toContain(sketchRules);
+    expect(TRANSCRIBE_PHOTO_PROMPT).toMatch(/NEVER INVENT, SUMMARISE OR TIDY/);
+    expect(TRANSCRIBE_PHOTO_PROMPT).toMatch(/"\[no writing\]"/);
+  });
+
+  test('says it is a photographed paper notebook page', () => {
+    expect(TRANSCRIBE_PHOTO_PROMPT).toMatch(/photograph of a page from a paper notebook/);
+    expect(TRANSCRIBE_PROMPT).not.toMatch(/photograph/);
+  });
+
+  test('transcribes handwritten ink only', () => {
+    expect(TRANSCRIBE_PHOTO_PROMPT).toMatch(/HANDWRITTEN INK ONLY/);
+    expect(TRANSCRIBE_PHOTO_PROMPT).toMatch(/only what the writer wrote by hand/);
+  });
+
+  test('ignores ruled lines, margins, edges, holes, shadows and the background', () => {
+    expect(TRANSCRIBE_PHOTO_PROMPT).toMatch(/Ignore ruled lines/);
+    expect(TRANSCRIBE_PHOTO_PROMPT).toMatch(/margin lines/);
+    expect(TRANSCRIBE_PHOTO_PROMPT).toMatch(/page edges/);
+    expect(TRANSCRIBE_PHOTO_PROMPT).toMatch(/punched holes/);
+    expect(TRANSCRIBE_PHOTO_PROMPT).toMatch(/shadows/);
+    expect(TRANSCRIBE_PHOTO_PROMPT).toMatch(/the desk and anything else in the background/);
+    expect(TRANSCRIBE_PHOTO_PROMPT).toMatch(/a ruled line is never an underline/);
+  });
+
+  test('ignores anything printed on the notebook: headers, dates, logos', () => {
+    expect(TRANSCRIBE_PHOTO_PROMPT).toMatch(/IGNORE PRINTED TEXT/);
+    expect(TRANSCRIBE_PHOTO_PROMPT).toMatch(/printed on the notebook itself/);
+    expect(TRANSCRIBE_PHOTO_PROMPT).toMatch(/page headers, printed dates/);
+    expect(TRANSCRIBE_PHOTO_PROMPT).toMatch(/brand names and logos/);
+  });
+
+  test('copes with slight skew', () => {
+    expect(TRANSCRIBE_PHOTO_PROMPT).toMatch(/COPE WITH SKEW/);
+    expect(TRANSCRIBE_PHOTO_PROMPT).toMatch(/slight angle/);
+  });
+
+  test('the sketch prompt has none of the photo rules', () => {
+    expect(TRANSCRIBE_PROMPT).not.toMatch(/ruled lines|IGNORE PRINTED TEXT|COPE WITH SKEW/);
   });
 });

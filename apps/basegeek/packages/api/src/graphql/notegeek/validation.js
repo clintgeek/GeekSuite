@@ -241,6 +241,14 @@ export const suggestForNoteArgsSchema = z
 export const TRANSCRIBE_MEDIA_TYPES = ['image/png', 'image/jpeg'];
 
 /**
+ * Where the page came from (HANDWRITING.md §3). `sketch` is a stylus page
+ * exported from tldraw; `photo` is a camera shot of a paper notebook, which
+ * gets extra rules (ignore ruled lines and anything printed). Optional, and
+ * `sketch` when absent, so last night's clients keep working unchanged.
+ */
+export const TRANSCRIBE_SOURCES = ['sketch', 'photo'];
+
+/**
  * About 8 MB of base64, which is a 6 MB image. The NoteGeek client refuses
  * anything bigger before sending it (`utils/sketchExport.js`); this is the
  * backstop for any other caller, checked before a model is asked.
@@ -275,6 +283,12 @@ export const transcribeSketchArgsSchema = z
       .max(TRANSCRIBE_MAX_BASE64_CHARS, 'That page is too large to read (over about 6 MB as an image).')
       .refine((s) => !s.startsWith('data:'), 'Send the image as bare base64, without a data: prefix.')
       .refine((s) => s.startsWith('data:') || BASE64.test(s), 'The image is not valid base64.'),
+    source: z
+      .enum(TRANSCRIBE_SOURCES, {
+        errorMap: () => ({ message: `source must be ${TRANSCRIBE_SOURCES.join(' or ')}.` }),
+      })
+      .nullish()
+      .transform((v) => v ?? 'sketch'),
   })
   .strict()
   .superRefine((args, ctx) => {

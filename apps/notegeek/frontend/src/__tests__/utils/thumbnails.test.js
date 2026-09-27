@@ -29,6 +29,15 @@ describe('sketchGeometry', () => {
     expect(g.viewBox.split(' ')).toHaveLength(4);
   });
 
+  it('draws a photo sketch note\'s pages (image shapes) as their outlines', () => {
+    const content = JSON.stringify({ store: {
+      'shape:p1': { typeName: 'shape', type: 'image', x: 0, y: 0, props: { w: 1000, h: 1333 } },
+      'shape:p2': { typeName: 'shape', type: 'image', x: 0, y: 1381, props: { w: 1000, h: 1333 } },
+    } });
+    const g = sketchGeometry(content, 'photos');
+    expect(g.boxes).toEqual([{ x: 0, y: 0, w: 1000, h: 1333 }, { x: 0, y: 1381, w: 1000, h: 1333 }]);
+  });
+
   it('thins a dense stroke to a fixed budget', () => {
     const pts = Array.from({ length: 5000 }, (_, i) => [i, Math.sin(i)]);
     const content = JSON.stringify({ store: { 'shape:a': drawShape('shape:a', 0, 0, pts) } });

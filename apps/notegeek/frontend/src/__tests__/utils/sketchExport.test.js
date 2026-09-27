@@ -103,6 +103,15 @@ describe('the derived note', () => {
     expect(body).toContain('# Doc\n\ntext');
   });
 
+  it('photographed pages (§3) say "From photos", and link back the same way', () => {
+    expect(backLinkLine({ sketchId: 'p1', sketchTitle: 'Photos · 27 Sep 2026', source: 'photo' }))
+      .toBe('From photos: [Photos · 27 Sep 2026](/notes/p1)');
+    expect(derivedNoteTitle({ sketchTitle: 'Kitchen', body: 'no heading', composed: false, source: 'photo' })).toBe('From photos: Kitchen');
+    expect(derivedNoteTitle({ sketchTitle: 'Kitchen', body: '# Plan', composed: true, source: 'photo' })).toBe('Plan');
+    const body = derivedNoteContent({ sketchId: 'p1', sketchTitle: 'Kitchen', body: 'a\nb', composed: false, source: 'photo' });
+    expect(body).toBe('From photos: [Kitchen](/notes/p1)\n\na  \nb\n');
+  });
+
   it('keeps a plain transcript\'s line breaks in Markdown, and changes nothing else', () => {
     const text = 'milk\neggs\n\n-> call roofer\n[ ] quote by Fri';
     expect(plainTextAsMarkdown(text)).toBe('milk  \neggs\n\n-> call roofer  \n[ ] quote by Fri');

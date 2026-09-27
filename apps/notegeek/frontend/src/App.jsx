@@ -15,6 +15,7 @@ import Register from './components/Register';
 // Import main app components
 import NoteList from './components/NoteList';
 import NoteEditorPage from './pages/NoteEditorPage';
+import PhotoPagesPage from './pages/PhotoPagesPage';
 import NotePage from './pages/NotePage';
 import SearchResults from './components/SearchResults';
 import TagNotesList from './components/TagNotesList';
@@ -114,6 +115,9 @@ function App() {
                         {isAuthenticated && (
                             <>
                                 <Route path="/notes/new" element={<Layout><NewNoteWrapper /></Layout>} />
+                                {/* Photo of a page (DOCS/HANDWRITING.md §3). A static segment, so it
+                                    outranks /notes/:id. */}
+                                <Route path="/notes/photo" element={<Layout><PhotoPagesPage /></Layout>} />
                                 <Route path="/notes/undefined" element={<Navigate to="/" replace />} />
                                 <Route path="/notes/undefined/edit" element={<Navigate to="/" replace />} />
                                 <Route path="/notes" element={<Layout><NoteList /></Layout>} />

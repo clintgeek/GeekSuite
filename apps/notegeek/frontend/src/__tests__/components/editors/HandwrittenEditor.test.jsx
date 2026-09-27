@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, act, within } from '@testing-library/react';
+import { render, screen, act, within, waitFor } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { MantineProvider } from '@mantine/core';
 import ThemeModeProvider from '../../../theme/ThemeModeProvider';
@@ -107,8 +107,20 @@ vi.mock('@tldraw/tldraw', async () => {
                     return off;
                 }),
                 getSnapshot: vi.fn(() => ({ store: {}, schema: {} })),
-                loadSnapshot: vi.fn(),
+                // Like tldraw: loading a snapshot puts its shape records on
+                // the page (sorted by index), where the camera can find them.
+                loadSnapshot: vi.fn((snap) => {
+                    editor.pageShapes = Object.values(snap?.store || {})
+                        .filter((r) => r?.typeName === 'shape')
+                        .sort((a, b) => String(a.index).localeCompare(String(b.index)));
+                }),
             },
+            pageShapes: [],
+            isDisposed: false,
+            getCurrentPageShapesSorted: vi.fn(() => editor.pageShapes),
+            getShapePageBounds: vi.fn((shape) => ({ x: shape.x, y: shape.y, w: shape.props?.w ?? 1, h: shape.props?.h ?? 1 })),
+            // The camera: session state, not the document.
+            zoomToBounds: vi.fn(() => editor),
         };
         return editor;
     };
@@ -507,6 +519,51 @@ describe('HandwrittenEditor', () => {
             const { api } = await mountWithApi();
             await expect(api.current.exportPng()).rejects.toMatchObject({ code: 'empty' });
             expect(tl.exportToBlob).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('a photo sketch note opens on its first page (HANDWRITING.md §3)', () => {
+        const shape = (id, type, index, y, extra = {}) => ({ id, typeName: 'shape', type, index, x: 0, y, props: { w: 1000, h: 1333 }, ...extra });
+        const snap = (...shapes) => JSON.stringify({ store: Object.fromEntries(shapes.map((r) => [r.id, r])), schema: {} });
+
+        // jsdom does no layout; the fit waits for a measured container.
+        let rect;
+        beforeEach(() => {
+            rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({
+                left: 0, top: 0, right: 390, bottom: 700, width: 390, height: 700, x: 0, y: 0, toJSON: () => ({}),
+            });
+        });
+        afterEach(() => rect.mockRestore());
+
+        it('zooms to the first image shape by index, no further in than 100%, camera only', async () => {
+            render(
+                <HandwrittenEditor
+                    content={snap(shape('shape:b', 'image', 'a2', 1381), shape('shape:a', 'image', 'a1', 0), shape('shape:c', 'draw', 'a3', 10, { props: {} }))}
+                    setContent={setContent}
+                />,
+                { wrapper: AllProviders }
+            );
+            const editor = tl.editors.at(-1);
+            await waitFor(() => expect(editor.zoomToBounds).toHaveBeenCalledTimes(1));
+            expect(editor.zoomToBounds).toHaveBeenCalledWith({ x: 0, y: 0, w: 1000, h: 1333 }, { targetZoom: 1, inset: 32 });
+            // Only once the viewport has its real size: before that tldraw
+            // assumes 1080×720, and a fit then lands at 100%, off to one side.
+            expect(editor.updateViewportScreenBounds).toHaveBeenCalled();
+            expect(editor.updateViewportScreenBounds.mock.invocationCallOrder[0])
+                .toBeLessThan(editor.zoomToBounds.mock.invocationCallOrder[0]);
+            // Once: later resizes leave the writer's camera alone.
+            await new Promise((r) => setTimeout(r, 260));
+            expect(editor.zoomToBounds).toHaveBeenCalledTimes(1);
+            // Nothing was written: the camera is not the document.
+            expect(setContent).not.toHaveBeenCalled();
+        });
+
+        it('leaves an ordinary sketch (no images) where it always opened', async () => {
+            render(<HandwrittenEditor content={snap(shape('shape:a', 'draw', 'a1', 0, { props: {} }))} setContent={setContent} />, { wrapper: AllProviders });
+            const editor = tl.editors.at(-1);
+            await waitFor(() => expect(editor.store.loadSnapshot).toHaveBeenCalled());
+            await waitFor(() => expect(editor.updateViewportScreenBounds).toHaveBeenCalledTimes(2));
+            expect(editor.zoomToBounds).not.toHaveBeenCalled();
         });
     });
 

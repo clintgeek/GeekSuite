@@ -356,8 +356,8 @@ export const resolvers = {
     transcribeSketch: async (_, rawArgs, context) => {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
-      const { image, mediaType } = validateTranscribeSketch(rawArgs);
-      return await transcribeSketch({ image, mediaType, userId });
+      const { image, mediaType, source } = validateTranscribeSketch(rawArgs);
+      return await transcribeSketch({ image, mediaType, source, userId });
     },
 
     renameTag: async (_, rawArgs, context) => {

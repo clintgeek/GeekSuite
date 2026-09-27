@@ -274,6 +274,30 @@ function MobileDrawingToolbar({ containerRef, onFullscreenChange, fine, onFineCh
 }
 
 /**
+ * A photo sketch note (DOCS/HANDWRITING.md §3) opens with its first page in
+ * view, instead of the camera's default of 100% at the page's top-left
+ * corner (a third of a photo on a phone). Camera only: the camera is session
+ * state, never in the saved document, so this cannot mark the sketch dirty.
+ * Ordinary sketches (no image shapes) are left exactly as before.
+ *
+ * It must run AFTER the viewport has its real size: until our first
+ * `updateViewportScreenBounds`, tldraw assumes a 1080×720 viewport, and a
+ * fit computed then lands at 100% and off to one side once the real bounds
+ * arrive (seen in the harness). So loading only marks the fit as pending, and
+ * the bounds update performs it, once.
+ */
+const firstPhotoShape = (editor) => (editor.getCurrentPageShapesSorted?.() || []).find((s) => s.type === 'image');
+
+function fitFirstPhotoPage(editor) {
+    if (!editor || editor.isDisposed) return false;
+    const shape = firstPhotoShape(editor);
+    const bounds = shape && editor.getShapePageBounds?.(shape);
+    if (!bounds) return false;
+    editor.zoomToBounds?.(bounds, { targetZoom: 1, inset: 32 });
+    return true;
+}
+
+/**
  * `sketchApiRef` (optional): filled with `{ exportPng, hasShapes }` once the
  * editor mounts, so the page can export this sketch for "Convert handwriting
  * to text" without importing tldraw itself (this file is lazy-loaded; the
@@ -296,6 +320,7 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
         setPenFineState(value);
     }, []);
     const fineHandlerOffRef = useRef(null);
+    const photoFitPendingRef = useRef(false);
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
@@ -356,6 +381,8 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
 
         if (content) {
             loadSnapshot(content, editor);
+            // Done by the bounds update below, once the viewport is measured.
+            photoFitPendingRef.current = Boolean(firstPhotoShape(editor));
         }
 
         // If onMount runs again, the previous editor's listener must go first,
@@ -400,6 +427,11 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
                 // This tells tldraw exactly where its container is on screen
                 // Critical for correct touch/mouse coordinate calculation
                 editorRef.current.updateViewportScreenBounds(screenBoundsOf(container));
+                // A photo sketch note's first-open fit, now that the viewport is real.
+                if (photoFitPendingRef.current && container.getBoundingClientRect().width > 1) {
+                    photoFitPendingRef.current = false;
+                    fitFirstPhotoPage(editorRef.current);
+                }
             }
         };
 

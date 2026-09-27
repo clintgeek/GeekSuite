@@ -80,7 +80,7 @@ function thin(points, budget) {
  * (`{ store: { 'shape:…': { typeName: 'shape', type, x, y, props } } }`).
  *
  * Draw / highlight / line shapes become polylines; geo shapes (rectangles,
- * ellipses…) become their bounding boxes; everything else is ignored. Points
+ * ellipses…) and images become their bounding boxes; everything else is ignored. Points
  * are shape-relative in tldraw, so the shape's x/y is added back. Rotation
  * is ignored — at 56px nobody can tell.
  *
@@ -135,7 +135,9 @@ export function sketchGeometry(content, key) {
           abs.forEach(([x, y]) => grow(x, y));
           strokes.push(thin(abs, MAX_POINTS_PER_STROKE));
         }
-      } else if ((rec.type === 'geo' || rec.type === 'frame' || rec.type === 'note') && Number.isFinite(props.w) && Number.isFinite(props.h)) {
+      } else if ((rec.type === 'geo' || rec.type === 'frame' || rec.type === 'note' || rec.type === 'image') && Number.isFinite(props.w) && Number.isFinite(props.h)) {
+        // `image`: a photo sketch note's pages (HANDWRITING.md §3) draw as
+        // their outlines, stacked, rather than leaving the row blank.
         boxes.push({ x: ox, y: oy, w: props.w, h: props.h });
         grow(ox, oy);
         grow(ox + props.w, oy + props.h);

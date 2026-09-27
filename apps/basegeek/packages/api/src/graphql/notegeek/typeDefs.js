@@ -149,8 +149,10 @@ export const typeDefs = gql`
     composeNote(content: String!): ComposedNote!
     """Read the handwriting in a sketch's exported page image. image is
     base64 with no data: prefix; mediaType is image/png or image/jpeg.
+    source is 'sketch' (the default) or 'photo' — a photographed notebook
+    page, read with rules for ruled lines and printed text.
     Changes nothing. Failures are errors, never an empty transcript."""
-    transcribeSketch(image: String!, mediaType: String!): SketchTranscript!
+    transcribeSketch(image: String!, mediaType: String!, source: String): SketchTranscript!
     deleteNote(id: ID!): Boolean!
     renameTag(oldTag: String!, newTag: String!): Boolean!
     deleteTag(tag: String!): Boolean!

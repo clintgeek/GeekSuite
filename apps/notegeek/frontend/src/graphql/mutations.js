@@ -121,12 +121,13 @@ export const COMPOSE_NOTE = gql`
 
 /**
  * Read the handwriting in a sketch's exported page (DOCS/HANDWRITING.md §2).
- * `image` is bare base64 (no data: prefix). Changes nothing; a failure is a
+ * `image` is bare base64 (no data: prefix). `source` is optional: `photo` for
+ * a photographed notebook page (§3), else a sketch. Changes nothing; a failure is a
  * GraphQL error with `extensions.details`, never an empty `text`.
  */
 export const TRANSCRIBE_SKETCH = gql`
-    mutation TranscribeSketch($image: String!, $mediaType: String!) {
-        transcribeSketch(image: $image, mediaType: $mediaType) {
+    mutation TranscribeSketch($image: String!, $mediaType: String!, $source: String) {
+        transcribeSketch(image: $image, mediaType: $mediaType, source: $source) {
             text
             provenance {
                 source

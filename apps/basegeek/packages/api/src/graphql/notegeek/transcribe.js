@@ -57,16 +57,42 @@ export const TRANSCRIBE_TIMEOUT_MS = 45000;
 /** A dense handwritten page is ~400 words; this leaves room for two. */
 export const TRANSCRIBE_MAX_TOKENS = 2500;
 
-export const TRANSCRIBE_PROMPT = `You are transcribing a page of handwriting — a sketch-pad note written with a stylus. Your only job is to write down, as plain text, exactly what is written on the page.
-
-Rules:
-1. TRANSCRIBE FAITHFULLY. Write the words exactly as written, in the order they appear, with the writer's own spelling, abbreviations, numbers and punctuation.
+/**
+ * The rules every transcription follows, sketch or photo. Shared text, so the
+ * photo prompt cannot drift from the sketch prompt: it is these rules plus
+ * the photo ones, never a rewrite of them.
+ */
+const TRANSCRIBE_RULES = `1. TRANSCRIBE FAITHFULLY. Write the words exactly as written, in the order they appear, with the writer's own spelling, abbreviations, numbers and punctuation.
 2. NEVER INVENT, SUMMARISE OR TIDY. Do not add words, fix grammar, correct spelling, reorder, merge, expand abbreviations, add headings, or improve anything. That is someone else's job, later.
 3. KEEP THE LAYOUT. Keep line breaks where the writer broke lines, keep blank lines between separate blocks, and keep list structure and indentation.
 4. RENDER MARKS AS TEXT. Bullets as "- ", numbered items as written ("1."), arrows as "->" (or "<-", "<->"), an empty checkbox as "[ ]" and a ticked one as "[x]", underlining or boxes around words as the words alone.
 5. MARK WHAT YOU CANNOT READ. Write "[?]" for each word you cannot read with confidence. Never guess a word and present it as read.
 6. DRAWINGS GET ONE SHORT PHRASE. A drawing, diagram or doodle becomes "[drawing: ...]" with a few words saying what it is, and nothing more. Transcribe any words written inside or beside it.
 7. PLAIN TEXT ONLY. No Markdown formatting, no code fences, no commentary, no "Here is the transcription". If the page has no writing at all, reply with exactly "[no writing]".`;
+
+export const TRANSCRIBE_PROMPT = `You are transcribing a page of handwriting — a sketch-pad note written with a stylus. Your only job is to write down, as plain text, exactly what is written on the page.
+
+Rules:
+${TRANSCRIBE_RULES}`;
+
+/**
+ * A photographed paper notebook page (HANDWRITING.md §3). Everything the
+ * sketch prompt says, plus what a camera adds: the paper itself (ruled lines,
+ * margins, holes, edges), the desk and shadows around it, and the notebook's
+ * own printing, which is not the writer's and must not enter the transcript.
+ * Rule 7's "[no writing]" still applies — a blank ruled page is no writing.
+ */
+export const TRANSCRIBE_PHOTO_PROMPT = `You are transcribing a page of handwriting — a photograph of a page from a paper notebook, written in pen or pencil. Your only job is to write down, as plain text, exactly what the writer wrote on the page.
+
+Rules:
+${TRANSCRIBE_RULES}
+8. HANDWRITTEN INK ONLY. Transcribe only what the writer wrote by hand. The paper, the photograph and the notebook's own printing are not writing.
+9. IGNORE THE PAPER AND THE PHOTO. Ignore ruled lines, grid or dot lines, margin lines, page edges, punched holes, spiral binding, creases, shadows, glare, fingers, the desk and anything else in the background. None of them are text, and a ruled line is never an underline, a dash or a list marker.
+10. IGNORE PRINTED TEXT. Ignore anything printed on the notebook itself — page headers, printed dates or "Date: ____" fields, page numbers, brand names and logos. Transcribe what the writer wrote into such a field, not the printed label.
+11. COPE WITH SKEW. The page may be photographed at a slight angle or be slightly rotated or curved. Read along the writer's lines as they run on the page, not along the edges of the photo.`;
+
+/** The system prompt for a page, by where it came from. */
+export const transcribePromptFor = (source) => (source === 'photo' ? TRANSCRIBE_PHOTO_PROMPT : TRANSCRIBE_PROMPT);
 
 /** A GraphQLError in the shape the client's `saveErrorMessage` already reads. */
 function transcribeError(message, code, extra = {}) {
@@ -87,21 +113,27 @@ const stripOuterFence = (text) => {
  * @param {object} opts
  * @param {string} opts.image      base64, no data: prefix (validated)
  * @param {string} opts.mediaType  image/png or image/jpeg (validated)
+ * @param {'sketch'|'photo'} [opts.source]  which prompt reads it; 'sketch' by default
  * @param {string} opts.userId
  * @param {object} [opts.ai]       injectable aiService, for tests
  * @returns {Promise<{ text: string, provenance: object }>}
  */
-export async function transcribeSketch({ image, mediaType, userId, ai = undefined }) {
+export async function transcribeSketch({ image, mediaType, source = 'sketch', userId, ai = undefined }) {
   const result = await runAIFeature({
     app: 'notegeek',
     feature: 'transcribe',
     userId,
     messages: [
-      { role: 'system', content: TRANSCRIBE_PROMPT },
+      { role: 'system', content: transcribePromptFor(source) },
       {
         role: 'user',
         content: [
-          { type: 'text', text: 'Transcribe the handwriting on this page.' },
+          {
+            type: 'text',
+            text: source === 'photo'
+              ? 'Transcribe the handwriting on this photographed notebook page.'
+              : 'Transcribe the handwriting on this page.',
+          },
           { type: 'image', mediaType, data: image },
         ],
       },

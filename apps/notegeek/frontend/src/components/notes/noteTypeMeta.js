@@ -5,6 +5,7 @@ import TagIcon from '@mui/icons-material/Tag';
 import DataObjectIcon from '@mui/icons-material/DataObject';
 import AccountTreeIcon from '@mui/icons-material/AccountTreeOutlined';
 import GestureIcon from '@mui/icons-material/Gesture';
+import PhotoCameraOutlined from '@mui/icons-material/PhotoCameraOutlined';
 
 /**
  * The five note types — NoteGeek's signature. One table, so the home chips,
@@ -23,6 +24,21 @@ export const NOTE_TYPE_META = {
 };
 
 export const NOTE_TYPE_ORDER = ['text', 'markdown', 'code', 'mindmap', 'handwritten'];
+
+/**
+ * "Photo of a page" (DOCS/HANDWRITING.md §3) is not a sixth type: it makes a
+ * sketch note (plus a Markdown one). So it borrows the sketch's ink, keeps
+ * its own glyph, and lives beside the type chips rather than in the table.
+ */
+export const PHOTO_ENTRY = {
+  key: 'photo',
+  inkType: 'handwritten',
+  label: 'Photo',
+  long: 'Photo of a page',
+  Icon: PhotoCameraOutlined,
+  description: 'Photograph a notebook page and read it into text',
+  path: '/notes/photo',
+};
 
 export function noteTypeMeta(type) {
   return NOTE_TYPE_META[type] || NOTE_TYPE_META.text;

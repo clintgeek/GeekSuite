@@ -18,6 +18,8 @@ import { noteTypeInk, stampFill, tapTarget44 } from '../../theme/tokens';
  *   selected  filter state: solid ink border + stronger wash
  *   label     override the label text (e.g. "New text")
  *   iconOnly  glyph only, label kept for assistive tech
+ *   meta      an entry that is not a type (PHOTO_ENTRY): its label and glyph,
+ *             in the ink of `meta.inkType`
  */
 function TypeStamp({
   type,
@@ -26,12 +28,14 @@ function TypeStamp({
   selected,
   label,
   iconOnly = false,
+  meta: metaOverride = null,
   sx,
   ...rest
 }) {
   const theme = useTheme();
-  const meta = noteTypeMeta(type);
-  const ink = noteTypeInk(theme, type in NOTE_TYPE_META ? type : 'text');
+  const meta = metaOverride || noteTypeMeta(type);
+  const inkKey = metaOverride?.inkType || type;
+  const ink = noteTypeInk(theme, inkKey in NOTE_TYPE_META ? inkKey : 'text');
   const Icon = meta.Icon;
   const isMd = size === 'md';
   const text = label ?? meta.label;
