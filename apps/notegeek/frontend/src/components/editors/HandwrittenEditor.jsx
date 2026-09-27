@@ -1,6 +1,14 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { CircularProgress, Box, useTheme, useMediaQuery, IconButton, Tooltip } from '@mui/material';
-import { Tldraw, useEditor, useValue } from '@tldraw/tldraw';
+import { Box as TlBox, Tldraw, useEditor, useValue } from '@tldraw/tldraw';
+
+// tldraw 2.4's updateViewportScreenBounds takes a Box and calls .equals() on
+// it. Passed the container element, as this file used to, it threw on every
+// resize and scroll, so the viewport's bounds were never updated.
+const screenBoundsOf = (el) => {
+    const r = el.getBoundingClientRect();
+    return new TlBox(r.left, r.top, Math.max(1, r.width), Math.max(1, r.height));
+};
 import '@tldraw/tldraw/tldraw.css';
 import EditorErrorBoundary from './EditorErrorBoundary';
 import GestureOutlinedIcon from '@mui/icons-material/GestureOutlined';
@@ -64,6 +72,7 @@ function MobileDrawingToolbar({ containerRef, onFullscreenChange }) {
             {/* Move */}
             <Tooltip title="Move" placement="top">
                 <IconButton
+                    aria-label="Move"
                     size="small"
                     onClick={() => editor.setCurrentTool('hand')}
                     sx={{
@@ -81,6 +90,7 @@ function MobileDrawingToolbar({ containerRef, onFullscreenChange }) {
             {/* Write */}
             <Tooltip title="Write" placement="top">
                 <IconButton
+                    aria-label="Write"
                     size="small"
                     onClick={() => editor.setCurrentTool('draw')}
                     sx={{
@@ -99,6 +109,7 @@ function MobileDrawingToolbar({ containerRef, onFullscreenChange }) {
 
             {/* Undo */}
             <IconButton
+                aria-label="Undo"
                 size="small"
                 onClick={() => editor.undo()}
                 disabled={!canUndo}
@@ -112,6 +123,7 @@ function MobileDrawingToolbar({ containerRef, onFullscreenChange }) {
             {/* Fullscreen */}
             <Tooltip title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'} placement="top">
                 <IconButton
+                    aria-label={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
                     size="small"
                     onClick={toggleFullscreen}
                 >
@@ -165,7 +177,9 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false }) => {
 
         // Apply dark mode preference based on MUI theme mode
         const isDark = theme.palette.mode === 'dark';
-        editor.user.updateUserPreferences({ isDarkMode: isDark });
+        // tldraw 2.4 renamed isDarkMode to colorScheme, and its validator rejects
+        // the old key, so every theme sync used to throw.
+        editor.user.updateUserPreferences({ colorScheme: isDark ? 'dark' : 'light' });
 
         if (content) {
             loadSnapshot(content, editor);
@@ -196,7 +210,7 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false }) => {
             if (editorRef.current) {
                 // This tells tldraw exactly where its container is on screen
                 // Critical for correct touch/mouse coordinate calculation
-                editorRef.current.updateViewportScreenBounds(container);
+                editorRef.current.updateViewportScreenBounds(screenBoundsOf(container));
             }
         };
 
@@ -236,7 +250,7 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false }) => {
     useEffect(() => {
         if (editorRef.current) {
             const isDark = theme.palette.mode === 'dark';
-            editorRef.current.user.updateUserPreferences({ isDarkMode: isDark });
+            editorRef.current.user.updateUserPreferences({ colorScheme: isDark ? 'dark' : 'light' });
         }
     }, [theme.palette.mode, isLoading]);
 
@@ -310,8 +324,11 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false }) => {
                         // Improve touch responsiveness
                         maxPointsPerDrawShape: 200,
                     }}
-                />
-                {/* Custom mobile toolbar */}
+                >
+                {/* Custom mobile toolbar. It must render INSIDE <Tldraw>: it calls
+                    useEditor(), which only resolves within tldraw's context. As a
+                    sibling it threw on every phone and the error boundary took
+                    the whole sketch editor down. */}
                 {isMobile && !readOnly && !isLoading && (
                     <MobileDrawingToolbar
                         containerRef={containerRef}
@@ -319,12 +336,13 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false }) => {
                             // Update tldraw bounds after fullscreen change
                             setTimeout(() => {
                                 if (editorRef.current && containerRef.current) {
-                                    editorRef.current.updateViewportScreenBounds(containerRef.current);
+                                    editorRef.current.updateViewportScreenBounds(screenBoundsOf(containerRef.current));
                                 }
                             }, 100);
                         }}
                     />
                 )}
+                </Tldraw>
             </Box>
         </EditorErrorBoundary>
     );

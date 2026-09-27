@@ -31,6 +31,25 @@ export const scenes = [
     teardown: (page, h) => h.esc(400),
   },
   {
+    // A NEW sketch note on a phone (2026-09-26). The mobile drawing toolbar
+    // called useEditor() from outside <Tldraw>, and EditorErrorBoundary caught
+    // the throw, so this crashed for Chef without any uncaught page error. It
+    // has to be asserted on screen: no fallback, and the phone toolbar present.
+    name: '03s-sketch-new',
+    goto: '/notes/new?type=handwritten',
+    wait: 2500,
+    async setup(page, h) {
+      await h.settle(800);
+      if (await page.getByText(/editor failed to load/i).count()) {
+        throw new Error('sketch editor crashed: EditorErrorBoundary fallback is showing');
+      }
+      if (!(await page.locator('.tl-container').count())) throw new Error('tldraw canvas did not render');
+      if (h.viewport === 'phone' && !(await page.getByRole('button', { name: /^write$/i }).count())) {
+        throw new Error('phone drawing toolbar (Write) did not render');
+      }
+    },
+  },
+  {
     // Delete confirm — GeekDialog mode="window".
     name: '04-delete-dialog',
     goto: '/notes/n1/edit',
@@ -75,4 +94,16 @@ export const scenes = [
 
 // Known, ticketed violations. Each one should die when the app is fixed —
 // an empty list is the goal, not a permanent parking lot.
-export const waivers = [];
+export const waivers = [
+  {
+    // tldraw's own style panel (desktop): its opacity slider thumb has no
+    // accessible name. That's third-party markup inside <Tldraw>; labelling it
+    // from outside would mean patching tldraw's DOM after every render. Scoped
+    // to this rule, this element and the sketch scene only. Drop it when
+    // tldraw labels the thumb.
+    rule: 'aria-input-field-name',
+    match: 'tlui-slider__thumb',
+    scenes: ['03s-sketch-new'],
+    reason: 'tldraw 2.4 style-panel slider thumb is unlabelled (third-party UI)',
+  },
+];
