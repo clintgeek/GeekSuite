@@ -42,7 +42,10 @@ const AIInsightsCard = () => {
   const [error, setError] = useState(null);
   const [activeTab, setActiveTab] = useState('daily'); // 'daily', 'coaching', 'correlations', 'chat'
   const [insight, setInsight] = useState(null);
-  const [expanded, setExpanded] = useState(true);
+  // Collapsed by default, and NOTHING is fetched until it's opened (Chef,
+  // 2026-09-27: "hide the AI INSIGHTS and don't pull them unless you expand
+  // its container"). Every Home load used to spend an AI call here.
+  const [expanded, setExpanded] = useState(false);
 
   // Chat state
   const [chatMessage, setChatMessage] = useState('');
@@ -54,8 +57,8 @@ const AIInsightsCard = () => {
   const isMorning = hour >= 5 && hour < 12;
 
   useEffect(() => {
-    loadInsight(activeTab);
-  }, [activeTab]);
+    if (expanded) loadInsight(activeTab);
+  }, [activeTab, expanded]); // eslint-disable-line react-hooks/exhaustive-deps -- loadInsight is recreated each render
 
   const loadInsight = async (type) => {
     if (type === 'chat') return; // Chat doesn't auto-load
@@ -241,7 +244,7 @@ const AIInsightsCard = () => {
             <IconButton
               size="small"
               onClick={() => loadInsight(activeTab)}
-              disabled={loading || activeTab === 'chat'}
+              disabled={!expanded || loading || activeTab === 'chat'}
               aria-label={`Refresh ${tabs.find((t) => t.id === activeTab)?.label || 'insight'}`}
               sx={{ p: 0.5 }}
             >
@@ -276,7 +279,7 @@ const AIInsightsCard = () => {
                 key={tab.id}
                 icon={<Icon sx={{ fontSize: 14 }} />}
                 label={tab.label}
-                onClick={() => setActiveTab(tab.id)}
+                onClick={() => { setActiveTab(tab.id); setExpanded(true); }}
                 size="small"
                 sx={{
                   borderRadius: 1.5,
