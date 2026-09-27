@@ -445,3 +445,13 @@ tldraw stays out of the page's chunk):
 - Whether its HEIC setting decodes in Chrome on Android.
 - The real per-page size, which is the number that settles 8 pages (see Size).
 - Writing over a locked photo with the S Pen, and the eraser sparing it.
+
+### Two copies of each page (Chef, 2026-09-27: "I like solution 1")
+Full camera frames came to ~492 KB a page at 2000px, so 8 pages (~5.3 MB) overran the
+5 MB snapshot ceiling. Each page is now prepared twice (`preparePhotoPageSet`):
+- the **model reads** the 2000px / 0.85 copy;
+- the **note keeps** a 1600px / 0.8 copy (`PHOTO_KEEP_EDGE`, `PHOTO_KEEP_QUALITY`),
+  about 60% of the size.
+
+The tray's size meter and the ceiling check count the kept copy. The page tests go red if
+the page sizes or stores the full-size copy.

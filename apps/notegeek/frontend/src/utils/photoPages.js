@@ -28,6 +28,12 @@ export const PHOTO_MAX_PAGES = 8;
 export const PHOTO_MAX_EDGE = 2000;
 
 export const PHOTO_JPEG_QUALITY = 0.85;
+// The copy KEPT in the photo sketch note is smaller than the one the model
+// reads (Chef, 2026-09-27): full camera frames came to ~492 KB a page at 2000px,
+// so 8 pages (~5.3 MB) overran the 5 MB snapshot ceiling. At 1600px and 0.8 a
+// page is roughly 60% of that, and the model still reads the full 2000px copy.
+export const PHOTO_KEEP_EDGE = 1600;
+export const PHOTO_KEEP_QUALITY = 0.8;
 
 export const PHOTO_MEDIA_TYPE = 'image/jpeg';
 
@@ -105,6 +111,11 @@ export function acceptPages(current, adding, max = PHOTO_MAX_PAGES) {
 /** Characters of `data:image/jpeg;base64,…` for a blob of `bytes` bytes. */
 export function dataUrlChars(bytes, mediaType = PHOTO_MEDIA_TYPE) {
   return `data:${mediaType};base64,`.length + Math.ceil(Math.max(0, bytes) / 3) * 4;
+}
+
+/** The copy of a prepared page that goes into the note (the kept copy when there is one). */
+export function keptCopy(prepared) {
+  return prepared?.keep || prepared;
 }
 
 /** An upper estimate of the photo sketch note's snapshot, in characters. */
@@ -264,4 +275,14 @@ export async function preparePhotoPage(file, rotation = 0, {
     base64,
     dataUrl: `data:${PHOTO_MEDIA_TYPE};base64,${base64}`,
   };
+}
+
+/**
+ * Both copies of one page: the 2000px/0.85 copy the model reads, with the
+ * smaller 1600px/0.8 copy the note keeps attached as `keep`.
+ */
+export async function preparePhotoPageSet(file, rotation = 0, opts = {}) {
+  const read = await preparePhotoPage(file, rotation, opts);
+  const keep = await preparePhotoPage(file, rotation, { ...opts, maxEdge: PHOTO_KEEP_EDGE, quality: PHOTO_KEEP_QUALITY });
+  return { ...read, keep };
 }

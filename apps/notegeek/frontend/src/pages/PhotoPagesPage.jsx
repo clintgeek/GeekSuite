@@ -36,8 +36,9 @@ import {
   acceptPages,
   joinPageTranscripts,
   photoNoteTitle,
+  keptCopy,
   photoSizeCheck,
-  preparePhotoPage,
+  preparePhotoPageSet,
   rotateBy,
 } from '../utils/photoPages';
 import { dotGridBackground, layout, noteTypeInk, stampFill, surfaces } from '../theme/tokens';
@@ -189,7 +190,7 @@ function PageRow({ page, index, count, onRotate, onRemove, onMove, busy }) {
   );
 }
 
-export default function PhotoPagesPage({ prepare = preparePhotoPage, loadSnapshotBuilder = null }) {
+export default function PhotoPagesPage({ prepare = preparePhotoPageSet, loadSnapshotBuilder = null }) {
   const theme = useTheme();
   const navigate = useNavigate();
   const { notify } = useToast();
@@ -306,7 +307,8 @@ export default function PhotoPagesPage({ prepare = preparePhotoPage, loadSnapsho
   const ready = pages.filter((p) => p.status === 'ready');
   const preparing = pages.some((p) => p.status === 'preparing');
   const failed = pages.some((p) => p.status === 'error');
-  const size = photoSizeCheck(ready.map((p) => ({ bytes: p.prepared.bytes })));
+  // The note holds the KEPT copies; the model reads the full-size ones.
+  const size = photoSizeCheck(ready.map((p) => ({ bytes: keptCopy(p.prepared).bytes })));
   const signature = pages.map(readingKey).join('|');
   const canRead = pages.length > 0 && !preparing && !failed && size.ok && !transcribe;
   const photoTitle = photoNoteTitle(title);
@@ -380,7 +382,7 @@ export default function PhotoPagesPage({ prepare = preparePhotoPage, loadSnapsho
           ? await loadSnapshotBuilder()
           : await import('../utils/photoSketchSnapshot');
         const snapshot = buildPhotoSketchSnapshot(list.map((p) => ({
-          dataUrl: p.prepared.dataUrl, width: p.prepared.width, height: p.prepared.height, bytes: p.prepared.bytes,
+          dataUrl: keptCopy(p.prepared).dataUrl, width: keptCopy(p.prepared).width, height: keptCopy(p.prepared).height, bytes: keptCopy(p.prepared).bytes,
         })));
         const exact = photoSizeCheck(null, { chars: snapshot.length });
         if (!exact.ok) {

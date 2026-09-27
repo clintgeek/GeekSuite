@@ -196,6 +196,39 @@ describe('the page tray', () => {
   });
 });
 
+describe('two copies of each page (Chef, 2026-09-27)', () => {
+  // The model reads the full 2000px copy; the note keeps the smaller one, so a
+  // full set of camera pages fits under the 5 MB ceiling.
+  const twoCopies = () => ({ ...prepared(1_000_000, 1500, 2000), keep: { ...prepared(300_000, 1200, 1600), dataUrl: `data:image/jpeg;base64,${JPEG_1PX}` } }); // the copies are told apart by size
+
+  it('sizes the note by the KEPT copy, so pages the full size would refuse still fit', async () => {
+    prepare = vi.fn(async () => twoCopies());
+    renderPage();
+    await waitFor(() => expect(filesInput()).toBeTruthy());
+    add('a.jpg', 'b.jpg', 'c.jpg', 'd.jpg', 'e.jpg', 'f.jpg');
+    // 6 x 1 MB would be refused; 6 x 0.3 MB kept copies fit.
+    await waitFor(() => expect(screen.getByRole('button', { name: /read 6 pages/i })).toBeEnabled());
+    expect(screen.queryByText(/too big for one note/)).not.toBeInTheDocument();
+  });
+
+  it('stores the kept copy in the photo note, at its own size', async () => {
+    prepare = vi.fn(async () => twoCopies());
+    transcribeSketch.mockResolvedValueOnce(reading('milk'));
+    renderPage();
+    await addReady('one.jpg');
+    fireEvent.click(screen.getByRole('button', { name: /read the page/i }));
+    await screen.findByRole('textbox', { name: 'Transcript' });
+    fireEvent.click(screen.getByRole('button', { name: 'Keep as plain text' }));
+    await screen.findByText('opened note');
+    const photoVars = createNote.mock.calls.map(([{ variables }]) => variables).find((v) => v.type === 'handwritten');
+    const store = createTLStore({ shapeUtils: defaultShapeUtils, bindingUtils: defaultBindingUtils });
+    store.loadStoreSnapshot(JSON.parse(photoVars.content));
+    const asset = store.allRecords().find((r) => r.typeName === 'asset');
+    expect(asset.props.w).toBe(1200);
+    expect(asset.props.h).toBe(1600);
+  });
+});
+
 describe('reading the pages', () => {
   it('one call per page, source photo, JPEG, strictly in page order, with progress', async () => {
     const pending = [];

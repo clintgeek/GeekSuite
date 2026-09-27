@@ -20,6 +20,11 @@ import {
   PHOTO_MAX_PAGES,
   PHOTO_MAX_EDGE,
   PHOTO_JPEG_QUALITY,
+  preparePhotoPageSet,
+  keptCopy,
+  photoSizeCheck,
+  PHOTO_KEEP_EDGE,
+  PHOTO_KEEP_QUALITY,
 } from '../../utils/photoPages';
 
 describe('rotation', () => {
@@ -215,5 +220,36 @@ describe('preparePhotoPage', () => {
     canvas.toBlob = (cb) => cb(null);
     await expect(preparePhotoPage(file(), 0, { decode: async () => bitmap(10, 10), createCanvas: () => canvas, toBase64: async () => 'A' }))
       .rejects.toMatchObject({ code: 'encode' });
+  });
+});
+
+describe('preparePhotoPageSet: the model reads 2000px, the note keeps 1600px', () => {
+  // Chef, 2026-09-27: 8 full camera pages at 2000px (~492 KB each) overran the
+  // 5 MB snapshot ceiling, so the note keeps a smaller copy.
+  it('makes a 2000px/0.85 reading copy and a 1600px/0.8 kept copy', async () => {
+    const canvases = [];
+    const out = await preparePhotoPageSet(file(), 0, {
+      decode: async () => bitmap(4000, 3000),
+      createCanvas: () => { const c = fakeCanvas().canvas; canvases.push(c); return c; },
+      toBase64: async () => 'AAAA',
+    });
+    expect(out).toMatchObject({ width: 2000, height: 1500 });
+    expect(out.keep).toMatchObject({ width: 1600, height: 1200 });
+    expect(PHOTO_KEEP_EDGE).toBe(1600);
+    expect(canvases[0].toBlob).toHaveBeenCalledWith(expect.any(Function), 'image/jpeg', 0.85);
+    expect(canvases[1].toBlob).toHaveBeenCalledWith(expect.any(Function), 'image/jpeg', PHOTO_KEEP_QUALITY);
+    expect(PHOTO_KEEP_QUALITY).toBe(0.8);
+  });
+
+  it('keptCopy picks the kept copy, and falls back to the page itself', () => {
+    const read = { bytes: 492_000, keep: { bytes: 300_000 } };
+    expect(keptCopy(read).bytes).toBe(300_000);
+    expect(keptCopy({ bytes: 100 }).bytes).toBe(100);
+  });
+
+  it('eight camera pages fit once the note keeps the smaller copy', () => {
+    const pages = Array.from({ length: 8 }, () => ({ bytes: 492_000, keep: { bytes: 300_000 } }));
+    expect(photoSizeCheck(pages.map((p) => ({ bytes: p.bytes }))).ok).toBe(false); // the old, full-size way
+    expect(photoSizeCheck(pages.map((p) => ({ bytes: keptCopy(p).bytes }))).ok).toBe(true);
   });
 });
