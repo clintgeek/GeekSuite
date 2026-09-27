@@ -16,7 +16,10 @@ import Lamp, { StatusLamp } from './Lamp';
 import { Dymo, Enamel } from './Labels';
 import { LAMP, healthDetail, healthLamp, HEALTH_WORD } from './readings';
 
-const BOARD_H = 116;
+// 132, not 116: with nine stations the descriptions wrap to two lines, and
+// the lower boards (plus their connector tick) overran the row into the
+// depot divider (2026-09-27).
+const BOARD_H = 132;
 const NODE_H = 40;
 
 /** The measured part of a reading: "42ms · v1.4.2", or nothing yet. */

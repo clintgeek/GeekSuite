@@ -27,13 +27,20 @@ import api from '../api';
 import { apolloClient } from '../apolloClient';
 import { healthLamp, lampTransitions } from './readings';
 
-export const KEY_APPS = ['fitnessgeek', 'bujogeek', 'notegeek', 'bookgeek', 'flockgeek', 'startgeek'];
+// Every live suite app is a station. storygeek, gamegeek and thinggeek were
+// missing (the list predates them; 2026-09-27). The registry also carries
+// babelgeek and geekpr, which aren't deployed, so it isn't used wholesale:
+// they would sit on the line as permanent faults.
+export const KEY_APPS = ['fitnessgeek', 'bujogeek', 'notegeek', 'bookgeek', 'gamegeek', 'storygeek', 'thinggeek', 'flockgeek', 'startgeek'];
 
 export const FALLBACK_APPS = [
   { name: 'fitnessgeek', displayName: 'fitnessGeek', description: 'Nutrition & fitness', icon: 'FitnessCenter', color: '#7dac8e', url: 'https://fitnessgeek.clintgeek.com', tag: 'health' },
   { name: 'bujogeek', displayName: 'bujoGeek', description: 'Bullet journal & tasks', icon: 'Book', color: '#d4956a', url: 'https://bujogeek.clintgeek.com', tag: 'productivity' },
   { name: 'notegeek', displayName: 'noteGeek', description: 'Notes & documents', icon: 'Note', color: '#a99df0', url: 'https://notegeek.clintgeek.com', tag: 'productivity' },
   { name: 'bookgeek', displayName: 'bookGeek', description: 'Library & reading', icon: 'MenuBook', color: '#5fa8d3', url: 'https://bookgeek.clintgeek.com', tag: 'reading' },
+  { name: 'gamegeek', displayName: 'gameGeek', description: 'Game library', icon: 'SportsEsports', color: '#ff3da8', url: 'https://gamegeek.clintgeek.com', tag: 'play' },
+  { name: 'storygeek', displayName: 'storyGeek', description: 'AI-run tabletop tales', icon: 'AutoStories', color: '#e8a94a', url: 'https://storygeek.clintgeek.com', tag: 'play' },
+  { name: 'thinggeek', displayName: 'thingGeek', description: 'Household inventory', icon: 'Inventory2', color: '#6fa89a', url: 'https://thinggeek.clintgeek.com', tag: 'household' },
   { name: 'flockgeek', displayName: 'flockGeek', description: 'Flock management', icon: 'NatureOutlined', color: '#9a8f6a', url: 'https://flockgeek.clintgeek.com', tag: 'management' },
   { name: 'startgeek', displayName: 'startGeek', description: 'Start page & launcher', icon: 'RocketLaunch', color: '#e6b35a', url: 'https://start.clintgeek.com', tag: 'launcher' },
 ];

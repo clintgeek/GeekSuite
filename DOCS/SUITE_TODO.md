@@ -201,6 +201,16 @@ Live since 2026-09-26.
 - **Its MCP tools**, once the suite MCP server exists.
 - **A PDF insurance report** with embedded photos.
 
+### basegeek health proxy reports "online" for an upstream 502
+
+Found 2026-09-27 while wiring the Signal Box stations. `/api/health/app/babelgeek` and
+`/api/health/app/geekpr` return `{"status":"online","httpStatus":502}`: the proxy calls an
+app "online" whenever the upstream answers at all, even with a 5xx. Anything reading
+`status` (the old home, the Signal Box lamps if those apps ever join the line) would show
+green for a dead app. The fix is `status: 'offline'` (or `'degraded'`) when `httpStatus >=
+500`, with a test. Also decide whether babelgeek and geekpr belong in the registry at all:
+both are enabled there but not deployed.
+
 ### S Pen ideas, parked (Chef, 2026-09-27)
 
 The eraser button and handwriting-to-Markdown are being built

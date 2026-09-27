@@ -59,7 +59,7 @@ describe('BaseGeekHome', () => {
 
     await waitFor(() => expect(screen.getByText('fitnessGeek')).toBeInTheDocument());
 
-    const names = ['fitnessGeek', 'bujoGeek', 'noteGeek', 'bookGeek', 'flockGeek', 'startGeek'];
+    const names = ['fitnessGeek', 'bujoGeek', 'noteGeek', 'bookGeek', 'gameGeek', 'storyGeek', 'thingGeek', 'flockGeek', 'startGeek'];
     // Every consecutive pair must appear in document order (a precedes b).
     for (let i = 0; i < names.length - 1; i += 1) {
       const a = screen.getByText(names[i]);
@@ -72,7 +72,8 @@ describe('BaseGeekHome', () => {
     mockHealthyBackend(); // no registry -> '/apps' rejects
     renderWithProviders(<BaseGeekHome />);
     await waitFor(() => expect(screen.getByText('fitnessGeek')).toBeInTheDocument());
-    for (const name of ['bujoGeek', 'noteGeek', 'bookGeek', 'flockGeek', 'startGeek']) {
+    // gameGeek, storyGeek and thingGeek were missing from the line until 2026-09-27.
+    for (const name of ['bujoGeek', 'noteGeek', 'bookGeek', 'gameGeek', 'storyGeek', 'thingGeek', 'flockGeek', 'startGeek']) {
       expect(screen.getByText(name)).toBeInTheDocument();
     }
   });

@@ -10,6 +10,66 @@ anything a future reader would otherwise have to rediscover.
 
 ---
 
+## 2026-09-27
+
+### BaseGeek — "The Signal Box"
+
+`5c715057`. Chef: "Be crazy but functional with it. Surprise me." The console became the
+interlocking every request passes through. All of it runs on real data:
+- a split-flap line status;
+- the suite as a track diagram with live health lamps per app;
+- gauges for spend against the governor cap, calls against the week's peak, and free
+  models alive;
+- a chart recorder;
+- an annunciator, one tile per attention kind;
+- provider lamps;
+- a lever frame (re-read, discovery, day/night).
+
+Easter eggs: the Konami code runs a lamp test, and Night Watch is a departures-board
+screensaver. **Verified on production** as Chef, with 0 page errors: the line was missing
+`gameGeek`, `storyGeek` and `thingGeek` (a hard-coded list older than them). All nine are
+stations now; the nameboard row went from 116 to 132px so the two-line descriptions clear
+the depot divider. The SSO login Heather sees stays calm. Settings' fake config form (a "JWT
+Secret" field and a Save button that did nothing) is gone. New read-only, admin-gated
+`aiTraffic(days)` query.
+
+### StoryGeek — "Candlelit Table"
+
+`7029b203`. A tabletop session at night:
+- the tale on parchment, with Cinzel drop caps per scene;
+- player actions in their own voice;
+- `/recall` canon as a sealed scroll with wax-seal provenance;
+- a notice-board tale list and a d20 motif.
+
+UX: a "/" commands menu, a "Game Master is writing…" state, replies that scroll to their
+first line, and a two-row phone header. **Caught before push:** the night error red measured
+3.66:1 in `packages/ui` themeContrast, a check the harness can't see because no scene shows
+an error. Now `#e0645a`, 4.84 to 5.64:1.
+
+### NoteGeek — S Pen: eraser button, Fine pen, handwriting to Markdown
+
+`b289bc16`. Spec: `apps/notegeek/DOCS/HANDWRITING.md`.
+- **Side button (button 2) erases,** restoring the pen on lift.
+- **A Fine pen** (scale 0.5) is the new default. The guard touches only the stroke being
+  drawn, because tldraw 2.4.6 re-runs before-create handlers on snapshot load.
+- **Handwriting to Markdown:** the sketch goes out as a white PNG; `transcribeSketch`
+  (vision) returns a faithful transcript; the review step lets Chef fix it; "Compose it"
+  makes a new Markdown note that links back to the sketch.
+- **Verified on production:** a real transcription as Chef came back exact through
+  `openai/gpt-4.1-mini`.
+- **nginx:** the NoteGeek vhost `/graphql` now has `client_max_body_size 12m`.
+- **Still to confirm on the S26:** the side button's real code.
+
+### Also
+
+- **NoteGeek fixes:**
+  - wide Markdown tables scroll inside the column (`0a487742`);
+  - a phone pen picker, with small then Fine as the default (`5cb761ad`);
+  - the stamp sits straight, and a race in the perf test is fixed (`0a76cf18`).
+- **BookGeek:** 15s test timeout (`8839ca8e`).
+- **BuJoGeek:** the "stupid simple" plan (`apps/bujogeek/DOCS/SIMPLE_PLAN.md`) awaits
+  Chef's go.
+
 ## 2026-09-26
 
 ### NoteGeek — sketch notes had never worked; now they open and save
