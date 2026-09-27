@@ -124,11 +124,11 @@ describe('BaseGeekHome', () => {
     }
   });
 
-  it('greets the signed-in user by username', async () => {
+  it('greets the signed-in user by name, capitalised', async () => {
     mockHealthyBackend();
     renderWithProviders(<BaseGeekHome />);
     await waitFor(() => {
-      expect(screen.getByText(/Good (morning|afternoon|evening), chef/)).toBeInTheDocument();
+      expect(screen.getByText(/Good (morning|afternoon|evening), Chef/)).toBeInTheDocument();
     });
   });
 

@@ -64,6 +64,18 @@ import {
 const SPEND_WORD = { ok: 'within cap', warn: 'nearing cap', fault: 'at cap' };
 const CATALOG_WORD = { ok: 'healthy', warn: 'thinning', fault: 'failing' };
 
+/**
+ * The name to greet. On production Chef's username IS his email, so greeting by
+ * username read "GOOD MORNING, CLINT@CLINTGEEK.COM" (2026-09-27). Prefer the
+ * profile's display name, then a username or email's local part, first letter
+ * capitalised (NoteGeek's greetingNameFrom does the same).
+ */
+export function greetingName(user) {
+  const raw = user?.profile?.displayName?.trim()
+    || String(user?.username || user?.email || '').split('@')[0].trim();
+  return raw ? raw.charAt(0).toUpperCase() + raw.slice(1) : '';
+}
+
 function greetingFor(date) {
   const hour = date.getHours();
   if (hour < 12) return 'Good morning';
@@ -128,7 +140,7 @@ function Fascia({ user, status, now }) {
         })}
       >
         <Typography variant="h4" component="h1" sx={{ fontSize: { xs: '1.6rem', sm: '2rem' } }}>
-          {greetingFor(now)}{user?.username ? `, ${user.username}` : ''}
+          {greetingFor(now)}{greetingName(user) ? `, ${greetingName(user)}` : ''}
         </Typography>
         <Typography sx={{ color: 'text.secondary', fontFamily: 'fontFamilyMono', fontSize: '0.8125rem' }}>
           {now.toLocaleDateString('en-US', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
