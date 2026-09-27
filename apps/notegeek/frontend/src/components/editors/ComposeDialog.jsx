@@ -52,7 +52,11 @@ export default function ComposeDialog({
     error,
     model,
     onSaveAsNew,
+    // Optional. Without it there is no "Replace this note": the
+    // handwriting path (DOCS/HANDWRITING.md §2) only ever makes a new note,
+    // because the sketch it came from is the original.
     onReplace,
+    discardLabel = 'Discard',
 }) {
     const failed = stats?.chunksFailed || 0;
     const hasResult = Boolean(markdown && markdown.trim());
@@ -137,19 +141,21 @@ export default function ComposeDialog({
             <Divider />
             <DialogActions sx={{ px: 2, py: 1.5, gap: 1, flexWrap: 'wrap' }}>
                 <Button onClick={onClose} sx={{ textTransform: 'none' }}>
-                    Discard
+                    {discardLabel}
                 </Button>
                 <Box sx={{ flex: 1 }} />
                 {/* Replace is deliberately the secondary action and sits left
                     of the primary, so the muscle-memory click is the safe one. */}
-                <Button
-                    onClick={onReplace}
-                    disabled={!hasResult || loading}
-                    color="inherit"
-                    sx={{ textTransform: 'none' }}
-                >
-                    Replace this note
-                </Button>
+                {onReplace ? (
+                    <Button
+                        onClick={onReplace}
+                        disabled={!hasResult || loading}
+                        color="inherit"
+                        sx={{ textTransform: 'none' }}
+                    >
+                        Replace this note
+                    </Button>
+                ) : null}
                 <Button
                     onClick={onSaveAsNew}
                     disabled={!hasResult || loading}

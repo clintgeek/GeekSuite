@@ -55,6 +55,16 @@ export const typeDefs = gql`
     degenerate: Boolean
   }
 
+  """
+  What a page of handwriting says, read by a vision model. A faithful
+  transcript, not a document: unreadable words are [?], drawings are
+  [drawing: ...]. The caller shows it for correction before anything is saved.
+  """
+  type SketchTranscript {
+    text: String!
+    provenance: AIProvenance
+  }
+
   type Note {
     id: ID!
     title: String
@@ -137,6 +147,10 @@ export const typeDefs = gql`
     """Build a document from a pile of scraps. Returns a NEW document and
     changes nothing — saving or replacing is the caller's separate act."""
     composeNote(content: String!): ComposedNote!
+    """Read the handwriting in a sketch's exported page image. image is
+    base64 with no data: prefix; mediaType is image/png or image/jpeg.
+    Changes nothing. Failures are errors, never an empty transcript."""
+    transcribeSketch(image: String!, mediaType: String!): SketchTranscript!
     deleteNote(id: ID!): Boolean!
     renameTag(oldTag: String!, newTag: String!): Boolean!
     deleteTag(tag: String!): Boolean!

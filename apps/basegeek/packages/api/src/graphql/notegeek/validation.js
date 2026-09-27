@@ -235,3 +235,55 @@ export const suggestForNoteArgsSchema = z
   })
   .strict();
 
+
+// ── transcribeSketch (apps/notegeek/DOCS/HANDWRITING.md §2) ─────────────────
+
+export const TRANSCRIBE_MEDIA_TYPES = ['image/png', 'image/jpeg'];
+
+/**
+ * About 8 MB of base64, which is a 6 MB image. The NoteGeek client refuses
+ * anything bigger before sending it (`utils/sketchExport.js`); this is the
+ * backstop for any other caller, checked before a model is asked.
+ */
+export const TRANSCRIBE_MAX_BASE64_CHARS = 8 * 1024 * 1024;
+
+// The first bytes of each allowed format, as base64. PNG's 8-byte signature
+// encodes to `iVBORw0KGgo`; every JPEG starts FF D8 FF, which is `/9j/`.
+const IMAGE_SIGNATURES = {
+  'image/png': 'iVBORw0KGgo',
+  'image/jpeg': '/9j/',
+};
+
+const BASE64 = /^[A-Za-z0-9+/]+={0,2}$/;
+
+/**
+ * A page image for the vision model.
+ *
+ * The declared mediaType must match the bytes. `services/ai/adapters/
+ * imageContent.js` trusts the caller's declaration, and a provider handed a
+ * PNG labelled JPEG answers with a 400 that would reach the writer as
+ * "unavailable" — so the lie is caught here, where it can be named.
+ */
+export const transcribeSketchArgsSchema = z
+  .object({
+    mediaType: z.enum(TRANSCRIBE_MEDIA_TYPES, {
+      errorMap: () => ({ message: `mediaType must be ${TRANSCRIBE_MEDIA_TYPES.join(' or ')}.` }),
+    }),
+    image: z
+      .string()
+      .min(1, 'The image is empty.')
+      .max(TRANSCRIBE_MAX_BASE64_CHARS, 'That page is too large to read (over about 6 MB as an image).')
+      .refine((s) => !s.startsWith('data:'), 'Send the image as bare base64, without a data: prefix.')
+      .refine((s) => s.startsWith('data:') || BASE64.test(s), 'The image is not valid base64.'),
+  })
+  .strict()
+  .superRefine((args, ctx) => {
+    const signature = IMAGE_SIGNATURES[args.mediaType];
+    if (signature && typeof args.image === 'string' && BASE64.test(args.image) && !args.image.startsWith(signature)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['image'],
+        message: `The image is not a ${args.mediaType === 'image/png' ? 'PNG' : 'JPEG'}.`,
+      });
+    }
+  });

@@ -98,3 +98,18 @@ describe('what GFM does NOT change', () => {
     expect(container.querySelector('pre')).not.toBeNull();
   });
 });
+
+describe('a task list', () => {
+  it('shows each box as a named state, not an unlabelled 13px checkbox', async () => {
+    const { MARKDOWN_COMPONENTS } = await import('../../components/notes/markdownComponents');
+    const { container } = render(
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>
+        {'- [ ] ask Heather\n- [x] call the roofer\n'}
+      </ReactMarkdown>
+    );
+    expect(container.querySelector('input')).toBeNull();
+    expect(screen.getByRole('img', { name: 'Not done' })).toBeInTheDocument();
+    expect(screen.getByRole('img', { name: 'Done' })).toBeInTheDocument();
+    expect(screen.getByText('ask Heather')).toBeInTheDocument();
+  });
+});

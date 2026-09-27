@@ -22,6 +22,7 @@ import AutoAwesomeMosaic from '@mui/icons-material/AutoAwesomeMosaic';
 import HistoryIcon from '@mui/icons-material/History';
 import Visibility from '@mui/icons-material/Visibility';
 import ArrowBack from '@mui/icons-material/ArrowBack';
+import TextSnippetOutlined from '@mui/icons-material/TextSnippetOutlined';
 
 const isMac = typeof navigator !== 'undefined' && /Mac|iP(hone|ad|od)/.test(navigator.platform || navigator.userAgent || '');
 const SAVE_SHORTCUT = isMac ? '⌘S' : 'Ctrl+S';
@@ -34,7 +35,8 @@ const SAVE_SHORTCUT = isMac ? '⌘S' : 'Ctrl+S';
  *
  *   - `BackButton` — flushes a pending save and leaves (the page's handler).
  *   - the View/Edit toggle, for mind maps only — a mode, not an action.
- *   - the ⋯ menu: Save now, Version history, Compose, Delete.
+ *   - the ⋯ menu: Save now, Version history, Compose, Convert handwriting
+ *     to text (sketches only), Delete.
  *
  * The ⋯ menu only calls the page's handlers. It does not mount anything:
  * `NoteHistoryDialog` stays mounted by the page, and only while open (its
@@ -81,6 +83,12 @@ function NoteActions({
   onCompose,
   isComposing = false,
   onHistory,
+  // Sketches only (DOCS/HANDWRITING.md §2). Offered whenever the handler is
+  // passed; disabled while the sketch is empty, so the entry is still
+  // discoverable on a blank page.
+  onTranscribe,
+  canTranscribe = false,
+  isTranscribing = false,
   // An autosaved-but-never-navigated note is still a real row; the page
   // decides whether "Delete" means delete or discard.
   deleteLabel = 'Delete note',
@@ -134,7 +142,7 @@ function NoteActions({
           '&:focus-visible': { boxShadow: `0 0 0 3px ${glow(theme).ring}` },
         }}
       >
-        {isComposing ? <CircularProgress size={16} color="inherit" /> : <MoreHoriz fontSize="small" />}
+        {isComposing || isTranscribing ? <CircularProgress size={16} color="inherit" /> : <MoreHoriz fontSize="small" />}
       </IconButton>
 
       <Menu
@@ -174,6 +182,20 @@ function NoteActions({
           >
             <ListItemIcon><AutoAwesomeMosaic fontSize="small" /></ListItemIcon>
             <ListItemText>Compose a document</ListItemText>
+          </MenuItem>
+        )}
+        {onTranscribe && (
+          <MenuItem
+            onClick={run(onTranscribe)}
+            disabled={!canTranscribe || isTranscribing}
+            sx={itemSx}
+          >
+            <ListItemIcon><TextSnippetOutlined fontSize="small" /></ListItemIcon>
+            <ListItemText
+              primary="Convert handwriting to text"
+              secondary={canTranscribe ? null : 'Write something first'}
+              secondaryTypographyProps={{ sx: { fontFamily: theme.typography.fontFamilyMono, fontSize: '0.75rem' } }}
+            />
           </MenuItem>
         )}
         {canDelete && onDelete && [

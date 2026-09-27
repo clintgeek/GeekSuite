@@ -40,6 +40,94 @@ async function openNote(page, h, noteFixture, path) {
   await page.goto(h.base + path, { waitUntil: 'networkidle' });
   await h.settle(1400);
 }
+// "Convert handwriting to text" (DOCS/HANDWRITING.md §2). The sketch is the
+// real fixture snapshot, so the export is tldraw's own, in a real browser;
+// only the gateway is stubbed. Every image the page sends is checked here:
+// bare base64 PNG, under the gateway's ~8 MB ceiling. Sizes are printed so a
+// run says what the export actually weighs.
+const TRANSCRIPT = [
+  'Onboarding flow',
+  '',
+  '[drawing: three boxes joined by arrows]',
+  'sign up -> verify email -> first note',
+  '- [ ] ask Heather about the [?] step',
+].join('\n');
+const COMPOSED = [
+  '# Onboarding flow',
+  '',
+  'Three steps, in order.',
+  '',
+  '1. Sign up',
+  '2. Verify email',
+  '3. Write a first note',
+  '',
+  '## Open questions',
+  '',
+  '- [ ] Ask Heather about the unclear step',
+].join('\n');
+
+async function openSketchToTranscribe(page, h) {
+  await page.route('**/api/users/bootstrap', (r) => json(r, {
+    identity: { username: 'chef', email: 'chef@example.com' },
+    profile: { displayName: 'Chef Crocker' },
+    preferences: {},
+    appPreferences: { notegeek: { suggestOnSave: false } },
+  }));
+  const sent = [];
+  await graphqlRoute(page, {
+    ...OPS,
+    GetNoteById: { note: NOTE_SKETCH },
+    UpdateNote: { updateNote: NOTE_SKETCH },
+    TranscribeSketch: (vars) => {
+      sent.push(vars);
+      return { transcribeSketch: { text: TRANSCRIPT, provenance: { source: 'model', reason: null, model: 'openai/gpt-4.1-mini', provider: 'openrouter', cached: false, callsToday: 1, cap: 40 } } };
+    },
+    ComposeNote: {
+      composeNote: {
+        markdown: COMPOSED,
+        stats: { inputChars: TRANSCRIPT.length, fragments: 3, chunks: 1, chunksFailed: 0, strategy: 'single', truncated: false, degenerate: false },
+        provenance: { source: 'model', reason: null, model: 'openai/gpt-4.1-mini', provider: 'openrouter', cached: false, callsToday: 1, cap: 120 },
+      },
+    },
+  });
+  await page.goto(h.base + '/notes/n3/edit', { waitUntil: 'networkidle' });
+  await h.settle(1800);
+  return sent;
+}
+
+async function openTranscribeMenu(page, h) {
+  await page.getByRole('button', { name: /more note actions/i }).first().click();
+  await h.settle(400);
+  const item = page.getByRole('menuitem', { name: /convert handwriting to text/i });
+  if (!(await item.count())) throw new Error('⋯ menu has no "Convert handwriting to text" on a sketch');
+  if (await item.getAttribute('aria-disabled') === 'true') throw new Error('"Convert handwriting to text" is disabled on a sketch with ink');
+  return item;
+}
+
+async function reviewTranscript(page, h) {
+  const sent = await openSketchToTranscribe(page, h);
+  await (await openTranscribeMenu(page, h)).click();
+  const box = page.getByRole('textbox', { name: 'Transcript' });
+  await box.waitFor({ timeout: 20000 });
+  if (sent.length !== 1) throw new Error(`expected one transcribeSketch call, saw ${sent.length}`);
+  const { image, mediaType } = sent[0];
+  if (mediaType !== 'image/png') throw new Error(`sent mediaType ${mediaType}`);
+  if (!/^iVBORw0KGgo/.test(image)) throw new Error('sent image is not bare base64 PNG');
+  if (image.length > 8 * 1024 * 1024) throw new Error(`sent image is ${image.length} base64 chars, over the gateway ceiling`);
+  const bytes = Math.floor(image.length * 3 / 4) - (image.endsWith('==') ? 2 : image.endsWith('=') ? 1 : 0);
+  console.log(`  [sketch export] ${h.viewport}: ${bytes} bytes PNG (${image.length} base64 chars)`);
+  if ((await box.inputValue()) !== TRANSCRIPT) throw new Error('the review box does not hold the transcript');
+  await h.settle(600);
+  // The page and the transcript must not overlap (on a phone they stack; a
+  // squeezed grid once ran the image caption into the Transcript label).
+  const caption = await page.getByText('What the model saw').boundingBox();
+  const field = await page.locator('.MuiTextField-root').filter({ has: box }).boundingBox();
+  if (caption && field && h.isPhone && caption.y + caption.height > field.y) {
+    throw new Error(`the page caption (bottom ${Math.round(caption.y + caption.height)}) overlaps the transcript (top ${Math.round(field.y)})`);
+  }
+  return box;
+}
+
 import { json, graphqlRoute } from '../../lib/net.mjs';
 import { OPS, NOTE_SUGGESTIONS, NOTE_CODE, NOTE_MINDMAP, NOTE_SKETCH, NOTE_WIDE_TABLE } from './fixtures.mjs';
 
@@ -272,6 +360,42 @@ export const scenes = [
         throw new Error('tldraw rendered its own error screen');
       }
     },
+  },
+  {
+    // The ⋯ menu on a sketch with ink: "Convert handwriting to text" enabled.
+    name: '12a-sketch-menu',
+    async setup(page, h) {
+      await openSketchToTranscribe(page, h);
+      await openTranscribeMenu(page, h);
+    },
+    teardown: (page, h) => h.esc(400),
+  },
+  {
+    // The review step: the page as sent beside an editable transcript.
+    name: '12b-sketch-review',
+    async setup(page, h) {
+      await reviewTranscript(page, h);
+    },
+    teardown: (page, h) => h.esc(400),
+  },
+  {
+    // "Compose it": the corrected transcript handed to Compose, which offers
+    // a new note only (no "Replace this note": the sketch is the original).
+    name: '12c-sketch-compose',
+    async setup(page, h) {
+      const box = await reviewTranscript(page, h);
+      await box.fill(TRANSCRIPT.replace('[?]', 'welcome'));
+      await page.getByRole('button', { name: 'Compose it' }).click();
+      await page.getByRole('button', { name: /save as a new note/i }).waitFor({ timeout: 20000 });
+      if (await page.getByRole('button', { name: /replace this note/i }).count()) {
+        throw new Error('Compose offered "Replace this note" from a sketch');
+      }
+      if (!(await page.getByRole('button', { name: 'Back to transcript' }).count())) {
+        throw new Error('Compose from a sketch has no "Back to transcript"');
+      }
+      await h.settle(500);
+    },
+    teardown: (page, h) => h.esc(400),
   },
 ];
 

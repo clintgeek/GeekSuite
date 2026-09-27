@@ -3,7 +3,11 @@ import { CircularProgress, Box, useTheme, useMediaQuery, IconButton, Tooltip, Po
 import {
     Box as TlBox, Tldraw, useEditor, useValue,
     DefaultColorStyle, DefaultSizeStyle, DefaultColorThemePalette,
+    exportToBlob, getPointerInfo,
 } from '@tldraw/tldraw';
+import { attachPenEraser } from '../../utils/penEraser';
+import { exportSketchPng } from '../../utils/sketchExport';
+import { fineStrokeHandler } from '../../utils/finePen';
 
 // tldraw 2.4's updateViewportScreenBounds takes a Box and calls .equals() on
 // it. Passed the container element, as this file used to, it threw on every
@@ -49,7 +53,9 @@ const NO_HIDDEN_COMPONENTS = {};
 // phones (it covers the canvas), so the pen's colour and size were unreachable
 // there (Chef, 2026-09-27). White is left out: it's invisible on the page.
 const PEN_COLORS = ['black', 'grey', 'blue', 'light-blue', 'violet', 'light-violet', 'green', 'light-green', 'yellow', 'orange', 'red', 'light-red'];
+// "Fine" is finer than tldraw's smallest size: see utils/finePen.js.
 const PEN_SIZES = [
+    { value: 'fine', label: 'Fine', dot: 3 },
     { value: 's', label: 'Small', dot: 5 },
     { value: 'm', label: 'Medium', dot: 8 },
     { value: 'l', label: 'Large', dot: 11 },
@@ -57,13 +63,21 @@ const PEN_SIZES = [
 ];
 const colorName = (c) => c.replace('-', ' ');
 
-function PenStylePicker({ editor }) {
+function PenStylePicker({ editor, fine, onFineChange }) {
     const theme = useTheme();
     const palette = DefaultColorThemePalette[theme.palette.mode === 'dark' ? 'darkMode' : 'lightMode'];
     const color = useValue('pen color', () => editor.getStyleForNextShape(DefaultColorStyle), [editor]);
     const size = useValue('pen size', () => editor.getStyleForNextShape(DefaultSizeStyle), [editor]);
     const [anchor, setAnchor] = useState(null);
-    const dot = (PEN_SIZES.find((s) => s.value === size) || PEN_SIZES[0]).dot;
+    const current = size === 's' && fine ? 'fine' : size;
+    const dot = (PEN_SIZES.find((s) => s.value === current) || PEN_SIZES[0]).dot;
+
+    const chooseSize = (value) => {
+        // Fine is size 's' plus a scale on new strokes; everything else is
+        // tldraw's own size and turns Fine off.
+        onFineChange(value === 'fine');
+        choose(DefaultSizeStyle, value === 'fine' ? 's' : value);
+    };
 
     const choose = (style, value) => {
         // Restyle what's selected, and every stroke from now on.
@@ -113,9 +127,9 @@ function PenStylePicker({ editor }) {
                         <IconButton
                             key={s.value}
                             aria-label={`Size: ${s.label}`}
-                            aria-pressed={size === s.value ? 'true' : 'false'}
-                            onClick={() => choose(DefaultSizeStyle, s.value)}
-                            sx={{ ...swatch, borderColor: size === s.value ? 'primary.main' : 'divider' }}
+                            aria-pressed={current === s.value ? 'true' : 'false'}
+                            onClick={() => chooseSize(s.value)}
+                            sx={{ ...swatch, borderColor: current === s.value ? 'primary.main' : 'divider' }}
                         >
                             <Box aria-hidden sx={{ width: s.dot, height: s.dot, borderRadius: '50%', bgcolor: 'text.primary' }} />
                         </IconButton>
@@ -143,7 +157,7 @@ function PenStylePicker({ editor }) {
 }
 
 // Minimal mobile toolbar - Move, Write, Pen style, Undo, Fullscreen
-function MobileDrawingToolbar({ containerRef, onFullscreenChange }) {
+function MobileDrawingToolbar({ containerRef, onFullscreenChange, fine, onFineChange }) {
     const editor = useEditor();
     const currentTool = useValue('current tool', () => editor.getCurrentToolId(), [editor]);
     const canUndo = useValue('can undo', () => editor.getCanUndo(), [editor]);
@@ -228,7 +242,7 @@ function MobileDrawingToolbar({ containerRef, onFullscreenChange }) {
             </Tooltip>
 
             {/* Pen colour and size */}
-            <PenStylePicker editor={editor} />
+            <PenStylePicker editor={editor} fine={fine} onFineChange={onFineChange} />
 
             <Box sx={{ width: 1, height: 24, bgcolor: 'divider', mx: 0.5 }} />
 
@@ -259,7 +273,13 @@ function MobileDrawingToolbar({ containerRef, onFullscreenChange }) {
     );
 }
 
-const HandwrittenEditor = ({ content, setContent, readOnly = false }) => {
+/**
+ * `sketchApiRef` (optional): filled with `{ exportPng, hasShapes }` once the
+ * editor mounts, so the page can export this sketch for "Convert handwriting
+ * to text" without importing tldraw itself (this file is lazy-loaded; the
+ * page is not). Cleared on unmount.
+ */
+const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef = null }) => {
     const editorRef = useRef(null);
     const unsubscribeRef = useRef(null);
     const isApplyingSnapshot = useRef(false);
@@ -267,6 +287,15 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false }) => {
     const saveTimeoutRef = useRef(null);
     const containerRef = useRef(null);
     const [isLoading, setIsLoading] = useState(true);
+    // The Fine pen: a ref the side effect reads live, and state for the
+    // picker. Editor state only — it never goes into the saved document.
+    const fineRef = useRef(true);
+    const [penFine, setPenFineState] = useState(true);
+    const setPenFine = useCallback((value) => {
+        fineRef.current = value;
+        setPenFineState(value);
+    }, []);
+    const fineHandlerOffRef = useRef(null);
     const theme = useTheme();
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
@@ -296,12 +325,28 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false }) => {
     const handleMount = useCallback((editor) => {
         editorRef.current = editor;
         setIsLoading(false);
+        if (sketchApiRef) {
+            sketchApiRef.current = {
+                exportPng: () => exportSketchPng(editor, { exportToBlob }),
+                hasShapes: () => editor.getCurrentPageShapeIds().size > 0,
+            };
+        }
 
         // Set initial tool to draw for better mobile experience
         editor.setCurrentTool('draw');
-        // Handwriting wants a fine pen: tldraw's default (m) wrote fat lines
-        // (Chef, 2026-09-27).
+        // Handwriting wants a fine pen: tldraw's default (m) wrote fat lines,
+        // and even 's' was too thick (Chef, 2026-09-27). New sketches start
+        // on Fine: size 's' plus FINE_SCALE on each new stroke.
         editor.setStyleForNextShapes(DefaultSizeStyle, 's');
+        // The same no-stacking rule as the store listener below: a remount
+        // drops the previous editor's handler before registering this one.
+        if (fineHandlerOffRef.current) {
+            fineHandlerOffRef.current();
+            fineHandlerOffRef.current = null;
+        }
+        if (!readOnly) {
+            fineHandlerOffRef.current = editor.sideEffects.registerBeforeCreateHandler('shape', fineStrokeHandler(editor, fineRef));
+        }
 
         // Apply dark mode preference based on MUI theme mode
         const isDark = theme.palette.mode === 'dark';
@@ -334,7 +379,16 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false }) => {
             });
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- content intentionally excluded; initial load only
-    }, [loadSnapshot, readOnly, debouncedSave, theme.palette.mode]);
+    }, [loadSnapshot, readOnly, debouncedSave, theme.palette.mode, sketchApiRef]);
+
+    // The S Pen's side button erases (DOCS/HANDWRITING.md §1). A capture-phase
+    // listener on the container, so it runs before tldraw's own handlers; see
+    // utils/penEraser.js for what it does and why.
+    useEffect(() => {
+        const container = containerRef.current;
+        if (!container || readOnly || isLoading) return undefined;
+        return attachPenEraser(container, () => editorRef.current, { getPointerInfo });
+    }, [readOnly, isLoading]);
 
     // Use ResizeObserver for reliable viewport bounds updates
     useEffect(() => {
@@ -391,6 +445,8 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false }) => {
 
     useEffect(() => {
         return () => {
+            if (sketchApiRef) sketchApiRef.current = null;
+            if (fineHandlerOffRef.current) fineHandlerOffRef.current();
             if (unsubscribeRef.current) {
                 unsubscribeRef.current();
             }
@@ -398,6 +454,7 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false }) => {
                 clearTimeout(saveTimeoutRef.current);
             }
         };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- unmount only
     }, []);
 
     const hiddenMobileComponents = isMobile ? MOBILE_HIDDEN_COMPONENTS : NO_HIDDEN_COMPONENTS;
@@ -454,6 +511,8 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false }) => {
                 {isMobile && !readOnly && !isLoading && (
                     <MobileDrawingToolbar
                         containerRef={containerRef}
+                        fine={penFine}
+                        onFineChange={setPenFine}
                         onFullscreenChange={() => {
                             // Update tldraw bounds after fullscreen change
                             setTimeout(() => {

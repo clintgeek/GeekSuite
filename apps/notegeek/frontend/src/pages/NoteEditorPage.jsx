@@ -7,8 +7,11 @@ import BackIcon from '@mui/icons-material/ArrowBack';
 import ChevronRight from '@mui/icons-material/ChevronRight';
 import { useQuery, useMutation } from '@apollo/client';
 import { GET_NOTE_BY_ID } from '../graphql/queries';
-import { CREATE_NOTE, UPDATE_NOTE, COMPOSE_NOTE } from '../graphql/mutations';
+import { CREATE_NOTE, UPDATE_NOTE, COMPOSE_NOTE, TRANSCRIBE_SKETCH } from '../graphql/mutations';
 import ComposeDialog from '../components/editors/ComposeDialog';
+import TranscribeDialog from '../components/editors/TranscribeDialog';
+import { sketchHasShapes } from '../utils/sketchExport';
+import { derivedNoteContent, derivedNoteTitle } from '../utils/sketchToText';
 import NoteHistoryDialog from '../components/notes/NoteHistoryDialog';
 import { useToast } from '@geeksuite/ui';
 import { useAppPreferences } from '@geeksuite/user';
@@ -283,17 +286,25 @@ function NoteEditorPage() {
     return (doc.body?.textContent || '').trim();
   };
 
-  const handleCompose = async () => {
-    const source = plainTextForCompose();
+  /**
+   * `override` is the handwriting path's reviewed transcript
+   * (DOCS/HANDWRITING.md §2): Compose reads that instead of this note's body,
+   * and the result can only become a new note (`origin: 'sketch'`).
+   */
+  const handleCompose = async (override) => {
+    const fromSketch = typeof override === 'string';
+    const origin = fromSketch ? 'sketch' : 'note';
+    const source = fromSketch ? override : plainTextForCompose();
     if (!source || !source.trim() || isComposing) return;
-    setCompose({ open: true, loading: true, markdown: '', stats: null, error: null });
+    const show = (state) => setCompose({ ...state, origin });
+    show({ open: true, loading: true, markdown: '', stats: null, error: null });
     try {
       const { data } = await composeNoteMutation({ variables: { content: source } });
       const result = data?.composeNote;
       const reason = result?.provenance?.reason;
 
       if (reason === 'content_too_long') {
-        setCompose({
+        show({
           open: true, loading: false, markdown: '', stats: result?.stats || null,
           error: 'That is more material than one compose can take. Split it across two notes and compose each.',
         });
@@ -303,7 +314,7 @@ function NoteEditorPage() {
         // The gateway threw the answer away because it was a loop, not a
         // document. Say what happened and that retrying is worth a try —
         // routing picks again, so a second attempt is not the same attempt.
-        setCompose({
+        show({
           open: true, loading: false, markdown: '', stats: result?.stats || null,
           error: 'The model got stuck repeating itself, so that result was thrown away. '
             + 'Your note is untouched — try again, and it may land on a better model.',
@@ -312,18 +323,18 @@ function NoteEditorPage() {
         return;
       }
       if (!result?.markdown?.trim()) {
-        setCompose({
+        show({
           open: true, loading: false, markdown: '', stats: result?.stats || null,
           error: 'Compose is unavailable right now — your note is unchanged.',
         });
         return;
       }
-      setCompose({
+      show({
         open: true, loading: false, markdown: result.markdown, stats: result.stats, error: null,
         model: result?.provenance?.model || null,
       });
     } catch (err) {
-      setCompose({
+      show({
         open: true, loading: false, markdown: '', stats: null,
         error: err?.message || 'Could not compose this note.',
       });
@@ -390,6 +401,121 @@ function NoteEditorPage() {
     } catch (err) {
       notify(err?.message || 'Could not replace the note.', { tone: 'error' });
     }
+  };
+
+  // ── Convert handwriting to text (DOCS/HANDWRITING.md §2) ──────────────
+  //
+  // Export the page, have it read, let the writer correct the reading, then
+  // Compose it or keep it plain. Either way the result is a NEW markdown note
+  // whose first line links back here. The sketch is never replaced: nothing
+  // on this path calls updateNote or setContent.
+  const sketchApiRef = useRef(null);
+  const transcribeRunRef = useRef(0);
+  const [transcribeSketchMutation] = useMutation(TRANSCRIBE_SKETCH);
+  const [transcribe, setTranscribe] = useState(null);
+  const canTranscribe = isHandwritten && sketchHasShapes(content);
+
+  const revokeImage = (url) => {
+    if (url && typeof URL.revokeObjectURL === 'function') URL.revokeObjectURL(url);
+  };
+
+  const closeTranscribe = () => {
+    transcribeRunRef.current += 1; // anything still in flight is now stale
+    setTranscribe((t) => { revokeImage(t?.imageUrl); return null; });
+  };
+
+  const transcribeErrorMessage = (err) => {
+    const status = err?.networkError?.statusCode;
+    if (status === 413) return 'That page is too large for the server to accept (413). Your sketch is unchanged.';
+    if (err?.networkError && !err?.graphQLErrors?.length) return 'Could not reach the server. Your sketch is unchanged.';
+    return saveErrorMessage(err);
+  };
+
+  const handleTranscribe = async () => {
+    const run = ++transcribeRunRef.current;
+    const stale = () => run !== transcribeRunRef.current;
+    // The new note links back to this sketch, so it has to exist on the
+    // server by the time that note is saved. Saving now overlaps the read.
+    if (dirtyRef.current || !savedNoteIdRef.current) handleSaveRef.current();
+
+    setTranscribe((t) => {
+      revokeImage(t?.imageUrl);
+      return { open: true, stage: 'working', step: 'export', text: '', error: null, model: null, imageUrl: null, saving: false };
+    });
+
+    let exported;
+    try {
+      const api = sketchApiRef.current;
+      if (!api) throw new Error('The sketch is still loading. Try again in a moment.');
+      exported = await api.exportPng();
+    } catch (err) {
+      if (stale()) return;
+      setTranscribe((t) => ({ ...t, stage: 'error', error: err?.message || 'Could not turn the sketch into an image.' }));
+      return;
+    }
+    if (stale()) return;
+
+    const imageUrl = typeof URL.createObjectURL === 'function' ? URL.createObjectURL(exported.blob) : null;
+    setTranscribe((t) => ({ ...t, step: 'read', imageUrl }));
+
+    try {
+      const { data } = await transcribeSketchMutation({
+        variables: { image: exported.base64, mediaType: exported.mediaType },
+      });
+      if (stale()) return;
+      const result = data?.transcribeSketch;
+      if (!result?.text?.trim()) {
+        setTranscribe((t) => ({ ...t, stage: 'error', error: 'The model read nothing back from that page. Try again.' }));
+        return;
+      }
+      setTranscribe((t) => ({ ...t, stage: 'review', text: result.text, model: result.provenance?.model || null }));
+    } catch (err) {
+      if (stale()) return;
+      setTranscribe((t) => ({ ...t, stage: 'error', error: transcribeErrorMessage(err) }));
+    }
+  };
+
+  /** A new markdown note made from this sketch. Never an update to it. */
+  const saveFromSketch = async (body, { composed }) => {
+    if (!savedNoteIdRef.current) await handleSaveRef.current();
+    const sketchId = savedNoteIdRef.current;
+    if (!sketchId) {
+      notify('Save the sketch first: the new note links back to it.', { tone: 'error' });
+      return false;
+    }
+    try {
+      const { data } = await createNoteMutation({
+        variables: {
+          title: derivedNoteTitle({ sketchTitle: title, body, composed }),
+          content: derivedNoteContent({ sketchId, sketchTitle: title, body, composed }),
+          type: 'markdown',
+          tags,
+        },
+      });
+      const created = data?.createNote;
+      closeTranscribe();
+      setCompose(null);
+      notify('Saved as a new note. The sketch is unchanged.', { tone: 'success' });
+      if (created?.id) navigate(`/notes/${created.id}`);
+      return true;
+    } catch (err) {
+      notify(saveErrorMessage(err), { tone: 'error' });
+      return false;
+    }
+  };
+
+  const handleTranscriptKeepPlain = async () => {
+    if (!transcribe?.text?.trim()) return;
+    setTranscribe((t) => ({ ...t, saving: true }));
+    const ok = await saveFromSketch(transcribe.text, { composed: false });
+    if (!ok) setTranscribe((t) => (t ? { ...t, saving: false } : t));
+  };
+
+  const handleTranscriptCompose = () => {
+    if (!transcribe?.text?.trim()) return;
+    // Hidden, not closed: "Back to transcript" in Compose returns to it.
+    setTranscribe((t) => ({ ...t, open: false }));
+    handleCompose(transcribe.text);
   };
 
   const handleSave = async () => {
@@ -794,8 +920,11 @@ function NoteEditorPage() {
                 canToggleEdit={isMindMap && !isNewNote && !!savedNoteId}
                 isEditMode={isEditMode}
                 onHistory={savedNoteId ? () => setHistoryOpen(true) : undefined}
-                onCompose={canCompose ? handleCompose : undefined}
+                onCompose={canCompose ? () => handleCompose() : undefined}
                 isComposing={isComposing}
+                onTranscribe={isHandwritten ? handleTranscribe : undefined}
+                canTranscribe={canTranscribe}
+                isTranscribing={transcribe?.stage === 'working'}
               />
             }
           />
@@ -819,6 +948,7 @@ function NoteEditorPage() {
             onChange={handleContentChange}
             readOnly={readOnlyMeta}
             isLoading={isLoadingSelected}
+            {...(isHandwritten ? { sketchApiRef } : {})}
           />
         </Box>
       </NoteShell>
@@ -845,7 +975,27 @@ function NoteEditorPage() {
         />
       ) : null}
 
-      {compose ? (
+      {compose && compose.origin === 'sketch' ? (
+        // From a sketch's transcript: a new note only, never "Replace this
+        // note" (the sketch is the original). Discard goes back to the
+        // transcript rather than losing it.
+        <ComposeDialog
+          open={compose.open}
+          loading={compose.loading}
+          markdown={compose.markdown}
+          stats={compose.stats}
+          error={compose.error}
+          model={compose.model}
+          discardLabel="Back to transcript"
+          onClose={() => {
+            setCompose(null);
+            setTranscribe((t) => (t ? { ...t, open: true } : t));
+          }}
+          onSaveAsNew={() => saveFromSketch(compose.markdown, { composed: true })}
+        />
+      ) : null}
+
+      {compose && compose.origin !== 'sketch' ? (
         <ComposeDialog
           open={compose.open}
           loading={compose.loading}
@@ -856,6 +1006,24 @@ function NoteEditorPage() {
           onClose={() => setCompose(null)}
           onSaveAsNew={() => handleComposeSaveAsNew(compose.markdown)}
           onReplace={() => handleComposeReplace(compose.markdown)}
+        />
+      ) : null}
+
+      {transcribe ? (
+        <TranscribeDialog
+          open={transcribe.open}
+          stage={transcribe.stage}
+          step={transcribe.step}
+          text={transcribe.text}
+          onTextChange={(text) => setTranscribe((t) => ({ ...t, text }))}
+          error={transcribe.error}
+          model={transcribe.model}
+          imageUrl={transcribe.imageUrl}
+          saving={transcribe.saving}
+          onClose={closeTranscribe}
+          onRetry={handleTranscribe}
+          onCompose={handleTranscriptCompose}
+          onKeepPlain={handleTranscriptKeepPlain}
         />
       ) : null}
 

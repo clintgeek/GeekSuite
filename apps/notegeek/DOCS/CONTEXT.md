@@ -60,6 +60,7 @@ NoteGeek's note storage, searching, and mutations are **100% gateway-owned** by 
   - `batchDeleteNotes(ids)`
   - `toggleNoteLock(id, isLocked)`
   - `reorderNotes(updates)`
+  - `transcribeSketch(image, mediaType)`: reads a sketch's exported PNG with the vision model (`need: vision+prose:balanced`, 40/day). It writes nothing; the client saves a new markdown note that links back. See `HANDWRITING.md`. It needs `client_max_body_size 12m` on the vhost's `/graphql` location, or images over 1 MB get a 413.
 
 ### HTML & Markdown Security
 Stored notes (`type: 'text'`) contain TipTap HTML. NoteGeek strictly sanitizes on both sides:

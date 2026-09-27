@@ -9,11 +9,13 @@ import {
   deleteTagArgsSchema,
   suggestForNoteArgsSchema,
   composeNoteArgsSchema,
+  transcribeSketchArgsSchema,
   assertContentCeiling,
 } from './validation.js';
 import { sanitizeNoteArgs } from './sanitize.js';
 import { suggestForNote } from './suggest.js';
 import { composeNote } from './compose.js';
+import { transcribeSketch } from './transcribe.js';
 import {
   snapshotNote,
   isMeaningfulChange,
@@ -29,6 +31,7 @@ const validateRenameTag = validateInput(renameTagArgsSchema);
 const validateDeleteTag = validateInput(deleteTagArgsSchema);
 const validateSuggestForNote = validateInput(suggestForNoteArgsSchema);
 const validateComposeNote = validateInput(composeNoteArgsSchema);
+const validateTranscribeSketch = validateInput(transcribeSketchArgsSchema);
 
 /** How many search hits one `searchNotes` call may return. */
 const SEARCH_RESULT_LIMIT = 100;
@@ -340,6 +343,21 @@ export const resolvers = {
       if (!userId) throw new Error('Unauthorized');
       const { content } = validateComposeNote(rawArgs);
       return await composeNote({ content, userId });
+    },
+
+    /**
+     * Read the handwriting in a sketch's page image (DOCS/HANDWRITING.md §2).
+     *
+     * Validated before anything else, so a bad image never reaches a model
+     * or counts against the cap. Writes nothing: the writer corrects the
+     * transcript, and the client saves it as a NEW note that links back to
+     * the sketch — the sketch itself is never replaced.
+     */
+    transcribeSketch: async (_, rawArgs, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const { image, mediaType } = validateTranscribeSketch(rawArgs);
+      return await transcribeSketch({ image, mediaType, userId });
     },
 
     renameTag: async (_, rawArgs, context) => {
