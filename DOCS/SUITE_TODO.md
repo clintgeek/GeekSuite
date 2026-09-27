@@ -201,6 +201,14 @@ Live since 2026-09-26.
 - **Its MCP tools**, once the suite MCP server exists.
 - **A PDF insurance report** with embedded photos.
 
+### CI: shard the mobile harness by app
+
+The full harness (every app, phone and desktop) took 41–47 min on 2026-09-27, and one run
+was cancelled at the old 45-minute cap. The cap is now 75 (`c4487943`), as a stopgap. A
+matrix of per-app jobs would bring it back to about 10 minutes, with each app failing on
+its own, but it renames the required status check (`mobile grammar (iPhone 14, dark +
+light)`). **Chef's call:** update branch protection's required checks at the same time.
+
 ### basegeek health proxy reports "online" for an upstream 502
 
 Found 2026-09-27 while wiring the Signal Box stations. `/api/health/app/babelgeek` and
