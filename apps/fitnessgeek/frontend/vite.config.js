@@ -79,7 +79,11 @@ export default defineConfig({
     themePreboot(),
     VitePWA({
       injectRegister: false,
-      registerType: 'autoUpdate',
+      // 'prompt', not 'autoUpdate' (2026-09-27): autoUpdate reloads the page
+      // the moment a new worker takes control, and every push to main
+      // redeploys, so a reload could land mid-way through typing a food.
+      // PWAUpdatePrompt now applies an update only while the app is hidden.
+      registerType: 'prompt',
       // Single source of truth is public/manifest.json (linked in index.html).
       // An inline manifest here would make VitePWA emit its own
       // manifest.webmanifest + <link rel="manifest">, producing two
@@ -93,7 +97,10 @@ export default defineConfig({
         // onNeedRefresh — so a new deploy's SW waited until every tab closed,
         // and PWAUpdatePrompt's snackbar could never appear.
         clientsClaim: true,
-        skipWaiting: true,
+        // The new worker WAITS; PWAUpdatePrompt sends SKIP_WAITING (via
+        // updateSW) when the page is hidden, so the swap and reload happen
+        // out of sight.
+        skipWaiting: false,
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         navigateFallback: '/index.html',
         // Workbox's NavigationRoute (what navigateFallback registers) matches

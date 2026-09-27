@@ -17,6 +17,7 @@ export default defineConfig({
         dedupe: ['react', 'react-dom', '@emotion/react', '@emotion/styled', '@mui/material'],
         alias: {
             '@geeksuite/ui': path.resolve(__dirname, '../../../packages/ui/src/index.js'),
+            'virtual:pwa-register': path.resolve(__dirname, './src/test/pwaRegisterStub.js'),
             '@geeksuite/utils': path.resolve(__dirname, '../../../packages/utils/src/index.js'),
             'react': path.resolve(__dirname, './node_modules/react'),
             'react-dom': path.resolve(__dirname, './node_modules/react-dom'),
