@@ -16,6 +16,7 @@ import ReactMarkdown from 'react-markdown';
 // See NoteViewer: the preview and the viewer must agree about what markdown
 // is, or the editor shows something the saved note will not.
 import remarkGfm from 'remark-gfm';
+import { MARKDOWN_COMPONENTS, markdownOverflowSx } from '../notes/markdownComponents';
 import { stampFill, stampInk, surfaces } from '../../theme/tokens';
 
 /**
@@ -87,6 +88,7 @@ function MarkdownEditor({ content = '', setContent, isLoading, readOnly = false,
     const renderPreview = () => (
         <Box
             sx={{
+                ...markdownOverflowSx,
                 minHeight: '40vh',
                 '& > :first-child': { mt: 0 },
                 '& h1, & h2, & h3, & h4, & h5, & h6': {
@@ -159,7 +161,7 @@ function MarkdownEditor({ content = '', setContent, isLoading, readOnly = false,
             }}
         >
             {content ? (
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>{content}</ReactMarkdown>
+                <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>{content}</ReactMarkdown>
             ) : (
                 <Box sx={{ color: 'text.secondary', fontStyle: 'italic' }}>
                     Nothing to preview yet...

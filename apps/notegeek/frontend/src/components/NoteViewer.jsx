@@ -6,6 +6,7 @@ import ReactMarkdown from 'react-markdown';
 // single run of literal pipes. The `& th` / `& td` styling below has been
 // waiting for tables it could never receive.
 import remarkGfm from 'remark-gfm';
+import { MARKDOWN_COMPONENTS, markdownOverflowSx } from './notes/markdownComponents';
 import {
     Paper,
     Typography,
@@ -248,6 +249,7 @@ function NoteViewer() {
                         {/* Content — reading space, generous breathing room */}
                         <Box
                             sx={{
+                                ...markdownOverflowSx,
                                 px: { xs: 2.5, sm: 3.5 },
                                 py: { xs: 2.5, sm: 3 },
                                 lineHeight: 1.85,
@@ -364,7 +366,7 @@ function NoteViewer() {
                             }}
                         >
                             {noteToView.type === 'markdown' ? (
-                                <ReactMarkdown remarkPlugins={[remarkGfm]}>{noteToView.content || ''}</ReactMarkdown>
+                                <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>{noteToView.content || ''}</ReactMarkdown>
                             ) : noteToView.type === 'text' ? (
                                 // Stored TipTap HTML. It is rendered as
                                 // markup, so it is sanitized here — the one

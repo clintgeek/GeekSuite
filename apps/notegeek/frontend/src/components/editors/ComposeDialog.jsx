@@ -15,6 +15,7 @@ import {
 } from '@mui/material';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import { MARKDOWN_COMPONENTS, markdownOverflowSx } from '../notes/markdownComponents';
 
 /**
  * ComposeDialog — see the composed document before anything is written.
@@ -110,6 +111,7 @@ export default function ComposeDialog({
                 {!loading && !error && hasResult ? (
                     <Box
                         sx={{
+                            ...markdownOverflowSx,
                             '& h1': { fontSize: '1.6rem', mt: 2, mb: 1 },
                             '& h2': { fontSize: '1.3rem', mt: 2, mb: 1 },
                             '& h3': { fontSize: '1.1rem', mt: 1.5, mb: 0.75 },
@@ -121,7 +123,7 @@ export default function ComposeDialog({
                             '& pre': { bgcolor: 'action.hover', p: 1.5, borderRadius: 1, overflow: 'auto' },
                         }}
                     >
-                        <ReactMarkdown remarkPlugins={[remarkGfm]}>{markdown}</ReactMarkdown>
+                        <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>{markdown}</ReactMarkdown>
                     </Box>
                 ) : null}
 
