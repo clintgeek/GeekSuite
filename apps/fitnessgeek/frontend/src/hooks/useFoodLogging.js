@@ -102,11 +102,13 @@ export const useFoodLogging = ({ date, onChanged }) => {
    * fine. That is reported, not hidden, or the log quietly disagrees with what
    * he told it.
    */
-  const describeMeal = useCallback(async (text) => {
+  const describeMeal = useCallback(async (text, { mealType } = {}) => {
     const result = await foodService.describe(text, {
       date,
       // The server runs UTC and cannot guess which meal 8pm is.
-      hour: new Date().getHours()
+      hour: new Date().getHours(),
+      // …and when the person already picked the meal, it doesn't have to.
+      mealType
     });
 
     const logged = result?.logged || [];

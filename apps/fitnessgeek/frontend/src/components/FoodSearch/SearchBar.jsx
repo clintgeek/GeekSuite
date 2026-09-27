@@ -12,7 +12,9 @@ import {
   Search as SearchIcon,
   QrCodeScanner as BarcodeIcon,
   SmartToy as AIIcon,
-  Clear as ClearIcon
+  Clear as ClearIcon,
+  Mic as MicIcon,
+  Stop as StopIcon
 } from '@mui/icons-material';
 import { GeekSlashHint, slashFocusProps } from '@geeksuite/ui';
 
@@ -34,6 +36,11 @@ const SearchBar = ({
   onSubmit,
   onBarcodeClick,
   onAIClick,
+  // Speak it (SIMPLE_AND_FULL_PLAN.md item 3). Rendered only when the host
+  // passes a handler — and the host passes one only when the browser has a
+  // speech recognizer, so an unsupported browser never shows a dead mic.
+  onMicClick,
+  listening = false,
   loading = false,
   // Every real mount passes its own; this default is only a fallback, and it
   // deliberately no longer promises describe-and-log, which depends on the
@@ -111,6 +118,28 @@ const SearchBar = ({
                   </IconButton>
                 )}
                 {!value && !loading && <GeekSlashHint />}
+                {onMicClick && (
+                  <Tooltip title={listening ? 'Stop listening' : 'Say what you ate'} arrow>
+                    <IconButton
+                      aria-label={listening ? 'Stop listening' : 'Say what you ate'}
+                      aria-pressed={listening}
+                      onClick={onMicClick}
+                      sx={{
+                        width: 48,
+                        height: 48,
+                        color: listening ? theme.palette.primary.contrastText : theme.palette.primary.main,
+                        backgroundColor: listening ? theme.palette.primary.main : 'transparent',
+                        '@media (hover: hover)': {
+                          '&:hover': {
+                            backgroundColor: listening ? theme.palette.primary.dark : `${theme.palette.primary.main}1a`,
+                          }
+                        }
+                      }}
+                    >
+                      {listening ? <StopIcon /> : <MicIcon />}
+                    </IconButton>
+                  </Tooltip>
+                )}
                 {onBarcodeClick && (
                   <Tooltip title="Scan Barcode" arrow>
                     <IconButton
@@ -153,8 +182,8 @@ const SearchBar = ({
         }}
         sx={{
           '& .MuiOutlinedInput-root': {
-            borderRadius: '12px',
-            fontSize: '1.0625rem',
+            borderRadius: '18px',
+            fontSize: '1.125rem',
             py: 1,
             px: 1.5,
             color: theme.palette.text.primary,

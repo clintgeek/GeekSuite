@@ -83,7 +83,7 @@ const ModeSelector = ({ value, onChange }) => {
             <Typography
               variant="h5"
               sx={{
-                fontFamily: '"DM Serif Display", serif',
+                fontFamily: 'inherit',
                 fontSize: '1.5rem',
                 mb: 0.75,
                 color: isSelected ? accentColor : 'text.primary',
@@ -97,7 +97,7 @@ const ModeSelector = ({ value, onChange }) => {
             <Typography
               variant="body2"
               sx={{
-                fontFamily: '"DM Sans", sans-serif',
+                fontFamily: 'inherit',
                 fontSize: '0.9375rem',
                 color: 'text.secondary',
                 mb: 2,
@@ -118,7 +118,7 @@ const ModeSelector = ({ value, onChange }) => {
               variant="caption"
               sx={{
                 display: 'block',
-                fontFamily: '"JetBrains Mono", monospace',
+                fontFamily: 'inherit',
                 color: isSelected ? accentColor : 'text.secondary',
                 mt: 1.5,
                 transition: 'color 180ms ease-out',
@@ -130,7 +130,7 @@ const ModeSelector = ({ value, onChange }) => {
               variant="caption"
               sx={{
                 display: 'block',
-                fontFamily: '"DM Sans", sans-serif',
+                fontFamily: 'inherit',
                 color: 'text.disabled',
                 mt: 0.25,
               }}

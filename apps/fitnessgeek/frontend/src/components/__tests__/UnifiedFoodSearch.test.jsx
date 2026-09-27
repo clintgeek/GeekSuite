@@ -250,7 +250,7 @@ describe('describing a meal', () => {
     await vi.advanceTimersByTimeAsync(600);
     fireEvent.click(screen.getByText(/Log “homemade quesadilla”/));
 
-    expect(await screen.findByText('Logged Homemade Quesadilla · 725 cal')).toBeInTheDocument();
+    expect(await screen.findByText('Added to breakfast ✓ · Homemade Quesadilla · 725 cal')).toBeInTheDocument();
     expect(screen.queryByText(/7 items/)).not.toBeInTheDocument();
   });
 
@@ -269,7 +269,7 @@ describe('describing a meal', () => {
     await vi.advanceTimersByTimeAsync(600);
     fireEvent.click(screen.getByText(/Log “fat boy's burger and fries and a coke”/));
 
-    expect(await screen.findByText("Logged Fat Boy's Burger and Fries and Coke · 970 cal")).toBeInTheDocument();
+    expect(await screen.findByText("Added to breakfast ✓ · Fat Boy's Burger and Fries and Coke · 970 cal")).toBeInTheDocument();
   });
 
   it('logs on Enter rather than re-running a search that already ran', async () => {
@@ -279,7 +279,8 @@ describe('describing a meal', () => {
 
     // SearchBar listens for the Enter key itself; there is no form element.
     fireEvent.keyDown(screen.getByPlaceholderText(/what did you eat/i), { key: 'Enter' });
-    await waitFor(() => expect(describeMeal).toHaveBeenCalledWith('a dozen nachos with beef and cheese'));
+    // The box's meal rides along, so the server need not guess it from the clock.
+    await waitFor(() => expect(describeMeal).toHaveBeenCalledWith('a dozen nachos with beef and cheese', { mealType: 'snack' }));
   });
 
   it('logs when the offer itself is tapped', async () => {
@@ -288,7 +289,7 @@ describe('describing a meal', () => {
     await vi.advanceTimersByTimeAsync(600);
 
     fireEvent.click(screen.getByText(/Log “eggs and toast”/));
-    await waitFor(() => expect(describeMeal).toHaveBeenCalledWith('eggs and toast'));
+    await waitFor(() => expect(describeMeal).toHaveBeenCalledWith('eggs and toast', { mealType: 'snack' }));
   });
 
   it('clears the box once it is written, so the same meal is not logged twice', async () => {

@@ -1,7 +1,8 @@
 import { Outlet, useLocation } from 'react-router-dom';
 import { useMediaQuery, useTheme } from '@mui/material';
 import { GeekShell, GeekAppFrame, GeekBottomNav, GeekToastProvider, geekLayout } from '@geeksuite/ui';
-import { activeNavId, bottomNavItems } from './navConfig.jsx';
+import { bottomNavActiveId, bottomNavItems } from './navConfig.jsx';
+import { CHROME_BG } from './chrome.js';
 import Sidebar from './Sidebar.jsx';
 import TopBar from './TopBar.jsx';
 
@@ -38,15 +39,16 @@ export default function ModernLayout() {
 
   return (
     <GeekShell
-      // Studio Slate's sidebar is always-dark; pin the mobile drawer paper too.
-      navSx={{ bgcolor: '#0C0A09' }}
+      // Market Morning's sidebar is the chalkboard in both modes; pin the
+      // mobile drawer paper to it too.
+      navSx={{ bgcolor: CHROME_BG }}
       nav={<Sidebar />}
       topBar={<TopBar />}
       bottomNav={
         isMobile ? (
           <GeekBottomNav
             items={bottomNavItems}
-            activeId={activeNavId(location.pathname)}
+            activeId={bottomNavActiveId(location.pathname)}
           />
         ) : null
       }

@@ -6,7 +6,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import { useSearchParams } from 'react-router-dom';
 import { useToast } from '@geeksuite/ui';
-import { SectionLabel, DisplayHeading } from '../components/primitives';
+
 import {
   fetchStagedShareFile,
   uploadBodyCompFile,
@@ -404,9 +404,7 @@ function ScanImport() {
   return (
     <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 720, mx: 'auto' }}>
       <Box sx={{ mb: 3 }}>
-        <SectionLabel sx={{ mb: 0.75 }}>Import · Body Scan</SectionLabel>
-        <DisplayHeading size="page">Import a scan</DisplayHeading>
-        <Typography sx={{ color: 'text.secondary', mt: 0.5, fontSize: '0.9375rem' }}>
+        <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem' }}>
           Share a body-composition report from your scale's app, or choose a file below.
         </Typography>
       </Box>

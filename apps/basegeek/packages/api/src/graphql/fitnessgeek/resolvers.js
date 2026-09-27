@@ -29,7 +29,7 @@ import {
 } from '@geeksuite/utils';
 import derivationModule from '@geeksuite/schemas/fitnessgeek/bodyCompositionDerivation';
 import { leanMassFor, loadBodyCompScans, toBodyCompPoint } from './bodyCompPoints.js';
-import { validateFitnessMealsArgs, validateParseFoodEntryArgs } from './validation.js';
+import { validateExperienceInput, validateFitnessMealsArgs, validateParseFoodEntryArgs } from './validation.js';
 import { runAIFeature } from '../../services/aiFeatureRunner.js';
 import {
   QUICK_ADD_SCHEMA,
@@ -1374,6 +1374,13 @@ export const resolvers = {
       // which enforce the "one household at a time" invariant. Accepting it as
       // free-form JSON let a client silently graft itself onto any household id.
       const { theme, household: _ignoredHousehold, ...otherSettings } = input;
+
+      // Simple and Full: the one sub-document here with a real contract
+      // (validation.js — known keys, two enums, a bounded name). Validated
+      // BEFORE the write, so a bad value is refused rather than stored.
+      if (otherSettings.experience != null) {
+        otherSettings.experience = validateExperienceInput(otherSettings.experience);
+      }
 
       // Dot paths, never whole sub-objects: a partial save must MERGE. See
       // flattenSettingsUpdate() above (BURN_REVIEW #5).

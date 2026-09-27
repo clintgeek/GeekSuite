@@ -59,7 +59,7 @@ const SleepStageTile = ({ icon: Icon, minutes = 0, label, color }) => {
       {Icon && <Icon sx={{ color, fontSize: 22 }} />}
       <Typography
         sx={{
-          fontFamily: "'JetBrains Mono', monospace",
+          fontFamily: "inherit",
           fontVariantNumeric: 'tabular-nums',
           fontSize: '1.125rem',
           fontWeight: 600,
@@ -112,7 +112,7 @@ const MetricTile = ({ icon: Icon, label, value, unit, color, subtext }) => {
       <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.375 }}>
         <Typography
           sx={{
-            fontFamily: "'JetBrains Mono', monospace",
+            fontFamily: "inherit",
             fontVariantNumeric: 'tabular-nums',
             fontSize: '1.125rem',
             fontWeight: 600,
@@ -126,7 +126,7 @@ const MetricTile = ({ icon: Icon, label, value, unit, color, subtext }) => {
         {unit && (
           <Typography
             sx={{
-              fontFamily: "'JetBrains Mono', monospace",
+              fontFamily: "inherit",
               fontSize: '0.75rem',
               fontWeight: 600,
               textTransform: 'uppercase',
@@ -152,7 +152,7 @@ const MetricTile = ({ icon: Icon, label, value, unit, color, subtext }) => {
       {subtext && (
         <Typography
           sx={{
-            fontFamily: "'JetBrains Mono', monospace",
+            fontFamily: "inherit",
             fontSize: '0.75rem',
             color: 'text.disabled',
           }}
@@ -249,7 +249,7 @@ const ActivityCard = ({ activity }) => {
           <Box sx={{ minWidth: 0 }}>
             <Typography
               sx={{
-                fontFamily: "'DM Serif Display', serif",
+                fontFamily: "inherit",
                 fontSize: '1.25rem',
                 fontWeight: 400,
                 color: 'text.primary',
@@ -265,7 +265,7 @@ const ActivityCard = ({ activity }) => {
             </Typography>
             <Typography
               sx={{
-                fontFamily: "'JetBrains Mono', monospace",
+                fontFamily: "inherit",
                 fontSize: '0.75rem',
                 color: 'text.secondary',
                 mt: 0.25,
@@ -285,7 +285,7 @@ const ActivityCard = ({ activity }) => {
               bgcolor: theme.palette.warning.main + '20',
               color: theme.palette.warning.dark,
               fontWeight: 600,
-              fontFamily: "'JetBrains Mono', monospace",
+              fontFamily: "inherit",
               flexShrink: 0,
             }}
           />
@@ -298,7 +298,7 @@ const ActivityCard = ({ activity }) => {
             <TimeIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
             <Typography
               sx={{
-                fontFamily: "'JetBrains Mono', monospace",
+                fontFamily: "inherit",
                 fontVariantNumeric: 'tabular-nums',
                 fontSize: '0.8125rem',
                 color: 'text.secondary',
@@ -313,7 +313,7 @@ const ActivityCard = ({ activity }) => {
             <TrendIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
             <Typography
               sx={{
-                fontFamily: "'JetBrains Mono', monospace",
+                fontFamily: "inherit",
                 fontVariantNumeric: 'tabular-nums',
                 fontSize: '0.8125rem',
                 color: 'text.secondary',
@@ -328,7 +328,7 @@ const ActivityCard = ({ activity }) => {
             <HeartIcon sx={{ fontSize: 16, color: 'text.secondary' }} />
             <Typography
               sx={{
-                fontFamily: "'JetBrains Mono', monospace",
+                fontFamily: "inherit",
                 fontVariantNumeric: 'tabular-nums',
                 fontSize: '0.8125rem',
                 color: 'text.secondary',

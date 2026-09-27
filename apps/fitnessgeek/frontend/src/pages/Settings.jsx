@@ -28,10 +28,9 @@ import { settingsService } from '../services/settingsService.js';
 import logger from '../utils/logger.js';
 import { useThemeMode as useAppTheme } from '@geeksuite/user';
 import HouseholdSettings from '../components/Settings/HouseholdSettings';
+import ExperienceSettings from '../components/Settings/ExperienceSettings.jsx';
 import {
   Surface,
-  DisplayHeading,
-  SectionLabel,
 } from '../components/primitives';
 
 // ─── Dirty detection — compare a settings snapshot field-by-field ───
@@ -194,14 +193,9 @@ const Settings = () => {
         pb: dirty ? { xs: 12, sm: 10 } : { xs: 2, sm: 3 },
       }}
     >
-      {/* Editorial header */}
-      <Box sx={{ mb: 3 }}>
-        <SectionLabel sx={{ mb: 0.75 }}>Account · Preferences</SectionLabel>
-        <DisplayHeading size="page">Settings</DisplayHeading>
-        <Typography sx={{ color: 'text.secondary', mt: 0.5, fontSize: '0.9375rem' }}>
-          Customize your FitnessGeek experience. Changes stay local until you save.
-        </Typography>
-      </Box>
+      {/* Simple or Full, and Larger text — saved as they are chosen. The
+          top bar already says "Settings"; the page no longer repeats it. */}
+      <ExperienceSettings />
 
       {/* Household Sharing */}
       <Box sx={{ mb: 2 }}>
@@ -214,7 +208,7 @@ const Settings = () => {
           <ThemeIcon sx={{ color: 'primary.main' }} />
           <Typography
             sx={{
-              fontFamily: "'DM Serif Display', serif",
+              fontFamily: "inherit",
               fontSize: '1.375rem',
               fontWeight: 400,
               color: 'text.primary',
@@ -226,8 +220,9 @@ const Settings = () => {
         </Box>
 
         <FormControl fullWidth>
-          <InputLabel>Theme</InputLabel>
+          <InputLabel id="settings-theme-label">Theme</InputLabel>
           <Select
+            labelId="settings-theme-label"
             value={themePreference}
             onChange={(e) => handleThemeChange(e.target.value)}
             label="Theme"
@@ -261,7 +256,7 @@ const Settings = () => {
           <LanguageIcon sx={{ color: 'primary.main' }} />
           <Typography
             sx={{
-              fontFamily: "'DM Serif Display', serif",
+              fontFamily: "inherit",
               fontSize: '1.375rem',
               fontWeight: 400,
               color: 'text.primary',
@@ -274,8 +269,9 @@ const Settings = () => {
 
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
           <FormControl fullWidth>
-            <InputLabel>Weight Units</InputLabel>
+            <InputLabel id="settings-weight-units-label">Weight Units</InputLabel>
             <Select
+            labelId="settings-weight-units-label"
               value={settings.units.weight}
               onChange={(e) => handleUnitSettingChange('weight', e.target.value)}
               label="Weight Units"
@@ -285,8 +281,9 @@ const Settings = () => {
             </Select>
           </FormControl>
           <FormControl fullWidth>
-            <InputLabel>Height Units</InputLabel>
+            <InputLabel id="settings-height-units-label">Height Units</InputLabel>
             <Select
+            labelId="settings-height-units-label"
               value={settings.units.height}
               onChange={(e) => handleUnitSettingChange('height', e.target.value)}
               label="Height Units"
@@ -304,7 +301,7 @@ const Settings = () => {
           <BPIcon sx={{ color: 'primary.main' }} />
           <Typography
             sx={{
-              fontFamily: "'DM Serif Display', serif",
+              fontFamily: "inherit",
               fontSize: '1.375rem',
               fontWeight: 400,
               color: 'text.primary',
@@ -363,7 +360,7 @@ const Settings = () => {
           <HealthAlertIcon sx={{ color: 'primary.main' }} />
           <Typography
             sx={{
-              fontFamily: "'DM Serif Display', serif",
+              fontFamily: "inherit",
               fontSize: '1.375rem',
               fontWeight: 400,
               color: 'text.primary',

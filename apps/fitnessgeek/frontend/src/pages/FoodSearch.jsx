@@ -6,7 +6,7 @@ import BarcodeScanner from '../components/BarcodeScanner/BarcodeScanner.jsx';
 import FoodEditDialog from '../components/MyFoods/FoodEditDialog.jsx';
 import { fitnessGeekService } from '../services/fitnessGeekService.js';
 import { useFoodLogging } from '../hooks/useFoodLogging.js';
-import { SectionLabel, DisplayHeading } from '../components/primitives';
+import { addedMessage } from '../utils/plainWords.js';
 
 const EMPTY_FOOD_FORM = {
   name: '',
@@ -85,9 +85,7 @@ const FoodSearchPage = () => {
   return (
     <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 820, mx: 'auto' }}>
       <Box sx={{ mb: 2 }}>
-        <SectionLabel sx={{ mb: 0.75 }}>Entry · Search</SectionLabel>
-        <DisplayHeading size="page">Add Food</DisplayHeading>
-        <Typography sx={{ color: 'text.secondary', mt: 0.5, fontSize: '0.9375rem' }}>
+        <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem' }}>
           Your own foods come up first. Tap once to log it.
         </Typography>
       </Box>
@@ -117,7 +115,7 @@ const FoodSearchPage = () => {
             const result = await logItems([{ ...food, servings: 1 }], mealType);
             if ((result?.ok ?? 0) > 0) {
               const logIds = result?.logIds || [];
-              notify(`Logged ${food.name}`, {
+              notify(addedMessage(mealType, food.name), {
                 tone: 'success',
                 action: logIds.length > 0 ? (
                   <Button

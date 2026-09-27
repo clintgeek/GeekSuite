@@ -106,7 +106,7 @@ const DayCard = ({ day, calorieTarget, macroTargets }) => {
         <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.75, mb: 1 }}>
           <Typography
             sx={{
-              fontFamily: "'DM Serif Display', serif",
+              fontFamily: "inherit",
               fontSize: '1.125rem',
               fontWeight: 400,
               color: ink,
@@ -118,7 +118,7 @@ const DayCard = ({ day, calorieTarget, macroTargets }) => {
           </Typography>
           <Typography
             sx={{
-              fontFamily: "'JetBrains Mono', monospace",
+              fontFamily: "inherit",
               fontVariantNumeric: 'tabular-nums',
               fontSize: '0.75rem',
               fontWeight: 600,
@@ -179,7 +179,7 @@ const DayCard = ({ day, calorieTarget, macroTargets }) => {
                     back. */}
                 <Typography
                   sx={{
-                    fontFamily: "'JetBrains Mono', monospace",
+                    fontFamily: "inherit",
                     fontSize: '0.75rem',
                     fontWeight: 700,
                     color: muted,
@@ -218,7 +218,7 @@ const DayCard = ({ day, calorieTarget, macroTargets }) => {
                 {/* Value */}
                 <Typography
                   sx={{
-                    fontFamily: "'JetBrains Mono', monospace",
+                    fontFamily: "inherit",
                     fontVariantNumeric: 'tabular-nums',
                     fontSize: '0.75rem',
                     fontWeight: 600,
@@ -276,7 +276,7 @@ const DayRibbon = ({ daily = [], macroTargets, calorieTarget, title = 'Daily Tot
         {rangeLabel && (
           <Typography
             sx={{
-              fontFamily: "'JetBrains Mono', monospace",
+              fontFamily: "inherit",
               fontSize: '0.75rem',
               fontWeight: 600,
               color: 'text.secondary',

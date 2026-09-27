@@ -18,12 +18,13 @@ vi.mock('../../services/fitnessGeekService.js', () => ({
   },
 }));
 vi.mock('../../services/goalsService.js', () => ({ goalsService: { getDerivedMacros: vi.fn() } }));
-vi.mock('../../services/weightService.js', () => ({ weightService: { getWeightStats: vi.fn() } }));
-vi.mock('../../services/bpService.js', () => ({ bpService: { getCurrentBP: vi.fn(() => Promise.resolve(null)) } }));
+vi.mock('../../services/weightService.js', () => ({ weightService: { getWeightStats: vi.fn(), getWeightLogs: vi.fn(() => Promise.resolve({ data: [] })) } }));
+vi.mock('../../services/bpService.js', () => ({ bpService: { getCurrentBP: vi.fn(() => Promise.resolve(null)), getBPLogs: vi.fn(() => Promise.resolve({ data: [] })) } }));
+vi.mock('../../services/medsService.js', () => ({ medsService: { list: vi.fn(() => Promise.resolve([])), getLogsByDate: vi.fn(() => Promise.resolve([])), log: vi.fn() } }));
 vi.mock('../../services/streakService.js', () => ({ streakService: { getLoginStreak: vi.fn(() => Promise.resolve(null)) } }));
 vi.mock('../../services/settingsService.js', () => ({ settingsService: { getSettings: vi.fn() } }));
 vi.mock('../../services/bodyCompService.js', () => ({ bodyCompService: { getSummary: vi.fn() } }));
-vi.mock('../../hooks/useFoodLogging.js', () => ({ useFoodLogging: () => ({ logItems: vi.fn() }) }));
+vi.mock('../../hooks/useFoodLogging.js', () => ({ useFoodLogging: () => ({ logItems: vi.fn(), undoLogs: vi.fn(), describeMeal: vi.fn(), adjustLogCalories: vi.fn() }) }));
 vi.mock('../../components/Dashboard/AIInsightsCard.jsx', () => ({ default: () => null }));
 vi.mock('@geeksuite/ui', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -65,7 +66,7 @@ describe('DashboardNew — body data', () => {
 
   it('shows no banner without a plan', async () => {
     setup({ ng: null });
-    await screen.findByText('Today\'s Meals');
+    await screen.findByText('Today\'s meals');
     expect(screen.queryByTestId('plan-accuracy-banner')).toBeNull();
   });
 
@@ -76,7 +77,7 @@ describe('DashboardNew — body data', () => {
 
   it('no protein caption on the goal-weight rule', async () => {
     setup({ basis: 'goal_weight' });
-    await screen.findByText('Today\'s Meals');
+    await screen.findByText('Today\'s meals');
     expect(screen.queryByTestId('macro-note-protein')).toBeNull();
   });
 

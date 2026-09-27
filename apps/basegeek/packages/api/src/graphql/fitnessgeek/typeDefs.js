@@ -135,6 +135,16 @@ export const typeDefs = gql`
     features: AIFeatures
   }
 
+  # Simple and Full (apps/fitnessgeek/DOCS/SIMPLE_AND_FULL_PLAN.md). \`mode\`
+  # null means the person never chose, and the app decides from their history.
+  type FitnessExperienceSettings {
+    mode: String
+    larger_text: Boolean
+    first_run_done: Boolean
+    preferred_name: String
+    goal: String
+  }
+
   type HouseholdSettings {
     household_id: String
     display_name: String
@@ -174,6 +184,7 @@ export const typeDefs = gql`
     weight_goal: WeightGoalSettings
     units: UnitSettings
     ai: AISettings
+    experience: FitnessExperienceSettings
     household: HouseholdSettings
     favorite_foods: [FitnessFood]
     created_at: Date
@@ -192,6 +203,7 @@ export const typeDefs = gql`
     weight_goal: FitnessJSON
     units: FitnessJSON
     ai: FitnessJSON
+    experience: FitnessJSON
     household: FitnessJSON
   }
 

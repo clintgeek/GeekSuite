@@ -68,7 +68,7 @@ const SIZE_MAP = {
  * StatNumber — monospaced, tabular-nums numeric display.
  *
  * Every metric number in the app should use this. It:
- *  - Applies JetBrains Mono with font-variant-numeric: tabular-nums (digits don't jitter)
+ *  - Applies font-variant-numeric: tabular-nums (digits don't jitter)
  *  - Supports animated count-up (opt-in via `animate` prop)
  *  - Takes a `unit` prop that renders smaller + muted next to the number
  *  - Has size variants that match the app's typographic scale
@@ -112,7 +112,7 @@ const StatNumber = ({
       <Typography
         component="span"
         sx={{
-          fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+          fontFamily: "inherit",
           fontVariantNumeric: 'tabular-nums',
           color: textColor,
           ...sizeStyles,
@@ -125,7 +125,7 @@ const StatNumber = ({
         <Typography
           component="span"
           sx={{
-            fontFamily: "'JetBrains Mono', 'Fira Code', monospace",
+            fontFamily: "inherit",
             fontSize:
               size === 'hero'
                 ? '0.875rem'
@@ -135,9 +135,7 @@ const StatNumber = ({
                 // the `body` size's unit label — the "×" beside sleep counts
                 // on the Activity page.
                 : '0.75rem',
-            fontWeight: 600,
-            textTransform: 'uppercase',
-            letterSpacing: '0.08em',
+            fontWeight: 700,
             color: theme.palette.text.secondary,
             alignSelf: size === 'hero' ? 'flex-end' : 'baseline',
             mb: size === 'hero' ? '0.6em' : 0,

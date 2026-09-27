@@ -55,10 +55,13 @@ beforeEach(() => {
 });
 
 describe('Weight & body page', () => {
-  it('is titled "Weight & body"', async () => {
+  it('says what it is in one line, and does not repeat the top bar\'s title', async () => {
     getSummary.mockResolvedValue({ success: true, data: { total_scans: 0 } });
     renderPage();
-    expect(await screen.findByRole('heading', { name: 'Weight & body' })).toBeInTheDocument();
+    // SIMPLE_AND_FULL_PLAN.md item 8: the title used to appear three times
+    // (top bar, eyebrow, heading). The top bar keeps it.
+    expect(await screen.findByText(/averaged so one water day doesn.t move the needle/)).toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: /weight & body/i })).toBeNull();
   });
 
   it('a failed body-comp query leaves the weight half standing', async () => {

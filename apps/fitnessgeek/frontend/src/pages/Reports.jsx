@@ -210,9 +210,7 @@ const Reports = () => {
     <Container maxWidth="xl" sx={{ py: 4, px: { xs: 2, md: 4 } }}>
       <Box sx={{ mb: 4, display: 'flex', flexDirection: { xs: 'column', md: 'row' }, gap: 2, alignItems: { md: 'flex-end' } }}>
         <Box sx={{ flex: 1 }}>
-          <SectionLabel sx={{ mb: 0.75 }}>Insight · Reports</SectionLabel>
-          <DisplayHeading size="page">Reports & Trends</DisplayHeading>
-          <Typography sx={{ color: 'text.secondary', mt: 0.5, fontSize: '0.9375rem' }}>
+          <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem' }}>
             Deep dive into your food logs, macro patterns, and AI insights for the past {range} days.
           </Typography>
         </Box>
@@ -349,7 +347,7 @@ const Reports = () => {
                         />
                         <Typography
                           sx={{
-                            fontFamily: "'JetBrains Mono', monospace",
+                            fontFamily: "inherit",
                             fontVariantNumeric: 'tabular-nums',
                             fontSize: '0.75rem',
                             color: 'text.secondary',
@@ -378,7 +376,7 @@ const Reports = () => {
                       </Typography>
                       <Typography
                         sx={{
-                          fontFamily: "'JetBrains Mono', monospace",
+                          fontFamily: "inherit",
                           fontVariantNumeric: 'tabular-nums',
                           fontSize: '0.75rem',
                           color: 'text.secondary',
@@ -443,7 +441,7 @@ const Reports = () => {
                         </Typography>
                         <Typography
                           sx={{
-                            fontFamily: "'JetBrains Mono', monospace",
+                            fontFamily: "inherit",
                             fontSize: '0.75rem',
                             color: 'text.secondary',
                           }}
@@ -453,7 +451,7 @@ const Reports = () => {
                       </Box>
                       <Typography
                         sx={{
-                          fontFamily: "'JetBrains Mono', monospace",
+                          fontFamily: "inherit",
                           fontVariantNumeric: 'tabular-nums',
                           fontSize: '0.8125rem',
                           fontWeight: 600,

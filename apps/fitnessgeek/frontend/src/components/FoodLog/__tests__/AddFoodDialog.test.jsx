@@ -93,7 +93,7 @@ describe('scanning a barcode from the meal-slot sheet', () => {
       [{ ...food, servings: 1 }],
       'breakfast'
     ));
-    expect(await screen.findByText(/Logged Test Food/)).toBeInTheDocument();
+    expect(await screen.findByText(/^Added to .* ✓ · Test Food$/)).toBeInTheDocument();
     await waitFor(() => expect(onClose).toHaveBeenCalledTimes(1));
   });
 

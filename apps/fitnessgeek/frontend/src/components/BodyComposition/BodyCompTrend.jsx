@@ -83,7 +83,7 @@ const Panel = ({ label, series, color, xMin, xMax, chartTheme, theme, showAxis }
                 {formatDay(slice.points[0].data.xFormatted)}
               </Typography>
               {slice.points.map((p) => (
-                <Typography key={p.id} sx={{ fontSize: '0.8125rem', color: 'text.primary', fontFamily: "'JetBrains Mono', monospace" }}>
+                <Typography key={p.id} sx={{ fontSize: '0.8125rem', color: 'text.primary', fontFamily: "inherit" }}>
                   {p.seriesId.endsWith('readings') ? 'Scan' : '7-day avg'} {Number(p.data.yFormatted).toFixed(1)} lb
                 </Typography>
               ))}

@@ -379,3 +379,21 @@ describe('usableRange', () => {
     expect(usableRange(null, 500)).toBe(false);
   });
 });
+
+// SIMPLE_AND_FULL_PLAN.md item 1: a meal card's "+ Add" (and the voice button
+// inside it) already knows which meal this is. The 7pm clock says dinner.
+describe('a meal the caller already chose', () => {
+  test('is the meal the rows are written to', async () => {
+    estimateDishes.mockImplementation(async () => ({
+      ok: true,
+      dishes: [estimated(0, 'Eggs', 140), estimated(1, 'Toast', 90)]
+    }));
+
+    const result = await logDescription('eggs and toast', {
+      userId: 'u1', date: '2026-09-15', hour: 19, mealType: 'breakfast', skipReview: true
+    });
+
+    expect(result.logged.map((row) => row.mealType)).toEqual(['breakfast', 'breakfast']);
+    expect(savedLogs.map((row) => row.meal_type)).toEqual(['breakfast', 'breakfast']);
+  });
+});

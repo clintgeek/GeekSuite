@@ -1,7 +1,7 @@
 /**
  * Shared Nivo chart theme for FitnessGeek.
  *
- * Typography locked to JetBrains Mono for axis values, tabular-nums,
+ * Typography inherits the app face (Nunito) for axis values, tabular-nums,
  * muted colors. Invisible grid (dotted, 5% opacity). No axis domain
  * lines, no tick marks — the data is the foreground, the chrome disappears.
  *
@@ -17,7 +17,7 @@ export const buildChartTheme = (theme) => {
   return {
     background: 'transparent',
     textColor: muted,
-    fontFamily: "'JetBrains Mono', monospace",
+    fontFamily: "inherit",
     fontSize: 10,
     axis: {
       domain: { line: { stroke: 'transparent' } },
@@ -26,7 +26,7 @@ export const buildChartTheme = (theme) => {
         text: {
           fill: muted,
           fontSize: 10,
-          fontFamily: "'JetBrains Mono', monospace",
+          fontFamily: "inherit",
           fontWeight: 500,
           letterSpacing: '0.02em',
         },

@@ -63,7 +63,9 @@ describe('the medication list', () => {
 
     render(<Medications />);
 
-    expect(await screen.findByText('Lisinopril')).toBeInTheDocument();
+    // Once in the list, once as today's dose to tick (SIMPLE_AND_FULL_PLAN.md item 6).
+    expect(await screen.findAllByText('Lisinopril')).toHaveLength(2);
+    expect(screen.getByRole('checkbox', { name: 'Lisinopril, morning' })).toBeInTheDocument();
     expect(screen.queryByText('No medications yet')).toBeNull();
   });
 

@@ -4,6 +4,7 @@ import {
   AddCircleOutline as CreateIcon,
   AutoAwesome as WandIcon,
   ExpandMore as ExpandIcon,
+  Mic as MicIcon,
 } from '@mui/icons-material';
 import { useTheme, alpha } from '@mui/material/styles';
 import { useToast, readableOn } from '@geeksuite/ui';
@@ -12,7 +13,10 @@ import FoodResultRow from './FoodResultRow';
 import ServingSheet from './ServingSheet';
 import SessionRibbon from './SessionRibbon';
 import PortionQuestion from './PortionQuestion';
+import QuickPicks from './QuickPicks';
 import { foodService } from '../../services/foodService';
+import { useSpeechInput } from '../../hooks/useSpeechInput.js';
+import { addedMessage } from '../../utils/plainWords.js';
 
 /**
  * The food search box. One surface, two waves, no submit step.
@@ -108,6 +112,14 @@ const UnifiedFoodSearch = ({
    * was asked for and are always shown.
    */
   collapseIdleList = false,
+  /**
+   * "Again" chips and "Same as yesterday's …" above the idle list
+   * (SIMPLE_AND_FULL_PLAN.md item 2). Needs `date`, the day being logged to.
+   */
+  showQuickPicks = false,
+  date = null,
+  /** The microphone (item 3). Shown only where the browser can listen. */
+  voice = true,
   className
 }) => {
   const theme = useTheme();
@@ -263,7 +275,7 @@ const UnifiedFoodSearch = ({
           ...prev,
           ...items.map((item, i) => ({ ...item, logIds: perItem[i] || [] }))
         ]);
-        notify(`Logged ${items.length === 1 ? items[0].name : `${ok} items`}`, {
+        notify(addedMessage(meal || mealType, items.length === 1 ? items[0].name : `${ok} items`), {
           tone: result?.fail ? 'warning' : 'success',
           action: logIds.length > 0 && onUndo ? (
             <Button
@@ -296,14 +308,18 @@ const UnifiedFoodSearch = ({
    * the box is an invitation to log it twice, and this is the path that exists
    * so nobody has to think about it.
    */
-  const describe = useCallback(async () => {
-    const text = query.trim();
+  const describe = useCallback(async (spoken) => {
+    // `spoken` is the microphone's transcript, handed straight in: the box's
+    // `query` state has not caught up with it yet on this render.
+    const text = String(typeof spoken === 'string' ? spoken : query).trim();
     if (!text || !onDescribe || describing) return;
 
     setDescribing(true);
     setError(null);
     try {
-      const result = await onDescribe(text);
+      // The meal the person picked (a meal card's "+ Add", or the chips)
+      // rides along, so "two eggs" from Lunch's sheet lands in lunch.
+      const result = await onDescribe(text, { mealType });
       const logged = result?.logged || [];
       const skipped = result?.skipped || [];
       const logIds = result?.logIds || [];
@@ -357,7 +373,7 @@ const UnifiedFoodSearch = ({
           : result?.totalCalories;
         const summary = `${what} · ${Math.round(calories || 0)} cal`;
 
-        notify(`Logged ${summary}`, {
+        notify(addedMessage(logged[0]?.mealType || mealType, summary), {
           tone: skipped.length > 0 ? 'warning' : 'success',
           action: logIds.length > 0 && onUndo ? (
             <Button
@@ -407,7 +423,24 @@ const UnifiedFoodSearch = ({
     } finally {
       setDescribing(false);
     }
-  }, [query, onDescribe, describing, onUndo, onClose, notify]);
+  }, [query, onDescribe, describing, onUndo, onClose, notify, mealType]);
+
+  // ── Speak it ─────────────────────────────────────────────────────────
+  // The transcript goes into the box (so he can see what was heard) and
+  // straight through describe-and-log, the same path typing takes.
+  const describeRef = useRef(describe);
+  describeRef.current = describe;
+  const speech = useSpeechInput({
+    onFinal: (text) => {
+      setQuery(text);
+      describeRef.current(text);
+    }
+  });
+  const micAvailable = voice && speech.supported && Boolean(onDescribe);
+  const toggleMic = useCallback(() => {
+    if (speech.listening) speech.stop();
+    else speech.start();
+  }, [speech]);
 
   /** Answering re-scales the log that was already written. */
   const answerQuestion = useCallback(async (asked, targetCalories) => {
@@ -476,7 +509,7 @@ const UnifiedFoodSearch = ({
     <Typography
       component="h3"
       sx={{
-        fontFamily: "'DM Serif Display', serif",
+        fontFamily: "inherit",
         fontSize: '0.9375rem',
         color: muted,
         mt: 2,
@@ -552,7 +585,7 @@ const UnifiedFoodSearch = ({
       role="button"
       tabIndex={0}
       aria-busy={describing}
-      onClick={describe}
+      onClick={() => describe()}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); describe(); } }}
       sx={{
         display: 'flex',
@@ -634,17 +667,75 @@ const UnifiedFoodSearch = ({
         onChange={(e) => setQuery(e.target.value)}
         onSubmit={() => (onDescribe ? describe() : runDeepSearch(query))}
         onBarcodeClick={onBarcodeClick}
+        onMicClick={micAvailable ? toggleMic : undefined}
+        listening={speech.listening}
         loading={loadingDeep}
         autoFocus={autoFocus || mode === 'dialog'}
         placeholder={onDescribe ? 'What did you eat?' : 'Search foods'}
       />
+
+      {speech.listening && (
+        <Box
+          role="status"
+          aria-live="polite"
+          data-testid="mic-listening"
+          sx={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1.5,
+            mt: -1.5,
+            mb: 2,
+            px: 2,
+            py: 1.5,
+            borderRadius: '18px',
+            bgcolor: alpha(theme.palette.primary.main, 0.1),
+            border: `2px solid ${theme.palette.primary.main}`,
+          }}
+        >
+          <Box
+            aria-hidden
+            sx={{
+              width: 14,
+              height: 14,
+              borderRadius: '50%',
+              bgcolor: theme.palette.primary.main,
+              flexShrink: 0,
+              animation: 'fgMicPulse 1.2s ease-in-out infinite',
+              '@keyframes fgMicPulse': {
+                '0%, 100%': { transform: 'scale(1)', opacity: 1 },
+                '50%': { transform: 'scale(1.5)', opacity: 0.55 },
+              },
+              '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
+            }}
+          />
+          <Box sx={{ minWidth: 0, flex: 1 }}>
+            <Typography sx={{ fontWeight: 800, fontSize: '1.0625rem', color: ink }}>
+              Listening… say what you ate
+            </Typography>
+            {speech.interim && (
+              <Typography sx={{ fontSize: '1rem', color: ink, overflowWrap: 'anywhere' }}>
+                &ldquo;{speech.interim}&rdquo;
+              </Typography>
+            )}
+          </Box>
+          <Button variant="contained" onClick={speech.stop} sx={{ minHeight: 44, flexShrink: 0 }}>
+            Done
+          </Button>
+        </Box>
+      )}
+
+      {speech.errorText && (
+        <Alert severity="info" onClose={speech.clearError} sx={{ mb: 1.5, borderRadius: 2, fontSize: '1rem' }} data-testid="mic-error">
+          {speech.errorText}
+        </Alert>
+      )}
 
       {onMealTypeChange && (
         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1.5 }}>
           {['breakfast', 'lunch', 'dinner', 'snack'].map((meal) => (
             <Chip
               key={meal}
-              label={meal.charAt(0).toUpperCase() + meal.slice(1)}
+              label={meal === 'snack' ? 'Snacks' : meal.charAt(0).toUpperCase() + meal.slice(1)}
               onClick={() => onMealTypeChange(meal)}
               aria-pressed={meal === mealType}
               color={meal === mealType ? 'primary' : 'default'}
@@ -661,6 +752,29 @@ const UnifiedFoodSearch = ({
         * write, so "no confirm step" does not become "no idea what happened".
         */}
       {describeRow}
+
+      {!searching && micAvailable && mode === 'dialog' && !speech.listening && (
+        <Button
+          variant="outlined"
+          size="large"
+          fullWidth
+          startIcon={<MicIcon />}
+          onClick={speech.start}
+          data-testid="speak-button"
+          sx={{ mb: 2, minHeight: 56, borderRadius: '18px', borderWidth: 2, '@media (hover: hover)': { '&:hover': { borderWidth: 2 } } }}
+        >
+          Say what you ate
+        </Button>
+      )}
+
+      {!searching && showQuickPicks && date && (
+        <QuickPicks
+          date={date}
+          mealType={mealType}
+          busy={busy}
+          onPick={(items) => logFoods(items, mealType)}
+        />
+      )}
 
       {/*
         * Asked only after the food is already in the log, and only when the
@@ -729,7 +843,7 @@ const UnifiedFoodSearch = ({
           </Box>
         ) : (
           <Box sx={{ textAlign: 'center', py: 5, px: 3 }}>
-            <Typography sx={{ fontFamily: "'DM Serif Display', serif", fontSize: '1.25rem', color: ink }}>
+            <Typography sx={{ fontFamily: "inherit", fontSize: '1.25rem', color: ink }}>
               {searching ? 'Nothing found' : 'What did you eat?'}
             </Typography>
             <Typography sx={{ color: muted, fontSize: '0.875rem', mt: 0.5, maxWidth: 380, mx: 'auto' }}>

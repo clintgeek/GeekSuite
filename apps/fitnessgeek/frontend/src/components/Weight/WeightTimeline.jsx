@@ -168,7 +168,7 @@ const WeightTimeline = ({ weightLogs = [], goal = null, unit = 'lbs' }) => {
             >
               <Typography
                 sx={{
-                  fontFamily: "'JetBrains Mono', monospace",
+                  fontFamily: "inherit",
                   fontSize: '0.75rem',
                   fontWeight: 700,
                   textTransform: 'uppercase',
@@ -193,7 +193,7 @@ const WeightTimeline = ({ weightLogs = [], goal = null, unit = 'lbs' }) => {
                   </Box>
                   <Typography
                     sx={{
-                      fontFamily: "'JetBrains Mono', monospace",
+                      fontFamily: "inherit",
                       fontVariantNumeric: 'tabular-nums',
                       fontSize: '0.8125rem',
                       fontWeight: 600,

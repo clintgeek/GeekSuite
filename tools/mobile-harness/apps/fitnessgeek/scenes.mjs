@@ -3,7 +3,7 @@
 // needs a dialog open re-navigates and re-opens it rather than relying on a
 // previous scene's state.
 import { json, graphqlRoute } from '../../lib/net.mjs';
-import { OPS, SETTINGS, BODY_COMP_SUMMARY_EARLY, BODY_COMP_SCANS_EARLY, opsWithPlan } from './fixtures.mjs';
+import { OPS, SETTINGS, BODY_COMP_SUMMARY_EARLY, BODY_COMP_SCANS_EARLY, opsWithPlan, heatherOps } from './fixtures.mjs';
 
 // The weight, dashboard and wizard scenes THROW when their anchor is missing instead of
 // returning false: a skip is silent (see scene 11's note), and these exist
@@ -91,7 +91,9 @@ export const scenes = [
     goto: '/food-log',
     wait: 1600,
     async setup(page, h) {
-      const copy = page.getByRole('button', { name: /copy meal/i }).first();
+      // Copy Meal moved out of the stacked row ahead of the date and under
+      // the meals, in words (SIMPLE_AND_FULL_PLAN.md item 8).
+      const copy = page.getByRole('button', { name: /copy a meal/i }).first();
       if (!(await copy.count())) return false;
       await copy.click();
       await h.settle(800);
@@ -419,6 +421,117 @@ export const scenes = [
     teardown: (page) => page.unroute('**/api/influx/trends*'),
   },
 ];
+
+// ── Simple and Full + Market Morning (apps/fitnessgeek/DOCS/SIMPLE_AND_FULL_PLAN.md) ──
+// Page-scoped stubs again, so these sit after everything above. Heather is
+// the Simple face: no logs of any kind, two medications. The scenes THROW on
+// a missing anchor — a skip would say PASS while covering nothing.
+const HEATHER = { mode: 'simple', first_run_done: true, preferred_name: 'Heather' };
+
+// A recognizer the page can detect, so the microphone renders the same way
+// whether or not this Chromium build exposes the Web Speech API. The shot is
+// of the mic's idle state; nothing here listens.
+const SPEECH_STUB = () => {
+  if (!window.SpeechRecognition && !window.webkitSpeechRecognition) {
+    window.webkitSpeechRecognition = class {
+      start() {}
+      stop() {}
+      abort() {}
+    };
+  }
+};
+
+const heatherScene = (name, experience, fn, extra = {}) => ({
+  name,
+  ...extra,
+  setup: (page, h) => withPageOps(page, heatherOps(experience), async () => {
+    await page.goto(h.base + (extra.path || '/dashboard'), { waitUntil: 'networkidle' });
+    await h.settle(1600);
+    await fn(page, h);
+  }),
+  teardown: async (page, h) => {
+    if (extra.dialog) await h.esc(400);
+    await page.unroute('**/graphql');
+  },
+});
+
+scenes.push(
+  // Simple home: the plate in words, the Today strip, four meal cards.
+  heatherScene('19-simple-home', HEATHER, async (page) => {
+    await must(page.locator('[data-testid="calories-sentence"]'), 'the calories sentence');
+    await must(page.locator('[data-testid="today-strip"]'), 'Today strip');
+    await must(page.locator('[data-testid="meal-cards"]'), 'meal cards');
+  }),
+  // …scrolled to the check-ins: the strip and "Did you take your meds?".
+  heatherScene('19a-simple-meds', HEATHER, async (page, h) => {
+    await must(page.locator('[data-testid="today-strip-meds"]'), 'meds check-in on the strip');
+    await must(page.locator('[data-testid="meds-checklist"]'), 'meds checklist');
+    await scrollToSection(page, h, '[data-testid="meds-checklist"]', 96);
+  }),
+  // First run: a person who never chose, and has never logged, lands here.
+  heatherScene('20-first-run', { mode: null, first_run_done: false }, async (page) => {
+    await must(page.locator('[data-testid="first-run"]'), 'first run');
+  }),
+  heatherScene('20a-first-run-goal', { mode: null, first_run_done: false }, async (page, h) => {
+    const next = await must(page.getByRole('button', { name: /^next$/i }).first(), 'Next');
+    await next.click();
+    await h.settle(500);
+    await must(page.getByRole('radio', { name: /keep my weight steady/i }), 'goal choices');
+  }, { viewports: ['phone'] }),
+  // Simple's add sheet from a meal card: the big "Say what you ate".
+  heatherScene('21a-simple-add-sheet', HEATHER, async (page, h) => {
+    const add = await must(page.getByRole('button', { name: /^add to lunch$/i }).first(), 'Add to lunch');
+    await add.click();
+    await h.settle(900);
+    await must(page.getByRole('dialog'), 'add sheet');
+    await must(page.locator('[data-testid="speak-button"]'), 'microphone button');
+  }, { dialog: true }),
+  // Larger text, on Heather's home.
+  heatherScene('22-larger-text', { ...HEATHER, larger_text: true }, async (page) => {
+    const size = await page.evaluate(() => document.documentElement.dataset.textSize);
+    if (size !== 'larger') throw new Error(`larger text not applied (data-text-size=${size})`);
+  }),
+  heatherScene('24a-more-simple', HEATHER, async (page) => {
+    await must(page.locator('[data-testid="more-page"]'), 'More page');
+  }, { path: '/more' }),
+  {
+    // Full's add sheet from Home's Lunch card: "Same as yesterday's lunch",
+    // the Again chips, and the microphone (idle) in the box.
+    name: '21-add-sheet-again',
+    async setup(page, h) {
+      await page.addInitScript(SPEECH_STUB);
+      await page.goto(h.base + '/dashboard', { waitUntil: 'networkidle' });
+      await h.settle(1600);
+      const add = await must(page.getByRole('button', { name: /^add to lunch$/i }).first(), 'Add to lunch');
+      await add.click();
+      await h.settle(1200);
+      await must(page.locator('[data-testid="again-chips"]'), 'Again chips');
+      await must(page.locator('[data-testid="same-as-yesterday"]'), 'Same as yesterday');
+      await must(page.getByRole('button', { name: /say what you ate/i }).first(), 'microphone');
+    },
+    teardown: (page, h) => h.esc(400),
+  },
+  {
+    // Full home, scrolled to the meal cards (with Chef's foods and removes).
+    name: '23-full-home-meals',
+    goto: '/dashboard',
+    wait: 1800,
+    async setup(page, h) {
+      await must(page.locator('[data-testid="macro-strip"]'), 'Full home macro strip');
+      await scrollToSection(page, h, '#todays-meals', 88);
+    },
+  },
+  { name: '24-more', goto: '/more', wait: 1400 },
+  {
+    // Settings: Simple or Full, and Larger text, at the top.
+    name: '25-settings-experience',
+    goto: '/settings',
+    wait: 1600,
+    async setup(page) {
+      await must(page.locator('[data-testid="experience-settings"]'), 'experience settings');
+    },
+  },
+);
 
 // Known, ticketed violations. Each one should die when the app is fixed —
 // an empty list is the goal, not a permanent parking lot.

@@ -89,7 +89,7 @@ describe('scanning a barcode on the full-page search', () => {
       [{ ...food, servings: 1 }],
       expect.any(String)
     ));
-    expect(await screen.findByText(/Logged Test Food/)).toBeInTheDocument();
+    expect(await screen.findByText(/^Added to .* ✓ · Test Food$/)).toBeInTheDocument();
     // The scanner's own field is gone once it has closed.
     await waitFor(() =>
       expect(screen.queryByPlaceholderText('Enter 8-14 digit barcode')).not.toBeInTheDocument()

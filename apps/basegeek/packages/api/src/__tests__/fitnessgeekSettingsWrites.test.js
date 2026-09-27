@@ -250,3 +250,66 @@ describe('updateFitnessUserSettings is a partial save', () => {
     await UserSettings.deleteOne({ user_id: bob });
   });
 });
+
+// ---------------------------------------------------------------------------
+// 6. experience — Simple and Full (apps/fitnessgeek/DOCS/SIMPLE_AND_FULL_PLAN.md)
+// ---------------------------------------------------------------------------
+
+describe('updateFitnessUserSettings: experience (Simple and Full)', () => {
+  test('a new document has no mode — "never chose" is how the app knows to decide', async () => {
+    await seed();
+    const doc = await UserSettings.findOne({ user_id: ALICE });
+    expect(doc.experience?.mode).toBeUndefined();
+    expect(doc.experience.larger_text).toBe(false);
+    expect(doc.experience.first_run_done).toBe(false);
+  });
+
+  test('switching mode is a partial write: larger text and the plan survive it', async () => {
+    await seed();
+    await M.updateFitnessUserSettings(null, { input: { experience: { larger_text: true, preferred_name: '  Heather ' } } }, ctx(ALICE));
+    await M.updateFitnessUserSettings(null, { input: { experience: { mode: 'simple' } } }, ctx(ALICE));
+
+    const after = await UserSettings.findOne({ user_id: ALICE });
+    expect(after.experience.mode).toBe('simple');
+    expect(after.experience.larger_text).toBe(true);
+    expect(after.experience.preferred_name).toBe('Heather');
+    expect(after.nutrition_goal.bmr).toBe(1850);
+  });
+
+  test('mode: null clears the choice back to "never chose"', async () => {
+    await seed();
+    await M.updateFitnessUserSettings(null, { input: { experience: { mode: 'full' } } }, ctx(ALICE));
+    await M.updateFitnessUserSettings(null, { input: { experience: { mode: null } } }, ctx(ALICE));
+    const after = await UserSettings.findOne({ user_id: ALICE });
+    expect(after.experience.mode ?? null).toBeNull();
+  });
+
+  test('an unknown mode is refused, not stored (updateSettings runs no validators)', async () => {
+    await seed();
+    await expect(
+      M.updateFitnessUserSettings(null, { input: { experience: { mode: 'expert' } } }, ctx(ALICE))
+    ).rejects.toThrow();
+    const after = await UserSettings.findOne({ user_id: ALICE });
+    expect(after.experience?.mode).toBeUndefined();
+  });
+
+  test('an unknown key is refused rather than silently dropped by strict mode', async () => {
+    await seed();
+    await expect(
+      M.updateFitnessUserSettings(null, { input: { experience: { largerText: true } } }, ctx(ALICE))
+    ).rejects.toThrow();
+  });
+
+  test('the first run writes its answers in one partial save', async () => {
+    await seed();
+    await M.updateFitnessUserSettings(
+      null,
+      { input: { experience: { preferred_name: 'Heather', goal: 'maintain', first_run_done: true } } },
+      ctx(ALICE)
+    );
+    const after = await UserSettings.findOne({ user_id: ALICE });
+    expect(after.experience.goal).toBe('maintain');
+    expect(after.experience.first_run_done).toBe(true);
+    expect(after.garmin.username).toBe('me@example.com');
+  });
+});

@@ -18,7 +18,7 @@ const BodyRecoverySparkline = lazy(() => import('./BodyRecoverySparkline.jsx'));
 const SPARK_HEIGHT = 56;
 
 const caption = { color: 'text.secondary', fontSize: '0.8125rem', lineHeight: 1.45 };
-const mono = { fontFamily: "'JetBrains Mono', monospace", fontVariantNumeric: 'tabular-nums', fontWeight: 600 };
+const mono = { fontFamily: "inherit", fontVariantNumeric: 'tabular-nums', fontWeight: 600 };
 
 /** The card shell: a named article, so each card is its own landmark for a screen reader. */
 const Card = ({ label, children, testId }) => (

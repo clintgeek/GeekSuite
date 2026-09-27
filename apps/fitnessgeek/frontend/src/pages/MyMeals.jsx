@@ -218,7 +218,7 @@ const MyMeals = () => {
                         <Box
                           component="span"
                           sx={{
-                            fontFamily: "'JetBrains Mono', monospace",
+                            fontFamily: "inherit",
                             fontVariantNumeric: 'tabular-nums',
                           }}
                         >
@@ -230,7 +230,7 @@ const MyMeals = () => {
                             <Box
                               component="span"
                               sx={{
-                                fontFamily: "'JetBrains Mono', monospace",
+                                fontFamily: "inherit",
                                 fontVariantNumeric: 'tabular-nums',
                               }}
                             >

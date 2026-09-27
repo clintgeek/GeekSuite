@@ -84,7 +84,7 @@ const NutritionSummaryCard = ({
                     <Typography variant="caption" sx={{
                       display: 'block',
                       color: theme.palette.text.secondary,
-                      fontFamily: "'JetBrains Mono', monospace",
+                      fontFamily: "inherit",
                       mb: 0.25,
                     }}>
                       {macro.subLabel}

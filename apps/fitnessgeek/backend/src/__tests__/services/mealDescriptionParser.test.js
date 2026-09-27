@@ -114,3 +114,22 @@ describe('edges', () => {
     expect(parse('homemade lasagna')[0].dish).toBe('lasagna');
   });
 });
+
+// SIMPLE_AND_FULL_PLAN.md item 1: a meal card's "+ Add" already knows the
+// meal. That choice beats the clock, and what the person SAID beats both.
+describe('a meal the person already picked', () => {
+  test('beats the hour: Lunch\'s "+ Add" at 8am logs to lunch', () => {
+    const entries = parseMealDescription('two eggs and toast', { hour: 8, mealType: 'lunch' }).entries;
+    expect(entries.map((e) => e.mealType)).toEqual(['lunch', 'lunch']);
+  });
+
+  test('a meal named in the text still wins', () => {
+    const entries = parseMealDescription('eggs for breakfast', { hour: 13, mealType: 'dinner' }).entries;
+    expect(entries[0].mealType).toBe('breakfast');
+  });
+
+  test('an unknown meal falls back to the hour rather than inventing a slot', () => {
+    const entries = parseMealDescription('nachos', { hour: 19, mealType: 'elevenses' }).entries;
+    expect(entries[0].mealType).toBe('dinner');
+  });
+});

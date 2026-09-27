@@ -60,7 +60,7 @@ const CalorieSummary = ({
           <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5 }}>
             <Typography
               sx={{
-                fontFamily: "'JetBrains Mono', monospace",
+                fontFamily: "inherit",
                 fontSize: '1.5rem',
                 fontWeight: 700,
                 lineHeight: 1,
@@ -122,7 +122,7 @@ const CalorieSummary = ({
     }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
         <CaloriesIcon sx={{ color: theme.palette.success.main }} />
-        <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontWeight: 600 }}>
+        <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontWeight: 800, fontSize: '0.9375rem' }}>
           Calories
         </Typography>
       </Box>
@@ -157,13 +157,23 @@ const CalorieSummary = ({
           }}
         />
         <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.25 }}>
-          <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-            {usingRda ? 'RDA' : 'Goal'}: {effectiveGoal} cal {(!usingRda && base && add > 0) ? ` (${Math.round(base)} +${Math.round(add)})` : ''}
+          {/* No arithmetic in the label (SIMPLE_AND_FULL_PLAN.md item 4). It
+              used to read "Goal: 2340 cal (2100 +240)"; the activity allowance
+              is said in a sentence instead, and only when there is one. */}
+          <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontSize: '0.9375rem' }}>
+            {usingRda ? 'Typical day' : 'Target'}: {effectiveGoal.toLocaleString('en-US')} cal
           </Typography>
-          <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-            {Math.max(0, effectiveGoal - Math.round(calories))} left
+          <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontSize: '0.9375rem', fontWeight: 700 }}>
+            {Math.round(calories) > effectiveGoal
+              ? `${(Math.round(calories) - effectiveGoal).toLocaleString('en-US')} over`
+              : `${Math.max(0, effectiveGoal - Math.round(calories)).toLocaleString('en-US')} left`}
           </Typography>
         </Box>
+        {!usingRda && base > 0 && add > 0 && (
+          <Typography data-testid="activity-allowance" sx={{ color: theme.palette.text.secondary, fontSize: '0.9375rem', mt: 0.5 }}>
+            Includes {Math.round(add).toLocaleString('en-US')} extra for today&apos;s activity.
+          </Typography>
+        )}
       </Box>
     </Box>
   );

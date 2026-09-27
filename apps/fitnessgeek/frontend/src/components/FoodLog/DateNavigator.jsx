@@ -2,8 +2,7 @@ import React from 'react';
 import {
   Box,
   Typography,
-  IconButton,
-  useMediaQuery
+  IconButton
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import {
@@ -21,15 +20,13 @@ const DateNavigator = ({
   ...props
 }) => {
   const theme = useTheme();
-  const isNarrow = useMediaQuery('(max-width:400px)');
-
-  // Format date with shorter format for narrow screens
+  // The day in words, never truncated: it wraps before it clips.
   const displayDate = React.useMemo(() => {
     if (typeof formatDate === 'function') {
-      return formatDate(selectedDate, isNarrow);
+      return formatDate(selectedDate);
     }
     return selectedDate;
-  }, [selectedDate, formatDate, isNarrow]);
+  }, [selectedDate, formatDate]);
 
   return (
     <Box sx={{
@@ -45,19 +42,20 @@ const DateNavigator = ({
         rowGap: 1,
         alignItems: 'center',
         backgroundColor: theme.palette.background.paper,
-        borderRadius: 2,
-        p: { xs: 1.5, sm: 3 },
-        boxShadow: theme.shadows[1],
-        border: 'none'
+        borderRadius: '24px',
+        p: { xs: 2, sm: 3 },
+        boxShadow: 'none',
+        border: `1px solid ${theme.palette.divider}`
       }}>
         <IconButton
           onClick={onPreviousDay}
           aria-label="Previous day"
           sx={{
             color: theme.palette.primary.main,
-            p: { xs: 0.5, sm: 1 },
-            '&:hover': {
-              backgroundColor: theme.palette.primary.light + '20'
+            width: 48,
+            height: 48,
+            '@media (hover: hover)': {
+              '&:hover': { backgroundColor: theme.palette.primary.light + '20' }
             }
           }}
         >
@@ -68,15 +66,15 @@ const DateNavigator = ({
           <Typography
             variant="h6"
             sx={{
-              fontWeight: 600,
-              fontSize: { xs: '0.875rem', sm: '1.25rem' },
+              fontWeight: 800,
+              fontSize: { xs: '1.1875rem', sm: '1.375rem' },
               color: theme.palette.text.primary,
               textAlign: 'center'
             }}
           >
             {displayDate}
           </Typography>
-          <CalendarIcon sx={{ color: theme.palette.primary.main, fontSize: { xs: 18, sm: 24 } }} />
+          <CalendarIcon aria-hidden sx={{ color: theme.palette.primary.main, fontSize: { xs: 20, sm: 24 } }} />
         </Box>
 
         <IconButton
@@ -84,9 +82,10 @@ const DateNavigator = ({
           aria-label="Next day"
           sx={{
             color: theme.palette.primary.main,
-            p: { xs: 0.5, sm: 1 },
-            '&:hover': {
-              backgroundColor: theme.palette.primary.light + '20'
+            width: 48,
+            height: 48,
+            '@media (hover: hover)': {
+              '&:hover': { backgroundColor: theme.palette.primary.light + '20' }
             }
           }}
         >

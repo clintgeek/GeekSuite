@@ -26,10 +26,10 @@ const SIZE_MAP = {
 };
 
 /**
- * DisplayHeading — DM Serif Display title type.
+ * DisplayHeading — the rounded, heavy Nunito title type (Market Morning).
  *
  * Use for editorial headings: page titles, surface titles, anywhere you want
- * the "human" voice to contrast with JetBrains Mono for numbers.
+ * the plain "human" voice.
  */
 const DisplayHeading = ({
   children,
@@ -49,8 +49,8 @@ const DisplayHeading = ({
     <Typography
       component={asComponent}
       sx={{
-        fontFamily: "'DM Serif Display', Georgia, serif",
-        fontWeight: 400,
+        fontFamily: "inherit",
+        fontWeight: 800,
         color: color || theme.palette.text.primary,
         ...sizeStyles,
         ...sx,

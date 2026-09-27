@@ -15,6 +15,22 @@ const GET_USER_SETTINGS = gql`
   query GetFitnessUserSettings { fitnessUserSettings { id theme influxEnabled dashboard { show_current_weight show_blood_pressure show_calories_today show_login_streak show_nutrition_today show_garmin_summary show_quick_actions show_weight_goal show_nutrition_goal card_order } garmin { enabled username last_connected_at } healthBaselines { weeklyHRV restingHR lastUpdated } health_alerts { sleep_apnea_screening } notifications { enabled daily_reminder goal_reminders } nutrition_goal { enabled start_date start_weight target_weight activity_level weight_change_rate plan_type calorie_target_mode auto_base_calories fixed_calories activity_eatback_fraction activity_eatback_cap_kcal protein_g_per_lb_goal fat_g_per_lb_goal goal_weight_lbs show_adjustment daily_calorie_target weekly_schedule min_safe_calories bmr tdee bmr_calc_version bmr_source lean_mass_lb protein_g_per_lb_lean calc_inputs { weight_lb height_in age gender activity_level active_kcal } timeline_weeks estimated_end_date mode keto { net_carb_limit_g track_net_carbs macro_split { preset fat_pct protein_pct carb_pct } } } weight_goal { enabled startWeight targetWeight startDate goalDate ratePerWeek lastRecalculated unit is_active } units { weight height } ai { enabled features { natural_language_food_logging meal_suggestions nutrition_analysis goal_recommendations } } household { household_id display_name share_food_logs share_weight share_meals } favorite_foods { id name brand } } }
 `;
 
+// Simple and Full (DOCS/SIMPLE_AND_FULL_PLAN.md). Its OWN document rather than
+// four more fields on GetFitnessUserSettings, deliberately: fitnessgeek and
+// basegeek deploy separately, and a field the gateway does not know yet fails
+// validation for the WHOLE query. Kept apart, a frontend that lands before
+// the gateway loses only this — and falls back to the default-mode rule —
+// instead of losing every setting the app reads.
+const GET_EXPERIENCE = gql`
+  query GetFitnessExperience { fitnessUserSettings { id experience { mode larger_text first_run_done preferred_name goal } } }
+`;
+
+// The default-mode rule's cheapest question: the most recent logs (the
+// gateway's no-argument form returns the newest 50), dates only.
+const GET_FOOD_LOG_ACTIVITY = gql`
+  query GetFoodLogActivity { foodLogs { id log_date } }
+`;
+
 const UPDATE_USER_SETTINGS = gql`
   mutation UpdateFitnessUserSettings($input: FitnessUserSettingsInput!) { updateFitnessUserSettings(input: $input) { id theme } }
 `;
@@ -489,6 +505,7 @@ function routeRequest(method, url, data) {
 
   if (method === 'GET') {
     if (base === '/settings') return { query: GET_USER_SETTINGS };
+    if (base === '/settings/experience') return { query: GET_EXPERIENCE };
     // /user/settings is an alias — same underlying FitnessUserSettings document
     if (base === '/user/settings') return { query: GET_USER_SETTINGS };
     if (base === '/weight') return { query: GET_WEIGHTS };
@@ -519,6 +536,7 @@ function routeRequest(method, url, data) {
     // below — that pattern matches '/logs/household' and '/logs/household/…'
     // too and was swallowing both routes, sending "household"/a memberId as
     // a `Date` scalar and blowing up (BURN_REVIEW #16).
+    if (base === '/logs/activity') return { query: GET_FOOD_LOG_ACTIVITY };
     if (base === '/logs/household') return { query: GET_HOUSEHOLD }; // household member list
     if (base.match(/^\/logs\/household\//)) {
       const sp = new URLSearchParams(url.split('?')[1]);
@@ -679,6 +697,8 @@ function routeRequest(method, url, data) {
     // type FitnessUserSettingsInput" — i.e. the save could never succeed.
     if (base === '/settings/dashboard') return { mutation: UPDATE_USER_SETTINGS, variables: { input: { dashboard: sanitizeSettingsInput(data) } } };
     if (base === '/settings/ai') return { mutation: UPDATE_USER_SETTINGS, variables: { input: { ai: sanitizeSettingsInput(data) } } };
+    // Partial, like every settings write: only the keys just touched.
+    if (base === '/settings/experience') return { mutation: UPDATE_USER_SETTINGS, variables: { input: { experience: sanitizeSettingsInput(data) } } };
     if (parts[0] === 'settings') return { mutation: UPDATE_USER_SETTINGS, variables: { input: sanitizeSettingsInput(data) } };
     if (parts[0] === 'weight') return { mutation: UPDATE_WEIGHT, variables: { id, input: data } };
     // /foods/:id updates a library FoodItem (not a log entry) — partial

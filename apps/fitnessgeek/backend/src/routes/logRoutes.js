@@ -278,7 +278,9 @@ router.get('/date/:date', async (req, res) => {
 router.post('/describe', async (req, res) => {
   try {
     const userId = req.user.id;
-    const { text, date, hour } = req.body || {};
+    // `mealType` is optional and additive: the meal card's "+ Add" already
+    // knows which meal this is, and the hour is only a guess at it.
+    const { text, date, hour, mealType } = req.body || {};
 
     if (!text || !String(text).trim()) {
       return res.status(400).json({
@@ -297,7 +299,8 @@ router.post('/describe', async (req, res) => {
     const result = await describeAndLogService.logDescription(text, {
       userId,
       date: toUtcMidnight(date),
-      hour: Number.isFinite(Number(hour)) ? Number(hour) : undefined
+      hour: Number.isFinite(Number(hour)) ? Number(hour) : undefined,
+      mealType: typeof mealType === 'string' ? mealType : undefined
     });
 
     // Nothing recognisable as food. Say so plainly rather than logging nothing

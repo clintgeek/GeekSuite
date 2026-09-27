@@ -92,7 +92,7 @@ const ServingSheet = ({ open, food, defaultMealType = 'snack', onClose, onConfir
             p: 1.5,
             borderRadius: 2,
             backgroundColor: alpha(theme.palette.primary.main, theme.palette.mode === 'dark' ? 0.16 : 0.07),
-            fontFamily: "'JetBrains Mono', monospace"
+            fontFamily: "inherit"
           }}
         >
           <Typography sx={{ fontWeight: 700 }}>{total('calories_per_serving')} cal</Typography>

@@ -1,5 +1,5 @@
 /**
- * FitnessGeek top bar — route-derived title, mono date stamp, and the suite's
+ * FitnessGeek top bar — route-derived title, the day in words, and the suite's
  * fixed right cluster (theme → switcher → account).
  *
  * Before this migration the left slot was empty and the avatar deep-linked
@@ -34,18 +34,18 @@ const TopBar = () => {
       onThemeToggle={toggleTheme}
       currentApp={APP_NAME}
       actions={
+        // The day in words, never abbreviated (plan item 8). Hidden on a
+        // phone, where the page itself says "Today".
         <Typography
           sx={{
-            fontFamily: "'JetBrains Mono', monospace",
-            fontSize: '0.75rem',
-            fontWeight: 600,
-            textTransform: 'uppercase',
-            letterSpacing: '0.14em',
+            fontSize: '1rem',
+            fontWeight: 700,
             color: 'text.secondary',
-            display: { xs: 'none', sm: 'block' },
+            whiteSpace: 'nowrap',
+            display: { xs: 'none', md: 'block' },
           }}
         >
-          {new Date().toLocaleDateString('en-US', { weekday: 'short', month: 'short', day: 'numeric' })}
+          {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
         </Typography>
       }
       account={{

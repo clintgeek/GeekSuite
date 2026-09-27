@@ -54,7 +54,7 @@ const Row = ({ label, before, after, unit = 'kcal' }) => {
   return (
     <Box sx={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 1, alignItems: 'baseline', py: 0.5 }}>
       <Typography variant="body2" sx={{ color: 'text.secondary' }}>{label}</Typography>
-      <Typography variant="body2" sx={{ fontFamily: "'JetBrains Mono', monospace", fontVariantNumeric: 'tabular-nums', color: 'text.primary', textAlign: 'right' }}>
+      <Typography variant="body2" sx={{ fontFamily: "inherit", fontVariantNumeric: 'tabular-nums', color: 'text.primary', textAlign: 'right' }}>
         {fmt(before)} → <Box component="strong" sx={{ fontWeight: 700 }}>{fmt(after)}</Box> {unit}
         {delta !== null && delta !== 0 && (
           <Box component="span" sx={{ color: 'text.secondary' }}> ({delta > 0 ? '+' : '−'}{fmt(Math.abs(delta))})</Box>

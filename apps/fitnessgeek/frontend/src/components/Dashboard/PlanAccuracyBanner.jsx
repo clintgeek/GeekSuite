@@ -60,6 +60,14 @@ function writeDismissed(key) {
 
 const fmt = (n) => Math.round(Number(n)).toLocaleString('en-US');
 
+/**
+ * One sentence and one button (SIMPLE_AND_FULL_PLAN.md item 4). This banner
+ * used to be a bold title plus a paragraph about "a formula error fixed on
+ * Sep 20"; the job is still live — a plan saved before that fix really is
+ * ~1,000 kcal high, and it is deliberately never rewritten for the person —
+ * so it stays, said plainly. Formula talk belongs in the calorie plan, which
+ * shows the old and new targets side by side before anything changes.
+ */
 export default function PlanAccuracyBanner({ nutritionGoal, scanBmr }) {
   const theme = useTheme();
   const kind = planBannerKind(nutritionGoal, scanBmr);
@@ -70,7 +78,7 @@ export default function PlanAccuracyBanner({ nutritionGoal, scanBmr }) {
   if (kind === 'scan' && (dismissedKey === key || readDismissed(key))) return null;
 
   const stale = kind === 'stale';
-  const accent = stale ? theme.palette.warning.main : theme.palette.info.main;
+  const accent = stale ? theme.palette.produce?.dinner?.fill || theme.palette.warning.main : theme.palette.produce?.lunch?.fill || theme.palette.info.main;
   const Icon = stale ? WarningIcon : ScanIcon;
 
   return (
@@ -78,40 +86,33 @@ export default function PlanAccuracyBanner({ nutritionGoal, scanBmr }) {
       role={stale ? 'alert' : 'status'}
       data-testid="plan-accuracy-banner"
       data-kind={kind}
-      sx={{ borderLeft: `4px solid ${accent}`, py: 1.5 }}
+      sx={{ borderLeft: `8px solid ${accent}`, py: 1.75 }}
     >
-      <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'flex-start' }}>
-        <Icon sx={{ color: accent, fontSize: 22, mt: 0.25, flexShrink: 0 }} aria-hidden />
-        <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Typography sx={{ fontWeight: 700, color: 'text.primary', fontSize: '0.9375rem' }}>
-            {stale ? 'Your calorie target needs recalculating' : 'A measured BMR is available'}
-          </Typography>
-          <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.25 }}>
-            {stale
-              ? 'It was calculated with a formula error fixed on Sep 20 and is likely too high. Recalculating shows your old and new targets before anything changes.'
-              : `From your body scans: ≈${fmt(scanBmr.bmr)} kcal a day, against ${fmt(nutritionGoal.bmr)} in your plan.`}
-          </Typography>
-          <Button
-            component={RouterLink}
-            to={WIZARD_ROUTE}
-            variant={stale ? 'contained' : 'outlined'}
-            size="small"
-            sx={{ mt: 1, textTransform: 'none', fontWeight: 700, minHeight: 36, boxShadow: 'none' }}
-          >
-            {stale ? 'Recalculate' : 'Update plan'}
-          </Button>
-        </Box>
+      <Box sx={{ display: 'flex', gap: 1.5, alignItems: 'center', flexWrap: 'wrap' }}>
+        <Icon sx={{ color: 'text.secondary', fontSize: 24, flexShrink: 0 }} aria-hidden />
+        <Typography sx={{ flex: '1 1 14rem', fontWeight: 700, color: 'text.primary', fontSize: '1.0625rem', lineHeight: 1.4 }}>
+          {stale
+            ? 'Your daily calorie target is probably too high.'
+            : `Your body scans suggest ${fmt(scanBmr.bmr)} calories a day at rest — your plan uses ${fmt(nutritionGoal.bmr)}.`}
+        </Typography>
+        <Button
+          component={RouterLink}
+          to={WIZARD_ROUTE}
+          variant={stale ? 'contained' : 'outlined'}
+          sx={{ minHeight: 48, flexShrink: 0 }}
+        >
+          {stale ? 'Check my target' : 'Update my plan'}
+        </Button>
         {!stale && (
           <IconButton
             aria-label="Dismiss"
-            size="small"
             onClick={() => {
               writeDismissed(key);
               setDismissedKey(key);
             }}
-            sx={{ color: 'text.secondary', mt: -0.5, mr: -0.5 }}
+            sx={{ color: 'text.secondary', width: 48, height: 48 }}
           >
-            <CloseIcon fontSize="small" />
+            <CloseIcon />
           </IconButton>
         )}
       </Box>

@@ -38,12 +38,14 @@ describe('PlanAccuracyBanner', () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
-  it('shows the stale-formula banner with Recalculate → the wizard, and no dismiss', () => {
+  it('shows the stale-plan banner as one sentence, Check my target → the wizard, and no dismiss', () => {
     renderBanner(STALE, SCAN);
     const banner = screen.getByTestId('plan-accuracy-banner');
     expect(banner).toHaveAttribute('data-kind', 'stale');
-    expect(banner.textContent).toMatch(/formula error fixed on Sep 20 and is likely too high/);
-    expect(screen.getByRole('link', { name: 'Recalculate' })).toHaveAttribute('href', '/calorie-wizard');
+    expect(banner.textContent).toMatch(/^Your daily calorie target is probably too high\.Check my target$/);
+    // Plain words: no formula talk on the home screen (SIMPLE_AND_FULL_PLAN.md item 4).
+    expect(banner.textContent).not.toMatch(/formula|Sep 20|BMR/);
+    expect(screen.getByRole('link', { name: 'Check my target' })).toHaveAttribute('href', '/calorie-wizard');
     expect(screen.queryByRole('button', { name: 'Dismiss' })).toBeNull();
     // Only one banner, even though a scan BMR is also available.
     expect(screen.getAllByTestId('plan-accuracy-banner')).toHaveLength(1);
@@ -55,10 +57,10 @@ describe('PlanAccuracyBanner', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('offers the scan BMR with both numbers, and Update plan → the wizard', () => {
+  it('offers the scan BMR with both numbers, and Update my plan → the wizard', () => {
     renderBanner(CURRENT_MIFFLIN, SCAN);
-    expect(screen.getByText(/From your body scans: ≈2,104 kcal a day, against 2,330 in your plan\./)).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Update plan' })).toHaveAttribute('href', '/calorie-wizard');
+    expect(screen.getByText('Your body scans suggest 2,104 calories a day at rest — your plan uses 2,330.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Update my plan' })).toHaveAttribute('href', '/calorie-wizard');
   });
 
   it('remembers a dismissal per plan', () => {

@@ -404,7 +404,7 @@ const FoodLogItem = ({
                 color: theme.palette.warning.main,
                 fontWeight: 700,
                 fontSize: '0.75rem',
-                fontFamily: '"JetBrains Mono", monospace',
+                fontFamily: 'inherit',
                 border: `1px solid ${theme.palette.warning.main}33`,
                 '& .MuiChip-label': { px: 1.25 }
               }}
@@ -448,7 +448,7 @@ const FoodLogItem = ({
                 color: theme.palette.warning.main,
                 fontSize: '0.75rem',
                 fontWeight: 700,
-                fontFamily: '"JetBrains Mono", monospace'
+                fontFamily: 'inherit'
               }}
             >
               · {totalNetCarbs}g nc{isMissingFiber ? '*' : ''}

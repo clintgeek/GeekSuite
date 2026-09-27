@@ -35,7 +35,7 @@ const NetCarbMeter = ({ consumed = 0, limitG = 20, sx }) => {
       <Typography
         sx={{
           fontSize: '0.75rem',
-          fontFamily: "'DM Sans', sans-serif",
+          fontFamily: "inherit",
           fontWeight: 700,
           textTransform: 'uppercase',
           letterSpacing: '0.1em',
@@ -49,7 +49,7 @@ const NetCarbMeter = ({ consumed = 0, limitG = 20, sx }) => {
       {/* Large numeric display */}
       <Typography
         sx={{
-          fontFamily: "'JetBrains Mono', monospace",
+          fontFamily: "inherit",
           fontVariantNumeric: 'tabular-nums',
           fontSize: '2rem',
           fontWeight: 700,
@@ -62,7 +62,7 @@ const NetCarbMeter = ({ consumed = 0, limitG = 20, sx }) => {
         <Typography
           component="span"
           sx={{
-            fontFamily: "'JetBrains Mono', monospace",
+            fontFamily: "inherit",
             fontVariantNumeric: 'tabular-nums',
             fontSize: '1rem',
             fontWeight: 400,

@@ -1,9 +1,9 @@
 // ─── FitnessGeek Design Primitives ──────────────────────────────
 //
-// Shared building blocks that encode the app's aesthetic:
-//   - Editorial serif for human voice (DisplayHeading)
-//   - JetBrains Mono for numeric precision (StatNumber)
-//   - Uppercase tick labels for section hierarchy (SectionLabel)
+// Shared building blocks that encode the app's aesthetic (Market Morning):
+//   - Rounded Nunito headings in plain words (DisplayHeading)
+//   - Tabular figures for numbers (StatNumber)
+//   - Sentence-case section labels — no ALL-CAPS tick labels (SectionLabel)
 //   - Single card variant system (Surface)
 //   - Consistent empty states (EmptyState)
 //

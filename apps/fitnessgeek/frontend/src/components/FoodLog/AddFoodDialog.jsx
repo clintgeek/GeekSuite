@@ -5,6 +5,7 @@ import { useToast } from '@geeksuite/ui';
 import { UnifiedFoodSearch } from '../FoodSearch';
 import BarcodeScanner from '../BarcodeScanner/BarcodeScanner.jsx';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
+import { addedMessage, mealWord } from '../../utils/plainWords.js';
 
 /**
  * The meal-slot sheet: the same search box, in a dialog, with the meal you
@@ -42,7 +43,10 @@ const AddFoodDialog = ({
   showBarcodeScanner,
   onShowBarcodeScanner,
   initialQuery = '',
-  ketoMode = false
+  ketoMode = false,
+  // The day being logged to — feeds the "Again" chips and "Same as
+  // yesterday's …" (SIMPLE_AND_FULL_PLAN.md item 2).
+  date = null
 }) => {
   const { notify } = useToast();
 
@@ -52,8 +56,9 @@ const AddFoodDialog = ({
         open={open}
         onClose={onClose}
         maxWidth="sm"
-        eyebrow="Log"
-        title="Add Food"
+        // One title, in words: "Add to lunch". It used to be an eyebrow, a
+        // title and an icon saying "Log · Add Food" above a meal picker.
+        title={`Add to ${mealWord(mealType)}`}
         icon={FoodIcon}
         contentSx={{ px: { xs: 1.5, sm: 2.5 } }}
       >
@@ -77,6 +82,8 @@ const AddFoodDialog = ({
             onBarcodeClick={() => onShowBarcodeScanner?.(true)}
             initialQuery={initialQuery}
             ketoMode={ketoMode}
+            showQuickPicks
+            date={date}
           />
         </Box>
       </PremiumDialog>
@@ -93,7 +100,7 @@ const AddFoodDialog = ({
             const result = await onLogItems?.([{ ...food, servings: 1 }], mealType);
             if ((result?.ok ?? 0) > 0) {
               const logIds = result?.logIds || [];
-              notify(`Logged ${food.name}`, {
+              notify(addedMessage(mealType, food.name), {
                 tone: 'success',
                 action: logIds.length > 0 && onUndo ? (
                   <Button

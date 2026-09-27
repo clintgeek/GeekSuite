@@ -25,7 +25,7 @@ import { useAuth } from '@geeksuite/auth';
 import { useToast } from '@geeksuite/ui';
 import { userService } from '../services/userService.js';
 import HouseholdSettings from '../components/Settings/HouseholdSettings';
-import { Surface, SectionLabel, DisplayHeading, PremiumDialog } from '../components/primitives';
+import { Surface, SectionLabel, PremiumDialog } from '../components/primitives';
 
 const Profile = () => {
   const { user, logout } = useAuth();
@@ -102,9 +102,7 @@ const Profile = () => {
     <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 960, mx: 'auto' }}>
       {/* Editorial header */}
       <Box sx={{ mb: 3 }}>
-        <SectionLabel sx={{ mb: 0.75 }}>Account · You</SectionLabel>
-        <DisplayHeading size="page">Profile</DisplayHeading>
-        <Typography sx={{ color: 'text.secondary', mt: 0.5, fontSize: '0.9375rem' }}>
+        <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem' }}>
           Your identity and account. App preferences live in Settings.
         </Typography>
       </Box>
@@ -120,7 +118,7 @@ const Profile = () => {
                 mx: 'auto',
                 mb: 2,
                 bgcolor: 'primary.main',
-                fontFamily: "'DM Serif Display', serif",
+                fontFamily: "inherit",
                 fontSize: '2.25rem',
                 fontWeight: 400,
               }}
@@ -129,7 +127,7 @@ const Profile = () => {
             </Avatar>
             <Typography
               sx={{
-                fontFamily: "'DM Serif Display', serif",
+                fontFamily: "inherit",
                 fontSize: '1.5rem',
                 fontWeight: 400,
                 color: 'text.primary',
@@ -196,7 +194,7 @@ const Profile = () => {
                 <Box sx={{ minWidth: 0 }}>
                   <Typography
                     sx={{
-                      fontFamily: "'DM Serif Display', serif",
+                      fontFamily: "inherit",
                       fontSize: '1.25rem',
                       fontWeight: 400,
                       color: 'text.primary',

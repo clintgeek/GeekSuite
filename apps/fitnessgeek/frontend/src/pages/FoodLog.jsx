@@ -7,7 +7,6 @@ import {
   Button,
   Stack,
   Collapse,
-  Tooltip,
   Typography,
   LinearProgress
 } from '@mui/material';
@@ -35,7 +34,10 @@ import { fitnessGeekService } from '../services/fitnessGeekService.js';
 import { settingsService } from '../services/settingsService.js';
 import { goalsService } from '../services/goalsService.js';
 import { useGeekPrimaryAction, useToast } from '@geeksuite/ui';
-import { Surface, SectionLabel, DisplayHeading, StatNumber } from '../components/primitives';
+import { Surface, SectionLabel, StatNumber } from '../components/primitives';
+import { useExperience } from '../contexts/ExperienceContext.jsx';
+import { friendlyDay } from '../utils/plainWords.js';
+import { localDateString } from '@geeksuite/utils';
 import { netCarbs as calcNetCarbs, ketoStatus } from '../utils/ketoMath.js';
 import { useFoodLogging } from '../hooks/useFoodLogging.js';
 
@@ -66,6 +68,7 @@ const mealTypeForNow = (now = new Date()) => {
 const FoodLog = () => {
   const theme = useTheme();
   const { notify } = useToast();
+  const { isSimple } = useExperience();
   const [selectedDate, setSelectedDate] = useState(() => fitnessGeekService.formatDate(new Date()));
   const [showAddDialog, setShowAddDialog] = useState(false);
   // Bug: this used to hardcode 'snack' regardless of the clock, so tapping a
@@ -379,34 +382,16 @@ const FoodLog = () => {
     setSelectedDate(fitnessGeekService.formatDate(currentDate));
   };
 
-  const formatDate = (dateString, short = false) => {
-    // Parse YYYY-MM-DD as a local date to avoid UTC shifting the displayed day
-    const [y, m, d] = (dateString || '').split('-').map(Number);
-    const date = new Date(y || 0, (m || 1) - 1, d || 1);
-    // Use shorter format on narrow screens
-    if (short || window.innerWidth < 400) {
-      return date.toLocaleDateString('en-US', {
-        weekday: 'short',
-        month: 'short',
-        day: 'numeric'
-      });
-    }
-    return date.toLocaleDateString('en-US', {
-      weekday: 'long',
-      month: 'long',
-      day: 'numeric',
-      year: 'numeric'
-    });
-  };
+  // "Today", "Yesterday", "Saturday, September 26" — in words and never
+  // truncated (SIMPLE_AND_FULL_PLAN.md item 8). It used to drop to
+  // "Sat, Sep 26" under 400px and still ran out of room beside the arrows.
+  const formatDate = (dateString) => friendlyDay(dateString, localDateString());
 
   return (
-    <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 960, mx: 'auto', display: 'flex', flexDirection: 'column' }}>
-      {/* Editorial header */}
-      <Box sx={{ mb: 2.5 }}>
-        <SectionLabel sx={{ mb: 0.75 }}>Today · Food Log</SectionLabel>
-        <DisplayHeading size="page">Food Log</DisplayHeading>
-      </Box>
-
+    // Bottom padding clears the thumb-zone "Log food" button, which used to
+    // sit on top of the last meal's empty-state text (plan item 8). The top
+    // bar already says "Food log", so the page no longer says it twice more.
+    <Box sx={{ p: { xs: 2, sm: 3 }, pb: { xs: 14, md: 6 }, maxWidth: 960, mx: 'auto', display: 'flex', flexDirection: 'column' }}>
       {/* Date Navigation with compact calorie card */}
       <DateNavigator
         selectedDate={selectedDate}
@@ -438,48 +423,6 @@ const FoodLog = () => {
           />
         }
       />
-
-      {/* Quick Actions — first on mobile, original position on desktop */}
-      <Box sx={{ display: 'flex', gap: 1, mb: 2, flexWrap: 'wrap', order: { xs: -1, md: 0 } }}>
-        <Tooltip title="Copy meals from another day">
-          <Button
-            variant="outlined"
-            size="small"
-            startIcon={<CopyIcon />}
-            onClick={() => setShowCopyDialog(true)}
-            sx={{
-              minWidth: { xs: 44, sm: 'auto' },
-              minHeight: { xs: 44, sm: 40 },
-              px: { xs: 2, sm: 2.5 },
-              borderRadius: { xs: 2, sm: 999 },
-              '& .MuiButton-startIcon': {
-                '& > svg': { fontSize: { xs: 20, sm: 22 } }
-              }
-            }}
-          >
-            Copy Meal
-          </Button>
-        </Tooltip>
-        <Tooltip title="See what household members ate">
-          <Button
-            variant="outlined"
-            size="small"
-            startIcon={<PeopleIcon />}
-            onClick={() => setShowHouseholdDialog(true)}
-            sx={{
-              minWidth: { xs: 44, sm: 'auto' },
-              minHeight: { xs: 44, sm: 40 },
-              px: { xs: 2, sm: 2.5 },
-              borderRadius: { xs: 2, sm: 999 },
-              '& .MuiButton-startIcon': {
-                '& > svg': { fontSize: { xs: 20, sm: 22 } }
-              }
-            }}
-          >
-            Household
-          </Button>
-        </Tooltip>
-      </Box>
 
       {/* Calorie Goal Panel (toggle) */}
       <Collapse in={showCaloriePanel} unmountOnExit>
@@ -536,6 +479,8 @@ const FoodLog = () => {
           onBarcodeClick={() => setShowBarcodeScanner(true)}
           onCreateFood={(query) => setCreateForm({ ...EMPTY_FOOD_FORM, name: query })}
           ketoMode={mode === 'keto'}
+          showQuickPicks
+          date={selectedDate}
         />
       </Surface>
 
@@ -562,7 +507,33 @@ const FoodLog = () => {
         </Box>
       ))}
 
-      {/* Nutrition Summary moved to bottom for cleaner mobile layout */}
+      {/* Copy Meal and Household, which used to be a row of buttons stacked
+          ahead of the date. Copying yesterday's meal is now one tap in the
+          add box ("Same as yesterday's …"); this is for any other day. */}
+      <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 1 }}>
+        <Button
+          variant="text"
+          startIcon={<CopyIcon />}
+          onClick={() => setShowCopyDialog(true)}
+          sx={{ minHeight: 48 }}
+        >
+          Copy a meal from another day
+        </Button>
+        {!isSimple && (
+          <Button
+            variant="text"
+            startIcon={<PeopleIcon />}
+            onClick={() => setShowHouseholdDialog(true)}
+            sx={{ minHeight: 48 }}
+          >
+            What your household ate
+          </Button>
+        )}
+      </Box>
+
+      {/* Macros and the calorie panel are Full-mode detail (plan: Simple
+          keeps macros out of the way). */}
+      {!isSimple && (
       <Box sx={{ mt: 3 }}>
         <NutritionSummary summary={nutritionSummary} showGoals={true} onCalorieSettingsClick={() => {
           setShowCaloriePanel(prev => {
@@ -577,9 +548,10 @@ const FoodLog = () => {
           });
         }} />
       </Box>
+      )}
 
       {/* Keto: Net Carb Day Total (Task D4) */}
-      {mode === 'keto' && (() => {
+      {!isSimple && mode === 'keto' && (() => {
         const { totalNetCarbs } = ketoTotals;
         const status = ketoStatus(totalNetCarbs, netCarbLimit);
         const barPct = Math.min((totalNetCarbs / netCarbLimit) * 100, 100);
@@ -594,19 +566,17 @@ const FoodLog = () => {
               variant="caption"
               sx={{
                 display: 'block',
-                textTransform: 'uppercase',
-                letterSpacing: '0.1em',
                 color: theme.palette.text.secondary,
-                fontFamily: '"DM Sans", sans-serif',
-                fontSize: '0.75rem',
+                fontSize: '0.9375rem',
+                fontWeight: 800,
                 mb: 0.5
               }}
             >
-              Net Carbs Today
+              Net carbs today
             </Typography>
             <Typography
               sx={{
-                fontFamily: '"JetBrains Mono", monospace',
+                fontFamily: 'inherit',
                 fontWeight: 700,
                 fontSize: '1.5rem',
                 color: theme.palette.warning.main,
@@ -618,7 +588,7 @@ const FoodLog = () => {
               <Typography
                 component="span"
                 sx={{
-                  fontFamily: '"JetBrains Mono", monospace',
+                  fontFamily: 'inherit',
                   fontSize: '1rem',
                   color: theme.palette.text.secondary,
                   fontWeight: 400,
@@ -697,6 +667,7 @@ const FoodLog = () => {
         showBarcodeScanner={showBarcodeScanner}
         onShowBarcodeScanner={setShowBarcodeScanner}
         ketoMode={mode === 'keto'}
+        date={selectedDate}
       />
 
       {/* "Can't find it? Create …" lands here, with the name already filled */}

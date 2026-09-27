@@ -22,7 +22,7 @@ import DisplayHeading from './DisplayHeading.jsx';
  * Props (all of the original API, plus the two mobile-header slots):
  *   open, onClose, maxWidth, fullWidth — passed through to GeekDialog
  *   eyebrow                            — small uppercase tick label
- *   title                              — DM Serif Display heading
+ *   title                              — the rounded display heading
  *   subtitle                           — optional muted body copy. Moves to the
  *                                        top of the body when full-screen, so
  *                                        the 60px header stays a header.

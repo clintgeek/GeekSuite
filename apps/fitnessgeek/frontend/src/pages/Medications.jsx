@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Box, Typography, TextField, Button, Chip, Stack, IconButton, ToggleButton, ToggleButtonGroup, FormControl, InputLabel, Select, MenuItem, Alert } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import EditIcon from '@mui/icons-material/Edit';
@@ -10,6 +10,8 @@ import WarningIcon from '@mui/icons-material/Warning';
 import medsService from '../services/medsService.js';
 import { localDateString, toUtcMidnight, utcDateString } from '@geeksuite/utils';
 import { Surface, SectionLabel, DisplayHeading, EmptyState } from '../components/primitives';
+import MedsChecklist from '../components/Home/MedsChecklist.jsx';
+import { useMedsToday } from '../hooks/useMedsToday.js';
 
 const TIME_OPTIONS = ['morning', 'afternoon', 'evening', 'bedtime'];
 
@@ -38,6 +40,9 @@ function SuggestionChips({ suggestions, userTags, onChange }) {
 }
 
 export default function Medications() {
+  // Today's doses — the dose log had a backend and no UI until now.
+  const today = localDateString();
+  const doses = useMedsToday(today);
   const [q, setQ] = useState('');
   const [searching, setSearching] = useState(false);
   const [results, setResults] = useState([]);
@@ -409,14 +414,25 @@ export default function Medications() {
 
   return (
     <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 960, mx: 'auto' }}>
-      {/* Editorial header */}
       <Box sx={{ mb: 3 }}>
-        <SectionLabel sx={{ mb: 0.75 }}>Tracking · Medications</SectionLabel>
-        <DisplayHeading size="page">Medications & Supplements</DisplayHeading>
-        <Typography sx={{ color: 'text.secondary', mt: 0.5, fontSize: '0.9375rem' }}>
-          Manage your medications, track supply, and export a list for your doctor.
+        <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem' }}>
+          Tick off today&apos;s doses, manage your medicines, and export a list for your doctor.
         </Typography>
       </Box>
+
+      {doses.total > 0 && (
+        <Surface sx={{ mb: 3, borderRadius: '24px' }}>
+          <MedsChecklist
+            title="Today's doses"
+            items={doses.items}
+            taken={doses.taken}
+            total={doses.total}
+            onToggle={doses.toggle}
+            saving={doses.saving}
+            error={doses.error}
+          />
+        </Surface>
+      )}
 
       {/* Export Buttons */}
       {/* `size="small"` renders these under the 44px tap floor the mobile
@@ -465,7 +481,7 @@ export default function Medications() {
                 <Typography sx={{ fontWeight: 600, fontSize: '0.9375rem' }}>{r.name}</Typography>
                 <Typography
                   sx={{
-                    fontFamily: "'JetBrains Mono', monospace",
+                    fontFamily: "inherit",
                     fontSize: '0.75rem',
                     color: 'text.secondary',
                     mt: 0.25,
@@ -638,7 +654,7 @@ export default function Medications() {
                             {m.strength && (
                               <Typography
                                 sx={{
-                                  fontFamily: "'JetBrains Mono', monospace",
+                                  fontFamily: "inherit",
                                   fontSize: '0.75rem',
                                   color: 'text.secondary',
                                   mb: 0.75,
@@ -682,7 +698,7 @@ export default function Medications() {
                                   color={remaining > 30 ? 'success' : remaining >= 7 ? 'warning' : 'error'}
                                   variant="outlined"
                                   sx={{
-                                    fontFamily: "'JetBrains Mono', monospace",
+                                    fontFamily: "inherit",
                                     fontVariantNumeric: 'tabular-nums',
                                     fontWeight: 600,
                                     fontSize: '0.75rem',

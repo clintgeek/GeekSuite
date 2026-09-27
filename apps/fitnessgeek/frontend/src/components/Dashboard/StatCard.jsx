@@ -121,7 +121,7 @@ export default function StatCard({
         <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5 }}>
           <Typography
             sx={{
-              fontFamily: "'JetBrains Mono', monospace",
+              fontFamily: "inherit",
               fontVariantNumeric: 'tabular-nums',
               fontSize: { xs: '1.75rem', sm: '2rem' },
               fontWeight: 600,
@@ -135,7 +135,7 @@ export default function StatCard({
           {unit && (
             <Typography
               sx={{
-                fontFamily: "'JetBrains Mono', monospace",
+                fontFamily: "inherit",
                 fontSize: '0.75rem',
                 fontWeight: 600,
                 textTransform: 'uppercase',

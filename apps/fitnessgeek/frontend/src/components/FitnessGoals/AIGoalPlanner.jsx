@@ -493,7 +493,7 @@ const CalorieGoalWizard = () => {
       {/* Step 0: Mode Selector */}
       {!hasExistingGoal && activeStep === 0 && (
         <Box sx={{ mt: 2 }}>
-          <Typography variant="h5" sx={{ fontFamily: '"DM Serif Display", serif', mb: 1 }}>
+          <Typography variant="h5" sx={{ fontFamily: 'inherit', mb: 1 }}>
             Choose your approach
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
@@ -748,7 +748,7 @@ const CalorieGoalWizard = () => {
       {/* Step 3b: Keto Plan (shown when mode === 'keto', new goal only) */}
       {!hasExistingGoal && mode === 'keto' && plan && activeStep === 3 && (
         <Box sx={{ mt: 2 }}>
-          <Typography variant="h5" sx={{ fontFamily: '"DM Serif Display", serif', mb: 3 }}>
+          <Typography variant="h5" sx={{ fontFamily: 'inherit', mb: 3 }}>
             Configure Your Keto Plan
           </Typography>
           <PlanComparison saved={savedSnapshot} next={plan} />
@@ -827,7 +827,7 @@ const CalorieGoalWizard = () => {
           </Typography>
           <Card sx={{ mb: 3, bgcolor: 'background.default', border: '2px solid', borderColor: 'warning.main' }}>
             <CardContent>
-              <Typography variant="h5" sx={{ fontWeight: 600, mb: 1, color: 'warning.main', fontFamily: '"DM Serif Display", serif' }}>
+              <Typography variant="h5" sx={{ fontWeight: 600, mb: 1, color: 'warning.main', fontFamily: 'inherit' }}>
                 {ketoConfig.net_carb_limit_g}g net carbs / day
               </Typography>
               <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
@@ -910,7 +910,7 @@ const CalorieGoalWizard = () => {
               </Box>
               {standardMacroPreview && (
                 <Box sx={{ mt: 2 }} data-testid="macro-preview">
-                  <Typography variant="body2" sx={{ color: 'text.primary', fontFamily: "'JetBrains Mono', monospace", fontVariantNumeric: 'tabular-nums' }}>
+                  <Typography variant="body2" sx={{ color: 'text.primary', fontFamily: "inherit", fontVariantNumeric: 'tabular-nums' }}>
                     Protein {standardMacroPreview.grams.protein_g}g · Fat {standardMacroPreview.grams.fat_g}g · Carbs {standardMacroPreview.grams.carbs_g}g
                   </Typography>
                   <ProteinBasisNote rules={standardMacroPreview.rules} />

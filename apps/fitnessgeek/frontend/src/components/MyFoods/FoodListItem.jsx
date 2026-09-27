@@ -121,7 +121,7 @@ const FoodListItem = ({ food, onEdit, onDelete }) => {
           <Box
             component="span"
             sx={{
-              fontFamily: "'JetBrains Mono', monospace",
+              fontFamily: "inherit",
               fontVariantNumeric: 'tabular-nums',
             }}
           >
@@ -131,7 +131,7 @@ const FoodListItem = ({ food, onEdit, onDelete }) => {
           <Box
             component="span"
             sx={{
-              fontFamily: "'JetBrains Mono', monospace",
+              fontFamily: "inherit",
               fontVariantNumeric: 'tabular-nums',
               fontSize: '0.75rem',
             }}

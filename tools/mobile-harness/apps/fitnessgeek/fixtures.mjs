@@ -19,9 +19,9 @@ const nut = (cal, p, c, f, fib = 2) => ({
   fiber_grams: fib, sugar_grams: 3, sodium_mg: 180,
 });
 
-const foodLog = (id, name, brand, meal, servings, n) => ({
+const foodLog = (id, name, brand, meal, servings, n, day = TODAY) => ({
   __typename: 'FoodLog',
-  id, log_date: TODAY, meal_type: meal, servings, notes: null,
+  id, log_date: day, meal_type: meal, servings, notes: null,
   nutrition: n, calculatedNutrition: n,
   food_item_id: {
     __typename: 'FitnessFood',
@@ -38,6 +38,70 @@ export const FOOD_LOGS = [
   foodLog('l6', 'Roasted Brussels Sprouts', null, 'dinner', 1, nut(120, 4, 12, 7, 5)),
   foodLog('l7', 'Almonds', 'Blue Diamond', 'snack', 1, nut(164, 6, 6, 14, 3.5)),
 ];
+
+// ── Simple and Full (apps/fitnessgeek/DOCS/SIMPLE_AND_FULL_PLAN.md) ────────
+// Four weeks of Chef-shaped history for the "Again" chips and "Same as
+// yesterday's …": yogurt and blueberries most breakfasts, the Caesar most
+// lunches, ribeye twice a week. Food ids match FOOD_LOGS so a chip is the
+// same food as today's row. Dated calendar days, like every stored log.
+const HISTORY = Array.from({ length: 27 }, (_, i) => i + 1).flatMap((n) => {
+  const d = daysAgo(n);
+  const rows = [
+    foodLog(`h${n}a`, 'Greek Yogurt, Plain Whole Milk', 'Fage', 'breakfast', 1, nut(190, 18, 8, 10, 0), d),
+  ];
+  if (n % 3 !== 0) rows.push(foodLog(`h${n}b`, 'Blueberries', null, 'breakfast', 0.5, nut(42, 0.5, 11, 0.2, 1.8), d));
+  if (n % 2 === 1) rows.push(foodLog(`h${n}c`, 'Chicken Caesar Salad', "Chef's kitchen", 'lunch', 1, nut(480, 38, 12, 31, 3), d));
+  if (n % 4 === 1) rows.push(foodLog(`h${n}d`, 'Sourdough Toast', 'Boudin', 'lunch', 2, nut(120, 4, 22, 1, 1), d));
+  if (n % 7 === 2 || n % 7 === 5) rows.push(foodLog(`h${n}e`, 'Ribeye, grilled', null, 'dinner', 1.5, nut(310, 26, 0, 23, 0), d));
+  if (n % 2 === 0) rows.push(foodLog(`h${n}f`, 'Almonds', 'Blue Diamond', 'snack', 1, nut(164, 6, 6, 14, 3.5), d));
+  return rows;
+});
+// Food ids keyed by name, so history rows share today's food ids.
+const FOOD_ID = Object.fromEntries(
+  [['Greek Yogurt, Plain Whole Milk', 'f-l1'], ['Blueberries', 'f-l2'], ['Chicken Caesar Salad', 'f-l3'],
+    ['Sourdough Toast', 'f-l4'], ['Ribeye, grilled', 'f-l5'], ['Almonds', 'f-l7']]
+);
+for (const row of HISTORY) row.food_item_id.id = FOOD_ID[row.food_item_id.name] || row.food_item_id.id;
+
+/** GetFoodLogs: a day's logs, or (with a range) the history plus today. */
+export const foodLogsFor = (today, history) => (vars = {}) => ({
+  foodLogs: vars.startDate ? [...history, ...today] : today,
+});
+
+export const SAVED_MEALS = [
+  {
+    __typename: 'FitnessMeal', id: 'meal-1', name: 'Usual breakfast', meal_type: 'breakfast',
+    food_items: [
+      { __typename: 'MealFoodItem', servings: 1, food_item_id: { __typename: 'FitnessFood', id: 'f-l1', name: 'Greek Yogurt, Plain Whole Milk', brand: 'Fage', serving_size: 170, serving_unit: 'g', nutrition: nut(190, 18, 8, 10, 0) } },
+      { __typename: 'MealFoodItem', servings: 0.5, food_item_id: { __typename: 'FitnessFood', id: 'f-l2', name: 'Blueberries', brand: null, serving_size: 148, serving_unit: 'g', nutrition: nut(42, 0.5, 11, 0.2, 1.8) } },
+    ],
+    totalNutrition: nut(232, 18.5, 19, 10.2, 1.8),
+  },
+];
+
+const med = (id, name, times) => ({
+  __typename: 'FitnessMedication', id, display_name: name, is_supplement: false, med_type: 'rx',
+  rxcui: null, ingredient_name: name, brand_name: null, form: 'tablet', route: 'oral', strength: null,
+  dose_value: null, dose_unit: null, sig: null, times_of_day: times, suggested_indications: [],
+  user_indications: [], supply_start_date: null, days_supply: null, notes: null,
+});
+export const MEDS = [
+  med('m1', 'Lisinopril 10 mg', ['morning']),
+  med('m2', 'Metformin 500 mg', ['morning', 'evening']),
+];
+// GET /api/meds/logs/by-date — REST, the dose log. One of three taken.
+export const MED_LOGS = [
+  { _id: 'ml1', medication_id: 'm1', time_of_day: 'morning', taken: true, log_date: `${TODAY}T00:00:00.000Z`, created_at: `${TODAY}T13:02:00.000Z` },
+];
+
+// Chef, who never chose a mode: the default rule sees his logs → Full.
+export const EXPERIENCE_UNSET = {
+  __typename: 'FitnessUserSettings', id: 'us1',
+  experience: { __typename: 'FitnessExperienceSettings', mode: null, larger_text: false, first_run_done: false, preferred_name: null, goal: null },
+};
+export const experienceOf = (patch) => ({
+  fitnessUserSettings: { ...EXPERIENCE_UNSET, experience: { ...EXPERIENCE_UNSET.experience, ...patch } },
+});
 
 export const SETTINGS = {
   __typename: 'FitnessUserSettings',
@@ -306,7 +370,9 @@ export const FOODS = [
 export const OPS = {
   GetFitnessUserSettings: { fitnessUserSettings: SETTINGS },
   UpdateFitnessUserSettings: { updateFitnessUserSettings: { __typename: 'FitnessUserSettings', id: 'us1', theme: 'dark' } },
-  GetFoodLogs: { foodLogs: FOOD_LOGS },
+  GetFoodLogs: foodLogsFor(FOOD_LOGS, HISTORY),
+  GetFoodLogActivity: { foodLogs: FOOD_LOGS.map((l) => ({ __typename: 'FoodLog', id: l.id, log_date: l.log_date })) },
+  GetFitnessExperience: { fitnessUserSettings: EXPERIENCE_UNSET },
   GetFitnessWeights: { fitnessWeights: WEIGHTS },
   GetBodyCompositionSummary: { bodyCompositionSummary: BODY_COMP_SUMMARY },
   GetBodyCompositions: { bodyCompositions: BODY_COMP_SCANS },
@@ -322,8 +388,8 @@ export const OPS = {
   GetActiveNutritionGoals: { activeNutritionGoals: null },
   GetFitnessFoods: { fitnessFoods: FOODS },
   GetFitnessFood: { fitnessFood: FOODS[0] },
-  GetFitnessMeals: { fitnessMeals: [] },
-  GetFitnessMedications: { fitnessMedications: [] },
+  GetFitnessMeals: { fitnessMeals: SAVED_MEALS },
+  GetFitnessMedications: { fitnessMedications: MEDS },
   GetLoginStreak: { loginStreak: { __typename: 'LoginStreak', current_streak: 12, longest_streak: 31, last_login: TODAY } },
   // The dashboard records a login on mount; without this the harness logs an
   // unstubbed op on every run.
@@ -398,6 +464,47 @@ export const USER = {
   profile: { age: 44, height: '6\'1"', gender: 'male' },
 };
 
+// Heather: settings, no logs of any kind, two medications (one of three doses
+// taken). `experience` decides which of her screens a scene sees.
+const HEATHER_TODAY = [
+  foodLog('hl1', 'Scrambled eggs', null, 'breakfast', 2, nut(91, 6, 1, 7, 0)),
+  foodLog('hl2', 'Whole wheat toast', null, 'breakfast', 1, nut(80, 4, 14, 1, 2)),
+];
+export const heatherOps = (experience, { today = HEATHER_TODAY } = {}) => ({
+  ...OPS,
+  GetFitnessExperience: experienceOf(experience),
+  GetFoodLogs: foodLogsFor(today, []),
+  GetFoodLogActivity: { foodLogs: [] },
+  GetFitnessWeights: { fitnessWeights: [] },
+  GetBps: { bloodPressures: [] },
+  GetFitnessMeals: { fitnessMeals: [] },
+  GetDailySummary: {
+    dailySummary: {
+      ...DAILY_SUMMARY,
+      calorieGoal: 1800,
+      totals: { ...DAILY_SUMMARY.totals, calories: today.reduce((a, l) => a + l.nutrition.calories_per_serving * l.servings, 0) },
+      meals: {
+        __typename: 'MealTotals',
+        breakfast: { __typename: 'MealTotal', calories: today.reduce((a, l) => a + l.nutrition.calories_per_serving * l.servings, 0), protein_grams: 16, carbs_grams: 16, fat_grams: 15 },
+        lunch: { __typename: 'MealTotal', calories: 0, protein_grams: 0, carbs_grams: 0, fat_grams: 0 },
+        dinner: { __typename: 'MealTotal', calories: 0, protein_grams: 0, carbs_grams: 0, fat_grams: 0 },
+        snack: { __typename: 'MealTotal', calories: 0, protein_grams: 0, carbs_grams: 0, fat_grams: 0 },
+      },
+    },
+  },
+  GetDerivedMacros: {
+    derivedMacros: { ...DERIVED, today: { ...DERIVED.today, base_calories: 1800, activity_add_kcal: 0, target_calories: 1800 } },
+  },
+  GetFitnessUserSettings: {
+    fitnessUserSettings: {
+      ...SETTINGS,
+      garmin: { ...SETTINGS.garmin, enabled: false, username: null },
+      nutrition_goal: { ...SETTINGS.nutrition_goal, enabled: false, bmr: null, daily_calorie_target: null },
+      household: { ...SETTINGS.household, display_name: 'Heather' },
+    },
+  },
+});
+
 /** OPS with the settings document's nutrition_goal patched — for page-scoped stubs. */
 export const opsWithPlan = (patch, extra = {}) => ({
   ...OPS,
@@ -413,4 +520,10 @@ export async function routes(ctx, { base, scheme, viewport } = {}) {
   // After sessionRoutes: its catch-all `/api/` answers `{ success, data: {} }`,
   // and a later route wins. Reports' Body & recovery reads this.
   await ctx.route('**/api/influx/trends*', (r) => json(r, INFLUX_TRENDS));
+  // The dose log (REST): today's doses, and a tick's write echoed back.
+  await ctx.route('**/api/meds/logs/by-date*', (r) => json(r, { success: true, data: MED_LOGS }));
+  await ctx.route(/\/api\/meds\/[^/]+\/logs$/, (r) => json(r, {
+    success: true,
+    data: { _id: 'ml-new', ...(r.request().postDataJSON?.() || {}), created_at: new Date().toISOString() },
+  }));
 }

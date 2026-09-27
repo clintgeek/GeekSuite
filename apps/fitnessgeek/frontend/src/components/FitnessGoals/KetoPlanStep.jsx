@@ -86,7 +86,7 @@ const KetoPlanStep = ({ ketoConfig, onChange, calorieTarget, baseGoal = null, le
 
   // ── section label style ────────────────────────────────────────────────────
   const labelSx = {
-    fontFamily: '"DM Sans", sans-serif',
+    fontFamily: 'inherit',
     fontSize: '0.75rem',
     textTransform: 'uppercase',
     letterSpacing: '0.08em',
@@ -104,7 +104,7 @@ const KetoPlanStep = ({ ketoConfig, onChange, calorieTarget, baseGoal = null, le
         {/* Live value */}
         <Typography
           sx={{
-            fontFamily: '"JetBrains Mono", monospace',
+            fontFamily: 'inherit',
             fontSize: '1.5rem',
             fontWeight: 700,
             color: theme.palette.warning.main,
@@ -157,10 +157,10 @@ const KetoPlanStep = ({ ketoConfig, onChange, calorieTarget, baseGoal = null, le
                         bgcolor: theme.palette.warning.main,
                         color: theme.palette.getContrastText(theme.palette.warning.main),
                         '&:hover': { bgcolor: theme.palette.warning.dark },
-                        fontFamily: '"DM Sans", sans-serif',
+                        fontFamily: 'inherit',
                       }
                     : {
-                        fontFamily: '"DM Sans", sans-serif',
+                        fontFamily: 'inherit',
                         borderColor: theme.palette.divider,
                       }
                 }
@@ -227,7 +227,7 @@ const KetoPlanStep = ({ ketoConfig, onChange, calorieTarget, baseGoal = null, le
               <Typography
                 variant="caption"
                 sx={{
-                  fontFamily: '"JetBrains Mono", monospace',
+                  fontFamily: 'inherit',
                   color: 'text.secondary',
                   display: 'block',
                 }}
@@ -258,7 +258,7 @@ const KetoPlanStep = ({ ketoConfig, onChange, calorieTarget, baseGoal = null, le
           <ToggleButton
             value="net"
             sx={{
-              fontFamily: '"DM Sans", sans-serif',
+              fontFamily: 'inherit',
               fontSize: '0.8125rem',
               textTransform: 'none',
               px: 2,
@@ -269,7 +269,7 @@ const KetoPlanStep = ({ ketoConfig, onChange, calorieTarget, baseGoal = null, le
           <ToggleButton
             value="total"
             sx={{
-              fontFamily: '"DM Sans", sans-serif',
+              fontFamily: 'inherit',
               fontSize: '0.8125rem',
               textTransform: 'none',
               px: 2,

@@ -578,10 +578,11 @@ export function usableRange(resolution, loggedCalories) {
  * The whole job: a sentence about food becomes rows in the log.
  *
  * @param {string} text
- * @param {{userId: string, date: string, hour?: number}} options
+ * @param {{userId: string, date: string, hour?: number, mealType?: string}} options
+ *        `mealType` is the meal the person already chose, when they chose one.
  */
-export async function logDescription(text, { userId, date, hour, ...options } = {}) {
-  const parsed = parseMealDescription(text, { hour });
+export async function logDescription(text, { userId, date, hour, mealType, ...options } = {}) {
+  const parsed = parseMealDescription(text, { hour, mealType });
   if (parsed.entries.length === 0) {
     return { logged: [], skipped: [], logIds: [], questions: [], parsed, requested: 0 };
   }

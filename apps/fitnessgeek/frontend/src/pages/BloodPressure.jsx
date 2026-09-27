@@ -19,7 +19,7 @@ import {
   PictureAsPdf as PdfIcon
 } from '@mui/icons-material';
 import { useToast } from '@geeksuite/ui';
-import { SectionLabel, DisplayHeading, SuspenseSurface } from '../components/primitives';
+import { SuspenseSurface } from '../components/primitives';
 import BPInsights from '../components/BloodPressure/BPInsights.jsx';
 import QuickAddBP from '../components/BloodPressure/QuickAddBP.jsx';
 import BPLogList from '../components/BloodPressure/BPLogList.jsx';
@@ -310,9 +310,7 @@ const BloodPressure = () => {
     <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 960, mx: 'auto' }}>
       {/* Editorial header */}
       <Box sx={{ mb: 3 }}>
-        <SectionLabel sx={{ mb: 0.75 }}>Tracking · Blood Pressure</SectionLabel>
-        <DisplayHeading size="page">Blood Pressure</DisplayHeading>
-        <Typography sx={{ color: 'text.secondary', mt: 0.5, fontSize: '0.9375rem' }}>
+        <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem' }}>
           Track your blood pressure and heart health over time.
         </Typography>
       </Box>

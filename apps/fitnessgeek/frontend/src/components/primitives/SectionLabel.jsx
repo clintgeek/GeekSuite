@@ -3,10 +3,11 @@ import { Box, Typography } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 
 /**
- * SectionLabel — the editorial tick label used across surfaces.
+ * SectionLabel — the small heading over a group of things.
  *
- * Uppercase, 0.14em letter-spacing, muted color. One source of truth
- * for the "small-caps tag" pattern that was appearing inconsistently.
+ * Sentence case, bold, muted. Market Morning retired the ALL-CAPS tracked
+ * tick labels (SIMPLE_AND_FULL_PLAN.md: "All-caps monospace labels"): a
+ * label is a word to read, not a stamp.
  *
  * Variants:
  *  - "default" : muted text color, used for minor hints
@@ -48,13 +49,12 @@ const SectionLabel = ({
       <Typography
         component="span"
         sx={{
-          fontFamily: "'DM Sans', sans-serif",
-          fontSize: '0.75rem',
-          fontWeight: 700,
-          textTransform: 'uppercase',
-          letterSpacing: '0.14em',
+          fontFamily: "inherit",
+          fontSize: '0.9375rem',
+          fontWeight: 800,
+          letterSpacing: 0,
           color,
-          lineHeight: 1,
+          lineHeight: 1.3,
         }}
       >
         {children}
@@ -62,8 +62,8 @@ const SectionLabel = ({
           <Typography
             component="span"
             sx={{
-              fontFamily: "'JetBrains Mono', monospace",
-              fontSize: '0.75rem',
+              fontFamily: "inherit",
+              fontSize: '0.875rem',
               fontWeight: 700,
               color: theme.palette.text.secondary,
               ml: 1,

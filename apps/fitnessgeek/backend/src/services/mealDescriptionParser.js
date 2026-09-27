@@ -95,7 +95,11 @@ function describeEntry(dishText, components) {
  * Parse a description of what someone ate.
  *
  * @param {string} text  "a dozen nachos with beef and cheese", or a whole day
- * @param {{hour?: number}} [options] local hour, for the meal guess
+ * @param {{hour?: number, mealType?: string}} [options] local hour, for the
+ *        meal guess; or `mealType`, the meal the person already picked (the
+ *        meal card's "+ Add" — SIMPLE_AND_FULL_PLAN.md item 1), which beats
+ *        the clock. A meal NAMED in the text ("eggs for breakfast") still
+ *        wins over both: it is what he said.
  * @returns {{raw: string, normalized: string, entries: object[]}}
  */
 export function parseMealDescription(text, options = {}) {
@@ -103,7 +107,7 @@ export function parseMealDescription(text, options = {}) {
   const raw = String(text || '');
   if (!normalized) return { raw, normalized: '', entries: [] };
 
-  const fallbackMeal = mealFromHour(options.hour);
+  const fallbackMeal = MEAL_TYPES.has(options.mealType) ? options.mealType : mealFromHour(options.hour);
   const segments = normalized.split(SEGMENT_SPLIT).map((s) => s.trim()).filter(Boolean);
 
   const entries = [];

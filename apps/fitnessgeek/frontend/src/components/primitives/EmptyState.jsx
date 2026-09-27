@@ -8,7 +8,7 @@ import Surface from './Surface';
 // so a heading component can't be handed in directly without nesting a
 // block element (`DisplayHeading`'s `h3`) inside a `<p>`.
 const TITLE_SX = {
-  fontFamily: "'DM Serif Display', Georgia, serif",
+  fontFamily: "inherit",
   fontWeight: 400,
   fontSize: { xs: '1.25rem', sm: '1.5rem' },
   lineHeight: 1.15,

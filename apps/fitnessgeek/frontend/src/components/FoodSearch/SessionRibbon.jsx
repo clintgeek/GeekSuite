@@ -80,7 +80,7 @@ const SessionRibbon = ({ items = [], onUndoAll, onUndoLast, busy = false }) => {
           {items.length} logged
         </Typography>
         <Typography
-          sx={{ fontSize: '0.75rem', color: 'text.secondary', fontFamily: "'JetBrains Mono', monospace" }}
+          sx={{ fontSize: '0.75rem', color: 'text.secondary', fontFamily: "inherit" }}
         >
           {displayed} cal this sitting
         </Typography>

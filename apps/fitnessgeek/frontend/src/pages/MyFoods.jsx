@@ -15,13 +15,7 @@ import { useFoodManagement } from '../hooks/useFoodManagement.js';
 import FoodListItem from '../components/MyFoods/FoodListItem.jsx';
 import FoodEditDialog from '../components/MyFoods/FoodEditDialog.jsx';
 import FoodDeleteDialog from '../components/MyFoods/FoodDeleteDialog.jsx';
-import {
-  Surface,
-  SectionLabel,
-  DisplayHeading,
-  EmptyState,
-  SurfaceSkeleton
-} from '../components/primitives';
+import { Surface, SectionLabel, EmptyState, SurfaceSkeleton } from '../components/primitives';
 
 const MyFoods = () => {
   const {
@@ -166,8 +160,6 @@ const MyFoods = () => {
     return (
       <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 900, mx: 'auto' }}>
         <Box sx={{ mb: 3 }}>
-          <SectionLabel sx={{ mb: 0.75 }}>Library · Foods</SectionLabel>
-          <DisplayHeading size="page">My Foods</DisplayHeading>
         </Box>
         <SurfaceSkeleton rows={5} />
       </Box>
@@ -178,9 +170,7 @@ const MyFoods = () => {
     <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 900, mx: 'auto' }}>
       {/* Editorial header */}
       <Box sx={{ mb: 3 }}>
-        <SectionLabel sx={{ mb: 0.75 }}>Library · Foods</SectionLabel>
-        <DisplayHeading size="page">My Foods</DisplayHeading>
-        <Typography sx={{ color: 'text.secondary', mt: 0.5, fontSize: '0.9375rem' }}>
+        <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem' }}>
           Your custom entries and everything you've saved for quick access.
         </Typography>
       </Box>

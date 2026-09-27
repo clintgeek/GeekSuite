@@ -2,9 +2,9 @@
  * FitnessGeek sidebar — thin identity wrapper around the suite `GeekSidebar`.
  *
  * Structure (brand → grouped nav → user chip → Settings → Sign out) belongs
- * to the primitive; this file only supplies FitnessGeek's signature
- * always-dark chrome (`#0C0A09`) and teal (`#2DD4BF`) accents, in both
- * light and dark app modes — identity, not structure.
+ * to the primitive; this file only supplies Market Morning's chalkboard
+ * chrome (chrome.js) — the same board in light and dark app modes, written on
+ * in chalk with a lemon accent — and the mode-aware section list.
  *
  * `GeekShell nav={…}` decides whether this panel sits in the permanent 220px
  * column or inside the mobile drawer, so there is no `isMobile` / `onClose`
@@ -13,14 +13,11 @@
 import { Box, Typography } from '@mui/material';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { GeekSidebar, geekLayout } from '@geeksuite/ui';
-import { activeNavId, navSections } from './navConfig.jsx';
-import { ACCENT, CHROME_BG, INK, MUTED } from './chrome.js';
+import { activeNavId, navSectionsFor } from './navConfig.jsx';
+import { ACCENT, ACTIVE_BG, CHROME_BG, HOVER_BG, INK, MUTED } from './chrome.js';
+import { useExperience } from '../../contexts/ExperienceContext.jsx';
 
-/**
- * Brand block, passed as a node rather than the primitive's
- * `{ monogram, name }` object so "geek" keeps its teal identity color
- * instead of the shared primary-tinted monogram chip.
- */
+/** Brand block: a lemon dot and the name, in chalk. */
 const Brand = () => (
   <Box
     component={RouterLink}
@@ -28,25 +25,21 @@ const Brand = () => (
     sx={{
       display: 'flex',
       alignItems: 'center',
+      gap: 1.25,
       px: 2.5,
       height: geekLayout.topBarHeight,
       textDecoration: 'none',
       color: 'inherit',
     }}
   >
+    <Box aria-hidden sx={{ width: 14, height: 14, borderRadius: '50%', bgcolor: ACCENT, boxShadow: `0 0 0 4px rgba(246, 201, 69, 0.18)` }} />
     <Typography
       variant="h5"
       noWrap
-      sx={{
-        fontWeight: 400,
-        color: INK,
-        fontSize: '1.375rem',
-        letterSpacing: '-0.02em',
-        fontFamily: '"DM Serif Display", Georgia, serif',
-      }}
+      sx={{ fontWeight: 800, color: INK, fontSize: '1.25rem', letterSpacing: '-0.01em' }}
     >
       fitness
-      <Box component="span" sx={{ fontWeight: 400, color: ACCENT }}>
+      <Box component="span" sx={{ color: ACCENT }}>
         geek
       </Box>
     </Typography>
@@ -55,34 +48,35 @@ const Brand = () => (
 
 const Sidebar = () => {
   const location = useLocation();
-
+  const { effectiveMode } = useExperience();
 
   return (
     <GeekSidebar
       brand={<Brand />}
-      sections={navSections}
+      sections={navSectionsFor(effectiveMode)}
       activeId={activeNavId(location.pathname)}
       sx={{ bgcolor: CHROME_BG }}
       chromeSx={{ flexShrink: 0 }}
       // The primitive's caption ink is `text.secondary`, which follows the app
-      // mode. On this always-dark panel, light mode's secondary is dark ink
-      // (4.12:1). Captions use the chrome's own muted ink in both modes, which
-      // is what dark mode already showed.
-      sectionLabelSx={{ color: MUTED }}
+      // mode; on the board it would be dark ink in light mode. Captions use
+      // the chalk's own muted ink in both modes.
+      sectionLabelSx={{ color: MUTED, textTransform: 'none', letterSpacing: 0, fontSize: '0.8125rem', fontWeight: 700 }}
       itemSx={{
         color: MUTED,
+        borderRadius: 999,
+        mx: 1,
         transition: 'background-color 0.15s ease, color 0.15s ease',
-        '& .MuiListItemText-primary': { fontSize: '0.8125rem' },
-        '&:hover': {
-          bgcolor: 'rgba(255, 255, 255, 0.04)',
-          color: INK,
+        '& .MuiListItemText-primary': { fontSize: '0.9375rem', fontWeight: 600 },
+        '& .MuiListItemIcon-root': { color: 'inherit' },
+        '@media (hover: hover)': {
+          '&:hover': { bgcolor: HOVER_BG, color: INK },
         },
         '&.Mui-selected': {
-          bgcolor: 'rgba(45, 212, 191, 0.08)',
+          bgcolor: ACTIVE_BG,
           color: INK,
-          boxShadow: `inset 3px 0 0 ${ACCENT}`,
-          '& .MuiListItemText-primary': { fontWeight: 600 },
-          '&:hover': { bgcolor: 'rgba(45, 212, 191, 0.12)' },
+          '& .MuiListItemIcon-root': { color: ACCENT },
+          '& .MuiListItemText-primary': { fontWeight: 800 },
+          '@media (hover: hover)': { '&:hover': { bgcolor: ACTIVE_BG } },
         },
       }}
     />

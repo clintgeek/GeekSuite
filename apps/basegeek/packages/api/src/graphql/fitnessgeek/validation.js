@@ -51,3 +51,25 @@ export const parseFoodEntryArgsSchema = z.object({
 });
 
 export const validateParseFoodEntryArgs = validateInput(parseFoodEntryArgsSchema);
+
+/**
+ * `updateFitnessUserSettings(input: { experience })` — Simple and Full
+ * (apps/fitnessgeek/DOCS/SIMPLE_AND_FULL_PLAN.md).
+ *
+ * The rest of `FitnessUserSettingsInput` is free-form `FitnessJSON` handed to
+ * a strict-mode model, which DROPS an unknown path silently and — because
+ * `updateSettings` does not run validators on update — would store an
+ * out-of-enum `mode` as-is. This sub-document is small and new, so it gets a
+ * real contract: known keys only (`.strict()` refuses a typo instead of
+ * losing it), the two enums, a bounded name. `mode: null` is allowed and
+ * means "I never chose" — the app then decides from the person's history.
+ */
+export const experienceInputSchema = z.object({
+  mode: z.enum(['simple', 'full']).nullable().optional(),
+  larger_text: z.boolean().optional(),
+  first_run_done: z.boolean().optional(),
+  preferred_name: z.string().trim().max(40).nullable().optional(),
+  goal: z.enum(['lose', 'maintain', 'track']).nullable().optional(),
+}).strict();
+
+export const validateExperienceInput = validateInput(experienceInputSchema);

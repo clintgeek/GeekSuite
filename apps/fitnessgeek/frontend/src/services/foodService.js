@@ -45,16 +45,21 @@ export const foodService = {
    * not a fault, so it is thrown with its message intact for the caller to
    * show.
    *
+   * `mealType` is the meal the person already picked — a meal card's
+   * "+ Add", or the sheet's meal chips. The server uses it instead of the
+   * hour; a meal named in the text itself still wins (SIMPLE_AND_FULL_PLAN.md).
+   *
    * @param {string} text
-   * @param {{date: string, hour?: number, signal?: AbortSignal}} options
+   * @param {{date: string, hour?: number, mealType?: string, signal?: AbortSignal}} options
    */
-  describe: async (text, { date, hour, signal } = {}) => {
+  describe: async (text, { date, hour, mealType, signal } = {}) => {
     const response = await restApi.post(
       '/logs/describe',
       {
         text,
         date,
-        hour: Number.isFinite(hour) ? hour : new Date().getHours()
+        hour: Number.isFinite(hour) ? hour : new Date().getHours(),
+        ...(mealType ? { mealType } : {})
       },
       { signal }
     );

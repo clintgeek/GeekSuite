@@ -1,27 +1,34 @@
 /* CSS Custom Properties — aligned with MUI theme (theme.jsx) */
 :root {
   color-scheme: light;
-  /* Light Mode — Stone/Teal palette */
-  --primary-color: #0D9488;
-  --primary-hover: #0F766E;
-  --secondary-color: #78716C;
-  --success-color: #059669;
-  --error-color: #DC2626;
-  --warning-color: #F59E0B;
-  --info-color: #0284C7;
-  --bg-color: #FAFAF9;
-  --card-bg: #FFFFFF;
-  --text-primary: #1C1917;
-  --text-secondary: #78716C;
-  --border-color: #E7E5E4;
-  --shadow: 0 1px 2px rgba(28, 25, 23, 0.06);
-  --shadow-lg: 0 4px 16px rgba(28, 25, 23, 0.10);
-  --shadow-card: 0 2px 8px rgba(28, 25, 23, 0.08);
+  /* Market Morning, light — aligned with theme/theme.jsx */
+  --primary-color: #2F6B35;
+  --primary-hover: #24522A;
+  --secondary-color: #8A5A3C;
+  --success-color: #2F7D32;
+  --error-color: #B3261E;
+  --warning-color: #9A5B00;
+  --info-color: #2A5F8F;
+  --bg-color: #FFF8EC;
+  --card-bg: #FFFEFB;
+  --text-primary: #2A2118;
+  --text-secondary: #5C4B3B;
+  --border-color: #EFE3CF;
+  --shadow: 0 1px 2px rgba(92, 64, 32, 0.06);
+  --shadow-lg: 0 12px 28px -20px rgba(92, 64, 32, 0.28);
+  --shadow-card: 0 1px 2px rgba(92, 64, 32, 0.06), 0 12px 28px -20px rgba(92, 64, 32, 0.28);
   /* Safe area defaults */
   --safe-area-inset-top: 0px;
   --safe-area-inset-right: 0px;
   --safe-area-inset-bottom: 0px;
   --safe-area-inset-left: 0px;
+}
+
+/* Larger text, per person (Settings → Larger text; stored on the settings
+   document, applied by contexts/ExperienceContext.jsx). Everything the theme
+   sizes in rem grows together. */
+:root[data-text-size='larger'] {
+  font-size: 118.75%;
 }
 
 @supports (padding-top: env(safe-area-inset-top)) {
@@ -35,22 +42,22 @@
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  /* Dark Mode — Stone/Teal palette */
-  --primary-color: #2DD4BF;
-  --primary-hover: #14B8A6;
-  --secondary-color: #A8A29E;
-  --success-color: #34D399;
-  --error-color: #F87171;
-  --warning-color: #FBBF24;
-  --info-color: #38BDF8;
-  --bg-color: #1C1917;
-  --card-bg: #292524;
-  --text-primary: #F5F5F4;
-  --text-secondary: #A8A29E;
-  --border-color: #44403C;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
-  --shadow-lg: 0 4px 16px rgba(0, 0, 0, 0.4);
-  --shadow-card: 0 2px 8px rgba(0, 0, 0, 0.3);
+  /* Market Morning, night — the same kitchen with the lamp on */
+  --primary-color: #8BCB7E;
+  --primary-hover: #A9DA9E;
+  --secondary-color: #D9A77F;
+  --success-color: #8BCB7E;
+  --error-color: #FF9A8A;
+  --warning-color: #F2B45A;
+  --info-color: #8CC4F0;
+  --bg-color: #1B1612;
+  --card-bg: #262019;
+  --text-primary: #F7EDE0;
+  --text-secondary: #D6C6B3;
+  --border-color: #3D3228;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  --shadow-lg: 0 10px 28px -18px rgba(0, 0, 0, 0.8);
+  --shadow-card: 0 10px 28px -18px rgba(0, 0, 0, 0.8);
 }
 
 /* Reset and base styles */
@@ -62,7 +69,8 @@
 
 html, body {
   height: 100%;
-  font-family: 'DM Sans', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-family: 'Nunito', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  font-variant-numeric: tabular-nums;
   background-color: var(--bg-color);
   color: var(--text-primary);
   transition: background-color 0.2s ease, color 0.2s ease;
@@ -84,8 +92,11 @@ html, body {
   padding-bottom: var(--safe-area-inset-bottom);
 }
 
-/* Utility: monospace data values (JetBrains Mono) */
+/* Utility: data values — tabular figures in the body face */
 .data-value {
-  font-family: 'JetBrains Mono', 'Fira Code', monospace;
   font-variant-numeric: tabular-nums;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html, body { transition: none; }
 }

@@ -16,7 +16,8 @@ import WeightProgress from '../components/Weight/WeightProgress.jsx';
 import QuickAddWeight from '../components/Weight/QuickAddWeight.jsx';
 import WeightLogList from '../components/Weight/WeightLogList.jsx';
 import BodyCompositionSection from '../components/BodyComposition/BodyCompositionSection.jsx';
-import { SectionLabel, DisplayHeading, SuspenseSurface } from '../components/primitives';
+import { SuspenseSurface } from '../components/primitives';
+import { useExperience } from '../contexts/ExperienceContext.jsx';
 
 // The timeline is the only thing on this page that needs Nivo (~530 kB raw
 // with @react-spring and the d3 scales behind it). Deferring it lets the
@@ -25,6 +26,7 @@ import { SectionLabel, DisplayHeading, SuspenseSurface } from '../components/pri
 const WeightTimeline = lazy(() => import('../components/Weight/WeightTimeline.jsx'));
 
 const Weight = () => {
+  const { isSimple } = useExperience();
   const navigate = useNavigate();
 
   // Use custom hook for weight operations
@@ -75,15 +77,14 @@ const Weight = () => {
   }
 
   return (
-    <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 960, mx: 'auto' }}>
-      {/* Editorial header */}
-      <Box sx={{ mb: 3 }}>
-        <SectionLabel sx={{ mb: 0.75 }}>Tracking · Weight &amp; body</SectionLabel>
-        <DisplayHeading size="page">Weight &amp; body</DisplayHeading>
-        <Typography sx={{ color: 'text.secondary', mt: 0.5, fontSize: '0.9375rem' }}>
-          Your weight and what it&rsquo;s made of, averaged so one water day doesn&rsquo;t move the needle.
-        </Typography>
-      </Box>
+    // Bottom padding clears the thumb-zone "Log weight" button (plan item 8).
+    <Box sx={{ p: { xs: 2, sm: 3 }, pb: { xs: 14, md: 6 }, maxWidth: 960, mx: 'auto' }}>
+      {/* The top bar says "Weight"; one plain line says what's here. */}
+      <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem', mb: 2.5 }}>
+        {isSimple
+          ? 'Your weight over time, averaged so one heavy day doesn’t move the needle.'
+          : 'Your weight and what it’s made of, averaged so one water day doesn’t move the needle.'}
+      </Typography>
 
       {/* Progress Card */}
       <Box sx={{ mb: 3 }}>
@@ -107,7 +108,9 @@ const Weight = () => {
         </SuspenseSurface>
       </Box>
 
-      {/* Body composition — summary, change, fat/lean trend */}
+      {/* Body composition — summary, change, fat/lean trend. Full only: body
+          composition is one of the things Simple keeps out of the way. */}
+      {!isSimple && (
       <Box sx={{ mb: 3 }}>
         <BodyCompositionSection
           summary={bodyComp.summary}
@@ -118,6 +121,7 @@ const Weight = () => {
           onRetry={bodyComp.reload}
         />
       </Box>
+      )}
 
       {/* Quick Add Weight (desktop card; the FAB on phones) */}
       <Box sx={{ mb: 3 }}>

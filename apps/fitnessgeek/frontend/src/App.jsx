@@ -29,11 +29,13 @@ const Reports = lazy(() => import('./pages/Reports.jsx'));
 const AIGoalPlanner = lazy(() => import('./components/FitnessGoals/AIGoalPlanner.jsx'));
 const HealthDashboard = lazy(() => import('./pages/HealthDashboard.jsx'));
 const ScanImport = lazy(() => import('./pages/ScanImport.jsx'));
+const More = lazy(() => import('./pages/More.jsx'));
 
 // Import contexts
 import { AuthProvider, useAuth } from '@geeksuite/auth';
 import AuthListener from './components/AuthListener.jsx';
 import { SettingsProvider } from './contexts/SettingsContext.jsx';
+import { ExperienceProvider } from './contexts/ExperienceContext.jsx';
 import { ThemeProvider, useThemeMode as useTheme } from '@geeksuite/user';
 
 // Loading component for Suspense fallback
@@ -95,6 +97,8 @@ function AppRoutes() {
         <Route path="calorie-wizard" element={<AIGoalPlanner />} />
         <Route path="profile" element={<Profile />} />
         <Route path="settings" element={<Settings />} />
+        {/* Everything that isn't Home, Log or Weight (SIMPLE_AND_FULL_PLAN.md item 6). */}
+        <Route path="more" element={<More />} />
       </Route>
 
       {/* Catch all route */}
@@ -117,15 +121,18 @@ function AppContent() {
         <AuthProvider appName="fitnessgeek">
           <AuthListener />
           <SettingsProvider>
-            <Router>
-              <Box sx={{
-                minHeight: '100vh'
-              }}>
-                <Suspense fallback={<LoadingFallback />}>
-                  <AppRoutes />
-                </Suspense>
-              </Box>
-            </Router>
+            {/* Simple or Full, Larger text, the first run — per person. */}
+            <ExperienceProvider>
+              <Router>
+                <Box sx={{
+                  minHeight: '100vh'
+                }}>
+                  <Suspense fallback={<LoadingFallback />}>
+                    <AppRoutes />
+                  </Suspense>
+                </Box>
+              </Router>
+            </ExperienceProvider>
           </SettingsProvider>
         </AuthProvider>
       </FocusModeProvider>

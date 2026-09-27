@@ -156,7 +156,7 @@ const FoodResultRow = ({
           alignItems: 'baseline',
           gap: 1.25,
           flexShrink: 0,
-          fontFamily: "'JetBrains Mono', monospace"
+          fontFamily: "inherit"
         }}
       >
         <Typography sx={{ fontSize: '0.875rem', fontWeight: 700, color: 'text.primary' }}>

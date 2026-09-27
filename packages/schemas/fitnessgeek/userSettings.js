@@ -126,6 +126,40 @@ function userSettingsDefinition(mongoose) {
         ]
       }
     },
+    // How the app looks for this person: Simple or Full, larger text, and the
+    // first-run answers (apps/fitnessgeek/DOCS/SIMPLE_AND_FULL_PLAN.md).
+    //
+    // `mode` has NO default on purpose. Unset means "never chosen", and the
+    // app then decides from the person's own history — Full if they have
+    // logged anything in the last 90 days, otherwise Simple (plan Decisions).
+    // A default here would freeze that decision into every document the
+    // moment it is created, and nobody would ever be offered Simple.
+    experience: {
+      mode: {
+        type: String,
+        enum: ['simple', 'full']
+      },
+      larger_text: {
+        type: Boolean,
+        default: false
+      },
+      first_run_done: {
+        type: Boolean,
+        default: false
+      },
+      // "What should we call you?" — the greeting's name. Free text, short.
+      preferred_name: {
+        type: String,
+        trim: true,
+        maxlength: 40
+      },
+      // The first run's goal question, in the person's words. It does not set
+      // a calorie target: that stays the calorie plan's job.
+      goal: {
+        type: String,
+        enum: ['lose', 'maintain', 'track']
+      }
+    },
     // General app settings
     theme: {
       type: String,

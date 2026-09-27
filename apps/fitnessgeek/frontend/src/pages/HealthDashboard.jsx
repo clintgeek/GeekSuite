@@ -24,7 +24,7 @@ import { useAuth } from '@geeksuite/auth';
 import { localDateString } from '@geeksuite/utils';
 import { apiService } from '../services/apiService';
 import InfluxDBSettings from '../components/InfluxDBSettings';
-import { SectionLabel, DisplayHeading, DateField, SuspenseSurface } from '../components/primitives';
+import { DateField, SuspenseSurface } from '../components/primitives';
 
 // The four analytics panels are lazy. Two of them (Intraday, Meal Impact) pull
 // the chart library, which used to sit in this route's chunk, so it was
@@ -115,8 +115,6 @@ export default function HealthDashboard() {
       <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
         <Stack spacing={3}>
           <Box>
-            <SectionLabel sx={{ mb: 0.75 }}>Integrations · Advanced</SectionLabel>
-            <DisplayHeading size="page">Health Dashboard</DisplayHeading>
           </Box>
 
           <Alert severity="info">
@@ -151,9 +149,7 @@ export default function HealthDashboard() {
         {/* Editorial header */}
         <Stack direction="row" justifyContent="space-between" alignItems="flex-end" spacing={2}>
           <Box>
-            <SectionLabel sx={{ mb: 0.75 }}>Integrations · Advanced</SectionLabel>
-            <DisplayHeading size="page">Health Dashboard</DisplayHeading>
-            <Typography sx={{ color: 'text.secondary', mt: 0.5, fontSize: '0.9375rem' }}>
+            <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem' }}>
               Deep analytics powered by your InfluxDB health data.
             </Typography>
           </Box>
