@@ -70,6 +70,22 @@ export const NOTE_SKETCH = note('n3', 'Sketch: onboarding flow', 'handwritten', 
 
 // Spread across the recency buckets: Today, Yesterday, This week, and two
 // older months — the notes list groups by them.
+// A markdown note with a table far wider than the ~70ch column, plus a long
+// unbroken URL. Wide tables ran out past the sheet's right edge (Chef,
+// 2026-09-27); scenes 11 and 11b guard it.
+const WIDE_ROW = (label) => `| ${label} | ` + Array.from({ length: 9 }, (_, i) => `${label} value ${i + 1}`).join(' | ') + ' |';
+export const NOTE_WIDE_TABLE = note('nw', 'Quarterly numbers', 'markdown', ['finance'], [
+  '## Quarterly numbers',
+  '',
+  '| Metric | ' + Array.from({ length: 9 }, (_, i) => `Column heading ${i + 1}`).join(' | ') + ' |',
+  '|' + ' --- |'.repeat(10),
+  WIDE_ROW('Revenue'),
+  WIDE_ROW('Costs'),
+  WIDE_ROW('Margin'),
+  '',
+  'Source: https://example.com/reports/2026/q3/an-extremely-long-unbroken-path-segment-that-should-wrap-not-overflow',
+].join('\n'), daysAgo(20));
+
 export const NOTES = [
   NOTE_N1,
   NOTE_CODE,

@@ -15,8 +15,10 @@ const pulse = keyframes`
  * the only thing the writer needs is to *see* where that stands. Explicit
  * saving still exists (Cmd/Ctrl+S, "Save now" in the ⋯ menu, and Back).
  *
- * "Saved" is the one state in brick, slightly rotated — the stamp has come
- * down on the page. Error is red and stays up until a save succeeds; its
+ * "Saved" is the one state in brick. It sits straight: it was tilted like a
+ * fresh stamp until 2026-09-27, but tilts are GameGeek's signature and a
+ * tilted label that changes every few seconds read as a glitch.
+ * Error is red and stays up until a save succeeds; its
  * detail is in the tooltip and was already raised as a toast. Every label is
  * 12px mono on the stamp's own tint and clears 4.5:1 against it (see
  * createAppTheme.js `stamp`).
@@ -68,8 +70,7 @@ function SaveStamp({ saving, error, empty, dirty, lastSavedAt }) {
         flexShrink: 0,
         // The stamp has come down: a hair off square. Only for "Saved" —
         // the in-between states are pencil, not ink.
-        transform: isSaved ? 'rotate(-1.5deg)' : 'none',
-        transition: 'transform 160ms ease, color 160ms ease, border-color 160ms ease',
+        transition: 'color 160ms ease, border-color 160ms ease',
         '@media (prefers-reduced-motion: reduce)': { transition: 'none' },
       }}
     >

@@ -5,6 +5,30 @@
 
 // Page-scoped stubs for the scenes after '05-suggestions': switch the
 // suggestion opt-in back off and answer GetNoteById with a given note.
+// Fails when a rendered markdown table (or any wide block) sticks out past an
+// ancestor that neither scrolls nor clips it. The page-wide overflow probe
+// can't see this, because the editor's sheet contains its own content.
+async function assertNoMarkdownOverflow(page) {
+  const bad = await page.evaluate(() => {
+    const out = [];
+    for (const el of document.querySelectorAll('table, pre, p')) {
+      const r = el.getBoundingClientRect();
+      if (!r.width) continue;
+      for (let a = el.parentElement; a && a !== document.body; a = a.parentElement) {
+        const ox = getComputedStyle(a).overflowX;
+        if (ox === 'auto' || ox === 'scroll') break; // contained: it scrolls
+        const ar = a.getBoundingClientRect();
+        if (ar.width && r.right > ar.right + 1) {
+          out.push(`${el.tagName.toLowerCase()} right ${Math.round(r.right)} > ${a.tagName.toLowerCase()}.${(a.className || '').toString().split(' ')[0]} right ${Math.round(ar.right)}`);
+          break;
+        }
+      }
+    }
+    return out;
+  });
+  if (bad.length) throw new Error('markdown overflows its column: ' + bad.slice(0, 3).join('; '));
+}
+
 async function openNote(page, h, noteFixture, path) {
   await page.route('**/api/users/bootstrap', (r) => json(r, {
     identity: { username: 'chef', email: 'chef@example.com' },
@@ -17,7 +41,7 @@ async function openNote(page, h, noteFixture, path) {
   await h.settle(1400);
 }
 import { json, graphqlRoute } from '../../lib/net.mjs';
-import { OPS, NOTE_SUGGESTIONS, NOTE_CODE, NOTE_MINDMAP, NOTE_SKETCH } from './fixtures.mjs';
+import { OPS, NOTE_SUGGESTIONS, NOTE_CODE, NOTE_MINDMAP, NOTE_SKETCH, NOTE_WIDE_TABLE } from './fixtures.mjs';
 
 export const scenes = [
   // Home (QuickCaptureHome) — bottom nav visible with mono labels + ink-stamp.
@@ -61,6 +85,22 @@ export const scenes = [
     teardown: (page, h) => h.esc(400),
   },
   {
+    // The pen's colour and size on a phone (2026-09-27). tldraw's style panel
+    // is hidden there, so this popup is the only way to change the pen.
+    name: '03p-sketch-pen',
+    goto: '/notes/new?type=handwritten',
+    wait: 2500,
+    viewports: ['phone'],
+    async setup(page, h) {
+      await h.settle(800);
+      await page.getByRole('button', { name: 'Pen colour and size' }).click();
+      await h.settle(500);
+      if (!(await page.getByRole('dialog', { name: 'Pen colour and size' }).count())) throw new Error('pen picker did not open');
+      if (!(await page.getByRole('button', { name: 'Size: Small' }).count())) throw new Error('size choices missing');
+    },
+    teardown: (page, h) => h.esc(400),
+  },
+  {
     // A NEW sketch note on a phone (2026-09-26). The mobile drawing toolbar
     // called useEditor() from outside <Tldraw>, and EditorErrorBoundary caught
     // the throw, so this crashed for Chef without any uncaught page error. It
@@ -77,6 +117,34 @@ export const scenes = [
       if (!(await page.locator('.tl-container').count())) throw new Error('tldraw canvas did not render');
       if (h.viewport === 'phone' && !(await page.getByRole('button', { name: /^write$/i }).count())) {
         throw new Error('phone drawing toolbar (Write) did not render');
+      }
+    },
+  },
+  {
+    // A wide markdown table in the viewer (/notes/:id).
+    name: '11-markdown-wide-table',
+    async setup(page, h) {
+      await openNote(page, h, NOTE_WIDE_TABLE, '/notes/nw');
+      if (!(await page.locator('table').count())) throw new Error('the table did not render');
+      await assertNoMarkdownOverflow(page);
+    },
+  },
+  {
+    // The same note in the editor's preview.
+    name: '11b-markdown-wide-preview',
+    async setup(page, h) {
+      await openNote(page, h, NOTE_WIDE_TABLE, '/notes/nw/edit');
+      await page.getByRole('button', { name: 'preview mode' }).click();
+      await h.settle(500);
+      if (!(await page.locator('table').count())) throw new Error('the preview table did not render');
+      await assertNoMarkdownOverflow(page);
+      // Split (desktop only) puts source and preview side by side in the
+      // same column, the tightest fit of all.
+      const split = page.getByRole('button', { name: 'split mode' });
+      if (await split.count()) {
+        await split.click();
+        await h.settle(500);
+        await assertNoMarkdownOverflow(page);
       }
     },
   },
