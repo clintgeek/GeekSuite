@@ -1,9 +1,10 @@
 import { alpha, useTheme } from '@mui/material';
 import { GeekDialog } from '@geeksuite/ui';
+import { fonts } from '../../theme/theme';
 
 /**
- * CodexDialog — the canonical StoryGeek dialog, an Arcane Codex skin over
- * `GeekDialog`.
+ * CodexDialog — the canonical StoryGeek dialog, a Candlelit Table skin over
+ * `GeekDialog` (the name predates the identity; it stays for the call sites).
  *
  * The primitive owns the rule (MOBILE_UI_PLAN.md §2): full-screen below `sm`
  * with a header of close ✕ / title / primary action, and the familiar window
@@ -36,12 +37,12 @@ export default function CodexDialog({
   children,
 }) {
   const theme = useTheme();
-  const gold = theme.palette.codex?.gold || '#c9a84c';
-  const hairline = `1px solid ${alpha(gold, 0.2)}`;
+  const c = theme.palette.candle;
+  const hairline = `1px solid ${c.rule}`;
   const codexTitle = {
-    fontFamily: '"Cinzel", serif',
-    fontWeight: 600,
-    letterSpacing: '0.03em',
+    fontFamily: fonts.display,
+    fontWeight: 700,
+    letterSpacing: '0.04em',
   };
 
   return (
@@ -70,8 +71,9 @@ export default function CodexDialog({
       dialogProps={dialogProps}
       sx={{
         backgroundImage: 'none',
-        backgroundColor: theme.palette.background.paper,
-        border: { xs: 'none', sm: `1px solid ${alpha(gold, 0.25)}` },
+        backgroundColor: c.page,
+        border: { xs: 'none', sm: `1px solid ${c.pageEdge}` },
+        boxShadow: c.mode === 'dark' ? `0 24px 64px ${alpha('#000', 0.6)}` : undefined,
         // The full-screen header's `h3` title is already Cinzel from the
         // theme; this keeps the two modes' titles identical anyway.
         '& [data-geek-dialog="title"]': codexTitle,

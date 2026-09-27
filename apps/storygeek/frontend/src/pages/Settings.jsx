@@ -1,12 +1,13 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Box, Typography, Card, CardContent, FormControl, InputLabel,
-  Select, MenuItem, Chip, CircularProgress, ListSubheader,
+  Select, MenuItem, CircularProgress, ListSubheader,
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { GeekErrorState } from '@geeksuite/ui';
 import useAISettingsStore from '../store/aiSettingsStore';
 import api from '../api';
+import Tag from '../components/primitives/Tag';
 
 /**
  * The AI Oracle picker.
@@ -32,10 +33,7 @@ import api from '../api';
  */
 function Settings() {
   const theme = useTheme();
-  const gold = theme.palette.codex?.gold || '#c9a84c';
-  // Muted section-label gold. Solid and mode-aware (theme.js) — the
-  // alpha()-diluted gold it replaces failed AA on every codex surface.
-  const goldMuted = theme.palette.codex?.goldMuted || gold;
+  const c = theme.palette.candle;
   const { selectedProvider, selectedModelId, setSelection } = useAISettingsStore();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState('');
@@ -97,30 +95,23 @@ function Settings() {
         <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
           {row.modelId}
         </Box>
-        <Chip
-          label={row.provider}
-          size="small"
-          variant="outlined"
-          sx={{ height: 20, fontSize: '0.6rem' }}
-        />
-        {row.paid && (
-          <Chip label="Paid" size="small" color="warning" sx={{ height: 20, fontSize: '0.6rem' }} />
-        )}
+        <Tag>{row.provider}</Tag>
+        {row.paid && <Tag tone="warn">Paid</Tag>}
       </Box>
     </MenuItem>
   );
 
   return (
     <Box>
-      <Box sx={{ mb: 4, mt: 1 }}>
-        <Typography variant="overline" sx={{ color: goldMuted }}>Configuration</Typography>
-        <Typography variant="h2" sx={{ mt: 0.5 }}>Settings</Typography>
+      <Box sx={{ mb: 8, mt: 2 }}>
+        <Typography variant="overline" component="p" sx={{ color: c.accentLabel }}>Configuration</Typography>
+        <Typography variant="h2" component="h1" sx={{ mt: 1, fontSize: { xs: '1.6rem', md: '2rem' } }}>Settings</Typography>
       </Box>
 
-      <Card>
-        <CardContent sx={{ p: 3 }}>
-          <Typography variant="h5" sx={{ mb: 2.5 }}>AI Oracle</Typography>
-          <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
+      <Card sx={{ maxWidth: 720 }}>
+        <CardContent sx={{ p: { xs: 5, md: 6 } }}>
+          <Typography variant="h5" component="h2" sx={{ mb: 3 }}>AI Oracle</Typography>
+          <Typography variant="body2" color="text.secondary" sx={{ mb: 5 }}>
             Automatic lets the Oracle choose, and keep one voice per story. Pick a
             specific model only if you want to hear a different one — if it stops
             answering, the Oracle quietly falls back and tells you it did.
@@ -135,7 +126,7 @@ function Settings() {
               description="Couldn't reach the model list. Automatic still works."
             />
           ) : loading ? (
-            <Box sx={{ py: 3, textAlign: 'center' }}><CircularProgress size={24} sx={{ color: gold }} /></Box>
+            <Box sx={{ py: 3, textAlign: 'center' }}><CircularProgress size={24} aria-label="Loading models" /></Box>
           ) : (
             <>
               <FormControl fullWidth>
@@ -150,7 +141,7 @@ function Settings() {
                   <MenuItem value="">
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <span>Automatic</span>
-                      <Chip label="Recommended" size="small" color="success" sx={{ height: 20, fontSize: '0.6rem' }} />
+                      <Tag tone="good">Recommended</Tag>
                     </Box>
                   </MenuItem>
                   {free.length > 0 && <ListSubheader>Free</ListSubheader>}

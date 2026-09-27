@@ -1,6 +1,20 @@
-// StoryGeek — the M4 pilot surfaces (MOBILE_UI_PLAN.md). Scenes are
-// independent: each one that needs a sheet/dialog open re-navigates and
-// re-opens it from scratch rather than relying on a previous scene's state.
+// StoryGeek — the M4 pilot surfaces (MOBILE_UI_PLAN.md), plus the Candlelit
+// Table surfaces (2026-09-27): the canon scroll, the writing state, the
+// commands menu, the empty table and the setup page. Scenes are independent:
+// each one that needs a sheet/dialog open re-navigates and re-opens it from
+// scratch rather than relying on a previous scene's state.
+import { json } from '../../lib/net.mjs';
+import { CANON } from './fixtures.mjs';
+
+// Send one action from the composer. Throws when the composer is missing: a
+// skipped scene is silent, and these exist to prove specific UI is on screen.
+async function act(page, h, text) {
+  const composer = page.getByPlaceholder('What do you do?');
+  if (!(await composer.count())) throw new Error('missing: composer');
+  await composer.fill(text);
+  await page.getByRole('button', { name: /^send$/i }).click();
+}
+
 export const scenes = [
   { name: '01-list', goto: '/', wait: 1200 },
   {
@@ -114,6 +128,91 @@ export const scenes = [
     },
     teardown: (page, h) => h.esc(500),
   },
+  {
+    // A /recall answer, rendered as the canon scroll. The page-scoped route
+    // beats the context's and is dropped in teardown (and on a throw).
+    name: '10-canon-card',
+    goto: '/play/s1',
+    wait: 1400,
+    async setup(page, h) {
+      await page.route('**/api/stories/s1/continue', (r) => json(r, CANON));
+      try {
+        await act(page, h, '/recall what do we know about Mira');
+        await page.getByText('From the Record').first().waitFor({ timeout: 5000 });
+        await h.settle(900);
+      } catch (err) {
+        await page.unroute('**/api/stories/s1/continue');
+        throw err;
+      }
+    },
+    async teardown(page) {
+      await page.unroute('**/api/stories/s1/continue');
+    },
+  },
+  {
+    // The writing ("streaming") state: the turn is held open long enough to
+    // photograph, then answered so nothing is left pending.
+    name: '11-gm-writing',
+    goto: '/play/s1',
+    wait: 1400,
+    async setup(page, h) {
+      let release;
+      const held = new Promise((resolve) => { release = resolve; });
+      h.releaseTurn = release;
+      await page.route('**/api/stories/s1/continue', async (r) => {
+        await held;
+        await json(r, { aiResponse: 'She sets the weight down, very gently, and does not look up.' });
+      });
+      try {
+        await act(page, h, 'I ask her, quietly, who else knows.');
+        await page.getByRole('status').filter({ hasText: /writing/i }).first().waitFor({ timeout: 5000 });
+        await h.settle(700);
+      } catch (err) {
+        release();
+        await page.unroute('**/api/stories/s1/continue');
+        throw err;
+      }
+    },
+    async teardown(page, h) {
+      h.releaseTurn?.();
+      await h.settle(600);
+      await page.unroute('**/api/stories/s1/continue');
+    },
+  },
+  {
+    // The composer's commands menu (replaces the 12px slash-command line).
+    name: '12-commands',
+    goto: '/play/s1',
+    wait: 1400,
+    viewports: ['phone'],
+    async setup(page, h) {
+      const btn = page.getByRole('button', { name: /^commands$/i }).first();
+      if (!(await btn.count())) throw new Error('missing: Commands button');
+      await btn.click();
+      await h.settle(600);
+    },
+    teardown: (page, h) => h.esc(500),
+  },
+  {
+    // A brand-new player: nothing on the table yet.
+    name: '13-empty-list',
+    goto: null,
+    async setup(page, h) {
+      await page.route('**/api/stories/user/**', (r) => json(r, []));
+      try {
+        await page.goto(h.base + '/', { waitUntil: 'networkidle' });
+        await page.getByText('No tale on the table yet').first().waitFor({ timeout: 5000 });
+        await h.settle(600);
+      } catch (err) {
+        await page.unroute('**/api/stories/user/**');
+        throw err;
+      }
+    },
+    async teardown(page) {
+      await page.unroute('**/api/stories/user/**');
+    },
+  },
+  { name: '14-create', goto: '/create', wait: 1200 },
 ];
 
 // Known, ticketed violations. Each one should die when the app is fixed —

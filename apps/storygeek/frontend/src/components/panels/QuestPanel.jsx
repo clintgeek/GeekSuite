@@ -1,6 +1,9 @@
 import React from 'react';
-import { Box, Typography, Chip, Tooltip, alpha, useTheme } from '@mui/material';
+import { Box, Typography, Tooltip, alpha, useTheme } from '@mui/material';
 import { GeekEmptyState } from '@geeksuite/ui';
+import PanelShell from './PanelShell';
+import Tag from '../primitives/Tag';
+import { fonts } from '../../theme/theme';
 
 /**
  * QuestPanel — threads as living objects (ideas #6). Active obligations,
@@ -9,74 +12,65 @@ import { GeekEmptyState } from '@geeksuite/ui';
  * resurface it. Unresolved commitments never silently vanish here.
  */
 const TYPE_META = {
-  quest:       { icon: '⚔️',  label: 'Quest' },
-  promise:     { icon: '🤝', label: 'Promise' },
-  debt:        { icon: '💰', label: 'Debt' },
-  secret:      { icon: '🤫', label: 'Secret' },
-  hunt:        { icon: '🎯', label: 'Hunt' },
-  consequence: { icon: '⚖️',  label: 'Consequence' },
-  other:       { icon: '📜', label: 'Thread' },
+  quest:       { glyph: '⚔', label: 'Quest' },
+  promise:     { glyph: '✋', label: 'Promise' },
+  debt:        { glyph: '⚖', label: 'Debt' },
+  secret:      { glyph: '✦', label: 'Secret' },
+  hunt:        { glyph: '➶', label: 'Hunt' },
+  consequence: { glyph: '☍', label: 'Consequence' },
+  other:       { glyph: '❧', label: 'Thread' },
 };
 
 export default function QuestPanel({ threads }) {
   const theme = useTheme();
-  const gold = theme.palette.codex?.gold || '#c9a84c';
-  // Muted section-label gold. Solid and mode-aware (theme.js) — the
-  // alpha()-diluted gold it replaces failed AA on every codex surface.
-  const goldMuted = theme.palette.codex?.goldMuted || gold;
+  const c = theme.palette.candle;
 
   return (
-    <Box sx={{ p: 1.5, borderRadius: 2, bgcolor: 'background.paper', border: `1px solid ${alpha(gold, 0.15)}` }}>
-      <Typography variant="overline" sx={{ color: goldMuted, fontSize: '0.75rem', letterSpacing: '0.12em', display: 'block', mb: 1 }}>
-        Open Threads · {threads.length}
-      </Typography>
+    <PanelShell title={`Open Threads · ${threads.length}`}>
       {threads.length === 0 ? (
         <GeekEmptyState
           compact
           align="start"
           description="No unresolved threads yet."
-          descriptionSx={{ color: 'text.disabled', fontStyle: 'italic', fontSize: '0.8rem' }}
+          descriptionSx={{ color: 'text.secondary', fontStyle: 'italic', fontSize: '0.9375rem' }}
           sx={{ py: 0 }}
         />
       ) : (
-        <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
+        <Box component="ul" sx={{ listStyle: 'none', m: 0, p: 0, display: 'flex', flexDirection: 'column', gap: 2 }}>
           {threads.map((t) => {
             const meta = TYPE_META[t.type] || TYPE_META.other;
             return (
-              <Box key={t.name} sx={{
-                p: 1, borderRadius: 1.5,
-                border: `1px solid ${t.dormant ? alpha(theme.palette.warning.main, 0.35) : alpha(gold, 0.12)}`,
-                bgcolor: t.dormant ? alpha(theme.palette.warning.main, 0.04) : alpha(gold, 0.02),
+              <Box component="li" key={t.name} sx={{
+                p: 2, borderRadius: '4px', display: 'flex', gap: 2, alignItems: 'flex-start',
+                border: `1px solid ${t.dormant ? alpha(c.tone.warn, 0.55) : c.rule}`,
+                bgcolor: t.dormant ? alpha(c.tone.warn, 0.05) : c.raised,
               }}>
-                <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 0.75 }}>
-                  <Typography sx={{ fontSize: '0.9rem', lineHeight: 1.2 }}>{meta.icon}</Typography>
-                  <Box sx={{ flex: 1, minWidth: 0 }}>
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, flexWrap: 'wrap' }}>
-                      <Typography sx={{ fontSize: '0.82rem', fontWeight: 600, lineHeight: 1.2 }}>
-                        {t.name}
-                      </Typography>
-                      {t.dormant && (
-                        <Tooltip title={`Quiet for ${t.age} turns — the GM may resurface it`}>
-                          <Chip size="small" label="dormant" color="warning" variant="outlined"
-                            sx={{ textTransform: 'uppercase', fontWeight: 700 }} />
-                        </Tooltip>
-                      )}
-                    </Box>
-                    <Typography variant="body2" sx={{ fontSize: '0.8125rem', color: 'text.secondary', mt: 0.25, lineHeight: 1.45 }}>
-                      {t.description}
+                <Typography aria-hidden="true" sx={{ fontFamily: fonts.display, fontSize: '1rem', lineHeight: 1.3, color: c.accentLabel, width: 16, textAlign: 'center', flexShrink: 0 }}>
+                  {meta.glyph}
+                </Typography>
+                <Box sx={{ flex: 1, minWidth: 0 }}>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
+                    <Typography sx={{ fontFamily: fonts.display, fontSize: '0.9rem', fontWeight: 700, lineHeight: 1.3 }}>
+                      {t.name}
                     </Typography>
-                    {t.characterNames?.length > 0 && (
-                      <Typography variant="caption" sx={{ color: goldMuted }}>
-                        {meta.label} · {t.characterNames.join(', ')}
-                      </Typography>
+                    {t.dormant && (
+                      <Tooltip title={`Quiet for ${t.age} turns — the GM may resurface it`}>
+                        <Tag tone="warn">dormant</Tag>
+                      </Tooltip>
                     )}
                   </Box>
+                  <Typography sx={{ fontSize: '0.9375rem', color: 'text.secondary', mt: 0.5, lineHeight: 1.45 }}>
+                    {t.description}
+                  </Typography>
+                  <Typography sx={{ fontFamily: fonts.ui, fontWeight: 700, fontSize: '0.75rem', letterSpacing: '0.1em', textTransform: 'uppercase', color: c.accentLabel, mt: 1 }}>
+                    {meta.label}{t.characterNames?.length > 0 ? ` · ${t.characterNames.join(', ')}` : ''}
+                  </Typography>
                 </Box>
               </Box>
             );
           })}
         </Box>
       )}
-    </Box>
+    </PanelShell>
   );
 }

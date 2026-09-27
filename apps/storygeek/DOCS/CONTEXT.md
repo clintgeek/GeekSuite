@@ -103,6 +103,68 @@ plus a darker light-mode `inkFaint` and light dice ramp replacing the
 `alpha(gold, 0.6–0.7)` section labels that composited to 2.4–4.1:1; never wrap
 `goldMuted` in `alpha()` again, that dilution *is* the bug.
 
+
+## Visual identity — "Candlelit Table" (2026-09-27)
+
+A tabletop RPG session at night: deep ink and oxblood surfaces, one warm candle, and
+parchment as the material the tale is written on. Light mode is the same table by day
+(pale oak, parchment sheets, oxblood ink), not the night palette inverted. It replaces
+"Arcane Codex" and is deliberately unlike the suite's other identities (GameGeek's loud
+stickers, BookGeek's navy library, NoteGeek's lab paper, ThingGeek's green ledger).
+
+**Where it lives.** `frontend/src/theme/theme.js` (tokens on `theme.palette.candle.*`:
+`table`, `paper`, `raised`, `page`, `ink`, `inkSoft`, `inkFaint`, `accent`,
+`accentLabel`, `voice`, `rule`, `tone.{good,warn,bad,info,neutral}`, `wax`), plus
+primitives in `components/primitives/` — `D20` (the motif: wordmark, dice, cards, empty
+states), `WaxSeal` (provenance), `Candle` (the writing state), `Tag` (inked labels). The
+old `palette.codex.*` slot is gone; read `palette.candle`.
+
+**Type (self-hosted, `src/theme/fonts.js`; never Google at runtime).** Cinzel 600/700 for
+titles; Cinzel Decorative 700 only for the drop cap; Alegreya 400/400i/500/700 for
+narration and body; Alegreya Sans 400/500/700 for UI chrome and small labels. Packages:
+`@fontsource/cinzel`, `@fontsource/cinzel-decorative`, `@fontsource/alegreya`,
+`@fontsource/alegreya-sans`. No monospace font is loaded (JetBrains Mono is NoteGeek's).
+
+**Measured text contrast (WCAG ratio).**
+
+| Token | Night (on table / paper / raised / page) | Day (on oak / parchment / raised / page) |
+|---|---|---|
+| `ink` | #efe3c8 — 15.2 / 14.1 / 13.0 / 13.7 | #2a1a10 — 11.3 / 14.5 / 13.1 / 14.8 |
+| `inkSoft` | #c9b99a — 10.0 / 9.3 / 8.6 / 9.0 | #5a4330 — 6.2 / 8.0 / 7.2 / 8.1 |
+| `inkFaint` | #ab9a7e — 7.0 / 6.6 / 6.0 / 6.4 | #6b513a — 4.9 / 6.4 / 5.7 / 6.5 |
+| `accent` | #e8a94a candle amber — 9.4 / 8.7 / 8.1 / 8.5 | #7a1f24 oxblood — 6.9 / 8.9 / 8.0 / 9.0 |
+| `accentLabel` | #c7913e — ≥ 5.96 | #7a4e0e bronze — 4.84 on oak, ≥ 5.6 elsewhere |
+| `voice` (player) | #e07a6e — ≥ 5.66 | #7a1f24 — as accent |
+| tones | good #8fc49a ≥ 8.3, warn #f0c060 ≥ 9.8, bad #ff8a78 ≥ 7.2, info #9db4e0 ≥ 7.9 | good #2f5e3a ≥ 5.1, warn #6a4a00 ≥ 5.5, bad #8e1f22 ≥ 6.0, info #2e4a7a ≥ 6.0 |
+
+Contained buttons: amber fill + #1d1208 text (8.9) at night, oxblood fill + #f9f0dc text
+(8.7) by day. The canon scroll is parchment (#efdfb8) in **both** modes and renders under
+`getScrollTheme()` (day inks re-measured on it: ink 12.7, soft 7.0, faint 5.6, bronze
+5.4). The two traps: candle amber is only a text colour at night — by day it becomes
+bronze ink; and **never wrap a text token in `alpha()`**, the dilution is the bug (same
+rule as the old `goldMuted`). `Tag` is outlined ink over a ≤ 8% wash of itself, never a
+filled chip, so 12px labels never depend on a fill. Wax seals are decorative; their
+words sit beside them in page ink.
+
+**The play screen.** The transcript is a page, not chat bubbles: GM narration is prose on
+the `page` sheet at a ~38rem measure (17px phone, 19px desktop, line-height 1.7+); a
+scene opening gets an illuminated drop cap (`::first-letter`, text untouched) and, after
+the first, a ❦ break. "Scene opening" is inferred in `game/transcript.js#opensScene`: the
+first narration, a `/reset-scene` answer (`opensScene: true`), or a new sitting (> 6h
+gap). Player actions are set in, italic, ruled in the `voice` ink and attributed
+"<name> · you". System messages are dashed "Table note" asides. `/recall` answers are the
+sealed scroll (`components/play/CanonCard.jsx`) with a `WaxSeal` per fact
+(You / Narrator / Opening · turn). A fresh reply scrolls to its **start**, not its end.
+
+**Motion.** Candle flicker, page glow, writing dots, entry fade and card lift are all off
+under `prefers-reduced-motion: reduce` (`index.css`, and `scrollIntoView` uses
+`behavior: 'auto'`); every hover style is inside `@media (hover: hover)`.
+
+**Harness.** Scenes 10–14 were added for this identity: `10-canon-card` (page-scoped
+`/continue` route returning a canon payload, `fixtures.mjs#CANON`), `11-gm-writing`
+(the turn is held open, then released in teardown), `12-commands`, `13-empty-list`,
+`14-create`.
+
 ---
 
 ## Known quirk — the StoryPlay test stall (root-caused 2026-09-05)

@@ -1,17 +1,17 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
-  Box, Typography, TextField, Button, Paper, CircularProgress,
-  Chip, IconButton, Tooltip, LinearProgress, alpha,
+  Box, Typography, Button, CircularProgress, IconButton, Tooltip, LinearProgress,
+  alpha, useTheme, useMediaQuery,
 } from '@mui/material';
-import { useTheme, useMediaQuery, ButtonGroup } from '@mui/material';
 import {
-  Send as SendIcon, MenuBook as ExportIcon, ContentCopy as CopyIcon,
+  MenuBook as ExportIcon, ContentCopy as CopyIcon,
   IosShare as ShareIcon, Download as DownloadIcon,
-  AutoStories as JournalIcon, Person as PersonIcon, Groups as PartyIcon,
+  HistoryEdu as JournalIcon, Groups as PartyIcon, ArrowBack as BackIcon,
+  Place as PlaceIcon, FileDownloadOutlined as EpubIcon,
 } from '@mui/icons-material';
-import { useParams, useNavigate } from 'react-router-dom';
+import { Link as RouterLink, useParams } from 'react-router-dom';
 import { useAuth } from '@geeksuite/auth';
-import { GeekErrorState, GeekSheet, slashFocusProps, useToast } from '@geeksuite/ui';
+import { GeekErrorState, GeekSheet, useToast } from '@geeksuite/ui';
 import CodexDialog from '../components/primitives/CodexDialog';
 import Narration from '../components/Narration';
 import useAISettingsStore from '../store/aiSettingsStore';
@@ -21,6 +21,12 @@ import CharacterPanel from '../components/panels/CharacterPanel';
 import PartyPanel from '../components/panels/PartyPanel';
 import QuestPanel from '../components/panels/QuestPanel';
 import JournalDrawer from '../components/panels/JournalDrawer';
+import CanonCard from '../components/play/CanonCard';
+import Composer from '../components/play/Composer';
+import WritingIndicator from '../components/play/WritingIndicator';
+import { NarrationEntry, PlayerEntry, SystemEntry } from '../components/play/TranscriptEntry';
+import { opensScene } from '../game/transcript';
+import { fonts } from '../theme/theme';
 import {
   getPlayer, getPresentNpcs, getActiveThreads, getScene,
 } from '../game/projections';
@@ -38,131 +44,6 @@ const eventToMessage = (event) => {
   };
 };
 
-// Provenance badge styling for canon facts: who established it, and when.
-// `tone: 'gold'` resolves to the theme's mode-aware gold at render time.
-const PROVENANCE_META = {
-  player:   { label: 'YOU',      color: '#4caf50' },
-  narrator: { label: 'NARRATOR', tone: 'gold' },
-  setup:    { label: 'OPENING',  color: '#7986cb' },
-};
-
-/**
- * CanonCard — the answer to "what do we know?" straight from the engine's
- * record. The fact list with provenance badges IS the answer; the summary
- * prose on top is generated under a report-only contract. Distinct visual
- * identity from narration: this is the archive speaking, not the narrator.
- */
-function CanonCard({ canon, gold, theme }) {
-  const goldMuted = theme.palette.codex?.goldMuted || gold;
-  return (
-    <Box className="fade-in-up" sx={{ display: 'flex', justifyContent: 'flex-start', mb: 2.5 }}>
-      <Paper elevation={0} sx={{
-        p: { xs: 2, md: 2.5 }, maxWidth: { xs: '100%', md: '85%' }, width: '100%',
-        borderRadius: 2,
-        border: `1px solid ${alpha(gold, 0.35)}`,
-        borderLeft: `4px solid ${gold}`,
-        background: alpha(gold, 0.04),
-      }}>
-        <Typography variant="caption" sx={{ color: gold, fontWeight: 700, display: 'block', mb: 0.75, letterSpacing: '0.08em' }}>
-          📜 CANON — from the record
-        </Typography>
-
-        {canon.summary && (
-          <Narration content={canon.summary} sx={{ mb: 1.5, '& p': { fontSize: '0.9rem', lineHeight: 1.7 } }} />
-        )}
-
-        {canon.entities?.length > 0 && (
-          <Box sx={{ mb: 1.25 }}>
-            <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap' }}>
-              {canon.entities.map((e, i) => (
-                <Chip key={i} size="small" variant="outlined"
-                  label={e.kind === 'character'
-                    ? `${e.name} · ${e.status}${e.locationName ? ` · at ${e.locationName}` : ''}`
-                    : `${e.name} · ${e.state}`}
-                  sx={{ borderColor: alpha(gold, 0.4), color: 'text.primary' }} />
-              ))}
-            </Box>
-            {/* What each character is recorded as knowing (player-visible only) */}
-            {canon.entities.filter(e => e.knows?.length > 0).map((e, i) => (
-              <Box key={`k${i}`} sx={{ mt: 0.75, pl: 1, borderLeft: `2px solid ${alpha(gold, 0.25)}` }}>
-                <Typography variant="caption" sx={{ color: goldMuted, fontWeight: 700 }}>
-                  {e.name.toUpperCase()} KNOWS (as recorded)
-                </Typography>
-                {e.knows.map((k, j) => (
-                  <Typography key={j} variant="body2" sx={{ fontSize: '0.78rem', color: 'text.secondary', lineHeight: 1.5 }}>
-                    • {k.text} <Typography component="span" sx={{ fontSize: '0.75rem', color: 'text.disabled', fontFamily: '"JetBrains Mono", monospace' }}>
-                      [{k.via}{k.turn != null ? ` · T${k.turn}` : ''}]
-                    </Typography>
-                  </Typography>
-                ))}
-              </Box>
-            ))}
-          </Box>
-        )}
-
-        {canon.facts?.length > 0 && (
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 0.5, mb: 1 }}>
-            {canon.facts.map((f, i) => {
-              const meta = PROVENANCE_META[f.source];
-              const prov = meta
-                ? { label: meta.label, color: meta.tone === 'gold' ? gold : meta.color }
-                : { label: 'RECORD', color: theme.palette.text.disabled };
-              return (
-                <Box key={i} sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
-                  <Chip size="small"
-                    label={`${prov.label}${f.turn != null ? ` · T${f.turn}` : ''}`}
-                    sx={{
-                      fontWeight: 700, flexShrink: 0, mt: 0.1,
-                      backgroundColor: alpha(prov.color, 0.12), color: prov.color,
-                      fontFamily: '"JetBrains Mono", monospace',
-                    }} />
-                  <Typography variant="body2" sx={{ fontSize: '0.85rem', lineHeight: 1.5 }}>
-                    {f.text}
-                    {f.visibility === 'secret' && (
-                      <Chip size="small" label="secret" color="warning" variant="outlined"
-                        sx={{ ml: 0.5, textTransform: 'uppercase' }} />
-                    )}
-                  </Typography>
-                </Box>
-              );
-            })}
-          </Box>
-        )}
-
-        {canon.threads?.length > 0 && (
-          <Box sx={{ mb: 1 }}>
-            {canon.threads.map((t, i) => (
-              <Typography key={i} variant="body2" sx={{ fontSize: '0.78rem', color: 'text.secondary' }}>
-                ◈ <b>{t.name}</b> [{t.status}] — {t.description}
-              </Typography>
-            ))}
-          </Box>
-        )}
-
-        <Typography variant="caption" sx={{ color: 'text.disabled', fontStyle: 'italic' }}>
-          {canon.note}
-        </Typography>
-      </Paper>
-    </Box>
-  );
-}
-
-// Dice result color based on d20 roll. The result text is painted ON the tint
-// it also generates (`alpha(dColor, .08)` outside, `.15` inside the die box),
-// so a light-mode tone has to clear 4.5:1 against its own darkest wash — the
-// old ramp landed at 3.5-4.3:1 there and was storygeek's last colour-contrast
-// finding. Every light value below is measured >= 4.6:1 on all three washes;
-// the tier order (gold crit, deep green, bronze, umber, blood red) is
-// unchanged. Dark mode sits on a gradient paper and is untouched.
-const getDiceColor = (result, isDark, gold) => {
-  if (result === 20) return isDark ? '#ffd700' : '#665000';
-  if (result === 1) return isDark ? '#ff4444' : '#a81717';
-  if (result >= 15) return isDark ? '#4caf50' : '#1b5e20';
-  if (result >= 10) return isDark ? gold : '#6d5219';
-  if (result >= 5) return isDark ? '#ff9800' : '#8a3d07';
-  return isDark ? '#e57373' : '#9c1414';
-};
-
 function StoryPlay() {
   const theme = useTheme();
   // Each rail collapses to a sheet at the width where it stops fitting, and its
@@ -178,13 +59,15 @@ function StoryPlay() {
   // threads, situational) at `lg`, and the play column never drops below ~350px.
   const showLeftRail = useMediaQuery(theme.breakpoints.up('md'));
   const showRightRail = useMediaQuery(theme.breakpoints.up('lg'));
+  // Worded tools only where the play column can afford them; below `xl`
+  // (both rails open at 1280) they are 44px icons so the title keeps its room.
+  const wordedTools = useMediaQuery(theme.breakpoints.up('xl'));
   const { storyId } = useParams();
-  const navigate = useNavigate();
   const { user } = useAuth();
   const { notify } = useToast();
   const { selectedProvider, selectedModelId } = useAISettingsStore();
-  const gold = theme.palette.codex?.gold || '#c9a84c';
-  const isDark = theme.palette.mode === 'dark';
+  const c = theme.palette.candle;
+  const reduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
 
   const [story, setStory] = useState(null);
   const [messages, setMessages] = useState([]);
@@ -208,17 +91,29 @@ function StoryPlay() {
   // keyboard mid-narration and shoved the story off screen
   // (MOBILE_UI_PLAN.md §2, "autofocus only on explicit user intent").
   const refocusRef = useRef(false);
+  const lastEntryRef = useRef(null);
+  const prevCountRef = useRef(0);
 
-  const scrollToBottom = () => {
-    endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  };
-
+  // A fresh reply lands at the top of the view, so a long narration is read
+  // from its first line instead of from wherever the bottom of it fell. The
+  // first load, the player's own line and the writing mark still go to the
+  // end of the page.
   useEffect(() => {
-    scrollToBottom();
+    const scrollIntoView = (el, block) => {
+      if (el && typeof el.scrollIntoView === 'function') {
+        el.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block });
+      }
+    };
+    const grewBy = messages.length - prevCountRef.current;
+    const last = messages[messages.length - 1];
+    const freshReply = prevCountRef.current > 0 && grewBy > 0 && last && last.type !== 'user';
+    prevCountRef.current = messages.length;
+    if (freshReply) scrollIntoView(lastEntryRef.current, 'start');
+    else scrollIntoView(endRef.current, 'end');
     if (!refocusRef.current) return;
     refocusRef.current = false;
     if (inputRef.current) try { inputRef.current.focus(); } catch (_) {}
-  }, [messages]);
+  }, [messages, reduceMotion]);
 
   // Keyed on the user's *id*, never on the `user` object: `loadStory` ends with
   // `setMessages(...map(...))`, which is a fresh array on every call, so the
@@ -233,6 +128,7 @@ function StoryPlay() {
   // landed — the `if (!story)` guard below passes while `story` is stale.
   useEffect(() => {
     setStory(null);
+    prevCountRef.current = 0;
     setMessages([]);
     setExportData(null);
     setExportError('');
@@ -425,7 +321,7 @@ function StoryPlay() {
       case 'scene_reset':
         systemMsg(data.message);
         if (data.notice) systemMsg(data.notice);
-        if (data.aiResponse) setMessages(prev => [...prev, { type: 'ai', content: data.aiResponse, timestamp: new Date(), diceResults: [] }]);
+        if (data.aiResponse) setMessages(prev => [...prev, { type: 'ai', content: data.aiResponse, timestamp: new Date(), diceResults: [], opensScene: true }]);
         break;
       case 'story_ended':
         systemMsg('The tale has reached its end.');
@@ -447,135 +343,23 @@ function StoryPlay() {
     }
   };
 
-  const renderMessage = (message, index) => {
-    const isUser = message.type === 'user';
-    const isSystem = message.type === 'system';
-
-    if (message.type === 'canon') {
-      return <CanonCard key={index} canon={message.canon} gold={gold} theme={theme} />;
+  const renderMessage = (message, index, all, playerName) => {
+    let entry;
+    if (message.type === 'canon') entry = <CanonCard canon={message.canon} />;
+    else if (message.type === 'user') entry = <PlayerEntry message={message} playerName={playerName} />;
+    else if (message.type === 'system') entry = <SystemEntry message={message} />;
+    else {
+      entry = (
+        <NarrationEntry
+          message={message}
+          opensScene={opensScene(all, index)}
+          isFirst={!all.slice(0, index).some((m) => m.type === 'ai')}
+        />
+      );
     }
-
     return (
-      <Box
-        key={index}
-        className="fade-in-up"
-        sx={{
-          display: 'flex',
-          justifyContent: isUser ? 'flex-end' : 'flex-start',
-          mb: 2.5,
-          animationDelay: '0.05s',
-        }}
-      >
-        <Paper
-          elevation={0}
-          sx={{
-            p: { xs: 2, md: 2.5 },
-            maxWidth: isUser ? { xs: '85%', md: '50%' } : { xs: '100%', md: '80%' },
-            borderRadius: isUser ? '16px 16px 4px 16px' : '16px 16px 16px 4px',
-            ...(isUser ? {
-              background: `linear-gradient(135deg, ${alpha(gold, 0.15)} 0%, ${alpha(gold, 0.08)} 100%)`,
-              border: `1px solid ${alpha(gold, 0.2)}`,
-            } : isSystem ? {
-              background: alpha(theme.palette.info.main, 0.06),
-              border: `1px solid ${alpha(theme.palette.info.main, 0.15)}`,
-              fontStyle: 'italic',
-            } : {
-              background: theme.palette.mode === 'dark'
-                ? `linear-gradient(160deg, ${alpha('#2a2420', 0.8)} 0%, ${alpha('#1a1614', 0.6)} 100%)`
-                : alpha(theme.palette.background.paper, 0.8),
-              border: `1px solid ${theme.palette.divider}`,
-            }),
-          }}
-        >
-          {/* Narrator label for AI messages */}
-          {!isUser && !isSystem && (
-            <Typography variant="caption" sx={{
-              color: gold, fontWeight: 600, display: 'block', mb: 0.75,
-            }}>
-              {'\u{270D}'} NARRATOR
-            </Typography>
-          )}
-          {isSystem && (
-            <Typography variant="caption" sx={{
-              color: 'info.main', fontWeight: 600, display: 'block', mb: 0.75,
-            }}>
-              SYSTEM
-            </Typography>
-          )}
-
-          <Narration
-            content={message.content}
-            sx={{
-              lineHeight: 1.8,
-              ...(isUser ? { fontWeight: 500 } : {}),
-              ...(!isUser && !isSystem ? {
-                fontFamily: '"Crimson Pro", serif',
-                fontSize: '1.05rem',
-              } : {}),
-            }}
-          />
-
-          {/* Dice Result */}
-          {message.diceResults?.length > 0 && (() => {
-            const d = message.diceResults[0];
-            const sit = message.diceMeta?.situation;
-            const reason = message.diceMeta?.reason;
-            const dColor = getDiceColor(d.result, isDark, gold);
-            const isCrit = d.result === 20 || d.result === 1;
-            return (
-              <Box sx={{
-                mt: 1.5, p: 1.25, borderRadius: 2,
-                background: alpha(dColor, 0.08),
-                border: `1px solid ${alpha(dColor, 0.2)}`,
-                display: 'flex', alignItems: 'center', gap: 1.5,
-              }}>
-                <Box sx={{
-                  width: 40, height: 40, borderRadius: 1.5,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  background: alpha(dColor, 0.15),
-                  border: `2px solid ${alpha(dColor, 0.4)}`,
-                  ...(isCrit ? { animation: 'glowPulse 2s ease-in-out infinite' } : {}),
-                }}>
-                  <Typography sx={{
-                    fontFamily: '"JetBrains Mono", monospace',
-                    fontWeight: 700, fontSize: '1.1rem', color: dColor,
-                  }}>
-                    {d.result}
-                  </Typography>
-                </Box>
-                <Box sx={{ flex: 1 }}>
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                    <Typography variant="caption" sx={{ color: dColor, fontWeight: 700 }}>
-                      D20 {isCrit ? (d.result === 20 ? '// CRITICAL' : '// FUMBLE') : ''}
-                    </Typography>
-                    {sit && (
-                      <Chip size="small" label={sit.toUpperCase()}
-                        sx={{
-                          fontWeight: 700,
-                          backgroundColor: alpha(dColor, 0.12), color: dColor,
-                          borderRadius: 1,
-                        }}
-                      />
-                    )}
-                  </Box>
-                  <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.8rem', mt: 0.25 }}>
-                    {d.interpretation}{reason ? ` — ${reason}` : ''}
-                  </Typography>
-                </Box>
-              </Box>
-            );
-          })()}
-
-          {/* Timestamp — `text.secondary`, not `opacity: 0.6` on the primary
-              ink: the composite of the latter measured 4.32:1 on the light
-              message paper. The token is already the "quieter copy" tier and
-              clears AA on every bubble variant. */}
-          <Typography variant="caption" sx={{
-            display: 'block', mt: 1, color: 'text.secondary',
-          }}>
-            {message.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-          </Typography>
-        </Paper>
+      <Box key={index} ref={index === all.length - 1 ? lastEntryRef : undefined} sx={{ scrollMarginTop: 16 }}>
+        {entry}
       </Box>
     );
   };
@@ -590,7 +374,7 @@ function StoryPlay() {
     }
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
-        <CircularProgress sx={{ color: gold }} />
+        <CircularProgress aria-label="Opening the tale" />
       </Box>
     );
   }
@@ -614,88 +398,150 @@ function StoryPlay() {
     </Box>
   );
 
-  const centerColumn = (
-    <Box sx={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1, minHeight: 0 }}>
-      {/* Header */}
-      <Box sx={{
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-        flexWrap: 'wrap', flexShrink: 0,
-        gap: 1, mb: 1.5, pb: 1.25, borderBottom: `1px solid ${alpha(gold, 0.1)}`,
-      }}>
-        <Box sx={{ minWidth: 0, flex: '1 1 auto' }}>
-          <Typography variant="h4" sx={{ lineHeight: 1.15, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-            {story.title}
-          </Typography>
-          <Box sx={{ display: 'flex', gap: 1, mt: 0.25, alignItems: 'center' }}>
-            <Typography variant="caption" sx={{ color: 'text.secondary' }}>{story.genre}</Typography>
-            <Typography variant="caption" sx={{ color: alpha(gold, 0.4) }}>·</Typography>
-            <Typography variant="caption" sx={{ color: 'text.secondary' }}>Turn {scene.turn}</Typography>
-          </Box>
-        </Box>
-        <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', flexShrink: 0 }}>
-          {!showLeftRail && (
-            <Tooltip title="Scene & character">
-              <IconButton
-                aria-label="Scene and character"
-                onClick={() => setMobilePanel('left')}
-                sx={{ color: 'text.secondary' }}
-              >
-                <PersonIcon />
-              </IconButton>
-            </Tooltip>
-          )}
-          {!showRightRail && (
-            <Tooltip title="Party & threads">
-              <IconButton
-                aria-label="Party and threads"
-                onClick={() => setMobilePanel('right')}
-                sx={{ color: 'text.secondary' }}
-              >
-                <PartyIcon />
-              </IconButton>
-            </Tooltip>
-          )}
+  const handleEpub = async () => {
+    if (!storyId) return;
+    setExporting(true);
+    try {
+      const res = await api.post(`/export/stories/${storyId}/epub`, null, {
+        responseType: 'blob',
+        timeout: LONG_REQUEST_TIMEOUT_MS,
+      });
+      const url = URL.createObjectURL(res.data);
+      const a = document.createElement('a');
+      a.href = url; a.download = `${(story.title || 'story').replace(/[^a-z0-9\-_]+/gi, '_')}.epub`;
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch (e) {
+      // A blob responseType means the error body is a Blob, so the
+      // shared interceptor can't read the envelope — unwrap it here.
+      notify(await messageFromBlobError(e, 'EPUB export failed'), { tone: 'error' });
+    }
+    finally { setExporting(false); }
+  };
+
+  const toolSx = {
+    width: 44, height: 44, borderRadius: '10px', color: 'text.secondary',
+    '@media (hover: hover)': { '&:hover': { color: c.accent, backgroundColor: alpha(c.accent, 0.08) } },
+  };
+  const subline = [
+    story.genre,
+    `Turn ${scene.turn}`,
+    scene.storyDay ? `Day ${scene.storyDay}` : null,
+  ].filter(Boolean).join('  ·  ');
+
+  // Party / Journal / Bookify / EPUB. Below `md` they are icon tools on the
+  // scene strip; at `md`+ Journal and the two exports carry their words.
+  // `disabled={exporting}` is on both exports: EPUB used to be missing it,
+  // so it could be double-clicked into two full export runs, or started on
+  // top of a Bookify — both sharing one `exporting` flag.
+  const tools = (
+    <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', flexShrink: 0 }}>
+      {!showRightRail && (
+        <Tooltip title="Party & threads">
+          <IconButton aria-label="Party and threads" onClick={() => setMobilePanel('right')} sx={toolSx}>
+            <PartyIcon />
+          </IconButton>
+        </Tooltip>
+      )}
+      {wordedTools ? (
+        <>
           {/* The tooltip is the desktop nicety; the aria-label is the label a
-              touch user's screen reader gets, and the sheet says "Journal" in
-              its own heading. A tooltip is never the only label. */}
+              touch user's screen reader gets. A tooltip is never the only label. */}
+          <Tooltip title="What your character knows">
+            <Button aria-label="Journal" onClick={() => setJournalOpen(true)} startIcon={<JournalIcon />}
+              sx={{ color: 'text.primary', minHeight: 40, px: 1.5 }}>
+              Journal
+            </Button>
+          </Tooltip>
+          <Box aria-hidden="true" sx={{ width: '1px', height: 24, bgcolor: c.rule, mx: 0.5 }} />
+          <Button variant="outlined" onClick={handleBookify} disabled={exporting}
+            startIcon={<ExportIcon />} sx={{ minHeight: 40, px: 1.5 }}>
+            {exporting ? 'Binding…' : 'Bookify'}
+          </Button>
+          <Button onClick={handleEpub} disabled={exporting} aria-label="EPUB" sx={{ minHeight: 40, px: 1.25, color: 'text.secondary' }}>
+            EPUB
+          </Button>
+        </>
+      ) : (
+        <>
           <Tooltip title="Journal — what your character knows">
-            <IconButton aria-label="Journal" onClick={() => setJournalOpen(true)} sx={{ color: gold }}>
+            <IconButton aria-label="Journal" onClick={() => setJournalOpen(true)} sx={{ ...toolSx, color: c.accent }}>
               <JournalIcon />
             </IconButton>
           </Tooltip>
-          <ButtonGroup size="small" variant="outlined">
-            <Button onClick={handleBookify} disabled={exporting} startIcon={<ExportIcon sx={{ fontSize: '16px !important' }} />}>
-              {exporting ? '...' : 'Bookify'}
-            </Button>
-            {/* `disabled={exporting}` was missing here but present on Bookify,
-                so EPUB could be double-clicked into two full export runs — and
-                started while a Bookify was still in flight, with both sharing
-                `exporting`. */}
-            <Button disabled={exporting} onClick={async () => {
-              if (!storyId) return;
-              setExporting(true);
-              try {
-                const res = await api.post(`/export/stories/${storyId}/epub`, null, {
-                  responseType: 'blob',
-                  timeout: LONG_REQUEST_TIMEOUT_MS,
-                });
-                const url = URL.createObjectURL(res.data);
-                const a = document.createElement('a');
-                a.href = url; a.download = `${(story.title || 'story').replace(/[^a-z0-9\-_]+/gi, '_')}.epub`;
-                document.body.appendChild(a); a.click(); a.remove();
-                setTimeout(() => URL.revokeObjectURL(url), 1000);
-              } catch (e) {
-                // A blob responseType means the error body is a Blob, so the
-                // shared interceptor can't read the envelope — unwrap it here.
-                notify(await messageFromBlobError(e, 'EPUB export failed'), { tone: 'error' });
-              }
-              finally { setExporting(false); }
-            }}>EPUB</Button>
-          </ButtonGroup>
+          <Tooltip title="Bookify — the tale as prose">
+            <span>
+              <IconButton aria-label="Bookify" onClick={handleBookify} disabled={exporting} sx={toolSx}>
+                {exporting ? <CircularProgress size={18} aria-hidden="true" sx={{ color: 'inherit' }} /> : <ExportIcon />}
+              </IconButton>
+            </span>
+          </Tooltip>
+          <Tooltip title="Download EPUB">
+            <span>
+              <IconButton aria-label="EPUB" onClick={handleEpub} disabled={exporting} sx={toolSx}>
+                <EpubIcon />
+              </IconButton>
+            </span>
+          </Tooltip>
+        </>
+      )}
+    </Box>
+  );
+
+  const centerColumn = (
+    <Box sx={{ display: 'flex', flexDirection: 'column', minWidth: 0, flex: 1, minHeight: 0 }}>
+      {/* Header: the way back, the tale's name, where it stands. */}
+      <Box component="header" sx={{ flexShrink: 0, pb: { xs: 0.75, md: 1.25 }, mb: { xs: 0, md: 0.5 } }}>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: { xs: 0.5, md: 1.5 } }}>
+          <Tooltip title="All tales">
+            <IconButton component={RouterLink} to="/" aria-label="All tales" sx={{ ...toolSx, ml: { xs: -0.75, md: -0.5 } }}>
+              <BackIcon />
+            </IconButton>
+          </Tooltip>
+          <Box sx={{ minWidth: 0, flex: '1 1 auto' }}>
+            <Typography variant="h3" component="h1" sx={{
+              fontSize: { xs: '1.2rem', md: '1.6rem' }, lineHeight: 1.15,
+              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            }}>
+              {story.title}
+            </Typography>
+            <Typography sx={{
+              fontFamily: fonts.ui, fontWeight: 700, fontSize: '0.75rem', letterSpacing: '0.12em',
+              textTransform: 'uppercase', color: c.accentLabel, mt: 0.25, whiteSpace: 'pre',
+              overflow: 'hidden', textOverflow: 'ellipsis', fontVariantNumeric: 'lining-nums',
+            }}>
+              {subline}
+            </Typography>
+          </Box>
+          {showLeftRail && tools}
         </Box>
+
+        {/* Phone: the scene strip. Where you are is the first thing a phone
+            player loses when the rails fold away, so it stays on screen as the
+            button that opens them. */}
+        {!showLeftRail && (
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, mt: 0.75 }}>
+            <Button
+              aria-label="Scene and character"
+              onClick={() => setMobilePanel('left')}
+              startIcon={<PlaceIcon sx={{ color: c.accentLabel }} />}
+              sx={{
+                flex: 1, minWidth: 0, minHeight: 44, justifyContent: 'flex-start', px: 1.25,
+                borderRadius: '10px', border: `1px solid ${c.rule}`, bgcolor: alpha(c.paper, 0.7),
+                color: 'text.primary', fontFamily: fonts.ui, fontWeight: 500, textAlign: 'left',
+              }}
+            >
+              <Box component="span" sx={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                {scene.locationName || 'An unfolding tale'}
+                {scene.timeOfDay ? <Box component="span" sx={{ color: 'text.secondary' }}>{` · ${scene.timeOfDay}`}</Box> : null}
+              </Box>
+            </Button>
+            {tools}
+          </Box>
+        )}
       </Box>
 
-      {/* Messages. The rail scrolls, so it owes a keyboard route into it:
+      {/* The page. The rail scrolls, so it owes a keyboard route into it:
           `tabIndex={0}` makes it focusable (axe `scrollable-region-focusable`)
           and `role="log"` + a name is what turns that focus stop into
           something a screen reader can announce — a role without a name just
@@ -706,67 +552,51 @@ function StoryPlay() {
         tabIndex={0}
         role="log"
         aria-label="Story transcript"
-        sx={{ flex: 1, minHeight: 0, overflow: 'auto', px: { xs: 0.5, md: 1.5 }, py: 1 }}
+        sx={{
+          flex: 1, minHeight: 0, overflow: 'auto', overscrollBehavior: 'contain',
+          mx: { xs: -2, sm: 0 },
+          '&:focus-visible': { outline: `2px solid ${c.accent}`, outlineOffset: -2 },
+        }}
       >
-        {messages.map(renderMessage)}
-        {loading && (
-          <Box sx={{ display: 'flex', justifyContent: 'flex-start', mb: 2 }}>
-            <Paper sx={{
-              p: 2, display: 'flex', alignItems: 'center', gap: 1.5,
-              border: `1px solid ${theme.palette.divider}`, borderRadius: '16px 16px 16px 4px',
-            }}>
-              <Box sx={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: gold, animation: 'glowPulse 1.5s ease-in-out infinite' }} />
-              <Typography variant="body2" sx={{ color: 'text.secondary', fontFamily: '"Cinzel", serif', fontSize: '0.8rem', letterSpacing: '0.05em' }}>
-                The narrator contemplates...
+        <Box sx={{
+          position: 'relative',
+          maxWidth: 760, minHeight: '100%', mx: 'auto',
+          px: { xs: 2.5, sm: 4, md: 7 }, pt: { xs: 3, md: 5 }, pb: { xs: 2, md: 4 },
+          backgroundColor: c.page,
+          borderLeft: { sm: `1px solid ${c.pageEdge}` },
+          borderRight: { sm: `1px solid ${c.pageEdge}` },
+          boxShadow: c.mode === 'dark'
+            ? 'inset 0 0 80px rgba(0,0,0,0.35)'
+            : '0 1px 2px rgba(60,35,10,0.12), 0 12px 32px rgba(60,35,10,0.14)',
+        }}>
+          {/* The candle's light on the sheet. */}
+          <Box aria-hidden="true" className="sg-candle-glow" sx={{
+            position: 'absolute', inset: 0, bottom: 'auto', height: 320, pointerEvents: 'none',
+            background: c.mode === 'dark'
+              ? `radial-gradient(ellipse 70% 100% at 50% 0%, ${alpha(c.accent, 0.09)} 0%, transparent 70%)`
+              : `radial-gradient(ellipse 70% 100% at 50% 0%, ${alpha('#ffffff', 0.55)} 0%, transparent 70%)`,
+          }} />
+          <Box sx={{ position: 'relative', maxWidth: '38rem', mx: 'auto' }}>
+            {messages.length === 0 && !loading && (
+              <Typography sx={{ fontFamily: fonts.text, fontStyle: 'italic', color: 'text.secondary', textAlign: 'center', py: 6 }}>
+                The page is blank. Tell the Game Master what you do, and the tale begins.
               </Typography>
-            </Paper>
+            )}
+            {messages.map((m, i, all) => renderMessage(m, i, all, player?.name))}
+            {loading && <WritingIndicator />}
+            <div ref={endRef} />
           </Box>
-        )}
-        <div ref={endRef} />
+        </Box>
       </Box>
 
-      {/* Input — the thumb-zone primary action. Pinned to the bottom of the
-          frame (the column is a flex box, this row does not shrink) and padded
-          clear of the iOS home indicator, so no FAB is needed here. */}
-      <Paper sx={{
-        flexShrink: 0,
-        p: { xs: 1.5, md: 2 },
-        pb: { xs: 'calc(12px + env(safe-area-inset-bottom))', md: 2 },
-        borderTop: `1px solid ${alpha(gold, 0.1)}`, borderRadius: 0,
-        background: theme.palette.mode === 'dark'
-          ? alpha(theme.palette.background.default, 0.95)
-          : alpha(theme.palette.background.paper, 0.95),
-        backdropFilter: 'blur(8px)',
-      }}>
-        <Box component="form" onSubmit={handleSubmit} sx={{ display: 'flex', gap: 1, alignItems: 'flex-end' }}>
-          <TextField
-            fullWidth value={userInput}
-            onChange={(e) => setUserInput(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                if (!loading && userInput.trim()) handleSubmit(e);
-              }
-            }}
-            placeholder="What do you do?"
-            disabled={loading} inputRef={inputRef}
-            // `/` (suite slash focus) lands here — the turn is the page. No
-            // select: a half-written action is not a query to replace. A `/`
-            // typed *in* the box is still the start of /recall, /end, etc.
-            inputProps={slashFocusProps(30, { select: false })}
-            multiline maxRows={4}
-            sx={{ '& .MuiOutlinedInput-root': { fontFamily: '"Crimson Pro", serif', fontSize: '1rem' } }}
-          />
-          {/* Icon-only: the aria-label is the button's whole name. */}
-          <Button type="submit" variant="contained" aria-label="Send" disabled={loading || !userInput.trim()}
-            sx={{ minWidth: 48, height: 48, borderRadius: 2, px: 0 }}>
-            {loading ? <CircularProgress size={20} sx={{ color: 'inherit' }} /> : <SendIcon />}
-          </Button>
-        </Box>
-        <Typography variant="body2" sx={{ mt: 0.75, fontSize: '0.75rem', color: 'text.disabled', textAlign: 'center' }}>
-          /recall /checkpoint /back /char /info /end
-        </Typography>
-      </Paper>
+      <Composer
+        value={userInput}
+        onChange={setUserInput}
+        onSubmit={handleSubmit}
+        loading={loading}
+        inputRef={inputRef}
+        showHint={showLeftRail}
+      />
     </Box>
   );
 
@@ -776,10 +606,10 @@ function StoryPlay() {
     // padding — too short on desktop, too tall on a phone with the URL bar
     // showing. The shell already hands the route a correctly-sized box (dvh,
     // top bar and safe areas subtracted); the play surface just fills it.
-    <Box sx={{ flex: 1, minHeight: 0, display: 'flex', gap: 1.5 }}>
+    <Box sx={{ flex: 1, minHeight: 0, display: 'flex', gap: { md: 3, lg: 3, xl: 5 } }}>
       {/* Left rail — back at `md` */}
       {showLeftRail && (
-        <Box sx={{ width: { md: 244, lg: 272 }, flexShrink: 0, overflowY: 'auto', pr: 0.5 }}>
+        <Box sx={{ width: { md: 248, lg: 240, xl: 280 }, flexShrink: 0, overflowY: 'auto', pr: 1 }}>
           {leftRail}
         </Box>
       )}
@@ -789,7 +619,7 @@ function StoryPlay() {
 
       {/* Right rail — back at `lg`, where there is room for both */}
       {showRightRail && (
-        <Box sx={{ width: 300, flexShrink: 0, overflowY: 'auto', pl: 0.5 }}>
+        <Box sx={{ width: { lg: 264, xl: 300 }, flexShrink: 0, overflowY: 'auto', pl: 1 }}>
           {rightRail}
         </Box>
       )}
@@ -865,8 +695,8 @@ function StoryPlay() {
         )}
         {exportData && (
           <Typography component="pre" sx={{
-            whiteSpace: 'pre-wrap', fontFamily: '"Crimson Pro", serif',
-            fontSize: '1.05rem', lineHeight: 1.8, m: 0,
+            whiteSpace: 'pre-wrap', fontFamily: fonts.text,
+            fontSize: '1.0625rem', lineHeight: 1.75, m: 0, mx: 'auto', maxWidth: '38rem',
           }}>
             {exportData.content}
           </Typography>

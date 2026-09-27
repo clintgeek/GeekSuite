@@ -108,6 +108,25 @@ export const STORY = {
   ],
 };
 
+// A `/recall` answer — what canonQueryService.answerCanonQuery returns.
+export const CANON = {
+  type: 'canon_answer',
+  subjects: ['Mira Vane'],
+  summary: 'Mira Vane runs the weighing-house and owes the Ferrier house money. You caught her scales reading light.',
+  facts: [
+    { text: 'Mira Vane runs the salt weighing-house and takes a cut of every load.', source: 'narrator', turn: 3, visibility: 'public' },
+    { text: 'The east gate is closed after the third bell.', source: 'setup', turn: null, visibility: 'public' },
+    { text: 'You told the guard your name was Aldric of Fenn — it is not.', source: 'player', turn: 7, visibility: 'secret' },
+    { text: 'Mira owes the Ferrier house eleven marks and has not paid.', source: 'narrator', turn: 11, visibility: 'secret' },
+  ],
+  entities: [
+    { kind: 'character', name: 'Mira Vane', status: 'alive', locationName: 'The Weighing-House',
+      knows: [{ text: 'The salt in the third cart is cut with something that burns green.', via: 'witnessed', turn: 9 }] },
+  ],
+  threads: [{ name: 'The Ferrier debt', type: 'debt', status: 'active', description: 'Eleven marks, and the house does not forget.', openedTurn: 6 }],
+  note: 'Anything not listed here has not been established in canon.',
+};
+
 export const BOOKIFY = {
   title: 'The Salt Road',
   content: [

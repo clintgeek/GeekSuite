@@ -3,8 +3,8 @@
  * Shared test harness (mirrors apps/notegeek/frontend/src/__tests__/testUtils.jsx).
  *
  * Tests render under the *real* StoryGeek theme (`createStoryTheme`), not a
- * bare `createTheme()` — the codex palette (`theme.palette.codex.gold`), the
- * `glow` tokens and the Cinzel/Crimson Pro font stacks are read directly by
+ * bare `createTheme()` — the Candlelit Table palette (`theme.palette.candle.*`),
+ * the `glow` tokens and the Cinzel/Alegreya font stacks are read directly by
  * Narration, CodexDialog and every panel, so a plain theme would hide bugs in
  * those custom tokens the moment a component reads one.
  *

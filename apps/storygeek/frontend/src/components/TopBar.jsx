@@ -16,6 +16,7 @@ import { useAuth } from '@geeksuite/auth';
 import { useThemeMode } from '@geeksuite/user';
 import { displayNameFrom, initialsFrom, secondaryFrom } from '../utils/userDisplay';
 import { pageTitle } from './navConfig';
+import { fonts } from '../theme/theme';
 
 function TopBar() {
   const theme = useTheme();
@@ -23,7 +24,7 @@ function TopBar() {
   const navigate = useNavigate();
   const { user, isAuthenticated, logout } = useAuth();
   const { theme: mode, toggleTheme } = useThemeMode();
-  const gold = theme.palette.codex?.gold || '#c9a84c';
+  const c = theme.palette.candle;
 
   const handleSignOut = () => {
     logout();
@@ -50,29 +51,27 @@ function TopBar() {
           : undefined
       }
       sx={{
-        // Arcane Codex identity: the parchment/leather gradient band, a gold
-        // hairline under it, Cinzel for the page title and gold icon hovers.
-        background:
-          theme.palette.mode === 'dark'
-            ? `linear-gradient(90deg, ${alpha('#1a1614', 0.95)} 0%, ${alpha('#2a2420', 0.95)} 100%)`
-            : `linear-gradient(90deg, ${alpha('#fff8ef', 0.95)} 0%, ${alpha('#f4ece1', 0.95)} 100%)`,
+        // Candlelit Table identity: the table colour, a rule under it, Cinzel
+        // for the page title and amber icon hovers (hover devices only).
+        backgroundColor: alpha(c.table, 0.92),
+        backgroundImage: 'none',
         color: 'text.primary',
         boxShadow: 'none',
-        borderBottom: `1px solid ${alpha(gold, 0.15)}`,
+        borderBottom: `1px solid ${c.rule}`,
         '& [data-geek-topbar="title"]': {
-          fontFamily: '"Cinzel", serif',
-          fontWeight: 600,
-          fontSize: '1rem',
-          letterSpacing: '0.04em',
+          fontFamily: fonts.display,
+          fontWeight: 700,
+          fontSize: '1.05rem',
+          letterSpacing: '0.05em',
         },
         '& .MuiIconButton-root': {
           color: 'text.secondary',
-          '&:hover': { color: gold, backgroundColor: alpha(gold, 0.08) },
+          '@media (hover: hover)': { '&:hover': { color: c.accent, backgroundColor: alpha(c.accent, 0.08) } },
         },
         '& .MuiAvatar-root': {
-          bgcolor: alpha(gold, 0.15),
-          color: gold,
-          fontFamily: '"Cinzel", serif',
+          bgcolor: c.mode === 'dark' ? c.accent : c.oxblood,
+          color: c.mode === 'dark' ? '#1d1208' : '#f9f0dc',
+          fontFamily: fonts.display,
           fontWeight: 700,
         },
       }}

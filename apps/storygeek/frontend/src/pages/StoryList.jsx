@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import {
-  Box, Typography, Button, Card, CardContent, Grid, Chip, TextField,
+  Box, Typography, Button, Card, CardActionArea, Grid, TextField,
   MenuItem, CircularProgress, IconButton, alpha,
 } from '@mui/material';
 import {
@@ -9,33 +9,38 @@ import {
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '@mui/material/styles';
 import { useAuth } from '@geeksuite/auth';
-import { GeekEmptyState, GeekErrorState, slashFocusProps, toneForMode, useGeekPrimaryAction, useToast } from '@geeksuite/ui';
+import { GeekEmptyState, GeekErrorState, slashFocusProps, useGeekPrimaryAction, useToast } from '@geeksuite/ui';
 import api from '../api';
 import CodexDialog from '../components/primitives/CodexDialog';
+import D20 from '../components/primitives/D20';
+import Tag from '../components/primitives/Tag';
+import { fonts } from '../theme/theme';
 
+// Genre colours are wax, not neon: they only ever paint the pin that holds a
+// notice to the board (decorative), never text.
 const genreAccents = {
-  'Fantasy':          { color: '#7c4dff', icon: '\u{1F9D9}' },
-  'Sci-Fi':           { color: '#00bcd4', icon: '\u{1F680}' },
-  'Horror':           { color: '#b71c1c', icon: '\u{1F480}' },
-  'Romance':          { color: '#e91e63', icon: '\u{1F339}' },
-  'Mystery':          { color: '#607d8b', icon: '\u{1F50D}' },
-  'Adventure':        { color: '#ff9800', icon: '\u{1F5FA}' },
-  'Historical':       { color: '#795548', icon: '\u{1F3DB}' },
-  'Contemporary':     { color: '#4caf50', icon: '\u{1F3D9}' },
-  'Post-Apocalyptic': { color: '#ff5722', icon: '\u{2622}' },
-  'Steampunk':        { color: '#bf8040', icon: '\u{2699}' },
-  'Cyberpunk':        { color: '#e040fb', icon: '\u{1F916}' },
-  'Western':          { color: '#a1887f', icon: '\u{1F920}' },
+  'Fantasy':          { color: '#6b4a9a', icon: '\u{1F9D9}' },
+  'Sci-Fi':           { color: '#2f7a86', icon: '\u{1F680}' },
+  'Horror':           { color: '#8a1f1f', icon: '\u{1F480}' },
+  'Romance':          { color: '#a8406a', icon: '\u{1F339}' },
+  'Mystery':          { color: '#4a5a6a', icon: '\u{1F50D}' },
+  'Adventure':        { color: '#c9802e', icon: '\u{1F5FA}' },
+  'Historical':       { color: '#7a5a3a', icon: '\u{1F3DB}' },
+  'Contemporary':     { color: '#4a7a4f', icon: '\u{1F3D9}' },
+  'Post-Apocalyptic': { color: '#a84a2a', icon: '\u{2622}' },
+  'Steampunk':        { color: '#9a6a2e', icon: '\u{2699}' },
+  'Cyberpunk':        { color: '#8a3a8a', icon: '\u{1F916}' },
+  'Western':          { color: '#8a6a4a', icon: '\u{1F920}' },
 };
 
-const getGenre = (genre) => genreAccents[genre] || { color: '#9e9e9e', icon: '\u{1F4DA}' };
+const getGenre = (genre) => genreAccents[genre] || { color: '#6b6259', icon: '\u{1F4DA}' };
 
 const statusStyles = {
-  active:    { label: 'Active',    color: 'success' },
-  setup:     { label: 'Setting Up', color: 'warning' },
-  paused:    { label: 'Paused',    color: 'warning' },
-  completed: { label: 'Complete',  color: 'info' },
-  abandoned: { label: 'Abandoned', color: 'error' },
+  active:    { label: 'Active',    tone: 'good' },
+  setup:     { label: 'Setting Up', tone: 'warn' },
+  paused:    { label: 'Paused',    tone: 'warn' },
+  completed: { label: 'Complete',  tone: 'info' },
+  abandoned: { label: 'Abandoned', tone: 'bad' },
 };
 
 function StoryList() {
@@ -43,10 +48,7 @@ function StoryList() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { notify } = useToast();
-  const gold = theme.palette.codex?.gold || '#c9a84c';
-  // Muted section-label gold. Solid and mode-aware (theme.js) — the
-  // alpha()-diluted gold it replaces failed AA on every codex surface.
-  const goldMuted = theme.palette.codex?.goldMuted || gold;
+  const c = theme.palette.candle;
 
   const [stories, setStories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -132,178 +134,187 @@ function StoryList() {
   if (loading) {
     return (
       <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
-        <CircularProgress sx={{ color: gold }} />
+        <CircularProgress aria-label="Loading your tales" />
       </Box>
     );
   }
 
+  const label = {
+    fontFamily: fonts.ui, fontWeight: 700, fontSize: '0.75rem', letterSpacing: '0.16em',
+    textTransform: 'uppercase', color: c.accentLabel,
+  };
+
   return (
     <Box>
       {/* Header */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', mb: 4, mt: 1 }}>
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 4, mb: { xs: 6, md: 8 }, mt: 2 }}>
         <Box>
-          <Typography variant="overline" sx={{ color: goldMuted }}>
-            Your Library
+          <Typography component="p" sx={label}>The table is set</Typography>
+          <Typography variant="h2" component="h1" sx={{ mt: 1, fontSize: { xs: '1.6rem', md: '2rem' } }}>
+            Your Tales
           </Typography>
-          <Typography variant="h2" sx={{ mt: 0.5 }}>
-            Tales & Quests
-          </Typography>
+          {stories.length > 0 && !loadError && (
+            <Typography sx={{ mt: 1, color: 'text.secondary', fontStyle: 'italic' }}>
+              {stories.length === 1 ? 'One adventure is waiting for you.' : `${stories.length} adventures are waiting for you.`}
+            </Typography>
+          )}
         </Box>
         <Button
           variant="contained"
           startIcon={<AddIcon />}
           onClick={() => setOpenDialog(true)}
-          sx={{ display: { xs: 'none', md: 'inline-flex' }, flexShrink: 0 }}
+          sx={{ display: { xs: 'none', md: 'inline-flex' }, flexShrink: 0, minHeight: 44, px: 5 }}
         >
           New Tale
         </Button>
       </Box>
 
       {loadError ? (
-        <Card sx={{ textAlign: 'center', py: 8 }}>
-          <CardContent>
-            <GeekErrorState
-              error={loadError}
-              onRetry={loadStories}
-              title="The shelves won't open"
-              description="Something kept the library from answering. Try again."
-            />
-          </CardContent>
+        <Card sx={{ textAlign: 'center', py: 12, px: 4 }}>
+          <GeekErrorState
+            error={loadError}
+            onRetry={loadStories}
+            title="The shelves won't open"
+            description="Something kept the library from answering. Try again."
+          />
         </Card>
       ) : stories.length === 0 ? (
-        <Card sx={{ textAlign: 'center', py: 8 }}>
-          <CardContent>
-            <GeekEmptyState
-              icon={<Typography sx={{ fontFamily: '"Cinzel Decorative", serif', fontSize: '2rem' }}>{'\u{1F4DC}'}</Typography>}
-              iconSx={{ color: alpha(gold, 0.3) }}
-              title="The shelves are empty"
-              description="Every great library begins with a single tale. Start your first story and let the ink flow."
-              action={
-                <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpenDialog(true)}>
-                  Begin Your First Tale
-                </Button>
-              }
-            />
-          </CardContent>
-        </Card>
+        <Box sx={{
+          textAlign: 'center', py: { xs: 12, md: 16 }, px: 4, borderRadius: '8px',
+          border: `2px dashed ${c.rule}`, bgcolor: alpha(c.paper, 0.6),
+        }}>
+          <GeekEmptyState
+            icon={<D20 size={72} value={20} color={c.accent} fill={alpha(c.accent, 0.08)} strokeWidth={0.9} sx={{ mx: 'auto' }} />}
+            title="No tale on the table yet"
+            titleSx={{ fontFamily: fonts.display, fontWeight: 700, fontSize: '1.35rem' }}
+            description="Pull up a chair. Describe a place, a person, or a trouble, and the Game Master will set the scene."
+            descriptionSx={{ maxWidth: 420, mx: 'auto', fontSize: '1.0625rem', color: 'text.secondary' }}
+            action={
+              <Button variant="contained" startIcon={<AddIcon />} onClick={() => setOpenDialog(true)} sx={{ minHeight: 44, px: 5 }}>
+                Begin your first tale
+              </Button>
+            }
+          />
+        </Box>
       ) : (
-        <Grid container spacing={3}>
+        <Grid container spacing={{ xs: 4, md: 6 }}>
           {stories.map((story, i) => {
             const genre = getGenre(story.genre);
             const status = statusStyles[story.status] || statusStyles.active;
+            const situation = story.worldState?.currentSituation && story.worldState.currentSituation !== 'Story setup in progress'
+              ? story.worldState.currentSituation : null;
             return (
               <Grid item xs={12} sm={6} lg={4} key={story._id}>
                 <Card
+                  component="article"
                   className="fade-in-up"
                   sx={{
-                    height: '100%',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    cursor: 'pointer',
-                    position: 'relative',
-                    overflow: 'hidden',
+                    height: '100%', display: 'flex', flexDirection: 'column', position: 'relative',
+                    overflow: 'visible',
                     animationDelay: `${i * 0.06}s`,
-                    animationFillMode: 'backwards',
-                    // Genre accent strip on left
-                    '&::before': {
-                      content: '""',
-                      position: 'absolute',
-                      left: 0, top: 0, bottom: 0,
-                      width: 4,
-                      background: `linear-gradient(180deg, ${genre.color}, ${alpha(genre.color, 0.3)})`,
+                    bgcolor: c.paper,
+                    backgroundImage: c.mode === 'dark'
+                      ? `radial-gradient(ellipse 90% 60% at 50% 0%, ${alpha(c.accent, 0.07)} 0%, transparent 70%)`
+                      : `radial-gradient(ellipse 90% 60% at 50% 0%, ${alpha('#ffffff', 0.7)} 0%, transparent 70%)`,
+                    boxShadow: c.mode === 'dark'
+                      ? `0 1px 0 ${alpha('#fff', 0.03)} inset, 0 8px 24px ${alpha('#000', 0.35)}`
+                      : `0 1px 2px ${alpha('#3c230a', 0.12)}, 0 8px 20px ${alpha('#3c230a', 0.10)}`,
+                    transition: 'transform 180ms ease, box-shadow 180ms ease, border-color 180ms ease',
+                    '@media (hover: hover)': {
+                      '&:hover': {
+                        transform: 'translateY(-2px)',
+                        borderColor: alpha(c.accent, 0.6),
+                        boxShadow: c.mode === 'dark'
+                          ? `0 10px 28px ${alpha('#000', 0.45)}, 0 0 24px ${alpha(c.accent, 0.12)}`
+                          : `0 10px 24px ${alpha('#3c230a', 0.16)}`,
+                      },
                     },
+                    '@media (prefers-reduced-motion: reduce)': { transition: 'none', '&:hover': { transform: 'none' } },
                   }}
-                  onClick={() => navigate(`/play/${story._id}`)}
                 >
-                  <CardContent sx={{ flex: 1, pl: 3 }}>
-                    {/* Genre & Status */}
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 1.5 }}>
-                      <Typography variant="caption" sx={{
-                        // Raw genre color is tuned for the edge strip; shift
-                        // it toward the text pole when used as type (#19).
-                        color: toneForMode(genre.color, theme),
-                        fontWeight: 600,
-                      }}>
-                        {genre.icon} {story.genre}
+                  {/* The wax pin holding the notice to the board, in the genre's colour. */}
+                  <Box aria-hidden="true" sx={{
+                    position: 'absolute', top: -9, left: '50%', ml: '-9px', width: 18, height: 18, borderRadius: '50%',
+                    background: `radial-gradient(circle at 35% 30%, ${alpha('#fff', 0.45)} 0%, ${genre.color} 45%, ${alpha('#000', 0.35)} 100%)`,
+                    boxShadow: `0 2px 3px ${alpha('#000', 0.4)}`,
+                  }} />
+                  <CardActionArea
+                    onClick={() => navigate(`/play/${story._id}`)}
+                    aria-label={`Open ${story.title}`}
+                    sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'stretch', justifyContent: 'flex-start', p: { xs: 5, md: 6 }, pb: 3, borderRadius: 'inherit' }}
+                  >
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, mb: 3 }}>
+                      <Typography component="span" sx={{ ...label, display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                        <span aria-hidden="true">{genre.icon}</span>{story.genre}
                       </Typography>
-                      <Chip
-                        label={status.label}
-                        color={status.color}
-                        size="small"
-                        sx={{ flexShrink: 0 }}
-                      />
+                      <Tag tone={status.tone}>{status.label}</Tag>
                     </Box>
 
-                    {/* Title */}
-                    <Typography variant="h4" sx={{
-                      mb: 1,
-                      lineHeight: 1.3,
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      display: '-webkit-box',
-                      WebkitLineClamp: 2,
-                      WebkitBoxOrient: 'vertical',
+                    <Typography variant="h4" component="h2" sx={{
+                      fontSize: '1.3rem', lineHeight: 1.25, mb: 2,
+                      overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box',
+                      WebkitLineClamp: 2, WebkitBoxOrient: 'vertical',
                     }}>
                       {story.title}
                     </Typography>
 
-                    {/* Stats */}
-                    <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
-                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                        {story.stats?.totalInteractions || 0} turns
-                      </Typography>
-                      <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                        {story.stats?.totalDiceRolls || 0} rolls
-                      </Typography>
-                    </Box>
-
-                    {/* Situation preview */}
-                    {story.worldState?.currentSituation && story.worldState.currentSituation !== 'Story setup in progress' && (
-                      <Typography variant="body2" color="text.secondary" sx={{
-                        fontStyle: 'italic',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        display: '-webkit-box',
-                        WebkitLineClamp: 2,
-                        WebkitBoxOrient: 'vertical',
-                        mb: 2,
+                    {situation ? (
+                      <Typography sx={{
+                        fontStyle: 'italic', color: 'text.secondary', fontSize: '1rem', lineHeight: 1.55,
+                        overflow: 'hidden', textOverflow: 'ellipsis', display: '-webkit-box',
+                        WebkitLineClamp: 3, WebkitBoxOrient: 'vertical', mb: 3,
                       }}>
-                        "{story.worldState.currentSituation}"
+                        “{situation}”
+                      </Typography>
+                    ) : (
+                      <Typography sx={{ fontStyle: 'italic', color: 'text.secondary', fontSize: '1rem', mb: 3 }}>
+                        The opening scene is still being set.
                       </Typography>
                     )}
 
-                    {/* Footer */}
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mt: 'auto' }}>
-                      <Typography variant="caption" sx={{ color: 'text.disabled' }}>
-                        {formatDate(story.updatedAt)}
-                      </Typography>
-                      <Box sx={{ display: 'flex', gap: 0.5 }} onClick={(e) => e.stopPropagation()}>
-                        <Button
-                          size="small"
-                          variant="outlined"
-                          startIcon={<PlayIcon />}
-                          onClick={() => navigate(`/play/${story._id}`)}
-                          sx={{ minWidth: 'auto', px: 1.5, fontSize: '0.8125rem' }}
-                        >
-                          Continue
-                        </Button>
-                        {/* Icon-only, and there is one per card — so the name
-                            has to carry the title, or a screen-reader user
-                            hears "Delete" four times with no way to tell which
-                            tale is which. */}
-                        <IconButton
-                          size="small"
-                          color="error"
-                          aria-label={`Delete ${story.title}`}
-                          onClick={() => setStoryToDelete(story)}
-                          disabled={deletingStory}
-                          sx={{ opacity: 0.6, '&:hover': { opacity: 1 } }}
-                        >
-                          <DeleteIcon fontSize="small" />
-                        </IconButton>
-                      </Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mt: 'auto', color: 'text.secondary', fontFamily: fonts.ui, fontSize: '0.875rem', fontVariantNumeric: 'lining-nums' }}>
+                      <D20 size={16} color={c.accentLabel} />
+                      <span>{story.stats?.totalInteractions || 0} turns</span>
+                      <span aria-hidden="true">·</span>
+                      <span>{story.stats?.totalDiceRolls || 0} rolls</span>
                     </Box>
-                  </CardContent>
+                  </CardActionArea>
+
+                  {/* Footer — outside the action area, so its buttons are not
+                      nested inside another button. */}
+                  <Box sx={{
+                    display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2,
+                    px: { xs: 5, md: 6 }, py: 2, borderTop: `1px dashed ${c.rule}`,
+                  }}>
+                    <Typography component="span" sx={{ fontFamily: fonts.ui, fontSize: '0.8125rem', color: 'text.secondary', fontVariantNumeric: 'lining-nums' }}>
+                      {formatDate(story.updatedAt)}
+                    </Typography>
+                    <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                      <Button
+                        variant="outlined"
+                        startIcon={<PlayIcon />}
+                        onClick={() => navigate(`/play/${story._id}`)}
+                        sx={{ minHeight: 44, px: 3 }}
+                      >
+                        Continue
+                      </Button>
+                      {/* Icon-only, and there is one per card — so the name
+                          has to carry the title, or a screen-reader user
+                          hears "Delete" four times with no way to tell which
+                          tale is which. */}
+                      <IconButton
+                        aria-label={`Delete ${story.title}`}
+                        onClick={() => setStoryToDelete(story)}
+                        disabled={deletingStory}
+                        sx={{
+                          width: 44, height: 44, color: 'text.secondary',
+                          '@media (hover: hover)': { '&:hover': { color: c.tone.bad, bgcolor: alpha(c.tone.bad, 0.08) } },
+                        }}
+                      >
+                        <DeleteIcon fontSize="small" />
+                      </IconButton>
+                    </Box>
+                  </Box>
                 </Card>
               </Grid>
             );

@@ -7,6 +7,7 @@
 body {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
 }
 
 /* The safe-area inset used to be padded here, on <body>. That made the
@@ -19,44 +20,81 @@ body {
   #root { min-height: 100dvh; }
 }
 
-/* Subtle grain texture */
+/* Paper grain over the whole table — faint enough to read as texture, never
+   as noise behind the narration. */
 body::before {
   content: '';
   position: fixed;
   inset: 0;
   pointer-events: none;
   z-index: 9999;
-  opacity: 0.025;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity: 0.03;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   background-repeat: repeat;
   background-size: 256px 256px;
 }
 
-/* Scrollbar */
-::-webkit-scrollbar { width: 6px; }
+/* Scrollbar — a thin amber-brown rail. */
+* { scrollbar-width: thin; scrollbar-color: rgba(160, 110, 50, 0.45) transparent; }
+::-webkit-scrollbar { width: 8px; height: 8px; }
 ::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: rgba(201, 168, 76, 0.2); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover { background: rgba(201, 168, 76, 0.35); }
+::-webkit-scrollbar-thumb { background: rgba(160, 110, 50, 0.35); border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(160, 110, 50, 0.55); }
 
-/* Animations */
-@keyframes diceRoll {
-  0% { transform: rotate(0deg) scale(1); }
-  25% { transform: rotate(90deg) scale(1.2); }
-  50% { transform: rotate(180deg) scale(1); }
-  75% { transform: rotate(270deg) scale(1.2); }
-  100% { transform: rotate(360deg) scale(1); }
-}
+/* ── Motion ─────────────────────────────────────────────────────────────
+   Everything here is off under prefers-reduced-motion (bottom of file). */
 
 @keyframes fadeInUp {
-  from { opacity: 0; transform: translateY(10px); }
+  from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
+.fade-in-up { animation: fadeInUp 0.35s ease-out both; }
 
-@keyframes glowPulse {
-  0%, 100% { box-shadow: 0 0 6px rgba(201, 168, 76, 0.1); }
-  50% { box-shadow: 0 0 18px rgba(201, 168, 76, 0.25); }
+/* The candle: the flame sways and breathes; its halo breathes with it. */
+@keyframes sgFlicker {
+  0%, 100% { transform: scale(1, 1) skewX(0deg); opacity: 1; }
+  22% { transform: scale(0.97, 1.04) skewX(-2deg); opacity: 0.94; }
+  48% { transform: scale(1.02, 0.97) skewX(1.5deg); opacity: 1; }
+  71% { transform: scale(0.98, 1.03) skewX(-1deg); opacity: 0.9; }
 }
+@keyframes sgHalo {
+  0%, 100% { opacity: 0.14; transform: scale(1); }
+  50% { opacity: 0.24; transform: scale(1.08); }
+}
+.sg-candle-flame { transform-box: fill-box; transform-origin: 50% 100%; animation: sgFlicker 2.6s ease-in-out infinite; }
+.sg-candle-halo { transform-box: fill-box; transform-origin: 50% 50%; animation: sgHalo 2.6s ease-in-out infinite; }
 
-.dice-rolling { animation: diceRoll 0.6s ease-in-out; }
-.fade-in-up { animation: fadeInUp 0.35s ease-out forwards; }
-.glow-pulse { animation: glowPulse 3s ease-in-out infinite; }
+/* The candlelight on the page: a slow, barely-there breathing of the glow at
+   the top of the narration sheet. */
+@keyframes sgGlow {
+  0%, 100% { opacity: 0.85; }
+  40% { opacity: 1; }
+  70% { opacity: 0.75; }
+}
+.sg-candle-glow { animation: sgGlow 5.5s ease-in-out infinite; }
+
+/* "writing" ellipsis */
+@keyframes sgDot { 0%, 80%, 100% { opacity: 0.25; } 40% { opacity: 1; } }
+.sg-dots > span { animation: sgDot 1.4s ease-in-out infinite; }
+.sg-dots > span:nth-of-type(2) { animation-delay: 0.2s; }
+.sg-dots > span:nth-of-type(3) { animation-delay: 0.4s; }
+
+/* A critical roll pulses once, then rests. */
+@keyframes sgCrit {
+  0% { transform: scale(0.8) rotate(-30deg); }
+  60% { transform: scale(1.12) rotate(6deg); }
+  100% { transform: scale(1) rotate(0deg); }
+}
+.sg-crit { animation: sgCrit 0.7s cubic-bezier(.2,.8,.3,1.2) both; }
+
+@media (prefers-reduced-motion: reduce) {
+  .fade-in-up,
+  .sg-candle-flame,
+  .sg-candle-halo,
+  .sg-candle-glow,
+  .sg-dots > span,
+  .sg-crit {
+    animation: none !important;
+  }
+  .sg-dots > span { opacity: 1; }
+}

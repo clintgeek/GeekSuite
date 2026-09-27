@@ -339,3 +339,41 @@ describe('StoryPlay — a failed turn', () => {
     await waitFor(() => expect(input).not.toBeDisabled());
   });
 });
+
+// Candlelit Table (2026-09-27): the 12px "/recall /checkpoint …" line under
+// the composer became a Commands menu. Picking a command only writes it into
+// the composer — the player still sends — and keeps what they already typed.
+describe('StoryPlay commands menu', () => {
+  it('writes the picked command into the composer without sending it', async () => {
+    renderStoryPlay();
+    const input = await screen.findByPlaceholderText('What do you do?');
+    fireEvent.change(input, { target: { value: 'Mira' } });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Commands' }));
+    fireEvent.click(await screen.findByRole('menuitem', { name: /\/recall/ }));
+
+    await waitFor(() => expect(input).toHaveValue('/recall Mira'));
+    expect(api.post).not.toHaveBeenCalled();
+  });
+});
+
+// A fresh reply is read from its first line: the view scrolls to the start of
+// the new entry rather than to the bottom of it (a long narration used to land
+// with its opening off the top of a phone screen).
+describe('StoryPlay reading position', () => {
+  it('brings the start of a fresh reply into view', async () => {
+    const spy = vi.spyOn(window.HTMLElement.prototype, 'scrollIntoView');
+    api.post.mockResolvedValue({ data: { aiResponse: 'The mist parts before you.' } });
+
+    renderStoryPlay();
+    const input = await screen.findByPlaceholderText('What do you do?');
+    fireEvent.change(input, { target: { value: 'I step into the mist.' } });
+    fireEvent.submit(input.closest('form'));
+    await screen.findByText('The mist parts before you.');
+
+    await waitFor(() =>
+      expect(spy).toHaveBeenCalledWith(expect.objectContaining({ block: 'start' }))
+    );
+    spy.mockRestore();
+  });
+});

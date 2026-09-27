@@ -42,10 +42,10 @@ const TIME_OVERLAY = {
 };
 
 const STATE_BADGE = {
-  intact:    { label: 'Intact',    color: 'success' },
-  damaged:   { label: 'Damaged',   color: 'warning' },
-  destroyed: { label: 'Destroyed', color: 'error' },
-  altered:   { label: 'Altered',   color: 'info' },
+  intact:    { label: 'Intact',    color: 'success', tone: 'good' },
+  damaged:   { label: 'Damaged',   color: 'warning', tone: 'warn' },
+  destroyed: { label: 'Destroyed', color: 'error',   tone: 'bad' },
+  altered:   { label: 'Altered',   color: 'info',    tone: 'info' },
 };
 
 const WEATHER_ICON = {

@@ -1,14 +1,16 @@
 import React, { useState } from 'react';
 import {
   Box, Typography, TextField, Button, Card, CardContent, Grid,
-  Paper, Chip, Alert, CircularProgress, MenuItem, alpha,
+  ButtonBase, Alert, CircularProgress, MenuItem, alpha,
 } from '@mui/material';
-import { Casino as CasinoIcon, Send as SendIcon } from '@mui/icons-material';
+import { AutoStories as BeginIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { useTheme } from '@mui/material/styles';
 import { useAuth } from '@geeksuite/auth';
 import useAISettingsStore from '../store/aiSettingsStore';
 import api from '../api';
+import D20 from '../components/primitives/D20';
+import { fonts } from '../theme/theme';
 
 const genres = [
   'Fantasy', 'Sci-Fi', 'Horror', 'Romance', 'Mystery', 'Adventure',
@@ -35,10 +37,7 @@ function StoryCreation() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const { selectedProvider, selectedModelId } = useAISettingsStore();
-  const gold = theme.palette.codex?.gold || '#c9a84c';
-  // Muted section-label gold. Solid and mode-aware (theme.js) — the
-  // alpha()-diluted gold it replaces failed AA on every codex surface.
-  const goldMuted = theme.palette.codex?.goldMuted || gold;
+  const c = theme.palette.candle;
 
   const [formData, setFormData] = useState({ title: '', genre: 'Fantasy', prompt: '', description: '' });
   const [loading, setLoading] = useState(false);
@@ -90,52 +89,52 @@ function StoryCreation() {
     'A merchant ship emerges from fog carrying cargo from a nation that no longer exists.',
   ];
 
+  const label = {
+    fontFamily: fonts.ui, fontWeight: 700, fontSize: '0.75rem', letterSpacing: '0.16em',
+    textTransform: 'uppercase', color: c.accentLabel,
+  };
+
   return (
     <Box>
-      <Box sx={{ mb: 4, mt: 1 }}>
-        <Typography variant="overline" sx={{ color: goldMuted }}>New Adventure</Typography>
-        <Typography variant="h2" sx={{ mt: 0.5 }}>Forge a Tale</Typography>
+      <Box sx={{ mb: { xs: 6, md: 8 }, mt: 2 }}>
+        <Typography component="p" sx={label}>New adventure</Typography>
+        <Typography variant="h2" component="h1" sx={{ mt: 1, fontSize: { xs: '1.6rem', md: '2rem' } }}>Set the Scene</Typography>
+        <Typography sx={{ mt: 1, color: 'text.secondary', fontStyle: 'italic', maxWidth: 560 }}>
+          Choose a hook or write your own. The Game Master builds the world from your words.
+        </Typography>
       </Box>
 
-      <Grid container spacing={3}>
+      <Grid container spacing={{ xs: 6, md: 8 }}>
         {/* Templates */}
         <Grid item xs={12} md={4}>
-          <Typography variant="h5" sx={{ mb: 2 }}>Archetypes</Typography>
-          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+          <Typography variant="h5" component="h2" sx={{ mb: 3 }}>Adventure hooks</Typography>
+          <Box sx={{ display: 'flex', flexDirection: 'column', gap: 3 }}>
             {storyTemplates.map((t) => {
               const isSelected = selectedTemplate?.name === t.name;
               return (
-                <Paper
+                <ButtonBase
                   key={t.name}
                   onClick={() => handleTemplateSelect(t)}
+                  aria-pressed={isSelected}
                   sx={{
-                    p: 2, cursor: 'pointer',
-                    border: `1px solid ${alpha(gold, isSelected ? 0.4 : 0.1)}`,
-                    background: isSelected
-                      ? alpha(gold, 0.08)
-                      : 'transparent',
-                    transition: 'all 0.2s ease',
-                    '&:hover': {
-                      borderColor: alpha(gold, 0.3),
-                      background: alpha(gold, 0.04),
-                    },
+                    display: 'block', textAlign: 'left', width: '100%', p: 4, borderRadius: '6px',
+                    bgcolor: isSelected ? alpha(c.accent, 0.1) : c.paper,
+                    border: `1px solid ${isSelected ? c.accent : c.rule}`,
+                    boxShadow: isSelected ? `inset 3px 0 0 ${c.accent}` : 'none',
+                    transition: 'border-color 160ms ease, background-color 160ms ease',
+                    '@media (hover: hover)': { '&:hover': { borderColor: alpha(c.accent, 0.7) } },
+                    '&.Mui-focusVisible': { outline: `2px solid ${c.accent}`, outlineOffset: 2 },
                   }}
                 >
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.75 }}>
-                    <Typography sx={{ fontSize: '1.2rem' }}>{t.icon}</Typography>
-                    <Typography variant="h6" sx={{ fontSize: '0.9rem' }}>{t.name}</Typography>
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 1 }}>
+                    <Typography component="span" aria-hidden="true" sx={{ fontSize: '1.2rem' }}>{t.icon}</Typography>
+                    <Typography component="span" sx={{ fontFamily: fonts.display, fontWeight: 700, fontSize: '1rem' }}>{t.name}</Typography>
                   </Box>
-                  <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.82rem', mb: 1 }}>
+                  <Typography component="span" sx={{ display: 'block', color: 'text.secondary', fontSize: '0.9375rem', lineHeight: 1.45, mb: 2 }}>
                     {t.desc}
                   </Typography>
-                  <Chip label={t.genre} size="small"
-                    sx={{
-                      height: 20, fontSize: '0.65rem',
-                      backgroundColor: alpha(gold, isSelected ? 0.2 : 0.08),
-                      color: isSelected ? gold : 'text.secondary',
-                    }}
-                  />
-                </Paper>
+                  <Typography component="span" sx={label}>{t.genre}</Typography>
+                </ButtonBase>
               );
             })}
           </Box>
@@ -143,14 +142,14 @@ function StoryCreation() {
 
         {/* Form */}
         <Grid item xs={12} md={8}>
-          <Card>
-            <CardContent sx={{ p: 3 }}>
-              <Typography variant="h5" sx={{ mb: 2.5 }}>Story Details</Typography>
+          <Card sx={{ bgcolor: c.page, borderColor: c.pageEdge }}>
+            <CardContent sx={{ p: { xs: 5, md: 8 } }}>
+              <Typography variant="h5" component="h2" sx={{ mb: 5 }}>The tale</Typography>
 
-              {error && <Alert severity="error" sx={{ mb: 2 }}>{error}</Alert>}
+              {error && <Alert severity="error" sx={{ mb: 4 }}>{error}</Alert>}
 
               <Box component="form" onSubmit={handleSubmit}>
-                <Grid container spacing={2.5}>
+                <Grid container spacing={5}>
                   <Grid item xs={12}>
                     <TextField fullWidth label="Title" value={formData.title}
                       onChange={(e) => setFormData(p => ({ ...p, title: e.target.value }))}
@@ -164,9 +163,10 @@ function StoryCreation() {
                   </Grid>
                   <Grid item xs={12} sm={6}>
                     <Button
-                      fullWidth variant="outlined" startIcon={<CasinoIcon />}
+                      fullWidth variant="outlined"
+                      startIcon={<D20 size={20} />}
                       onClick={() => setFormData(p => ({ ...p, prompt: randomPrompts[Math.floor(Math.random() * randomPrompts.length)] }))}
-                      sx={{ height: '100%' }}
+                      sx={{ height: '100%', minHeight: 56 }}
                     >
                       Roll for Inspiration
                     </Button>
@@ -174,22 +174,23 @@ function StoryCreation() {
                   <Grid item xs={12}>
                     <TextField fullWidth label="Story Prompt" value={formData.prompt}
                       onChange={(e) => setFormData(p => ({ ...p, prompt: e.target.value }))}
-                      required multiline rows={5}
+                      required multiline minRows={5}
                       placeholder="Describe your vision. The AI Game Master will weave the world around your words..."
+                      sx={{ '& textarea': { fontFamily: fonts.text, fontSize: '1.0625rem', lineHeight: 1.6 } }}
                     />
                   </Grid>
                   <Grid item xs={12}>
                     <TextField fullWidth label="Additional Details (Optional)" value={formData.description}
                       onChange={(e) => setFormData(p => ({ ...p, description: e.target.value }))}
-                      multiline rows={2} placeholder="Tone, setting constraints, character ideas..."
+                      multiline minRows={2} placeholder="Tone, setting constraints, character ideas..."
                     />
                   </Grid>
                   <Grid item xs={12}>
-                    <Box sx={{ display: 'flex', gap: 2, justifyContent: 'flex-end', pt: 1 }}>
-                      <Button onClick={() => navigate('/')} sx={{ color: 'text.secondary' }}>Cancel</Button>
-                      <Button type="submit" variant="contained" disabled={loading}
-                        startIcon={loading ? <CircularProgress size={18} /> : <SendIcon />}>
-                        {loading ? 'Conjuring...' : 'Begin the Tale'}
+                    <Box sx={{ display: 'flex', gap: 3, justifyContent: 'flex-end', flexWrap: 'wrap', pt: 2 }}>
+                      <Button onClick={() => navigate('/')} sx={{ color: 'text.secondary', minHeight: 44, px: 4 }}>Cancel</Button>
+                      <Button type="submit" variant="contained" disabled={loading} sx={{ minHeight: 44, px: 6 }}
+                        startIcon={loading ? <CircularProgress size={18} sx={{ color: 'inherit' }} /> : <BeginIcon />}>
+                        {loading ? 'Setting the scene…' : 'Begin the Tale'}
                       </Button>
                     </Box>
                   </Grid>

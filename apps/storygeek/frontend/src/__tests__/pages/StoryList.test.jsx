@@ -190,7 +190,7 @@ describe('StoryList', () => {
   it('shows GeekEmptyState when the library is genuinely empty', async () => {
     api.get.mockResolvedValue({ data: [] });
     renderStoryList();
-    expect(await screen.findByText('The shelves are empty')).toBeInTheDocument();
+    expect(await screen.findByText('No tale on the table yet')).toBeInTheDocument();
     expect(document.querySelector('[data-geek-empty-state]')).not.toBeNull();
   });
 

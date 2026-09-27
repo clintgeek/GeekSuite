@@ -3,10 +3,11 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkBreaks from 'remark-breaks';
 import { Typography, Link as MuiLink, alpha, useTheme } from '@mui/material';
+import { fonts } from '../theme/theme';
 
 /**
  * Narration — renders GM narration and player messages as markdown, styled
- * from the Arcane Codex palette instead of the plain-text `pre-wrap` block
+ * from the Candlelit Table palette instead of the plain-text `pre-wrap` block
  * this replaces (DOCS/TODO_ORDER.md #24: "**bold**" was showing literal
  * asterisks).
  *
@@ -56,26 +57,58 @@ function balanceUnterminatedMarkdown(text) {
 // keeps some visual order rather than collapsing to one size.
 const HEADING_VARIANT = { 1: 'h4', 2: 'h4', 3: 'h5', 4: 'h6', 5: 'h6', 6: 'h6' };
 
-export default function Narration({ content, sx }) {
+/**
+ * `dropCap` illuminates the first letter of the first paragraph — the mark of
+ * a new scene opening on the page (StoryPlay decides which entries earn it).
+ * It is a `::first-letter` style, so the text itself is untouched: a screen
+ * reader and a copy-paste both still get the whole word.
+ */
+function dropCapSx(c) {
+  return {
+    '& > p:first-of-type::first-letter': {
+      fontFamily: fonts.initial,
+      fontWeight: 700,
+      float: 'left',
+      fontSize: '3.4em',
+      lineHeight: 0.82,
+      padding: '0.1em 0.12em 0.02em',
+      margin: '0.06em 0.14em 0 0',
+      color: c.mode === 'dark' ? '#1d1208' : '#f9f0dc',
+      backgroundColor: c.mode === 'dark' ? c.accent : c.oxblood,
+      backgroundImage: c.mode === 'dark'
+        ? 'linear-gradient(160deg, #f3c472 0%, #e8a94a 45%, #b87a2a 100%)'
+        : 'linear-gradient(160deg, #9a3036 0%, #7a1f24 50%, #5a1519 100%)',
+      borderRadius: '3px',
+      boxShadow: c.mode === 'dark'
+        ? '0 0 0 1px #5a3a18, 0 0 18px rgba(232,169,74,0.28)'
+        : '0 0 0 1px #c9a15a, 0 0 0 3px #f9f0dc, 0 0 0 4px #c9a15a',
+    },
+  };
+}
+
+export default function Narration({ content, sx, dropCap = false }) {
   const theme = useTheme();
-  const gold = theme.palette.codex?.gold || '#c9a84c';
-  const inkGold = `color-mix(in srgb, ${theme.palette.text.primary} 65%, ${gold} 35%)`;
+  const c = theme.palette.candle;
+  const gold = c?.accent || theme.palette.primary.main;
+  // Bold in narration: the page's ink, weighted — not a colour change, which
+  // would need its own contrast measurement on every surface.
+  const inkGold = theme.palette.text.primary;
 
   const safeContent = useMemo(() => balanceUnterminatedMarkdown(content || ''), [content]);
 
   const components = useMemo(() => ({
     p: ({ children }) => (
-      <Typography component="p" variant="body1" sx={{ m: 0, '&:not(:last-child)': { mb: 1.25 } }}>
+      <Typography component="p" variant="body1" sx={{ m: 0, fontSize: 'inherit', lineHeight: 'inherit', '&:not(:last-child)': { mb: '0.85em' } }}>
         {children}
       </Typography>
     ),
     em: ({ children }) => (
-      <Typography component="em" sx={{ fontFamily: '"Crimson Pro", serif', fontStyle: 'italic' }}>
+      <Typography component="em" sx={{ fontFamily: 'inherit', fontSize: 'inherit', fontStyle: 'italic' }}>
         {children}
       </Typography>
     ),
     strong: ({ children }) => (
-      <Typography component="strong" sx={{ fontWeight: 700, color: inkGold }}>
+      <Typography component="strong" sx={{ fontWeight: 700, fontSize: 'inherit', color: inkGold }}>
         {children}
       </Typography>
     ),
@@ -105,7 +138,7 @@ export default function Narration({ content, sx }) {
       </Typography>
     ),
     li: ({ children }) => (
-      <Typography component="li" variant="body1" sx={{ lineHeight: 1.6 }}>
+      <Typography component="li" variant="body1" sx={{ fontSize: 'inherit', lineHeight: 1.6 }}>
         {children}
       </Typography>
     ),
@@ -117,7 +150,7 @@ export default function Narration({ content, sx }) {
         <Typography
           component="code"
           sx={{
-            fontFamily: '"JetBrains Mono", monospace',
+            fontFamily: fonts.mono,
             fontSize: isBlock ? '0.85em' : '0.88em',
             ...(isBlock
               ? { display: 'block', whiteSpace: 'pre-wrap' }
@@ -155,7 +188,7 @@ export default function Narration({ content, sx }) {
         href={href}
         target="_blank"
         rel="noopener noreferrer"
-        sx={{ color: gold, textDecorationColor: alpha(gold, 0.4) }}
+        sx={{ color: gold, textDecorationColor: alpha(gold, 0.5) }}
       >
         {children}
       </MuiLink>
@@ -175,7 +208,7 @@ export default function Narration({ content, sx }) {
   }), [gold, inkGold]);
 
   return (
-    <Typography component="div" variant="body1" sx={sx}>
+    <Typography component="div" variant="body1" sx={[dropCap && c ? dropCapSx(c) : false, ...(Array.isArray(sx) ? sx : [sx || false])]}>
       <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={components}>
         {safeContent}
       </ReactMarkdown>

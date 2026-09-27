@@ -1,29 +1,29 @@
 import React from 'react';
-import { Box, Typography, Chip, Avatar, Divider, alpha, useTheme } from '@mui/material';
+import { Box, Typography, alpha, useTheme } from '@mui/material';
 import { GeekEmptyState } from '@geeksuite/ui';
+import PanelShell, { PanelLabel } from './PanelShell';
+import Tag from '../primitives/Tag';
+import { fonts } from '../../theme/theme';
 
 /**
  * CharacterPanel — the persistent character HUD (ideas #3). "Who am I, how
  * am I doing, what do I have" without opening a sheet. Reads the canonical
  * player character; degrades gracefully before the PC is established.
  */
-const STATUS_COLOR = { alive: 'success', dead: 'error', missing: 'warning', unknown: 'default' };
+const STATUS_TONE = { alive: 'good', dead: 'bad', missing: 'warn', unknown: 'neutral' };
 
 export default function CharacterPanel({ player }) {
   const theme = useTheme();
-  const gold = theme.palette.codex?.gold || '#c9a84c';
-  // Muted section-label gold. Solid and mode-aware (theme.js) — the
-  // alpha()-diluted gold it replaces failed AA on every codex surface.
-  const goldMuted = theme.palette.codex?.goldMuted || gold;
+  const c = theme.palette.candle;
 
   if (!player) {
     return (
-      <PanelShell gold={gold} goldMuted={goldMuted} title="Character">
+      <PanelShell title="Character">
         <GeekEmptyState
           compact
           align="start"
           description="Your character will take shape as the tale begins."
-          descriptionSx={{ color: 'text.disabled', fontStyle: 'italic' }}
+          descriptionSx={{ color: 'text.secondary', fontStyle: 'italic' }}
           sx={{ py: 0 }}
         />
       </PanelShell>
@@ -34,89 +34,72 @@ export default function CharacterPanel({ player }) {
   const skills = player.skills || [];
 
   return (
-    <PanelShell gold={gold} goldMuted={goldMuted} title="Character">
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 1 }}>
-        <Avatar sx={{
-          width: 40, height: 40, bgcolor: alpha(gold, 0.15), color: gold,
-          fontFamily: '"Cinzel", serif', fontWeight: 700,
+    <PanelShell title="Character">
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: 3, mb: 2 }}>
+        <Box aria-hidden="true" sx={{
+          width: 44, height: 44, borderRadius: '50%', flexShrink: 0,
+          display: 'grid', placeItems: 'center',
+          fontFamily: fonts.display, fontWeight: 700, fontSize: '1.2rem',
+          color: c.mode === 'dark' ? '#1d1208' : '#f9f0dc',
+          background: c.mode === 'dark'
+            ? 'radial-gradient(circle at 35% 30%, #f3c472, #c98a2e 70%)'
+            : 'radial-gradient(circle at 35% 30%, #9a3036, #7a1f24 70%)',
+          boxShadow: `0 0 0 2px ${c.paper}, 0 0 0 3px ${c.rule}`,
         }}>
           {player.name?.[0]?.toUpperCase() || '?'}
-        </Avatar>
+        </Box>
         <Box sx={{ minWidth: 0 }}>
           <Typography sx={{
-            fontFamily: '"Cinzel", serif', fontWeight: 600, fontSize: '1rem', lineHeight: 1.15,
-            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+            fontFamily: fonts.display, fontWeight: 700, fontSize: '1.05rem', lineHeight: 1.2,
+            whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', mb: 1,
           }}>
             {player.name}
           </Typography>
-          <Chip size="small" label={player.status || 'alive'} color={STATUS_COLOR[player.status] || 'success'}
-            sx={{ textTransform: 'uppercase', fontWeight: 700, mt: 0.25 }} />
+          <Tag tone={STATUS_TONE[player.status] || 'good'}>{player.status || 'alive'}</Tag>
         </Box>
       </Box>
 
       {player.currentState && (
-        <Typography variant="body2" sx={{ color: 'text.secondary', fontSize: '0.8rem', mb: 1, fontStyle: 'italic' }}>
+        <Typography sx={{ color: 'text.secondary', fontSize: '0.9375rem', lineHeight: 1.5, fontStyle: 'italic', mb: 2 }}>
           {player.currentState}
         </Typography>
       )}
 
       {inventory.length > 0 && (
-        <>
-          <Divider sx={{ my: 1, borderColor: alpha(gold, 0.1) }} />
-          <Label goldMuted={goldMuted}>Inventory</Label>
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.5, mt: 0.5 }}>
+        <Box sx={{ pt: 2, mt: 1, borderTop: `1px dashed ${c.rule}` }}>
+          <PanelLabel>Inventory</PanelLabel>
+          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1.5, mt: 1.5 }}>
             {inventory.map((it, i) => (
-              <Chip key={i} size="small"
-                label={`${it.name}${(it.quantity ?? 1) > 1 ? ` ×${it.quantity}` : ''}`}
-                variant="outlined"
-                sx={{
-                  borderColor: it.isEquipped ? gold : alpha(gold, 0.25),
-                  color: it.isEquipped ? gold : 'text.secondary',
-                }} />
+              <Box key={i} component="span" sx={{
+                display: 'inline-flex', alignItems: 'center', minHeight: 26, px: 2, borderRadius: '3px',
+                fontFamily: fonts.ui, fontSize: '0.875rem',
+                border: `1px solid ${it.isEquipped ? c.accent : c.rule}`,
+                bgcolor: it.isEquipped ? alpha(c.accent, 0.08) : 'transparent',
+                color: it.isEquipped ? c.accent : 'text.primary',
+                fontWeight: it.isEquipped ? 700 : 400,
+              }}>
+                {`${it.name}${(it.quantity ?? 1) > 1 ? ` ×${it.quantity}` : ''}`}
+              </Box>
             ))}
           </Box>
-        </>
+        </Box>
       )}
 
       {skills.length > 0 && (
-        <>
-          <Divider sx={{ my: 1, borderColor: alpha(gold, 0.1) }} />
-          <Label goldMuted={goldMuted}>Skills</Label>
-          <Box sx={{ mt: 0.5 }}>
+        <Box sx={{ pt: 2, mt: 3, borderTop: `1px dashed ${c.rule}` }}>
+          <PanelLabel>Skills</PanelLabel>
+          <Box sx={{ mt: 1 }}>
             {skills.map((s, i) => (
-              <Box key={i} sx={{ display: 'flex', justifyContent: 'space-between', py: 0.15 }}>
-                <Typography variant="body2" sx={{ fontSize: '0.78rem' }}>{s.name}</Typography>
-                <Typography variant="body2" sx={{ fontSize: '0.78rem', color: gold, fontFamily: '"JetBrains Mono", monospace' }}>
+              <Box key={i} sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', py: 0.75 }}>
+                <Typography sx={{ fontFamily: fonts.ui, fontSize: '0.9375rem' }}>{s.name}</Typography>
+                <Typography sx={{ fontFamily: fonts.ui, fontWeight: 700, fontSize: '0.9375rem', color: c.accent, fontVariantNumeric: 'lining-nums tabular-nums' }}>
                   {s.level}
                 </Typography>
               </Box>
             ))}
           </Box>
-        </>
+        </Box>
       )}
     </PanelShell>
-  );
-}
-
-function PanelShell({ gold, goldMuted, title, children }) {
-  return (
-    <Box sx={{
-      p: 1.5, borderRadius: 2, bgcolor: 'background.paper',
-      border: `1px solid ${alpha(gold, 0.15)}`,
-    }}>
-      <Label goldMuted={goldMuted} block>{title}</Label>
-      <Box sx={{ mt: 1 }}>{children}</Box>
-    </Box>
-  );
-}
-
-function Label({ goldMuted, children, block }) {
-  return (
-    <Typography variant="overline" sx={{
-      color: goldMuted, fontSize: '0.75rem', letterSpacing: '0.12em',
-      display: block ? 'block' : 'inline',
-    }}>
-      {children}
-    </Typography>
   );
 }
