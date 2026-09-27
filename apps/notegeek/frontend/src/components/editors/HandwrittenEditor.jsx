@@ -20,6 +20,28 @@ import { surfaces } from '../../theme/tokens';
 
 const SAVE_DEBOUNCE_MS = 400;
 
+// <Tldraw>'s props must keep their identity across renders. tldraw rebuilds
+// its editor when `options` or `components` change, so objects built inline
+// made every re-render (each autosave marks the page dirty) re-create the
+// canvas and run onMount again. That stacked another store listener each time
+// and left the strokes the writer was drawing with no listener that saved them.
+const TLDRAW_OPTIONS = {
+    // Improve touch responsiveness
+    maxPointsPerDrawShape: 200,
+};
+// Components to hide on mobile for a cleaner UI
+const MOBILE_HIDDEN_COMPONENTS = {
+    Toolbar: null,           // Hide default toolbar (we have custom)
+    StylePanel: null,        // Hide style panel
+    NavigationPanel: null,   // Hide navigation/zoom
+    PageMenu: null,          // Hide page menu
+    ActionsMenu: null,       // Hide actions menu
+    HelpMenu: null,          // Hide help menu
+    DebugMenu: null,         // Hide debug menu
+    SharePanel: null,        // Hide share panel
+};
+const NO_HIDDEN_COMPONENTS = {};
+
 // Minimal mobile toolbar - Move, Write, Undo, Fullscreen
 function MobileDrawingToolbar({ containerRef, onFullscreenChange }) {
     const editor = useEditor();
@@ -185,6 +207,13 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false }) => {
             loadSnapshot(content, editor);
         }
 
+        // If onMount runs again, the previous editor's listener must go first,
+        // or listeners stack up (one per mount) on stores that are gone.
+        if (unsubscribeRef.current) {
+            unsubscribeRef.current();
+            unsubscribeRef.current = null;
+        }
+
         if (!readOnly) {
             unsubscribeRef.current = editor.store.listen(() => {
                 if (isApplyingSnapshot.current) return;
@@ -265,17 +294,7 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false }) => {
         };
     }, []);
 
-    // Components to hide on mobile for a cleaner UI
-    const hiddenMobileComponents = isMobile ? {
-        Toolbar: null,           // Hide default toolbar (we have custom)
-        StylePanel: null,        // Hide style panel
-        NavigationPanel: null,   // Hide navigation/zoom
-        PageMenu: null,          // Hide page menu
-        ActionsMenu: null,       // Hide actions menu
-        HelpMenu: null,          // Hide help menu
-        DebugMenu: null,         // Hide debug menu
-        SharePanel: null,        // Hide share panel
-    } : {};
+    const hiddenMobileComponents = isMobile ? MOBILE_HIDDEN_COMPONENTS : NO_HIDDEN_COMPONENTS;
 
     return (
         <EditorErrorBoundary title="Drawing canvas failed to load" message="The handwritten editor encountered an error.">
@@ -320,10 +339,7 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false }) => {
                     onMount={handleMount}
                     readOnly={readOnly}
                     components={hiddenMobileComponents}
-                    options={{
-                        // Improve touch responsiveness
-                        maxPointsPerDrawShape: 200,
-                    }}
+                    options={TLDRAW_OPTIONS}
                 >
                 {/* Custom mobile toolbar. It must render INSIDE <Tldraw>: it calls
                     useEditor(), which only resolves within tldraw's context. As a
