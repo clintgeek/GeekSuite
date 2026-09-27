@@ -6,9 +6,8 @@ import SaveIcon from '@mui/icons-material/Save';
 import DeleteIcon from '@mui/icons-material/Delete';
 import MedicationIcon from '@mui/icons-material/Medication';
 import LocalPharmacyIcon from '@mui/icons-material/LocalPharmacy';
-import WarningIcon from '@mui/icons-material/Warning';
 import medsService from '../services/medsService.js';
-import { localDateString, toUtcMidnight, utcDateString } from '@geeksuite/utils';
+import { localDateString } from '@geeksuite/utils';
 import { Surface, SectionLabel, DisplayHeading, EmptyState } from '../components/primitives';
 import MedsChecklist from '../components/Home/MedsChecklist.jsx';
 import { useMedsToday } from '../hooks/useMedsToday.js';
@@ -57,7 +56,6 @@ export default function Medications() {
   const [userTags, setUserTags] = useState([]);
   const [newTag, setNewTag] = useState('');
   const [medType, setMedType] = useState('rx');
-  const [currentDaysSupply, setCurrentDaysSupply] = useState('');
 
   const editorRef = useRef(null);
   const nameInputRef = useRef(null);
@@ -73,28 +71,11 @@ export default function Medications() {
     }, 0);
   };
 
-  // `supply_start_date` is a CALENDAR date stored at UTC midnight; "today" is
-  // the reader's calendar day. Differencing the stored instant against a raw
-  // `new Date()` counted the hours since UTC midnight, so "days left" ticked
-  // down at 19:00 Central rather than at the user's midnight. Compare whole
-  // calendar days by normalising both sides to UTC midnight first.
-  const elapsedCalendarDays = (startValue) => {
-    const start = toUtcMidnight(startValue);
-    if (Number.isNaN(start.getTime())) return null;
-    const today = toUtcMidnight(localDateString());
-    return Math.max(0, Math.round((today - start) / (1000 * 60 * 60 * 24)));
-  };
-
-  const computeRemainingAndRunout = (m) => {
-    const days = m.days_supply || null;
-    if (!m.supply_start_date || !days) return { remaining: null, runout: null };
-    const elapsed = elapsedCalendarDays(m.supply_start_date);
-    if (elapsed == null) return { remaining: null, runout: null };
-    const remaining = Math.max(0, days - elapsed);
-    const runout = new Date(toUtcMidnight(m.supply_start_date).getTime() + days * 24 * 60 * 60 * 1000);
-    return { remaining, runout: utcDateString(runout) };
-  };
-
+  // Refill tracking (days supply, days left, run-out, the low-supply border)
+  // was removed on 2026-09-27. Chef: "just too complicated to keep updated and
+  // the mail order places do it automatically anyway." The stored
+  // supply_start_date / days_supply fields are left alone: saves omit them,
+  // and the backend keeps what's there.
   const buildExportText = () => {
     const order = { rx: 0, otc: 1, supplement: 2 };
     const lines = [];
@@ -116,9 +97,7 @@ export default function Medications() {
         const type = (m.med_type || 'rx').toUpperCase();
         const strength = m.strength ? ` ${m.strength}` : '';
         const tags = (m.user_indications || []).join(', ');
-        const { remaining, runout } = computeRemainingAndRunout(m);
-        const supply = remaining != null ? ` | ${remaining} days left${runout ? ` (run-out ${runout})` : ''}` : '';
-        lines.push(`- ${m.display_name}${strength} [${type}]${tags ? ` | Indications: ${tags}` : ''}${supply}`);
+        lines.push(`- ${m.display_name}${strength} [${type}]${tags ? ` | Indications: ${tags}` : ''}`);
       });
       lines.push('');
     });
@@ -205,8 +184,7 @@ export default function Medications() {
     const columns = [
       { key: 'name', title: 'Name', width: 240 },
       { key: 'type', title: 'Type', width: 80 },
-      { key: 'ind', title: 'Indications', width: 150 },
-      { key: 'days', title: 'Days Left', width: 60 },
+      { key: 'ind', title: 'Indications', width: 210 },
     ];
 
     const drawTableHeader = () => {
@@ -255,15 +233,11 @@ export default function Medications() {
       ensureRoom(60);
       drawSectionHeader(section.slot);
       drawTableHeader();
-      const rows = section.meds.map(m => {
-        const { remaining } = computeRemainingAndRunout(m) || {};
-        return {
-          name: m.display_name || '',
-          type: (m.med_type || 'rx').toUpperCase(),
-          ind: (m.user_indications || []).join(', '),
-          days: remaining != null ? String(remaining) : '',
-        };
-      });
+      const rows = section.meds.map(m => ({
+        name: m.display_name || '',
+        type: (m.med_type || 'rx').toUpperCase(),
+        ind: (m.user_indications || []).join(', '),
+      }));
       rows.forEach((r, idx) => drawRow(r, idx));
       y += 6;
     });
@@ -324,8 +298,6 @@ export default function Medications() {
     times_of_day: timesOfDay,
     suggested_indications: details?.suggested || editingMed?.suggested_indications || [],
     user_indications: userTags,
-    supply_start_date: currentDaysSupply ? localDateString() : null,
-    days_supply: currentDaysSupply ? Number(currentDaysSupply) : null,
   });
 
   const saveMedication = async () => {
@@ -362,7 +334,6 @@ export default function Medications() {
     setSelectedStrength(null);
     setDetails(null);
     setMedType('rx');
-    setCurrentDaysSupply('');
   };
 
   const startEdit = async (m) => {
@@ -372,14 +343,6 @@ export default function Medications() {
     setTimesOfDay(m.times_of_day || []);
     setUserTags(m.user_indications || []);
     setMedType(m.med_type || 'rx');
-    // Prefill current days supply as remaining (days_supply - elapsed)
-    if (m.supply_start_date && m.days_supply) {
-      const elapsed = elapsedCalendarDays(m.supply_start_date) ?? 0;
-      const remaining = Math.max(0, Number(m.days_supply) - elapsed);
-      setCurrentDaysSupply(String(remaining));
-    } else {
-      setCurrentDaysSupply('');
-    }
     setSelectedStrength(null);
     if (m.rxcui) {
       try {
@@ -542,13 +505,6 @@ export default function Medications() {
                 ))}
               </ToggleButtonGroup>
             </Box>
-            <TextField
-              label="Current days supply"
-              type="number"
-              inputProps={{ min: 1, max: 3650 }}
-              value={currentDaysSupply}
-              onChange={(e) => setCurrentDaysSupply(e.target.value)}
-            />
 
             {((details?.suggested?.length || 0) > 0) && (
               <Box>
@@ -603,7 +559,7 @@ export default function Medications() {
           <EmptyState
             icon={MedicationIcon}
             title="No medications yet"
-            copy="Search for a medication above to add it to your list. You'll be able to group by time of day, track supply, and export the list for your doctor."
+            copy="Search for a medication above to add it to your list. You'll be able to group by time of day and export the list for your doctor."
           />
         </Box>
       ) : (
@@ -628,8 +584,6 @@ export default function Medications() {
                   })
                   .map(m => {
                     const typeInfo = getMedTypeColor(m.med_type);
-                    const { remaining } = computeRemainingAndRunout(m);
-                    const isLowSupply = remaining != null && remaining < 7;
 
                     return (
                       <Surface
@@ -638,9 +592,6 @@ export default function Medications() {
                         sx={{
                           py: 1.75,
                           px: 2,
-                          border: (theme) => isLowSupply
-                            ? `2px solid ${theme.palette.error.main}`
-                            : 'none',
                         }}
                       >
                         <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 2 }}>
@@ -690,30 +641,14 @@ export default function Medications() {
                                   height: 20,
                                 }}
                               />
-                              {remaining != null && (
-                                <Chip
-                                  size="small"
-                                  icon={isLowSupply ? <WarningIcon sx={{ fontSize: 14 }} /> : undefined}
-                                  label={`${remaining} days left`}
-                                  color={remaining > 30 ? 'success' : remaining >= 7 ? 'warning' : 'error'}
-                                  variant="outlined"
-                                  sx={{
-                                    fontFamily: "inherit",
-                                    fontVariantNumeric: 'tabular-nums',
-                                    fontWeight: 600,
-                                    fontSize: '0.75rem',
-                                    height: 20,
-                                  }}
-                                />
-                              )}
                             </Box>
                           </Box>
 
                           <Stack direction="row" spacing={0.5}>
-                            <IconButton size="small" color="primary" onClick={() => startEdit(m)}>
+                            <IconButton size="small" color="primary" aria-label={`Edit ${m.display_name}`} onClick={() => startEdit(m)}>
                               <EditIcon fontSize="small" />
                             </IconButton>
-                            <IconButton size="small" color="error" onClick={() => removeMed(m)}>
+                            <IconButton size="small" color="error" aria-label={`Remove ${m.display_name}`} onClick={() => removeMed(m)}>
                               <DeleteIcon fontSize="small" />
                             </IconButton>
                           </Stack>

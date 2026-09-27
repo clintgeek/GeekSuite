@@ -14,10 +14,8 @@
  * The layering drifted in `cf3254c`, which moved medsService from returning the
  * raw apiService envelope to unwrapping it; the page was never updated.
  *
- * Also pinned here: BURN_REVIEW P2 (f) — `supply_start_date` is a CALENDAR date
- * at UTC midnight, and "days left" was computed by differencing it against a
- * raw local `new Date()`, so the count ticked down at 19:00 Central rather than
- * at the user's own midnight.
+ * Refill tracking (days supply / days left) was removed on 2026-09-27; the tests
+ * below pin that it stays gone.
  */
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { render, screen, waitFor, fireEvent } from '@testing-library/react';
@@ -92,36 +90,29 @@ describe('the medication search', () => {
   });
 });
 
-describe('days of supply is counted in whole calendar days', () => {
-  it('a supply started 3 calendar days ago on a 30-day script reads 27 days left', async () => {
-    // Build "3 local days ago" and store it the way the API does: the calendar
-    // day at UTC midnight. Under the old local-vs-UTC subtraction the count
-    // came out one short for most of the evening in Central.
-    const pad = (n) => String(n).padStart(2, '0');
-    const d = new Date();
-    d.setDate(d.getDate() - 3);
-    const startedUtcMidnight = `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T00:00:00.000Z`;
+describe('refill tracking is gone (Chef, 2026-09-27)', () => {
+  // "just too complicated to keep updated and the mail order places do it
+  // automatically anyway." A stored supply must not resurface anywhere.
+  const SUPPLIED = { ...MED, supply_start_date: new Date().toISOString(), days_supply: 30 };
 
-    medsService.list.mockResolvedValue([
-      { ...MED, supply_start_date: startedUtcMidnight, days_supply: 30 },
-    ]);
-
+  it('shows no days-left chip or low-supply warning, even for a med with a stored supply', async () => {
+    medsService.list.mockResolvedValue([{ ...SUPPLIED, days_supply: 3 }]);
     render(<Medications />);
-
-    await waitFor(() => expect(screen.getByText('27 days left')).toBeInTheDocument());
+    await screen.findAllByText('Lisinopril');
+    expect(screen.queryByText(/days left/i)).toBeNull();
   });
 
-  it('a supply started today reads the full script', async () => {
-    const pad = (n) => String(n).padStart(2, '0');
-    const now = new Date();
-    const todayUtcMidnight = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}T00:00:00.000Z`;
-
-    medsService.list.mockResolvedValue([
-      { ...MED, supply_start_date: todayUtcMidnight, days_supply: 30 },
-    ]);
-
+  it('the edit form has no days-supply field, and a save sends no supply keys', async () => {
+    medsService.list.mockResolvedValue([SUPPLIED]);
+    medsService.update.mockResolvedValue(SUPPLIED);
     render(<Medications />);
-
-    await waitFor(() => expect(screen.getByText('30 days left')).toBeInTheDocument());
+    await screen.findAllByText('Lisinopril');
+    fireEvent.click(screen.getByRole('button', { name: 'Edit Lisinopril' }));
+    await waitFor(() => expect(screen.queryByLabelText(/days supply/i)).toBeNull());
+    fireEvent.click(await screen.findByRole('button', { name: /^(update|save)/i }));
+    await waitFor(() => expect(medsService.update).toHaveBeenCalled());
+    const payload = medsService.update.mock.calls[0][1];
+    expect(payload).not.toHaveProperty('days_supply');
+    expect(payload).not.toHaveProperty('supply_start_date');
   });
 });

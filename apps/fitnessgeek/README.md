@@ -11,7 +11,7 @@ assists with meal suggestions and food search.
 - **Food log** — search USDA, Nutritionix, OpenFoodFacts, and local DB; log meals by type; AI-powered composite query parsing
 - **Weight tracking** — daily log, goal setting, trend charts
 - **Macro tracking** — standard calorie-first or keto net-carb-first mode with mode-aware dashboard hero
-- **Medications** — add/edit medications, track supply, PDF export
+- **Medications** — add/edit medications, a daily "did you take them?" checklist, PDF export (refill tracking removed 2026-09-27)
 - **Garmin integration** — activity, steps, sleep via Garmin OAuth
 - **AI meal suggestions** — via basegeek's AI service (Claude)
 - **InfluxDB health dashboard** — time-series metrics via own Influx instance
