@@ -13,6 +13,9 @@ export default defineConfig({
     test: {
         environment: 'jsdom',
         globals: true,
+        // Full-page renders (LibraryView's sort menu) take several seconds on a
+        // loaded CI runner; 5s timed out there on 2026-09-27. Same as StoryGeek and ThingGeek.
+        testTimeout: 15000,
         setupFiles: ['./src/__tests__/setup.js'],
         include: ['src/**/*.test.{js,jsx}'],
         server: {

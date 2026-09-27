@@ -12,6 +12,47 @@ anything a future reader would otherwise have to rediscover.
 
 ## 2026-09-26
 
+### NoteGeek — sketch notes had never worked; now they open and save
+
+`e44cdad0`, `5358da4b`. Chef: "When trying to launch notegeek with the sketch / handwritten
+option it crashes." Production had **0 handwritten notes**.
+- **The phone crash:** the drawing toolbar called `useEditor()` outside `<Tldraw>`.
+- **Stale screen bounds:** `updateViewportScreenBounds(element)` threw on every resize and
+  scroll; tldraw 2.4 wants a `Box`.
+- **Dark mode never applied:** `isDarkMode` is rejected; it's `colorScheme` now.
+- **Strokes were never saved.** Inline `options` and `components` props rebuilt the editor
+  on every render (6 mounts in 16s), stacking listeners, and drawn shapes never reached a
+  save.
+- **Why nothing caught it:** the old test mock couldn't fail, and the error boundary hid the
+  crash from the harness. Now the mock throws like tldraw does. Red check: 7/7 tests fail on
+  the old code, 3/7 on e44cdad0 alone. Harness scenes 03s and 10 assert on screen,
+  including tldraw's own error screen.
+
+### NoteGeek — "Lab Notebook"
+
+`611860ab`. All seven approved changes:
+1. The editor is a page (dot-grid desk, ~70ch, inline title).
+2. A save-status stamp instead of a Save button, with a ⋯ menu.
+3. Type stamps, with code, sketch and mind-map previews.
+4. A tag tree with counts.
+5. Recency groups in the notes list.
+6. "Continue where you left off" and a capitalised greeting.
+7. Self-hosted Geist and JetBrains Mono.
+
+vitest 328, harness 50 scenes clean.
+
+### BookGeek — curated tags; the destructive import is gone
+
+`68cbecae`…`d0506a88`, `97180cb6`, `0c8297ae`. The tag vocabulary is mirrored on GameGeek's.
+On production:
+- **752 raw tags:** 358 mapped, 109 dropped, 285 Unsorted.
+- **A boot migration** re-derived all 554 books; raw tags are untouched.
+- **My tags** survive re-imports. `TAGS_REVIEW.md` is Chef's local worksheet.
+- **`POST /api/import/calibre` removed:** it wiped every book's history. The rescan covers
+  imports.
+- **Chef's Goodreads export** was removed from the tree.
+- **The progress slider** got proper padding (`b213e777`). The suite spacing unit is 4px.
+
 ### ThingGeek — containment: everything is a Thing, `parentId` says where it is
 
 `39b5775e`. Spec: [`THINGGEEK_PLAN.md`](THINGGEEK_PLAN.md), "Containment".
