@@ -28,6 +28,9 @@ export default defineConfig({
     test: {
         environment: 'jsdom',
         globals: true,
+        // Full-page renders (the BP edit flow) take ~2.5s alone and passed 5s under
+        // load (2026-09-27). Same bar as BookGeek, StoryGeek and ThingGeek.
+        testTimeout: 15000,
         setupFiles: ['./src/test/setup.js'],
         include: ['src/**/*.test.{js,jsx}'],
         server: {
