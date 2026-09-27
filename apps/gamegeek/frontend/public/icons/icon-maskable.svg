@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Full-bleed ink; the sticker scaled into the central 80% safe circle. -->
+  <rect width="512" height="512" fill="#0C0A12"/>
+  <g transform="translate(256 256) rotate(-8) scale(0.66) translate(-264 -292)">
+    <!-- die-cut sticker edge -->
+    <path d="M176 168 H336 C404 168 436 204 448 262 L464 342 C472 390 438 418 404 410 C378 404 362 378 346 356 H166 C150 378 134 404 108 410 C74 418 40 390 48 342 L64 262 C76 204 108 168 176 168 Z" fill="#F6F1FF" stroke="#F6F1FF" stroke-width="56" stroke-linejoin="round"/>
+    <!-- hard shadow, printed inside the die-cut -->
+    <path transform="translate(16 18)" d="M176 168 H336 C404 168 436 204 448 262 L464 342 C472 390 438 418 404 410 C378 404 362 378 346 356 H166 C150 378 134 404 108 410 C74 418 40 390 48 342 L64 262 C76 204 108 168 176 168 Z" fill="#22E4FF" stroke="#0C0A12" stroke-width="16" stroke-linejoin="round"/>
+    <!-- the gamepad -->
+    <path d="M176 168 H336 C404 168 436 204 448 262 L464 342 C472 390 438 418 404 410 C378 404 362 378 346 356 H166 C150 378 134 404 108 410 C74 418 40 390 48 342 L64 262 C76 204 108 168 176 168 Z" fill="#FF3DA8" stroke="#0C0A12" stroke-width="16" stroke-linejoin="round"/>
+    <path d="M150 232 H182 V260 H210 V292 H182 V320 H150 V292 H122 V260 H150 Z" fill="#D7FF3D" stroke="#0C0A12" stroke-width="10" stroke-linejoin="round"/>
+    <circle cx="344" cy="250" r="24" fill="#22E4FF" stroke="#0C0A12" stroke-width="10"/>
+    <circle cx="390" cy="298" r="24" fill="#D7FF3D" stroke="#0C0A12" stroke-width="10"/>
+  </g>
+</svg>

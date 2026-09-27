@@ -39,8 +39,8 @@ self.addEventListener('push', (event) => {
   event.waitUntil(
     self.registration.showNotification(title, {
       body,
-      icon: '/favicon.svg',
-      badge: '/favicon.svg',
+      icon: '/icons/icon-192.png',
+      badge: '/icons/icon-192.png',
       // One notification per task: a re-push for the same task replaces rather
       // than stacks.
       tag: payload.taskId ? `bujo-task-${payload.taskId}` : 'bujo-reminder',

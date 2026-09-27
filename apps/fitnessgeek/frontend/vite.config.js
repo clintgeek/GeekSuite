@@ -87,6 +87,14 @@ export default defineConfig({
       manifest: false,
       workbox: {
         cleanupOutdatedCaches: true,
+        // registerType 'autoUpdate' with injectRegister:false does NOT turn
+        // these on (vite-plugin-pwa only does so for injectRegister 'auto'),
+        // and registerSW()'s auto mode never sends SKIP_WAITING or calls
+        // onNeedRefresh — so a new deploy's SW waited until every tab closed,
+        // and PWAUpdatePrompt's snackbar could never appear.
+        clientsClaim: true,
+        skipWaiting: true,
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         navigateFallback: '/index.html',
         // Workbox's NavigationRoute (what navigateFallback registers) matches
         // ANY navigation request regardless of HTTP method — not just GET.
@@ -97,7 +105,10 @@ export default defineConfig({
         // reached the network, silently dropping the shared file with no
         // error. generateSW cannot express a custom POST fetch handler
         // (DOCS/PWA_STANDARD.md), so the fix is exclusion, not interception.
-        navigateFallbackDenylist: [/^\/share-target/],
+        //
+        // Also never the API, the gateway, or a path with a file extension
+        // (a stale hashed asset, sw.js, the manifest): the server 404s those.
+        navigateFallbackDenylist: [/^\/share-target/, /^\/api\//, /^\/graphql/, /\/[^/?]+\.[^/]+$/],
         runtimeCaching: [
           {
             // Auth endpoints must NEVER be cached — stale /api/me causes ghost sessions

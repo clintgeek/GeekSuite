@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- StartGeek: the console prompt chevron in accent amber on the ground.
+       Master for icon-192/512.png (the same mark as the old icon-512.svg). -->
+  <rect width="512" height="512" rx="112" fill="#0a0d12"/>
+  <path d="M187 155 L325 256 L187 357" fill="none" stroke="#e6b35a" stroke-width="37" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

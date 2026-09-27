@@ -1,0 +1,28 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- FlockGeek: an amber hen with a rust comb on the leather tile — the
+       app's own palette, replacing the old blue/violet placeholder.
+       Master for icon-192/512.png. -->
+  <defs><linearGradient id="leather" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#1a1a17"/><stop offset="1" stop-color="#0f0f0d"/></linearGradient></defs>
+  <rect width="512" height="512" rx="112" fill="url(#leather)"/>
+  <g transform="translate(0 -8)">
+    <!-- tail -->
+    <path d="M318 262 C338 196 372 150 426 126 C446 196 430 278 380 322 Z" fill="#a06e00"/>
+    <!-- body -->
+    <ellipse cx="282" cy="306" rx="130" ry="100" fill="#d4910a"/>
+    <!-- neck + head -->
+    <path d="M150 226 C150 190 176 162 206 162 C240 162 262 190 262 226 L300 262 L200 336 C170 310 150 270 150 226 Z" fill="#d4910a"/>
+    <!-- comb and wattle -->
+    <circle cx="170" cy="164" r="22" fill="#c4453c"/>
+    <circle cx="198" cy="148" r="24" fill="#c4453c"/>
+    <circle cx="226" cy="162" r="20" fill="#c4453c"/>
+    <ellipse cx="146" cy="258" rx="14" ry="20" fill="#c4453c"/>
+    <!-- beak and eye -->
+    <path d="M152 206 L112 222 L152 238 Z" fill="#e8b44a"/>
+    <circle cx="186" cy="208" r="11" fill="#0f0f0d"/>
+    <!-- wing -->
+    <path d="M238 300 C270 256 356 256 372 318 C330 346 270 344 238 300 Z" fill="#a06e00"/>
+    <!-- legs -->
+    <rect x="248" y="396" width="16" height="44" rx="6" fill="#e8b44a"/>
+    <rect x="304" y="396" width="16" height="44" rx="6" fill="#e8b44a"/>
+  </g>
+</svg>

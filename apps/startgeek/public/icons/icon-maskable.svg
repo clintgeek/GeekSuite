@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- Full-bleed ground; the chevron inside the central 80% safe circle. -->
+  <rect width="512" height="512" fill="#0a0d12"/>
+  <path d="M199 172 L313 256 L199 340" fill="none" stroke="#e6b35a" stroke-width="32" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

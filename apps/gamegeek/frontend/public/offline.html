@@ -27,24 +27,29 @@
       padding: calc(2rem + env(safe-area-inset-top)) calc(1.5rem + env(safe-area-inset-right))
                calc(2rem + env(safe-area-inset-bottom)) calc(1.5rem + env(safe-area-inset-left));
     }
-    .card { max-width: 380px; background: var(--card); border: 1px solid var(--rule); border-radius: 12px; padding: 2rem 1.5rem; }
-    svg { width: 56px; height: 56px; margin-bottom: 1rem; }
+    .card { max-width: 380px; background: var(--card); border: 3px solid var(--rule); border-radius: 12px; padding: 2rem 1.5rem; box-shadow: 6px 6px 0 var(--accent); }
+    svg { width: 96px; height: 63px; margin-bottom: 1rem; transform: rotate(-8deg); }
     h1 { font-size: 1.375rem; font-weight: 700; letter-spacing: -0.01em; margin-bottom: 0.5rem; }
     p { font-size: 1rem; line-height: 1.55; color: var(--muted); margin-bottom: 1.5rem; }
     button {
-      background: var(--accent); color: var(--accent-text); border: none;
+      background: var(--accent); color: var(--accent-text);
       padding: 0.75rem 2rem; min-height: 44px; min-width: 44px; border-radius: 8px;
+      border: 2px solid var(--rule); box-shadow: 3px 3px 0 var(--rule);
       font: 600 1rem/1 inherit; font-family: inherit; cursor: pointer;
     }
   </style>
 </head>
 <body>
   <div class="card">
-    <svg viewBox="0 0 16 16" aria-hidden="true" shape-rendering="crispEdges">
-      <rect x="2" y="1" width="12" height="14" fill="currentColor" opacity=".18"/>
-      <rect x="4" y="1" width="8" height="5" fill="currentColor" opacity=".55"/>
-      <rect x="9" y="2" width="2" height="3" fill="var(--page)"/>
-      <rect x="4" y="9" width="8" height="5" fill="var(--accent)"/>
+    <!-- The Arcade Sticker gamepad (public/icons/icon.svg), inline so the page
+         needs nothing from the network. -->
+    <svg viewBox="30 140 460 300" aria-hidden="true">
+      <path d="M176 168 H336 C404 168 436 204 448 262 L464 342 C472 390 438 418 404 410 C378 404 362 378 346 356 H166 C150 378 134 404 108 410 C74 418 40 390 48 342 L64 262 C76 204 108 168 176 168 Z" fill="#F6F1FF" stroke="#F6F1FF" stroke-width="40" stroke-linejoin="round"/>
+      <path transform="translate(16 18)" d="M176 168 H336 C404 168 436 204 448 262 L464 342 C472 390 438 418 404 410 C378 404 362 378 346 356 H166 C150 378 134 404 108 410 C74 418 40 390 48 342 L64 262 C76 204 108 168 176 168 Z" fill="#22E4FF" stroke="#0C0A12" stroke-width="16" stroke-linejoin="round"/>
+      <path d="M176 168 H336 C404 168 436 204 448 262 L464 342 C472 390 438 418 404 410 C378 404 362 378 346 356 H166 C150 378 134 404 108 410 C74 418 40 390 48 342 L64 262 C76 204 108 168 176 168 Z" fill="#FF3DA8" stroke="#0C0A12" stroke-width="16" stroke-linejoin="round"/>
+      <path d="M150 232 H182 V260 H210 V292 H182 V320 H150 V292 H122 V260 H150 Z" fill="#D7FF3D" stroke="#0C0A12" stroke-width="10" stroke-linejoin="round"/>
+      <circle cx="344" cy="250" r="24" fill="#22E4FF" stroke="#0C0A12" stroke-width="10"/>
+      <circle cx="390" cy="298" r="24" fill="#D7FF3D" stroke="#0C0A12" stroke-width="10"/>
     </svg>
     <h1>Game paused — you're offline</h1>
     <p>GameGeek needs a connection to load your library. Your progress is saved on the server; nothing is lost.</p>

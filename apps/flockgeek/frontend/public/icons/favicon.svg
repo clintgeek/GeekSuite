@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- FlockGeek tab icon: the hen, a touch larger, on the leather tile. -->
+  <rect width="512" height="512" rx="112" fill="#1a1a17"/>
+  <g transform="translate(256 256) scale(1.08) translate(-268 -290)">
+    <path d="M318 262 C338 196 372 150 426 126 C446 196 430 278 380 322 Z" fill="#a06e00"/>
+    <ellipse cx="282" cy="306" rx="130" ry="100" fill="#d4910a"/>
+    <path d="M150 226 C150 190 176 162 206 162 C240 162 262 190 262 226 L300 262 L200 336 C170 310 150 270 150 226 Z" fill="#d4910a"/>
+    <circle cx="176" cy="160" r="28" fill="#c4453c"/>
+    <circle cx="214" cy="152" r="26" fill="#c4453c"/>
+    <path d="M152 202 L104 222 L152 242 Z" fill="#e8b44a"/>
+    <circle cx="190" cy="210" r="14" fill="#0f0f0d"/>
+  </g>
+</svg>

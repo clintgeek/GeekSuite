@@ -114,7 +114,17 @@ export default defineConfig(({ command, mode }) => {
         manifest: false,
         workbox: {
           cleanupOutdatedCaches: true,
-          globPatterns: ['**/*.{js,css,html,ico,png,svg}'],
+          // registerType 'autoUpdate' with injectRegister:false does NOT turn
+          // these on (vite-plugin-pwa only does so for injectRegister 'auto'),
+          // and registerSW()'s auto mode never sends SKIP_WAITING — so without
+          // them a new deploy's SW waited until every tab was closed.
+          clientsClaim: true,
+          skipWaiting: true,
+          globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+          maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+          // The SPA shell must never answer for the API, the gateway, or a
+          // path with a file extension (stale hashed asset, sw.js, manifest).
+          navigateFallbackDenylist: [/^\/api\//, /^\/graphql/, /\/[^/?]+\.[^/]+$/],
           // Push reminders need `push` / `notificationclick` handlers inside the
           // service worker. Rather than switching the whole PWA to
           // injectManifest (which would make us own precaching by hand), we keep

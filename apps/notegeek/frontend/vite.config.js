@@ -16,32 +16,22 @@ export default defineConfig(({ mode }) => {
       VitePWA({
         injectRegister: false,
         registerType: 'autoUpdate',
-        includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'masked-icon.svg'],
+        // Icons: public/icons/ (masters + PNGs rendered by tools/pwa-icons.mjs);
+        // favicon.ico stays at the root because browsers ask for it there.
         manifest: {
+          id: '/',
           name: 'NoteGeek',
           short_name: 'NoteGeek',
-          description: 'A powerful note-taking application',
+          description: 'An engineer\'s notebook: notes, markdown, code, mind maps and sketches — part of GeekSuite',
           theme_color: '#FBF7EE',
           background_color: '#FBF7EE',
           display: 'standalone',
           orientation: 'any',
           icons: [
-            {
-              src: 'pwa-192x192.png',
-              sizes: '192x192',
-              type: 'image/png'
-            },
-            {
-              src: 'pwa-512x512.png',
-              sizes: '512x512',
-              type: 'image/png'
-            },
-            {
-              src: 'pwa-512x512.png',
-              sizes: '512x512',
-              type: 'image/png',
-              purpose: 'any maskable'
-            }
+            { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+            { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+            { src: '/icons/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+            { src: '/icons/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' }
           ],
           start_url: '/',
           scope: '/',
@@ -52,10 +42,20 @@ export default defineConfig(({ mode }) => {
           clientsClaim: true,
           skipWaiting: true,
           globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
+          // The HandwrittenEditor (tldraw) chunk is ~1 MB; the default 2 MiB cap
+          // silently drops anything bigger from the precache. 4 MiB is headroom,
+          // and tools/pwa-audit.mjs fails CI if a hashed chunk still misses.
+          maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+          // The SPA shell must never answer for the API, the gateway, or a
+          // path with a file extension (a stale hashed asset, sw.js, the
+          // manifest) — the server 404s those, and so must the SW.
+          navigateFallbackDenylist: [/^\/api\//, /^\/graphql/, /\/[^/?]+\.[^/]+$/],
           runtimeCaching: [
             {
               urlPattern: ({ url }) => {
-                return url.pathname === '/api/me' || url.pathname.startsWith('/api/auth/');
+                return url.pathname === '/api/me' ||
+                  url.pathname.startsWith('/api/auth/') ||
+                  url.pathname.startsWith('/api/users/me');
               },
               handler: 'NetworkOnly',
               options: {

@@ -50,8 +50,11 @@ export default defineConfig({
         skipWaiting: true,
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
         navigateFallback: 'index.html',
-        // The SPA shell must never answer for the API or the gateway.
-        navigateFallbackDenylist: [/^\/api\//, /^\/graphql/],
+        // The SPA shell must never answer for the API, the gateway, or a path
+        // with a file extension (a stale hashed asset, sw.js, the manifest) —
+        // the server 404s those, and so must the service worker.
+        navigateFallbackDenylist: [/^\/api\//, /^\/graphql/, /\/[^/?]+\.[^/]+$/],
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
         runtimeCaching: [
           {
             // FIRST, always: auth state must be fresh (PWA_STANDARD §2A).

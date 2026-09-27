@@ -1,0 +1,26 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- NoteGeek "Lab Notebook": a dot-grid notebook page with a brick rubber
+       stamp, on the ink desk. Master for icon-192/512.png. -->
+  <rect width="512" height="512" rx="112" fill="#16140F"/>
+    <!-- the page -->
+    <rect x="132" y="84" width="264" height="344" rx="16" fill="#FFFDF8"/>
+    <!-- binding holes down the left margin -->
+    <circle cx="164" cy="140" r="11" fill="#16140F"/>
+    <circle cx="164" cy="212" r="11" fill="#16140F"/>
+    <circle cx="164" cy="284" r="11" fill="#16140F"/>
+    <circle cx="164" cy="356" r="11" fill="#16140F"/>
+    <!-- dot grid -->
+    <g fill="#16140F" fill-opacity="0.32">
+      <circle cx="220" cy="136" r="6"/><circle cx="260" cy="136" r="6"/><circle cx="300" cy="136" r="6"/><circle cx="340" cy="136" r="6"/>
+      <circle cx="220" cy="176" r="6"/><circle cx="260" cy="176" r="6"/><circle cx="300" cy="176" r="6"/><circle cx="340" cy="176" r="6"/>
+      <circle cx="220" cy="216" r="6"/><circle cx="260" cy="216" r="6"/><circle cx="300" cy="216" r="6"/><circle cx="340" cy="216" r="6"/>
+      <circle cx="220" cy="256" r="6"/><circle cx="260" cy="256" r="6"/>
+      <circle cx="220" cy="296" r="6"/>
+    </g>
+    <!-- the brick rubber stamp, rotated like SaveStamp -->
+    <g transform="rotate(-12 312 330)">
+      <rect x="236" y="286" width="152" height="88" rx="12" fill="#FFFDF8" fill-opacity="0.85" stroke="#8B2C2A" stroke-width="14"/>
+      <rect x="262" y="312" width="100" height="14" rx="7" fill="#8B2C2A"/>
+      <rect x="262" y="336" width="64" height="14" rx="7" fill="#8B2C2A"/>
+    </g>
+</svg>

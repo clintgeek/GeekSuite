@@ -8,7 +8,7 @@
     "build": "vite build",
     "lint": "eslint .",
     "preview": "vite preview",
-    "generate-pwa-assets": "node scripts/svg-to-png.js && node scripts/generate-pwa-assets.js",
+    "generate-pwa-assets": "node ../../../tools/pwa-icons.mjs --app notegeek",
     "test": "vitest run",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage"

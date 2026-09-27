@@ -7,24 +7,48 @@ export default defineConfig({
   plugins: [
     react(),
     themePreboot(),
+    // PWA_STANDARD.md flavour A. injectRegister is the default ('auto'), so
+    // VitePWA injects registerSW.js and turns on skipWaiting + clientsClaim.
     VitePWA({
       registerType: 'autoUpdate',
-      includeAssets: ['favicon.ico', 'robots.txt', 'apple-touch-icon.png'],
+      // Icons: public/icons/ (SVG masters; PNGs rendered by tools/pwa-icons.mjs).
       manifest: {
+        id: '/',
         name: 'baseGeek',
         short_name: 'baseGeek',
-        description: 'Core Infrastructure for GeekSuite',
+        description: 'The Signal Box: sign-in, accounts and the core infrastructure every GeekSuite app runs through',
+        start_url: '/',
+        scope: '/',
+        display: 'standalone',
         theme_color: '#0e1012',
+        background_color: '#0e1012',
         icons: [
+          { src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png', purpose: 'any' },
+          { src: '/icons/icon-512.png', sizes: '512x512', type: 'image/png', purpose: 'any' },
+          { src: '/icons/icon-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+          { src: '/icons/icon.svg', sizes: 'any', type: 'image/svg+xml', purpose: 'any' }
+        ]
+      },
+      workbox: {
+        cleanupOutdatedCaches: true,
+        // woff2: the B612 / Big Shoulders faces are self-hosted; precache them
+        // so the console keeps its type offline.
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
+        // basegeek is the SSO gateway: /api/* (login, OAuth callbacks, logout)
+        // and /graphql are real top-level navigations that must reach the
+        // server, never the SPA shell. Paths with a file extension 404 on the
+        // server (stale hashed assets) and must here too.
+        navigateFallbackDenylist: [/^\/api\//, /^\/graphql/, /\/[^/?]+\.[^/]+$/],
+        runtimeCaching: [
           {
-            src: 'pwa-192x192.png',
-            sizes: '192x192',
-            type: 'image/png'
-          },
-          {
-            src: 'pwa-512x512.png',
-            sizes: '512x512',
-            type: 'image/png'
+            // FIRST, always: auth state must be fresh (PWA_STANDARD rule 1).
+            urlPattern: ({ url }) =>
+              url.pathname === '/api/me' ||
+              url.pathname.startsWith('/api/auth/') ||
+              url.pathname.startsWith('/api/users/me'),
+            handler: 'NetworkOnly',
+            options: { cacheName: 'auth-bypass' }
           }
         ]
       }
