@@ -8,19 +8,13 @@
     <title>NoteGeek</title>
     <meta name="theme-color" media="(prefers-color-scheme: light)" content="#FBF7EE" />
     <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#16140F" />
-    <!-- Geist (display + body) — matches basegeek for suite typeface continuity.
-         JetBrains Mono — used for all metadata (timestamps, tags, type indicators)
-         and the actual editor surface. The "Ink Studio" identity rides on this
-         sans/mono pair; do not add a third typeface without revisiting the design. -->
-    <link rel="preconnect" href="https://cdn.jsdelivr.net" crossorigin />
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/geist@1.3.1/dist/fonts/geist-sans/style.css" />
-    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/geist@1.3.1/dist/fonts/geist-mono/style.css" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&display=swap"
-      rel="stylesheet"
-    />
+    <!-- Fonts are self-hosted (src/main.jsx imports @fontsource-variable/geist
+         and @fontsource/jetbrains-mono) so the PWA keeps its typefaces offline;
+         Vite emits the woff2 files and the service worker precaches them.
+         Geist is display + body; JetBrains Mono is every piece of metadata
+         (timestamps, tags, type stamps, the save stamp). The "Lab Notebook"
+         identity rides on this sans/mono pair; do not add a third typeface
+         without revisiting the design (DOCS/CONTEXT.md). -->
     <!-- Baseline cream/ink colors that snap before MUI mounts.
          Must EXACTLY match createAppTheme.js's surfaces.default + text.primary,
          or you'll get a brief repaint when React boots. -->

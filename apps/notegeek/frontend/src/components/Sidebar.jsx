@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import {
     List,
@@ -23,18 +23,33 @@ import ClearIcon from '@mui/icons-material/Clear';
 import TagIcon from '@mui/icons-material/LocalOffer';
 import AllNotesIcon from '@mui/icons-material/AutoStoriesOutlined';
 import MoreIcon from '@mui/icons-material/MoreHoriz';
+import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { GeekSidebar, geekLayout, useGeekShell } from '@geeksuite/ui';
 import useTagStore from '../store/tagStore';
 import useNoteStore from '../store/noteStore';
 import TagContextMenu from './TagContextMenu';
 import { gql, useQuery } from '@apollo/client';
 import { toneForMode } from '@geeksuite/ui';
-import { glow, noteTypeColor } from '../theme/tokens';
+import { glow, noteTypeColor, tapTarget44 } from '../theme/tokens';
+import { buildTagTree, filterTagTree } from '../utils/tagTree';
 import { NEW_NOTE_ITEM, navSections, activeNavId } from './navConfig';
 
 const GET_TAGS = gql`
   query GetNoteTags {
     noteTags
+  }
+`;
+
+// Note counts per tag. `noteTags` is a bare string list, so the counts come
+// from the notes themselves — ids and tags only, nothing heavy. It is a
+// `notes` root field, so every note write evicts it with the tag index
+// (graphql/cacheUpdates.js) and the counts stay honest.
+const GET_TAG_COUNTS = gql`
+  query GetNoteTagCounts {
+    notes {
+      id
+      tags
+    }
   }
 `;
 
@@ -91,130 +106,239 @@ function SectionLabel({ children, sx }) {
     );
 }
 
-// ——— Tag hierarchy builder (pure function, module-level) ———————————————
-function buildTagHierarchy(tagList) {
-    const hierarchy = {};
-    tagList.forEach((tag) => {
-        const parts = tag.split('/');
-        let current = hierarchy;
-        let currentPath = '';
-        parts.forEach((part) => {
-            currentPath = currentPath ? `${currentPath}/${part}` : part;
-            if (!current[part]) {
-                current[part] = { path: currentPath, children: {} };
-            }
-            current = current[part].children;
-        });
-    });
-    return hierarchy;
+// ——— Tag tree ——————————————————————————————————————————————————————————
+//
+// A real tree: expand/collapse chevrons, a guide line down each open branch,
+// and a note count on every row (a parent counts the distinct notes under
+// it — utils/tagTree.js). Rows are 32px on desktop and 44px in the phone
+// drawer (MOBILE_UI_PLAN §2). Each row is a <li> holding three siblings —
+// chevron button, the tag link, the "…" button — rather than buttons nested
+// inside the link.
+
+const COLLAPSED_KEY = 'notegeek.tagTree.collapsed';
+
+function readCollapsed() {
+    try {
+        const raw = window.localStorage.getItem(COLLAPSED_KEY);
+        const list = raw ? JSON.parse(raw) : [];
+        return new Set(Array.isArray(list) ? list : []);
+    } catch {
+        return new Set();
+    }
 }
 
-// ——— TagTreeRow: single tag node (module-level, no re-creation) —————————
-function TagTreeRow({ tag, data, level, location, theme, onNavigate, onTagMenu }) {
-    const isSelected = location.pathname === `/tags/${encodeURIComponent(data.path)}`;
-    const tagColor = getTagColor(data.path, theme);
-    const hasChildren = Object.keys(data.children).length > 0;
+function writeCollapsed(set) {
+    try {
+        window.localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...set]));
+    } catch {
+        // Private mode / blocked storage: collapse still works for the session.
+    }
+}
+
+const ROW_SX = (theme) => ({
+    minHeight: 32,
+    [theme.breakpoints.down('md')]: { minHeight: 44 },
+});
+
+function TagTreeRow({ node, level, activePath, isOpen, onToggle, theme, onNavigate, onTagMenu, renderChildren }) {
+    const href = `/tags/${encodeURIComponent(node.path)}`;
+    const isSelected = activePath === node.path;
+    const tagColor = getTagColor(node.path, theme);
+    const hasChildren = node.children.length > 0;
 
     return (
-        <div key={data.path}>
-            <ListItemButton
-                component={Link}
-                to={`/tags/${encodeURIComponent(data.path)}`}
-                selected={isSelected}
-                onClick={onNavigate}
-                onContextMenu={(e) => { e.preventDefault(); onTagMenu(e, data.path); }}
+        <Box component="li" sx={{ listStyle: 'none', m: 0, p: 0 }}>
+            <Box
                 sx={{
-                    pl: level * 1.5 + 2,
-                    pr: 0.5,
-                    py: 0.625,
-                    mx: 0.75,
-                    my: 0.125,
-                    borderRadius: '6px',
-                    transition: 'all 100ms ease',
-                    '&.Mui-selected': {
-                        backgroundColor: alpha(tagColor, 0.08),
-                        borderLeft: `2px solid ${tagColor}`,
-                        paddingLeft: `calc(${level * 1.5 + 2} * 8px - 2px)`,
-                        '&:hover': { backgroundColor: alpha(tagColor, 0.12) },
-                    },
-                    '&:hover': {
-                        backgroundColor: alpha(tagColor, 0.06),
-                        '& .tag-more-btn': { opacity: 1 },
-                    },
+                    display: 'flex',
+                    alignItems: 'center',
+                    mx: '6px',
+                    borderRadius: '4px',
+                    position: 'relative',
+                    ...ROW_SX(theme),
+                    bgcolor: isSelected ? alpha(tagColor, 0.1) : 'transparent',
+                    '&:hover': { bgcolor: alpha(tagColor, isSelected ? 0.14 : 0.06) },
+                    '&:hover .tag-more-btn, &:focus-within .tag-more-btn': { opacity: 1 },
+                    '&::before': isSelected ? {
+                        content: '""',
+                        position: 'absolute',
+                        left: 0,
+                        top: 6,
+                        bottom: 6,
+                        width: 2,
+                        borderRadius: 1,
+                        bgcolor: tagColor,
+                    } : undefined,
                 }}
             >
-                {/* Tag color dot */}
+                {/* Indent + chevron (or a spacer the same width) */}
+                <Box sx={{ width: level * 14, flexShrink: 0 }} />
+                {hasChildren ? (
+                    <IconButton
+                        size="small"
+                        onClick={() => onToggle(node.path)}
+                        aria-expanded={isOpen}
+                        aria-label={`${isOpen ? 'Collapse' : 'Expand'} ${node.path}`}
+                        sx={{
+                            width: 24,
+                            height: 24,
+                            minWidth: 24,
+                            minHeight: 24,
+                            p: 0,
+                            flexShrink: 0,
+                            color: 'text.secondary',
+                            borderRadius: '4px',
+                            [theme.breakpoints.down('md')]: { ...tapTarget44, width: 44, height: 44 },
+                            '&:hover': { color: 'text.primary', bgcolor: 'transparent' },
+                        }}
+                    >
+                        <ChevronRightIcon
+                            sx={{
+                                fontSize: 16,
+                                transform: isOpen ? 'rotate(90deg)' : 'none',
+                                transition: 'transform 120ms ease',
+                                '@media (prefers-reduced-motion: reduce)': { transition: 'none' },
+                            }}
+                        />
+                    </IconButton>
+                ) : (
+                    <Box sx={{ width: 24, flexShrink: 0, [theme.breakpoints.down('md')]: { width: 44 } }} />
+                )}
+
                 <Box
+                    component={Link}
+                    to={href}
+                    onClick={onNavigate}
+                    aria-current={isSelected ? 'page' : undefined}
+                    onContextMenu={(e) => { e.preventDefault(); onTagMenu(e.currentTarget, node.path); }}
                     sx={{
-                        width: 6,
-                        height: 6,
-                        borderRadius: '50%',
-                        bgcolor: tagColor,
-                        mr: 1.25,
-                        flexShrink: 0,
-                        opacity: isSelected ? 1 : 0.55,
-                        transition: 'opacity 100ms ease',
-                    }}
-                />
-                <ListItemText
-                    primary={tag}
-                    primaryTypographyProps={{
-                        fontFamily: theme.typography.fontFamilyMono,
-                        fontSize: '0.75rem',
-                        fontWeight: isSelected ? 600 : 400,
+                        flex: 1,
+                        minWidth: 0,
+                        alignSelf: 'stretch',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        pl: '2px',
+                        pr: '4px',
+                        textDecoration: 'none',
                         color: isSelected ? 'text.primary' : 'text.secondary',
-                        letterSpacing: '0.01em',
+                        borderRadius: '4px',
+                        '&:hover': { color: 'text.primary' },
+                        '&:focus-visible': { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: -2 },
                     }}
-                />
+                >
+                    <Box
+                        aria-hidden
+                        sx={{
+                            width: 6,
+                            height: 6,
+                            borderRadius: '50%',
+                            bgcolor: tagColor,
+                            flexShrink: 0,
+                            opacity: isSelected ? 1 : 0.7,
+                        }}
+                    />
+                    <Box
+                        component="span"
+                        sx={{
+                            flex: 1,
+                            minWidth: 0,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                            fontFamily: theme.typography.fontFamilyMono,
+                            fontSize: '0.75rem',
+                            fontWeight: isSelected ? 600 : 400,
+                            letterSpacing: '0.01em',
+                        }}
+                    >
+                        {node.name}
+                    </Box>
+                    {node.count !== null && (
+                        <Box
+                            component="span"
+                            sx={{
+                                flexShrink: 0,
+                                fontFamily: theme.typography.fontFamilyMono,
+                                fontSize: '0.75rem',
+                                color: 'text.secondary',
+                                fontVariantNumeric: 'tabular-nums',
+                            }}
+                        >
+                            {node.count}
+                        </Box>
+                    )}
+                </Box>
+
                 {/* Discoverable "..." button — visible on hover or focus */}
                 <IconButton
                     className="tag-more-btn"
                     size="small"
-                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); onTagMenu(e.currentTarget, data.path); }}
+                    onClick={(e) => { e.preventDefault(); e.stopPropagation(); onTagMenu(e.currentTarget, node.path); }}
                     sx={{
                         opacity: 0,
                         p: 0.25,
-                        color: 'text.disabled',
+                        mr: '2px',
+                        minWidth: 24,
+                        minHeight: 24,
+                        [theme.breakpoints.down('md')]: { ...tapTarget44 },
+                        color: 'text.secondary',
                         transition: 'opacity 100ms ease, color 100ms ease',
-                        '&:hover': { color: 'text.secondary', bgcolor: 'transparent' },
+                        '&:hover': { color: 'text.primary', bgcolor: 'transparent' },
+                        '&:focus-visible': { opacity: 1 },
                     }}
-                    aria-label={`Tag options for ${data.path}`}
+                    aria-label={`Tag options for ${node.path}`}
                 >
                     <MoreIcon sx={{ fontSize: 14 }} />
                 </IconButton>
-            </ListItemButton>
-            {hasChildren && (
-                <TagTree
-                    hierarchy={data.children}
-                    level={level + 1}
-                    location={location}
-                    theme={theme}
-                    onNavigate={onNavigate}
-                    onTagMenu={onTagMenu}
-                />
-            )}
-        </div>
+            </Box>
+
+            {hasChildren && isOpen && renderChildren(node.children, level + 1, node.path)}
+        </Box>
     );
 }
 
-// ——— TagTree: recursive renderer (module-level) ———————————————————————
-function TagTree({ hierarchy, level = 0, location, theme, onNavigate, onTagMenu }) {
-    return (
-        <>
-            {Object.entries(hierarchy).map(([tag, data]) => (
+function TagTree({ nodes, activePath, collapsed, forceOpen, onToggle, theme, onNavigate, onTagMenu }) {
+    const render = (list, level, parentPath) => (
+        <Box
+            component="ul"
+            aria-label={parentPath ? `Tags under ${parentPath}` : 'Tags'}
+            sx={{
+                m: 0,
+                p: 0,
+                position: 'relative',
+                // The guide line down an open branch, under the parent's chevron.
+                ...(level > 0 ? {
+                    '&::before': {
+                        content: '""',
+                        position: 'absolute',
+                        top: 0,
+                        bottom: 6,
+                        left: `${6 + (level - 1) * 14 + 12}px`,
+                        width: '1px',
+                        bgcolor: theme.palette.divider,
+                        [theme.breakpoints.down('md')]: { left: `${6 + (level - 1) * 14 + 22}px` },
+                    },
+                } : null),
+            }}
+        >
+            {list.map((node) => (
                 <TagTreeRow
-                    key={data.path}
-                    tag={tag}
-                    data={data}
+                    key={node.path}
+                    node={node}
                     level={level}
-                    location={location}
+                    activePath={activePath}
+                    isOpen={forceOpen || !collapsed.has(node.path)}
+                    onToggle={onToggle}
                     theme={theme}
                     onNavigate={onNavigate}
                     onTagMenu={onTagMenu}
+                    renderChildren={render}
                 />
             ))}
-        </>
+        </Box>
     );
+    return render(nodes, 0, null);
 }
 
 // ——— Brand: two-tone mono wordmark ——————————————————————————————————————
@@ -277,8 +401,19 @@ function Sidebar() {
     const { data, loading: tagsLoading, error: tagsError, refetch: refetchTags } = useQuery(GET_TAGS, {
         fetchPolicy: 'cache-and-network',
     });
-    const tags = data?.noteTags || [];
+    const tags = useMemo(() => data?.noteTags || [], [data]);
+    const { data: countData } = useQuery(GET_TAG_COUNTS, { fetchPolicy: 'cache-and-network' });
+    const countNotes = countData?.notes || null;
 
+    const [collapsed, setCollapsed] = useState(readCollapsed);
+    const toggleTag = useCallback((path) => {
+        setCollapsed((prev) => {
+            const next = new Set(prev);
+            if (next.has(path)) next.delete(path); else next.add(path);
+            writeCollapsed(next);
+            return next;
+        });
+    }, []);
 
     // Single context menu handler for all tag rows
     const handleTagMenu = useCallback((anchorEl, tagPath) => {
@@ -291,11 +426,21 @@ function Sidebar() {
         setSelectedTag(null);
     }, []);
 
-    const filteredTags = tags.filter((tag) =>
-        tag.toLowerCase().includes(tagFilter.toLowerCase())
-    );
-    const tagHierarchy = buildTagHierarchy(tags);
-    const filteredHierarchy = buildTagHierarchy(filteredTags);
+    const tagTree = useMemo(() => buildTagTree(tags, countNotes), [tags, countNotes]);
+    const filteredTree = useMemo(() => filterTagTree(tagTree, tagFilter), [tagTree, tagFilter]);
+
+    // The tag this route is showing, and every ancestor of it open, so a deep
+    // link never lands on a collapsed branch.
+    const activePath = location.pathname.startsWith('/tags/')
+        ? decodeURIComponent(location.pathname.slice('/tags/'.length))
+        : null;
+    const effectiveCollapsed = useMemo(() => {
+        if (!activePath) return collapsed;
+        const next = new Set(collapsed);
+        const parts = activePath.split('/');
+        for (let i = 1; i < parts.length; i += 1) next.delete(parts.slice(0, i).join('/'));
+        return next;
+    }, [collapsed, activePath]);
 
     // "/tags/…" rows manage their own `selected` state directly off
     // `location` (see TagTreeRow) since they live outside the primitive's
@@ -303,7 +448,7 @@ function Sidebar() {
     const activeId = activeNavId(location.pathname);
 
     /**
-     * The Collections tag tree as `extras` — see the file header note in the
+     * The Tags tree as `extras` — see the file header note in the
      * migration report: `GeekSidebar`'s `sections` box is the only slot with
      * `flex: 1` / its own scroll region, while `extras` sizes to its content
      * and does not compete for space. For NoteGeek the tag tree (not the
@@ -311,12 +456,12 @@ function Sidebar() {
      * so left unbounded it would push the footer (Settings / Sign out)
      * outside the panel's `overflow: hidden` bounds. Bounding it here with
      * its own `maxHeight` + `overflowY: auto` keeps the footer on screen at
-     * the cost of a variable gap between Search and "Collections" on tall
+     * the cost of a variable gap between Search and "Tags" on tall
      * viewports with few tags — a primitive gap, not an app choice.
      */
     const collectionsExtras = (
         <Box sx={{ borderTop: `1px solid ${theme.palette.divider}` }}>
-            <SectionLabel>Collections</SectionLabel>
+            <SectionLabel>Tags</SectionLabel>
 
             {/* The tag tree takes the rest of the sidebar's height (extrasGrow
                 below) and scrolls in GeekSidebar's extras body. It used to be
@@ -400,6 +545,15 @@ function Sidebar() {
                                 fontWeight: location.pathname === '/notes' ? 600 : 400,
                             }}
                         />
+                        {countNotes && (
+                            <Typography
+                                component="span"
+                                variant="caption"
+                                sx={{ color: 'text.secondary', fontVariantNumeric: 'tabular-nums' }}
+                            >
+                                {countNotes.length}
+                            </Typography>
+                        )}
                     </ListItemButton>
                     </ListItem>
                 </List>
@@ -421,7 +575,7 @@ function Sidebar() {
                         onRetry={() => refetchTags()}
                     />
                 )}
-                {!tagsLoading && !tagsError && Object.keys(tagHierarchy).length === 0 && (
+                {!tagsLoading && !tagsError && tagTree.length === 0 && (
                     <GeekEmptyState
                         compact
                         icon={<TagIcon sx={{ fontSize: 24 }} />}
@@ -431,16 +585,20 @@ function Sidebar() {
                         descriptionSx={{ typography: 'caption' }}
                     />
                 )}
-                {!tagsLoading && !tagsError && Object.keys(filteredHierarchy).length > 0 && (
+                {!tagsLoading && !tagsError && filteredTree.length > 0 && (
                     <TagTree
-                        hierarchy={filteredHierarchy}
-                        location={location}
+                        nodes={filteredTree}
+                        activePath={activePath}
+                        collapsed={effectiveCollapsed}
+                        // While filtering, show every match in place.
+                        forceOpen={Boolean(tagFilter.trim())}
+                        onToggle={toggleTag}
                         theme={theme}
                         onNavigate={closeNav}
                         onTagMenu={handleTagMenu}
                     />
                 )}
-                {!tagsLoading && !tagsError && tagFilter && Object.keys(filteredHierarchy).length === 0 && (
+                {!tagsLoading && !tagsError && tagFilter && filteredTree.length === 0 && (
                     <GeekEmptyState
                         compact
                         description={`No tags match "${tagFilter}"`}

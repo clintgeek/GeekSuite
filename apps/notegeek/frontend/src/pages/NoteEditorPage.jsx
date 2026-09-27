@@ -1,14 +1,10 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { Box, CircularProgress, Typography, Button, Paper, Stack, alpha, useTheme } from '@mui/material';
+import { Box, CircularProgress, Typography, Button, Stack, alpha, useTheme } from '@mui/material';
 // Deep-import (see RichTextEditor.jsx for why) instead of the
 // '@mui/icons-material' barrel.
-import TextIcon from '@mui/icons-material/TextFields';
-import MarkdownIcon from '@mui/icons-material/Description';
-import CodeIcon from '@mui/icons-material/Code';
-import MindMapIcon from '@mui/icons-material/AccountTree';
-import HandwrittenIcon from '@mui/icons-material/Draw';
 import BackIcon from '@mui/icons-material/ArrowBack';
+import ChevronRight from '@mui/icons-material/ChevronRight';
 import { useQuery, useMutation } from '@apollo/client';
 import { GET_NOTE_BY_ID } from '../graphql/queries';
 import { CREATE_NOTE, UPDATE_NOTE, COMPOSE_NOTE } from '../graphql/mutations';
@@ -17,75 +13,76 @@ import NoteHistoryDialog from '../components/notes/NoteHistoryDialog';
 import { useToast } from '@geeksuite/ui';
 import { useAppPreferences } from '@geeksuite/user';
 import { NoteShell, NoteMetaBar, NoteActions, NoteTypeRouter, NOTE_TYPES, SuggestionStrip } from '../components/notes';
+import { BackButton } from '../components/notes/NoteActions';
+import SaveStamp from '../components/notes/SaveStamp';
+import { NOTE_TYPE_META, NOTE_TYPE_ORDER } from '../components/notes/noteTypeMeta';
+import { toDate } from '../utils/dateUtils';
 import DeleteNoteDialog from '../components/DeleteNoteDialog';
 import { onNoteCreated, onNoteUpdated } from '../graphql/cacheUpdates';
 import { overSizeMessage, saveErrorMessage } from '../utils/saveGuards';
 import { containsNoteLink, insertLink, noteLinkMarkup, supportsLinkInsertion } from '../utils/noteLinks';
-import { noteTypeColor, layout } from '../theme/tokens';
+import { dotGridBackground, noteTypeInk, stampFill, surfaces, layout } from '../theme/tokens';
 
-// Type card configuration. Colors come from theme.palette.noteTypes so light
-// and dark modes stay in sync with NoteRow / NoteMetaBar / NoteViewer / sidebar.
-const NOTE_TYPE_CARDS = [
-  { type: NOTE_TYPES.TEXT,        icon: TextIcon,        title: 'Rich Text',  description: 'Bold, italic, lists',         themeKey: 'text' },
-  { type: NOTE_TYPES.MARKDOWN,    icon: MarkdownIcon,    title: 'Markdown',   description: 'Plain text with live preview', themeKey: 'markdown' },
-  { type: NOTE_TYPES.CODE,        icon: CodeIcon,        title: 'Code',       description: 'Syntax-highlighted snippets',  themeKey: 'code' },
-  { type: NOTE_TYPES.MINDMAP,     icon: MindMapIcon,     title: 'Mind Map',   description: 'Visual idea mapping',         themeKey: 'mindmap' },
-  { type: NOTE_TYPES.HANDWRITTEN, icon: HandwrittenIcon, title: 'Sketch',     description: 'Freehand drawing and notes',  themeKey: 'handwritten' },
-];
-
-// Type card — workspace style
-function TypeCard({ config, onSelect }) {
+// Type card — one row per note type, carrying the same glyph and ink as
+// its stamp everywhere else (TypeStamp.jsx is the source of truth).
+function TypeCard({ type, onSelect }) {
   const theme = useTheme();
-  const Icon = config.icon;
-  const color = noteTypeColor(theme, config.themeKey);
+  const meta = NOTE_TYPE_META[type];
+  const Icon = meta.Icon;
+  const ink = noteTypeInk(theme, type);
 
   return (
     <Box
       component="button"
-      onClick={() => onSelect(config.type)}
+      type="button"
+      onClick={() => onSelect(type)}
       sx={{
         display: 'flex',
         alignItems: 'center',
-        gap: 1.5,
+        gap: '12px',
         width: '100%',
-        py: 1,
-        px: 1.5,
-        border: `1px solid ${ theme.palette.divider }`,
-        borderRadius: 2,
+        minHeight: 56,
+        py: '8px',
+        px: '12px',
+        border: `1px solid ${theme.palette.divider}`,
+        borderRadius: '4px',
         cursor: 'pointer',
         textAlign: 'left',
-        bgcolor: 'background.paper',
-        transition: 'all 100ms ease',
-        '&:hover': {
-          borderColor: alpha(color, 0.4),
-          bgcolor: alpha(color, 0.03),
-        },
-        '&:focus-visible': {
-          outline: `2px solid ${ color }`,
-          outlineOffset: 2,
-        },
+        font: 'inherit',
+        color: 'inherit',
+        bgcolor: surfaces(theme).elevated,
+        transition: 'border-color 100ms ease, background-color 100ms ease',
+        '&:hover': { borderColor: alpha(ink, 0.6), bgcolor: stampFill(theme, ink) },
+        '&:hover .type-card-chevron': { color: ink },
+        '&:focus-visible': { outline: `2px solid ${ink}`, outlineOffset: 2 },
+        '@media (prefers-reduced-motion: reduce)': { transition: 'none' },
       }}
     >
-      <Icon sx={{ fontSize: 18, color: color, flexShrink: 0 }} />
+      <Box
+        aria-hidden
+        sx={{
+          width: 36,
+          height: 36,
+          flexShrink: 0,
+          display: 'grid',
+          placeItems: 'center',
+          borderRadius: '3px',
+          border: `1px solid ${alpha(ink, 0.42)}`,
+          bgcolor: stampFill(theme, ink),
+          color: ink,
+        }}
+      >
+        <Icon sx={{ fontSize: 20 }} />
+      </Box>
       <Box sx={{ minWidth: 0, flex: 1 }}>
-        <Typography
-          sx={{
-            fontWeight: 600,
-            fontSize: '0.8125rem',
-            color: 'text.primary',
-          }}
-        >
-          {config.title}
+        <Typography sx={{ fontWeight: 600, fontSize: '0.9375rem', color: 'text.primary' }}>
+          {meta.long}
         </Typography>
-        <Typography
-          sx={{
-            fontSize: '0.6875rem',
-            color: 'text.disabled',
-          }}
-        >
-          {config.description}
+        <Typography variant="caption" component="div" sx={{ color: 'text.secondary' }}>
+          {meta.description}
         </Typography>
       </Box>
+      <ChevronRight className="type-card-chevron" aria-hidden sx={{ fontSize: 18, color: 'text.secondary' }} />
     </Box>
   );
 }
@@ -123,7 +120,13 @@ function NoteEditorPage() {
   const [tags, setTags] = useState([]);
   const [noteType, setNoteType] = useState(NOTE_TYPES.TEXT);
   const [hasPickedType, setHasPickedType] = useState(false);
-  const [saveStatus, setSaveStatus] = useState('');
+  // Save state, shown by the SaveStamp. Four facts rather than one status
+  // string: the old string reached only a button that compared it against
+  // 'Saved', so every error message it was ever set to rendered nowhere.
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState(null);
+  const [saveEmpty, setSaveEmpty] = useState(false);
+  const [lastSavedAt, setLastSavedAt] = useState(null);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [savedNoteId, setSavedNoteId] = useState(() => (id && id !== 'new' && id !== 'undefined' ? id : null));
   const [dirty, setDirty] = useState(false);
@@ -133,6 +136,7 @@ function NoteEditorPage() {
   const [saveToken, setSaveToken] = useState(0);
 
   const { notify } = useToast();
+  const theme = useTheme();
 
   // "Suggest tags & links" — off by default, and stored where notegeek's other
   // preferences live (the gateway reads the same flag before it consults a
@@ -232,6 +236,7 @@ function NoteEditorPage() {
       setTitle(noteToEdit.title || '');
       setContent(noteToEdit.content || '');
       setTags(noteToEdit.tags || []);
+      setLastSavedAt(toDate(noteToEdit.updatedAt));
       savedNoteIdRef.current = id;
 
       if (noteToEdit.type && Object.values(NOTE_TYPES).includes(noteToEdit.type)) {
@@ -373,11 +378,14 @@ function NoteEditorPage() {
         // dirty would have the unmount flush re-save the same text on the way
         // out — harmless, but it also leaves a false "unsaved" on screen.
         setDirty(false);
+        setSaveError(null);
+        setLastSavedAt(new Date());
         notify('Replaced. The previous version is in History.', { tone: 'success' });
       } else {
         // An unsaved note has nothing to replace server-side yet. The text is
-        // on screen and dirty; the user's Save writes it.
-        notify('Composed. Save when you are happy with it.', { tone: 'success' });
+        // on screen and dirty, so the ordinary autosave (or Cmd/Ctrl+S, or
+        // "Save now" in the ⋯ menu) writes it.
+        notify('Composed. It saves like any other edit.', { tone: 'success' });
       }
     } catch (err) {
       notify(err?.message || 'Could not replace the note.', { tone: 'error' });
@@ -388,10 +396,12 @@ function NoteEditorPage() {
     if (discardedRef.current) return;
 
     if (!content.trim() && !title.trim()) {
-      setSaveStatus('Error: Add a title or some content first');
-      setTimeout(() => setSaveStatus(''), 2000);
+      // Shown by the stamp ("Nothing to save") for as long as it is true;
+      // it used to be a status string that rendered nowhere.
+      setSaveEmpty(true);
       return;
     }
+    setSaveEmpty(false);
 
     // One save at a time. A second request while one is in flight is recorded
     // and replayed when the first lands, so nothing newer is dropped — and,
@@ -407,12 +417,12 @@ function NoteEditorPage() {
     // once, in the user's terms — and do not burn a round trip discovering it.
     const tooBig = overSizeMessage(content, noteType);
     if (tooBig) {
-      setSaveStatus('');
+      setSaveError(tooBig);
       notify(tooBig, { tone: 'error' });
       return;
     }
 
-    setSaveStatus('Saving...');
+    setIsSaving(true);
     savingRef.current = true;
 
     // What this save is actually writing. `dirty` is cleared only if the form
@@ -459,30 +469,32 @@ function NoteEditorPage() {
         if (savedNote.title && savedNote.title !== title) {
           setTitle(savedNote.title);
         }
-        setSaveStatus('Saved');
+        setSaveError(null);
+        setLastSavedAt(new Date());
         setSaveToken((n) => n + 1);
         // Only clean if the form still holds exactly what we wrote.
         if (contentRef.current === noteData.content && titleRef.current === title) {
           setDirty(false);
         }
-        setTimeout(() => setSaveStatus(''), 2000);
-
         if (isMindMap && !isNewNote) {
           setIsEditMode(false);
         }
       } else {
-        setSaveStatus('');
+        setSaveError('Failed to save — the server returned nothing.');
         notify('Failed to save — the server returned nothing.', { tone: 'error' });
       }
     } catch (error) {
-      // `saveStatus` only ever reached NoteActions, which compares it against
-      // the single string 'Saved'. Every error message this used to set was
+      // The old `saveStatus` only ever reached NoteActions, which compared it
+      // against the single string 'Saved'. Every error message it was set to
       // rendered nowhere at all: a note that could not be saved looked exactly
-      // like one that had been.
-      setSaveStatus('');
-      notify(saveErrorMessage(error), { tone: 'error' });
+      // like one that had been. Now the stamp says "Not saved" (and keeps
+      // saying it until a save lands), and the toast carries the detail.
+      const message = saveErrorMessage(error);
+      setSaveError(message);
+      notify(message, { tone: 'error' });
     } finally {
       savingRef.current = false;
+      setIsSaving(false);
       if (saveAgainRef.current) {
         saveAgainRef.current = false;
         handleSaveRef.current();
@@ -636,69 +648,57 @@ function NoteEditorPage() {
     return (
       <Box
         sx={{
-          width: '100%',
-          maxWidth: layout.pickerWidth,
-          mx: 'auto',
-          py: { xs: 2, sm: 4 },
-          px: { xs: 2, sm: 3 },
-          minHeight: '100%',
-          display: 'flex',
-          flexDirection: 'column',
+          flex: 1,
+          minHeight: 0,
+          height: '100%',
+          overflowY: 'auto',
+          [theme.breakpoints.up('md')]: dotGridBackground(theme),
         }}
       >
-        {/* Back button */}
-        <Button
-          startIcon={<BackIcon />}
-          onClick={() => navigate(-1)}
+        <Box
           sx={{
-            alignSelf: 'flex-start',
-            mb: 3,
-            color: 'text.secondary',
-            fontWeight: 500,
-            '&:hover': {
-              bgcolor: 'action.hover',
-            },
+            width: '100%',
+            maxWidth: layout.pickerWidth,
+            mx: 'auto',
+            py: { xs: '16px', sm: '32px' },
+            px: { xs: '16px', sm: '24px' },
+            display: 'flex',
+            flexDirection: 'column',
           }}
         >
-          Back
-        </Button>
+          <Box sx={{ ml: '-6px', mb: '24px' }}>
+            <BackButton onBack={() => navigate(-1)} />
+          </Box>
 
-        {/* Header */}
-        <Box sx={{ mb: 4, textAlign: 'center' }}>
-          <Typography
-            sx={{
-              fontFamily: '"Geist", -apple-system, BlinkMacSystemFont, sans-serif',
-              fontWeight: 700,
-              fontSize: { xs: '1.75rem', sm: '2rem' },
-              color: 'text.primary',
-              mb: 1,
-            }}
-          >
-            New note
-          </Typography>
-          <Typography
-            sx={{
-              fontSize: '0.875rem',
-              color: 'text.secondary',
-            }}
-          >
-            Choose a format
-          </Typography>
-        </Box>
-
-        {/* Type cards */}
-        <Stack spacing={1.5}>
-          {NOTE_TYPE_CARDS.map((config, index) => (
-            <TypeCard
-              key={config.type}
-              config={config}
-              index={index}
-              onSelect={(type) => {
-                navigate(`/notes/new?type=${ encodeURIComponent(type) }`, { replace: true });
+          <Box sx={{ mb: '24px' }}>
+            <Typography variant="h6" component="p" sx={{ color: 'text.secondary', mb: '8px' }}>
+              New page
+            </Typography>
+            <Typography
+              component="h1"
+              sx={{
+                fontWeight: 700,
+                fontSize: { xs: '1.75rem', sm: '2rem' },
+                letterSpacing: '-0.025em',
+                color: 'text.primary',
               }}
-            />
-          ))}
-        </Stack>
+            >
+              What are you writing?
+            </Typography>
+          </Box>
+
+          <Stack spacing="8px">
+            {NOTE_TYPE_ORDER.map((type) => (
+              <TypeCard
+                key={type}
+                type={type}
+                onSelect={(picked) => {
+                  navigate(`/notes/new?type=${ encodeURIComponent(picked) }`, { replace: true });
+                }}
+              />
+            ))}
+          </Stack>
+        </Box>
       </Box>
     );
   }
@@ -720,7 +720,7 @@ function NoteEditorPage() {
       >
         <Typography
           sx={{
-            fontFamily: '"Geist", -apple-system, BlinkMacSystemFont, sans-serif',
+            fontFamily: '"Geist Variable", "Geist", -apple-system, BlinkMacSystemFont, sans-serif',
             fontSize: '1.25rem',
             fontWeight: 600,
             color: 'error.main',
@@ -743,9 +743,13 @@ function NoteEditorPage() {
     );
   }
 
+  const isCanvas = isMindMap || isHandwritten;
+  const readOnlyMeta = !isEditMode && isMindMap;
+
   return (
-    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+    <Box sx={{ flex: 1, minHeight: 0, height: '100%', display: 'flex', flexDirection: 'column' }}>
       <NoteShell
+        variant={isCanvas ? 'canvas' : 'page'}
         header={
           <NoteMetaBar
             title={title}
@@ -753,8 +757,18 @@ function NoteEditorPage() {
             noteType={noteType}
             tags={tags}
             onTagsChange={(v) => { setTags(v); setDirty(true); }}
-            readOnly={!isEditMode && isMindMap}
-            dirty={dirty}
+            readOnly={readOnlyMeta}
+            compact={isCanvas}
+            leading={<BackButton onBack={handleBack} />}
+            status={
+              <SaveStamp
+                saving={isSaving}
+                error={saveError}
+                empty={saveEmpty && !content.trim() && !title.trim()}
+                dirty={dirty}
+                lastSavedAt={lastSavedAt}
+              />
+            }
             // Mounted only when the writer has switched suggestions on: the
             // strip owns a lazy query, and a feature that is off should cost
             // the editor nothing at all, not even a hook.
@@ -776,35 +790,14 @@ function NoteEditorPage() {
                 onSave={handleSave}
                 onDelete={() => setIsDeleteDialogOpen(true)}
                 onToggleEdit={() => setIsEditMode(!isEditMode)}
-                onBack={handleBack}
-                isSaving={saveStatus === 'Saving...'}
-                saveStatus={saveStatus}
                 canDelete={!isNewNote || !!savedNoteId}
                 canToggleEdit={isMindMap && !isNewNote && !!savedNoteId}
                 isEditMode={isEditMode}
                 onHistory={savedNoteId ? () => setHistoryOpen(true) : undefined}
                 onCompose={canCompose ? handleCompose : undefined}
                 isComposing={isComposing}
-                variant="inline"
               />
             }
-          />
-        }
-        actions={
-          <NoteActions
-            onSave={handleSave}
-            onDelete={() => setIsDeleteDialogOpen(true)}
-            onToggleEdit={() => setIsEditMode(!isEditMode)}
-            onBack={handleBack}
-            isSaving={saveStatus === 'Saving...'}
-            saveStatus={saveStatus}
-            canDelete={!isNewNote || !!savedNoteId}
-            canToggleEdit={isMindMap && !isNewNote && !!savedNoteId}
-            isEditMode={isEditMode}
-            onHistory={savedNoteId ? () => setHistoryOpen(true) : undefined}
-            onCompose={canCompose ? handleCompose : undefined}
-            isComposing={isComposing}
-            variant="bottom-bar"
           />
         }
         disableContentScroll={isHandwritten}
@@ -824,7 +817,7 @@ function NoteEditorPage() {
             type={noteType}
             content={content}
             onChange={handleContentChange}
-            readOnly={!isEditMode && isMindMap}
+            readOnly={readOnlyMeta}
             isLoading={isLoadingSelected}
           />
         </Box>
@@ -845,6 +838,8 @@ function NoteEditorPage() {
             setContent(note.content || '');
             setNoteType(note.type || NOTE_TYPES.TEXT);
             setDirty(false);
+            setSaveError(null);
+            setLastSavedAt(new Date());
             notify('Restored. The version you replaced is still in History.', { tone: 'success' });
           }}
         />

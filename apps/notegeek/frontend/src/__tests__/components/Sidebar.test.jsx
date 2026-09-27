@@ -15,6 +15,15 @@ const GET_TAGS = gql`
   }
 `;
 
+const GET_TAG_COUNTS = gql`
+  query GetNoteTagCounts {
+    notes {
+      id
+      tags
+    }
+  }
+`;
+
 const theme = lightTheme;
 
 // Mock Zustand stores directly (only the bits Sidebar still reads)
@@ -47,7 +56,20 @@ function tagsMock(tags = TAGS) {
     };
 }
 
-const SidebarTestWrapper = ({ children, initialPath = '/', mocks = [tagsMock()] }) => (
+const COUNT_NOTES = [
+    { id: 'a', tags: ['project/foo'] },
+    { id: 'b', tags: ['project/foo', 'project/bar'] },
+    { id: 'c', tags: ['personal'] },
+];
+
+function countsMock(notes = COUNT_NOTES) {
+    return {
+        request: { query: GET_TAG_COUNTS },
+        result: { data: { notes } },
+    };
+}
+
+const SidebarTestWrapper = ({ children, initialPath = '/', mocks = [tagsMock(), countsMock()] }) => (
     <ThemeProvider theme={theme}>
         <MockedProvider mocks={mocks} addTypename={false}>
             <MemoryRouter initialEntries={[initialPath]}>
@@ -94,6 +116,47 @@ describe('Sidebar', () => {
 
         expect(screen.queryByText('bar')).not.toBeInTheDocument();
         expect(screen.queryByText('personal')).not.toBeInTheDocument();
+    });
+
+    it('is headed "Tags", not "Collections"', () => {
+        render(<Sidebar />, { wrapper: SidebarTestWrapper });
+        expect(screen.getByText('Tags')).toBeInTheDocument();
+        expect(screen.queryByText('Collections')).toBeNull();
+    });
+
+    it('shows a note count on every row, parents counting distinct notes', async () => {
+        render(<Sidebar />, { wrapper: SidebarTestWrapper });
+        const row = async (name) => (await screen.findByRole('link', { name: new RegExp(`^${name}\\s*\\d+$`) }));
+        // `project` covers notes a and b — b carries two project tags but is one note.
+        expect(await row('project')).toHaveTextContent(/project\s*2$/);
+        expect(await row('foo')).toHaveTextContent(/foo\s*2$/);
+        expect(await row('bar')).toHaveTextContent(/bar\s*1$/);
+        expect(await row('personal')).toHaveTextContent(/personal\s*1$/);
+    });
+
+    it('collapses and expands a branch with its chevron', async () => {
+        try { window.localStorage.removeItem('notegeek.tagTree.collapsed'); } catch { /* ignore */ }
+        render(<Sidebar />, { wrapper: SidebarTestWrapper });
+        const chevron = await screen.findByRole('button', { name: 'Collapse project' });
+        expect(chevron).toHaveAttribute('aria-expanded', 'true');
+        expect(screen.getByText('foo')).toBeInTheDocument();
+
+        fireEvent.click(chevron);
+        expect(screen.queryByText('foo')).not.toBeInTheDocument();
+        const expand = screen.getByRole('button', { name: 'Expand project' });
+        expect(expand).toHaveAttribute('aria-expanded', 'false');
+
+        fireEvent.click(expand);
+        expect(screen.getByText('foo')).toBeInTheDocument();
+    });
+
+    it('opens the branch of the tag being viewed, even if it was collapsed', async () => {
+        try { window.localStorage.setItem('notegeek.tagTree.collapsed', JSON.stringify(['project'])); } catch { /* ignore */ }
+        render(<Sidebar />, {
+            wrapper: ({ children }) => <SidebarTestWrapper initialPath="/tags/project%2Fbar">{children}</SidebarTestWrapper>,
+        });
+        expect(await screen.findByText('bar')).toBeInTheDocument();
+        try { window.localStorage.removeItem('notegeek.tagTree.collapsed'); } catch { /* ignore */ }
     });
 
     it('does not render account actions (they live in the header avatar menu)', () => {

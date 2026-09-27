@@ -54,11 +54,13 @@ describe('NoteMetaBar', () => {
             <NoteMetaBar title="" noteType="markdown" tags={[]} />,
             { wrapper: AllProviders }
         );
-        expect(screen.getByText('MARKDOWN')).toBeInTheDocument();
+        // Sentence case in the DOM (a screen reader says "Markdown"); the
+        // stamp uppercases it with CSS.
+        expect(screen.getByText('Markdown')).toBeInTheDocument();
 
         // rerender reuses the original `wrapper`; re-wrapping would nest routers.
         rerender(<NoteMetaBar title="" noteType="code" tags={[]} />);
-        expect(screen.getByText('CODE')).toBeInTheDocument();
+        expect(screen.getByText('Code')).toBeInTheDocument();
     });
 
     it('passes down props to TagSelector', () => {
@@ -78,6 +80,21 @@ describe('NoteMetaBar', () => {
         const titleInput = screen.getByLabelText('Note title');
         expect(titleInput).toBeDisabled();
         expect(screen.getByTestId('tag-selector-mock')).toHaveTextContent('disabled');
+    });
+
+    it('renders the leading, status and actions slots', () => {
+        render(
+            <NoteMetaBar
+                title=""
+                noteType="text"
+                tags={[]}
+                leading={<button data-testid="back-btn">Back</button>}
+                status={<span data-testid="stamp">Saved</span>}
+            />,
+            { wrapper: AllProviders }
+        );
+        expect(screen.getByTestId('back-btn')).toBeInTheDocument();
+        expect(screen.getByTestId('stamp')).toHaveTextContent('Saved');
     });
 
     it('renders actions if provided', () => {

@@ -4,7 +4,8 @@ import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import Underline from '@tiptap/extension-underline';
 import Placeholder from '@tiptap/extension-placeholder';
-import { Box, ButtonGroup, Button, Tooltip } from '@mui/material';
+import { Box, IconButton, Tooltip, useTheme } from '@mui/material';
+import { glow, stampFill, stampInk, surfaces, tapTarget44 } from '../../theme/tokens';
 // Deep-import each icon (rather than the '@mui/icons-material' barrel) —
 // the barrel re-exports 2000+ icons and is catastrophically slow to load
 // under Vite's SSR module runner (the one vitest uses for jsdom tests),
@@ -18,7 +19,31 @@ import FormatQuote from '@mui/icons-material/FormatQuote';
 import Code from '@mui/icons-material/Code';
 import LinkIcon from '@mui/icons-material/Link';
 
+const TOOL_GROUPS = [
+  [
+    { label: 'Bold', Icon: FormatBold, mark: 'bold', run: (e) => e.chain().focus().toggleBold().run() },
+    { label: 'Italic', Icon: FormatItalic, mark: 'italic', run: (e) => e.chain().focus().toggleItalic().run() },
+    { label: 'Underline', Icon: FormatUnderlined, mark: 'underline', run: (e) => e.chain().focus().toggleUnderline().run() },
+  ],
+  [
+    { label: 'Code', Icon: Code, mark: 'code', run: (e) => e.chain().focus().toggleCode().run() },
+    { label: 'Quote', Icon: FormatQuote, mark: 'blockquote', run: (e) => e.chain().focus().toggleBlockquote().run() },
+  ],
+  [
+    { label: 'Bullet List', Icon: FormatListBulleted, mark: 'bulletList', run: (e) => e.chain().focus().toggleBulletList().run() },
+    { label: 'Numbered List', Icon: FormatListNumbered, mark: 'orderedList', run: (e) => e.chain().focus().toggleOrderedList().run() },
+  ],
+];
+
+/**
+ * The formatting toolbar: one slim row on the text column's left edge, not a
+ * boxed button group centred over the page. It is `position: sticky` against
+ * NoteShell's page scroller, so it stays in reach while the title scrolls
+ * away. Icon buttons are 32px on desktop and 44px on phones (MOBILE_UI_PLAN
+ * §2); an active mark is inked in brick.
+ */
 const MenuBar = ({ editor }) => {
+  const theme = useTheme();
   if (!editor) {
     return null;
   }
@@ -30,93 +55,86 @@ const MenuBar = ({ editor }) => {
     }
   };
 
+  const ink = stampInk(theme).ink;
+  const buttonSx = (active) => ({
+    width: 32,
+    height: 32,
+    // The suite theme floors every IconButton at 44px; the desktop toolbar
+    // is a slim strip, so it opts down to 32 above `md` only.
+    minWidth: 32,
+    minHeight: 32,
+    borderRadius: '4px',
+    color: active ? ink : 'text.secondary',
+    bgcolor: active ? stampFill(theme, ink) : 'transparent',
+    [theme.breakpoints.down('md')]: { ...tapTarget44 },
+    '&:hover': { bgcolor: active ? stampFill(theme, ink) : glow(theme).soft, color: active ? ink : 'text.primary' },
+    '& svg': { fontSize: 18 },
+  });
+
+  const Separator = () => (
+    <Box
+      aria-hidden
+      sx={{ width: '1px', height: 16, bgcolor: 'divider', mx: '6px', display: { xs: 'none', md: 'block' } }}
+    />
+  );
+
   return (
-    <ButtonGroup
+    <Box
+      role="toolbar"
+      aria-label="Formatting"
+      data-editor-toolbar
       sx={{
-        mb: 1.5,
-        flexShrink: 0,
+        position: 'sticky',
+        top: 0,
+        zIndex: 2,
         display: 'flex',
-        // Below `md` there isn't room for eight buttons in one row without
-        // horizontal scroll clipping the last few tools; wrap to a second
-        // row instead. `ButtonGroup`'s grouped-corner styling assumes one
-        // row, so the wrapped row's end buttons get their own rounding.
-        flexWrap: { xs: 'wrap', md: 'nowrap' },
-        justifyContent: 'center',
-        rowGap: 1,
-        '& .MuiButton-root': {
-          py: 0.5,
-          // 44px hit area (MOBILE_UI_PLAN §2) — these are icon-only toolbar
-          // buttons, easy to undershoot once py is trimmed for the wrap.
-          minWidth: 44,
-          minHeight: 44,
-        }
+        alignItems: 'center',
+        flexWrap: 'wrap',
+        gap: { xs: 0, md: '2px' },
+        py: '4px',
+        mb: '16px',
+        // Flush with the text column: the first button's glyph, not its
+        // padding, lines up with the title above.
+        ml: { xs: 0, md: '-7px' },
+        bgcolor: surfaces(theme).elevated,
+        borderBottom: `1px solid ${theme.palette.divider}`,
+        flexShrink: 0,
       }}
     >
-      <Tooltip title="Bold">
-        <Button
-          onClick={() => editor.chain().focus().toggleBold().run()}
-          variant={editor.isActive('bold') ? 'contained' : 'outlined'}
-        >
-          <FormatBold />
-        </Button>
-      </Tooltip>
-      <Tooltip title="Italic">
-        <Button
-          onClick={() => editor.chain().focus().toggleItalic().run()}
-          variant={editor.isActive('italic') ? 'contained' : 'outlined'}
-        >
-          <FormatItalic />
-        </Button>
-      </Tooltip>
-      <Tooltip title="Underline">
-        <Button
-          onClick={() => editor.chain().focus().toggleUnderline().run()}
-          variant={editor.isActive('underline') ? 'contained' : 'outlined'}
-        >
-          <FormatUnderlined />
-        </Button>
-      </Tooltip>
-      <Tooltip title="Code">
-        <Button
-          onClick={() => editor.chain().focus().toggleCode().run()}
-          variant={editor.isActive('code') ? 'contained' : 'outlined'}
-        >
-          <Code />
-        </Button>
-      </Tooltip>
-      <Tooltip title="Quote">
-        <Button
-          onClick={() => editor.chain().focus().toggleBlockquote().run()}
-          variant={editor.isActive('blockquote') ? 'contained' : 'outlined'}
-        >
-          <FormatQuote />
-        </Button>
-      </Tooltip>
-      <Tooltip title="Bullet List">
-        <Button
-          onClick={() => editor.chain().focus().toggleBulletList().run()}
-          variant={editor.isActive('bulletList') ? 'contained' : 'outlined'}
-        >
-          <FormatListBulleted />
-        </Button>
-      </Tooltip>
-      <Tooltip title="Numbered List">
-        <Button
-          onClick={() => editor.chain().focus().toggleOrderedList().run()}
-          variant={editor.isActive('orderedList') ? 'contained' : 'outlined'}
-        >
-          <FormatListNumbered />
-        </Button>
-      </Tooltip>
+      {TOOL_GROUPS.map((group, gi) => (
+        <React.Fragment key={gi}>
+          {gi > 0 && <Separator />}
+          {group.map((tool) => {
+            const { label, mark, run } = tool;
+            const Glyph = tool.Icon;
+            const active = editor.isActive(mark);
+            return (
+              <Tooltip key={label} title={label}>
+                <IconButton
+                  aria-label={label}
+                  aria-pressed={active}
+                  onClick={() => run(editor)}
+                  sx={buttonSx(active)}
+                >
+                  <Glyph />
+                </IconButton>
+              </Tooltip>
+            );
+          })}
+        </React.Fragment>
+      ))}
+      <Separator />
       <Tooltip title="Link">
-        <Button
+        <IconButton
+          aria-label="Link"
+          aria-pressed={editor.isActive('link')}
           onClick={addLink}
-          variant={editor.isActive('link') ? 'contained' : 'outlined'}
+          sx={buttonSx(editor.isActive('link'))}
         >
           <LinkIcon />
-        </Button>
+        </IconButton>
       </Tooltip>
-    </ButtonGroup>
+    </Box>
   );
 };
 
@@ -193,10 +211,10 @@ const RichTextEditor = ({ content = '', setContent = () => {}, isLoading = false
     return (
       <Box
         sx={{
-          width: '99%',
-          height: '100%',
+          width: '100%',
+          minHeight: 200,
           bgcolor: 'transparent',
-          p: 1.5,
+          color: 'text.secondary',
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center'
@@ -207,23 +225,28 @@ const RichTextEditor = ({ content = '', setContent = () => {}, isLoading = false
     );
   }
 
+  // No scroll box of its own: the page (NoteShell) scrolls, which is what
+  // lets the toolbar stick and the title scroll away. The ProseMirror
+  // surface has no side padding so its text sits on the title's edge.
   return (
-    <Box
-      sx={{
-        width: '99%',
-        height: '100%',
-        bgcolor: 'transparent',
-        p: 1.5,
-        overflow: 'auto',
-        display: 'flex',
-        flexDirection: 'column'
-      }}
-    >
+    <Box sx={{ width: '100%', display: 'flex', flexDirection: 'column', flex: '1 0 auto' }}>
       <MenuBar editor={editor} />
-      {/* Fills whatever height the flex chain above (NoteShell's content
-          zone, ultimately the shell's own 100dvh) actually gives this column
-          — no viewport-relative magic number to fight it. */}
-      <Box sx={{ flex: 1, minHeight: 0, overflow: 'auto', '& .ProseMirror': { fontSize: `${fontSize}px` } }}>
+      <Box
+        sx={{
+          flex: '1 0 auto',
+          display: 'flex',
+          flexDirection: 'column',
+          '& > div': { flex: '1 0 auto', display: 'flex', flexDirection: 'column' },
+          '& .ProseMirror': {
+            flex: '1 0 auto',
+            fontSize: `${fontSize}px`,
+            px: 0,
+            py: '4px',
+            minHeight: '40vh',
+            lineHeight: 1.7,
+          },
+        }}
+      >
         <EditorContent editor={editor} />
       </Box>
     </Box>

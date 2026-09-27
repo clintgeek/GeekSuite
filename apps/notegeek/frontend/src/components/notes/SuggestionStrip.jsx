@@ -41,10 +41,15 @@ import { excerptFor, readDismissed, writeDismissed } from '../../utils/suggestio
 
 const TITLE_DEBOUNCE_MS = 1500;
 
-/** Chips are 44px tall on every viewport (MOBILE_UI_PLAN §2) and wrap; the row never scrolls sideways. */
+/**
+ * Chips are 44px tall on phones (MOBILE_UI_PLAN §2), 32px from `md` up, and
+ * wrap; the row never scrolls sideways. Squared like the type stamps (Lab
+ * Notebook), not round pills.
+ */
 const chipSx = (theme, tone) => ({
   minHeight: 44,
-  borderRadius: '22px',
+  [theme.breakpoints.up('md')]: { minHeight: 32 },
+  borderRadius: '4px',
   maxWidth: '100%',
   borderColor: alpha(tone, 0.35),
   color: 'text.primary',
@@ -159,8 +164,9 @@ function SuggestionStrip({
         mt: 1,
         px: 1.25,
         py: 1,
-        borderRadius: 2,
-        border: `1px solid ${ theme.palette.divider }`,
+        // A pencilled margin note, not a panel: dashed, squared.
+        borderRadius: '4px',
+        border: `1px dashed ${ theme.palette.divider }`,
         bgcolor: alpha(theme.palette.primary.main, 0.03),
       }}
     >

@@ -9,6 +9,7 @@ import {
 import { GeekErrorState } from '@geeksuite/ui';
 import { Link as RouterLink } from 'react-router-dom';
 import NoteList from './NoteList';
+import { layout } from '../theme/tokens';
 
 const TagNotesList = () => {
     const { tag } = useParams();
@@ -41,7 +42,8 @@ const TagNotesList = () => {
 
     return (
         <Box sx={{ p: 2 }}>
-            <Breadcrumbs sx={{ mb: 2 }}>
+            {/* On the list's own column, so the path sits over the notes it names. */}
+            <Breadcrumbs sx={{ mb: 1, maxWidth: layout.contentWidth, mx: 'auto', px: '4px' }}>
                 {items.map((item, index) => (
                     index === items.length - 1 ? (
                         <Typography key={index} color="text.primary" variant="h6">

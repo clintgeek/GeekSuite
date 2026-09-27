@@ -16,7 +16,7 @@ import ReactMarkdown from 'react-markdown';
 // See NoteViewer: the preview and the viewer must agree about what markdown
 // is, or the editor shows something the saved note will not.
 import remarkGfm from 'remark-gfm';
-import { surfaces } from '../../theme/tokens';
+import { stampFill, stampInk, surfaces } from '../../theme/tokens';
 
 /**
  * MarkdownEditor — markdown editing with live preview, rendered by
@@ -50,7 +50,6 @@ function MarkdownEditor({ content = '', setContent, isLoading, readOnly = false,
                 disableUnderline: true,
             }}
             sx={{
-                height: '100%',
                 // The scroll lives on the input ROOT, and the textarea inside
                 // it is left alone to grow — the same shape RichTextEditor
                 // uses, where ProseMirror's content div grows and its wrapper
@@ -67,14 +66,17 @@ function MarkdownEditor({ content = '', setContent, isLoading, readOnly = false,
                 // note with 80 sections: inline height 8956px, computed height
                 // 44.78px — collapsed to about one line, with the whole note
                 // scrolling inside that sliver.
+                //
+                // Since the Lab Notebook pass the page (NoteShell) is the
+                // scroller, so the root no longer scrolls either: it grows
+                // with the textarea, and the sheet scrolls around it.
                 '& .MuiInputBase-root': {
-                    height: '100%',
                     alignItems: 'flex-start',
-                    overflow: 'auto',
-                    p: { xs: 1.5, sm: 2 },
+                    p: 0,
+                    minHeight: '40vh',
                 },
                 '& .MuiInputBase-input': {
-                    fontFamily: '"Roboto Mono", monospace',
+                    fontFamily: theme.typography.fontFamilyMono,
                     fontSize: `${fontSize}px`,
                     lineHeight: 1.6,
                 },
@@ -85,9 +87,8 @@ function MarkdownEditor({ content = '', setContent, isLoading, readOnly = false,
     const renderPreview = () => (
         <Box
             sx={{
-                p: { xs: 1.5, sm: 2 },
-                height: '100%',
-                overflow: 'auto',
+                minHeight: '40vh',
+                '& > :first-child': { mt: 0 },
                 '& h1, & h2, & h3, & h4, & h5, & h6': {
                     mt: 2,
                     mb: 1,
@@ -100,7 +101,7 @@ function MarkdownEditor({ content = '', setContent, isLoading, readOnly = false,
                 '& ul, & ol': { pl: 3, mb: 1.5 },
                 '& li': { mb: 0.5 },
                 '& code': {
-                    fontFamily: '"Roboto Mono", monospace',
+                    fontFamily: theme.typography.fontFamilyMono,
                     fontSize: '0.85em',
                     bgcolor: 'action.hover',
                     px: 0.5,
@@ -168,20 +169,25 @@ function MarkdownEditor({ content = '', setContent, isLoading, readOnly = false,
     );
 
     return (
-        <Box sx={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
-            {/* Mode toggle */}
+        <Box sx={{ display: 'flex', flexDirection: 'column', flex: '1 0 auto' }}>
+            {/* Mode toggle — the same slim, sticky, left-aligned strip as the
+                rich-text toolbar, so every page type has one toolbar line. */}
             {!readOnly && (
                 <Box
+                    role="toolbar"
+                    aria-label="Markdown view"
+                    data-editor-toolbar
                     sx={{
+                        position: 'sticky',
+                        top: 0,
+                        zIndex: 2,
                         display: 'flex',
                         alignItems: 'center',
-                        justifyContent: 'center',
-                        p: 1,
-                        px: { xs: 1, sm: 2 },
+                        py: '4px',
+                        mb: '16px',
                         borderBottom: 1,
                         borderColor: 'divider',
-                        bgcolor: surfaces(theme).paper,
-                        gap: 1,
+                        bgcolor: surfaces(theme).elevated,
                     }}
                 >
                     <ToggleButtonGroup
@@ -189,46 +195,66 @@ function MarkdownEditor({ content = '', setContent, isLoading, readOnly = false,
                         exclusive
                         onChange={handleViewModeChange}
                         size="small"
+                        sx={{
+                            '& .MuiToggleButton-root': {
+                                border: 0,
+                                borderRadius: '4px !important',
+                                px: '10px',
+                                py: '4px',
+                                gap: '6px',
+                                fontFamily: theme.typography.fontFamilyMono,
+                                fontSize: '0.75rem',
+                                fontWeight: 500,
+                                letterSpacing: '0.04em',
+                                textTransform: 'uppercase',
+                                color: 'text.secondary',
+                                [theme.breakpoints.down('md')]: { minHeight: 44, minWidth: 44 },
+                                '&.Mui-selected': {
+                                    color: stampInk(theme).ink,
+                                    bgcolor: stampFill(theme, stampInk(theme).ink),
+                                },
+                                '& svg': { fontSize: 16 },
+                            },
+                        }}
                     >
                         <ToggleButton value="edit" aria-label="edit mode">
-                            <Edit fontSize="small" sx={{ mr: 0.5 }} />
+                            <Edit fontSize="small" />
                             Edit
                         </ToggleButton>
                         {!isMobile && (
                             <ToggleButton value="split" aria-label="split mode">
-                                <VerticalSplit fontSize="small" sx={{ mr: 0.5 }} />
+                                <VerticalSplit fontSize="small" />
                                 Split
                             </ToggleButton>
                         )}
                         <ToggleButton value="preview" aria-label="preview mode">
-                            <Visibility fontSize="small" sx={{ mr: 0.5 }} />
+                            <Visibility fontSize="small" />
                             Preview
                         </ToggleButton>
                     </ToggleButtonGroup>
-
                 </Box>
             )}
 
-            {/* Content area */}
-            <Box sx={{ flexGrow: 1, minHeight: 0, display: 'flex' }}>
+            {/* Content area — grows; the page scrolls */}
+            <Box sx={{ flex: '1 0 auto', display: 'flex', gap: viewMode === 'split' ? '24px' : 0 }}>
                 {viewMode === 'edit' && (
-                    <Box sx={{ width: '100%', height: '100%' }}>
+                    <Box sx={{ width: '100%' }}>
                         {renderEditor()}
                     </Box>
                 )}
 
                 {viewMode === 'preview' && (
-                    <Box sx={{ width: '100%', height: '100%' }}>
+                    <Box sx={{ width: '100%' }}>
                         {renderPreview()}
                     </Box>
                 )}
 
                 {viewMode === 'split' && (
                     <>
-                        <Box sx={{ width: '50%', height: '100%', borderRight: 1, borderColor: 'divider' }}>
+                        <Box sx={{ width: '50%', pr: '24px', borderRight: 1, borderColor: 'divider' }}>
                             {renderEditor()}
                         </Box>
-                        <Box sx={{ width: '50%', height: '100%' }}>
+                        <Box sx={{ width: '50%' }}>
                             {renderPreview()}
                         </Box>
                     </>

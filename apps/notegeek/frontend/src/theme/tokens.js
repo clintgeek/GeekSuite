@@ -54,6 +54,45 @@ export function noteTypeColor(theme, type) {
 }
 
 /**
+ * Text-bearing type colour (stamp labels, code-preview tint). Same hue as
+ * `noteTypeColor`, darkened/lifted so 12px text clears 4.5:1 on the stamp's
+ * own fill — see createAppTheme.js for the measured ratios.
+ */
+export function noteTypeInk(theme, type) {
+  const map = theme.palette.noteTypeInk;
+  if (!map) return noteTypeColor(theme, type);
+  return map[type] || map[FALLBACK_NOTE_TYPE] || theme.palette.text?.primary;
+}
+
+/** The tinted fill behind a stamp: 8% of the ink in light, 12% in dark. */
+export function stampFill(theme, ink) {
+  return alpha(ink, theme.palette.mode === 'dark' ? 0.12 : 0.08);
+}
+
+/** Rubber-stamp inks for the save stamp. */
+export function stampInk(theme) {
+  return (
+    theme.palette.stamp || {
+      ink: theme.palette.primary?.main,
+      error: theme.palette.error?.main,
+      muted: theme.palette.text?.secondary,
+    }
+  );
+}
+
+/**
+ * The desk's dot grid as `sx` background props. One 1px dot per 16px — four
+ * suite units — anchored to the element so it does not crawl on scroll.
+ */
+export function dotGridBackground(theme) {
+  const dot = theme.palette.dotGrid || alpha(theme.palette.text?.primary || '#000', 0.1);
+  return {
+    backgroundImage: `radial-gradient(circle at 1px 1px, ${dot} 1px, transparent 1.5px)`,
+    backgroundSize: '16px 16px',
+  };
+}
+
+/**
  * Layout constants — replaces magic numbers scattered across components.
  * All in px; use via `layout.contentWidth` etc. in `sx` props.
  */
@@ -62,6 +101,10 @@ export const layout = {
   pickerWidth: 480,     // max width for the new-note type picker
   timestampMinWidth: 44, // min width for the timestamp column in NoteRow
   rowHeight: 44,        // skeleton row height for list loading states
+  // The writing measure: ~70ch of 16px Geist. The sheet is this plus its
+  // gutters, so the text column — title, toolbar, body — lines up exactly.
+  measure: 680,
+  sheetGutter: { xs: 16, sm: 32, md: 56 },
 };
 
 /**

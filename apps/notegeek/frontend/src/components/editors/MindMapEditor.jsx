@@ -6,7 +6,8 @@ import ReactFlow, {
     useNodesState,
     useEdgesState,
     addEdge,
-    ReactFlowProvider
+    ReactFlowProvider,
+    useReactFlow,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { Box, useTheme, useMediaQuery, alpha } from '@mui/material';
@@ -53,6 +54,14 @@ function MindMapEditorInner({ content, setContent, readOnly }) {
     //     re-serialization differs from what is stored and the note was saved
     //     although it had only been looked at.
     const baselinePendingRef = useRef(true);
+    // `fitView` on <ReactFlow> fits the nodes it mounts with — the default
+    // "Main Idea" placeholder — not the saved map that replaces it a tick
+    // later, so a stored map opened half off-canvas. Re-fit once the loaded
+    // nodes have been measured. This moves the VIEWPORT only; nodes and edges
+    // are untouched, so it cannot be mistaken for an edit (see
+    // baselinePendingRef above).
+    const { fitView } = useReactFlow();
+    const fitAfterLoadRef = useRef(false);
 
     // Initialize or update from content
     useEffect(() => {
@@ -83,6 +92,7 @@ function MindMapEditorInner({ content, setContent, readOnly }) {
                         }));
                         setNodes(nodesWithCallbacks);
                         setEdges(data.edges || []);
+                        fitAfterLoadRef.current = true;
 
                         // Update the next ID based on the highest ID in the nodes
                         const maxId = Math.max(...data.nodes.map(n => {
@@ -141,6 +151,15 @@ function MindMapEditorInner({ content, setContent, readOnly }) {
         }, 100);
         return () => clearTimeout(timer);
     }, [nodes, edges, readOnly, setContent]);
+
+    useEffect(() => {
+        if (!fitAfterLoadRef.current) return undefined;
+        // Wait until ReactFlow has measured the new nodes.
+        if (!nodes.length || nodes.some((n) => !n.width)) return undefined;
+        fitAfterLoadRef.current = false;
+        const frame = requestAnimationFrame(() => fitView({ padding: 0.2, maxZoom: 1.25 }));
+        return () => cancelAnimationFrame(frame);
+    }, [nodes, fitView]);
 
     const initializeEmptyMap = () => {
         const rootNode = {

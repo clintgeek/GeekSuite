@@ -125,7 +125,7 @@ function Settings() {
             <Typography
                 variant="h3"
                 sx={{
-                    fontFamily: '"Geist", -apple-system, BlinkMacSystemFont, sans-serif',
+                    fontFamily: '"Geist Variable", "Geist", -apple-system, BlinkMacSystemFont, sans-serif',
                     fontWeight: 600,
                     fontSize: { xs: '1.5rem', sm: '1.75rem' },
                     color: 'text.primary',

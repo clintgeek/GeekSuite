@@ -1,19 +1,58 @@
 // NoteGeek fixtures (MOBILE_UI_PLAN.md M2). Every note operation goes
 // through /graphql (apolloClient), keyed by GraphQL operation name; the
 // session check goes through the shared session routes.
+import { readFileSync } from 'node:fs';
 import { sessionRoutes, graphqlRoute } from '../../lib/net.mjs';
 
-const today = new Date();
-const iso = (d) => d.toISOString().slice(0, 10);
-const daysAgo = (n) => { const d = new Date(today); d.setDate(d.getDate() - n); return iso(d); };
+// Full timestamps, not bare dates: a date-only ISO string parses as UTC
+// midnight, which is "yesterday" evening in every zone west of Greenwich —
+// and the list now groups by the writer's LOCAL day.
+const now = new Date();
+const hoursAgo = (h) => new Date(now.getTime() - h * 3600 * 1000).toISOString();
+const daysAgo = (d) => hoursAgo(d * 24);
 
-const note = (id, title, type, tags, content) => ({
+const note = (id, title, type, tags, content, updatedAt = hoursAgo(2), createdAt = daysAgo(20)) => ({
   __typename: 'Note',
   id, title, content, type, tags,
   isLocked: false,
   isEncrypted: false,
-  createdAt: daysAgo(20),
-  updatedAt: daysAgo(0),
+  createdAt,
+  updatedAt,
+});
+
+// A real snapshot, written by the sketch editor itself (tldraw 2.4, schema v2:
+// three boxes, two arrows and a pen stroke), captured on 2026-09-26. The
+// hand-written one it replaces had an invented schema header, so tldraw's
+// migrations threw and the sketch scene showed tldraw's own error screen.
+export const SKETCH_CONTENT = readFileSync(new URL('./sketch-snapshot.json', import.meta.url), 'utf8');
+
+const mmNode = (id, label, x, y, isRoot = false) => ({
+  id, type: 'mindmap', position: { x, y }, data: { label, isRoot }, dragHandle: '.drag-handle',
+});
+export const MINDMAP_CONTENT = JSON.stringify({
+  nodes: [
+    mmNode('0', 'GeekSuite', 100, 250, true),
+    mmNode('1', 'NoteGeek', 350, 100),
+    mmNode('2', 'BookGeek', 350, 200),
+    mmNode('3', 'GameGeek', 350, 300),
+    mmNode('4', 'FitnessGeek', 350, 400),
+    mmNode('5', 'BaseGeek', 350, 500),
+  ],
+  edges: ['1', '2', '3', '4', '5'].map((t) => ({ id: `e0-${t}`, source: '0', target: t })),
+});
+
+export const CODE_CONTENT = JSON.stringify({
+  language: 'javascript',
+  code: [
+    '// Debounce a function: run it once the calls stop.',
+    'export function debounce(fn, wait = 200) {',
+    '  let timer = null;',
+    '  return (...args) => {',
+    '    clearTimeout(timer);',
+    '    timer = setTimeout(() => fn(...args), wait);',
+    '  };',
+    '}',
+  ].join('\n'),
 });
 
 export const NOTE_N1 = note(
@@ -22,15 +61,25 @@ export const NOTE_N1 = note(
   'text',
   ['work', 'planning'],
   '<h2>Roadmap</h2><p>Draft agenda for the <strong>Q3 planning</strong> session — see the bullet list below and the linked doc.</p><ul><li>Ship the mobile pass</li><li>Close out CSRF hardening</li><li>Decide on flockgeek bottom nav</li></ul><p>Follow-ups land in a separate note once triaged.</p>',
+  hoursAgo(2),
 );
 
+export const NOTE_CODE = note('n6', 'debounce.js', 'code', ['dev', 'dev/frontend'], CODE_CONTENT, hoursAgo(5));
+export const NOTE_MINDMAP = note('n4', 'Mind map: GeekSuite apps', 'mindmap', ['meta'], MINDMAP_CONTENT, daysAgo(3));
+export const NOTE_SKETCH = note('n3', 'Sketch: onboarding flow', 'handwritten', ['product'], SKETCH_CONTENT, daysAgo(1));
+
+// Spread across the recency buckets: Today, Yesterday, This week, and two
+// older months — the notes list groups by them.
 export const NOTES = [
   NOTE_N1,
-  note('n2', 'Recipe: brown butter chocolate chip cookies', 'markdown', ['recipes'], '# Cookies\n\nBrown the butter first.'),
-  note('n3', 'Sketch: onboarding flow', 'handwritten', ['product'], ''),
-  note('n4', 'Mind map: GeekSuite apps', 'mindmap', ['meta'], '{}'),
-  note('n5', 'Standup snippets', 'text', ['work'], '<p>Nothing blocking.</p>'),
-  note('n6', 'snippet.js', 'code', ['dev'], 'export const x = 1;'),
+  NOTE_CODE,
+  note('n5', 'Standup snippets', 'text', ['work', 'work/meetings'], '<p>Nothing blocking. Pairing on the sidebar tree after lunch; ask about the tag counts query.</p>', hoursAgo(7)),
+  NOTE_SKETCH,
+  note('n2', 'Recipe: brown butter chocolate chip cookies', 'markdown', ['recipes'], '# Cookies\n\nBrown the butter first, then **chill the dough** overnight. 350°F, 11 minutes.', daysAgo(1.2)),
+  NOTE_MINDMAP,
+  note('n7', 'Nginx wildcard cert renewal', 'markdown', ['dev', 'dev/infra'], '## Renewal\n\nRun certbot with the DNS plugin, then `nginx -t` and reload.', daysAgo(5)),
+  note('n8', 'Garden bed layout', 'handwritten', ['garden'], '', daysAgo(40)),
+  note('n9', 'Reading list', 'text', ['reading'], '<p>The Pragmatic Programmer, A Philosophy of Software Design, Thinking in Systems.</p>', daysAgo(75)),
 ];
 
 // Enough tags (with a nested path) that the sidebar's tree must scroll — the
@@ -60,8 +109,21 @@ export const NOTE_SUGGESTIONS = {
   },
 };
 
+// The sidebar's per-tag counts come from `notes { id tags }`: every fixture
+// note plus a few tag-only ones so each listed tag has a believable count.
+const extraTagged = [
+  ['c1', ['dev', 'dev/frontend']], ['c2', ['dev/frontend']], ['c3', ['dev/infra']],
+  ['c4', ['finance']], ['c5', ['health']], ['c6', ['writing']], ['c7', ['writing', 'zettel']],
+  ['c8', ['travel']], ['c9', ['work/meetings']], ['c10', ['planning']],
+];
+export const TAG_COUNT_NOTES = [
+  ...NOTES.map(({ id, tags }) => ({ __typename: 'Note', id, tags })),
+  ...extraTagged.map(([id, tags]) => ({ __typename: 'Note', id, tags })),
+];
+
 export const OPS = {
   GetNotes: { notes: NOTES },
+  GetNoteTagCounts: { notes: TAG_COUNT_NOTES },
   GetNoteById: { note: NOTE_N1 },
   GetNoteTags: { noteTags: TAGS },
   CreateNote: { createNote: note('new1', 'Untitled Note', 'text', [], '') },

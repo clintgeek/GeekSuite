@@ -8,12 +8,22 @@
  * each guessing differently.
  */
 
-/** Best human-readable name we have, or "Writer" when we have nothing. */
-export function displayNameFrom(user) {
-  const raw = user?.name || user?.username || user?.email?.split('@')[0] || '';
-  if (!raw) return 'Writer';
+/**
+ * The first name to greet someone by, first letter capitalised — "Chef",
+ * not "chef" — or '' when we have nothing to go on. Whatever the source (a
+ * profile name, a username, an email's local part), only the FIRST letter
+ * is touched: "McKenna" stays "McKenna".
+ */
+export function greetingNameFrom(user) {
+  const raw = String(user?.name || user?.displayName || user?.username || user?.email?.split('@')[0] || '').trim();
+  if (!raw) return '';
   const first = raw.split(/[._@\s]/)[0];
   return first.charAt(0).toUpperCase() + first.slice(1);
+}
+
+/** Best human-readable name we have, or "Writer" when we have nothing. */
+export function displayNameFrom(user) {
+  return greetingNameFrom(user) || 'Writer';
 }
 
 /** Email if we have one; otherwise the username, which is at least stable. */

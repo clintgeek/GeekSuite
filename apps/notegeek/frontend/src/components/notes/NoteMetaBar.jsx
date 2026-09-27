@@ -1,30 +1,20 @@
 import React from 'react';
-import { Box, InputBase, Stack, Typography, useTheme } from '@mui/material';
+import { Box, InputBase, useTheme } from '@mui/material';
 import TagSelector from '../TagSelector';
-import { border, glow, noteTypeColor } from '../../theme/tokens';
-
-// Type config — labels are ALLCAPS (ink-stamp mono style)
-// Color comes from theme.palette.noteTypes[colorKey]
-const TYPE_CONFIG = {
-  text:        { label: 'RICH TEXT',  colorKey: 'text' },
-  markdown:    { label: 'MARKDOWN',   colorKey: 'markdown' },
-  code:        { label: 'CODE',       colorKey: 'code' },
-  mindmap:     { label: 'MINDMAP',    colorKey: 'mindmap' },
-  handwritten: { label: 'SKETCH',     colorKey: 'handwritten' },
-};
+import TypeStamp from './TypeStamp';
 
 /**
- * NoteMetaBar — Title input + type pill + tag chips.
- * Lives in the sticky header slot of NoteShell on `surfaces.paper`.
+ * NoteMetaBar — the head of the page: a chrome line, the title, the tags.
  *
- * Layout:
- *   Row 1: [title input (full width)]
- *   Row 2: [type pill]  [tag chips flowing right]  [desktop actions]
- *   Row 3: [`belowMeta` slot — the suggestion strip, when there is one]
+ *   Row 1: [leading (Back)] [type stamp] ·········· [status (save stamp)] [actions (⋯)]
+ *   Row 2: the title, large, edited in place — no box, no label
+ *   Row 3: tags, as a quiet inline field
+ *   Row 4: `belowMeta` — the suggestion strip, when there is one
  *
- * Row 3 is a slot rather than a component because the strip needs the editor
- * page's state (the body, the save token, the tag setter) and the meta bar has
- * no business knowing about any of it.
+ * It sits inside NoteShell's text column, so the title, the toolbar and the
+ * body all share one left edge. Row 4 is a slot rather than a component
+ * because the strip needs the editor page's state (the body, the save token,
+ * the tag setter) and the meta bar has no business knowing about any of it.
  */
 function NoteMetaBar({
   title,
@@ -33,151 +23,83 @@ function NoteMetaBar({
   tags,
   onTagsChange,
   readOnly = false,
-  dirty = false,
-  actions,
+  leading = null,
+  status = null,
+  actions = null,
   belowMeta = null,
+  compact = false,
 }) {
   const theme = useTheme();
-  const typeConfig = TYPE_CONFIG[noteType] || TYPE_CONFIG.text;
-  const typeColor = noteTypeColor(theme, typeConfig.colorKey);
 
   return (
-    <Box sx={{ px: { xs: 1.5, sm: 2 }, py: { xs: 1.25, sm: 1.5 } }}>
-
-      {/* ── Row 1: Title input ─────────────────────────────────────── */}
+    <Box sx={{ pt: compact ? '8px' : { xs: '8px', md: '16px' }, pb: compact ? '8px' : '12px' }}>
+      {/* ── Row 1: chrome line ─────────────────────────────────────── */}
       <Box
         sx={{
-          mb: 1.25,
-          borderRadius: '4px',
-          transition: 'box-shadow 120ms ease',
-          '&:focus-within': {
-            boxShadow: `0 0 0 3px ${glow(theme).ring}`,
-          },
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          minHeight: 36,
+          mb: compact ? '4px' : { xs: '8px', md: '16px' },
+          // Pull Back into the margin so its arrow, not its padding, sits on
+          // the text column's edge.
+          ml: leading ? '-6px' : 0,
         }}
       >
-        <InputBase
-          value={title}
-          onChange={(e) => onTitleChange?.(e.target.value)}
-          disabled={readOnly}
-          placeholder="Untitled note"
-          fullWidth
-          inputProps={{ 'aria-label': 'Note title' }}
-          sx={{
-            // 44px hit area (MOBILE_UI_PLAN §2) — a bare title input with
-            // no borders sat as tall as its text (23px); center the text in
-            // a taller box rather than growing the type size.
-            minHeight: 44,
-            display: 'flex',
-            alignItems: 'center',
-            fontSize: '1.25rem',
-            fontWeight: 600,
-            fontFamily: theme.typography.fontFamily,
-            letterSpacing: '-0.015em',
-            lineHeight: 1.3,
-            color: 'text.primary',
-            // No border, no underline — the focus ring on the parent is enough
-            '& .MuiInputBase-input': {
-              py: 0,
-              px: 0,
-              bgcolor: 'transparent',
-              '&::placeholder': {
-                color: 'text.disabled',
-                fontStyle: 'italic',
-                opacity: 1,
-              },
-            },
-          }}
-        />
-      </Box>
-
-      {/* ── Row 2: Type pill + tags + desktop actions ──────────────── */}
-      <Stack
-        direction="row"
-        spacing={1.5}
-        alignItems="center"
-        flexWrap="wrap"
-        sx={{ gap: 1 }}
-      >
-        {/* Type indicator pill */}
-        {noteType && (
-          <Box
-            sx={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 0.625,
-              px: 0.875,
-              py: 0.25,
-              borderRadius: '4px',
-              border: `1px solid ${border(theme)}`,
-              bgcolor: glow(theme).soft,
-              flexShrink: 0,
-            }}
-          >
-            {/* Color dot */}
-            <Box
-              sx={{
-                width: 6,
-                height: 6,
-                borderRadius: '50%',
-                bgcolor: typeColor,
-                flexShrink: 0,
-              }}
-            />
-            <Typography
-              variant="caption"
-              sx={{
-                color: typeColor,
-                lineHeight: 1,
-                letterSpacing: '0.04em',
-              }}
-            >
-              {typeConfig.label}
-            </Typography>
-          </Box>
-        )}
-
-        {/* Unsaved-changes indicator */}
-        {dirty && (
-          <Typography
-            variant="caption"
-            sx={{
-              color: 'primary.main',
-              flexShrink: 0,
-              lineHeight: 1,
-              userSelect: 'none',
-            }}
-          >
-            ● Edited
-          </Typography>
-        )}
-
-        {/* Tag selector */}
-        <Box sx={{ flexGrow: 1, minWidth: 120 }}>
-          <TagSelector
-            selectedTags={tags}
-            onChange={onTagsChange}
-            disabled={readOnly}
-          />
-        </Box>
-
-        {/* Desktop-only actions (Save/Cancel/Delete). Pairs with NoteShell's
-            mobile sticky bar — both gate on `md` so exactly one renders at
-            every width. */}
+        {leading}
+        {noteType && <TypeStamp type={noteType} />}
+        <Box sx={{ flex: 1 }} />
+        {status}
         {actions && (
-          <Box
-            sx={{
-              display: { xs: 'none', md: 'flex' },
-              gap: 1,
-              flexShrink: 0,
-              alignItems: 'center',
-            }}
-          >
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: '4px', flexShrink: 0, mr: '-6px' }}>
             {actions}
           </Box>
         )}
-      </Stack>
+      </Box>
 
-      {/* ── Row 3: whatever the page wants under the title ─────────── */}
+      {/* ── Row 2: the title ───────────────────────────────────────── */}
+      <InputBase
+        value={title}
+        onChange={(e) => onTitleChange?.(e.target.value)}
+        disabled={readOnly}
+        placeholder="Untitled note"
+        fullWidth
+        inputProps={{ 'aria-label': 'Note title' }}
+        sx={{
+          fontFamily: theme.typography.fontFamily,
+          fontSize: compact ? { xs: '1.375rem', md: '1.5rem' } : { xs: '1.625rem', md: '2.125rem' },
+          fontWeight: 700,
+          letterSpacing: '-0.025em',
+          lineHeight: 1.2,
+          color: 'text.primary',
+          minHeight: 44,
+          '& .MuiInputBase-input': {
+            p: 0,
+            height: 'auto',
+            // Restated on the <input>: the suite theme lifts every phone
+            // input to 16px (iOS zoom guard), which would shrink the title
+            // to body size exactly where it most needs to read as a title.
+            fontSize: 'inherit',
+            '&::placeholder': { color: 'text.secondary', opacity: 0.7 },
+          },
+          '&.Mui-disabled .MuiInputBase-input': {
+            WebkitTextFillColor: theme.palette.text.primary,
+          },
+          // A pencil line under the title while it has focus — the only
+          // affordance it needs.
+          borderBottom: '1px solid transparent',
+          transition: 'border-color 120ms ease',
+          '&.Mui-focused': { borderBottomColor: theme.palette.divider },
+          '@media (prefers-reduced-motion: reduce)': { transition: 'none' },
+        }}
+      />
+
+      {/* ── Row 3: tags ────────────────────────────────────────────── */}
+      <Box sx={{ mt: compact ? '4px' : '8px' }}>
+        <TagSelector selectedTags={tags} onChange={onTagsChange} disabled={readOnly} />
+      </Box>
+
+      {/* ── Row 4: whatever the page wants under the title ─────────── */}
       {belowMeta}
     </Box>
   );

@@ -35,9 +35,14 @@ export function decodeCodeNote(content = '') {
  * @param {string} content  Raw note content.
  * @param {string} type     Note type: 'text' | 'markdown' | 'code' | …
  * @param {number} maxLen   Approximate character ceiling (default 180).
+ * @param {object} [opts]
+ * @param {boolean} [opts.shape=false]  Keep a little block structure for a
+ *   human reader (heading — paragraph, item · item). Off by default: the AI
+ *   suggestion excerpt (utils/suggestions.js) is built from this too, and
+ *   what the gateway is sent should not change for a visual nicety.
  * @returns {string}        Clean single-line preview string.
  */
-export function previewText(content = '', type = 'text', maxLen = 180) {
+export function previewText(content = '', type = 'text', maxLen = 180, { shape = false } = {}) {
   if (!content) return '';
   if (typeof content === 'string' && content.startsWith('data:image/')) return '';
 
@@ -50,6 +55,17 @@ export function previewText(content = '', type = 'text', maxLen = 180) {
   }
 
   let s = content;
+
+  // Keep the shape a little: a heading runs into its first paragraph with a
+  // dash ("Roadmap — Draft agenda…"), list items are separated by a middot,
+  // instead of every block collapsing into one undifferentiated run.
+  if (shape) {
+    s = s.replace(/<\/h[1-6]>/gi, ' — ');
+    s = s.replace(/<\/li>/gi, ' · ');
+    if (type === 'markdown') {
+      s = s.replace(/^\s{0,3}#{1,6}\s+(.+?)\s*#*\s*$/gm, '$1 — ');
+    }
+  }
 
   // Strip HTML (rich-text + any inline HTML in markdown)
   s = s.replace(/<[^>]+>/g, ' ');
@@ -71,7 +87,9 @@ export function previewText(content = '', type = 'text', maxLen = 180) {
     s = s.replace(/!\[([^\]]*)\]\([^)]+\)/g, '$1');
   }
 
-  // Collapse whitespace and trim
+  // Collapse whitespace and trim, and drop a separator left dangling at the
+  // end (a heading or list item with nothing after it).
   s = s.replace(/\s+/g, ' ').trim();
+  if (shape) s = s.replace(/(\s*[—·])+$/, '').replace(/·\s*—/g, '—').trim();
   return s.slice(0, maxLen);
 }

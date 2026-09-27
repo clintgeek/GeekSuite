@@ -79,6 +79,16 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
+/** Cmd/Ctrl+S — the explicit save, now that there is no Save button. */
+function pressSave() {
+  window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true }));
+}
+
+/** The save stamp (role="status"). */
+function stamp() {
+  return screen.getByRole('status');
+}
+
 /** Type into the title field, which is the one control that is always present. */
 async function typeTitle(text) {
   const field = await screen.findByPlaceholderText(/untitled/i);
@@ -99,12 +109,12 @@ describe('NoteEditorPage — one save at a time', () => {
     renderEditor();
     await typeTitle('Roof quote');
 
-    const saveButtons = screen.getAllByRole('button', { name: /^save$/i });
+    // There is no Save button any more (the page autosaves; the stamp shows
+    // the state). Two explicit saves in the same tick — the shape of "Back
+    // fires a save, then the unmount flush fires another".
     await act(async () => {
-      // Two clicks in the same tick — the shape of "Back fires a save, then the
-      // unmount flush fires another".
-      saveButtons[0].click();
-      saveButtons[0].click();
+      pressSave();
+      pressSave();
       await Promise.resolve();
     });
 
@@ -123,14 +133,10 @@ describe('NoteEditorPage — one save at a time', () => {
     renderEditor();
     await typeTitle('Roof quote');
 
-    const save = screen.getAllByRole('button', { name: /^save$/i })[0];
-    await act(async () => { save.click(); });          // create, still pending
-    // The Save button disables itself while a save runs, so the second request
-    // comes in the way the real ones did — Cmd/Ctrl+S, which is not disabled,
-    // and (in production) the unmount flush.
-    await act(async () => {
-      window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true }));
-    });
+    await act(async () => { pressSave(); });          // create, still pending
+    // The second request comes in the way the real ones do — Cmd/Ctrl+S
+    // again, the ⋯ menu's "Save now", or (in production) the unmount flush.
+    await act(async () => { pressSave(); });
     await act(async () => { resolveCreate(); await Promise.resolve(); });
 
     await waitFor(() => expect(updateNote).toHaveBeenCalledTimes(1));
@@ -159,13 +165,78 @@ describe('NoteEditorPage — save failures are visible', () => {
     renderEditor();
     await typeTitle('Roof quote');
     await act(async () => {
-      screen.getAllByRole('button', { name: /^save$/i })[0].click();
+      pressSave();
       await Promise.resolve();
     });
 
     await waitFor(() => expect(notify).toHaveBeenCalled());
     expect(notify.mock.calls[0][0]).toContain('at most 100000');
     expect(notify.mock.calls[0][1]).toMatchObject({ tone: 'error' });
+    // And the page itself says so — the stamp, not only a toast that goes away.
+    expect(stamp()).toHaveTextContent(/not saved/i);
+  });
+
+  it('keeps saying "Not saved" through further edits, until a save succeeds', async () => {
+    createNote.mockRejectedValueOnce(new Error('Network down'));
+    renderEditor();
+    await typeTitle('Roof quote');
+    await act(async () => { pressSave(); await Promise.resolve(); });
+    await waitFor(() => expect(stamp()).toHaveTextContent(/not saved/i));
+
+    // More typing must not make a failed save look fine.
+    await typeTitle('Roof quote, v2');
+    expect(stamp()).toHaveTextContent(/not saved/i);
+
+    // The next save lands, and only then does the stamp come down.
+    await act(async () => { pressSave(); await Promise.resolve(); });
+    await waitFor(() => expect(stamp()).toHaveTextContent(/saved · just now/i));
+    expect(stamp()).toHaveAttribute('data-save-state', 'saved');
+  });
+});
+
+describe('NoteEditorPage — the save stamp', () => {
+  it('walks Draft → Unsaved → Saving… → Saved · just now', async () => {
+    let resolveCreate;
+    createNote.mockImplementationOnce(
+      () => new Promise((r) => { resolveCreate = () => r({ data: { createNote: { id: 'new-1', title: 'Roof quote' } } }); })
+    );
+    renderEditor();
+    await screen.findByPlaceholderText(/untitled/i);
+    expect(stamp()).toHaveTextContent(/^draft$/i);
+
+    await typeTitle('Roof quote');
+    expect(stamp()).toHaveTextContent(/^unsaved$/i);
+
+    await act(async () => { pressSave(); });
+    expect(stamp()).toHaveTextContent(/saving/i);
+
+    await act(async () => { resolveCreate(); await Promise.resolve(); });
+    await waitFor(() => expect(stamp()).toHaveTextContent(/saved · just now/i));
+  });
+
+  it('autosaves two seconds after the last edit, with no button to press', async () => {
+    renderEditor();
+    await typeTitle('Roof quote');
+    expect(createNote).not.toHaveBeenCalled();
+    await act(async () => { vi.advanceTimersByTime(2100); });
+    await waitFor(() => expect(createNote).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(stamp()).toHaveTextContent(/saved/i));
+  });
+
+  it('says "Nothing to save" for an empty note instead of saying nothing', async () => {
+    renderEditor();
+    await screen.findByPlaceholderText(/untitled/i);
+    await act(async () => { pressSave(); });
+    expect(stamp()).toHaveTextContent(/nothing to save/i);
+    expect(createNote).not.toHaveBeenCalled();
+  });
+
+  it('"Save now" in the ⋯ menu saves', async () => {
+    renderEditor();
+    await typeTitle('Roof quote');
+    await act(async () => { screen.getByRole('button', { name: 'More note actions' }).click(); });
+    await act(async () => { screen.getByRole('menuitem', { name: /save now/i }).click(); });
+    await waitFor(() => expect(createNote).toHaveBeenCalledTimes(1));
   });
 
 });

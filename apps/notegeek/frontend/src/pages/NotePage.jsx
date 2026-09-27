@@ -52,6 +52,7 @@ function NotePage() {
                 <Box sx={{
                     display: 'flex',
                     flexGrow: 1,
+                    minHeight: 0,
                     height: '100%',
                     width: '100%',
                     overflow: 'hidden',
@@ -157,8 +158,14 @@ function NotePage() {
         return renderEditor();
     }
 
-    // For other note types, use the regular viewer/editor pattern
-    return isEditRoute ? <NoteEditorPage /> : <NoteViewer />;
+    // For other note types, use the regular viewer/editor pattern. The
+    // frame does not scroll on /notes/:id (Layout passes `fill` so the
+    // editor can own its height), so the viewer brings its own scroller.
+    return isEditRoute ? <NoteEditorPage /> : (
+        <Box sx={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
+            <NoteViewer />
+        </Box>
+    );
 }
 
 export default NotePage;

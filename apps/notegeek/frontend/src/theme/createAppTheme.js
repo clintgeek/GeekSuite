@@ -1,13 +1,17 @@
 /**
- * NoteGeek Theme: "Ink Studio"
+ * NoteGeek Theme: "Lab Notebook"
  *
- * Writer's tool, not a control panel. Composes createGeekSuiteTheme
- * with NoteGeek-specific identity overrides.
+ * An engineer's notebook: warm paper on a dot-grid desk, typewritten
+ * metadata, and the brick accent used the way a rubber stamp is — sparingly,
+ * outlined, and only on things that have a status (the save stamp, the five
+ * note-type stamps). Calm, precise, tactile. It must not borrow from its
+ * siblings: no cloth or serif (BookGeek), no neon or hard offset shadows
+ * (GameGeek). See apps/notegeek/DOCS/CONTEXT.md, "Visual identity".
  *
  * Identity:
- * - Oxblood accent (#8B2C2A)
- * - Cream paper surfaces (#FBF7EE)
- * - Geist (sans) / JetBrains Mono (mono) typography
+ * - Brick accent (#8B2C2A light / #C97570 dark)
+ * - Warm paper sheet (#FFFDF8) on a cream dot-grid desk (#FBF7EE)
+ * - Geist (sans) / JetBrains Mono (mono), both self-hosted
  */
 import { alpha } from '@mui/material/styles';
 import { createGeekSuiteTheme } from '@geeksuite/ui';
@@ -35,8 +39,10 @@ function buildNoteOverrides(mode) {
   const accent = accentFor(mode);
 
   // Cream-paper / ink-desk-lamp palette.
+  // `elevated` is the writing sheet. Warm white rather than #FFFFFF: pure
+  // white on cream read as a form field, not as a page.
   const surfaces = isLight
-    ? { default: '#FBF7EE', paper: '#FFFCF5', elevated: '#FFFFFF' }
+    ? { default: '#FBF7EE', paper: '#FFFCF5', elevated: '#FFFDF8' }
     : { default: '#16140F', paper: '#1F1C16', elevated: '#26221A' };
 
   const text = isLight
@@ -66,7 +72,42 @@ function buildNoteOverrides(mode) {
         handwritten: '#C97570',
       };
 
-  const sansStack = '"Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+  // Text-bearing versions of the type colours: the same hue, pushed until
+  // 12px mono on the stamp's own tinted fill (`stampFill` in tokens.js,
+  // 8% light / 12% dark) clears 4.5:1 on every surface it sits on — sheet,
+  // desk and paper. Measured (worst surface): light text 13.5, markdown 5.69,
+  // code 5.35, mindmap 5.18, sketch 6.93; dark text 9.11, markdown 5.66,
+  // code 5.74, mindmap 6.23, sketch 5.31. The plain `noteTypes` hues above
+  // stay for dots, edges and strokes, where there is no text to read —
+  // light mindmap amber is only 3.25:1 as text.
+  const noteTypeInk = isLight
+    ? {
+        text:        '#1F1C16',
+        markdown:    '#275E8E',
+        code:        '#3E6A25',
+        mindmap:     '#805A0E',
+        handwritten: '#8B2C2A',
+      }
+    : {
+        text:        '#EDE6D6',
+        markdown:    '#7DB2DF',
+        code:        '#8CBC5E',
+        mindmap:     '#E0B055',
+        handwritten: '#DE948E',
+      };
+
+  // The rubber stamp. Brick ink for "Saved", a readable error red for
+  // "Not saved". Same 4.5:1-on-own-fill rule: light brick 6.93, error 6.03;
+  // dark brick 5.31, error 5.87 (worst surface).
+  const stamp = isLight
+    ? { ink: '#8B2C2A', error: '#A3261F', muted: '#6B6258' }
+    : { ink: '#DE948E', error: '#F2998F', muted: '#A89C8C' };
+
+  // Dot grid on the desk: one 1px dot every 16px (four suite units). Faint
+  // enough that nothing is ever set on top of it that needs the contrast.
+  const dotGrid = isLight ? 'rgba(31, 28, 22, 0.13)' : 'rgba(237, 230, 214, 0.075)';
+
+  const sansStack = '"Geist Variable", "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
   const monoStack = '"JetBrains Mono", "Geist Mono", ui-monospace, "SFMono-Regular", monospace';
 
   return {
@@ -87,6 +128,9 @@ function buildNoteOverrides(mode) {
       surfaces,
       border,
       noteTypes,
+      noteTypeInk,
+      stamp,
+      dotGrid,
     },
 
     typography: {
@@ -174,7 +218,7 @@ function buildNoteOverrides(mode) {
 /**
  * createNoteTheme(mode)
  *
- * Composes shared GeekSuite rules with NoteGeek "Ink Studio" identity.
+ * Composes shared GeekSuite rules with NoteGeek "Lab Notebook" identity.
  */
 export function createNoteTheme(mode = 'light') {
   const accent = accentFor(mode);

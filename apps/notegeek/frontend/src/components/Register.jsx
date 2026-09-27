@@ -111,7 +111,7 @@ function Register() {
                         variant="h3"
                         component="div"
                         sx={{
-                            fontFamily: '"Geist", -apple-system, BlinkMacSystemFont, sans-serif',
+                            fontFamily: '"Geist Variable", "Geist", -apple-system, BlinkMacSystemFont, sans-serif',
                             fontWeight: 800,
                             fontSize: { xs: '2rem', sm: '2.5rem' },
                             display: 'flex',

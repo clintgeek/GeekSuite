@@ -1,9 +1,11 @@
 import React, { useEffect } from 'react';
-import { Autocomplete, TextField, Chip } from '@mui/material';
+import { Autocomplete, TextField, Chip, useTheme } from '@mui/material';
+import LocalOfferOutlined from '@mui/icons-material/LocalOfferOutlined';
 import useTagStore from '../store/tagStore';
 
-function TagSelector({ selectedTags, onChange, disabled }) {
+function TagSelector({ selectedTags, onChange, disabled = false }) {
   const { tags, fetchTags } = useTagStore();
+  const theme = useTheme();
 
   useEffect(() => {
     fetchTags();
@@ -24,42 +26,65 @@ function TagSelector({ selectedTags, onChange, disabled }) {
       handleHomeEndKeys
       isOptionEqualToValue={(option, value) => option === value}
       renderTags={(value, getTagProps) =>
-        value.map((option, index) => (
-          <Chip
-            label={option}
-            size="small"
-            {...getTagProps({ index })}
-            disabled={disabled}
-          />
-        ))
+        value.map((option, index) => {
+          const { key, onDelete, ...tagProps } = getTagProps({ index });
+          return (
+            <Chip
+              key={key ?? index}
+              label={option}
+              size="small"
+              {...tagProps}
+              onDelete={disabled ? undefined : onDelete}
+              disabled={disabled}
+            />
+          );
+        })
       }
       renderInput={(params) => (
+        // A quiet inline field under the title, not a boxed form control:
+        // a tag glyph, the chips, and a place to type. Its name comes from
+        // `aria-label`, since there is no visible label any more.
         <TextField
           {...params}
-          variant="outlined"
-          label="Tags"
-          placeholder={disabled ? "" : "Add tags (press Enter)"}
+          variant="standard"
+          placeholder={disabled ? "" : (selectedTags?.length ? "add tag…" : "Add tags (press Enter)")}
           size="small"
           disabled={disabled}
+          inputProps={{ ...params.inputProps, 'aria-label': 'Tags' }}
+          InputProps={{
+            ...params.InputProps,
+            disableUnderline: true,
+            startAdornment: (
+              <>
+                <LocalOfferOutlined aria-hidden sx={{ fontSize: 14, color: 'text.secondary', mr: '6px', ml: '1px' }} />
+                {params.InputProps.startAdornment}
+              </>
+            ),
+          }}
         />
       )}
       size="small"
       sx={{
-        minWidth: 160,
-        maxWidth: 320,
-        // 44px hit area (MOBILE_UI_PLAN §2) — the "small" outlined field
-        // (chips + free-solo input share this box) sat at 40px on phones.
-        '& .MuiOutlinedInput-root': {
+        width: '100%',
+        '& .MuiInputBase-root': {
+          gap: '4px',
+          fontFamily: theme.typography.fontFamilyMono,
+          fontSize: '0.8125rem',
+          alignItems: 'center',
+          // 44px hit area on phones (MOBILE_UI_PLAN §2); compact above.
           minHeight: 44,
+          [theme.breakpoints.up('sm')]: { minHeight: 32 },
         },
+        '& .MuiInputBase-input::placeholder': { color: theme.palette.text.secondary, opacity: 1 },
+        '& .MuiChip-root': { height: 24, bgcolor: 'transparent' },
+        // Read-only (a mind map in view mode): the tags are still content to
+        // read, so no 38%-opacity "disabled" wash — that put 12px labels at
+        // 3.0:1. Full-strength secondary ink instead, and no delete glyph.
+        '& .MuiChip-root.Mui-disabled': { opacity: 1, color: theme.palette.text.secondary },
+        '& .MuiAutocomplete-inputRoot.Mui-disabled': { color: theme.palette.text.secondary },
       }}
     />
   );
 }
-
-// Set default prop for disabled
-TagSelector.defaultProps = {
-  disabled: false
-};
 
 export default TagSelector;

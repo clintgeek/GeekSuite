@@ -8,7 +8,9 @@ import {
 } from '@mui/material';
 import { formatRelativeTime } from '../../utils/dateUtils';
 import { previewText } from '../../utils/previewText';
-import { border, glow, noteTypeColor, layout } from '../../theme/tokens';
+import { glow } from '../../theme/tokens';
+import TypeStamp from './TypeStamp';
+import { CodePreview, NoteThumb } from './NotePreview';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -18,7 +20,7 @@ function getPreview(note, maxLen = 120) {
     if (note.snippet) return note.snippet;
     const type = note.type || 'text';
     if (VISUAL_TYPES.includes(type)) return '';
-    return previewText(note.content, type, maxLen);
+    return previewText(note.content, type, maxLen, { shape: true });
 }
 
 function highlightQuery(text, query, highlightColor) {
@@ -35,7 +37,17 @@ function highlightQuery(text, query, highlightColor) {
 // ─── NoteRow ──────────────────────────────────────────────────────────────────
 
 /**
- * Shared editorial list row for notes.
+ * Shared list row for notes — the same on phone and desktop:
+ *
+ *   Title ······························ [thumb]
+ *   preview (prose clamp, or tinted code)  [    ]
+ *   [TYPE STAMP] #tag #tag +1 ·········· 2h ago
+ *
+ * The type stamp and up to two tags are always shown (they used to vanish
+ * below `md`, leaving every phone row identical but for its title). The
+ * relative time sits at the end of the meta line in quiet mono rather than
+ * in its own column. Sketch and mind-map notes get a thumbnail
+ * (NotePreview.jsx), lazily rendered.
  *
  * Props:
  *  - note:        the note object (id/_id, title, content, type, tags, updatedAt/createdAt)
@@ -43,12 +55,14 @@ function highlightQuery(text, query, highlightColor) {
  *  - onClick:     if provided (and no `to`), renders as a ButtonBase with click handler
  *  - query:       optional search query for term highlighting
  *  - maxPreview:  max preview length (default 120)
+ *  - dateField:   which timestamp the row shows ('updatedAt' | 'createdAt')
  */
-function NoteRow({ note, to, onClick, query, maxPreview = 120 }) {
+function NoteRow({ note, to, onClick, query, maxPreview = 160, dateField = 'updatedAt' }) {
     const theme = useTheme();
     const type = note.type || 'text';
-    const typeColor = noteTypeColor(theme, type);
-    const preview = getPreview(note, maxPreview);
+    const isVisual = VISUAL_TYPES.includes(type);
+    const isCode = type === 'code' && !note.snippet;
+    const preview = isCode ? '' : getPreview(note, maxPreview);
     const highlightColor = theme.palette.primary.main;
 
     const noteId = note.id || note._id;
@@ -58,125 +72,120 @@ function NoteRow({ note, to, onClick, query, maxPreview = 120 }) {
         ? { component: Link, to: linkTo }
         : { onClick };
 
+    const tags = note.tags || [];
+    const when = note[dateField] || note.updatedAt || note.createdAt;
+
     return (
         <ButtonBase
             {...buttonProps}
+            data-note-row={type}
             sx={{
                 display: 'flex',
                 alignItems: 'flex-start',
-                gap: 1.5,
+                gap: '12px',
                 width: '100%',
-                // 44px hit area (MOBILE_UI_PLAN §2). A row with a preview
-                // line already clears this; a visual/mindmap note with no
-                // preview (getPreview returns '') sat at ~30px without it.
                 minHeight: 44,
                 textAlign: 'left',
-                py: 1.25,
-                px: 0.5,
-                borderRadius: 0,
+                py: '12px',
+                px: '8px',
+                borderRadius: '4px',
                 textDecoration: 'none',
                 color: 'inherit',
-                transition: 'background 120ms ease',
-                '&:hover': {
-                    bgcolor: glow(theme).soft,
-                    '& .type-dot': { transform: 'scale(1.5)' },
-                },
+                transition: 'background-color 120ms ease',
+                '&:hover': { bgcolor: glow(theme).soft },
+                '&:focus-visible': { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: -2 },
+                '@media (prefers-reduced-motion: reduce)': { transition: 'none' },
             }}
         >
-            {/* Type-color identity dot */}
-            <Box
-                className="type-dot"
-                sx={{
-                    width: 7,
-                    height: 7,
-                    borderRadius: '50%',
-                    bgcolor: typeColor,
-                    flexShrink: 0,
-                    mt: preview ? '7px' : '6px',
-                    transition: 'transform 120ms ease',
-                }}
-            />
-
-            {/* Title + preview */}
             <Box sx={{ flex: 1, minWidth: 0 }}>
+                {/* Title */}
                 <Typography
-                    variant="body1"
+                    component="div"
                     sx={{
                         color: 'text.primary',
+                        fontWeight: 600,
+                        fontSize: '0.9375rem',
+                        letterSpacing: '-0.005em',
                         overflow: 'hidden',
                         textOverflow: 'ellipsis',
                         whiteSpace: 'nowrap',
-                        lineHeight: 1.45,
+                        lineHeight: 1.4,
                     }}
                 >
                     {query
                         ? highlightQuery(note.title || 'Untitled', query, highlightColor)
                         : (note.title || 'Untitled')}
                 </Typography>
-                {preview && (
+
+                {/* Preview — prose or code */}
+                {isCode ? (
+                    <CodePreview content={note.content} />
+                ) : preview ? (
                     <Typography
-                        variant="caption"
                         component="div"
                         sx={{
-                            display: 'block',
                             color: 'text.secondary',
-                            overflow: 'hidden',
-                            textOverflow: 'ellipsis',
-                            whiteSpace: 'nowrap',
+                            fontSize: '0.8125rem',
                             lineHeight: 1.5,
-                            mt: 0.25,
+                            mt: '2px',
+                            overflow: 'hidden',
+                            display: '-webkit-box',
+                            WebkitLineClamp: 2,
+                            WebkitBoxOrient: 'vertical',
+                            wordBreak: 'break-word',
                         }}
                     >
-                        {query
-                            ? highlightQuery(preview, query, highlightColor)
-                            : preview}
+                        {query ? highlightQuery(preview, query, highlightColor) : preview}
                     </Typography>
-                )}
-            </Box>
+                ) : null}
 
-            {/* Tag pills — hidden below `md` (the suite's mobile/desktop split) */}
-            {note.tags && note.tags.length > 0 && (
+                {/* Meta line: type stamp, tags, time */}
                 <Box
                     sx={{
-                        display: { xs: 'none', md: 'flex' },
-                        gap: 0.5,
-                        flexShrink: 0,
-                        alignSelf: 'center',
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: '8px',
+                        mt: '8px',
+                        minWidth: 0,
                     }}
                 >
-                    {note.tags.slice(0, 2).map((tag) => (
+                    <TypeStamp type={type} />
+                    {tags.slice(0, 2).map((tag) => (
                         <Typography
                             key={tag}
+                            component="span"
                             variant="caption"
+                            title={tag}
                             sx={{
-                                px: 0.75,
-                                py: 0.125,
-                                borderRadius: '4px',
-                                border: `1px solid ${border(theme)}`,
-                                bgcolor: glow(theme).soft,
                                 color: 'text.secondary',
-                                lineHeight: '18px',
+                                whiteSpace: 'nowrap',
+                                overflow: 'hidden',
+                                textOverflow: 'ellipsis',
+                                minWidth: 0,
+                                maxWidth: 140,
+                                lineHeight: 1,
                             }}
                         >
-                            {tag.split('/').pop()}
+                            #{tag.split('/').pop()}
                         </Typography>
                     ))}
+                    {tags.length > 2 && (
+                        <Typography component="span" variant="caption" sx={{ color: 'text.secondary', lineHeight: 1, flexShrink: 0 }}>
+                            +{tags.length - 2}
+                        </Typography>
+                    )}
+                    <Box sx={{ flex: 1 }} />
+                    <Typography
+                        component="span"
+                        variant="caption"
+                        sx={{ color: 'text.secondary', whiteSpace: 'nowrap', flexShrink: 0, lineHeight: 1 }}
+                    >
+                        {formatRelativeTime(when)}
+                    </Typography>
                 </Box>
-            )}
+            </Box>
 
-            {/* Timestamp */}
-            <Typography
-                variant="caption"
-                sx={{
-                    flexShrink: 0,
-                    minWidth: layout.timestampMinWidth,
-                    textAlign: 'right',
-                    color: 'text.disabled',
-                    alignSelf: 'center',
-                }}
-            >
-                {formatRelativeTime(note.updatedAt || note.createdAt)}
-            </Typography>
+            {isVisual && <NoteThumb note={note} />}
         </ButtonBase>
     );
 }

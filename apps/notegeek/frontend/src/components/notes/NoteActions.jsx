@@ -1,229 +1,197 @@
-import React from 'react';
-import { Box, Button, IconButton, CircularProgress, Tooltip, useTheme } from '@mui/material';
-import { glow } from '../../theme/tokens';
+import React, { useState } from 'react';
+import {
+  Button,
+  Divider,
+  IconButton,
+  ListItemIcon,
+  ListItemText,
+  Menu,
+  MenuItem,
+  Typography,
+  CircularProgress,
+  useTheme,
+} from '@mui/material';
+import { glow, tapTarget44 } from '../../theme/tokens';
 // Deep-import (see RichTextEditor.jsx for why) instead of the
 // '@mui/icons-material' barrel.
-import Save from '@mui/icons-material/Save';
+import MoreHoriz from '@mui/icons-material/MoreHoriz';
+import SaveOutlined from '@mui/icons-material/SaveOutlined';
 import DeleteOutline from '@mui/icons-material/DeleteOutline';
 import Edit from '@mui/icons-material/Edit';
 import AutoAwesomeMosaic from '@mui/icons-material/AutoAwesomeMosaic';
 import HistoryIcon from '@mui/icons-material/History';
 import Visibility from '@mui/icons-material/Visibility';
-import Check from '@mui/icons-material/Check';
 import ArrowBack from '@mui/icons-material/ArrowBack';
 
+const isMac = typeof navigator !== 'undefined' && /Mac|iP(hone|ad|od)/.test(navigator.platform || navigator.userAgent || '');
+const SAVE_SHORTCUT = isMac ? '⌘S' : 'Ctrl+S';
+
 /**
- * NoteActions — Save, delete, edit/view toggle, back.
+ * NoteActions — the editor's quiet controls.
  *
- * Design:
- *   - Back: text button with arrow icon (mobile bottom-bar only)
- *   - Save: contained primary (oxblood)
- *   - Cancel / View: text button
- *   - Delete: text button, error color, confirm dialog handled upstream
+ * The page autosaves, so there is no Save button any more (the SaveStamp
+ * shows where that stands). What remains:
  *
- * Desktop inline: right-aligned row of compact buttons.
- * Mobile bottom-bar: full-width buttons, thumb-reachable.
+ *   - `BackButton` — flushes a pending save and leaves (the page's handler).
+ *   - the View/Edit toggle, for mind maps only — a mode, not an action.
+ *   - the ⋯ menu: Save now, Version history, Compose, Delete.
+ *
+ * The ⋯ menu only calls the page's handlers. It does not mount anything:
+ * `NoteHistoryDialog` stays mounted by the page, and only while open (its
+ * `useLazyQuery` needs an Apollo client even when skipped).
  */
+export function BackButton({ onBack }) {
+  const theme = useTheme();
+  return (
+    <Button
+      variant="text"
+      color="inherit"
+      onClick={onBack}
+      aria-label="Back"
+      size="small"
+      sx={{
+        color: 'text.secondary',
+        minWidth: 0,
+        px: '6px',
+        gap: '4px',
+        fontFamily: theme.typography.fontFamilyMono,
+        fontSize: '0.75rem',
+        fontWeight: 500,
+        letterSpacing: '0.04em',
+        [theme.breakpoints.down('md')]: { ...tapTarget44 },
+        '&:hover': { color: 'text.primary', bgcolor: glow(theme).soft },
+      }}
+    >
+      <ArrowBack sx={{ fontSize: 16 }} />
+      <span className="back-label">Back</span>
+    </Button>
+  );
+}
+
 function NoteActions({
   onSave,
   onDelete,
   onToggleEdit,
-  onBack,
-  isSaving = false,
-  saveStatus = '',
   canDelete = true,
   canToggleEdit = false,
   isEditMode = true,
   // Compose is offered only when the page can act on the result; no
-  // handler means no button, so a note type that cannot be composed does
+  // handler means no menu item, so a note type that cannot be composed does
   // not advertise it.
   onCompose,
   isComposing = false,
   onHistory,
-  variant = 'inline', // 'inline' | 'bottom-bar'
+  // An autosaved-but-never-navigated note is still a real row; the page
+  // decides whether "Delete" means delete or discard.
+  deleteLabel = 'Delete note',
 }) {
   const theme = useTheme();
-  const isBottomBar = variant === 'bottom-bar';
-  const isSaved = saveStatus === 'Saved';
+  const [anchorEl, setAnchorEl] = useState(null);
+  const open = Boolean(anchorEl);
+  const close = () => setAnchorEl(null);
+  const run = (fn) => () => {
+    close();
+    fn?.();
+  };
 
-  // ── Save ──────────────────────────────────────────────────────────────
-  const SaveButton = () => (
-    <Button
-      variant="contained"
-      color={isSaved ? 'success' : 'primary'}
-      startIcon={isSaving ? null : isSaved ? <Check /> : <Save />}
-      onClick={onSave}
-      disabled={isSaving}
-      size={isBottomBar ? 'medium' : 'small'}
-      sx={{
-        ...(isBottomBar
-          ? { flex: 1 }
-          : { minWidth: 80 }),
-        boxShadow: 'none',
-        '&:hover': { boxShadow: 'none' },
-        transition: 'background-color 120ms ease',
-      }}
-    >
-      {isSaving ? (
-        <CircularProgress size={16} color="inherit" />
-      ) : isSaved ? (
-        'Saved'
-      ) : (
-        'Save'
-      )}
-    </Button>
-  );
+  const itemSx = {
+    gap: 0,
+    minHeight: 40,
+    [theme.breakpoints.down('md')]: { minHeight: 44 },
+    '& .MuiListItemIcon-root': { minWidth: 32, color: 'text.secondary' },
+    '& .MuiListItemText-primary': { fontSize: '0.875rem' },
+  };
 
-  // ── Delete ────────────────────────────────────────────────────────────
-  const DeleteButton = () =>
-    isBottomBar ? (
-      <Button
-        variant="text"
-        color="error"
-        startIcon={<DeleteOutline />}
-        onClick={onDelete}
-        size="medium"
-        sx={{ flex: 0.55 }}
-      >
-        Delete
-      </Button>
-    ) : (
-      <Tooltip title="Delete note" arrow>
-        <IconButton
-          color="error"
-          onClick={onDelete}
-          size="small"
-          sx={{
-            borderRadius: '6px',
-            transition: 'background 120ms ease',
-            '&:hover': {
-              bgcolor: glow(theme).soft,
-            },
-            '&:focus-visible': {
-              boxShadow: `0 0 0 3px ${glow(theme).ring}`,
-            },
-          }}
-        >
-          <DeleteOutline fontSize="small" />
-        </IconButton>
-      </Tooltip>
-    );
-
-  // ── History ───────────────────────────────────────────────────────────
-  const HistoryButton = () => (
-    <Tooltip title="Version history" arrow>
-      <span>
-        <IconButton
-          onClick={onHistory}
-          size={isBottomBar ? 'medium' : 'small'}
-          aria-label="Version history"
-          sx={{
-            // The bottom bar is the mobile one: 44px is the tap floor the
-            // harness enforces, and `medium` alone is only 40.
-            ...(isBottomBar ? { minWidth: 44, minHeight: 44 } : {}),
-            borderRadius: '6px',
-            transition: 'background 120ms ease',
-            '&:hover': { bgcolor: glow(theme).soft },
-            '&:focus-visible': { boxShadow: `0 0 0 3px ${glow(theme).ring}` },
-          }}
-        >
-          <HistoryIcon fontSize="small" />
-        </IconButton>
-      </span>
-    </Tooltip>
-  );
-
-  // ── Compose ───────────────────────────────────────────────────────────
-  // Lives here rather than in one editor so every note type that can be
-  // composed gets it from one implementation.
-  const ComposeButton = () => (
-    <Tooltip title="Compose a document from the scraps in this note" arrow>
-      <span>
-        <IconButton
-          color="primary"
-          onClick={onCompose}
-          disabled={isComposing}
-          size={isBottomBar ? 'medium' : 'small'}
-          aria-label="Compose a document from this note"
-          sx={{
-            ...(isBottomBar ? { minWidth: 44, minHeight: 44 } : {}),
-            borderRadius: '6px',
-            transition: 'background 120ms ease',
-            '&:hover': { bgcolor: glow(theme).soft },
-            '&:focus-visible': { boxShadow: `0 0 0 3px ${glow(theme).ring}` },
-          }}
-        >
-          {isComposing
-            ? <CircularProgress size={16} color="inherit" />
-            : <AutoAwesomeMosaic fontSize="small" />}
-        </IconButton>
-      </span>
-    </Tooltip>
-  );
-
-  // ── Toggle edit/view ──────────────────────────────────────────────────
-  const ToggleEditButton = () => (
-    <Button
-      variant="text"
-      color="primary"
-      startIcon={isEditMode ? <Visibility /> : <Edit />}
-      onClick={onToggleEdit}
-      size={isBottomBar ? 'medium' : 'small'}
-      sx={{
-        ...(isBottomBar ? { flex: 0.7 } : {}),
-      }}
-    >
-      {isEditMode ? 'View' : 'Edit'}
-    </Button>
-  );
-
-  // ── Back button ───────────────────────────────────────────────────────
-  const BackButton = () => (
-    <Button
-      variant="text"
-      color="inherit"
-      startIcon={<ArrowBack />}
-      onClick={onBack}
-      size={isBottomBar ? 'medium' : 'small'}
-      sx={{
-        color: 'text.secondary',
-        ...(isBottomBar ? { flex: 0.55 } : {}),
-      }}
-    >
-      Back
-    </Button>
-  );
-
-  // ── Bottom-bar layout (mobile) ────────────────────────────────────────
-  if (isBottomBar) {
-    return (
-      <Box
-        sx={{
-          display: 'flex',
-          gap: 1,
-          px: 2,
-          py: 1.25,
-        }}
-      >
-        {onBack && <BackButton />}
-        {onHistory && <HistoryButton />}
-        {onCompose && <ComposeButton />}
-        {canToggleEdit && <ToggleEditButton />}
-        {isEditMode && <SaveButton />}
-        {canDelete && <DeleteButton />}
-      </Box>
-    );
-  }
-
-  // ── Inline layout (desktop) — rendered as fragments, parent aligns them
   return (
     <>
-      {onBack && <BackButton />}
-      {onHistory && <HistoryButton />}
-      {onCompose && <ComposeButton />}
-      {canToggleEdit && <ToggleEditButton />}
-      {isEditMode && <SaveButton />}
-      {canDelete && <DeleteButton />}
+      {canToggleEdit && (
+        <Button
+          variant="text"
+          color="primary"
+          startIcon={isEditMode ? <Visibility /> : <Edit />}
+          onClick={onToggleEdit}
+          size="small"
+          sx={{ [theme.breakpoints.down('md')]: { ...tapTarget44 } }}
+        >
+          {isEditMode ? 'View' : 'Edit'}
+        </Button>
+      )}
+
+      <IconButton
+        aria-label="More note actions"
+        aria-haspopup="menu"
+        aria-expanded={open || undefined}
+        aria-controls={open ? 'note-actions-menu' : undefined}
+        onClick={(e) => setAnchorEl(e.currentTarget)}
+        size="small"
+        sx={{
+          color: 'text.secondary',
+          borderRadius: '6px',
+          minWidth: 32,
+          minHeight: 32,
+          [theme.breakpoints.down('md')]: { ...tapTarget44 },
+          '&:hover': { bgcolor: glow(theme).soft, color: 'text.primary' },
+          '&:focus-visible': { boxShadow: `0 0 0 3px ${glow(theme).ring}` },
+        }}
+      >
+        {isComposing ? <CircularProgress size={16} color="inherit" /> : <MoreHoriz fontSize="small" />}
+      </IconButton>
+
+      <Menu
+        id="note-actions-menu"
+        anchorEl={anchorEl}
+        open={open}
+        onClose={close}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+        slotProps={{ paper: { sx: { minWidth: 232, mt: '4px' } } }}
+      >
+        {isEditMode && onSave && (
+          <MenuItem onClick={run(onSave)} sx={itemSx}>
+            <ListItemIcon><SaveOutlined fontSize="small" /></ListItemIcon>
+            <ListItemText>Save now</ListItemText>
+            <Typography
+              variant="caption"
+              aria-hidden
+              sx={{ ml: 2, color: 'text.secondary', display: { xs: 'none', md: 'inline' } }}
+            >
+              {SAVE_SHORTCUT}
+            </Typography>
+          </MenuItem>
+        )}
+        {onHistory && (
+          <MenuItem onClick={run(onHistory)} sx={itemSx}>
+            <ListItemIcon><HistoryIcon fontSize="small" /></ListItemIcon>
+            <ListItemText>Version history</ListItemText>
+          </MenuItem>
+        )}
+        {onCompose && (
+          <MenuItem
+            onClick={run(onCompose)}
+            disabled={isComposing}
+            sx={itemSx}
+            aria-label="Compose a document from this note"
+          >
+            <ListItemIcon><AutoAwesomeMosaic fontSize="small" /></ListItemIcon>
+            <ListItemText>Compose a document</ListItemText>
+          </MenuItem>
+        )}
+        {canDelete && onDelete && [
+          <Divider key="d" sx={{ my: '4px !important' }} />,
+          <MenuItem
+            key="delete"
+            onClick={run(onDelete)}
+            sx={{
+              ...itemSx,
+              color: 'error.main',
+              '& .MuiListItemIcon-root': { minWidth: 32, color: 'error.main' },
+            }}
+          >
+            <ListItemIcon><DeleteOutline fontSize="small" /></ListItemIcon>
+            <ListItemText>{deleteLabel}</ListItemText>
+          </MenuItem>,
+        ]}
+      </Menu>
     </>
   );
 }

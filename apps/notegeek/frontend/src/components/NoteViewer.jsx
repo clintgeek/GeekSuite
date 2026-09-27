@@ -26,18 +26,11 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import DeleteNoteDialog from './DeleteNoteDialog';
+import TypeStamp from './notes/TypeStamp';
 import { border, glow, noteTypeColor, surfaces } from '../theme/tokens';
 import { decodeCodeNote } from '../utils/previewText';
 import { sanitizeNoteHtml } from '../utils/sanitizeNoteHtml';
 
-// Note type configuration — type color comes from theme.palette.noteTypes
-const NOTE_TYPE_CONFIG = {
-    text:        { label: 'Text' },
-    markdown:    { label: 'Markdown' },
-    code:        { label: 'Code' },
-    mindmap:     { label: 'Mindmap' },
-    handwritten: { label: 'Sketch' },
-};
 
 function NoteViewer() {
     const theme = useTheme();
@@ -83,7 +76,6 @@ function NoteViewer() {
     }
 
     const noteType = noteToView.type || 'text';
-    const typeConfig = NOTE_TYPE_CONFIG[noteType] || NOTE_TYPE_CONFIG.text;
     // Use theme tokens — same source of truth as the rest of the app
     const typeColor = noteTypeColor(theme, noteType);
 
@@ -113,6 +105,7 @@ function NoteViewer() {
                 >
                     <IconButton
                         onClick={() => navigate('/notes')}
+                        aria-label="Back to notes"
                         size="small"
                         sx={{
                             color: 'text.disabled',
@@ -124,27 +117,8 @@ function NoteViewer() {
                         <ArrowBackIcon sx={{ fontSize: 18 }} />
                     </IconButton>
 
-                    {/* Type pill — mono ink-stamp */}
-                    <Box
-                        sx={{
-                            display: 'inline-flex',
-                            alignItems: 'center',
-                            gap: 0.625,
-                            px: 0.875,
-                            py: 0.25,
-                            borderRadius: '4px',
-                            border: `1px solid ${border(theme)}`,
-                            bgcolor: glow(theme).soft,
-                        }}
-                    >
-                        <Box sx={{ width: 6, height: 6, borderRadius: '50%', bgcolor: typeColor, flexShrink: 0 }} />
-                        <Typography
-                            variant="caption"
-                            sx={{ color: typeColor, letterSpacing: '0.04em', lineHeight: 1 }}
-                        >
-                            {typeConfig.label.toUpperCase()}
-                        </Typography>
-                    </Box>
+                    {/* Type stamp — the same one the list and editor wear */}
+                    <TypeStamp type={noteType} />
 
                     <Box sx={{ flex: 1 }} />
 
@@ -282,7 +256,7 @@ function NoteViewer() {
                                 letterSpacing: '0.01em',
                                 '& p': { mb: 2 },
                                 '& h1': {
-                                    fontFamily: '"Geist", -apple-system, BlinkMacSystemFont, sans-serif',
+                                    fontFamily: '"Geist Variable", "Geist", -apple-system, BlinkMacSystemFont, sans-serif',
                                     fontWeight: 700,
                                     fontSize: '1.75rem',
                                     mt: 4,
@@ -290,7 +264,7 @@ function NoteViewer() {
                                     lineHeight: 1.2,
                                 },
                                 '& h2': {
-                                    fontFamily: '"Geist", -apple-system, BlinkMacSystemFont, sans-serif',
+                                    fontFamily: '"Geist Variable", "Geist", -apple-system, BlinkMacSystemFont, sans-serif',
                                     fontWeight: 600,
                                     fontSize: '1.4rem',
                                     mt: 3.5,
@@ -298,7 +272,7 @@ function NoteViewer() {
                                     lineHeight: 1.25,
                                 },
                                 '& h3': {
-                                    fontFamily: '"Geist", -apple-system, BlinkMacSystemFont, sans-serif',
+                                    fontFamily: '"Geist Variable", "Geist", -apple-system, BlinkMacSystemFont, sans-serif',
                                     fontWeight: 700,
                                     fontSize: '1.15rem',
                                     mt: 3,
@@ -306,7 +280,7 @@ function NoteViewer() {
                                     lineHeight: 1.3,
                                 },
                                 '& h4, & h5, & h6': {
-                                    fontFamily: '"Geist", -apple-system, BlinkMacSystemFont, sans-serif',
+                                    fontFamily: '"Geist Variable", "Geist", -apple-system, BlinkMacSystemFont, sans-serif',
                                     fontWeight: 700,
                                     fontSize: '1rem',
                                     mt: 2.5,

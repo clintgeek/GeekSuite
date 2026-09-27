@@ -1,5 +1,6 @@
 import React from 'react';
 import { useTheme, useMediaQuery } from '@mui/material';
+import { useLocation } from 'react-router-dom';
 import { GeekShell, GeekAppFrame, GeekToastProvider } from '@geeksuite/ui';
 import useAuthStore from '../store/authStore';
 import Sidebar from './Sidebar';
@@ -33,16 +34,29 @@ function Layout({ children }) {
     const isMobile = useMediaQuery(theme.breakpoints.down('md'));
     const { isAuthenticated } = useAuthStore();
     const showNavigation = isAuthenticated;
+    const { pathname } = useLocation();
+    // A single note (/notes/new, /notes/:id, /notes/:id/edit) is a page that
+    // owns its own scroller: the editor's sheet must be exactly as tall as
+    // the viewport so it reaches the bottom and its toolbar can stick, and
+    // the canvas editors need a real height to fill. `fill` makes the frame
+    // a non-scrolling flex column and hands that height down; lists and
+    // home keep the frame's own scroll.
+    const fillFrame = /^\/notes\/[^/]+/.test(pathname);
 
     return (
         <GeekShell
             nav={showNavigation ? <Sidebar /> : undefined}
             topBar={<Header />}
-            bottomNav={showNavigation && isMobile ? <MobileBottomNav /> : null}
+            // Not on a single note: MobileBottomNav hides itself there
+            // (`shouldHide`), but passing it anyway still made the frame
+            // reserve its 56px inset — a strip of empty desk under the
+            // editor on every phone.
+            bottomNav={showNavigation && isMobile && !fillFrame ? <MobileBottomNav /> : null}
         >
             <GeekToastProvider>
                 {/* Main content with route transitions */}
                 <GeekAppFrame
+                    fill={fillFrame}
                     sx={{
                         // NoteGeek specific: Mindmap editor wants overflow: hidden
                         '&.mindmap-container': {

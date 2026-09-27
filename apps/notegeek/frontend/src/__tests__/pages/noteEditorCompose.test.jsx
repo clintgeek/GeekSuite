@@ -103,9 +103,16 @@ beforeEach(() => {
   });
 });
 
+/** Compose lives in the editor's ⋯ menu since the Lab Notebook pass. */
+async function clickCompose() {
+  const more = await screen.findByRole('button', { name: 'More note actions' });
+  await act(async () => { more.click(); });
+  const item = await screen.findByRole('menuitem', { name: 'Compose a document from this note' });
+  await act(async () => { item.click(); });
+}
+
 async function compose() {
-  const button = (await screen.findAllByRole('button', { name: 'Compose a document from this note' }))[0];
-  await act(async () => { button.click(); });
+  await clickCompose();
   await screen.findByRole('button', { name: /save as a new note/i });
 }
 
@@ -173,8 +180,7 @@ describe('composing a note', () => {
       },
     });
     renderEditor();
-    const button = (await screen.findAllByRole('button', { name: 'Compose a document from this note' }))[0];
-    await act(async () => { button.click(); });
+    await clickCompose();
 
     expect(await screen.findByText(/stuck repeating itself/i)).toBeInTheDocument();
     expect(screen.getByText(/try again/i)).toBeInTheDocument();
@@ -189,8 +195,7 @@ describe('composing a note', () => {
       data: { composeNote: { markdown: '', stats: null, provenance: { reason: 'fallback' } } },
     });
     renderEditor();
-    const button = (await screen.findAllByRole('button', { name: 'Compose a document from this note' }))[0];
-    await act(async () => { button.click(); });
+    await clickCompose();
 
     expect(await screen.findByText(/unavailable right now/i)).toBeInTheDocument();
     expect(updateNote).not.toHaveBeenCalled();
