@@ -3,9 +3,9 @@
  * `src/routes/importRoutes.js`:
  *
  *  1. **P0 — `POST /api/import/calibre` was unauthenticated**, and its very
- *     first act is `Book.deleteMany({ source: "calibre-import" })`. Anyone who
- *     could reach the host could wipe every Calibre-imported book with one
- *     curl.
+ *     first act was `Book.deleteMany({ source: "calibre-import" })`. It was
+ *     gated on 2026-09-05 and removed entirely on 2026-09-26; the test now
+ *     proves the route is gone.
  *  2. **P0 — `db.query(...)` is Bun:sqlite's API, not better-sqlite3's.**
  *     Twelve call sites, all inside the per-book loop, so `POST
  *     /api/import/calibre/rescan` threw `TypeError: db.query is not a
@@ -188,25 +188,24 @@ after(async () => {
   else process.env.BASEGEEK_URL = prevBasegeekUrl;
 });
 
-describe("POST /api/import/calibre — the destructive one-time import", () => {
-  test("401s an unauthenticated caller and deletes nothing", async () => {
-    deleteManyCalls.length = 0;
-    const res = await fetch(`${baseUrl}/api/import/calibre`, { method: "POST" });
-    assert.equal(res.status, 401);
-    assert.deepEqual(
-      deleteManyCalls,
-      [],
-      "Book.deleteMany must not run for an unauthenticated caller"
-    );
-  });
-
-  test("401s a caller whose token basegeek rejects, and still deletes nothing", async () => {
+describe("POST /api/import/calibre — removed 2026-09-26", () => {
+  // The one-time full import's first act was deleteMany on every
+  // Calibre-imported book. It was removed, not gated: even a signed-in caller
+  // must reach nothing, and nothing must be deleted.
+  test("404s for a signed-in caller and deletes nothing", async () => {
     deleteManyCalls.length = 0;
     const res = await fetch(`${baseUrl}/api/import/calibre`, {
       method: "POST",
-      headers: { Authorization: "Bearer wrong" },
+      headers: { Authorization: `Bearer ${TOKEN}` },
     });
-    assert.equal(res.status, 401);
+    assert.equal(res.status, 404);
+    assert.deepEqual(deleteManyCalls, [], "Book.deleteMany must never run");
+  });
+
+  test("404s an unauthenticated caller and deletes nothing", async () => {
+    deleteManyCalls.length = 0;
+    const res = await fetch(`${baseUrl}/api/import/calibre`, { method: "POST" });
+    assert.equal(res.status, 404);
     assert.deepEqual(deleteManyCalls, []);
   });
 });
@@ -336,12 +335,13 @@ describe("the unconfined join must not creep back", () => {
     }
   });
 
-  test("both walks confine what they derive, and count what they refuse", () => {
-    // Per walk: the row directory, the data-table file, the folder-scan file
-    // and the cover — four sites, two walks.
+  test("the rescan's walk confines what it derives, and counts what it refuses", () => {
+    // The row directory, the data-table file, the folder-scan file and the
+    // cover: four sites. There were two walks (eight sites) until the
+    // one-time full import was removed on 2026-09-26.
     assert.ok(
-      (src.match(/resolveInLibrary\(/g) || []).length >= 8,
-      "every path-building site in both walks goes through the helper"
+      (src.match(/resolveInLibrary\(/g) || []).length >= 4,
+      "every path-building site in the rescan's walk goes through the helper"
     );
     assert.ok(src.includes("skippedUnsafePaths"));
   });

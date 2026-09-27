@@ -90,14 +90,11 @@ vocabulary, synonyms or drop list.
 
 ## Import behaviour (found 2026-09-26)
 
-- **`POST /api/import/calibre` overwrites, and not only `tags`.** It deletes every
-  `source: "calibre-import"` book and inserts the library again from `metadata.db`
-  (`api/src/routes/importRoutes.js`). The new documents get new `_id`s, and every field
-  that lives only in BookGeek (shelf, rating, review, reading progress, dates, Goodreads
-  merges) is gone. Nothing in the web app calls it; Settings only offers the rescan. It's
-  kept as the one-time import it was built as. **Outside this work: re-running it today
-  would wipe Chef's reading history. It needs a guard or a merge before anyone uses it
-  again.**
+- **`POST /api/import/calibre` is gone (removed 2026-09-26, Chef: "guard or remove as
+  appropriate").** It deleted every `source: "calibre-import"` book and inserted the library
+  again, so one POST from any signed-in account wiped shelves, ratings, reviews, progress
+  and dates. Nothing called it, and the rescan imports every Calibre book it doesn't already
+  have, so an empty library is covered too. The myTags carry-over written for it went with it.
 - **`POST /api/import/calibre/rescan` never touches `tags` on a book it recognises.** It
   only merges `files`, sets `owned` and fills a missing `coverPath`. A book it doesn't
   recognise is created with Calibre's tags.

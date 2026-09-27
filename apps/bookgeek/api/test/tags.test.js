@@ -21,7 +21,7 @@ import { describe, test } from "node:test";
 import assert from "node:assert/strict";
 import fs from "node:fs";
 
-import { carryOverMyTags, withDerivedTags, tagVocabulary } from "../src/tags.js";
+import { withDerivedTags, tagVocabulary } from "../src/tags.js";
 import { migrateTags, planTagMigration } from "../src/migrations/tags.js";
 
 const {
@@ -177,29 +177,8 @@ describe("saved views and my tags", () => {
   });
 });
 
-describe("the Calibre re-import keeps myTags", () => {
+describe("withDerivedTags", () => {
   const dune = { title: "Dune", authors: ["Frank Herbert"], isbn: "9780441013593", tags: ["Science Fiction"] };
-
-  test("a re-imported book inherits the myTags of the book it replaces", () => {
-    const existing = [{ _id: "old1", title: "Dune", authors: ["Frank Herbert"], isbn: "978-0441013593", myTags: ["desert"] }];
-    const { docs, keepIds, carried } = carryOverMyTags(existing, [withDerivedTags(dune), { title: "Other", authors: [] }]);
-    assert.deepEqual(docs[0].myTags, ["desert"]);
-    assert.equal(docs[1].myTags, undefined);
-    assert.deepEqual(keepIds, []);
-    assert.equal(carried, 1);
-  });
-
-  test("matching falls back to title + first author", () => {
-    const existing = [{ _id: "old1", title: "DUNE", authors: ["frank herbert"], myTags: ["desert"] }];
-    const { docs } = carryOverMyTags(existing, [{ title: "Dune", authors: ["Frank Herbert"] }]);
-    assert.deepEqual(docs[0].myTags, ["desert"]);
-  });
-
-  test("a book with myTags that is no longer in Calibre is kept, not deleted", () => {
-    const existing = [{ _id: "gone", title: "Removed", authors: ["Nobody"], myTags: ["mine"] }];
-    const { keepIds } = carryOverMyTags(existing, [dune]);
-    assert.deepEqual(keepIds, ["gone"]);
-  });
 
   test("withDerivedTags derives from the doc's own tags and leaves tags alone", () => {
     const doc = withDerivedTags(dune);
@@ -300,11 +279,9 @@ describe("the boot migration", () => {
 describe("every api path that writes tags derives the fields", () => {
   const read = (rel) => fs.readFileSync(new URL(rel, import.meta.url), "utf8");
 
-  test("the Calibre import and the rescan's new books", () => {
+  test("the rescan's new books", () => {
     const src = read("../src/routes/importRoutes.js");
-    assert.ok(src.includes("docs.push(withDerivedTags(doc))"), "POST /calibre");
     assert.ok(src.includes("await Book.create(withDerivedTags(doc))"), "POST /calibre/rescan (new books)");
-    assert.ok(src.includes("carryOverMyTags(previousWithMyTags, docs)"), "POST /calibre carries myTags");
   });
 
   test("enrich, which merges provider subjects into tags", () => {

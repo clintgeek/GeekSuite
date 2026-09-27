@@ -15,7 +15,7 @@ BookGeek is the **authoritative library manager** — replacing both CalibreWeb 
 | Source | Location | Records | Purpose |
 |--------|----------|---------|---------|
 | Calibre Library | `/Volumes/Media/Docker/calibreWeb/books/` | 510 books | Import existing ebooks + metadata |
-| Goodreads Export | `./goodreads_library_export.csv` | 223 books | Import reading history, ratings, reviews |
+| Goodreads Export | *(removed from the repo 2026-09-26; export again from Goodreads when needed)* | 223 books | Import reading history, ratings, reviews |
 
 After import, BookGeek is the sole source of truth.
 
@@ -560,6 +560,8 @@ src` 18 warnings → 18; `npm run build` green; mobile harness
   Both look like one-time/throwaway legacy; deleting a feature is Chef's call.
   *(2026-09-25: `/kindle-test*` deleted in the Phase A cleanup;
   `POST /api/import/calibre` is still mounted and gated.)*
+  *(2026-09-26: `POST /api/import/calibre` removed. The rescan covers every import,
+  including an empty library; see `DOCS/TAGS.md`.)*
 - **`bookify`-adjacent notes from BURN_REVIEW (o), (p), (x)** re-verified as
   still accurate and still deliberate — no change.
 - **The Calibre paths cannot be exercised on this box.** `better-sqlite3` is a
