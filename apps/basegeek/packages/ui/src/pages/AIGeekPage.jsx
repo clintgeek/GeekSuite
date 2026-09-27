@@ -31,6 +31,7 @@ import { useToast } from '@geeksuite/ui';
 import { useAIGeek } from './aigeek/useAIGeek';
 import { SECTIONS, TAB_SECTIONS, normalizeAppId } from './aigeek/format';
 import StatusNav from './aigeek/StatusNav';
+import InstrumentStrip from './aigeek/InstrumentStrip';
 import CollapsedSection from './aigeek/CollapsedSection';
 import AttentionPanel from './aigeek/AttentionPanel';
 import UsagePanel from './aigeek/UsagePanel';
@@ -131,6 +132,8 @@ export default function AIGeekPage() {
 
   return (
     <Box>
+      <InstrumentStrip status={state.status} />
+
       <StatusNav
         attentionCount={attentionCount}
         hasWarning={(state.status?.attention || []).some(item => item.severity === 'warn')}

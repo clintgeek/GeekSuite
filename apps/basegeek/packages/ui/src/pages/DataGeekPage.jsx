@@ -1,4 +1,7 @@
-import { Box, Paper, Tabs, Tab, Card, CardContent, Typography, CircularProgress, Grid, Divider, Stack } from '@mui/material';
+import { Box, Tabs, Tab, Typography, CircularProgress } from '@mui/material';
+import Readouts from '../signalbox/Readouts';
+import { Dymo } from '../signalbox/Labels';
+import { Cabinet } from '../signalbox/Cabinet';
 import { useState, useEffect } from 'react';
 import MongoStatus from '../components/MongoStatus';
 import api from '../api';
@@ -56,35 +59,30 @@ function RedisStatus() {
   }
 
   return (
-    <Card variant="outlined">
-      <CardContent>
-        <Typography variant="h6" gutterBottom>
-          Redis Status
-        </Typography>
-        <Typography color={status.isConnected ? "success.main" : "error.main"} variant="subtitle1">
-          {status.isConnected ? "Connected" : "Disconnected"}
-        </Typography>
-        {status.error && (
-          <Typography color="error" variant="body2">
-            Error: {status.error}
-          </Typography>
-        )}
-        {status.isConnected && (
-          <Grid container spacing={2} mt={2}>
-            <Grid item xs={6}>
-              <Typography variant="body2">Version: {status.redisVersion}</Typography>
-              <Typography variant="body2">Uptime (s): {status.uptime}</Typography>
-              <Typography variant="body2">Clients: {status.connectedClients}</Typography>
-            </Grid>
-            <Grid item xs={6}>
-              <Typography variant="body2">Used Memory: {status.usedMemory}</Typography>
-              <Typography variant="body2">Total Keys: {status.totalKeys}</Typography>
-            </Grid>
-          </Grid>
-        )}
-      </CardContent>
-    </Card>
+    <Cabinet number={2} title="Redis" connected={status.isConnected} error={status.error}>
+      {status.isConnected && (
+        <Readouts
+          items={[
+            { label: 'Version', value: status.redisVersion },
+            { label: 'Uptime', value: formatSeconds(status.uptime) },
+            { label: 'Clients', value: status.connectedClients },
+            { label: 'Used memory', value: status.usedMemory },
+            { label: 'Total keys', value: status.totalKeys?.toLocaleString?.() ?? status.totalKeys },
+          ]}
+        />
+      )}
+    </Cabinet>
   );
+}
+
+/** Seconds as "5d 22h 19m" — Redis reports uptime in seconds. */
+function formatSeconds(seconds) {
+  const n = Number(seconds);
+  if (!Number.isFinite(n)) return seconds;
+  const d = Math.floor(n / 86400);
+  const h = Math.floor((n % 86400) / 3600);
+  const m = Math.floor((n % 3600) / 60);
+  return `${d}d ${h}h ${m}m`;
 }
 
 function formatPostgresUptime(uptime) {
@@ -149,33 +147,24 @@ function PostgresStatus() {
   }
 
   return (
-    <Card variant="outlined">
-      <CardContent>
-        <Typography variant="h6" gutterBottom>
-          Postgres Status
-        </Typography>
-        <Typography color={status.isConnected ? "success.main" : "error.main"} variant="subtitle1">
-          {status.isConnected ? "Connected" : "Disconnected"}
-        </Typography>
-        {status.error && (
-          <Typography color="error" variant="body2">
-            Error: {status.error}
-          </Typography>
-        )}
-        {status.isConnected && (
-          <Grid container spacing={2} mt={2}>
-            <Grid item xs={6}>
-              <Typography variant="body2">Version: {status.version}</Typography>
-              <Typography variant="body2">Uptime: {formatPostgresUptime(status.uptime)}</Typography>
-            </Grid>
-            <Grid item xs={6}>
-              <Typography variant="body2">DB Size: {status.dbSize}</Typography>
-              <Typography variant="body2">Connections: {status.connectionCount}</Typography>
-            </Grid>
-          </Grid>
-        )}
-      </CardContent>
-    </Card>
+    <Cabinet number={3} title="Postgres" connected={status.isConnected} error={status.error}>
+      {status.isConnected && (
+        <>
+          <Readouts
+            items={[
+              { label: 'Uptime', value: formatPostgresUptime(status.uptime) },
+              { label: 'DB size', value: status.dbSize },
+              { label: 'Connections', value: status.connectionCount },
+            ]}
+          />
+          {status.version && (
+            <Typography variant="body2" sx={{ mt: 1.5, color: 'text.secondary', fontFamily: 'fontFamilyMono', overflowWrap: 'anywhere' }}>
+              {status.version}
+            </Typography>
+          )}
+        </>
+      )}
+    </Cabinet>
   );
 }
 
@@ -228,82 +217,54 @@ function InfluxStatus() {
   const isConnected = status.status === 'connected';
 
   return (
-    <Card variant="outlined">
-      <CardContent>
-        <Typography variant="h6" gutterBottom>
-          InfluxDB Status
-        </Typography>
-        <Typography color={isConnected ? 'success.main' : 'error.main'} variant="subtitle1">
-          {isConnected ? 'Connected' : status.status === 'unreachable' ? 'Unreachable' : 'Disconnected'}
-        </Typography>
-        {status.error && (
-          <Typography color="error" variant="body2">
-            Error: {status.error}
-          </Typography>
-        )}
-        {isConnected && (
-          <Stack spacing={2} mt={2}>
-            <Box>
-              <Typography variant="subtitle2" gutterBottom>
-                Configuration
-              </Typography>
-              <Grid container spacing={2}>
-                <Grid item xs={6}>
-                  <Typography variant="body2">Org: {status.config?.org}</Typography>
-                </Grid>
-                <Grid item xs={6}>
-                  <Typography variant="body2">Bucket: {status.config?.bucket}</Typography>
-                </Grid>
-              </Grid>
+    <Cabinet
+      number={4}
+      title="InfluxDB"
+      connected={isConnected}
+      stateWord={isConnected ? 'connected' : status.status === 'unreachable' ? 'unreachable' : 'disconnected'}
+      error={status.error}
+    >
+      {isConnected && (
+        <>
+          <Readouts
+            items={[
+              { label: 'Org', value: status.config?.org },
+              { label: 'Bucket', value: status.config?.bucket },
+              { label: 'Measurements', value: status.measurements.count },
+              { label: 'Points, last hour', value: status.stats.pointsLastHour?.toLocaleString?.() ?? 'n/a' },
+              { label: 'Last point', value: status.stats.lastPointTime ? new Date(status.stats.lastPointTime).toLocaleString() : 'n/a' },
+            ]}
+          />
+          {status.measurements.samples?.length > 0 && (
+            <Box sx={{ mt: 2, display: 'flex', gap: 1, flexWrap: 'wrap', alignItems: 'center' }}>
+              <Typography variant="body2" sx={{ color: 'text.secondary' }}>Samples:</Typography>
+              {status.measurements.samples.map((m) => <Dymo key={m}>{m}</Dymo>)}
             </Box>
-            <Divider />
-            <Box>
-              <Typography variant="subtitle2" gutterBottom>
-                Measurements
-              </Typography>
-              <Typography variant="body2">Total: {status.measurements.count}</Typography>
-              {status.measurements.samples?.length > 0 && (
-                <Typography variant="body2">
-                  Samples: {status.measurements.samples.join(', ')}
-                </Typography>
-              )}
-            </Box>
-            <Divider />
-            <Box>
-              <Typography variant="subtitle2" gutterBottom>
-                Recent Activity
-              </Typography>
-              <Typography variant="body2">
-                Points (last hour): {status.stats.pointsLastHour ?? 'n/a'}
-              </Typography>
-              <Typography variant="body2">
-                Last point: {status.stats.lastPointTime ? new Date(status.stats.lastPointTime).toLocaleString() : 'n/a'}
-              </Typography>
-            </Box>
-          </Stack>
-        )}
-      </CardContent>
-    </Card>
+          )}
+        </>
+      )}
+    </Cabinet>
   );
 }
 
 export default function DataGeekPage() {
-  console.log('DataGeekPage component rendering');
   const [tab, setTab] = useState(0);
   return (
     <Box>
       <Typography variant="body2" sx={{ color: 'text.secondary', mb: 3 }}>
-        Database and infrastructure status
+        The relay room: each shared database in its own cabinet, re-read every 30 seconds.
       </Typography>
 
-      <Box sx={{
-        borderRadius: '12px',
-        border: '1px solid',
-        borderColor: 'divider',
-        backgroundColor: 'background.paper',
+      <Box sx={(theme) => ({
+        borderRadius: 1,
+        border: `1px solid ${theme.palette.line.strong}`,
+        bgcolor: theme.palette.box.tape.black,
         mb: 3,
         overflow: 'hidden',
-      }}>
+        '& .MuiTab-root': { color: '#b0b6be', minHeight: 48 },
+        '& .MuiTab-root.Mui-selected': { color: theme.palette.box.plate.shine },
+        '& .MuiTabs-scrollButtons': { color: '#ece6d6' },
+      })}>
         <Tabs
           value={tab}
           onChange={(_, v) => setTab(v)}

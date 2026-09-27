@@ -2,30 +2,30 @@
  * baseGeek sidebar — thin identity wrapper around the suite `GeekSidebar`.
  *
  * Structure (brand → grouped nav → user chip → Settings → Sign out) belongs to
- * the primitive; this file supplies only baseGeek's Mission Control identity:
- * the gradient "bg" monogram, the Geist Mono eyebrow, the hairline under the
- * brand band and the dense amber-selected rows.
+ * the primitive; this file supplies only the Signal Box identity: a two-aspect
+ * signal head for a mark, the stencil wordmark over a dymo-tape eyebrow, and
+ * brass-selected rows.
  *
  * `GeekShell nav={…}` decides whether this panel sits in the permanent 220px
  * column or inside the mobile drawer, so there is no `isMobile` / `mobileOpen`
  * / collapse-rail plumbing here any more.
  */
-import { Box, Typography, alpha, useTheme } from '@mui/material';
+import { Box, Typography } from '@mui/material';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { GeekSidebar, useGeekShell } from '@geeksuite/ui';
 import { activeNavId, visibleNavSections } from './navConfig';
 import { useBaseGeekAuth } from './AuthContext';
+import SignalHead from '../signalbox/SignalHead';
 
 /**
  * Brand block. Passed as a node rather than the primitive's
- * `{ monogram, name, tagline }` object because baseGeek's mark is a gradient
- * tile with a mono eyebrow, not the shared translucent accent chip.
+ * `{ monogram, name, tagline }` object because baseGeek's mark is a drawing,
+ * not the shared translucent accent chip.
  *
  * The primitive wires `closeNav` for the object form only, so a node brand has
  * to close the mobile drawer itself.
  */
 function Brand() {
-  const theme = useTheme();
   const { closeNav } = useGeekShell();
 
   return (
@@ -36,8 +36,7 @@ function Brand() {
       sx={{
         display: 'flex',
         alignItems: 'center',
-        gap: 1,
-        // Fills the primitive's 60px band; padding comes from `brandSx`.
+        gap: 1.25,
         width: '100%',
         height: '100%',
         minWidth: 0,
@@ -45,53 +44,41 @@ function Brand() {
         color: 'inherit',
       }}
     >
-      <Box
-        aria-hidden="true"
-        sx={{
-          width: 32,
-          height: 32,
-          flexShrink: 0,
-          borderRadius: '8px',
-          // The mark keeps its bright amber gradient in both modes, so its ink
-          // is the fixed `onBrightFill` rather than `primary.contrastText`.
-          background: theme.palette.accent.gradient,
-          color: theme.palette.accent.onBrightFill,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          fontSize: '14px',
-          fontWeight: 700,
-          fontFamily: '"Geist Mono", monospace',
-        }}
-      >
-        bg
-      </Box>
+      <SignalHead size={34} />
       <Box sx={{ minWidth: 0 }}>
         <Typography
           noWrap
           sx={{
-            fontWeight: 700,
-            fontSize: '0.95rem',
-            lineHeight: 1.2,
-            letterSpacing: '-0.01em',
+            fontFamily: 'fontFamilyPlate',
+            fontWeight: 800,
+            fontSize: '1.3rem',
+            lineHeight: 1,
+            letterSpacing: '0.04em',
+            textTransform: 'uppercase',
             color: 'text.primary',
           }}
         >
           baseGeek
         </Typography>
-        <Typography
-          noWrap
-          sx={{
-            display: 'block',
+        <Box
+          component="span"
+          sx={(theme) => ({
+            display: 'inline-block',
+            mt: 0.5,
+            px: 0.75,
+            borderRadius: '2px',
+            bgcolor: theme.palette.box.tape.black,
+            color: theme.palette.box.tape.ink,
+            fontFamily: theme.typography.fontFamilyMono,
+            fontWeight: 700,
             fontSize: '0.75rem',
-            color: 'text.secondary',
-            fontFamily: '"Geist Mono", monospace',
-            letterSpacing: '0.05em',
+            lineHeight: 1.5,
+            letterSpacing: '0.12em',
             textTransform: 'uppercase',
-          }}
+          })}
         >
-          mission control
-        </Typography>
+          signal box
+        </Box>
       </Box>
     </Box>
   );
@@ -123,14 +110,14 @@ export default function Sidebar() {
           minWidth: 36,
           '& .MuiSvgIcon-root': { fontSize: 20 },
         },
-        '& .MuiListItemText-primary': { fontSize: '0.8125rem', fontWeight: 400 },
+        '& .MuiListItemText-primary': { fontSize: '0.8125rem', fontWeight: 400, letterSpacing: '0.01em' },
         '&:hover': { color: 'text.primary' },
-        // The amber inset bar and glow come from the theme's `.Mui-selected`
+        // The brass inset bar comes from the theme's `.Mui-selected`
         // override; only the ink weighting is decided here.
         '&.Mui-selected': {
           color: 'text.primary',
           '& .MuiListItemIcon-root': { color: 'primary.main' },
-          '& .MuiListItemText-primary': { fontWeight: 600 },
+          '& .MuiListItemText-primary': { fontWeight: 700 },
         },
       }}
     />

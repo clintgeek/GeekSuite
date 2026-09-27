@@ -18,7 +18,7 @@ import SmartToyIcon from '@mui/icons-material/SmartToy';
 
 /**
  * Two sections, grouped by what the operator is doing:
- *   Overview — the control room itself
+ *   Overview — the signal box itself
  *   Services — the shared backends baseGeek fronts
  *
  * There is no longer an Access section. API keys were a row of their own until
@@ -32,8 +32,10 @@ export const navSections = [
     label: 'Overview',
     items: [
       // `title` overrides the top bar label: the row reads "Home" next to the
-      // brand, but the page it opens is the mission control dashboard.
-      { id: '/', label: 'Home', title: 'Mission Control', to: '/', icon: <HomeIcon /> },
+      // brand, but the page it opens is the Signal Box dashboard. (The suite
+      // app switcher still calls baseGeek "Mission Control"; that label lives
+      // in the shared package.)
+      { id: '/', label: 'Home', title: 'Signal Box', to: '/', icon: <HomeIcon /> },
     ],
   },
   {

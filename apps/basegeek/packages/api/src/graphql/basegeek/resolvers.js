@@ -4,6 +4,8 @@ import { encrypt } from '@geeksuite/crypto-vault';
 import AIPricing from '../../models/AIPricing.js';
 import AIFreeTier from '../../models/AIFreeTier.js';
 import AIAppConfig from '../../models/AIAppConfig.js';
+import AISpend from '../../models/AISpend.js';
+import { readTraffic } from './aiTraffic.js';
 import { normalizeTier } from '../../services/aiRoute.js';
 import aiService from '../../services/aiService.js';
 import aiDirectorService from '../../services/aiDirectorService.js';
@@ -272,6 +274,17 @@ export const resolvers = {
     aiAppConfig: async (_, { appName }, { user }) => {
       requireAuth(user);
       return await AIAppConfig.findOne({ appName });
+    },
+
+    /**
+     * aiTraffic — calls per UTC day and today's calls per app, from the
+     * AISpend ledger (see ./aiTraffic.js). Read-only and admin-only: it is the
+     * whole suite's traffic, which is the operator's business, and the
+     * console's Signal Box dashboard is the only reader.
+     */
+    aiTraffic: async (_, { days }, { user }) => {
+      await requireAdminUser(user);
+      return readTraffic(AISpend, { days });
     }
   },
 

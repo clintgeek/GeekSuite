@@ -31,15 +31,23 @@ describe('the aiGeek status chips are readable on their own fill', () => {
   }
 
   it('leaves a fill alone when the palette already passes', () => {
-    // This is a contrast fix, not a restyle: only the tone that actually
-    // failed moves. On this palette that is the dark theme's error chip and
-    // nothing else.
+    // This is a contrast fix, not a restyle: only a tone that actually fails
+    // moves. The Signal Box palette (2026-09-27) inks its night-turn status
+    // hues dark, so every tone passes on `main` in both modes and nothing moves.
     const dark = createBaseGeekTheme('dark');
     expect(filledChipSx(dark, 'success').bgcolor).toBe(dark.palette.success.main);
-    expect(filledChipSx(dark, 'error').bgcolor).toBe(dark.palette.error.dark);
+    expect(filledChipSx(dark, 'error').bgcolor).toBe(dark.palette.error.main);
 
     const light = createBaseGeekTheme('light');
     expect(filledChipSx(light, 'error').bgcolor).toBe(light.palette.error.main);
+  });
+
+  it('moves the fill to `dark` when `main` fails under its ink', () => {
+    // The mechanism, on the palette that first needed it (Mission Control's
+    // dark error: white on #c76b6b), so a palette that passes everywhere
+    // cannot leave the fallback untested.
+    const theme = { palette: { error: { main: '#c76b6b', dark: '#a85050', contrastText: '#ffffff' } } };
+    expect(filledChipSx(theme, 'error').bgcolor).toBe('#a85050');
   });
 
   it('reproduces the exact failure the harness reported', () => {

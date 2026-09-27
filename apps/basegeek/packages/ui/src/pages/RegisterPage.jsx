@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Box, TextField, Button, Typography, Alert, useTheme, CircularProgress } from '@mui/material';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { alpha } from '@mui/material/styles';
+import AuthFrame from '../signalbox/AuthFrame';
 import api from '../api';
 import { useBaseGeekAuth } from '../components/AuthContext';
 import { safeRedirect } from '../utils/safeRedirect';
@@ -58,74 +58,19 @@ export default function RegisterPage() {
   };
 
   return (
-    <Box sx={{
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      minHeight: '100vh',
-      '@supports (height: 100dvh)': { minHeight: '100dvh' },
-      backgroundColor: theme.palette.surfaces.deep,
-      position: 'relative',
-      overflow: 'hidden',
-    }}>
-      <Box sx={{
-        position: 'absolute',
-        top: '20%',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        width: '600px',
-        height: '400px',
-        background: `radial-gradient(ellipse, ${theme.palette.glow.soft} 0%, transparent 70%)`,
-        pointerEvents: 'none',
-      }} />
-
-      <Box sx={{ width: '100%', maxWidth: 380, mx: 2, position: 'relative', zIndex: 1 }}>
-        <Box sx={{ textAlign: 'center', mb: 4 }}>
-          <Box sx={{
-            width: 56,
-            height: 56,
-            borderRadius: '14px',
-            background: theme.palette.accent.gradient,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '20px',
-            fontWeight: 700,
-            color: theme.palette.accent.onBrightFill,
-            fontFamily: '"Geist Mono", monospace',
-            mx: 'auto',
-            mb: 2,
-            boxShadow: `0 8px 32px ${alpha(theme.palette.primary.main, 0.15)}`,
-          }}>
-            bg
-          </Box>
-          <Typography sx={{ fontWeight: 700, fontSize: '1.5rem', color: 'text.primary', letterSpacing: '-0.02em', mb: 0.25 }}>
-            baseGeek
-          </Typography>
-          <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', fontFamily: '"Geist Mono", monospace', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
-            create account
-          </Typography>
-        </Box>
-
-        <Box sx={{ backgroundColor: 'background.paper', borderRadius: '16px', border: `1px solid ${theme.palette.line.panel}`, p: 3.5 }}>
-          <form onSubmit={handleSubmit}>
-            <TextField label="Username" name="username" value={form.username} onChange={handleChange} fullWidth margin="dense" required autoFocus size="small" />
-            <TextField label="Email" name="email" type="email" value={form.email} onChange={handleChange} fullWidth margin="dense" required size="small" />
-            <TextField label="Password" name="password" type="password" value={form.password} onChange={handleChange} fullWidth margin="dense" required size="small" />
-            {error && <Alert severity="error" sx={{ mt: 1.5, fontSize: '0.8rem' }}>{error}</Alert>}
-            <Button type="submit" variant="contained" color="primary" fullWidth disabled={isLoading} sx={{ mt: 2.5, py: 1.25, fontWeight: 600, fontSize: '0.875rem', borderRadius: '10px' }}>
-              {isLoading ? 'Working...' : 'Create account'}
-            </Button>
-            <Button variant="text" fullWidth sx={{ mt: 1, fontSize: '0.8rem', color: 'text.secondary' }} onClick={() => navigate('/login')}>
-              Already have an account? Sign in
-            </Button>
-          </form>
-        </Box>
-
-        <Typography sx={{ textAlign: 'center', mt: 3, fontSize: '0.75rem', color: 'text.muted', fontFamily: '"Geist Mono", monospace' }}>
-          GeekSuite — shared authentication
-        </Typography>
-      </Box>
-    </Box>
+    <AuthFrame subtitle="Create a GeekSuite account">
+      <form onSubmit={handleSubmit}>
+        <TextField label="Username" name="username" value={form.username} onChange={handleChange} fullWidth margin="dense" required autoFocus size="small" />
+        <TextField label="Email" name="email" type="email" value={form.email} onChange={handleChange} fullWidth margin="dense" required size="small" />
+        <TextField label="Password" name="password" type="password" value={form.password} onChange={handleChange} fullWidth margin="dense" required size="small" />
+        {error && <Alert severity="error" sx={{ mt: 1.5, fontSize: '0.8rem' }}>{error}</Alert>}
+        <Button type="submit" variant="contained" color="primary" fullWidth disabled={isLoading} sx={{ mt: 2.5, py: 1.25, fontWeight: 600, fontSize: '0.875rem', borderRadius: '10px' }}>
+          {isLoading ? 'Working...' : 'Create account'}
+        </Button>
+        <Button variant="text" fullWidth sx={{ mt: 1, fontSize: '0.8rem', color: 'text.secondary' }} onClick={() => navigate('/login')}>
+          Already have an account? Sign in
+        </Button>
+      </form>
+    </AuthFrame>
   );
 }

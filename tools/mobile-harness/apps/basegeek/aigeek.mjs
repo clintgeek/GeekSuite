@@ -237,7 +237,32 @@ export const AI_FEATURE = {
   },
 };
 
+/**
+ * `aiTraffic` — the ledger by day, for the Signal Box's chart recorder and
+ * traffic gauge (added 2026-09-27). Fixed dates, not "the last 7 days from
+ * now": a screenshot should not change with the calendar. The shape of the
+ * week is a real one — quiet Sunday, a StoryGeek-heavy Friday night.
+ */
+export const AI_TRAFFIC = {
+  today: '2026-09-07',
+  days: [
+    { day: '2026-09-01', calls: 212, costUsd: 0.0214, refusals: 0 },
+    { day: '2026-09-02', calls: 305, costUsd: 0.0311, refusals: 0 },
+    { day: '2026-09-03', calls: 188, costUsd: 0.0102, refusals: 0 },
+    { day: '2026-09-04', calls: 421, costUsd: 0.1920, refusals: 1 },
+    { day: '2026-09-05', calls: 517, costUsd: 0.2410, refusals: 2 },
+    { day: '2026-09-06', calls: 96, costUsd: 0, refusals: 0 },
+    { day: '2026-09-07', calls: 264, costUsd: 0.0231, refusals: 0 },
+  ],
+  apps: [
+    { app: 'storygeek', calls: 141, costUsd: 0.0131 },
+    { app: 'codegeek', calls: 77, costUsd: 0.01 },
+    { app: 'notegeek', calls: 46, costUsd: 0 },
+  ],
+};
+
 export const AI_OPS = {
+  GetAITraffic: { aiTraffic: AI_TRAFFIC },
   GetAIConfig: { aiConfig: AI_CONFIG },
   GetAIStats: { aiStats: AI_STATS },
   GetAIDirectorModels: { aiDirectorModels: DIRECTOR },

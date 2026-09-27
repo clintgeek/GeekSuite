@@ -82,7 +82,7 @@ function KeyTable({ keys, onCopy, onEdit, onRevoke }) {
           label: 'Prefix',
           render: (apiKey) => (
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, justifyContent: { xs: 'flex-end', md: 'flex-start' } }}>
-              <Typography variant="body2" sx={{ fontFamily: '"Geist Mono", monospace', fontSize: 12 }}>
+              <Typography variant="body2" sx={{ fontFamily: '"B612 Mono", ui-monospace, monospace', fontSize: 12 }}>
                 {apiKey.keyPrefix}…
               </Typography>
               <Tooltip title="Copy prefix">
@@ -315,7 +315,7 @@ function AppGroupCard({ group, picker, saving, onEditRouting, onDeleteRouting, o
           <Box sx={{ minWidth: 0 }}>
             <Typography variant="h6" sx={{ wordBreak: 'break-word' }}>{displayName}</Typography>
             {displayName !== appId && (
-              <Typography variant="caption" color="text.secondary" sx={{ fontFamily: '"Geist Mono", monospace', fontSize: 12 }}>
+              <Typography variant="caption" color="text.secondary" sx={{ fontFamily: '"B612 Mono", ui-monospace, monospace', fontSize: 12 }}>
                 {appId}
               </Typography>
             )}

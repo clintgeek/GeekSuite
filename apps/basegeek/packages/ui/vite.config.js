@@ -14,7 +14,7 @@ export default defineConfig({
         name: 'baseGeek',
         short_name: 'baseGeek',
         description: 'Core Infrastructure for GeekSuite',
-        theme_color: '#121215',
+        theme_color: '#0e1012',
         icons: [
           {
             src: 'pwa-192x192.png',

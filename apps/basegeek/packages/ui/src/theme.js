@@ -2,99 +2,158 @@ import { alpha, darken } from '@mui/material/styles';
 import { createGeekSuiteTheme } from '@geeksuite/ui';
 
 /**
- * BaseGeek Theme: "Mission Control"
+ * BaseGeek Theme: "The Signal Box"
  *
- * The control room of your digital life. Warm, calm, and now legible in
- * daylight too — a desk you built yourself, lit by a warm lamp at night and
- * by the window in the morning.
+ * baseGeek is the interlocking every request in the suite passes through —
+ * auth, the gateway, the AI router. So the console is the box it lives in: a
+ * blackened-steel instrument panel with cream enamel plates, brass lever
+ * plates, dymo-tape labels and lamps that are lit by real readings. Night turn
+ * (dark) is the panel under its own lamps; day turn (light) is the same panel
+ * painted in pale signal-box steel, the way the old illuminated diagrams were.
  *
- * Composes `createGeekSuiteTheme` with BaseGeek's identity overrides:
- * - Amber accent (bright ochre on stone in dark, deep amber on paper in light)
- * - Warm stone surfaces (dark) / warm off-white paper surfaces (light)
- * - Geist (sans) / Geist Mono typography, 10px panel radius
+ * Neighbours it must not look like: GameGeek's neon stickers, BookGeek's navy
+ * cloth, NoteGeek's warm paper and rubber stamps, ThingGeek's green ledger. So:
+ * cool steel grounds (no paper warmth), brass instead of an accent colour, and
+ * type from the cockpit rather than the desk —
+ *
+ * - **B612** (sans + mono): the typeface Airbus commissioned for cockpit
+ *   displays, drawn to be read at a glance under bad light. Body, tables,
+ *   readouts.
+ * - **Big Shoulders Stencil Display**: plate lettering. Titles only, never
+ *   body copy.
  *
  * Contrast: every palette pair asserted by
  * packages/ui/src/__tests__/themeContrast.test.js clears WCAG AA in BOTH
- * modes. Measured ratios are noted beside the values that are close to a
- * threshold — retune with that suite, not by eye.
+ * modes, and `chipContrast.test.js` holds the filled status chips to 4.5:1.
+ * Measured ratios sit beside the values — retune with those suites, not by eye.
  */
 
-// Warm stone scale — zero blue cast, amber/brown undertones. This is the
-// DARK-mode surface ramp; light mode uses `paperScale` below. Exposed on the
-// palette as `stone` for continuity, but prefer `palette.surfaces` /
-// `palette.text` in components so the value tracks the active mode.
+export const FONT_SANS = '"B612", "Segoe UI", system-ui, sans-serif';
+export const FONT_MONO = '"B612 Mono", ui-monospace, "SFMono-Regular", Menlo, monospace';
+export const FONT_PLATE = '"Big Shoulders Stencil Display", "B612", "Arial Narrow", sans-serif';
+
+// Blackened steel — the night-turn ramp. Exposed as `stone` for continuity
+// with the pre-Signal-Box components that read it; prefer `surfaces`.
 const stone = {
-  950:  '#0c0c0f',
-  900:  '#121215',
-  850:  '#17171b',
-  800:  '#1c1c21',
-  700:  '#252529',
-  600:  '#2e2e33',
-  500:  '#3a3a40',
-  400:  '#52525a',
-  300:  '#71717a',
-  200:  '#a1a1aa',
-  100:  '#d4d4dc',
-  50:   '#f0f0f3',
+  950: '#08090a',
+  900: '#0e1012',
+  850: '#171a1e',
+  800: '#1f2328',
+  700: '#2b3037',
+  600: '#3a414a',
+  500: '#4a525c',
+  400: '#5d6670',
+  300: '#737b85',
+  200: '#9ca3ac',
+  100: '#d7dade',
+  50: '#f1f2f3',
 };
 
-// Warm off-white ramp — the light-mode counterpart to `stone`. Same amber
-// undertone, so the two modes read as one family rather than two products.
+// Signal-box steel, painted — the day-turn ramp. Cool, not paper-warm.
 const paperScale = {
-  50:  '#ffffff',
-  100: '#faf9f6',
-  200: '#f4f2ee',
-  300: '#ebe8e2',
-  400: '#ddd9d2',
+  50: '#ffffff',
+  100: '#f3f5f6',
+  200: '#e8ecee',
+  300: '#dde2e6',
+  400: '#cdd3d8',
 };
 
-// Amber accent, per mode.
-// Dark: bright ochre on near-black, dark ink label (9.37:1).
-// Light: deep amber on paper — 4.86:1 as foreground text/icons (needs 3.0)
-// and 4.86:1 against its white label (needs 4.5). A brighter amber cannot
-// carry a white label at AA, which is why light mode goes deeper, not lighter.
-const accentDark = {
-  main: '#e8a849',
-  light: '#f0c078',
-  dark: '#c48a30',
-  contrastText: stone[950],
-};
+// Brass. Night: polished (8.22:1 on the panel, 8.87:1 under its dark ink).
+// Day: tarnished deep brass (6.07:1 on the panel, 6.64:1 under white).
+const accentDark = { main: '#d9ab4e', light: '#e8c47a', dark: '#b0863a', contrastText: '#14110a' };
+const accentLight = { main: '#7a560c', light: '#a07a2c', dark: '#5a3f08', contrastText: '#ffffff' };
 
-const accentLight = {
-  main: '#a56118',
-  light: '#c9852f',
-  dark: '#7d4a0a',
-  contrastText: '#ffffff',
-};
-
-// Status hues. Dark values are lifted for the near-black ground; light values
-// are deepened so each clears 3.0:1 on paper (error clears 4.5:1, since
-// "Password is required" is real body copy).
+// Status hues. Night values are lamp-bright; day values are deepened so each
+// clears 4.5:1 on the day panel as text, not just 3:1 as a glyph.
 const semanticDark = {
-  error:   { main: '#c76b6b', light: '#e0a0a0', dark: '#a85050' },  // 4.86:1
-  warning: { main: '#d4b06a', light: '#e8cc90', dark: '#b8903a' },
-  success: { main: '#7dac8e', light: '#a0c8ae', dark: '#5a8c6a' },
-  info:    { main: '#a99df0', light: '#c4bcf5', dark: '#8a7ed0' },
+  error: { main: '#ff8a7a', light: '#ffb3a8', dark: '#c6483a', contrastText: '#14110a' }, // 7.62:1
+  warning: { main: '#f2b84b', light: '#f7d38c', dark: '#b8862a', contrastText: '#14110a' }, // 9.75:1
+  success: { main: '#5fcf85', light: '#94e0ad', dark: '#2f8f52', contrastText: '#14110a' }, // 8.94:1
+  info: { main: '#8fb8f2', light: '#b9d3f7', dark: '#4f7fc0', contrastText: '#14110a' }, // 8.57:1
 };
 
 const semanticLight = {
-  error:   { main: '#a33b3b', light: '#c76b6b', dark: '#7d2a2a' },  // 6.48:1
-  warning: { main: '#8a5a00', light: '#b8903a', dark: '#5e3d00' },
-  success: { main: '#2f6b45', light: '#5a8c6a', dark: '#1f4a2e' },
-  info:    { main: '#5b4bbd', light: '#8a7ed0', dark: '#3d3186' },
+  error: { main: '#b0261d', light: '#d0564c', dark: '#7f1a14', contrastText: '#ffffff' }, // 6.11:1
+  warning: { main: '#8a5300', light: '#b8862a', dark: '#5e3900', contrastText: '#ffffff' }, // 5.79:1
+  success: { main: '#1b6a39', light: '#3f8f5c', dark: '#114a27', contrastText: '#ffffff' }, // 6.06:1
+  info: { main: '#1c58a3', light: '#4f7fc0', dark: '#123d73', contrastText: '#ffffff' }, // 6.46:1
 };
+
+/**
+ * The instrument tokens — everything that is not a surface or a text tier.
+ *
+ * Lamps are *graphics*: they owe 3:1 against the panel, and they never carry
+ * meaning alone (every lamp has a shape per state and a word beside it — see
+ * signalbox/Lamp.jsx). The fixed-fill tokens (tape, plate, enamel) are the
+ * same in both modes, because a label is an object, not a surface; their inks
+ * are measured against their own fill.
+ */
+function boxTokens(isLight) {
+  return {
+    lamp: isLight
+      ? { ok: '#17803f', warn: '#a86400', fault: '#c42b1c', off: '#aab2ba', glow: 0.0 }
+      : { ok: '#53d37c', warn: '#ffbf3f', fault: '#ff5b4d', off: '#4a525c', glow: 0.55 },
+    // Lamp bezel: the ring that gives an unlit lamp its 3:1 edge.
+    bezel: isLight ? '#3b434c' : '#737b85',
+    // Dymo tape: white embossed on black (15.77:1) or on red (7.47:1).
+    tape: { black: '#15181c', red: '#a3231a', ink: '#f4f1e8' },
+    // Brass lever plate: engraved ink on the flat of the plate (7.59:1).
+    plate: {
+      face: '#caa14a',
+      edge: '#8e6a22',
+      shine: '#e9c97e',
+      ink: '#1a1406',
+    },
+    // Cream enamel: the station nameboards (ink 14.08:1, red 7.49:1).
+    enamel: { face: '#efe8d4', ink: '#1b1b1b', red: '#8c1c13', rim: '#1b1b1b' },
+    // Gauge faces: always a light dial with dark ticks, like the real thing.
+    dial: {
+      face: isLight ? '#fbfaf6' : '#e9e4d6',
+      ink: '#15181c',
+      tick: '#3b434c',
+      needle: '#b3261e',
+      hub: '#15181c',
+      zoneOk: '#2f8f52',
+      zoneWarn: '#c98a14',
+      zoneFault: '#b3261e',
+    },
+    // Track on the diagram, and the lit "route set" colour.
+    track: isLight ? '#15181c' : '#9ca3ac',
+    trackLit: isLight ? '#7a560c' : '#d9ab4e',
+    screw: isLight ? '#9aa2aa' : '#3a414a',
+    screwSlot: isLight ? '#5d6670' : '#15181c',
+    // The chart recorder's paper and pen.
+    chart: {
+      paper: isLight ? '#fbfaf6' : '#e9e4d6',
+      grid: isLight ? 'rgba(27, 106, 57, 0.18)' : 'rgba(27, 106, 57, 0.22)',
+      pen: '#a3231a',
+      ink: '#15181c',
+    },
+  };
+}
 
 const accentFor = (mode) => (mode === 'light' ? accentLight : accentDark);
 
 /**
  * Per-app brand hues (the `color` fields in the app directories) are tuned for
- * the dark ground and land near 2:1 on light paper. Darken them for anything
+ * a dark ground and land near 2:1 on a light one. Darken them for anything
  * that carries meaning — glyphs, chip labels — while tinted FILLS keep the raw
- * hue in both modes. Verified: every suite brand hue clears 4.9:1 on its own
- * 9% tint and 5.2:1 on white at this coefficient.
+ * hue in both modes. Every suite brand hue clears 4.9:1 on its own 9% tint and
+ * 5.2:1 on white at this coefficient.
  */
 export function brandInk(theme, hex) {
   return theme.palette.mode === 'light' ? darken(hex, 0.4) : hex;
+}
+
+/** Four panel screws, as background layers, for a panel of any size. */
+function screws(box) {
+  const screw = (x, y) => `radial-gradient(circle at ${x} ${y}, ${box.screwSlot} 0 1px, ${box.screw} 1.5px 3.5px, transparent 4px)`;
+  return [
+    screw('10px', '10px'),
+    screw('calc(100% - 10px)', '10px'),
+    screw('10px', 'calc(100% - 10px)'),
+    screw('calc(100% - 10px)', 'calc(100% - 10px)'),
+  ].join(', ');
 }
 
 /**
@@ -105,61 +164,62 @@ export function createBaseGeekTheme(mode = 'dark') {
   const isLight = mode === 'light';
   const accentPalette = accentFor(mode);
   const semantic = isLight ? semanticLight : semanticDark;
-  const amber = accentPalette.main;
+  const brass = accentPalette.main;
+  const box = boxTokens(isLight);
 
-  // Surfaces. Dark keeps the stone ramp; light uses warm off-white with true
-  // white paper so cards lift off the canvas the way they do in dark.
   const surfaces = isLight
-    ? { deep: paperScale[200], base: paperScale[200], surface: paperScale[50], elevated: paperScale[100] }
-    : { deep: stone[950],      base: stone[900],      surface: stone[850],     elevated: stone[800] };
+    ? { deep: paperScale[400], base: paperScale[300], surface: paperScale[100], elevated: paperScale[200] }
+    : { deep: stone[950], base: stone[900], surface: stone[850], elevated: stone[800] };
 
+  // Night: 14.01 / 8.55 / 6.86 on the panel. Day: 16.73 / 9.17 / 7.24.
   const text = isLight
-    ? { primary: '#1c1c21', secondary: '#52525a', muted: '#6e6a72', disabled: '#8e8a94' }
-    // 14.13 / 5.27 / 5.27 / 3.68 on the dark canvas
-    : { primary: '#e4dfd6', secondary: '#8a8690', muted: '#8a8690', disabled: stone[300] };
+    ? { primary: '#12151a', secondary: '#3b434c', muted: '#4a525c', disabled: '#737b85' }
+    : { primary: '#ece6d6', secondary: '#b0b6be', muted: '#9ca3ac', disabled: '#737b85' };
 
-  // Hairlines and control outlines, per mode.
   const line = isLight
     ? {
-        divider: 'rgba(0, 0, 0, 0.08)',
-        panel:   'rgba(0, 0, 0, 0.10)',
-        strong:  'rgba(0, 0, 0, 0.14)',
-        input:   'rgba(0, 0, 0, 0.23)',
-        inputHover: 'rgba(0, 0, 0, 0.42)',
-        hover:   'rgba(0, 0, 0, 0.04)',
-      }
+      divider: 'rgba(18, 21, 26, 0.10)',
+      panel: '#b9c0c6',
+      strong: '#8e979f',
+      input: '#737b85',
+      inputHover: '#3b434c',
+      hover: 'rgba(18, 21, 26, 0.05)',
+    }
     : {
-        divider: 'rgba(255, 255, 255, 0.06)',
-        panel:   stone[700],
-        strong:  stone[600],
-        input:   stone[600],
-        inputHover: stone[400],
-        hover:   'rgba(255, 255, 255, 0.04)',
-      };
+      divider: 'rgba(236, 230, 214, 0.08)',
+      panel: stone[700],
+      strong: stone[600],
+      input: stone[500],
+      inputHover: stone[300],
+      hover: 'rgba(236, 230, 214, 0.05)',
+    };
 
-  // Amber glow — always derived from the active accent so the ring tracks the
-  // mode instead of baking the dark amber into light surfaces.
   const glow = {
-    ring:   alpha(amber, 0.20),
-    soft:   alpha(amber, isLight ? 0.07 : 0.06),
-    medium: alpha(amber, isLight ? 0.12 : 0.10),
-    border: alpha(amber, 0.30),
+    ring: alpha(brass, 0.28),
+    soft: alpha(brass, isLight ? 0.08 : 0.07),
+    medium: alpha(brass, isLight ? 0.14 : 0.12),
+    border: alpha(brass, 0.40),
   };
 
-  // Tooltips invert against the page in both modes (dark bubble on light UI,
-  // lifted stone on dark UI) — the conventional, most legible treatment.
   const tooltip = isLight
-    ? { bg: stone[800], fg: paperScale[200], border: stone[600] }
-    : { bg: stone[600], fg: text.primary,    border: stone[500] };
+    ? { bg: stone[800], fg: '#eef1f3', border: stone[600] } // 13.93:1
+    : { bg: stone[700], fg: text.primary, border: stone[500] }; // 10.66:1
 
-  const shadowTint = isLight ? '28, 28, 33' : '0, 0, 0';
+  const shadowTint = isLight ? '18, 21, 26' : '0, 0, 0';
   const s = (y, blur, a) => `0 ${y}px ${blur}px rgba(${shadowTint}, ${a})`;
   const shadowScale = isLight
-    ? ['none', s(1, 2, 0.05), s(2, 4, 0.06), s(4, 8, 0.08), s(8, 16, 0.10), s(12, 24, 0.12), s(16, 32, 0.14)]
-    : ['none', s(1, 2, 0.3),  s(2, 4, 0.3),  s(4, 8, 0.35), s(8, 16, 0.4),  s(12, 24, 0.45), s(16, 32, 0.5)];
+    ? ['none', s(1, 2, 0.08), s(2, 4, 0.10), s(4, 8, 0.12), s(8, 16, 0.14), s(12, 24, 0.16), s(16, 32, 0.18)]
+    : ['none', s(1, 2, 0.4), s(2, 4, 0.45), s(4, 8, 0.5), s(8, 16, 0.55), s(12, 24, 0.6), s(16, 32, 0.65)];
 
-  const sansStack = '"Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-  const monoStack = '"Geist Mono", monospace';
+  // The bevel every raised panel wears: a lit top edge, a shadowed bottom.
+  const bevel = isLight
+    ? 'inset 0 1px 0 rgba(255,255,255,0.9), inset 0 -1px 0 rgba(18,21,26,0.08), 0 1px 2px rgba(18,21,26,0.10)'
+    : 'inset 0 1px 0 rgba(255,255,255,0.05), inset 0 -1px 0 rgba(0,0,0,0.5), 0 1px 3px rgba(0,0,0,0.45)';
+
+  // Brushed steel: hairline grain at a few percent, so no text tier moves.
+  const brushed = isLight
+    ? 'repeating-linear-gradient(90deg, rgba(18,21,26,0.018) 0 1px, transparent 1px 3px)'
+    : 'repeating-linear-gradient(90deg, rgba(255,255,255,0.014) 0 1px, transparent 1px 3px)';
 
   return createGeekSuiteTheme({
     mode,
@@ -167,33 +227,26 @@ export function createBaseGeekTheme(mode = 'dark') {
     overrides: {
       palette: {
         secondary: isLight
-          ? { main: '#2f6b45', light: '#5a8c6a', dark: '#1f4a2e', contrastText: '#ffffff' }
-          : { main: '#7dac8e', light: '#a0c8ae', dark: '#5a8c6a', contrastText: stone[950] },
+          ? { main: '#1b6a39', light: '#3f8f5c', dark: '#114a27', contrastText: '#ffffff' }
+          : { main: '#5fcf85', light: '#94e0ad', dark: '#2f8f52', contrastText: '#14110a' },
         background: {
           default: surfaces.base,
           paper: surfaces.surface,
         },
-        text: {
-          primary: text.primary,
-          secondary: text.secondary,
-          muted: text.muted,
-          disabled: text.disabled,
-        },
+        text,
         divider: line.divider,
         error: semantic.error,
         warning: semantic.warning,
         success: semantic.success,
         info: semantic.info,
-        // Custom BaseGeek tokens. `stone` stays the raw dark ramp for
-        // continuity; `surfaces`, `line` and `accent` are mode-aware — read
-        // those in components so nothing pins a dark value onto light paper.
         stone,
         paperScale,
         surfaces,
         line,
+        box,
         accent: {
-          amber,
-          amberSoft: isLight ? '#8a5a2a' : '#d4956a',
+          amber: brass,
+          amberSoft: isLight ? '#5a3f08' : '#e8c47a',
           amberGlow: glow.medium,
           sage: semantic.success.main,
           sageSoft: alpha(semantic.success.main, 0.12),
@@ -201,50 +254,50 @@ export function createBaseGeekTheme(mode = 'dark') {
           coralSoft: alpha(semantic.error.main, 0.12),
           indigo: semantic.info.main,
           indigoSoft: alpha(semantic.info.main, 0.10),
-          // The "bg" brand mark keeps its bright amber gradient in both modes
-          // (a logo is not a surface), so its ink stays dark in both modes.
-          gradient: `linear-gradient(135deg, ${accentDark.main} 0%, #d4956a 100%)`,
-          // Ink for text/icons sitting on a BRIGHT fill that is the same in
-          // both modes — the brand gradient and the fixed accent-colour
-          // swatches. Not `primary.contrastText`, which correctly flips to
-          // white in light mode and would vanish on a pale swatch.
-          onBrightFill: stone[950],
+          // The brass plate, as a fill. Fixed in both modes: a plate is an
+          // object on the panel, not a surface of it.
+          // Flat face through the middle, where the engraving sits (7.59:1);
+          // the shine and the edge are only the plate's top and bottom lip.
+          gradient: `linear-gradient(180deg, ${box.plate.shine} 0%, ${box.plate.face} 28%, ${box.plate.face} 78%, ${box.plate.edge} 100%)`,
+          onBrightFill: box.plate.ink,
         },
         glow,
       },
 
       typography: {
-        fontFamily: sansStack,
-        fontFamilyMono: monoStack,
-        h1: { fontFamily: sansStack, fontWeight: 700, letterSpacing: '-0.03em',  lineHeight: 1.15 },
-        h2: { fontFamily: sansStack, fontWeight: 700, letterSpacing: '-0.02em',  lineHeight: 1.2 },
-        h3: { fontFamily: sansStack, fontWeight: 600, letterSpacing: '-0.015em', lineHeight: 1.25 },
-        h4: { fontFamily: sansStack, fontWeight: 600, letterSpacing: '-0.01em',  lineHeight: 1.3 },
-        h5: { fontWeight: 600, letterSpacing: '-0.005em', lineHeight: 1.35 },
-        h6: { fontWeight: 600, lineHeight: 1.4 },
-        subtitle1: { fontWeight: 500, fontSize: '0.9375rem', lineHeight: 1.5 },
+        fontFamily: FONT_SANS,
+        fontFamilyMono: FONT_MONO,
+        fontFamilyPlate: FONT_PLATE,
+        fontWeightMedium: 700,
+        h1: { fontFamily: FONT_PLATE, fontWeight: 800, letterSpacing: '0.01em', lineHeight: 1.05, textTransform: 'uppercase' },
+        h2: { fontFamily: FONT_PLATE, fontWeight: 800, letterSpacing: '0.01em', lineHeight: 1.1, textTransform: 'uppercase' },
+        h3: { fontFamily: FONT_PLATE, fontWeight: 800, letterSpacing: '0.02em', lineHeight: 1.1, textTransform: 'uppercase' },
+        h4: { fontFamily: FONT_PLATE, fontWeight: 800, letterSpacing: '0.03em', lineHeight: 1.15, textTransform: 'uppercase' },
+        h5: { fontFamily: FONT_PLATE, fontWeight: 800, letterSpacing: '0.04em', lineHeight: 1.2, textTransform: 'uppercase' },
+        h6: { fontFamily: FONT_PLATE, fontWeight: 800, fontSize: '1.2rem', letterSpacing: '0.05em', lineHeight: 1.2, textTransform: 'uppercase' },
+        subtitle1: { fontWeight: 700, fontSize: '0.9375rem', lineHeight: 1.5 },
         subtitle2: {
-          fontWeight: 600,
-          letterSpacing: '0.04em',
+          fontFamily: FONT_MONO,
+          fontWeight: 700,
+          letterSpacing: '0.06em',
           textTransform: 'uppercase',
           fontSize: '0.75rem',
         },
-        body1: { lineHeight: 1.65, fontSize: '0.9375rem' },
-        body2: { lineHeight: 1.6,  fontSize: '0.8125rem' },
-        button: { fontWeight: 600, textTransform: 'none', fontSize: '0.8125rem' },
-        caption: { fontWeight: 500, fontSize: '0.75rem', color: text.muted },
+        body1: { lineHeight: 1.6, fontSize: '0.9rem' },
+        body2: { lineHeight: 1.55, fontSize: '0.8125rem' },
+        button: { fontWeight: 700, textTransform: 'none', fontSize: '0.8125rem', letterSpacing: '0.01em' },
+        caption: { fontWeight: 400, fontSize: '0.75rem', color: text.muted },
         overline: {
           fontWeight: 700,
-          letterSpacing: '0.08em',
+          letterSpacing: '0.14em',
           textTransform: 'uppercase',
           fontSize: '0.75rem',
-          fontFamily: monoStack,
+          fontFamily: FONT_MONO,
+          lineHeight: 1.6,
         },
       },
 
-      shape: {
-        borderRadius: 10,
-      },
+      shape: { borderRadius: 6 },
 
       shadows: [...shadowScale, ...Array(25 - shadowScale.length).fill(shadowScale[shadowScale.length - 1])],
 
@@ -255,38 +308,57 @@ export function createBaseGeekTheme(mode = 'dark') {
               WebkitFontSmoothing: 'antialiased',
               MozOsxFontSmoothing: 'grayscale',
             },
+            body: {
+              backgroundColor: surfaces.base,
+              backgroundImage: brushed,
+            },
             '::selection': {
-              backgroundColor: alpha(amber, 0.25),
+              backgroundColor: alpha(brass, 0.30),
               color: 'inherit',
             },
             'input, textarea, [contenteditable]': {
-              caretColor: `${amber} !important`,
+              caretColor: `${brass} !important`,
+            },
+            // Numbers in this console are readings; they line up.
+            'td, th, .MuiTableCell-root': {
+              fontVariantNumeric: 'tabular-nums',
             },
           },
         },
         MuiButton: {
           styleOverrides: {
             root: {
-              borderRadius: 8,
+              borderRadius: 4,
               padding: '8px 16px',
-              transition: 'all 150ms ease',
-              fontSize: '0.875rem',
+              transition: 'transform 80ms ease, box-shadow 120ms ease, background-color 150ms ease, border-color 150ms ease',
+              fontSize: '0.8125rem',
               minHeight: 44,
               minWidth: 44,
+              '&:active': { transform: 'translateY(1px)' },
+              '&:focus-visible': { boxShadow: `0 0 0 3px ${glow.ring}` },
             },
+            // A brass push-button: bevelled, pressed in on :active.
             contained: {
-              boxShadow: 'none',
-              '&:hover': { boxShadow: 'none' },
+              boxShadow: `inset 0 1px 0 ${alpha('#ffffff', 0.35)}, inset 0 -2px 0 ${alpha('#000000', 0.25)}, 0 1px 2px ${alpha('#000000', 0.35)}`,
+              '&:hover': { boxShadow: `inset 0 1px 0 ${alpha('#ffffff', 0.35)}, inset 0 -2px 0 ${alpha('#000000', 0.25)}, 0 1px 2px ${alpha('#000000', 0.35)}` },
+              '&:active': { boxShadow: `inset 0 2px 3px ${alpha('#000000', 0.35)}` },
             },
             outlined: {
               borderColor: line.strong,
-              '&:hover': {
-                borderColor: amber,
-                backgroundColor: glow.soft,
+              backgroundColor: alpha(isLight ? '#ffffff' : '#000000', isLight ? 0.5 : 0.18),
+              '@media (hover: hover)': {
+                '&:hover': {
+                  borderColor: brass,
+                  backgroundColor: glow.soft,
+                },
               },
-              '&:focus-visible': {
-                boxShadow: `0 0 0 3px ${glow.ring}`,
-              },
+            },
+          },
+        },
+        MuiIconButton: {
+          styleOverrides: {
+            root: {
+              '&:focus-visible': { boxShadow: `0 0 0 3px ${glow.ring}` },
             },
           },
         },
@@ -301,60 +373,83 @@ export function createBaseGeekTheme(mode = 'dark') {
         },
         MuiCard: {
           styleOverrides: {
+            // A top-level card is a panel bolted to the rack: bevel, grain,
+            // four screws. An `outlined` card is a card *inside* a panel, and
+            // gets none of it — screws inside screws is a junk drawer.
             root: {
-              borderRadius: 8,
+              borderRadius: 6,
               border: `1px solid ${line.panel}`,
-              backgroundImage: 'none',
-              transition: 'all 150ms ease',
+              transition: 'border-color 150ms ease',
+              '&:not(.MuiPaper-outlined)': {
+                boxShadow: bevel,
+                backgroundImage: `${screws(box)}, ${brushed}`,
+              },
+              '&.MuiPaper-outlined': {
+                backgroundImage: 'none',
+                backgroundColor: surfaces.elevated,
+              },
+            },
+          },
+        },
+        MuiCardContent: {
+          styleOverrides: {
+            root: {
+              padding: 20,
+              '&:last-child': { paddingBottom: 20 },
             },
           },
         },
         MuiDialog: {
           styleOverrides: {
             paper: {
-              borderRadius: 8,
+              borderRadius: 6,
               border: `1px solid ${line.strong}`,
+              borderTop: `4px solid ${brass}`,
               backgroundColor: isLight ? paperScale[50] : stone[800],
+              boxShadow: shadowScale[6],
             },
           },
         },
         MuiTooltip: {
           styleOverrides: {
             tooltip: {
-              borderRadius: 4,
-              fontWeight: 500,
+              borderRadius: 3,
+              fontWeight: 400,
+              fontFamily: FONT_MONO,
               fontSize: '0.75rem',
-              padding: '6px 12px',
+              padding: '6px 10px',
               backgroundColor: tooltip.bg,
               color: tooltip.fg,
               border: `1px solid ${tooltip.border}`,
             },
-            arrow: {
-              color: tooltip.bg,
-            },
+            arrow: { color: tooltip.bg },
           },
         },
         MuiChip: {
           styleOverrides: {
             root: {
-              borderRadius: 4,
-              fontWeight: 500,
+              borderRadius: 3,
+              fontWeight: 700,
+              fontFamily: FONT_MONO,
               fontSize: '0.75rem',
+              letterSpacing: '0.02em',
               height: 24,
+            },
+            outlined: {
+              borderColor: line.strong,
             },
           },
         },
         MuiListItemButton: {
           styleOverrides: {
             root: {
-              borderRadius: 8,
+              borderRadius: 4,
               margin: '2px 8px',
               padding: '8px 12px',
-              transition: 'all 120ms ease',
+              transition: 'background-color 120ms ease',
               '&.Mui-selected': {
                 backgroundColor: glow.soft,
-                borderLeft: `2px solid ${amber}`,
-                paddingLeft: 10,
+                boxShadow: `inset 3px 0 0 ${brass}`,
                 '&:hover': { backgroundColor: glow.medium },
               },
               '&:hover': { backgroundColor: line.hover },
@@ -381,22 +476,16 @@ export function createBaseGeekTheme(mode = 'dark') {
         MuiTextField: {
           styleOverrides: {
             root: {
+              // Recessed fields: the input sits *into* the panel.
               '& .MuiOutlinedInput-root': {
-                borderRadius: 8,
-                transition: 'all 150ms ease',
-                '& .MuiOutlinedInput-notchedOutline': {
-                  borderColor: line.input,
-                },
-                '&:hover .MuiOutlinedInput-notchedOutline': {
-                  borderColor: line.inputHover,
-                },
-                '&.Mui-focused': {
-                  boxShadow: `0 0 0 3px ${glow.ring}`,
-                },
-                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
-                  borderColor: amber,
-                  borderWidth: 1.5,
-                },
+                borderRadius: 4,
+                backgroundColor: isLight ? '#ffffff' : stone[950],
+                boxShadow: isLight ? 'inset 0 1px 2px rgba(18,21,26,0.10)' : 'inset 0 1px 3px rgba(0,0,0,0.6)',
+                transition: 'box-shadow 150ms ease',
+                '& .MuiOutlinedInput-notchedOutline': { borderColor: line.input },
+                '&:hover .MuiOutlinedInput-notchedOutline': { borderColor: line.inputHover },
+                '&.Mui-focused': { boxShadow: `0 0 0 3px ${glow.ring}` },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: brass, borderWidth: 2 },
               },
             },
           },
@@ -404,8 +493,7 @@ export function createBaseGeekTheme(mode = 'dark') {
         MuiSelect: {
           styleOverrides: {
             select: {
-              // 44px tap targets, no exceptions (DOCS/MOBILE_UI_PLAN.md §2) —
-              // size="small" selects (e.g. Account page) are otherwise 40px.
+              // 44px tap targets, no exceptions (DOCS/MOBILE_UI_PLAN.md §2).
               '&.MuiInputBase-inputSizeSmall': {
                 minHeight: 44,
                 display: 'flex',
@@ -418,43 +506,54 @@ export function createBaseGeekTheme(mode = 'dark') {
         MuiAlert: {
           styleOverrides: {
             root: {
-              borderRadius: 8,
-              fontWeight: 500,
+              borderRadius: 4,
+              fontWeight: 400,
               border: '1px solid',
+              borderLeftWidth: 4,
             },
             standardError: {
-              backgroundColor: alpha(semantic.error.main, isLight ? 0.08 : 0.12),
-              borderColor: alpha(semantic.error.main, 0.25),
+              backgroundColor: alpha(semantic.error.main, isLight ? 0.07 : 0.10),
+              borderColor: alpha(semantic.error.main, 0.45),
+              borderLeftColor: semantic.error.main,
             },
             standardSuccess: {
-              backgroundColor: alpha(semantic.success.main, isLight ? 0.08 : 0.12),
-              borderColor: alpha(semantic.success.main, 0.25),
+              backgroundColor: alpha(semantic.success.main, isLight ? 0.07 : 0.10),
+              borderColor: alpha(semantic.success.main, 0.45),
+              borderLeftColor: semantic.success.main,
             },
             standardInfo: {
-              backgroundColor: alpha(semantic.info.main, isLight ? 0.08 : 0.10),
-              borderColor: alpha(semantic.info.main, 0.25),
+              backgroundColor: alpha(semantic.info.main, isLight ? 0.07 : 0.08),
+              borderColor: alpha(semantic.info.main, 0.45),
+              borderLeftColor: semantic.info.main,
             },
             standardWarning: {
-              backgroundColor: alpha(semantic.warning.main, isLight ? 0.08 : 0.10),
-              borderColor: alpha(semantic.warning.main, 0.25),
+              backgroundColor: alpha(semantic.warning.main, isLight ? 0.07 : 0.08),
+              borderColor: alpha(semantic.warning.main, 0.45),
+              borderLeftColor: semantic.warning.main,
             },
           },
         },
         MuiTabs: {
           styleOverrides: {
+            // The indicator is a lit lamp strip under the selected tab.
             indicator: {
-              backgroundColor: amber,
-              height: 2,
+              backgroundColor: brass,
+              height: 3,
+              borderRadius: 2,
+              boxShadow: isLight ? 'none' : `0 0 8px ${alpha(brass, 0.6)}`,
             },
           },
         },
         MuiTab: {
           styleOverrides: {
             root: {
-              textTransform: 'none',
-              fontWeight: 500,
-              fontSize: '0.875rem',
-              '&.Mui-selected': { color: amber },
+              textTransform: 'uppercase',
+              fontFamily: FONT_MONO,
+              fontWeight: 700,
+              letterSpacing: '0.08em',
+              fontSize: '0.8125rem',
+              minHeight: 48,
+              '&.Mui-selected': { color: isLight ? text.primary : brass },
             },
           },
         },
@@ -463,16 +562,84 @@ export function createBaseGeekTheme(mode = 'dark') {
             root: { borderColor: line.divider },
           },
         },
+        MuiTableCell: {
+          styleOverrides: {
+            head: {
+              fontFamily: FONT_MONO,
+              fontWeight: 700,
+              fontSize: '0.75rem',
+              letterSpacing: '0.06em',
+              textTransform: 'uppercase',
+              color: text.secondary,
+              borderBottom: `2px solid ${line.strong}`,
+            },
+            root: { borderColor: line.divider },
+          },
+        },
+        MuiBadge: {
+          styleOverrides: {
+            badge: { fontFamily: FONT_MONO, fontWeight: 700 },
+          },
+        },
+        /**
+         * The toggle is a panel switch: a recessed slot, a knurled bat that
+         * throws left or right, and the word ON or OFF engraved in the slot —
+         * so the state is never colour alone. 44px tall, 64px wide.
+         */
         MuiSwitch: {
           styleOverrides: {
+            root: {
+              width: 68,
+              height: 44,
+              padding: 8,
+            },
             switchBase: {
+              padding: 10,
+              top: 0,
+              left: 0,
+              transition: 'transform 160ms cubic-bezier(.3,1.4,.5,1)',
               '&.Mui-checked': {
-                color: amber,
+                transform: 'translateX(24px)',
+                color: box.plate.face,
                 '& + .MuiSwitch-track': {
-                  backgroundColor: amber,
-                  opacity: isLight ? 0.5 : 0.4,
+                  backgroundColor: isLight ? '#1b6a39' : '#1f5c37',
+                  opacity: 1,
+                  '&::before': { opacity: 1 },
+                  '&::after': { opacity: 0 },
                 },
               },
+              '&.Mui-disabled + .MuiSwitch-track': { opacity: 0.45 },
+              '&.Mui-focusVisible .MuiSwitch-thumb': { boxShadow: `0 0 0 4px ${glow.ring}` },
+            },
+            thumb: {
+              width: 24,
+              height: 24,
+              borderRadius: 4,
+              backgroundColor: box.plate.face,
+              backgroundImage: `repeating-linear-gradient(90deg, ${alpha('#000000', 0.18)} 0 1px, transparent 1px 3px), linear-gradient(180deg, ${box.plate.shine}, ${box.plate.edge})`,
+              boxShadow: `0 1px 2px ${alpha('#000000', 0.5)}`,
+            },
+            track: {
+              borderRadius: 4,
+              opacity: 1,
+              backgroundColor: isLight ? '#5d6670' : stone[700],
+              boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.55)',
+              position: 'relative',
+              // White on the slot fills: 5.83:1 (OFF, day) · 13.29:1 (OFF,
+              // night) · 6.63:1 (ON, day) · 7.94:1 (ON, night).
+              '&::before, &::after': {
+                position: 'absolute',
+                top: '50%',
+                transform: 'translateY(-50%)',
+                fontFamily: FONT_MONO,
+                fontSize: 10,
+                fontWeight: 700,
+                letterSpacing: '0.04em',
+                color: '#ffffff',
+                transition: 'opacity 120ms ease',
+              },
+              '&::before': { content: '"ON"', left: 7, opacity: 0 },
+              '&::after': { content: '"OFF"', right: 5, opacity: 1 },
             },
           },
         },
@@ -481,5 +648,5 @@ export function createBaseGeekTheme(mode = 'dark') {
   });
 }
 
-// Stray default imports get the dark theme, which is BaseGeek's default mode.
+// Stray default imports get the night turn, which is BaseGeek's default mode.
 export default createBaseGeekTheme('dark');

@@ -203,7 +203,7 @@ export function NewKeyDialog({ apiKey, onCopy, onClose }) {
       >
         <Typography
           variant="body2"
-          fontFamily='"Geist Mono", monospace'
+          fontFamily='"B612 Mono", ui-monospace, monospace'
           sx={{ flexGrow: 1, wordBreak: 'break-all', fontSize: 12 }}
         >
           {apiKey}

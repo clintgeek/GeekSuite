@@ -1,14 +1,14 @@
 import Box from '@mui/material/Box';
-import Typography from '@mui/material/Typography';
 import { GeekDialog } from '@geeksuite/ui';
+import { Dymo } from '../../signalbox/Labels';
 
 /**
  * ConsoleDialog — baseGeek's repeated dialog identity over `GeekDialog`
  * (DOCS/MOBILE_UI_PLAN.md §4 "basegeek"). The primitive already owns the
  * mobile rule (full-screen below `sm`, a header of close ✕ / title / primary
- * action); this file supplies only the Mission Control look every form
- * dialog in this app shares: an optional uppercase Geist Mono eyebrow over
- * the title, matching the console voice used in the sidebar and top bar.
+ * action); this file supplies only the Signal Box look every form dialog
+ * in this app shares: an optional dymo-tape eyebrow over the title, the same
+ * tape the sidebar and the panels are labelled with.
  *
  * The dialog paper itself already carries the app's hairline border and
  * `background.paper` fill via the `MuiDialog` override in `theme.js` — this
@@ -33,21 +33,7 @@ import { GeekDialog } from '@geeksuite/ui';
 export default function ConsoleDialog({ eyebrow, title, ...rest }) {
   const titleNode = eyebrow ? (
     <Box sx={{ minWidth: 0 }}>
-      <Typography
-        component="span"
-        sx={{
-          display: 'block',
-          fontFamily: '"Geist Mono", monospace',
-          fontSize: '0.75rem',
-          fontWeight: 600,
-          letterSpacing: '0.08em',
-          textTransform: 'uppercase',
-          color: 'text.secondary',
-          mb: 0.25,
-        }}
-      >
-        {eyebrow}
-      </Typography>
+      <Box sx={{ mb: 0.75, lineHeight: 1 }}><Dymo tilt={false}>{eyebrow}</Dymo></Box>
       {title}
     </Box>
   ) : title;

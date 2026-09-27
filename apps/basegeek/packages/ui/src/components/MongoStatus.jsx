@@ -1,17 +1,10 @@
 import { useState, useEffect } from 'react';
-import {
-  Card,
-  CardContent,
-  Typography,
-  Box,
-  CircularProgress,
-  Grid,
-  Paper,
-  List,
-  ListItem,
-  ListItemText
-} from '@mui/material';
+import { Typography, Box, CircularProgress } from '@mui/material';
 import api from '../api';
+import Panel from '../signalbox/Panel';
+import Readouts from '../signalbox/Readouts';
+import { Dymo } from '../signalbox/Labels';
+import { Cabinet } from '../signalbox/Cabinet';
 
 const formatBytes = (bytes, decimals = 2) => {
   if (!bytes || bytes === 0) return '0 Bytes';
@@ -73,95 +66,77 @@ export default function MongoStatus() {
   }
 
   return (
-    <Box>
-      <Card variant="outlined" sx={{ mb: 2 }}>
-        <CardContent>
-          <Typography variant="h6" gutterBottom>
-            MongoDB Server Status
-          </Typography>
-          <Typography color={status.isConnected ? "success.main" : "error.main"} variant="subtitle1">
-            {status.isConnected ? "Connected" : "Disconnected"}
-          </Typography>
-          {status.error && (
-            <Typography color="error" variant="body2">
-              Error: {status.error}
-            </Typography>
+    <Box sx={{ display: 'grid', gap: 3 }}>
+      <Cabinet number={1} title="MongoDB" connected={status.isConnected} error={status.error}>
+        {status.serverInfo && (
+          <Readouts
+            items={[
+              { label: 'Version', value: status.serverInfo.version },
+              { label: 'Uptime', value: formatUptime(status.serverInfo.uptime) },
+              { label: 'Host', value: status.serverInfo.host },
+              { label: 'Connections', value: status.serverInfo.connections },
+              ...(status.serverInfo.memory
+                ? [
+                  { label: 'Memory resident', value: formatBytes(status.serverInfo.memory.resident) },
+                  { label: 'Memory virtual', value: formatBytes(status.serverInfo.memory.virtual) },
+                ]
+                : []),
+            ]}
+          />
+        )}
+      </Cabinet>
+      {status.databases.map((db) => (
+        <Panel key={db.name} title={`Database: ${db.name}`} headingComponent="h3">
+          {db.stats && (
+            <Readouts
+              items={[
+                { label: 'Collections', value: db.stats.collections },
+                { label: 'Objects', value: db.stats.objects?.toLocaleString?.() ?? db.stats.objects },
+                { label: 'Avg object', value: formatBytes(db.stats.avgObjSize) },
+                { label: 'Data size', value: formatBytes(db.stats.dataSize) },
+                { label: 'Storage size', value: formatBytes(db.stats.storageSize) },
+                { label: 'Index size', value: formatBytes(db.stats.indexSize) },
+              ]}
+            />
           )}
-          {status.serverInfo && (
-            <Box mt={2}>
-              <Typography variant="subtitle2">Server Info</Typography>
-              <Grid container spacing={2}>
-                <Grid item xs={6}>
-                  <Typography variant="body2">Version: {status.serverInfo.version}</Typography>
-                  <Typography variant="body2">Uptime: {formatUptime(status.serverInfo.uptime)}</Typography>
-                  <Typography variant="body2">Host: {status.serverInfo.host}</Typography>
-                </Grid>
-                <Grid item xs={6}>
-                  <Typography variant="body2">Connections: {status.serverInfo.connections}</Typography>
-                  {status.serverInfo.memory && (
-                    <>
-                      <Typography variant="body2">Memory Resident: {formatBytes(status.serverInfo.memory.resident)}</Typography>
-                      <Typography variant="body2">Memory Virtual: {formatBytes(status.serverInfo.memory.virtual)}</Typography>
-                    </>
-                  )}
-                </Grid>
-              </Grid>
+          {db.collections && db.collections.length > 0 && (
+            <Box sx={{ mt: 2 }}>
+              <Dymo sx={{ mb: 1 }}>Collections</Dymo>
+              <Box component="ul" sx={{ m: 0, p: 0 }}>
+                {db.collections.map((collection) => (
+                  <Box
+                    component="li"
+                    key={collection.name}
+                    sx={{
+                      listStyle: 'none',
+                      display: 'flex',
+                      flexWrap: 'wrap',
+                      alignItems: 'baseline',
+                      columnGap: 2,
+                      rowGap: 0.25,
+                      py: 1,
+                      borderBottom: '1px solid',
+                      borderColor: 'divider',
+                    }}
+                  >
+                    <Typography sx={{ fontWeight: 700, fontSize: '0.875rem', flex: '1 1 160px', minWidth: 0, overflowWrap: 'anywhere' }}>
+                      {collection.name}
+                    </Typography>
+                    <Typography variant="body2" component="span" sx={{ fontFamily: 'fontFamilyMono', color: 'text.secondary' }}>
+                      Documents: {collection.count?.toLocaleString?.() ?? collection.count}
+                    </Typography>
+                    <Typography variant="body2" component="span" sx={{ fontFamily: 'fontFamilyMono', color: 'text.secondary' }}>
+                      Size: {formatBytes(collection.size)}
+                    </Typography>
+                    <Typography variant="body2" component="span" sx={{ fontFamily: 'fontFamilyMono', color: 'text.secondary' }}>
+                      Indexes: {collection.indexes}
+                    </Typography>
+                  </Box>
+                ))}
+              </Box>
             </Box>
           )}
-        </CardContent>
-      </Card>
-      {status.databases.map((db) => (
-        <Card key={db.name} variant="outlined" sx={{ mb: 2 }}>
-          <CardContent>
-            <Typography variant="h6" gutterBottom>
-              Database: {db.name}
-            </Typography>
-            {db.stats && (
-              <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
-                <Typography variant="subtitle2">Database Stats</Typography>
-                <Grid container spacing={2}>
-                  <Grid item xs={6}>
-                    <Typography variant="body2">Collections: {db.stats.collections}</Typography>
-                    <Typography variant="body2">Objects: {db.stats.objects}</Typography>
-                    <Typography variant="body2">Avg Object Size: {formatBytes(db.stats.avgObjSize)}</Typography>
-                  </Grid>
-                  <Grid item xs={6}>
-                    <Typography variant="body2">Data Size: {formatBytes(db.stats.dataSize)}</Typography>
-                    <Typography variant="body2">Storage Size: {formatBytes(db.stats.storageSize)}</Typography>
-                    <Typography variant="body2">Index Size: {formatBytes(db.stats.indexSize)}</Typography>
-                  </Grid>
-                </Grid>
-              </Paper>
-            )}
-            {db.collections && db.collections.length > 0 && (
-              <Paper variant="outlined" sx={{ p: 2 }}>
-                <Typography variant="subtitle2">Collections</Typography>
-                <List dense>
-                  {db.collections.map((collection) => (
-                    <ListItem key={collection.name}>
-                      <ListItemText
-                        primary={collection.name}
-                        secondary={
-                          <Box component="span" sx={{ display: 'flex', gap: 2 }}>
-                            <Typography variant="body2" component="span">
-                              Documents: {collection.count}
-                            </Typography>
-                            <Typography variant="body2" component="span">
-                              Size: {formatBytes(collection.size)}
-                            </Typography>
-                            <Typography variant="body2" component="span">
-                              Indexes: {collection.indexes}
-                            </Typography>
-                          </Box>
-                        }
-                      />
-                    </ListItem>
-                  ))}
-                </List>
-              </Paper>
-            )}
-          </CardContent>
-        </Card>
+        </Panel>
       ))}
     </Box>
   );

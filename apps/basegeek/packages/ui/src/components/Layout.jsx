@@ -25,6 +25,7 @@ import { Outlet } from 'react-router-dom';
 import { GeekShell, GeekAppFrame, GeekToastProvider } from '@geeksuite/ui';
 import Sidebar from './Sidebar';
 import TopBar from './TopBar';
+import { LampTestProvider } from '../signalbox/LampTest';
 
 export default function Layout() {
   return (
@@ -34,13 +35,16 @@ export default function Layout() {
       topBar={<TopBar />}
     >
       <GeekToastProvider>
-        <GeekAppFrame>
-          <Box sx={{ p: { xs: 2, sm: 3, md: 4 } }}>
-            <Box sx={{ maxWidth: 1400, mx: 'auto' }}>
-              <Outlet />
+        {/* The Konami lamp test reaches every lamp on every console page. */}
+        <LampTestProvider>
+          <GeekAppFrame>
+            <Box sx={{ p: { xs: 2, sm: 3, md: 4 } }}>
+              <Box sx={{ maxWidth: 1400, mx: 'auto' }}>
+                <Outlet />
+              </Box>
             </Box>
-          </Box>
-        </GeekAppFrame>
+          </GeekAppFrame>
+        </LampTestProvider>
       </GeekToastProvider>
     </GeekShell>
   );

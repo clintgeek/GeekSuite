@@ -177,6 +177,15 @@ importers:
       '@emotion/styled':
         specifier: ^11.14.0
         version: 11.14.1(@emotion/react@11.14.0(@types/react@18.3.28)(react@18.3.1))(@types/react@18.3.28)(react@18.3.1)
+      '@fontsource/b612':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/b612-mono':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/big-shoulders-stencil-display':
+        specifier: ^5.3.0
+        version: 5.3.0
       '@geeksuite/api-client':
         specifier: workspace:*
         version: link:../../../../packages/api-client
@@ -3318,6 +3327,15 @@ packages:
 
   '@fontsource/alegreya@5.3.0':
     resolution: {integrity: sha512-YCsp9dHYfMNdggXxinMMS0nkGlZkzs2MvPL7qPVjSO4DM1uJ29hmKEdTC/fBP+2K4Aa+4Z44JuOQz05eDcvNJA==}
+
+  '@fontsource/b612-mono@5.3.0':
+    resolution: {integrity: sha512-G0Ihm+ekqqP5PZJ1zrx6GbeS2q4GDmYnM01zrNrPARRg64GoG0D2pTf+FsbDWvbg/9tVWFRmFIz8xYLjgFrUpg==}
+
+  '@fontsource/b612@5.3.0':
+    resolution: {integrity: sha512-2AQPrSFDI9K00w/lPlgfcqve+ZPdRSCttvVUxcmv+UrnwwaKLMym+/uXmM7+dgPCVBIV9omoXUabFoyBFpc1Vg==}
+
+  '@fontsource/big-shoulders-stencil-display@5.3.0':
+    resolution: {integrity: sha512-xZfOmq5/66j90rw2SipYr1skJUDrDBCcCZZY8aNU3oDpvqzHjcA1KADdl/4AMZNs7aPc61KbV5P696ggmF81Tw==}
 
   '@fontsource/bungee@5.3.0':
     resolution: {integrity: sha512-vKwbDE7yMrqfGxgFan+diPLwgWp9j4FGYaLm+OhUoqYO6Pr02QIi/p0KiTW0E/7uiXqfTd6cMj+/E4h2sc3Ocg==}
@@ -13178,6 +13196,12 @@ snapshots:
   '@fontsource/alegreya-sans@5.3.0': {}
 
   '@fontsource/alegreya@5.3.0': {}
+
+  '@fontsource/b612-mono@5.3.0': {}
+
+  '@fontsource/b612@5.3.0': {}
+
+  '@fontsource/big-shoulders-stencil-display@5.3.0': {}
 
   '@fontsource/bungee@5.3.0': {}
 

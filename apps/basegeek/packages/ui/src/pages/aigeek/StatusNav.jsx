@@ -31,7 +31,8 @@ export default function StatusNav({ attentionCount = 0, hasWarning = false, onJu
         // The attention badge is pushed 6px outward (below), so a 4px gap let
         // it land on top of the next item's label — visible as "Needs
         // attention ③Usage and cost". The gap has to clear the offset.
-        gap: 2,
+        // 4px suite unit: 16px clears the badge's 6px outward offset.
+        gap: 4,
         flexWrap: 'wrap',
         py: 1,
         mb: 2,

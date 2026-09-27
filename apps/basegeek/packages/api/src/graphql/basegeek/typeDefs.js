@@ -126,6 +126,30 @@ export const typeDefs = gql`
     isExpired: Boolean
   }
 
+  """One UTC day of the AI ledger: every call, free or paid, and what it cost."""
+  type AITrafficDay {
+    day: String!
+    calls: Int!
+    costUsd: Float!
+    refusals: Int!
+  }
+
+  type AITrafficApp {
+    app: String!
+    calls: Int!
+    costUsd: Float!
+  }
+
+  """
+  The AISpend ledger summarised for the console: \`days\` oldest first and
+  zero-filled, \`apps\` is today's calls per app, busiest first.
+  """
+  type AITraffic {
+    today: String!
+    days: [AITrafficDay!]!
+    apps: [AITrafficApp!]!
+  }
+
   type APIKeyAppUsage {
     appName: String!
     keyCount: Int
@@ -153,6 +177,9 @@ export const typeDefs = gql`
     # App Routing
     aiAppConfigs: JSON
     aiAppConfig(appName: String!): JSON
+
+    # Admin only. Calls per UTC day (1-31, default 7) from the AISpend ledger.
+    aiTraffic(days: Int): AITraffic!
   }
 
   extend type Mutation {

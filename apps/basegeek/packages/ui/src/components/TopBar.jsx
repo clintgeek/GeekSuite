@@ -57,17 +57,19 @@ export default function TopBar() {
           : undefined
       }
       sx={{
-        // Mission Control identity: the base surface rather than paper, a
-        // hairline panel rule, and a compact Geist page title instead of h3.
+        // Signal Box identity: the base surface, a heavier panel rule with a
+        // brass hairline under it, and the page title as stencil plate type.
         bgcolor: 'background.default',
         backgroundImage: 'none',
-        borderBottom: `1px solid ${theme.palette.line.panel}`,
-        boxShadow: 'none',
+        borderBottom: `1px solid ${theme.palette.line.strong}`,
+        boxShadow: `0 1px 0 ${theme.palette.glow.border}`,
         color: 'text.primary',
         '& [data-geek-topbar="title"]': {
-          fontSize: '1rem',
-          fontWeight: 600,
-          letterSpacing: '-0.01em',
+          fontFamily: theme.typography.fontFamilyPlate,
+          fontSize: '1.45rem',
+          fontWeight: 800,
+          letterSpacing: '0.06em',
+          textTransform: 'uppercase',
         },
       }}
     />

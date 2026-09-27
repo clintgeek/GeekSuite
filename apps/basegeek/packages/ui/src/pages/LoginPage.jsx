@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { Box, TextField, Button, Typography, Alert, Tabs, Tab, useTheme, CircularProgress } from '@mui/material';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { alpha } from '@mui/material/styles';
+import AuthFrame from '../signalbox/AuthFrame';
 import api from '../api';
 import { useBaseGeekAuth } from '../components/AuthContext';
 import { safeRedirect } from '../utils/safeRedirect';
@@ -78,184 +78,96 @@ export default function LoginPage() {
   };
 
   return (
-    <Box sx={{
-      display: 'flex',
-      justifyContent: 'center',
-      alignItems: 'center',
-      minHeight: '100vh',
-      '@supports (height: 100dvh)': { minHeight: '100dvh' },
-      backgroundColor: theme.palette.surfaces.deep,
-      position: 'relative',
-      overflow: 'hidden',
-    }}>
-      {/* Ambient glow */}
-      <Box sx={{
-        position: 'absolute',
-        top: '20%',
-        left: '50%',
-        transform: 'translateX(-50%)',
-        width: '600px',
-        height: '400px',
-        background: `radial-gradient(ellipse, ${theme.palette.glow.soft} 0%, transparent 70%)`,
-        pointerEvents: 'none',
-      }} />
+    <AuthFrame subtitle="GeekSuite sign-in">
+      {appInfo && (
+        <Alert severity="info" sx={{ mb: 2.5, fontSize: '0.8125rem' }}>
+          Signing in via baseGeek to access {appInfo.name}
+        </Alert>
+      )}
 
-      <Box sx={{
-        width: '100%',
-        maxWidth: 380,
-        mx: 2,
-        position: 'relative',
-        zIndex: 1,
-      }}>
-        {/* Brand */}
-        <Box sx={{ textAlign: 'center', mb: 4 }}>
-          <Box sx={{
-            width: 56,
-            height: 56,
-            borderRadius: '14px',
-            background: theme.palette.accent.gradient,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: '20px',
-            fontWeight: 700,
-            color: theme.palette.accent.onBrightFill,
-            fontFamily: '"Geist Mono", monospace',
-            mx: 'auto',
-            mb: 2,
-            boxShadow: `0 8px 32px ${alpha(theme.palette.primary.main, 0.15)}`,
-          }}>
-            bg
-          </Box>
-          <Typography sx={{
-            fontWeight: 700,
-            fontSize: '1.5rem',
-            color: 'text.primary',
-            letterSpacing: '-0.02em',
-            mb: 0.25,
-          }}>
-            baseGeek
-          </Typography>
-          <Typography sx={{
-            fontSize: '0.75rem',
-            color: 'text.secondary',
-            fontFamily: '"Geist Mono", monospace',
-            letterSpacing: '0.08em',
-            textTransform: 'uppercase',
-          }}>
-            mission control
-          </Typography>
-        </Box>
-
-        {/* Card */}
-        <Box sx={{
-          backgroundColor: 'background.paper',
-          borderRadius: '16px',
-          border: `1px solid ${theme.palette.line.panel}`,
-          p: 3.5,
-        }}>
-          {appInfo && (
-            <Alert severity="info" sx={{ mb: 2.5, fontSize: '0.8rem' }}>
-              Signing in via baseGeek to access {appInfo.name}
-            </Alert>
-          )}
-
-          {!appInfo && (
-            <Typography sx={{
-              color: 'text.secondary',
-              fontSize: '0.85rem',
-              textAlign: 'center',
-              mb: 2.5,
-            }}>
-              Sign in to your GeekSuite account
-            </Typography>
-          )}
-
-          <Tabs
-            value={tab}
-            onChange={(_, v) => setTab(v)}
-            centered
-            sx={{
-              mb: 2.5,
-              minHeight: 36,
-              '& .MuiTab-root': {
-                minHeight: 36,
-                py: 0.75,
-                fontSize: '0.8rem',
-              },
-            }}
-          >
-            <Tab label="Sign in" />
-            <Tab label="Register" />
-          </Tabs>
-
-          <form onSubmit={handleSubmit}>
-            <TextField
-              label="Username or email"
-              name="identifier"
-              value={form.identifier}
-              onChange={handleChange}
-              fullWidth
-              margin="dense"
-              required
-              autoFocus
-              size="small"
-            />
-            {tab === 1 && (
-              <TextField
-                label="Email"
-                name="email"
-                type="email"
-                value={form.email}
-                onChange={handleChange}
-                fullWidth
-                margin="dense"
-                required
-                size="small"
-              />
-            )}
-            <TextField
-              label="Password"
-              name="password"
-              type="password"
-              value={form.password}
-              onChange={handleChange}
-              fullWidth
-              margin="dense"
-              required
-              size="small"
-            />
-            {error && <Alert severity="error" sx={{ mt: 1.5, fontSize: '0.8rem' }}>{error}</Alert>}
-            <Button
-              type="submit"
-              variant="contained"
-              color="primary"
-              fullWidth
-              disabled={isLoading}
-              sx={{
-                mt: 2.5,
-                py: 1.25,
-                fontWeight: 600,
-                fontSize: '0.875rem',
-                borderRadius: '10px',
-              }}
-            >
-              {isLoading ? 'Working...' : tab === 0 ? 'Sign in' : 'Create account'}
-            </Button>
-          </form>
-        </Box>
-
-        {/* Footer */}
+      {!appInfo && (
         <Typography sx={{
+          color: 'text.secondary',
+          fontSize: '0.85rem',
           textAlign: 'center',
-          mt: 3,
-          fontSize: '0.75rem',
-          color: 'text.muted',
-          fontFamily: '"Geist Mono", monospace',
+          mb: 2.5,
         }}>
-          GeekSuite — shared authentication
+          Sign in to your GeekSuite account
         </Typography>
-      </Box>
-    </Box>
+      )}
+
+      <Tabs
+        value={tab}
+        onChange={(_, v) => setTab(v)}
+        centered
+        sx={{
+          mb: 2.5,
+          minHeight: 44,
+          '& .MuiTab-root': {
+            minHeight: 44,
+            py: 0.75,
+            fontSize: '0.8rem',
+          },
+        }}
+      >
+        <Tab label="Sign in" />
+        <Tab label="Register" />
+      </Tabs>
+
+      <form onSubmit={handleSubmit}>
+        <TextField
+          label="Username or email"
+          name="identifier"
+          value={form.identifier}
+          onChange={handleChange}
+          fullWidth
+          margin="dense"
+          required
+          autoFocus
+          size="small"
+        />
+        {tab === 1 && (
+          <TextField
+            label="Email"
+            name="email"
+            type="email"
+            value={form.email}
+            onChange={handleChange}
+            fullWidth
+            margin="dense"
+            required
+            size="small"
+          />
+        )}
+        <TextField
+          label="Password"
+          name="password"
+          type="password"
+          value={form.password}
+          onChange={handleChange}
+          fullWidth
+          margin="dense"
+          required
+          size="small"
+        />
+        {error && <Alert severity="error" sx={{ mt: 1.5, fontSize: '0.8rem' }}>{error}</Alert>}
+        <Button
+          type="submit"
+          variant="contained"
+          color="primary"
+          fullWidth
+          disabled={isLoading}
+          sx={{
+            mt: 2.5,
+            py: 1.25,
+            fontWeight: 600,
+            fontSize: '0.875rem',
+            borderRadius: '10px',
+          }}
+        >
+          {isLoading ? 'Working...' : tab === 0 ? 'Sign in' : 'Create account'}
+        </Button>
+      </form>
+    </AuthFrame>
   );
 }

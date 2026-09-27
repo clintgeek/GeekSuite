@@ -30,6 +30,91 @@ v6, zustand (via `@geeksuite/user`). Routes render inside `Layout.jsx`
 
 ---
 
+## Visual identity — "The Signal Box" (2026-09-27)
+
+baseGeek is the interlocking every suite request passes through, so the console
+is the box it lives in: a blackened-steel instrument panel (night turn = dark,
+the default) or pale signal-box steel (day turn = light), with cream enamel
+station boards, brass lever plates, dymo-tape labels and lamps lit by real
+readings. It replaced "Mission Control" (amber on stone, Geist).
+
+**Type** (self-hosted, `src/main.jsx`, latin subsets only): `@fontsource/b612`
+(400/700, the Airbus cockpit face — body, tables), `@fontsource/b612-mono`
+(400/700 — readouts, tape, flaps), `@fontsource/big-shoulders-stencil-display`
+(800 — plate titles only, never body copy). The jsDelivr Geist `<link>`s in
+`index.html` are gone. Theme exposes `typography.fontFamilyMono` /
+`fontFamilyPlate`; use those names in `sx`, not literals.
+
+**Tokens** live in `src/theme.js`: `palette.box` holds the instrument colours
+(lamps per mode, tape, plate, enamel, dial, track, chart). Fixed fills (tape,
+plate, enamel, dial face) are the same in both modes and their inks are
+measured against their own face. Measured: text tiers 14.0/8.6/6.9:1 (night
+panel) and 16.7/9.2/7.2:1 (day); brass 8.2:1 night, 6.1:1 day (6.6:1 under
+white); tape 15.8:1 (black) / 7.5:1 (red); plate 7.6:1; enamel 14.1:1; every
+switch slot word ≥5.8:1; every status hue ≥5.8:1 as text. The shared
+`packages/ui/src/__tests__/themeContrast.test.js` and `chipContrast.test.js`
+both pass on it.
+
+**Components** — `src/signalbox/`: `Lamp` (every state has a shape — round
+clear, triangle caution, octagon fault, ring off, broken ring checking — and a
+word beside it; colour is never alone), `Gauge` (`role="meter"` with value, max
+and a sentence; "no reading" rather than a needle against an invented max),
+`SplitFlap`, `Dymo`/`BrassPlate`/`Enamel` (`Labels.jsx`), `Panel` (screwed card
++ plate), `SuiteMap` (track diagram; horizontal ≥md, vertical on phones),
+`ChartRecorder`, `Annunciator`, `Lever`, `Readouts`, `Cabinet`, `AuthFrame`,
+`NightWatch`, `LampTest`. Every number comes from `signalbox/readings.js`
+(pure, tested in `__tests__/signalbox/`). Theme overrides make every MUI
+`Card` a screwed panel (outlined cards inside panels stay plain), every
+`Switch` a 44px panel switch with ON/OFF engraved, and `Tab`s mono caps.
+
+**What each instrument reads** (nothing decorative):
+- Home fascia: line status = faults (lamps measured down) + cautions (slow
+  lamps, `warn` attention items). The line: `/health/app/<name>` per app.
+  Depot: admin → `/<svc>/status` ×4; anyone else → public `/health/infra`
+  (Mongo/Redis/Influx). Non-admins previously got four 403s drawn "offline".
+- Gauges: paid spend today vs `spend.capPerDayUsd` (the governor); AI calls
+  today vs the week's busiest day (ledger — **not** a cap: `dailyCap` is per
+  app/feature/user, so an app-wide gauge against it would lie); free models
+  alive / probed in `catalog.lastProbe`.
+- Chart recorder: calls per UTC day, `aiTraffic` (below).
+- Annunciator: one tile per attention `kind`; providers: `catalog.byProvider`
+  + provider_dead/listing_failed items.
+- Levers: 1 re-read everything, 2 `POST /ai/catalog/run` (held over while
+  `catalog.running`), 3 day/night. Nothing destructive is on a lever; deletes,
+  revokes and resets keep their dialogs.
+- Train register: a session log of lamp transitions and levers thrown.
+
+**API addition:** `aiTraffic(days: Int = 7): AITraffic!` (GraphQL,
+`requireAdminUser`, read-only) — `graphql/basegeek/aiTraffic.js` folds the
+`AISpend` ledger into zero-filled days + today's calls per app. Tests:
+`packages/api/src/__tests__/aiTraffic.test.js`.
+
+**Easter eggs:** Konami code (↑↑↓↓←→←→BA, outside text fields) runs the lamp
+test on any console page for 3s. Night Watch: after N idle minutes (Settings;
+default 5) the dashboard dims to a live departures board; any input exits;
+never under reduced motion or `navigator.webdriver` (the harness). Sound (bell,
+lever clunk, WebAudio-synthesised) is **off by default** (Settings).
+
+**Settings** used to be a form that saved nothing (API URL, "JWT Secret", SSL,
+backups, a Save button with no handler). It is now only real switches: theme,
+sound, Night Watch + idle minutes (`signalbox/consolePrefs.js`, localStorage).
+
+**The sign-in path** (`/login`, `/register` — every app's `loginRedirect()`
+lands here — plus `/portal`, public, and `/account`, reachable by every user)
+gets the identity at its calmest: `AuthFrame` (steel ground, signal-head mark,
+stencil wordmark, brass rule over the card), theme restyle only, no motion.
+Home for a non-admin is the fascia + the line (the launcher) and links to
+Account/Settings.
+
+**Motion:** `index.css` collapses animations/transitions under
+`prefers-reduced-motion`; timers check `signalbox/motion.js`. Hover effects
+are wrapped in `@media (hover: hover)`. Spacing is the suite's 4px unit.
+
+**Not changed:** the shared app switcher still labels baseGeek "Mission
+Control" (`packages/ui`, shared); the Home nav title is now "Signal Box".
+
+---
+
 ## basegeek validates its own sessions in-process (2026-09-05)
 
 `server.js` mounts the gateway behind the shared session middleware:

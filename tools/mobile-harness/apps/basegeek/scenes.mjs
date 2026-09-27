@@ -1,4 +1,12 @@
-// basegeek — Mission Control's M4 surfaces, plus the /aigeek route it hosts.
+// basegeek — the Signal Box console's surfaces, plus the /aigeek route it
+// hosts and the SSO door (login/register) every suite app redirects to.
+import { DEFAULT_USER, json } from '../../lib/net.mjs';
+
+const PROFILE = '**/api/auth/profile';
+
+/** Page-level routes win over the context's, so a scene can be signed out. */
+const signedOut = (page) => page.route(PROFILE, (r) => json(r, { message: 'no session' }, 401));
+const asMember = (page) => page.route(PROFILE, (r) => json(r, { ...DEFAULT_USER, id: 'u2', username: 'heather', role: 'user' }));
 export const scenes = [
   { name: '00-home', goto: '/', wait: 1200 },
   { name: '01-usergeek', goto: '/usergeek', wait: 900 },
@@ -115,6 +123,38 @@ export const scenes = [
       }
       await h.settle(600);
     },
+  },
+  // ── Signal Box additions (2026-09-27) ───────────────────────────────────
+  { name: '15-settings', goto: '/settings', wait: 900 },
+  {
+    // The suite's SSO door, as someone arriving from another app sees it.
+    name: '16-login',
+    async setup(page, h) {
+      await signedOut(page);
+      await page.goto(`${h.base}/login?app=notegeek&redirect=${encodeURIComponent('https://notegeek.clintgeek.com/')}`, { waitUntil: 'networkidle' });
+      await h.settle(800);
+    },
+    teardown: (page) => page.unroute(PROFILE),
+  },
+  {
+    name: '17-register',
+    async setup(page, h) {
+      await signedOut(page);
+      await page.goto(`${h.base}/register`, { waitUntil: 'networkidle' });
+      await h.settle(800);
+    },
+    teardown: (page) => page.unroute(PROFILE),
+  },
+  {
+    // Home for a household member (not an admin): the line and the depot from
+    // the public probe, no instruments, no levers.
+    name: '18-home-member',
+    async setup(page, h) {
+      await asMember(page);
+      await page.goto(`${h.base}/`, { waitUntil: 'networkidle' });
+      await h.settle(1200);
+    },
+    teardown: (page) => page.unroute(PROFILE),
   },
 ];
 

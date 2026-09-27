@@ -254,7 +254,7 @@ export default function AccountPage() {
               color: theme.palette.accent.onBrightFill,
               fontSize: '2rem',
               fontWeight: 700,
-              fontFamily: '"Geist", sans-serif',
+              fontFamily: '"B612", system-ui, sans-serif',
             }}>
               {displayName[0].toUpperCase()}
             </Avatar>
@@ -433,7 +433,7 @@ export default function AccountPage() {
             </Box>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
               <Box sx={{ width: 12, height: 12, borderRadius: '3px', backgroundColor: prefsForm.accentColor }} />
-              <Typography sx={{ fontSize: '0.75rem', color: 'text.muted', fontFamily: '"Geist Mono", monospace' }}>
+              <Typography sx={{ fontSize: '0.75rem', color: 'text.muted', fontFamily: '"B612 Mono", ui-monospace, monospace' }}>
                 {prefsForm.accentColor}
               </Typography>
             </Box>
@@ -467,7 +467,7 @@ export default function AccountPage() {
                       fontSize: '0.8rem',
                       color: 'text.primary',
                       mb: 1,
-                      fontFamily: '"Geist Mono", monospace',
+                      fontFamily: '"B612 Mono", ui-monospace, monospace',
                     }}>
                       {appName}
                     </Typography>
@@ -478,7 +478,7 @@ export default function AccountPage() {
                           label={`${key}: ${val}`}
                           size="small"
                           variant="outlined"
-                          sx={{ fontSize: '0.75rem', fontFamily: '"Geist Mono", monospace' }}
+                          sx={{ fontSize: '0.75rem', fontFamily: '"B612 Mono", ui-monospace, monospace' }}
                         />
                       ))}
                     </Box>
@@ -499,7 +499,7 @@ function DetailRow({ label, value }) {
   return (
     <Box sx={{ display: 'flex', justifyContent: 'space-between', py: 0.5 }}>
       <Typography sx={{ fontSize: '0.75rem', color: 'text.muted' }}>{label}</Typography>
-      <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', fontFamily: '"Geist Mono", monospace' }}>
+      <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', fontFamily: '"B612 Mono", ui-monospace, monospace' }}>
         {value}
       </Typography>
     </Box>

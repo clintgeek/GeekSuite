@@ -273,7 +273,7 @@ export default function TestPromptPanel({ picker }) {
           multiline
           rows={6}
           placeholder={SCHEMA_PLACEHOLDER}
-          inputProps={{ style: { fontFamily: '"Geist Mono", monospace', fontSize: 12 } }}
+          inputProps={{ style: { fontFamily: '"B612 Mono", ui-monospace, monospace', fontSize: 12 } }}
           helperText="A bare schema, or the full { name, schema } envelope. Providers without native support get the prompt-injection fallback."
         />
       </Collapse>
@@ -394,7 +394,7 @@ export default function TestPromptPanel({ picker }) {
               border: '1px solid',
               borderColor: 'divider',
               bgcolor: 'action.hover',
-              fontFamily: '"Geist Mono", monospace',
+              fontFamily: '"B612 Mono", ui-monospace, monospace',
               fontSize: 12,
               whiteSpace: 'pre-wrap',
               wordBreak: 'break-word',
@@ -424,7 +424,7 @@ export default function TestPromptPanel({ picker }) {
                 border: '1px solid',
                 borderColor: 'divider',
                 bgcolor: 'action.hover',
-                fontFamily: '"Geist Mono", monospace',
+                fontFamily: '"B612 Mono", ui-monospace, monospace',
                 fontSize: 12,
                 whiteSpace: 'pre-wrap',
                 wordBreak: 'break-all',

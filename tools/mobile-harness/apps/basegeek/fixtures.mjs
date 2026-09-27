@@ -66,9 +66,11 @@ export const INFLUX_STATUS = {
 
 export const USERS = {
   users: [
-    { id: 'u1', username: 'chef', email: 'chef@example.com' },
-    { id: 'u2', username: 'sage', email: 'sage@example.com' },
-    { id: 'u3', username: 'demo-user-with-a-long-name', email: 'demo-user-with-a-long-name@example.com' },
+    // role / createdAt / lastLogin are what GET /api/users returns (routes/user.js
+    // formatIdentity); the token board prints all three.
+    { id: 'u1', username: 'chef', email: 'chef@example.com', role: 'admin', createdAt: '2025-01-01T00:00:00.000Z', lastLogin: '2026-09-07T18:02:00.000Z' },
+    { id: 'u2', username: 'sage', email: 'sage@example.com', role: 'user', createdAt: '2025-03-14T00:00:00.000Z', lastLogin: '2026-09-02T07:40:00.000Z' },
+    { id: 'u3', username: 'demo-user-with-a-long-name', email: 'demo-user-with-a-long-name@example.com', role: 'user', createdAt: '2026-08-30T00:00:00.000Z', lastLogin: null },
   ],
 };
 

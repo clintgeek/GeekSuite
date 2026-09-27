@@ -1,10 +1,66 @@
 import { useEffect, useId, useState } from 'react';
-import { Box, Paper, Typography, List, ListItem, ListItemText, IconButton, CircularProgress, TextField, Button, Stack } from '@mui/material';
+import { Box, Typography, IconButton, CircularProgress, TextField, Button, Stack } from '@mui/material';
 import DeleteIcon from '@mui/icons-material/Delete';
 import AddIcon from '@mui/icons-material/Add';
 import { GeekEmptyState, GeekErrorState, useToast } from '@geeksuite/ui';
 import ConsoleDialog from '../components/primitives/ConsoleDialog';
 import api from '../api';
+import Panel from '../signalbox/Panel';
+import { Dymo } from '../signalbox/Labels';
+
+/**
+ * UserGeek — the token board.
+ *
+ * On a single line, a driver may only enter a section while holding its
+ * token; in the suite, a userGeek record is that token — the authority to
+ * sign in anywhere. So each user is a brass tablet (initials, brass for an
+ * admin, steel for everyone else) on a row with their role on dymo tape and
+ * the two dates that matter: when they were issued and when they last used it.
+ *
+ * Deleting a user withdraws their token from every app with no undo on the
+ * server, which is why it stays behind the confirmation dialog.
+ */
+function initials(user) {
+  const name = user.profile?.displayName || user.username || '?';
+  const parts = String(name).trim().split(/[\s._-]+/).filter(Boolean);
+  return ((parts[0]?.[0] || '') + (parts[1]?.[0] || '')).toUpperCase() || '?';
+}
+
+function shortDate(value) {
+  if (!value) return null;
+  const d = new Date(Number.isFinite(Number(value)) ? Number(value) : value);
+  if (Number.isNaN(d.getTime())) return null;
+  return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' });
+}
+
+function Token({ user }) {
+  const admin = user.role === 'admin';
+  return (
+    <Box
+      aria-hidden="true"
+      sx={(theme) => ({
+        width: 44,
+        height: 44,
+        flexShrink: 0,
+        borderRadius: '50%',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        fontFamily: theme.typography.fontFamilyMono,
+        fontWeight: 700,
+        fontSize: '0.875rem',
+        color: admin ? theme.palette.box.plate.ink : '#ffffff',
+        background: admin
+          ? theme.palette.accent.gradient
+          : 'linear-gradient(180deg, #5d6670, #2b3037)',
+        border: `2px solid ${admin ? theme.palette.box.plate.edge : '#2b3037'}`,
+        boxShadow: 'inset 0 0 0 3px rgba(255,255,255,0.18), 0 1px 2px rgba(0,0,0,0.4)',
+      })}
+    >
+      {initials(user)}
+    </Box>
+  );
+}
 
 export default function UserGeekPage() {
   const formId = useId();
@@ -86,86 +142,75 @@ export default function UserGeekPage() {
     );
   }
 
+  const adminCount = users.filter((u) => u.role === 'admin').length;
+
   return (
     <Box>
-      <Box sx={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', mb: 4 }}>
-        <Box>
-          <Typography variant="body2" sx={{ color: 'text.secondary' }}>
-            Manage users across the GeekSuite applications
-          </Typography>
-        </Box>
-        <Button
-          variant="outlined"
-          startIcon={<AddIcon />}
-          onClick={handleOpenCreate}
-          size="small"
-        >
-          Add user
-        </Button>
-      </Box>
-
-      {loadError ? (
-        <Box sx={{
-          borderRadius: '12px',
-          border: '1px solid',
-          borderColor: 'divider',
-          backgroundColor: 'background.paper',
-        }}>
+      <Panel
+        title="Token board"
+        caption={loadError
+          ? 'Every suite user holds one token: their userGeek record.'
+          : `${users.length} ${users.length === 1 ? 'token' : 'tokens'} issued · ${adminCount} admin. A token signs its holder in to every GeekSuite app.`}
+        actions={(
+          <Button variant="outlined" startIcon={<AddIcon />} onClick={handleOpenCreate} size="small">
+            Add user
+          </Button>
+        )}
+      >
+        {loadError ? (
           <GeekErrorState title="Couldn't load users" error={loadError} onRetry={fetchUsers} />
-        </Box>
-      ) : (
-        <Box sx={{
-          borderRadius: '12px',
-          border: '1px solid',
-          borderColor: 'divider',
-          backgroundColor: 'background.paper',
-          overflow: 'hidden',
-        }}>
-          {users.length === 0 ? (
-            <GeekEmptyState
-              title="No users found"
-              description="There are no users in the system"
-            />
-          ) : (
-            <List disablePadding>
-              {users.map((user, idx) => (
-                <ListItem
+        ) : users.length === 0 ? (
+          <GeekEmptyState title="No users found" description="There are no users in the system" />
+        ) : (
+          <Box component="ul" sx={{ m: 0, p: 0 }}>
+            {users.map((user) => {
+              const joined = shortDate(user.createdAt);
+              const seen = shortDate(user.lastLogin);
+              return (
+                <Box
+                  component="li"
                   key={user.id}
-                  secondaryAction={
-                    <IconButton
-                      edge="end"
-                      aria-label="delete"
-                      onClick={() => setConfirmDelete(user)}
-                      disabled={deleting === user.id}
-                      size="small"
-                      sx={{ color: 'text.secondary', '&:hover': { color: 'error.main' } }}
-                    >
-                      {deleting === user.id ? (
-                        <CircularProgress size={18} />
-                      ) : (
-                        <DeleteIcon fontSize="small" />
-                      )}
-                    </IconButton>
-                  }
                   sx={{
-                    borderBottom: idx < users.length - 1 ? '1px solid' : 'none',
+                    listStyle: 'none',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 1.5,
+                    py: 1.25,
+                    borderBottom: '1px solid',
                     borderColor: 'divider',
-                    py: 1.5,
-                    px: 2.5,
+                    '&:last-of-type': { borderBottom: 'none' },
                   }}
                 >
-                  <ListItemText
-                    primary={user.username}
-                    secondary={user.email}
-                    primaryTypographyProps={{ fontWeight: 500, fontSize: '0.875rem' }}
-                    secondaryTypographyProps={{ fontSize: '0.75rem' }}
-                  />
-                </ListItem>
-              ))}
-            </List>
-          )}
-        </Box>
-      )}
+                  <Token user={user} />
+                  <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 2, rowGap: 0.5 }}>
+                    <Box sx={{ minWidth: 0, flex: '1 1 200px' }}>
+                      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0 }}>
+                        <Typography sx={{ fontWeight: 700, fontSize: '0.9rem', overflowWrap: 'anywhere' }}>{user.username}</Typography>
+                        {user.role && <Dymo tone={user.role === 'admin' ? 'red' : 'black'} tilt={false}>{user.role}</Dymo>}
+                      </Box>
+                      <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary', overflowWrap: 'anywhere' }}>{user.email}</Typography>
+                    </Box>
+                    {(joined || seen) && (
+                      <Typography component="span" sx={{ fontFamily: 'fontFamilyMono', fontSize: '0.75rem', color: 'text.secondary', lineHeight: 1.5 }}>
+                        {joined && <Box component="span" sx={{ display: 'block' }}>issued {joined}</Box>}
+                        <Box component="span" sx={{ display: 'block' }}>last in {seen || 'never'}</Box>
+                      </Typography>
+                    )}
+                  </Box>
+                  <IconButton
+                    aria-label="delete"
+                    onClick={() => setConfirmDelete(user)}
+                    disabled={deleting === user.id}
+                    sx={{ width: 44, height: 44, color: 'text.secondary', '@media (hover: hover)': { '&:hover': { color: 'error.main' } } }}
+                  >
+                    {deleting === user.id ? <CircularProgress size={18} /> : <DeleteIcon fontSize="small" />}
+                  </IconButton>
+                </Box>
+              );
+            })}
+          </Box>
+        )}
+      </Panel>
 
       <ConsoleDialog
         open={!!confirmDelete}
