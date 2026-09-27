@@ -42,7 +42,10 @@ jobs:
   harness:
     name: mobile grammar (iPhone 14, dark + light)
     runs-on: ubuntu-latest
-    timeout-minutes: 45
+    # 75, not 45: the full run (every app, phone + desktop) reached 41-45 min
+    # on 2026-09-27 as scenes grew, and one run was cancelled at the cap.
+    # Durable fix, pending: shard by app in a matrix (renames the check).
+    timeout-minutes: 75
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
