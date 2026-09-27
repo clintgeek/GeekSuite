@@ -63,7 +63,9 @@ export default function Medications() {
   const scrollToEditorFocus = () => {
     setTimeout(() => {
       if (editorRef.current) {
-        editorRef.current.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        // Optional-called: jsdom (and some embedded browsers) have no
+        // scrollIntoView, and a throw here escaped as an unhandled error.
+        editorRef.current?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
       }
       if (nameInputRef.current) {
         try { nameInputRef.current.focus(); } catch (_) {}

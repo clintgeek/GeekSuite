@@ -649,6 +649,10 @@ export const scenes = [
         console.log(`  [photo size] 8 pages sent: ${bytes.join(', ')} bytes`);
         await page.getByRole('button', { name: 'Keep as plain text' }).click();
         await page.waitForURL(/\/notes\/md1$/, { timeout: 30000 });
+        // Let the new note's page finish arriving before the a11y pass: measured
+        // straight after the navigation, its date caption was caught mid-fade
+        // (4.42:1; the token is 5.03:1 at rest). 2026-09-27.
+        await h.settle(1200);
         console.log(`  [photo size] 8-page snapshot: ${calls.create[0].content.length} chars`);
       } else {
         const why = await page.getByText(/too big for one note/).textContent();
