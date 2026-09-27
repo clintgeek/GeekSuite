@@ -201,6 +201,15 @@ Live since 2026-09-26.
 - **Its MCP tools**, once the suite MCP server exists.
 - **A PDF insurance report** with embedded photos.
 
+### S Pen ideas, parked (Chef, 2026-09-27)
+
+The eraser button and handwriting-to-Markdown are being built
+(`apps/notegeek/DOCS/HANDWRITING.md`). Parked, both "awesome and will work no matter what":
+- **ThingGeek photo markup:** circle the serial plate, or scribble on a damage photo. Chef
+  isn't using ThingGeek yet.
+- **A handwritten daily page in BuJoGeek.** Waits until BuJoGeek has been torn apart and
+  rebuilt.
+
 ### BookGeek — audiobooks?
 
 Chef, 2026-09-26: "I have audiobooks but I never thought to manage them in bookgeek and I
