@@ -1,6 +1,9 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { CircularProgress, Box, useTheme, useMediaQuery, IconButton, Tooltip } from '@mui/material';
-import { Box as TlBox, Tldraw, useEditor, useValue } from '@tldraw/tldraw';
+import { CircularProgress, Box, useTheme, useMediaQuery, IconButton, Tooltip, Popover, Typography } from '@mui/material';
+import {
+    Box as TlBox, Tldraw, useEditor, useValue,
+    DefaultColorStyle, DefaultSizeStyle, DefaultColorThemePalette,
+} from '@tldraw/tldraw';
 
 // tldraw 2.4's updateViewportScreenBounds takes a Box and calls .equals() on
 // it. Passed the container element, as this file used to, it threw on every
@@ -42,7 +45,104 @@ const MOBILE_HIDDEN_COMPONENTS = {
 };
 const NO_HIDDEN_COMPONENTS = {};
 
-// Minimal mobile toolbar - Move, Write, Undo, Fullscreen
+// Pen styles for the phone toolbar. tldraw's own style panel is hidden on
+// phones (it covers the canvas), so the pen's colour and size were unreachable
+// there (Chef, 2026-09-27). White is left out: it's invisible on the page.
+const PEN_COLORS = ['black', 'grey', 'blue', 'light-blue', 'violet', 'light-violet', 'green', 'light-green', 'yellow', 'orange', 'red', 'light-red'];
+const PEN_SIZES = [
+    { value: 's', label: 'Small', dot: 5 },
+    { value: 'm', label: 'Medium', dot: 8 },
+    { value: 'l', label: 'Large', dot: 11 },
+    { value: 'xl', label: 'Extra large', dot: 15 },
+];
+const colorName = (c) => c.replace('-', ' ');
+
+function PenStylePicker({ editor }) {
+    const theme = useTheme();
+    const palette = DefaultColorThemePalette[theme.palette.mode === 'dark' ? 'darkMode' : 'lightMode'];
+    const color = useValue('pen color', () => editor.getStyleForNextShape(DefaultColorStyle), [editor]);
+    const size = useValue('pen size', () => editor.getStyleForNextShape(DefaultSizeStyle), [editor]);
+    const [anchor, setAnchor] = useState(null);
+    const dot = (PEN_SIZES.find((s) => s.value === size) || PEN_SIZES[0]).dot;
+
+    const choose = (style, value) => {
+        // Restyle what's selected, and every stroke from now on.
+        editor.setStyleForSelectedShapes(style, value);
+        editor.setStyleForNextShapes(style, value);
+        if (editor.getCurrentToolId() === 'hand') editor.setCurrentTool('draw');
+    };
+
+    const swatch = {
+        minWidth: 44, minHeight: 44, width: 44, height: 44,
+        borderRadius: 2, border: '2px solid transparent',
+    };
+
+    return (
+        <>
+            <Tooltip title="Pen colour and size" placement="top">
+                <IconButton
+                    aria-label="Pen colour and size"
+                    aria-haspopup="dialog"
+                    aria-expanded={anchor ? 'true' : 'false'}
+                    size="small"
+                    onClick={(e) => setAnchor(e.currentTarget)}
+                >
+                    <Box
+                        aria-hidden
+                        sx={{
+                            width: dot + 4, height: dot + 4, borderRadius: '50%',
+                            bgcolor: palette[color]?.solid ?? 'text.primary',
+                            boxShadow: (t) => `0 0 0 1px ${t.palette.divider}`,
+                        }}
+                    />
+                </IconButton>
+            </Tooltip>
+            <Popover
+                open={Boolean(anchor)}
+                anchorEl={anchor}
+                onClose={() => setAnchor(null)}
+                anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+                transformOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+                slotProps={{ paper: { role: 'dialog', 'aria-label': 'Pen colour and size', sx: { p: 3, mb: 2 } } }}
+            >
+                <Typography component="h2" variant="caption" sx={{ display: 'block', mb: 1, color: 'text.secondary' }}>
+                    Size
+                </Typography>
+                <Box role="group" aria-label="Pen size" sx={{ display: 'flex', gap: 1, mb: 3 }}>
+                    {PEN_SIZES.map((s) => (
+                        <IconButton
+                            key={s.value}
+                            aria-label={`Size: ${s.label}`}
+                            aria-pressed={size === s.value ? 'true' : 'false'}
+                            onClick={() => choose(DefaultSizeStyle, s.value)}
+                            sx={{ ...swatch, borderColor: size === s.value ? 'primary.main' : 'divider' }}
+                        >
+                            <Box aria-hidden sx={{ width: s.dot, height: s.dot, borderRadius: '50%', bgcolor: 'text.primary' }} />
+                        </IconButton>
+                    ))}
+                </Box>
+                <Typography component="h2" variant="caption" sx={{ display: 'block', mb: 1, color: 'text.secondary' }}>
+                    Colour
+                </Typography>
+                <Box role="group" aria-label="Pen colour" sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, 44px)', gap: 1 }}>
+                    {PEN_COLORS.map((c) => (
+                        <IconButton
+                            key={c}
+                            aria-label={`Colour: ${colorName(c)}`}
+                            aria-pressed={color === c ? 'true' : 'false'}
+                            onClick={() => choose(DefaultColorStyle, c)}
+                            sx={{ ...swatch, borderColor: color === c ? 'primary.main' : 'transparent' }}
+                        >
+                            <Box aria-hidden sx={{ width: 24, height: 24, borderRadius: '50%', bgcolor: palette[c]?.solid }} />
+                        </IconButton>
+                    ))}
+                </Box>
+            </Popover>
+        </>
+    );
+}
+
+// Minimal mobile toolbar - Move, Write, Pen style, Undo, Fullscreen
 function MobileDrawingToolbar({ containerRef, onFullscreenChange }) {
     const editor = useEditor();
     const currentTool = useValue('current tool', () => editor.getCurrentToolId(), [editor]);
@@ -127,6 +227,9 @@ function MobileDrawingToolbar({ containerRef, onFullscreenChange }) {
                 </IconButton>
             </Tooltip>
 
+            {/* Pen colour and size */}
+            <PenStylePicker editor={editor} />
+
             <Box sx={{ width: 1, height: 24, bgcolor: 'divider', mx: 0.5 }} />
 
             {/* Undo */}
@@ -196,6 +299,9 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false }) => {
 
         // Set initial tool to draw for better mobile experience
         editor.setCurrentTool('draw');
+        // Handwriting wants a fine pen: tldraw's default (m) wrote fat lines
+        // (Chef, 2026-09-27).
+        editor.setStyleForNextShapes(DefaultSizeStyle, 's');
 
         // Apply dark mode preference based on MUI theme mode
         const isDark = theme.palette.mode === 'dark';

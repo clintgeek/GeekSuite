@@ -4,6 +4,8 @@ import { MemoryRouter } from 'react-router-dom';
 import { MantineProvider } from '@mantine/core';
 import ThemeModeProvider from '../../../theme/ThemeModeProvider';
 import HandwrittenEditor from '../../../components/editors/HandwrittenEditor';
+import { DefaultColorStyle, DefaultSizeStyle } from '@tldraw/tldraw';
+import userEvent from '@testing-library/user-event';
 
 const AllProviders = ({ children }) => (
     <ThemeModeProvider>
@@ -30,8 +32,17 @@ vi.mock('@tldraw/tldraw', async () => {
         equals(o) { return !!o && o.x === this.x && o.y === this.y && o.w === this.w && o.h === this.h; }
     }
 
+    const DefaultColorStyle = { id: 'tldraw:color' };
+    const DefaultSizeStyle = { id: 'tldraw:size' };
+    const swatches = Object.fromEntries(['black', 'grey', 'blue', 'light-blue', 'violet', 'light-violet', 'green', 'light-green', 'yellow', 'orange', 'red', 'light-red', 'white'].map((c) => [c, { solid: '#123456' }]));
+    const DefaultColorThemePalette = { lightMode: swatches, darkMode: swatches };
+
     const makeEditor = () => {
+        const styles = new Map([[DefaultColorStyle, 'black'], [DefaultSizeStyle, 'm']]);
         const editor = {
+            getStyleForNextShape: vi.fn((style) => styles.get(style)),
+            setStyleForNextShapes: vi.fn((style, value) => { styles.set(style, value); return editor; }),
+            setStyleForSelectedShapes: vi.fn(() => editor),
             unsubscribes: [],
             listeners: [],
             getCurrentToolId: vi.fn(() => 'draw'),
@@ -84,7 +95,7 @@ vi.mock('@tldraw/tldraw', async () => {
         return editor;
     };
 
-    return { Tldraw, useEditor, useValue: (_name, fn) => fn(), Box };
+    return { Tldraw, useEditor, useValue: (_name, fn) => fn(), Box, DefaultColorStyle, DefaultSizeStyle, DefaultColorThemePalette };
 });
 
 const observers = [];
@@ -183,6 +194,31 @@ describe('HandwrittenEditor', () => {
         expect(bounds).toHaveBeenCalled();
         expect(bounds).toHaveReturned();
         expect(typeof bounds.mock.calls[0][0].equals).toBe('function');
+    });
+
+    it('starts with a small pen', async () => {
+        render(<HandwrittenEditor content="" setContent={setContent} />, { wrapper: AllProviders });
+        await screen.findByTestId('tldraw-mock');
+        expect(tl.editors[0].setStyleForNextShapes).toHaveBeenCalledWith(DefaultSizeStyle, 's');
+    });
+
+    it('on a phone, the pen button offers colour and size, and applies them to new and selected strokes', async () => {
+        setViewport(true);
+        const user = userEvent.setup();
+        render(<HandwrittenEditor content="" setContent={setContent} />, { wrapper: AllProviders });
+        await user.click(await screen.findByRole('button', { name: 'Pen colour and size' }));
+        expect(await screen.findByRole('dialog', { name: 'Pen colour and size' })).toBeInTheDocument();
+        const editor = tl.editors.at(-1);
+
+        await user.click(screen.getByRole('button', { name: 'Colour: blue' }));
+        expect(editor.setStyleForNextShapes).toHaveBeenCalledWith(DefaultColorStyle, 'blue');
+        expect(editor.setStyleForSelectedShapes).toHaveBeenCalledWith(DefaultColorStyle, 'blue');
+
+        await user.click(screen.getByRole('button', { name: 'Size: Large' }));
+        expect(editor.setStyleForNextShapes).toHaveBeenCalledWith(DefaultSizeStyle, 'l');
+        expect(editor.setStyleForSelectedShapes).toHaveBeenCalledWith(DefaultSizeStyle, 'l');
+        // White is left out: it would be invisible on the page.
+        expect(screen.queryByRole('button', { name: 'Colour: white' })).not.toBeInTheDocument();
     });
 
     it('saves a drawing: a store change reaches setContent', async () => {
