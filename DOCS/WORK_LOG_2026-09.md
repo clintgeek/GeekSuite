@@ -12,6 +12,54 @@ anything a future reader would otherwise have to rediscover.
 
 ## 2026-09-27
 
+### FitnessGeek — "Market Morning", Simple and Full (one revertable commit)
+
+`644c99b5`, deliberately **one commit** (Chef: "so we can easily reverse it"). Spec and
+as-built: `apps/fitnessgeek/DOCS/SIMPLE_AND_FULL_PLAN.md`.
+
+- **Simple is for Heather**, who had never logged: a three-step first run, a plate ring
+  ("You have N calories left today"), meal cards with their own + Add, a Today strip
+  (Weighed · BP · Meds), a "Did you take your meds?" checklist, and voice ("Say what you
+  ate", via describe-and-log).
+- **Full keeps everything Chef uses.**
+- **The default mode:** Full if the person has logged in the last 90 days, else Simple.
+  No user ids.
+- **Look:** cream, Nunito, and produce colours as fills with ink text only.
+- **Verified live:** the new strings and the Nunito fonts are in the deployed build.
+
+Kept **separate**, so a revert can't touch them:
+- `daffe548`: updates apply only while the app is hidden, never mid-entry.
+- `9777e436`: a 15s test timeout.
+- `a6b6e90a`: prescription **refill tracking removed** (the stored fields are kept), and
+  the edit/remove icon buttons got accessible names.
+- `84184580`: AI Insights starts collapsed and fetches nothing until opened.
+- `c1a5e30b`: two CI fixes. An unguarded `scrollIntoView` failed the job on an unhandled
+  error although every test passed, and a harness scene was measured mid-fade.
+
+### NoteGeek — photograph notebook pages
+
+`28ed17ad`, `d245296e`. Spec: `HANDWRITING.md` §3.
+- **The flow:** up to 8 pages, EXIF-upright, with rotate and reorder; `transcribeSketch`
+  runs with `source: 'photo'` (ignore ruled lines and printed text) one page at a time; the
+  review step; then a **photo sketch note** built by tldraw itself, with the images locked
+  so the S Pen eraser can't take them, plus a Markdown note linking back.
+- **Two copies of each page:** the model reads 2000px and the note keeps 1600px. The CI
+  harness showed 8 real-size camera pages (~492 KB each sent) making a 2.78 MB note, under
+  the 5 MB ceiling.
+
+### The suite — icons, and the PWA audit
+
+`bf684173`, `4fa778ee`.
+- **Every app has its own icon set,** rendered by `tools/pwa-icons.mjs` from SVG masters.
+- **`tools/pwa-audit.mjs` runs as a new CI job** (`pwa audit (<app>)`). It went from 68
+  problems to 0.
+- **Real bugs fixed:**
+  - FitnessGeek and BuJoGeek updates were stuck until every tab closed.
+  - BaseGeek had an unguarded service worker that could answer `/api` login navigations.
+  - Several apps had no `navigateFallback` denylist.
+  - BaseGeek's manifest referenced PNGs that didn't exist.
+- **The harness timeout** is now 75 min (`c4487943`); the full run takes ~47 min.
+
 ### BaseGeek — "The Signal Box"
 
 `5c715057`. Chef: "Be crazy but functional with it. Surprise me." The console became the
