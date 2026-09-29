@@ -39,3 +39,20 @@ export function renderWithProviders(ui, { initialEntries = ['/'], mode = 'light'
   }
   return render(ui, { wrapper: Providers, ...options });
 }
+
+/**
+ * Pretend to be a phone (or any width) for `useMediaQuery`: min-/max-width
+ * queries are answered against `width`. Returns a restore function.
+ */
+export function mockViewport(width = 390) {
+  const original = window.matchMedia;
+  window.matchMedia = (query) => {
+    const min = /min-width:\s*([\d.]+)px/.exec(query);
+    const max = /max-width:\s*([\d.]+)px/.exec(query);
+    const matches = (!min || width >= Number(min[1])) && (!max || width <= Number(max[1]));
+    return { matches, media: query, onchange: null, addListener: () => {}, removeListener: () => {}, addEventListener: () => {}, removeEventListener: () => {}, dispatchEvent: () => false };
+  };
+  return () => {
+    window.matchMedia = original;
+  };
+}

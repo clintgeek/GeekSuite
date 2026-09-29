@@ -13,14 +13,16 @@
  * md+: the filter panel column beside the grid (collapsible, remembered).
  * Phone: a "Filters · N" button opens the same sections in a full sheet.
  *
- * `/thing/:id` and `/add` render into the <Outlet/>, so the library stays
- * mounted — pages, scroll and all — under the sheet.
+ * Phone first (Label Maker): the default is the dense LIST on a card-stock
+ * sheet; the photo grid is the toggle beside Sort, and the choice is
+ * remembered (utils/storage.js — try/catch, a convenience). Desktop defaults
+ * to the grid. A thing and the add screen are pages of their own; coming
+ * back, useScrollMemory puts the list where it was.
  */
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Box, CircularProgress, LinearProgress, Skeleton, useMediaQuery, useTheme } from '@mui/material';
-import { Add as AddIcon } from '@mui/icons-material';
-import { Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { GeekErrorState, useGeekPrimaryAction } from '@geeksuite/ui';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { GeekErrorState } from '@geeksuite/ui';
 import { FilterPanel, FiltersSheet, LibraryHeader, useInfiniteSentinel, useScrollMemory, useSectionOpen } from '@geeksuite/collection';
 import { useLibraryFilter, useThingFacets, useThingPages } from '../hooks/useLibrary';
 import { useFacetContext } from '../hooks/useThingMeta';
@@ -28,7 +30,7 @@ import { useScrollRoot } from '../components/AppMain';
 import ThingCard from '../components/ThingCard';
 import ThingRow, { ListHeader } from '../components/ThingRow';
 import SaveLibraryView from '../components/SaveLibraryView';
-import { isFabVisible, thingPath } from '../components/navConfig';
+import { thingPath } from '../components/navConfig';
 import { DEFAULT_OPEN, SECTIONS, SECTIONS_OPEN_KEY, activeChips } from '../utils/facets';
 import { SORTS, isNarrowed, stateToParams } from '../utils/libraryFilter';
 import { readPref, writePref } from '../utils/storage';
@@ -45,6 +47,20 @@ export const GRID_SX = {
   gridTemplateColumns: { xs: 'repeat(auto-fill, minmax(156px, 1fr))', sm: 'repeat(auto-fill, minmax(190px, 1fr))', lg: 'repeat(auto-fill, minmax(210px, 1fr))' },
   gap: { xs: 1.5, md: 2 },
 };
+
+/** No stored choice: the list on a phone, the grid on a desk. */
+export function defaultLibraryView() {
+  try {
+    return window.matchMedia('(min-width: 900px)').matches ? 'grid' : 'list';
+  } catch {
+    return 'list';
+  }
+}
+
+export function initialLibraryView() {
+  const stored = readPref(VIEW_KEY, null);
+  return stored === 'list' || stored === 'grid' ? stored : defaultLibraryView();
+}
 
 function defaultPanelOpen() {
   try {
@@ -76,7 +92,7 @@ export default function LibraryView() {
   const lib = useLibraryFilter();
   const { state } = lib;
 
-  const [view, setView] = useState(() => (readPref(VIEW_KEY, 'grid') === 'list' ? 'list' : 'grid'));
+  const [view, setView] = useState(initialLibraryView);
   const [panelOpen, setPanelOpen] = useState(() => {
     const stored = readPref(PANEL_KEY, null);
     return typeof stored === 'boolean' ? stored : defaultPanelOpen();
@@ -135,7 +151,7 @@ export default function LibraryView() {
     body = <LibraryEmpty firstRun={householdEmpty && !narrowed} onAdd={openAdd} onClear={lib.clearAll} />;
   } else if (view === 'list') {
     body = (
-      <Box sx={{ mx: { xs: -1, sm: 0 } }}>
+      <Box data-testid="thing-list" sx={{ mx: { xs: -0.5, sm: 0 }, bgcolor: 'background.paper', border: 1, borderColor: 'border', borderRadius: '6px', overflow: 'hidden', boxShadow: '0 2px 6px rgba(40, 25, 10, 0.12)' }}>
         <ListHeader />
         <Box component="ul" aria-label="Things" sx={{ m: 0, p: 0 }}>
           {things.map((t) => (
@@ -156,8 +172,6 @@ export default function LibraryView() {
 
   // First run: no chrome to filter nothing with — just the welcome.
   const bare = !firstLoad && !things.length && householdEmpty && !narrowed;
-  // The welcome carries its own big "Add a thing"; a FAB beside it is a second voice saying the same.
-  useGeekPrimaryAction({ label: 'Add a thing', icon: <AddIcon />, onClick: openAdd, hidden: !isFabVisible(location.pathname) || bare });
 
   return (
     <>
@@ -175,7 +189,7 @@ export default function LibraryView() {
         ) : null}
 
         <Box sx={{ flex: 1, minWidth: 0 }}>
-          <Box sx={{ px: { xs: 2, md: 3 }, pb: { xs: 12, md: 6 }, pt: { xs: 1.5, md: 2 }, maxWidth: 1400, mx: 'auto' }}>
+          <Box sx={{ px: { xs: 2, md: 3 }, pb: { xs: 4, md: 6 }, pt: { xs: 1.5, md: 2 }, maxWidth: 1400, mx: 'auto' }}>
             {bare ? null : (
               <LibraryHeader
                 sorts={SORTS}
@@ -239,8 +253,6 @@ export default function LibraryView() {
       ) : null}
 
       <SaveLibraryView open={saveOpen} onClose={() => setSaveOpen(false)} filterInput={lib.filterInput} sort={state.sort} dir={state.dir} chips={chips} />
-
-      <Outlet />
     </>
   );
 }

@@ -47,7 +47,7 @@ export const APPS = {
   bujogeek: { dir: 'apps/bujogeek/frontend/public', bg: '#FAF8F5' },
   storygeek: { dir: 'apps/storygeek/frontend/public', bg: '#120d0c' },
   basegeek: { dir: 'apps/basegeek/packages/ui/public', bg: '#0e1012' },
-  thinggeek: { dir: 'apps/thinggeek/frontend/public', bg: '#0E3324' },
+  thinggeek: { dir: 'apps/thinggeek/frontend/public', bg: '#D2B284' },
   fitnessgeek: { dir: 'apps/fitnessgeek/frontend/public', bg: '#0F766E' },
   flockgeek: { dir: 'apps/flockgeek/frontend/public', bg: '#0f0f0d' },
   startgeek: { dir: 'apps/startgeek/public', bg: '#0a0d12' },

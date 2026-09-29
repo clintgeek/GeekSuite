@@ -1,147 +1,191 @@
 /**
- * ThingGeek theme: "Ledger".
+ * ThingGeek theme: "Label Maker".
  *
- * The household's record of what it owns, so it looks like one: warm ledger
- * paper and iron-gall ink by day, the same ledger under a desk lamp by night,
- * with one steady accent — registry green, the colour of a bound account book
- * and of an asset tag's stamp — and brass for the small hardware (the tag's
- * eyelet, rules, the range histogram). Manrope carries headings and the
- * wordmark; body copy stays on the suite face; identifiers are set in mono so
- * a serial reads character by character.
+ * The household's inventory, dressed like the shelves it lives on: kraft
+ * cardboard for the desk and the chrome (storage boxes, shipping cartons),
+ * off-white card stock for the sheets you read, and — the signature — Dymo
+ * embossed tape for the NAMES OF PLACES (components/DymoTape.jsx). By night
+ * it is the same workbench under a lamp: a charcoal-brown shelf.
  *
- * Distinct from its neighbours on purpose: GameGeek is slate + amber,
- * BookGeek ink + sky, FitnessGeek stone + teal. Registry green sits well
- * clear of FitnessGeek's blue-green teal.
+ * One accent, SAFETY ORANGE, for "needs attention" and the screen's one
+ * primary action. It is only ever a FILL with dark ink on it — never orange
+ * text on kraft. Everything else is ink: MUI's `primary` is the tape-black
+ * ink (card stock in the dark), so links, focus, selected chips and the
+ * everyday contained button are ink, and nothing orange leaks into text.
  *
- * Contrast notes:
- *   - Light mode's green (#1D6546) clears 4.5:1 as text on every light
- *     surface and carries a white label as a fill.
- *   - Dark mode's green (#7CC9A0) is text-bright on every dark surface and
- *     carries a near-black label as a fill.
- *   - Brass is a GRAPHIC in both modes (eyelets, rules, histogram bars),
- *     never text.
- *   - Status tones (overdue / soon / upcoming) are text-safe on the paper and
- *     card; call sites still pass them through readableOn for tints.
- *   - Every pair lives in __tests__/utils/themeContrast.test.js.
+ * Fonts: Barlow Condensed for tape and headings (a condensed, label-ish
+ * grotesque), Barlow for body copy, mono for identifiers so a serial reads
+ * character by character. Headings are sentence case; only tape is
+ * uppercase and letterspaced.
+ *
+ * Contrast: every pair this app paints is measured in
+ * __tests__/theme/labelMakerContrast.test.js, both modes.
  */
 import { createGeekSuiteTheme } from '@geeksuite/ui';
 
-export const DISPLAY_FONT = '"Manrope", "Roboto", system-ui, -apple-system, "Segoe UI", sans-serif';
-export const BODY_FONT = '"Roboto", system-ui, -apple-system, "Segoe UI", "Helvetica", "Arial", sans-serif';
+export const DISPLAY_FONT = '"Barlow Condensed", "Roboto Condensed", "Arial Narrow", system-ui, sans-serif';
+export const BODY_FONT = '"Barlow", system-ui, -apple-system, "Segoe UI", "Helvetica", "Arial", sans-serif';
+export const TAPE_FONT = DISPLAY_FONT;
 export const MONO_FONT = '"Roboto Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace';
 
-const registryLight = { main: '#1D6546', light: '#2E8A62', dark: '#154D35', contrastText: '#FFFFFF' };
-const registryDark = { main: '#7CC9A0', light: '#9AD8B6', dark: '#5DB286', contrastText: '#0E1A13' };
+/** Kraft fibre on the desk: two faint crossed hatchings (AppMain paints it). */
+export const fibreImage = (f) => `repeating-linear-gradient(115deg, ${f} 0 1px, transparent 1px 7px), repeating-linear-gradient(25deg, ${f} 0 1px, transparent 1px 11px)`;
 
+/**
+ * desk     the page behind everything (kraft by day, the dark shelf by night)
+ * chrome   top bar, tab bar, sidebar: a deeper kraft, the carton's side
+ * paper    card stock: sheets, dialogs, menus, the library list
+ * card     a card stock card on the desk
+ * raised   a pressed-in well on card stock (chips, badges, inputs)
+ */
 export const SURFACES = {
   light: {
-    page: '#F2EEE5',
-    paper: '#FFFDF9',
-    card: '#FFFDF9',
-    raised: '#F7F3EB',
-    text: '#1D1B17',
-    secondary: '#4A453C',
-    muted: '#5A5449',
-    divider: 'rgba(29, 27, 23, 0.10)',
-    border: 'rgba(29, 27, 23, 0.18)',
+    desk: '#D9BD94',
+    chrome: '#C9A574',
+    paper: '#FBF7EE',
+    card: '#FDFAF3',
+    raised: '#F1E7D3',
+    text: '#22190F',
+    secondary: '#4B3B28',
+    muted: '#54432F',
+    divider: 'rgba(34, 25, 15, 0.14)',
+    border: 'rgba(34, 25, 15, 0.26)',
+    fibre: 'rgba(90, 60, 25, 0.04)',
   },
   dark: {
-    page: '#13120F',
-    paper: '#1B1A16',
-    card: '#201F1A',
-    raised: '#29271F',
-    text: '#EFEADF',
-    secondary: '#C2BBAD',
-    muted: '#ABA496',
-    divider: 'rgba(239, 234, 223, 0.10)',
-    border: 'rgba(239, 234, 223, 0.18)',
+    desk: '#1C1611',
+    chrome: '#261E17',
+    paper: '#2A231B',
+    card: '#2F271E',
+    raised: '#3A3026',
+    text: '#F3E9D8',
+    secondary: '#D2C3AA',
+    muted: '#B9A88D',
+    divider: 'rgba(243, 233, 216, 0.12)',
+    border: 'rgba(243, 233, 216, 0.24)',
+    fibre: 'rgba(0, 0, 0, 0.12)',
   },
 };
 
-/** Brass: hardware, rules, histogram bars. A graphic — never text. */
-export const BRASS = { light: '#A87B2B', dark: '#D2A857' };
+/** Ink: MUI's primary. Tape black by day, card stock by night. Never orange. */
+export const INK = {
+  light: { main: '#2A1F14', light: '#4B3B28', dark: '#140E08', contrastText: '#FBF7EE' },
+  dark: { main: '#EBDDC4', light: '#F6ECDB', dark: '#D2C3AA', contrastText: '#1C1611' },
+};
+
+/** Safety orange: a FILL, with dark ink on it. Attention and the primary action. */
+export const SAFETY = {
+  light: { main: '#F26A1B', light: '#F5853F', dark: '#D95A10', contrastText: '#1B1006' },
+  dark: { main: '#FF7A29', light: '#FF9350', dark: '#E8681A', contrastText: '#1B1006' },
+};
 
 /**
- * Due-date status tones, used as small text and dots. Solid, text-safe on
- * the paper/card/raised surfaces of their mode (asserted in the ratchet).
+ * Dymo tape. The same black plastic in both modes (it's a physical thing);
+ * in the dark it gets a faint edge so it lifts off the shelf.
+ *   ground  the tape's body (the darkest band of its sheen)
+ *   top     the lightest band of the sheen (worst case for the letters)
+ *   ink     the raised letters
+ */
+export const TAPE = {
+  ground: '#121110',
+  top: '#34312D',
+  ink: '#F4F1EA',
+  edgeLight: 'rgba(0, 0, 0, 0.35)',
+  edgeDark: 'rgba(255, 255, 255, 0.16)',
+};
+
+/**
+ * Due-date status tones, used as small text and dots on card stock (paper,
+ * card, raised). DueLine still passes them through readableOn.
  */
 export const STATUS_TONES = {
-  light: { overdue: '#B42318', soon: '#8F5200', upcoming: '#1F5F8B', later: '#4A453C' },
-  dark: { overdue: '#F4978E', soon: '#F2B45A', upcoming: '#8CC3EC', later: '#C2BBAD' },
+  light: { overdue: '#A8241A', soon: '#7F4A00', upcoming: '#1F557D', later: '#4B3B28' },
+  dark: { overdue: '#F4978E', soon: '#F2B45A', upcoming: '#8CC3EC', later: '#D2C3AA' },
+};
+
+/** The ground behind a thing with no photo: a kraft tint with the type's glyph. */
+export const PLATE = {
+  light: { ground: '#EADAB9', rule: 'rgba(90, 60, 25, 0.10)', icon: '#5A4630' },
+  dark: { ground: '#3A3026', rule: 'rgba(243, 233, 216, 0.06)', icon: '#CDB894' },
 };
 
 function buildOverrides(mode) {
   const isDark = mode === 'dark';
   const s = SURFACES[mode];
-  const accent = isDark ? registryDark.main : registryLight.main;
+  const ink = INK[mode];
 
   return {
     palette: {
-      background: { default: s.page, paper: s.paper, card: s.card, raised: s.raised },
+      background: { default: s.desk, paper: s.paper, card: s.card, raised: s.raised, chrome: s.chrome, desk: s.desk },
       text: { primary: s.text, secondary: s.secondary, muted: s.muted },
       divider: s.divider,
       border: s.border,
-      brass: BRASS[mode],
+      safety: SAFETY[mode],
+      tape: TAPE,
       status: STATUS_TONES[mode],
       // The collection's RangeFacet paints its in-range bars with `phosphor`.
-      phosphor: {
-        main: BRASS[mode],
-        glow: isDark ? 'rgba(124, 201, 160, 0.10)' : 'rgba(29, 101, 70, 0.07)',
-      },
-      // The "type plate" behind a thing with no photo: a quiet tint of the accent.
-      plate: {
-        ground: isDark ? '#1F2A23' : '#E7EFE8',
-        rule: isDark ? 'rgba(124, 201, 160, 0.10)' : 'rgba(29, 101, 70, 0.08)',
-        icon: isDark ? '#7CC9A0' : '#2E6B50',
-      },
+      phosphor: { main: isDark ? '#CDB894' : '#7A5B34', glow: isDark ? 'rgba(235, 221, 196, 0.08)' : 'rgba(42, 31, 20, 0.06)' },
+      plate: PLATE[mode],
+      fibre: s.fibre,
+      // Kept for any old reader: the "hardware" colour is now kraft-dark.
+      brass: isDark ? '#CDB894' : '#7A5B34',
     },
     typography: {
       fontFamily: BODY_FONT,
-      h1: { fontFamily: DISPLAY_FONT, fontWeight: 800, letterSpacing: '-0.02em' },
-      h2: { fontFamily: DISPLAY_FONT, fontWeight: 800, letterSpacing: '-0.015em' },
-      h3: { fontFamily: DISPLAY_FONT, fontWeight: 700, letterSpacing: '-0.01em' },
+      h1: { fontFamily: DISPLAY_FONT, fontWeight: 700, letterSpacing: '0' },
+      h2: { fontFamily: DISPLAY_FONT, fontWeight: 700, letterSpacing: '0' },
+      h3: { fontFamily: DISPLAY_FONT, fontWeight: 700, letterSpacing: '0.005em' },
       h4: { fontFamily: DISPLAY_FONT, fontWeight: 700 },
       h5: { fontFamily: DISPLAY_FONT, fontWeight: 700 },
       h6: { fontFamily: DISPLAY_FONT, fontWeight: 700 },
-      overline: { fontSize: '0.75rem', letterSpacing: '0.1em', fontWeight: 700, lineHeight: 1.6 },
+      button: { fontFamily: BODY_FONT, fontWeight: 600, textTransform: 'none', letterSpacing: '0.01em' },
+      // Sentence case everywhere: uppercase belongs to the tape alone.
+      overline: { fontSize: '0.8125rem', letterSpacing: '0.01em', fontWeight: 600, lineHeight: 1.5, textTransform: 'none' },
     },
     components: {
       MuiCssBaseline: {
         styleOverrides: {
-          '::selection': { background: isDark ? 'rgba(124, 201, 160, 0.30)' : 'rgba(29, 101, 70, 0.20)' },
+          body: { backgroundColor: s.desk },
+          '::selection': { background: isDark ? 'rgba(255, 122, 41, 0.35)' : 'rgba(242, 106, 27, 0.30)' },
         },
       },
       MuiCard: {
         styleOverrides: {
           root: {
-            borderRadius: 12,
+            borderRadius: 6,
             backgroundColor: s.card,
             border: `1px solid ${s.divider}`,
-            boxShadow: isDark
-              ? '0 1px 0 rgba(255,255,255,0.03) inset, 0 6px 18px rgba(0,0,0,0.30)'
-              : '0 1px 2px rgba(29,27,23,0.05), 0 4px 14px rgba(29,27,23,0.05)',
+            boxShadow: isDark ? '0 1px 0 rgba(255,255,255,0.03) inset, 0 4px 12px rgba(0,0,0,0.35)' : '0 1px 0 rgba(255,255,255,0.6) inset, 0 2px 6px rgba(60,40,15,0.12)',
           },
+        },
+      },
+      // Fields are card stock on the kraft desk, never see-through.
+      MuiOutlinedInput: {
+        styleOverrides: { root: { backgroundColor: s.paper } },
+      },
+      MuiPaper: {
+        styleOverrides: { root: { backgroundImage: 'none' } },
+      },
+      MuiButton: {
+        styleOverrides: {
+          root: { borderRadius: 6 },
+          containedPrimary: { boxShadow: 'none' },
         },
       },
       MuiListItemButton: {
         styleOverrides: {
-          root: {
-            // Selected rows keep text on the text tokens; the tint and the
-            // inset rule carry "selected" (the sidebar's itemSx adds the rule).
-            '&.Mui-selected': { color: s.text },
-          },
+          root: { '&.Mui-selected': { color: s.text } },
         },
       },
       MuiLink: {
-        styleOverrides: { root: { color: accent, textUnderlineOffset: '0.18em' } },
+        styleOverrides: { root: { color: ink.main, textUnderlineOffset: '0.18em' } },
       },
     },
   };
 }
 
 export function createThingTheme(mode = 'light') {
-  const accent = mode === 'dark' ? registryDark : registryLight;
-  return createGeekSuiteTheme({ mode, accent, overrides: buildOverrides(mode) });
+  return createGeekSuiteTheme({ mode, accent: INK[mode === 'dark' ? 'dark' : 'light'], overrides: buildOverrides(mode) });
 }
 
 export default createThingTheme;

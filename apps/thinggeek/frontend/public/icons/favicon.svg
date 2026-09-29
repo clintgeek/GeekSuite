@@ -1,17 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <!-- Drawn for 16-32px: a kraft tile, a band of black tape, a white T. -->
   <defs>
-    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#236B4C"/><stop offset="1" stop-color="#0E3324"/></linearGradient>
-    <pattern id="rule" width="512" height="28" patternUnits="userSpaceOnUse"><rect y="27" width="512" height="1" fill="#FFFFFF" fill-opacity="0.05"/></pattern>
+    <linearGradient id="t" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3A3632"/><stop offset="0.25" stop-color="#121110"/><stop offset="1" stop-color="#121110"/></linearGradient>
   </defs>
-  <rect width="512" height="512" rx="112" fill="url(#bg)"/>
-  <rect width="512" height="512" rx="112" fill="url(#rule)"/>
-  <g transform="rotate(-14 256 256)">
-    <path d="M178 150 H372 a36 36 0 0 1 36 36 V326 a36 36 0 0 1 -36 36 H178 L96 256 Z" fill="#F2EEE5"/>
-    <circle cx="170" cy="256" r="27" fill="#0E3324"/>
-    <circle cx="170" cy="256" r="27" fill="none" stroke="#D2A857" stroke-width="14"/>
-    <rect x="232" y="214" width="138" height="20" rx="10" fill="#236B4C"/>
-    <rect x="232" y="256" width="104" height="20" rx="10" fill="#236B4C" fill-opacity="0.55"/>
-    <rect x="232" y="298" width="64" height="20" rx="10" fill="#236B4C" fill-opacity="0.35"/>
-  </g>
-  <path d="M143 262 C 110 300, 96 350, 118 408" fill="none" stroke="#D2A857" stroke-width="10" stroke-linecap="round"/>
+  <rect width="32" height="32" rx="7" fill="#C9A574"/>
+  <path d="M1.5 7.5 L3 6 H29 L30.5 7.5 V24.5 L29 26 H3 L1.5 24.5 Z" fill="url(#t)"/>
+  <path d="M8.5 9 H23.5 V13.5 H18.25 V23 H13.75 V13.5 H8.5 Z" fill="#F4F1EA"/>
 </svg>

@@ -1,5 +1,5 @@
 /**
- * Contains — what is directly inside this thing (a location's shelves, the
+ * Inside [VAN] — what is directly inside this thing, under its name on tape (a location's shelves, the
  * Van's jumper cables), each a link to its own page, and "Add here", which
  * opens the add flow with this thing already chosen as where it is.
  *
@@ -11,6 +11,7 @@ import { Box, Button, ButtonBase, Typography } from '@mui/material';
 import { Add as AddIcon } from '@mui/icons-material';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import Section from './Section';
+import DymoTape from '../../components/DymoTape';
 import ThingPhoto from '../../components/ThingPhoto';
 import { coverSrc } from '../../components/thingDisplay';
 import { thingPath } from '../../components/navConfig';
@@ -24,7 +25,13 @@ export default function ContainsSection({ thing }) {
   return (
     <Section
       id="contains"
-      title={contents.length ? `Contains · ${contents.length}` : 'Contains'}
+      title={
+        <>
+          <span>{'Inside '}</span>
+          <DymoTape size="sm" sx={{ minWidth: 0 }}>{thing.name}</DymoTape>
+          {contents.length ? <span>{` · ${contents.length}`}</span> : null}
+        </>
+      }
       action={
         <Button size="small" startIcon={<AddIcon />} onClick={addHere} data-testid="add-here" sx={{ color: 'text.primary', fontWeight: 600 }}>
           Add here
@@ -38,9 +45,9 @@ export default function ContainsSection({ thing }) {
               <ButtonBase
                 component={RouterLink}
                 to={thingPath(t.id, location.search)}
-                sx={{ width: '100%', display: 'flex', alignItems: 'center', gap: 1.25, minHeight: 48, px: 0.5, py: 0.5, borderRadius: 2, justifyContent: 'flex-start', textAlign: 'left', '&:hover': { bgcolor: 'action.hover' } }}
+                sx={{ width: '100%', display: 'flex', alignItems: 'center', gap: 1.25, minHeight: 48, px: 0.5, py: 0.5, borderRadius: '6px', justifyContent: 'flex-start', textAlign: 'left', '&:hover': { bgcolor: 'action.hover' } }}
               >
-                <ThingPhoto src={coverSrc(t)} icon={t.type?.icon} variant="thumb" radius={6} sx={{ width: 40, height: 40, flexShrink: 0 }} />
+                <ThingPhoto src={coverSrc(t)} icon={t.type?.icon} variant="thumb" radius={4} sx={{ width: 40, height: 40, flexShrink: 0 }} />
                 <Box sx={{ minWidth: 0 }}>
                   <Typography noWrap sx={{ fontSize: '0.9375rem', fontWeight: 600, color: 'text.primary' }}>
                     {t.name}

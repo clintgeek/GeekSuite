@@ -42,7 +42,7 @@ export default function NotAMember({ user, onSignOut }) {
         }}
       >
         <TagMark size={56} sx={{ mx: 'auto', mb: 2.5 }} />
-        <Typography component="h1" sx={{ fontFamily: DISPLAY_FONT, fontWeight: 800, fontSize: '1.5rem', lineHeight: 1.2, letterSpacing: '-0.015em', mb: 1.25 }}>
+        <Typography component="h1" sx={{ fontFamily: DISPLAY_FONT, fontWeight: 700, fontSize: '1.5rem', lineHeight: 1.2, mb: 1.25 }}>
           ThingGeek is only open to members of this household
         </Typography>
         <Typography sx={{ color: 'text.secondary', lineHeight: 1.6, mb: 1 }}>

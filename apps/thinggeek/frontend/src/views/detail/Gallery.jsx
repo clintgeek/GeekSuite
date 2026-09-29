@@ -116,10 +116,10 @@ export default function Gallery({ thing, uploads = [], onAddPhoto, onRetry }) {
 
   if (!count) {
     return (
-      <Box sx={{ position: 'relative', height: { xs: 200, md: 240 }, overflow: 'hidden' }}>
-        <TypePlate icon={thing.type?.icon} iconSize="64px" />
-        <Box sx={{ position: 'absolute', inset: 0, display: 'grid', placeItems: 'end center', pb: 2.5 }}>
-          <Button variant="contained" startIcon={<AddPhotoIcon />} onClick={onAddPhoto} sx={{ boxShadow: '0 6px 18px rgba(0,0,0,0.18)' }}>
+      <Box sx={{ position: 'relative', height: { xs: 132, md: '100%' }, minHeight: { md: 240 }, overflow: 'hidden', borderRadius: { xs: 0, md: '6px' } }}>
+        <TypePlate icon={thing.type?.icon} iconSize="56px" sx={{ placeItems: { xs: 'center start', md: 'center' }, pl: { xs: 3, md: 0 } }} />
+        <Box sx={{ position: 'absolute', inset: 0, display: 'grid', placeItems: { xs: 'center end', md: 'end center' }, pr: { xs: 2, md: 0 }, pb: { xs: 0, md: 2.5 } }}>
+          <Button variant="contained" startIcon={<AddPhotoIcon />} onClick={onAddPhoto} sx={{ boxShadow: '0 4px 12px rgba(0,0,0,0.18)' }}>
             Take the first photo
           </Button>
         </Box>
@@ -128,7 +128,8 @@ export default function Gallery({ thing, uploads = [], onAddPhoto, onRetry }) {
   }
 
   return (
-    <Box sx={{ position: 'relative', height: { xs: 260, sm: 320, md: 360 } }} data-testid="gallery">
+    // A strip, not a hero: on a phone the name, place and actions stay above the fold.
+    <Box sx={{ position: 'relative', height: { xs: 196, sm: 260, md: '100%' }, minHeight: { md: 300 }, overflow: 'hidden', borderRadius: { xs: 0, md: '6px' } }} data-testid="gallery">
       <Box
         ref={trackRef}
         onScroll={onScroll}

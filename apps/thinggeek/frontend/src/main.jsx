@@ -6,11 +6,14 @@ import { BrowserRouter } from 'react-router-dom';
 import { registerSW } from 'virtual:pwa-register';
 import { ThemeProvider as UserThemeProvider, useThemeMode } from '@geeksuite/user';
 import { GeekSuiteApolloProvider } from '@geeksuite/api-client';
-// The display face, self-hosted so headings and the wordmark render offline.
-import '@fontsource/manrope/500.css';
-import '@fontsource/manrope/600.css';
-import '@fontsource/manrope/700.css';
-import '@fontsource/manrope/800.css';
+// Label Maker faces, self-hosted so they render offline: Barlow Condensed
+// for the tape and headings, Barlow for everything you read.
+import '@fontsource/barlow/400.css';
+import '@fontsource/barlow/500.css';
+import '@fontsource/barlow/600.css';
+import '@fontsource/barlow/700.css';
+import '@fontsource/barlow-condensed/600.css';
+import '@fontsource/barlow-condensed/700.css';
 import './styles.css';
 import App from './App.jsx';
 import { configureUserPlatform } from './bootstrapUser';

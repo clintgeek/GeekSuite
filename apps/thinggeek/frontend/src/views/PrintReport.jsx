@@ -66,7 +66,7 @@ export function PrintThing({ thing }) {
         </Fact>
       </Box>
       <Box sx={{ textAlign: { xs: 'left', sm: 'right' }, gridColumn: { xs: '2', sm: 'auto' } }}>
-        <Box sx={{ fontSize: '9pt', color: GREY, textTransform: 'uppercase', letterSpacing: '0.08em' }}>Value</Box>
+        <Box sx={{ fontSize: '9pt', color: GREY, fontWeight: 600 }}>Value</Box>
         <Box sx={{ fontSize: '13pt', fontWeight: 700, color: INK }}>{value !== null ? formatMoney(value, thing.value?.currency) : '—'}</Box>
         {thing.value?.asOf ? <Box sx={{ fontSize: '9pt', color: GREY }}>as of {formatCalendarDate(thing.value.asOf)}</Box> : null}
       </Box>

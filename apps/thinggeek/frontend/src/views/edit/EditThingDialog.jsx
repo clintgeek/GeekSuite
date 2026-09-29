@@ -121,7 +121,7 @@ export function validateForm(form, type) {
 function Group({ id, title, hint, children }) {
   return (
     <Box component="section" id={`edit-${id}`} aria-labelledby={`edit-${id}-title`} sx={{ scrollMarginTop: 12, pb: 3, mb: 3, borderBottom: 1, borderColor: 'divider', '&:last-of-type': { borderBottom: 0, mb: 0 } }}>
-      <Typography id={`edit-${id}-title`} component="h3" sx={{ fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'text.secondary', mb: hint ? 0.5 : 1.5 }}>
+      <Typography id={`edit-${id}-title`} component="h3" sx={{ fontSize: '0.875rem', fontWeight: 700, color: 'text.primary', mb: hint ? 0.5 : 1.5 }}>
         {title}
       </Typography>
       {hint ? <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary', mb: 2.25 }}>{hint}</Typography> : null}

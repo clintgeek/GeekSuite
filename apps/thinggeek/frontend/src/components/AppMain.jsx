@@ -1,30 +1,43 @@
 /**
- * The scrolling <main> column.
+ * The scrolling <main> column: the kraft desk every page sits on.
  *
- * Not GeekAppFrame, on purpose: the frame keys its route transition on the
- * top-level path segment, so `/` → `/thing/:id` would unmount the library
- * under the detail sheet (losing its pages and scroll position) just to fade
- * it back in. The detail sheet and the add flow are overlays ON the
- * library, so the library must stay mounted. This keeps the frame's scroll
- * contract and adds a small fade keyed on the real destination instead.
+ * Not GeekAppFrame, on purpose: this keeps the frame's scroll contract with
+ * a small fade keyed on the real destination. Every route is a page now
+ * (a thing and the add screen included, Label Maker 2026-09-29); arriving on
+ * one starts at its top, except the library, which puts itself back where
+ * you left it (useScrollMemory) — so a reset here must not undo that.
  *
  * The element is published as the scroll root so the infinite-scroll
  * sentinel can look ahead inside it (an IntersectionObserver on the viewport
- * cannot see past this container's clip).
+ * cannot see past this container's clip), and so sticky bars inside a page
+ * know what they stick to.
  */
-import React, { createContext, useContext, useState } from 'react';
+import React, { createContext, useContext, useLayoutEffect, useState } from 'react';
 import { Box } from '@mui/material';
+import { fibreImage } from '../theme/theme';
 
 const ScrollRootContext = createContext(null);
 export const useScrollRoot = () => useContext(ScrollRootContext);
 
 export default function AppMain({ children, transitionKey }) {
   const [node, setNode] = useState(null);
+  useLayoutEffect(() => {
+    if (node && transitionKey !== 'library') node.scrollTop = 0;
+  }, [node, transitionKey]);
   return (
     <Box
       component="main"
       ref={setNode}
-      sx={{ flex: 1, minHeight: 0, overflowY: 'auto', overflowX: 'hidden', bgcolor: 'background.default' }}
+      sx={{
+        flex: 1,
+        minHeight: 0,
+        overflowY: 'auto',
+        overflowX: 'hidden',
+        bgcolor: 'background.desk',
+        // Kraft fibre: two faint crossed hatchings, static and cheap.
+        backgroundImage: (t) => fibreImage(t.palette.fibre),
+        backgroundAttachment: 'local',
+      }}
     >
       <ScrollRootContext.Provider value={node}>
         <Box key={transitionKey} sx={{ minHeight: '100%', animation: 'tg-fade-in 180ms ease-out' }}>

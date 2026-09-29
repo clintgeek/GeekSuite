@@ -1,4 +1,8 @@
 // ThingGeek — every surface of the MVP (DOCS/THINGGEEK_PLAN.md "Screens"),
+// in the Label Maker identity (2026-09-29): a phone tab bar (Things · Where ·
+// Add · Attention · More) instead of a drawer, a dense list as the phone's
+// library, Where as a drill-down on the phone, a one-screen Add, and a
+// thing's page as a full page.
 // including where things are: the Where tree, a thing's breadcrumb, Move
 // to…, and Contains (the fixtures are a containment graph — House › Garage ›
 // Van › Jumper cables).
@@ -14,17 +18,20 @@ const click = async (page, h, locator, ms = 700) => {
 };
 
 export const scenes = [
+  // The phone's default is the dense list (thumb, name, type, place tape, attention dot); a desk's is the grid.
   { name: '01-library', goto: '/', wait: 1600 },
   {
-    // The list view: value and next-due columns (a phone folds them under the name).
-    name: '01b-library-list',
+    // The other view, one tap away: covers on a phone, the list (value and next-due columns) on a desk.
+    name: '01b-library-other-view',
     goto: '/',
     wait: 1400,
     async setup(page, h) {
-      if (!(await click(page, h, page.getByRole('button', { name: 'Show as a list' }), 600))) return false;
+      const to = h.isPhone ? 'Show as covers' : 'Show as a list';
+      if (!(await click(page, h, page.getByRole('button', { name: to }), 600))) return false;
     },
     async teardown(page, h) {
-      await click(page, h, page.getByRole('button', { name: 'Show as covers' }), 200);
+      const back = h.isPhone ? 'Show as a list' : 'Show as covers';
+      await click(page, h, page.getByRole('button', { name: back }), 200);
     },
   },
   {
@@ -43,11 +50,26 @@ export const scenes = [
     teardown: (page, h) => h.esc(),
   },
   {
-    name: '02-drawer',
+    // The phone's navigation: the tab bar, with Attention's count. No hamburger anywhere.
+    name: '02-bottom-nav',
+    goto: '/attention',
+    viewports: ['phone'],
+    wait: 1500,
+    async setup(page) {
+      if (!(await page.getByTestId('bottom-tabs').count())) throw new Error('no tab bar');
+      if (await page.locator('[data-geek-topbar="menu"]').count()) throw new Error('a hamburger is back');
+      if (!(await page.getByTestId('attention-badge').count())) throw new Error('no attention count on the tab');
+    },
+  },
+  {
+    // More: Types, Insurance report, Trash, Saved views and Settings — each one's only home on a phone.
+    name: '02b-more-sheet',
     goto: '/',
     viewports: ['phone'],
+    wait: 1400,
     async setup(page, h) {
-      if (!(await click(page, h, page.locator('[data-geek-topbar="menu"]'), 600))) return false;
+      if (!(await click(page, h, page.getByTestId('bottom-tabs').getByRole('button', { name: 'More' }), 700))) return false;
+      if (!(await page.getByTestId('nav-more').count())) throw new Error('the More sheet did not open');
     },
     teardown: (page, h) => h.esc(),
   },
@@ -88,11 +110,25 @@ export const scenes = [
     teardown: (page, h) => h.esc(),
   },
   {
-    // Deep link: the library underneath, Wendy's page on top — gallery, breadcrumb, Contains, readiness.
+    // Deep link: Wendy's page, a full page — the photo strip, name, tape breadcrumb and actions above the fold.
     name: '05-detail',
     goto: '/thing/th1',
     wait: 1800,
-    teardown: (page, h) => h.esc(),
+    async setup(page) {
+      if (await page.getByRole('dialog').count()) throw new Error('the thing page is a sheet again');
+      if (!(await page.getByTestId('thing-page').count())) throw new Error('no thing page');
+    },
+  },
+  {
+    // The page scrolled: the action bar pins to the top on a phone.
+    name: '05a-detail-scrolled',
+    goto: '/thing/th1',
+    viewports: ['phone'],
+    wait: 1800,
+    async setup(page, h) {
+      await page.locator('main').evaluate((el) => el.scrollTo({ top: 520 }));
+      await h.settle(400);
+    },
   },
   {
     // Further down Wendy's page: Details (masked hull + registration), Dates, Accessories.
@@ -247,55 +283,65 @@ export const scenes = [
       await h.esc();
     },
   },
-  { name: '07-add-photo-step', goto: '/add', wait: 1200, teardown: (page, h) => h.esc() },
+  // Add, on one screen: photo slot, name, type chips, where, Save / Save & add another.
+  { name: '07-add', goto: '/add', wait: 1400 },
   {
-    name: '07b-add-type-step',
+    // The type chips opened out: most-used first, then everything under "More types".
+    name: '07b-add-more-types',
     goto: '/add',
-    wait: 1200,
+    wait: 1400,
     async setup(page, h) {
-      if (!(await click(page, h, page.getByRole('button', { name: /Skip — no photo yet/ }), 600))) return false;
+      if (!(await click(page, h, page.getByRole('button', { name: 'More types' }), 500))) return false;
     },
-    teardown: (page, h) => h.esc(),
   },
   {
-    name: '07c-add-name-step',
+    // Filled in, with the keyboard down: the Save bar at the foot.
+    name: '07c-add-filled',
     goto: '/add',
-    wait: 1200,
+    wait: 1400,
     async setup(page, h) {
-      if (!(await click(page, h, page.getByRole('button', { name: /Skip — no photo yet/ }), 500))) return false;
-      if (!(await click(page, h, page.getByTestId('type-card').filter({ hasText: 'Boat' }), 600))) return false;
-      await page.getByLabel('Name *').fill('Wendy');
+      await page.getByLabel('Name *').fill('DeWalt impact driver');
+      if (!(await click(page, h, page.getByTestId('type-chips').getByRole('button', { name: 'Tool' }), 500))) return false;
+      await page.getByLabel('Name *').blur();
       await h.settle(300);
     },
+  },
+  {
+    // The place picker: locations and containers only, with a new location inline.
+    name: '07d-add-where-picker',
+    goto: '/add',
+    wait: 1400,
+    async setup(page, h) {
+      if (!(await click(page, h, page.getByRole('button', { name: /^Where it is: / }), 800))) return false;
+    },
     teardown: (page, h) => h.esc(),
   },
   {
-    // The add flow's where step: locations and containers only, with a new location inline.
-    name: '07d-add-where-step',
-    goto: '/add',
-    wait: 1200,
-    async setup(page, h) {
-      if (!(await click(page, h, page.getByRole('button', { name: /Skip — no photo yet/ }), 500))) return false;
-      if (!(await click(page, h, page.getByTestId('type-card').filter({ hasText: 'Tool' }), 600))) return false;
-      if (!(await click(page, h, page.getByRole('button', { name: /^Where it is: / }), 700))) return false;
-    },
-    teardown: async (page, h) => {
-      await h.esc();
-      await h.esc();
-    },
-  },
-  {
-    // "Add here" from the Van: the add flow arrives already pointed at it.
+    // "Add here" from the Van: the add screen arrives already pointed at it.
     name: '07e-add-here',
     goto: '/thing/th13',
     wait: 1800,
     async setup(page, h) {
-      if (!(await click(page, h, page.getByTestId('add-here'), 800))) return false;
-      if (!(await click(page, h, page.getByRole('button', { name: /Skip — no photo yet/ }), 500))) return false;
-      if (!(await click(page, h, page.getByTestId('type-card').filter({ hasText: 'Tool' }), 600))) return false;
+      if (!(await click(page, h, page.getByTestId('add-here'), 900))) return false;
       if (!(await page.getByRole('button', { name: 'Where it is: House › Garage › Van. Change' }).count())) throw new Error('Add here did not preset the Van');
     },
-    teardown: (page, h) => h.esc(),
+  },
+  {
+    // Save & add another: saved, still here — the same place and type, the name and photo cleared.
+    name: '07f-add-another',
+    goto: '/thing/th13',
+    wait: 1800,
+    async setup(page, h) {
+      if (!(await click(page, h, page.getByTestId('add-here'), 900))) return false;
+      await page.getByLabel('Name *').fill('Tow strap');
+      if (!(await click(page, h, page.getByTestId('type-chips').getByRole('button', { name: 'Tool' }), 400))) return false;
+      if (!(await click(page, h, page.getByRole('button', { name: 'Save & add another' }), 1200))) return false;
+      if ((await page.getByLabel('Name *').inputValue()) !== '') throw new Error('the name was not cleared');
+      if ((await page.getByTestId('type-chips').getByRole('button', { name: 'Tool' }).getAttribute('aria-pressed')) !== 'true') throw new Error('the type was not kept');
+      if (!(await page.getByRole('button', { name: 'Where it is: House › Garage › Van. Change' }).count())) throw new Error('the place was not kept');
+      await page.getByLabel('Name *').blur();
+      await h.settle(300);
+    },
   },
   {
     name: '08-edit-form',
@@ -327,12 +373,36 @@ export const scenes = [
     },
   },
   { name: '09-attention', goto: '/attention', wait: 1500 },
-  // Where: the containment tree (it replaced Places; /places redirects here).
+  // Where. A phone drills down (top level, then one place at a time); a desk shows the tree.
   { name: '10-where', goto: '/where', wait: 1400 },
   {
-    // Expanded to the items kept directly in the Van and the safe; the two groups below opened.
+    // One level in: the House's places, then what's kept directly in it, under a tape breadcrumb.
+    name: '10a-where-level',
+    goto: '/where?at=p-house',
+    viewports: ['phone'],
+    wait: 1400,
+    async setup(page) {
+      if ((await page.getByTestId('where-level').getAttribute('data-at')) !== 'p-house') throw new Error('did not drill into the House');
+    },
+  },
+  {
+    // Two levels in: the Garage — its shelf, vehicles and boat — with Add here / Move in place.
+    name: '10a2-where-level-garage',
+    goto: '/where',
+    viewports: ['phone'],
+    wait: 1400,
+    async setup(page, h) {
+      // Walk it the way a thumb does: House, then Garage.
+      if (!(await click(page, h, page.getByRole('link', { name: /^House: .*Look inside$/ }), 800))) return false;
+      if (!(await click(page, h, page.getByRole('link', { name: /^Garage: .*Look inside$/ }), 800))) return false;
+      if ((await page.getByTestId('where-level').getAttribute('data-at')) !== 'p-garage') throw new Error('did not drill into the Garage');
+    },
+  },
+  {
+    // The desk's tree, expanded to the items kept directly in the Van and the safe; the two groups below opened.
     name: '10b-where-expanded',
     goto: '/where',
+    viewports: ['desktop'],
     wait: 1400,
     async setup(page, h) {
       if (!(await click(page, h, page.getByRole('button', { name: /^Show .* kept directly in Van$/ }), 400))) return false;
@@ -342,8 +412,9 @@ export const scenes = [
     },
   },
   {
+    // A place's ⋯ menu (a phone finds the Garage one level into the House; a desk, in the tree).
     name: '10c-where-menu',
-    goto: '/where',
+    goto: '/where?at=p-house',
     wait: 1400,
     async setup(page, h) {
       if (!(await click(page, h, page.getByRole('button', { name: 'Garage: more' }), 500))) return false;
@@ -352,7 +423,7 @@ export const scenes = [
   },
   {
     name: '10d-where-move',
-    goto: '/where',
+    goto: '/where?at=p-garage',
     wait: 1400,
     async setup(page, h) {
       if (!(await click(page, h, page.getByRole('button', { name: 'Van: more' }), 400))) return false;
@@ -362,7 +433,7 @@ export const scenes = [
   },
   {
     name: '10e-where-add-location',
-    goto: '/where',
+    goto: '/where?at=p-house',
     wait: 1400,
     async setup(page, h) {
       if (!(await click(page, h, page.getByRole('button', { name: 'Garage: more' }), 400))) return false;

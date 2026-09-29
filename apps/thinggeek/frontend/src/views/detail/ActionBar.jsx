@@ -1,7 +1,8 @@
 /**
- * The sticky action bar under the gallery: Edit · Add photo · Add document
- * · More. Four equal 52px targets with 12px labels, pinned as the sheet
- * scrolls.
+ * The action bar under a thing's name: Edit · Add photo · Add document ·
+ * More. Four equal 52px targets with 12px labels. On a phone it pins to the
+ * top of the page as you scroll (the page is a page now, not a sheet, so
+ * there is no ✕ to keep clear of).
  */
 import React from 'react';
 import { Box, Button } from '@mui/material';
@@ -32,20 +33,20 @@ export default function ActionBar({ onEdit, onAddPhoto, onAddDocument, onMore })
     <Box
       data-testid="detail-actions"
       sx={{
-        position: 'sticky',
+        position: { xs: 'sticky', md: 'static' },
         top: 0,
         zIndex: 2,
         display: 'grid',
         gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
         gap: 0.5,
-        // The sheet's ✕ floats top-right; when the bar is pinned it must not sit under it.
-        pl: { xs: 1, md: 2 },
-        pr: { xs: 7.5, md: 8 },
+        px: { xs: 1, md: 0.5 },
         py: 0.5,
         bgcolor: 'background.paper',
-        borderTop: 1,
-        borderBottom: 1,
-        borderColor: 'divider',
+        border: { xs: 0, md: 1 },
+        borderTop: { xs: 1 },
+        borderBottom: { xs: 1 },
+        borderColor: { xs: 'border', md: 'border' },
+        borderRadius: { xs: 0, md: '6px' },
       }}
     >
       <Button onClick={onEdit} sx={BAR_BUTTON_SX}>

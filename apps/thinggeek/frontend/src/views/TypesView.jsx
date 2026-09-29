@@ -242,7 +242,7 @@ export function TypeEditorDialog({ open, type, onClose }) {
       <Box data-testid="type-editor">
         <TextField fullWidth label="Name *" value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} inputProps={{ maxLength: 60 }} placeholder="Trailer" />
 
-        <Typography component="h3" id="type-kind-label" sx={{ fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'text.secondary', mt: 3, mb: 1 }}>
+        <Typography component="h3" id="type-kind-label" sx={{ fontSize: '0.875rem', fontWeight: 700, color: 'text.primary', mt: 3, mb: 1 }}>
           What it is
         </Typography>
         <Box role="radiogroup" aria-labelledby="type-kind-label" sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' }, gap: 1 }}>
@@ -268,7 +268,7 @@ export function TypeEditorDialog({ open, type, onClose }) {
           })}
         </Box>
 
-        <Typography component="h3" id="type-icon-label" sx={{ fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'text.secondary', mt: 3, mb: 1 }}>
+        <Typography component="h3" id="type-icon-label" sx={{ fontSize: '0.875rem', fontWeight: 700, color: 'text.primary', mt: 3, mb: 1 }}>
           Icon
         </Typography>
         <Box role="radiogroup" aria-labelledby="type-icon-label" sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(44px, 1fr))', gap: 0.5 }}>
@@ -289,7 +289,7 @@ export function TypeEditorDialog({ open, type, onClose }) {
           })}
         </Box>
 
-        <Typography component="h3" sx={{ fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'text.secondary', mt: 3, mb: 0.5 }}>
+        <Typography component="h3" sx={{ fontSize: '0.875rem', fontWeight: 700, color: 'text.primary', mt: 3, mb: 0.5 }}>
           Fields
         </Typography>
         <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary', mb: 1.5 }}>
@@ -377,7 +377,7 @@ export default function TypesView() {
                   </Box>
                   <Box sx={{ flex: 1, minWidth: 0 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                      <Typography sx={{ fontFamily: DISPLAY_FONT, fontWeight: 800, fontSize: '1.0625rem', color: 'text.primary' }}>{t.name}</Typography>
+                      <Typography sx={{ fontFamily: DISPLAY_FONT, fontWeight: 700, fontSize: '1.0625rem', color: 'text.primary' }}>{t.name}</Typography>
                       {t.builtIn ? <Chip label="Starter" size="small" variant="outlined" sx={{ height: 22, color: 'text.secondary', borderColor: 'border' }} /> : null}
                       {t.kind && t.kind !== 'item' ? <Chip label={KIND_LABELS[t.kind]?.one ?? t.kind} size="small" variant="outlined" sx={{ height: 22, color: 'text.secondary', borderColor: 'border' }} /> : null}
                     </Box>

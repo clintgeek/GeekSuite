@@ -38,7 +38,7 @@ export default function AddFileSheet({ open, kind = 'photo', initialRole, roles,
 
   return (
     <GeekSheet open={open} onClose={onClose} title={isPhoto ? 'Add a photo' : 'Add a document'} description={thingName}>
-      <Typography component="h3" sx={{ fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'text.secondary', mb: 1 }}>
+      <Typography component="h3" sx={{ fontSize: '0.875rem', fontWeight: 700, color: 'text.primary', mb: 1 }}>
         {isPhoto ? 'This photo shows' : 'This document is'}
       </Typography>
       <RoleChips roles={roles} value={role} onChange={setRole} label={isPhoto ? 'Photo role' : 'Document role'} labelFor={isPhoto ? photoRoleLabel : documentRoleLabel} />

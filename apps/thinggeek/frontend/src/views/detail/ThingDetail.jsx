@@ -1,23 +1,25 @@
 /**
- * `/thing/:id` — a thing's page, as a sheet over the library (full-height
- * bottom sheet on a phone, a dialog at md+; GeekSheet decides). Deep-
- * linkable: a direct load renders the library underneath and this on top;
- * closing goes back to the library with its filters intact.
+ * `/thing/:id` — a thing's page. A PAGE on every size (Label Maker,
+ * 2026-09-29), not a sheet over the library: on a phone, a photo STRIP on
+ * top (not a giant hero) so the name, the tape breadcrumb, the actions and
+ * the first details are above the fold; at md+, the photo and the header
+ * side by side, the sections in two columns below. Back returns to wherever
+ * you came from (the library with its filters, a Where level, Attention).
  *
  * The query reads through the cache first (cachePolicies: Query.thing), so a
  * card tap paints the name and cover at once and the rest fills in.
  *
  * Everything under the header is keyed by the thing's id, so a revealed
- * serial re-masks the moment you move to another thing (or close the sheet).
+ * serial re-masks the moment you move to another thing (or leave the page).
  *
- * Where it is: the header's breadcrumb (House › Garage › Van) and "Move
- * to…"; a location or container also lists what it Contains, with Add here.
+ * Where it is: the header's tape breadcrumb (HOUSE › GARAGE › VAN) and
+ * "Move to…"; a location or container also lists what's Inside, with Add here.
  */
 import React, { useRef, useState } from 'react';
-import { Box, Button, CircularProgress, Typography } from '@mui/material';
+import { Box, Button, CircularProgress } from '@mui/material';
 import { useQuery } from '@apollo/client';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
-import { GeekEmptyState, GeekSheet, useToast } from '@geeksuite/ui';
+import { GeekEmptyState, useToast } from '@geeksuite/ui';
 import { GET_THING } from '../../graphql/queries';
 import { useThingActions } from '../../hooks/useThingActions';
 import { useVocabulary } from '../../hooks/useThingMeta';
@@ -25,8 +27,7 @@ import { useUploads } from '../../hooks/useUploads';
 import { isNotMemberError, reportNotMember } from '../../membership';
 import TagMark from '../../components/TagMark';
 import { MoveSheet } from '../../components/WherePicker';
-import { libraryPath } from '../../components/navConfig';
-import { visuallyHidden } from '../../utils/a11y';
+import { goBack } from '../../utils/goBack';
 import EditThingDialog from '../edit/EditThingDialog';
 import ActionBar from './ActionBar';
 import AddFileSheet from './AddFileSheet';
@@ -49,10 +50,15 @@ export function ThingDetailBody({ thing, onPanel, onFix, uploads, onRetry }) {
   const docUploads = uploads.filter((u) => u.kind === 'document');
   const edit = (focus) => () => onPanel('edit', focus);
   return (
-    <>
-      <Gallery thing={thing} uploads={photoUploads} onAddPhoto={() => onPanel('photo')} onRetry={onRetry} />
-      <DetailHeader thing={thing} onMove={() => onPanel('move')} />
-      <ActionBar onEdit={edit()} onAddPhoto={() => onPanel('photo')} onAddDocument={() => onPanel('document')} onMore={() => onPanel('more')} />
+    <Box component="article" aria-labelledby="thing-name" data-testid="thing-page" sx={{ maxWidth: 1120, mx: 'auto', px: { xs: 0, md: 3 }, pt: { xs: 0, md: 3 } }}>
+      <Box sx={{ display: { xs: 'block', md: 'grid' }, gridTemplateColumns: { md: 'minmax(0, 1fr) minmax(0, 1fr)' }, gap: 3, alignItems: 'stretch' }}>
+        <Gallery thing={thing} uploads={photoUploads} onAddPhoto={() => onPanel('photo')} onRetry={onRetry} />
+        {/* display:contents on a phone, so the action bar can pin to the page, not to this column. */}
+        <Box sx={{ display: { xs: 'contents', md: 'flex' }, flexDirection: 'column', justifyContent: 'flex-end', gap: 1.5, minWidth: 0 }}>
+          <DetailHeader thing={thing} onMove={() => onPanel('move')} />
+          <ActionBar onEdit={edit()} onAddPhoto={() => onPanel('photo')} onAddDocument={() => onPanel('document')} onMore={() => onPanel('more')} />
+        </Box>
+      </Box>
       <Box
         key={thing.id}
         sx={{
@@ -60,7 +66,8 @@ export function ThingDetailBody({ thing, onPanel, onFix, uploads, onRetry }) {
           gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'minmax(0, 1.15fr) minmax(0, 1fr)' },
           alignItems: 'start',
           gap: 1.5,
-          p: { xs: 1.5, md: 2 },
+          px: { xs: 1.5, md: 0 },
+          pt: { xs: 1.5, md: 3 },
           pb: 'calc(24px + env(safe-area-inset-bottom))',
         }}
       >
@@ -77,7 +84,7 @@ export function ThingDetailBody({ thing, onPanel, onFix, uploads, onRetry }) {
           <DocumentsSection documents={thing.documents ?? []} uploads={docUploads} onAdd={() => onPanel('document')} onRetry={onRetry} />
         </Box>
       </Box>
-    </>
+    </Box>
   );
 }
 
@@ -103,7 +110,7 @@ export default function ThingDetail() {
   const thing = data?.thing ?? null;
   const complete = Boolean(thing && thing.fields);
 
-  const close = () => navigate(libraryPath(location.search));
+  const close = () => goBack(navigate, location);
   const openPanel = (name, arg = null) => {
     setPanelArg(arg);
     setPanel(name);
@@ -139,7 +146,7 @@ export default function ThingDetail() {
     content = (
       <GeekEmptyState
         icon={<TagMark size={44} />}
-        title={error ? "This didn't load" : 'Not in the ledger'}
+        title={error ? "This didn't load" : 'Not in the inventory'}
         description={error ? 'The server did not answer. Try again in a moment.' : "This thing isn't in the household's library — it may be in the Trash."}
         action={
           <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center', flexWrap: 'wrap' }}>
@@ -152,8 +159,8 @@ export default function ThingDetail() {
                 Open the Trash
               </Button>
             )}
-            <Button variant="contained" onClick={close}>
-              Back to the library
+            <Button variant="contained" onClick={() => navigate('/')}>
+              Back to your things
             </Button>
           </Box>
         }
@@ -166,28 +173,7 @@ export default function ThingDetail() {
 
   return (
     <>
-      <GeekSheet
-        open
-        onClose={close}
-        snap="full"
-        maxWidth="md"
-        headerSx={{
-          p: 0,
-          minHeight: 0,
-          zIndex: 3,
-          '& [data-geek-sheet="close"]': {
-            bgcolor: 'rgba(17, 16, 13, 0.72)',
-            color: '#FFFFFF',
-            backdropFilter: 'blur(6px)',
-            '&:hover': { bgcolor: 'rgba(17, 16, 13, 0.9)' },
-          },
-        }}
-        bodySx={{ p: 0, px: 0, bgcolor: 'background.paper' }}
-        dialogProps={{ PaperProps: { sx: { height: 'min(92vh, 1040px)' } } }}
-        title={<Typography component="p" sx={visuallyHidden}>{thing?.name || 'Thing details'}</Typography>}
-      >
-        {content}
-      </GeekSheet>
+      {content}
 
       <input
         ref={cameraRef}

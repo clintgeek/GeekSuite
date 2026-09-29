@@ -73,7 +73,7 @@ function DueGroup({ id, title, things, empty }) {
   return (
     <Box component="section" aria-labelledby={`${id}-heading`} sx={{ minWidth: 0, border: 1, borderColor: 'divider', borderRadius: 3, bgcolor: 'background.card', p: { xs: 1.5, md: 2 } }}>
       <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', px: 0.5, mb: 0.5 }}>
-        <Typography id={`${id}-heading`} component="h2" sx={{ fontFamily: DISPLAY_FONT, fontWeight: 800, fontSize: '1.0625rem' }}>
+        <Typography id={`${id}-heading`} component="h2" sx={{ fontFamily: DISPLAY_FONT, fontWeight: 700, fontSize: '1.0625rem' }}>
           {title}
         </Typography>
         <Typography component="span" sx={{ fontSize: '0.8125rem', color: 'text.secondary', fontVariantNumeric: 'tabular-nums' }}>
@@ -122,7 +122,7 @@ export default function AttentionView() {
         <DueGroup id="due-soon" title="Due in the next 30 days" things={a.dueSoon} empty={loading ? 'Loading…' : 'Nothing due in the next month.'} />
       </Box>
 
-      <Typography component="h2" sx={{ fontFamily: DISPLAY_FONT, fontWeight: 800, fontSize: '1.25rem', mb: 0.5 }}>
+      <Typography component="h2" sx={{ fontFamily: DISPLAY_FONT, fontWeight: 700, fontSize: '1.25rem', mb: 0.5 }}>
         Gaps in the record
       </Typography>
       <Typography sx={{ color: 'text.secondary', fontSize: '0.875rem', mb: 2 }}>Each opens the library showing exactly those things.</Typography>
@@ -158,7 +158,7 @@ export default function AttentionView() {
                 <Box sx={{ flex: 1, minWidth: 0 }}>
                   <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 1 }}>
                     <Typography sx={{ fontWeight: 700, fontSize: '0.9375rem', color: 'text.primary' }}>{g.title}</Typography>
-                    <Typography component="span" sx={{ fontFamily: DISPLAY_FONT, fontWeight: 800, fontSize: '1.375rem', lineHeight: 1, color: none ? 'text.secondary' : 'text.primary', fontVariantNumeric: 'tabular-nums' }}>
+                    <Typography component="span" sx={{ fontFamily: DISPLAY_FONT, fontWeight: 700, fontSize: '1.375rem', lineHeight: 1, color: none ? 'text.secondary' : 'text.primary', fontVariantNumeric: 'tabular-nums' }}>
                       {g.count ?? '–'}
                     </Typography>
                   </Box>

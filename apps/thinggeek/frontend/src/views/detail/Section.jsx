@@ -1,6 +1,13 @@
-/** A titled block of the detail sheet: a small-caps heading, an optional action, the body. */
+/**
+ * A titled block of a thing's page: a card-stock sheet with a sentence-case
+ * heading (uppercase belongs to the tape alone), an optional action, the
+ * body. `title` may be a node — Contains puts the place's tape in it.
+ */
 import React from 'react';
 import { Box, Typography } from '@mui/material';
+import { DISPLAY_FONT } from '../../theme/theme';
+
+export const SECTION_TITLE_SX = { fontFamily: DISPLAY_FONT, fontSize: '1.125rem', fontWeight: 700, lineHeight: 1.25, color: 'text.primary' };
 
 export default function Section({ title, action, children, id, sx }) {
   const headingId = id ? `${id}-heading` : undefined;
@@ -9,14 +16,10 @@ export default function Section({ title, action, children, id, sx }) {
       component="section"
       aria-labelledby={headingId}
       data-section={id}
-      sx={{ border: 1, borderColor: 'divider', borderRadius: 3, bgcolor: 'background.card', p: 2, minWidth: 0, scrollMarginTop: 72, ...sx }}
+      sx={{ border: 1, borderColor: 'border', borderRadius: '6px', bgcolor: 'background.paper', p: 2, minWidth: 0, scrollMarginTop: 72, boxShadow: '0 1px 3px rgba(40, 25, 10, 0.10)', ...sx }}
     >
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 1, minHeight: 32 }}>
-        <Typography
-          id={headingId}
-          component="h3"
-          sx={{ fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'text.secondary' }}
-        >
+        <Typography id={headingId} component="h2" sx={{ ...SECTION_TITLE_SX, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.75, minWidth: 0 }}>
           {title}
         </Typography>
         {action}

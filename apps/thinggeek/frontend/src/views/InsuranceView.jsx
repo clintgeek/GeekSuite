@@ -48,8 +48,8 @@ import PrintReport from './PrintReport';
 function Stat({ label, value, sub }) {
   return (
     <Box sx={{ p: 2, borderRadius: 3, border: 1, borderColor: 'divider', bgcolor: 'background.card', minWidth: 0 }}>
-      <Typography sx={{ fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'text.secondary' }}>{label}</Typography>
-      <Typography sx={{ fontFamily: DISPLAY_FONT, fontWeight: 800, fontSize: { xs: '1.5rem', md: '1.75rem' }, lineHeight: 1.15, mt: 0.5, fontVariantNumeric: 'tabular-nums' }}>{value}</Typography>
+      <Typography sx={{ fontSize: '0.875rem', fontWeight: 700, color: 'text.primary' }}>{label}</Typography>
+      <Typography sx={{ fontFamily: DISPLAY_FONT, fontWeight: 700, fontSize: { xs: '1.5rem', md: '1.75rem' }, lineHeight: 1.15, mt: 0.5, fontVariantNumeric: 'tabular-nums' }}>{value}</Typography>
       {sub ? <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary', mt: 0.25 }}>{sub}</Typography> : null}
     </Box>
   );
@@ -190,7 +190,7 @@ export default function InsuranceView() {
   }, [client, filterKey]);
 
   const generatedAt = useMemo(() => new Date(), []);
-  const scopeText = scopeChips.length ? scopeChips.map((c) => `${c.group}: ${c.label}`).join(' · ') : 'Everything in the ledger';
+  const scopeText = scopeChips.length ? scopeChips.map((c) => `${c.group}: ${c.label}`).join(' · ') : 'Everything in the inventory';
 
   const csv = () => {
     try {
@@ -256,7 +256,7 @@ export default function InsuranceView() {
         <Box sx={{ py: 4 }} aria-busy="true">
           <LinearProgress variant={rows.total ? 'determinate' : 'indeterminate'} value={rows.total ? (rows.loaded / rows.total) * 100 : undefined} aria-label="Loading the report" sx={{ mb: 1.5, borderRadius: 1 }} />
           <Typography sx={{ fontSize: '0.875rem', color: 'text.secondary', textAlign: 'center' }}>
-            {rows.total ? `Gathering ${rows.loaded} of ${rows.total}…` : 'Gathering the ledger…'}
+            {rows.total ? `Gathering ${rows.loaded} of ${rows.total}…` : 'Gathering everything…'}
           </Typography>
         </Box>
       ) : rows.things.length ? (

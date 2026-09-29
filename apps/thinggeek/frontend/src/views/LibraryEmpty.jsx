@@ -43,8 +43,8 @@ export default function LibraryEmpty({ firstRun, onAdd, onClear }) {
     return (
       <Frame wide>
         <TagMark size={64} sx={{ mx: 'auto', mb: 2.5 }} />
-        <Typography component="h2" sx={{ fontFamily: DISPLAY_FONT, fontWeight: 800, fontSize: { xs: '1.5rem', md: '1.75rem' }, letterSpacing: '-0.015em', mb: 1.25 }}>
-          Start the household ledger
+        <Typography component="h2" sx={{ fontFamily: DISPLAY_FONT, fontWeight: 700, fontSize: { xs: '1.75rem', md: '2rem' }, mb: 1.25 }}>
+          Start the household inventory
         </Typography>
         <Typography sx={{ color: 'text.secondary', mb: 3, lineHeight: 1.6, fontSize: '1rem', maxWidth: 460, mx: 'auto' }}>
           Start with the things you'd hate to lose — the boat, the guns, the good tools. A photo and where it is is enough to begin.
@@ -64,7 +64,7 @@ export default function LibraryEmpty({ firstRun, onAdd, onClear }) {
         >
           {STEPS.map(([title, text], i) => (
             <Box component="li" key={title} sx={{ p: 1.5, borderRadius: 2, border: 1, borderColor: 'divider', bgcolor: 'background.raised' }}>
-              <Typography component="span" sx={{ display: 'block', fontFamily: DISPLAY_FONT, fontWeight: 800, fontSize: '0.75rem', letterSpacing: '0.08em', color: 'primary.main', mb: 0.5 }}>
+              <Typography component="span" sx={{ display: 'block', fontFamily: DISPLAY_FONT, fontWeight: 700, fontSize: '0.75rem', letterSpacing: '0.08em', color: 'primary.main', mb: 0.5 }}>
                 STEP {i + 1}
               </Typography>
               <Typography sx={{ fontWeight: 700, fontSize: '0.9375rem', mb: 0.25 }}>{title}</Typography>

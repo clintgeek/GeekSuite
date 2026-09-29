@@ -1,83 +1,81 @@
 /**
- * `/add` — adding a thing, phone-first, in three steps:
+ * `/add` — adding a thing, on ONE screen (Label Maker, 2026-09-29; it was a
+ * three-step wizard that offered Skip twice):
  *
- *   1. Photo   the camera opens on the back lens (capture="environment");
- *              say what the photo shows (overview / ID plate / receipt).
- *              Optional — "Skip, no photo yet".
- *   2. Type    a grid of the household's types (the starter types to begin).
- *   3. Name    + where it is (locations and containers only, with a new
- *              location made inline) + tags. "Add here" on a thing page or
- *              the Where page arrives with it already chosen
- *              (location.state.parentId).
+ *   photo slot    camera (back lens) or a file; optional, so there is no
+ *                 Skip. Once there's a photo, say what it shows (overview /
+ *                 ID plate / receipt).
+ *   name          a name you'd say out loud.
+ *   type          chips, the household's most-used types first, then
+ *                 "More types" for the rest.
+ *   where         the place picker, defaulting to the last place you added
+ *                 something (or the one "Add here" came from).
+ *   Save          lands on the new thing's page.
+ *   Save & add    stays here with the same place and type, the photo and
+ *   another       name cleared, the name field focused — for walking a
+ *                 shelf.
  *
- * Create → the thing is made, the sheet lands on its page, and the photo
- * uploads there with a progress bar (hooks/useUploads.jsx — it keeps going
- * whatever the person does next, and a failure offers Retry on the page).
- * Details can be filled in later; that's the point.
+ * Phone first: the Save bar is fixed to the bottom and rides ABOVE the
+ * on-screen keyboard (hooks/useKeyboardInset.js), so typing a name never
+ * hides Save. The tab bar steps aside on this screen (navConfig
+ * hidesTabBar). md+: the same form in a column, the bar at its foot.
+ *
+ * Create → the thing is made and the photo uploads onto it in the
+ * background (hooks/useUploads.jsx — it keeps going whatever you do next,
+ * and a failure offers Retry on the thing's page).
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Box, Button, ButtonBase, CircularProgress, TextField, Typography } from '@mui/material';
+import { Box, Button, CircularProgress, Portal, TextField, ToggleButton, ToggleButtonGroup, Typography, useMediaQuery, useTheme } from '@mui/material';
 import {
-  ArrowBack as BackIcon,
-  CheckCircle as SelectedIcon,
+  CloseRounded as RemoveIcon,
+  ExpandMore as MoreIcon,
   FolderOpenOutlined as FileIcon,
   PhotoCameraOutlined as CameraIcon,
 } from '@mui/icons-material';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { GeekDialog, useToast } from '@geeksuite/ui';
+import { useToast } from '@geeksuite/ui';
 import WherePicker from '../../components/WherePicker';
 import RoleChips from '../../components/RoleChips';
 import TagInput from '../../components/TagInput';
 import TypeIcon from '../../components/TypeIcon';
-import { libraryPath, thingPath } from '../../components/navConfig';
+import { PageFrame } from '../../components/PageHeader';
+import { thingPath } from '../../components/navConfig';
 import { useThingActions } from '../../hooks/useThingActions';
-import { useThingTypes } from '../../hooks/useThingMeta';
+import { useThingTree, useThingTypes } from '../../hooks/useThingMeta';
 import { useUploads } from '../../hooks/useUploads';
+import useKeyboardInset from '../../hooks/useKeyboardInset';
 import { DISPLAY_FONT } from '../../theme/theme';
+import { chipGroupSx } from '../../theme/chipStyles';
 import { photoRoleLabel } from '../../utils/vocab';
 import { buildAttributes } from '../../utils/attributes';
 import { hasValue } from '../../utils/identifiers';
+import { readPref, writePref } from '../../utils/storage';
+import { goBack } from '../../utils/goBack';
+import { visuallyHidden } from '../../utils/a11y';
 import AttributeField from '../edit/AttributeField';
 import { PHOTO_ACCEPT } from '../detail/AddFileSheet';
 
-const STEPS = ['Photo', 'Type', 'Name & where'];
 const ADD_ROLES = ['overview', 'id-plate', 'receipt'];
+export const LAST_PLACE_KEY = 'thinggeek.lastPlace';
+/** How many types show before "More types". */
+export const TOP_TYPES = 6;
 
-function StepHeader({ step }) {
-  return (
-    <Box component="ol" aria-label="Steps" sx={{ listStyle: 'none', m: 0, p: 0, display: 'flex', gap: 0.75, mb: 2.5 }}>
-      {STEPS.map((s, i) => {
-        const state = i < step ? 'done' : i === step ? 'current' : 'todo';
-        return (
-          <Box
-            component="li"
-            key={s}
-            aria-current={state === 'current' ? 'step' : undefined}
-            sx={{ flex: 1, minWidth: 0 }}
-          >
-            <Box sx={{ height: 4, borderRadius: 2, bgcolor: state === 'todo' ? 'divider' : 'primary.main', mb: 0.75 }} />
-            <Typography noWrap sx={{ fontSize: '0.75rem', fontWeight: state === 'current' ? 700 : 500, color: state === 'current' ? 'text.primary' : 'text.secondary' }}>
-              {i + 1}. {s}
-            </Typography>
-          </Box>
-        );
-      })}
-    </Box>
-  );
+const labelSx = { fontSize: '0.9375rem', fontWeight: 700, color: 'text.primary', mb: 1 };
+
+/**
+ * The type chips' order: most-used first (by how many things the household
+ * has of each), then the rest in their own order; General and locations go
+ * last (the fallback, and not what "Add a thing" is usually for).
+ */
+export function orderTypes(types = []) {
+  const rank = (t) => (t.key === 'general' ? 2 : t.kind === 'location' ? 3 : 0);
+  return types
+    .map((t, i) => ({ t, i }))
+    .sort((a, b) => rank(a.t) - rank(b.t) || (b.t.thingCount ?? 0) - (a.t.thingCount ?? 0) || a.i - b.i)
+    .map(({ t }) => t);
 }
 
-function StepTitle({ children, lede }) {
-  return (
-    <Box sx={{ mb: 2 }}>
-      <Typography component="h3" sx={{ fontFamily: DISPLAY_FONT, fontWeight: 800, fontSize: '1.375rem', letterSpacing: '-0.01em', lineHeight: 1.2 }}>
-        {children}
-      </Typography>
-      {lede ? <Typography sx={{ color: 'text.secondary', fontSize: '0.875rem', mt: 0.5 }}>{lede}</Typography> : null}
-    </Box>
-  );
-}
-
-export function PhotoStep({ photo, onPhoto, role, onRole }) {
+export function PhotoSlot({ photo, onPhoto, role, onRole }) {
   const cameraRef = useRef(null);
   const fileRef = useRef(null);
   const [preview, setPreview] = useState(null);
@@ -99,23 +97,21 @@ export function PhotoStep({ photo, onPhoto, role, onRole }) {
   };
 
   return (
-    <>
-      <StepTitle lede="Start with a photo — it's the first thing an insurer asks for. You can skip it and add one later.">Take a photo</StepTitle>
+    <Box component="section" aria-label="Photo">
       <Box
+        data-testid="add-photo-slot"
         sx={{
           position: 'relative',
-          aspectRatio: '4 / 3',
-          maxHeight: 340,
+          height: { xs: 168, sm: 220 },
           width: '100%',
-          borderRadius: 3,
+          borderRadius: '6px',
           overflow: 'hidden',
-          border: photo ? 0 : 2,
-          borderStyle: 'dashed',
+          border: photo ? 1 : 2,
+          borderStyle: photo ? 'solid' : 'dashed',
           borderColor: 'border',
-          bgcolor: photo ? '#11100D' : 'background.raised',
+          bgcolor: photo ? '#11100D' : 'background.paper',
           display: 'grid',
           placeItems: 'center',
-          mb: 2,
         }}
       >
         {preview ? (
@@ -123,244 +119,245 @@ export function PhotoStep({ photo, onPhoto, role, onRole }) {
         ) : photo ? (
           <Typography sx={{ color: '#F5F1E8', fontSize: '0.875rem' }}>{photo.name}</Typography>
         ) : (
-          <Box sx={{ textAlign: 'center', px: 2 }}>
-            <CameraIcon aria-hidden="true" sx={{ fontSize: 44, color: 'text.secondary', mb: 1 }} />
-            <Typography sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>The whole thing, in good light.</Typography>
+          <Box sx={{ display: 'grid', justifyItems: 'center', gap: 1.25, px: 2, textAlign: 'center' }}>
+            <Typography sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>A photo is optional — the whole thing, in good light.</Typography>
+            <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 1 }}>
+              <Button variant="contained" startIcon={<CameraIcon />} onClick={() => cameraRef.current?.click()}>
+                Take a photo
+              </Button>
+              <Button variant="outlined" startIcon={<FileIcon />} onClick={() => fileRef.current?.click()} sx={{ color: 'text.primary', borderColor: 'border', bgcolor: 'background.paper' }}>
+                Choose a file
+              </Button>
+            </Box>
           </Box>
         )}
+        {photo ? (
+          <Box sx={{ position: 'absolute', right: 8, bottom: 8, display: 'flex', gap: 1 }}>
+            <Button size="small" variant="contained" startIcon={<CameraIcon />} onClick={() => cameraRef.current?.click()} sx={{ minHeight: 44 }}>
+              Retake
+            </Button>
+            <Button size="small" variant="contained" startIcon={<RemoveIcon />} onClick={() => onPhoto(null)} sx={{ minHeight: 44 }}>
+              Remove
+            </Button>
+          </Box>
+        ) : null}
       </Box>
-      <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 1, mb: 2.5 }}>
-        <Button variant="contained" startIcon={<CameraIcon />} onClick={() => cameraRef.current?.click()}>
-          {photo ? 'Retake' : 'Take a photo'}
-        </Button>
-        <Button variant="outlined" startIcon={<FileIcon />} onClick={() => fileRef.current?.click()} sx={{ color: 'text.primary' }}>
-          Choose a file
-        </Button>
-      </Box>
-      <Typography component="h4" sx={{ fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase', color: 'text.secondary', mb: 1 }}>
-        This photo shows
-      </Typography>
-      <RoleChips roles={ADD_ROLES} value={role} onChange={onRole} label="Photo role" labelFor={photoRoleLabel} />
+      {photo ? (
+        <Box sx={{ mt: 1.5 }}>
+          <Typography component="h2" sx={labelSx}>
+            This photo shows
+          </Typography>
+          <RoleChips roles={ADD_ROLES} value={role} onChange={onRole} label="Photo role" labelFor={photoRoleLabel} />
+        </Box>
+      ) : null}
       <input ref={cameraRef} type="file" accept="image/*" capture="environment" hidden aria-hidden="true" tabIndex={-1} data-testid="add-camera-input" onChange={picked} />
       <input ref={fileRef} type="file" accept={PHOTO_ACCEPT} hidden aria-hidden="true" tabIndex={-1} data-testid="add-file-input" onChange={picked} />
-    </>
+    </Box>
   );
 }
 
-export function TypeStep({ types, loading, value, onPick }) {
-  return (
-    <>
-      <StepTitle lede="Each type asks only for what matters to it. You can edit types, or make your own, under Types.">What is it?</StepTitle>
-      {loading && !types.length ? (
-        <Box sx={{ display: 'grid', placeItems: 'center', py: 6 }}>
-          <CircularProgress size={24} aria-label="Loading types" />
-        </Box>
-      ) : (
-        <Box role="radiogroup" aria-label="Type" sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', sm: 'repeat(3, minmax(0, 1fr))' }, gap: 1 }}>
-          {types.map((t) => {
-            const selected = value === t.id;
-            const masked = t.fields.filter((f) => f.identifier).length;
-            return (
-              <ButtonBase
-                key={t.id}
-                role="radio"
-                aria-checked={selected ? 'true' : 'false'}
-                onClick={() => onPick(t.id)}
-                data-testid="type-card"
-                sx={{
-                  position: 'relative',
-                  display: 'flex',
-                  flexDirection: 'column',
-                  alignItems: 'flex-start',
-                  gap: 0.75,
-                  p: 1.5,
-                  minHeight: 96,
-                  borderRadius: 2.5,
-                  border: selected ? 2 : 1,
-                  borderColor: selected ? 'primary.main' : 'divider',
-                  bgcolor: selected ? 'action.selected' : 'background.card',
-                  textAlign: 'left',
-                  '&:hover': { borderColor: 'primary.main' },
-                }}
-              >
-                <Box sx={{ width: 36, height: 36, borderRadius: '10px', display: 'grid', placeItems: 'center', bgcolor: 'plate.ground', color: 'plate.icon' }}>
-                  <TypeIcon name={t.icon} sx={{ fontSize: 22 }} />
-                </Box>
-                <Typography sx={{ fontWeight: 700, fontSize: '0.9375rem', color: 'text.primary' }}>{t.name}</Typography>
-                <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', lineHeight: 1.35 }}>
-                  {t.fields.length ? `${t.fields.length} field${t.fields.length === 1 ? '' : 's'}${masked ? ` · ${masked} masked` : ''}` : 'Just the basics'}
-                </Typography>
-                {selected ? <SelectedIcon aria-hidden="true" sx={{ position: 'absolute', top: 10, right: 10, fontSize: 20, color: 'primary.main' }} /> : null}
-              </ButtonBase>
-            );
-          })}
-        </Box>
-      )}
-    </>
-  );
-}
+export function TypeChips({ types, loading, value, onPick }) {
+  const [all, setAll] = useState(false);
+  const ordered = useMemo(() => orderTypes(types), [types]);
+  const top = ordered.slice(0, TOP_TYPES);
+  // The chosen type always shows, even if it came from "More types".
+  const shown = all ? ordered : top.some((t) => t.id === value) || !value ? top : [...top, ordered.find((t) => t.id === value)].filter(Boolean);
+  const hidden = ordered.length - shown.length;
 
-export function NameStep({ type, name, onName, parentId, onParent, tags, onTags, error, attrs = {}, onAttr, attrErrors = {} }) {
-  const required = (type?.fields ?? []).filter((f) => f.required);
-  return (
-    <>
-      <StepTitle lede="A name you'd say out loud — “Wendy”, “the Ruger”, “Dad's table saw”.">{type ? `Name this ${type.name.toLowerCase()}` : 'Name it'}</StepTitle>
-      <Box sx={{ display: 'grid', gap: 2 }}>
-        <TextField
-          autoFocus
-          label="Name *"
-          value={name}
-          onChange={(e) => onName(e.target.value)}
-          error={Boolean(error)}
-          helperText={error || undefined}
-          inputProps={{ maxLength: 200 }}
-          fullWidth
-        />
-        {required.map((f) => (
-          <AttributeField key={f.key} field={f} value={attrs[f.key]} onChange={(v) => onAttr(f.key, v)} error={attrErrors[f.key]} />
-        ))}
-        <WherePicker value={parentId} onChange={onParent} />
-        <TagInput value={tags} onChange={onTags} />
+  if (loading && !types.length) {
+    return (
+      <Box sx={{ display: 'grid', placeItems: 'center', py: 2 }}>
+        <CircularProgress size={22} aria-label="Loading types" />
       </Box>
-    </>
+    );
+  }
+  return (
+    <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, alignItems: 'center' }}>
+      <ToggleButtonGroup
+        exclusive
+        value={value}
+        onChange={(_e, v) => onPick(v)}
+        aria-label="Type"
+        data-testid="type-chips"
+        sx={{ ...chipGroupSx, '& .MuiToggleButton-root': { ...chipGroupSx['& .MuiToggleButton-root'], gap: 0.75, pl: 1.25 } }}
+      >
+        {shown.map((t) => (
+          <ToggleButton key={t.id} value={t.id} data-testid="type-chip">
+            <TypeIcon name={t.icon} sx={{ fontSize: 18 }} />
+            {t.name}
+          </ToggleButton>
+        ))}
+      </ToggleButtonGroup>
+      {hidden > 0 ? (
+        <Button onClick={() => setAll(true)} endIcon={<MoreIcon />} sx={{ color: 'text.primary', minHeight: 44, borderRadius: '999px', px: 1.75 }}>
+          More types
+        </Button>
+      ) : null}
+    </Box>
   );
 }
 
 export default function AddThing() {
+  const theme = useTheme();
+  const isPhone = useMediaQuery(theme.breakpoints.down('md'));
   const navigate = useNavigate();
   const location = useLocation();
   const { notify } = useToast();
   const { types, typesById, loading } = useThingTypes();
+  const { nodesById } = useThingTree();
   const { createThing } = useThingActions();
   const { enqueue } = useUploads();
-  const [step, setStep] = useState(0);
+  const keyboard = useKeyboardInset();
+  const nameRef = useRef(null);
+
+  const fromHere = location.state?.parentId ?? null;
   const [photo, setPhoto] = useState(null);
   const [role, setRole] = useState('overview');
   const [typeId, setTypeId] = useState(null);
   const [name, setName] = useState('');
-  const [parentId, setParentId] = useState(() => location.state?.parentId ?? null);
+  const [parentId, setParentId] = useState(() => fromHere ?? readPref(LAST_PLACE_KEY, null));
   const [tags, setTags] = useState([]);
-  const [busy, setBusy] = useState(false);
+  const [busy, setBusy] = useState(null); // 'save' | 'again' | null
   const [nameError, setNameError] = useState('');
   const [attrs, setAttrs] = useState({});
   const [attrErrors, setAttrErrors] = useState({});
 
-  const type = typeId ? typesById.get(typeId) : null;
-  const close = () => navigate(libraryPath(location.search));
-  const sortedTypes = useMemo(() => {
-    // General last: it's the fallback, not a first choice.
-    const list = [...types];
-    list.sort((a, b) => (a.key === 'general') - (b.key === 'general'));
-    return list;
-  }, [types]);
+  // A remembered place that has since gone (trashed, purged) is not a default.
+  useEffect(() => {
+    if (parentId && !fromHere && nodesById.size && !nodesById.has(parentId)) setParentId(null);
+  }, [parentId, fromHere, nodesById]);
 
-  const create = async () => {
-    // A type's required fields are asked for here (the gateway enforces them on create).
-    const required = (type?.fields ?? []).filter((f) => f.required);
+  const type = typeId ? typesById.get(typeId) : null;
+  const generalId = useMemo(() => types.find((t) => t.key === 'general')?.id ?? null, [types]);
+  const required = (type?.fields ?? []).filter((f) => f.required);
+
+  const save = async (again) => {
     const missingRequired = Object.fromEntries(required.filter((f) => !hasValue(attrs[f.key]) && attrs[f.key] !== false).map((f) => [f.key, `${f.label} is required for this type.`]));
     setAttrErrors(missingRequired);
     if (!name.trim()) {
       setNameError('A thing needs a name.');
+      nameRef.current?.focus();
       return;
     }
     if (Object.keys(missingRequired).length) return;
-    setBusy(true);
+    setBusy(again ? 'again' : 'save');
     try {
-      const input = { name: name.trim(), typeId: typeId || null, parentId: parentId || null, tags };
+      const input = { name: name.trim(), typeId: typeId || generalId || null, parentId: parentId || null, tags };
       if (required.length) input.attributes = buildAttributes(required, attrs);
       const thing = await createThing(input, { search: location.search });
       if (!thing?.id) throw new Error("That didn't save. Try again.");
       if (photo) enqueue(thing.id, { file: photo, kind: 'photo', role });
-      notify(photo ? `${thing.name} added — the photo is uploading.` : `${thing.name} added.`, { tone: 'success' });
-      navigate(thingPath(thing.id, location.search), { replace: true });
+      writePref(LAST_PLACE_KEY, parentId || null);
+      if (again) {
+        notify(photo ? `${thing.name} added — the photo is uploading. Next one.` : `${thing.name} added. Next one.`, { tone: 'success' });
+        setName('');
+        setPhoto(null);
+        setRole('overview');
+        setAttrs({});
+        setBusy(null);
+        requestAnimationFrame(() => nameRef.current?.focus());
+      } else {
+        notify(photo ? `${thing.name} added — the photo is uploading.` : `${thing.name} added.`, { tone: 'success' });
+        navigate(thingPath(thing.id, location.search), { replace: true });
+      }
     } catch (err) {
       notify(err?.message || "That didn't save. Try again.", { tone: 'error' });
-      setBusy(false);
+      setBusy(null);
     }
   };
 
-  let primary;
-  if (step === 0) {
-    primary = (
-      <Button variant="contained" onClick={() => setStep(1)}>
-        {photo ? 'Next' : 'Skip'}
-      </Button>
-    );
-  } else if (step === 1) {
-    primary = (
-      <Button variant="contained" disabled={!typeId} onClick={() => setStep(2)}>
-        Next
-      </Button>
-    );
-  } else {
-    primary = (
-      <Button variant="contained" onClick={create} disabled={busy}>
-        {busy ? 'Creating…' : 'Create'}
-      </Button>
-    );
-  }
-
-  return (
-    <GeekDialog
-      open
-      onClose={close}
-      title="Add a thing"
-      maxWidth="sm"
-      primaryAction={primary}
-      secondaryAction={
-        <Button onClick={close} sx={{ color: 'text.secondary' }}>
+  const bar = (
+    <Box
+      data-testid="add-save-bar"
+      sx={
+        isPhone
+          ? {
+              position: 'fixed',
+              left: 0,
+              right: 0,
+              bottom: `${keyboard}px`,
+              zIndex: theme.zIndex.appBar,
+              display: 'grid',
+              gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
+              gap: 1,
+              px: 2,
+              pt: 1.25,
+              pb: keyboard ? 1.25 : 'calc(10px + env(safe-area-inset-bottom))',
+              bgcolor: 'background.chrome',
+              borderTop: 1,
+              borderColor: 'border',
+            }
+          : { display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 3, pt: 2, borderTop: 1, borderColor: 'border' }
+      }
+    >
+      {!isPhone ? (
+        <Button onClick={() => goBack(navigate, location)} sx={{ color: 'text.secondary', mr: 'auto' }}>
           Cancel
         </Button>
-      }
-      bodySx={{ pt: 2.5 }}
-    >
-      <Box data-testid={`add-step-${step}`}>
-        <StepHeader step={step} />
-        {step > 0 ? (
-          <Button size="small" startIcon={<BackIcon />} onClick={() => setStep(step - 1)} sx={{ color: 'text.secondary', ml: -1, mb: 1 }}>
-            Back to {STEPS[step - 1].toLowerCase()}
-          </Button>
+      ) : null}
+      <Button variant="outlined" onClick={() => save(true)} disabled={Boolean(busy)} sx={{ color: 'text.primary', borderColor: 'text.primary', bgcolor: 'background.paper', '&:hover': { bgcolor: 'background.paper' } }}>
+        {busy === 'again' ? 'Saving…' : 'Save & add another'}
+      </Button>
+      <Button variant="contained" color="safety" disableElevation onClick={() => save(false)} disabled={Boolean(busy)} sx={{ fontWeight: 700, border: 1.5, borderStyle: 'solid', borderColor: 'safety.contrastText' }}>
+        {busy === 'save' ? 'Saving…' : 'Save'}
+      </Button>
+    </Box>
+  );
+
+  return (
+    <PageFrame maxWidth={680} sx={{ pt: { xs: 2, md: 4 }, pb: { xs: 'calc(96px + env(safe-area-inset-bottom))', md: 8 } }}>
+      <Typography variant="h1" component="h1" sx={isPhone ? visuallyHidden : { fontFamily: DISPLAY_FONT, fontSize: '2rem', mb: 2.5 }}>
+        Add a thing
+      </Typography>
+      <Box
+        component="form"
+        noValidate
+        data-testid="add-form"
+        onSubmit={(e) => {
+          e.preventDefault();
+          save(false);
+        }}
+        sx={{ display: 'grid', gap: 2.5 }}
+      >
+        <PhotoSlot photo={photo} onPhoto={setPhoto} role={role} onRole={setRole} />
+
+        <TextField
+          inputRef={nameRef}
+          autoFocus={!isPhone}
+          label="Name *"
+          placeholder="Wendy, the Ruger, Dad's table saw"
+          value={name}
+          onChange={(e) => {
+            setName(e.target.value);
+            if (nameError) setNameError('');
+          }}
+          error={Boolean(nameError)}
+          helperText={nameError || undefined}
+          inputProps={{ maxLength: 200, enterKeyHint: 'done' }}
+          fullWidth
+        />
+
+        <Box component="section" aria-labelledby="add-type-label">
+          <Typography id="add-type-label" component="h2" sx={labelSx}>
+            What is it?
+          </Typography>
+          <TypeChips types={types} loading={loading} value={typeId} onPick={setTypeId} />
+        </Box>
+
+        {required.length ? (
+          <Box sx={{ display: 'grid', gap: 2 }}>
+            {required.map((f) => (
+              <AttributeField key={f.key} field={f} value={attrs[f.key]} onChange={(v) => setAttrs((a) => ({ ...a, [f.key]: v }))} error={attrErrors[f.key]} />
+            ))}
+          </Box>
         ) : null}
-        {step === 0 ? (
-          <>
-            <PhotoStep photo={photo} onPhoto={setPhoto} role={role} onRole={setRole} />
-            {!photo ? (
-              <Button fullWidth onClick={() => setStep(1)} sx={{ mt: 2, color: 'text.primary' }}>
-                Skip — no photo yet
-              </Button>
-            ) : null}
-          </>
-        ) : null}
-        {step === 1 ? (
-          <TypeStep
-            types={sortedTypes}
-            loading={loading}
-            value={typeId}
-            onPick={(id) => {
-              setTypeId(id);
-              setStep(2);
-            }}
-          />
-        ) : null}
-        {step === 2 ? (
-          <NameStep
-            type={type}
-            name={name}
-            onName={(v) => {
-              setName(v);
-              if (nameError) setNameError('');
-            }}
-            parentId={parentId}
-            onParent={setParentId}
-            tags={tags}
-            onTags={setTags}
-            error={nameError}
-            attrs={attrs}
-            onAttr={(key, v) => setAttrs((a) => ({ ...a, [key]: v }))}
-            attrErrors={attrErrors}
-          />
-        ) : null}
+
+        <WherePicker value={parentId} onChange={setParentId} />
+        <TagInput value={tags} onChange={setTags} />
+        {/* Enter in the name field saves (the bar's Save is outside the form on a phone). */}
+        <button type="submit" hidden aria-hidden="true" tabIndex={-1} />
       </Box>
-    </GeekDialog>
+      {isPhone ? <Portal>{bar}</Portal> : bar}
+    </PageFrame>
   );
 }

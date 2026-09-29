@@ -25,7 +25,7 @@ export default function ValueSection({ thing, onEdit }) {
       <Box sx={{ mb: hasPurchase ? 1.5 : 0 }}>
         {value !== null ? (
           <>
-            <Typography sx={{ fontFamily: DISPLAY_FONT, fontWeight: 800, fontSize: '1.75rem', lineHeight: 1.1, letterSpacing: '-0.02em', fontVariantNumeric: 'tabular-nums' }}>
+            <Typography sx={{ fontFamily: DISPLAY_FONT, fontWeight: 700, fontSize: '1.75rem', lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>
               {formatMoney(value, thing.value?.currency)}
             </Typography>
             <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', mt: 0.25 }}>

@@ -197,6 +197,23 @@ escaped (the ReDoS rule).
 - **Identity:** its own palette inside the suite shell. Every page must pass the phone
   AND desktop harness with `--enforce-a11y` (CI now gates both).
 
+*As built (2026-09-29, "Label Maker", approved by Chef):*
+- **Identity:** kraft cardboard desk and chrome, card-stock sheets, a charcoal-brown shelf
+  by night. Place names (breadcrumbs, Where rows, "Inside …" headers, the place chip on a
+  row) are Dymo embossed tape (`components/DymoTape.jsx`, real text). One accent, safety
+  orange, only ever a fill with dark ink: needs-attention and the screen's primary action.
+  Barlow Condensed (tape, headings) + Barlow (body). Sentence case everywhere but tape.
+  Pairs measured in `__tests__/theme/labelMakerContrast.test.js`.
+- **Phone navigation:** a tab bar, Things · Where · Add · Attention (count) · More (Types,
+  Insurance report, Trash, Saved views, Settings). No hamburger, no FAB. Desktop keeps the
+  sidebar; the avatar menu holds only theme and sign out.
+- **Library:** the phone defaults to a dense list (thumb, name, type, place tape, attention
+  dot); the grid is the toggle, remembered.
+- **Where:** a drill-down on the phone (`/where?at=<id>`), the tree on a desk.
+- **Add:** one screen (photo slot, name, type chips most-used first, where defaulting to
+  the last place used, Save / Save & add another); the Save bar rides above the keyboard.
+- **Thing page:** a full page on every size (not a sheet), with a photo strip on a phone.
+
 ## Files
 
 - **Photos:** jpeg, png and webp are accepted; HEIC is stored and converted where sharp

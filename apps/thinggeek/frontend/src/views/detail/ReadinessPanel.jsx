@@ -20,6 +20,7 @@ import {
 } from '@mui/icons-material';
 import { PRESENT_LABELS } from '../../utils/vocab';
 import { MISSING_VALUES } from '../../utils/libraryFilter';
+import { SECTION_TITLE_SX } from './Section';
 
 export const FIXES = {
   photo: { label: 'Add a photo', hint: 'The whole thing, in good light.', icon: PhotoIcon },
@@ -47,15 +48,16 @@ export default function ReadinessPanel({ thing, onFix }) {
       data-testid="readiness"
       sx={{
         border: 1,
-        borderColor: ready ? 'divider' : 'border',
-        borderRadius: 3,
-        bgcolor: 'background.card',
+        borderColor: 'border',
+        borderRadius: '6px',
+        bgcolor: 'background.paper',
+        boxShadow: '0 1px 3px rgba(40, 25, 10, 0.10)',
         p: 2,
         minWidth: 0,
       }}
     >
       <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 1, mb: 1 }}>
-        <Typography id="readiness-heading" component="h3" sx={{ fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.1em', textTransform: 'uppercase', color: 'text.secondary' }}>
+        <Typography id="readiness-heading" component="h2" sx={SECTION_TITLE_SX}>
           Claim readiness
         </Typography>
         <Typography component="span" sx={{ fontSize: '0.8125rem', fontWeight: 700, color: 'text.primary', fontVariantNumeric: 'tabular-nums' }}>

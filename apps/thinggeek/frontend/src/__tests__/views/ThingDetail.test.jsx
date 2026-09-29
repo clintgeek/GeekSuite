@@ -108,7 +108,8 @@ describe('where it is', () => {
     renderWithProviders(body({ ...cables(), path }));
     const crumbsNav = screen.getByRole('navigation', { name: 'Where it is' });
     expect(within(crumbsNav).getAllByRole('link').map((a) => a.textContent)).toEqual(['House', 'Garage']);
-    expect(within(crumbsNav).getByText('Van (in the Trash)')).toBeInTheDocument();
+    expect(within(crumbsNav).getByText('Van')).toBeInTheDocument();
+    expect(within(crumbsNav).getByText('(in the Trash)')).toBeInTheDocument();
     expect(screen.getByTestId('inside-trash')).toHaveTextContent('inside something in the Trash');
   });
 
@@ -118,7 +119,7 @@ describe('where it is', () => {
       contents: [makeThing({ id: 't-cables', name: 'Jumper cables', type: typeRef('ty-tool'), kind: 'item' })],
     });
     renderWithProviders(body(van));
-    const section = screen.getByRole('region', { name: 'Contains · 1' });
+    const section = screen.getByRole('region', { name: 'Inside Van · 1' });
     expect(within(section).getByRole('link', { name: /Jumper cables/ })).toHaveAttribute('href', '/thing/t-cables');
     expect(within(section).getByRole('button', { name: 'Add here' })).toBeInTheDocument();
   });
@@ -130,7 +131,7 @@ describe('where it is', () => {
 
   it('a location says it is empty', () => {
     renderWithProviders(body(makeThing({ id: 'n-shelf', name: 'Shelf 2', type: typeRef('ty-location'), kind: 'location', fields: [], relationships: [] })));
-    expect(screen.getByRole('region', { name: 'Contains' })).toHaveTextContent('Nothing inside yet.');
+    expect(screen.getByRole('region', { name: /^Inside / })).toHaveTextContent('Nothing inside yet.');
   });
 });
 

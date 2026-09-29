@@ -11,9 +11,13 @@ describe('ThingCard', () => {
     const onOpen = vi.fn();
     const thing = makeThing();
     renderWithProviders(<ThingCard thing={thing} onOpen={onOpen} />);
-    const card = screen.getByRole('button', { name: 'Wendy, Boat · House › Garage' });
+    const card = screen.getByRole('button', { name: 'Wendy, Boat, in House › Garage, Due in 12 days · Registration' });
     expect(within(card).getByRole('heading', { name: 'Wendy' })).toBeInTheDocument();
-    expect(within(card).getByText('Boat · House › Garage')).toBeInTheDocument();
+    expect(within(card).getByText('Boat')).toBeInTheDocument();
+    // Where it is: the last crumb on Dymo tape, the whole walk as its title.
+    const tape = within(card).getByTestId('dymo-tape');
+    expect(tape).toHaveTextContent('Garage');
+    expect(tape).toHaveAttribute('title', 'House › Garage');
     expect(screen.getByTestId('due-line')).toHaveTextContent('Due in 12 days · Registration');
     expect(screen.getByText('fishing')).toBeInTheDocument();
     fireEvent.click(card);
@@ -35,6 +39,32 @@ describe('ThingCard', () => {
 });
 
 describe('ThingRow', () => {
+  it('a dense phone row: name, type, the place on tape, and the attention dot', () => {
+    const onOpen = vi.fn();
+    const thing = makeThing();
+    renderWithProviders(
+      <ul>
+        <ThingRow thing={thing} onOpen={onOpen} />
+      </ul>
+    );
+    const row = screen.getByRole('button', { name: 'Wendy, Boat, in House › Garage, Due in 12 days · Registration' });
+    expect(within(row).getByTestId('dymo-tape')).toHaveTextContent(/^Garage$/);
+    expect(within(row).getByTestId('attention-dot')).toBeInTheDocument();
+    fireEvent.click(row);
+    expect(onOpen).toHaveBeenCalledWith(thing);
+  });
+
+  it('no dot for a date that is not close, and no tape for a thing that is nowhere yet', () => {
+    renderWithProviders(
+      <ul>
+        <ThingRow thing={makeThing({ nextDue: date({ status: 'later', daysUntil: 200 }), path: [], parentId: null })} />
+      </ul>
+    );
+    expect(screen.queryByTestId('attention-dot')).toBeNull();
+    expect(screen.queryByTestId('dymo-tape')).toBeNull();
+    expect(screen.getByRole('button', { name: 'Wendy, Boat' })).toBeInTheDocument();
+  });
+
   it('shows value and next due in their columns', () => {
     renderWithProviders(
       <ul>

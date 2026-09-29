@@ -3,54 +3,75 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#F2EEE5">
-  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#13120F">
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#C9A574">
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#261E17">
   <title>ThingGeek — Offline</title>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
       color-scheme: light dark;
-      --page: #F2EEE5; --card: #FFFDF9; --text: #1D1B17; --muted: #4A453C;
-      --accent: #1D6546; --accent-text: #FFFFFF; --brass: #A87B2B; --rule: rgba(29, 27, 23, 0.12);
+      --desk: #D9BD94; --card: #FBF7EE; --text: #22190F; --muted: #4B3B28;
+      --rule: rgba(90, 60, 25, 0.18); --shadow: 0 1px 0 rgba(90, 60, 25, 0.12), 0 8px 24px rgba(60, 38, 12, 0.18);
+      --safety: #F26A1B; --safety-ink: #1B1006; --focus: #22190F;
     }
     @media (prefers-color-scheme: dark) {
       :root {
-        --page: #13120F; --card: #1B1A16; --text: #EFEADF; --muted: #C2BBAD;
-        --accent: #7CC9A0; --accent-text: #0E1A13; --brass: #D2A857; --rule: rgba(239, 234, 223, 0.12);
+        --desk: #1C1611; --card: #2A231B; --text: #F3E9D8; --muted: #D2C3AA;
+        --rule: rgba(243, 233, 216, 0.14); --shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+        --safety: #FF7A29; --focus: #F3E9D8;
       }
     }
     body {
-      font-family: 'Manrope', system-ui, -apple-system, 'Segoe UI', sans-serif;
+      font-family: system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
       display: flex; align-items: center; justify-content: center;
       min-height: 100vh; min-height: 100dvh;
-      background: var(--page); color: var(--text); text-align: center;
-      padding: calc(2rem + env(safe-area-inset-top)) calc(1.5rem + env(safe-area-inset-right))
-               calc(2rem + env(safe-area-inset-bottom)) calc(1.5rem + env(safe-area-inset-left));
+      background: var(--desk); color: var(--text); text-align: center;
+      padding: calc(2rem + env(safe-area-inset-top)) calc(1rem + env(safe-area-inset-right))
+               calc(2rem + env(safe-area-inset-bottom)) calc(1rem + env(safe-area-inset-left));
     }
-    .card { max-width: 380px; background: var(--card); border: 1px solid var(--rule); border-radius: 12px; padding: 2rem 1.5rem; }
-    svg { width: 56px; height: 56px; margin-bottom: 1rem; }
-    h1 { font-size: 1.375rem; font-weight: 800; letter-spacing: -0.01em; margin-bottom: 0.5rem; }
+    .card {
+      width: 100%; max-width: 380px; background: var(--card); border: 1px solid var(--rule);
+      border-radius: 6px; box-shadow: var(--shadow); padding: 2rem 1.5rem;
+    }
+    svg { display: block; width: 132px; height: auto; margin: 0 auto 1.25rem; }
+    h1 {
+      font-family: 'Barlow Condensed', 'Roboto Condensed', 'Arial Narrow', sans-serif;
+      font-stretch: condensed; font-size: 1.75rem; font-weight: 700; line-height: 1.1; margin-bottom: 0.5rem;
+    }
     p { font-size: 1rem; line-height: 1.55; color: var(--muted); margin-bottom: 1.5rem; }
     button {
-      background: var(--accent); color: var(--accent-text); border: none;
-      padding: 0.75rem 2rem; min-height: 44px; min-width: 44px; border-radius: 8px;
-      font: 600 1rem/1 inherit; font-family: inherit; cursor: pointer;
+      background: var(--safety); color: var(--safety-ink); border: 1px solid rgba(27, 16, 6, 0.35);
+      padding: 0.75rem 2rem; min-height: 44px; min-width: 44px; border-radius: 4px;
+      font: 700 1.0625rem/1 'Barlow Condensed', 'Roboto Condensed', 'Arial Narrow', sans-serif;
+      letter-spacing: 0.02em; cursor: pointer;
     }
+    button:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
   </style>
 </head>
 <body>
   <div class="card">
-    <svg viewBox="0 0 32 32" aria-hidden="true">
-      <g transform="rotate(-14 16 16)">
-        <path d="M11 8 H24 a3 3 0 0 1 3 3 V21 a3 3 0 0 1 -3 3 H11 L5 16 Z" fill="var(--accent)"/>
-        <circle cx="10.5" cy="16" r="1.9" fill="var(--card)" stroke="var(--brass)" stroke-width="1.2"/>
-        <rect x="14.5" y="13" width="9" height="1.6" rx=".8" fill="var(--card)"/>
-        <rect x="14.5" y="17" width="6" height="1.6" rx=".8" fill="var(--card)" fill-opacity=".6"/>
+    <!-- The mark: a strip of black Dymo tape with an embossed T (as icons/icon.svg). -->
+    <svg viewBox="28 132 456 256" aria-hidden="true">
+      <defs>
+        <linearGradient id="tape" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#34312D"/><stop offset="0.14" stop-color="#1E1C1A"/><stop offset="0.45" stop-color="#121110"/><stop offset="0.85" stop-color="#121110"/><stop offset="1" stop-color="#1F1D1B"/></linearGradient>
+        <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0.16"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/></linearGradient>
+        <linearGradient id="letter" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F9F7F1"/><stop offset="0.6" stop-color="#F0ECE3"/><stop offset="1" stop-color="#D9D3C7"/></linearGradient>
+        <filter id="soft" x="-10%" y="-30%" width="120%" height="160%"><feGaussianBlur stdDeviation="8"/></filter>
+        <filter id="dent" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="2.5"/></filter>
+      </defs>
+      <g transform="rotate(-4 256 256)">
+        <path d="M60 196 L76 180 H436 L452 196 V332 L436 348 H76 L60 332 Z" fill="#000000" fill-opacity="0.35" filter="url(#soft)" transform="translate(0 10)"/>
+        <path d="M56 190 L72 174 H440 L456 190 V322 L440 338 H72 L56 322 Z" fill="url(#tape)"/>
+        <path d="M62 186 L74 178 H438 L450 186 V226 H62 Z" fill="url(#sheen)"/>
+        <path d="M73 176.5 H439 L453 190.5" fill="none" stroke="#FFFFFF" stroke-opacity="0.28" stroke-width="3"/>
+        <path d="M183 205 H329 V237 H273 V311 H239 V237 H183 Z" fill="#000000" fill-opacity="0.7" stroke="#000000" stroke-opacity="0.7" stroke-width="6" stroke-linejoin="round" filter="url(#dent)" transform="translate(2 6)"/>
+        <path d="M183 205 H329 V237 H273 V311 H239 V237 H183 Z" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="6" stroke-linejoin="round" transform="translate(-1 -2)"/>
+        <path d="M183 205 H329 V237 H273 V311 H239 V237 H183 Z" fill="url(#letter)" stroke="url(#letter)" stroke-width="6" stroke-linejoin="round"/>
       </g>
     </svg>
     <h1>You're offline</h1>
-    <p>ThingGeek needs a connection to open the ledger. Everything you've recorded is safe on the server.</p>
-    <button onclick="window.location.reload()">Retry</button>
+    <p>ThingGeek needs a connection to open your inventory. Everything you've recorded is safe on the server.</p>
+    <button type="button" onclick="window.location.reload()">Retry</button>
   </div>
 </body>
 </html>

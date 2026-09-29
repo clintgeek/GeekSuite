@@ -13,7 +13,7 @@
  * members-only page instead of the app.
  */
 import React, { Suspense, lazy, useEffect, useState } from 'react';
-import { Box, CircularProgress, Typography } from '@mui/material';
+import { Box, CircularProgress, Typography, useMediaQuery, useTheme } from '@mui/material';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useApolloClient, useQuery } from '@apollo/client';
 import { getMe, loginRedirect, logout as logoutRequest, onLogout, startRefreshTimer, stopRefreshTimer } from '@geeksuite/auth';
@@ -25,11 +25,13 @@ import { GET_THING_VOCABULARY } from './graphql/queries';
 import { UploadsProvider } from './hooks/useUploads';
 import { isNotMemberError, isNotMemberState, onNotMember, resetMembership } from './membership';
 import AppMain from './components/AppMain';
+import BottomTabs from './components/BottomTabs';
 import NotAMember from './components/NotAMember';
 import Sidebar from './components/Sidebar';
 import TagMark from './components/TagMark';
 import TopBar from './components/TopBar';
-import { APP_ID, isLibraryPath } from './components/navConfig';
+import { APP_ID, hidesTabBar, isLibraryPath } from './components/navConfig';
+import { SIDEBAR_SX } from './components/Sidebar';
 import { THING_COLLECTION } from './utils/collectionConfig';
 import LibraryView from './views/LibraryView';
 import ThingDetail from './views/detail/ThingDetail';
@@ -42,7 +44,7 @@ const InsuranceView = lazy(() => import('./views/InsuranceView'));
 const TrashView = lazy(() => import('./views/TrashView'));
 const SettingsView = lazy(() => import('./views/settings/SettingsView'));
 
-export function Booting({ label = 'Opening the ledger…' }) {
+export function Booting({ label = 'Opening the inventory…' }) {
   return (
     <Box
       sx={{
@@ -86,6 +88,9 @@ export function useMembership() {
 
 function SignedIn({ user, onSignOut }) {
   const location = useLocation();
+  const theme = useTheme();
+  // Phone: the tab bar is the navigation (no drawer, no hamburger). md+: the sidebar.
+  const isPhone = useMediaQuery(theme.breakpoints.down('md'));
   const { checking, notMember } = useMembership();
   const onLibrary = isLibraryPath(location.pathname);
 
@@ -95,25 +100,18 @@ function SignedIn({ user, onSignOut }) {
   return (
     <CollectionProvider value={THING_COLLECTION}>
       <GeekShell
-        nav={<Sidebar user={user} onSignOut={onSignOut} />}
-        navSx={{ bgcolor: 'background.paper' }}
+        nav={isPhone ? undefined : <Sidebar user={user} onSignOut={onSignOut} />}
+        navSx={SIDEBAR_SX}
         topBar={<TopBar user={user} onSignOut={onSignOut} />}
+        bottomNav={isPhone && !hidesTabBar(location.pathname) ? <BottomTabs /> : undefined}
       >
         <GeekToastProvider>
           <UploadsProvider>
             <AppMain transitionKey={onLibrary ? 'library' : location.pathname}>
               <Routes>
-                <Route path="/" element={<LibraryView />}>
-                  <Route path="thing/:id" element={<ThingDetail />} />
-                  <Route
-                    path="add"
-                    element={
-                      <Suspense fallback={null}>
-                        <AddThing />
-                      </Suspense>
-                    }
-                  />
-                </Route>
+                <Route path="/" element={<LibraryView />} />
+                <Route path="/thing/:id" element={<ThingDetail />} />
+                <Route path="/add" element={lazyRoute(<AddThing />)} />
                 <Route path="/attention" element={lazyRoute(<AttentionView />)} />
                 <Route path="/where" element={lazyRoute(<WhereView />)} />
                 {/* The Places page became Where (2026-09-26); an old bookmark still lands. */}
@@ -194,7 +192,7 @@ export default function App() {
         appSuffix="geek"
         taglineLine1="Everything worth keeping."
         taglineLine2="Ready for a bad day."
-        description="The household ledger of what we own — where it lives, what's due, and the photo, serial, receipt and value the insurer will ask for."
+        description="The household inventory of what we own — where it lives, what's due, and the photo, serial, receipt and value the insurer will ask for."
         features={['Photos & receipts', 'Masked serials', "What's due", 'Insurance report']}
         onLogin={() => {
           setSigningIn(true);
@@ -204,8 +202,8 @@ export default function App() {
         loading={signingIn}
         error={error}
         logoColor="text.primary"
-        logoSuffixColor="primary.main"
-        inkColors={['rgba(29, 101, 70, 0.10)', 'rgba(168, 123, 43, 0.12)']}
+        logoSuffixColor="text.primary"
+        inkColors={['rgba(120, 84, 40, 0.14)', 'rgba(18, 17, 16, 0.10)']}
       />
     );
   }

@@ -8,7 +8,12 @@
  * focus a small helper under the field shows a worked example.
  *
  * `/` (suite slash focus) lands in the library search — priority 20.
- * "Add a thing" is a desktop action; the phone has the FAB.
+ *
+ * Phone (Label Maker): no hamburger — the tab bar is the navigation. A
+ * sub-page (a thing, the add screen) gets a back arrow instead. "Add a
+ * thing" is a desktop action here, a safety-orange fill; the phone's Add is
+ * the middle tab. Settings lives in the sidebar (desktop) or More (phone),
+ * so the avatar menu keeps only the account: theme and sign out.
  */
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { Box, Button, IconButton, InputAdornment, Paper, Popper, alpha, useMediaQuery, useTheme } from '@mui/material';
@@ -18,10 +23,11 @@ import { useThemeMode } from '@geeksuite/user';
 import { GeekSearchField, GeekTopBar } from '@geeksuite/ui';
 import { useDebouncedCallback } from '../hooks/useDebouncedCallback';
 import { DISPLAY_FONT, MONO_FONT } from '../theme/theme';
+import { goBack } from '../utils/goBack';
 import { writeLibraryState } from '../utils/libraryFilter';
 import { visuallyHidden } from '../utils/a11y';
 import { displayNameFrom, initialsFrom, secondaryFrom } from '../utils/userDisplay';
-import { APP_ID, isLibraryPath, titleFor } from './navConfig';
+import { APP_ID, isBackPath, isLibraryPath, titleFor } from './navConfig';
 
 export const SEARCH_EXAMPLE = ['type:boat', 'tag:fishing', 'in:garage', 'missing:receipt'];
 export const SEARCH_MORE = ['before:2020', 'due:30d', 'has:document'];
@@ -74,6 +80,7 @@ export default function TopBar({ user, onSignOut }) {
   const { theme: mode, toggleTheme } = useThemeMode();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const onLibrary = isLibraryPath(location.pathname);
+  const onSubPage = isBackPath(location.pathname);
   const hintId = useId();
 
   const urlQ = params.get('q') || '';
@@ -150,7 +157,13 @@ export default function TopBar({ user, onSignOut }) {
     <>
       <GeekTopBar
         elevation={0}
-        leading={mobileSearch ? null : undefined}
+        leading={
+          !isMobile ? undefined : onSubPage && !mobileSearch ? (
+            <IconButton data-geek-topbar="back" aria-label="Back" edge="start" onClick={() => goBack(navigate, location)} sx={{ color: 'inherit' }}>
+              <ArrowBackIcon />
+            </IconButton>
+          ) : null
+        }
         title={
           mobileSearch
             ? React.cloneElement(field, {
@@ -172,9 +185,11 @@ export default function TopBar({ user, onSignOut }) {
           onLibrary ? (
             <Button
               variant="contained"
+              color="safety"
+              disableElevation
               startIcon={<AddIcon />}
               onClick={() => navigate(`/add${location.search}`)}
-              sx={{ fontWeight: 600, px: 2, whiteSpace: 'nowrap' }}
+              sx={{ fontWeight: 700, px: 2, whiteSpace: 'nowrap', border: 1.5, borderStyle: 'solid', borderColor: 'safety.contrastText' }}
             >
               Add a thing
             </Button>
@@ -199,21 +214,24 @@ export default function TopBar({ user, onSignOut }) {
                 name: displayNameFrom(user),
                 secondary: secondaryFrom(user),
                 initials: initialsFrom(user),
-                onSettings: () => navigate('/settings'),
                 onSignOut,
               }
             : undefined
         }
         sx={{
-          backgroundColor: theme.palette.background.paper,
-          borderBottom: `1px solid ${theme.palette.divider}`,
-          boxShadow: 'none',
+          backgroundColor: theme.palette.background.chrome,
+          borderBottom: `1px solid ${theme.palette.border}`,
+          boxShadow: 'inset 0 -1px 0 rgba(255,255,255,0.12)',
           color: 'text.primary',
-          '& [data-geek-topbar="title"]': { fontFamily: DISPLAY_FONT, fontWeight: 700, fontSize: '1.2rem', letterSpacing: '-0.015em' },
-          '& [data-geek-topbar="theme"], & [data-geek-topbar="switcher"]': {
+          '& [data-geek-topbar="title"]': { fontFamily: DISPLAY_FONT, fontWeight: 700, fontSize: '1.5rem', letterSpacing: '0.01em', lineHeight: 1.1 },
+          '& [data-geek-topbar="theme"], & [data-geek-topbar="switcher"], & [data-geek-topbar="back"]': {
             color: 'text.primary',
-            '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.1) },
+            '&:hover': { bgcolor: alpha(theme.palette.text.primary, 0.08) },
           },
+          // The avatar: an ink disc with card-stock initials (never orange).
+          '& [data-geek-topbar="account"] .MuiAvatar-root': { bgcolor: 'primary.main', color: 'primary.contrastText', fontWeight: 700 },
+          // The search field is card stock on the kraft bar.
+          '& .MuiInputBase-root': { bgcolor: 'background.paper' },
         }}
       />
       {onLibrary ? (
