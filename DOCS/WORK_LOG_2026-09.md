@@ -12,6 +12,34 @@ anything a future reader would otherwise have to rediscover.
 
 ## 2026-09-29
 
+### NoteGeek — "Graphite", one New, share target, shortcuts, pins
+
+`7cdbe442` `1ff7ab34` `1b71ce97` `44f00a68` `de1d024e` `a75092f2`
+
+Chef wasn't sure about Lab Notebook. Once BuJoGeek went paper, black and red, NoteGeek's
+cream and oxblood made it a sibling. The chrome (monospace capitals, six coloured type
+stamps) was louder than the notes, and "saved" was a red stamp. Real data: 25 notes, 19
+markdown, 5 text, none of the other types yet.
+
+- **Graphite (`1ff7ab34`, one revertable commit):** graphite ink on grey-green engineering
+  paper, with one highlighter yellow used only as a fill behind ink. The fonts are Spline
+  Sans and Spline Sans Mono. There is one New (markdown by default; Photo and Sketch on the
+  phone sheet; code and mind map under More). The phone home is the capture box plus
+  Recent. Rows are quiet. The save status speaks only on failure; a failing autosave used
+  to stack a toast every 2s. The phone editor's toolbar docks above the keyboard, and the
+  duplicate phone navigation is gone.
+- **Search clear button (`7cdbe442`):** it had no accessible name (axe critical). No scene
+  had ever typed into search.
+- **Share → NoteGeek (`1b71ce97`):** text and links only. Images need a POST share target
+  and a hand-written service worker, which risks the generateSW update guarantees. The
+  follow-up is noted in vite.config.js.
+- **Shortcuts (`44f00a68`):** New note, Photo of a page, Search.
+- **Pins:** the API (`de1d024e`) shipped and was confirmed live BEFORE the UI (`a75092f2`),
+  because the UI's list query asks for `pinned`. Deploying the UI first would have 400'd
+  every note list until basegeek caught up; basegeek lands one Watchtower poll late.
+- NoteGeek CONTEXT.md's GraphQL section listed folders, locking and batch operations that
+  never existed. It is rewritten from typeDefs.js.
+
 ### BuJoGeek — Phase 1 "stupid simple" + "Red Pen" (one revertable commit)
 
 `9668203c`
