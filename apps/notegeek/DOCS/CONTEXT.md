@@ -41,25 +41,29 @@ NoteGeek adheres to the GeekSuite SSO standard:
 NoteGeek's note storage, searching, and mutations are **100% gateway-owned** by BaseGeek's Apollo GraphQL server:
 - **Gateway Location**: `apps/basegeek/packages/api/src/graphql/notegeek/`.
 - **Mongoose Model**: `Note` collection in the shared MongoDB instance (`notegeek` db).
-- **Zod Validation**: All 8 mutations are protected with Zod input schemas in `apps/basegeek/packages/api/src/graphql/shared/validation.js`.
+- **Zod Validation**: every mutation's arguments are validated with Zod (`notegeek/validation.js`).
 
 ### GraphQL Surface
+Source of truth: `apps/basegeek/packages/api/src/graphql/notegeek/typeDefs.js`. (Corrected
+2026-09-29: this list once named folders, locking, `recentNotes` and batch deletes, none of
+which exist.)
 - **Queries**:
-  - `notes(folderId, tag, search, sort, isArchived, isPinned)`: Full note query with regex search and filtering.
-  - `note(id)`: Single note detail by ID (scoped to requesting user).
-  - `recentNotes(limit)`: Chronological recent notes.
-  - `lockedNotes`: Notes protected by user password/PIN.
-  - `tags`: Tag frequency list.
-  - `folders`: User folder list.
-  - `aiSuggestNoteTags(id)`: AI-powered tag suggestions.
-  - `aiSuggestNoteLinks(id)`: AI-powered backlink suggestions.
+  - `notes(tag, prefix, type, limit, sort)`: the list. `prefix` matches tags that start with it
+    (`dev/` → `dev/frontend`); sending both `tag` and `prefix` narrows by both. Pinned notes always sort first, then `sort`.
+  - `note(id)`: single note, scoped to the requesting user.
+  - `noteVersions(noteId)`, `noteVersion(id)`: edit history.
+  - `noteTags`: the user's distinct tags.
+  - `searchNotes(q)`: full-text search, returning snippets.
+  - `suggestForNote(noteId, title, excerpt, tags)`: AI tag and link suggestions.
 - **Mutations**:
-  - `createNote(input)`
-  - `updateNote(id, input)`
-  - `deleteNote(id)`
-  - `batchDeleteNotes(ids)`
-  - `toggleNoteLock(id, isLocked)`
-  - `reorderNotes(updates)`
+  - `createNote(title, content, type, tags)`
+  - `updateNote(id, title, content, type, tags, changeReason)`: each update writes a
+    history entry.
+  - `restoreNoteVersion(versionId)`
+  - `composeNote(content)`: AI compose; returns a draft and writes nothing.
+  - `setNotePinned(id, pinned)`: owner-scoped. It writes no history entry and leaves
+    `updatedAt` untouched.
+  - `deleteNote(id)`, `renameTag(oldTag, newTag)`, `deleteTag(tag)`
   - `transcribeSketch(image, mediaType, source)`: reads a sketch's exported PNG, or (`source: 'photo'`) a photographed notebook page as JPEG with a prompt that ignores ruled lines and printed text, with the vision model (`need: vision+prose:balanced`, 40/day, every page counts). It writes nothing; the client saves new notes that link back. See `HANDWRITING.md` §2 and §3 ("Photo of a page", route `/notes/photo`). It needs `client_max_body_size 12m` on the vhost's `/graphql` location, or images over 1 MB get a 413.
 
 ### HTML & Markdown Security

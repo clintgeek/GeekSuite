@@ -198,6 +198,14 @@ export const composeNoteArgsSchema = z
 
 export const deleteNoteArgsSchema = z.object({ id: idString }).strict();
 
+/** Pin or unpin a note. Both arguments required — there is no "leave alone". */
+export const setNotePinnedArgsSchema = z
+  .object({
+    id: idString,
+    pinned: z.boolean(),
+  })
+  .strict();
+
 export const renameTagArgsSchema = z
   .object({
     oldTag: tagSchema,

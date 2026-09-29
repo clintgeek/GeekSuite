@@ -5,6 +5,7 @@ import {
   createNoteArgsSchema,
   updateNoteArgsSchema,
   deleteNoteArgsSchema,
+  setNotePinnedArgsSchema,
   renameTagArgsSchema,
   deleteTagArgsSchema,
   suggestForNoteArgsSchema,
@@ -27,6 +28,7 @@ import {
 const validateCreateNote = validateInput(createNoteArgsSchema);
 const validateUpdateNote = validateInput(updateNoteArgsSchema);
 const validateDeleteNote = validateInput(deleteNoteArgsSchema);
+const validateSetNotePinned = validateInput(setNotePinnedArgsSchema);
 const validateRenameTag = validateInput(renameTagArgsSchema);
 const validateDeleteTag = validateInput(deleteTagArgsSchema);
 const validateSuggestForNote = validateInput(suggestForNoteArgsSchema);
@@ -95,7 +97,10 @@ export const resolvers = {
           break;
       }
 
-      const query = Note.find(filter).sort(sortObj);
+      // Pinned notes sort first, ahead of whatever order was requested —
+      // server-side, matching how every other `notes` sort is decided here
+      // rather than left to the client.
+      const query = Note.find(filter).sort({ pinned: -1, ...sortObj });
       if (limit && limit > 0) query.limit(limit);
       return await query;
     },
@@ -283,6 +288,29 @@ export const resolvers = {
         await snapshotNote(previous, changeReason || 'edit');
       }
 
+      return note;
+    },
+
+    /**
+     * Pin or unpin a note. Scoped to the owner exactly like updateNote —
+     * `findOneAndUpdate({ _id, userId }, ...)` is the same "not found" shape
+     * for someone else's note as every other write here. Not routed through
+     * `updateNote`'s content/sanitize/version pipeline: pinning is not an
+     * edit, and must not create a history entry or touch `updatedAt`.
+     */
+    setNotePinned: async (_, rawArgs, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const { id, pinned } = validateSetNotePinned(rawArgs);
+      if (!id || id === 'undefined' || !mongoose.isValidObjectId(id)) {
+        throw new Error(`Invalid Note ID format: ${ id }`);
+      }
+      const note = await Note.findOneAndUpdate(
+        { _id: id, userId },
+        { pinned, pinnedAt: pinned ? new Date() : null },
+        { new: true }
+      );
+      if (!note) throw new Error('Note not found or you do not have permission to edit it');
       return note;
     },
 

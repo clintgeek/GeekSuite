@@ -42,6 +42,19 @@ const NoteSchema = new mongoose.Schema(
       type: String,
       select: false,
     },
+    // Pin a note to the top of the list. `pinnedAt` is the moment it was
+    // pinned (null when not), kept separately from `updatedAt` so pinning a
+    // note doesn't masquerade as an edit and isn't cleared by one — it is set
+    // and cleared only by `setNotePinned`.
+    pinned: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    pinnedAt: {
+      type: Date,
+      default: null,
+    },
   },
   {
     timestamps: true,
@@ -51,6 +64,9 @@ const NoteSchema = new mongoose.Schema(
 NoteSchema.index({ createdAt: 1 });
 NoteSchema.index({ updatedAt: 1 });
 NoteSchema.index({ title: 'text', content: 'text', tags: 'text' });
+// The `notes` query sorts pinned notes first, then by the requested order —
+// this compound index serves that shape directly for the default sort.
+NoteSchema.index({ pinned: -1, updatedAt: -1 });
 
 const Note = noteConn.models.Note || noteConn.model('Note', NoteSchema);
 

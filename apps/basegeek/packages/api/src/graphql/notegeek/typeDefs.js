@@ -74,6 +74,10 @@ export const typeDefs = gql`
     tags: [String!]!
     isLocked: Boolean!
     isEncrypted: Boolean!
+    """Pinned notes sort first in \`notes\`. Set only by setNotePinned."""
+    pinned: Boolean!
+    """When this note was pinned; null when it isn't."""
+    pinnedAt: Date
     createdAt: Date!
     updatedAt: Date!
   }
@@ -153,6 +157,8 @@ export const typeDefs = gql`
     page, read with rules for ruled lines and printed text.
     Changes nothing. Failures are errors, never an empty transcript."""
     transcribeSketch(image: String!, mediaType: String!, source: String): SketchTranscript!
+    """Pin or unpin a note. Scoped to the owner, like every other note mutation."""
+    setNotePinned(id: ID!, pinned: Boolean!): Note!
     deleteNote(id: ID!): Boolean!
     renameTag(oldTag: String!, newTag: String!): Boolean!
     deleteTag(tag: String!): Boolean!
