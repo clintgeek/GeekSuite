@@ -11,6 +11,9 @@ import { previewText } from '../../utils/previewText';
 import { graphiteTokens } from '../../theme/tokens';
 import TypeIcon from './TypeIcon';
 import { CodePreview, NoteThumb } from './NotePreview';
+// Deep-import (see RichTextEditor.jsx for why) instead of the
+// '@mui/icons-material' barrel.
+import PushPin from '@mui/icons-material/PushPin';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -32,6 +35,33 @@ function highlightQuery(text, query) {
         part.toLowerCase() === query.toLowerCase()
             ? <mark key={i}>{part}</mark>
             : part
+    );
+}
+
+/**
+ * A pinned note's quiet marker — same visual weight as `TypeIcon` (size,
+ * `text.secondary`), rendered only when the note is pinned so its
+ * accessible name ("Pinned") exists only then. No yellow: the highlighter
+ * accent is a fill behind ink, never a glyph or text colour on its own.
+ */
+function PinGlyph({ size = 14 }) {
+    return (
+        <Box
+            component="span"
+            role="img"
+            aria-label="Pinned"
+            title="Pinned"
+            sx={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flexShrink: 0,
+                color: 'text.secondary',
+                lineHeight: 0,
+            }}
+        >
+            <PushPin aria-hidden sx={{ fontSize: size }} />
+        </Box>
     );
 }
 
@@ -150,6 +180,7 @@ function NoteRow({ note, to, onClick, query, maxPreview = 160, dateField = 'upda
                         minWidth: 0,
                     }}
                 >
+                    {note.pinned && <PinGlyph size={14} />}
                     <TypeIcon type={type} size={15} />
                     {tags.length > 0 && (
                         <Typography

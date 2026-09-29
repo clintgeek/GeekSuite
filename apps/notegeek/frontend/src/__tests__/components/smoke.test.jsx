@@ -20,7 +20,7 @@ import Layout from '../../components/Layout';
 // Minimal mocks for Apollo queries used by NoteList / Sidebar inside Layout
 const GET_NOTES = gql`
     query GetNotes($tag: String, $prefix: String, $type: String, $limit: Int) {
-        notes(tag: $tag, prefix: $prefix, type: $type, limit: $limit) { id title content type tags createdAt updatedAt }
+        notes(tag: $tag, prefix: $prefix, type: $type, limit: $limit) { id title content type tags pinned pinnedAt createdAt updatedAt }
     }
 `;
 const GET_TAGS = gql`

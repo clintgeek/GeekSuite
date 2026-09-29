@@ -80,6 +80,23 @@ export const onNoteUpdated = (cache) => {
  * root fields: the alternative is a sidebar and a set of note rows showing a
  * tag that no longer exists.
  */
+/**
+ * A note was pinned or unpinned (`hooks/usePinNote.js`).
+ *
+ * The note's own fields merge themselves — `setNotePinned` selects
+ * `pinned`/`pinnedAt` and Apollo merges them onto the existing `Note:<id>`
+ * entity. What does not follow automatically is list ORDER: the gateway
+ * sorts pinned notes first (`resolvers.js`), and the client has no honest
+ * way to resort an arbitrary cached `notes(tag:, prefix:, type:, limit:)`
+ * variant without knowing which one this note belongs to — so, same
+ * reasoning as `onNoteUpdated`, cached `notes` lists are evicted rather than
+ * patched, and refetch on next read.
+ */
+export const onNotePinned = (cache) => {
+  cache.evict({ id: 'ROOT_QUERY', fieldName: 'notes' });
+  cache.gc();
+};
+
 export const onTagsRewritten = (cache) => {
   cache.evict({ id: 'ROOT_QUERY', fieldName: 'note' });
   evictNoteDerived(cache);

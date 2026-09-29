@@ -31,6 +31,8 @@ const NOTE_A = {
   content: 'call back',
   type: 'text',
   tags: ['house'],
+  pinned: false,
+  pinnedAt: null,
   createdAt: '2026-09-01T00:00:00.000Z',
   updatedAt: '2026-09-01T00:00:00.000Z',
 };

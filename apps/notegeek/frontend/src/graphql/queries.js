@@ -8,6 +8,8 @@ export const GET_NOTES = gql`
             content
             type
             tags
+            pinned
+            pinnedAt
             createdAt
             updatedAt
         }
@@ -24,6 +26,8 @@ export const GET_NOTE_BY_ID = gql`
             tags
             isLocked
             isEncrypted
+            pinned
+            pinnedAt
             createdAt
             updatedAt
         }

@@ -93,6 +93,11 @@ function QuickCaptureHome() {
   };
 
   const recentNotes = notes.slice(0, RECENT_COUNT);
+  // Pinned notes get their own quiet group above Recent — the server already
+  // sorts them first, so this is a client-side split of the same slice, not
+  // a resort, and they are pulled out so Recent never repeats them.
+  const pinnedNotes = recentNotes.filter((n) => n.pinned);
+  const otherNotes = recentNotes.filter((n) => !n.pinned);
   const canCapture = captureText.trim().length > 0;
 
   return (
@@ -161,43 +166,63 @@ function QuickCaptureHome() {
             description="Write a thought in the box above and press Save. The camera makes a note from a photo of a page; the pen starts a sketch."
           />
         ) : (
-          <Box component="section" aria-labelledby="home-recent">
-            <SectionHeading
-              id="home-recent"
-              action={
-                <ButtonBase
-                  onClick={() => navigate('/notes')}
-                  sx={{
-                    ...tapTarget44,
-                    gap: '4px',
-                    px: '6px',
-                    borderRadius: '8px',
-                    fontSize: '0.8125rem',
-                    fontWeight: 500,
-                    color: 'text.secondary',
-                    '&:hover': { color: 'text.primary' },
-                    '&:focus-visible': { outline: `2px solid ${g.ink}`, outlineOffset: 2 },
-                  }}
+          <>
+            {pinnedNotes.length > 0 && (
+              <Box component="section" aria-labelledby="home-pinned">
+                <SectionHeading id="home-pinned">Pinned</SectionHeading>
+                <Box>
+                  {pinnedNotes.map((note, idx) => (
+                    <React.Fragment key={note.id || note._id}>
+                      {idx > 0 && <Divider sx={{ borderColor: theme.palette.divider, mx: '8px' }} />}
+                      <NoteRow
+                        note={note}
+                        onClick={() => navigate(`/notes/${note.id || note._id}`)}
+                      />
+                    </React.Fragment>
+                  ))}
+                </Box>
+              </Box>
+            )}
+            {otherNotes.length > 0 && (
+              <Box component="section" aria-labelledby="home-recent">
+                <SectionHeading
+                  id="home-recent"
+                  action={
+                    <ButtonBase
+                      onClick={() => navigate('/notes')}
+                      sx={{
+                        ...tapTarget44,
+                        gap: '4px',
+                        px: '6px',
+                        borderRadius: '8px',
+                        fontSize: '0.8125rem',
+                        fontWeight: 500,
+                        color: 'text.secondary',
+                        '&:hover': { color: 'text.primary' },
+                        '&:focus-visible': { outline: `2px solid ${g.ink}`, outlineOffset: 2 },
+                      }}
+                    >
+                      All notes
+                      <ArrowForward aria-hidden sx={{ fontSize: 15 }} />
+                    </ButtonBase>
+                  }
                 >
-                  All notes
-                  <ArrowForward aria-hidden sx={{ fontSize: 15 }} />
-                </ButtonBase>
-              }
-            >
-              Recent
-            </SectionHeading>
-            <Box>
-              {recentNotes.map((note, idx) => (
-                <React.Fragment key={note.id || note._id}>
-                  {idx > 0 && <Divider sx={{ borderColor: theme.palette.divider, mx: '8px' }} />}
-                  <NoteRow
-                    note={note}
-                    onClick={() => navigate(`/notes/${note.id || note._id}`)}
-                  />
-                </React.Fragment>
-              ))}
-            </Box>
-          </Box>
+                  Recent
+                </SectionHeading>
+                <Box>
+                  {otherNotes.map((note, idx) => (
+                    <React.Fragment key={note.id || note._id}>
+                      {idx > 0 && <Divider sx={{ borderColor: theme.palette.divider, mx: '8px' }} />}
+                      <NoteRow
+                        note={note}
+                        onClick={() => navigate(`/notes/${note.id || note._id}`)}
+                      />
+                    </React.Fragment>
+                  ))}
+                </Box>
+              </Box>
+            )}
+          </>
         )}
       </Box>
     </Box>

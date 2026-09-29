@@ -12,6 +12,7 @@ import TranscribeDialog from '../components/editors/TranscribeDialog';
 import { sketchHasShapes } from '../utils/sketchExport';
 import { derivedNoteContent, derivedNoteTitle } from '../utils/sketchToText';
 import NoteHistoryDialog from '../components/notes/NoteHistoryDialog';
+import { usePinNote } from '../hooks/usePinNote';
 import { useToast } from '@geeksuite/ui';
 import { useAppPreferences } from '@geeksuite/user';
 import { NoteShell, NoteMetaBar, NoteActions, NoteTypeRouter, NOTE_TYPES, SuggestionStrip } from '../components/notes';
@@ -58,6 +59,18 @@ function NoteEditorPage() {
   // (graphql/cacheUpdates.js) is what actually makes the new note appear.
   const [createNoteMutation] = useMutation(CREATE_NOTE, { update: onNoteCreated });
   const [updateNoteMutation] = useMutation(UPDATE_NOTE, { update: onNoteUpdated });
+  const [setPinned, { loading: isPinning }] = usePinNote();
+  // Usually just a read of `noteToEdit.pinned` — the note entity merges its
+  // own `pinned`/`pinnedAt` (usePinNote's optimistic response) and
+  // `noteToEdit` reads that same normalized entity via GET_NOTE_BY_ID. But a
+  // note that autosaved and was never navigated to keeps `id === 'new'` in
+  // the URL (deliberately — see the create branch of handleSave below), so
+  // GET_NOTE_BY_ID stays `skip`ped and `noteToEdit` stays undefined even
+  // after it has a real id. `pinnedOverride` is the local fallback for
+  // exactly that window: set by `handlePin`, cleared whenever this form is
+  // (re)initialized for a note identity (below).
+  const [pinnedOverride, setPinnedOverride] = useState(null);
+  const pinned = pinnedOverride !== null ? pinnedOverride : !!noteToEdit?.pinned;
 
   // Form state
   const [title, setTitle] = useState('');
@@ -165,6 +178,7 @@ function NoteEditorPage() {
       resetForm();
       savedNoteIdRef.current = null;
       setNoteType(getTypeFromQuery() || NOTE_TYPES.MARKDOWN);
+      setPinnedOverride(null);
       initializedFor.current = identity;
       return;
     }
@@ -174,6 +188,7 @@ function NoteEditorPage() {
       setContent(noteToEdit.content || '');
       setTags(noteToEdit.tags || []);
       setLastSavedAt(toDate(noteToEdit.updatedAt));
+      setPinnedOverride(null);
       savedNoteIdRef.current = id;
 
       if (noteToEdit.type && Object.values(NOTE_TYPES).includes(noteToEdit.type)) {
@@ -659,6 +674,24 @@ function NoteEditorPage() {
     };
   }, []);
 
+  /**
+   * Pin / unpin. Only offered once the note actually exists server-side
+   * (`savedNoteId`), same gating as History — an unsaved draft has nothing
+   * to pin. Feedback is error-only: a successful toggle is visible right in
+   * the menu label and the row's own glyph, so a toast would just be noise.
+   */
+  const handlePin = async () => {
+    if (!savedNoteId) return;
+    const next = !pinned;
+    setPinnedOverride(next);
+    try {
+      await setPinned(savedNoteId, next);
+    } catch (err) {
+      setPinnedOverride(!next);
+      notify(err?.message || 'Could not update the pin.', { tone: 'error' });
+    }
+  };
+
   // Back / cancel — flush save if dirty, then navigate away
   const handleBack = useCallback(() => {
     if (dirtyRef.current) {
@@ -815,6 +848,9 @@ function NoteEditorPage() {
                 canToggleEdit={isMindMap && !isNewNote && !!savedNoteId}
                 isEditMode={isEditMode}
                 onHistory={savedNoteId ? () => setHistoryOpen(true) : undefined}
+                onPin={savedNoteId ? handlePin : undefined}
+                pinned={pinned}
+                isPinning={isPinning}
                 onCompose={canCompose ? () => handleCompose() : undefined}
                 isComposing={isComposing}
                 onTranscribe={isHandwritten ? handleTranscribe : undefined}

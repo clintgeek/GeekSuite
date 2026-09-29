@@ -23,6 +23,8 @@ import HistoryIcon from '@mui/icons-material/History';
 import Visibility from '@mui/icons-material/Visibility';
 import ArrowBack from '@mui/icons-material/ArrowBack';
 import TextSnippetOutlined from '@mui/icons-material/TextSnippetOutlined';
+import PushPin from '@mui/icons-material/PushPin';
+import PushPinOutlined from '@mui/icons-material/PushPinOutlined';
 
 const isMac = typeof navigator !== 'undefined' && /Mac|iP(hone|ad|od)/.test(navigator.platform || navigator.userAgent || '');
 const SAVE_SHORTCUT = isMac ? '⌘S' : 'Ctrl+S';
@@ -83,6 +85,13 @@ function NoteActions({
   onCompose,
   isComposing = false,
   onHistory,
+  // Pin / unpin. Offered only when the handler is passed (a brand-new,
+  // never-saved note has nothing to pin yet — see NoteEditorPage). The
+  // label and icon flip on `pinned`; a menu item, not a toggle switch, so
+  // it reads the same way "Save now" and "Delete" do.
+  onPin,
+  pinned = false,
+  isPinning = false,
   // Sketches only (DOCS/HANDWRITING.md §2). Offered whenever the handler is
   // passed; disabled while the sketch is empty, so the entry is still
   // discoverable on a blank page.
@@ -165,6 +174,14 @@ function NoteActions({
             >
               {SAVE_SHORTCUT}
             </Typography>
+          </MenuItem>
+        )}
+        {onPin && (
+          <MenuItem onClick={run(onPin)} disabled={isPinning} sx={itemSx}>
+            <ListItemIcon>
+              {pinned ? <PushPin fontSize="small" /> : <PushPinOutlined fontSize="small" />}
+            </ListItemIcon>
+            <ListItemText>{pinned ? 'Unpin' : 'Pin'}</ListItemText>
           </MenuItem>
         )}
         {onHistory && (

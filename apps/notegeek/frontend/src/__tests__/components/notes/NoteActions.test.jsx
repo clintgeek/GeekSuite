@@ -123,6 +123,61 @@ describe('NoteActions', () => {
     });
 });
 
+describe('NoteActions — Pin/Unpin', () => {
+    let mockOnSave, mockOnDelete;
+
+    beforeEach(() => {
+        mockOnSave = vi.fn();
+        mockOnDelete = vi.fn();
+        vi.clearAllMocks();
+    });
+
+    it('offers no Pin/Unpin without a handler (an unsaved note has nothing to pin)', () => {
+        render(<NoteActions onSave={mockOnSave} onDelete={mockOnDelete} />, { wrapper: ThemeWrapper });
+        const menu = openMenu();
+        expect(within(menu).queryByRole('menuitem', { name: /^pin$/i })).not.toBeInTheDocument();
+        expect(within(menu).queryByRole('menuitem', { name: /^unpin$/i })).not.toBeInTheDocument();
+    });
+
+    it('labels the item "Pin" for an unpinned note, and calls onPin', () => {
+        const onPin = vi.fn();
+        render(<NoteActions onSave={mockOnSave} onDelete={mockOnDelete} onPin={onPin} pinned={false} />, { wrapper: ThemeWrapper });
+        const menu = openMenu();
+        const item = within(menu).getByRole('menuitem', { name: 'Pin' });
+        expect(within(menu).queryByRole('menuitem', { name: 'Unpin' })).not.toBeInTheDocument();
+        fireEvent.click(item);
+        expect(onPin).toHaveBeenCalledTimes(1);
+    });
+
+    it('labels the item "Unpin" for a pinned note, and calls onPin', () => {
+        const onPin = vi.fn();
+        render(<NoteActions onSave={mockOnSave} onDelete={mockOnDelete} onPin={onPin} pinned />, { wrapper: ThemeWrapper });
+        const menu = openMenu();
+        const item = within(menu).getByRole('menuitem', { name: 'Unpin' });
+        expect(within(menu).queryByRole('menuitem', { name: 'Pin' })).not.toBeInTheDocument();
+        fireEvent.click(item);
+        expect(onPin).toHaveBeenCalledTimes(1);
+    });
+
+    it('flips the label when `pinned` flips, across a re-render', () => {
+        const onPin = vi.fn();
+        const { rerender } = render(
+            <NoteActions onSave={mockOnSave} onDelete={mockOnDelete} onPin={onPin} pinned={false} />,
+            { wrapper: ThemeWrapper },
+        );
+        const firstMenu = openMenu();
+        expect(firstMenu).toHaveTextContent('Pin');
+        fireEvent.keyDown(firstMenu, { key: 'Escape' });
+
+        rerender(
+            <ThemeWrapper>
+                <NoteActions onSave={mockOnSave} onDelete={mockOnDelete} onPin={onPin} pinned />
+            </ThemeWrapper>,
+        );
+        expect(openMenu()).toHaveTextContent('Unpin');
+    });
+});
+
 describe('BackButton', () => {
     it('calls back', () => {
         const onBack = vi.fn();

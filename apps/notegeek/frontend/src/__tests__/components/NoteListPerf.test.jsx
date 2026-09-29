@@ -25,6 +25,8 @@ const GET_NOTES = gql`
             content
             type
             tags
+            pinned
+            pinnedAt
             createdAt
             updatedAt
         }

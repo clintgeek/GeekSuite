@@ -26,6 +26,8 @@ const GET_NOTES = gql`
             content
             type
             tags
+            pinned
+            pinnedAt
             createdAt
             updatedAt
         }
@@ -164,11 +166,18 @@ function NoteList({ tag, prefix }) {
         return arr;
     }, [notes, sortBy]);
 
+    // Pinned notes get their own group ABOVE everything else — the server
+    // already sorts them first, so this is a client-side split, not a
+    // resort. They are pulled out here so neither the date groups nor the
+    // A–Z flat list repeat them below.
+    const pinnedNotes = React.useMemo(() => sortedNotes.filter((n) => n.pinned), [sortedNotes]);
+    const unpinnedNotes = React.useMemo(() => sortedNotes.filter((n) => !n.pinned), [sortedNotes]);
+
     // Recency groups apply to the two date sorts only; A–Z is one run.
     const dateField = sortBy === 'created' ? 'createdAt' : 'updatedAt';
     const groups = React.useMemo(
-        () => (sortBy === 'title' ? null : groupByRecency(sortedNotes, { field: dateField })),
-        [sortedNotes, sortBy, dateField]
+        () => (sortBy === 'title' ? null : groupByRecency(unpinnedNotes, { field: dateField })),
+        [unpinnedNotes, sortBy, dateField]
     );
 
     if (isLoadingList && !data) {
@@ -289,23 +298,34 @@ function NoteList({ tag, prefix }) {
                 </GeekSheet>
             )}
 
-            {/* The list — grouped by recency for date sorts */}
+            {/* The list — pinned first (its own group, never repeated below),
+                then grouped by recency for date sorts, or flat for A–Z. */}
             {sortedNotes.length === 0 ? (
                 <GeekEmptyState
                     title={tag ? 'No notes tagged here yet.' : 'No notes yet'}
                     description={!tag ? 'Create your first note to get started' : undefined}
                 />
-            ) : groups ? (
-                groups.map((group) => (
-                    <Box component="section" key={group.key} aria-label={group.label}>
-                        <GroupHeading label={group.label} count={group.notes.length} />
-                        <RowList notes={group.notes} dateField={dateField} />
-                    </Box>
-                ))
             ) : (
-                <Box sx={{ pt: '8px' }}>
-                    <RowList notes={sortedNotes} dateField={dateField} />
-                </Box>
+                <>
+                    {pinnedNotes.length > 0 && (
+                        <Box component="section" aria-label="Pinned">
+                            <GroupHeading label="Pinned" count={pinnedNotes.length} />
+                            <RowList notes={pinnedNotes} dateField={dateField} />
+                        </Box>
+                    )}
+                    {groups ? (
+                        groups.map((group) => (
+                            <Box component="section" key={group.key} aria-label={group.label}>
+                                <GroupHeading label={group.label} count={group.notes.length} />
+                                <RowList notes={group.notes} dateField={dateField} />
+                            </Box>
+                        ))
+                    ) : unpinnedNotes.length > 0 ? (
+                        <Box sx={{ pt: '8px' }}>
+                            <RowList notes={unpinnedNotes} dateField={dateField} />
+                        </Box>
+                    ) : null}
+                </>
             )}
         </Box>
     );

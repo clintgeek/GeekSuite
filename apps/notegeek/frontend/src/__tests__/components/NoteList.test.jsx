@@ -12,6 +12,8 @@ const GET_NOTES = gql`
             content
             type
             tags
+            pinned
+            pinnedAt
             createdAt
             updatedAt
         }
@@ -100,6 +102,40 @@ describe('NoteList Unit Tests', () => {
         expect(sketches).toHaveAttribute('aria-pressed', 'false');
         // No Lab Notebook stamps left behind.
         expect(document.querySelector('.type-stamp')).toBeNull();
+    });
+
+    it('gives pinned notes their own group above the date groups, never repeated inside them', async () => {
+        // Same wall-clock pin as the recency test above.
+        vi.useFakeTimers({ shouldAdvanceTime: true, now: new Date(2026, 8, 26, 12, 0, 0) });
+        const now = Date.now();
+        const iso = (h) => new Date(now - h * 3600e3).toISOString();
+        const notes = [
+            { id: '1', title: 'Pinned but old', content: '', type: 'text', tags: [], pinned: true, createdAt: iso(2000), updatedAt: iso(24 * 60) },
+            { id: '2', title: 'Fresh', content: '', type: 'text', tags: [], pinned: false, createdAt: iso(1000), updatedAt: iso(0.05) },
+        ];
+        renderWithProviders(<NoteList />, { mocks: [mockNotesQuery(notes)] });
+
+        await screen.findByRole('heading', { name: 'Pinned' });
+        const pinnedSection = screen.getByRole('region', { name: 'Pinned' });
+        expect(pinnedSection).toHaveTextContent('Pinned but old');
+
+        // The pinned note is old enough it would otherwise land in a month
+        // bucket, not "Today" — its OWN group is what puts it up top, and it
+        // must not also appear inside "Today".
+        const today = screen.getByRole('region', { name: 'Today' });
+        expect(today).toHaveTextContent('Fresh');
+        expect(today).not.toHaveTextContent('Pinned but old');
+        expect(screen.getAllByText('Pinned but old')).toHaveLength(1);
+        vi.useRealTimers();
+    });
+
+    it('shows no "Pinned" heading when nothing is pinned', async () => {
+        const notes = [
+            { id: '1', title: 'One', content: '', type: 'text', tags: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        ];
+        renderWithProviders(<NoteList />, { mocks: [mockNotesQuery(notes)] });
+        await screen.findByText('One');
+        expect(screen.queryByRole('heading', { name: 'Pinned' })).not.toBeInTheDocument();
     });
 
     it('shows empty state when no notes', async () => {

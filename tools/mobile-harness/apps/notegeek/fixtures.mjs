@@ -11,11 +11,13 @@ const now = new Date();
 const hoursAgo = (h) => new Date(now.getTime() - h * 3600 * 1000).toISOString();
 const daysAgo = (d) => hoursAgo(d * 24);
 
-const note = (id, title, type, tags, content, updatedAt = hoursAgo(2), createdAt = daysAgo(20)) => ({
+const note = (id, title, type, tags, content, updatedAt = hoursAgo(2), createdAt = daysAgo(20), pinned = false, pinnedAt = null) => ({
   __typename: 'Note',
   id, title, content, type, tags,
   isLocked: false,
   isEncrypted: false,
+  pinned,
+  pinnedAt,
   createdAt,
   updatedAt,
 });
@@ -70,7 +72,10 @@ export const NOTE_SKETCH = note('n3', 'Sketch: onboarding flow', 'handwritten', 
 
 // A markdown note the size of Chef's real ones (most are markdown reference
 // notes of a few hundred to a few thousand characters): headings, a list, a
-// checklist, a link. The Graphite editor scenes write into it.
+// checklist, a link. The Graphite editor scenes write into it. Also the
+// suite's one pinned fixture note (scenes 01p, 06p): it sits mid-list by
+// `updatedAt` (daysAgo(1.2), not the newest), so a scene showing it at the
+// top of a "Pinned" group actually demonstrates the pin, not just recency.
 export const NOTE_MD = note('n2', 'Recipe: brown butter chocolate chip cookies', 'markdown', ['recipes'], [
   '# Cookies',
   '',
@@ -88,7 +93,7 @@ export const NOTE_MD = note('n2', 'Recipe: brown butter chocolate chip cookies',
   '- The [original recipe](https://example.com/cookies) halves cleanly.',
   '',
   '> Rest the dough at least 12 hours. 36 is better.',
-].join('\n'), daysAgo(1.2));
+].join('\n'), daysAgo(1.2), daysAgo(20), true, hoursAgo(3));
 
 // Search results: the gateway's `searchNotes` shape (`_id`, `snippet`).
 export const SEARCH_RESULTS = [
@@ -176,6 +181,9 @@ export const OPS = {
   RenameTag: { renameTag: true },
   DeleteTag: { deleteTag: true },
   SearchNotes: { searchNotes: [] },
+  SetNotePinned: (vars) => ({
+    setNotePinned: { __typename: 'Note', id: vars.id, pinned: vars.pinned, pinnedAt: vars.pinned ? now.toISOString() : null },
+  }),
 };
 
 export async function routes(ctx, { base, scheme, viewport } = {}) {

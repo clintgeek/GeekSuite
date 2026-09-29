@@ -318,6 +318,26 @@ export const scenes = [
       await h.settle(300);
     },
   },
+  {
+    // A pinned note (NOTE_MD, "Recipe: ...") gets its own quiet "Pinned"
+    // group above "Recent" — and must not also show up inside Recent.
+    name: '01p-home-pinned',
+    goto: '/',
+    wait: 1200,
+    async setup(page, h) {
+      const pinnedHeading = page.getByRole('heading', { name: 'Pinned' });
+      if (!(await pinnedHeading.count())) throw new Error('home has no "Pinned" heading with a pinned note present');
+      const pinnedRow = page.locator('[data-note-row]').filter({ has: page.getByRole('img', { name: 'Pinned' }) });
+      if (!(await pinnedRow.count())) throw new Error('no note row under "Pinned" carries the pin glyph');
+      const recentHeading = page.getByRole('heading', { name: 'Recent' });
+      if (await recentHeading.count()) {
+        const recentSection = page.locator('section', { has: recentHeading });
+        if (await recentSection.getByText('Recipe: brown butter chocolate chip cookies').count()) {
+          throw new Error('the pinned note is repeated inside "Recent"');
+        }
+      }
+    },
+  },
   // Notes list — bottom nav still visible, "Notes" tab active.
   { name: '02-notes-list', goto: '/notes', wait: 1200 },
   // Editor route — an existing text note, so the sticky bar shows
@@ -436,6 +456,25 @@ export const scenes = [
       await h.settle(400);
       if (!(await page.getByRole('menuitem', { name: /version history/i }).count())) {
         throw new Error('⋯ menu has no Version history item');
+      }
+    },
+    teardown: (page, h) => h.esc(400),
+  },
+  {
+    // The same ⋯ menu on the pinned fixture note (NOTE_MD): the item reads
+    // "Unpin", not "Pin".
+    name: '06p-editor-menu-unpin',
+    async setup(page, h) {
+      await openNote(page, h, NOTE_MD, '/notes/n2/edit');
+      const more = page.getByRole('button', { name: /more note actions/i }).first();
+      if (!(await more.count())) throw new Error('no "More note actions" button');
+      await more.click();
+      await h.settle(400);
+      if (!(await page.getByRole('menuitem', { name: /^unpin$/i }).count())) {
+        throw new Error('⋯ menu has no "Unpin" for a pinned note');
+      }
+      if (await page.getByRole('menuitem', { name: /^pin$/i }).count()) {
+        throw new Error('⋯ menu shows "Pin" on an already-pinned note');
       }
     },
     teardown: (page, h) => h.esc(400),
