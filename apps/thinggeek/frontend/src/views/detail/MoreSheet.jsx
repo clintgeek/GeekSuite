@@ -1,7 +1,7 @@
 /** ⋯ More: the rare things you do to a thing. */
 import React from 'react';
 import { Box, ButtonBase, Typography } from '@mui/material';
-import { DeleteOutline as TrashIcon, EditOutlined as EditIcon, ReceiptLongOutlined as ReportIcon } from '@mui/icons-material';
+import { DeleteOutline as TrashIcon, EditOutlined as EditIcon, QrCode2Outlined as LabelIcon, ReceiptLongOutlined as ReportIcon } from '@mui/icons-material';
 import { GeekSheet } from '@geeksuite/ui';
 
 function Row({ icon, label, hint, onClick, danger }) {
@@ -21,7 +21,7 @@ function Row({ icon, label, hint, onClick, danger }) {
   );
 }
 
-export default function MoreSheet({ open, onClose, title, onEdit, onReport, onTrash, trashDays = 30 }) {
+export default function MoreSheet({ open, onClose, title, onEdit, onPrintLabel, onReport, onTrash, trashDays = 30 }) {
   const pick = (fn) => () => {
     onClose();
     fn();
@@ -30,6 +30,7 @@ export default function MoreSheet({ open, onClose, title, onEdit, onReport, onTr
     <GeekSheet open={open} onClose={onClose} title="More" description={title}>
       <Box component="ul" sx={{ m: 0, p: 0, pb: 1 }}>
         <Row icon={<EditIcon />} label="Edit everything" hint="Fields, dates, value, accessories, photos and documents" onClick={pick(onEdit)} />
+        {onPrintLabel ? <Row icon={<LabelIcon />} label="Print label" hint="A sticker with a QR code back to this thing" onClick={pick(onPrintLabel)} /> : null}
         <Row icon={<ReportIcon />} label="Insurance report" hint="Print or export the whole ledger" onClick={pick(onReport)} />
         <Row icon={<TrashIcon />} label="Move to Trash" hint={`Kept for ${trashDays} days, then purged with its files`} onClick={pick(onTrash)} danger />
       </Box>

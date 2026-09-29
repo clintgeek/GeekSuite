@@ -502,6 +502,17 @@ export const scenes = [
       if (!(await page.getByTestId('onboarding-checklist').count())) throw new Error('no first-run checklist');
     },
   },
+  {
+    // ⋯ More: Print label, between Edit everything and Insurance report.
+    name: '20-more-print-label',
+    goto: '/thing/th1',
+    wait: 1800,
+    async setup(page, h) {
+      if (!(await click(page, h, page.getByTestId('detail-actions').getByRole('button', { name: 'More actions' }), 900))) return false;
+      if (!(await page.getByText('Print label', { exact: true }).count())) throw new Error('no Print label row');
+    },
+    teardown: (page, h) => h.esc(),
+  },
 ];
 
 // Known, ticketed violations. The list starts empty and stays that way.

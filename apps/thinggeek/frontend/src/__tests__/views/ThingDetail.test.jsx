@@ -1,9 +1,11 @@
 import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, within, waitFor } from '@testing-library/react';
-import { ThingDetailBody } from '../../views/detail/ThingDetail';
+import { Route, Routes, useLocation } from 'react-router-dom';
+import ThingDetail, { ThingDetailBody } from '../../views/detail/ThingDetail';
 import ReadinessPanel from '../../views/detail/ReadinessPanel';
 import { renderWithProviders } from '../testUtils';
+import { GET_THING } from '../../graphql/queries';
 import { crumbs, date, makeRifle, makeThing, typeRef } from '../fixtures';
 
 const body = (thing, props = {}) => <ThingDetailBody thing={thing} onPanel={() => {}} onFix={() => {}} uploads={[]} onRetry={() => {}} {...props} />;
@@ -154,6 +156,28 @@ describe('dates timeline', () => {
     expect(recurring).toHaveTextContent('Every year, counting from Mar 3, 2020');
     // overdue sorts first
     expect(rows[0]).toBe(overdue);
+  });
+});
+
+describe('the ⋯ More sheet, mounted for real', () => {
+  function LocationProbe() {
+    const location = useLocation();
+    return <p>At {location.pathname}{location.search}</p>;
+  }
+
+  it('Print label navigates to /labels?ids=<id>', async () => {
+    const thing = makeThing({ id: 'th1', name: 'Wendy', contentsCount: 0, contents: [] });
+    const mocks = [{ request: { query: GET_THING, variables: { id: 'th1' } }, result: { data: { thing } } }];
+    renderWithProviders(
+      <Routes>
+        <Route path="/thing/:id" element={<ThingDetail />} />
+        <Route path="/labels" element={<LocationProbe />} />
+      </Routes>,
+      { initialEntries: ['/thing/th1'], mocks }
+    );
+    fireEvent.click(await screen.findByRole('button', { name: 'More actions' }));
+    fireEvent.click(screen.getByText('Print label', { exact: true }));
+    expect(await screen.findByText('At /labels?ids=th1')).toBeInTheDocument();
   });
 });
 

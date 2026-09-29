@@ -28,6 +28,7 @@ import { isNotMemberError, reportNotMember } from '../../membership';
 import TagMark from '../../components/TagMark';
 import { MoveSheet } from '../../components/WherePicker';
 import { goBack } from '../../utils/goBack';
+import { labelsPath } from '../../utils/labelUrl';
 import EditThingDialog from '../edit/EditThingDialog';
 import ActionBar from './ActionBar';
 import AddFileSheet from './AddFileSheet';
@@ -219,6 +220,7 @@ export default function ThingDetail() {
             title={thing.name}
             trashDays={vocab.trashDays}
             onEdit={() => openPanel('edit')}
+            onPrintLabel={() => navigate(labelsPath(thing.id))}
             onReport={() => navigate('/insurance')}
             onTrash={() => openPanel('trash')}
           />

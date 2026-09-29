@@ -33,6 +33,7 @@ import {
   OpenInNew as OpenIcon,
   PhotoCameraOutlined as WalkIcon,
   PlaceOutlined as PlaceIcon,
+  QrCode2Outlined as LabelIcon,
 } from '@mui/icons-material';
 import { Link as RouterLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { GeekDialog, GeekErrorState, useToast } from '@geeksuite/ui';
@@ -45,6 +46,7 @@ import { MoveSheet } from '../components/WherePicker';
 import { thingPath } from '../components/navConfig';
 import { useThingActions } from '../hooks/useThingActions';
 import { useLocationType, useThingTree } from '../hooks/useThingMeta';
+import { labelsPath } from '../utils/labelUrl';
 import { libraryLinkWith } from '../utils/libraryFilter';
 import { visuallyHidden } from '../utils/a11y';
 import { buildTree, bySiblingOrder, countsText, flattenTree, isParentKind, kindOf } from '../utils/where';
@@ -329,6 +331,11 @@ function DrillDown({ at, live, byId, onMenu, onAddHere, onMove, onAddLocation, o
             <Button component={RouterLink} to={thingPath(node.id)} startIcon={<OpenIcon />} sx={{ color: 'text.primary' }}>
               Its page
             </Button>
+            {places.length ? (
+              <Button component={RouterLink} to={labelsPath(places.map((p) => p.id))} startIcon={<LabelIcon />} data-testid="where-print-labels" sx={{ color: 'text.primary' }}>
+                Print labels
+              </Button>
+            ) : null}
           </Box>
         </Box>
       ) : null}
