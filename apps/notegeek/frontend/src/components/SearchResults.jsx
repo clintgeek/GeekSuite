@@ -82,6 +82,7 @@ function SearchResults() {
                         <InputAdornment position="end">
                             <IconButton
                                 onClick={handleClear}
+                                aria-label="Clear search"
                                 edge="end"
                                 size="small"
                                 sx={{ color: 'text.disabled', '&:hover': { color: 'text.secondary' } }}
