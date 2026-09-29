@@ -353,6 +353,13 @@ export default function AddThing() {
         ) : null}
 
         <WherePicker value={parentId} onChange={setParentId} />
+        <Button
+          onClick={() => navigate('/walk')}
+          startIcon={<CameraIcon />}
+          sx={{ color: 'text.secondary', justifyContent: 'flex-start', minHeight: 44, justifySelf: 'start', px: 0.5 }}
+        >
+          Walk a room…
+        </Button>
         <TagInput value={tags} onChange={setTags} />
         {/* Enter in the name field saves (the bar's Save is outside the form on a phone). */}
         <button type="submit" hidden aria-hidden="true" tabIndex={-1} />

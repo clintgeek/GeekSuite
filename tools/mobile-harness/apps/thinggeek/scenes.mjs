@@ -474,6 +474,25 @@ export const scenes = [
   { name: '17-labels-selector', goto: '/labels', wait: 1400 },
   // …and a preview for one thing (Wendy, th1 — a container with a breadcrumb).
   { name: '17b-labels-preview', goto: '/labels?ids=th1', wait: 1600 },
+  // "Walk the room" (2026-09-29): a full-screen capture loop — the place as
+  // tape, a running count, the camera-or-name form, sticky type chips.
+  { name: '18-walk-empty', goto: '/walk?at=p-garage', wait: 1400 },
+  {
+    // Two quick captures: the count reaches 2, and the trip list shows both saved.
+    name: '18b-walk-two-items',
+    goto: '/walk?at=p-garage',
+    wait: 1400,
+    async setup(page, h) {
+      await page.getByLabel('Name *').fill('Extension cord');
+      if (!(await click(page, h, page.getByRole('button', { name: 'Next' }), 900))) return false;
+      await page.getByLabel('Name *').fill('Rake');
+      if (!(await click(page, h, page.getByRole('button', { name: 'Next' }), 900))) return false;
+      const count = await page.getByTestId('walk-count').textContent();
+      if (!count?.includes('2 added')) throw new Error('the running count did not reach 2');
+      await page.getByLabel('Name *').blur();
+      await h.settle(300);
+    },
+  },
 ];
 
 // Known, ticketed violations. The list starts empty and stays that way.

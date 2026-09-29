@@ -27,11 +27,12 @@ export const NAV = {
   settings: 'settings',
 };
 
-/** `tab`: the phone tab it lights. `back`: a sub-page — a back arrow, not a title-only bar. */
+/** `tab`: the phone tab it lights. `back`: a sub-page — a back arrow, not a title-only bar. `fullScreen`: the tab bar steps aside (its own Save/Done bar rides the foot instead). */
 export const ROUTES = [
   { path: '/', navId: NAV.library, title: 'Things', library: true, tab: 'things' },
   { path: '/thing/:id', navId: NAV.library, title: 'Thing', tab: 'things', back: true },
-  { path: '/add', navId: NAV.library, title: 'Add a thing', tab: 'add', back: true },
+  { path: '/add', navId: NAV.library, title: 'Add a thing', tab: 'add', back: true, fullScreen: true },
+  { path: '/walk', navId: NAV.where, title: 'Walk a room', tab: 'where', back: true, fullScreen: true },
   { path: '/attention', navId: NAV.attention, title: 'Needs attention', tab: 'attention' },
   { path: '/where', navId: NAV.where, title: 'Where', tab: 'where' },
   { path: '/types', navId: NAV.types, title: 'Types', tab: 'more' },
@@ -75,7 +76,7 @@ export function isBackPath(pathname) {
   return Boolean(routeFor(pathname)?.back);
 }
 
-/** The add screen carries its own Save bar; the tab bar steps aside for it. */
+/** The add screen and Walk carry their own Save/Done bar; the tab bar steps aside for them. */
 export function hidesTabBar(pathname) {
-  return routeFor(pathname)?.tab === 'add';
+  return Boolean(routeFor(pathname)?.fullScreen);
 }

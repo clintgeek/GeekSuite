@@ -31,6 +31,7 @@ import {
   FilterListOutlined as LibraryIcon,
   MoreVert as MoreIcon,
   OpenInNew as OpenIcon,
+  PhotoCameraOutlined as WalkIcon,
   PlaceOutlined as PlaceIcon,
 } from '@mui/icons-material';
 import { Link as RouterLink, useLocation, useNavigate, useSearchParams } from 'react-router-dom';
@@ -286,7 +287,7 @@ function ThingLevelRow({ item }) {
 
 const sheetSx = { border: 1, borderColor: 'border', borderRadius: '6px', bgcolor: 'background.paper', overflow: 'hidden', boxShadow: '0 2px 6px rgba(40, 25, 10, 0.12)' };
 
-function DrillDown({ at, live, byId, onMenu, onAddHere, onMove, onAddLocation, locationType }) {
+function DrillDown({ at, live, byId, onMenu, onAddHere, onMove, onAddLocation, onWalk, locationType }) {
   const node = at ? byId.get(at) : null;
   const path = node ? levelPath(node.id, byId) : [];
   const children = useMemo(() => {
@@ -318,6 +319,9 @@ function DrillDown({ at, live, byId, onMenu, onAddHere, onMove, onAddLocation, l
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1.5 }}>
             <Button variant="contained" startIcon={<AddIcon />} onClick={() => onAddHere(node)} data-testid="where-add-here">
               Add here
+            </Button>
+            <Button variant="outlined" startIcon={<WalkIcon />} onClick={() => onWalk(node)} data-testid="where-walk" sx={{ color: 'text.primary', borderColor: 'border' }}>
+              Walk this room
             </Button>
             <Button variant="outlined" startIcon={<MoveIcon />} onClick={() => onMove(node)} data-testid="where-move" sx={{ color: 'text.primary', borderColor: 'border' }}>
               Move
@@ -451,6 +455,10 @@ export default function WhereView() {
     setMenu(null);
     navigate('/add', { state: { parentId: node.id } });
   };
+  const walkHere = (node) => {
+    setMenu(null);
+    navigate(`/walk?at=${encodeURIComponent(node.id)}`);
+  };
 
   const drilled = isPhone && at && byId.has(at);
   let body;
@@ -483,6 +491,7 @@ export default function WhereView() {
         onAddHere={addHere}
         onMove={(n) => open('move', n)}
         onAddLocation={(n) => open('add', n)}
+        onWalk={walkHere}
         locationType={locationType}
       />
     );
@@ -555,6 +564,14 @@ export default function WhereView() {
               <AddIcon fontSize="small" />
             </ListItemIcon>
             Add a thing here
+          </MenuItem>
+        ) : null}
+        {menuIsParent ? (
+          <MenuItem onClick={() => walkHere(menuNode)} sx={{ minHeight: 44 }}>
+            <ListItemIcon>
+              <WalkIcon fontSize="small" />
+            </ListItemIcon>
+            Walk this room
           </MenuItem>
         ) : null}
         {menuIsParent && locationType ? (
