@@ -25,14 +25,11 @@ import AllNotesIcon from '@mui/icons-material/AutoStoriesOutlined';
 import MoreIcon from '@mui/icons-material/MoreHoriz';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { GeekSidebar, geekLayout, useGeekShell } from '@geeksuite/ui';
-import useTagStore from '../store/tagStore';
-import useNoteStore from '../store/noteStore';
 import TagContextMenu from './TagContextMenu';
 import { gql, useQuery } from '@apollo/client';
-import { toneForMode } from '@geeksuite/ui';
-import { glow, noteTypeColor, tapTarget44 } from '../theme/tokens';
+import { graphiteTokens, tapTarget44 } from '../theme/tokens';
 import { buildTagTree, filterTagTree } from '../utils/tagTree';
-import { NEW_NOTE_ITEM, navSections, activeNavId } from './navConfig';
+import { navSections, activeNavId } from './navConfig';
 
 const GET_TAGS = gql`
   query GetNoteTags {
@@ -53,48 +50,14 @@ const GET_TAG_COUNTS = gql`
   }
 `;
 
-// Earthy, editorial tag accent colors — spread across the hue wheel so
-// adjacent tags get visually distinct dots. Mapped deterministically from
-// tag name hash. First four are the real per-mode noteTypes palette values
-// (not a copy — dark mode used to reuse the light-mode hex here, which
-// skipped the dark lift `noteTypes` applies everywhere else, DOCS/SUITE_TODO.md
-// "notegeek mind-map off-palette colors"). The remaining four have no
-// noteTypes equivalent, so they're light-authored hues run through
-// `toneForMode` (packages/ui/src/color.js) for the same dark lift.
-const EXTRA_TAG_HUES = [
-    '#6B5A3A',  // warm umber
-    '#5C4A8A',  // muted indigo
-    '#7A4A5C',  // plum
-    '#3A6B7A',  // deep teal
-];
-
-function getTagColors(theme) {
-    return [
-        noteTypeColor(theme, 'markdown'),
-        noteTypeColor(theme, 'code'),
-        noteTypeColor(theme, 'mindmap'),
-        noteTypeColor(theme, 'handwritten'),
-        ...EXTRA_TAG_HUES.map((hue) => toneForMode(hue, theme)),
-    ];
-}
-
-function getTagColor(tagName, theme) {
-    let hash = 0;
-    for (let i = 0; i < tagName.length; i++) {
-        hash = tagName.charCodeAt(i) + ((hash << 5) - hash);
-    }
-    const colors = getTagColors(theme);
-    return colors[Math.abs(hash) % colors.length];
-}
-
 // ——— Section label ————————————————————————————————————————————————————
-// h6 variant: mono caps, letterspaced — the "Ink Studio" panel header.
+// h6 variant: sentence-case sans in secondary ink — a label, not a stamp.
 function SectionLabel({ children, sx }) {
     return (
         <Typography
             variant="h6"
             sx={{
-                color: 'text.muted',
+                color: 'text.secondary',
                 px: 1.5,
                 pt: 1.5,
                 pb: 0.5,
@@ -143,7 +106,7 @@ const ROW_SX = (theme) => ({
 function TagTreeRow({ node, level, activePath, isOpen, onToggle, theme, onNavigate, onTagMenu, renderChildren }) {
     const href = `/tags/${encodeURIComponent(node.path)}`;
     const isSelected = activePath === node.path;
-    const tagColor = getTagColor(node.path, theme);
+    const g = graphiteTokens(theme);
     const hasChildren = node.children.length > 0;
 
     return (
@@ -156,19 +119,10 @@ function TagTreeRow({ node, level, activePath, isOpen, onToggle, theme, onNaviga
                     borderRadius: '4px',
                     position: 'relative',
                     ...ROW_SX(theme),
-                    bgcolor: isSelected ? alpha(tagColor, 0.1) : 'transparent',
-                    '&:hover': { bgcolor: alpha(tagColor, isSelected ? 0.14 : 0.06) },
+                    // The tag being viewed: highlighter under ink.
+                    bgcolor: isSelected ? g.hl : 'transparent',
+                    '&:hover': { bgcolor: isSelected ? g.hl : alpha(g.ink, 0.05) },
                     '&:hover .tag-more-btn, &:focus-within .tag-more-btn': { opacity: 1 },
-                    '&::before': isSelected ? {
-                        content: '""',
-                        position: 'absolute',
-                        left: 0,
-                        top: 6,
-                        bottom: 6,
-                        width: 2,
-                        borderRadius: 1,
-                        bgcolor: tagColor,
-                    } : undefined,
                 }}
             >
                 {/* Indent + chevron (or a spacer the same width) */}
@@ -186,7 +140,7 @@ function TagTreeRow({ node, level, activePath, isOpen, onToggle, theme, onNaviga
                             minHeight: 24,
                             p: 0,
                             flexShrink: 0,
-                            color: 'text.secondary',
+                            color: isSelected ? g.onHl : 'text.secondary',
                             borderRadius: '4px',
                             [theme.breakpoints.down('md')]: { ...tapTarget44, width: 44, height: 44 },
                             '&:hover': { color: 'text.primary', bgcolor: 'transparent' },
@@ -221,23 +175,12 @@ function TagTreeRow({ node, level, activePath, isOpen, onToggle, theme, onNaviga
                         pl: '2px',
                         pr: '4px',
                         textDecoration: 'none',
-                        color: isSelected ? 'text.primary' : 'text.secondary',
+                        color: isSelected ? g.onHl : 'text.secondary',
                         borderRadius: '4px',
-                        '&:hover': { color: 'text.primary' },
-                        '&:focus-visible': { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: -2 },
+                        '&:hover': { color: isSelected ? g.onHl : 'text.primary' },
+                        '&:focus-visible': { outline: `2px solid ${g.ink}`, outlineOffset: -2 },
                     }}
                 >
-                    <Box
-                        aria-hidden
-                        sx={{
-                            width: 6,
-                            height: 6,
-                            borderRadius: '50%',
-                            bgcolor: tagColor,
-                            flexShrink: 0,
-                            opacity: isSelected ? 1 : 0.7,
-                        }}
-                    />
                     <Box
                         component="span"
                         sx={{
@@ -246,10 +189,8 @@ function TagTreeRow({ node, level, activePath, isOpen, onToggle, theme, onNaviga
                             overflow: 'hidden',
                             textOverflow: 'ellipsis',
                             whiteSpace: 'nowrap',
-                            fontFamily: theme.typography.fontFamilyMono,
-                            fontSize: '0.75rem',
+                            fontSize: '0.8125rem',
                             fontWeight: isSelected ? 600 : 400,
-                            letterSpacing: '0.01em',
                         }}
                     >
                         {node.name}
@@ -261,7 +202,7 @@ function TagTreeRow({ node, level, activePath, isOpen, onToggle, theme, onNaviga
                                 flexShrink: 0,
                                 fontFamily: theme.typography.fontFamilyMono,
                                 fontSize: '0.75rem',
-                                color: 'text.secondary',
+                                color: isSelected ? g.onHl : 'text.secondary',
                                 fontVariantNumeric: 'tabular-nums',
                             }}
                         >
@@ -282,9 +223,9 @@ function TagTreeRow({ node, level, activePath, isOpen, onToggle, theme, onNaviga
                         minWidth: 24,
                         minHeight: 24,
                         [theme.breakpoints.down('md')]: { ...tapTarget44 },
-                        color: 'text.secondary',
+                        color: isSelected ? g.onHl : 'text.secondary',
                         transition: 'opacity 100ms ease, color 100ms ease',
-                        '&:hover': { color: 'text.primary', bgcolor: 'transparent' },
+                        '&:hover': { color: isSelected ? g.onHl : 'text.primary', bgcolor: 'transparent' },
                         '&:focus-visible': { opacity: 1 },
                     }}
                     aria-label={`Tag options for ${node.path}`}
@@ -341,13 +282,14 @@ function TagTree({ nodes, activePath, collapsed, forceOpen, onToggle, theme, onN
     return render(nodes, 0, null);
 }
 
-// ——— Brand: two-tone mono wordmark ——————————————————————————————————————
+// ——— Brand: the wordmark with a pass of highlighter under "Note" ————————
 // Passed as a node rather than the primitive's `{ monogram, name }` object
-// so the "Note" / "Geek" color split stays exact. `GeekSidebar` still gives
-// it the standard 60px block, but a node brand has no built-in link/close
+// so the highlighter stroke stays exact. `GeekSidebar` still gives it the
+// standard 60px block, but a node brand has no built-in link/close
 // behavior, so this owns its own `RouterLink` + mobile-drawer close.
 function Brand() {
     const theme = useTheme();
+    const g = graphiteTokens(theme);
     const { closeNav } = useGeekShell();
 
     return (
@@ -358,42 +300,63 @@ function Brand() {
             sx={{
                 display: 'flex',
                 alignItems: 'center',
+                gap: '10px',
                 px: 2,
                 height: geekLayout.topBarHeight,
                 textDecoration: 'none',
                 color: 'inherit',
             }}
         >
+            <Box component="img" src="/icons/favicon.svg" alt="" aria-hidden sx={{ width: 22, height: 22, flexShrink: 0 }} />
             <Typography
                 component="div"
                 noWrap
                 sx={{
-                    fontFamily: theme.typography.fontFamilyMono,
-                    fontWeight: 600,
-                    fontSize: '0.8125rem',
-                    letterSpacing: '0.12em',
-                    textTransform: 'uppercase',
+                    fontWeight: 650,
+                    fontSize: '1rem',
+                    letterSpacing: '-0.01em',
                     userSelect: 'none',
-                    display: 'flex',
                     lineHeight: 1,
+                    color: 'text.primary',
                 }}
             >
-                <Box component="span" sx={{ color: 'text.primary' }}>
+                <Box
+                    component="span"
+                    sx={theme.palette.mode === 'dark' ? {
+                        // At night the swipe covers the whole word, with the
+                        // dark ink the highlighter always carries.
+                        bgcolor: g.hl,
+                        color: g.onHl,
+                        borderRadius: '2px',
+                        px: '3px',
+                        mr: '1px',
+                    } : {
+                        // By day, a highlighter swipe: the lower half of the word.
+                        background: `linear-gradient(transparent 45%, ${g.hl} 45%, ${g.hl} 92%, transparent 92%)`,
+                        px: '2px',
+                        mx: '-2px',
+                    }}
+                >
                     Note
                 </Box>
-                <Box component="span" sx={{ color: 'primary.main' }}>
-                    Geek
-                </Box>
+                Geek
             </Typography>
         </Box>
     );
 }
 
-function Sidebar() {
+/**
+ * TagsPanel — the tag filter, "All notes" and the tag tree, with the one
+ * context menu for every row. The desktop sidebar holds it (as `extras`);
+ * on a phone the Notes page opens it in a sheet (there is no drawer).
+ *
+ * `onNavigate` runs after a row is followed (the sidebar closes its drawer,
+ * the phone sheet closes itself).
+ */
+export function TagsPanel({ onNavigate, stickyBg = 'background.paper' }) {
     const location = useLocation();
     const theme = useTheme();
-    const isDark = theme.palette.mode === 'dark';
-    const { closeNav } = useGeekShell();
+    const g = graphiteTokens(theme);
     const [tagFilter, setTagFilter] = useState('');
     const [contextMenu, setContextMenu] = useState(null);
     const [selectedTag, setSelectedTag] = useState(null);
@@ -442,35 +405,13 @@ function Sidebar() {
         return next;
     }, [collapsed, activePath]);
 
-    // "/tags/…" rows manage their own `selected` state directly off
-    // `location` (see TagTreeRow) since they live outside the primitive's
-    // `sections`/`activeId` matching — only the primary row uses it.
-    const activeId = activeNavId(location.pathname);
+    const onAllNotes = location.pathname === '/notes';
 
-    /**
-     * The Tags tree as `extras` — see the file header note in the
-     * migration report: `GeekSidebar`'s `sections` box is the only slot with
-     * `flex: 1` / its own scroll region, while `extras` sizes to its content
-     * and does not compete for space. For NoteGeek the tag tree (not the
-     * three-item primary row) is the thing that can grow arbitrarily large,
-     * so left unbounded it would push the footer (Settings / Sign out)
-     * outside the panel's `overflow: hidden` bounds. Bounding it here with
-     * its own `maxHeight` + `overflowY: auto` keeps the footer on screen at
-     * the cost of a variable gap between Search and "Tags" on tall
-     * viewports with few tags — a primitive gap, not an app choice.
-     */
-    const collectionsExtras = (
-        <Box sx={{ borderTop: `1px solid ${theme.palette.divider}` }}>
-            <SectionLabel>Tags</SectionLabel>
-
-            {/* The tag tree takes the rest of the sidebar's height (extrasGrow
-                below) and scrolls in GeekSidebar's extras body. It used to be
-                capped at 40vh with a 4px, 15%-opacity scrollbar, so the last
-                tags sat below the fold of a box that looked finished — Chef,
-                2026-09-24: "new tags like xformative" weren't showing. */}
+    return (
+        <>
             <Box sx={{ pb: 1.5 }}>
                 {/* Tag filter input — stays put while the tree scrolls under it. */}
-                <Box sx={{ px: 1.25, pt: 0.25, pb: 0.75, position: 'sticky', top: 0, zIndex: 1, backgroundColor: 'background.paper' }}>
+                <Box sx={{ px: 1.25, pt: 0.25, pb: 0.75, position: 'sticky', top: 0, zIndex: 1, backgroundColor: stickyBg }}>
                     <TextField
                         size="small"
                         fullWidth
@@ -480,76 +421,62 @@ function Sidebar() {
                         inputProps={{ 'aria-label': 'filter tags' }}
                         sx={{
                             '& .MuiOutlinedInput-root': {
-                                borderRadius: '6px',
-                                fontSize: '0.75rem',
-                                fontFamily: theme.typography.fontFamilyMono,
-                                bgcolor: alpha(theme.palette.text.primary, 0.025),
+                                borderRadius: '8px',
+                                fontSize: '0.8125rem',
+                                bgcolor: alpha(g.ink, 0.03),
                                 transition: 'all 120ms ease',
-                                '&:hover': {
-                                    bgcolor: alpha(theme.palette.text.primary, 0.04),
-                                },
-                                '&.Mui-focused': {
-                                    bgcolor: 'background.paper',
-                                    boxShadow: `0 0 0 3px ${glow(theme).ring}`,
-                                },
+                                '&:hover': { bgcolor: alpha(g.ink, 0.05) },
+                                '&.Mui-focused': { bgcolor: g.sheet },
+                                '&.Mui-focused .MuiOutlinedInput-notchedOutline': { borderColor: g.ink, borderWidth: 1 },
                             },
+                            '& .MuiInputBase-input::placeholder': { color: 'text.secondary', opacity: 1 },
                         }}
                         InputProps={{
                             startAdornment: (
                                 <InputAdornment position="start">
-                                    <SearchIcon sx={{ fontSize: 14, color: 'text.disabled' }} />
+                                    <SearchIcon sx={{ fontSize: 15, color: 'text.secondary' }} />
                                 </InputAdornment>
                             ),
                             endAdornment: tagFilter && (
                                 <InputAdornment position="end">
-                                    <ClearIcon
-                                        sx={{
-                                            fontSize: 14,
-                                            cursor: 'pointer',
-                                            color: 'text.disabled',
-                                            '&:hover': { color: 'text.secondary' },
-                                        }}
+                                    <IconButton
+                                        size="small"
+                                        aria-label="Clear tag filter"
                                         onClick={() => setTagFilter('')}
-                                    />
+                                        sx={{ color: 'text.secondary', minWidth: 32, minHeight: 32, [theme.breakpoints.down('md')]: { ...tapTarget44 } }}
+                                    >
+                                        <ClearIcon sx={{ fontSize: 15 }} />
+                                    </IconButton>
                                 </InputAdornment>
                             ),
                         }}
                     />
                 </Box>
 
-                {/* All Notes */}
-                {/* The row is an <li> that CONTAINS the link — a bare
-                    ListItemButton put an <a> straight into the <ul> (axe
+                {/* All notes. The row is an <li> that CONTAINS the link — a
+                    bare ListItemButton put an <a> straight into the <ul> (axe
                     `list`), unseen until a scene first opened the drawer. */}
                 <List sx={{ pt: 0, px: 0.75 }}>
                     <ListItem disablePadding>
                     <ListItemButton
                         component={Link}
                         to="/notes"
-                        selected={location.pathname === '/notes'}
-                        onClick={closeNav}
+                        selected={onAllNotes}
+                        aria-current={onAllNotes ? 'page' : undefined}
+                        onClick={onNavigate}
                     >
                         <ListItemIcon sx={{ minWidth: 26 }}>
-                            <AllNotesIcon
-                                sx={{
-                                    fontSize: 17,
-                                    color: location.pathname === '/notes' ? 'primary.main' : 'text.secondary',
-                                    transition: 'color 100ms ease',
-                                }}
-                            />
+                            <AllNotesIcon sx={{ fontSize: 17, color: onAllNotes ? g.onHl : 'text.secondary' }} />
                         </ListItemIcon>
                         <ListItemText
-                            primary="All Notes"
-                            primaryTypographyProps={{
-                                fontSize: '0.8125rem',
-                                fontWeight: location.pathname === '/notes' ? 600 : 400,
-                            }}
+                            primary="All notes"
+                            primaryTypographyProps={{ fontSize: '0.8125rem', fontWeight: onAllNotes ? 600 : 400 }}
                         />
                         {countNotes && (
                             <Typography
                                 component="span"
                                 variant="caption"
-                                sx={{ color: 'text.secondary', fontVariantNumeric: 'tabular-nums' }}
+                                sx={{ color: onAllNotes ? g.onHl : 'text.secondary', fontVariantNumeric: 'tabular-nums' }}
                             >
                                 {countNotes.length}
                             </Typography>
@@ -561,10 +488,7 @@ function Sidebar() {
                 {/* Tag tree */}
                 {tagsLoading && (
                     <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
-                        <CircularProgress
-                            size={16}
-                            sx={{ color: 'text.disabled' }}
-                        />
+                        <CircularProgress size={16} sx={{ color: 'text.secondary' }} />
                     </Box>
                 )}
                 {tagsError && (
@@ -594,7 +518,7 @@ function Sidebar() {
                         forceOpen={Boolean(tagFilter.trim())}
                         onToggle={toggleTag}
                         theme={theme}
-                        onNavigate={closeNav}
+                        onNavigate={onNavigate}
                         onTagMenu={handleTagMenu}
                     />
                 )}
@@ -606,52 +530,6 @@ function Sidebar() {
                     />
                 )}
             </Box>
-        </Box>
-    );
-
-    return (
-        <>
-            <GeekSidebar
-                brand={<Brand />}
-                chromeSx={{ flexShrink: 0 }}
-                sections={[{ items: [NEW_NOTE_ITEM, ...navSections[0].items] }]}
-                activeId={activeId}
-                extras={collectionsExtras}
-                extrasGrow
-                extrasSx={{
-                    scrollbarWidth: 'thin',
-                    scrollbarColor: isDark
-                        ? 'rgba(237, 230, 214, 0.35) transparent'
-                        : 'rgba(31, 28, 22, 0.3) transparent',
-                    '&::-webkit-scrollbar': { width: 6 },
-                    '&::-webkit-scrollbar-track': { backgroundColor: 'transparent' },
-                    '&::-webkit-scrollbar-thumb': {
-                        backgroundColor: isDark ? 'rgba(237, 230, 214, 0.35)' : 'rgba(31, 28, 22, 0.3)',
-                        borderRadius: 3,
-                    },
-                }}
-                itemSx={{
-                    color: 'text.secondary',
-                    '& .MuiListItemText-primary': { fontSize: '0.8125rem' },
-                    '&.Mui-selected .MuiListItemText-primary': { fontWeight: 600, color: 'text.primary' },
-                    '&.Mui-selected .MuiListItemIcon-root': { color: 'primary.main' },
-                    // New Note — the one row styled as a filled primary
-                    // button rather than a plain nav row (see NEW_NOTE_ITEM).
-                    '&[data-geek-nav-item="new-note"]': {
-                        mb: 0.25,
-                        borderRadius: '6px',
-                        bgcolor: 'primary.main',
-                        color: 'primary.contrastText',
-                        transition: 'background 100ms ease',
-                        '& .MuiListItemText-primary': { fontWeight: 600 },
-                        '&:hover': { bgcolor: 'primary.dark' },
-                        '&:focus-visible': {
-                            outline: `2px solid ${theme.palette.primary.main}`,
-                            outlineOffset: 2,
-                        },
-                    },
-                }}
-            />
 
             {/* Single context menu for all tag rows */}
             <TagContextMenu
@@ -661,6 +539,60 @@ function Sidebar() {
                 tag={selectedTag}
             />
         </>
+    );
+}
+
+/**
+ * Sidebar — desktop's permanent column: the brand, Home, then the Tags
+ * panel. New lives in the top bar (NewNoteMenu) and search in the top bar's
+ * box, so neither is repeated here.
+ */
+function Sidebar() {
+    const location = useLocation();
+    const theme = useTheme();
+    const g = graphiteTokens(theme);
+    const { closeNav } = useGeekShell();
+    const activeId = activeNavId(location.pathname);
+
+    /**
+     * The Tags panel as `extras` — `GeekSidebar`'s `sections` box is the only
+     * slot with its own scroll region by default; `extrasGrow` gives the tag
+     * tree (the thing that can grow arbitrarily large) the rest of the height
+     * and its own scroll, so the footer stays on screen. It used to be capped
+     * at 40vh with a faint scrollbar, so the last tags sat below the fold of a
+     * box that looked finished (Chef, 2026-09-24).
+     */
+    const collectionsExtras = (
+        <Box sx={{ borderTop: `1px solid ${theme.palette.divider}` }}>
+            <SectionLabel>Tags</SectionLabel>
+            <TagsPanel onNavigate={closeNav} />
+        </Box>
+    );
+
+    const thumb = alpha(g.ink, 0.3);
+
+    return (
+        <GeekSidebar
+            brand={<Brand />}
+            chromeSx={{ flexShrink: 0 }}
+            sections={navSections}
+            activeId={activeId}
+            extras={collectionsExtras}
+            extrasGrow
+            extrasSx={{
+                scrollbarWidth: 'thin',
+                scrollbarColor: `${thumb} transparent`,
+                '&::-webkit-scrollbar': { width: 6 },
+                '&::-webkit-scrollbar-track': { backgroundColor: 'transparent' },
+                '&::-webkit-scrollbar-thumb': { backgroundColor: thumb, borderRadius: 3 },
+            }}
+            itemSx={{
+                color: 'text.secondary',
+                '& .MuiListItemText-primary': { fontSize: '0.8125rem' },
+                '&.Mui-selected .MuiListItemText-primary': { fontWeight: 600, color: g.onHl },
+                '&.Mui-selected .MuiListItemIcon-root': { color: g.onHl },
+            }}
+        />
     );
 }
 

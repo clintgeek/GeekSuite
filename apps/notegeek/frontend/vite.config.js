@@ -23,8 +23,8 @@ export default defineConfig(({ mode }) => {
           name: 'NoteGeek',
           short_name: 'NoteGeek',
           description: 'An engineer\'s notebook: notes, markdown, code, mind maps and sketches — part of GeekSuite',
-          theme_color: '#FBF7EE',
-          background_color: '#FBF7EE',
+          theme_color: '#F1F4EF',
+          background_color: '#E9EEE7',
           display: 'standalone',
           orientation: 'any',
           icons: [

@@ -74,7 +74,7 @@ describe('NoteList — a long list with sketch thumbnails', () => {
         // many of each is scheduling, not behaviour: on a slow CI runner the
         // 200 rows took long enough that every preview had landed first
         // (2026-09-27), so asserting "some placeholders" was a race.
-        const shown = () => screen.queryAllByRole('img', { name: 'Sketch note' }).length
+        const shown = () => screen.queryAllByRole('img', { name: 'Sketch thumbnail' }).length
             + screen.queryAllByRole('img', { name: 'Sketch preview' }).length;
         expect(shown()).toBe(60);
         // …and every preview lands.

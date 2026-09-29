@@ -3,29 +3,14 @@
  * row, the top bar's page title, and the active-id matching both surfaces
  * use to highlight the current route.
  *
- * The suite grammar (THE_UI_UNIFICATION_PLAN.md §3) wants a real page title
- * in the top bar and consistent active-state matching in the sidebar and its
- * footer. Deriving both from the same list means a new route can't appear in
- * one surface and not the other.
+ * Graphite (2026-09-29) keeps one path to each place. On desktop: New is the
+ * top bar's split button (NewNoteMenu), search is the top bar's box, and the
+ * sidebar carries Home and the Tags panel ("All notes" heads it). On a phone:
+ * the tab bar (Home, Search, New, Notes) and nothing else.
  */
-import AddIcon from '@mui/icons-material/Add';
 import HomeIcon from '@mui/icons-material/HomeOutlined';
-import SearchIcon from '@mui/icons-material/Search';
 
-/**
- * "New Note" is an action, not a destination you land on and stay
- * highlighted against — it is deliberately left out of `navSections` (and
- * therefore out of `activeNavId`), and styled as a filled primary button via
- * `Sidebar`'s `itemSx` keyed off this id.
- */
-export const NEW_NOTE_ITEM = {
-  id: 'new-note',
-  label: 'New Note',
-  to: '/notes/new',
-  icon: <AddIcon sx={{ fontSize: 17 }} />,
-};
-
-/** The sidebar's primary section, sans "New Note" (see above). */
+/** The sidebar's primary section. */
 export const navSections = [
   {
     items: [
@@ -34,12 +19,6 @@ export const navSections = [
         label: 'Home',
         to: '/',
         icon: <HomeIcon sx={{ fontSize: 17 }} />,
-      },
-      {
-        id: 'search',
-        label: 'Search',
-        to: '/search',
-        icon: <SearchIcon sx={{ fontSize: 17 }} />,
       },
     ],
   },
@@ -53,6 +32,7 @@ export const navSections = [
 const extraTitles = {
   '/notes': 'Notes',
   '/tags': 'Notes',
+  '/search': 'Search',
   '/settings': 'Settings',
 };
 

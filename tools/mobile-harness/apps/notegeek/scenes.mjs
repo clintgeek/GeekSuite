@@ -1,7 +1,9 @@
 // NoteGeek — the M2 pilot surfaces (MOBILE_UI_PLAN.md), the Night 2 AI
-// tag/link suggestion scene (R116/R126), and the Lab Notebook pass
-// (2026-09-26): the editor's ⋯ menu, the tag tree, and one editor scene per
-// non-text page type (code, mind map, sketch).
+// tag/link suggestion scene (R116/R126), the Lab Notebook pass (2026-09-26):
+// the editor's ⋯ menu, the tag tree, one editor scene per non-text page
+// type — and the Graphite pass (2026-09-29): one New (sheet on a phone, split
+// button on desktop), the phone's Tags sheet, the markdown editor writing
+// with its toolbar docked, the loud save states, and search with its marks.
 
 // Page-scoped stubs for the scenes after '05-suggestions': switch the
 // suggestion opt-in back off and answer GetNoteById with a given note.
@@ -130,7 +132,7 @@ async function reviewTranscript(page, h) {
 
 import { fileURLToPath } from 'node:url';
 import { json, graphqlRoute } from '../../lib/net.mjs';
-import { OPS, NOTE_SUGGESTIONS, NOTE_CODE, NOTE_MINDMAP, NOTE_SKETCH, NOTE_WIDE_TABLE } from './fixtures.mjs';
+import { OPS, NOTE_SUGGESTIONS, NOTE_CODE, NOTE_MINDMAP, NOTE_SKETCH, NOTE_WIDE_TABLE, NOTE_MD, SEARCH_RESULTS } from './fixtures.mjs';
 
 // ── Photo of a page (DOCS/HANDWRITING.md §3) ────────────────────────────────
 //
@@ -244,9 +246,67 @@ async function savePhotos(page, h) {
   return { photo, md };
 }
 
+// The phone has no drawer (Graphite): the tag tree opens from the Notes
+// page's Tags button, as a sheet.
+async function openPhoneTags(page, h) {
+  const tags = page.getByRole('button', { name: /^tags$/i }).first();
+  if (!(await tags.count())) throw new Error('the notes page has no Tags button on a phone');
+  await tags.click();
+  await h.settle(600);
+  if (!(await page.getByRole('dialog', { name: /tags/i }).count())) throw new Error('the Tags sheet did not open');
+}
+
+// No greeting, no "Continue" cards, and a note row in the first screen.
+async function assertHomeIsNotes(page, h) {
+  if (await page.getByText(/good (morning|afternoon|evening)/i).count()) throw new Error('home still has the greeting');
+  if (await page.getByText(/continue where you left off/i).count()) throw new Error('home still has the Continue cards');
+  if (await page.locator('.type-stamp').count()) throw new Error('a Lab Notebook type stamp is still rendered');
+  const first = await page.locator('[data-note-row]').first().boundingBox();
+  const vh = page.viewportSize().height;
+  if (!first || first.y + first.height > vh) throw new Error(`the first note row is not on the first screen (${first ? Math.round(first.y) : 'none'} of ${vh})`);
+}
+
 export const scenes = [
-  // Home (QuickCaptureHome) — bottom nav visible with mono labels + ink-stamp.
-  { name: '01-home', goto: '/', wait: 1200 },
+  // Home (QuickCaptureHome): the capture box and the notes, nothing else.
+  // The first note must be on the first screen of a phone.
+  {
+    name: '01-home',
+    goto: '/',
+    wait: 1200,
+    async setup(page, h) {
+      await assertHomeIsNotes(page, h);
+    },
+  },
+  {
+    // One New. Phone: the tab bar's New opens a sheet — a note, a photo, a
+    // sketch — with code and mind map under More (opened here). Desktop:
+    // the top bar's split button menu.
+    name: '01n-new',
+    goto: '/',
+    wait: 1200,
+    async setup(page, h) {
+      if (h.isPhone) {
+        await page.locator('[data-geek-bottom-nav-item="new"]').click();
+        await h.settle(600);
+        const sheet = page.getByRole('dialog', { name: /new/i });
+        if (!(await sheet.count())) throw new Error('New did not open its sheet');
+        for (const k of ['markdown', 'photo', 'handwritten']) {
+          if (!(await sheet.locator(`[data-new-entry="${k}"]`).count())) throw new Error(`the New sheet has no ${k} entry`);
+        }
+        if (await sheet.locator('[data-new-entry="text"]').count()) throw new Error('the New sheet still offers rich text');
+        await sheet.getByRole('button', { name: /more/i }).click();
+        await h.settle(500);
+        if (!(await sheet.locator('[data-new-entry="code"]').isVisible())) throw new Error('More did not show Code');
+      } else {
+        await page.getByRole('button', { name: 'More kinds of note' }).click();
+        await h.settle(400);
+        for (const k of ['photo', 'handwritten', 'code', 'mindmap']) {
+          if (!(await page.locator(`[role="menu"] [data-new-entry="${k}"]`).count())) throw new Error(`the New menu has no ${k}`);
+        }
+      }
+    },
+    teardown: (page, h) => h.esc(400),
+  },
   {
     // Home with a thought typed: Capture in its enabled state, which must
     // read nothing like the empty (disabled) one in '01-home'.
@@ -267,19 +327,17 @@ export const scenes = [
   // scrolls on single-note routes, so the viewer brings its own scroller.
   { name: '03v-viewer', goto: '/notes/n1', wait: 1200 },
   {
-    // The navigation drawer with the tag tree. It takes the rest of the
-    // sidebar's height; the LAST tag must be reachable by scrolling.
-    name: '03t-tag-drawer',
+    // The phone's Tags sheet (Graphite: there is no drawer). The LAST tag
+    // must be reachable by scrolling.
+    name: '03t-tag-sheet',
     goto: '/notes',
     wait: 1200,
     viewports: ['phone'],
     async setup(page, h) {
-      const menu = page.getByRole('button', { name: /open (navigation|menu)|menu/i }).first();
-      if (!(await menu.count())) throw new Error('no navigation menu button');
-      await menu.click();
-      await h.settle(500);
+      if (await page.getByRole('button', { name: /open (navigation|menu)/i }).count()) throw new Error('the phone still has a hamburger');
+      await openPhoneTags(page, h);
       const last = page.getByRole('link', { name: /zettel/i }).first();
-      if (!(await last.count())) throw new Error('last tag "zettel" not rendered in the drawer');
+      if (!(await last.count())) throw new Error('last tag "zettel" not rendered in the Tags sheet');
       await last.scrollIntoViewIfNeeded();
       await h.settle(300);
     },
@@ -384,17 +442,12 @@ export const scenes = [
   },
   {
     // The Tags tree with counts, on a nested tag route: its ancestor is
-    // open, the row is selected. On a phone it is the drawer.
+    // open, the row is highlighted. On a phone it is the Tags sheet.
     name: '07-tag-tree',
     goto: '/tags/dev%2Ffrontend',
     wait: 1200,
     async setup(page, h) {
-      if (h.isPhone) {
-        const menu = page.getByRole('button', { name: /open (navigation|menu)|menu/i }).first();
-        if (!(await menu.count())) throw new Error('no navigation menu button');
-        await menu.click();
-        await h.settle(500);
-      }
+      if (h.isPhone) await openPhoneTags(page, h);
       const collapse = page.getByRole('button', { name: /^collapse dev$/i }).first();
       if (!(await collapse.count())) throw new Error('tag "dev" has no expanded chevron');
       await collapse.scrollIntoViewIfNeeded();
@@ -434,6 +487,75 @@ export const scenes = [
 
       await page.goto(h.base + '/notes/n1/edit', { waitUntil: 'networkidle' });
       await h.settle(2400);
+    },
+  },
+  {
+    // A markdown note (the default type, and most of Chef's notes) being
+    // written. Phone: the caret is in the body, so the suite top bar has
+    // tucked away and the formatting toolbar is docked at the bottom.
+    // Desktop: the same toolbar, inline and sticky.
+    name: '03m-editor-markdown',
+    async setup(page, h) {
+      await openNote(page, h, NOTE_MD, '/notes/n2/edit');
+      const body = page.getByRole('textbox', { name: 'Note body' });
+      await body.click();
+      await body.press('End');
+      await h.settle(600);
+      const bar = page.getByRole('toolbar', { name: 'Markdown formatting' });
+      const docked = await bar.getAttribute('data-editor-toolbar');
+      if (h.isPhone) {
+        if (docked !== 'docked') throw new Error(`phone toolbar is ${docked}, not docked`);
+        const box = await bar.boundingBox();
+        const vh = page.viewportSize().height;
+        if (!box || Math.abs(box.y + box.height - vh) > 40) throw new Error(`docked toolbar is not at the bottom (${box && Math.round(box.y + box.height)} of ${vh})`);
+        if (await page.locator('header.MuiAppBar-root').count()) throw new Error('the top bar did not tuck away while writing');
+      } else if (docked !== 'inline') {
+        throw new Error(`desktop toolbar is ${docked}, not inline`);
+      }
+      if (!(await page.getByRole('status').filter({ hasText: /saved|editing/ }).count())) throw new Error('no quiet save status');
+      if (await page.locator('[data-save-alert]').count()) throw new Error('a save alert is showing while all is fine');
+    },
+  },
+  {
+    // A save that fails: the loud state — error ink, a Retry — in the head
+    // row, where the quiet status never sits.
+    name: '03f-save-failed',
+    async setup(page, h) {
+      await bootstrapChef(page);
+      await graphqlRoute(page, { ...OPS, GetNoteById: { note: NOTE_MD }, UpdateNote: { updateNote: null } });
+      await page.goto(h.base + '/notes/n2/edit', { waitUntil: 'networkidle' });
+      await h.settle(1200);
+      const title = page.getByLabel('Note title');
+      await title.click();
+      await title.press('End');
+      await title.type(' (v2)');
+      await page.keyboard.press('Control+s');
+      await h.settle(1200);
+      if (!(await page.locator('[data-save-alert="error"]').count())) throw new Error('a failed save raised no alert');
+      if (!(await page.getByRole('button', { name: 'Retry' }).count())) throw new Error('the save alert has no Retry');
+      await title.blur();
+      await h.settle(1500);
+    },
+  },
+  {
+    // Offline with unsaved edits, on a phone, while writing: the docked
+    // toolbar carries the alert, because the note's head has scrolled away.
+    name: '03o-offline-unsaved',
+    viewports: ['phone'],
+    async setup(page, h) {
+      await openNote(page, h, NOTE_MD, '/notes/n2/edit');
+      await page.context().setOffline(true);
+      const body = page.getByRole('textbox', { name: 'Note body' });
+      await body.click();
+      await body.press('End');
+      await body.type('\n- [ ] eggs');
+      await h.settle(800);
+      const bar = page.getByRole('toolbar', { name: 'Markdown formatting' });
+      if (!(await bar.locator('[data-save-alert="offline"]').count())) throw new Error('offline with unsaved edits did not show in the docked toolbar');
+    },
+    teardown: async (page, h) => {
+      await page.context().setOffline(false);
+      await h.settle(200);
     },
   },
   {
@@ -511,15 +633,17 @@ export const scenes = [
     teardown: (page, h) => h.esc(400),
   },
   {
-    // The way in: "Photo of a page" in the new-note picker, and the Photo
-    // chip on Home, which opens the (empty) page tray.
+    // The way in: the camera in Home's capture box, which opens the (empty)
+    // page tray. (The New sheet / menu entries are checked in '01n-new'.)
+    // /notes/new itself is now straight into a Markdown note, no picker.
     name: '13a-photo-entry',
     async setup(page, h) {
       await bootstrapChef(page);
       await graphqlRoute(page, OPS);
       await page.goto(h.base + '/notes/new', { waitUntil: 'networkidle' });
       await h.settle(600);
-      if (!(await page.getByRole('button', { name: /photo of a page/i }).count())) throw new Error('the new-note picker has no "Photo of a page"');
+      if (await page.getByText(/what are you writing/i).count()) throw new Error('/notes/new still shows the type picker');
+      if (!(await page.getByRole('textbox', { name: 'Note body' }).count())) throw new Error('/notes/new did not open a markdown note');
       await page.goto(h.base + '/', { waitUntil: 'networkidle' });
       await h.settle(800);
       await page.getByRole('button', { name: 'New note from a photo of a page' }).click();
@@ -659,6 +783,30 @@ export const scenes = [
         console.log(`  [photo size] 8 pages refused before anything was read or created: ${why}`);
         if (calls.transcribe.length || calls.create.length) throw new Error('the size guard let a call through');
       }
+    },
+  },
+  {
+    // Search: the phone's Search tab (the only path to it there), results
+    // with the query under a pass of highlighter.
+    name: '14-search',
+    async setup(page, h) {
+      await bootstrapChef(page);
+      await graphqlRoute(page, { ...OPS, SearchNotes: { searchNotes: SEARCH_RESULTS } });
+      await page.goto(h.base + '/', { waitUntil: 'networkidle' });
+      await h.settle(800);
+      if (h.isPhone) {
+        if (await page.locator('header').getByRole('button', { name: /search/i }).count()) throw new Error('the phone top bar still has a search button');
+        await page.locator('[data-geek-bottom-nav-item="search"]').click();
+      } else {
+        await page.goto(h.base + '/search', { waitUntil: 'networkidle' });
+      }
+      await h.settle(600);
+      await page.getByPlaceholder(/search titles/i).fill('brown');
+      await page.getByText(/2 results/).waitFor({ timeout: 10000 });
+      await h.settle(600);
+      if ((await page.locator('mark').count()) < 2) throw new Error('search hits are not marked');
+      await page.getByPlaceholder(/search titles/i).blur();
+      await h.settle(300);
     },
   },
 ];

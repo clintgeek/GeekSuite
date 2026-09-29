@@ -116,31 +116,38 @@ describe('Page Tests', () => {
                 useNoteStore.setState({ notes: [] });
             });
 
-            it('greets the writer with a capitalised name — "Chef", not "chef"', () => {
+            it('is the capture box and the notes: no greeting, no "Continue" cards', () => {
                 render(<QuickCaptureHome />, { wrapper: AllProviders });
-                expect(screen.getByRole('heading', { level: 1 })).toHaveTextContent(/^Good (morning|afternoon|evening), Chef$/);
+                expect(screen.queryByRole('heading', { level: 1 })).toBeNull();
+                expect(screen.queryByText(/good (morning|afternoon|evening)/i)).toBeNull();
+                expect(screen.queryByRole('region', { name: /continue where you left off/i })).toBeNull();
+                // Every recent note, newest first, once each.
+                const recent = screen.getByRole('region', { name: /recent/i });
+                const titles = ['Roof quote', 'debounce.js', 'Garden', 'Older one'];
+                for (const t of titles) expect(within(recent).getAllByText(t)).toHaveLength(1);
+                expect(recent.textContent.indexOf('Roof quote')).toBeLessThan(recent.textContent.indexOf('Older one'));
             });
 
-            it('offers the last three notes under "Continue where you left off"', () => {
+            it('offers Photo and Sketch while the box is empty, and Save once there is a thought', () => {
                 render(<QuickCaptureHome />, { wrapper: AllProviders });
-                const section = screen.getByRole('region', { name: /continue where you left off/i });
-                const cards = within(section).getAllByRole('button');
-                expect(cards).toHaveLength(3);
-                expect(cards[0]).toHaveTextContent('Roof quote');
-                expect(cards[2]).toHaveTextContent('Garden');
-                // The fourth is in Recent, not duplicated in Continue.
-                expect(within(section).queryByText('Older one')).toBeNull();
-                expect(screen.getByRole('region', { name: /recent/i })).toHaveTextContent('Older one');
-            });
-
-            it('Capture is disabled while the box is empty, and enabled once there is a thought', () => {
-                render(<QuickCaptureHome />, { wrapper: AllProviders });
-                const capture = screen.getByRole('button', { name: /capture/i });
-                expect(capture).toBeDisabled();
+                expect(screen.getByRole('button', { name: 'New note from a photo of a page' })).toBeInTheDocument();
+                expect(screen.getByRole('button', { name: 'New sketch' })).toBeInTheDocument();
+                expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
                 fireEvent.change(screen.getByLabelText('Quick capture'), { target: { value: 'buy nails' } });
-                expect(capture).toBeEnabled();
+                expect(screen.getByRole('button', { name: 'Save' })).toBeEnabled();
+                expect(screen.queryByRole('button', { name: 'New sketch' })).toBeNull();
                 fireEvent.change(screen.getByLabelText('Quick capture'), { target: { value: '   ' } });
-                expect(capture).toBeDisabled();
+                expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
+            });
+
+            it('saves a capture as a Markdown note (the default type), not rich text', async () => {
+                const createNote = vi.fn().mockResolvedValue({ id: 'n9' });
+                useNoteStore.setState({ createNote, fetchNotes: vi.fn() });
+                render(<QuickCaptureHome />, { wrapper: AllProviders });
+                fireEvent.change(screen.getByLabelText('Quick capture'), { target: { value: 'buy nails' } });
+                fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+                await vi.waitFor(() => expect(createNote).toHaveBeenCalledTimes(1));
+                expect(createNote.mock.calls[0][0]).toMatchObject({ type: 'markdown', content: 'buy nails' });
             });
         });
     });

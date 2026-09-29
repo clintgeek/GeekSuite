@@ -58,7 +58,7 @@ export default function TranscribeDialog({
     const theme = useTheme();
     const phone = useMediaQuery(theme.breakpoints.down('sm'));
     const titleId = useId();
-    const mono = { fontFamily: theme.typography.fontFamilyMono };
+    const mono = { fontFamily: theme.typography.fontFamilyMono, wordSpacing: 'normal' };
     const hasText = Boolean(text && text.trim());
     const reviewing = stage === 'review';
     const button = { textTransform: 'none', [theme.breakpoints.down('md')]: { minHeight: 44 } };

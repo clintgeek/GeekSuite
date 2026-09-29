@@ -91,7 +91,7 @@ function composeOutcome(result) {
 
 function PageRow({ page, index, count, onRotate, onRemove, onMove, busy }) {
   const theme = useTheme();
-  const mono = { fontFamily: theme.typography.fontFamilyMono };
+  const mono = { fontFamily: theme.typography.fontFamilyMono, wordSpacing: 'normal' };
   const n = index + 1;
   const small = { [theme.breakpoints.down('md')]: { width: 44, height: 44 } };
   return (
@@ -198,7 +198,7 @@ export default function PhotoPagesPage({ prepare = preparePhotoPageSet, loadSnap
   const coarse = useMediaQuery('(pointer: coarse)');
   const canCapture = phone || coarse;
   const ink = noteTypeInk(theme, 'handwritten');
-  const mono = { fontFamily: theme.typography.fontFamilyMono };
+  const mono = { fontFamily: theme.typography.fontFamilyMono, wordSpacing: 'normal' };
 
   const [pages, setPages] = useState([]);
   const [title, setTitle] = useState('');

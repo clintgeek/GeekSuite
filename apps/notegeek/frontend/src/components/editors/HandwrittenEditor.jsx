@@ -23,7 +23,7 @@ import PanToolOutlinedIcon from '@mui/icons-material/PanToolOutlined';
 import UndoIcon from '@mui/icons-material/Undo';
 import FullscreenIcon from '@mui/icons-material/Fullscreen';
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
-import { surfaces } from '../../theme/tokens';
+import { graphiteTokens, surfaces } from '../../theme/tokens';
 
 const SAVE_DEBOUNCE_MS = 400;
 
@@ -159,6 +159,7 @@ function PenStylePicker({ editor, fine, onFineChange }) {
 // Minimal mobile toolbar - Move, Write, Pen style, Undo, Fullscreen
 function MobileDrawingToolbar({ containerRef, onFullscreenChange, fine, onFineChange }) {
     const editor = useEditor();
+    const hl = graphiteTokens(useTheme());
     const currentTool = useValue('current tool', () => editor.getCurrentToolId(), [editor]);
     const canUndo = useValue('can undo', () => editor.getCanUndo(), [editor]);
     const [isFullscreen, setIsFullscreen] = useState(false);
@@ -212,10 +213,11 @@ function MobileDrawingToolbar({ containerRef, onFullscreenChange, fine, onFineCh
                     size="small"
                     onClick={() => editor.setCurrentTool('hand')}
                     sx={{
-                        bgcolor: currentTool === 'hand' ? 'primary.main' : 'transparent',
-                        color: currentTool === 'hand' ? 'primary.contrastText' : 'text.secondary',
+                        // The active tool is highlighted (Graphite): ink on highlighter.
+                        bgcolor: currentTool === 'hand' ? hl.hl : 'transparent',
+                        color: currentTool === 'hand' ? hl.onHl : 'text.secondary',
                         '&:hover': {
-                            bgcolor: currentTool === 'hand' ? 'primary.dark' : 'action.hover',
+                            bgcolor: currentTool === 'hand' ? hl.hl : 'action.hover',
                         },
                     }}
                 >
@@ -230,10 +232,11 @@ function MobileDrawingToolbar({ containerRef, onFullscreenChange, fine, onFineCh
                     size="small"
                     onClick={() => editor.setCurrentTool('draw')}
                     sx={{
-                        bgcolor: currentTool === 'draw' ? 'primary.main' : 'transparent',
-                        color: currentTool === 'draw' ? 'primary.contrastText' : 'text.secondary',
+                        // The active tool is highlighted (Graphite): ink on highlighter.
+                        bgcolor: currentTool === 'draw' ? hl.hl : 'transparent',
+                        color: currentTool === 'draw' ? hl.onHl : 'text.secondary',
                         '&:hover': {
-                            bgcolor: currentTool === 'draw' ? 'primary.dark' : 'action.hover',
+                            bgcolor: currentTool === 'draw' ? hl.hl : 'action.hover',
                         },
                     }}
                 >

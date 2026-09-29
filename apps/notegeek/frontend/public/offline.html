@@ -3,35 +3,46 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#FBF7EE">
-  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#16140F">
+  <meta name="theme-color" media="(prefers-color-scheme: light)" content="#F1F4EF">
+  <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#1B1F22">
   <title>NoteGeek — Offline</title>
   <style>
+    /* Graphite (src/theme/graphite.js): graphite ink on grey-green
+       engineering paper; the highlighter only ever as a fill behind ink. */
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
       color-scheme: light dark;
-      --page: #FBF7EE;
-      --text: #1F1C16;
-      --muted: #6b6456;
-      --accent: #8B2C2A;
-      --accent-hover: #a83a37;
-      --accent-text: #ffffff;
+      --desk: #E9EEE7;
+      --sheet: #F8FAF6;
+      --ink: #2F2E2B;
+      --ink2: #55544F;
+      --rule: #D3DAD0;
+      --grid: rgba(76, 122, 94, 0.11);
+      --hl: #F5DF4D;
+      --hl-hover: #EDD43A;
+      --on-hl: #2F2E2B;
     }
     @media (prefers-color-scheme: dark) {
       :root {
-        --page: #16140F;
-        --text: #EDE6D6;
-        --muted: #b8ab90;
-        --accent: #c4514d;
-        --accent-hover: #d97370;
-        --accent-text: #16140F;
+        --desk: #15181A;
+        --sheet: #212629;
+        --ink: #E6E3DC;
+        --ink2: #ACAEA8;
+        --rule: #2E3438;
+        --grid: rgba(170, 205, 185, 0.055);
+        --hl: #E2C94A;
+        --hl-hover: #D4BB3C;
+        --on-hl: #1A1C1D;
       }
     }
     body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
       display: flex; align-items: center; justify-content: center;
       min-height: 100vh; min-height: 100dvh;
-      background: var(--page); color: var(--text);
+      background-color: var(--desk);
+      background-image: linear-gradient(var(--grid) 1px, transparent 1px), linear-gradient(90deg, var(--grid) 1px, transparent 1px);
+      background-size: 16px 16px;
+      color: var(--ink);
       text-align: center;
       padding: 2rem;
       padding-top: calc(2rem + env(safe-area-inset-top));
@@ -39,27 +50,29 @@
       padding-left: calc(2rem + env(safe-area-inset-left));
       padding-right: calc(2rem + env(safe-area-inset-right));
     }
-    .card { max-width: 400px; }
-    .icon {
-      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      font-size: 2.5rem; margin-bottom: 1rem;
+    .card {
+      max-width: 400px; background: var(--sheet); border: 1px solid var(--rule);
+      border-radius: 12px; padding: 2rem 1.5rem;
     }
-    h1 { font-size: 1.5rem; font-weight: 600; margin-bottom: 0.5rem; color: var(--accent); }
-    p { font-size: 1rem; line-height: 1.6; color: var(--muted); margin-bottom: 1.5rem; }
+    .mark { width: 56px; height: 56px; margin: 0 auto 1rem; display: block; }
+    h1 { font-size: 1.375rem; font-weight: 650; margin-bottom: 0.5rem; }
+    h1 span { background: var(--hl); color: var(--on-hl); padding: 0 4px; border-radius: 2px; }
+    p { font-size: 1rem; line-height: 1.6; color: var(--ink2); margin-bottom: 1.5rem; }
     button {
-      background: var(--accent); color: var(--accent-text); border: none;
+      background: var(--hl); color: var(--on-hl); border: none;
       padding: 0.75rem 2rem; min-height: 44px; min-width: 44px;
-      border-radius: 8px; font-size: 1rem; font-weight: 600; cursor: pointer;
+      border-radius: 8px; font-size: 1rem; font-weight: 650; cursor: pointer;
       font-family: inherit;
     }
-    button:hover { background: var(--accent-hover); }
+    button:hover { background: var(--hl-hover); }
+    button:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
   </style>
 </head>
 <body>
   <div class="card">
-    <div class="icon">📝</div>
-    <h1>You're offline</h1>
-    <p>NoteGeek needs an internet connection to work. Check your connection and try again.</p>
+    <img class="mark" src="/icons/favicon.svg" alt="">
+    <h1>You're <span>offline</span></h1>
+    <p>NoteGeek needs a connection to open your notes. Check it and try again.</p>
     <button onclick="window.location.reload()">Retry</button>
   </div>
 </body>

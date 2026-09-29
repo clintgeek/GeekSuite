@@ -68,6 +68,34 @@ export const NOTE_CODE = note('n6', 'debounce.js', 'code', ['dev', 'dev/frontend
 export const NOTE_MINDMAP = note('n4', 'Mind map: GeekSuite apps', 'mindmap', ['meta'], MINDMAP_CONTENT, daysAgo(3));
 export const NOTE_SKETCH = note('n3', 'Sketch: onboarding flow', 'handwritten', ['product'], SKETCH_CONTENT, daysAgo(1));
 
+// A markdown note the size of Chef's real ones (most are markdown reference
+// notes of a few hundred to a few thousand characters): headings, a list, a
+// checklist, a link. The Graphite editor scenes write into it.
+export const NOTE_MD = note('n2', 'Recipe: brown butter chocolate chip cookies', 'markdown', ['recipes'], [
+  '# Cookies',
+  '',
+  'Brown the butter first, then **chill the dough** overnight. 350°F, 11 minutes, and pull them while the middles still look underdone.',
+  '',
+  '## Shopping',
+  '',
+  '- [x] dark chocolate, 70%',
+  '- [ ] flaky salt',
+  '- [ ] brown sugar',
+  '',
+  '## Notes',
+  '',
+  '- Two sheets at once runs the bottom one dark; rotate at 6 minutes.',
+  '- The [original recipe](https://example.com/cookies) halves cleanly.',
+  '',
+  '> Rest the dough at least 12 hours. 36 is better.',
+].join('\n'), daysAgo(1.2));
+
+// Search results: the gateway's `searchNotes` shape (`_id`, `snippet`).
+export const SEARCH_RESULTS = [
+  { __typename: 'SearchSnippet', _id: 'n2', title: 'Recipe: brown butter chocolate chip cookies', type: 'markdown', tags: ['recipes'], isLocked: false, isEncrypted: false, createdAt: daysAgo(20), updatedAt: daysAgo(1.2), score: 3, snippet: 'Brown the butter first, then chill the dough overnight.', message: null },
+  { __typename: 'SearchSnippet', _id: 'n7', title: 'Nginx wildcard cert renewal', type: 'markdown', tags: ['dev', 'dev/infra'], isLocked: false, isEncrypted: false, createdAt: daysAgo(20), updatedAt: daysAgo(5), score: 1, snippet: 'Run certbot, then brown-bag the reload until nginx -t passes.', message: null },
+];
+
 // Spread across the recency buckets: Today, Yesterday, This week, and two
 // older months — the notes list groups by them.
 // A markdown note with a table far wider than the ~70ch column, plus a long
@@ -91,7 +119,7 @@ export const NOTES = [
   NOTE_CODE,
   note('n5', 'Standup snippets', 'text', ['work', 'work/meetings'], '<p>Nothing blocking. Pairing on the sidebar tree after lunch; ask about the tag counts query.</p>', hoursAgo(7)),
   NOTE_SKETCH,
-  note('n2', 'Recipe: brown butter chocolate chip cookies', 'markdown', ['recipes'], '# Cookies\n\nBrown the butter first, then **chill the dough** overnight. 350°F, 11 minutes.', daysAgo(1.2)),
+  NOTE_MD,
   NOTE_MINDMAP,
   note('n7', 'Nginx wildcard cert renewal', 'markdown', ['dev', 'dev/infra'], '## Renewal\n\nRun certbot with the DNS plugin, then `nginx -t` and reload.', daysAgo(5)),
   note('n8', 'Garden bed layout', 'handwritten', ['garden'], '', daysAgo(40)),

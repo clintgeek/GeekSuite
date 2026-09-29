@@ -2,13 +2,11 @@ import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import { registerSW } from 'virtual:pwa-register'
 
-// Self-hosted type (was jsDelivr + Google Fonts at runtime, which fell back
-// to Arial offline). Geist is variable, so one import covers every weight;
-// JetBrains Mono carries all metadata, at the three weights the theme uses.
-import '@fontsource-variable/geist'
-import '@fontsource/jetbrains-mono/400.css'
-import '@fontsource/jetbrains-mono/500.css'
-import '@fontsource/jetbrains-mono/600.css'
+// Self-hosted type, so the installed PWA keeps its faces offline. Both are
+// variable fonts: one import each covers every weight the theme uses.
+// Spline Sans is titles and body; Spline Sans Mono is small metadata only.
+import '@fontsource-variable/spline-sans'
+import '@fontsource-variable/spline-sans-mono'
 
 // Import ReactFlow styles
 import 'reactflow/dist/style.css';

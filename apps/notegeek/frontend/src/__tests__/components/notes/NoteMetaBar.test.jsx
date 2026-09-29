@@ -54,9 +54,8 @@ describe('NoteMetaBar', () => {
             <NoteMetaBar title="" noteType="markdown" tags={[]} />,
             { wrapper: AllProviders }
         );
-        // Sentence case in the DOM (a screen reader says "Markdown"); the
-        // stamp uppercases it with CSS.
-        expect(screen.getByText('Markdown')).toBeInTheDocument();
+        // Markdown is the default note, so the meta line just says "Note".
+        expect(screen.getByText('Note')).toBeInTheDocument();
 
         // rerender reuses the original `wrapper`; re-wrapping would nest routers.
         rerender(<NoteMetaBar title="" noteType="code" tags={[]} />);
@@ -80,6 +79,26 @@ describe('NoteMetaBar', () => {
         const titleInput = screen.getByLabelText('Note title');
         expect(titleInput).toBeDisabled();
         expect(screen.getByTestId('tag-selector-mock')).toHaveTextContent('disabled');
+    });
+
+    it('keeps the quiet status in the meta line and the alert in the header row', () => {
+        render(
+            <NoteMetaBar
+                title=""
+                noteType="markdown"
+                tags={[]}
+                status={<span data-testid="status">saved · just now</span>}
+                alert={<span data-testid="alert">not saved</span>}
+                actions={<button>more</button>}
+            />,
+            { wrapper: AllProviders }
+        );
+        const meta = document.querySelector('[data-note-meta]');
+        expect(meta).toContainElement(screen.getByTestId('status'));
+        expect(meta).not.toContainElement(screen.getByTestId('alert'));
+        // The alert sits in row 1 beside the menu, before the title.
+        const title = screen.getByLabelText('Note title');
+        expect(screen.getByTestId('alert').compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     });
 
     it('renders the leading, status and actions slots', () => {

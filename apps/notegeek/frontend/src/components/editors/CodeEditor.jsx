@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Box, Select, MenuItem, FormControl, Typography, useTheme } from '@mui/material';
-import { noteTypeInk, surfaces } from '../../theme/tokens';
+import { surfaces } from '../../theme/tokens';
 
 const CODE_LANGUAGES = [
   { value: 'javascript', label: 'JavaScript' },
@@ -129,9 +129,9 @@ function CodeEditor({ content = '', setContent, readOnly = false, fontSize = 14 
           id="code-language-label"
           htmlFor="code-language-select"
           variant="caption"
-          sx={{ color: 'text.secondary', textTransform: 'uppercase', letterSpacing: '0.06em' }}
+          sx={{ color: 'text.secondary' }}
         >
-          Language
+          language
         </Typography>
         <FormControl variant="standard" size="small">
           <Select
@@ -145,7 +145,7 @@ function CodeEditor({ content = '', setContent, readOnly = false, fontSize = 14 
               fontFamily: mono,
               fontSize: '0.8125rem',
               fontWeight: 600,
-              color: noteTypeInk(theme, 'code'),
+              color: 'text.primary',
               minHeight: { xs: 44, md: 32 },
               '& .MuiSelect-select': { py: '4px', pr: '24px !important' },
             }}
@@ -238,9 +238,10 @@ function CodeEditor({ content = '', setContent, readOnly = false, fontSize = 14 
             overflowX: 'auto',
             overflowY: 'hidden',
             whiteSpace: 'pre',
-            // Code is shown as typed: JetBrains Mono's ligatures would draw
+            // Code is shown as typed: the mono face's ligatures would draw
             // `=>` as one arrow glyph the writer never typed.
             fontVariantLigatures: 'none',
+            wordSpacing: 'normal',
             '&::placeholder': {
               color: 'text.secondary',
             },

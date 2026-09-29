@@ -8,8 +8,8 @@ import {
 } from '@mui/material';
 import { formatRelativeTime } from '../../utils/dateUtils';
 import { previewText } from '../../utils/previewText';
-import { glow } from '../../theme/tokens';
-import TypeStamp from './TypeStamp';
+import { graphiteTokens } from '../../theme/tokens';
+import TypeIcon from './TypeIcon';
 import { CodePreview, NoteThumb } from './NotePreview';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
@@ -23,13 +23,14 @@ function getPreview(note, maxLen = 120) {
     return previewText(note.content, type, maxLen, { shape: true });
 }
 
-function highlightQuery(text, query, highlightColor) {
+/** Search hits under a pass of highlighter (`mark`, styled in the theme). */
+function highlightQuery(text, query) {
     if (!query || !text) return text;
     const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const parts = text.split(new RegExp(`(${escaped})`, 'gi'));
     return parts.map((part, i) =>
         part.toLowerCase() === query.toLowerCase()
-            ? <span key={i} style={{ color: highlightColor }}>{part}</span>
+            ? <mark key={i}>{part}</mark>
             : part
     );
 }
@@ -41,13 +42,13 @@ function highlightQuery(text, query, highlightColor) {
  *
  *   Title ······························ [thumb]
  *   preview (prose clamp, or tinted code)  [    ]
- *   [TYPE STAMP] #tag #tag +1 ·········· 2h ago
+ *   ⌇ work · planning ·················· 2h ago
  *
- * The type stamp and up to two tags are always shown (they used to vanish
- * below `md`, leaving every phone row identical but for its title). The
- * relative time sits at the end of the meta line in quiet mono rather than
- * in its own column. Sketch and mind-map notes get a thumbnail
- * (NotePreview.jsx), lazily rendered.
+ * Quiet by design (Graphite): the type is a small graphite glyph with an
+ * accessible label, tags are plain words, and the time is small lowercase
+ * mono at the end of the line. The title is the loudest thing in the row.
+ * Sketch and mind-map notes get a thumbnail (NotePreview.jsx), lazily
+ * rendered.
  *
  * Props:
  *  - note:        the note object (id/_id, title, content, type, tags, updatedAt/createdAt)
@@ -63,7 +64,7 @@ function NoteRow({ note, to, onClick, query, maxPreview = 160, dateField = 'upda
     const isVisual = VISUAL_TYPES.includes(type);
     const isCode = type === 'code' && !note.snippet;
     const preview = isCode ? '' : getPreview(note, maxPreview);
-    const highlightColor = theme.palette.primary.main;
+    const g = graphiteTokens(theme);
 
     const noteId = note.id || note._id;
     const linkTo = to || `/notes/${noteId}`;
@@ -92,8 +93,8 @@ function NoteRow({ note, to, onClick, query, maxPreview = 160, dateField = 'upda
                 textDecoration: 'none',
                 color: 'inherit',
                 transition: 'background-color 120ms ease',
-                '&:hover': { bgcolor: glow(theme).soft },
-                '&:focus-visible': { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: -2 },
+                '&:hover': { bgcolor: g.paper },
+                '&:focus-visible': { outline: `2px solid ${g.ink}`, outlineOffset: -2 },
                 '@media (prefers-reduced-motion: reduce)': { transition: 'none' },
             }}
         >
@@ -113,7 +114,7 @@ function NoteRow({ note, to, onClick, query, maxPreview = 160, dateField = 'upda
                     }}
                 >
                     {query
-                        ? highlightQuery(note.title || 'Untitled', query, highlightColor)
+                        ? highlightQuery(note.title || 'Untitled', query)
                         : (note.title || 'Untitled')}
                 </Typography>
 
@@ -135,50 +136,44 @@ function NoteRow({ note, to, onClick, query, maxPreview = 160, dateField = 'upda
                             wordBreak: 'break-word',
                         }}
                     >
-                        {query ? highlightQuery(preview, query, highlightColor) : preview}
+                        {query ? highlightQuery(preview, query) : preview}
                     </Typography>
                 ) : null}
 
-                {/* Meta line: type stamp, tags, time */}
+                {/* Meta line: type glyph, tags, time */}
                 <Box
                     sx={{
                         display: 'flex',
                         alignItems: 'center',
                         gap: '8px',
-                        mt: '8px',
+                        mt: '6px',
                         minWidth: 0,
                     }}
                 >
-                    <TypeStamp type={type} />
-                    {tags.slice(0, 2).map((tag) => (
+                    <TypeIcon type={type} size={15} />
+                    {tags.length > 0 && (
                         <Typography
-                            key={tag}
                             component="span"
-                            variant="caption"
-                            title={tag}
+                            title={tags.join(', ')}
                             sx={{
                                 color: 'text.secondary',
+                                fontSize: '0.8125rem',
+                                lineHeight: 1.2,
                                 whiteSpace: 'nowrap',
                                 overflow: 'hidden',
                                 textOverflow: 'ellipsis',
                                 minWidth: 0,
-                                maxWidth: 140,
-                                lineHeight: 1,
                             }}
                         >
-                            #{tag.split('/').pop()}
-                        </Typography>
-                    ))}
-                    {tags.length > 2 && (
-                        <Typography component="span" variant="caption" sx={{ color: 'text.secondary', lineHeight: 1, flexShrink: 0 }}>
-                            +{tags.length - 2}
+                            {tags.slice(0, 2).map((tag) => tag.split('/').pop()).join(' · ')}
+                            {tags.length > 2 ? ` +${tags.length - 2}` : ''}
                         </Typography>
                     )}
                     <Box sx={{ flex: 1 }} />
                     <Typography
                         component="span"
                         variant="caption"
-                        sx={{ color: 'text.secondary', whiteSpace: 'nowrap', flexShrink: 0, lineHeight: 1 }}
+                        sx={{ color: 'text.secondary', whiteSpace: 'nowrap', flexShrink: 0, lineHeight: 1.2 }}
                     >
                         {formatRelativeTime(when)}
                     </Typography>

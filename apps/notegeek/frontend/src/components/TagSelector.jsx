@@ -47,7 +47,7 @@ function TagSelector({ selectedTags, onChange, disabled = false }) {
         <TextField
           {...params}
           variant="standard"
-          placeholder={disabled ? "" : (selectedTags?.length ? "add tag…" : "Add tags (press Enter)")}
+          placeholder={disabled ? "" : (selectedTags?.length ? "add tag…" : "add tags")}
           size="small"
           disabled={disabled}
           inputProps={{ ...params.inputProps, 'aria-label': 'Tags' }}
@@ -68,15 +68,15 @@ function TagSelector({ selectedTags, onChange, disabled = false }) {
         width: '100%',
         '& .MuiInputBase-root': {
           gap: '4px',
-          fontFamily: theme.typography.fontFamilyMono,
-          fontSize: '0.8125rem',
+          fontFamily: theme.typography.fontFamily,
+          fontSize: '0.875rem',
           alignItems: 'center',
           // 44px hit area on phones (MOBILE_UI_PLAN §2); compact above.
           minHeight: 44,
           [theme.breakpoints.up('sm')]: { minHeight: 32 },
         },
         '& .MuiInputBase-input::placeholder': { color: theme.palette.text.secondary, opacity: 1 },
-        '& .MuiChip-root': { height: 24, bgcolor: 'transparent' },
+        '& .MuiChip-root': { height: 26, bgcolor: 'transparent', fontSize: '0.8125rem' },
         // Read-only (a mind map in view mode): the tags are still content to
         // read, so no 38%-opacity "disabled" wash — that put 12px labels at
         // 3.0:1. Full-strength secondary ink instead, and no delete glyph.

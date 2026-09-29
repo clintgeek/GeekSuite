@@ -1,26 +1,28 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- NoteGeek "Lab Notebook": a dot-grid notebook page with a brick rubber
-       stamp, on the ink desk. Master for icon-192/512.png. -->
-  <rect width="512" height="512" rx="112" fill="#16140F"/>
-    <!-- the page -->
-    <rect x="132" y="84" width="264" height="344" rx="16" fill="#FFFDF8"/>
-    <!-- binding holes down the left margin -->
-    <circle cx="164" cy="140" r="11" fill="#16140F"/>
-    <circle cx="164" cy="212" r="11" fill="#16140F"/>
-    <circle cx="164" cy="284" r="11" fill="#16140F"/>
-    <circle cx="164" cy="356" r="11" fill="#16140F"/>
-    <!-- dot grid -->
-    <g fill="#16140F" fill-opacity="0.32">
-      <circle cx="220" cy="136" r="6"/><circle cx="260" cy="136" r="6"/><circle cx="300" cy="136" r="6"/><circle cx="340" cy="136" r="6"/>
-      <circle cx="220" cy="176" r="6"/><circle cx="260" cy="176" r="6"/><circle cx="300" cy="176" r="6"/><circle cx="340" cy="176" r="6"/>
-      <circle cx="220" cy="216" r="6"/><circle cx="260" cy="216" r="6"/><circle cx="300" cy="216" r="6"/><circle cx="340" cy="216" r="6"/>
-      <circle cx="220" cy="256" r="6"/><circle cx="260" cy="256" r="6"/>
-      <circle cx="220" cy="296" r="6"/>
+  <!-- NoteGeek "Graphite": a pencil on engineering paper, and the line it
+       just drew on a pass of highlighter. Master for icon-192/512.png. -->
+  <defs>
+    <clipPath id="tile"><rect width="512" height="512" rx="112"/></clipPath>
+    <pattern id="grid" width="32" height="32" patternUnits="userSpaceOnUse">
+      <path d="M32 0 H0 V32" fill="none" stroke="#4C7A5E" stroke-opacity="0.22" stroke-width="2"/>
+    </pattern>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="#E9EEE7"/>
+  <rect width="512" height="512" fill="url(#grid)" clip-path="url(#tile)"/>
+  <g transform="translate(-6 -24)">
+    <!-- a pass of highlighter, and the line the pencil just drew on it -->
+    <rect x="118" y="360" width="300" height="60" rx="14" fill="#F5DF4D" transform="rotate(-5 268 390)"/>
+    <path d="M150 396 q 30 -22 60 0 t 60 0 t 60 0 t 60 0" fill="none" stroke="#2F2E2B" stroke-width="11" stroke-linecap="round" stroke-linejoin="round" transform="rotate(-5 268 390)"/>
+    <!-- the pencil, tip down-left: body, facet, ferrule, eraser, sharpened wood, graphite -->
+    <g transform="translate(40 36) rotate(-45 256 256) translate(24 -40)">
+      <rect x="112" y="222" width="232" height="68" fill="#3A3936"/>
+      <rect x="112" y="222" width="232" height="20" fill="#5A5955"/>
+      <rect x="344" y="218" width="40" height="76" rx="4" fill="#9DA4A0"/>
+      <rect x="354" y="218" width="6" height="76" fill="#7C807B"/>
+      <rect x="368" y="218" width="6" height="76" fill="#7C807B"/>
+      <path d="M384 218 h26 a22 22 0 0 1 22 22 v32 a22 22 0 0 1 -22 22 h-26 z" fill="#6B6F6C"/>
+      <path d="M112 222 L112 290 L50 256 Z" fill="#D8C39A"/>
+      <path d="M72 244 L72 268 L50 256 Z" fill="#2F2E2B"/>
     </g>
-    <!-- the brick rubber stamp, rotated like SaveStamp -->
-    <g transform="rotate(-12 312 330)">
-      <rect x="236" y="286" width="152" height="88" rx="12" fill="#FFFDF8" fill-opacity="0.85" stroke="#8B2C2A" stroke-width="14"/>
-      <rect x="262" y="312" width="100" height="14" rx="7" fill="#8B2C2A"/>
-      <rect x="262" y="336" width="64" height="14" rx="7" fill="#8B2C2A"/>
-    </g>
+  </g>
 </svg>

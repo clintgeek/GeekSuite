@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, waitFor, fireEvent } from '@testing-library/react';
+import { screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { gql } from '@apollo/client';
 import { renderWithProviders } from '../testUtils';
 import NoteList from '../../components/NoteList';
@@ -73,17 +73,33 @@ describe('NoteList Unit Tests', () => {
         vi.useRealTimers();
     });
 
-    it('shows the type stamp and up to two tags on every row', async () => {
+    it('shows the type as a labelled glyph and up to two plain tags on every row', async () => {
         const notes = [
             { id: '1', title: 'Tagged', content: 'x', type: 'markdown', tags: ['a', 'b/c', 'd'], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
         ];
         renderWithProviders(<NoteList />, { mocks: [mockNotesQuery(notes)] });
         const row = (await screen.findByText('Tagged')).closest('a');
-        expect(row).toHaveTextContent('Markdown');
-        expect(row).toHaveTextContent('#a');
-        expect(row).toHaveTextContent('#c');
-        expect(row).toHaveTextContent('+1');
-        expect(row).not.toHaveTextContent('#d');
+        // The type is an icon with an accessible name, not a coloured stamp.
+        expect(within(row).getByRole('img', { name: 'Markdown note' })).toBeInTheDocument();
+        // Tags are plain words (the last path segment), no # and no chips.
+        expect(row).toHaveTextContent('a · c +1');
+        expect(row).not.toHaveTextContent('#');
+        expect(row).not.toHaveTextContent('· d');
+    });
+
+    it('filters by type with one quiet row of pressed/unpressed chips', async () => {
+        const notes = [
+            { id: '1', title: 'One', content: 'x', type: 'markdown', tags: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        ];
+        renderWithProviders(<NoteList />, { mocks: [mockNotesQuery(notes)] });
+        await screen.findByText('One');
+        const group = screen.getByRole('group', { name: 'Filter by type' });
+        const all = within(group).getByRole('button', { name: /all/i });
+        const sketches = within(group).getByRole('button', { name: /sketches/i });
+        expect(all).toHaveAttribute('aria-pressed', 'true');
+        expect(sketches).toHaveAttribute('aria-pressed', 'false');
+        // No Lab Notebook stamps left behind.
+        expect(document.querySelector('.type-stamp')).toBeNull();
     });
 
     it('shows empty state when no notes', async () => {

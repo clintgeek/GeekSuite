@@ -27,8 +27,9 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import DeleteNoteDialog from './DeleteNoteDialog';
-import TypeStamp from './notes/TypeStamp';
-import { border, glow, noteTypeColor, surfaces } from '../theme/tokens';
+import TypeIcon from './notes/TypeIcon';
+import { noteTypeMeta } from './notes/noteTypeMeta';
+import { border, glow, surfaces } from '../theme/tokens';
 import { decodeCodeNote } from '../utils/previewText';
 import { sanitizeNoteHtml } from '../utils/sanitizeNoteHtml';
 
@@ -78,7 +79,7 @@ function NoteViewer() {
 
     const noteType = noteToView.type || 'text';
     // Use theme tokens — same source of truth as the rest of the app
-    const typeColor = noteTypeColor(theme, noteType);
+
 
     const formatDate = (date) => {
         return new Date(date).toLocaleDateString(undefined, {
@@ -109,7 +110,7 @@ function NoteViewer() {
                         aria-label="Back to notes"
                         size="small"
                         sx={{
-                            color: 'text.disabled',
+                            color: 'text.secondary',
                             borderRadius: 1.5,
                             transition: 'color 100ms ease',
                             '&:hover': { color: 'text.primary' },
@@ -118,8 +119,11 @@ function NoteViewer() {
                         <ArrowBackIcon sx={{ fontSize: 18 }} />
                     </IconButton>
 
-                    {/* Type stamp — the same one the list and editor wear */}
-                    <TypeStamp type={noteType} />
+                    {/* The type, quietly: glyph + name, as in the editor's meta line */}
+                    <Box sx={{ display: 'inline-flex', alignItems: 'center', gap: '4px', color: 'text.secondary', fontSize: '0.8125rem' }}>
+                        <TypeIcon type={noteType} size={15} aria-hidden role={undefined} aria-label={undefined} />
+                        {noteTypeMeta(noteType).label}
+                    </Box>
 
                     <Box sx={{ flex: 1 }} />
 
@@ -144,7 +148,7 @@ function NoteViewer() {
                             onClick={handleDeleteClick}
                             size="small"
                             sx={{
-                                color: 'text.disabled',
+                                color: 'text.secondary',
                                 borderRadius: 1.5,
                                 transition: 'all 120ms ease',
                                 '&:hover': { color: 'error.main', bgcolor: alpha(theme.palette.error.main, 0.06) },
@@ -166,9 +170,6 @@ function NoteViewer() {
                         display: 'flex',
                     }}
                 >
-                    {/* Left accent — type identity, same spatial language as Continue */}
-                    <Box sx={{ width: 3, bgcolor: typeColor, flexShrink: 0 }} />
-
                     <Box sx={{ flex: 1, minWidth: 0 }}>
                         {/* Title zone — generous, prominent. This is where your eyes land. */}
                         <Box sx={{ px: { xs: 2.5, sm: 3.5 }, pt: { xs: 3, sm: 4 }, pb: 2 }}>
@@ -176,8 +177,8 @@ function NoteViewer() {
                                 variant="h3"
                                 component="h1"
                                 sx={{
-                                    fontWeight: 700,
-                                    fontSize: { xs: '1.375rem', sm: '1.625rem' },
+                                    fontWeight: 650,
+                                    fontSize: { xs: '1.5rem', sm: '1.75rem' },
                                     color: 'text.primary',
                                     lineHeight: 1.2,
                                     letterSpacing: '-0.02em',
@@ -209,19 +210,19 @@ function NoteViewer() {
                                             {noteToView.tags.map(tag => (
                                                 <Typography
                                                     key={tag}
-                                                    variant="caption"
                                                     component="span"
                                                     onClick={() => navigate(`/tags/${encodeURIComponent(tag)}`)}
                                                     sx={{
-                                                        px: 0.75,
+                                                        px: '10px',
                                                         py: 0.125,
-                                                        borderRadius: '4px',
+                                                        fontSize: '0.8125rem',
+                                                        borderRadius: '999px',
                                                         border: `1px solid ${border(theme)}`,
                                                         color: 'text.secondary',
                                                         cursor: 'pointer',
                                                         lineHeight: '18px',
                                                         transition: 'color 100ms ease, border-color 100ms ease',
-                                                        '&:hover': { color: 'primary.main', borderColor: theme.palette.primary.main },
+                                                        '&:hover': { color: 'text.primary', borderColor: theme.palette.text.primary },
                                                     }}
                                                 >
                                                     {tag}
@@ -258,7 +259,7 @@ function NoteViewer() {
                                 letterSpacing: '0.01em',
                                 '& p': { mb: 2 },
                                 '& h1': {
-                                    fontFamily: '"Geist Variable", "Geist", -apple-system, BlinkMacSystemFont, sans-serif',
+                                    fontFamily: 'inherit',
                                     fontWeight: 700,
                                     fontSize: '1.75rem',
                                     mt: 4,
@@ -266,7 +267,7 @@ function NoteViewer() {
                                     lineHeight: 1.2,
                                 },
                                 '& h2': {
-                                    fontFamily: '"Geist Variable", "Geist", -apple-system, BlinkMacSystemFont, sans-serif',
+                                    fontFamily: 'inherit',
                                     fontWeight: 600,
                                     fontSize: '1.4rem',
                                     mt: 3.5,
@@ -274,7 +275,7 @@ function NoteViewer() {
                                     lineHeight: 1.25,
                                 },
                                 '& h3': {
-                                    fontFamily: '"Geist Variable", "Geist", -apple-system, BlinkMacSystemFont, sans-serif',
+                                    fontFamily: 'inherit',
                                     fontWeight: 700,
                                     fontSize: '1.15rem',
                                     mt: 3,
@@ -282,24 +283,24 @@ function NoteViewer() {
                                     lineHeight: 1.3,
                                 },
                                 '& h4, & h5, & h6': {
-                                    fontFamily: '"Geist Variable", "Geist", -apple-system, BlinkMacSystemFont, sans-serif',
+                                    fontFamily: 'inherit',
                                     fontWeight: 700,
                                     fontSize: '1rem',
                                     mt: 2.5,
                                     mb: 1,
                                 },
                                 '& a': {
-                                    color: 'primary.main',
+                                    color: 'text.primary',
                                     textDecoration: 'none',
                                     borderBottom: `1px solid`,
-                                    borderColor: alpha(theme.palette.primary.main, 0.3),
+                                    borderColor: border(theme),
                                     transition: 'border-color 150ms ease',
                                     '&:hover': {
                                         borderColor: 'primary.main',
                                     },
                                 },
                                 '& code': {
-                                    fontFamily: '"JetBrains Mono", monospace',
+                                    fontFamily: 'var(--ng-mono)',
                                     fontSize: '0.85em',
                                     bgcolor: alpha(theme.palette.text.primary, 0.05),
                                     px: 0.75,
@@ -308,7 +309,7 @@ function NoteViewer() {
                                     fontWeight: 500,
                                 },
                                 '& pre': {
-                                    fontFamily: '"JetBrains Mono", monospace',
+                                    fontFamily: 'var(--ng-mono)',
                                     fontSize: '0.825rem',
                                     lineHeight: 1.7,
                                     bgcolor: theme.palette.background.default,
@@ -323,7 +324,7 @@ function NoteViewer() {
                                     },
                                 },
                                 '& blockquote': {
-                                    borderLeft: `3px solid ${ typeColor }`,
+                                    borderLeft: `2px solid ${ border(theme) }`,
                                     pl: 2.5,
                                     ml: 0,
                                     my: 2.5,

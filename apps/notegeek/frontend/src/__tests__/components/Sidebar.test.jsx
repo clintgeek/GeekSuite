@@ -90,10 +90,12 @@ describe('Sidebar', () => {
 
     it('renders main navigation links', () => {
         render(<Sidebar />, { wrapper: SidebarTestWrapper });
-        expect(screen.getByText('New Note')).toBeInTheDocument();
         expect(screen.getByText('Home')).toBeInTheDocument();
-        expect(screen.getByText('Search')).toBeInTheDocument();
-        expect(screen.getByText('All Notes')).toBeInTheDocument();
+        expect(screen.getByText('All notes')).toBeInTheDocument();
+        // One path each: New is the top bar's split button and search is the
+        // top bar's box, so the sidebar repeats neither.
+        expect(screen.queryByText('New Note')).toBeNull();
+        expect(screen.queryByText('Search')).toBeNull();
     });
 
     it('renders tags hierarchically', async () => {

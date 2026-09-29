@@ -1145,12 +1145,12 @@ importers:
       '@emotion/styled':
         specifier: ^11.14.0
         version: 11.14.1(@emotion/react@11.14.0(@types/react@18.3.28)(react@18.3.1))(@types/react@18.3.28)(react@18.3.1)
-      '@fontsource-variable/geist':
+      '@fontsource-variable/spline-sans':
         specifier: ^5.3.0
         version: 5.3.0
-      '@fontsource/jetbrains-mono':
-        specifier: ^5.2.8
-        version: 5.2.8
+      '@fontsource-variable/spline-sans-mono':
+        specifier: ^5.3.0
+        version: 5.3.0
       '@geeksuite/api-client':
         specifier: workspace:*
         version: link:../../../packages/api-client
@@ -3325,8 +3325,11 @@ packages:
   '@fontsource-variable/dm-sans@5.2.8':
     resolution: {integrity: sha512-AxkvMTvNWgfrmlyjiV05vlHYJa+nRQCf1EfvIrQAPBpFJW0O9VTz7oAFr9S3lvbWdmnFoBk7yFqQL86u64nl2g==}
 
-  '@fontsource-variable/geist@5.3.0':
-    resolution: {integrity: sha512-j0m+vLQuG5XAYoHtGCVu0spvlGreR3EzpECUVzkFmI1mTVnAO38l/NEPDCFgZ177JxzYJCLSmTQibIiYPilGrA==}
+  '@fontsource-variable/spline-sans-mono@5.3.0':
+    resolution: {integrity: sha512-dH/qBj/MCE4ObiuCwlA9X1o3AftMO9dwfFgoRVYjy6VCPYkpWAlEtK/RjeyICgsR8rW763IAQARskVgShBY5JA==}
+
+  '@fontsource-variable/spline-sans@5.3.0':
+    resolution: {integrity: sha512-a0EVY1u6qvI5uk66ImOKbh3QD8y3LtMpuqMMyN4OB9eJwivKPXNTn8rJUB+YLrJ5LxS85vqSmG1xeYG/mF8MDw==}
 
   '@fontsource/alegreya-sans@5.3.0':
     resolution: {integrity: sha512-Uf0RbuwzhSS3NQrBFcRzEUm7TxDQW3qdAbQ6JIOhsIW6V+YN2dqlR99lhfEE38R3GHgMCMJBzqSp7aJxhNXSOw==}
@@ -13203,7 +13206,9 @@ snapshots:
 
   '@fontsource-variable/dm-sans@5.2.8': {}
 
-  '@fontsource-variable/geist@5.3.0': {}
+  '@fontsource-variable/spline-sans-mono@5.3.0': {}
+
+  '@fontsource-variable/spline-sans@5.3.0': {}
 
   '@fontsource/alegreya-sans@5.3.0': {}
 

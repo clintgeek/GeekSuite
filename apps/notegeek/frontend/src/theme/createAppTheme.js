@@ -1,214 +1,202 @@
 /**
- * NoteGeek Theme: "Lab Notebook"
+ * NoteGeek Theme: "Graphite"
  *
- * An engineer's notebook: warm paper on a dot-grid desk, typewritten
- * metadata, and the brick accent used the way a rubber stamp is — sparingly,
- * outlined, and only on things that have a status (the save stamp, the five
- * note-type stamps). Calm, precise, tactile. It must not borrow from its
- * siblings: no cloth or serif (BookGeek), no neon or hard offset shadows
- * (GameGeek). See apps/notegeek/DOCS/CONTEXT.md, "Visual identity".
+ * Pencil on pale grey-green engineering paper. Graphite ink (warm dark grey,
+ * never black), one highlighter-yellow accent used only as a fill behind ink,
+ * and a faint grid on the desk. At night: slate paper, light-graphite ink,
+ * the highlighter still a fill with dark ink on it. See
+ * apps/notegeek/DOCS/CONTEXT.md §7 and theme/graphite.js (the palette, with
+ * every pair measured in __tests__/theme/graphiteContrast.test.js).
  *
- * Identity:
- * - Brick accent (#8B2C2A light / #C97570 dark)
- * - Warm paper sheet (#FFFDF8) on a cream dot-grid desk (#FBF7EE)
- * - Geist (sans) / JetBrains Mono (mono), both self-hosted
+ * What it is not: BuJoGeek's paper + black + red, BookGeek's navy cloth and
+ * serif, GameGeek's neon stickers, StoryGeek's parchment, FitnessGeek's
+ * cream and produce, BaseGeek's steel panel.
+ *
+ * MUI's `primary` is the graphite pencil, not the yellow: the suite reads
+ * `primary.main` as link text, focus rings and active icons, and yellow on
+ * paper is unreadable. The highlighter is wired in explicitly where it
+ * belongs — contained primary buttons, selected list rows, ::selection.
  */
 import { alpha } from '@mui/material/styles';
 import { createGeekSuiteTheme } from '@geeksuite/ui';
-
-const noteAccent = {
-  light: '#B5524F',
-  main:  '#8B2C2A',
-  dark:  '#5E1A19',
-  contrastText: '#FFFCF5',
-};
-
-// Oxblood is 2.0:1 as a foreground on the warm-black ground, so dark mode
-// lifts the accent (matches noteTypes.handwritten below).
-const noteAccentDark = {
-  light: '#E09A95',
-  main:  '#C97570',
-  dark:  '#8B2C2A',
-  contrastText: '#1F1C16',
-};
-
-const accentFor = (mode) => (mode === 'light' ? noteAccent : noteAccentDark);
+import { graphite, SANS, MONO } from './graphite';
 
 function buildNoteOverrides(mode) {
-  const isLight = mode === 'light';
-  const accent = accentFor(mode);
+  const g = graphite[mode === 'dark' ? 'dark' : 'light'];
+  const isLight = mode !== 'dark';
 
-  // Cream-paper / ink-desk-lamp palette.
-  // `elevated` is the writing sheet. Warm white rather than #FFFFFF: pure
-  // white on cream read as a form field, not as a page.
-  const surfaces = isLight
-    ? { default: '#FBF7EE', paper: '#FFFCF5', elevated: '#FFFDF8' }
-    : { default: '#16140F', paper: '#1F1C16', elevated: '#26221A' };
+  const surfaces = { default: g.desk, paper: g.paper, elevated: g.sheet };
 
-  const text = isLight
-    ? { primary: '#1F1C16', secondary: '#6B6258', muted: '#7A7064', disabled: '#857C72' }
-    : { primary: '#EDE6D6', secondary: '#998F80', muted: '#A89C8C', disabled: '#7A7062' };
+  // Type identity is an icon now, not a colour: every type draws in the
+  // same soft graphite. The map survives because mind-map edges, code-preview
+  // rules and thumbnails still ask for "the colour of this type".
+  const noteTypes = {
+    text: g.lead,
+    markdown: g.lead,
+    code: g.lead,
+    mindmap: g.lead,
+    handwritten: g.lead,
+  };
+  // Text-bearing type colour (the code preview's keyword tint etc.): plain
+  // secondary ink, so it clears 4.5:1 everywhere secondary text does.
+  const noteTypeInk = {
+    text: g.ink,
+    markdown: g.ink2,
+    code: g.ink2,
+    mindmap: g.ink2,
+    handwritten: g.ink2,
+  };
 
-  const divider = isLight ? '#E5DDC8' : '#2D2A24';
-  const border  = isLight ? '#D8D0BD' : '#3A352D';
-
-  // Per-note-type identity colours — earthy and editorial, never playful.
-  // Hues are spread across the wheel (blue → green → amber → red) so the
-  // 7px identity dots stay distinguishable at a glance. Dark mode lifts
-  // each hue so it stays legible on the warm-black ground.
-  const noteTypes = isLight
-    ? {
-        text:        '#1F1C16',  // ink black
-        markdown:    '#2D6A9F',  // slate blue
-        code:        '#4A7A2E',  // forest green
-        mindmap:     '#B8841F',  // warm amber
-        handwritten: '#8B2C2A',  // oxblood
-      }
-    : {
-        text:        '#EDE6D6',
-        markdown:    '#6BA5D6',
-        code:        '#7DAE50',
-        mindmap:     '#D9A542',
-        handwritten: '#C97570',
-      };
-
-  // Text-bearing versions of the type colours: the same hue, pushed until
-  // 12px mono on the stamp's own tinted fill (`stampFill` in tokens.js,
-  // 8% light / 12% dark) clears 4.5:1 on every surface it sits on — sheet,
-  // desk and paper. Measured (worst surface): light text 13.5, markdown 5.69,
-  // code 5.35, mindmap 5.18, sketch 6.93; dark text 9.11, markdown 5.66,
-  // code 5.74, mindmap 6.23, sketch 5.31. The plain `noteTypes` hues above
-  // stay for dots, edges and strokes, where there is no text to read —
-  // light mindmap amber is only 3.25:1 as text.
-  const noteTypeInk = isLight
-    ? {
-        text:        '#1F1C16',
-        markdown:    '#275E8E',
-        code:        '#3E6A25',
-        mindmap:     '#805A0E',
-        handwritten: '#8B2C2A',
-      }
-    : {
-        text:        '#EDE6D6',
-        markdown:    '#7DB2DF',
-        code:        '#8CBC5E',
-        mindmap:     '#E0B055',
-        handwritten: '#DE948E',
-      };
-
-  // The rubber stamp. Brick ink for "Saved", a readable error red for
-  // "Not saved". Same 4.5:1-on-own-fill rule: light brick 6.93, error 6.03;
-  // dark brick 5.31, error 5.87 (worst surface).
-  const stamp = isLight
-    ? { ink: '#8B2C2A', error: '#A3261F', muted: '#6B6258' }
-    : { ink: '#DE948E', error: '#F2998F', muted: '#A89C8C' };
-
-  // Dot grid on the desk: one 1px dot every 16px (four suite units). Faint
-  // enough that nothing is ever set on top of it that needs the contrast.
-  const dotGrid = isLight ? 'rgba(31, 28, 22, 0.13)' : 'rgba(237, 230, 214, 0.075)';
-
-  const sansStack = '"Geist Variable", "Geist", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
-  const monoStack = '"JetBrains Mono", "Geist Mono", ui-monospace, "SFMono-Regular", monospace';
+  const hlHover = isLight ? '#EDD43A' : '#D4BB3C';
 
   return {
     palette: {
-      background: {
-        default: surfaces.default,
-        paper:   surfaces.paper,
-      },
-      text: {
-        primary:   text.primary,
-        secondary: text.secondary,
-        muted:     text.muted,
-        disabled:  text.disabled,
-      },
-      divider,
-      // Custom NoteGeek tokens — read these via ../theme/tokens.js helpers,
-      // never directly, so a plain MUI theme can't crash the UI.
+      background: { default: g.desk, paper: g.paper },
+      text: { primary: g.ink, secondary: g.ink2, muted: g.muted, disabled: g.disabled },
+      error: { main: g.error, contrastText: isLight ? '#FFFFFF' : g.desk },
+      divider: g.rule,
+      // Custom NoteGeek tokens — read through ../theme/tokens.js helpers,
+      // never directly, so a plain MUI theme cannot crash the UI.
       surfaces,
-      border,
+      border: g.border,
       noteTypes,
       noteTypeInk,
-      stamp,
-      dotGrid,
+      graphite: g,
+      stamp: { ink: g.ink2, error: g.error, muted: g.ink2 },
+      dotGrid: g.grid,
     },
 
     typography: {
-      fontFamily: sansStack,
-      fontFamilyMono: monoStack,
-
-      // Headers keep Geist but use NoteGeek-specific weights/spacing
-      h1: { fontFamily: sansStack, fontWeight: 700, fontSize: '2rem',     letterSpacing: '-0.025em', lineHeight: 1.15 },
-      h2: { fontFamily: sansStack, fontWeight: 700, fontSize: '1.5rem',   letterSpacing: '-0.02em',  lineHeight: 1.2 },
-      h3: { fontFamily: sansStack, fontWeight: 600, fontSize: '1.25rem',  letterSpacing: '-0.015em', lineHeight: 1.3 },
-      h4: { fontFamily: sansStack, fontWeight: 600, fontSize: '1.0625rem',letterSpacing: '-0.01em',  lineHeight: 1.35 },
-      h5: { fontFamily: sansStack, fontWeight: 600, fontSize: '0.9375rem',lineHeight: 1.4 },
+      fontFamily: SANS,
+      fontFamilyMono: MONO,
+      h1: { fontFamily: SANS, fontWeight: 650, fontSize: '2rem', letterSpacing: '-0.02em', lineHeight: 1.15 },
+      h2: { fontFamily: SANS, fontWeight: 650, fontSize: '1.5rem', letterSpacing: '-0.015em', lineHeight: 1.2 },
+      h3: { fontFamily: SANS, fontWeight: 600, fontSize: '1.25rem', letterSpacing: '-0.01em', lineHeight: 1.3 },
+      h4: { fontFamily: SANS, fontWeight: 600, fontSize: '1.0625rem', letterSpacing: '-0.005em', lineHeight: 1.35 },
+      h5: { fontFamily: SANS, fontWeight: 600, fontSize: '0.9375rem', lineHeight: 1.4 },
+      // Section labels: sentence case, sans, secondary ink. The Lab Notebook
+      // set these in letterspaced uppercase mono; Graphite lets the notes be
+      // the loudest thing on the page.
       h6: {
-        fontFamily: monoStack,
+        fontFamily: SANS,
         fontWeight: 600,
-        // 12px text floor (MOBILE_UI_PLAN §2) — the uppercase mono label
-        // identity holds fine at 12px, it just can't go below it.
-        fontSize: '0.75rem',
-        letterSpacing: '0.10em',
-        textTransform: 'uppercase',
-        lineHeight: 1,
+        fontSize: '0.8125rem',
+        letterSpacing: '0',
+        textTransform: 'none',
+        lineHeight: 1.3,
       },
-
-      // Captions and Overlines are Mono — NoteGeek's metadata identity
+      // Captions are the metadata voice: small mono, lowercase as written.
       caption: {
-        fontFamily: monoStack,
-        fontWeight: 500,
+        fontFamily: MONO,
+        fontWeight: 400,
         fontSize: '0.75rem',
-        color: text.secondary,
+        letterSpacing: '0',
+        wordSpacing: 'normal',
+        color: g.ink2,
       },
       overline: {
-        fontFamily: monoStack,
+        fontFamily: SANS,
         fontWeight: 600,
-        fontSize: '0.6875rem',
-        letterSpacing: '0.10em',
-        textTransform: 'uppercase',
+        fontSize: '0.75rem',
+        letterSpacing: '0.02em',
+        textTransform: 'none',
       },
     },
 
     components: {
       MuiCssBaseline: {
         styleOverrides: {
+          // The page's tokens as CSS variables, for the plain stylesheet the
+          // rich-text surface uses (src/index.css).
+          ':root': {
+            '--ng-ink': g.ink,
+            '--ng-ink2': g.ink2,
+            '--ng-hl': g.hl,
+            '--ng-hl-soft': g.hlSoft,
+            '--ng-on-hl': g.onHl,
+            '--ng-rule': g.rule,
+            '--ng-border': g.border,
+            '--ng-desk': g.desk,
+            '--ng-sheet': g.sheet,
+            '--ng-mono': MONO,
+          },
+          // Spline Sans sets a tight word space; at 13–16px on a phone
+          // "below and" read as "belowand". A hair more, everywhere the sans
+          // is used (form controls reset word-spacing, so they are named).
+          'body, input, textarea, button': { wordSpacing: '0.06em' },
+          // …but never in code: mono columns must line up.
+          'pre, code, kbd, samp, [data-mono]': { wordSpacing: 'normal' },
           'input, textarea, [contenteditable]': {
-            caretColor: `${accent.main} !important`,
+            caretColor: `${g.ink} !important`,
+          },
+          // The highlighter, where it does the most good: over whatever the
+          // writer selects. Ink on it, in both modes.
+          '::selection': { backgroundColor: g.hl, color: g.onHl },
+          'mark, .ng-hit': {
+            backgroundColor: g.hl,
+            color: g.onHl,
+            borderRadius: '2px',
+            padding: '0 1px',
           },
         },
       },
       MuiPaper: {
         styleOverrides: {
-          root: {
-            backgroundImage: 'none',
-            border: `1px solid ${border}`,
-          },
+          root: { backgroundImage: 'none', border: `1px solid ${g.rule}` },
         },
       },
       MuiAppBar: {
         styleOverrides: {
           root: {
-            backgroundColor: surfaces.paper,
-            borderBottom: `1px solid ${divider}`,
+            backgroundColor: g.paper,
+            borderBottom: `1px solid ${g.rule}`,
             backgroundImage: 'none',
+            boxShadow: 'none',
           },
         },
       },
-      // NoteGeek specific chips — ink stamp style
+      MuiButton: {
+        styleOverrides: {
+          // The primary action is a stroke of highlighter with ink on it.
+          containedPrimary: {
+            backgroundColor: g.hl,
+            color: g.onHl,
+            fontWeight: 650,
+            '&:hover': { backgroundColor: hlHover },
+            '&:active': { backgroundColor: hlHover },
+          },
+        },
+      },
+      MuiListItemButton: {
+        styleOverrides: {
+          root: {
+            '&:hover': { backgroundColor: alpha(g.ink, isLight ? 0.05 : 0.07) },
+            // The active nav row: highlighter under ink.
+            '&.Mui-selected': {
+              backgroundColor: g.hl,
+              color: g.onHl,
+              '& .MuiListItemIcon-root': { color: g.onHl },
+              '&:hover': { backgroundColor: hlHover },
+            },
+          },
+        },
+      },
       MuiChip: {
         styleOverrides: {
           root: {
-            borderRadius: 4,
-            fontFamily: monoStack,
+            borderRadius: 999,
+            fontFamily: SANS,
             fontWeight: 500,
-            // 12px text floor (MOBILE_UI_PLAN §2). Visual height stays 22 —
-            // only the label text was under the floor.
-            fontSize: '0.75rem',
-            height: 22,
-            border: `1px solid ${border}`,
+            fontSize: '0.8125rem',
+            height: 26,
+            border: `1px solid ${g.border}`,
             backgroundColor: 'transparent',
           },
+        },
+      },
+      MuiTooltip: {
+        styleOverrides: {
+          tooltip: { fontFamily: SANS },
         },
       },
     },
@@ -218,24 +206,25 @@ function buildNoteOverrides(mode) {
 /**
  * createNoteTheme(mode)
  *
- * Composes shared GeekSuite rules with NoteGeek "Lab Notebook" identity.
+ * Shared GeekSuite rules + NoteGeek "Graphite".
  */
 export function createNoteTheme(mode = 'light') {
-  const accent = accentFor(mode);
+  const g = graphite[mode === 'dark' ? 'dark' : 'light'];
   const theme = createGeekSuiteTheme({
     mode,
-    accent,
+    accent: g.primary,
     overrides: buildNoteOverrides(mode),
   });
 
-  // Failsafe: Ensure theme.palette.glow is always defined even if
-  // Vite is serving an outdated, pre-bundled cache of @geeksuite/ui.
+  // Failsafe: theme.palette.glow must exist even if Vite serves a stale,
+  // pre-bundled @geeksuite/ui.
   if (!theme.palette.glow) {
+    const accent = theme.palette.primary.main;
     theme.palette.glow = {
-      ring: alpha(accent.main, 0.20),
-      soft: alpha(accent.main, 0.06),
-      medium: alpha(accent.main, 0.10),
-      border: alpha(accent.main, 0.30),
+      ring: alpha(accent, 0.2),
+      soft: alpha(accent, 0.06),
+      medium: alpha(accent, 0.1),
+      border: alpha(accent, 0.3),
     };
   }
 

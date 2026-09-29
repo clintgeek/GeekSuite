@@ -58,7 +58,7 @@ function SearchResults() {
     };
 
     return (
-        <Box sx={{ maxWidth: layout.contentWidth, mx: 'auto', py: { xs: 1.5, sm: 2 } }}>
+        <Box sx={{ maxWidth: layout.contentWidth, mx: 'auto', py: { xs: 1.5, sm: 2 }, px: { xs: '12px', sm: '16px' } }}>
             {/* Search input — aligned with the Ink Studio aesthetic */}
             <TextField
                 inputRef={inputRef}

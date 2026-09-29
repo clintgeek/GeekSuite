@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 import {
     Box,
     TextField,
@@ -7,6 +7,16 @@ import {
     useMediaQuery,
     useTheme,
 } from '@mui/material';
+import FormatBold from '@mui/icons-material/FormatBold';
+import FormatItalic from '@mui/icons-material/FormatItalic';
+import TitleIcon from '@mui/icons-material/Title';
+import FormatListBulleted from '@mui/icons-material/FormatListBulleted';
+import CheckBoxOutlined from '@mui/icons-material/CheckBoxOutlined';
+import FormatQuote from '@mui/icons-material/FormatQuote';
+import Code from '@mui/icons-material/Code';
+import LinkIcon from '@mui/icons-material/Link';
+import EditorToolbar, { ToolButton, ToolSeparator } from './EditorToolbar';
+import { insertLink, toggleLinePrefix, toggleWrap } from '../../utils/markdownFormat';
 // Deep-import (see RichTextEditor.jsx for why) instead of the
 // '@mui/icons-material' barrel.
 import Edit from '@mui/icons-material/Edit';
@@ -17,20 +27,63 @@ import ReactMarkdown from 'react-markdown';
 // is, or the editor shows something the saved note will not.
 import remarkGfm from 'remark-gfm';
 import { MARKDOWN_COMPONENTS, markdownOverflowSx } from '../notes/markdownComponents';
-import { stampFill, stampInk, surfaces } from '../../theme/tokens';
+import { graphiteTokens, tapTarget44 } from '../../theme/tokens';
 
 /**
  * MarkdownEditor — markdown editing with live preview, rendered by
  * react-markdown. Three modes: edit, preview, split (desktop only).
  *
+ * The toolbar (EditorToolbar) carries markdown formatting — heading, bold,
+ * italic, list, checklist, quote, code, link — as edits to the textarea's
+ * own text (utils/markdownFormat.js), and the mode switch. On a phone it docks
+ * above the keyboard; the formatting buttons hide in preview, where there is
+ * no text to format.
+ *
+ * The source is written in the sans, not mono: a markdown note is prose that
+ * happens to have a few asterisks in it.
+ *
  * The AI Tidy button lived here until 2026-09-22 and was removed with the
  * feature (see `DOCS/WORK_LOG_2026-09.md`). Compose, in the note's action row,
  * is what replaced it.
  */
+const FORMATS = [
+    { label: 'Heading', Icon: TitleIcon, apply: (t, a, b) => toggleLinePrefix(t, a, b, '## ') },
+    { label: 'Bold', Icon: FormatBold, apply: (t, a, b) => toggleWrap(t, a, b, '**') },
+    { label: 'Italic', Icon: FormatItalic, apply: (t, a, b) => toggleWrap(t, a, b, '_') },
+    'sep',
+    { label: 'Bullet list', Icon: FormatListBulleted, apply: (t, a, b) => toggleLinePrefix(t, a, b, '- ') },
+    { label: 'Checklist', Icon: CheckBoxOutlined, apply: (t, a, b) => toggleLinePrefix(t, a, b, '- [ ] ') },
+    { label: 'Quote', Icon: FormatQuote, apply: (t, a, b) => toggleLinePrefix(t, a, b, '> ') },
+    'sep',
+    { label: 'Code', Icon: Code, apply: (t, a, b) => toggleWrap(t, a, b, '`') },
+    { label: 'Link', Icon: LinkIcon, apply: (t, a, b) => insertLink(t, a, b) },
+];
+
 function MarkdownEditor({ content = '', setContent, isLoading, readOnly = false, fontSize = 14 }) {
     const theme = useTheme();
     const isMobile = useMediaQuery('(max-width:600px)');
+    const g = graphiteTokens(theme);
     const [viewMode, setViewMode] = useState(readOnly ? 'preview' : 'edit');
+    const inputRef = useRef(null);
+    // Where the selection goes after a toolbar edit re-renders the text.
+    const pendingSelection = useRef(null);
+    useLayoutEffect(() => {
+        const sel = pendingSelection.current;
+        const el = inputRef.current;
+        if (!sel || !el) return;
+        pendingSelection.current = null;
+        el.focus({ preventScroll: true });
+        el.setSelectionRange(sel.start, sel.end);
+    });
+
+    const applyFormat = (format) => {
+        const el = inputRef.current;
+        const start = el ? el.selectionStart : content.length;
+        const end = el ? el.selectionEnd : content.length;
+        const edit = format.apply(content, start, end);
+        pendingSelection.current = { start: edit.start, end: edit.end };
+        setContent(edit.text);
+    };
     // On mobile, only allow edit or preview (no split)
     const handleViewModeChange = (event, newMode) => {
         if (newMode !== null) {
@@ -40,7 +93,9 @@ function MarkdownEditor({ content = '', setContent, isLoading, readOnly = false,
 
     const renderEditor = () => (
         <TextField
-            placeholder="# Start writing markdown..."
+            placeholder="Start writing…"
+            inputRef={inputRef}
+            inputProps={{ 'aria-label': 'Note body' }}
             value={content}
             onChange={(e) => setContent(e.target.value)}
             multiline
@@ -77,9 +132,10 @@ function MarkdownEditor({ content = '', setContent, isLoading, readOnly = false,
                     minHeight: '40vh',
                 },
                 '& .MuiInputBase-input': {
-                    fontFamily: theme.typography.fontFamilyMono,
-                    fontSize: `${fontSize}px`,
-                    lineHeight: 1.6,
+                    fontFamily: theme.typography.fontFamily,
+                    fontSize: `${Math.max(fontSize, 16)}px`,
+                    lineHeight: 1.65,
+                    '&::placeholder': { color: 'text.secondary', opacity: 1 },
                 },
             }}
         />
@@ -121,17 +177,19 @@ function MarkdownEditor({ content = '', setContent, isLoading, readOnly = false,
                     },
                 },
                 '& blockquote': {
-                    borderLeft: 3,
-                    borderColor: 'primary.main',
+                    borderLeft: 2,
+                    borderColor: 'divider',
                     pl: 2,
                     ml: 0,
                     color: 'text.secondary',
                     fontStyle: 'italic',
                 },
                 '& a': {
-                    color: 'primary.main',
-                    textDecoration: 'none',
-                    '&:hover': { textDecoration: 'underline' },
+                    color: 'text.primary',
+                    textDecoration: 'underline',
+                    textDecorationColor: g.border,
+                    textUnderlineOffset: '2px',
+                    '&:hover': { textDecorationColor: 'currentColor' },
                 },
                 '& hr': {
                     border: 'none',
@@ -172,69 +230,64 @@ function MarkdownEditor({ content = '', setContent, isLoading, readOnly = false,
 
     return (
         <Box sx={{ display: 'flex', flexDirection: 'column', flex: '1 0 auto' }}>
-            {/* Mode toggle — the same slim, sticky, left-aligned strip as the
-                rich-text toolbar, so every page type has one toolbar line. */}
             {!readOnly && (
-                <Box
-                    role="toolbar"
-                    aria-label="Markdown view"
-                    data-editor-toolbar
-                    sx={{
-                        position: 'sticky',
-                        top: 0,
-                        zIndex: 2,
-                        display: 'flex',
-                        alignItems: 'center',
-                        py: '4px',
-                        mb: '16px',
-                        borderBottom: 1,
-                        borderColor: 'divider',
-                        bgcolor: surfaces(theme).elevated,
-                    }}
-                >
-                    <ToggleButtonGroup
-                        value={viewMode}
-                        exclusive
-                        onChange={handleViewModeChange}
-                        size="small"
-                        sx={{
-                            '& .MuiToggleButton-root': {
-                                border: 0,
-                                borderRadius: '4px !important',
-                                px: '10px',
-                                py: '4px',
-                                gap: '6px',
-                                fontFamily: theme.typography.fontFamilyMono,
-                                fontSize: '0.75rem',
-                                fontWeight: 500,
-                                letterSpacing: '0.04em',
-                                textTransform: 'uppercase',
-                                color: 'text.secondary',
-                                [theme.breakpoints.down('md')]: { minHeight: 44, minWidth: 44 },
-                                '&.Mui-selected': {
-                                    color: stampInk(theme).ink,
-                                    bgcolor: stampFill(theme, stampInk(theme).ink),
+                <EditorToolbar
+                    label="Markdown formatting"
+                    trailing={
+                        <ToggleButtonGroup
+                            value={viewMode}
+                            exclusive
+                            onChange={handleViewModeChange}
+                            size="small"
+                            aria-label="Markdown view"
+                            sx={{
+                                gap: '2px',
+                                '& .MuiToggleButton-root': {
+                                    border: 0,
+                                    borderRadius: '6px !important',
+                                    px: '10px',
+                                    py: '4px',
+                                    gap: '6px',
+                                    fontSize: '0.8125rem',
+                                    fontWeight: 500,
+                                    textTransform: 'none',
+                                    color: 'text.secondary',
+                                    [theme.breakpoints.down('md')]: { ...tapTarget44, px: '8px' },
+                                    '&.Mui-selected, &.Mui-selected:hover': {
+                                        color: g.onHl,
+                                        bgcolor: g.hl,
+                                    },
+                                    '& svg': { fontSize: 17 },
                                 },
-                                '& svg': { fontSize: 16 },
-                            },
-                        }}
-                    >
-                        <ToggleButton value="edit" aria-label="edit mode">
-                            <Edit fontSize="small" />
-                            Edit
-                        </ToggleButton>
-                        {!isMobile && (
-                            <ToggleButton value="split" aria-label="split mode">
-                                <VerticalSplit fontSize="small" />
-                                Split
+                            }}
+                        >
+                            <ToggleButton value="edit" aria-label="edit mode">
+                                <Edit fontSize="small" />
+                                {!isMobile && 'Edit'}
                             </ToggleButton>
-                        )}
-                        <ToggleButton value="preview" aria-label="preview mode">
-                            <Visibility fontSize="small" />
-                            Preview
-                        </ToggleButton>
-                    </ToggleButtonGroup>
-                </Box>
+                            {!isMobile && (
+                                <ToggleButton value="split" aria-label="split mode">
+                                    <VerticalSplit fontSize="small" />
+                                    Split
+                                </ToggleButton>
+                            )}
+                            <ToggleButton value="preview" aria-label="preview mode">
+                                <Visibility fontSize="small" />
+                                {!isMobile && 'Preview'}
+                            </ToggleButton>
+                        </ToggleButtonGroup>
+                    }
+                >
+                    {viewMode !== 'preview' && FORMATS.map((f, i) => (
+                        f === 'sep'
+                            ? <ToolSeparator key={`sep-${i}`} />
+                            : (
+                                <ToolButton key={f.label} label={f.label} onClick={() => applyFormat(f)}>
+                                    <f.Icon />
+                                </ToolButton>
+                            )
+                    ))}
+                </EditorToolbar>
             )}
 
             {/* Content area — grows; the page scrolls */}

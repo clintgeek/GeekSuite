@@ -41,40 +41,64 @@ describe('MarkdownEditor', () => {
 
     it('renders editor by default when not readOnly', () => {
         render(<MarkdownEditor content="# Hello" setContent={mockSetContent} />, { wrapper: AllProviders });
-        const textbox = screen.getByPlaceholderText('# Start writing markdown...');
+        const textbox = screen.getByPlaceholderText('Start writing…');
         expect(textbox).toBeInTheDocument();
         expect(textbox).toHaveValue('# Hello');
     });
 
     it('renders preview by default when readOnly', () => {
         render(<MarkdownEditor content="# Read Only Header" readOnly={true} setContent={mockSetContent} />, { wrapper: AllProviders });
-        expect(screen.queryByPlaceholderText('# Start writing markdown...')).not.toBeInTheDocument();
+        expect(screen.queryByPlaceholderText('Start writing…')).not.toBeInTheDocument();
         expect(screen.getByText('Read Only Header')).toBeInTheDocument();
         expect(screen.queryByLabelText('edit mode')).not.toBeInTheDocument();
     });
 
     it('calls setContent when typing', () => {
         render(<MarkdownEditor content="" setContent={mockSetContent} />, { wrapper: AllProviders });
-        const textbox = screen.getByPlaceholderText('# Start writing markdown...');
+        const textbox = screen.getByPlaceholderText('Start writing…');
         fireEvent.change(textbox, { target: { value: 'New text' } });
         expect(mockSetContent).toHaveBeenCalledWith('New text');
     });
 
     it('can toggle to preview mode', () => {
         render(<MarkdownEditor content="**Bold text**" setContent={mockSetContent} />, { wrapper: AllProviders });
-        expect(screen.getByPlaceholderText('# Start writing markdown...')).toBeInTheDocument();
+        expect(screen.getByPlaceholderText('Start writing…')).toBeInTheDocument();
 
         const previewToggle = screen.getByLabelText('preview mode');
         fireEvent.click(previewToggle);
 
-        expect(screen.queryByPlaceholderText('# Start writing markdown...')).not.toBeInTheDocument();
+        expect(screen.queryByPlaceholderText('Start writing…')).not.toBeInTheDocument();
         expect(screen.getByText('Bold text')).toBeInTheDocument();
     });
 
     it('disables input when isLoading', () => {
         render(<MarkdownEditor content="" isLoading={true} setContent={mockSetContent} />, { wrapper: AllProviders });
-        const textbox = screen.getByPlaceholderText('# Start writing markdown...');
+        const textbox = screen.getByPlaceholderText('Start writing…');
         expect(textbox).toBeDisabled();
     });
 
+    it('Bold wraps the selected words in the textarea', () => {
+        render(<MarkdownEditor content="a word here" setContent={mockSetContent} />, { wrapper: AllProviders });
+        const textbox = screen.getByPlaceholderText('Start writing…');
+        textbox.focus();
+        textbox.setSelectionRange(2, 6);
+        fireEvent.click(screen.getByRole('button', { name: 'Bold' }));
+        expect(mockSetContent).toHaveBeenCalledWith('a **word** here');
+    });
+
+    it('Checklist turns the caret line into a task', () => {
+        render(<MarkdownEditor content={'milk\neggs'} setContent={mockSetContent} />, { wrapper: AllProviders });
+        const textbox = screen.getByPlaceholderText('Start writing…');
+        textbox.focus();
+        textbox.setSelectionRange(6, 6);
+        fireEvent.click(screen.getByRole('button', { name: 'Checklist' }));
+        expect(mockSetContent).toHaveBeenCalledWith('milk\n- [ ] eggs');
+    });
+
+    it('hides the formatting buttons in preview, where there is nothing to format', () => {
+        render(<MarkdownEditor content="x" setContent={mockSetContent} />, { wrapper: AllProviders });
+        expect(screen.getByRole('button', { name: 'Bold' })).toBeInTheDocument();
+        fireEvent.click(screen.getByLabelText('preview mode'));
+        expect(screen.queryByRole('button', { name: 'Bold' })).not.toBeInTheDocument();
+    });
 });

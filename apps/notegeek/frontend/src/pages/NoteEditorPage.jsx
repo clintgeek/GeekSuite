@@ -1,10 +1,9 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { useNavigate, useParams, useLocation } from 'react-router-dom';
-import { Box, CircularProgress, Typography, Button, Stack, alpha, useTheme } from '@mui/material';
+import { Box, CircularProgress, Typography, Button } from '@mui/material';
 // Deep-import (see RichTextEditor.jsx for why) instead of the
 // '@mui/icons-material' barrel.
 import BackIcon from '@mui/icons-material/ArrowBack';
-import ChevronRight from '@mui/icons-material/ChevronRight';
 import { useQuery, useMutation } from '@apollo/client';
 import { GET_NOTE_BY_ID } from '../graphql/queries';
 import { CREATE_NOTE, UPDATE_NOTE, COMPOSE_NOTE, TRANSCRIBE_SKETCH } from '../graphql/mutations';
@@ -17,83 +16,25 @@ import { useToast } from '@geeksuite/ui';
 import { useAppPreferences } from '@geeksuite/user';
 import { NoteShell, NoteMetaBar, NoteActions, NoteTypeRouter, NOTE_TYPES, SuggestionStrip } from '../components/notes';
 import { BackButton } from '../components/notes/NoteActions';
-import SaveStamp from '../components/notes/SaveStamp';
-import { NOTE_TYPE_META, NOTE_TYPE_ORDER, PHOTO_ENTRY } from '../components/notes/noteTypeMeta';
+import { SaveStatus, SaveAlert } from '../components/notes/SaveStatus';
+import { saveStampState } from '../utils/saveStamp';
+import useOnline from '../hooks/useOnline';
+import useEditorChrome from '../store/editorChromeStore';
 import { toDate } from '../utils/dateUtils';
 import DeleteNoteDialog from '../components/DeleteNoteDialog';
 import { onNoteCreated, onNoteUpdated } from '../graphql/cacheUpdates';
 import { overSizeMessage, saveErrorMessage } from '../utils/saveGuards';
 import { containsNoteLink, insertLink, noteLinkMarkup, supportsLinkInsertion } from '../utils/noteLinks';
-import { dotGridBackground, noteTypeInk, stampFill, surfaces, layout } from '../theme/tokens';
-
-// Type card — one row per note type, carrying the same glyph and ink as
-// its stamp everywhere else (TypeStamp.jsx is the source of truth).
-// `meta` is for an entry that is not a type (PHOTO_ENTRY, HANDWRITING.md §3).
-function TypeCard({ type, onSelect, meta: metaOverride = null }) {
-  const theme = useTheme();
-  const meta = metaOverride || NOTE_TYPE_META[type];
-  const Icon = meta.Icon;
-  const ink = noteTypeInk(theme, metaOverride?.inkType || type);
-
-  return (
-    <Box
-      component="button"
-      type="button"
-      onClick={() => onSelect(type)}
-      sx={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: '12px',
-        width: '100%',
-        minHeight: 56,
-        py: '8px',
-        px: '12px',
-        border: `1px solid ${theme.palette.divider}`,
-        borderRadius: '4px',
-        cursor: 'pointer',
-        textAlign: 'left',
-        font: 'inherit',
-        color: 'inherit',
-        bgcolor: surfaces(theme).elevated,
-        transition: 'border-color 100ms ease, background-color 100ms ease',
-        '&:hover': { borderColor: alpha(ink, 0.6), bgcolor: stampFill(theme, ink) },
-        '&:hover .type-card-chevron': { color: ink },
-        '&:focus-visible': { outline: `2px solid ${ink}`, outlineOffset: 2 },
-        '@media (prefers-reduced-motion: reduce)': { transition: 'none' },
-      }}
-    >
-      <Box
-        aria-hidden
-        sx={{
-          width: 36,
-          height: 36,
-          flexShrink: 0,
-          display: 'grid',
-          placeItems: 'center',
-          borderRadius: '3px',
-          border: `1px solid ${alpha(ink, 0.42)}`,
-          bgcolor: stampFill(theme, ink),
-          color: ink,
-        }}
-      >
-        <Icon sx={{ fontSize: 20 }} />
-      </Box>
-      <Box sx={{ minWidth: 0, flex: 1 }}>
-        <Typography sx={{ fontWeight: 600, fontSize: '0.9375rem', color: 'text.primary' }}>
-          {meta.long}
-        </Typography>
-        <Typography variant="caption" component="div" sx={{ color: 'text.secondary' }}>
-          {meta.description}
-        </Typography>
-      </Box>
-      <ChevronRight className="type-card-chevron" aria-hidden sx={{ fontSize: 18, color: 'text.secondary' }} />
-    </Box>
-  );
-}
 
 /**
  * NoteEditorPage - Unified page for creating and editing notes
  * Uses the new modular note system components
+ *
+ * A new note is Markdown. `/notes/new` opens straight into it — there is no
+ * "what are you writing?" picker any more (Graphite, 2026-09-29): the New
+ * surfaces (NewNoteSheet, NewNoteMenu) offer Photo and Sketch beside it and
+ * Code / Mind map under "More", and each links here with `?type=`. Rich text
+ * (`type: 'text'`) still opens and edits; it is just not offered as new.
  */
 function NoteEditorPage() {
   const { id } = useParams();
@@ -122,8 +63,7 @@ function NoteEditorPage() {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [tags, setTags] = useState([]);
-  const [noteType, setNoteType] = useState(NOTE_TYPES.TEXT);
-  const [hasPickedType, setHasPickedType] = useState(false);
+  const [noteType, setNoteType] = useState(isNewNote ? NOTE_TYPES.MARKDOWN : NOTE_TYPES.TEXT);
   // Save state, shown by the SaveStamp. Four facts rather than one status
   // string: the old string reached only a button that compared it against
   // 'Saved', so every error message it was ever set to rendered nowhere.
@@ -140,7 +80,7 @@ function NoteEditorPage() {
   const [saveToken, setSaveToken] = useState(0);
 
   const { notify } = useToast();
-  const theme = useTheme();
+  const online = useOnline();
 
   // "Suggest tags & links" — off by default, and stored where notegeek's other
   // preferences live (the gateway reads the same flag before it consults a
@@ -204,8 +144,7 @@ function NoteEditorPage() {
     setTitle('');
     setContent('');
     setTags([]);
-    setNoteType(NOTE_TYPES.TEXT);
-    setHasPickedType(false);
+    setNoteType(NOTE_TYPES.MARKDOWN);
     setIsEditMode(true);
     setSavedNoteId(null);
   }, []);
@@ -225,13 +164,7 @@ function NoteEditorPage() {
     if (isNewNote) {
       resetForm();
       savedNoteIdRef.current = null;
-      const typeFromQuery = getTypeFromQuery();
-      if (typeFromQuery) {
-        setNoteType(typeFromQuery);
-        setHasPickedType(true);
-      } else {
-        setHasPickedType(false);
-      }
+      setNoteType(getTypeFromQuery() || NOTE_TYPES.MARKDOWN);
       initializedFor.current = identity;
       return;
     }
@@ -607,8 +540,9 @@ function NoteEditorPage() {
           setIsEditMode(false);
         }
       } else {
-        setSaveError('Failed to save — the server returned nothing.');
-        notify('Failed to save — the server returned nothing.', { tone: 'error' });
+        const message = 'Failed to save — the server returned nothing.';
+        if (saveErrorRef.current !== message) notify(message, { tone: 'error' });
+        setSaveError(message);
       }
     } catch (error) {
       // The old `saveStatus` only ever reached NoteActions, which compared it
@@ -617,8 +551,11 @@ function NoteEditorPage() {
       // like one that had been. Now the stamp says "Not saved" (and keeps
       // saying it until a save lands), and the toast carries the detail.
       const message = saveErrorMessage(error);
+      // Toast a failure once. The alert in the head (and the docked
+      // toolbar) stays up until a save lands; the autosave retrying the
+      // same failure every two seconds must not stack a toast each time.
+      if (saveErrorRef.current !== message) notify(message, { tone: 'error' });
       setSaveError(message);
-      notify(message, { tone: 'error' });
     } finally {
       savingRef.current = false;
       setIsSaving(false);
@@ -682,6 +619,8 @@ function NoteEditorPage() {
   contentRef.current = content;
   const titleRef = useRef(title);
   titleRef.current = title;
+  const saveErrorRef = useRef(saveError);
+  saveErrorRef.current = saveError;
 
   // Debounced autosave — fires 2s after the last edit while dirty.
   // Resets on every content/title/tag change, giving a true debounce.
@@ -748,6 +687,20 @@ function NoteEditorPage() {
     return () => window.removeEventListener('beforeunload', handler);
   }, [dirty]);
 
+  // The loud save status, published for the phone's docked toolbar
+  // (EditorToolbar), which is what is on screen while typing.
+  const { tone: saveTone, loud: saveLoud } = saveStampState({
+    saving: isSaving, error: saveError, dirty, offline: !online, lastSavedAt,
+  });
+  const setSaveAlert = useEditorChrome((st) => st.setSaveAlert);
+  useEffect(() => {
+    setSaveAlert(
+      saveLoud ? { tone: saveTone, detail: typeof saveError === 'string' ? saveError : null } : null,
+      saveLoud ? () => handleSaveRef.current() : null,
+    );
+  }, [saveLoud, saveTone, saveError, setSaveAlert]);
+  useEffect(() => () => setSaveAlert(null, null), [setSaveAlert]);
+
   // Loading state
   if (isLoadingSelected && !isNewNote) {
     return (
@@ -770,71 +723,6 @@ function NoteEditorPage() {
     );
   }
 
-  const showNewTypePicker = isNewNote && !savedNoteId && !hasPickedType;
-  if (showNewTypePicker) {
-    return (
-      <Box
-        sx={{
-          flex: 1,
-          minHeight: 0,
-          height: '100%',
-          overflowY: 'auto',
-          [theme.breakpoints.up('md')]: dotGridBackground(theme),
-        }}
-      >
-        <Box
-          sx={{
-            width: '100%',
-            maxWidth: layout.pickerWidth,
-            mx: 'auto',
-            py: { xs: '16px', sm: '32px' },
-            px: { xs: '16px', sm: '24px' },
-            display: 'flex',
-            flexDirection: 'column',
-          }}
-        >
-          <Box sx={{ ml: '-6px', mb: '24px' }}>
-            <BackButton onBack={() => navigate(-1)} />
-          </Box>
-
-          <Box sx={{ mb: '24px' }}>
-            <Typography variant="h6" component="p" sx={{ color: 'text.secondary', mb: '8px' }}>
-              New page
-            </Typography>
-            <Typography
-              component="h1"
-              sx={{
-                fontWeight: 700,
-                fontSize: { xs: '1.75rem', sm: '2rem' },
-                letterSpacing: '-0.025em',
-                color: 'text.primary',
-              }}
-            >
-              What are you writing?
-            </Typography>
-          </Box>
-
-          <Stack spacing="8px">
-            {NOTE_TYPE_ORDER.map((type) => (
-              <TypeCard
-                key={type}
-                type={type}
-                onSelect={(picked) => {
-                  navigate(`/notes/new?type=${ encodeURIComponent(picked) }`, { replace: true });
-                }}
-              />
-            ))}
-            <TypeCard
-              type={PHOTO_ENTRY.key}
-              meta={PHOTO_ENTRY}
-              onSelect={() => navigate(PHOTO_ENTRY.path, { replace: true })}
-            />
-          </Stack>
-        </Box>
-      </Box>
-    );
-  }
-
   // Error state
   if (selectedError && !isNewNote) {
     return (
@@ -852,7 +740,7 @@ function NoteEditorPage() {
       >
         <Typography
           sx={{
-            fontFamily: '"Geist Variable", "Geist", -apple-system, BlinkMacSystemFont, sans-serif',
+            fontFamily: 'inherit',
             fontSize: '1.25rem',
             fontWeight: 600,
             color: 'error.main',
@@ -877,6 +765,14 @@ function NoteEditorPage() {
 
   const isCanvas = isMindMap || isHandwritten;
   const readOnlyMeta = !isEditMode && isMindMap;
+  const saveState = {
+    saving: isSaving,
+    error: saveError,
+    empty: saveEmpty && !content.trim() && !title.trim(),
+    dirty,
+    offline: !online,
+    lastSavedAt,
+  };
 
   return (
     <Box sx={{ flex: 1, minHeight: 0, height: '100%', display: 'flex', flexDirection: 'column' }}>
@@ -892,15 +788,8 @@ function NoteEditorPage() {
             readOnly={readOnlyMeta}
             compact={isCanvas}
             leading={<BackButton onBack={handleBack} />}
-            status={
-              <SaveStamp
-                saving={isSaving}
-                error={saveError}
-                empty={saveEmpty && !content.trim() && !title.trim()}
-                dirty={dirty}
-                lastSavedAt={lastSavedAt}
-              />
-            }
+            status={<SaveStatus {...saveState} />}
+            alert={<SaveAlert {...saveState} onRetry={() => handleSaveRef.current()} />}
             // Mounted only when the writer has switched suggestions on: the
             // strip owns a lazy query, and a feature that is off should cost
             // the editor nothing at all, not even a hook.

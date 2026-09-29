@@ -84,7 +84,7 @@ function pressSave() {
   window.dispatchEvent(new KeyboardEvent('keydown', { key: 's', ctrlKey: true, bubbles: true }));
 }
 
-/** The save stamp (role="status"). */
+/** The quiet save status (role="status", under the title). */
 function stamp() {
   return screen.getByRole('status');
 }
@@ -194,8 +194,79 @@ describe('NoteEditorPage — save failures are visible', () => {
   });
 });
 
+describe('NoteEditorPage — one New', () => {
+  it('/notes/new opens straight into a Markdown note: no type picker', async () => {
+    renderEditor('/notes/new');
+    await screen.findByPlaceholderText(/untitled/i);
+    expect(screen.queryByText(/what are you writing/i)).toBeNull();
+    expect(document.querySelector('[data-note-meta]')).toHaveTextContent(/^Note/);
+    await typeTitle('Roof quote');
+    await act(async () => { pressSave(); await Promise.resolve(); });
+    await waitFor(() => expect(createNote).toHaveBeenCalledTimes(1));
+    expect(createNote.mock.calls[0][0].variables.type).toBe('markdown');
+  });
+
+  it('still opens rich text from an old ?type=text link', async () => {
+    renderEditor('/notes/new?type=text');
+    await screen.findByPlaceholderText(/untitled/i);
+    expect(document.querySelector('[data-note-meta]')).toHaveTextContent(/^Rich text/);
+  });
+});
+
+describe('NoteEditorPage — quiet when fine, loud when not', () => {
+  const alertPill = () => document.querySelector('[data-save-alert]');
+
+  it('has no alert while things are fine: the status is small metadata', async () => {
+    renderEditor();
+    await typeTitle('Roof quote');
+    await act(async () => { pressSave(); await Promise.resolve(); });
+    await waitFor(() => expect(stamp()).toHaveTextContent(/saved · just now/i));
+    expect(alertPill()).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Retry' })).toBeNull();
+  });
+
+  it('a failed save raises the loud alert with a Retry that saves again', async () => {
+    createNote.mockRejectedValueOnce(new Error('Network down'));
+    renderEditor();
+    await typeTitle('Roof quote');
+    await act(async () => { pressSave(); await Promise.resolve(); });
+    await waitFor(() => expect(alertPill()).not.toBeNull());
+    expect(alertPill()).toHaveAttribute('data-save-alert', 'error');
+    await act(async () => { screen.getAllByRole('button', { name: 'Retry' })[0].click(); await Promise.resolve(); });
+    await waitFor(() => expect(createNote).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(alertPill()).toBeNull());
+  });
+
+  it('toasts a repeated failure once: the alert stays, the toasts do not stack', async () => {
+    createNote.mockRejectedValue(new Error('Network down'));
+    renderEditor();
+    await typeTitle('Roof quote');
+    await act(async () => { pressSave(); await Promise.resolve(); });
+    await waitFor(() => expect(alertPill()).not.toBeNull());
+    await act(async () => { pressSave(); await Promise.resolve(); });
+    await waitFor(() => expect(createNote).toHaveBeenCalledTimes(2));
+    expect(notify.mock.calls.filter(([, o]) => o?.tone === 'error')).toHaveLength(1);
+    createNote.mockReset();
+  });
+
+  it('offline with unsaved edits is loud; offline with nothing unsaved is not', async () => {
+    const onLine = vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false);
+    try {
+      renderEditor();
+      await screen.findByPlaceholderText(/untitled/i);
+      await act(async () => { window.dispatchEvent(new Event('offline')); });
+      expect(alertPill()).toBeNull();
+      await typeTitle('Roof quote');
+      expect(alertPill()).toHaveAttribute('data-save-alert', 'offline');
+      expect(stamp()).toHaveTextContent(/offline · not saved/i);
+    } finally {
+      onLine.mockRestore();
+    }
+  });
+});
+
 describe('NoteEditorPage — the save stamp', () => {
-  it('walks Draft → Unsaved → Saving… → Saved · just now', async () => {
+  it('walks draft → editing → saving… → saved · just now', async () => {
     let resolveCreate;
     createNote.mockImplementationOnce(
       () => new Promise((r) => { resolveCreate = () => r({ data: { createNote: { id: 'new-1', title: 'Roof quote' } } }); })
@@ -205,7 +276,7 @@ describe('NoteEditorPage — the save stamp', () => {
     expect(stamp()).toHaveTextContent(/^draft$/i);
 
     await typeTitle('Roof quote');
-    expect(stamp()).toHaveTextContent(/^unsaved$/i);
+    expect(stamp()).toHaveTextContent(/^editing$/i);
 
     await act(async () => { pressSave(); });
     expect(stamp()).toHaveTextContent(/saving/i);

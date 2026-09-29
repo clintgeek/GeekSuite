@@ -1,8 +1,8 @@
 import React, { useState, useRef } from 'react';
 import {
   Box,
-  IconButton,
   InputBase,
+  useMediaQuery,
   useTheme,
   alpha,
 } from '@mui/material';
@@ -10,7 +10,8 @@ import SearchOutlinedIcon from '@mui/icons-material/SearchOutlined';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { GeekTopBar } from '@geeksuite/ui';
 import { useThemeMode } from '../theme/ThemeModeProvider.jsx';
-import { glow } from '../theme/tokens';
+import { graphiteTokens } from '../theme/tokens';
+import NewNoteMenu from './new/NewNoteMenu';
 import useAuthStore from '../store/authStore';
 import useNoteStore from '../store/noteStore';
 import useTagStore from '../store/tagStore';
@@ -20,16 +21,22 @@ import { displayNameFrom, initialsFrom, secondaryFrom } from '../utils/userDispl
 /**
  * Header — thin identity wrapper around the suite `GeekTopBar`.
  *
- * Brand moved out to the sidebar (`Sidebar`'s `Brand`); this now carries a
- * real, route-derived page title, the search box (its own desktop/mobile
- * forms; `/` reaches it through the suite's slash focus — GeekShell installs
- * the listener and GeekTopBar marks the search slot), and the account menu that
- * used to have nowhere to live. The mobile hamburger comes from
- * `GeekTopBar`'s default leading slot — there is no local `onMenuClick`
- * plumbing any more.
+ * Brand lives in the sidebar (`Sidebar`'s `Brand`); this carries a real,
+ * route-derived page title, the desktop search box (`/` reaches it through
+ * the suite's slash focus — GeekShell installs the listener and GeekTopBar
+ * marks the search slot), desktop's New split button, and the account menu.
+ *
+ * One path each on a phone (Graphite, 2026-09-29): search is the tab bar's
+ * Search tab, so there is no search icon up here; and there is no hamburger
+ * (`leading={null}`) — the drawer only repeated the Notes tab, and the tag
+ * tree it held now opens from the Notes page's Tags button. The phone bar
+ * is the title and the suite cluster, and it tucks away while you write
+ * (Layout.jsx).
  */
 function Header() {
   const theme = useTheme();
+  const g = graphiteTokens(theme);
+  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
   const location = useLocation();
   const navigate = useNavigate();
   const { mode, toggleMode } = useThemeMode();
@@ -58,8 +65,8 @@ function Header() {
   const search = (
     <>
       {/* Search input — desktop. Small and unobtrusive at rest; on focus,
-          primary border + glow.ring shadow. "/" shortcut hint in the pill.
-          The pill keeps its 30px look; an outer padded wrapper (not the
+          a graphite border on the sheet. "/" shortcut hint in the pill.
+          The pill keeps its 32px look; an outer padded wrapper (not the
           visual box) carries the 44px hit area, so tapping the padding
           around it still focuses the input. */}
       <Box
@@ -79,20 +86,19 @@ function Header() {
             alignItems: 'center',
             maxWidth: 340,
             px: 1.25,
-            height: 30,
-            borderRadius: '6px',
+            height: 32,
+            borderRadius: '8px',
             border: `1px solid ${theme.palette.divider}`,
             bgcolor: alpha(theme.palette.text.primary, 0.025),
             transition: 'all 150ms ease',
             '&:focus-within': {
-              borderColor: theme.palette.primary.main,
-              bgcolor: theme.palette.background.paper,
-              boxShadow: `0 0 0 3px ${glow(theme).ring}`,
+              borderColor: g.ink,
+              bgcolor: g.sheet,
             },
           }}
         >
           <SearchOutlinedIcon
-            sx={{ fontSize: 13, color: 'text.disabled', mr: 0.75, flexShrink: 0 }}
+            sx={{ fontSize: 15, color: 'text.secondary', mr: 0.75, flexShrink: 0 }}
           />
           <InputBase
             value={searchQuery}
@@ -101,14 +107,12 @@ function Header() {
             inputProps={{ 'aria-label': 'search notes' }}
             sx={{
               flex: 1,
-              fontFamily: theme.typography.fontFamilyMono,
-              fontSize: '0.75rem',
-              letterSpacing: '0.01em',
+              fontSize: '0.8125rem',
               color: 'text.primary',
               '& .MuiInputBase-input': {
                 py: 0,
                 height: 'auto',
-                '&::placeholder': { color: 'text.disabled', opacity: 1 },
+                '&::placeholder': { color: 'text.secondary', opacity: 1 },
               },
             }}
           />
@@ -133,7 +137,7 @@ function Header() {
                 fontFamily: theme.typography.fontFamilyMono,
                 fontSize: '0.75rem',
                 fontWeight: 600,
-                color: 'text.disabled',
+                color: 'text.secondary',
                 lineHeight: 1,
               }}
             >
@@ -143,31 +147,16 @@ function Header() {
         </Box>
       </Box>
 
-      {/* Search icon button — mobile only. 44px target: the icon stays
-          visually small, but minWidth/minHeight keep the hit area honest
-          even though `size="small"` shrinks the padding around it. */}
-      <IconButton
-        onClick={() => navigate('/search')}
-        aria-label="search"
-        size="small"
-        sx={{
-          display: { xs: 'flex', md: 'none' },
-          p: 0.75,
-          minWidth: 44,
-          minHeight: 44,
-          borderRadius: 1.5,
-          color: 'text.secondary',
-        }}
-      >
-        <SearchOutlinedIcon sx={{ fontSize: 18 }} />
-      </IconButton>
     </>
   );
 
   return (
     <GeekTopBar
       title={pageTitle(location.pathname)}
-      search={search}
+      leading={null}
+      search={isMobile ? undefined : search}
+      actions={<NewNoteMenu />}
+      mobileActions={null}
       themeMode={mode}
       onThemeToggle={toggleMode}
       currentApp="notegeek"

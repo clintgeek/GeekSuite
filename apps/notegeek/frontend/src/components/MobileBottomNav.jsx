@@ -1,18 +1,19 @@
-import React from 'react';
-import { useTheme } from '@mui/material';
+import React, { useState } from 'react';
+import { Box, useTheme } from '@mui/material';
 import { useLocation, useNavigate } from 'react-router-dom';
 import HomeOutlinedIcon from '@mui/icons-material/HomeOutlined';
 import HomeIcon from '@mui/icons-material/Home';
 import SearchOutlinedIcon from '@mui/icons-material/SearchOutlined';
 import SearchIcon from '@mui/icons-material/Search';
-import AddOutlinedIcon from '@mui/icons-material/AddOutlined';
+import AddIcon from '@mui/icons-material/Add';
 import AutoStoriesOutlinedIcon from '@mui/icons-material/AutoStoriesOutlined';
 import AutoStoriesIcon from '@mui/icons-material/AutoStories';
 import { GeekBottomNav } from '@geeksuite/ui';
+import NewNoteSheet from './new/NewNoteSheet';
+import { graphiteTokens } from '../theme/tokens';
 
 function getNavValue(pathname) {
   if (pathname.startsWith('/search'))                                     return 'search';
-  if (pathname.startsWith('/notes/new'))                                  return 'new';
   if (pathname === '/')                                                    return 'home';
   if (pathname.startsWith('/notes') || pathname.startsWith('/tags/'))     return 'notes';
   return 'home';
@@ -29,83 +30,91 @@ function shouldHide(pathname) {
 }
 
 /**
- * MobileBottomNav — thin wrapper around the suite `GeekBottomNav`.
+ * The icon, on a pill of highlighter when its tab is the current page — the
+ * phone's one active mark. New is an action, never "current", so it only
+ * ever wears the pill's outline.
+ */
+function TabIcon({ active, children, action = false }) {
+  const theme = useTheme();
+  const g = graphiteTokens(theme);
+  return (
+    <Box
+      component="span"
+      sx={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        width: 52,
+        height: 28,
+        borderRadius: '999px',
+        bgcolor: active ? g.hl : 'transparent',
+        color: active ? g.onHl : 'inherit',
+        border: action ? `1.5px solid ${g.ink2}` : '1.5px solid transparent',
+      }}
+    >
+      {children}
+    </Box>
+  );
+}
+
+/**
+ * MobileBottomNav — the phone's one set of paths: Home, Search, New, Notes.
+ * Search lives only here on a phone (the top bar has no search icon), and
+ * there is no hamburger duplicating Notes. New opens the New sheet (a note,
+ * a photo, a sketch; code and mind map under More).
  *
- * Same four items and hide rules as before, but no more `Portal` / fixed
- * positioning / safe-area padding of its own: `GeekShell`'s `bottomNav` slot
- * renders it in normal flow at the foot of the shell, and `GeekAppFrame`
- * insets the scrollable content by `geekLayout.bottomNavHeight` for it —
- * `Layout` only mounts this on mobile, so there's nothing to hide by
- * breakpoint here, only by route.
+ * `GeekShell`'s `bottomNav` slot renders it in normal flow at the foot of
+ * the shell, and `GeekAppFrame` insets the content for it; `Layout` only
+ * mounts it on mobile, so there is nothing to hide by breakpoint here, only
+ * by route.
  */
 function MobileBottomNav() {
-  const theme = useTheme();
   const location = useLocation();
   const navigate = useNavigate();
+  const [newOpen, setNewOpen] = useState(false);
 
   if (shouldHide(location.pathname)) return null;
 
   const value = getNavValue(location.pathname);
+  const size = { fontSize: 21 };
 
   const items = [
     {
       id: 'home',
       label: 'Home',
-      icon: value === 'home' ? <HomeIcon sx={{ fontSize: 20 }} /> : <HomeOutlinedIcon sx={{ fontSize: 20 }} />,
+      icon: <TabIcon active={value === 'home'}>{value === 'home' ? <HomeIcon sx={size} /> : <HomeOutlinedIcon sx={size} />}</TabIcon>,
       onClick: () => navigate('/'),
     },
     {
       id: 'search',
       label: 'Search',
-      icon: value === 'search' ? <SearchIcon sx={{ fontSize: 20 }} /> : <SearchOutlinedIcon sx={{ fontSize: 20 }} />,
+      icon: <TabIcon active={value === 'search'}>{value === 'search' ? <SearchIcon sx={size} /> : <SearchOutlinedIcon sx={size} />}</TabIcon>,
       onClick: () => navigate('/search'),
     },
     {
       id: 'new',
       label: 'New',
-      icon: <AddOutlinedIcon sx={{ fontSize: 22 }} />,
-      onClick: () => navigate('/notes/new'),
+      icon: <TabIcon action><AddIcon sx={size} /></TabIcon>,
+      onClick: () => setNewOpen(true),
     },
     {
       id: 'notes',
       label: 'Notes',
-      icon: value === 'notes' ? <AutoStoriesIcon sx={{ fontSize: 20 }} /> : <AutoStoriesOutlinedIcon sx={{ fontSize: 20 }} />,
+      icon: <TabIcon active={value === 'notes'}>{value === 'notes' ? <AutoStoriesIcon sx={size} /> : <AutoStoriesOutlinedIcon sx={size} />}</TabIcon>,
       onClick: () => navigate('/notes'),
     },
   ];
 
   return (
-    <GeekBottomNav
-      items={items}
-      activeId={value}
-      // Mono, uppercase, letterspaced labels — `labelSx` merges directly onto
-      // the primitive's label Typography, so identity comes from the
-      // primitive's own slot instead of a nested `.MuiTypography-caption`
-      // selector reaching in from outside (THE_UI_UNIFICATION_PLAN.md §3b).
-      labelSx={{
-        fontFamily: theme.typography.fontFamilyMono,
-        letterSpacing: '0.06em',
-        textTransform: 'uppercase',
-      }}
-      itemSx={{
-        // Ink-stamp active indicator — a 3px top bar, same treatment the
-        // bespoke bar used, recreated off the primitive's own `aria-current`.
-        // Not expressible through `labelSx` (it targets the item, not the
-        // label), so it stays here.
-        position: 'relative',
-        '&[aria-current="page"]::before': {
-          content: '""',
-          position: 'absolute',
-          top: 0,
-          left: '50%',
-          transform: 'translateX(-50%)',
-          width: 32,
-          height: 3,
-          borderRadius: '0 0 3px 3px',
-          bgcolor: 'primary.main',
-        },
-      }}
-    />
+    <>
+      <GeekBottomNav
+        items={items}
+        activeId={value}
+        labelSx={{ fontFamily: 'inherit', fontSize: '0.75rem', letterSpacing: 0 }}
+        itemSx={{ color: 'text.secondary', '&[aria-current="page"]': { color: 'text.primary' } }}
+      />
+      <NewNoteSheet open={newOpen} onClose={() => setNewOpen(false)} />
+    </>
   );
 }
 

@@ -6,6 +6,7 @@ import useAuthStore from '../store/authStore';
 import Sidebar from './Sidebar';
 import MobileBottomNav from './MobileBottomNav';
 import Header from './Header';
+import useEditorChrome from '../store/editorChromeStore';
 
 /**
  * Layout — pure suite grammar.
@@ -42,11 +43,18 @@ function Layout({ children }) {
     // a non-scrolling flex column and hands that height down; lists and
     // home keep the frame's own scroll.
     const fillFrame = /^\/notes\/[^/]+/.test(pathname);
+    // Writing on a phone: the suite top bar tucks away while the caret is in
+    // the note (NoteShell reports it), so the page has the room. The note's
+    // own head — Back, the ⋯ menu — is still at the top of the sheet.
+    const writing = useEditorChrome((s) => s.writing);
+    const tuckTopBar = isMobile && fillFrame && writing;
 
     return (
         <GeekShell
-            nav={showNavigation ? <Sidebar /> : undefined}
-            topBar={<Header />}
+            // Desktop only: a phone has no drawer (Header.jsx); its tag tree
+            // opens from the Notes page instead.
+            nav={showNavigation && !isMobile ? <Sidebar /> : undefined}
+            topBar={tuckTopBar ? null : <Header />}
             // Not on a single note: MobileBottomNav hides itself there
             // (`shouldHide`), but passing it anyway still made the frame
             // reserve its 56px inset — a strip of empty desk under the

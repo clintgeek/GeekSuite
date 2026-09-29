@@ -269,7 +269,7 @@ function NoteThumbInner({ note }) {
     );
   }
   return (
-    <Tile type={type} label={`${meta.long} note`} innerRef={ref}>
+    <Tile type={type} label={`${meta.long} thumbnail`} innerRef={ref}>
       <Glyph type={type} />
     </Tile>
   );

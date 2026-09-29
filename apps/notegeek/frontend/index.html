@@ -9,21 +9,18 @@
     <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <title>NoteGeek</title>
-    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#FBF7EE" />
-    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#16140F" />
-    <!-- Fonts are self-hosted (src/main.jsx imports @fontsource-variable/geist
-         and @fontsource/jetbrains-mono) so the PWA keeps its typefaces offline;
-         Vite emits the woff2 files and the service worker precaches them.
-         Geist is display + body; JetBrains Mono is every piece of metadata
-         (timestamps, tags, type stamps, the save stamp). The "Lab Notebook"
-         identity rides on this sans/mono pair; do not add a third typeface
-         without revisiting the design (DOCS/CONTEXT.md). -->
-    <!-- Baseline cream/ink colors that snap before MUI mounts.
-         Must EXACTLY match createAppTheme.js's surfaces.default + text.primary,
-         or you'll get a brief repaint when React boots. -->
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#F1F4EF" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#1B1F22" />
+    <!-- Fonts are self-hosted (src/main.jsx imports @fontsource-variable/spline-sans
+         and @fontsource-variable/spline-sans-mono) so the PWA keeps its faces
+         offline; Vite emits the woff2 files and the service worker precaches
+         them. The "Graphite" identity (DOCS/CONTEXT.md §7) is these two faces:
+         the sans for titles and body, the mono for small metadata only. -->
+    <!-- Baseline desk/ink colours that snap before MUI mounts. Must match
+         theme/graphite.js desk + ink, or React's first paint repaints. -->
     <style>
-      :root                    { color-scheme: light; background-color: #FBF7EE; color: #1F1C16; }
-      :root[data-theme="dark"] { color-scheme: dark; background-color: #16140F; color: #EDE6D6; }
+      :root                    { color-scheme: light; background-color: #E9EEE7; color: #2F2E2B; }
+      :root[data-theme="dark"] { color-scheme: dark; background-color: #15181A; color: #E6E3DC; }
       body                     { margin: 0; background-color: inherit; color: inherit; }
     </style>
   </head>

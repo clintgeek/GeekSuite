@@ -1,18 +1,21 @@
 import React, { useState } from 'react';
+import { alpha } from '@mui/material/styles';
 import {
     Typography,
     Box,
     ButtonBase,
     Skeleton,
     Divider,
+    useMediaQuery,
     useTheme,
 } from '@mui/material';
-import { GeekEmptyState, GeekErrorState } from '@geeksuite/ui';
+import LocalOfferOutlined from '@mui/icons-material/LocalOfferOutlined';
+import { GeekEmptyState, GeekErrorState, GeekSheet } from '@geeksuite/ui';
 import { gql, useQuery } from '@apollo/client';
 import NoteRow from './notes/NoteRow';
-import { border, glow, layout, tapTarget44 } from '../theme/tokens';
-import TypeStamp from './notes/TypeStamp';
-import { NOTE_TYPE_ORDER } from './notes/noteTypeMeta';
+import { graphiteTokens, layout, tapTarget44 } from '../theme/tokens';
+import { NOTE_TYPE_ORDER, noteTypeMeta } from './notes/noteTypeMeta';
+import { TagsPanel } from './Sidebar';
 import { groupByRecency } from '../utils/recency';
 
 const GET_NOTES = gql`
@@ -29,8 +32,58 @@ const GET_NOTES = gql`
     }
 `;
 
-// Type filters — the same stamps as everywhere else, plus "All".
+// Type filters: "All" and every type, as short plural labels with the
+// type's glyph. One quiet row; the active one is highlighted.
 const TYPE_FILTERS = [null, ...NOTE_TYPE_ORDER];
+const FILTER_LABELS = {
+    markdown: 'Notes',
+    handwritten: 'Sketches',
+    code: 'Code',
+    mindmap: 'Mind maps',
+    text: 'Rich text',
+};
+
+function FilterChip({ type, active, onClick }) {
+    const theme = useTheme();
+    const g = graphiteTokens(theme);
+    const Icon = type ? noteTypeMeta(type).Icon : null;
+    return (
+        <ButtonBase
+            onClick={onClick}
+            aria-pressed={active}
+            data-type-filter={type || 'all'}
+            sx={{
+                flexShrink: 0,
+                borderRadius: '999px',
+                [theme.breakpoints.down('md')]: { ...tapTarget44 },
+                '&:focus-visible': { outline: `2px solid ${g.ink}`, outlineOffset: 2 },
+                '&:hover .ng-chip': { bgcolor: active ? g.hl : alpha(g.ink, 0.05) },
+            }}
+        >
+            <Box
+                component="span"
+                className="ng-chip"
+                sx={{
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    height: 30,
+                    px: '12px',
+                    borderRadius: '999px',
+                    border: `1px solid ${active ? g.ink : 'transparent'}`,
+                    bgcolor: active ? g.hl : 'transparent',
+                    color: active ? g.onHl : 'text.secondary',
+                    fontSize: '0.8125rem',
+                    fontWeight: active ? 600 : 500,
+                    whiteSpace: 'nowrap',
+                }}
+            >
+                {Icon && <Icon aria-hidden sx={{ fontSize: 16 }} />}
+                {type ? FILTER_LABELS[type] : 'All'}
+            </Box>
+        </ButtonBase>
+    );
+}
 
 // Sort options
 const SORT_OPTIONS = [
@@ -40,7 +93,7 @@ const SORT_OPTIONS = [
 ];
 
 /**
- * A recency heading: typewritten label, a hairline, and the bucket's count.
+ * A recency heading: a sentence-case label, a hairline, and the bucket's count.
  * An <h3> so the list has a real outline for screen-reader navigation.
  */
 function GroupHeading({ label, count }) {
@@ -85,6 +138,9 @@ function RowList({ notes, dateField }) {
 
 function NoteList({ tag, prefix }) {
     const theme = useTheme();
+    const g = graphiteTokens(theme);
+    const isPhone = useMediaQuery(theme.breakpoints.down('md'));
+    const [tagsOpen, setTagsOpen] = useState(false);
     const [typeFilter, setTypeFilter] = useState(null);
     const [sortBy, setSortBy] = useState('updated');
 
@@ -137,116 +193,101 @@ function NoteList({ tag, prefix }) {
 
     return (
         <Box sx={{ py: { xs: '8px', sm: '16px' }, px: { xs: '8px', sm: 0 }, maxWidth: layout.contentWidth, mx: 'auto' }}>
-            {/* ── Filter + sort controls ──────────────────────────────── */}
+            {/* ── Count, tags (phone), sort ─────────────────────────── */}
             <Box sx={{
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'space-between',
-                flexWrap: 'wrap',
-                gap: 1,
-                mb: 1.5,
-                px: 0.5,
+                gap: '4px',
+                mb: '4px',
+                px: '4px',
             }}>
-                {/* Count label */}
-                <Typography variant="h6" component="h2" sx={{ color: 'text.secondary', m: 0 }}>
+                <Typography variant="h6" component="h2" sx={{ color: 'text.secondary', m: 0, mr: 'auto' }}>
                     {notes.length} {notes.length === 1 ? 'note' : 'notes'}
                 </Typography>
 
-                {/* Sort dropdown — compact text buttons */}
-                <Box sx={{ display: 'flex', gap: 0.5 }}>
-                    {SORT_OPTIONS.map((opt) => (
-                        <ButtonBase
-                            key={opt.value}
-                            onClick={() => setSortBy(opt.value)}
-                            aria-pressed={sortBy === opt.value}
-                            sx={{
-                                ...tapTarget44,
-                                px: 0.75,
-                                py: 0.25,
-                                borderRadius: '4px',
-                                fontFamily: theme.typography.fontFamilyMono,
-                                fontSize: '0.75rem',
-                                fontWeight: sortBy === opt.value ? 600 : 400,
-                                letterSpacing: '0.04em',
-                                color: sortBy === opt.value ? 'text.primary' : 'text.secondary',
-                                textDecoration: sortBy === opt.value ? 'underline' : 'none',
-                                textDecorationColor: theme.palette.primary.main,
-                                textDecorationThickness: '2px',
-                                textUnderlineOffset: '5px',
-                                transition: 'all 120ms ease',
-                                '&:hover': {
-                                    color: 'text.secondary',
-                                    bgcolor: glow(theme).soft,
-                                },
-                            }}
-                        >
-                            {opt.label}
-                        </ButtonBase>
-                    ))}
+                {isPhone && (
+                    <ButtonBase
+                        onClick={() => setTagsOpen(true)}
+                        aria-haspopup="dialog"
+                        sx={{
+                            ...tapTarget44,
+                            gap: '6px',
+                            px: '8px',
+                            borderRadius: '8px',
+                            fontSize: '0.8125rem',
+                            fontWeight: 500,
+                            color: 'text.secondary',
+                            '&:focus-visible': { outline: `2px solid ${g.ink}`, outlineOffset: 2 },
+                        }}
+                    >
+                        <LocalOfferOutlined aria-hidden sx={{ fontSize: 16 }} />
+                        Tags
+                    </ButtonBase>
+                )}
+
+                <Box role="group" aria-label="Sort" sx={{ display: 'flex' }}>
+                    {SORT_OPTIONS.map((opt) => {
+                        const on = sortBy === opt.value;
+                        return (
+                            <ButtonBase
+                                key={opt.value}
+                                onClick={() => setSortBy(opt.value)}
+                                aria-pressed={on}
+                                sx={{
+                                    ...tapTarget44,
+                                    px: '8px',
+                                    borderRadius: '8px',
+                                    fontSize: '0.8125rem',
+                                    fontWeight: on ? 600 : 400,
+                                    color: on ? 'text.primary' : 'text.secondary',
+                                    textDecoration: on ? 'underline' : 'none',
+                                    textDecorationColor: g.ink,
+                                    textDecorationThickness: '2px',
+                                    textUnderlineOffset: '6px',
+                                    '&:hover': { color: 'text.primary' },
+                                    '&:focus-visible': { outline: `2px solid ${g.ink}`, outlineOffset: -2 },
+                                }}
+                            >
+                                {opt.label}
+                            </ButtonBase>
+                        );
+                    })}
                 </Box>
             </Box>
 
-            {/* Type filters */}
+            {/* Type filter — one quiet row, scrolls sideways on a phone */}
             <Box
                 role="group"
                 aria-label="Filter by type"
                 sx={{
                     display: 'flex',
-                    flexWrap: 'wrap',
                     alignItems: 'center',
-                    gap: { xs: '0 4px', md: '8px' },
-                    mb: '8px',
-                    px: '4px',
+                    gap: '2px',
+                    mb: '4px',
+                    px: '2px',
+                    overflowX: 'auto',
+                    scrollbarWidth: 'none',
+                    '&::-webkit-scrollbar': { display: 'none' },
                 }}
             >
                 {TYPE_FILTERS.map((type) => {
                     const isActive = typeFilter === type;
-                    if (!type) {
-                        return (
-                            <ButtonBase
-                                key="all"
-                                onClick={() => setTypeFilter(null)}
-                                aria-pressed={isActive}
-                                sx={{
-                                    borderRadius: '4px',
-                                    [theme.breakpoints.down('md')]: { ...tapTarget44 },
-                                    '&:focus-visible': { outline: `2px solid ${theme.palette.text.primary}`, outlineOffset: 2 },
-                                }}
-                            >
-                                <Box
-                                    component="span"
-                                    sx={{
-                                        display: 'inline-flex',
-                                        alignItems: 'center',
-                                        height: 28,
-                                        px: '10px',
-                                        borderRadius: '3px',
-                                        border: `1px solid ${isActive ? theme.palette.text.primary : border(theme)}`,
-                                        bgcolor: isActive ? glow(theme).medium : 'transparent',
-                                        fontFamily: theme.typography.fontFamilyMono,
-                                        fontSize: '0.75rem',
-                                        fontWeight: 600,
-                                        letterSpacing: '0.06em',
-                                        textTransform: 'uppercase',
-                                        color: isActive ? 'text.primary' : 'text.secondary',
-                                    }}
-                                >
-                                    All
-                                </Box>
-                            </ButtonBase>
-                        );
-                    }
                     return (
-                        <TypeStamp
-                            key={type}
+                        <FilterChip
+                            key={type || 'all'}
                             type={type}
-                            size="md"
-                            selected={isActive}
-                            onClick={() => setTypeFilter(isActive ? null : type)}
+                            active={isActive}
+                            onClick={() => setTypeFilter(type && isActive ? null : type)}
                         />
                     );
                 })}
             </Box>
+
+            {isPhone && (
+                <GeekSheet open={tagsOpen} onClose={() => setTagsOpen(false)} title="Tags" snap="full">
+                    <TagsPanel onNavigate={() => setTagsOpen(false)} />
+                </GeekSheet>
+            )}
 
             {/* The list — grouped by recency for date sorts */}
             {sortedNotes.length === 0 ? (

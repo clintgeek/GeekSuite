@@ -64,16 +64,16 @@ export function noteTypeInk(theme, type) {
   return map[type] || map[FALLBACK_NOTE_TYPE] || theme.palette.text?.primary;
 }
 
-/** The tinted fill behind a stamp: 8% of the ink in light, 12% in dark. */
+/** A faint wash of an ink, for hover grounds (8% light / 12% dark). */
 export function stampFill(theme, ink) {
   return alpha(ink, theme.palette.mode === 'dark' ? 0.12 : 0.08);
 }
 
-/** Rubber-stamp inks for the save stamp. */
+/** Save-status inks: quiet secondary ink when fine, error when not. */
 export function stampInk(theme) {
   return (
     theme.palette.stamp || {
-      ink: theme.palette.primary?.main,
+      ink: theme.palette.text?.secondary,
       error: theme.palette.error?.main,
       muted: theme.palette.text?.secondary,
     }
@@ -81,16 +81,51 @@ export function stampInk(theme) {
 }
 
 /**
- * The desk's dot grid as `sx` background props. One 1px dot per 16px — four
- * suite units — anchored to the element so it does not crawl on scroll.
+ * The Graphite palette (theme/graphite.js) for this theme, with MUI-native
+ * fallbacks so a plain theme (tests) still renders: the highlighter falls
+ * back to the warning hue, the ink to text.primary.
  */
-export function dotGridBackground(theme) {
-  const dot = theme.palette.dotGrid || alpha(theme.palette.text?.primary || '#000', 0.1);
+export function graphiteTokens(theme) {
+  const g = theme.palette.graphite;
+  if (g) return g;
+  const p = theme.palette;
   return {
-    backgroundImage: `radial-gradient(circle at 1px 1px, ${dot} 1px, transparent 1.5px)`,
-    backgroundSize: '16px 16px',
+    desk: p.background?.default,
+    paper: p.background?.paper,
+    sheet: p.background?.paper,
+    ink: p.text?.primary,
+    ink2: p.text?.secondary,
+    muted: p.text?.secondary,
+    disabled: p.text?.disabled,
+    hl: p.warning?.light || '#F5DF4D',
+    hlSoft: alpha(p.warning?.light || '#F5DF4D', 0.4),
+    onHl: '#2F2E2B',
+    error: p.error?.main,
+    errorFill: alpha(p.error?.main || '#A8261D', 0.1),
+    rule: p.divider,
+    border: p.divider,
+    lead: p.text?.secondary,
+    grid: alpha(p.text?.primary || '#000', 0.06),
   };
 }
+
+/**
+ * The desk's engineering-paper grid as `sx` background props: a 1px line
+ * every 16px (four suite units), in a faint grey-green. Anchored to the
+ * element so it does not crawl on scroll. Decoration only — copy that needs
+ * its contrast sits on a solid sheet, not on the grid.
+ */
+export function gridBackground(theme) {
+  const line = theme.palette.dotGrid || alpha(theme.palette.text?.primary || '#000', 0.06);
+  return {
+    backgroundImage: `linear-gradient(${line} 1px, transparent 1px), linear-gradient(90deg, ${line} 1px, transparent 1px)`,
+    backgroundSize: '16px 16px',
+    backgroundPosition: '-1px -1px',
+  };
+}
+
+/** @deprecated Lab Notebook name; the desk is a grid now. */
+export const dotGridBackground = gridBackground;
 
 /**
  * Layout constants — replaces magic numbers scattered across components.
@@ -101,7 +136,7 @@ export const layout = {
   pickerWidth: 480,     // max width for the new-note type picker
   timestampMinWidth: 44, // min width for the timestamp column in NoteRow
   rowHeight: 44,        // skeleton row height for list loading states
-  // The writing measure: ~70ch of 16px Geist. The sheet is this plus its
+  // The writing measure: ~70ch of 16px Spline Sans. The sheet is this plus its
   // gutters, so the text column — title, toolbar, body — lines up exactly.
   measure: 680,
   sheetGutter: { xs: 16, sm: 32, md: 56 },

@@ -4,8 +4,8 @@ import StarterKit from '@tiptap/starter-kit';
 import Link from '@tiptap/extension-link';
 import Underline from '@tiptap/extension-underline';
 import Placeholder from '@tiptap/extension-placeholder';
-import { Box, IconButton, Tooltip, useTheme } from '@mui/material';
-import { glow, stampFill, stampInk, surfaces, tapTarget44 } from '../../theme/tokens';
+import { Box } from '@mui/material';
+import EditorToolbar, { ToolButton, ToolSeparator } from './EditorToolbar';
 // Deep-import each icon (rather than the '@mui/icons-material' barrel) —
 // the barrel re-exports 2000+ icons and is catastrophically slow to load
 // under Vite's SSR module runner (the one vitest uses for jsdom tests),
@@ -36,14 +36,11 @@ const TOOL_GROUPS = [
 ];
 
 /**
- * The formatting toolbar: one slim row on the text column's left edge, not a
- * boxed button group centred over the page. It is `position: sticky` against
- * NoteShell's page scroller, so it stays in reach while the title scrolls
- * away. Icon buttons are 32px on desktop and 44px on phones (MOBILE_UI_PLAN
- * §2); an active mark is inked in brick.
+ * The formatting toolbar (EditorToolbar): a sticky strip on the text column
+ * on desktop, docked above the keyboard on a phone. An active mark is
+ * highlighted — highlighter fill, graphite ink.
  */
 const MenuBar = ({ editor }) => {
-  const theme = useTheme();
   if (!editor) {
     return null;
   }
@@ -55,86 +52,27 @@ const MenuBar = ({ editor }) => {
     }
   };
 
-  const ink = stampInk(theme).ink;
-  const buttonSx = (active) => ({
-    width: 32,
-    height: 32,
-    // The suite theme floors every IconButton at 44px; the desktop toolbar
-    // is a slim strip, so it opts down to 32 above `md` only.
-    minWidth: 32,
-    minHeight: 32,
-    borderRadius: '4px',
-    color: active ? ink : 'text.secondary',
-    bgcolor: active ? stampFill(theme, ink) : 'transparent',
-    [theme.breakpoints.down('md')]: { ...tapTarget44 },
-    '&:hover': { bgcolor: active ? stampFill(theme, ink) : glow(theme).soft, color: active ? ink : 'text.primary' },
-    '& svg': { fontSize: 18 },
-  });
-
-  const Separator = () => (
-    <Box
-      aria-hidden
-      sx={{ width: '1px', height: 16, bgcolor: 'divider', mx: '6px', display: { xs: 'none', md: 'block' } }}
-    />
-  );
-
   return (
-    <Box
-      role="toolbar"
-      aria-label="Formatting"
-      data-editor-toolbar
-      sx={{
-        position: 'sticky',
-        top: 0,
-        zIndex: 2,
-        display: 'flex',
-        alignItems: 'center',
-        flexWrap: 'wrap',
-        gap: { xs: 0, md: '2px' },
-        py: '4px',
-        mb: '16px',
-        // Flush with the text column: the first button's glyph, not its
-        // padding, lines up with the title above.
-        ml: { xs: 0, md: '-7px' },
-        bgcolor: surfaces(theme).elevated,
-        borderBottom: `1px solid ${theme.palette.divider}`,
-        flexShrink: 0,
-      }}
-    >
+    <EditorToolbar label="Formatting">
       {TOOL_GROUPS.map((group, gi) => (
         <React.Fragment key={gi}>
-          {gi > 0 && <Separator />}
+          {gi > 0 && <ToolSeparator />}
           {group.map((tool) => {
             const { label, mark, run } = tool;
             const Glyph = tool.Icon;
-            const active = editor.isActive(mark);
             return (
-              <Tooltip key={label} title={label}>
-                <IconButton
-                  aria-label={label}
-                  aria-pressed={active}
-                  onClick={() => run(editor)}
-                  sx={buttonSx(active)}
-                >
-                  <Glyph />
-                </IconButton>
-              </Tooltip>
+              <ToolButton key={label} label={label} active={editor.isActive(mark)} onClick={() => run(editor)}>
+                <Glyph />
+              </ToolButton>
             );
           })}
         </React.Fragment>
       ))}
-      <Separator />
-      <Tooltip title="Link">
-        <IconButton
-          aria-label="Link"
-          aria-pressed={editor.isActive('link')}
-          onClick={addLink}
-          sx={buttonSx(editor.isActive('link'))}
-        >
-          <LinkIcon />
-        </IconButton>
-      </Tooltip>
-    </Box>
+      <ToolSeparator />
+      <ToolButton label="Link" active={editor.isActive('link')} onClick={addLink}>
+        <LinkIcon />
+      </ToolButton>
+    </EditorToolbar>
   );
 };
 
