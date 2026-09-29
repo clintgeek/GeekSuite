@@ -43,6 +43,7 @@ const TypesView = lazy(() => import('./views/TypesView'));
 const InsuranceView = lazy(() => import('./views/InsuranceView'));
 const TrashView = lazy(() => import('./views/TrashView'));
 const SettingsView = lazy(() => import('./views/settings/SettingsView'));
+const LabelsView = lazy(() => import('./views/LabelsView'));
 
 export function Booting({ label = 'Opening the inventory…' }) {
   return (
@@ -120,6 +121,7 @@ function SignedIn({ user, onSignOut }) {
                 <Route path="/insurance" element={lazyRoute(<InsuranceView />)} />
                 <Route path="/trash" element={lazyRoute(<TrashView />)} />
                 <Route path="/settings" element={lazyRoute(<SettingsView user={user} onSignOut={onSignOut} />)} />
+                <Route path="/labels" element={lazyRoute(<LabelsView />)} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </AppMain>

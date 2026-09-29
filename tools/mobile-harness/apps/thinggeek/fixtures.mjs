@@ -446,6 +446,9 @@ export const OPS = {
   SearchThings: (v) => ({ things: { __typename: 'ThingPage', total: list(v).length, things: list(v).slice(0, v.limit || 12).map((t) => { const r = render(t); return { __typename: 'Thing', id: r.id, name: r.name, type: r.type, coverPhoto: r.coverPhoto }; }) } }),
   GetThingFacets: (v) => ({ thingFacets: facets(v.filter || {}) }),
   GetThing: (v) => ({ thing: WORLD.some((t) => t.id === v.id) ? render(find(v.id), { withContents: true }) : null }),
+  // Labels (src/graphql/labelQueries.js): same "null for a bad/missing id"
+  // shape as GetThing, since /labels?ids= mixes a live id with a stale one.
+  GetLabelThing: (v) => ({ thing: WORLD.some((t) => t.id === v.id) ? render(find(v.id)) : null }),
   GetThingTypes: () => ({ thingTypes: types() }),
   GetThingTree: () => ({ thingTree: tree() }),
   GetThingAttention: () => ({ thingAttention: attention() }),

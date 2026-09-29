@@ -470,6 +470,10 @@ export const scenes = [
   { name: '14-settings', goto: '/settings', wait: 1400 },
   { name: '15-not-a-member', goto: '/?__fixture=nonmember', wait: 1600 },
   { name: '16-first-run', goto: '/?__fixture=empty', wait: 1600 },
+  // Printable QR box labels (2026-09-29): the picker with nothing chosen yet…
+  { name: '17-labels-selector', goto: '/labels', wait: 1400 },
+  // …and a preview for one thing (Wendy, th1 — a container with a breadcrumb).
+  { name: '17b-labels-preview', goto: '/labels?ids=th1', wait: 1600 },
 ];
 
 // Known, ticketed violations. The list starts empty and stays that way.
