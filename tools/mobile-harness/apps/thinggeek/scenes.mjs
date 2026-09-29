@@ -493,6 +493,15 @@ export const scenes = [
       await h.settle(300);
     },
   },
+  {
+    // First-run checklist, above the attention list: a brand-new household.
+    name: '19-attention-checklist',
+    goto: '/attention?__fixture=empty',
+    wait: 1600,
+    async setup(page) {
+      if (!(await page.getByTestId('onboarding-checklist').count())) throw new Error('no first-run checklist');
+    },
+  },
 ];
 
 // Known, ticketed violations. The list starts empty and stays that way.

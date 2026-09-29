@@ -4,7 +4,7 @@
  * insurance gaps as counts, each a door into the library pre-filtered to
  * exactly those things (`/?missing=receipt`).
  */
-import React from 'react';
+import React, { useMemo } from 'react';
 import { Box, ButtonBase, Typography, useTheme } from '@mui/material';
 import {
   AddAPhotoOutlined as PhotoIcon,
@@ -18,15 +18,17 @@ import {
 import { Link as RouterLink } from 'react-router-dom';
 import { GeekErrorState } from '@geeksuite/ui';
 import PageHeader, { PageFrame } from '../components/PageHeader';
+import OnboardingChecklist from '../components/OnboardingChecklist';
 import ThingPhoto from '../components/ThingPhoto';
 import { statusTone } from '../components/DueLine';
 import { coverSrc, thingWhereText } from '../components/thingDisplay';
 import { thingPath } from '../components/navConfig';
-import { useAttention } from '../hooks/useThingMeta';
+import { useAttention, useThingTree } from '../hooks/useThingMeta';
 import { DISPLAY_FONT } from '../theme/theme';
 import { dueDateOf, formatCalendarDate, relativeDay } from '../utils/dates';
 import { libraryLinkWith } from '../utils/libraryFilter';
 import { dateKindLabel } from '../utils/vocab';
+import { isLocation, isParentKind, kindOf } from '../utils/where';
 
 export const GAP_CARDS = [
   { key: 'id-plate', field: 'missingIdPlate', title: 'No ID-plate photo', text: 'The plate carries the model and serial — the photo an adjuster asks for first.', icon: PlateIcon },
@@ -95,6 +97,17 @@ function DueGroup({ id, title, things, empty }) {
 
 export default function AttentionView() {
   const { attention, loading, error, refetch } = useAttention();
+  const { nodes, loading: treeLoading } = useThingTree();
+
+  const { locationsCount, itemsCount, walkAt } = useMemo(() => {
+    const locations = nodes.filter(isLocation);
+    const places = nodes.filter((n) => isParentKind(kindOf(n)));
+    return {
+      locationsCount: locations.length,
+      itemsCount: nodes.length - locations.length,
+      walkAt: places.length === 1 ? places[0].id : null,
+    };
+  }, [nodes]);
 
   if (error && !attention) {
     return (
@@ -111,6 +124,9 @@ export default function AttentionView() {
   return (
     <PageFrame>
       <PageHeader title="Needs attention" lede="Dates that have passed or are close, then everything an insurer would ask for that isn't on file yet." />
+      {!loading && !treeLoading ? (
+        <OnboardingChecklist locationsCount={locationsCount} itemsCount={itemsCount} missingIdPlate={attention?.missingIdPlate ?? 0} walkAt={walkAt} />
+      ) : null}
       {allClear ? (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, p: 2, mb: 2, borderRadius: 3, border: 1, borderColor: 'divider', bgcolor: 'background.card' }}>
           <ClearIcon sx={{ color: 'primary.main' }} aria-hidden="true" />
