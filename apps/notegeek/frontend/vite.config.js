@@ -35,8 +35,37 @@ export default defineConfig(({ mode }) => {
           ],
           start_url: '/',
           scope: '/',
-          categories: ['productivity', 'utilities']
+          categories: ['productivity', 'utilities'],
+          // Android "Share -> NoteGeek". GET-only (title/text/url); see the
+          // note below for why shared images aren't handled.
+          share_target: {
+            action: '/share',
+            method: 'GET',
+            params: {
+              title: 'title',
+              text: 'text',
+              url: 'url'
+            }
+          }
         },
+        // Image sharing would need `method: 'POST'` +
+        // `enctype: 'multipart/form-data'` on share_target and a service
+        // worker that intercepts that POST, stores the file, and redirects
+        // to /share — which in turn needs `strategies: 'injectManifest'`
+        // (a hand-written SW `fetch` handler; `generateSW` cannot express
+        // "intercept this one POST route"). notegeek's SW is flavour A
+        // (VitePWA/generateSW, DOCS/PWA_STANDARD.md §2) specifically because
+        // its precache manifest, cleanupOutdatedCaches/skipWaiting/
+        // clientsClaim wiring, and tools/pwa-audit.mjs's flavour-A checks
+        // all assume `generateSW`'s shape. Switching strategies to gain one
+        // feature would touch the update-survives-a-deploy guarantee
+        // PWA_STANDARD.md §1a documents for this exact app, for a payload
+        // (a photo shared from the OS share sheet) that "Photo of a page"
+        // (DOCS/HANDWRITING.md §3) already covers by a more deliberate,
+        // multi-page path. Decision: GET-only, text/url. Follow-up if image
+        // sharing turns out to be wanted: add a second, narrowly-scoped
+        // `injectManifest` entry point rather than converting the app's main
+        // SW, so the generateSW guarantees above stay intact.
         workbox: {
           cleanupOutdatedCaches: true,
           clientsClaim: true,

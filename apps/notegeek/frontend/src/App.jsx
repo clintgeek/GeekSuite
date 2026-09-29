@@ -21,6 +21,7 @@ import SearchResults from './components/SearchResults';
 import TagNotesList from './components/TagNotesList';
 import QuickCaptureHome from './pages/QuickCaptureHome';
 import Settings from './pages/Settings';
+import ShareTarget from './pages/ShareTarget';
 
 // `/login` and `/register` accept an optional same-origin `?redirect=` (or
 // `?returnTo=`) target — honored only when it's a relative path, so an
@@ -107,6 +108,23 @@ function App() {
                                     </Layout>
                                 ) : (
                                     <Navigate to="/login" replace />
+                                )
+                            }
+                        />
+
+                        {/* Android share target ("Share -> NoteGeek", manifest share_target,
+                            GET method). Reachable whether or not the visitor is logged in — an
+                            expired/absent session must not drop the shared title/text/url, so
+                            this route (unlike the block below) sends a logged-out visitor
+                            through /login with this same query string via ?redirect=, rather
+                            than falling through to the catch-all's bare /login. */}
+                        <Route
+                            path="/share"
+                            element={
+                                isAuthenticated ? (
+                                    <Layout><ShareTarget /></Layout>
+                                ) : (
+                                    <Navigate to={`/login?redirect=${encodeURIComponent('/share' + window.location.search)}`} replace />
                                 )
                             }
                         />
