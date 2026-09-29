@@ -10,6 +10,30 @@ anything a future reader would otherwise have to rediscover.
 
 ---
 
+## 2026-09-29
+
+### BuJoGeek — Phase 1 "stupid simple" + "Red Pen" (one revertable commit)
+
+`9668203c`
+
+Chef's brief: "I just use the todo list features… It needs simplifying and made
+stupid simple." The app is now Today / Upcoming / Done / Search, and the retired
+routes redirect to /today. An always-visible add box underlines `/day time`,
+`!high`, `#tag` and `^note` in red as you type. A tap checks a row off with a red
+strike and an undo. Carried-over tasks collect in one group with "Move all to
+today". Pinned tag filters are stored in `appPreferences.bujogeek.pinnedTags`.
+
+Red Pen: paper and black ink, with red only where it carries meaning (priority,
+carried over, the strike). The typeface is Inter Tight, and the icons, manifest
+and offline page are new. A 52-pair contrast test checks the palette in both modes.
+
+Independent bug, fixed in the same commit because it lives in the rewritten
+parser: the bujo signifier was matched anywhere in the line rather than only
+at its start. It is now the first character only.
+
+Verified in a clean worktree: 348 vitest, pwa-audit 0, themeContrast 399,
+harness 48 scenes 0/0/0.
+
 ## 2026-09-27
 
 ### FitnessGeek — "Market Morning", Simple and Full (one revertable commit)

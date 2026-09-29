@@ -228,6 +228,15 @@ The eraser button and handwriting-to-Markdown are being built
 - **A handwritten daily page in BuJoGeek.** Waits until BuJoGeek has been torn apart and
   rebuilt.
 
+### BuJoGeek — subtasks, parked (Chef, 2026-09-29: "leave it out for now")
+
+Red Pen removed subtasks from the UI (1 in 378 tasks ever had one). If they come back, the
+proposed shape is one level of steps inside a task, not in the list. The row shows only a
+"2/5" count; steps are added in the inline editor with "+ step" and Enter, and there's no
+dialog. Finishing the last step *offers* to check the parent. Steps carry no dates, tags or
+priority. It is frontend-only: basegeek still serves `parentTask` (tested). **Phase 4 dead-code
+removal must not delete the API side**, only the old frontend components.
+
 ### BookGeek — audiobooks?
 
 Chef, 2026-09-26: "I have audiobooks but I never thought to manage them in bookgeek and I
