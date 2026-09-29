@@ -1,33 +1,26 @@
 /**
- * BuJoGeek sidebar — thin identity wrapper around the suite `GeekSidebar`.
+ * BuJoGeek sidebar — Red Pen on the suite `GeekSidebar`.
  *
- * Structure (brand → grouped nav → extras → user chip → Settings → Sign out)
- * belongs to the primitive; this file only supplies BuJoGeek's "analog soul,
- * digital spine" identity: the always-dark tobacco chrome, the 56px wordmark
- * block, the IBM Plex Mono section labels, and the accent active-bar.
+ * The same paper as the page, a hairline to its right, four rows. The active
+ * row is ink, bold, with the red pen's margin bar. The wordmark is the icon's
+ * mark (a done bullet with a red tick) and "bujogeek" in Inter Tight.
  *
- * `GeekShell nav={…}` decides whether this panel sits in the permanent 220px
- * column or inside the mobile drawer, so there is no `isMobile` / `onClose`
- * plumbing here any more.
+ * The reminders switch stays in `extras`: it is the app's one push preference
+ * and it has no other home now that Settings is out of the UI.
  */
-import { Box, Typography, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Tooltip } from '@mui/material';
+import { Box, List, ListItem, ListItemButton, ListItemIcon, ListItemText, Tooltip, Typography } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { Bell, BellOff } from 'lucide-react';
 import { GeekSidebar } from '@geeksuite/ui';
 import usePushReminders from '../../hooks/usePushReminders';
-import { chrome } from '../../theme/chrome';
+import { chromeFor } from '../../theme/chrome';
+import { PEN_FONT } from '../../theme/pen';
 import { navSections, activeNavId } from './navConfig';
 
-// The chrome palette lives in theme/chrome.js (solid inks, measured, asserted
-// in packages/ui's themeContrast.test.js).
-
-/**
- * The reminders toggle — the app's only push preference, so it lives in the
- * sidebar's `extras` slot next to the footer rather than justifying its own
- * nav row. Also surfaced on the Settings page, since it's a per-browser
- * global preference, not a per-page control.
- */
 export const RemindersToggle = () => {
+  const theme = useTheme();
+  const chrome = chromeFor(theme.palette.mode);
   const { status, busy, toggle } = usePushReminders();
 
   if (status === 'loading' || status === 'unsupported') return null;
@@ -35,7 +28,6 @@ export const RemindersToggle = () => {
   const on = status === 'on';
   const denied = status === 'denied';
   const Icon = on ? Bell : BellOff;
-
   const label = on ? 'Reminders on' : denied ? 'Reminders blocked' : 'Reminders off';
   const hint = denied
     ? 'Notifications are blocked for this site — allow them in your browser settings.'
@@ -52,29 +44,18 @@ export const RemindersToggle = () => {
               onClick={denied || busy ? undefined : toggle}
               disabled={denied || busy}
               sx={{
-                py:           0.875,
-                px:           1.75,
-                borderRadius: '6px',
-                color:        on ? chrome.accent : chrome.textDisabled,
-                transition:   'color 0.14s ease, background-color 0.14s ease',
+                minHeight: 44,
+                px: 3.5,
+                borderRadius: '4px',
+                color: on ? chrome.accent : chrome.textDisabled,
                 '&.Mui-disabled': { opacity: 1, color: chrome.textDisabled },
-                '&:hover': {
-                  backgroundColor: on ? chrome.accentBg : chrome.bgHover,
-                  color:           on ? chrome.accent : chrome.text,
-                },
+                '&:hover': { backgroundColor: chrome.bgHover, color: on ? chrome.accent : chrome.text },
               }}
             >
-              <ListItemIcon sx={{ color: 'inherit', minWidth: 34 }}>
-                <Icon size={15} strokeWidth={1.75} />
+              <ListItemIcon sx={{ color: 'inherit', minWidth: 32 }}>
+                <Icon size={16} strokeWidth={1.75} />
               </ListItemIcon>
-              <ListItemText
-                primary={label}
-                primaryTypographyProps={{
-                  fontFamily: '"Source Sans 3", sans-serif',
-                  fontSize:   '0.8125rem',
-                  color:      'inherit',
-                }}
-              />
+              <ListItemText primary={label} primaryTypographyProps={{ fontFamily: PEN_FONT, fontSize: '0.875rem', color: 'inherit' }} />
             </ListItemButton>
           </Box>
         </Tooltip>
@@ -83,121 +64,58 @@ export const RemindersToggle = () => {
   );
 };
 
-/** Brand block — the "bujo|geek" wordmark, kept at its original 56px height via `brandSx`. */
-const Brand = () => (
-  <Box
-    component={RouterLink}
-    to="/today"
-    sx={{ display: 'flex', alignItems: 'center', color: 'inherit', textDecoration: 'none' }}
-  >
-    <Box
-      sx={{
-        width:          28,
-        height:         28,
-        borderRadius:   '5px',
-        border:         `1.5px solid ${chrome.logoAccent}`,
-        display:        'flex',
-        alignItems:     'center',
-        justifyContent: 'center',
-        mr:             1.25,
-        flexShrink:     0,
-        opacity:        0.9,
-      }}
-    >
-      <Typography
-        sx={{
-          fontFamily:    '"IBM Plex Mono", monospace',
-          // 12px is the suite's text floor. At 10px the mark read as a
-          // readable string under it (desktop harness, 2026-09-25).
-          fontSize:      '0.75rem',
-          fontWeight:    700,
-          color:         chrome.logoAccent,
-          letterSpacing: '0.02em',
-          lineHeight:    1,
-        }}
-      >
-        BJ
-      </Typography>
-    </Box>
-    <Typography
-      sx={{
-        fontFamily:    '"Source Sans 3", sans-serif',
-        fontWeight:    300,
-        color:         chrome.logo,
-        fontSize:      '1.0625rem',
-        letterSpacing: '-0.02em',
-        lineHeight:    1,
-      }}
-    >
-      bujo
-      <Box component="span" sx={{ fontWeight: 700, color: chrome.logoAccent, letterSpacing: '-0.01em' }}>
-        geek
-      </Box>
+/** The mark: an ink bullet with the red pen's tick (the app icon, drawn small). */
+export const PenMark = ({ size = 26, chrome }) => (
+  <Box component="svg" viewBox="0 0 32 32" width={size} height={size} aria-hidden sx={{ display: 'block', flexShrink: 0 }}>
+    <circle cx="15" cy="17" r="11" fill={chrome.logo} />
+    <path d="M9.5 16.5 L13.8 21 L26.5 6.5" fill="none" stroke={chrome.logoAccent} strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" />
+  </Box>
+);
+
+const Brand = ({ chrome }) => (
+  <Box component={RouterLink} to="/today" aria-label="BuJoGeek, Today" sx={{ display: 'flex', alignItems: 'center', gap: 2.5, color: 'inherit', textDecoration: 'none' }}>
+    <PenMark chrome={chrome} />
+    <Typography sx={{ fontFamily: PEN_FONT, fontWeight: 700, color: chrome.logo, fontSize: '1.125rem', letterSpacing: '-0.03em', lineHeight: 1 }}>
+      bujogeek
     </Typography>
   </Box>
 );
 
 const Sidebar = () => {
+  const theme = useTheme();
+  const chrome = chromeFor(theme.palette.mode);
   const location = useLocation();
-  // `GeekSidebar` has no router of its own — on the settings route (which has
-  // no nav row) pass its default settings id explicitly so the footer
-  // Settings row highlights, per the primitive's own contract.
-  const currentId = location.pathname.startsWith('/settings')
-    ? 'settings'
-    : activeNavId(location.pathname);
+  const currentId = activeNavId(location.pathname);
 
   const sections = navSections.map((section) => ({
     label: section.label,
     items: section.items.map(({ Icon, ...item }) => ({
       ...item,
-      icon: <Icon size={17} strokeWidth={item.id === currentId ? 2 : 1.75} />,
+      icon: <Icon size={18} strokeWidth={item.id === currentId ? 2.25 : 1.75} />,
     })),
   }));
 
   return (
     <GeekSidebar
-      brand={<Brand />}
+      brand={<Brand chrome={chrome} />}
       sections={sections}
       activeId={currentId}
       extras={<RemindersToggle />}
-      sx={{
-        bgcolor: chrome.bg,
-      }}
-      // Section captions ("Journal" / "Library"): the IBM Plex Mono eyebrow,
-      // at the 12px floor. They were 9px, and the letter-spacing is eased to
-      // keep the same quiet weight at the bigger size.
-      sectionLabelSx={{
-        fontFamily:    '"IBM Plex Mono", monospace',
-        fontSize:      '0.75rem',
-        fontWeight:    600,
-        letterSpacing: '0.06em',
-        color:         chrome.textDisabled,
-      }}
-      brandSx={{ height: 56, minHeight: 56, px: 2.25, borderBottom: `1px solid ${chrome.border}` }}
+      sx={{ bgcolor: chrome.bg, borderRight: `1px solid ${chrome.border}` }}
+      brandSx={{ height: 64, minHeight: 64, px: 4.5, borderBottom: 'none' }}
       itemSx={{
-        mb:           0.125,
-        px:           1.75,
-        borderRadius: '6px',
-        color:        chrome.textMuted,
-        transition:   'color 0.14s ease, background-color 0.14s ease',
-        '& .MuiListItemText-primary': {
-          fontFamily:    '"Source Sans 3", sans-serif',
-          fontSize:      '0.875rem',
-        },
-        // The row description ("Daily log") takes the chrome's own ink. The
-        // theme's text.secondary follows the app mode, so in light mode it
-        // was dark ink on dark tobacco (2.32:1).
-        '& .MuiListItemText-secondary': { color: chrome.caption },
-        '&:hover': {
-          backgroundColor: chrome.bgHover,
-          color:           chrome.textHover,
-        },
+        minHeight: 44,
+        px: 3.5,
+        borderRadius: '4px',
+        color: chrome.textMuted,
+        '& .MuiListItemIcon-root': { color: 'inherit' },
+        '& .MuiListItemText-primary': { fontFamily: PEN_FONT, fontSize: '0.9375rem', fontWeight: 500 },
+        '&:hover': { backgroundColor: chrome.bgHover, color: chrome.textHover },
         '&.Mui-selected': {
           backgroundColor: chrome.active,
-          color:           chrome.text,
-          boxShadow:       `inset 3px 0 0 ${chrome.accent}`,
-          '& .MuiListItemText-primary': { fontWeight: 600 },
-          '& .MuiListItemIcon-root': { color: chrome.accent },
+          color: chrome.text,
+          boxShadow: `inset 3px 0 0 ${chrome.accent}`,
+          '& .MuiListItemText-primary': { fontWeight: 700 },
           '&:hover': { backgroundColor: chrome.active },
         },
       }}

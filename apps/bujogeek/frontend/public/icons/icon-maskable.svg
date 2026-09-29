@@ -1,10 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- Full-bleed paper; the bullet inside the central 80% safe circle. -->
-  <defs>
-    <pattern id="dots" width="48" height="48" patternUnits="userSpaceOnUse" x="16" y="16"><circle cx="8" cy="8" r="4" fill="#1C1A18" fill-opacity="0.12"/></pattern>
-  </defs>
-  <rect width="512" height="512" fill="#FAF8F5"/>
-  <rect width="512" height="512" fill="url(#dots)"/>
-  <circle cx="256" cy="256" r="136" fill="#1C1A18"/>
-  <path d="M193 261 L238 306 L323 214" fill="none" stroke="#FAF8F5" stroke-width="38" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- Full-bleed paper; the ticked bullet inside the central 80% safe circle
+       (every point within 205 of the centre). -->
+  <rect width="512" height="512" fill="#FBFBF8"/>
+  <circle cx="244" cy="272" r="126" fill="#121212"/>
+  <path d="M182 268 L237 322 L368 154" fill="none" stroke="#C8202A" stroke-width="40" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

@@ -1,39 +1,38 @@
-// BuJoGeek sidebar chrome: dark tobacco, warm and grounded. It is the same in
-// light and dark app modes, so the sidebar is always a dark anchor.
+// BuJoGeek sidebar chrome — Red Pen.
 //
-// Every ink here is a SOLID colour. The pre-2026-09-25 palette painted text
-// with rgba(255,245,220,α), which is not a colour but a colour plus whatever
-// shows through it (GEEK_SUITE_DESIGN_LANGUAGE.md, "Colour on a surface").
-// Inactive nav titles at α=0.38 measured 3.34:1. The values below are those
-// same inks composited over `bg`, with the dimmest tiers lifted until they
-// clear 4.5:1. The brightness order is unchanged: active > hover > inactive
-// title > description > caption.
+// The sidebar is the same paper as the page, separated by a hairline, in both
+// modes: no dark spine, no tint. The active row is ink with a red margin bar,
+// the pen's mark (DOCS/SIMPLE_PLAN.md § Identity). It used to be an always-dark
+// tobacco panel; that belonged to the journal BuJoGeek no longer is.
 //
-// The theme's `text.*` tokens follow the app mode, so they are the wrong ink on
-// this ground. Light mode's `text.secondary` measured 2.32:1 as the row
-// descriptions. Text on the chrome takes its ink from here.
-//
-// This file is plain data, so packages/ui's themeContrast.test.js imports it
-// and asserts each ink against the grounds it sits on.
-import { colors } from './colors';
+// Every ink is a SOLID colour measured against the ground it sits on. The
+// `chrome` export is the light set: packages/ui's themeContrast.test.js imports
+// it by name and asserts each pair. `chromeFor('dark')` is the night set, held
+// to the same pairs by this app's own `__tests__/theme/redPenContrast.test.js`.
+import { pen } from './pen';
 
-export const chrome = {
-  bg:           '#252018',  // deeper tobacco — more luxurious than before
-  bgHover:      '#2E2820',
-  active:       '#1E1B14',  // sunken active state
-  border:       'rgba(255, 245, 220, 0.07)',   // a rule, never text
-  text:         '#DED5BF',  // active row title        11.1:1 on bg (was α 0.85)
-  textHover:    '#C2B9A5',  // hovered row title        6.8:1 on bgHover (was α 0.72)
-  textMuted:    '#B3AA97',  // inactive row title       7.0:1 on bg (was α 0.38, 3.34:1)
-  caption:      '#9D9584',  // row description          4.9:1 on bgHover, the dimmest ground it meets
-  textDisabled: '#928B7A',  // section label, inert toggle  4.8:1 on bg (was α 0.5)
-  accent:       colors.primary[400],
-  accentBg:     'rgba(96, 152, 204, 0.1)',
-  danger:       'rgba(184, 60, 52, 0.75)',
-  dangerBg:     'rgba(184, 60, 52, 0.08)',
-  logo:         '#CFC6B1',  // wordmark "bujo"          9.5:1 on bg (was α 0.78)
-  logoAccent:   colors.primary[400],
-  divider:      'rgba(255, 245, 220, 0.06)',   // a rule, never text
-};
+const build = (p, { active, accentBg }) => ({
+  bg:           p.paper,
+  bgHover:      p.fill,
+  active,                    // selected row ground
+  border:       p.rule,      // a rule, never text
+  text:         p.ink,       // active row title
+  textHover:    p.ink,       // hovered row title
+  textMuted:    p.grey,      // inactive row title
+  caption:      p.muted,     // row description
+  textDisabled: p.muted,     // section label, inert toggle
+  accent:       p.red,       // the active bar; the reminders-on toggle
+  accentBg,
+  danger:       p.red,
+  dangerBg:     accentBg,
+  logo:         p.ink,       // wordmark
+  logoAccent:   p.red,       // the tick in the mark
+  divider:      p.rule,
+});
+
+export const chrome = build(pen.light, { active: '#EDEDE8', accentBg: 'rgba(200, 32, 42, 0.05)' });
+export const chromeDark = build(pen.dark, { active: '#222221', accentBg: 'rgba(232, 82, 80, 0)' });
+
+export const chromeFor = (mode) => (mode === 'dark' ? chromeDark : chrome);
 
 export default chrome;

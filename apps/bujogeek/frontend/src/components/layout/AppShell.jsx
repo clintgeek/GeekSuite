@@ -1,28 +1,41 @@
 /**
- * AppShell — BuJoGeek's layout shell, pure suite grammar.
+ * AppShell — BuJoGeek's layout shell, suite grammar (`GeekShell`: sidebar /
+ * drawer, top bar, the phone's tab bar).
  *
- * The shell owns the breakpoint and the drawer (`nav`), so the bespoke
- * `isMobile` / `mobileOpen` state and the hand-rolled `<Drawer>` that used to
- * live here are gone. The same `Sidebar` panel serves the permanent 220px
- * desktop column and the temporary mobile drawer; its always-dark tobacco
- * chrome is pinned onto the drawer paper via `navSx` (the drawer paper would
- * otherwise follow the app's mode-aware `background.paper`).
+ * The content frame is BuJoGeek's own rather than `GeekAppFrame`: the frame
+ * fades every route in, and Red Pen allows exactly one animation, the strike
+ * (DOCS/SIMPLE_PLAN.md § Identity item 3). The frame is otherwise the same —
+ * the scrolling <main>, the page ground, room for the tab bar.
  *
- * `GeekToastProvider` is mounted *inside* `GeekShell` and *outside*
- * `GeekAppFrame`, on purpose. Inside the shell so it can read `useGeekShell()`
- * and place itself clear of the 220px sidebar and the mobile tab bar; outside
- * the frame because the frame's route transition is a framer-motion element,
- * and an animating element becomes a containing block for `position: fixed`
- * children — a toast mounted under it would jump with the page fade.
+ * `GeekToastProvider` stays inside `GeekShell` (so it reads the shell's
+ * insets and clears the sidebar and tab bar).
  */
-import { useMediaQuery } from '@mui/material';
+import { Box, useMediaQuery } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
-import { GeekShell, GeekAppFrame, GeekToastProvider } from '@geeksuite/ui';
+import { GeekShell, GeekToastProvider, useGeekShell } from '@geeksuite/ui';
 import { useAuth } from '../../context/AuthContext';
 import Sidebar from './Sidebar';
-import { chrome } from '../../theme/chrome';
+import { chromeFor } from '../../theme/chrome';
 import TopBar from './TopBar';
 import MobileTabBar from './MobileTabBar';
+
+function PenFrame({ children }) {
+  const { bottomInset } = useGeekShell();
+  return (
+    <Box
+      component="main"
+      sx={{
+        flex: 1,
+        overflowY: 'auto',
+        overflowX: 'hidden',
+        bgcolor: 'background.default',
+        ...(bottomInset ? { pb: `${bottomInset}px` } : null),
+      }}
+    >
+      {children}
+    </Box>
+  );
+}
 
 const AppShell = ({ children }) => {
   const theme = useTheme();
@@ -33,12 +46,12 @@ const AppShell = ({ children }) => {
   return (
     <GeekShell
       nav={showNavigation ? <Sidebar /> : null}
-      navSx={{ bgcolor: chrome.bg }}
+      navSx={{ bgcolor: chromeFor(theme.palette.mode).bg }}
       topBar={<TopBar />}
       bottomNav={isMobile && showNavigation ? <MobileTabBar /> : null}
     >
       <GeekToastProvider>
-        <GeekAppFrame>{children}</GeekAppFrame>
+        <PenFrame>{children}</PenFrame>
       </GeekToastProvider>
     </GeekShell>
   );

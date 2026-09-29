@@ -1,576 +1,163 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { Box, Button, useMediaQuery } from '@mui/material';
+/**
+ * Today — the page BuJoGeek opens on (DOCS/SIMPLE_PLAN.md § "Three views").
+ *
+ *   desk-calendar date · "4 to do · 2 done"
+ *   pinned tag chips
+ *   the add box (in the page on desktop; docked above the nav on a phone)
+ *   "3 carried over" — one line, a count and "Move all to today"; tap to open
+ *   today's tasks, priority then time
+ *   Anytime (no date)
+ *
+ * A task ticked here is drawn crossed off in place for a moment, then leaves
+ * for Done (PenContext SETTLE_MS; at once under reduced motion).
+ */
+import { useMemo, useState } from 'react';
+import { Box, ButtonBase, useMediaQuery } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
-import { useApolloClient, useMutation } from '@apollo/client';
-import { addDays, format, isWithinInterval, startOfDay } from 'date-fns';
-import { localDateString } from '@geeksuite/utils';
-import { useTaskContext } from '../context/TaskContext';
-import PageHeader from '../components/layout/PageHeader';
-import OverdueSection from '../components/today/OverdueSection';
-import TodaySection from '../components/today/TodaySection';
-import UpcomingSection from '../components/today/UpcomingSection';
-import CompletedSection from '../components/today/CompletedSection';
-import BlockedSection from '../components/today/BlockedSection';
-import InlineQuickAdd from '../components/today/InlineQuickAdd';
-import QuickAddSheet from '../components/today/QuickAddSheet';
-import SkeletonLoader from '../components/shared/SkeletonLoader';
-import TaskEditor from '../components/tasks/TaskEditor';
-import BlockTaskDialog from '../components/tasks/BlockTaskDialog';
-import AddSubtaskDialog from '../components/tasks/AddSubtaskDialog';
-import useKeyboardNav from '../hooks/useKeyboardNav';
-import useGlobalShortcuts from '../hooks/useGlobalShortcuts';
-import { CREATE_NOTE } from '../graphql/notegeekMutations';
-import { GET_MONTHLY_TASKS, GET_BLOCKED_TASKS } from '../graphql/queries';
-import { getTaskAge } from '../utils/taskAging';
-import { splitNested, allSubtasksComplete } from '../utils/subtasks';
-import { dueDayStart } from '../utils/dueDate';
-import { useToast } from '@geeksuite/ui';
+import { ChevronRight } from 'lucide-react';
+import { useGeekShell } from '@geeksuite/ui';
+import { usePen } from '../context/PenContext';
+import { penOf } from '../theme/pen';
+import AddBox from '../components/pen/AddBox';
+import TagChips from '../components/pen/TagChips';
+import PenPage, { PenLoading } from '../components/pen/PenPage';
+import usePenRows from '../components/pen/usePenRows';
+import { DeskDate, EmptyLine, SectionCaption } from '../components/pen/PenHeadings';
+import useKeyboardInset from '../hooks/useKeyboardInset';
+import { todaySections, withSettling } from '../utils/penViews';
 
-const TodayPage = () => {
+function OverdueLine({ count, open, onToggle, onMoveAll, p }) {
+  return (
+    <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, borderBottom: `1px solid ${p.rule}`, minHeight: 52, pl: 1 }}>
+      <ButtonBase
+        onClick={onToggle}
+        aria-expanded={open}
+        aria-controls="overdue-list"
+        sx={{ minHeight: 44, px: 2, gap: 2, borderRadius: '4px', fontSize: '1rem', fontWeight: 600, color: p.ink }}
+      >
+        <Box component="span" aria-hidden sx={{ display: 'inline-flex', transition: 'none', transform: open ? 'rotate(90deg)' : 'none' }}>
+          <ChevronRight size={18} />
+        </Box>
+        <span>
+          <Box component="span" sx={{ color: p.red }}>{count}</Box> carried over
+        </span>
+      </ButtonBase>
+      <Box sx={{ flex: 1 }} />
+      <ButtonBase
+        onClick={onMoveAll}
+        sx={{ minHeight: 44, px: 2, borderRadius: '4px', fontSize: '0.9375rem', fontWeight: 600, color: p.ink, textDecoration: 'underline', textUnderlineOffset: '3px' }}
+      >
+        Move all to today
+      </ButtonBase>
+    </Box>
+  );
+}
+
+function Dock({ children }) {
+  const { bottomInset } = useGeekShell();
+  const keyboard = useKeyboardInset();
   const theme = useTheme();
-  // Below `md` the writing surface moves to a FAB-opened sheet, so the inline
-  // field is hidden — two entry points on one page would be one too many.
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const [currentDate, setCurrentDate] = useState(new Date());
-  const [editingTask, setEditingTask] = useState(null);
-  // Tasks due within the next 7 days (fetched separately from the daily view)
-  const [upcomingRangeTasks, setUpcomingRangeTasks] = useState([]);
-  // Parked tasks — their own query, because the gateway keeps blocked tasks out
-  // of the daily/weekly/monthly log views entirely.
-  const [blockedTasks, setBlockedTasks] = useState([]);
-  // The task whose "Block…" action is open, if any.
-  const [blockingTask, setBlockingTask] = useState(null);
-  // The task whose "Add subtask" action is open, if any.
-  const [addingSubtaskTo, setAddingSubtaskTo] = useState(null);
-  // Track whether fetchTasks has resolved for the current date.
-  // Separate from context loading state because: (a) context starts as 'IDLE' string
-  // not matching LoadingState enum, and (b) other views (Review, Plan) mutate the
-  // shared tasks array, so Today renders stale foreign tasks until its own fetch completes.
-  const [todayLoaded, setTodayLoaded] = useState(false);
-  const { notify } = useToast();
-  const [createNote] = useMutation(CREATE_NOTE);
-  const apolloClient = useApolloClient();
-  const {
-    tasks,
-    loading,
-    fetchTasks,
-    createTask,
-    updateTask,
-    updateTaskStatus,
-    blockTask,
-    unblockTask,
-    deleteTask,
-    saveDailyOrder,
-    addSubtask,
-    getTaskFromState,
-    LoadingState,
-  } = useTaskContext();
-
-  useEffect(() => {
-    setTodayLoaded(false);
-    fetchTasks('daily', currentDate).finally(() => setTodayLoaded(true));
-  }, [currentDate, fetchTasks]);
-
-  // ─── Upcoming: tasks due within the next 7 days after the viewed date ───
-  const fetchUpcoming = useCallback(async () => {
-    try {
-      const res = await apolloClient.query({
-        query: GET_MONTHLY_TASKS,
-        variables: {
-          startDate: format(addDays(currentDate, 1), 'yyyy-MM-dd'),
-          endDate: format(addDays(currentDate, 7), 'yyyy-MM-dd'),
-          // The browser's offset for that span — without it an evening task
-          // lands in the wrong day's bucket here too.
-          tzOffsetMinutes: addDays(currentDate, 1).getTimezoneOffset(),
-        },
-        fetchPolicy: 'no-cache',
-      });
-      setUpcomingRangeTasks(res.data?.monthlyTasks || []);
-    } catch (err) {
-      // Told, not swallowed. A console line is not a user-facing signal, and
-      // an empty Upcoming section is indistinguishable from a quiet week.
-      console.error('Failed to fetch upcoming tasks:', err);
-      notify('Could not load upcoming tasks.', { tone: 'error' });
-    }
-  }, [apolloClient, currentDate, notify]);
-
-  useEffect(() => {
-    fetchUpcoming();
-  }, [fetchUpcoming]);
-
-  // ─── Blocked: the parked shelf at the bottom of the page ───
-  const fetchBlocked = useCallback(async () => {
-    try {
-      const res = await apolloClient.query({
-        query: GET_BLOCKED_TASKS,
-        fetchPolicy: 'no-cache',
-      });
-      setBlockedTasks(res.data?.blockedTasks || []);
-    } catch (err) {
-      // This one asserts in prose. On an empty list `BlockedSection` renders
-      // "nothing is waiting on anyone" and the header reports "0 blocked" —
-      // so a failed query did not merely show nothing, it stated something
-      // false about the user's parked work.
-      console.error('Failed to fetch blocked tasks:', err);
-      notify('Could not load parked tasks.', { tone: 'error' });
-    }
-  }, [apolloClient, notify]);
-
-  useEffect(() => {
-    fetchBlocked();
-  }, [fetchBlocked]);
-
-  const handleDateChange = useCallback((newDate) => {
-    setCurrentDate(newDate);
-  }, []);
-
-  // Any status change can move a task across the shelves — completing or
-  // cancelling a parked task un-parks it server-side — so the blocked list is
-  // refetched alongside Upcoming.
-  const handleStatusToggle = useCallback(async (task) => {
-    const newStatus = task.status === 'completed' ? 'pending' : 'completed';
-    await updateTaskStatus((task.id || task._id), newStatus);
-    fetchUpcoming();
-    fetchBlocked();
-  }, [updateTaskStatus, fetchUpcoming, fetchBlocked]);
-
-  const handleCancelToggle = useCallback(async (task) => {
-    const newStatus = task.status === 'cancelled' ? 'pending' : 'cancelled';
-    await updateTaskStatus((task.id || task._id), newStatus);
-    fetchUpcoming();
-    fetchBlocked();
-  }, [updateTaskStatus, fetchUpcoming, fetchBlocked]);
-
-  /**
-   * Defer a task by one day, in one tap.
-   *
-   * The same shape `ReviewPage.handleMoveTomorrow` has always used — new due
-   * date plus `migrated_future`, so the entry reads as moved rather than
-   * silently re-dated and the carry-forward machinery treats it correctly.
-   *
-   * Tomorrow is relative to the DAY BEING VIEWED, not to `new Date()`. Today
-   * has prev/next-day navigation, so "tomorrow" while looking at last Tuesday
-   * means Wednesday; anchoring on the real today would fling the task across
-   * the calendar from a page the user is only visiting.
-   *
-   * `updateTask` throws on failure (unlike updateTaskStatus, which resolves
-   * undefined), so the catch is what stops a failed move from reporting
-   * success.
-   */
-  const handleMoveToTomorrow = useCallback(async (task) => {
-    try {
-      await updateTask((task.id || task._id), {
-        ...task,
-        dueDate: localDateString(addDays(currentDate, 1)),
-        status: 'migrated_future',
-      });
-      notify('Moved to tomorrow', { tone: 'success' });
-      fetchUpcoming();
-    } catch {
-      notify('Could not move that task.', { tone: 'error' });
-    }
-  }, [updateTask, currentDate, notify, fetchUpcoming]);
-
-  const handleEdit = useCallback((task) => {
-    setEditingTask(task);
-  }, []);
-
-  const handleDelete = useCallback(async (task) => {
-    if (window.confirm('Delete this task?')) {
-      await deleteTask((task.id || task._id));
-      fetchBlocked();
-    }
-  }, [deleteTask, fetchBlocked]);
-
-  const handleSaveAsNote = useCallback(async (task) => {
-    try {
-      await createNote({
-        variables: {
-          title: task.content,
-          content: task.note || task.content,
-          type: 'text',
-          tags: task.tags || [],
-        },
-      });
-      notify('Note saved to NoteGeek', { tone: 'success' });
-    } catch (err) {
-      notify('Failed to save note to NoteGeek', { tone: 'error' });
-    }
-  }, [createNote, notify]);
-
-  const handleBlockRequest = useCallback((task) => {
-    setBlockingTask(task);
-  }, []);
-
-  // ─── Steps ──────────────────────────────────────────────────────────────
-
-  const handleAddSubtaskRequest = useCallback((task) => {
-    setAddingSubtaskTo(task);
-  }, []);
-
-  const handleAddSubtask = useCallback(async (task, content) => (
-    addSubtask((task.id || task._id), { content })
-  ), [addSubtask]);
-
-  /**
-   * Completing a step is completing a task — the same mutation, the same
-   * optimistic path. What is different is what happens when it was the LAST
-   * step: the page offers to finish the parent, and does not do it.
-   *
-   * That distinction is the whole design. An entry with every step ticked is
-   * usually done, but not always — there is often a last look, a send, a
-   * signature that was never worth its own step. Auto-completing would be
-   * right most of the time and infuriating the rest, and the writer would
-   * have to undo it. So: a toast with a button, which expires on its own if
-   * the answer is no.
-   */
-  const handleSubtaskToggle = useCallback(async (subtask) => {
-    const subtaskId = subtask.id || subtask._id;
-    const newStatus = subtask.status === 'completed' ? 'pending' : 'completed';
-    await updateTaskStatus(subtaskId, newStatus);
-    fetchUpcoming();
-
-    if (newStatus !== 'completed') return;
-
-    // Read the parent back from context state, which the toggle has already
-    // patched — the `subtask` argument is the pre-toggle object.
-    const parentId = subtask.parentTask?.id || subtask.parentTask?._id;
-    if (!parentId) return;
-    const parent = getTaskFromState(parentId);
-    if (!parent || parent.status === 'completed' || !allSubtasksComplete(parent)) return;
-
-    notify('Every step is done.', {
-      tone: 'success',
-      duration: 8000,
-      action: (
-        <Button
-          size="small"
-          onClick={() => updateTaskStatus(parentId, 'completed')}
-          sx={{ fontSize: '0.8125rem', textTransform: 'none', fontWeight: 600 }}
-        >
-          Complete the entry
-        </Button>
-      ),
-    });
-  }, [updateTaskStatus, fetchUpcoming, getTaskFromState, notify]);
-
-  const handleSubtaskDelete = useCallback(async (subtask) => {
-    if (window.confirm('Remove this step?')) {
-      await deleteTask((subtask.id || subtask._id));
-    }
-  }, [deleteTask]);
-
-  const subtaskProps = useMemo(() => ({
-    onAddSubtask: handleAddSubtaskRequest,
-    onSubtaskToggle: handleSubtaskToggle,
-    onSubtaskEdit: handleEdit,
-    onSubtaskDelete: handleSubtaskDelete,
-  }), [handleAddSubtaskRequest, handleSubtaskToggle, handleEdit, handleSubtaskDelete]);
-
-  const handleBlockConfirm = useCallback(async (reason) => {
-    const task = blockingTask;
-    setBlockingTask(null);
-    if (!task) return;
-    const blocked = await blockTask((task.id || task._id), reason);
-    if (!blocked) return; // the context has already surfaced the error
-    notify('Task blocked', { tone: 'success' });
-    // Every list here is fetched no-cache, so refetch the ones that change:
-    // the task leaves the log and joins the parked shelf.
-    fetchTasks('daily', currentDate);
-    fetchUpcoming();
-    fetchBlocked();
-  }, [blockingTask, blockTask, notify, fetchTasks, currentDate, fetchUpcoming, fetchBlocked]);
-
-  const handleUnblock = useCallback(async (task) => {
-    const unblocked = await unblockTask((task.id || task._id));
-    if (!unblocked) return;
-    notify('Task unblocked', { tone: 'success' });
-    fetchTasks('daily', currentDate);
-    fetchUpcoming();
-    fetchBlocked();
-  }, [unblockTask, notify, fetchTasks, currentDate, fetchUpcoming, fetchBlocked]);
-
-  const handleQuickAdd = useCallback(async (taskData) => {
-    // `~blocked [reason]` is a two-step create: the mutation has no blocked
-    // input, so the task is created and then parked.
-    const { blocked, blockedReason, ...fields } = taskData;
-    let created;
-    try {
-      created = await createTask(fields);
-    } catch {
-      // createTask has already surfaced the error via the task context snackbar;
-      // skip the refetch so the failed entry isn't silently dropped from view.
-      // `false` also keeps the quick-add sheet open with the entry still typed.
-      return false;
-    }
-    if (blocked && created) {
-      const parked = await blockTask((created.id || created._id), blockedReason);
-      if (parked) {
-        notify('Task added and blocked', { tone: 'success' });
-        fetchBlocked();
-      }
-    }
-    // Refetch to get sorted list
-    fetchTasks('daily', currentDate);
-    return true;
-  }, [createTask, blockTask, notify, fetchBlocked, fetchTasks, currentDate]);
-
-  // Split tasks into overdue, active, completed
-  const { overdueTasks, activeTasks, completedTasks } = useMemo(() => {
-    if (!Array.isArray(tasks)) {
-      return { overdueTasks: [], activeTasks: [], completedTasks: [] };
-    }
-
-    const overdue = [];
-    const active = [];
-    const completed = [];
-
-    // A step whose parent is also in today's log belongs under that parent's
-    // expander, not on a shelf of its own — otherwise the same work is on
-    // screen twice. A step whose parent is NOT here (filed in a collection,
-    // due another day) keeps its own row and shows the parent as a caption.
-    const { rows } = splitNested(tasks);
-
-    rows.forEach((task) => {
-      // A parked task has left the log — it belongs to BlockedSection, not to
-      // Today/Carried forward. (The gateway already filters it out of
-      // dailyTasks; this guards the window between a block and the refetch.)
-      if (task.status === 'blocked') return;
-      if (task.status === 'completed' || task.status === 'cancelled') {
-        // Cancelled sinks alongside completed — struck as irrelevant, out of
-        // the active/overdue flow, tucked into the collapsed section.
-        completed.push(task);
-      } else {
-        const { days } = getTaskAge(task);
-        if (days > 0) {
-          overdue.push(task);
-        } else {
-          active.push(task);
-        }
-      }
-    });
-
-    // Sort overdue by age (oldest first)
-    overdue.sort((a, b) => {
-      const ageA = getTaskAge(a).days;
-      const ageB = getTaskAge(b).days;
-      return ageB - ageA;
-    });
-
-    return { overdueTasks: overdue, activeTasks: active, completedTasks: completed };
-  }, [tasks]);
-
-  // Upcoming = pending tasks with a due date within (viewed date, viewed date + 7],
-  // excluding anything already shown on this page (dedupe against daily tasks).
-  const upcomingTasks = useMemo(() => {
-    const dayStart = startOfDay(currentDate);
-    const windowStart = addDays(dayStart, 1);
-    const windowEnd = addDays(dayStart, 7);
-    const dailyIds = new Set(
-      (Array.isArray(tasks) ? tasks : []).map((t) => String(t.id || t._id))
-    );
-
-    const { rows: upcomingRows } = splitNested(
-      Array.isArray(upcomingRangeTasks) ? upcomingRangeTasks : []
-    );
-
-    return upcomingRows
-      .filter((task) => {
-        if (task.status === 'completed' || task.status === 'cancelled') return false;
-        if (task.status === 'blocked') return false;
-        if (!task.dueDate) return false;
-        if (dailyIds.has(String(task.id || task._id))) return false;
-        // `dueDayStart` (utils/dueDate.js) is the local midnight of the day
-        // this due date means — date-only values are read in UTC, timed ones
-        // locally. `startOfDay(new Date(dueDate))` read both locally, so a
-        // date-only task due tomorrow landed on TODAY's midnight, one day
-        // short of `windowStart`, and never appeared under Upcoming at all.
-        const dueDay = dueDayStart(task.dueDate);
-        if (!dueDay) return false;
-        return isWithinInterval(dueDay, {
-          start: windowStart,
-          end: windowEnd,
-        });
-      })
-      .sort((a, b) => new Date(a.dueDate) - new Date(b.dueDate));
-  }, [upcomingRangeTasks, tasks, currentDate]);
-
-  // ─── Drag-and-drop reorder for Today's active tasks ───
-  const [orderedActiveTasks, setOrderedActiveTasks] = useState(null);
-
-  // Reset custom order when tasks change from server (new task added, status toggled, etc.)
-  useEffect(() => {
-    setOrderedActiveTasks(null);
-  }, [tasks]);
-
-  // The display list: custom order if user has reordered, otherwise the default
-  const displayActiveTasks = orderedActiveTasks || activeTasks;
-
-  const handleReorder = useCallback(
-    (reordered) => {
-      setOrderedActiveTasks(reordered);
-      // Persist the order to the backend
-      const dateKey = format(currentDate, 'yyyy-MM-dd');
-      const ids = reordered.map((t) => t.id || t._id);
-      saveDailyOrder(dateKey, ids).catch((err) =>
-        console.error('Failed to save task order:', err)
-      );
-    },
-    [currentDate, saveDailyOrder]
-  );
-
-  const stats = useMemo(() => ({
-    total: Array.isArray(tasks) ? tasks.length : 0,
-    overdue: overdueTasks.length,
-    completed: completedTasks.length,
-    blocked: blockedTasks.length,
-  }), [tasks, overdueTasks, completedTasks, blockedTasks]);
-
-  const isLoading = !todayLoaded || loading === LoadingState.FETCHING;
-
-  // ─── Keyboard navigation ───────────────────────────���─────
-  // Flat list of navigable tasks: overdue then active (completed is collapsed)
-  const navigableTasks = useMemo(
-    () => [...overdueTasks, ...displayActiveTasks],
-    [overdueTasks, displayActiveTasks]
-  );
-
-  const { focusedTaskId, clearFocus } = useKeyboardNav({
-    tasks: navigableTasks,
-    onToggle: handleStatusToggle,
-    onEdit: handleEdit,
-    onDelete: handleDelete,
-    onCancel: handleCancelToggle,
-    enabled: !isLoading && !editingTask && !blockingTask && !addingSubtaskTo,
-  });
-
-  useGlobalShortcuts();
-
+  const p = penOf(theme);
   return (
     <Box
+      data-add-dock
       sx={{
-        maxWidth: 720,
-        mx: 'auto',
-        px: { xs: 1, sm: 3 },
-        // Room for the FAB below `md` so it never sits on the last entry.
-        pb: { xs: 11, md: 4 },
+        position: 'fixed',
+        left: 0,
+        right: 0,
+        bottom: keyboard ? `${keyboard}px` : `calc(${bottomInset}px + env(safe-area-inset-bottom, 0px))`,
+        zIndex: (t) => t.zIndex.appBar - 1,
+        px: 4,
+        py: 2,
+        backgroundColor: p.paper,
+        borderTop: `1px solid ${p.rule}`,
       }}
     >
-      <PageHeader
-        date={currentDate}
-        onDateChange={handleDateChange}
-        stats={stats}
-      />
+      {children}
+    </Box>
+  );
+}
 
-      {/* Writing surface — always visible, never gated on loading. At `md`+
-          it is the inline field; below it, the FAB's sheet (same component). */}
-      <Box sx={{ display: { xs: 'none', md: 'block' } }}>
-        <InlineQuickAdd
-          onAdd={handleQuickAdd}
-          autoFocus={
-            !isMobile && !isLoading && displayActiveTasks.length === 0 && overdueTasks.length === 0
-          }
-        />
-      </Box>
+const real = (t) => t.__real || t;
 
-      <QuickAddSheet
-        label="Add task"
-        sheetTitle="New entry"
-        onAdd={handleQuickAdd}
-      />
+const TodayPage = () => {
+  const pen = usePen();
+  const theme = useTheme();
+  const p = penOf(theme);
+  const isPhone = useMediaQuery(theme.breakpoints.down('md'));
+  const [overdueOpen, setOverdueOpen] = useState(false);
 
-      {isLoading ? (
-        <Box sx={{ mt: 1 }}>
-          <SkeletonLoader rows={6} />
-        </Box>
-      ) : (
+  const counts = useMemo(() => todaySections(pen.visible, pen.now).counts, [pen.visible, pen.now]);
+  const sections = useMemo(
+    () => todaySections(withSettling(pen.visible, pen.settling), pen.now),
+    [pen.visible, pen.settling, pen.now],
+  );
+  const order = useMemo(
+    () => [...(overdueOpen ? sections.overdue : []), ...sections.today, ...sections.anytime].map(real),
+    [sections, overdueOpen],
+  );
+  const { renderRow, sheet, expandedId } = usePenRows(order);
+  const row = (t) => renderRow(real(t), { crossed: Boolean(t.__real) });
+
+  // On desktop the box takes focus only when there is nothing to do: with a
+  // list on screen, the keys (j k x t d e) are the faster way in; `/` or
+  // Ctrl+N reach the box from anywhere.
+  const addBox = (
+    <AddBox
+      onAdd={pen.add}
+      onHelp={() => pen.setHelpOpen(true)}
+      now={pen.now}
+      autoFocus={!isPhone && pen.loaded && counts.toDo === 0}
+    />
+  );
+
+  return (
+    <PenPage dock={isPhone}>
+      <DeskDate date={pen.now} toDo={counts.toDo} done={counts.done} />
+      <Box sx={{ pb: 4 }}><TagChips /></Box>
+
+      {!isPhone && <Box sx={{ pb: 5 }}>{addBox}</Box>}
+
+      {!pen.loaded ? <PenLoading /> : (
         <>
-          <OverdueSection
-            tasks={overdueTasks}
-            onStatusToggle={handleStatusToggle}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-            onSaveAsNote={handleSaveAsNote}
-            onMoveToTomorrow={handleMoveToTomorrow}
-            onCancel={handleCancelToggle}
-            onBlock={handleBlockRequest}
-            focusedTaskId={focusedTaskId}
-            subtaskProps={subtaskProps}
-          />
+          {sections.overdue.length > 0 && (
+            <Box component="section" aria-label="Carried over">
+              <OverdueLine
+                count={sections.overdue.length}
+                open={overdueOpen}
+                onToggle={() => setOverdueOpen((o) => !o)}
+                onMoveAll={() => pen.moveAllToToday(sections.overdue.map(real))}
+                p={p}
+              />
+              {overdueOpen && (
+                <Box component="ul" id="overdue-list" sx={{ m: 0, p: 0 }}>
+                  {sections.overdue.map(row)}
+                </Box>
+              )}
+            </Box>
+          )}
 
-          <TodaySection
-            tasks={displayActiveTasks}
-            onStatusToggle={handleStatusToggle}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-            onSaveAsNote={handleSaveAsNote}
-            onMoveToTomorrow={handleMoveToTomorrow}
-            onCancel={handleCancelToggle}
-            onBlock={handleBlockRequest}
-            focusedTaskId={focusedTaskId}
-            onReorder={handleReorder}
-            subtaskProps={subtaskProps}
-          />
+          <Box component="section" aria-label="Today">
+            {sections.today.length > 0 ? (
+              <Box component="ul" sx={{ m: 0, p: 0 }}>{sections.today.map(row)}</Box>
+            ) : (
+              <EmptyLine>{pen.tagFilter ? `Nothing tagged #${pen.tagFilter} today.` : 'Nothing due today.'}</EmptyLine>
+            )}
+          </Box>
 
-          <UpcomingSection
-            tasks={upcomingTasks}
-            onStatusToggle={handleStatusToggle}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-            onSaveAsNote={handleSaveAsNote}
-            onMoveToTomorrow={handleMoveToTomorrow}
-            onCancel={handleCancelToggle}
-            onBlock={handleBlockRequest}
-            focusedTaskId={focusedTaskId}
-            subtaskProps={subtaskProps}
-          />
-
-          {/* The parked shelf sits above Completed. Always rendered, even at zero. */}
-          <BlockedSection
-            tasks={blockedTasks}
-            onStatusToggle={handleStatusToggle}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-            onSaveAsNote={handleSaveAsNote}
-            onCancel={handleCancelToggle}
-            onUnblock={handleUnblock}
-            focusedTaskId={focusedTaskId}
-            subtaskProps={subtaskProps}
-          />
-
-          {/* Last on the page: what got done. */}
-          <CompletedSection
-            tasks={completedTasks}
-            onStatusToggle={handleStatusToggle}
-            onEdit={handleEdit}
-            onDelete={handleDelete}
-            onSaveAsNote={handleSaveAsNote}
-            onCancel={handleCancelToggle}
-            subtaskProps={subtaskProps}
-          />
+          {sections.anytime.length > 0 && (
+            <Box component="section" aria-labelledby="anytime-caption">
+              <SectionCaption id="anytime-caption" aside={`${sections.anytime.length}`}>Anytime</SectionCaption>
+              <Box component="ul" sx={{ m: 0, p: 0 }}>{sections.anytime.map(row)}</Box>
+            </Box>
+          )}
         </>
       )}
 
-      <TaskEditor
-        open={Boolean(editingTask)}
-        onClose={() => setEditingTask(null)}
-        task={editingTask}
-      />
-
-      <BlockTaskDialog
-        open={Boolean(blockingTask)}
-        task={blockingTask}
-        onClose={() => setBlockingTask(null)}
-        onConfirm={handleBlockConfirm}
-      />
-
-      <AddSubtaskDialog
-        open={Boolean(addingSubtaskTo)}
-        task={addingSubtaskTo}
-        onClose={() => setAddingSubtaskTo(null)}
-        onAdd={handleAddSubtask}
-      />
-    </Box>
+      {/* The editor needs the room; the add box comes back when it closes. */}
+      {isPhone && !expandedId && <Dock>{addBox}</Dock>}
+      {sheet}
+    </PenPage>
   );
 };
 

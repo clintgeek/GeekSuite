@@ -15,6 +15,13 @@ reminder time, `graphql/bujogeek/validation.js:25-28,84-85`), not calendar dates
 `DOCS/BURN_REVIEW.md` #8 for the full account and the two new regression tests
 (`__tests__/components/TaskList.test.jsx`, run under `TZ=America/Chicago`).
 
+Amended 2026-09-29: **Phase 1 "stupid simple" + the Red Pen identity** (`DOCS/SIMPLE_PLAN.md`,
+its "As built" section is the record). Routes are now Today / Upcoming / Done / Search; every other screen
+redirects to `/today` (its code and data untouched until Phase 4). All four views read `allTasks` through
+`context/PenContext.jsx` and slice it in `utils/penViews.js`. Pinned tags live in
+`appPreferences.bujogeek.pinnedTags`. The Routes and Keyboard lines below are current; most of the rest of
+this file describes the retired screens and the old Today.
+
 ---
 
 ## Project Overview
@@ -52,16 +59,16 @@ Part of GeekSuite. Authenticates via `@geeksuite/auth` (basegeek SSO). **All dat
 | Route | View |
 |-------|------|
 | `/` | Redirect → `/today` |
-| `/today` | Daily planner (primary screen, with Upcoming section) |
-| `/review` | Review aging tasks (keep / tomorrow / date / backlog / cancel / delete) |
-| `/plan/weekly` · `/plan/monthly` · `/plan/backlog` | Planning views |
-| `/collections` · `/collections/:id` | Named lists outside the daily log |
-| `/habits` | Habit week-grid tracker with streaks |
-| `/search` | Search + filters + JSON/Markdown export |
-| `/templates` · `/tags` | Templates, tag browser |
+| `/today` | Desk-calendar date, pinned tags, the add box, carried over (collapsed), today, Anytime |
+| `/upcoming` | The next 14 days as a timetable (empty days skipped), then Later by month |
+| `/done` | Finished tasks by day, searchable; the square un-completes |
+| `/search` | Every task, open or done (`?q=`) |
+| `/review` `/plan/*` `/templates/*` `/tags` `/collections/*` `/habits` `/journal` `/settings` `/tasks/*` … | Redirect → `/today` (`RETIRED_PATHS`, `components/layout/navConfig.jsx`) |
 | `/login` | Login (SSO splash) |
 
-Keyboard: `j/k/x/e/d/c` row nav, `g→t/r/p/s/l/h` chords, `Cmd+N`, `?` help.
+Keyboard: `j/k` move, `x` done, `t` tomorrow, `d` pick a date, `e`/Enter edit (focus follows the task id,
+`hooks/useRowKeys.js`); `g→t/u/d/s` chords; `/` and `Cmd+N` the add box; `?` help. Phone: swipe right done,
+left tomorrow, long left pick a date (`hooks/useSwipe.js`).
 
 ---
 

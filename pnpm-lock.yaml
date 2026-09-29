@@ -456,6 +456,9 @@ importers:
       '@emotion/styled':
         specifier: ^11.14.0
         version: 11.14.1(@emotion/react@11.14.0(@types/react@18.3.28)(react@18.3.1))(@types/react@18.3.28)(react@18.3.1)
+      '@fontsource/inter-tight':
+        specifier: ^5.3.0
+        version: 5.3.0
       '@geeksuite/api-client':
         specifier: workspace:*
         version: link:../../../packages/api-client
@@ -3357,6 +3360,9 @@ packages:
 
   '@fontsource/ibm-plex-sans@5.2.8':
     resolution: {integrity: sha512-eztSXjDhPhcpxNIiGTgMebdLP9qS4rWkysuE1V7c+DjOR0qiezaiDaTwQE7bTnG5HxAY/8M43XKDvs3cYq6ZYQ==}
+
+  '@fontsource/inter-tight@5.3.0':
+    resolution: {integrity: sha512-uRwIrjKSUcCKIFeO2qm3yECA9phwge6Y1qQZvUmwqFgiIVWUELwwuq7pFlmlpPtO33ZtFQVOXQGNuvna1JPs6A==}
 
   '@fontsource/jetbrains-mono@5.2.8':
     resolution: {integrity: sha512-6w8/SG4kqvIMu7xd7wt6x3idn1Qux3p9N62s6G3rfldOUYHpWcc2FKrqf+Vo44jRvqWj2oAtTHrZXEP23oSKwQ==}
@@ -13220,6 +13226,8 @@ snapshots:
   '@fontsource/dm-serif-display@5.2.8': {}
 
   '@fontsource/ibm-plex-sans@5.2.8': {}
+
+  '@fontsource/inter-tight@5.3.0': {}
 
   '@fontsource/jetbrains-mono@5.2.8': {}
 

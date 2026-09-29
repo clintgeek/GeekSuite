@@ -1,13 +1,9 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- BuJoGeek: one bullet, done. An ink bullet with a paper tick knocked out,
-       on laid paper with a faint dot grid. Deliberately plain: the app is
-       being rebuilt as a simple to-do list (DOCS/SIMPLE_PLAN.md) and this
-       should survive whatever identity that brings. Master for icon-192/512. -->
-  <defs>
-    <pattern id="dots" width="48" height="48" patternUnits="userSpaceOnUse" x="16" y="16"><circle cx="8" cy="8" r="4" fill="#1C1A18" fill-opacity="0.12"/></pattern>
-  </defs>
-  <rect width="512" height="512" rx="112" fill="#FAF8F5"/>
-  <rect width="512" height="512" rx="112" fill="url(#dots)"/>
-  <circle cx="256" cy="256" r="156" fill="#1C1A18"/>
-  <path d="M184 262 L236 314 L334 208" fill="none" stroke="#FAF8F5" stroke-width="44" stroke-linecap="round" stroke-linejoin="round"/>
+  <!-- BuJoGeek, Red Pen (DOCS/SIMPLE_PLAN.md § Identity item 10): the done
+       bullet — an ink disc on white paper — ticked in the red pen, the stroke
+       flicking out past the bullet the way a real tick does. Master for
+       icon-192/512. No text. -->
+  <rect width="512" height="512" rx="112" fill="#FBFBF8"/>
+  <circle cx="240" cy="276" r="150" fill="#121212"/>
+  <path d="M166 270 L232 334 L392 132" fill="none" stroke="#C8202A" stroke-width="46" stroke-linecap="round" stroke-linejoin="round"/>
 </svg>

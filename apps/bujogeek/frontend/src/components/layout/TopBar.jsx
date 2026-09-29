@@ -1,27 +1,22 @@
 /**
- * BuJoGeek top bar — suite grammar via `GeekTopBar`.
- *
- * Before this migration the left slot was empty (no page title) and the
- * avatar was inert, hidden on mobile. Now the left carries a real,
- * route-derived title and the avatar is a real account menu (Settings, Sign
- * out) on every width — the shell's own hamburger covers mobile nav access,
- * so there is no bespoke `onMenuClick` plumbing here any more.
+ * BuJoGeek top bar — suite grammar via `GeekTopBar`, in Red Pen: paper, a
+ * hairline, the view's name in ink. The account menu has no Settings row any
+ * more (Settings is out of the UI; theme is the toggle here, reminders the
+ * switch in the sidebar).
  */
-import { alpha } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
-import { useLocation, useNavigate } from 'react-router-dom';
+import { useLocation } from 'react-router-dom';
 import { GeekTopBar } from '@geeksuite/ui';
 import { useThemeMode } from '@geeksuite/user';
 import { useAuth } from '../../context/AuthContext';
 import { displayNameFrom, initialsFrom, secondaryFrom } from '../../utils/userDisplay';
-import { colors } from '../../theme/colors';
+import { penOf, PEN_FONT } from '../../theme/pen';
 import { pageTitle } from './navConfig';
 
 const TopBar = () => {
   const theme = useTheme();
-  const isDark = theme.palette.mode === 'dark';
+  const p = penOf(theme);
   const location = useLocation();
-  const navigate = useNavigate();
   const { user, isAuthenticated, logout } = useAuth();
   const { theme: themeMode, toggleTheme } = useThemeMode();
 
@@ -37,20 +32,16 @@ const TopBar = () => {
               name: displayNameFrom(user),
               secondary: secondaryFrom(user),
               initials: initialsFrom(user),
-              onSettings: () => navigate('/settings'),
               onSignOut: logout,
             }
           : undefined
       }
       sx={{
-        backgroundColor: alpha(theme.palette.background.paper, 0.96),
-        borderBottom: `1px dotted ${isDark ? 'rgba(255,255,255,0.12)' : colors.ink[200]}`,
+        backgroundColor: p.paper,
+        borderBottom: `1px solid ${p.rule}`,
         boxShadow: 'none',
         color: 'text.primary',
-        '& [data-geek-topbar="title"]': {
-          fontFamily: '"Fraunces", serif',
-          fontWeight: 500,
-        },
+        '& [data-geek-topbar="title"]': { fontFamily: PEN_FONT, fontWeight: 700, letterSpacing: '-0.02em' },
       }}
     />
   );

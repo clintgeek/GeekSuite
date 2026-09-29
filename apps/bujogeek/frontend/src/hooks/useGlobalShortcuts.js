@@ -4,23 +4,19 @@ import { useNavigate } from 'react-router-dom';
 /**
  * useGlobalShortcuts — app-wide keyboard shortcuts.
  *
- * Chords (two-key sequences within 800ms):
- *   g → t   navigate to /today
- *   g → r   navigate to /review
- *   g → p   navigate to /plan
- *   g → s   navigate to /search
- *   g → l   navigate to /collections (lists)
- *   g → h   navigate to /habits
+ * Chords (two-key sequences within 800ms), one per view
+ * (DOCS/SIMPLE_PLAN.md Phase 1):
+ *   g → t   Today
+ *   g → u   Upcoming
+ *   g → d   Done
+ *   g → s   Search
  *
- * `g → c` would read better for Collections, but a bare `c` is already the
- * task-list "toggle cancelled" key in useKeyboardNav — which listens on window
- * ahead of this hook and would strike the focused task on the way past. `l`
- * for "lists" is free everywhere, and so is `h` (useKeyboardNav claims only
- * j/k/x/e/c/d/Escape).
+ * The second key of a chord is also a row key (`t` tomorrow, `d` pick a
+ * date); `useRowKeys` skips a key that follows `g`, so a chord never acts on
+ * the focused row.
  *
  * Single keys:
- *   Cmd/Ctrl+N   focus the quick-add input (data-quickadd attribute)
- *   ?            show keyboard shortcut help (optional onShowHelp callback)
+ *   Cmd/Ctrl+N   focus the add box (data-quickadd attribute)
  *
  * Suppressed when typing in inputs, textareas, or when inside a dialog.
  */
@@ -28,11 +24,9 @@ const CHORD_TIMEOUT = 800;
 
 const CHORD_MAP = {
   t: '/today',
-  r: '/review',
-  p: '/plan',
+  u: '/upcoming',
+  d: '/done',
   s: '/search',
-  l: '/collections',
-  h: '/habits',
 };
 
 const useGlobalShortcuts = ({ onShowHelp } = {}) => {
@@ -68,7 +62,7 @@ const useGlobalShortcuts = ({ onShowHelp } = {}) => {
         const quickAdd = document.querySelector('[data-quickadd]');
         if (quickAdd) {
           quickAdd.focus();
-          quickAdd.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+          quickAdd.scrollIntoView?.({ block: 'nearest' });
         }
         clearChord();
         return;

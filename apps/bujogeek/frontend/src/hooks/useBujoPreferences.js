@@ -14,6 +14,9 @@ import { useAppPreferences } from '@geeksuite/user';
  * *bujogeek*, follow the user between devices, and that the gateway may also
  * need to read.
  *
+ * `pinnedTags` (2026-09-29) is the second: the tag chips pinned above every
+ * view, an array of strings.
+ *
  * `aiReviewDraft` is the first: the opt-in for the AI weekly review draft
  * (DOCS/AI_IDEAS.md #1). Default OFF, and off means off on both ends — the
  * `reviewDraft` resolver reads the same preference and will not consult a
@@ -21,11 +24,19 @@ import { useAppPreferences } from '@geeksuite/user';
  */
 export const BUJO_APP = 'bujogeek';
 
+const NO_TAGS = Object.freeze([]);
+
 export default function useBujoPreferences() {
   const { preferences, updateAppPreferences, loaded, loading } = useAppPreferences(BUJO_APP);
 
   const setAiReviewDraft = useCallback(
     (on) => updateAppPreferences({ aiReviewDraft: Boolean(on) }),
+    [updateAppPreferences]
+  );
+
+  // Pinned tag chips (usePinnedTags). Partial write: the PATCH merges.
+  const setPinnedTags = useCallback(
+    (tags) => updateAppPreferences({ pinnedTags: tags }),
     [updateAppPreferences]
   );
 
@@ -36,5 +47,7 @@ export default function useBujoPreferences() {
     // opted out, never as "unknown, try it and see".
     aiReviewDraft: preferences?.aiReviewDraft === true,
     setAiReviewDraft,
+    pinnedTags: Array.isArray(preferences?.pinnedTags) ? preferences.pinnedTags : NO_TAGS,
+    setPinnedTags,
   };
 }

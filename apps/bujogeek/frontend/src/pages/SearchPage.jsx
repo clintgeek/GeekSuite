@@ -1,124 +1,65 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Box, Typography, Button, useTheme } from '@mui/material';
-import { FileJson, FileText } from 'lucide-react';
-import { useTaskContext } from '../context/TaskContext';
-import TaskFilters, { FiltersButton } from '../components/tasks/TaskFilters';
-import TaskList from '../components/tasks/TaskList';
-import SkeletonLoader from '../components/shared/SkeletonLoader';
-import useGlobalShortcuts from '../hooks/useGlobalShortcuts';
-import { filterTasks } from '../utils/filterTasks';
-import { tasksToJSON, tasksToMarkdown, downloadFile, exportFilename } from '../utils/exportTasks';
-import { colors } from '../theme/colors';
-
 /**
- * SearchPage — free-text + faceted search across every task, with a
- * lightweight export toolbar. Reuses the TaskFilters/TaskList pair that
- * was kept around for exactly this after the old TasksPage was retired.
- *
- * Task data is client-side: it pulls the full task set once via
- * fetchAllTasks() and lets TaskFilters/TaskList do the (also client-side)
- * filtering against the shared `filters` context state.
+ * Search — every task, open or done, by its words, note or #tag. Open matches
+ * first (soonest first), then what is done. The query lives in the URL (?q=),
+ * so Back returns to it.
  */
+import { useMemo } from 'react';
+import { useSearchParams } from 'react-router-dom';
+import { Box, InputAdornment, TextField } from '@mui/material';
+import { Search } from 'lucide-react';
+import { slashFocusProps } from '@geeksuite/ui';
+import { usePen } from '../context/PenContext';
+import TagChips from '../components/pen/TagChips';
+import PenPage, { PenLoading } from '../components/pen/PenPage';
+import usePenRows from '../components/pen/usePenRows';
+import { EmptyLine, PageTitle, SectionCaption } from '../components/pen/PenHeadings';
+import { searchTasks } from '../utils/penViews';
+
 const SearchPage = () => {
-  const theme = useTheme();
-  const isDark = theme.palette.mode === 'dark';
-  const { tasks, filters, fetchAllTasks, loading, LoadingState } = useTaskContext();
-  const [drawerOpen, setDrawerOpen] = useState(false);
-
-  useGlobalShortcuts();
-
-  useEffect(() => {
-    fetchAllTasks();
-    // Only needed once on mount — fetchAllTasks is stable (useCallback in context).
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Same predicate TaskList applies internally — computed here too so the
-  // export buttons act on exactly what's on screen.
-  const filteredTasks = useMemo(() => filterTasks(tasks, filters), [tasks, filters]);
-
-  const handleExportJSON = () => {
-    downloadFile(tasksToJSON(filteredTasks), exportFilename('json'), 'application/json');
-  };
-
-  const handleExportMarkdown = () => {
-    downloadFile(tasksToMarkdown(filteredTasks), exportFilename('md'), 'text/markdown');
-  };
-
-  const isInitialLoading = loading === LoadingState.FETCHING && tasks.length === 0;
+  const pen = usePen();
+  const [params, setParams] = useSearchParams();
+  const query = params.get('q') || '';
+  const results = useMemo(() => searchTasks(pen.visible, query), [pen.visible, query]);
+  const doneShown = useMemo(() => results.done.slice(0, 100), [results]);
+  const order = useMemo(() => [...results.open, ...doneShown], [results, doneShown]);
+  const { renderRow, sheet } = usePenRows(order);
 
   return (
-    <Box sx={{ maxWidth: 880, mx: 'auto', px: { xs: 1, sm: 3 }, pb: 4 }}>
-      {/* Masthead */}
-      <Box sx={{ px: { xs: 2, sm: 0.5 }, pt: { xs: 2.5, sm: 3.5 }, pb: 1 }}>
-        <Typography
-          sx={{
-            fontFamily: '"Fraunces", serif',
-            fontSize: '0.8125rem',
-            fontWeight: 400,
-            fontStyle: 'italic',
-            color: isDark ? 'rgba(255,255,255,0.3)' : colors.ink[300],
-            mb: 0.5,
-            letterSpacing: '0.01em',
-          }}
-        >
-          {filteredTasks.length} result{filteredTasks.length !== 1 ? 's' : ''}
-        </Typography>
-
-        <Box
-          sx={{
-            display: 'flex',
-            alignItems: 'baseline',
-            justifyContent: 'space-between',
-            gap: 1,
-            flexWrap: 'wrap',
-          }}
-        >
-          <Typography
-            variant="h1"
-            sx={{ fontSize: { xs: '1.75rem', sm: '2.25rem' }, color: theme.palette.text.primary, lineHeight: 1.2 }}
-          >
-            Search
-          </Typography>
-
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Button
-              size="small"
-              variant="outlined"
-              startIcon={<FileJson size={16} />}
-              onClick={handleExportJSON}
-              sx={{ textTransform: 'none', borderRadius: '8px', fontSize: '0.8125rem' }}
-            >
-              Export JSON
-            </Button>
-            <Button
-              size="small"
-              variant="outlined"
-              startIcon={<FileText size={16} />}
-              onClick={handleExportMarkdown}
-              sx={{ textTransform: 'none', borderRadius: '8px', fontSize: '0.8125rem' }}
-            >
-              Export Markdown
-            </Button>
-            <FiltersButton onClick={() => setDrawerOpen(true)} />
-          </Box>
-        </Box>
+    <PenPage>
+      <PageTitle>Search</PageTitle>
+      <Box sx={{ pb: 4, display: 'grid', gap: 3 }}>
+        <TextField
+          value={query}
+          onChange={(e) => setParams(e.target.value ? { q: e.target.value } : {}, { replace: true })}
+          placeholder="Words, a note, or #tag"
+          fullWidth
+          autoFocus
+          inputProps={{ 'aria-label': 'Search tasks', type: 'search', ...slashFocusProps(40) }}
+          InputProps={{ startAdornment: <InputAdornment position="start"><Search size={18} aria-hidden /></InputAdornment> }}
+        />
+        <TagChips />
       </Box>
 
-      {/* Filters */}
-      <Box sx={{ px: { xs: 0.5, sm: 0 }, mb: 1 }}>
-        <TaskFilters openDrawer={drawerOpen} setDrawerOpen={setDrawerOpen} />
-      </Box>
-
-      {/* Results */}
-      {isInitialLoading ? (
-        <Box sx={{ px: { xs: 0.5, sm: 0 } }}>
-          <SkeletonLoader rows={5} />
-        </Box>
-      ) : (
-        <TaskList tasks={tasks} viewType="search" />
+      {!pen.loaded ? <PenLoading /> : (
+        <>
+          {!query.trim() && <EmptyLine>Type to search every task, open or done.</EmptyLine>}
+          {query.trim() && order.length === 0 && <EmptyLine>Nothing matches “{query.trim()}”.</EmptyLine>}
+          {results.open.length > 0 && (
+            <Box component="section" aria-labelledby="search-open">
+              <SectionCaption id="search-open" aside={`${results.open.length}`}>To do</SectionCaption>
+              <Box component="ul" sx={{ m: 0, p: 0 }}>{results.open.map((t) => renderRow(t, { context: 'any' }))}</Box>
+            </Box>
+          )}
+          {results.done.length > 0 && (
+            <Box component="section" aria-labelledby="search-done">
+              <SectionCaption id="search-done" aside={`${results.done.length}`}>Done</SectionCaption>
+              <Box component="ul" sx={{ m: 0, p: 0 }}>{doneShown.map((t) => renderRow(t, { context: 'done' }))}</Box>
+            </Box>
+          )}
+        </>
       )}
-    </Box>
+      {sheet}
+    </PenPage>
   );
 };
 

@@ -1,7 +1,7 @@
 # BuJoGeek — stupid simple
 
-*Written 2026-09-27 from a conversation with Chef. Status: **spec, awaiting Chef's go on
-Phase 1.***
+*Written 2026-09-27 from a conversation with Chef. Status: **Phase 1 plus the Red Pen
+identity approved and building** (Chef, 2026-09-29: "I love it, do it.").*
 
 Chef: "At this point I just use the todo list features. The rest of it seems overly
 complicated maybe. It needs simplifying and made stupid simple." He wants both a workflow
@@ -97,6 +97,40 @@ redirect to Today.
   as ordinary tasks, and `~blocked` still parses, as a `#blocked` tag.
 - **The dead code is deleted in Phase 4,** once Chef has lived without it.
 
+## Identity: "Red Pen" (Chef, 2026-09-29)
+
+Black ink on white paper, and one red pen for crossing things off. It's stark, fast and
+calm, and unlike every other app in the suite. The look is built around a to-do app's best
+moment: crossing something off. It ships **together with Phase 1, as one revertable
+commit** (Chef's rule: a large redesign lands as one commit, and independent fixes go in
+their own).
+
+1. **One typeface:** Inter Tight, self-hosted. No serif, no mono, no italics, and tabular
+   numerals. The runtime Google Fonts links (Fraunces, Plex Mono, Source Sans) go.
+2. **Three colours:** ink about `#121212`, paper about `#FBFBF8`, and one red about
+   `#C8202A` (5.9:1 on paper). Everything secondary is grey. Night mode is near-black paper
+   with off-white ink, and the red stays red, lightened only as far as contrast needs.
+3. **The signature:** ticking draws a quick hand-drawn red strike through the words and
+   fills the square with red. The row then greys and slides into Done, with Undo. It's the
+   only animation in the app, and it's instant under reduced motion.
+4. **Rows:**
+   - a square checkbox and 17–18px words;
+   - time or "tomorrow" in grey on the right;
+   - tags as plain grey `#work` text, not chips;
+   - overdue as red words ("2 days late"), not a pink card.
+5. **Priority** is a proofreader's mark: a red bar or `!` in the left margin, not a chip.
+6. **Bujo symbols** (`-` `@` `?` `!`, typed as the first character) appear as a small grey
+   glyph in the margin, and only when used. Plain tasks show nothing.
+7. **The add box shows its parsing in your own sentence:** the parsed parts are underlined
+   as you type (dates and times in red, `#tags` grey, priority as the red margin mark). This
+   **replaces the chip-row preview** described under "The add box" below.
+8. **Today's header is a desk calendar:** a huge day number, "Sunday · September" beside it,
+   and one plain line ("4 to do · 2 done"). "Carried over" collapses to one line with
+   **Move all to today**.
+9. **Upcoming is a timetable:** big day numerals in a left column and tasks to the right.
+   Empty days are skipped.
+10. **Icon:** the done-bullet mark, with the tick in the red pen.
+
 ## Phases
 1. **Simplify.** Nav down to Today / Upcoming / Done plus search. The add box with the live
    preview, the inline editor, one-tap and swipe actions, undo, pinned tag chips, and the
@@ -118,3 +152,96 @@ redirect to Today.
 - No screen outside Today / Upcoming / Done / search is reachable from the UI. Old URLs
   land on Today, and no data is lost.
 - Harness is a11y-clean on phone and desktop; tests are red/green checked.
+
+## As built (Phase 1 + Red Pen, 2026-09-29)
+
+Decisions the spec left open, and how they were made. One commit; `git revert` takes all of it back.
+
+### One corpus
+- **Every view reads `allTasks` and slices it on the client** (`frontend/src/utils/penViews.js`), through
+  a new `PenContext` on top of the existing `TaskContext`. `dailyTasks` drops blocked, backlog and undated
+  collection tasks from the log; with those screens gone, their tasks must show as ordinary ones, and one
+  list also means a change on one view is right on the next without a refetch. It re-reads when the tab
+  comes back after a minute away.
+- **Repeats:** `allTasks` expands a series a year either side of today. Overdue keeps only a series'
+  latest missed occurrence (what the daily log's carry-forward did); Upcoming's "Later" shows a series once,
+  at its next occurrence. Search shows it once.
+- **Blocked** tasks (status `blocked`) are ordinary open tasks: they appear by their due date and can be
+  ticked or moved. Backlog and collection tasks likewise. No data is changed to make that so.
+- **Cancelled** tasks appear in Done, words struck through in grey, labelled "cancelled"; the square
+  puts them back on the list.
+
+### The add box
+- **No date typed → today, date-only.** A date without a time → date-only. A typed time → the instant.
+  The old box sent today at 09:00 local, which the gateway reads as a due *time*, so every quick-added task
+  carried a phantom "9:00" and was eligible for a 9am push. Repeating entries keep the old 09:00 anchor so
+  the first occurrence agrees with the RRULE (Phase 2's business).
+- **Plain-word dates:** `today`, `tomorrow`, `monday`–`sunday`, `next week`, `next month`,
+  `next <weekday>`, as the first or last words of what is left after the other tokens; optionally with a
+  time after (`tomorrow 2pm`, `friday at 9:30am`) or, at the end, before (`2pm tomorrow`); at the end they
+  may follow `on`/`by`/`due`, which go with them. Not read mid-sentence, not after `for`, `until`, `since`,
+  `every`, `last`, `this`, `from`, `of`… (they are *about* the day), not as the whole task, not as a
+  possessive, never a bare number as a time. Days resolve like the slash forms (a weekday is its next
+  occurrence after today). A slash date wins; the word then stays text.
+- **The signifier is the first character only.** The parser took the first `* @ - ! ?` anywhere in the
+  line, so "follow up re: Q3-plan" became a note and "Buy milk?" a question, contradicting its own doc
+  comment and the old box's highlighter (which only coloured position 0).
+- **`~blocked [reason]`** files the task tagged `#blocked`, the reason kept in its note as
+  "Blocked: …". No block mutation is sent.
+- **Screen readers:** the understood parts are a sentence on `aria-describedby` ("Task: call Dana. Due
+  tomorrow at 2 pm. High priority. Tagged work."); a polite live region says what was added.
+- **Where it sits:** Today only. In the page on desktop; docked above the bottom nav on phones (and above
+  the keyboard, via `visualViewport`); hidden while a row's editor is open. It takes focus on desktop only
+  when Today is empty (keys are the faster way into a list); `/` and Ctrl+N reach it anywhere; Escape
+  leaves it.
+- **Not carried over:** the old box's `#` tag autocomplete. Worth adding back if Chef misses it.
+- **An entry dated for another day** gets an "Added for tomorrow · Undo" toast, since it will not appear
+  on the page he is looking at.
+
+### Rows and actions
+- **Keys:** `j`/`k`, `x` done, `t` tomorrow, `d` pick a date, `e`/Enter edit; `g t`/`g u`/`g d`/`g s` go
+  to Today/Upcoming/Done/Search (the second key of a chord is ignored by the rows). Delete is in the
+  editor; the old `d` = delete and `c` = cancel keys are gone.
+- **Undo, for everything that changes a task:** done, not-done, moved, "move all", delete, and an add for
+  another day. 6 seconds. Undo restores the previous status or due date exactly. **Delete is deferred**:
+  the row hides at once and the mutation is sent when the toast expires, so Undo loses nothing; a tab
+  closed inside the window keeps the task. Deleting an occurrence of a repeat deletes that occurrence only.
+- **Moving** sends only `dueDate` (a timed task keeps its clock time on the new day). It no longer stamps
+  `migrated_future`, which also stopped moved tasks' reminders (the sweep only reads `pending`).
+- **Swipes** are touch-only (a mouse drag is not a swipe): right ≥ 72px done, left ≥ 72px tomorrow, left
+  past half the row (at least 160px) pick a date. The row follows the finger and shows what letting go
+  will do; short of a threshold, nothing happens.
+- **Pick a date** is a sheet: Today, Tomorrow, the weekend, next Monday, any day (the browser's date
+  input), or Anytime.
+- **The inline editor** uses the browser's date and time inputs (no date-picker bundle), sends only
+  changed fields, and shows Repeats only on a task that already repeats (the old None/Daily/Weekly/Monthly
+  select, with the old "this one or the series?" dialog).
+- **Priority marks:** High a full-height red bar, Medium a short red bar, Low a short grey bar.
+
+### Pinned tags
+- Stored in `User.appPreferences.bujogeek.pinnedTags` (array of strings) through `useBujoPreferences` →
+  `PATCH /api/users/preferences/bujogeek`, which merges, so only `pinnedTags` is sent. No gateway or schema
+  change. Up to 12, case-insensitive. Which chip is active is per session and shared by all views; it
+  filters every list and Today's counts with it.
+
+### Retired
+- Review, Plan (weekly, monthly, backlog), Templates, Tags, Collections, Habits, Journal, Settings, and the
+  legacy `/tasks/*` URLs redirect to `/today` (`RETIRED_PATHS` in `components/layout/navConfig.jsx`). Their
+  files, resolvers and data are untouched (Phase 4). Settings went too: theme is the top-bar toggle,
+  reminders the sidebar switch; the account menu has no Settings row.
+
+### Red Pen
+- **Palette** (`frontend/src/theme/pen.js`, all measured, pinned by `__tests__/theme/redPenContrast.test.js`):
+  light — paper `#FBFBF8`, surface `#FFFFFF`, fill `#F3F3EF`, ink `#121212`, grey `#5C5C58`, muted
+  `#686864`, red `#C8202A` (5.5:1 paper, 5.1 fill); night — paper `#141413`, surface `#1C1C1B`, fill
+  `#1F1F1E`, ink `#EDEDE8`, grey `#A3A39D`, muted `#9C9C96`, red `#E85250` (5.0 paper, 4.5 fill). The MUI
+  accent is the ink; red is only the pen. Toast tones are greys, error is the red, alerts carry no icon.
+- **Type:** Inter Tight via `@fontsource/inter-tight`, latin 400/500/600/700 (four woff2, precached),
+  tabular numerals. The Google Fonts links are gone.
+- **The strike** is a hand-drawn SVG path painted as the words' background with
+  `box-decoration-break: clone` (one stroke per wrapped line) and drawn by growing `background-size` from
+  0 to 100% in 320ms; the square fills red with a white tick. The row holds its place for 700ms, then
+  leaves for Done. Under `prefers-reduced-motion` there is no transition and no hold.
+- **The only animation:** the route fade (`GeekAppFrame`) was replaced with an equivalent frame that does
+  not fade; the loading shimmer with a still line.
+- **The sidebar** is the page's paper in both modes, active row in ink with a red margin bar.
