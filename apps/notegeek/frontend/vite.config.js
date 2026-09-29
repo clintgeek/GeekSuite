@@ -36,6 +36,28 @@ export default defineConfig(({ mode }) => {
           start_url: '/',
           scope: '/',
           categories: ['productivity', 'utilities'],
+          // Long-press shortcuts on the installed icon. One icon size is
+          // enough (Chromium accepts a single one).
+          shortcuts: [
+            {
+              name: 'New note',
+              short_name: 'New note',
+              url: '/notes/new',
+              icons: [{ src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' }]
+            },
+            {
+              name: 'Photo of a page',
+              short_name: 'Photo',
+              url: '/notes/photo',
+              icons: [{ src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' }]
+            },
+            {
+              name: 'Search',
+              short_name: 'Search',
+              url: '/search',
+              icons: [{ src: '/icons/icon-192.png', sizes: '192x192', type: 'image/png' }]
+            }
+          ],
           // Android "Share -> NoteGeek". GET-only (title/text/url); see the
           // note below for why shared images aren't handled.
           share_target: {
