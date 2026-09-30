@@ -12,6 +12,43 @@ anything a future reader would otherwise have to rediscover.
 
 ## 2026-09-30
 
+### BookGeek — Unread is a real shelf; no sticker on it
+
+`38cf1c86` plus a DB migration
+
+Chef: anything not Read, On reader or Reading should be Unread, and without a sticker.
+
+- **Migration:** the 325 books with no shelf (none of them finished) were set to
+  `shelf: 'unread'` directly in the `bookgeek.books` collection. The unread count went from
+  46 to 371 of 554.
+- **Rollback:** the ids are in `~/geeksuite-migrations/bookgeek-unshelved-ids-2026-09-30.json`;
+  a rollback is `$unset: { shelf: 1 }` on them.
+- **Not moved yet:** Want to read (36) and Abandoned (11) are deliberate shelves, so they
+  stay put pending Chef's call.
+- **Sticker:** the price sticker is now On reader only.
+
+### NoteGeek — print / Save as PDF, and Markdown import
+
+`894f11cc` `aecc6208`
+
+Chef: "absolutely needs a way to print and/or export notes as PDF", and "drag/drop a md file
+into new note".
+
+- **Print:** it uses the browser's own print path (`window.print()` and a print stylesheet),
+  whose dialog offers Save as PDF on the phone and on desktop.
+  - The ⋯ menu, the viewer and Ctrl/Cmd+P all print a paper copy of the note.
+  - The note title becomes the PDF filename.
+  - Sketches are exported to an image first.
+  - Mind maps print as an outline; the canvas library has no image export.
+- **Import:** drop `.md`, `.markdown` or `.txt` files on the app (desktop), or use "Import a
+  Markdown file" in the New sheet (phone).
+  - The first `# heading` becomes the title and is removed from the body.
+  - `.txt` becomes a Markdown note, not rich text, so its line breaks survive.
+  - Files over 1 MB, or with bodies over 100,000 characters, are refused with a message.
+- **How it was built:** by a delegated agent in a worktree, then cherry-picked and
+  re-verified on main (613 tests, build, PWA and GraphQL audits). The harness gained 6
+  scenes.
+
 ### BookGeek — "Used Bookstore"
 
 `5253a6f9`
