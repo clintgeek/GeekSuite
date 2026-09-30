@@ -74,9 +74,13 @@ only — never bold it). What changed is the store around them:
 - **Shelves:** every book in the grid stands on a `ShelfPlank`. The grid's
   column gap (12px) is exactly twice the plank's bleed, so a row of cards is one
   continuous shelf — keep them in step if either changes. No card box.
-- **Price sticker** (`PriceSticker`): round, matte, never tilted — On reader
-  only. Unread had one for a day; with every unshelved book moved to Unread
-  (371 of 554, 2026-09-30) a sticker there was wallpaper.
+- **Price stickers** (`PriceSticker`): round, matte, never tilted, one colour
+  per shelf (theme `STICKER`) — Reading (yellow), On reader (mint), Read
+  (blue), Want to read (lavender), Abandoned (coral, reads "Gave up"). Unread
+  wears none: it's most of the library (371 of 554), so no sticker is the
+  default. The label is drawn with `content: attr(data-label)`, so it adds no
+  DOM text (the caption carries the shelf). Sticker yellow for the signboard's
+  action, avatar and current aisle sign is `SIGN_YELLOW`.
 - **Unread is a real shelf value now:** on 2026-09-30 the 325 books with no
   shelf (none finished) were set to `shelf: 'unread'`. Their ids are in
   `~/geeksuite-migrations/bookgeek-unshelved-ids-2026-09-30.json` for a rollback

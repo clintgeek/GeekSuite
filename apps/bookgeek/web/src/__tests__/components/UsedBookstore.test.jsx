@@ -16,9 +16,13 @@ import { renderWithProviders } from '../testUtils';
 const [reading42, read100] = BOOKS;
 
 describe('price sticker', () => {
-  it('marks only what is waiting on the reader; Unread wears none (it is most of the library)', () => {
-    expect(stickerFor({ shelf: 'on-reader' })).toMatchObject({ tone: 'onReader' });
-    for (const shelf of ['unread', 'read', 'reading', 'want-to-read', 'abandoned', undefined]) expect(stickerFor({ shelf })).toBeNull();
+  it('every built-in shelf wears one, except Unread (most of the library)', () => {
+    expect(stickerFor({ shelf: 'reading' })).toMatchObject({ tone: 'reading', lines: ['Reading'] });
+    expect(stickerFor({ shelf: 'on-reader' })).toMatchObject({ tone: 'on-reader' });
+    expect(stickerFor({ shelf: 'read' })).toMatchObject({ tone: 'read', lines: ['Read'] });
+    expect(stickerFor({ shelf: 'want-to-read' })).toMatchObject({ tone: 'want-to-read' });
+    expect(stickerFor({ shelf: 'abandoned' })).toMatchObject({ tone: 'abandoned', lines: ['Gave', 'up'] });
+    for (const shelf of ['unread', 'custom-comfort-reads', undefined]) expect(stickerFor({ shelf })).toBeNull();
   });
 
   it('is decorative on the card: the shelf stays in the caption', () => {
@@ -31,9 +35,12 @@ describe('price sticker', () => {
     expect(screen.queryByTestId('price-sticker')).toBeNull();
   });
 
-  it('a read book carries no sticker', () => {
+  it('a read book wears the Read sticker, drawn — it adds no text to the card', () => {
     renderWithProviders(<BookCard book={read100} shelves={SHELVES} />);
-    expect(screen.queryByTestId('price-sticker')).toBeNull();
+    const sticker = screen.getByTestId('price-sticker');
+    expect(sticker).toHaveAttribute('data-tone', 'read');
+    expect(sticker.textContent).toBe('');
+    expect(sticker.querySelector('[data-label]')).toHaveAttribute('data-label', 'Read');
   });
 });
 

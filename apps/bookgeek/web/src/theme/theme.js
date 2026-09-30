@@ -11,7 +11,7 @@
  *     plank (components/ShelfPlank.jsx);
  *   - hand-lettered shelf talkers (components/ShelfTalker.jsx, Caveat) — the
  *     only handwriting in the app;
- *   - one round price sticker, for what's waiting on the e-reader
+ *   - round price stickers, one colour per shelf, on every shelf but Unread
  *     (components/PriceSticker.jsx);
  *   - aisle signs for the shelf strip and the sidebar's section labels;
  *   - a bargain-bin crate for the empty states.
@@ -91,10 +91,24 @@ export const WOOD = {
   dark: { top: '#6B4729', front: '#4F331D', edge: '#2A1A0D', grain: 'rgba(0, 0, 0, 0.30)' },
 };
 
-/** The price sticker: sticker yellow, dark ink. A fill, never an ink. */
+/**
+ * Sticker yellow: the one action on the signboard (Add book), the avatar, and
+ * the aisle sign for the shelf you're on. A fill with dark ink, never an ink.
+ */
+export const SIGN_YELLOW = { ground: '#F4C542', ink: '#221B14', rim: 'rgba(120, 80, 0, 0.35)' };
+
+/**
+ * Price stickers, one tone per shelf (components/PriceSticker.jsx). Every
+ * shelf but Unread wears one (Chef, 2026-09-30: Unread is most of the
+ * library). Soft matte stock with the same dark ink; the same in both modes,
+ * as paper stickers would be.
+ */
 export const STICKER = {
-  unread: { ground: '#F4C542', ink: '#221B14', rim: 'rgba(120, 80, 0, 0.35)' },
-  onReader: { ground: '#9ED9BD', ink: '#10231B', rim: 'rgba(10, 60, 40, 0.35)' },
+  reading: SIGN_YELLOW,
+  'on-reader': { ground: '#9ED9BD', ink: '#10231B', rim: 'rgba(10, 60, 40, 0.35)' },
+  read: { ground: '#A9C8EE', ink: '#12213A', rim: 'rgba(20, 50, 100, 0.35)' },
+  'want-to-read': { ground: '#D3C1F2', ink: '#221638', rim: 'rgba(60, 30, 110, 0.35)' },
+  abandoned: { ground: '#F2A99F', ink: '#2E1210', rim: 'rgba(120, 30, 20, 0.35)' },
 };
 
 /** A shelf talker: an index card, ink handwriting, a red rule across the top. */

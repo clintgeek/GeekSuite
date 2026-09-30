@@ -1,11 +1,11 @@
 /**
- * PriceSticker — the one sticker in BookGeek: a round, matte label stuck on
- * a cover's corner, the way a used bookstore prices a book. It marks what's
- * waiting on the device: "On reader". Nothing else wears one.
+ * PriceSticker — a round, matte label stuck on a cover's corner, the way a
+ * used bookstore prices a book: one colour per shelf (theme STICKER) —
+ * Reading, On reader, Read, Want to read, Abandoned.
  *
- * "Unread" had a yellow sticker for a day (2026-09-30). Chef then moved every
- * book not read / on the reader / being read to the Unread shelf — 371 of 554
- * — and a sticker on two-thirds of the library is wallpaper, not a signal.
+ * Unread wears NONE (Chef, 2026-09-30): every book not read, on the reader
+ * or being read is Unread — 371 of 554 — so the sticker-less cover is the
+ * default and a sticker means "this one has a story".
  *
  * Round, matte, NEVER tilted, never neon — GameGeek owns tilted stickers.
  * A fill with dark ink on it (theme STICKER; usedBookstoreContrast). Text is
@@ -16,14 +16,26 @@ import React from "react";
 import { Box } from "@mui/material";
 import { STICKER } from "../theme/theme";
 
-/** What sticker, if any, a book wears. Pure, so it is tested alone. */
+/**
+ * The words on each shelf's sticker. "Abandoned" doesn't fit a price tag at
+ * a legible size, so it reads "Gave up" — the card's caption still says
+ * Abandoned.
+ */
+const LINES = {
+  reading: ["Reading"],
+  "on-reader": ["On", "reader"],
+  read: ["Read"],
+  "want-to-read": ["Want", "to read"],
+  abandoned: ["Gave", "up"],
+};
+
+/** What sticker, if any, a book wears: every built-in shelf but Unread. Pure, so it is tested alone. */
 export function stickerFor(book) {
-  if (!book) return null;
-  if (book.shelf === "on-reader") return { tone: "onReader", lines: ["On", "reader"] };
-  return null;
+  const lines = book ? LINES[book.shelf] : null;
+  return lines ? { tone: book.shelf, lines } : null;
 }
 
-export default function PriceSticker({ book, size = 62, sx }) {
+export default function PriceSticker({ book, size = 64, sx }) {
   const s = stickerFor(book);
   if (!s) return null;
   const tone = STICKER[s.tone];
@@ -56,9 +68,10 @@ export default function PriceSticker({ book, size = 62, sx }) {
         ...sx,
       }}
     >
-      {s.lines.map((l) => (
-        <span key={l}>{l}</span>
-      ))}
+      {/* The words are drawn, not written (content: attr): the card's caption
+          already says the shelf, and a second copy in the DOM would be read
+          twice and trip every getByText. */}
+      <Box component="span" data-label={s.lines.join("\n")} sx={{ whiteSpace: "pre", "&::before": { content: "attr(data-label)" } }} />
     </Box>
   );
 }

@@ -32,7 +32,7 @@ import { useThemeMode } from '@geeksuite/user';
 import { GeekSearchField, GeekTopBar } from '@geeksuite/ui';
 import { displayNameFrom, initialsFrom, secondaryFrom } from '../utils/userDisplay';
 import { viewTitle } from './navConfig';
-import { SERIF_FONT, STICKER } from '../theme/theme';
+import { SERIF_FONT, SIGN_YELLOW } from '../theme/theme';
 
 const TopBar = ({
   user,
@@ -131,10 +131,10 @@ const TopBar = ({
             fontWeight: 700,
             px: 2,
             // On the green board the action is sticker yellow with dark ink.
-            bgcolor: STICKER.unread.ground,
-            color: STICKER.unread.ink,
-            boxShadow: `inset 0 -2px 0 ${STICKER.unread.rim}`,
-            '&:hover': { bgcolor: '#E9B82F', boxShadow: `inset 0 -2px 0 ${STICKER.unread.rim}` }
+            bgcolor: SIGN_YELLOW.ground,
+            color: SIGN_YELLOW.ink,
+            boxShadow: `inset 0 -2px 0 ${SIGN_YELLOW.rim}`,
+            '&:hover': { bgcolor: '#E9B82F', boxShadow: `inset 0 -2px 0 ${SIGN_YELLOW.rim}` }
           }}
         >
           Add book
@@ -182,7 +182,7 @@ const TopBar = ({
           '&:hover': { bgcolor: alpha(theme.palette.sign.ink, 0.12) }
         },
         // The avatar: a sticker-yellow disc with dark initials, not green on green.
-        '& [data-geek-topbar="account"] .MuiAvatar-root': { bgcolor: STICKER.unread.ground, color: STICKER.unread.ink, fontWeight: 700 },
+        '& [data-geek-topbar="account"] .MuiAvatar-root': { bgcolor: SIGN_YELLOW.ground, color: SIGN_YELLOW.ink, fontWeight: 700 },
         // The search field is a card of paper on the board.
         '& .MuiInputBase-root': { bgcolor: 'background.paper', color: 'text.primary' },
       }}

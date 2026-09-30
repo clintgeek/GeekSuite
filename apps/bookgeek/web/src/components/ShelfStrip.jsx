@@ -18,7 +18,7 @@
  */
 import React from "react";
 import { Box, ButtonBase } from "@mui/material";
-import { SERIF_FONT, STICKER } from "../theme/theme";
+import { SERIF_FONT, SIGN_YELLOW } from "../theme/theme";
 import { shelfCount } from "./navConfig";
 
 export default function ShelfStrip({
@@ -84,8 +84,8 @@ export default function ShelfStrip({
                 pt: "5px",
                 borderRadius: "3px",
                 transition: "transform 120ms ease-out",
-                bgcolor: active ? STICKER.unread.ground : t.palette.sign.board,
-                color: active ? STICKER.unread.ink : t.palette.sign.ink,
+                bgcolor: active ? SIGN_YELLOW.ground : t.palette.sign.board,
+                color: active ? SIGN_YELLOW.ink : t.palette.sign.ink,
                 // A painted board: a lit top edge, a darker bottom edge.
                 boxShadow: `inset 0 1px 0 rgba(255,255,255,0.18), inset 0 -2px 0 ${active ? "rgba(120, 80, 0, 0.35)" : t.palette.sign.edge}, 0 1px 2px rgba(20, 12, 4, 0.25)`,
                 pointerEvents: "none",
@@ -95,7 +95,7 @@ export default function ShelfStrip({
                 {shelf.label}
               </Box>
               {count ? (
-                <Box component="span" sx={(t) => ({ fontSize: "0.75rem", fontWeight: 600, fontVariantNumeric: "tabular-nums", color: active ? STICKER.unread.ink : t.palette.sign.inkSoft })}>
+                <Box component="span" sx={(t) => ({ fontSize: "0.75rem", fontWeight: 600, fontVariantNumeric: "tabular-nums", color: active ? SIGN_YELLOW.ink : t.palette.sign.inkSoft })}>
                   {count}
                 </Box>
               ) : null}
