@@ -1,8 +1,11 @@
 /**
  * PriceSticker — the one sticker in BookGeek: a round, matte label stuck on
- * a cover's corner, the way a used bookstore prices a book. It marks the pile
- * you haven't read: "Unread", and "On reader" for what's waiting on the
- * device. Read books carry nothing.
+ * a cover's corner, the way a used bookstore prices a book. It marks what's
+ * waiting on the device: "On reader". Nothing else wears one.
+ *
+ * "Unread" had a yellow sticker for a day (2026-09-30). Chef then moved every
+ * book not read / on the reader / being read to the Unread shelf — 371 of 554
+ * — and a sticker on two-thirds of the library is wallpaper, not a signal.
  *
  * Round, matte, NEVER tilted, never neon — GameGeek owns tilted stickers.
  * A fill with dark ink on it (theme STICKER; usedBookstoreContrast). Text is
@@ -16,7 +19,6 @@ import { STICKER } from "../theme/theme";
 /** What sticker, if any, a book wears. Pure, so it is tested alone. */
 export function stickerFor(book) {
   if (!book) return null;
-  if (book.shelf === "unread") return { tone: "unread", lines: ["Unread"] };
   if (book.shelf === "on-reader") return { tone: "onReader", lines: ["On", "reader"] };
   return null;
 }

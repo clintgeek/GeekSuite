@@ -16,15 +16,19 @@ import { renderWithProviders } from '../testUtils';
 const [reading42, read100] = BOOKS;
 
 describe('price sticker', () => {
-  it('marks only the pile you have not read', () => {
-    expect(stickerFor({ shelf: 'unread' })).toMatchObject({ tone: 'unread' });
+  it('marks only what is waiting on the reader; Unread wears none (it is most of the library)', () => {
     expect(stickerFor({ shelf: 'on-reader' })).toMatchObject({ tone: 'onReader' });
-    for (const shelf of ['read', 'reading', 'want-to-read', 'abandoned', undefined]) expect(stickerFor({ shelf })).toBeNull();
+    for (const shelf of ['unread', 'read', 'reading', 'want-to-read', 'abandoned', undefined]) expect(stickerFor({ shelf })).toBeNull();
   });
 
   it('is decorative on the card: the shelf stays in the caption', () => {
-    renderWithProviders(<BookCard book={{ ...read100, shelf: 'unread', rating: null }} shelves={SHELVES} />);
+    renderWithProviders(<BookCard book={{ ...read100, shelf: 'on-reader', rating: null }} shelves={SHELVES} />);
     expect(screen.getByTestId('price-sticker')).toHaveAttribute('aria-hidden', 'true');
+  });
+
+  it('an unread book carries no sticker', () => {
+    renderWithProviders(<BookCard book={{ ...read100, shelf: 'unread', rating: null }} shelves={SHELVES} />);
+    expect(screen.queryByTestId('price-sticker')).toBeNull();
   });
 
   it('a read book carries no sticker', () => {

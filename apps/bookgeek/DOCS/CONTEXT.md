@@ -74,8 +74,13 @@ only — never bold it). What changed is the store around them:
 - **Shelves:** every book in the grid stands on a `ShelfPlank`. The grid's
   column gap (12px) is exactly twice the plank's bleed, so a row of cards is one
   continuous shelf — keep them in step if either changes. No card box.
-- **Price sticker** (`PriceSticker`): round, matte, never tilted — on Unread
-  and On reader only. Read books carry nothing.
+- **Price sticker** (`PriceSticker`): round, matte, never tilted — On reader
+  only. Unread had one for a day; with every unshelved book moved to Unread
+  (371 of 554, 2026-09-30) a sticker there was wallpaper.
+- **Unread is a real shelf value now:** on 2026-09-30 the 325 books with no
+  shelf (none finished) were set to `shelf: 'unread'`. Their ids are in
+  `~/geeksuite-migrations/bookgeek-unshelved-ids-2026-09-30.json` for a rollback
+  (`$unset: { shelf: 1 }` on those ids).
 - **Shelf talker** (`ShelfTalker`): the only handwriting in the app (Caveat), on
   an index card — "42% in — no spoilers!" or "Staff pick!" for five stars.
 - **Aisle signs:** the phone shelf strip and the sidebar's section captions are

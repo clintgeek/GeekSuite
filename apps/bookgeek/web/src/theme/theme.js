@@ -11,7 +11,7 @@
  *     plank (components/ShelfPlank.jsx);
  *   - hand-lettered shelf talkers (components/ShelfTalker.jsx, Caveat) — the
  *     only handwriting in the app;
- *   - one round price sticker, sticker yellow, for the pile you haven't read
+ *   - one round price sticker, for what's waiting on the e-reader
  *     (components/PriceSticker.jsx);
  *   - aisle signs for the shelf strip and the sidebar's section labels;
  *   - a bargain-bin crate for the empty states.
