@@ -12,6 +12,39 @@ anything a future reader would otherwise have to rediscover.
 
 ## 2026-09-30
 
+### BookGeek — "Used Bookstore"
+
+`5253a6f9`
+
+Chef: "too 'library' and not enough 'half price books'". The book objects (boards, spine
+crease, cloth boards, ribbon, DM Serif titles) were the good part and stayed as they were.
+The generic chrome around them went:
+
+- **What was there:** sky-blue pills and FAB, slate navy.
+- **What replaced it:**
+  - a green signboard top bar;
+  - wood shelves under every row;
+  - one round matte price sticker, on Unread and On reader only;
+  - hand-lettered shelf talkers;
+  - aisle signs for the shelf strip and the sidebar captions;
+  - a bargain-bin empty state;
+  - "after hours" dark mode;
+  - DM Sans body text.
+- **Not gated:** the dark-mode aisle sign and plank against the floor (1.35:1 and 1.6:1).
+  The plank is decoration; a tab needs legible lettering and a selected state that stands
+  apart (yellow on green), and both are gated.
+- **Test:** `usedBookstoreContrast`.
+
+### GameGeek — covers the same size as BookGeek's
+
+`d543046d` `833c35e9`
+
+On Chef's phone GameGeek showed one huge poster at a time. The cause was `auto-fill,
+minmax(150px)`, which drops to one column below about a 344px viewport (display zoom, large
+text). The grid is now BookGeek's: 2 across on a phone, 3 on sm, 150px auto-fill from md.
+The shelf tag and stars row wraps on narrow cards. `HARNESS_PHONE_WIDTH=320` lets the
+harness check narrow phones.
+
 ### ThingGeek — the tape, redrawn from real Dymo output
 
 `9a12452b`
