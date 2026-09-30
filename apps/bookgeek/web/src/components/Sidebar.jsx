@@ -24,6 +24,7 @@
  */
 import React from 'react';
 import {
+  Box,
   ButtonBase,
   Typography,
   alpha,
@@ -45,6 +46,7 @@ import { GeekSidebar, readableAcross, useGeekShell } from '@geeksuite/ui';
 import { SavedViews } from '@geeksuite/collection';
 import { useSavedViews } from '../hooks/useSavedViews';
 import { canonicalSearch, savedViewSearch } from '../utils/libraryFilter';
+import { SERIF_FONT } from '../theme/theme';
 import {
   LIBRARY_NAV_ID,
   activeNavId,
@@ -99,6 +101,31 @@ const Brand = ({ onHome }) => {
       </Typography>
     </ButtonBase>
   );
+};
+
+/**
+ * Used Bookstore: a sidebar section caption is a small aisle sign — a green
+ * board with cream serif lettering, like the phone's shelf strip. Applied to
+ * GeekSidebar's captions and, by id, to the Saved views caption that
+ * @geeksuite/collection draws (the look is BookGeek's, so it is set here,
+ * not in the shared package).
+ */
+const AISLE_SIGN_SX = {
+  display: 'inline-block',
+  mx: 2,
+  px: 1.25,
+  pt: '3px',
+  pb: '3px',
+  mb: 0.75,
+  borderRadius: '3px',
+  bgcolor: 'sign.board',
+  color: 'sign.ink',
+  fontFamily: SERIF_FONT,
+  fontWeight: 400,
+  fontSize: '0.875rem',
+  textTransform: 'none',
+  letterSpacing: '0.01em',
+  boxShadow: (t) => `inset 0 -2px 0 ${t.palette.sign.edge}`,
 };
 
 const Sidebar = ({
@@ -177,7 +204,7 @@ const Sidebar = ({
   };
 
   const extras = views.length || viewsError ? (
-    <>
+    <Box sx={{ '& #saved-views-label': { ...AISLE_SIGN_SX, mx: 1.5 } }}>
       <SavedViews
         views={views}
         activeId={activeSavedView?.id ?? null}
@@ -190,7 +217,7 @@ const Sidebar = ({
           Saved views did not load.
         </Typography>
       ) : null}
-    </>
+    </Box>
   ) : null;
 
   return (
@@ -205,6 +232,8 @@ const Sidebar = ({
       extrasGrow
       sx={{ bgcolor: 'background.paper' }}
       itemSx={itemSx}
+      // Used Bookstore: each section caption is a small aisle sign.
+      sectionLabelSx={AISLE_SIGN_SX}
     />
   );
 };

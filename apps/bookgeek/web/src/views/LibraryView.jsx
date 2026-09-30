@@ -24,7 +24,7 @@
  */
 import React, { useEffect, useRef, useState } from "react";
 import { Box, Button, CircularProgress, LinearProgress, Skeleton, Typography, useMediaQuery, useTheme } from "@mui/material";
-import { GeekEmptyState, GeekErrorState, geekLayout, useToast } from "@geeksuite/ui";
+import { GeekErrorState, geekLayout, useToast } from "@geeksuite/ui";
 import {
   FilterPanel,
   FiltersSheet,
@@ -33,6 +33,7 @@ import {
   useScrollMemory,
   useSectionOpen,
 } from "@geeksuite/collection";
+import BargainBin from "../components/BargainBin";
 import BookCard from "../components/BookCard";
 import BookRow from "../components/BookRow";
 import LibraryActions from "../components/LibraryActions";
@@ -77,9 +78,13 @@ function defaultPanelOpen() {
   }
 }
 
+// The column gap is exactly twice ShelfPlank's bleed (6px), so the planks
+// under a row of covers meet and read as one shelf; the row gap is the air
+// between one shelf and the next.
 const GRID_SX = {
   display: "grid",
-  gap: 1.5,
+  columnGap: 1.5,
+  rowGap: 3,
   gridTemplateColumns: {
     xs: "repeat(2, minmax(0, 1fr))",
     sm: "repeat(3, minmax(0, 1fr))",
@@ -287,7 +292,8 @@ export default function LibraryView({
     );
   } else if (books.length === 0) {
     body = (
-      <GeekEmptyState
+      <BargainBin
+        sign={narrowed ? "Nothing on this shelf" : "Bargain bin's empty"}
         title={narrowed ? "Nothing matches these filters" : "No books here yet"}
         description={
           narrowed ? "Try a different shelf, or clear what you have narrowed by." : "Add a book to start your library."

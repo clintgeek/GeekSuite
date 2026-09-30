@@ -14,14 +14,24 @@
  * card's button, as its own row under the author: a control inside a <button>
  * is invalid HTML, and every star tap would open the book. The select-mode
  * checkbox sits outside the button for the same reason.
+ *
+ * Used Bookstore (2026-09-30): no card box any more — the book STANDS on a
+ * shelf. The cover sits on a ShelfPlank that bleeds half the grid gap past
+ * the card on each side, so a row of cards is one continuous shelf; the
+ * title and author are the shelf-edge label under it. The pile you haven't
+ * read wears a PriceSticker; a book in progress or a five-star book gets a
+ * hand-lettered ShelfTalker. Hover lifts the book off the shelf, not the card.
  */
 import React from "react";
-import { Box, Card, ButtonBase, Checkbox, Typography, alpha, useTheme } from "@mui/material";
+import { Box, ButtonBase, Checkbox, Typography, alpha, useTheme } from "@mui/material";
 import { Check as CheckIcon } from "@mui/icons-material";
 import { API_BASE, getCoverUrl } from "../utils/bookDisplay";
 import { canRate } from "../utils/rating";
 import StarRating from "./StarRating";
 import BookCover from "./BookCover";
+import PriceSticker from "./PriceSticker";
+import ShelfPlank from "./ShelfPlank";
+import ShelfTalker from "./ShelfTalker";
 
 export default function BookCard({
   book,
@@ -66,17 +76,13 @@ export default function BookCard({
   };
 
   return (
-    <Card
-      elevation={0}
+    <Box
+      data-testid="book-card"
       sx={{
         position: "relative",
-        overflow: "hidden",
-        transition: theme.transitions.create(["transform", "border-color"]),
-        ...(selected
-          ? { borderColor: "primary.main", boxShadow: `0 0 0 1px ${ theme.palette.primary.main }` }
-          : null),
+        minWidth: 0,
         "@media (hover: hover)": {
-          "&:hover": { transform: "translateY(-2px)" },
+          "&:hover [data-book-standing]": { transform: "translateY(-3px)" },
         },
       }}
     >
@@ -88,18 +94,35 @@ export default function BookCard({
           display: "block",
           width: "100%",
           textAlign: "left",
-          p: 1,
-          borderRadius: "inherit",
+          p: 0,
+          borderRadius: "4px",
+          "&.Mui-focusVisible": { outline: 2, outlineStyle: "solid", outlineColor: "primary.main", outlineOffset: 3 },
         }}
       >
-        <BookCover
-          book={book}
-          src={bookId ? getCoverUrl(book) || `${ API_BASE }/books/${ bookId }/cover` : null}
-          size="card"
-          ribbon={bookmarked}
-          ribbonTestId="book-card-ribbon"
-          sx={{ mb: 1 }}
-        />
+        {/* The book, standing on the shelf. */}
+        <Box
+          data-book-standing
+          sx={{
+            position: "relative",
+            px: 0.5,
+            transition: theme.transitions.create("transform", { duration: 160 }),
+            "& [data-testid='book-cover']": {
+              boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.18), 0 2px 3px rgba(20, 12, 4, 0.35)",
+              ...(selected ? { outline: `3px solid ${ theme.palette.primary.main }`, outlineOffset: 2 } : null),
+            },
+          }}
+        >
+          <BookCover
+            book={book}
+            src={bookId ? getCoverUrl(book) || `${ API_BASE }/books/${ bookId }/cover` : null}
+            size="card"
+            ribbon={bookmarked}
+            ribbonTestId="book-card-ribbon"
+          />
+          <PriceSticker book={book} />
+          <ShelfTalker book={book} />
+        </Box>
+        <ShelfPlank sx={{ mb: 1 }} />
 
         <Typography
           variant="body1"
@@ -112,6 +135,7 @@ export default function BookCard({
             fontSize: "1.0625rem",
             color: "text.primary",
             lineHeight: 1.25,
+            px: 0.5,
             display: "-webkit-box",
             WebkitLineClamp: 2,
             WebkitBoxOrient: "vertical",
@@ -120,7 +144,7 @@ export default function BookCard({
         >
           {title}
         </Typography>
-        <Typography variant="body2" noWrap sx={{ color: "text.secondary" }}>
+        <Typography variant="body2" noWrap sx={{ color: "text.secondary", px: 0.5 }}>
           {authors}
         </Typography>
       </ButtonBase>
@@ -135,9 +159,9 @@ export default function BookCard({
             alignItems: "center",
             flexWrap: "wrap",
             columnGap: 0.75,
-            px: 1,
-            pb: rateable ? 0 : 1,
-            mt: rateable ? -0.75 : -0.5,
+            px: 0.5,
+            pb: rateable ? 0 : 0.5,
+            mt: rateable ? -0.5 : 0,
             minWidth: 0,
           }}
         >
@@ -198,6 +222,6 @@ export default function BookCard({
           }}
         />
       )}
-    </Card>
+    </Box>
   );
 }

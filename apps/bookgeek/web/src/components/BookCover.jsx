@@ -153,7 +153,7 @@ function ClothBoard({ book, showText }) {
               component="span"
               sx={{
                 display: "block",
-                fontFamily: '"Inter", system-ui, sans-serif',
+                fontFamily: '"DM Sans", system-ui, sans-serif',
                 fontVariantCaps: "all-small-caps",
                 letterSpacing: "0.08em",
                 fontWeight: 500,

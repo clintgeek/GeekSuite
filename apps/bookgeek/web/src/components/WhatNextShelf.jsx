@@ -20,6 +20,7 @@ import React from "react";
 import { Box, Button, Chip, Skeleton, Typography } from "@mui/material";
 import { AutoAwesome as SparkleIcon } from "@mui/icons-material";
 import BookCard from "./BookCard";
+import { SERIF_FONT } from "../theme/theme";
 import { whatNextProvenanceLine } from "../utils/libraryAssistant";
 
 /** 150px keeps two and a bit cards on the narrowest phone — a strip, not a grid. */
@@ -44,17 +45,29 @@ export default function WhatNextShelf({
         sx={{
           px: { xs: 2, md: 3 },
           display: "flex",
-          alignItems: "baseline",
+          alignItems: "center",
           flexWrap: "wrap",
           columnGap: 1,
           rowGap: 0.25,
         }}
       >
+        {/* An aisle sign over the staff-picks table (Used Bookstore). */}
         <Typography
           id="what-next-heading"
           component="h2"
-          variant="body1"
-          sx={{ fontWeight: 600 }}
+          sx={(t) => ({
+            fontFamily: SERIF_FONT,
+            fontWeight: 400,
+            fontSize: "1.0625rem",
+            lineHeight: 1.2,
+            px: 1.25,
+            pt: "4px",
+            pb: "5px",
+            borderRadius: "3px",
+            bgcolor: t.palette.sign.board,
+            color: t.palette.sign.ink,
+            boxShadow: `inset 0 -2px 0 ${ t.palette.sign.edge }`,
+          })}
         >
           What next?
         </Typography>

@@ -10,9 +10,15 @@
  * Kindle"), and on a phone the sheet and the drawer are both two taps away
  * where this is one. `value` is the one shelf on ("all" for none, null when
  * several are picked in the sheet — then no chip lights).
+ *
+ * Used Bookstore (2026-09-30): each shelf is an AISLE SIGN — a small painted
+ * green board with cream serif lettering; the shelf you're on is the one
+ * painted sticker yellow. The visible board is decorative; the ButtonBase
+ * around it is the 44px tab.
  */
 import React from "react";
-import { Box, ButtonBase, Chip } from "@mui/material";
+import { Box, ButtonBase } from "@mui/material";
+import { SERIF_FONT, STICKER } from "../theme/theme";
 import { shelfCount } from "./navConfig";
 
 export default function ShelfStrip({
@@ -58,48 +64,42 @@ export default function ShelfStrip({
             sx={{
               flex: "0 0 auto",
               minHeight: 44,
-              borderRadius: "16px",
+              borderRadius: "4px",
               scrollSnapAlign: "start",
-              ...(active && {
-                "&:hover .MuiChip-root": { bgcolor: "primary.dark" },
-              }),
+              "&.Mui-focusVisible": { outline: 2, outlineStyle: "solid", outlineColor: "primary.main", outlineOffset: 1 },
+              "@media (hover: hover)": { "&:hover [data-aisle-sign]": { transform: "translateY(-1px)" } },
             }}
           >
-            <Chip
+            <Box
               component="span"
-              label={
-                <Box component="span" sx={{ display: "inline-flex", alignItems: "baseline", gap: 0.75 }}>
-                  <Box component="span" sx={{ fontSize: "0.75rem", fontWeight: 500 }}>
-                    {shelf.label}
-                  </Box>
-                  {count ? (
-                    <Box
-                      component="span"
-                      sx={{
-                        fontFamily: '"Roboto Mono", monospace',
-                        fontSize: "0.75rem",
-                        opacity: 0.7,
-                      }}
-                    >
-                      {count}
-                    </Box>
-                  ) : null}
-                </Box>
-              }
-              variant={active ? "filled" : "outlined"}
-              sx={{
+              data-aisle-sign
+              data-active={active ? "true" : "false"}
+              sx={(t) => ({
+                display: "inline-flex",
+                alignItems: "baseline",
+                gap: 0.75,
                 height: 32,
-                borderRadius: "16px",
+                boxSizing: "border-box",
+                px: 1.5,
+                pt: "5px",
+                borderRadius: "3px",
+                transition: "transform 120ms ease-out",
+                bgcolor: active ? STICKER.unread.ground : t.palette.sign.board,
+                color: active ? STICKER.unread.ink : t.palette.sign.ink,
+                // A painted board: a lit top edge, a darker bottom edge.
+                boxShadow: `inset 0 1px 0 rgba(255,255,255,0.18), inset 0 -2px 0 ${active ? "rgba(120, 80, 0, 0.35)" : t.palette.sign.edge}, 0 1px 2px rgba(20, 12, 4, 0.25)`,
                 pointerEvents: "none",
-                ...(active
-                  ? {
-                      bgcolor: "primary.main",
-                      color: "primary.contrastText",
-                      borderColor: "primary.main",
-                    }
-                  : { color: "text.secondary" }),
-              }}
-            />
+              })}
+            >
+              <Box component="span" sx={{ fontFamily: SERIF_FONT, fontWeight: 400, fontSize: "0.9375rem", lineHeight: 1.2, letterSpacing: "0.01em" }}>
+                {shelf.label}
+              </Box>
+              {count ? (
+                <Box component="span" sx={(t) => ({ fontSize: "0.75rem", fontWeight: 600, fontVariantNumeric: "tabular-nums", color: active ? STICKER.unread.ink : t.palette.sign.inkSoft })}>
+                  {count}
+                </Box>
+              ) : null}
+            </Box>
           </ButtonBase>
         );
       })}

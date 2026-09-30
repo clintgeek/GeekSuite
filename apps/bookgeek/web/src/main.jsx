@@ -10,6 +10,14 @@ import App from "./App.jsx";
 // headings render offline; index.html used to load Libre Baskerville from
 // Google instead, so every serif in the app fell back to Georgia.
 import "@fontsource/dm-serif-display";
+// Used Bookstore (2026-09-30): DM Sans for everything that isn't a title (the
+// old "Inter" was never loaded, so it had been the system font all along), and
+// Caveat for the hand-lettered shelf talkers only.
+import "@fontsource/dm-sans/400.css";
+import "@fontsource/dm-sans/500.css";
+import "@fontsource/dm-sans/600.css";
+import "@fontsource/dm-sans/700.css";
+import "@fontsource/caveat/600.css";
 import "./styles.css";
 import { configureUserPlatform } from "./bootstrapUser";
 import { GeekSuiteApolloProvider } from "@geeksuite/api-client";

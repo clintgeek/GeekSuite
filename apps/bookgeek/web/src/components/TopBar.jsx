@@ -32,6 +32,7 @@ import { useThemeMode } from '@geeksuite/user';
 import { GeekSearchField, GeekTopBar } from '@geeksuite/ui';
 import { displayNameFrom, initialsFrom, secondaryFrom } from '../utils/userDisplay';
 import { viewTitle } from './navConfig';
+import { SERIF_FONT, STICKER } from '../theme/theme';
 
 const TopBar = ({
   user,
@@ -125,12 +126,15 @@ const TopBar = ({
           startIcon={<AddIcon />}
           onClick={() => setAddBookOpen(true)}
           sx={{
-            borderRadius: 2,
+            borderRadius: '6px',
             textTransform: 'none',
-            fontWeight: 600,
+            fontWeight: 700,
             px: 2,
-            bgcolor: 'primary.main',
-            '&:hover': { bgcolor: 'primary.dark' }
+            // On the green board the action is sticker yellow with dark ink.
+            bgcolor: STICKER.unread.ground,
+            color: STICKER.unread.ink,
+            boxShadow: `inset 0 -2px 0 ${STICKER.unread.rim}`,
+            '&:hover': { bgcolor: '#E9B82F', boxShadow: `inset 0 -2px 0 ${STICKER.unread.rim}` }
           }}
         >
           Add book
@@ -159,22 +163,28 @@ const TopBar = ({
           : undefined
       }
       sx={{
-        // BookGeek identity: flat paper band with a hairline rule, and the
-        // serif wordmark's face on the page title.
-        backgroundColor: theme.palette.background.paper,
-        borderBottom: `1px solid ${theme.palette.divider}`,
-        boxShadow: 'none',
-        color: 'text.primary',
+        // Used Bookstore: the top bar is the shop's painted signboard — green
+        // board, cream serif lettering, a darker bottom edge (theme SIGN).
+        backgroundColor: theme.palette.sign.board,
+        backgroundImage: `linear-gradient(180deg, ${alpha('#FFFFFF', 0.06)}, transparent 45%)`,
+        borderBottom: `3px solid ${theme.palette.sign.edge}`,
+        boxShadow: '0 2px 6px rgba(20, 12, 4, 0.18)',
+        color: theme.palette.sign.ink,
         '& [data-geek-topbar="title"]': {
-          fontFamily: '"DM Serif Display", Georgia, serif',
+          fontFamily: SERIF_FONT,
           fontWeight: 400,
-          fontSize: '1.25rem',
-          letterSpacing: '-0.02em'
+          fontSize: '1.375rem',
+          letterSpacing: '0.005em',
+          color: theme.palette.sign.ink,
         },
-        '& [data-geek-topbar="theme"], & [data-geek-topbar="switcher"]': {
-          color: 'text.primary',
-          '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.1) }
-        }
+        '& [data-geek-topbar="theme"], & [data-geek-topbar="switcher"], & [data-geek-topbar="menu"], & [data-geek-topbar="search"]': {
+          color: theme.palette.sign.ink,
+          '&:hover': { bgcolor: alpha(theme.palette.sign.ink, 0.12) }
+        },
+        // The avatar: a sticker-yellow disc with dark initials, not green on green.
+        '& [data-geek-topbar="account"] .MuiAvatar-root': { bgcolor: STICKER.unread.ground, color: STICKER.unread.ink, fontWeight: 700 },
+        // The search field is a card of paper on the board.
+        '& .MuiInputBase-root': { bgcolor: 'background.paper', color: 'text.primary' },
       }}
     />
   );

@@ -61,25 +61,34 @@ Exclusive Shelf, My Review, Spoiler, Private Notes, Read Count, Owned Copies
 - **Deployment:** Docker (API: 1800, Frontend: 1801)
 - **UI:** Dark mode default, Inter/Geist fonts
 
-### Visual identity — "Midnight Reader" (2026-09-26)
+### Visual identity — "Used Bookstore" (2026-09-30; replaced "Midnight Reader")
 
-A reserved library: DM Serif Display (weight 400 only — never bold it) for
-headings and card titles, Inter for everything else, sky accent, amber for
-stars and reading progress, navy surfaces. Its material is **paper, cloth and a
-bit of craft** — quiet on purpose, the opposite of GameGeek's loud "Arcade
-Sticker". No hard shadows, stickers, tilts or neon.
+Chef: "too 'library' and not enough 'half price books'." The books stay exactly
+as Midnight Reader drew them — square boards with a spine crease, cloth boards
+when there's no art, the bookmark ribbon, DM Serif Display titles (weight 400
+only — never bold it). What changed is the store around them:
 
-- **Covers are books** (`web/src/components/BookCover.jsx`, used by the card,
-  the list row and the detail hero): 2px corners, a faint spine crease on the
-  left edge (a translucent overlay, so real art keeps its colours).
-- **No art → cloth board**: a muted bookcloth hashed from the book id, a CSS
-  linen weave, a thin gold rule, serif title and small-caps author. Cream
-  `#f4ecdb` title ≥7:1 and gold `#dcc796` author ≥5:1 on every cloth.
-- **In progress → bookmark ribbon** hanging from the top edge
-  (`palette.progress.ribbon`); the percentage stays as text on the card. The
-  detail slider stays a slider.
-- **Dark mode is one night**: page `#0b1222` → surface `#0f172a` → card
-  `#151e2f`, all one navy family.
+- **Signboard:** the top bar is painted bookstore green (`palette.sign`) with
+  cream serif lettering; the one action on it ("Add book") and the avatar are
+  sticker yellow with dark ink.
+- **Shelves:** every book in the grid stands on a `ShelfPlank`. The grid's
+  column gap (12px) is exactly twice the plank's bleed, so a row of cards is one
+  continuous shelf — keep them in step if either changes. No card box.
+- **Price sticker** (`PriceSticker`): round, matte, never tilted — on Unread
+  and On reader only. Read books carry nothing.
+- **Shelf talker** (`ShelfTalker`): the only handwriting in the app (Caveat), on
+  an index card — "42% in — no spoilers!" or "Staff pick!" for five stars.
+- **Aisle signs:** the phone shelf strip and the sidebar's section captions are
+  small green boards; the shelf you're on is the yellow one.
+- **Bargain bin** (`BargainBin`): the empty states are a crate with a sign.
+- **Dark mode is "after hours":** the same store under one lamp.
+- Body text is DM Sans (the old `"Inter"` was never loaded — it had been the
+  system font all along).
+- **Neighbours:** ThingGeek owns kraft and tape, StoryGeek candlelit
+  parchment, GameGeek tilted neon stickers — so wood and warm white paper, and
+  one round matte sticker.
+- Contrast for the sign, sticker and talker pairs:
+  `web/src/__tests__/theme/usedBookstoreContrast.test.js`.
 
 ---
 

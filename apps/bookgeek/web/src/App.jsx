@@ -76,7 +76,8 @@ function Shell() {
             activeView={params.activeView}
           />
         }
-        navSx={{ bgcolor: "background.paper" }}
+        // The end of a bookcase: the nav column is edged in shelf wood.
+        navSx={{ bgcolor: "background.paper", borderRight: (t) => `6px solid ${ t.palette.wood.front }` }}
         topBar={
           <TopBar
             user={user}

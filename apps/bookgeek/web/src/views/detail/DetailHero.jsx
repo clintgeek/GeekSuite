@@ -1,10 +1,11 @@
 /**
- * DetailHero — the cover on a blurred copy of itself, then title, authors and
- * one meta line (MOBILE_UI_PLAN.md §3.2).
+ * DetailHero — the book on the shelf, then title, authors and one meta line
+ * (MOBILE_UI_PLAN.md §3.2).
  *
- * The blur is the app's one flourish, so it is guarded: under
- * `prefers-reduced-motion: reduce` the layer disappears and the hero is a flat
- * `background.paper` panel. The ✎ "Edit cover" affordance moved into the More
+ * Used Bookstore (2026-09-30): the book you picked up stands face-out on a
+ * plank of shelf wood, wearing the same price sticker and shelf talker it has
+ * in the grid. (It used to sit on a blurred copy of its own cover — the
+ * Midnight Reader flourish.) The ✎ "Edit cover" affordance lives in the More
  * sheet; nothing on the cover is tap-only-if-you-know.
  */
 import React from "react";
@@ -13,6 +14,9 @@ import { alpha, useTheme } from "@mui/material/styles";
 import { Close as CloseIcon } from "@mui/icons-material";
 import { API_BASE, getCoverUrl } from "../../utils/bookDisplay";
 import BookCover from "../../components/BookCover";
+import PriceSticker from "../../components/PriceSticker";
+import ShelfPlank from "../../components/ShelfPlank";
+import ShelfTalker from "../../components/ShelfTalker";
 import { bookId, publishedYear, shelfColor, shelfLabel, starsFor } from "./bookFacts";
 
 export default function DetailHero({ book, shelves, onClose, showClose = false }) {
@@ -49,44 +53,15 @@ export default function DetailHero({ book, shelves, onClose, showClose = false }
         textAlign: "center",
       }}
     >
-      {coverUrl ? (
-        <Box
-          aria-hidden="true"
-          component="img"
-          src={coverUrl}
-          alt=""
-          sx={{
-            position: "absolute",
-            inset: -24,
-            width: "calc(100% + 48px)",
-            height: "calc(100% + 48px)",
-            objectFit: "cover",
-            filter: "blur(28px) saturate(1.2)",
-            opacity: 0.62,
-            "@media (prefers-reduced-motion: reduce)": { display: "none" },
-          }}
-          onError={(e) => {
-            e.currentTarget.style.display = "none";
-          }}
-        />
-      ) : null}
+      {/* The shop wall behind the shelf: a faint lamp pool, nothing more. */}
       <Box
         aria-hidden="true"
         sx={{
           position: "absolute",
           inset: 0,
-          background: `linear-gradient(to bottom, ${alpha(
-            theme.palette.background.paper,
-            0.12
-          )} 0%, ${alpha(theme.palette.background.paper, 0.55)} 62%, ${
-            theme.palette.background.paper
-          } 100%)`,
-          "@media (prefers-reduced-motion: reduce)": {
-            background: theme.palette.background.paper,
-          },
+          background: `radial-gradient(70% 60% at 50% 30%, ${alpha(theme.palette.progress.main, theme.palette.mode === "dark" ? 0.1 : 0.06)}, transparent 70%)`,
         }}
       />
-
       {showClose ? (
         <IconButton
           onClick={onClose}
@@ -107,10 +82,11 @@ export default function DetailHero({ book, shelves, onClose, showClose = false }
       <Box sx={{ position: "relative" }}>
         <Box
           sx={{
+            position: "relative",
             width: { xs: 160, md: 200 },
             mx: "auto",
-            // A soft shadow under the board, as a book lies on a table.
-            filter: "drop-shadow(0 10px 18px rgba(0,0,0,0.35))",
+            // Standing face-out on the shelf: a short shadow onto the plank.
+            "& [data-testid='book-cover']": { boxShadow: "inset 0 0 0 1px rgba(0,0,0,0.18), 0 3px 5px rgba(20, 12, 4, 0.4)" },
           }}
         >
           <BookCover
@@ -122,7 +98,11 @@ export default function DetailHero({ book, shelves, onClose, showClose = false }
             ribbon={bookmarked}
             ribbonTestId="detail-cover-ribbon"
           />
+          <PriceSticker book={book} size={66} />
+          <ShelfTalker book={book} sx={{ fontSize: "1.25rem" }} />
         </Box>
+        {/* The shelf runs the width of the hero. */}
+        <ShelfPlank bleed={16} sx={{ height: 14 }} />
 
         <Typography
           variant="h2"
