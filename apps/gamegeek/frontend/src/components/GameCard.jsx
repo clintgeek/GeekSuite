@@ -9,12 +9,14 @@
  * colour (keyed by title, so a grid reads as a set of colours), and on a real
  * pointer the card lifts and leans a degree toward its own side. No lift on
  * touch (hover: none) and none at all under prefers-reduced-motion.
+ *
+ * No play hours on the card (Chef doesn't track playtime, 2026-09-30); the
+ * game's own page still shows them if Playnite sent any.
  */
 import React from 'react';
 import { Box, ButtonBase, Card, Typography, useTheme } from '@mui/material';
-import { AccessTime as ClockIcon, Favorite as FavoriteIcon } from '@mui/icons-material';
+import { Favorite as FavoriteIcon } from '@mui/icons-material';
 import { hardShadow, POP_COLOURS } from '../theme/theme';
-import { formatHours } from '../utils/dates';
 import { plateFor } from '../utils/titlePlate';
 import { shelfLabel } from '../utils/vocab';
 import GameCover from './GameCover';
@@ -27,7 +29,6 @@ export default function GameCard({ game, onOpen, onRate, showShelf = true, custo
   const theme = useTheme();
   const title = game.title || 'Untitled';
   const me = game.me || {};
-  const hours = formatHours(me.hoursPlayed);
   const progress = Number.isFinite(me.progress) ? Math.min(100, Math.max(0, me.progress)) : 0;
   const rateable = Boolean(onRate) && canRate(game);
   const shelf = showShelf && me.shelf ? shelfLabel(me.shelf, customShelves) : null;
@@ -106,16 +107,6 @@ export default function GameCard({ game, onOpen, onRate, showShelf = true, custo
         ) : null}
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 0.5, mt: 0.75, minHeight: 22 }}>
           <PlatformChips platforms={copyPlatforms(game)} max={2} sx={{ flexWrap: 'nowrap', overflow: 'hidden' }} />
-          {hours ? (
-            <Box
-              component="span"
-              aria-label={`${hours} played`}
-              sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.25, flexShrink: 0, fontSize: '0.75rem', fontWeight: 600, color: 'text.secondary', fontVariantNumeric: 'tabular-nums' }}
-            >
-              <ClockIcon aria-hidden="true" sx={{ fontSize: 13 }} />
-              {hours}
-            </Box>
-          ) : null}
         </Box>
       </ButtonBase>
 

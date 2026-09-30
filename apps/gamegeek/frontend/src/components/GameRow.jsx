@@ -2,10 +2,11 @@
  * One game in the list view — built for scanning and rating in a pass: a
  * small cover, title, one meta line, and the stars in their own column down
  * the right edge. The opening button and the stars are siblings, never nested.
+ * No play hours here either (Chef doesn't track playtime); the game's page has them.
  */
 import React from 'react';
 import { Box, ButtonBase, Typography } from '@mui/material';
-import { formatHours, relativeInstant } from '../utils/dates';
+import { relativeInstant } from '../utils/dates';
 import { platformShort, shelfLabel } from '../utils/vocab';
 import GameCover from './GameCover';
 import { copyPlatforms } from './PlatformChips';
@@ -16,12 +17,11 @@ import { canRate, metaLine } from './gameDisplay';
 export default function GameRow({ game, onOpen, onRate, showShelf = true, customShelves = [] }) {
   const title = game.title || 'Untitled';
   const me = game.me || {};
-  const hours = formatHours(me.hoursPlayed);
   const platforms = copyPlatforms(game).map(platformShort).join(' · ');
   const rateable = Boolean(onRate) && canRate(game);
   const shelf = showShelf && me.shelf ? shelfLabel(me.shelf, customShelves) : null;
   const last = me.lastPlayedAt ? relativeInstant(me.lastPlayedAt) : null;
-  const detail = [platforms, hours, last && `Played ${last.toLowerCase()}`].filter(Boolean).join(' · ');
+  const detail = [platforms, last && `Played ${last.toLowerCase()}`].filter(Boolean).join(' · ');
 
   return (
     <Box

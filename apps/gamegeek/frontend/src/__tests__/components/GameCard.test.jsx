@@ -27,12 +27,12 @@ describe('GameCard', () => {
     expect(screen.getByTestId('title-plate')).toBeInTheDocument();
   });
 
-  it('shows meta, platform chips, hours and shelf; opens on tap', () => {
+  it('shows meta, platform chips and shelf — never play hours; opens on tap', () => {
     const onOpen = vi.fn();
     renderWithProviders(<GameCard game={makeGame()} onOpen={onOpen} onRate={() => {}} />);
     expect(screen.getByText('2020 · Supergiant Games')).toBeInTheDocument();
     expect(screen.getByRole('list', { name: 'Platforms' })).toHaveTextContent('Switch');
-    expect(screen.getByText('22.5 h')).toBeInTheDocument();
+    expect(screen.queryByText('22.5 h')).toBeNull();
     expect(screen.getByText('Playing')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Hades' }));
     expect(onOpen).toHaveBeenCalledWith(expect.objectContaining({ id: 'g1' }));
