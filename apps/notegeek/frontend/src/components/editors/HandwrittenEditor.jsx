@@ -6,7 +6,7 @@ import {
     exportToBlob, getPointerInfo,
 } from '@tldraw/tldraw';
 import { attachPenButton } from '../../utils/penButton';
-import { exportSketchPng } from '../../utils/sketchExport';
+import { exportSketchPng, exportSketchForPrint } from '../../utils/sketchExport';
 import { fineStrokeHandler } from '../../utils/finePen';
 
 // tldraw 2.4's updateViewportScreenBounds takes a Box and calls .equals() on
@@ -301,7 +301,7 @@ function fitFirstPhotoPage(editor) {
 }
 
 /**
- * `sketchApiRef` (optional): filled with `{ exportPng, hasShapes }` once the
+ * `sketchApiRef` (optional): filled with `{ exportPng, exportForPrint, hasShapes }` once the
  * editor mounts, so the page can export this sketch for "Convert handwriting
  * to text" without importing tldraw itself (this file is lazy-loaded; the
  * page is not). Cleared on unmount.
@@ -356,6 +356,9 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
         if (sketchApiRef) {
             sketchApiRef.current = {
                 exportPng: () => exportSketchPng(editor, { exportToBlob }),
+                // Print / Save as PDF (utils/printNote.js): bigger, uncapped,
+                // one image per photographed page.
+                exportForPrint: () => exportSketchForPrint(editor, { exportToBlob }),
                 hasShapes: () => editor.getCurrentPageShapeIds().size > 0,
             };
         }

@@ -23,6 +23,17 @@ function ScrollingTable({ node, ...props }) {
 }
 
 /**
+ * A code block scrolls sideways rather than wrapping (code keeps its lines),
+ * so, like a table, it is a named, focusable region: axe fails a scroller
+ * the keyboard cannot reach (`scrollable-region-focusable`), found by the
+ * print harness scene's long shell line (2026-09-30).
+ */
+// eslint-disable-next-line no-unused-vars -- `node` is react-markdown's AST node; keep it off the DOM
+function ScrollingPre({ node, ...props }) {
+    return <pre role="region" aria-label="Code block" tabIndex={0} {...props} />;
+}
+
+/**
  * A GFM task box (`- [ ]` / `- [x]`). remark-gfm renders a disabled
  * `<input type="checkbox">` with no label: axe fails it (`label`, critical)
  * and on a phone it is a 13px "control" that does nothing when tapped. Found
@@ -45,7 +56,7 @@ function TaskBox({ node, type, checked, disabled, ...props }) {
     );
 }
 
-export const MARKDOWN_COMPONENTS = { table: ScrollingTable, input: TaskBox };
+export const MARKDOWN_COMPONENTS = { table: ScrollingTable, pre: ScrollingPre, input: TaskBox };
 
 /**
  * The sx both renderers spread in. Wide tables scroll inside their own box
@@ -60,6 +71,7 @@ export const markdownOverflowSx = {
         mb: 4,
         '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 2 },
     },
+    '& pre[tabindex]:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 2 },
     // A narrow table still fills the column; a wide one takes the width it
     // needs and scrolls. Cells don't break words mid-way.
     '& .md-table-scroll > table': {

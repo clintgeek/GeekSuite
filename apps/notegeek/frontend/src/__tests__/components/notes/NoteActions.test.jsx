@@ -178,6 +178,29 @@ describe('NoteActions — Pin/Unpin', () => {
     });
 });
 
+describe('NoteActions — Print or save as PDF', () => {
+    it('is in the menu when the page can print, and calls back', () => {
+        const onPrint = vi.fn();
+        render(<NoteActions onSave={vi.fn()} onDelete={vi.fn()} onPrint={onPrint} />, { wrapper: ThemeWrapper });
+        const menu = openMenu();
+        fireEvent.click(within(menu).getByRole('menuitem', { name: /print or save as pdf/i }));
+        expect(onPrint).toHaveBeenCalledTimes(1);
+    });
+
+    it('is offered in a mind map\'s view mode too (printing is not editing)', () => {
+        render(
+            <NoteActions onPrint={vi.fn()} isEditMode={false} canToggleEdit onToggleEdit={vi.fn()} />,
+            { wrapper: ThemeWrapper },
+        );
+        expect(within(openMenu()).getByRole('menuitem', { name: /print or save as pdf/i })).toBeInTheDocument();
+    });
+
+    it('is absent without a handler', () => {
+        render(<NoteActions onSave={vi.fn()} onDelete={vi.fn()} />, { wrapper: ThemeWrapper });
+        expect(within(openMenu()).queryByRole('menuitem', { name: /print/i })).not.toBeInTheDocument();
+    });
+});
+
 describe('BackButton', () => {
     it('calls back', () => {
         const onBack = vi.fn();

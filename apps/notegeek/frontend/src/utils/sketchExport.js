@@ -62,11 +62,11 @@ export function sketchHasShapes(content) {
  * EXPORT_MAX_EDGE; never above 1, because upscaling a small sketch adds
  * pixels, not legibility.
  */
-export function sketchExportOptions(bounds) {
+export function sketchExportOptions(bounds, maxEdge = EXPORT_MAX_EDGE) {
   const w = Math.max(1, bounds?.w || bounds?.width || 1);
   const h = Math.max(1, bounds?.h || bounds?.height || 1);
   const edge = Math.max(w, h) + EXPORT_PADDING * 2;
-  const scale = Math.min(1, EXPORT_MAX_EDGE / (edge * TLDRAW_PIXEL_RATIO));
+  const scale = Math.min(1, maxEdge / (edge * TLDRAW_PIXEL_RATIO));
   return {
     background: false,
     darkMode: false,
@@ -144,15 +144,29 @@ export async function blobToBase64(blob) {
  * @param {object} editor           a tldraw 2.4 Editor
  * @param {object} deps
  * @param {Function} deps.exportToBlob  tldraw's `exportToBlob`
+ * @param {Array} [deps.ids]        only these shapes (default: the whole page)
+ * @param {number} [deps.maxEdge]   longest edge in pixels (print asks for more)
+ * @param {number} [deps.maxBytes]  refused past this; `Infinity` for print,
+ *   which never leaves the device
+ * @param {boolean} [deps.base64=true]  print needs only the blob
  * @returns {Promise<{ blob: Blob, base64: string, mediaType: 'image/png', width: number, height: number }>}
  * @throws {SketchExportError} code `empty` | `too_large` | `encode`
  */
-export async function exportSketchPng(editor, { exportToBlob, flatten = flattenOnWhite, toBase64 = blobToBase64 } = {}) {
-  const ids = [...(editor.getCurrentPageShapeIds?.() || [])];
+export async function exportSketchPng(editor, {
+  exportToBlob,
+  flatten = flattenOnWhite,
+  toBase64 = blobToBase64,
+  ids: only = null,
+  maxEdge = EXPORT_MAX_EDGE,
+  maxBytes = EXPORT_MAX_BYTES,
+  base64 = true,
+} = {}) {
+  const ids = only ? [...only] : [...(editor.getCurrentPageShapeIds?.() || [])];
   if (!ids.length) {
     throw new SketchExportError('empty', 'This sketch is empty. Write something first.');
   }
-  const opts = sketchExportOptions(editor.getCurrentPageBounds?.());
+  const bounds = only ? unionBounds(ids.map((id) => editor.getShapePageBounds?.(id))) : editor.getCurrentPageBounds?.();
+  const opts = sketchExportOptions(bounds, maxEdge);
 
   let raw;
   try {
@@ -160,9 +174,9 @@ export async function exportSketchPng(editor, { exportToBlob, flatten = flattenO
   } catch (err) {
     throw new SketchExportError('encode', `Could not turn the sketch into an image (${err?.message || 'export failed'}).`);
   }
-  const { blob, width, height } = await flatten(raw);
+  const { blob, width, height } = await flatten(raw, { maxEdge });
 
-  if (blob.size > EXPORT_MAX_BYTES) {
+  if (blob.size > maxBytes) {
     const mb = (blob.size / (1024 * 1024)).toFixed(1);
     throw new SketchExportError(
       'too_large',
@@ -170,5 +184,62 @@ export async function exportSketchPng(editor, { exportToBlob, flatten = flattenO
     );
   }
 
-  return { blob, base64: await toBase64(blob), mediaType: 'image/png', width, height };
+  return { blob, base64: base64 ? await toBase64(blob) : '', mediaType: 'image/png', width, height };
+}
+
+/** `{ w, h }` of the smallest box holding every one of `boxes` (nulls skipped). */
+export function unionBounds(boxes) {
+  const real = boxes.filter(Boolean);
+  if (!real.length) return null;
+  const minX = Math.min(...real.map((b) => b.x ?? b.minX ?? 0));
+  const minY = Math.min(...real.map((b) => b.y ?? b.minY ?? 0));
+  const maxX = Math.max(...real.map((b) => (b.x ?? b.minX ?? 0) + (b.w ?? b.width ?? 0)));
+  const maxY = Math.max(...real.map((b) => (b.y ?? b.minY ?? 0) + (b.h ?? b.height ?? 0)));
+  return { x: minX, y: minY, w: maxX - minX, h: maxY - minY };
+}
+
+/** Print resolution: about 300 dpi across a 7.5in text block. */
+export const PRINT_MAX_EDGE = 3000;
+
+const overlaps = (a, b) => a && b
+  && a.x < b.x + b.w && a.x + a.w > b.x
+  && a.y < b.y + b.h && a.y + a.h > b.y;
+
+/**
+ * A sketch as the images a printed page shows, top to bottom.
+ *
+ * A plain sketch is one image of all its ink. A photo sketch
+ * (DOCS/HANDWRITING.md §3) stacks one photographed page per image shape, and
+ * one image of the whole stack would shrink every page to a strip, so it
+ * prints one image per photo: that photo plus whatever ink overlaps it.
+ * Ink that touches no photo follows as one more image.
+ *
+ * @returns {Promise<Array<{ blob: Blob, width: number, height: number }>>}
+ * @throws {SketchExportError} code `empty` | `encode`
+ */
+export async function exportSketchForPrint(editor, { exportToBlob, flatten = flattenOnWhite } = {}) {
+  const shapes = editor.getCurrentPageShapesSorted?.() || [];
+  if (!shapes.length) {
+    throw new SketchExportError('empty', 'This sketch is empty.');
+  }
+  const once = (ids) => exportSketchPng(editor, {
+    exportToBlob, flatten, ids, maxEdge: PRINT_MAX_EDGE, maxBytes: Infinity, base64: false,
+  });
+  const photos = shapes.filter((s) => s.type === 'image');
+  if (!photos.length) return [await once(shapes.map((s) => s.id))];
+
+  const boundsOf = (s) => editor.getShapePageBounds?.(s.id) || null;
+  const photoBounds = photos
+    .map((p) => ({ shape: p, b: boundsOf(p) }))
+    .sort((a, b) => (a.b?.y ?? 0) - (b.b?.y ?? 0));
+  const claimed = new Set(photos.map((p) => p.id));
+  const out = [];
+  for (const { shape, b } of photoBounds) {
+    const ink = shapes.filter((s) => s.type !== 'image' && overlaps(boundsOf(s), b));
+    ink.forEach((s) => claimed.add(s.id));
+    out.push(await once([shape.id, ...ink.map((s) => s.id)]));
+  }
+  const loose = shapes.filter((s) => !claimed.has(s.id));
+  if (loose.length) out.push(await once(loose.map((s) => s.id)));
+  return out;
 }

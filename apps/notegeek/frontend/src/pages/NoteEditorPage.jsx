@@ -17,6 +17,8 @@ import { useToast } from '@geeksuite/ui';
 import { useAppPreferences } from '@geeksuite/user';
 import { NoteShell, NoteMetaBar, NoteActions, NoteTypeRouter, NOTE_TYPES, SuggestionStrip } from '../components/notes';
 import { BackButton } from '../components/notes/NoteActions';
+import NotePrintView from '../components/notes/NotePrintView';
+import useNotePrint from '../hooks/useNotePrint';
 import { SaveStatus, SaveAlert } from '../components/notes/SaveStatus';
 import { saveStampState } from '../utils/saveStamp';
 import useOnline from '../hooks/useOnline';
@@ -720,6 +722,51 @@ function NoteEditorPage() {
     return () => window.removeEventListener('beforeunload', handler);
   }, [dirty]);
 
+  // ── Print / Save as PDF (DOCS/CONTEXT.md §8) ──────────────────────────
+  //
+  // NotePrintView is the paper copy; the ⋯ menu and Ctrl/Cmd+P both go
+  // through `printNote`. Only a sketch needs preparing: its canvas is
+  // exported to images (one per photographed page) right before the dialog
+  // opens, so the drawing printed is the drawing on screen.
+  const [printSketch, setPrintSketch] = useState({ images: null, error: null });
+  const revokePrintImages = (images) => images?.forEach((img) => revokeImage(img.url));
+  const preparePrint = async () => {
+    if (!isHandwritten) return;
+    const api = sketchApiRef.current;
+    if (!api?.exportForPrint) {
+      setPrintSketch((prev) => {
+        revokePrintImages(prev.images);
+        return { images: null, error: 'The sketch was still loading, so the drawing is not on this page. Try again in a moment.' };
+      });
+      return;
+    }
+    let next;
+    try {
+      const pages = await api.exportForPrint();
+      next = {
+        images: pages.map((p) => ({ url: URL.createObjectURL(p.blob), width: p.width, height: p.height })),
+        error: null,
+      };
+    } catch (err) {
+      next = {
+        images: null,
+        error: err?.code === 'empty' ? 'This sketch is empty.' : `The drawing could not be exported (${err?.message || 'export failed'}).`,
+      };
+    }
+    setPrintSketch((prev) => {
+      revokePrintImages(prev.images);
+      return next;
+    });
+  };
+  const { print: handlePrint, printing: isPrinting, rootRef: printRootRef } = useNotePrint({
+    title,
+    prepare: preparePrint,
+  });
+  const printImagesRef = useRef(null);
+  printImagesRef.current = printSketch.images;
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- unmount only
+  useEffect(() => () => revokePrintImages(printImagesRef.current), []);
+
   // The loud save status, published for the phone's docked toolbar
   // (EditorToolbar), which is what is on screen while typing.
   const { tone: saveTone, loud: saveLoud } = saveStampState({
@@ -856,6 +903,8 @@ function NoteEditorPage() {
                 onTranscribe={isHandwritten ? handleTranscribe : undefined}
                 canTranscribe={canTranscribe}
                 isTranscribing={transcribe?.stage === 'working'}
+                onPrint={handlePrint}
+                isPrinting={isPrinting}
               />
             }
           />
@@ -883,6 +932,13 @@ function NoteEditorPage() {
           />
         </Box>
       </NoteShell>
+
+      <NotePrintView
+        note={{ title, type: noteType, content, tags, updatedAt: lastSavedAt }}
+        sketchImages={isHandwritten ? printSketch.images : null}
+        sketchError={isHandwritten ? printSketch.error : null}
+        rootRef={printRootRef}
+      />
 
       {/* Mounted only while open: the dialog's own Apollo hooks have no reason
           to run on every editor mount, and the list query is network-only. */}

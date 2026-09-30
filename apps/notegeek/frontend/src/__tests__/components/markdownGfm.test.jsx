@@ -99,6 +99,20 @@ describe('what GFM does NOT change', () => {
   });
 });
 
+describe('a code block', () => {
+  it('is a named region the keyboard can reach, since it scrolls sideways', async () => {
+    const { MARKDOWN_COMPONENTS } = await import('../../components/notes/markdownComponents');
+    render(
+      <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>
+        {'```sh\ndocker compose up -d --force-recreate --no-deps notegeek\n```'}
+      </ReactMarkdown>
+    );
+    const pre = screen.getByRole('region', { name: 'Code block' });
+    expect(pre.tagName).toBe('PRE');
+    expect(pre).toHaveAttribute('tabindex', '0');
+  });
+});
+
 describe('a task list', () => {
   it('shows each box as a named state, not an unlabelled 13px checkbox', async () => {
     const { MARKDOWN_COMPONENTS } = await import('../../components/notes/markdownComponents');

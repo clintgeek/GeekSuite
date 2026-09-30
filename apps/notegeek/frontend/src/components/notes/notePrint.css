@@ -1,0 +1,106 @@
+/*
+ * notePrint.css — Print / Save as PDF (NotePrintView.jsx, DOCS/CONTEXT.md §8).
+ *
+ * On screen the print view does not exist. In print, it is the only thing
+ * that does: every other child of <body> (the app, MUI's portalled menus,
+ * dialogs, backdrops, toasts) is hidden, and the frame's fixed-height,
+ * overflow-hidden layout is released so a long note runs onto page two.
+ * Plain black on white; Graphite is a screen look, not an ink.
+ */
+.ng-print-root { display: none; }
+
+@media print {
+  @page { size: auto; margin: 18mm 16mm 20mm; }
+
+  html, body, #root {
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    overflow: visible !important;
+    background: #fff !important;
+    color: #000 !important;
+  }
+
+  body:has(> .ng-print-root) > *:not(.ng-print-root) { display: none !important; }
+
+  .ng-print-root {
+    display: block;
+    color: #000;
+    background: #fff;
+    font-family: 'Spline Sans Variable', 'Helvetica Neue', Arial, sans-serif;
+    font-size: 11pt;
+    line-height: 1.5;
+    word-spacing: 0.06em;
+    overflow-wrap: break-word;
+    -webkit-print-color-adjust: economy;
+    print-color-adjust: economy;
+  }
+  .ng-print-root * { color: #000 !important; background: transparent !important; box-shadow: none !important; }
+
+  .ng-print-head { margin: 0 0 14pt; padding-bottom: 6pt; border-bottom: 0.75pt solid #000; break-after: avoid; }
+  .ng-print-title { font-size: 20pt; line-height: 1.2; font-weight: 650; margin: 0 0 4pt; }
+  .ng-print-meta { font-family: 'Spline Sans Mono Variable', ui-monospace, Menlo, Consolas, monospace; font-size: 8.5pt; margin: 0; }
+  .ng-print-aside, .ng-print-empty { font-size: 9pt; font-style: italic; }
+
+  /* ── Body text ─────────────────────────────────────────────────────── */
+  .ng-print-root h1, .ng-print-root h2, .ng-print-root h3,
+  .ng-print-root h4, .ng-print-root h5, .ng-print-root h6 {
+    line-height: 1.25; font-weight: 650; margin: 14pt 0 5pt; break-after: avoid; break-inside: avoid;
+  }
+  .ng-print-md h1, .ng-print-rich h1 { font-size: 16pt; }
+  .ng-print-md h2, .ng-print-rich h2 { font-size: 14pt; }
+  .ng-print-md h3, .ng-print-rich h3 { font-size: 12pt; }
+  .ng-print-md h4, .ng-print-md h5, .ng-print-md h6,
+  .ng-print-rich h4, .ng-print-rich h5, .ng-print-rich h6 { font-size: 11pt; }
+  .ng-print-root p { margin: 0 0 7pt; orphans: 3; widows: 3; }
+  .ng-print-root ul, .ng-print-root ol { margin: 0 0 7pt; padding-left: 18pt; }
+  .ng-print-root li { margin: 0 0 2pt; }
+  .ng-print-root li > ul, .ng-print-root li > ol { margin: 2pt 0 0; }
+  .ng-print-root ul.contains-task-list { list-style: none; padding-left: 4pt; }
+  .ng-print-root blockquote { margin: 0 0 7pt; padding: 0 0 0 10pt; border-left: 2pt solid #000; font-style: italic; }
+  .ng-print-root hr { border: 0; border-top: 0.75pt solid #000; margin: 10pt 0; }
+  .ng-print-root a { text-decoration: underline; }
+  .ng-print-url { font-size: 8pt; overflow-wrap: anywhere; }
+  /* Rich text's links carry no React wrapper; the URL is printed by CSS. */
+  .ng-print-rich a[href^="http"]::after { content: " (" attr(href) ")"; font-size: 8pt; overflow-wrap: anywhere; }
+  .ng-print-plain { white-space: pre-wrap; }
+
+  /* ── Code ──────────────────────────────────────────────────────────── */
+  .ng-print-root code {
+    font-family: 'Spline Sans Mono Variable', ui-monospace, Menlo, Consolas, monospace;
+    font-size: 9pt;
+  }
+  .ng-print-root pre {
+    margin: 0 0 8pt;
+    padding: 6pt 8pt;
+    border: 0.5pt solid #555;
+    white-space: pre-wrap;        /* wrap, never clip */
+    overflow-wrap: anywhere;
+    overflow: visible;
+    break-inside: avoid;
+    line-height: 1.4;
+  }
+  .ng-print-root pre code { font-size: 9pt; }
+  .ng-print-code { break-inside: auto; } /* a whole code note may run pages */
+
+  /* ── Tables (pipe tables are tables) ───────────────────────────────── */
+  .ng-print-root table { width: 100%; border-collapse: collapse; margin: 0 0 8pt; font-size: 9.5pt; }
+  .ng-print-root thead { display: table-header-group; }
+  .ng-print-root tr { break-inside: avoid; }
+  .ng-print-root th, .ng-print-root td {
+    border: 0.5pt solid #000; padding: 3pt 5pt; text-align: left; vertical-align: top; overflow-wrap: anywhere;
+  }
+  .ng-print-root th { font-weight: 650; }
+
+  /* ── Images and sketches ───────────────────────────────────────────── */
+  .ng-print-root img { max-width: 100%; height: auto; break-inside: avoid; }
+  .ng-print-sketch img {
+    display: block;
+    width: auto;
+    max-width: 100%;
+    max-height: 235mm;            /* one page, less the head on page one */
+    margin: 0 auto 8pt;
+    object-fit: contain;
+  }
+  .ng-print-sketch img + img { break-before: page; }
+}

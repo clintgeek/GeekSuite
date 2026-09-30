@@ -119,6 +119,30 @@ export const NOTE_WIDE_TABLE = note('nw', 'Quarterly numbers', 'markdown', ['fin
   'Source: https://example.com/reports/2026/q3/an-extremely-long-unbroken-path-segment-that-should-wrap-not-overflow',
 ].join('\n'), daysAgo(20));
 
+// Print / Save as PDF (scenes 14a/14v, DOCS/CONTEXT.md §8): a table, a code
+// block with a line far wider than the page, a quote, and a link whose URL
+// should follow it on paper.
+export const NOTE_PRINT = note('np', 'Deploy checklist', 'markdown', ['dev', 'dev/infra'], [
+  '# Deploy checklist',
+  '',
+  'Push to main and let Watchtower roll it out; see the [runbook](https://example.com/runbook) for the rest.',
+  '',
+  '| Step | Command | Owner |',
+  '| --- | --- | --- |',
+  '| Build | `pnpm build` | CI |',
+  '| Check | `nginx -t` | Chef |',
+  '| Reload | `nginx -s reload` | Chef |',
+  '',
+  '```sh',
+  'docker compose -f /mnt/Media/Docker/notegeek/docker-compose.yml up -d --force-recreate --no-deps notegeek && docker logs -f notegeek',
+  '```',
+  '',
+  '> A Watchtower deploy never picks up new .env.production vars.',
+  '',
+  '- [x] tests green',
+  '- [ ] harness green',
+].join('\n'), hoursAgo(1));
+
 export const NOTES = [
   NOTE_N1,
   NOTE_CODE,

@@ -132,7 +132,7 @@ async function reviewTranscript(page, h) {
 
 import { fileURLToPath } from 'node:url';
 import { json, graphqlRoute } from '../../lib/net.mjs';
-import { OPS, NOTE_SUGGESTIONS, NOTE_CODE, NOTE_MINDMAP, NOTE_SKETCH, NOTE_WIDE_TABLE, NOTE_MD, SEARCH_RESULTS } from './fixtures.mjs';
+import { OPS, NOTE_SUGGESTIONS, NOTE_CODE, NOTE_MINDMAP, NOTE_SKETCH, NOTE_WIDE_TABLE, NOTE_MD, NOTE_PRINT, SEARCH_RESULTS } from './fixtures.mjs';
 
 // ── Photo of a page (DOCS/HANDWRITING.md §3) ────────────────────────────────
 //
@@ -264,6 +264,59 @@ async function assertHomeIsNotes(page, h) {
   const first = await page.locator('[data-note-row]').first().boundingBox();
   const vh = page.viewportSize().height;
   if (!first || first.y + first.height > vh) throw new Error(`the first note row is not on the first screen (${first ? Math.round(first.y) : 'none'} of ${vh})`);
+}
+
+// Print / Save as PDF (DOCS/CONTEXT.md §8). `window.print` is replaced with
+// a recorder (a real dialog would hang a headless run); it notes the title
+// and what the print view held at that moment, then fires `afterprint` the
+// way the browser does when the dialog closes.
+async function stubPrint(page) {
+  await page.evaluate(() => {
+    window.__printed = [];
+    window.print = () => {
+      const root = document.querySelector('body > .ng-print-root');
+      window.__printed.push({
+        title: document.title,
+        text: root?.textContent || '',
+        tables: root?.querySelectorAll('table').length || 0,
+        imgs: [...(root?.querySelectorAll('img') || [])].map((i) => ({ complete: i.complete, w: i.naturalWidth })),
+      });
+      setTimeout(() => window.dispatchEvent(new Event('afterprint')), 0);
+    };
+  });
+}
+
+async function printedOnce(page, h, before) {
+  await page.waitForFunction(() => window.__printed.length > 0, null, { timeout: 20000 });
+  await h.settle(200);
+  const [printed] = await page.evaluate(() => window.__printed);
+  if (await page.title() !== before) throw new Error(`document.title was not restored after printing (${await page.title()})`);
+  return printed;
+}
+
+async function printFromMenu(page, h) {
+  await stubPrint(page);
+  const before = await page.title();
+  await page.getByRole('button', { name: /more note actions/i }).first().click();
+  await h.settle(400);
+  const item = page.getByRole('menuitem', { name: /print or save as pdf/i });
+  if (!(await item.count())) throw new Error('⋯ menu has no "Print or save as PDF"');
+  await item.click();
+  return printedOnce(page, h, before);
+}
+
+// In print media the note's paper copy is all there is; on screen it is not there at all.
+async function assertPrintMedia(page) {
+  const read = () => page.evaluate(() => ({
+    view: getComputedStyle(document.querySelector('body > .ng-print-root')).display,
+    app: getComputedStyle(document.getElementById('root')).display,
+  }));
+  const onScreen = await read();
+  await page.emulateMedia({ media: 'print' });
+  const onPaper = await read();
+  await page.emulateMedia({ media: null });
+  if (onScreen.view !== 'none') throw new Error('the print view shows on screen');
+  if (onPaper.view === 'none' || onPaper.app !== 'none') throw new Error(`print media: view ${onPaper.view}, app ${onPaper.app}`);
 }
 
 export const scenes = [
@@ -848,6 +901,50 @@ export const scenes = [
       await h.settle(300);
     },
   },
+  {
+    // Print / Save as PDF from the ⋯ menu on a markdown note: the dialog
+    // opens with the note's title as the document title (the PDF's suggested
+    // filename), the paper copy holds the rendered table and the link's URL,
+    // and print media shows only it. The screenshot is the ⋯ menu.
+    name: '14a-print-markdown',
+    async setup(page, h) {
+      await openNote(page, h, NOTE_PRINT, '/notes/np/edit');
+      const printed = await printFromMenu(page, h);
+      if (printed.title !== 'Deploy checklist') throw new Error(`printed with document.title "${printed.title}"`);
+      if (!printed.tables) throw new Error('the paper copy has no table');
+      if (!printed.text.includes('https://example.com/runbook')) throw new Error('the link URL is not printed after the link');
+      await assertPrintMedia(page);
+      await page.getByRole('button', { name: /more note actions/i }).first().click();
+      await h.settle(400);
+    },
+    teardown: (page, h) => h.esc(400),
+  },
+  {
+    // The read-only viewer (/notes/:id) prints too, from its own button.
+    name: '14v-print-viewer',
+    async setup(page, h) {
+      await openNote(page, h, NOTE_PRINT, '/notes/np');
+      await stubPrint(page);
+      const before = await page.title();
+      await page.getByRole('button', { name: 'Print or save as PDF' }).first().click();
+      const printed = await printedOnce(page, h, before);
+      if (printed.title !== 'Deploy checklist') throw new Error(`viewer printed with document.title "${printed.title}"`);
+      await assertPrintMedia(page);
+    },
+  },
+  {
+    // A sketch prints as an image of its ink: exported by tldraw just before
+    // the dialog, and loaded by the time it opens.
+    name: '14b-print-sketch',
+    async setup(page, h) {
+      await openNote(page, h, NOTE_SKETCH, '/notes/n3/edit');
+      const printed = await printFromMenu(page, h);
+      if (printed.imgs.length !== 1) throw new Error(`the sketch printed ${printed.imgs.length} images`);
+      if (!printed.imgs[0].complete || !printed.imgs[0].w) throw new Error('the sketch image had not loaded when the dialog opened');
+      console.log(`  [sketch print] ${h.viewport}: ${printed.imgs[0].w}px wide`);
+      await assertPrintMedia(page);
+    },
+  },
 ];
 
 // Known, ticketed violations. Each one should die when the app is fixed —
@@ -861,7 +958,7 @@ export const waivers = [
     // tldraw labels the thumb.
     rule: 'aria-input-field-name',
     match: 'tlui-slider__thumb',
-    scenes: ['03s-sketch-new', '10-editor-sketch'],
+    scenes: ['03s-sketch-new', '10-editor-sketch', '14b-print-sketch'],
     reason: 'tldraw 2.4 style-panel slider thumb is unlabelled (third-party UI)',
   },
   {

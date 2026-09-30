@@ -26,7 +26,10 @@ import EditIcon from '@mui/icons-material/Edit';
 import DeleteIcon from '@mui/icons-material/Delete';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
+import PrintOutlined from '@mui/icons-material/PrintOutlined';
 import DeleteNoteDialog from './DeleteNoteDialog';
+import NotePrintView from './notes/NotePrintView';
+import useNotePrint from '../hooks/useNotePrint';
 import TypeIcon from './notes/TypeIcon';
 import { noteTypeMeta } from './notes/noteTypeMeta';
 import { border, glow, surfaces } from '../theme/tokens';
@@ -48,6 +51,12 @@ function NoteViewer() {
     });
 
     const noteToView = data?.note;
+    // Print / Save as PDF (DOCS/CONTEXT.md §8). Nothing to prepare: the
+    // viewer only shows markdown, rich text and code.
+    const { print: handlePrint, rootRef: printRootRef } = useNotePrint({
+        title: noteToView?.title,
+        enabled: Boolean(noteToView),
+    });
 
     const handleEdit = () => {
         if (noteToView) {
@@ -140,6 +149,23 @@ function NoteViewer() {
                             }}
                         >
                             <EditIcon sx={{ fontSize: 17 }} />
+                        </IconButton>
+                    </Tooltip>
+
+                    <Tooltip title="Print or save as PDF" arrow>
+                        <IconButton
+                            onClick={handlePrint}
+                            aria-label="Print or save as PDF"
+                            size="small"
+                            sx={{
+                                color: 'text.secondary',
+                                borderRadius: 1.5,
+                                transition: 'all 120ms ease',
+                                '&:hover': { color: 'text.primary', bgcolor: glow(theme).soft },
+                                '&:focus-visible': { boxShadow: `0 0 0 3px ${ glow(theme).ring }` },
+                            }}
+                        >
+                            <PrintOutlined sx={{ fontSize: 17 }} />
                         </IconButton>
                     </Tooltip>
 
@@ -386,7 +412,7 @@ function NoteViewer() {
                                 // `{ language, code }` envelope; printing it
                                 // raw showed the reader the JSON rather than
                                 // their code. See utils/previewText.js.
-                                <pre>
+                                <pre role="region" aria-label="Code" tabIndex={0}>
                                     <code>{decodeCodeNote(noteToView.content || '').code}</code>
                                 </pre>
                             ) : (
@@ -400,6 +426,8 @@ function NoteViewer() {
                         </Box>
                     </Box>
                 </Paper>
+
+                <NotePrintView note={noteToView} rootRef={printRootRef} />
 
                 {/* Delete dialog */}
                 <DeleteNoteDialog

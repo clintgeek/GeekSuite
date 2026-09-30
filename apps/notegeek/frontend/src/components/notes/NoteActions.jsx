@@ -25,9 +25,11 @@ import ArrowBack from '@mui/icons-material/ArrowBack';
 import TextSnippetOutlined from '@mui/icons-material/TextSnippetOutlined';
 import PushPin from '@mui/icons-material/PushPin';
 import PushPinOutlined from '@mui/icons-material/PushPinOutlined';
+import PrintOutlined from '@mui/icons-material/PrintOutlined';
 
 const isMac = typeof navigator !== 'undefined' && /Mac|iP(hone|ad|od)/.test(navigator.platform || navigator.userAgent || '');
 const SAVE_SHORTCUT = isMac ? '⌘S' : 'Ctrl+S';
+const PRINT_SHORTCUT = isMac ? '⌘P' : 'Ctrl+P';
 
 /**
  * NoteActions — the editor's quiet controls.
@@ -37,8 +39,8 @@ const SAVE_SHORTCUT = isMac ? '⌘S' : 'Ctrl+S';
  *
  *   - `BackButton` — flushes a pending save and leaves (the page's handler).
  *   - the View/Edit toggle, for mind maps only — a mode, not an action.
- *   - the ⋯ menu: Save now, Version history, Compose, Convert handwriting
- *     to text (sketches only), Delete.
+ *   - the ⋯ menu: Save now, Print or save as PDF, Pin, Version history,
+ *     Compose, Convert handwriting to text (sketches only), Delete.
  *
  * The ⋯ menu only calls the page's handlers. It does not mount anything:
  * `NoteHistoryDialog` stays mounted by the page, and only while open (its
@@ -98,6 +100,11 @@ function NoteActions({
   onTranscribe,
   canTranscribe = false,
   isTranscribing = false,
+  // Print / Save as PDF (hooks/useNotePrint.js). The browser's print
+  // dialog is where "Save as PDF" lives, on Android and desktop alike, so
+  // one item says both.
+  onPrint,
+  isPrinting = false,
   // An autosaved-but-never-navigated note is still a real row; the page
   // decides whether "Delete" means delete or discard.
   deleteLabel = 'Delete note',
@@ -151,7 +158,7 @@ function NoteActions({
           '&:focus-visible': { boxShadow: `0 0 0 3px ${glow(theme).ring}` },
         }}
       >
-        {isComposing || isTranscribing ? <CircularProgress size={16} color="inherit" /> : <MoreHoriz fontSize="small" />}
+        {isComposing || isTranscribing || isPrinting ? <CircularProgress size={16} color="inherit" /> : <MoreHoriz fontSize="small" />}
       </IconButton>
 
       <Menu
@@ -173,6 +180,19 @@ function NoteActions({
               sx={{ ml: 2, color: 'text.secondary', display: { xs: 'none', md: 'inline' } }}
             >
               {SAVE_SHORTCUT}
+            </Typography>
+          </MenuItem>
+        )}
+        {onPrint && (
+          <MenuItem onClick={run(onPrint)} disabled={isPrinting} sx={itemSx}>
+            <ListItemIcon><PrintOutlined fontSize="small" /></ListItemIcon>
+            <ListItemText>Print or save as PDF</ListItemText>
+            <Typography
+              variant="caption"
+              aria-hidden
+              sx={{ ml: 2, color: 'text.secondary', display: { xs: 'none', md: 'inline' } }}
+            >
+              {PRINT_SHORTCUT}
             </Typography>
           </MenuItem>
         )}

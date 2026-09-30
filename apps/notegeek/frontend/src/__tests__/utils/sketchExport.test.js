@@ -3,6 +3,8 @@ import {
   EXPORT_MAX_EDGE,
   EXPORT_MAX_BYTES,
   exportSketchPng,
+  exportSketchForPrint,
+  PRINT_MAX_EDGE,
   fitWithin,
   flattenOnWhite,
   sketchExportOptions,
@@ -82,6 +84,54 @@ describe('sketch export', () => {
       toBase64: async () => 'iVBORw0KGgo',
     });
     expect(out).toMatchObject({ base64: 'iVBORw0KGgo', mediaType: 'image/png' });
+  });
+});
+
+/** Print / Save as PDF (DOCS/CONTEXT.md §8): the sketch as paper images. */
+describe('sketch export for print', () => {
+  const editorWith = (shapes) => ({
+    getCurrentPageShapesSorted: () => shapes.map(({ id, type }) => ({ id, type })),
+    getCurrentPageShapeIds: () => new Set(shapes.map((s) => s.id)),
+    getShapePageBounds: (id) => shapes.find((s) => s.id === id)?.b || null,
+    getCurrentPageBounds: () => ({ w: 100, h: 100 }),
+  });
+  const run = (editor) => {
+    const calls = [];
+    const flatten = vi.fn(async (_raw, { maxEdge }) => ({ blob: { size: 9e9 }, width: maxEdge, height: 1 }));
+    const exportToBlob = vi.fn(async (args) => { calls.push(args); return new Blob(['raw']); });
+    return exportSketchForPrint(editor, { exportToBlob, flatten }).then((pages) => ({ pages, calls, flatten }));
+  };
+
+  it('a plain sketch is one image of all its ink, bigger than the vision export and never size-capped', async () => {
+    const { pages, calls } = await run(editorWith([
+      { id: 'shape:a', type: 'draw', b: { x: 0, y: 0, w: 50, h: 50 } },
+      { id: 'shape:b', type: 'geo', b: { x: 60, y: 60, w: 20, h: 20 } },
+    ]));
+    expect(pages).toHaveLength(1);
+    expect(pages[0].width).toBe(PRINT_MAX_EDGE); // the 2000px cap did not apply
+    expect(calls[0].ids.sort()).toEqual(['shape:a', 'shape:b']);
+    expect(PRINT_MAX_EDGE).toBeGreaterThan(EXPORT_MAX_EDGE);
+  });
+
+  it('a photo sketch prints one image per photographed page, with the ink drawn on it', async () => {
+    const { pages, calls } = await run(editorWith([
+      { id: 'shape:p2', type: 'image', b: { x: 0, y: 1100, w: 1000, h: 1000 } },
+      { id: 'shape:p1', type: 'image', b: { x: 0, y: 0, w: 1000, h: 1000 } },
+      { id: 'shape:ink1', type: 'draw', b: { x: 100, y: 100, w: 10, h: 10 } },
+      { id: 'shape:ink2', type: 'draw', b: { x: 100, y: 1500, w: 10, h: 10 } },
+      { id: 'shape:far', type: 'draw', b: { x: 5000, y: 5000, w: 10, h: 10 } },
+    ]));
+    expect(pages).toHaveLength(3);
+    expect(calls.map((c) => c.ids)).toEqual([
+      ['shape:p1', 'shape:ink1'],
+      ['shape:p2', 'shape:ink2'],
+      ['shape:far'],
+    ]);
+  });
+
+  it('refuses an empty sketch', async () => {
+    const err = await run(editorWith([])).catch((e) => e);
+    expect(err.code).toBe('empty');
   });
 });
 
