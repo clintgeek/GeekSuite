@@ -7,6 +7,7 @@ import Sidebar from './Sidebar';
 import MobileBottomNav from './MobileBottomNav';
 import Header from './Header';
 import useEditorChrome from '../store/editorChromeStore';
+import NoteImporter from './new/NoteImporter';
 
 /**
  * Layout — pure suite grammar.
@@ -62,6 +63,10 @@ function Layout({ children }) {
             bottomNav={showNavigation && isMobile && !fillFrame ? <MobileBottomNav /> : null}
         >
             <GeekToastProvider>
+                {/* Markdown import: the drop zone and the file picker the New
+                    surfaces open (DOCS/CONTEXT.md §9). Inside the toast
+                    provider, which Header and the tab bar are not. */}
+                {showNavigation ? <NoteImporter /> : null}
                 {/* Main content with route transitions */}
                 <GeekAppFrame
                     fill={fillFrame}

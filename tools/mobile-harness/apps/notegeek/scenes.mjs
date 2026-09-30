@@ -305,6 +305,45 @@ async function printFromMenu(page, h) {
   return printedOnce(page, h, before);
 }
 
+// Markdown import (DOCS/CONTEXT.md §9). CreateNote answers with the note it
+// was asked for, and every call's variables are kept for the scene to check.
+async function stubImportCreates(page) {
+  const created = [];
+  await graphqlRoute(page, {
+    ...OPS,
+    CreateNote: (vars) => {
+      created.push(vars);
+      return {
+        createNote: {
+          __typename: 'Note', id: `imp${created.length}`, title: vars.title, content: vars.content,
+          type: vars.type, tags: vars.tags || [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+        },
+      };
+    },
+    GetNoteById: (vars) => {
+      const v = created[Number(String(vars.id).replace('imp', '')) - 1];
+      return {
+        note: v ? {
+          __typename: 'Note', id: vars.id, title: v.title, content: v.content, type: v.type, tags: [],
+          isLocked: false, isEncrypted: false, pinned: false, pinnedAt: null,
+          createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
+        } : null,
+      };
+    },
+  });
+  return created;
+}
+
+// A drag of files over the window, the way the OS hands it to the page.
+async function dragFiles(page, type, files) {
+  await page.evaluate(({ type, files }) => {
+    const dt = new DataTransfer();
+    for (const f of files) dt.items.add(new File([f.body], f.name, { type: f.type || '' }));
+    const target = document.elementFromPoint(innerWidth / 2, innerHeight / 2) || document.body;
+    target.dispatchEvent(new DragEvent(type, { bubbles: true, cancelable: true, dataTransfer: dt }));
+  }, { type, files });
+}
+
 // In print media the note's paper copy is all there is; on screen it is not there at all.
 async function assertPrintMedia(page) {
   const read = () => page.evaluate(() => ({
@@ -943,6 +982,73 @@ export const scenes = [
       if (!printed.imgs[0].complete || !printed.imgs[0].w) throw new Error('the sketch image had not loaded when the dialog opened');
       console.log(`  [sketch print] ${h.viewport}: ${printed.imgs[0].w}px wide`);
       await assertPrintMedia(page);
+    },
+  },
+  {
+    // "Import a Markdown file" from New (the phone's sheet; desktop's menu):
+    // the real file chooser, one .md picked, one Markdown note made — titled
+    // from its heading, heading out of the body — and opened.
+    name: '15a-import-picker',
+    goto: '/',
+    wait: 1200,
+    async setup(page, h) {
+      const created = await stubImportCreates(page);
+      let entry;
+      if (h.isPhone) {
+        await page.locator('[data-geek-bottom-nav-item="new"]').click();
+        await h.settle(600);
+        entry = page.getByRole('dialog', { name: /new/i }).getByRole('button', { name: /import a markdown file/i });
+      } else {
+        await page.getByRole('button', { name: 'More kinds of note' }).click();
+        await h.settle(400);
+        entry = page.getByRole('menuitem', { name: /import markdown files/i });
+      }
+      if (!(await entry.count())) throw new Error('New offers no Markdown import');
+      const [chooser] = await Promise.all([page.waitForEvent('filechooser', { timeout: 10000 }), entry.click()]);
+      if (!chooser.isMultiple()) throw new Error('the import picker takes one file only');
+      await chooser.setFiles({ name: 'Lisbon trip.md', mimeType: 'application/octet-stream', buffer: Buffer.from('# Lisbon trip\n\n- Day one: Alfama\n- Day two: Belém\n') });
+      await page.waitForURL(/\/notes\/imp1$/, { timeout: 10000 });
+      await h.settle(900);
+      if (created.length !== 1) throw new Error(`expected one createNote, saw ${created.length}`);
+      const v = created[0];
+      if (v.type !== 'markdown' || v.title !== 'Lisbon trip' || v.content.startsWith('#')) {
+        throw new Error(`created ${JSON.stringify(v).slice(0, 160)}`);
+      }
+    },
+  },
+  {
+    // Files dragged over the notes list: the drop zone covers the page.
+    name: '15b-import-dropzone',
+    goto: '/notes',
+    wait: 1200,
+    async setup(page, h) {
+      await dragFiles(page, 'dragenter', [{ name: 'a.md', body: '# A' }]);
+      await h.settle(300);
+      if (!(await page.locator('[data-import-dropzone]').isVisible())) throw new Error('no drop zone while files are over the page');
+    },
+    async teardown(page, h) {
+      await dragFiles(page, 'dragleave', []);
+      await h.settle(200);
+    },
+  },
+  {
+    // Two .md and a .png dropped: two notes, the picture skipped with a
+    // toast, and the list stays put saying how many landed.
+    name: '15c-import-drop',
+    goto: '/notes',
+    wait: 1200,
+    async setup(page, h) {
+      const created = await stubImportCreates(page);
+      await dragFiles(page, 'dragenter', [{ name: 'a.md', body: '' }]);
+      await dragFiles(page, 'drop', [
+        { name: 'Standup.md', body: '# Standup\n\nNothing blocking.' },
+        { name: 'photo.png', body: 'x', type: 'image/png' },
+        { name: 'ideas.txt', body: 'one\ntwo' },
+      ]);
+      await page.getByText('Imported 2 notes.').waitFor({ timeout: 10000 });
+      if (created.map((c) => c.title).join('|') !== 'Standup|ideas') throw new Error(`created ${created.map((c) => c.title)}`);
+      if (!/\/notes$/.test(page.url())) throw new Error(`a multi-file drop navigated to ${page.url()}`);
+      if (await page.locator('[data-import-dropzone]').count()) throw new Error('the drop zone stayed up after the drop');
     },
   },
 ];

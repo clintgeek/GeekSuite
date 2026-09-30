@@ -19,6 +19,7 @@ import { NoteShell, NoteMetaBar, NoteActions, NoteTypeRouter, NOTE_TYPES, Sugges
 import { BackButton } from '../components/notes/NoteActions';
 import NotePrintView from '../components/notes/NotePrintView';
 import useNotePrint from '../hooks/useNotePrint';
+import useImportStore from '../store/importStore';
 import { SaveStatus, SaveAlert } from '../components/notes/SaveStatus';
 import { saveStampState } from '../utils/saveStamp';
 import useOnline from '../hooks/useOnline';
@@ -766,6 +767,17 @@ function NoteEditorPage() {
   printImagesRef.current = printSketch.images;
   // eslint-disable-next-line react-hooks/exhaustive-deps -- unmount only
   useEffect(() => () => revokePrintImages(printImagesRef.current), []);
+
+  // ── Markdown import onto a blank note (DOCS/CONTEXT.md §9) ────────────
+  // A file dropped on a brand-new, still-empty Markdown note becomes a note
+  // of its own (NoteImporter), which then opens in this one's place: the
+  // blank draft was never saved, so nothing is lost. Once anything is
+  // written, a drop is the page's own business again.
+  const setEditorDropOk = useImportStore((st) => st.setEditorDropOk);
+  const editorDropOk = isNewNote && !savedNoteId && noteType === NOTE_TYPES.MARKDOWN
+    && !title.trim() && !content.trim();
+  useEffect(() => { setEditorDropOk(editorDropOk); }, [editorDropOk, setEditorDropOk]);
+  useEffect(() => () => setEditorDropOk(false), [setEditorDropOk]);
 
   // The loud save status, published for the phone's docked toolbar
   // (EditorToolbar), which is what is on screen while typing.

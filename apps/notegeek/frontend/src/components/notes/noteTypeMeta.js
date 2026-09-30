@@ -6,6 +6,7 @@ import DataObjectIcon from '@mui/icons-material/DataObject';
 import AccountTreeIcon from '@mui/icons-material/AccountTreeOutlined';
 import GestureIcon from '@mui/icons-material/Gesture';
 import PhotoCameraOutlined from '@mui/icons-material/PhotoCameraOutlined';
+import UploadFileOutlined from '@mui/icons-material/UploadFileOutlined';
 
 /**
  * The five note types, in one table, so the rows, filters, editor head and
@@ -51,8 +52,23 @@ export const PHOTO_ENTRY = {
   path: '/notes/photo',
 };
 
+/**
+ * "Import a Markdown file" (DOCS/CONTEXT.md §9): not a type either — each
+ * file becomes a Markdown note. It opens the importer's file picker
+ * (store/importStore.js) instead of a route.
+ */
+export const IMPORT_ENTRY = {
+  key: 'import',
+  label: 'Import',
+  long: 'Import a Markdown file',
+  aria: 'Import a Markdown file',
+  Icon: UploadFileOutlined,
+  description: '.md or .txt, one note per file',
+};
+
 export function noteTypeMeta(type) {
   if (type === 'photo') return PHOTO_ENTRY;
+  if (type === 'import') return IMPORT_ENTRY;
   return NOTE_TYPE_META[type] || NOTE_TYPE_META.text;
 }
 

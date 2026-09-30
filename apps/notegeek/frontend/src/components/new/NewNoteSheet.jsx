@@ -5,6 +5,7 @@ import ExpandMore from '@mui/icons-material/ExpandMore';
 import { GeekSheet } from '@geeksuite/ui';
 import { NEW_FRONT, NEW_MORE, newNotePath, noteTypeMeta } from '../notes/noteTypeMeta';
 import { graphiteTokens } from '../../theme/tokens';
+import { openImportPicker } from '../../store/importStore';
 
 /**
  * One row of the New surface: glyph, name, a line of description. The first
@@ -50,8 +51,9 @@ export function NewEntry({ entryKey, onPick, primary = false }) {
 
 /**
  * NewNoteSheet — the phone's "New": a bottom sheet with the three front-door
- * entries (a note, a photo of a page, a sketch) and "More" folding out Code
- * and Mind map. Markdown is the default note; rich text is not offered.
+ * entries (a note, a photo of a page, a sketch), "More" folding out Code
+ * and Mind map, and "Import a Markdown file". Markdown is the default note;
+ * rich text is not offered.
  */
 function NewNoteSheet({ open, onClose }) {
   const navigate = useNavigate();
@@ -59,9 +61,12 @@ function NewNoteSheet({ open, onClose }) {
   const [more, setMore] = useState(false);
 
   const pick = (key) => {
+    // The file picker must open inside the tap (user activation), so it is
+    // asked for before the sheet closes; the importer lives outside it.
+    if (key === 'import') openImportPicker();
     onClose();
     setMore(false);
-    navigate(newNotePath(key));
+    if (key !== 'import') navigate(newNotePath(key));
   };
 
   return (
@@ -107,6 +112,7 @@ function NewNoteSheet({ open, onClose }) {
             </Box>
           </Collapse>
         </Box>
+        <Box role="listitem"><NewEntry entryKey="import" onPick={pick} /></Box>
       </Box>
     </GeekSheet>
   );
