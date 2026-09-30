@@ -12,6 +12,44 @@ anything a future reader would otherwise have to rediscover.
 
 ## 2026-09-30
 
+### NoteGeek — Bear-style nested tags
+
+`c0a0d56a` (gateway, deployed and confirmed first) `89ff1eac` (UI)
+
+Chef wants NoteGeek as a "digital brain" and chose Bear-style nested tags over notebooks. A
+tag like `house/garage` sits under `house`.
+- **Tag pages:** a tag's page (`notes(under:)`) shows the tag and everything beneath it; `house`
+  never matches `houseboat`.
+- **Rename and delete:** renaming a tag moves its whole subtree in one owner-scoped pipeline
+  update. A move into its own subtree is refused, and so is a rename that would push a child
+  tag past 100 characters. Deleting a tag removes it and its sub-tags; notes are never
+  deleted. A `noteTagUsage` query feeds the delete dialog.
+- **Normalization:** tags are cleaned on every write (trim, tidy slashes, dedupe; case kept).
+- **Inline tags:** writing `#house/garage` in a markdown or rich-text note adds that tag on
+  save, and only adds. It ignores headings, code, links, `#1`, and hex colours (including
+  words like `#cafe`). Tags are linkified in the markdown view.
+- **Phone:** the tag tree's ⋯ menu is always visible on phones (it used to be hover-only).
+- **Tests:** 719 frontend and 228 gateway tests pass, and 40 red-checks were run.
+- **Search:** meaning-based search runs on `datageek_embeddings` (`507a6b7e`), a local Ollama
+  with `nomic-embed-text` and no published port. That work is next.
+
+### Duplicati — stuck Network job, and it was backing itself up
+
+Duplicati was holding 12.2 GB of RAM and the box was at about 40% iowait. The Network job's
+local database had grown from 1.9 GB to 4.6 GB, and it was 9 hours into a run. Chef had it
+restarted, which freed 12 GB, and has disabled the Network job for now.
+
+All four jobs were backing up Duplicati's own live job databases, about 14 GB plus 6.7 GB of
+June upgrade leftovers. The fix is in the Int and Google Drive job filters:
+- job databases excluded, with `Duplicati-server.sqlite` kept;
+- Int's `node_modules` exclude restored;
+- the live `apps/basegeek/data/{mongodb,postgres,influxdb,redis,ollama}` excluded, since the
+  nightly verified dumps are the restorable copies;
+- plaintext job exports excluded.
+
+The regexes were tested against 13 real paths. Chef applies them in the UI. The corrected
+configs were written without printing any credential.
+
 ### BookGeek — Unread is a real shelf; no sticker on it
 
 `38cf1c86` plus a DB migration
