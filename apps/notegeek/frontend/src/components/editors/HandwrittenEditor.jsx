@@ -5,7 +5,7 @@ import {
     DefaultColorStyle, DefaultSizeStyle, DefaultColorThemePalette,
     exportToBlob, getPointerInfo,
 } from '@tldraw/tldraw';
-import { attachPenEraser } from '../../utils/penEraser';
+import { attachPenButton } from '../../utils/penButton';
 import { exportSketchPng } from '../../utils/sketchExport';
 import { fineStrokeHandler } from '../../utils/finePen';
 
@@ -411,13 +411,13 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
     // eslint-disable-next-line react-hooks/exhaustive-deps -- content intentionally excluded; initial load only
     }, [loadSnapshot, readOnly, debouncedSave, theme.palette.mode, sketchApiRef]);
 
-    // The S Pen's side button erases (DOCS/HANDWRITING.md §1). A capture-phase
-    // listener on the container, so it runs before tldraw's own handlers; see
-    // utils/penEraser.js for what it does and why.
+    // Hold the S Pen's side button to scroll the page; an eraser end erases
+    // (DOCS/HANDWRITING.md §1). A capture-phase listener on the container, so
+    // it runs before tldraw's own handlers; see utils/penButton.js.
     useEffect(() => {
         const container = containerRef.current;
         if (!container || readOnly || isLoading) return undefined;
-        return attachPenEraser(container, () => editorRef.current, { getPointerInfo });
+        return attachPenButton(container, () => editorRef.current, { getPointerInfo });
     }, [readOnly, isLoading]);
 
     // Use ResizeObserver for reliable viewport bounds updates

@@ -1,4 +1,4 @@
-# NoteGeek — S Pen: eraser button, and handwriting to Markdown
+# NoteGeek — S Pen: scroll button, and handwriting to Markdown
 
 *Written 2026-09-27. Chef has a Samsung S26 Ultra with an S Pen coming. Chef: "I'd love to
 write things in sketch, feed it to AI to get a reasonable approximation of what it says,
@@ -9,25 +9,33 @@ And: "button=eraser will work, we may as well do that."*
 and a handwritten daily page in BuJoGeek (BuJoGeek is about to be torn apart). Both are
 listed in `DOCS/SUITE_TODO.md`.
 
-## 1. The side button is an eraser
+## 1. The side button scrolls; an eraser end erases
+
+*Changed 2026-09-29. Chef: "Button on the S-pen should let me scroll. That's way more
+useful." Until then the side button was the eraser; the toolbar eraser is still there.*
 
 - **What tldraw 2.4 already does:** it switches to the eraser for `button === 5` (the eraser
   tip on Surface and Wacom pens) and restores the previous tool when the pen lifts
   (`Editor.ts`, `STYLUS_ERASER_BUTTON`). It also turns on pen mode the first time it sees a
   pen: from then on the pen draws and fingers only pan and zoom.
-- **What we add:** Android browsers are expected to report the **S Pen side button as
-  `button === 2`** (the same code as a right-click), with `buttons & 2` set during moves.
-  This hasn't been checked on a device yet. A pen `pointerdown` with button 2 (or with
-  `buttons & 32`, the eraser bit) gets tldraw 5's treatment: remember the current tool,
-  switch to `eraser` for that stroke, and restore on `pointerup` or `pointercancel`.
+- **What we add** (`utils/penButton.js`): Android browsers are expected to report the
+  **S Pen side button as `button === 2`** (the same code as a right-click), with
+  `buttons & 2` set during moves. This hasn't been checked on a device yet.
+  - A pen `pointerdown` with the side button (button 2 or `buttons & 2`) switches to tldraw's
+    **`hand` tool** for that press: drag to scroll the page, let go and the pen is back.
+  - A pen `pointerdown` with the **eraser bit** (`buttons & 32`, a rubber end that doesn't
+    report as button 5) switches to the **eraser** for that stroke.
+  - Either way the current tool is remembered and restored on `pointerup` or
+    `pointercancel`.
   - It only applies to `pointerType === 'pen'`. A mouse right-click keeps tldraw's context
     menu.
   - A pen press never opens tldraw's context menu (`contextmenu` from a pen is
     suppressed).
   - It works on phones and desktop alike (a Wacom tablet's barrel button gets it too).
-- **Done when:** unit tests cover button 2 and buttons 32 switching to the eraser and then
-  restoring; a mouse right-click is unaffected; and the tests are red/green checked. On the
-  S26 it's Chef's test: hold the button, rub a stroke out, let go, keep writing.
+- **Done when:** unit tests cover button 2 / `buttons & 2` switching to the hand tool and
+  `buttons & 32` switching to the eraser, both restoring; a mouse right-click is unaffected;
+  and the tests are red/green checked. On the S25+ or S26 it's Chef's test: hold the button,
+  drag to scroll, let go, keep writing.
 
 ## 2. Handwriting to Markdown
 

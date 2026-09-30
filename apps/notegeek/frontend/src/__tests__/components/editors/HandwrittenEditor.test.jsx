@@ -26,7 +26,7 @@ const AllProviders = ({ children }) => (
 // button-2 press becomes `right_click` and draws nothing; only buttons 0, 1
 // and 5 start a pointer_down; pointerup passes 0, 1, 2 and 5. A contextmenu
 // that reaches it "opens" tldraw's (Radix) context menu. getPointerInfo is
-// tldraw's, field for field. So the S Pen eraser is tested against the
+// tldraw's, field for field. So the S Pen button is tested against the
 // handlers it has to get around, not against a mock that would accept anything.
 const tl = vi.hoisted(() => ({ renders: [], editors: [], contextMenus: [], longPresses: [], exportToBlob: null }));
 
@@ -326,7 +326,7 @@ describe('HandwrittenEditor', () => {
         }
     });
 
-    describe('the S Pen side button is an eraser', () => {
+    describe('the S Pen side button scrolls; an eraser end erases', () => {
         const fire = (type, { pointerType = 'pen', button = 0, buttons = 0, pointerId = 7 } = {}) => {
             const canvas = screen.getByTestId('tl-canvas');
             const e = new PointerEvent(type, { pointerType, button, buttons, pointerId, bubbles: true, cancelable: true, clientX: 10, clientY: 20 });
@@ -342,32 +342,32 @@ describe('HandwrittenEditor', () => {
             return editor;
         };
 
-        it('button 2 on a pen erases that stroke, then puts the pen back', async () => {
+        it('button 2 on a pen pans the page (hand tool) for that press, then puts the pen back', async () => {
             const editor = await mount();
             expect(editor.getCurrentToolId()).toBe('draw');
 
             fire('pointerdown', { button: 2, buttons: 2 });
-            expect(editor.getCurrentToolId()).toBe('eraser');
-            // tldraw saw a primary press while the eraser was the tool, and
+            expect(editor.getCurrentToolId()).toBe('hand');
+            // tldraw saw a primary press while the hand was the tool, and
             // never a right_click.
             expect(editor.events.map((ev) => ev.name)).toEqual(['pointer_down']);
-            expect(editor.events[0]).toMatchObject({ button: 0, isPen: true, toolAtDispatch: 'eraser' });
+            expect(editor.events[0]).toMatchObject({ button: 0, isPen: true, toolAtDispatch: 'hand' });
 
             fire('pointerup', { button: 2, buttons: 0 });
             expect(editor.events.map((ev) => ev.name)).toEqual(['pointer_down', 'pointer_up']);
-            expect(editor.events[1].toolAtDispatch).toBe('eraser');
+            expect(editor.events[1].toolAtDispatch).toBe('hand');
             expect(editor.getCurrentToolId()).toBe('draw');
         });
 
-        it('button 2 alone, or the barrel bit alone (tip down with the button held), both erase', async () => {
+        it('button 2 alone, or the barrel bit alone (tip down with the button held), both pan', async () => {
             const editor = await mount();
             fire('pointerdown', { button: 2, buttons: 0 });
-            expect(editor.getCurrentToolId()).toBe('eraser');
+            expect(editor.getCurrentToolId()).toBe('hand');
             fire('pointerup', { button: 2 });
             expect(editor.getCurrentToolId()).toBe('draw');
 
             fire('pointerdown', { button: 0, buttons: 3 });
-            expect(editor.getCurrentToolId()).toBe('eraser');
+            expect(editor.getCurrentToolId()).toBe('hand');
             fire('pointerup', { button: 0 });
             expect(editor.getCurrentToolId()).toBe('draw');
         });
@@ -381,7 +381,7 @@ describe('HandwrittenEditor', () => {
             expect(tl.longPresses).toHaveLength(1);
         });
 
-        it('buttons & 32 (the eraser bit) erases and restores, on pointercancel too', async () => {
+        it('buttons & 32 (an eraser end) still erases, and restores on pointercancel too', async () => {
             const editor = await mount();
             fire('pointerdown', { button: 0, buttons: 32 });
             expect(editor.getCurrentToolId()).toBe('eraser');
@@ -392,17 +392,17 @@ describe('HandwrittenEditor', () => {
 
         it('restores whatever tool was in use, not always the pen', async () => {
             const editor = await mount();
-            act(() => { editor.setCurrentTool('hand'); });
+            act(() => { editor.setCurrentTool('select'); });
             fire('pointerdown', { button: 2, buttons: 2 });
             fire('pointerup', { button: 2 });
-            expect(editor.getCurrentToolId()).toBe('hand');
+            expect(editor.getCurrentToolId()).toBe('select');
         });
 
         it('only the pressing pointer ends it', async () => {
             const editor = await mount();
             fire('pointerdown', { button: 2, buttons: 2, pointerId: 7 });
             fire('pointerup', { pointerType: 'touch', pointerId: 9 });
-            expect(editor.getCurrentToolId()).toBe('eraser');
+            expect(editor.getCurrentToolId()).toBe('hand');
             fire('pointerup', { button: 2, pointerId: 7 });
             expect(editor.getCurrentToolId()).toBe('draw');
         });
@@ -446,7 +446,7 @@ describe('HandwrittenEditor', () => {
             const editor = tl.editors.at(-1);
             editor.setCurrentTool.mockClear();
             fire('pointerdown', { button: 2, buttons: 2 });
-            expect(editor.setCurrentTool).not.toHaveBeenCalledWith('eraser');
+            expect(editor.setCurrentTool).not.toHaveBeenCalledWith('hand');
         });
     });
 

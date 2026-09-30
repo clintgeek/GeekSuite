@@ -1,32 +1,36 @@
 /**
- * penEraser.js — the S Pen's side button is an eraser (DOCS/HANDWRITING.md §1).
+ * penButton.js — what a pen's buttons do on the sketch canvas
+ * (DOCS/HANDWRITING.md §1).
  *
- * tldraw 2.4 already does this for `button === 5`, the eraser end of a
- * Surface or Wacom pen (`Editor.ts`, STYLUS_ERASER_BUTTON): remember the
- * tool, switch to the eraser, restore it when the pen lifts. It does NOT do
- * it for a pen's barrel button, which Android browsers are expected to
- * report as `button === 2` (the same code as a right-click) with `buttons & 2`
- * set. tldraw's canvas turns a button-2 press into `right_click` and draws
- * nothing, and its context menu opens under the pen.
+ * - **The S Pen side button scrolls.** Hold it and drag to move around the
+ *   page (tldraw's `hand` tool); let go and the pen is back. Chef, 2026-09-29:
+ *   "Button on the S-pen should let me scroll. That's way more useful." It
+ *   was the eraser until then.
+ * - **An eraser end still erases.** A pen that reports its rubber end with the
+ *   eraser bit (`buttons & 32`) gets the eraser for that stroke. `button === 5`
+ *   (Surface/Wacom eraser end) is tldraw's own and is left alone.
  *
- * So, in a CAPTURE-phase listener on the editor's container, a pen
- * `pointerdown` on the canvas with the barrel (`button 2`, `buttons & 2`) or
- * the eraser bit (`buttons & 32`) held:
+ * Android browsers are expected to report the side button as `button === 2`
+ * (the same code as a right-click) with `buttons & 2` set. tldraw's canvas
+ * turns a button-2 press into `right_click`, does nothing with it, and opens
+ * its context menu under the pen. So, in a CAPTURE-phase listener on the
+ * editor's container, a pen `pointerdown` on the canvas with the side button
+ * or the eraser bit held:
  *
  *   1. stops the event before tldraw's own (React, bubble-phase) handler
  *      sees it, so there is no right_click and no context menu;
- *   2. remembers the current tool and switches to `eraser`;
+ *   2. remembers the current tool and switches to `hand` (side button) or
+ *      `eraser` (eraser bit);
  *   3. dispatches the press to tldraw as a primary pointer_down, which is
- *      what starts an erase — tldraw only starts one on buttons 0, 1 and 5;
+ *      what starts a pan or an erase (tldraw starts those on buttons 0, 1, 5);
  *   4. on that pointer's `pointerup` OR `pointercancel`, dispatches the lift
  *      and restores the tool.
  *
- * Moves are left alone: tldraw's own pointermove handler feeds the eraser.
+ * Moves are left alone: tldraw's own pointermove handler feeds the tool.
  *
  * Only `pointerType === 'pen'`. A mouse right-click is never touched and keeps
- * tldraw's context menu. `button === 5` is left to tldraw, which already
- * handles it. A `contextmenu` event from a pen (or straight after a pen
- * press) is swallowed, so the pen never opens tldraw's menu.
+ * tldraw's context menu. A `contextmenu` event from a pen (or straight after
+ * a pen press) is swallowed, so the pen never opens tldraw's menu.
  *
  * @param {HTMLElement} container  the element wrapping <Tldraw>
  * @param {() => object|null} getEditor  the live tldraw editor, or null
@@ -39,13 +43,16 @@ export const TLDRAW_ERASER_BUTTON = 5;
 const BARREL_BIT = 2;
 const ERASER_BIT = 32;
 
-export function isPenEraserPress(e) {
-  if (e.pointerType !== 'pen') return false;
-  if (e.button === TLDRAW_ERASER_BUTTON) return false; // tldraw's own
-  return e.button === BARREL_BUTTON || (e.buttons & BARREL_BIT) !== 0 || (e.buttons & ERASER_BIT) !== 0;
+/** The tool a pen press should borrow, or null to leave the press alone. */
+export function penButtonTool(e) {
+  if (e.pointerType !== 'pen') return null;
+  if (e.button === TLDRAW_ERASER_BUTTON) return null; // tldraw's own
+  if ((e.buttons & ERASER_BIT) !== 0) return 'eraser';
+  if (e.button === BARREL_BUTTON || (e.buttons & BARREL_BIT) !== 0) return 'hand';
+  return null;
 }
 
-export function attachPenEraser(container, getEditor, { getPointerInfo }) {
+export function attachPenButton(container, getEditor, { getPointerInfo }) {
   let active = null; // { pointerId, restoreToolId, canvas }
   let lastPointerType = null;
 
@@ -58,7 +65,8 @@ export function attachPenEraser(container, getEditor, { getPointerInfo }) {
 
   const onPointerDown = (e) => {
     lastPointerType = e.pointerType || null;
-    if (!isPenEraserPress(e)) return;
+    const tool = penButtonTool(e);
+    if (!tool) return;
     const canvas = e.target?.closest?.('.tl-canvas');
     if (!canvas) return; // the toolbar, a menu: not a stroke
     const editor = getEditor();
@@ -69,7 +77,7 @@ export function attachPenEraser(container, getEditor, { getPointerInfo }) {
 
     const restoreToolId = editor.getCurrentToolId();
     editor.complete();
-    editor.setCurrentTool('eraser');
+    editor.setCurrentTool(tool);
     active = { pointerId: e.pointerId, restoreToolId, canvas };
     try { canvas.setPointerCapture?.(e.pointerId); } catch { /* not capturable: fine */ }
     editor.dispatch({ ...info(e, 0), name: 'pointer_down' });
@@ -83,8 +91,8 @@ export function attachPenEraser(container, getEditor, { getPointerInfo }) {
     const editor = getEditor();
     try { canvas.releasePointerCapture?.(e.pointerId); } catch { /* already released */ }
     if (!editor) return;
-    // A cancel (the browser took the pointer) ends the stroke the same way a
-    // lift does: what the writer saw rubbed out stays rubbed out.
+    // A cancel (the browser took the pointer) ends it the same way a lift
+    // does: what the writer saw rubbed out stays rubbed out, a pan stays put.
     editor.dispatch({ ...info(e, 0), name: 'pointer_up' });
     editor.complete();
     editor.setCurrentTool(restoreToolId);
