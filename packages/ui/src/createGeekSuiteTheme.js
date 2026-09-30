@@ -1,5 +1,5 @@
-import { alpha, createTheme, lighten } from '@mui/material/styles';
-import { readableAcross, readableOn } from './color.js';
+import { alpha, createTheme, getContrastRatio, lighten } from '@mui/material/styles';
+import { flattenOver, readableAcross, readableOn } from './color.js';
 import { geekDesignTokens } from './designTokens.js';
 
 const {
@@ -84,6 +84,35 @@ function buildTypography() {
       textTransform: 'none',
     },
   };
+}
+
+/**
+ * The fill a contained button takes on hover and press: its own colour's
+ * `.dark`, as MUI does. Except where the label would drop below AA on it —
+ * a dark-mode semantic colour is a light fill with a DARK label, and
+ * darkening it closes the gap (error measures 7.9:1 at rest, 4.1:1 on
+ * `.dark`). There the tone moves the other way, to `.light`, whichever keeps
+ * the label more readable: the press still visibly changes the button, and
+ * the label stays copy. Primary is not routed through this: it keeps the
+ * `.dark` it has always had (flockgeek's light primary measures 3.27:1 there —
+ * a recorded gap in themeContrast, not something to fix by stealth). Returns
+ * undefined when the colour has no `.dark`
+ * (`color="inherit"`), leaving MUI's own treatment.
+ */
+function containedPressedFill(tone) {
+  if (!tone?.dark) return undefined;
+  if (!tone.contrastText || !tone.light) return tone.dark;
+  const on = (fill) => {
+    try {
+      // An rgba() label (MUI's dark-mode `rgba(0,0,0,0.87)`) is only as
+      // dark as the fill showing through it.
+      return getContrastRatio(flattenOver(tone.contrastText, fill), fill);
+    } catch {
+      return 0;
+    }
+  };
+  if (on(tone.dark) >= 4.5) return tone.dark;
+  return on(tone.light) > on(tone.dark) ? tone.light : tone.dark;
 }
 
 function buildComponents(themePalette) {
@@ -196,15 +225,27 @@ function buildComponents(themePalette) {
           textTransform: 'none',
           transition: `background-color ${transition}, border-color ${transition}, box-shadow ${transition}`,
         },
-        contained: {
-          boxShadow: 'none',
-          '&:hover': {
+        // Flat, and darkened on hover AND on press (a phone never hovers, so
+        // :active is the only feedback a tap gets) — to the button's OWN
+        // colour's `.dark` (see containedPressedFill), not primary's. This used to hard-code
+        // `primary.dark`, so a `color="safety"` / error / success button, or
+        // any colour an app registers, washed out to the accent the moment it
+        // was touched (found 2026-09-29 by ThingGeek Walk). A function so it
+        // reads the final theme: some apps add palette colours after
+        // createTheme. `color="inherit"` has no palette entry and keeps MUI's
+        // own treatment.
+        contained: ({ ownerState, theme }) => {
+          const tone = theme.palette[ownerState.color];
+          // Primary keeps exactly what this override always gave it.
+          const pressed = ownerState.color === 'primary' ? tone?.dark : containedPressedFill(tone);
+          return {
             boxShadow: 'none',
-            backgroundColor: themePalette.primary.dark,
-          },
-          '&:active': {
-            backgroundColor: themePalette.primary.dark,
-          },
+            '&:hover': {
+              boxShadow: 'none',
+              ...(pressed && { backgroundColor: pressed }),
+            },
+            ...(pressed && { '&:active': { backgroundColor: pressed } }),
+          };
         },
         outlined: {
           borderColor: themePalette.divider,
@@ -384,7 +425,14 @@ function deepMerge(target, source) {
   const output = { ...target };
   for (const key of Object.keys(source)) {
     if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
-      if (target[key] && typeof target[key] === 'object') {
+      if (typeof target[key] === 'function') {
+        // A props-driven style override (MUI calls it with { ownerState,
+        // theme }) that an app extends with a plain object: resolve ours,
+        // then lay the app's on top, exactly as two objects would merge.
+        const base = target[key];
+        const extra = source[key];
+        output[key] = (props) => deepMerge(base(props), extra);
+      } else if (target[key] && typeof target[key] === 'object') {
         output[key] = deepMerge(target[key], source[key]);
       } else {
         output[key] = { ...source[key] };

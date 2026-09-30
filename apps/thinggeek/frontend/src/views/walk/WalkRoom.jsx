@@ -333,14 +333,8 @@ export default function WalkRoom() {
           borderColor: 'safety.contrastText',
           flex: isPhone ? 1 : undefined,
           minHeight: 44,
-          // The shared MuiButton `contained` hover/active rule hardcodes
-          // primary.dark for every colour (packages/ui/createGeekSuiteTheme.js)
-          // — invisible everywhere else because those buttons navigate away
-          // the instant they're clicked, but Next never does: the same
-          // button sits there, tapped, over and over. Without this it fades
-          // from safety orange to a washed cream after the very first tap.
-          '&:hover': { backgroundColor: 'safety.dark' },
-          '&:active': { backgroundColor: 'safety.dark' },
+          // Next is tapped over and over without navigating away; the
+          // shared theme presses it to safety.dark, its own colour.
         }}
       >
         {saving ? 'Saving…' : 'Next'}

@@ -118,6 +118,25 @@ function pairsFor(theme) {
     min: 4.5,
   });
 
+  // A contained button's label on its hover/press fill. The shared override
+  // resolves that fill per `color` (it used to paint every colour
+  // `primary.dark`), so read it off the built override the way MUI calls it.
+  // A tap on a phone is the press state, and the label is still copy: AA.
+  const contained = theme.components?.MuiButton?.styleOverrides?.contained;
+  for (const tone of ['primary', 'secondary', 'error', 'success', 'warning', 'info']) {
+    const style = typeof contained === 'function'
+      ? contained({ ownerState: { color: tone, variant: 'contained' }, theme })
+      : contained;
+    const fill = style?.['&:active']?.backgroundColor ?? style?.['&:hover']?.backgroundColor;
+    if (!fill || !p[tone]?.contrastText) continue;
+    pairs.push({
+      label: `${tone}.contrastText on contained ${tone} press fill`,
+      fg: p[tone].contrastText,
+      bg: fill,
+      min: 4.5,
+    });
+  }
+
   // Semantic colors are foregrounds far more often than fills: status icons,
   // outlined chips, helper text.
   for (const tone of ['error', 'success', 'warning', 'info']) {
@@ -203,8 +222,21 @@ function pairsFor(theme) {
  *   canvas, bujogeek's dark warm greys, and bookgeek reusing slate-500 for
  *   secondary in BOTH modes (its mode-tuned `muted` slot is more legible than
  *   its secondary). Part of the TODO_ORDER #3 text-tier sweep.
+ *
+ *   (The paragraphs above are history: those gaps are closed. What is listed
+ *   below is live.)
  */
 const KNOWN_GAPS = {
+  // Contained-button press fills, recorded 2026-09-30 when these pairs were
+  // added. Both predate the per-colour fix: flockgeek's primary has always
+  // pressed to primary.dark, and primary is deliberately left on it (see
+  // containedPressedFill). A palette decision for flockgeek's accent ramp,
+  // not a theme rule.
+  'flockgeek/light/primary.contrastText on contained primary press fill': 3.27,
+  'flockgeek/dark/primary.contrastText on contained primary press fill': 4.29,
+  // Its secondary IS the accent's dark, at rest and pressed alike (#A06E00
+  // under a white label); neither .dark nor .light clears AA.
+  'flockgeek/dark/secondary.contrastText on contained secondary press fill': 4.45,
 };
 
 /* ── suite ─────────────────────────────────────────────────────────────── */
