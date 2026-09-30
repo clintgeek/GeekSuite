@@ -206,9 +206,6 @@ Live since 2026-09-26.
   a custom required field, Walk's create is rejected (it shows Retry with the server message)
   and can't be fixed from Walk. Either prompt for required fields in Walk, or create with the
   General type and flag the item in Attention.
-- **Label Maker is too quiet** (Chef, 2026-09-29: "isn't real obvious"). The six-point
-  amplification is proposed and awaiting Chef: tape page titles, real embossing, coloured
-  refills, tape section heads, a label-maker empty state, real cardboard.
 - **AI Ask (`??`):** needs the AI tier decided first. Under the privacy rule, identifiers,
   document contents and values never go to a provider.
 - **Its MCP tools**, once the suite MCP server exists.

@@ -10,6 +10,75 @@ anything a future reader would otherwise have to rediscover.
 
 ---
 
+## 2026-09-30
+
+### ThingGeek — Label Maker made loud
+
+`fe0d3ec8`
+
+Chef, about the 2026-09-29 redesign: "the lablemaker theme isn't real obvious. In fact I
+don't really see it." He was right: on the screen he actually has (5 rooms, 0 things) the
+only tape was one strip per room on Where. The rest was a brown app. All six points of
+the proposal went in, as one revertable commit:
+
+- **Page titles on tape.** The top bar's title is a long strip at every size, so the
+  PageHeader `<h1>` is now visually hidden everywhere. Attention used to show "Needs
+  attention" twice, and with tape on both it was loud noise.
+- **Real Dymo detail.** The ends are rounded instead of corner-clipped, and the plastic
+  has a speckle texture. Each letter is struck slightly off the line (±0.03em;
+  ±0.05em read as mixed letter sizes). The offset is derived from the text, so it's stable.
+  The letters are inline spans moved with `top`, so the tape still ellipsizes and
+  `textContent` is still exactly the name.
+  - **Test landmine:** `getByText('Shelf 2')` can no longer see a tape's text. Use
+    `getByText(tapeText('Shelf 2'))` from `__tests__/testUtils.jsx`.
+- **Coloured refills (`TAPE_TONES`).**
+  - Black: locations.
+  - Blue: containers, via `toneForKind` on the crumb or node `kind`.
+  - Red: Overdue, but only once something is overdue.
+  - Green: done (a checklist step, All clear).
+  - Orange: the first-run "Add a thing" strip, with dark letters. Orange is still never
+    an ink.
+  - Every tone's letters are measured against all four sheen bands in
+    labelMakerContrast.
+- **Section headings on tape:** SectionTape. It covers the detail Sections, the Attention
+  groups, "Gaps in the record", "Getting started" and "Kept here".
+- **The empty state is a label maker.** The three steps are punched strips, the card is
+  held on with packing tape, and Add a thing is an orange strip (TapeButton, 48px).
+  "Nothing matches" and Where's "Nowhere yet" are on tape.
+- **Real cardboard.** A corrugated flute strip runs under the top bar and over the tab
+  bar. It's a background image, so it takes no taps. PackingTape (aria-hidden) holds the
+  first-run card and the checklist.
+
+### NoteGeek — the S Pen side button scrolls
+
+`532a66a4` `b36c5393`
+
+Chef: "Button on the S-pen should let me scroll. That's way more useful." Holding the
+barrel button (button 2 / buttons bit 2) now switches tldraw to the `hand` tool and back.
+An eraser end (buttons bit 32) still erases. `utils/penEraser.js` is now `penButton.js`.
+Live 2026-09-29 20:09 CDT; not yet confirmed on Chef's S25+.
+
+### ThingGeek — the Label Maker overhaul
+
+`4ebfc2fc` `0897bbf7` `68fe2629` `8921cf7e` `bcb72c24`
+
+- **Label Maker redesign (`4ebfc2fc`, one revertable commit):**
+  - kraft desk and chrome, card-stock sheets, Dymo tape for places, safety orange only
+    as a fill;
+  - Barlow Condensed and Barlow;
+  - a phone tab bar (Things · Where · Add · Attention · More);
+  - a thing and Add are pages, not dialogs;
+  - Where drills down on a phone via `?at=`.
+- **QR labels (`0897bbf7`):**
+  - Small is 38×25mm, Large is 100×60mm.
+  - The QR has a real 4-module quiet zone inside its box.
+  - Names are set in Barlow Condensed, sized so the longest word fits the column, so
+    names wrap between words ("Wendy" never becomes "Wend / y").
+- **Walk the room (`68fe2629`):** rapid capture into one place, full screen.
+- **First-run checklist on Attention (`8921cf7e`).** "Photograph ID plates" needs at
+  least one item before it can count as done: an empty inventory also has 0 missing.
+- **Print label (`bcb72c24`):** on a thing, and "Print labels" on a Where level.
+
 ## 2026-09-29
 
 ### NoteGeek — "Graphite", one New, share target, shortcuts, pins
