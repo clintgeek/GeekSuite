@@ -15,17 +15,22 @@ import { crumbs, makeThing } from '../fixtures';
 import { renderWithProviders } from '../testUtils';
 
 describe('struck-by-hand letters', () => {
-  it('each letter sits a hair off the line, the same way every time, and the text stays the name', () => {
-    renderWithProviders(<DymoTape>Garage</DymoTape>);
+  it('one hidden run of real text; the struck cells are aria-hidden, fixed pitch, a hair off the line', () => {
+    renderWithProviders(<DymoTape>Gun safe</DymoTape>);
     const tape = screen.getByTestId('dymo-tape');
-    expect(tape.textContent).toBe('Garage');
-    const letters = [...tape.firstElementChild.children];
-    expect(letters.map((l) => l.textContent).join('')).toBe('Garage');
-    const offsets = letters.map((l) => l.style.top);
-    expect(new Set(offsets).size).toBeGreaterThan(1); // not all on the line
-    for (let i = 0; i < 6; i += 1) {
-      expect(Math.abs(letterOffset('Garage', i))).toBeLessThanOrEqual(0.03);
-      expect(letterOffset('Garage', i)).toBe(letterOffset('Garage', i));
+    // The text is exactly the name, once — what getByText and a screen reader get.
+    expect(tape.textContent).toBe('Gun safe');
+    expect(screen.getByText('Gun safe')).toBeInTheDocument();
+    const letters = screen.getByTestId('dymo-letters');
+    expect(letters).toHaveAttribute('aria-hidden', 'true');
+    const cells = [...letters.children];
+    // One cell per character, the space included (the wheel strikes at a fixed pitch).
+    expect(cells.map((c) => c.getAttribute('data-ch'))).toEqual(['G', 'u', 'n', '', 's', 'a', 'f', 'e']);
+    expect(letters.textContent).toBe('');
+    expect(new Set(cells.map((c) => c.style.top)).size).toBeGreaterThan(1); // not all on the line
+    for (let i = 0; i < 8; i += 1) {
+      expect(Math.abs(letterOffset('Gun safe', i))).toBeLessThanOrEqual(0.03);
+      expect(letterOffset('Gun safe', i)).toBe(letterOffset('Gun safe', i));
     }
   });
 });

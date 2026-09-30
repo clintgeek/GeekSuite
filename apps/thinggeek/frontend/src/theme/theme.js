@@ -28,7 +28,8 @@ import { createGeekSuiteTheme } from '@geeksuite/ui';
 
 export const DISPLAY_FONT = '"Barlow Condensed", "Roboto Condensed", "Arial Narrow", system-ui, sans-serif';
 export const BODY_FONT = '"Barlow", system-ui, -apple-system, "Segoe UI", "Helvetica", "Arial", sans-serif';
-export const TAPE_FONT = DISPLAY_FONT;
+/** The embosser's wheel: a rounded single-weight sans, struck at a fixed pitch (components/DymoTape.jsx). */
+export const TAPE_FONT = '"Quicksand", "Varela Round", "Nunito", system-ui, sans-serif';
 export const MONO_FONT = '"Roboto Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace';
 
 /** Kraft fibre on the desk: two faint crossed hatchings (AppMain paints it). */
@@ -98,23 +99,28 @@ export const TAPE = {
 };
 
 /**
- * Refill cartridges. Each tone is one roll of tape, the same in both modes:
+ * Refill cartridges. Each tone is one roll of flat glossy vinyl, the same in
+ * both modes:
  *   black   locations (and the default): House, Garage, Shelf 2
  *   blue    containers: the van, the safe, the tackle box
  *   red     attention: Overdue
  *   green   done: a checked step, "All clear"
  *   orange  the one primary action, as tape (safety orange; DARK letters —
  *           orange is a fill, never an ink)
- * `top` is the lightest band of the sheen and `mid`/`ground`/`low` the rest;
- * the letters are measured against `top` (the worst case) in
- * __tests__/theme/labelMakerContrast.test.js.
+ *   body    the vinyl
+ *   top     the gloss along the top edge (body + 12% white): the lightest
+ *           ground a letter lands on, so the one contrast is measured on
+ *   ink     the stress-whitened plastic of a raised letter: its rim is `ink`
+ *           and its face `ink` at FILL_ALPHA over the tape
+ * (__tests__/theme/labelMakerContrast.test.js measures the face on `top`.)
  */
+export const TAPE_FILL_ALPHA = 0.88;
 export const TAPE_TONES = {
-  black: { top: TAPE.top, mid: '#1F1D1B', ground: TAPE.ground, low: '#24211E', ink: TAPE.ink },
-  blue: { top: '#2F5E9A', mid: '#1B477F', ground: '#123A6C', low: '#1A4476', ink: TAPE.ink },
-  red: { top: '#A62A20', mid: '#8E1C15', ground: '#7A150F', low: '#861A13', ink: TAPE.ink },
-  green: { top: '#2F6A39', mid: '#22552B', ground: '#1A4722', low: '#1F4F28', ink: TAPE.ink },
-  orange: { top: '#F7904C', mid: '#F2741F', ground: '#E8661A', low: '#EE6E1D', ink: '#1B1006' },
+  black: { body: '#161514', top: '#323130', ink: '#FFFFFF' },
+  blue: { body: '#1C4C8C', top: '#37619A', ink: '#FFFFFF' },
+  red: { body: '#A3211A', top: '#AE3C35', ink: '#FFFFFF' },
+  green: { body: '#1F5A2A', top: '#3A6E44', ink: '#FFFFFF' },
+  orange: { body: '#F2741F', top: '#F4853A', ink: '#1B1006' },
 };
 
 /** Tape tone for a place, by its kind: containers are on blue refill, everything else black. */

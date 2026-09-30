@@ -9,7 +9,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { alpha, getContrastRatio } from '@mui/material/styles';
-import { INK, PLATE, SAFETY, STATUS_TONES, SURFACES, TAPE, TAPE_TONES, createThingTheme } from '../../theme/theme';
+import { INK, PLATE, SAFETY, STATUS_TONES, SURFACES, TAPE, TAPE_FILL_ALPHA, TAPE_TONES, createThingTheme } from '../../theme/theme';
 import { LIGHTBOX_INK, LIGHTBOX_MUTED } from '../../views/detail/Lightbox';
 import { OVERLAY_GROUND, OVERLAY_INK } from '../../views/detail/Gallery';
 
@@ -72,9 +72,10 @@ for (const mode of ['light', 'dark']) {
   add(`${mode} tape letters on the tape body`, TAPE.ink, TAPE.ground);
   add(`${mode} tape letters on the tape's top sheen`, TAPE.ink, TAPE.top);
   // Every refill tone (blue containers, red Overdue, green Done, the orange
-  // action strip): its letters against every band of its own sheen.
+  // action strip): a struck letter's face — its ink at TAPE_FILL_ALPHA over
+  // the tape — on the tone's body and on its top gloss (the lightest ground).
   for (const [name, tone] of Object.entries(TAPE_TONES)) {
-    for (const band of ['top', 'mid', 'ground', 'low']) add(`${mode} ${name} tape letters on its ${band} band`, tone.ink, tone[band]);
+    for (const band of ['body', 'top']) add(`${mode} ${name} tape letter face on its ${band}`, over(alpha(tone.ink, TAPE_FILL_ALPHA), tone[band]), tone[band]);
   }
   // On a light desk the tape reads as a shape by itself.
   if (mode === 'light') add(`${mode} tape against the desk (the strip's edge)`, TAPE.top, s.desk, GLYPH);
