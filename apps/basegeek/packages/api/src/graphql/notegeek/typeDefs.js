@@ -119,15 +119,31 @@ export const typeDefs = gql`
 
   # module carrying the same text merges to one type — but the moment anyone
 
+  """How much of the library a tag subtree covers."""
+  type TagUsage {
+    """Notes carrying the tag or any tag beneath it."""
+    notes: Int!
+    """Distinct tags beneath it (house/garage, house/garage/door, ...)."""
+    subTags: Int!
+  }
+
   type Query {
-    notes(tag: String, prefix: String, type: String, limit: Int, sort: String): [Note!]!
+    """
+    The note list. tag = exactly that tag; prefix = any tag starting with
+    the string; under = the nested-tag view, the tag itself or anything
+    beneath it (house -> house, house/garage; never houseboat). Sent
+    together, they all narrow.
+    """
+    notes(tag: String, prefix: String, under: String, type: String, limit: Int, sort: String): [Note!]!
     note(id: ID!): Note
     """A note's history, newest first. The content field is null here —
     fetch one version with noteVersion rather than pulling every body."""
     noteVersions(noteId: ID!): [NoteVersion!]!
     noteVersion(id: ID!): NoteVersion
     noteTags: [String!]!
-    searchNotes(q: String!): [SearchSnippet!]!
+    """Notes carrying the tag or a descendant, and how many sub-tags it has."""
+    noteTagUsage(tag: String!): TagUsage!
+    searchNotes(q: String!, under: String): [SearchSnippet!]!
     suggestForNote(noteId: ID, title: String!, excerpt: String!, tags: [String!]!): NoteSuggestions!
   }
 
@@ -160,7 +176,14 @@ export const typeDefs = gql`
     """Pin or unpin a note. Scoped to the owner, like every other note mutation."""
     setNotePinned(id: ID!, pinned: Boolean!): Note!
     deleteNote(id: ID!): Boolean!
+    """
+    Rename or move a tag with its whole subtree: house -> home turns
+    house/garage into home/garage; garage -> house/garage moves it. Merges
+    into an existing tag without duplicates. Refuses a move into its own
+    descendant. True when any note changed.
+    """
     renameTag(oldTag: String!, newTag: String!): Boolean!
+    """Remove a tag and every tag beneath it from your notes. Notes stay."""
     deleteTag(tag: String!): Boolean!
   }
 `;

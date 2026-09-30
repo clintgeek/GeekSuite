@@ -218,4 +218,12 @@ describe('renameTag / deleteTag', () => {
   test('tags are trimmed', () => {
     expect(remove({ tag: '  work  ' }).tag).toBe('work');
   });
+
+  test('tag paths are normalized, and a name that normalizes to nothing is rejected', () => {
+    expect(rename({ oldTag: ' house / garage/ ', newTag: 'home//garage' }))
+      .toEqual({ oldTag: 'house/garage', newTag: 'home/garage' });
+    expect(remove({ tag: '/house/' }).tag).toBe('house');
+    expectBadInput(() => remove({ tag: '/' }));
+    expectBadInput(() => rename({ oldTag: 'work', newTag: ' // ' }));
+  });
 });

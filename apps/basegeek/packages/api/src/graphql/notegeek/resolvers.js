@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { GraphQLError } from 'graphql';
 import Note from './models/Note.js';
 import {
   validateInput,
@@ -17,6 +18,13 @@ import { sanitizeNoteArgs } from './sanitize.js';
 import { suggestForNote } from './suggest.js';
 import { composeNote } from './compose.js';
 import { transcribeSketch } from './transcribe.js';
+import {
+  normalizeTag,
+  escapeRegex,
+  subtreeCondition,
+  isInSubtree,
+  swapPrefix,
+} from './tags.js';
 import {
   snapshotNote,
   isMeaningfulChange,
@@ -38,6 +46,21 @@ const validateTranscribeSketch = validateInput(transcribeSketchArgsSchema);
 /** How many search hits one `searchNotes` call may return. */
 const SEARCH_RESULT_LIMIT = 100;
 
+/** The stored tag ceiling — the same 100 `validation.js` enforces on input. */
+const TAG_MAX = 100;
+
+/** Code-point length, which is what Mongo's `$strLenCP` / `$substrCP` count. */
+const cpLength = (str) => Array.from(str).length;
+
+const badTagInput = (message, path = 'newTag') =>
+  new GraphQLError(message, {
+    extensions: {
+      code: 'BAD_USER_INPUT',
+      http: { status: 400 },
+      details: [{ path, message }],
+    },
+  });
+
 export const resolvers = {
   Query: {
     /** A note's history, newest first. Content omitted — see versions.js. */
@@ -56,13 +79,11 @@ export const resolvers = {
       return getNoteVersion({ versionId: id, userId });
     },
 
-    notes: async (_, { tag, prefix, type, limit, sort }, context) => {
+    notes: async (_, { tag, prefix, under, type, limit, sort }, context) => {
       const userId = context.user?.id;
       if (!userId) return [];
 
       const filter = { userId };
-
-      const escapeRegex = (str) => str.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
       // `tag` and `prefix` are separate arguments and a client may send both.
       // Two plain assignments meant the second silently REPLACED the first, so
@@ -72,6 +93,12 @@ export const resolvers = {
       const tagConds = [];
       if (tag) tagConds.push({ $in: [tag] });
       if (prefix) tagConds.push({ $regex: `^${ escapeRegex(prefix) }` });
+      // `under` is the nested-tag view: the tag itself AND everything beneath
+      // it (`house` → `house`, `house/garage`, never `houseboat`). Normalized
+      // the way stored tags are, so `house/` finds `house`. One that
+      // normalizes to nothing narrows nothing, like an absent argument.
+      const underTag = normalizeTag(under);
+      if (underTag) tagConds.push(subtreeCondition(underTag));
       if (tagConds.length === 1) {
         filter.tags = tagConds[0];
       } else if (tagConds.length > 1) {
@@ -123,7 +150,26 @@ export const resolvers = {
       return tags.sort((a, b) => a.localeCompare(b));
     },
 
-    searchNotes: async (_, { q }, context) => {
+    /**
+     * How much a tag subtree covers: the notes carrying the tag or any tag
+     * beneath it, and how many distinct sub-tags there are. The delete dialog
+     * reads it before asking — "Removes #house and its 2 sub-tags from 7
+     * notes" — so the user sees the blast radius first.
+     */
+    noteTagUsage: async (_, { tag }, context) => {
+      const userId = context.user?.id;
+      const root = normalizeTag(tag);
+      if (!userId || !root) return { notes: 0, subTags: 0 };
+      const filter = { userId, tags: subtreeCondition(root) };
+      const [notes, tags] = await Promise.all([
+        Note.countDocuments(filter),
+        Note.distinct('tags', filter),
+      ]);
+      const subTags = tags.filter((t) => t !== root && isInSubtree(t, root)).length;
+      return { notes, subTags };
+    },
+
+    searchNotes: async (_, { q, under }, context) => {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
       if (!q || q.trim().length === 0) throw new Error('Search query cannot be empty');
@@ -135,8 +181,11 @@ export const resolvers = {
       // cap is on results rather than on the projection because an
       // aggregation-expression projection alongside `$meta: 'textScore'`
       // needs a server version this deployment does not assert.
+      const searchFilter = { userId, $text: { $search: q.trim() } };
+      const underTag = normalizeTag(under);
+      if (underTag) searchFilter.tags = subtreeCondition(underTag);
       const notes = await Note.find(
-        { userId, $text: { $search: q.trim() } },
+        searchFilter,
         { score: { $meta: 'textScore' }, title: 1, type: 1, tags: 1, isLocked: 1, isEncrypted: 1, createdAt: 1, updatedAt: 1, content: 1 }
       ).sort({ score: { $meta: 'textScore' } }).limit(SEARCH_RESULT_LIMIT).lean();
 
@@ -388,41 +437,108 @@ export const resolvers = {
       return await transcribeSketch({ image, mediaType, source, userId });
     },
 
+    /**
+     * Rename or MOVE a tag, children and all.
+     *
+     * Tags are paths (`tags.js`), so renaming `house` → `home` rewrites
+     * `house` AND every `house/...` to `home/...`; moving is the same call
+     * with a path (`garage` → `house/garage`, and `garage/door` follows to
+     * `house/garage/door`). Merging is allowed: if the target already exists
+     * on a note, the note keeps one copy, at the position of the first.
+     *
+     * One aggregation-pipeline `updateMany`, not N round trips: the rewrite
+     * (`$map`) and the dedupe (`$reduce`) run inside Mongo, so it costs the
+     * same shape for 30 notes or 30 000. `Boolean!` is kept for the clients
+     * already deployed: true when any note changed.
+     */
     renameTag: async (_, rawArgs, context) => {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
       const { oldTag, newTag } = validateRenameTag(rawArgs);
       // Renaming a tag to itself is a no-op, and it has to be an EXPLICIT one.
-      // Both names are trimmed by the schema, so the dialog's own guard
-      // (`TagContextMenu.jsx`, which compares the raw strings) lets
-      // `"work" -> "work "` through: `$addToSet` then does nothing and `$pull`
-      // deletes the tag from every note that had it (BURN_REVIEW_2 #2).
-      // `false` — "nothing changed" — rather than a thrown error, because the
-      // client's cache update (`onTagsRewritten`) runs on the successful
-      // boolean and refetches the tag index, while a rejection would leave the
-      // rename dialog open on an unhandled promise. Case still matters:
+      // Both names are trimmed and normalized by the schema, so a dialog that
+      // compares the RAW strings lets `"work" -> "work "` through; a rewrite
+      // that then ran anyway was once a deletion (BURN_REVIEW_2 #2). `false`
+      // — "nothing changed" — rather than a thrown error, because the
+      // client's cache update runs on the boolean. Case still matters:
       // `work -> Work` is a real rename.
       if (oldTag === newTag) return false;
-      // A positional `$set: { 'tags.$': newTag }` renames in place, so a note
-      // that already carries `newTag` ends up with it twice — `[a, b]` renamed
-      // a -> b becomes `[b, b]`. $addToSet the new tag first (a no-op if it's
-      // already there), then $pull the old one, so the result is deduped
-      // regardless of whether the two tags collided.
-      await Note.updateMany({ userId, tags: oldTag }, { $addToSet: { tags: newTag } });
-      const { modifiedCount } = await Note.updateMany(
-        { userId, tags: oldTag },
-        { $pull: { tags: oldTag } }
-      );
+      // A tag cannot be moved inside itself: `house` → `house/garage` would
+      // rewrite `house/garage` to `house/garage/garage`, and so on down.
+      if (isInSubtree(newTag, oldTag)) {
+        throw badTagInput(`Can't move #${ oldTag } inside itself (#${ newTag }).`);
+      }
+
+      const filter = { userId, tags: subtreeCondition(oldTag) };
+      // Swapping the prefix can make a deep child longer than a tag may be.
+      // Checked up front against the distinct tags (one indexed read) so the
+      // write is all-or-nothing rather than leaving an over-long tag behind.
+      const affected = await Note.distinct('tags', filter);
+      const tooLong = affected
+        .filter((t) => isInSubtree(t, oldTag))
+        .map((t) => swapPrefix(t, oldTag, newTag))
+        .find((t) => t.length > TAG_MAX);
+      if (tooLong) {
+        throw badTagInput(`#${ tooLong.slice(0, 40) }… would be longer than ${ TAG_MAX } characters.`);
+      }
+
+      // Every user-supplied string enters the pipeline through `$literal`:
+      // a tag that starts with `$` would otherwise be read as a field path.
+      const oldLen = cpLength(oldTag);
+      const isInOld = {
+        $or: [
+          { $eq: ['$$t', { $literal: oldTag }] },
+          { $eq: [{ $substrCP: ['$$t', 0, oldLen + 1] }, { $literal: `${ oldTag }/` }] },
+        ],
+      };
+      const renamed = {
+        $map: {
+          input: '$tags',
+          as: 't',
+          in: {
+            $cond: [
+              isInOld,
+              {
+                $concat: [
+                  { $literal: newTag },
+                  { $substrCP: ['$$t', oldLen, { $subtract: [{ $strLenCP: '$$t' }, oldLen] }] },
+                ],
+              },
+              '$$t',
+            ],
+          },
+        },
+      };
+      const deduped = {
+        $reduce: {
+          input: renamed,
+          initialValue: [],
+          in: {
+            $cond: [
+              { $in: ['$$this', '$$value'] },
+              '$$value',
+              { $concatArrays: ['$$value', ['$$this']] },
+            ],
+          },
+        },
+      };
+      const { modifiedCount } = await Note.updateMany(filter, [{ $set: { tags: deduped } }]);
       return modifiedCount > 0;
     },
 
+    /**
+     * Remove a tag AND everything beneath it from the caller's notes
+     * (`house` takes `house/garage` with it). Notes are never deleted — a
+     * note that loses its last tag is simply untagged.
+     */
     deleteTag: async (_, rawArgs, context) => {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
       const { tag } = validateDeleteTag(rawArgs);
+      const condition = subtreeCondition(tag);
       await Note.updateMany(
-        { userId, tags: tag },
-        { $pull: { tags: tag } }
+        { userId, tags: condition },
+        { $pull: { tags: condition } }
       );
       return true;
     },

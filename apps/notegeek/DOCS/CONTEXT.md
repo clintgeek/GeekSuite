@@ -48,12 +48,18 @@ Source of truth: `apps/basegeek/packages/api/src/graphql/notegeek/typeDefs.js`. 
 2026-09-29: this list once named folders, locking, `recentNotes` and batch deletes, none of
 which exist.)
 - **Queries**:
-  - `notes(tag, prefix, type, limit, sort)`: the list. `prefix` matches tags that start with it
-    (`dev/` → `dev/frontend`); sending both `tag` and `prefix` narrows by both. Pinned notes always sort first, then `sort`.
+  - `notes(tag, prefix, under, type, limit, sort)`: the list. `tag` is an exact tag; `prefix` matches
+    tags that start with the raw string (`dev/` → `dev/frontend`); `under` is the nested-tag view — the
+    tag itself **or** anything beneath it (`house` → `house`, `house/garage`; never `houseboat`),
+    normalized like a stored tag. Any combination narrows by all of them. Pinned notes always sort
+    first, then `sort`. `tag`/`prefix` stay for old cached bundles; the UI sends `under`.
   - `note(id)`: single note, scoped to the requesting user.
   - `noteVersions(noteId)`, `noteVersion(id)`: edit history.
   - `noteTags`: the user's distinct tags.
-  - `searchNotes(q)`: full-text search, returning snippets.
+  - `noteTagUsage(tag)` → `{ notes, subTags }`: notes carrying the tag or any descendant, and how
+    many distinct sub-tags sit beneath it. The delete dialog reads it before asking.
+  - `searchNotes(q, under)`: full-text search, returning snippets; `under` optionally narrows to a
+    tag subtree.
   - `suggestForNote(noteId, title, excerpt, tags)`: AI tag and link suggestions.
 - **Mutations**:
   - `createNote(title, content, type, tags)`
@@ -63,7 +69,21 @@ which exist.)
   - `composeNote(content)`: AI compose; returns a draft and writes nothing.
   - `setNotePinned(id, pinned)`: owner-scoped. It writes no history entry and leaves
     `updatedAt` untouched.
-  - `deleteNote(id)`, `renameTag(oldTag, newTag)`, `deleteTag(tag)`
+  - `deleteNote(id)`
+  - `renameTag(oldTag, newTag)` → `Boolean!` (true when any note changed): renames or **moves** the
+    whole subtree — `house` → `home` turns `house/garage` into `home/garage`; `garage` →
+    `house/garage` moves it and its children. Merges into an existing tag with no duplicates (one copy,
+    at the first position). Refuses a move into its own descendant (`house` → `house/garage`) and a
+    rename that would push a child past 100 characters, both as `BAD_USER_INPUT`. One aggregation-
+    pipeline `updateMany`, owner-scoped. A normalized no-op (`work` → `work `) returns false.
+  - `deleteTag(tag)`: removes the tag **and every tag beneath it** from the owner's notes. Notes are
+    never deleted.
+- **Tags are `/` paths, normalized on write** (`notegeek/tags.js`, copied in the frontend as
+  `src/utils/tagPath.js` — change both): trim, split on `/`, trim each segment, drop empty
+  segments, rejoin (`" house // garage/ "` → `house/garage`); empties dropped; exact-string dedupe
+  keeping order. Case is kept — `Work` and `work` are different tags. Applied to createNote/updateNote
+  `tags` and the renameTag/deleteTag inputs. Nothing about the tree is stored; it is read off the
+  strings.
   - `transcribeSketch(image, mediaType, source)`: reads a sketch's exported PNG, or (`source: 'photo'`) a photographed notebook page as JPEG with a prompt that ignores ruled lines and printed text, with the vision model (`need: vision+prose:balanced`, 40/day, every page counts). It writes nothing; the client saves new notes that link back. See `HANDWRITING.md` §2 and §3 ("Photo of a page", route `/notes/photo`). It needs `client_max_body_size 12m` on the vhost's `/graphql` location, or images over 1 MB get a 413.
 
 ### HTML & Markdown Security
