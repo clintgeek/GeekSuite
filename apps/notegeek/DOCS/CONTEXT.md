@@ -149,6 +149,8 @@ Added 2026-09-30. The browser's own print path, no PDF library: `window.print()`
 
 ---
 
+**Running header and footer (2026-09-30).** notePrint.css defines `@page { @bottom-right }` with "Page N of M", and while printing `printNote.js` injects a style (`#ng-print-page-header`) with the note title in `@top-left` for pages 2 onward (page 1 opens with the title already). Defining ANY margin box also switches off Chrome's default headers and footers (the date, "NoteGeek", the URL); this was verified in Chromium 145. So keep at least one margin box even if the wording changes. Text in the PDF stays real, selectable and searchable text; only sketches are images.
+
 ## 9. Import a Markdown file
 
 Added 2026-09-30. Each `.md` / `.markdown` / `.txt` file becomes one new **Markdown** note through the ordinary `createNote` (title, body and type in one call; no backend change). A `.txt` becomes Markdown too, not `text`: `text` is TipTap HTML, where a plain file's line breaks and any `<` would be read as markup, while the Markdown editor shows a plain file exactly as written.

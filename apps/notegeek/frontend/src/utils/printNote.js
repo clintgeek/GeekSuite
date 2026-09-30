@@ -8,9 +8,12 @@
  *
  * Two things the stylesheet cannot do on its own:
  *
- *   - **The filename.** "Save as PDF" suggests `document.title`, which is
- *     "NoteGeek" all day. It is swapped for the note's title while printing
- *     and put back afterwards (`afterprint`).
+ *   - **The filename and the running header.** "Save as PDF" suggests
+ *     `document.title`, which is "NoteGeek" all day. It is swapped for the
+ *     note's title while printing and put back afterwards (`afterprint`), and
+ *     the same title goes in the page header of pages 2+ (`setPageHeader`).
+ *     The page-number footer is static CSS; any margin box also turns off
+ *     Chrome's own date/URL headers.
  *   - **Anything asynchronous.** A sketch is a tldraw canvas; paper needs it
  *     as an image, and the export takes a moment. `runPrint` awaits the
  *     page's `prepare`, waits for the print view's images to load, and only
@@ -30,16 +33,49 @@ export function printTitleFor(title) {
   return t || PRINT_TITLE_FALLBACK;
 }
 
-/** Show `title` as the document title until `endPrintTitle`. Idempotent. */
+export const PAGE_HEADER_STYLE_ID = 'ng-print-page-header';
+
+/** `text` as a CSS string literal: backslashes, quotes and line breaks escaped. */
+export function cssString(text) {
+  return `"${String(text).replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/[\r\n]+/g, ' ')}"`;
+}
+
+/**
+ * The running header: the note's title at the top left of every page but the
+ * first (page one opens with the title in large type already). CSS can't read
+ * the title from the page (`string-set` isn't in Chrome), so it is written
+ * into a style element for the length of the print, next to the static
+ * page-number footer in notePrint.css.
+ */
+function setPageHeader(title) {
+  let el = document.getElementById(PAGE_HEADER_STYLE_ID);
+  if (!el) {
+    el = document.createElement('style');
+    el.id = PAGE_HEADER_STYLE_ID;
+    document.head.appendChild(el);
+  }
+  el.textContent =
+    `@media print { @page { @top-left { content: ${cssString(printTitleFor(title))}; ` +
+    `font-family: 'Spline Sans Mono Variable', ui-monospace, Menlo, Consolas, monospace; font-size: 8pt; color: #555; } } ` +
+    `@page :first { @top-left { content: none; } } }`;
+}
+
+/**
+ * Show `title` as the document title, and as the running page header, until
+ * `endPrintTitle`. Idempotent.
+ */
 export function beginPrintTitle(title) {
   if (typeof document === 'undefined') return;
   if (savedTitle === null) savedTitle = document.title;
   document.title = printTitleFor(title);
+  setPageHeader(title);
 }
 
-/** Put back the title `beginPrintTitle` replaced. Safe to call twice. */
+/** Put back the title `beginPrintTitle` replaced, and drop the page header. Safe to call twice. */
 export function endPrintTitle() {
-  if (typeof document === 'undefined' || savedTitle === null) return;
+  if (typeof document === 'undefined') return;
+  document.getElementById(PAGE_HEADER_STYLE_ID)?.remove();
+  if (savedTitle === null) return;
   document.title = savedTitle;
   savedTitle = null;
 }

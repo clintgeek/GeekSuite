@@ -10,7 +10,23 @@
 .ng-print-root { display: none; }
 
 @media print {
-  @page { size: auto; margin: 18mm 16mm 20mm; }
+  /*
+   * Our own running footer (and, from printNote.js, a running header with
+   * the note's title on pages 2+). Defining ANY margin box also switches off
+   * Chrome's default headers and footers — the date, "NoteGeek" and the URL
+   * that Chef found ugly — so this block must stay even if the wording
+   * changes. Verified in Chromium 145 (2026-09-30).
+   */
+  @page {
+    size: auto;
+    margin: 18mm 16mm 20mm;
+    @bottom-right {
+      content: "Page " counter(page) " of " counter(pages);
+      font-family: 'Spline Sans Mono Variable', ui-monospace, Menlo, Consolas, monospace;
+      font-size: 8pt;
+      color: #555;
+    }
+  }
 
   html, body, #root {
     height: auto !important;

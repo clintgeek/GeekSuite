@@ -1,6 +1,9 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
+  PAGE_HEADER_STYLE_ID,
+  PRINT_TITLE_FALLBACK,
   beginPrintTitle,
+  cssString,
   endPrintTitle,
   isPrintShortcut,
   mindMapOutline,
@@ -144,5 +147,36 @@ describe('mindMapOutline', () => {
     expect(mindMapOutline('not json')).toEqual([]);
     expect(mindMapOutline('{}')).toEqual([]);
     expect(mindMapOutline('')).toEqual([]);
+  });
+});
+
+describe('the running header and footer', () => {
+  afterEach(() => endPrintTitle());
+
+  it('the note title goes in the page header of pages 2+ while printing, and is removed after', () => {
+    beginPrintTitle('Trip notes');
+    const el = document.getElementById(PAGE_HEADER_STYLE_ID);
+    expect(el).not.toBeNull();
+    expect(el.textContent).toContain('@top-left { content: "Trip notes"');
+    expect(el.textContent).toContain('@page :first { @top-left { content: none; } }');
+    endPrintTitle();
+    expect(document.getElementById(PAGE_HEADER_STYLE_ID)).toBeNull();
+  });
+
+  it('a title with quotes, backslashes or line breaks cannot break out of the CSS string', () => {
+    expect(cssString('Say "hi"\\now\nplease')).toBe('"Say \\"hi\\"\\\\now please"');
+  });
+
+  it('an untitled note still gets a header, not an empty string', () => {
+    beginPrintTitle('   ');
+    expect(document.getElementById(PAGE_HEADER_STYLE_ID).textContent).toContain(`content: "${PRINT_TITLE_FALLBACK}"`);
+  });
+
+  it('the stylesheet defines the page-number footer — which is also what turns off Chrome’s date/URL headers', async () => {
+    // Read from disk: vitest stubs CSS imports (even ?raw) to an empty string.
+    const { readFileSync } = await import('node:fs');
+    const { join } = await import('node:path');
+    const css = readFileSync(join(process.cwd(), 'src/components/notes/notePrint.css'), 'utf8');
+    expect(css).toMatch(/@bottom-right\s*\{\s*content: "Page " counter\(page\) " of " counter\(pages\)/);
   });
 });
