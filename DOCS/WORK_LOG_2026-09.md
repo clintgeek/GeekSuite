@@ -12,6 +12,29 @@ anything a future reader would otherwise have to rediscover.
 
 ## 2026-09-30
 
+### ThingGeek — the tape, redrawn from real Dymo output
+
+`9a12452b`
+
+Chef: "make it appear a little more embossed … the labels would have been square and not
+rounded corners." He was right on both counts. Photos of real Dymo output (Wikimedia Commons)
+showed:
+
+- flat glossy vinyl, cut square;
+- a fixed pitch: every character and every space takes the same cell, with faint die seams
+  between cells;
+- rounded single-weight letters pushed up out of the plastic, whitened by the stress, with a
+  hard shadow on one side.
+
+DymoTape now draws exactly that:
+
+- **Font:** Quicksand 600, at 0.86em cells.
+- **Letters:** a face at 88% of the ink colour, a bright rim, a drop shadow and a lit edge.
+- **Accessibility landmine:** Chrome reads per-character boxes as "G a r a g e". The name
+  now lives in ONE visually hidden span, and the struck cells are aria-hidden and draw with
+  `content: attr(data-ch)`. `textContent` and `getByText` work again, so the `tapeText()`
+  matcher from `fe0d3ec8` is gone.
+
 ### ThingGeek — Label Maker made loud
 
 `fe0d3ec8`
@@ -29,8 +52,8 @@ the proposal went in, as one revertable commit:
   ±0.05em read as mixed letter sizes). The offset is derived from the text, so it's stable.
   The letters are inline spans moved with `top`, so the tape still ellipsizes and
   `textContent` is still exactly the name.
-  - **Test landmine:** `getByText('Shelf 2')` can no longer see a tape's text. Use
-    `getByText(tapeText('Shelf 2'))` from `__tests__/testUtils.jsx`.
+  - Superseded by the entry above: the per-letter spans made `getByText` miss the text,
+    which was patched with a `tapeText()` matcher, now removed.
 - **Coloured refills (`TAPE_TONES`).**
   - Black: locations.
   - Blue: containers, via `toneForKind` on the crumb or node `kind`.
