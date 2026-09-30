@@ -18,6 +18,18 @@ name: Mobile harness
 # permanent sidebar lives, and it had 46 findings that no gate saw because the
 # phone drawer is closed in every phone scene. The job went from ~17 to ~28
 # minutes (220 -> 380 scenes), still inside the 45-minute timeout.
+#
+# Since 2026-09-30 it is SHARDED BY APP: one job per app in
+# tools/mobile-harness/lib/registry.mjs (the `apps` job reads the list, so a
+# new app joins the matrix on its own), each running phone + desktop for that
+# app exactly as the single job did. The full run went 41-47 min -> about the
+# slowest single app plus install (~10 min), and each app fails on its own.
+#
+# Branch protection (repo ruleset "Protect main") requires a check named
+# exactly `mobile grammar (iPhone 14, dark + light)`. That name now belongs to
+# the `gate` job, which needs every shard, always runs, and fails unless the
+# app list and every shard succeeded. Do NOT rename it, and do not give any
+# shard that name, without changing the ruleset in the same breath (Chef).
 on:
   push:
     branches: [main]
@@ -39,13 +51,35 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  harness:
-    name: mobile grammar (iPhone 14, dark + light)
+  apps:
+    name: mobile harness · app list
     runs-on: ubuntu-latest
-    # 75, not 45: the full run (every app, phone + desktop) reached 41-45 min
-    # on 2026-09-27 as scenes grew, and one run was cancelled at the cap.
-    # Durable fix, pending: shard by app in a matrix (renames the check).
-    timeout-minutes: 75
+    timeout-minutes: 5
+    outputs:
+      apps: ${{ steps.list.outputs.apps }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: tools/mobile-harness
+      - name: Read the app list from the harness registry
+        id: list
+        # registry.mjs has no imports, so this needs no install.
+        run: |
+          apps=$(node --input-type=module -e "import { APP_NAMES } from './tools/mobile-harness/lib/registry.mjs'; console.log(JSON.stringify(APP_NAMES))")
+          echo "apps: $apps"
+          echo "apps=$apps" >> "$GITHUB_OUTPUT"
+
+  shard:
+    name: mobile grammar · ${{ matrix.app }}
+    needs: apps
+    runs-on: ubuntu-latest
+    # One app, phone + desktop. The slowest app ran ~8-10 min inside the old
+    # single job; 25 leaves room for growth and still catches a hang early.
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        app: ${{ fromJSON(needs.apps.outputs.apps) }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -58,6 +92,7 @@ jobs:
 
       # Cache the browser, not the download script: the key is the pinned
       # Playwright version, so a version bump invalidates it on its own.
+      # Every shard shares the one key; the first to finish saves it.
       - name: Read the pinned Playwright version
         id: pw
         run: echo "version=$(node -p "require('./tools/mobile-harness/package.json').devDependencies.playwright")" >> "$GITHUB_OUTPUT"
@@ -72,22 +107,79 @@ jobs:
         run: npx playwright install --with-deps chromium
         working-directory: tools/mobile-harness
 
-      - name: Build, serve and probe every app
+      - name: Build, serve and probe ${{ matrix.app }}
         # All four categories are enforcing. The three grammar rules have been
         # green since 2026-09-05 14:54; the axe-core a11y category joined them
         # later the same day at 0 findings across all eight apps. Drop
-        # `-- --enforce-a11y` only to deliberately un-gate a11y, and say why.
+        # `--enforce-a11y` only to deliberately un-gate a11y, and say why.
         # `--desktop` adds the desktop contexts to the phone ones (ci.mjs:
         # ALL_VIEWPORTS). It has been enforcing since 2026-09-25, when the
         # desktop pass reached 0. Drop it only to deliberately un-gate
         # desktop, and say why.
-        run: pnpm --filter @geeksuite/mobile-harness run ci -- --enforce-a11y --desktop
+        run: pnpm --filter @geeksuite/mobile-harness run ci -- --enforce-a11y --desktop --app ${{ matrix.app }}
 
       - name: Upload screenshots and SUMMARY.md
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: mobile-harness-${{ github.run_id }}
+          name: mobile-harness-${{ matrix.app }}-${{ github.run_id }}
           path: tools/mobile-harness/out/
           retention-days: 14
           if-no-files-found: warn
+          # a re-run of this job re-uploads under the same name
+          overwrite: true
+
+  gate:
+    # THE REQUIRED CHECK. This exact string is in the "Protect main" ruleset.
+    name: mobile grammar (iPhone 14, dark + light)
+    needs: [apps, shard]
+    # always(), not !cancelled(): a skipped required check counts as passing
+    # on GitHub, so this job must run (and fail) even when the shards were
+    # cancelled or never started.
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: tools/mobile-harness
+
+      - name: Download every shard's artifact
+        uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          pattern: mobile-harness-*-${{ github.run_id }}
+          path: shards
+
+      - name: Merge the shard summaries into one SUMMARY.md
+        # Only node builtins; no install. Always exits 0 — it reports, the
+        # last step decides.
+        run: |
+          node tools/mobile-harness/merge-summaries.mjs shards \
+            --expect '${{ join(fromJSON(needs.apps.outputs.apps || '[]'), ',') }}' \
+            --out combined/SUMMARY.md
+          cat combined/SUMMARY.md >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload the combined SUMMARY.md
+        uses: actions/upload-artifact@v4
+        with:
+          name: mobile-harness-summary-${{ github.run_id }}
+          path: combined/SUMMARY.md
+          retention-days: 14
+          if-no-files-found: warn
+          # a re-run of this job re-uploads under the same name
+          overwrite: true
+
+      - name: Pass only if every shard passed
+        # needs.shard.result folds the matrix: success only if every shard
+        # succeeded; failure/cancelled/skipped (e.g. the app list failed)
+        # all fail the gate.
+        env:
+          APPS_RESULT: ${{ needs.apps.result }}
+          SHARD_RESULT: ${{ needs.shard.result }}
+        run: |
+          echo "app list: $APPS_RESULT   shards: $SHARD_RESULT"
+          if [ "$APPS_RESULT" != success ] || [ "$SHARD_RESULT" != success ]; then
+            echo "::error::mobile harness failed (app list: $APPS_RESULT, shards: $SHARD_RESULT) — see the per-app 'mobile grammar · <app>' jobs and SUMMARY.md"
+            exit 1
+          fi

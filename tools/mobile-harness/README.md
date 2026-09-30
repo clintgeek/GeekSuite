@@ -8,7 +8,11 @@ axe-core (WCAG 2 A + AA) on every scene as a fourth category, **enforcing in
 CI since 2026-09-05**; see [the a11y pass](#the-a11y-pass-axe-core) below.
 
 It is the scratch harness from the M1–M5 passes, cleaned up and made a repo
-citizen: one lib, one fixture set per app, one entry point, one CI job.
+citizen: one lib, one fixture set per app, one entry point, one CI workflow. Since
+2026-09-30 CI runs one job per app (`mobile grammar · <app>`) and a gate job,
+`mobile grammar (iPhone 14, dark + light)`, which is the required check; it
+folds the shards' `summary.json` files into one SUMMARY.md with
+`merge-summaries.mjs` (DOCS/RUNBOOK.md §8).
 
 ---
 
@@ -30,6 +34,7 @@ node tools/mobile-harness/shoot.mjs --app basegeek --serve --viewports all
 # Everything, the way CI runs it
 pnpm --filter @geeksuite/mobile-harness run ci
 node tools/mobile-harness/ci.mjs --app bookgeek --app flockgeek   # a subset
+node tools/mobile-harness/ci.mjs --app gamegeek --enforce-a11y --desktop   # one CI shard, exactly
 
 # Make the axe-core findings count toward the exit code. CI passes this; the
 # tool's own default is still report-only, so pass it when you want the gate.

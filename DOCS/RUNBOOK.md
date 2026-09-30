@@ -173,7 +173,7 @@ Full design in `DOCS/CICD.md` — this is the as-shipped summary.
 |---|---|---|
 | `.github/workflows/ci.yml` | PR → `main`, push → `main` (both skip `**/*.md`, `DOCS/**`, `LICENSE` via `paths-ignore`) | `test-basegeek` (jest, mongodb-memory-server), `test-bookgeek` (`node --test`), `test-notegeek` (vitest), `test-bookgeek-web`, `test-flockgeek`, `test-storygeek`, `test-fitnessgeek-web` (frontend vitest suites, added 2026-09-05), `test-basegeek-ui` (basegeek's admin console — `apps/basegeek/packages/ui` — first test suite that app has had, added 2026-09-05), `test-ui` (vitest, theme contrast), `test-utils`, `test-crypto-vault` (added 2026-09-05), `test-api-client`, `test-auth`, `test-logger`, `test-user` (four shared-package jobs added 2026-09-05, BURN_REVIEW #20 — `@geeksuite/api-client`, `@geeksuite/auth`, `@geeksuite/logger`, `@geeksuite/user` shipped real `test` scripts CI never ran), `test-bujogeek` (vitest), `test-startgeek` (`npm ci` + `npm test` — standalone app, own lockfile, no pnpm workspace install — 14 `node --test` cases over `src/lib/*.test.js`, added 2026-09-05), `test-backends` matrix (bujogeek/fitnessgeek/flockgeek/storygeek/notegeek jest, `pnpm test`), `lint` (`pnpm -r lint`, errors gate/warnings don't), `syntax` (`node tools/syntax-check.mjs`, see below), `gql-audit` (`node tools/gql-arg-audit.mjs`, see below, added 2026-09-05), `boot-smoke` (`node tools/boot-smoke.mjs`, see below, added 2026-09-05), `build-frontends` matrix (8 apps, `npm run build`) |
 | `.github/workflows/release.yml` | push → `main` (same `paths-ignore`), or `workflow_dispatch` with an optional single-app input | Matrix-builds and pushes every app with a root `Dockerfile` to `ghcr.io/clintgeek/<app>:{latest,sha-<short>,main}` |
-| `.github/workflows/mobile-harness.yml` | push → `main`, PR → `main` (`paths`-scoped to `apps/**`, `packages/ui/**`, `tools/mobile-harness/**`, the workflow file itself) | Builds each app, serves `dist`, walks it with `tools/mobile-harness` at iPhone 14 (dark + light), fails on any tap target < 44px, readable text < 12px, sideways scroll, or page error. **Enforcing since 2026-09-05 14:54** (first green run; §8) — no longer report-only. |
+| `.github/workflows/mobile-harness.yml` | push → `main`, PR → `main` (`paths`-scoped to `apps/**`, `packages/ui/**`, `tools/mobile-harness/**`, the workflow file itself) | Builds each app, serves `dist`, walks it with `tools/mobile-harness` at iPhone 14 (dark + light), fails on any tap target < 44px, readable text < 12px, sideways scroll, or page error. **Enforcing since 2026-09-05 14:54** (first green run; §8) — no longer report-only. **Sharded by app since 2026-09-30:** `mobile harness · app list` → one `mobile grammar · <app>` job per app in `tools/mobile-harness/lib/registry.mjs` (phone + desktop, 25-min cap, `fail-fast: false`) → the gate job `mobile grammar (iPhone 14, dark + light)`, which is the name the "Protect main" ruleset requires. Keep that name on the gate (§8). |
 
 **A push to `main` = a deploy.** Release publishes new images; Watchtower on the box polls
 GHCR and recreates any container whose digest changed, within ~5 minutes, no inbound access
@@ -383,6 +383,28 @@ re-hotwired `~/.agents/skills` to `~/.ai/skills` on 2026-09-04): the tool pins i
 `playwright` devDependency and CI installs the matching Chromium; a local run without
 `pnpm install` can still point `PLAYWRIGHT_MODULE` at an existing install, and
 `lib/playwright.mjs` falls back to `~/.agents/skills*/playwright` on its own.
+
+**CI shape (since 2026-09-30).** The one ~47-minute job is now a matrix, one job per app, so
+a full run takes about as long as the slowest app plus install (~10–13 min), and each app
+fails on its own:
+- `mobile harness · app list` reads `APP_NAMES` from `tools/mobile-harness/lib/registry.mjs`
+  (no install). A new app in the registry joins the matrix on its own.
+- `mobile grammar · <app>` runs exactly
+  `pnpm --filter @geeksuite/mobile-harness run ci -- --enforce-a11y --desktop --app <app>`
+  (phone + desktop, as before), 25-minute cap, `fail-fast: false`. Each shard keeps the
+  pnpm-store and Playwright-browser caches and uploads `tools/mobile-harness/out/` as
+  `mobile-harness-<app>-<run_id>` (`ci/<app>/…` screenshots, `ci/SUMMARY.md`, `ci/summary.json`).
+- `mobile grammar (iPhone 14, dark + light)` is the gate: `needs:` both, `if: always()`, and
+  fails unless the app list and every shard succeeded (failed, cancelled and skipped all
+  fail it; a skipped required check would count as passing). It folds every shard's
+  `summary.json` into one SUMMARY.md with `tools/mobile-harness/merge-summaries.mjs` (a per-app
+  table at the bottom; a shard with no summary is listed MISSING), writes it to the run's
+  summary page, and uploads it as `mobile-harness-summary-<run_id>`.
+- **That gate name is a required status check** in the repo ruleset "Protect main" (with the
+  CI job names). Renaming the gate, or giving a shard that exact name, breaks merges until
+  the ruleset changes too, and changing the ruleset is Chef's call.
+- To reproduce one red shard locally, run that shard's exact command:
+  `cd tools/mobile-harness && node ci.mjs --app <app> --enforce-a11y --desktop`.
 
 Run: `pnpm --filter @geeksuite/mobile-harness shoot -- --app <app> --base <url> --label <label>`
 for one app against a running server, or `node tools/mobile-harness/ci.mjs` for the full CI walk.

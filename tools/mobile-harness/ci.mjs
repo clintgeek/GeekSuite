@@ -12,6 +12,7 @@
 //   node ci.mjs --no-build                          # reuse existing dist/
 //   node ci.mjs --enforce-a11y                      # a11y counts toward exit
 //   node ci.mjs --no-a11y                           # skip the axe pass entirely
+//   node ci.mjs --app gamegeek --enforce-a11y --desktop   # one CI shard, exactly
 import fs from 'node:fs';
 import path from 'node:path';
 import { APP_NAMES } from './lib/registry.mjs';
@@ -74,7 +75,10 @@ const outRoot = path.join(TOOL_ROOT, 'out', label);
 try {
   fs.mkdirSync(outRoot, { recursive: true });
   fs.writeFileSync(path.join(outRoot, 'SUMMARY.md'), `${summaryMarkdown(summary, { label, apps })}\n`);
-  console.log(`\nsummary written to out/${label}/SUMMARY.md`);
+  // The machine-readable twin: CI runs one app per job, and the aggregate
+  // job folds these back into one SUMMARY.md (merge-summaries.mjs).
+  fs.writeFileSync(path.join(outRoot, 'summary.json'), `${JSON.stringify({ label, apps, failures, summary }, null, 2)}\n`);
+  console.log(`\nsummary written to out/${label}/SUMMARY.md (+ summary.json)`);
 } catch (err) {
   console.error(`could not write SUMMARY.md: ${err.message || err}`);
 }
