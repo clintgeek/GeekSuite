@@ -120,7 +120,9 @@ export default function GameCard({ game, onOpen, onRate, showShelf = true, custo
       </ButtonBase>
 
       {(shelf || rateable) && (
-        <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 0.5, px: 1, pb: rateable ? 0 : 1, mt: 'auto', minWidth: 0 }}>
+        // Wraps: on a narrow card (2-across on a small phone) the stars drop
+        // under the shelf tag instead of squeezing it to "Cou…".
+        <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'space-between', columnGap: 0.5, rowGap: 0.25, px: 1, pb: rateable ? 0 : 1, mt: 'auto', minWidth: 0 }}>
           {shelf ? <ShelfTag shelf={me.shelf} label={shelf} sx={{ flex: '0 1 auto' }} /> : <span />}
           {rateable ? (
             <Box sx={{ width: 88, flexShrink: 0 }}>

@@ -47,10 +47,18 @@ const VIEW_KEY = 'gamegeek.libraryView';
 const PANEL_KEY = 'gamegeek.filterPanel';
 const SCROLL_KEY = 'gamegeek.libraryScroll';
 
+// The same grid as BookGeek's, so a cover is the same size in both apps
+// (Chef, 2026-09-30). A phone is always 2 across: `auto-fill, minmax(150px)`
+// fell to ONE column on any phone narrower than ~344px (display zoom, large
+// text) and showed one huge poster at a time.
 const GRID_SX = {
   display: 'grid',
-  gridTemplateColumns: { xs: 'repeat(auto-fill, minmax(150px, 1fr))', sm: 'repeat(auto-fill, minmax(168px, 1fr))', lg: 'repeat(auto-fill, minmax(176px, 1fr))' },
-  gap: { xs: 1.5, md: 2 },
+  gridTemplateColumns: {
+    xs: 'repeat(2, minmax(0, 1fr))',
+    sm: 'repeat(3, minmax(0, 1fr))',
+    md: 'repeat(auto-fill, minmax(150px, 1fr))',
+  },
+  gap: 1.5,
 };
 
 function defaultPanelOpen() {
