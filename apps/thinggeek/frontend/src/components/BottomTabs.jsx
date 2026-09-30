@@ -24,6 +24,7 @@ import {
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { geekLayout } from '@geeksuite/ui';
 import { useAttention } from '../hooks/useThingMeta';
+import { corrugatedEdge } from '../theme/theme';
 import { tabFor } from './navConfig';
 import NavMoreSheet from './NavMoreSheet';
 
@@ -144,9 +145,13 @@ export default function BottomTabs() {
           boxSizing: 'content-box',
           pb: 'env(safe-area-inset-bottom, 0px)',
           bgcolor: 'background.chrome',
+          // The carton's cut edge: a strip of corrugation along the top.
+          backgroundImage: (t) => corrugatedEdge(t.palette.mode),
+          backgroundRepeat: 'repeat-x',
+          backgroundPosition: 'left top',
+          backgroundSize: '8px 6px',
           borderTop: 1,
           borderColor: 'border',
-          boxShadow: '0 -1px 0 rgba(255,255,255,0.18) inset',
         }}
       >
         {tabs.map((t) => {

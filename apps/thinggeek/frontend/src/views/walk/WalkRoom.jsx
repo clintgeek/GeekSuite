@@ -30,6 +30,7 @@ import { PhotoCameraOutlined as CameraIcon } from '@mui/icons-material';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { GeekErrorState } from '@geeksuite/ui';
 import DymoTape from '../../components/DymoTape';
+import { toneForKind } from '../../theme/theme';
 import { statusTone } from '../../components/DueLine';
 import TypeIcon from '../../components/TypeIcon';
 import { PageFrame } from '../../components/PageHeader';
@@ -354,7 +355,7 @@ export default function WalkRoom() {
       </Typography>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1.5, mb: 2.5, flexWrap: 'wrap' }}>
         <Box sx={{ minWidth: 0 }}>
-          <DymoTape size="md">{place.name}</DymoTape>
+          <DymoTape size="lg" tone={toneForKind(kindOf(place))}>{place.name}</DymoTape>
           <Typography data-testid="walk-count" sx={{ mt: 0.75, fontSize: '0.9375rem', color: 'text.secondary' }}>
             {savedCount} added to {place.name}
           </Typography>

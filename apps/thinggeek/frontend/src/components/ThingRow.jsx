@@ -16,6 +16,7 @@ import React from 'react';
 import { Box, ButtonBase, Typography } from '@mui/material';
 import DueLine, { dueSummary } from './DueLine';
 import DymoTape from './DymoTape';
+import { toneForKind } from '../theme/theme';
 import ThingPhoto from './ThingPhoto';
 import { coverSrc, thingValueText } from './thingDisplay';
 import { dueDateOf, formatCalendarDate } from '../utils/dates';
@@ -39,13 +40,13 @@ export function AttentionDot({ sx }) {
   );
 }
 
-/** The last crumb of where it is, as tape — or nothing when it isn't anywhere yet. */
+/** The last crumb of where it is, as tape (blue refill for a container) — or nothing when it isn't anywhere yet. */
 export function PlaceTape({ thing, size = 'sm', sx }) {
   const path = pathOf(thing);
   const last = path[path.length - 1];
   if (!last) return null;
   return (
-    <DymoTape size={size} tilt={false} title={whereLabel(thing)} sx={{ maxWidth: '100%', ...sx }}>
+    <DymoTape size={size} tone={toneForKind(last.kind)} tilt={false} title={whereLabel(thing)} sx={{ maxWidth: '100%', ...sx }}>
       {last.name}
     </DymoTape>
   );

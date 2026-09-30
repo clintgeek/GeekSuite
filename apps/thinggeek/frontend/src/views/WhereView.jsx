@@ -39,6 +39,8 @@ import { Link as RouterLink, useLocation, useNavigate, useSearchParams } from 'r
 import { GeekDialog, GeekErrorState, useToast } from '@geeksuite/ui';
 import PageHeader, { PageFrame } from '../components/PageHeader';
 import DymoTape from '../components/DymoTape';
+import SectionTape from '../components/SectionTape';
+import { toneForKind } from '../theme/theme';
 import TapeCrumbs from '../components/TapeCrumbs';
 import TypeIcon from '../components/TypeIcon';
 import { useScrollRoot } from '../components/AppMain';
@@ -133,7 +135,7 @@ function NodeRow({ node, depth, items, expanded, onToggle, onMenu }) {
           aria-label={`${node.name}: ${countsText(node)}. Open`}
           sx={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 1.25, minHeight: 52, px: 1, borderRadius: '6px', justifyContent: 'flex-start', textAlign: 'left', '&:hover': { bgcolor: 'action.hover' } }}
         >
-          <DymoTape tilt={depth === 0} size={depth === 0 ? 'md' : 'sm'} sx={{ minWidth: 0 }}>
+          <DymoTape tilt={depth === 0} size={depth === 0 ? 'md' : 'sm'} tone={toneForKind(kindOf(node))} sx={{ minWidth: 0 }}>
             {node.name}
           </DymoTape>
           {kindOf(node) === 'container' && node.type?.name ? (
@@ -248,7 +250,7 @@ function PlaceRow({ node, onMenu }) {
         sx={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 1.25, minHeight: 60, pl: 1.5, pr: 0.5, justifyContent: 'flex-start', textAlign: 'left', '&:hover': { bgcolor: 'action.hover' } }}
       >
         <Box sx={{ minWidth: 0, flex: 1 }}>
-          <DymoTape sx={{ maxWidth: '100%' }}>{node.name}</DymoTape>
+          <DymoTape tone={toneForKind(kindOf(node))} sx={{ maxWidth: '100%' }}>{node.name}</DymoTape>
           <Typography noWrap sx={{ fontSize: '0.8125rem', color: 'text.secondary', mt: 0.5 }}>
             {[kindOf(node) === 'container' ? node.type?.name : null, countsText(node)].filter(Boolean).join(' · ')}
           </Typography>
@@ -351,9 +353,9 @@ function DrillDown({ at, live, byId, onMenu, onAddHere, onMove, onAddLocation, o
           ) : null}
           {things.length ? (
             <Box component="section" aria-labelledby="where-level-things">
-              <Typography id="where-level-things" component="h2" sx={{ fontSize: '0.9375rem', fontWeight: 700, color: 'text.primary', mb: 0.75 }}>
-                Kept here · {things.length}
-              </Typography>
+              <SectionTape id="where-level-things" count={things.length} sx={{ mb: 1 }}>
+                Kept here
+              </SectionTape>
               <Box component="ul" sx={{ m: 0, p: 0, ...sheetSx }}>
                 {things.map((n) => (
                   <ThingLevelRow key={n.id} item={n} />
@@ -477,7 +479,9 @@ export default function WhereView() {
     body = (
       <Box sx={{ ...sheetSx, textAlign: 'center', py: 5, px: 2 }}>
         <PlaceIcon sx={{ fontSize: 40, color: 'text.secondary', mb: 1 }} aria-hidden="true" />
-        <Typography sx={{ fontWeight: 700, mb: 0.5 }}>Nowhere yet</Typography>
+        <Typography component="h2" sx={{ mb: 1, lineHeight: 1 }}>
+          <DymoTape size="lg">Nowhere yet</DymoTape>
+        </Typography>
         <Typography sx={{ color: 'text.secondary', fontSize: '0.875rem', mb: 2 }}>
           Start with the big ones — House, Garage, Shop — then add rooms and shelves inside them.
         </Typography>

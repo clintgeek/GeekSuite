@@ -6,7 +6,7 @@ import WhereView from '../../views/WhereView';
 import WherePicker from '../../components/WherePicker';
 import { UPDATE_THING } from '../../graphql/mutations';
 import { GET_THING_TREE, GET_THING_TYPES } from '../../graphql/queries';
-import { mockViewport, renderWithProviders } from '../testUtils';
+import { mockViewport, renderWithProviders, tapeText } from '../testUtils';
 import { NODES, TYPES, makeThing } from '../fixtures';
 
 const many = (m) => ({ ...m, maxUsageCount: 20 });
@@ -16,7 +16,7 @@ const typesMock = many({ request: { query: GET_THING_TYPES }, result: { data: { 
 describe('the Where page', () => {
   it('is the tree of locations and containers, each opening its thing, with counts inside', async () => {
     renderWithProviders(<WhereView />, { mocks: [treeMock(), typesMock] });
-    await screen.findByText('Shelf 2');
+    await screen.findByText(tapeText('Shelf 2'));
     const rows = screen.getAllByTestId('where-row');
     expect(rows.map((r) => [within(r).getAllByRole('link')[0].textContent, r.getAttribute('data-depth'), r.getAttribute('data-kind')])).toEqual([
       ['House5 things', '0', 'location'],
@@ -130,7 +130,7 @@ describe('the Where page on a phone: a drill-down, not a tree', () => {
     const crumbsNav = within(level).getByRole('navigation', { name: 'Where you are' });
     expect(within(crumbsNav).getByRole('link', { name: 'Where' })).toHaveAttribute('href', '/where');
     // The current level is on tape but not a link to itself.
-    expect(within(crumbsNav).getByText('House').closest('a')).toBeNull();
+    expect(within(crumbsNav).getByText(tapeText('House')).closest('a')).toBeNull();
     expect(within(level).getAllByTestId('where-level-place').map((p) => within(p).getByTestId('dymo-tape').textContent)).toEqual(['Garage']);
     const kept = within(level).getAllByTestId('where-level-item');
     expect(kept.map((k) => within(k).getByRole('link').getAttribute('href'))).toEqual(['/thing/t-rifle']);
@@ -161,7 +161,7 @@ describe('the Where page on a phone: a drill-down, not a tree', () => {
 describe('the Where tree on a desk', () => {
   it('lines up: every row is the same grid, a fixed indent per level then a 44px toggle column', async () => {
     renderWithProviders(<WhereView />, { mocks: [treeMock(), typesMock] });
-    await screen.findByText('Shelf 2');
+    await screen.findByText(tapeText('Shelf 2'));
     const grid = (row) => row.firstElementChild.style.gridTemplateColumns || getComputedStyle(row.firstElementChild).gridTemplateColumns;
     const rows = screen.getAllByTestId('where-row');
     // Van (expandable) and Shelf 2 (not) sit at the same depth: identical columns, so their names line up.

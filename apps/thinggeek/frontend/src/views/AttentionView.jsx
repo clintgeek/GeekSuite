@@ -13,11 +13,12 @@ import {
   NumbersOutlined as SerialIcon,
   QrCode2Outlined as PlateIcon,
   ReceiptLongOutlined as ReceiptIcon,
-  TaskAlt as ClearIcon,
 } from '@mui/icons-material';
 import { Link as RouterLink } from 'react-router-dom';
 import { GeekErrorState } from '@geeksuite/ui';
 import PageHeader, { PageFrame } from '../components/PageHeader';
+import DymoTape from '../components/DymoTape';
+import SectionTape from '../components/SectionTape';
 import OnboardingChecklist from '../components/OnboardingChecklist';
 import ThingPhoto from '../components/ThingPhoto';
 import { statusTone } from '../components/DueLine';
@@ -71,13 +72,14 @@ function DueRow({ thing }) {
   );
 }
 
-function DueGroup({ id, title, things, empty }) {
+function DueGroup({ id, title, things, empty, tone = 'black' }) {
   return (
     <Box component="section" aria-labelledby={`${id}-heading`} sx={{ minWidth: 0, border: 1, borderColor: 'divider', borderRadius: 3, bgcolor: 'background.card', p: { xs: 1.5, md: 2 } }}>
-      <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', px: 0.5, mb: 0.5 }}>
-        <Typography id={`${id}-heading`} component="h2" sx={{ fontFamily: DISPLAY_FONT, fontWeight: 700, fontSize: '1.0625rem' }}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', px: 0.5, mb: 1, minHeight: 32 }}>
+        {/* Overdue is struck on red refill tape — but only once something IS overdue. */}
+        <SectionTape id={`${id}-heading`} tone={things.length ? tone : 'black'}>
           {title}
-        </Typography>
+        </SectionTape>
         <Typography component="span" sx={{ fontSize: '0.8125rem', color: 'text.secondary', fontVariantNumeric: 'tabular-nums' }}>
           {things.length}
         </Typography>
@@ -128,19 +130,19 @@ export default function AttentionView() {
         <OnboardingChecklist locationsCount={locationsCount} itemsCount={itemsCount} missingIdPlate={attention?.missingIdPlate ?? 0} walkAt={walkAt} />
       ) : null}
       {allClear ? (
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, p: 2, mb: 2, borderRadius: 3, border: 1, borderColor: 'divider', bgcolor: 'background.card' }}>
-          <ClearIcon sx={{ color: 'primary.main' }} aria-hidden="true" />
-          <Typography sx={{ fontSize: '0.9375rem' }}>All clear — nothing due and nothing missing.</Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1.5, p: 2, mb: 2, borderRadius: 3, border: 1, borderColor: 'divider', bgcolor: 'background.card' }}>
+          <DymoTape tone="green">All clear</DymoTape>
+          <Typography sx={{ fontSize: '0.9375rem' }}>Nothing due and nothing missing.</Typography>
         </Box>
       ) : null}
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'repeat(2, minmax(0, 1fr))' }, gap: 1.5, mb: 4 }} aria-busy={loading ? 'true' : undefined}>
-        <DueGroup id="overdue" title="Overdue" things={a.overdue} empty={loading ? 'Loading…' : 'Nothing overdue.'} />
+        <DueGroup id="overdue" title="Overdue" tone="red" things={a.overdue} empty={loading ? 'Loading…' : 'Nothing overdue.'} />
         <DueGroup id="due-soon" title="Due in the next 30 days" things={a.dueSoon} empty={loading ? 'Loading…' : 'Nothing due in the next month.'} />
       </Box>
 
-      <Typography component="h2" sx={{ fontFamily: DISPLAY_FONT, fontWeight: 700, fontSize: '1.25rem', mb: 0.5 }}>
+      <SectionTape size="lg" sx={{ mb: 1 }}>
         Gaps in the record
-      </Typography>
+      </SectionTape>
       <Typography sx={{ color: 'text.secondary', fontSize: '0.875rem', mb: 2 }}>Each opens the library showing exactly those things.</Typography>
       <Box component="ul" sx={{ listStyle: 'none', m: 0, p: 0, display: 'grid', gridTemplateColumns: { xs: 'minmax(0, 1fr)', sm: 'repeat(2, minmax(0, 1fr))', lg: 'repeat(3, minmax(0, 1fr))' }, gap: 1.5 }}>
         {gaps.map((g) => {

@@ -4,7 +4,7 @@ import { fireEvent, screen, within, waitFor } from '@testing-library/react';
 import { Route, Routes, useLocation } from 'react-router-dom';
 import ThingDetail, { ThingDetailBody } from '../../views/detail/ThingDetail';
 import ReadinessPanel from '../../views/detail/ReadinessPanel';
-import { renderWithProviders } from '../testUtils';
+import { renderWithProviders, tapeText } from '../testUtils';
 import { GET_THING } from '../../graphql/queries';
 import { crumbs, date, makeRifle, makeThing, typeRef } from '../fixtures';
 
@@ -110,7 +110,7 @@ describe('where it is', () => {
     renderWithProviders(body({ ...cables(), path }));
     const crumbsNav = screen.getByRole('navigation', { name: 'Where it is' });
     expect(within(crumbsNav).getAllByRole('link').map((a) => a.textContent)).toEqual(['House', 'Garage']);
-    expect(within(crumbsNav).getByText('Van')).toBeInTheDocument();
+    expect(within(crumbsNav).getByText(tapeText('Van'))).toBeInTheDocument();
     expect(within(crumbsNav).getByText('(in the Trash)')).toBeInTheDocument();
     expect(screen.getByTestId('inside-trash')).toHaveTextContent('inside something in the Trash');
   });

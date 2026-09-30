@@ -16,13 +16,14 @@
  * so the avatar menu keeps only the account: theme and sign out.
  */
 import React, { useEffect, useId, useRef, useState } from 'react';
-import { Box, Button, IconButton, InputAdornment, Paper, Popper, alpha, useMediaQuery, useTheme } from '@mui/material';
+import { Box, Button, IconButton, InputAdornment, Paper, Popper, Typography, alpha, useMediaQuery, useTheme } from '@mui/material';
 import { Add as AddIcon, ArrowBack as ArrowBackIcon, Close as CloseIcon, Search as SearchIcon } from '@mui/icons-material';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useThemeMode } from '@geeksuite/user';
 import { GeekSearchField, GeekTopBar } from '@geeksuite/ui';
 import { useDebouncedCallback } from '../hooks/useDebouncedCallback';
-import { DISPLAY_FONT, MONO_FONT } from '../theme/theme';
+import { DISPLAY_FONT, MONO_FONT, corrugatedEdge } from '../theme/theme';
+import DymoTape from './DymoTape';
 import { goBack } from '../utils/goBack';
 import { writeLibraryState } from '../utils/libraryFilter';
 import { visuallyHidden } from '../utils/a11y';
@@ -175,7 +176,12 @@ export default function TopBar({ user, onSignOut }) {
                   }
                 },
               })
-            : titleFor(location.pathname)
+            : (
+                // The page's name on a long strip of tape, stuck to the carton.
+                <Typography variant="h3" noWrap data-geek-topbar="title" sx={{ minWidth: 0, lineHeight: 1 }}>
+                  <DymoTape size="lg">{titleFor(location.pathname)}</DymoTape>
+                </Typography>
+              )
         }
         search={!isMobile && onLibrary ? field : undefined}
         themeMode={mode}
@@ -221,7 +227,11 @@ export default function TopBar({ user, onSignOut }) {
         sx={{
           backgroundColor: theme.palette.background.chrome,
           borderBottom: `1px solid ${theme.palette.border}`,
-          boxShadow: 'inset 0 -1px 0 rgba(255,255,255,0.12)',
+          // The carton's cut edge: a strip of corrugation along the bottom.
+          backgroundImage: corrugatedEdge(theme.palette.mode),
+          backgroundRepeat: 'repeat-x',
+          backgroundPosition: 'left bottom',
+          backgroundSize: '8px 6px',
           color: 'text.primary',
           '& [data-geek-topbar="title"]': { fontFamily: DISPLAY_FONT, fontWeight: 700, fontSize: '1.5rem', letterSpacing: '0.01em', lineHeight: 1.1 },
           '& [data-geek-topbar="theme"], & [data-geek-topbar="switcher"], & [data-geek-topbar="back"]': {

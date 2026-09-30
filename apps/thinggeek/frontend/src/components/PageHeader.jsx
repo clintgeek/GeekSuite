@@ -1,16 +1,18 @@
 /**
- * The top of a non-library page: a display-face title (the top bar already
- * names the page, so on a phone the heading is visually hidden and only the
- * lede shows), a lede that says what the page is for, and actions.
+ * The top of a non-library page: a lede that says what the page is for, and
+ * actions. The top bar carries the page's title on a long strip of Dymo tape
+ * at every size, so the heading here is visually hidden (still the page's
+ * <h1>) — a second strip saying the same thing right under it was noise.
  */
 import React from 'react';
 import { Box, Typography } from '@mui/material';
+import { visuallyHidden } from '../utils/a11y';
 
 export default function PageHeader({ title, lede, actions, sx }) {
   return (
     <Box sx={{ display: 'flex', alignItems: { xs: 'flex-start', sm: 'flex-end' }, flexDirection: { xs: 'column', sm: 'row' }, gap: 1.5, mb: { xs: 2, md: 3 }, ...sx }}>
       <Box sx={{ flex: 1, minWidth: 0 }}>
-        <Typography variant="h1" component="h1" sx={{ fontSize: { xs: '1.5rem', md: '1.875rem' }, lineHeight: 1.15, mb: lede ? 0.75 : 0 }}>
+        <Typography variant="h1" component="h1" sx={visuallyHidden}>
           {title}
         </Typography>
         {lede ? (

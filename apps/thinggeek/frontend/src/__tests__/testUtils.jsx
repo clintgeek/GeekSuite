@@ -56,3 +56,11 @@ export function mockViewport(width = 390) {
     window.matchMedia = original;
   };
 }
+
+/**
+ * A text matcher for a strip of Dymo tape: its letters are one inline span
+ * each (the struck-by-hand jitter), so `getByText('Shelf 2')` can't see them
+ * — use `getByText(tapeText('Shelf 2'))`. Matches the tape itself, whose
+ * textContent is exactly the name.
+ */
+export const tapeText = (name) => (_content, el) => el?.getAttribute?.('data-testid') === 'dymo-tape' && el.textContent === name;

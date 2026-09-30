@@ -12,6 +12,8 @@ import { Add as AddIcon } from '@mui/icons-material';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import Section from './Section';
 import DymoTape from '../../components/DymoTape';
+import { toneForKind } from '../../theme/theme';
+import { kindOf } from '../../utils/where';
 import ThingPhoto from '../../components/ThingPhoto';
 import { coverSrc } from '../../components/thingDisplay';
 import { thingPath } from '../../components/navConfig';
@@ -28,7 +30,7 @@ export default function ContainsSection({ thing }) {
       title={
         <>
           <span>{'Inside '}</span>
-          <DymoTape size="sm" sx={{ minWidth: 0 }}>{thing.name}</DymoTape>
+          <DymoTape size="md" tone={toneForKind(kindOf(thing))} sx={{ minWidth: 0 }}>{thing.name}</DymoTape>
           {contents.length ? <span>{` · ${contents.length}`}</span> : null}
         </>
       }

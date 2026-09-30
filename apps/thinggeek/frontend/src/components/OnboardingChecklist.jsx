@@ -28,13 +28,16 @@
  *
  * "Hide this list" retires the whole card the same way, also localStorage.
  * No orange text anywhere here (the Label Maker rule): checks are ink
- * (primary.main), not safety orange.
+ * (primary.main), not safety orange; a finished step gets a strip of green
+ * "Done" tape. The card is taped to the carton with packing tape.
  */
 import React, { useState } from 'react';
 import { Box, Button, Typography } from '@mui/material';
 import { CheckCircle as DoneIcon, RadioButtonUnchecked as TodoIcon } from '@mui/icons-material';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
-import { DISPLAY_FONT } from '../theme/theme';
+import DymoTape from './DymoTape';
+import PackingTape from './PackingTape';
+import SectionTape from './SectionTape';
 import { libraryLinkWith } from '../utils/libraryFilter';
 import { readPref, writePref } from '../utils/storage';
 
@@ -70,7 +73,11 @@ function StepRow({ step, action }) {
         <Typography sx={{ flex: '1 1 auto', minWidth: 180, fontSize: '0.9375rem', color: step.done ? 'text.secondary' : 'text.primary', textDecoration: step.done ? 'line-through' : 'none' }}>
           {step.label}
         </Typography>
-        {!step.done && action ? (
+        {step.done ? (
+          <DymoTape size="sm" tone="green">
+            Done
+          </DymoTape>
+        ) : action ? (
           <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>{action}</Box>
         ) : null}
       </Box>
@@ -104,11 +111,10 @@ export default function OnboardingChecklist({ locationsCount, itemsCount, missin
   const startWalk = () => navigate(walkAt ? `/walk?at=${encodeURIComponent(walkAt)}` : '/walk');
 
   return (
-    <Box data-testid="onboarding-checklist" sx={{ mb: 3, border: 1, borderColor: 'divider', borderRadius: 3, bgcolor: 'background.card', p: { xs: 1.5, md: 2 } }}>
-      <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 1, mb: 0.5 }}>
-        <Typography component="h2" sx={{ fontFamily: DISPLAY_FONT, fontWeight: 700, fontSize: '1.0625rem' }}>
-          Getting started
-        </Typography>
+    <Box data-testid="onboarding-checklist" sx={{ position: 'relative', mt: 1.5, mb: 3, border: 1, borderColor: 'divider', borderRadius: 3, bgcolor: 'background.card', p: { xs: 1.5, md: 2 }, pt: { xs: 2.5, md: 3 } }}>
+      <PackingTape />
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 0.5 }}>
+        <SectionTape>Getting started</SectionTape>
         <Button onClick={hide} data-testid="checklist-hide" sx={{ color: 'text.secondary', minHeight: 44 }}>
           Hide this list
         </Button>

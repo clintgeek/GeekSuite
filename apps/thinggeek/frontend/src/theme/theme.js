@@ -4,8 +4,11 @@
  * The household's inventory, dressed like the shelves it lives on: kraft
  * cardboard for the desk and the chrome (storage boxes, shipping cartons),
  * off-white card stock for the sheets you read, and — the signature — Dymo
- * embossed tape for the NAMES OF PLACES (components/DymoTape.jsx). By night
- * it is the same workbench under a lamp: a charcoal-brown shelf.
+ * embossed tape (components/DymoTape.jsx) for the names of places, page
+ * titles and section headings, on coloured refills that mean something
+ * (TAPE_TONES). A corrugated edge on the bars and packing tape on the odd
+ * card finish the carton. By night it is the same workbench under a lamp: a
+ * charcoal-brown shelf.
  *
  * One accent, SAFETY ORANGE, for "needs attention" and the screen's one
  * primary action. It is only ever a FILL with dark ink on it — never orange
@@ -16,7 +19,7 @@
  * Fonts: Barlow Condensed for tape and headings (a condensed, label-ish
  * grotesque), Barlow for body copy, mono for identifiers so a serial reads
  * character by character. Headings are sentence case; only tape is
- * uppercase and letterspaced.
+ * uppercase and letterspaced (the DOM keeps sentence case).
  *
  * Contrast: every pair this app paints is measured in
  * __tests__/theme/labelMakerContrast.test.js, both modes.
@@ -95,6 +98,58 @@ export const TAPE = {
 };
 
 /**
+ * Refill cartridges. Each tone is one roll of tape, the same in both modes:
+ *   black   locations (and the default): House, Garage, Shelf 2
+ *   blue    containers: the van, the safe, the tackle box
+ *   red     attention: Overdue
+ *   green   done: a checked step, "All clear"
+ *   orange  the one primary action, as tape (safety orange; DARK letters —
+ *           orange is a fill, never an ink)
+ * `top` is the lightest band of the sheen and `mid`/`ground`/`low` the rest;
+ * the letters are measured against `top` (the worst case) in
+ * __tests__/theme/labelMakerContrast.test.js.
+ */
+export const TAPE_TONES = {
+  black: { top: TAPE.top, mid: '#1F1D1B', ground: TAPE.ground, low: '#24211E', ink: TAPE.ink },
+  blue: { top: '#2F5E9A', mid: '#1B477F', ground: '#123A6C', low: '#1A4476', ink: TAPE.ink },
+  red: { top: '#A62A20', mid: '#8E1C15', ground: '#7A150F', low: '#861A13', ink: TAPE.ink },
+  green: { top: '#2F6A39', mid: '#22552B', ground: '#1A4722', low: '#1F4F28', ink: TAPE.ink },
+  orange: { top: '#F7904C', mid: '#F2741F', ground: '#E8661A', low: '#EE6E1D', ink: '#1B1006' },
+};
+
+/** Tape tone for a place, by its kind: containers are on blue refill, everything else black. */
+export const toneForKind = (kind) => (kind === 'container' ? 'blue' : 'black');
+
+/**
+ * Corrugated cardboard, seen edge-on where a carton was cut: a row of
+ * flutes between two liners. Painted along the bottom of the top bar and the
+ * top of the tab bar (a background image, so it never takes a tap or covers
+ * a word). `flute` is the kraft, `hollow` the shadow inside each arch.
+ */
+export const CORRUGATION = {
+  light: { flute: '#B38C57', hollow: '#8E6A3C', liner: '#A57E4B' },
+  dark: { flute: '#3B3026', hollow: '#120E0A', liner: '#2F261D' },
+};
+export function corrugatedEdge(mode = 'light') {
+  const c = CORRUGATION[mode] ?? CORRUGATION.light;
+  // 8×6 tile: liner, one flute arch, liner. Symmetric enough to serve both edges.
+  const svg =
+    `<svg xmlns='http://www.w3.org/2000/svg' width='8' height='6' viewBox='0 0 8 6'>` +
+    `<rect width='8' height='6' fill='${c.hollow}'/>` +
+    `<path d='M0 5 C1.5 5 1.5 1 4 1 C6.5 1 6.5 5 8 5' fill='none' stroke='${c.flute}' stroke-width='1.3'/>` +
+    `<rect y='0' width='8' height='0.9' fill='${c.liner}'/><rect y='5.1' width='8' height='0.9' fill='${c.liner}'/>` +
+    `</svg>`;
+  const url = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
+  return url;
+}
+
+/** Clear packing tape: a translucent tan strip with a faint sheen (components/PackingTape.jsx). */
+export const PACKING = {
+  light: { body: 'rgba(222, 196, 146, 0.62)', sheen: 'rgba(255, 255, 255, 0.35)', edge: 'rgba(120, 90, 45, 0.28)' },
+  dark: { body: 'rgba(214, 186, 132, 0.30)', sheen: 'rgba(255, 255, 255, 0.10)', edge: 'rgba(0, 0, 0, 0.40)' },
+};
+
+/**
  * Due-date status tones, used as small text and dots on card stock (paper,
  * card, raised). DueLine still passes them through readableOn.
  */
@@ -122,6 +177,8 @@ function buildOverrides(mode) {
       border: s.border,
       safety: SAFETY[mode],
       tape: TAPE,
+      tapeTones: TAPE_TONES,
+      packing: PACKING[mode],
       status: STATUS_TONES[mode],
       // The collection's RangeFacet paints its in-range bars with `phosphor`.
       phosphor: { main: isDark ? '#CDB894' : '#7A5B34', glow: isDark ? 'rgba(235, 221, 196, 0.08)' : 'rgba(42, 31, 20, 0.06)' },

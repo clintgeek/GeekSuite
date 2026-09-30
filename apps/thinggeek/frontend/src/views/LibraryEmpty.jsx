@@ -1,12 +1,18 @@
 /**
+ * The library's empty states — the first screen a new household sees, so
+ * the Label Maker is at its loudest here: a card taped to the carton, the
+ * steps punched out as tape, and the one action on an orange strip.
+ *
  * The library's empty states. "The ledger is blank" and "nothing matches"
  * are different situations and get different sentences. No demo data
  * (Chef's call): the first run is a warm welcome that says where to start.
  */
 import React from 'react';
-import { Box, Button, Link, Typography } from '@mui/material';
+import { Box, Button, ButtonBase, Link, Typography } from '@mui/material';
 import { Add as AddIcon, CategoryOutlined as TypesIcon, PlaceOutlined as PlacesIcon } from '@mui/icons-material';
 import { Link as RouterLink } from 'react-router-dom';
+import DymoTape from '../components/DymoTape';
+import PackingTape from '../components/PackingTape';
 import TagMark from '../components/TagMark';
 import { DISPLAY_FONT } from '../theme/theme';
 
@@ -14,8 +20,9 @@ function Frame({ children, wide }) {
   return (
     <Box
       sx={{
+        position: 'relative',
         mx: 'auto',
-        mt: { xs: 1, md: 5 },
+        mt: { xs: 2.5, md: 6 },
         maxWidth: wide ? 620 : 460,
         textAlign: 'center',
         px: { xs: 2.5, sm: 4 },
@@ -24,11 +31,40 @@ function Frame({ children, wide }) {
         border: 1,
         borderColor: 'divider',
         bgcolor: 'background.paper',
-        backgroundImage: (t) => `radial-gradient(120% 70% at 50% 0%, ${t.palette.phosphor?.glow ?? 'transparent'}, transparent 70%)`,
+        boxShadow: '0 2px 8px rgba(60, 40, 15, 0.14)',
       }}
     >
+      {/* A sheet of card stock, taped to the carton. */}
+      <PackingTape width={132} />
       {children}
     </Box>
+  );
+}
+
+/**
+ * The screen's one primary action, struck on orange tape: a real button
+ * (48px tall, a visible focus ring), wearing a strip of safety-orange refill
+ * with dark letters — orange is a fill, never an ink.
+ */
+export function TapeButton({ children, onClick, testId }) {
+  return (
+    <ButtonBase
+      onClick={onClick}
+      data-testid={testId}
+      sx={{
+        minHeight: 48,
+        px: 0.5,
+        borderRadius: '8px',
+        '& [data-testid="dymo-tape"]': { transition: 'transform 120ms ease-out' },
+        '@media (hover: hover)': { '&:hover [data-testid="dymo-tape"]': { transform: 'rotate(-1deg) translateY(-1px)' } },
+        '&:active [data-testid="dymo-tape"]': { transform: 'translateY(1px)' },
+        '&.Mui-focusVisible': { outline: 2, outlineStyle: 'solid', outlineColor: 'text.primary', outlineOffset: 2 },
+      }}
+    >
+      <DymoTape size="xl" tone="orange" tilt={false}>
+        {children}
+      </DymoTape>
+    </ButtonBase>
   );
 }
 
@@ -49,6 +85,7 @@ export default function LibraryEmpty({ firstRun, onAdd, onClear }) {
         <Typography sx={{ color: 'text.secondary', mb: 3, lineHeight: 1.6, fontSize: '1rem', maxWidth: 460, mx: 'auto' }}>
           Start with the things you'd hate to lose — the boat, the guns, the good tools. A photo and where it is is enough to begin.
         </Typography>
+        {/* The steps, punched out as strips of tape: a label maker's to-do list. */}
         <Box
           component="ol"
           sx={{
@@ -57,24 +94,24 @@ export default function LibraryEmpty({ firstRun, onAdd, onClear }) {
             p: 0,
             mb: 3.5,
             display: 'grid',
-            gridTemplateColumns: { xs: '1fr', sm: 'repeat(3, 1fr)' },
-            gap: 1.5,
+            gap: 2,
             textAlign: 'left',
+            maxWidth: 440,
+            mx: 'auto',
           }}
         >
           {STEPS.map(([title, text], i) => (
-            <Box component="li" key={title} sx={{ p: 1.5, borderRadius: 2, border: 1, borderColor: 'divider', bgcolor: 'background.raised' }}>
-              <Typography component="span" sx={{ display: 'block', fontFamily: DISPLAY_FONT, fontWeight: 700, fontSize: '0.75rem', letterSpacing: '0.08em', color: 'primary.main', mb: 0.5 }}>
-                STEP {i + 1}
+            <Box component="li" key={title} data-testid="empty-step" sx={{ display: 'grid', gap: 0.75, justifyItems: 'start' }}>
+              <Typography component="h3" sx={{ m: 0, lineHeight: 1 }}>
+                <DymoTape size="lg">{`${i + 1} ${title}`}</DymoTape>
               </Typography>
-              <Typography sx={{ fontWeight: 700, fontSize: '0.9375rem', mb: 0.25 }}>{title}</Typography>
-              <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary', lineHeight: 1.5 }}>{text}</Typography>
+              <Typography sx={{ fontSize: '0.875rem', color: 'text.secondary', lineHeight: 1.5, pl: 0.5 }}>{text}</Typography>
             </Box>
           ))}
         </Box>
-        <Button variant="contained" size="large" startIcon={<AddIcon />} onClick={onAdd} sx={{ px: 3 }}>
+        <TapeButton onClick={onAdd} testId="empty-add">
           Add a thing
-        </Button>
+        </TapeButton>
         <Box sx={{ display: 'flex', gap: 1, justifyContent: 'center', flexWrap: 'wrap', mt: 2 }}>
           <Button component={RouterLink} to="/where" startIcon={<PlacesIcon />} sx={{ color: 'text.primary' }}>
             Set up where things go
@@ -95,9 +132,8 @@ export default function LibraryEmpty({ firstRun, onAdd, onClear }) {
 
   return (
     <Frame>
-      <TagMark size={44} sx={{ mx: 'auto', mb: 2 }} />
-      <Typography variant="h3" component="h2" sx={{ mb: 1 }}>
-        Nothing matches
+      <Typography component="h2" sx={{ mb: 1.5, lineHeight: 1 }}>
+        <DymoTape size="lg">Nothing matches</DymoTape>
       </Typography>
       <Typography sx={{ color: 'text.secondary', mb: 3, lineHeight: 1.6 }}>Try a shorter search, or loosen the filters.</Typography>
       <Box sx={{ display: 'flex', gap: 1.5, justifyContent: 'center', flexWrap: 'wrap' }}>

@@ -1,5 +1,6 @@
 /**
- * Where something is, as a row of Dymo tape: HOUSE › GARAGE › VAN. Each
+ * Where something is, as a row of Dymo tape: HOUSE › GARAGE › VAN (a
+ * container on blue refill, a location on black). Each
  * crumb is a link (44px tall target around the tape) — to that thing's page
  * by default, or wherever `hrefFor(crumb)` says (the Where drill-down links
  * each level back to itself).
@@ -11,6 +12,7 @@ import React from 'react';
 import { Box } from '@mui/material';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import DymoTape from './DymoTape';
+import { toneForKind } from '../theme/theme';
 import { thingPath } from './navConfig';
 
 export default function TapeCrumbs({ path = [], hrefFor, label = 'Where it is', size = 'md', lead = null, currentLinked = true, testId = 'where-breadcrumb', sx }) {
@@ -35,14 +37,14 @@ export default function TapeCrumbs({ path = [], hrefFor, label = 'Where it is', 
             <Box component="li" key={p.id} sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75, minWidth: 0, maxWidth: '100%' }}>
               {p.inTrash ? (
                 <Box component="span" sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.75, minHeight: 44, minWidth: 0 }}>
-                  <DymoTape size={size} sx={{ opacity: 0.8 }}>{p.name}</DymoTape>
+                  <DymoTape size={size} tone={toneForKind(p.kind)} sx={{ opacity: 0.8 }}>{p.name}</DymoTape>
                   <Box component="span" sx={{ color: 'text.secondary', fontSize: '0.8125rem', fontStyle: 'italic', whiteSpace: 'nowrap' }}>
                     (in the Trash)
                   </Box>
                 </Box>
               ) : last && !currentLinked ? (
                 <Box component="span" aria-current="location" sx={{ display: 'inline-flex', alignItems: 'center', minHeight: 44, minWidth: 0, maxWidth: '100%' }}>
-                  <DymoTape size={size}>{p.name}</DymoTape>
+                  <DymoTape size={size} tone={toneForKind(p.kind)}>{p.name}</DymoTape>
                 </Box>
               ) : (
                 <Box
@@ -62,7 +64,7 @@ export default function TapeCrumbs({ path = [], hrefFor, label = 'Where it is', 
                     '&:focus-visible': { outline: 2, outlineStyle: 'solid', outlineColor: 'text.primary', outlineOffset: 1 },
                   }}
                 >
-                  <DymoTape size={size}>{p.name}</DymoTape>
+                  <DymoTape size={size} tone={toneForKind(p.kind)}>{p.name}</DymoTape>
                 </Box>
               )}
               {!last ? (
