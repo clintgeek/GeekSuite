@@ -25,8 +25,13 @@ export async function newContext(browser, key, { base } = {}) {
   const spec = VIEWPORTS[key];
   if (!spec) throw new Error(`unknown viewport "${key}" (have: ${ALL_VIEWPORTS.join(', ')})`);
   const { devices } = await loadPlaywright();
-  const opts = spec.device
-    ? { ...devices[spec.device], colorScheme: spec.scheme, serviceWorkers: 'block' }
+  // HARNESS_PHONE_WIDTH=320 narrows the phone contexts, for checking a
+  // layout on a small (or display-zoomed) phone. Unset in CI.
+  const phoneWidth = Number(process.env.HARNESS_PHONE_WIDTH) || 0;
+  const device = spec.device ? { ...devices[spec.device] } : null;
+  if (device && phoneWidth) device.viewport = { ...device.viewport, width: phoneWidth };
+  const opts = device
+    ? { ...device, colorScheme: spec.scheme, serviceWorkers: 'block' }
     : { viewport: spec.viewport, colorScheme: spec.scheme, serviceWorkers: 'block' };
   const ctx = await browser.newContext(opts);
   // Every app reads the suite theme cookie before React boots (themePreboot),
