@@ -5,8 +5,8 @@ import { renderWithProviders } from '../testUtils';
 import NoteList from '../../components/NoteList';
 
 const GET_NOTES = gql`
-    query GetNotes($tag: String, $prefix: String, $type: String, $limit: Int) {
-        notes(tag: $tag, prefix: $prefix, type: $type, limit: $limit) {
+    query GetNotes($tag: String, $prefix: String, $under: String, $type: String, $limit: Int) {
+        notes(tag: $tag, prefix: $prefix, under: $under, type: $type, limit: $limit) {
             id
             title
             content
@@ -20,8 +20,8 @@ const GET_NOTES = gql`
     }
 `;
 
-// Default variables match what NoteList sends: { tag, prefix, type: null, limit: 200 }
-const DEFAULT_VARS = { tag: undefined, prefix: undefined, type: null, limit: 200 };
+// Default variables match what NoteList sends: { tag, prefix, under, type: null, limit: 200 }
+const DEFAULT_VARS = { tag: undefined, prefix: undefined, under: undefined, type: null, limit: 200 };
 
 function mockNotesQuery(notes = [], variables = DEFAULT_VARS) {
     return {
@@ -136,6 +136,21 @@ describe('NoteList Unit Tests', () => {
         renderWithProviders(<NoteList />, { mocks: [mockNotesQuery(notes)] });
         await screen.findByText('One');
         expect(screen.queryByRole('heading', { name: 'Pinned' })).not.toBeInTheDocument();
+    });
+
+    it('a tag view sends `under` and each row names the sub-tag it sits in', async () => {
+        const notes = [
+            { id: '1', title: 'Parent note', content: 'x', type: 'markdown', tags: ['house'], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+            { id: '2', title: 'Door note', content: 'x', type: 'markdown', tags: ['misc', 'house/garage/door'], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        ];
+        const vars = { ...DEFAULT_VARS, under: 'house' };
+        renderWithProviders(<NoteList under="house" />, { mocks: [mockNotesQuery(notes, vars)] });
+        const door = (await screen.findByText('Door note')).closest('a');
+        // The part under `house`, first, then the rest.
+        expect(door).toHaveTextContent('garage/door · misc');
+        const parent = screen.getByText('Parent note').closest('a');
+        // Tagged exactly `house`: the header already says so.
+        expect(parent).not.toHaveTextContent('house');
     });
 
     it('shows empty state when no notes', async () => {

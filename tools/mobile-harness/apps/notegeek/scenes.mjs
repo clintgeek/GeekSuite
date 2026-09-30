@@ -596,6 +596,75 @@ export const scenes = [
     },
   },
   {
+    // Nested tags (2026-09-30): the PARENT view. /tags/house lists everything
+    // under house — its own note and both sub-tags' — with the sub-tag named
+    // on each row, a breadcrumb back up, and a row of sub-tags to go down.
+    name: '16a-tag-parent-view',
+    goto: '/tags/house',
+    wait: 1200,
+    async setup(page, h) {
+      for (const title of ['Garage shelving plan', 'Kitchen tap washer', 'House insurance renewal']) {
+        if (!(await page.locator('[data-note-row]').filter({ hasText: title }).count())) {
+          throw new Error(`the house view does not list "${title}" (under: not applied?)`);
+        }
+      }
+      const garageRow = page.locator('[data-note-row]').filter({ hasText: 'Garage shelving plan' });
+      if (!/garage/.test(await garageRow.innerText())) throw new Error('the row does not name its sub-tag');
+      const sub = page.getByRole('navigation', { name: 'Sub-tags of house' });
+      if (!(await sub.count())) throw new Error('no sub-tag row on the parent view');
+      for (const name of [/^garage\s*\d+$/, /^kitchen\s*\d+$/]) {
+        if (!(await sub.getByRole('link', { name }).count())) throw new Error(`sub-tag link ${name} missing`);
+      }
+      if (!(await page.getByRole('heading', { level: 1, name: 'house' }).count())) throw new Error('no "house" heading');
+    },
+  },
+  {
+    // Rename or move, from the tag tree's ⋯ (the Tags sheet on a phone). The
+    // helper says the sub-tags come along; a move into its own descendant is
+    // refused in the dialog before anything is sent.
+    name: '16b-tag-rename-dialog',
+    goto: '/tags/house',
+    wait: 1200,
+    async setup(page, h) {
+      if (h.isPhone) await openPhoneTags(page, h);
+      await page.getByRole('button', { name: 'Tag options for house' }).first().click();
+      await h.settle(300);
+      await page.getByRole('menuitem', { name: /rename or move/i }).click();
+      await h.settle(500);
+      const field = page.getByRole('textbox', { name: 'Tag path' });
+      if (!(await field.count())) throw new Error('the rename dialog did not open');
+      await field.fill('house/garage');
+      await h.settle(200);
+      if (!(await page.getByText("#house can't move inside itself.").count())) throw new Error('no refusal for a move into its own descendant');
+      await field.fill('home/house');
+      await h.settle(300);
+      if (!(await page.getByText(/sub-tags and their notes come along/i).count())) throw new Error('the helper text is missing');
+    },
+    teardown: async (page, h) => {
+      await h.esc(400);
+      if (h.isPhone) await h.esc(400);
+    },
+  },
+  {
+    // Delete, as a real dialog with the blast radius from noteTagUsage.
+    name: '16c-tag-delete-dialog',
+    goto: '/tags/house',
+    wait: 1200,
+    async setup(page, h) {
+      if (h.isPhone) await openPhoneTags(page, h);
+      await page.getByRole('button', { name: 'Tag options for house' }).first().click();
+      await h.settle(300);
+      await page.getByRole('menuitem', { name: /delete tag/i }).click();
+      await h.settle(800);
+      const text = 'Removes #house and its 2 sub-tags from 3 notes. The notes stay.';
+      if (!(await page.getByText(text).count())) throw new Error(`the delete dialog does not say "${text}"`);
+    },
+    teardown: async (page, h) => {
+      await h.esc(400);
+      if (h.isPhone) await h.esc(400);
+    },
+  },
+  {
     // Tag & link suggestions (DOCS/AI_IDEAS.md #3, Night 2 R116). The opt-in
     // (`appPreferences.notegeek.suggestOnSave`) and `suggestForNote` are
     // stubbed at the PAGE level, not in fixtures.mjs's context-wide routes(),

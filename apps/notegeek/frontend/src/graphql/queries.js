@@ -1,8 +1,8 @@
 import { gql } from '@apollo/client';
 
 export const GET_NOTES = gql`
-    query GetNotes($tag: String, $prefix: String, $type: String, $limit: Int) {
-        notes(tag: $tag, prefix: $prefix, type: $type, limit: $limit) {
+    query GetNotes($tag: String, $prefix: String, $under: String, $type: String, $limit: Int) {
+        notes(tag: $tag, prefix: $prefix, under: $under, type: $type, limit: $limit) {
             id
             title
             content
@@ -37,6 +37,19 @@ export const GET_NOTE_BY_ID = gql`
 export const GET_TAGS = gql`
     query GetNoteTags {
         noteTags
+    }
+`;
+
+/**
+ * How much a tag subtree covers — the tag's notes (itself or any tag beneath
+ * it) and its distinct sub-tags. The delete dialog asks before it asks you.
+ */
+export const NOTE_TAG_USAGE = gql`
+    query NoteTagUsage($tag: String!) {
+        noteTagUsage(tag: $tag) {
+            notes
+            subTags
+        }
     }
 `;
 

@@ -9,6 +9,9 @@
  * scrollable region to be reachable by keyboard.
  */
 import React from 'react';
+import { Link as RouterLink, useInRouterContext } from 'react-router-dom';
+import remarkGfm from 'remark-gfm';
+import remarkInlineTags from '../../utils/remarkInlineTags';
 // Deep imports (see RichTextEditor.jsx for why).
 import CheckBoxOutlined from '@mui/icons-material/CheckBoxOutlined';
 import CheckBoxOutlineBlank from '@mui/icons-material/CheckBoxOutlineBlank';
@@ -56,7 +59,24 @@ function TaskBox({ node, type, checked, disabled, ...props }) {
     );
 }
 
-export const MARKDOWN_COMPONENTS = { table: ScrollingTable, pre: ScrollingPre, input: TaskBox };
+/**
+ * Links. An inline `#tag` (remarkInlineTags) is an in-app route, so it goes
+ * through the router — a plain `<a href="/tags/…">` would reload the whole
+ * PWA. Everything else is the plain anchor react-markdown would have made.
+ */
+// eslint-disable-next-line no-unused-vars, react-refresh/only-export-components -- `node` is react-markdown's AST node; keep it off the DOM
+function MarkdownLink({ node, href, children, ...props }) {
+    const inRouter = useInRouterContext();
+    if (inRouter && typeof href === 'string' && href.startsWith('/tags/')) {
+        return <RouterLink to={href} {...props}>{children}</RouterLink>;
+    }
+    return <a href={href} {...props}>{children}</a>;
+}
+
+export const MARKDOWN_COMPONENTS = { table: ScrollingTable, pre: ScrollingPre, input: TaskBox, a: MarkdownLink };
+
+/** GFM (tables, task lists) plus inline `#tags` as links to their tag page. */
+export const MARKDOWN_REMARK_PLUGINS = [remarkGfm, remarkInlineTags];
 
 /**
  * The sx both renderers spread in. Wide tables scroll inside their own box
@@ -72,6 +92,13 @@ export const markdownOverflowSx = {
         '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 2 },
     },
     '& pre[tabindex]:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 2 },
+    // An inline #tag: a quiet link in secondary ink, not a loud blue one.
+    '& a.ng-inline-tag': {
+        color: 'text.secondary',
+        fontWeight: 500,
+        textDecoration: 'none',
+        '&:hover': { textDecoration: 'underline', color: 'text.primary' },
+    },
     // A narrow table still fills the column; a wide one takes the width it
     // needs and scrolls. Cells don't break words mid-way.
     '& .md-table-scroll > table': {

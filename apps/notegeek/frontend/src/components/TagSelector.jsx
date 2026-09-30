@@ -2,7 +2,13 @@ import React, { useEffect } from 'react';
 import { Autocomplete, TextField, Chip, useTheme } from '@mui/material';
 import LocalOfferOutlined from '@mui/icons-material/LocalOfferOutlined';
 import useTagStore from '../store/tagStore';
+import { normalizeTags, filterTagOptions } from '../utils/tagPath';
 
+/**
+ * The note's tag chips. Tags are paths (`house/garage`); whatever is typed
+ * is normalized the way the gateway stores it (`house / garage` →
+ * `house/garage`), and the options are full paths.
+ */
 function TagSelector({ selectedTags, onChange, disabled = false }) {
   const { tags, fetchTags } = useTagStore();
   const theme = useTheme();
@@ -17,7 +23,8 @@ function TagSelector({ selectedTags, onChange, disabled = false }) {
       id="tags-selector"
       options={tags.map(tag => tag.name || tag)}
       value={selectedTags}
-      onChange={(event, newValue) => onChange(newValue)}
+      onChange={(event, newValue) => onChange(normalizeTags(newValue))}
+      filterOptions={(options, state) => filterTagOptions(options, state.inputValue)}
       disabled={disabled}
       freeSolo
       filterSelectedOptions

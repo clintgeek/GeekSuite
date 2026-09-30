@@ -36,7 +36,7 @@
  * honestly decide which cached variants a changed note now belongs to, and
  * guessing wrong is worse than refetching.
  */
-const NOTE_DERIVED_ROOT_FIELDS = ['notes', 'noteTags', 'searchNotes'];
+const NOTE_DERIVED_ROOT_FIELDS = ['notes', 'noteTags', 'noteTagUsage', 'searchNotes'];
 
 const evictNoteDerived = (cache) => {
   for (const fieldName of NOTE_DERIVED_ROOT_FIELDS) {

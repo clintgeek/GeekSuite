@@ -143,6 +143,13 @@ export const NOTE_PRINT = note('np', 'Deploy checklist', 'markdown', ['dev', 'de
   '- [ ] harness green',
 ].join('\n'), hoursAgo(1));
 
+// Tagged under `house` — the nested-tag scenes (16a-16c).
+export const HOUSE_NOTES = [
+  note('h1', 'Garage shelving plan', 'markdown', ['house/garage'], 'Four uprights, 18in deep. Buy brackets #house/garage and ask about the #fff paint.', daysAgo(3)),
+  note('h2', 'Kitchen tap washer', 'text', ['house/kitchen', 'finance'], '<p>Replace the washer, not the tap. About £4.</p>', daysAgo(9)),
+  note('h3', 'House insurance renewal', 'markdown', ['house'], 'Renews in October. Compare two quotes first.', daysAgo(14)),
+];
+
 export const NOTES = [
   NOTE_N1,
   NOTE_CODE,
@@ -153,12 +160,15 @@ export const NOTES = [
   note('n7', 'Nginx wildcard cert renewal', 'markdown', ['dev', 'dev/infra'], '## Renewal\n\nRun certbot with the DNS plugin, then `nginx -t` and reload.', daysAgo(5)),
   note('n8', 'Garden bed layout', 'handwritten', ['garden'], '', daysAgo(40)),
   note('n9', 'Reading list', 'text', ['reading'], '<p>The Pragmatic Programmer, A Philosophy of Software Design, Thinking in Systems.</p>', daysAgo(75)),
+  // Nested tags (2026-09-30): `house` is a notebook with two notebooks in it.
+  // The parent view (/tags/house) lists all three; the rows name the sub-tag.
+  ...HOUSE_NOTES,
 ];
 
 // Enough tags (with a nested path) that the sidebar's tree must scroll — the
 // last ones sat hidden below a 40vh cap until 2026-09-24.
 export const TAGS = [
-  'dev', 'dev/frontend', 'dev/infra', 'finance', 'garden', 'health', 'meta', 'planning',
+  'dev', 'dev/frontend', 'dev/infra', 'finance', 'garden', 'health', 'house', 'house/garage', 'house/kitchen', 'meta', 'planning',
   'product', 'reading', 'recipes', 'travel', 'work', 'work/meetings', 'writing', 'zettel',
 ];
 
@@ -194,8 +204,19 @@ export const TAG_COUNT_NOTES = [
   ...extraTagged.map(([id, tags]) => ({ __typename: 'Note', id, tags })),
 ];
 
+// The gateway's nested-tag rules, just enough for the stubs: `under` is the
+// tag itself or anything beneath it.
+const inSubtree = (t, root) => t === root || t.startsWith(`${root}/`);
+
 export const OPS = {
-  GetNotes: { notes: NOTES },
+  GetNotes: (vars) => ({
+    notes: vars?.under ? NOTES.filter((n) => n.tags.some((t) => inSubtree(t, vars.under))) : NOTES,
+  }),
+  NoteTagUsage: (vars) => {
+    const hit = TAG_COUNT_NOTES.filter((n) => n.tags.some((t) => inSubtree(t, vars.tag)));
+    const sub = new Set(hit.flatMap((n) => n.tags).filter((t) => t !== vars.tag && inSubtree(t, vars.tag)));
+    return { noteTagUsage: { __typename: 'TagUsage', notes: hit.length, subTags: sub.size } };
+  },
   GetNoteTagCounts: { notes: TAG_COUNT_NOTES },
   GetNoteById: { note: NOTE_N1 },
   GetNoteTags: { noteTags: TAGS },

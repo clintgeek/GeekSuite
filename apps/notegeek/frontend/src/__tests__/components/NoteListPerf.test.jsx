@@ -18,8 +18,8 @@ import NoteList from '../../components/NoteList';
  */
 
 const GET_NOTES = gql`
-    query GetNotes($tag: String, $prefix: String, $type: String, $limit: Int) {
-        notes(tag: $tag, prefix: $prefix, type: $type, limit: $limit) {
+    query GetNotes($tag: String, $prefix: String, $under: String, $type: String, $limit: Int) {
+        notes(tag: $tag, prefix: $prefix, under: $under, type: $type, limit: $limit) {
             id
             title
             content
@@ -64,7 +64,7 @@ describe('NoteList — a long list with sketch thumbnails', () => {
         const started = performance.now();
         renderWithProviders(<NoteList />, {
             mocks: [{
-                request: { query: GET_NOTES, variables: { tag: undefined, prefix: undefined, type: null, limit: 200 } },
+                request: { query: GET_NOTES, variables: { tag: undefined, prefix: undefined, under: undefined, type: null, limit: 200 } },
                 result: { data: { notes } },
             }],
         });

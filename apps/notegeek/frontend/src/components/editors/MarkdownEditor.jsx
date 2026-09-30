@@ -25,8 +25,7 @@ import VerticalSplit from '@mui/icons-material/VerticalSplit';
 import ReactMarkdown from 'react-markdown';
 // See NoteViewer: the preview and the viewer must agree about what markdown
 // is, or the editor shows something the saved note will not.
-import remarkGfm from 'remark-gfm';
-import { MARKDOWN_COMPONENTS, markdownOverflowSx } from '../notes/markdownComponents';
+import { MARKDOWN_COMPONENTS, MARKDOWN_REMARK_PLUGINS, markdownOverflowSx } from '../notes/markdownComponents';
 import { graphiteTokens, tapTarget44 } from '../../theme/tokens';
 
 /**
@@ -219,7 +218,7 @@ function MarkdownEditor({ content = '', setContent, isLoading, readOnly = false,
             }}
         >
             {content ? (
-                <ReactMarkdown remarkPlugins={[remarkGfm]} components={MARKDOWN_COMPONENTS}>{content}</ReactMarkdown>
+                <ReactMarkdown remarkPlugins={MARKDOWN_REMARK_PLUGINS} components={MARKDOWN_COMPONENTS}>{content}</ReactMarkdown>
             ) : (
                 <Box sx={{ color: 'text.secondary', fontStyle: 'italic' }}>
                     Nothing to preview yet...

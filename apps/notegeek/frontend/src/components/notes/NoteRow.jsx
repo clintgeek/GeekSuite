@@ -8,6 +8,7 @@ import {
 } from '@mui/material';
 import { formatRelativeTime } from '../../utils/dateUtils';
 import { previewText } from '../../utils/previewText';
+import { rowTagLabels } from '../../utils/tagPath';
 import { graphiteTokens } from '../../theme/tokens';
 import TypeIcon from './TypeIcon';
 import { CodePreview, NoteThumb } from './NotePreview';
@@ -87,8 +88,11 @@ function PinGlyph({ size = 14 }) {
  *  - query:       optional search query for term highlighting
  *  - maxPreview:  max preview length (default 120)
  *  - dateField:   which timestamp the row shows ('updatedAt' | 'createdAt')
+ *  - tagContext:  the tag view this row is listed in, if any. Inside `house`
+ *                 a note tagged `house/garage` reads `garage` (the sub-tag it
+ *                 sits in), first — see `rowTagLabels` in utils/tagPath.js.
  */
-function NoteRow({ note, to, onClick, query, maxPreview = 160, dateField = 'updatedAt' }) {
+function NoteRow({ note, to, onClick, query, maxPreview = 160, dateField = 'updatedAt', tagContext = null }) {
     const theme = useTheme();
     const type = note.type || 'text';
     const isVisual = VISUAL_TYPES.includes(type);
@@ -104,6 +108,7 @@ function NoteRow({ note, to, onClick, query, maxPreview = 160, dateField = 'upda
         : { onClick };
 
     const tags = note.tags || [];
+    const tagLabels = rowTagLabels(tags, tagContext);
     const when = note[dateField] || note.updatedAt || note.createdAt;
 
     return (
@@ -182,7 +187,7 @@ function NoteRow({ note, to, onClick, query, maxPreview = 160, dateField = 'upda
                 >
                     {note.pinned && <PinGlyph size={14} />}
                     <TypeIcon type={type} size={15} />
-                    {tags.length > 0 && (
+                    {tagLabels.length > 0 && (
                         <Typography
                             component="span"
                             title={tags.join(', ')}
@@ -196,8 +201,8 @@ function NoteRow({ note, to, onClick, query, maxPreview = 160, dateField = 'upda
                                 minWidth: 0,
                             }}
                         >
-                            {tags.slice(0, 2).map((tag) => tag.split('/').pop()).join(' · ')}
-                            {tags.length > 2 ? ` +${tags.length - 2}` : ''}
+                            {tagLabels.slice(0, 2).join(' · ')}
+                            {tagLabels.length > 2 ? ` +${tagLabels.length - 2}` : ''}
                         </Typography>
                     )}
                     <Box sx={{ flex: 1 }} />

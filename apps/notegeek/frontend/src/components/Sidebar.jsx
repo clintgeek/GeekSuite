@@ -222,7 +222,10 @@ function TagTreeRow({ node, level, activePath, isOpen, onToggle, theme, onNaviga
                         mr: '2px',
                         minWidth: 24,
                         minHeight: 24,
-                        [theme.breakpoints.down('md')]: { ...tapTarget44 },
+                        // A phone has no hover, so the menu — the only way to
+                        // rename, move or delete a tag there — is always shown.
+                        [theme.breakpoints.down('md')]: { ...tapTarget44, opacity: 1 },
+                        '@media (hover: none)': { opacity: 1 },
                         color: isSelected ? g.onHl : 'text.secondary',
                         transition: 'opacity 100ms ease, color 100ms ease',
                         '&:hover': { color: isSelected ? g.onHl : 'text.primary', bgcolor: 'transparent' },

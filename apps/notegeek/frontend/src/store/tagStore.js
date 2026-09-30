@@ -4,6 +4,7 @@ import {
     renameTagApi,
     deleteTagApi,
 } from '../services/api';
+import { normalizeTag, isInSubtree, swapPrefix } from '../utils/tagPath';
 
 const useTagStore = create((set, get) => ({
     tags: [],
@@ -44,27 +45,32 @@ const useTagStore = create((set, get) => ({
     },
 
     /**
-     * Rename one tag.
+     * Rename or move a tag WITH its subtree — the same thing the gateway does
+     * (`graphql/notegeek/resolvers.js` renameTag): `house` → `home` makes
+     * `house/garage` `home/garage`; `garage` → `house/garage` moves it and
+     * its children. A rename onto an existing tag merges (one copy).
      *
-     * Deliberately an EXACT match, matching what the server does. The resolver
-     * is `Note.updateMany({ userId, tags: oldTag }, { $set: { 'tags.$': newTag } })`
-     * (`graphql/notegeek/resolvers.js`), which touches only notes carrying that
-     * literal string. This store used to rename the whole `oldTag/...` subtree
-     * locally, so renaming `work` showed `newname/ideas` in the sidebar while
-     * the database still said `work/ideas` — and the children snapped back on
-     * the next real fetch. Renaming a subtree is a server-side decision; until
-     * the resolver makes it, the client must not pretend it did.
+     * The mirror is the point. Until 2026-09-30 the server renamed only the
+     * exact tag, so this store did too — it had once renamed the subtree on
+     * its own and the children snapped back on the next fetch. Now both
+     * rewrite the subtree, with the same normalization.
+     *
+     * The server refuses a move into the tag's own descendant; so does this,
+     * before the round trip, in the same words.
      */
     renameTag: async (oldTag, newTag) => {
+        const from = normalizeTag(oldTag);
+        const to = normalizeTag(newTag);
+        if (from && to && from !== to && isInSubtree(to, from)) {
+            const error = new Error(`Can't move #${from} inside itself (#${to}).`);
+            set({ error: error.message });
+            throw error;
+        }
         set({ isLoading: true, error: null });
         try {
-            await renameTagApi(oldTag, newTag);
-            const tags = get().tags;
-            const renamed = tags.map(tag => (tag === oldTag ? newTag : tag));
-            // The server merges into an existing tag rather than duplicating,
-            // so a rename onto a tag that already exists collapses the two.
-            const updatedTags = [...new Set(renamed)].sort();
-            set({ tags: updatedTags, isLoading: false });
+            await renameTagApi(from, to);
+            const renamed = get().tags.map((tag) => swapPrefix(tag, from, to));
+            set({ tags: [...new Set(renamed)].sort(), isLoading: false });
         } catch (error) {
             set({
                 error: error.message || 'Failed to rename tag',
@@ -75,16 +81,15 @@ const useTagStore = create((set, get) => ({
     },
 
     /**
-     * Delete one tag. Exact match, for the same reason `renameTag` is exact:
-     * the resolver is `$pull: { tags: tag }`, which leaves `tag/child` alone.
-     * Pruning the subtree here made deleted children reappear on refetch.
+     * Delete a tag AND every tag beneath it — the gateway's `deleteTag` pulls
+     * the whole subtree. The notes stay.
      */
     deleteTag: async (tag) => {
+        const root = normalizeTag(tag);
         set({ isLoading: true, error: null });
         try {
-            await deleteTagApi(tag);
-            const tags = get().tags;
-            const updatedTags = tags.filter(t => t !== tag);
+            await deleteTagApi(root);
+            const updatedTags = get().tags.filter((t) => !isInSubtree(t, root));
             set({ tags: updatedTags, isLoading: false });
         } catch (error) {
             set({

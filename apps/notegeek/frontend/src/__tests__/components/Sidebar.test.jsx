@@ -136,6 +136,18 @@ describe('Sidebar', () => {
         expect(await row('personal')).toHaveTextContent(/personal\s*1$/);
     });
 
+    it('a parent row is a link to the parent view, separate from its chevron', async () => {
+        try { window.localStorage.removeItem('notegeek.tagTree.collapsed'); } catch { /* ignore */ }
+        render(<Sidebar />, { wrapper: SidebarTestWrapper });
+        const parent = await screen.findByRole('link', { name: /^project\s*\d+$/ });
+        expect(parent).toHaveAttribute('href', '/tags/project');
+        // The chevron is its own button, not inside the link.
+        const chevron = screen.getByRole('button', { name: 'Collapse project' });
+        expect(parent.contains(chevron)).toBe(false);
+        // And the row's menu button is there for touch (no hover on a phone).
+        expect(screen.getByRole('button', { name: 'Tag options for project' })).toBeInTheDocument();
+    });
+
     it('collapses and expands a branch with its chevron', async () => {
         try { window.localStorage.removeItem('notegeek.tagTree.collapsed'); } catch { /* ignore */ }
         render(<Sidebar />, { wrapper: SidebarTestWrapper });

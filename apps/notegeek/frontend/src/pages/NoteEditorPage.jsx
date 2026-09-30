@@ -28,6 +28,7 @@ import { toDate } from '../utils/dateUtils';
 import DeleteNoteDialog from '../components/DeleteNoteDialog';
 import { onNoteCreated, onNoteUpdated } from '../graphql/cacheUpdates';
 import { overSizeMessage, saveErrorMessage } from '../utils/saveGuards';
+import { applyInlineTags } from '../utils/inlineTags';
 import { containsNoteLink, insertLink, noteLinkMarkup, supportsLinkInsertion } from '../utils/noteLinks';
 
 /**
@@ -79,6 +80,11 @@ function NoteEditorPage() {
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [tags, setTags] = useState([]);
+  // Inline #tags (utils/inlineTags.js), per editing session: the tags a save
+  // added from the body (so a word autosaved mid-typing can be taken back),
+  // and the chips the user removed (so the body can't put them straight back).
+  const inlineProvisionalRef = useRef(new Set());
+  const inlineSuppressedRef = useRef(new Set());
   const [noteType, setNoteType] = useState(isNewNote ? NOTE_TYPES.MARKDOWN : NOTE_TYPES.TEXT);
   // Save state, shown by the SaveStamp. Four facts rather than one status
   // string: the old string reached only a button that compared it against
@@ -160,6 +166,8 @@ function NoteEditorPage() {
     setTitle('');
     setContent('');
     setTags([]);
+    inlineProvisionalRef.current = new Set();
+    inlineSuppressedRef.current = new Set();
     setNoteType(NOTE_TYPES.MARKDOWN);
     setIsEditMode(true);
     setSavedNoteId(null);
@@ -190,6 +198,8 @@ function NoteEditorPage() {
       setTitle(noteToEdit.title || '');
       setContent(noteToEdit.content || '');
       setTags(noteToEdit.tags || []);
+      inlineProvisionalRef.current = new Set();
+      inlineSuppressedRef.current = new Set();
       setLastSavedAt(toDate(noteToEdit.updatedAt));
       setPinnedOverride(null);
       savedNoteIdRef.current = id;
@@ -506,10 +516,23 @@ function NoteEditorPage() {
     // What this save is actually writing. `dirty` is cleared only if the form
     // still holds it when the mutation lands — otherwise the user typed during
     // the round trip and there is genuinely more to save.
+    //
+    // Inline #tags in the body join the note's tags here, on save — additive
+    // only (utils/inlineTags.js has the rule). The chips update to match.
+    const inline = applyInlineTags({
+      tags,
+      content,
+      type: noteType,
+      provisional: inlineProvisionalRef.current,
+      suppressed: inlineSuppressedRef.current,
+    });
+    inlineProvisionalRef.current = inline.provisional;
+    if (inline.changed) setTags(inline.tags);
+
     const noteData = {
       title: title.trim() || 'Untitled Note',
       content,
-      tags,
+      tags: inline.tags,
       type: noteType,
     };
 
@@ -876,7 +899,14 @@ function NoteEditorPage() {
             onTitleChange={(v) => { setTitle(v); setDirty(true); }}
             noteType={noteType}
             tags={tags}
-            onTagsChange={(v) => { setTags(v); setDirty(true); }}
+            onTagsChange={(v) => {
+              // A chip removed by hand stays removed for this session, even
+              // while its #tag is still in the body.
+              for (const t of tags) if (!v.includes(t)) inlineSuppressedRef.current.add(t);
+              for (const t of v) inlineSuppressedRef.current.delete(t);
+              setTags(v);
+              setDirty(true);
+            }}
             readOnly={readOnlyMeta}
             compact={isCanvas}
             leading={<BackButton onBack={handleBack} />}

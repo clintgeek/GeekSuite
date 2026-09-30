@@ -19,8 +19,8 @@ import { TagsPanel } from './Sidebar';
 import { groupByRecency } from '../utils/recency';
 
 const GET_NOTES = gql`
-    query GetNotes($tag: String, $prefix: String, $type: String, $limit: Int) {
-        notes(tag: $tag, prefix: $prefix, type: $type, limit: $limit) {
+    query GetNotes($tag: String, $prefix: String, $under: String, $type: String, $limit: Int) {
+        notes(tag: $tag, prefix: $prefix, under: $under, type: $type, limit: $limit) {
             id
             title
             content
@@ -126,19 +126,24 @@ function GroupHeading({ label, count }) {
     );
 }
 
-function RowList({ notes, dateField }) {
+function RowList({ notes, dateField, tagContext }) {
     const theme = useTheme();
     return notes.map((note, idx) => (
         <React.Fragment key={note.id || note._id}>
             {idx > 0 && <Divider sx={{ borderColor: theme.palette.divider, mx: '8px' }} />}
-            <NoteRow note={note} dateField={dateField} />
+            <NoteRow note={note} dateField={dateField} tagContext={tagContext} />
         </React.Fragment>
     ));
 }
 
 // ─── NoteList ─────────────────────────────────────────────────────────────────
 
-function NoteList({ tag, prefix }) {
+/**
+ * `under` is the nested-tag view (TagNotesList): the tag and everything
+ * beneath it, with each row naming the sub-tag it sits in. `tag` / `prefix`
+ * are the older exact / raw-prefix filters, kept for any caller that wants them.
+ */
+function NoteList({ tag, prefix, under }) {
     const theme = useTheme();
     const g = graphiteTokens(theme);
     const isPhone = useMediaQuery(theme.breakpoints.down('md'));
@@ -147,7 +152,7 @@ function NoteList({ tag, prefix }) {
     const [sortBy, setSortBy] = useState('updated');
 
     const { loading: isLoadingList, error, data, refetch } = useQuery(GET_NOTES, {
-        variables: { tag, prefix, type: typeFilter, limit: 200 },
+        variables: { tag, prefix, under, type: typeFilter, limit: 200 },
         fetchPolicy: 'cache-and-network',
     });
 
@@ -302,27 +307,27 @@ function NoteList({ tag, prefix }) {
                 then grouped by recency for date sorts, or flat for A–Z. */}
             {sortedNotes.length === 0 ? (
                 <GeekEmptyState
-                    title={tag ? 'No notes tagged here yet.' : 'No notes yet'}
-                    description={!tag ? 'Create your first note to get started' : undefined}
+                    title={(tag || under) ? 'No notes tagged here yet.' : 'No notes yet'}
+                    description={!(tag || under) ? 'Create your first note to get started' : undefined}
                 />
             ) : (
                 <>
                     {pinnedNotes.length > 0 && (
                         <Box component="section" aria-label="Pinned">
                             <GroupHeading label="Pinned" count={pinnedNotes.length} />
-                            <RowList notes={pinnedNotes} dateField={dateField} />
+                            <RowList notes={pinnedNotes} dateField={dateField} tagContext={under} />
                         </Box>
                     )}
                     {groups ? (
                         groups.map((group) => (
                             <Box component="section" key={group.key} aria-label={group.label}>
                                 <GroupHeading label={group.label} count={group.notes.length} />
-                                <RowList notes={group.notes} dateField={dateField} />
+                                <RowList notes={group.notes} dateField={dateField} tagContext={under} />
                             </Box>
                         ))
                     ) : unpinnedNotes.length > 0 ? (
                         <Box sx={{ pt: '8px' }}>
-                            <RowList notes={unpinnedNotes} dateField={dateField} />
+                            <RowList notes={unpinnedNotes} dateField={dateField} tagContext={under} />
                         </Box>
                     ) : null}
                 </>
