@@ -101,6 +101,12 @@ Pull from here when planning the next pass; update as work lands or priorities s
   - Migrate remaining FitnessGeek REST reads (food search / barcode / favorites / recent in `foodService.js`) to gateway queries.
   - Retire FlockGeek caller-less mounted REST layer in `routes/api.js` (Chef item Q22).
   - Delete unused StoryGeek gateway schema in `apps/basegeek/packages/api/src/graphql/storygeek` (Chef item Q38).
+- **`packages/ui` contained-button hover ignores `color`** (found 2026-09-29 by ThingGeek Walk):
+  `createGeekSuiteTheme.js` sets `&:hover`/`&:active` to `primary.dark` for EVERY contained
+  button, so a `color="safety"` (or any non-primary) button washes out to primary on hover or
+  tap. It's invisible wherever the button navigates away at once. Walk overrides it locally. The
+  fix belongs in the shared theme, scoped to `ownerState.color`, and needs a themeContrast rerun
+  across all apps.
 - **Mongo Connection Topology (basegeek)**:
   - Investigated: four connection pools serve four distinct databases (`userGeek`, `basegeek`, `aiGeek`, app data). Deferred unless connection limits become a bottleneck. Avoid calling `getAppConnection('usergeek')` which would spawn a redundant pool.
 
@@ -196,6 +202,13 @@ Wanted, not built on the 2026-09-22 overnight run:
 Live since 2026-09-26.
 - **The first real add is the upload test:** a photo from a phone, including HEIC,
   hasn't been uploaded on production yet.
+- **Walk the room skips required custom fields.** No starter type has one. If a household adds
+  a custom required field, Walk's create is rejected (it shows Retry with the server message)
+  and can't be fixed from Walk. Either prompt for required fields in Walk, or create with the
+  General type and flag the item in Attention.
+- **Label Maker is too quiet** (Chef, 2026-09-29: "isn't real obvious"). The six-point
+  amplification is proposed and awaiting Chef: tape page titles, real embossing, coloured
+  refills, tape section heads, a label-maker empty state, real cardboard.
 - **AI Ask (`??`):** needs the AI tier decided first. Under the privacy rule, identifiers,
   document contents and values never go to a provider.
 - **Its MCP tools**, once the suite MCP server exists.
