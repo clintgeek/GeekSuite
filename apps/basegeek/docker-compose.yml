@@ -83,6 +83,37 @@ services:
         max-size: "10m"
         max-file: "3"
 
+  # Local embeddings for NoteGeek's meaning-based search (2026-09-30). Notes
+  # never leave the box: no published port — only containers on
+  # datageek_network (basegeek) reach it, at http://datageek_embeddings:11434.
+  # Kept loaded (KEEP_ALIVE=-1) so a search never waits on a cold model; capped
+  # at 1 GB and 2 CPUs so it can't crowd the box. Pinned version, and no
+  # Watchtower label: it only changes when we change it.
+  embeddings:
+    image: ollama/ollama:0.35.0
+    container_name: datageek_embeddings
+    environment:
+      - OLLAMA_KEEP_ALIVE=-1
+      - OLLAMA_MAX_LOADED_MODELS=1
+      - OLLAMA_NUM_PARALLEL=2
+    volumes:
+      - ./data/ollama:/root/.ollama
+    networks:
+      - datageek_network
+    mem_limit: 1g
+    cpus: 2
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "ollama", "list"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
   postgres:
     image: postgres:15
     container_name: datageek_postgres

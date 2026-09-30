@@ -131,7 +131,7 @@ basegeek, bookgeek, bujogeek, fitnessgeek, flockgeek, notegeek, storygeek all ha
 
 ## 3. The databases
 
-All four live in `apps/basegeek/docker-compose.yml` (basegeek's compose file doubles as the
+All five live in `apps/basegeek/docker-compose.yml` (basegeek's compose file doubles as the
 suite's datastore compose file) and share `datageek_network`.
 
 | Container | Image | Host port → container port | Used for |
@@ -140,6 +140,7 @@ suite's datastore compose file) and share `datageek_network`.
 | `datageek_postgres` | `postgres:15` | 55432 → 5432 | basegeek's AI config + related tables (README.md "Infrastructure") |
 | `datageek_redis` | `redis:latest` | 6380 → 6379 | Session caching, rate limiting, refresh-token rotation state |
 | `datageek_influxdb` | `influxdb:1.8` | 8086 → 8086 | Time-series — Garmin health metrics (fitnessgeek), basegeek request metrics |
+| `datageek_embeddings` | `ollama/ollama:0.35.0` (pinned; no Watchtower label) | **none** — reachable only on `datageek_network` at `http://datageek_embeddings:11434` | Local text embeddings (`nomic-embed-text`, 768 dims) for NoteGeek's meaning-based search. Notes never leave the box. Kept loaded (`OLLAMA_KEEP_ALIVE=-1`), capped `mem_limit: 1g`, `cpus: 2`; ~300 MB resident, 0% CPU idle; ~0.5 s per query, ~9 s for a long note on this box (so indexing is background work). Model lives in `apps/basegeek/data/ollama` (re-downloadable: `docker exec datageek_embeddings ollama pull nomic-embed-text`). Added 2026-09-30. Start/recreate ONLY it: `cd apps/basegeek && docker compose up -d --no-deps embeddings` |
 
 Mongo's LAN address is `192.168.1.17:27018` — this is the value every app's `MONGODB_URI`/
 `DB_URI` should resolve to in production (confirmed in `DOCS/SSO_OVERVIEW.md` and the
