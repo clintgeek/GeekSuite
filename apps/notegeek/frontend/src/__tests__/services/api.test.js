@@ -192,7 +192,7 @@ describe('API Service', () => {
         await searchNotesApi('query');
         expect(mockApollo.query).toHaveBeenCalledWith({
             query: SEARCH_NOTES,
-            variables: { q: 'query' },
+            variables: { q: 'query', hybrid: true },
             fetchPolicy: 'network-only',
         });
 

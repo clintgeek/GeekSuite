@@ -53,9 +53,15 @@ export const NOTE_TAG_USAGE = gql`
     }
 `;
 
+/**
+ * Search. `hybrid: true` asks the gateway to also match by meaning (local
+ * embeddings, DOCS/CONTEXT.md §11) and fuse the two lists; `matchedBy` says
+ * how each row matched and `why` is the passage a meaning hit matched on.
+ * Needs the gateway from 2026-09-30 — an older one rejects `hybrid`.
+ */
 export const SEARCH_NOTES = gql`
-    query SearchNotes($q: String!) {
-        searchNotes(q: $q) {
+    query SearchNotes($q: String!, $hybrid: Boolean) {
+        searchNotes(q: $q, hybrid: $hybrid) {
             _id
             title
             type
@@ -67,6 +73,25 @@ export const SEARCH_NOTES = gql`
             score
             snippet
             message
+            matchedBy
+            why
+        }
+    }
+`;
+
+/**
+ * The notes nearest this one in meaning (local embeddings only). Empty until
+ * the note has been indexed — ~30 s after an edit settles.
+ */
+export const RELATED_NOTES = gql`
+    query RelatedNotes($noteId: ID!, $limit: Int) {
+        relatedNotes(noteId: $noteId, limit: $limit) {
+            id
+            title
+            type
+            updatedAt
+            score
+            snippet
         }
     }
 `;

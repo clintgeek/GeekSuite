@@ -30,6 +30,7 @@ function SearchResults() {
     const [searchTerm, setSearchTerm] = useState(query);
     const { searchNotes, searchResults, isSearching, searchError, clearSearchResults } = useNoteStore();
     const inputRef = useRef(null);
+    const meaningCount = searchResults.filter((r) => r.matchedBy === 'meaning').length;
 
     // Debounce the box into the URL. The `if (searchTerm)` guard that used to
     // wrap this meant an EMPTIED box never wrote `q=''`: `query` kept its old
@@ -98,8 +99,12 @@ function SearchResults() {
                 }}
             />
 
-            {/* Results */}
-            {isSearching ? (
+            {/* Results. While a newer search is in flight the previous results
+                stay on screen (with a quiet "Searching…"): results update as
+                you type, and a hybrid search can take a second while the
+                query is embedded — blanking the list to skeletons on every
+                pause made the page flicker under your thumb. */}
+            {isSearching && searchResults.length === 0 ? (
                 <Box>
                     {/* Subtle inline searching indicator */}
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1.5, px: 0.5 }}>
@@ -122,11 +127,15 @@ function SearchResults() {
                     onRetry={query ? () => searchNotes(query) : undefined}
                 />
             ) : searchResults.length > 0 ? (
-                <Box>
-                    <Box sx={{ mb: 1.5, px: 0.5 }}>
+                <Box aria-busy={isSearching || undefined}>
+                    <Box sx={{ mb: 1.5, px: 0.5, display: 'flex', alignItems: 'center', gap: 1 }}>
                         <Typography variant="h6" sx={{ color: 'text.muted' }}>
                             {searchResults.length} {searchResults.length === 1 ? 'result' : 'results'}
+                            {meaningCount > 0 ? ` · ${meaningCount} similar` : ''}
                         </Typography>
+                        {isSearching && (
+                            <CircularProgress size={12} thickness={4} aria-label="Searching" sx={{ color: 'text.disabled' }} />
+                        )}
                     </Box>
                     <Box>
                         {searchResults.map((note, idx) => (

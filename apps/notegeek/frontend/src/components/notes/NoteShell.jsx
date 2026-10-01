@@ -45,6 +45,10 @@ function useWritingFocus() {
  *     stylus (DOCS/HANDWRITTEN_EDITOR_MOBILE_FIX.md). `disableContentScroll`
  *     keeps that promise explicitly.
  *
+ * `footer` (page variant only) sits under the body, inside the same column
+ * and scroller — Related notes and Linked from (NoteFooter.jsx). A canvas
+ * has nowhere to put it without shrinking the drawing, so it is ignored there.
+ *
  * `actions` is still honoured as a phone-only footer for any caller that
  * wants one; the editor page no longer passes it (its controls live in the
  * head: Back, the save stamp and the ⋯ menu).
@@ -54,6 +58,7 @@ function NoteShell({
   children,
   actions,
   toolbar,
+  footer = null,
   variant = 'page',
   fullHeight = true,
   disableContentScroll = false,
@@ -188,6 +193,7 @@ function NoteShell({
           }}
         >
           {children}
+          {footer}
         </Box>
       </Box>
       {actions && <MobileFooter>{actions}</MobileFooter>}

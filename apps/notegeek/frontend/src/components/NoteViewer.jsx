@@ -28,6 +28,7 @@ import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import PrintOutlined from '@mui/icons-material/PrintOutlined';
 import DeleteNoteDialog from './DeleteNoteDialog';
 import NotePrintView from './notes/NotePrintView';
+import NoteFooter from './notes/NoteFooter';
 import useNotePrint from '../hooks/useNotePrint';
 import TypeIcon from './notes/TypeIcon';
 import { noteTypeMeta } from './notes/noteTypeMeta';
@@ -425,6 +426,11 @@ function NoteViewer() {
                         </Box>
                     </Box>
                 </Paper>
+
+                {/* Related notes (and, later, backlinks). Own queries; hidden when empty. */}
+                <Box sx={{ px: { xs: 1, sm: 2 }, pb: 4 }}>
+                    <NoteFooter noteId={noteToView.id || noteToView._id} />
+                </Box>
 
                 <NotePrintView note={noteToView} rootRef={printRootRef} />
 

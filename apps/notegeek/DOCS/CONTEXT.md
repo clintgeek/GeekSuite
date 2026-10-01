@@ -265,3 +265,23 @@ down, search is keyword-only and Related is empty; nothing else is asked.
   real ANN index (pgvector next door, or Mongo vector search).
 - **Check it:** `noteIndexStatus` (owner-scoped counts + `serviceAvailable` / `lastError`). From the
   host: `docker exec basegeek node -e "fetch('http://datageek_embeddings:11434/api/embed',{method:'POST',body:JSON.stringify({model:'nomic-embed-text',input:['search_query: hi']})}).then(r=>r.json()).then(j=>console.log(j.embeddings[0].length))"` → `768`.
+- **UI (2026-09-30; needs the gateway above live first — the bundle sends `hybrid` and selects
+  `matchedBy` / `why` / `relatedNotes`, which an older gateway rejects):**
+  - Search (`components/SearchResults.jsx`) always asks for `hybrid: true` (`services/api.js`).
+    Results update as you type (300 ms debounce into `?q=`); while a newer search is in flight the
+    previous results STAY on screen with a small spinner — skeletons only when there is nothing yet.
+    The count line says how many are by meaning: "3 results · 2 similar".
+  - A meaning-only row (`NoteRow`, `matchedBy === 'meaning'`) shows the passage that matched (`why`)
+    instead of the note's opening, highlights nothing, and carries a quiet italic **"similar"** in its
+    meta line (`data-match="meaning"`; its title says it may not contain your words). Keyword and
+    both rows highlight each query word of 3+ letters (`utils/highlightTerms.js`, a few stop words
+    skipped) — before this a multi-word query marked nothing, since only the whole phrase was sought.
+  - **Related notes** (`components/notes/RelatedNotes.jsx`, mounted by `NoteFooter.jsx`, list markup
+    in `NoteSection.jsx`) at the foot of the read-only viewer and of the editor (page types only — a
+    canvas has nowhere to put it; `NoteShell`'s `footer` prop). Five rows: type glyph, title, one line
+    of the closest passage; 44px rows; heading "Related notes" + "similar in meaning". Its own
+    `cache-and-network` query: renders nothing while loading, on error, or when empty, so it never
+    blocks or shifts the note. Not printed.
+  - **Checks:** `__tests__/components/notes/hybridSearch.test.jsx`, `__tests__/services/api.test.js`;
+    harness `14h-search-hybrid` (types "fix the garage"; every search asked for hybrid, two "similar"
+    rows with no marks, the keyword row marked), `17a-related-viewer`, `17b-related-editor`.

@@ -16,6 +16,7 @@ import { usePinNote } from '../hooks/usePinNote';
 import { useToast } from '@geeksuite/ui';
 import { useAppPreferences } from '@geeksuite/user';
 import { NoteShell, NoteMetaBar, NoteActions, NoteTypeRouter, NOTE_TYPES, SuggestionStrip } from '../components/notes';
+import NoteFooter from '../components/notes/NoteFooter';
 import { BackButton } from '../components/notes/NoteActions';
 import NotePrintView from '../components/notes/NotePrintView';
 import useNotePrint from '../hooks/useNotePrint';
@@ -952,6 +953,7 @@ function NoteEditorPage() {
           />
         }
         disableContentScroll={isHandwritten}
+        footer={!isCanvas && savedNoteId ? <NoteFooter noteId={savedNoteId} /> : null}
       >
         {/* `display: contents` — this wrapper exists only to catch the caret
             events bubbling out of whichever editor is mounted. It must not

@@ -132,7 +132,7 @@ async function reviewTranscript(page, h) {
 
 import { fileURLToPath } from 'node:url';
 import { json, graphqlRoute } from '../../lib/net.mjs';
-import { OPS, NOTE_SUGGESTIONS, NOTE_CODE, NOTE_MINDMAP, NOTE_SKETCH, NOTE_WIDE_TABLE, NOTE_MD, NOTE_PRINT, SEARCH_RESULTS } from './fixtures.mjs';
+import { OPS, NOTE_SUGGESTIONS, NOTE_CODE, NOTE_MINDMAP, NOTE_SKETCH, NOTE_WIDE_TABLE, NOTE_MD, NOTE_PRINT, SEARCH_RESULTS, HYBRID_RESULTS, RELATED_TO_N1, NOTE_N1 } from './fixtures.mjs';
 
 // ── Photo of a page (DOCS/HANDWRITING.md §3) ────────────────────────────────
 //
@@ -1007,6 +1007,89 @@ export const scenes = [
       if ((await page.locator('mark').count()) < 2) throw new Error('search hits are not marked');
       await page.getByPlaceholder(/search titles/i).blur();
       await h.settle(300);
+    },
+  },
+  {
+    // Hybrid search (DOCS/CONTEXT.md §11): the note with the typed words
+    // first, marked; then notes found by meaning, unmarked, each with a quiet
+    // "similar" and the passage that matched. Results update as you type.
+    name: '14h-search-hybrid',
+    async setup(page, h) {
+      await bootstrapChef(page);
+      let searches = 0;
+      let keywordOnly = 0;
+      await graphqlRoute(page, {
+        ...OPS,
+        SearchNotes: (vars) => {
+          searches += 1;
+          if (vars.hybrid !== true) keywordOnly += 1;
+          return { searchNotes: HYBRID_RESULTS };
+        },
+      });
+      await page.goto(h.base + '/search', { waitUntil: 'networkidle' });
+      await h.settle(600);
+      const box = page.getByPlaceholder(/search titles/i);
+      await box.pressSequentially('fix the garage', { delay: 40 });
+      await page.getByText(/3 results · 2 similar/).waitFor({ timeout: 10000 });
+      await h.settle(600);
+      if (searches < 1) throw new Error('typing did not search');
+      if (keywordOnly) throw new Error('a search did not ask for hybrid results');
+      if ((await page.locator('[data-match="meaning"]').count()) !== 2) throw new Error('meaning hits are not marked "similar"');
+      const meaningRow = page.locator('[data-note-row]').filter({ has: page.locator('[data-match="meaning"]') }).first();
+      if (await meaningRow.locator('mark').count()) throw new Error('a meaning hit has highlighted words');
+      if (!(await page.locator('[data-note-row]').first().locator('mark').count())) throw new Error('the keyword hit is not highlighted');
+      await box.blur();
+      await h.settle(300);
+    },
+  },
+  {
+    // Related notes under the read-only viewer: own query, quiet list,
+    // 44px rows. Scrolled into view for the screenshot.
+    name: '17a-related-viewer',
+    async setup(page, h) {
+      await page.route('**/api/users/bootstrap', (r) => json(r, {
+        identity: { username: 'chef', email: 'chef@example.com' },
+        profile: { displayName: 'Chef Crocker' },
+        preferences: {},
+        appPreferences: { notegeek: { suggestOnSave: false } },
+      }));
+      await graphqlRoute(page, {
+        ...OPS,
+        GetNoteById: { note: NOTE_N1 },
+        RelatedNotes: (vars) => ({ relatedNotes: vars.noteId === 'n1' ? RELATED_TO_N1 : [] }),
+      });
+      await page.goto(h.base + '/notes/n1', { waitUntil: 'networkidle' });
+      await h.settle(1200);
+      const section = page.locator('[data-related-notes]');
+      await section.waitFor({ timeout: 10000 });
+      if (!(await section.getByRole('heading', { name: 'Related notes' }).count())) throw new Error('no "Related notes" heading');
+      if ((await section.getByRole('link').count()) !== 3) throw new Error('related rows missing');
+      await section.scrollIntoViewIfNeeded();
+      await h.settle(400);
+    },
+  },
+  {
+    // The same section at the foot of the editor (markdown note n2), after
+    // the body; absent on canvases.
+    name: '17b-related-editor',
+    async setup(page, h) {
+      await page.route('**/api/users/bootstrap', (r) => json(r, {
+        identity: { username: 'chef', email: 'chef@example.com' },
+        profile: { displayName: 'Chef Crocker' },
+        preferences: {},
+        appPreferences: { notegeek: { suggestOnSave: false } },
+      }));
+      await graphqlRoute(page, {
+        ...OPS,
+        GetNoteById: { note: NOTE_MD },
+        RelatedNotes: { relatedNotes: RELATED_TO_N1.slice(0, 2) },
+      });
+      await page.goto(h.base + '/notes/n2/edit', { waitUntil: 'networkidle' });
+      await h.settle(1400);
+      const section = page.locator('[data-related-notes]');
+      await section.waitFor({ timeout: 10000 });
+      await section.scrollIntoViewIfNeeded();
+      await h.settle(400);
     },
   },
   {

@@ -87,7 +87,9 @@ export const getTagsApi = async () => {
 // Search
 export const searchNotesApi = async (query) => {
     try {
-        const { data } = await apolloClient.query({ query: SEARCH_NOTES, variables: { q: query }, fetchPolicy: 'network-only' });
+        // Hybrid: keyword hits plus meaning hits, fused on the gateway. It
+        // degrades to keyword-only by itself when the embeddings are down.
+        const { data } = await apolloClient.query({ query: SEARCH_NOTES, variables: { q: query, hybrid: true }, fetchPolicy: 'network-only' });
         return { data: data.searchNotes };
     } catch (error) {
         console.error('Search failed:', error.message);

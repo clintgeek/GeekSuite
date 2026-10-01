@@ -97,8 +97,24 @@ export const NOTE_MD = note('n2', 'Recipe: brown butter chocolate chip cookies',
 
 // Search results: the gateway's `searchNotes` shape (`_id`, `snippet`).
 export const SEARCH_RESULTS = [
-  { __typename: 'SearchSnippet', _id: 'n2', title: 'Recipe: brown butter chocolate chip cookies', type: 'markdown', tags: ['recipes'], isLocked: false, isEncrypted: false, createdAt: daysAgo(20), updatedAt: daysAgo(1.2), score: 3, snippet: 'Brown the butter first, then chill the dough overnight.', message: null },
-  { __typename: 'SearchSnippet', _id: 'n7', title: 'Nginx wildcard cert renewal', type: 'markdown', tags: ['dev', 'dev/infra'], isLocked: false, isEncrypted: false, createdAt: daysAgo(20), updatedAt: daysAgo(5), score: 1, snippet: 'Run certbot, then brown-bag the reload until nginx -t passes.', message: null },
+  { __typename: 'SearchSnippet', _id: 'n2', title: 'Recipe: brown butter chocolate chip cookies', type: 'markdown', tags: ['recipes'], isLocked: false, isEncrypted: false, createdAt: daysAgo(20), updatedAt: daysAgo(1.2), score: 3, snippet: 'Brown the butter first, then chill the dough overnight.', message: null, matchedBy: 'keyword', why: null },
+  { __typename: 'SearchSnippet', _id: 'n7', title: 'Nginx wildcard cert renewal', type: 'markdown', tags: ['dev', 'dev/infra'], isLocked: false, isEncrypted: false, createdAt: daysAgo(20), updatedAt: daysAgo(5), score: 1, snippet: 'Run certbot, then brown-bag the reload until nginx -t passes.', message: null, matchedBy: 'keyword', why: null },
+];
+
+// Hybrid search (DOCS/CONTEXT.md §11): "fix the garage" — one note with the
+// words (marked), then two the local embeddings found by meaning (no marks,
+// a quiet "similar", and the passage that matched). Scene 14h.
+export const HYBRID_RESULTS = [
+  { __typename: 'SearchSnippet', _id: 'h1', title: 'Garage shelving plan', type: 'markdown', tags: ['house/garage'], isLocked: false, isEncrypted: false, createdAt: daysAgo(20), updatedAt: daysAgo(3), score: 0.0164, snippet: 'Four uprights, 18in deep. Fix the brackets to the garage studs.', message: null, matchedBy: 'both', why: 'Four uprights, 18in deep. Fix the brackets to the garage studs.' },
+  { __typename: 'SearchSnippet', _id: 'h2', title: 'Kitchen tap washer', type: 'text', tags: ['house/kitchen', 'finance'], isLocked: false, isEncrypted: false, createdAt: daysAgo(20), updatedAt: daysAgo(9), score: 0.0129, snippet: 'Replace the washer, not the tap. About £4.', message: null, matchedBy: 'meaning', why: 'Replace the washer, not the tap. About £4.' },
+  { __typename: 'SearchSnippet', _id: 'h3', title: 'House insurance renewal', type: 'markdown', tags: ['house'], isLocked: false, isEncrypted: false, createdAt: daysAgo(20), updatedAt: daysAgo(14), score: 0.0127, snippet: 'Renews in October. Compare two quotes first.', message: null, matchedBy: 'meaning', why: 'Renews in October. Compare two quotes first.' },
+];
+
+// Related notes (local embeddings) for the Q3 roadmap note — scenes 17a/17b.
+export const RELATED_TO_N1 = [
+  { __typename: 'SimilarNote', id: 'n5', title: 'Standup snippets', type: 'text', updatedAt: hoursAgo(7), score: 0.71, snippet: 'Nothing blocking. Pairing on the sidebar tree after lunch.' },
+  { __typename: 'SimilarNote', id: 'np', title: 'Deploy checklist', type: 'markdown', updatedAt: hoursAgo(1), score: 0.69, snippet: 'A Watchtower deploy never picks up new .env.production vars.' },
+  { __typename: 'SimilarNote', id: 'n4', title: 'Mind map: GeekSuite apps', type: 'mindmap', updatedAt: daysAgo(3), score: 0.67, snippet: null },
 ];
 
 // Spread across the recency buckets: Today, Yesterday, This week, and two
@@ -226,6 +242,8 @@ export const OPS = {
   RenameTag: { renameTag: true },
   DeleteTag: { deleteTag: true },
   SearchNotes: { searchNotes: [] },
+  // Empty by default, so the scenes before 17a show no Related section.
+  RelatedNotes: { relatedNotes: [] },
   SetNotePinned: (vars) => ({
     setNotePinned: { __typename: 'Note', id: vars.id, pinned: vars.pinned, pinnedAt: vars.pinned ? now.toISOString() : null },
   }),

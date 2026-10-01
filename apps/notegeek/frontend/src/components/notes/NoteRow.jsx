@@ -9,6 +9,7 @@ import {
 import { formatRelativeTime } from '../../utils/dateUtils';
 import { previewText } from '../../utils/previewText';
 import { rowTagLabels } from '../../utils/tagPath';
+import { highlightTerms } from '../../utils/highlightTerms';
 import { graphiteTokens } from '../../theme/tokens';
 import TypeIcon from './TypeIcon';
 import { CodePreview, NoteThumb } from './NotePreview';
@@ -30,10 +31,16 @@ function getPreview(note, maxLen = 120) {
 /** Search hits under a pass of highlighter (`mark`, styled in the theme). */
 function highlightQuery(text, query) {
     if (!query || !text) return text;
-    const escaped = query.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const parts = text.split(new RegExp(`(${escaped})`, 'gi'));
+    const terms = highlightTerms(query);
+    if (!terms.length) return text;
+    // Longest first, so "garages" wins over "garage" where both are terms.
+    const pattern = terms
+        .sort((a, b) => b.length - a.length)
+        .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+        .join('|');
+    const parts = text.split(new RegExp(`(${pattern})`, 'gi'));
     return parts.map((part, i) =>
-        part.toLowerCase() === query.toLowerCase()
+        terms.includes(part.toLowerCase())
             ? <mark key={i}>{part}</mark>
             : part
     );
@@ -63,6 +70,31 @@ function PinGlyph({ size = 14 }) {
         >
             <PushPin aria-hidden sx={{ fontSize: size }} />
         </Box>
+    );
+}
+
+/**
+ * A search hit found by MEANING, not by the typed words (hybrid search,
+ * DOCS/CONTEXT.md §11). Without it a row with no highlighted word looks like
+ * a bug. Quiet: small secondary text in the meta line, like the tags.
+ */
+function MeaningMark() {
+    return (
+        <Typography
+            component="span"
+            data-match="meaning"
+            title="Found by meaning: it may not contain the words you typed"
+            sx={{
+                color: 'text.secondary',
+                fontSize: '0.75rem',
+                lineHeight: 1.2,
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
+                fontStyle: 'italic',
+            }}
+        >
+            similar
+        </Typography>
     );
 }
 
@@ -96,8 +128,14 @@ function NoteRow({ note, to, onClick, query, maxPreview = 160, dateField = 'upda
     const theme = useTheme();
     const type = note.type || 'text';
     const isVisual = VISUAL_TYPES.includes(type);
-    const isCode = type === 'code' && !note.snippet;
-    const preview = isCode ? '' : getPreview(note, maxPreview);
+    // Hybrid search: a row matched by meaning alone shows the passage that
+    // matched and is marked, and nothing in it is highlighted — the typed
+    // words are, by definition, not what found it.
+    const byMeaning = note.matchedBy === 'meaning';
+    const why = byMeaning && note.why ? note.why : null;
+    const isCode = type === 'code' && !note.snippet && !why;
+    const preview = isCode ? '' : (why || getPreview(note, maxPreview));
+    const highlight = byMeaning ? null : query;
     const g = graphiteTokens(theme);
 
     const noteId = note.id || note._id;
@@ -148,8 +186,8 @@ function NoteRow({ note, to, onClick, query, maxPreview = 160, dateField = 'upda
                         lineHeight: 1.4,
                     }}
                 >
-                    {query
-                        ? highlightQuery(note.title || 'Untitled', query)
+                    {highlight
+                        ? highlightQuery(note.title || 'Untitled', highlight)
                         : (note.title || 'Untitled')}
                 </Typography>
 
@@ -171,7 +209,7 @@ function NoteRow({ note, to, onClick, query, maxPreview = 160, dateField = 'upda
                             wordBreak: 'break-word',
                         }}
                     >
-                        {query ? highlightQuery(preview, query) : preview}
+                        {highlight ? highlightQuery(preview, highlight) : preview}
                     </Typography>
                 ) : null}
 
@@ -187,6 +225,7 @@ function NoteRow({ note, to, onClick, query, maxPreview = 160, dateField = 'upda
                 >
                     {note.pinned && <PinGlyph size={14} />}
                     <TypeIcon type={type} size={15} />
+                    {byMeaning && <MeaningMark />}
                     {tagLabels.length > 0 && (
                         <Typography
                             component="span"
