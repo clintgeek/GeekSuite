@@ -12,6 +12,89 @@ anything a future reader would otherwise have to rediscover.
 
 ## 2026-10-01
 
+### ThingGeek — "Storage Yard" (Moving Day toned down)
+
+`8b713683`
+
+Chef: Moving Day "leaned way too hard into the moving aesthetic … more just U-Haul inspired
+storage and rental than actual literal prep for moving workflow."
+
+- **Kept:** the orange/kraft/black livery, the dust texture, the roll-up-door yard, the murals,
+  the dashboard lights and gauge, and the odometer.
+- **Dropped:**
+  - "Loading dock" and "Load", back to "Add";
+  - "Pack a room", back to "Walk the room";
+  - the "TO:" chips, now plain unit tags;
+  - box size, FRAGILE and OVERSIZE markings;
+  - the curb, now Trash;
+  - the bill-of-lading wording.
+- **Test:** the first-run test fails if moving words return.
+
+### Tags — one suite standard: lowercase kebab-case, `/` nesting
+
+`fd5fe362` `0d8526f3` `40526984` `eb4211f0` (gateway, tolerant reads), then `06f54a7c` (UIs)
+
+- **The package:** `@geeksuite/tags` (`DOCS/TAG_STANDARD.md`) is used by the gateway, NoteGeek,
+  BuJoGeek and ThingGeek. BookGeek and GameGeek are untouched (curated vocabularies).
+- **Migration** (Chef approved the dry-run table first): 121 BuJoGeek tasks across 7 tags
+  (`geekSuite` → `geek-suite` and the like); nothing else changed.
+  - The rollback file is in `~/geeksuite-migrations/tags-kebab/`.
+  - A re-run is a no-op.
+- **Behaviour changes:**
+  - a case-only rename now does nothing;
+  - `#work/tomorrow` is a nested tag;
+  - `C#` and `#1` are no longer tags.
+- **Not built yet:** the `suiteTags` / `taggedAcross` gateway queries are live, but the
+  cross-app UI awaits a layout proposal.
+
+### NoteGeek — Fold in new info
+
+`bb0adfb7` (gateway) → `00206e7f` (UI), plus `2b83e229` and `34ad6d13` (test fixes)
+
+- **How it works:**
+  - The AI proposes anchored edit operations; NoteGeek validates and applies them itself.
+  - Unmatched suggestions are dropped and disclosed.
+  - Unplaced content gets its own card.
+  - A version is snapshotted before apply; Undo restores it.
+- **Where:** the ⋯ menu, the viewer, the share sheet ("Add to an existing note", with a
+  suggested note) and the capture box.
+- **Model:** gpt-4.1-mini via the paid-first route, about 3 s and under $0.001 per proposal.
+  Rich-text notes are refused.
+- **CI after the push:** the gateway commit missed a `gatewayInputObjectParity` fixture
+  (`2b83e229`). A test counted versions globally in a shared test DB (`34ad6d13`).
+  Lesson saved: run the FULL api suite before pushing a gateway change.
+
+### NoteGeek — search: a best match, weak hits cut, a better local model
+
+`70b4d6f1` (gateway) → `7007baf8` (UI)
+
+Chef: the right note came first, "but then number two was unrelated auth, and the rest were
+just random-ish."
+
+- **What was wrong:** measured on prod, the tail was single-word `$text` matches (0.50 vs a
+  2.23 top) and nomic's squashed scores.
+- **What changed:**
+  - keyword hits under 40% of the top are cut;
+  - vector hits must score ≥0.55 and be within 0.08 of the best;
+  - a "Best match" block appears when #1 clearly wins (a lead of 0.08 or more, or agreement
+    between the keyword and meaning lists);
+  - the model is now `mxbai-embed-large` (1024 dims), with the embeddings `mem_limit` raised
+    to 1536m and an automatic re-index of all 36 notes (about 10 min).
+- **Live check, 11 queries on Chef's notes:** GameGeek auth is the best match with one
+  related row; "what pills" moved from #17 to the best match.
+- **Known limit:** generic keyword queries keep a noisy "Also related" list.
+
+### BuJoGeek — private tasks
+
+`0a5cc2eb` + `a7721a15` (gateway, StartGeek) → `d4c6c84d` (UI)
+
+- **Marking:** a "Private" checkbox or `(private)`.
+- **On desktop:** the words are out of the DOM until revealed, and re-hide on window
+  blur/hidden, Esc or after 60 s.
+- **On a phone:** shown with a small mark.
+- **Elsewhere:** reminders say "Private task due"; StartGeek shows "Private task" and never
+  returns private tasks in search; the AI weekly review never sees the words.
+
 ### ThingGeek — "Moving Day" (replaced Label Maker)
 
 `228d0d61`, one revertable commit.
