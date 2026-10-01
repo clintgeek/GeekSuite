@@ -443,7 +443,9 @@ describe('resolvers: preview writes nothing, apply snapshots and re-validates', 
     const after = await Note.findById(n._id).lean();
     expect(after.content).toBe(SPIDERS);
     expect(after.updatedAt.getTime()).toBe(n.updatedAt.getTime());
-    expect(await NoteVersion.countDocuments({})).toBe(0);
+    // Scoped to this note: other suites share the test database and run in
+    // parallel, so a global count saw their versions (CI, 2026-10-01).
+    expect(await NoteVersion.countDocuments({ noteId: n._id })).toBe(0);
   });
 
   test('apply snapshots the old note first, applies only what was sent, and returns the version for undo', async () => {
@@ -468,7 +470,7 @@ describe('resolvers: preview writes nothing, apply snapshots and re-validates', 
     await expect(Mutation.foldInApply(null, { noteId: String(n._id), baseUpdatedAt: base, operations: ops }, ctx(ALICE)))
       .rejects.toMatchObject({ extensions: { code: 'CONFLICT' } });
     expect((await Note.findById(n._id).lean()).content).not.toContain('Brown widow');
-    expect(await NoteVersion.countDocuments({})).toBe(0);
+    expect(await NoteVersion.countDocuments({ noteId: n._id })).toBe(0);
   });
 
   test('a stale base whose anchors still hold applies', async () => {
@@ -508,7 +510,7 @@ describe('resolvers: preview writes nothing, apply snapshots and re-validates', 
     const ops = [{ type: 'append_to_list', anchor: 'Red widow', items: ['Brown widow'] }];
     await expect(Mutation.foldInApply(null, { noteId: String(n._id), baseUpdatedAt: n.updatedAt.toISOString(), operations: ops }, ctx(ALICE)))
       .rejects.toMatchObject({ extensions: { code: 'CONFLICT' } });
-    expect(await NoteVersion.countDocuments({})).toBe(0);
+    expect(await NoteVersion.countDocuments({ noteId: n._id })).toBe(0);
   });
 
   test('owner-scoped, and only markdown notes', async () => {
