@@ -2,6 +2,8 @@ import Task from '../models/Task.js';
 import TaskOrder from '../models/TaskOrder.js';
 import Collection from '../models/Collection.js';
 import mongoose from 'mongoose';
+import { normalizeTag } from '@geeksuite/tags';
+import { spellingsOf } from '../../shared/tagSpellings.js';
 import rrulePkg from 'rrule';
 
 const { rrulestr, RRule } = rrulePkg;
@@ -1228,20 +1230,37 @@ class TaskService {
     return this.taskModel.findOne({ _id: id, createdBy: userId }).select('content status');
   }
 
+  /**
+   * Tag counts, in the suite standard (`@geeksuite/tags`). Spellings stored
+   * before the standard (`geekSuite`) are folded into their standard tag
+   * (`geek-suite`) until the migration rewrites them; a task carrying two
+   * legacy spellings of one tag is counted under it once per spelling.
+   */
   async getTagsForUser(userId) {
     this.requireUser(userId);
-    return this.taskModel.aggregate([
+    const rows = await this.taskModel.aggregate([
       { $match: { createdBy: new mongoose.Types.ObjectId(userId) } },
       { $unwind: '$tags' },
       { $group: { _id: '$tags', count: { $sum: 1 } } },
-      { $sort: { count: -1, _id: 1 } },
-      { $project: { _id: 0, tag: '$_id', count: 1 } },
     ]);
+    const counts = new Map();
+    for (const { _id, count } of rows) {
+      const tag = normalizeTag(typeof _id === 'string' ? _id : '');
+      if (tag) counts.set(tag, (counts.get(tag) || 0) + count);
+    }
+    return [...counts]
+      .map(([tag, count]) => ({ tag, count }))
+      .sort((a, b) => b.count - a.count || (a.tag < b.tag ? -1 : a.tag > b.tag ? 1 : 0));
   }
 
+  /** Tasks carrying ALL of `tags` (normalized; legacy spellings still match). */
   async getTasksByTags(userId, tags) {
     this.requireUser(userId);
-    const tasks = await this.taskModel.find({ createdBy: userId, tags: { $all: tags } }).sort({ dueDate: -1, createdAt: -1 });
+    const scope = { createdBy: userId };
+    const clauses = await Promise.all(
+      tags.map(async (t) => ({ tags: { $in: await spellingsOf(this.taskModel, scope, t) } }))
+    );
+    const tasks = await this.taskModel.find({ ...scope, ...(clauses.length ? { $and: clauses } : {}) }).sort({ dueDate: -1, createdAt: -1 });
     return tasks.map(t => t.toObject());
   }
 }

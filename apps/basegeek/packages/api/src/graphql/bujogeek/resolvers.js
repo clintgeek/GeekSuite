@@ -6,6 +6,8 @@ import collectionService from './services/collectionService.js';
 import habitService from './services/habitService.js';
 import reminderService from './services/reminderService.js';
 import reviewService from './services/reviewService.js';
+import { normalizeTags } from '@geeksuite/tags';
+import { spellingsOf } from '../shared/tagSpellings.js';
 import {
   validateInput,
   createTaskSchema,
@@ -34,6 +36,20 @@ const validateCreateJournalFromTemplate = validateInput(createJournalFromTemplat
 const validateReviewDraft = validateInput(reviewDraftArgsSchema);
 
 /**
+ * Journal entries and templates take `tags` straight from GraphQL (no zod
+ * schema of their own); they are written in the suite standard all the same.
+ * Absent or null `tags` is left exactly as sent.
+ */
+const withNormalizedTags = (fields) =>
+  Array.isArray(fields?.tags) ? { ...fields, tags: normalizeTags(fields.tags) } : fields;
+
+/** Every stored spelling of any of `tags`, for `$in` (`shared/tagSpellings.js`). */
+async function spellingsOfAll(Model, scope, tags) {
+  const lists = await Promise.all(tags.map((t) => spellingsOf(Model, scope, t)));
+  return [...new Set(lists.flat())];
+}
+
+/**
  * The service layer throws transport-agnostic errors tagged with a `code`;
  * a caller-error (a transition the task's state does not allow) becomes a
  * 400-style GraphQLError so the client's `handleApiError` can tell it apart
@@ -55,8 +71,10 @@ export const resolvers = {
       if (!userId) return [];
       const filter = { createdBy: userId };
       if (status) filter.status = status;
-      if (tags && tags.length > 0) filter.tags = { $in: tags };
       const { default: Task } = await import('./models/Task.js');
+      // Any of the tags, in the suite standard — and any legacy spelling of
+      // them still stored (`geekSuite` for `geek-suite`) until the migration.
+      if (tags && tags.length > 0) filter.tags = { $in: await spellingsOfAll(Task, { createdBy: userId }, tags) };
       return Task.find(filter).sort({ originalDate: -1 });
     },
     task: async (_, { id }, context) => {
@@ -128,7 +146,7 @@ export const resolvers = {
       if (!userId) return [];
       const filter = { createdBy: userId };
       if (type) filter.type = type;
-      if (tags && tags.length > 0) filter.tags = { $in: tags };
+      if (tags && tags.length > 0) filter.tags = { $in: await spellingsOfAll(JournalEntry, { createdBy: userId }, tags) };
       return JournalEntry.find(filter).sort({ date: -1 });
     },
     journalEntry: async (_, { id }, context) => {
@@ -363,14 +381,14 @@ export const resolvers = {
     createJournalEntry: async (_, args, context) => {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
-      const entry = new JournalEntry({ ...args, createdBy: userId, date: args.date ? new Date(args.date) : new Date() });
+      const entry = new JournalEntry({ ...withNormalizedTags(args), createdBy: userId, date: args.date ? new Date(args.date) : new Date() });
       return entry.save();
     },
     updateJournalEntry: async (_, args, context) => {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
       const { id, ...updateFields } = args;
-      const entry = await JournalEntry.findOneAndUpdate({ _id: id, createdBy: userId }, updateFields, { new: true, runValidators: true });
+      const entry = await JournalEntry.findOneAndUpdate({ _id: id, createdBy: userId }, withNormalizedTags(updateFields), { new: true, runValidators: true });
       if (!entry) throw new Error('Entry not found');
       return entry;
     },
@@ -393,7 +411,7 @@ export const resolvers = {
         content: template.content,
         type: template.type,
         date: date ? new Date(date) : new Date(),
-        tags: template.tags,
+        tags: normalizeTags(template.tags),
         templateId: template._id,
         createdBy: userId,
       });
@@ -406,14 +424,14 @@ export const resolvers = {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
       const { default: Template } = await import('./models/Template.js');
-      const template = new Template({ ...args, createdBy: userId });
+      const template = new Template({ ...withNormalizedTags(args), createdBy: userId });
       return template.save();
     },
     updateTemplate: async (_, { id, ...updateFields }, context) => {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
       const { default: Template } = await import('./models/Template.js');
-      const template = await Template.findOneAndUpdate({ _id: id, createdBy: userId }, updateFields, { new: true, runValidators: true });
+      const template = await Template.findOneAndUpdate({ _id: id, createdBy: userId }, withNormalizedTags(updateFields), { new: true, runValidators: true });
       if (!template) throw new Error('Template not found');
       return template;
     },
@@ -448,6 +466,9 @@ export const resolvers = {
     // A row from before the field existed, or a lean/virtual object without
     // it, is simply not private.
     private: (task) => task.private === true,
+    // Read in the suite standard, so a task tagged before it (`geekSuite`)
+    // shows — and is next saved as — `geek-suite` even before the migration.
+    tags: (task) => (Array.isArray(task.tags) ? normalizeTags(task.tags) : task.tags),
     // Both sides of the parent/child link are resolved lazily and from the
     // stored `subtasks` array, which is the order of record. A list view that
     // does not select them pays nothing; one that does pays a single extra
@@ -511,7 +532,13 @@ export const resolvers = {
     id: (log) => (log._id ? log._id.toString() : log.id?.toString()),
     habitId: (log) => (log.habitId ? log.habitId.toString() : null),
   },
-  JournalEntry: { id: (entry) => entry._id ? entry._id.toString() : entry.id?.toString() },
-  Template: { id: (template) => template._id ? template._id.toString() : template.id?.toString() },
+  JournalEntry: {
+    id: (entry) => entry._id ? entry._id.toString() : entry.id?.toString(),
+    tags: (entry) => (Array.isArray(entry.tags) ? normalizeTags(entry.tags) : entry.tags),
+  },
+  Template: {
+    id: (template) => template._id ? template._id.toString() : template.id?.toString(),
+    tags: (template) => (Array.isArray(template.tags) ? normalizeTags(template.tags) : template.tags),
+  },
   PushSubscription: { id: (sub) => (sub._id ? sub._id.toString() : sub.id?.toString()) },
 };

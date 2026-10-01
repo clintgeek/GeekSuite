@@ -157,13 +157,16 @@ describe('note writes are owner-scoped', () => {
     expect((await Note.findById(note._id)).tags).toEqual(['work']);
   });
 
-  test('a case-only rename is a real rename and still happens', async () => {
+  // Since the suite tag standard (2026-10-01, DOCS/TAG_STANDARD.md) tags are
+  // lowercase by construction: `Work` IS `work`, so a case-only rename is a
+  // no-op that reports false, exactly like the trim case above.
+  test('a case-only rename is a no-op under the kebab-case standard', async () => {
     const note = await makeNote({ tags: ['work'] });
 
     const result = await Mutation.renameTag(null, { oldTag: 'work', newTag: 'Work' }, ctx(ALICE));
 
-    expect(result).toBe(true);
-    expect((await Note.findById(note._id)).tags).toEqual(['Work']);
+    expect(result).toBe(false);
+    expect((await Note.findById(note._id)).tags).toEqual(['work']);
   });
 
   test('renaming a tag nobody has reports false and touches nothing', async () => {

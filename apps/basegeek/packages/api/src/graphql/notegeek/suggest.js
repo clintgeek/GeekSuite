@@ -40,6 +40,7 @@ import mongoose from 'mongoose';
 import logger from '../../lib/logger.js';
 import { runAIFeature, callsToday } from '../../services/aiFeatureRunner.js';
 import Note from './models/Note.js';
+import { normalizeTag } from './tags.js';
 import { EXCERPT_MAX, TITLE_MAX } from './validation.js';
 
 export { EXCERPT_MAX, TITLE_MAX };
@@ -212,13 +213,15 @@ export function localSuggestions({ title = '', excerpt = '', tags = [], noteId =
   ];
 
   const selfId = noteId ? String(noteId) : null;
-  const own = new Set((tags || []).map((t) => String(t).trim().toLowerCase()).filter(Boolean));
+  // Tags are compared and suggested in the suite standard (`tags.js`), so a
+  // legacy `GeekSuite` on an old note is offered as `geek-suite`.
+  const own = new Set((tags || []).map((t) => normalizeTag(String(t))).filter(Boolean));
 
   // ── Tag candidates: one document per tag, name + the titles that carry it ──
   const titlesByTag = new Map();
   for (const note of notes) {
     for (const tag of note.tags || []) {
-      const name = String(tag).trim();
+      const name = normalizeTag(String(tag));
       if (!name) continue;
       if (!titlesByTag.has(name)) titlesByTag.set(name, []);
       const bucket = titlesByTag.get(name);

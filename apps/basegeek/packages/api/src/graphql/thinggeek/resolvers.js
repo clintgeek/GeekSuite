@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { normalizeTags } from '@geeksuite/tags';
 import { GraphQLError } from 'graphql';
 import { Thing } from './models/thing.js';
 import { ThingType } from './models/thingType.js';
@@ -448,17 +449,10 @@ async function resolveRelationships(householdId, rels, selfId) {
   return out;
 }
 
-function dedupeTags(tags) {
-  const seen = new Set();
-  const out = [];
-  for (const t of tags ?? []) {
-    const key = t.toLowerCase();
-    if (seen.has(key)) continue;
-    seen.add(key);
-    out.push(t);
-  }
-  return out;
-}
+// The suite standard (`@geeksuite/tags`): normalized, deduped, first position
+// wins. Validation has already normalized the input; this keeps the write
+// path honest for any caller that skips it.
+const dedupeTags = (tags) => normalizeTags(tags ?? []);
 
 const emptyMoney = () => ({ amount: null, currency: DEFAULT_CURRENCY });
 
@@ -668,7 +662,7 @@ const countOf = (rows) => rows?.[0]?.n ?? 0;
 export const resolvers = {
   Thing: {
     id: (t) => String(t._id),
-    tags: (t) => t.tags ?? [],
+    tags: (t) => normalizeTags(t.tags ?? []),
     type: (t, _a, context) => typeOf(t, context, scopeOf(context).householdId),
     kind: async (t, _a, context) => kindOfType(await typeOf(t, context, scopeOf(context).householdId)),
     parentId: (t) => (t.parentId ? String(t.parentId) : null),

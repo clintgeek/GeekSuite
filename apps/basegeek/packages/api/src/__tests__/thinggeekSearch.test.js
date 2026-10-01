@@ -119,6 +119,12 @@ describe('tokens', () => {
     expect(await q('tag:fishing tag:boat', { tagMatch: 'all' })).toEqual(['Wendy']);
   });
 
+  test('tag: reads its value in the suite tag standard (kebab-case)', async () => {
+    expect(await q('tag:Fishing_')).toEqual(['Fish finder', 'Wendy']);
+    expect(await q('tag:#fishing')).toEqual(['Fish finder', 'Wendy']);
+    expect(await names({ tags: ['Fishing'] })).toEqual(['Fish finder', 'Wendy']);
+  });
+
   test('in: name, name path (suffix), quoted, or id — descendants included', async () => {
     expect(await q('in:garage')).toEqual(['Drill', 'Glock 19']);
     expect(await q('in:"shelf 2"')).toEqual(['Glock 19']);

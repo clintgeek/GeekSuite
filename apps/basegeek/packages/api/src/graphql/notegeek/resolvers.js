@@ -20,11 +20,12 @@ import { composeNote } from './compose.js';
 import { transcribeSketch } from './transcribe.js';
 import {
   normalizeTag,
+  normalizeTags,
   escapeRegex,
-  subtreeCondition,
   isInSubtree,
   swapPrefix,
 } from './tags.js';
+import { spellingsOf, subtreeSpellings, storedSpellingsWhere, anyOf } from '../shared/tagSpellings.js';
 import {
   snapshotNote,
   isMeaningfulChange,
@@ -68,9 +69,6 @@ const SEARCH_RESULT_LIMIT = 100;
 /** The stored tag ceiling — the same 100 `validation.js` enforces on input. */
 const TAG_MAX = 100;
 
-/** Code-point length, which is what Mongo's `$strLenCP` / `$substrCP` count. */
-const cpLength = (str) => Array.from(str).length;
-
 /** One search result row. The snippet rules are the original ones. */
 function searchRow(note, { score, matchedBy = null, why = null }) {
   let snippet = '';
@@ -82,7 +80,7 @@ function searchRow(note, { score, matchedBy = null, why = null }) {
     _id: note._id,
     title: note.title,
     type: note.type,
-    tags: note.tags || [],
+    tags: normalizeTags(note.tags || []),
     isLocked: note.isLocked || false,
     isEncrypted: note.isEncrypted || false,
     createdAt: note.createdAt,
@@ -133,15 +131,27 @@ export const resolvers = {
       // `notes(tag: "flock", prefix: "chores/")` quietly dropped the tag half
       // and returned the wrong list. Both narrow now, which is what a caller
       // asking for both means.
+      //
+      // Every tag argument is read through the suite standard AND matched
+      // against the owner's stored spellings (`shared/tagSpellings.js`), so a
+      // note tagged before the standard (`geekSuite`) is still found by
+      // `geek-suite` until the migration rewrites it.
+      const owner = { userId };
       const tagConds = [];
-      if (tag) tagConds.push({ $in: [tag] });
-      if (prefix) tagConds.push({ $regex: `^${ escapeRegex(prefix) }` });
+      if (tag) tagConds.push(anyOf(await spellingsOf(Note, owner, tag)));
+      if (prefix) {
+        // A raw prefix (old bundles), also tried in the standard spelling.
+        const normPrefix = normalizeTag(prefix) + (/\/\s*$/.test(prefix) ? '/' : '');
+        const hits = await storedSpellingsWhere(Note, owner,
+          (n, stored) => stored.startsWith(prefix) || (normPrefix !== '' && n.startsWith(normPrefix)));
+        tagConds.push(anyOf(hits));
+      }
       // `under` is the nested-tag view: the tag itself AND everything beneath
       // it (`house` → `house`, `house/garage`, never `houseboat`). Normalized
       // the way stored tags are, so `house/` finds `house`. One that
       // normalizes to nothing narrows nothing, like an absent argument.
       const underTag = normalizeTag(under);
-      if (underTag) tagConds.push(subtreeCondition(underTag));
+      if (underTag) tagConds.push(anyOf(await subtreeSpellings(Note, owner, underTag)));
       if (tagConds.length === 1) {
         filter.tags = tagConds[0];
       } else if (tagConds.length > 1) {
@@ -189,8 +199,10 @@ export const resolvers = {
     noteTags: async (_, __, context) => {
       const userId = context.user?.id;
       if (!userId) return [];
+      // In the standard spelling, deduped — a legacy `Work` and `work` are
+      // one tag, the one every write now stores.
       const tags = await Note.distinct('tags', { userId });
-      return tags.sort((a, b) => a.localeCompare(b));
+      return normalizeTags(tags).sort((a, b) => a.localeCompare(b));
     },
 
     /**
@@ -203,12 +215,11 @@ export const resolvers = {
       const userId = context.user?.id;
       const root = normalizeTag(tag);
       if (!userId || !root) return { notes: 0, subTags: 0 };
-      const filter = { userId, tags: subtreeCondition(root) };
-      const [notes, tags] = await Promise.all([
-        Note.countDocuments(filter),
-        Note.distinct('tags', filter),
-      ]);
-      const subTags = tags.filter((t) => t !== root && isInSubtree(t, root)).length;
+      const spellings = await subtreeSpellings(Note, { userId }, root);
+      const notes = await Note.countDocuments({ userId, tags: anyOf(spellings) });
+      const subTags = new Set(
+        spellings.map(normalizeTag).filter((t) => t !== root && isInSubtree(t, root))
+      ).size;
       return { notes, subTags };
     },
 
@@ -235,7 +246,7 @@ export const resolvers = {
       // needs a server version this deployment does not assert.
       const scope = { userId };
       const underTag = normalizeTag(under);
-      if (underTag) scope.tags = subtreeCondition(underTag);
+      if (underTag) scope.tags = anyOf(await subtreeSpellings(Note, { userId }, underTag));
       const projection = { title: 1, type: 1, tags: 1, isLocked: 1, isEncrypted: 1, createdAt: 1, updatedAt: 1, content: 1 };
       const keywordRows = await Note.find(
         { ...scope, $text: { $search: q.trim() } },
@@ -621,12 +632,12 @@ export const resolvers = {
       if (!userId) throw new Error('Unauthorized');
       const { oldTag, newTag } = validateRenameTag(rawArgs);
       // Renaming a tag to itself is a no-op, and it has to be an EXPLICIT one.
-      // Both names are trimmed and normalized by the schema, so a dialog that
-      // compares the RAW strings lets `"work" -> "work "` through; a rewrite
-      // that then ran anyway was once a deletion (BURN_REVIEW_2 #2). `false`
-      // — "nothing changed" — rather than a thrown error, because the
-      // client's cache update runs on the boolean. Case still matters:
-      // `work -> Work` is a real rename.
+      // Both names are normalized by the schema (the suite standard), so a
+      // dialog that compares the RAW strings lets `"work" -> "work "` through;
+      // a rewrite that then ran anyway was once a deletion (BURN_REVIEW_2 #2).
+      // `false` — "nothing changed" — rather than a thrown error, because the
+      // client's cache update runs on the boolean. Since 2026-10-01 case does
+      // NOT matter: `work -> Work` normalizes to `work -> work`, a no-op.
       if (oldTag === newTag) return false;
       // A tag cannot be moved inside itself: `house` → `house/garage` would
       // rewrite `house/garage` to `house/garage/garage`, and so on down.
@@ -634,43 +645,31 @@ export const resolvers = {
         throw badTagInput(`Can't move #${ oldTag } inside itself (#${ newTag }).`);
       }
 
-      const filter = { userId, tags: subtreeCondition(oldTag) };
+      // Every stored spelling in the subtree — including ones written before
+      // the standard (`House/Garage`), which land on the standard spelling of
+      // their new path. One indexed `distinct`.
+      const from = await subtreeSpellings(Note, { userId }, oldTag);
+      const to = from.map((t) => swapPrefix(normalizeTag(t), oldTag, newTag));
       // Swapping the prefix can make a deep child longer than a tag may be.
-      // Checked up front against the distinct tags (one indexed read) so the
-      // write is all-or-nothing rather than leaving an over-long tag behind.
-      const affected = await Note.distinct('tags', filter);
-      const tooLong = affected
-        .filter((t) => isInSubtree(t, oldTag))
-        .map((t) => swapPrefix(t, oldTag, newTag))
-        .find((t) => t.length > TAG_MAX);
+      // Checked up front so the write is all-or-nothing rather than leaving an
+      // over-long tag behind.
+      const tooLong = to.find((t) => t.length > TAG_MAX);
       if (tooLong) {
         throw badTagInput(`#${ tooLong.slice(0, 40) }… would be longer than ${ TAG_MAX } characters.`);
       }
 
-      // Every user-supplied string enters the pipeline through `$literal`:
-      // a tag that starts with `$` would otherwise be read as a field path.
-      const oldLen = cpLength(oldTag);
-      const isInOld = {
-        $or: [
-          { $eq: ['$$t', { $literal: oldTag }] },
-          { $eq: [{ $substrCP: ['$$t', 0, oldLen + 1] }, { $literal: `${ oldTag }/` }] },
-        ],
-      };
+      // old spelling → new tag, as two parallel literal arrays. Every
+      // user-supplied string enters the pipeline through `$literal`: a legacy
+      // tag that starts with `$` would otherwise be read as a field path.
       const renamed = {
         $map: {
           input: '$tags',
           as: 't',
           in: {
-            $cond: [
-              isInOld,
-              {
-                $concat: [
-                  { $literal: newTag },
-                  { $substrCP: ['$$t', oldLen, { $subtract: [{ $strLenCP: '$$t' }, oldLen] }] },
-                ],
-              },
-              '$$t',
-            ],
+            $let: {
+              vars: { i: { $indexOfArray: [{ $literal: from }, '$$t'] } },
+              in: { $cond: [{ $gte: ['$$i', 0] }, { $arrayElemAt: [{ $literal: to }, '$$i'] }, '$$t'] },
+            },
           },
         },
       };
@@ -687,20 +686,24 @@ export const resolvers = {
           },
         },
       };
-      const { modifiedCount } = await Note.updateMany(filter, [{ $set: { tags: deduped } }]);
+      const { modifiedCount } = await Note.updateMany(
+        { userId, tags: anyOf(from) },
+        [{ $set: { tags: deduped } }]
+      );
       return modifiedCount > 0;
     },
 
     /**
      * Remove a tag AND everything beneath it from the caller's notes
      * (`house` takes `house/garage` with it). Notes are never deleted — a
-     * note that loses its last tag is simply untagged.
+     * note that loses its last tag is simply untagged. Legacy spellings of
+     * the subtree go too.
      */
     deleteTag: async (_, rawArgs, context) => {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
       const { tag } = validateDeleteTag(rawArgs);
-      const condition = subtreeCondition(tag);
+      const condition = anyOf(await subtreeSpellings(Note, { userId }, tag));
       await Note.updateMany(
         { userId, tags: condition },
         { $pull: { tags: condition } }
@@ -711,6 +714,9 @@ export const resolvers = {
 
   Note: {
     id: (note) => note._id.toString(),
+    // Read in the suite standard, so a note tagged before it (`geekSuite`)
+    // shows — and is next saved as — `geek-suite` even before the migration.
+    tags: (note) => normalizeTags(note.tags || []),
     links: (note) => (note.links || []).map((l) => ({
       key: l.key,
       title: l.title || '',

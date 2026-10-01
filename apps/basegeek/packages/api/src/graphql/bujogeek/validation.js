@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { normalizeTags } from '@geeksuite/tags';
 import {
   idString,
   instantField,
@@ -52,7 +53,15 @@ const statusSchema = z
   .nullable()
   .optional();
 const prioritySchema = z.number().int().min(1).max(3).nullable().optional();
-const tagsSchema = z.array(z.string().trim().max(100)).max(50).optional();
+// Tags in the suite standard (`@geeksuite/tags`, DOCS/TAG_STANDARD.md):
+// lowercase kebab-case, `/` for nesting, deduped in order. The 100 cap is
+// checked again on the normalized value — normalizing can lengthen a tag.
+const tagsSchema = z
+  .array(z.string().trim().max(100))
+  .max(50)
+  .transform(normalizeTags)
+  .pipe(z.array(z.string().max(100)))
+  .optional();
 // The legacy shim (taskService.recurrencePatternToRRule) accepts these four;
 // anything else is already a no-op there, so the enum matches its own input.
 const recurrencePatternSchema = z.enum(['none', 'daily', 'weekly', 'monthly']).nullable().optional();

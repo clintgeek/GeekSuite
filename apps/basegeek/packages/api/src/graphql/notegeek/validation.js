@@ -135,15 +135,18 @@ const noteTypeSchema = z.enum(NOTE_TYPES).optional();
 // `''` is a real value here: QuickCaptureHome saves a capture with no title.
 const titleSchema = z.string().trim().max(500).nullable().optional();
 /**
- * Tags are `/`-separated paths (nested tags — see `tags.js`). Every tag that
- * reaches a write is normalized there: segments trimmed, empty segments
- * dropped, so `" house // garage/ "` is stored as `house/garage`. A name that
- * normalizes to nothing (`"/"`) is not a tag, so rename/delete reject it the
- * same way they reject `""`.
+ * Tags are `/`-separated paths in the suite standard (`@geeksuite/tags`,
+ * DOCS/TAG_STANDARD.md — lowercase kebab-case segments). Every tag that
+ * reaches a write is normalized: `" House // Garage Door/ "` is stored as
+ * `house/garage-door`. A name that normalizes to nothing (`"/"`, `"&&"`) is
+ * not a tag, so rename/delete reject it the same way they reject `""`. The
+ * 100-character cap is checked on the raw input AND on the normalized result,
+ * since normalizing can lengthen a tag (`GeekSuite` → `geek-suite`).
  */
-const tagSchema = z.string().trim().min(1).max(100).transform(normalizeTag).pipe(z.string().min(1));
+const tagSchema = z.string().trim().min(1).max(100).transform(normalizeTag).pipe(z.string().min(1).max(100));
+const normalizedTagList = z.array(z.string().max(100));
 /** Note tag lists: normalized, empties dropped, deduped in order. */
-const tagsSchema = z.array(z.string().trim().max(100)).max(50).transform(normalizeTags).nullable().optional();
+const tagsSchema = z.array(z.string().trim().max(100)).max(50).transform(normalizeTags).pipe(normalizedTagList).nullable().optional();
 
 /**
  * Tags on UPDATE. `Note.tags` is `[String!]!`, so an explicit `null` may not
@@ -154,7 +157,7 @@ const tagsSchema = z.array(z.string().trim().max(100)).max(50).transform(normali
  * Same rule as bookgeek's `title` (BURN_REVIEW #7). `createNote`'s `tags`
  * argument IS nullable in the schema, so create keeps `tagsSchema`.
  */
-const updateTagsSchema = z.array(z.string().trim().max(100)).max(50).transform(normalizeTags).optional();
+const updateTagsSchema = z.array(z.string().trim().max(100)).max(50).transform(normalizeTags).pipe(normalizedTagList).optional();
 
 export const createNoteArgsSchema = z
   .object({

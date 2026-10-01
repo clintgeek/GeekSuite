@@ -1,6 +1,7 @@
 import mongoose from 'mongoose';
 import { format } from 'date-fns';
 import logger from '../../lib/logger.js';
+import { normalizeTag } from '@geeksuite/tags';
 import ical from 'node-ical';
 
 import Task from '../bujogeek/models/Task.js';
@@ -465,7 +466,11 @@ export async function searchThings(userId, term, options = {}) {
   };
 
   const sinceClause = validSince ? { updatedAt: { $gte: validSince } } : {};
-  const tagClause = tagList.length ? { tags: { $in: tagList } } : {};
+  // Notes and tasks store tags in the suite standard (`@geeksuite/tags`); the
+  // planner's words are matched both as given and normalized, so `GeekSuite`
+  // finds `geek-suite` and a not-yet-migrated `geekSuite` alike.
+  const tagIn = [...new Set([...tagList, ...tagList.map((t) => normalizeTag(String(t)))].filter(Boolean))];
+  const tagClause = tagIn.length ? { tags: { $in: tagIn } } : {};
 
   // ── Notes ──
   try {

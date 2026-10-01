@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { normalizeTags } from '@geeksuite/tags';
 import { GraphQLError } from 'graphql';
 import { toUtcMidnight } from '@geeksuite/utils/dates';
 import { idString, historicalDateField, validateInput, inRange, MIN_HISTORICAL_DATE } from '../shared/validation.js';
@@ -82,7 +83,15 @@ const documentInput = z
 
 const relationshipInput = z.object({ kind: enumOf(RELATIONSHIP_KINDS), thingId: idString }).strict();
 
-const tagList = z.array(z.string().trim().min(1).max(bounds.tag.maxlength)).max(LIST_MAX);
+// Tags in the suite standard (`@geeksuite/tags`, DOCS/TAG_STANDARD.md):
+// lowercase kebab-case, `/` nesting, deduped in order — on things AND on a
+// saved view's filter (the same schema). ThingGeek keeps its own 60-char cap,
+// checked again after normalizing (which can lengthen a tag).
+const tagList = z
+  .array(z.string().trim().min(1).max(bounds.tag.maxlength))
+  .max(LIST_MAX)
+  .transform(normalizeTags)
+  .pipe(z.array(z.string().max(bounds.tag.maxlength)));
 
 const thingFields = {
   typeId: idString.nullable().optional(),

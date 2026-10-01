@@ -49,29 +49,30 @@ describe('normalizeTag / normalizeTags', () => {
     [' house // garage/ ', 'house/garage'],
     ['house / garage', 'house/garage'],
     ['/house/', 'house'],
-    ['House/Garage', 'House/Garage'],
+    ['House/Garage', 'house/garage'],
     ['  work  ', 'work'],
     ['/', ''],
     [' // ', ''],
     ['', ''],
     [null, ''],
-    ['a b/c d', 'a b/c d'],
+    ['a b/c d', 'a-b/c-d'],
+    ['work/GeekSuite', 'work/geek-suite'],
   ])('%j → %j', (raw, expected) => {
     expect(normalizeTag(raw)).toBe(expected);
   });
 
-  test('normalizeTags drops empties and dedupes in order, keeping case', () => {
+  test('normalizeTags drops empties and dedupes in order — case folds to one tag', () => {
     expect(normalizeTags(['b', ' a ', 'house / garage', '', '/', 'b', 'house/garage', 'B']))
-      .toEqual(['b', 'a', 'house/garage', 'B']);
+      .toEqual(['b', 'a', 'house/garage']);
   });
 
   test('createNote and updateNote store normalized, deduped tags', async () => {
     const created = await Mutation.createNote(
       null,
-      { content: 'x', tags: [' house // garage/ ', 'house/garage', '/', 'Work'] },
+      { content: 'x', tags: [' house // garage/ ', 'house/garage', '/', 'Work', 'GeekSuite', 'geek_suite'] },
       ctx(ALICE),
     );
-    expect([...created.tags]).toEqual(['house/garage', 'Work']);
+    expect([...created.tags]).toEqual(['house/garage', 'work', 'geek-suite']);
 
     const updated = await Mutation.updateNote(
       null,
@@ -215,10 +216,21 @@ describe('renameTag — the subtree moves', () => {
     expect(await tagsOf(bobs)).toEqual(['house', 'house/garage']);
   });
 
-  test('non-ASCII and $-leading names are literal, not expressions', async () => {
+  test('non-ASCII names survive; a legacy $-leading tag is literal, not an expression', async () => {
     const a = await makeNote(['café', 'café/crème']);
-    await Mutation.renameTag(null, { oldTag: 'café', newTag: '$price' }, ctx(ALICE));
-    expect(await tagsOf(a)).toEqual(['$price', '$price/crème']);
+    await Mutation.renameTag(null, { oldTag: 'café', newTag: 'prix' }, ctx(ALICE));
+    expect(await tagsOf(a)).toEqual(['prix', 'prix/crème']);
+    // `$price` can no longer be written (the standard drops `$`), but one
+    // stored before it is still matched — and rewritten — as a plain string.
+    const b = await makeNote(['$price', '$price/Crème']);
+    expect(await Mutation.renameTag(null, { oldTag: 'price', newTag: 'cost' }, ctx(ALICE))).toBe(true);
+    expect(await tagsOf(b)).toEqual(['cost', 'cost/crème']);
+  });
+
+  test('a case-only rename is a no-op (case folds under the standard)', async () => {
+    const a = await makeNote(['work']);
+    expect(await Mutation.renameTag(null, { oldTag: 'work', newTag: 'Work' }, ctx(ALICE))).toBe(false);
+    expect(await tagsOf(a)).toEqual(['work']);
   });
 
   test('refuses a rename whose children would exceed the tag length', async () => {
@@ -265,5 +277,55 @@ describe('noteTagUsage', () => {
     expect(await Query.noteTagUsage(null, { tag: 'house/garage' }, ctx(ALICE))).toEqual({ notes: 2, subTags: 1 });
     expect(await Query.noteTagUsage(null, { tag: 'ghost' }, ctx(ALICE))).toEqual({ notes: 0, subTags: 0 });
     expect(await Query.noteTagUsage(null, { tag: 'house' }, ctx(null))).toEqual({ notes: 0, subTags: 0 });
+  });
+});
+
+// Tags stored before the suite standard (2026-10-01) stay in the database
+// until scripts/migrate-tags-kebab.js --apply rewrites them. Every read and
+// every rename/delete must still find them by their standard spelling.
+describe('legacy (pre-standard) tags are tolerated until the migration', () => {
+  beforeEach(async () => {
+    await makeNote(['GeekSuite', 'Work'], { title: 'legacy camel' });
+    await makeNote(['geekSuite/Roadmap'], { title: 'legacy child' });
+    await makeNote(['geek-suite'], { title: 'standard' });
+    await makeNote(['geekSuiteboat'], { title: 'not a child' });
+    await makeNote(['GeekSuite'], { userId: BOB, title: 'bob legacy' });
+  });
+
+  test('notes(tag:) and notes(under:) match legacy spellings by their standard form', async () => {
+    expect(titles(await Query.notes(null, { tag: 'geek-suite' }, ctx(ALICE)))).toEqual(['legacy camel', 'standard']);
+    expect(titles(await Query.notes(null, { tag: 'GeekSuite' }, ctx(ALICE)))).toEqual(['legacy camel', 'standard']);
+    expect(titles(await Query.notes(null, { under: 'geek-suite' }, ctx(ALICE))))
+      .toEqual(['legacy camel', 'legacy child', 'standard']);
+  });
+
+  test('Note.tags and noteTags read in the standard spelling', async () => {
+    const [note] = await Query.notes(null, { tag: 'work' }, ctx(ALICE));
+    expect(resolvers.Note.tags(note)).toEqual(['geek-suite', 'work']);
+    expect(await Query.noteTags(null, {}, ctx(ALICE)))
+      .toEqual(['geek-suite', 'geek-suite/roadmap', 'geek-suiteboat', 'work']);
+  });
+
+  test('noteTagUsage counts legacy spellings, sub-tags once each', async () => {
+    expect(await Query.noteTagUsage(null, { tag: 'geek-suite' }, ctx(ALICE))).toEqual({ notes: 3, subTags: 1 });
+  });
+
+  test('renameTag rewrites legacy spellings onto the standard path', async () => {
+    expect(await Mutation.renameTag(null, { oldTag: 'geek-suite', newTag: 'work/suite' }, ctx(ALICE))).toBe(true);
+    const byTitle = async (title) => (await Note.findOne({ userId: ALICE, title })).tags;
+    expect(await byTitle('legacy camel')).toEqual(['work/suite', 'Work']);
+    expect(await byTitle('legacy child')).toEqual(['work/suite/roadmap']);
+    expect(await byTitle('standard')).toEqual(['work/suite']);
+    expect(await byTitle('not a child')).toEqual(['geekSuiteboat']);
+    expect((await Note.findOne({ userId: BOB })).tags).toEqual(['GeekSuite']);
+  });
+
+  test('deleteTag removes legacy spellings of the subtree', async () => {
+    await Mutation.deleteTag(null, { tag: 'geek-suite' }, ctx(ALICE));
+    const byTitle = async (title) => (await Note.findOne({ userId: ALICE, title })).tags;
+    expect(await byTitle('legacy camel')).toEqual(['Work']);
+    expect(await byTitle('legacy child')).toEqual([]);
+    expect(await byTitle('not a child')).toEqual(['geekSuiteboat']);
+    expect((await Note.findOne({ userId: BOB })).tags).toEqual(['GeekSuite']);
   });
 });

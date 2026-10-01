@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { normalizeTag } from '@geeksuite/tags';
 import constantsModule from '@geeksuite/schemas/thinggeek/constants';
 import {
   buildFacetStage,
@@ -31,7 +32,7 @@ import { DUE_BUCKETS, dueBucketClause, dueWithinClause, occurrenceStages, todayU
  * ## The q grammar (parsed here, server-side, so AI/MCP get the same one)
  *
  *   type:<key or name>   the type's key or name, case-insensitive
- *   tag:<t>              a tag, case-insensitive exact
+ *   tag:<t>              a tag, in the suite standard (tag:GeekSuite = geek-suite)
  *   in:<thing>           a thing's id, or a name path ("garage", "house/garage",
  *                        "House > Garage"; the path matches the END of the
  *                        thing's root→self path). Any live thing may be named
@@ -403,10 +404,16 @@ export function buildConditions(filter = {}, { types = [], tree = buildThingTree
     const v = t.value;
     switch (t.key) {
       case 'type':
-      case 'tag':
       case 'in':
         grouped[t.key].push(v);
         break;
+      case 'tag': {
+        // `tag:GeekSuite` means the stored `geek-suite` (the suite standard).
+        const tag = normalizeTag(v);
+        if (!tag) words.push(t.raw);
+        else grouped.tag.push(tag);
+        break;
+      }
       case 'before':
       case 'after': {
         const period = parsePeriod(v);

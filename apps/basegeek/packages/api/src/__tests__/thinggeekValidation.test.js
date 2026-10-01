@@ -165,8 +165,11 @@ describe('attributes against the type', () => {
     expect((await createErr({ name: 'x', tags: ['t'.repeat(61)] })).extensions.code).toBe('BAD_USER_INPUT');
     expect((await createErr({ name: 'x', value: { amount: -5 } })).extensions.code).toBe('BAD_USER_INPUT');
     expect((await createErr({ name: 'x', dates: [{ kind: 'birthday', date: '2026-01-01' }] })).extensions.code).toBe('BAD_USER_INPUT');
-    const t = await createThing({ name: 'x', tags: ['Fishing', 'fishing', 'boat'] });
-    expect(t.tags).toEqual(['Fishing', 'boat']);
+    // The suite tag standard: lowercase kebab-case, deduped after normalizing.
+    const t = await createThing({ name: 'x', tags: ['Fishing', 'fishing', 'boat', 'Fly Rods', 'flyRods'] });
+    expect(t.tags).toEqual(['fishing', 'boat', 'fly-rods']);
+    // 60 raw characters that normalize past ThingGeek's 60-character cap.
+    expect((await createErr({ name: 'x', tags: ['aB'.repeat(30)] })).extensions.code).toBe('BAD_USER_INPUT');
     expect(await errorCode(UPDATE_THING, { id: t.id, input: { name: null } })).toBe('BAD_USER_INPUT');
   });
 });
