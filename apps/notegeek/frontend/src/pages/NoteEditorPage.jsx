@@ -9,6 +9,7 @@ import { GET_NOTE_BY_ID } from '../graphql/queries';
 import { CREATE_NOTE, UPDATE_NOTE, COMPOSE_NOTE, TRANSCRIBE_SKETCH } from '../graphql/mutations';
 import ComposeDialog from '../components/editors/ComposeDialog';
 import TranscribeDialog from '../components/editors/TranscribeDialog';
+import FoldInSheet from '../components/foldin/FoldInSheet';
 import { sketchHasShapes } from '../utils/sketchExport';
 import { derivedNoteContent, derivedNoteTitle } from '../utils/sketchToText';
 import NoteHistoryDialog from '../components/notes/NoteHistoryDialog';
@@ -372,6 +373,38 @@ function NoteEditorPage() {
     } catch (err) {
       notify(err?.message || 'Could not replace the note.', { tone: 'error' });
     }
+  };
+
+  // ── Fold in new info (DOCS/CONTEXT.md §13) ───────────────────────────
+  //
+  // The gateway proposes anchored changes against the STORED note, so a
+  // pending edit is saved first — otherwise the proposal would be made
+  // against text that is no longer on screen. The result is put on screen
+  // as the server wrote it, clean.
+  const [foldInOpen, setFoldInOpen] = useState(false);
+  const canFoldIn = Boolean(savedNoteId) && noteType === NOTE_TYPES.MARKDOWN;
+
+  const flushBeforeFoldIn = async () => {
+    if (dirtyRef.current || savingRef.current) {
+      await handleSaveRef.current();
+      // A save already in flight returns at once and replays itself; wait.
+      for (let i = 0; i < 100 && (savingRef.current || dirtyRef.current); i += 1) {
+        await new Promise((r) => setTimeout(r, 100));
+      }
+    }
+    if (dirtyRef.current) {
+      throw new Error('Your latest edits are not saved yet, so Fold-in cannot see them. Try again once the note says saved.');
+    }
+  };
+
+  const showServerNote = (note) => {
+    if (!note) return;
+    setContent(note.content || '');
+    if (Array.isArray(note.tags)) setTags(note.tags);
+    setDirty(false);
+    setSaveError(null);
+    setLastSavedAt(new Date());
+    setSaveToken((n) => n + 1);
   };
 
   // ── Convert handwriting to text (DOCS/HANDWRITING.md §2) ──────────────
@@ -950,6 +983,7 @@ function NoteEditorPage() {
                 onPin={savedNoteId ? handlePin : undefined}
                 pinned={pinned}
                 isPinning={isPinning}
+                onFoldIn={canFoldIn ? () => setFoldInOpen(true) : undefined}
                 onCompose={canCompose ? () => handleCompose() : undefined}
                 isComposing={isComposing}
                 onTranscribe={isHandwritten ? handleTranscribe : undefined}
@@ -1046,6 +1080,17 @@ function NoteEditorPage() {
           onClose={() => setCompose(null)}
           onSaveAsNew={() => handleComposeSaveAsNew(compose.markdown)}
           onReplace={() => handleComposeReplace(compose.markdown)}
+        />
+      ) : null}
+
+      {foldInOpen && savedNoteId ? (
+        <FoldInSheet
+          open
+          note={{ id: savedNoteId, title, type: noteType }}
+          prepare={flushBeforeFoldIn}
+          onClose={() => setFoldInOpen(false)}
+          onApplied={({ note }) => showServerNote(note)}
+          onUndone={showServerNote}
         />
       ) : null}
 

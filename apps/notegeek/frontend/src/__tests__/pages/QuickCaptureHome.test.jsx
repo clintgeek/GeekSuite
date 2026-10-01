@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { screen, within } from '@testing-library/react';
+import { screen, within, fireEvent } from '@testing-library/react';
 import { renderWithProviders } from '../testUtils';
 
 /**
@@ -72,5 +72,25 @@ describe('QuickCaptureHome — Pinned group', () => {
 
     expect(screen.queryByRole('heading', { name: 'Pinned' })).not.toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Recent' })).toBeInTheDocument();
+  });
+});
+
+describe('QuickCaptureHome — Fold into a note', () => {
+  beforeEach(() => {
+    mockStore.notes = [];
+    mockStore.isLoadingList = false;
+    mockStore.fetchNotes = vi.fn();
+    mockStore.createNote = vi.fn();
+  });
+
+  it('offers "Fold into an existing note" only once something is typed, and it opens the picker', async () => {
+    renderWithProviders(<QuickCaptureHome />);
+    expect(screen.queryByRole('button', { name: 'Fold into an existing note' })).toBeNull();
+    fireEvent.change(screen.getByLabelText('Quick capture'), { target: { value: 'brown widow in the garage' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Fold into an existing note' }));
+    expect(await screen.findByText('Fold into a note')).toBeInTheDocument();
+    expect(screen.getByLabelText('Find a note')).toBeInTheDocument();
+    // Picking is not saving: nothing was created.
+    expect(mockStore.createNote).not.toHaveBeenCalled();
   });
 });

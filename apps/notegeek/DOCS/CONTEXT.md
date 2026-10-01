@@ -432,3 +432,39 @@ to produce the note's text: it can only name a place and what to add there.
   with the new sighting — so the prompt now says a new sighting/measurement is an ADDITION and `replace_text` is
   only for explicit corrections; second run: list item for the brown widow, `replace_text` orange→red, a new table
   row for the sighting, 0 dropped. gpt-4.1-mini puts a replace's explanation in `reason`, so `why` falls back to it.
+- **UI (2026-10-01; needs the gateway above live first — the bundle sends `foldInPreview` / `foldInApply`):**
+  - **Entry points:** "Fold in new info" in the editor's ⋯ menu (a saved Markdown note only — an unsaved draft or
+    any other type gets no item); a merge glyph in the read-only viewer's action bar (Markdown, unlocked);
+    **Share → NoteGeek** (`pages/ShareTarget.jsx`) now lands on a choice — "Save as a new note" (one tap; it used
+    to create the note on arrival, which made "add this to my spiders note" impossible without a duplicate) or
+    "Add to an existing note"; and on Home, a "Fold into an existing note" button beside Save while a capture is
+    typed.
+  - **Picking the note** (`components/foldin/FoldTargetPicker.jsx`): the shared/captured text's first 300
+    characters go through `searchNotes(hybrid: true)` (keyword + local embeddings, §11 — nothing leaves the box
+    for this); the best Markdown, unlocked hit is offered as **"Looks like it belongs in: Spiders"**, up to three
+    more below, then a "Find a note" title search (`noteTitles`). Rich text and other types are never offered.
+  - **The sheet** (`components/foldin/FoldInSheet.jsx`, a `GeekSheet`: full height on a phone, a dialog from `md`):
+    a "New info" box (prefilled from a share or capture; over 12 000 characters disables Propose and says to use
+    Compose) → "Propose changes" (a status line with elapsed seconds; the editor first SAVES any pending edit, and
+    refuses to propose if it can't, so the gateway proposes against what is on screen) → the proposal: the
+    model's one-line summary; "N suggestions didn't match the note and were left out" when the gateway dropped
+    any; one card per change in NOTE ORDER — where it lands ("List under \"## Widow spiders\""), what it does
+    and the model's why, a checkbox (on by default, `Include: <where>`), and a preview: inserted Markdown
+    rendered on a pass of highlighter (`hlSoft` fill, `hl` edge, ink on it — Graphite's rule), a table row under
+    its header, a correction as the old text struck through above the new; a dashed "Couldn't find a place for:"
+    card with a Copy button per item; the model's id in small mono. "Apply N changes" counts the ticked cards.
+  - **"Preview the whole note"** (a switch above the cards): the note's source, monospaced, with every ticked
+    change in place — additions highlighted (`<ins>`), removals struck (`<del>`). Offered only when a fresh read
+    of the note still has the `updatedAt` the proposal was made against, since its offsets are the gateway's.
+    Blank-line padding there is approximate; the gateway's apply is exact.
+  - **After Apply:** the gateway's note goes on screen clean (editor) or into Apollo's cache (viewer, share →
+    opens `/notes/<id>`); inline `#tags` in the result are merged into the chips with one tags-only
+    `updateNote` (no version — tags are not a meaningful change); a 10 s toast "Folded in N changes." with
+    **Undo** → `restoreNoteVersion(versionId)` (which itself snapshots, so Undo is undoable from History,
+    where the entry reads "Fold-in"). A `CONFLICT` keeps the sheet open with "Propose again".
+  - **Phone:** the sheet's bottom edge rides `useKeyboardInset()` (Chrome on Android shrinks only the visual
+    viewport, so a `bottom: 0` sheet hid its own actions behind the keyboard); every control 44px.
+  - **Checks:** `__tests__/components/foldin/foldInSheet.test.jsx`, `__tests__/utils/foldIn.test.js`,
+    `__tests__/pages/noteEditorFoldIn.test.jsx`, `__tests__/pages/shareTarget.test.jsx` (all red-checked); harness
+    `19a-foldin-input`, `19b-foldin-proposal`, `19c-foldin-whole`, `19d-share-existing`,
+    `19e-share-foldin-applied` (fixtures: the live smoke's note and proposal, `NOTE_SPIDERS` / `FOLD_IN_PROPOSAL`).

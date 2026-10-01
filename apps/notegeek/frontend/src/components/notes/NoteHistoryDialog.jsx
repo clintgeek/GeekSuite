@@ -42,6 +42,8 @@ const REASON_LABEL = {
     edit: 'Edit',
     compose: 'Compose',
     restore: 'Restore',
+    // Replaced by a Fold-in (DOCS/CONTEXT.md §13), like `compose` above.
+    fold_in: 'Fold-in',
 };
 
 const when = (iso) => {

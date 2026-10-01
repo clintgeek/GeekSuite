@@ -26,6 +26,7 @@ import TextSnippetOutlined from '@mui/icons-material/TextSnippetOutlined';
 import PushPin from '@mui/icons-material/PushPin';
 import PushPinOutlined from '@mui/icons-material/PushPinOutlined';
 import PrintOutlined from '@mui/icons-material/PrintOutlined';
+import CallMerge from '@mui/icons-material/CallMerge';
 
 const isMac = typeof navigator !== 'undefined' && /Mac|iP(hone|ad|od)/.test(navigator.platform || navigator.userAgent || '');
 const SAVE_SHORTCUT = isMac ? '⌘S' : 'Ctrl+S';
@@ -40,7 +41,8 @@ const PRINT_SHORTCUT = isMac ? '⌘P' : 'Ctrl+P';
  *   - `BackButton` — flushes a pending save and leaves (the page's handler).
  *   - the View/Edit toggle, for mind maps only — a mode, not an action.
  *   - the ⋯ menu: Save now, Print or save as PDF, Pin, Version history,
- *     Compose, Convert handwriting to text (sketches only), Delete.
+ *     Fold in new info (saved Markdown notes), Compose, Convert handwriting
+ *     to text (sketches only), Delete.
  *
  * The ⋯ menu only calls the page's handlers. It does not mount anything:
  * `NoteHistoryDialog` stays mounted by the page, and only while open (its
@@ -86,6 +88,9 @@ function NoteActions({
   // not advertise it.
   onCompose,
   isComposing = false,
+  // Fold-in (DOCS/CONTEXT.md §13): saved Markdown notes only — the page
+  // decides and passes no handler otherwise.
+  onFoldIn,
   onHistory,
   // Pin / unpin. Offered only when the handler is passed (a brand-new,
   // never-saved note has nothing to pin yet — see NoteEditorPage). The
@@ -208,6 +213,12 @@ function NoteActions({
           <MenuItem onClick={run(onHistory)} sx={itemSx}>
             <ListItemIcon><HistoryIcon fontSize="small" /></ListItemIcon>
             <ListItemText>Version history</ListItemText>
+          </MenuItem>
+        )}
+        {onFoldIn && (
+          <MenuItem onClick={run(onFoldIn)} sx={itemSx}>
+            <ListItemIcon><CallMerge fontSize="small" /></ListItemIcon>
+            <ListItemText>Fold in new info</ListItemText>
           </MenuItem>
         )}
         {onCompose && (

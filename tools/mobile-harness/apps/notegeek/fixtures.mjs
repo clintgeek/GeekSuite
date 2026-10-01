@@ -225,6 +225,91 @@ export const NOTE_SUGGESTIONS = {
   },
 };
 
+// Fold-in (DOCS/CONTEXT.md §13) — scenes 19a-19e. The spiders note from the
+// 2026-10-01 live smoke, and the proposal the real model made for it
+// (gpt-4.1-mini: a list item, a correction, a table row), plus one dropped
+// suggestion and one unplaced line so every part of the sheet is on screen.
+// Offsets are computed from the content, the way the gateway reports them.
+export const SPIDERS_CONTENT = [
+  '# Spiders',
+  '',
+  "Spiders I've found around the house, and what to do about them.",
+  '',
+  '## Widow spiders',
+  '',
+  'Venomous. Leave them alone and call pest control.',
+  '',
+  '- Black widow — shiny black, orange hourglass underneath',
+  '- Red widow — Florida only',
+  '',
+  '## Jumping spiders',
+  '',
+  '| Name | Where | Size |',
+  '|------|-------|------|',
+  '| Bold jumper | Porch | 13 mm |',
+  '| Zebra jumper | Garden wall | 6 mm |',
+  '',
+  'Harmless and curious.',
+  '',
+  '## Cellar spiders',
+  '',
+  'Long thin legs, messy webs in the basement. Harmless.',
+  '',
+].join('\n');
+export const NOTE_SPIDERS = note('ns', 'Spiders', 'markdown', ['nature'], SPIDERS_CONTENT, hoursAgo(6));
+export const FOLD_IN_INPUT = 'Found a brown widow in the garage today. Tan with an orange hourglass, spiky egg sacs. Correction: the black widow\'s hourglass is red, not orange. Saw a zebra jumper on the mailbox too, about 5 mm. Saw one on the mailbox at 7am.';
+const after = (s) => SPIDERS_CONTENT.indexOf(s) + s.length;
+const at = (s) => SPIDERS_CONTENT.indexOf(s);
+const foldOp = (over) => ({
+  __typename: 'FoldInOperation',
+  why: null, heading: null, markdown: null, anchor: null, items: null, tableHeaderRow: null, cells: null,
+  find: null, replace: null, reason: null, afterHeading: null, level: null,
+  ...over,
+});
+export const FOLD_IN_OPERATIONS = [
+  foldOp({
+    id: 'op2', type: 'replace_text', why: 'The new info corrects the hourglass colour',
+    find: 'orange hourglass underneath', replace: 'red hourglass underneath', reason: 'correction',
+    location: 'In "## Widow spiders"', start: at('orange hourglass underneath'), end: after('orange hourglass underneath'), text: 'red hourglass underneath',
+  }),
+  foldOp({
+    id: 'op1', type: 'append_to_list', why: 'Another widow, beside the other two',
+    anchor: 'Red widow — Florida only', items: ['Brown widow — tan, orange hourglass, spiky egg sacs; found in the garage'],
+    location: 'List under "## Widow spiders"', start: after('- Red widow — Florida only\n'), end: after('- Red widow — Florida only\n'),
+    text: '- Brown widow — tan, orange hourglass, spiky egg sacs; found in the garage',
+  }),
+  foldOp({
+    id: 'op3', type: 'add_table_row', why: 'A new zebra jumper sighting, in the table',
+    tableHeaderRow: '| Name | Where | Size |', cells: ['Zebra jumper', 'Mailbox', '5 mm'],
+    location: 'Table under "## Jumping spiders"', start: after('| Zebra jumper | Garden wall | 6 mm |\n'), end: after('| Zebra jumper | Garden wall | 6 mm |\n'),
+    text: '| Zebra jumper | Mailbox | 5 mm |',
+  }),
+];
+export const FOLD_IN_PROPOSAL = {
+  __typename: 'FoldInProposal',
+  operations: FOLD_IN_OPERATIONS,
+  summary: 'Added the brown widow, corrected the black widow\'s hourglass, and added the mailbox sighting.',
+  unplaced: ['Saw one on the mailbox at 7am'],
+  baseUpdatedAt: NOTE_SPIDERS.updatedAt,
+  stats: {
+    __typename: 'FoldInStats',
+    inputChars: FOLD_IN_INPUT.length, noteChars: SPIDERS_CONTENT.length, strategy: 'whole', sectionsTotal: 4, sectionsSent: 4,
+    sentChars: SPIDERS_CONTENT.length, proposed: 4, valid: 3, failed: false, truncated: false,
+    dropped: [{ __typename: 'FoldInDropped', index: 3, type: 'insert_after_heading', reason: 'anchor_not_found', detail: 'heading "Sightings"' }],
+  },
+  provenance: { __typename: 'AIProvenance', source: 'model', reason: null, model: 'openai/gpt-4.1-mini', provider: 'openrouter', cached: false, callsToday: 1, cap: 60 },
+};
+/** The note after all three applied — what foldInApply returns. */
+export const SPIDERS_FOLDED = SPIDERS_CONTENT
+  .replace('orange hourglass underneath', 'red hourglass underneath')
+  .replace('- Red widow — Florida only\n', '- Red widow — Florida only\n- Brown widow — tan, orange hourglass, spiky egg sacs; found in the garage\n')
+  .replace('| Zebra jumper | Garden wall | 6 mm |\n', '| Zebra jumper | Garden wall | 6 mm |\n| Zebra jumper | Mailbox | 5 mm |\n');
+export const SPIDERS_SEARCH = [
+  { __typename: 'SearchSnippet', _id: 'n1', title: 'Q3 roadmap notes', type: 'text', tags: ['work'], isLocked: false, isEncrypted: false, createdAt: daysAgo(20), updatedAt: hoursAgo(2), score: 0.02, snippet: 'Draft agenda', message: null, matchedBy: 'keyword', why: null },
+  { __typename: 'SearchSnippet', _id: 'ns', title: 'Spiders', type: 'markdown', tags: ['nature'], isLocked: false, isEncrypted: false, createdAt: daysAgo(20), updatedAt: hoursAgo(6), score: 0.031, snippet: 'Spiders I\'ve found around the house', message: null, matchedBy: 'both', why: 'Black widow — shiny black, orange hourglass underneath' },
+  { __typename: 'SearchSnippet', _id: 'h1', title: 'Garage shelving plan', type: 'markdown', tags: ['house/garage'], isLocked: false, isEncrypted: false, createdAt: daysAgo(20), updatedAt: daysAgo(3), score: 0.016, snippet: 'Four uprights', message: null, matchedBy: 'keyword', why: null },
+];
+
 // The sidebar's per-tag counts come from `notes { id tags }`: every fixture
 // note plus a few tag-only ones so each listed tag has a believable count.
 const extraTagged = [

@@ -12,8 +12,11 @@ import {
   Typography,
   useTheme,
 } from '@mui/material';
-import { GeekEmptyState, slashFocusProps, useToast } from '@geeksuite/ui';
+import { GeekEmptyState, GeekSheet, slashFocusProps, useToast } from '@geeksuite/ui';
 import ArrowForward from '@mui/icons-material/ArrowForward';
+import CallMerge from '@mui/icons-material/CallMerge';
+import FoldTargetPicker from '../components/foldin/FoldTargetPicker';
+import FoldInSheet from '../components/foldin/FoldInSheet';
 import NoteRow from '../components/notes/NoteRow';
 import useNoteStore from '../store/noteStore';
 import { newNotePath, noteTypeMeta } from '../components/notes/noteTypeMeta';
@@ -70,6 +73,11 @@ function QuickCaptureHome() {
   const g = graphiteTokens(theme);
   const { notes, fetchNotes, isLoadingList, createNote } = useNoteStore();
   const [captureText, setCaptureText] = useState('');
+  // "Fold into…" (DOCS/CONTEXT.md §13): a capture that belongs in a note you
+  // already have. Pick the note (suggestions ranked like the share target's),
+  // then Fold-in shows where it goes before anything changes.
+  const [foldPicking, setFoldPicking] = useState(false);
+  const [foldTarget, setFoldTarget] = useState(null);
   const { notify } = useToast();
 
   useEffect(() => {
@@ -140,9 +148,16 @@ function QuickCaptureHome() {
               }}
             />
             {canCapture ? (
-              <Button type="submit" variant="contained" disableElevation sx={{ flexShrink: 0, borderRadius: '8px', px: '16px', minHeight: 44 }}>
-                Save
-              </Button>
+              <>
+                <Tooltip title="Fold into a note…">
+                  <IconButton aria-label="Fold into an existing note" onClick={() => setFoldPicking(true)} sx={{ ...tapTarget44, color: 'text.secondary', flexShrink: 0 }}>
+                    <CallMerge fontSize="small" />
+                  </IconButton>
+                </Tooltip>
+                <Button type="submit" variant="contained" disableElevation sx={{ flexShrink: 0, borderRadius: '8px', px: '16px', minHeight: 44 }}>
+                  Save
+                </Button>
+              </>
             ) : (
               <>
                 <CaptureShortcut entryKey="photo" label="New note from a photo of a page" />
@@ -225,6 +240,28 @@ function QuickCaptureHome() {
           </>
         )}
       </Box>
+      <GeekSheet
+        open={foldPicking}
+        onClose={() => setFoldPicking(false)}
+        title="Fold into a note"
+        description="Pick the note this belongs in."
+      >
+        {foldPicking ? (
+          <FoldTargetPicker
+            text={captureText}
+            onPick={(n) => { setFoldPicking(false); setFoldTarget(n); }}
+          />
+        ) : null}
+      </GeekSheet>
+      {foldTarget ? (
+        <FoldInSheet
+          open
+          note={foldTarget}
+          initialInput={captureText.trim()}
+          onClose={() => setFoldTarget(null)}
+          onApplied={() => { setCaptureText(''); fetchNotes({ limit: 50 }); }}
+        />
+      ) : null}
     </Box>
   );
 }

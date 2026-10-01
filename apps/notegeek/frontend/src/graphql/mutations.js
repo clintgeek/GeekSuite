@@ -141,3 +141,88 @@ export const TRANSCRIBE_SKETCH = gql`
         }
     }
 `;
+
+/**
+ * Fold-in (DOCS/CONTEXT.md §13): propose how new information fits into an
+ * existing Markdown note, as anchored operations the gateway has already
+ * checked against the note. Writes NOTHING. Needs the 2026-10-01 gateway.
+ */
+export const FOLD_IN_PREVIEW = gql`
+    mutation FoldInPreview($noteId: ID!, $input: String!) {
+        foldInPreview(noteId: $noteId, input: $input) {
+            operations {
+                id
+                type
+                why
+                heading
+                markdown
+                anchor
+                items
+                tableHeaderRow
+                cells
+                find
+                replace
+                reason
+                afterHeading
+                level
+                location
+                start
+                end
+                text
+            }
+            summary
+            unplaced
+            baseUpdatedAt
+            stats {
+                inputChars
+                noteChars
+                strategy
+                sectionsTotal
+                sectionsSent
+                sentChars
+                proposed
+                valid
+                failed
+                truncated
+                dropped {
+                    index
+                    type
+                    reason
+                    detail
+                }
+            }
+            provenance {
+                source
+                reason
+                model
+                provider
+                cached
+                callsToday
+                cap
+            }
+        }
+    }
+`;
+
+/**
+ * Apply the accepted operations. The gateway re-validates every one against
+ * the note as it is now, snapshots a version first, and returns its id —
+ * `restoreNoteVersion(versionId)` is the Undo.
+ */
+export const FOLD_IN_APPLY = gql`
+    mutation FoldInApply($noteId: ID!, $baseUpdatedAt: String!, $operations: [FoldInOperationInput!]!) {
+        foldInApply(noteId: $noteId, baseUpdatedAt: $baseUpdatedAt, operations: $operations) {
+            note {
+                id
+                title
+                content
+                type
+                tags
+                createdAt
+                updatedAt
+            }
+            versionId
+            applied
+        }
+    }
+`;

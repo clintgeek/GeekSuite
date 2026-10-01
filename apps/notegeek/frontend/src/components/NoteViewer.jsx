@@ -26,6 +26,9 @@ import DeleteIcon from '@mui/icons-material/Delete';
 import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import PrintOutlined from '@mui/icons-material/PrintOutlined';
+import CallMerge from '@mui/icons-material/CallMerge';
+import FoldInSheet from './foldin/FoldInSheet';
+import { canFoldInto } from '../utils/foldIn';
 import DeleteNoteDialog from './DeleteNoteDialog';
 import NotePrintView from './notes/NotePrintView';
 import NoteFooter from './notes/NoteFooter';
@@ -41,6 +44,9 @@ import { sanitizeNoteHtml } from '../utils/sanitizeNoteHtml';
 function NoteViewer() {
     const theme = useTheme();
     const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+    // Fold-in (DOCS/CONTEXT.md §13). The apply and the undo both write the
+    // note into Apollo's cache, so the viewer re-renders from it.
+    const [foldInOpen, setFoldInOpen] = useState(false);
 
     const { id } = useParams();
     const navigate = useNavigate();
@@ -155,6 +161,25 @@ function NoteViewer() {
                             <EditIcon sx={{ fontSize: 17 }} />
                         </IconButton>
                     </Tooltip>
+
+                    {canFoldInto(noteToView) ? (
+                        <Tooltip title="Fold in new info" arrow>
+                            <IconButton
+                                onClick={() => setFoldInOpen(true)}
+                                aria-label="Fold in new info"
+                                size="small"
+                                sx={{
+                                    color: 'text.secondary',
+                                    borderRadius: 1.5,
+                                    transition: 'all 120ms ease',
+                                    '&:hover': { color: 'text.primary', bgcolor: glow(theme).soft },
+                                    '&:focus-visible': { boxShadow: `0 0 0 3px ${ glow(theme).ring }` },
+                                }}
+                            >
+                                <CallMerge sx={{ fontSize: 17 }} />
+                            </IconButton>
+                        </Tooltip>
+                    ) : null}
 
                     <Tooltip title="Print or save as PDF" arrow>
                         <IconButton
@@ -437,6 +462,14 @@ function NoteViewer() {
                 </Box>
 
                 <NotePrintView note={noteToView} rootRef={printRootRef} />
+
+                {foldInOpen ? (
+                    <FoldInSheet
+                        open
+                        note={{ id: noteToView.id || noteToView._id, title: noteToView.title, type: noteToView.type }}
+                        onClose={() => setFoldInOpen(false)}
+                    />
+                ) : null}
 
                 {/* Delete dialog */}
                 <DeleteNoteDialog

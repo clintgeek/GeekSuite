@@ -132,7 +132,62 @@ async function reviewTranscript(page, h) {
 
 import { fileURLToPath } from 'node:url';
 import { json, graphqlRoute } from '../../lib/net.mjs';
-import { OPS, NOTE_SUGGESTIONS, NOTE_CODE, NOTE_MINDMAP, NOTE_SKETCH, NOTE_WIDE_TABLE, NOTE_MD, NOTE_PRINT, SEARCH_RESULTS, HYBRID_RESULTS, RELATED_TO_N1, NOTE_N1, NOTE_LINKED, NOTE_LINKED_LINKS, BACKLINKS_TO_NL } from './fixtures.mjs';
+import { OPS, NOTE_SUGGESTIONS, NOTE_CODE, NOTE_MINDMAP, NOTE_SKETCH, NOTE_WIDE_TABLE, NOTE_MD, NOTE_PRINT, SEARCH_RESULTS, HYBRID_RESULTS, RELATED_TO_N1, NOTE_N1, NOTE_LINKED, NOTE_LINKED_LINKS, BACKLINKS_TO_NL, NOTE_SPIDERS, FOLD_IN_INPUT, FOLD_IN_PROPOSAL, SPIDERS_FOLDED, SPIDERS_SEARCH } from './fixtures.mjs';
+
+// ── Fold-in helpers (scenes 19a-19e) ────────────────────────────────────────
+// The gateway is stubbed with the proposal the real model made for this note
+// (fixtures.mjs). Every call is recorded so a scene can say nothing was
+// written before Apply, and that Apply sent back only what it should.
+async function stubFoldIn(page, extra = {}) {
+  const calls = { preview: [], apply: [], search: [], create: [] };
+  let folded = false;
+  await graphqlRoute(page, {
+    ...OPS,
+    GetNoteById: () => ({ note: folded ? { ...NOTE_SPIDERS, content: SPIDERS_FOLDED, updatedAt: new Date().toISOString() } : NOTE_SPIDERS }),
+    FoldInPreview: (vars) => { calls.preview.push(vars); return { foldInPreview: FOLD_IN_PROPOSAL }; },
+    FoldInApply: (vars) => {
+      calls.apply.push(vars);
+      folded = true;
+      return { foldInApply: { __typename: 'FoldInResult', note: { ...NOTE_SPIDERS, content: SPIDERS_FOLDED, updatedAt: new Date().toISOString() }, versionId: 'v-fold', applied: vars.operations.length } };
+    },
+    SearchNotes: (vars) => { calls.search.push(vars); return { searchNotes: SPIDERS_SEARCH }; },
+    CreateNote: (vars) => { calls.create.push(vars); return OPS.CreateNote; },
+    ...extra,
+  });
+  return calls;
+}
+
+async function openSpidersEditor(page, h) {
+  await bootstrapChef(page);
+  const calls = await stubFoldIn(page);
+  await page.goto(h.base + '/notes/ns/edit', { waitUntil: 'networkidle' });
+  await h.settle(1200);
+  return calls;
+}
+
+async function openFoldIn(page, h) {
+  await page.getByRole('button', { name: /more note actions/i }).first().click();
+  await h.settle(400);
+  const item = page.getByRole('menuitem', { name: 'Fold in new info' });
+  if (!(await item.count())) throw new Error('the ⋯ menu has no "Fold in new info" on a markdown note');
+  await item.click();
+  await page.getByRole('dialog', { name: /fold in new info/i }).waitFor({ timeout: 5000 });
+  await h.settle(500);
+}
+
+/** The sheet's primary action must be on screen, not under the fold. */
+async function assertActionsOnScreen(page, h, name) {
+  const btn = page.getByRole('button', { name });
+  const box = await btn.boundingBox();
+  const vp = page.viewportSize();
+  if (!box) throw new Error(`"${name}" is not visible`);
+  if (box.y + box.height > vp.height + 1 || box.y < 0) throw new Error(`"${name}" is off screen (y ${Math.round(box.y)}, viewport ${vp.height})`);
+}
+
+async function stubShareFold(page) {
+  await bootstrapChef(page);
+  return stubFoldIn(page);
+}
 
 // ── Photo of a page (DOCS/HANDWRITING.md §3) ────────────────────────────────
 //
@@ -1313,6 +1368,111 @@ export const scenes = [
       if (created.map((c) => c.title).join('|') !== 'Standup|ideas') throw new Error(`created ${created.map((c) => c.title)}`);
       if (!/\/notes$/.test(page.url())) throw new Error(`a multi-file drop navigated to ${page.url()}`);
       if (await page.locator('[data-import-dropzone]').count()) throw new Error('the drop zone stayed up after the drop');
+    },
+  },
+  // ── Fold in new info (DOCS/CONTEXT.md §13) ─────────────────────────────
+  {
+    // The ⋯ menu's "Fold in new info" on a markdown note opens the sheet;
+    // the new info typed in. On a phone it is full height and its actions
+    // sit inside the screen.
+    name: '19a-foldin-input',
+    async setup(page, h) {
+      const calls = await openSpidersEditor(page, h);
+      await openFoldIn(page, h);
+      await page.getByRole('textbox', { name: 'New info' }).fill(FOLD_IN_INPUT);
+      await h.settle(400);
+      await assertActionsOnScreen(page, h, 'Propose changes');
+      if (calls.preview.length) throw new Error('a proposal was asked for before Propose');
+    },
+    teardown: (page, h) => h.esc(500),
+  },
+  {
+    // The proposal: three change cards in note order (a correction struck
+    // through beside the new text, a list item, a table row), the dropped
+    // suggestion disclosed, the unplaced line kept with Copy, Apply 3.
+    name: '19b-foldin-proposal',
+    async setup(page, h) {
+      const calls = await openSpidersEditor(page, h);
+      await openFoldIn(page, h);
+      await page.getByRole('textbox', { name: 'New info' }).fill(FOLD_IN_INPUT);
+      await page.getByRole('button', { name: 'Propose changes' }).click();
+      const list = page.getByRole('list', { name: 'Proposed changes' });
+      await list.waitFor({ timeout: 10000 });
+      await h.settle(600);
+      if (calls.preview.length !== 1 || calls.preview[0].noteId !== 'ns') throw new Error(`preview calls ${JSON.stringify(calls.preview)}`);
+      const kinds = await list.locator('[data-foldin-card]').evaluateAll((els) => els.map((e) => e.dataset.foldinCard));
+      if (kinds.join(',') !== 'replace_text,append_to_list,add_table_row') throw new Error(`cards in order ${kinds}`);
+      if ((await list.locator('del').first().textContent()) !== 'orange hourglass underneath') throw new Error('the correction does not strike the old text');
+      if (!(await page.getByText("1 suggestion didn't match the note and was left out.", { exact: false }).count())) throw new Error('the dropped suggestion is not disclosed');
+      if (!(await page.locator('[data-foldin-unplaced]').getByText('Saw one on the mailbox at 7am').count())) throw new Error('the unplaced line is missing');
+      await assertActionsOnScreen(page, h, 'Apply 3 changes');
+      if (calls.apply.length) throw new Error('applied before Apply');
+    },
+    teardown: (page, h) => h.esc(500),
+  },
+  {
+    // "Preview the whole note": the note as it would be, the additions on a
+    // pass of highlighter and the removed words struck.
+    name: '19c-foldin-whole',
+    async setup(page, h) {
+      await openSpidersEditor(page, h);
+      await openFoldIn(page, h);
+      await page.getByRole('textbox', { name: 'New info' }).fill(FOLD_IN_INPUT);
+      await page.getByRole('button', { name: 'Propose changes' }).click();
+      await page.getByRole('list', { name: 'Proposed changes' }).waitFor({ timeout: 10000 });
+      await page.getByRole('checkbox', { name: 'Preview the whole note' }).check();
+      const region = page.getByRole('region', { name: 'The whole note with the changes' });
+      await region.waitFor({ timeout: 5000 });
+      if ((await region.locator('ins').count()) !== 3) throw new Error(`whole preview has ${await region.locator('ins').count()} insertions`);
+      if ((await region.locator('del').count()) !== 1) throw new Error('whole preview strikes nothing');
+      await h.settle(400);
+    },
+    teardown: (page, h) => h.esc(500),
+  },
+  {
+    // Share -> NoteGeek, "Add to an existing note": the hybrid search's best
+    // Markdown hit first ("Looks like it belongs in: Spiders"), a rich-text
+    // hit not offered, and a title search below.
+    name: '19d-share-existing',
+    async setup(page, h) {
+      const calls = await stubShareFold(page);
+      await page.goto(`${h.base}/share?text=${encodeURIComponent(FOLD_IN_INPUT)}`, { waitUntil: 'networkidle' });
+      await h.settle(1200);
+      const best = page.getByRole('button', { name: 'Looks like it belongs in: Spiders' });
+      if (!(await best.count())) throw new Error('no "Looks like it belongs in: Spiders"');
+      if (!calls.search.length || calls.search[0].hybrid !== true) throw new Error(`search calls ${JSON.stringify(calls.search)}`);
+      if (await page.getByText('Q3 roadmap notes').count()) throw new Error('a rich-text note is offered as a fold target');
+      if (!(await page.getByRole('button', { name: 'Save as a new note' }).count())) throw new Error('Save as a new note is missing');
+      if (calls.create.length) throw new Error('the share created a note on arrival');
+    },
+  },
+  {
+    // ...picked, proposed and applied: the viewer opens on the folded note
+    // and the toast says how many changes, with Undo.
+    name: '19e-share-foldin-applied',
+    async setup(page, h) {
+      const calls = await stubShareFold(page);
+      await page.goto(`${h.base}/share?text=${encodeURIComponent(FOLD_IN_INPUT)}`, { waitUntil: 'networkidle' });
+      await h.settle(1000);
+      await page.getByRole('button', { name: 'Looks like it belongs in: Spiders' }).click();
+      const box = page.getByRole('textbox', { name: 'New info' });
+      await box.waitFor({ timeout: 5000 });
+      if ((await box.inputValue()) !== FOLD_IN_INPUT) throw new Error('the sheet was not prefilled with the share');
+      await page.getByRole('button', { name: 'Propose changes' }).click();
+      await page.getByRole('list', { name: 'Proposed changes' }).waitFor({ timeout: 10000 });
+      await page.getByRole('button', { name: 'Apply 3 changes' }).click();
+      await page.waitForURL(/\/notes\/ns$/, { timeout: 10000 });
+      await page.getByText('Folded in 3 changes.').waitFor({ timeout: 5000 });
+      if (!(await page.getByRole('button', { name: 'Undo' }).count())) throw new Error('the toast has no Undo');
+      if (calls.apply.length !== 1 || calls.apply[0].operations.length !== 3) throw new Error(`apply calls ${JSON.stringify(calls.apply).slice(0, 200)}`);
+      if (calls.apply[0].operations.some((op) => 'id' in op || 'start' in op || 'location' in op)) throw new Error('apply sent the gateway annotations back');
+      try {
+        await page.getByRole('cell', { name: 'Mailbox' }).waitFor({ timeout: 8000 });
+      } catch {
+        const body = (await page.locator('main, body').first().innerText()).slice(0, 400).replace(/\s+/g, ' ');
+        throw new Error(`the viewer does not show the folded-in table row (url ${page.url()}; page: ${body})`);
+      }
+      await h.settle(300);
     },
   },
 ];
