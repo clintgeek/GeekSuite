@@ -54,5 +54,28 @@ normalized; in Markdown/HTML also code, URLs and link targets. Output is normali
 
 ## Legacy data
 
-Tags written before the standard are tolerated on read until the migration
-(`apps/basegeek/packages/api/scripts/migrate-tags-kebab.js`, dry run by default) rewrites them.
+Tags written before the standard are tolerated on read until the migration rewrites them: the gateway
+(`graphql/shared/tagSpellings.js`) reads the owner's distinct stored spellings, keeps the ones that normalize to
+the wanted tag (or its subtree) and filters with `$in` on those; every `tags` field resolver returns the standard
+spelling. After the migration the lookup returns just the tag itself.
+
+### The migration — `apps/basegeek/packages/api/scripts/migrate-tags-kebab.js`
+
+Covers `noteGeek.notes`, `bujogeek.tasks|journalentries|templates`, `thinggeek.things` (per owner / household).
+Not NoteGeek version history, not BuJoGeek pinned tags (normalized by the app on read), not BookGeek/GameGeek.
+Spellings that normalize to the same tag collapse (first position wins), empties are removed, over-cap tags are
+truncated. Writes `tags` only (never `updatedAt`), each write guarded on the item still holding the planned tags.
+Idempotent.
+
+The basegeek image carries `packages/api/scripts/` and `@geeksuite/tags`, so once this commit is deployed:
+
+```
+docker exec basegeek node /app/apps/basegeek/packages/api/scripts/migrate-tags-kebab.js            # dry run (default)
+docker exec basegeek node …/migrate-tags-kebab.js --apply --rollback-dir /tmp/tags-kebab           # writes; rollback file first
+docker cp basegeek:/tmp/tags-kebab ~/geeksuite-migrations/                                           # the container's disk does not survive a recreate
+docker exec basegeek node …/migrate-tags-kebab.js --rollback /tmp/tags-kebab/tags-kebab-<stamp>.json
+```
+
+Dry run against production, 2026-10-01: NoteGeek (28 tagged notes) and ThingGeek (0) already clean; BuJoGeek
+121 of 349 tagged tasks carry one of 7 camelCase spellings (`farmLife`, `geekSuite`, `hobbyCoding`, `jobSearch`,
+`lakeLife`, `offTicket`, `onCall`); no merges, removals or truncations.
