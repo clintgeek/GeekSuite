@@ -12,6 +12,55 @@ anything a future reader would otherwise have to rediscover.
 
 ## 2026-09-30
 
+### NoteGeek — local meaning-based search, Related notes, [[links]]
+
+`f83c87e8` (search gateway) → `69e5d4a8` (search UI) · `4df38820` (links gateway) → `5f13ac5c` (links UI).
+Each gateway commit was deployed and confirmed live before its UI commit.
+
+**Privacy.** Note text goes ONLY to `datageek_embeddings` (Ollama `nomic-embed-text`, local,
+no published port); there is no cloud fallback. Tests enforce it: a source scan bans
+AI-stack imports, only `embeddings.js` may call fetch, and every embed call is asserted to
+target `EMBEDDINGS_URL`.
+
+**Indexing.**
+- A background indexer runs inside basegeek. It embeds a note only after 30 s without edits
+  (autosave fires every 2 s), skips notes whose passages are unchanged, and backs off when the
+  service is down. Logs carry ids and counts only.
+- Notes are chunked into 250–350-word passages. The live backfill indexed all 29 notes
+  (75 chunks).
+
+**Search.**
+- Hybrid: keyword and vector hits are fused by weighted Reciprocal Rank Fusion, with exact
+  words winning ties. Meaning-only hits show the passage that matched, marked "similar".
+- "Related notes" sits at the foot of each note.
+- Brute-force vectors are fine up to about 50k chunks per user.
+
+**Links.**
+- `[[Title]]` and `[[Title|shown]]` links resolve by title within your notes, then by id.
+  Unresolved links resolve later when a matching note appears. Renaming a note doesn't
+  rewrite other notes' text.
+- Typing `[[` opens a title picker, docked over the toolbar on a phone and at the caret on
+  desktop. "Linked from" shows the linking sentence.
+
+**Checks.** 751 frontend and 280 gateway tests pass, and about 78 red-checks were run. The
+harness passed with 96 phone and 182 desktop scenes.
+
+**Mistake.** One push (`69e5d4a8`) went out with a local test failure, because the command
+chain didn't stop on it. It was a Compose test timing out under indexing load: it passed
+6/6 twice alone and passed in CI.
+
+### Also shipped 2026-09-30
+
+- **CI mobile harness split per app** (`d06f9539`): 14 min, down from 41–47. The required
+  check name is kept by a gate job, so no branch-protection change was needed.
+- **Shared contained buttons hover to their own colour** (`851246d1`). Dark-mode semantic
+  buttons press lighter for contrast. Hover pairs are now in themeContrast, and flockgeek's
+  three pre-existing gaps are recorded.
+- **ThingGeek Walk asks for required fields inline** (`73655c0e`).
+- **GameGeek drops play hours from cards and rows** (`edfc64b2`).
+- **FitnessGeek harness fixtures use local dates** (`47f2e1f1`). Before this,
+  `21-add-sheet-again` failed after 7 PM CDT.
+
 ### NoteGeek — Bear-style nested tags
 
 `c0a0d56a` (gateway, deployed and confirmed first) `89ff1eac` (UI)
