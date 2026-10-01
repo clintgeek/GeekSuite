@@ -11,8 +11,10 @@ import { LockOutlined as LockIcon } from '@mui/icons-material';
 import { MONO_FONT } from '../../theme/theme';
 import { chipGroupSx } from '../../theme/chipStyles';
 
-export default function AttributeField({ field, value, onChange, error }) {
-  const id = `attr-${field.key}`;
+export default function AttributeField({ field, value, onChange, error, idPrefix = 'attr' }) {
+  // `idPrefix` keeps ids unique when one screen shows the same field twice
+  // (Walk: the capture row and a trip item that needs fixing).
+  const id = `${idPrefix}-${field.key}`;
   const label = field.required ? `${field.label} *` : field.label;
   const common = {
     id,

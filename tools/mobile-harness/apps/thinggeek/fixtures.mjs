@@ -19,6 +19,12 @@
 // reach them with a plain deep link:
 //   ?__fixture=empty      a brand-new household (starter types, nothing else)
 //   ?__fixture=nonmember  every GraphQL op answers NOT_A_MEMBER
+//   ?__fixture=required   the household has its own Bike type whose Frame size
+//                         is REQUIRED (no starter type has a required field)
+//   ?__fixture=required-stale  the same Bike, but the types this page loaded
+//                         predate Frame size becoming required: the create is
+//                         rejected the way the gateway does it (HTTP 400,
+//                         BAD_USER_INPUT, details on input.attributes.frameSize)
 import { json, body, svg, sessionRoutes, graphqlRoute, corsHeaders } from '../../lib/net.mjs';
 
 const T = (s) => `${s}T00:00:00.000Z`;
@@ -485,6 +491,29 @@ export const EMPTY_OPS = {
   GetThingProfile: () => ({ thingProfile: { __typename: 'ThingProfile', savedFilters: [] } }),
 };
 
+// A household's own type with a required field (Walk asks for it inline).
+const BIKE = (required) => ({
+  __typename: 'ThingType',
+  id: 't-bike',
+  key: 'bike',
+  name: 'Bike',
+  icon: 'PedalBike',
+  kind: 'item',
+  builtIn: false,
+  thingCount: 99,
+  fields: [F('frameSize', 'Frame size', 'text', { required }), F('colour', 'Colour')],
+});
+export const REQUIRED_OPS = { ...OPS, GetThingTypes: () => ({ thingTypes: [...types(), BIKE(true)] }) };
+export const STALE_REQUIRED_OPS = { ...OPS, GetThingTypes: () => ({ thingTypes: [...types(), BIKE(false)] }) };
+
+function fixtureOf(pageUrl) {
+  try {
+    return new URL(pageUrl).searchParams.get('__fixture') || '';
+  } catch {
+    return '';
+  }
+}
+
 // ── Photo art: stand-ins that read as photographs at a glance ───────────────
 const esc = (s) => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;');
 function scene(sky, ground, shape) {
@@ -535,7 +564,8 @@ export async function routes(ctx) {
     } catch {
       pageUrl = '';
     }
-    const ops = pageUrl.includes('__fixture=empty') ? EMPTY_OPS : OPS;
+    const mode = fixtureOf(pageUrl);
+    const ops = mode === 'empty' ? EMPTY_OPS : mode === 'required' ? REQUIRED_OPS : mode === 'required-stale' ? STALE_REQUIRED_OPS : OPS;
     const entry = ops[op];
     return typeof entry === 'function' ? entry(vars, r) : entry;
   });
@@ -549,6 +579,18 @@ export async function routes(ctx) {
         return '';
       }
     })();
+    if (fixtureOf(pageUrl) === 'required-stale') {
+      let payload = {};
+      try {
+        payload = JSON.parse(r.request().postData() || '{}');
+      } catch {
+        payload = {};
+      }
+      const input = payload.variables?.input;
+      if (payload.operationName === 'CreateThing' && input?.typeId === 't-bike' && !input?.attributes?.frameSize) {
+        return json(r, { errors: [{ message: 'Invalid input', extensions: { code: 'BAD_USER_INPUT', details: [{ path: 'input.attributes.frameSize', message: 'Frame size is required' }] } }], data: null }, 400);
+      }
+    }
     if (pageUrl.includes('__fixture=nonmember')) {
       return json(r, { data: null, errors: [{ message: 'ThingGeek is only open to members of this household.', extensions: { code: 'NOT_A_MEMBER' } }] });
     }

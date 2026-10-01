@@ -494,6 +494,37 @@ export const scenes = [
     },
   },
   {
+    // A type with a REQUIRED field (the household's own Bike, Frame size):
+    // the field shows inline under the chips, Next is disabled with the reason.
+    name: '18c-walk-required-field',
+    goto: '/walk?at=p-garage&__fixture=required',
+    wait: 1400,
+    async setup(page, h) {
+      if (!(await click(page, h, page.getByTestId('type-chips').getByRole('button', { name: 'Bike' }), 500))) return false;
+      await page.getByLabel('Name *').fill('Road bike');
+      if (!(await page.getByTestId('walk-required').count())) throw new Error('the required field did not show');
+      if (!(await page.getByRole('button', { name: 'Next' }).isDisabled())) throw new Error('Next was not disabled');
+      if (!(await page.getByTestId('walk-next-reason').count())) throw new Error('no reason beside Next');
+      await page.getByLabel('Name *').blur();
+      await h.settle(300);
+    },
+  },
+  {
+    // The server still says no (Frame size became required after the types
+    // loaded): the trip row names the field and offers it in place.
+    name: '18d-walk-server-needs-field',
+    goto: '/walk?at=p-garage&__fixture=required-stale',
+    wait: 1400,
+    async setup(page, h) {
+      if (!(await click(page, h, page.getByTestId('type-chips').getByRole('button', { name: 'Bike' }), 500))) return false;
+      await page.getByLabel('Name *').fill('Road bike');
+      if (!(await click(page, h, page.getByRole('button', { name: 'Next' }), 1200))) return false;
+      if ((await page.getByTestId('walk-item').getAttribute('data-status')) !== 'needs') throw new Error('the rejected item does not ask for the field');
+      await page.getByLabel('Name *').blur();
+      await h.settle(300);
+    },
+  },
+  {
     // First-run checklist, above the attention list: a brand-new household.
     name: '19-attention-checklist',
     goto: '/attention?__fixture=empty',

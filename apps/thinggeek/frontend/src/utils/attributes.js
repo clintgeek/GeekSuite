@@ -120,3 +120,37 @@ export function makeModel(fields = []) {
   const model = get('model');
   return [make, model].filter(Boolean).join(' ');
 }
+
+const ATTRIBUTE_PATH = /^input\.attributes\.(.+)$/;
+
+/**
+ * The per-attribute problems a rejected create carries, as `[{ key, message }]`
+ * (the gateway's BAD_USER_INPUT `extensions.details`, path
+ * `input.attributes.<key>` — see its validation.js `validateAttributes`).
+ * The gateway sends those with HTTP 400, so Apollo usually reports them as a
+ * network error whose `result.errors` holds them; both shapes are read.
+ */
+export function attributeErrorsFrom(error) {
+  if (!error) return [];
+  const errors = [...(error.graphQLErrors ?? error.errors ?? []), ...(error.networkError?.result?.errors ?? [])];
+  const out = [];
+  for (const e of errors) {
+    for (const d of e?.extensions?.details ?? []) {
+      const m = ATTRIBUTE_PATH.exec(String(d?.path ?? ''));
+      if (m && !out.some((o) => o.key === m[1])) out.push({ key: m[1], message: String(d.message ?? '') });
+    }
+  }
+  return out;
+}
+
+/** The required fields the form hasn't filled yet (a boolean's "No" is an answer). */
+export function missingRequired(fields = [], formValues = {}) {
+  return fields.filter((f) => f.required && formToAttribute(f, formValues[f.key]) === undefined);
+}
+
+/** "Frame size" · "Frame size and Colour" · "A, B and C". */
+export function fieldList(fields = []) {
+  const labels = fields.map((f) => f.label);
+  if (labels.length <= 1) return labels.join('');
+  return `${labels.slice(0, -1).join(', ')} and ${labels.at(-1)}`;
+}

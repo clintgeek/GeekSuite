@@ -196,10 +196,6 @@ Wanted, not built on the 2026-09-22 overnight run:
 Live since 2026-09-26.
 - **The first real add is the upload test:** a photo from a phone, including HEIC,
   hasn't been uploaded on production yet.
-- **Walk the room skips required custom fields.** No starter type has one. If a household adds
-  a custom required field, Walk's create is rejected (it shows Retry with the server message)
-  and can't be fixed from Walk. Either prompt for required fields in Walk, or create with the
-  General type and flag the item in Attention.
 - **AI Ask (`??`):** needs the AI tier decided first. Under the privacy rule, identifiers,
   document contents and values never go to a provider.
 - **Its MCP tools**, once the suite MCP server exists.
