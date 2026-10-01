@@ -595,6 +595,34 @@ const FIXTURES = {
     rootValue: { updateTask: () => ({}) },
   },
 
+  'Mutation.foldInApply': {
+    // apps/notegeek/frontend/src/components/foldin/FoldInSheet.jsx apply()
+    // — operations are utils/foldIn.js toOperationInput() of what
+    // foldInPreview returned (only the defined input fields; new_section
+    // carries afterHeading: null for "at the end"). One op of each type,
+    // because each type uses a different subset of FoldInOperationInput.
+    //
+    // Returns `FoldInResult!` — same `rootValue` fix as savePushSubscription.
+    source: `
+      mutation FoldInApply($noteId: ID!, $baseUpdatedAt: String!, $operations: [FoldInOperationInput!]!) {
+        foldInApply(noteId: $noteId, baseUpdatedAt: $baseUpdatedAt, operations: $operations) { __typename }
+      }
+    `,
+    variables: {
+      noteId: 'note1',
+      baseUpdatedAt: '2026-10-01T18:00:00.000Z',
+      operations: [
+        { type: 'insert_after_heading', why: 'New species', heading: 'Widow spiders', markdown: 'Brown widow.' },
+        { type: 'insert_under_section_end', why: 'Detail', heading: 'Widow spiders', markdown: 'Egg sacs are spiky.' },
+        { type: 'append_to_list', why: 'Another one', anchor: 'Black widow', items: ['Brown widow'] },
+        { type: 'add_table_row', why: 'Sighting', tableHeaderRow: '| Name | Where | Size |', cells: ['Zebra jumper', 'Mailbox', '5 mm'] },
+        { type: 'replace_text', why: 'Correction', find: 'orange hourglass', replace: 'red hourglass', reason: 'Correction' },
+        { type: 'new_section', why: 'New group', afterHeading: null, heading: 'Orb weavers', level: 2, markdown: 'Big round webs.' },
+      ],
+    },
+    rootValue: { foldInApply: () => ({}) },
+  },
+
   // basegeek's one entry here was 'Mutation.bulkUpdateFreeTiers' until Phase 3
   // (2026-09-07). The mutation, its FreeTierUpdateInput and the Catalog tab's
   // Save-all that called it all went together
@@ -691,8 +719,9 @@ describe('every input-object-taking root field is enumerated and accounted for',
   // 41 from 2026-09-26: thinggeek's createPlace and updatePlace (PlaceInput)
   // removed — the Place tree became the containment graph
   // (DOCS/THINGGEEK_PLAN.md "Containment").
-  test('the count matches the audit: 41 root fields take an input-object argument', () => {
-    expect(inputObjectRootFields()).toHaveLength(41);
+  // 42 from 2026-10-01: notegeek's foldInApply ([FoldInOperationInput!]!).
+  test('the count matches the audit: 42 root fields take an input-object argument', () => {
+    expect(inputObjectRootFields()).toHaveLength(42);
   });
 
   test('FIXTURES and NO_FRONTEND_CALLER never claim the same field', () => {
