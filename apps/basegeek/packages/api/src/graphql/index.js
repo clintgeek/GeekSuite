@@ -32,6 +32,9 @@ import { resolvers as thingResolvers } from './thinggeek/resolvers.js';
 import { typeDefs as glanceTypeDefs } from './glance/typeDefs.js';
 import { resolvers as glanceResolvers } from './glance/resolvers.js';
 
+import { typeDefs as suiteTagsTypeDefs } from './suitetags/typeDefs.js';
+import { resolvers as suiteTagsResolvers } from './suitetags/resolvers.js';
+
 // Scalar resolver for the shared `Date` type
 const dateScalarResolver = {
   Date: new GraphQLScalarType({
@@ -89,6 +92,7 @@ export const typeDefs = mergeTypeDefs([
   gameTypeDefs,
   thingTypeDefs,
   glanceTypeDefs,
+  suiteTagsTypeDefs,
 ]);
 
 export const resolvers = mergeResolvers([
@@ -102,4 +106,5 @@ export const resolvers = mergeResolvers([
   gameResolvers,
   thingResolvers,
   glanceResolvers,
+  suiteTagsResolvers,
 ]);

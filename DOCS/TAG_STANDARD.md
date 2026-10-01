@@ -79,3 +79,15 @@ docker exec basegeek node …/migrate-tags-kebab.js --rollback /tmp/tags-kebab/t
 Dry run against production, 2026-10-01: NoteGeek (28 tagged notes) and ThingGeek (0) already clean; BuJoGeek
 121 of 349 tagged tasks carry one of 7 camelCase spellings (`farmLife`, `geekSuite`, `hobbyCoding`, `jobSearch`,
 `lakeLife`, `offTicket`, `onCall`); no merges, removals or truncations.
+
+## Tags across the suite (gateway, `graphql/suitetags/`)
+
+- `suiteTags` → `[{ tag, total, apps: [{ app, count }] }]`: the caller's tags across NoteGeek (own notes),
+  BuJoGeek (own tasks) and ThingGeek (household, **members only** — anyone else just gets no ThingGeek counts;
+  live things only). Legacy spellings are folded in. Sorted by total, then name.
+- `taggedAcross(tag, under, apps)` → `[{ app, id, title, snippet, url, tags, updatedAt }]`, at most 50 per app,
+  newest first; `under: true` takes the subtree. A **private** BuJoGeek task is `Private task` with no snippet and
+  no tags (as StartGeek's glance). A thing is its **name only** — no serial, plate, receipt, value or attribute.
+  Locked/encrypted notes and sketches/mind maps have no snippet. URLs: NoteGeek `/notes/<id>`, ThingGeek
+  `/thing/<id>`, BuJoGeek `/search?q=%23<tag>` (it has no per-task page).
+- Not yet used by any UI (the "Also tagged …" sections and suite-wide suggestions are the next step).
