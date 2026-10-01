@@ -32,6 +32,18 @@ import {
   getNoteVersion,
   deleteVersionsForNote,
 } from './versions.js';
+import NoteChunk from './models/NoteChunk.js';
+import logger from '../../lib/logger.js';
+import {
+  vectorSearch,
+  rrfFuse,
+  whyExcerpt,
+  relatedNotes as findRelatedNotes,
+  indexStatus,
+  invalidateUserVectors,
+  KEYWORD_WEIGHT,
+  VECTOR_WEIGHT,
+} from './semantic.js';
 
 const validateCreateNote = validateInput(createNoteArgsSchema);
 const validateUpdateNote = validateInput(updateNoteArgsSchema);
@@ -51,6 +63,30 @@ const TAG_MAX = 100;
 
 /** Code-point length, which is what Mongo's `$strLenCP` / `$substrCP` count. */
 const cpLength = (str) => Array.from(str).length;
+
+/** One search result row. The snippet rules are the original ones. */
+function searchRow(note, { score, matchedBy = null, why = null }) {
+  let snippet = '';
+  if (note.content && !note.isLocked && note.type !== 'handwritten' && note.type !== 'mindmap') {
+    const plain = note.content.replace(/<[^>]+>/g, '');
+    snippet = plain.slice(0, 200);
+  }
+  return {
+    _id: note._id,
+    title: note.title,
+    type: note.type,
+    tags: note.tags || [],
+    isLocked: note.isLocked || false,
+    isEncrypted: note.isEncrypted || false,
+    createdAt: note.createdAt,
+    updatedAt: note.updatedAt,
+    score,
+    snippet,
+    message: note.isLocked ? 'Note is locked. Content not available.' : null,
+    matchedBy,
+    why,
+  };
+}
 
 const badTagInput = (message, path = 'newTag') =>
   new GraphQLError(message, {
@@ -169,7 +205,16 @@ export const resolvers = {
       return { notes, subTags };
     },
 
-    searchNotes: async (_, { q, under }, context) => {
+    /**
+     * Search. `hybrid: false` (the default, and what bundles from before
+     * 2026-09-30 send by omission) is the original keyword search, unchanged.
+     * `hybrid: true` fuses it with meaning-based hits from the local
+     * embeddings (`semantic.js`) by Reciprocal Rank Fusion; each row then says
+     * how it matched (`matchedBy`) and, for a meaning hit, the passage that
+     * matched (`why`). When the embeddings service is down or slow, hybrid is
+     * silently keyword-only.
+     */
+    searchNotes: async (_, { q, under, hybrid }, context) => {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
       if (!q || q.trim().length === 0) throw new Error('Search query cannot be empty');
@@ -181,34 +226,74 @@ export const resolvers = {
       // cap is on results rather than on the projection because an
       // aggregation-expression projection alongside `$meta: 'textScore'`
       // needs a server version this deployment does not assert.
-      const searchFilter = { userId, $text: { $search: q.trim() } };
+      const scope = { userId };
       const underTag = normalizeTag(under);
-      if (underTag) searchFilter.tags = subtreeCondition(underTag);
-      const notes = await Note.find(
-        searchFilter,
-        { score: { $meta: 'textScore' }, title: 1, type: 1, tags: 1, isLocked: 1, isEncrypted: 1, createdAt: 1, updatedAt: 1, content: 1 }
+      if (underTag) scope.tags = subtreeCondition(underTag);
+      const projection = { title: 1, type: 1, tags: 1, isLocked: 1, isEncrypted: 1, createdAt: 1, updatedAt: 1, content: 1 };
+      const keywordRows = await Note.find(
+        { ...scope, $text: { $search: q.trim() } },
+        { ...projection, score: { $meta: 'textScore' } }
       ).sort({ score: { $meta: 'textScore' } }).limit(SEARCH_RESULT_LIMIT).lean();
 
-      return notes.map(note => {
-        let snippet = '';
-        if (note.content && !note.isLocked && note.type !== 'handwritten' && note.type !== 'mindmap') {
-          const plain = note.content.replace(/<[^>]+>/g, '');
-          snippet = plain.slice(0, 200);
-        }
-        return {
-          _id: note._id,
-          title: note.title,
-          type: note.type,
-          tags: note.tags || [],
-          isLocked: note.isLocked || false,
-          isEncrypted: note.isEncrypted || false,
-          createdAt: note.createdAt,
-          updatedAt: note.updatedAt,
-          score: note.score,
-          snippet,
-          message: note.isLocked ? 'Note is locked. Content not available.' : null,
-        };
-      });
+      if (!hybrid) return keywordRows.map((note) => searchRow(note, { score: note.score }));
+
+      let vectorHits = [];
+      try {
+        vectorHits = await vectorSearch({ userId, q, log: logger });
+      } catch (err) {
+        // Anything unexpected in the vector half costs the meaning hits, never the search.
+        logger.warn({ err: err?.message }, '[notegeek] vector search failed; keyword-only');
+      }
+      if (!vectorHits.length) {
+        return keywordRows.map((note) => searchRow(note, { score: note.score, matchedBy: 'keyword' }));
+      }
+
+      const fused = rrfFuse([
+        { ids: keywordRows.map((n) => String(n._id)), weight: KEYWORD_WEIGHT },
+        { ids: vectorHits.map((h) => h.noteId), weight: VECTOR_WEIGHT },
+      ]);
+      const byId = new Map(keywordRows.map((n) => [String(n._id), n]));
+      // Meaning-only hits are re-read through the same scope (owner + `under`),
+      // which also drops a note deleted since its vectors were cached.
+      const missing = vectorHits.map((h) => h.noteId).filter((id) => !byId.has(id));
+      if (missing.length) {
+        const extra = await Note.find({ ...scope, _id: { $in: missing } }, projection).lean();
+        for (const n of extra) byId.set(String(n._id), n);
+      }
+      const hitById = new Map(vectorHits.map((h) => [h.noteId, h]));
+      return fused
+        .filter((f) => byId.has(f.id))
+        .slice(0, SEARCH_RESULT_LIMIT)
+        .map((f) => {
+          const note = byId.get(f.id);
+          const kw = f.ranks[0] !== null;
+          const vec = f.ranks[1] !== null;
+          const hit = hitById.get(f.id);
+          return searchRow(note, {
+            score: f.score,
+            matchedBy: kw && vec ? 'both' : kw ? 'keyword' : 'meaning',
+            why: vec ? whyExcerpt(hit.text, note.title) : null,
+          });
+        });
+    },
+
+    /** Notes that read like this one, by meaning. Empty until it is indexed. */
+    relatedNotes: async (_, { noteId, limit }, context) => {
+      const userId = context.user?.id;
+      if (!userId || !noteId || !mongoose.isValidObjectId(noteId)) return [];
+      try {
+        return await findRelatedNotes({ userId, noteId, limit });
+      } catch (err) {
+        logger.warn({ err: err?.message }, '[notegeek] relatedNotes failed');
+        return [];
+      }
+    },
+
+    /** How much of the caller's library is searchable by meaning. */
+    noteIndexStatus: async (_, __, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      return indexStatus({ userId });
     },
 
     /**
@@ -375,6 +460,14 @@ export const resolvers = {
       // Keeping the history of a deleted note would mean delete did not
       // delete, which is not what the word promises.
       await deleteVersionsForNote(id, userId);
+      // Its search passages go with it. A failure here is not the user's
+      // problem: the indexer's sweep removes orphaned chunks later.
+      try {
+        await NoteChunk.deleteMany({ noteId: note._id, userId });
+      } catch (err) {
+        logger.warn({ err: err?.message }, '[notegeek] chunk cleanup failed; the sweep will retry');
+      }
+      invalidateUserVectors(userId);
       return true;
     },
     /**

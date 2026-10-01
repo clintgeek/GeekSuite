@@ -40,7 +40,8 @@ NoteGeek adheres to the GeekSuite SSO standard:
 
 NoteGeek's note storage, searching, and mutations are **100% gateway-owned** by BaseGeek's Apollo GraphQL server:
 - **Gateway Location**: `apps/basegeek/packages/api/src/graphql/notegeek/`.
-- **Mongoose Model**: `Note` collection in the shared MongoDB instance (`notegeek` db).
+- **Mongoose Model**: `Note` collection in the shared MongoDB instance (`noteGeek` db), plus
+  `noteChunks` (embedded passages, §11) and `noteversions`.
 - **Zod Validation**: every mutation's arguments are validated with Zod (`notegeek/validation.js`).
 
 ### GraphQL Surface
@@ -58,8 +59,15 @@ which exist.)
   - `noteTags`: the user's distinct tags.
   - `noteTagUsage(tag)` → `{ notes, subTags }`: notes carrying the tag or any descendant, and how
     many distinct sub-tags sit beneath it. The delete dialog reads it before asking.
-  - `searchNotes(q, under)`: full-text search, returning snippets; `under` optionally narrows to a
-    tag subtree.
+  - `searchNotes(q, under, hybrid)`: search, returning snippets; `under` optionally narrows to a
+    tag subtree. `hybrid: true` (added 2026-09-30) also matches by meaning with the LOCAL embeddings
+    and fuses both lists (§11); each row then carries `matchedBy` (`keyword` / `meaning` / `both`) and,
+    for a meaning hit, `why` (the passage that matched). Omitted = the old keyword search, so cached
+    bundles keep working.
+  - `relatedNotes(noteId, limit)` → `[SimilarNote]` `{ id title type updatedAt score snippet }`:
+    the owner's notes nearest in meaning (§11). Empty until the note is indexed.
+  - `noteIndexStatus` → `{ total indexed stale failed skipped chunks model serviceAvailable lastError
+    lastOkAt }`: how much of the caller's library is searchable by meaning.
   - `suggestForNote(noteId, title, excerpt, tags)`: AI tag and link suggestions.
 - **Mutations**:
   - `createNote(title, content, type, tags)`
@@ -196,3 +204,64 @@ Added 2026-09-30. A tag is a `/` path: `house/garage` is a tag of its own **and*
 - **Inline `#tags`** (`utils/inlineTags.js`), `markdown` and `text` notes only. On save the body's tags are MERGED into the chips — additive; deleting the text does not remove a tag, the chip does. Rule: `#` at the start or after whitespace or `(`, then a letter, then letters/digits/`_`/`-`/`/` (Unicode letters and marks); stops at anything else; trailing `/` dropped; normalized like a stored tag. Ignored: `# Heading` (hash + space), fenced and inline code (`<pre>`/`<code>` in rich text), URLs and link targets (`https://x.com/#s`, `[a](#anchor)`, `<a href="#x">`, `[ref]: url`), a hash glued to a word (`C#`, `a#b`, `\#x`, `&#35;`), anything starting with a digit (`#1`, `#2nd`), hex colours (exactly 3/4/6/8 hex chars — so an all-hex word like `#cafe` or `#beef` is read as a colour; add it as a chip), tags over 100 characters, and anything past the 50-tag cap. Compared case-insensitively with the chips (`#work` does not add a second `Work`). Two session-only memories: a tag a save added from the body that has since grown into a longer one (`#hou` autosaved mid-word, now `#house`) is taken back off; and a chip removed by hand is not re-added from the body until the note is reopened. Known edge: `#Heading` with no space is a tag, since in CommonMark it is not a heading.
 - **Rendered Markdown** (viewer and editor preview; not print or Compose) turns inline `#tags` into links to their page (`utils/remarkInlineTags.js`, the same token rule; router links, secondary ink, `a.ng-inline-tag`). Rich-text notes are not linkified — their HTML is rendered sanitized, and rewriting it was out of scope.
 - **Checks:** `__tests__/utils/tagPath.test.js`, `utils/inlineTags.test.js`, `components/markdownInlineTags.test.jsx`, `components/TagNotesList.test.jsx`, `components/TagContextMenu.test.jsx`, `components/TagSelector.test.jsx`, `pages/noteEditorInlineTags.test.jsx`, `store/tagStore.test.js`; gateway `notegeekNestedTags.test.js`; harness scenes `16a-tag-parent-view`, `16b-tag-rename-dialog`, `16c-tag-delete-dialog` (fixture tags `house`, `house/garage`, `house/kitchen`).
+
+## 11. Meaning-based search and Related notes (local embeddings)
+
+Added 2026-09-30. **Privacy guarantee: note text goes only to the local embeddings container on this box
+— never to aiGeek, OpenRouter or any cloud provider, not even as a fallback.** When the local service is
+down, search is keyword-only and Related is empty; nothing else is asked.
+
+- **The service:** `datageek_embeddings` (Ollama, `nomic-embed-text`, 768 dims), on `datageek_network`
+  at `http://datageek_embeddings:11434`, no host port (RUNBOOK §3). Knobs, both optional — the
+  defaults are production's, since Watchtower deploys never pick up new env vars: `EMBEDDINGS_URL`,
+  `EMBEDDINGS_MODEL`; `NOTEGEEK_INDEXER=off` stops the worker. nomic needs task prefixes —
+  `search_document: ` for passages, `search_query: ` for queries; `embeddings.js` adds them.
+- **Where the code is** (gateway, `apps/basegeek/packages/api/src/graphql/notegeek/`): `embeddings.js`
+  (the only network call — a POST to `${EMBEDDINGS_URL}/api/embed`; ≤ 8 000 chars per request,
+  ≤ 4 000 per input), `chunking.js` (note → passages), `indexer.js` (background worker), `semantic.js`
+  (vector cache, hybrid fusion, related, status), `models/NoteChunk.js`.
+- **Enforced and tested** (`src/__tests__/notegeekSemantic.test.js`): those modules may not import the
+  AI stack or any provider client (the test reads their sources), only `embeddings.js` calls `fetch`,
+  and every embed call a full index + search cycle makes is asserted to target `EMBEDDINGS_URL`.
+- **What is embedded:** title + body in passages of ~250–350 words with a 40-word overlap, cut at
+  paragraphs and headings; the title opens the first passage. markdown as written; rich text with
+  the HTML stripped; code's code; a mind map's node labels; a sketch or photo note its title only
+  (an untitled one is `skipped`); a locked or encrypted note its title only. At most 60 passages.
+- **Stored:** `noteChunks` `{ userId, noteId, chunk, text, textHash, vector[768], model, updatedAt }`,
+  not on the Note (keeps list reads light). Bookkeeping on the Note (never in GraphQL):
+  `embeddingState` (`stale` / `indexed` / `skipped` / `failed`; absent = stale), `embeddingHash`,
+  `embeddingAttempts`, `embeddingRetryAt`, `embeddingError`. Indexer writes use `timestamps: false`,
+  so indexing never moves a note in the Recent list.
+- **Indexing is background work, never on a save:** Note middleware flips `embeddingState` to `stale`
+  on any create or title/content write (tags and pins don't). Every 10 s a single-flight loop takes
+  the stale note edited longest ago, but only once it has been **still for 30 s** (autosave bumps
+  `updatedAt` every ~2 s while typing, so a note is embedded once, after you stop). Same passages
+  as last time (sha256 of model + passages) → marked indexed with no embed call. Passages go one
+  request each (≤ 2 500 chars), so a search query never waits behind more than ~2 s of CPU. An edit
+  that lands mid-embed leaves the note stale and it goes round again. A tick stops after 25 s.
+- **Backfill:** notes from before this have no state and are simply the oldest in the queue. A sweep
+  at start-up (20 s after boot) and hourly deletes chunks of deleted notes and re-queues "indexed"
+  notes with no chunks. `deleteNote` deletes its chunks at once. (NoteGeek has no trash — delete is
+  delete.) Measured 2026-09-30 against the live service on a busy box: the 14 harness fixture notes
+  (14 passages) took 12.9 s; an 1 873-word note was 8 passages, ~16 s.
+- **Failure handling:** connection error, timeout or 5xx → the whole loop pauses with doubling
+  backoff (30 s → 15 min, shared with search), the note is not charged. A 400 → the note is charged:
+  retry in 5 min × attempts, `failed` after 5. Logged via the basegeek pino logger
+  (`module: notegeek-indexer`) with note ids only, never text.
+- **Hybrid search** (`searchNotes(hybrid: true)`): Mongo `$text` hits (≤ 100) and vector hits — cosine
+  of the query against every passage, best passage per note, kept if ≥ 0.55 **and** within 0.06 of
+  the best hit, at most 20 — fused by weighted **Reciprocal Rank Fusion**: score = Σ w / (60 + rank),
+  keyword w = 1.0, vector w = 0.8, ties to the keyword hit. So the note with the typed words (a
+  serial, a name) wins, a note in both lists beats one in either, and meaning-only hits follow.
+  Meaning-only hits are re-read through the same owner + `under` scope. The query embedding waits
+  at most 5 s, is cached (200 queries), and is skipped outright while the service is marked down.
+  Calibration (live, harness fixtures): true matches 0.59–0.71, unrelated 0.48–0.57, nonsense ≤ 0.53.
+- **Related notes** (`relatedNotes`): the centroid of the note's passages against every other note's
+  best passage, ≥ 0.65, top 5 (max 20), excluding itself; survivors re-read from `Note` by owner,
+  which drops deleted notes.
+- **Scale ceiling:** brute-force cosine in Node over the user's passages, cached in memory per user
+  as Float32Arrays (10 min TTL, 32 users, invalidated by every index write and delete). ~2 000 notes ×
+  3 passages ≈ 18 MB and ~5 ms a query. Past ~50 000 passages per user (≈150 MB, ~100 ms) move to a
+  real ANN index (pgvector next door, or Mongo vector search).
+- **Check it:** `noteIndexStatus` (owner-scoped counts + `serviceAvailable` / `lastError`). From the
+  host: `docker exec basegeek node -e "fetch('http://datageek_embeddings:11434/api/embed',{method:'POST',body:JSON.stringify({model:'nomic-embed-text',input:['search_query: hi']})}).then(r=>r.json()).then(j=>console.log(j.embeddings[0].length))"` → `768`.

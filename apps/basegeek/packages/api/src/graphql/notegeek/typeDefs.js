@@ -94,6 +94,41 @@ export const typeDefs = gql`
     score: Float
     snippet: String
     message: String
+    """
+    Hybrid search only: keyword (the typed words), meaning (similar in
+    meaning, may not contain the words), or both. Null on keyword-only search.
+    """
+    matchedBy: String
+    """Hybrid search, meaning hits: the passage that matched."""
+    why: String
+  }
+
+  """A note near another one in meaning (local embeddings, never a cloud model)."""
+  type SimilarNote {
+    id: ID!
+    title: String!
+    type: String!
+    updatedAt: Date
+    """Cosine similarity, 0..1."""
+    score: Float!
+    """The passage of this note that is closest."""
+    snippet: String
+  }
+
+  """How much of the library is searchable by meaning. Owner-scoped."""
+  type NoteIndexStatus {
+    total: Int!
+    indexed: Int!
+    """Waiting to be (re-)embedded, including never-indexed notes."""
+    stale: Int!
+    failed: Int!
+    """Nothing to embed (an untitled sketch)."""
+    skipped: Int!
+    chunks: Int!
+    model: String!
+    serviceAvailable: Boolean!
+    lastError: String
+    lastOkAt: Date
   }
 
   """A tag the user already has, scored against the note being written."""
@@ -143,7 +178,14 @@ export const typeDefs = gql`
     noteTags: [String!]!
     """Notes carrying the tag or a descendant, and how many sub-tags it has."""
     noteTagUsage(tag: String!): TagUsage!
-    searchNotes(q: String!, under: String): [SearchSnippet!]!
+    """
+    Search. hybrid = also match by meaning (local embeddings), fused with the
+    keyword hits; omitted/false is keyword-only, as before.
+    """
+    searchNotes(q: String!, under: String, hybrid: Boolean): [SearchSnippet!]!
+    """The caller's notes closest in meaning to this one. Empty until it is indexed."""
+    relatedNotes(noteId: ID!, limit: Int): [SimilarNote!]!
+    noteIndexStatus: NoteIndexStatus!
     suggestForNote(noteId: ID, title: String!, excerpt: String!, tags: [String!]!): NoteSuggestions!
   }
 

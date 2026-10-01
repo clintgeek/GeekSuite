@@ -35,6 +35,7 @@ import { seedMissingApps } from './services/appRegistrySeed.js';
 import { startOAuthRefreshJob, stopOAuthRefreshJob } from './services/oauthRefreshJobService.js';
 import { startAICatalogJob, stopAICatalogJob } from './services/aiCatalogJob.js';
 import reminderService from './graphql/bujogeek/services/reminderService.js';
+import { startNoteIndexer, stopNoteIndexer } from './graphql/notegeek/indexer.js';
 import { ApolloServer } from '@apollo/server';
 import { expressMiddleware } from '@as-integrations/express4';
 import { typeDefs, resolvers } from './graphql/index.js';
@@ -589,6 +590,14 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
   // `onemin`, both deleted in September. Free-tier health now lives on the
   // request path, in `AIFreeTier.health`.
 
+  // NoteGeek meaning-based search: the background embedding worker. Talks
+  // only to the local embeddings container; see graphql/notegeek/indexer.js.
+  try {
+    startNoteIndexer();
+  } catch (error) {
+    logger.error({ err: error }, 'NoteGeek indexer failed to start');
+  }
+
   // Phase 3: Initialize conversation service
   try {
     const conversationService = (await import('./services/conversationService.js')).default;
@@ -625,6 +634,11 @@ const shutdown = (signal) => {
       stopAICatalogJob()
     } catch (err) {
       logger.error({ err }, 'Error stopping AI catalog job')
+    }
+    try {
+      stopNoteIndexer()
+    } catch (err) {
+      logger.error({ err }, 'Error stopping NoteGeek indexer')
     }
     try {
       reminderService.stop()
