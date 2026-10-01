@@ -31,7 +31,7 @@ const indexer = await import('../graphql/notegeek/indexer.js');
 
 const { chunkNote, noteText, CHUNK_MAX_WORDS, CHUNK_OVERLAP_WORDS, MAX_CHUNKS_PER_NOTE } = chunking;
 const { embedTexts, EmbeddingsUnavailableError, DEFAULT_EMBEDDINGS_URL, MAX_CHARS_PER_REQUEST } = embeddings;
-const { rrfFuse, selectVectorHits, _resetSemanticState, serviceIsDown } = semantic;
+const { rrfFuse, selectVectorHits, selectKeywordHits, pickBestMatch, rankHybrid, bestChunkPerNote, _resetSemanticState, serviceIsDown } = semantic;
 const { runIndexerOnce, sweepIndex, QUIET_MS } = indexer;
 
 const HERE = path.dirname(fileURLToPath(import.meta.url));
@@ -49,9 +49,10 @@ const TOPICS = {
   nginx: 2, certificate: 2, homelab: 2, certbot: 2,
   pressure: 3, blood: 3, health: 3,
 };
-function fakeVector(text) {
-  const v = new Array(768).fill(0);
-  v[767] = 0.25; // a little shared baseline, like any real model
+const MXBAI_QUERY = 'Represent this sentence for searching relevant passages: ';
+function fakeVector(text, dims = 1024) {
+  const v = new Array(dims).fill(0);
+  v[dims - 1] = 0.25; // a little shared baseline, like any real model
   for (const w of String(text).toLowerCase().split(/[^a-z0-9]+/)) {
     if (w in TOPICS) v[TOPICS[w]] += 1;
   }
@@ -59,12 +60,15 @@ function fakeVector(text) {
 }
 let fetchCalls = [];
 let fetchImpl = null;
+// Answers at the width of the model asked for, like Ollama does.
+const DIMS = { 'mxbai-embed-large': 1024, 'nomic-embed-text': 768 };
+const unprefix = (s) => s.replace(/^search_(document|query): /, '').replace(MXBAI_QUERY, '');
 function okFetch(url, init) {
-  const { input } = JSON.parse(init.body);
+  const { input, model } = JSON.parse(init.body);
   return Promise.resolve({
     ok: true,
     status: 200,
-    json: async () => ({ embeddings: input.map((s) => fakeVector(s.replace(/^search_(document|query): /, ''))) }),
+    json: async () => ({ embeddings: input.map((s) => fakeVector(unprefix(s), DIMS[model] ?? 512)) }),
     text: async () => '',
   });
 }
@@ -168,12 +172,37 @@ describe('chunking', () => {
 
 // ── 2. the embeddings client ───────────────────────────────────────────────
 describe('embeddings client', () => {
-  test('adds the nomic task prefix and targets EMBEDDINGS_URL', async () => {
-    await embedTexts(['hello'], { kind: 'document' });
+  test('defaults to mxbai: query prefix, no passage prefix, 1024 dims, targets EMBEDDINGS_URL', async () => {
+    const [doc] = await embedTexts(['hello'], { kind: 'document' });
     await embedTexts(['hi'], { kind: 'query' });
     expect(fetchCalls.map((c) => c.url)).toEqual([`${ TEST_URL }/api/embed`, `${ TEST_URL }/api/embed`]);
+    expect(fetchCalls[0].body).toEqual({ model: 'mxbai-embed-large', input: ['hello'] });
+    expect(fetchCalls[1].body.input).toEqual([`${ MXBAI_QUERY }hi`]);
+    expect(doc).toHaveLength(1024);
+  });
+
+  test('EMBEDDINGS_MODEL=nomic-embed-text still gets nomic prefixes and 768 dims', async () => {
+    process.env.EMBEDDINGS_MODEL = 'nomic-embed-text';
+    const [doc] = await embedTexts(['hello'], { kind: 'document' });
+    await embedTexts(['hi'], { kind: 'query' });
     expect(fetchCalls[0].body).toEqual({ model: 'nomic-embed-text', input: ['search_document: hello'] });
     expect(fetchCalls[1].body.input).toEqual(['search_query: hi']);
+    expect(doc).toHaveLength(768);
+  });
+
+  test('the model table: each model its width; a wrong width is refused; an unknown model only needs consistency', async () => {
+    expect(embeddings.modelSpec('mxbai-embed-large')).toMatchObject({ dims: 1024, documentPrefix: '', known: true });
+    expect(embeddings.modelSpec('nomic-embed-text')).toMatchObject({ dims: 768, queryPrefix: 'search_query: ', known: true });
+    expect(embeddings.DEFAULT_EMBEDDINGS_MODEL).toBe('mxbai-embed-large');
+    // mxbai answering with nomic's width is a broken service, not a vector.
+    fetchImpl = () => Promise.resolve({ ok: true, json: async () => ({ embeddings: [fakeVector('x', 768)] }) });
+    await expect(embedTexts(['x'], { kind: 'document' })).rejects.toBeInstanceOf(EmbeddingsUnavailableError);
+    process.env.EMBEDDINGS_MODEL = 'some-new-model';
+    expect(embeddings.modelSpec()).toMatchObject({ known: false, dims: null, queryPrefix: '' });
+    fetchImpl = okFetch;
+    const vecs = await embedTexts(['a', 'b'], { kind: 'query' });
+    expect(vecs.map((v) => v.length)).toEqual([512, 512]);
+    expect(fetchCalls.at(-1).body.input).toEqual(['a', 'b']);
   });
 
   test('defaults to the local container with no env at all', async () => {
@@ -233,7 +262,8 @@ describe('indexer', () => {
     expect((await runIndexerOnce({ now: LATER() })).results).toEqual(['indexed']);
     const chunks = await NoteChunk.find({ noteId: note._id }).lean();
     expect(chunks).toHaveLength(1);
-    expect(chunks[0].vector).toHaveLength(768);
+    expect(chunks[0].vector).toHaveLength(1024);
+    expect(chunks[0].model).toBe('mxbai-embed-large');
     expect(String(chunks[0].userId)).toBe(String(ALICE));
     const after = await Note.findById(note._id).lean();
     expect(after.embeddingState).toBe('indexed');
@@ -312,7 +342,7 @@ describe('indexer', () => {
     expect(await NoteChunk.countDocuments({ noteId: a._id })).toBe(0);
 
     // An orphan the resolver never saw, and an indexed note that lost its chunks.
-    await NoteChunk.create({ userId: ALICE, noteId: new mongoose.Types.ObjectId(), chunk: 0, vector: fakeVector('x'), model: 'm' });
+    await NoteChunk.create({ userId: ALICE, noteId: new mongoose.Types.ObjectId(), chunk: 0, vector: fakeVector('x'), model: 'mxbai-embed-large' });
     await NoteChunk.deleteMany({ noteId: b._id });
     expect(await sweepIndex()).toEqual({ removed: 1, requeued: 1 });
     expect((await Note.findById(b._id).lean()).embeddingState).toBe('stale');
@@ -324,7 +354,7 @@ describe('indexer', () => {
     await md(BOB, 'Nginx', 'certbot');
     await indexAll();
     const s = await Query.noteIndexStatus(null, {}, ctx(ALICE));
-    expect(s).toMatchObject({ total: 1, indexed: 1, stale: 0, chunks: 1, model: 'nomic-embed-text', serviceAvailable: true });
+    expect(s).toMatchObject({ total: 1, indexed: 1, stale: 0, chunks: 1, model: 'mxbai-embed-large', serviceAvailable: true });
   });
 });
 
@@ -379,7 +409,7 @@ describe('searchNotes hybrid', () => {
     expect(rows.map((r) => String(r._id))).toEqual([String(exact._id)]);
     expect(rows[0].matchedBy).toBeNull();
     expect(typeof rows[0].score).toBe('number');
-    expect(fetchCalls.filter((c) => c.body.input[0].startsWith('search_query'))).toHaveLength(0);
+    expect(fetchCalls.filter((c) => c.body.input[0].startsWith(MXBAI_QUERY))).toHaveLength(0);
   });
 
   test("never another user's notes, by keyword or by meaning", async () => {
@@ -426,6 +456,181 @@ describe('searchNotes hybrid', () => {
     await Note.deleteOne({ _id: meaning._id }); // behind the resolver's back
     const rows = await Query.searchNotes(null, { q: 'opener', hybrid: true }, ctx(ALICE));
     expect(rows.map((r) => String(r._id))).not.toContain(String(meaning._id));
+  });
+});
+
+// ── 4b. ranking: weak-hit cuts and the best match ─────────────────────────
+// The numbers are Chef's, measured live 2026-10-01 (mxbai-embed-large, 34
+// notes): see the calibration notes at the top of semantic.js.
+const kwRows = (...scores) => scores.map((score, i) => ({ _id: `k${ i }`, score }));
+const vHits = (...pairs) => pairs.map(([noteId, score]) => ({ noteId, score }));
+
+describe('ranking', () => {
+  test('keyword weak-hit cut: 2.23 / 1.84 / 0.50 ×3 keeps the 2.23 and the 1.84', () => {
+    const kept = selectKeywordHits(kwRows(2.23, 1.84, 0.5, 0.5, 0.5));
+    expect(kept.map((r) => r.score)).toEqual([2.23, 1.84]);
+    expect(semantic.KEYWORD_MIN_RATIO).toBe(0.4);
+  });
+
+  test('keyword cut: the top hit always stays; equal scores all stay', () => {
+    expect(selectKeywordHits(kwRows(0.5)).map((r) => r.score)).toEqual([0.5]);
+    expect(selectKeywordHits(kwRows(1, 1, 1))).toHaveLength(3);
+    expect(selectKeywordHits([])).toEqual([]);
+  });
+
+  test("vector cut on mxbai's scale: 'retirement savings' keeps the 401(k) note alone", () => {
+    // 401(k) 0.656, then four long work notes at 0.533–0.558.
+    const ranked = [0.656, 0.558, 0.557, 0.554, 0.540, 0.533].map((score, i) => ({ noteId: `v${ i }`, score }));
+    expect(selectVectorHits(ranked).map((h) => h.score)).toEqual([0.656]);
+    // "how do I log into the server": four real hits within 0.05 of each other stay.
+    const server = [0.627, 0.603, 0.587, 0.576, 0.527, 0.524].map((score, i) => ({ noteId: `s${ i }`, score }));
+    expect(selectVectorHits(server).map((h) => h.score)).toEqual([0.627, 0.603, 0.587, 0.576]);
+    // Nonsense ("quantum chromodynamics") tops out under the floor.
+    expect(selectVectorHits([{ noteId: 'q', score: 0.496 }])).toEqual([]);
+  });
+
+  test('best match: a clear meaning win is flagged and goes FIRST, over junk keyword hits', () => {
+    // "what pills do I take every day": no keyword hit on the meds note; five
+    // long work notes match "take"/"every"/"day". Meds 0.720, next 0.439.
+    const ranked = rankHybrid({
+      keywordRows: kwRows(2.83, 2.26, 2.26, 2.0, 1.94),
+      vectorHits: vHits(['meds', 0.720]),
+      runnerUpScore: 0.439,
+    });
+    expect(ranked[0]).toMatchObject({ id: 'meds', best: true, matchedBy: 'meaning' });
+    expect(ranked.filter((r) => r.best)).toHaveLength(1);
+    // The rest keep their RRF (keyword) order.
+    expect(ranked.slice(1).map((r) => r.id)).toEqual(['k0', 'k1', 'k2', 'k3', 'k4']);
+  });
+
+  test('best match: the GameGeek question — top in both lists, clear lead', () => {
+    const ranked = rankHybrid({
+      keywordRows: [{ _id: 'gg', score: 2.23 }, { _id: 'gcloud', score: 1.84 }, { _id: 'phone', score: 0.5 }],
+      vectorHits: vHits(['gg', 0.722], ['rally', 0.614]),
+      runnerUpScore: 0.614,
+    });
+    expect(ranked.map((r) => [r.id, r.best])).toEqual([['gg', true], ['gcloud', false], ['rally', false]]);
+  });
+
+  test('no best match on a near-tie', () => {
+    // "how do I log into the server": 0.627 vs 0.603.
+    expect(pickBestMatch({ keywordTopId: 'backup', vectorHits: vHits(['rally', 0.627], ['ssh', 0.603]), runnerUpScore: 0.603 })).toBeNull();
+    // "who are the people at the partner bank": 0.634 vs 0.585, lists disagree.
+    expect(pickBestMatch({ keywordTopId: 'brief', vectorHits: vHits(['dw', 0.634], ['xf', 0.585]), runnerUpScore: 0.585 })).toBeNull();
+    const tie = rankHybrid({ keywordRows: kwRows(1.0), vectorHits: vHits(['a', 0.627], ['b', 0.603]), runnerUpScore: 0.603 });
+    expect(tie.some((r) => r.best)).toBe(false);
+  });
+
+  test('agreement: both lists pick the same note → a smaller lead is enough', () => {
+    // "newsgroup downloads": Usenet is keyword #1 and vector #1, 0.598 vs 0.548.
+    expect(pickBestMatch({ keywordTopId: 'usenet', vectorHits: vHits(['usenet', 0.598]), runnerUpScore: 0.548 })).toBe('usenet');
+    // The same lead without the keyword agreement is not.
+    expect(pickBestMatch({ keywordTopId: 'other', vectorHits: vHits(['usenet', 0.598]), runnerUpScore: 0.548 })).toBeNull();
+  });
+
+  test('never a best match with no vectors, or mid-backfill', () => {
+    expect(rankHybrid({ keywordRows: kwRows(3.87, 1.0) }).some((r) => r.best)).toBe(false);
+    expect(pickBestMatch({ keywordTopId: 'meds', vectorHits: vHits(['meds', 0.72]), runnerUpScore: 0.44, backfilling: true })).toBeNull();
+  });
+
+  test('a note with many passages gets no extra weight: its score is its best passage', () => {
+    const unit = (i, dims = 4) => { const v = new Float32Array(dims); v[i] = 1; return v; };
+    const q = Float32Array.from([0.6, 0.8, 0, 0]);
+    // "long" has ten passages each scoring 0.6; "short" one passage scoring 0.8.
+    const rows = [
+      ...Array.from({ length: 10 }, (_, c) => ({ noteId: 'long', chunk: c, text: '', vec: unit(0) })),
+      { noteId: 'short', chunk: 0, text: '', vec: unit(1) },
+    ];
+    const ranked = bestChunkPerNote(rows, q);
+    expect(ranked.map((h) => h.noteId)).toEqual(['short', 'long']);
+    expect(ranked[1].score).toBeCloseTo(0.6, 5);
+  });
+});
+
+describe('searchNotes best match', () => {
+  test('a clear winner comes back first with bestMatch: true; the rest false', async () => {
+    const bread = await md(ALICE, 'Bread', 'Sourdough starter every 12 hours.');
+    await md(ALICE, 'Garage', 'The chamberlain opener needs a remote.');
+    await md(ALICE, 'Nginx', 'certbot renews the certificate.');
+    await indexAll();
+    const rows = await Query.searchNotes(null, { q: 'sourdough', hybrid: true }, ctx(ALICE));
+    expect(String(rows[0]._id)).toBe(String(bread._id));
+    expect(rows[0].bestMatch).toBe(true);
+    expect(rows.slice(1).every((r) => r.bestMatch === false)).toBe(true);
+  });
+
+  test('two equally good notes: no best match', async () => {
+    await md(ALICE, 'Bread', 'sourdough starter flour');
+    await md(ALICE, 'Loaf', 'sourdough starter flour');
+    await indexAll();
+    const rows = await Query.searchNotes(null, { q: 'baking', hybrid: true }, ctx(ALICE));
+    expect(rows.length).toBeGreaterThanOrEqual(2);
+    expect(rows.some((r) => r.bestMatch)).toBe(false);
+  });
+
+  test('keyword-only search always says bestMatch: false', async () => {
+    await md(ALICE, 'Bread', 'Sourdough starter every 12 hours.');
+    await indexAll();
+    const rows = await Query.searchNotes(null, { q: 'sourdough' }, ctx(ALICE));
+    expect(rows.map((r) => r.bestMatch)).toEqual([false]);
+  });
+});
+
+// ── 4c. changing the model ─────────────────────────────────────────────────
+describe('model change', () => {
+  async function libraryOnNomic() {
+    process.env.EMBEDDINGS_MODEL = 'nomic-embed-text';
+    const exact = await md(ALICE, 'Garage', 'The garage serial is 4XK-229.');
+    const meaning = await md(ALICE, 'Chamberlain', 'The chamberlain opener needs a new remote battery.');
+    await md(ALICE, 'Bread', 'Sourdough starter every 12 hours.');
+    await indexAll();
+    expect(await NoteChunk.countDocuments({ model: 'nomic-embed-text' })).toBe(3);
+    delete process.env.EMBEDDINGS_MODEL; // the deploy: default is now mxbai
+    _resetSemanticState();
+    return { exact, meaning };
+  }
+
+  test('old-model chunks are ignored: keyword-only search, no Related, no error', async () => {
+    const { exact, meaning } = await libraryOnNomic();
+    const rows = await Query.searchNotes(null, { q: 'garage', hybrid: true }, ctx(ALICE));
+    expect(rows.map((r) => [String(r._id), r.matchedBy, r.bestMatch])).toEqual([[String(exact._id), 'keyword', false]]);
+    expect(await Query.relatedNotes(null, { noteId: String(meaning._id) }, ctx(ALICE))).toEqual([]);
+    expect(await Query.noteIndexStatus(null, {}, ctx(ALICE))).toMatchObject({ chunks: 0, model: 'mxbai-embed-large' });
+  });
+
+  test('the sweep re-queues every note; the indexer re-embeds them and the old chunks go', async () => {
+    await libraryOnNomic();
+    expect(await sweepIndex()).toEqual({ removed: 0, requeued: 3 });
+    expect(await Note.countDocuments({ embeddingState: 'stale' })).toBe(3);
+    expect((await indexAll()).results).toEqual(['indexed', 'indexed', 'indexed']);
+    expect(await NoteChunk.countDocuments({ model: 'nomic-embed-text' })).toBe(0);
+    const chunks = await NoteChunk.find({}).lean();
+    expect(chunks).toHaveLength(3);
+    expect(chunks.every((c) => c.model === 'mxbai-embed-large' && c.vector.length === 1024)).toBe(true);
+    // Settled: a second sweep has nothing to do.
+    expect(await sweepIndex()).toEqual({ removed: 0, requeued: 0 });
+    // A stray old-model row on a re-embedded note (a crash mid-write) is swept.
+    await NoteChunk.create({ userId: ALICE, noteId: chunks[0].noteId, chunk: 7, vector: fakeVector('x', 768), model: 'nomic-embed-text' });
+    expect(await sweepIndex()).toEqual({ removed: 1, requeued: 0 });
+  });
+
+  test('mid-backfill: keyword + the re-embedded notes, never an old-model vector, no best match', async () => {
+    const { exact, meaning } = await libraryOnNomic();
+    await sweepIndex();
+    // Re-embed only the first in the queue (the oldest edit: Garage).
+    expect((await runIndexerOnce({ now: LATER(), maxNotes: 1 })).results).toEqual(['indexed']);
+    expect(await NoteChunk.countDocuments({ noteId: exact._id, model: 'mxbai-embed-large' })).toBe(1);
+
+    const rows = await Query.searchNotes(null, { q: 'garage door opener', hybrid: true }, ctx(ALICE));
+    // The chamberlain note still has only nomic vectors: it must not be a meaning hit.
+    expect(rows.map((r) => String(r._id))).not.toContain(String(meaning._id));
+    expect(rows[0]).toMatchObject({ matchedBy: 'both', bestMatch: false });
+
+    // The rest catch up, and the best match comes back.
+    await indexAll();
+    const after = await Query.searchNotes(null, { q: 'garage door opener', hybrid: true }, ctx(ALICE));
+    expect(after.map((r) => String(r._id))).toContain(String(meaning._id));
+    expect(await NoteChunk.countDocuments({ model: 'nomic-embed-text' })).toBe(0);
   });
 });
 

@@ -47,14 +47,12 @@ import {
 } from './links.js';
 import logger from '../../lib/logger.js';
 import {
-  vectorSearch,
-  rrfFuse,
+  vectorSearchRanked,
+  rankHybrid,
   whyExcerpt,
   relatedNotes as findRelatedNotes,
   indexStatus,
   invalidateUserVectors,
-  KEYWORD_WEIGHT,
-  VECTOR_WEIGHT,
 } from './semantic.js';
 
 const validateCreateNote = validateInput(createNoteArgsSchema);
@@ -92,7 +90,7 @@ const SEARCH_RESULT_LIMIT = 100;
 const TAG_MAX = 100;
 
 /** One search result row. The snippet rules are the original ones. */
-function searchRow(note, { score, matchedBy = null, why = null }) {
+function searchRow(note, { score, matchedBy = null, why = null, bestMatch = false }) {
   let snippet = '';
   if (note.content && !note.isLocked && note.type !== 'handwritten' && note.type !== 'mindmap') {
     const plain = note.content.replace(/<[^>]+>/g, '');
@@ -112,6 +110,7 @@ function searchRow(note, { score, matchedBy = null, why = null }) {
     message: note.isLocked ? 'Note is locked. Content not available.' : null,
     matchedBy,
     why,
+    bestMatch,
   };
 }
 
@@ -251,8 +250,10 @@ export const resolvers = {
      * `hybrid: true` fuses it with meaning-based hits from the local
      * embeddings (`semantic.js`) by Reciprocal Rank Fusion; each row then says
      * how it matched (`matchedBy`) and, for a meaning hit, the passage that
-     * matched (`why`). When the embeddings service is down or slow, hybrid is
-     * silently keyword-only.
+     * matched (`why`). Weak keyword hits are cut, and a clear winner comes
+     * first with `bestMatch: true` (semantic.js). When the embeddings service
+     * is down or slow, hybrid is silently keyword-only (still cut, never a
+     * best match).
      */
     searchNotes: async (_, { q, under, hybrid }, context) => {
       const userId = context.user?.id;
@@ -277,21 +278,19 @@ export const resolvers = {
 
       if (!hybrid) return keywordRows.map((note) => searchRow(note, { score: note.score }));
 
-      let vectorHits = [];
+      let vector = { hits: [], runnerUpScore: null, backfilling: false };
       try {
-        vectorHits = await vectorSearch({ userId, q, log: logger });
+        vector = await vectorSearchRanked({ userId, q, log: logger });
       } catch (err) {
         // Anything unexpected in the vector half costs the meaning hits, never the search.
         logger.warn({ err: err?.message }, '[notegeek] vector search failed; keyword-only');
       }
-      if (!vectorHits.length) {
-        return keywordRows.map((note) => searchRow(note, { score: note.score, matchedBy: 'keyword' }));
-      }
+      const vectorHits = vector.hits;
 
-      const fused = rrfFuse([
-        { ids: keywordRows.map((n) => String(n._id)), weight: KEYWORD_WEIGHT },
-        { ids: vectorHits.map((h) => h.noteId), weight: VECTOR_WEIGHT },
-      ]);
+      // The weak-hit cuts, RRF, and the best match: semantic.js `rankHybrid`.
+      const ranked = rankHybrid({
+        keywordRows, vectorHits, runnerUpScore: vector.runnerUpScore, backfilling: vector.backfilling,
+      });
       const byId = new Map(keywordRows.map((n) => [String(n._id), n]));
       // Meaning-only hits are re-read through the same scope (owner + `under`),
       // which also drops a note deleted since its vectors were cached.
@@ -301,18 +300,18 @@ export const resolvers = {
         for (const n of extra) byId.set(String(n._id), n);
       }
       const hitById = new Map(vectorHits.map((h) => [h.noteId, h]));
-      return fused
-        .filter((f) => byId.has(f.id))
+      return ranked
+        .filter((r) => byId.has(r.id))
         .slice(0, SEARCH_RESULT_LIMIT)
-        .map((f) => {
-          const note = byId.get(f.id);
-          const kw = f.ranks[0] !== null;
-          const vec = f.ranks[1] !== null;
-          const hit = hitById.get(f.id);
+        .map((r) => {
+          const note = byId.get(r.id);
+          const hit = hitById.get(r.id);
           return searchRow(note, {
-            score: f.score,
-            matchedBy: kw && vec ? 'both' : kw ? 'keyword' : 'meaning',
-            why: vec ? whyExcerpt(hit.text, note.title) : null,
+            // Keyword-only (no vectors at all): the textScore, as before.
+            score: vectorHits.length ? r.score : note.score,
+            matchedBy: r.matchedBy,
+            why: hit ? whyExcerpt(hit.text, note.title) : null,
+            bestMatch: r.best,
           });
         });
     },

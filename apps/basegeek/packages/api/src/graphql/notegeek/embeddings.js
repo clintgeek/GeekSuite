@@ -5,7 +5,7 @@
  *
  * Chef's rule: the digital brain stays on this box. Note text goes to the
  * local embeddings container (`datageek_embeddings`, Ollama running
- * `nomic-embed-text`) and to NOTHING else — not aiGeek, not OpenRouter, not a
+ * `mxbai-embed-large`) and to NOTHING else — not aiGeek, not OpenRouter, not a
  * cloud provider, not as a fallback when the local service is down. When it is
  * down, the answer is "no vectors right now", never "ask someone else".
  *
@@ -21,33 +21,51 @@
  *     `EmbeddingsUnavailableError` and the callers degrade (search goes
  *     keyword-only; the indexer backs off and tries the same service later).
  *
- * ## nomic-embed-text needs task prefixes
+ * ## Models are a table, not a constant
  *
- * Stored text is embedded as `search_document: …`, queries as
- * `search_query: …`. Without them the model still answers, just worse
- * (measured 2026-09-30: 0.66 → 0.62 on a matching pair). `embedTexts` adds
- * them; callers pass plain text.
+ * Each model has its own width, its own task prefixes and its own score scale
+ * (`EMBEDDING_MODELS`). The default is `mxbai-embed-large` since 2026-10-01
+ * (1024 dims; a query gets "Represent this sentence for searching relevant
+ * passages: ", a passage no prefix). It replaced `nomic-embed-text` (768
+ * dims, `search_query: ` / `search_document: `) because nomic squashed every
+ * score into 0.50–0.73, so unrelated notes and true hits overlapped, while
+ * mxbai pulls them apart (live, Chef's 36 notes: "what pills do I take every
+ * day" → the meds note 0.720, the next note 0.439). Without its prefixes a
+ * model still answers, just worse (nomic, 2026-09-30: 0.66 → 0.62 on a
+ * matching pair). `embedTexts` adds them; callers pass plain text.
+ *
+ * Vectors of two models never meet: every chunk records its `model`, search
+ * and related read only the current model's chunks, and the indexer's sweep
+ * re-queues every note that has none (`indexer.js`). Changing the model is a
+ * background re-index, not a migration.
  */
 
 /** Container address on datageek_network. No published host port. */
 export const DEFAULT_EMBEDDINGS_URL = 'http://datageek_embeddings:11434';
-export const DEFAULT_EMBEDDINGS_MODEL = 'nomic-embed-text';
-/** nomic-embed-text v1.5 at full width. A response of any other size is refused. */
-export const EMBEDDING_DIMS = 768;
+export const DEFAULT_EMBEDDINGS_MODEL = 'mxbai-embed-large';
 
 /**
- * Hard ceiling on the characters in one request (all inputs together). A
- * guard, not a tuning knob: chunking keeps real requests far below it. At
- * ~6 characters a word it is ~1 300 words, ~3 s of CPU on this box — which is
- * also how long a search query can wait behind the indexer, since Ollama
- * serves one request at a time.
+ * What we know about each model. `dims` is enforced: a response of any other
+ * width is refused. `search` and `relatedMin` are the model's score scale,
+ * read by `semantic.js` — how each number was chosen is written there, next
+ * to the rule that uses it.
  */
-export const MAX_CHARS_PER_REQUEST = 8000;
-/** One input is cut here before it is sent (nomic's window is 2 048 tokens). */
-export const MAX_CHARS_PER_INPUT = 4000;
-
-export const DOCUMENT_PREFIX = 'search_document: ';
-export const QUERY_PREFIX = 'search_query: ';
+export const EMBEDDING_MODELS = Object.freeze({
+  'mxbai-embed-large': Object.freeze({
+    dims: 1024,
+    queryPrefix: 'Represent this sentence for searching relevant passages: ',
+    documentPrefix: '',
+    search: Object.freeze({ floor: 0.55, gap: 0.08, bestMin: 0.60, bestMargin: 0.08, bestAgreeMargin: 0.04 }),
+    relatedMin: 0.70,
+  }),
+  'nomic-embed-text': Object.freeze({
+    dims: 768,
+    queryPrefix: 'search_query: ',
+    documentPrefix: 'search_document: ',
+    search: Object.freeze({ floor: 0.55, gap: 0.06, bestMin: 0.65, bestMargin: 0.08, bestAgreeMargin: 0.04 }),
+    relatedMin: 0.65,
+  }),
+});
 
 /**
  * Read at call time, not import time, so a test (or an operator) can change
@@ -59,6 +77,38 @@ export function embeddingsConfig() {
   const model = process.env.EMBEDDINGS_MODEL || DEFAULT_EMBEDDINGS_MODEL;
   return { url, model };
 }
+
+/**
+ * The spec for a model (the configured one by default). A model not in the
+ * table — EMBEDDINGS_MODEL set to try one — gets no prefixes, no width check
+ * beyond "every vector in a response the same width", and the default
+ * model's score scale: it works, uncalibrated, until it is added here.
+ */
+export function modelSpec(model = embeddingsConfig().model) {
+  const known = EMBEDDING_MODELS[model];
+  if (known) return { model, known: true, ...known };
+  const fallback = EMBEDDING_MODELS[DEFAULT_EMBEDDINGS_MODEL];
+  return {
+    model, known: false, dims: null, queryPrefix: '', documentPrefix: '',
+    search: fallback.search, relatedMin: fallback.relatedMin,
+  };
+}
+
+/**
+ * Hard ceiling on the characters in one request (all inputs together). A
+ * guard, not a tuning knob: chunking keeps real requests far below it. At
+ * ~6 characters a word it is ~1 300 words, ~3 s of CPU on this box — which is
+ * also how long a search query can wait behind the indexer, since Ollama
+ * serves one request at a time.
+ */
+export const MAX_CHARS_PER_REQUEST = 8000;
+/**
+ * One input is cut here before it is sent. mxbai reads 512 tokens (nomic
+ * 2 048); chunking caps a passage at 350 words / 3 000 characters, which is
+ * about what mxbai reads. Ollama truncates anything past its window, and the
+ * 40-word chunk overlap means a truncated tail opens the next passage anyway.
+ */
+export const MAX_CHARS_PER_INPUT = 4000;
 
 /**
  * The service could not give us vectors: down, slow, refusing, or answering
@@ -86,7 +136,7 @@ export function normalizeVector(vec) {
 }
 
 /**
- * Embed a batch of plain strings.
+ * Embed a batch of plain strings with the configured model.
  *
  * @param {string[]} texts
  * @param {{ kind: 'document'|'query', timeoutMs?: number }} opts
@@ -98,7 +148,9 @@ export async function embedTexts(texts, { kind, timeoutMs = 60000 } = {}) {
   if (kind !== 'document' && kind !== 'query') {
     throw new TypeError(`embedTexts: kind must be 'document' or 'query', got ${ kind }`);
   }
-  const prefix = kind === 'query' ? QUERY_PREFIX : DOCUMENT_PREFIX;
+  const { url, model } = embeddingsConfig();
+  const spec = modelSpec(model);
+  const prefix = kind === 'query' ? spec.queryPrefix : spec.documentPrefix;
   const input = texts.map((t) => prefix + String(t ?? '').slice(0, MAX_CHARS_PER_INPUT));
   const total = input.reduce((n, s) => n + s.length, 0);
   if (total > MAX_CHARS_PER_REQUEST) {
@@ -107,7 +159,6 @@ export async function embedTexts(texts, { kind, timeoutMs = 60000 } = {}) {
     throw new RangeError(`embedTexts: ${ total } characters is over the ${ MAX_CHARS_PER_REQUEST } per-request guard`);
   }
 
-  const { url, model } = embeddingsConfig();
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   let res;
@@ -143,9 +194,11 @@ export async function embedTexts(texts, { kind, timeoutMs = 60000 } = {}) {
   if (!Array.isArray(vectors) || vectors.length !== input.length) {
     throw new EmbeddingsUnavailableError(`embeddings returned ${ vectors?.length ?? 'no' } vectors for ${ input.length } inputs`);
   }
+  // A known model's width is fixed; an unknown one must at least be consistent.
+  const dims = spec.dims ?? (Array.isArray(vectors[0]) ? vectors[0].length : 0);
   for (const v of vectors) {
-    if (!Array.isArray(v) || v.length !== EMBEDDING_DIMS) {
-      throw new EmbeddingsUnavailableError(`embeddings returned a ${ v?.length ?? '?' }-dim vector, expected ${ EMBEDDING_DIMS }`);
+    if (!Array.isArray(v) || !dims || v.length !== dims) {
+      throw new EmbeddingsUnavailableError(`embeddings returned a ${ v?.length ?? '?' }-dim vector, expected ${ dims || 'a non-empty vector' } (${ model })`);
     }
   }
   return vectors.map(normalizeVector);

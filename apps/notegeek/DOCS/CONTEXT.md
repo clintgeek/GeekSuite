@@ -231,11 +231,17 @@ Added 2026-09-30. **Privacy guarantee: note text goes only to the local embeddin
 — never to aiGeek, OpenRouter or any cloud provider, not even as a fallback.** When the local service is
 down, search is keyword-only and Related is empty; nothing else is asked.
 
-- **The service:** `datageek_embeddings` (Ollama, `nomic-embed-text`, 768 dims), on `datageek_network`
-  at `http://datageek_embeddings:11434`, no host port (RUNBOOK §3). Knobs, both optional — the
-  defaults are production's, since Watchtower deploys never pick up new env vars: `EMBEDDINGS_URL`,
-  `EMBEDDINGS_MODEL`; `NOTEGEEK_INDEXER=off` stops the worker. nomic needs task prefixes —
-  `search_document: ` for passages, `search_query: ` for queries; `embeddings.js` adds them.
+- **The service:** `datageek_embeddings` (Ollama, `mxbai-embed-large`, 1024 dims, since 2026-10-01;
+  `nomic-embed-text`, 768, before), on `datageek_network` at `http://datageek_embeddings:11434`, no
+  host port (RUNBOOK §3). Knobs, both optional — the defaults are production's, since Watchtower
+  deploys never pick up new env vars: `EMBEDDINGS_URL`, `EMBEDDINGS_MODEL`; `NOTEGEEK_INDEXER=off`
+  stops the worker. Each model's width, task prefixes and score scale are one row of
+  `EMBEDDING_MODELS` in `embeddings.js`: mxbai prefixes a query with `Represent this sentence for
+  searching relevant passages: ` and a passage with nothing; nomic uses `search_query: ` /
+  `search_document: `. `embeddings.js` adds them. Why mxbai: nomic squashed every score into
+  0.50–0.73, so junk and true hits overlapped; mxbai separates them ("what pills do I take every
+  day" → the meds note 0.720, the next 0.439). Its window is 512 tokens — a 350-word passage is
+  about that; Ollama truncates the rest and the 40-word overlap carries it into the next passage.
 - **Where the code is** (gateway, `apps/basegeek/packages/api/src/graphql/notegeek/`): `embeddings.js`
   (the only network call — a POST to `${EMBEDDINGS_URL}/api/embed`; ≤ 8 000 chars per request,
   ≤ 4 000 per input), `chunking.js` (note → passages), `indexer.js` (background worker), `semantic.js`
@@ -247,7 +253,7 @@ down, search is keyword-only and Related is empty; nothing else is asked.
   paragraphs and headings; the title opens the first passage. markdown as written; rich text with
   the HTML stripped; code's code; a mind map's node labels; a sketch or photo note its title only
   (an untitled one is `skipped`); a locked or encrypted note its title only. At most 60 passages.
-- **Stored:** `noteChunks` `{ userId, noteId, chunk, text, textHash, vector[768], model, updatedAt }`,
+- **Stored:** `noteChunks` `{ userId, noteId, chunk, text, textHash, vector[1024], model, updatedAt }`,
   not on the Note (keeps list reads light). Bookkeeping on the Note (never in GraphQL):
   `embeddingState` (`stale` / `indexed` / `skipped` / `failed`; absent = stale), `embeddingHash`,
   `embeddingAttempts`, `embeddingRetryAt`, `embeddingError`. Indexer writes use `timestamps: false`,
@@ -261,30 +267,59 @@ down, search is keyword-only and Related is empty; nothing else is asked.
   that lands mid-embed leaves the note stale and it goes round again. A tick stops after 25 s.
 - **Backfill:** notes from before this have no state and are simply the oldest in the queue. A sweep
   at start-up (20 s after boot) and hourly deletes chunks of deleted notes and re-queues "indexed"
-  notes with no chunks. `deleteNote` deletes its chunks at once. (NoteGeek has no trash — delete is
+  notes with no chunks **of the current model**. `deleteNote` deletes its chunks at once.
+- **Changing the model** is a background re-index, not a migration: search, Related and
+  `noteIndexStatus.chunks` read only chunks whose `model` is the current one; the start-up sweep
+  re-queues every indexed note that has none (the passage hash includes the model, so nothing is
+  skipped as "unchanged"); re-embedding a note replaces its rows by (note, chunk), so its old-model
+  rows go with it, and the sweep deletes strays. Meanwhile search is keyword + whatever is already
+  re-embedded, never a mix of two models, never an error — and claims no best match while any
+  old-model chunk is left. Chef's library (34 notes, 96 passages) at ~3.5 s a passage ≈ 6–7 min. (NoteGeek has no trash — delete is
   delete.) Measured 2026-09-30 against the live service on a busy box: the 14 harness fixture notes
   (14 passages) took 12.9 s; an 1 873-word note was 8 passages, ~16 s.
 - **Failure handling:** connection error, timeout or 5xx → the whole loop pauses with doubling
   backoff (30 s → 15 min, shared with search), the note is not charged. A 400 → the note is charged:
   retry in 5 min × attempts, `failed` after 5. Logged via the basegeek pino logger
   (`module: notegeek-indexer`) with note ids only, never text.
-- **Hybrid search** (`searchNotes(hybrid: true)`): Mongo `$text` hits (≤ 100) and vector hits — cosine
-  of the query against every passage, best passage per note, kept if ≥ 0.55 **and** within 0.06 of
-  the best hit, at most 20 — fused by weighted **Reciprocal Rank Fusion**: score = Σ w / (60 + rank),
-  keyword w = 1.0, vector w = 0.8, ties to the keyword hit. So the note with the typed words (a
-  serial, a name) wins, a note in both lists beats one in either, and meaning-only hits follow.
-  Meaning-only hits are re-read through the same owner + `under` scope. The query embedding waits
-  at most 5 s, is cached (200 queries), and is skipped outright while the service is marked down.
-  Calibration (live, harness fixtures): true matches 0.59–0.71, unrelated 0.48–0.57, nonsense ≤ 0.53.
+- **Hybrid search** (`searchNotes(hybrid: true)`, ranking in `semantic.js` `rankHybrid`):
+  - **Keyword weak-hit cut:** Mongo `$text` hits (≤ 100) under 40% of the top textScore are dropped
+    (`KEYWORD_MIN_RATIO`; the top hit always stays). "What auth credentials do I have for
+    GameGeek?" scored 2.23 / 1.84 / 0.50 / 0.50 / 0.50 — the 0.50s were one common word each.
+  - **Vector hits:** cosine of the query against every passage of the current model, best passage
+    per note (a note's score is its single best passage — never a sum, so long notes get no extra
+    weight), kept if ≥ the model's `floor` **and** within its `gap` of the best hit, at most 20.
+    mxbai: floor 0.55, gap 0.08 (nomic kept 0.55 / 0.06).
+  - **Fusion:** weighted Reciprocal Rank Fusion, score = Σ w / (60 + rank), keyword w = 1.0, vector
+    w = 0.8, ties to the keyword hit. Meaning-only hits are re-read through the same owner + `under`
+    scope.
+  - **Best match** (`bestMatch: true` on at most one row, always moved first): the vector #1 when it
+    clearly wins, judged by its lead over the vector #2 (the raw runner-up, before the cut) — a lead
+    ≥ 0.08 and a score ≥ 0.60 on meaning alone, or a lead ≥ 0.04 when it is also the top keyword
+    hit. Never with no vectors (embeddings down, nothing indexed) and never mid-backfill. Everything
+    else keeps its RRF order. "What pills do I take every day": the meds note has none of those
+    words; the old ranking put it 17th of 17 (16 notes share "take" / "every" / "day"), the keyword
+    cut alone 6th of 6 — the best match puts it first.
+  - **Known limit:** the keyword cut is relative to the top hit, so when the top keyword hit is
+    itself junk ("change a keyboard key": 20 notes say "key"/"change", the top at 1.97) the cut
+    keeps 12 junk rows and drops the true note (0.51) from the keyword list — the vector list still
+    finds it and the best match puts it first, but "Also related" stays noisy. A vector veto on
+    keyword-only rows is the next lever, not shipped: it would cost exact-serial searches.
+  - **Calibration** (live, Chef's library, 2026-10-01, mxbai): true hits 0.57–0.76, junk 0.38–0.56
+    (long notes the usual 0.52–0.56 — the best of 12 passages is a high-water mark of noise),
+    nonsense ≤ 0.50. Clear wins led by 0.098–0.324, near-ties by 0.024–0.050. The full table is in
+    the header of `semantic.js`.
+  - The query embedding waits at most 5 s, is cached (200 queries, per model), and is skipped
+    outright while the service is marked down.
 - **Related notes** (`relatedNotes`): the centroid of the note's passages against every other note's
-  best passage, ≥ 0.65, top 5 (max 20), excluding itself; survivors re-read from `Note` by owner,
+  best passage, ≥ the model's `relatedMin` (mxbai 0.70: same-topic pairs scored 0.70–0.90, unrelated
+  ones up to 0.69; nomic 0.65), top 5 (max 20), excluding itself; survivors re-read from `Note` by owner,
   which drops deleted notes.
 - **Scale ceiling:** brute-force cosine in Node over the user's passages, cached in memory per user
   as Float32Arrays (10 min TTL, 32 users, invalidated by every index write and delete). ~2 000 notes ×
-  3 passages ≈ 18 MB and ~5 ms a query. Past ~50 000 passages per user (≈150 MB, ~100 ms) move to a
+  3 passages × 1024 floats ≈ 25 MB and ~5 ms a query. Past ~50 000 passages per user (≈150 MB, ~100 ms) move to a
   real ANN index (pgvector next door, or Mongo vector search).
 - **Check it:** `noteIndexStatus` (owner-scoped counts + `serviceAvailable` / `lastError`). From the
-  host: `docker exec basegeek node -e "fetch('http://datageek_embeddings:11434/api/embed',{method:'POST',body:JSON.stringify({model:'nomic-embed-text',input:['search_query: hi']})}).then(r=>r.json()).then(j=>console.log(j.embeddings[0].length))"` → `768`.
+  host: `docker exec basegeek node -e "fetch('http://datageek_embeddings:11434/api/embed',{method:'POST',body:JSON.stringify({model:'mxbai-embed-large',input:['hi']})}).then(r=>r.json()).then(j=>console.log(j.embeddings[0].length))"` → `1024`.
 - **UI (2026-09-30; needs the gateway above live first — the bundle sends `hybrid` and selects
   `matchedBy` / `why` / `relatedNotes`, which an older gateway rejects):**
   - Search (`components/SearchResults.jsx`) always asks for `hybrid: true` (`services/api.js`).
@@ -305,6 +340,9 @@ down, search is keyword-only and Related is empty; nothing else is asked.
   - **Checks:** `__tests__/components/notes/hybridSearch.test.jsx`, `__tests__/services/api.test.js`;
     harness `14h-search-hybrid` (types "fix the garage"; every search asked for hybrid, two "similar"
     rows with no marks, the keyword row marked), `17a-related-viewer`, `17b-related-editor`.
+    Gateway: `src/__tests__/notegeekSemantic.test.js` (model table, mixed-model chunks ignored,
+    re-embed on model change, mid-backfill, keyword cut, best match on a clear win and not on a
+    near-tie, long notes not weighted).
 
 ## 12. [[Links]] and backlinks
 

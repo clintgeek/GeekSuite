@@ -230,6 +230,12 @@ export const typeDefs = gql`
     matchedBy: String
     """Hybrid search, meaning hits: the passage that matched."""
     why: String
+    """
+    Hybrid search: this row is the one clear answer (the first row, at most
+    one per search). False on keyword-only search and whenever no note
+    clearly wins.
+    """
+    bestMatch: Boolean!
   }
 
   """A note near another one in meaning (local embeddings, never a cloud model)."""

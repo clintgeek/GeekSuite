@@ -27,8 +27,8 @@
  * Notes written before this existed have no `embeddingState`; the pick query
  * treats that as stale, so they are simply the queue's oldest entries. The
  * sweep (at start-up, then hourly) also re-queues any "indexed" note that has
- * no chunks (the collection was dropped, say) and deletes chunks whose note
- * is gone.
+ * no chunks of the current model (the collection was dropped, or the model
+ * changed — see `sweepIndex`) and deletes chunks whose note is gone.
  *
  * ## When the service is down
  *
@@ -135,6 +135,8 @@ export async function indexNote(note) {
     },
   }));
   await NoteChunk.bulkWrite(ops, { ordered: false });
+  // Rows past the new end. Together with the replace above (one row per
+  // note + chunk, unique index) that is every old row, whatever model wrote it.
   await NoteChunk.deleteMany({ noteId: note._id, chunk: { $gte: chunks.length } });
   invalidateUserVectors(note.userId);
 
@@ -222,9 +224,20 @@ function tally(results) {
 
 /**
  * Housekeeping: chunks of notes that no longer exist go; "indexed" notes with
- * no chunks go back in the queue.
+ * no chunks OF THE CURRENT MODEL go back in the queue; and another model's
+ * chunks go once their note has the current model's.
+ *
+ * The middle rule is the whole model migration. Change EMBEDDINGS_MODEL (or
+ * the default) and the start-up sweep finds every indexed note holding only
+ * old-model chunks, marks it stale, and the loop re-embeds the library in the
+ * background, oldest edit first. Search reads only current-model chunks
+ * (`semantic.js`), so meanwhile it is keyword + whatever is already
+ * re-embedded — never a mix of two models' scores, never an error.
+ * `indexNote` replaces a note's rows by (note, chunk), so re-embedding a note
+ * already removes its old-model rows; the third rule only catches strays.
  */
 export async function sweepIndex() {
+  const { model } = embeddingsConfig();
   const chunkNoteIds = await NoteChunk.distinct('noteId');
   const live = new Set((await Note.find({ _id: { $in: chunkNoteIds } }, { _id: 1 }).lean()).map((n) => String(n._id)));
   const orphans = chunkNoteIds.filter((id) => !live.has(String(id)));
@@ -234,12 +247,15 @@ export async function sweepIndex() {
     ({ deletedCount: removed } = await NoteChunk.deleteMany({ noteId: { $in: orphans } }));
     new Set(orphanRows.map((r) => String(r.userId))).forEach(invalidateUserVectors);
   }
+  const currentIds = await NoteChunk.distinct('noteId', { model });
+  const { deletedCount: oldModel } = await NoteChunk.deleteMany({ noteId: { $in: currentIds }, model: { $ne: model } });
+  removed += oldModel;
   const { modifiedCount: requeued } = await Note.updateMany(
-    { embeddingState: 'indexed', _id: { $nin: chunkNoteIds.map((id) => new mongoose.Types.ObjectId(String(id))) } },
+    { embeddingState: 'indexed', _id: { $nin: currentIds.map((id) => new mongoose.Types.ObjectId(String(id))) } },
     { $set: { embeddingState: 'stale', embeddingHash: null } },
     { timestamps: false },
   );
-  if (removed || requeued) log.info({ removed, requeued }, 'index sweep');
+  if (removed || requeued) log.info({ removed, requeued, model }, 'index sweep');
   return { removed, requeued };
 }
 

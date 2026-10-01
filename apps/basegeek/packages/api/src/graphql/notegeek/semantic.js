@@ -17,24 +17,61 @@
  * rank in both lists means the note with the typed words comes first. A note
  * in both lists beats a note in one.
  *
- * ## Which vector hits count
+ * ## Which hits count — the weak-hit cuts
  *
- * Every note is "similar" to every query at some level, so a vector hit must
- * clear a floor (SEARCH_MIN_SCORE) AND be near the best hit (within
- * SEARCH_SCORE_GAP of it). Calibrated on the live service 2026-09-30
- * (nomic-embed-text, the harness fixture notes): true matches scored
- * 0.59–0.71 ("cookie baking" → the cookie recipe 0.705, "how to renew the TLS
- * certificate" → the nginx cert note 0.691), unrelated pairs 0.48–0.57, and
- * "quantum chromodynamics" topped out at 0.526 — under the 0.55 floor.
+ * Keyword: `$text` matches any shared word, so a long question drags in
+ * every note with "have" or "day" in it. A keyword hit under
+ * KEYWORD_MIN_RATIO (40%) of the top textScore is dropped; the top one always
+ * stays (`selectKeywordHits`). Chef's "What auth credentials do I have for
+ * GameGeek?": 2.23 / 1.84 / 0.50 / 0.50 / 0.50 → the 0.50s go, 1.84 stays.
  *
- * Related notes use a higher floor (RELATED_MIN_SCORE 0.65): note-to-note
- * similarity runs higher than query-to-note, and two dev notes sat at
- * 0.60–0.64 without having much to do with each other.
+ * Vector: every note is "similar" to every query at some level, so a hit must
+ * clear the model's `floor` AND sit within `gap` of the best hit — relative,
+ * because how high the best hit scores varies by query far more than how far
+ * junk sits below it. The numbers live in the model table
+ * (`embeddings.js`). mxbai-embed-large, calibrated live 2026-10-01 on Chef's
+ * library (34 notes, 96 passages, 13 queries):
+ *   - true hits 0.57–0.76 (meds 0.720, boat 0.762, 401(k) 0.656, keyboard
+ *     remap 0.673, GameGeek auth 0.722, Usenet 0.598, smart-plug board 0.569);
+ *   - junk under the true hits at 0.38–0.56, with long notes (12–13
+ *     passages) the usual 0.52–0.56 junk — the best of many passages is a
+ *     high-water mark of noise;
+ *   - nonsense ("quantum chromodynamics") tops out at 0.496.
+ *   floor 0.55 keeps nonsense out and "newsgroup downloads" to Usenet alone
+ *   (next 0.548); gap 0.08 cuts "retirement savings" to the 401(k) note
+ *   (gap 0.12 let four 0.54–0.56 long work notes in) while "how do I log
+ *   into the server" keeps its four real hits at 0.58–0.63.
+ * nomic-embed-text keeps its 2026-09-30 numbers (floor 0.55, gap 0.06).
+ *
+ * ## Best match
+ *
+ * After fusion, one note may be marked `best` and put first (`pickBestMatch`
+ * has the rule). The data behind the margins (vector #1 minus vector #2):
+ * clear wins led by 0.098–0.324 (401(k) 0.098, GameGeek 0.108, keyboard
+ * remap 0.122, meds 0.281, boat 0.324); the in-between cases by 0.066–0.068
+ * (the PIP note for "employee who is underperforming", the card-campaign
+ * plan for "launching the debit card program"); near-ties by 0.024–0.050
+ * (server login 0.024, partner-bank people 0.049, Usenet 0.050). So:
+ *   - meaning alone: a lead of 0.08 and a score of at least 0.60 (every
+ *     clear win scored 0.65+); the in-between cases do not get it;
+ *   - agreement (the keyword #1 is the same note): a lead of 0.04. Usenet
+ *     (both lists' #1, 0.050) and the card plan (both #1, 0.068) get it; the
+ *     bank query's lists disagree, and server login's lead is 0.024.
+ * Everything else keeps its RRF order below it.
+ *
+ * Long notes get no extra weight: a note's vector score is its single best
+ * passage (never a sum), each list names a note once, and Related compares a
+ * centroid. The high-water effect above is why the floor sits at 0.55.
+ *
+ * Related notes use the model's `relatedMin`: note-to-note similarity runs
+ * higher than query-to-note. mxbai 0.70 (same-topic pairs 0.70–0.90 —
+ * the two Phone Contents notes 0.827, the hiring notes 0.80; unrelated pairs
+ * up to 0.69, again mostly a long note); nomic 0.65.
  *
  * ## Brute force, and where it stops being fine
  *
  * Cosine in Node over every chunk the user has — vectors are unit length, so
- * it is a dot product. 2 000 notes × 3 chunks × 768 floats is ~18 MB as
+ * it is a dot product. 2 000 notes × 3 chunks × 1024 floats is ~25 MB as
  * Float32Array and ~5 ms per query. The user's vectors are cached in memory
  * (per user, TTL + invalidated by every index write and delete). Past roughly
  * 50 000 chunks per user (≈150 MB, ~100 ms a query) this wants a real ANN
@@ -44,18 +81,17 @@
 import mongoose from 'mongoose';
 import Note from './models/Note.js';
 import NoteChunk from './models/NoteChunk.js';
-import { embedTexts, embeddingsConfig, EmbeddingsUnavailableError } from './embeddings.js';
+import { embedTexts, embeddingsConfig, modelSpec, EmbeddingsUnavailableError } from './embeddings.js';
 
 // ── knobs ──────────────────────────────────────────────────────────────────
 export const RRF_K = 60;
 export const KEYWORD_WEIGHT = 1.0;
 export const VECTOR_WEIGHT = 0.8;
-export const SEARCH_MIN_SCORE = 0.55;
-export const SEARCH_SCORE_GAP = 0.06;
+/** Keyword hits under this share of the top textScore are dropped (`selectKeywordHits`). */
+export const KEYWORD_MIN_RATIO = 0.4;
 export const SEARCH_MAX_VECTOR_HITS = 20;
 /** A search waits this long for the query's vector before going keyword-only. */
 export const QUERY_EMBED_TIMEOUT_MS = 5000;
-export const RELATED_MIN_SCORE = 0.65;
 export const RELATED_DEFAULT_LIMIT = 5;
 export const RELATED_MAX_LIMIT = 20;
 const VECTOR_CACHE_TTL_MS = 10 * 60 * 1000;
@@ -91,22 +127,40 @@ export function _resetSemanticState() {
 }
 
 // ── the per-user vector cache ──────────────────────────────────────────────
-const vectorCache = new Map(); // userId -> { at, rows }
+const vectorCache = new Map(); // `${userId}\u0000${model}` -> { at, rows }
 
 export function invalidateUserVectors(userId) {
-  vectorCache.delete(String(userId));
+  const prefix = `${ String(userId) }\u0000`;
+  for (const key of [...vectorCache.keys()]) if (key.startsWith(prefix)) vectorCache.delete(key);
 }
 
-/** Every chunk the user has: `{ noteId, chunk, text, vec: Float32Array }`. */
+/** Every current-model chunk the user has: `{ noteId, chunk, text, vec: Float32Array }`. */
 export async function userVectors(userId, now = Date.now()) {
-  const key = String(userId);
+  return (await userVectorState(userId, now)).rows;
+}
+
+/**
+ * `{ rows, backfilling }`. `backfilling` is true while any of the user's
+ * chunks are another model's — i.e. a model change is still being
+ * re-embedded, so some notes have no current vector yet. Search then does
+ * not claim a best match: the note that would have beaten it may simply not
+ * be re-embedded yet. It clears itself — re-embedding a note replaces its
+ * old-model rows, and the sweep removes strays.
+ */
+export async function userVectorState(userId, now = Date.now()) {
+  const { model } = embeddingsConfig();
+  const key = `${ String(userId) }\u0000${ model }`;
   const hit = vectorCache.get(key);
   if (hit && now - hit.at < VECTOR_CACHE_TTL_MS) {
     vectorCache.delete(key); vectorCache.set(key, hit); // LRU touch
-    return hit.rows;
+    return hit;
   }
+  // The current model's chunks only. Another model's vectors are a different
+  // space (even a different width): a dot product across them is noise. While
+  // the indexer re-embeds after a model change, a note still on the old model
+  // simply has no vector yet — keyword search still finds it.
   const docs = await NoteChunk.find(
-    { userId: new mongoose.Types.ObjectId(key) },
+    { userId: new mongoose.Types.ObjectId(String(userId)), model },
     { noteId: 1, chunk: 1, text: 1, vector: 1 },
   ).lean();
   const rows = docs.map((d) => ({
@@ -115,9 +169,13 @@ export async function userVectors(userId, now = Date.now()) {
     text: d.text || '',
     vec: Float32Array.from(d.vector),
   }));
-  vectorCache.set(key, { at: now, rows });
+  const backfilling = Boolean(await NoteChunk.exists({
+    userId: new mongoose.Types.ObjectId(String(userId)), model: { $ne: model },
+  }));
+  const entry = { at: now, rows, backfilling };
+  vectorCache.set(key, entry);
   while (vectorCache.size > VECTOR_CACHE_USERS) vectorCache.delete(vectorCache.keys().next().value);
-  return rows;
+  return entry;
 }
 
 function dot(a, b) {
@@ -138,13 +196,58 @@ export function bestChunkPerNote(rows, vec, { exclude = null } = {}) {
   return [...best.values()].sort((a, b) => b.score - a.score);
 }
 
-/** Floor + gap-from-best, then a count cap. Input sorted best first. */
-export function selectVectorHits(ranked, {
-  min = SEARCH_MIN_SCORE, gap = SEARCH_SCORE_GAP, max = SEARCH_MAX_VECTOR_HITS,
-} = {}) {
+/**
+ * Floor + gap-from-best, then a count cap. Input sorted best first. The floor
+ * and gap are the configured model's (`modelSpec().search`) unless given.
+ */
+export function selectVectorHits(ranked, { min, gap, max = SEARCH_MAX_VECTOR_HITS } = {}) {
   if (!ranked.length) return [];
-  const cutoff = Math.max(min, ranked[0].score - gap);
+  const scale = modelSpec().search;
+  const cutoff = Math.max(min ?? scale.floor, ranked[0].score - (gap ?? scale.gap));
   return ranked.filter((h) => h.score >= cutoff).slice(0, max);
+}
+
+/**
+ * The keyword weak-hit cut. `$text` scores every note that shares ANY word
+ * with the query, so "What auth credentials do I have for GameGeek?" matched
+ * GameGeek API Auth at 2.23, Google Cloud SDK Info at 1.84, and three notes
+ * at 0.50 for one common word each — the "random-ish" tail Chef saw. A hit
+ * scoring under KEYWORD_MIN_RATIO of the best one is dropped; the best one
+ * always stays. Input sorted best first (`score` = textScore).
+ */
+export function selectKeywordHits(rows, { ratio = KEYWORD_MIN_RATIO } = {}) {
+  if (!rows.length) return [];
+  const cutoff = (rows[0].score || 0) * ratio;
+  return rows.filter((r, i) => i === 0 || (r.score || 0) >= cutoff);
+}
+
+/**
+ * Is there one clear answer? Returns that note's id, or null. Only ever the
+ * vector #1, judged by its LEAD: its score minus the vector runner-up's (the
+ * next note by raw score, before the floor/gap cut). Two ways to win:
+ *
+ *   - agreement: it is also the top keyword hit, and leads by
+ *     `bestAgreeMargin` (0.04 for mxbai). Two independent signals pick it.
+ *   - meaning alone: it scores at least `bestMin` (0.60) and leads by
+ *     `bestMargin` (0.08). This wins even when its words are not the query's
+ *     — "what pills do I take every day" has no keyword hit on the meds
+ *     note at all, while "take", "every" and "day" matched 16 other notes
+ *     (live, 2026-10-01). The old ranking put the meds note 17th of 17;
+ *     with the keyword cut alone it was still 6th of 6, under five long
+ *     work notes.
+ *
+ * Never a best match when there are no vector hits (textScore has no scale
+ * that says how clear a win is), and never while `backfilling` — mid
+ * re-index the note that would have beaten #1 may just not have a vector yet.
+ */
+export function pickBestMatch({ keywordTopId = null, vectorHits, runnerUpScore = null, backfilling = false, scale }) {
+  if (backfilling || !vectorHits?.length) return null;
+  const s = scale ?? modelSpec().search;
+  const top = vectorHits[0];
+  const lead = runnerUpScore === null || runnerUpScore === undefined ? Infinity : top.score - runnerUpScore;
+  if (keywordTopId !== null && keywordTopId === top.noteId && lead >= s.bestAgreeMargin) return top.noteId;
+  if (top.score >= s.bestMin && lead >= s.bestMargin) return top.noteId;
+  return null;
 }
 
 /**
@@ -178,6 +281,40 @@ export function rrfFuse(lists, k = RRF_K) {
   });
 }
 
+/**
+ * The whole hybrid ranking, pure: keyword rows (`{ _id, score }`, textScore
+ * order) and vector hits in, ordered `{ id, score, ranks, matchedBy, best }`
+ * out. The keyword weak-hit cut, RRF for the order, and — when one note
+ * clearly wins (`pickBestMatch`) — that note first, flagged `best`; the rest
+ * keep their RRF order. With no vector hits it is the cut keyword list, in
+ * textScore order, with no best match.
+ */
+export function rankHybrid({ keywordRows, vectorHits = [], runnerUpScore = null, backfilling = false }) {
+  const keyword = selectKeywordHits(keywordRows);
+  const fused = rrfFuse([
+    { ids: keyword.map((n) => String(n._id)), weight: KEYWORD_WEIGHT },
+    { ids: vectorHits.map((h) => h.noteId), weight: VECTOR_WEIGHT },
+  ]);
+  const best = pickBestMatch({
+    keywordTopId: keyword.length ? String(keyword[0]._id) : null, vectorHits, runnerUpScore, backfilling,
+  });
+  if (best) {
+    const at = fused.findIndex((f) => f.id === best);
+    if (at > 0) fused.unshift(...fused.splice(at, 1));
+  }
+  return fused.map((f) => {
+    const kw = f.ranks[0] !== null;
+    const vec = f.ranks[1] !== null;
+    return {
+      id: f.id,
+      score: f.score,
+      ranks: f.ranks,
+      matchedBy: kw && vec ? 'both' : kw ? 'keyword' : 'meaning',
+      best: f.id === best,
+    };
+  });
+}
+
 /** A chunk's passage without the title line the first chunk opens with. */
 export function whyExcerpt(text, title) {
   let body = String(text || '');
@@ -208,9 +345,20 @@ async function queryVector(q) {
  * nothing indexed, so the caller simply has no meaning hits.
  */
 export async function vectorSearch({ userId, q, log }) {
-  if (serviceIsDown()) return [];
-  const rows = await userVectors(userId);
-  if (!rows.length) return [];
+  return (await vectorSearchRanked({ userId, q, log })).hits;
+}
+
+/**
+ * `vectorSearch` plus what the best-match rule needs: the raw score of the
+ * vector runner-up (the second note before the floor/gap cut — a cut-away #2
+ * is exactly what makes #1 a clear win). `{ hits: [], runnerUpScore: null }`
+ * whenever there are no vectors.
+ */
+export async function vectorSearchRanked({ userId, q, log }) {
+  const none = { hits: [], runnerUpScore: null, backfilling: false };
+  if (serviceIsDown()) return none;
+  const { rows, backfilling } = await userVectorState(userId);
+  if (!rows.length) return none;
   let vec;
   try {
     vec = await queryVector(q);
@@ -219,11 +367,15 @@ export async function vectorSearch({ userId, q, log }) {
     if (err instanceof EmbeddingsUnavailableError) {
       markServiceDown(err);
       log?.warn?.({ err: err.message }, '[notegeek] query embedding failed; keyword-only search');
-      return [];
+      return none;
     }
     throw err;
   }
-  return selectVectorHits(bestChunkPerNote(rows, vec));
+  // A query vector of another width (a model change mid-cache) would make
+  // every dot product meaningless; treat it as "no vectors".
+  if (vec.length !== rows[0].vec.length) return none;
+  const ranked = bestChunkPerNote(rows, vec);
+  return { hits: selectVectorHits(ranked), runnerUpScore: ranked.length > 1 ? ranked[1].score : null, backfilling };
 }
 
 /**
@@ -245,7 +397,7 @@ export async function relatedNotes({ userId, noteId, limit = RELATED_DEFAULT_LIM
   for (let i = 0; i < centroid.length; i += 1) centroid[i] /= norm;
 
   const ranked = bestChunkPerNote(rows, centroid, { exclude: String(noteId) })
-    .filter((h) => h.score >= RELATED_MIN_SCORE)
+    .filter((h) => h.score >= modelSpec().relatedMin)
     .slice(0, n * 2); // headroom for notes that turn out to be gone
   if (!ranked.length) return [];
   const notes = await Note.find(
@@ -277,7 +429,8 @@ export async function indexStatus({ userId }) {
       { $match: { userId: uid } },
       { $group: { _id: { $ifNull: ['$embeddingState', 'stale'] }, n: { $sum: 1 } } },
     ]),
-    NoteChunk.countDocuments({ userId: uid }),
+    // Searchable passages: the current model's (old ones are ignored).
+    NoteChunk.countDocuments({ userId: uid, model: embeddingsConfig().model }),
   ]);
   const count = (s) => states.find((x) => x._id === s)?.n || 0;
   const total = states.reduce((sum, x) => sum + x.n, 0);

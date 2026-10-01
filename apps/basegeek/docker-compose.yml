@@ -87,8 +87,12 @@ services:
   # never leave the box: no published port — only containers on
   # datageek_network (basegeek) reach it, at http://datageek_embeddings:11434.
   # Kept loaded (KEEP_ALIVE=-1) so a search never waits on a cold model; capped
-  # at 1 GB and 2 CPUs so it can't crowd the box. Pinned version, and no
+  # at 1.5 GB and 2 CPUs so it can't crowd the box. Pinned version, and no
   # Watchtower label: it only changes when we change it.
+  # Model: mxbai-embed-large since 2026-10-01 (was nomic-embed-text): ~700 MB
+  # resident against nomic's ~300 MB, so the cap went 1g → 1536m — mxbai plus
+  # headroom for a query landing mid-index. MAX_LOADED_MODELS=1 means asking
+  # for the other model swaps it in (and the first call is cold).
   embeddings:
     image: ollama/ollama:0.35.0
     container_name: datageek_embeddings
@@ -100,7 +104,7 @@ services:
       - ./data/ollama:/root/.ollama
     networks:
       - datageek_network
-    mem_limit: 1g
+    mem_limit: 1536m
     cpus: 2
     restart: unless-stopped
     healthcheck:
