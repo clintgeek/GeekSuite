@@ -9,7 +9,11 @@ import { sessionRoutes, graphqlRoute, json, DEFAULT_USER } from '../../lib/net.m
 import { bodyCompCurrent, bodyCompChange } from '../../../../packages/utils/src/bodyComp.js';
 
 const today = new Date();
-const iso = (d) => d.toISOString().slice(0, 10);
+// LOCAL calendar dates, like the app's own "today" (and the browser, which
+// runs in this machine's timezone). toISOString() is UTC: after 7 PM CDT it
+// is already tomorrow there, and "yesterday's lunch" pointed at a day with no
+// lunch (21-add-sheet-again failed every evening, 2026-09-30).
+const iso = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 const daysAgo = (n) => { const d = new Date(today); d.setDate(d.getDate() - n); return iso(d); };
 const TODAY = iso(today);
 
