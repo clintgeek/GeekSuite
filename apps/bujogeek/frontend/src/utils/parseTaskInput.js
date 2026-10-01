@@ -5,7 +5,12 @@
  * Supported syntax (all case-insensitive):
  *   Signifier (first char):  * (task, default)  @ (event)  - (note)  ? (question)  ! (important)
  *   Priority:                 !high  !medium  !low
- *   Tags:                     #work  #my-tag  (letters, digits, hyphens, underscores)
+ *   Tags:                     #work  #my-tag  #home/garage  (the suite tag
+ *                             standard, @geeksuite/tags — 2026-10-01: `#` at
+ *                             the start or after a space or `(`, then a letter,
+ *                             then letters/digits/`_`/`-`/`/`; `/` nests; saved
+ *                             kebab-case, so `#GeekSuite` is `geek-suite`. Not
+ *                             a tag: `C#`, `a#b`, `#1`.)
  *   Recurrence:               (daily)  (weekly)  (monthly)
  *   Private:                  (private)  — hide the words on a desktop until
  *                             clicked (2026-10-01; see PenRow / PrivacyContext)
@@ -59,6 +64,8 @@
  * Returns: { content, signifier, priority, dueDate, hasTime, tags, note,
  *            noteGeekNote, recurrenceRule, blocked, blockedReason, private }
  */
+
+import { findTagTokens } from '@geeksuite/tags';
 
 const DAY_NAMES = {
   sunday: 0, sun: 0,
@@ -147,7 +154,6 @@ const PATTERNS = {
   dateTime:
     /\/(today|tomorrow|next-week|next-month|next-(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|(?:mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)|(?:\d{4}-\d{2}-\d{2})|(?:\d{2}-\d{2}-\d{4})|(?:\d{2}-\d{2})|(?:\d{1,2})(?:st|nd|rd|th)?|(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{1,2}(?:st|nd|rd|th)?)(?:\s+(\d{1,2})(?::(\d{2}))?\s*(?:([ap]\.?m\.?))?)?/i,
   timeMarker: /\b([ap]\.?m\.?)\b/i,
-  tags: /#([a-zA-Z0-9_-]+)/g,
   type: /^[*@\-!?]/,
   noteGeek: /\$\^(.+)$/,
   note: /\^(.+)$/,
@@ -285,10 +291,15 @@ export function parseTaskInputDetailed(text, { now = new Date() } = {}) {
     take(m.index, m.index + m[0].length, 'private');
   }
 
-  // 1. Tags — first, so # tokens don't interfere with other parsing.
-  for (const m of [...masked.matchAll(PATTERNS.tags)]) {
-    tags.push(m[1]);
-    take(m.index, m.index + m[0].length, 'tag');
+  // 1. Tags — first, so # tokens don't interfere with other parsing (a
+  //    nested `#home/garage` is never half-read as a `/date`). The suite's
+  //    one `#tag` reader (`@geeksuite/tags`), normalized; the span covers the
+  //    token as WRITTEN, so the underline sits under `#GeekSuite` while the
+  //    tag saved is `geek-suite`. Hex colours are not a thing in a task line:
+  //    `#add`, `#cafe` are tags here.
+  for (const t of findTagTokens(masked, { hexColours: false })) {
+    if (!tags.includes(t.tag)) tags.push(t.tag);
+    take(t.start, t.end, 'tag');
   }
 
   // 2a. NoteGeek note ($^) — before the plain note, which would half-match it.

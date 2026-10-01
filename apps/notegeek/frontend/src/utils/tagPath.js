@@ -5,56 +5,26 @@
  * tag of its own AND sits under `house`. Nothing about the tree is stored; it
  * is read off the strings, so they must always be spelled the same way.
  *
- * `normalizeTag` / `normalizeTags` are a COPY of the gateway's
- * (`apps/basegeek/packages/api/src/graphql/notegeek/tags.js`), which applies
- * them to every write. The UI applies them too so a chip shows what will be
- * stored. Change one, change both — the tests are the same cases.
+ * Since 2026-10-01 that spelling is the suite standard, `@geeksuite/tags`
+ * (lowercase kebab-case segments — DOCS/TAG_STANDARD.md), the same package
+ * the gateway normalizes every write with. `GeekSuite`, `geek suite` and
+ * `geek_suite` are all `geek-suite`; `Work` and `work` are one tag. The path
+ * helpers come from there too; what is left here is NoteGeek's own wording
+ * and layout.
  */
+import {
+  normalizeTag,
+  normalizeTags,
+  isUnder,
+  isDescendant,
+  swapPrefix,
+  parentTag,
+} from '@geeksuite/tags';
 
-/**
- * Trim; split on `/`; trim each segment; drop empty segments; rejoin.
- * `" house // garage/ "` → `house/garage`. Case is kept — `Work` and `work`
- * are different tags. Non-strings normalize to `''`.
- */
-export function normalizeTag(raw) {
-  if (typeof raw !== 'string') return '';
-  return raw
-    .split('/')
-    .map((segment) => segment.trim())
-    .filter(Boolean)
-    .join('/');
-}
-
-/** Normalize, drop empties, dedupe (exact) keeping the first position. */
-export function normalizeTags(list) {
-  if (!Array.isArray(list)) return [];
-  const seen = new Set();
-  const out = [];
-  for (const raw of list) {
-    const tag = normalizeTag(raw);
-    if (!tag || seen.has(tag)) continue;
-    seen.add(tag);
-    out.push(tag);
-  }
-  return out;
-}
+export { normalizeTag, normalizeTags, isDescendant, swapPrefix, parentTag };
 
 /** True when `tag` is `root` or sits beneath it. `house` ∌ `houseboat`. */
-export const isInSubtree = (tag, root) =>
-  typeof tag === 'string' && !!root && (tag === root || tag.startsWith(`${root}/`));
-
-/** True when `tag` sits strictly beneath `root`. */
-export const isDescendant = (tag, root) => isInSubtree(tag, root) && tag !== root;
-
-/** `house/garage` with `house` → `home` becomes `home/garage`. */
-export const swapPrefix = (tag, oldRoot, newRoot) =>
-  isInSubtree(tag, oldRoot) ? newRoot + tag.slice(oldRoot.length) : tag;
-
-/** `house/garage` → `house`; a top-level tag → `''`. */
-export const parentTag = (tag) => {
-  const i = typeof tag === 'string' ? tag.lastIndexOf('/') : -1;
-  return i === -1 ? '' : tag.slice(0, i);
-};
+export const isInSubtree = isUnder;
 
 /**
  * Why a rename/move can't go ahead, in the user's words — or null. Mirrors
@@ -109,7 +79,7 @@ export function rowTagLabels(tags, context = null) {
 
 /**
  * What the typed text asks for, spelled like a stored tag — but keeping a
- * trailing `/`, which means "the children of": `house / ` → `house/`.
+ * trailing `/`, which means "the children of": `House / ` → `house/`.
  */
 export function tagQuery(input) {
   const raw = typeof input === 'string' ? input.trim() : '';
@@ -118,15 +88,20 @@ export function tagQuery(input) {
 }
 
 /**
- * Options for the typed text: every existing tag PATH containing it
- * (case-insensitive), the ones that start with it first — so `house/` lists
- * `house/garage`, `house/kitchen` straight away.
+ * Options for the typed text, read in the suite standard: every existing
+ * tag PATH containing it, the ones that start with it first — so `house/`
+ * lists `house/garage`, `house/kitchen` straight away, and `GeekS` finds
+ * `geek-suite`. Hyphens are where the standard put word breaks, not
+ * something the user typed, so `geeks` finds `geek-suite` too.
  */
 export function filterTagOptions(options, inputValue) {
-  const q = tagQuery(inputValue).toLowerCase();
+  const q = tagQuery(inputValue);
   if (!q) return options;
-  const hits = options.filter((o) => String(o).toLowerCase().includes(q));
-  const starts = hits.filter((o) => String(o).toLowerCase().startsWith(q));
-  const rest = hits.filter((o) => !String(o).toLowerCase().startsWith(q));
-  return [...starts, ...rest];
+  const bare = (s) => s.replace(/-/g, '');
+  const qBare = bare(q);
+  const text = (o) => normalizeTag(String(o)) || String(o).toLowerCase();
+  const matches = (o) => text(o).includes(q) || bare(text(o)).includes(qBare);
+  const startsWith = (o) => text(o).startsWith(q) || bare(text(o)).startsWith(qBare);
+  const hits = options.filter(matches);
+  return [...hits.filter(startsWith), ...hits.filter((o) => !startsWith(o))];
 }

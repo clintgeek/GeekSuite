@@ -200,6 +200,14 @@ Added 2026-09-30. Each `.md` / `.markdown` / `.txt` file becomes one new **Markd
 
 ## 10. Nested tags (Bear-style)
 
+**Amended 2026-10-01 — the suite tag standard.** Tags are lowercase kebab-case segments (`work/geek-suite`),
+from `@geeksuite/tags` (`DOCS/TAG_STANDARD.md`), the one package the gateway and this UI both use —
+`utils/tagPath.js` and `utils/inlineTags.js` now import it (the duplicated normalizer, the inline-tag reader and
+`utils/tagTree.js` were deleted). `#GeekSuite`, `geek suite`, `geek_suite` are all `geek-suite`; case folds, so a
+case-only rename is a no-op. Chips normalize on commit (Enter/pick), not while typing; option matching ignores
+hyphens (`geeks` finds `geek-suite`). The gateway reads legacy spellings tolerantly until the migration runs.
+Where this section says "case-insensitively" or lists `_` as kept, read it through that rule.
+
 Added 2026-09-30. A tag is a `/` path: `house/garage` is a tag of its own **and** sits under `house`, the way a Bear notebook holds notebooks. Nothing about the tree is stored; it is read off the strings, so the spelling rule (§3, `src/utils/tagPath.js` — a copy of the gateway's `tags.js`) is applied everywhere a tag is written. The gateway commit must be live before this UI: the list sends `notes(under:)` and the delete dialog reads `noteTagUsage`.
 
 - **A tag's page** (`/tags/:tag`, `components/TagNotesList.jsx`) lists `notes(under: tag)` — the tag and everything beneath it (`house` shows `house`, `house/garage`, `house/kitchen`; never `houseboat`). Each row's meta line names the sub-tag the note sits in, relative to the page (`garage`, `garage/door`), first; the page's own tag is dropped from the row since the heading says it (`rowTagLabels`). Above the list: a breadcrumb (`All notes › house › garage`, 44px targets on a phone, the current tag an `h1`) and a row of the direct sub-tags as links with the tree's descendant-inclusive counts (same `GetNoteTagCounts` cache entry as the sidebar, so the numbers agree).

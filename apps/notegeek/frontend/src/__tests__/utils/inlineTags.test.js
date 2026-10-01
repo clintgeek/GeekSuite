@@ -20,7 +20,8 @@ describe('what counts as an inline tag', () => {
     ["#house's roof", ['house']],
     ['#house/', ['house']],
     ['#house//garage/', ['house/garage']],
-    ['#to-do and #snake_case', ['to-do', 'snake_case']],
+    ['#to-do and #snake_case', ['to-do', 'snake-case']],
+    ['#GeekSuite and #work/RoadMap', ['geek-suite', 'work/road-map']],
     ['#v2 #2024plan', ['v2']],
     ['#café #日記 #naïve', ['café', '日記', 'naïve']],
     ['tab\t#tabbed', ['tabbed']],
@@ -72,8 +73,8 @@ describe('what counts as an inline tag', () => {
     expect(md('see ( #house ) [x](#anchor)')).toEqual(['house']);
   });
 
-  it('dedupes case-insensitively, first spelling wins, in order', () => {
-    expect(md('#Work then #work then #home #Work')).toEqual(['Work', 'home']);
+  it('dedupes in the suite standard, in order', () => {
+    expect(md('#Work then #work then #home #Work')).toEqual(['work', 'home']);
   });
 
   it('drops a tag longer than the gateway allows', () => {
@@ -118,7 +119,7 @@ describe('which notes are read', () => {
 
 describe('findTagTokens', () => {
   it('reports where each token sits, excluding a trailing slash', () => {
-    expect(findTagTokens('go #house/ now')).toEqual([{ tag: 'house', start: 3, end: 9 }]);
+    expect(findTagTokens('go #house/ now')).toEqual([{ tag: 'house', raw: 'house', start: 3, end: 9 }]);
   });
   it('atStart: false refuses a hash at index 0 (it continues an earlier word)', () => {
     expect(findTagTokens('#glued', { atStart: false })).toEqual([]);
@@ -174,6 +175,35 @@ describe('applyInlineTags — merging on save', () => {
   it('leaves code notes alone', () => {
     const r = applyInlineTags({ tags: ['a'], content: '#house', type: 'code' });
     expect(r.tags).toEqual(['a']);
+    expect(r.changed).toBe(false);
+  });
+});
+
+describe('applyInlineTags — the kebab-case standard (2026-10-01)', () => {
+  it('#GeekSuite tags the note geek-suite', () => {
+    const r = applyInlineTags({ tags: [], content: 'ship #GeekSuite', type: 'markdown' });
+    expect(r.tags).toEqual(['geek-suite']);
+  });
+
+  it('a camelCase word still being typed is taken back when it grows', () => {
+    const first = applyInlineTags({ tags: [], content: '#Geek', type: 'markdown' });
+    expect(first.tags).toEqual(['geek']);
+    const second = applyInlineTags({ tags: first.tags, content: '#GeekS', type: 'markdown', provisional: first.provisional });
+    expect(second.tags).toEqual(['geek-s']);
+    const third = applyInlineTags({ tags: second.tags, content: '#GeekSuite', type: 'markdown', provisional: second.provisional });
+    expect(third.tags).toEqual(['geek-suite']);
+  });
+
+  it('an acronym that splits as it grows is still a word being typed (https → http-server)', () => {
+    const first = applyInlineTags({ tags: [], content: '#HTTPS', type: 'markdown' });
+    expect(first.tags).toEqual(['https']);
+    const second = applyInlineTags({ tags: first.tags, content: '#HTTPServer', type: 'markdown', provisional: first.provisional });
+    expect(second.tags).toEqual(['http-server']);
+  });
+
+  it('a legacy chip is not duplicated by its standard spelling', () => {
+    const r = applyInlineTags({ tags: ['GeekSuite'], content: '#geek-suite', type: 'markdown' });
+    expect(r.tags).toEqual(['GeekSuite']);
     expect(r.changed).toBe(false);
   });
 });

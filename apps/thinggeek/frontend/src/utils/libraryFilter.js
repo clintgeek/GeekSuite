@@ -21,6 +21,7 @@
  *   &sort=value&dir=asc / &sort=random&seed=812
  */
 import { createFilterCodec, integerBetween } from '@geeksuite/collection';
+import { normalizeTags } from '@geeksuite/tags';
 import { THING_KINDS } from './where';
 
 export const PAGE_SIZE = 48;
@@ -99,6 +100,9 @@ export const LIBRARY_CODEC = createFilterCodec({
     { key: 'value', type: 'range', param: 'value', minKey: 'valueMin', maxKey: 'valueMax', parse: dollars },
   ],
   sorts: SORTS,
+  // `?tag=Fishing` (an old link, a typed URL) reads as the stored `fishing` —
+  // the suite tag standard — so the facet shows it selected.
+  legacy: (_params, state) => ({ ...state, filter: { ...state.filter, tags: normalizeTags(state.filter.tags) } }),
 });
 
 export const EMPTY_FILTER = LIBRARY_CODEC.EMPTY_FILTER;

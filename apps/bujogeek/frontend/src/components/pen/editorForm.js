@@ -3,6 +3,7 @@
  * and back to only the fields that changed (see InlineEditor.jsx).
  */
 import { format } from 'date-fns';
+import { normalizeTags } from '@geeksuite/tags';
 import { hasDueTime, dueDayKey } from '../../utils/dueDate';
 import { buildRecurrenceRule, frequencyFromRecurrenceRule } from '../../utils/parseTaskInput';
 
@@ -13,17 +14,12 @@ export const PRIORITIES = [
   { value: '1', label: 'High' },
 ];
 
-export const parseTagText = (text) => {
-  const seen = new Set();
-  return String(text ?? '')
-    .split(/[\s,]+/)
-    .map((t) => t.replace(/^#+/, '').trim())
-    .filter((t) => {
-      if (!t || !/^[a-zA-Z0-9_-]+$/.test(t) || seen.has(t.toLowerCase())) return false;
-      seen.add(t.toLowerCase());
-      return true;
-    });
-};
+/**
+ * The editor's Tags field → tags. Spaces and commas separate tags; each one
+ * is spelled in the suite standard (`@geeksuite/tags`): `#GeekSuite` →
+ * `geek-suite`, `#Home/Garage` → `home/garage`, duplicates after that once.
+ */
+export const parseTagText = (text) => normalizeTags(String(text ?? '').split(/[\s,]+/));
 
 export const isRepeating = (task) => Boolean(task?.recurrenceRule || task?.seriesId || String(task?.id ?? '').startsWith('virtual_'));
 

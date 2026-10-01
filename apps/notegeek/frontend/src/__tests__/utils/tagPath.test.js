@@ -9,29 +9,30 @@ import {
   rowTagLabels,
 } from '../../utils/tagPath';
 
-// The same cases as the gateway's notegeekNestedTags.test.js — this file is a
-// copy of `graphql/notegeek/tags.js`, and the two must agree.
+// The suite standard (@geeksuite/tags) — the same cases as the gateway's
+// notegeekNestedTags.test.js; both import the one package now.
 describe('normalizeTag', () => {
   it.each([
     [' house // garage/ ', 'house/garage'],
     ['house / garage', 'house/garage'],
     ['/house/', 'house'],
-    ['House/Garage', 'House/Garage'],
+    ['House/Garage', 'house/garage'],
+    ['work/GeekSuite', 'work/geek-suite'],
     ['  work  ', 'work'],
     ['/', ''],
     [' // ', ''],
     ['', ''],
     [null, ''],
-    ['a b/c d', 'a b/c d'],
+    ['a b/c d', 'a-b/c-d'],
   ])('%j → %j', (raw, expected) => {
     expect(normalizeTag(raw)).toBe(expected);
   });
 });
 
 describe('normalizeTags', () => {
-  it('drops empties and dedupes in order, keeping case', () => {
+  it('drops empties and dedupes in order — case folds into one tag', () => {
     expect(normalizeTags(['b', ' a ', 'house / garage', '', '/', 'b', 'house/garage', 'B']))
-      .toEqual(['b', 'a', 'house/garage', 'B']);
+      .toEqual(['b', 'a', 'house/garage']);
   });
   it('is [] for a non-array', () => {
     expect(normalizeTags(null)).toEqual([]);

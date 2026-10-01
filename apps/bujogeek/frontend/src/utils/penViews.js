@@ -23,6 +23,7 @@
  */
 import { addDays, differenceInCalendarDays, format, nextMonday } from 'date-fns';
 import { localDateString } from '@geeksuite/utils';
+import { normalizeTag } from '@geeksuite/tags';
 import { dueDayKey, dueDayStart, hasDueTime } from './dueDate';
 
 export const UPCOMING_DAYS = 14;
@@ -106,11 +107,15 @@ function firstPerSeries(tasks) {
   });
 }
 
-/** Does the task carry this tag? Case-insensitive; a null tag matches all. */
+/**
+ * Does the task carry this tag? Compared in the suite standard
+ * (`@geeksuite/tags`), so `GeekSuite`, `geekSuite` and `geek-suite` are one;
+ * a null tag matches all.
+ */
 export function hasTag(task, tag) {
   if (!tag) return true;
-  const want = String(tag).toLowerCase();
-  return (task?.tags || []).some((t) => String(t).toLowerCase() === want);
+  const want = normalizeTag(String(tag));
+  return (task?.tags || []).some((t) => normalizeTag(String(t)) === want);
 }
 
 export const filterByTag = (tasks, tag) => (tag ? tasks.filter((t) => hasTag(t, tag)) : tasks);
@@ -237,8 +242,8 @@ export function tagCounts(tasks) {
   const counts = new Map();
   for (const task of tasks || []) {
     for (const tag of task?.tags || []) {
-      const t = String(tag);
-      counts.set(t, (counts.get(t) || 0) + 1);
+      const t = normalizeTag(String(tag));
+      if (t) counts.set(t, (counts.get(t) || 0) + 1);
     }
   }
   return [...counts.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0])).map(([tag]) => tag);

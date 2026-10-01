@@ -28,7 +28,7 @@ import { GeekSidebar, geekLayout, useGeekShell } from '@geeksuite/ui';
 import TagContextMenu from './TagContextMenu';
 import { gql, useQuery } from '@apollo/client';
 import { graphiteTokens, tapTarget44 } from '../theme/tokens';
-import { buildTagTree, filterTagTree } from '../utils/tagTree';
+import { tagTree as buildTagTree, filterTagTree } from '@geeksuite/tags';
 import { navSections, activeNavId } from './navConfig';
 
 const GET_TAGS = gql`
@@ -73,7 +73,7 @@ function SectionLabel({ children, sx }) {
 //
 // A real tree: expand/collapse chevrons, a guide line down each open branch,
 // and a note count on every row (a parent counts the distinct notes under
-// it — utils/tagTree.js). Rows are 32px on desktop and 44px in the phone
+// it — @geeksuite/tags tagTree). Rows are 32px on desktop and 44px in the phone
 // drawer (MOBILE_UI_PLAN §2). Each row is a <li> holding three siblings —
 // chevron button, the tag link, the "…" button — rather than buttons nested
 // inside the link.

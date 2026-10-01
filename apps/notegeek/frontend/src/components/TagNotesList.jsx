@@ -13,7 +13,7 @@ import { gql, useQuery } from '@apollo/client';
 import { GeekErrorState } from '@geeksuite/ui';
 import NoteList from './NoteList';
 import { graphiteTokens, layout, tapTarget44 } from '../theme/tokens';
-import { buildTagTree } from '../utils/tagTree';
+import { tagTree as buildTagTree } from '@geeksuite/tags';
 import { tagHref } from '../utils/tagPath';
 
 // The same documents the sidebar's tag tree reads (Sidebar.jsx), so the

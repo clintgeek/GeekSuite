@@ -1,4 +1,5 @@
 import { useCallback, useMemo } from 'react';
+import { normalizeTag, normalizeTags } from '@geeksuite/tags';
 import useBujoPreferences from './useBujoPreferences';
 
 /**
@@ -12,21 +13,13 @@ import useBujoPreferences from './useBujoPreferences';
  * never touches `aiReviewDraft` or anything else there. The bag is free-form,
  * so nothing on the server changed.
  *
- * Tags keep the case they were first pinned with; comparison is
- * case-insensitive, like tag filtering.
+ * Pins are spelled in the suite tag standard (`@geeksuite/tags`, 2026-10-01):
+ * a pin stored before it (`geekSuite`) reads as `geek-suite`, and is written
+ * that way the next time the pins change. No migration needed for the bag.
  */
 export function normalizePinned(value) {
   if (!Array.isArray(value)) return [];
-  const seen = new Set();
-  const out = [];
-  for (const raw of value) {
-    const tag = String(raw ?? '').replace(/^#/, '').trim();
-    const key = tag.toLowerCase();
-    if (!tag || seen.has(key)) continue;
-    seen.add(key);
-    out.push(tag);
-  }
-  return out.slice(0, 12);
+  return normalizeTags(value.map((raw) => String(raw ?? ''))).slice(0, 12);
 }
 
 export default function usePinnedTags() {
@@ -36,9 +29,9 @@ export default function usePinnedTags() {
   const setPinned = useCallback((next) => write(normalizePinned(next)), [write]);
 
   const toggle = useCallback((tag) => {
-    const key = String(tag).toLowerCase();
-    const has = pinned.some((t) => t.toLowerCase() === key);
-    return setPinned(has ? pinned.filter((t) => t.toLowerCase() !== key) : [...pinned, tag]);
+    const key = normalizeTag(String(tag));
+    const has = pinned.includes(key);
+    return setPinned(has ? pinned.filter((t) => t !== key) : [...pinned, key]);
   }, [pinned, setPinned]);
 
   return { pinned, setPinned, toggle, loaded };

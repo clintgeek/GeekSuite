@@ -25,6 +25,15 @@ this file describes the retired screens and the old Today.
 Amended 2026-10-01: **Private tasks** — see "Private tasks" under Data Model. Gateway first
 (`Task.private`), then the UI (`context/PrivacyContext.jsx`, `components/pen/PenRow.jsx`).
 
+Amended 2026-10-01: **Tags follow the suite standard** (`@geeksuite/tags`, `DOCS/TAG_STANDARD.md`) —
+lowercase kebab-case, `/` nests. The add box reads `#tags` with the suite's one reader
+(`findTagTokens`, hex-colour skip off): `#GeekSuite` saves `geek-suite`, `#home/garage` is one nested tag
+(so `#work/tomorrow` with no space is a tag, not a date), and `C#`, `a#b`, `#1` are no longer tags. The
+underline still sits under the token as typed. The editor's Tags field, pins
+(`appPreferences.bujogeek.pinnedTags`, normalized on read and on the next pin), the tag filter and the pin
+picker all compare in the standard spelling. The gateway normalizes every write and reads legacy spellings
+until `scripts/migrate-tags-kebab.js` runs (prod had 7 camelCase tags on 121 tasks).
+
 ---
 
 ## Project Overview

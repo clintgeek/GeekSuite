@@ -5,9 +5,13 @@ import useTagStore from '../store/tagStore';
 import { normalizeTags, filterTagOptions } from '../utils/tagPath';
 
 /**
- * The note's tag chips. Tags are paths (`house/garage`); whatever is typed
- * is normalized the way the gateway stores it (`house / garage` →
- * `house/garage`), and the options are full paths.
+ * The note's tag chips. Tags are paths (`house/garage`) in the suite
+ * standard (`@geeksuite/tags`): whatever is typed is normalized the way the
+ * gateway stores it when it is COMMITTED (Enter / pick) — `House / Garage`
+ * → `house/garage`, `#GeekSuite` → `geek-suite` — so the chip shows exactly
+ * what is saved. The text field is left alone while typing: normalizing it
+ * live would eat the space in `geek s…` before the next word arrived. The
+ * options are full paths, matched against the normalized query.
  */
 function TagSelector({ selectedTags, onChange, disabled = false }) {
   const { tags, fetchTags } = useTagStore();

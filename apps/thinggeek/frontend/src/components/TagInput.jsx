@@ -2,29 +2,38 @@
  * Tags: type and press Enter (or comma) to add; the household's existing
  * tags are offered as you type so "fishing" doesn't become "Fishing" and
  * "fish" on three different boats.
+ *
+ * Tags are spelled in the suite standard (`@geeksuite/tags`, 2026-10-01):
+ * lowercase kebab-case, `/` for nesting. A tag is normalized when it is
+ * ADDED (Enter, comma, blur, pick) — `Fly Rods` becomes the chip
+ * `fly-rods` — not while it is being typed, which would eat the space
+ * before the second word arrived.
  */
 import React, { useMemo, useState } from 'react';
 import { Autocomplete, Chip, TextField } from '@mui/material';
 import { useQuery } from '@apollo/client';
+import { normalizeTag as standardTag } from '@geeksuite/tags';
 import { GET_THING_FACETS } from '../graphql/queries';
 
 const MAX_TAGS = 50;
 const MAX_LEN = 60;
 
+/** One typed tag → the standard spelling, inside ThingGeek's 60-character cap. */
 export function normalizeTag(raw) {
-  return String(raw || '').trim().replace(/\s+/g, ' ').slice(0, MAX_LEN);
+  const tag = standardTag(String(raw || ''));
+  return tag.length <= MAX_LEN ? tag : tag.slice(0, MAX_LEN).replace(/[-/]+$/, '');
 }
 
 export function addTags(current, raw) {
-  const next = [...current];
+  const next = current.map(normalizeTag).filter(Boolean);
   String(raw || '')
     .split(',')
     .map(normalizeTag)
     .filter(Boolean)
     .forEach((t) => {
-      if (!next.some((x) => x.toLowerCase() === t.toLowerCase())) next.push(t);
+      if (!next.includes(t)) next.push(t);
     });
-  return next.slice(0, MAX_TAGS);
+  return [...new Set(next)].slice(0, MAX_TAGS);
 }
 
 export default function TagInput({ value = [], onChange, label = 'Tags', id }) {

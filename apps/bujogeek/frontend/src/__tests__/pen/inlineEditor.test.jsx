@@ -37,7 +37,8 @@ describe('the form model', () => {
     expect(changedFields(t, initialForm(t))).toEqual({});
   });
   it('reads tags however they are typed', () => {
-    expect(parseTagText('#work fd, #Work #bad!tag')).toEqual(['work', 'fd']);
+    // The suite tag standard: case folds, punctuation is dropped, / nests.
+    expect(parseTagText('#work fd, #Work #bad!tag #GeekSuite #Home/Garage')).toEqual(['work', 'fd', 'badtag', 'geek-suite', 'home/garage']);
   });
 });
 

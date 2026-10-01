@@ -12,6 +12,7 @@ import { Box, ButtonBase, Checkbox, FormControlLabel } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { GeekSheet } from '@geeksuite/ui';
 import { penOf } from '../../theme/pen';
+import { normalizeTag } from '@geeksuite/tags';
 import usePinnedTags from '../../hooks/usePinnedTags';
 import { usePen } from '../../context/PenContext';
 import { tagCounts } from '../../utils/penViews';
@@ -47,7 +48,8 @@ export default function TagChips() {
   const { pinned, toggle } = usePinnedTags();
   const [picking, setPicking] = useState(false);
   const all = tagCounts(corpus);
-  const isOn = (tag) => tagFilter && tagFilter.toLowerCase() === tag.toLowerCase();
+  // Compared in the suite tag standard: a `geekSuite` filter is the `geek-suite` pin.
+  const isOn = (tag) => tagFilter && normalizeTag(tagFilter) === normalizeTag(tag);
 
   return (
     <Box component="nav" aria-label="Filter by tag" sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
@@ -75,7 +77,7 @@ export default function TagChips() {
           {all.map((tag) => (
             <FormControlLabel
               key={tag}
-              control={<Checkbox checked={pinned.some((t) => t.toLowerCase() === tag.toLowerCase())} onChange={() => toggle(tag)} />}
+              control={<Checkbox checked={pinned.includes(normalizeTag(tag))} onChange={() => toggle(tag)} />}
               label={`#${tag}`}
               sx={{ minHeight: 44, m: 0 }}
             />

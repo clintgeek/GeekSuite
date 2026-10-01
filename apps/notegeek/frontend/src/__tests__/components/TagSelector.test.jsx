@@ -27,6 +27,14 @@ describe('tagQuery / filterTagOptions', () => {
         expect(filterTagOptions(TAGS, 'house')).toEqual(['house', 'house/garage', 'house/kitchen', 'houseboat', 'work/house']);
         expect(filterTagOptions(TAGS, 'House / Kit')).toEqual(['house/kitchen']);
     });
+
+    it('reads what is typed in the kebab-case standard; hyphens do not have to be typed', () => {
+        const tags = ['geek-suite', 'work/geek-suite', 'geeky'];
+        expect(tagQuery('GeekSuite')).toBe('geek-suite');
+        expect(filterTagOptions(tags, 'GeekS')).toEqual(['geek-suite', 'work/geek-suite']);
+        expect(filterTagOptions(tags, 'geeks')).toEqual(['geek-suite', 'work/geek-suite']);
+        expect(filterTagOptions(tags, 'geek')).toEqual(['geek-suite', 'geeky', 'work/geek-suite']);
+    });
 });
 
 describe('TagSelector', () => {
@@ -41,6 +49,15 @@ describe('TagSelector', () => {
         fireEvent.change(input, { target: { value: ' house / shed/ ' } });
         fireEvent.keyDown(input, { key: 'Enter' });
         expect(onChange).toHaveBeenLastCalledWith(['house/shed']);
+    });
+
+    it('typing #GeekSuite commits the chip geek-suite', () => {
+        const onChange = vi.fn();
+        renderWithProviders(<TagSelector selectedTags={['work']} onChange={onChange} />);
+        const input = screen.getByRole('combobox', { name: 'Tags' });
+        fireEvent.change(input, { target: { value: '#GeekSuite' } });
+        fireEvent.keyDown(input, { key: 'Enter' });
+        expect(onChange).toHaveBeenLastCalledWith(['work', 'geek-suite']);
     });
 
     it('does not add a duplicate of a chip already there once normalized', () => {

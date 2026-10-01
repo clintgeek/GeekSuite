@@ -86,9 +86,9 @@ export const ALL = [
   done(0, 10, { content: 'Reply to the offsite thread', dueDate: on(0), tags: ['work'] }),
 
   // Anytime
-  task({ content: 'Sharpen the mower blades', dueDate: null, tags: ['farmLife'] }),
+  task({ content: 'Sharpen the mower blades', dueDate: null, tags: ['farm-life'] }),
   task({ content: 'Is the camping permit transferable', dueDate: null, signifier: '?', tags: ['camping'] }),
-  task({ content: 'Look into pinning container DNS', dueDate: null, priority: 3, tags: ['geekSuite'] }),
+  task({ content: 'Look into pinning container DNS', dueDate: null, priority: 3, tags: ['geek-suite'] }),
 
   // The next fortnight
   task({ content: 'Draft the offsite agenda', dueDate: at(1, 11), priority: 2, tags: ['work'] }),
@@ -99,15 +99,15 @@ export const ALL = [
   task({ content: 'Mum’s birthday', dueDate: on(12), signifier: '@', priority: 1 }),
 
   // Later
-  task({ content: 'Order seed potatoes', dueDate: on(25), tags: ['farmLife'] }),
+  task({ content: 'Order seed potatoes', dueDate: on(25), tags: ['farm-life'] }),
   task({ content: 'File the Q4 estimated tax', dueDate: on(41), priority: 1, tags: ['admin'] }),
 
   // Done, earlier
   done(-1, 16, { content: 'Ship the invoice export', dueDate: on(-1), tags: ['work', 'fd'] }),
-  done(-1, 11, { content: 'Order more chicken feed', dueDate: null, tags: ['farmLife'] }),
+  done(-1, 11, { content: 'Order more chicken feed', dueDate: null, tags: ['farm-life'] }),
   done(-2, 15, { content: 'Close out the invoices', dueDate: on(-2), tags: ['work'] }),
   done(-2, 11, { content: 'Talk to HR about Jane', dueDate: on(-2), private: true, tags: ['manager'] }),
-  done(-5, 20, { content: 'Fix the flaky harness scene', dueDate: on(-5), tags: ['geekSuite'] }),
+  done(-5, 20, { content: 'Fix the flaky harness scene', dueDate: on(-5), tags: ['geek-suite'] }),
   task({ content: 'Argue with the insurance company', dueDate: on(-3), status: 'cancelled', cancelledAt: at(-3, 12), updatedAt: at(-3, 12) }),
 ];
 
@@ -115,7 +115,7 @@ export const TAGS = [
   { __typename: 'TagCount', tag: 'work', count: 12 },
   { __typename: 'TagCount', tag: 'house', count: 7 },
   { __typename: 'TagCount', tag: 'admin', count: 5 },
-  { __typename: 'TagCount', tag: 'farmLife', count: 3 },
+  { __typename: 'TagCount', tag: 'farm-life', count: 3 },
 ];
 
 // The pins Chef chose, as the bootstrap returns them (appPreferences.bujogeek.pinnedTags).

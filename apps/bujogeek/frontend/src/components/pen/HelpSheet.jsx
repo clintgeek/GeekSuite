@@ -11,7 +11,7 @@ const GRAMMAR = [
   ['tomorrow  friday  next week', 'a date, at the start or the end'],
   ['/tomorrow  /fri  /mar 15', 'a date, anywhere'],
   ['2pm  14:30', 'a time, after the date'],
-  ['#work', 'a tag'],
+  ['#work  #home/garage', 'a tag; / nests. #GeekSuite saves as geek-suite'],
   ['!high  !medium  !low', 'priority'],
   ['^remember the badge', 'a note (last)'],
   ['$^draft text', 'a note saved to NoteGeek (last)'],
