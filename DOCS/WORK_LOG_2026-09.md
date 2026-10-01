@@ -10,6 +10,38 @@ anything a future reader would otherwise have to rediscover.
 
 ---
 
+## 2026-10-01
+
+### ThingGeek — "Moving Day" (replaced Label Maker)
+
+`228d0d61`, one revertable commit.
+
+Chef gave one word ("U-Haul") and said "commit to the theme". The look borrows the FEEL of a
+truck rental and a self-storage yard, never the brand: no name, logo or lettering. The mood
+is "dusty trucks and dark storage rooms", in orange, cardboard and black.
+
+- **The look:**
+  - kraft page with black chrome and an orange livery stripe;
+  - Zilla Slab headings, Public Sans body, Allerta Stencil for box markings;
+  - a subtle dust texture, included in the contrast test;
+  - dark mode as the dim corridor under one bulb.
+- **Labels and boxes:**
+  - moving labels (ROOM / BOX / OVERSIZE / TO) replace the Dymo tape;
+  - boxes carry size stencils (SMALL / MEDIUM / LARGE / OVERSIZE) and FRAGILE marks.
+    Firearms get "HANDLE WITH CARE" only.
+- **Screens:**
+  - Where is a storage yard of roll-up doors that open onto a lit unit;
+  - truck-side murals by keyword;
+  - Attention is the cab dashboard: warning lights plus a load-check gauge;
+  - "Load" is the add action;
+  - "Pack a room" is the new name for Walk;
+  - insurance is an inventory sheet with an odometer total;
+  - the trash is "the curb".
+- **First run for Chef's real data** (5 empty rooms): each room is a label that opens Pack a
+  room.
+- **Checks:** 435 tests; 207 contrast pairs, both modes; the harness passed 218 scenes at phone
+  and desktop, and at 320px.
+
 ## 2026-09-30
 
 ### NoteGeek — local meaning-based search, Related notes, [[links]]
