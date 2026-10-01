@@ -1,22 +1,25 @@
 /**
- * One thing in the list view — the phone's default (Label Maker): dense
- * enough to scan a drawer's worth at a glance.
+ * One thing in the list view — the phone's default: a line on the cargo
+ * hold's manifest, dense enough to scan a drawer's worth at a glance.
  *
- *   [photo] Name                                   ●
- *           Type  [GARAGE]
+ *   [box] Name                                     ●
+ *         Type  [TO | Garage]
  *
- * The place is a small strip of Dymo tape with the LAST crumb of the path
+ * The place is a moving label with the LAST crumb of the path, captioned TO
  * (the full walk is on the thing's page, and in the row's accessible name).
- * The orange dot means it needs attention (overdue or due soon) — the same
- * count the Attention tab carries.
+ * The marker light means it needs attention: red overdue, amber due soon —
+ * the same count the Attention tab carries. Vehicles and boats carry a small
+ * yellow OVERSIZE tag.
  *
  * sm+: Value and Next due get their own right-aligned columns.
  */
 import React from 'react';
 import { Box, ButtonBase, Typography } from '@mui/material';
 import DueLine, { dueSummary } from './DueLine';
-import DymoTape from './DymoTape';
-import { toneForKind } from '../theme/theme';
+import MovingLabel from './MovingLabel';
+import { MarkerLight } from './SectionHeading';
+import { STENCIL_FONT } from '../theme/theme';
+import { boxMarks } from '../utils/boxMarks';
 import ThingPhoto from './ThingPhoto';
 import { coverSrc, thingValueText } from './thingDisplay';
 import { dueDateOf, formatCalendarDate } from '../utils/dates';
@@ -28,27 +31,45 @@ export const ROW_COLUMNS = { xs: '44px minmax(0, 1fr) auto', sm: '52px minmax(0,
 export const ATTENTION_STATUSES = new Set(['overdue', 'soon']);
 export const needsAttention = (thing) => ATTENTION_STATUSES.has(thing?.nextDue?.status);
 
-/** The orange attention dot: a fill with an ink ring, so it reads on card stock too. */
-export function AttentionDot({ sx }) {
-  return (
-    <Box
-      component="span"
-      aria-hidden="true"
-      data-testid="attention-dot"
-      sx={{ width: 12, height: 12, borderRadius: '50%', bgcolor: 'safety.main', border: '2px solid', borderColor: 'text.primary', flexShrink: 0, ...sx }}
-    />
-  );
+/** The attention marker light: red when overdue, amber when due soon, with a black ring. */
+export function AttentionDot({ status, sx }) {
+  return <MarkerLight testId="attention-dot" tone={status === 'overdue' ? 'overdue' : 'soon'} size={14} sx={sx} />;
 }
 
-/** The last crumb of where it is, as tape (blue refill for a container) — or nothing when it isn't anywhere yet. */
-export function PlaceTape({ thing, size = 'sm', sx }) {
+/** The last crumb of where it is, as a "TO:" moving label — or nothing when it isn't anywhere yet. */
+export function PlaceLabel({ thing, size = 'sm', sx }) {
   const path = pathOf(thing);
   const last = path[path.length - 1];
   if (!last) return null;
   return (
-    <DymoTape size={size} tone={toneForKind(last.kind)} tilt={false} title={whereLabel(thing)} sx={{ maxWidth: '100%', ...sx }}>
+    <MovingLabel kind={last.kind} caption="TO" variant="inline" size={size} title={whereLabel(thing)} sx={{ maxWidth: '100%', ...sx }}>
       {last.name}
-    </DymoTape>
+    </MovingLabel>
+  );
+}
+
+/** The highway sign's yellow: a small OVERSIZE tag for vehicles and boats (decoration; the type says what it is). */
+export function OversizeTag({ sx }) {
+  return (
+    <Box
+      component="span"
+      aria-hidden="true"
+      data-testid="oversize-tag"
+      data-caption="OVERSIZE"
+      sx={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        flexShrink: 0,
+        height: 18,
+        px: '5px',
+        bgcolor: 'oversize.ground',
+        color: 'oversize.ink',
+        border: '1px solid',
+        borderColor: 'oversize.ink',
+        '&::before': { content: 'attr(data-caption)', fontFamily: STENCIL_FONT, fontSize: '0.75rem', letterSpacing: '0.06em', lineHeight: 1 },
+        ...sx,
+      }}
+    />
   );
 }
 
@@ -83,6 +104,7 @@ export default function ThingRow({ thing, onOpen }) {
   const value = thingValueText(thing);
   const due = thing.nextDue;
   const attention = needsAttention(thing);
+  const marks = boxMarks(thing);
   const label = [name, thing.type?.name, where ? `in ${where}` : null, attention ? dueSummary(due) : null].filter(Boolean).join(', ');
 
   return (
@@ -103,9 +125,9 @@ export default function ThingRow({ thing, onOpen }) {
           '&:hover': { bgcolor: 'action.hover' },
         }}
       >
-        <ThingPhoto src={coverSrc(thing)} icon={thing.type?.icon} variant="thumb" radius={4} />
+        <ThingPhoto src={coverSrc(thing)} icon={thing.type?.icon} marks={marks} variant="thumb" radius={3} />
         <Box sx={{ minWidth: 0 }}>
-          <Typography component="h3" noWrap sx={{ fontSize: '0.9375rem', fontWeight: 600, lineHeight: 1.3, color: 'text.primary' }}>
+          <Typography component="h3" noWrap sx={{ fontSize: '0.9375rem', fontWeight: 700, lineHeight: 1.3, color: 'text.primary' }}>
             {name}
           </Typography>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, minWidth: 0, mt: '3px' }}>
@@ -114,11 +136,12 @@ export default function ThingRow({ thing, onOpen }) {
                 {thing.type.name}
               </Typography>
             ) : null}
-            <PlaceTape thing={thing} sx={{ minWidth: 0 }} />
+            {marks.size === 'OVERSIZE' ? <OversizeTag /> : null}
+            <PlaceLabel thing={thing} sx={{ minWidth: 0 }} />
           </Box>
         </Box>
         {/* Phone: the dot. sm+: the Value and Next due columns. */}
-        <Box sx={{ display: { xs: 'flex', sm: 'none' }, alignItems: 'center', justifyContent: 'center', width: 16 }}>{attention ? <AttentionDot /> : null}</Box>
+        <Box sx={{ display: { xs: 'flex', sm: 'none' }, alignItems: 'center', justifyContent: 'center', width: 16 }}>{attention ? <AttentionDot status={due?.status} /> : null}</Box>
         <Typography
           component="span"
           sx={{ display: { xs: 'none', sm: 'block' }, textAlign: 'right', fontSize: '0.875rem', fontWeight: 600, color: value ? 'text.primary' : 'text.muted', fontVariantNumeric: 'tabular-nums' }}

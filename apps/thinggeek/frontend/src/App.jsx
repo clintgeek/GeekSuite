@@ -28,7 +28,7 @@ import AppMain from './components/AppMain';
 import BottomTabs from './components/BottomTabs';
 import NotAMember from './components/NotAMember';
 import Sidebar from './components/Sidebar';
-import TagMark from './components/TagMark';
+import BoxMark from './components/BoxMark';
 import TopBar from './components/TopBar';
 import { APP_ID, hidesTabBar, isLibraryPath } from './components/navConfig';
 import { SIDEBAR_SX } from './components/Sidebar';
@@ -46,7 +46,7 @@ const TrashView = lazy(() => import('./views/TrashView'));
 const SettingsView = lazy(() => import('./views/settings/SettingsView'));
 const LabelsView = lazy(() => import('./views/LabelsView'));
 
-export function Booting({ label = 'Opening the inventory…' }) {
+export function Booting({ label = 'Opening up the yard…' }) {
   return (
     <Box
       sx={{
@@ -61,7 +61,7 @@ export function Booting({ label = 'Opening the inventory…' }) {
         color: 'text.secondary',
       }}
     >
-      <TagMark size={44} />
+      <BoxMark size={48} />
       <Typography sx={{ fontSize: '0.875rem' }}>{label}</Typography>
     </Box>
   );
@@ -194,8 +194,8 @@ export default function App() {
       <LoginSplash
         appName="thing"
         appSuffix="geek"
-        taglineLine1="Everything worth keeping."
-        taglineLine2="Ready for a bad day."
+        taglineLine1="Everything packed and labelled."
+        taglineLine2="Ready for moving day — or a bad one."
         description="The household inventory of what we own — where it lives, what's due, and the photo, serial, receipt and value the insurer will ask for."
         features={['Photos & receipts', 'Masked serials', "What's due", 'Insurance report']}
         onLogin={() => {
@@ -207,7 +207,7 @@ export default function App() {
         error={error}
         logoColor="text.primary"
         logoSuffixColor="text.primary"
-        inkColors={['rgba(120, 84, 40, 0.14)', 'rgba(18, 17, 16, 0.10)']}
+        inkColors={['rgba(242, 107, 29, 0.18)', 'rgba(22, 18, 13, 0.12)']}
       />
     );
   }

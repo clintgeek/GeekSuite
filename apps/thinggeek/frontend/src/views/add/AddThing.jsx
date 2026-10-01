@@ -1,6 +1,6 @@
 /**
- * `/add` — adding a thing, on ONE screen (Label Maker, 2026-09-29; it was a
- * three-step wizard that offered Skip twice):
+ * `/add` — "Load a thing" (Moving Day: the loading dock), on ONE screen
+ * (since 2026-09-29; it was a three-step wizard that offered Skip twice):
  *
  *   photo slot    camera (back lens) or a file; optional, so there is no
  *                 Skip. Once there's a photo, say what it shows (overview /
@@ -23,15 +23,14 @@
  * Create → the thing is made and the photo uploads onto it in the
  * background (hooks/useUploads.jsx — it keeps going whatever you do next,
  * and a failure offers Retry on the thing's page).
+ *
+ * Moving Day: the photo slot is an open box seen from above — four
+ * cardboard flaps folded back around the dark inside, the camera in it; the
+ * Save bar is the dock's black edge with the orange Save.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Button, CircularProgress, Portal, TextField, ToggleButton, ToggleButtonGroup, Typography, useMediaQuery, useTheme } from '@mui/material';
-import {
-  CloseRounded as RemoveIcon,
-  ExpandMore as MoreIcon,
-  FolderOpenOutlined as FileIcon,
-  PhotoCameraOutlined as CameraIcon,
-} from '@mui/icons-material';
+import { CloseRounded as RemoveIcon, ExpandMore as MoreIcon, FolderOpenOutlined as FileIcon, PhotoCameraOutlined as CameraIcon } from '@mui/icons-material';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useToast } from '@geeksuite/ui';
 import WherePicker from '../../components/WherePicker';
@@ -44,7 +43,8 @@ import { useThingActions } from '../../hooks/useThingActions';
 import { useThingTree, useThingTypes } from '../../hooks/useThingMeta';
 import { useUploads } from '../../hooks/useUploads';
 import useKeyboardInset from '../../hooks/useKeyboardInset';
-import { DISPLAY_FONT } from '../../theme/theme';
+import ChromeTheme from '../../components/Chrome';
+import { CHROME, DISPLAY_FONT, LIVERY, STENCIL_FONT, dustImage } from '../../theme/theme';
 import { chipGroupSx } from '../../theme/chipStyles';
 import { photoRoleLabel } from '../../utils/vocab';
 import { buildAttributes } from '../../utils/attributes';
@@ -98,49 +98,78 @@ export function PhotoSlot({ photo, onPhoto, role, onRole }) {
 
   return (
     <Box component="section" aria-label="Photo">
+      {/* The open box, from above: four flaps folded back around the dark inside. */}
       <Box
-        data-testid="add-photo-slot"
         sx={{
           position: 'relative',
-          height: { xs: 168, sm: 220 },
-          width: '100%',
-          borderRadius: '6px',
-          overflow: 'hidden',
-          border: photo ? 1 : 2,
-          borderStyle: photo ? 'solid' : 'dashed',
-          borderColor: 'border',
-          bgcolor: photo ? '#11100D' : 'background.paper',
-          display: 'grid',
-          placeItems: 'center',
+          p: '14px',
+          borderRadius: '3px',
+          bgcolor: 'box.flap',
+          backgroundImage: (t) =>
+            `${dustImage(t.palette.mode)}, linear-gradient(135deg, rgba(0,0,0,0.16) 0 14px, transparent 14px), linear-gradient(225deg, rgba(0,0,0,0.16) 0 14px, transparent 14px), linear-gradient(45deg, rgba(0,0,0,0.12) 0 14px, transparent 14px), linear-gradient(315deg, rgba(0,0,0,0.12) 0 14px, transparent 14px)`,
+          boxShadow: (t) => (t.palette.mode === 'dark' ? '0 3px 0 rgba(0,0,0,0.6)' : '0 3px 0 rgba(60,38,14,0.25)'),
+          // packing tape left on the front flap
+          '&::after': { content: '""', position: 'absolute', left: '50%', bottom: 0, width: 26, height: 14, ml: '-13px', bgcolor: 'rgba(255, 244, 222, 0.5)' },
         }}
       >
-        {preview ? (
-          <Box component="img" src={preview} alt="The photo you chose" data-testid="add-photo-preview" sx={{ width: '100%', height: '100%', objectFit: 'contain' }} />
-        ) : photo ? (
-          <Typography sx={{ color: '#F5F1E8', fontSize: '0.875rem' }}>{photo.name}</Typography>
-        ) : (
-          <Box sx={{ display: 'grid', justifyItems: 'center', gap: 1.25, px: 2, textAlign: 'center' }}>
-            <Typography sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>A photo is optional — the whole thing, in good light.</Typography>
-            <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 1 }}>
-              <Button variant="contained" startIcon={<CameraIcon />} onClick={() => cameraRef.current?.click()}>
-                Take a photo
-              </Button>
-              <Button variant="outlined" startIcon={<FileIcon />} onClick={() => fileRef.current?.click()} sx={{ color: 'text.primary', borderColor: 'border', bgcolor: 'background.paper' }}>
-                Choose a file
-              </Button>
-            </Box>
+        <ChromeTheme>
+          <Box
+            data-testid="add-photo-slot"
+            sx={{
+              position: 'relative',
+              height: { xs: 168, sm: 220 },
+              width: '100%',
+              borderRadius: '2px',
+              overflow: 'hidden',
+              bgcolor: photo ? '#0B0A09' : 'box.hole',
+              backgroundImage: photo ? 'none' : 'radial-gradient(ellipse 80% 70% at 50% 0, rgba(255, 210, 138, 0.14), transparent 100%)',
+              boxShadow: 'inset 0 6px 14px rgba(0,0,0,0.6)',
+              display: 'grid',
+              placeItems: 'center',
+            }}
+          >
+            {preview ? (
+              <Box component="img" src={preview} alt="The photo you chose" data-testid="add-photo-preview" sx={{ width: '100%', height: '100%', objectFit: 'contain' }} />
+            ) : photo ? (
+              <Typography sx={{ color: 'text.primary', fontSize: '0.875rem' }}>{photo.name}</Typography>
+            ) : (
+              <Box sx={{ display: 'grid', justifyItems: 'center', gap: 1.25, px: 2, textAlign: 'center' }}>
+                <Box
+                  component="span"
+                  aria-hidden="true"
+                  data-caption="PHOTO GOES IN HERE"
+                  sx={{ color: LIVERY.orange, fontFamily: STENCIL_FONT, fontSize: '0.75rem', letterSpacing: '0.14em', '&::before': { content: 'attr(data-caption)' } }}
+                />
+                <Typography sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>A photo is optional — the whole thing, in good light.</Typography>
+                <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 1 }}>
+                  <Button
+                    variant="contained"
+                    color="load"
+                    disableElevation
+                    startIcon={<CameraIcon />}
+                    onClick={() => cameraRef.current?.click()}
+                    sx={{ fontWeight: 800, border: 2, borderStyle: 'solid', borderColor: 'load.contrastText' }}
+                  >
+                    Take a photo
+                  </Button>
+                  <Button variant="outlined" startIcon={<FileIcon />} onClick={() => fileRef.current?.click()} sx={{ color: 'text.primary', borderColor: 'text.secondary' }}>
+                    Choose a file
+                  </Button>
+                </Box>
+              </Box>
+            )}
+            {photo ? (
+              <Box sx={{ position: 'absolute', right: 8, bottom: 8, display: 'flex', gap: 1 }}>
+                <Button size="small" variant="contained" startIcon={<CameraIcon />} onClick={() => cameraRef.current?.click()} sx={{ minHeight: 44 }}>
+                  Retake
+                </Button>
+                <Button size="small" variant="contained" startIcon={<RemoveIcon />} onClick={() => onPhoto(null)} sx={{ minHeight: 44 }}>
+                  Remove
+                </Button>
+              </Box>
+            ) : null}
           </Box>
-        )}
-        {photo ? (
-          <Box sx={{ position: 'absolute', right: 8, bottom: 8, display: 'flex', gap: 1 }}>
-            <Button size="small" variant="contained" startIcon={<CameraIcon />} onClick={() => cameraRef.current?.click()} sx={{ minHeight: 44 }}>
-              Retake
-            </Button>
-            <Button size="small" variant="contained" startIcon={<RemoveIcon />} onClick={() => onPhoto(null)} sx={{ minHeight: 44 }}>
-              Remove
-            </Button>
-          </Box>
-        ) : null}
+        </ChromeTheme>
       </Box>
       {photo ? (
         <Box sx={{ mt: 1.5 }}>
@@ -281,13 +310,13 @@ export default function AddThing() {
               gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1fr)',
               gap: 1,
               px: 2,
-              pt: 1.25,
               pb: keyboard ? 1.25 : 'calc(10px + env(safe-area-inset-bottom))',
-              bgcolor: 'background.chrome',
-              borderTop: 1,
-              borderColor: 'border',
+              bgcolor: CHROME.bar,
+              // the dock's edge: the orange livery stripe along the top
+              backgroundImage: `linear-gradient(180deg, ${LIVERY.orange} 0 4px, transparent 4px)`,
+              pt: '14px',
             }
-          : { display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 3, pt: 2, borderTop: 1, borderColor: 'border' }
+          : { display: 'flex', justifyContent: 'flex-end', gap: 1, mt: 3, pt: 2, borderTop: '3px solid', borderColor: 'rule.main' }
       }
     >
       {!isPhone ? (
@@ -295,10 +324,17 @@ export default function AddThing() {
           Cancel
         </Button>
       ) : null}
-      <Button variant="outlined" onClick={() => save(true)} disabled={Boolean(busy)} sx={{ color: 'text.primary', borderColor: 'text.primary', bgcolor: 'background.paper', '&:hover': { bgcolor: 'background.paper' } }}>
+      <Button variant="outlined" onClick={() => save(true)} disabled={Boolean(busy)} sx={{ color: 'text.primary', borderColor: 'text.primary', fontWeight: 700 }}>
         {busy === 'again' ? 'Saving…' : 'Save & add another'}
       </Button>
-      <Button variant="contained" color="safety" disableElevation onClick={() => save(false)} disabled={Boolean(busy)} sx={{ fontWeight: 700, border: 1.5, borderStyle: 'solid', borderColor: 'safety.contrastText' }}>
+      <Button
+        variant="contained"
+        color="load"
+        disableElevation
+        onClick={() => save(false)}
+        disabled={Boolean(busy)}
+        sx={{ fontWeight: 800, border: 2, borderStyle: 'solid', borderColor: 'load.contrastText' }}
+      >
         {busy === 'save' ? 'Saving…' : 'Save'}
       </Button>
     </Box>
@@ -306,8 +342,8 @@ export default function AddThing() {
 
   return (
     <PageFrame maxWidth={680} sx={{ pt: { xs: 2, md: 4 }, pb: { xs: 'calc(96px + env(safe-area-inset-bottom))', md: 8 } }}>
-      <Typography variant="h1" component="h1" sx={isPhone ? visuallyHidden : { fontFamily: DISPLAY_FONT, fontSize: '2rem', mb: 2.5 }}>
-        Add a thing
+      <Typography variant="h1" component="h1" sx={isPhone ? visuallyHidden : { fontFamily: DISPLAY_FONT, fontStyle: 'italic', fontSize: '2.25rem', mb: 2.5 }}>
+        Load a thing
       </Typography>
       <Box
         component="form"
@@ -353,18 +389,20 @@ export default function AddThing() {
         ) : null}
 
         <WherePicker value={parentId} onChange={setParentId} />
-        <Button
-          onClick={() => navigate('/walk')}
-          startIcon={<CameraIcon />}
-          sx={{ color: 'text.secondary', justifyContent: 'flex-start', minHeight: 44, justifySelf: 'start', px: 0.5 }}
-        >
-          Walk a room…
+        <Button onClick={() => navigate('/walk')} startIcon={<CameraIcon />} sx={{ color: 'text.secondary', justifyContent: 'flex-start', minHeight: 44, justifySelf: 'start', px: 0.5 }}>
+          Pack a whole room…
         </Button>
         <TagInput value={tags} onChange={setTags} />
         {/* Enter in the name field saves (the bar's Save is outside the form on a phone). */}
         <button type="submit" hidden aria-hidden="true" tabIndex={-1} />
       </Box>
-      {isPhone ? <Portal>{bar}</Portal> : bar}
+      {isPhone ? (
+        <Portal>
+          <ChromeTheme>{bar}</ChromeTheme>
+        </Portal>
+      ) : (
+        bar
+      )}
     </PageFrame>
   );
 }

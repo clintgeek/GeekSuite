@@ -14,10 +14,10 @@ describe('ThingCard', () => {
     const card = screen.getByRole('button', { name: 'Wendy, Boat, in House › Garage, Due in 12 days · Registration' });
     expect(within(card).getByRole('heading', { name: 'Wendy' })).toBeInTheDocument();
     expect(within(card).getByText('Boat')).toBeInTheDocument();
-    // Where it is: the last crumb on Dymo tape, the whole walk as its title.
-    const tape = within(card).getByTestId('dymo-tape');
-    expect(tape).toHaveTextContent('Garage');
-    expect(tape).toHaveAttribute('title', 'House › Garage');
+    // Where it is: the last crumb on a TO: moving label, the whole walk as its title.
+    const label = within(card).getByTestId('moving-label');
+    expect(label).toHaveTextContent('Garage');
+    expect(label).toHaveAttribute('title', 'House › Garage');
     expect(screen.getByTestId('due-line')).toHaveTextContent('Due in 12 days · Registration');
     expect(screen.getByText('fishing')).toBeInTheDocument();
     fireEvent.click(card);
@@ -29,7 +29,7 @@ describe('ThingCard', () => {
     expect(screen.queryByTestId('due-line')).toBeNull();
   });
 
-  it('draws the type plate when there is no photo, the cover when there is', () => {
+  it('draws its box when there is no photo, the cover when there is', () => {
     const { container, rerender } = renderWithProviders(<ThingCard thing={makeThing()} />);
     expect(container.querySelector('img')).toBeNull();
     expect(container.querySelector('svg[data-testid="DirectionsBoatIcon"]')).not.toBeNull();
@@ -39,7 +39,7 @@ describe('ThingCard', () => {
 });
 
 describe('ThingRow', () => {
-  it('a dense phone row: name, type, the place on tape, and the attention dot', () => {
+  it('a dense phone row: name, type, the place on its label, and the attention marker light', () => {
     const onOpen = vi.fn();
     const thing = makeThing();
     renderWithProviders(
@@ -48,20 +48,20 @@ describe('ThingRow', () => {
       </ul>
     );
     const row = screen.getByRole('button', { name: 'Wendy, Boat, in House › Garage, Due in 12 days · Registration' });
-    expect(within(row).getByTestId('dymo-tape')).toHaveTextContent(/^Garage$/);
+    expect(within(row).getByTestId('moving-label')).toHaveTextContent(/^Garage$/);
     expect(within(row).getByTestId('attention-dot')).toBeInTheDocument();
     fireEvent.click(row);
     expect(onOpen).toHaveBeenCalledWith(thing);
   });
 
-  it('no dot for a date that is not close, and no tape for a thing that is nowhere yet', () => {
+  it('no dot for a date that is not close, and no label for a thing that is nowhere yet', () => {
     renderWithProviders(
       <ul>
         <ThingRow thing={makeThing({ nextDue: date({ status: 'later', daysUntil: 200 }), path: [], parentId: null })} />
       </ul>
     );
     expect(screen.queryByTestId('attention-dot')).toBeNull();
-    expect(screen.queryByTestId('dymo-tape')).toBeNull();
+    expect(screen.queryByTestId('moving-label')).toBeNull();
     expect(screen.getByRole('button', { name: 'Wendy, Boat' })).toBeInTheDocument();
   });
 

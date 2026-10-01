@@ -9,21 +9,25 @@
  *
  * `/` (suite slash focus) lands in the library search — priority 20.
  *
- * Phone (Label Maker): no hamburger — the tab bar is the navigation. A
- * sub-page (a thing, the add screen) gets a back arrow instead. "Add a
- * thing" is a desktop action here, a safety-orange fill; the phone's Add is
- * the middle tab. Settings lives in the sidebar (desktop) or More (phone),
- * so the avatar menu keeps only the account: theme and sign out.
+ * Phone: no hamburger — the tab bar is the navigation. A sub-page (a
+ * thing, the add screen) gets a back arrow instead. "Load a thing" is a
+ * desktop action here, a moving-orange fill with black lettering; the
+ * phone's Load is the middle tab. Settings lives in the sidebar (desktop) or
+ * More (phone), so the avatar menu keeps only the account: theme and sign out.
+ *
+ * Moving Day: the bar is the truck's black flank in both modes (it renders
+ * under the chrome theme), the page title in leaning slab truck lettering,
+ * and the orange livery stripe along its bottom edge.
  */
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { Box, Button, IconButton, InputAdornment, Paper, Popper, Typography, alpha, useMediaQuery, useTheme } from '@mui/material';
-import { Add as AddIcon, ArrowBack as ArrowBackIcon, Close as CloseIcon, Search as SearchIcon } from '@mui/icons-material';
+import { ArrowBack as ArrowBackIcon, Close as CloseIcon, LocalShippingOutlined as LoadIcon, Search as SearchIcon } from '@mui/icons-material';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useThemeMode } from '@geeksuite/user';
 import { GeekSearchField, GeekTopBar } from '@geeksuite/ui';
 import { useDebouncedCallback } from '../hooks/useDebouncedCallback';
-import { DISPLAY_FONT, MONO_FONT, corrugatedEdge } from '../theme/theme';
-import DymoTape from './DymoTape';
+import { CHROME, DISPLAY_FONT, LIVERY, LIVERY_BAND_PX, MONO_FONT, liveryBand } from '../theme/theme';
+import ChromeTheme from './Chrome';
 import { goBack } from '../utils/goBack';
 import { writeLibraryState } from '../utils/libraryFilter';
 import { visuallyHidden } from '../utils/a11y';
@@ -53,10 +57,13 @@ export function SearchHint({ sx }) {
       <Box component="span" sx={{ mr: 0.75, fontWeight: 600, color: 'text.primary' }}>
         Try
       </Box>
+      {/* A space after each token: a line-break opportunity, so a 320px phone wraps them. */}
       {SEARCH_EXAMPLE.map((t) => (
-        <Box component="span" key={t} sx={{ ...tokenSx, mr: 0.5 }}>
-          {t}
-        </Box>
+        <React.Fragment key={t}>
+          <Box component="span" sx={tokenSx}>
+            {t}
+          </Box>{' '}
+        </React.Fragment>
       ))}
       <Box component="span" sx={{ display: 'block' }}>
         Also {SEARCH_MORE.map((t, i) => (
@@ -155,7 +162,7 @@ export default function TopBar({ user, onSignOut }) {
   const hintOpen = onLibrary && focused && Boolean(anchor) && (!isMobile || mobileSearch);
 
   return (
-    <>
+    <ChromeTheme>
       <GeekTopBar
         elevation={0}
         leading={
@@ -177,9 +184,9 @@ export default function TopBar({ user, onSignOut }) {
                 },
               })
             : (
-                // The page's name on a long strip of tape, stuck to the carton.
-                <Typography variant="h3" noWrap data-geek-topbar="title" sx={{ minWidth: 0, lineHeight: 1 }}>
-                  <DymoTape size="lg">{titleFor(location.pathname)}</DymoTape>
+                // The page's name in truck lettering: heavy slab, leaning.
+                <Typography variant="h3" noWrap data-geek-topbar="title" sx={{ minWidth: 0 }}>
+                  {titleFor(location.pathname)}
                 </Typography>
               )
         }
@@ -191,13 +198,13 @@ export default function TopBar({ user, onSignOut }) {
           onLibrary ? (
             <Button
               variant="contained"
-              color="safety"
+              color="load"
               disableElevation
-              startIcon={<AddIcon />}
+              startIcon={<LoadIcon />}
               onClick={() => navigate(`/add${location.search}`)}
-              sx={{ fontWeight: 700, px: 2, whiteSpace: 'nowrap', border: 1.5, borderStyle: 'solid', borderColor: 'safety.contrastText' }}
+              sx={{ fontWeight: 800, px: 2, whiteSpace: 'nowrap', border: 2, borderStyle: 'solid', borderColor: 'load.contrastText', boxShadow: `0 0 0 2px ${LIVERY.orange}` }}
             >
-              Add a thing
+              Load a thing
             </Button>
           ) : null
         }
@@ -225,23 +232,23 @@ export default function TopBar({ user, onSignOut }) {
             : undefined
         }
         sx={{
-          backgroundColor: theme.palette.background.chrome,
-          borderBottom: `1px solid ${theme.palette.border}`,
-          // The carton's cut edge: a strip of corrugation along the bottom.
-          backgroundImage: corrugatedEdge(theme.palette.mode),
-          backgroundRepeat: 'repeat-x',
+          backgroundColor: CHROME.bar,
+          borderBottom: 0,
+          // The livery stripe along the bottom edge of the truck's flank.
+          backgroundImage: liveryBand('bottom'),
+          backgroundRepeat: 'no-repeat',
           backgroundPosition: 'left bottom',
-          backgroundSize: '8px 6px',
-          color: 'text.primary',
-          '& [data-geek-topbar="title"]': { fontFamily: DISPLAY_FONT, fontWeight: 700, fontSize: '1.5rem', letterSpacing: '0.01em', lineHeight: 1.1 },
-          '& [data-geek-topbar="theme"], & [data-geek-topbar="switcher"], & [data-geek-topbar="back"]': {
-            color: 'text.primary',
-            '&:hover': { bgcolor: alpha(theme.palette.text.primary, 0.08) },
+          backgroundSize: `100% ${LIVERY_BAND_PX}px`,
+          pb: `${LIVERY_BAND_PX - 4}px`,
+          color: CHROME.text,
+          '& [data-geek-topbar="title"]': { fontFamily: DISPLAY_FONT, fontStyle: 'italic', fontWeight: 700, fontSize: '1.625rem', letterSpacing: '-0.005em', lineHeight: 1.15, color: CHROME.text },
+          '& [data-geek-topbar="theme"], & [data-geek-topbar="switcher"], & [data-geek-topbar="back"], & [data-geek-topbar="search"]': {
+            color: CHROME.text,
+            '&:hover': { bgcolor: alpha(CHROME.text, 0.1) },
           },
-          // The avatar: an ink disc with card-stock initials (never orange).
-          '& [data-geek-topbar="account"] .MuiAvatar-root': { bgcolor: 'primary.main', color: 'primary.contrastText', fontWeight: 700 },
-          // The search field is card stock on the kraft bar.
-          '& .MuiInputBase-root': { bgcolor: 'background.paper' },
+          // The avatar: an orange disc with black initials — the livery.
+          '& [data-geek-topbar="account"] .MuiAvatar-root': { bgcolor: LIVERY.orange, color: LIVERY.ink, fontWeight: 800 },
+          '& .MuiInputBase-root': { bgcolor: CHROME.raised },
         }}
       />
       {onLibrary ? (
@@ -261,6 +268,6 @@ export default function TopBar({ user, onSignOut }) {
           <SearchHint />
         </Paper>
       </Popper>
-    </>
+    </ChromeTheme>
   );
 }

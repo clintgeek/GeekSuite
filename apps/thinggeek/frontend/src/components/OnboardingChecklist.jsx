@@ -27,17 +27,15 @@
  *      dismissible ("Done" / "Not for us"), stored in localStorage.
  *
  * "Hide this list" retires the whole card the same way, also localStorage.
- * No orange text anywhere here (the Label Maker rule): checks are ink
- * (primary.main), not safety orange; a finished step gets a strip of green
- * "Done" tape. The card is taped to the carton with packing tape.
+ *
+ * Moving Day: this is "Before you roll" — the pre-trip sheet on the cab's
+ * clipboard: a printed form (white stock) under a black clip, square check
+ * boxes, and a finished step stamped "Done" in orange with black ink.
  */
 import React, { useState } from 'react';
 import { Box, Button, Typography } from '@mui/material';
-import { CheckCircle as DoneIcon, RadioButtonUnchecked as TodoIcon } from '@mui/icons-material';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
-import DymoTape from './DymoTape';
-import PackingTape from './PackingTape';
-import SectionTape from './SectionTape';
+import { CHROME, DISPLAY_FONT, LIVERY, STENCIL_FONT } from '../theme/theme';
 import { libraryLinkWith } from '../utils/libraryFilter';
 import { readPref, writePref } from '../utils/storage';
 
@@ -53,7 +51,7 @@ export function isNewIsh({ locationsCount = 0, itemsCount = 0 } = {}) {
 export function checklistSteps({ locationsCount = 0, itemsCount = 0, missingIdPlate = 0, labelsAnswer = null } = {}) {
   return [
     { key: 'rooms', label: 'Add your rooms', done: locationsCount >= 2 },
-    { key: 'walk', label: 'Walk one room', done: itemsCount >= 5 },
+    { key: 'walk', label: 'Pack one room', done: itemsCount >= 5 },
     // Nothing missing only counts once there's something to photograph: an
     // empty inventory has "0 missing" too, and must not tick itself off.
     { key: 'id-plate', label: 'Photograph ID plates on valuables', done: itemsCount > 0 && missingIdPlate === 0 },
@@ -61,22 +59,43 @@ export function checklistSteps({ locationsCount = 0, itemsCount = 0, missingIdPl
   ];
 }
 
-function StepRow({ step, action }) {
-  const Icon = step.done ? DoneIcon : TodoIcon;
+/** A square check box, printed on the form: ticked in black when done. */
+export function CheckSquare({ done, sx }) {
   return (
-    <Box component="li" data-testid={`checklist-step-${step.key}`} data-done={step.done ? 'true' : 'false'} sx={{ listStyle: 'none', display: 'flex', alignItems: 'flex-start', gap: 1.25, minHeight: 44, py: 0.5 }}>
-      <Icon aria-hidden="true" sx={{ fontSize: 20, color: step.done ? 'primary.main' : 'text.secondary', flexShrink: 0, mt: '10px' }} />
+    <Box
+      component="span"
+      aria-hidden="true"
+      sx={{ width: 20, height: 20, flexShrink: 0, border: '2px solid', borderColor: 'text.primary', borderRadius: '2px', display: 'grid', placeItems: 'center', fontSize: '0.875rem', fontWeight: 900, lineHeight: 1, color: 'text.primary', ...sx }}
+    >
+      {done ? '✓' : ''}
+    </Box>
+  );
+}
+
+/** The orange "Done" stamp on a finished step (real text). */
+export function DoneStamp() {
+  return (
+    <Box component="span" data-testid="done-stamp" sx={{ display: 'inline-flex', alignItems: 'center', px: 1, height: 24, bgcolor: LIVERY.orange, color: LIVERY.ink, border: `1.5px solid ${LIVERY.ink}`, borderRadius: '2px', fontFamily: STENCIL_FONT, fontSize: '0.8125rem', letterSpacing: '0.08em', transform: 'rotate(-3deg)' }}>
+      Done
+    </Box>
+  );
+}
+
+function StepRow({ step, action }) {
+  return (
+    <Box component="li" data-testid={`checklist-step-${step.key}`} data-done={step.done ? 'true' : 'false'} sx={{ listStyle: 'none', display: 'flex', alignItems: 'flex-start', gap: 1.25, minHeight: 44, py: 0.5, borderBottom: 1, borderColor: 'divider', '&:last-of-type': { borderBottom: 0 } }}>
+      <Box sx={{ height: 44, display: 'flex', alignItems: 'center', flexShrink: 0 }}>
+        <CheckSquare done={step.done} />
+      </Box>
       {/* flex-wrap: a long label (the labels step) and a multi-button action both
           claiming the same line would squeeze — the action drops to its own
           line under the label instead, rather than the two visually overlapping. */}
-      <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 1, rowGap: 0.5, py: '10px' }}>
-        <Typography sx={{ flex: '1 1 auto', minWidth: 180, fontSize: '0.9375rem', color: step.done ? 'text.secondary' : 'text.primary', textDecoration: step.done ? 'line-through' : 'none' }}>
+      <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 1, rowGap: 0.5, py: 0 }}>
+        <Typography sx={{ flex: '1 1 auto', minWidth: 180, minHeight: 44, display: 'flex', alignItems: 'center', fontSize: '0.9375rem', color: step.done ? 'text.secondary' : 'text.primary', textDecoration: step.done ? 'line-through' : 'none' }}>
           {step.label}
         </Typography>
         {step.done ? (
-          <DymoTape size="sm" tone="green">
-            Done
-          </DymoTape>
+          <DoneStamp />
         ) : action ? (
           <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 0.5, flexShrink: 0 }}>{action}</Box>
         ) : null}
@@ -111,15 +130,21 @@ export default function OnboardingChecklist({ locationsCount, itemsCount, missin
   const startWalk = () => navigate(walkAt ? `/walk?at=${encodeURIComponent(walkAt)}` : '/walk');
 
   return (
-    <Box data-testid="onboarding-checklist" sx={{ position: 'relative', mt: 1.5, mb: 3, border: 1, borderColor: 'divider', borderRadius: 3, bgcolor: 'background.card', p: { xs: 1.5, md: 2 }, pt: { xs: 2.5, md: 3 } }}>
-      <PackingTape />
-      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 0.5 }}>
-        <SectionTape>Getting started</SectionTape>
-        <Button onClick={hide} data-testid="checklist-hide" sx={{ color: 'text.secondary', minHeight: 44 }}>
+    <Box data-testid="onboarding-checklist" component="section" aria-labelledby="checklist-heading" sx={{ position: 'relative', mt: 5, mb: 3, border: 1, borderColor: 'border', borderRadius: '3px', bgcolor: 'background.paper', boxShadow: '0 3px 0 rgba(0,0,0,0.18)' }}>
+      {/* The clipboard's clip, holding the sheet. */}
+      <Box aria-hidden="true" sx={{ position: 'absolute', top: -9, left: '50%', width: 92, height: 18, ml: '-46px', borderRadius: '4px 4px 2px 2px', bgcolor: CHROME.bar, border: `2px solid ${CHROME.raised}`, boxShadow: 'inset 0 -3px 0 rgba(255,255,255,0.08)' }} />
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, px: { xs: 1.5, md: 2 }, pt: 2, pb: 0.5, borderBottom: '3px solid', borderColor: 'rule.main' }}>
+        <Box sx={{ minWidth: 0 }}>
+          <Typography id="checklist-heading" component="h2" sx={{ fontFamily: DISPLAY_FONT, fontWeight: 700, fontSize: '1.25rem', lineHeight: 1.2 }}>
+            Before you roll
+          </Typography>
+          <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary' }}>The first-run checklist — four things, then you're on the road.</Typography>
+        </Box>
+        <Button onClick={hide} data-testid="checklist-hide" sx={{ color: 'text.secondary', minHeight: 44, flexShrink: 0 }}>
           Hide this list
         </Button>
       </Box>
-      <Box component="ul" sx={{ m: 0, p: 0 }}>
+      <Box component="ul" sx={{ m: 0, px: { xs: 1.5, md: 2 }, pb: 1 }}>
         <StepRow
           step={steps[0]}
           action={
@@ -132,7 +157,7 @@ export default function OnboardingChecklist({ locationsCount, itemsCount, missin
           step={steps[1]}
           action={
             <Button onClick={startWalk} size="small" sx={{ color: 'text.primary', minHeight: 44, flexShrink: 0 }}>
-              Walk a room
+              Pack a room
             </Button>
           }
         />

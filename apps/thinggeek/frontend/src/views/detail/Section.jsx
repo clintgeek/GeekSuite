@@ -1,13 +1,13 @@
 /**
- * A titled block of a thing's page: a card-stock sheet whose heading is a
- * strip of Dymo tape (the words stay sentence case in the DOM; the tape
- * uppercases them), an optional action, the body. `title` may be a node —
- * Contains builds its own ("Inside [VAN] · 3") — and is then used as is.
+ * A titled block of a thing's page: a box face (cardboard, a little dust)
+ * under a heavy black rule, its heading in slab led by the orange speed
+ * stripes, an optional action, the body. `title` may be a node — Contains
+ * builds its own ("Inside [BOX Van] · 3") — and is then used as is.
  */
 import React from 'react';
 import { Box, Typography } from '@mui/material';
-import { DISPLAY_FONT } from '../../theme/theme';
-import SectionTape from '../../components/SectionTape';
+import { DISPLAY_FONT, dustImage } from '../../theme/theme';
+import SectionHeading from '../../components/SectionHeading';
 
 export const SECTION_TITLE_SX = { fontFamily: DISPLAY_FONT, fontSize: '1.125rem', fontWeight: 700, lineHeight: 1.25, color: 'text.primary' };
 
@@ -18,13 +18,24 @@ export default function Section({ title, action, children, id, sx }) {
       component="section"
       aria-labelledby={headingId}
       data-section={id}
-      sx={{ border: 1, borderColor: 'border', borderRadius: '6px', bgcolor: 'background.paper', p: 2, minWidth: 0, scrollMarginTop: 72, boxShadow: '0 1px 3px rgba(40, 25, 10, 0.10)', ...sx }}
+      sx={{
+        border: 1,
+        borderColor: 'border',
+        borderTop: '4px solid',
+        borderTopColor: 'rule.main',
+        borderRadius: '3px',
+        bgcolor: 'background.card',
+        backgroundImage: (t) => dustImage(t.palette.mode),
+        p: 2,
+        minWidth: 0,
+        scrollMarginTop: 72,
+        boxShadow: (t) => (t.palette.mode === 'dark' ? '0 3px 0 rgba(0,0,0,0.5)' : '0 3px 0 rgba(60, 38, 14, 0.18)'),
+        ...sx,
+      }}
     >
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, mb: 1, minHeight: 32 }}>
         {typeof title === 'string' ? (
-          <SectionTape id={headingId} tilt={false}>
-            {title}
-          </SectionTape>
+          <SectionHeading id={headingId}>{title}</SectionHeading>
         ) : (
           <Typography id={headingId} component="h2" sx={{ ...SECTION_TITLE_SX, display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 0.75, minWidth: 0 }}>
             {title}

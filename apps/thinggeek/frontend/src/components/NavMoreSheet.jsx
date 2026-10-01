@@ -19,9 +19,9 @@ import { SavedViews } from '@geeksuite/collection';
 import { useSavedViews } from '../hooks/useSavedViews';
 
 export const MORE_LINKS = [
-  { id: 'types', label: 'Types', hint: 'What each kind of thing asks for', to: '/types', icon: <TypesIcon /> },
-  { id: 'insurance', label: 'Insurance report', hint: 'Print it, or export a CSV', to: '/insurance', icon: <InsuranceIcon /> },
-  { id: 'trash', label: 'Trash', hint: 'Kept for a while, then purged', to: '/trash', icon: <TrashIcon /> },
+  { id: 'types', label: 'Types', hint: 'The packing rules: what each kind of thing asks for', to: '/types', icon: <TypesIcon /> },
+  { id: 'insurance', label: 'Insurance report', hint: 'The inventory sheet: print it, or export a CSV', to: '/insurance', icon: <InsuranceIcon /> },
+  { id: 'trash', label: 'Trash', hint: 'The curb: kept for a while, then hauled away', to: '/trash', icon: <TrashIcon /> },
   { id: 'settings', label: 'Settings', hint: 'Appearance and account', to: '/settings', icon: <SettingsIcon /> },
 ];
 

@@ -15,6 +15,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Box, Button, ButtonBase, IconButton, LinearProgress, Typography } from '@mui/material';
 import { AddAPhotoOutlined as AddPhotoIcon, PhotoOutlined as PhotoIcon, ChevronLeft as PrevIcon, ChevronRight as NextIcon, ErrorOutline as FailedIcon } from '@mui/icons-material';
 import { TypePlate } from '../../components/ThingPhoto';
+import { boxMarks } from '../../utils/boxMarks';
 import { photoRoleLabel } from '../../utils/vocab';
 import Lightbox from './Lightbox';
 
@@ -116,10 +117,11 @@ export default function Gallery({ thing, uploads = [], onAddPhoto, onRetry }) {
 
   if (!count) {
     return (
-      <Box sx={{ position: 'relative', height: { xs: 132, md: '100%' }, minHeight: { md: 240 }, overflow: 'hidden', borderRadius: { xs: 0, md: '6px' } }}>
-        <TypePlate icon={thing.type?.icon} iconSize="56px" sx={{ placeItems: { xs: 'center start', md: 'center' }, pl: { xs: 3, md: 0 } }} />
-        <Box sx={{ position: 'absolute', inset: 0, display: 'grid', placeItems: { xs: 'center end', md: 'end center' }, pr: { xs: 2, md: 0 }, pb: { xs: 0, md: 2.5 } }}>
-          <Button variant="contained" startIcon={<AddPhotoIcon />} onClick={onAddPhoto} sx={{ boxShadow: '0 4px 12px rgba(0,0,0,0.18)' }}>
+      <Box sx={{ position: 'relative', height: { xs: 156, md: '100%' }, minHeight: { md: 260 }, overflow: 'hidden', borderRadius: { xs: 0, md: '4px' } }}>
+        {/* No photo yet: the thing's box, stencilled with its size. */}
+        <TypePlate icon={thing.type?.icon} marks={boxMarks(thing)} iconSize="52px" />
+        <Box sx={{ position: 'absolute', inset: 0, display: 'grid', placeItems: { xs: 'start end', md: 'start end' }, pr: 1.5, pt: 1.5 }}>
+          <Button variant="contained" startIcon={<AddPhotoIcon />} onClick={onAddPhoto} sx={{ boxShadow: '0 3px 0 rgba(0,0,0,0.3)' }}>
             Take the first photo
           </Button>
         </Box>

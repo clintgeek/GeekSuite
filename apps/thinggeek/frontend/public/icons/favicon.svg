@@ -1,9 +1,10 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
-  <!-- Drawn for 16-32px: a kraft tile, a band of black tape, a white T. -->
-  <defs>
-    <linearGradient id="t" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#3A3632"/><stop offset="0.25" stop-color="#121110"/><stop offset="1" stop-color="#121110"/></linearGradient>
-  </defs>
-  <rect width="32" height="32" rx="7" fill="#C9A574"/>
-  <path d="M1.5 7.5 L3 6 H29 L30.5 7.5 V24.5 L29 26 H3 L1.5 24.5 Z" fill="url(#t)"/>
-  <path d="M8.5 9 H23.5 V13.5 H18.25 V23 H13.75 V13.5 H8.5 Z" fill="#F4F1EA"/>
+  <!-- Drawn for 16-32px: a black tile, an orange stripe, a cardboard box with its orange band. -->
+  <rect width="32" height="32" rx="7" fill="#15120F"/>
+  <path d="M22 32 L31 0 H35 L26 32 Z" fill="#F26B1D"/>
+  <path d="M4 12 L8 8.5 H27 L23 12 Z" fill="#D9AE78" stroke="#16120D" stroke-width="1" stroke-linejoin="round"/>
+  <path d="M23 12 L27 8.5 V23 L23 26.5 Z" fill="#A87A45" stroke="#16120D" stroke-width="1" stroke-linejoin="round"/>
+  <rect x="4" y="12" width="19" height="14.5" fill="#C99A62" stroke="#16120D" stroke-width="1" stroke-linejoin="round"/>
+  <rect x="8.5" y="14.5" width="8" height="2.4" rx="1.2" fill="#16120D"/>
+  <rect x="4.5" y="19.5" width="18" height="4" fill="#F26B1D"/>
 </svg>

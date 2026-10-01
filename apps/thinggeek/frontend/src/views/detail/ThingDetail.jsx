@@ -1,6 +1,6 @@
 /**
- * `/thing/:id` — a thing's page. A PAGE on every size (Label Maker,
- * 2026-09-29), not a sheet over the library: on a phone, a photo STRIP on
+ * `/thing/:id` — a thing's page. A PAGE on every size (since 2026-09-29),
+ * not a sheet over the library: on a phone, a photo STRIP on
  * top (not a giant hero) so the name, the tape breadcrumb, the actions and
  * the first details are above the fold; at md+, the photo and the header
  * side by side, the sections in two columns below. Back returns to wherever
@@ -12,8 +12,11 @@
  * Everything under the header is keyed by the thing's id, so a revealed
  * serial re-masks the moment you move to another thing (or leave the page).
  *
- * Where it is: the header's tape breadcrumb (HOUSE › GARAGE › VAN) and
- * "Move to…"; a location or container also lists what's Inside, with Add here.
+ * Where it is: the header's moving-label breadcrumb (House › Garage › Van)
+ * and "Move to…"; a location or container also lists what's Inside (its
+ * unit's door rolls up onto it), with Add here. A place with no photo yet
+ * leads with its truck-side mural instead of an empty photo slot, and the
+ * mural carries the page's heading.
  */
 import React, { useRef, useState } from 'react';
 import { Box, Button, CircularProgress } from '@mui/material';
@@ -25,7 +28,9 @@ import { useThingActions } from '../../hooks/useThingActions';
 import { useVocabulary } from '../../hooks/useThingMeta';
 import { useUploads } from '../../hooks/useUploads';
 import { isNotMemberError, reportNotMember } from '../../membership';
-import TagMark from '../../components/TagMark';
+import BoxMark from '../../components/BoxMark';
+import { captionForKind } from '../../components/MovingLabel';
+import TruckMural from '../../components/TruckMural';
 import { MoveSheet } from '../../components/WherePicker';
 import { goBack } from '../../utils/goBack';
 import { labelsPath } from '../../utils/labelUrl';
@@ -34,7 +39,7 @@ import ActionBar from './ActionBar';
 import AddFileSheet from './AddFileSheet';
 import ConfirmTrashDialog from './ConfirmTrashDialog';
 import ContainsSection from './ContainsSection';
-import { showsContents } from '../../utils/where';
+import { isParentKind, kindOf, showsContents } from '../../utils/where';
 import DatesSection from './DatesSection';
 import DetailHeader from './DetailHeader';
 import DetailsSection from './DetailsSection';
@@ -50,13 +55,25 @@ export function ThingDetailBody({ thing, onPanel, onFix, uploads, onRetry }) {
   const photoUploads = uploads.filter((u) => u.kind === 'photo');
   const docUploads = uploads.filter((u) => u.kind === 'document');
   const edit = (focus) => () => onPanel('edit', focus);
+  const kind = kindOf(thing);
+  const mural = isParentKind(kind) && !(thing.photos ?? []).length && !photoUploads.length;
   return (
     <Box component="article" aria-labelledby="thing-name" data-testid="thing-page" sx={{ maxWidth: 1120, mx: 'auto', px: { xs: 0, md: 3 }, pt: { xs: 0, md: 3 } }}>
-      <Box sx={{ display: { xs: 'block', md: 'grid' }, gridTemplateColumns: { md: 'minmax(0, 1fr) minmax(0, 1fr)' }, gap: 3, alignItems: 'stretch' }}>
-        <Gallery thing={thing} uploads={photoUploads} onAddPhoto={() => onPanel('photo')} onRetry={onRetry} />
+      <Box sx={{ display: { xs: 'block', md: 'grid' }, gridTemplateColumns: { md: 'minmax(0, 1fr) minmax(0, 1fr)' }, gap: mural ? 2 : 3, alignItems: 'stretch' }}>
+        {mural ? (
+          <TruckMural
+            name={thing.name}
+            typeName={thing.type?.name}
+            caption={captionForKind(kind)}
+            headingProps={{ component: 'h1', id: 'thing-name', 'data-testid': 'thing-name' }}
+            sx={{ gridColumn: { md: '1 / -1' } }}
+          />
+        ) : (
+          <Gallery thing={thing} uploads={photoUploads} onAddPhoto={() => onPanel('photo')} onRetry={onRetry} />
+        )}
         {/* display:contents on a phone, so the action bar can pin to the page, not to this column. */}
-        <Box sx={{ display: { xs: 'contents', md: 'flex' }, flexDirection: 'column', justifyContent: 'flex-end', gap: 1.5, minWidth: 0 }}>
-          <DetailHeader thing={thing} onMove={() => onPanel('move')} />
+        <Box sx={{ display: { xs: 'contents', md: 'flex' }, flexDirection: 'column', justifyContent: 'flex-end', gap: 1.5, minWidth: 0, gridColumn: mural ? { md: '1 / -1' } : undefined }}>
+          <DetailHeader thing={thing} onMove={() => onPanel('move')} showName={!mural} />
           <ActionBar onEdit={edit()} onAddPhoto={() => onPanel('photo')} onAddDocument={() => onPanel('document')} onMore={() => onPanel('more')} />
         </Box>
       </Box>
@@ -146,7 +163,7 @@ export default function ThingDetail() {
   } else if (!thing || !complete) {
     content = (
       <GeekEmptyState
-        icon={<TagMark size={44} />}
+        icon={<BoxMark size={48} />}
         title={error ? "This didn't load" : 'Not in the inventory'}
         description={error ? 'The server did not answer. Try again in a moment.' : "This thing isn't in the household's library — it may be in the Trash."}
         action={

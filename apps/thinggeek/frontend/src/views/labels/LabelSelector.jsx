@@ -12,6 +12,7 @@ import { useQuery } from '@apollo/client';
 import { GET_THING_TREE } from '../../graphql/queries';
 import { buildTree, flattenTree, isParentKind, kindOf } from '../../utils/where';
 import { labelsPath } from '../../utils/labelUrl';
+import { DISPLAY_FONT } from '../../theme/theme';
 
 export default function LabelSelector() {
   const navigate = useNavigate();
@@ -52,9 +53,9 @@ export default function LabelSelector() {
 
   return (
     <Box>
-      <Typography sx={{ fontWeight: 800, fontSize: '1.375rem', color: 'text.primary', mb: 0.5 }}>Print labels</Typography>
+      <Typography component="h1" sx={{ fontFamily: DISPLAY_FONT, fontWeight: 700, fontSize: '1.625rem', color: 'text.primary', mb: 0.5 }}>Print labels</Typography>
       <Typography sx={{ color: 'text.secondary', mb: 2 }}>
-        Pick what to label. Each gets a QR sticker that opens straight into ThingGeek.
+        Pick what to label. Each gets a moving label with a QR code that opens straight into ThingGeek — stick it on the box, the shelf, the tote.
       </Typography>
       <FormControlLabel
         control={<Switch checked={includeItems} onChange={(e) => setIncludeItems(e.target.checked)} />}
@@ -64,7 +65,7 @@ export default function LabelSelector() {
       <Box
         component="ul"
         aria-label="Things to label"
-        sx={{ listStyle: 'none', m: 0, p: 0, border: 1, borderColor: 'divider', borderRadius: 2, overflow: 'hidden' }}
+        sx={{ listStyle: 'none', m: 0, p: 0, border: 1, borderColor: 'border', borderTop: '4px solid', borderTopColor: 'rule.main', borderRadius: '3px', overflow: 'hidden', bgcolor: 'background.paper' }}
       >
         {rows.map(({ node, depth }) => (
           <Box

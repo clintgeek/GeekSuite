@@ -6,16 +6,20 @@ import { BrowserRouter } from 'react-router-dom';
 import { registerSW } from 'virtual:pwa-register';
 import { ThemeProvider as UserThemeProvider, useThemeMode } from '@geeksuite/user';
 import { GeekSuiteApolloProvider } from '@geeksuite/api-client';
-// Label Maker faces, self-hosted so they render offline: Barlow Condensed
-// for the tape and headings, Barlow for everything you read.
-import '@fontsource/barlow/400.css';
-import '@fontsource/barlow/500.css';
-import '@fontsource/barlow/600.css';
-import '@fontsource/barlow/700.css';
-import '@fontsource/barlow-condensed/600.css';
+// Moving Day faces, self-hosted so they render offline: Zilla Slab for
+// headings (its italic for truck lettering), Public Sans for everything you
+// read, Allerta Stencil for box markings. Barlow Condensed is kept for one
+// job only: the printed QR labels' names (views/labels/LabelSticker.jsx sizes
+// them to its metrics, so print stays the same on every machine).
+import '@fontsource/public-sans/400.css';
+import '@fontsource/public-sans/500.css';
+import '@fontsource/public-sans/600.css';
+import '@fontsource/public-sans/700.css';
+import '@fontsource/public-sans/800.css';
+import '@fontsource/zilla-slab/700.css';
+import '@fontsource/zilla-slab/700-italic.css';
+import '@fontsource/allerta-stencil/400.css';
 import '@fontsource/barlow-condensed/700.css';
-import '@fontsource/quicksand/600.css';
-import '@fontsource/quicksand/700.css';
 import './styles.css';
 import App from './App.jsx';
 import { configureUserPlatform } from './bootstrapUser';

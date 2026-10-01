@@ -1,9 +1,11 @@
 /**
- * The scrolling <main> column: the kraft desk every page sits on.
+ * The scrolling <main> column: the cardboard floor every page sits on
+ * (Moving Day) — kraft by day with a little road dust on it, the dim
+ * corridor by night.
  *
  * Not GeekAppFrame, on purpose: this keeps the frame's scroll contract with
  * a small fade keyed on the real destination. Every route is a page now
- * (a thing and the add screen included, Label Maker 2026-09-29); arriving on
+ * (a thing and the add screen included, since 2026-09-29); arriving on
  * one starts at its top, except the library, which puts itself back where
  * you left it (useScrollMemory) — so a reset here must not undo that.
  *
@@ -14,7 +16,7 @@
  */
 import React, { createContext, useContext, useLayoutEffect, useState } from 'react';
 import { Box } from '@mui/material';
-import { fibreImage } from '../theme/theme';
+import { dustImage } from '../theme/theme';
 
 const ScrollRootContext = createContext(null);
 export const useScrollRoot = () => useContext(ScrollRootContext);
@@ -34,8 +36,8 @@ export default function AppMain({ children, transitionKey }) {
         overflowY: 'auto',
         overflowX: 'hidden',
         bgcolor: 'background.desk',
-        // Kraft fibre: two faint crossed hatchings, static and cheap.
-        backgroundImage: (t) => fibreImage(t.palette.fibre),
+        // Dust and scuffs: one tiled SVG noise, static and cheap (measured under text).
+        backgroundImage: (t) => dustImage(t.palette.mode),
         backgroundAttachment: 'local',
       }}
     >

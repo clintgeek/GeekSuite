@@ -112,26 +112,26 @@ describe('the Where page on a phone: a drill-down, not a tree', () => {
       { initialEntries: [entry], mocks: [treeMock(), typesMock] }
     );
 
-  it('the top level is the places that are not inside anything, each on tape, and no indented rows', async () => {
+  it('the top level is the places that are not inside anything, each a unit with its label, and no indented rows', async () => {
     renderAt('/where');
     const level = await screen.findByTestId('where-level');
     expect(level).toHaveAttribute('data-at', '');
     const places = within(level).getAllByTestId('where-level-place');
-    expect(places.map((p) => within(p).getByTestId('dymo-tape').textContent)).toEqual(['House']);
+    expect(places.map((p) => within(p).getByTestId('moving-label').textContent)).toEqual(['House']);
     expect(screen.queryAllByTestId('where-row')).toHaveLength(0);
     // Tapping a place looks inside it.
     expect(within(places[0]).getByRole('link', { name: /^House: .*Look inside$/ })).toHaveAttribute('href', '/where?at=n-house');
   });
 
-  it('one level in: its places first, then what is kept there, under a tape breadcrumb back up', async () => {
+  it('one level in: its places first, then what is kept there, under a label breadcrumb back up', async () => {
     renderAt('/where?at=n-house');
     const level = await screen.findByTestId('where-level');
     expect(level).toHaveAttribute('data-at', 'n-house');
     const crumbsNav = within(level).getByRole('navigation', { name: 'Where you are' });
     expect(within(crumbsNav).getByRole('link', { name: 'Where' })).toHaveAttribute('href', '/where');
-    // The current level is on tape but not a link to itself.
+    // The current level is on its label but not a link to itself.
     expect(within(crumbsNav).getByText('House').closest('a')).toBeNull();
-    expect(within(level).getAllByTestId('where-level-place').map((p) => within(p).getByTestId('dymo-tape').textContent)).toEqual(['Garage']);
+    expect(within(level).getAllByTestId('where-level-place').map((p) => within(p).getByTestId('moving-label').textContent)).toEqual(['Garage']);
     const kept = within(level).getAllByTestId('where-level-item');
     expect(kept.map((k) => within(k).getByRole('link').getAttribute('href'))).toEqual(['/thing/t-rifle']);
   });
@@ -144,7 +144,7 @@ describe('the Where page on a phone: a drill-down, not a tree', () => {
       ['House', '/where?at=n-house'],
     ]);
     // Places (Shelf 2, the Van, the boat) drill further.
-    expect(screen.getAllByTestId('where-level-place').map((p) => within(p).getByTestId('dymo-tape').textContent)).toEqual(['Shelf 2', 'Van', 'Wendy']);
+    expect(screen.getAllByTestId('where-level-place').map((p) => within(p).getByTestId('moving-label').textContent)).toEqual(['Shelf 2', 'Van', 'Wendy']);
     await act(async () => {
       fireEvent.click(screen.getByTestId('where-add-here'));
     });

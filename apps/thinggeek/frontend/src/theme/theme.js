@@ -1,228 +1,271 @@
 /**
- * ThingGeek theme: "Label Maker".
+ * ThingGeek theme: "Moving Day" (2026-10-01, replacing "Label Maker").
  *
- * The household's inventory, dressed like the shelves it lives on: kraft
- * cardboard for the desk and the chrome (storage boxes, shipping cartons),
- * off-white card stock for the sheets you read, and — the signature — Dymo
- * embossed tape (components/DymoTape.jsx) for the names of places, page
- * titles and section headings, on coloured refills that mean something
- * (TAPE_TONES). A corrugated edge on the bars and packing tape on the odd
- * card finish the carton. By night it is the same workbench under a lamp: a
- * charcoal-brown shelf.
+ * The household's stuff, run like a moving-truck rental and self-storage
+ * yard: everything packed, labelled, accounted for and insured, ready for a
+ * move, a claim or a bad day. The feel is the EXPERIENCE — dusty trucks,
+ * cardboard boxes, roll-up doors on dim storage units under one bulb — and
+ * never anybody's brand: no company names, logos or lettering anywhere.
  *
- * One accent, SAFETY ORANGE, for "needs attention" and the screen's one
- * primary action. It is only ever a FILL with dark ink on it — never orange
- * text on kraft. Everything else is ink: MUI's `primary` is the tape-black
- * ink (card stock in the dark), so links, focus, selected chips and the
- * everyday contained button are ink, and nothing orange leaks into text.
+ * Palette: ORANGE + CARDBOARD + BLACK.
+ *   - Black is the livery: the top bar, the tab bar and the sidebar are the
+ *     truck's black flank with orange speed stripes (CHROME, both modes —
+ *     rendered under a nested chrome theme, components/Chrome.jsx).
+ *   - Cardboard (kraft) is the page and the box faces it holds; a faint dust
+ *     and scuff texture rides on it (dustImage), measured under text.
+ *   - Moving orange (LIVERY.orange) is the hero: stripes, the Load button,
+ *     roll-up doors, warning fills — always with BLACK ink on it. The deeper
+ *     burnt orange (LIVERY.burnt) is the only orange that carries white
+ *     text (a moving label's header strip).
+ *   - White is printed matter only: moving labels, the inventory sheet,
+ *     dialogs and fields (a form you fill in), the paper labels.
+ *   - Night (dark): the dim corridor — charcoal, a darker kraft, the same
+ *     orange, and the warm light of the bulb over an open unit (UNIT.glow).
  *
- * Fonts: Barlow Condensed for tape and headings (a condensed, label-ish
- * grotesque), Barlow for body copy, mono for identifiers so a serial reads
- * character by character. Headings are sentence case; only tape is
- * uppercase and letterspaced (the DOM keeps sentence case).
+ * Type: Zilla Slab 700 for headings (its italic for truck-side lettering:
+ * murals and the bar title lean), Public Sans for everything you read,
+ * Allerta Stencil for box markings only (ROOM, BOX, FRAGILE, THIS SIDE UP —
+ * always aria-hidden or doubled by real words), mono for identifiers.
+ * Sentence case everywhere but the stencil.
  *
  * Contrast: every pair this app paints is measured in
- * __tests__/theme/labelMakerContrast.test.js, both modes.
+ * __tests__/theme/movingDayContrast.test.js, both modes, textures included.
  */
 import { createGeekSuiteTheme } from '@geeksuite/ui';
 
-export const DISPLAY_FONT = '"Barlow Condensed", "Roboto Condensed", "Arial Narrow", system-ui, sans-serif';
-export const BODY_FONT = '"Barlow", system-ui, -apple-system, "Segoe UI", "Helvetica", "Arial", sans-serif';
-/** The embosser's wheel: a rounded single-weight sans, struck at a fixed pitch (components/DymoTape.jsx). */
-export const TAPE_FONT = '"Quicksand", "Varela Round", "Nunito", system-ui, sans-serif';
+export const DISPLAY_FONT = '"Zilla Slab", "Rockwell", "Roboto Slab", Georgia, serif';
+export const BODY_FONT = '"Public Sans", system-ui, -apple-system, "Segoe UI", "Helvetica", "Arial", sans-serif';
+/** Box markings only: ROOM / BOX / FRAGILE / THIS SIDE UP. */
+export const STENCIL_FONT = '"Allerta Stencil", "Stencil", "Impact", sans-serif';
 export const MONO_FONT = '"Roboto Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace';
 
-/** Kraft fibre on the desk: two faint crossed hatchings (AppMain paints it). */
-export const fibreImage = (f) => `repeating-linear-gradient(115deg, ${f} 0 1px, transparent 1px 7px), repeating-linear-gradient(25deg, ${f} 0 1px, transparent 1px 11px)`;
-
 /**
- * desk     the page behind everything (kraft by day, the dark shelf by night)
- * chrome   top bar, tab bar, sidebar: a deeper kraft, the carton's side
- * paper    card stock: sheets, dialogs, menus, the library list
- * card     a card stock card on the desk
- * raised   a pressed-in well on card stock (chips, badges, inputs)
+ * desk     the page: kraft by day, the dim corridor by night
+ * card     a box face on the desk (sections, lists, cards): lighter kraft / darker kraft
+ * paper    printed matter: dialogs, menus, fields, the inventory sheet
+ * raised   a pressed-in well (chips, plates, the row thumb)
  */
 export const SURFACES = {
   light: {
-    desk: '#D9BD94',
-    chrome: '#C9A574',
-    paper: '#FBF7EE',
-    card: '#FDFAF3',
-    raised: '#F1E7D3',
-    text: '#22190F',
-    secondary: '#4B3B28',
-    muted: '#54432F',
-    divider: 'rgba(34, 25, 15, 0.14)',
-    border: 'rgba(34, 25, 15, 0.26)',
-    fibre: 'rgba(90, 60, 25, 0.04)',
+    desk: '#D2B48A',
+    card: '#E6D2AF',
+    paper: '#FBF7EF',
+    raised: '#DCC59F',
+    text: '#16120D',
+    secondary: '#44352A',
+    muted: '#4A3B2E',
+    divider: 'rgba(22, 18, 13, 0.16)',
+    border: 'rgba(22, 18, 13, 0.34)',
   },
   dark: {
-    desk: '#1C1611',
-    chrome: '#261E17',
-    paper: '#2A231B',
-    card: '#2F271E',
-    raised: '#3A3026',
-    text: '#F3E9D8',
-    secondary: '#D2C3AA',
-    muted: '#B9A88D',
-    divider: 'rgba(243, 233, 216, 0.12)',
-    border: 'rgba(243, 233, 216, 0.24)',
-    fibre: 'rgba(0, 0, 0, 0.12)',
+    desk: '#121110',
+    card: '#2A231C',
+    paper: '#1F1B17',
+    raised: '#362D24',
+    text: '#F2E8D8',
+    secondary: '#CDBFA8',
+    muted: '#B6A78F',
+    divider: 'rgba(242, 232, 216, 0.12)',
+    border: 'rgba(242, 232, 216, 0.26)',
   },
 };
 
-/** Ink: MUI's primary. Tape black by day, card stock by night. Never orange. */
-export const INK = {
-  light: { main: '#2A1F14', light: '#4B3B28', dark: '#140E08', contrastText: '#FBF7EE' },
-  dark: { main: '#EBDDC4', light: '#F6ECDB', dark: '#D2C3AA', contrastText: '#1C1611' },
-};
-
-/** Safety orange: a FILL, with dark ink on it. Attention and the primary action. */
-export const SAFETY = {
-  light: { main: '#F26A1B', light: '#F5853F', dark: '#D95A10', contrastText: '#1B1006' },
-  dark: { main: '#FF7A29', light: '#FF9350', dark: '#E8681A', contrastText: '#1B1006' },
-};
-
-/**
- * Dymo tape. The same black plastic in both modes (it's a physical thing);
- * in the dark it gets a faint edge so it lifts off the shelf.
- *   ground  the tape's body (the darkest band of its sheen)
- *   top     the lightest band of the sheen (worst case for the letters)
- *   ink     the raised letters
- */
-export const TAPE = {
-  ground: '#121110',
-  top: '#34312D',
-  ink: '#F4F1EA',
-  edgeLight: 'rgba(0, 0, 0, 0.35)',
-  edgeDark: 'rgba(255, 255, 255, 0.16)',
+/** The truck's black flank: top bar, tab bar, sidebar — the same in both modes. */
+export const CHROME = {
+  bar: '#15120F',
+  raised: '#241F1A',
+  text: '#F4E8D4',
+  secondary: '#CDBCA2',
+  divider: 'rgba(244, 232, 212, 0.14)',
+  border: 'rgba(244, 232, 212, 0.28)',
 };
 
 /**
- * Refill cartridges. Each tone is one roll of flat glossy vinyl, the same in
- * both modes:
- *   black   locations (and the default): House, Garage, Shelf 2
- *   blue    containers: the van, the safe, the tackle box
- *   red     attention: Overdue
- *   green   done: a checked step, "All clear"
- *   orange  the one primary action, as tape (safety orange; DARK letters —
- *           orange is a fill, never an ink)
- *   body    the vinyl
- *   top     the gloss along the top edge (body + 12% white): the lightest
- *           ground a letter lands on, so the one contrast is measured on
- *   ink     the stress-whitened plastic of a raised letter: its rim is `ink`
- *           and its face `ink` at FILL_ALPHA over the tape
- * (__tests__/theme/labelMakerContrast.test.js measures the face on `top`.)
+ * Moving orange.
+ *   orange  the livery: stripes, the Load button, doors, marker fills (black ink on it)
+ *   deep    its pressed/hover shade (still black ink)
+ *   burnt   the one orange that carries WHITE text (a label's header strip)
+ *   ink     the black lettering on orange
  */
-export const TAPE_FILL_ALPHA = 0.88;
-export const TAPE_TONES = {
-  black: { body: '#161514', top: '#323130', ink: '#FFFFFF' },
-  blue: { body: '#1C4C8C', top: '#37619A', ink: '#FFFFFF' },
-  red: { body: '#A3211A', top: '#AE3C35', ink: '#FFFFFF' },
-  green: { body: '#1F5A2A', top: '#3A6E44', ink: '#FFFFFF' },
-  orange: { body: '#F2741F', top: '#F4853A', ink: '#1B1006' },
+export const LIVERY = {
+  orange: '#F26B1D',
+  deep: '#DD5C12',
+  burnt: '#A9420A',
+  ink: '#140E08',
+  white: '#FFFFFF',
 };
 
-/** Tape tone for a place, by its kind: containers are on blue refill, everything else black. */
-export const toneForKind = (kind) => (kind === 'container' ? 'blue' : 'black');
+/** A moving label: printed white stock (dimmed a touch at night so it doesn't glare). */
+export const LABEL = {
+  light: { stock: '#FFFDF8', ink: '#16120D', soft: '#4A3B2E', edge: 'rgba(22, 18, 13, 0.30)' },
+  dark: { stock: '#EFE6D6', ink: '#16120D', soft: '#4A3B2E', edge: 'rgba(0, 0, 0, 0.55)' },
+};
+
+/** Cardboard for the box illustrations (faces, flaps, the hand-hold's shadow). */
+export const BOX = {
+  light: { face: '#C99A62', side: '#B2834D', flap: '#D7AC76', seam: '#8E6536', hole: '#3B2715', print: '#16120D' },
+  dark: { face: '#8A6440', side: '#74532F', flap: '#9A7149', seam: '#4D3720', hole: '#120C07', print: '#120C07' },
+};
 
 /**
- * Corrugated cardboard, seen edge-on where a carton was cut: a row of
- * flutes between two liners. Painted along the bottom of the top bar and the
- * top of the tab bar (a background image, so it never takes a tap or covers
- * a word). `flute` is the kraft, `hollow` the shadow inside each arch.
+ * A storage unit: a corrugated roll-up door (orange, like every yard's), and
+ * the dim room behind it lit by one bulb. Contents are listed on `interior`.
  */
-export const CORRUGATION = {
-  light: { flute: '#B38C57', hollow: '#8E6A3C', liner: '#A57E4B' },
-  dark: { flute: '#3B3026', hollow: '#120E0A', liner: '#2F261D' },
+export const UNIT = {
+  light: { door: '#E2651F', groove: '#A9480F', ridge: '#F48A45', frame: '#2A241E', interior: '#17130F', glow: 'rgba(255, 205, 128, 0.20)', text: '#F2E8D8', secondary: '#CDBFA8', divider: 'rgba(242, 232, 216, 0.14)' },
+  dark: { door: '#C4561A', groove: '#86380B', ridge: '#D9702F', frame: '#0B0A09', interior: '#0E0C0A', glow: 'rgba(255, 205, 128, 0.16)', text: '#F2E8D8', secondary: '#C9BBA4', divider: 'rgba(242, 232, 216, 0.12)' },
 };
-export function corrugatedEdge(mode = 'light') {
-  const c = CORRUGATION[mode] ?? CORRUGATION.light;
-  // 8×6 tile: liner, one flute arch, liner. Symmetric enough to serve both edges.
+
+/** The bulb over an open unit: a warm accent for dark mode's highlights. */
+export const BULB = '#FFD28A';
+
+/** Due-date status tones, small text on box faces and paper. */
+export const STATUS_TONES = {
+  light: { overdue: '#7A140C', soon: '#6E3F00', upcoming: '#1D4874', later: '#44352A' },
+  dark: { overdue: '#FF9C8F', soon: '#F5C35A', upcoming: '#93C6EE', later: '#CDBFA8' },
+};
+
+/** Marker lights (the attention dot, the dashboard's warning lights): fills with a black ring. */
+export const MARKER = { overdue: '#E0312B', soon: '#F5A623', ring: '#16120D' };
+
+/** "Oversize load" banner: the highway sign's yellow, black letters. */
+export const OVERSIZE = { ground: '#F6C619', ink: '#140E08' };
+
+/**
+ * Dust and scuffs: a faint speckle and a few long streaks over kraft (and
+ * the orange livery), as one tiled SVG noise. `speck` is the worst case a
+ * letter can land on (its colour at full tile alpha) — the contrast test
+ * measures text on the desk under it.
+ */
+export const DUST = {
+  light: { speck: 'rgba(60, 38, 14, 0.10)', streak: 'rgba(255, 245, 225, 0.10)' },
+  dark: { speck: 'rgba(255, 228, 190, 0.05)', streak: 'rgba(0, 0, 0, 0.18)' },
+};
+
+const rgbaParts = (c) => {
+  const m = /rgba?\(([^)]+)\)/.exec(c);
+  const [r, g, b, a = '1'] = m[1].split(',').map((x) => x.trim());
+  return { r: Number(r) / 255, g: Number(g) / 255, b: Number(b) / 255, a: Number(a) };
+};
+
+/** A tiled noise texture (data URI) for `mode`: speckle + a few scuff streaks. Decorative. */
+export function dustImage(mode = 'light') {
+  const d = DUST[mode] ?? DUST.light;
+  const s = rgbaParts(d.speck);
+  const k = rgbaParts(d.streak);
   const svg =
-    `<svg xmlns='http://www.w3.org/2000/svg' width='8' height='6' viewBox='0 0 8 6'>` +
-    `<rect width='8' height='6' fill='${c.hollow}'/>` +
-    `<path d='M0 5 C1.5 5 1.5 1 4 1 C6.5 1 6.5 5 8 5' fill='none' stroke='${c.flute}' stroke-width='1.3'/>` +
-    `<rect y='0' width='8' height='0.9' fill='${c.liner}'/><rect y='5.1' width='8' height='0.9' fill='${c.liner}'/>` +
-    `</svg>`;
-  const url = `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
-  return url;
+    `<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'>` +
+    `<filter id='s'><feTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' seed='7'/>` +
+    `<feColorMatrix values='0 0 0 0 ${s.r.toFixed(3)} 0 0 0 0 ${s.g.toFixed(3)} 0 0 0 0 ${s.b.toFixed(3)} 0 0 0 -3 1.9'/></filter>` +
+    `<filter id='k'><feTurbulence type='fractalNoise' baseFrequency='0.012 0.35' numOctaves='1' seed='3'/>` +
+    `<feColorMatrix values='0 0 0 0 ${k.r.toFixed(3)} 0 0 0 0 ${k.g.toFixed(3)} 0 0 0 0 ${k.b.toFixed(3)} 0 0 0 -4 2.4'/></filter>` +
+    `<rect width='180' height='180' filter='url(#s)' opacity='${s.a}'/>` +
+    `<rect width='180' height='180' filter='url(#k)' opacity='${k.a}'/></svg>`;
+  return `url("data:image/svg+xml,${encodeURIComponent(svg)}")`;
 }
 
-/** Clear packing tape: a translucent tan strip with a faint sheen (components/PackingTape.jsx). */
-export const PACKING = {
-  light: { body: 'rgba(222, 196, 146, 0.62)', sheen: 'rgba(255, 255, 255, 0.35)', edge: 'rgba(120, 90, 45, 0.28)' },
-  dark: { body: 'rgba(214, 186, 132, 0.30)', sheen: 'rgba(255, 255, 255, 0.10)', edge: 'rgba(0, 0, 0, 0.40)' },
-};
+/**
+ * The livery band: three horizontal orange stripes (thick, thin, thinner) —
+ * the stripe down a truck's flank. A background layer for the bars' edges.
+ * `edge` = 'bottom' (the top bar) or 'top' (the tab bar).
+ */
+export function liveryBand(edge = 'bottom') {
+  const dir = edge === 'top' ? '180deg' : '0deg';
+  const o = LIVERY.orange;
+  const b = LIVERY.burnt;
+  return `linear-gradient(${dir}, ${o} 0 4px, transparent 4px 6px, ${b} 6px 8px, transparent 8px 10px, ${o} 10px 11px, transparent 11px)`;
+}
+export const LIVERY_BAND_PX = 11;
 
 /**
- * Due-date status tones, used as small text and dots on card stock (paper,
- * card, raised). DueLine still passes them through readableOn.
+ * Diagonal speed stripes (CSS): bold orange bands leaning forward, the
+ * truck's flank. For heroes, empty states and the bars' trailing corner.
  */
-export const STATUS_TONES = {
-  light: { overdue: '#A8241A', soon: '#7F4A00', upcoming: '#1F557D', later: '#4B3B28' },
-  dark: { overdue: '#F4978E', soon: '#F2B45A', upcoming: '#8CC3EC', later: '#D2C3AA' },
+export function speedStripes(angle = 116) {
+  const o = LIVERY.orange;
+  const b = LIVERY.burnt;
+  return `repeating-linear-gradient(${angle}deg, transparent 0 18px, ${o} 18px 32px, transparent 32px 38px, ${b} 38px 44px, transparent 44px 64px)`;
+}
+
+/** Deterministic small hash, for unit numbers, murals and box tilts. */
+export function hashString(s = '') {
+  let h = 2166136261;
+  const str = String(s);
+  for (let i = 0; i < str.length; i += 1) {
+    h ^= str.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
+/** Ink for MUI's primary: black by day; the livery orange (black text on it) by night. */
+export const PRIMARY = {
+  light: { main: '#16120D', light: '#3A2E23', dark: '#000000', contrastText: '#F4E8D4' },
+  dark: { main: '#FF8236', light: '#FF9A5C', dark: '#F26B1D', contrastText: '#140E08' },
 };
 
-/** The ground behind a thing with no photo: a kraft tint with the type's glyph. */
-export const PLATE = {
-  light: { ground: '#EADAB9', rule: 'rgba(90, 60, 25, 0.10)', icon: '#5A4630' },
-  dark: { ground: '#3A3026', rule: 'rgba(243, 233, 216, 0.06)', icon: '#CDB894' },
-};
+/** The Load button (and every hero action): orange, black lettering, a black edge. */
+export const LOAD = { main: LIVERY.orange, light: '#F5833F', dark: LIVERY.deep, contrastText: LIVERY.ink };
 
-function buildOverrides(mode) {
+function buildOverrides(mode, chrome) {
   const isDark = mode === 'dark';
-  const s = SURFACES[mode];
-  const ink = INK[mode];
+  const s = chrome
+    ? { desk: CHROME.bar, card: CHROME.raised, paper: CHROME.raised, raised: CHROME.raised, text: CHROME.text, secondary: CHROME.secondary, muted: CHROME.secondary, divider: CHROME.divider, border: CHROME.border }
+    : SURFACES[mode];
+  const ink = chrome ? PRIMARY.dark : PRIMARY[mode];
 
   return {
     palette: {
-      background: { default: s.desk, paper: s.paper, card: s.card, raised: s.raised, chrome: s.chrome, desk: s.desk },
+      // Only the surfaces a page paints. The black chrome is NOT one of them:
+      // the shared theme walks the focused-label ink across every declared
+      // background, and a black one in light mode would bleach it to white.
+      background: { default: s.desk, paper: s.paper, card: s.card, raised: s.raised, desk: s.desk },
       text: { primary: s.text, secondary: s.secondary, muted: s.muted },
       divider: s.divider,
       border: s.border,
-      safety: SAFETY[mode],
-      tape: TAPE,
-      tapeTones: TAPE_TONES,
-      packing: PACKING[mode],
-      status: STATUS_TONES[mode],
+      // The heavy rule across the top of a box face or a form: black by day, the livery orange at night.
+      rule: { main: chrome || isDark ? LIVERY.orange : SURFACES.light.text },
+      load: LOAD,
+      livery: LIVERY,
+      label: LABEL[mode],
+      box: BOX[mode],
+      unit: UNIT[mode],
+      marker: MARKER,
+      oversize: OVERSIZE,
+      status: STATUS_TONES[chrome ? 'dark' : mode],
+      chromeTokens: CHROME,
       // The collection's RangeFacet paints its in-range bars with `phosphor`.
-      phosphor: { main: isDark ? '#CDB894' : '#7A5B34', glow: isDark ? 'rgba(235, 221, 196, 0.08)' : 'rgba(42, 31, 20, 0.06)' },
-      plate: PLATE[mode],
-      fibre: s.fibre,
-      // Kept for any old reader: the "hardware" colour is now kraft-dark.
-      brass: isDark ? '#CDB894' : '#7A5B34',
+      phosphor: { main: isDark ? '#FF8236' : '#A9420A', glow: isDark ? 'rgba(255, 130, 54, 0.10)' : 'rgba(169, 66, 10, 0.08)' },
     },
     typography: {
       fontFamily: BODY_FONT,
       h1: { fontFamily: DISPLAY_FONT, fontWeight: 700, letterSpacing: '0' },
       h2: { fontFamily: DISPLAY_FONT, fontWeight: 700, letterSpacing: '0' },
-      h3: { fontFamily: DISPLAY_FONT, fontWeight: 700, letterSpacing: '0.005em' },
+      h3: { fontFamily: DISPLAY_FONT, fontWeight: 700, letterSpacing: '0' },
       h4: { fontFamily: DISPLAY_FONT, fontWeight: 700 },
       h5: { fontFamily: DISPLAY_FONT, fontWeight: 700 },
       h6: { fontFamily: DISPLAY_FONT, fontWeight: 700 },
-      button: { fontFamily: BODY_FONT, fontWeight: 600, textTransform: 'none', letterSpacing: '0.01em' },
-      // Sentence case everywhere: uppercase belongs to the tape alone.
+      button: { fontFamily: BODY_FONT, fontWeight: 700, textTransform: 'none', letterSpacing: '0.01em' },
       overline: { fontSize: '0.8125rem', letterSpacing: '0.01em', fontWeight: 600, lineHeight: 1.5, textTransform: 'none' },
     },
     components: {
       MuiCssBaseline: {
         styleOverrides: {
           body: { backgroundColor: s.desk },
-          '::selection': { background: isDark ? 'rgba(255, 122, 41, 0.35)' : 'rgba(242, 106, 27, 0.30)' },
+          '::selection': { background: 'rgba(242, 107, 29, 0.35)' },
         },
       },
       MuiCard: {
         styleOverrides: {
           root: {
-            borderRadius: 6,
+            borderRadius: 4,
             backgroundColor: s.card,
-            border: `1px solid ${s.divider}`,
-            boxShadow: isDark ? '0 1px 0 rgba(255,255,255,0.03) inset, 0 4px 12px rgba(0,0,0,0.35)' : '0 1px 0 rgba(255,255,255,0.6) inset, 0 2px 6px rgba(60,40,15,0.12)',
+            border: `1px solid ${s.border}`,
+            boxShadow: isDark ? '0 2px 0 rgba(0,0,0,0.5), 0 6px 14px rgba(0,0,0,0.35)' : '0 2px 0 rgba(60,38,14,0.22), 0 4px 10px rgba(60,38,14,0.14)',
           },
         },
       },
-      // Fields are card stock on the kraft desk, never see-through.
+      // Fields are printed forms: white stock on kraft, never see-through.
       MuiOutlinedInput: {
         styleOverrides: { root: { backgroundColor: s.paper } },
       },
@@ -231,7 +274,7 @@ function buildOverrides(mode) {
       },
       MuiButton: {
         styleOverrides: {
-          root: { borderRadius: 6 },
+          root: { borderRadius: 4 },
           containedPrimary: { boxShadow: 'none' },
         },
       },
@@ -247,8 +290,15 @@ function buildOverrides(mode) {
   };
 }
 
-export function createThingTheme(mode = 'light') {
-  return createGeekSuiteTheme({ mode, accent: INK[mode === 'dark' ? 'dark' : 'light'], overrides: buildOverrides(mode) });
+/**
+ * `chrome: true` builds the black livery theme the bars render under (a
+ * nested ThemeProvider, components/Chrome.jsx), in either mode.
+ */
+export function createThingTheme(mode = 'light', { chrome = false } = {}) {
+  const m = mode === 'dark' ? 'dark' : 'light';
+  const themeMode = chrome ? 'dark' : m;
+  const accent = chrome ? PRIMARY.dark : PRIMARY[m];
+  return createGeekSuiteTheme({ mode: themeMode, accent, overrides: buildOverrides(m, chrome) });
 }
 
 export default createThingTheme;

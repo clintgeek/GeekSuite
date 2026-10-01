@@ -18,6 +18,7 @@
 // Special modes, keyed on the page URL (the request's frame), so a scene can
 // reach them with a plain deep link:
 //   ?__fixture=empty      a brand-new household (starter types, nothing else)
+//   ?__fixture=rooms      Chef's real shape (2026-10-01): five rooms set up, no things in them
 //   ?__fixture=nonmember  every GraphQL op answers NOT_A_MEMBER
 //   ?__fixture=required   the household has its own Bike type whose Frame size
 //                         is REQUIRED (no starter type has a required field)
@@ -491,6 +492,21 @@ export const EMPTY_OPS = {
   GetThingProfile: () => ({ thingProfile: { __typename: 'ThingProfile', savedFilters: [] } }),
 };
 
+// Chef's real household on 2026-10-01: five rooms, nothing in them yet.
+const ROOM = (id, name, parentId = null) => ({
+  __typename: 'ThingNode',
+  id,
+  name,
+  parentId,
+  parentInTrash: false,
+  kind: 'location',
+  childCount: 0,
+  itemCount: 0,
+  type: { __typename: 'ThingType', id: 't-location', name: 'Location', icon: 'Place' },
+});
+const ROOMS = [ROOM('r-garage', 'Garage'), ROOM('r-kitchen', 'Kitchen'), ROOM('r-office', 'Office'), ROOM('r-bedroom', 'Bedroom'), ROOM('r-attic', 'Attic')];
+export const ROOMS_OPS = { ...EMPTY_OPS, GetThingTree: () => ({ thingTree: ROOMS }) };
+
 // A household's own type with a required field (Walk asks for it inline).
 const BIKE = (required) => ({
   __typename: 'ThingType',
@@ -565,7 +581,7 @@ export async function routes(ctx) {
       pageUrl = '';
     }
     const mode = fixtureOf(pageUrl);
-    const ops = mode === 'empty' ? EMPTY_OPS : mode === 'required' ? REQUIRED_OPS : mode === 'required-stale' ? STALE_REQUIRED_OPS : OPS;
+    const ops = mode === 'empty' ? EMPTY_OPS : mode === 'rooms' ? ROOMS_OPS : mode === 'required' ? REQUIRED_OPS : mode === 'required-stale' ? STALE_REQUIRED_OPS : OPS;
     const entry = ops[op];
     return typeof entry === 'function' ? entry(vars, r) : entry;
   });

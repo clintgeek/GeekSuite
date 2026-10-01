@@ -5,8 +5,8 @@
   "description": "The household inventory of what we own — part of GeekSuite",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#D9BD94",
-  "theme_color": "#C9A574",
+  "background_color": "#D2B48A",
+  "theme_color": "#15120F",
   "orientation": "portrait-primary",
   "scope": "/",
   "categories": [

@@ -1,6 +1,8 @@
 html, body, #root { height: 100%; }
 body { margin: 0; -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
 @keyframes tg-fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+/* A storage unit's roll-up door going up (components/StorageUnit.jsx). */
+@keyframes tg-door-up { from { transform: translateY(0); } to { transform: translateY(-101%); visibility: hidden; } }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
 }

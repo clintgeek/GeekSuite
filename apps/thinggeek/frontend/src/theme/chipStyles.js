@@ -30,11 +30,11 @@ export const selectChipSx = {
   fontSize: '0.8125rem',
   fontWeight: 500,
   color: 'text.secondary',
-  // Card stock, so a chip reads the same on the kraft desk as on a sheet.
+  // Printed stock, so a chip reads the same on the cardboard as on a sheet.
   bgcolor: 'background.paper',
   '&:hover': { bgcolor: 'background.paper', borderColor: (t) => `${t.palette.text.primary} !important` },
   '&.Mui-selected, &.Mui-selected:hover': {
-    // The tint composited over card stock (a solid colour, so it stays opaque on kraft).
+    // The tint composited over the stock (a solid colour, so it stays opaque on cardboard).
     bgcolor: (t) => mixOver(alpha(t.palette.primary.main, t.palette.mode === 'dark' ? 0.16 : 0.1), t.palette.background.paper),
     borderColor: (t) => `${t.palette.primary.main} !important`,
     color: 'text.primary',

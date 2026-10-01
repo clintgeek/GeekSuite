@@ -21,6 +21,12 @@
  * only raises text to a 13px floor via CSS `max()`, never shrinking it.
  * Text that no longer fits truncates/wraps exactly as it does at the true
  * print size.
+ *
+ * Moving Day: the sticker is laid out as a moving label — a heavy black
+ * frame, and on Large the printed field captions a box label carries
+ * (CONTENTS over the name, ROOM over where it lives) and THIS SIDE UP in the
+ * footer. Still black on white and nothing else: it's paper. Small keeps
+ * only the frame (there's no room for captions at 38×25mm).
  */
 import React from 'react';
 import { Box } from '@mui/material';
@@ -30,7 +36,7 @@ import { whereLabel } from '../../utils/where';
 
 const INK = '#000000';
 const GREY = '#444444';
-const RULE = '#BBBBBB';
+const FRAME = '#000000';
 
 /**
  * Small: an Avery/label-roll cell. Large: a tote-front sticker, read from
@@ -129,6 +135,15 @@ export function fitLongestWord(name, stepPt, columnMm, floorPt) {
   return Math.max(floorPt, Math.min(stepPt, Math.floor(fitPt * 2) / 2));
 }
 
+/** A printed field caption (Large only): small caps, black, above its field. */
+function Caption({ children, pt, sx }) {
+  return (
+    <Box data-testid="label-caption" sx={{ fontSize: pt(5.5), fontWeight: 700, color: INK, letterSpacing: '0.14em', textTransform: 'uppercase', lineHeight: 1, ...sx }}>
+      {children}
+    </Box>
+  );
+}
+
 export default function LabelSticker({ thing, size = 'small', testIdPrefix = 'label', preview = false }) {
   const spec = LABEL_SIZES[size] ?? LABEL_SIZES.small;
   const isLarge = spec.key === 'large';
@@ -155,7 +170,7 @@ export default function LabelSticker({ thing, size = 'small', testIdPrefix = 'la
         height: `${spec.heightMm}mm`,
         bgcolor: '#FFFFFF',
         color: INK,
-        border: `0.5pt solid ${RULE}`,
+        border: `${isLarge ? 1.5 : 1}pt solid ${FRAME}`,
         boxSizing: 'border-box',
         p: '2mm',
         display: 'grid',
@@ -176,6 +191,7 @@ export default function LabelSticker({ thing, size = 'small', testIdPrefix = 'la
           pinned to the top with dead air underneath). */}
       <Box sx={{ minWidth: 0, display: 'flex', flexDirection: 'column', height: '100%' }}>
         <Box sx={{ flex: 1, minHeight: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: '0.5mm' }}>
+          {isLarge ? <Caption pt={pt}>Contents</Caption> : null}
           <Box
             data-testid={id('name')}
             title={thing.name}
@@ -203,6 +219,7 @@ export default function LabelSticker({ thing, size = 'small', testIdPrefix = 'la
           >
             {thing.name}
           </Box>
+          {breadcrumb ? <Caption pt={pt} sx={{ mt: '1.5mm', borderTop: `0.75pt solid ${FRAME}`, pt: '1mm' }}>Room</Caption> : null}
           {breadcrumb ? (
             <Box
               data-testid={id('breadcrumb')}
@@ -223,7 +240,7 @@ export default function LabelSticker({ thing, size = 'small', testIdPrefix = 'la
           data-testid={id('footer')}
           sx={{ fontSize: pt(spec.footerFontPt), color: GREY, letterSpacing: '0.08em', textTransform: 'uppercase' }}
         >
-          ThingGeek
+          ThingGeek{isLarge ? ' · This side up ↑' : ''}
         </Box>
       </Box>
     </Box>

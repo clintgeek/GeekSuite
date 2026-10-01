@@ -7,6 +7,9 @@
  * The gaps are the server's (`thing.missing`). "ID plate" and "Serial" only
  * count for a type with identifier fields — a keyboard has no serial to
  * miss (the gateway's missingOf rule).
+ *
+ * Moving Day: a printed claim sheet (white stock under a heavy black rule),
+ * its meter a row of orange cells, and each gap a dashed "fill me in" slot.
  */
 import React from 'react';
 import { Box, Button, Typography } from '@mui/material';
@@ -20,7 +23,8 @@ import {
 } from '@mui/icons-material';
 import { PRESENT_LABELS } from '../../utils/vocab';
 import { MISSING_VALUES } from '../../utils/libraryFilter';
-import { SECTION_TITLE_SX } from './Section';
+import SectionHeading from '../../components/SectionHeading';
+import { LIVERY } from '../../theme/theme';
 
 export const FIXES = {
   photo: { label: 'Add a photo', hint: 'The whole thing, in good light.', icon: PhotoIcon },
@@ -49,17 +53,17 @@ export default function ReadinessPanel({ thing, onFix }) {
       sx={{
         border: 1,
         borderColor: 'border',
-        borderRadius: '6px',
+        borderTop: '4px solid',
+        borderTopColor: 'rule.main',
+        borderRadius: '3px',
         bgcolor: 'background.paper',
-        boxShadow: '0 1px 3px rgba(40, 25, 10, 0.10)',
+        boxShadow: '0 3px 0 rgba(40, 25, 10, 0.16)',
         p: 2,
         minWidth: 0,
       }}
     >
       <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 1, mb: 1 }}>
-        <Typography id="readiness-heading" component="h2" sx={SECTION_TITLE_SX}>
-          Claim readiness
-        </Typography>
+        <SectionHeading id="readiness-heading">Claim readiness</SectionHeading>
         <Typography component="span" sx={{ fontSize: '0.8125rem', fontWeight: 700, color: 'text.primary', fontVariantNumeric: 'tabular-nums' }}>
           {onFile.length} of {keys.length} on file
         </Typography>
@@ -67,7 +71,7 @@ export default function ReadinessPanel({ thing, onFix }) {
 
       <Box aria-hidden="true" sx={{ display: 'grid', gridTemplateColumns: `repeat(${keys.length}, 1fr)`, gap: 0.5, mb: 1.25 }}>
         {keys.map((k) => (
-          <Box key={k} sx={{ height: 6, borderRadius: 3, bgcolor: missing.has(k) ? 'divider' : 'primary.main' }} />
+          <Box key={k} sx={{ height: 10, borderRadius: '1px', border: '1.5px solid', borderColor: 'text.primary', bgcolor: missing.has(k) ? 'transparent' : LIVERY.orange }} />
         ))}
       </Box>
 

@@ -8,43 +8,44 @@
  *   Saved views (SavedViews, as `extras`: they need a ⋯ menu)
  *   footer: user · Settings · Sign out
  *
- * The panel is kraft chrome; a selected row is a card-stock label with an
- * ink rule. Section captions are sentence case (only tape is uppercase).
- * The attention count is a safety-orange fill with dark ink — "needs
- * attention" is what orange means. axe cannot see sidebar rows (they come
- * back "incomplete"), so these pairs are asserted in
- * __tests__/theme/labelMakerContrast.test.js.
+ * Moving Day: the panel is the truck's black flank (it renders under the
+ * chrome theme in both modes); a selected row is lit — a raised panel with an
+ * orange rule. Section captions are sentence case (stencil is for box
+ * markings only). The attention count is an orange fill with black ink.
+ * axe cannot see sidebar rows (they come back "incomplete"), so these pairs
+ * are asserted in __tests__/theme/movingDayContrast.test.js.
  */
 import React from 'react';
-import { Box, Typography, alpha, useTheme } from '@mui/material';
+import { Box, Typography, alpha } from '@mui/material';
 import {
   CategoryOutlined as TypesIcon,
   DeleteOutline as TrashIcon,
   Inventory2Outlined as LibraryIcon,
-  NotificationsActiveOutlined as AttentionIcon,
-  PlaceOutlined as PlacesIcon,
   ReceiptLongOutlined as InsuranceIcon,
+  SpeedOutlined as AttentionIcon,
+  WarehouseOutlined as PlacesIcon,
 } from '@mui/icons-material';
 import { useLocation } from 'react-router-dom';
 import { useQuery } from '@apollo/client';
 import { GeekSidebar } from '@geeksuite/ui';
 import { SavedViews } from '@geeksuite/collection';
 import { GET_THING_FACETS } from '../graphql/queries';
-import { DISPLAY_FONT } from '../theme/theme';
+import { CHROME, DISPLAY_FONT, LIVERY } from '../theme/theme';
+import ChromeTheme from './Chrome';
 import { useAttention } from '../hooks/useThingMeta';
 import { useSavedViews } from '../hooks/useSavedViews';
 import { displayNameFrom, initialsFrom, secondaryFrom } from '../utils/userDisplay';
 import { APP_NAME, NAV, activeNavId } from './navConfig';
-import TagMark from './TagMark';
+import BoxMark from './BoxMark';
 
 function Brand() {
   return (
     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, minWidth: 0 }}>
-      <TagMark size={30} />
+      <BoxMark size={32} />
       <Typography
         component="span"
         noWrap
-        sx={{ fontFamily: DISPLAY_FONT, fontWeight: 700, fontSize: '1.375rem', letterSpacing: '0.01em', color: 'text.primary' }}
+        sx={{ fontFamily: DISPLAY_FONT, fontStyle: 'italic', fontWeight: 700, fontSize: '1.5rem', letterSpacing: '-0.005em', color: CHROME.text }}
       >
         ThingGeek
       </Typography>
@@ -53,63 +54,70 @@ function Brand() {
 }
 
 /** The row styling, exported for the ratchet: what a selected row paints. */
-export function sidebarItemSx(theme) {
-  const ink = theme.palette.text.primary;
+export function sidebarItemSx() {
   return {
     mb: 0.25,
     minHeight: 44,
-    borderRadius: '6px',
-    color: 'text.secondary',
+    borderRadius: '3px',
+    color: CHROME.secondary,
     border: '1px solid transparent',
-    '& .MuiListItemText-primary': { fontSize: '0.9375rem', fontWeight: 500 },
+    '& .MuiListItemText-primary': { fontSize: '0.9375rem', fontWeight: 600 },
+    '& .MuiListItemIcon-root': { color: 'inherit' },
     '& .MuiListItemIcon-root .MuiSvgIcon-root': { fontSize: 20 },
-    '&:hover': { bgcolor: alpha(ink, 0.07), color: 'text.primary' },
+    '&:hover': { bgcolor: alpha(CHROME.text, 0.08), color: CHROME.text },
     '&.Mui-selected': {
       position: 'relative',
-      bgcolor: 'background.paper',
-      borderColor: theme.palette.border,
-      color: 'text.primary',
-      boxShadow: '0 1px 2px rgba(0,0,0,0.12)',
-      '& .MuiListItemIcon-root': { color: 'text.primary' },
-      '& .MuiListItemText-primary': { fontWeight: 700 },
+      bgcolor: CHROME.raised,
+      borderColor: CHROME.border,
+      color: CHROME.text,
+      '& .MuiListItemIcon-root': { color: LIVERY.orange },
+      '& .MuiListItemText-primary': { fontWeight: 800 },
       '&::before': {
         content: '""',
         position: 'absolute',
         left: 0,
-        top: 8,
-        bottom: 8,
-        width: 3,
-        borderRadius: 2,
-        bgcolor: ink,
+        top: 6,
+        bottom: 6,
+        width: 4,
+        bgcolor: LIVERY.orange,
       },
-      '&:hover': { bgcolor: 'background.paper' },
+      '&:hover': { bgcolor: CHROME.raised },
     },
   };
 }
 
 export const badgeProps = {
-  sx: { color: 'text.secondary', backgroundColor: 'background.raised', fontVariantNumeric: 'tabular-nums' },
+  sx: { color: CHROME.secondary, backgroundColor: CHROME.raised, fontVariantNumeric: 'tabular-nums' },
 };
 
-/** "Needs attention" is what orange means: a fill, dark ink on it. */
+/** The attention count: an orange fill, black ink on it. */
 export const attentionBadgeProps = {
-  sx: { color: 'safety.contrastText', backgroundColor: 'safety.main', fontWeight: 700, fontVariantNumeric: 'tabular-nums' },
+  sx: { color: LIVERY.ink, backgroundColor: LIVERY.orange, fontWeight: 800, fontVariantNumeric: 'tabular-nums' },
 };
 
-/** Sentence-case captions, on the kraft chrome. */
+/** Sentence-case captions, on the black flank. */
 export const SIDEBAR_SX = {
-  bgcolor: 'background.chrome',
-  '& [data-geek-sidebar="section-label"]': { textTransform: 'none', letterSpacing: '0.01em', fontSize: '0.8125rem', fontWeight: 600, color: 'text.secondary' },
+  bgcolor: CHROME.bar,
+  color: CHROME.text,
+  borderRight: `4px solid ${LIVERY.orange}`,
+  '& [data-geek-sidebar="section-label"]': { textTransform: 'none', letterSpacing: '0.01em', fontSize: '0.8125rem', fontWeight: 700, color: CHROME.secondary },
 };
 
-export default function Sidebar({ user, onSignOut }) {
-  const theme = useTheme();
+export default function Sidebar(props) {
+  return (
+    <ChromeTheme>
+      <SidebarInner {...props} />
+    </ChromeTheme>
+  );
+}
+
+function SidebarInner({ user, onSignOut }) {
   const location = useLocation();
   const { dueCount } = useAttention();
   const { data: facetData } = useQuery(GET_THING_FACETS, { fetchPolicy: 'cache-and-network', nextFetchPolicy: 'cache-first' });
   const total = facetData?.thingFacets?.total;
   const { views, activeView, hrefFor, remove } = useSavedViews();
-  const itemSx = sidebarItemSx(theme);
+  const itemSx = sidebarItemSx();
 
   const sections = [
     {

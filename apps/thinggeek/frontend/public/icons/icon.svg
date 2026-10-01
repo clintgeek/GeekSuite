@@ -1,30 +1,30 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- Label Maker: a strip of black Dymo tape with an embossed T, on a kraft tile. -->
+  <!-- Moving Day: a taped moving box with its orange band, on the truck's black flank with three speed stripes. -->
   <defs>
-    <linearGradient id="kraft" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#E0C69E"/><stop offset="0.55" stop-color="#D2B284"/><stop offset="1" stop-color="#BE9764"/></linearGradient>
-    <pattern id="flute" width="14" height="512" patternUnits="userSpaceOnUse"><rect width="5" height="512" fill="#6B4A22" fill-opacity="0.06"/></pattern>
-    <linearGradient id="tape" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#34312D"/><stop offset="0.14" stop-color="#1E1C1A"/><stop offset="0.45" stop-color="#121110"/><stop offset="0.85" stop-color="#121110"/><stop offset="1" stop-color="#1F1D1B"/></linearGradient>
-    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0.16"/><stop offset="1" stop-color="#FFFFFF" stop-opacity="0"/></linearGradient>
-    <linearGradient id="gloss" x1="0" y1="0" x2="1" y2="0.35"><stop offset="0" stop-color="#FFFFFF" stop-opacity="0"/><stop offset="0.66" stop-color="#FFFFFF" stop-opacity="0"/><stop offset="0.72" stop-color="#FFFFFF" stop-opacity="0.09"/><stop offset="0.8" stop-color="#FFFFFF" stop-opacity="0"/></linearGradient>
-    <linearGradient id="letter" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#F9F7F1"/><stop offset="0.6" stop-color="#F0ECE3"/><stop offset="1" stop-color="#D9D3C7"/></linearGradient>
-    <filter id="soft" x="-10%" y="-30%" width="120%" height="160%"><feGaussianBlur stdDeviation="8"/></filter>
-    <filter id="dent" x="-10%" y="-10%" width="120%" height="120%"><feGaussianBlur stdDeviation="2.5"/></filter>
+    <clipPath id="tile"><rect width="512" height="512" rx="112"/></clipPath>
   </defs>
-  <rect width="512" height="512" rx="112" fill="url(#kraft)"/>
-  <rect width="512" height="512" rx="112" fill="url(#flute)"/>
-    <g transform="rotate(-4 256 256)">
-      <!-- the tape's cast shadow on the kraft -->
-      <path d="M60 196 L76 180 H436 L452 196 V332 L436 348 H76 L60 332 Z" fill="#3A2610" fill-opacity="0.45" filter="url(#soft)" transform="translate(0 10)"/>
-      <!-- tape body, cutter-clipped corners -->
-      <path d="M56 190 L72 174 H440 L456 190 V322 L440 338 H72 L56 322 Z" fill="url(#tape)"/>
-      <!-- gloss: a soft band along the top third, a faint diagonal glint -->
-      <path d="M62 186 L74 178 H438 L450 186 V226 H62 Z" fill="url(#sheen)"/>
-      <path d="M56 190 L72 174 H440 L456 190 V322 L440 338 H72 L56 322 Z" fill="url(#gloss)"/>
-      <path d="M73 176.5 H439 L453 190.5" fill="none" stroke="#FFFFFF" stroke-opacity="0.28" stroke-width="3"/>
-      <path d="M58 322 L72 336 H440 L454 322" fill="none" stroke="#000000" stroke-opacity="0.6" stroke-width="3"/>
-      <!-- the embossed T: the press dents the tape (shadow), the raised plastic whitens -->
-      <path d="M183 205 H329 V237 H273 V311 H239 V237 H183 Z" fill="#000000" fill-opacity="0.7" stroke="#000000" stroke-opacity="0.7" stroke-width="6" stroke-linejoin="round" filter="url(#dent)" transform="translate(2 6)"/>
-      <path d="M183 205 H329 V237 H273 V311 H239 V237 H183 Z" fill="#FFFFFF" stroke="#FFFFFF" stroke-width="6" stroke-linejoin="round" transform="translate(-1 -2)"/>
-      <path d="M183 205 H329 V237 H273 V311 H239 V237 H183 Z" fill="url(#letter)" stroke="url(#letter)" stroke-width="6" stroke-linejoin="round"/>
-    </g>
+  <rect width="512" height="512" rx="112" fill="#15120F"/>
+  <g clip-path="url(#tile)">
+    <path d="M300 512 L470 0 H540 L370 512 Z" fill="#F26B1D"/>
+    <path d="M392 512 L562 0 H596 L426 512 Z" fill="#A9420A"/>
+    <path d="M448 512 L618 0 H640 L470 512 Z" fill="#F26B1D"/>
+    <rect y="440" width="512" height="20" fill="#F26B1D"/>
+  </g>
+  <!-- the box's shadow on the floor -->
+  <ellipse cx="262" cy="420" rx="168" ry="16" fill="#000000" fill-opacity="0.45"/>
+  <g stroke="#16120D" stroke-width="10" stroke-linejoin="round">
+    <path d="M104 196 L170 146 H406 L340 196 Z" fill="#D9AE78"/>
+    <path d="M340 196 L406 146 V352 L340 404 Z" fill="#A87A45"/>
+    <rect x="104" y="196" width="236" height="208" fill="#C99A62"/>
+  </g>
+  <!-- packing tape over the seam and down the front -->
+  <path d="M206 196 L272 146 H306 L240 196 Z" fill="#EAD7B5"/>
+  <rect x="206" y="201" width="34" height="46" fill="#EAD7B5"/>
+  <!-- the hand-hold -->
+  <rect x="168" y="262" width="108" height="24" rx="12" fill="#16120D"/>
+  <!-- the printed band -->
+  <rect x="109" y="318" width="226" height="44" fill="#F26B1D"/>
+  <path d="M345 314 L401 270 V306 L345 350 Z" fill="#DD5C12"/>
+  <!-- THIS SIDE UP -->
+  <path d="M132 392 l13 -18 l13 18 h-8 v9 h-10 v-9 z M164 392 l13 -18 l13 18 h-8 v9 h-10 v-9 z" fill="#16120D" fill-opacity="0.85"/>
 </svg>

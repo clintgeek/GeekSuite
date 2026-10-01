@@ -13,8 +13,9 @@
  * md+: the filter panel column beside the grid (collapsible, remembered).
  * Phone: a "Filters · N" button opens the same sections in a full sheet.
  *
- * Phone first (Label Maker): the default is the dense LIST on a card-stock
- * sheet; the photo grid is the toggle beside Sort, and the choice is
+ * Phone first: the default is the dense LIST — the cargo hold's manifest on
+ * a box-face panel under a heavy black rule; the photo grid (boxes on
+ * pallets) is the toggle beside Sort, and the choice is
  * remembered (utils/storage.js — try/catch, a convenience). Desktop defaults
  * to the grid. A thing and the add screen are pages of their own; coming
  * back, useScrollMemory puts the list where it was.
@@ -25,17 +26,19 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { GeekErrorState } from '@geeksuite/ui';
 import { FilterPanel, FiltersSheet, LibraryHeader, useInfiniteSentinel, useScrollMemory, useSectionOpen } from '@geeksuite/collection';
 import { useLibraryFilter, useThingFacets, useThingPages } from '../hooks/useLibrary';
-import { useFacetContext } from '../hooks/useThingMeta';
+import { useFacetContext, useThingTree } from '../hooks/useThingMeta';
 import { useScrollRoot } from '../components/AppMain';
 import ThingCard from '../components/ThingCard';
 import ThingRow, { ListHeader } from '../components/ThingRow';
 import SaveLibraryView from '../components/SaveLibraryView';
 import { thingPath } from '../components/navConfig';
 import { DEFAULT_OPEN, SECTIONS, SECTIONS_OPEN_KEY, activeChips } from '../utils/facets';
+import { dustImage } from '../theme/theme';
 import { SORTS, isNarrowed, stateToParams } from '../utils/libraryFilter';
 import { readPref, writePref } from '../utils/storage';
 import { isNotMemberError, reportNotMember } from '../membership';
 import { rememberLibrarySearch } from '../utils/lastLibrary';
+import { bySiblingOrder, isParentKind, kindOf } from '../utils/where';
 import LibraryEmpty from './LibraryEmpty';
 
 const VIEW_KEY = 'thinggeek.libraryView';
@@ -44,8 +47,9 @@ const SCROLL_KEY = 'thinggeek.libraryScroll';
 
 export const GRID_SX = {
   display: 'grid',
-  gridTemplateColumns: { xs: 'repeat(auto-fill, minmax(156px, 1fr))', sm: 'repeat(auto-fill, minmax(190px, 1fr))', lg: 'repeat(auto-fill, minmax(210px, 1fr))' },
-  gap: { xs: 1.5, md: 2 },
+  gridTemplateColumns: { xs: 'repeat(auto-fill, minmax(150px, 1fr))', sm: 'repeat(auto-fill, minmax(190px, 1fr))', lg: 'repeat(auto-fill, minmax(210px, 1fr))' },
+  columnGap: { xs: 1.5, md: 2 },
+  rowGap: { xs: 2, md: 3 },
 };
 
 /** No stored choice: the list on a phone, the grid on a desk. */
@@ -74,8 +78,8 @@ function SkeletonGrid() {
   return (
     <Box sx={GRID_SX} aria-busy="true" aria-label="Loading things">
       {Array.from({ length: 8 }, (_, i) => (
-        <Box key={i} sx={{ p: 1, borderRadius: '12px', border: 1, borderColor: 'divider', bgcolor: 'background.card' }}>
-          <Skeleton variant="rounded" sx={{ width: '100%', height: 'auto', aspectRatio: '4 / 3', borderRadius: '8px' }} />
+        <Box key={i} sx={{ p: 1, borderRadius: '4px', border: 1, borderColor: 'divider', bgcolor: 'background.card' }}>
+          <Skeleton variant="rounded" sx={{ width: '100%', height: 'auto', aspectRatio: '4 / 3', borderRadius: '2px' }} />
           <Skeleton variant="text" sx={{ mt: 1, width: '80%', fontSize: '0.9375rem' }} />
           <Skeleton variant="text" sx={{ width: '55%', fontSize: '0.75rem' }} />
         </Box>
@@ -103,6 +107,9 @@ export default function LibraryView() {
   const filtersButtonRef = useRef(null);
   const scrollRoot = useScrollRoot();
   const facetContext = useFacetContext();
+  const { nodes: treeNodes } = useThingTree();
+  // The household's top places (Chef's shape: rooms set up, nothing in them), for the first run.
+  const rooms = React.useMemo(() => treeNodes.filter((n) => isParentKind(kindOf(n))).sort(bySiblingOrder).slice(0, 12), [treeNodes]);
 
   const { page, things, hasMore, loading, refreshing, loadingMore, loadMore, error, refetch } = useThingPages(lib);
   const facets = useThingFacets(lib.filterInput);
@@ -148,10 +155,25 @@ export default function LibraryView() {
   } else if (firstLoad) {
     body = <SkeletonGrid />;
   } else if (!things.length) {
-    body = <LibraryEmpty firstRun={householdEmpty && !narrowed} onAdd={openAdd} onClear={lib.clearAll} />;
+    body = <LibraryEmpty firstRun={householdEmpty && !narrowed} onAdd={openAdd} onClear={lib.clearAll} rooms={rooms} />;
   } else if (view === 'list') {
     body = (
-      <Box data-testid="thing-list" sx={{ mx: { xs: -0.5, sm: 0 }, bgcolor: 'background.paper', border: 1, borderColor: 'border', borderRadius: '6px', overflow: 'hidden', boxShadow: '0 2px 6px rgba(40, 25, 10, 0.12)' }}>
+      <Box
+        data-testid="thing-list"
+        sx={{
+          mx: { xs: -0.5, sm: 0 },
+          bgcolor: 'background.card',
+          backgroundImage: (t) => dustImage(t.palette.mode),
+          border: 1,
+          borderColor: 'border',
+          // the hold's heavy black rule across the top
+          borderTop: '4px solid',
+          borderTopColor: 'rule.main',
+          borderRadius: '3px',
+          overflow: 'hidden',
+          boxShadow: (t) => (t.palette.mode === 'dark' ? '0 3px 0 rgba(0,0,0,0.6)' : '0 3px 0 rgba(60,38,14,0.22)'),
+        }}
+      >
         <ListHeader />
         <Box component="ul" aria-label="Things" sx={{ m: 0, p: 0 }}>
           {things.map((t) => (
@@ -217,6 +239,7 @@ export default function LibraryView() {
                   height: 2,
                   borderRadius: 1,
                   bgcolor: 'transparent',
+                  overflow: 'hidden',
                   opacity: refreshing ? 1 : 0,
                   transition: 'opacity 160ms',
                   transitionDelay: refreshing ? '120ms' : '0ms',

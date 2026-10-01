@@ -41,7 +41,7 @@ import { useThingTypes, useVocabulary } from '../hooks/useThingMeta';
 import { move } from './edit/MediaEditor';
 import { fieldKindLabel } from '../utils/vocab';
 import { KIND_LABELS, THING_KINDS } from '../utils/where';
-import { DISPLAY_FONT } from '../theme/theme';
+import { DISPLAY_FONT, LIVERY, dustImage } from '../theme/theme';
 
 const REFETCH = { refetchQueries: [{ query: GET_THING_TYPES }, 'GetThingTree'], awaitRefetchQueries: true };
 const UNIT_KINDS = new Set(['text', 'number']);
@@ -349,7 +349,7 @@ export default function TypesView() {
     <PageFrame maxWidth={960}>
       <PageHeader
         title="Types"
-        lede="What kinds of things the household keeps, and what each one asks for. Edit a starter type or make your own."
+        lede="The packing rules: what kinds of things the household keeps, and what each one asks for. Edit a starter type or make your own."
         actions={
           <Button variant="contained" startIcon={<AddIcon />} onClick={() => setEditing({})}>
             New type
@@ -370,10 +370,11 @@ export default function TypesView() {
                   onClick={() => setEditing(t)}
                   data-testid="type-row"
                   aria-label={`Edit ${t.name}`}
-                  sx={{ width: '100%', height: '100%', display: 'flex', alignItems: 'flex-start', gap: 1.5, p: 2, borderRadius: 3, border: 1, borderColor: 'divider', bgcolor: 'background.card', textAlign: 'left', justifyContent: 'flex-start', '&:hover': { borderColor: 'primary.main' } }}
+                  sx={{ width: '100%', height: '100%', display: 'flex', alignItems: 'flex-start', gap: 1.5, p: 2, borderRadius: '3px', border: 1, borderColor: 'border', borderTop: '4px solid', borderTopColor: 'rule.main', bgcolor: 'background.card', backgroundImage: (th) => dustImage(th.palette.mode), textAlign: 'left', justifyContent: 'flex-start', '&:hover': { borderColor: 'text.primary' } }}
                 >
-                  <Box sx={{ width: 44, height: 44, borderRadius: '12px', display: 'grid', placeItems: 'center', flexShrink: 0, bgcolor: 'plate.ground', color: 'plate.icon' }}>
-                    <TypeIcon name={t.icon} />
+                  {/* The type's box: a little cardboard face with the printed band. */}
+                  <Box aria-hidden="true" sx={{ position: 'relative', width: 46, height: 46, borderRadius: '2px', display: 'grid', placeItems: 'center', flexShrink: 0, bgcolor: 'box.face', color: 'box.print', border: '1.5px solid', borderColor: 'text.primary', backgroundImage: `linear-gradient(180deg, transparent 0 66%, ${LIVERY.orange} 66% 86%, transparent 86%)` }}>
+                    <TypeIcon name={t.icon} sx={{ mb: '8px' }} />
                   </Box>
                   <Box sx={{ flex: 1, minWidth: 0 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>

@@ -9,6 +9,7 @@ import { PrintOutlined as PrintIcon } from '@mui/icons-material';
 import { Link as RouterLink } from 'react-router-dom';
 import { useApolloClient } from '@apollo/client';
 import LabelSticker, { LABEL_SIZES, LABEL_SIZE_ORDER } from './LabelSticker';
+import { DISPLAY_FONT, dustImage } from '../../theme/theme';
 import LabelPrintPortal from './LabelPrintPortal';
 import { fetchLabelThings } from '../../utils/labelData';
 
@@ -43,7 +44,7 @@ export default function LabelPreview({ ids }) {
   return (
     <Box>
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 1, mb: 1 }}>
-        <Typography sx={{ fontWeight: 800, fontSize: '1.375rem', color: 'text.primary' }}>Print labels</Typography>
+        <Typography component="h1" sx={{ fontFamily: DISPLAY_FONT, fontWeight: 700, fontSize: '1.625rem', color: 'text.primary' }}>Print labels</Typography>
         <Button component={RouterLink} to="/labels" sx={{ color: 'text.primary', minHeight: 44 }}>
           Choose different things
         </Button>
@@ -78,9 +79,11 @@ export default function LabelPreview({ ids }) {
           <Box sx={{ mb: 2 }}>
             <Button
               variant="contained"
+              color="load"
+              disableElevation
               startIcon={<PrintIcon />}
               onClick={() => window.print()}
-              sx={{ minHeight: 44 }}
+              sx={{ minHeight: 44, fontWeight: 800, border: 2, borderStyle: 'solid', borderColor: 'load.contrastText' }}
             >
               Print
             </Button>
@@ -92,10 +95,12 @@ export default function LabelPreview({ ids }) {
               flexWrap: 'wrap',
               gap: 2,
               p: 2,
-              bgcolor: 'background.paper',
+              // The labels, stuck on the side of a box.
+              bgcolor: 'box.face',
+              backgroundImage: (t) => dustImage(t.palette.mode),
               border: 1,
-              borderColor: 'divider',
-              borderRadius: 2,
+              borderColor: 'border',
+              borderRadius: '3px',
             }}
           >
             {state.found.map((thing) => (
