@@ -445,6 +445,9 @@ export const resolvers = {
   Task: {
     id: (task) => task._id ? task._id.toString() : task.id?.toString(),
     collectionId: (task) => (task.collectionId ? task.collectionId.toString() : null),
+    // A row from before the field existed, or a lean/virtual object without
+    // it, is simply not private.
+    private: (task) => task.private === true,
     // Both sides of the parent/child link are resolved lazily and from the
     // stored `subtasks` array, which is the order of record. A list view that
     // does not select them pays nothing; one that does pays a single extra

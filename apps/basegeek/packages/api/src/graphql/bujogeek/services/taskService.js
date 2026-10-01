@@ -516,6 +516,7 @@ class TaskService {
               recurrenceRule: master.recurrenceRule,
               recurrencePattern: master.recurrencePattern,
               collectionId: master.collectionId,
+              private: master.private === true,
               isVirtual: true,
               createdBy: master.createdBy
             });
@@ -547,6 +548,7 @@ class TaskService {
                   recurrenceRule: master.recurrenceRule,
                   recurrencePattern: master.recurrencePattern,
                   collectionId: master.collectionId,
+                  private: master.private === true,
                   isVirtual: true,
                   createdBy: master.createdBy
                 });
@@ -712,6 +714,8 @@ class TaskService {
   async createTask(taskData) {
     this.requireUser(taskData?.createdBy);
     const data = this.normalizeRecurrence(taskData);
+    // `private: null` (or absent — every pre-private client) is not private.
+    if ('private' in data) data.private = data.private === true;
     if ('collectionId' in data) {
       await this.assertOwnedCollection(data.collectionId, data.createdBy);
       if (!data.collectionId) data.collectionId = null;
@@ -849,6 +853,9 @@ class TaskService {
     // Only touch recurrence fields when the caller actually sent one, so that
     // ordinary edits never disturb an existing series.
     let updateData = rawUpdateData || {};
+
+    // `private: null` means "not private" — never a stored null.
+    if ('private' in updateData) updateData = { ...updateData, private: updateData.private === true };
 
     // Filing into / moving between collections — `null` clears the filing.
     if ('collectionId' in updateData) {

@@ -89,6 +89,7 @@ export const createTaskSchema = z
     recurrenceRule: recurrenceRuleSchema,
     isSeriesMaster: z.boolean().optional(),
     collectionId: idString.nullable().optional(),
+    private: z.boolean().nullable().optional(),
   })
   .strict();
 
@@ -105,6 +106,7 @@ export const updateTaskInputSchema = z
     recurrencePattern: recurrencePatternSchema,
     recurrenceRule: recurrenceRuleSchema,
     collectionId: idString.nullable().optional(),
+    private: z.boolean().nullable().optional(),
   })
   .strict();
 

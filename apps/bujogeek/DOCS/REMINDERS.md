@@ -22,6 +22,24 @@ The test is `hasDueTime()` in `reminderService.js`. There is deliberately no way
 to ask for a reminder on a date-only task: there would be no defensible instant
 to fire at.
 
+## Private tasks: no words in the push (2026-10-01)
+
+A task marked **private** (`Task.private`) still reminds, but the payload
+`reminderService.buildPayload` builds for it carries none of the task:
+
+```json
+{ "title": "Private task due", "body": "Due 14:30 UTC", "tags": [],
+  "dueDate": "…", "taskId": "…", "private": true, "url": "/today" }
+```
+
+No content, no tags (a `#hr` tag says as much as the words), no note. This is
+done on the server so that no push service, OS notification centre, watch or
+shared desktop ever receives the text — the service worker cannot leak what it
+was never sent. `push-sw.js` needs no change: it re-renders the body as
+`Due 2:30 PM` from `dueDate` and the (empty) tags. Covered by
+`__tests__/bujogeekPrivate.test.js`, which asserts on the whole serialised wire
+string, not just the fields.
+
 ## Recurring tasks get ONE reminder — a known limitation
 
 **A repeating task with a due time notifies on its first occurrence and then

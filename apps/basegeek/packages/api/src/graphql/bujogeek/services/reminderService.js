@@ -19,6 +19,9 @@ export const TICK_INTERVAL_MS = 60 * 1000;
 /** Notification titles are truncated to this before the OS does it for us. */
 const TITLE_MAX = 80;
 
+/** What a private task's reminder says instead of its words. */
+export const PRIVATE_TITLE = 'Private task due';
+
 /**
  * A dueDate at *exactly* UTC midnight is the module's "date only, no time"
  * convention (the same one habitService.toUtcMidnight writes). Such a task is
@@ -152,10 +155,28 @@ class ReminderService {
    * the SW handler is an older version.
    */
   buildPayload(task) {
-    const title = String(task.content || 'Reminder').slice(0, TITLE_MAX);
     const due = new Date(task.dueDate);
     const hh = String(due.getUTCHours()).padStart(2, '0');
     const mm = String(due.getUTCMinutes()).padStart(2, '0');
+
+    // A PRIVATE task's words never leave the server. A notification lands on
+    // a lock screen, a watch, or a desktop that is being shared — and the push
+    // service, the OS and every device on the subscription list all see the
+    // payload. So it carries no content, no tags (`#hr` can say as much as the
+    // words) and no note: only that something private is due, and when.
+    if (task.private === true) {
+      return {
+        title: PRIVATE_TITLE,
+        body: `Due ${hh}:${mm} UTC`,
+        tags: [],
+        dueDate: due.toISOString(),
+        taskId: String(task._id),
+        private: true,
+        url: '/today',
+      };
+    }
+
+    const title = String(task.content || 'Reminder').slice(0, TITLE_MAX);
     const tags = (task.tags || []).filter(Boolean).map((t) => `#${t}`).join(' ');
     const body = [`Due ${hh}:${mm} UTC`, tags].filter(Boolean).join(' · ');
     return {

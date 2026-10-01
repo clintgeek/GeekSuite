@@ -23,7 +23,8 @@
  * ## What leaves the box
  *
  * Task **titles** (`content`) and collection names for the overdue and parked
- * lists, habit names with their streaks, and the week's counts. Not notes, not
+ * lists — except a private task's, which goes as "Private task" with no
+ * reason — habit names with their streaks, and the week's counts. Not notes, not
  * tags, not task bodies, not anything from another app — see
  * `factsForModel()`, which is the only thing serialised into the prompt.
  *
@@ -43,6 +44,9 @@ import Task from '../models/Task.js';
 import Collection from '../models/Collection.js';
 import habitService from './habitService.js';
 import logger from '../../../lib/logger.js';
+
+/** A private task's title in the review facts (and so in any prompt). */
+export const PRIVATE_TASK_TITLE = 'Private task';
 import { runAIFeature, callsToday } from '../../../services/aiFeatureRunner.js';
 
 export const REVIEW_APP = 'bujogeek';
@@ -133,12 +137,12 @@ export async function gatherFacts({ userId, weekStart }) {
     })
       .sort({ dueDate: 1 })
       .limit(MAX_LIST)
-      .select('content dueDate collectionId')
+      .select('content dueDate collectionId private')
       .lean(),
     Task.find({ createdBy: userId, status: 'blocked' })
       .sort({ blockedAt: -1 })
       .limit(MAX_LIST)
-      .select('content blockedReason blockedAt collectionId')
+      .select('content blockedReason blockedAt collectionId private')
       .lean(),
     habitService.listHabits(userId, false),
     habitService.getLogs({ userId, startDate: start, endDate: lastDay }),
@@ -187,8 +191,10 @@ export async function gatherFacts({ userId, weekStart }) {
     })
   );
 
+  // A private task is counted, but its words (and a parked one's reason) are
+  // never put in front of a model: the facts become the prompt.
   const overdue = openTasks.map((t) => ({
-    title: t.content,
+    title: t.private === true ? PRIVATE_TASK_TITLE : t.content,
     collection: nameFor(t.collectionId),
     dueDate: dayKey(t.dueDate),
     daysOverdue: Math.max(
@@ -198,9 +204,9 @@ export async function gatherFacts({ userId, weekStart }) {
   }));
 
   const blocked = parked.map((t) => ({
-    title: t.content,
+    title: t.private === true ? PRIVATE_TASK_TITLE : t.content,
     collection: nameFor(t.collectionId),
-    reason: t.blockedReason || null,
+    reason: t.private === true ? null : t.blockedReason || null,
     blockedSince: dayKey(t.blockedAt),
   }));
 

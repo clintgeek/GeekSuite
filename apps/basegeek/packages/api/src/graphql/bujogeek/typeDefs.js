@@ -48,6 +48,12 @@ export const typeDefs = gql`
     blockedReason: String
     "When the task was parked. Non-null exactly while status is 'blocked'."
     blockedAt: Date
+    """
+    The owner marked this task private: the desktop UI hides its words until
+    clicked, and its reminder push says "Private task due" instead of them.
+    Always a boolean (false for tasks written before the field existed).
+    """
+    private: Boolean
     collectionId: ID
     createdAt: Date
     updatedAt: Date
@@ -196,6 +202,8 @@ export const typeDefs = gql`
     recurrenceRule: String
     "Set to file this task into a collection, or null to take it out of one."
     collectionId: ID
+    "Mark the task private (true) or not (false). null is read as false."
+    private: Boolean
   }
 
   """
@@ -350,7 +358,7 @@ export const typeDefs = gql`
     \`recurrencePattern\` is accepted for backward compatibility only and is
     translated to an equivalent RRULE at create time.
     """
-    createTask(content: String!, signifier: String, status: String, priority: Int, tags: [String], dueDate: Date, createdAt: Date, updatedAt: Date, note: String, recurrencePattern: String @deprecated(reason: "Legacy recurrence enum — translated to recurrenceRule server-side. Send recurrenceRule instead."), recurrenceRule: String, isSeriesMaster: Boolean, collectionId: ID): Task!
+    createTask(content: String!, signifier: String, status: String, priority: Int, tags: [String], dueDate: Date, createdAt: Date, updatedAt: Date, note: String, recurrencePattern: String @deprecated(reason: "Legacy recurrence enum — translated to recurrenceRule server-side. Send recurrenceRule instead."), recurrenceRule: String, isSeriesMaster: Boolean, collectionId: ID, private: Boolean): Task!
     updateTask(id: ID!, input: UpdateTaskInput!, editScope: EditScope): Task!
     deleteTask(id: ID!, editScope: EditScope): DeleteResponse!
     updateTaskStatus(id: ID!, status: String!): Task!

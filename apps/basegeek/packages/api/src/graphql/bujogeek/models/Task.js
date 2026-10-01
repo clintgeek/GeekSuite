@@ -49,6 +49,13 @@ const taskSchema = new mongoose.Schema({
   // See taskService.blockTask / unblockTask.
   blockedReason: { type: String, trim: true, maxlength: 280, default: null },
   blockedAt: { type: Date, default: null },
+  // "Private": the owner does not want this task's words on a shared screen.
+  // The desktop UI hides the text until clicked; the server's part is that a
+  // private task's reminder push never carries its text (reminderService
+  // .buildPayload) and the AI weekly review never sees it (reviewService).
+  // Rows written before the field existed have no key; `default` covers them
+  // on read, and the Task.private resolver coerces anything else to a boolean.
+  private: { type: Boolean, default: false },
   // When the web-push reminder for this task's dueDate was delivered. Non-null
   // means "already reminded" and is what keeps the 60s scheduler from firing
   // the same task twice; taskService.updateTask clears it whenever dueDate
