@@ -1,0 +1,21 @@
+{
+  "name": "@geeksuite/tags",
+  "version": "0.1.0",
+  "private": true,
+  "description": "The suite tag standard: lowercase kebab-case segments, / for nesting. Pure ESM, zero runtime deps, Node and browser.",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "sideEffects": false,
+  "scripts": {
+    "test": "vitest run",
+    "lint": "eslint ."
+  },
+  "devDependencies": {
+    "@geeksuite/eslint-config": "workspace:*",
+    "eslint": "^9.39.2",
+    "vitest": "^4.0.18"
+  }
+}

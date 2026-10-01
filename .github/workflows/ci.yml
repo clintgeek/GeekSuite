@@ -282,6 +282,24 @@ jobs:
         working-directory: packages/utils
         run: npx vitest run
 
+  test-tags:
+    name: shared tags tests (the tag standard)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # @geeksuite/tags: lowercase kebab-case, / for nesting — the gateway and
+      # the NoteGeek / BuJoGeek / ThingGeek frontends all spell tags with it.
+      - name: Run vitest
+        working-directory: packages/tags
+        run: npx vitest run
+
   test-crypto-vault:
     name: shared crypto-vault tests
     runs-on: ubuntu-latest

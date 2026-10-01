@@ -19,6 +19,7 @@
     "@fontsource/inter-tight": "^5.3.0",
     "@geeksuite/api-client": "workspace:*",
     "@geeksuite/auth": "workspace:*",
+    "@geeksuite/tags": "workspace:*",
     "@geeksuite/ui": "workspace:*",
     "@geeksuite/user": "workspace:*",
     "@geeksuite/utils": "workspace:*",

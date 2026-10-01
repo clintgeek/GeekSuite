@@ -36,6 +36,7 @@ on:
     paths:
       - 'apps/**'
       - 'packages/ui/**'
+      - 'packages/tags/**'
       - 'tools/mobile-harness/**'
       - '.github/workflows/mobile-harness.yml'
   pull_request:
@@ -43,6 +44,7 @@ on:
     paths:
       - 'apps/**'
       - 'packages/ui/**'
+      - 'packages/tags/**'
       - 'tools/mobile-harness/**'
       - '.github/workflows/mobile-harness.yml'
 

@@ -22,6 +22,7 @@
     "@geeksuite/api-client": "workspace:*",
     "@geeksuite/auth": "workspace:*",
     "@geeksuite/collection": "workspace:*",
+    "@geeksuite/tags": "workspace:*",
     "@geeksuite/ui": "workspace:*",
     "@geeksuite/user": "workspace:*",
     "@mui/icons-material": "^5.16.7",
