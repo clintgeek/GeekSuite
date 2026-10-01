@@ -8,7 +8,7 @@
  * count for a type with identifier fields — a keyboard has no serial to
  * miss (the gateway's missingOf rule).
  *
- * Moving Day: a printed claim sheet (white stock under a heavy black rule),
+ * Storage Yard: a printed claim sheet (white stock under a heavy black rule),
  * its meter a row of orange cells, and each gap a dashed "fill me in" slot.
  */
 import React from 'react';

@@ -1,6 +1,6 @@
 /**
- * Inside [BOX Van] — what is directly inside this thing, under its moving
- * label: the unit's door rolls up onto the dim room (a location's shelves,
+ * Inside [▌Van] — what is directly inside this thing, under its unit tag:
+ * the unit's door rolls up onto the dim room (a location's shelves,
  * the Van's jumper cables), each a link to its own page, and "Add here",
  * which opens the add flow with this thing already chosen as where it is.
  *
@@ -13,10 +13,9 @@ import { Add as AddIcon } from '@mui/icons-material';
 import { Link as RouterLink, useLocation, useNavigate } from 'react-router-dom';
 import Section from './Section';
 import ChromeTheme from '../../components/Chrome';
-import MovingLabel from '../../components/MovingLabel';
+import UnitTag from '../../components/UnitTag';
 import { UnitInterior } from '../../components/StorageUnit';
 import { StripeMark } from '../../components/SectionHeading';
-import { boxMarks, isOversize } from '../../utils/boxMarks';
 import { kindOf } from '../../utils/where';
 import ThingPhoto from '../../components/ThingPhoto';
 import { coverSrc } from '../../components/thingDisplay';
@@ -35,9 +34,9 @@ export default function ContainsSection({ thing }) {
         <>
           <StripeMark />
           <span>{'Inside '}</span>
-          <MovingLabel size="sm" variant="inline" kind={kindOf(thing)} caption={isOversize(thing) ? 'OVERSIZE' : undefined} sx={{ minWidth: 0 }}>
+          <UnitTag size="sm" variant="inline" kind={kindOf(thing)} sx={{ minWidth: 0 }}>
             {thing.name}
-          </MovingLabel>
+          </UnitTag>
           {contents.length ? <span>{` · ${contents.length}`}</span> : null}
         </>
       }
@@ -70,7 +69,7 @@ export default function ContainsSection({ thing }) {
                       '&:hover': { bgcolor: 'action.hover' },
                     }}
                   >
-                    <ThingPhoto src={coverSrc(t)} icon={t.type?.icon} marks={boxMarks(t)} variant="thumb" radius={2} sx={{ width: 40, height: 40, flexShrink: 0 }} />
+                    <ThingPhoto src={coverSrc(t)} icon={t.type?.icon} variant="thumb" radius={2} sx={{ width: 40, height: 40, flexShrink: 0 }} />
                     <Box sx={{ minWidth: 0 }}>
                       <Typography noWrap sx={{ fontSize: '0.9375rem', fontWeight: 600, color: 'text.primary' }}>
                         {t.name}

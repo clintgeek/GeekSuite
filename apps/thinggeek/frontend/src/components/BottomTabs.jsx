@@ -1,15 +1,15 @@
 /**
- * The phone's one set of paths: Things · Where · Load · Attention · More.
+ * The phone's one set of paths: Things · Where · Add · Attention · More.
  *
- *   - Load sits in the middle: a big moving-orange tile with black
+ *   - Add sits in the middle: a big yard-orange tile with black
  *     lettering, standing a little proud of the bar — the app's one primary
  *     action, in the thumb zone (it opens the add screen). No floating +.
- *   - Attention (the cab dashboard) carries the count of things overdue or
+ *   - Attention (the dashboard) carries the count of things overdue or
  *     due soon on an orange badge.
  *   - More opens a sheet with the rest (Types, Insurance report, Trash,
  *     Settings, saved views). No hamburger anywhere on the phone.
  *
- * Moving Day: the bar is the truck's black flank with the orange livery
+ * Storage Yard: the bar is a rental truck's black flank with the orange livery
  * stripe along its top edge, in both modes (it renders under the chrome
  * theme). Rendered only below md (App.jsx), as GeekShell's `bottomNav`, so
  * the shell reserves its 56px (plus the home-indicator inset).
@@ -18,7 +18,7 @@ import React, { useState } from 'react';
 import { Box, ButtonBase, Typography } from '@mui/material';
 import {
   Inventory2Outlined as ThingsIcon,
-  LocalShippingOutlined as LoadIcon,
+  Add as AddIcon,
   MoreHoriz as MoreIcon,
   SpeedOutlined as AttentionIcon,
   WarehouseOutlined as WhereIcon,
@@ -26,7 +26,7 @@ import {
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { geekLayout } from '@geeksuite/ui';
 import { useAttention } from '../hooks/useThingMeta';
-import { CHROME, LIVERY, LIVERY_BAND_PX, STENCIL_FONT, liveryBand } from '../theme/theme';
+import { CHROME, DISPLAY_FONT, LIVERY, LIVERY_BAND_PX, liveryBand } from '../theme/theme';
 import ChromeTheme from './Chrome';
 import { tabFor } from './navConfig';
 import NavMoreSheet from './NavMoreSheet';
@@ -114,14 +114,14 @@ function Label({ active, children }) {
   );
 }
 
-/** The middle tab: the Load button, standing proud of the bar. */
-function LoadTab() {
+/** The middle tab: the Add button, standing proud of the bar. */
+function AddTab() {
   return (
     <ButtonBase
       component={RouterLink}
       to="/add"
       data-tab="add"
-      aria-label="Load: add a thing"
+      aria-label="Add a thing"
       sx={{ ...itemSx, pt: 0, justifyContent: 'flex-start', '&:focus-visible': {} }}
     >
       <Box
@@ -144,9 +144,9 @@ function LoadTab() {
           '& .MuiSvgIcon-root': { fontSize: 24 },
         }}
       >
-        <LoadIcon aria-hidden="true" />
-        <Box component="span" sx={{ fontFamily: STENCIL_FONT, fontSize: '0.8125rem', lineHeight: 1, letterSpacing: '0.06em' }}>
-          Load
+        <AddIcon aria-hidden="true" />
+        <Box component="span" sx={{ fontFamily: DISPLAY_FONT, fontWeight: 700, fontSize: '0.9375rem', lineHeight: 1 }}>
+          Add
         </Box>
       </Box>
     </ButtonBase>
@@ -197,7 +197,7 @@ export default function BottomTabs() {
           }}
         >
           {tabs.map((t) => {
-            if (t.id === 'add') return <LoadTab key="add" />;
+            if (t.id === 'add') return <AddTab key="add" />;
             const active = current === t.id;
             return (
               <ButtonBase

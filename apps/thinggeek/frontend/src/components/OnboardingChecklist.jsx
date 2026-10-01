@@ -28,7 +28,7 @@
  *
  * "Hide this list" retires the whole card the same way, also localStorage.
  *
- * Moving Day: this is "Before you roll" — the pre-trip sheet on the cab's
+ * Storage Yard: "Getting started" — the sheet on the rental counter's
  * clipboard: a printed form (white stock) under a black clip, square check
  * boxes, and a finished step stamped "Done" in orange with black ink.
  */
@@ -51,7 +51,7 @@ export function isNewIsh({ locationsCount = 0, itemsCount = 0 } = {}) {
 export function checklistSteps({ locationsCount = 0, itemsCount = 0, missingIdPlate = 0, labelsAnswer = null } = {}) {
   return [
     { key: 'rooms', label: 'Add your rooms', done: locationsCount >= 2 },
-    { key: 'walk', label: 'Pack one room', done: itemsCount >= 5 },
+    { key: 'walk', label: 'Walk one room', done: itemsCount >= 5 },
     // Nothing missing only counts once there's something to photograph: an
     // empty inventory has "0 missing" too, and must not tick itself off.
     { key: 'id-plate', label: 'Photograph ID plates on valuables', done: itemsCount > 0 && missingIdPlate === 0 },
@@ -136,9 +136,9 @@ export default function OnboardingChecklist({ locationsCount, itemsCount, missin
       <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1, px: { xs: 1.5, md: 2 }, pt: 2, pb: 0.5, borderBottom: '3px solid', borderColor: 'rule.main' }}>
         <Box sx={{ minWidth: 0 }}>
           <Typography id="checklist-heading" component="h2" sx={{ fontFamily: DISPLAY_FONT, fontWeight: 700, fontSize: '1.25rem', lineHeight: 1.2 }}>
-            Before you roll
+            Getting started
           </Typography>
-          <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary' }}>The first-run checklist — four things, then you're on the road.</Typography>
+          <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary' }}>The first-run checklist — four things, then you're set.</Typography>
         </Box>
         <Button onClick={hide} data-testid="checklist-hide" sx={{ color: 'text.secondary', minHeight: 44, flexShrink: 0 }}>
           Hide this list
@@ -157,7 +157,7 @@ export default function OnboardingChecklist({ locationsCount, itemsCount, missin
           step={steps[1]}
           action={
             <Button onClick={startWalk} size="small" sx={{ color: 'text.primary', minHeight: 44, flexShrink: 0 }}>
-              Pack a room
+              Walk a room
             </Button>
           }
         />

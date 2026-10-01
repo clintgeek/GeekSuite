@@ -13,10 +13,10 @@
  * (styles.css hides the app shell under `body.tg-printing` in print media),
  * so the shell's fixed-height scrolling layout can never clip it to a page.
  *
- * Moving Day: on screen this is the mover's inventory sheet — a printed
- * bill-of-lading form: a header block of ruled fields, the total insured
- * value on an odometer reel, check boxes for what's on file, and numbered
- * ruled lines with a value column. The printout stays plain black on white.
+ * Storage Yard: on screen this is a clean printed inventory form — a header
+ * block of ruled fields, the total insured value on an odometer reel, check
+ * boxes for what's on file, and numbered ruled lines with a value column.
+ * The printout stays plain black on white.
  */
 import React, { useEffect, useMemo, useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -311,23 +311,23 @@ export default function InsuranceView() {
         ) : null}
       </Box>
 
-      {/* The inventory sheet's header block: a printed form. */}
+      {/* The inventory's header block: a printed form. */}
       <Box
         data-testid="insurance-totals"
         sx={{ mb: 2, border: 1, borderColor: 'border', borderTop: '6px solid', borderTopColor: 'rule.main', borderRadius: '2px', bgcolor: 'background.paper', p: { xs: 1.5, md: 2.5 }, boxShadow: '0 3px 0 rgba(40, 25, 10, 0.16)' }}
       >
         <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', justifyContent: 'space-between', gap: 2, mb: 2 }}>
           <Box sx={{ minWidth: 0 }}>
-            <Box component="span" aria-hidden="true" data-caption="HOUSEHOLD GOODS" sx={{ display: 'block', fontFamily: STENCIL_FONT, fontSize: '0.75rem', letterSpacing: '0.14em', color: 'text.secondary', '&::before': { content: 'attr(data-caption)' } }} />
+            <Box component="span" aria-hidden="true" data-caption="HOME INVENTORY" sx={{ display: 'block', fontFamily: STENCIL_FONT, fontSize: '0.75rem', letterSpacing: '0.14em', color: 'text.secondary', '&::before': { content: 'attr(data-caption)' } }} />
             <Typography component="h2" sx={{ fontFamily: DISPLAY_FONT, fontWeight: 700, fontSize: { xs: '1.5rem', md: '1.875rem' }, lineHeight: 1.1 }}>
               Inventory sheet
             </Typography>
-            <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary' }}>{t ? `${t.count} item${t.count === 1 ? '' : 's'} declared` : 'Counting…'}</Typography>
+            <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary' }}>{t ? `${t.count} item${t.count === 1 ? '' : 's'} listed` : 'Counting…'}</Typography>
           </Box>
           <OdometerReel text={t ? formatMoney(t.totalValue, t.currency) : '$0'} />
         </Box>
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr 1fr', md: '1fr 1fr 2fr' }, columnGap: 2, rowGap: 1.25, mb: 2 }}>
-          <Field label="Shipper">This household</Field>
+          <Field label="Owner">This household</Field>
           <Field label="Prepared">{generatedAt.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}</Field>
           <Field label="Contents" sx={{ gridColumn: { xs: '1 / -1', md: 'auto' } }}>
             {scopeText}

@@ -1,16 +1,15 @@
 /**
- * `/walk?at=<placeId>` — "Pack a room" (Moving Day's name for what was "Walk
- * the room"; the route stays /walk): a full-screen, phone-first capture
+ * `/walk?at=<placeId>` — "Walk the room": a full-screen, phone-first capture
  * loop for filling in a household's inventory fast (DOCS/THINGGEEK_PLAN.md).
- * It looks the part: the room's open box with its moving label on the
- * front, a running "N packed into Garage", and the orange Next on the
- * dock's black edge.
+ * It looks the part (Storage Yard): the room as an open unit with its tag,
+ * a running "N added to Garage", and the orange Next on the black livery
+ * bar.
  * Prod's actual problem: 5 locations and 0 items. Add is built for adding ONE
  * thing carefully; Walk is built for adding TEN things in two minutes.
  *
- * Entry points: WhereView's "Pack this room" (Add here's neighbour, on the
+ * Entry points: WhereView's "Walk this room" (Add here's neighbour, on the
  * drill-down and the ⋯ menu) arrives with `?at=` already set. AddThing's
- * "Pack a whole room…" link arrives without it — this screen then asks which
+ * "Walk a whole room…" link arrives without it — this screen then asks which
  * place, the same locations-and-containers list the "where is it?" picker
  * uses (components/WherePicker's WhereList).
  *
@@ -43,8 +42,8 @@ import { PhotoCameraOutlined as CameraIcon } from '@mui/icons-material';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { GeekErrorState } from '@geeksuite/ui';
 import ChromeTheme from '../../components/Chrome';
-import MovingBox from '../../components/MovingBox';
-import MovingLabel from '../../components/MovingLabel';
+import { MiniDoor } from '../../components/StorageUnit';
+import UnitTag from '../../components/UnitTag';
 import { statusTone } from '../../components/DueLine';
 import { CHROME, LIVERY, dustImage } from '../../theme/theme';
 import TypeIcon from '../../components/TypeIcon';
@@ -96,7 +95,7 @@ function CaptureThumb({ photo, onPhoto }) {
           height: '100%',
           borderRadius: '3px',
           overflow: 'hidden',
-          // a little open box: cardboard flaps round a dark inside
+          // the camera slot: a kraft frame round a dark inside
           border: '6px solid',
           borderColor: 'box.flap',
           bgcolor: photo ? '#0B0A09' : 'box.hole',
@@ -211,11 +210,11 @@ function ItemRow({ item, upload, onRetryCreate, onRetryUpload, onFix }) {
   return (
     <Box component="li" data-testid="walk-item" data-status={item.status} sx={{ listStyle: 'none', borderBottom: 1, borderColor: 'divider' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, minHeight: 52, py: 0.75 }}>
-        <Box sx={{ width: 40, height: 40, borderRadius: '2px', overflow: 'hidden', flexShrink: 0, bgcolor: 'box.face', display: 'grid', placeItems: 'center', backgroundImage: `linear-gradient(180deg, transparent 0 62%, ${LIVERY.orange} 62% 80%, transparent 80%)` }}>
+        <Box sx={{ width: 40, height: 40, borderRadius: '2px', overflow: 'hidden', flexShrink: 0, bgcolor: 'box.face', display: 'grid', placeItems: 'center', backgroundImage: `linear-gradient(180deg, transparent 0 80%, ${LIVERY.orange} 80% 88%, transparent 88%)` }}>
           {item.previewUrl ? (
             <Box component="img" src={item.previewUrl} alt="" sx={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           ) : (
-            <TypeIcon name={item.typeIcon ?? 'Inventory2'} sx={{ fontSize: 18, color: 'box.print', mb: '8px' }} />
+            <TypeIcon name={item.typeIcon ?? 'Inventory2'} sx={{ fontSize: 18, color: 'box.print', mb: '4px' }} />
           )}
         </Box>
         <Box sx={{ flex: 1, minWidth: 0 }}>
@@ -247,7 +246,7 @@ function ChooseRoom({ onPick }) {
   return (
     <PageFrame maxWidth={520}>
       <Typography variant="h1" component="h1" sx={{ fontSize: '1.625rem', mb: 0.5 }}>
-        Which room are you packing?
+        Which room are you walking?
       </Typography>
       <Typography sx={{ color: 'text.secondary', fontSize: '0.9375rem', mb: 2 }}>Pick a place, then capture what's in it one thing at a time.</Typography>
       <Box sx={{ border: 1, borderColor: 'border', borderTop: '4px solid', borderTopColor: 'rule.main', borderRadius: '3px', bgcolor: 'background.paper' }}>
@@ -441,7 +440,7 @@ export default function WalkRoom() {
       ) : null}
       <Button
         variant="contained"
-        color="load"
+        color="hero"
         disableElevation
         onClick={next}
         disabled={saving || Boolean(blockedReason)}
@@ -450,12 +449,12 @@ export default function WalkRoom() {
           fontWeight: 800,
           border: 2,
           borderStyle: 'solid',
-          borderColor: 'load.contrastText',
+          borderColor: 'hero.contrastText',
           flex: isPhone ? 1 : undefined,
           minHeight: 48,
           fontSize: '1rem',
           // Next is tapped over and over without navigating away; the
-          // shared theme presses it to load.dark, its own colour.
+          // shared theme presses it to hero.dark, its own colour.
         }}
       >
         {saving ? 'Saving…' : 'Next'}
@@ -466,9 +465,9 @@ export default function WalkRoom() {
   return (
     <PageFrame maxWidth={640} sx={{ pt: { xs: 2, md: 4 }, pb: { xs: blockedReason ? 'calc(124px + env(safe-area-inset-bottom))' : 'calc(96px + env(safe-area-inset-bottom))', md: 8 } }}>
       <Typography variant="h1" component="h1" sx={visuallyHidden}>
-        Pack {place.name}
+        Walk {place.name}
       </Typography>
-      {/* The room's box, flaps open, its label on the front, the tally beside it. */}
+      {/* The room as an open unit, its tag, the tally beside it. */}
       <Box
         sx={{
           display: 'flex',
@@ -485,14 +484,14 @@ export default function WalkRoom() {
         }}
       >
         <Box sx={{ position: 'relative', flexShrink: 0 }}>
-          <MovingBox open size={savedCount >= 12 ? 'LARGE' : savedCount >= 4 ? 'MEDIUM' : 'SMALL'} width={96} testId="walk-box" />
+          <MiniDoor open size={72} />
         </Box>
         <Box sx={{ minWidth: 0, flex: 1 }}>
-          <MovingLabel size="lg" kind={kindOf(place)} tilt sx={{ maxWidth: '100%' }}>
+          <UnitTag size="lg" kind={kindOf(place)} tilt sx={{ maxWidth: '100%' }}>
             {place.name}
-          </MovingLabel>
+          </UnitTag>
           <Typography data-testid="walk-count" sx={{ mt: 1, fontSize: '0.9375rem', fontWeight: 700, color: 'text.primary' }}>
-            {savedCount} packed into {place.name}
+            {savedCount} added to {place.name}
           </Typography>
         </Box>
         <Button variant="outlined" onClick={doneWalking} sx={{ color: 'text.primary', borderColor: 'text.primary', minHeight: 44, flexShrink: 0, alignSelf: 'flex-start' }}>
@@ -563,7 +562,7 @@ export default function WalkRoom() {
       {items.length ? (
         <Box sx={{ mt: 3 }}>
           <Typography component="h2" sx={{ fontSize: '0.875rem', fontWeight: 700, color: 'text.primary', mb: 0.5 }}>
-            This load · {items.length}
+            This walk · {items.length}
           </Typography>
           <Box component="ul" sx={{ m: 0, p: 0 }}>
             {items.map((item) => (

@@ -194,8 +194,8 @@ export default function App() {
       <LoginSplash
         appName="thing"
         appSuffix="geek"
-        taglineLine1="Everything packed and labelled."
-        taglineLine2="Ready for moving day — or a bad one."
+        taglineLine1="Everything you own, in one place."
+        taglineLine2="Labelled, stored, insured."
         description="The household inventory of what we own — where it lives, what's due, and the photo, serial, receipt and value the insurer will ask for."
         features={['Photos & receipts', 'Masked serials', "What's due", 'Insurance report']}
         onLogin={() => {

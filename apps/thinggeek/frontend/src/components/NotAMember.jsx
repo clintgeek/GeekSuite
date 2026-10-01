@@ -5,7 +5,7 @@
  * crash and never a login loop (they ARE signed in; the login page would
  * only bring them back).
  *
- * Moving Day: the sign on the yard's gate — black and orange, striped, a
+ * Storage Yard: the sign on the yard's gate — black and orange, striped, a
  * stencilled "MEMBERS ONLY" (decoration; the heading says it in words).
  */
 import React from 'react';

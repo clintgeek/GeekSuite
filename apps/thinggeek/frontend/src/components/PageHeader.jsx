@@ -1,6 +1,6 @@
 /**
  * The top of a non-library page: a lede that says what the page is for, and
- * actions. The top bar carries the page's title in truck lettering at every
+ * actions. The top bar carries the page's title in fleet lettering at every
  * size, so the heading here is visually hidden (still the page's <h1>) — a
  * second title saying the same thing right under it was noise.
  */

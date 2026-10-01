@@ -1,6 +1,6 @@
 /**
  * The truck's black flank: the top bar, the phone tab bar and the desktop
- * sidebar render under this nested theme in BOTH modes (Moving Day's black
+ * sidebar render under this nested theme in BOTH modes (the Storage Yard's black
  * livery), so every shared primitive inside them — the avatar menu, the
  * search field, the sidebar's captions — picks up light-on-black ink without
  * restyling the shared packages.

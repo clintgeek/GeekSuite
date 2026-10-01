@@ -22,11 +22,11 @@
  * Text that no longer fits truncates/wraps exactly as it does at the true
  * print size.
  *
- * Moving Day: the sticker is laid out as a moving label — a heavy black
- * frame, and on Large the printed field captions a box label carries
- * (CONTENTS over the name, ROOM over where it lives) and THIS SIDE UP in the
- * footer. Still black on white and nothing else: it's paper. Small keeps
- * only the frame (there's no room for captions at 38×25mm).
+ * Storage Yard: the sticker is laid out as a storage label — a heavy black
+ * frame, and on Large the printed field captions a bin or shelf label
+ * carries (CONTENTS over the name, LOCATION over where it lives). Still
+ * black on white and nothing else: it's paper. Small keeps only the frame
+ * (there's no room for captions at 38×25mm).
  */
 import React from 'react';
 import { Box } from '@mui/material';
@@ -219,7 +219,7 @@ export default function LabelSticker({ thing, size = 'small', testIdPrefix = 'la
           >
             {thing.name}
           </Box>
-          {breadcrumb ? <Caption pt={pt} sx={{ mt: '1.5mm', borderTop: `0.75pt solid ${FRAME}`, pt: '1mm' }}>Room</Caption> : null}
+          {breadcrumb ? <Caption pt={pt} sx={{ mt: '1.5mm', borderTop: `0.75pt solid ${FRAME}`, pt: '1mm' }}>Location</Caption> : null}
           {breadcrumb ? (
             <Box
               data-testid={id('breadcrumb')}
@@ -240,7 +240,7 @@ export default function LabelSticker({ thing, size = 'small', testIdPrefix = 'la
           data-testid={id('footer')}
           sx={{ fontSize: pt(spec.footerFontPt), color: GREY, letterSpacing: '0.08em', textTransform: 'uppercase' }}
         >
-          ThingGeek{isLarge ? ' · This side up ↑' : ''}
+          ThingGeek
         </Box>
       </Box>
     </Box>

@@ -8,12 +8,12 @@
  *   Saved views (SavedViews, as `extras`: they need a ⋯ menu)
  *   footer: user · Settings · Sign out
  *
- * Moving Day: the panel is the truck's black flank (it renders under the
+ * Storage Yard: the panel is a rental truck's black flank (it renders under the
  * chrome theme in both modes); a selected row is lit — a raised panel with an
- * orange rule. Section captions are sentence case (stencil is for box
- * markings only). The attention count is an orange fill with black ink.
+ * orange rule. Section captions are sentence case (stencil is for yard
+ * stencils only). The attention count is an orange fill with black ink.
  * axe cannot see sidebar rows (they come back "incomplete"), so these pairs
- * are asserted in __tests__/theme/movingDayContrast.test.js.
+ * are asserted in __tests__/theme/storageYardContrast.test.js.
  */
 import React from 'react';
 import { Box, Typography, alpha } from '@mui/material';

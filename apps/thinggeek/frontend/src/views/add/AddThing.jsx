@@ -1,5 +1,5 @@
 /**
- * `/add` — "Load a thing" (Moving Day: the loading dock), on ONE screen
+ * `/add` — "Add a thing", on ONE screen
  * (since 2026-09-29; it was a three-step wizard that offered Skip twice):
  *
  *   photo slot    camera (back lens) or a file; optional, so there is no
@@ -24,9 +24,10 @@
  * background (hooks/useUploads.jsx — it keeps going whatever you do next,
  * and a failure offers Retry on the thing's page).
  *
- * Moving Day: the photo slot is an open box seen from above — four
- * cardboard flaps folded back around the dark inside, the camera in it; the
- * Save bar is the dock's black edge with the orange Save.
+ * Storage Yard: the photo slot is an open unit — the black steel frame, the
+ * orange roll-up door pulled up into its housing, the dim inside lit from
+ * the top, the camera in it; the Save bar is the black livery bar with the
+ * orange Save.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Button, CircularProgress, Portal, TextField, ToggleButton, ToggleButtonGroup, Typography, useMediaQuery, useTheme } from '@mui/material';
@@ -44,7 +45,7 @@ import { useThingTree, useThingTypes } from '../../hooks/useThingMeta';
 import { useUploads } from '../../hooks/useUploads';
 import useKeyboardInset from '../../hooks/useKeyboardInset';
 import ChromeTheme from '../../components/Chrome';
-import { CHROME, DISPLAY_FONT, LIVERY, STENCIL_FONT, dustImage } from '../../theme/theme';
+import { CHROME, DISPLAY_FONT, LIVERY, STENCIL_FONT } from '../../theme/theme';
 import { chipGroupSx } from '../../theme/chipStyles';
 import { photoRoleLabel } from '../../utils/vocab';
 import { buildAttributes } from '../../utils/attributes';
@@ -98,18 +99,20 @@ export function PhotoSlot({ photo, onPhoto, role, onRole }) {
 
   return (
     <Box component="section" aria-label="Photo">
-      {/* The open box, from above: four flaps folded back around the dark inside. */}
+      {/* An open unit: the steel frame, the roll-up door pulled up into its housing, the dim inside. */}
       <Box
         sx={{
           position: 'relative',
-          p: '14px',
+          p: '6px',
+          pt: '20px',
           borderRadius: '3px',
-          bgcolor: 'box.flap',
+          bgcolor: 'unit.frame',
           backgroundImage: (t) =>
-            `${dustImage(t.palette.mode)}, linear-gradient(135deg, rgba(0,0,0,0.16) 0 14px, transparent 14px), linear-gradient(225deg, rgba(0,0,0,0.16) 0 14px, transparent 14px), linear-gradient(45deg, rgba(0,0,0,0.12) 0 14px, transparent 14px), linear-gradient(315deg, rgba(0,0,0,0.12) 0 14px, transparent 14px)`,
+            `repeating-linear-gradient(180deg, ${t.palette.unit.ridge} 0 2px, ${t.palette.unit.door} 2px 5px, ${t.palette.unit.groove} 5px 6px)`,
+          backgroundSize: 'calc(100% - 12px) 12px',
+          backgroundPosition: '6px 4px',
+          backgroundRepeat: 'no-repeat',
           boxShadow: (t) => (t.palette.mode === 'dark' ? '0 3px 0 rgba(0,0,0,0.6)' : '0 3px 0 rgba(60,38,14,0.25)'),
-          // packing tape left on the front flap
-          '&::after': { content: '""', position: 'absolute', left: '50%', bottom: 0, width: 26, height: 14, ml: '-13px', bgcolor: 'rgba(255, 244, 222, 0.5)' },
         }}
       >
         <ChromeTheme>
@@ -144,11 +147,11 @@ export function PhotoSlot({ photo, onPhoto, role, onRole }) {
                 <Box sx={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 1 }}>
                   <Button
                     variant="contained"
-                    color="load"
+                    color="hero"
                     disableElevation
                     startIcon={<CameraIcon />}
                     onClick={() => cameraRef.current?.click()}
-                    sx={{ fontWeight: 800, border: 2, borderStyle: 'solid', borderColor: 'load.contrastText' }}
+                    sx={{ fontWeight: 800, border: 2, borderStyle: 'solid', borderColor: 'hero.contrastText' }}
                   >
                     Take a photo
                   </Button>
@@ -312,7 +315,7 @@ export default function AddThing() {
               px: 2,
               pb: keyboard ? 1.25 : 'calc(10px + env(safe-area-inset-bottom))',
               bgcolor: CHROME.bar,
-              // the dock's edge: the orange livery stripe along the top
+              // the livery: the orange stripe along the top
               backgroundImage: `linear-gradient(180deg, ${LIVERY.orange} 0 4px, transparent 4px)`,
               pt: '14px',
             }
@@ -329,11 +332,11 @@ export default function AddThing() {
       </Button>
       <Button
         variant="contained"
-        color="load"
+        color="hero"
         disableElevation
         onClick={() => save(false)}
         disabled={Boolean(busy)}
-        sx={{ fontWeight: 800, border: 2, borderStyle: 'solid', borderColor: 'load.contrastText' }}
+        sx={{ fontWeight: 800, border: 2, borderStyle: 'solid', borderColor: 'hero.contrastText' }}
       >
         {busy === 'save' ? 'Saving…' : 'Save'}
       </Button>
@@ -343,7 +346,7 @@ export default function AddThing() {
   return (
     <PageFrame maxWidth={680} sx={{ pt: { xs: 2, md: 4 }, pb: { xs: 'calc(96px + env(safe-area-inset-bottom))', md: 8 } }}>
       <Typography variant="h1" component="h1" sx={isPhone ? visuallyHidden : { fontFamily: DISPLAY_FONT, fontStyle: 'italic', fontSize: '2.25rem', mb: 2.5 }}>
-        Load a thing
+        Add a thing
       </Typography>
       <Box
         component="form"
@@ -390,7 +393,7 @@ export default function AddThing() {
 
         <WherePicker value={parentId} onChange={setParentId} />
         <Button onClick={() => navigate('/walk')} startIcon={<CameraIcon />} sx={{ color: 'text.secondary', justifyContent: 'flex-start', minHeight: 44, justifySelf: 'start', px: 0.5 }}>
-          Pack a whole room…
+          Walk a whole room…
         </Button>
         <TagInput value={tags} onChange={setTags} />
         {/* Enter in the name field saves (the bar's Save is outside the form on a phone). */}

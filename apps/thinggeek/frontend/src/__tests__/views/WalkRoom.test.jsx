@@ -48,17 +48,17 @@ beforeEach(() => {
   }
 });
 
-describe('Pack a room (/walk)', () => {
-  it('shows the place on its moving label, with a running count and a Done button', async () => {
+describe('Walk the room (/walk)', () => {
+  it('shows the place on its unit tag, with a running count and a Done button', async () => {
     setup();
-    expect(await screen.findByTestId('moving-label')).toHaveTextContent('Garage');
-    expect(screen.getByTestId('walk-count')).toHaveTextContent('0 packed into Garage');
+    expect(await screen.findByTestId('unit-tag')).toHaveTextContent('Garage');
+    expect(screen.getByTestId('walk-count')).toHaveTextContent('0 added to Garage');
     expect(screen.getByRole('button', { name: 'Done' })).toBeInTheDocument();
   });
 
   it('asks which room when `at` is missing', async () => {
     setup({ at: '' });
-    expect(await screen.findByText('Which room are you packing?')).toBeInTheDocument();
+    expect(await screen.findByText('Which room are you walking?')).toBeInTheDocument();
   });
 
   it('saving two items keeps the place and the sticky type; the name resets for the next one', async () => {
@@ -75,7 +75,7 @@ describe('Pack a room (/walk)', () => {
     fireEvent.change(nameBox(), { target: { value: 'Jumper cables' } });
     fireEvent.click(nextButton());
 
-    await waitFor(() => expect(screen.getByTestId('walk-count')).toHaveTextContent('1 packed into Garage'));
+    await waitFor(() => expect(screen.getByTestId('walk-count')).toHaveTextContent('1 added to Garage'));
     expect(nameBox()).toHaveValue('');
     expect(screen.getByRole('button', { name: 'Tool' })).toHaveAttribute('aria-pressed', 'true');
     expect(screen.getByTestId('walk-item')).toHaveTextContent('Jumper cables');
@@ -83,7 +83,7 @@ describe('Pack a room (/walk)', () => {
 
     fireEvent.change(nameBox(), { target: { value: 'Tow strap' } });
     fireEvent.click(nextButton());
-    await waitFor(() => expect(screen.getByTestId('walk-count')).toHaveTextContent('2 packed into Garage'));
+    await waitFor(() => expect(screen.getByTestId('walk-count')).toHaveTextContent('2 added to Garage'));
     expect(screen.getAllByTestId('walk-item')).toHaveLength(2);
     expect(upload).not.toHaveBeenCalled();
   });
@@ -98,19 +98,19 @@ describe('Pack a room (/walk)', () => {
       ],
     });
 
-    await screen.findByTestId('moving-label');
+    await screen.findByTestId('unit-tag');
     fireEvent.change(nameBox(), { target: { value: 'Drill' } });
     fireEvent.click(nextButton());
 
     await waitFor(() => expect(screen.getByTestId('walk-item')).toHaveAttribute('data-status', 'failed'));
     expect(screen.getByTestId('walk-item')).toHaveTextContent("Didn't save — retry");
-    expect(screen.getByTestId('walk-count')).toHaveTextContent('0 packed into Garage');
+    expect(screen.getByTestId('walk-count')).toHaveTextContent('0 added to Garage');
     // The name field is already clear again, ready for the next item — the failed one lives in the list.
     expect(nameBox()).toHaveValue('');
 
     fireEvent.click(within(screen.getByTestId('walk-item')).getByRole('button', { name: 'Retry' }));
     await waitFor(() => expect(screen.getByTestId('walk-item')).toHaveAttribute('data-status', 'saved'));
-    expect(screen.getByTestId('walk-count')).toHaveTextContent('1 packed into Garage');
+    expect(screen.getByTestId('walk-count')).toHaveTextContent('1 added to Garage');
   });
 
   it('with a photo: create first, then upload it onto the new thing (overview)', async () => {
@@ -133,7 +133,7 @@ describe('Pack a room (/walk)', () => {
       ],
     });
 
-    await screen.findByTestId('moving-label');
+    await screen.findByTestId('unit-tag');
     const file = new File(['jpegbytes'], 'rake.jpg', { type: 'image/jpeg' });
     fireEvent.change(screen.getByTestId('walk-camera-input'), { target: { files: [file] } });
     expect(await screen.findByTestId('walk-photo-preview')).toBeInTheDocument();
@@ -158,7 +158,7 @@ describe('Pack a room (/walk)', () => {
   });
 });
 
-describe('Pack a room — required fields', () => {
+describe('Walk the room — required fields', () => {
   const bikeThing = (id, name) => makeThing({ id, name, parentId: 'n-garage', path: [], tags: [], relationships: [], dates: [], nextDue: null });
 
   it('shows the picked type’s required field inline; Next is disabled with the reason until it is filled', async () => {
@@ -241,6 +241,6 @@ describe('Pack a room — required fields', () => {
     fireEvent.click(save);
 
     await waitFor(() => expect(screen.getByTestId('walk-item')).toHaveAttribute('data-status', 'saved'));
-    expect(screen.getByTestId('walk-count')).toHaveTextContent('1 packed into Garage');
+    expect(screen.getByTestId('walk-count')).toHaveTextContent('1 added to Garage');
   });
 });

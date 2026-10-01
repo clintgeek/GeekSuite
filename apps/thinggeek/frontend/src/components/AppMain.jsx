@@ -1,6 +1,6 @@
 /**
  * The scrolling <main> column: the cardboard floor every page sits on
- * (Moving Day) — kraft by day with a little road dust on it, the dim
+ * (Storage Yard) — kraft by day with a little yard dust on it, the dim
  * corridor by night.
  *
  * Not GeekAppFrame, on purpose: this keeps the frame's scroll contract with

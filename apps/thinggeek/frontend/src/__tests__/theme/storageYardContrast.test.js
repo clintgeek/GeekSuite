@@ -1,18 +1,17 @@
 /**
- * Moving Day, measured. Every text/background pair ThingGeek paints, on
- * every ground it lands on, in both modes: the cardboard desk and box faces
- * (and under the dust texture), printed stock, the black chrome (top bar,
- * tab bar, sidebar, the cab dashboard, a mural's panel, an odometer drum),
- * the dim inside of a storage unit (under its bulb), moving labels, the
- * orange livery fills, the oversize banner, marker lights, selection tints
- * and the photo overlays. axe cannot see generated content, sidebar rows or
+ * The Storage Yard, measured. Every text/background pair ThingGeek paints,
+ * on every ground it lands on, in both modes: the cardboard desk and bin
+ * faces (and under the dust texture), printed stock, the black chrome (top
+ * bar, tab bar, sidebar, the dashboard, a mural's panel, an odometer drum),
+ * the dim inside of a storage unit (under its bulb), unit tags, the orange
+ * livery fills, marker lights, selection tints and the photo overlays. axe cannot see generated content, sidebar rows or
  * text over gradients (they come back "incomplete"), so this file is the gate.
  *
  * Text ≥ 4.5:1. Glyphs and component edges (a UI boundary, not copy) ≥ 3:1.
  */
 import { describe, expect, it } from 'vitest';
 import { alpha, getContrastRatio } from '@mui/material/styles';
-import { BOX, CHROME, DUST, LABEL, LIVERY, LOAD, MARKER, OVERSIZE, PRIMARY, STATUS_TONES, SURFACES, UNIT, createThingTheme } from '../../theme/theme';
+import { BOX, CHROME, DUST, HERO, LABEL, LIVERY, MARKER, PRIMARY, STATUS_TONES, SURFACES, UNIT, createThingTheme } from '../../theme/theme';
 import { mixOver } from '../../theme/chipStyles';
 import { LIGHTBOX_INK, LIGHTBOX_MUTED } from '../../views/detail/Lightbox';
 import { OVERLAY_GROUND, OVERLAY_INK } from '../../views/detail/Gallery';
@@ -48,7 +47,7 @@ for (const mode of ['light', 'dark']) {
   const s = SURFACES[mode];
   const t = createThingTheme(mode);
   const dust = DUST[mode];
-  // Text lands on the desk and on box faces under the dust: the worst speck is the speck colour at full tile alpha.
+  // Text lands on the desk and on bin faces under the dust: the worst speck is the speck colour at full tile alpha.
   const grounds = {
     desk: s.desk,
     'desk under dust': over(dust.speck, s.desk),
@@ -65,26 +64,26 @@ for (const mode of ['light', 'dark']) {
     add(`${mode} secondary on ${g}`, s.secondary, bg);
     add(`${mode} muted on ${g}`, s.muted, bg);
     add(`${mode} primary.main (links, icons, text buttons) on ${g}`, PRIMARY[mode].main, bg);
-    // The box markings on a thing's page and the care stamp sit on the desk or a box face.
-    add(`${mode} status.overdue (the FRAGILE stamp) on ${g}`, STATUS_TONES[mode].overdue, bg);
+    // Overdue text (a due line, an error) sits on the desk or a card.
+    add(`${mode} status.overdue on ${g}`, STATUS_TONES[mode].overdue, bg);
   }
   add(`${mode} contained primary label`, PRIMARY[mode].contrastText, PRIMARY[mode].main);
   add(`${mode} contained primary label, hovered`, PRIMARY[mode].contrastText, PRIMARY[mode].dark);
   add(`${mode} the theme agrees: primary.contrastText on primary.main`, t.palette.primary.contrastText, t.palette.primary.main);
 
-  // The heavy rule across a box face / form: a boundary.
+  // The heavy rule across a bin face / form: a boundary.
   for (const [g, bg] of Object.entries({ desk: s.desk, card: s.card, paper: s.paper })) add(`${mode} the heavy rule against ${g}`, t.palette.rule.main, bg, GLYPH);
 
-  // Due-date tones: small text on box faces and paper (DueLine still walks them through readableOn).
+  // Due-date tones: small text on bin faces and paper (DueLine still walks them through readableOn).
   for (const [k, v] of Object.entries(STATUS_TONES[mode])) for (const g of ['card', 'card under dust', 'paper', 'raised']) add(`${mode} status.${k} on ${g}`, v, grounds[g]);
   for (const g of ['card', 'paper']) add(`${mode} error on ${g}`, t.palette.error.main, grounds[g]);
 
-  // A moving label: printed stock, ink on it; its burnt-orange caption strip, white stencil.
-  add(`${mode} moving label name on its stock`, LABEL[mode].ink, LABEL[mode].stock);
+  // A unit tag: printed stock, ink on it; its burnt-orange strip (white stencil when captioned).
+  add(`${mode} unit tag name on its stock`, LABEL[mode].ink, LABEL[mode].stock);
   add(`${mode} the label's soft ink on its stock`, LABEL[mode].soft, LABEL[mode].stock);
 
-  // The box illustrations and box faces: the glyph printed on cardboard.
-  add(`${mode} box-face glyph on the face`, BOX[mode].print, BOX[mode].face, GLYPH);
+  // The storage-bin plate: the type glyph printed on cardboard.
+  add(`${mode} bin-face glyph on the face`, BOX[mode].print, BOX[mode].face, GLYPH);
   add(`${mode} the hand-hold against the face`, BOX[mode].hole, BOX[mode].face, GLYPH);
 
   // Marker lights (the attention dot, a status heading): a lit fill with a black ring.
@@ -122,7 +121,7 @@ const chromeGrounds = {
 for (const [g, bg] of Object.entries(chromeGrounds)) {
   add(`chrome text on ${g}`, CHROME.text, bg);
   add(`chrome secondary on ${g}`, CHROME.secondary, bg);
-  // Orange stencils on black: WHERE / ROOM over a mural, THE LOADING DOCK, MEMBERS ONLY, the active tab.
+  // Orange stencils on black: WHERE / LOCATION over a mural, YOUR STORAGE, a step plate, MEMBERS ONLY, the active tab.
   add(`livery orange (stencil text) on ${g}`, LIVERY.orange, bg);
 }
 const chrome = createThingTheme('light', { chrome: true });
@@ -136,16 +135,14 @@ add('the current tab glyph (orange) on the bar', LIVERY.orange, CHROME.bar, GLYP
 add('odometer numerals on a drum', CHROME.text, CHROME.bar);
 add("odometer numerals on a drum's lit edge", CHROME.text, DRUM_EDGE);
 
-// Orange fills always carry BLACK lettering: the Load button, the attention badge, a box's band, the Done stamp.
-add('Load lettering on orange', LOAD.contrastText, LOAD.main);
-add('Load lettering on orange, hovered/pressed', LOAD.contrastText, LOAD.dark);
-add('Load lettering on orange, its light shade', LOAD.contrastText, LOAD.light);
-add('the theme agrees: load.contrastText on load.main', createThingTheme('light').palette.load.contrastText, createThingTheme('light').palette.load.main);
-add('the orange Load button against the black bar', LOAD.main, CHROME.bar, GLYPH);
-// The one orange that carries WHITE: a moving label's caption strip.
-add("a label's white caption on the burnt-orange strip", LIVERY.white, LIVERY.burnt);
-// The oversize banner: the highway sign's yellow.
-add('OVERSIZE lettering on the yellow', OVERSIZE.ink, OVERSIZE.ground);
+// Orange fills always carry BLACK lettering: the Add button, the attention badge, the Done stamp.
+add('Add lettering on orange', HERO.contrastText, HERO.main);
+add('Add lettering on orange, hovered/pressed', HERO.contrastText, HERO.dark);
+add('Add lettering on orange, its light shade', HERO.contrastText, HERO.light);
+add('the theme agrees: hero.contrastText on hero.main', createThingTheme('light').palette.hero.contrastText, createThingTheme('light').palette.hero.main);
+add('the orange Add button against the black bar', HERO.main, CHROME.bar, GLYPH);
+// The one orange that carries WHITE: a unit tag's captioned strip ("FOR RENT").
+add("a tag's white caption on the burnt-orange strip", LIVERY.white, LIVERY.burnt);
 // The unit plate: chrome text on black.
 add('the unit number plate', CHROME.text, CHROME.bar);
 
@@ -155,7 +152,7 @@ add('photo role badge / counter on the overlay over a white photo', OVERLAY_INK,
 add('lightbox ink', LIGHTBOX_INK, '#0B0A08');
 add('lightbox muted', LIGHTBOX_MUTED, '#0B0A08');
 
-describe('Moving Day contrast', () => {
+describe('Storage Yard contrast', () => {
   it.each(pairs)('%s (%s on %s) ≥ %s:1', (label, fg, bg, min) => {
     expect(getContrastRatio(fg, bg), `${label}: ${fg} on ${bg}`).toBeGreaterThanOrEqual(min);
   });

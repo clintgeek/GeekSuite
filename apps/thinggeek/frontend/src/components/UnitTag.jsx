@@ -1,30 +1,29 @@
 /**
- * MovingLabel — the Moving Day signature: the printed label slapped on a
- * moving box. White stock, a burnt-orange header strip with a stencilled
- * caption, the name in heavy slab beneath. For place names: the breadcrumb,
- * the Where rows, a storage unit's door, the "Inside …" headers, the place
- * on a row ("TO: GARAGE").
+ * UnitTag — the Storage Yard's place tag: the printed tag on a unit's door
+ * or a bin's front. White stock, a burnt-orange colour strip, the name in
+ * heavy slab. For place names: the breadcrumb, the Where rows, a unit's
+ * door, the "Inside …" headers, the place on a row.
  *
- *   variant="inline"   one line: [TO | Garage] — rows and crumbs
- *   variant="stacked"  the header strip over the name — headings, doors
+ *   variant="inline"   one line: [▌Garage] — rows and crumbs
+ *   variant="stacked"  the strip over the name — headings, doors
  *
- * The caption says what the place is: ROOM for a location, BOX for a
- * container (or anything passed as `caption`, e.g. "TO" on a row).
+ * No box markings: the strip is plain colour unless a `caption` is passed
+ * (a stencil drawn from `data-caption`, e.g. "FOR RENT"). What a place IS
+ * (a location or a container) is said in words by whatever holds the tag
+ * (the row's type line, the crumb's accessible name).
  *
- * Real text, always: the label's textContent is exactly the name, as typed
- * (what getByText finds and a screen reader says). The caption is a box
- * marking, drawn with generated content from `data-caption`, so it adds
- * nothing to the text; the kind is in the accessible name of whatever holds
- * the label (the row, the crumb), never only in the stencil.
+ * Real text, always: the tag's textContent is exactly the name, as typed
+ * (what getByText finds and a screen reader says).
  *
  * The same stock in both modes (dimmed a touch at night) — it's paper.
- * Pairs are measured in __tests__/theme/movingDayContrast.test.js.
+ * Pairs are measured in __tests__/theme/storageYardContrast.test.js.
  */
 import React from 'react';
 import { Box, useTheme } from '@mui/material';
 import { DISPLAY_FONT, LABEL, LIVERY, STENCIL_FONT, hashString } from '../theme/theme';
 
-export const captionForKind = (kind) => (kind === 'container' ? 'BOX' : 'ROOM');
+/** The plain word for what a place is — a mural's caption; never stencilled on the tag itself. */
+export const captionForKind = (kind) => (kind === 'container' ? 'CONTAINER' : 'LOCATION');
 
 const SIZES = {
   sm: { name: '0.8125rem', cap: '0.75rem', padX: '6px', padY: '1px', minH: 22 },
@@ -33,16 +32,16 @@ const SIZES = {
   xl: { name: '1.75rem', cap: '0.8125rem', padX: '14px', padY: '4px', minH: 42 },
 };
 
-/** A stable slap-on angle in [-1°, 1°] for a name (labels are never stuck on quite straight). */
+/** A stable angle in [-1°, 1°] for a name (a tag on a door is never stuck on quite straight). */
 export function labelTilt(text = '') {
   return ((hashString(text) % 21) - 10) / 10;
 }
 
-export default function MovingLabel({ children, kind = 'location', caption, size = 'md', variant = 'stacked', tilt = false, title, sx, component = 'span', ...rest }) {
+export default function UnitTag({ children, kind = 'location', caption = '', size = 'md', variant = 'stacked', tilt = false, title, sx, component = 'span', ...rest }) {
   const theme = useTheme();
   const stock = LABEL[theme.palette.mode === 'dark' ? 'dark' : 'light'];
   const s = SIZES[size] ?? SIZES.md;
-  const cap = caption ?? captionForKind(kind);
+  const cap = caption || '';
   const text = typeof children === 'string' ? children : '';
   const angle = tilt ? labelTilt(text) : 0;
   const inline = variant === 'inline';
@@ -50,7 +49,7 @@ export default function MovingLabel({ children, kind = 'location', caption, size
   return (
     <Box
       component={component}
-      data-testid="moving-label"
+      data-testid="unit-tag"
       data-kind={kind}
       data-caption={cap}
       data-variant={inline ? 'inline' : 'stacked'}
@@ -73,8 +72,8 @@ export default function MovingLabel({ children, kind = 'location', caption, size
       }}
       {...rest}
     >
-      {/* The caption strip: burnt orange, white stencil — a box marking, drawn
-          from data-caption so it is never part of the label's text. */}
+      {/* The colour strip: burnt orange. A stencilled caption only when one is
+          passed, drawn from data-caption so it is never part of the tag's text. */}
       <Box
         component="span"
         aria-hidden="true"
@@ -86,16 +85,19 @@ export default function MovingLabel({ children, kind = 'location', caption, size
           flexShrink: 0,
           bgcolor: LIVERY.burnt,
           color: LIVERY.white,
-          px: inline ? '5px' : s.padX,
-          minHeight: inline ? undefined : 17,
-          '&::before': {
-            content: 'attr(data-caption)',
-            fontFamily: STENCIL_FONT,
-            fontSize: s.cap,
-            lineHeight: 1,
-            letterSpacing: '0.08em',
-            whiteSpace: 'nowrap',
-          },
+          px: cap ? (inline ? '5px' : s.padX) : 0,
+          width: inline && !cap ? 5 : undefined,
+          minHeight: inline ? undefined : cap ? 17 : 6,
+          '&::before': cap
+            ? {
+                content: 'attr(data-caption)',
+                fontFamily: STENCIL_FONT,
+                fontSize: s.cap,
+                lineHeight: 1,
+                letterSpacing: '0.08em',
+                whiteSpace: 'nowrap',
+              }
+            : undefined,
         }}
       />
       <Box
@@ -110,7 +112,7 @@ export default function MovingLabel({ children, kind = 'location', caption, size
           fontFamily: DISPLAY_FONT,
           fontWeight: 700,
           fontSize: s.name,
-          // Zilla Slab's bold space is narrow; at label sizes "Shelf 2" read as "Shelf2".
+          // Zilla Slab's bold space is narrow; at tag sizes "Shelf 2" read as "Shelf2".
           wordSpacing: '0.14em',
           lineHeight: inline ? `${s.minH - 2}px` : 1.25,
           whiteSpace: 'nowrap',

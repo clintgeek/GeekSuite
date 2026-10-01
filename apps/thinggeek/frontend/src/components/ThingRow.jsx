@@ -1,25 +1,22 @@
 /**
- * One thing in the list view — the phone's default: a line on the cargo
- * hold's manifest, dense enough to scan a drawer's worth at a glance.
+ * One thing in the list view — the phone's default: a line on the yard's
+ * inventory, dense enough to scan a drawer's worth at a glance.
  *
- *   [box] Name                                     ●
- *         Type  [TO | Garage]
+ *   [bin] Name                                     ●
+ *         Type  [▌Garage]
  *
- * The place is a moving label with the LAST crumb of the path, captioned TO
- * (the full walk is on the thing's page, and in the row's accessible name).
+ * The place is a unit tag with the LAST crumb of the path (the full walk is
+ * on the thing's page, in the tag's title and in the row's accessible name).
  * The marker light means it needs attention: red overdue, amber due soon —
- * the same count the Attention tab carries. Vehicles and boats carry a small
- * yellow OVERSIZE tag.
+ * the same count the Attention tab carries.
  *
  * sm+: Value and Next due get their own right-aligned columns.
  */
 import React from 'react';
 import { Box, ButtonBase, Typography } from '@mui/material';
 import DueLine, { dueSummary } from './DueLine';
-import MovingLabel from './MovingLabel';
+import UnitTag from './UnitTag';
 import { MarkerLight } from './SectionHeading';
-import { STENCIL_FONT } from '../theme/theme';
-import { boxMarks } from '../utils/boxMarks';
 import ThingPhoto from './ThingPhoto';
 import { coverSrc, thingValueText } from './thingDisplay';
 import { dueDateOf, formatCalendarDate } from '../utils/dates';
@@ -36,40 +33,15 @@ export function AttentionDot({ status, sx }) {
   return <MarkerLight testId="attention-dot" tone={status === 'overdue' ? 'overdue' : 'soon'} size={14} sx={sx} />;
 }
 
-/** The last crumb of where it is, as a "TO:" moving label — or nothing when it isn't anywhere yet. */
+/** The last crumb of where it is, as a unit tag — or nothing when it isn't anywhere yet. */
 export function PlaceLabel({ thing, size = 'sm', sx }) {
   const path = pathOf(thing);
   const last = path[path.length - 1];
   if (!last) return null;
   return (
-    <MovingLabel kind={last.kind} caption="TO" variant="inline" size={size} title={whereLabel(thing)} sx={{ maxWidth: '100%', ...sx }}>
+    <UnitTag kind={last.kind} variant="inline" size={size} title={whereLabel(thing)} sx={{ maxWidth: '100%', ...sx }}>
       {last.name}
-    </MovingLabel>
-  );
-}
-
-/** The highway sign's yellow: a small OVERSIZE tag for vehicles and boats (decoration; the type says what it is). */
-export function OversizeTag({ sx }) {
-  return (
-    <Box
-      component="span"
-      aria-hidden="true"
-      data-testid="oversize-tag"
-      data-caption="OVERSIZE"
-      sx={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        flexShrink: 0,
-        height: 18,
-        px: '5px',
-        bgcolor: 'oversize.ground',
-        color: 'oversize.ink',
-        border: '1px solid',
-        borderColor: 'oversize.ink',
-        '&::before': { content: 'attr(data-caption)', fontFamily: STENCIL_FONT, fontSize: '0.75rem', letterSpacing: '0.06em', lineHeight: 1 },
-        ...sx,
-      }}
-    />
+    </UnitTag>
   );
 }
 
@@ -104,7 +76,6 @@ export default function ThingRow({ thing, onOpen }) {
   const value = thingValueText(thing);
   const due = thing.nextDue;
   const attention = needsAttention(thing);
-  const marks = boxMarks(thing);
   const label = [name, thing.type?.name, where ? `in ${where}` : null, attention ? dueSummary(due) : null].filter(Boolean).join(', ');
 
   return (
@@ -125,7 +96,7 @@ export default function ThingRow({ thing, onOpen }) {
           '&:hover': { bgcolor: 'action.hover' },
         }}
       >
-        <ThingPhoto src={coverSrc(thing)} icon={thing.type?.icon} marks={marks} variant="thumb" radius={3} />
+        <ThingPhoto src={coverSrc(thing)} icon={thing.type?.icon} variant="thumb" radius={3} />
         <Box sx={{ minWidth: 0 }}>
           <Typography component="h3" noWrap sx={{ fontSize: '0.9375rem', fontWeight: 700, lineHeight: 1.3, color: 'text.primary' }}>
             {name}
@@ -136,7 +107,6 @@ export default function ThingRow({ thing, onOpen }) {
                 {thing.type.name}
               </Typography>
             ) : null}
-            {marks.size === 'OVERSIZE' ? <OversizeTag /> : null}
             <PlaceLabel thing={thing} sx={{ minWidth: 0 }} />
           </Box>
         </Box>

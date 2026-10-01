@@ -79,11 +79,11 @@ export default function LabelPreview({ ids }) {
           <Box sx={{ mb: 2 }}>
             <Button
               variant="contained"
-              color="load"
+              color="hero"
               disableElevation
               startIcon={<PrintIcon />}
               onClick={() => window.print()}
-              sx={{ minHeight: 44, fontWeight: 800, border: 2, borderStyle: 'solid', borderColor: 'load.contrastText' }}
+              sx={{ minHeight: 44, fontWeight: 800, border: 2, borderStyle: 'solid', borderColor: 'hero.contrastText' }}
             >
               Print
             </Button>

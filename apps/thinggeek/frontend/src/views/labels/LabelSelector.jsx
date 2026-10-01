@@ -55,7 +55,7 @@ export default function LabelSelector() {
     <Box>
       <Typography component="h1" sx={{ fontFamily: DISPLAY_FONT, fontWeight: 700, fontSize: '1.625rem', color: 'text.primary', mb: 0.5 }}>Print labels</Typography>
       <Typography sx={{ color: 'text.secondary', mb: 2 }}>
-        Pick what to label. Each gets a moving label with a QR code that opens straight into ThingGeek — stick it on the box, the shelf, the tote.
+        Pick what to label. Each gets a label with a QR code that opens straight into ThingGeek — stick it on the bin, the shelf, the tote.
       </Typography>
       <FormControlLabel
         control={<Switch checked={includeItems} onChange={(e) => setIncludeItems(e.target.checked)} />}

@@ -1,5 +1,5 @@
 /**
- * A section heading the Moving Day way: heavy slab words, led by a short
+ * A section heading the Storage Yard way: heavy slab words, led by a short
  * cluster of orange speed stripes (or, for status sections, a marker light).
  * The heading element keeps its role and its words — an <h2> that reads
  * "Overdue" — and `count` rides beside it as plain text.

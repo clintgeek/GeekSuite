@@ -197,53 +197,61 @@ escaped (the ReDoS rule).
 - **Identity:** its own palette inside the suite shell. Every page must pass the phone
   AND desktop harness with `--enforce-a11y` (CI now gates both).
 
-*As built (2026-10-01, "Moving Day", replacing "Label Maker" — Chef: "U-Haul … have fun
-with the UI design and commit to the theme"; then "orange/cardboard/black", "dusty trucks
-and dark storage rooms"):*
-- **Identity:** the household's stuff run like a moving-truck rental and self-storage yard.
-  The FEEL of one, never a brand: no company names, logos or lettering anywhere. Palette is
-  orange + cardboard + black: black livery chrome in both modes (top bar, tab bar, sidebar,
-  the detail action bar — they render under a nested chrome theme, `components/Chrome.jsx`),
-  kraft desk and box faces with a faint dust/scuff texture (measured under text), moving
-  orange `#F26B1D` for stripes, doors and the Load button (always black lettering), burnt
-  orange `#A9420A` only under white (a label's caption strip), white only for printed
-  matter (labels, forms, dialogs). Night is the dim corridor: charcoal, darker kraft, the
-  same orange, a warm bulb. Zilla Slab 700 (+ italic for truck lettering) headings, Public
-  Sans body, Allerta Stencil for box markings only, mono identifiers; Barlow Condensed is
-  kept only for the printed QR labels' names (their fit math). Tokens and the rationale:
-  `theme/theme.js`; every pair measured in `__tests__/theme/movingDayContrast.test.js`.
-- **Motifs** (all real text, decoration aria-hidden): moving labels for place names
-  (`MovingLabel`: white stock, burnt-orange ROOM / BOX / TO caption, slab name; crumbs are
-  `LabelCrumbs`); moving boxes for things without a photo and the empty states
-  (`MovingBox`, the box-face plate in `ThingPhoto`) with a stencilled size and a care stamp
-  from `utils/boxMarks.js` (vehicles/boats OVERSIZE; containers by contents 0–3 / 4–11 /
-  12+; items by type; FRAGILE for electronics/cameras/keyboards; firearms get HANDLE WITH
-  CARE and nothing more); livery stripes on the bars and heroes; storage units with
-  roll-up doors (`StorageUnit`: unit numbers from the name, the door rolls up ~320 ms onto a
-  dim room under a bulb, reduced motion opens it at once); truck-side murals for places
-  (`TruckMural`, keyword motif + per-name sky, `utils/mural.js`).
-- **Phone navigation:** unchanged structure, renamed: Things · Where · **Load** (the add
-  screen; a big orange tile standing proud of the bar) · Attention (count) · More. Desktop
-  keeps the sidebar (black, an orange rule on the current row) and a "Load a thing" button.
-- **Library = the cargo hold:** the manifest list (box thumb, name, type, OVERSIZE tag, a
-  "TO:" label, a red/amber marker light); the grid is boxes on pallets with an OVERSIZE LOAD
-  banner for vehicles and boats. First run is the loading dock; with rooms set up and
-  nothing in them (Chef's shape) each room is a label that opens Pack a room.
+*As built (2026-10-01, "Storage Yard" — first shipped the same day as "Moving Day",
+replacing "Label Maker". Chef: "U-Haul … have fun with the UI design and commit to the
+theme"; then "orange/cardboard/black", "dusty trucks and dark storage rooms"; then, of
+Moving Day: "leaned way too hard into the moving aesthetic. I was looking for more just
+U-Haul inspired storage and rental than actual literal prep for moving workflow."):*
+- **Identity:** the household's stuff kept like a self-storage and truck-rental yard —
+  storage and rental, NOT moving day: no packing workflow, no box markings, no "load the
+  truck" copy anywhere. The FEEL of one, never a brand: no company names, logos or
+  lettering anywhere. Palette is orange + cardboard + black: black livery chrome in both
+  modes (top bar, tab bar, sidebar, the detail action bar — they render under a nested
+  chrome theme, `components/Chrome.jsx`), kraft desk and bin faces with a faint dust/scuff
+  texture (measured under text), yard orange `#F26B1D` for stripes, doors and the Add
+  button (always black lettering; the token is `HERO` / `palette.hero`), burnt orange
+  `#A9420A` only under white (a unit tag's colour strip), white only for printed matter
+  (tags, forms, dialogs). Night is the dim corridor: charcoal, darker kraft, the same
+  orange, a warm bulb. Zilla Slab 700 (+ italic for fleet lettering) headings, Public Sans
+  body, Allerta Stencil for yard stencils only (unit numbers, WHERE / LOCATION captions),
+  mono identifiers; Barlow Condensed is kept only for the printed QR labels' names (their
+  fit math). Tokens and the rationale: `theme/theme.js`; every pair measured in
+  `__tests__/theme/storageYardContrast.test.js`.
+- **Motifs** (all real text, decoration aria-hidden): unit tags for place names
+  (`UnitTag`: white stock, a plain burnt-orange strip — no ROOM / BOX / TO captions; a
+  caption only when asked for, e.g. "FOR RENT" — slab name; crumbs are `LabelCrumbs`); a
+  plain storage-bin plate for things without a photo (`ThingPhoto`'s `TypePlate`:
+  hand-hold, type glyph, a slim orange stripe — no size or care stamps); livery stripes on
+  the bars and heroes; storage units with roll-up doors (`StorageUnit`: unit numbers from
+  the name, the door rolls up ~320 ms onto a dim room under a bulb, reduced motion opens it
+  at once; `MiniDoor` for toggles and empty states); truck-side murals for places as fleet
+  livery (`TruckMural`, keyword motif + per-name sky, `utils/mural.js`).
+- **Phone navigation:** Things · Where · **Add** (the add screen; a big orange tile
+  standing proud of the bar) · Attention (count) · More. Desktop keeps the sidebar (black,
+  an orange rule on the current row) and an "Add a thing" button.
+- **Library:** the dense list (bin thumb, name, type, a unit tag with the last crumb, a
+  red/amber marker light); the grid is bins on pallets. First run is "YOUR STORAGE —
+  Everything you own, in one place.", a short row of roll-up doors (one up onto a lit
+  unit), the steps on numbered unit plates and "Add your first thing"; with rooms set up
+  and nothing in them (Chef's shape) each room is a unit (a small door + its tag) that
+  opens Walk the room.
 - **Where = the storage yard:** the phone drill-down is an aisle of unit doors; a level
   opens with its mural and its door rolling up onto the contents. The desk tree keeps its
   grid; each row's toggle is a little door that rolls up onto an interior panel.
-- **Needs attention = the cab dashboard:** warning lights (Overdue red, Due soon amber),
-  a LOAD CHECK gauge (photo, receipt and value on file over three checks per inventory
-  thing — from the counts the page already fetches; ID plate and serial stay on the list,
-  not the gauge, because their denominators aren't known here), "Before you roll" (the
-  first-run checklist on a clipboard) and "Load check" (the gaps as a pre-trip list).
-- **Load (add):** the loading dock — the photo slot is an open box from above; same fast
-  flow. **Pack a room** is Walk's new name (route still `/walk`). **Insurance** on screen is
-  the inventory sheet (ruled form, numbered lines, an odometer reel for the total); the
-  printout is unchanged. **Labels** print as moving labels (heavy frame; Large adds
-  CONTENTS / ROOM captions and THIS SIDE UP), still black on white. **Trash** is the curb.
+- **Needs attention = the rental counter's dashboard:** warning lights (Overdue red, Due
+  soon amber), a RECORD CHECK gauge (photo, receipt and value on file over three checks per
+  inventory thing — from the counts the page already fetches; ID plate and serial stay on
+  the list, not the gauge, because their denominators aren't known here), "Getting
+  started" (the first-run checklist on a clipboard) and "Record check" (the gaps, each a
+  door into the filtered library).
+- **Add:** the photo slot is an open unit (steel frame, the door pulled up into its
+  housing); same fast flow. **Walk the room** keeps its name and route (`/walk`).
+  **Insurance** on screen is a clean inventory form (ruled fields, numbered lines, an
+  odometer reel for the total); the printout is unchanged. **Labels** print as storage
+  labels (heavy frame; Large adds CONTENTS / LOCATION captions), still black on white.
+  **Trash** is plain.
 - **Thing page:** a full page on every size; a place with no photo leads with its mural
-  (which carries the h1); box markings under the type; the cab's black action bar.
+  (which carries the h1); the black action bar.
 
 ## Files
 

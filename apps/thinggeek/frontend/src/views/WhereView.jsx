@@ -1,9 +1,9 @@
 /**
  * `/where` — where everything is (DOCS/THINGGEEK_PLAN.md "Containment"),
- * as the self-storage yard (Moving Day): every place is a unit behind an
- * orange roll-up door with its moving label on it (components/StorageUnit,
- * MovingLabel), and a place's own level opens with a truck-side mural and
- * its door rolling up onto the dim room inside, under one bulb.
+ * as the self-storage yard (Storage Yard): every place is a unit behind an
+ * orange roll-up door with its tag on it (components/StorageUnit, UnitTag),
+ * and a place's own level opens with a fleet-livery mural and its door
+ * rolling up onto the dim room inside, under one bulb.
  *
  * Phone: a DRILL-DOWN, never an indented tree (indents drift and wrap at
  * 390px). The top level lists the places that aren't inside anything;
@@ -32,8 +32,7 @@ import {
   DriveFileMoveOutlined as MoveIcon,
   EditOutlined as RenameIcon,
   ExpandMore as ExpandedIcon,
-  LocalShippingOutlined as LoadIcon,
-  FilterListOutlined as LibraryIcon,
+    FilterListOutlined as LibraryIcon,
   MoreVert as MoreIcon,
   OpenInNew as OpenIcon,
   MoveToInboxOutlined as WalkIcon,
@@ -44,13 +43,12 @@ import { GeekDialog, GeekErrorState, useToast } from '@geeksuite/ui';
 import PageHeader, { PageFrame } from '../components/PageHeader';
 import ChromeTheme from '../components/Chrome';
 import LabelCrumbs from '../components/LabelCrumbs';
-import MovingLabel, { captionForKind } from '../components/MovingLabel';
+import UnitTag, { captionForKind } from '../components/UnitTag';
 import SectionHeading from '../components/SectionHeading';
 import { MiniDoor, UnitDoor, UnitInterior, UnitPlate } from '../components/StorageUnit';
 import ThingPhoto from '../components/ThingPhoto';
 import TruckMural from '../components/TruckMural';
 import { DISPLAY_FONT, dustImage } from '../theme/theme';
-import { boxMarks, isOversize } from '../utils/boxMarks';
 import { useScrollRoot } from '../components/AppMain';
 import { MoveSheet } from '../components/WherePicker';
 import { thingPath } from '../components/navConfig';
@@ -60,9 +58,6 @@ import { labelsPath } from '../utils/labelUrl';
 import { libraryLinkWith } from '../utils/libraryFilter';
 import { visuallyHidden } from '../utils/a11y';
 import { buildTree, bySiblingOrder, countsText, flattenTree, isParentKind, kindOf } from '../utils/where';
-
-/** A truck or a boat parked in the yard is OVERSIZE, not a BOX (utils/boxMarks.js). */
-const placeCaption = (node) => (isOversize(node) ? 'OVERSIZE' : undefined);
 
 export const WHERE_LEDE = 'Every place is a unit in the yard: rooms, and the things that hold things.';
 
@@ -148,9 +143,9 @@ function NodeRow({ node, depth, items, expanded, onToggle, onMenu }) {
           sx={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 1.25, minHeight: 52, px: 1, borderRadius: '4px', justifyContent: 'flex-start', textAlign: 'left', '&:hover': { bgcolor: 'action.hover' } }}
         >
           {depth === 0 || kindOf(node) === 'container' ? <UnitPlate name={node.name} /> : null}
-          <MovingLabel variant="inline" size={depth === 0 ? 'md' : 'sm'} kind={kindOf(node)} caption={placeCaption(node)} sx={{ minWidth: 0 }}>
+          <UnitTag variant="inline" size={depth === 0 ? 'md' : 'sm'} kind={kindOf(node)} sx={{ minWidth: 0 }}>
             {node.name}
-          </MovingLabel>
+          </UnitTag>
           {kindOf(node) === 'container' && node.type?.name ? (
             <Typography component="span" noWrap sx={{ fontSize: '0.8125rem', color: 'text.secondary' }}>
               {node.type.name}
@@ -196,7 +191,7 @@ function ItemRow({ item, depth, onMenu }) {
         to={thingPath(item.id, location.search)}
         sx={{ minWidth: 0, display: 'flex', alignItems: 'center', gap: 1.25, minHeight: 44, px: 1, borderRadius: '4px', justifyContent: 'flex-start', textAlign: 'left', '&:hover': { bgcolor: 'action.hover' } }}
       >
-        <ThingPhoto icon={item.type?.icon ?? 'Inventory2'} marks={boxMarks(item)} variant="thumb" radius={2} sx={{ width: 30, height: 30 }} />
+        <ThingPhoto icon={item.type?.icon ?? 'Inventory2'} variant="thumb" radius={2} sx={{ width: 30, height: 30 }} />
         <Typography noWrap sx={{ fontSize: '0.9375rem', fontWeight: 600, color: 'text.primary' }}>
           {item.name}
         </Typography>
@@ -259,7 +254,7 @@ export function levelPath(id, byId) {
 
 const whereAt = (id) => (id ? `/where?at=${encodeURIComponent(id)}` : '/where');
 
-/** One unit in the aisle: its roll-up door with the moving label on it, the counts and ⋯ on the sill below. */
+/** One unit in the aisle: its roll-up door with its tag on it, the counts and ⋯ on the sill below. */
 function PlaceRow({ node, onMenu }) {
   const kind = kindOf(node);
   return (
@@ -280,9 +275,9 @@ function PlaceRow({ node, onMenu }) {
         }}
       >
         <UnitDoor name={node.name} minHeight={118}>
-          <MovingLabel kind={kind} caption={placeCaption(node)} size="md" tilt sx={{ maxWidth: '100%' }}>
+          <UnitTag kind={kind} size="md" tilt sx={{ maxWidth: '100%' }}>
             {node.name}
-          </MovingLabel>
+          </UnitTag>
         </UnitDoor>
       </ButtonBase>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5, minWidth: 0, pl: 0.5 }}>
@@ -297,7 +292,7 @@ function PlaceRow({ node, onMenu }) {
   );
 }
 
-/** A thing kept in this unit: a box on the floor of the room, under the bulb. */
+/** A thing kept in this unit: on the floor of the room, under the bulb. */
 function ThingLevelRow({ item }) {
   return (
     <Box component="li" data-testid="where-level-item" sx={{ listStyle: 'none', borderBottom: 1, borderColor: 'divider', '&:last-of-type': { borderBottom: 0 } }}>
@@ -306,7 +301,7 @@ function ThingLevelRow({ item }) {
         to={thingPath(item.id)}
         sx={{ width: '100%', display: 'flex', alignItems: 'center', gap: 1.5, minHeight: 52, px: 1.5, justifyContent: 'flex-start', textAlign: 'left', '&:hover': { bgcolor: 'action.hover' } }}
       >
-        <ThingPhoto icon={item.type?.icon ?? 'Inventory2'} marks={boxMarks(item)} variant="thumb" radius={2} sx={{ width: 36, height: 36 }} />
+        <ThingPhoto icon={item.type?.icon ?? 'Inventory2'} variant="thumb" radius={2} sx={{ width: 36, height: 36 }} />
         <Box sx={{ minWidth: 0, flex: 1 }}>
           <Typography noWrap sx={{ fontSize: '0.9375rem', fontWeight: 700, color: 'text.primary' }}>
             {item.name}
@@ -390,11 +385,11 @@ function DrillDown({ at, live, byId, onMenu, onAddHere, onMove, onAddLocation, o
             }
           />
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1 }}>
-            <Button variant="contained" color="load" disableElevation startIcon={<LoadIcon />} onClick={() => onAddHere(node)} data-testid="where-add-here" sx={{ fontWeight: 800, border: 2, borderStyle: 'solid', borderColor: 'load.contrastText' }}>
+            <Button variant="contained" color="hero" disableElevation startIcon={<AddIcon />} onClick={() => onAddHere(node)} data-testid="where-add-here" sx={{ fontWeight: 800, border: 2, borderStyle: 'solid', borderColor: 'hero.contrastText' }}>
               Add here
             </Button>
             <Button variant="outlined" startIcon={<WalkIcon />} onClick={() => onWalk(node)} data-testid="where-walk" sx={{ color: 'text.primary', borderColor: 'text.primary' }}>
-              Pack this room
+              Walk this room
             </Button>
             <Button variant="outlined" startIcon={<MoveIcon />} onClick={() => onMove(node)} data-testid="where-move" sx={{ color: 'text.primary', borderColor: 'text.primary' }}>
               Move
@@ -533,7 +528,7 @@ export default function WhereView() {
       <Box sx={{ ...sheetSx, textAlign: 'center', py: 4, px: 2, backgroundImage: (t) => dustImage(t.palette.mode) }}>
         <Box sx={{ maxWidth: 220, mx: 'auto', mb: 2 }}>
           <UnitDoor name="First unit" minHeight={110}>
-            <MovingLabel size="md">For rent</MovingLabel>
+            <UnitTag size="md">For rent</UnitTag>
           </UnitDoor>
         </Box>
         <Typography component="h2" sx={{ mb: 1, fontFamily: DISPLAY_FONT, fontWeight: 700, fontSize: '1.5rem' }}>
@@ -644,7 +639,7 @@ export default function WhereView() {
             <ListItemIcon>
               <WalkIcon fontSize="small" />
             </ListItemIcon>
-            Pack this room
+            Walk this room
           </MenuItem>
         ) : null}
         {menuIsParent && locationType ? (

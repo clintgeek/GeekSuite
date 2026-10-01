@@ -1,41 +1,44 @@
 /**
- * ThingGeek theme: "Moving Day" (2026-10-01, replacing "Label Maker").
+ * ThingGeek theme: "Storage Yard" (2026-10-01, replacing "Moving Day", which
+ * replaced "Label Maker").
  *
- * The household's stuff, run like a moving-truck rental and self-storage
- * yard: everything packed, labelled, accounted for and insured, ready for a
- * move, a claim or a bad day. The feel is the EXPERIENCE — dusty trucks,
- * cardboard boxes, roll-up doors on dim storage units under one bulb — and
- * never anybody's brand: no company names, logos or lettering anywhere.
+ * The household's stuff, kept like a self-storage and truck-rental yard:
+ * every place a unit behind a roll-up door, everything labelled, accounted
+ * for and insured. The feel is the EXPERIENCE of the yard — dusty rental
+ * trucks parked in a row, the rental counter's dashboard, roll-up doors on
+ * dim storage units under one bulb — and never anybody's brand: no company
+ * names, logos or lettering anywhere. It is storage and rental, NOT moving
+ * day: no packing workflow, no box markings, no "load the truck".
  *
  * Palette: ORANGE + CARDBOARD + BLACK.
- *   - Black is the livery: the top bar, the tab bar and the sidebar are the
- *     truck's black flank with orange speed stripes (CHROME, both modes —
+ *   - Black is the livery: the top bar, the tab bar and the sidebar are a
+ *     rental truck's black flank with orange stripes (CHROME, both modes —
  *     rendered under a nested chrome theme, components/Chrome.jsx).
- *   - Cardboard (kraft) is the page and the box faces it holds; a faint dust
- *     and scuff texture rides on it (dustImage), measured under text.
- *   - Moving orange (LIVERY.orange) is the hero: stripes, the Load button,
+ *   - Cardboard (kraft) is the page and the storage bins it holds; a faint
+ *     dust and scuff texture rides on it (dustImage), measured under text.
+ *   - Yard orange (LIVERY.orange) is the hero: stripes, the Add button,
  *     roll-up doors, warning fills — always with BLACK ink on it. The deeper
  *     burnt orange (LIVERY.burnt) is the only orange that carries white
- *     text (a moving label's header strip).
- *   - White is printed matter only: moving labels, the inventory sheet,
- *     dialogs and fields (a form you fill in), the paper labels.
+ *     text (a unit tag's colour strip).
+ *   - White is printed matter only: unit tags, the inventory sheet, dialogs
+ *     and fields (a form you fill in), the paper labels.
  *   - Night (dark): the dim corridor — charcoal, a darker kraft, the same
  *     orange, and the warm light of the bulb over an open unit (UNIT.glow).
  *
- * Type: Zilla Slab 700 for headings (its italic for truck-side lettering:
- * murals and the bar title lean), Public Sans for everything you read,
- * Allerta Stencil for box markings only (ROOM, BOX, FRAGILE, THIS SIDE UP —
+ * Type: Zilla Slab 700 for headings (its italic for fleet lettering: murals
+ * and the bar title lean), Public Sans for everything you read, Allerta
+ * Stencil for yard stencils only (unit numbers, captions like WHERE —
  * always aria-hidden or doubled by real words), mono for identifiers.
  * Sentence case everywhere but the stencil.
  *
  * Contrast: every pair this app paints is measured in
- * __tests__/theme/movingDayContrast.test.js, both modes, textures included.
+ * __tests__/theme/storageYardContrast.test.js, both modes, textures included.
  */
 import { createGeekSuiteTheme } from '@geeksuite/ui';
 
 export const DISPLAY_FONT = '"Zilla Slab", "Rockwell", "Roboto Slab", Georgia, serif';
 export const BODY_FONT = '"Public Sans", system-ui, -apple-system, "Segoe UI", "Helvetica", "Arial", sans-serif';
-/** Box markings only: ROOM / BOX / FRAGILE / THIS SIDE UP. */
+/** Yard stencils only: unit numbers, WHERE / UNIT captions. */
 export const STENCIL_FONT = '"Allerta Stencil", "Stencil", "Impact", sans-serif';
 export const MONO_FONT = '"Roboto Mono", ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace';
 
@@ -81,10 +84,10 @@ export const CHROME = {
 };
 
 /**
- * Moving orange.
- *   orange  the livery: stripes, the Load button, doors, marker fills (black ink on it)
+ * Yard orange.
+ *   orange  the livery: stripes, the Add button, doors, marker fills (black ink on it)
  *   deep    its pressed/hover shade (still black ink)
- *   burnt   the one orange that carries WHITE text (a label's header strip)
+ *   burnt   the one orange that carries WHITE text (a unit tag's colour strip)
  *   ink     the black lettering on orange
  */
 export const LIVERY = {
@@ -95,13 +98,13 @@ export const LIVERY = {
   white: '#FFFFFF',
 };
 
-/** A moving label: printed white stock (dimmed a touch at night so it doesn't glare). */
+/** A unit tag: printed white stock (dimmed a touch at night so it doesn't glare). */
 export const LABEL = {
   light: { stock: '#FFFDF8', ink: '#16120D', soft: '#4A3B2E', edge: 'rgba(22, 18, 13, 0.30)' },
   dark: { stock: '#EFE6D6', ink: '#16120D', soft: '#4A3B2E', edge: 'rgba(0, 0, 0, 0.55)' },
 };
 
-/** Cardboard for the box illustrations (faces, flaps, the hand-hold's shadow). */
+/** Cardboard for the storage-bin plate (its face, side, the hand-hold's shadow). */
 export const BOX = {
   light: { face: '#C99A62', side: '#B2834D', flap: '#D7AC76', seam: '#8E6536', hole: '#3B2715', print: '#16120D' },
   dark: { face: '#8A6440', side: '#74532F', flap: '#9A7149', seam: '#4D3720', hole: '#120C07', print: '#120C07' },
@@ -127,9 +130,6 @@ export const STATUS_TONES = {
 
 /** Marker lights (the attention dot, the dashboard's warning lights): fills with a black ring. */
 export const MARKER = { overdue: '#E0312B', soon: '#F5A623', ring: '#16120D' };
-
-/** "Oversize load" banner: the highway sign's yellow, black letters. */
-export const OVERSIZE = { ground: '#F6C619', ink: '#140E08' };
 
 /**
  * Dust and scuffs: a faint speckle and a few long streaks over kraft (and
@@ -187,7 +187,7 @@ export function speedStripes(angle = 116) {
   return `repeating-linear-gradient(${angle}deg, transparent 0 18px, ${o} 18px 32px, transparent 32px 38px, ${b} 38px 44px, transparent 44px 64px)`;
 }
 
-/** Deterministic small hash, for unit numbers, murals and box tilts. */
+/** Deterministic small hash, for unit numbers, murals and tag tilts. */
 export function hashString(s = '') {
   let h = 2166136261;
   const str = String(s);
@@ -204,8 +204,8 @@ export const PRIMARY = {
   dark: { main: '#FF8236', light: '#FF9A5C', dark: '#F26B1D', contrastText: '#140E08' },
 };
 
-/** The Load button (and every hero action): orange, black lettering, a black edge. */
-export const LOAD = { main: LIVERY.orange, light: '#F5833F', dark: LIVERY.deep, contrastText: LIVERY.ink };
+/** The Add button (and every hero action): orange, black lettering, a black edge. */
+export const HERO = { main: LIVERY.orange, light: '#F5833F', dark: LIVERY.deep, contrastText: LIVERY.ink };
 
 function buildOverrides(mode, chrome) {
   const isDark = mode === 'dark';
@@ -223,15 +223,14 @@ function buildOverrides(mode, chrome) {
       text: { primary: s.text, secondary: s.secondary, muted: s.muted },
       divider: s.divider,
       border: s.border,
-      // The heavy rule across the top of a box face or a form: black by day, the livery orange at night.
+      // The heavy rule across the top of a bin face or a form: black by day, the livery orange at night.
       rule: { main: chrome || isDark ? LIVERY.orange : SURFACES.light.text },
-      load: LOAD,
+      hero: HERO,
       livery: LIVERY,
       label: LABEL[mode],
       box: BOX[mode],
       unit: UNIT[mode],
       marker: MARKER,
-      oversize: OVERSIZE,
       status: STATUS_TONES[chrome ? 'dark' : mode],
       chromeTokens: CHROME,
       // The collection's RangeFacet paints its in-range bars with `phosphor`.

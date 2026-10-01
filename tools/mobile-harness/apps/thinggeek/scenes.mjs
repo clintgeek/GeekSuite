@@ -1,8 +1,8 @@
 // ThingGeek — every surface of the MVP (DOCS/THINGGEEK_PLAN.md "Screens"),
-// in the Moving Day identity (2026-10-01): a phone tab bar (Things · Where ·
-// Load · Attention · More) instead of a drawer, a dense list as the phone's
+// in the Storage Yard identity (2026-10-01): a phone tab bar (Things · Where ·
+// Add · Attention · More) instead of a drawer, a dense list as the phone's
 // library, Where as a drill-down (an aisle of storage units) on the phone, a
-// one-screen Load (add), and a thing's page as a full page.
+// one-screen Add, and a thing's page as a full page.
 // including where things are: the Where tree, a thing's breadcrumb, Move
 // to…, and Contains (the fixtures are a containment graph — House › Garage ›
 // Van › Jumper cables).
@@ -473,16 +473,16 @@ export const scenes = [
   { name: '16-first-run', goto: '/?__fixture=empty', wait: 1600 },
   // Chef's real household (2026-10-01): five rooms set up, nothing in them —
   // the library's first run offers each room to pack, Where is an aisle of
-  // empty units, and Attention's dashboard reads "nothing loaded yet".
+  // empty units, and Attention's dashboard reads "nothing recorded yet".
   { name: '16b-first-run-rooms', goto: '/?__fixture=rooms', wait: 1600 },
   { name: '16c-where-rooms', goto: '/where?__fixture=rooms', wait: 1600 },
   { name: '16d-attention-rooms', goto: '/attention?__fixture=rooms', wait: 1600 },
-  // Printable QR box labels (2026-09-29): the picker with nothing chosen yet…
+  // Printable QR labels (2026-09-29): the picker with nothing chosen yet…
   { name: '17-labels-selector', goto: '/labels', wait: 1400 },
   // …and a preview for one thing (Wendy, th1 — a container with a breadcrumb).
   { name: '17b-labels-preview', goto: '/labels?ids=th1', wait: 1600 },
-  // "Pack a room" (was "Walk the room", 2026-09-29): a full-screen capture
-  // loop — the room's open box and label, a running count, the camera-or-name
+  // "Walk the room" (2026-09-29; briefly "Pack a room"): a full-screen capture
+  // loop — the room's open unit and tag, a running count, the camera-or-name
   // form, sticky type chips.
   { name: '18-walk-empty', goto: '/walk?at=p-garage', wait: 1400 },
   {
@@ -496,7 +496,7 @@ export const scenes = [
       await page.getByLabel('Name *').fill('Rake');
       if (!(await click(page, h, page.getByRole('button', { name: 'Next' }), 900))) return false;
       const count = await page.getByTestId('walk-count').textContent();
-      if (!count?.includes('2 packed')) throw new Error('the running count did not reach 2');
+      if (!count?.includes('2 added')) throw new Error('the running count did not reach 2');
       await page.getByLabel('Name *').blur();
       await h.settle(300);
     },

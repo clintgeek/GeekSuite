@@ -1,6 +1,6 @@
 /**
- * Where something is, as a row of moving labels: ROOM House › ROOM Garage ›
- * BOX Van. Each crumb is a link (a 44px target around the label) — to that
+ * Where something is, as a row of unit tags: House › Garage › Van. Each
+ * crumb is a link (a 44px target around the tag) — to that
  * thing's page by default, or wherever `hrefFor(crumb)` says (the Where
  * drill-down links each level back to itself).
  *
@@ -10,7 +10,7 @@
 import React from 'react';
 import { Box } from '@mui/material';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
-import MovingLabel from './MovingLabel';
+import UnitTag from './UnitTag';
 import { thingPath } from './navConfig';
 
 const Sep = () => (
@@ -23,9 +23,9 @@ export default function LabelCrumbs({ path = [], hrefFor, label = 'Where it is',
   const location = useLocation();
   const to = hrefFor ?? ((p) => thingPath(p.id, location.search));
   const tag = (p) => (
-    <MovingLabel kind={p.kind} size={size} variant="inline">
+    <UnitTag kind={p.kind} size={size} variant="inline">
       {p.name}
-    </MovingLabel>
+    </UnitTag>
   );
   return (
     <Box component="nav" aria-label={label} data-testid={testId} sx={{ minWidth: 0, ...sx }}>
@@ -65,8 +65,8 @@ export default function LabelCrumbs({ path = [], hrefFor, label = 'Where it is',
                     maxWidth: '100%',
                     textDecoration: 'none',
                     borderRadius: '4px',
-                    '& [data-testid="moving-label"]': { transition: 'transform 120ms ease-out' },
-                    '@media (hover: hover)': { '&:hover [data-testid="moving-label"]': { transform: 'translateY(-1px) rotate(-0.6deg)' } },
+                    '& [data-testid="unit-tag"]': { transition: 'transform 120ms ease-out' },
+                    '@media (hover: hover)': { '&:hover [data-testid="unit-tag"]': { transform: 'translateY(-1px) rotate(-0.6deg)' } },
                     '&:focus-visible': { outline: 2, outlineStyle: 'solid', outlineColor: 'text.primary', outlineOffset: 1 },
                   }}
                 >

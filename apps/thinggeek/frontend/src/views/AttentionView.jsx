@@ -1,16 +1,16 @@
 /**
- * `/attention` — what needs doing, as the truck cab's instrument panel
- * (Moving Day):
+ * `/attention` — what needs doing, as the rental counter's dashboard
+ * (Storage Yard):
  *
  *   the dash      two warning lights — Overdue (red) and Due soon (amber),
- *                 lit with their counts — and the LOAD CHECK gauge: how
+ *                 lit with their counts — and the RECORD CHECK gauge: how
  *                 complete the records are.
- *   Before you    the first-run checklist (components/OnboardingChecklist),
- *   roll          while the household is getting going.
+ *   Getting       the first-run checklist (components/OnboardingChecklist),
+ *   started       while the household is getting going.
  *   the lists     the things overdue, then due in the server's 30-day window.
- *   Load check    the pre-trip checklist: each insurance gap as a line with
- *                 its count, a door into the library pre-filtered to exactly
- *                 those things (`/?missing=receipt`).
+ *   Record check  each insurance gap as a line with its count, a door into
+ *                 the library pre-filtered to exactly those things
+ *                 (`/?missing=receipt`).
  *
  * The gauge reads from what this page already fetches, no new query:
  * thingAttention's missing-photo, -receipt and -value counts over three
@@ -33,7 +33,6 @@ import { coverSrc, thingWhereText } from '../components/thingDisplay';
 import { thingPath } from '../components/navConfig';
 import { useAttention, useThingTree } from '../hooks/useThingMeta';
 import { CHROME, DISPLAY_FONT, LIVERY, MARKER, STENCIL_FONT, dustImage } from '../theme/theme';
-import { boxMarks } from '../utils/boxMarks';
 import { dueDateOf, formatCalendarDate, relativeDay } from '../utils/dates';
 import { libraryLinkWith } from '../utils/libraryFilter';
 import { dateKindLabel } from '../utils/vocab';
@@ -47,8 +46,8 @@ export const GAP_CARDS = [
   { key: 'photo', field: 'missingPhoto', title: 'No photo', text: 'Not even one. Start with the overview.' },
 ];
 
-/** The load-check percentage: photo, receipt and value on file, over three checks per inventory thing. Null with nothing loaded. */
-export function loadCheckPercent(attention, items) {
+/** The record-check percentage: photo, receipt and value on file, over three checks per inventory thing. Null with nothing recorded. */
+export function recordCheckPercent(attention, items) {
   if (!attention || !items) return null;
   const missing = (attention.missingPhoto ?? 0) + (attention.missingReceipt ?? 0) + (attention.missingValue ?? 0);
   const checks = items * 3;
@@ -102,7 +101,7 @@ function Gauge({ percent }) {
     return `M${x0.toFixed(2)} ${y0.toFixed(2)} A${r} ${r} 0 ${to - from > 180 ? 1 : 0} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`;
   };
   return (
-    <svg viewBox="0 0 140 78" width="100%" aria-hidden="true" focusable="false" data-testid="load-gauge" data-percent={percent ?? ''}>
+    <svg viewBox="0 0 140 78" width="100%" aria-hidden="true" focusable="false" data-testid="record-gauge" data-percent={percent ?? ''}>
       <path d={arc(0, 180)} stroke="#3A332C" strokeWidth="10" fill="none" />
       {percent != null && p > 0 ? <path d={arc(0, (180 * p) / 100)} stroke={LIVERY.orange} strokeWidth="10" fill="none" /> : null}
       <path d={arc(0, 36)} stroke={MARKER.overdue} strokeWidth="3" fill="none" transform="translate(0 0)" opacity="0.9" />
@@ -154,11 +153,11 @@ function Dashboard({ overdue, dueSoon, percent, items }) {
         <Box sx={{ maxWidth: 200, mx: 'auto' }}>
           <Gauge percent={percent} />
         </Box>
-        <Typography data-testid="load-check" sx={{ fontFamily: DISPLAY_FONT, fontWeight: 700, fontSize: '1.125rem', lineHeight: 1.2, color: CHROME.text }}>
-          Load check {percent != null ? `${percent}%` : '—'}
+        <Typography data-testid="record-check" sx={{ fontFamily: DISPLAY_FONT, fontWeight: 700, fontSize: '1.125rem', lineHeight: 1.2, color: CHROME.text }}>
+          Record check {percent != null ? `${percent}%` : '—'}
         </Typography>
         <Typography sx={{ fontSize: '0.75rem', color: CHROME.secondary, lineHeight: 1.4 }}>
-          {percent != null ? `Photo, receipt and value on file, across ${items} thing${items === 1 ? '' : 's'}` : 'Nothing loaded yet'}
+          {percent != null ? `Photo, receipt and value on file, across ${items} thing${items === 1 ? '' : 's'}` : 'Nothing recorded yet'}
         </Typography>
       </Box>
     </Box>
@@ -180,7 +179,7 @@ function DueRow({ thing }) {
         sx={{ width: '100%', display: 'flex', alignItems: 'center', gap: 1.5, px: 0.5, py: 1, justifyContent: 'flex-start', textAlign: 'left', '&:hover': { bgcolor: 'action.hover' } }}
       >
         <Box sx={{ width: 48, flexShrink: 0 }}>
-          <ThingPhoto src={coverSrc(thing)} icon={thing.type?.icon} marks={boxMarks(thing)} variant="thumb" radius={3} />
+          <ThingPhoto src={coverSrc(thing)} icon={thing.type?.icon} variant="thumb" radius={3} />
         </Box>
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography noWrap sx={{ fontWeight: 700, fontSize: '0.9375rem' }}>{thing.name}</Typography>
@@ -227,15 +226,15 @@ function DueGroup({ id, title, things, empty, tone }) {
   );
 }
 
-/** The pre-trip checklist: a printed form, one line per gap. */
-function LoadCheckList({ gaps }) {
+/** The record check: a printed form, one line per gap. */
+function RecordCheckList({ gaps }) {
   return (
-    <Box component="section" aria-labelledby="load-check-heading" sx={{ border: 1, borderColor: 'border', borderRadius: '3px', bgcolor: 'background.paper', overflow: 'hidden' }}>
+    <Box component="section" aria-labelledby="record-check-heading" sx={{ border: 1, borderColor: 'border', borderRadius: '3px', bgcolor: 'background.paper', overflow: 'hidden' }}>
       <Box sx={{ px: { xs: 1.5, md: 2 }, pt: 1.5, pb: 1, borderBottom: '3px solid', borderColor: 'rule.main' }}>
-        <SectionHeading id="load-check-heading" size="lg">
-          Load check
+        <SectionHeading id="record-check-heading" size="lg">
+          Record check
         </SectionHeading>
-        <Typography sx={{ color: 'text.secondary', fontSize: '0.875rem', mt: 0.25 }}>The pre-trip list: everything an insurer would ask for that isn't on file yet. Each opens the library showing exactly those things.</Typography>
+        <Typography sx={{ color: 'text.secondary', fontSize: '0.875rem', mt: 0.25 }}>Everything an insurer would ask for that isn't on file yet. Each opens the library showing exactly those things.</Typography>
       </Box>
       <Box component="ul" sx={{ listStyle: 'none', m: 0, p: 0 }}>
         {gaps.map((g) => {
@@ -292,11 +291,11 @@ export default function AttentionView() {
   const a = attention ?? { overdue: [], dueSoon: [] };
   const gaps = GAP_CARDS.map((g) => ({ ...g, count: attention?.[g.field] ?? null }));
   const allClear = attention && itemsCount > 0 && !a.overdue.length && !a.dueSoon.length && gaps.every((g) => !g.count);
-  const percent = treeLoading ? null : loadCheckPercent(attention, itemsCount);
+  const percent = treeLoading ? null : recordCheckPercent(attention, itemsCount);
 
   return (
     <PageFrame>
-      <PageHeader title="Needs attention" lede="The cab's dashboard: dates that have passed or are close, then everything an insurer would ask for that isn't on file yet." />
+      <PageHeader title="Needs attention" lede="Dates that have passed or are close, then everything an insurer would ask for that isn't on file yet." />
       <Dashboard overdue={attention ? a.overdue.length : null} dueSoon={attention ? a.dueSoon.length : null} percent={percent} items={itemsCount} />
       {!loading && !treeLoading ? (
         <OnboardingChecklist locationsCount={locationsCount} itemsCount={itemsCount} missingIdPlate={attention?.missingIdPlate ?? 0} walkAt={walkAt} />
@@ -311,7 +310,7 @@ export default function AttentionView() {
         <DueGroup id="overdue" title="Overdue" tone="overdue" things={a.overdue} empty={loading ? 'Loading…' : 'Nothing overdue.'} />
         <DueGroup id="due-soon" title="Due in the next 30 days" tone="soon" things={a.dueSoon} empty={loading ? 'Loading…' : 'Nothing due in the next month.'} />
       </Box>
-      <LoadCheckList gaps={gaps} />
+      <RecordCheckList gaps={gaps} />
     </PageFrame>
   );
 }

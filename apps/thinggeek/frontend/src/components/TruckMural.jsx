@@ -1,5 +1,6 @@
 /**
- * The truck-side mural: a wide band across the top of a place's page and
+ * The truck-side mural (fleet livery — a rental truck parked in the yard, not
+ * a move): a wide band across the top of a place's page and
  * the Where page — the black side of the truck with the place's name in big
  * leaning slab lettering on the left, three orange speed stripes, and a
  * painted scene on the right (sky, hills, the road to the horizon, and a
@@ -188,7 +189,7 @@ export function MuralScene({ name, typeName, mode = 'light' }) {
   );
 }
 
-export default function TruckMural({ name, typeName, caption = 'ROOM', sub, headingProps, actions, sx }) {
+export default function TruckMural({ name, typeName, caption = 'LOCATION', sub, headingProps, actions, sx }) {
   const theme = useTheme();
   const mode = theme.palette.mode === 'dark' ? 'dark' : 'light';
   const { component: headingComponent = 'p', ...restHeading } = headingProps ?? {};

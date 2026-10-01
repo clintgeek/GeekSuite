@@ -144,7 +144,21 @@ export function MiniDoor({ open = false, size = 26, sx }) {
       component="span"
       aria-hidden="true"
       data-open={open ? 'true' : 'false'}
-      sx={{ position: 'relative', display: 'inline-block', width: size, height: size * 0.82, borderRadius: '2px', border: `2px solid ${u.frame}`, borderTopWidth: 4, bgcolor: u.interior, overflow: 'hidden', flexShrink: 0, ...sx }}
+      sx={{
+        position: 'relative',
+        display: 'inline-block',
+        width: size,
+        height: size * 0.82,
+        borderRadius: '2px',
+        border: `2px solid ${u.frame}`,
+        borderTopWidth: 4,
+        bgcolor: u.interior,
+        // the bulb's pool of light, seen once the door is up
+        backgroundImage: `radial-gradient(ellipse 80% 70% at 50% 0, ${u.glow}, transparent 100%)`,
+        overflow: 'hidden',
+        flexShrink: 0,
+        ...sx,
+      }}
     >
       <Box
         component="span"

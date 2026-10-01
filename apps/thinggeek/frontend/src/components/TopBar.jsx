@@ -10,18 +10,18 @@
  * `/` (suite slash focus) lands in the library search — priority 20.
  *
  * Phone: no hamburger — the tab bar is the navigation. A sub-page (a
- * thing, the add screen) gets a back arrow instead. "Load a thing" is a
- * desktop action here, a moving-orange fill with black lettering; the
- * phone's Load is the middle tab. Settings lives in the sidebar (desktop) or
+ * thing, the add screen) gets a back arrow instead. "Add a thing" is a
+ * desktop action here, a yard-orange fill with black lettering; the
+ * phone's Add is the middle tab. Settings lives in the sidebar (desktop) or
  * More (phone), so the avatar menu keeps only the account: theme and sign out.
  *
- * Moving Day: the bar is the truck's black flank in both modes (it renders
- * under the chrome theme), the page title in leaning slab truck lettering,
+ * Storage Yard: the bar is a rental truck's black flank in both modes (it
+ * renders under the chrome theme), the page title in leaning slab lettering,
  * and the orange livery stripe along its bottom edge.
  */
 import React, { useEffect, useId, useRef, useState } from 'react';
 import { Box, Button, IconButton, InputAdornment, Paper, Popper, Typography, alpha, useMediaQuery, useTheme } from '@mui/material';
-import { ArrowBack as ArrowBackIcon, Close as CloseIcon, LocalShippingOutlined as LoadIcon, Search as SearchIcon } from '@mui/icons-material';
+import { ArrowBack as ArrowBackIcon, Close as CloseIcon, Add as AddIcon, Search as SearchIcon } from '@mui/icons-material';
 import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useThemeMode } from '@geeksuite/user';
 import { GeekSearchField, GeekTopBar } from '@geeksuite/ui';
@@ -184,7 +184,7 @@ export default function TopBar({ user, onSignOut }) {
                 },
               })
             : (
-                // The page's name in truck lettering: heavy slab, leaning.
+                // The page's name in fleet lettering: heavy slab, leaning.
                 <Typography variant="h3" noWrap data-geek-topbar="title" sx={{ minWidth: 0 }}>
                   {titleFor(location.pathname)}
                 </Typography>
@@ -198,13 +198,13 @@ export default function TopBar({ user, onSignOut }) {
           onLibrary ? (
             <Button
               variant="contained"
-              color="load"
+              color="hero"
               disableElevation
-              startIcon={<LoadIcon />}
+              startIcon={<AddIcon />}
               onClick={() => navigate(`/add${location.search}`)}
-              sx={{ fontWeight: 800, px: 2, whiteSpace: 'nowrap', border: 2, borderStyle: 'solid', borderColor: 'load.contrastText', boxShadow: `0 0 0 2px ${LIVERY.orange}` }}
+              sx={{ fontWeight: 800, px: 2, whiteSpace: 'nowrap', border: 2, borderStyle: 'solid', borderColor: 'hero.contrastText', boxShadow: `0 0 0 2px ${LIVERY.orange}` }}
             >
-              Load a thing
+              Add a thing
             </Button>
           ) : null
         }

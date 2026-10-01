@@ -1,5 +1,5 @@
 /**
- * The ThingGeek mark (Moving Day): a taped-up moving box, three-quarter
+ * The ThingGeek mark (Storage Yard): a storage box, three-quarter
  * view, with the orange band and a hand-hold — the same drawing as the app
  * icon (public/icons/icon.svg), simplified for small sizes. Used in the
  * brand, the boot screen and the members-only page; never in working chrome.

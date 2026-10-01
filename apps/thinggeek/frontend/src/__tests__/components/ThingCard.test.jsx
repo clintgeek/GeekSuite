@@ -14,8 +14,8 @@ describe('ThingCard', () => {
     const card = screen.getByRole('button', { name: 'Wendy, Boat, in House › Garage, Due in 12 days · Registration' });
     expect(within(card).getByRole('heading', { name: 'Wendy' })).toBeInTheDocument();
     expect(within(card).getByText('Boat')).toBeInTheDocument();
-    // Where it is: the last crumb on a TO: moving label, the whole walk as its title.
-    const label = within(card).getByTestId('moving-label');
+    // Where it is: the last crumb on a unit tag, the whole walk as its title.
+    const label = within(card).getByTestId('unit-tag');
     expect(label).toHaveTextContent('Garage');
     expect(label).toHaveAttribute('title', 'House › Garage');
     expect(screen.getByTestId('due-line')).toHaveTextContent('Due in 12 days · Registration');
@@ -29,7 +29,7 @@ describe('ThingCard', () => {
     expect(screen.queryByTestId('due-line')).toBeNull();
   });
 
-  it('draws its box when there is no photo, the cover when there is', () => {
+  it('draws its bin when there is no photo, the cover when there is', () => {
     const { container, rerender } = renderWithProviders(<ThingCard thing={makeThing()} />);
     expect(container.querySelector('img')).toBeNull();
     expect(container.querySelector('svg[data-testid="DirectionsBoatIcon"]')).not.toBeNull();
@@ -48,7 +48,7 @@ describe('ThingRow', () => {
       </ul>
     );
     const row = screen.getByRole('button', { name: 'Wendy, Boat, in House › Garage, Due in 12 days · Registration' });
-    expect(within(row).getByTestId('moving-label')).toHaveTextContent(/^Garage$/);
+    expect(within(row).getByTestId('unit-tag')).toHaveTextContent(/^Garage$/);
     expect(within(row).getByTestId('attention-dot')).toBeInTheDocument();
     fireEvent.click(row);
     expect(onOpen).toHaveBeenCalledWith(thing);
@@ -61,7 +61,7 @@ describe('ThingRow', () => {
       </ul>
     );
     expect(screen.queryByTestId('attention-dot')).toBeNull();
-    expect(screen.queryByTestId('moving-label')).toBeNull();
+    expect(screen.queryByTestId('unit-tag')).toBeNull();
     expect(screen.getByRole('button', { name: 'Wendy, Boat' })).toBeInTheDocument();
   });
 

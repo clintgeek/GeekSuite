@@ -349,7 +349,7 @@ export default function TypesView() {
     <PageFrame maxWidth={960}>
       <PageHeader
         title="Types"
-        lede="The packing rules: what kinds of things the household keeps, and what each one asks for. Edit a starter type or make your own."
+        lede="What kinds of things the household keeps, and what each one asks for. Edit a starter type or make your own."
         actions={
           <Button variant="contained" startIcon={<AddIcon />} onClick={() => setEditing({})}>
             New type

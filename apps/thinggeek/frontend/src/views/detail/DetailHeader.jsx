@@ -1,8 +1,6 @@
 /**
- * Who this thing is: name, type (icon + name) and its box markings (the
- * stencilled size, FRAGILE / HANDLE WITH CARE, THIS SIDE UP — decoration
- * doubled by the type line), WHERE it is — the moving-label breadcrumb
- * House › Garage › Van, each crumb a link to that thing's page, with "Move
+ * Who this thing is: name, type (icon + name), WHERE it is — the unit-tag
+ * breadcrumb House › Garage › Van, each crumb a link to that thing's page, with "Move
  * to…" beside it — and its tags. When a place's page leads with a mural,
  * the mural carries the name (`showName={false}`).
  *
@@ -16,39 +14,8 @@ import { DriveFileMoveOutlined as MoveIcon } from '@mui/icons-material';
 import TagChips from '../../components/TagChips';
 import LabelCrumbs from '../../components/LabelCrumbs';
 import TypeIcon from '../../components/TypeIcon';
-import { DISPLAY_FONT, STENCIL_FONT } from '../../theme/theme';
-import { boxMarks } from '../../utils/boxMarks';
+import { DISPLAY_FONT } from '../../theme/theme';
 import { insideTrash, pathOf } from '../../utils/where';
-
-/** Stencilled box markings, as a row of small stamps. Decorative: the type line says what it is. */
-export function BoxMarkings({ thing, sx }) {
-  const { size, care } = boxMarks(thing);
-  if (!size) return null;
-  const marks = [size === 'OVERSIZE' ? 'OVERSIZE LOAD' : `${size} BOX`, care, 'THIS SIDE UP ↑'].filter(Boolean);
-  return (
-    <Box aria-hidden="true" data-testid="box-markings" sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75, ...sx }}>
-      {marks.map((m) => (
-        <Box
-          key={m}
-          component="span"
-          data-caption={m}
-          sx={{
-            px: '6px',
-            height: 22,
-            display: 'inline-flex',
-            alignItems: 'center',
-            border: '1.5px solid',
-            borderColor: m === care ? 'status.overdue' : 'text.primary',
-            color: m === care ? 'status.overdue' : 'text.primary',
-            bgcolor: m === 'OVERSIZE LOAD' ? 'oversize.ground' : 'transparent',
-            ...(m === 'OVERSIZE LOAD' ? { color: 'oversize.ink', borderColor: 'oversize.ink' } : null),
-            '&::before': { content: 'attr(data-caption)', fontFamily: STENCIL_FONT, fontSize: '0.75rem', letterSpacing: '0.08em', lineHeight: 1 },
-          }}
-        />
-      ))}
-    </Box>
-  );
-}
 
 export function Breadcrumb({ thing }) {
   const path = pathOf(thing);
@@ -83,7 +50,6 @@ export default function DetailHeader({ thing, onMove, showName = true }) {
           {thing.type.name}
         </Box>
       ) : null}
-      <BoxMarkings thing={thing} sx={{ mt: 1 }} />
       <Box sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', columnGap: 1, rowGap: 0, mt: 0.5 }}>
         <Breadcrumb thing={thing} />
         {onMove ? (

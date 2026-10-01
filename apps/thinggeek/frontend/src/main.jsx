@@ -6,9 +6,9 @@ import { BrowserRouter } from 'react-router-dom';
 import { registerSW } from 'virtual:pwa-register';
 import { ThemeProvider as UserThemeProvider, useThemeMode } from '@geeksuite/user';
 import { GeekSuiteApolloProvider } from '@geeksuite/api-client';
-// Moving Day faces, self-hosted so they render offline: Zilla Slab for
-// headings (its italic for truck lettering), Public Sans for everything you
-// read, Allerta Stencil for box markings. Barlow Condensed is kept for one
+// Storage Yard faces, self-hosted so they render offline: Zilla Slab for
+// headings (its italic for fleet lettering), Public Sans for everything you
+// read, Allerta Stencil for yard stencils. Barlow Condensed is kept for one
 // job only: the printed QR labels' names (views/labels/LabelSticker.jsx sizes
 // them to its metrics, so print stays the same on every machine).
 import '@fontsource/public-sans/400.css';

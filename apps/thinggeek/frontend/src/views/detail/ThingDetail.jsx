@@ -12,10 +12,10 @@
  * Everything under the header is keyed by the thing's id, so a revealed
  * serial re-masks the moment you move to another thing (or leave the page).
  *
- * Where it is: the header's moving-label breadcrumb (House › Garage › Van)
+ * Where it is: the header's unit-tag breadcrumb (House › Garage › Van)
  * and "Move to…"; a location or container also lists what's Inside (its
  * unit's door rolls up onto it), with Add here. A place with no photo yet
- * leads with its truck-side mural instead of an empty photo slot, and the
+ * leads with its fleet-livery mural instead of an empty photo slot, and the
  * mural carries the page's heading.
  */
 import React, { useRef, useState } from 'react';
@@ -29,7 +29,7 @@ import { useVocabulary } from '../../hooks/useThingMeta';
 import { useUploads } from '../../hooks/useUploads';
 import { isNotMemberError, reportNotMember } from '../../membership';
 import BoxMark from '../../components/BoxMark';
-import { captionForKind } from '../../components/MovingLabel';
+import { captionForKind } from '../../components/UnitTag';
 import TruckMural from '../../components/TruckMural';
 import { MoveSheet } from '../../components/WherePicker';
 import { goBack } from '../../utils/goBack';

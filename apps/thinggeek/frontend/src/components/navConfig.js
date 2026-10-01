@@ -9,7 +9,7 @@
  * remembers its scroll for the way back.
  *
  * The phone's paths are the tab bar (components/BottomTabs.jsx): Things ·
- * Where · Load · Attention · More (Load is the add screen, Moving Day). `tabFor()` says which tab a route lights.
+ * Where · Add · Attention · More (Add is the add screen). `tabFor()` says which tab a route lights.
  */
 import { matchPath } from 'react-router-dom';
 
@@ -31,8 +31,8 @@ export const NAV = {
 export const ROUTES = [
   { path: '/', navId: NAV.library, title: 'Things', library: true, tab: 'things' },
   { path: '/thing/:id', navId: NAV.library, title: 'Thing', tab: 'things', back: true },
-  { path: '/add', navId: NAV.library, title: 'Load a thing', tab: 'add', back: true, fullScreen: true },
-  { path: '/walk', navId: NAV.where, title: 'Pack a room', tab: 'where', back: true, fullScreen: true },
+  { path: '/add', navId: NAV.library, title: 'Add a thing', tab: 'add', back: true, fullScreen: true },
+  { path: '/walk', navId: NAV.where, title: 'Walk the room', tab: 'where', back: true, fullScreen: true },
   { path: '/attention', navId: NAV.attention, title: 'Needs attention', tab: 'attention' },
   { path: '/where', navId: NAV.where, title: 'Where', tab: 'where' },
   { path: '/types', navId: NAV.types, title: 'Types', tab: 'more' },

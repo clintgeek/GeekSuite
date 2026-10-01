@@ -4,7 +4,7 @@
  * top of the page as you scroll (the page is a page now, not a sheet, so
  * there is no ✕ to keep clear of).
  *
- * Moving Day: the cab's switch panel — black in both modes (the chrome
+ * Storage Yard: the rental counter's switch panel — black in both modes (the chrome
  * theme), orange glyphs, an orange stripe along its foot.
  */
 import React from 'react';
