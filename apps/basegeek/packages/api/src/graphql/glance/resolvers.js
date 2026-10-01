@@ -52,7 +52,25 @@ function escapeRegex(str) {
   return String(str).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
+/**
+ * A BuJoGeek PRIVATE task (2026-10-01) never shows its words on StartGeek:
+ * the start page is exactly what opens in a new tab mid-screen-share, and it
+ * has no reveal. It reads "Private task" and carries no tags.
+ */
+const PRIVATE_TASK_LABEL = 'Private task';
+
 function mapTask(t) {
+  if (t.private) {
+    return {
+      id: t._id ? t._id.toString() : t.id,
+      content: PRIVATE_TASK_LABEL,
+      signifier: t.signifier || null,
+      status: t.status || 'pending',
+      priority: t.priority || null,
+      dueDate: t.dueDate || null,
+      tags: [],
+    };
+  }
   return {
     id: t._id ? t._id.toString() : t.id,
     content: t.content || '',
@@ -489,6 +507,9 @@ export async function searchThings(userId, term, options = {}) {
         ...sinceClause,
         ...tagClause,
         $or: [{ content: regex }, { note: regex }],
+        // Private tasks are never searchable here: a hit would show the words
+        // (and glanceAsk would hand them to a model).
+        private: { $ne: true },
       })
         .sort({ updatedAt: -1 })
         .limit(cap)

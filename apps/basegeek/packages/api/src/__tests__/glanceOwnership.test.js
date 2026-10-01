@@ -363,3 +363,29 @@ describe('glanceSearch field correctness', () => {
     expect(results[0].title).toBe('has a.*b inside');
   });
 });
+
+describe('BuJoGeek private tasks never show their words on StartGeek', () => {
+  test('glanceToday shows a private task as "Private task" with no tags', async () => {
+    const when = inDayWindow();
+    await col('bujogeek', 'tasks').insertMany([
+      { content: 'Fire Jane', createdBy: ALICE, dueDate: when, status: 'pending', private: true, tags: ['hr'] },
+      { content: 'buy milk', createdBy: ALICE, dueDate: when, status: 'pending' },
+    ]);
+    const today = await Query.glanceToday(null, { date: TARGET_DATE }, ctx(ALICE));
+    const contents = today.tasks.due.map((t) => t.content).sort();
+    expect(contents).toEqual(['Private task', 'buy milk']);
+    expect(JSON.stringify(today)).not.toContain('Fire Jane');
+    expect(today.tasks.due.find((t) => t.content === 'Private task').tags).toEqual([]);
+  });
+
+  test('glanceSearch never returns a private task', async () => {
+    await col('bujogeek', 'tasks').insertMany([
+      { content: 'Fire Jane quietly', createdBy: ALICE, status: 'pending', private: true, updatedAt: new Date() },
+      { content: 'Jane birthday card', createdBy: ALICE, status: 'pending', updatedAt: new Date() },
+    ]);
+    const search = await Query.glanceSearch(null, { query: 'Jane' }, ctx(ALICE));
+    const tasks = search.filter((r) => r.app === 'bujogeek');
+    expect(tasks.map((r) => r.title)).toEqual(['Jane birthday card']);
+    expect(JSON.stringify(search)).not.toContain('Fire Jane');
+  });
+});
