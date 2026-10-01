@@ -6,6 +6,13 @@
  * (`resolvers.js`'s `updateNote`), and keeping the snapshot there means there
  * is no second path that can quietly skip it. If a second writer ever
  * appears, it calls this too — that is the whole contract.
+ *
+ * Two have since appeared, and both call it: `restoreNoteVersion` and
+ * Fold-in's `foldInApply` (`foldin.js`). Fold-in is the one exception to
+ * "stored after the write": it snapshots BEFORE writing and refuses to write
+ * when the snapshot fails, because Undo is that feature's promise — and it
+ * deletes the snapshot again if the conditional write then loses a race, so
+ * no version describes a state that was never replaced.
  */
 
 import NoteVersion, { MAX_VERSIONS_PER_NOTE } from './models/NoteVersion.js';
@@ -38,7 +45,7 @@ export function isMeaningfulChange(previous, payload) {
  * worse. It returns null instead so a caller can log it.
  *
  * @param {object} previous the note document as it was (lean or hydrated)
- * @param {string} reason what replaced it — 'edit', 'compose', 'restore'
+ * @param {string} reason what replaced it — 'edit', 'compose', 'restore', 'fold_in'
  * @returns {Promise<object|null>} the stored version, or null
  */
 export async function snapshotNote(previous, reason = 'edit') {

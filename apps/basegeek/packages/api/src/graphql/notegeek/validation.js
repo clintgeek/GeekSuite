@@ -210,6 +210,41 @@ export const composeNoteArgsSchema = z
 
 export const deleteNoteArgsSchema = z.object({ id: idString }).strict();
 
+// ── Fold-in (foldin.js) ─────────────────────────────────────────────────────
+
+/** Kept in step with `foldin.js#MAX_FOLD_INPUT_CHARS` (asserted by its tests). */
+export const FOLD_IN_INPUT_MAX = 12000;
+/** Kept in step with `foldin.js#MAX_OPERATIONS`. */
+export const FOLD_IN_OPS_MAX = 30;
+
+/**
+ * The new information is REFUSED past the ceiling, never cut: a fold-in that
+ * quietly used the first 12 000 characters would place some of what the
+ * person pasted and lose the rest without a word.
+ */
+export const foldInPreviewArgsSchema = z
+  .object({
+    noteId: idString,
+    input: z
+      .string()
+      .refine((s) => s.trim().length > 0, 'Paste or type the new information first.')
+      .refine((s) => s.length <= FOLD_IN_INPUT_MAX, `Fold-in takes up to ${FOLD_IN_INPUT_MAX.toLocaleString('en-US')} characters at a time. For more, use Compose.`),
+  })
+  .strict();
+
+/**
+ * Operations come back as loose objects on purpose: each one is validated by
+ * `foldin.js#operationSchema` against the note as it is now, and the apply is
+ * all-or-nothing on that result. This layer only bounds the envelope.
+ */
+export const foldInApplyArgsSchema = z
+  .object({
+    noteId: idString,
+    baseUpdatedAt: z.string().trim().min(1).max(64),
+    operations: z.array(z.record(z.any())).min(1, 'Choose at least one change.').max(FOLD_IN_OPS_MAX),
+  })
+  .strict();
+
 /** Pin or unpin a note. Both arguments required — there is no "leave alone". */
 export const setNotePinnedArgsSchema = z
   .object({

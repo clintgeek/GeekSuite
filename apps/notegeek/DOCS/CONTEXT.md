@@ -82,6 +82,11 @@ which exist.)
     history entry.
   - `restoreNoteVersion(versionId)`
   - `composeNote(content)`: AI compose; returns a draft and writes nothing.
+  - `foldInPreview(noteId, input)` → `FoldInProposal { operations summary unplaced stats baseUpdatedAt provenance }`:
+    Fold-in (§13) — anchored edits that put new information into an existing Markdown note. Writes nothing.
+  - `foldInApply(noteId, baseUpdatedAt, operations)` → `FoldInResult { note versionId applied }`: re-validates,
+    snapshots a version (`reason: fold_in`) first, applies all or nothing; `CONFLICT` when the note changed and an
+    anchor broke. Undo = `restoreNoteVersion(versionId)`.
   - `setNotePinned(id, pinned)`: owner-scoped. It writes no history entry and leaves
     `updatedAt` untouched.
   - `deleteNote(id)`
@@ -362,3 +367,68 @@ Added 2026-09-30 (gateway: `apps/basegeek/packages/api/src/graphql/notegeek/link
   - **Checks:** `__tests__/components/wikiLinks.test.jsx` (18, red-checked); harness `18a-link-picker`,
     `18b-link-inserted`, `18c-links-viewer` (resolved/unresolved hrefs, alias text, Linked from above
     Related), `18d-link-create` (unresolved → `/notes/new?title=` with the title filled, nothing saved).
+
+## 13. Fold in new info
+
+Added 2026-10-01 (gateway: `apps/basegeek/packages/api/src/graphql/notegeek/foldin.js`; tests
+`src/__tests__/notegeekFoldIn.test.js`). "I have a note about spiders and found a new kind of spider — put it in."
+
+**The safety rule: the AI never writes the note.** It returns a short list of small ANCHORED operations; the
+gateway checks each anchor against the note as it is now, drops (and reports) what does not match, and applies
+the rest as deterministic character splices. Everything no operation touched is byte-identical afterwards.
+
+**Why this is not Tidy.** Tidy (removed 2026-09-22) gave the model a whole note and wrote back what came out; on
+2026-09-21 that truncated a long note to ~63% with nothing to restore from. Compose answered that by never
+overwriting (it makes a NEW note). Fold-in has to change the existing note, so instead the model is never allowed
+to produce the note's text: it can only name a place and what to add there.
+
+- **The operations** (each with a one-line `why`):
+  - `insert_after_heading { heading, markdown }` — right under the heading, before its text.
+  - `insert_under_section_end { heading, markdown }` — at the end of the section's OWN text, before its first
+    sub-heading (a new sub-section is `new_section`).
+  - `append_to_list { anchor, items }` — after the anchor item's last sibling (and that sibling's children), in the
+    anchor's style: same indent and bullet, ordered lists continue their numbering, checkbox lists get `[ ]`.
+  - `add_table_row { tableHeaderRow, cells }` — after the table's last row; `|` in a cell is escaped, a short row is
+    padded, more cells than columns drops the op.
+  - `replace_text { find, replace, reason }` — **the only op that removes text.** `find` must occur EXACTLY ONCE,
+    verbatim (never loosely matched), outside any code fence.
+  - `new_section { afterHeading|null, heading, level, markdown }` — after the whole section of `afterHeading`
+    (null = the end); refused if that heading already exists ("add under it instead").
+- **Anchoring rule:** exact text (after stripping `## `, `- [ ] `, `1. ` from both sides) first — one match wins,
+  two or more is ambiguous; otherwise case-folded, whitespace-collapsed, trailing `:`/`.` ignored — one match
+  wins, two or more is ambiguous; otherwise not found. Never prefix or "closest". Setext headings are not anchors.
+- **Never inside code:** no anchor is recognised in a fence, no insertion lands in one (or past an unclosed one),
+  `replace_text` may not touch one, and inserted markdown with an unbalanced fence is dropped.
+- **Overlap:** two removals may not intersect; an insertion may not land strictly inside a removal. Several
+  insertions at one point apply in order. The later op of a clash is dropped.
+- **Nothing silently lost:** every proposed op is either applied or listed in `stats.dropped` with a reason
+  (`anchor_not_found`, `ambiguous_anchor`, `text_not_found`, `ambiguous_text`, `overlap`, `inside_code_fence`,
+  `unbalanced_fence`, `duplicate_heading`, `too_many_cells`, `malformed`, `too_many` past 30, `empty`,
+  `no_change`), and a dropped op's content is moved to `unplaced`, next to what the model itself could not place.
+  A failed call (cap, unavailable, unparseable) is `stats.failed: true`, never an empty "nothing to add".
+- **Which notes:** Markdown. A "plain text" note in NoteGeek is a Markdown note without headings (imports become
+  Markdown, §9) — it gets list/table/replace/new-section-at-end. **Rich text (`text`) is refused**: the gateway
+  has no Markdown→HTML renderer, so an insert would be model-written HTML in a stored note, and `replace_text`
+  over HTML cannot honestly quote what the reader sees across tags and entities. Code, mind map and sketch are
+  refused ("Fold-in works on markdown and text notes"); locked/encrypted notes are never sent to a model.
+- **Long notes:** up to 14 000 characters the note goes whole. Past that: an OUTLINE (every heading, each
+  section's first line, table header rows, each list's first/last item; ≤ 6 000 chars) plus the full text of the
+  sections sharing the most words with the new info (heading words ×3), ≤ 14 000 chars. Anchors are still checked
+  against the full note. Not the local embeddings: §11's index is per passage, not per section, and keeping this
+  module off the embeddings client keeps §11's no-cloud boundary trivially true. Logged: counts only (strategy,
+  chars sent, sections sent/total, proposed/valid, drop reasons, model) — never text.
+- **Model:** `need: 'prose+structured:deep'` (JSON that must parse, prose judgement, time to think); NoteGeek is
+  paid-first, so OpenRouter `openai/gpt-4.1-mini` answers (live 2026-10-01: ~3 s, ~$0.0007 a preview). 60
+  previews per user per UTC day, 30 s timeout, 3 000 output tokens. New info is refused past 12 000 characters
+  ("use Compose"), never cut.
+- **Apply:** the client sends back the ops it accepted (a subset is fine); the gateway re-plans them against the
+  CURRENT note. All or nothing. If `updatedAt` moved since `baseUpdatedAt` and any anchor broke → `CONFLICT`
+  ("Propose again"); if every anchor still holds it applies. It snapshots a version **before** writing and refuses
+  if the snapshot fails (Undo is the promise), writes with the `updateNote` helpers (ceiling, sanitizer, links; the
+  Note middleware queues re-indexing) conditional on `updatedAt`, and if that loses a race it deletes the
+  snapshot and returns `CONFLICT`. Inline `#tags` are merged into chips by the client, as on any save.
+- **Live smoke (2026-10-01, a 4-section spiders note + "found a brown widow… correction: the black widow's
+  hourglass is red… zebra jumper on the mailbox, 5 mm"):** first run, the model "corrected" the zebra jumper's row
+  with the new sighting — so the prompt now says a new sighting/measurement is an ADDITION and `replace_text` is
+  only for explicit corrections; second run: list item for the brown widow, `replace_text` orange→red, a new table
+  row for the sighting, 0 dropped. gpt-4.1-mini puts a replace's explanation in `reason`, so `why` falls back to it.

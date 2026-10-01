@@ -12,12 +12,16 @@ import {
   suggestForNoteArgsSchema,
   composeNoteArgsSchema,
   transcribeSketchArgsSchema,
+  foldInPreviewArgsSchema,
+  foldInApplyArgsSchema,
   assertContentCeiling,
 } from './validation.js';
 import { sanitizeNoteArgs } from './sanitize.js';
 import { suggestForNote } from './suggest.js';
 import { composeNote } from './compose.js';
 import { transcribeSketch } from './transcribe.js';
+import { foldInPreview, planOperations, applyPlan, refusalFor } from './foldin.js';
+import NoteVersion from './models/NoteVersion.js';
 import {
   normalizeTag,
   normalizeTags,
@@ -62,6 +66,24 @@ const validateDeleteTag = validateInput(deleteTagArgsSchema);
 const validateSuggestForNote = validateInput(suggestForNoteArgsSchema);
 const validateComposeNote = validateInput(composeNoteArgsSchema);
 const validateTranscribeSketch = validateInput(transcribeSketchArgsSchema);
+const validateFoldInPreview = validateInput(foldInPreviewArgsSchema);
+const validateFoldInApply = validateInput(foldInApplyArgsSchema);
+
+/** A refusal the person can act on, in the same shape as every other input error. */
+const foldInRefusal = (message, code = 'BAD_USER_INPUT', details = []) =>
+  new GraphQLError(message, {
+    extensions: { code, http: { status: code === 'CONFLICT' ? 409 : 400 }, details },
+  });
+
+/** The note fold-in is aimed at, owner-scoped, or a refusal saying why not. */
+async function foldableNote(noteId, userId) {
+  if (!mongoose.isValidObjectId(noteId)) throw new Error(`Invalid Note ID format: ${ noteId }`);
+  const note = await Note.findOne({ _id: noteId, userId }).lean();
+  if (!note) throw new Error('Note not found or you do not have permission to edit it');
+  const refusal = refusalFor(note);
+  if (refusal) throw foldInRefusal(refusal);
+  return note;
+}
 
 /** How many search hits one `searchNotes` call may return. */
 const SEARCH_RESULT_LIMIT = 100;
@@ -611,6 +633,78 @@ export const resolvers = {
       if (!userId) throw new Error('Unauthorized');
       const { image, mediaType, source } = validateTranscribeSketch(rawArgs);
       return await transcribeSketch({ image, mediaType, source, userId });
+    },
+
+    /**
+     * Propose how to fold new information into a note (foldin.js). Writes
+     * nothing — not the note, not a version. A mutation rather than a query
+     * only because it spends a model call, like composeNote.
+     */
+    foldInPreview: async (_, rawArgs, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const { noteId, input } = validateFoldInPreview(rawArgs);
+      const note = await foldableNote(noteId, userId);
+      return await foldInPreview({ note, input, userId, log: logger });
+    },
+
+    /**
+     * Apply the operations the person accepted.
+     *
+     * 1. Re-validate EVERY operation against the note as it is now. All or
+     *    nothing: the person reviewed a set, and half of it is not what they
+     *    agreed to. If the note changed since the preview (`baseUpdatedAt`)
+     *    and an anchor broke, that is a CONFLICT; if every anchor still
+     *    holds, the edit is still exactly what was reviewed, so it applies.
+     * 2. Snapshot the note FIRST, and refuse if the snapshot fails — Undo is
+     *    this feature's promise, so it is not best-effort here.
+     * 3. Write through the same helpers `updateNote` uses (ceiling, sanitizer,
+     *    links; the Note middleware marks it for re-indexing), conditional on
+     *    `updatedAt` so an edit landing between the read and the write is a
+     *    CONFLICT too — and the snapshot is removed again, so no version
+     *    describes a state that was never replaced.
+     */
+    foldInApply: async (_, rawArgs, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const { noteId, baseUpdatedAt, operations } = validateFoldInApply(rawArgs);
+      const current = await foldableNote(noteId, userId);
+
+      const base = new Date(baseUpdatedAt);
+      const stale = Number.isNaN(base.getTime())
+        || base.getTime() !== new Date(current.updatedAt).getTime();
+      const plan = planOperations(current.content || '', operations);
+      if (plan.dropped.length) {
+        const details = plan.dropped.map((d) => ({ path: `operations.${ d.index }`, message: `${ d.reason }${ d.detail ? `: ${ d.detail }` : '' }` }));
+        if (stale) {
+          throw foldInRefusal('The note changed since these changes were proposed, and some no longer fit. Propose again.', 'CONFLICT', details);
+        }
+        throw foldInRefusal('Some of these changes do not match the note.', 'BAD_USER_INPUT', details);
+      }
+
+      const content = applyPlan(current.content || '', plan);
+      assertContentCeiling(content, current.type);
+      let payload = sanitizeNoteArgs({ content }, current.type);
+      assertContentCeiling(payload.content, current.type, { sanitized: true });
+      payload = {
+        ...payload,
+        links: await resolveLinks({ userId, content: payload.content, type: current.type, previous: current.links }),
+      };
+
+      const version = await snapshotNote(current, 'fold_in');
+      if (!version) throw new Error('Could not save a version to undo to, so nothing was changed. Try again.');
+
+      const note = await Note.findOneAndUpdate(
+        { _id: current._id, userId, updatedAt: current.updatedAt },
+        payload,
+        { new: true }
+      );
+      if (!note) {
+        await NoteVersion.deleteOne({ _id: version._id }).catch(() => {});
+        throw foldInRefusal('The note changed while the changes were being applied. Propose again.', 'CONFLICT');
+      }
+      logger.info({ noteId: String(note._id), applied: plan.accepted.length, stale }, '[notegeek] fold-in applied');
+      return { note, versionId: String(version._id), applied: plan.accepted.length };
     },
 
     /**

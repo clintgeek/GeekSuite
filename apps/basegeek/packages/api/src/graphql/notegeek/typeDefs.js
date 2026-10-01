@@ -15,7 +15,7 @@ export const typeDefs = gql`
     tags: [String!]
     isLocked: Boolean
     isEncrypted: Boolean
-    """What replaced this version: edit, compose, restore."""
+    """What replaced this version: edit, compose, restore, fold_in."""
     reason: String
     createdAt: String
   }
@@ -63,6 +63,104 @@ export const typeDefs = gql`
   type SketchTranscript {
     text: String!
     provenance: AIProvenance
+  }
+
+
+  """
+  One anchored change Fold-in proposes. The model never writes the note: it
+  names a place (an exact heading, list item, table header or quoted text)
+  and what to add there, and the gateway checked that place exists exactly
+  once in the note as it is now. Only replace_text removes anything.
+  """
+  type FoldInOperation {
+    """op1, op2... — the model's order, stable within one preview."""
+    id: ID!
+    """insert_after_heading | insert_under_section_end | append_to_list | add_table_row | replace_text | new_section"""
+    type: String!
+    why: String
+    heading: String
+    markdown: String
+    anchor: String
+    items: [String!]
+    tableHeaderRow: String
+    cells: [String!]
+    find: String
+    replace: String
+    reason: String
+    afterHeading: String
+    level: Int
+    """Where it lands, for a person: Under "## Widow spiders"."""
+    location: String!
+    """The splice in the note's current content: [start, end) is replaced by text (start = end for an insert)."""
+    start: Int!
+    end: Int!
+    text: String!
+  }
+
+  """
+  The same operation sent back to foldInApply. The gateway re-validates every
+  field against the note as it is at apply time; nothing here is trusted.
+  """
+  input FoldInOperationInput {
+    type: String!
+    why: String
+    heading: String
+    markdown: String
+    anchor: String
+    items: [String!]
+    tableHeaderRow: String
+    cells: [String!]
+    find: String
+    replace: String
+    reason: String
+    afterHeading: String
+    level: Int
+  }
+
+  """A proposed change that did not match the note, and why. Its content is in unplaced."""
+  type FoldInDropped {
+    index: Int!
+    type: String
+    """anchor_not_found | ambiguous_anchor | text_not_found | ambiguous_text | overlap | inside_code_fence | unbalanced_fence | duplicate_heading | too_many_cells | malformed | too_many | empty | no_change"""
+    reason: String!
+    detail: String
+  }
+
+  """
+  What the preview did. failed means no model answer at all (provenance.reason
+  says why) — an empty proposal that must not read as "nothing to add".
+  """
+  type FoldInStats {
+    inputChars: Int!
+    noteChars: Int!
+    """whole (the note went whole) or outline (outline + the most relevant sections)."""
+    strategy: String!
+    sectionsTotal: Int!
+    sectionsSent: Int!
+    sentChars: Int!
+    proposed: Int!
+    valid: Int!
+    dropped: [FoldInDropped!]!
+    failed: Boolean!
+    truncated: Boolean!
+  }
+
+  type FoldInProposal {
+    operations: [FoldInOperation!]!
+    summary: String!
+    """New information with no place in the note — the model's own, plus the content of every dropped change. Never lost."""
+    unplaced: [String!]!
+    stats: FoldInStats!
+    """The note's updatedAt the proposal was made against. Send it back to foldInApply."""
+    baseUpdatedAt: Date!
+    provenance: AIProvenance
+  }
+
+  type FoldInResult {
+    note: Note!
+    """The version holding the note as it was before; restoreNoteVersion(versionId) undoes the fold-in."""
+    versionId: ID!
+    applied: Int!
   }
 
   type Note {
@@ -244,6 +342,18 @@ export const typeDefs = gql`
     """Build a document from a pile of scraps. Returns a NEW document and
     changes nothing — saving or replacing is the caller's separate act."""
     composeNote(content: String!): ComposedNote!
+    """
+    Propose how to fold new information into an existing Markdown note, as
+    anchored edit operations. Writes NOTHING.
+    """
+    foldInPreview(noteId: ID!, input: String!): FoldInProposal!
+    """
+    Apply the accepted operations from a foldInPreview. All or nothing:
+    every operation is re-validated against the note as it is now, and a note
+    that changed since baseUpdatedAt in a way that breaks an anchor is a
+    CONFLICT. Snapshots a version first; the result names it for Undo.
+    """
+    foldInApply(noteId: ID!, baseUpdatedAt: String!, operations: [FoldInOperationInput!]!): FoldInResult!
     """Read the handwriting in a sketch's exported page image. image is
     base64 with no data: prefix; mediaType is image/png or image/jpeg.
     source is 'sketch' (the default) or 'photo' — a photographed notebook
