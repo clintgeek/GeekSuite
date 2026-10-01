@@ -146,6 +146,71 @@ export const scenes = [
     },
     teardown: (page, h) => h.esc(),
   },
+  // ── Private tasks (2026-10-01). These THROW when the words leak. ──
+  {
+    // Desktop: hidden by default — an eye-slash and an ink bar, and the words
+    // nowhere on the page (not just invisible: not in the DOM).
+    name: '40-private-hidden',
+    goto: '/today',
+    wait: 1400,
+    viewports: ['desktop'],
+    async setup(page) {
+      const hidden = page.getByRole('button', { name: 'Private task, hidden. Activate to show.' });
+      if (!(await hidden.count())) throw new Error('no hidden private row on the desktop Today');
+      const html = await page.content();
+      if (/write-up for David|Before the 1:1/.test(html)) throw new Error('a private task’s words are in the desktop DOM');
+    },
+  },
+  {
+    // Desktop: clicked — the words in place, the eye-slash now a Hide button.
+    name: '41-private-revealed',
+    goto: '/today',
+    wait: 1400,
+    viewports: ['desktop'],
+    async setup(page) {
+      const hidden = page.getByRole('button', { name: 'Private task, hidden. Activate to show.' }).first();
+      if (!(await hidden.count())) throw new Error('no hidden private row to reveal');
+      await hidden.click();
+      await page.waitForTimeout(250);
+      if (!(await page.getByText('Finish the write-up for David').count())) throw new Error('reveal did not show the words');
+      if (!(await page.getByRole('button', { name: 'Hide private task' }).count())) throw new Error('no Hide button once revealed');
+      // Leave the pointer off the row so the shot shows the row, not the hover strip.
+      await page.mouse.move(5, 5);
+    },
+  },
+  {
+    // Phone: shown, with the small eye-slash mark.
+    name: '42-private-phone',
+    goto: '/today',
+    wait: 1400,
+    viewports: ['phone'],
+    async setup(page) {
+      if (!(await page.getByText('Finish the write-up for David').count())) throw new Error('the phone hid a private task');
+      if (!(await page.locator('[data-private-mark]').count())) throw new Error('no private mark on the phone');
+      const row = page.locator('[data-private-mark]').first();
+      await row.scrollIntoViewIfNeeded();
+    },
+  },
+  {
+    // The add box: "(private)" typed, underlined, and the Private box ticked in ink.
+    name: '43-add-box-private',
+    goto: '/today',
+    wait: 1400,
+    async setup(page) {
+      const box = page.getByRole('textbox', { name: /^new task$/i }).first();
+      if (!(await box.count())) return false;
+      await box.click();
+      await page.keyboard.type('Fire Jane (private) friday #manager');
+      await page.waitForTimeout(300);
+      const tick = page.getByRole('checkbox', { name: 'Private' }).first();
+      if ((await tick.getAttribute('aria-checked')) !== 'true') throw new Error('typing (private) did not tick the box');
+    },
+    teardown: async (page) => {
+      const box = page.getByRole('textbox', { name: /^new task$/i }).first();
+      await box.fill('');
+      await page.keyboard.press('Escape');
+    },
+  },
   // Retired screens: their URLs land on Today. These throw if they do not.
   ...['/review', '/plan/weekly', '/plan/monthly', '/plan/backlog', '/habits', '/collections/c1', '/templates', '/tags', '/settings', '/tasks/daily'].map((from) => ({
     name: `20-redirect${from.replace(/\//g, '-')}`,

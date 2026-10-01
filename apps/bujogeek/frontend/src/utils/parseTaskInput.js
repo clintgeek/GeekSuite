@@ -7,6 +7,8 @@
  *   Priority:                 !high  !medium  !low
  *   Tags:                     #work  #my-tag  (letters, digits, hyphens, underscores)
  *   Recurrence:               (daily)  (weekly)  (monthly)
+ *   Private:                  (private)  — hide the words on a desktop until
+ *                             clicked (2026-10-01; see PenRow / PrivacyContext)
  *   Note:                     ^some note text  (must be last token)
  *   NoteGeek note:            $^note text  (saves to NoteGeek; must be last token)
  *   Blocked:                  ~blocked waiting on legal  (the reason is optional
@@ -55,7 +57,7 @@
  * with `\s+`.
  *
  * Returns: { content, signifier, priority, dueDate, hasTime, tags, note,
- *            noteGeekNote, recurrenceRule, blocked, blockedReason }
+ *            noteGeekNote, recurrenceRule, blocked, blockedReason, private }
  */
 
 const DAY_NAMES = {
@@ -140,6 +142,7 @@ export function frequencyFromRecurrenceRule(rule) {
 
 const PATTERNS = {
   recurrence: /\((daily|weekly|monthly)\)/i,
+  private: /\(private\)/gi,
   priority: /!(high|medium|low)\b/i,
   dateTime:
     /\/(today|tomorrow|next-week|next-month|next-(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|(?:mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)|(?:\d{4}-\d{2}-\d{2})|(?:\d{2}-\d{2}-\d{4})|(?:\d{2}-\d{2})|(?:\d{1,2})(?:st|nd|rd|th)?|(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{1,2}(?:st|nd|rd|th)?)(?:\s+(\d{1,2})(?::(\d{2}))?\s*(?:([ap]\.?m\.?))?)?/i,
@@ -241,7 +244,7 @@ function findPlainDate(masked, now) {
  * @param {{ now?: Date }} [options] `now` anchors relative dates (tests pass one)
  * @returns the `parseTaskInput` fields plus `spans`: Array<{ start, end, kind }>
  *   in line order, kind ∈ signifier | priority | tag | date | recurrence |
- *   note | noteGeek | blocked.
+ *   private | note | noteGeek | blocked.
  */
 export function parseTaskInputDetailed(text, { now = new Date() } = {}) {
   const line = String(text ?? '');
@@ -262,6 +265,7 @@ export function parseTaskInputDetailed(text, { now = new Date() } = {}) {
   let blocked = false;
   let blockedReason = null;
   let recurrenceFreq = null;
+  let isPrivate = false;
   const tags = [];
 
   // 0. Recurrence — (daily) / (weekly) / (monthly). The RRULE itself is built
@@ -270,6 +274,15 @@ export function parseTaskInputDetailed(text, { now = new Date() } = {}) {
   if (recurrenceMatch) {
     recurrenceFreq = recurrenceMatch[1].toLowerCase();
     take(recurrenceMatch.index, recurrenceMatch.index + recurrenceMatch[0].length, 'recurrence');
+  }
+
+  // 0b. Private — `(private)`, anywhere, the same parenthesised shape as the
+  //     repeats. Every copy is read (typing it twice is still one flag) so
+  //     none is left behind as words. Read before the note, like the repeats,
+  //     so it may sit after a ^note and still count without becoming note text.
+  for (const m of [...masked.matchAll(PATTERNS.private)]) {
+    isPrivate = true;
+    take(m.index, m.index + m[0].length, 'private');
   }
 
   // 1. Tags — first, so # tokens don't interfere with other parsing.
@@ -427,6 +440,7 @@ export function parseTaskInputDetailed(text, { now = new Date() } = {}) {
     recurrenceRule: recurrenceRule || undefined,
     blocked: blocked || undefined,
     blockedReason: blockedReason || undefined,
+    private: isPrivate || undefined,
     spans,
   };
 }

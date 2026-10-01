@@ -630,6 +630,8 @@ const TaskProvider = ({ children }) => {
         'tags', 'dueDate', 'isBacklog', 'recurrenceRule',
         // null files the task out of its collection; a string moves it.
         'collectionId',
+        // Private: hide the words on a desktop (PrivacyContext).
+        'private',
       ];
       const cleanUpdates = {};
       for (const key of ALLOWED_UPDATE_FIELDS) {

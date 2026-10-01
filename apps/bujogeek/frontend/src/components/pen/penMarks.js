@@ -30,3 +30,13 @@ export const srOnly = {
   position: 'absolute', width: '1px', height: '1px', padding: 0, margin: '-1px',
   overflow: 'hidden', clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap', border: 0,
 };
+
+/**
+ * The redaction bar's width: roughly the words', in steps of eight
+ * characters, so the bar reads as "some words" without measuring them out.
+ */
+export function redactionWidth(text) {
+  const n = String(text ?? '').length;
+  const stepped = Math.min(Math.max(Math.ceil(n / 8) * 8, 8), 48);
+  return `${stepped * 0.5}em`;
+}

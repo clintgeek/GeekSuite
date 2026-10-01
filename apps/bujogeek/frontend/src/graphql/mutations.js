@@ -87,8 +87,8 @@ export const DELETE_COLLECTION = gql`
 `;
 
 export const CREATE_TASK = gql`
-  mutation CreateTask($content: String!, $signifier: String, $status: String, $priority: Int, $tags: [String], $dueDate: Date, $createdAt: Date, $updatedAt: Date, $note: String, $recurrenceRule: String, $isSeriesMaster: Boolean, $collectionId: ID) {
-    createTask(content: $content, signifier: $signifier, status: $status, priority: $priority, tags: $tags, dueDate: $dueDate, createdAt: $createdAt, updatedAt: $updatedAt, note: $note, recurrenceRule: $recurrenceRule, isSeriesMaster: $isSeriesMaster, collectionId: $collectionId) {
+  mutation CreateTask($content: String!, $signifier: String, $status: String, $priority: Int, $tags: [String], $dueDate: Date, $createdAt: Date, $updatedAt: Date, $note: String, $recurrenceRule: String, $isSeriesMaster: Boolean, $collectionId: ID, $private: Boolean) {
+    createTask(content: $content, signifier: $signifier, status: $status, priority: $priority, tags: $tags, dueDate: $dueDate, createdAt: $createdAt, updatedAt: $updatedAt, note: $note, recurrenceRule: $recurrenceRule, isSeriesMaster: $isSeriesMaster, collectionId: $collectionId, private: $private) {
       id
       content
       signifier
@@ -103,6 +103,7 @@ export const CREATE_TASK = gql`
       migratedTo
       isBacklog
       blockedReason
+      private
       blockedAt
       taskType
       recurrencePattern
@@ -135,6 +136,7 @@ export const UPDATE_TASK = gql`
       migratedTo
       isBacklog
       blockedReason
+      private
       blockedAt
       taskType
       recurrencePattern
@@ -177,6 +179,7 @@ export const UPDATE_TASK_STATUS = gql`
       migratedTo
       isBacklog
       blockedReason
+      private
       blockedAt
       taskType
       createdAt
@@ -208,6 +211,7 @@ export const BLOCK_TASK = gql`
       migratedTo
       isBacklog
       blockedReason
+      private
       blockedAt
       taskType
       createdAt
@@ -235,6 +239,7 @@ export const UNBLOCK_TASK = gql`
       migratedTo
       isBacklog
       blockedReason
+      private
       blockedAt
       taskType
       createdAt
@@ -261,6 +266,7 @@ export const MIGRATE_TASK_TO_FUTURE = gql`
       migratedTo
       isBacklog
       blockedReason
+      private
       blockedAt
       taskType
       createdAt

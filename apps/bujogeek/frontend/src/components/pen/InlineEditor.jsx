@@ -2,7 +2,8 @@
  * InlineEditor — a task's details, opened in place under its row. No dialog
  * (DOCS/SIMPLE_PLAN.md § "A task row").
  *
- * Text, date and time, tags, priority, note. Date and time are the browser's
+ * Text, date and time, tags, priority, Private, note. Private hides the
+ * words on a desktop until clicked (context/PrivacyContext.jsx). Date and time are the browser's
  * own inputs: on a phone they open the system pickers, and they cost no
  * bundle. Clearing the date makes the task "Anytime"; a date with no time is
  * date-only (UTC midnight), a date with a time is an instant — the same rule
@@ -17,8 +18,10 @@
  */
 import { useMemo, useState } from 'react';
 import {
-  Box, Button, FormControl, InputLabel, MenuItem, Select, TextField, ToggleButton, ToggleButtonGroup,
+  Box, Button, Checkbox, FormControl, FormControlLabel, InputLabel, MenuItem, Select, TextField, ToggleButton,
+  ToggleButtonGroup,
 } from '@mui/material';
+import { EyeOff } from 'lucide-react';
 import RecurringEditDialog from '../tasks/RecurringEditDialog';
 import { PRIORITIES, changedFields, initialForm, isRepeating } from './editorForm';
 
@@ -89,6 +92,19 @@ export default function InlineEditor({ task, onSave, onCancel, onDelete }) {
             </ToggleButton>
           ))}
         </ToggleButtonGroup>
+        <FormControlLabel
+          sx={{ m: 0, minHeight: 44, pr: 2, color: 'text.primary', '& .MuiFormControlLabel-label': { display: 'inline-flex', alignItems: 'center', gap: 1.5, fontWeight: 600 } }}
+          control={(
+            <Checkbox
+              checked={form.private}
+              onChange={(e) => setForm((f) => ({ ...f, private: e.target.checked }))}
+              inputProps={{ 'aria-describedby': `${idBase}-private-hint` }}
+              sx={{ width: 44, height: 44, color: 'text.secondary', '&.Mui-checked': { color: 'text.primary' } }}
+            />
+          )}
+          label={<><EyeOff size={16} strokeWidth={1.75} aria-hidden />Private</>}
+        />
+        <Box id={`${idBase}-private-hint`} sx={{ display: 'none' }}>Hidden on a desktop until you click it.</Box>
         {form.date && (
           <Button size="small" onClick={() => setForm((f) => ({ ...f, date: '', time: '' }))} sx={{ minHeight: 44, color: 'text.secondary' }}>
             Make it Anytime

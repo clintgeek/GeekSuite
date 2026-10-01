@@ -6,6 +6,10 @@
 // few days of Done. One blocked task and one subtask are in it too: those
 // screens are gone and they must show as ordinary tasks.
 //
+// Two PRIVATE tasks (the Private feature, 2026-10-01): one on Today, one in
+// Done. On the desktop contexts their words are not on the page until
+// revealed; on the phone they show, with an eye-slash mark.
+//
 // Mutations answer with the task they were asked about, changed, so ticking,
 // moving and editing behave on screen as they do against the gateway.
 import { sessionRoutes, graphqlRoute, json } from '../../lib/net.mjs';
@@ -44,6 +48,7 @@ const task = (over = {}) => ({
   isBacklog: false,
   blockedReason: null,
   blockedAt: null,
+  private: false,
   taskType: 'task',
   recurrencePattern: 'none',
   recurrenceRule: null,
@@ -73,6 +78,8 @@ export const ALL = [
   task({ content: 'Review Dana’s PR on the billing export', dueDate: on(0), priority: 1, tags: ['work', 'fd'] }),
   task({ content: 'Write the retro notes', dueDate: at(0, 14), priority: 2, note: 'Three things that worked, one that did not.', tags: ['work'] }),
   task({ content: 'Pick up the dry cleaning', dueDate: on(0) }),
+  // Private: hidden on a desktop until clicked.
+  task({ content: 'Finish the write-up for David', dueDate: at(0, 16), priority: 2, private: true, note: 'Before the 1:1 on Thursday.', tags: ['manager'] }),
   // The one subtask: shown as an ordinary task.
   task({ content: 'Ask the county about the setback', dueDate: on(0), priority: 3, tags: ['house'], parentTask: { __typename: 'Task', id: 't3', content: 'File the permit amendment', status: 'blocked' } }),
   done(0, 8, { content: 'Book the dentist', dueDate: on(0) }),
@@ -99,6 +106,7 @@ export const ALL = [
   done(-1, 16, { content: 'Ship the invoice export', dueDate: on(-1), tags: ['work', 'fd'] }),
   done(-1, 11, { content: 'Order more chicken feed', dueDate: null, tags: ['farmLife'] }),
   done(-2, 15, { content: 'Close out the invoices', dueDate: on(-2), tags: ['work'] }),
+  done(-2, 11, { content: 'Talk to HR about Jane', dueDate: on(-2), private: true, tags: ['manager'] }),
   done(-5, 20, { content: 'Fix the flaky harness scene', dueDate: on(-5), tags: ['geekSuite'] }),
   task({ content: 'Argue with the insurance company', dueDate: on(-3), status: 'cancelled', cancelledAt: at(-3, 12), updatedAt: at(-3, 12) }),
 ];

@@ -35,6 +35,7 @@ import { localDateString } from '@geeksuite/utils';
 import { useReducedMotion, useToast } from '@geeksuite/ui';
 import { useTaskContext } from './TaskContext.jsx';
 import { useAuth } from './AuthContext';
+import { PrivacyProvider } from './PrivacyContext.jsx';
 import { CREATE_NOTE } from '../graphql/notegeekMutations';
 import { dueDateOn, filterByTag, isDone, taskId } from '../utils/penViews';
 
@@ -288,7 +289,11 @@ export function PenProvider({ children }) {
   }), [loaded, now, corpus, visible, settling, tagFilter, helpOpen, refresh, toggleDone, moveTo, moveToTomorrow,
     moveAllToToday, remove, save, add, offerUndo]);
 
-  return <PenContext.Provider value={value}>{children}</PenContext.Provider>;
+  return (
+    <PenContext.Provider value={value}>
+      <PrivacyProvider>{children}</PrivacyProvider>
+    </PenContext.Provider>
+  );
 }
 
 export default PenProvider;

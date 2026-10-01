@@ -22,6 +22,9 @@ redirects to `/today` (its code and data untouched until Phase 4). All four view
 `appPreferences.bujogeek.pinnedTags`. The Routes and Keyboard lines below are current; most of the rest of
 this file describes the retired screens and the old Today.
 
+Amended 2026-10-01: **Private tasks** — see "Private tasks" under Data Model. Gateway first
+(`Task.private`), then the UI (`context/PrivacyContext.jsx`, `components/pen/PenRow.jsx`).
+
 ---
 
 ## Project Overview
@@ -86,6 +89,7 @@ completedAt, cancelledAt, blockedAt (mutually exclusive; set/cleared by
 recurrenceRule (RRULE string; ONLY recurrence mechanism — recurrencePattern is a
   deprecated input shim translated server-side), seriesId, isSeriesMaster, exdates[],
 collectionId (undated collection tasks are excluded from log views/carry-forward),
+private (hide the words on a desktop; redacted from reminder pushes — see below),
 remindedAt (push reminder dedup), parentTask, subtasks[], createdBy, timestamps
 ```
 Recurring tasks are virtual: masters are expanded per view window as
@@ -121,6 +125,44 @@ export, backlog) still sees it, and `blockedTasks` is the list view.
   `status: 'pending'`, so a parked task sends no push and resumes on unblock.
 - There is no summary/stats type in this schema, so the requested `blocked: Int`
   count has no home yet — the frontend reads `blockedTasks.length`.
+
+#### Private tasks — added 2026-10-01
+
+Chef: a todo like "Fire Jane" should not be on a screen that is accidentally shared. **Desktop
+only** — on a phone it shows normally.
+
+- **Data:** `Task.private: Boolean` (default false). `createTask(private:)`,
+  `UpdateTaskInput.private`; `null` is read as false and never stored; rows without the key
+  resolve false (`Task.private` resolver). A series master's flag is copied onto its virtual
+  occurrences. Old bundles never send it. The gateway commit deploys first; the UI selects
+  `private` in every task query (pinned by `__tests__/graphql/taskSelections.test.js`).
+- **Server-side redaction:** a private task's reminder push is `{ title: "Private task due",
+  body: "Due hh:mm UTC", tags: [] }` — no content, tags or note in the payload
+  (`reminderService.buildPayload`, DOCS/REMINDERS.md). The AI weekly review facts carry
+  "Private task" and no blocked reason (`reviewService.gatherFacts`). **Not** redacted:
+  StartGeek's glance tasks and glance search (`graphql/glance/resolvers.js`) still return the
+  words — StartGeek has no reveal UI, so hiding there is a product call for Chef.
+- **Marking:** the add box's eye-slash **Private** tick box and the typed `(private)` token are
+  one thing — the line is the only state (`quickAdd.setPrivateToken`); the token is underlined
+  like `(daily)`. The inline editor has a Private checkbox. HelpSheet lists both.
+- **Desktop = `md`+ AND `(pointer: fine)`** (`useHidesPrivate`). There, every list (Today,
+  Upcoming, Done, Search — all `PenRow`) renders a private task as an eye-slash, an ink
+  redaction bar (width in 8-char steps) and one button named "Private task, hidden. Activate
+  to show." **The words, tags and note are not in the DOM** while hidden; the checkbox reads
+  "Done: Private task". The square, priority mark, kind glyph and date stay.
+- **Reveal:** click / Enter / Space on that button shows that one task in place (and the
+  eye-slash becomes a "Hide private task" button; clicking the words then opens the editor as
+  usual). Re-hides on that button, Escape, window `blur`, `visibilitychange` → hidden (every
+  revealed task), or `REVEAL_MS` = 60 s. An open editor counts as revealed while open, and is
+  `filter: blur()`-ed (not closed — the edit is kept) while the window is away. Nothing is
+  persisted; a reload starts hidden. Outside a `PrivacyProvider` (mounted inside
+  `PenProvider`) a row fails safe: hidden and not revealable.
+- **Phone:** words shown, a small grey eye-slash before them, ", private" for screen readers.
+- **Said out loud:** the add box's live region says "Added a private task."; no Pen toast ever
+  echoed task words (pinned by a test). Retired screens (`TaskRow`, `TaskList`, Review…) are
+  unreachable and were not changed.
+- **Tests:** gateway `bujogeekPrivate.test.js`; UI `utils/privateToken.test.js`,
+  `pen/privateRows.test.jsx`, `pen/privateAddEdit.test.jsx`. Harness scenes `40`–`43`.
 
 ### Collection
 `name, description, archived, createdBy, timestamps` — tasks reference it via `collectionId`; delete detaches by default, cascades on request.

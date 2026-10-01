@@ -15,16 +15,26 @@
  * - Desktop (a real hover): done / tomorrow / pick-a-date buttons appear on
  *   hover or keyboard focus. Phone: swipe right for done, left for tomorrow,
  *   a long swipe left to pick a date (hooks/useSwipe.js).
+ * - PRIVATE tasks (2026-10-01, context/PrivacyContext.jsx). On a desktop the
+ *   words, tags and note are NOT RENDERED until revealed: the row shows an
+ *   eye-slash and an ink redaction bar, one button whose accessible name is
+ *   "Private task, hidden. Activate to show." — nothing to select, copy, read
+ *   aloud or catch in a screenshot. Click / Enter / Space reveals that task in
+ *   place; the eye-slash before the words then hides it again. An open editor
+ *   is revealed while open, and blurred while the window is away. The square,
+ *   the priority mark, the kind glyph and the date stay, so the list still
+ *   reads. On a phone the words show, with a small eye-slash mark.
  */
 import { memo, useId } from 'react';
 import { Box, ButtonBase, IconButton, Tooltip, useMediaQuery } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
-import { ArrowRight, CalendarDays, Check } from 'lucide-react';
+import { ArrowRight, CalendarDays, Check, EyeOff } from 'lucide-react';
 import { useReducedMotion } from '@geeksuite/ui';
 import { penOf } from '../../theme/pen';
-import { STRIKE_MS, TICK_PATH, srOnly, strikeImage } from './penMarks';
+import { STRIKE_MS, TICK_PATH, redactionWidth, srOnly, strikeImage } from './penMarks';
 import useSwipe from '../../hooks/useSwipe';
 import { isDone, whenLabel } from '../../utils/penViews';
+import { HIDDEN_LABEL, PRIVATE_LABEL, usePrivacy } from '../../context/PrivacyContext';
 
 const KIND = {
   '@': 'Event',
@@ -125,6 +135,17 @@ function PenRow({
   const cancelled = task.status === 'cancelled';
   const when = context === 'done' ? { text: cancelled ? 'cancelled' : '' } : whenLabel(task, now, context);
   const kind = KIND[task.signifier];
+  const privacy = usePrivacy();
+  const isPrivate = task.private === true;
+  const revealed = isPrivate && privacy.isRevealed(id);
+  // Hidden: a private task, on a desktop, not revealed, its editor not open.
+  const hidden = isPrivate && privacy.hides && !revealed && !expanded;
+  const name = hidden ? PRIVATE_LABEL : task.content;
+  const wordsButtonSx = {
+    flex: 1, minWidth: 0, minHeight: 44, py: 2.5, pl: 1, pr: 2,
+    display: 'block', textAlign: 'left', borderRadius: '4px',
+    '&.Mui-focusVisible': { outline: `2px solid ${p.ink}`, outlineOffset: -2 },
+  };
   const swipe = useSwipe({
     enabled: !canHover && !expanded,
     onDone: () => onDone?.(task),
@@ -198,20 +219,58 @@ function PenRow({
         <PenCheckbox
           checked={done && !cancelled}
           motion={motion}
-          label={`${done ? 'Not done' : 'Done'}: ${task.content}`}
+          label={`${done ? 'Not done' : 'Done'}: ${name}`}
           onClick={() => onDone?.(task)}
         />
 
+        {hidden && (
+          // The words are not in the DOM: only the mark and a bar.
+          <ButtonBase
+            onClick={() => privacy.reveal(id)}
+            aria-label={HIDDEN_LABEL}
+            data-private-hidden
+            sx={{ ...wordsButtonSx, userSelect: 'none' }}
+          >
+            <Box component="span" aria-hidden sx={{ display: 'flex', alignItems: 'center', gap: 2, height: 26 }}>
+              <EyeOff size={16} strokeWidth={1.75} color={p.grey} style={{ flexShrink: 0 }} />
+              <Box
+                component="span"
+                data-redaction
+                sx={{
+                  display: 'block', width: redactionWidth(task.content), maxWidth: 'calc(100% - 24px)', height: 12,
+                  borderRadius: '2px', backgroundColor: done ? p.muted : p.ink, opacity: done ? 0.5 : 0.85,
+                }}
+              />
+            </Box>
+          </ButtonBase>
+        )}
+
+        {isPrivate && privacy.hides && !hidden && !expanded && (
+          <Tooltip title="Hide" enterDelay={400}>
+            <IconButton
+              aria-label="Hide private task"
+              onClick={() => privacy.hide(id)}
+              data-private-hide
+              sx={{ width: 40, height: 40, mt: 0.75, mr: -1, flexShrink: 0, color: p.grey, '&:hover': { color: p.ink } }}
+            >
+              <EyeOff size={16} strokeWidth={1.75} />
+            </IconButton>
+          </Tooltip>
+        )}
+
+        {!hidden && (
         <ButtonBase
           onClick={() => onToggleExpand?.(task)}
           aria-expanded={expanded}
           aria-controls={expanded ? editorId : undefined}
-          sx={{
-            flex: 1, minWidth: 0, minHeight: 44, py: 2.5, pl: 1, pr: 2,
-            display: 'block', textAlign: 'left', borderRadius: '4px',
-            '&.Mui-focusVisible': { outline: `2px solid ${p.ink}`, outlineOffset: -2 },
-          }}
+          sx={wordsButtonSx}
         >
+          {isPrivate && !privacy.hides && (
+            // Phone: the words show; the mark says they are private.
+            <Box component="span" aria-hidden data-private-mark sx={{ display: 'inline-flex', verticalAlign: '-2px', mr: 1.5, color: p.grey }}>
+              <EyeOff size={15} strokeWidth={1.75} />
+            </Box>
+          )}
           <Box
             component="span"
             data-words
@@ -237,6 +296,7 @@ function PenRow({
           >
             {task.content}
           </Box>
+          {isPrivate && <Box component="span" sx={srOnly}>, private</Box>}
           {kind && <Box component="span" sx={srOnly}>{`, ${kind.toLowerCase()}`}</Box>}
           {task.priority ? <Box component="span" sx={srOnly}>{`, ${PRIORITY[task.priority]}`}</Box> : null}
           {showTags && task.tags?.length > 0 && (
@@ -250,6 +310,7 @@ function PenRow({
             </Box>
           )}
         </ButtonBase>
+        )}
 
         {when.text && (
           <Box
@@ -281,7 +342,16 @@ function PenRow({
       </Box>
 
       {expanded && editor && (
-        <Box id={editorId} sx={{ backgroundColor: p.fill, pl: { xs: 4, sm: 16 }, pr: { xs: 4, sm: 6 }, pb: 4 }}>
+        <Box
+          id={editorId}
+          data-private-away={isPrivate && privacy.away ? 'true' : undefined}
+          sx={{
+            backgroundColor: p.fill, pl: { xs: 4, sm: 16 }, pr: { xs: 4, sm: 6 }, pb: 4,
+            // A private task's open editor, while the window is away (a screen
+            // share starting): blurred, not closed — the edit is kept.
+            filter: isPrivate && privacy.away ? 'blur(10px)' : 'none',
+          }}
+        >
           {editor}
         </Box>
       )}

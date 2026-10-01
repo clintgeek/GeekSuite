@@ -18,16 +18,22 @@
  * was added after Enter.
  *
  * Enter adds and keeps focus in the box, so the next task can follow.
+ *
+ * PRIVATE (2026-10-01): the eye-slash "Private" tick box beside the line and
+ * the typed `(private)` token are the same thing — the line is the only state.
+ * Ticking appends the token; unticking takes every copy out; typing or
+ * deleting it ticks or unticks the box. The token is underlined like the other
+ * modifiers, and the ticked box is drawn in ink: that is the mark.
  */
 import { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
-import { Box, IconButton, InputBase } from '@mui/material';
+import { Box, ButtonBase, IconButton, InputBase, Tooltip } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
-import { HelpCircle } from 'lucide-react';
+import { EyeOff, HelpCircle } from 'lucide-react';
 import { slashFocusProps } from '@geeksuite/ui';
 import { penOf } from '../../theme/pen';
 import { srOnly } from './penMarks';
 import { parseTaskInputDetailed } from '../../utils/parseTaskInput';
-import { describeParse, segmentLine, spokenDate, toCreateInput } from '../../utils/quickAdd';
+import { describeParse, segmentLine, setPrivateToken, spokenDate, toCreateInput } from '../../utils/quickAdd';
 import { localDateString } from '@geeksuite/utils';
 
 
@@ -47,6 +53,18 @@ export default function AddBox({ onAdd, onHelp, autoFocus = false, now }) {
   const parsed = useMemo(() => (value.trim() ? parseTaskInputDetailed(value, { now: clock }) : null), [value, clock]);
   const segments = useMemo(() => (parsed ? segmentLine(value, parsed.spans) : []), [parsed, value]);
   const summary = describeParse(parsed, clock);
+  const isPrivate = Boolean(parsed?.private);
+
+  const togglePrivate = () => {
+    const next = setPrivateToken(value, !isPrivate);
+    setValue(next);
+    requestAnimationFrame(() => {
+      const el = inputRef.current;
+      if (!el) return;
+      el.focus();
+      try { el.setSelectionRange(next.length, next.length); } catch { /* not a text input */ }
+    });
+  };
 
   useEffect(() => {
     if (autoFocus) inputRef.current?.focus();
@@ -77,7 +95,8 @@ export default function AddBox({ onAdd, onHelp, autoFocus = false, now }) {
       return;
     }
     setValue('');
-    setAnnounce(`Added: ${input.content}${where ? `, for ${where}` : ''}.`);
+    // A private task's words are not repeated, even to the live region.
+    setAnnounce(`Added${input.private ? ' a private task' : `: ${input.content}`}${where ? `, for ${where}` : ''}.`);
     inputRef.current?.focus();
   };
 
@@ -175,6 +194,26 @@ export default function AddBox({ onAdd, onHelp, autoFocus = false, now }) {
           }}
         />
       </Box>
+      <Tooltip title="Private: hidden on a desktop until clicked" enterDelay={400}>
+        <ButtonBase
+          role="checkbox"
+          aria-checked={isPrivate}
+          aria-label="Private"
+          onClick={togglePrivate}
+          data-add-private={isPrivate ? 'true' : undefined}
+          sx={{
+            minWidth: 44, height: 44, px: { xs: 0, sm: 2 }, gap: 1.5, flexShrink: 0, borderRadius: '4px',
+            fontSize: '0.875rem', fontWeight: 600,
+            color: isPrivate ? p.paper : p.grey,
+            backgroundColor: isPrivate ? p.ink : 'transparent',
+            '&:hover': { color: isPrivate ? p.paper : p.ink },
+            '&.Mui-focusVisible': { outline: `2px solid ${p.ink}`, outlineOffset: 2 },
+          }}
+        >
+          <EyeOff size={18} strokeWidth={1.75} aria-hidden />
+          <Box component="span" aria-hidden sx={{ display: { xs: 'none', sm: 'inline' } }}>Private</Box>
+        </ButtonBase>
+      </Tooltip>
       <IconButton aria-label="How to write a task" onClick={onHelp} sx={{ width: 44, height: 44, color: p.grey }}>
         <HelpCircle size={20} strokeWidth={1.75} />
       </IconButton>

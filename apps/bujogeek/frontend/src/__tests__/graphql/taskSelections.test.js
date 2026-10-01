@@ -51,6 +51,8 @@ const REQUIRED_TASK_FIELDS = [
   'recurrenceRule',
   'seriesId',
   'isSeriesMaster',
+  // A row only knows to hide its words if the list it came from said so.
+  'private',
 ];
 
 describe('task query selection sets', () => {

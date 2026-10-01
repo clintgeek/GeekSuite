@@ -17,6 +17,7 @@ const GRAMMAR = [
   ['$^draft text', 'a note saved to NoteGeek (last)'],
   ['@  -  ?  !', 'first character: event, note, question, important'],
   ['(daily)  (weekly)  (monthly)', 'repeats'],
+  ['(private)', 'private: hidden on a desktop until clicked'],
 ];
 
 const KEYS = [
@@ -25,6 +26,7 @@ const KEYS = [
   ['t', 'tomorrow'],
   ['d', 'pick a date'],
   ['e  Enter', 'edit'],
+  ['Esc', 'hide private tasks again'],
   ['/', 'the add box, or search'],
   ['g t  g u  g d  g s', 'Today, Upcoming, Done, Search'],
 ];

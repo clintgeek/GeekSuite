@@ -38,6 +38,7 @@ export function initialForm(task) {
     priority: task?.priority ? String(task.priority) : '',
     note: task?.note || '',
     repeat: frequencyFromRecurrenceRule(task?.recurrenceRule),
+    private: task?.private === true,
   };
 }
 
@@ -60,6 +61,7 @@ export function changedFields(task, form) {
   if (tags.join(' ') !== parseTagText(start.tags).join(' ')) out.tags = tags;
   if (form.priority !== start.priority) out.priority = form.priority ? Number(form.priority) : null;
   if (form.note.trim() !== start.note.trim()) out.note = form.note.trim() || null;
+  if (Boolean(form.private) !== start.private) out.private = Boolean(form.private);
   if ('recurrenceRule' in (task || {}) && isRepeating(task) && form.repeat !== start.repeat) {
     const anchor = formDueDate(form);
     out.recurrenceRule = buildRecurrenceRule(form.repeat, anchor ? new Date(anchor.length === 10 ? `${anchor}T09:00:00` : anchor) : undefined);

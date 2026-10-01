@@ -21,6 +21,8 @@
  *   the entry as an ordinary task tagged `blocked`, with any reason kept in
  *   its note as "Blocked: …".
  * - `$^note` goes to NoteGeek and is NOT part of the task input.
+ * - `(private)` sends `private: true`. It is only ever sent when true, so a
+ *   gateway that predates the field never sees it from an ordinary entry.
  */
 import { format } from 'date-fns';
 import { localDateString } from '@geeksuite/utils';
@@ -62,6 +64,7 @@ export function toCreateInput(parsed, { today = new Date() } = {}) {
   if (tags.length) input.tags = tags;
   if (noteParts.length) input.note = noteParts.join('\n');
   if (parsed.recurrenceRule) input.recurrenceRule = parsed.recurrenceRule;
+  if (parsed.private) input.private = true;
 
   return { input, noteGeekNote: parsed.noteGeekNote || null };
 }
@@ -96,9 +99,27 @@ export function describeParse(parsed, now = new Date()) {
   const tags = [...(parsed.tags || []), ...(parsed.blocked ? ['blocked'] : [])];
   if (tags.length) parts.push(`Tagged ${tags.join(', ')}.`);
   if (parsed.recurrenceRule) parts.push('Repeats.');
+  if (parsed.private) parts.push('Private: hidden on a desktop until you show it.');
   if (parsed.note) parts.push('With a note.');
   if (parsed.noteGeekNote) parts.push('Note saved to NoteGeek.');
   return parts.join(' ');
+}
+
+/**
+ * The line with the `(private)` token added (at the end) or every copy of it
+ * taken out — what the add box's Private tick box does, so the box and the
+ * token are one thing: the line is the only state.
+ */
+export function setPrivateToken(text, on) {
+  const line = String(text ?? '');
+  const has = /\(private\)/i.test(line);
+  if (on) {
+    if (has) return line;
+    const trimmed = line.replace(/\s+$/, '');
+    return trimmed ? `${trimmed} (private)` : '(private) ';
+  }
+  if (!has) return line;
+  return line.replace(/\s*\(private\)/gi, '').replace(/^\s+/, '').replace(/\s{2,}/g, ' ');
 }
 
 /** Split a line into plain and understood segments, in order. */
