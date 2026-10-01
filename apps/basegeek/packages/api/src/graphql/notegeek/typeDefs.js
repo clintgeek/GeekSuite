@@ -80,6 +80,37 @@ export const typeDefs = gql`
     pinnedAt: Date
     createdAt: Date!
     updatedAt: Date!
+    """
+    Outgoing [[links]] in the body, one per distinct target. noteId is null
+    while no note has that title. Renaming the target keeps the link (by id);
+    the typed text is not rewritten.
+    """
+    links: [NoteLink!]!
+  }
+
+  type NoteLink {
+    """Lowercased title the link was written with, or id:<hex> for a /notes/<id> link."""
+    key: String!
+    """The title as written in [[...]]; empty for an id link."""
+    title: String!
+    noteId: ID
+  }
+
+  """A note that links to another one, with the words around the link."""
+  type Backlink {
+    id: ID!
+    title: String!
+    type: String!
+    updatedAt: Date
+    snippet: String
+  }
+
+  """A note's title, for the [[ picker."""
+  type NoteTitle {
+    id: ID!
+    title: String!
+    type: String!
+    updatedAt: Date
   }
 
   type SearchSnippet {
@@ -186,6 +217,10 @@ export const typeDefs = gql`
     """The caller's notes closest in meaning to this one. Empty until it is indexed."""
     relatedNotes(noteId: ID!, limit: Int): [SimilarNote!]!
     noteIndexStatus: NoteIndexStatus!
+    """Notes that link to this one ([[its title]] or a /notes/<id> link), newest first."""
+    backlinks(noteId: ID!): [Backlink!]!
+    """Titles containing q (case-insensitive), prefix matches first. For the [[ picker."""
+    noteTitles(q: String, limit: Int): [NoteTitle!]!
     suggestForNote(noteId: ID, title: String!, excerpt: String!, tags: [String!]!): NoteSuggestions!
   }
 

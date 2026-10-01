@@ -68,6 +68,13 @@ which exist.)
     the owner's notes nearest in meaning (§11). Empty until the note is indexed.
   - `noteIndexStatus` → `{ total indexed stale failed skipped chunks model serviceAvailable lastError
     lastOkAt }`: how much of the caller's library is searchable by meaning.
+  - `backlinks(noteId)` → `[Backlink]` `{ id title type updatedAt snippet }`: the owner's notes that link
+    to this one (`[[its title]]` or an in-app `/notes/<id>` link), newest first, max 50, never itself;
+    `snippet` is ~70 characters either side of the link (§12).
+  - `noteTitles(q, limit)` → `[NoteTitle]` `{ id title type updatedAt }`: titles containing `q`
+    (case-insensitive, regex-escaped), prefix matches first, then most recent; default 20, max 50.
+    The `[[` picker's source — no bodies.
+  - `Note.links` → `[NoteLink]` `{ key title noteId }`: the note's outgoing links (§12).
   - `suggestForNote(noteId, title, excerpt, tags)`: AI tag and link suggestions.
 - **Mutations**:
   - `createNote(title, content, type, tags)`
@@ -285,3 +292,33 @@ down, search is keyword-only and Related is empty; nothing else is asked.
   - **Checks:** `__tests__/components/notes/hybridSearch.test.jsx`, `__tests__/services/api.test.js`;
     harness `14h-search-hybrid` (types "fix the garage"; every search asked for hybrid, two "similar"
     rows with no marks, the keyword row marked), `17a-related-viewer`, `17b-related-editor`.
+
+## 12. [[Links]] and backlinks
+
+Added 2026-09-30 (gateway: `apps/basegeek/packages/api/src/graphql/notegeek/links.js`).
+
+- **Syntax:** `[[Note title]]` and `[[Note title|shown text]]` in **markdown** and **rich-text** notes.
+  Matched case-insensitively (whitespace collapsed) against the owner's own titles. Fenced code, inline
+  code and `<pre>`/`<code>` are skipped (`if [[ -f x ]]` in a script is not a link). An in-app link
+  `[text](/notes/<id>)` / `<a href="/notes/<id>">` — what the suggestion strip's "Insert link" writes —
+  counts too, already resolved by id. Max 200 links a note; titles cut at 500 characters.
+- **Stored:** `Note.links: [{ key, title, noteId }]`, recomputed on every write of the body or type
+  (createNote, updateNote, restoreNoteVersion). `key` = lowercased title, or `id:<hex>` for an id link;
+  `noteId` = the target, or null while no note has that title. Indexed `{userId, links.noteId}` and
+  `{userId, links.key}`. Notes written before this have no links until their next save.
+- **Resolution choices:**
+  - A link keeps the note it already pointed at (same key, note still exists); otherwise it resolves by
+    title, the **oldest** note first if two share one; otherwise it is stored unresolved.
+  - Creating a note, or retitling one, resolves every unresolved link to that title (one `updateMany`,
+    `timestamps: false`, so linking notes don't jump in Recent).
+  - **Renaming a target does not rewrite anyone's text.** `[[Old title]]` keeps pointing at the renamed
+    note, by id, for as long as that text stays, and the UI renders it as a link to the note. Rewriting
+    other notes' bodies would be a silent edit to notes you aren't looking at (history entries, new
+    `updatedAt`, re-embeds) for a cosmetic gain. Retype it as `[[New title]]` whenever you like.
+  - Deleting a note: id links to it are removed; `[[title]]` links go back to unresolved, then resolve
+    to another note with that title if one exists.
+  - An id link to a note that isn't yours (or doesn't exist) is dropped.
+- **Cost:** nothing unless the body contains `[[` or `/notes/`; then one projected title lookup (with a
+  case-insensitive collation), plus one `updateMany` when a title changes. A save without links makes
+  no link queries (tested).
+- **Checks:** `src/__tests__/notegeekLinks.test.js` (18 tests, all red-checked).

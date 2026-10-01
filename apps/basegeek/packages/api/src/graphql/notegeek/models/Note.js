@@ -75,6 +75,21 @@ const NoteSchema = new mongoose.Schema(
     embeddingAttempts: { type: Number, default: 0 },
     embeddingRetryAt: { type: Date, default: null },
     embeddingError: { type: String, default: null },
+    // ── [[Links]] (links.js) ───────────────────────────────────────────────
+    // Outgoing links parsed from the body on save: `key` is the lowercased
+    // title (or `id:<hex>` for an in-app /notes/<id> link), `noteId` the
+    // target once resolved, null while no note has that title.
+    links: {
+      type: [
+        {
+          _id: false,
+          key: { type: String, required: true },
+          title: { type: String, default: '' },
+          noteId: { type: mongoose.Schema.Types.ObjectId, default: null },
+        },
+      ],
+      default: [],
+    },
   },
   {
     timestamps: true,
@@ -108,6 +123,9 @@ NoteSchema.pre('findOneAndUpdate', function markStaleOnUpdate() {
 NoteSchema.index({ createdAt: 1 });
 // The indexer's queue scan: stale (or never-indexed) notes, oldest edit first.
 NoteSchema.index({ embeddingState: 1, updatedAt: 1 });
+// Backlinks ("who links here") and resolving pending links by title.
+NoteSchema.index({ userId: 1, 'links.noteId': 1 });
+NoteSchema.index({ userId: 1, 'links.key': 1 });
 NoteSchema.index({ updatedAt: 1 });
 NoteSchema.index({ title: 'text', content: 'text', tags: 'text' });
 // The `notes` query sorts pinned notes first, then by the requested order —

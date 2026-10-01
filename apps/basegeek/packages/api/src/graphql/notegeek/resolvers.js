@@ -33,6 +33,13 @@ import {
   deleteVersionsForNote,
 } from './versions.js';
 import NoteChunk from './models/NoteChunk.js';
+import {
+  resolveLinks,
+  resolvePendingLinks,
+  detachLinksTo,
+  backlinks as findBacklinks,
+  linkKey,
+} from './links.js';
 import logger from '../../lib/logger.js';
 import {
   vectorSearch,
@@ -289,6 +296,36 @@ export const resolvers = {
       }
     },
 
+    /** Notes that link to this one with [[its title]] (or an in-app link), with context. */
+    backlinks: async (_, { noteId }, context) => {
+      const userId = context.user?.id;
+      if (!userId || !noteId || !mongoose.isValidObjectId(noteId)) return [];
+      return findBacklinks({ userId, noteId });
+    },
+
+    /**
+     * Titles for the [[ picker: the owner's notes whose title contains `q`
+     * (case-insensitive), titles that start with it first, then the most
+     * recently edited. A light projection — no bodies.
+     */
+    noteTitles: async (_, { q, limit }, context) => {
+      const userId = context.user?.id;
+      if (!userId) return [];
+      const n = Math.max(1, Math.min(Number(limit) || 20, 50));
+      const needle = String(q ?? '').trim().slice(0, 200);
+      const filter = { userId, title: { $nin: [null, ''] } };
+      if (needle) filter.title = { $regex: escapeRegex(needle), $options: 'i' };
+      const rows = await Note.find(filter, { title: 1, type: 1, updatedAt: 1 })
+        .sort({ updatedAt: -1 }).limit(needle ? 200 : n).lean();
+      const low = needle.toLowerCase();
+      const starts = (t) => (low && String(t).toLowerCase().startsWith(low) ? 0 : 1);
+      return rows
+        .map((r, i) => ({ r, i }))
+        .sort((a, b) => starts(a.r.title) - starts(b.r.title) || a.i - b.i)
+        .slice(0, n)
+        .map(({ r }) => ({ id: String(r._id), title: r.title, type: r.type, updatedAt: r.updatedAt }));
+    },
+
     /** How much of the caller's library is searchable by meaning. */
     noteIndexStatus: async (_, __, context) => {
       const userId = context.user?.id;
@@ -353,8 +390,12 @@ export const resolvers = {
       // Otherwise a note is created above the ceiling and can never be saved
       // again.
       assertContentCeiling(cleaned.content, effectiveType, { sanitized: true });
-      const note = new Note({ ...cleaned, userId });
-      return await note.save();
+      const links = await resolveLinks({ userId, content: cleaned.content, type: effectiveType });
+      const note = new Note({ ...cleaned, userId, links });
+      const saved = await note.save();
+      // Anyone's [[This title]] that was waiting for this note now finds it.
+      if (saved.title) await resolvePendingLinks({ userId, noteId: saved._id, title: saved.title });
+      return saved;
     },
 
     updateNote: async (_, rawArgs, context) => {
@@ -407,12 +448,30 @@ export const resolvers = {
       // is what makes one snapshot call sufficient.
       const previous = await Note.findOne({ _id: id, userId }).lean();
 
+      // [[Links]]: re-read from the body whenever the body (or the type) is
+      // written. Cheap: nothing at all unless the text has `[[` or `/notes/`.
+      if (previous && (typeof payload.content === 'string' || typeof payload.type === 'string')) {
+        payload = {
+          ...payload,
+          links: await resolveLinks({
+            userId,
+            content: typeof payload.content === 'string' ? payload.content : previous.content,
+            type: payload.type || previous.type,
+            previous: previous.links,
+          }),
+        };
+      }
+
       const note = await Note.findOneAndUpdate(
         { _id: id, userId },
         payload,
         { new: true }
       );
       if (!note) throw new Error('Note not found or you do not have permission to edit it');
+
+      if (typeof payload.title === 'string' && linkKey(payload.title) !== linkKey(previous?.title)) {
+        await resolvePendingLinks({ userId, noteId: note._id, title: note.title });
+      }
 
       if (isMeaningfulChange(previous, payload)) {
         // `reason` rides in from the caller so an AI rewrite is labelled as
@@ -468,6 +527,13 @@ export const resolvers = {
         logger.warn({ err: err?.message }, '[notegeek] chunk cleanup failed; the sweep will retry');
       }
       invalidateUserVectors(userId);
+      // Links to it fall back to waiting for its title (or another note
+      // with that title). Never fails the delete.
+      try {
+        await detachLinksTo({ userId, noteId: note._id, title: note.title });
+      } catch (err) {
+        logger.warn({ err: err?.message }, '[notegeek] link cleanup after delete failed');
+      }
       return true;
     },
     /**
@@ -491,11 +557,17 @@ export const resolvers = {
       const current = await Note.findOne({ _id: version.noteId, userId }).lean();
       if (!current) throw new Error('Note not found or you do not have permission to edit it');
 
+      const links = await resolveLinks({
+        userId, content: version.content, type: version.type, previous: current.links,
+      });
       const note = await Note.findOneAndUpdate(
         { _id: version.noteId, userId },
-        { title: version.title, content: version.content, type: version.type },
+        { title: version.title, content: version.content, type: version.type, links },
         { new: true }
       );
+      if (note && linkKey(version.title) !== linkKey(current.title)) {
+        await resolvePendingLinks({ userId, noteId: note._id, title: note.title });
+      }
       await snapshotNote(current, 'restore');
       return note;
     },
@@ -639,5 +711,10 @@ export const resolvers = {
 
   Note: {
     id: (note) => note._id.toString(),
+    links: (note) => (note.links || []).map((l) => ({
+      key: l.key,
+      title: l.title || '',
+      noteId: l.noteId ? String(l.noteId) : null,
+    })),
   },
 };
