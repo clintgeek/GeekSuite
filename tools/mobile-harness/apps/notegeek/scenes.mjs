@@ -132,7 +132,7 @@ async function reviewTranscript(page, h) {
 
 import { fileURLToPath } from 'node:url';
 import { json, graphqlRoute } from '../../lib/net.mjs';
-import { OPS, NOTE_SUGGESTIONS, NOTE_CODE, NOTE_MINDMAP, NOTE_SKETCH, NOTE_WIDE_TABLE, NOTE_MD, NOTE_PRINT, SEARCH_RESULTS, HYBRID_RESULTS, RELATED_TO_N1, NOTE_N1, NOTE_LINKED, NOTE_LINKED_LINKS, BACKLINKS_TO_NL, NOTE_SPIDERS, FOLD_IN_INPUT, FOLD_IN_PROPOSAL, SPIDERS_FOLDED, SPIDERS_SEARCH } from './fixtures.mjs';
+import { OPS, NOTE_SUGGESTIONS, NOTE_CODE, NOTE_MINDMAP, NOTE_SKETCH, NOTE_WIDE_TABLE, NOTE_MD, NOTE_PRINT, SEARCH_RESULTS, HYBRID_RESULTS, BEST_MATCH_RESULTS, NEAR_TIE_RESULTS, RELATED_TO_N1, NOTE_N1, NOTE_LINKED, NOTE_LINKED_LINKS, BACKLINKS_TO_NL, NOTE_SPIDERS, FOLD_IN_INPUT, FOLD_IN_PROPOSAL, SPIDERS_FOLDED, SPIDERS_SEARCH } from './fixtures.mjs';
 
 // ── Fold-in helpers (scenes 19a-19e) ────────────────────────────────────────
 // The gateway is stubbed with the proposal the real model made for this note
@@ -1094,6 +1094,48 @@ export const scenes = [
       if (await meaningRow.locator('mark').count()) throw new Error('a meaning hit has highlighted words');
       if (!(await page.locator('[data-note-row]').first().locator('mark').count())) throw new Error('the keyword hit is not highlighted');
       await box.blur();
+      await h.settle(300);
+    },
+  },
+  {
+    // Best match (DOCS/CONTEXT.md §11): the gateway named one clear answer.
+    // It sits first in its own "Best match" region — highlighter label, the
+    // matched passage at up to four lines — and the rest follow under the
+    // quieter "Also related".
+    name: '14i-search-best-match',
+    async setup(page, h) {
+      await bootstrapChef(page);
+      await graphqlRoute(page, { ...OPS, SearchNotes: { searchNotes: BEST_MATCH_RESULTS } });
+      await page.goto(h.base + '/search?q=' + encodeURIComponent('what pills do I take every day'), { waitUntil: 'networkidle' });
+      const best = page.getByRole('region', { name: 'Best match' });
+      await best.waitFor({ timeout: 10000 });
+      await h.settle(600);
+      const also = page.getByRole('region', { name: 'Also related' });
+      if ((await also.count()) !== 1) throw new Error('no "Also related" region');
+      if ((await best.getByRole('link').count()) !== 1) throw new Error('the best-match block should hold exactly one note');
+      if (!(await best.getByText('Meds and supplements').count())) throw new Error('wrong note in the best-match block');
+      if ((await also.getByRole('link').count()) !== 2) throw new Error('the other two results are not under "Also related"');
+      const [bBox, aBox, rowBox] = await Promise.all([best.boundingBox(), also.boundingBox(), best.getByRole('link').boundingBox()]);
+      if (!(bBox && aBox && bBox.y < aBox.y)) throw new Error('best match is not above the rest');
+      if (rowBox.height < 44) throw new Error(`best-match row is ${rowBox.height}px tall, under 44`);
+      await page.getByPlaceholder(/search titles/i).blur();
+      await h.settle(300);
+    },
+  },
+  {
+    // Near-tie: three good answers, none clearly first — no best match, so
+    // the page is the plain list it always was: no headings, no block.
+    name: '14j-search-near-tie',
+    async setup(page, h) {
+      await bootstrapChef(page);
+      await graphqlRoute(page, { ...OPS, SearchNotes: { searchNotes: NEAR_TIE_RESULTS } });
+      await page.goto(h.base + '/search?q=' + encodeURIComponent('how do I log into the server'), { waitUntil: 'networkidle' });
+      await page.getByText(/3 results · 1 similar/).waitFor({ timeout: 10000 });
+      await h.settle(600);
+      if (await page.locator('[data-search-best]').count()) throw new Error('a near-tie got a best-match block');
+      if (await page.getByRole('heading', { name: /Also related|Best match/ }).count()) throw new Error('a near-tie got section headings');
+      if ((await page.locator('[data-note-row]').count()) !== 3) throw new Error('rows missing');
+      await page.getByPlaceholder(/search titles/i).blur();
       await h.settle(300);
     },
   },

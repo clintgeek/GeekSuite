@@ -326,6 +326,13 @@ down, search is keyword-only and Related is empty; nothing else is asked.
     Results update as you type (300 ms debounce into `?q=`); while a newer search is in flight the
     previous results STAY on screen with a small spinner — skeletons only when there is nothing yet.
     The count line says how many are by meaning: "3 results · 2 similar".
+  - **Best match (2026-10-01; needs the 2026-10-01 gateway first — the bundle selects `bestMatch`):**
+    when a row has `bestMatch`, it is pulled out into its own region headed **"Best match"** (an h2
+    on a pass of highlighter — `hl` fill, `onHl` ink), on the writing sheet with a 4px highlighter
+    rule down its left edge, showing the passage that matched (`why`, even for a keyword/both hit,
+    words still marked) at up to four lines in body ink (`NoteRow prominent`). The rest follow
+    under a quieter h2 **"Also related"** (`data-search-best` / `data-search-also`). The count line
+    still counts every row. No best match → the plain list, no headings, exactly as before.
   - A meaning-only row (`NoteRow`, `matchedBy === 'meaning'`) shows the passage that matched (`why`)
     instead of the note's opening, highlights nothing, and carries a quiet italic **"similar"** in its
     meta line (`data-match="meaning"`; its title says it may not contain your words). Keyword and
@@ -337,12 +344,14 @@ down, search is keyword-only and Related is empty; nothing else is asked.
     of the closest passage; 44px rows; heading "Related notes" + "similar in meaning". Its own
     `cache-and-network` query: renders nothing while loading, on error, or when empty, so it never
     blocks or shifts the note. Not printed.
-  - **Checks:** `__tests__/components/notes/hybridSearch.test.jsx`, `__tests__/services/api.test.js`;
+  - **Checks:** `__tests__/components/notes/hybridSearch.test.jsx`,
+    `__tests__/components/notes/searchBestMatch.test.jsx`, `__tests__/services/api.test.js`;
     harness `14h-search-hybrid` (types "fix the garage"; every search asked for hybrid, two "similar"
-    rows with no marks, the keyword row marked), `17a-related-viewer`, `17b-related-editor`.
-    Gateway: `src/__tests__/notegeekSemantic.test.js` (model table, mixed-model chunks ignored,
-    re-embed on model change, mid-backfill, keyword cut, best match on a clear win and not on a
-    near-tie, long notes not weighted).
+    rows with no marks, the keyword row marked), `14i-search-best-match` (the block first, one note
+    in it, two under "Also related", 44px row), `14j-search-near-tie` (no block, no headings),
+    `17a-related-viewer`, `17b-related-editor`. Gateway: `src/__tests__/notegeekSemantic.test.js`
+    (model table, mixed-model chunks ignored, re-embed on model change, mid-backfill, keyword cut,
+    best match on a clear win and not on a near-tie, long notes not weighted).
 
 ## 12. [[Links]] and backlinks
 

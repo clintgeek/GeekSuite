@@ -123,8 +123,11 @@ function MeaningMark() {
  *  - tagContext:  the tag view this row is listed in, if any. Inside `house`
  *                 a note tagged `house/garage` reads `garage` (the sub-tag it
  *                 sits in), first — see `rowTagLabels` in utils/tagPath.js.
+ *  - prominent:   search's "Best match" (DOCS/CONTEXT.md §11): the passage
+ *                 that matched (`why`) whenever there is one, not only for a
+ *                 meaning hit, clamped at four lines instead of two.
  */
-function NoteRow({ note, to, onClick, query, maxPreview = 160, dateField = 'updatedAt', tagContext = null }) {
+function NoteRow({ note, to, onClick, query, maxPreview = 160, dateField = 'updatedAt', tagContext = null, prominent = false }) {
     const theme = useTheme();
     const type = note.type || 'text';
     const isVisual = VISUAL_TYPES.includes(type);
@@ -132,7 +135,7 @@ function NoteRow({ note, to, onClick, query, maxPreview = 160, dateField = 'upda
     // matched and is marked, and nothing in it is highlighted — the typed
     // words are, by definition, not what found it.
     const byMeaning = note.matchedBy === 'meaning';
-    const why = byMeaning && note.why ? note.why : null;
+    const why = (byMeaning || prominent) && note.why ? note.why : null;
     const isCode = type === 'code' && !note.snippet && !why;
     const preview = isCode ? '' : (why || getPreview(note, maxPreview));
     const highlight = byMeaning ? null : query;
@@ -198,13 +201,13 @@ function NoteRow({ note, to, onClick, query, maxPreview = 160, dateField = 'upda
                     <Typography
                         component="div"
                         sx={{
-                            color: 'text.secondary',
-                            fontSize: '0.8125rem',
+                            color: prominent ? 'text.primary' : 'text.secondary',
+                            fontSize: prominent ? '0.875rem' : '0.8125rem',
                             lineHeight: 1.5,
-                            mt: '2px',
+                            mt: prominent ? '4px' : '2px',
                             overflow: 'hidden',
                             display: '-webkit-box',
-                            WebkitLineClamp: 2,
+                            WebkitLineClamp: prominent ? 4 : 2,
                             WebkitBoxOrient: 'vertical',
                             wordBreak: 'break-word',
                         }}

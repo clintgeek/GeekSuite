@@ -97,17 +97,38 @@ export const NOTE_MD = note('n2', 'Recipe: brown butter chocolate chip cookies',
 
 // Search results: the gateway's `searchNotes` shape (`_id`, `snippet`).
 export const SEARCH_RESULTS = [
-  { __typename: 'SearchSnippet', _id: 'n2', title: 'Recipe: brown butter chocolate chip cookies', type: 'markdown', tags: ['recipes'], isLocked: false, isEncrypted: false, createdAt: daysAgo(20), updatedAt: daysAgo(1.2), score: 3, snippet: 'Brown the butter first, then chill the dough overnight.', message: null, matchedBy: 'keyword', why: null },
-  { __typename: 'SearchSnippet', _id: 'n7', title: 'Nginx wildcard cert renewal', type: 'markdown', tags: ['dev', 'dev/infra'], isLocked: false, isEncrypted: false, createdAt: daysAgo(20), updatedAt: daysAgo(5), score: 1, snippet: 'Run certbot, then brown-bag the reload until nginx -t passes.', message: null, matchedBy: 'keyword', why: null },
+  { __typename: 'SearchSnippet', bestMatch: false, _id: 'n2', title: 'Recipe: brown butter chocolate chip cookies', type: 'markdown', tags: ['recipes'], isLocked: false, isEncrypted: false, createdAt: daysAgo(20), updatedAt: daysAgo(1.2), score: 3, snippet: 'Brown the butter first, then chill the dough overnight.', message: null, matchedBy: 'keyword', why: null },
+  { __typename: 'SearchSnippet', bestMatch: false, _id: 'n7', title: 'Nginx wildcard cert renewal', type: 'markdown', tags: ['dev', 'dev/infra'], isLocked: false, isEncrypted: false, createdAt: daysAgo(20), updatedAt: daysAgo(5), score: 1, snippet: 'Run certbot, then brown-bag the reload until nginx -t passes.', message: null, matchedBy: 'keyword', why: null },
 ];
 
 // Hybrid search (DOCS/CONTEXT.md §11): "fix the garage" — one note with the
 // words (marked), then two the local embeddings found by meaning (no marks,
 // a quiet "similar", and the passage that matched). Scene 14h.
 export const HYBRID_RESULTS = [
-  { __typename: 'SearchSnippet', _id: 'h1', title: 'Garage shelving plan', type: 'markdown', tags: ['house/garage'], isLocked: false, isEncrypted: false, createdAt: daysAgo(20), updatedAt: daysAgo(3), score: 0.0164, snippet: 'Four uprights, 18in deep. Fix the brackets to the garage studs.', message: null, matchedBy: 'both', why: 'Four uprights, 18in deep. Fix the brackets to the garage studs.' },
-  { __typename: 'SearchSnippet', _id: 'h2', title: 'Kitchen tap washer', type: 'text', tags: ['house/kitchen', 'finance'], isLocked: false, isEncrypted: false, createdAt: daysAgo(20), updatedAt: daysAgo(9), score: 0.0129, snippet: 'Replace the washer, not the tap. About £4.', message: null, matchedBy: 'meaning', why: 'Replace the washer, not the tap. About £4.' },
-  { __typename: 'SearchSnippet', _id: 'h3', title: 'House insurance renewal', type: 'markdown', tags: ['house'], isLocked: false, isEncrypted: false, createdAt: daysAgo(20), updatedAt: daysAgo(14), score: 0.0127, snippet: 'Renews in October. Compare two quotes first.', message: null, matchedBy: 'meaning', why: 'Renews in October. Compare two quotes first.' },
+  { __typename: 'SearchSnippet', bestMatch: false, _id: 'h1', title: 'Garage shelving plan', type: 'markdown', tags: ['house/garage'], isLocked: false, isEncrypted: false, createdAt: daysAgo(20), updatedAt: daysAgo(3), score: 0.0164, snippet: 'Four uprights, 18in deep. Fix the brackets to the garage studs.', message: null, matchedBy: 'both', why: 'Four uprights, 18in deep. Fix the brackets to the garage studs.' },
+  { __typename: 'SearchSnippet', bestMatch: false, _id: 'h2', title: 'Kitchen tap washer', type: 'text', tags: ['house/kitchen', 'finance'], isLocked: false, isEncrypted: false, createdAt: daysAgo(20), updatedAt: daysAgo(9), score: 0.0129, snippet: 'Replace the washer, not the tap. About £4.', message: null, matchedBy: 'meaning', why: 'Replace the washer, not the tap. About £4.' },
+  { __typename: 'SearchSnippet', bestMatch: false, _id: 'h3', title: 'House insurance renewal', type: 'markdown', tags: ['house'], isLocked: false, isEncrypted: false, createdAt: daysAgo(20), updatedAt: daysAgo(14), score: 0.0127, snippet: 'Renews in October. Compare two quotes first.', message: null, matchedBy: 'meaning', why: 'Renews in October. Compare two quotes first.' },
+];
+
+// Best match (DOCS/CONTEXT.md §11) — scene 14i. The gateway named one clear
+// answer: a meaning hit for a question whose words are elsewhere.
+const snip = (id, title, type, tags, updatedAt, matchedBy, text, extra = {}) => ({
+  __typename: 'SearchSnippet', bestMatch: false, _id: id, title, type, tags, isLocked: false, isEncrypted: false,
+  createdAt: daysAgo(30), updatedAt, score: 0.012, snippet: text, message: null, matchedBy, why: matchedBy === 'keyword' ? null : text, ...extra,
+});
+export const BEST_MATCH_RESULTS = [
+  snip('b1', 'Meds and supplements', 'markdown', ['health'], daysAgo(6), 'meaning',
+    'Morning, with breakfast: vitamin D 2000 IU, magnesium glycinate, the allergy tablet. Evening: fish oil. Refill the vitamin D at the start of each month; the pharmacy holds the allergy prescription.',
+    { bestMatch: true, score: 0.0131 }),
+  snip('b2', 'Weekly planning ritual', 'markdown', ['routines'], daysAgo(2), 'keyword', 'Every Sunday: take ten minutes, look at the week, pick the three things that matter.'),
+  snip('b3', 'Boat maintenance', 'markdown', ['boat'], daysAgo(40), 'both', 'Every 100 hours: change the oil and filter. Take the old oil to the marina.'),
+];
+// Near-tie — scene 14j: three good answers, none clearly first. No best
+// match, so the list is the plain list.
+export const NEAR_TIE_RESULTS = [
+  snip('t1', 'Server SSH key', 'code', ['dev/infra'], daysAgo(3), 'both', 'ssh -i ~/.ssh/homelab chef@server — key is in the password manager.'),
+  snip('t2', 'Cloud SDK info', 'markdown', ['dev'], daysAgo(12), 'both', 'gcloud auth login, then set the project. Service account JSON lives in the vault.'),
+  snip('t3', 'Backup box', 'markdown', ['dev/infra'], daysAgo(20), 'meaning', 'The backup box answers on the tailnet; log in as the backup user.'),
 ];
 
 // [[Links]] (DOCS/CONTEXT.md §12) — scenes 18a-18c. A markdown note that
@@ -305,9 +326,9 @@ export const SPIDERS_FOLDED = SPIDERS_CONTENT
   .replace('- Red widow — Florida only\n', '- Red widow — Florida only\n- Brown widow — tan, orange hourglass, spiky egg sacs; found in the garage\n')
   .replace('| Zebra jumper | Garden wall | 6 mm |\n', '| Zebra jumper | Garden wall | 6 mm |\n| Zebra jumper | Mailbox | 5 mm |\n');
 export const SPIDERS_SEARCH = [
-  { __typename: 'SearchSnippet', _id: 'n1', title: 'Q3 roadmap notes', type: 'text', tags: ['work'], isLocked: false, isEncrypted: false, createdAt: daysAgo(20), updatedAt: hoursAgo(2), score: 0.02, snippet: 'Draft agenda', message: null, matchedBy: 'keyword', why: null },
-  { __typename: 'SearchSnippet', _id: 'ns', title: 'Spiders', type: 'markdown', tags: ['nature'], isLocked: false, isEncrypted: false, createdAt: daysAgo(20), updatedAt: hoursAgo(6), score: 0.031, snippet: 'Spiders I\'ve found around the house', message: null, matchedBy: 'both', why: 'Black widow — shiny black, orange hourglass underneath' },
-  { __typename: 'SearchSnippet', _id: 'h1', title: 'Garage shelving plan', type: 'markdown', tags: ['house/garage'], isLocked: false, isEncrypted: false, createdAt: daysAgo(20), updatedAt: daysAgo(3), score: 0.016, snippet: 'Four uprights', message: null, matchedBy: 'keyword', why: null },
+  { __typename: 'SearchSnippet', bestMatch: false, _id: 'n1', title: 'Q3 roadmap notes', type: 'text', tags: ['work'], isLocked: false, isEncrypted: false, createdAt: daysAgo(20), updatedAt: hoursAgo(2), score: 0.02, snippet: 'Draft agenda', message: null, matchedBy: 'keyword', why: null },
+  { __typename: 'SearchSnippet', bestMatch: false, _id: 'ns', title: 'Spiders', type: 'markdown', tags: ['nature'], isLocked: false, isEncrypted: false, createdAt: daysAgo(20), updatedAt: hoursAgo(6), score: 0.031, snippet: 'Spiders I\'ve found around the house', message: null, matchedBy: 'both', why: 'Black widow — shiny black, orange hourglass underneath' },
+  { __typename: 'SearchSnippet', bestMatch: false, _id: 'h1', title: 'Garage shelving plan', type: 'markdown', tags: ['house/garage'], isLocked: false, isEncrypted: false, createdAt: daysAgo(20), updatedAt: daysAgo(3), score: 0.016, snippet: 'Four uprights', message: null, matchedBy: 'keyword', why: null },
 ];
 
 // The sidebar's per-tag counts come from `notes { id tags }`: every fixture

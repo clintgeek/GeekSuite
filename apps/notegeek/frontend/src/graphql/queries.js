@@ -57,7 +57,9 @@ export const NOTE_TAG_USAGE = gql`
  * Search. `hybrid: true` asks the gateway to also match by meaning (local
  * embeddings, DOCS/CONTEXT.md §11) and fuse the two lists; `matchedBy` says
  * how each row matched and `why` is the passage a meaning hit matched on.
- * Needs the gateway from 2026-09-30 — an older one rejects `hybrid`.
+ * `bestMatch` marks the one clear answer, when there is one (always the first
+ * row). Needs the gateway from 2026-09-30 — an older one rejects `hybrid` —
+ * and `bestMatch` the one from 2026-10-01.
  */
 export const SEARCH_NOTES = gql`
     query SearchNotes($q: String!, $hybrid: Boolean) {
@@ -75,6 +77,7 @@ export const SEARCH_NOTES = gql`
             message
             matchedBy
             why
+            bestMatch
         }
     }
 `;

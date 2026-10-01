@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useId } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
     Box,
@@ -18,19 +18,86 @@ import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
 import NoteRow from './notes/NoteRow';
 import useNoteStore from '../store/noteStore';
-import { layout } from '../theme/tokens';
+import { layout, graphiteTokens } from '../theme/tokens';
 
+
+// ─── pieces ───────────────────────────────────────────────────────────────────
+
+/** Rows divided by hairlines — the list as it has always looked. */
+function ResultList({ notes, query }) {
+    const theme = useTheme();
+    return (
+        <Box>
+            {notes.map((note, idx) => (
+                <React.Fragment key={note.id || note._id}>
+                    {idx > 0 && <Divider sx={{ borderColor: theme.palette.divider }} />}
+                    <NoteRow note={note} query={query} maxPreview={180} />
+                </React.Fragment>
+            ))}
+        </Box>
+    );
+}
+
+/**
+ * The one clear answer, when the gateway names one (`bestMatch`). A little
+ * louder than a row, never shouty (Graphite): the label sits on a pass of
+ * highlighter — the accent as a fill, dark ink on it, as everywhere else —
+ * and the row is on the writing sheet with a highlighter rule down its left
+ * edge, showing the passage that matched at up to four lines.
+ */
+function BestMatch({ note, query }) {
+    const theme = useTheme();
+    const g = graphiteTokens(theme);
+    const headingId = useId();
+    return (
+        <Box component="section" aria-labelledby={headingId} data-search-best="">
+            <Box sx={{ px: '8px', mb: '8px' }}>
+                <Typography
+                    id={headingId}
+                    component="h2"
+                    sx={{
+                        display: 'inline-block',
+                        fontSize: '0.8125rem',
+                        fontWeight: 600,
+                        lineHeight: 1.4,
+                        color: g.onHl,
+                        bgcolor: g.hl,
+                        borderRadius: '2px',
+                        px: '6px',
+                    }}
+                >
+                    Best match
+                </Typography>
+            </Box>
+            <Box
+                sx={{
+                    bgcolor: g.sheet,
+                    border: `1px solid ${g.rule}`,
+                    borderLeft: `4px solid ${g.hl}`,
+                    borderRadius: '4px',
+                }}
+            >
+                <NoteRow note={note} query={query} maxPreview={360} prominent />
+            </Box>
+        </Box>
+    );
+}
 
 // ─── SearchResults ────────────────────────────────────────────────────────────
 
 function SearchResults() {
-    const theme = useTheme();
     const [searchParams, setSearchParams] = useSearchParams();
     const query = searchParams.get('q') || '';
     const [searchTerm, setSearchTerm] = useState(query);
     const { searchNotes, searchResults, isSearching, searchError, clearSearchResults } = useNoteStore();
     const inputRef = useRef(null);
     const meaningCount = searchResults.filter((r) => r.matchedBy === 'meaning').length;
+    // Hybrid search may name one clear answer (DOCS/CONTEXT.md §11). It gets
+    // its own block; the rest follow under a quieter heading. No best match:
+    // the plain list, exactly as before.
+    const best = searchResults.find((r) => r.bestMatch) || null;
+    const rest = best ? searchResults.filter((r) => r !== best) : searchResults;
+    const alsoId = useId();
 
     // Debounce the box into the URL. The `if (searchTerm)` guard that used to
     // wrap this meant an EMPTIED box never wrote `q=''`: `query` kept its old
@@ -137,16 +204,25 @@ function SearchResults() {
                             <CircularProgress size={12} thickness={4} aria-label="Searching" sx={{ color: 'text.disabled' }} />
                         )}
                     </Box>
-                    <Box>
-                        {searchResults.map((note, idx) => (
-                            <React.Fragment key={note.id || note._id}>
-                                {idx > 0 && (
-                                    <Divider sx={{ borderColor: theme.palette.divider }} />
-                                )}
-                                <NoteRow note={note} query={query} maxPreview={180} />
-                            </React.Fragment>
-                        ))}
-                    </Box>
+                    {best ? (
+                        <>
+                            <BestMatch note={best} query={query} />
+                            {rest.length > 0 && (
+                                <Box component="section" aria-labelledby={alsoId} data-search-also="">
+                                    <Typography
+                                        id={alsoId}
+                                        component="h2"
+                                        sx={{ fontSize: '0.8125rem', fontWeight: 600, color: 'text.secondary', lineHeight: 1.4, px: '8px', mt: '20px', mb: '4px' }}
+                                    >
+                                        Also related
+                                    </Typography>
+                                    <ResultList notes={rest} query={query} />
+                                </Box>
+                            )}
+                        </>
+                    ) : (
+                        <ResultList notes={searchResults} query={query} />
+                    )}
                 </Box>
             ) : query ? (
                 <GeekEmptyState
