@@ -322,3 +322,35 @@ Added 2026-09-30 (gateway: `apps/basegeek/packages/api/src/graphql/notegeek/link
   case-insensitive collation), plus one `updateMany` when a title changes. A save without links makes
   no link queries (tested).
 - **Checks:** `src/__tests__/notegeekLinks.test.js` (18 tests, all red-checked).
+- **UI (2026-09-30; needs the gateway above live first — it selects `note.links`, `backlinks` and
+  `noteTitles`):**
+  - **Typing `[[`** in the Markdown editor (`MarkdownEditor.jsx`; the body is a plain MUI textarea)
+    opens a title picker (`editors/WikiLinkPicker.jsx`, options from `hooks/useTitleOptions.js`):
+    titles containing what you typed, prefix matches first, up to 6, plus a last "New note “…”" row
+    when nothing is called exactly that. **Phone:** docked full-width just above the formatting
+    toolbar (which is docked above the keyboard), 44px rows. **Desktop:** floats under the caret (above it when the caret is within 240px of the window bottom)
+    (`utils/caretPosition.js`, a mirror-div measurement). **Keys:** ↑ ↓ move, Enter or Tab inserts,
+    Esc closes it for that `[[` (it reopens at the next one); the caret never leaves the textarea,
+    which carries `aria-autocomplete="list"`, `aria-controls` and `aria-activedescendant` on the
+    `role="listbox"`. A tap chooses (rows swallow `mousedown`, so the keyboard stays up). Inserting
+    replaces `[[query` with `[[Title]]`, swallowing a `]]` already typed after the caret; a title the
+    syntax can't carry (`[`, `]`, `|`) is inserted as an id link `[Title](/notes/<id>)` instead.
+    The rows are always narrowed client-side to what is typed right now, because the request lags the
+    keyboard by a 120 ms debounce: Enter inside that window once chose from the previous query's list
+    (harness 18b found it). Rich-text (TipTap) notes have no picker; their `[[…]]` still resolves on
+    the gateway and counts as a backlink.
+  - **Rendered `[[links]]`** (viewer and editor preview; `utils/remarkWikiLinks.js`, resolution map
+    from the small `NoteLinks` query in `hooks/useNoteLinks.js`, handed down by `WikiLinkContext`; the
+    editor refetches it after every save, since links resolve on save): resolved → an ink link with a
+    1px underline to `/notes/<id>` (`a.ng-wikilink`), showing the alias if there is one; unresolved →
+    quieter secondary ink with a dashed underline (`a.ng-wikilink-missing`), titled "Create …",
+    leading to `/notes/new?title=…`, which opens a new Markdown note with the title filled in and
+    saves nothing until you write. `/notes/…` links go through the router (no PWA reload). Code is
+    never linkified. Print and Compose show `[[…]]` as typed.
+  - **"Linked from"** (`components/notes/LinkedFrom.jsx`) sits in `NoteFooter` ABOVE "Related notes"
+    (explicit links first): a link glyph before the heading, no hint, each row the linking note's title
+    and the sentence around the link with the link text in bold. Hidden while loading, on error and
+    when nothing links here.
+  - **Checks:** `__tests__/components/wikiLinks.test.jsx` (18, red-checked); harness `18a-link-picker`,
+    `18b-link-inserted`, `18c-links-viewer` (resolved/unresolved hrefs, alias text, Linked from above
+    Related), `18d-link-create` (unresolved → `/notes/new?title=` with the title filled, nothing saved).

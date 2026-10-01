@@ -67,7 +67,9 @@ function TaskBox({ node, type, checked, disabled, ...props }) {
 // eslint-disable-next-line no-unused-vars, react-refresh/only-export-components -- `node` is react-markdown's AST node; keep it off the DOM
 function MarkdownLink({ node, href, children, ...props }) {
     const inRouter = useInRouterContext();
-    if (inRouter && typeof href === 'string' && href.startsWith('/tags/')) {
+    // `/tags/…` (inline #tags) and `/notes/…` ([[links]] and in-app note
+    // links) are routes, not page loads.
+    if (inRouter && typeof href === 'string' && (href.startsWith('/tags/') || href.startsWith('/notes/'))) {
         return <RouterLink to={href} {...props}>{children}</RouterLink>;
     }
     return <a href={href} {...props}>{children}</a>;
@@ -75,7 +77,11 @@ function MarkdownLink({ node, href, children, ...props }) {
 
 export const MARKDOWN_COMPONENTS = { table: ScrollingTable, pre: ScrollingPre, input: TaskBox, a: MarkdownLink };
 
-/** GFM (tables, task lists) plus inline `#tags` as links to their tag page. */
+/**
+ * GFM (tables, task lists) plus inline `#tags` as links to their tag page.
+ * No [[links]] here: they need the note's resolution map — note renderers use
+ * `useMarkdownPlugins()` (hooks/useNoteLinks.js) instead.
+ */
 export const MARKDOWN_REMARK_PLUGINS = [remarkGfm, remarkInlineTags];
 
 /**
@@ -98,6 +104,20 @@ export const markdownOverflowSx = {
         fontWeight: 500,
         textDecoration: 'none',
         '&:hover': { textDecoration: 'underline', color: 'text.primary' },
+    },
+    // A [[link]] to another note: ink, underlined, a touch heavier than prose.
+    '& a.ng-wikilink': {
+        color: 'text.primary',
+        fontWeight: 500,
+        textDecorationLine: 'underline',
+        textDecorationThickness: '1px',
+        textUnderlineOffset: '3px',
+    },
+    // ...and to a note that doesn't exist yet: quieter, dashed — tap to create it.
+    '& a.ng-wikilink-missing': {
+        color: 'text.secondary',
+        fontWeight: 400,
+        textDecorationStyle: 'dashed',
     },
     // A narrow table still fills the column; a wide one takes the width it
     // needs and scrolls. Cells don't break words mid-way.

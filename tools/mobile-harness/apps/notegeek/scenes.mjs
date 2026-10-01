@@ -132,7 +132,7 @@ async function reviewTranscript(page, h) {
 
 import { fileURLToPath } from 'node:url';
 import { json, graphqlRoute } from '../../lib/net.mjs';
-import { OPS, NOTE_SUGGESTIONS, NOTE_CODE, NOTE_MINDMAP, NOTE_SKETCH, NOTE_WIDE_TABLE, NOTE_MD, NOTE_PRINT, SEARCH_RESULTS, HYBRID_RESULTS, RELATED_TO_N1, NOTE_N1 } from './fixtures.mjs';
+import { OPS, NOTE_SUGGESTIONS, NOTE_CODE, NOTE_MINDMAP, NOTE_SKETCH, NOTE_WIDE_TABLE, NOTE_MD, NOTE_PRINT, SEARCH_RESULTS, HYBRID_RESULTS, RELATED_TO_N1, NOTE_N1, NOTE_LINKED, NOTE_LINKED_LINKS, BACKLINKS_TO_NL } from './fixtures.mjs';
 
 // ── Photo of a page (DOCS/HANDWRITING.md §3) ────────────────────────────────
 //
@@ -1090,6 +1090,118 @@ export const scenes = [
       await section.waitFor({ timeout: 10000 });
       await section.scrollIntoViewIfNeeded();
       await h.settle(400);
+    },
+  },
+  {
+    // The [[ picker: typing `[[garage` in the markdown editor lists matching
+    // titles (prefix first). Phone: docked above the formatting toolbar,
+    // which is docked above the keyboard; desktop: under the caret. ↓ moves
+    // the highlight; the screenshot is the open picker.
+    name: '18a-link-picker',
+    async setup(page, h) {
+      await openNote(page, h, NOTE_MD, '/notes/n2/edit');
+      const body = page.getByRole('textbox', { name: 'Note body' });
+      await body.click();
+      await page.keyboard.press('Control+End');
+      await page.keyboard.type('\n\nSee [[garage', { delay: 40 });
+      const list = page.getByRole('listbox', { name: 'Link to a note' });
+      await list.waitFor({ timeout: 10000 });
+      await h.settle(400);
+      const opts = list.getByRole('option');
+      if ((await opts.count()) < 2) throw new Error('the picker did not list matching titles');
+      if (!/garage/i.test(await opts.first().innerText())) throw new Error('prefix match is not first');
+      if (!(await body.getAttribute('aria-activedescendant'))) throw new Error('the textarea does not point at the active row');
+      const box = await page.locator('[data-wikilink-picker]').boundingBox();
+      const vp = page.viewportSize();
+      if (!box || box.y < 0 || box.y + box.height > vp.height + 1) throw new Error(`the picker runs off-screen (${ JSON.stringify(box) })`);
+      await page.keyboard.press('ArrowDown');
+      await h.settle(200);
+    },
+  },
+  {
+    // Choosing from the picker writes [[Title]] and closes it.
+    name: '18b-link-inserted',
+    async setup(page, h) {
+      await openNote(page, h, NOTE_MD, '/notes/n2/edit');
+      const body = page.getByRole('textbox', { name: 'Note body' });
+      await body.click();
+      await page.keyboard.press('Control+End');
+      await page.keyboard.type('\n\nSee [[garage', { delay: 40 });
+      const list = page.getByRole('listbox', { name: 'Link to a note' });
+      await list.getByRole('option', { name: 'Garage shelving plan' }).waitFor({ timeout: 10000 });
+      await page.keyboard.press('Enter');
+      await h.settle(300);
+      if (await page.getByRole('listbox', { name: 'Link to a note' }).count()) throw new Error('the picker stayed open');
+      const value = await body.inputValue();
+      if (!/See \[\[Garage shelving plan\]\]$/.test(value)) throw new Error(`not inserted: …${ value.slice(-40) }`);
+      await body.blur();
+      await h.settle(300);
+    },
+  },
+  {
+    // Rendered [[links]] in the viewer: a resolved one is an ink link to the
+    // note, an unresolved one is quieter and dashed (tap to create it). Below
+    // the note: "Linked from" (the linking sentence) above "Related notes".
+    name: '18c-links-viewer',
+    async setup(page, h) {
+      await page.route('**/api/users/bootstrap', (r) => json(r, {
+        identity: { username: 'chef', email: 'chef@example.com' },
+        profile: { displayName: 'Chef Crocker' },
+        preferences: {},
+        appPreferences: { notegeek: { suggestOnSave: false } },
+      }));
+      await graphqlRoute(page, {
+        ...OPS,
+        GetNoteById: { note: NOTE_LINKED },
+        NoteLinks: { note: { __typename: 'Note', id: 'nl', links: NOTE_LINKED_LINKS } },
+        Backlinks: { backlinks: BACKLINKS_TO_NL },
+        RelatedNotes: { relatedNotes: RELATED_TO_N1.slice(0, 2) },
+      });
+      await page.goto(h.base + '/notes/nl', { waitUntil: 'networkidle' });
+      await h.settle(1200);
+      const resolved = page.locator('a[data-wikilink="resolved"]');
+      await resolved.waitFor({ timeout: 10000 });
+      if ((await resolved.getAttribute('href')) !== '/notes/h1') throw new Error('resolved link does not go to the note');
+      if ((await resolved.innerText()) !== 'the shelving plan') throw new Error('alias text not shown');
+      const missing = page.locator('a[data-wikilink="missing"]');
+      if ((await missing.getAttribute('href')) !== '/notes/new?title=Opener%20manual') throw new Error('unresolved link does not offer to create the note');
+      const linked = page.locator('[data-linked-from]');
+      const related = page.locator('[data-related-notes]');
+      await linked.waitFor({ timeout: 10000 });
+      await related.waitFor({ timeout: 10000 });
+      const [ly, ry] = [await linked.boundingBox(), await related.boundingBox()];
+      if (!(ly && ry && ly.y < ry.y)) throw new Error('"Linked from" is not above "Related notes"');
+      if (!(await linked.getByRole('heading', { name: 'Linked from' }).count())) throw new Error('no "Linked from" heading');
+      if (h.isPhone) await linked.scrollIntoViewIfNeeded();
+      await h.settle(400);
+    },
+  },
+  {
+    // An unresolved [[Opener manual]]: tapping it opens a new note with that
+    // title already in place (not saved until you write).
+    name: '18d-link-create',
+    async setup(page, h) {
+      await page.route('**/api/users/bootstrap', (r) => json(r, {
+        identity: { username: 'chef', email: 'chef@example.com' },
+        profile: { displayName: 'Chef Crocker' },
+        preferences: {},
+        appPreferences: { notegeek: { suggestOnSave: false } },
+      }));
+      let creates = 0;
+      await graphqlRoute(page, {
+        ...OPS,
+        GetNoteById: { note: NOTE_LINKED },
+        NoteLinks: { note: { __typename: 'Note', id: 'nl', links: NOTE_LINKED_LINKS } },
+        CreateNote: (vars) => { creates += 1; return OPS.CreateNote; },
+      });
+      await page.goto(h.base + '/notes/nl', { waitUntil: 'networkidle' });
+      await h.settle(1000);
+      await page.locator('a[data-wikilink="missing"]').click();
+      await page.waitForURL(/\/notes\/new\?title=Opener%20manual/, { timeout: 10000 });
+      await h.settle(1200);
+      const title = page.getByRole('textbox', { name: 'Note title' });
+      if ((await title.inputValue()) !== 'Opener manual') throw new Error('the new note did not get the link\'s title');
+      if (creates) throw new Error('a note was saved before anything was written');
     },
   },
   {

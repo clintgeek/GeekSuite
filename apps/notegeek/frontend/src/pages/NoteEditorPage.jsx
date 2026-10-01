@@ -17,6 +17,7 @@ import { useToast } from '@geeksuite/ui';
 import { useAppPreferences } from '@geeksuite/user';
 import { NoteShell, NoteMetaBar, NoteActions, NoteTypeRouter, NOTE_TYPES, SuggestionStrip } from '../components/notes';
 import NoteFooter from '../components/notes/NoteFooter';
+import { WikiLinkContext, useNoteLinks } from '../hooks/useNoteLinks';
 import { BackButton } from '../components/notes/NoteActions';
 import NotePrintView from '../components/notes/NotePrintView';
 import useNotePrint from '../hooks/useNotePrint';
@@ -101,6 +102,9 @@ function NoteEditorPage() {
   // the gateway for a fresh set. A counter rather than a boolean so two saves
   // in a row are two requests.
   const [saveToken, setSaveToken] = useState(0);
+  // [[links]] in this note resolve through the gateway; refetched after each
+  // save, since that is when links are (re)resolved.
+  const resolveLink = useNoteLinks(savedNoteId, saveToken);
 
   const { notify } = useToast();
   const online = useOnline();
@@ -190,6 +194,10 @@ function NoteEditorPage() {
       resetForm();
       savedNoteIdRef.current = null;
       setNoteType(getTypeFromQuery() || NOTE_TYPES.MARKDOWN);
+      // `?title=` — an unresolved [[link]]'s "create this note". Seeded, not
+      // dirty: nothing is saved until the writer actually writes.
+      const seededTitle = new URLSearchParams(location.search).get('title');
+      if (seededTitle) setTitle(seededTitle.trim().slice(0, 500));
       setPinnedOverride(null);
       initializedFor.current = identity;
       return;
@@ -891,6 +899,7 @@ function NoteEditorPage() {
   };
 
   return (
+    <WikiLinkContext.Provider value={resolveLink}>
     <Box sx={{ flex: 1, minHeight: 0, height: '100%', display: 'flex', flexDirection: 'column' }}>
       <NoteShell
         variant={isCanvas ? 'canvas' : 'page'}
@@ -1074,6 +1083,7 @@ function NoteEditorPage() {
         isUnsavedNote={!savedNoteId}
       />
     </Box>
+    </WikiLinkContext.Provider>
   );
 }
 

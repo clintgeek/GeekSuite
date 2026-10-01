@@ -158,3 +158,48 @@ export const GET_NOTE_VERSION = gql`
         }
     }
 `;
+
+/**
+ * A note's outgoing [[links]], resolved by the gateway (DOCS/CONTEXT.md §12).
+ * Its own small query rather than a field on GET_NOTE_BY_ID, so rendered
+ * markdown can turn `[[Title]]` into a link without every other reader of
+ * the note (and every mock of it) carrying the field. Needs the gateway from
+ * 2026-09-30.
+ */
+export const NOTE_LINKS = gql`
+    query NoteLinks($id: ID!) {
+        note(id: $id) {
+            id
+            links {
+                key
+                title
+                noteId
+            }
+        }
+    }
+`;
+
+/** Notes that link to this one, with the words around the link. */
+export const BACKLINKS = gql`
+    query Backlinks($noteId: ID!) {
+        backlinks(noteId: $noteId) {
+            id
+            title
+            type
+            updatedAt
+            snippet
+        }
+    }
+`;
+
+/** Titles for the [[ picker: containing q, prefix matches first. No bodies. */
+export const NOTE_TITLES = gql`
+    query NoteTitles($q: String, $limit: Int) {
+        noteTitles(q: $q, limit: $limit) {
+            id
+            title
+            type
+            updatedAt
+        }
+    }
+`;

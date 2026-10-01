@@ -25,8 +25,12 @@ import VerticalSplit from '@mui/icons-material/VerticalSplit';
 import ReactMarkdown from 'react-markdown';
 // See NoteViewer: the preview and the viewer must agree about what markdown
 // is, or the editor shows something the saved note will not.
-import { MARKDOWN_COMPONENTS, MARKDOWN_REMARK_PLUGINS, markdownOverflowSx } from '../notes/markdownComponents';
+import { MARKDOWN_COMPONENTS, markdownOverflowSx } from '../notes/markdownComponents';
 import { graphiteTokens, tapTarget44 } from '../../theme/tokens';
+import { useMarkdownPlugins } from '../../hooks/useNoteLinks';
+import WikiLinkPicker from './WikiLinkPicker';
+import { useTitleOptions, PICKER_LISTBOX_ID, pickerOptionId } from '../../hooks/useTitleOptions';
+import { openWikiLink, completeWikiLink } from '../../utils/wikiLinks';
 
 /**
  * MarkdownEditor — markdown editing with live preview, rendered by
@@ -61,6 +65,7 @@ const FORMATS = [
 function MarkdownEditor({ content = '', setContent, isLoading, readOnly = false, fontSize = 14 }) {
     const theme = useTheme();
     const isMobile = useMediaQuery('(max-width:600px)');
+    const markdownPlugins = useMarkdownPlugins();
     const g = graphiteTokens(theme);
     const [viewMode, setViewMode] = useState(readOnly ? 'preview' : 'edit');
     const inputRef = useRef(null);
@@ -74,6 +79,56 @@ function MarkdownEditor({ content = '', setContent, isLoading, readOnly = false,
         el.focus({ preventScroll: true });
         el.setSelectionRange(sel.start, sel.end);
     });
+
+    // ── The [[ picker ─────────────────────────────────────────────────────
+    // Open while the caret sits right after an unfinished `[[query`. Esc
+    // dismisses it for that `[[` (it reopens at the next one).
+    const [link, setLink] = useState(null); // { start, query, caret }
+    const [activeIndex, setActiveIndex] = useState(0);
+    const dismissedAt = useRef(null);
+    const options = useTitleOptions(link?.query ?? '', Boolean(link));
+    const pickerOpen = Boolean(link) && options.length > 0;
+
+    const syncLink = (text, caret) => {
+        const open = openWikiLink(text, caret);
+        if (!open || dismissedAt.current === open.start) {
+            if (!open) dismissedAt.current = null;
+            setLink(null);
+            return;
+        }
+        setLink((prev) => {
+            if (!prev || prev.query !== open.query) setActiveIndex(0);
+            return { ...open, caret };
+        });
+    };
+
+    const chooseLink = (note) => {
+        const el = inputRef.current;
+        if (!link || !el) return;
+        const done = completeWikiLink(content, { start: link.start, caret: el.selectionStart }, note);
+        pendingSelection.current = { start: done.caret, end: done.caret };
+        setLink(null);
+        setContent(done.text);
+    };
+
+    const handleKeyDown = (e) => {
+        if (!pickerOpen) return;
+        if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            setActiveIndex((i) => (i + 1) % options.length);
+        } else if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            setActiveIndex((i) => (i - 1 + options.length) % options.length);
+        } else if (e.key === 'Enter' || e.key === 'Tab') {
+            e.preventDefault();
+            chooseLink(options[Math.min(activeIndex, options.length - 1)]);
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            e.stopPropagation();
+            dismissedAt.current = link.start;
+            setLink(null);
+        }
+    };
 
     const applyFormat = (format) => {
         const el = inputRef.current;
@@ -94,9 +149,26 @@ function MarkdownEditor({ content = '', setContent, isLoading, readOnly = false,
         <TextField
             placeholder="Start writing…"
             inputRef={inputRef}
-            inputProps={{ 'aria-label': 'Note body' }}
+            inputProps={{
+                'aria-label': 'Note body',
+                // The textarea stays focused while the [[ picker is open and
+                // points at its active row.
+                'aria-autocomplete': 'list',
+                ...(pickerOpen ? {
+                    'aria-controls': PICKER_LISTBOX_ID,
+                    'aria-activedescendant': pickerOptionId(Math.min(activeIndex, options.length - 1)),
+                } : {}),
+            }}
             value={content}
-            onChange={(e) => setContent(e.target.value)}
+            onChange={(e) => {
+                setContent(e.target.value);
+                syncLink(e.target.value, e.target.selectionStart);
+            }}
+            onKeyDown={handleKeyDown}
+            onSelect={(e) => {
+                if (link && e.target.selectionStart !== link.caret) syncLink(e.target.value, e.target.selectionStart);
+            }}
+            onBlur={() => setLink(null)}
             multiline
             fullWidth
             variant="standard"
@@ -218,7 +290,7 @@ function MarkdownEditor({ content = '', setContent, isLoading, readOnly = false,
             }}
         >
             {content ? (
-                <ReactMarkdown remarkPlugins={MARKDOWN_REMARK_PLUGINS} components={MARKDOWN_COMPONENTS}>{content}</ReactMarkdown>
+                <ReactMarkdown remarkPlugins={markdownPlugins} components={MARKDOWN_COMPONENTS}>{content}</ReactMarkdown>
             ) : (
                 <Box sx={{ color: 'text.secondary', fontStyle: 'italic' }}>
                     Nothing to preview yet...
@@ -287,6 +359,17 @@ function MarkdownEditor({ content = '', setContent, isLoading, readOnly = false,
                             )
                     ))}
                 </EditorToolbar>
+            )}
+
+            {pickerOpen && viewMode !== 'preview' && (
+                <WikiLinkPicker
+                    options={options}
+                    activeIndex={Math.min(activeIndex, options.length - 1)}
+                    onHover={setActiveIndex}
+                    onChoose={chooseLink}
+                    textarea={inputRef.current}
+                    caretIndex={link.caret}
+                />
             )}
 
             {/* Content area — grows; the page scrolls */}

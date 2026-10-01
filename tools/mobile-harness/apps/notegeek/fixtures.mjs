@@ -110,6 +110,23 @@ export const HYBRID_RESULTS = [
   { __typename: 'SearchSnippet', _id: 'h3', title: 'House insurance renewal', type: 'markdown', tags: ['house'], isLocked: false, isEncrypted: false, createdAt: daysAgo(20), updatedAt: daysAgo(14), score: 0.0127, snippet: 'Renews in October. Compare two quotes first.', message: null, matchedBy: 'meaning', why: 'Renews in October. Compare two quotes first.' },
 ];
 
+// [[Links]] (DOCS/CONTEXT.md §12) — scenes 18a-18c. A markdown note that
+// links to a note that exists (resolved) and one that doesn't yet.
+export const NOTE_LINKED = note('nl', 'Garage door fix', 'markdown', ['house/garage'], [
+  '# Garage door',
+  '',
+  'The opener stopped answering the remote after the power cut. Reset the logic board, then re-paired both remotes.',
+  '',
+  'Brackets and sizes are in [[Garage shelving plan|the shelving plan]]; the wiring diagram belongs in [[Opener manual]].',
+].join('\n'), hoursAgo(4));
+export const NOTE_LINKED_LINKS = [
+  { __typename: 'NoteLink', key: 'garage shelving plan', title: 'Garage shelving plan', noteId: 'h1' },
+  { __typename: 'NoteLink', key: 'opener manual', title: 'Opener manual', noteId: null },
+];
+export const BACKLINKS_TO_NL = [
+  { __typename: 'Backlink', id: 'h3', title: 'House insurance renewal', type: 'markdown', updatedAt: daysAgo(2), snippet: '…ask whether the claim covers the motor — see [[Garage door fix]] for what failed.' },
+];
+
 // Related notes (local embeddings) for the Q3 roadmap note — scenes 17a/17b.
 export const RELATED_TO_N1 = [
   { __typename: 'SimilarNote', id: 'n5', title: 'Standup snippets', type: 'text', updatedAt: hoursAgo(7), score: 0.71, snippet: 'Nothing blocking. Pairing on the sidebar tree after lunch.' },
@@ -244,6 +261,17 @@ export const OPS = {
   SearchNotes: { searchNotes: [] },
   // Empty by default, so the scenes before 17a show no Related section.
   RelatedNotes: { relatedNotes: [] },
+  // No [[links]] and nothing linking in, unless a scene says otherwise.
+  NoteLinks: (vars) => ({ note: { __typename: 'Note', id: vars.id, links: [] } }),
+  Backlinks: { backlinks: [] },
+  NoteTitles: (vars) => {
+    const q = String(vars?.q || '').toLowerCase();
+    const all = [...NOTES, NOTE_MD]
+      .filter((n, i, arr) => n.title && arr.findIndex((m) => m.id === n.id) === i)
+      .filter((n) => !q || n.title.toLowerCase().includes(q))
+      .sort((a, b) => Number(!a.title.toLowerCase().startsWith(q)) - Number(!b.title.toLowerCase().startsWith(q)));
+    return { noteTitles: all.slice(0, vars?.limit || 20).map((n) => ({ __typename: 'NoteTitle', id: n.id, title: n.title, type: n.type, updatedAt: n.updatedAt })) };
+  },
   SetNotePinned: (vars) => ({
     setNotePinned: { __typename: 'Note', id: vars.id, pinned: vars.pinned, pinnedAt: vars.pinned ? now.toISOString() : null },
   }),

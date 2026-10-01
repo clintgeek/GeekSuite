@@ -1,11 +1,11 @@
-import React, { useState } from 'react';
+import React, { useMemo, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 // GFM is what makes a pipe table a table. Without it react-markdown parses
 // only CommonMark, where `| a | b |` is ordinary text and consecutive lines
 // fold into one paragraph — which is exactly how a table rendered here: a
 // single run of literal pipes. The `& th` / `& td` styling below has been
 // waiting for tables it could never receive.
-import { MARKDOWN_COMPONENTS, MARKDOWN_REMARK_PLUGINS, markdownOverflowSx } from './notes/markdownComponents';
+import { MARKDOWN_COMPONENTS, markdownOverflowSx } from './notes/markdownComponents';
 import {
     Paper,
     Typography,
@@ -29,6 +29,7 @@ import PrintOutlined from '@mui/icons-material/PrintOutlined';
 import DeleteNoteDialog from './DeleteNoteDialog';
 import NotePrintView from './notes/NotePrintView';
 import NoteFooter from './notes/NoteFooter';
+import { useNoteLinks, markdownPluginsFor } from '../hooks/useNoteLinks';
 import useNotePrint from '../hooks/useNotePrint';
 import TypeIcon from './notes/TypeIcon';
 import { noteTypeMeta } from './notes/noteTypeMeta';
@@ -53,6 +54,9 @@ function NoteViewer() {
     const noteToView = data?.note;
     // Print / Save as PDF (DOCS/CONTEXT.md §8). Nothing to prepare: the
     // viewer only shows markdown, rich text and code.
+    // [[links]] in the body resolve through the gateway's stored links.
+    const resolveLink = useNoteLinks(id);
+    const markdownPlugins = useMemo(() => markdownPluginsFor(resolveLink), [resolveLink]);
     const { print: handlePrint, rootRef: printRootRef } = useNotePrint({
         title: noteToView?.title,
         enabled: Boolean(noteToView),
@@ -393,7 +397,7 @@ function NoteViewer() {
                             }}
                         >
                             {noteToView.type === 'markdown' ? (
-                                <ReactMarkdown remarkPlugins={MARKDOWN_REMARK_PLUGINS} components={MARKDOWN_COMPONENTS}>{noteToView.content || ''}</ReactMarkdown>
+                                <ReactMarkdown remarkPlugins={markdownPlugins} components={MARKDOWN_COMPONENTS}>{noteToView.content || ''}</ReactMarkdown>
                             ) : noteToView.type === 'text' ? (
                                 // Stored TipTap HTML. It is rendered as
                                 // markup, so it is sanitized here — the one
