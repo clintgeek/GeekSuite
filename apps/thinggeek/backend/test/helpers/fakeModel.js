@@ -7,7 +7,7 @@
  *
  * Query language: equality on dotted paths (null matches missing, arrays
  * match by element containment, numeric segments index arrays), $in, $ne,
- * $exists, $lt/$lte/$gt/$gte, $or. Updates: $set, $push, $pull (with an
+ * $exists, $lt/$lte/$gt/$gte, $or. Updates: $set, $unset, $inc, $push, $pull (with an
  * {field: {$in}} condition). Timestamps like mongoose's (createdAt/updatedAt;
  * updates bump updatedAt unless options.timestamps === false).
  *
@@ -116,6 +116,13 @@ function applyUpdate(doc, update) {
       } else if (op === '$pull') {
         const arr = getPath(doc, p);
         if (Array.isArray(arr)) setPath(doc, p, arr.filter((el) => !matches(el, value)));
+      } else if (op === '$unset') {
+        const segs = p.split('.');
+        let cur = doc;
+        for (const seg of segs.slice(0, -1)) cur = cur?.[seg];
+        if (cur && typeof cur === 'object') delete cur[segs[segs.length - 1]];
+      } else if (op === '$inc') {
+        setPath(doc, p, (Number(getPath(doc, p)) || 0) + Number(value));
       } else throw new Error(`fakeModel: unsupported update ${op}`);
     }
   }
@@ -182,7 +189,7 @@ export function createFakeModel(initialDocs = [], { hooks = {}, now = () => new 
     async create(doc) {
       calls.push(['create', doc]);
       const at = now();
-      const row = { thumbPath: null, width: null, height: null, originalName: '', uploadedBy: null, ...cloneDoc(doc), _id: new ObjectId(), createdAt: at, updatedAt: at };
+      const row = { thumbPath: null, width: null, height: null, originalName: '', uploadedBy: null, ...cloneDoc(doc), _id: doc._id ?? new ObjectId(), createdAt: at, updatedAt: at };
       docs.push(row);
       return cloneDoc(row);
     },

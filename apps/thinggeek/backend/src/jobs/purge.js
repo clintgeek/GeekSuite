@@ -27,6 +27,7 @@
 import thingConstants from '@geeksuite/schemas/thinggeek/constants';
 import { deleteFileQuiet, filesRoot as resolveFilesRoot } from '../lib/fileStorage.js';
 import { singleFlight } from '../lib/concurrency.js';
+import { purgeAttic } from './atticPurge.js';
 
 const { TRASH_DAYS } = thingConstants;
 
@@ -130,6 +131,7 @@ export async function runPurge({
   now = () => new Date(),
   batchSize = DEFAULT_BATCH,
   log,
+  attic = null,
 }) {
   const root = resolveFilesRoot(filesRoot);
   const cutoff = new Date(now().getTime() - trashDays * DAY_MS);
@@ -143,6 +145,12 @@ export async function runPurge({
     totals.files += f.deleted;
     totals.filesKept += f.kept;
   }
+  // The Attic's deleted documents and orphaned sealed files (jobs/atticPurge.js).
+  if (attic?.AtticDocument && attic?.AtticFile) {
+    const a = await purgeAttic({ ...attic, root, now });
+    totals.atticDocuments = a.documents;
+    totals.atticFiles = a.files;
+  }
   log?.info({ event: 'purge_done', ...totals }, 'trash purge finished');
   return totals;
 }
@@ -155,6 +163,7 @@ export async function runPurge({
 export function startPurgeSchedule({
   Thing,
   ThingFile,
+  attic = null,
   filesRoot,
   log,
   env = process.env,
@@ -168,7 +177,7 @@ export function startPurgeSchedule({
   }
   const run = singleFlight(async () => {
     try {
-      await runPurge({ Thing, ThingFile, filesRoot, log });
+      await runPurge({ Thing, ThingFile, attic, filesRoot, log });
     } catch (err) {
       log?.error({ event: 'purge_failed', code: err?.code, name: err?.name }, 'trash purge failed');
     }

@@ -18,10 +18,18 @@ const { ensureFilesRoot, filesRoot } = await import('./src/lib/fileStorage.js');
 const { startPurgeSchedule } = await import('./src/jobs/purge.js');
 const { default: Thing } = await import('./src/models/Thing.js');
 const { default: ThingFile } = await import('./src/models/ThingFile.js');
+const { default: AtticModels } = await import('./src/models/Attic.js');
+const { loadVaultKeyring } = await import('./src/lib/atticCrypto.js');
 
 const PORT = Number(process.env.PORT) || 1820;
 
-const app = createApp();
+// The Attic's key (DOCS/THINGGEEK_PLAN.md "The Attic"). Missing or malformed:
+// ThingGeek still runs, but every /api/attic route answers 503 — never plaintext.
+const keyring = loadVaultKeyring(process.env);
+if (!keyring.ok) logger.error({ event: 'attic_key_unavailable', reason: keyring.reason }, 'The Attic is closed: no usable THINGGEEK_VAULT_KEY');
+else logger.info({ event: 'attic_key_loaded', keyVersion: keyring.version }, 'The Attic key is loaded');
+
+const app = createApp({ keyring, attic: AtticModels });
 
 async function connectDB() {
   logger.info('Connecting to MongoDB');
@@ -92,7 +100,7 @@ async function start() {
 
   // Trash purge: ~60 s after boot, then daily. Production (or
   // PURGE_AUTORUN=1) only; PURGE_DISABLED=1 turns it off.
-  purge = startPurgeSchedule({ Thing, ThingFile, log: logger });
+  purge = startPurgeSchedule({ Thing, ThingFile, attic: AtticModels, log: logger });
 }
 
 start();

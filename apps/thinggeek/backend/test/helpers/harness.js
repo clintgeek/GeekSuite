@@ -6,23 +6,30 @@
  */
 import fs from 'node:fs';
 import os from 'node:os';
+import crypto from 'node:crypto';
 import path from 'node:path';
 import sharp from 'sharp';
 import mongoose from 'mongoose';
 import userServer from '@geeksuite/user/server';
 import createApp from '../../src/app.js';
 import { createFakeModel } from './fakeModel.js';
+import { loadVaultKeyring } from '../../src/lib/atticCrypto.js';
+import vaultSessionModule from '@geeksuite/schemas/thinggeek/vaultSession';
 
 const { invalidSession } = userServer;
+const { newVaultToken, vaultSessionRow, VAULT_COOKIE } = vaultSessionModule;
 
 export const CHEF_ID = '6818c2bddcf626909f6a93a1';
 export const HEATHER_ID = '689931bbe8828efb78d11bab';
 export const STRANGER_ID = '5f0000000000000000000001';
+/** One of the kids' accounts: signed in, not a household member. */
+export const KID_ID = '5f0000000000000000000002';
 
 export const USERS = {
   chef: { id: CHEF_ID, userId: CHEF_ID, username: 'chef', email: 'chef@example.test' },
   heather: { id: HEATHER_ID, userId: HEATHER_ID, username: 'heather' },
   stranger: { id: STRANGER_ID, userId: STRANGER_ID, username: 'stranger' },
+  kid: { id: KID_ID, userId: KID_ID, username: 'kid' },
 };
 
 export const auth = (who) => ({ Authorization: `Bearer ${who}` });
@@ -46,17 +53,34 @@ export function newId() {
  * @param {object[]} [seed.things]
  * @param {object[]} [seed.files]
  */
-export function buildHarness({ things = [], files = [], now, hooks = {} } = {}) {
+/** A throwaway vault key, generated per run — never a real one. */
+export function testKeyring(extraEnv = {}) {
+  return loadVaultKeyring({ THINGGEEK_VAULT_KEY: crypto.randomBytes(32).toString('base64'), ...extraEnv });
+}
+
+export function buildHarness({ things = [], files = [], attic = {}, keyring = testKeyring(), now, hooks = {}, webauthn } = {}) {
   const filesPath = makeTempDir();
   const clock = now || (() => new Date());
   const Thing = createFakeModel(things, { now: clock, hooks: hooks.Thing });
   const ThingFile = createFakeModel(files, { now: clock, hooks: hooks.ThingFile });
-  const app = createApp({ Thing, ThingFile, filesPath, validateSession, now: clock, publicPath: makeTempDir('thinggeek-public-') });
+  const atticModels = Object.fromEntries(
+    ['AtticPerson', 'AtticDocumentType', 'AtticDocument', 'AtticFile', 'VaultCredential', 'VaultSession', 'AtticAudit']
+      .map((name) => [name, createFakeModel(attic[name] ?? [], { now: clock, hooks: hooks[name] })]),
+  );
+  const app = createApp({ Thing, ThingFile, filesPath, validateSession, now: clock, publicPath: makeTempDir('thinggeek-public-'), attic: atticModels, keyring, webauthn });
   return {
     app,
     Thing,
     ThingFile,
+    attic: atticModels,
+    keyring,
     filesPath,
+    /** Open a vault session for `who` directly (as an unlock would); returns the Cookie header value. */
+    unlock(who, { at = clock(), householdId = 'default' } = {}) {
+      const token = newVaultToken();
+      atticModels.VaultSession.docs.push({ _id: newId(), ...vaultSessionRow({ token, userId: USERS[who].id, householdId, method: 'pin', now: at }), createdAt: at, updatedAt: at });
+      return `${VAULT_COOKIE}=${token}`;
+    },
     cleanup() {
       fs.rmSync(filesPath, { recursive: true, force: true });
     },

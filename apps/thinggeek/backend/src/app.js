@@ -11,6 +11,10 @@ import { filesRoot as resolveFilesRoot } from './lib/fileStorage.js';
 import { createMemberGate } from './middleware/authMiddleware.js';
 import createAuthRouter from './routes/authRoutes.js';
 import createFileRoutes from './routes/fileRoutes.js';
+import createAtticRoutes from './routes/atticRoutes.js';
+import { noStore, createRequireKey, createRequireVault } from './middleware/attic.js';
+import { loadVaultKeyring } from './lib/atticCrypto.js';
+import AtticModels from './models/Attic.js';
 import ThingModel from './models/Thing.js';
 import ThingFileModel from './models/ThingFile.js';
 
@@ -33,6 +37,8 @@ const __dirname = path.dirname(__filename);
  * @param {string} [options.publicPath]       default backend/public
  * @param {Function} [options.validateSession] attachUser's session check override
  * @param {() => Date} [options.now]
+ * @param {object} [options.attic]           the Attic's models (or fakes); default the real ones
+ * @param {object} [options.keyring]         default loadVaultKeyring(process.env)
  */
 export function createApp(options = {}) {
   const {
@@ -42,6 +48,8 @@ export function createApp(options = {}) {
     publicPath = path.join(__dirname, '..', 'public'),
     validateSession,
     now,
+    attic = AtticModels,
+    keyring = loadVaultKeyring(process.env),
   } = options;
   const filesRoot = resolveFilesRoot(filesPath);
   const memberGate = createMemberGate({ validateSession });
@@ -114,6 +122,13 @@ export function createApp(options = {}) {
   app.use('/api/auth', createAuthRouter({ memberGate }));
   app.get('/api/me', ...memberGate, meHandler());
   app.use('/api', createFileRoutes({ memberGate, Thing, ThingFile, filesRoot, now }));
+
+  // The Attic (DOCS/THINGGEEK_PLAN.md "The Attic"): no-store on every answer,
+  // then the member gate, the vault key and a live vault session.
+  const clock = now || (() => new Date());
+  app.use('/api/attic', noStore);
+  const atticGuards = [...memberGate, createRequireKey(keyring), createRequireVault({ VaultSession: attic.VaultSession, now: clock })];
+  app.use('/api/attic', createAtticRoutes({ guards: atticGuards, keyring, models: attic, filesRoot, now: clock }));
 
   // Unknown /api paths answer JSON, not the SPA.
   app.use('/api', (req, res) => res.status(404).json({ code: 'NOT_FOUND', message: 'Route not found' }));
