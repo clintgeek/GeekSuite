@@ -106,6 +106,10 @@ of each app's backend source. Names only — no values were read or printed.
 - **startgeek** (`.env.example` populated; **no `.env.production` on the box** — it needs none,
   it's a static build that calls basegeek's public URL): `VITE_GRAPHQL_API_URL`,
   `VITE_BASEGEEK_URL`, `VITE_BASEGEEK_PROXY` (dev-only, optional)
+- **thinggeek**: `MONGODB_URI`, `BASEGEEK_URL`, `BASEGEEK_TIMEOUT_MS`, `CORS_ORIGINS`, `CSRF_GUARD`,
+  `FILES_PATH` (compose), `PURGE_DISABLED`/`PURGE_AUTORUN`, `LOG_LEVEL`, `PORT`, `NODE_ENV`, and
+  **`THINGGEEK_VAULT_KEY`** (+ optional `THINGGEEK_VAULT_KEY_VERSION`, `THINGGEEK_VAULT_KEYS_RETIRED`,
+  `ATTIC_RP_ID`, `ATTIC_ORIGINS`) — the Attic's key, thinggeek ONLY, never basegeek (§15)
 - **storygeek**: `DB_URI`, `JWT_SECRET`, `BASEGEEK_URL`, `BASEGEEK_JWT_TOKEN`,
   `STORYGEEK_FREE_ONLY`, `STORYGEEK_GM_PROVIDER`, `STORYGEEK_GM_MODEL`, `STORYGEEK_GM_FALLBACKS`,
   `STORYGEEK_AUX_PROVIDER`, `STORYGEEK_AUX_MODEL`, `STORYGEEK_TEST_TOKEN` (test-only),
@@ -766,3 +770,63 @@ steps, key custody, and the "Fix now" Duplicati items. The short version:
 - **Alarm config:** `~/.config/geeksuite/backup.env` holds `HEALTHCHECK_URL`, `VERIFY_HEALTHCHECK_URL`, `DUPLICATI_HEALTHCHECK_URL` and `ALERT_WEBHOOK`. It stores names only until Chef fills in the values.
 - **The private key must also live off-box** (Bitwarden). Without it, every set is ciphertext.
 - **Redis is deliberately not backed up** (transient session/rate-limit state).
+
+## 15. The Attic's key (ThingGeek, 2026-10-02)
+
+ThingGeek's Attic (family documents; `DOCS/THINGGEEK_PLAN.md` "The Attic") seals every
+identifier and every file with AES-256-GCM under **`THINGGEEK_VAULT_KEY`**.
+
+- **Where:** `apps/thinggeek/.env.production` ONLY. basegeek does **not** get it — the gateway
+  never decrypts (it checks vault sessions in Mongo, no secret needed). Never put it in a compose
+  `environment:` block, a commit, a log or a ticket.
+- **Generate** (once, on the box; print it nowhere else):
+  ```
+  openssl rand -base64 32
+  ```
+  Add the line `THINGGEEK_VAULT_KEY=<that value>` to `apps/thinggeek/.env.production` with an
+  editor. Optional: `THINGGEEK_VAULT_KEY_VERSION=1` (the default).
+- **Copy it to Bitwarden** ("ThingGeek Attic key", with its version). **Key lost = every Attic
+  document is unrecoverable** — the images and numbers are ciphertext without it. The nightly
+  backup also carries it (inside the age-encrypted env tarball, §14), so the backup age key
+  decrypts the Attic too: guard that key accordingly.
+- **Apply it — Watchtower will NOT** (it never re-reads `.env.production`; §6, landmine):
+  ```
+  cd apps/thinggeek && docker compose up -d thinggeek
+  ```
+  Check: `docker logs thinggeek 2>&1 | grep attic_key` → `attic_key_loaded` (never the key).
+  Without it: `attic_key_unavailable`, and `/api/attic/*` answers 503 ATTIC_UNAVAILABLE (the rest
+  of ThingGeek works; nothing is ever served in plaintext).
+- **Passkeys' RP ID** is `thinggeek.clintgeek.com` by default. Dev only: `ATTIC_RP_ID=localhost`
+  and `ATTIC_ORIGINS=http://localhost:1821` in `.env.local`.
+
+### Deploy order (the first Attic deploy)
+
+1. basegeek (schemas + gateway: `graphql/thinggeek/attic/`). Confirm the gateway is up before
+   anything selects the new fields (memory: schema changes vs deploy order). Nothing in basegeek's
+   env changes.
+2. Set `THINGGEEK_VAULT_KEY` in `apps/thinggeek/.env.production` (above).
+3. thinggeek (backend + frontend), then `cd apps/thinggeek && docker compose up -d thinggeek` so
+   the new env var is read.
+
+Out of order: thinggeek before basegeek → the Attic pages, the Attention panel and a thing's
+"In the Attic" line error quietly (each has its own query; the rest of each page is fine) and the
+Attic shows "didn't load". thinggeek without the key → the Attic shows "The Attic is closed".
+Neither exposes anything.
+
+### Forgotten PIN / lost phone
+
+- A member who can still unlock with a fingerprint changes the PIN from the Attic ("Your lock").
+- Both lost: delete that member's row from `thinggeek.attic_vault_credentials` (by `userId`) on
+  the box; their next visit is a fresh set-up. Their documents are untouched (the key is the
+  server's, not the PIN's). Do it only for the member who asked, in person.
+
+### Rotation (sketch — the re-seal script is not written yet)
+
+1. Generate a new key; in `.env.production` set `THINGGEEK_VAULT_KEY=<new>`,
+   `THINGGEEK_VAULT_KEY_VERSION=2`, `THINGGEEK_VAULT_KEYS_RETIRED=1:<old>`; store both in
+   Bitwarden.
+2. `docker compose up -d thinggeek`. New seals use v2; v1 items still open.
+3. Re-seal every `attic_documents.secrets.*` with `v: 1` and every `attic_files` with
+   `keyVersion: 1` (script to write: open with v1, seal with v2, atomic per item). PINs: the
+   pepper changes with the key, so members re-set their PIN after rotation (passkeys unaffected).
+4. When nothing at v1 remains, drop `THINGGEEK_VAULT_KEYS_RETIRED` and `compose up -d` again.
