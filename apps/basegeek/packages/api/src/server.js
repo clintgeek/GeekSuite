@@ -501,6 +501,9 @@ app.use('/graphql', (req, _res, next) => {
 app.use('/graphql', expressMiddleware(apolloServer, {
   context: async ({ req }) => ({
     user: req.user || null,
+    // ThingGeek's Attic reads its vault-session cookie (thinggeek_vault,
+    // host-only on thinggeek.clintgeek.com, whose /graphql is proxied here).
+    cookies: req.cookies || {},
   }),
 }));
 

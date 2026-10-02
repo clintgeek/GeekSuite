@@ -33,7 +33,10 @@
     "./thinggeek/thingType": "./thinggeek/thingType.js",
     "./thinggeek/file": "./thinggeek/file.js",
     "./thinggeek/profile": "./thinggeek/profile.js",
-    "./thinggeek/starterTypes": "./thinggeek/starterTypes.js"
+    "./thinggeek/starterTypes": "./thinggeek/starterTypes.js",
+    "./thinggeek/attic": "./thinggeek/attic.js",
+    "./thinggeek/atticModels": "./thinggeek/atticModels.js",
+    "./thinggeek/vaultSession": "./thinggeek/vaultSession.js"
   },
   "scripts": {
     "lint": "eslint ."

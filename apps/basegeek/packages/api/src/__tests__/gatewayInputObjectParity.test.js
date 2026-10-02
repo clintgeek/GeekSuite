@@ -691,6 +691,15 @@ const NO_FRONTEND_CALLER = new Set([
   // createPlace / updatePlace removed 2026-09-26: places became things
   // (containment — a move is updateThing's parentId).
   'Mutation.saveThingFilter',
+  // thinggeek's Attic (2026-10-02): the gateway lands one commit before
+  // apps/thinggeek/frontend's Attic pages. Each moves to FIXTURES with its
+  // real call site in that commit (DOCS/THINGGEEK_PLAN.md "The Attic").
+  'Mutation.createAtticPerson',
+  'Mutation.updateAtticPerson',
+  'Mutation.createAtticDocumentType',
+  'Mutation.updateAtticDocumentType',
+  'Mutation.createAtticDocument',
+  'Mutation.updateAtticDocument',
 ]);
 
 describe('every input-object-taking root field is enumerated and accounted for', () => {
@@ -720,8 +729,10 @@ describe('every input-object-taking root field is enumerated and accounted for',
   // removed — the Place tree became the containment graph
   // (DOCS/THINGGEEK_PLAN.md "Containment").
   // 42 from 2026-10-01: notegeek's foldInApply ([FoldInOperationInput!]!).
-  test('the count matches the audit: 42 root fields take an input-object argument', () => {
-    expect(inputObjectRootFields()).toHaveLength(42);
+  // 48 from 2026-10-02: thinggeek's Attic — create/update person, document
+  // type and document (DOCS/THINGGEEK_PLAN.md "The Attic").
+  test('the count matches the audit: 48 root fields take an input-object argument', () => {
+    expect(inputObjectRootFields()).toHaveLength(48);
   });
 
   test('FIXTURES and NO_FRONTEND_CALLER never claim the same field', () => {
