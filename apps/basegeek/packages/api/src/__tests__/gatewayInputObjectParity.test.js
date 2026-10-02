@@ -623,6 +623,84 @@ const FIXTURES = {
     rootValue: { foldInApply: () => ({}) },
   },
 
+  // ── thinggeek: The Attic (2026-10-02, DOCS/THINGGEEK_PLAN.md "The Attic") ──
+  // Payloads are what apps/thinggeek/frontend/src/views/attic/ builds. Each
+  // returns a non-null object — same `rootValue` stand-in as foldInApply.
+  'Mutation.createAtticPerson': {
+    // views/attic/AtticView.jsx PersonSheet save() (PeoplePicker sends { name } only)
+    source: `
+      mutation CreateAtticPerson($input: AtticPersonInput!) {
+        createAtticPerson(input: $input) { __typename }
+      }
+    `,
+    variables: { input: { name: 'Heather', relation: 'Spouse', birthDate: '1984-05-02T00:00:00.000Z' } },
+    rootValue: { createAtticPerson: () => ({}) },
+  },
+  'Mutation.updateAtticPerson': {
+    // views/attic/AtticView.jsx PersonSheet save() for an existing person
+    source: `
+      mutation UpdateAtticPerson($id: ID!, $input: AtticPersonInput!) {
+        updateAtticPerson(id: $id, input: $input) { __typename }
+      }
+    `,
+    variables: { id: 'p1', input: { name: 'Clint', relation: null, birthDate: null } },
+    rootValue: { updateAtticPerson: () => ({}) },
+  },
+  'Mutation.createAtticDocumentType': {
+    // views/attic/AtticTypesView.jsx typeInputFrom()
+    source: `
+      mutation CreateAtticDocumentType($input: AtticDocumentTypeInput!) {
+        createAtticDocumentType(input: $input) { __typename }
+      }
+    `,
+    variables: {
+      input: {
+        name: 'Boat registration',
+        expiryLabel: 'Expires',
+        expiryWarnDays: 30,
+        fields: [{ key: 'registrationNumber', label: 'Registration number', kind: 'text', identifier: true, strict: false, required: false, choices: [] }],
+      },
+    },
+    rootValue: { createAtticDocumentType: () => ({}) },
+  },
+  'Mutation.updateAtticDocumentType': {
+    // views/attic/AtticTypesView.jsx typeInputFrom() for an existing type
+    source: `
+      mutation UpdateAtticDocumentType($id: ID!, $input: AtticDocumentTypeInput!) {
+        updateAtticDocumentType(id: $id, input: $input) { __typename }
+      }
+    `,
+    variables: { id: 'ty1', input: { name: 'Passport', expiryLabel: 'Expires', expiryWarnDays: 270, fields: [{ key: 'number', label: 'Passport number', kind: 'text', identifier: true, strict: false, required: false, choices: [] }] } },
+    rootValue: { updateAtticDocumentType: () => ({}) },
+  },
+  'Mutation.createAtticDocument': {
+    // views/attic/AtticDocumentForm.jsx documentInputFrom(..., { create: true }) —
+    // never an identifier value (those go to the backend, sealed)
+    source: `
+      mutation CreateAtticDocument($input: AtticDocumentInput!) {
+        createAtticDocument(input: $input) { __typename }
+      }
+    `,
+    variables: {
+      input: { typeId: 'ty1', personIds: ['p1'], title: null, fields: { country: 'USA' }, issued: null, expires: '2027-04-20T00:00:00.000Z', links: ['t1'], notes: '' },
+    },
+    rootValue: { createAtticDocument: () => ({}) },
+  },
+  'Mutation.updateAtticDocument': {
+    // views/attic/AtticDocumentForm.jsx documentInputFrom(..., { create: false });
+    // AtticDocumentPage.jsx removeFile() sends { files: [{ id }] } alone
+    source: `
+      mutation UpdateAtticDocument($id: ID!, $input: AtticDocumentInput!) {
+        updateAtticDocument(id: $id, input: $input) { __typename }
+      }
+    `,
+    variables: {
+      id: 'd1',
+      input: { personIds: ['p1', 'p2'], title: 'Joint policy', fields: { carrier: 'State Farm' }, issued: '2025-04-01T00:00:00.000Z', expires: '2026-12-01T00:00:00.000Z', links: [], notes: 'Agent: call before renewing.', files: [{ id: 'e1' }, { id: 'e2', side: 'back', caption: 'Back' }] },
+    },
+    rootValue: { updateAtticDocument: () => ({}) },
+  },
+
   // basegeek's one entry here was 'Mutation.bulkUpdateFreeTiers' until Phase 3
   // (2026-09-07). The mutation, its FreeTierUpdateInput and the Catalog tab's
   // Save-all that called it all went together
@@ -691,15 +769,6 @@ const NO_FRONTEND_CALLER = new Set([
   // createPlace / updatePlace removed 2026-09-26: places became things
   // (containment — a move is updateThing's parentId).
   'Mutation.saveThingFilter',
-  // thinggeek's Attic (2026-10-02): the gateway lands one commit before
-  // apps/thinggeek/frontend's Attic pages. Each moves to FIXTURES with its
-  // real call site in that commit (DOCS/THINGGEEK_PLAN.md "The Attic").
-  'Mutation.createAtticPerson',
-  'Mutation.updateAtticPerson',
-  'Mutation.createAtticDocumentType',
-  'Mutation.updateAtticDocumentType',
-  'Mutation.createAtticDocument',
-  'Mutation.updateAtticDocument',
 ]);
 
 describe('every input-object-taking root field is enumerated and accounted for', () => {

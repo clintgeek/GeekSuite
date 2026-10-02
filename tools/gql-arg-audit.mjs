@@ -153,10 +153,21 @@ const EXCLUDE_DIRS = new Set(['node_modules', 'dist', 'build', 'coverage', '.git
  * this reads typeDefs directly instead of booting the merged schema.
  */
 async function loadSchemaRootFields() {
-  const modules = (await readdir(GRAPHQL_DIR, { withFileTypes: true }))
+  const top = (await readdir(GRAPHQL_DIR, { withFileTypes: true }))
     .filter((e) => e.isDirectory())
     .map((e) => e.name)
     .sort();
+  // A module may keep a sub-module's typeDefs one level down
+  // (thinggeek/attic/typeDefs.js — ThingGeek's Attic).
+  const modules = [];
+  for (const name of top) {
+    modules.push(name);
+    const subs = (await readdir(path.join(GRAPHQL_DIR, name), { withFileTypes: true }))
+      .filter((e) => e.isDirectory())
+      .map((e) => `${name}/${e.name}`)
+      .sort();
+    modules.push(...subs);
+  }
 
   /** @type {Map<'Query'|'Mutation', Map<string, {args: Map<string,string>, module: string}>>} */
   const roots = new Map([['Query', new Map()], ['Mutation', new Map()]]);

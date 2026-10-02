@@ -23,6 +23,7 @@ export const NAV = {
   types: 'types',
   insurance: 'insurance',
   trash: 'trash',
+  attic: 'attic',
   /** Matches GeekSidebar's default `footer.settings.id`. */
   settings: 'settings',
 };
@@ -38,6 +39,12 @@ export const ROUTES = [
   { path: '/types', navId: NAV.types, title: 'Types', tab: 'more' },
   { path: '/insurance', navId: NAV.insurance, title: 'Insurance report', tab: 'more' },
   { path: '/trash', navId: NAV.trash, title: 'Trash', tab: 'more' },
+  // The Attic: the household's locked unit for family documents.
+  { path: '/attic', navId: NAV.attic, title: 'The Attic', tab: 'more' },
+  { path: '/attic/types', navId: NAV.attic, title: 'Document types', tab: 'more', back: true },
+  { path: '/attic/add', navId: NAV.attic, title: 'Add a document', tab: 'more', back: true },
+  { path: '/attic/edit/:id', navId: NAV.attic, title: 'Edit a document', tab: 'more', back: true },
+  { path: '/attic/doc/:id', navId: NAV.attic, title: 'The Attic', tab: 'more', back: true },
   { path: '/settings', navId: NAV.settings, title: 'Settings', tab: 'more' },
 ];
 

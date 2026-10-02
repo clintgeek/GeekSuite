@@ -122,6 +122,21 @@ export const UNIT = {
 /** The bulb over an open unit: a warm accent for dark mode's highlights. */
 export const BULB = '#FFD28A';
 
+/**
+ * The Attic (DOCS/THINGGEEK_PLAN.md "The Attic"): the household's locked,
+ * climate-controlled unit for family documents. Not a roll-up door — a
+ * brushed STEEL swing door (panels, seams, rivets, three hinges, a hasp)
+ * with the yard's orange PADLOCK on it. Unlocked, the door stands open on
+ * the lit interior (UNIT.interior under the BULB). `text`/`secondary` are
+ * the stencils and words that sit ON the steel; measured in the contrast test.
+ */
+export const STEEL = {
+  light: { door: '#50575E', panel: '#5B6269', seam: '#2B2F33', rivet: '#A2A9B0', frame: '#1C1F22', text: '#F5F7F8', secondary: '#EBEEF0', sheen: 'rgba(255, 255, 255, 0.10)' },
+  dark: { door: '#3B4045', panel: '#444A50', seam: '#1D2023', rivet: '#8F969D', frame: '#0B0C0D', text: '#EEF1F3', secondary: '#D3D8DC', sheen: 'rgba(255, 255, 255, 0.06)' },
+};
+/** The padlock: yard-orange body, a steel shackle, a black keyhole. Decorative (a glyph: ≥ 3:1 on the door). */
+export const PADLOCK = { body: LIVERY.orange, shackle: '#C9CED3', keyhole: LIVERY.ink };
+
 /** Due-date status tones, small text on box faces and paper. */
 export const STATUS_TONES = {
   light: { overdue: '#7A140C', soon: '#6E3F00', upcoming: '#1D4874', later: '#44352A' },
@@ -230,6 +245,7 @@ function buildOverrides(mode, chrome) {
       label: LABEL[mode],
       box: BOX[mode],
       unit: UNIT[mode],
+      steel: STEEL[mode],
       marker: MARKER,
       status: STATUS_TONES[chrome ? 'dark' : mode],
       chromeTokens: CHROME,

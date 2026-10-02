@@ -4,7 +4,7 @@
  *
  *   Things · Needs attention (N)
  *   Inventory   Where · Types
- *   Records     Insurance report · Trash
+ *   Records     Insurance report · The Attic (family documents, locked) · Trash
  *   Saved views (SavedViews, as `extras`: they need a ⋯ menu)
  *   footer: user · Settings · Sign out
  *
@@ -20,6 +20,7 @@ import { Box, Typography, alpha } from '@mui/material';
 import {
   CategoryOutlined as TypesIcon,
   DeleteOutline as TrashIcon,
+  LockOutlined as AtticIcon,
   Inventory2Outlined as LibraryIcon,
   ReceiptLongOutlined as InsuranceIcon,
   SpeedOutlined as AttentionIcon,
@@ -137,6 +138,7 @@ function SidebarInner({ user, onSignOut }) {
       label: 'Records',
       items: [
         { id: NAV.insurance, label: 'Insurance report', icon: <InsuranceIcon />, to: '/insurance' },
+        { id: NAV.attic, label: 'The Attic', icon: <AtticIcon />, to: '/attic' },
         { id: NAV.trash, label: 'Trash', icon: <TrashIcon />, to: '/trash' },
       ],
     },

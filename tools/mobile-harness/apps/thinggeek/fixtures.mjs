@@ -564,6 +564,135 @@ const ART = {
   'plate-rifle': plate(['STURM RUGER & CO', 'MODEL 10/22 CARBINE', 'SERIAL 0012-34567', 'CAL .22 LR'], ['#3A3A3A', '#1F1F1F']).replace(/fill="#2A2C30"/g, 'fill="#D9D9D9"'),
 };
 
+// ── The Attic (DOCS/THINGGEEK_PLAN.md "The Attic") ──────────────────────────
+// The vault's state rides on the page URL like the other modes:
+//   (default)                unlocked, set up (PIN + this phone's passkey)
+//   ?__fixture=attic-locked  set up, locked — the steel door
+//   ?__fixture=attic-setup   nobody has put a lock on it yet
+// Identifier VALUES never appear in any fixture answer: the gateway only says
+// `hasValue`, and a reveal is a backend call the scenes don't make.
+const ATTIC_NOW = Date.now();
+const vaultStatus = (mode) => {
+  const base = {
+    available: true, setUp: true, pin: true,
+    passkeys: [{ id: 'pk1', label: 'S25+', createdAt: ago(20), lastUsedAt: ago(0) }],
+    unlocked: true, method: 'passkey',
+    idleExpiresAt: new Date(Date.now() + 9 * 60000 + 41000).toISOString(),
+    expiresAt: new Date(Date.now() + 50 * 60000).toISOString(),
+    pinRetryAt: null, idleMs: 600000, maxMs: 3600000, pinLength: { min: 6, max: 12 },
+  };
+  if (mode === 'attic-locked') return { ...base, unlocked: false, method: null, idleExpiresAt: null, expiresAt: null };
+  if (mode === 'attic-setup') return { ...base, setUp: false, pin: false, passkeys: [], unlocked: false, method: null, idleExpiresAt: null, expiresAt: null };
+  return base;
+};
+const AF = (key, label, extra = {}) => ({ __typename: 'AtticDocumentTypeField', key, label, kind: 'text', choices: [], identifier: false, strict: false, required: false, ...extra });
+const ATYPE = (id, key, name, icon, fields, extra = {}) => ({ __typename: 'AtticDocumentType', id, key, name, icon, issuedLabel: 'Issued', expiryLabel: 'Expires', expiryWarnDays: 30, builtIn: true, documentCount: 0, fields, ...extra });
+const ATTIC_TYPES = [
+  ATYPE('at-pass', 'passport', 'Passport', 'Flight', [AF('number', 'Passport number', { identifier: true }), AF('country', 'Country')], { expiryWarnDays: 270 }),
+  ATYPE('at-lic', 'drivers-license', "Driver's license", 'Badge', [AF('number', 'License number', { identifier: true }), AF('class', 'Class'), AF('state', 'State')], { expiryWarnDays: 60 }),
+  ATYPE('at-birth', 'birth-certificate', 'Birth certificate', 'ChildFriendly', [AF('number', 'Certificate number', { identifier: true }), AF('place', 'Place of birth')], { expiryLabel: null, expiryWarnDays: null }),
+  ATYPE('at-ssn', 'social-security', 'Social Security card', 'Shield', [AF('number', 'Social Security number', { identifier: true, strict: true })], { issuedLabel: null, expiryLabel: null, expiryWarnDays: null }),
+  ATYPE('at-med', 'medical-card', 'Medical / insurance card', 'LocalHospital', [AF('memberId', 'Member ID', { identifier: true }), AF('group', 'Group number', { identifier: true }), AF('carrier', 'Carrier')], { issuedLabel: null }),
+  ATYPE('at-pol', 'insurance-policy', 'Insurance policy', 'Policy', [AF('policyNumber', 'Policy number', { identifier: true }), AF('carrier', 'Carrier'), AF('agent', 'Agent')], { issuedLabel: 'Started', expiryLabel: 'Renews' }),
+  ATYPE('at-title', 'vehicle-title', 'Vehicle title', 'Description', [AF('titleNumber', 'Title number', { identifier: true }), AF('vin', 'VIN', { identifier: true }), AF('state', 'State')], { expiryLabel: null, expiryWarnDays: null }),
+  ATYPE('at-pet', 'pet-record', 'Pet record', 'Pets', [AF('petName', 'Pet name'), AF('vet', 'Vet')], { issuedLabel: null, expiryLabel: 'Rabies vaccine expires' }),
+  ATYPE('at-other', 'other', 'Other', 'FolderOpen', []),
+];
+const atype = (id) => ATTIC_TYPES.find((t) => t.id === id);
+const PERSON = (id, name, relation, n) => ({ __typename: 'AtticPerson', id, name, relation, birthDate: null, documentCount: n });
+const ATTIC_PEOPLE = [PERSON('ap1', 'Clint', 'Self', 4), PERSON('ap2', 'Heather', 'Spouse', 3), PERSON('ap3', 'Maddie', 'Child', 1), PERSON('ap4', 'Biscuit', 'Pet', 1)];
+const dayOut = (n) => {
+  const d = new Date();
+  return new Date(Date.UTC(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate() + n)).toISOString();
+};
+const thingRef = (tid) => {
+  const t = WORLD.find((x) => x.id === tid);
+  const ty = t ? typeById.get(t.typeId) : null;
+  return { __typename: 'ThingSummary', id: tid, name: t?.name ?? tid, type: ty ? { __typename: 'ThingType', id: ty.id, icon: ty.icon, name: ty.name } : null };
+};
+const ADOC = (id, typeId, people, title, extra = {}) => {
+  const type = atype(typeId);
+  const fields = type.fields.filter((f) => !f.identifier).map((f) => ({ __typename: 'AtticField', key: f.key, label: f.label, kind: f.kind, value: extra.values?.[f.key] ?? null }));
+  const identifiers = type.fields.filter((f) => f.identifier).map((f) => ({ __typename: 'AtticIdentifier', key: f.key, label: f.label, strict: f.strict, hasValue: true }));
+  const days = extra.days ?? null;
+  const status = days == null ? 'none' : days < 0 ? 'expired' : days <= (type.expiryWarnDays ?? -1) ? 'warning' : 'ok';
+  return {
+    __typename: 'AtticDocument', id, title, type,
+    people: people.map((p) => ({ __typename: 'AtticPerson', id: p.id, name: p.name })),
+    fields, identifiers,
+    issued: extra.issued ?? null,
+    expires: days == null ? null : dayOut(days),
+    expiry: { __typename: 'AtticExpiry', status, daysUntil: days, label: type.expiryLabel, warnDays: type.expiryWarnDays, warnsOn: null },
+    files: (extra.files ?? []).map((side, i) => ({ __typename: 'AtticDocumentFile', id: `${id}-e${i}`, fileId: `${id}-f${i}`, side, caption: '', url: `/api/attic/files/${id}-f${i}`, mime: 'image/jpeg', size: 412000, width: 1600, height: 1009 })),
+    links: (extra.links ?? []).map(thingRef),
+    notes: extra.notes ?? '',
+    createdAt: ago(10), updatedAt: ago(2),
+  };
+};
+const [P_CLINT, P_HEATHER, P_MADDIE, P_BISCUIT] = ATTIC_PEOPLE;
+const ATTIC_DOCS = [
+  ADOC('ad1', 'at-pass', [P_CLINT], 'Passport · Clint', { days: 212, issued: '2017-06-02T00:00:00.000Z', values: { country: 'United States' }, files: ['front'], notes: 'The original is in the fire safe, top shelf.' }),
+  ADOC('ad2', 'at-lic', [P_HEATHER], "Driver's license · Heather", { days: 840, values: { class: 'F', state: 'MO' }, files: ['front', 'back'] }),
+  ADOC('ad3', 'at-ssn', [P_CLINT], 'Social Security card · Clint', { files: ['front'] }),
+  ADOC('ad4', 'at-title', [P_CLINT, P_HEATHER], 'Van title', { values: { state: 'MO' }, links: ['th13'] }),
+  ADOC('ad5', 'at-pol', [P_CLINT, P_HEATHER], 'Auto policy', { days: 24, values: { carrier: 'Ozark Mutual', agent: 'Dana, Main St office' }, links: ['th13'] }),
+  ADOC('ad6', 'at-birth', [P_MADDIE], 'Birth certificate · Maddie', { values: { place: 'Springfield, MO' }, files: ['page'] }),
+  ADOC('ad7', 'at-pet', [P_BISCUIT], 'Rabies certificate · Biscuit', { days: 19, values: { petName: 'Biscuit', vet: 'Southside Animal Clinic' } }),
+];
+const docSummary = (d) => ({
+  __typename: 'AtticDocument', id: d.id, title: d.title,
+  type: { __typename: 'AtticDocumentType', id: d.type.id, key: d.type.key, name: d.type.name, icon: d.type.icon },
+  people: d.people, expires: d.expires,
+  expiry: { __typename: 'AtticExpiry', status: d.expiry.status, daysUntil: d.expiry.daysUntil, label: d.expiry.label },
+  files: d.files.map((f) => ({ __typename: 'AtticDocumentFile', id: f.id })),
+});
+const ATTIC_LOG = [
+  ['reveal', 'heather', 'ad1', 'Passport number', 4],
+  ['view', 'heather', 'ad1', null, 5],
+  ['unlock', 'heather', null, null, 6, 'passkey'],
+  ['download', 'chef', 'ad5', null, 60 * 26],
+  ['unlock-failed', 'chef', null, null, 60 * 27, 'pin'],
+  ['unlock', 'chef', null, null, 60 * 27, 'pin'],
+  ['created', 'chef', 'ad7', null, 60 * 50],
+  ['lock', 'chef', null, null, 60 * 51],
+].map(([action, actorName, documentId, field, minsAgo, method = null], i) => ({
+  __typename: 'AtticAccessEntry', id: `al${i}`, at: new Date(ATTIC_NOW - minsAgo * 60000).toISOString(), action, actorName, method, documentId,
+  documentTitle: documentId ? ATTIC_DOCS.find((d) => d.id === documentId)?.title ?? null : null, field,
+}));
+const ATTIC_EXPIRING = ATTIC_DOCS.filter((d) => d.expiry.status === 'warning' || d.expiry.status === 'expired')
+  .map((d) => ({ __typename: 'AtticExpiring', documentId: d.id, typeName: d.type.name, expiryLabel: d.type.expiryLabel, people: d.people.map((p) => p.name), expires: d.expires, daysUntil: d.expiry.daysUntil, status: d.expiry.status }))
+  .sort((a, b) => a.daysUntil - b.daysUntil);
+export const ATTIC_OPS = {
+  GetAtticHome: () => ({ atticPeople: ATTIC_PEOPLE, atticDocumentTypes: ATTIC_TYPES, atticDocuments: ATTIC_DOCS.map(docSummary) }),
+  GetAtticDocument: (v) => ({ atticDocument: ATTIC_DOCS.find((d) => d.id === v.id) ?? null }),
+  GetAtticAccessLog: (v) => ({ atticAccessLog: ATTIC_LOG.slice(0, v.limit || 8) }),
+  GetAtticExpiring: () => ({ atticExpiring: ATTIC_EXPIRING }),
+  GetThingAttic: (v, locked) => {
+    const docs = ATTIC_DOCS.filter((d) => d.links.some((l) => l.id === v.id));
+    return { thing: { __typename: 'Thing', id: v.id, attic: { __typename: 'ThingAttic', count: docs.length, locked, documents: locked ? [] : docs.map(docSummary) } } };
+  },
+  CreateAtticDocument: (v) => ({ createAtticDocument: { ...ATTIC_DOCS[0], id: 'ad-new', title: v.input?.title || 'New document' } }),
+  UpdateAtticDocument: (v) => ({ updateAtticDocument: ATTIC_DOCS.find((d) => d.id === v.id) ?? ATTIC_DOCS[0] }),
+  CreateAtticPerson: (v) => ({ createAtticPerson: PERSON('ap-new', v.input?.name || 'New', v.input?.relation || null, 0) }),
+};
+
+/** A card stand-in for /api/attic/files: plainly a SAMPLE, never a real document's look. */
+function cardArt(id) {
+  const back = /-f1$/.test(id);
+  if (/^ad6/.test(id)) {
+    return `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="1600" viewBox="0 0 1200 1600"><rect width="1200" height="1600" fill="#F4EFE2"/><rect x="80" y="80" width="1040" height="1440" fill="none" stroke="#8C7B5E" stroke-width="10"/>` +
+      `${Array.from({ length: 14 }, (_, i) => `<rect x="160" y="${360 + i * 72}" width="${880 - (i % 3) * 140}" height="18" rx="9" fill="#CFC4AE"/>`).join('')}` +
+      `<text x="600" y="240" text-anchor="middle" font-family="DejaVu Serif, serif" font-size="64" fill="#5B4D36">SAMPLE RECORD</text></svg>`;
+  }
+  const face = back
+    ? `<rect x="0" y="120" width="1600" height="160" fill="#2A2E33"/>${Array.from({ length: 22 }, (_, i) => `<rect x="${120 + i * 62}" y="640" width="${i % 3 ? 22 : 40}" height="180" fill="#1E2124"/>`).join('')}`
+    : `<rect x="110" y="250" width="420" height="540" rx="24" fill="#8FA5B8"/><circle cx="320" cy="430" r="110" fill="#CDD8E1"/><rect x="190" y="560" width="260" height="180" rx="90" fill="#CDD8E1"/>` +
+      `${Array.from({ length: 6 }, (_, i) => `<rect x="620" y="${300 + i * 82}" width="${720 - (i % 2) * 180}" height="30" rx="15" fill="#5E7489"/>`).join('')}`;
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="1009" viewBox="0 0 1600 1009"><defs><linearGradient id="c" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="${back ? '#D9E2E8' : '#DCE7F0'}"/><stop offset="1" stop-color="${back ? '#B9C6CF' : '#A9C1D6'}"/></linearGradient></defs>` +
+    `<rect width="1600" height="1009" rx="64" fill="url(#c)"/>${face}` +
+    `<text x="800" y="180" text-anchor="middle" font-family="DejaVu Sans, sans-serif" font-weight="700" font-size="76" fill="#24313D" letter-spacing="10">SAMPLE ID</text></svg>`;
+}
+
 export async function routes(ctx) {
   await sessionRoutes(ctx);
   await ctx.route(/\/api\/files\/([^/?]+)/, (r) => {
@@ -573,6 +702,17 @@ export async function routes(ctx) {
     return svg(r, art);
   });
   await ctx.route(/\/api\/things\/[^/]+\/files/, (r) => json(r, { file: { id: 'f-up' }, entry: { id: 'ph-up' }, deduped: false }, 201));
+  // The Attic's backend: the vault's state (per page URL), sealed images, uploads.
+  const pageMode = (r) => {
+    try {
+      return fixtureOf(r.request().frame().url());
+    } catch {
+      return '';
+    }
+  };
+  await ctx.route(/\/api\/attic\/vault(\/.*)?$/, (r) => json(r, vaultStatus(pageMode(r))));
+  await ctx.route(/\/api\/attic\/files\/([^/?]+)/, (r) => svg(r, cardArt(/\/api\/attic\/files\/([^/?]+)/.exec(r.request().url())[1])));
+  await ctx.route(/\/api\/attic\/documents\/[^/]+\/(files|identifiers)/, (r) => json(r, { identifiers: [] }, 201));
   await graphqlRoute(ctx, (op, vars, r) => {
     let pageUrl = '';
     try {
@@ -582,6 +722,12 @@ export async function routes(ctx) {
     }
     const mode = fixtureOf(pageUrl);
     const ops = mode === 'empty' ? EMPTY_OPS : mode === 'rooms' ? ROOMS_OPS : mode === 'required' ? REQUIRED_OPS : mode === 'required-stale' ? STALE_REQUIRED_OPS : OPS;
+    if (ATTIC_OPS[op]) {
+      const locked = mode === 'attic-locked' || mode === 'attic-setup';
+      if (op === 'GetThingAttic') return ATTIC_OPS.GetThingAttic(vars, locked);
+      if (locked && op !== 'GetAtticExpiring') return undefined;
+      return ATTIC_OPS[op](vars, r);
+    }
     const entry = ops[op];
     return typeof entry === 'function' ? entry(vars, r) : entry;
   });

@@ -147,11 +147,11 @@ describe('the phone tab bar', () => {
     expect(screen.getByTestId('attention-badge')).toHaveTextContent('3');
   });
 
-  it('More opens the rest: Types, Insurance report, Trash, Settings', async () => {
+  it('More opens the rest: Types, Insurance report, the Attic, Trash, Settings', async () => {
     renderWithProviders(<BottomTabs />, { mocks: [attentionMock(), profileMock] });
     fireEvent.click(screen.getByRole('button', { name: 'More' }));
     const more = await screen.findByTestId('nav-more');
-    expect(within(more).getAllByRole('link').map((a) => a.getAttribute('href'))).toEqual(['/types', '/insurance', '/trash', '/settings']);
+    expect(within(more).getAllByRole('link').map((a) => a.getAttribute('href'))).toEqual(['/types', '/insurance', '/attic', '/trash', '/settings']);
   });
 
   it('every route lights one tab; the add screen hides the bar (it has its own Save bar)', () => {
@@ -160,7 +160,7 @@ describe('the phone tab bar', () => {
     expect(tabFor('/where')).toBe('where');
     expect(tabFor('/walk')).toBe('where');
     expect(tabFor('/attention')).toBe('attention');
-    for (const p of ['/types', '/insurance', '/trash', '/settings']) expect(tabFor(p)).toBe('more');
+    for (const p of ['/types', '/insurance', '/trash', '/settings', '/attic', '/attic/doc/d1', '/attic/add']) expect(tabFor(p)).toBe('more');
     expect(hidesTabBar('/add')).toBe(true);
     expect(hidesTabBar('/walk')).toBe(true);
     expect(hidesTabBar('/')).toBe(false);

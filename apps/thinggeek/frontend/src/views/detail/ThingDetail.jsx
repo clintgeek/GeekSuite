@@ -50,8 +50,9 @@ import NotesSection from './NotesSection';
 import ReadinessPanel from './ReadinessPanel';
 import RelationshipsSection from './RelationshipsSection';
 import ValueSection from './ValueSection';
+import { ThingAttic } from '../attic/AtticAttention';
 
-export function ThingDetailBody({ thing, onPanel, onFix, uploads, onRetry }) {
+export function ThingDetailBody({ thing, onPanel, onFix, uploads, onRetry, atticSlot = null }) {
   const photoUploads = uploads.filter((u) => u.kind === 'photo');
   const docUploads = uploads.filter((u) => u.kind === 'document');
   const edit = (focus) => () => onPanel('edit', focus);
@@ -100,6 +101,7 @@ export function ThingDetailBody({ thing, onPanel, onFix, uploads, onRetry }) {
           <ReadinessPanel thing={thing} onFix={onFix} />
           <ValueSection thing={thing} onEdit={edit('value')} />
           <DocumentsSection documents={thing.documents ?? []} uploads={docUploads} onAdd={() => onPanel('document')} onRetry={onRetry} />
+          {atticSlot}
         </Box>
       </Box>
     </Box>
@@ -186,7 +188,7 @@ export default function ThingDetail() {
       />
     );
   } else {
-    content = <ThingDetailBody thing={thing} onPanel={openPanel} onFix={onFix} uploads={uploads.items} onRetry={uploads.retry} />;
+    content = <ThingDetailBody thing={thing} onPanel={openPanel} onFix={onFix} uploads={uploads.items} onRetry={uploads.retry} atticSlot={<ThingAttic thingId={thing.id} />} />;
   }
 
   return (

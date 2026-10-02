@@ -552,6 +552,134 @@ export const scenes = [
     },
     teardown: (page, h) => h.esc(),
   },
+  // ── The Attic (DOCS/THINGGEEK_PLAN.md "The Attic") ────────────────────────
+  {
+    // Locked: the steel door with its orange padlock; fingerprint first, PIN second. Nothing inside renders.
+    name: '21-attic-locked',
+    goto: '/attic?__fixture=attic-locked',
+    wait: 1600,
+    async setup(page) {
+      if (!(await page.getByTestId('attic-locked').count())) throw new Error('no locked door');
+      if (await page.getByTestId('attic-home').count()) throw new Error('the Attic rendered while locked');
+      if (!(await page.getByRole('button', { name: 'Unlock with fingerprint' }).count())) throw new Error('no fingerprint unlock');
+    },
+  },
+  {
+    // The PIN fallback, as a sheet over the door.
+    name: '21b-attic-pin',
+    goto: '/attic?__fixture=attic-locked',
+    wait: 1400,
+    async setup(page, h) {
+      if (!(await click(page, h, page.getByRole('button', { name: 'Use PIN' }), 700))) return false;
+      if (!(await page.getByLabel('PIN').count())) throw new Error('no PIN field');
+    },
+    teardown: (page, h) => h.esc(),
+  },
+  {
+    // First visit: put a lock on it — fingerprint, then a backup PIN.
+    name: '22-attic-setup',
+    goto: '/attic?__fixture=attic-setup',
+    wait: 1600,
+    async setup(page) {
+      if (!(await page.getByTestId('attic-setup').count())) throw new Error('no set-up');
+    },
+  },
+  {
+    // Unlocked: the door stands open on the lit interior; documents by person; the lock bar's countdown.
+    name: '23-attic-open',
+    goto: '/attic',
+    wait: 1800,
+    async setup(page) {
+      if (!(await page.getByTestId('attic-home').count())) throw new Error('the Attic did not open');
+      if (!(await page.getByTestId('attic-lockbar').count())) throw new Error('no lock bar');
+      if ((await page.getByTestId('attic-group').count()) < 3) throw new Error('documents are not grouped by person');
+    },
+  },
+  {
+    // Further down: People, your lock, Recent access (who revealed what — never the value).
+    name: '23b-attic-access',
+    goto: '/attic',
+    wait: 1800,
+    async setup(page, h) {
+      const s = page.getByTestId('attic-access');
+      if (!(await s.count())) return false;
+      await s.evaluate((el) => el.scrollIntoView({ block: 'start' }));
+      await h.settle(400);
+    },
+  },
+  {
+    // By type instead of by person.
+    name: '23c-attic-by-type',
+    goto: '/attic?by=type',
+    wait: 1800,
+  },
+  {
+    // Add a document: a card type asks for the FRONT, then the BACK, each by camera or file.
+    name: '24-attic-add-card',
+    goto: '/attic/add',
+    wait: 1600,
+    async setup(page, h) {
+      if (!(await click(page, h, page.getByRole('radio', { name: "Driver's license" }), 600))) return false;
+      if (!(await page.getByTestId('capture-front').count()) || !(await page.getByTestId('capture-back').count())) throw new Error('no front/back capture slots');
+      await page.getByTestId('capture-front').evaluate((el) => el.scrollIntoView({ block: 'center' }));
+      await h.settle(300);
+    },
+  },
+  {
+    // The number fields of the add form: masked as typed, a show toggle.
+    name: '24b-attic-add-numbers',
+    goto: '/attic/add?type=passport',
+    wait: 1600,
+    async setup(page, h) {
+      const n = page.getByRole('textbox', { name: 'Passport number' });
+      if (!(await n.count())) return false;
+      await n.fill('SAMPLE00');
+      await n.blur();
+      await n.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+      await h.settle(300);
+    },
+  },
+  {
+    // A document's page: its image, the masked number (no partial digits), details.
+    name: '25-attic-document',
+    goto: '/attic/doc/ad1',
+    wait: 1800,
+    async setup(page) {
+      if (!(await page.getByTestId('attic-doc').count())) throw new Error('no document page');
+      const v = await page.getByTestId('identifier-value').first().textContent();
+      if (!/^•+$/.test((v || '').trim())) throw new Error(`the number is not masked: "${v}"`);
+    },
+  },
+  {
+    // A card with both sides on file.
+    name: '25b-attic-card-sides',
+    goto: '/attic/doc/ad2',
+    wait: 1800,
+  },
+  {
+    // Needs attention, LOCKED: the Attic's line shows who + which document + the date only.
+    name: '26-attention-attic',
+    goto: '/attention?__fixture=attic-locked',
+    wait: 1800,
+    async setup(page, h) {
+      const s = page.getByTestId('attic-attention');
+      if (!(await s.count())) throw new Error('no Attic line on Needs attention');
+      await s.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+      await h.settle(400);
+    },
+  },
+  {
+    // The Van's page, locked: "2 documents in the Attic — unlock to view".
+    name: '27-thing-attic-locked',
+    goto: '/thing/th13?__fixture=attic-locked',
+    wait: 1800,
+    async setup(page, h) {
+      const s = page.getByTestId('thing-attic-locked');
+      if (!(await s.count())) throw new Error('no Attic count on the thing page');
+      await s.evaluate((el) => el.scrollIntoView({ block: 'center' }));
+      await h.settle(400);
+    },
+  },
 ];
 
 // Known, ticketed violations. The list starts empty and stays that way.

@@ -1,6 +1,6 @@
 /**
  * The phone's More tab: everything that isn't a tab. Types, the insurance
- * report, the Trash, the caller's saved views and Settings — the one place
+ * report, the Attic (family documents, locked), the Trash, the caller's saved views and Settings — the one place
  * each of them lives on a phone (the avatar menu keeps only the account:
  * theme and sign out).
  */
@@ -10,6 +10,7 @@ import {
   CategoryOutlined as TypesIcon,
   ChevronRight as GoIcon,
   DeleteOutline as TrashIcon,
+  LockOutlined as AtticIcon,
   ReceiptLongOutlined as InsuranceIcon,
   SettingsOutlined as SettingsIcon,
 } from '@mui/icons-material';
@@ -21,6 +22,7 @@ import { useSavedViews } from '../hooks/useSavedViews';
 export const MORE_LINKS = [
   { id: 'types', label: 'Types', hint: 'What each kind of thing asks for', to: '/types', icon: <TypesIcon /> },
   { id: 'insurance', label: 'Insurance report', hint: 'Print it, or export a CSV', to: '/insurance', icon: <InsuranceIcon /> },
+  { id: 'attic', label: 'The Attic', hint: 'Family documents, under lock', to: '/attic', icon: <AtticIcon /> },
   { id: 'trash', label: 'Trash', hint: 'Kept for a while, then purged', to: '/trash', icon: <TrashIcon /> },
   { id: 'settings', label: 'Settings', hint: 'Appearance and account', to: '/settings', icon: <SettingsIcon /> },
 ];

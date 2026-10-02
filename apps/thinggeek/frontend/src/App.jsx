@@ -23,6 +23,7 @@ import { CollectionProvider } from '@geeksuite/collection';
 import { installThingPolicies } from './graphql/cachePolicies';
 import { GET_THING_VOCABULARY } from './graphql/queries';
 import { UploadsProvider } from './hooks/useUploads';
+import { VaultProvider } from './hooks/useVault';
 import { isNotMemberError, isNotMemberState, onNotMember, resetMembership } from './membership';
 import AppMain from './components/AppMain';
 import BottomTabs from './components/BottomTabs';
@@ -45,6 +46,10 @@ const InsuranceView = lazy(() => import('./views/InsuranceView'));
 const TrashView = lazy(() => import('./views/TrashView'));
 const SettingsView = lazy(() => import('./views/settings/SettingsView'));
 const LabelsView = lazy(() => import('./views/LabelsView'));
+const AtticView = lazy(() => import('./views/attic/AtticView'));
+const AtticDocumentPage = lazy(() => import('./views/attic/AtticDocumentPage'));
+const AtticDocumentForm = lazy(() => import('./views/attic/AtticDocumentForm'));
+const AtticTypesView = lazy(() => import('./views/attic/AtticTypesView'));
 
 export function Booting({ label = 'Opening up the yard…' }) {
   return (
@@ -109,24 +114,32 @@ function SignedIn({ user, onSignOut }) {
       >
         <GeekToastProvider>
           <UploadsProvider>
-            <AppMain transitionKey={onLibrary ? 'library' : location.pathname}>
-              <Routes>
-                <Route path="/" element={<LibraryView />} />
-                <Route path="/thing/:id" element={<ThingDetail />} />
-                <Route path="/add" element={lazyRoute(<AddThing />)} />
-                <Route path="/walk" element={lazyRoute(<WalkRoom />)} />
-                <Route path="/attention" element={lazyRoute(<AttentionView />)} />
-                <Route path="/where" element={lazyRoute(<WhereView />)} />
-                {/* The Places page became Where (2026-09-26); an old bookmark still lands. */}
-                <Route path="/places" element={<Navigate to="/where" replace />} />
-                <Route path="/types" element={lazyRoute(<TypesView />)} />
-                <Route path="/insurance" element={lazyRoute(<InsuranceView />)} />
-                <Route path="/trash" element={lazyRoute(<TrashView />)} />
-                <Route path="/settings" element={lazyRoute(<SettingsView user={user} onSignOut={onSignOut} />)} />
-                <Route path="/labels" element={lazyRoute(<LabelsView />)} />
-                <Route path="*" element={<Navigate to="/" replace />} />
-              </Routes>
-            </AppMain>
+            <VaultProvider>
+              <AppMain transitionKey={onLibrary ? 'library' : location.pathname}>
+                <Routes>
+                  <Route path="/" element={<LibraryView />} />
+                  <Route path="/thing/:id" element={<ThingDetail />} />
+                  <Route path="/add" element={lazyRoute(<AddThing />)} />
+                  <Route path="/walk" element={lazyRoute(<WalkRoom />)} />
+                  <Route path="/attention" element={lazyRoute(<AttentionView />)} />
+                  <Route path="/where" element={lazyRoute(<WhereView />)} />
+                  {/* The Places page became Where (2026-09-26); an old bookmark still lands. */}
+                  <Route path="/places" element={<Navigate to="/where" replace />} />
+                  <Route path="/types" element={lazyRoute(<TypesView />)} />
+                  <Route path="/insurance" element={lazyRoute(<InsuranceView />)} />
+                  <Route path="/trash" element={lazyRoute(<TrashView />)} />
+                  <Route path="/settings" element={lazyRoute(<SettingsView user={user} onSignOut={onSignOut} />)} />
+                  <Route path="/labels" element={lazyRoute(<LabelsView />)} />
+                  {/* The Attic: family documents behind a server-enforced lock. */}
+                  <Route path="/attic" element={lazyRoute(<AtticView />)} />
+                  <Route path="/attic/types" element={lazyRoute(<AtticTypesView />)} />
+                  <Route path="/attic/add" element={lazyRoute(<AtticDocumentForm mode="add" />)} />
+                  <Route path="/attic/edit/:id" element={lazyRoute(<AtticDocumentForm mode="edit" />)} />
+                  <Route path="/attic/doc/:id" element={lazyRoute(<AtticDocumentPage />)} />
+                  <Route path="*" element={<Navigate to="/" replace />} />
+                </Routes>
+              </AppMain>
+            </VaultProvider>
           </UploadsProvider>
         </GeekToastProvider>
       </GeekShell>

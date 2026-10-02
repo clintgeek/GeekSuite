@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa';
 import { themePreboot } from '@geeksuite/user/vite';
 import path from 'path';
+import { runtimeCaching } from './pwa/runtimeCaching.js';
 
 // ─── Vendor chunking ────────────────────────────────────────────────────────
 // Same function form as GameGeek: matched on the LAST node_modules/ segment,
@@ -25,15 +26,6 @@ function manualChunks(id) {
   return undefined;
 }
 
-/** An SPA fallback's index.html must never be stored as a photo or a script. */
-const notHtml = {
-  cacheWillUpdate: async ({ response }) => {
-    if (!response || response.status !== 200) return null;
-    if ((response.headers.get('content-type') || '').includes('text/html')) return null;
-    return response;
-  },
-};
-
 export default defineConfig({
   plugins: [
     react(),
@@ -55,47 +47,8 @@ export default defineConfig({
         // the server 404s those, and so must the service worker.
         navigateFallbackDenylist: [/^\/api\//, /^\/graphql/, /\/[^/?]+\.[^/]+$/],
         maximumFileSizeToCacheInBytes: 4 * 1024 * 1024,
-        runtimeCaching: [
-          {
-            // FIRST, always: auth state must be fresh (PWA_STANDARD §2A).
-            urlPattern: ({ url }) =>
-              url.pathname === '/api/me' ||
-              url.pathname.startsWith('/api/auth/') ||
-              url.pathname.startsWith('/api/users/me'),
-            handler: 'NetworkOnly',
-            options: { cacheName: 'auth-bypass' },
-          },
-          {
-            // Photos and thumbnails. A file's bytes never change under its id
-            // (sha256-deduped, new upload = new file), so CacheFirst, capped.
-            // The backend serves them `Cache-Control: private`, which the
-            // service worker honours for this origin only.
-            urlPattern: ({ url, request }) => request.method === 'GET' && url.pathname.startsWith('/api/files/'),
-            handler: 'CacheFirst',
-            options: {
-              cacheName: 'thinggeek-files',
-              expiration: { maxEntries: 300, maxAgeSeconds: 60 * 60 * 24 * 30, purgeOnQuotaError: true },
-              cacheableResponse: { statuses: [200] },
-              plugins: [notHtml],
-            },
-          },
-          {
-            // Everything else under /api is live data.
-            urlPattern: ({ url }) => url.pathname.startsWith('/api/'),
-            handler: 'NetworkOnly',
-            options: { cacheName: 'api-bypass' },
-          },
-          {
-            // Anything the precache missed. Guarded: PWA_STANDARD §1a rule 3.
-            urlPattern: ({ request }) => ['style', 'script', 'font', 'image'].includes(request.destination),
-            handler: 'StaleWhileRevalidate',
-            options: {
-              cacheName: 'thinggeek-assets',
-              expiration: { maxEntries: 120, maxAgeSeconds: 60 * 60 * 24 * 30 },
-              plugins: [notHtml],
-            },
-          },
-        ],
+        // pwa/runtimeCaching.js: the Attic first (NetworkOnly, never cached), then auth, photos, /api, assets.
+        runtimeCaching,
       },
     }),
   ],

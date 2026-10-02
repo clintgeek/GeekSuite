@@ -11,7 +11,7 @@
  */
 import { describe, expect, it } from 'vitest';
 import { alpha, getContrastRatio } from '@mui/material/styles';
-import { BOX, CHROME, DUST, HERO, LABEL, LIVERY, MARKER, PRIMARY, STATUS_TONES, SURFACES, UNIT, createThingTheme } from '../../theme/theme';
+import { BOX, CHROME, DUST, HERO, LABEL, LIVERY, MARKER, PADLOCK, PRIMARY, STATUS_TONES, STEEL, SURFACES, UNIT, createThingTheme } from '../../theme/theme';
 import { mixOver } from '../../theme/chipStyles';
 import { LIGHTBOX_INK, LIGHTBOX_MUTED } from '../../views/detail/Lightbox';
 import { OVERLAY_GROUND, OVERLAY_INK } from '../../views/detail/Gallery';
@@ -36,6 +36,8 @@ const over = (top, under) => {
 const TEXT = 4.5;
 const GLYPH = 3;
 const pairs = [];
+/** [label, ground] — the padlock is visible when its outline or its body clears 3:1 there. */
+const padlocks = [];
 const add = (label, fg, bg, min = TEXT) => pairs.push([label, fg, bg, min]);
 
 // The dashboard's panel runs a gradient from this (its lightest) down to near-black.
@@ -108,6 +110,27 @@ for (const mode of ['light', 'dark']) {
   }
   // The roll-up door against the frame and the floor it stands on (it's a shape).
   add(`${mode} the door against its black frame`, u.door, u.frame, GLYPH);
+
+  // The Attic (views/attic): the lock bar is the lit interior — words on it.
+  for (const [g, bg] of Object.entries({ 'Attic lock bar': u.interior, 'Attic lock bar under the bulb': lit })) {
+    add(`${mode} unit.text in the ${g}`, u.text, bg);
+    add(`${mode} unit.secondary in the ${g}`, u.secondary, bg);
+  }
+  // The steel door: its stencilled plate (on the frame), words on the door and panels, a glyph on the door.
+  const st = STEEL[mode];
+  add(`${mode} Attic plate stencil on the steel frame`, st.text, st.frame);
+  for (const [g, bg] of Object.entries({ door: st.door, panel: st.panel, 'door under its sheen': over(st.sheen, st.door) })) {
+    add(`${mode} steel text on the ${g}`, st.text, bg);
+    add(`${mode} steel secondary on the ${g}`, st.secondary, bg);
+  }
+  add(`${mode} a type glyph on the steel badge`, st.text, st.door, GLYPH);
+  add(`${mode} the hasp plate against the door`, st.rivet, st.door, GLYPH);
+  // A selected person chip: paper ink on the text colour (inverted).
+  add(`${mode} a selected person chip`, s.paper, s.text);
+  // The padlock (a glyph: on the hasp, on a card, on paper): its black outline OR its orange body must stand off the ground.
+  for (const [g, bg] of Object.entries({ 'hasp plate': st.rivet, card: s.card, paper: s.paper })) {
+    padlocks.push([`${mode} padlock on the ${g}`, bg]);
+  }
 }
 
 // ── Both modes: the black chrome and the livery ─────────────────────────────
@@ -155,6 +178,11 @@ add('lightbox muted', LIGHTBOX_MUTED, '#0B0A08');
 describe('Storage Yard contrast', () => {
   it.each(pairs)('%s (%s on %s) ≥ %s:1', (label, fg, bg, min) => {
     expect(getContrastRatio(fg, bg), `${label}: ${fg} on ${bg}`).toBeGreaterThanOrEqual(min);
+  });
+
+  it.each(padlocks)('%s: outline or body ≥ 3:1 (ground %s)', (_label, bg) => {
+    const best = Math.max(getContrastRatio(PADLOCK.keyhole, bg), getContrastRatio(PADLOCK.body, bg));
+    expect(best).toBeGreaterThanOrEqual(GLYPH);
   });
 
   it('orange is never body ink by day: no light-mode text token is a livery orange', () => {

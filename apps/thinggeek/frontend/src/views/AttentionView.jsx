@@ -37,6 +37,7 @@ import { dueDateOf, formatCalendarDate, relativeDay } from '../utils/dates';
 import { libraryLinkWith } from '../utils/libraryFilter';
 import { dateKindLabel } from '../utils/vocab';
 import { isLocation, isParentKind, kindOf } from '../utils/where';
+import { AtticAttention } from './attic/AtticAttention';
 
 export const GAP_CARDS = [
   { key: 'id-plate', field: 'missingIdPlate', title: 'No ID-plate photo', text: 'The plate carries the model and serial — the photo an adjuster asks for first.' },
@@ -310,6 +311,8 @@ export default function AttentionView() {
         <DueGroup id="overdue" title="Overdue" tone="overdue" things={a.overdue} empty={loading ? 'Loading…' : 'Nothing overdue.'} />
         <DueGroup id="due-soon" title="Due in the next 30 days" tone="soon" things={a.dueSoon} empty={loading ? 'Loading…' : 'Nothing due in the next month.'} />
       </Box>
+      {/* Family documents nearing expiry: person + type + date, readable while the Attic is locked. */}
+      <AtticAttention />
       <RecordCheckList gaps={gaps} />
     </PageFrame>
   );

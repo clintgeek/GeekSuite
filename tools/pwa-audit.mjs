@@ -27,6 +27,8 @@
 //               Workbox: cleanupOutdatedCaches, skipWaiting + clientsClaim,
 //               and the navigateFallback denylist keeps the SPA shell away
 //               from /api, /graphql and any path with a file extension.
+//               Sealed paths (NEVER_CACHED: ThingGeek's /api/attic) get a
+//               NetworkOnly route registered before any caching route.
 //               Hand-rolled: BUILD_ID/PRECACHE_ASSETS were stamped, a
 //               text/html guard sits ahead of cache.put, and it never
 //               answers a navigation with index.html.
@@ -51,6 +53,11 @@ export const APPS = {
   startgeek: 'apps/startgeek',
   storygeek: 'apps/storygeek/frontend',
   thinggeek: 'apps/thinggeek/frontend',
+};
+
+// Paths no service worker may ever cache (DOCS/THINGGEEK_PLAN.md "The Attic").
+const NEVER_CACHED = {
+  thinggeek: { path: '/api/attic', cacheName: 'attic-no-store' },
 };
 
 // Navigations the SPA shell must never answer, and ones it must.
@@ -238,6 +245,23 @@ export function auditApp(name, distDir) {
         /serviceWorker\.register\(/.test(fs.readFileSync(p, 'utf8')));
     if (!registered) bad('sw', 'nothing in index.html or the bundle registers the service worker');
     if (!sw.includes('/api/me')) bad('sw', 'no auth bypass for /api/me (PWA_STANDARD rule 1)');
+
+    // Sealed routes (ThingGeek's Attic): a NetworkOnly route, registered
+    // before ANY caching route — workbox takes the first match, and an Attic
+    // <img> would otherwise fall into the image/asset cache.
+    const sealed = NEVER_CACHED[name];
+    if (sealed) {
+      const at = sw.indexOf(`cacheName:"${sealed.cacheName}"`);
+      const caching = ['CacheFirst(', 'StaleWhileRevalidate(', 'NetworkFirst(', 'CacheOnly(']
+        .map((h) => sw.indexOf(h)).filter((i) => i >= 0);
+      if (at === -1 || !/NetworkOnly\(\{\s*$/.test(sw.slice(Math.max(0, at - 40), at))) {
+        bad('sw', `no NetworkOnly route (cacheName ${sealed.cacheName}) for ${sealed.path} — it must never be cached`);
+      } else if (!sw.includes(sealed.path)) {
+        bad('sw', `the ${sealed.cacheName} route does not name ${sealed.path}`);
+      } else if (caching.some((i) => i < at)) {
+        bad('sw', `a caching route is registered before ${sealed.path}'s NetworkOnly route — it must come first`);
+      }
+    }
 
     const workbox = /precacheAndRoute|workbox/.test(sw);
     let precached;
