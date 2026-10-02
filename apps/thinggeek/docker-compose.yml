@@ -26,6 +26,11 @@ services:
     # substitutions — that reads compose's own .env, a different file.
     # NOTE: a Watchtower redeploy does not pick up NEW .env.production vars;
     # that needs `docker compose up -d`.
+    # The Attic's key, THINGGEEK_VAULT_KEY (32 bytes base64, `openssl rand
+    # -base64 32`), lives ONLY in this container's .env.production — never
+    # in basegeek's. Without it the Attic answers 503 and serves nothing;
+    # lose it and the Attic's documents are unrecoverable (keep a copy in
+    # Bitwarden). DOCS/RUNBOOK.md "The Attic's key".
     env_file:
       - .env.production
 

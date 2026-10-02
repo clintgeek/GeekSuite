@@ -27,6 +27,7 @@
     "@geeksuite/user": "workspace:*",
     "@mui/icons-material": "^5.16.7",
     "@mui/material": "^5.16.7",
+    "@simplewebauthn/browser": "^13.3.0",
     "axios": "^1.7.2",
     "graphql": "^16.10.0",
     "qrcode": "^1.5.4",

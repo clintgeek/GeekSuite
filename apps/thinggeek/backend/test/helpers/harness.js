@@ -67,7 +67,7 @@ export function buildHarness({ things = [], files = [], attic = {}, keyring = te
     ['AtticPerson', 'AtticDocumentType', 'AtticDocument', 'AtticFile', 'VaultCredential', 'VaultSession', 'AtticAudit']
       .map((name) => [name, createFakeModel(attic[name] ?? [], { now: clock, hooks: hooks[name] })]),
   );
-  const app = createApp({ Thing, ThingFile, filesPath, validateSession, now: clock, publicPath: makeTempDir('thinggeek-public-'), attic: atticModels, keyring, webauthn });
+  const app = createApp({ Thing, ThingFile, filesPath, validateSession, now: clock, publicPath: makeTempDir('thinggeek-public-'), attic: atticModels, keyring, webauthn, pinCost: 4, webauthnConfig: { rpID: 'thinggeek.test', origins: ['https://thinggeek.test'], rpName: 'ThingGeek' } });
   return {
     app,
     Thing,
