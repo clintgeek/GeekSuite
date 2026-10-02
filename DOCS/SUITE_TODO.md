@@ -229,6 +229,25 @@ dialog. Finishing the last step *offers* to check the parent. Steps carry no dat
 priority. It is frontend-only: basegeek still serves `parentTask` (tested). **Phase 4 dead-code
 removal must not delete the API side**, only the old frontend components.
 
+### Cross-app tags: recall related items across apps — parked (Chef, 2026-10-02)
+
+Chef's vision is to "eventually be able to recall links to related items across apps by tags".
+It's parked because BuJoGeek has no solid tag view to build on yet. What already exists:
+
+- **The standard is shipped:** `@geeksuite/tags` (lowercase kebab, `/` nesting), migrated in
+  NoteGeek, BuJoGeek and ThingGeek.
+- **The gateway queries are live:** `suiteTags` (tags across the three apps with per-app
+  counts) and `taggedAcross(tag, under)` (notes, tasks and things under one tag). Private tasks
+  come back as "Private task"; identifiers are never included.
+- **The layout proposed on 2026-10-02, not built:**
+  - NoteGeek's tag page gets an "Also tagged" section of tasks and things, collapsed to one
+    line on the phone;
+  - BuJoGeek's tag filter gets a quiet "Also tagged: N notes · M things" strip;
+  - ThingGeek's tag-filtered library gets an "Also tagged" block;
+  - tag suggestions in every app draw from `suiteTags`.
+- **Prerequisite:** a real BuJoGeek tag view (a tag page or filter screen) before cross-app
+  sections have a home there.
+
 ### BookGeek — audiobooks?
 
 Chef, 2026-09-26: "I have audiobooks but I never thought to manage them in bookgeek and I
