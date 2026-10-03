@@ -98,8 +98,30 @@ decisions and we'll review tomorrow."*
 - Games, "co-op": Second Extinction, TerraTech, Arcadegeddon, Dark Envoy, Cat Quest II — $0.00119.
 - Total spent overnight on tests: under $0.02.
 
+### Second round (after N5–N9 were live)
+
+| # | Decision | Evidence |
+|---|---|---|
+| N10 | Mood row (text field + Ask) is 44 px in both panels; GameGeek gets harness scene `24-what-next` | The mobile harness failed on `2bff34d6`: bookgeek `07-what-next` Ask button 57×38, under the 44 px rule. GameGeek's shard "passed" only because no scene mounted its opt-in panel. Both now clean (bookgeek 70 scenes, gamegeek 82 scenes, 0 violations). |
+| N11 | Candidates travel to the model as `c1…cN`, not ObjectIds; answers are **salvaged** (keep the picks that map, drop the rest, top up from the deterministic list) instead of all-or-nothing; drops logged as counts only | Live: a "short and chill" game answer was billed ($0.0011) and then thrown away whole (`reason: invalid`). Short ids also cut ~10% off the cost per call. Side effect: a model answer with zero picks now counts as invalid → fallback. |
+| N12 | With a mood, the mood queue takes every other shortlist slot (mood, seed1, mood, seed2, …) | With one slot per round across six queues, the mood got ~4 of 20 candidates and 1 of 5 fallback picks. |
+| N13 | All catalog score sorts break ties by id | A flaky test (CI failure on `653014a6`, 2/6 locally) traced to an exact score tie settled by Mongo's natural row order — production ordering had the same dependence. 20/20 runs green after. |
+
+Commits: `653014a6` (N6–N9), `801d79dd` (N10), `40001fd5` (N11–N12), `20927213` (N13). Final state on
+`20927213`: CI, Release images and Mobile harness all green; deployed and verified in the container.
+
+### Live results after round two (gpt-4.1-mini, Chef's data)
+
+- Games, "short and chill": Q.U.B.E: Director's Cut, Cozy Grove, Close To The Sun, Freshly Frosted, The Almost Gone — model, $0.00102, 2.9 s. (Before: Fort Solis and Jedi Knight in a fallback.)
+- Games, "co-op": Jitsu Squad, Project Winter, Second Extinction, SUPER CRAZY RHYTHM CASTLE, KeyWe — model, $0.00103, 2.8 s.
+- Games, no mood: Fallout 3 GOTY, Watch Dogs: Legion, Sin Slayers, Fallout: New Vegas, DEATHLOOP — model, $0.00108, 2.8 s.
+- Books, no mood: Altered Carbon, Children of Time, Daughter of Gloriavale, Unfollow, Seductive Poison — model, $0.00136, 2.7 s.
+- Typical cost: **~$0.001 per question** — your $10 is roughly 9 000 questions. Total spent on all overnight testing: under $0.03.
+
 ### For Chef to review
 
 1. N5's model choice: gpt-4.1-mini is cheap and reliable; a stronger *non-reasoning* model would cost more per pick and is a one-field change on the routing row.
 2. Whether Heather / the girls should get the opt-in.
 3. Whether to push `mcp-parked` to GitHub as a backup.
+4. **Branch protection.** Every push to `main` tonight printed "Bypassed rule violations … Changes must be made through a pull request" — the repo has a PR rule that the account's admin rights bypass. I followed the documented deploy path (push to `main`, `DOCS/CICD.md`) as before, but if that rule is meant to bind, future work should go through PRs.
+5. No-mood game reasons still lean on "like <seed>" comparisons (e.g. "Watch Dogs: Legion … like Cyberpunk 2077") — accurate now, but repetitive. A prompt tweak for variety in phrasing is cheap if it bothers you.
