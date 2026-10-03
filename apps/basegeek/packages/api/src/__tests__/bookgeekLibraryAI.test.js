@@ -36,6 +36,7 @@ const library = await import('../graphql/bookgeek/library.js');
 const { _resetCounters } = await import('../services/aiFeatureRunner.js');
 const { BookVector } = await import('../graphql/catalog/models/BookVector.js');
 const catalogSemantic = await import('../graphql/catalog/catalogSemantic.js');
+const { salvagePicks } = await import('../graphql/catalog/salvagePicks.js');
 const semantic = await import('../graphql/notegeek/semantic.js');
 const { embeddingsConfig } = await import('../graphql/notegeek/embeddings.js');
 
@@ -123,7 +124,7 @@ describe('whatNext — the candidate set is computed, not asked', () => {
   test('only in-the-library, not-finished books are offered to the model', async () => {
     await setOptIn(ALICE, true);
     const [unread, reading, finished, abandoned, ghost, readCounted] = await Book.create([
-      bookRow({ title: 'Unread One' }),
+      bookRow({ title: 'Unread One', dateAdded: new Date('2026-05-01') }), // newest → the "c1" label
       bookRow({ title: 'Reading One', shelf: 'reading' }),
       bookRow({ title: 'Finished One', shelf: 'read', dateFinished: new Date('2026-02-02'), readCount: 1 }),
       bookRow({ title: 'Abandoned One', shelf: 'abandoned' }),
@@ -133,19 +134,24 @@ describe('whatNext — the candidate set is computed, not asked', () => {
       bookRow({ title: 'Secretly Finished', readCount: 2 }),
     ]);
 
-    modelSays({ picks: [{ bookId: String(unread._id), why: 'You have had it waiting a while.' }] });
+    // The model sees only short labels — "c1" is the first candidate.
+    modelSays({ picks: [{ bookId: 'c1', why: 'You have had it waiting a while.' }] });
     const res = await Q.whatNext(null, { limit: 5 }, ctx(ALICE));
 
     expect(res.provenance.source).toBe('model');
-    expect(res.picks).toHaveLength(1);
+    // The model returned one pick; the shelf tops up to limit from the
+    // deterministic ranking — only two candidates exist, so two picks.
+    expect(res.picks).toHaveLength(2);
     expect(res.picks[0]).toMatchObject({
       bookId: String(unread._id),
       why: 'You have had it waiting a while.',
     });
     // The pick carries its book so the shelf is one round trip.
     expect(res.picks[0].book.title).toBe('Unread One');
+    expect(res.picks[1]).toMatchObject({ bookId: String(reading._id) });
 
     const sent = JSON.parse(callAI.mock.calls[0][1].messages[1].content);
+    expect(sent.candidates.map((c) => c.id)).toEqual(['c1', 'c2']);
     const offered = sent.candidates.map((c) => c.title).sort();
     expect(offered).toEqual(['Reading One', 'Unread One']);
     for (const excluded of [finished, abandoned, ghost, readCounted]) {
@@ -228,15 +234,44 @@ describe('whatNext — the candidate set is computed, not asked', () => {
     expect(res.picks[0].why).toMatch(/recent additions/i);
   });
 
-  test('duplicate ids and over-long lists are rejected too', async () => {
+  test('the salvage keeps what maps and counts what it drops', () => {
+    const map = new Map([['c1', 'REAL1'], ['c2', 'REAL2'], ['c3', 'REAL3']]);
+    const salv = salvagePicks({
+      picks: [
+        { bookId: 'c1', why: 'a' },
+        { bookId: 'nope', why: 'x' },       // unknown
+        { bookId: 'c1', why: 'dup' },       // duplicate
+        { bookId: 'c2', why: 42 },          // non-string why → null
+        { bookId: 'c3', why: 'b' },         // over the limit of 2
+      ],
+    }, map, 'bookId', 2);
+    expect(salv.picks).toEqual([{ id: 'REAL1', why: 'a' }, { id: 'REAL2', why: null }]);
+    expect(salv.stats).toMatchObject({ returned: 5, kept: 2, unknownIds: 1, duplicates: 1, overLimit: 1 });
+    // Nothing salvageable → the caller falls back, exactly like before.
+    expect(salvagePicks({ picks: [{ bookId: 'zzz', why: 'x' }] }, map, 'bookId', 5).picks).toEqual([]);
+    expect(salvagePicks({ picks: 'nope' }, map, 'bookId', 5).picks).toEqual([]);
+  });
+
+  test('one bad id among good ones: the good picks survive, the fallback tops up', async () => {
     await setOptIn(ALICE, true);
-    const book = await Book.create(bookRow({ title: 'Real Book' }));
-    const id = String(book._id);
-    const ids = new Set([id]);
-    expect(library.validatePicks({ picks: [{ bookId: id, why: 'a' }, { bookId: id, why: 'b' }] }, ids, 5)).toBe(false);
-    expect(library.validatePicks({ picks: [{ bookId: id, why: 'a' }] }, ids, 0)).toBe(false);
-    expect(library.validatePicks({ picks: 'nope' }, ids, 5)).toBe(false);
-    expect(library.validatePicks({ picks: [{ bookId: id, why: 'a' }] }, ids, 5)).toBe(true);
+    const rows = [];
+    for (let i = 0; i < 5; i += 1) rows.push(bookRow({ title: `Shelf Book ${ i }` }));
+    await Book.create(rows);
+
+    modelSays({ picks: [{ bookId: 'c1', why: 'kept one' }, { bookId: 'bogus', why: 'lost' }, { bookId: 'c2', why: 'kept two' }] });
+    const res = await Q.whatNext(null, { limit: 5 }, ctx(ALICE));
+
+    expect(res.provenance.source).toBe('model');
+    expect(res.picks).toHaveLength(5);
+    expect(res.picks[0].why).toBe('kept one');
+    expect(res.picks[1].why).toBe('kept two');
+    // The three top-ups are the deterministic ranking's own picks — real
+    // ObjectIds, real fallback reasons, never the model's garbage.
+    for (const pick of res.picks.slice(2)) {
+      expect(pick.bookId).toMatch(/^[0-9a-f]{24}$/);
+      expect(pick.why).toBeTruthy();
+      expect(pick.book).toBeTruthy();
+    }
   });
 });
 
@@ -415,7 +450,7 @@ describe('whatNext — the vector shortlist path (WHAT_NEXT_SPEC)', () => {
   test('shortlisted candidates carry mood and the loved book they resemble ("because")', async () => {
     await setOptIn(ALICE, true);
     const { c1 } = await plant();
-    modelSays({ picks: [{ bookId: String(c1._id), why: 'A match.' }] });
+    modelSays({ picks: [{ bookId: 'c1', why: 'A match.' }] });
     const res = await Q.whatNext(null, { limit: 5, mood: 'something cozy' }, ctx(ALICE));
 
     const sent = JSON.parse(callAI.mock.calls[0][1].messages[1].content);

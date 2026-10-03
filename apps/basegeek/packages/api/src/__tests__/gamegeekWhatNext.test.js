@@ -27,6 +27,7 @@ const { User } = await import('../models/user.js');
 const { resolvers } = await import('../graphql/gamegeek/resolvers.js');
 const library = await import('../graphql/gamegeek/library.js');
 const { _resetCounters } = await import('../services/aiFeatureRunner.js');
+const logger = (await import('../lib/logger.js')).default;
 const catalogSemantic = await import('../graphql/catalog/catalogSemantic.js');
 const semantic = await import('../graphql/notegeek/semantic.js');
 const { embeddingsConfig } = await import('../graphql/notegeek/embeddings.js');
@@ -127,10 +128,39 @@ describe('gameWhatNext — opt-in and fallback', () => {
   test('the model path: picks carry their game; provenance names the model', async () => {
     await setOptIn(true);
     const { c1 } = await plant();
-    callAI.mockResolvedValue(JSON.stringify({ picks: [{ gameId: String(c1._id), why: 'Short and brilliant.' }] }));
+    // Candidates are handed to the model as short labels — "c1" is the first.
+    callAI.mockResolvedValue(JSON.stringify({ picks: [{ gameId: 'c1', why: 'Short and brilliant.' }] }));
     const res = await Q.gameWhatNext(null, { limit: 5 }, ctx(ALICE));
     expect(res.provenance).toMatchObject({ source: 'model', model: 'llama-test', provider: 'groq' });
     expect(res.picks[0]).toMatchObject({ gameId: String(c1._id), why: 'Short and brilliant.' });
+  });
+
+  test('a bad id among good ones: the good survive, the fallback tops up, counts are logged', async () => {
+    await setOptIn(true);
+    const { c1, c2 } = await plant();
+    const warnSpy = jest.spyOn(logger, 'warn').mockImplementation(() => {});
+    callAI.mockResolvedValue(JSON.stringify({
+      picks: [
+        { gameId: 'c1', why: 'the model pick' },
+        { gameId: 'bogus-id', why: 'lost' },
+        { gameId: 'c1', why: 'a repeat' },
+      ],
+    }));
+    const res = await Q.gameWhatNext(null, { limit: 5 }, ctx(ALICE));
+    expect(res.provenance.source).toBe('model');
+    expect(res.picks.map((p) => p.gameId)).toEqual([String(c1._id), String(c2._id)]);
+    expect(res.picks[0].why).toBe('the model pick');
+    expect(res.picks[1].why).toBe('Because you loved Loved Game.'); // the top-up keeps its fallback why
+    const logLine = warnSpy.mock.calls.find(([arg]) => arg?.returned === 3);
+    expect(logLine).toBeDefined();
+    expect(logLine[0]).toMatchObject({
+      app: 'gamegeek', feature: 'whatnext',
+      returned: 3, kept: 1, unknownIds: 1, duplicates: 1, overLimit: 0, toppedUp: 1,
+    });
+    // Diagnostics are counts only — no ids, titles or reasons.
+    expect(JSON.stringify(logLine[0])).not.toContain(String(c1._id));
+    expect(JSON.stringify(logLine[0])).not.toContain('bogus-id');
+    warnSpy.mockRestore();
   });
 });
 
@@ -158,6 +188,7 @@ describe('gameWhatNext — what the model sees (X6)', () => {
       { title: 'Loved Game', genres: [], rating: 5, hoursPlayed: 40, why: 'loved' },
     ]);
     expect(sent.candidates).toHaveLength(2);
+    expect(sent.candidates.map((c) => c.id)).toEqual(['c1', 'c2']); // short labels, never ObjectIds
     for (const c of sent.candidates) {
       expect(Object.keys(c).sort()).toEqual(['because', 'genres', 'hoursToBeat', 'id', 'modes', 'tags', 'title', 'year']);
     }

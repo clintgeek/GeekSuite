@@ -19,9 +19,10 @@
  * answer. `candidateBooks()` runs the same not-finished predicate the `unread`
  * shelf uses (`resolvers.js`'s `shelfMatch`), intersected with "owns it or has
  * put it on a shelf", newest-added first, capped at 60. The model may only
- * rank and explain what it is given, and `validatePicks()` refuses any id that
- * was not in the set — a hallucinated ObjectId settles on the fallback rather
- * than reaching the client.
+ * rank and explain what it is given. Candidates travel as short labels
+ * ("c1"…"cN"), mapped back after the call; `salvagePicks()` keeps the picks
+ * it can map and drops the rest — an answer with no salvageable pick settles
+ * on the fallback rather than reaching the client.
  *
  * ## What leaves the box
  *
@@ -55,6 +56,7 @@ import logger from '../../lib/logger.js';
 import { runAIFeature } from '../../services/aiFeatureRunner.js';
 import { Book } from './models/book.js';
 import { catalogVectors, shortlistFromSeeds, moodQueryVector } from '../catalog/catalogSemantic.js';
+import { salvagePicks, shortId } from '../catalog/salvagePicks.js';
 
 export const LIBRARY_APP = 'bookgeek';
 export const LIBRARY_FEATURE = 'library';
@@ -239,8 +241,9 @@ const WHAT_NEXT_SCHEMA = {
 export const WHAT_NEXT_SYSTEM_PROMPT = `You help one person choose what to read next from books they already own.
 
 You are given JSON with:
-- "candidates": books they own or have shelved and have NOT finished. Each has an
-  "id", "title", "authors", "tags", "pages", "shelf" and "added" (the day it
+- "candidates": books they own or have shelved and have NOT finished. Each has a
+  short "id" label like "c3" (NOT a database id — copy it exactly), "title",
+  "authors", "tags", "pages", "shelf" and "added" (the day it
   entered the library).
 - "recentlyFinished": the books they most recently finished, with the rating they
   gave (0-5; 0 means they did not rate it).
@@ -251,8 +254,9 @@ You are given JSON with:
 
 Rules, in order of importance:
 1. Return at most "limit" picks, each a DISTINCT "bookId" copied verbatim from a
-   candidate's "id". Never invent an id. Never return an id that is not in
-   "candidates". Fewer picks is fine; wrong ids are not.
+   candidate's "id" — a short label like "c3". Never invent an id. Never
+   return an id that is not in "candidates". Fewer picks is fine; wrong ids
+   are not.
 2. Order them best first.
 3. "why" is ONE short sentence, at most 90 characters, addressed to them, and
    grounded in the data you were given — an author or tag their ratings favour,
@@ -326,8 +330,8 @@ export function whatNextContext(candidates, finished, limit, { becauseById = nul
   return {
     limit,
     mood: mood || null,
-    candidates: candidates.map((book) => ({
-      id: String(book._id),
+    candidates: candidates.map((book, index) => ({
+      id: shortId(index),
       title: book.title || 'Untitled',
       authors: authorList(book),
       tags: tagList(book),
@@ -342,21 +346,6 @@ export function whatNextContext(candidates, finished, limit, { becauseById = nul
       rating: Number.isFinite(book.rating) ? book.rating : 0,
     })),
   };
-}
-
-/** Ids the model returned must be ids we handed it — and each only once. */
-export function validatePicks(data, allowedIds, limit) {
-  if (!data || !Array.isArray(data.picks)) return false;
-  if (data.picks.length > limit) return false;
-  const seen = new Set();
-  for (const pick of data.picks) {
-    if (!pick || typeof pick.bookId !== 'string') return false;
-    if (!allowedIds.has(pick.bookId)) return false;
-    if (seen.has(pick.bookId)) return false;
-    seen.add(pick.bookId);
-    if (pick.why != null && typeof pick.why !== 'string') return false;
-  }
-  return true;
 }
 
 /**
@@ -454,7 +443,11 @@ export async function whatNext({ userId, limit, enabled, mood }) {
   } else if (!enabled) {
     result = { data: fallback(), provenance: disabledProvenance('disabled') };
   } else {
-    const allowedIds = new Set(modelCandidates.map((b) => String(b._id)));
+    // The model sees "c1".."cN" labels, never the real ids (a miscopied
+    // 24-hex id used to sink the whole paid answer — the salvage keeps what
+    // maps and tops the rest up from the deterministic list).
+    const shortToReal = new Map(modelCandidates.map((b, i) => [shortId(i), String(b._id)]));
+    let salvaged = null;
     result = await runAIFeature({
       app: LIBRARY_APP,
       feature: LIBRARY_FEATURE,
@@ -462,12 +455,36 @@ export async function whatNext({ userId, limit, enabled, mood }) {
       system: WHAT_NEXT_SYSTEM_PROMPT,
       user: JSON.stringify(whatNextContext(modelCandidates, finished, limit, { becauseById, mood })),
       schema: WHAT_NEXT_SCHEMA,
-      validate: (data) => validatePicks(data, allowedIds, limit),
+      validate: (data) => {
+        salvaged = salvagePicks(data, shortToReal, 'bookId', limit);
+        return salvaged.picks.length > 0;
+      },
       fallback,
       maxTokens: 350,
       maxCallsPerDay: LIBRARY_DAILY_CAP,
       timeoutMs: WHAT_NEXT_TIMEOUT_MS,
     });
+
+    if (result.provenance.source === 'model') {
+      const salv = salvaged ?? salvagePicks(result.data, shortToReal, 'bookId', limit);
+      if (!salv.picks.length) {
+        result = { data: fallback(), provenance: { ...result.provenance, source: 'fallback', reason: 'invalid' } };
+      } else {
+        const seen = new Set(salv.picks.map((p) => p.id));
+        const topUps = fallback().picks.filter((p) => !seen.has(p.bookId)).slice(0, Math.max(0, limit - salv.picks.length));
+        if (salv.stats.returned !== salv.stats.kept || topUps.length) {
+          // Counts only — never ids or titles.
+          logger.warn(
+            { app: LIBRARY_APP, feature: LIBRARY_FEATURE, ...salv.stats, toppedUp: topUps.length },
+            '[bookgeek] what-next answer salvaged',
+          );
+        }
+        result = {
+          ...result,
+          data: { picks: [...salv.picks.map((p) => ({ bookId: p.id, why: p.why })), ...topUps] },
+        };
+      }
+    }
   }
 
 
@@ -691,7 +708,6 @@ export default {
   libraryTags,
   fallbackPicks,
   fallbackTagsByAuthor,
-  validatePicks,
   validateMetadataDraft,
   whatNextContext,
 };

@@ -234,7 +234,7 @@ describe('embeddings client', () => {
     // through notegeek/embeddings.js and fetch nowhere at all.
     const groups = [
       [path.join(HERE, '../graphql/notegeek'), ['embeddings.js', 'chunking.js', 'semantic.js', 'indexer.js', 'models/NoteChunk.js']],
-      [path.join(HERE, '../graphql/catalog'), ['catalogText.js', 'catalogSemantic.js', 'catalogIndexer.js', 'models/GameVector.js', 'models/BookVector.js']],
+      [path.join(HERE, '../graphql/catalog'), ['catalogText.js', 'catalogSemantic.js', 'catalogIndexer.js', 'salvagePicks.js', 'models/GameVector.js', 'models/BookVector.js']],
     ];
     for (const [dir, files] of groups) for (const f of files) {
       const src = readFileSync(path.join(dir, f), 'utf8');

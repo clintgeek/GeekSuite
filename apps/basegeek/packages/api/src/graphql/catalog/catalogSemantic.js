@@ -163,8 +163,9 @@ export async function moodQueryVector(mood, log) {
  * when a mood vector is given — then one candidate is taken from each seed's
  * list in turn, in seed order, skipping duplicates, until `size`. Each entry
  * keeps `because`: the seed whose list it came through. With a mood, a
- * mood-only queue (`because: null`, `mood: true`) goes FIRST, so the mood
- * always gets slots instead of only the candidates near seeds. Seeds without a
+ * mood-only queue (`because: null`, `mood: true`) alternates with the seed
+ * queues every other slot — mood, seed1, mood, seed2 — so a mood keeps
+ * roughly half the shortlist instead of one slot per round. Seeds without a
  * vector in the scope are dropped before ranking; every seed id is excluded
  * from every list (a seed never recommends itself or a sibling seed).
  *
@@ -210,18 +211,36 @@ export async function shortlistFromSeeds({ kind, scope, seedIds, candidateIds = 
 
   const out = [];
   const seen = new Set();
-  for (let depth = 0; out.length < size; depth += 1) {
-    let advanced = false;
-    for (const list of lists) {
-      const hit = list[depth];
-      if (hit === undefined) continue;
-      advanced = true;
-      if (seen.has(hit.id)) continue;
-      seen.add(hit.id);
-      out.push(hit);
-      if (out.length >= size) break;
+  if (moodVec) {
+    // With a mood, it gets every OTHER slot — mood, seed1, mood, seed2, …
+    // cycling the seeds (one mood slot per round across six queues buried
+    // the mood picks in live testing).
+    const moodList = lists[0];
+    const seedLists = lists.slice(1);
+    for (let k = 0; out.length < size; k += 1) {
+      const pair = [moodList[k], seedLists.length ? seedLists[k % seedLists.length][Math.floor(k / seedLists.length)] : undefined];
+      if (pair.every((p) => p === undefined)) break;
+      for (const hit of pair) {
+        if (!hit || seen.has(hit.id)) continue;
+        seen.add(hit.id);
+        out.push(hit);
+        if (out.length >= size) break;
+      }
     }
-    if (!advanced) break;
+  } else {
+    for (let depth = 0; out.length < size; depth += 1) {
+      let advanced = false;
+      for (const list of lists) {
+        const hit = list[depth];
+        if (hit === undefined) continue;
+        advanced = true;
+        if (seen.has(hit.id)) continue;
+        seen.add(hit.id);
+        out.push(hit);
+        if (out.length >= size) break;
+      }
+      if (!advanced) break;
+    }
   }
   return out;
 }

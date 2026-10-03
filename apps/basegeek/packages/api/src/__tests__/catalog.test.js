@@ -472,6 +472,29 @@ describe('shortlistFromSeeds (X3)', () => {
     expect(new Set(out.map((o) => o.id)).size).toBe(out.length); // no dupes
   });
 
+  test('with a mood the queues interleave: mood, seed1, mood, seed2', async () => {
+    const [s1, s2] = await Promise.all([mkGame({ title: 'seed one' }), mkGame({ title: 'seed two' })]);
+    const [cA, cC, k1, k2] = await Promise.all([
+      mkGame({ title: 'mood top' }), mkGame({ title: 'mood second' }),
+      mkGame({ title: 'seed one pick' }), mkGame({ title: 'seed two pick' }),
+    ]);
+    await Promise.all([
+      mkGVec(s1._id, [1, 0, 0]), mkGVec(s2._id, [0, 1, 0]),
+      mkGVec(cA._id, [0, 0, 1]), mkGVec(cC._id, [0, 0, 0.95]),
+      mkGVec(k1._id, [0.95, 0, 0]), mkGVec(k2._id, [0, 0.95, 0]),
+    ]);
+    // A weak mood vector (0.5) leaves the seed rankings seed-led while the
+    // mood queue still tops the list — so every other slot alternates.
+    const out = await shortlistFromSeeds({
+      kind: 'game', scope: 'default', seedIds: [String(s1._id), String(s2._id)],
+      candidateIds: candidatesOf(cA, cC, k1, k2), moodVec: [0, 0, 0.5], size: 20,
+    });
+    expect(out.map((o) => o.id)).toEqual([String(cA._id), String(k1._id), String(cC._id), String(k2._id)]);
+    expect(out.map((o) => Boolean(o.mood))).toEqual([true, false, true, false]);
+    expect(out[1].because).toBe(String(s1._id));
+    expect(out[3].because).toBe(String(s2._id));
+  });
+
   test('the embeddings service down → moodQueryVector null, shortlist still answers', async () => {
     const { s1, s2, c1, c2, c3 } = await plant();
     markServiceDown(new Error('test outage'));

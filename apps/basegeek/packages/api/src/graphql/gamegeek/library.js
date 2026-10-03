@@ -6,10 +6,12 @@
  * played), a local shortlist of at most 20 is built from five taste seeds
  * by `catalogSemantic.shortlistFromSeeds`, and ONE model call — through
  * `services/aiFeatureRunner.js` as `{ app: 'gamegeek', feature: 'whatnext' }` —
- * only ranks and explains what it is handed. `validatePicks` refuses any id
- * outside the shortlist; every refusal settles on the deterministic
- * fallback, which is the shortlist's own order with a "because you loved X"
- * reason — so an off, capped or unreachable model still answers.
+ * only ranks and explains what it is handed. Candidates travel as short
+ * labels ("c1"…"c20"), mapped back after the call; `salvagePicks` keeps the
+ * picks it can map and drops the rest — an answer with no salvageable pick
+ * settles on the deterministic fallback, which is the shortlist's own order
+ * with a "because you loved X" reason — so an off, capped or unreachable
+ * model still answers.
  *
  * Unlike BookGeek, the model MAY use outside knowledge about games
  * (WHAT_NEXT_SPEC §2): how they play, how long they run, their reputation.
@@ -34,6 +36,7 @@ import { runAIFeature } from '../../services/aiFeatureRunner.js';
 import { Game } from './models/game.js';
 import { GamePlayer } from './models/gamePlayer.js';
 import { catalogVectors, shortlistFromSeeds, moodQueryVector } from '../catalog/catalogSemantic.js';
+import { salvagePicks, shortId } from '../catalog/salvagePicks.js';
 
 export const GAME_APP = 'gamegeek';
 export const GAME_FEATURE = 'whatnext';
@@ -171,8 +174,9 @@ You are given JSON with:
 - "seeds": up to five games from their library that say what they like —
   "why" is "loved" (a favourite, a high rating, or many hours) or "recent"
   (played lately), with the rating and hours they gave it.
-- "candidates": games they own but have NOT really played. Each has an "id",
-  "title", "genres", "tags", "year", "hoursToBeat", "modes" and "because" —
+- "candidates": games they own but have NOT really played. Each has a short
+  "id" label like "c3" (NOT a database id — copy it exactly), "title",
+  "genres", "tags", "year", "hoursToBeat", "modes" and "because" —
   the title of the seed this candidate most resembles, or null when the
   candidate came from the mood rather than a seed.
 - "limit": how many picks to return.
@@ -181,8 +185,9 @@ You are given JSON with:
 
 Rules, in order of importance:
 1. Return at most "limit" picks, each a DISTINCT "gameId" copied verbatim
-   from a candidate's "id". Never invent an id. Never return an id that is
-   not in "candidates". Fewer picks is fine; wrong ids are not.
+   from a candidate's "id" — a short label like "c3". Never invent an id.
+   Never return an id that is not in "candidates". Fewer picks is fine;
+   wrong ids are not.
 2. Order them best first.
 3. "why" is ONE short sentence, at most 90 characters, addressed to them.
 4. You MAY use what you know about these games — how they play, how long
@@ -196,21 +201,6 @@ Rules, in order of importance:
 6. Prefer variety across the picks — five versions of the same game is not
    a library's worth of options.`;
 
-/** Ids the model returned must be ids we handed it — and each only once. */
-export function validateGamePicks(data, allowedIds, limit) {
-  if (!data || !Array.isArray(data.picks)) return false;
-  if (data.picks.length > limit) return false;
-  const seen = new Set();
-  for (const pick of data.picks) {
-    if (!pick || typeof pick.gameId !== 'string') return false;
-    if (!allowedIds.has(pick.gameId)) return false;
-    if (seen.has(pick.gameId)) return false;
-    seen.add(pick.gameId);
-    if (pick.why != null && typeof pick.why !== 'string') return false;
-  }
-  return true;
-}
-
 /** The trimmed snapshot the model sees (X6). No descriptions, ever. */
 export function gameWhatNextContext({ seedDocs, candidateDocs, becauseById, mood, limit }) {
   return {
@@ -223,8 +213,8 @@ export function gameWhatNextContext({ seedDocs, candidateDocs, becauseById, mood
       hoursPlayed: row?.hoursPlayed ?? 0,
       why,
     })),
-    candidates: candidateDocs.map((doc) => ({
-      id: String(doc._id),
+    candidates: candidateDocs.map((doc, index) => ({
+      id: shortId(index),
       title: doc.title || 'Untitled',
       genres: doc.genres || [],
       tags: [...new Set([...(doc.tags || []), ...(doc.autoTags || [])])].slice(0, 5),
@@ -357,7 +347,11 @@ export async function gameWhatNext({ userId, householdId, mood, limit, enabled }
   } else if (!enabled) {
     result = { data: fallback(), provenance: disabledProvenance('disabled') };
   } else {
-    const allowedIds = new Set(candidateDocs.map((g) => String(g._id)));
+    // The model sees "c1".."cN" labels, never the real ids (a miscopied
+    // 24-hex id used to sink the whole paid answer — the salvage keeps what
+    // maps and tops the rest up from the deterministic list).
+    const shortToReal = new Map(candidateDocs.map((g, i) => [shortId(i), String(g._id)]));
+    let salvaged = null;
     result = await runAIFeature({
       app: GAME_APP,
       feature: GAME_FEATURE,
@@ -367,12 +361,36 @@ export async function gameWhatNext({ userId, householdId, mood, limit, enabled }
         gameWhatNextContext({ seedDocs, candidateDocs, becauseById: becauseTitleById, mood, limit }),
       ),
       schema: GAME_WHAT_NEXT_SCHEMA,
-      validate: (data) => validateGamePicks(data, allowedIds, limit),
+      validate: (data) => {
+        salvaged = salvagePicks(data, shortToReal, 'gameId', limit);
+        return salvaged.picks.length > 0;
+      },
       fallback,
       maxTokens: 350,
       maxCallsPerDay: GAME_DAILY_CAP,
       timeoutMs: WHAT_NEXT_TIMEOUT_MS,
     });
+
+    if (result.provenance.source === 'model') {
+      const salv = salvaged ?? salvagePicks(result.data, shortToReal, 'gameId', limit);
+      if (!salv.picks.length) {
+        result = { data: fallback(), provenance: { ...result.provenance, source: 'fallback', reason: 'invalid' } };
+      } else {
+        const seen = new Set(salv.picks.map((p) => p.id));
+        const topUps = fallback().picks.filter((p) => !seen.has(p.gameId)).slice(0, Math.max(0, limit - salv.picks.length));
+        if (salv.stats.returned !== salv.stats.kept || topUps.length) {
+          // Counts only — never ids or titles.
+          logger.warn(
+            { app: GAME_APP, feature: GAME_FEATURE, ...salv.stats, toppedUp: topUps.length },
+            '[gamegeek] what-next answer salvaged',
+          );
+        }
+        result = {
+          ...result,
+          data: { picks: [...salv.picks.map((p) => ({ gameId: p.id, why: p.why })), ...topUps] },
+        };
+      }
+    }
   }
 
   const picks = normalizeGamePicks(result.data?.picks, limit, byId);
