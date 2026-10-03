@@ -398,7 +398,10 @@ describe('shortlistFromSeeds (X3)', () => {
     ]);
     await Promise.all([
       mkGVec(s1._id, [1, 0, 0]), mkGVec(s2._id, [0, 1, 0]),
-      mkGVec(c1._id, [0.9, 0.5, 0]), mkGVec(c2._id, [0.5, 0.9, 0]), mkGVec(c3._id, [0.4, 0.4, 0]),
+      // c1 is 0.95 not 0.9: with mood [0,1,0] the old 0.9 tied c2 at 0.7 in
+      // s1's blended queue, and the tie broke on Mongo's natural row order —
+      // the flake. 0.95 keeps c1 strictly ahead, tie or no tie.
+      mkGVec(c1._id, [0.95, 0.5, 0]), mkGVec(c2._id, [0.5, 0.9, 0]), mkGVec(c3._id, [0.4, 0.4, 0]),
     ]);
     return { s1, s2, c1, c2, c3 };
   }

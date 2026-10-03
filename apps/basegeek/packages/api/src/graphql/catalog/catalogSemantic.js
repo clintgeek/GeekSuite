@@ -119,7 +119,7 @@ export async function searchCatalog({ kind, scope, q, keywordRows = [], limit = 
       if (vec && vec.length === rows[0].vec.length) {
         const ranked = rows
           .map((r) => ({ noteId: r.itemId, score: dot(r.vec, vec) }))
-          .sort((a, b) => b.score - a.score);
+          .sort((a, b) => b.score - a.score || String(a.noteId).localeCompare(String(b.noteId)));
         vectorHits = selectVectorHits(ranked, { min: scale.floor, gap: scale.gap, max: CATALOG_SEARCH_MAX_VECTOR_HITS });
       }
     }
@@ -192,7 +192,9 @@ export async function shortlistFromSeeds({ kind, scope, seedIds, candidateIds = 
       if (cands && !cands.has(row.itemId)) continue;
       ranked.push({ id: row.itemId, because: null, mood: true, score: dot(row.vec, moodVec) });
     }
-    ranked.sort((a, b) => b.score - a.score);
+    // Score ties break by id: Mongo's natural row order is not part of the
+    // ranking, so a tied list must not inherit it.
+    ranked.sort((a, b) => b.score - a.score || String(a.id).localeCompare(String(b.id)));
     lists.push(ranked);
   }
 
@@ -205,7 +207,7 @@ export async function shortlistFromSeeds({ kind, scope, seedIds, candidateIds = 
       const base = dot(row.vec, sVec);
       ranked.push({ id: row.itemId, because: seedId, score: moodVec ? (base + dot(row.vec, moodVec)) / 2 : base });
     }
-    ranked.sort((a, b) => b.score - a.score);
+    ranked.sort((a, b) => b.score - a.score || String(a.id).localeCompare(String(b.id)));
     return ranked;
   }));
 
@@ -291,7 +293,7 @@ export async function recommendCatalog({ kind, scope, seeds = [], candidateIds =
     ranked = rows
       .filter((r) => !cands || cands.has(r.itemId))
       .map((r) => ({ id: r.itemId, because: null, score: dot(r.vec, moodVec) }))
-      .sort((a, b) => b.score - a.score)
+      .sort((a, b) => b.score - a.score || String(a.id).localeCompare(String(b.id)))
       .slice(0, limit);
   }
   return {
