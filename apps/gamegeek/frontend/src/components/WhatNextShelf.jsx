@@ -76,9 +76,9 @@ export default function WhatNextShelf({
               placeholder="Mood? short, co-op, chill…"
               size="small"
               inputProps={{ maxLength: 200, 'aria-label': 'Mood for suggestions' }}
-              sx={{ width: { xs: 160, sm: 220 }, '& .MuiInputBase-root': { height: 32, fontSize: '0.8125rem' } }}
+              sx={{ width: { xs: 160, sm: 220 }, '& .MuiInputBase-root': { height: 44, fontSize: '0.8125rem' } }}
             />
-            <Button type="submit" size="small" variant="outlined" sx={{ minHeight: 32 }}>
+            <Button type="submit" size="small" variant="outlined" sx={{ minHeight: 44 }}>
               Ask
             </Button>
           </Box>

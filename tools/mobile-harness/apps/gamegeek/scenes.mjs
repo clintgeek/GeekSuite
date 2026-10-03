@@ -2,6 +2,20 @@
 // preferred over clicks wherever the app has one (/game/:id, /add, /settings);
 // every scene navigates for itself.
 
+import { json, graphqlRoute } from '../../lib/net.mjs';
+import { OPS, GAME_WHAT_NEXT_RESULT } from './fixtures.mjs';
+
+// The play-assistant strip is opt-in (`appPreferences.gamegeek.playAssistant`),
+// so the '24-what-next' scene stubs bootstrap the way bookgeek's
+// '07-what-next' does — page level, leaving every other scene's shared
+// sessionRoutes bootstrap alone.
+const bootstrapWithPlayAssistant = (r) => json(r, {
+  identity: { username: 'chef', email: 'chef@example.com' },
+  profile: { displayName: 'Chef Crocker' },
+  preferences: {},
+  appPreferences: { gamegeek: { playAssistant: true } },
+});
+
 export const scenes = [
   { name: '01-library', goto: '/', wait: 1500 },
   {
@@ -314,6 +328,20 @@ export const scenes = [
       if (!(await card.count())) return false;
       await card.hover({ position: { x: 40, y: 60 } });
       await h.settle(400);
+    },
+  },
+  {
+    // The "What should I play?" strip (DOCS/WHAT_NEXT_SPEC.md): opt-in pref
+    // stubbed on, GetGameWhatNext answered with five backlog picks. Its own
+    // bootstrap/GraphQL registrations are page-scoped like bookgeek's
+    // '07-what-next', and it is LAST so no scene depends on its state.
+    name: '24-what-next',
+    async setup(page, h) {
+      await page.route('**/api/users/bootstrap', bootstrapWithPlayAssistant);
+      await graphqlRoute(page, { ...OPS, GetGameWhatNext: { gameWhatNext: GAME_WHAT_NEXT_RESULT } });
+
+      await page.goto(h.base + '/', { waitUntil: 'networkidle' });
+      await h.settle(1500);
     },
   },
 ];

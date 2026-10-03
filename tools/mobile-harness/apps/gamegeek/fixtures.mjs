@@ -225,6 +225,28 @@ export const VOCAB = {
 
 const strip = ({ coverColor, ...g }) => g; // eslint-disable-line no-unused-vars
 
+// The '24-what-next' scene's stub: five picks off the backlog — owned, never
+// really played — each carrying a whole `game` (the shipped query selects
+// GameCardFields, which these fixture rows already satisfy), so the strip
+// renders real cards, covers where the library has them and the colour
+// plates where it doesn't.
+export const GAME_WHAT_NEXT_PICKS = [
+  { gameId: 'g17', why: 'A deduction box that respects your evenings; nothing else on your shelf plays this way.' },
+  { gameId: 'g5', why: 'The deepest RPG on your backlog, and it has been waiting the longest.' },
+  { gameId: 'g28', why: 'A compact adventure — secrets to map yourself, short enough for a weekend.' },
+  { gameId: 'g22', why: 'Remedy at its weirdest; the story-driven action gap in your playing shelf.' },
+  { gameId: 'g18', why: 'Slow-burn mystery — the narrative pick your RPG backlog keeps circling.' },
+].map((p) => ({ __typename: 'GameWhatNextPick', ...p, game: strip(GAMES.find((g) => g.id === p.gameId)) }));
+
+export const GAME_WHAT_NEXT_RESULT = {
+  __typename: 'GameWhatNextResult',
+  picks: GAME_WHAT_NEXT_PICKS,
+  provenance: {
+    __typename: 'AIProvenance',
+    source: 'model', reason: null, model: 'llama-3.1-8b-instant', provider: 'groq', cached: false, callsToday: 1, cap: 20,
+  },
+};
+
 const ttb = (g) => g.timeToBeat?.main ?? null;
 const SORTERS = {
   title: (a, b) => a.sortTitle.localeCompare(b.sortTitle),
