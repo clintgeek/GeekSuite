@@ -52,7 +52,8 @@ beforeEach(() => {
   globalThis.fetch = jest.fn(() =>
     Promise.resolve({
       ok: true, status: 200,
-      json: async () => ({ embeddings: [[0.5, 0.5, 0.5]] }),
+      // 1024 dims — the mxbai dim check; the first three axes carry the mood.
+      json: async () => ({ embeddings: [Object.assign(new Array(1024).fill(0), { 0: 0.5, 1: 0.5, 2: 0.5 })] }),
       text: async () => '',
     }),
   );
@@ -79,13 +80,15 @@ const mkPlayer = (fields = {}) =>
   GamePlayer.create({ householdId: 'default', userId: String(ALICE), ...fields });
 const mkVec = (itemId, vector, householdId = 'default') =>
   GameVector.create({ itemId, householdId, model: embeddingsConfig().model, hash: 'h', vector, indexedAt: new Date() });
+/** Stored vectors are the model's real 1024 dims; the first three axes carry the test ranking. */
+const vec = (a, b, c) => Object.assign(new Array(1024).fill(0), { 0: a, 1: b, 2: c });
 
-/** One seed + two candidates with planted 3-dim vectors. */
+/** One seed + two candidates with planted vectors. */
 async function plant() {
   const seed = await mkGame({ title: 'Loved Game', description: 'never sent' });
   const c1 = await mkGame({ title: 'Candidate One', description: 'never sent' });
   const c2 = await mkGame({ title: 'Candidate Two' });
-  await Promise.all([mkVec(seed._id, [1, 0, 0]), mkVec(c1._id, [0.9, 0.1, 0]), mkVec(c2._id, [0.2, 0.9, 0])]);
+  await Promise.all([mkVec(seed._id, vec(1, 0, 0)), mkVec(c1._id, vec(0.9, 0.1, 0)), mkVec(c2._id, vec(0.2, 0.9, 0))]);
   await mkPlayer({ gameId: seed._id, favorite: true, rating: 5, hoursPlayed: 40 });
   return { seed, c1, c2 };
 }
@@ -100,6 +103,16 @@ describe('gameWhatNext — opt-in and fallback', () => {
     expect(res.provenance).toMatchObject({ source: 'fallback', reason: 'disabled', model: null });
     expect(res.picks[0]).toMatchObject({ gameId: String(c1._id), why: 'Because you loved Loved Game.' });
     expect(res.picks[0].game.title).toBe('Candidate One');
+  });
+
+  test('a mood-only pick falls back with "Fits your mood: …"', async () => {
+    await setOptIn(false);
+    const { c2 } = await plant();
+    // The fetch stub embeds every text as [0.5,0.5,0.5]: dot gives c2 0.55,
+    // c1 0.50 — the mood queue claims Candidate Two before any seed queue.
+    const res = await Q.gameWhatNext(null, { limit: 5, mood: 'short and chill' }, ctx(ALICE));
+    expect(callAI).not.toHaveBeenCalled();
+    expect(res.picks[0]).toMatchObject({ gameId: String(c2._id), why: 'Fits your mood: "short and chill".' });
   });
 
   test('an id the model was never given settles on the fallback', async () => {
@@ -121,6 +134,15 @@ describe('gameWhatNext — opt-in and fallback', () => {
   });
 });
 
+describe('gameWhatNext — prompt and runner options', () => {
+  test('the prompt carries the live-testing rules', () => {
+    const p = library.GAME_WHAT_NEXT_SYSTEM_PROMPT;
+    expect(p).toContain('outranks the seeds');
+    expect(p).toContain('stand behind');
+    expect(p).toContain('or null when the\n  candidate came from the mood');
+  });
+});
+
 describe('gameWhatNext — what the model sees (X6)', () => {
   test('seeds, mood and X6 candidate fields only — never descriptions or player data', async () => {
     await setOptIn(true);
@@ -139,7 +161,10 @@ describe('gameWhatNext — what the model sees (X6)', () => {
     for (const c of sent.candidates) {
       expect(Object.keys(c).sort()).toEqual(['because', 'genres', 'hoursToBeat', 'id', 'modes', 'tags', 'title', 'year']);
     }
-    expect(sent.candidates[0].because).toBe('Loved Game');
+    // With a mood, the mood queue claims its top hit first (because null);
+    // the seed-attributed pick follows.
+    expect(sent.candidates[0].because).toBeNull();
+    expect(sent.candidates[1].because).toBe('Loved Game');
     const raw = callAI.mock.calls[0][1].messages[1].content;
     for (const never of ['description', 'never sent', 'review', 'notes', 'sessions', 'coverPath']) {
       expect(raw).not.toContain(never);
@@ -150,7 +175,7 @@ describe('gameWhatNext — what the model sees (X6)', () => {
     await setOptIn(true);
     const { c1 } = await plant();
     const foreign = await mkGame({ title: 'Foreign Game', householdId: 'other-house' });
-    await mkVec(foreign._id, [0.95, 0.05, 0], 'other-house');
+    await mkVec(foreign._id, vec(0.95, 0.05, 0), 'other-house');
     // Even a state row pointing at the foreign game must not seed it.
     await mkPlayer({ gameId: foreign._id, favorite: true, rating: 5, hoursPlayed: 99 });
     callAI.mockResolvedValue(JSON.stringify({ picks: [] }));
@@ -165,7 +190,7 @@ describe('gameWhatNext — what the model sees (X6)', () => {
     const seeds = [];
     for (let i = 0; i < 5; i += 1) {
       seeds.push(await mkGame({ title: `The Elder Scrolls ${i}: A Rather Long Subtitle` }));
-      await mkVec(seeds[i]._id, [1 - i * 0.1, i * 0.1, 0]);
+      await mkVec(seeds[i]._id, vec(1 - i * 0.1, i * 0.1, 0));
       await mkPlayer({ gameId: seeds[i]._id, rating: 5, hoursPlayed: 30 + i });
     }
     for (let i = 0; i < 20; i += 1) {
@@ -175,7 +200,7 @@ describe('gameWhatNext — what the model sees (X6)', () => {
         modes: ['single'], timeToBeat: { main: 42 },
         releaseDate: new Date(Date.UTC(2015 + (i % 10), 0, 1)),
       });
-      await mkVec(g._id, [0.5 + i * 0.01, 0.4, 0.1]);
+      await mkVec(g._id, vec(0.5 + i * 0.01, 0.4, 0.1));
     }
     callAI.mockResolvedValue(JSON.stringify({ picks: [] }));
     await Q.gameWhatNext(null, { limit: 10, mood: 'something short and co-op for tonight' }, ctx(ALICE));

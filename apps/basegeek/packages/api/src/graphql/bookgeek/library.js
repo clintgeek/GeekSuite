@@ -71,6 +71,10 @@ export const MAX_DRAFT_TAGS = 8;
 export const MAX_NEW_TAGS = 2;
 export const MAX_DESCRIPTION_CHARS = 1200;
 export const MAX_WHY_CHARS = 160;
+/** Live calls run 3–6 s; the default 6 s cut a mood call on the wire. */
+export const WHAT_NEXT_TIMEOUT_MS = 12000;
+/** Mood text in a fallback `why` is capped, like every other borrowed phrase. */
+export const MAX_MOOD_WHY_CHARS = 40;
 
 // ---------------------------------------------------------------------------
 // The computed halves
@@ -253,6 +257,8 @@ Rules, in order of importance:
 3. "why" is ONE short sentence, at most 90 characters, addressed to them, and
    grounded in the data you were given — an author or tag their ratings favour,
    a length that fits, the shelf they parked it on, how long it has been waiting.
+   Mention the book named in "because" only when the resemblance is real and
+   specific; otherwise say what makes this pick itself a good fit.
 4. Do not use outside knowledge about these books. Do not describe the plot, do
    not summarise the story, and never reveal anything a reader would not want to
    know before starting.
@@ -434,10 +440,10 @@ export async function whatNext({ userId, limit, enabled, mood }) {
         picks: shortlist.slice(0, limit).map((s) => {
           const seedWhy = seedWhyById.get(s.because);
           const title = seedTitleById.get(s.because) ?? 'it';
-          return {
-            bookId: s.id,
-            why: seedWhy === 'recent' ? `Because you read ${ title } recently.` : `Because you loved ${ title }.`,
-          };
+          const why = s.mood && mood
+            ? `Fits your mood: "${ String(mood).slice(0, MAX_MOOD_WHY_CHARS) }".`
+            : seedWhy === 'recent' ? `Because you read ${ title } recently.` : `Because you loved ${ title }.`;
+          return { bookId: s.id, why };
         }),
       })
     : () => ({ picks: fallbackPicks(candidates, finished, limit) });
@@ -460,6 +466,7 @@ export async function whatNext({ userId, limit, enabled, mood }) {
       fallback,
       maxTokens: 350,
       maxCallsPerDay: LIBRARY_DAILY_CAP,
+      timeoutMs: WHAT_NEXT_TIMEOUT_MS,
     });
   }
 

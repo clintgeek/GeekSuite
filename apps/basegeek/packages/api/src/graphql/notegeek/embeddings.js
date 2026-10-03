@@ -56,10 +56,18 @@ export const EMBEDDING_MODELS = Object.freeze({
     queryPrefix: 'Represent this sentence for searching relevant passages: ',
     documentPrefix: '',
     search: Object.freeze({ floor: 0.55, gap: 0.08, bestMin: 0.60, bestMargin: 0.08, bestAgreeMargin: 0.04 }),
-    // UNCALIBRATED: seeded with this model's note-search floor/gap. Catalog
-    // items are short blurbs, not note passages — tune on Chef's library
-    // after the first backfill (MCP_SPEC D20).
-    catalogSearch: Object.freeze({ floor: 0.55, gap: 0.08 }),
+    // Catalog search, calibrated live 2026-10-03 on Chef's library (554 books,
+    // 723 games; one vector per item, catalog text only). Catalog scores sit
+    // lower than note passages. True hits: books "cyberpunk" 0.60–0.70,
+    // "memoir about growing up in a cult" 0.71–0.76, "funny fantasy" 0.59–0.64;
+    // games "co-op shooter" 0.66–0.71, "cozy farming" 0.52–0.60, "soulslike"
+    // 0.47–0.55, "space exploration" 0.57–0.66. Nonsense tops out at books
+    // 0.546 / games 0.513 ("quantum chromodynamics") and 0.48 / 0.45
+    // ("recipes for sourdough bread"). floor 0.50 keeps sourdough out entirely
+    // and lets at most a handful of near-misses through for physics jargon;
+    // gap 0.10 keeps "cyberpunk" to its six real book hits. Only search uses
+    // these; the what-next shortlist ranks by seed similarity, no floor.
+    catalogSearch: Object.freeze({ floor: 0.50, gap: 0.10 }),
     relatedMin: 0.70,
   }),
   'nomic-embed-text': Object.freeze({

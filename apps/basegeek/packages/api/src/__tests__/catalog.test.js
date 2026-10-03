@@ -444,7 +444,7 @@ describe('shortlistFromSeeds (X3)', () => {
     expect(out[0].id).toBe(String(c1._id));
   });
 
-  test('a mood vector changes per-seed ranking', async () => {
+  test('a mood vector gets its own queue FIRST; its top hit has no because', async () => {
     const { s1, s2, c1, c2, c3 } = await plant();
     const moody = await mkGame({ title: 'mood match' });
     await mkGVec(moody._id, [0.4, 0.4, 0.9]); // mid-similar to seeds, strong on mood
@@ -453,7 +453,23 @@ describe('shortlistFromSeeds (X3)', () => {
       candidateIds: candidatesOf(c1, c2, c3, moody),
       moodVec: [0, 0, 1], size: 20,
     });
-    expect(out[0].id).toBe(String(moody._id)); // (0.4+0.9)/2 beats c1's (0.9+0)/2
+    // The mood queue claims its strongest hit before any seed queue runs.
+    expect(out[0]).toMatchObject({ id: String(moody._id), because: null, mood: true });
+    expect(out[0].score).toBeCloseTo(0.9, 5);
+  });
+
+  test('the mood queue claims shared winners: dedupe across queues, first queue wins', async () => {
+    const { s1, s2, c1, c2, c3 } = await plant();
+    // moodVec == s2's vector: c2 tops BOTH queues. The mood queue runs first,
+    // so c2 arrives as a mood pick (because null); c1 is the seed queue's top.
+    const out = await shortlistFromSeeds({
+      kind: 'game', scope: 'default', seedIds: [String(s1._id)],
+      candidateIds: candidatesOf(c1, c2, c3), moodVec: [0, 1, 0], size: 20,
+    });
+    expect(out[0]).toMatchObject({ id: String(c2._id), because: null, mood: true });
+    expect(out[1]).toMatchObject({ id: String(c1._id), because: String(s1._id) });
+    expect(out[1].mood).toBeFalsy();
+    expect(new Set(out.map((o) => o.id)).size).toBe(out.length); // no dupes
   });
 
   test('the embeddings service down → moodQueryVector null, shortlist still answers', async () => {
@@ -477,6 +493,12 @@ describe('shortlistFromSeeds (X3)', () => {
     expect(reason).toBeNull();
     expect(items[0].closestId).toBe(String(s1._id));
     expect(items.map((i) => i.id)).toEqual([String(c1._id), String(c2._id), String(c3._id)]);
+  });
+});
+
+describe('catalogSearch calibration', () => {
+  test('mxbai carries the live-calibrated floor and gap', () => {
+    expect(embeddings.modelSpec().catalogSearch).toEqual({ floor: 0.50, gap: 0.10 });
   });
 });
 

@@ -41,6 +41,10 @@ export const GAME_DAILY_CAP = 20;
 
 export const MAX_PICKS = 10;
 export const MAX_WHY_CHARS = 160;
+/** Live calls run 3–6 s; the default 6 s cut a mood call on the wire. */
+export const WHAT_NEXT_TIMEOUT_MS = 12000;
+/** Mood text in a fallback `why` is capped, like every other borrowed phrase. */
+export const MAX_MOOD_WHY_CHARS = 40;
 export const SHORTLIST_SIZE = 20;
 export const SEED_COUNT = 5;
 export const LOVED_SEEDS = 3;
@@ -169,7 +173,8 @@ You are given JSON with:
   (played lately), with the rating and hours they gave it.
 - "candidates": games they own but have NOT really played. Each has an "id",
   "title", "genres", "tags", "year", "hoursToBeat", "modes" and "because" —
-  the title of the seed this candidate most resembles.
+  the title of the seed this candidate most resembles, or null when the
+  candidate came from the mood rather than a seed.
 - "limit": how many picks to return.
 - "mood": an optional short phrase for what they feel like right now
   ("short", "co-op", "chill"). Absent when they gave none.
@@ -181,9 +186,13 @@ Rules, in order of importance:
 2. Order them best first.
 3. "why" is ONE short sentence, at most 90 characters, addressed to them.
 4. You MAY use what you know about these games — how they play, how long
-   they run, their reputation — but the ranking must still be grounded in
-   the seeds and the "because" links.
-5. When "mood" is given, honour it in both the ranking and the reasons.
+   they run, their reputation. Mention a seed in "why" only when the
+   resemblance is real and specific; otherwise say what makes the game
+   itself a good pick. Never claim a likeness you would not stand behind.
+5. When "mood" is given it outranks the seeds: every pick should fit it,
+   and "why" should say how. For length-related moods ("short", "quick",
+   "long") use "hoursToBeat" when known and what you know of the game when
+   it is null.
 6. Prefer variety across the picks — five versions of the same game is not
    a library's worth of options.`;
 
@@ -228,10 +237,12 @@ export function gameWhatNextContext({ seedDocs, candidateDocs, becauseById, mood
 }
 
 /** The deterministic answer: the shortlist's own order, with its reasons. */
-export function fallbackGamePicks(shortlist, seedMetaById, limit, preVector) {
+export function fallbackGamePicks(shortlist, seedMetaById, limit, preVector, mood) {
   return shortlist.slice(0, limit).map((entry) => {
     let why;
-    if (preVector || !entry.because) {
+    if (entry.mood && mood) {
+      why = `Fits your mood: "${ String(mood).slice(0, MAX_MOOD_WHY_CHARS) }".`;
+    } else if (preVector || !entry.because) {
       why = 'One of the most recent additions to your library.';
     } else {
       const seed = seedMetaById.get(entry.because);
@@ -328,14 +339,16 @@ export async function gameWhatNext({ userId, householdId, mood, limit, enabled }
     : null;
   const preVector = !becauseById;
 
+  const moodById = new Map(shortlist.map((s) => [s.id, s.mood === true]));
   const shortlistEntries = orderedIds.map((id) => ({
     id,
     because: becauseById?.get(id) ?? null,
     why: becauseById ? seedMetaById.get(becauseById.get(id))?.why ?? 'loved' : null,
+    mood: moodById.get(id) ?? false,
   }));
 
   const fallback = () => ({
-    picks: fallbackGamePicks(shortlistEntries, seedMetaById, limit, preVector),
+    picks: fallbackGamePicks(shortlistEntries, seedMetaById, limit, preVector, mood),
   });
 
   let result;
@@ -358,6 +371,7 @@ export async function gameWhatNext({ userId, householdId, mood, limit, enabled }
       fallback,
       maxTokens: 350,
       maxCallsPerDay: GAME_DAILY_CAP,
+      timeoutMs: WHAT_NEXT_TIMEOUT_MS,
     });
   }
 

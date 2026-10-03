@@ -65,3 +65,41 @@ way.
 ## 6. Out of scope
 
 Notes; free-form questions; the MCP endpoint (parked); any write.
+
+## 7. Overnight log, 2026-10-02 → 03 — decisions by Sage, for Chef's review
+
+Chef: *"Finish this up and anything else that seems necessary or relevant … Just record
+decisions and we'll review tomorrow."*
+
+### Done in production
+
+| # | What | Detail |
+|---|---|---|
+| N1 | Deployed `2bff34d6` | push to `main` → Release images green → Watchtower recreated basegeek, bookgeek, gamegeek (healthy). MCP stays on local branch `mcp-parked` (not pushed). |
+| N2 | Routing rows inserted (aiGeek `aiappconfigs`) | `gamegeek`, `bookgeek`: `tier auto`, `allowPaid`, `paidFirst`, `openrouter` / `openai/gpt-4.1-mini`. No other row touched. |
+| N3 | Opt-in set for Chef only | `clint@clintgeek.com`: `appPreferences.gamegeek.playAssistant` and `appPreferences.bookgeek.libraryAssistant` = true. Other prefs verified intact. Heather / Abby / Lauren untouched. |
+| N4 | Backfill complete | 554 book + 723 game vectors, ~55 min total (≈2.5 s/book, ≈1.8 s/game on this box — slower than the 1–2 s estimate). |
+
+### Decisions
+
+| # | Decision | Evidence |
+|---|---|---|
+| N5 | **Model: `openai/gpt-4.1-mini`, not `google/gemini-3.8-flash`.** | Live: Gemini 3.8 Flash is a reasoning model; its hidden reasoning used the whole 350-token budget → `finishReason: length` → unparseable → fallback, and still billed $0.0036. gpt-4.1-mini: `stop`, valid picks, $0.0012–0.0015 per call, already proven on NoteGeek/FitnessGeek. Rule for future picks: no reasoning/"thinking" models on capped-output features. |
+| N6 | `timeoutMs: 12000` on both what-next calls | Live latency 3.1–5.6 s against the runner's 6 s default; a timed-out paid call is still billed. |
+| N7 | Mood gets its own shortlist queue, first in the round-robin | Live: "short and chill" returned Fort Solis (horror) and Jedi Knight because candidates only came from seed neighbourhoods; the mood vector alone ranks *A Short Hike* first (0.582) but it never reached the shortlist. Mood-sourced candidates carry `because: null`; fallback reason `Fits your mood: "…"`. |
+| N8 | Game prompt: mention a seed only when the likeness is real; mood outranks seeds; use `hoursToBeat` for length moods | Live reasons were shoehorned: "Tiny Robots Recharged … like Cyberpunk 2077", "Turmoil … Path of Exile's spirit". Book prompt got the same seed-mention rule; its no-outside-knowledge rule is unchanged. |
+| N9 | Catalog search floor 0.50 / gap 0.10 (mxbai) | Calibrated on the real library; numbers in the comment in `notegeek/embeddings.js`. Affects only `bookSearch`/`gameSearch` (no UI consumer on `main` yet), not what-next. |
+
+### Live results (before N6–N8)
+
+- Books, no mood (gpt-4.1-mini): Altered Carbon, ViraVax, American Gods, Feet of Clay, Legend — $0.00145, 3.2 s.
+- Books, "something light and funny": Feet of Clay, Charlie and the Great Glass Elevator, Fear and Loathing…, A Closed and Common Orbit, Neuromancer — $0.00143, 5.6 s.
+- Games, no mood: DEATHLOOP, Jedi Knight: Dark Forces II, WATCH_DOGS 2, Sin Slayers, Fallout: New Vegas — $0.00123, 3.1 s.
+- Games, "co-op": Second Extinction, TerraTech, Arcadegeddon, Dark Envoy, Cat Quest II — $0.00119.
+- Total spent overnight on tests: under $0.02.
+
+### For Chef to review
+
+1. N5's model choice: gpt-4.1-mini is cheap and reliable; a stronger *non-reasoning* model would cost more per pick and is a one-field change on the routing row.
+2. Whether Heather / the girls should get the opt-in.
+3. Whether to push `mcp-parked` to GitHub as a backup.

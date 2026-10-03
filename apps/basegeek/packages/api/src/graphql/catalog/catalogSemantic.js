@@ -162,7 +162,9 @@ export async function moodQueryVector(mood, log) {
  * dot(candidate, seed) — or `(dot(candidate, seed) + dot(candidate, mood)) / 2`
  * when a mood vector is given — then one candidate is taken from each seed's
  * list in turn, in seed order, skipping duplicates, until `size`. Each entry
- * keeps `because`: the seed whose list it came through. Seeds without a
+ * keeps `because`: the seed whose list it came through. With a mood, a
+ * mood-only queue (`because: null`, `mood: true`) goes FIRST, so the mood
+ * always gets slots instead of only the candidates near seeds. Seeds without a
  * vector in the scope are dropped before ranking; every seed id is excluded
  * from every list (a seed never recommends itself or a sibling seed).
  *
@@ -178,7 +180,22 @@ export async function shortlistFromSeeds({ kind, scope, seedIds, candidateIds = 
   const seedSet = new Set(seeds);
   const cands = candidateIds ? new Set([...candidateIds].map(String)) : null;
 
-  const lists = seeds.map((seedId) => {
+  const lists = [];
+  if (moodVec) {
+    // The mood gets its own queue FIRST (overnight finding: seed
+    // neighbourhoods alone can box the mood out entirely). Mood entries have
+    // no seed behind them — `because: null`, `mood: true`.
+    const ranked = [];
+    for (const row of rows) {
+      if (seedSet.has(row.itemId)) continue;
+      if (cands && !cands.has(row.itemId)) continue;
+      ranked.push({ id: row.itemId, because: null, mood: true, score: dot(row.vec, moodVec) });
+    }
+    ranked.sort((a, b) => b.score - a.score);
+    lists.push(ranked);
+  }
+
+  lists.push(...seeds.map((seedId) => {
     const sVec = byId.get(seedId);
     const ranked = [];
     for (const row of rows) {
@@ -189,7 +206,7 @@ export async function shortlistFromSeeds({ kind, scope, seedIds, candidateIds = 
     }
     ranked.sort((a, b) => b.score - a.score);
     return ranked;
-  });
+  }));
 
   const out = [];
   const seen = new Set();
