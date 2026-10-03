@@ -277,6 +277,31 @@ export const GET_GAME_PROFILE = gql`
   ${GAME_PROFILE_FIELDS}
 `;
 
+/** "What should I play?" (DOCS/WHAT_NEXT_SPEC.md) — the pick carries a whole card. */
+export const GET_GAME_WHAT_NEXT = gql`
+  query GetGameWhatNext($limit: Int, $mood: String) {
+    gameWhatNext(limit: $limit, mood: $mood) {
+      picks {
+        gameId
+        why
+        game {
+          ...GameCardFields
+        }
+      }
+      provenance {
+        source
+        reason
+        model
+        provider
+        cached
+        callsToday
+        cap
+      }
+    }
+  }
+  ${GAME_CARD_FIELDS}
+`;
+
 export const GET_GAME_VOCABULARY = gql`
   query GetGameVocabulary {
     gameVocabulary {

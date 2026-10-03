@@ -138,6 +138,7 @@ export default function LibraryView({
   whatNextLoading = false,
   whatNextPicks,
   whatNextProvenance,
+  applyMood,
 }) {
   const theme = useTheme();
   const isDesktop = useMediaQuery(theme.breakpoints.up("md"));
@@ -380,6 +381,7 @@ export default function LibraryView({
             onOpen={openBook}
             onStartReading={onStartReading}
             startingBookId={startingBookId}
+            onSubmitMood={applyMood}
           />
         ) : null}
 

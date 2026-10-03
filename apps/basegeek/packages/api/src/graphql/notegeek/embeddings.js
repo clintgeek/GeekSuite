@@ -56,6 +56,10 @@ export const EMBEDDING_MODELS = Object.freeze({
     queryPrefix: 'Represent this sentence for searching relevant passages: ',
     documentPrefix: '',
     search: Object.freeze({ floor: 0.55, gap: 0.08, bestMin: 0.60, bestMargin: 0.08, bestAgreeMargin: 0.04 }),
+    // UNCALIBRATED: seeded with this model's note-search floor/gap. Catalog
+    // items are short blurbs, not note passages — tune on Chef's library
+    // after the first backfill (MCP_SPEC D20).
+    catalogSearch: Object.freeze({ floor: 0.55, gap: 0.08 }),
     relatedMin: 0.70,
   }),
   'nomic-embed-text': Object.freeze({
@@ -63,6 +67,8 @@ export const EMBEDDING_MODELS = Object.freeze({
     queryPrefix: 'search_query: ',
     documentPrefix: 'search_document: ',
     search: Object.freeze({ floor: 0.55, gap: 0.06, bestMin: 0.65, bestMargin: 0.08, bestAgreeMargin: 0.04 }),
+    // UNCALIBRATED — see the mxbai entry.
+    catalogSearch: Object.freeze({ floor: 0.55, gap: 0.06 }),
     relatedMin: 0.65,
   }),
 });
@@ -90,7 +96,7 @@ export function modelSpec(model = embeddingsConfig().model) {
   const fallback = EMBEDDING_MODELS[DEFAULT_EMBEDDINGS_MODEL];
   return {
     model, known: false, dims: null, queryPrefix: '', documentPrefix: '',
-    search: fallback.search, relatedMin: fallback.relatedMin,
+    search: fallback.search, catalogSearch: fallback.catalogSearch, relatedMin: fallback.relatedMin,
   };
 }
 

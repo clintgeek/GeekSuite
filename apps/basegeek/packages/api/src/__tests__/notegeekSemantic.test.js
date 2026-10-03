@@ -230,9 +230,13 @@ describe('embeddings client', () => {
   });
 
   test('no cloud path: the semantic modules import nothing from the AI stack and only embeddings.js fetches', () => {
-    const dir = path.join(HERE, '../graphql/notegeek');
-    const files = ['embeddings.js', 'chunking.js', 'semantic.js', 'indexer.js', 'models/NoteChunk.js'];
-    for (const f of files) {
+    // The catalog modules get the same guarantee (MCP_SPEC D25): they embed
+    // through notegeek/embeddings.js and fetch nowhere at all.
+    const groups = [
+      [path.join(HERE, '../graphql/notegeek'), ['embeddings.js', 'chunking.js', 'semantic.js', 'indexer.js', 'models/NoteChunk.js']],
+      [path.join(HERE, '../graphql/catalog'), ['catalogText.js', 'catalogSemantic.js', 'catalogIndexer.js', 'models/GameVector.js', 'models/BookVector.js']],
+    ];
+    for (const [dir, files] of groups) for (const f of files) {
       const src = readFileSync(path.join(dir, f), 'utf8');
       const imports = [...src.matchAll(/^\s*import[^'"]*['"]([^'"]+)['"]/gm)].map((m) => m[1]);
       for (const spec of imports) {

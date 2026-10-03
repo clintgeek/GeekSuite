@@ -312,7 +312,25 @@ export const removeBookShelfArgsSchema = z
 export const whatNextArgsSchema = z
   .object({
     limit: z.number().int().min(1).max(20).nullable().optional(),
+    mood: z.string().trim().min(1).max(200).nullable().optional(),
   })
   .strict();
 
 export const draftBookMetadataArgsSchema = z.object({ bookId: idString }).strict();
+
+// ── Catalog meaning search (MCP_SPEC Stage 1b, D24) ────────────────────────
+
+export const bookSearchArgsSchema = z
+  .object({
+    q: z.string().trim().min(1).max(500),
+    limit: z.number().int().min(1).max(50).nullable().optional(),
+  })
+  .strict();
+
+export const booksLikeArgsSchema = z
+  .object({
+    likeIds: z.array(idString).max(50).nullable().optional(),
+    q: z.string().trim().min(1).max(500).nullable().optional(),
+    limit: z.number().int().min(1).max(25).nullable().optional(),
+  })
+  .strict();

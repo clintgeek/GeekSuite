@@ -28,6 +28,7 @@ import { Box, CircularProgress, LinearProgress, Skeleton, useMediaQuery, useThem
 import { Add as AddIcon } from '@mui/icons-material';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { GeekErrorState, useGeekPrimaryAction } from '@geeksuite/ui';
+import { useAppPreferences } from '@geeksuite/user';
 import { FilterPanel, FiltersSheet, LibraryHeader, useInfiniteSentinel, useScrollMemory, useSectionOpen } from '@geeksuite/collection';
 import { useGameProfile, useShelfList, useShelfStats } from '../hooks/useGameMeta';
 import { useGameFacets, useGamePages, useLibraryFilter } from '../hooks/useLibrary';
@@ -37,6 +38,8 @@ import GameCard from '../components/GameCard';
 import GameRow from '../components/GameRow';
 import ShelfStrip from '../components/ShelfStrip';
 import SaveLibraryView from '../components/SaveLibraryView';
+import WhatNextShelf from '../components/WhatNextShelf';
+import { useWhatNext } from '../hooks/useWhatNext';
 import { gamePath, isFabVisible } from '../components/navConfig';
 import { DEFAULT_OPEN, SECTIONS, SECTIONS_OPEN_KEY, activeChips } from '../utils/facets';
 import { SORTS, isNarrowed, stateToParams } from '../utils/libraryFilter';
@@ -112,6 +115,12 @@ export default function LibraryView() {
   const { page, games, hasMore, loading, refreshing, loadingMore, loadMore, error, refetch } = useGamePages(lib);
   const facets = useGameFacets(lib.filterInput);
   const total = page?.total ?? facets.current?.total ?? null;
+
+  // The play assistant (DOCS/WHAT_NEXT_SPEC.md). Off by default — the
+  // Settings switch is the only on, and the query is not even sent until
+  // `playAssistant` is explicitly true.
+  const { preferences: gamePrefs } = useAppPreferences('gamegeek');
+  const whatNext = useWhatNext({ enabled: gamePrefs?.playAssistant === true });
 
   const sentinelRef = useInfiniteSentinel(loadMore, { enabled: hasMore, busy: loadingMore, root: scrollRoot });
   useScrollMemory(scrollRoot, stateToParams(state).toString(), { rows: games.length, hasMore, storageKey: SCROLL_KEY });
@@ -206,6 +215,20 @@ export default function LibraryView() {
                 stats={stats}
                 value={stripValue}
                 onChange={(id) => lib.update({ shelves: id === 'all' ? [] : [id] })}
+              />
+            </Box>
+          ) : null}
+          {gamePrefs?.playAssistant === true ? (
+            <Box sx={{ maxWidth: 1400, mx: 'auto' }}>
+              <WhatNextShelf
+                picks={whatNext.picks}
+                provenance={whatNext.provenance}
+                loading={whatNext.loading}
+                error={whatNext.error}
+                onOpen={openGame}
+                onRate={rate}
+                customShelves={customShelves}
+                onSubmitMood={whatNext.applyMood}
               />
             </Box>
           ) : null}

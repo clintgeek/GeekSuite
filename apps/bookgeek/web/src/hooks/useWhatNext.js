@@ -24,11 +24,18 @@ export function evictWhatNext(cache) {
 export function useWhatNext({ enabled, onUpdateShelf }) {
   const client = useApolloClient();
   const [startingBookId, setStartingBookId] = useState(null);
+  const [mood, setMood] = useState(null);
   const { data, loading, error } = useQuery(GET_WHAT_NEXT, {
-    variables: { limit: WHAT_NEXT_LIMIT },
+    variables: { limit: WHAT_NEXT_LIMIT, mood: mood || null },
     skip: !enabled,
     fetchPolicy: "cache-first",
   });
+
+  /** The mood box: submit re-runs the strip; blank clears it. */
+  const applyMood = (text) => {
+    const clean = String(text ?? "").trim();
+    setMood(clean || null);
+  };
 
   const result = enabled ? data?.whatNext : null;
   const whatNextPicks = Array.isArray(result?.picks) ? result.picks.filter((p) => p?.book) : [];
@@ -65,5 +72,7 @@ export function useWhatNext({ enabled, onUpdateShelf }) {
     whatNextError: enabled && error ? error.message || "Could not load suggestions." : null,
     onStartReading,
     startingBookId,
+    mood,
+    applyMood,
   };
 }

@@ -16,8 +16,8 @@
  * and one provenance line, and "Start reading" goes through the ordinary shelf
  * mutation (hooks/useWhatNext.js) — nothing on this strip writes on its own.
  */
-import React from "react";
-import { Box, Button, Chip, Skeleton, Typography } from "@mui/material";
+import React, { useState } from "react";
+import { Box, Button, Chip, Skeleton, TextField, Typography } from "@mui/material";
 import { AutoAwesome as SparkleIcon } from "@mui/icons-material";
 import BookCard from "./BookCard";
 import { SERIF_FONT } from "../theme/theme";
@@ -35,7 +35,13 @@ export default function WhatNextShelf({
   onOpen,
   onStartReading,
   startingBookId = null,
+  onSubmitMood,
 }) {
+  const [moodText, setMoodText] = useState("");
+  const submitMood = (event) => {
+    event?.preventDefault?.();
+    onSubmitMood?.(moodText);
+  };
   const hasPicks = Array.isArray(picks) && picks.length > 0;
   if (!loading && !error && !hasPicks) return null;
 
@@ -78,6 +84,25 @@ export default function WhatNextShelf({
           variant="outlined"
           sx={{ height: 22, "& .MuiChip-label": { fontSize: "0.75rem", px: 0.75 } }}
         />
+        {onSubmitMood ? (
+          <Box
+            component="form"
+            onSubmit={submitMood}
+            sx={{ display: "flex", alignItems: "center", gap: 0.75, ml: "auto" }}
+          >
+            <TextField
+              value={moodText}
+              onChange={(e) => setMoodText(e.target.value)}
+              placeholder="Mood? short, co-op, chill…"
+              size="small"
+              inputProps={{ maxLength: 200, "aria-label": "Mood for suggestions" }}
+              sx={{ width: { xs: 160, sm: 220 }, "& .MuiInputBase-root": { height: 32, fontSize: "0.8125rem" } }}
+            />
+            <Button type="submit" size="small" variant="outlined" sx={{ minHeight: 32 }}>
+              Ask
+            </Button>
+          </Box>
+        ) : null}
         {whatNextProvenanceLine(provenance) ? (
           <Typography variant="caption" sx={{ color: "text.muted", width: "100%" }}>
             {whatNextProvenanceLine(provenance)}

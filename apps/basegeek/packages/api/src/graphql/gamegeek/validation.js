@@ -350,3 +350,35 @@ export const RESOLVE_INSTALL_ACTIONS = Object.freeze([...INSTALL_FLAG_ACTIONS, '
 export const resolveInstallFlagArgsSchema = z
   .object({ gameId: idString, action: enumOf(RESOLVE_INSTALL_ACTIONS) })
   .strict();
+
+// ── Catalog meaning search (MCP_SPEC Stage 1b, D24) ────────────────────────
+
+export const gameSearchArgsSchema = z
+  .object({
+    q: z.string().trim().min(1).max(500),
+    limit: z.number().int().min(1).max(50).nullable().optional(),
+  })
+  .strict();
+
+export const gamesLikeArgsSchema = z
+  .object({
+    likeIds: z.array(idString).max(50).nullable().optional(),
+    q: z.string().trim().min(1).max(500).nullable().optional(),
+    limit: z.number().int().min(1).max(25).nullable().optional(),
+  })
+  .strict();
+
+export const gameLibraryOverviewArgsSchema = z
+  .object({
+    limit: z.number().int().min(1).max(1000).nullable().optional(),
+  })
+  .strict();
+
+// ── What should I play next (DOCS/WHAT_NEXT_SPEC.md, X9) ───────────────────
+
+export const gameWhatNextArgsSchema = z
+  .object({
+    mood: z.string().trim().min(1).max(200).nullable().optional(),
+    limit: z.number().int().min(1).max(10).nullable().optional(),
+  })
+  .strict();

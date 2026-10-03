@@ -36,6 +36,7 @@ import { startOAuthRefreshJob, stopOAuthRefreshJob } from './services/oauthRefre
 import { startAICatalogJob, stopAICatalogJob } from './services/aiCatalogJob.js';
 import reminderService from './graphql/bujogeek/services/reminderService.js';
 import { startNoteIndexer, stopNoteIndexer } from './graphql/notegeek/indexer.js';
+import { startCatalogIndexer, stopCatalogIndexer } from './graphql/catalog/catalogIndexer.js';
 import { ApolloServer } from '@apollo/server';
 import { expressMiddleware } from '@as-integrations/express4';
 import { typeDefs, resolvers } from './graphql/index.js';
@@ -601,6 +602,14 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
     logger.error({ err: error }, 'NoteGeek indexer failed to start');
   }
 
+  // The catalog counterpart (DOCS/MCP_SPEC.md §6 D19, DOCS/WHAT_NEXT_SPEC.md): keeps bookvectors /
+  // gamevectors in step with bookgeek's and gamegeek's item collections.
+  try {
+    startCatalogIndexer();
+  } catch (error) {
+    logger.error({ err: error }, 'Catalog indexer failed to start');
+  }
+
   // Phase 3: Initialize conversation service
   try {
     const conversationService = (await import('./services/conversationService.js')).default;
@@ -642,6 +651,11 @@ const shutdown = (signal) => {
       stopNoteIndexer()
     } catch (err) {
       logger.error({ err }, 'Error stopping NoteGeek indexer')
+    }
+    try {
+      stopCatalogIndexer()
+    } catch (err) {
+      logger.error({ err }, 'Error stopping catalog indexer')
     }
     try {
       reminderService.stop()

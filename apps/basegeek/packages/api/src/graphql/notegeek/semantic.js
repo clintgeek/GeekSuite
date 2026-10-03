@@ -328,7 +328,9 @@ export function whyExcerpt(text, title) {
 // ── queries ────────────────────────────────────────────────────────────────
 const queryCache = new Map(); // `${model}\u0000${q}` -> vector
 
-async function queryVector(q) {
+// Exported for the catalog meaning-search (graphql/catalog/catalogSemantic.js),
+// which shares this cache rather than keeping its own.
+export async function queryVector(q) {
   const { model } = embeddingsConfig();
   const key = `${ model }\u0000${ q.trim().toLowerCase() }`;
   if (queryCache.has(key)) return queryCache.get(key);

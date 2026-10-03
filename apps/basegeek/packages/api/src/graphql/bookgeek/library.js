@@ -54,6 +54,7 @@
 import logger from '../../lib/logger.js';
 import { runAIFeature } from '../../services/aiFeatureRunner.js';
 import { Book } from './models/book.js';
+import { catalogVectors, shortlistFromSeeds, moodQueryVector } from '../catalog/catalogSemantic.js';
 
 export const LIBRARY_APP = 'bookgeek';
 export const LIBRARY_FEATURE = 'library';
@@ -88,6 +89,17 @@ const FINISHED_SIGNALS = [
 ];
 
 const NOT_FINISHED = { $nor: FINISHED_SIGNALS };
+
+/** The JS twin of FINISHED_SIGNALS — for rows already in hand (WHAT_NEXT_SPEC X2). */
+export function isFinishedBook(book) {
+  return (
+    book?.shelf === 'read' ||
+    book?.shelf === 'abandoned' ||
+    (book?.readCount ?? 0) > 0 ||
+    book?.dateFinished != null
+  );
+}
+
 /** Owned, or deliberately placed on a shelf. A row with neither is library noise. */
 const IN_THE_LIBRARY = {
   $or: [{ owned: true }, { shelf: { $type: 'string', $nin: [''] } }],
@@ -121,6 +133,11 @@ export async function candidateBooks(limit = MAX_CANDIDATES) {
     .lean();
 }
 
+export const SEED_COUNT = 5;
+export const LOVED_SEEDS = 3;
+export const RECENT_SEEDS = 2;
+export const SHORTLIST_SIZE = 20;
+
 /** The last N finished books, newest first, with the rating the user gave. */
 export async function recentlyFinishedBooks(limit = MAX_FINISHED) {
   return Book.find({ $or: FINISHED_SIGNALS })
@@ -128,6 +145,51 @@ export async function recentlyFinishedBooks(limit = MAX_FINISHED) {
     .sort({ dateFinished: -1, updatedAt: -1, _id: -1 })
     .limit(Math.max(1, limit))
     .lean();
+}
+
+/**
+ * The five taste seeds (X2), chosen from rows the caller actually has a
+ * record of:
+ *
+ *   loved  — rated ≥4, most recently finished first (never-finished last); 3.
+ *   recent — the most recently finished not already chosen; 2.
+ *
+ * A short pool is topped up from the other to 5 total. Only ids with a
+ * vector in the shared library scope count — `vectorIds` is filtered
+ * against BEFORE taking, so an unindexed book never wastes a slot.
+ *
+ * Pure over rows (`{ id|_id, rating, dateFinished, updatedAt, finished }`);
+ * the DB read lives in `whatNext`.
+ */
+export function pickBookSeeds(rows, vectorIds) {
+  const idOf = (r) => String(r.id ?? r._id);
+  const eligible = (Array.isArray(rows) ? rows : []).filter((r) => vectorIds.has(idOf(r)));
+  const finishedDesc = (a, b) =>
+    (b.dateFinished ? +new Date(b.dateFinished) : -Infinity) -
+    (a.dateFinished ? +new Date(a.dateFinished) : -Infinity);
+  const loved = eligible.filter((r) => (r.rating ?? 0) >= 4).sort(finishedDesc);
+  const recent = eligible
+    .filter((r) => r.finished)
+    .sort((a, b) => finishedDesc(a, b) || (+new Date(b.updatedAt || 0)) - (+new Date(a.updatedAt || 0)));
+
+  const chosen = [];
+  const seen = new Set();
+  const take = (pool, n, why) => {
+    let left = n;
+    for (const row of pool) {
+      if (left <= 0) break;
+      const id = idOf(row);
+      if (seen.has(id)) continue;
+      seen.add(id);
+      chosen.push({ id, why, row });
+      left -= 1;
+    }
+  };
+  take(loved, LOVED_SEEDS, 'loved');
+  take(recent, RECENT_SEEDS, 'recent');
+  take(loved, SEED_COUNT - chosen.length, 'loved');
+  take(recent, SEED_COUNT - chosen.length, 'recent');
+  return chosen.slice(0, SEED_COUNT);
 }
 
 /** Every tag the library already uses, most-used first, capped. Names only. */
@@ -179,6 +241,9 @@ You are given JSON with:
 - "recentlyFinished": the books they most recently finished, with the rating they
   gave (0-5; 0 means they did not rate it).
 - "limit": how many picks to return.
+- "mood" (optional): a short phrase for what they feel like right now.
+- "because" on a candidate names the loved or recently-finished book it most
+  resembles — present only when their library has been meaning-indexed.
 
 Rules, in order of importance:
 1. Return at most "limit" picks, each a DISTINCT "bookId" copied verbatim from a
@@ -190,7 +255,10 @@ Rules, in order of importance:
    a length that fits, the shelf they parked it on, how long it has been waiting.
 4. Do not use outside knowledge about these books. Do not describe the plot, do
    not summarise the story, and never reveal anything a reader would not want to
-   know before starting.`;
+   know before starting.
+5. When "mood" is given, honour it. When a candidate carries "because", that is
+   the book they loved that this one resembles — leaning on it for "why" is
+   good.`;
 
 /** Average rating per author across the books they actually rated. */
 function authorAverages(finished) {
@@ -248,9 +316,10 @@ export function fallbackPicks(candidates, finished, limit) {
 }
 
 /** The trimmed snapshot the model sees. Ids and titles, never bodies. */
-export function whatNextContext(candidates, finished, limit) {
+export function whatNextContext(candidates, finished, limit, { becauseById = null, mood = null } = {}) {
   return {
     limit,
+    mood: mood || null,
     candidates: candidates.map((book) => ({
       id: String(book._id),
       title: book.title || 'Untitled',
@@ -259,6 +328,7 @@ export function whatNextContext(candidates, finished, limit) {
       pages: Number.isFinite(book.pageCount) ? book.pageCount : null,
       shelf: book.shelf || 'unread',
       added: dayString(book.dateAdded),
+      ...(becauseById ? { because: becauseById.get(String(book._id)) ?? null } : {}),
     })),
     recentlyFinished: finished.map((book) => ({
       title: book.title || 'Untitled',
@@ -306,37 +376,94 @@ function normalizePicks(picks, limit, byId) {
  * @param {object} opts
  * @param {string} opts.userId
  * @param {number} opts.limit
+ * @param {string} [opts.mood]    an optional steering phrase (WHAT_NEXT_SPEC X4)
  * @param {boolean} opts.enabled  the caller's opt-in switch
  */
-export async function whatNext({ userId, limit, enabled }) {
-  const [candidates, finished] = await Promise.all([
+export async function whatNext({ userId, limit, enabled, mood }) {
+  const [candidates, finished, vecs] = await Promise.all([
     candidateBooks(MAX_CANDIDATES),
     recentlyFinishedBooks(MAX_FINISHED),
+    catalogVectors('book', 'books'),
   ]);
+  const byId = new Map(candidates.map((b) => [String(b._id), b]));
 
-  const fallback = () => ({ picks: fallbackPicks(candidates, finished, limit) });
+  // The vector path (WHAT_NEXT_SPEC): five taste seeds → the X3 round-robin
+  // shortlist of ≤20 candidates, steered by the mood's vector. No vectors or
+  // no seeds → today's shape: every candidate, newest-added first.
+  const vectorIds = new Set(vecs.map((v) => v.itemId));
+  let shortlist = null;
+  let seeds = [];
+  if (vectorIds.size) {
+    const seedRows = await Book.find(
+      { $or: [{ rating: { $gte: 4 } }, ...FINISHED_SIGNALS] },
+      { title: 1, rating: 1, shelf: 1, readCount: 1, dateFinished: 1, updatedAt: 1 },
+    ).lean();
+    seeds = pickBookSeeds(
+      seedRows.map((r) => ({ ...r, finished: isFinishedBook(r) })),
+      vectorIds,
+    );
+    if (seeds.length) {
+      const moodVec = await moodQueryVector(mood, logger);
+      const short = await shortlistFromSeeds({
+        kind: 'book',
+        scope: 'books',
+        seedIds: seeds.map((s) => s.id),
+        candidateIds: new Set(byId.keys()),
+        moodVec,
+        size: SHORTLIST_SIZE,
+      });
+      if (short.length) shortlist = short;
+    }
+  }
+
+  const modelCandidates = shortlist
+    ? shortlist.map((s) => byId.get(s.id)).filter(Boolean)
+    : candidates;
+  const seedTitleById = new Map();
+  const seedWhyById = new Map();
+  for (const seed of seeds) {
+    seedTitleById.set(seed.id, seed.row?.title ?? 'it');
+    seedWhyById.set(seed.id, seed.why);
+  }
+  const becauseById = shortlist
+    ? new Map(shortlist.map((s) => [s.id, seedTitleById.get(s.because) ?? null]))
+    : null;
+
+  const fallback = shortlist
+    ? () => ({
+        picks: shortlist.slice(0, limit).map((s) => {
+          const seedWhy = seedWhyById.get(s.because);
+          const title = seedTitleById.get(s.because) ?? 'it';
+          return {
+            bookId: s.id,
+            why: seedWhy === 'recent' ? `Because you read ${ title } recently.` : `Because you loved ${ title }.`,
+          };
+        }),
+      })
+    : () => ({ picks: fallbackPicks(candidates, finished, limit) });
 
   let result;
-  if (!candidates.length) {
+  if (!modelCandidates.length) {
     result = { data: { picks: [] }, provenance: disabledProvenance('no_candidates') };
   } else if (!enabled) {
     result = { data: fallback(), provenance: disabledProvenance('disabled') };
   } else {
-    const allowedIds = new Set(candidates.map((b) => String(b._id)));
+    const allowedIds = new Set(modelCandidates.map((b) => String(b._id)));
     result = await runAIFeature({
       app: LIBRARY_APP,
       feature: LIBRARY_FEATURE,
       userId,
       system: WHAT_NEXT_SYSTEM_PROMPT,
-      user: JSON.stringify(whatNextContext(candidates, finished, limit)),
+      user: JSON.stringify(whatNextContext(modelCandidates, finished, limit, { becauseById, mood })),
       schema: WHAT_NEXT_SCHEMA,
       validate: (data) => validatePicks(data, allowedIds, limit),
       fallback,
+      maxTokens: 350,
       maxCallsPerDay: LIBRARY_DAILY_CAP,
     });
   }
 
-  const byId = new Map(candidates.map((b) => [String(b._id), b]));
+
   const picks = normalizePicks(result.data?.picks, limit, byId);
   logger.info(
     {

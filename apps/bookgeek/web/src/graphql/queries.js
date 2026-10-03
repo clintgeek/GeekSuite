@@ -272,8 +272,8 @@ const AI_PROVENANCE_FIELDS = `
 `;
 
 export const GET_WHAT_NEXT = gql`
-  query GetWhatNext($limit: Int) {
-    whatNext(limit: $limit) {
+  query GetWhatNext($limit: Int, $mood: String) {
+    whatNext(limit: $limit, mood: $mood) {
       picks {
         bookId
         why

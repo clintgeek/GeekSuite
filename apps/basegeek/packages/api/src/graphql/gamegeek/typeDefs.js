@@ -369,7 +369,73 @@ export const typeDefs = gql`
     filter: JSON
   }
 
+  # Meaning search / recommendations over the household library (MCP_SPEC Stage 1b).
+  type GameSearchHit {
+    game: Game!
+    score: Float!
+    matchedBy: String!
+  }
+  type GameSearchResult {
+    items: [GameSearchHit!]!
+  }
+  type GameSeedRef {
+    id: ID!
+    title: String
+  }
+  type GameLikeHit {
+    game: Game!
+    score: Float!
+    closestTo: GameSeedRef
+  }
+  type GamesLikeResult {
+    items: [GameLikeHit!]!
+    # null on success; 'no_seeds', 'not_indexed' or 'embeddings_unavailable' when empty.
+    reason: String
+  }
+  # One owned game in the caller's compact library overview (D23): the
+  # catalog fields plus the CALLER's state row.
+  type GameLibraryEntry {
+    id: ID!
+    title: String!
+    genres: [String!]
+    tags: [String!]
+    shelf: String
+    rating: Float
+    hoursPlayed: Float
+    favorite: Boolean
+  }
+  type GameLibraryOverview {
+    items: [GameLibraryEntry!]!
+    total: Int!
+    truncated: Boolean!
+  }
+
+  # A what-next pick: the game document rides along so the shelf is one
+  # round trip. why is the one-sentence reason (model or fallback).
+  type GameWhatNextPick {
+    gameId: ID!
+    game: Game
+    why: String
+  }
+
+  type GameWhatNextResult {
+    picks: [GameWhatNextPick!]!
+    provenance: AIProvenance!
+  }
+
   extend type Query {
+    # Hybrid keyword + meaning search over the household's catalog vectors
+    # (local embeddings only). Keyword-only when the embeddings service is down.
+    gameSearch(q: String!, limit: Int): GameSearchResult!
+    # Owned games the caller hasn't really played, ranked by likeness to what
+    # they loved — or to likeIds / q when given. Local embeddings only.
+    gamesLike(likeIds: [ID!], q: String, limit: Int): GamesLikeResult!
+    # The caller's whole owned library, compact, in one call.
+    gameLibraryOverview(limit: Int): GameLibraryOverview!
+    # "What should I play?" — owned unplayed games ranked from five taste
+    # seeds by the local vectors, then by one model call (or the
+    # deterministic fallback). Opt-in: appPreferences.gamegeek.playAssistant.
+    gameWhatNext(mood: String, limit: Int): GameWhatNextResult!
     # sort: title | dateAdded | releaseDate | rating | lastPlayed | hoursPlayed | timeToBeat | random
     # (rating/lastPlayed/hoursPlayed are the CALLER's values; timeToBeat is main,
     # nulls last; random is ordered by seed, stable across pages). sortDir: asc | desc.

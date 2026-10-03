@@ -61,6 +61,10 @@ describe('gamegeek — authentication required', () => {
       gameFacets: () => Query.gameFacets(null, {}, ctx(null)),
       gameProfile: () => Query.gameProfile(null, {}, ctx(null)),
       gameVocabulary: () => Query.gameVocabulary(null, {}, ctx(null)),
+      gameSearch: () => Query.gameSearch(null, { q: 'x' }, ctx(null)),
+      gamesLike: () => Query.gamesLike(null, {}, ctx(null)),
+      gameLibraryOverview: () => Query.gameLibraryOverview(null, {}, ctx(null)),
+      gameWhatNext: () => Query.gameWhatNext(null, {}, ctx(null)),
     };
     const mutationCalls = {
       createGame: () => Mutation.createGame(null, { input: { title: 'x' } }, ctx(null)),

@@ -4,8 +4,9 @@ import bookSchemaModule from "@geeksuite/schemas/bookgeek/book";
 import AIConfig from "../../models/AIConfig.js";
 import mongoose from "mongoose";
 import * as library from "./library.js";
-import { randomSortKey, pageFacetStage, shapePage } from "@geeksuite/collection/server";
-import { SHELF_NAMES, shelfMatch, buildConditions, facetsPipeline, shapeFacets, legacyConditions } from "./filters.js";
+import { randomSortKey, pageFacetStage, shapePage, searchRegex } from "@geeksuite/collection/server";
+import { SHELF_NAMES, shelfMatch, buildConditions, facetsPipeline, shapeFacets, legacyConditions, searchMatch } from "./filters.js";
+import { searchCatalog, recommendCatalog } from "../catalog/catalogSemantic.js";
 import {
   validateInput,
   createBookArgsSchema,
@@ -20,6 +21,8 @@ import {
   draftBookMetadataArgsSchema,
   booksFilterArgsSchema,
   bookFacetsArgsSchema,
+  bookSearchArgsSchema,
+  booksLikeArgsSchema,
 } from "./validation.js";
 
 // The tag vocabulary (apps/bookgeek/DOCS/TAGS.md). The shared module is
@@ -58,6 +61,8 @@ const validateDeleteLibraryFilter = validateInput(deleteLibraryFilterArgsSchema)
 const validateAddBookShelf = validateInput(addBookShelfArgsSchema);
 const validateRemoveBookShelf = validateInput(removeBookShelfArgsSchema);
 const validateWhatNext = validateInput(whatNextArgsSchema);
+const validateBookSearch = validateInput(bookSearchArgsSchema);
+const validateBooksLike = validateInput(booksLikeArgsSchema);
 const validateDraftBookMetadata = validateInput(draftBookMetadataArgsSchema);
 const validateBooksFilter = validateInput(booksFilterArgsSchema);
 const validateBookFacets = validateInput(bookFacetsArgsSchema);
@@ -288,6 +293,74 @@ export const resolvers = {
         pageSize: limitNum,
       };
     },
+    // Meaning search over the shared library's catalog vectors (MCP_SPEC
+    // Stage 1b, D20/D24). Household-shared like `books`: no user narrowing.
+    // Keyword rows come from the existing `q` filter, title matches first;
+    // the vector half silently drops out when the embeddings service is down.
+    bookSearch: async (_, rawArgs, { user }) => {
+      requireUser(user);
+      const { q, limit } = validateBookSearch(rawArgs ?? {});
+      const limitNum = Math.min(50, limit ?? 20);
+      const match = searchMatch(q);
+      const rows = await Book.find(match || {}, { title: 1 }).limit(200).lean();
+      const titleHit = new RegExp(searchRegex(q), 'i');
+      const keywordRows = [
+        ...rows.filter((r) => titleHit.test(r.title || '')),
+        ...rows.filter((r) => !titleHit.test(r.title || '')),
+      ];
+      const hits = await searchCatalog({ kind: 'book', scope: 'books', q, keywordRows, limit: limitNum });
+      const books = await Book.find({ _id: { $in: hits.map((h) => h.id) } }).lean();
+      const byId = new Map(books.map((b) => [String(b._id), b]));
+      return { items: hits.filter((h) => byId.has(h.id)).map((h) => ({ book: byId.get(h.id), score: h.score, matchedBy: h.matchedBy })) };
+    },
+    // "Owned and unread that reads like what I loved" (D22): seeds are the
+    // caller's 4★+ books — or likeIds when given — and candidates are owned
+    // books never finished, never read, not on the 'read' shelf.
+    booksLike: async (_, rawArgs, { user }) => {
+      requireUser(user);
+      const { likeIds, q, limit } = validateBooksLike(rawArgs ?? {});
+      const limitNum = Math.min(25, limit ?? 10);
+      let seeds;
+      // An explicitly-given likeIds replaces the taste seeds — even an empty
+      // array, which is how a caller says "no seeds, just the q".
+      if (likeIds != null) {
+        const ids = likeIds.filter((v) => validObjectId(v));
+        seeds = (await Book.find({ _id: { $in: ids } }, { _id: 1 }).lean()).map((b) => ({ id: String(b._id), weight: 1 }));
+      } else {
+        seeds = (await Book.find({ rating: { $gte: 4 } }, { _id: 1 }).lean()).map((b) => ({ id: String(b._id), weight: 1 }));
+      }
+      const candidates = await Book.find(
+        {
+          owned: true,
+          _id: { $nin: seeds.map((s) => s.id) },
+          shelf: { $ne: 'read' },
+          dateFinished: null,
+          $or: [{ readCount: 0 }, { readCount: null }, { readCount: { $exists: false } }],
+        },
+        { _id: 1 },
+      ).lean();
+      const { items, reason } = await recommendCatalog({
+        kind: 'book',
+        scope: 'books',
+        seeds,
+        candidateIds: new Set(candidates.map((c) => String(c._id))),
+        q,
+        limit: limitNum,
+      });
+      const lookupIds = [...new Set([...items.map((i) => i.id), ...items.map((i) => i.closestId).filter(Boolean)])];
+      const docs = await Book.find({ _id: { $in: lookupIds } }).lean();
+      const byId = new Map(docs.map((b) => [String(b._id), b]));
+      return {
+        reason,
+        items: items
+          .filter((i) => byId.has(i.id))
+          .map((i) => ({
+            book: byId.get(i.id),
+            score: i.score,
+            closestTo: i.closestId ? { id: i.closestId, title: byId.get(i.closestId)?.title ?? null } : null,
+          })),
+      };
+    },
     // Each facet's counts apply every active filter EXCEPT its own
     // (filters.js). Household-shared like `books`: no user narrowing.
     bookFacets: async (_, rawArgs, { user }) => {
@@ -363,10 +436,10 @@ export const resolvers = {
     // it is off both still answer — with the deterministic fallback.
     whatNext: async (_, rawArgs, { user }) => {
       const userId = requireUser(user);
-      const { limit } = validateWhatNext(rawArgs);
+      const { limit, mood } = validateWhatNext(rawArgs);
       const picks = Math.min(library.MAX_PICKS, Math.max(1, limit ?? 5));
       const enabled = await library.libraryAssistantEnabled(userId);
-      return await library.whatNext({ userId, limit: picks, enabled });
+      return await library.whatNext({ userId, limit: picks, enabled, mood });
     },
     draftBookMetadata: async (_, rawArgs, { user }) => {
       const userId = requireUser(user);

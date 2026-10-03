@@ -6,8 +6,10 @@ import { GameProfile } from './models/profile.js';
 import householdModule from '@geeksuite/schemas/gamegeek/household';
 import constantsModule from '@geeksuite/schemas/gamegeek/constants';
 import gameSchemaModule from '@geeksuite/schemas/gamegeek/game';
-import { nullsLastSort, pageArgs, pageFacetStage, randomSortKey, shapePage } from '@geeksuite/collection/server';
-import { effectiveFilter, buildConditions, matchOf, lookupMeStages, facetsPipeline, shapeFacets } from './filters.js';
+import { nullsLastSort, pageArgs, pageFacetStage, randomSortKey, shapePage, buildSearchFilter, searchRegex } from '@geeksuite/collection/server';
+import { effectiveFilter, buildConditions, matchOf, lookupMeStages, facetsPipeline, shapeFacets, SEARCH_FIELDS } from './filters.js';
+import { searchCatalog, recommendCatalog } from '../catalog/catalogSemantic.js';
+import * as library from './library.js';
 import {
   validateInput,
   GAME_SORTS,
@@ -28,6 +30,10 @@ import {
   saveGameFilterArgsSchema,
   deleteGameFilterArgsSchema,
   resolveInstallFlagArgsSchema,
+  gameSearchArgsSchema,
+  gamesLikeArgsSchema,
+  gameLibraryOverviewArgsSchema,
+  gameWhatNextArgsSchema,
 } from './validation.js';
 
 /**
@@ -92,6 +98,10 @@ const validateRemoveGameShelf = validateInput(removeGameShelfArgsSchema);
 const validateSaveGameFilter = validateInput(saveGameFilterArgsSchema);
 const validateDeleteGameFilter = validateInput(deleteGameFilterArgsSchema);
 const validateResolveInstallFlag = validateInput(resolveInstallFlagArgsSchema);
+const validateGameSearch = validateInput(gameSearchArgsSchema);
+const validateGamesLike = validateInput(gamesLikeArgsSchema);
+const validateGameLibraryOverview = validateInput(gameLibraryOverviewArgsSchema);
+const validateGameWhatNext = validateInput(gameWhatNextArgsSchema);
 
 /** The flag fields cleared whenever the "not installed anymore" question is answered or moot. */
 const CLEAR_INSTALL_FLAG = Object.freeze({ installFlag: null, installFlagAt: null });
@@ -517,6 +527,137 @@ export const resolvers = {
   },
 
   Query: {
+    // Meaning search over the household's catalog vectors (MCP_SPEC Stage
+    // 1b, D20/D24). Same tenancy rule as everything above: `householdId` in
+    // the literal, keyword rows from the existing `q` filter, title matches
+    // first. Keyword-only when the embeddings service is down.
+    gameSearch: async (_, rawArgs, { user } = {}) => {
+      requireUser(user);
+      const householdId = resolveHouseholdId(user);
+      const { q, limit } = validateGameSearch(rawArgs ?? {});
+      const limitNum = Math.min(50, limit ?? 20);
+      const match = buildSearchFilter(q, SEARCH_FIELDS);
+      const rows = await Game.find({ householdId, ...(match || {}) }, { title: 1 }).limit(200).lean();
+      const titleHit = new RegExp(searchRegex(q), 'i');
+      const keywordRows = [
+        ...rows.filter((r) => titleHit.test(r.title || '')),
+        ...rows.filter((r) => !titleHit.test(r.title || '')),
+      ];
+      const hits = await searchCatalog({ kind: 'game', scope: householdId, q, keywordRows, limit: limitNum });
+      const games = await Game.find({ _id: { $in: hits.map((h) => h.id) }, householdId }).lean();
+      const byId = new Map(games.map((g) => [String(g._id), g]));
+      return { items: hits.filter((h) => byId.has(h.id)).map((h) => ({ game: byId.get(h.id), score: h.score, matchedBy: h.matchedBy })) };
+    },
+
+    // "Owned, haven't played, might enjoy" (D21). Seeds: the caller's
+    // GamePlayer rows that are favorite, rated ≥4, or the top 10 by
+    // hoursPlayed (≥5 h) — or likeIds, household-checked, when given.
+    // Candidates: owned household games the caller has no row for, or a
+    // zero-hour row on no shelf / the backlog shelf.
+    gamesLike: async (_, rawArgs, { user } = {}) => {
+      const userId = requireUser(user);
+      const householdId = resolveHouseholdId(user);
+      const { likeIds, q, limit } = validateGamesLike(rawArgs ?? {});
+      const limitNum = Math.min(25, limit ?? 10);
+
+      let seeds;
+      // An explicitly-given likeIds replaces the taste seeds — even an empty
+      // array, which is how a caller says "no seeds, just the q".
+      if (likeIds != null) {
+        const ids = likeIds.filter((v) => validObjectId(v));
+        // Household-scoped: a foreign id is silently ignored, never an error.
+        const games = await Game.find({ _id: { $in: ids }, householdId }, { _id: 1 }).lean();
+        seeds = games.map((g) => ({ id: String(g._id), weight: 1 }));
+      } else {
+        const loved = await GamePlayer.find(
+          { userId, householdId, $or: [{ favorite: true }, { rating: { $gte: 4 } }] },
+          { gameId: 1, favorite: 1, rating: 1 },
+        ).lean();
+        const mostPlayed = await GamePlayer.find(
+          { userId, householdId, hoursPlayed: { $gte: 5 } },
+          { gameId: 1, favorite: 1, rating: 1 },
+        ).sort({ hoursPlayed: -1 }).limit(10).lean();
+        const byGame = new Map();
+        for (const row of [...loved, ...mostPlayed]) {
+          const id = String(row.gameId);
+          const weight = row.favorite || row.rating === 5 ? 2 : 1;
+          const prev = byGame.get(id);
+          byGame.set(id, { id, weight: Math.max(weight, prev?.weight ?? 0) });
+        }
+        seeds = [...byGame.values()];
+      }
+
+      const candidateIds = new Set(
+        await library.unplayedGameIds({ userId, householdId, excludeIds: new Set(seeds.map((s) => s.id)) }),
+      );
+
+      const { items, reason } = await recommendCatalog({
+        kind: 'game', scope: householdId, seeds, candidateIds, q, limit: limitNum,
+      });
+      const lookupIds = [...new Set([...items.map((i) => i.id), ...items.map((i) => i.closestId).filter(Boolean)])];
+      const docs = await Game.find({ _id: { $in: lookupIds }, householdId }).lean();
+      const byId = new Map(docs.map((g) => [String(g._id), g]));
+      return {
+        reason,
+        items: items
+          .filter((i) => byId.has(i.id))
+          .map((i) => ({
+            game: byId.get(i.id),
+            score: i.score,
+            closestTo: i.closestId ? { id: i.closestId, title: byId.get(i.closestId)?.title ?? null } : null,
+          })),
+      };
+    },
+
+    // The caller's whole owned library in one compact call (D23): EVERY owned
+    // household game — including ones they've never touched, which are
+    // exactly the "own but haven't played" set — with their state row (or
+    // nulls) left-joined on. Capped at 1 000.
+    gameLibraryOverview: async (_, rawArgs, { user } = {}) => {
+      const userId = requireUser(user);
+      const householdId = resolveHouseholdId(user);
+      const { limit } = validateGameLibraryOverview(rawArgs ?? {});
+      const limitNum = Math.min(1000, limit ?? 1000);
+      const [games, rows] = await Promise.all([
+        Game.find(
+          { householdId, owned: true },
+          { title: 1, sortTitle: 1, genres: 1, tags: 1, autoTags: 1 },
+        ).sort({ sortTitle: 1, _id: 1 }).lean(),
+        GamePlayer.find(
+          { userId, householdId },
+          { gameId: 1, shelf: 1, rating: 1, hoursPlayed: 1, favorite: 1 },
+        ).lean(),
+      ]);
+      const byGame = new Map(rows.map((r) => [String(r.gameId), r]));
+      const all = games.map((g) => {
+        const r = byGame.get(String(g._id));
+        return {
+          id: String(g._id),
+          title: g.title,
+          genres: g.genres || [],
+          tags: [...new Set([...(g.tags || []), ...(g.autoTags || [])])],
+          shelf: r?.shelf ?? null,
+          rating: r?.rating ?? null,
+          hoursPlayed: r?.hoursPlayed ?? 0,
+          favorite: Boolean(r?.favorite),
+        };
+      });
+      return { items: all.slice(0, limitNum), total: all.length, truncated: all.length > limitNum };
+    },
+
+    // "What should I play?" (DOCS/WHAT_NEXT_SPEC.md): a local vector
+    // shortlist from five taste seeds, ranked and explained by one model
+    // call — or the deterministic fallback when the assistant is off, capped
+    // or unreachable. Opt-in via appPreferences.gamegeek.playAssistant.
+    gameWhatNext: async (_, rawArgs, { user } = {}) => {
+      const userId = requireUser(user);
+      const householdId = resolveHouseholdId(user);
+      const { mood, limit } = validateGameWhatNext(rawArgs ?? {});
+      const picks = Math.min(library.MAX_PICKS, Math.max(1, limit ?? 5));
+      const enabled = await library.playAssistantEnabled(userId);
+      return await library.gameWhatNext({ userId, householdId, mood, limit: picks, enabled });
+    },
+
     games: async (_, rawArgs, { user } = {}) => {
       const userId = requireUser(user);
       const householdId = resolveHouseholdId(user);

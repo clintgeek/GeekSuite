@@ -291,17 +291,48 @@ export const typeDefs = gql`
     provenance: AIProvenance!
   }
 
+  # Meaning search / recommendations over the shared library (MCP_SPEC Stage 1b).
+  # matchedBy: keyword | meaning | both. score is the fused rank score.
+  type BookSearchHit {
+    book: Book!
+    score: Float!
+    matchedBy: String!
+  }
+  type BookSearchResult {
+    items: [BookSearchHit!]!
+  }
+  type BookSeedRef {
+    id: ID!
+    title: String
+  }
+  type BookLikeHit {
+    book: Book!
+    score: Float!
+    closestTo: BookSeedRef
+  }
+  type BooksLikeResult {
+    items: [BookLikeHit!]!
+    # null on success; 'no_seeds', 'not_indexed' or 'embeddings_unavailable' when empty.
+    reason: String
+  }
+
   type Query {
     # The flat args are the pre-C2 library's and keep working unchanged; "filter" is the faceted
     # library's. sort adds "random" (seeded by "seed", stable across pages).
     books(page: Int, limit: Int, sort: String, sortDir: String, author: String, tag: String, shelf: String, owned: String, q: String, filter: BookFilterInput, seed: Int): BookPage!
+    # Hybrid keyword + meaning search over the catalog vectors (local
+    # embeddings only). Keyword-only when the embeddings service is down.
+    bookSearch(q: String!, limit: Int): BookSearchResult!
+    # Owned, unread books ranked by likeness to the caller's 4★+ books — or
+    # to likeIds / q when given. Local embeddings only; no AI spend.
+    booksLike(likeIds: [ID!], q: String, limit: Int): BooksLikeResult!
     bookFacets(filter: BookFilterInput): BookFacets!
     book(id: ID!): Book
     shelves: ShelfStats!
     bookProfile: BookProfile
     libraryFilters: [BookSavedFilter!]!
     bookAiStatus: BookAiStatus!
-    whatNext(limit: Int = 5): WhatNextResult!
+    whatNext(limit: Int = 5, mood: String): WhatNextResult!
     draftBookMetadata(bookId: ID!): BookMetadataDraft!
   }
 

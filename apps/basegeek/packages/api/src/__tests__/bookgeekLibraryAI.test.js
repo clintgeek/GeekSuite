@@ -34,6 +34,10 @@ const { User } = await import('../models/user.js');
 const { resolvers } = await import('../graphql/bookgeek/resolvers.js');
 const library = await import('../graphql/bookgeek/library.js');
 const { _resetCounters } = await import('../services/aiFeatureRunner.js');
+const { BookVector } = await import('../graphql/catalog/models/BookVector.js');
+const catalogSemantic = await import('../graphql/catalog/catalogSemantic.js');
+const semantic = await import('../graphql/notegeek/semantic.js');
+const { embeddingsConfig } = await import('../graphql/notegeek/embeddings.js');
 
 const Q = resolvers.Query;
 
@@ -63,9 +67,11 @@ async function setOptIn(userId, value) {
   );
 }
 
+const realFetch = globalThis.fetch;
 beforeAll(async () => {
   await Book.db.asPromise();
   await User.db.asPromise();
+  await BookVector.init();
   await User.create([
     { _id: ALICE, username: 'alice-r117', passwordHash: 'x'.repeat(20) },
     { _id: BOB, username: 'bob-r117', passwordHash: 'x'.repeat(20) },
@@ -76,10 +82,23 @@ beforeEach(() => {
   callAI.mockReset();
   aiServiceMock.lastProviderInfo = { provider: 'groq', model: 'llama-test' };
   _resetCounters();
+  semantic._resetSemanticState();
+  catalogSemantic._resetCatalogState();
+  // The mood vector's only fetch (the local query embedder) — a fixed 3-dim
+  // answer so it blends with the 3-dim vectors the shortlist tests plant.
+  globalThis.fetch = jest.fn(() =>
+    Promise.resolve({
+      ok: true, status: 200,
+      json: async () => ({ embeddings: [[0.5, 0.5, 0.5]] }),
+      text: async () => '',
+    })
+  );
 });
 
 afterEach(async () => {
+  globalThis.fetch = realFetch;
   await Book.deleteMany({});
+  await BookVector.deleteMany({});
 });
 
 afterAll(async () => {
@@ -367,6 +386,62 @@ describe('draftBookMetadata', () => {
       library.validateMetadataDraft({ description: 'x'.repeat(library.MAX_DESCRIPTION_CHARS + 1), tags: [] }, known)
     ).toBe(false);
     expect(library.validateMetadataDraft({ description: '', tags: new Array(9).fill('mystery') }, known)).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// WHAT_NEXT_SPEC: the vector shortlist path + the mood box
+// ---------------------------------------------------------------------------
+
+const mkBVec = (itemId, vector) =>
+  BookVector.create({ itemId, model: embeddingsConfig().model, hash: 'h', vector, indexedAt: new Date() });
+
+describe('whatNext — the vector shortlist path (WHAT_NEXT_SPEC)', () => {
+  /** One loved finished book + two candidates, with planted 3-dim vectors. */
+  async function plant() {
+    const [loved, c1, c2] = await Book.create([
+      bookRow({ title: 'Loved Space Book', shelf: 'read', rating: 5, readCount: 1, dateFinished: new Date('2026-03-01') }),
+      bookRow({ title: 'Unread One', description: 'never sent' }),
+      bookRow({ title: 'Unread Two' }),
+    ]);
+    await Promise.all([
+      mkBVec(loved._id, [1, 0, 0]),
+      mkBVec(c1._id, [0.9, 0.1, 0]),
+      mkBVec(c2._id, [0.2, 0.9, 0]),
+    ]);
+    return { loved, c1, c2 };
+  }
+
+  test('shortlisted candidates carry mood and the loved book they resemble ("because")', async () => {
+    await setOptIn(ALICE, true);
+    const { c1 } = await plant();
+    modelSays({ picks: [{ bookId: String(c1._id), why: 'A match.' }] });
+    const res = await Q.whatNext(null, { limit: 5, mood: 'something cozy' }, ctx(ALICE));
+
+    const sent = JSON.parse(callAI.mock.calls[0][1].messages[1].content);
+    expect(sent.mood).toBe('something cozy');
+    expect(sent.candidates.length).toBeLessThanOrEqual(20);
+    expect(sent.candidates[0]).toMatchObject({ title: 'Unread One', because: 'Loved Space Book' });
+    expect(res.picks[0]).toMatchObject({ bookId: String(c1._id), why: 'A match.' });
+  });
+
+  test('shortlist disabled → fallback is the shortlist order with "because you loved" reasons', async () => {
+    await setOptIn(ALICE, false);
+    const { c1 } = await plant();
+    const res = await Q.whatNext(null, { limit: 5 }, ctx(ALICE));
+    expect(callAI).not.toHaveBeenCalled();
+    expect(res.provenance.reason).toBe('disabled');
+    expect(res.picks[0]).toMatchObject({ bookId: String(c1._id), why: 'Because you loved Loved Space Book.' });
+  });
+
+  test('no vectors → the legacy path: every candidate, no "because" key', async () => {
+    await setOptIn(ALICE, true);
+    await Book.create(bookRow({ title: 'Plain Unread' }));
+    modelSays({ picks: [] });
+    await Q.whatNext(null, { limit: 5 }, ctx(ALICE));
+    const sent = JSON.parse(callAI.mock.calls[0][1].messages[1].content);
+    expect(sent.candidates).toHaveLength(1);
+    expect('because' in sent.candidates[0]).toBe(false);
   });
 });
 

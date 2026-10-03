@@ -45,7 +45,7 @@ const { ENRICHMENT_STATUSES, LENGTH_BUCKETS, LENGTH_BOUNDS, FILTER_PLAYED, RECEN
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /** The fields a library search looks in. */
-const SEARCH_FIELDS = ['title', 'developers', 'publishers', 'tags', 'autoTags', 'genres'];
+export const SEARCH_FIELDS = ['title', 'developers', 'publishers', 'tags', 'autoTags', 'genres'];
 
 export { searchRegex, matchOf };
 
