@@ -684,13 +684,13 @@ is opt-in, off by default, and nothing on either path writes to a book.
   `descriptionSchema` on the update input.
 - **`resolvers.js`** — the two `Query` resolvers; `requireUser` first, zod second,
   same as the rest of the module.
-- **Web**: `components/WhatNextShelf.jsx`, `utils/libraryAssistant.js` (tag merge
+- **Web**: `components/WhatNextSheet.jsx` (was `WhatNextShelf.jsx`; see below), `utils/libraryAssistant.js` (tag merge
   + the provenance wording), the `GET_WHAT_NEXT` / `DRAFT_BOOK_METADATA`
   documents, a **Library assistant** switch in Settings → AI, a "Draft
   description & tags" button plus a real **Description** field in
   `EditMetadataDialog`, and the App state/handlers behind all of it.
-- **Tests**: `bookgeekLibraryAI.test.js` (18, gateway), `WhatNextShelf.test.jsx`
-  (7), `libraryAssistant.test.js` (7), `EditMetadataDialog.test.jsx` (7), plus 3
+- **Tests**: `bookgeekLibraryAI.test.js` (18, gateway), `WhatNextSheet.test.jsx`
+  (10), `hooks/useWhatNext.test.jsx` (3), `libraryAssistant.test.js` (7), `EditMetadataDialog.test.jsx` (7), plus 3
   in `SettingsView.test.jsx`.
 
 ### The decisions, and why
@@ -709,9 +709,12 @@ is opt-in, off by default, and nothing on either path writes to a book.
   document, and `BookCard` needs a book — so the pick carries it, and the shelf
   is one round trip instead of `bookId` plus five `book(id:)` lookups. `bookId`
   is still the identity to key on.
-- **`ShelfStrip` is a chip nav, not a book rail**, so `WhatNextShelf` reuses its
-  *pattern* (scroll-snap, full-bleed, no scrollbar) and real `BookCard`s, rather
-  than the component itself.
+- **On demand, in a sheet (2026-10-03).** The original rail of `BookCard`s
+  above the grid loaded on every visit and pushed the library down. Now a ✨
+  button in the library header (`LibraryHeader` `actions`, beside the ⋯ menu)
+  opens `WhatNextSheet`, a `GeekSheet` of compact rows, and the query is
+  skipped until that first open (`useWhatNext`'s `asked` latch). Root spec:
+  `DOCS/WHAT_NEXT_SPEC.md` §8.
 - **The opt-in lives where `defaultShelfFilter` already lives** —
   `appPreferences.bookgeek.libraryAssistant`, via `useAppPreferences("bookgeek")`
   → `PATCH /api/users/preferences/bookgeek`. It is checked **server-side too**:

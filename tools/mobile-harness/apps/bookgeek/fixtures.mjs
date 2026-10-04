@@ -138,7 +138,7 @@ function coverSvg(book) {
 // reported rather than fixed (out of this stream's `tools/mobile-harness/**`
 // scope) — see the harness run report. This fixture attaches `book` anyway,
 // deliberately broader than what the shipped query can ever receive, purely
-// so `WhatNextShelf` itself (its render and its a11y) can be exercised.
+// so `WhatNextSheet` itself (its render and its a11y) can be exercised.
 export const WHAT_NEXT_PICKS = [
   { bookId: 'b4', why: 'You finished the last three history books you started.', book: BOOKS.find((b) => b.id === 'b4') },
   { bookId: 'b7', why: 'On your unread shelf the longest, and homesteading is a tag you keep returning to.', book: BOOKS.find((b) => b.id === 'b7') },

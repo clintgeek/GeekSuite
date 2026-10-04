@@ -509,7 +509,7 @@ deliberate part of the contract). `App.jsx`'s `.filter((p) => p?.book)`
 (~line 375) then discards every pick against a real server response, so the
 shelf can never render in production, switch on or not. `fixtures.mjs`'s
 `WHAT_NEXT_PICKS` attaches `book` to each pick anyway — broader than what the
-shipped query can ever receive — specifically so `WhatNextShelf` itself (and
+shipped query can ever receive — specifically so `WhatNextSheet` itself (and
 its a11y) could still be exercised here; this is not a fix and this tree does
 not own `apps/bookgeek/web/**`. See the harness run report for the same note.
 

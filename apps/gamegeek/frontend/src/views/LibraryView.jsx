@@ -38,7 +38,7 @@ import GameCard from '../components/GameCard';
 import GameRow from '../components/GameRow';
 import ShelfStrip from '../components/ShelfStrip';
 import SaveLibraryView from '../components/SaveLibraryView';
-import WhatNextShelf from '../components/WhatNextShelf';
+import WhatNextSheet, { WhatNextButton } from '../components/WhatNextSheet';
 import { useWhatNext } from '../hooks/useWhatNext';
 import { gamePath, isFabVisible } from '../components/navConfig';
 import { DEFAULT_OPEN, SECTIONS, SECTIONS_OPEN_KEY, activeChips } from '../utils/facets';
@@ -120,7 +120,8 @@ export default function LibraryView() {
   // Settings switch is the only on, and the query is not even sent until
   // `playAssistant` is explicitly true.
   const { preferences: gamePrefs } = useAppPreferences('gamegeek');
-  const whatNext = useWhatNext({ enabled: gamePrefs?.playAssistant === true });
+  const playAssistant = gamePrefs?.playAssistant === true;
+  const whatNext = useWhatNext({ enabled: playAssistant });
 
   const sentinelRef = useInfiniteSentinel(loadMore, { enabled: hasMore, busy: loadingMore, root: scrollRoot });
   useScrollMemory(scrollRoot, stateToParams(state).toString(), { rows: games.length, hasMore, storageKey: SCROLL_KEY });
@@ -218,20 +219,6 @@ export default function LibraryView() {
               />
             </Box>
           ) : null}
-          {gamePrefs?.playAssistant === true ? (
-            <Box sx={{ maxWidth: 1400, mx: 'auto' }}>
-              <WhatNextShelf
-                picks={whatNext.picks}
-                provenance={whatNext.provenance}
-                loading={whatNext.loading}
-                error={whatNext.error}
-                onOpen={openGame}
-                onRate={rate}
-                customShelves={customShelves}
-                onSubmitMood={whatNext.applyMood}
-              />
-            </Box>
-          ) : null}
           <Box sx={{ px: { xs: 2, md: 3 }, pb: { xs: 12, md: 6 }, pt: { xs: 0.5, md: 2 }, maxWidth: 1400, mx: 'auto' }}>
             <LibraryHeader
               sorts={SORTS}
@@ -246,6 +233,7 @@ export default function LibraryView() {
               onSave={() => setSaveOpen(true)}
               view={view}
               onToggleView={toggleView}
+              actions={playAssistant ? <WhatNextButton onClick={whatNext.openSheet} isDesktop={isDesktop} /> : null}
             />
             <Box sx={{ position: 'relative', mt: 1.5 }}>
               <LinearProgress
@@ -281,6 +269,23 @@ export default function LibraryView() {
           </Box>
         </Box>
       </Box>
+
+      {playAssistant ? (
+        <WhatNextSheet
+          open={whatNext.open}
+          onClose={whatNext.closeSheet}
+          picks={whatNext.picks}
+          provenance={whatNext.provenance}
+          loading={whatNext.loading}
+          error={whatNext.error}
+          mood={whatNext.mood}
+          onSubmitMood={whatNext.applyMood}
+          onOpen={(game) => {
+            whatNext.closeSheet();
+            openGame(game);
+          }}
+        />
+      ) : null}
 
       {!isDesktop ? (
         <FiltersSheet

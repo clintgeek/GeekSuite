@@ -125,3 +125,15 @@ Commits: `653014a6` (N6–N9), `801d79dd` (N10), `40001fd5` (N11–N12), `209272
 3. Whether to push `mcp-parked` to GitHub as a backup.
 4. **Branch protection.** Every push to `main` tonight printed "Bypassed rule violations … Changes must be made through a pull request" — the repo has a PR rule that the account's admin rights bypass. I followed the documented deploy path (push to `main`, `DOCS/CICD.md`) as before, but if that rule is meant to bind, future work should go through PRs.
 5. No-mood game reasons still lean on "like <seed>" comparisons (e.g. "Watch Dogs: Legion … like Cyberpunk 2077") — accurate now, but repetitive. A prompt tweak for variety in phrasing is cheap if it bothers you.
+
+## 8. UI rework, 2026-10-03 — on demand, in a sheet
+
+Chef: *"They need some severe UI/UX work. Maybe don't show them all the time, make it on
+demand, and make it fit in the page."* This replaces X10's rail for both apps.
+
+| # | Decision |
+|---|---|
+| U1 | **On demand.** Nothing is asked when the library loads. A ✨ button in the library header (round icon on a phone, "What next?" pill on desktop; via `LibraryHeader`'s `actions`) opens the panel; the first open sends the query. Closing keeps the answer, and re-opening reads it from the Apollo cache. A library visit never spends a call. |
+| U2 | **Fits the page.** The picks open in `GeekSheet`, a bottom sheet below `md` and a dialog at `md`+, as compact rows: cover thumb, title, author/meta, the whole `why` (no 3-line clamp), and in BookGeek "Start reading" under the reason. The 150 px card rail above the grid is gone. |
+| U3 | Mood box sits at the top of the sheet, full width, and shows the mood behind the list now on screen. Tapping a pick closes the sheet and opens the item. |
+| U4 | The hook tests (`__tests__/hooks/useWhatNext.test.jsx`, both apps) pin "no query until opened". With the old `skip: !enabled` restored, they go red. Harness scenes `07-what-next` / `24-what-next` now tap the button before checking. |

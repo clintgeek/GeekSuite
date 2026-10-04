@@ -1,7 +1,9 @@
 /**
  * The What-next shelf (DOCS/AI_IDEAS.md #4, stream R117).
  *
- * Fetched once per session per switch-on: it is a suggestion strip, not live
+ * On demand (2026-10-03): nothing is asked until the sheet is first opened
+ * (`openWhatNext`), so a library visit never spends a call on its own. After
+ * that it is fetched once per session per switch-on: it is a suggestion, not live
  * data, and refetching it on every filter change would spend the daily cap on
  * a shelf nobody asked to change. The Apollo cache is what makes it "once":
  * `cache-first`, and the answer stays until the switch goes off (evicted in
@@ -25,9 +27,13 @@ export function useWhatNext({ enabled, onUpdateShelf }) {
   const client = useApolloClient();
   const [startingBookId, setStartingBookId] = useState(null);
   const [mood, setMood] = useState(null);
+  const [whatNextOpen, setWhatNextOpen] = useState(false);
+  // Latches on the first open: closing the sheet keeps the answer, and
+  // re-opening reads it from the cache instead of asking again.
+  const [asked, setAsked] = useState(false);
   const { data, loading, error } = useQuery(GET_WHAT_NEXT, {
     variables: { limit: WHAT_NEXT_LIMIT, mood: mood || null },
-    skip: !enabled,
+    skip: !enabled || !asked,
     fetchPolicy: "cache-first",
   });
 
@@ -66,6 +72,12 @@ export function useWhatNext({ enabled, onUpdateShelf }) {
 
   return {
     whatNextEnabled: Boolean(enabled),
+    whatNextOpen: Boolean(enabled && whatNextOpen),
+    openWhatNext: () => {
+      setAsked(true);
+      setWhatNextOpen(true);
+    },
+    closeWhatNext: () => setWhatNextOpen(false),
     whatNextPicks,
     whatNextProvenance: result?.provenance || null,
     whatNextLoading: Boolean(enabled && loading),

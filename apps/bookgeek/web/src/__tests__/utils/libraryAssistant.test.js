@@ -28,7 +28,7 @@ describe('mergeTagList', () => {
 
 describe('provenance lines', () => {
   it('names the model when a model answered', () => {
-    expect(whatNextProvenanceLine({ source: 'model', model: 'llama' })).toBe('Drafted by llama');
+    expect(whatNextProvenanceLine({ source: 'model', model: 'llama' })).toBe('AI-drafted by llama');
     expect(metadataDraftProvenanceLine({ source: 'model', model: 'llama' })).toBe(
       'AI-drafted by llama — review before saving'
     );
@@ -52,6 +52,6 @@ describe('provenance lines', () => {
   });
 
   it('degrades gracefully when the model name is missing', () => {
-    expect(whatNextProvenanceLine({ source: 'model' })).toBe("Drafted by the suite's model");
+    expect(whatNextProvenanceLine({ source: 'model' })).toBe("AI-drafted by the suite's model");
   });
 });

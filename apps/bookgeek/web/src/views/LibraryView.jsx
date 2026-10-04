@@ -39,7 +39,7 @@ import BookRow from "../components/BookRow";
 import LibraryActions from "../components/LibraryActions";
 import SaveLibraryView from "../components/SaveLibraryView";
 import ShelfStrip from "../components/ShelfStrip";
-import WhatNextShelf from "../components/WhatNextShelf";
+import WhatNextSheet, { WhatNextButton } from "../components/WhatNextSheet";
 import { useScrollRoot } from "../components/AppMain";
 import { DEFAULT_OPEN, SECTIONS_OPEN_KEY, activeChips, sectionsFor } from "../utils/facets";
 import { SORTS, isNarrowed, stateToParams } from "../utils/libraryFilter";
@@ -138,6 +138,10 @@ export default function LibraryView({
   whatNextLoading = false,
   whatNextPicks,
   whatNextProvenance,
+  whatNextOpen = false,
+  openWhatNext,
+  closeWhatNext,
+  mood = null,
   applyMood,
 }) {
   const theme = useTheme();
@@ -255,7 +259,7 @@ export default function LibraryView({
 
   const openBook = (b) => setSelectedBook(b);
 
-  const actions = (
+  const libraryActions = (
     <LibraryActions
       view={layout}
       onToggleView={isDesktop ? undefined : toggleLayout}
@@ -267,6 +271,16 @@ export default function LibraryView({
       mergeLoading={mergeLoading}
       mergeCount={selectedBookIds?.length ?? 0}
     />
+  );
+  // The assistant asks nothing until this is tapped (it used to load a rail
+  // of cards above the grid on every visit).
+  const actions = whatNextEnabled ? (
+    <>
+      <WhatNextButton onClick={openWhatNext} isDesktop={isDesktop} />
+      {libraryActions}
+    </>
+  ) : (
+    libraryActions
   );
 
   let body;
@@ -371,17 +385,21 @@ export default function LibraryView({
         ) : null}
 
         {whatNextEnabled ? (
-          // Full-bleed: the rail scrolls edge to edge and supplies its own gutters.
-          <WhatNextShelf
+          <WhatNextSheet
+            open={whatNextOpen}
+            onClose={closeWhatNext}
             picks={whatNextPicks}
             provenance={whatNextProvenance}
             loading={whatNextLoading}
             error={whatNextError}
-            shelves={shelves}
-            onOpen={openBook}
+            mood={mood}
+            onSubmitMood={applyMood}
+            onOpen={(book) => {
+              closeWhatNext?.();
+              openBook(book);
+            }}
             onStartReading={onStartReading}
             startingBookId={startingBookId}
-            onSubmitMood={applyMood}
           />
         ) : null}
 

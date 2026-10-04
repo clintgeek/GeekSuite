@@ -327,6 +327,13 @@ export const scenes = [
 
       await page.goto(h.base + '/', { waitUntil: 'networkidle' });
       await h.settle(1500);
+
+      // On demand since 2026-10-03: the picks live in a sheet behind the
+      // header's sparkle button, not in a rail on the page.
+      const ask = page.getByRole('button', { name: /^(What should I read next\?|What next\?)$/ });
+      if (!(await ask.count())) return h.log('no what-next button') ?? false;
+      await ask.click();
+      await h.settle(900);
     },
   },
   {

@@ -23,7 +23,7 @@
 export function provenanceLine(provenance, copy) {
   if (!provenance) return null;
   if (provenance.source === "model") {
-    return `Drafted by ${ provenance.model || "the suite's model" }`;
+    return `AI-drafted by ${ provenance.model || "the suite's model" }`;
   }
   if (provenance.reason === "cap" && copy?.capText) return copy.capText;
   return copy?.fallbackText || "No model — deterministic result";
