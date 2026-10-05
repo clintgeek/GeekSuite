@@ -6,6 +6,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { registerSW } from 'virtual:pwa-register';
 import { ThemeProvider as UserThemeProvider, useThemeMode } from '@geeksuite/user';
 import { GeekSuiteApolloProvider } from '@geeksuite/api-client';
+import { GeekUpdateIndicator } from '@geeksuite/ui';
 // The display faces, self-hosted so headings and the wordmark render offline:
 // Bungee (the arcade marquee: wordmark, h1–h3, cover plates) and Space
 // Grotesk (h4–h6 and the mid-level labels).
@@ -18,7 +19,8 @@ import App from './App.jsx';
 import { configureUserPlatform } from './bootstrapUser';
 import createGameTheme from './theme/theme';
 
-// generateSW + autoUpdate: the new worker takes over on the next load.
+// generateSW + autoUpdate: a new worker takes over as soon as it installs and
+// the page reloads into it (GeekUpdateIndicator shows "Updating…" meanwhile).
 registerSW({ immediate: true });
 
 configureUserPlatform();
@@ -29,6 +31,9 @@ function ThemedApp() {
   return (
     <ThemeProvider theme={muiTheme}>
       <CssBaseline />
+      {/* First open after a deploy: the old build draws, then the new worker
+          reloads into the new one (PWA_STANDARD rows 5 + 6). This says so. */}
+      <GeekUpdateIndicator />
       <GeekSuiteApolloProvider appName="gamegeek">
         <BrowserRouter>
           <App />

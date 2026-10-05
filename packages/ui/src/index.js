@@ -9,6 +9,8 @@ export {
   GeekErrorState,
   GeekToastContext,
   GeekToastProvider,
+  GeekUpdateIndicator,
+  useServiceWorkerUpdating,
   useToast,
 } from './feedback';
 export { FocusModeToggle, GlobalSearchButton, QuickCaptureButton } from './features';

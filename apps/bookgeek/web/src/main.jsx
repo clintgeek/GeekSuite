@@ -2,7 +2,7 @@ import React from "react";
 import { createRoot } from "react-dom/client";
 import { ThemeProvider } from "@mui/material/styles";
 import { CssBaseline } from "@mui/material";
-import { FocusModeProvider } from "@geeksuite/ui";
+import { FocusModeProvider, GeekUpdateIndicator } from "@geeksuite/ui";
 import { BrowserRouter } from "react-router-dom";
 import { ThemeProvider as UserThemeProvider, useThemeMode } from "@geeksuite/user";
 import App from "./App.jsx";
@@ -43,6 +43,9 @@ function ThemeWrapper() {
   return (
     <ThemeProvider theme={muiTheme}>
       <CssBaseline />
+      {/* First open after a deploy: the old build draws, then the new worker
+          reloads into the new one (PWA_STANDARD rows 5 + 6). This says so. */}
+      <GeekUpdateIndicator />
       <FocusModeProvider storageKey="bookgeek.focusMode">
         <GeekSuiteApolloProvider appName="bookgeek">
           <BrowserRouter>

@@ -89,6 +89,7 @@ Pull from here when planning the next pass; update as work lands or priorities s
 - **Auth-Hydration Splash**: Several apps display an unthemed grey container while hydrating user session. Provide a shared `GeekAuthSplash` in `@geeksuite/ui` honoring the app's theme.
 - **Reduced Motion Support**: Ensure framer-motion transitions and bujogeek's grain overlay respect `prefers-reduced-motion`.
 - **Themed Tooltips**: Replace MUI's default grey-700 tooltips with theme-derived tooltips in `createGeekSuiteTheme`.
+- **"Updating…" on the other PWAs**: bookgeek and gamegeek render `<GeekUpdateIndicator />` (PWA_STANDARD rule 9, 2026-10-04) so the post-deploy double draw explains itself. fitnessgeek, notegeek, bujogeek, flockgeek, storygeek, startgeek and thinggeek have the same double draw and don't render it yet. One line in each app's root, inside its ThemeProvider.
 - **Offline Pages**: Give flockgeek and bookgeek `offline.html` theme-aware styles matching their PWA manifest colors.
 
 ---
