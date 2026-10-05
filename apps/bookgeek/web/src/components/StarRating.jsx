@@ -26,6 +26,7 @@ import {
   StarHalf,
   StarBorder as StarEmpty,
 } from '@mui/icons-material';
+import { ratingLine } from '@geeksuite/collection';
 import { starFill } from '../utils/rating';
 
 const ICONS = { full: StarFull, half: StarHalf, empty: StarEmpty };
@@ -90,7 +91,11 @@ export default function StarRating({
       aria-valuemin={0}
       aria-valuemax={5}
       aria-valuenow={rated ? value : 0}
-      aria-valuetext={rated ? `${value} of 5 stars` : 'Not rated'}
+      // "4 of 5 — It was great!": the shared labels (@geeksuite/collection),
+      // the same words GameGeek's stars say. The title is a hover hint on
+      // desktop; on a phone the toast after a rating carries the label.
+      aria-valuetext={rated ? ratingLine(value) : 'Not rated'}
+      title={shown ? ratingLine(shown) : 'Not rated'}
       data-testid="star-rating"
       onClick={(e) => {
         e.stopPropagation();

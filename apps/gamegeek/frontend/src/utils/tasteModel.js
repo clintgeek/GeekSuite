@@ -4,10 +4,14 @@
  * live in the app; the shelf picker, the Add form, the rating section and
  * the Settings disclosure all read from here so the words never drift.
  *
- * `short` is the calm, one-line form used inline (a picker row, a live
- * line under the stars). `full` is Chef's own quote, used only in the
- * Settings disclosure where there's room for it.
+ * `short` is the one-line form used inline (a picker row, a live line
+ * under the stars). Rating labels come from @geeksuite/collection
+ * (RATING_LABELS, shared with BookGeek) and Settings shows them. A
+ * rating's `full` quote is the recommender's definition
+ * (DOCS/TASTE_MODEL.md); a shelf's `full` quote is what Settings shows for
+ * shelves. Meanings did not change.
  */
+import { RATING_LABELS, ratingLabelFor, ratingLine } from '@geeksuite/collection';
 
 export const SHELF_MEANINGS = Object.freeze({
   playing: {
@@ -50,51 +54,40 @@ export function shelfMeaning(id) {
 
 export const RATING_MEANINGS = Object.freeze({
   5: {
-    short: 'Love it — play it ten times',
+    short: RATING_LABELS[5],
     full: 'I love this game, you should play this game like 10 times, do you have 2 hours to talk about it?',
   },
   4: {
-    short: 'Really liked it — I’d rather play something new than replay it',
+    short: RATING_LABELS[4],
     full: 'I really liked this game, I wouldn’t hate playing again, but probably would rather play something new.',
   },
   3: {
-    short: 'Well made, not my type — good if you’re into that sort of game',
+    short: RATING_LABELS[3],
     full: 'I didn’t hate it, not my type of game but done well, it had some good moments, you should play it if you’re into that sort of game.',
   },
   2: {
-    short: 'Didn’t like it, but sank more hours in than I should have',
+    short: RATING_LABELS[2],
     full: 'I didn’t like it but probably put more hours into it than I should have.',
   },
   1: {
-    short: 'Hated it — never play it',
+    short: RATING_LABELS[1],
     full: 'I freaking hated this game, you should never play it, it’s awful, do you have an hour to discuss how awful this game is?',
   },
 });
 
 /**
- * A rating value's meaning. `value` may be a half (3.5) because the data
- * model allows it (packages/schemas/gamegeek/constants.js: rating 0-5, no
- * step) even though StarRating's own controls (click, arrows, 1-5 keys)
- * only ever commit a whole number — a half can only arrive pre-existing,
- * e.g. from an import. Per the taste model, a half shows the meaning of
- * its LOWER whole star, with the half noted.
+ * A rating value's meaning. Halves (an import can bring a 3.5) read as the
+ * LOWER whole star, with the half noted — the rule lives in
+ * @geeksuite/collection's ratingLabelFor, shared with BookGeek.
  *
  * Returns null for an unrated value (0, null, undefined).
  */
 export function ratingMeaningFor(value) {
-  const v = Number(value);
-  if (!Number.isFinite(v) || v <= 0) return null;
-  const whole = Math.floor(v);
-  const isHalf = v - whole === 0.5;
-  const star = Math.min(5, Math.max(1, isHalf ? whole : Math.round(v)));
-  const meaning = RATING_MEANINGS[star];
-  if (!meaning) return null;
-  return { star, isHalf, short: meaning.short, full: meaning.full };
+  const r = ratingLabelFor(value);
+  if (!r) return null;
+  const meaning = RATING_MEANINGS[r.star];
+  return { star: r.star, isHalf: r.isHalf, short: meaning.short, full: meaning.full };
 }
 
 /** The live line's text for a rating value, or null when there's nothing to say. */
-export function ratingMeaningLine(value) {
-  const meaning = ratingMeaningFor(value);
-  if (!meaning) return null;
-  return `${meaning.star}${meaning.isHalf ? '½' : ''} of 5 — ${meaning.short}`;
-}
+export const ratingMeaningLine = ratingLine;

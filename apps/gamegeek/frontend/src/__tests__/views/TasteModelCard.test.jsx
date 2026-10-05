@@ -13,7 +13,7 @@ describe('TasteModelCard — the shelves & stars disclosure', () => {
     expect(screen.queryByText(SHELF_MEANINGS.playing.full)).not.toBeInTheDocument();
   });
 
-  it('lists every built-in shelf and every rating with the full quote, once expanded', () => {
+  it('lists every shelf with its full quote and every rating with its label, once expanded', () => {
     renderWithProviders(<TasteModelCard />);
     fireEvent.click(screen.getByRole('button', { name: 'What the shelves and stars mean' }));
 
@@ -21,7 +21,7 @@ describe('TasteModelCard — the shelves & stars disclosure', () => {
       expect(screen.getByText(new RegExp(meaning.full.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))).toBeInTheDocument();
     }
     for (const meaning of Object.values(RATING_MEANINGS)) {
-      expect(screen.getByText(new RegExp(meaning.full.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))).toBeInTheDocument();
+      expect(screen.getByText(new RegExp(meaning.short.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')))).toBeInTheDocument();
     }
     expect(screen.getAllByText('provisional')).toHaveLength(2);
   });

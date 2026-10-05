@@ -65,7 +65,7 @@ export default function TasteModelCard() {
           </Typography>
           <Box component="ul" sx={{ m: 0, p: 0 }}>
             {[5, 4, 3, 2, 1].map((star) => (
-              <DefinitionRow key={star} term={`${star} ${star === 1 ? 'star' : 'stars'}`} quote={RATING_MEANINGS[star].full} />
+              <DefinitionRow key={star} term={`${star} ${star === 1 ? 'star' : 'stars'}`} quote={RATING_MEANINGS[star].short} />
             ))}
           </Box>
         </Box>

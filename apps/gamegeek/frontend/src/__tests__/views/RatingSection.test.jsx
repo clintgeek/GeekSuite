@@ -19,7 +19,7 @@ describe('RatingSection — the live meaning line', () => {
   it('follows the current rating when not hovering', () => {
     const game = makeDetailGame({ me: { rating: 4 } });
     renderWithProviders(<RatingSection game={game} onRate={vi.fn()} />);
-    expect(screen.getByText(/4 of 5 — Really liked it/)).toBeInTheDocument();
+    expect(screen.getByText(/4 of 5 — It was great!/)).toBeInTheDocument();
   });
 
   it('follows the hovered star while choosing, live (aria-live), then falls back once the pointer leaves', () => {
@@ -31,10 +31,10 @@ describe('RatingSection — the live meaning line', () => {
     expect(screen.getByText(/4 of 5/)).toHaveAttribute('aria-live', 'polite');
 
     fireEvent.pointerMove(slider, { pointerType: 'mouse', clientX: 5 });
-    expect(screen.getByText(/1 of 5 — Hated it/)).toBeInTheDocument();
+    expect(screen.getByText(/1 of 5 — It actively offended me/)).toBeInTheDocument();
 
     fireEvent.pointerLeave(slider);
-    expect(screen.getByText(/4 of 5 — Really liked it/)).toBeInTheDocument();
+    expect(screen.getByText(/4 of 5 — It was great!/)).toBeInTheDocument();
   });
 
   it('a keyboard commit changes the value, and the live line follows it', () => {
@@ -46,6 +46,6 @@ describe('RatingSection — the live meaning line', () => {
     expect(onRate).toHaveBeenCalledWith(game, 3);
 
     rerender(<RatingSection game={makeDetailGame({ me: { rating: 3 } })} onRate={onRate} />);
-    expect(screen.getByText(/3 of 5 — Well made, not my type/)).toBeInTheDocument();
+    expect(screen.getByText(/3 of 5 — It was ok/)).toBeInTheDocument();
   });
 });

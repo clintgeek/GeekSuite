@@ -17,13 +17,17 @@ their generic dictionary meaning.*
 
 ## Ratings, in Chef's words
 
-| Stars | Means | Signal for a recommender |
-|---|---|---|
-| ★★★★★ | "I love this game, you should play this game like 10 times, do you have 2 hours to talk about it?" | Strong positive. Games like this are the target. |
-| ★★★★ | "I really liked this game, I wouldn't hate playing again, but probably would rather play something new." | Positive. Recommend *similar but new*, never a replay. |
-| ★★★ | "I didn't hate it, not my type of game but done well, it had some good moments, you should play it if you're into that sort of game." | **Quality was fine, the fit was wrong.** Negative on its *type* (genres, tags), not on craft. |
-| ★★ | "I didn't like it but probably put more hours into it than I should have." | Negative, **but compulsive**: it hooked him while he disliked it. A "hooks without satisfying" signal. Don't treat it as simple dislike. |
-| ★ | "I freaking hated this game, you should never play it, it's awful, do you have an hour to discuss how awful this game is?" | Strong negative. Avoid its type and its closest neighbours. |
+The label is what the app shows (Chef's wording, 2026-10-04), kept generic and shared with
+BookGeek: `RATING_LABELS` in `packages/collection/src/ratings.js`. The meanings behind the
+labels did not change.
+
+| Stars | Label | Means | Signal for a recommender |
+|---|---|---|---|
+| ★★★★★ | LOVED IT! | "I love this game, you should play this game like 10 times, do you have 2 hours to talk about it?" | Strong positive. Games like this are the target. |
+| ★★★★ | It was great! | "I really liked this game, I wouldn't hate playing again, but probably would rather play something new." | Positive. Recommend *similar but new*, never a replay. |
+| ★★★ | It was ok | "I didn't hate it, not my type of game but done well, it had some good moments, you should play it if you're into that sort of game." | **Quality was fine, the fit was wrong.** Negative on its *type* (genres, tags), not on craft. |
+| ★★ | Meh | "I didn't like it but probably put more hours into it than I should have." | Negative, **but compulsive**: it hooked him while he disliked it. A "hooks without satisfying" signal. Don't treat it as simple dislike. |
+| ★ | It actively offended me | "I freaking hated this game, you should never play it, it's awful, do you have an hour to discuss how awful this game is?" | Strong negative. Avoid its type and its closest neighbours. |
 
 ## How the two combine
 

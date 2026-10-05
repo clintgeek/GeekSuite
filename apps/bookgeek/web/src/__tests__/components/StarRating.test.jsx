@@ -79,7 +79,7 @@ describe('display', () => {
   it('reads sensibly to a screen reader', () => {
     const { rerender } = renderWithProviders(<StarRating value={4} onChange={vi.fn()} label="Dune" />);
     const s = screen.getByRole('slider', { name: 'Rate Dune' });
-    expect(s).toHaveAttribute('aria-valuetext', '4 of 5 stars');
+    expect(s).toHaveAttribute('aria-valuetext', '4 of 5 — It was great!');
     rerender(<StarRating value={null} onChange={vi.fn()} label="Dune" />);
     expect(screen.getByRole('slider')).toHaveAttribute('aria-valuetext', 'Not rated');
   });

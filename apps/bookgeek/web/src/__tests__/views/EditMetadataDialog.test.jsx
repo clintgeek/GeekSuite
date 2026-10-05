@@ -104,3 +104,16 @@ describe('EditMetadataDialog — tags (DOCS/TAGS.md §4)', () => {
     expect(next).not.toHaveProperty('tags');
   });
 });
+
+describe('EditMetadataDialog — what the stars mean', () => {
+  it('names the current rating in the shared words', () => {
+    renderWithProviders(<EditMetadataDialog {...props({ editDraft: { ...props().editDraft, rating: '2' } })} />);
+    expect(screen.getByText('2 of 5 — Meh', { selector: '[aria-live]' })).toBeInTheDocument();
+  });
+
+  it('says "Not rated" with no rating, and labels each star for a screen reader', () => {
+    renderWithProviders(<EditMetadataDialog {...props()} />);
+    expect(screen.getByText('Not rated', { selector: '[aria-live]' })).toBeInTheDocument();
+    expect(screen.getByLabelText('5 of 5 — LOVED IT!')).toBeInTheDocument();
+  });
+});

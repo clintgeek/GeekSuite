@@ -11,10 +11,11 @@
  * it, and Save goes through the same `updateBook` mutation a hand-typed edit
  * does.
  */
-import React from "react";
+import React, { useState } from "react";
 import { Box, Button, Chip, Rating, TextField, Typography } from "@mui/material";
 import { AutoAwesome as SparkleIcon } from "@mui/icons-material";
 import { GeekDialog } from "@geeksuite/ui";
+import { ratingLine } from "@geeksuite/collection";
 import { metadataDraftProvenanceLine } from "../../utils/libraryAssistant";
 
 export default function EditMetadataDialog({
@@ -34,6 +35,7 @@ export default function EditMetadataDialog({
   handleDraftMetadata,
 }) {
   const draft = editDraft || {};
+  const [ratingHover, setRatingHover] = useState(null);
   const setField = (key) => (event) =>
     setEditDraft((prev) => ({ ...(prev || {}), [key]: event.target.value }));
 
@@ -150,9 +152,15 @@ export default function EditMetadataDialog({
                 rating: next == null ? "" : String(next),
               }))
             }
+            onChangeActive={(event, hovered) => setRatingHover(hovered > 0 ? hovered : null)}
+            getLabelText={(value) => ratingLine(value) || "Not rated"}
             // 44px stars: each star is a tap target (harness scene 08-edit-metadata-draft)
             sx={{ fontSize: 44 }}
           />
+          {/* The shared labels (@geeksuite/collection): the hovered star, else the rating. */}
+          <Typography aria-live="polite" variant="body2" sx={{ color: "text.secondary", minHeight: "1.5em" }}>
+            {ratingLine(ratingHover ?? (draft.rating === "" || draft.rating == null ? null : Number(draft.rating))) || "Not rated"}
+          </Typography>
         </Box>
 
         <TextField

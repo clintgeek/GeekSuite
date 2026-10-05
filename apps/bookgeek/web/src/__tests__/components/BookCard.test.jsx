@@ -154,7 +154,7 @@ describe('BookCard — stars in the shelf line', () => {
   it('keeps showing a rating on a book that is off the Read shelf', () => {
     // reading42 is on "reading" but rated 4 — its stars stay visible.
     renderWithProviders(<BookCard book={reading42} shelves={SHELVES} onRate={vi.fn()} />);
-    expect(screen.getByRole('slider')).toHaveAttribute('aria-valuetext', '4 of 5 stars');
+    expect(screen.getByRole('slider')).toHaveAttribute('aria-valuetext', '4 of 5 — It was great!');
   });
 
   it('shows no stars on an unrated book you have not read', () => {

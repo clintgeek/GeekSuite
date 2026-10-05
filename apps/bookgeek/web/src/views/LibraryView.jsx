@@ -29,6 +29,7 @@ import {
   FilterPanel,
   FiltersSheet,
   LibraryHeader,
+  ratingLabelFor,
   useInfiniteSentinel,
   useScrollMemory,
   useSectionOpen,
@@ -193,7 +194,8 @@ export default function LibraryView({
       notify(`Couldn't save the rating for ${ title }.`, { tone: "error" });
       return;
     }
-    notify(`${ rating }★ · ${ title }`, {
+    const label = ratingLabelFor(rating)?.label;
+    notify(`${ rating }★${ label ? ` ${ label }` : "" } · ${ title }`, {
       tone: "success",
       action: (
         <Button

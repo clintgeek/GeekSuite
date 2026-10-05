@@ -6,6 +6,9 @@
 // Config
 export { CollectionProvider, useCollectionConfig, countNoun, DEFAULT_COLLECTION_CONFIG } from './config';
 
+// Star ratings — the words beside the stars, shared by every app
+export { RATING_LABELS, ratingLabelFor, ratingLine } from './ratings';
+
 // Filter state ↔ URL
 export { createFilterCodec, integerBetween, newSeed } from './filter/codec';
 export { useCollectionFilter } from './filter/useCollectionFilter';

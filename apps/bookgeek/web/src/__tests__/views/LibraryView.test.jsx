@@ -380,6 +380,14 @@ describe('LibraryView — rating', () => {
     expect(onRateBook).toHaveBeenLastCalledWith({ ...read100, rating: 3 }, 5);
   });
 
+  it('the toast names what the stars mean, in the shared words', async () => {
+    const onRateBook = vi.fn().mockResolvedValue(true);
+    renderView({ onRateBook });
+    screen.getByRole('slider', { name: 'Rate The Sound of Gravel' }).focus();
+    await userEvent.keyboard('4');
+    expect(await screen.findByText('4★ It was great! · The Sound of Gravel')).toBeInTheDocument();
+  });
+
   it('says so when a rating fails to save', async () => {
     const onRateBook = vi.fn().mockResolvedValue(false);
     renderView({ onRateBook });
