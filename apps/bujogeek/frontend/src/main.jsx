@@ -1,5 +1,6 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
+import { MotionConfig } from 'framer-motion';
 import { registerSW } from 'virtual:pwa-register';
 import { configureUserPlatform } from './bootstrapUser';
 // Red Pen's one typeface, self-hosted (DOCS/SIMPLE_PLAN.md § Identity). Latin
@@ -19,8 +20,11 @@ configureUserPlatform();
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <ApolloProvider client={apolloClient}>
-      <App />
-    </ApolloProvider>
+    {/* Every framer-motion animation honours the OS "reduce motion" setting. */}
+    <MotionConfig reducedMotion="user">
+      <ApolloProvider client={apolloClient}>
+        <App />
+      </ApolloProvider>
+    </MotionConfig>
   </React.StrictMode>,
 );

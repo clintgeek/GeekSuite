@@ -1,5 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import { MotionConfig } from "framer-motion";
 import { BrowserRouter } from "react-router-dom";
 import { CssBaseline } from "@mui/material";
 import "@fontsource/dm-serif-display/400.css";
@@ -16,18 +17,21 @@ import { GeekUpdateIndicator } from "@geeksuite/ui";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
-    <AppThemeProvider>
-      <CssBaseline />
-      {/* PWA_STANDARD rule 9: "Updating…" during the post-deploy reload. */}
-      <GeekUpdateIndicator />
-      <BrowserRouter>
-        <AuthProvider>
-          <GeekSuiteApolloProvider appName="flockgeek">
-            <App />
-          </GeekSuiteApolloProvider>
-        </AuthProvider>
-      </BrowserRouter>
-    </AppThemeProvider>
+    {/* Every framer-motion animation honours the OS "reduce motion" setting. */}
+    <MotionConfig reducedMotion="user">
+      <AppThemeProvider>
+        <CssBaseline />
+        {/* PWA_STANDARD rule 9: "Updating…" during the post-deploy reload. */}
+        <GeekUpdateIndicator />
+        <BrowserRouter>
+          <AuthProvider>
+            <GeekSuiteApolloProvider appName="flockgeek">
+              <App />
+            </GeekSuiteApolloProvider>
+          </AuthProvider>
+        </BrowserRouter>
+      </AppThemeProvider>
+    </MotionConfig>
   </React.StrictMode>
 );
 

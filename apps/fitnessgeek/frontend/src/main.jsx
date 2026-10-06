@@ -1,4 +1,5 @@
 import { StrictMode } from 'react'
+import { MotionConfig } from 'framer-motion'
 import { createRoot } from 'react-dom/client'
 // Market Morning: Nunito, self-hosted (DOCS/SIMPLE_AND_FULL_PLAN.md). One
 // rounded family for everything; the four weights the theme uses.
@@ -12,8 +13,11 @@ import { GeekSuiteApolloProvider } from '@geeksuite/api-client';
 
 createRoot(document.getElementById('root')).render(
   <StrictMode>
-    <GeekSuiteApolloProvider appName="fitnessgeek">
-      <App />
-    </GeekSuiteApolloProvider>
+    {/* Every framer-motion animation honours the OS "reduce motion" setting. */}
+    <MotionConfig reducedMotion="user">
+      <GeekSuiteApolloProvider appName="fitnessgeek">
+        <App />
+      </GeekSuiteApolloProvider>
+    </MotionConfig>
   </StrictMode>,
 )
