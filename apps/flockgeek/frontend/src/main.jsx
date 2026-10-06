@@ -12,11 +12,14 @@ import "./index.css";
 import { AuthProvider } from "./contexts/AuthContext";
 import { AppThemeProvider } from "./theme/AppThemeProvider";
 import { GeekSuiteApolloProvider } from "@geeksuite/api-client";
+import { GeekUpdateIndicator } from "@geeksuite/ui";
 
 ReactDOM.createRoot(document.getElementById("root")).render(
   <React.StrictMode>
     <AppThemeProvider>
       <CssBaseline />
+      {/* PWA_STANDARD rule 9: "Updating…" during the post-deploy reload. */}
+      <GeekUpdateIndicator />
       <BrowserRouter>
         <AuthProvider>
           <GeekSuiteApolloProvider appName="flockgeek">

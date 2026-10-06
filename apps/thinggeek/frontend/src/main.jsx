@@ -6,6 +6,7 @@ import { BrowserRouter } from 'react-router-dom';
 import { registerSW } from 'virtual:pwa-register';
 import { ThemeProvider as UserThemeProvider, useThemeMode } from '@geeksuite/user';
 import { GeekSuiteApolloProvider } from '@geeksuite/api-client';
+import { GeekUpdateIndicator } from '@geeksuite/ui';
 // Storage Yard faces, self-hosted so they render offline: Zilla Slab for
 // headings (its italic for fleet lettering), Public Sans for everything you
 // read, Allerta Stencil for yard stencils. Barlow Condensed is kept for one
@@ -36,6 +37,8 @@ function ThemedApp() {
   return (
     <ThemeProvider theme={muiTheme}>
       <CssBaseline />
+      {/* PWA_STANDARD rule 9: "Updating…" during the post-deploy reload. */}
+      <GeekUpdateIndicator />
       <GeekSuiteApolloProvider appName="thinggeek">
         <BrowserRouter>
           <App />

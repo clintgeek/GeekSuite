@@ -4,7 +4,7 @@ import { ThemeProvider as MuiThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { Box, CircularProgress } from '@mui/material';
 import { AuthProvider, useAuth } from '@geeksuite/auth';
-import { FocusModeProvider } from '@geeksuite/ui';
+import { FocusModeProvider, GeekUpdateIndicator } from '@geeksuite/ui';
 import { ThemeProvider, useThemeMode } from '@geeksuite/user';
 import { createStoryTheme } from './theme/theme';
 
@@ -28,6 +28,7 @@ function AppShell() {
     return (
       <MuiThemeProvider theme={theme}>
         <CssBaseline />
+        <GeekUpdateIndicator />
         <Box display="flex" justifyContent="center" alignItems="center" minHeight="100vh">
           <CircularProgress />
         </Box>
@@ -45,6 +46,8 @@ function AppShell() {
   return (
     <MuiThemeProvider theme={theme}>
       <CssBaseline />
+      {/* PWA_STANDARD rule 9: "Updating…" during the post-deploy reload. */}
+      <GeekUpdateIndicator />
       <FocusModeProvider storageKey="storygeek.focusMode">
         <BrowserRouter>
           <Routes>

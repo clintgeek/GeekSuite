@@ -2,7 +2,7 @@ import React, { createContext, useContext, useMemo } from 'react';
 import { CssBaseline, GlobalStyles } from '@mui/material';
 import { ThemeProvider as MuiThemeProvider } from '@mui/material/styles';
 import { ThemeProvider as GeekThemeProvider, useThemeMode as useGeekThemeMode } from '@geeksuite/user';
-import { FocusModeProvider } from '@geeksuite/ui';
+import { FocusModeProvider, GeekUpdateIndicator } from '@geeksuite/ui';
 import { createNoteTheme } from './createAppTheme';
 
 const ThemeModeContext = createContext(null);
@@ -37,6 +37,8 @@ function InnerProvider({ children }) {
       <FocusModeProvider storageKey="notegeek.focusMode">
         <MuiThemeProvider theme={muiTheme}>
           <CssBaseline />
+          {/* PWA_STANDARD rule 9: "Updating…" during the post-deploy reload. */}
+          <GeekUpdateIndicator />
           {/* Desktop-only: undoes the shared theme's 44px input floor so
               NoteGeek's forms stay compact above the phone breakpoint.
               Scoped to `@media (min-width: 600px)` — below that, phones

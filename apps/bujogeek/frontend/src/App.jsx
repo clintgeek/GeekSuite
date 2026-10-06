@@ -6,7 +6,7 @@ import { PenProvider, usePen } from './context/PenContext.jsx';
 import AppBootstrapper from './AppBootstrapper.jsx';
 import { createBuJoTheme } from './theme/theme';
 import { ThemeProvider, useThemeMode } from './context/ThemeContext';
-import { FocusModeProvider } from '@geeksuite/ui';
+import { FocusModeProvider, GeekUpdateIndicator } from '@geeksuite/ui';
 import AppShell from './components/layout/AppShell';
 import { RETIRED_PATHS } from './components/layout/navConfig';
 import ProtectedRoute from './components/ProtectedRoute';
@@ -100,6 +100,8 @@ function AppContent() {
   return (
     <MuiThemeProvider theme={muiTheme}>
       <CssBaseline />
+      {/* PWA_STANDARD rule 9: "Updating…" during the post-deploy reload. */}
+      <GeekUpdateIndicator />
       <AuthProvider>
         <AppBootstrapper>
           <TaskProvider>
