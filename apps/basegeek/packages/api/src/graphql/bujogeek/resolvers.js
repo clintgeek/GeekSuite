@@ -4,6 +4,7 @@ import JournalEntry from './models/JournalEntry.js';
 import taskService from './services/taskService.js';
 import collectionService from './services/collectionService.js';
 import habitService from './services/habitService.js';
+import { batchLoad } from './batch.js';
 import reminderService from './services/reminderService.js';
 import reviewService from './services/reviewService.js';
 import { normalizeTags } from '@geeksuite/tags';
@@ -22,6 +23,22 @@ import {
   createJournalFromTemplateArgsSchema,
   reviewDraftArgsSchema,
 } from './validation.js';
+
+const loadCollectionCounts = (collection, userId, context) =>
+  batchLoad(
+    context,
+    'collectionCounts',
+    String(collection._id ?? collection.id),
+    (ids) => collectionService.getCountsBatch(ids, userId)
+  );
+
+const loadHabitStreak = (habit, today, userId, context) =>
+  batchLoad(
+    context,
+    `habitStreak:${today || ''}`,
+    habit,
+    (habits) => habitService.getCurrentStreaksBatch(habits, userId, today || undefined)
+  );
 
 const validateCreateTask = validateInput(createTaskSchema);
 const validateUpdateTask = validateInput(updateTaskArgsSchema);
@@ -501,17 +518,19 @@ export const resolvers = {
       if (!userId) return [];
       return collectionService.getTasksForCollection(collection._id ?? collection.id, userId);
     },
+    // Both counts share ONE batched aggregation per request, however many
+    // collections the list selects and whichever of the two fields it asks for.
     taskCount: async (collection, _, context) => {
       const userId = context.user?.id;
       if (!userId) return 0;
-      const { total } = await collectionService.getCounts(collection._id ?? collection.id, userId);
-      return total;
+      const counts = await loadCollectionCounts(collection, userId, context);
+      return counts?.total ?? 0;
     },
     completedCount: async (collection, _, context) => {
       const userId = context.user?.id;
       if (!userId) return 0;
-      const { completed } = await collectionService.getCounts(collection._id ?? collection.id, userId);
-      return completed;
+      const counts = await loadCollectionCounts(collection, userId, context);
+      return counts?.completed ?? 0;
     },
   },
   Habit: {
@@ -525,7 +544,7 @@ export const resolvers = {
       // The caller's own day — see the field's comment in typeDefs. The
       // `undefined` fallback is the old server-day behaviour, kept only for
       // a caller that sends nothing.
-      return habitService.getCurrentStreak(habit, userId, today || undefined);
+      return (await loadHabitStreak(habit, today, userId, context)) ?? 0;
     },
   },
   HabitLog: {

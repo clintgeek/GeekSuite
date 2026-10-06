@@ -215,6 +215,11 @@ class HabitService {
         : await Habit.findOne({ _id: habitId, createdBy: userId }).select('daysOfWeek');
     if (!schedule) return 0;
 
+    return this.countStreak(schedule, done, end);
+  }
+
+  /** The streak walk itself — pure, shared by the single and batched paths. */
+  countStreak(schedule, done, end) {
     let streak = 0;
     let cursor = end;
     for (let i = 0; i <= STREAK_LOOKBACK_DAYS; i += 1) {
@@ -229,6 +234,56 @@ class HabitService {
       cursor = new Date(cursor.getTime() - DAY_MS);
     }
     return streak;
+  }
+
+  /**
+   * Streaks for many habits with ONE HabitLog query (and at most one Habit
+   * query, only for habits handed over without their schedule). Takes the
+   * habit objects as the resolver sees them and returns Map<habit, streak>
+   * keyed by those same objects. Same answers as `getCurrentStreak`.
+   */
+  async getCurrentStreaksBatch(habits, userId, today = undefined) {
+    this.requireUser(userId);
+    const result = new Map();
+    const end = this.toUtcMidnight(today);
+    const idOf = (h) => h?._id ?? h?.id ?? h;
+    const valid = [];
+    for (const h of habits) {
+      result.set(h, 0);
+      if (end && mongoose.Types.ObjectId.isValid(idOf(h))) valid.push(h);
+    }
+    if (valid.length === 0) return result;
+    const start = new Date(end.getTime() - STREAK_LOOKBACK_DAYS * DAY_MS);
+
+    const logs = await HabitLog.find({
+      createdBy: userId,
+      habitId: { $in: valid.map((h) => idOf(h)) },
+      date: { $gte: start, $lte: end },
+    }).select('habitId date');
+    const doneByHabit = new Map();
+    for (const log of logs) {
+      const k = String(log.habitId);
+      if (!doneByHabit.has(k)) doneByHabit.set(k, new Set());
+      doneByHabit.get(k).add(this.dateKey(log.date));
+    }
+
+    const bare = valid.filter(
+      (h) => !(h && typeof h === 'object' && 'daysOfWeek' in h) && doneByHabit.has(String(idOf(h)))
+    );
+    const loaded = new Map();
+    if (bare.length > 0) {
+      const found = await Habit.find({ _id: { $in: bare.map((h) => idOf(h)) }, createdBy: userId }).select('daysOfWeek');
+      for (const f of found) loaded.set(String(f._id), f);
+    }
+
+    for (const h of valid) {
+      const done = doneByHabit.get(String(idOf(h)));
+      if (!done) continue; // no logs -> 0
+      const schedule = h && typeof h === 'object' && 'daysOfWeek' in h ? h : loaded.get(String(idOf(h)));
+      if (!schedule) continue;
+      result.set(h, this.countStreak(schedule, done, end));
+    }
+    return result;
   }
 }
 

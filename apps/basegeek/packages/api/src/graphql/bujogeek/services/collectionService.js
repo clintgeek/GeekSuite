@@ -99,11 +99,46 @@ class CollectionService {
   async getCounts(collectionId, userId) {
     this.requireUser(userId);
     if (!mongoose.Types.ObjectId.isValid(collectionId)) return { total: 0, completed: 0 };
-    const [total, completed] = await Promise.all([
-      Task.countDocuments({ createdBy: userId, collectionId }),
-      Task.countDocuments({ createdBy: userId, collectionId, status: 'completed' }),
+    const counts = await this.getCountsBatch([collectionId], userId);
+    return counts.get(String(collectionId));
+  }
+
+  /**
+   * { total, completed } entry counts for many collections in ONE aggregation,
+   * owner-scoped. Returns Map<String(collectionId), { total, completed }>;
+   * every valid requested id is present (zeros when it has no entries or is
+   * not the caller's — the same answer the per-collection counts gave).
+   */
+  async getCountsBatch(collectionIds, userId) {
+    this.requireUser(userId);
+    const result = new Map();
+    const oids = [];
+    for (const id of collectionIds) {
+      const key = String(id);
+      if (result.has(key)) continue;
+      result.set(key, { total: 0, completed: 0 });
+      if (mongoose.Types.ObjectId.isValid(id)) oids.push(new mongoose.Types.ObjectId(key));
+    }
+    if (oids.length === 0) return result;
+    const rows = await Task.aggregate([
+      {
+        $match: {
+          createdBy: new mongoose.Types.ObjectId(String(userId)),
+          collectionId: { $in: oids },
+        },
+      },
+      {
+        $group: {
+          _id: '$collectionId',
+          total: { $sum: 1 },
+          completed: { $sum: { $cond: [{ $eq: ['$status', 'completed'] }, 1, 0] } },
+        },
+      },
     ]);
-    return { total, completed };
+    for (const row of rows) {
+      result.set(String(row._id), { total: row.total, completed: row.completed });
+    }
+    return result;
   }
 }
 
