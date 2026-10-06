@@ -63,13 +63,19 @@ const { default: BloodPressure } = await import('../BloodPressure.jsx');
 
 describe('BloodPressure page — editing a row', () => {
   it('saves through updateBPLog, not createBPLog', async () => {
-    const user = userEvent.setup();
+    // Cost control, not a timeout bump: delay:null drops userEvent's per-action
+    // setTimeout hop and pointerEventsCheck:0 skips a getComputedStyle walk up
+    // the MUI tree on every click. getAllByRole on this page walks the whole
+    // tree computing accessibility and alone cost ~2.4s under load, so the row
+    // control is found by its aria-label and the save button with hidden:true
+    // (scoped to the dialog, which is already known to be open).
+    const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
     render(<BloodPressure />);
 
     // Wait for the initial load to land the one reading.
     await screen.findAllByText(/118\/76/);
 
-    const editButtons = screen.getAllByRole('button', { name: /edit the 118\/76 mmhg reading/i });
+    const editButtons = screen.getAllByLabelText(/edit the 118\/76 mmhg reading/i);
     await user.click(editButtons[0]);
 
     // QuickAddBP's own desktop card also has a "Systolic" field, always
@@ -85,7 +91,7 @@ describe('BloodPressure page — editing a row', () => {
     await user.clear(dialogSystolic);
     await user.type(dialogSystolic, '150');
 
-    const saveButton = within(dialog).getByRole('button', { name: /save/i });
+    const saveButton = within(dialog).getByRole('button', { name: /save/i, hidden: true });
     await user.click(saveButton);
 
     expect(updateBPLog).toHaveBeenCalledTimes(1);
