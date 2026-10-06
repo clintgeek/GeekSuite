@@ -10,7 +10,7 @@ dotenv.config();
 import cors from 'cors';
 import morgan from 'morgan';
 import cookieParser from 'cookie-parser';
-import { createHttpLogger } from '@geeksuite/logger';
+import { createHttpLogger, installShutdownHooks } from '@geeksuite/logger';
 import logger from './lib/logger.js';
 import mongoose from 'mongoose';
 import mongoRoutes from './routes/mongo.js';
@@ -621,22 +621,8 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
 });
 
 // Graceful shutdown
-let shuttingDown = false
-const shutdown = (signal) => {
-  if (shuttingDown) {
-    logger.info(`${ signal } received during shutdown — forcing exit`)
-    process.exit(1)
-  }
-  shuttingDown = true
-  logger.info(`${ signal } received — shutting down`)
-
-  const forceTimer = setTimeout(() => {
-    logger.error('Shutdown timed out after 15s — forcing exit')
-    process.exit(0)
-  }, 15_000)
-  forceTimer.unref()
-
-  server.close(async () => {
+installShutdownHooks(logger, server, {
+  onClose: async () => {
     try {
       stopOAuthRefreshJob()
     } catch (err) {
@@ -672,9 +658,5 @@ const shutdown = (signal) => {
     } catch (err) {
       logger.error({ err }, 'Error closing refresh-token store')
     }
-    process.exit(0)
-  })
-}
-
-process.on('SIGTERM', () => shutdown('SIGTERM'))
-process.on('SIGINT',  () => shutdown('SIGINT'))
+  },
+})

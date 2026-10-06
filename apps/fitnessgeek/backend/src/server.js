@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { installShutdownHooks } from '@geeksuite/logger';
 import connectDB from './config/database.js';
 import redisClient from './config/redis.js';
 import logger from './config/logger.js';
@@ -41,23 +42,10 @@ async function start() {
     logger.info(`Redis caching: ${ redisClient.isReady() ? 'enabled' : 'disabled' }`);
   });
 
-  // Graceful shutdown
-  let shuttingDown = false;
-  const shutdown = (signal) => {
-    if (shuttingDown) {
-      logger.info(`${ signal } received during shutdown — forcing exit`);
-      process.exit(1);
-    }
-    shuttingDown = true;
-    logger.info(`${ signal } received — shutting down`);
-
-    const forceTimer = setTimeout(() => {
-      logger.error('Shutdown timed out after 15s — forcing exit');
-      process.exit(0);
-    }, 15_000);
-    forceTimer.unref();
-
-    server.close(async () => {
+  // Graceful shutdown: close the server, then each cleanup step on its own so
+  // one failure never skips the next.
+  installShutdownHooks(logger, server, {
+    onClose: async () => {
       try {
         await folderImport.stop();
       } catch (err) {
@@ -75,12 +63,8 @@ async function start() {
       } catch (err) {
         logger.error({ err }, 'Error closing Redis client');
       }
-      process.exit(0);
-    });
-  };
-
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
-  process.on('SIGINT', () => shutdown('SIGINT'));
+    },
+  });
 }
 
 start();

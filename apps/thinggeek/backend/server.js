@@ -1,3 +1,4 @@
+import http from 'http';
 import mongoose from 'mongoose';
 import dotenv from 'dotenv';
 import path from 'path';
@@ -13,6 +14,7 @@ const envFile = process.env.NODE_ENV === 'production' ? '.env.production' : '.en
 dotenv.config({ path: path.resolve(__dirname, envFile) });
 
 const { default: logger } = await import('./src/lib/logger.js');
+const { installShutdownHooks } = await import('@geeksuite/logger');
 const { default: createApp } = await import('./src/app.js');
 const { ensureFilesRoot, filesRoot } = await import('./src/lib/fileStorage.js');
 const { startPurgeSchedule } = await import('./src/jobs/purge.js');
@@ -37,48 +39,30 @@ async function connectDB() {
   logger.info({ db: mongoose.connection.db.databaseName }, 'MongoDB connected');
 }
 
+// Created up front (not by app.listen in start()) so the shutdown hooks always
+// have a server to close. A signal can arrive before listen() — the container
+// is stopped while connectDB is still waiting on Mongo, say — and close() on a
+// server that is not listening still calls back, so onClose runs and the
+// process exits 0.
+const server = http.createServer(app);
+
 let shuttingDown = false;
-let server;
 let purge = { stop() {} };
 
-function shutdown(signal) {
-  if (shuttingDown) {
-    logger.info(`${signal} received during shutdown — forcing exit`);
-    process.exit(1);
-  }
-  shuttingDown = true;
-  logger.info({ signal }, 'shutting down');
-
-  const forceTimer = setTimeout(() => {
-    logger.error('Shutdown timed out after 15s — forcing exit');
-    process.exit(1);
-  }, 15_000);
-  forceTimer.unref();
-
-  const closed = async () => {
+installShutdownHooks(logger, server, {
+  onClose: async () => {
+    shuttingDown = true;
     purge.stop();
     // Still connecting (readyState 2)? disconnect() would wait out server
-    // selection (30 s) and the force timer would turn a clean stop into exit 1.
-    if (mongoose.connection.readyState !== 1) process.exit(0);
+    // selection (30 s) and the force timer would fire mid-cleanup.
+    if (mongoose.connection.readyState !== 1) return;
     try {
       await mongoose.disconnect();
     } catch (err) {
       logger.error({ err: { name: err?.name } }, 'Error disconnecting mongoose');
     }
-    process.exit(0);
-  };
-
-  // A signal can arrive before listen() (container stopped while Mongo is
-  // still connecting) — `server` is undefined then.
-  if (!server) {
-    closed();
-    return;
-  }
-  server.close(closed);
-}
-
-process.on('SIGTERM', () => shutdown('SIGTERM'));
-process.on('SIGINT', () => shutdown('SIGINT'));
+  },
+});
 
 async function start() {
   ensureFilesRoot();
@@ -94,7 +78,7 @@ async function start() {
     process.exit(1);
   }
 
-  server = app.listen(PORT, '0.0.0.0', () => {
+  server.listen(PORT, '0.0.0.0', () => {
     logger.info(`ThingGeek API server running on port ${PORT}`);
   });
 

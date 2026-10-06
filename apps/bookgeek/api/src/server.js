@@ -4,6 +4,7 @@
  */
 import dotenv from "dotenv";
 import mongoose from "mongoose";
+import { installShutdownHooks } from "@geeksuite/logger";
 
 // Before app.js is imported, so every module sees the loaded env.
 dotenv.config();
@@ -42,33 +43,15 @@ async function start() {
     logger.info(`Environment: ${process.env.NODE_ENV || "development"}`);
   });
 
-  let shuttingDown = false;
-  const shutdown = (signal) => {
-    if (shuttingDown) {
-      logger.info(`${signal} received during shutdown — forcing exit`);
-      process.exit(1);
-    }
-    shuttingDown = true;
-    logger.info(`${signal} received — shutting down`);
-
-    const forceTimer = setTimeout(() => {
-      logger.error("Shutdown timed out after 15s — forcing exit");
-      process.exit(0);
-    }, 15_000);
-    forceTimer.unref();
-
-    server.close(async () => {
+  installShutdownHooks(logger, server, {
+    onClose: async () => {
       try {
         await mongoose.disconnect();
       } catch (err) {
         logger.error({ err }, "Error disconnecting mongoose");
       }
-      process.exit(0);
-    });
-  };
-
-  process.on("SIGTERM", () => shutdown("SIGTERM"));
-  process.on("SIGINT", () => shutdown("SIGINT"));
+    },
+  });
 }
 
 start().catch((err) => {

@@ -5,7 +5,7 @@ import helmet from 'helmet';
 import rateLimit from 'express-rate-limit';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { createHttpLogger } from '@geeksuite/logger';
+import { createHttpLogger, installShutdownHooks } from '@geeksuite/logger';
 import mongoose from 'mongoose';
 import connectDB from './config/db.js';
 import { getAllowedOrigins } from './config/corsOrigins.js';
@@ -182,33 +182,15 @@ async function start() {
   });
 
   // Graceful shutdown
-  let shuttingDown = false;
-  const shutdown = (signal) => {
-    if (shuttingDown) {
-      logger.info(`${ signal } received during shutdown — forcing exit`);
-      process.exit(1);
-    }
-    shuttingDown = true;
-    logger.info(`${ signal } received — shutting down`);
-
-    const forceTimer = setTimeout(() => {
-      logger.error('Shutdown timed out after 15s — forcing exit');
-      process.exit(1);
-    }, 15_000);
-    forceTimer.unref();
-
-    server.close(async () => {
+  installShutdownHooks(logger, server, {
+    onClose: async () => {
       try {
         await mongoose.disconnect();
       } catch (err) {
         logger.error({ err }, 'Error disconnecting mongoose');
       }
-      process.exit(0);
-    });
-  };
-
-  process.on('SIGTERM', () => shutdown('SIGTERM'));
-  process.on('SIGINT', () => shutdown('SIGINT'));
+    },
+  });
 }
 
 start().catch(err => {

@@ -1,4 +1,6 @@
+import http from 'http';
 import mongoose from 'mongoose';
+import { installShutdownHooks } from '@geeksuite/logger';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
@@ -26,47 +28,23 @@ const connectDB = async () => {
   logger.info({ db: mongoose.connection.db.databaseName }, 'MongoDB connected');
 };
 
+// Created up front (not by app.listen in start()) so the shutdown hooks always
+// have a server to close. A signal can arrive before listen() — the container
+// is stopped while connectDB is still waiting on Mongo, say — and close() on a
+// server that is not listening still calls back, so onClose runs and the
+// process exits 0.
+const server = http.createServer(app);
+
 // Graceful shutdown
-let shuttingDown = false;
-let server;
-
-const shutdown = (signal) => {
-  if (shuttingDown) {
-    logger.info(`${ signal } received during shutdown — forcing exit`);
-    process.exit(1);
-  }
-  shuttingDown = true;
-  logger.info({ signal }, 'shutting down');
-
-  const forceTimer = setTimeout(() => {
-    logger.error('Shutdown timed out after 15s — forcing exit');
-    process.exit(1);
-  }, 15_000);
-  forceTimer.unref();
-
-  // A signal can arrive before `listen()` — the container is stopped while
-  // connectDB is still waiting on Mongo, say. `server` is undefined then, and
-  // dereferencing it turned a clean SIGTERM into a TypeError and a non-zero
-  // exit.
-  const closed = async () => {
+installShutdownHooks(logger, server, {
+  onClose: async () => {
     try {
       await mongoose.disconnect();
     } catch (err) {
       logger.error({ err }, 'Error disconnecting mongoose');
     }
-    process.exit(0);
-  };
-
-  if (!server) {
-    closed();
-    return;
-  }
-
-  server.close(closed);
-};
-
-process.on('SIGTERM', () => shutdown('SIGTERM'));
-process.on('SIGINT', () => shutdown('SIGINT'));
+  },
+});
 
 // Start server — connect DB first, then listen
 async function start() {
@@ -77,7 +55,7 @@ async function start() {
     process.exit(1);
   }
 
-  server = app.listen(PORT, '0.0.0.0', () => {
+  server.listen(PORT, '0.0.0.0', () => {
     logger.info('API server running on port ' + PORT);
   });
 }
