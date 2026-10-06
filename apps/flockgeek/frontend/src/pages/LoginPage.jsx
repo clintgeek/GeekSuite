@@ -20,8 +20,10 @@ const LoginPage = () => {
       loading={loading}
       error={error}
       // FlockGeek branding (Amber/Gold/Red) - Rooster colors
-      logoColor="#d97706" // Amber 600
-      logoSuffixColor="#b45309" // Amber 700
+      // Theme tokens, not hex: the wordmark follows the app's own palette in
+      // both modes, and that palette is what the contrast suite checks.
+      logoColor="text.primary"
+      logoSuffixColor="primary.main"
       // Custom ink wash for FlockGeek
       inkColors={[
         'rgba(217, 119, 6, 0.08)', // Amber

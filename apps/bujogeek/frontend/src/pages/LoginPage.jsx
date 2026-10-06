@@ -20,8 +20,10 @@ const LoginPage = () => {
       loading={loading}
       error={error}
       // BujoGeek branding colors (Sage/Earth tones)
-      logoColor="#4A8C6F" // Sage Green
-      logoSuffixColor="#B87341" // Earthy Orange/Brown
+      // Theme tokens, not hex: the wordmark follows the app's own palette in
+      // both modes, and that palette is what the contrast suite checks.
+      logoColor="text.primary"
+      logoSuffixColor="primary.main"
       // Custom ink wash for BujoGeek (Greens/Earths)
       inkColors={[
         'rgba(74, 140, 111, 0.08)', // Sage
