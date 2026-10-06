@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -940,4 +940,7 @@ const TaskRow = ({
   );
 };
 
-export default TaskRow;
+// Memoised: the task context keeps unchanged task objects by identity, so with
+// stable handlers from the parent a checkbox tap re-renders only the row that
+// changed (BUJOGEEK_REVIEW §3.3). Props are compared shallowly.
+export default memo(TaskRow);

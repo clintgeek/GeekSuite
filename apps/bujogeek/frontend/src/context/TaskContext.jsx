@@ -129,12 +129,21 @@ const mapTaskDeep = (mapper) => (task) => {
  */
 const mapTasksState = (state, mapper) => {
   const deep = mapTaskDeep(mapper);
-  if (Array.isArray(state)) return sortTasks(state.map(deep));
+  // Map first, and only pay for a re-sort (and a new array identity) when
+  // something actually changed. A mutation touches one task; every list it
+  // did not touch keeps its reference, and in the list it did touch every
+  // other task keeps its object identity — which is what lets a memoised
+  // TaskRow skip re-rendering (BUJOGEEK_REVIEW §3.3).
+  const mapList = (list) => {
+    const mapped = list.map(deep);
+    return mapped.some((task, i) => task !== list[i]) ? sortTasks(mapped) : list;
+  };
+  if (Array.isArray(state)) return mapList(state);
   if (!state || typeof state !== 'object') return state;
 
   const next = {};
   Object.entries(state).forEach(([date, list]) => {
-    next[date] = Array.isArray(list) ? sortTasks(list.map(deep)) : list;
+    next[date] = Array.isArray(list) ? mapList(list) : list;
   });
   return next;
 };

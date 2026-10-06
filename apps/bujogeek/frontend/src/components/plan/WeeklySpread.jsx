@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { Box, Typography, IconButton, Button, useTheme } from '@mui/material';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -92,16 +92,18 @@ const WeeklySpread = () => {
     return { tasksByDay: grouped, weekStats: stats };
   }, [tasks, days]);
 
-  const handleStatusToggle = async (task) => {
+  // Stable identities: TaskRow is memoised, and a fresh function per render
+  // would defeat that for every row on every parent render.
+  const handleStatusToggle = useCallback(async (task) => {
     const newStatus = task.status === 'completed' ? 'pending' : 'completed';
     await updateTaskStatus(task.id || task._id, newStatus);
-  };
+  }, [updateTaskStatus]);
 
-  const handleDelete = async (task) => {
+  const handleDelete = useCallback(async (task) => {
     if (window.confirm('Delete this task?')) {
       await deleteTask(task.id || task._id);
     }
-  };
+  }, [deleteTask]);
 
   const now = new Date();
   const isCurrentWeek = now >= weekStart && now <= weekEnd;

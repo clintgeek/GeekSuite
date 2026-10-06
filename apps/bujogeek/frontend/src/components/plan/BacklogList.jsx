@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useCallback } from 'react';
 import { Box, Typography, Button, useTheme } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
 import { ClipboardCheck } from 'lucide-react';
@@ -52,16 +52,18 @@ const BacklogList = () => {
     return { staleTasks: stale, recentBacklog: recent };
   }, [backlogTasks]);
 
-  const handleStatusToggle = async (task) => {
+  // Stable identities: TaskRow is memoised, and a fresh function per render
+  // would defeat that for every row on every parent render.
+  const handleStatusToggle = useCallback(async (task) => {
     const newStatus = task.status === 'completed' ? 'pending' : 'completed';
     await updateTaskStatus(task.id || task._id, newStatus);
-  };
+  }, [updateTaskStatus]);
 
-  const handleDelete = async (task) => {
+  const handleDelete = useCallback(async (task) => {
     if (window.confirm('Delete this task?')) {
       await deleteTask(task.id || task._id);
     }
-  };
+  }, [deleteTask]);
 
   const isLoading = loading === LoadingState.FETCHING;
 
