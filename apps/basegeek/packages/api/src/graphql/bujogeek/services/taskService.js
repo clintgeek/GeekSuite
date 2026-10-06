@@ -482,10 +482,39 @@ class TaskService {
       status: { $nin: ['completed', 'cancelled', 'blocked'] }
     });
 
-    const overrides = await this.taskModel.find({
-      createdBy: userId,
-      seriesId: { $in: masterTasks.map(m => m._id) }
-    });
+    // BOUNDED, NOT EVERY OVERRIDE EVER. `overrideMap` is only ever read by
+    // key `${seriesId}_${originalDueDate}` for (a) occurrences expanded inside
+    // [viewStart, viewEnd] and (b) the one carry-forward occurrence just
+    // before viewStart on the daily/all views. So that is all we fetch: the
+    // window, plus the exact (series, past date) pair for each master. Rows
+    // with no originalDueDate were already ignored when building the map.
+    const overrideClauses = [];
+    if (masterTasks.length > 0) {
+      const masterIds = masterTasks.map(m => m._id);
+      overrideClauses.push({
+        seriesId: { $in: masterIds },
+        originalDueDate: { $gte: viewStart, $lte: viewEnd },
+      });
+      if (viewType === 'daily' || viewType === 'all') {
+        for (const master of masterTasks) {
+          if (!master.recurrenceRule) continue;
+          try {
+            const pastDate = rrulestr(master.recurrenceRule).before(viewStart, false);
+            if (pastDate) {
+              overrideClauses.push({ seriesId: master._id, originalDueDate: pastDate });
+            }
+          } catch (e) {
+            // Invalid rule: the expansion loop below logs it and skips it.
+          }
+        }
+      }
+    }
+    const overrides = overrideClauses.length === 0
+      ? []
+      : await this.taskModel.find({
+          createdBy: userId,
+          $or: overrideClauses,
+        });
     const overrideMap = new Map();
     for (const ov of overrides) {
       if (ov.originalDueDate) {
