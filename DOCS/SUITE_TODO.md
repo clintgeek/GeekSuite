@@ -33,9 +33,9 @@ Pull from here when planning the next pass; update as work lands or priorities s
     - [x] basegeek's own `packages/ui/src/api.js` interceptor sends it
     - [x] `packages/api-client`'s shared Apollo `authLink` sends it
     - [x] `apps/startgeek/src/lib/graphql.js` and `apps/startgeek/src/lib/basegeek.js` send it
-    - [ ] Trace and eliminate remaining ~5 per 24h `POST /api/auth/refresh` warnings from `axios/1.13.5` (an app-proxied refresh whose browser caller omitted the header).
-    - [ ] A full 24-hour window with zero `CSRF token check (report-only)` warnings in basegeek's logs.
-    - [ ] Flip `CSRF_TOKEN=enforce` in `apps/basegeek/.env.production` and restart.
+    - [x] ~~Trace the ~5/24h `POST /api/auth/refresh` warnings~~ — **traced and closed 2026-09-11** (`5b2b1494`: one Sep 8 burst from a single Android tab on a pre-rollout bundle); this line was carried forward as open by the 09-13 consolidation. Re-checked 2026-10-06: all 8 app auth proxies forward the header via `authProxyHeaders(req)` (pinned by `packages/user/src/server/__tests__/authProxyHeaders.test.js`), `doTokenRefresh()` sends it, and no frontend refreshes any other way. Two header-less refreshes in the window carried no SSO cookie at all (logged-out tabs → basegeek's 400 "Refresh token is required"), which the check correctly skips.
+    - [x] A full 24-hour window with zero `CSRF token check (report-only)` warnings — **met 2026-10-06**: the ~46 h since basegeek's 2026-10-05 01:01Z recreate hold zero (older logs went with the old container).
+    - [ ] **Chef:** flip `CSRF_TOKEN=enforce` in `apps/basegeek/.env.production`, then `docker compose up -d basegeek` from `apps/basegeek/` (a Watchtower redeploy does NOT pick up an env change). One theoretical edge to watch after: a login POST from a tab holding a stale SSO cookie + `geek_csrf` but sending no header would 403 — not seen in the logs.
 
 - **`CORS_ORIGINS` is unset in the basegeek container** (live, seen 2026-09-16). Production is
   running on the hardcoded fallback origin list and says so at boot:
@@ -61,7 +61,7 @@ Pull from here when planning the next pass; update as work lands or priorities s
   `resolveHouseholdId` swap, FitnessGeek's household becomes a layer over it). Phased H0–H5:
   [`DOCS/SUITE_HOUSEHOLDS_PLAN.md`](SUITE_HOUSEHOLDS_PLAN.md). **Proposal, not started.**
 
-- **nginx `client_max_body_size` has no suite-wide documented home.** Its absence 413'd every
+- ~~**nginx `client_max_body_size` has no suite-wide documented home.**~~ — **documented 2026-10-06** in `DOCS/RUNBOOK.md` §10 (symptom, fix, live per-app values). Its absence 413'd every
   basegeek AI call carrying an image (found 2026-09-something, recorded only in agent memory,
   not in `DOCS/RUNBOOK.md`'s landmine table). The nginx config itself isn't in the repo, so
   this recurs for any new app that uploads images (GameGeek's cover uploads, `/mcp`'s image
@@ -81,22 +81,22 @@ Pull from here when planning the next pass; update as work lands or priorities s
 
 ### Contrast & Typography
 - **Contrast Regression Ratchet**: Keep `packages/ui/src/__tests__/themeContrast.test.js` green across all light and dark theme permutations.
-- **BookGeek Primary Button Contrast**: Sky `#0ea5e9` with white `contrastText` is 2.8:1 in both modes ("Add book", "Create"). Darken accent or utilize dark contrastText.
-- **Login Wordmark Brand Colors**: Ensure `LoginSplash` brand colors meet AA standards on dark cards (fitnessgeek `#2563eb`, bookgeek `#1d4ed8`, storygeek off-identity purple/orange).
+- ~~**BookGeek Primary Button Contrast**~~ — **gone 2026-09-30** with the Used Bookstore restyle: contained buttons are bookstore green now, and `themeContrast` covers them.
+- ~~**Login Wordmark Brand Colors**~~ — **done 2026-10-06**: bujogeek and flockgeek were the only apps passing hardcoded hex to `LoginSplash`; both now pass theme tokens (`text.primary` / `primary.main`) like the other six, so the wordmark carries each app's own contrast-checked palette.
 - **StartGeek Wallpaper Scrim**: Labels and weather glyphs can lose contrast against bright user-selected wallpapers; verify dock label shadows and weather text contrast.
 
 ### Polish & Accessibility
-- **Auth-Hydration Splash**: Several apps display an unthemed grey container while hydrating user session. Provide a shared `GeekAuthSplash` in `@geeksuite/ui` honoring the app's theme.
-- **Reduced Motion Support**: Ensure framer-motion transitions and bujogeek's grain overlay respect `prefers-reduced-motion`.
-- **Themed Tooltips**: Replace MUI's default grey-700 tooltips with theme-derived tooltips in `createGeekSuiteTheme`.
-- **"Updating…" on the other PWAs**: bookgeek and gamegeek render `<GeekUpdateIndicator />` (PWA_STANDARD rule 9, 2026-10-04) so the post-deploy double draw explains itself. fitnessgeek, notegeek, bujogeek, flockgeek, storygeek, startgeek and thinggeek have the same double draw and don't render it yet. One line in each app's root, inside its ThemeProvider.
+- ~~**Auth-Hydration Splash**~~ — **already resolved; verified 2026-10-06** with `/api/me` delayed 3 s in all 8 MUI apps, dark and light: every loading state sits inside its app's ThemeProvider on its own `background.default` (bookgeek "Checking session…", gamegeek/thinggeek marks, spinners elsewhere). Only bujogeek shows an empty themed body with no spinner — polish, not this bug.
+- ~~**Reduced Motion Support**~~ — **done 2026-10-06**: the five framer-motion apps (flockgeek, fitnessgeek, bujogeek, storygeek, startgeek) wrap their root in `<MotionConfig reducedMotion="user">`, so every animation honours the OS setting. bujogeek's grain overlay no longer exists.
+- ~~**Themed Tooltips**~~ — **already done**: `createGeekSuiteTheme`'s `MuiTooltip` override uses theme-derived `tooltipBg`/`tooltipFg` (re-checked 2026-10-06).
+- ~~**"Updating…" on the other PWAs**~~ — **done 2026-10-06** in notegeek, bujogeek, flockgeek, storygeek, thinggeek (all reload after a new worker activates). **Deliberately not** in fitnessgeek: it defers updates until the page is hidden (`PWAUpdatePrompt.jsx`, 2026-09-27), so no reload follows the download and the pill would never clear. Not in startgeek: no MUI.
 - **Offline Pages**: Give flockgeek and bookgeek `offline.html` theme-aware styles matching their PWA manifest colors.
 
 ---
 
 ## 4. Shared Libraries & Refactors
 
-- **Wire `installShutdownHooks`**: Connect `@geeksuite/logger`'s `installShutdownHooks(logger, server, { onClose })` into the 7 backend servers to replace bespoke shutdown logic.
+- ~~**Wire `installShutdownHooks`**~~ — **done 2026-10-06** (`9725bb97`): all nine backends (basegeek, bookgeek, bujogeek, fitnessgeek, flockgeek, gamegeek, notegeek, storygeek, thinggeek) shut down through it, each `onClose` carrying exactly its old cleanup. bujogeek/gamegeek/thinggeek create the server up front so a pre-`listen()` signal still cleans up; fitnessgeek lost a stray SIGINT handler that raced the real one. The hook itself is pinned by a real-SIGTERM test in `packages/logger` (`d6f1934e`). Behaviour change: notegeek/bujogeek/gamegeek/thinggeek now exit 0 (was 1) when the 15 s force-exit fires; a second signal still exits 1.
 - **FitnessGeek Secrets Parity**: `KEY_VAULT_SECRET` **is** set in the fitnessgeek container (64 chars, checked 2026-09-16). What remains is running the Garmin password backfill (`scripts/encryptGarminPasswords.js`) — Chef's call, same shape as basegeek's encrypt-keys migration, which ran 2026-09-16.
 - **GraphQL Gateway Consolidation Follow-ups**:
   - Migrate remaining FitnessGeek REST reads (food search / barcode / favorites / recent in `foodService.js`) to gateway queries.
@@ -271,16 +271,11 @@ All of §1 and §2 shipped 2026-09-20/21. What is left, in the report's own
 recommended order:
 
 - ~~**§3.1 Indexes**~~ — done 2026-09-21 (`b8458bcd`), verified with explain.
-  The override fetch's missing DATE bound remains open; the index itself is
+  The override fetch's missing DATE bound was closed 2026-10-06 (below); the index itself is
   served by the partial unique index on `(seriesId, originalDueDate)`.
-- **§3.1 leftover — the unbounded override fetch.** Still pulls every
-  materialised override for every series with no date bound, on every load.
-- **§3.2 Two N+1s** — each collection costs four count queries (two field
-  resolvers each calling a two-count helper); `currentStreak` issues one log
-  query per habit. Both bounded; fold in when those files are open.
-- **§3.3 `TaskRow` is not memoised** — `mapTasksState` re-sorts the whole
-  array on every mutation, so one checkbox tap re-renders every row. Matters
-  on Search/Backlog, which render the full corpus.
+- ~~**§3.1 leftover — the unbounded override fetch**~~ — **done 2026-10-06** (`291935bc`): bounded to overrides in the view window plus each master's carry-forward date, still owner-scoped; same results.
+- ~~**§3.2 Two N+1s**~~ — **done 2026-10-06** (`37d73e27`): `taskCount`/`completedCount` share one per-request aggregation (4N `countDocuments` → 1), `currentStreak` one `HabitLog.find` for all habits (N → 1). Per-request batcher in `graphql/bujogeek/batch.js`, keyed on the GraphQL context so a batch never crosses users.
+- ~~**§3.3 `TaskRow` is not memoised**~~ — **done 2026-10-06** (`26ce9ad5`): `memo` + stable handlers; `mapTasksState` only re-sorts a list a task actually changed in (a no-op mutation no longer re-sorts).
 - **§3.5 Two doors onto the blocked state machine** — `updateTaskStatus`'s
   resolver throws a plain Error where `blockTask` throws a classified one, and
   `updateTask` accepts `status` straight through, bypassing the guard and the
@@ -314,9 +309,7 @@ the app was down over its due time, should it arrive late or be skipped?
   history lookup, which misses "2 fage yogurts" (quantity is in its key). Fixing
   that safely needs a marker on food rows saying whether a person or an
   estimate created them — a shared-schema change.
-- **Flaky test:** `bloodPressureEdit.test.jsx` times out at 5 s under full-suite
-  concurrency and passes alone. Seen by an agent 2026-09-22; not reproduced in
-  the main checkout's runs.
+- ~~**Flaky test:** `bloodPressureEdit.test.jsx` timed out at 5 s under full-suite load~~ — **fixed 2026-10-06** (`git log --grep bloodPressureEdit`): slow, not hung — a whole-tree `getAllByRole` (~2.4 s under load) and userEvent's per-action delay. Now queried by aria-label with `userEvent.setup({ delay: null, pointerEventsCheck: 0 })`; assertions unchanged (red when the edit calls create instead of update). Test body ~1.5 s. `vitest.config.js` had already raised `testTimeout` to 15 s on 2026-09-27 (`9777e436`).
 
 ### FitnessGeek — Health Dashboard
 
@@ -452,16 +445,12 @@ the app was down over its due time, should it arrive late or be skipped?
 
 ## 8. Suite Tenancy & GameGeek (plans written 2026-09-24)
 
-- **Suite households** — `DOCS/SUITE_HOUSEHOLDS_PLAN.md`. Proposal, not started. The
+- **Suite households** — same item as §2's "Suite-wide households / multi-tenancy". `DOCS/SUITE_HOUSEHOLDS_PLAN.md`. Proposal, not started. The
   suite-wide multi-tenancy model (a `households` collection in `userGeek`, server-side
   `requireHousehold(user)` resolution, expiring single-use invites). BookGeek and GameGeek
   both need this before a third user can safely exist; FitnessGeek's app-local household
   becomes a thin layer over it. See that doc's phased rollout (H0–H4).
-- **Registration gate** — `DOCS/REGISTRATION_GATE_PLAN.md`. Proposal awaiting Chef's call, NOT
-  implemented. `POST /api/auth/register` is public and rate-limited but not gated, and
-  BookGeek's shared library (plus GameGeek's default household) means any sign-up can read,
-  edit, or delete it today. Recommended stopgap: `REGISTRATION_MODE=closed` (one-line), ahead
-  of the full suite-households plan.
+- ~~**Registration gate**~~ — **shipped 2026-09-25** (`REGISTRATION_MODE`, default closed; see §2). This entry said "awaiting Chef's call" until 2026-10-06.
 - **BookGeek prep** — `DOCS/BOOKGEEK_PREP_PLAN.md`. Proposal, not started. The deletion pass
   (dead REST CRUD in `apps/bookgeek/api/src/server.js`, dead models, stale `CONTEXT.md`) plus
   the `@geeksuite/collection` extraction. Sequencing updated 2026-09-24: GameGeek is shipping
@@ -472,10 +461,7 @@ the app was down over its due time, should it arrive late or be skipped?
   (Steam + CSV imports), G4 (Tonight + Stats + Glance), G5 (free-walk AI, golden-set entries),
   G6 (backlog goal, wishlist, loans, scan-to-add, MCP tools). Each phase's done-when is in the
   plan's table; G5 is explicitly cuttable if rules-based Tonight feels good without it.
-- **GameGeek storefront file importer** — `DOCS/GAMEGEEK_STOREFRONT_IMPORTS.md`. Research
-  proposal, not started. Steam API import and manual paste-a-list are being built tonight;
-  next up is a file importer for Playnite JSON/CSV, Heroic's library cache JSON, and a GOG
-  Galaxy 2.0 DB export, deduped against IGDB's `external_games`.
+- ~~**GameGeek storefront file importer**~~ — **superseded 2026-09-25**: Chef's call is Playnite-only imports (no per-store importers; Steam/IGDB/RAWG are metadata only). `DOCS/GAMEGEEK_STOREFRONT_IMPORTS.md` stays as research.
 
 ## 9. From the memory audit, 2026-09-24
 
@@ -491,7 +477,7 @@ existing doc home, not just history:
   (the latter needs a whole-box daemon restart, Chef's call) — has not been applied. Not
   currently in `DOCS/RUNBOOK.md`'s landmine tables; worth adding there when the durable fix
   lands, or sooner so the next occurrence is faster to diagnose.
-- **basegeek's nginx `client_max_body_size` fix has no doc home, and its own "tidier fix" is
+- **basegeek's nginx `client_max_body_size` fix ~~has no doc home~~ (documented in RUNBOOK §10, 2026-10-06), and its own "tidier fix" is
   still undone.** `clintgeek.com_baseGeek.conf` had no `client_max_body_size`, so nginx's 1 MB
   default 413'd any AI call carrying an image before basegeek's own 8 MB guard was ever
   reached — surfaced as a useless "assistant isn't available" in FitnessGeek. Fixed 2026-09-17

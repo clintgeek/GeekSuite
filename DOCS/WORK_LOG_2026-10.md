@@ -40,3 +40,23 @@ GameGeek; in BookGeek, one reload and unit tests (the deploy probe's API stubs d
 requests that go through BookGeek's worker). Ruled out along the way: a CSRF reload (the token
 is double-submit, so a restart doesn't invalidate it), and an in-app reload loop (none with
 the worker blocked). PWA_STANDARD rule 9; the other PWAs are in SUITE_TODO.
+
+### Backlog pass — "do the things you can" (2026-10-06)
+
+Shipped:
+- **"Updating…" pill** in notegeek, bujogeek, flockgeek, storygeek and thinggeek (`2dfc2e26`). Not in fitnessgeek, which defers updates until the page is hidden, so the pill would never clear. Not in startgeek, which has no MUI.
+- **Reduced motion app-wide** in the five framer-motion apps via `<MotionConfig reducedMotion="user">` (`8af3e847`).
+- **Login wordmarks:** bujogeek and flockgeek use theme tokens instead of hex (`37aebe63`).
+- **Graceful shutdown:** all nine backends go through `installShutdownHooks` (`9725bb97`). The hook itself is pinned by a real-SIGTERM test in `packages/logger` (`d6f1934e`).
+- **BuJoGeek performance:** the override fetch is bounded to the view (`291935bc`), counts and streaks are batched (4N queries → 1, N → 1; `37d73e27`), and `TaskRow` is memoised (`26ce9ad5`).
+- **FitnessGeek's BP edit test** is cheaper instead of leaning on a raised timeout (`7c9091b7`).
+- **RUNBOOK §10:** an nginx 413 / `client_max_body_size` row, the first time it's written down in the repo.
+
+Verified already done, and the todo list corrected:
+- **Themed tooltips:** already in the shared theme.
+- **BookGeek's 2.8:1 button:** gone with the Used Bookstore restyle.
+- **The "grey auth splash":** all 8 apps are themed, checked with `/api/me` delayed by 3 s.
+- **CSRF "~5/24 h" warnings:** traced and closed 2026-09-11, then carried forward as open by a later docs consolidation. 46 h of logs show zero warnings, and all 8 proxies forward the header. Only Chef's flip remains (`docker compose up -d basegeek`).
+- **Registration gate:** shipped 2026-09-25. **Storefront importer:** superseded by the Playnite-only decision.
+
+Gates: full basegeek API suite (142 suites, 3,086 tests), the other eight backends, and every touched frontend. Mobile harness, phone and desktop with `--enforce-a11y`, for the seven touched apps.

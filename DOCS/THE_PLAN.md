@@ -26,11 +26,8 @@ The active backlog has been reconciled. All items currently pending action are e
 
 ### 2.1 Q18b: `CSRF_TOKEN=enforce` Rollout Gate
 - **Context**: Double-submit CSRF protection (`geek_csrf` cookie + `X-CSRF-Token` header) is implemented across all 8 apps and running in `report` mode on basegeek.
-- **Current Observation**: Logs show ~5 report-only hits per 24-hour window on `POST /api/auth/refresh` from an `axios/1.13.5` client. All 6 backend reverse proxies forward the CSRF header correctly, confirming the missing header originates from a browser-side refresh caller.
-- **Action Plan**:
-  1. Identify and patch the specific browser-side Axios refresh caller omitting `X-CSRF-Token`.
-  2. Verify 24 consecutive hours of zero `CSRF token check (report-only)` log warnings.
-  3. Obtain Chef approval to flip `CSRF_TOKEN=enforce` in `apps/basegeek/.env.production` and restart.
+- **Status (2026-10-06)**: the "~5 report-only hits per 24 h" were traced and closed on 2026-09-11 (`5b2b1494`); all 8 app proxies forward the header, and the ~46 h of logs since basegeek's last recreate hold zero warnings. Details in `DOCS/SUITE_TODO.md` §2.
+- **Remaining**: Chef flips `CSRF_TOKEN=enforce` in `apps/basegeek/.env.production`, then `docker compose up -d basegeek` (a Watchtower redeploy doesn't pick up env changes).
 
 ### 2.2 Free-Tier AI Resilience Monitor
 - **Context**: AIGeek integrates Cloudflare Workers AI, Google Gemini, and Groq free tiers with automatic fallback routing.
