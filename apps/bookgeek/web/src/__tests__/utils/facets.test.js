@@ -24,6 +24,14 @@ describe("labels", () => {
     expect(languageLabel("en")).toBe("English");
     expect(languageLabel("Klingon-ish")).toBe("Klingon-ish");
   });
+
+  it('the read-year filter says "last read" (dateFinished, Chef 2026-10-08); the URL key stays read=', () => {
+    const chip = activeChips(stateOf("?read=2020-2024"), { shelves: SHELVES }).find((c) => c.id === "read");
+    expect(chip.group).toBe("Last read");
+    const section = SECTIONS.find((s) => s.id === "read");
+    expect(section.title).toBe("Year last read");
+    expect(section.labels.single(2024)).toBe("Every book here was last read in 2024.");
+  });
 });
 
 describe("sections", () => {
@@ -79,7 +87,7 @@ describe("chips", () => {
       "Format: EPUB",
       "Owned: Yes",
       "File: Has one",
-      "Read: 2020 or later",
+      "Last read: 2020 or later",
       "Rating: 4★–5★",
     ]);
     expect(chips.find((c) => c.id === "tags:a").patch).toEqual({ tags: ["b"] });

@@ -221,7 +221,7 @@ describe('LibraryView — desktop: the filter panel', () => {
     const panel = screen.getByTestId('filter-panel');
     const titles = within(panel).getAllByRole('heading', { level: 3 }).map((h) => h.textContent.replace(/\d+ selected$/, ''));
     // One language in the library: no Language section to choose from.
-    expect(titles).toEqual(['Shelf', 'Author', 'Series', 'Tags', 'Format', 'Copy', 'Year read', 'My rating']);
+    expect(titles).toEqual(['Shelf', 'Author', 'Series', 'Tags', 'Format', 'Copy', 'Year last read', 'My rating']);
     expect(within(panel).getByRole('heading', { level: 2, name: 'Filters' })).toHaveStyle({ fontFamily: '"DM Serif Display", Georgia, serif' });
   });
 
@@ -274,7 +274,7 @@ describe('LibraryView — desktop: the filter panel', () => {
     const menu = await screen.findByRole('menu', { name: 'Sort by' });
     const names = within(menu).getAllByRole('menuitemradio').map((i) => i.textContent);
     expect(names).toEqual([
-      'Title', 'Author', 'Recently added', 'My rating', 'Date finished', 'Page count', 'Published', 'Owned first', 'Shuffle',
+      'Title', 'Author', 'Recently added', 'My rating', 'Last read', 'Page count', 'Published', 'Owned first', 'Shuffle',
       'A → Z', 'Z → A',
     ]);
     await user.click(within(menu).getByRole('menuitemradio', { name: 'Page count' }));

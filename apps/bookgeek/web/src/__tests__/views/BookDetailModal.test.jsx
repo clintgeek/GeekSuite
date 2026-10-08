@@ -250,4 +250,27 @@ describe('BookDetailModal', () => {
     expect(screen.queryByText('Failed to update shelf')).not.toBeInTheDocument();
     expect(screen.queryByText('Failed to convert file')).not.toBeInTheDocument();
   });
+
+  it('calls dateFinished "Last read", never "Finished" (Chef, 2026-10-08)', () => {
+    const finished = { ...book, shelf: 'read', dateFinished: '2024-03-01T00:00:00.000Z' };
+    renderWithProviders(<BookDetailModal {...baseProps({ selectedBook: finished })} />);
+    const term = screen.getByText('Last read', { selector: 'dt' });
+    // A UTC-midnight calendar day, shown on that day in any timezone.
+    expect(term.nextSibling).toHaveTextContent(new Date(2024, 2, 1).toLocaleDateString());
+    expect(screen.queryByText('Finished', { selector: 'dt' })).not.toBeInTheDocument();
+  });
+
+  it('with an editor wired, "Last read" shows even when empty, as Set date', async () => {
+    const user = userEvent.setup();
+    const setLastReadEditing = vi.fn();
+    renderWithProviders(
+      <BookDetailModal
+        {...baseProps({ selectedBook: { ...book, dateFinished: null }, handleSaveLastRead: vi.fn(), setLastReadEditing })}
+      />
+    );
+    const button = screen.getByRole('button', { name: 'Set last read date' });
+    expect(button).toHaveTextContent('Set date');
+    await user.click(button);
+    expect(setLastReadEditing).toHaveBeenCalledWith(true);
+  });
 });

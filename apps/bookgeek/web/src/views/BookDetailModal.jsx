@@ -79,6 +79,10 @@ export default function BookDetailModal({
   editError,
   editMode,
   editSaving,
+  lastReadEditing = false,
+  lastReadSaving = false,
+  lastReadError = null,
+  setLastReadEditing,
   enrichError,
   enrichLoading,
   enrichSummary,
@@ -96,6 +100,7 @@ export default function BookDetailModal({
   handleSendToKindle,
   handleUpdateProgress,
   handleUpdateShelf,
+  handleSaveLastRead,
   handleUploadBookFile,
   handleUploadCoverForSelectedBook,
   handleUploadFileChange,
@@ -244,7 +249,21 @@ export default function BookDetailModal({
           </Box>
 
           <Box sx={{ minWidth: 0, pt: { md: 3 } }}>
-            <MetadataList book={selectedBook} />
+            <MetadataList
+              book={selectedBook}
+              lastRead={
+                handleSaveLastRead
+                  ? {
+                    editing: lastReadEditing,
+                    saving: lastReadSaving,
+                    error: lastReadError,
+                    onEdit: () => setLastReadEditing(true),
+                    onCancel: () => setLastReadEditing(false),
+                    onSave: (day) => handleSaveLastRead(selectedBook, day),
+                  }
+                  : null
+              }
+            />
 
             {description ? (
               <Box sx={{ px: 2, pb: 2 }}>

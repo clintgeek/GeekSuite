@@ -73,6 +73,7 @@ export const BOOK_CSV_COLUMNS = [
   { key: 'readingProgress', label: 'Progress' },
   { key: 'dateAdded', label: 'Date Added' },
   { key: 'dateStarted', label: 'Date Started' },
+  // The app calls it "Last read"; the export keeps Goodreads' header.
   { key: 'dateFinished', label: 'Date Finished' },
   { key: 'review', label: 'Review' },
   { key: 'id', label: 'BookGeek ID' },

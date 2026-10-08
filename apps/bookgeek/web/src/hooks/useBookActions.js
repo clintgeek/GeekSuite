@@ -18,6 +18,7 @@ import {
 } from "../graphql/cachePolicies.js";
 import { authFetch, restErrorMessage } from "../utils/authFetch";
 import { createRateBook } from "../utils/rateBook";
+import { shelfMoveInput } from "../utils/lastRead";
 
 export const bookIdOf = (book) => book?.id || book?._id || null;
 
@@ -70,12 +71,33 @@ export function useBookActions() {
     [client]
   );
 
-  /** Move a book to a shelf ("" clears it). Resolves to the updated book. */
+  /**
+   * Move a book to a shelf ("" clears it). Resolves to the updated book.
+   * Moving to `read` with no last-read date sets it to today in the same
+   * mutation (utils/lastRead.js `shelfMoveInput`) — every caller gets that,
+   * so the toast is each caller's job, not the date. `extra` rides along in
+   * the same update (Undo restoring a previous `dateFinished`).
+   */
   const updateShelf = useCallback(
-    async (book, newShelf) => {
-      const updated = await updateBook(bookIdOf(book), { shelf: newShelf }, "Failed to update shelf");
+    async (book, newShelf, extra) => {
+      const { input } = shelfMoveInput(book, newShelf, extra);
+      const updated = await updateBook(bookIdOf(book), input, "Failed to update shelf");
       applyShelfChangeToLists(client.cache, updated);
       await refreshShelfSummary(client);
+      return updated;
+    },
+    [client, updateBook]
+  );
+
+  /**
+   * Set or clear a book's last-read date (`dateFinished`): a day the reader
+   * picked, already UTC midnight (utils/lastRead.js), or null. A date takes a
+   * book out of the Unread list, so the lists are checked like a shelf move.
+   */
+  const setLastRead = useCallback(
+    async (book, iso) => {
+      const updated = await updateBook(bookIdOf(book), { dateFinished: iso ?? null }, "Couldn't save the last-read date");
+      applyShelfChangeToLists(client.cache, updated);
       return updated;
     },
     [client, updateBook]
@@ -95,7 +117,7 @@ export function useBookActions() {
   /** A book a REST route answered with (enrich, covers, upload), into the cache. */
   const writeBook = useCallback((raw) => writeRestBook(client.cache, raw), [client]);
 
-  return { client, updateBook, updateShelf, deleteBook, writeBook };
+  return { client, updateBook, updateShelf, setLastRead, deleteBook, writeBook };
 }
 
 /**

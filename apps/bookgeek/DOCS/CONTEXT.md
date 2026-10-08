@@ -1143,3 +1143,46 @@ against the sidebar, and Settings keeps its centred 1200px column in
   - `06j` is red/green: without `useScrollMemory` it errors
     `600 → 0`.
   - `01b` now finds the list switch in the ⋯ menu on a phone.
+
+---
+
+## "Last read" (2026-10-08)
+
+Chef: "BookGeek needs a way to set/show a 'last read' date."
+
+- **"Last read" IS `dateFinished`**, relabelled and made editable. No new
+  field; a re-read moves it forward. Everything that already followed
+  `dateFinished` still does: the sort (now "Last read"), the `read=` year
+  filter ("Year last read", chip "Last read: …"), the read/unread rule in
+  `graphql/cachePolicies.js` and the gateway's `filters.js`/`library.js`, and
+  What-next. Internal names and URL keys are unchanged. The CSV export keeps
+  the Goodreads header **"Date Finished"**. `readCount` is not touched.
+- **The date rule** (`web/src/utils/lastRead.js`, tested): a day the reader
+  picks is stored as **UTC midnight of that calendar day**
+  (`2026-10-08` → `2026-10-08T00:00:00.000Z`), so `formatReadingDate` shows it
+  on that day in every timezone, like the 90 imported dates. "Today" is the
+  viewer's **local** calendar date stored the same way — 9 PM Central on
+  Oct 8 is Oct 8, not Oct 9. An unchanged day is never re-sent, so an idle
+  Save never rounds a real instant off.
+- **Where it's set:** the detail page's "Last read" row (always shown; "Set
+  date" when empty) opens a native date input with Save / Clear / Cancel, all
+  44px (`views/detail/LastReadRow.jsx`); and Edit metadata has a "Last read"
+  date field (blank clears). Both go through `updateBook`. Clearing sends
+  `dateFinished: null`, which the gateway already accepts (`instantField` is
+  nullable; the resolver `$set`s null; the read rule is `$ne: null`).
+- **Moving a book to Read** (`useBookActions.updateShelf` → `shelfMoveInput`):
+  with no date, today goes in the **same mutation** and the toast says
+  "Moved to Read · Last read set to today" with **Undo** (shelf and date both
+  back — to empty) and **Change date** (opens the row's editor). With a date
+  already, only the shelf moves and the toast asks: "Moved to Read · Last read
+  Mar 2024" with **Set to today** and **Undo** (`views/detail/movedToReadToast.jsx`).
+  Today the detail page's Shelf sheet is the only way a book reaches Read
+  (What-next only starts books; Add book creates rather than moves), but the
+  fill lives in `updateShelf`, so any new path gets the date — the toast is
+  the caller's job.
+- **Known gap:** the toast renders outside the detail sheet's modal, so while
+  the sheet is open MUI marks it aria-hidden and the focus trap keeps the
+  keyboard out of it. The sheet carries the equivalents (the Last read row;
+  the Shelf sheet to move back). True of every toast fired over a sheet.
+- Tests: `__tests__/utils/lastRead.test.js`, `__tests__/views/lastRead.test.jsx`;
+  harness scene `03c-detail-last-read`.

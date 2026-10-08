@@ -145,7 +145,7 @@ const SECTION_DEFS = [
   },
   {
     id: "read",
-    title: "Year read",
+    title: "Year last read",
     kind: "range",
     facet: "readYears",
     bucketKey: "year",
@@ -153,10 +153,10 @@ const SECTION_DEFS = [
     maxKey: "readYearMax",
     labels: {
       any: "Any year",
-      empty: "No finished dates recorded yet.",
-      single: (lo) => `Every finished book here was finished in ${ lo }.`,
-      minAria: "Earliest year read",
-      maxAria: "Latest year read",
+      empty: "No last-read dates recorded yet.",
+      single: (lo) => `Every book here was last read in ${ lo }.`,
+      minAria: "Earliest year last read",
+      maxAria: "Latest year last read",
     },
   },
   {
@@ -221,7 +221,7 @@ export const CHIP_SPECS = [
   listChip("languages", "Language"),
   { kind: "boolean", key: "owned", group: "Owned", labels: { true: "Yes", false: "No" } },
   { kind: "flag", key: "hasFile", group: "File", label: "Has one" },
-  { kind: "range", id: "read", group: "Read", minKey: "readYearMin", maxKey: "readYearMax" },
+  { kind: "range", id: "read", group: "Last read", minKey: "readYearMin", maxKey: "readYearMax" },
   { kind: "range", id: "stars", group: "Rating", minKey: "ratingMin", maxKey: "ratingMax", format: starsLabel },
 ];
 

@@ -16,6 +16,10 @@ import { ExpandMore as ExpandMoreIcon } from "@mui/icons-material";
 import { GeekChip } from "@geeksuite/ui";
 import { bookTagGroups } from "../../utils/tagGroups";
 import { formatBytes, formatCalendarDate, formatDate, formatReadingDate } from "./bookFacts";
+import LastReadRow from "./LastReadRow";
+
+/** Marks the row LastReadRow draws (editable, and present even when empty). */
+const LAST_READ = Symbol("lastRead");
 
 const captionSx = {
   display: "block",
@@ -111,7 +115,13 @@ function DetailRow({ label, value }) {
   );
 }
 
-export default function MetadataList({ book }) {
+/**
+ * `lastRead` — `{ editing, saving, error, onEdit, onCancel, onSave }` from
+ * useBookDetail — makes "Last read" an editable row that shows even when
+ * empty. Without it the row is read-only and, like the rest, only shows
+ * with a value.
+ */
+export default function MetadataList({ book, lastRead = null }) {
   const primaryFile = Array.isArray(book.files) ? book.files[0] : null;
   const formatLabel = primaryFile
     ? [String(primaryFile.format || "").toUpperCase() || "File", primaryFile.size ? formatBytes(primaryFile.size) : null]
@@ -122,15 +132,17 @@ export default function MetadataList({ book }) {
   const rows = [
     ["Publisher", book.publisher || null],
     // A calendar day stored at UTC midnight, not an instant — read in UTC
-    // or it renders a day early west of UTC. `Added`/`Finished` below are
-    // genuine instants and stay local.
+    // or it renders a day early west of UTC. `Added` below is a genuine
+    // instant and stays local; `Last read` (`dateFinished`) goes through
+    // formatReadingDate, which tells the two apart.
     ["Published", formatCalendarDate(book.publishedDate)],
     ["ISBN", book.isbn || null],
     ["ISBN13", book.isbn13 || null],
     ["Language", book.language || null],
     ["Goodreads", book.goodreadsId || null],
     ["Added", formatDate(book.dateAdded)],
-    ["Finished", formatReadingDate(book.dateFinished)],
+    // "Last read" IS `dateFinished` (Chef, 2026-10-08): a re-read moves it on.
+    ["Last read", lastRead ? LAST_READ : formatReadingDate(book.dateFinished)],
     [
       "Read count",
       typeof book.readCount === "number" && book.readCount > 0 ? String(book.readCount) : null,
@@ -170,9 +182,13 @@ export default function MetadataList({ book }) {
             gap: "12px",
           }}
         >
-          {rows.map(([label, value]) => (
-            <DetailRow key={label} label={label} value={value} />
-          ))}
+          {rows.map(([label, value]) =>
+            value === LAST_READ ? (
+              <LastReadRow key={label} book={book} {...lastRead} />
+            ) : (
+              <DetailRow key={label} label={label} value={value} />
+            )
+          )}
         </Box>
       ) : null}
 

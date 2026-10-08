@@ -87,6 +87,15 @@ export default function EditMetadataDialog({
           <TextField label="Goodreads ID" value={draft.goodreadsId || ""} onChange={setField("goodreadsId")} />
           <TextField label="ISBN" value={draft.isbn || ""} onChange={setField("isbn")} />
           <TextField label="ISBN13" value={draft.isbn13 || ""} onChange={setField("isbn13")} />
+          {/* `dateFinished`, relabelled (Chef, 2026-10-08). Blank clears it. */}
+          <TextField
+            label="Last read"
+            type="date"
+            value={draft.dateFinished || ""}
+            onChange={setField("dateFinished")}
+            InputLabelProps={{ shrink: true }}
+            helperText="Leave blank if you haven't read it."
+          />
         </Box>
 
         {metadataDraftEnabled ? (

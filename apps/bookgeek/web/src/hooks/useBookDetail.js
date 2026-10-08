@@ -13,8 +13,11 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@apollo/client";
+import { useToast } from "@geeksuite/ui";
 import { GET_BOOK } from "../graphql/queries.js";
 import { authFetch } from "../utils/authFetch";
+import { calendarDayToIso, isoToCalendarDay, todayAsCalendarIso } from "../utils/lastRead";
+import { notifyMovedToRead } from "../views/detail/movedToReadToast";
 import { bookIdOf, useBookActions } from "./useBookActions";
 import { useBookEdit } from "./useBookEdit";
 import { useCoverTools } from "./useCoverTools";
@@ -63,6 +66,11 @@ export function useBookDetail({ bookId, onClose, onDeleted }) {
   const [progressDraft, setProgressDraft] = useState("");
   const [progressError, setProgressError] = useState(null);
   const progressCommitRef = useRef(null);
+
+  const [lastReadEditing, setLastReadEditing] = useState(false);
+  const [lastReadSaving, setLastReadSaving] = useState(false);
+  const [lastReadError, setLastReadError] = useState(null);
+  const { notify } = useToast();
 
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState(null);
@@ -281,8 +289,10 @@ export function useBookDetail({ bookId, onClose, onDeleted }) {
 
     setShelfSavingId(id);
     setShelfError(null);
+    const before = { shelf: book.shelf || "", dateFinished: book.dateFinished || null };
     try {
-      await actions.updateShelf(book, newShelf);
+      const updated = await actions.updateShelf(book, newShelf);
+      if (newShelf === "read") announceMovedToRead(updated, before);
     } catch (err) {
       // Was `console.error` and nothing else: with the gateway down the sheet
       // closed, the shelf did not move, and the user was told nothing at all.
@@ -290,6 +300,63 @@ export function useBookDetail({ bookId, onClose, onDeleted }) {
       setShelfError(err?.message || "Failed to update shelf");
     } finally {
       setShelfSavingId(null);
+    }
+  }
+
+  /**
+   * The Moved-to-Read toast (views/detail/movedToReadToast.jsx). Undo puts the
+   * shelf back and, when the move filled in today, the date too — back to
+   * empty. The toast outlives the sheet, so its handlers report through the
+   * toast, never through this sheet's state (Change date aside: it opens the
+   * editor on this sheet, which is still up when it is tapped).
+   */
+  function announceMovedToRead(updated, before) {
+    notifyMovedToRead(notify, before, {
+      undo: () => {
+        const extra = before.dateFinished ? undefined : { dateFinished: null };
+        actions
+          .updateShelf(updated, before.shelf, extra)
+          .catch((err) => notify(err?.message || "Couldn't undo that.", { tone: "error" }));
+      },
+      changeDate: () => {
+        setLastReadError(null);
+        setLastReadEditing(true);
+      },
+      setToday: () => {
+        actions
+          .setLastRead(updated, todayAsCalendarIso())
+          .then(() => notify("Last read set to today", { tone: "success" }))
+          .catch((err) => notify(err?.message || "Couldn't save the last-read date", { tone: "error" }));
+      },
+    });
+  }
+
+  /**
+   * Save the detail page's "Last read": `day` is the date input's
+   * `YYYY-MM-DD`, or "" to clear. Stored as UTC midnight of that day; an
+   * unchanged day writes nothing (so an idle Save never rounds off a real
+   * instant).
+   */
+  async function handleSaveLastRead(book, day) {
+    if (!bookIdOf(book)) return;
+    if ((day || "") === isoToCalendarDay(book.dateFinished)) {
+      setLastReadEditing(false);
+      return;
+    }
+    const iso = calendarDayToIso(day);
+    if (day && !iso) {
+      setLastReadError("Pick a date, or Clear.");
+      return;
+    }
+    setLastReadSaving(true);
+    setLastReadError(null);
+    try {
+      await actions.setLastRead(book, iso);
+      setLastReadEditing(false);
+    } catch (err) {
+      setLastReadError(err?.message || "Couldn't save the last-read date");
+    } finally {
+      setLastReadSaving(false);
     }
   }
 
@@ -350,6 +417,12 @@ export function useBookDetail({ bookId, onClose, onDeleted }) {
     shelfSavingId,
     shelfError,
     handleUpdateShelf,
+
+    lastReadEditing,
+    setLastReadEditing,
+    lastReadSaving,
+    lastReadError,
+    handleSaveLastRead,
 
     progressDraft,
     setProgressDraft,

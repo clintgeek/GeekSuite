@@ -9,6 +9,7 @@ import { useState } from "react";
 import { useApolloClient } from "@apollo/client";
 import { DRAFT_BOOK_METADATA } from "../graphql/queries.js";
 import { mergeTagList } from "../utils/libraryAssistant";
+import { calendarDayToIso, isoToCalendarDay } from "../utils/lastRead";
 
 export function useBookEdit({ selectedBook, updateBook }) {
   const apolloClient = useApolloClient();
@@ -47,6 +48,9 @@ export function useBookEdit({ selectedBook, updateBook }) {
         typeof selectedBook.rating === "number" && !Number.isNaN(selectedBook.rating)
           ? String(selectedBook.rating)
           : "",
+      // "Last read" (`dateFinished`) as the date input's YYYY-MM-DD, on the
+      // day the detail page shows it (utils/lastRead.js).
+      dateFinished: isoToCalendarDay(selectedBook.dateFinished),
     });
     setEditMode(true);
   }
@@ -106,6 +110,21 @@ export function useBookEdit({ selectedBook, updateBook }) {
       if (ratingNumber !== null && Number.isFinite(ratingNumber)) {
         payload.rating = ratingNumber;
       }
+    }
+
+    // Last read: sent only when the day changed, as that day's UTC midnight
+    // ("" clears). An untouched field never rounds a real instant off.
+    if (
+      editDraft.dateFinished !== undefined &&
+      (editDraft.dateFinished || "") !== isoToCalendarDay(selectedBook?.dateFinished)
+    ) {
+      const iso = calendarDayToIso(editDraft.dateFinished);
+      if (editDraft.dateFinished && !iso) {
+        setEditSaving(false);
+        setEditError("Last read isn't a valid date.");
+        return;
+      }
+      payload.dateFinished = iso;
     }
 
     try {
