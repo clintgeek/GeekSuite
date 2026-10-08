@@ -281,14 +281,20 @@ export const resolvers = {
     noteTagUsage: async (_, { tag }, context) => {
       const userId = context.user?.id;
       const root = normalizeTag(tag);
-      if (!userId || !root) return { notes: 0, subTags: 0 };
+      if (!userId || !root) return { notes: 0, subTags: 0, archived: 0 };
       // Active notes only (spec §3 A2): the counts describe what you can see.
       const spellings = await subtreeSpellings(Note, { userId, ...active() }, root);
       const notes = await Note.countDocuments({ userId, ...active(), tags: anyOf(spellings) });
       const subTags = new Set(
         spellings.map(normalizeTag).filter((t) => t !== root && isInSubtree(t, root))
       ).size;
-      return { notes, subTags };
+      // renameTag/deleteTag reach archived notes too (spec §3 A4), so the
+      // dialogs need this to say what an action will actually touch.
+      const archivedSpellings = await subtreeSpellings(Note, { userId, archived: true }, root);
+      const archived = archivedSpellings.length
+        ? await Note.countDocuments({ userId, archived: true, tags: anyOf(archivedSpellings) })
+        : 0;
+      return { notes, subTags, archived };
     },
 
     /**

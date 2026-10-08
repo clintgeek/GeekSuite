@@ -211,7 +211,19 @@ describe('A2 — notegeek resolvers', () => {
     const gone = await make({ tags: ['house/attic'] });
     const gone2 = await make({ tags: ['house'] });
     await Mutation.archiveNotes(null, { ids: [String(gone._id), String(gone2._id)] }, ctx(ALICE));
-    expect(await Query.noteTagUsage(null, { tag: 'house' }, ctx(ALICE))).toEqual({ notes: 1, subTags: 0 });
+    expect(await Query.noteTagUsage(null, { tag: 'house' }, ctx(ALICE))).toEqual({ notes: 1, subTags: 0, archived: 2 });
+  });
+
+  test('noteTagUsage.archived: owner-scoped, subtree only — what a rename/delete will also reach', async () => {
+    await make({ tags: ['house'] });
+    const mine = await make({ tags: ['house/attic'] });
+    const lookalike = await make({ tags: ['houseboat'] });
+    const theirs = await make({ tags: ['house'], userId: BOB });
+    await Mutation.archiveNotes(null, { ids: [String(mine._id), String(lookalike._id)] }, ctx(ALICE));
+    await Mutation.archiveNotes(null, { ids: [String(theirs._id)] }, ctx(BOB));
+    const usage = await Query.noteTagUsage(null, { tag: 'house' }, ctx(ALICE));
+    expect(usage.archived).toBe(1);
+    expect(usage.notes).toBe(1);
   });
 
   test('searchNotes (keyword): archived left out', async () => {

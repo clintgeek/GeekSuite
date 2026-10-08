@@ -273,10 +273,10 @@ describe('noteTagUsage', () => {
     await makeNote(['houseboat']);
     await makeNote(['house/attic'], { userId: BOB });
 
-    expect(await Query.noteTagUsage(null, { tag: 'house' }, ctx(ALICE))).toEqual({ notes: 3, subTags: 3 });
-    expect(await Query.noteTagUsage(null, { tag: 'house/garage' }, ctx(ALICE))).toEqual({ notes: 2, subTags: 1 });
-    expect(await Query.noteTagUsage(null, { tag: 'ghost' }, ctx(ALICE))).toEqual({ notes: 0, subTags: 0 });
-    expect(await Query.noteTagUsage(null, { tag: 'house' }, ctx(null))).toEqual({ notes: 0, subTags: 0 });
+    expect(await Query.noteTagUsage(null, { tag: 'house' }, ctx(ALICE))).toEqual({ notes: 3, subTags: 3, archived: 0 });
+    expect(await Query.noteTagUsage(null, { tag: 'house/garage' }, ctx(ALICE))).toEqual({ notes: 2, subTags: 1, archived: 0 });
+    expect(await Query.noteTagUsage(null, { tag: 'ghost' }, ctx(ALICE))).toEqual({ notes: 0, subTags: 0, archived: 0 });
+    expect(await Query.noteTagUsage(null, { tag: 'house' }, ctx(null))).toEqual({ notes: 0, subTags: 0, archived: 0 });
   });
 });
 
@@ -307,7 +307,7 @@ describe('legacy (pre-standard) tags are tolerated until the migration', () => {
   });
 
   test('noteTagUsage counts legacy spellings, sub-tags once each', async () => {
-    expect(await Query.noteTagUsage(null, { tag: 'geek-suite' }, ctx(ALICE))).toEqual({ notes: 3, subTags: 1 });
+    expect(await Query.noteTagUsage(null, { tag: 'geek-suite' }, ctx(ALICE))).toEqual({ notes: 3, subTags: 1, archived: 0 });
   });
 
   test('renameTag rewrites legacy spellings onto the standard path', async () => {

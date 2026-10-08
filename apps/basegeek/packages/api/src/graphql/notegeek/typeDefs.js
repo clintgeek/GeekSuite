@@ -341,6 +341,12 @@ export const typeDefs = gql`
     notes: Int!
     """Distinct tags beneath it (house/garage, house/garage/door, ...)."""
     subTags: Int!
+    """
+    Archived notes carrying the tag or any tag beneath it. Not in \`notes\`
+    (that counts what you can see), but renameTag/deleteTag DO reach them, so a
+    delete/rename dialog says "and N archived".
+    """
+    archived: Int!
   }
 
   type Query {

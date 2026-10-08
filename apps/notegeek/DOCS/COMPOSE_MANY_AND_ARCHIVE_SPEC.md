@@ -50,6 +50,10 @@ source."* ("compile" = **Compose**.)
   restored pinned note is pinned again). Restore clears `archivedAt`.
 - **A6 Query.** `archivedNotes(limit: Int, offset: Int): [Note!]!`, newest `archivedAt` first.
 - **A7 Note type** gains `archived: Boolean!` and `archivedAt: String`. Additive — old bundles are unaffected.
+- **A8 Tag counts vs tag actions** (Chef, 2026-10-08). `noteTagUsage.notes` counts active notes only (what you
+  can see), but `renameTag`/`deleteTag` also reach archived notes (A4). So `TagUsage` gains `archived: Int!`
+  (archived notes carrying the tag or anything beneath it), and the rename/delete dialogs say so:
+  "from 4 notes (and 2 archived)". Omit the parenthesis when it is 0.
 
 ## 4. Compose from several notes — requirements
 
