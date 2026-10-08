@@ -674,3 +674,77 @@ describe('relatedNotes', () => {
     expect(await Query.relatedNotes(null, { noteId: 'nope' }, ctx(ALICE))).toEqual([]);
   });
 });
+
+// ── 6. Archive (NoteGeek spec §3 A2) ───────────────────────────────────────
+// The indexer keeps embedding archived notes (so a restore is instantly
+// searchable); meaning search and Related drop them at query time.
+describe('archived notes', () => {
+  const archive = (note) => Mutation.archiveNotes(null, { ids: [String(note._id)] }, ctx(ALICE));
+
+  test('the indexer still indexes an archived note', async () => {
+    const note = await md(ALICE, 'Garage', 'chamberlain opener');
+    await archive(note);
+    await indexAll();
+    expect(await NoteChunk.countDocuments({ noteId: note._id })).toBeGreaterThan(0);
+    expect((await Note.findById(note._id).lean()).embeddingState).toBe('indexed');
+  });
+
+  test('vector search: an archived note is not a meaning hit (filtered before ranking)', async () => {
+    const live = await md(ALICE, 'Chamberlain', 'The chamberlain opener needs a new remote battery.');
+    const gone = await md(ALICE, 'Old opener', 'chamberlain opener remote garage door');
+    await indexAll();
+    await archive(gone);
+    const { hits } = await semantic.vectorSearchRanked({ userId: String(ALICE), q: 'garage' });
+    expect(hits.map((h) => h.noteId)).toEqual([String(live._id)]);
+  });
+
+  test('hybrid searchNotes: archived left out of keyword AND meaning rows', async () => {
+    const exact = await md(ALICE, 'Garage', 'The garage serial is 4XK-229.');
+    const meaning = await md(ALICE, 'Chamberlain', 'The chamberlain opener needs a new remote battery.');
+    const goneKw = await md(ALICE, 'Garage old', 'The garage serial was 1AB-000.');
+    const goneVec = await md(ALICE, 'Opener old', 'chamberlain remote door');
+    await indexAll();
+    await archive(goneKw);
+    await archive(goneVec);
+    const rows = await Query.searchNotes(null, { q: 'garage', hybrid: true }, ctx(ALICE));
+    const got = rows.map((r) => String(r._id));
+    expect(got).toEqual(expect.arrayContaining([String(exact._id), String(meaning._id)]));
+    expect(got).not.toContain(String(goneKw._id));
+    expect(got).not.toContain(String(goneVec._id));
+  });
+
+  test('relatedNotes: an archived note is never related; an archived note still has its own Related', async () => {
+    const a = await md(ALICE, 'Garage', 'garage opener remote');
+    const b = await md(ALICE, 'Chamberlain', 'chamberlain remote');
+    const c = await md(ALICE, 'Remote', 'door remote');
+    await indexAll();
+    await archive(b);
+    const rel = await Query.relatedNotes(null, { noteId: String(a._id) }, ctx(ALICE));
+    expect(rel.map((r) => r.id)).toEqual([String(c._id)]);
+    const fromArchived = await Query.relatedNotes(null, { noteId: String(b._id) }, ctx(ALICE));
+    expect(fromArchived.map((r) => r.id).sort()).toEqual([String(a._id), String(c._id)].sort());
+  });
+
+  test('relatedNotes: archived notes are dropped BEFORE the cut, so they cannot crowd out an active one', async () => {
+    // Three archived notes closer than the active one; with limit 1 the
+    // headroom (limit x 2) would be spent on them if they were cut after.
+    const a = await md(ALICE, 'Garage', 'garage opener remote');
+    const gone = [];
+    for (const t of ['One', 'Two', 'Three']) gone.push(await md(ALICE, t, 'garage opener remote'));
+    const live = await md(ALICE, 'Remote', 'garage door remote baking');
+    await indexAll();
+    await Mutation.archiveNotes(null, { ids: gone.map((g) => String(g._id)) }, ctx(ALICE));
+    const rel = await Query.relatedNotes(null, { noteId: String(a._id), limit: 1 }, ctx(ALICE));
+    expect(rel.map((r) => r.id)).toEqual([String(live._id)]);
+  });
+
+  test('restore brings it straight back, with no re-index', async () => {
+    const a = await md(ALICE, 'Garage', 'garage opener remote');
+    const b = await md(ALICE, 'Chamberlain', 'chamberlain remote');
+    await indexAll();
+    await archive(b);
+    expect(await Query.relatedNotes(null, { noteId: String(a._id) }, ctx(ALICE))).toEqual([]);
+    await Mutation.restoreNotes(null, { ids: [String(b._id)] }, ctx(ALICE));
+    expect((await Query.relatedNotes(null, { noteId: String(a._id) }, ctx(ALICE))).map((r) => r.id)).toEqual([String(b._id)]);
+  });
+});

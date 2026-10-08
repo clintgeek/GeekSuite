@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import { GraphQLError } from 'graphql';
-import Note from './models/Note.js';
+import Note, { active } from './models/Note.js';
 import {
   validateInput,
   createNoteArgsSchema,
@@ -14,6 +14,8 @@ import {
   transcribeSketchArgsSchema,
   foldInPreviewArgsSchema,
   foldInApplyArgsSchema,
+  archiveNotesArgsSchema,
+  archivedNotesArgsSchema,
   assertContentCeiling,
 } from './validation.js';
 import { sanitizeNoteArgs } from './sanitize.js';
@@ -66,6 +68,46 @@ const validateComposeNote = validateInput(composeNoteArgsSchema);
 const validateTranscribeSketch = validateInput(transcribeSketchArgsSchema);
 const validateFoldInPreview = validateInput(foldInPreviewArgsSchema);
 const validateFoldInApply = validateInput(foldInApplyArgsSchema);
+const validateArchiveNotes = validateInput(archiveNotesArgsSchema);
+const validateArchivedNotes = validateInput(archivedNotesArgsSchema);
+
+/** Default page of the Archived view. */
+const ARCHIVED_DEFAULT_LIMIT = 50;
+
+/**
+ * Archive or restore the caller's notes (spec §3 A5). One shape for both.
+ *
+ * - Owner-scoped, and an id that is malformed, someone else's, missing or
+ *   already in the wanted state is simply not in the answer — never an error,
+ *   so a stale selection cannot fail the whole batch.
+ * - NOT an edit: `timestamps: false` keeps `updatedAt`, no version snapshot,
+ *   no re-embed (title/content untouched), and `pinned` is left alone so a
+ *   restored pinned note is pinned again.
+ *
+ * @returns {{ ids: string[], count: number }} the notes actually changed
+ */
+async function setArchived(rawArgs, context, archive) {
+  const userId = context.user?.id;
+  if (!userId) throw new Error('Unauthorized');
+  const { ids } = validateArchiveNotes(rawArgs);
+  const valid = [...new Set(ids.filter((id) => mongoose.isValidObjectId(id)).map(String))];
+  if (!valid.length) return { ids: [], count: 0 };
+  const scope = {
+    userId,
+    _id: { $in: valid },
+    archived: archive ? { $ne: true } : true,
+  };
+  const targets = await Note.find(scope, { _id: 1 }).lean();
+  if (!targets.length) return { ids: [], count: 0 };
+  const changed = targets.map((n) => n._id);
+  await Note.updateMany(
+    { ...scope, _id: { $in: changed } },
+    { $set: archive ? { archived: true, archivedAt: new Date() } : { archived: false, archivedAt: null } },
+    { timestamps: false },
+  );
+  logger.info({ userId: String(userId), count: changed.length }, archive ? '[notegeek] notes archived' : '[notegeek] notes restored');
+  return { ids: changed.map(String), count: changed.length };
+}
 
 /** A refusal the person can act on, in the same shape as every other input error. */
 const foldInRefusal = (message, code = 'BAD_USER_INPUT', details = []) =>
@@ -145,7 +187,9 @@ export const resolvers = {
       const userId = context.user?.id;
       if (!userId) return [];
 
-      const filter = { userId };
+      // Archived notes leave the list (spec §3 A2). The tag-spelling lookups
+      // below stay owner-wide: a superset of spellings narrows nothing wrongly.
+      const filter = { userId, ...active() };
 
       // `tag` and `prefix` are separate arguments and a client may send both.
       // Two plain assignments meant the second silently REPLACED the first, so
@@ -222,7 +266,7 @@ export const resolvers = {
       if (!userId) return [];
       // In the standard spelling, deduped — a legacy `Work` and `work` are
       // one tag, the one every write now stores.
-      const tags = await Note.distinct('tags', { userId });
+      const tags = await Note.distinct('tags', { userId, ...active() });
       return normalizeTags(tags).sort((a, b) => a.localeCompare(b));
     },
 
@@ -236,8 +280,9 @@ export const resolvers = {
       const userId = context.user?.id;
       const root = normalizeTag(tag);
       if (!userId || !root) return { notes: 0, subTags: 0 };
-      const spellings = await subtreeSpellings(Note, { userId }, root);
-      const notes = await Note.countDocuments({ userId, tags: anyOf(spellings) });
+      // Active notes only (spec §3 A2): the counts describe what you can see.
+      const spellings = await subtreeSpellings(Note, { userId, ...active() }, root);
+      const notes = await Note.countDocuments({ userId, ...active(), tags: anyOf(spellings) });
       const subTags = new Set(
         spellings.map(normalizeTag).filter((t) => t !== root && isInSubtree(t, root))
       ).size;
@@ -267,7 +312,9 @@ export const resolvers = {
       // cap is on results rather than on the projection because an
       // aggregation-expression projection alongside `$meta: 'textScore'`
       // needs a server version this deployment does not assert.
-      const scope = { userId };
+      // Active notes only (spec §3 A2) — the keyword rows AND the meaning-only
+      // `extra` re-read below share this scope.
+      const scope = { userId, ...active() };
       const underTag = normalizeTag(under);
       if (underTag) scope.tags = anyOf(await subtreeSpellings(Note, { userId }, underTag));
       const projection = { title: 1, type: 1, tags: 1, isLocked: 1, isEncrypted: 1, createdAt: 1, updatedAt: 1, content: 1 };
@@ -345,7 +392,7 @@ export const resolvers = {
       if (!userId) return [];
       const n = Math.max(1, Math.min(Number(limit) || 20, 50));
       const needle = String(q ?? '').trim().slice(0, 200);
-      const filter = { userId, title: { $nin: [null, ''] } };
+      const filter = { userId, ...active(), title: { $nin: [null, ''] } };
       if (needle) filter.title = { $regex: escapeRegex(needle), $options: 'i' };
       const rows = await Note.find(filter, { title: 1, type: 1, updatedAt: 1 })
         .sort({ updatedAt: -1 }).limit(needle ? 200 : n).lean();
@@ -356,6 +403,20 @@ export const resolvers = {
         .sort((a, b) => starts(a.r.title) - starts(b.r.title) || a.i - b.i)
         .slice(0, n)
         .map(({ r }) => ({ id: String(r._id), title: r.title, type: r.type, updatedAt: r.updatedAt }));
+    },
+
+    /**
+     * The Archived view (spec §3 A6): the caller's archived notes, most
+     * recently archived first. Paged; an anonymous caller gets nothing.
+     */
+    archivedNotes: async (_, rawArgs, context) => {
+      const userId = context.user?.id;
+      if (!userId) return [];
+      const { limit, offset } = validateArchivedNotes(rawArgs || {});
+      return await Note.find({ userId, archived: true })
+        .sort({ archivedAt: -1, _id: -1 })
+        .skip(offset ?? 0)
+        .limit(limit ?? ARCHIVED_DEFAULT_LIMIT);
     },
 
     /** How much of the caller's library is searchable by meaning. */
@@ -538,6 +599,12 @@ export const resolvers = {
       if (!note) throw new Error('Note not found or you do not have permission to edit it');
       return note;
     },
+
+    /** Archive notes (spec §3 A5). See `setArchived`. */
+    archiveNotes: (_, rawArgs, context) => setArchived(rawArgs, context, true),
+
+    /** Restore archived notes; clears `archivedAt` (spec §3 A5). */
+    restoreNotes: (_, rawArgs, context) => setArchived(rawArgs, context, false),
 
     deleteNote: async (_, rawArgs, context) => {
       const userId = context.user?.id;
@@ -810,6 +877,9 @@ export const resolvers = {
     // Read in the suite standard, so a note tagged before it (`geekSuite`)
     // shows — and is next saved as — `geek-suite` even before the migration.
     tags: (note) => normalizeTags(note.tags || []),
+    // A note from before Archive has no field at all; it is active.
+    archived: (note) => note.archived === true,
+    archivedAt: (note) => (note.archivedAt ? new Date(note.archivedAt).toISOString() : null),
     links: (note) => (note.links || []).map((l) => ({
       key: l.key,
       title: l.title || '',

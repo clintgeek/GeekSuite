@@ -22,7 +22,7 @@
 import mongoose from 'mongoose';
 import { normalizeTag, normalizeTags } from '@geeksuite/tags';
 import householdModule from '@geeksuite/schemas/thinggeek/household';
-import Note from '../notegeek/models/Note.js';
+import Note, { active as activeNote } from '../notegeek/models/Note.js';
 import Task from '../bujogeek/models/Task.js';
 import { Thing } from '../thinggeek/models/thing.js';
 import { spellingsOf, subtreeSpellings } from '../shared/tagSpellings.js';
@@ -49,7 +49,8 @@ function scopes(user) {
   const owner = oidOf(user?.id);
   if (!owner) return null;
   return {
-    notegeek: { model: Note, scope: { userId: owner } },
+    // Archived notes are neither counted nor listed (NoteGeek spec §3 A2).
+    notegeek: { model: Note, scope: { userId: owner, ...activeNote() } },
     bujogeek: { model: Task, scope: { createdBy: owner } },
     thinggeek: isMember(user) ? { model: Thing, scope: { householdId: DEFAULT_HOUSEHOLD_ID, deletedAt: null } } : null,
   };

@@ -39,7 +39,7 @@
 import mongoose from 'mongoose';
 import logger from '../../lib/logger.js';
 import { runAIFeature, callsToday } from '../../services/aiFeatureRunner.js';
-import Note from './models/Note.js';
+import Note, { active } from './models/Note.js';
 import { normalizeTag } from './tags.js';
 import { EXCERPT_MAX, TITLE_MAX } from './validation.js';
 
@@ -417,8 +417,9 @@ export async function suggestForNote({ userId, noteId = null, title = '', excerp
   // Locked and encrypted notes are excluded here, once, for both corpora: they
   // are neither suggested, nor used as evidence for a tag, nor put in front of
   // a model.
+  // Archived notes are never suggested, nor evidence for a tag (spec §3 A2).
   const notes = await Note.find(
-    { userId, isLocked: { $ne: true }, isEncrypted: { $ne: true } },
+    { userId, ...active(), isLocked: { $ne: true }, isEncrypted: { $ne: true } },
     { title: 1, tags: 1, updatedAt: 1 }
   )
     .sort({ updatedAt: -1 })

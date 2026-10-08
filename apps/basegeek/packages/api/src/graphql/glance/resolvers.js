@@ -10,7 +10,7 @@ import HabitLog from '../bujogeek/models/HabitLog.js';
 import taskService from '../bujogeek/services/taskService.js';
 import habitService from '../bujogeek/services/habitService.js';
 
-import Note from '../notegeek/models/Note.js';
+import Note, { active as activeNote } from '../notegeek/models/Note.js';
 import { Book } from '../bookgeek/models/book.js';
 import Bird from '../flockgeek/models/Bird.js';
 import EggProduction from '../flockgeek/models/EggProduction.js';
@@ -297,7 +297,8 @@ export async function fetchGlanceToday(context, date) {
   // ── Recent notes ──
   try {
     if (userOid) {
-      const notes = await Note.find({ userId: userOid })
+      // Archived notes are not "recent" (NoteGeek spec §3 A2).
+      const notes = await Note.find({ userId: userOid, ...activeNote() })
         .sort({ updatedAt: -1 })
         .limit(5)
         .lean();
@@ -477,6 +478,7 @@ export async function searchThings(userId, term, options = {}) {
     if (userOid && wants('note')) {
       const notes = await Note.find({
         userId: userOid,
+        ...activeNote(), // archived notes are not found (NoteGeek spec §3 A2)
         ...sinceClause,
         ...tagClause,
         $or: [

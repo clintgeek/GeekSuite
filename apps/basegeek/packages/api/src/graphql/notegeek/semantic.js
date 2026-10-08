@@ -79,7 +79,7 @@
  */
 
 import mongoose from 'mongoose';
-import Note from './models/Note.js';
+import Note, { active } from './models/Note.js';
 import NoteChunk from './models/NoteChunk.js';
 import { embedTexts, embeddingsConfig, modelSpec, EmbeddingsUnavailableError } from './embeddings.js';
 
@@ -325,6 +325,23 @@ export function whyExcerpt(text, title) {
   return body.length > WHY_CHARS ? `${ body.slice(0, WHY_CHARS).replace(/\s+\S*$/, '') }…` : body;
 }
 
+/**
+ * The caller's archived note ids, as strings (spec §3 A2).
+ *
+ * The indexer keeps embedding archived notes so a restore is instantly
+ * searchable again; the cached vectors therefore include them, and they are
+ * dropped HERE, at query time, before ranking — so an archived note can
+ * neither appear nor shift the cut-off / best-match margins of the notes
+ * that do. Read fresh every query (one small indexed find on
+ * `{ userId, archived }`), never cached, so an archive is honoured at once.
+ */
+export async function archivedNoteIds(userId) {
+  const rows = await Note.find({ userId, archived: true }, { _id: 1 }).lean();
+  return new Set(rows.map((n) => String(n._id)));
+}
+
+const withoutArchived = (rows, archived) => (archived.size ? rows.filter((r) => !archived.has(r.noteId)) : rows);
+
 // ── queries ────────────────────────────────────────────────────────────────
 const queryCache = new Map(); // `${model}\u0000${q}` -> vector
 
@@ -359,7 +376,9 @@ export async function vectorSearch({ userId, q, log }) {
 export async function vectorSearchRanked({ userId, q, log }) {
   const none = { hits: [], runnerUpScore: null, backfilling: false };
   if (serviceIsDown()) return none;
-  const { rows, backfilling } = await userVectorState(userId);
+  const state = await userVectorState(userId);
+  const { backfilling } = state;
+  const rows = withoutArchived(state.rows, await archivedNoteIds(userId));
   if (!rows.length) return none;
   let vec;
   try {
@@ -388,9 +407,12 @@ export async function vectorSearchRanked({ userId, q, log }) {
  */
 export async function relatedNotes({ userId, noteId, limit = RELATED_DEFAULT_LIMIT }) {
   const n = Math.max(1, Math.min(Number(limit) || RELATED_DEFAULT_LIMIT, RELATED_MAX_LIMIT));
-  const rows = await userVectors(userId);
-  const own = rows.filter((r) => r.noteId === String(noteId));
+  const all = await userVectors(userId);
+  // The note's OWN chunks come from the full set: an archived note opened
+  // directly still gets its Related list. The candidates never include one.
+  const own = all.filter((r) => r.noteId === String(noteId));
   if (!own.length) return [];
+  const rows = withoutArchived(all, await archivedNoteIds(userId));
   const centroid = new Float32Array(own[0].vec.length);
   for (const r of own) for (let i = 0; i < centroid.length; i += 1) centroid[i] += r.vec[i];
   let norm = 0;
@@ -403,7 +425,7 @@ export async function relatedNotes({ userId, noteId, limit = RELATED_DEFAULT_LIM
     .slice(0, n * 2); // headroom for notes that turn out to be gone
   if (!ranked.length) return [];
   const notes = await Note.find(
-    { userId, _id: { $in: ranked.map((h) => h.noteId) } },
+    { userId, ...active(), _id: { $in: ranked.map((h) => h.noteId) } },
     { title: 1, type: 1, updatedAt: 1 },
   ).lean();
   const byId = new Map(notes.map((note) => [String(note._id), note]));

@@ -55,6 +55,20 @@ const NoteSchema = new mongoose.Schema(
       type: Date,
       default: null,
     },
+    // Archive (DOCS/COMPOSE_MANY_AND_ARCHIVE_SPEC.md §3). An archived note
+    // leaves every list, count and search but stays intact with its history.
+    // Set only by `archiveNotes` / `restoreNotes`, with `timestamps: false` —
+    // archiving is not an edit. NO MIGRATION: notes written before this have
+    // no field at all, so every read filters with `active()` below
+    // (`archived: { $ne: true }`), never `archived: false`.
+    archived: {
+      type: Boolean,
+      default: false,
+    },
+    archivedAt: {
+      type: Date,
+      default: null,
+    },
     // ── Meaning-based search index (indexer.js) ────────────────────────────
     // Bookkeeping only; never exposed on the GraphQL Note type. The vectors
     // themselves live in `noteChunks` (models/NoteChunk.js).
@@ -131,6 +145,16 @@ NoteSchema.index({ title: 'text', content: 'text', tags: 'text' });
 // The `notes` query sorts pinned notes first, then by the requested order —
 // this compound index serves that shape directly for the default sort.
 NoteSchema.index({ pinned: -1, updatedAt: -1 });
+// The active filter and the Archived view, both owner-scoped.
+NoteSchema.index({ userId: 1, archived: 1 });
+
+/**
+ * The active-note filter. Spread into every read that lists, counts or finds
+ * notes (`{ userId, ...active() }`). `$ne: true` rather than `false` so a note
+ * with no `archived` field — every note written before Archive — is active.
+ * A function, not a shared constant: mongoose casts filters in place.
+ */
+export const active = () => ({ archived: { $ne: true } });
 
 const Note = noteConn.models.Note || noteConn.model('Note', NoteSchema);
 

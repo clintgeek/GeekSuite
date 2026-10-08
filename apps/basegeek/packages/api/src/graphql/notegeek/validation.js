@@ -210,6 +210,42 @@ export const composeNoteArgsSchema = z
 
 export const deleteNoteArgsSchema = z.object({ id: idString }).strict();
 
+// ── Archive / Compose-many (DOCS/COMPOSE_MANY_AND_ARCHIVE_SPEC.md) ──────────
+
+/** How many notes one archiveNotes / restoreNotes call may name (spec A5). */
+export const ARCHIVE_IDS_MAX = 100;
+
+/**
+ * Archive or restore. 1–100 ids; an id that is malformed or not the caller's
+ * is NOT an error here or in the resolver — it is simply not in the result.
+ */
+export const archiveNotesArgsSchema = z
+  .object({
+    ids: z.array(idString).min(1, 'Choose at least one note.').max(ARCHIVE_IDS_MAX),
+  })
+  .strict();
+
+/** The Archived view's paging. Absent = defaults in the resolver. */
+export const archivedNotesArgsSchema = z
+  .object({
+    limit: z.number().int().min(1).max(200).nullish(),
+    offset: z.number().int().min(0).max(100_000).nullish(),
+  })
+  .strict();
+
+/** How many notes one composeNotes may combine (spec C1). */
+export const COMPOSE_NOTES_MIN = 2;
+export const COMPOSE_NOTES_MAX = 20;
+
+export const composeNotesArgsSchema = z
+  .object({
+    noteIds: z
+      .array(idString)
+      .min(COMPOSE_NOTES_MIN, `Choose at least ${COMPOSE_NOTES_MIN} notes to compose.`)
+      .max(COMPOSE_NOTES_MAX, `Compose takes up to ${COMPOSE_NOTES_MAX} notes at a time.`),
+  })
+  .strict();
+
 // ── Fold-in (foldin.js) ─────────────────────────────────────────────────────
 
 /** Kept in step with `foldin.js#MAX_FOLD_INPUT_CHARS` (asserted by its tests). */

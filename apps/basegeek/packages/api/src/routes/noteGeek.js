@@ -17,6 +17,10 @@ const noteSchema = new mongoose.Schema({
   isLocked: { type: Boolean, default: false },
   isEncrypted: { type: Boolean, default: false },
   lockHash: { type: String },
+  // Declared (no default) so the active filter below is never stripped by
+  // strictQuery. Written only by the GraphQL archiveNotes / restoreNotes.
+  archived: { type: Boolean },
+  archivedAt: { type: Date },
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
 });
@@ -32,7 +36,8 @@ function escapeRegex(value) {
 router.get('/', async (req, res) => {
   try {
     const { tag, prefix } = req.query;
-    const filter = { userId: req.user.id };
+    // Archived notes are not listed (NoteGeek spec §3 A2).
+    const filter = { userId: req.user.id, archived: { $ne: true } };
 
     if (tag) {
       filter.tags = { $in: [tag] };
@@ -60,7 +65,7 @@ router.get('/', async (req, res) => {
 // `:id` route and answered 404 "Note not found" (or 500 on the CastError).
 router.get('/tags', async (req, res) => {
   try {
-    const notes = await Note.find({ userId: req.user.id }, 'tags');
+    const notes = await Note.find({ userId: req.user.id, archived: { $ne: true } }, 'tags');
     const hierarchy = {};
 
     // Build tag hierarchy from all notes

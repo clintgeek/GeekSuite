@@ -31,6 +31,15 @@
  *     would be a silent edit to notes you aren't looking at — new history
  *     entries, new `updatedAt`s, re-embeds — for a cosmetic gain.
  *
+ * ## Archived notes (spec §3 A2)
+ *
+ * A link TO an archived note still resolves — the note exists, and opening it
+ * shows the archived banner. But when a title is shared by an archived and an
+ * active note, the active one wins: title lookups sort `archived` ascending
+ * (missing < false < true in BSON order) before age, and a kept resolution
+ * that points at an archived note gives way to an active note with that
+ * title. Backlinks list no archived source.
+ *
  * ## Cost
  *
  * Nothing at all unless the body contains `[[` or `/notes/`. Then: one
@@ -39,7 +48,7 @@
  */
 
 import mongoose from 'mongoose';
-import Note from './models/Note.js';
+import Note, { active } from './models/Note.js';
 import { htmlToText } from './chunking.js';
 
 export const MAX_LINKS_PER_NOTE = 200;
@@ -112,27 +121,35 @@ export async function resolveLinks({ userId, content, type, previous = [] }) {
   const titles = parsed.filter((l) => !l.noteId).map((l) => l.title);
   const [alive, byTitle] = await Promise.all([
     idCandidates.size
-      ? Note.find({ userId, _id: { $in: [...idCandidates].filter((id) => mongoose.isValidObjectId(id)) } }, { _id: 1 }).lean()
+      ? Note.find({ userId, _id: { $in: [...idCandidates].filter((id) => mongoose.isValidObjectId(id)) } }, { _id: 1, archived: 1 }).lean()
       : [],
+    // Active before archived (missing/false sort before true), then oldest.
     titles.length
-      ? Note.find({ userId, title: { $in: titles } }, { _id: 1, title: 1, createdAt: 1 })
+      ? Note.find({ userId, title: { $in: titles } }, { _id: 1, title: 1, createdAt: 1, archived: 1 })
         .collation({ locale: 'en', strength: 2 })
-        .sort({ createdAt: 1 })
+        .sort({ archived: 1, createdAt: 1 })
         .lean()
       : [],
   ]);
   const aliveIds = new Set(alive.map((n) => String(n._id)));
+  const archivedIds = new Set(alive.filter((n) => n.archived === true).map((n) => String(n._id)));
   const firstByKey = new Map();
+  const activeByKey = new Map();
   for (const n of byTitle) {
     const k = linkKey(n.title);
     if (!firstByKey.has(k)) firstByKey.set(k, String(n._id));
+    if (n.archived !== true && !activeByKey.has(k)) activeByKey.set(k, String(n._id));
   }
 
   return parsed
     .map((l) => {
       if (l.noteId) return aliveIds.has(l.noteId) ? l : null; // an id link to nothing is dropped
       const kept = prevByKey.get(l.key);
-      if (kept && aliveIds.has(kept)) return { ...l, noteId: kept };
+      if (kept && aliveIds.has(kept)) {
+        // An archived target keeps the link unless an active note now has the title.
+        const heir = archivedIds.has(kept) ? activeByKey.get(l.key) : null;
+        return { ...l, noteId: heir || kept };
+      }
       return { ...l, noteId: firstByKey.get(l.key) || null };
     })
     .filter(Boolean)
@@ -171,7 +188,7 @@ export async function detachLinksTo({ userId, noteId, title }) {
   const key = linkKey(title);
   if (!key) return;
   const heir = await Note.findOne({ userId, title: cleanTitle(title) }, { _id: 1 })
-    .collation({ locale: 'en', strength: 2 }).sort({ createdAt: 1 }).lean();
+    .collation({ locale: 'en', strength: 2 }).sort({ archived: 1, createdAt: 1 }).lean();
   if (heir) await resolvePendingLinks({ userId, noteId: heir._id, title });
 }
 
@@ -202,7 +219,7 @@ export async function backlinks({ userId, noteId }) {
   if (!mongoose.isValidObjectId(noteId)) return [];
   const id = new mongoose.Types.ObjectId(String(noteId));
   const rows = await Note.find(
-    { userId, 'links.noteId': id, _id: { $ne: id } },
+    { userId, ...active(), 'links.noteId': id, _id: { $ne: id } },
     { title: 1, type: 1, content: 1, updatedAt: 1, links: 1, isLocked: 1, isEncrypted: 1 },
   ).sort({ updatedAt: -1 }).limit(BACKLINKS_LIMIT).lean();
   return rows.map((n) => {

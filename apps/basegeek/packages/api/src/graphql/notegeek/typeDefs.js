@@ -179,6 +179,14 @@ export const typeDefs = gql`
     createdAt: Date!
     updatedAt: Date!
     """
+    Archived notes leave every list, tag count and search, but stay intact
+    with their history and are still opened by id. Set only by
+    archiveNotes / restoreNotes; never an edit (updatedAt is untouched).
+    """
+    archived: Boolean!
+    """When the note was archived (ISO 8601); null when it isn't."""
+    archivedAt: String
+    """
     Outgoing [[links]] in the body, one per distinct target. noteId is null
     while no note has that title. Renaming the target keeps the link (by id);
     the typed text is not rewritten.
@@ -287,6 +295,12 @@ export const typeDefs = gql`
     provenance: AIProvenance!
   }
 
+  """The notes an archiveNotes / restoreNotes call actually changed."""
+  type ArchiveResult {
+    ids: [ID!]!
+    count: Int!
+  }
+
   # module carrying the same text merges to one type — but the moment anyone
 
   """How much of the library a tag subtree covers."""
@@ -326,6 +340,8 @@ export const typeDefs = gql`
     """Titles containing q (case-insensitive), prefix matches first. For the [[ picker."""
     noteTitles(q: String, limit: Int): [NoteTitle!]!
     suggestForNote(noteId: ID, title: String!, excerpt: String!, tags: [String!]!): NoteSuggestions!
+    """The Archived view: archived notes, most recently archived first."""
+    archivedNotes(limit: Int, offset: Int): [Note!]!
   }
 
   type Mutation {
@@ -368,6 +384,14 @@ export const typeDefs = gql`
     transcribeSketch(image: String!, mediaType: String!, source: String): SketchTranscript!
     """Pin or unpin a note. Scoped to the owner, like every other note mutation."""
     setNotePinned(id: ID!, pinned: Boolean!): Note!
+    """
+    Archive 1-100 notes. Owner-scoped; ids that are invalid, someone else's or
+    already archived are ignored, not errors. Not an edit: no version, no
+    updatedAt change, pinned untouched.
+    """
+    archiveNotes(ids: [ID!]!): ArchiveResult!
+    """Restore archived notes (same rules as archiveNotes). Clears archivedAt."""
+    restoreNotes(ids: [ID!]!): ArchiveResult!
     deleteNote(id: ID!): Boolean!
     """
     Rename or move a tag with its whole subtree: house -> home turns
