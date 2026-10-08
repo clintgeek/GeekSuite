@@ -515,3 +515,62 @@ to produce the note's text: it can only name a place and what to add there.
     `__tests__/pages/noteEditorFoldIn.test.jsx`, `__tests__/pages/shareTarget.test.jsx` (all red-checked); harness
     `19a-foldin-input`, `19b-foldin-proposal`, `19c-foldin-whole`, `19d-share-existing`,
     `19e-share-foldin-applied` (fixtures: the live smoke's note and proposal, `NOTE_SPIDERS` / `FOLD_IN_PROPOSAL`).
+
+## 14. Archive
+
+Spec: `DOCS/COMPOSE_MANY_AND_ARCHIVE_SPEC.md` §3. Gateway facts:
+
+- **Fields:** `Note.archived` (Boolean, default false) and `Note.archivedAt` (Date|null); index
+  `{ userId: 1, archived: 1 }`. GraphQL: `Note.archived: Boolean!` (resolves `false` for a legacy doc with no
+  field) and `Note.archivedAt: String` (ISO 8601).
+- **The filter rule:** every read that lists, counts or finds notes spreads `active()` from `models/Note.js`
+  = `{ archived: { $ne: true } }` — never `archived: false`, because existing notes have no field (no migration).
+  A function, not a constant: mongoose casts filters in place. **A new read site must get it or say why not.**
+- **Filtered:** `notes` (incl. tag/prefix/under), `noteTags`, `noteTagUsage` (count and sub-tags), `searchNotes`
+  (keyword rows and the meaning-only re-read), `noteTitles`, `backlinks`, `suggestForNote`, glance
+  `recentNotes` + `glanceSearch`, `suiteTags` / `taggedAcross` (the notegeek scope), legacy REST
+  `GET /api/notes` and `/api/notes/tags`. Meaning search (`vectorSearchRanked`) and `relatedNotes` drop archived
+  ids **before ranking** (`semantic.js#archivedNoteIds`, read fresh per query) so they can't move the cut or the
+  best-match margins; an archived note opened directly still gets its own Related list.
+- **Deliberately not filtered:** direct-by-id reads (`note`, `updateNote`, `restoreNoteVersion`, fold-in,
+  `composeNotes`), `renameTag` / `deleteTag` (spec A4 — a restore never brings back a renamed tag), the
+  tag-spelling lookups inside `notes`/`searchNotes` (a superset of spellings narrows nothing wrongly), the
+  indexer (keeps embedding archived notes, so restore is instant), `noteIndexStatus` (it reports the indexer's
+  work, which includes them), and link maintenance.
+- **Links:** a `[[link]]` to an archived note still resolves. When an archived and an active note share a title
+  the active one wins — title lookups sort `{ archived: 1, createdAt: 1 }`, and a kept resolution pointing at an
+  archived note gives way to an active note with that title on the next save.
+- **Mutations:** `archiveNotes(ids)` / `restoreNotes(ids)` → `ArchiveResult { ids, count }` (the ids actually
+  changed). 1–100 ids (zod); owner-scoped; malformed, foreign, missing or already-in-state ids are ignored, not
+  errors. One `updateMany` with `timestamps: false`: no `updatedAt` change, no version, no re-embed, `pinned`
+  untouched. Restore sets `archived: false, archivedAt: null`. Editing an archived note does not restore it.
+- **Query:** `archivedNotes(limit, offset)` — newest `archivedAt` first; limit default 50, max 200.
+- **Checks:** `src/__tests__/notegeekArchive.test.js` (one test per read site) and the `archived notes` block in
+  `notegeekSemantic.test.js`; every filter revert-checked red.
+
+## 15. Compose from several notes
+
+Spec: `DOCS/COMPOSE_MANY_AND_ARCHIVE_SPEC.md` §4. Gateway facts:
+
+- **Mutation:** `composeNotes(noteIds: [ID!]!): ComposedNotes!` — 2–20 ids (zod), writes nothing.
+  `ComposedNotes` = `ComposedNote`'s `markdown`, `stats`, `provenance` + `sources { used: [ID!]!,
+  skipped: [ComposeSourceSkip { id, title, reason }] }`.
+- **Same pipeline:** `compose.js#composeNotes` assembles the pile and calls `composeNote` — same size refusal
+  (`MAX_COMPOSE_CHARS`, `content_too_long`, total in `stats.inputChars`), map-reduce, degenerate check, feature
+  `compose_note`, `COMPOSE_DAILY_CAP`, `need: 'prose:deep'`. The only addition is `framing`, appended to the
+  single / map / reduce system prompts on this path (`composeManyFraming(n)`; the MAP step also gets
+  `COMPOSE_MANY_MAP_EXTRA` so it keeps the `Written` dates its own rules call noise). Single-note
+  `composeNote` passes none — its prompts are byte-identical.
+- **Input shape:** per note `# <title or "Untitled">` + `Written <YYYY-MM-DD>` (the caller's
+  `profile.timezone`, default America/Chicago) + blank line + body; joined by `\n\n---\n\n`. Oldest `createdAt`
+  first. Duplicate ids count once.
+- **Sources:** owner-scoped load by id (archived notes are composable). Bodies: `markdown` as-is, `code` unwraps
+  the `{ code }` JSON form, `text` and the legacy null type are TipTap HTML stripped by jsdom's `DOMParser`
+  (`htmlToPlainText`, paragraph breaks kept, a literal `<` survives). **Skip reasons:** `locked` (locked or
+  encrypted, never sent), `unsupported_type` (handwritten, mindmap), `empty` (nothing after stripping),
+  `not_found` (missing, malformed or another user's — title null). Fewer than 2 usable →
+  `provenance.reason: 'not_enough_sources'`, `stats.strategy: 'refused'`, no model call.
+- **Logging:** one `[notegeek] compose-many` line of counts (requested/used/skipped/chars/chunks) — never text or
+  titles.
+- **Checks:** `src/__tests__/notegeekComposeNotes.test.js` (revert-checked red per rule); the single-note
+  `notegeekComposeNote.test.js` is unchanged and green.
