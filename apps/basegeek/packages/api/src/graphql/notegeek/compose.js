@@ -172,8 +172,21 @@ export const COMPOSE_DAILY_CAP = 120;
  */
 export const COMPOSE_NEED = 'prose:deep';
 
-/** A single map or reduce call's timeout. */
+/** A single call's timeout: the one-call path and each MAP chunk. */
 export const COMPOSE_TIMEOUT_MS = 25000;
+
+/**
+ * The REDUCE call's timeout, and its output budget. The reduce writes the
+ * whole document from every extract, so it is the one long call — live
+ * 2026-10-08, 13 notes / 86k chars: all 8 MAP chunks fine in ~15 s, then
+ * the reduce timed out at 25 s and the compose came back empty (and a
+ * timed-out paid call is still billed). 90 s stays under notegeek's nginx
+ * `/graphql` proxy_read_timeout (150 s, raised the same day from the 60 s
+ * default) even after a slow 25 s MAP. 4500 tokens keeps a big document
+ * from stopping mid-sentence (~$0.007 on gpt-4.1-mini).
+ */
+export const COMPOSE_REDUCE_TIMEOUT_MS = 90000;
+export const COMPOSE_REDUCE_MAX_TOKENS = 4500;
 
 /** Input characters per MAP chunk. Output is bullets, so far smaller. */
 export const COMPOSE_CHUNK_CHARS = 12000;
@@ -437,7 +450,7 @@ export async function composeNote({ content, userId, ai = undefined, framing = '
   const fragments = segmentFragments(raw);
   baseStats.fragments = fragments.length;
 
-  const runOnce = (system, user, maxTokens) => runAIFeature({
+  const runOnce = (system, user, maxTokens, timeoutMs = COMPOSE_TIMEOUT_MS) => runAIFeature({
     app: 'notegeek',
     feature: 'compose_note',
     userId,
@@ -449,7 +462,7 @@ export async function composeNote({ content, userId, ai = undefined, framing = '
     // never sees the original material again.
     need: COMPOSE_NEED,
     maxCallsPerDay: COMPOSE_DAILY_CAP,
-    timeoutMs: COMPOSE_TIMEOUT_MS,
+    timeoutMs,
     maxTokens,
     fallback: () => '',
     ...(ai ? { ai } : {}),
@@ -492,7 +505,9 @@ export async function composeNote({ content, userId, ai = undefined, framing = '
   }
 
   // REDUCE.
-  const reduced = await runOnce(framed(COMPOSE_REDUCE_PROMPT), kept.join('\n\n'), 3500);
+  const reduced = await runOnce(
+    framed(COMPOSE_REDUCE_PROMPT), kept.join('\n\n'), COMPOSE_REDUCE_MAX_TOKENS, COMPOSE_REDUCE_TIMEOUT_MS
+  );
   const markdown = stripOuterFence(typeof reduced.data === 'string' ? reduced.data : '');
 
   return finish(

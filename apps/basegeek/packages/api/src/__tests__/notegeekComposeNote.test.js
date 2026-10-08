@@ -409,3 +409,31 @@ describe('one fan-out resolves its need once', () => {
     }
   });
 });
+
+describe('the REDUCE call gets room to write the whole document (live 2026-10-08)', () => {
+  // 13 notes / 86k chars: every MAP chunk answered, then the reduce timed out
+  // at the 25 s per-call limit and the compose came back empty.
+  afterEach(() => jest.useRealTimers());
+
+  test('a 30 s reduce still lands, and it is asked for the larger budget', async () => {
+    jest.useFakeTimers();
+    const big = Array.from({ length: 40 }, (_, i) => `fragment ${i} ` + 'x'.repeat(400)).join('\n\n');
+    const reduceOpts = [];
+    const ai = fakeAI((_p, opts) => {
+      const system = opts?.messages?.[0]?.content || '';
+      if (system.includes('extracting the substance')) return Promise.resolve('- a point');
+      reduceOpts.push(opts);
+      return new Promise((resolve) => setTimeout(() => resolve('# Doc\n\n- a point'), 30_000));
+    });
+
+    const pending = composeNote({ content: big, userId: 'u1', ai });
+    await jest.advanceTimersByTimeAsync(31_000);
+    const result = await pending;
+
+    expect(result.stats.strategy).toBe('map_reduce');
+    expect(result.markdown).toContain('# Doc');
+    expect(result.provenance.reason).not.toBe('reduce_failed');
+    expect(reduceOpts).toHaveLength(1);
+    expect(reduceOpts[0].maxTokens).toBe(4500);
+  });
+});
