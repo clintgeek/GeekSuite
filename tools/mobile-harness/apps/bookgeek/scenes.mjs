@@ -91,6 +91,26 @@ export const scenes = [
     teardown: (page, h) => h.esc(),
   },
   {
+    // "Last read" (dateFinished, 2026-10-08) open for editing on a book that
+    // has none: the date input, Save and Cancel (Clear only shows with a
+    // date), all 44px, spanning both Details columns.
+    name: '03c-detail-last-read',
+    goto: '/',
+    async setup(page, h) {
+      const card = page.getByText('Lock In', { exact: true }).first();
+      if (!(await card.count())) return false;
+      await card.click();
+      await h.settle(1000);
+      const set = page.getByRole('button', { name: 'Set last read date' });
+      if (!(await set.count())) return false;
+      await set.first().click();
+      await h.settle(600);
+      await page.getByLabel('Last read date').first().evaluate((el) => el.scrollIntoView({ block: 'center' }));
+      await h.settle(400);
+    },
+    teardown: (page, h) => h.esc(),
+  },
+  {
     name: '04-add',
     goto: '/',
     async setup(page, h) {
