@@ -574,3 +574,69 @@ Spec: `DOCS/COMPOSE_MANY_AND_ARCHIVE_SPEC.md` §4. Gateway facts:
   titles.
 - **Checks:** `src/__tests__/notegeekComposeNotes.test.js` (revert-checked red per rule); the single-note
   `notegeekComposeNote.test.js` is unchanged and green.
+
+## 16. Select mode, Compose-many and Archive — UI
+
+Spec: `DOCS/COMPOSE_MANY_AND_ARCHIVE_SPEC.md` §5 (U1–U9). Needs §14/§15's gateway live first — the bundle sends
+`archiveNotes` / `restoreNotes` / `archivedNotes` / `composeNotes` and reads `Note.archived`.
+
+- **Select mode** — one hook, `hooks/useNoteSelection.js`, used by Home (`QuickCaptureHome`), All notes and a tag page
+  (both `NoteList`), search (`SearchResults`) and Archived. It holds the selected NOTES (types, titles, `createdAt`),
+  not just ids; `resetKey` drops it when the same component shows a different list (another tag, a new query); Esc
+  exits unless a dialog took the key. Enter by **long-press** (`hooks/useLongPress.js`: 500 ms, a 10 px move cancels,
+  the click that ends the press is swallowed so the row doesn't open, Android's link callout suppressed for touch) or
+  the header's **Select** (`components/select/SelectControl.jsx`). Selecting: a sticky "N selected · Cancel" header
+  (count is a polite live region). Rows (`NoteRow` `selectMode`) become `role="checkbox"` buttons with a 44 px box in
+  front and a highlighter-soft wash when ticked (everything on it in ink — secondary ink is too faint on it at night).
+  Landmine: a long press turns the row into a checkbox MID-gesture, so the hook stays attached in select mode to
+  swallow the click that lands on the new element (and a hold in select mode toggles, like a tap).
+- **The action bar** (`components/select/SelectionBar.jsx`): fixed, just above the tab bar (`useGeekShell().bottomInset`)
+  on a phone, right of the sidebar on desktop; leaves a spacer under the list. **Archive** (≥ 1) and **Compose N notes**
+  (≥ 2 selected AND ≥ 2 it can read, ≤ 20); "1 will be skipped" counts sketches, mind maps and locked/encrypted notes
+  from the selection (`composeSkipReason`; the list query carries no `isLocked`, so only search/Archived rows can say
+  locked — the gateway's `sources.skipped` is the final word). Archived view: **Restore** only. It mounts its Apollo
+  hooks only while selecting (Home's tests render without a client). A failed archive/restore keeps the selection.
+- **Compose-many** (`components/select/ComposeManyFlow.jsx` over the existing `ComposeDialog`): ids sent oldest first;
+  the dialog's many-notes mode (`sourceCount`) shows "Composing 4 notes… 12s", the draft, the notes left out
+  ("2 notes left out: Garden plan (locked), Sketch 4 (a sketch)" — `utils/composeMany.js#skipSummary`), the
+  chunksFailed / truncated warnings, and **Save as a new note** only. Refusals (`not_enough_sources`,
+  `content_too_long` with the total, degenerate, empty) and errors say so with **Back to selection** — the selection
+  survives. Save → one `createNote` (title = the draft's first `#` heading, kept in the body, else "Composed note";
+  `tags: []`; markdown). Then, only after a successful save and only if `sources.used` is non-empty, the dialog becomes
+  "Saved. Archive the N source notes?" — **Archive them** archives `sources.used` ONLY (never a skipped note) →
+  toast "Archived N notes" with **Undo** (`restoreNotes`); **Keep them** archives nothing. Either opens the new note.
+  Without `sourceCount`/`offer`/`skippedSummary`/`saving` the dialog is exactly the single-note one.
+- **Archive anywhere:** `hooks/useArchiveNotes.jsx` owns both mutations, their cache update and toasts (Undo calls
+  through a ref, so it works after the archiving component unmounts). Editor ⋯ menu: "Archive" / "Restore from
+  archive" (saved notes); viewer action bar: an Archive / Restore icon button. A note opened directly while archived
+  shows `components/notes/ArchivedBanner.jsx` ("Archived Oct 8, 2026 · Restore"; in the editor's `belowMeta`, above
+  the viewer's sheet). Archived state comes from its own small query `NOTE_ARCHIVE_STATE` (`hooks/useNoteArchiveState.js`)
+  so `GET_NOTE_BY_ID` and its many mocks are untouched. Editing an archived note does not restore it.
+- **Archived view:** `/archived` (`pages/ArchivedNotes.jsx`, `archivedNotes(limit: 200)`, rows dated by `archivedAt`),
+  titled "Archived"; empty state explains archive. Reached from an "Archived" row under "All notes" in `TagsPanel`
+  — the desktop sidebar, and on a phone the Notes page's Tags sheet; not a tab (the tab bar highlights Notes).
+- **Cache (U8):** `onNotesArchived(archived)` in `graphql/cacheUpdates.js` writes `archived`/`archivedAt` onto each
+  changed `Note:<id>` (the banner flips with no refetch) and evicts `notes` (lists + sidebar tag counts), `noteTags`,
+  `noteTagUsage`, `searchNotes`, `archivedNotes`, `noteTitles`, `backlinks`, `relatedNotes`. Home and search read the
+  zustand store, so `noteStore.dropNotes(ids)` removes archived rows at once and `refreshLists()` re-reads Home's list
+  and the last search after a restore.
+- **Tag rename / delete say what they reach (spec A8):** `NOTE_TAG_USAGE` selects `archived`; `utils/tagPath.js`
+  `notesTouched` → "4 notes (and 2 archived)", parenthesis omitted at 0. The delete dialog reads "Removes #house
+  and its 2 sub-tags from 4 notes (and 2 archived). The notes stay."; the rename dialog now loads the same count and
+  reads "Changes #house and its 2 sub-tags on 4 notes (and 2 archived)." (`renameSummary`, shown once counted).
+  Tests in `__tests__/components/TagContextMenu.test.jsx` (red-checked); harness 16b/16c assert the sentences
+  (fixture `house` has one archived note).
+- **Compose-many dialog a11y:** in many-notes mode the scrolling `DialogContent` is a focusable `region`
+  ("Composed document") — axe `scrollable-region-focusable` on 20b. The single-note dialog was left byte-identical
+  and has the same latent issue (no scene shows its draft).
+- **Contract check:** the five documents in `graphql/archive.js` were validated against main's shared + notegeek
+  typeDefs (graphql `validate`) on 2026-10-08.
+- **Checks:** `__tests__/components/select/selectMode.test.jsx` (long-press, tap, scroll-cancel, Select/Cancel/Esc,
+  bar enablement and skip count, archive + Undo, failed archive keeps the selection),
+  `components/select/composeMany.test.jsx` (oldest-first, title, no tags, offer = `sources.used` only, Keep, failed
+  save, chunksFailed/truncated/skipped wording, refusals keep the selection), `components/notes/archivedViewer.test.jsx`
+  (banner + Restore, Archive → banner, real normalized cache), `pages/archivedNotes.test.jsx`,
+  `pages/noteEditorArchive.test.jsx`, `graphql/archiveCache.test.js`, `utils/composeMany.test.js` — every behaviour
+  revert-checked red; single-note Compose's tests unchanged and green. Harness `20a-select-mode`,
+  `20b-compose-many-draft`, `20c-compose-many-offer`, `20d-compose-many-archived` (only the used ids archived, toast
+  with Undo), `20e-archived-view` (reached via the Tags panel, Restore-only bar), `20f-archived-banner`.
