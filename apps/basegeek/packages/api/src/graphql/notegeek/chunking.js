@@ -54,7 +54,8 @@ export function htmlToText(html) {
     .trim();
 }
 
-function codeText(content) {
+/** A code note's source: the JSON `{ code }` form or the raw text. */
+export function codeText(content) {
   const raw = String(content ?? '');
   if (raw.trim().startsWith('{')) {
     try {

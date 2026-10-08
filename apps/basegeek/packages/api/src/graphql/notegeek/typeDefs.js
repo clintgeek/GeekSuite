@@ -32,6 +32,38 @@ export const typeDefs = gql`
   }
 
   """
+  A note composeNotes left out, and why: locked (locked or encrypted — never
+  sent to a model), unsupported_type (a sketch or mind map), empty (nothing
+  left after stripping), not_found (missing or not yours; title is null).
+  """
+  type ComposeSourceSkip {
+    id: ID!
+    title: String
+    reason: String!
+  }
+
+  """Which of the selected notes went into a composeNotes result."""
+  type ComposeSources {
+    """Composed, oldest first."""
+    used: [ID!]!
+    skipped: [ComposeSourceSkip!]!
+  }
+
+  """
+  composeNotes' answer: everything ComposedNote has, plus which notes were
+  used and which were skipped. provenance.reason not_enough_sources means
+  fewer than two notes were usable and no model was asked; content_too_long
+  means the selection is over the compose ceiling (stats.inputChars is the
+  total) — select fewer notes.
+  """
+  type ComposedNotes {
+    markdown: String!
+    stats: ComposeStats!
+    provenance: AIProvenance
+    sources: ComposeSources!
+  }
+
+  """
   What the compose actually did. Three of these are the caller's problem to
   report: chunksFailed means material missing from a document that still looks
   complete, truncated means it stops mid-thought, and degenerate means the
@@ -364,6 +396,12 @@ export const typeDefs = gql`
     """Build a document from a pile of scraps. Returns a NEW document and
     changes nothing — saving or replacing is the caller's separate act."""
     composeNote(content: String!): ComposedNote!
+    """
+    Compose 2-20 of your notes (oldest first) into one NEW document. Changes
+    nothing — not the sources, not a new note. Notes that cannot be composed
+    are skipped and listed in sources.skipped.
+    """
+    composeNotes(noteIds: [ID!]!): ComposedNotes!
     """
     Propose how to fold new information into an existing Markdown note, as
     anchored edit operations. Writes NOTHING.

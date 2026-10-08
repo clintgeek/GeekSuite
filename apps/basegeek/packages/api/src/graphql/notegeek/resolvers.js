@@ -16,11 +16,12 @@ import {
   foldInApplyArgsSchema,
   archiveNotesArgsSchema,
   archivedNotesArgsSchema,
+  composeNotesArgsSchema,
   assertContentCeiling,
 } from './validation.js';
 import { sanitizeNoteArgs } from './sanitize.js';
 import { suggestForNote } from './suggest.js';
-import { composeNote } from './compose.js';
+import { composeNote, composeNotes } from './compose.js';
 import { transcribeSketch } from './transcribe.js';
 import { foldInPreview, planOperations, applyPlan, refusalFor } from './foldin.js';
 import NoteVersion from './models/NoteVersion.js';
@@ -70,6 +71,7 @@ const validateFoldInPreview = validateInput(foldInPreviewArgsSchema);
 const validateFoldInApply = validateInput(foldInApplyArgsSchema);
 const validateArchiveNotes = validateInput(archiveNotesArgsSchema);
 const validateArchivedNotes = validateInput(archivedNotesArgsSchema);
+const validateComposeNotes = validateInput(composeNotesArgsSchema);
 
 /** Default page of the Archived view. */
 const ARCHIVED_DEFAULT_LIMIT = 50;
@@ -684,6 +686,34 @@ export const resolvers = {
       if (!userId) throw new Error('Unauthorized');
       const { content } = validateComposeNote(rawArgs);
       return await composeNote({ content, userId });
+    },
+
+    /**
+     * Compose 2–20 of the caller's notes into one new document (spec §4).
+     *
+     * Writes NOTHING, like composeNote. The load is owner-scoped and by id —
+     * so an archived note selected in the Archived view is composable — and
+     * everything after it is compose.js `composeNotes`: skips with reasons,
+     * oldest first, the one compose pipeline. Logged as counts only.
+     */
+    composeNotes: async (_, rawArgs, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const { noteIds } = validateComposeNotes(rawArgs);
+      const valid = [...new Set(noteIds.filter((id) => mongoose.isValidObjectId(id)).map(String))];
+      const notes = valid.length
+        ? await Note.find(
+          { _id: { $in: valid }, userId },
+          { title: 1, content: 1, type: 1, isLocked: 1, isEncrypted: 1, createdAt: 1 },
+        ).lean()
+        : [];
+      return await composeNotes({
+        noteIds,
+        notes,
+        userId,
+        timeZone: context.user?.profile?.timezone || undefined,
+        log: logger,
+      });
     },
 
     /**

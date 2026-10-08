@@ -77,9 +77,36 @@
  *      lesson as Tidy's length floor, in the only form available here:
  *      compose cannot check that content survived, but it can check that the
  *      answer is not the same sentence forty times.
+ *
+ * ## Several notes at once — `composeNotes` (2026-10-08)
+ *
+ * NoteGeek's select mode composes 2–20 of the caller's notes into one
+ * (apps/notegeek/DOCS/COMPOSE_MANY_AND_ARCHIVE_SPEC.md §4). It is NOT a second
+ * pipeline: the notes are assembled into one pile and handed to the same
+ * `composeNote` path — same size refusal, same map-reduce, same degenerate
+ * check, same feature/cap/need — with exactly one addition, a framing rule
+ * appended to the system prompts of THIS path only (`composeManyFraming`).
+ * Single-note Compose passes no framing and its prompts are byte-identical
+ * to before.
+ *
+ *   - Each note becomes `# <title>` + `Written <YYYY-MM-DD>` + its body, and
+ *     the notes are joined by `---` rules — which `segmentFragments` already
+ *     splits on, so a note boundary is always a fragment boundary and
+ *     survives batching.
+ *   - Oldest `createdAt` first, so "the later note is the newer information"
+ *     has an order to point at.
+ *   - What cannot be composed is skipped and REPORTED, never silently
+ *     dropped: `locked` (never sent to a model), `unsupported_type` (sketches,
+ *     mind maps), `empty`, `not_found` (missing or not the caller's — one
+ *     reason, so a foreign id reveals nothing). Fewer than two usable notes
+ *     is a refusal (`not_enough_sources`) with no model call.
+ *   - `text` notes are TipTap HTML, stripped with a real parser (jsdom's
+ *     DOMParser), never a regex: a code block's literal `<` is text.
  */
 
+import { JSDOM } from 'jsdom';
 import { runAIFeature } from '../../services/aiFeatureRunner.js';
+import { codeText } from './chunking.js';
 
 export const COMPOSE_MAP_PROMPT = `You are extracting the substance from a pile of raw, pasted material — chat messages, notes, email fragments, model answers, half-finished thoughts.
 
@@ -116,6 +143,17 @@ Rules:
 export const COMPOSE_SINGLE_PROMPT = `${COMPOSE_REDUCE_PROMPT}
 
 The input is the raw material itself rather than extracted points, so apply the same judgement: keep every specific, drop greetings and quoted reply chains and boilerplate, merge duplicates, and group what remains into a document.`;
+
+/**
+ * The one extra rule the several-notes path adds (spec C4). Appended to every
+ * system prompt that path sends — single, map and reduce — and to no other
+ * path. The MAP step gets one more sentence, because its own rules call
+ * timestamps noise, and dropping the `Written` dates would leave the reduce no
+ * way to tell which note is the newer one.
+ */
+export const composeManyFraming = (n) => `The material is ${n} separate notes, oldest first, each starting with its \`#\` title and a \`Written\` date, separated by \`---\` rules. Merge overlapping material; where they disagree, the later note is the newer information.`;
+
+export const COMPOSE_MANY_MAP_EXTRA = 'Each note\'s `Written` date is NOT noise: keep it with that note\'s points, so a disagreement can be settled by which note is newer.';
 
 /** Roughly how many characters one token is worth, for English prose. */
 const CHARS_PER_TOKEN = 4;
@@ -323,8 +361,11 @@ const stripOuterFence = (text) => {
  * @returns {Promise<{markdown: string, stats: object, provenance: object}>}
  *   `markdown` is a NEW document — never something to write over the source.
  */
-export async function composeNote({ content, userId, ai = undefined }) {
+export async function composeNote({ content, userId, ai = undefined, framing = '' }) {
   const raw = typeof content === 'string' ? content : '';
+  // `framing` is the several-notes path's rule (composeManyFraming). Absent,
+  // every prompt below is exactly the single-note prompt.
+  const framed = (prompt, extra = '') => (framing ? `${prompt}\n\n${[framing, extra].filter(Boolean).join(' ')}` : prompt);
 
   /**
    * The one exit both paths take.
@@ -417,7 +458,7 @@ export async function composeNote({ content, userId, ai = undefined }) {
   // Small enough to see whole: one call, no extraction step. Better output
   // and cheaper than map-reduce on material that never needed splitting.
   if (raw.length <= SINGLE_CALL_CHARS) {
-    const result = await runOnce(COMPOSE_SINGLE_PROMPT, raw, 3000);
+    const result = await runOnce(framed(COMPOSE_SINGLE_PROMPT), raw, 3000);
     const markdown = stripOuterFence(typeof result.data === 'string' ? result.data : '');
     const stats = { ...baseStats, chunks: 1, chunksFailed: markdown.trim() ? 0 : 1, strategy: 'single' };
     return finish(markdown, stats, result.provenance);
@@ -431,7 +472,7 @@ export async function composeNote({ content, userId, ai = undefined }) {
   // whole compose.
   const extracts = await Promise.all(chunks.map(async (chunk) => {
     try {
-      const r = await runOnce(COMPOSE_MAP_PROMPT, chunk, mapTokensFor(chunk));
+      const r = await runOnce(framed(COMPOSE_MAP_PROMPT, COMPOSE_MANY_MAP_EXTRA), chunk, mapTokensFor(chunk));
       const text = typeof r.data === 'string' ? r.data.trim() : '';
       return text || null;
     } catch {
@@ -451,7 +492,7 @@ export async function composeNote({ content, userId, ai = undefined }) {
   }
 
   // REDUCE.
-  const reduced = await runOnce(COMPOSE_REDUCE_PROMPT, kept.join('\n\n'), 3500);
+  const reduced = await runOnce(framed(COMPOSE_REDUCE_PROMPT), kept.join('\n\n'), 3500);
   const markdown = stripOuterFence(typeof reduced.data === 'string' ? reduced.data : '');
 
   return finish(
@@ -461,4 +502,162 @@ export async function composeNote({ content, userId, ai = undefined }) {
       ? reduced.provenance
       : { ...reduced.provenance, source: 'fallback', reason: 'reduce_failed' }
   );
+}
+
+// ── Several notes at once (spec §4) ─────────────────────────────────────────
+
+/** Note types Compose reads: Compose's own, plus the legacy null type. */
+export const COMPOSABLE_TYPES = new Set(['markdown', 'code', 'text']);
+
+/** Between two notes in the assembled pile; `segmentFragments` splits on it. */
+export const NOTE_SEPARATOR = '\n\n---\n\n';
+
+/** Elements whose end is a line break in the plain text. */
+const LINE_BLOCKS = new Set(['LI', 'TR', 'DT', 'DD']);
+/** Elements whose end is a paragraph break. */
+const PARA_BLOCKS = new Set(['P', 'DIV', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'PRE', 'BLOCKQUOTE', 'UL', 'OL', 'TABLE', 'HR', 'FIGURE', 'SECTION', 'ARTICLE']);
+
+/**
+ * One jsdom window for the process, built on first use (the same trade
+ * sanitize.js makes: ~50 ms once, never at boot). DOMParser documents never
+ * run scripts.
+ */
+let parserWindow = null;
+const getParserWindow = () => {
+  if (!parserWindow) parserWindow = new JSDOM('').window;
+  return parserWindow;
+};
+
+/**
+ * TipTap HTML → plain text, with a real parser. Matches the editor's
+ * `plainTextForCompose` (DOMParser + textContent), plus paragraph breaks
+ * where blocks end — textContent alone glues `<p>a</p><p>b</p>` into "ab",
+ * and Compose segments on blank lines.
+ */
+export function htmlToPlainText(html) {
+  const win = getParserWindow();
+  const doc = new win.DOMParser().parseFromString(String(html ?? ''), 'text/html');
+  const body = doc.body;
+  if (!body) return '';
+  for (const el of body.querySelectorAll('script, style, template')) el.remove();
+  for (const el of body.querySelectorAll('br')) el.replaceWith(doc.createTextNode('\n'));
+  for (const el of body.querySelectorAll('*')) {
+    if (LINE_BLOCKS.has(el.tagName)) el.append(doc.createTextNode('\n'));
+    else if (PARA_BLOCKS.has(el.tagName)) el.append(doc.createTextNode('\n\n'));
+  }
+  return (body.textContent || '')
+    .replace(/ /g, ' ')
+    .replace(/[ \t]+\n/g, '\n')
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
+}
+
+/** A YYYY-MM-DD calendar day for an instant, in the caller's time zone. */
+export function calendarDay(instant, timeZone = 'America/Chicago') {
+  const d = new Date(instant);
+  if (Number.isNaN(d.getTime())) return 'unknown date';
+  try {
+    return new Intl.DateTimeFormat('en-CA', { timeZone, year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
+  } catch {
+    return d.toISOString().slice(0, 10); // an unknown zone: UTC, not a failure
+  }
+}
+
+/**
+ * Why a loaded note cannot be composed, or its plain-text body.
+ * @returns {{ reason: string } | { body: string }}
+ */
+export function composableBody(note) {
+  if (note.isLocked || note.isEncrypted) return { reason: 'locked' };
+  const type = note.type ?? null;
+  if (type !== null && !COMPOSABLE_TYPES.has(type)) return { reason: 'unsupported_type' };
+  let body;
+  if (type === 'markdown') body = String(note.content ?? '');
+  else if (type === 'code') body = codeText(note.content);
+  else body = htmlToPlainText(note.content); // text, and the legacy null type (TipTap's default)
+  body = body.trim();
+  return body ? { body } : { reason: 'empty' };
+}
+
+/**
+ * Sort out the requested ids against the notes that were loaded.
+ *
+ * @param {string[]} requested ids as the caller sent them (deduped here)
+ * @param {object[]} notes the caller's notes among them (owner-scoped load)
+ * @returns {{ used: object[], skipped: {id,title,reason}[] }} used is oldest first
+ */
+export function planComposeSources(requested, notes) {
+  const byId = new Map(notes.map((n) => [String(n._id), n]));
+  const used = [];
+  const skipped = [];
+  for (const id of [...new Set(requested.map(String))]) {
+    const note = byId.get(id);
+    if (!note) {
+      // One reason for "missing" and "someone else's", and no title: a
+      // foreign id reveals nothing.
+      skipped.push({ id, title: null, reason: 'not_found' });
+      continue;
+    }
+    const out = composableBody(note);
+    if (out.reason) skipped.push({ id, title: note.title || null, reason: out.reason });
+    else used.push({ note, body: out.body });
+  }
+  used.sort((a, b) => new Date(a.note.createdAt) - new Date(b.note.createdAt)
+    || String(a.note._id).localeCompare(String(b.note._id)));
+  return { used, skipped };
+}
+
+/** The assembled pile: one `# title` / `Written` / body block per note, `---` between. */
+export function assembleComposeInput(used, { timeZone } = {}) {
+  return used
+    .map(({ note, body }) => `# ${(note.title || '').trim() || 'Untitled'}\nWritten ${calendarDay(note.createdAt, timeZone)}\n\n${body}`)
+    .join(NOTE_SEPARATOR);
+}
+
+/**
+ * Compose several of the caller's notes into one new document.
+ *
+ * The caller (the resolver) does the owner-scoped load; this decides what is
+ * usable, refuses below two, and otherwise runs the ONE compose pipeline with
+ * this path's framing rule. Writes nothing.
+ *
+ * @param {object} opts
+ * @param {string[]} opts.noteIds as requested
+ * @param {object[]} opts.notes the caller's notes among them
+ * @param {string} [opts.userId]
+ * @param {string} [opts.timeZone] for the `Written` dates
+ * @param {object} [opts.ai] injectable aiService, for tests
+ * @param {object} [opts.log] logger; counts only, never text
+ */
+export async function composeNotes({ noteIds, notes, userId, timeZone, ai = undefined, log = undefined }) {
+  const { used, skipped } = planComposeSources(noteIds, notes);
+  const sources = { used: used.map(({ note }) => String(note._id)), skipped };
+  const logCounts = (extra) => log?.info?.({
+    userId: userId ? String(userId) : null,
+    requested: new Set(noteIds.map(String)).size,
+    used: used.length,
+    skipped: skipped.length,
+    ...extra,
+  }, '[notegeek] compose-many');
+
+  if (used.length < 2) {
+    logCounts({ outcome: 'not_enough_sources' });
+    return {
+      markdown: '',
+      stats: { inputChars: 0, fragments: 0, chunks: 0, chunksFailed: 0, strategy: 'refused' },
+      provenance: { source: 'fallback', reason: 'not_enough_sources', model: null, provider: null, cached: false, callsToday: 0, cap: COMPOSE_DAILY_CAP },
+      sources,
+    };
+  }
+
+  const content = assembleComposeInput(used, { timeZone });
+  const result = await composeNote({ content, userId, ai, framing: composeManyFraming(used.length) });
+  logCounts({
+    outcome: result.provenance?.reason || result.provenance?.source || 'unknown',
+    inputChars: result.stats.inputChars,
+    chunks: result.stats.chunks,
+    chunksFailed: result.stats.chunksFailed,
+    outputChars: result.markdown.length,
+  });
+  return { ...result, sources };
 }
