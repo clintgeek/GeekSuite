@@ -42,14 +42,34 @@ export function renameProblem(fromTag, rawNext) {
 const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
 
 /**
+ * "7 notes (and 2 archived)" — what a tag operation touches, from
+ * `noteTagUsage`. renameTag / deleteTag reach archived notes too (spec A4),
+ * so the dialogs say so; the parenthesis is left out when there are none (A8).
+ */
+export function notesTouched(usage) {
+  const archived = Number(usage?.archived) || 0;
+  const base = plural(usage?.notes ?? 0, 'note', 'notes');
+  return archived > 0 ? `${base} (and ${archived} archived)` : base;
+}
+
+const tagAndSubTags = (tag, subTags) => (subTags > 0 ? `#${tag} and its ${plural(subTags, 'sub-tag', 'sub-tags')}` : `#${tag}`);
+
+/**
  * The delete dialog's sentence, from `noteTagUsage`:
- * "Removes #house and its 2 sub-tags from 7 notes. The notes stay."
+ * "Removes #house and its 2 sub-tags from 7 notes (and 2 archived). The notes stay."
  */
 export function deleteSummary(tag, usage) {
   if (!usage) return `Removes #${tag} and any sub-tags from your notes. The notes stay.`;
-  const { notes, subTags } = usage;
-  const what = subTags > 0 ? `#${tag} and its ${plural(subTags, 'sub-tag', 'sub-tags')}` : `#${tag}`;
-  return `Removes ${what} from ${plural(notes, 'note', 'notes')}. The notes stay.`;
+  return `Removes ${tagAndSubTags(tag, usage.subTags)} from ${notesTouched(usage)}. The notes stay.`;
+}
+
+/**
+ * The rename dialog's sentence: "Changes #house and its 2 sub-tags on 7 notes
+ * (and 2 archived)." Null until the count is in.
+ */
+export function renameSummary(tag, usage) {
+  if (!usage) return null;
+  return `Changes ${tagAndSubTags(tag, usage.subTags)} on ${notesTouched(usage)}.`;
 }
 
 /** The route for a tag's view. */

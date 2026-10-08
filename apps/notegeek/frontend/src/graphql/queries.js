@@ -49,6 +49,9 @@ export const NOTE_TAG_USAGE = gql`
         noteTagUsage(tag: $tag) {
             notes
             subTags
+            # Archived notes in the subtree: renameTag / deleteTag reach them
+            # too (COMPOSE_MANY_AND_ARCHIVE_SPEC.md A4, A8). notes is active only.
+            archived
         }
     }
 `;

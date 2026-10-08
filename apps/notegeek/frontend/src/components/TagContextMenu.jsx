@@ -25,6 +25,7 @@ import {
     parentTag,
     renameProblem,
     deleteSummary,
+    renameSummary,
 } from '../utils/tagPath';
 
 /**
@@ -58,6 +59,8 @@ function TagContextMenu({ anchorEl, open, onClose, tag }) {
         setRenameFor(tag);
         setNewTagName(tag || '');
         setActionError(null);
+        // What the rename will touch, archived notes included (spec A8).
+        if (tag) loadUsage({ variables: { tag } });
         onClose();
     };
 
@@ -166,6 +169,11 @@ function TagContextMenu({ anchorEl, open, onClose, tag }) {
                     <Button onClick={closeDialogs} disabled={busy}>Cancel</Button>
                 }
             >
+                {!usageLoading && renameSummary(renameFor || '', usage) ? (
+                    <DialogContentText data-testid="rename-tag-summary" sx={{ mb: 1 }}>
+                        {renameSummary(renameFor || '', usage)}
+                    </DialogContentText>
+                ) : null}
                 <TextField
                     autoFocus
                     margin="dense"

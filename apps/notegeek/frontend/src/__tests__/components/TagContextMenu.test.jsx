@@ -14,9 +14,9 @@ vi.mock('../../store/tagStore', () => {
     return { default: useStore };
 });
 
-const usageMock = (tag, notes, subTags) => ({
+const usageMock = (tag, notes, subTags, archived = 0) => ({
     request: { query: NOTE_TAG_USAGE, variables: { tag } },
-    result: { data: { noteTagUsage: { notes, subTags } } },
+    result: { data: { noteTagUsage: { notes, subTags, archived } } },
 });
 
 const anchor = () => document.createElement('div');
@@ -105,6 +105,39 @@ describe('TagContextMenu', () => {
         await waitFor(() => expect(useTagStore.getState().deleteTag).toHaveBeenCalledWith('house'));
     });
 
+    it('delete: says how many archived notes it also reaches (spec A8)', async () => {
+        renderWithProviders(
+            <TagContextMenu anchorEl={anchor()} open onClose={onClose} tag="house" />,
+            { mocks: [usageMock('house', 4, 0, 2)] },
+        );
+        fireEvent.click(screen.getByText('Delete tag'));
+        const dialog = await screen.findByRole('dialog');
+        await waitFor(() => expect(within(dialog).getByTestId('delete-tag-summary'))
+            .toHaveTextContent('Removes #house from 4 notes (and 2 archived). The notes stay.'));
+    });
+
+    it('rename: says what it will change, archived notes included (spec A8)', async () => {
+        renderWithProviders(
+            <TagContextMenu anchorEl={anchor()} open onClose={onClose} tag="house" />,
+            { mocks: [usageMock('house', 4, 2, 2)] },
+        );
+        fireEvent.click(screen.getByText('Rename or move'));
+        await screen.findByLabelText('Tag path');
+        await waitFor(() => expect(screen.getByTestId('rename-tag-summary'))
+            .toHaveTextContent('Changes #house and its 2 sub-tags on 4 notes (and 2 archived).'));
+    });
+
+    it('rename: no parenthesis when nothing archived carries the tag', async () => {
+        renderWithProviders(
+            <TagContextMenu anchorEl={anchor()} open onClose={onClose} tag="house" />,
+            { mocks: [usageMock('house', 1, 0, 0)] },
+        );
+        fireEvent.click(screen.getByText('Rename or move'));
+        await waitFor(() => expect(screen.getByTestId('rename-tag-summary'))
+            .toHaveTextContent('Changes #house on 1 note.'));
+        expect(screen.getByTestId('rename-tag-summary')).not.toHaveTextContent('archived');
+    });
+
     it('delete: cancel deletes nothing', async () => {
         renderWithProviders(
             <TagContextMenu anchorEl={anchor()} open onClose={onClose} tag="house" />,
@@ -124,6 +157,8 @@ describe('tag dialog copy', () => {
         expect(deleteSummary('house', { notes: 7, subTags: 2 })).toBe('Removes #house and its 2 sub-tags from 7 notes. The notes stay.');
         expect(deleteSummary('house', { notes: 1, subTags: 1 })).toBe('Removes #house and its 1 sub-tag from 1 note. The notes stay.');
         expect(deleteSummary('house', { notes: 3, subTags: 0 })).toBe('Removes #house from 3 notes. The notes stay.');
+        expect(deleteSummary('house', { notes: 3, subTags: 0, archived: 0 })).toBe('Removes #house from 3 notes. The notes stay.');
+        expect(deleteSummary('house', { notes: 0, subTags: 1, archived: 1 })).toBe('Removes #house and its 1 sub-tag from 0 notes (and 1 archived). The notes stay.');
     });
     it('renameProblem', () => {
         expect(renameProblem('house', 'house/garage')).toMatch(/inside itself/);
