@@ -132,7 +132,7 @@ async function reviewTranscript(page, h) {
 
 import { fileURLToPath } from 'node:url';
 import { json, graphqlRoute } from '../../lib/net.mjs';
-import { OPS, NOTE_SUGGESTIONS, NOTE_CODE, NOTE_MINDMAP, NOTE_SKETCH, NOTE_WIDE_TABLE, NOTE_MD, NOTE_PRINT, SEARCH_RESULTS, HYBRID_RESULTS, BEST_MATCH_RESULTS, NEAR_TIE_RESULTS, RELATED_TO_N1, NOTE_N1, NOTE_LINKED, NOTE_LINKED_LINKS, BACKLINKS_TO_NL, NOTE_SPIDERS, FOLD_IN_INPUT, FOLD_IN_PROPOSAL, SPIDERS_FOLDED, SPIDERS_SEARCH } from './fixtures.mjs';
+import { OPS, ARCHIVED, NOTE_COMPOSED, NOTE_SUGGESTIONS, NOTE_CODE, NOTE_MINDMAP, NOTE_SKETCH, NOTE_WIDE_TABLE, NOTE_MD, NOTE_PRINT, SEARCH_RESULTS, HYBRID_RESULTS, BEST_MATCH_RESULTS, NEAR_TIE_RESULTS, RELATED_TO_N1, NOTE_N1, NOTE_LINKED, NOTE_LINKED_LINKS, BACKLINKS_TO_NL, NOTE_SPIDERS, FOLD_IN_INPUT, FOLD_IN_PROPOSAL, SPIDERS_FOLDED, SPIDERS_SEARCH } from './fixtures.mjs';
 
 // ── Fold-in helpers (scenes 19a-19e) ────────────────────────────────────────
 // The gateway is stubbed with the proposal the real model made for this note
@@ -411,6 +411,83 @@ async function assertPrintMedia(page) {
   await page.emulateMedia({ media: null });
   if (onScreen.view !== 'none') throw new Error('the print view shows on screen');
   if (onPaper.view === 'none' || onPaper.app !== 'none') throw new Error(`print media: view ${onPaper.view}, app ${onPaper.app}`);
+}
+
+// ── Select mode, Compose from several notes, Archive (scenes 20a-20f) ───────
+// DOCS/COMPOSE_MANY_AND_ARCHIVE_SPEC.md §5. Every call is recorded so a scene
+// can say what was (and was not) sent. Registered on the PAGE, last, so it
+// wins over routes earlier scenes left behind.
+async function stubSelect(page, extra = {}) {
+  const calls = { compose: [], create: [], archive: [], restore: [] };
+  await graphqlRoute(page, {
+    ...OPS,
+    ComposeNotes: (vars) => { calls.compose.push(vars); return OPS.ComposeNotes; },
+    CreateNote: (vars) => { calls.create.push(vars); return { createNote: NOTE_COMPOSED }; },
+    ArchiveNotes: (vars) => { calls.archive.push(vars); return OPS.ArchiveNotes(vars); },
+    RestoreNotes: (vars) => { calls.restore.push(vars); return OPS.RestoreNotes(vars); },
+    ...extra,
+  });
+  return calls;
+}
+
+const rowFor = (page, title) => page.locator('[data-note-row]').filter({ hasText: title }).first();
+
+// A held finger (~700 ms, no movement) — the phone's way in.
+async function longPress(page, locator) {
+  const b = await locator.boundingBox();
+  if (!b) throw new Error('nothing to long-press');
+  await page.mouse.move(b.x + b.width / 2, b.y + Math.min(20, b.height / 2));
+  await page.mouse.down();
+  await page.waitForTimeout(700);
+  await page.mouse.up();
+}
+
+// Into select mode with three notes picked: the roadmap, the standup notes
+// and the sketch (which Compose will skip). Phone: long-press the first row.
+// Desktop: the header's Select button.
+async function selectThree(page, h) {
+  if (h.isPhone) {
+    await longPress(page, rowFor(page, 'Q3 roadmap notes'));
+  } else {
+    await page.getByRole('button', { name: 'Select', exact: true }).click();
+    await page.getByRole('checkbox', { name: /Q3 roadmap notes/ }).click();
+  }
+  await h.settle(300);
+  if (/\/notes\/n1/.test(page.url())) throw new Error('the long press opened the note');
+  const first = page.getByRole('checkbox', { name: /Q3 roadmap notes/ });
+  if ((await first.getAttribute('aria-checked')) !== 'true') throw new Error('the first row is not selected after entering select mode');
+  await page.getByRole('checkbox', { name: /Standup snippets/ }).click();
+  await page.getByRole('checkbox', { name: /Sketch: onboarding flow/ }).click();
+  await h.settle(300);
+  if (!(await page.getByText('3 selected').count())) throw new Error('the header does not read "3 selected"');
+}
+
+async function assertBarInThumbZone(page, h) {
+  const bar = page.getByRole('toolbar', { name: 'Selected notes' });
+  const b = await bar.boundingBox();
+  if (!b) throw new Error('no action bar in select mode');
+  const vh = page.viewportSize().height;
+  if (h.isPhone) {
+    const nav = await page.locator('[data-geek-bottom-nav]').boundingBox();
+    if (!nav) throw new Error('the tab bar is gone in select mode');
+    if (b.y + b.height > nav.y + 1) throw new Error(`the action bar (bottom ${Math.round(b.y + b.height)}) overlaps the tab bar (top ${Math.round(nav.y)})`);
+  } else if (b.y + b.height < vh - 2) {
+    throw new Error(`the action bar is not at the bottom (bottom ${Math.round(b.y + b.height)} of ${vh})`);
+  }
+}
+
+async function openComposeMany(page, h, calls) {
+  await page.goto(h.base + '/notes', { waitUntil: 'networkidle' });
+  await h.settle(1000);
+  await selectThree(page, h);
+  await page.getByRole('button', { name: 'Compose 3 notes' }).click();
+  await page.getByRole('heading', { name: 'Shipping' }).waitFor({ timeout: 10000 });
+  await h.settle(500);
+  if (calls.compose.length !== 1) throw new Error(`composeNotes called ${calls.compose.length} times`);
+  // The fixture notes share a createdAt, so only the set is checked here;
+  // oldest-first ordering is unit-tested (composeMany.test.jsx).
+  const sent = [...calls.compose[0].noteIds].sort().join(',');
+  if (sent !== 'n1,n3,n5') throw new Error(`composeNotes sent ${sent}`);
 }
 
 export const scenes = [
@@ -694,6 +771,9 @@ export const scenes = [
       await field.fill('home/house');
       await h.settle(300);
       if (!(await page.getByText(/sub-tags and their notes come along/i).count())) throw new Error('the helper text is missing');
+      // Spec A8: what the rename touches, archived notes included.
+      const touched = 'Changes #house and its 2 sub-tags on 3 notes (and 1 archived).';
+      if (!(await page.getByText(touched).count())) throw new Error(`the rename dialog does not say "${touched}"`);
     },
     teardown: async (page, h) => {
       await h.esc(400);
@@ -711,7 +791,7 @@ export const scenes = [
       await h.settle(300);
       await page.getByRole('menuitem', { name: /delete tag/i }).click();
       await h.settle(800);
-      const text = 'Removes #house and its 2 sub-tags from 3 notes. The notes stay.';
+      const text = 'Removes #house and its 2 sub-tags from 3 notes (and 1 archived). The notes stay.';
       if (!(await page.getByText(text).count())) throw new Error(`the delete dialog does not say "${text}"`);
     },
     teardown: async (page, h) => {
@@ -1515,6 +1595,114 @@ export const scenes = [
         throw new Error(`the viewer does not show the folded-in table row (url ${page.url()}; page: ${body})`);
       }
       await h.settle(300);
+    },
+  },
+
+  // ── Select mode, Compose from several notes, Archive (spec §5) ─────────
+  {
+    // Select mode in All notes: three picked (one a sketch). Each row a
+    // checkbox, "3 selected" + Cancel up top, the action bar above the tab
+    // bar with "Compose 3 notes" and the skip count, and Archive.
+    name: '20a-select-mode',
+    async setup(page, h) {
+      await stubSelect(page);
+      await page.goto(h.base + '/notes', { waitUntil: 'networkidle' });
+      await h.settle(1000);
+      await selectThree(page, h);
+      const bar = page.getByRole('toolbar', { name: 'Selected notes' });
+      if (await bar.getByRole('button', { name: 'Compose 3 notes' }).isDisabled()) throw new Error('Compose 3 notes is disabled');
+      if (await bar.getByRole('button', { name: 'Archive' }).isDisabled()) throw new Error('Archive is disabled');
+      if (!(await bar.getByText(/^1 will be skipped/).count())) throw new Error('the bar does not say the sketch will be skipped');
+      if (!(await page.getByRole('button', { name: 'Cancel' }).count())) throw new Error('no Cancel in select mode');
+      await assertBarInThumbZone(page, h);
+    },
+    teardown: (page, h) => h.esc(400),
+  },
+  {
+    // Compose 3 notes -> the draft, with the left-out sketch named above it,
+    // and Save as a new note (no Replace).
+    name: '20b-compose-many-draft',
+    async setup(page, h) {
+      const calls = await stubSelect(page);
+      await openComposeMany(page, h, calls);
+      if (!(await page.getByText('1 note left out: Sketch: onboarding flow (a sketch)').count())) throw new Error('the skipped sketch is not named');
+      if (await page.getByRole('button', { name: /replace/i }).count()) throw new Error('compose-many offers Replace');
+      if (calls.create.length) throw new Error('a note was created before Save');
+    },
+    teardown: (page, h) => h.esc(500),
+  },
+  {
+    // Saved -> "Saved. Archive the 2 source notes?" — two, not three: the
+    // sketch was not composed, so it is not offered. Nothing archived yet.
+    name: '20c-compose-many-offer',
+    async setup(page, h) {
+      const calls = await stubSelect(page);
+      await openComposeMany(page, h, calls);
+      await page.getByRole('button', { name: 'Save as a new note' }).click();
+      await page.getByRole('dialog', { name: 'Saved. Archive the 2 source notes?' }).waitFor({ timeout: 8000 });
+      await h.settle(400);
+      if (calls.create.length !== 1) throw new Error(`createNote called ${calls.create.length} times`);
+      const v = calls.create[0];
+      if (v.title !== 'Q3 planning and standups' || v.type !== 'markdown' || (v.tags || []).length) throw new Error(`created ${JSON.stringify({ title: v.title, type: v.type, tags: v.tags })}`);
+      if (calls.archive.length) throw new Error('archived before being asked');
+    },
+    teardown: (page, h) => h.esc(500),
+  },
+  {
+    // Archive them -> only the two used notes archived, the new note opens,
+    // and the toast says so with Undo.
+    name: '20d-compose-many-archived',
+    async setup(page, h) {
+      const calls = await stubSelect(page, { GetNoteById: { note: NOTE_COMPOSED } });
+      await openComposeMany(page, h, calls);
+      await page.getByRole('button', { name: 'Save as a new note' }).click();
+      await page.getByRole('button', { name: 'Archive them' }).click();
+      await page.waitForURL(/\/notes\/cm1$/, { timeout: 10000 });
+      await page.getByText('Archived 2 notes').waitFor({ timeout: 5000 });
+      if (!(await page.getByRole('button', { name: 'Undo' }).count())) throw new Error('the toast has no Undo');
+      if (calls.archive.length !== 1 || [...calls.archive[0].ids].sort().join(',') !== 'n1,n5') throw new Error(`archived ${JSON.stringify(calls.archive)}`);
+      await h.settle(400);
+    },
+  },
+  {
+    // The Archived view (reached from the Tags panel), in select mode with
+    // one picked: Restore, and nothing else, in the bar.
+    name: '20e-archived-view',
+    async setup(page, h) {
+      await stubSelect(page);
+      await page.goto(h.base + '/notes', { waitUntil: 'networkidle' });
+      await h.settle(800);
+      if (h.isPhone) await openPhoneTags(page, h);
+      await page.getByRole('link', { name: 'Archived' }).click();
+      await page.waitForURL(/\/archived$/, { timeout: 8000 });
+      await page.getByText(ARCHIVED[0].title).waitFor({ timeout: 8000 });
+      await h.settle(600);
+      if (h.isPhone) {
+        await longPress(page, rowFor(page, 'Spring garden plan'));
+      } else {
+        await page.getByRole('button', { name: 'Select', exact: true }).click();
+        await page.getByRole('checkbox', { name: /Spring garden plan/ }).click();
+      }
+      await h.settle(400);
+      const bar = page.getByRole('toolbar', { name: 'Selected notes' });
+      if (!(await bar.getByRole('button', { name: 'Restore' }).count())) throw new Error('the Archived bar has no Restore');
+      if (await bar.getByRole('button', { name: /Compose|Archive/ }).count()) throw new Error('the Archived bar offers Compose or Archive');
+      await assertBarInThumbZone(page, h);
+    },
+    teardown: (page, h) => h.esc(400),
+  },
+  {
+    // An archived note opened directly: the viewer's "Archived <date> ·
+    // Restore" banner, and Restore (not Archive) in its actions.
+    name: '20f-archived-banner',
+    async setup(page, h) {
+      await stubSelect(page, { GetNoteById: { note: ARCHIVED[0] } });
+      await page.goto(h.base + '/notes/xa1', { waitUntil: 'networkidle' });
+      await h.settle(1000);
+      const banner = page.locator('[data-archived-banner]');
+      if (!(await banner.count())) throw new Error('no archived banner');
+      if (!(await banner.getByRole('button', { name: 'Restore' }).count())) throw new Error('the banner has no Restore');
+      if (!(await page.getByRole('button', { name: 'Restore from archive' }).count())) throw new Error('the viewer still offers Archive');
     },
   },
 ];

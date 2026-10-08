@@ -331,6 +331,49 @@ export const SPIDERS_SEARCH = [
   { __typename: 'SearchSnippet', bestMatch: false, _id: 'h1', title: 'Garage shelving plan', type: 'markdown', tags: ['house/garage'], isLocked: false, isEncrypted: false, createdAt: daysAgo(20), updatedAt: daysAgo(3), score: 0.016, snippet: 'Four uprights', message: null, matchedBy: 'keyword', why: null },
 ];
 
+// Compose from several notes + Archive (DOCS/COMPOSE_MANY_AND_ARCHIVE_SPEC.md)
+// — scenes 20a-20f. Selected in /notes: the roadmap (rich text), the standup
+// snippets (rich text) and the onboarding sketch, which Compose skips.
+export const COMPOSE_MANY_MARKDOWN = [
+  '# Q3 planning and standups',
+  '',
+  'What the roadmap session decided, and what the standups since have added.',
+  '',
+  '## Shipping',
+  '',
+  '- Ship the mobile pass',
+  '- Close out CSRF hardening',
+  '- Decide on the flockgeek bottom nav',
+  '',
+  '## Open threads',
+  '',
+  '- Pairing on the sidebar tree; the tag counts query still loads whole notes.',
+  '- Follow-ups land in their own note once triaged.',
+].join('\n');
+export const COMPOSE_MANY_RESULT = {
+  __typename: 'ComposedNotes',
+  markdown: COMPOSE_MANY_MARKDOWN,
+  stats: { __typename: 'ComposeStats', inputChars: 812, fragments: 6, chunks: 1, chunksFailed: 0, strategy: 'single', truncated: false, degenerate: false },
+  provenance: { __typename: 'AIProvenance', source: 'model', reason: null, model: 'openai/gpt-4.1-mini', provider: 'openrouter', cached: false, callsToday: 2, cap: 120 },
+  sources: {
+    __typename: 'ComposeSources',
+    used: ['n1', 'n5'],
+    skipped: [{ __typename: 'ComposeSourceSkip', id: 'n3', title: 'Sketch: onboarding flow', reason: 'unsupported_type' }],
+  },
+};
+export const NOTE_COMPOSED = note('cm1', 'Q3 planning and standups', 'markdown', [], COMPOSE_MANY_MARKDOWN, hoursAgo(0.01), hoursAgo(0.01));
+
+const archivedNote = (id, title, type, tags, content, archivedHoursAgo) => ({
+  ...note(id, title, type, tags, content, daysAgo(30), daysAgo(60)),
+  archived: true,
+  archivedAt: hoursAgo(archivedHoursAgo),
+});
+export const ARCHIVED = [
+  archivedNote('xa1', 'Old roof quote', 'markdown', ['house'], 'Second quote came in lower; went with them in August.', 3),
+  archivedNote('xa2', 'Spring garden plan', 'text', ['garden'], '<p>Tomatoes along the fence, herbs by the door. Superseded by the autumn plan.</p>', 26),
+  archivedNote('xa3', 'Conference notes 2025', 'markdown', ['work'], 'Talks worth rewatching: the one on local-first sync, and the accessibility audit.', 24 * 9),
+];
+
 // The sidebar's per-tag counts come from `notes { id tags }`: every fixture
 // note plus a few tag-only ones so each listed tag has a believable count.
 const extraTagged = [
@@ -354,7 +397,10 @@ export const OPS = {
   NoteTagUsage: (vars) => {
     const hit = TAG_COUNT_NOTES.filter((n) => n.tags.some((t) => inSubtree(t, vars.tag)));
     const sub = new Set(hit.flatMap((n) => n.tags).filter((t) => t !== vars.tag && inSubtree(t, vars.tag)));
-    return { noteTagUsage: { __typename: 'TagUsage', notes: hit.length, subTags: sub.size } };
+    // `archived` (spec A8): archived notes in the subtree — renameTag /
+    // deleteTag reach them too. `house` has one (ARCHIVED's "Old roof quote").
+    const archived = ARCHIVED.filter((n) => n.tags.some((t) => inSubtree(t, vars.tag))).length;
+    return { noteTagUsage: { __typename: 'TagUsage', notes: hit.length, subTags: sub.size, archived } };
   },
   GetNoteTagCounts: { notes: TAG_COUNT_NOTES },
   GetNoteById: { note: NOTE_N1 },
@@ -378,6 +424,15 @@ export const OPS = {
       .sort((a, b) => Number(!a.title.toLowerCase().startsWith(q)) - Number(!b.title.toLowerCase().startsWith(q)));
     return { noteTitles: all.slice(0, vars?.limit || 20).map((n) => ({ __typename: 'NoteTitle', id: n.id, title: n.title, type: n.type, updatedAt: n.updatedAt })) };
   },
+  // Archive (spec §3): nothing is archived unless a scene says so.
+  NoteArchiveState: (vars) => {
+    const hit = ARCHIVED.find((n) => n.id === vars.id);
+    return { note: { __typename: 'Note', id: vars.id, archived: Boolean(hit), archivedAt: hit ? hit.archivedAt : null } };
+  },
+  ArchivedNotes: { archivedNotes: ARCHIVED },
+  ArchiveNotes: (vars) => ({ archiveNotes: { __typename: 'ArchiveResult', ids: vars.ids, count: vars.ids.length } }),
+  RestoreNotes: (vars) => ({ restoreNotes: { __typename: 'ArchiveResult', ids: vars.ids, count: vars.ids.length } }),
+  ComposeNotes: { composeNotes: COMPOSE_MANY_RESULT },
   SetNotePinned: (vars) => ({
     setNotePinned: { __typename: 'Note', id: vars.id, pinned: vars.pinned, pinnedAt: vars.pinned ? now.toISOString() : null },
   }),
