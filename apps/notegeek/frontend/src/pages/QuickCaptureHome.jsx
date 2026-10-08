@@ -21,6 +21,9 @@ import NoteRow from '../components/notes/NoteRow';
 import useNoteStore from '../store/noteStore';
 import { newNotePath, noteTypeMeta } from '../components/notes/noteTypeMeta';
 import { graphiteTokens, gridBackground, layout, tapTarget44 } from '../theme/tokens';
+import { useNoteSelection, rowSelectProps } from '../hooks/useNoteSelection';
+import { SelectButton, SelectingHeader } from '../components/select/SelectControl';
+import SelectionBar from '../components/select/SelectionBar';
 
 const RECENT_COUNT = 12;
 
@@ -79,6 +82,8 @@ function QuickCaptureHome() {
   const [foldPicking, setFoldPicking] = useState(false);
   const [foldTarget, setFoldTarget] = useState(null);
   const { notify } = useToast();
+  // Select mode over the notes on Home (DOCS/COMPOSE_MANY_AND_ARCHIVE_SPEC.md U1).
+  const selection = useNoteSelection();
 
   useEffect(() => {
     fetchNotes({ limit: 50 });
@@ -182,9 +187,10 @@ function QuickCaptureHome() {
           />
         ) : (
           <>
+            {selection.active && <SelectingHeader selection={selection} />}
             {pinnedNotes.length > 0 && (
               <Box component="section" aria-labelledby="home-pinned">
-                <SectionHeading id="home-pinned">Pinned</SectionHeading>
+                <SectionHeading id="home-pinned" action={selection.active ? null : <SelectButton selection={selection} />}>Pinned</SectionHeading>
                 <Box>
                   {pinnedNotes.map((note, idx) => (
                     <React.Fragment key={note.id || note._id}>
@@ -192,6 +198,7 @@ function QuickCaptureHome() {
                       <NoteRow
                         note={note}
                         onClick={() => navigate(`/notes/${note.id || note._id}`)}
+                        {...rowSelectProps(selection, note)}
                       />
                     </React.Fragment>
                   ))}
@@ -203,6 +210,8 @@ function QuickCaptureHome() {
                 <SectionHeading
                   id="home-recent"
                   action={
+                    <>
+                    {pinnedNotes.length === 0 && !selection.active && <SelectButton selection={selection} />}
                     <ButtonBase
                       onClick={() => navigate('/notes')}
                       sx={{
@@ -220,6 +229,7 @@ function QuickCaptureHome() {
                       All notes
                       <ArrowForward aria-hidden sx={{ fontSize: 15 }} />
                     </ButtonBase>
+                    </>
                   }
                 >
                   Recent
@@ -231,6 +241,7 @@ function QuickCaptureHome() {
                       <NoteRow
                         note={note}
                         onClick={() => navigate(`/notes/${note.id || note._id}`)}
+                        {...rowSelectProps(selection, note)}
                       />
                     </React.Fragment>
                   ))}
@@ -239,6 +250,7 @@ function QuickCaptureHome() {
             )}
           </>
         )}
+        <SelectionBar selection={selection} />
       </Box>
       <GeekSheet
         open={foldPicking}

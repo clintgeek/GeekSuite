@@ -19,19 +19,22 @@ import ClearIcon from '@mui/icons-material/Clear';
 import NoteRow from './notes/NoteRow';
 import useNoteStore from '../store/noteStore';
 import { layout, graphiteTokens } from '../theme/tokens';
+import { useNoteSelection, rowSelectProps } from '../hooks/useNoteSelection';
+import { SelectButton, SelectingHeader } from './select/SelectControl';
+import SelectionBar from './select/SelectionBar';
 
 
 // ─── pieces ───────────────────────────────────────────────────────────────────
 
 /** Rows divided by hairlines — the list as it has always looked. */
-function ResultList({ notes, query }) {
+function ResultList({ notes, query, selection }) {
     const theme = useTheme();
     return (
         <Box>
             {notes.map((note, idx) => (
                 <React.Fragment key={note.id || note._id}>
                     {idx > 0 && <Divider sx={{ borderColor: theme.palette.divider }} />}
-                    <NoteRow note={note} query={query} maxPreview={180} />
+                    <NoteRow note={note} query={query} maxPreview={180} {...rowSelectProps(selection, note)} />
                 </React.Fragment>
             ))}
         </Box>
@@ -45,7 +48,7 @@ function ResultList({ notes, query }) {
  * and the row is on the writing sheet with a highlighter rule down its left
  * edge, showing the passage that matched at up to four lines.
  */
-function BestMatch({ note, query }) {
+function BestMatch({ note, query, selection }) {
     const theme = useTheme();
     const g = graphiteTokens(theme);
     const headingId = useId();
@@ -77,7 +80,7 @@ function BestMatch({ note, query }) {
                     borderRadius: '4px',
                 }}
             >
-                <NoteRow note={note} query={query} maxPreview={360} prominent />
+                <NoteRow note={note} query={query} maxPreview={360} prominent {...rowSelectProps(selection, note)} />
             </Box>
         </Box>
     );
@@ -98,6 +101,9 @@ function SearchResults() {
     const best = searchResults.find((r) => r.bestMatch) || null;
     const rest = best ? searchResults.filter((r) => r !== best) : searchResults;
     const alsoId = useId();
+    // Select mode (DOCS/COMPOSE_MANY_AND_ARCHIVE_SPEC.md U1). A new query is a
+    // new list: the selection does not follow you into it.
+    const selection = useNoteSelection({ resetKey: query });
 
     // Debounce the box into the URL. The `if (searchTerm)` guard that used to
     // wrap this meant an EMPTIED box never wrote `q=''`: `query` kept its old
@@ -195,6 +201,7 @@ function SearchResults() {
                 />
             ) : searchResults.length > 0 ? (
                 <Box aria-busy={isSearching || undefined}>
+                    {selection.active ? <SelectingHeader selection={selection} sx={{ mb: 1.5 }} /> : (
                     <Box sx={{ mb: 1.5, px: 0.5, display: 'flex', alignItems: 'center', gap: 1 }}>
                         <Typography variant="h6" sx={{ color: 'text.muted' }}>
                             {searchResults.length} {searchResults.length === 1 ? 'result' : 'results'}
@@ -203,10 +210,13 @@ function SearchResults() {
                         {isSearching && (
                             <CircularProgress size={12} thickness={4} aria-label="Searching" sx={{ color: 'text.disabled' }} />
                         )}
+                        <Box sx={{ flex: 1 }} />
+                        <SelectButton selection={selection} />
                     </Box>
+                    )}
                     {best ? (
                         <>
-                            <BestMatch note={best} query={query} />
+                            <BestMatch note={best} query={query} selection={selection} />
                             {rest.length > 0 && (
                                 <Box component="section" aria-labelledby={alsoId} data-search-also="">
                                     <Typography
@@ -216,13 +226,14 @@ function SearchResults() {
                                     >
                                         Also related
                                     </Typography>
-                                    <ResultList notes={rest} query={query} />
+                                    <ResultList notes={rest} query={query} selection={selection} />
                                 </Box>
                             )}
                         </>
                     ) : (
-                        <ResultList notes={searchResults} query={query} />
+                        <ResultList notes={searchResults} query={query} selection={selection} />
                     )}
+                    <SelectionBar selection={selection} />
                 </Box>
             ) : query ? (
                 <GeekEmptyState

@@ -14,6 +14,11 @@ const useNoteStore = create((set, get) => {
     let selectedNoteTimer = null;
     // Monotonic id for search requests — only the newest one may write.
     let searchSeq = 0;
+    // The last query searched, so a list-membership change (archive /
+    // restore) can re-run it. Cleared with the results.
+    let lastSearchQuery = '';
+    // The filters Home last listed with, for the same reason.
+    let lastListFilters = null;
 
     return {
         notes: [],         // List of notes (metadata mainly)
@@ -36,6 +41,8 @@ const useNoteStore = create((set, get) => {
                 clearTimeout(selectedNoteTimer);
                 selectedNoteTimer = null;
             }
+            lastSearchQuery = '';
+            lastListFilters = null;
             // Reset all note-related state
             set({
                 notes: [],
@@ -56,6 +63,7 @@ const useNoteStore = create((set, get) => {
         // Action to fetch notes list
         fetchNotes: async (filters = {}) => {
             if (get().isLoadingList) return;
+            lastListFilters = filters;
             set({ isLoadingList: true, listError: null });
             try {
                 const response = await getNotesApi(filters);
@@ -193,6 +201,7 @@ const useNoteStore = create((set, get) => {
          */
         searchNotes: async (query) => {
             const seq = ++searchSeq;
+            lastSearchQuery = query;
             set({ isSearching: true, searchError: null });
             try {
                 const response = await searchNotesApi(query);
@@ -211,7 +220,32 @@ const useNoteStore = create((set, get) => {
             // Bump the sequence so a search still in flight cannot land after
             // the user has cleared the box.
             searchSeq += 1;
+            lastSearchQuery = '';
             set({ searchResults: [], searchError: null, isSearching: false });
+        },
+
+        /**
+         * Notes left every list (archived — spec COMPOSE_MANY_AND_ARCHIVE
+         * U8). Home and search read this store rather than an Apollo watcher,
+         * so the Apollo eviction alone would leave them on screen here.
+         */
+        dropNotes: (ids) => {
+            const gone = new Set((ids || []).map(String));
+            if (!gone.size) return;
+            const keep = (n) => !gone.has(String(n.id || n._id));
+            set({
+                notes: get().notes.filter(keep),
+                searchResults: get().searchResults.filter(keep),
+            });
+        },
+
+        /**
+         * Notes came back (restored): re-read what this store last showed.
+         * Only what was actually loaded — a store nobody has used stays idle.
+         */
+        refreshLists: () => {
+            if (lastListFilters) get().fetchNotes(lastListFilters);
+            if (lastSearchQuery) get().searchNotes(lastSearchQuery);
         }
     };
 });

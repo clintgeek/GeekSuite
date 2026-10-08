@@ -27,6 +27,8 @@ import PushPin from '@mui/icons-material/PushPin';
 import PushPinOutlined from '@mui/icons-material/PushPinOutlined';
 import PrintOutlined from '@mui/icons-material/PrintOutlined';
 import CallMerge from '@mui/icons-material/CallMerge';
+import ArchiveOutlined from '@mui/icons-material/ArchiveOutlined';
+import UnarchiveOutlined from '@mui/icons-material/UnarchiveOutlined';
 
 const isMac = typeof navigator !== 'undefined' && /Mac|iP(hone|ad|od)/.test(navigator.platform || navigator.userAgent || '');
 const SAVE_SHORTCUT = isMac ? '⌘S' : 'Ctrl+S';
@@ -110,6 +112,12 @@ function NoteActions({
   // one item says both.
   onPrint,
   isPrinting = false,
+  // Archive / Restore (DOCS/COMPOSE_MANY_AND_ARCHIVE_SPEC.md U6). A saved
+  // note only — the page passes no handler for an unsaved draft. The label
+  // flips on `archived`.
+  onArchive,
+  archived = false,
+  isArchiving = false,
   // An autosaved-but-never-navigated note is still a real row; the page
   // decides whether "Delete" means delete or discard.
   deleteLabel = 'Delete note',
@@ -244,6 +252,14 @@ function NoteActions({
               secondary={canTranscribe ? null : 'Write something first'}
               secondaryTypographyProps={{ sx: { fontFamily: theme.typography.fontFamilyMono, fontSize: '0.75rem' } }}
             />
+          </MenuItem>
+        )}
+        {onArchive && (
+          <MenuItem onClick={run(onArchive)} disabled={isArchiving} sx={itemSx} data-menu-archive="">
+            <ListItemIcon>
+              {archived ? <UnarchiveOutlined fontSize="small" /> : <ArchiveOutlined fontSize="small" />}
+            </ListItemIcon>
+            <ListItemText>{archived ? 'Restore from archive' : 'Archive'}</ListItemText>
           </MenuItem>
         )}
         {canDelete && onDelete && [

@@ -16,6 +16,8 @@ function getNavValue(pathname) {
   if (pathname.startsWith('/search'))                                     return 'search';
   if (pathname === '/')                                                    return 'home';
   if (pathname.startsWith('/notes') || pathname.startsWith('/tags/'))     return 'notes';
+  // Archived is reached from the Notes page's Tags sheet; it belongs there.
+  if (pathname.startsWith('/archived'))                                   return 'notes';
   return 'home';
 }
 

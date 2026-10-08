@@ -22,6 +22,7 @@ import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
 import TagIcon from '@mui/icons-material/LocalOffer';
 import AllNotesIcon from '@mui/icons-material/AutoStoriesOutlined';
+import ArchiveOutlined from '@mui/icons-material/ArchiveOutlined';
 import MoreIcon from '@mui/icons-material/MoreHoriz';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { GeekSidebar, geekLayout, useGeekShell } from '@geeksuite/ui';
@@ -409,6 +410,7 @@ export function TagsPanel({ onNavigate, stickyBg = 'background.paper' }) {
     }, [collapsed, activePath]);
 
     const onAllNotes = location.pathname === '/notes';
+    const onArchived = location.pathname === '/archived';
 
     return (
         <>
@@ -484,6 +486,26 @@ export function TagsPanel({ onNavigate, stickyBg = 'background.paper' }) {
                                 {countNotes.length}
                             </Typography>
                         )}
+                    </ListItemButton>
+                    </ListItem>
+                    {/* Archived (DOCS/COMPOSE_MANY_AND_ARCHIVE_SPEC.md U7): a
+                        secondary place, beside All notes rather than a tab. */}
+                    <ListItem disablePadding>
+                    <ListItemButton
+                        component={Link}
+                        to="/archived"
+                        selected={onArchived}
+                        aria-current={onArchived ? 'page' : undefined}
+                        onClick={onNavigate}
+                        data-nav-archived=""
+                    >
+                        <ListItemIcon sx={{ minWidth: 26 }}>
+                            <ArchiveOutlined sx={{ fontSize: 17, color: onArchived ? g.onHl : 'text.secondary' }} />
+                        </ListItemIcon>
+                        <ListItemText
+                            primary="Archived"
+                            primaryTypographyProps={{ fontSize: '0.8125rem', fontWeight: onArchived ? 600 : 400 }}
+                        />
                     </ListItemButton>
                     </ListItem>
                 </List>

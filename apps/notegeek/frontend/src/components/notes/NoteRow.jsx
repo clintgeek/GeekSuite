@@ -16,6 +16,9 @@ import { CodePreview, NoteThumb } from './NotePreview';
 // Deep-import (see RichTextEditor.jsx for why) instead of the
 // '@mui/icons-material' barrel.
 import PushPin from '@mui/icons-material/PushPin';
+import CheckBox from '@mui/icons-material/CheckBox';
+import CheckBoxOutlineBlank from '@mui/icons-material/CheckBoxOutlineBlank';
+import { useLongPress } from '../../hooks/useLongPress';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -126,8 +129,18 @@ function MeaningMark() {
  *  - prominent:   search's "Best match" (DOCS/CONTEXT.md §11): the passage
  *                 that matched (`why`) whenever there is one, not only for a
  *                 meaning hit, clamped at four lines instead of two.
+ *
+ * Select mode (DOCS/COMPOSE_MANY_AND_ARCHIVE_SPEC.md U1, hooks/useNoteSelection.js):
+ *  - onLongPress:    hold ~500 ms to enter select mode with this row picked;
+ *                    the click that ends the press does not navigate.
+ *  - selectMode:     the row is a checkbox (`role="checkbox"`) with a 44px
+ *                    box in front; a tap toggles it instead of opening.
+ *  - selected / onToggleSelect: its state and what a tap does.
  */
-function NoteRow({ note, to, onClick, query, maxPreview = 160, dateField = 'updatedAt', tagContext = null, prominent = false }) {
+function NoteRow({
+    note, to, onClick, query, maxPreview = 160, dateField = 'updatedAt', tagContext = null, prominent = false,
+    selectMode = false, selected = false, onToggleSelect, onLongPress,
+}) {
     const theme = useTheme();
     const type = note.type || 'text';
     const isVisual = VISUAL_TYPES.includes(type);
@@ -144,9 +157,28 @@ function NoteRow({ note, to, onClick, query, maxPreview = 160, dateField = 'upda
     const noteId = note.id || note._id;
     const linkTo = to || `/notes/${noteId}`;
 
-    const buttonProps = to || !onClick
-        ? { component: Link, to: linkTo }
-        : { onClick };
+    // Live in select mode too. A long press turns this row into a checkbox
+    // mid-gesture, and the click that ends the press lands on the NEW
+    // element — without the hook's swallow it would untick the row it just
+    // ticked. In select mode a hold toggles, the same as a tap, and the next
+    // pointerdown clears the swallow even if a browser sent no click.
+    const longPress = useLongPress(onLongPress || selectMode
+        ? () => (selectMode ? onToggleSelect?.(note) : onLongPress?.(note))
+        : null);
+
+    const buttonProps = selectMode
+        ? {
+            ...longPress,
+            onClick: () => onToggleSelect?.(note),
+            role: 'checkbox',
+            'aria-checked': selected,
+        }
+        : to || !onClick
+            ? { component: Link, to: linkTo, ...longPress }
+            : { onClick, ...longPress };
+    // On the highlighter wash of a selected row the secondary ink is too
+    // faint at night, so everything on it is ink.
+    const subInk = selected ? g.ink : 'text.secondary';
 
     const tags = note.tags || [];
     const tagLabels = rowTagLabels(tags, tagContext);
@@ -156,6 +188,7 @@ function NoteRow({ note, to, onClick, query, maxPreview = 160, dateField = 'upda
         <ButtonBase
             {...buttonProps}
             data-note-row={type}
+            data-selected={selectMode ? String(selected) : undefined}
             sx={{
                 display: 'flex',
                 alignItems: 'flex-start',
@@ -169,11 +202,37 @@ function NoteRow({ note, to, onClick, query, maxPreview = 160, dateField = 'upda
                 textDecoration: 'none',
                 color: 'inherit',
                 transition: 'background-color 120ms ease',
-                '&:hover': { bgcolor: g.paper },
+                ...(selected ? { bgcolor: g.hlSoft } : null),
+                '&:hover': { bgcolor: selected ? g.hlSoft : g.paper },
+                // A held row must not start a text selection or Android's
+                // link callout under the finger.
+                ...(onLongPress || selectMode ? { WebkitTouchCallout: 'none', userSelect: 'none' } : null),
                 '&:focus-visible': { outline: `2px solid ${g.ink}`, outlineOffset: -2 },
                 '@media (prefers-reduced-motion: reduce)': { transition: 'none' },
             }}
         >
+            {selectMode && (
+                <Box
+                    component="span"
+                    aria-hidden
+                    data-select-box=""
+                    sx={{
+                        flexShrink: 0,
+                        width: 44,
+                        height: 44,
+                        mt: '-12px',
+                        mb: '-12px',
+                        ml: '-8px',
+                        mr: '-8px',
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        color: selected ? g.ink : 'text.secondary',
+                    }}
+                >
+                    {selected ? <CheckBox sx={{ fontSize: 22 }} /> : <CheckBoxOutlineBlank sx={{ fontSize: 22 }} />}
+                </Box>
+            )}
             <Box sx={{ flex: 1, minWidth: 0 }}>
                 {/* Title */}
                 <Typography
@@ -201,7 +260,7 @@ function NoteRow({ note, to, onClick, query, maxPreview = 160, dateField = 'upda
                     <Typography
                         component="div"
                         sx={{
-                            color: prominent ? 'text.primary' : 'text.secondary',
+                            color: prominent ? 'text.primary' : subInk,
                             fontSize: prominent ? '0.875rem' : '0.8125rem',
                             lineHeight: 1.5,
                             mt: prominent ? '4px' : '2px',
@@ -234,7 +293,7 @@ function NoteRow({ note, to, onClick, query, maxPreview = 160, dateField = 'upda
                             component="span"
                             title={tags.join(', ')}
                             sx={{
-                                color: 'text.secondary',
+                                color: subInk,
                                 fontSize: '0.8125rem',
                                 lineHeight: 1.2,
                                 whiteSpace: 'nowrap',
@@ -251,7 +310,7 @@ function NoteRow({ note, to, onClick, query, maxPreview = 160, dateField = 'upda
                     <Typography
                         component="span"
                         variant="caption"
-                        sx={{ color: 'text.secondary', whiteSpace: 'nowrap', flexShrink: 0, lineHeight: 1.2 }}
+                        sx={{ color: subInk, whiteSpace: 'nowrap', flexShrink: 0, lineHeight: 1.2 }}
                     >
                         {formatRelativeTime(when)}
                     </Typography>

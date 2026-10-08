@@ -97,6 +97,47 @@ export const onNotePinned = (cache) => {
   cache.gc();
 };
 
+/**
+ * Notes were archived or restored (`archiveNotes` / `restoreNotes`, spec
+ * COMPOSE_MANY_AND_ARCHIVE_SPEC.md U8).
+ *
+ * Membership changes everywhere a note is listed, counted or found: the
+ * lists and the sidebar's tag counts (`notes`), the tag index (a tag carried
+ * only by archived notes disappears), search, the `[[` picker's titles,
+ * "Linked from", Related, and the Archived view itself. All of them are
+ * evicted and refetch on next read — the same reasoning as `onNoteUpdated`.
+ *
+ * The notes' own `archived`/`archivedAt` are written onto their entities, so
+ * an open note's banner flips at once. `cache.modify` only touches fields
+ * already cached, so a note nobody has asked about stays untouched.
+ */
+const ARCHIVE_DERIVED_ROOT_FIELDS = ['archivedNotes', 'noteTitles', 'backlinks', 'relatedNotes'];
+
+export const onNotesArchived = (archived) => (cache, { data } = {}) => {
+  try {
+    const result = data?.archiveNotes || data?.restoreNotes;
+    const ids = Array.isArray(result?.ids) ? result.ids : [];
+    const at = archived ? new Date().toISOString() : null;
+    for (const id of ids) {
+      const ref = cache.identify({ __typename: 'Note', id: String(id) });
+      if (!ref) continue;
+      cache.modify({
+        id: ref,
+        fields: {
+          archived: () => archived,
+          archivedAt: () => at,
+        },
+      });
+    }
+    for (const fieldName of ARCHIVE_DERIVED_ROOT_FIELDS) {
+      cache.evict({ id: 'ROOT_QUERY', fieldName });
+    }
+    evictNoteDerived(cache);
+  } catch {
+    // A cache update must never take a successful write down with it.
+  }
+};
+
 export const onTagsRewritten = (cache) => {
   cache.evict({ id: 'ROOT_QUERY', fieldName: 'note' });
   evictNoteDerived(cache);

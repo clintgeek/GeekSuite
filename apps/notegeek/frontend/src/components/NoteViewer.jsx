@@ -27,6 +27,11 @@ import ArrowBackIcon from '@mui/icons-material/ArrowBack';
 import AccessTimeIcon from '@mui/icons-material/AccessTime';
 import PrintOutlined from '@mui/icons-material/PrintOutlined';
 import CallMerge from '@mui/icons-material/CallMerge';
+import ArchiveOutlined from '@mui/icons-material/ArchiveOutlined';
+import UnarchiveOutlined from '@mui/icons-material/UnarchiveOutlined';
+import ArchivedBanner from './notes/ArchivedBanner';
+import { useNoteArchiveState } from '../hooks/useNoteArchiveState';
+import { useArchiveNotes } from '../hooks/useArchiveNotes';
 import FoldInSheet from './foldin/FoldInSheet';
 import { canFoldInto } from '../utils/foldIn';
 import DeleteNoteDialog from './DeleteNoteDialog';
@@ -67,6 +72,12 @@ function NoteViewer() {
         title: noteToView?.title,
         enabled: Boolean(noteToView),
     });
+
+    // Archive / Restore (DOCS/COMPOSE_MANY_AND_ARCHIVE_SPEC.md U6). The
+    // viewer stays on the note: the banner appears, the toast has Undo.
+    const { archived, archivedAt } = useNoteArchiveState(id);
+    const { archive, restore, busy: isArchiving } = useArchiveNotes();
+    const handleArchiveToggle = () => (archived ? restore([id]) : archive([id]));
 
     const handleEdit = () => {
         if (noteToView) {
@@ -198,6 +209,24 @@ function NoteViewer() {
                         </IconButton>
                     </Tooltip>
 
+                    <Tooltip title={archived ? 'Restore from archive' : 'Archive'} arrow>
+                        <IconButton
+                            onClick={handleArchiveToggle}
+                            disabled={isArchiving}
+                            aria-label={archived ? 'Restore from archive' : 'Archive'}
+                            size="small"
+                            sx={{
+                                color: 'text.secondary',
+                                borderRadius: 1.5,
+                                transition: 'all 120ms ease',
+                                '&:hover': { color: 'text.primary', bgcolor: glow(theme).soft },
+                                '&:focus-visible': { boxShadow: `0 0 0 3px ${ glow(theme).ring }` },
+                            }}
+                        >
+                            {archived ? <UnarchiveOutlined sx={{ fontSize: 17 }} /> : <ArchiveOutlined sx={{ fontSize: 17 }} />}
+                        </IconButton>
+                    </Tooltip>
+
                     <Tooltip title="Delete" arrow>
                         <IconButton
                             onClick={handleDeleteClick}
@@ -213,6 +242,15 @@ function NoteViewer() {
                         </IconButton>
                     </Tooltip>
                 </Box>
+
+                {archived ? (
+                    <ArchivedBanner
+                        archivedAt={archivedAt}
+                        onRestore={() => restore([id])}
+                        busy={isArchiving}
+                        sx={{ mb: 1.5, mx: 0.5 }}
+                    />
+                ) : null}
 
                 {/* The reading room — the editor-paper surface */}
                 <Paper

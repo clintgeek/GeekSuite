@@ -13,6 +13,9 @@ import FoldInSheet from '../components/foldin/FoldInSheet';
 import { sketchHasShapes } from '../utils/sketchExport';
 import { derivedNoteContent, derivedNoteTitle } from '../utils/sketchToText';
 import NoteHistoryDialog from '../components/notes/NoteHistoryDialog';
+import ArchivedBanner from '../components/notes/ArchivedBanner';
+import { useNoteArchiveState } from '../hooks/useNoteArchiveState';
+import { useArchiveNotes } from '../hooks/useArchiveNotes';
 import { usePinNote } from '../hooks/usePinNote';
 import { useToast } from '@geeksuite/ui';
 import { useAppPreferences } from '@geeksuite/user';
@@ -760,6 +763,20 @@ function NoteEditorPage() {
     }
   };
 
+  /**
+   * Archive / Restore (DOCS/COMPOSE_MANY_AND_ARCHIVE_SPEC.md U6). Not an
+   * edit: no version, `updatedAt` untouched, and an archived note can still
+   * be edited (that does not restore it). The page stays put; the banner
+   * says what happened and the toast carries Undo.
+   */
+  const { archived, archivedAt } = useNoteArchiveState(savedNoteId);
+  const { archive: archiveNotes, restore: restoreNotes, busy: isArchiving } = useArchiveNotes();
+  const handleArchiveToggle = async () => {
+    if (!savedNoteId) return;
+    if (archived) await restoreNotes([savedNoteId]);
+    else await archiveNotes([savedNoteId]);
+  };
+
   // Back / cancel — flush save if dirty, then navigate away
   const handleBack = useCallback(() => {
     if (dirtyRef.current) {
@@ -958,7 +975,17 @@ function NoteEditorPage() {
             // Mounted only when the writer has switched suggestions on: the
             // strip owns a lazy query, and a feature that is off should cost
             // the editor nothing at all, not even a hook.
-            belowMeta={suggestEnabled ? (
+            belowMeta={archived || suggestEnabled ? (
+              <>
+              {archived && savedNoteId ? (
+                <ArchivedBanner
+                  archivedAt={archivedAt}
+                  onRestore={() => restoreNotes([savedNoteId])}
+                  busy={isArchiving}
+                  sx={{ mt: '8px' }}
+                />
+              ) : null}
+              {suggestEnabled ? (
               <SuggestionStrip
                 enabled
                 noteId={savedNoteId}
@@ -970,6 +997,8 @@ function NoteEditorPage() {
                 onApplyTag={handleApplySuggestedTag}
                 onInsertLink={handleInsertNoteLink}
               />
+              ) : null}
+              </>
             ) : null}
             actions={
               <NoteActions
@@ -991,6 +1020,9 @@ function NoteEditorPage() {
                 isTranscribing={transcribe?.stage === 'working'}
                 onPrint={handlePrint}
                 isPrinting={isPrinting}
+                onArchive={savedNoteId ? handleArchiveToggle : undefined}
+                archived={archived}
+                isArchiving={isArchiving}
               />
             }
           />

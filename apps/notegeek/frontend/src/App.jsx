@@ -22,6 +22,7 @@ import TagNotesList from './components/TagNotesList';
 import QuickCaptureHome from './pages/QuickCaptureHome';
 import Settings from './pages/Settings';
 import ShareTarget from './pages/ShareTarget';
+import ArchivedNotes from './pages/ArchivedNotes';
 
 // `/login` and `/register` accept an optional same-origin `?redirect=` (or
 // `?returnTo=`) target — honored only when it's a relative path, so an
@@ -143,6 +144,7 @@ function App() {
                                 <Route path="/notes/:id/edit" element={<Layout><NoteEditorPage /></Layout>} />
                                 <Route path="/tags/:tag" element={<Layout><TagNotesList /></Layout>} />
                                 <Route path="/search" element={<Layout><SearchResults /></Layout>} />
+                                <Route path="/archived" element={<Layout><ArchivedNotes /></Layout>} />
                                 <Route path="/settings" element={<Layout><Settings /></Layout>} />
                             </>
                         )}

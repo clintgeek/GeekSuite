@@ -33,6 +33,7 @@ const extraTitles = {
   '/notes': 'Notes',
   '/tags': 'Notes',
   '/search': 'Search',
+  '/archived': 'Archived',
   '/settings': 'Settings',
 };
 

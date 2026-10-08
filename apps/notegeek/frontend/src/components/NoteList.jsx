@@ -17,6 +17,9 @@ import { graphiteTokens, layout, tapTarget44 } from '../theme/tokens';
 import { NOTE_TYPE_ORDER, noteTypeMeta } from './notes/noteTypeMeta';
 import { TagsPanel } from './Sidebar';
 import { groupByRecency } from '../utils/recency';
+import { useNoteSelection, rowSelectProps } from '../hooks/useNoteSelection';
+import { SelectButton, SelectingHeader } from './select/SelectControl';
+import SelectionBar from './select/SelectionBar';
 
 const GET_NOTES = gql`
     query GetNotes($tag: String, $prefix: String, $under: String, $type: String, $limit: Int) {
@@ -126,12 +129,12 @@ function GroupHeading({ label, count }) {
     );
 }
 
-function RowList({ notes, dateField, tagContext }) {
+function RowList({ notes, dateField, tagContext, selection }) {
     const theme = useTheme();
     return notes.map((note, idx) => (
         <React.Fragment key={note.id || note._id}>
             {idx > 0 && <Divider sx={{ borderColor: theme.palette.divider, mx: '8px' }} />}
-            <NoteRow note={note} dateField={dateField} tagContext={tagContext} />
+            <NoteRow note={note} dateField={dateField} tagContext={tagContext} {...rowSelectProps(selection, note)} />
         </React.Fragment>
     ));
 }
@@ -150,6 +153,9 @@ function NoteList({ tag, prefix, under }) {
     const [tagsOpen, setTagsOpen] = useState(false);
     const [typeFilter, setTypeFilter] = useState(null);
     const [sortBy, setSortBy] = useState('updated');
+    // Select mode (DOCS/COMPOSE_MANY_AND_ARCHIVE_SPEC.md U1): a different
+    // tag's list is a different page, so the selection does not carry over.
+    const selection = useNoteSelection({ resetKey: `${tag || ''}|${prefix || ''}|${under || ''}` });
 
     const { loading: isLoadingList, error, data, refetch } = useQuery(GET_NOTES, {
         variables: { tag, prefix, under, type: typeFilter, limit: 200 },
@@ -207,7 +213,8 @@ function NoteList({ tag, prefix, under }) {
 
     return (
         <Box sx={{ py: { xs: '8px', sm: '16px' }, px: { xs: '8px', sm: 0 }, maxWidth: layout.contentWidth, mx: 'auto' }}>
-            {/* ── Count, tags (phone), sort ─────────────────────────── */}
+            {/* ── Count, tags (phone), sort — or "N selected · Cancel" ── */}
+            {selection.active ? <SelectingHeader selection={selection} /> : (
             <Box sx={{
                 display: 'flex',
                 alignItems: 'center',
@@ -218,6 +225,8 @@ function NoteList({ tag, prefix, under }) {
                 <Typography variant="h6" component="h2" sx={{ color: 'text.secondary', m: 0, mr: 'auto' }}>
                     {notes.length} {notes.length === 1 ? 'note' : 'notes'}
                 </Typography>
+
+                {notes.length > 0 && <SelectButton selection={selection} />}
 
                 {isPhone && (
                     <ButtonBase
@@ -268,6 +277,7 @@ function NoteList({ tag, prefix, under }) {
                     })}
                 </Box>
             </Box>
+            )}
 
             {/* Type filter — one quiet row, scrolls sideways on a phone */}
             <Box
@@ -315,23 +325,25 @@ function NoteList({ tag, prefix, under }) {
                     {pinnedNotes.length > 0 && (
                         <Box component="section" aria-label="Pinned">
                             <GroupHeading label="Pinned" count={pinnedNotes.length} />
-                            <RowList notes={pinnedNotes} dateField={dateField} tagContext={under} />
+                            <RowList notes={pinnedNotes} dateField={dateField} tagContext={under} selection={selection} />
                         </Box>
                     )}
                     {groups ? (
                         groups.map((group) => (
                             <Box component="section" key={group.key} aria-label={group.label}>
                                 <GroupHeading label={group.label} count={group.notes.length} />
-                                <RowList notes={group.notes} dateField={dateField} tagContext={under} />
+                                <RowList notes={group.notes} dateField={dateField} tagContext={under} selection={selection} />
                             </Box>
                         ))
                     ) : unpinnedNotes.length > 0 ? (
                         <Box sx={{ pt: '8px' }}>
-                            <RowList notes={unpinnedNotes} dateField={dateField} tagContext={under} />
+                            <RowList notes={unpinnedNotes} dateField={dateField} tagContext={under} selection={selection} />
                         </Box>
                     ) : null}
                 </>
             )}
+
+            <SelectionBar selection={selection} />
         </Box>
     );
 }
