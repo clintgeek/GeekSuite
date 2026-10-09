@@ -41,6 +41,23 @@ export const BooksIcon = ({ className = 'w-5 h-5' }) => (
   </svg>
 )
 
+export const GamesIcon = ({ className = 'w-5 h-5' }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...s}>
+    <path d="M7 7h10a5 5 0 015 5v1.5a3.5 3.5 0 01-6.3 2.1L14.5 14h-5l-1.2 1.6A3.5 3.5 0 012 13.5V12a5 5 0 015-5z" />
+    <path d="M7 10v4M5 12h4" />
+    <path d="M15.5 11h.01M17.5 13h.01" />
+  </svg>
+)
+
+export const ThingsIcon = ({ className = 'w-5 h-5' }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...s}>
+    <path d="M21 8l-9-5-9 5v8l9 5 9-5V8z" />
+    <path d="M3 8l9 5 9-5" />
+    <path d="M12 13v8" />
+    <path d="M7.5 5.5l9 5" />
+  </svg>
+)
+
 export const PhotosIcon = ({ className = 'w-5 h-5' }) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...s}>
     <rect x="3" y="3" width="18" height="18" rx="2" />

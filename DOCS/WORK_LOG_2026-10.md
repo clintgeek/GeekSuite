@@ -70,3 +70,7 @@ Chef rejected the uniform sunburst (2026-10-08): real used-bookstore covers carr
 - a solid block with a paper window.
 
 Shape, corner, tilt (≤ 12°) and offset are seeded from the book id. A book showing a ribbon is always stickered on the left. FNV-1a gained a murmur finalizer, because ids that differed only in their last character clustered. Tests were revert-checked (4 red against the old component). Harness: phone and desktop, `--enforce-a11y`.
+
+### StartGeek — dock: Flock out, Games and Things in (2026-10-09)
+
+The dock is now Notes, Bujo, Fitness, Books, Games and Things, with new line icons for a gamepad and a parcel box. On phones the labels drop their letter-spacing so all six fit at 390px with "FITNESS" whole. Lint 0, tests 24/24, harness phone + desktop `--enforce-a11y`.
