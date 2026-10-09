@@ -43,6 +43,7 @@ import Game from '../models/Game.js';
 import GamePlayer from '../models/GamePlayer.js';
 import Profile from '../models/Profile.js';
 import PlayniteDropFile from '../models/PlayniteDropFile.js';
+import PlayniteTombstone from '../models/PlayniteTombstone.js';
 import householdModule from '@geeksuite/schemas/gamegeek/household';
 import { parseJsonText, parseExport, PlayniteFileError } from './parse.js';
 import { buildPlaynitePlan, commitPlaynitePlan } from './runCommit.js';
@@ -202,7 +203,7 @@ export async function processFile({ root, folder, userId, filename, settle, now 
     const counts = await withImportLock(async () => {
       // Hidden games are never imported by the auto path — no setting, no override.
       const plan = await buildPlaynitePlan({
-        parsed, householdId, userId, includeHidden: false, now: now(), Game, GamePlayer,
+        parsed, householdId, userId, includeHidden: false, now: now(), Game, GamePlayer, PlayniteTombstone,
       });
       await commitPlaynitePlan({
         plan, householdId, userId, generatedAtUtc: parsed.generatedAtUtc, source: 'folder', Game, GamePlayer, Profile,

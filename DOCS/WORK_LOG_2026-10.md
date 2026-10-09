@@ -74,3 +74,12 @@ Shape, corner, tilt (≤ 12°) and offset are seeded from the book id. A book sh
 ### StartGeek — dock: Flock out, Games and Things in (2026-10-09)
 
 The dock is now Notes, Bujo, Fitness, Books, Games and Things, with new line icons for a gamepad and a parcel box. On phones the labels drop their letter-spacing so all six fit at 390px with "FITNESS" whole. Lint 0, tests 24/24, harness phone + desktop `--enforce-a11y`.
+
+### GameGeek — Playnite import: uninstalled → Backlog, hidden → removed, deletes remembered (2026-10-09)
+
+Chef: uninstalled games weren't leaving Playing, and DLC he hid in Playnite stayed in GameGeek. Three changes:
+- **Uninstalled:** a Playing game whose Playnite copies are all uninstalled moves to Backlog automatically. This replaces the "how did it end?" flag-and-ask, and an Android or Switch copy no longer keeps it on Playing. A game put on Playing by hand stays there until it's installed and uninstalled again.
+- **Hidden in Playnite:** the import removes that copy, or the whole game if it was the last copy. Unhiding brings it back.
+- **Deleted in GameGeek:** remembered in a new `PlayniteTombstone` collection, written by the gateway's `deleteGame` and when a Playnite copy is removed in edit. The import never brings these back.
+
+Spec: `apps/gamegeek/DOCS/PLAYNITE_IMPORT.md`. Tests were revert-checked: 20 backend and 4 gateway tests fail against the old code. The delete guard was checked against an in-memory Mongo.

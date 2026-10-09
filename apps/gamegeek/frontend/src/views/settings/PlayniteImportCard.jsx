@@ -49,7 +49,8 @@ export function dropStatusMessage(status) {
     if (c.create) parts.push(`${c.create} new`);
     if (c.update) parts.push(`${c.update} updated`);
     if (c.movedToPlaying) parts.push(`${c.movedToPlaying} moved to Playing`);
-    if (c.flaggedUninstalled) parts.push(`${c.flaggedUninstalled} not installed anymore`);
+    if (c.movedToBacklog) parts.push(`${c.movedToBacklog} moved to Backlog`);
+    if (c.removedHidden) parts.push(`${c.removedHidden} hidden removed`);
     const detail = parts.length ? ` (${parts.join(', ')})` : ' (no changes)';
     return `${base} — last export imported ${when}${detail}`;
   }

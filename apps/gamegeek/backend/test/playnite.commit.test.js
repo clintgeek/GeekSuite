@@ -178,4 +178,28 @@ describe('commitPlayniteImport', () => {
     };
     await assert.rejects(run(planFor([entry()]), { Game }), /boom/);
   });
+
+  test('hidden copies: a pull for a game that keeps others; a guarded delete, then player rows only for games that went', async () => {
+    const plan = {
+      ops: {
+        creates: [], gameUpdates: [], copyUpdates: [], playerCreates: [], playerUpdates: [], installUpdates: [],
+        copyRemovals: [{ gameId: 'keep', playniteIds: ['pid-1'] }],
+        gameDeletes: [{ gameId: 'gone', playniteIds: ['pid-2'] }, { gameId: 'raced', playniteIds: ['pid-3'] }],
+      },
+    };
+    const Game = fakeModel();
+    // 'raced' gained a Switch copy after the plan was read, so its delete matched nothing.
+    Game.find = (filter) => ({ lean: async () => (filter._id.$in.includes('raced') ? [{ _id: 'raced' }] : []) });
+    const { GamePlayer } = await run(plan, { Game });
+    const ops = allOps(Game);
+    assert.deepEqual(ops.find((o) => o.updateOne).updateOne, {
+      filter: { _id: 'keep', householdId: HOUSEHOLD },
+      update: { $pull: { copies: { 'playnite.playniteId': { $in: ['pid-1'] } } } },
+    });
+    assert.deepEqual(ops.filter((o) => o.deleteOne).map((o) => o.deleteOne.filter), [
+      { _id: 'gone', householdId: HOUSEHOLD, copies: { $not: { $elemMatch: { 'playnite.playniteId': { $nin: ['pid-2'] } } } } },
+      { _id: 'raced', householdId: HOUSEHOLD, copies: { $not: { $elemMatch: { 'playnite.playniteId': { $nin: ['pid-3'] } } } } },
+    ]);
+    assert.deepEqual(allOps(GamePlayer), [{ deleteMany: { filter: { householdId: HOUSEHOLD, gameId: 'gone' } } }]);
+  });
 });

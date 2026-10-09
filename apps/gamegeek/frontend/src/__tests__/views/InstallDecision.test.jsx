@@ -12,7 +12,7 @@ import { InMemoryCache, useQuery } from '@apollo/client';
 import InstallDecisionBanner from '../../views/detail/InstallDecisionBanner';
 import CopiesSection from '../../views/detail/CopiesSection';
 import { FilterSections } from '@geeksuite/collection';
-import PlaynitePreview from '../../views/settings/PlaynitePreview';
+import PlaynitePreview, { previewSummary } from '../../views/settings/PlaynitePreview';
 import { dropStatusMessage } from '../../views/settings/PlayniteImportCard';
 import { useResolveInstallFlag } from '../../hooks/useGameActions';
 import { GET_GAME } from '../../graphql/queries';
@@ -203,23 +203,32 @@ describe('copies and Settings', () => {
     expect(screen.getAllByText('· Installed')).toHaveLength(1);
   });
 
-  it('the dry run preview and the auto-import line report moves and flags when there are any', () => {
+  it('the dry run preview and the auto-import line report moves both ways when there are any', () => {
     const preview = {
       total: 3,
-      counts: { create: 0, addCopy: 0, update: 2, unchanged: 1, skippedHidden: 0, notInFile: 0, invalid: 0, movedToPlaying: 2, flaggedUninstalled: 1 },
+      counts: { create: 0, addCopy: 0, update: 2, unchanged: 1, skippedHidden: 0, notInFile: 0, invalid: 0, movedToPlaying: 2, movedToBacklog: 1 },
       samples: {},
     };
     renderWithProviders(<PlaynitePreview preview={preview} />);
     expect(screen.getByTestId('playnite-install-summary')).toHaveTextContent(
-      '2 installed games move to Playing. 1 Playing game is not installed anymore — it stays on Playing and asks how it ended.'
+      "2 installed games move to Playing. 1 Playing game isn't installed anymore and moves to Backlog."
     );
     const line = dropStatusMessage({
       enabled: true,
       watching: true,
       folder: 'gamegeek-import/chef/',
-      lastFile: { status: 'imported', processedAt: new Date().toISOString(), counts: { update: 2, movedToPlaying: 2, flaggedUninstalled: 1 } },
+      lastFile: { status: 'imported', processedAt: new Date().toISOString(), counts: { update: 2, movedToPlaying: 2, movedToBacklog: 1, removedHidden: 3 } },
     });
-    expect(line).toMatch(/\(2 updated, 2 moved to Playing, 1 not installed anymore\)$/);
+    expect(line).toMatch(/\(2 updated, 2 moved to Playing, 1 moved to Backlog, 3 hidden removed\)$/);
+  });
+
+  it('the dry run says what hiding in Playnite and deleting in GameGeek do', () => {
+    const preview = { total: 4, counts: { unchanged: 1, removedHidden: 2, skippedDeleted: 1 }, samples: { removedHidden: [{ title: 'Dying Light The Bozak' }] } };
+    renderWithProviders(<PlaynitePreview preview={preview} />);
+    expect(screen.getByTestId('playnite-removal-summary')).toHaveTextContent(
+      '2 hidden in Playnite are removed from GameGeek (unhide them to bring them back). 1 you deleted from GameGeek stays deleted.'
+    );
+    expect(previewSummary(preview).shelfChanges).toBe(2);
   });
 
   it('no install summary when nothing moved or flagged', () => {

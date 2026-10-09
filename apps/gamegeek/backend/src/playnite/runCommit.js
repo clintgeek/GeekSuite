@@ -26,11 +26,13 @@ export const PLAYER_FIELDS = {
  * @param {Date} params.now
  * @param {object} params.Game mongoose model
  * @param {object} params.GamePlayer mongoose model
+ * @param {object} params.PlayniteTombstone mongoose model (games deleted from GameGeek)
  */
-export async function buildPlaynitePlan({ parsed, householdId, userId, includeHidden, now, Game, GamePlayer }) {
-  const [existingGames, existingPlayers] = await Promise.all([
+export async function buildPlaynitePlan({ parsed, householdId, userId, includeHidden, now, Game, GamePlayer, PlayniteTombstone }) {
+  const [existingGames, existingPlayers, tombstones] = await Promise.all([
     Game.find({ householdId }, GAME_FIELDS).lean(),
     GamePlayer.find({ userId, householdId }, PLAYER_FIELDS).lean(),
+    PlayniteTombstone.find({ householdId }, { playniteId: 1 }).lean(),
   ]);
   return planPlayniteImport({
     entries: parsed.entries,
@@ -38,6 +40,7 @@ export async function buildPlaynitePlan({ parsed, householdId, userId, includeHi
     existingPlayers,
     userId,
     includeHidden,
+    deletedPlayniteIds: tombstones.map((t) => t.playniteId),
     now,
     seenPlayniteIds: parsed.seenPlayniteIds,
     invalid: parsed.invalid,

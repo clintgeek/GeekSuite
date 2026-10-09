@@ -7,19 +7,24 @@
  * cannot disagree (the Steam importer's pattern, src/steam/importPlanner.js).
  *
  * Every entry lands in exactly one bucket, so
- *   create + addCopy + update + unchanged + skippedHidden + invalid === total.
+ *   create + addCopy + update + unchanged + skippedHidden + removedHidden
+ *     + skippedDeleted + invalid === total.
  * `notInFile` counts household Playnite copies the file no longer mentions;
  * they are reported, never deleted.
  *
- * The plan never contains a delete. Writes are:
+ * Writes are:
  *   creates       new Game documents (with their copies)
  *   gameUpdates   copies pushed onto an existing game + fill-only-empty fields
  *   copyUpdates   an existing copy's `playnite` subdoc refreshed
+ *   copyRemovals  Playnite copies hidden in Playnite, pulled off a game that
+ *                 keeps other copies (Chef, 2026-10-09)
+ *   gameDeletes   games whose every copy was hidden in Playnite — the game and
+ *                 every household member's row for it go
  *   playerCreates the importing user's first GamePlayer row for a game
  *   playerUpdates hours (guarded) and lastPlayedAt (a $max) on an existing row
  *   installUpdates Playing follows isInstalled on an existing row: a move to
- *                 Playing, or setting / clearing the "not installed anymore"
- *                 flag (§Installed → Playing; installDecision below)
+ *                 Playing, a move off it to Backlog, or clearing a leftover
+ *                 "not installed anymore" flag (installDecision below)
  */
 import constantsModule from '@geeksuite/schemas/gamegeek/constants';
 import { mapEntry, normalizeTitle, cleanList } from './mapping.js';
@@ -62,25 +67,26 @@ export function inferShelf({ playtimeSeconds, installed }) {
  *     move afterwards sticks. Finished, abandoned, wishlist and custom
  *     shelves are never moved (reinstalling a finished game is not a claim
  *     he's back in it).
- *   - Flag "not installed anymore" ONLY when the shelf is playing AND every
- *     copy is a Playnite copy AND every one of them is known to be not
- *     installed (null = not yet known never counts) AND the user has not
- *     dismissed it since the last install transition. The shelf is never
- *     moved for it.
- *   - A game with no Playnite copy is never moved or flagged (Chef's manual
- *     Android / Switch games); a game with any non-Playnite copy is never
- *     flagged. A flag whose condition no longer holds is cleared.
+ *   - On playing, and every Playnite copy is known to be not installed (null
+ *     = not yet known never counts) → move to BACKLOG (Chef, 2026-10-09;
+ *     this replaced the "not installed anymore" flag-and-ask). A
+ *     non-Playnite copy (Android, Switch) does not keep it on Playing: Chef
+ *     doesn't track those installs. Unless the user put it on Playing by
+ *     hand (or answered "Still playing") since the last install transition
+ *     — `installFlagDismissedAt` — so a manual move sticks until it is
+ *     installed and uninstalled again.
+ *   - A game with no Playnite copy is never moved (Playnite knows nothing
+ *     about it). A leftover flag from the old rule is cleared.
  *
  * @param {object} p
  * @param {object[]} p.playniteCopies the game's Playnite subdocs as they will
  *   be after the commit: `{ isInstalled, installedChangedAt }`
- * @param {number} p.otherCopies copies with no Playnite subdoc
  * @param {object} p.player `{ shelf, installFlag, installFlagDismissedAt }`
- * @returns {{ moveToPlaying: boolean, flag: 'set'|'clear'|null, lastChange: Date|null }}
+ * @returns {{ moveToPlaying: boolean, moveToBacklog: boolean, flag: 'clear'|null, lastChange: Date|null }}
  */
-export function installDecision({ playniteCopies, otherCopies = 0, player, becameInstalled = false }) {
+export function installDecision({ playniteCopies, player, becameInstalled = false }) {
   const list = Array.isArray(playniteCopies) ? playniteCopies : [];
-  const out = { moveToPlaying: false, flag: null, lastChange: null };
+  const out = { moveToPlaying: false, moveToBacklog: false, flag: null, lastChange: null };
   if (!player) return out;
   const shelf = player.shelf ?? null;
   const flagged = player.installFlag === 'uninstalled';
@@ -94,16 +100,16 @@ export function installDecision({ playniteCopies, otherCopies = 0, player, becam
 
   const anyInstalled = list.some((p) => p.isInstalled === true);
   const noneInstalled = list.length > 0 && list.every((p) => p.isInstalled === false);
-  const dismissedAt = time(player.installFlagDismissedAt);
-  const dismissed = dismissedAt !== null && !(lastChange !== null && lastChange > dismissedAt);
+  const keptAt = time(player.installFlagDismissedAt);
+  const kept = keptAt !== null && !(lastChange !== null && lastChange > keptAt);
 
   // Promote only when THIS import saw a copy become installed (a flip, or a
   // new copy arriving installed). An installed game Chef moved to Backlog or
   // On hold by hand stays there on every later import.
   out.moveToPlaying = becameInstalled && anyInstalled && INSTALL_PROMOTES_FROM.includes(shelf);
-  const shouldFlag = shelf === 'playing' && otherCopies === 0 && noneInstalled && !dismissed;
-  if (shouldFlag && !flagged) out.flag = 'set';
-  else if (!shouldFlag && flagged) out.flag = 'clear';
+  out.moveToBacklog = shelf === 'playing' && noneInstalled && !kept;
+  // The move clears the flag itself; any other leftover flag is just cleared.
+  if (flagged && !out.moveToBacklog) out.flag = 'clear';
   return out;
 }
 
@@ -171,8 +177,12 @@ function pushSample(list, item) {
  * @param {object[]} params.existingPlayers this user's GamePlayer rows (lean):
  *   `gameId, shelf, hoursPlayed, hoursSource, lastPlayedAt, installFlag, installFlagDismissedAt`
  * @param {string} params.userId
- * @param {boolean} [params.includeHidden=false]
- * @param {Date} params.now stamps install transitions and new flags
+ * @param {boolean} [params.includeHidden=false] also create/keep hidden
+ *   entries; when false a hidden entry is never created, and an already
+ *   imported hidden copy is removed (Chef, 2026-10-09)
+ * @param {Iterable<string>} [params.deletedPlayniteIds] playniteIds someone
+ *   deleted from GameGeek (PlayniteTombstone): never created or added again
+ * @param {Date} params.now stamps install transitions
  * @param {Iterable<string>} [params.seenPlayniteIds] every playniteId in the
  *   file, including invalid entries, so those don't count as `notInFile`
  * @param {number} [params.invalid=0] entries the parser already rejected
@@ -184,6 +194,7 @@ export function planPlayniteImport({
   existingPlayers,
   userId,
   includeHidden = false,
+  deletedPlayniteIds,
   now,
   seenPlayniteIds,
   invalid = 0,
@@ -193,13 +204,17 @@ export function planPlayniteImport({
   const list = Array.isArray(entries) ? entries : [];
   const games = Array.isArray(existingGames) ? existingGames : [];
 
-  // movedToPlaying / flaggedUninstalled are per-user outcomes, not entry
-  // buckets: they sit outside the create + … + invalid === total sum.
+  // movedToPlaying / movedToBacklog are per-user outcomes, and gamesRemoved
+  // counts games, not entries: all three sit outside the
+  // create + … + invalid === total sum.
   const counts = {
-    create: 0, addCopy: 0, update: 0, unchanged: 0, skippedHidden: 0, notInFile: 0, invalid,
-    movedToPlaying: 0, flaggedUninstalled: 0,
+    create: 0, addCopy: 0, update: 0, unchanged: 0, skippedHidden: 0, removedHidden: 0, skippedDeleted: 0,
+    notInFile: 0, invalid, movedToPlaying: 0, movedToBacklog: 0, gamesRemoved: 0,
   };
-  const samples = { create: [], addCopy: [], update: [], notInFile: [], movedToPlaying: [], flaggedUninstalled: [] };
+  const samples = {
+    create: [], addCopy: [], update: [], removedHidden: [], notInFile: [], movedToPlaying: [], movedToBacklog: [],
+  };
+  const deleted = new Set(deletedPlayniteIds ?? []);
 
   // ── Indexes over what the household already has ────────────────────────
   const byPlayniteId = new Map(); // playniteId → { work, playnite }
@@ -223,6 +238,7 @@ export function planPlayniteImport({
       game,
       playniteCopies, // playniteId → playnite subdoc as it will be after the commit
       pushCopies: [],
+      removeCopies: [], // playniteIds hidden in Playnite → pulled off this game
       entryKinds: [], // 'create' | 'addCopy' | 'match'
       mapped: [], // mapped entries that belong to this game this run
       touched: false,
@@ -258,8 +274,19 @@ export function planPlayniteImport({
     }
     inFile.add(m.playniteId);
 
-    // 1. Same playniteId → update that copy (hidden or not).
+    // 1. Same playniteId → update that copy — or, if it is now hidden in
+    //    Playnite, remove it (Chef, 2026-10-09: DLC entries he hid kept
+    //    showing up). Unhidden later, it comes back through 2–4 below.
     const hit = byPlayniteId.get(m.playniteId);
+    if (hit && !hit.isNew && m.hidden && !includeHidden) {
+      hit.removeCopies.push(m.playniteId);
+      hit.playniteCopies.delete(m.playniteId);
+      byPlayniteId.delete(m.playniteId);
+      hit.touched = true;
+      counts.removedHidden += 1;
+      pushSample(samples.removedHidden, { title: hit.title });
+      continue;
+    }
     if (hit) {
       const before = hit.playniteCopies.get(m.playniteId);
       // An install transition is stamped with `now`; the first fill of a copy
@@ -282,6 +309,11 @@ export function planPlayniteImport({
 
     if (m.hidden && !includeHidden) {
       counts.skippedHidden += 1;
+      continue;
+    }
+    // Deleted from GameGeek by someone → never brought back (Chef, 2026-10-09).
+    if (deleted.has(m.playniteId)) {
+      counts.skippedDeleted += 1;
       continue;
     }
 
@@ -350,8 +382,24 @@ export function planPlayniteImport({
   const playerCreates = [];
   const playerUpdates = [];
   const installUpdates = [];
+  const copyRemovals = [];
+  const gameDeletes = [];
 
-  const touched = [...workById.values(), ...works].filter((w) => w.touched);
+  // Hidden copies: pulled off the game, or the game goes with its last copy.
+  for (const w of workById.values()) {
+    if (!w.removeCopies.length) continue;
+    const gone = new Set(w.removeCopies);
+    const left = (w.game.copies ?? []).filter((c) => !gone.has(c?.playnite?.playniteId)).length + w.pushCopies.length;
+    if (left === 0) {
+      w.removed = true;
+      gameDeletes.push({ gameId: w.gameId, playniteIds: w.removeCopies });
+      counts.gamesRemoved += 1;
+    } else {
+      copyRemovals.push({ gameId: w.gameId, playniteIds: w.removeCopies });
+    }
+  }
+
+  const touched = [...workById.values(), ...works].filter((w) => w.touched && !w.removed);
   for (const w of touched) {
     const platforms = [];
     for (const m of w.mapped) for (const p of [...m.platforms, m.copyPlatform]) if (!platforms.includes(p)) platforms.push(p);
@@ -452,26 +500,24 @@ export function planPlayniteImport({
   // condition stopped holding (the user added a Switch copy) still clears.
   // Rows the import creates took their shelf from inferShelf above.
   for (const w of workById.values()) {
+    if (w.removed) continue;
     const player = playersByGameId.get(w.gameId);
     if (!player) continue;
-    const otherCopies = (w.game.copies ?? []).filter((c) => !c?.playnite?.playniteId).length;
-    const d = installDecision({ playniteCopies: [...w.playniteCopies.values()], otherCopies, player, becameInstalled: !!w.becameInstalled });
-    if (!d.moveToPlaying && !d.flag) continue;
+    const d = installDecision({ playniteCopies: [...w.playniteCopies.values()], player, becameInstalled: !!w.becameInstalled });
+    if (!d.moveToPlaying && !d.moveToBacklog && !d.flag) continue;
     const op = { gameId: w.gameId };
     if (d.moveToPlaying) {
       op.moveToPlaying = true;
       counts.movedToPlaying += 1;
       pushSample(samples.movedToPlaying, { title: w.title, shelfBefore: player.shelf ?? null });
     }
-    if (d.flag === 'set') {
-      op.flag = 'set';
-      op.flagAt = now;
+    if (d.moveToBacklog) {
+      op.moveToBacklog = true;
       op.lastChange = d.lastChange;
-      counts.flaggedUninstalled += 1;
-      pushSample(samples.flaggedUninstalled, { title: w.title });
-    } else if (d.flag === 'clear') {
-      op.flag = 'clear';
+      counts.movedToBacklog += 1;
+      pushSample(samples.movedToBacklog, { title: w.title });
     }
+    if (d.flag === 'clear') op.flag = 'clear';
     installUpdates.push(op);
   }
 
@@ -490,7 +536,7 @@ export function planPlayniteImport({
     total: total ?? list.length + invalid,
     counts,
     samples,
-    ops: { creates, gameUpdates, copyUpdates, playerCreates, playerUpdates, installUpdates },
+    ops: { creates, gameUpdates, copyUpdates, copyRemovals, gameDeletes, playerCreates, playerUpdates, installUpdates },
   };
 }
 

@@ -16,6 +16,7 @@ import request from 'supertest';
 import createApp from '../src/app.js';
 import Game from '../src/models/Game.js';
 import GamePlayer from '../src/models/GamePlayer.js';
+import PlayniteTombstone from '../src/models/PlayniteTombstone.js';
 import Profile from '../src/models/Profile.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -51,6 +52,7 @@ beforeEach(() => {
   const lean = (rows) => ({ lean: async () => rows });
   mock.method(Game, 'find', () => lean([]));
   mock.method(GamePlayer, 'find', () => lean([]));
+  mock.method(PlayniteTombstone, 'find', () => lean([]));
   mock.method(Game, 'bulkWrite', async (ops) => writes.game.push(...ops));
   mock.method(GamePlayer, 'bulkWrite', async (ops) => writes.player.push(...ops));
   mock.method(Profile, 'findOneAndUpdate', async (filter, update) => writes.profile.push({ filter, update }));
@@ -74,8 +76,8 @@ describe('POST /api/import/playnite', () => {
     assert.equal(res.body.committed, false);
     assert.equal(res.body.schemaVersion, 1);
     assert.equal(res.body.total, 14);
-    assert.deepEqual(res.body.counts, { create: 10, addCopy: 0, update: 0, unchanged: 0, skippedHidden: 4, notInFile: 0, invalid: 0, movedToPlaying: 0, flaggedUninstalled: 0 });
-    assert.deepEqual(Object.keys(res.body.samples).sort(), ['addCopy', 'create', 'flaggedUninstalled', 'movedToPlaying', 'notInFile', 'update']);
+    assert.deepEqual(res.body.counts, { create: 10, addCopy: 0, update: 0, unchanged: 0, skippedHidden: 4, removedHidden: 0, skippedDeleted: 0, notInFile: 0, invalid: 0, movedToPlaying: 0, movedToBacklog: 0, gamesRemoved: 0 });
+    assert.deepEqual(Object.keys(res.body.samples).sort(), ['addCopy', 'create', 'movedToBacklog', 'movedToPlaying', 'notInFile', 'removedHidden', 'update']);
     assert.equal(writes.game.length + writes.player.length + writes.profile.length, 0);
     // Scoped to the caller's household and user.
     assert.deepEqual(Game.find.mock.calls[0].arguments[0], { householdId: 'default' });

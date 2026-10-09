@@ -23,7 +23,10 @@ export function previewSummary(preview) {
   // Playing follows isInstalled (PLAYNITE_IMPORT.md §Installed → Playing):
   // per-user outcomes, outside the entry buckets.
   const movedToPlaying = counts.movedToPlaying || 0;
-  const flaggedUninstalled = counts.flaggedUninstalled || 0;
+  const movedToBacklog = counts.movedToBacklog || 0;
+  // Hidden in Playnite → removed; deleted in GameGeek → never brought back (Chef, 2026-10-09).
+  const removedHidden = counts.removedHidden || 0;
+  const skippedDeleted = counts.skippedDeleted || 0;
   return {
     total: preview?.total ?? 0,
     create,
@@ -34,10 +37,12 @@ export function previewSummary(preview) {
     notInFile,
     invalid,
     movedToPlaying,
-    flaggedUninstalled,
+    movedToBacklog,
+    removedHidden,
+    skippedDeleted,
     actionable: create + addCopy + update,
-    // A shelf move or a flag alone (no catalog change) is still worth committing.
-    shelfChanges: movedToPlaying + flaggedUninstalled,
+    // A shelf move or a removal alone (no catalog change) is still worth committing.
+    shelfChanges: movedToPlaying + movedToBacklog + removedHidden,
   };
 }
 
@@ -126,13 +131,27 @@ export default function PlaynitePreview({ preview, includeHidden, onToggleInclud
         </Typography>
       ) : null}
 
-      {s.movedToPlaying > 0 || s.flaggedUninstalled > 0 ? (
+      {s.movedToPlaying > 0 || s.movedToBacklog > 0 ? (
         <Typography data-testid="playnite-install-summary" sx={{ fontSize: '0.8125rem', color: 'text.secondary', mt: 1.5, lineHeight: 1.6 }}>
           {[
             s.movedToPlaying > 0 ? `${s.movedToPlaying} installed ${s.movedToPlaying === 1 ? 'game moves' : 'games move'} to Playing` : null,
-            s.flaggedUninstalled > 0
-              ? `${s.flaggedUninstalled} Playing ${s.flaggedUninstalled === 1 ? 'game is' : 'games are'} not installed anymore — ${s.flaggedUninstalled === 1 ? 'it stays' : 'they stay'} on Playing and ${s.flaggedUninstalled === 1 ? 'asks' : 'ask'} how it ended`
+            s.movedToBacklog > 0
+              ? `${s.movedToBacklog} Playing ${s.movedToBacklog === 1 ? "game isn't" : "games aren't"} installed anymore and ${s.movedToBacklog === 1 ? 'moves' : 'move'} to Backlog`
               : null,
+          ]
+            .filter(Boolean)
+            .join('. ')}
+          .
+        </Typography>
+      ) : null}
+
+      {s.removedHidden > 0 || s.skippedDeleted > 0 ? (
+        <Typography data-testid="playnite-removal-summary" sx={{ fontSize: '0.8125rem', color: 'text.secondary', mt: 1.5, lineHeight: 1.6 }}>
+          {[
+            s.removedHidden > 0
+              ? `${s.removedHidden} hidden in Playnite ${s.removedHidden === 1 ? 'is' : 'are'} removed from GameGeek (unhide ${s.removedHidden === 1 ? 'it' : 'them'} to bring ${s.removedHidden === 1 ? 'it' : 'them'} back)`
+              : null,
+            s.skippedDeleted > 0 ? `${s.skippedDeleted} you deleted from GameGeek ${s.skippedDeleted === 1 ? 'stays' : 'stay'} deleted` : null,
           ]
             .filter(Boolean)
             .join('. ')}
@@ -155,7 +174,8 @@ export default function PlaynitePreview({ preview, includeHidden, onToggleInclud
         render={(g) => `${formatHours(g.hoursBefore) || '0 h'} → ${formatHours(g.hoursAfter) || '0 h'}`}
       />
       <SampleList id="playnite-sample-moved" title="Moving to Playing" items={samples.movedToPlaying} render={(g) => (g.shelfBefore ? shelfLabel(g.shelfBefore) : 'Unshelved')} />
-      <SampleList id="playnite-sample-flagged" title="Not installed anymore" items={samples.flaggedUninstalled} render={() => 'Playing'} />
+      <SampleList id="playnite-sample-backlog" title="Moving to Backlog" items={samples.movedToBacklog} render={() => 'Not installed'} />
+      <SampleList id="playnite-sample-hidden" title="Removing (hidden in Playnite)" items={samples.removedHidden} render={() => 'Hidden'} />
     </Box>
   );
 }

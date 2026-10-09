@@ -46,24 +46,26 @@ Response (dry run and commit have the same shape; commit adds `committed: true`)
   "generatedAtUtc": "2026-09-25T16:21:03Z",
   "total": 931,
   "counts": { "create": 0, "addCopy": 0, "update": 0, "unchanged": 0,
-              "skippedHidden": 0, "notInFile": 0, "invalid": 0,
-              "movedToPlaying": 0, "flaggedUninstalled": 0 },
+              "skippedHidden": 0, "removedHidden": 0, "skippedDeleted": 0,
+              "notInFile": 0, "invalid": 0,
+              "movedToPlaying": 0, "movedToBacklog": 0, "gamesRemoved": 0 },
   "samples": {
     "create":   [{ "title": "…", "storefront": "epic" }],
     "addCopy":  [{ "title": "…", "storefront": "gog" }],
     "update":   [{ "title": "…", "hoursBefore": 1.2, "hoursAfter": 3.4 }],
     "notInFile":[{ "title": "…" }],
-    "movedToPlaying":     [{ "title": "…", "shelfBefore": "backlog" }],
-    "flaggedUninstalled": [{ "title": "…" }]
+    "removedHidden":  [{ "title": "…" }],
+    "movedToPlaying": [{ "title": "…", "shelfBefore": "backlog" }],
+    "movedToBacklog": [{ "title": "…" }]
   },
   "committed": false
 }
 ```
 
-Each sample list is capped at 20. `movedToPlaying` and `flaggedUninstalled` are per-user
-outcomes (§Installed → Playing), not entry buckets: they are outside the
-`create + addCopy + update + unchanged + skippedHidden + invalid = total` sum, and a row the
-import creates is never counted as "moved". Errors are `{message, code}`: 400 `PLAYNITE_BAD_FILE` for
+Each sample list is capped at 20. `movedToPlaying` and `movedToBacklog` are per-user
+outcomes (§Installed → Playing) and `gamesRemoved` counts games, so all three are outside the
+entry-bucket sum (§Hidden, removed, deleted, invalid), and a row the import creates is never
+counted as "moved". Errors are `{message, code}`: 400 `PLAYNITE_BAD_FILE` for
 unparseable JSON or an unknown `schemaVersion`, 413 when the body is too large.
 
 ## Mapping
@@ -125,23 +127,24 @@ game the importing user has a `GamePlayer` row for (`importPlanner.js` `installD
 1. **Move to Playing:** any of the game's Playnite copies is installed AND the shelf is
    `backlog`, `on-hold` or unshelved → `playing`. Never from `finished`, `abandoned`,
    `wishlist` or a custom shelf (reinstalling a finished game is not a claim he's back in it).
-2. **Flag, never move:** `GamePlayer.installFlag = 'uninstalled'` (+ `installFlagAt`) ONLY
-   when the shelf is `playing` AND the game has at least one copy AND **every** copy is a
-   Playnite copy AND **each** is known to be not installed. A copy whose `isInstalled` is
-   still unknown (imported before the field existed and not in this file) never counts as
-   uninstalled.
-3. A game with **no Playnite copy** is never moved or flagged. A game with **any
-   non-Playnite copy** (a manual Switch copy beside a Playnite PC copy) is never flagged.
-4. **The flag clears** when the game is installed again, when the condition in (2) stops
-   holding (e.g. a Switch copy was added — the gateway's `updateGame` also clears it for
-   every member of the household), when the user moves it off Playing (`setGameState`),
-   or when the user answers it (`resolveInstallFlag`).
-5. **"Still playing"** keeps the game on Playing, clears the flag and stores
-   `installFlagDismissedAt`. The import does not flag it again until some copy's
-   `installedChangedAt` is newer than that — i.e. it was installed, then uninstalled again.
+2. **Move to Backlog** (Chef, 2026-10-09 — replaced the 2026-09-25 "flag, never move"
+   rule and its "how did it end?" question): the shelf is `playing` AND the game has at
+   least one Playnite copy AND **each** Playnite copy is known to be not installed → `backlog`.
+   A copy whose `isInstalled` is still unknown (imported before the field existed and not in
+   this file) never counts as uninstalled. **A non-Playnite copy does not keep it on
+   Playing** — Chef: "I don't track Android installs on GameGeek, so it should pop it back
+   … regardless."
+3. A game with **no Playnite copy** is never moved (Playnite knows nothing about it).
+4. **Playing by hand sticks.** Putting a game on Playing yourself (`setGameState`, a logged
+   session, or the old "Still playing" answer) stamps `GamePlayer.installFlagDismissedAt`.
+   The import does not move it to Backlog again until some copy's `installedChangedAt` is
+   newer — i.e. it was installed, then uninstalled again.
+5. A leftover `installFlag` from the old rule is cleared (by the move, or on its own when
+   the game is installed again). The import never sets the flag any more; the banner,
+   Cleanup filter and `resolveInstallFlag` stay for rows flagged before 2026-10-09.
 6. Idempotent: the same export twice changes nothing the second time. Every write repeats
-   its condition in the Mongo filter (the from-shelf list, `shelf: 'playing'`, the
-   dismissal) and carries `userId` + `householdId`.
+   its condition in the Mongo filter (the from-shelf list, `shelf: 'playing'`, the manual
+   stamp) and carries `userId` + `householdId`.
 
 Gateway: `GameCopy.installed` (null for a non-Playnite copy or an unknown one),
 `GameMyState.installFlag` / `installFlagAt`, `resolveInstallFlag(gameId, action)` with
@@ -164,14 +167,30 @@ happens only at the moment a copy becomes installed".
 Fill only what is empty (genres, release date, steamAppId, platformsAvailable union).
 Never overwrite the title or any field someone edited.
 
-## Hidden, removed, invalid
+## Hidden, removed, deleted, invalid
 
-- `hidden` entries are skipped for create and addCopy unless `includeHidden`. An
-  already-imported copy still gets its `hidden` flag and playtime updated.
+- **Hidden in Playnite** (Chef, 2026-10-09: DLC entries he hid kept showing up). A hidden
+  entry is never created or added as a copy. An already-imported copy that is now hidden
+  is **removed**: `$pull`ed off a game that keeps other copies, or — when it was the
+  game's last copy — the game is deleted with every household member's `GamePlayer` row.
+  The delete is guarded in its filter (no copy outside the hidden set), so a Switch copy
+  added since the plan was read keeps the game. Counted as `removedHidden` (entries) and
+  `gamesRemoved` (games). Unhidden later, it comes back like any new entry.
+  `includeHidden` (manual upload only) turns all of this off: hidden entries are then
+  created, and existing hidden copies kept and updated.
+- **Deleted in GameGeek** (Chef, 2026-10-09: "remember the delete"). The gateway's
+  `deleteGame`, and `updateGame` dropping a Playnite copy, write a `PlayniteTombstone`
+  (`gamegeek.playnitetombstones`, `@geeksuite/schemas/gamegeek/playniteTombstone`) per
+  playniteId. The import never creates or adds a copy for a tombstoned playniteId again:
+  `skippedDeleted`. There is no UI to forget a tombstone; delete the row by hand.
 - A household Playnite copy whose `playniteId` is **not in the file** is counted as
   `notInFile` and listed. It is **never deleted**: a partial export must not wipe the
   library.
 - An entry that fails validation is counted as `invalid` and skipped. It is never fatal.
+
+Every entry lands in exactly one bucket:
+`create + addCopy + update + unchanged + skippedHidden + removedHidden + skippedDeleted + invalid = total`.
+`movedToPlaying`, `movedToBacklog` and `gamesRemoved` sit outside that sum.
 
 ## Profile
 

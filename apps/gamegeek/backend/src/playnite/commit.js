@@ -2,8 +2,10 @@
  * Apply a Playnite import plan (importPlanner.js) to Mongo.
  *
  * Batched `bulkWrite`s, unordered, so ~1000 games is a handful of round
- * trips. Nothing here deletes: every op is an insert, a guarded $push, a
- * targeted $set, or a $max.
+ * trips. Every op is an insert, a guarded $push, a targeted $set or a $max —
+ * except copies hidden in Playnite (Chef, 2026-10-09): those are $pull'ed,
+ * and a game whose every copy was hidden is deleted with its player rows,
+ * guarded so a copy added meanwhile keeps the game.
  *
  * Race safety: the plan was computed from a read; between that read and this
  * write someone may have added the same Steam game. The per-household unique
@@ -67,7 +69,9 @@ async function bulkInBatches(Model, ops, batchSize) {
  * @param {number} [params.batchSize]
  */
 export async function commitPlayniteImport({ plan, householdId, userId, Game, GamePlayer, newId, batchSize = BATCH_SIZE }) {
-  const { creates, gameUpdates, copyUpdates, playerCreates, playerUpdates, installUpdates = [] } = plan.ops;
+  const {
+    creates, gameUpdates, copyUpdates, copyRemovals = [], gameDeletes = [], playerCreates, playerUpdates, installUpdates = [],
+  } = plan.ops;
   const idByKey = new Map();
 
   // 1. New games. _ids are assigned here so player rows can reference them.
@@ -131,6 +135,36 @@ export async function commitPlayniteImport({ plan, householdId, userId, Game, Ga
   });
   await bulkInBatches(Game, copyOps, batchSize);
 
+  // 3b. Copies hidden in Playnite. A pull leaves the game's other copies; a
+  //     delete only matches while the game has no copy outside the hidden set
+  //     (someone may have added a Switch copy since the plan was read).
+  const removalOps = copyRemovals.map((u) => ({
+    updateOne: {
+      filter: { _id: u.gameId, householdId },
+      update: { $pull: { copies: { 'playnite.playniteId': { $in: u.playniteIds } } } },
+    },
+  }));
+  const deleteOps = gameDeletes.map((u) => ({
+    deleteOne: {
+      filter: {
+        _id: u.gameId,
+        householdId,
+        copies: { $not: { $elemMatch: { 'playnite.playniteId': { $nin: u.playniteIds } } } },
+      },
+    },
+  }));
+  await bulkInBatches(Game, [...removalOps, ...deleteOps], batchSize);
+  if (gameDeletes.length) {
+    // Every member's row goes with the game (the gateway's deleteGame does
+    // the same) — but only for games that really went.
+    const ids = gameDeletes.map((u) => u.gameId);
+    const survivors = new Set((await Game.find({ _id: { $in: ids }, householdId }, { _id: 1 }).lean()).map((g) => String(g._id)));
+    const goneOps = ids
+      .filter((id) => !survivors.has(String(id)))
+      .map((gameId) => ({ deleteMany: { filter: { householdId, gameId } } }));
+    await bulkInBatches(GamePlayer, goneOps, batchSize);
+  }
+
   // 4. The importing user's rows. Creation is $setOnInsert, so a row that
   //    appeared meanwhile keeps its shelf and favorite.
   const gameIdFor = (ref) => (ref.key ? idByKey.get(ref.key) : ref.gameId);
@@ -168,9 +202,9 @@ export async function commitPlayniteImport({ plan, householdId, userId, Game, Ga
   }
   // 5. Playing follows isInstalled (importPlanner.js installDecision). Each
   //    write repeats its condition in the filter, so a shelf the user changed
-  //    since the plan was read (finished, a custom shelf) is never moved and a
-  //    flag is never set on a row that left Playing or was just dismissed.
-  //    Only shelf and the install-flag fields are written — never hours or ratings.
+  //    since the plan was read (finished, a custom shelf, Playing by hand) is
+  //    never moved. Only shelf and the install-flag fields are written —
+  //    never hours or ratings.
   for (const u of installUpdates) {
     const key = { userId, householdId, gameId: u.gameId };
     if (u.moveToPlaying) {
@@ -181,17 +215,19 @@ export async function commitPlayniteImport({ plan, householdId, userId, Game, Ga
         },
       });
     }
-    if (u.flag === 'set') {
-      const notDismissedSince = u.lastChange
+    if (u.moveToBacklog) {
+      // Not kept on Playing by hand since the last install transition.
+      const notKeptSince = u.lastChange
         ? { $or: [{ installFlagDismissedAt: null }, { installFlagDismissedAt: { $lt: u.lastChange } }] }
         : { installFlagDismissedAt: null };
       playerOps.push({
         updateOne: {
-          filter: { ...key, shelf: 'playing', installFlag: { $ne: 'uninstalled' }, ...notDismissedSince },
-          update: { $set: { installFlag: 'uninstalled', installFlagAt: u.flagAt } },
+          filter: { ...key, shelf: 'playing', ...notKeptSince },
+          update: { $set: { shelf: 'backlog', installFlag: null, installFlagAt: null } },
         },
       });
-    } else if (u.flag === 'clear') {
+    }
+    if (u.flag === 'clear') {
       playerOps.push({
         updateOne: {
           filter: { ...key, installFlag: 'uninstalled' },
@@ -209,6 +245,8 @@ export async function commitPlayniteImport({ plan, householdId, userId, Game, Ga
     gamesRematched: dupCreates.length,
     gamesUpdated: gameUpdates.length,
     copiesUpdated: copyUpdates.length,
+    copiesRemoved: copyRemovals.length,
+    gamesDeleted: gameDeletes.length,
     playersCreated: playerCreates.length,
     playersUpdated: playerUpdates.length,
     installUpdates: installUpdates.length,

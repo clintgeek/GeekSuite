@@ -7,12 +7,12 @@
  *      copies; an install flip stamps installedChangedAt (the first fill doesn't)
  *   2a installed → Playing only from backlog / on-hold / unshelved — never from
  *      finished, abandoned, wishlist or a custom shelf
- *   2b flag "not installed anymore" only when playing AND every copy is a
- *      Playnite copy AND none installed; the shelf is never moved for it
- *   2c a game with NO Playnite copy is never moved or flagged
- *   2d a game with ANY non-Playnite copy is never flagged
- *   2e the flag clears on reinstall or on leaving Playing; a dismissal is not
- *      re-flagged until installed-then-uninstalled again
+ *   2b on Playing and every Playnite copy known uninstalled → Backlog
+ *      (Chef, 2026-10-09; replaced the "not installed anymore" flag-and-ask)
+ *   2c a game with NO Playnite copy is never moved
+ *   2d a non-Playnite copy (Android, Switch) does NOT keep it on Playing
+ *   2e Playing set by hand (or "Still playing") sticks until the game is
+ *      installed and uninstalled again; a leftover old flag is cleared
  *   2f re-running the same export changes nothing the second time
  *   2g the writes are guarded, tenant-scoped, and never touch hours or ratings
  *   2h (first-import inference lives in playnite.planner.test.js)
@@ -104,8 +104,9 @@ function applyPlan(p, { games, players }) {
     if (u.moveToPlaying && ['backlog', 'on-hold', null, ''].includes(r.shelf ?? null)) {
       Object.assign(r, { shelf: 'playing', installFlag: null, installFlagAt: null });
     }
-    if (u.flag === 'set' && r.shelf === 'playing' && r.installFlag !== 'uninstalled') {
-      Object.assign(r, { installFlag: 'uninstalled', installFlagAt: u.flagAt });
+    if (u.moveToBacklog && r.shelf === 'playing') {
+      const kept = r.installFlagDismissedAt && !(u.lastChange && u.lastChange > r.installFlagDismissedAt);
+      if (!kept) Object.assign(r, { shelf: 'backlog', installFlag: null, installFlagAt: null });
     }
     if (u.flag === 'clear' && r.installFlag === 'uninstalled') Object.assign(r, { installFlag: null, installFlagAt: null });
   }
@@ -182,8 +183,8 @@ describe('rule 2a — installed → Playing, from backlog / on-hold / unshelved 
 
 // ── Rule 2b / 2c / 2d ─────────────────────────────────────────────────────────
 
-describe('rule 2b — flag, never move, a Playing game that is no longer installed', () => {
-  test('playing + every copy Playnite + none installed → flagged; the shelf is not moved', () => {
+describe('rule 2b — a Playing game that is no longer installed moves to Backlog', () => {
+  test('playing + every Playnite copy uninstalled → backlog', () => {
     const games = [game('g1', [pcCopy('pid-1', true), pcCopy('pid-2', false)])];
     const p = plan({
       entries: [entry({ isInstalled: false }), entry({ playniteId: 'pid-2', sourceName: 'GOG', isInstalled: false })],
@@ -192,16 +193,32 @@ describe('rule 2b — flag, never move, a Playing game that is no longer install
       now: T2,
     });
     const op = opFor(p, 'g1');
-    assert.equal(op.flag, 'set');
-    assert.equal(op.flagAt.toISOString(), T2.toISOString());
-    assert.equal(op.moveToPlaying, undefined);
-    assert.equal('shelf' in op, false);
-    assert.equal(p.counts.flaggedUninstalled, 1);
-    assert.deepEqual(p.samples.flaggedUninstalled, [{ title: 'g1' }]);
+    assert.equal(op.moveToBacklog, true);
+    assert.equal(op.lastChange.toISOString(), T2.toISOString());
+    assert.equal(p.counts.movedToBacklog, 1);
+    assert.deepEqual(p.samples.movedToBacklog, [{ title: 'g1' }]);
+    const after = applyPlan(p, { games, players: [row('g1', 'playing')] });
+    assert.equal(after.players[0].shelf, 'backlog');
   });
 
-  for (const shelf of ['backlog', 'on-hold', 'finished', null]) {
-    test(`not on playing (${shelf ?? 'unshelved'}) → never flagged`, () => {
+  test('a game uninstalled before this rule existed (no transition stamp) moves too', () => {
+    const games = [game('g1', [pcCopy('pid-1', false)])];
+    const p = plan({ entries: [entry({ isInstalled: false })], games, players: [row('g1', 'playing')] });
+    assert.equal(opFor(p, 'g1').moveToBacklog, true);
+  });
+
+  test('one copy still installed keeps it on Playing', () => {
+    const games = [game('g1', [pcCopy('pid-1', true), pcCopy('pid-2', true)])];
+    const p = plan({
+      entries: [entry({ isInstalled: false }), entry({ playniteId: 'pid-2', sourceName: 'GOG', isInstalled: true })],
+      games,
+      players: [row('g1', 'playing')],
+    });
+    assert.equal(opFor(p, 'g1'), undefined);
+  });
+
+  for (const shelf of ['backlog', 'on-hold', 'finished', 'abandoned', 'custom-couch', null]) {
+    test(`not on playing (${shelf ?? 'unshelved'}) → never moved`, () => {
       const games = [game('g1', [pcCopy('pid-1', true)])];
       const p = plan({ entries: [entry({ isInstalled: false })], games, players: [row('g1', shelf)] });
       assert.equal(opFor(p, 'g1'), undefined);
@@ -215,11 +232,11 @@ describe('rule 2b — flag, never move, a Playing game that is no longer install
   });
 });
 
-describe("rule 2c — a game with NO Playnite copy is never moved or flagged (Chef's manual Android/Switch games)", () => {
+describe("rule 2c — a game with NO Playnite copy is never moved (Playnite knows nothing about it)", () => {
   for (const shelf of ['playing', 'backlog', 'on-hold', null]) {
     test(`manual-only game on ${shelf ?? 'unshelved'} is untouched by an import`, () => {
       const games = [game('manual', [switchCopy()], 'Tears of the Kingdom'), game('g1', [pcCopy('pid-1', true)])];
-      const players = [row('manual', shelf), row('g1', 'playing')];
+      const players = [row('manual', shelf), row('g1', 'finished')];
       const p = plan({ entries: [entry({ isInstalled: false })], games, players });
       assert.equal(opFor(p, 'manual'), undefined);
       const after = applyPlan(p, { games, players });
@@ -227,15 +244,16 @@ describe("rule 2c — a game with NO Playnite copy is never moved or flagged (Ch
     });
   }
 
-  test('a game with no copies at all is never flagged', () => {
+  test('a game with no copies at all is never moved', () => {
     const p = plan({ entries: [entry()], games: [game('empty', [])], players: [row('empty', 'playing')] });
     assert.equal(opFor(p, 'empty'), undefined);
   });
 
-  test('installDecision with no Playnite copy: no move, no flag', () => {
+  test('installDecision with no Playnite copy: no move either way', () => {
     for (const shelf of ['playing', 'backlog', null]) {
-      assert.deepEqual(installDecision({ playniteCopies: [], otherCopies: 1, player: row('x', shelf) }), {
+      assert.deepEqual(installDecision({ playniteCopies: [], player: row('x', shelf) }), {
         moveToPlaying: false,
+        moveToBacklog: false,
         flag: null,
         lastChange: null,
       });
@@ -243,12 +261,11 @@ describe("rule 2c — a game with NO Playnite copy is never moved or flagged (Ch
   });
 });
 
-describe('rule 2d — a game with ANY non-Playnite copy is never flagged', () => {
-  test('Playnite PC copy (uninstalled) + manual Switch copy, on playing → never flagged', () => {
+describe('rule 2d — an Android or Switch copy does not keep it on Playing (Chef, 2026-10-09)', () => {
+  test('Playnite PC copy (uninstalled) + manual copy, on playing → backlog', () => {
     const games = [game('mixed', [pcCopy('pid-1', true), switchCopy()])];
     const p = plan({ entries: [entry({ isInstalled: false })], games, players: [row('mixed', 'playing')] });
-    assert.equal(opFor(p, 'mixed'), undefined);
-    assert.equal(p.counts.flaggedUninstalled, 0);
+    assert.equal(opFor(p, 'mixed').moveToBacklog, true);
   });
 
   test('the same mixed game, installed and on backlog → still moves to playing (2a applies)', () => {
@@ -256,110 +273,83 @@ describe('rule 2d — a game with ANY non-Playnite copy is never flagged', () =>
     const p = plan({ entries: [entry({ isInstalled: true })], games, players: [row('mixed', 'backlog')] });
     assert.equal(opFor(p, 'mixed').moveToPlaying, true);
   });
-
-  test('a stale flag on a game that gained a Switch copy is cleared', () => {
-    const games = [game('mixed', [pcCopy('pid-1', false), switchCopy()])];
-    const p = plan({
-      entries: [entry({ isInstalled: false })],
-      games,
-      players: [row('mixed', 'playing', { installFlag: 'uninstalled', installFlagAt: T0 })],
-    });
-    assert.deepEqual(opFor(p, 'mixed'), { gameId: 'mixed', flag: 'clear' });
-  });
 });
 
 // ── Rule 2e ───────────────────────────────────────────────────────────────────
 
-describe('rule 2e — the flag clears, and a dismissal sticks until reinstall → uninstall', () => {
-  const flaggedRow = (over) => row('g1', 'playing', { installFlag: 'uninstalled', installFlagAt: T0, ...over });
-
-  test('installed again → flag cleared', () => {
+describe('rule 2e — Playing set by hand sticks until installed, then uninstalled again', () => {
+  test('a leftover flag from the old rule goes with the move', () => {
     const games = [game('g1', [pcCopy('pid-1', false, T0)])];
-    const p = plan({ entries: [entry({ isInstalled: true })], games, players: [flaggedRow()] });
+    const p = plan({ entries: [entry({ isInstalled: false })], games, players: [row('g1', 'playing', { installFlag: 'uninstalled', installFlagAt: T0 })] });
+    assert.deepEqual(opFor(p, 'g1'), { gameId: 'g1', moveToBacklog: true, lastChange: T0 });
+  });
+
+  test('a leftover flag on a game that is installed again is cleared', () => {
+    const games = [game('g1', [pcCopy('pid-1', false, T0)])];
+    const p = plan({ entries: [entry({ isInstalled: true })], games, players: [row('g1', 'playing', { installFlag: 'uninstalled' })] });
     assert.deepEqual(opFor(p, 'g1'), { gameId: 'g1', flag: 'clear' });
   });
 
-  test('moved off playing (the gateway clears it too; the import cleans up a leftover)', () => {
-    const games = [game('g1', [pcCopy('pid-1', false, T0)])];
-    const p = plan({ entries: [entry({ isInstalled: false })], games, players: [flaggedRow({ shelf: 'finished' })] });
-    assert.deepEqual(opFor(p, 'g1'), { gameId: 'g1', flag: 'clear' });
-  });
-
-  test('"Still playing" is not re-flagged by later imports — until installed, then uninstalled again', () => {
-    // T0: an import saw the game uninstalled; the user dismissed the flag at T1.
+  test('kept on Playing by hand: not moved by later imports — until installed, then uninstalled again', () => {
+    // T0: an import saw it uninstalled; at T1 Chef put it back on Playing by hand.
     let state = {
       games: [game('g1', [pcCopy('pid-1', false, T0)])],
       players: [row('g1', 'playing', { installFlagDismissedAt: T1 })],
     };
-    // T2: same export again (still uninstalled) → no re-flag.
     let p = plan({ entries: [entry({ isInstalled: false })], ...state, now: T2 });
     assert.equal(opFor(p, 'g1'), undefined);
     state = applyPlan(p, state);
 
-    // Reinstalled → no flag (it is installed), stamps a transition.
+    // Reinstalled → stays, stamps a transition.
     p = plan({ entries: [entry({ isInstalled: true })], ...state, now: T2 });
     assert.equal(opFor(p, 'g1'), undefined);
     state = applyPlan(p, state);
-    assert.equal(state.games[0].copies[0].playnite.installedChangedAt.toISOString(), T2.toISOString());
 
-    // Uninstalled again after the dismissal → flagged again.
+    // Uninstalled again after the manual move → Backlog.
     p = plan({ entries: [entry({ isInstalled: false })], ...state, now: T3 });
-    assert.equal(opFor(p, 'g1').flag, 'set');
-    assert.equal(opFor(p, 'g1').lastChange.toISOString(), T3.toISOString());
+    assert.equal(opFor(p, 'g1').moveToBacklog, true);
+    state = applyPlan(p, state);
+    assert.equal(state.players[0].shelf, 'backlog');
   });
 
-  test('a transition older than the dismissal does not re-flag', () => {
-    const d = installDecision({
-      playniteCopies: [{ isInstalled: false, installedChangedAt: T0 }],
-      otherCopies: 0,
-      player: row('g1', 'playing', { installFlagDismissedAt: T1 }),
-    });
-    assert.equal(d.flag, null);
-    const newer = installDecision({
-      playniteCopies: [{ isInstalled: false, installedChangedAt: T2 }],
-      otherCopies: 0,
-      player: row('g1', 'playing', { installFlagDismissedAt: T1 }),
-    });
-    assert.equal(newer.flag, 'set');
+  test('a transition older than the manual move does not move it', () => {
+    const player = row('g1', 'playing', { installFlagDismissedAt: T1 });
+    assert.equal(installDecision({ playniteCopies: [{ isInstalled: false, installedChangedAt: T0 }], player }).moveToBacklog, false);
+    assert.equal(installDecision({ playniteCopies: [{ isInstalled: false, installedChangedAt: T2 }], player }).moveToBacklog, true);
+    assert.equal(installDecision({ playniteCopies: [{ isInstalled: false }], player }).moveToBacklog, false);
   });
 });
 
 // ── Rule 2f ───────────────────────────────────────────────────────────────────
 
 describe('rule 2f — idempotent', () => {
-  test('the same export twice: the first run moves and flags, the second changes nothing', () => {
+  test('the same export twice: the first run moves both ways, the second changes nothing', () => {
     const games = [
       game('toMove', [pcCopy('pid-1', false)]), // known uninstalled → installed: a real flip
-      game('toFlag', [pcCopy('pid-2', undefined)]),
+      game('toBacklog', [pcCopy('pid-2', undefined)]),
       game('manual', [switchCopy()]),
       game('mixed', [pcCopy('pid-3', undefined), switchCopy()]),
       game('done', [pcCopy('pid-4', undefined)]),
     ];
-    const players = [row('toMove', 'backlog'), row('toFlag', 'playing'), row('manual', 'playing'), row('mixed', 'playing'), row('done', 'finished')];
+    const players = [row('toMove', 'backlog'), row('toBacklog', 'playing'), row('manual', 'playing'), row('mixed', 'playing'), row('done', 'finished')];
     const entries = [
       entry({ playniteId: 'pid-1', name: 'toMove', isInstalled: true }),
-      entry({ playniteId: 'pid-2', name: 'toFlag', isInstalled: false }),
+      entry({ playniteId: 'pid-2', name: 'toBacklog', isInstalled: false }),
       entry({ playniteId: 'pid-3', name: 'mixed', isInstalled: false }),
       entry({ playniteId: 'pid-4', name: 'done', isInstalled: true }),
     ];
     const first = plan({ entries, games, players, now: T1 });
     assert.equal(first.counts.movedToPlaying, 1);
-    assert.equal(first.counts.flaggedUninstalled, 1);
+    assert.equal(first.counts.movedToBacklog, 2);
     const state = applyPlan(first, { games, players });
-    const shelves = Object.fromEntries(state.players.map((r) => [r.gameId, [r.shelf, r.installFlag]]));
-    assert.deepEqual(shelves, {
-      toMove: ['playing', null],
-      toFlag: ['playing', 'uninstalled'],
-      manual: ['playing', null],
-      mixed: ['playing', null],
-      done: ['finished', null],
-    });
+    const shelves = Object.fromEntries(state.players.map((r) => [r.gameId, r.shelf]));
+    assert.deepEqual(shelves, { toMove: 'playing', toBacklog: 'backlog', manual: 'playing', mixed: 'backlog', done: 'finished' });
 
     const again = plan({ entries, ...state, now: T2 });
     assert.equal(again.ops.installUpdates.length, 0);
     assert.equal(again.ops.copyUpdates.length, 0);
     assert.equal(again.counts.movedToPlaying, 0);
-    assert.equal(again.counts.flaggedUninstalled, 0);
+    assert.equal(again.counts.movedToBacklog, 0);
     assert.equal(again.counts.update, 0);
   });
 });
@@ -387,7 +377,7 @@ describe('rule 2g — commit writes are guarded, scoped, and touch only shelf + 
     assert.deepEqual(u.update, { $set: { shelf: 'playing', installFlag: null, installFlagAt: null } });
   });
 
-  test('a flag requires playing, not already flagged, and no dismissal since the last transition', async () => {
+  test('a move to Backlog requires playing and no manual Playing since the last transition', async () => {
     const games = [game('g1', [pcCopy('pid-1', true, T0)])];
     const [u] = await commitFor(plan({ entries: [entry({ isInstalled: false })], games, players: [row('g1', 'playing')], now: T2 }));
     assert.deepEqual(u.filter, {
@@ -395,10 +385,15 @@ describe('rule 2g — commit writes are guarded, scoped, and touch only shelf + 
       householdId: HOUSEHOLD,
       gameId: 'g1',
       shelf: 'playing',
-      installFlag: { $ne: 'uninstalled' },
       $or: [{ installFlagDismissedAt: null }, { installFlagDismissedAt: { $lt: T2 } }],
     });
-    assert.deepEqual(u.update, { $set: { installFlag: 'uninstalled', installFlagAt: T2 } });
+    assert.deepEqual(u.update, { $set: { shelf: 'backlog', installFlag: null, installFlagAt: null } });
+  });
+
+  test('with no transition stamp, only a row never kept on Playing by hand moves', async () => {
+    const games = [game('g1', [pcCopy('pid-1', false)])];
+    const [u] = await commitFor(plan({ entries: [entry({ isInstalled: false })], games, players: [row('g1', 'playing')], now: T2 }));
+    assert.deepEqual(u.filter, { userId: USER, householdId: HOUSEHOLD, gameId: 'g1', shelf: 'playing', installFlagDismissedAt: null });
   });
 
   test('a clear only touches a flagged row', async () => {

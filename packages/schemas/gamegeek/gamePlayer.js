@@ -58,7 +58,11 @@ function gamePlayerDefinition(mongoose) {
     // Playing, or by resolveInstallFlag. The shelf is never moved for it.
     installFlag: { type: String, enum: [...INSTALL_FLAGS, null], default: null },
     installFlagAt: { type: Date, default: null },
-    // "Still playing": not re-flagged until a copy's installedChangedAt is newer.
+    // When this person last put the game on Playing by hand (setGameState,
+    // a logged session, "Still playing"). The Playnite import's move to
+    // Backlog (Chef, 2026-10-09) leaves it alone until a copy's
+    // installedChangedAt is newer — installed, then uninstalled again.
+    // (Named for the retired "not installed anymore" flag it first served.)
     installFlagDismissedAt: { type: Date, default: null },
   };
 }

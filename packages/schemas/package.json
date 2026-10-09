@@ -27,6 +27,7 @@
     "./gamegeek/gamePlayer": "./gamegeek/gamePlayer.js",
     "./gamegeek/profile": "./gamegeek/profile.js",
     "./gamegeek/playniteDropFile": "./gamegeek/playniteDropFile.js",
+    "./gamegeek/playniteTombstone": "./gamegeek/playniteTombstone.js",
     "./thinggeek/constants": "./thinggeek/constants.js",
     "./thinggeek/household": "./thinggeek/household.js",
     "./thinggeek/thing": "./thinggeek/thing.js",

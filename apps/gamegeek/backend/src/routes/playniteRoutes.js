@@ -18,6 +18,7 @@ import Game from '../models/Game.js';
 import GamePlayer from '../models/GamePlayer.js';
 import Profile from '../models/Profile.js';
 import PlayniteDropFile from '../models/PlayniteDropFile.js';
+import PlayniteTombstone from '../models/PlayniteTombstone.js';
 import householdModule from '@geeksuite/schemas/gamegeek/household';
 import { parseExport, parseJsonText, PlayniteFileError } from '../playnite/parse.js';
 import { buildPlaynitePlan, commitPlaynitePlan } from '../playnite/runCommit.js';
@@ -94,7 +95,7 @@ router.post('/playnite', authenticate, readBody, async (req, res, next) => {
 
   try {
     const plan = await buildPlaynitePlan({
-      parsed, householdId, userId, includeHidden, now: new Date(), Game, GamePlayer,
+      parsed, householdId, userId, includeHidden, now: new Date(), Game, GamePlayer, PlayniteTombstone,
     });
 
     const body = {

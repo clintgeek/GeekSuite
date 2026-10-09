@@ -3,6 +3,7 @@ import { GraphQLError } from 'graphql';
 import { Game } from './models/game.js';
 import { GamePlayer } from './models/gamePlayer.js';
 import { GameProfile } from './models/profile.js';
+import { PlayniteTombstone } from './models/playniteTombstone.js';
 import householdModule from '@geeksuite/schemas/gamegeek/household';
 import constantsModule from '@geeksuite/schemas/gamegeek/constants';
 import gameSchemaModule from '@geeksuite/schemas/gamegeek/game';
@@ -115,6 +116,26 @@ const CLEAR_INSTALL_FLAG = Object.freeze({ installFlag: null, installFlagAt: nul
 function uninstalledEverywhere(game) {
   const copies = game?.copies ?? [];
   return copies.length > 0 && copies.every((c) => c?.playnite?.playniteId && c.playnite.isInstalled === false);
+}
+
+/**
+ * Remember Playnite copies someone deleted, so the Playnite import never
+ * brings them back (Chef, 2026-10-09; @geeksuite/schemas/gamegeek/playniteTombstone).
+ * Household-scoped, idempotent.
+ */
+async function rememberDeletedPlaynite(householdId, title, copies, userId) {
+  const ids = [...new Set((copies ?? []).map((c) => c?.playnite?.playniteId).filter(Boolean))];
+  if (!ids.length) return;
+  await PlayniteTombstone.bulkWrite(
+    ids.map((playniteId) => ({
+      updateOne: {
+        filter: { householdId, playniteId },
+        update: { $setOnInsert: { householdId, playniteId, title: title ?? '', deletedBy: userId ?? null, deletedAt: new Date() } },
+        upsert: true,
+      },
+    })),
+    { ordered: false }
+  );
 }
 
 // ── Errors ───────────────────────────────────────────────────────────────────
@@ -791,12 +812,18 @@ export const resolvers = {
         }
         for (const [k, v] of Object.entries(input[f])) if (v !== undefined) game.set(`${f}.${k}`, v);
       }
+      let droppedPlaynite = [];
       if (input.copies !== undefined) {
         const existingById = new Map(
           (game.copies ?? []).map((c) => [String(c._id), { playnite: c.playnite ? c.playnite.toObject?.() ?? c.playnite : null }])
         );
+        const before = (game.copies ?? []).filter((c) => c?.playnite?.playniteId).map((c) => ({ playnite: { playniteId: c.playnite.playniteId } }));
         game.copies = (input.copies ?? []).map((c) => copyFromInput(c, existingById));
+        const kept = new Set(game.copies.map((c) => c?.playnite?.playniteId).filter(Boolean));
+        droppedPlaynite = before.filter((c) => !kept.has(c.playnite.playniteId));
       }
+      // A Playnite copy removed by hand stays removed (the import skips it).
+      await rememberDeletedPlaynite(householdId, game.title, droppedPlaynite, userId);
       await game.save();
       // A copy edit can make "not installed anymore" moot (a Switch copy was
       // added, the last Playnite copy removed). Every member's flag on this
@@ -814,6 +841,10 @@ export const resolvers = {
       const householdId = resolveHouseholdId(user);
       const { id } = validateGameId(rawArgs);
       if (!validObjectId(id)) return { success: false, message: 'Game not found' };
+      const game = await Game.findOne({ _id: id, householdId }, { title: 1, copies: 1 }).lean();
+      if (!game) return { success: false, message: 'Game not found' };
+      // Remembered before the delete, so the Playnite import never brings it back.
+      await rememberDeletedPlaynite(householdId, game.title, game.copies, user.id);
       const res = await Game.deleteOne({ _id: id, householdId });
       if (res.deletedCount === 0) return { success: false, message: 'Game not found' };
       // Every member's state for it — within this household only.
@@ -831,6 +862,9 @@ export const resolvers = {
       if (input.shelf !== undefined) set.shelf = await resolveShelf(userId, input.shelf);
       // Leaving Playing answers "not installed anymore" (PLAYNITE_IMPORT.md).
       if (input.shelf !== undefined && set.shelf !== 'playing') Object.assign(set, CLEAR_INSTALL_FLAG);
+      // Playing by hand sticks: the import won't move it to Backlog until it
+      // is installed and uninstalled again (installDecision, gamegeek backend).
+      if (input.shelf !== undefined && set.shelf === 'playing') set.installFlagDismissedAt = new Date();
       if (input.rating !== undefined) set.rating = input.rating;
       if (input.review !== undefined) set.review = input.review ?? '';
       if (input.notes !== undefined) set.notes = input.notes ?? '';
@@ -873,7 +907,10 @@ export const resolvers = {
       }
       doc.hoursPlayed = roundHours((doc.hoursPlayed ?? 0) + input.minutes / 60);
       doc.lastPlayedAt = new Date();
-      if (AUTO_PLAYING_FROM.includes(doc.shelf ?? null)) doc.shelf = 'playing';
+      if (AUTO_PLAYING_FROM.includes(doc.shelf ?? null)) {
+        doc.shelf = 'playing';
+        doc.installFlagDismissedAt = new Date(); // a session played is Playing by hand
+      }
       if (doc.shelf !== 'playing' && doc.installFlag) Object.assign(doc, CLEAR_INSTALL_FLAG);
       await doc.save();
       return withMe(game, doc);

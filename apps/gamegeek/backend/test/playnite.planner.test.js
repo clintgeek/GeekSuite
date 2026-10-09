@@ -209,15 +209,79 @@ describe('planPlayniteImport — re-import', () => {
     assert.equal(p.ops.gameUpdates.find((u) => u.pushCopies.length).pushCopies[0].storefront, 'gog');
   });
 
-  test('an already-imported copy that is now hidden still gets its hidden flag and playtime updated', () => {
+  test('with includeHidden, an already-imported copy that is now hidden is kept and updated', () => {
     const state = applyPlan(plan({ entries: [entry({ playtimeSeconds: 3600 })] }));
-    const p = plan({ entries: [entry({ hidden: true, playtimeSeconds: 7200 })], games: state.games, players: state.players });
-    assert.equal(p.counts.skippedHidden, 0);
+    const p = plan({ entries: [entry({ hidden: true, playtimeSeconds: 7200 })], games: state.games, players: state.players, includeHidden: true });
+    assert.equal(p.counts.removedHidden, 0);
     assert.equal(p.counts.update, 1);
     assert.deepEqual(p.ops.copyUpdates[0].set.hidden, true);
     assert.equal(p.ops.copyUpdates[0].set.playtimeSeconds, 7200);
     assert.equal(p.ops.playerUpdates[0].hoursPlayed, 2);
-    assert.deepEqual(p.samples.update, [{ title: 'Hades', hoursBefore: 1, hoursAfter: 2 }]);
+  });
+
+  test('hidden in Playnite (Chef, 2026-10-09): a game whose only copy is now hidden is removed', () => {
+    const state = applyPlan(plan({ entries: [entry({ name: 'Dying Light The Bozak' })] }));
+    const p = plan({ entries: [entry({ name: 'Dying Light The Bozak', hidden: true })], games: state.games, players: state.players });
+    assert.equal(p.counts.removedHidden, 1);
+    assert.equal(p.counts.gamesRemoved, 1);
+    assert.equal(p.counts.update + p.counts.unchanged + p.counts.skippedHidden, 0);
+    assert.deepEqual(p.ops.gameDeletes, [{ gameId: state.games[0]._id, playniteIds: ['pid-1'] }]);
+    assert.deepEqual(p.ops.copyRemovals, []);
+    assert.deepEqual(p.samples.removedHidden, [{ title: 'Dying Light The Bozak' }]);
+    // Nothing else is written for a game that is going.
+    assert.deepEqual([p.ops.copyUpdates, p.ops.playerUpdates, p.ops.installUpdates], [[], [], []]);
+  });
+
+  test('hidden in Playnite: only that copy goes when the game has another', () => {
+    const state = applyPlan(plan({ entries: [entry({ playtimeSeconds: 3600 }), entry({ playniteId: 'pid-2', sourceName: 'GOG', playtimeSeconds: 7200 })] }));
+    assert.equal(state.games.length, 1);
+    const p = plan({
+      entries: [entry({ hidden: true }), entry({ playniteId: 'pid-2', sourceName: 'GOG', playtimeSeconds: 7200 })],
+      games: state.games,
+      players: state.players,
+    });
+    assert.deepEqual(p.ops.copyRemovals, [{ gameId: state.games[0]._id, playniteIds: ['pid-1'] }]);
+    assert.deepEqual(p.ops.gameDeletes, []);
+    assert.equal(p.counts.gamesRemoved, 0);
+    // Hours now come from the copy that stays.
+    assert.equal(p.ops.playerUpdates[0].hoursPlayed, 2);
+  });
+
+  test('a manual (non-Playnite) copy keeps the game when its Playnite copy is hidden', () => {
+    const state = applyPlan(plan({ entries: [entry()] }));
+    state.games[0].copies.push({ platform: 'switch', storefront: 'nintendo' });
+    const p = plan({ entries: [entry({ hidden: true })], games: state.games, players: state.players });
+    assert.equal(p.ops.copyRemovals.length, 1);
+    assert.equal(p.ops.gameDeletes.length, 0);
+  });
+
+  test('unhidden in Playnite, it comes back as a new game', () => {
+    const state = applyPlan(plan({ entries: [entry()] }));
+    const hidden = plan({ entries: [entry({ hidden: true })], games: state.games, players: state.players });
+    assert.equal(hidden.ops.gameDeletes.length, 1);
+    const p = plan({ entries: [entry()], games: [], players: [] });
+    assert.equal(p.counts.create, 1);
+  });
+
+  test('deleted from GameGeek (a tombstone): never created or added again', () => {
+    const p = plan({ entries: [entry(), entry({ playniteId: 'pid-2', name: 'Celeste' })], deletedPlayniteIds: ['pid-1'] });
+    assert.equal(p.counts.skippedDeleted, 1);
+    assert.equal(p.counts.create, 1);
+    assert.deepEqual(p.samples.create.map((c) => c.title), ['Celeste']);
+    // ...not even as another copy of a game that is still there.
+    const state = applyPlan(plan({ entries: [entry({ playniteId: 'pid-9' })] }));
+    const again = plan({ entries: [entry({ playniteId: 'pid-9' }), entry({ sourceName: 'GOG' })], games: state.games, players: state.players, deletedPlayniteIds: ['pid-1'] });
+    assert.equal(again.counts.addCopy, 0);
+    assert.equal(again.counts.skippedDeleted, 1);
+  });
+
+  test('every entry still lands in exactly one bucket', () => {
+    const state = applyPlan(plan({ entries: [entry(), entry({ playniteId: 'pid-2', name: 'Celeste' })] }));
+    const entries = [entry({ hidden: true }), entry({ playniteId: 'pid-2', name: 'Celeste' }), entry({ playniteId: 'pid-3', name: 'Gone' }), entry({ playniteId: 'pid-4', name: 'Shy', hidden: true })];
+    const p = plan({ entries, games: state.games, players: state.players, deletedPlayniteIds: ['pid-3'] });
+    const c = p.counts;
+    assert.equal(c.create + c.addCopy + c.update + c.unchanged + c.skippedHidden + c.removedHidden + c.skippedDeleted + c.invalid, entries.length);
+    assert.deepEqual([c.removedHidden, c.unchanged, c.skippedDeleted, c.skippedHidden], [1, 1, 1, 1]);
   });
 
   test('never changes shelf or favorite after creation', () => {
@@ -288,7 +352,7 @@ describe('planPlayniteImport — matching an existing library', () => {
       ],
       games,
     });
-    assert.deepEqual(p.counts, { create: 1, addCopy: 2, update: 1, unchanged: 0, skippedHidden: 0, notInFile: 0, invalid: 0, movedToPlaying: 0, flaggedUninstalled: 0 });
+    assert.deepEqual(p.counts, { create: 1, addCopy: 2, update: 1, unchanged: 0, skippedHidden: 0, removedHidden: 0, skippedDeleted: 0, notInFile: 0, invalid: 0, movedToPlaying: 0, movedToBacklog: 0, gamesRemoved: 0 });
     const pushedTo = Object.fromEntries(p.ops.gameUpdates.filter((u) => u.pushCopies.length).map((u) => [u.gameId, u.pushCopies[0].playnite.playniteId]));
     assert.deepEqual(pushedTo, { bySteam: 'pid-B', byTitle: 'pid-C' });
   });
@@ -302,7 +366,7 @@ describe('planPlayniteImport — matching an existing library', () => {
     assert.equal(p.counts.notInFile, 1);
     assert.deepEqual(p.samples.notInFile, [{ title: 'Gone Game' }]);
     // The plan has no delete of any kind: every op is a create, a push, or a $set.
-    assert.deepEqual(Object.keys(p.ops).sort(), ['copyUpdates', 'creates', 'gameUpdates', 'installUpdates', 'playerCreates', 'playerUpdates']);
+    assert.deepEqual(Object.keys(p.ops).sort(), ['copyRemovals', 'copyUpdates', 'creates', 'gameDeletes', 'gameUpdates', 'installUpdates', 'playerCreates', 'playerUpdates']);
     for (const u of p.ops.gameUpdates) assert.equal(u.gameId === 'g1', false);
   });
 
