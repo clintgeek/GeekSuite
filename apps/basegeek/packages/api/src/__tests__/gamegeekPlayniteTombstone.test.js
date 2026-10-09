@@ -32,7 +32,7 @@ beforeAll(async () => {
 }, 60000);
 
 afterEach(async () => {
-  await Promise.all([Game.deleteMany({}), GamePlayer.deleteMany({}), PlayniteTombstone.deleteMany({})]);
+  await Promise.all([Game.deleteMany({}), GamePlayer.deleteMany({}), PlayniteTombstone.deleteMany({ deletedBy: ALICE })]);
 });
 
 afterAll(async () => {
@@ -40,15 +40,17 @@ afterAll(async () => {
   if (mongoose.connection.readyState !== 0) await mongoose.disconnect();
 });
 
+// Scoped to this file's user: CI runs suites against one shared database,
+// and other suites' deleteGame calls write tombstones too.
 const tombs = async () =>
-  (await PlayniteTombstone.find({}, { _id: 0, householdId: 1, playniteId: 1, title: 1, deletedBy: 1 }).sort({ playniteId: 1 }).lean());
+  (await PlayniteTombstone.find({ deletedBy: ALICE }, { _id: 0, householdId: 1, playniteId: 1, title: 1, deletedBy: 1 }).sort({ playniteId: 1 }).lean());
 
 describe('deleteGame remembers the Playnite copies', () => {
   test('every Playnite copy is remembered; the manual copy is not; the game goes', async () => {
     const game = await Game.create({ householdId: 'default', title: 'Hades', copies: [pcCopy('pid-1'), pcCopy('pid-2'), switchCopy()] });
     const res = await Mutation.deleteGame(null, { id: String(game._id) }, ctx());
     expect(res.success).toBe(true);
-    expect(await Game.countDocuments({})).toBe(0);
+    expect(await Game.countDocuments({ _id: game._id })).toBe(0);
     expect(await tombs()).toEqual([
       { householdId: 'default', playniteId: 'pid-1', title: 'Hades', deletedBy: ALICE },
       { householdId: 'default', playniteId: 'pid-2', title: 'Hades', deletedBy: ALICE },
@@ -65,7 +67,7 @@ describe('deleteGame remembers the Playnite copies', () => {
     const game = await Game.create({ householdId: 'elsewhere', title: 'Hades', copies: [pcCopy('pid-1')] });
     const res = await Mutation.deleteGame(null, { id: String(game._id) }, ctx());
     expect(res.success).toBe(false);
-    expect(await Game.countDocuments({})).toBe(1);
+    expect(await Game.countDocuments({ _id: game._id })).toBe(1);
     expect(await tombs()).toEqual([]);
   });
 
