@@ -74,15 +74,20 @@ only — never bold it). What changed is the store around them:
 - **Shelves:** every book in the grid stands on a `ShelfPlank`. The grid's
   column gap (12px) is exactly twice the plank's bleed, so a row of cards is one
   continuous shelf — keep them in step if either changes. No card box.
-- **Price stickers** (`PriceSticker`): sunburst shop labels (2026-10-08 —
-  a shallow 28-point starburst edge, faint lighter sunrays, a printed rim
-  ring; 58px on cards, 62px on the detail hero; label condensed to 85% width
-  at the 12px floor), matte, one colour
+- **Price stickers** (`PriceSticker`): a MIX of real shop stickers (Chef,
+  2026-10-09, from a photo of a used-bookstore cover — "the stickers are not
+  the same"): a round **dot**, a printed **label** (shelf-colour header band
+  over a barcode, peeled corner), a hand-priced **tag** (shelf-colour edge and
+  band, the shelf word in Caveat marker, curled corner) and a solid **block**
+  with a paper window. One colour
   per shelf (theme `STICKER`) — Reading (yellow), On reader (mint), Read
   (blue), Want to read (lavender), Abandoned (coral, reads "Gave up"). **Tilt rule (Chef, 2026-10-08): no tilted buttons or UI
   elements in BookGeek — but stickers on books tilt, for realism.** Each
-  sticker's tilt (≤ 8° either way) and corner nudge is seeded from the book's
-  id (`stickerPlacement`), so it never jumps on a re-render and matches
+  sticker's shape, corner (top-left or top-right — always left when the book
+  shows a bookmark ribbon), tilt (≤ 12°) and offset (4–30px down, 4–18px in)
+  are seeded from the book's id (`stickerPlacement`, FNV-1a + a murmur
+  finalizer), never Math.random, so a sticker never jumps on a re-render and
+  matches
   between grid and detail. Unread
   wears none: it's most of the library (371 of 554), so no sticker is the
   default. The label is drawn with `content: attr(data-label)`, so it adds no

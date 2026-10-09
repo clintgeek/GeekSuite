@@ -1,7 +1,8 @@
 /**
  * ShelfTalker — the hand-lettered card a bookseller clips to the shelf under
- * a book they want you to notice. The ONLY handwriting in BookGeek (Caveat),
- * on an index card with a red rule across the top.
+ * a book they want you to notice. Handwritten in Caveat on an index card with
+ * a red rule across the top. (The only other handwriting is the marker on a
+ * hand-priced PriceSticker tag.)
  *
  * One talker per book at most, and only when there is something to say
  * (`talkerFor`): a book you're partway through, or a five-star book. The

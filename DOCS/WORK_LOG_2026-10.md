@@ -60,3 +60,13 @@ Verified already done, and the todo list corrected:
 - **Registration gate:** shipped 2026-09-25. **Storefront importer:** superseded by the Playnite-only decision.
 
 Gates: full basegeek API suite (142 suites, 3,086 tests), the other eight backends, and every touched frontend. Mobile harness, phone and desktop with `--enforce-a11y`, for the seven touched apps.
+
+### BookGeek — a mix of real shop stickers (2026-10-09)
+
+Chef rejected the uniform sunburst (2026-10-08): real used-bookstore covers carry *different* stickers, in different spots and at different angles. `PriceSticker` now draws four kinds:
+- a round dot;
+- a printed label with a header band, a barcode and a peeled corner;
+- a hand-priced tag in Caveat with a curled corner;
+- a solid block with a paper window.
+
+Shape, corner, tilt (≤ 12°) and offset are seeded from the book id. A book showing a ribbon is always stickered on the left. FNV-1a gained a murmur finalizer, because ids that differed only in their last character clustered. Tests were revert-checked (4 red against the old component). Harness: phone and desktop, `--enforce-a11y`.

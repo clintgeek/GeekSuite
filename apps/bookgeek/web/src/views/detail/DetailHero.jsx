@@ -98,7 +98,7 @@ export default function DetailHero({ book, shelves, onClose, showClose = false }
             ribbon={bookmarked}
             ribbonTestId="detail-cover-ribbon"
           />
-          <PriceSticker book={book} size={62} />
+          <PriceSticker book={book} scale={1.1} />
           <ShelfTalker book={book} sx={{ fontSize: "1.25rem" }} />
         </Box>
         {/* The shelf runs the width of the hero. */}

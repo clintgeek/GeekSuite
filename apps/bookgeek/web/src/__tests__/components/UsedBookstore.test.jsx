@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import BookCard from '../../components/BookCard';
 import BargainBin from '../../components/BargainBin';
-import { stickerFor, stickerPlacement } from '../../components/PriceSticker';
+import { stickerFor, stickerPlacement, SHAPES } from '../../components/PriceSticker';
 import { talkerFor } from '../../components/ShelfTalker';
 import { BOOKS, SHELVES } from '../fixtures';
 import { renderWithProviders } from '../testUtils';
@@ -52,22 +52,29 @@ describe('price sticker placement — stuck on by hand, never moving', () => {
     expect(stickerPlacement({ _id: 'b1' })).toEqual(stickerPlacement({ id: 'b1' }));
   });
 
-  it('varies across a shelf of books: tilt both ways, more than one offset', () => {
+  it('varies across a shelf of books: every kind of sticker, both corners, tilt both ways', () => {
     const all = ids.map((id) => stickerPlacement({ id }));
-    expect(all.some((p) => p.rotate < -2)).toBe(true);
-    expect(all.some((p) => p.rotate > 2)).toBe(true);
-    expect(new Set(all.map((p) => `${p.top},${p.left}`)).size).toBeGreaterThan(5);
+    expect(new Set(all.map((p) => p.shape))).toEqual(new Set(SHAPES));
+    expect(new Set(all.map((p) => p.side))).toEqual(new Set(['left', 'right']));
+    expect(all.some((p) => p.rotate < -4)).toBe(true);
+    expect(all.some((p) => p.rotate > 4)).toBe(true);
+    expect(new Set(all.map((p) => `${p.top},${p.offset}`)).size).toBeGreaterThan(10);
   });
 
-  it('stays slight: at most 8° and a few px from the corner', () => {
+  it('stays on the cover\'s top: at most 12° and within reach of a corner', () => {
     for (const id of ids) {
       const p = stickerPlacement({ id });
-      expect(Math.abs(p.rotate)).toBeLessThanOrEqual(8);
-      expect(p.top).toBeGreaterThanOrEqual(3);
-      expect(p.top).toBeLessThanOrEqual(11);
-      expect(p.left).toBeGreaterThanOrEqual(4);
-      expect(p.left).toBeLessThanOrEqual(14);
+      expect(Math.abs(p.rotate)).toBeLessThanOrEqual(12);
+      expect(p.top).toBeGreaterThanOrEqual(4);
+      expect(p.top).toBeLessThanOrEqual(30);
+      expect(p.offset).toBeGreaterThanOrEqual(4);
+      expect(p.offset).toBeLessThanOrEqual(18);
     }
+  });
+
+  it('keeps clear of the bookmark ribbon: a book in progress is stickered on the left', () => {
+    const right = ids.find((id) => stickerPlacement({ id }).side === 'right');
+    expect(stickerPlacement({ id: right, readingProgress: 40 }).side).toBe('left');
   });
 
   it('a book with no id sits square in the corner', () => {
@@ -77,7 +84,9 @@ describe('price sticker placement — stuck on by hand, never moving', () => {
   it('the card wears its own book\'s tilt', () => {
     renderWithProviders(<BookCard book={read100} shelves={SHELVES} />);
     const { rotate } = stickerPlacement(read100);
-    expect(getComputedStyle(screen.getByTestId('price-sticker')).transform).toBe(`rotate(${rotate}deg)`);
+    const sticker = screen.getByTestId('price-sticker');
+    expect(getComputedStyle(sticker).transform).toBe(`rotate(${rotate}deg)`);
+    expect(sticker).toHaveAttribute('data-shape', stickerPlacement(read100).shape);
   });
 });
 
