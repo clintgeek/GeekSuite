@@ -8,7 +8,7 @@ import { describe, expect, it } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import BookCard from '../../components/BookCard';
 import BargainBin from '../../components/BargainBin';
-import { stickerFor } from '../../components/PriceSticker';
+import { stickerFor, stickerPlacement } from '../../components/PriceSticker';
 import { talkerFor } from '../../components/ShelfTalker';
 import { BOOKS, SHELVES } from '../fixtures';
 import { renderWithProviders } from '../testUtils';
@@ -41,6 +41,43 @@ describe('price sticker', () => {
     expect(sticker).toHaveAttribute('data-tone', 'read');
     expect(sticker.textContent).toBe('');
     expect(sticker.querySelector('[data-label]')).toHaveAttribute('data-label', 'Read');
+  });
+});
+
+describe('price sticker placement — stuck on by hand, never moving', () => {
+  const ids = Array.from({ length: 40 }, (_, i) => `book-${i}`);
+
+  it('is the same every time for the same book, so it never jumps on a re-render', () => {
+    expect(stickerPlacement({ id: 'b1' })).toEqual(stickerPlacement({ id: 'b1' }));
+    expect(stickerPlacement({ _id: 'b1' })).toEqual(stickerPlacement({ id: 'b1' }));
+  });
+
+  it('varies across a shelf of books: tilt both ways, more than one offset', () => {
+    const all = ids.map((id) => stickerPlacement({ id }));
+    expect(all.some((p) => p.rotate < -2)).toBe(true);
+    expect(all.some((p) => p.rotate > 2)).toBe(true);
+    expect(new Set(all.map((p) => `${p.top},${p.left}`)).size).toBeGreaterThan(5);
+  });
+
+  it('stays slight: at most 8° and a few px from the corner', () => {
+    for (const id of ids) {
+      const p = stickerPlacement({ id });
+      expect(Math.abs(p.rotate)).toBeLessThanOrEqual(8);
+      expect(p.top).toBeGreaterThanOrEqual(3);
+      expect(p.top).toBeLessThanOrEqual(11);
+      expect(p.left).toBeGreaterThanOrEqual(4);
+      expect(p.left).toBeLessThanOrEqual(14);
+    }
+  });
+
+  it('a book with no id sits square in the corner', () => {
+    expect(stickerPlacement({}).rotate).toBe(0);
+  });
+
+  it('the card wears its own book\'s tilt', () => {
+    renderWithProviders(<BookCard book={read100} shelves={SHELVES} />);
+    const { rotate } = stickerPlacement(read100);
+    expect(getComputedStyle(screen.getByTestId('price-sticker')).transform).toBe(`rotate(${rotate}deg)`);
   });
 });
 
