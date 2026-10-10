@@ -238,6 +238,51 @@ describe('POST /api/auth/refresh', () => {
 
     expect(res.status).toBe(400);
   });
+
+  // The BuJoGeek → TodoGeek rename retired the app id 'bujogeek'. A cached
+  // bundle that still names it on /refresh must get a usable session back,
+  // not an access token whose `app` claim every route then refuses.
+  it('drops an app name outside VALID_APPS instead of minting a dead token', async () => {
+    const { verifyAccessToken } = await import('../middleware/auth.js');
+    const { default: jwt } = await import('jsonwebtoken');
+    await createTestUser({ email: 'heidi@example.com', password: 'password123' });
+    const loginRes = await login('heidi@example.com', 'password123');
+
+    const res = await request(app)
+      .post('/api/auth/refresh')
+      .send({ refreshToken: loginRes.body.refreshToken, app: 'bujogeek' });
+
+    expect(res.status).toBe(200);
+    expect(res.body.user.app).toBeNull();
+    expect(jwt.decode(res.body.token).app).toBeNull();
+    expect(verifyAccessToken(res.body.token).ok).toBe(true);
+  });
+
+  it('lowercases a known app name on refresh', async () => {
+    const { default: jwt } = await import('jsonwebtoken');
+    await createTestUser({ email: 'ivan@example.com', password: 'password123' });
+    const loginRes = await login('ivan@example.com', 'password123');
+
+    const res = await request(app)
+      .post('/api/auth/refresh')
+      .send({ refreshToken: loginRes.body.refreshToken, app: 'TodoGeek' });
+
+    expect(res.status).toBe(200);
+    expect(jwt.decode(res.body.token).app).toBe('todogeek');
+  });
+});
+
+describe('access token minted under a retired app id', () => {
+  it('is refused, so the client refreshes or re-logs in rather than crashing', async () => {
+    const { verifyAccessToken } = await import('../middleware/auth.js');
+    const { default: jwt } = await import('jsonwebtoken');
+    const stale = jwt.sign(
+      { id: new mongoose.Types.ObjectId(), username: 'u', email: 'u@example.com', app: 'bujogeek' },
+      process.env.JWT_SECRET,
+      { expiresIn: '1h' }
+    );
+    expect(verifyAccessToken(stale)).toEqual({ ok: false, status: 403, message: 'Invalid app token' });
+  });
 });
 
 describe('POST /api/auth/logout', () => {

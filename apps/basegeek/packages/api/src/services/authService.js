@@ -44,6 +44,17 @@ export function parseTokenTtlSeconds(spec) {
 // Token generation
 // ---------------------------------------------------------------------------
 
+/**
+ * The `app` claim a token may carry: a VALID_APPS id, lowercased, or null.
+ * @param {*} app
+ * @returns {string|null}
+ */
+export function normalizeClaimApp(app) {
+  if (typeof app !== 'string') return null;
+  const id = app.trim().toLowerCase();
+  return VALID_APPS.includes(id) ? id : null;
+}
+
 // Token generation with app context
 export const generateToken = (user, app = null) => {
   if (!user || !user._id) {
@@ -163,9 +174,17 @@ export const rotateRefreshToken = async (oldRefreshToken, app = null) => {
     }
   }
 
+  // The `app` here is a request-body field, and /refresh never validated it:
+  // a body naming an app outside VALID_APPS (a retired name from a cached
+  // bundle, or a mixed-case spelling) minted an access token whose `app`
+  // claim `verifyAccessToken` then refuses on every route — a refresh that
+  // "succeeded" into a dead session. An unknown app becomes no app, which is
+  // a valid, app-less token (see middleware/auth.js).
+  const claimApp = normalizeClaimApp(app);
+
   // Issue new token pair (same family)
-  const token = generateToken(user, app);
-  const refreshToken = await generateRefreshToken(user, app, family);
+  const token = generateToken(user, claimApp);
+  const refreshToken = await generateRefreshToken(user, claimApp, family);
 
   return {
     token,
@@ -174,7 +193,7 @@ export const rotateRefreshToken = async (oldRefreshToken, app = null) => {
       id: user._id,
       username: user.username,
       email: user.email,
-      app
+      app: claimApp
     }
   };
 };
