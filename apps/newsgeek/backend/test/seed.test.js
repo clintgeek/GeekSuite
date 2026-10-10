@@ -51,7 +51,10 @@ describe('first run', () => {
   test('the plan\'s "No working feed" list is not seeded', async () => {
     await runSeed({ Place, Source });
     const all = (await Source.find({}, { homepage: 1, feeds: 1 }).lean()).flatMap((s) => [s.homepage, ...s.feeds.map((f) => f.url)]).join(' ');
-    for (const gone of ['hsu.edu', 'obu.edu', 'axios.com', 'tailgate', 'clarkcountyar', 'hotspringcounty']) {
+    // clarkcountyar.gov came back with a working feed (2026-10-10), so it is
+    // seeded now. The hijacked domains (spam on old newspaper names) must
+    // never be: banner-news.com, hsuoracle.com, crossettar.com.
+    for (const gone of ['hsu.edu', 'obu.edu', 'axios.com', 'tailgate', 'hotspringcounty', 'banner-news.com', 'hsuoracle.com', 'crossettar.com']) {
       assert.ok(!all.toLowerCase().includes(gone), gone);
     }
   });
@@ -103,5 +106,24 @@ describe('re-runs never clobber', () => {
     await Promise.all([runSeed({ Place, Source }), runSeed({ Place, Source })]);
     assert.equal(await Place.countDocuments(), PLACES.length);
     assert.equal(await Source.countDocuments(), SOURCES.length);
+  });
+});
+
+describe('seed data integrity (pure)', () => {
+  test('every source place and every place parent exists; parents come first', () => {
+    const seen = new Set();
+    for (const p of PLACES) {
+      if (p.parent) assert.ok(seen.has(p.parent), `${p.slug}: parent ${p.parent} must come earlier`);
+      assert.ok(!seen.has(p.slug), `duplicate place ${p.slug}`);
+      seen.add(p.slug);
+    }
+    for (const s of SOURCES) for (const pl of s.places || []) assert.ok(seen.has(pl), `${s.slug}: unknown place ${pl}`);
+  });
+
+  test('slugs and feed URLs are unique across the starter and south lists', () => {
+    const slugs = SOURCES.map((s) => s.slug);
+    assert.deepEqual(slugs.filter((x, i) => slugs.indexOf(x) !== i), []);
+    const urls = SOURCES.flatMap((s) => s.feeds.map((f) => f.url));
+    assert.deepEqual(urls.filter((x, i) => urls.indexOf(x) !== i), []);
   });
 });

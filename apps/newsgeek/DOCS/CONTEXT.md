@@ -116,3 +116,66 @@ Watchtower recreates the container with its old env.
   module variable was tried and dropped: Apollo memoizes reads per field and served the old
   list after the write.
 
+
+### 2026-10-10: south half of Arkansas (sources research)
+
+Chef asked for every source covering Clark County (Arkadelphia, Gurdon, Malvern), Hot Springs,
+Little Rock, Texarkana, Conway and the southern half of the state.
+- **How it was done:** five parallel research passes: home counties, central, southwest,
+  southeast/Delta, and statewide official.
+- **Verification:** each feed was fetched once with the honest UA and had to return items.
+- **Paywall check:** one article page per source. The check looked for publisher markup
+  (`isAccessibleForFree`), the Zephr/Piano, CherryRoad and PMPro plugins, and "premium
+  content" text. Metered counts as paywalled.
+- **Result:** 58 sources in `backend/src/seed/southArkansas.js` and 100 new gazetteer places
+  (37 counties with FIPS, 78 towns). New sources are inserted on the next boot; existing
+  rows are untouched.
+  - 26 journalism, 26 official and 6 Google News gap-fill searches.
+  - The official sources include three NWS alert zones (central/LZK, southwest/SHV,
+    southeast/JAN), each with county AND forecast-zone codes from `api.weather.gov/zones`.
+  - The gap-fill searches cover Gurdon, Hot Springs/Garland, Texarkana, Camden, El Dorado
+    and Hope/Prescott.
+  - Paywalled (metered): Log Cabin Democrat, Saline Courier, Dumas Clarion, Ashley County
+    Ledger, Ashley News Observer, Chicot County Spectator (CherryRoad plugin).
+- **Dropped after verifying:** KTVE (mostly Louisiana), Texarkana College (TX campus),
+  Entergy's all-company newsroom (the `tag/arkansas` feed is used instead), Philander
+  Smith (low-volume PR), and the Ashley/Chicot `/feed/` (classifieds; the news category
+  feeds are used).
+- **Hijacked domains, never add** (a seed test enforces it): `banner-news.com` (Magnolia
+  Banner-News), `hsuoracle.com` (HSU Oracle), `crossettar.com`. All three now serve spam.
+- **Place tagging changed** (`ingest/places.js`), because names like Union County, Conway,
+  Benton and Stuttgart exist elsewhere and Hope, Stamps and Magnolia are ordinary words:
+  - **Case:** a match must be Title Case or ALL CAPS, never lower case.
+  - **Default:** every town and county needs Arkansas context, except `UNIQUE_PLACE_SLUGS`.
+  - **Common words** (`COMMON_WORD_PLACE_SLUGS`) need strong context: the source covers
+    the place or its county, the text names the county, or the text says "<Name>, Ark."
+  - Revert-checked: 8 mutations, each red.
+- **Gaps** (so nobody researches them again):
+  - Home:
+    - Gurdon Times: Facebook only.
+    - Siftings Herald and Glenwood Herald: gone.
+    - Pike County: no outlet at all.
+    - Montgomery County News, Sheridan Headlight, Hot Springs Village Voice: HTML only.
+    - Henderson State: no feed.
+    - Sheriffs, police and fire, and small-town city halls: Facebook only.
+    - Hot Spring County gov and Lake Ouachita: WordPress with zero posts.
+    - No radio newsroom feeds.
+  - Central:
+    - Arkansas Business, FOX 16 and Lonoke News block bots.
+    - The Cabot/Lonoke/Maumelle/Sherwood/Jacksonville/NLR weeklies folded in 2017.
+    - The Cabot and Jacksonville CivicPlus feeds exist but are empty; recheck later.
+  - Southwest:
+    - Texarkana Gazette and El Dorado News-Times: WEHCO hard paywall, no RSS (Google News only).
+    - Camden News: parked.
+    - Hope Star, Nevada County Picayune and Little River News: closed.
+    - Hope and Magnolia city sites: behind a Cloudflare challenge.
+  - Southeast:
+    - McGehee Times, Warren Eagle Democrat and Lincoln Ledger: placeholder sites.
+    - Cleveland County Herald: feed stale since 2022.
+    - Advance-Monticellonian: feed is syndicated filler.
+    - UAM and Phillips CC: no RSS.
+  - Statewide:
+    - No feed for the Secretary of State, the Legislature, the Supreme Court or State Parks.
+    - Dept of Education: bad TLS.
+    - The Arkansas Press Association member list
+      (`arkansaspress.org/apa-newspaper-members/`) is the place to look for new papers.

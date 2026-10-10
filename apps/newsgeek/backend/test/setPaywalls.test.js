@@ -6,6 +6,7 @@ import { describe, test, before, after, beforeEach } from 'node:test';
 import assert from 'node:assert/strict';
 import { setPaywalls } from '../src/seed/setPaywalls.js';
 import { PAYWALL_BY_SLUG, SOURCES } from '../src/seed/data.js';
+import { SOUTH_SOURCES } from '../src/seed/southArkansas.js';
 import { runSeed } from '../src/seed/seed.js';
 import { startMongo, stopMongo, clearAll } from './helpers/mongo.js';
 
@@ -34,7 +35,10 @@ describe('set-paywalls', () => {
     for (const slug of Object.keys(PAYWALL_BY_SLUG)) {
       assert.equal(SOURCES.find((s) => s.slug === slug).access.paywall, PAYWALL_BY_SLUG[slug], `seed data agrees for ${slug}`);
     }
-    assert.equal(SOURCES.filter((s) => s.access.paywall !== 'none').length, 5, 'nothing else in the seed is paywalled');
+    // The south-Arkansas sources are new rows: they are inserted with their
+    // verdicts already set, so the script never needs to touch them.
+    const southSlugs = new Set(SOUTH_SOURCES.map((s) => s.slug));
+    assert.equal(SOURCES.filter((s) => !southSlugs.has(s.slug) && s.access.paywall !== 'none').length, 5, 'nothing else in the starter seed is paywalled');
   });
 
   test('sets exactly access.paywall on exactly those slugs, reporting old → new', async () => {

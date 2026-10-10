@@ -11,7 +11,9 @@
  * requests a minute), NWS 10, Google News 60 (be polite to the aggregator too).
  */
 
-export const PLACES = [
+import { SOUTH_PLACES, SOUTH_SOURCES } from './southArkansas.js';
+
+const BASE_PLACES = [
   { slug: 'us', name: 'United States', kind: 'country', parent: null, aliases: ['U.S.', 'U.S.A.', 'United States of America'], fips: null },
   { slug: 'arkansas', name: 'Arkansas', kind: 'state', parent: 'us', aliases: [], fips: '05' },
 
@@ -70,7 +72,7 @@ export const PAYWALL_BY_SLUG = {
 };
 const walled = (slug, access) => ({ ...access, paywall: PAYWALL_BY_SLUG[slug] });
 
-export const SOURCES = [
+const BASE_SOURCES = [
   // ---- Local journalism -------------------------------------------------
   {
     slug: 'arkadelphian', name: 'The Arkadelphian', homepage: 'https://arkadelphian.com',
@@ -240,5 +242,10 @@ export const SOURCES = [
     notes: 'Reuters has no public RSS.',
   },
 ];
+
+// The south half of Arkansas (2026-10-10 research): its own module so the
+// starter list above stays readable. Same insert-if-absent seeding.
+export const PLACES = [...BASE_PLACES, ...SOUTH_PLACES];
+export const SOURCES = [...BASE_SOURCES, ...SOUTH_SOURCES];
 
 export default { PLACES, SOURCES };
