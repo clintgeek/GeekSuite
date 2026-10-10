@@ -176,7 +176,7 @@ days).
 | `fitnessgeek/fitnessGoalService.js:238` | `mealPlan` | `structured:balanced` | yes | yes | **no fallback exists** — *"No deterministic fallback exists for a two-week menu, so a refusal is the answer"* | 0 |
 | `fitnessgeek/aiInsightsService.js` (×7: brief, summary, correlations, weeklyReport, trendWatch, coaching, chat) | prose | **no** — *"prose does not filter, so sending it would add no safety"* (routing doc §7.9) | no | mixed | `UNAVAILABLE_MESSAGE` placeholder | 0 |
 | `basegeek/graphql/glance/briefService.js:314` | `startgeek:brief` | **no** | no (free text, `isUsableBrief` validated) | no — cached daily digest | `deterministicBrief(facts)` | 24 (cap is 3/day; **effectively saturated**) |
-| `basegeek/graphql/bujogeek/services/reviewService.js:455` | `bujogeek:review` | **no** | yes (schema) | opt-in gated | `buildFallbackDraft(facts)` | 0 |
+| `basegeek/graphql/todogeek/services/reviewService.js:455` | `todogeek:review` | **no** | yes (schema) | opt-in gated | `buildFallbackDraft(facts)` | 0 |
 | `basegeek/graphql/notegeek/suggest.js:449` | `notegeek:suggest` | **no** | yes (schema) | opt-in gated | `{related: null}` | 0 |
 | `basegeek/graphql/notegeek/tidy.js:52` | `notegeek:tidy_markdown` | **no** | no (free text) | yes, user clicks Tidy | returns original content unchanged | 1 |
 | `basegeek/graphql/bookgeek/library.js:326,478` | `bookgeek:whatNext`/metadata | **no** | yes (schema) | no, background suggestion | `fallbackPicks(...)` / author-sibling tags | 0 |
@@ -191,7 +191,7 @@ days).
    only 5 (`dishEstimate`, `foodParse`, `foodClassify`, `bodyCompExtract`,
    `nutritionGoals`, `mealPlan` — six, counting both goal features) send a
    `need`. Every `runAIFeature` caller in basegeek's GraphQL layer —
-   StartGeek's brief, BuJoGeek's review, NoteGeek's suggest/tidy, BookGeek's
+   StartGeek's brief, TodoGeek's review, NoteGeek's suggest/tidy, BookGeek's
    what-next/metadata, FitnessGeek's quickadd — routes on the app's
    `AIAppConfig` row alone, with no task/weight signal at all. StoryGeek sends
    none either. This means the capability-routing system built in
@@ -209,10 +209,10 @@ days).
    a coding assistant, which runs much larger prompts than a JSON food-log
    extraction) are not something this analysis can price.
 3. **Several shipped features show zero real traffic in nine days**:
-   `nutritionGoals`, `mealPlan`, `bujogeek:review`, `notegeek:suggest`,
+   `nutritionGoals`, `mealPlan`, `todogeek:review`, `notegeek:suggest`,
    `bookgeek:whatNext`/metadata, `fitnessgeek:quickadd`, and all seven of
    FitnessGeek's insight generators. Some of these are explicitly opt-in
-   (`natural_language_food_logging` defaults false; BuJoGeek's review checks
+   (`natural_language_food_logging` defaults false; TodoGeek's review checks
    `optedIn`) so zero calls may mean zero opt-ins rather than zero interest —
    but it means the *complexity budget* spent keeping ~80 free rows healthy is
    serving, at most, a handful of features that are actually being called.

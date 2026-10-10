@@ -19,7 +19,7 @@ pulls new images via Watchtower — no inbound access from CI. Details in [DOCS/
 | App | Status | Port | Description |
 |-----|--------|------|-------------|
 | **basegeek** | Running | `8987` | Central hub — SSO auth, GraphQL gateway, AIGeek director, user management |
-| **bujogeek** | Running | `5005` | Bullet-journal daily planner (Today → Review → Plan) |
+| **todogeek** | Running | `5005` | Bullet-journal daily planner (Today → Review → Plan) |
 | **fitnessgeek** | Running | `4080` | Health and fitness tracking — weight, blood pressure, nutrition, Garmin |
 | **flockgeek** | Running | `5001` | Poultry flock management and egg production tracking |
 | **storygeek** | Running | `9977` | Creative writing tool with Codex and narrative generation |
@@ -36,7 +36,7 @@ GeekSuite/
 ├── apps/                  # Active applications
 │   ├── basegeek/          # Central auth + GraphQL gateway (:8987)
 │   ├── bookgeek/          # Book tracking (:1800)
-│   ├── bujogeek/          # Bullet journal (:5005)
+│   ├── todogeek/          # Tasks & habits (:5005)
 │   ├── fitnessgeek/       # Fitness tracking (:4080)
 │   ├── flockgeek/         # Flock management (:5001)
 │   ├── notegeek/          # Notes (:9988)
@@ -98,7 +98,7 @@ GeekSuite/
 ## How to deploy
 
 ```bash
-./build.sh bujogeek      # Build + deploy a single app
+./build.sh todogeek      # Build + deploy a single app
 ./build.sh --all         # Build + deploy everything
 ```
 

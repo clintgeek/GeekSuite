@@ -38,7 +38,7 @@ auth implementation see `apps/basegeek/DOCS/SSO_IMPLEMENTATION.md`.
 
 ```javascript
 const VALID_APPS = [
-  'basegeek', 'notegeek', 'bujogeek', 'fitnessgeek',
+  'basegeek', 'notegeek', 'todogeek', 'fitnessgeek',
   'storygeek', 'startgeek', 'flockgeek', 'musicgeek',
   'babelgeek', 'bookgeek'
 ];
@@ -143,7 +143,7 @@ page load still reloads only once. A reload drops unsaved page state — worth k
 one part of this that is user-visible — but it's the last resort after a same-cookie retry has
 already failed, not the first response to any 403.
 
-**Server-to-server: the six auth proxies.** notegeek, bujogeek, fitnessgeek, storygeek, flockgeek
+**Server-to-server: the six auth proxies.** notegeek, todogeek, fitnessgeek, storygeek, flockgeek
 and bookgeek expose `POST /api/auth/{refresh,logout}` as thin proxies — the browser calls its own
 app's backend, the backend replays the browser's cookies up to basegeek with axios. That upstream
 call is not a browser request: it sends no `Origin` and no `Referer`, so `csrfGuard`'s "neither
@@ -197,7 +197,7 @@ alike to a user: the first means log out, the second means try again in a moment
 **Who does the checking.** `attachUser()` / `optionalUser()` from `@geeksuite/user/server` guard
 every authenticated route in the suite. By default they validate over HTTP —
 `GET BASEGEEK_URL/api/users/me` with the caller's token, bounded by `BASEGEEK_TIMEOUT_MS`
-(default 8 s). That is correct for the **six consumer backends** — bookgeek, bujogeek,
+(default 8 s). That is correct for the **six consumer backends** — bookgeek, todogeek,
 fitnessgeek, flockgeek, notegeek, storygeek — because basegeek is a different process and the only
 holder of `JWT_SECRET`.
 
@@ -257,7 +257,7 @@ token is bad.
 ## App Migration Status
 
 > **Note**: The table below reflects state as of early 2026 and is partially historical.
-> As of April 2026: basegeek, fitnessgeek, and bujogeek have completed consolidation +
+> As of April 2026: basegeek, fitnessgeek, and todogeek have completed consolidation +
 > hardening. storygeek and flockgeek are consolidated but not yet hardened. bookgeek,
 > notegeek, dashgeek, and startgeek are pending consolidation. See `DOCS/SUITE_TODO.md`
 > for the current backlog.
@@ -269,7 +269,7 @@ logging, graceful shutdown, and environment-driven CORS.
 that moved a lot this day — how much of each app's own CRUD lives on basegeek's gateway vs.
 its local REST. fitnessgeek's food-log writes and bookgeek's profile/filters/shelves/AI-status
 are now gateway-owned with the REST routes deleted; notegeek's legacy REST and `Note` model are
-gone; every gateway mutation module (bujogeek, fitnessgeek, notegeek, flockgeek, bookgeek) has
+gone; every gateway mutation module (todogeek, fitnessgeek, notegeek, flockgeek, bookgeek) has
 zod validation. See `DOCS/SUITE_TODO.md` "GraphQL consolidation audit" for the current per-app
 state, which has moved past this table.
 
@@ -312,7 +312,7 @@ users get responses, but log noise is misleading. Polish ticket — not a fire.
 ## Time zones (Q42, Night 2 — 2026-09-06)
 
 Containers run **UTC**, full stop. The `TZ=America/Chicago` line in every consumer app's
-`docker-compose.yml` (bookgeek, fitnessgeek, notegeek, flockgeek, storygeek, bujogeek, startgeek)
+`docker-compose.yml` (bookgeek, fitnessgeek, notegeek, flockgeek, storygeek, todogeek, startgeek)
 was removed — it was inert dead weight. None of these images carry `tzdata` (plain
 `node:20-alpine`/`-slim`), so `TZ` had no effect on any server-side `new Date()`, `Date.now()`, or
 log timestamp; it was misleading, not merely useless, because it looked like a config a reader
@@ -346,7 +346,7 @@ its own `TZ` handling, if any, is unaudited by this pass.
 
 **Built/changed:**
 - Removed the `TZ: America/Chicago` line from the seven in-scope compose files: `apps/bookgeek`,
-  `apps/fitnessgeek`, `apps/notegeek`, `apps/flockgeek`, `apps/storygeek`, `apps/bujogeek`,
+  `apps/fitnessgeek`, `apps/notegeek`, `apps/flockgeek`, `apps/storygeek`, `apps/todogeek`,
   `apps/startgeek` — each a single-line, byte-identical-otherwise diff, YAML-validated with
   `python3 -c "import yaml; yaml.safe_load(...)"` (no `docker compose config` available/allowed).
 - Added the "Time zones" section above.
@@ -432,7 +432,7 @@ app: everything below is either a bug fix or additive, and every consumer was gr
   yet — which is why the trap was worth removing before something does.
 - **`packages/ui/src/surfaces/GeekDialog.jsx` — `dialogProps.PaperProps` was silently dropped.**
   `dialogProps` is the slot every app primitive forwards its `...rest` into (PremiumDialog,
-  BujoDialog, LedgerDialog, CodexDialog), and this assigned `PaperProps` rather than merging it,
+  TodoDialog, LedgerDialog, CodexDialog), and this assigned `PaperProps` rather than merging it,
   unlike `GeekSheet`, which has always merged. Latent — no app passes it today. Ladder is now
   full-screen defaults → `dialogProps` → the primitive's own `sx`.
 - **`packages/schemas/fitnessgeek/weight.js` — exports `weightBounds`** (BURN_REVIEW note (r)).
@@ -472,7 +472,7 @@ app: everything below is either a bug fix or additive, and every consumer was gr
   ever stops being true.
 - **`useUserStore`'s `useUser()` can tear**: it seeds `useState` from the module store at first
   render and only subscribes in an effect, so a store change landing in that window is missed
-  until the next notify. Live in bujogeek and notegeek; not observed, and the fix is a
+  until the next notify. Live in todogeek and notegeek; not observed, and the fix is a
   `useSyncExternalStore` rewrite of a module every app's bootstrap touches.
 - **`createUserModel` has no consumers at all.** Left (now trap-free) rather than deleted —
   deleting a shared factory is a Chef call, not a going-over call.

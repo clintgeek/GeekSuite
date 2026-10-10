@@ -77,26 +77,26 @@ Pull from here when planning the next pass; update as work lands or priorities s
   - **Still open, small:** the ranker's `chosenForQuery` pin is read by `foodRanker` and written by nothing, so "what you picked for this query last time" does not rank. Note the describe path has its OWN history reuse (`findInHistory`), so the common case is already covered; this only improves the search fallback.
 - **Shell Grammar Visual Pass**: Verify every app at mobile viewports (iPhone 14) and desktop widths in both light and dark modes. Ensure no regressions from the GeekShell navigation migration.
 - **StoryGeek Three-Column Surface**: Three-column play surface loses 220px on desktop due to sidebar; evaluate breakpoint threshold for collapsing side panels to preserve editor breathing room.
-- **Shared Mobile Bottom-Nav Primitive**: Standardize bottom navigation across bujogeek, notegeek, fitnessgeek, and flockgeek into one `@geeksuite/ui` primitive.
+- **Shared Mobile Bottom-Nav Primitive**: Standardize bottom navigation across todogeek, notegeek, fitnessgeek, and flockgeek into one `@geeksuite/ui` primitive.
 
 ### Contrast & Typography
 - **Contrast Regression Ratchet**: Keep `packages/ui/src/__tests__/themeContrast.test.js` green across all light and dark theme permutations.
 - ~~**BookGeek Primary Button Contrast**~~ — **gone 2026-09-30** with the Used Bookstore restyle: contained buttons are bookstore green now, and `themeContrast` covers them.
-- ~~**Login Wordmark Brand Colors**~~ — **done 2026-10-06**: bujogeek and flockgeek were the only apps passing hardcoded hex to `LoginSplash`; both now pass theme tokens (`text.primary` / `primary.main`) like the other six, so the wordmark carries each app's own contrast-checked palette.
+- ~~**Login Wordmark Brand Colors**~~ — **done 2026-10-06**: todogeek and flockgeek were the only apps passing hardcoded hex to `LoginSplash`; both now pass theme tokens (`text.primary` / `primary.main`) like the other six, so the wordmark carries each app's own contrast-checked palette.
 - **StartGeek Wallpaper Scrim**: Labels and weather glyphs can lose contrast against bright user-selected wallpapers; verify dock label shadows and weather text contrast.
 
 ### Polish & Accessibility
-- ~~**Auth-Hydration Splash**~~ — **already resolved; verified 2026-10-06** with `/api/me` delayed 3 s in all 8 MUI apps, dark and light: every loading state sits inside its app's ThemeProvider on its own `background.default` (bookgeek "Checking session…", gamegeek/thinggeek marks, spinners elsewhere). Only bujogeek shows an empty themed body with no spinner — polish, not this bug.
-- ~~**Reduced Motion Support**~~ — **done 2026-10-06**: the five framer-motion apps (flockgeek, fitnessgeek, bujogeek, storygeek, startgeek) wrap their root in `<MotionConfig reducedMotion="user">`, so every animation honours the OS setting. bujogeek's grain overlay no longer exists.
+- ~~**Auth-Hydration Splash**~~ — **already resolved; verified 2026-10-06** with `/api/me` delayed 3 s in all 8 MUI apps, dark and light: every loading state sits inside its app's ThemeProvider on its own `background.default` (bookgeek "Checking session…", gamegeek/thinggeek marks, spinners elsewhere). Only todogeek shows an empty themed body with no spinner — polish, not this bug.
+- ~~**Reduced Motion Support**~~ — **done 2026-10-06**: the five framer-motion apps (flockgeek, fitnessgeek, todogeek, storygeek, startgeek) wrap their root in `<MotionConfig reducedMotion="user">`, so every animation honours the OS setting. todogeek's grain overlay no longer exists.
 - ~~**Themed Tooltips**~~ — **already done**: `createGeekSuiteTheme`'s `MuiTooltip` override uses theme-derived `tooltipBg`/`tooltipFg` (re-checked 2026-10-06).
-- ~~**"Updating…" on the other PWAs**~~ — **done 2026-10-06** in notegeek, bujogeek, flockgeek, storygeek, thinggeek (all reload after a new worker activates). **Deliberately not** in fitnessgeek: it defers updates until the page is hidden (`PWAUpdatePrompt.jsx`, 2026-09-27), so no reload follows the download and the pill would never clear. Not in startgeek: no MUI.
+- ~~**"Updating…" on the other PWAs**~~ — **done 2026-10-06** in notegeek, todogeek, flockgeek, storygeek, thinggeek (all reload after a new worker activates). **Deliberately not** in fitnessgeek: it defers updates until the page is hidden (`PWAUpdatePrompt.jsx`, 2026-09-27), so no reload follows the download and the pill would never clear. Not in startgeek: no MUI.
 - **Offline Pages**: Give flockgeek and bookgeek `offline.html` theme-aware styles matching their PWA manifest colors.
 
 ---
 
 ## 4. Shared Libraries & Refactors
 
-- ~~**Wire `installShutdownHooks`**~~ — **done 2026-10-06** (`9725bb97`): all nine backends (basegeek, bookgeek, bujogeek, fitnessgeek, flockgeek, gamegeek, notegeek, storygeek, thinggeek) shut down through it, each `onClose` carrying exactly its old cleanup. bujogeek/gamegeek/thinggeek create the server up front so a pre-`listen()` signal still cleans up; fitnessgeek lost a stray SIGINT handler that raced the real one. The hook itself is pinned by a real-SIGTERM test in `packages/logger` (`d6f1934e`). Behaviour change: notegeek/bujogeek/gamegeek/thinggeek now exit 0 (was 1) when the 15 s force-exit fires; a second signal still exits 1.
+- ~~**Wire `installShutdownHooks`**~~ — **done 2026-10-06** (`9725bb97`): all nine backends (basegeek, bookgeek, todogeek, fitnessgeek, flockgeek, gamegeek, notegeek, storygeek, thinggeek) shut down through it, each `onClose` carrying exactly its old cleanup. todogeek/gamegeek/thinggeek create the server up front so a pre-`listen()` signal still cleans up; fitnessgeek lost a stray SIGINT handler that raced the real one. The hook itself is pinned by a real-SIGTERM test in `packages/logger` (`d6f1934e`). Behaviour change: notegeek/todogeek/gamegeek/thinggeek now exit 0 (was 1) when the 15 s force-exit fires; a second signal still exits 1.
 - **FitnessGeek Secrets Parity**: `KEY_VAULT_SECRET` **is** set in the fitnessgeek container (64 chars, checked 2026-09-16). What remains is running the Garmin password backfill (`scripts/encryptGarminPasswords.js`) — Chef's call, same shape as basegeek's encrypt-keys migration, which ran 2026-09-16.
 - **GraphQL Gateway Consolidation Follow-ups**:
   - Migrate remaining FitnessGeek REST reads (food search / barcode / favorites / recent in `foodService.js`) to gateway queries.
@@ -139,18 +139,18 @@ Wanted, not built on the 2026-09-22 overnight run:
   Full phase table and done-when criteria: [`DOCS/GameGeekPlan.md`](GameGeekPlan.md) §11.
   Blocked on P0 prep and Chef's answers in §13.
 - ✅ **DONE 2026-09-25: desktop harness findings, and CI now gates desktop.** Was: 46 findings
-  under `ci.mjs --enforce-a11y --desktop` (18 grammar in bujogeek, and 28 a11y findings over 102
-  nodes in fitnessgeek and bujogeek). All pre-existing; CI ran phone only. Now **0 / 0 / 0 waived across
+  under `ci.mjs --enforce-a11y --desktop` (18 grammar in todogeek, and 28 a11y findings over 102
+  nodes in fitnessgeek and todogeek). All pre-existing; CI ran phone only. Now **0 / 0 / 0 waived across
   380 scenes, phone and desktop**, and `.github/workflows/mobile-harness.yml` passes `--desktop`
   (the job goes from ~17 to ~28 minutes). The fixes:
   - FitnessGeek section captions pin the chrome's own `MUTED` (`Layout/chrome.js`). Light mode's
     `text.secondary` measured 4.12:1 on the always-dark `#0C0A09`.
-  - BuJoGeek sidebar: solid inks in `theme/chrome.js` instead of `rgba(…, α)`. Section captions
+  - TodoGeek sidebar: solid inks in `theme/chrome.js` instead of `rgba(…, α)`. Section captions
     and the "BJ" mark are at 12px. Row descriptions take a chrome ink, not the mode-following
     token.
-  - BuJoGeek quick-add prompt uses `text.muted`. Monthly plan: days outside the month use
+  - TodoGeek quick-add prompt uses `text.muted`. Monthly plan: days outside the month use
     `text.muted`, and today's number and "today" tag go through `readableOn`.
-  - Found by measuring, because axe files sidebar rows as *incomplete*: BuJo's inactive rows were
+  - Found by measuring, because axe files sidebar rows as *incomplete*: TodoGeek's inactive rows were
     3.34:1, and the shared selected-row and badge accent ink failed in several themes (BookGeek
     light 3.4–3.5:1). The fix is `readableAcross` in `@geeksuite/ui`, used by the
     `MuiListItemButton` selected override, GeekSidebar's badge and monogram, and BookGeek's own
@@ -218,10 +218,10 @@ The eraser button and handwriting-to-Markdown are being built
 (`apps/notegeek/DOCS/HANDWRITING.md`). Parked, both "awesome and will work no matter what":
 - **ThingGeek photo markup:** circle the serial plate, or scribble on a damage photo. Chef
   isn't using ThingGeek yet.
-- **A handwritten daily page in BuJoGeek.** Waits until BuJoGeek has been torn apart and
+- **A handwritten daily page in TodoGeek.** Waits until TodoGeek has been torn apart and
   rebuilt.
 
-### BuJoGeek — subtasks, parked (Chef, 2026-09-29: "leave it out for now")
+### TodoGeek — subtasks, parked (Chef, 2026-09-29: "leave it out for now")
 
 Red Pen removed subtasks from the UI (1 in 378 tasks ever had one). If they come back, the
 proposed shape is one level of steps inside a task, not in the list. The row shows only a
@@ -233,20 +233,20 @@ removal must not delete the API side**, only the old frontend components.
 ### Cross-app tags: recall related items across apps — parked (Chef, 2026-10-02)
 
 Chef's vision is to "eventually be able to recall links to related items across apps by tags".
-It's parked because BuJoGeek has no solid tag view to build on yet. What already exists:
+It's parked because TodoGeek has no solid tag view to build on yet. What already exists:
 
 - **The standard is shipped:** `@geeksuite/tags` (lowercase kebab, `/` nesting), migrated in
-  NoteGeek, BuJoGeek and ThingGeek.
+  NoteGeek, TodoGeek and ThingGeek.
 - **The gateway queries are live:** `suiteTags` (tags across the three apps with per-app
   counts) and `taggedAcross(tag, under)` (notes, tasks and things under one tag). Private tasks
   come back as "Private task"; identifiers are never included.
 - **The layout proposed on 2026-10-02, not built:**
   - NoteGeek's tag page gets an "Also tagged" section of tasks and things, collapsed to one
     line on the phone;
-  - BuJoGeek's tag filter gets a quiet "Also tagged: N notes · M things" strip;
+  - TodoGeek's tag filter gets a quiet "Also tagged: N notes · M things" strip;
   - ThingGeek's tag-filtered library gets an "Also tagged" block;
   - tag suggestions in every app draw from `suiteTags`.
-- **Prerequisite:** a real BuJoGeek tag view (a tag page or filter screen) before cross-app
+- **Prerequisite:** a real TodoGeek tag view (a tag page or filter screen) before cross-app
   sections have a home there.
 
 ### BookGeek — audiobooks?
@@ -265,7 +265,7 @@ Proposed 2026-09-22: a `/mcp` route in basegeek so ChatGPT / Claude clients can 
 data through curated, read-only tools. Blocked on Chef's three answers in the plan's §6
 (ChatGPT → OAuth; health data in or out; read-only v1), then a spec via `spec-builder`.
 
-### BuJoGeek — remaining from `DOCS/BUJOGEEK_REVIEW_2026-09.md`
+### TodoGeek — remaining from `DOCS/TODOGEEK_REVIEW_2026-09.md`
 
 All of §1 and §2 shipped 2026-09-20/21. What is left, in the report's own
 recommended order:
@@ -274,7 +274,7 @@ recommended order:
   The override fetch's missing DATE bound was closed 2026-10-06 (below); the index itself is
   served by the partial unique index on `(seriesId, originalDueDate)`.
 - ~~**§3.1 leftover — the unbounded override fetch**~~ — **done 2026-10-06** (`291935bc`): bounded to overrides in the view window plus each master's carry-forward date, still owner-scoped; same results.
-- ~~**§3.2 Two N+1s**~~ — **done 2026-10-06** (`37d73e27`): `taskCount`/`completedCount` share one per-request aggregation (4N `countDocuments` → 1), `currentStreak` one `HabitLog.find` for all habits (N → 1). Per-request batcher in `graphql/bujogeek/batch.js`, keyed on the GraphQL context so a batch never crosses users.
+- ~~**§3.2 Two N+1s**~~ — **done 2026-10-06** (`37d73e27`): `taskCount`/`completedCount` share one per-request aggregation (4N `countDocuments` → 1), `currentStreak` one `HabitLog.find` for all habits (N → 1). Per-request batcher in `graphql/todogeek/batch.js`, keyed on the GraphQL context so a batch never crosses users.
 - ~~**§3.3 `TaskRow` is not memoised**~~ — **done 2026-10-06** (`26ce9ad5`): `memo` + stable handlers; `mapTasksState` only re-sorts a list a task actually changed in (a no-op mutation no longer re-sorts).
 - **§3.5 Two doors onto the blocked state machine** — `updateTaskStatus`'s
   resolver throws a plain Error where `blockTask` throws a classified one, and
@@ -289,11 +289,11 @@ recommended order:
   **Still open:** Plan's Weekly and Backlog cannot edit a task at all (the
   biggest remaining one — the screen whose job is planning can only complete
   or delete); Review's `e` re-files instead of editing; `RecurringEditDialog`
-  bypasses `BujoDialog` and its 44px floor; subtask removal is the one delete
+  bypasses `TodoDialog` and its 44px floor; subtask removal is the one delete
   with no confirm; day navigation on Today is mouse-only.
 
 **Open question for Chef:** recurring reminders fire once and then go silent
-(documented in `apps/bujogeek/DOCS/REMINDERS.md`, not fixed). The fix changes
+(documented in `apps/todogeek/DOCS/REMINDERS.md`, not fixed). The fix changes
 what `remindedAt` MEANS and needs a decision: when a push is missed because
 the app was down over its due time, should it arrive late or be skipped?
 
@@ -374,7 +374,7 @@ the app was down over its due time, should it arrive late or be skipped?
   Compose rewrites. If that turns out to be missed, the thing to build is a
   formatter that shows a diff and asks — which is what Tidy should have been.
 
-- **`remark-breaks`?** GFM was added 2026-09-21 so pipe tables render. BuJoGeek
+- **`remark-breaks`?** GFM was added 2026-09-21 so pipe tables render. TodoGeek
   and StoryGeek also pin `remark-breaks`, which turns a single newline into a
   line break. Deliberately NOT added: it changes how every existing note
   renders, which is more than the reported bug asked for. Chef's call.

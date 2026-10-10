@@ -32,7 +32,7 @@ shared `userGeek` collection. Two apps make that dangerous today, not hypothetic
   (`packages/schemas/gamegeek/household.js`) — so it inherits the identical hole by
   construction, not by oversight, until real households exist.
 
-Every other app (BuJoGeek, NoteGeek, FlockGeek, StoryGeek) is scoped per-user already, so a new
+Every other app (TodoGeek, NoteGeek, FlockGeek, StoryGeek) is scoped per-user already, so a new
 registrant sees nothing of theirs — see `DOCS/SUITE_HOUSEHOLDS_PLAN.md` §4 for the full
 per-app table. This plan is only about closing the BookGeek/GameGeek hole *before* the real
 households plan lands, because that plan is bigger and shouldn't block a one-line stopgap.
@@ -98,7 +98,7 @@ value; a hardcoded invite requirement is closed by a deploy.
   Chef's call, §6).
 
 **Frontend — there is exactly one registration form to gate, not several.** Every app's own
-"Register" page is a thin wrapper: `bujogeek/frontend/src/pages/RegisterPage.jsx` and
+"Register" page is a thin wrapper: `todogeek/frontend/src/pages/RegisterPage.jsx` and
 `fitnessgeek/frontend/src/pages/Register.jsx` both call `register()` from `@geeksuite/auth`'s
 `AuthProvider`, which is `loginRedirect(appName, returnTo, 'register')`
 (`packages/auth/src/AuthProvider.jsx:72-78`) — a browser redirect to basegeek's own shared

@@ -9,7 +9,7 @@ stopgap that doesn't wait for it.
 
 **Today** there are two users — Chef and Chef's wife — sharing one house. Every app either
 treats "everyone with an account" as the household (BookGeek) or treats each account as its
-own silo (BuJoGeek, NoteGeek, FlockGeek, StoryGeek), and FitnessGeek grew its own app-local
+own silo (TodoGeek, NoteGeek, FlockGeek, StoryGeek), and FitnessGeek grew its own app-local
 household concept because sharing food/weight data was a real need and nothing suite-wide
 existed to lean on. Chef wants GeekSuite to become genuinely multi-tenant — more than one
 real household, each seeing only its own data — eventually, not urgently.
@@ -32,9 +32,9 @@ inventing their own.
 
 - Not building household billing, quotas per household, or household-level admin roles beyond
   owner/member. That's a future project if the suite ever has paying tenants.
-- Not retrofitting BuJoGeek/NoteGeek/FlockGeek/StoryGeek sharing in this pass. They're
+- Not retrofitting TodoGeek/NoteGeek/FlockGeek/StoryGeek sharing in this pass. They're
   per-user today and stay per-user; nothing about this plan forces them into a shared model.
-  If Chef later wants "my partner can see my BuJo list," that's a per-app product decision on
+  If Chef later wants "my partner can see my TodoGeek list," that's a per-app product decision on
   top of this plumbing, not a consequence of it.
 - Not solving registration being public — that's `DOCS/REGISTRATION_GATE_PLAN.md`, and it
   ships first because it's the one that can't wait for a data model.
@@ -48,7 +48,7 @@ The question that matters: **what can a brand-new registrant see today?**
 | **BookGeek** | none — `Book` has no owner field | Shared by every account | Everything. Full read/write/delete on the whole library. `requireUser` only checks "signed in", never "whose". `apps/basegeek/packages/api/src/graphql/bookgeek/resolvers.js:86-99` documents this as deliberate ("BookGeek is a deliberately SHARED household library"); `deleteBook` (`:408-415`) runs `Book.deleteOne` with no ownership check at all. Per-user data (`Profile`: Kindle email, device word, custom shelves, saved filters) IS scoped by `userId` in the same file. |
 | **GameGeek** (new, not yet built) | `householdId` on every document | Shared within a household, but the household is a single hardcoded default until this plan lands | Same hole as BookGeek, scoped to whichever games exist. `packages/schemas/gamegeek/household.js`'s `resolveHouseholdId(user)` returns the constant `DEFAULT_HOUSEHOLD_ID = 'default'` for every authenticated user — verified in the file, which says so in its own header and cites this plan by name. |
 | **FitnessGeek** | `UserSettings.household.household_id`, app-local | Private by default; shared only after opting into a household | A new registrant sees nothing of anyone else's data — they have no household until they join one. Joining is `joinFitnessHousehold` (`apps/basegeek/packages/api/src/graphql/fitnessgeek/resolvers.js:1647-1663`), keyed by a code minted in `createFitnessHousehold` (`:1628-1644`) as `crypto.randomBytes(6).toString('hex').toUpperCase()` — 12 hex characters, stored on the row with **no expiry field at all**. Sharing is then further gated per-feature by `share_food_logs`/`share_weight`/`share_meals` booleans (`typeDefs.js:138-160`), so joining a household doesn't itself expose everything — but the join code itself never expires and isn't single-use in the invite sense (anyone who has it can join, repeatedly, forever). |
-| **BuJoGeek** | `createdBy` / `userId` | Private, per-user, no household concept | Nothing. Every resolver filters `{ createdBy: userId }` or passes `userId` into the service layer — verified `apps/basegeek/packages/api/src/graphql/bujogeek/resolvers.js:54-74` (a representative sample; the pattern is uniform). |
+| **TodoGeek** | `createdBy` / `userId` | Private, per-user, no household concept | Nothing. Every resolver filters `{ createdBy: userId }` or passes `userId` into the service layer — verified `apps/basegeek/packages/api/src/graphql/todogeek/resolvers.js:54-74` (a representative sample; the pattern is uniform). |
 | **NoteGeek** | `userId` | Private, per-user, no household concept | Nothing. `apps/basegeek/packages/api/src/graphql/notegeek/resolvers.js:40-58` — every query builds `{ userId }` or passes it to a service function; note versions are looked up by `{ noteId, userId }`. |
 | **FlockGeek** | `ownerId` via `requireUser(context)` | Private, per-user, no household concept | Nothing. `apps/basegeek/packages/api/src/graphql/flockgeek/resolvers.js:250-361` — every mutation sampled calls `requireUser(context)` and uses the returned `ownerId` to scope the write. (SUITE_TODO already tracks retiring FlockGeek's separate mounted REST layer, `routes/api.js`, as Chef item Q22 — orthogonal to this plan.) |
 | **StoryGeek** | `Story.userId`, enforced by middleware, not the gateway | Private, per-user, no household concept | Nothing. StoryGeek is the odd one out architecturally: it isn't gatewayed through basegeek's GraphQL like the others (SUITE_TODO already flags a dead, unused `graphql/storygeek` schema in basegeek as Chef item Q38 — separate cleanup). Ownership is enforced by Express middleware, `apps/storygeek/backend/src/middleware/storyOwner.js:9-22`, which loads `Story.findById(req.params.storyId)` and 403s unless `story.userId` matches the caller. |
@@ -118,7 +118,7 @@ of cost `requireUser` already pays for session validation and is not a new categ
 | **BookGeek** | `Book` gains `householdId` (required, indexed). One-time backfill: every existing book gets the single household both current users belong to (see §8). Every resolver in `graphql/bookgeek/resolvers.js` adds a `householdId` filter alongside `requireUser`'s "signed in" check — same shape as GameGeek's `requireHousehold`. `deleteBook` in particular must gain the check it has none of today. |
 | **GameGeek** | Nothing changes in the data model — it's already `householdId`-shaped (§4). `resolveHouseholdId` in `packages/schemas/gamegeek/household.js` swaps its hardcoded `DEFAULT_HOUSEHOLD_ID` return for a real lookup against the new `households` collection. That function is the *only* place this touches, by design (its own header says so). |
 | **FitnessGeek** | Its app-local household becomes a thin layer **over** the suite household: `UserSettings.household.household_id` is superseded by `User.householdId`, and the per-feature sharing flags (`share_food_logs`, `share_weight`, `share_meals`) stay exactly as they are — they're a finer-grained opt-in on top of household membership, not a replacement for it. The existing 12-hex join-code flow either goes away in favor of the suite invite system, or stays as FitnessGeek's own "which household features do I share" step after suite membership already exists — Chef's call, not forced by this plan. |
-| **BuJoGeek, NoteGeek, FlockGeek, StoryGeek** | **No change.** These are per-user apps and nothing in this plan makes them shared. If a household concept is ever wanted here (e.g., "see my partner's BuJo backlog"), that's a separate per-app product decision layered on the same `households` collection — the plumbing would already exist, but building the feature is out of scope here. |
+| **TodoGeek, NoteGeek, FlockGeek, StoryGeek** | **No change.** These are per-user apps and nothing in this plan makes them shared. If a household concept is ever wanted here (e.g., "see my partner's TodoGeek backlog"), that's a separate per-app product decision layered on the same `households` collection — the plumbing would already exist, but building the feature is out of scope here. |
 
 ## 8. Migration for today's two users
 

@@ -240,10 +240,10 @@ The rules that fell out of that burn-down:
 
 Added 2026-09-25, from the desktop harness pass:
 
-- **A chrome that ignores the app mode owns its inks.** bujogeek's tobacco
+- **A chrome that ignores the app mode owns its inks.** todogeek's tobacco
   sidebar and fitnessgeek's `#0C0A09` sidebar are dark in *both* modes, but
   `text.*` follow the mode. So in light mode `text.secondary` is dark ink on a
-  dark panel (fitnessgeek's section captions measured 4.12:1, bujogeek's row
+  dark panel (fitnessgeek's section captions measured 4.12:1, todogeek's row
   descriptions 2.32:1). This kind of chrome keeps solid inks in a plain module
   (`theme/chrome.js`, `Layout/chrome.js`). It passes them to every slot that
   would otherwise inherit a token (`sectionLabelSx`, and
@@ -258,7 +258,7 @@ Added 2026-09-25, from the desktop harness pass:
   move.
 - **axe cannot see sidebar rows.** It files the text inside GeekSidebar's
   `ListItemButton` rows as *incomplete* ("background could not be determined
-  because it is overlapped", observed in bujogeek and bookgeek on 2026-09-25), not as a
+  because it is overlapped", observed in todogeek and bookgeek on 2026-09-25), not as a
   violation.
   So every nav row, badge and selected label passes the harness however it
   measures. For those pairs the ratchet is the only gate. Assert them there.

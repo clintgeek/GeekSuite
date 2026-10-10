@@ -11,7 +11,7 @@ The suite is stable, quiet, and fully verified:
 
 - **Night 2 Engineering Burn Complete**: Waves 18–25 landed, consolidating the five AI features onto a single unified runner (`aiFeatureRunner`), deploying free-tier resilience adapters, and fixing the Cloudflare chat-adapter timeout fault.
 - **Mobile Harness Enforcing**: Playwright-based mobile grammar probe (`tools/mobile-harness`) runs in CI (`.github/workflows/mobile-harness.yml`), asserting 139 scenes across iPhone 14 viewports (dark and light modes). All 8 apps maintain 0 violations (touch target ≥44px, text ≥12px, no horizontal scroll).
-- **Fleet Health**: All 8 application containers (`basegeek`, `bookgeek`, `bujogeek`, `fitnessgeek`, `flockgeek`, `notegeek`, `startgeek`, `storygeek`) and 4 shared datastore containers are active, monitored with Docker healthchecks, and configured with bounded JSON log rotation (`10m`, 3 files).
+- **Fleet Health**: All 8 application containers (`basegeek`, `bookgeek`, `todogeek`, `fitnessgeek`, `flockgeek`, `notegeek`, `startgeek`, `storygeek`) and 4 shared datastore containers are active, monitored with Docker healthchecks, and configured with bounded JSON log rotation (`10m`, 3 files).
 - **CI & Quality Gates Enforcing**:
   - CI matrix runs 14+ frontend/backend test suites with ~600 tests added.
   - AST-level syntax gate (`node tools/syntax-check.mjs`) checks all JS/MJS/CJS files.

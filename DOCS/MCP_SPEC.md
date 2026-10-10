@@ -15,7 +15,7 @@ games"* — and wants to use Devin, Gemini and Claude *"from their android apps,
 but at least from the CLI so that's the starting point."* **[stated]**
 
 This spec covers that starting point: an MCP server that lets Chef's AI command-line
-clients (Devin CLI, Claude Code, Gemini CLI, Antigravity) read his NoteGeek notes, BuJoGeek
+clients (Devin CLI, Claude Code, Gemini CLI, Antigravity) read his NoteGeek notes, TodoGeek
 tasks, BookGeek books and GameGeek games, reached over the LAN or Tailscale. Mobile access
 is a later stage with its own spec. **[confirmed]**
 
@@ -54,7 +54,7 @@ is a later stage with its own spec. **[confirmed]**
     extend glance; filtering: Sage]**
 
 ### Privacy
-14. Private BuJoGeek tasks (`private: true`) never appear in any tool's output, including
+14. Private TodoGeek tasks (`private: true`) never appear in any tool's output, including
     cross-app search. **[stated]**
 15. Locked or encrypted notes never appear in any tool's output — not in search, lists or
     tag views. Fetching one by id answers "not found". **[confirmed]**
@@ -115,7 +115,7 @@ settled; each is cheap to change.
 | D8 | `/mcp` gets its own `express.json({ limit: '256kb' })`, mounted before the global 50 MB parser | MCP requests are tiny | Inherit 50 MB |
 | D9 | `note_tags` returns the tag list as the app does, including tags that only locked/encrypted notes carry | Tag names aren't note content; filtering would need a new query | Compute tags from unlocked notes only |
 | D10 | `glanceSearch`'s games branch matches title, developers and publishers, household-scoped via `resolveHouseholdId`; games join the merged list sorted by `updatedAt`, so with the 12-item cap a game hit can displace an older hit from another app. Existing branches, their filters and relative order are untouched | That's what "extend glance" means under a shared cap | Separate games-only search |
-| D11 | Task tools accept optional `date` (YYYY-MM-DD) and `tzOffsetMinutes`, passed straight through; descriptions tell the model to send the user's offset | Same contract as the BuJo UI | Server-side default timezone |
+| D11 | Task tools accept optional `date` (YYYY-MM-DD) and `tzOffsetMinutes`, passed straight through; descriptions tell the model to send the user's offset | Same contract as the TodoGeek UI | Server-side default timezone |
 | D12 | Lists are paginated where the resolver paginates (books, games: default 20, max 50) and otherwise capped at 50 items with `truncated` + `total` in the result | Small responses for models | — |
 | D13 | Results are trimmed JSON (ids, titles, key fields, ISO dates) returned as MCP text content | Models read JSON well; keeps payloads small | Markdown rendering |
 | D14 | The MCP SDK (`@modelcontextprotocol/sdk`) is added to basegeek's api package at an exact version published ≥ 7 days ago | Supply-chain rule | — |

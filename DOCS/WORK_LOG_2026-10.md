@@ -89,3 +89,7 @@ Spec: `apps/gamegeek/DOCS/PLAYNITE_IMPORT.md`. Tests were revert-checked: 20 bac
 After a power cut every login failed with `users.findOne()` buffering timeouts for an hour. Docker started all containers in the same second, basegeek's userGeek connection failed its first connect, and mongoose never retries that. Boot now exits 1 when userGeek can't connect (`lib/requireConnection.js`), so Docker's restart policy tries again. The test was revert-checked: it fails without the exit.
 
 Also: `docker.service` enabled at boot (it was socket-activated only, so Docker waited for a cron job), dev stacks set to on-demand, and ~113 GB of Docker leftovers cleared. See the RUNBOOK troubleshooting rows.
+
+## 2026-10-10 — BuJoGeek renamed TodoGeek
+
+The look had become a todo app, so the name followed: `apps/todogeek`, app key and Mongo DB `todogeek`, image `ghcr.io/clintgeek/todogeek`, domain `todogeek.clintgeek.com`. The old domain and the `bujo.` alias are retired with a 410, not a redirect (Chef: so nothing keeps using them). History (`DOCS/ARCHIVE`, `archive/`, dated logs) keeps the old name. Live data moves with a DB copy plus `scripts/rename-bujogeek-to-todogeek.js` (app key in user prefs, app registry, aiGeek configs/spends/keys). Push reminders belong to an origin, so each phone re-enables them on the new domain. Refresh now ignores an app claim that isn't a valid app.

@@ -92,7 +92,7 @@ there is nothing to stamp.
 | startgeek | B (hand-rolled) | ✅ done 2026-09-05 (Q54) — built with npm/Vite standalone, same plugin shape in its own `vite.config.js` |
 | notegeek | A (VitePWA/Workbox) | ✅ already fine — `generateSW`'s revisioned manifest + `cleanupOutdatedCaches` reinstall on every deploy natively; no hand-rolled SW exists to fix |
 | fitnessgeek | A (VitePWA/Workbox) | ✅ already fine — same as notegeek, via the plugin |
-| bujogeek | A (VitePWA/Workbox) | ⏳ pending R90 — another agent owns `apps/bujogeek/frontend/vite.config.js` as of 2026-09-05; likely already fine like notegeek/fitnessgeek (same flavor) but not yet re-verified under R90 |
+| todogeek | A (VitePWA/Workbox) | ⏳ pending R90 — another agent owns `apps/todogeek/frontend/vite.config.js` as of 2026-09-05; likely already fine like notegeek/fitnessgeek (same flavor) but not yet re-verified under R90 |
 | basegeek | none | n/a — ships no service worker |
 
 **A StaleWhileRevalidate rule for JS/CSS/fonts must refuse `text/html`.**
@@ -130,7 +130,7 @@ a service worker — not a per-app judgment call.
      return res.status(404).type('text/plain').send('Not found');
    }
    ```
-   Present in: `apps/bujogeek/backend/src/app.js`, `apps/notegeek/backend/server.js`,
+   Present in: `apps/todogeek/backend/src/app.js`, `apps/notegeek/backend/server.js`,
    `apps/bookgeek/api/src/server.js`, `apps/fitnessgeek/backend/src/app.js` (fixed
    2026-09-05 — previously the one gap: `GET /assets/gone-DEAD.js` returned 200
    `text/html`), `apps/storygeek/backend/src/app.js` (added 2026-09-05),
@@ -154,7 +154,7 @@ a service worker — not a per-app judgment call.
    in flight before the deploy that added the guard above) can never poison
    the cache. VitePWA/Workbox apps use the `cacheWillUpdate` plugin shown
    above (`apps/fitnessgeek/frontend/vite.config.js`'s `fitnessgeek-assets`
-   rule); `apps/bujogeek/frontend/vite.config.js` and
+   rule); `apps/todogeek/frontend/vite.config.js` and
    `apps/notegeek/frontend/vite.config.js` carry no runtime-caching rule for
    scripts/styles/fonts/images at all (precache only), so there is nothing for
    this rule to guard there today — if either app ever adds a
@@ -173,13 +173,13 @@ including the async ones nobody downloads on the first visit).
 | App | Routes lazy | Vendor chunks (all eager) | First load raw / gzip | Largest chunk | New hashed chunks after a deploy |
 |-----|-------------|---------------------------|------------------------|---------------|-----------------------------------|
 | flockgeek | ✅ 2026-09-05 — 8 of 10 (`HomePage` + `LoginPage` stay eager, see `apps/flockgeek/CONTEXT.md` "Bundle") | react-vendor / mui / apollo / motion; no async vendor group (no chart, date or export library in the app) | 1011 kB / 312 kB (was 1072 kB / 326 kB, one 1060 kB chunk) | 313 kB `mui` (was 1060 kB) | ✅ precached — hand-rolled `public/sw.js` has no build step, so `swPrecache()` in its `vite.config.js` stamps the hashed `.js`/`.css` list + a content-hash `BUILD_ID` into `dist/sw.js` (the flavour-B equivalent of `generateSW`'s `globPatterns`) |
-| bujogeek | ✅ 2026-09-05 — all 12 pages, including `LoginPage`/`RegisterPage`; fallback is the app's own `SkeletonLoader` parchment shimmer, not a spinner (see `apps/bujogeek/DOCS/CONTEXT.md` "Bundle") | react-vendor / apollo / motion / date-fns eager, `markdown` (react-markdown + the whole remark/micromark tail) async behind the lazy TemplatePreview; **deliberately no `mui` group** — measured three ways in `apps/bujogeek/frontend/vite.config.js`, and here a group costs 77 kB of first load rather than saving it (fitnessgeek's is load-bearing only because of its chart vendors) | 1010 kB / 310 kB (was 1606 kB / 480 kB, one single 1605 kB chunk — no `manualChunks`, no route splitting at all) | 449 kB entry `index` (was 1605 kB); nothing over 500 kB, build no longer warns | ✅ precached — `generateSW`'s default `globPatterns`; verified after the split: 44 hashed `.js`/`.css` on disk, all 44 in the SW's 47-entry manifest (+ `index.html`, `offline.html`, `favicon.svg`). Precache-only, no runtime asset rule, so there is no cache for a `text/html` response to poison; an unknown hashed chunk falls straight through to the network, where the backend's extname-404 guard answers 404 |
+| todogeek | ✅ 2026-09-05 — all 12 pages, including `LoginPage`/`RegisterPage`; fallback is the app's own `SkeletonLoader` parchment shimmer, not a spinner (see `apps/todogeek/DOCS/CONTEXT.md` "Bundle") | react-vendor / apollo / motion / date-fns eager, `markdown` (react-markdown + the whole remark/micromark tail) async behind the lazy TemplatePreview; **deliberately no `mui` group** — measured three ways in `apps/todogeek/frontend/vite.config.js`, and here a group costs 77 kB of first load rather than saving it (fitnessgeek's is load-bearing only because of its chart vendors) | 1010 kB / 310 kB (was 1606 kB / 480 kB, one single 1605 kB chunk — no `manualChunks`, no route splitting at all) | 449 kB entry `index` (was 1605 kB); nothing over 500 kB, build no longer warns | ✅ precached — `generateSW`'s default `globPatterns`; verified after the split: 44 hashed `.js`/`.css` on disk, all 44 in the SW's 47-entry manifest (+ `index.html`, `offline.html`, `favicon.svg`). Precache-only, no runtime asset rule, so there is no cache for a `text/html` response to poison; an unknown hashed chunk falls straight through to the network, where the backend's extname-404 guard answers 404 |
 
 ### 2. Two SW Flavors in the Suite
 
 #### A. VitePWA + Workbox (preferred for new apps)
 
-Used by: fitnessGeek, NoteGeek, BuJoGeek
+Used by: fitnessGeek, NoteGeek, TodoGeek
 
 Config lives in `vite.config.js` under `VitePWA({ workbox: { runtimeCaching: [...] } })`.
 
@@ -301,7 +301,7 @@ SW-reinstalls-on-deploy fixed suite-wide across the hand-rolled Flavor-B apps (Q
 | App | SW Type | Auth Safe | SPA Fallback Guard | SW Asset-Cache Guard | Manifest | Offline Page | Installable |
 |-----|---------|-----------|---------------------|-----------------------|----------|--------------|-------------|
 | bookgeek | Hand-rolled | ✅ | ✅ had | ✅ added | ✅ | ✅ — now matches both light/dark palettes via `prefers-color-scheme` | ✅ |
-| bujogeek | VitePWA/Workbox | ✅ | ✅ had | n/a — no asset runtime-caching rule exists | ✅ — `scope` added, `theme_color` now matches default (light) page | ✅ (new) — precached, but **not** wired as `navigateFallback` (see note) | ✅ |
+| todogeek | VitePWA/Workbox | ✅ | ✅ had | n/a — no asset runtime-caching rule exists | ✅ — `scope` added, `theme_color` now matches default (light) page | ✅ (new) — precached, but **not** wired as `navigateFallback` (see note) | ✅ |
 | fitnessgeek | VitePWA/Workbox | ✅ | ✅ added (2026-09-05, Q53) | ✅ had (`cacheWillUpdate`) | ✅ — inline `manifest` in `vite.config.js` replaced with `manifest: false`; `public/manifest.json` (linked in `index.html`) is now the single source, fixing the duplicate `<link rel="manifest">` in built `dist/index.html` | ✅ (new) — precached; `navigateFallback` stays `/index.html` (SPA routing), not repointed (see note) | ✅ |
 | notegeek | VitePWA/Workbox | ✅ | ✅ had | n/a — no asset runtime-caching rule exists | ✅ — `theme_color` now matches default (light) page; `apple-touch-icon` link added | ✅ (new) — precached, not wired as `navigateFallback` (see note) | ✅ |
 | flockgeek | Hand-rolled | ✅ | ✅ added (Q53) | ✅ added (Q53) | ✅ — `scope` added, `theme_color` now matches default (dark) page; `apple-touch-icon` link added | ✅ — now matches both palettes via `prefers-color-scheme` | ✅ |
@@ -316,7 +316,7 @@ unconditionally serves the precached document for every matching navigation, onl
 off (confirmed against `workbox-precaching`'s `PrecacheStrategy._handle`, which returns
 the cache hit before ever considering the network). fitnessgeek already relies on this
 for SPA routing (`navigateFallback: '/index.html'`); repointing it at `/offline.html`
-would show the offline page for every route, always. bujogeek and notegeek both use
+would show the offline page for every route, always. todogeek and notegeek both use
 `react-router-dom` `BrowserRouter` with real paths, so adding a fresh
 `navigateFallback: '/offline.html'` would break deep links and refreshes the same way.
 None of the three were changed. Their new `offline.html` files are precached (existing
@@ -346,14 +346,14 @@ needs `workbox-recipes`' `offlineFallback()` / a custom `setCatchHandler`, which
   the full file list. Summary: `apps/storygeek/backend/src/app.js`,
   `apps/flockgeek/backend/src/server.js` and
   `apps/basegeek/packages/api/src/server.js` gained the extname-404 guard
-  (bujogeek, notegeek, bookgeek, and fitnessgeek already had it).
+  (todogeek, notegeek, bookgeek, and fitnessgeek already had it).
   `apps/startgeek/Dockerfile` dropped `serve`'s `-s` flag — the same
   landmine, confirmed by local repro, closed by removing the flag rather than
   reworking the rewrite, since the app has no client-side router to protect.
   `apps/bookgeek/web/public/sw.js`, `apps/flockgeek/frontend/public/sw.js`,
   `apps/storygeek/frontend/public/sw.js` and `apps/startgeek/public/sw.js`
   (all hand-rolled, Flavor B) gained a `content-type` check ahead of
-  `cache.put(...)` in their static-asset fetch handler. bujogeek's and
+  `cache.put(...)` in their static-asset fetch handler. todogeek's and
   notegeek's VitePWA configs carry no runtime-caching rule for
   scripts/styles/fonts/images (precache only), so neither needed the
   `cacheWillUpdate` plugin. Proof: a new `spaFallback.test.js` per fixed
@@ -363,7 +363,7 @@ needs `workbox-recipes`' `offlineFallback()` / a custom `setCatchHandler`, which
   tools/syntax-check.mjs`; `node --check` on every touched `sw.js`; the
   flockgeek mobile harness (`--label sw-guard --viewports phone`) — 28
   scenes, 0 page errors, SW active.
-- **bujogeek**: no change needed — already `manifest: false` with `public/manifest.json`
+- **todogeek**: no change needed — already `manifest: false` with `public/manifest.json`
   (`theme_color` `#FAF8F5`) as the sole source, matching the default (light) page
   background. Verified via `pnpm build`: one manifest link in `dist/index.html`.
 - **storygeek**: hand-rolled `public/sw.js` added (Flavor B, matching bookgeek's
@@ -376,7 +376,7 @@ needs `workbox-recipes`' `offlineFallback()` / a custom `setCatchHandler`, which
   SW reaches `activated`, an online `/api/me` fetch hits the network (401, not a cached
   200) and is absent from the `storygeek-cache-v1` cache, and going offline and
   navigating renders the offline page.
-- **bujogeek, notegeek, fitnessgeek**: `manifest.json` icons still combine
+- **todogeek, notegeek, fitnessgeek**: `manifest.json` icons still combine
   `purpose: "any maskable"` on a single non-safe-zone SVG/PNG (no dedicated maskable
   icon exists). Left as-is — do not invent icons — but a real maskable icon (safe zone
   padding) is still missing suite-wide.
@@ -394,5 +394,5 @@ needs `workbox-recipes`' `offlineFallback()` / a custom `setCatchHandler`, which
 5. **Always bump the cache version** (`v1` → `v2`) when changing SW logic so old caches get cleaned
 6. **Always use `skipWaiting()` + `clients.claim()`** so new SWs activate immediately
 7. **Test auth flow after every SW change**: login → verify `/api/me` → logout → verify `/api/me` returns 401 (not cached 200)
-8. **The hand-rolled registration snippet must capture `hadController` before calling `register()`, and the `controllerchange` handler must bail when it was `false`.** `sw.js` calls `skipWaiting()` + `clients.claim()`, so a first-ever visit takes control of the page that installed it and fires `controllerchange` too — reloading a page the visitor was already reading, on the very install that should be silent. Only a real update (a controller already existed) is worth the reload. Fixed 2026-09-05 (going-over) in `apps/bookgeek/web/index.html`, `apps/storygeek/frontend/index.html` and `apps/startgeek/index.html`. `apps/flockgeek/frontend/src/main.jsx` registers the same way (not `index.html` — its `sw.js` registration lives in the entry script) and carries the identical bug; not fixed here — out of this pass's file scope, flagged for the owning agent. VitePWA/Workbox apps (Flavor A: notegeek, fitnessgeek, bujogeek) don't carry this snippet at all and are unaffected. basegeek ships no service worker.
+8. **The hand-rolled registration snippet must capture `hadController` before calling `register()`, and the `controllerchange` handler must bail when it was `false`.** `sw.js` calls `skipWaiting()` + `clients.claim()`, so a first-ever visit takes control of the page that installed it and fires `controllerchange` too — reloading a page the visitor was already reading, on the very install that should be silent. Only a real update (a controller already existed) is worth the reload. Fixed 2026-09-05 (going-over) in `apps/bookgeek/web/index.html`, `apps/storygeek/frontend/index.html` and `apps/startgeek/index.html`. `apps/flockgeek/frontend/src/main.jsx` registers the same way (not `index.html` — its `sw.js` registration lives in the entry script) and carries the identical bug; not fixed here — out of this pass's file scope, flagged for the owning agent. VitePWA/Workbox apps (Flavor A: notegeek, fitnessgeek, todogeek) don't carry this snippet at all and are unaffected. basegeek ships no service worker.
 9. **Render `<GeekUpdateIndicator />` (`@geeksuite/ui`) once near the app root, inside the MUI ThemeProvider.** Rows 5 and 6 together mean the first open after a deploy always draws the OLD build from cache, then reloads into the new one once the new worker takes over — measured 2026-10-04 on GameGeek: old build at 0.1 s, reload at ~5.6 s, the library drawn twice. Chef chose to keep both rules (network-first navigation and "apply on next open" were both declined), so the reload stays and the indicator says "Updating to the latest version…" while it downloads. It shows only over an existing controller (never on a first install), hides if the install goes `redundant`, and reloads nothing itself. Adopted by bookgeek and gamegeek (2026-10-04); the other PWAs have the same double draw and don't render it yet (`DOCS/SUITE_TODO.md`).

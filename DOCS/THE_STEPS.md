@@ -112,7 +112,7 @@ Standardizing documentation structure across all active apps:
 - [x] **NoteGeek**: Authored canonical `apps/notegeek/DOCS/CONTEXT.md` documenting GraphQL gateway ownership, TipTap/canvas editors, and auth proxies; archived 7 historical plans into `apps/notegeek/DOCS/ARCHIVE/`.
 - [x] **BaseGeek**: Archived 8 sprint/job notes (`AIGEEK_*`, `AUTH_HARDENING_*`, `SSO_CLIENT_*`) into `apps/basegeek/DOCS/ARCHIVE/`.
 - [x] **BookGeek**: Archived `THE_PLAN.md` and `DEVICE_BASKET_PLAN.md` into `apps/bookgeek/DOCS/ARCHIVE/`.
-- [x] **BujoGeek & FitnessGeek**: Archived `HARDENING_2026-04.md` into respective `DOCS/ARCHIVE/` directories.
+- [x] **TodoGeek & FitnessGeek**: Archived `HARDENING_2026-04.md` into respective `DOCS/ARCHIVE/` directories.
 - [x] **Workspace Hygiene**: Pruned obsolete third-party agent scraper directories (`.devin/`, `.serena/`, `.zencoder/`).
 
 ---

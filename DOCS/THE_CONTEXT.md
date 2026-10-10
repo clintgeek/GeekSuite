@@ -18,7 +18,7 @@ graph TD
     subgraph Suite Apps [8 Active Applications]
         basegeek["basegeek (:8987)<br/>Auth, Gateway, AI, Admin"]
         bookgeek["bookgeek (:1800)<br/>Library, Baskets, E-Reader"]
-        bujogeek["bujogeek (:5005)<br/>Bullet Journal Planner"]
+        todogeek["todogeek (:5005)<br/>Tasks & Habits"]
         fitnessgeek["fitnessgeek (:4080)<br/>Nutrition, Vitals, Garmin"]
         flockgeek["flockgeek (:5001)<br/>Flock Management, Eggs"]
         notegeek["notegeek (:9988)<br/>Notes, Code, Mindmaps"]
@@ -50,7 +50,7 @@ graph TD
 ### 1.2 Apollo GraphQL Gateway
 - **Single Apollo Server**: Mounted at `/graphql` in `apps/basegeek/packages/api/src/server.js` (host port `8987`).
 - **Nginx routing**: Every app's Nginx configuration proxies `/graphql` to `http://192.168.1.17:8987/graphql`. The browser communicates with its own origin, avoiding cross-origin issues.
-- **Merged schema**: Combines `shared`, `basegeek`, `bujogeek`, `fitnessgeek`, `flockgeek`, `bookgeek`, `notegeek`, and `glance` typeDefs/resolvers via `@graphql-tools/merge`.
+- **Merged schema**: Combines `shared`, `basegeek`, `todogeek`, `fitnessgeek`, `flockgeek`, `bookgeek`, `notegeek`, and `glance` typeDefs/resolvers via `@graphql-tools/merge`.
 - **Ownership & Auth**: Resolvers enforce user ownership using `context.user` verified via in-process JWT validation against `userGeek`.
 
 ### 1.3 Active Applications & Port Map
@@ -60,7 +60,7 @@ All containers run on `server` (`192.168.1.17`) attached to `datageek_network` (
 |-----|-----------|---------------|-------|---------------|
 | **basegeek** | `8987` | `8987` | Vite + React / Node + Express | SSO authority, GraphQL gateway, AIGeek director |
 | **bookgeek** | `1800` | `1800` | Vite + React + Tailwind / Node | Book catalog, format conversion, device baskets |
-| **bujogeek** | `5005` | `5005` | Vite + React + MUI 7 / Node | Bullet journal (pure GraphQL consumer) |
+| **todogeek** | `5005` | `5005` | Vite + React + MUI 7 / Node | Tasks & habits (pure GraphQL consumer) |
 | **fitnessgeek** | `4080` | `3001` | Vite + React / Node (ESM, v20) | Nutrition, weights, vitest suites, Garmin sync |
 | **flockgeek** | `5001` | `5001` | Vite + React / Node + Express | Poultry tracking, harvest logging |
 | **notegeek** | `9988` | `9988` | Vite + React / Node + Express | Note-taking, mind maps, tags |

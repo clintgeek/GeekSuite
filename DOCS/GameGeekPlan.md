@@ -414,7 +414,7 @@ are unaffected.
 ### 5.2 Navigation
 
 There are four real destinations, so GameGeek uses the suite's bottom-nav pattern
-(fitnessgeek, notegeek, bujogeek, flockgeek):
+(fitnessgeek, notegeek, todogeek, flockgeek):
 
 - **Phone**: `GeekBottomNav` with **Library · Tonight · Journal · Stats**. The drawer holds
   shelves, saved filters, Settings, and Sign out.
@@ -742,7 +742,7 @@ Deviations from the plan above, decided overnight:
 
 | Plan said | Shipped | Why |
 |---|---|---|
-| `api/` + `web/` | `backend/` + `frontend/` | the bujogeek thin-backend shape; `tools/gql-arg-audit.mjs` and boot-smoke conventions |
+| `api/` + `web/` | `backend/` + `frontend/` | the todogeek thin-backend shape; `tools/gql-arg-audit.mjs` and boot-smoke conventions |
 | Prep phase P0 before G0 | P0 **not done**; GameGeek has its own library components | shipping overnight without touching BookGeek unsupervised. The extraction now consolidates **both** apps onto `@geeksuite/collection` in one pass (`DOCS/BOOKGEEK_PREP_PLAN.md`) |
 | IGDB as primary provider | Steam store search (keyless) is live; IGDB activates when `IGDB_CLIENT_ID`/`IGDB_CLIENT_SECRET` are set | no Twitch app exists yet — Chef must create one |
 | `/mnt/extra_space` for data | `apps/gamegeek/data/{covers,imports}` | `/mnt/extra_space` is root-owned; DEPLOY.md's `apps/<app>/data/` convention |

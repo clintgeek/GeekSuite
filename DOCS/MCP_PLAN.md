@@ -16,7 +16,7 @@ server. Read-only first; writes are a later, separate decision.
 - **Scope v1:** read-only access to **notes, tasks, books, games**.
 - **Start with the CLIs**, reached over the LAN / Tailscale. Android apps are the goal, not
   the starting point (§3.2).
-- **Private BuJo tasks are excluded entirely** (not masked) while LAN-only. Revisit before
+- **Private TodoGeek tasks are excluded entirely** (not masked) while LAN-only. Revisit before
   any public exposure (§3.2).
 - **Tailscale goes on `server` itself** (Chef installs it; it isn't there today). That makes
   `server` a tailnet node for Stage 1 and the Funnel host for Stage 2.

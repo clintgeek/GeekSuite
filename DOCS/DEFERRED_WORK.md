@@ -133,9 +133,9 @@ Likely rollout order once ready:
   for dev, sketchy for prod. Either enforce env in production
   (throw if unset) or strip the defaults in a future release.
 
-- ~~**No tests on fitnessgeek, flockgeek, storygeek, bujogeek, notegeek.**~~
+- ~~**No tests on fitnessgeek, flockgeek, storygeek, todogeek, notegeek.**~~
   **Stale — struck 2026-09-16.** Every app has tests now: fitnessgeek 47
-  files, notegeek 41, bookgeek 27, storygeek 23, bujogeek 17, flockgeek 15,
+  files, notegeek 41, bookgeek 27, storygeek 23, todogeek 17, flockgeek 15,
   startgeek 4. Depth still varies and startgeek is thin, but the blanket
   claim was wrong and was hiding that.
 
@@ -156,8 +156,8 @@ Likely rollout order once ready:
 
 ## Apps still to migrate (consolidation, not hardening)
 
-- `bujogeek` — local Mongo data to migrate; first app with state
-  that moves from `/mnt/Media/Docker/bujogeek/` into the source
+- `todogeek` — local Mongo data to migrate; first app with state
+  that moves from `/mnt/Media/Docker/todogeek/` into the source
   tree. Do next.
 - `notegeek` — two services (backend + frontend) + local Mongo data.
   Either combine into one container or teach `build.sh` about apps
@@ -191,7 +191,7 @@ Out of scope until bookgeek enters the consolidation+hardening cycle.
 
 ## Apps still to harden (after consolidation)
 
-`storygeek`, `flockgeek`, `bujogeek`, `notegeek` — migrated (or will
+`storygeek`, `flockgeek`, `todogeek`, `notegeek` — migrated (or will
 be) but haven't had the same logging / boot-await / graceful-shutdown
 pass fitnessgeek just got. Each is probably a ~90-minute agent
 round, same shape as Item A of the fitnessgeek hardening plan.

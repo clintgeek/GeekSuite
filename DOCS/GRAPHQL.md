@@ -30,7 +30,7 @@ disagree, the typeDefs win — update this file.
 shared/typeDefs.js          scalars + cross-app types
 basegeek/typeDefs.js        admin, API keys, aiGeek
 notegeek/typeDefs.js        (declares the root `type Query` / `type Mutation`)
-bujogeek/typeDefs.js
+todogeek/typeDefs.js
 flockgeek/typeDefs.js
 fitnessgeek/typeDefs.js
 bookgeek/typeDefs.js
@@ -137,7 +137,7 @@ Types: `Note` (`isLocked`, `isEncrypted`, `tags`), `SearchSnippet` (`score`, `sn
 Content is sanitized on save through `notegeek/sanitize.js` (same DOMPurify profile as the
 client).
 
-### 4.3 bujogeek
+### 4.3 todogeek
 
 **Queries**
 
@@ -157,7 +157,7 @@ client).
 | `templates(type, isDefault)` / `template(id!)` | `[Template!]!` / `Template` | |
 | `pushVapidKey` | `String` | null = reminders not configured on this deployment |
 | `pushSubscriptions` | `[PushSubscription!]!` | caller's registered devices |
-| `reviewDraft(weekStart!)` | `ReviewDraftResult!` | AI weekly review; `weekStart` must be a Monday. Opt-in via `appPreferences.bujogeek.aiReviewDraft`; 10 model calls/user/day; degrades to deterministic with `provenance.reason: "opted_out"` |
+| `reviewDraft(weekStart!)` | `ReviewDraftResult!` | AI weekly review; `weekStart` must be a Monday. Opt-in via `appPreferences.todogeek.aiReviewDraft`; 10 model calls/user/day; degrades to deterministic with `provenance.reason: "opted_out"` |
 
 **Mutations**
 
@@ -183,7 +183,7 @@ client).
 | `createJournalFromTemplate(templateId!, date)` | `JournalEntry!` | |
 | `createTemplate(name!, description, type, content!, isDefault, isPublic, tags)` / `updateTemplate(id!, ...)` | `Template!` | |
 | `deleteTemplate(id!)` | `DeleteResponse!` | |
-| `updateBujoPreferences(theme!)` | `JSON!` | |
+| `updateTodoPreferences(theme!)` | `JSON!` | |
 | `savePushSubscription(input: PushSubscriptionInput!)` | `PushSubscription!` | Keyed by endpoint; idempotent |
 | `removePushSubscription(endpoint!)` | `DeleteResponse!` | `success: false` if the endpoint isn't the caller's |
 

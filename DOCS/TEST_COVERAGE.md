@@ -4,8 +4,8 @@ _Generated 2026-04-21; updated 2026-08-30. Qualitative survey — not measured v
 
 > **2026-08-30 update:** basegeek's GraphQL gateway is now the best-tested
 > surface in the suite — 21 jest suites / 344 passing tests, including ownership
-> (IDOR) suites for every app module (bujogeek, fitnessgeek, storygeek,
-> bookgeek, flockgeek, notegeek, dashboard) plus bujogeek feature suites
+> (IDOR) suites for every app module (todogeek, fitnessgeek, storygeek,
+> bookgeek, flockgeek, notegeek, dashboard) plus todogeek feature suites
 > (recurrence, cancelled state, collections, habits, reminders).
 > bookgeek's api gained a node:test suite (64 tests: slugs, device
 > baskets, formats). CI now runs basegeek + bookgeek tests and six
@@ -19,7 +19,7 @@ _Generated 2026-04-21; updated 2026-08-30. Qualitative survey — not measured v
 |---|---|---|---|---|---|
 | basegeek | React/Vite | Express + GraphQL | Jest | 21 suites / 344 passing | **Good on gateway; UI untested** |
 | bookgeek | React/Vite | Express | node:test | 2 files / 64 tests | **Partial (api)** |
-| bujogeek | React/Vite | Express | Jest (configured, unused) | 0 | **Minimal (<5%)** |
+| todogeek | React/Vite | Express | Jest (configured, unused) | 0 | **Minimal (<5%)** |
 | fitnessgeek | React/Vite | Express | Jest (configured, unused) | 0 | **Minimal (<5%)** |
 | flockgeek | React/Vite | Express | — | 0 | **None** |
 | notegeek | React/Vite | Express | Vitest (FE) + Jest (BE) | 36 | **Partial (~50%)** |
@@ -64,9 +64,9 @@ _Generated 2026-04-21; updated 2026-08-30. Qualitative survey — not measured v
 
 ---
 
-## bujogeek
+## todogeek
 
-**Structure:** [backend/](apps/bujogeek/backend/) (24 source files), [frontend/](apps/bujogeek/frontend/) (81 source files).
+**Structure:** [backend/](apps/todogeek/backend/) (24 source files), [frontend/](apps/todogeek/frontend/) (81 source files).
 
 **Tooling:** Jest + supertest installed, `test` script present, but **no jest config and no test files**.
 
@@ -161,7 +161,7 @@ _Generated 2026-04-21; updated 2026-08-30. Qualitative survey — not measured v
 2. ~~No GraphQL resolver tests in basegeek~~ **Closed 2026-08-30** — ownership/behavior suites cover every gateway module's resolvers and services.
 3. **No E2E tests anywhere** in the suite (no Playwright, Cypress, or similar).
 4. **No route integration tests** except notegeek's auth route and basegeek's auth flow.
-5. **Three apps have Jest installed but no jest.config.js and no tests** (bujogeek, fitnessgeek, storygeek) — quickest wins: write first tests against existing scaffolding.
+5. **Three apps have Jest installed but no jest.config.js and no tests** (todogeek, fitnessgeek, storygeek) — quickest wins: write first tests against existing scaffolding.
 6. **Model/database tests are almost absent** — basegeek relies on MongoMemoryServer infra but doesn't exercise models directly; notegeek is the only app testing model behavior.
 
 ## Suggested priorities
@@ -169,5 +169,5 @@ _Generated 2026-04-21; updated 2026-08-30. Qualitative survey — not measured v
 - **notegeek:** close frontend integration gap (App, Layout, Login/Register) and backend route integration for notes/search/tags.
 - **basegeek:** add GraphQL resolver tests — highest-value surface currently uncovered.
 - **fitnessgeek:** largest untested surface; start with auth + food/fitness route smoke tests.
-- **bujogeek / storygeek:** Jest is already wired — write a first auth test as a template, then expand.
+- **todogeek / storygeek:** Jest is already wired — write a first auth test as a template, then expand.
 - **bookgeek / flockgeek / startgeek:** decide whether to install test tooling or defer.

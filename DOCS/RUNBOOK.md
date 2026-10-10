@@ -49,7 +49,7 @@ SSO/static-file shell (see `DOCS/CONTEXT.md` and each app's own `CONTEXT.md`).
 |---|---|---|---|---|---|---|---|
 | basegeek | `basegeek.clintgeek.com` (+ `base.`) | `basegeek` | `ghcr.io/clintgeek/basegeek:latest` | 8987→8987 | none in compose; app serves `GET /api/health` | Vite 5 + React (`packages/ui`) | Node + Express (`packages/api`) |
 | bookgeek | `bookgeek.clintgeek.com` | `bookgeek` | `ghcr.io/clintgeek/bookgeek:latest` | 1800→1800 | `wget --spider http://localhost:1800/api/health` | Vite + React + Tailwind + shadcn/ui (`web/`) | Node + Express (`api/`), `node:20-alpine` in `Dockerfile` — `apps/bookgeek/DOCS/CONTEXT.md`'s runtime line was corrected to node:20 2026-09-05 (`70eb36e`); no longer contradicts the shipped image |
-| bujogeek | `bujogeek.clintgeek.com` (+ `bujo.`) | `bujogeek` | `ghcr.io/clintgeek/bujogeek:latest` | 5005→5005 | `wget --spider http://127.0.0.1:5005/` (root, not `/api/health`, though that route exists) | Vite + React + MUI 7 | Node + Express, thin — SSO proxy + `/api/me` + `/api/health` + static only; all task/habit/collection data is gateway-owned |
+| todogeek | `todogeek.clintgeek.com` | `todogeek` | `ghcr.io/clintgeek/todogeek:latest` | 5005→5005 | `wget --spider http://127.0.0.1:5005/` (root, not `/api/health`, though that route exists) | Vite + React + MUI 7 | Node + Express, thin — SSO proxy + `/api/me` + `/api/health` + static only; all task/habit/collection data is gateway-owned |
 | fitnessgeek | `fitnessgeek.clintgeek.com` (+ `nutrition-tracker.`, `myfitnessgeek.`, `food.`) | `fitnessgeek` | `ghcr.io/clintgeek/fitnessgeek:latest` | 4080→3001 | none in compose; app serves `GET /health` and `GET /api/health` | Vite + React | Node + Express — hybrid: verifies JWT locally with shared `JWT_SECRET` (see `DOCS/SSO_OVERVIEW.md`) as well as proxying auth to basegeek |
 | flockgeek | `flockgeek.clintgeek.com` | `flockgeek` | `ghcr.io/clintgeek/flockgeek:latest` | 5001→5001 | none in compose; app serves `GET /api/health` | Vite + React | Node + Express — owns its own Mongoose models (birds, egg production, meat runs) directly, not fully gateway-owned |
 | notegeek | `notegeek.clintgeek.com` (+ `notes.`) | `notegeek` | `ghcr.io/clintgeek/notegeek:latest` | 9988→9988 | `wget --spider http://localhost:9988/` (root) | Vite + React | Node + Express — **two auth middlewares** (legacy Bearer-only + local DB, and a newer cookie-first one); see `DOCS/SSO_OVERVIEW.md` §NoteGeek |
@@ -84,7 +84,7 @@ of each app's backend source. Names only — no values were read or printed.
   `KINDLE_UI_USER_ID`, `LOG_LEVEL`, `NODE_ENV`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_SECURE`,
   `SMTP_USER`, `SMTP_PASS`, `SMTP_FROM_EMAIL` (`emailService.js`; without all of these
   set, send-to-kindle reports "unconfigured")
-- **bujogeek**: `DB_URI`, `JWT_SECRET`, `BASEGEEK_URL`/`BASE_GEEK_URL`, `GATEWAY_URL`, `PORT`,
+- **todogeek**: `DB_URI`, `JWT_SECRET`, `BASEGEEK_URL`/`BASE_GEEK_URL`, `GATEWAY_URL`, `PORT`,
   `APP_NAME`, `CORS_ORIGINS`, `LOG_LEVEL`, `NODE_ENV` — VAPID keys are **not** local; they live
   in basegeek's env (`DOCS/REMINDERS.md`)
 - **fitnessgeek**: `MONGODB_URI`, `JWT_SECRET` (verified locally; `JWT_REFRESH_SECRET` is
@@ -124,11 +124,11 @@ Shared-secret vars (`JWT_SECRET`, Mongo root creds) must be rotated across every
 |---|---|---|
 | basegeek | `./data/{mongodb,influxdb,influxdb-config,redis,postgres}` bind-mounted under `apps/basegeek/` | These four containers (`datageek_mongodb`, `datageek_influxdb`, `datageek_redis`, `datageek_postgres`) are defined in `apps/basegeek/docker-compose.yml` alongside the app itself — basegeek's compose file **is** the datastore compose file for the whole suite |
 | bookgeek | `/mnt/extra_space/books` → `/data/library`, `/mnt/extra_space/books/temp` → `/data/temp`, `/mnt/extra_space/books/addMe` → `/data/addMe` | `COVERS_PATH=/data/covers` is set as an env var but **no volume mounts `/data/covers`** — the host actually has `/mnt/extra_space/books/covers` sitting unmounted right next to the mounted `library` tree. Verify whether covers persist (they may be living inside the container's writable layer, lost on recreate) before relying on this path. |
-| bujogeek, fitnessgeek, flockgeek, notegeek, startgeek, storygeek | none declared | Stateless containers — their state lives in the shared Mongo/Redis/Influx (via `MONGODB_URI`/`DB_URI`) or is fully gateway-owned in basegeek |
+| todogeek, fitnessgeek, flockgeek, notegeek, startgeek, storygeek | none declared | Stateless containers — their state lives in the shared Mongo/Redis/Influx (via `MONGODB_URI`/`DB_URI`) or is fully gateway-owned in basegeek |
 
 ### `.env.production` present on the box (filenames only, not read)
 
-basegeek, bookgeek, bujogeek, fitnessgeek, flockgeek, notegeek, storygeek all have one.
+basegeek, bookgeek, todogeek, fitnessgeek, flockgeek, notegeek, storygeek all have one.
 **startgeek does not** — consistent with it needing no server-side secrets.
 
 ---
@@ -140,7 +140,7 @@ suite's datastore compose file) and share `datageek_network`.
 
 | Container | Image | Host port → container port | Used for |
 |---|---|---|---|
-| `datageek_mongodb` | `mongo:latest` | 27018 → 27017 | Primary store — `userGeek` (central auth, `DOCS/SSO_OVERVIEW.md`), per-app databases for gateway-owned data, plus direct connections from bujogeek/fitnessgeek/flockgeek/notegeek/storygeek's own `MONGODB_URI`/`DB_URI` |
+| `datageek_mongodb` | `mongo:latest` | 27018 → 27017 | Primary store — `userGeek` (central auth, `DOCS/SSO_OVERVIEW.md`), per-app databases for gateway-owned data, plus direct connections from todogeek/fitnessgeek/flockgeek/notegeek/storygeek's own `MONGODB_URI`/`DB_URI` |
 | `datageek_postgres` | `postgres:15` | 55432 → 5432 | basegeek's AI config + related tables (README.md "Infrastructure") |
 | `datageek_redis` | `redis:latest` | 6380 → 6379 | Session caching, rate limiting, refresh-token rotation state |
 | `datageek_influxdb` | `influxdb:1.8` | 8086 → 8086 | Time-series — Garmin health metrics (fitnessgeek), basegeek request metrics |
@@ -175,7 +175,7 @@ Full design in `DOCS/CICD.md` — this is the as-shipped summary.
 
 | Workflow | Trigger | Does |
 |---|---|---|
-| `.github/workflows/ci.yml` | PR → `main`, push → `main` (both skip `**/*.md`, `DOCS/**`, `LICENSE` via `paths-ignore`) | `test-basegeek` (jest, mongodb-memory-server), `test-bookgeek` (`node --test`), `test-notegeek` (vitest), `test-bookgeek-web`, `test-flockgeek`, `test-storygeek`, `test-fitnessgeek-web` (frontend vitest suites, added 2026-09-05), `test-basegeek-ui` (basegeek's admin console — `apps/basegeek/packages/ui` — first test suite that app has had, added 2026-09-05), `test-ui` (vitest, theme contrast), `test-utils`, `test-crypto-vault` (added 2026-09-05), `test-api-client`, `test-auth`, `test-logger`, `test-user` (four shared-package jobs added 2026-09-05, BURN_REVIEW #20 — `@geeksuite/api-client`, `@geeksuite/auth`, `@geeksuite/logger`, `@geeksuite/user` shipped real `test` scripts CI never ran), `test-bujogeek` (vitest), `test-startgeek` (`npm ci` + `npm test` — standalone app, own lockfile, no pnpm workspace install — 14 `node --test` cases over `src/lib/*.test.js`, added 2026-09-05), `test-backends` matrix (bujogeek/fitnessgeek/flockgeek/storygeek/notegeek jest, `pnpm test`), `lint` (`pnpm -r lint`, errors gate/warnings don't), `syntax` (`node tools/syntax-check.mjs`, see below), `gql-audit` (`node tools/gql-arg-audit.mjs`, see below, added 2026-09-05), `boot-smoke` (`node tools/boot-smoke.mjs`, see below, added 2026-09-05), `build-frontends` matrix (8 apps, `npm run build`) |
+| `.github/workflows/ci.yml` | PR → `main`, push → `main` (both skip `**/*.md`, `DOCS/**`, `LICENSE` via `paths-ignore`) | `test-basegeek` (jest, mongodb-memory-server), `test-bookgeek` (`node --test`), `test-notegeek` (vitest), `test-bookgeek-web`, `test-flockgeek`, `test-storygeek`, `test-fitnessgeek-web` (frontend vitest suites, added 2026-09-05), `test-basegeek-ui` (basegeek's admin console — `apps/basegeek/packages/ui` — first test suite that app has had, added 2026-09-05), `test-ui` (vitest, theme contrast), `test-utils`, `test-crypto-vault` (added 2026-09-05), `test-api-client`, `test-auth`, `test-logger`, `test-user` (four shared-package jobs added 2026-09-05, BURN_REVIEW #20 — `@geeksuite/api-client`, `@geeksuite/auth`, `@geeksuite/logger`, `@geeksuite/user` shipped real `test` scripts CI never ran), `test-todogeek` (vitest), `test-startgeek` (`npm ci` + `npm test` — standalone app, own lockfile, no pnpm workspace install — 14 `node --test` cases over `src/lib/*.test.js`, added 2026-09-05), `test-backends` matrix (todogeek/fitnessgeek/flockgeek/storygeek/notegeek jest, `pnpm test`), `lint` (`pnpm -r lint`, errors gate/warnings don't), `syntax` (`node tools/syntax-check.mjs`, see below), `gql-audit` (`node tools/gql-arg-audit.mjs`, see below, added 2026-09-05), `boot-smoke` (`node tools/boot-smoke.mjs`, see below, added 2026-09-05), `build-frontends` matrix (8 apps, `npm run build`) |
 | `.github/workflows/release.yml` | push → `main` (same `paths-ignore`), or `workflow_dispatch` with an optional single-app input | Matrix-builds and pushes every app with a root `Dockerfile` to `ghcr.io/clintgeek/<app>:{latest,sha-<short>,main}` |
 | `.github/workflows/mobile-harness.yml` | push → `main`, PR → `main` (`paths`-scoped to `apps/**`, `packages/ui/**`, `tools/mobile-harness/**`, the workflow file itself) | Builds each app, serves `dist`, walks it with `tools/mobile-harness` at iPhone 14 (dark + light), fails on any tap target < 44px, readable text < 12px, sideways scroll, or page error. **Enforcing since 2026-09-05 14:54** (first green run; §8) — no longer report-only. **Sharded by app since 2026-09-30:** `mobile harness · app list` → one `mobile grammar · <app>` job per app in `tools/mobile-harness/lib/registry.mjs` (phone + desktop, 25-min cap, `fail-fast: false`) → the gate job `mobile grammar (iPhone 14, dark + light)`, which is the name the "Protect main" ruleset requires. Keep that name on the gate (§8). |
 
@@ -215,7 +215,7 @@ Docs-only commits (`**/*.md`, `DOCS/**`, `LICENSE`) are excluded from both workf
 `apps/*/**` and `packages/*/**` (excluding `node_modules`, `dist`, `build`, `coverage`,
 `.vite`, `out`, and macOS AppleDouble `._*` sidecar junk) and fails on the first file that
 can't be parsed. It exists because on 2026-09-05 basegeek crash-looped in production:
-`apps/basegeek/packages/api/src/graphql/bujogeek/typeDefs.js` had an unescaped backtick
+`apps/basegeek/packages/api/src/graphql/todogeek/typeDefs.js` had an unescaped backtick
 inside a `gql` template literal — a plain `SyntaxError` — and every jest suite stayed green
 because none of them imported that module (fixed in `61d3109`, which also added a
 `gatewaySchemaLoads` test). No test suite can be relied on to import every file in the repo;
@@ -285,14 +285,14 @@ mean an input object's fields do.
 syntax gate and `gatewaySchemaLoads` catch parse-level failures, but nothing caught an
 **import-time** failure (a missing export, a bad workspace path, a CJS/ESM interop error) or
 a service booting without a required env var. For each of the seven backends
-(`apps/{bujogeek,fitnessgeek,flockgeek,notegeek,storygeek}/backend`, `apps/bookgeek/api`,
+(`apps/{todogeek,fitnessgeek,flockgeek,notegeek,storygeek}/backend`, `apps/bookgeek/api`,
 `apps/basegeek/packages/api`) it spawns `node --input-type=module -e "await
 import('<module>')"` with an obviously-fake `KEY_VAULT_SECRET` (64 hex chars,
 `'deadbeef'.repeat(8)`, satisfying crypto-vault's format check) and fake, never-listening
 Mongo URIs (`mongodb://127.0.0.1:1/...` for `DB_URI`/`MONGODB_URI`/`BASEGEEK_MONGODB_URI`/
 `AIGEEK_MONGODB_URI`/`MONGO_BASE_URI`) — no real database, no bound port, no docker. None of
 the seven backends has a `SKIP_LISTEN`-style guard today, so per the task that drove this none
-was added; instead each target is either the app's own `app.js` (bujogeek, fitnessgeek,
+was added; instead each target is either the app's own `app.js` (todogeek, fitnessgeek,
 storygeek — already split from `server.js` so it builds the Express app without connecting or
 listening) or a documented **fallback** for the four apps with no such split:
 
@@ -351,14 +351,14 @@ longer the primary deploy path (`DEPLOY.md`) — and using it re-triggers landmi
 |---|---|---|---|
 | basegeek | `nodemon src/server.js` (`packages/api`) | `vite` — 5173 dev / 8988 preview (`packages/ui/vite.config.js`) | `npm run dev` at `apps/basegeek/` runs both concurrently |
 | bookgeek | `nodemon src/server.js` (`api/`) | `vite` — 1801 (`web/vite.config.js`) | |
-| bujogeek | `nodemon server.js` (`backend/`) — prod `PORT` default 5005 (compose), but its own `DOCS/CONTEXT.md` documents local dev backend on `5001` | `vite` — 3000 (`frontend/vite.config.js`) | `resolve.dedupe: ['@mui/material','@emotion/react','@emotion/styled','react','react-dom']` required (see landmine below) |
+| todogeek | `nodemon server.js` (`backend/`) — prod `PORT` default 5005 (compose), but its own `DOCS/CONTEXT.md` documents local dev backend on `5001` | `vite` — 3000 (`frontend/vite.config.js`) | `resolve.dedupe: ['@mui/material','@emotion/react','@emotion/styled','react','react-dom']` required (see landmine below) |
 | fitnessgeek | `nodemon src/server.js` (`backend/`) | `vite` — 5173 (`frontend/vite.config.js`) | dedupe: `['react','react-dom','@emotion/react','@emotion/styled']` |
 | flockgeek | `nodemon src/server.js` (`backend/`) | `vite` — 5173 dev / 4173 preview (`frontend/vite.config.js`) | dedupe: `['@mui/material','@emotion/react','@emotion/styled','react','react-dom']` |
 | notegeek | `nodemon server.js` (`backend/`) | `vite` — 5173 (`frontend/vite.config.js`) | dedupe: same MUI set. **Dev server fault fixed 2026-09-05** (`70eb36e`): `styled_default is not a function` from the dependency optimizer's lazy `init_styled` — `vite.config.js` now pins `@mui/material/styles` and emotion into `optimizeDeps.include`. |
 | startgeek | none (no backend) | `vite` — 3000 | Standalone `npm` app, no pnpm workspace deps, its own ESLint 8 config — a `workspace:*` devDependency broke its image build once (`TODO_ORDER.md` #5) |
 | storygeek | `nodemon src/server.js` (`backend/`) | `vite` — 5173 (`frontend/vite.config.js`) | |
 
-**The `resolve.dedupe` requirement** (all six MUI-consuming apps: bujogeek, fitnessgeek,
+**The `resolve.dedupe` requirement** (all six MUI-consuming apps: todogeek, fitnessgeek,
 flockgeek, notegeek, bookgeek, basegeek's own `packages/ui`): `packages/ui` peers on
 `@mui/material ^5`, and because apps alias `@geeksuite/ui` to source, pnpm installs a private
 MUI 5 alongside each app's MUI 7 — two separate theme contexts, so the shell frame renders
@@ -426,8 +426,8 @@ some of these may differ once the in-flight work lands).
 | `packages/ui` | `npx vitest run` | **340 passed**, 8 files — matches `STATUS.md` |
 | `apps/basegeek/packages/api` | `node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --forceExit` | The `Cannot find module '@geeksuite/logger'` failure seen earlier this pass was a transient burn-session artifact (an uncommitted `packages/logger` not yet linked); resolved once it landed (`61997ed`) and the workspace was reinstalled. The suite has grown fast the same day as more gateway modules gained zod validation and shared schemas — `DOCS/BURN_QUEUE.md` cites **1082** for the api suite as of the R70 stream (09-05). Re-run `pnpm install` at the repo root if a local run disagrees, and treat any single number here as a snapshot, not a contract. |
 | `apps/bookgeek/api` | `npm test` (`node --test test/*.test.js`) | **78 passed**, 2 suites |
-| `apps/bujogeek/frontend` | `npx vitest run` | **64 passed**, 3 files |
-| `apps/bujogeek/backend`, `apps/fitnessgeek/backend`, `apps/flockgeek/backend`, `apps/storygeek/backend`, `apps/notegeek/backend` | `pnpm test` (jest, mongodb-memory-server) — this is CI's `test-backends` matrix | fitnessgeek: **45 passed** (one run showed 1 flaky failure in `auth.test.js` on a `responseTime` assertion under load, reran clean — treat as flaky, not broken); flockgeek: **57 passed**, 5 suites; storygeek: `npm test` runs both `test:node` (**65 passed**) and `test:jest` (**41 passed**) = 106 total; notegeek backend: **96 passed / 9 skipped**, 3 of 10 suites skipped |
+| `apps/todogeek/frontend` | `npx vitest run` | **64 passed**, 3 files |
+| `apps/todogeek/backend`, `apps/fitnessgeek/backend`, `apps/flockgeek/backend`, `apps/storygeek/backend`, `apps/notegeek/backend` | `pnpm test` (jest, mongodb-memory-server) — this is CI's `test-backends` matrix | fitnessgeek: **45 passed** (one run showed 1 flaky failure in `auth.test.js` on a `responseTime` assertion under load, reran clean — treat as flaky, not broken); flockgeek: **57 passed**, 5 suites; storygeek: `npm test` runs both `test:node` (**65 passed**) and `test:jest` (**41 passed**) = 106 total; notegeek backend: **96 passed / 9 skipped**, 3 of 10 suites skipped |
 | `apps/notegeek/frontend` | `npx vitest run` | **130 passed / 1 failed** (a worker-timeout under heavy parallel load during this pass, not a real assertion failure) of 131 total, 21 of 22 files. `STATUS.md` reports 141 — the gap is an uncommitted new `App.test.jsx` plus general WIP noise; re-run in isolation for a trustworthy number. |
 | `apps/*/frontend`, `packages/ui`, `apps/startgeek` (build smoke) | `npm run build` per app | Covered by CI's `build-frontends` matrix; not re-run individually during this pass |
 
@@ -438,7 +438,7 @@ some of these may differ once the in-flight work lands).
 | Symptom | Cause | Fix |
 |---|---|---|
 | App logged in as "stale" after logout; silent refresh fails | Service worker cached `/api/me` or `/api/auth/*` | Auth endpoints must be `NetworkOnly` and evaluated **first** in the SW's runtime-caching rules — `DOCS/PWA_STANDARD.md` |
-| App renders unstyled after a deploy until the user clears site data | SPA fallback answered every unknown path (including hashed asset paths) with `index.html`; an old SW revalidates a stale `/assets/*.css`, gets `index.html` back as 200, caches it as the stylesheet | Express fallback must 404 any path with a file extension, not just serve `index.html` for everything (done in bujogeek/notegeek/bookgeek servers) |
+| App renders unstyled after a deploy until the user clears site data | SPA fallback answered every unknown path (including hashed asset paths) with `index.html`; an old SW revalidates a stale `/assets/*.css`, gets `index.html` back as 200, caches it as the stylesheet | Express fallback must 404 any path with a file extension, not just serve `index.html` for everything (done in todogeek/notegeek/bookgeek servers) |
 | Dark mode shows white panels / MUI-default text color after a frontend change | Two MUI 5/7 copies in the bundle (`packages/ui` materializes its own MUI 5 peer) | `resolve.dedupe` in the app's `vite.config.js` — see §7 |
 | Release workflow green, `docker ps` shows a container hours old, site serves the old build | Local `build.sh` deploy left the image with no RepoDigest, so Watchtower has nothing to diff against | `docker compose pull <app> && docker compose up -d <app>` — §5 |
 | Some apps are **missing** from `docker ps -a` (not stopped — gone), one sits in `Created`, and `NGINX` is `Exited (255)` despite `unless-stopped`; every site is down (2026-10-09) | The Docker daemon restarted (here: `apt upgrade` upgraded containerd/docker at 13:37, daemon restarted 13:41) **while Watchtower was mid-update** after a main push: it had stopped and removed the old containers but not yet created the new ones | `docker start NGINX`, then for each missing app `cd apps/<app> && docker compose pull <app> && docker compose up -d <app>`, basegeek first; check `docker ps` health and `curl` each host. Avoid `apt upgrade` on the server within ~10 min of a push to main (every push restarts the fleet). |
@@ -448,7 +448,7 @@ some of these may differ once the in-flight work lands).
 | ~~Adding a field to fitnessgeek's `UserSettings` silently disappears~~ | **Fixed 2026-09-05** (`6d7865c`, `TODO_ORDER.md` #21) — both models now build from `packages/schemas/fitnessgeek/userSettings.js` (`@geeksuite/schemas`); a parity tripwire on both sides fails if either stops consuming it. Same pattern followed for seven more fitnessgeek models the same day (`DOCS/CONTEXT.md`). | Add a field to the shared module only, per `apps/fitnessgeek/DOCS/USER_SETTINGS_SCHEMA.md` |
 | notegeek dev server rendered nothing | esbuild dependency-optimizer fault (`styled_default is not a function`); production build was unaffected | **Fixed 2026-09-05** (`70eb36e`) — `vite.config.js` pins `@mui/material/styles` and emotion into `optimizeDeps.include`, so the optimizer stops re-splitting MUI's lazy init across passes |
 | basegeek `packages/api` test suite fails wholesale with `Cannot find module '@geeksuite/logger'` | A new workspace package (`packages/logger`) was added but the workspace hasn't been re-linked yet | `pnpm install` at the repo root — this specific occurrence was fixed 2026-09-05 (`61997ed`); the general shape (add a workspace package, forget to reinstall) recurs any time one lands |
-| An app crash-loops in production with a plain `SyntaxError` even though CI was green | A module no jest/vitest suite imports (e.g. a `typeDefs.js`) had a parse error — nothing ever loaded it to notice | Fixed by the `syntax` CI job / `pnpm check:syntax` (§5) added 2026-09-05 after exactly this happened to `apps/basegeek/packages/api/src/graphql/bujogeek/typeDefs.js` (`61d3109`) |
+| An app crash-loops in production with a plain `SyntaxError` even though CI was green | A module no jest/vitest suite imports (e.g. a `typeDefs.js`) had a parse error — nothing ever loaded it to notice | Fixed by the `syntax` CI job / `pnpm check:syntax` (§5) added 2026-09-05 after exactly this happened to `apps/basegeek/packages/api/src/graphql/todogeek/typeDefs.js` (`61d3109`) |
 | basegeek opens Mongo/Postgres/Redis/Influx connections before those containers are ready, on a full `up -d` | `apps/basegeek/docker-compose.yml`'s four datastore services had no `healthcheck:` and basegeek's `depends_on:` was short-form (waits for *started*, not *ready*) — BURN_REVIEW_2 #12 | Fixed 2026-09-05: mongodb (`mongosh --eval "db.adminCommand('ping').ok"`), postgres (`pg_isready -U $POSTGRES_USER`), redis (`redis-cli ping`), influxdb (`curl` against `/ping`) all got healthchecks with a 20s `start_period`; basegeek's `depends_on:` is now long-form with `condition: service_healthy` for all four, and its own healthcheck gained a 30s `start_period` to match its observed ~15-25s boot time. Applied — all four datastores report `(healthy)` (checked 2026-10-09). |
 | Login fails with ``Operation `users.findOne()` buffering timed out after 10000ms``; `/api/health` reports `"downDependencies":["userGeek"]` while Mongo itself is healthy | After a power cut or daemon restart Docker starts every container in the same second (compose `depends_on` only applies to `compose up`), so basegeek dialed Mongo before it accepted connections. mongoose never retries a failed **first** connect on a `createConnection()`, and Docker doesn't restart an *unhealthy* container (2026-10-10) | `docker restart basegeek`. Fixed 2026-10-10: `lib/requireConnection.js` makes boot exit 1 when userGeek can't connect, so Docker's restart policy retries it |
 | After a reboot, ssh works for minutes before any site or Home Assistant answers; basegeek logs `MongoServerSelectionError` timeouts, then recovers | `docker.service` was **disabled** — only `docker.socket` was enabled, so the daemon waited for the first thing to touch the socket (2026-10-09: a Nextcloud cron `docker exec` at 4m24s). Then ~40 containers loaded from the HDD data-root (2m20s) and started at once on 4 cores (load 42) | `sudo systemctl enable docker.service` (done 2026-10-09). Dev/side stacks are on-demand (`restart: "no"`): rallycenter dev + test postgres, docker-registry, the buildx builder — start them by hand with `docker compose up -d` / `docker start` |
@@ -503,7 +503,7 @@ A dedicated pass over `apps/*/Dockerfile`, `apps/*/docker-compose.yml`, `apps/*/
   `SUITE_TODO.md`), but the same pattern applied to `MONGODB_URI`, `JWT_SECRET`, `BASEGEEK_URL`,
   `REDIS_URL`, `AI_GEEK_API_KEY`, `USDA_API_KEY`, `OPENFOODFACTS_API_URL` and every `INFLUXDB_*`
   var — all silently sourced from a stale local file instead of the current `.env.production` on
-  every recreate. Removed the duplicate substitutions; `bujogeek`/`notegeek`'s compose files
+  every recreate. Removed the duplicate substitutions; `todogeek`/`notegeek`'s compose files
   already carry a comment warning against exactly this, this one just didn't follow it.
 - **basegeek's `mongodb`/`postgres` services had no `env_file` either**, using bare
   `${MONGO_INITDB_ROOT_USERNAME}` etc. substitutions with no local `.env` present at all — a
@@ -515,7 +515,7 @@ A dedicated pass over `apps/*/Dockerfile`, `apps/*/docker-compose.yml`, `apps/*/
 - **Three containers showed no `(healthy)` in `docker ps`**: basegeek, fitnessgeek, flockgeek had
   no compose `healthcheck:` even though all three serve `/api/health` (confirmed by reading each
   app's route table, not just the doc). Added the same `wget --spider` healthcheck pattern
-  bujogeek/notegeek/bookgeek already use (all run on `node:20-alpine`, which ships busybox
+  todogeek/notegeek/bookgeek already use (all run on `node:20-alpine`, which ships busybox
   `wget` — no image change needed).
 - **No compose file in the suite set log rotation** — unbounded `json-file` logs on a box that
   also runs a dozen other services. Added `logging: {driver: json-file, options: {max-size: 10m,
@@ -568,10 +568,10 @@ A dedicated pass over `apps/*/Dockerfile`, `apps/*/docker-compose.yml`, `apps/*/
 - ~~`TZ=America/Chicago` is inert in every container (no `tzdata` in any `node:20-alpine`/`-slim`
   image) — Q42, Chef's call, per `STATUS.md`.~~ **Removed Night 2 (2026-09-06)** — the `TZ:` line
   was stripped from all seven consumer compose files (bookgeek, fitnessgeek, notegeek, flockgeek,
-  storygeek, bujogeek, startgeek); basegeek's compose is out of this stream's scope. See
+  storygeek, todogeek, startgeek); basegeek's compose is out of this stream's scope. See
   `DOCS/CONTEXT.md` "Time zones" for the rule that replaces it.
-- `bujogeek`'s compose sets `GATEWAY_URL=http://host.docker.internal:4100`, but nothing in the
-  bujogeek backend reads `process.env.GATEWAY_URL` (grepped, zero hits) — dead config, and the
+- `todogeek`'s compose sets `GATEWAY_URL=http://host.docker.internal:4100`, but nothing in the
+  todogeek backend reads `process.env.GATEWAY_URL` (grepped, zero hits) — dead config, and the
   port doesn't even match basegeek's real one (8987). Harmless since unread; not touched.
 - `main` has no required status checks (BURN_REVIEW #21) — a GitHub repo setting, not a file in
   this tree.

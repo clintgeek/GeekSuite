@@ -36,7 +36,7 @@
 | **Cookie: geek_token** | 7 days max-age, HttpOnly: **true**, Secure: production, SameSite: lax |
 | **Cookie: geek_refresh_token** | 30 days max-age, HttpOnly: **true**, Secure: production, SameSite: lax |
 | **Cookie Domain** | `.clintgeek.com` (production), omitted in dev |
-| **VALID_APPS** | `basegeek, notegeek, bujogeek, fitnessgeek, storygeek, startgeek, flockgeek, musicgeek, babelgeek, bookgeek, gamegeek` |
+| **VALID_APPS** | `basegeek, notegeek, todogeek, fitnessgeek, storygeek, startgeek, flockgeek, musicgeek, babelgeek, bookgeek, gamegeek` |
 
 ### baseGeek Auth Endpoints
 
@@ -117,7 +117,7 @@
 
 ---
 
-### 3. BuJoGeek ✅ Mostly Migrated (has legacy remnants)
+### 3. TodoGeek ✅ Mostly Migrated (has legacy remnants)
 
 | Layer | File | Pattern |
 |-------|------|---------|
@@ -129,7 +129,7 @@
 - **Token Storage**: Cookies (primary), **but `ssoTokens.js` still exists** reading cookies + localStorage fallback
 - **Login UX**: Redirect to baseGeek
 - **Logout**: BroadcastChannel `geeksuite-auth` with `{ type: "LOGOUT" }` 📡 (was lowercase `logout`; standardized September 2026)
-- **Legacy Files**: `client/src/utils/ssoTokens.js` — reads `document.cookie` + `localStorage` fallback for `token` / `bujogeek_refresh_token`
+- **Legacy Files**: `client/src/utils/ssoTokens.js` — reads `document.cookie` + `localStorage` fallback for `token` / `todogeek_refresh_token`
 - **Backend authController** (`server/src/controllers/authController.js`): ⚠️ **Has LOCAL register/login that creates users in a LOCAL MongoDB**, issues its own JWTs with `{ _id }` payload (7d TTL). This is a **completely separate auth path** from the SSO proxy routes.
 - **Local User DB**: Yes (local User model with password)
 
@@ -260,7 +260,7 @@
 | **baseGeek** | Zustand + localStorage | Bearer header only | Local JWT verify | Central (userGeek) | Body or cookie → new tokens + cookies |
 | **BabelGeek** | Cookie (getMe) | Cookie + Bearer | Proxy to baseGeek | No | None (frontend) |
 | **bookgeek** | Cookie (getMe) | Cookie + Bearer | Proxy to baseGeek | No | Proxy to baseGeek |
-| **BuJoGeek** | Cookie (getMe) | Cookie + Bearer | Proxy to baseGeek | ⚠️ Yes (legacy) | Proxy to baseGeek |
+| **TodoGeek** | Cookie (getMe) | Cookie + Bearer | Proxy to baseGeek | ⚠️ Yes (legacy) | Proxy to baseGeek |
 | **fitnessGeek** | Cookie (getMe) | Cookie + Bearer | **Local JWT verify** | No | ⚡ Keep-alive every 15min |
 | **FlockGeek** | Cookie (getMe) | Cookie + Bearer | Proxy to baseGeek | No | Body-only (broken for cookies) |
 | **MusicGeek** | Cookie (getMe) | Cookie + Bearer | Proxy to baseGeek | Yes (profiles) | Body-only (broken for cookies) |
@@ -277,7 +277,7 @@ One channel, one message type, suite-wide. The canonical values live in
 
 | Apps | Channel Name | Logout Message |
 |------|-------------|----------------|
-| **All** (basegeek, bookgeek, bujogeek, fitnessgeek, flockgeek, notegeek, storygeek) | `geeksuite-auth` | `{ type: 'LOGOUT', sender: <tabId> }` |
+| **All** (basegeek, bookgeek, todogeek, fitnessgeek, flockgeek, notegeek, storygeek) | `geeksuite-auth` | `{ type: 'LOGOUT', sender: <tabId> }` |
 
 Every app both **posts** on logout and **listens** to clear local auth state:
 
@@ -394,7 +394,7 @@ A guard whose list can drift from the CORS list is worse than no guard.
 | App | Mount | Allow-list source |
 |-----|-------|-------------------|
 | basegeek | `apps/basegeek/packages/api/src/server.js:105` | `src/lib/corsOrigins.js` (extracted from server.js) |
-| bujogeek | `apps/bujogeek/backend/src/app.js:56` | `allowedOrigins` in `createApp()` |
+| todogeek | `apps/todogeek/backend/src/app.js:56` | `allowedOrigins` in `createApp()` |
 | fitnessgeek | `apps/fitnessgeek/backend/src/app.js:81` | `allowedOrigins` in `app.js` (`CORS_ORIGINS` in prod) |
 | flockgeek | `apps/flockgeek/backend/src/server.js:43` | `src/config/corsOrigins.js` (extracted; `CORS_ORIGIN`) |
 | notegeek | `apps/notegeek/backend/server.js:86` | `config/corsOrigins.js` (extracted) |
@@ -479,7 +479,7 @@ frontend. It is the right follow-up, not part of this pass.
 |------|-----|--------|
 | `baseGeek/packages/ui/src/utils/ssoTokens.js` | baseGeek | Marked for deletion in CONTEXT.md |
 | `fitnessGeek/frontend/src/utils/ssoTokens.js` | fitnessGeek | Marked for deletion |
-| `BuJoGeek/client/src/utils/ssoTokens.js` | BuJoGeek | **Still referenced?** Reads cookie + localStorage fallback |
+| `TodoGeek/client/src/utils/ssoTokens.js` | TodoGeek | **Still referenced?** Reads cookie + localStorage fallback |
 | `baseGeek/packages/ui/src/store/sharedAuthStore.js` | baseGeek | Legacy Zustand store persisting tokens to localStorage |
 | `baseGeek/src/middleware/auth.js` | baseGeek | Old duplicate middleware with different VALID_APPS |
 
@@ -490,7 +490,7 @@ frontend. It is the right follow-up, not part of this pass.
 | App | SW File | Risk |
 |-----|---------|------|
 | **BabelGeek** | `frontend/public/sw.js` | May cache `/api/me` responses |
-| **BuJoGeek** | `client/dev-dist/sw.js` | Workbox PWA — potential stale auth cache |
+| **TodoGeek** | `client/dev-dist/sw.js` | Workbox PWA — potential stale auth cache |
 | **fitnessGeek** | `frontend/public/sw.js` | Workbox PWA — potential stale auth cache |
 | **FlockGeek** | `frontend/public/sw.js` | May cache auth responses |
 | **NoteGeek** | `client/dev-dist/sw.js` | Workbox PWA |
@@ -548,14 +548,14 @@ Clearing browser cache/cookies removes `geek_token` and `geek_refresh_token`. Si
 Was: three different BroadcastChannel names (`geeksuite-auth`, `geek-auth`, none) and two message types (`LOGOUT`, `logout`), with baseGeek on `postMessage`. Now a single channel and message type across every app — see [BroadcastChannel — Standardized](#broadcastchannel--standardized-september-2026).
 
 ### 12. Service Worker Caching Auth Responses
-Apps with Workbox service workers (fitnessGeek, BuJoGeek, NoteGeek, FlockGeek, BabelGeek) may cache `/api/me` responses. Even though backends set `Cache-Control: no-store`, service workers can intercept before the cache header is evaluated. A stale cached "authenticated" response after logout would keep showing the user as logged in.
+Apps with Workbox service workers (fitnessGeek, TodoGeek, NoteGeek, FlockGeek, BabelGeek) may cache `/api/me` responses. Even though backends set `Cache-Control: no-store`, service workers can intercept before the cache header is evaluated. A stale cached "authenticated" response after logout would keep showing the user as logged in.
 
 ---
 
 ## 🟡 Architecture Inconsistencies
 
 ### 13. Two Validation Strategies
-- **Proxy validation** (BabelGeek, bookgeek, BuJoGeek, FlockGeek, MusicGeek, geekSuite): Each request to `/api/me` makes a network call to `baseGeek /api/users/me`. Adds latency and creates baseGeek as single point of failure.
+- **Proxy validation** (BabelGeek, bookgeek, TodoGeek, FlockGeek, MusicGeek, geekSuite): Each request to `/api/me` makes a network call to `baseGeek /api/users/me`. Adds latency and creates baseGeek as single point of failure.
 - **Local JWT validation** (fitnessGeek): Verifies JWT locally with shared secret. Fast, works offline from baseGeek, but won't catch revoked tokens.
 - **Hybrid** (photoGeek, NoteGeek): Tries local first, falls back to proxy. Complex, harder to reason about.
 
@@ -572,7 +572,7 @@ These are all slightly different implementations of the same logic.
 There is no token blacklist or revocation mechanism. Logging out clears cookies but the JWT remains valid until expiration. If an attacker captures a token, it's valid for the full 1-hour TTL regardless of logout.
 
 ### 16. Local User DB Fragmentation
-BuJoGeek, NoteGeek, MusicGeek, and photoGeek maintain local user records mapped to baseGeek user IDs. Each has its own user creation/mapping logic. If baseGeek user IDs change (migration, data recovery), the mapping breaks silently.
+TodoGeek, NoteGeek, MusicGeek, and photoGeek maintain local user records mapped to baseGeek user IDs. Each has its own user creation/mapping logic. If baseGeek user IDs change (migration, data recovery), the mapping breaks silently.
 
 ---
 
@@ -825,7 +825,7 @@ For each app, in order of risk (lowest risk first):
 4. **bookgeek** — Well-migrated, fix channel name + swap to shared package
 5. **MusicGeek** — Well-migrated, fix refresh + logout auth requirement + swap
 6. **fitnessGeek** — Reference impl, swap to shared package (keep local JWT verify as option)
-7. **BuJoGeek** — Remove legacy ssoTokens.js, local auth controller, swap to shared package
+7. **TodoGeek** — Remove legacy ssoTokens.js, local auth controller, swap to shared package
 8. **photoGeek** — Remove hybrid middleware, fix VALID_APPS, remove local JWT generation, swap
 9. **NoteGeek** — Highest risk: remove dual auth, remove local register/login, swap to shared package
 
@@ -854,9 +854,9 @@ For each app:
 
 - [ ] Delete `baseGeek/packages/ui/src/utils/ssoTokens.js`
 - [ ] Delete `fitnessGeek/frontend/src/utils/ssoTokens.js`
-- [ ] Delete `BuJoGeek/client/src/utils/ssoTokens.js`
+- [ ] Delete `TodoGeek/client/src/utils/ssoTokens.js`
 - [ ] Remove `baseGeek/packages/ui/src/store/sharedAuthStore.js` (or migrate to cookie-first)
-- [ ] Remove `BuJoGeek/server/src/controllers/authController.js` (local auth)
+- [ ] Remove `TodoGeek/server/src/controllers/authController.js` (local auth)
 - [ ] Remove `NoteGeek/server/controllers/auth.js` (local auth)
 - [ ] Remove `NoteGeek/server/middleware/auth.js` (old Bearer-only middleware)
 - [ ] Remove `photoGeek/backend/src/middleware/auth.js` `generateToken()` function
