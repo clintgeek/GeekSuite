@@ -83,3 +83,9 @@ Chef: uninstalled games weren't leaving Playing, and DLC he hid in Playnite stay
 - **Deleted in GameGeek:** remembered in a new `PlayniteTombstone` collection, written by the gateway's `deleteGame` and when a Playnite copy is removed in edit. The import never brings these back.
 
 Spec: `apps/gamegeek/DOCS/PLAYNITE_IMPORT.md`. Tests were revert-checked: 20 backend and 4 gateway tests fail against the old code. The delete guard was checked against an in-memory Mongo.
+
+## 2026-10-10 — basegeek survives a cold start
+
+After a power cut every login failed with `users.findOne()` buffering timeouts for an hour. Docker started all containers in the same second, basegeek's userGeek connection failed its first connect, and mongoose never retries that. Boot now exits 1 when userGeek can't connect (`lib/requireConnection.js`), so Docker's restart policy tries again. The test was revert-checked: it fails without the exit.
+
+Also: `docker.service` enabled at boot (it was socket-activated only, so Docker waited for a cron job), dev stacks set to on-demand, and ~113 GB of Docker leftovers cleared. See the RUNBOOK troubleshooting rows.
