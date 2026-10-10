@@ -27,6 +27,7 @@ import appsRoutes from './routes/apps.js';
 import ambientRoutes from './routes/ambient.js';
 import { connectAIGeekDB, getAIGeekConnection } from './config/database.js';
 import { userGeekConn } from './models/user.js';
+import { requireConnection } from './lib/requireConnection.js';
 import { listAppConnections } from './graphql/shared/appConnections.js';
 import { resolveAllowedOrigins } from './lib/corsOrigins.js';
 import { summarizeDependencies, createCachedProbe } from './lib/healthCheck.js';
@@ -60,6 +61,9 @@ try {
   logger.error({ err }, 'MongoDB connection error')
   process.exit(1)
 }
+
+// Every login reads userGeek; a failed first connect never recovers on its own.
+await requireConnection(userGeekConn, 'userGeek', { logger })
 
 // Auto-seed the app registry with any default app that's missing (never
 // updates or deletes an existing row). Runs on every boot so the Home page
