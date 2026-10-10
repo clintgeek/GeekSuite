@@ -8,6 +8,8 @@
 //   (none)                  admin, a full front page, every feed health state
 //   ?__fixture=empty        admin, no stories yet
 //   ?__fixture=nonadmin     a plain reader: newsViewer.isAdmin is false
+//   ?__fixture=free         "Free to read" on: paywalled sources' items left out,
+//                           hiddenPaywalled = 14
 import { sessionRoutes, graphqlRoute } from '../../lib/net.mjs';
 
 const ago = (min) => new Date(Date.now() - min * 60000).toISOString();
@@ -121,10 +123,12 @@ const S = (id, name, o = {}) => ({
   notes: '',
   articlesLast7d: 14,
   ...o,
+  paywalled: ['metered', 'hard'].includes((o.access ?? {}).paywall),
 });
+const WALL = (paywall, content = 'excerpt') => ({ __typename: 'NewsSourceAccess', paywall, content });
 const SOURCES = [
   S('s-ark', 'The Arkadelphian', { sections: ['local'], places: [PLACES[0], PLACES[2]], articlesLast7d: 22, feeds: [F('s-ark-f1', 'ok')] }),
-  S('s-mal', 'Malvern Daily Record', { sections: ['local'], places: [PLACES[1], PLACES[3]], access: { __typename: 'NewsSourceAccess', paywall: 'metered', content: 'title' }, articlesLast7d: 9, feeds: [F('s-mal-f1', 'stale')] }),
+  S('s-mal', 'Malvern Daily Record', { sections: ['local'], places: [PLACES[1], PLACES[3]], access: WALL('hard'), articlesLast7d: 9, feeds: [F('s-mal-f1', 'stale')] }),
   S('s-nws', 'NWS Little Rock', {
     kind: 'official', sections: ['local', 'state'], articlesLast7d: 3,
     feeds: [F('s-nws-f1', 'ok', { format: 'nws', url: 'https://api.weather.gov/alerts/active.atom?zone=ARC019', pollEveryMin: 15 })],
@@ -132,6 +136,7 @@ const SOURCES = [
   S('s-katv', 'KATV', { sections: ['state'], places: [PLACES[4]], articlesLast7d: 31, feeds: [F('s-katv-f1', 'failing')] }),
   S('s-adv', 'Arkansas Advocate', { sections: ['state'], places: [PLACES[4]], status: 'broken', notes: 'Moved to a new CMS in September; the old feed 404s.', articlesLast7d: 0, feeds: [F('s-adv-f1', 'broken')] }),
   S('s-npr', 'NPR', { sections: ['national', 'world'], places: [], articlesLast7d: 120 }),
+  S('s-verge', 'The Verge', { sections: ['tech'], places: [], access: WALL('metered'), articlesLast7d: 40 }),
   S('s-ars', 'Ars Technica', { sections: ['tech'], places: [], status: 'discovered', articlesLast7d: 0, feeds: [F('s-ars-f1', 'never')] }),
 ];
 
@@ -144,10 +149,14 @@ const fixtureOf = (pageUrl) => {
   }
 };
 
+// `free`: the reader's "Free to read" switch is on — paywalled sources' items
+// are left out and the page says how many were hidden.
+const WALLED_IDS = new Set(SOURCES.filter((s) => s.paywalled).map((s) => s.id));
 const articlesFor = (vars, mode) => {
-  if (mode === 'empty') return { __typename: 'NewsArticlePage', items: [], nextBefore: null };
-  const items = ARTICLES.filter((a) => (!vars.section || a.sections.includes(vars.section)) && (!vars.sourceId || a.sourceId === vars.sourceId));
-  return { __typename: 'NewsArticlePage', items, nextBefore: ago(400) };
+  if (mode === 'empty') return { __typename: 'NewsArticlePage', items: [], nextBefore: null, hiddenPaywalled: 0 };
+  const free = mode === 'free';
+  const items = ARTICLES.filter((a) => (!vars.section || a.sections.includes(vars.section)) && (!vars.sourceId || a.sourceId === vars.sourceId) && !(free && WALLED_IDS.has(a.sourceId)));
+  return { __typename: 'NewsArticlePage', items, nextBefore: ago(400), hiddenPaywalled: free ? 14 : 0 };
 };
 
 export async function routes(ctx) {
@@ -163,6 +172,10 @@ export async function routes(ctx) {
     switch (op) {
       case 'NewsViewer':
         return { newsViewer: { __typename: 'NewsViewer', isAdmin: mode !== 'nonadmin' } };
+      case 'NewsPrefs':
+        return { newsPrefs: { __typename: 'NewsPrefs', freeToReadOnly: mode === 'free' } };
+      case 'NewsSetPrefs':
+        return { newsSetPrefs: { __typename: 'NewsPrefs', freeToReadOnly: Boolean(vars.input?.freeToReadOnly) } };
       case 'NewsPlaces':
         return { newsPlaces: PLACES };
       case 'NewsArticles':

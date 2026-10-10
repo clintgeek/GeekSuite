@@ -13,6 +13,7 @@ import { useToast } from '@geeksuite/ui';
 import Column from '../components/Column';
 import HealthIndicator from '../components/HealthIndicator';
 import KindBadge from '../components/KindBadge';
+import PaywallBadge from '../components/PaywallBadge';
 import PlaceChips from '../components/PlaceChips';
 import TimeAgo from '../components/TimeAgo';
 import { CHECK_NEWS_SOURCE_NOW, SET_NEWS_SOURCE_STATUS } from '../graphql/mutations';
@@ -164,6 +165,7 @@ export default function SourceDetailView() {
       <Box component="header" sx={{ pt: 6, pb: 4, borderBottom: 2, borderColor: 'text.primary' }}>
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center', mb: 2 }}>
           <KindBadge kind={source.kind} />
+          <PaywallBadge source={source} />
           <Typography component="span" sx={{ ...flagSx, color: 'text.secondary' }}>
             {labelFor(STATUS_LABEL, source.status)}
           </Typography>

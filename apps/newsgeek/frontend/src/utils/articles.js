@@ -8,4 +8,10 @@ export function articleVariables(section, before) {
   return vars;
 }
 
+/** "14 paywalled stories hidden" / "1 paywalled story hidden"; null when nothing was. */
+export function hiddenPaywalledLine(n) {
+  if (!Number.isInteger(n) || n < 1) return null;
+  return `${n.toLocaleString('en-US')} paywalled ${n === 1 ? 'story' : 'stories'} hidden`;
+}
+
 export const EMPTY_LINE = 'No stories yet — the presses are warming up. Sources are polled every 15–60 minutes.';

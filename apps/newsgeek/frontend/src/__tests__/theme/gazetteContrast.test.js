@@ -191,6 +191,9 @@ const GROUND_PAIRS = ['light', 'dark'].flatMap((mode) => {
     // Muted copy on the shaded band (selected row, section band).
     [`${mode}: text.muted on shade`, g.inkFaint, g.shade],
     [`${mode}: text.secondary on shade`, g.inkSoft, g.shade],
+    // The "Free to read" switch thumb (FreeToReadSwitch): inkSoft off, ink on, on the page.
+    [`${mode}: Free to read thumb (off) on newsprint`, g.inkSoft, g.newsprint],
+    [`${mode}: Free to read thumb (on) on newsprint`, g.ink, g.newsprint],
   ];
   // Health labels are 12-13px text in their tone, on the page and on stock.
   for (const [state, tone] of Object.entries(g.tone)) {

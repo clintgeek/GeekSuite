@@ -54,6 +54,7 @@ export const SOURCE_FIELDS = gql`
     blockedDomains
     notes
     articlesLast7d
+    paywalled
   }
   ${PLACE_FIELDS}
   ${FEED_FIELDS}
@@ -97,6 +98,16 @@ export const GET_NEWS_ARTICLES = gql`
         }
       }
       nextBefore
+      hiddenPaywalled
+    }
+  }
+`;
+
+/** The reader's own prefs (per user, server-side). Defaults when never set. */
+export const GET_NEWS_PREFS = gql`
+  query NewsPrefs {
+    newsPrefs {
+      freeToReadOnly
     }
   }
 `;

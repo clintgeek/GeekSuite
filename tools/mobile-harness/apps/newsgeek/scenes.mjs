@@ -1,6 +1,6 @@
 // NewsGeek (County Gazette): Latest, Sources, Source detail, and the Add
 // source dialog (DOCS/NEWSGEEK_PLAN.md "Screens"). Deep links everywhere; fixture
-// modes ride on the URL (?__fixture=empty | nonadmin), see fixtures.mjs.
+// modes ride on the URL (?__fixture=empty | nonadmin | free), see fixtures.mjs.
 export const scenes = [
   { name: '01-latest', goto: '/', wait: 1600 },
   { name: '02-latest-local', goto: '/?section=local', wait: 1600 },
@@ -20,6 +20,9 @@ export const scenes = [
     },
     teardown: (page, h) => h.esc(),
   },
+  // "Free to read" on: the switch set, "14 paywalled stories hidden" under the tabs.
+  { name: '08-latest-free-to-read', goto: '/?__fixture=free', wait: 1600 },
+  { name: '09-source-paywall', goto: '/sources/s-mal', wait: 1600 },
 ];
 
 export const waivers = [];

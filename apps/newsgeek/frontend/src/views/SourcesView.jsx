@@ -12,6 +12,7 @@ import { Link as RouterLink } from 'react-router-dom';
 import Column from '../components/Column';
 import HealthIndicator from '../components/HealthIndicator';
 import KindBadge from '../components/KindBadge';
+import PaywallBadge from '../components/PaywallBadge';
 import TimeAgo from '../components/TimeAgo';
 import { GET_NEWS_SOURCES } from '../graphql/queries';
 import { useViewer } from '../hooks/useViewer';
@@ -45,6 +46,7 @@ function SourceRow({ source }) {
             {source.name}
           </Link>
         </Typography>
+        <PaywallBadge source={source} />
         <KindBadge kind={source.kind} />
       </Box>
       <Typography sx={{ fontFamily: GOTHIC, fontSize: '0.8125rem', color: 'text.secondary', mb: 1 }}>

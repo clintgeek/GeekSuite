@@ -52,8 +52,13 @@ export const source = (id, overrides = {}) => ({
   blockedDomains: [],
   notes: '',
   articlesLast7d: 12,
+  paywalled: ['metered', 'hard'].includes(overrides.access?.paywall),
   ...overrides,
 });
+
+/** A source with a paywall level (`paywalled` derived the way the gateway does). */
+export const walledSource = (id, paywall, overrides = {}) =>
+  source(id, { access: { __typename: 'NewsSourceAccess', paywall, content: 'excerpt' }, paywalled: paywall !== 'none', ...overrides });
 
 export const viewerMock = (isAdmin) => ({
   request: { query: GET_NEWS_VIEWER },

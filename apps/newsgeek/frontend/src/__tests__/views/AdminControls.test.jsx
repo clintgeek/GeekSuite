@@ -9,7 +9,7 @@ import { CHECK_NEWS_SOURCE_NOW } from '../../graphql/mutations';
 import { GET_NEWS_PLACES, GET_NEWS_SOURCE, GET_NEWS_SOURCES } from '../../graphql/queries';
 import SourceDetailView from '../../views/SourceDetailView';
 import SourcesView from '../../views/SourcesView';
-import { place, source, viewerMock } from '../fixtures';
+import { place, source, viewerMock, walledSource } from '../fixtures';
 import { renderWithProviders } from '../testUtils';
 
 const detailMock = { request: { query: GET_NEWS_SOURCE, variables: { id: 's1' } }, result: { data: { newsSource: source('s1', { name: 'The Arkadelphian' }) } } };
@@ -21,6 +21,19 @@ const renderDetail = (isAdmin, extra = []) =>
   renderWithProviders(<SourceDetailView />, { mocks: [viewerMock(isAdmin), detailMock, ...extra], initialEntries: ['/sources/s1'], path: '/sources/:id' });
 
 describe('source detail', () => {
+  it('a paywalled source wears its badge in the header; a free one does not', async () => {
+    const walled = { request: { query: GET_NEWS_SOURCE, variables: { id: 's2' } }, result: { data: { newsSource: walledSource('s2', 'hard', { name: 'Sentinel-Record' }) } } };
+    renderWithProviders(<SourceDetailView />, { mocks: [viewerMock(false), walled], initialEntries: ['/sources/s2'], path: '/sources/:id' });
+    expect(await screen.findByRole('heading', { level: 1, name: 'Sentinel-Record' })).toBeInTheDocument();
+    expect(screen.getByTestId('paywall-badge')).toHaveTextContent(/^Paywall$/);
+  });
+
+  it('a free source has no paywall badge', async () => {
+    renderDetail(false);
+    expect(await screen.findByRole('heading', { level: 1, name: 'The Arkadelphian' })).toBeInTheDocument();
+    expect(screen.queryByTestId('paywall-badge')).toBeNull();
+  });
+
   it('a reader sees the record and no admin controls', async () => {
     renderDetail(false);
     expect(await screen.findByRole('heading', { level: 1, name: 'The Arkadelphian' })).toBeInTheDocument();
