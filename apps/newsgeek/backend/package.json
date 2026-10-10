@@ -1,0 +1,32 @@
+{
+  "name": "newsgeek-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "NewsGeek backend — feed polling, normalization, dedupe, feed health, retention purge. Part of GeekSuite.",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "seed": "node scripts/seed.js",
+    "test": "node --test --test-concurrency=1 test/*.test.js",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@geeksuite/logger": "workspace:*",
+    "@geeksuite/schemas": "workspace:*",
+    "@geeksuite/user": "workspace:*",
+    "cookie-parser": "^1.4.7",
+    "cors": "^2.8.6",
+    "dotenv": "^16.6.1",
+    "express": "^4.22.1",
+    "fast-xml-parser": "^5.3.4",
+    "mongoose": "^8.23.0"
+  },
+  "devDependencies": {
+    "@geeksuite/eslint-config": "workspace:*",
+    "eslint": "^9.39.2",
+    "mongodb-memory-server": "^10.4.3",
+    "supertest": "^7.2.2"
+  }
+}

@@ -37,7 +37,12 @@
     "./thinggeek/starterTypes": "./thinggeek/starterTypes.js",
     "./thinggeek/attic": "./thinggeek/attic.js",
     "./thinggeek/atticModels": "./thinggeek/atticModels.js",
-    "./thinggeek/vaultSession": "./thinggeek/vaultSession.js"
+    "./thinggeek/vaultSession": "./thinggeek/vaultSession.js",
+    "./newsgeek/constants": "./newsgeek/constants.js",
+    "./newsgeek/place": "./newsgeek/place.js",
+    "./newsgeek/source": "./newsgeek/source.js",
+    "./newsgeek/article": "./newsgeek/article.js",
+    "./newsgeek/health": "./newsgeek/health.js"
   },
   "scripts": {
     "lint": "eslint ."

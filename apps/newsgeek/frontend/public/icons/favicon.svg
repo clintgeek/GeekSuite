@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 48 48">
+  <!-- Drawn for 16-32px: the page, its fold, the nameplate and a headline. Newsprint tile reads on light and dark tab strips. -->
+  <rect x="1" y="1" width="46" height="46" rx="9" fill="#F4F0E6" stroke="#1B1A17" stroke-width="2"/>
+  <path d="M9 6h21l9 9v27H9z" fill="#FBF9F3" stroke="#1B1A17" stroke-width="3.5" stroke-linejoin="round"/>
+  <path d="M30 6v9h9" fill="none" stroke="#1B1A17" stroke-width="3.5" stroke-linejoin="round"/>
+  <rect x="14" y="12" width="12" height="5" fill="#1B1A17"/>
+  <rect x="14" y="22" width="20" height="4" fill="#1B1A17"/>
+  <rect x="14" y="30" width="20" height="2.5" fill="#5C574C"/>
+  <rect x="14" y="35" width="14" height="2.5" fill="#5C574C"/>
+</svg>

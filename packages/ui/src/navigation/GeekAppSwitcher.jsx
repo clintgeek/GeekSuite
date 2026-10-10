@@ -31,6 +31,7 @@ export const GEEKSUITE_APPS = [
   { id: 'bookgeek', label: 'BookGeek', monogram: 'BK' },
   { id: 'gamegeek', label: 'GameGeek', monogram: 'GG' },
   { id: 'thinggeek', label: 'ThingGeek', monogram: 'TG' },
+  { id: 'newsgeek', label: 'NewsGeek', monogram: 'NW' },
   { id: 'startgeek', label: 'Start', monogram: 'ST', url: 'https://start.clintgeek.com' },
 ].map((app) => ({ ...app, url: app.url || `https://${app.id}.clintgeek.com` }));
 

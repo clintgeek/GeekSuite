@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>The Verge</title>
+  <id>https://www.theverge.com/rss/index.xml</id>
+  <updated>2026-10-10T12:00:00Z</updated>
+  <entry>
+    <title type="html">Apple&#8217;s new thing &amp; you</title>
+    <link rel="replies" href="https://www.theverge.com/tech/1/apple-thing#comments"/>
+    <link rel="alternate" type="text/html" href="https://www.theverge.com/tech/1/apple-thing"/>
+    <id>https://www.theverge.com/tech/1</id>
+    <author><name>Nilay Patel</name></author>
+    <published>2026-10-10T11:00:00Z</published>
+    <updated>2026-10-10T11:30:00Z</updated>
+    <summary type="html">&lt;p&gt;It is &lt;em&gt;new&lt;/em&gt;.&lt;/p&gt;</summary>
+    <content type="html">&lt;p&gt;FULL BODY&lt;/p&gt;</content>
+  </entry>
+  <entry>
+    <title>Only updated</title>
+    <link href="https://www.theverge.com/tech/2/only-updated"/>
+    <id>https://www.theverge.com/tech/2</id>
+    <updated>2026-10-09T08:00:00Z</updated>
+    <content type="html">&lt;p&gt;Content only.&lt;/p&gt;</content>
+  </entry>
+</feed>

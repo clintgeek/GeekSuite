@@ -26,6 +26,7 @@ import { createFlockTheme } from '../../../../apps/flockgeek/frontend/src/theme/
 import { createStoryTheme } from '../../../../apps/storygeek/frontend/src/theme/theme.js';
 import createBookTheme from '../../../../apps/bookgeek/web/src/theme/theme.js';
 import { createBaseGeekTheme } from '../../../../apps/basegeek/packages/ui/src/theme.js';
+import { createNewsTheme } from '../../../../apps/newsgeek/frontend/src/theme/theme.js';
 import { SIDEBAR_CHIP_TINT, sidebarChipInk } from '../navigation/sidebarInk.js';
 import { geekInteraction } from '../designTokens.js';
 import { chrome as todoChrome } from '../../../../apps/todogeek/frontend/src/theme/chrome.js';
@@ -69,6 +70,7 @@ const THEMES = [
   { app: 'storygeek', modes: ['light', 'dark'], build: createStoryTheme },
   { app: 'bookgeek', modes: ['light', 'dark'], build: createBookTheme },
   { app: 'basegeek', modes: ['light', 'dark'], build: createBaseGeekTheme },
+  { app: 'newsgeek', modes: ['light', 'dark'], build: createNewsTheme },
 ];
 
 /* ── pair matrix ───────────────────────────────────────────────────────── */

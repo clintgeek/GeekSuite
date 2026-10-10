@@ -24,6 +24,7 @@ APPS=(
   flockgeek
   gamegeek
   musicgeek
+  newsgeek
   notegeek
   photogeek
   startgeek

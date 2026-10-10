@@ -1,0 +1,57 @@
+services:
+  newsgeek:
+    image: ghcr.io/clintgeek/newsgeek:latest
+    container_name: newsgeek
+    restart: unless-stopped
+
+    labels:
+      com.centurylinklabs.watchtower.enable: "true"
+
+    networks:
+      - datageek_network
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    # Containers pin the host's DNS resolver at start; a Tailscale DNS change
+    # afterward leaves them stuck on a dead resolver until restarted (the
+    # suite's container-DNS landmine). Pinned so config, not a manual
+    # restart, is the fix. NewsGeek polls ~30 public feeds, so a dead
+    # resolver here would read as every feed failing at once.
+    dns:
+      - 1.1.1.1
+      - 8.8.8.8
+
+    # All runtime secrets/config (MONGODB_URI, JWT_SECRET, BASEGEEK_URL, …)
+    # come from .env.production via env_file. Don't list them here as ${VAR}
+    # substitutions — that reads compose's own .env, a different file.
+    # NOTE: a Watchtower redeploy does not pick up NEW .env.production vars;
+    # that needs `docker compose up -d`.
+    env_file:
+      - .env.production
+
+    # Compose-fixed values that don't vary per environment.
+    environment:
+      NODE_ENV: production
+      PORT: 1830
+
+    ports:
+      - "1830:1830"
+
+    # No volumes: NewsGeek stores no files (titles, excerpts and links live in Mongo).
+
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:1830/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  datageek_network:
+    external: true

@@ -25,6 +25,7 @@ pulls new images via Watchtower — no inbound access from CI. Details in [DOCS/
 | **storygeek** | Running | `9977` | Creative writing tool with Codex and narrative generation |
 | **bookgeek** | Running | `1800` | Book library + reading tracker — on-demand format conversion, e-reader device baskets |
 | **notegeek** | Running | `9988` | Note-taking app — text, markdown, code, mind map, sketch |
+| **newsgeek** | Building | `1830` | Local-first news briefing: Clark & Hot Spring County, then state, national, world, tech |
 | **startgeek** | Running | `3000` | Personal-desktop launcher — clock, weather, world clocks, app dock |
 
 ---

@@ -1,0 +1,68 @@
+# NewsGeek — context
+
+How NewsGeek actually runs. The spec, meaning what it's *for*, is `DOCS/NEWSGEEK_PLAN.md`
+at the repo root. This file is a dated decision log, and it should stay honest.
+
+## Shape
+
+| Piece | Where | Notes |
+|---|---|---|
+| Public host | `newsgeek.clintgeek.com` | nginx vhost: `/` → :1830, `/graphql` → basegeek :8987 (the frontend calls a relative `/graphql`) |
+| Container | `newsgeek`, image `ghcr.io/clintgeek/newsgeek:latest` | host port **1830**; dev frontend 1831 |
+| Database | Mongo `newsgeek`: `sources`, `places`, `articles` | Shared definitions are in `@geeksuite/schemas/newsgeek/*`. Add fields there, never in a model file. |
+| Gateway | `apps/basegeek/packages/api/src/graphql/newsgeek/` | Reads need any signed-in user. Writes need an admin (`requireAdminUser`). |
+| Backend | `apps/newsgeek/backend` (`newsgeek-server`) | auth proxy, `/api/health`, the static frontend, the **ingest worker**, the retention purge |
+| Frontend | `apps/newsgeek/frontend` (`newsgeek-frontend`) | "County Gazette": Newsreader + Libre Franklin, newsprint `#F4F0E6`, blue reserved for *official* |
+
+## The ingest worker
+
+- **When it runs:** in production, or with `INGEST_AUTORUN=1`. `INGEST_DISABLED=1` is the
+  kill switch. It ticks every 60s.
+- **Concurrency:** 4 feeds at a time (`INGEST_CONCURRENCY`), never more than one request
+  per host. All state lives in Mongo, so a restart mid-tick re-polls and the dedupe
+  absorbs the repeats.
+- **The gateway never calls it.** "Check now" sets `feeds.nextPollAt = now`, and the next
+  tick picks that up.
+- **Backoff:** each failure doubles the interval, capped at 6h. `Retry-After` wins when it
+  asks for longer (capped at 24h). After 12 consecutive failures the source goes `broken`.
+  Status is per *source*, so one dead NPR feed marks all of NPR broken.
+- **Stale:** an OK fetch with no new item for longer than max(7 × median gap, 3 days).
+  NWS is exempt.
+- **Seed:** insert-if-absent by slug, on every boot. It never overwrites an existing row.
+  **A deleted starter source comes back on the next boot. Retire it instead.** Retired
+  sources are left alone.
+- **Retention:** items older than 90 days are never ingested and are purged daily.
+  `pinnedArticleIds()` is the hook for N2's saved stories.
+
+## Env (`apps/newsgeek/.env.production`, names only)
+
+- **Required:** `MONGODB_URI` (db `newsgeek`), `JWT_SECRET` (the suite's shared secret),
+  `BASEGEEK_URL`.
+- **Optional:** `LOG_LEVEL`, `BASEGEEK_TIMEOUT_MS`, `CSRF_GUARD`, `CORS_ORIGINS`,
+  `INGEST_DISABLED`, `INGEST_CONCURRENCY`, `PURGE_DISABLED`.
+
+A new variable only takes effect after `docker compose up -d` in `apps/newsgeek/`.
+Watchtower recreates the container with its old env.
+
+## Log
+
+### 2026-10-10: N0 built (skeleton + ingest)
+
+- **Built:** the gateway module, the ingest backend, the County Gazette frontend
+  (Latest + Sources), and the harness scenes. All of it is on branch `newsgeek`, held until
+  the TodoGeek rename lands on main.
+- **First live tick** against real feeds, in a local container with a scratch Mongo:
+  - 1,084 articles from 29 of the 30 sources in one tick (41 ms per tick afterwards).
+  - **Malvern Daily Record answered 429 to our very first request.** Possibly it was still
+    rate-limited from the feed survey earlier that day, or it may refuse non-browser
+    clients outright. The worker backs off (the next try was 2h later). If it keeps
+    answering 429 it will go `broken` in about 3 days and show on the Sources screen.
+    Don't hammer it to find out.
+  - Google News town searches also return weather.com forecast pages and obituaries
+    (Dignity Memorial, AL.com, Sports Illustrated high-school pages). weather.com is now
+    in the blocklist. **Obituaries are Chef's call** (open).
+- **Known follow-ups:**
+  - Google News links are still news.google.com redirect wrappers.
+  - NWS links point at the api.weather.gov alert URL, not a page for humans.
+  - The first tick after a fresh deploy polls all 32 feeds at once (still one request per
+    host at a time). No jitter yet.

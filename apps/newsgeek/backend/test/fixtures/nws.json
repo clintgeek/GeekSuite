@@ -1,0 +1,43 @@
+{
+ "@context": [
+  "https://geojson.org/geojson-ld/geojson-context.jsonld"
+ ],
+ "type": "FeatureCollection",
+ "title": "Current watches, warnings, and advisories for ARC019 ARC059 ARZ053 ARZ054",
+ "updated": "2026-10-10T14:00:00+00:00",
+ "features": [
+  {
+   "id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.aaa.001.1",
+   "type": "Feature",
+   "geometry": null,
+   "properties": {
+    "@id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.aaa.001.1",
+    "id": "urn:oid:2.49.0.1.840.0.aaa.001.1",
+    "areaDesc": "Clark, AR; Hot Spring, AR",
+    "sent": "2026-10-10T13:45:00-05:00",
+    "effective": "2026-10-10T13:45:00-05:00",
+    "expires": "2026-10-10T16:00:00-05:00",
+    "ends": "2026-10-10T19:00:00-05:00",
+    "event": "Flood Watch",
+    "senderName": "NWS Little Rock AR",
+    "headline": "Flood Watch issued October 10 at 1:45PM CDT until October 10 at 7:00PM CDT by NWS Little Rock AR",
+    "description": "* WHAT...Flooding caused by excessive rainfall is possible.\n\n* WHERE...Clark and Hot Spring counties.\n\nMore detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. More detail. "
+   }
+  },
+  {
+   "id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.bbb.002.1",
+   "type": "Feature",
+   "geometry": null,
+   "properties": {
+    "@id": "https://api.weather.gov/alerts/urn:oid:2.49.0.1.840.0.bbb.002.1",
+    "id": "urn:oid:2.49.0.1.840.0.bbb.002.1",
+    "sent": "2026-10-09T06:00:00-05:00",
+    "expires": "2026-10-09T12:00:00-05:00",
+    "ends": null,
+    "event": "Dense Fog Advisory",
+    "headline": null,
+    "description": "Visibility one quarter mile or less."
+   }
+  }
+ ]
+}

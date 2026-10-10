@@ -31,6 +31,9 @@ import { resolvers as thingResolvers } from './thinggeek/resolvers.js';
 import { typeDefs as atticTypeDefs } from './thinggeek/attic/typeDefs.js';
 import { resolvers as atticResolvers } from './thinggeek/attic/resolvers.js';
 
+import { typeDefs as newsTypeDefs } from './newsgeek/typeDefs.js';
+import { resolvers as newsResolvers } from './newsgeek/resolvers.js';
+
 import { typeDefs as glanceTypeDefs } from './glance/typeDefs.js';
 import { resolvers as glanceResolvers } from './glance/resolvers.js';
 
@@ -94,6 +97,7 @@ export const typeDefs = mergeTypeDefs([
   gameTypeDefs,
   thingTypeDefs,
   atticTypeDefs,
+  newsTypeDefs,
   glanceTypeDefs,
   suiteTagsTypeDefs,
 ]);
@@ -109,6 +113,7 @@ export const resolvers = mergeResolvers([
   gameResolvers,
   thingResolvers,
   atticResolvers,
+  newsResolvers,
   glanceResolvers,
   suiteTagsResolvers,
 ]);

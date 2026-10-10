@@ -35,7 +35,7 @@ const requireAuth = (user) => {
  * API keys are refused before the lookup: a key belongs to an app, carries no
  * user document, and its synthetic `apikey_<id>` id is not an ObjectId.
  */
-const requireAdminUser = async (user) => {
+export const requireAdminUser = async (user) => {
   requireAuth(user);
 
   const deny = () => {

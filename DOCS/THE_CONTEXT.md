@@ -65,6 +65,7 @@ All containers run on `server` (`192.168.1.17`) attached to `datageek_network` (
 | **flockgeek** | `5001` | `5001` | Vite + React / Node + Express | Poultry tracking, harvest logging |
 | **notegeek** | `9988` | `9988` | Vite + React / Node + Express | Note-taking, mind maps, tags |
 | **startgeek** | `3000` | `3000` | Vite + React + Tailwind (serve) | Standalone launcher, quick-glance, dock |
+| **newsgeek** | `1830` | `1830` | Vite + React + MUI 5 / Node + Express | Local-first news briefing; feed ingest worker |
 | **storygeek** | `9977` | `9977` | Vite + React / Node + Express | Interactive writing, narrative generation |
 
 ### 1.4 Shared Packages (`packages/*`)

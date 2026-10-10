@@ -13,6 +13,7 @@ export const VALID_APPS = [
   'bookgeek',
   'gamegeek',
   'thinggeek',
+  'newsgeek',
   'photogeek',
   'dashgeek',
   'geekpr',
