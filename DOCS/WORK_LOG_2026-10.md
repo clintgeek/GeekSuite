@@ -126,3 +126,22 @@ is tuned against a labelled golden set.
   - nginx now warns that `server_names_hash` is at capacity. It's harmless today, but
     the next vhost may need `server_names_hash_bucket_size 128`.
 
+
+## 2026-10-10 — nginx host cleanup
+
+nginx went from 69 live host names to 51, using Chef's list.
+- **Root and www:** `clintgeek.com` and `www.` now 301 to `start.clintgeek.com`. Nothing
+  had been running on :8081.
+- **Vhosts archived** to `zzz_*.fnoc`: musicgeek, photogeek, git, code, retro, ai-scaling,
+  geekpr, about (with aboutme and portfolio) and geeksuite.
+- **Aliases dropped:** `base.`, `subs.`, `jelly.`, `radar.`, `sonar.`, `myfitnessgeek.` and
+  `nutrition-tracker.`.
+- **Unknown names:** DNS is a wildcard, so any retired or unknown name lands on the root
+  block and is sent to Start.
+- **Hash setting:** `server_names_hash_bucket_size 128` added to `nginx.conf`.
+  `nginx.conf` is a single-file bind mount: an editor that renames files (`sed -i`) leaves
+  the container reading the old inode, so this one needed `docker restart NGINX`, not a
+  reload.
+- **Backup** of the pre-change `sites-available/` and `nginx.conf` is in the session scratchpad.
+- **Repo leftovers, harmless:** dead CORS origins for `geeksuite.` and `geekpr.`, and a
+  geekPR entry in `appRegistrySeed.js`.
