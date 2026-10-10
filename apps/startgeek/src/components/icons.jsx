@@ -58,6 +58,14 @@ export const ThingsIcon = ({ className = 'w-5 h-5' }) => (
   </svg>
 )
 
+export const NewsIcon = ({ className = 'w-5 h-5' }) => (
+  <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...s}>
+    <path d="M4 5h13v13a2 2 0 002 2H6a2 2 0 01-2-2V5z" />
+    <path d="M17 9h3v9a2 2 0 01-2 2" />
+    <path d="M7 8h7M7 11h7M7 14h4M7 17h7" />
+  </svg>
+)
+
 export const PhotosIcon = ({ className = 'w-5 h-5' }) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...s}>
     <rect x="3" y="3" width="18" height="18" rx="2" />
