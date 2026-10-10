@@ -42,7 +42,7 @@ describe('first run', () => {
     assert.equal(nws.feeds[0].url, 'https://api.weather.gov/alerts/active?zone=ARC019,ARC059,ARZ053,ARZ054');
 
     for (const agg of await Source.find({ kind: 'aggregator' }).lean()) {
-      assert.ok(agg.blockedDomains.includes('legacy.com'), agg.slug);
+      assert.ok(agg.blockedDomains.includes('weather.com'), agg.slug);
       assert.equal(agg.access.content, 'title');
     }
     assert.equal((await Source.findOne({ slug: 'hacker-news' }).lean()).access.content, 'title');

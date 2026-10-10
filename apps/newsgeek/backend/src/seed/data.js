@@ -48,10 +48,11 @@ const EXCERPT = { paywall: 'none', content: 'excerpt' };
 const FULL = { paywall: 'none', content: 'full' };
 const TITLE = { paywall: 'none', content: 'title' };
 
-// Google News: legacy.com obituaries are ~25% of a "Malvern" search, and
-// weather.com answers town searches with forecast pages (first live tick,
-// 2026-10-10) — neither is news.
-const AGG_BLOCKED = ['legacy.com', 'weather.com'];
+// Google News: weather.com answers town searches with forecast pages (first
+// live tick, 2026-10-10) — not news. Obituaries (legacy.com, ~25% of a
+// "Malvern" search) are KEPT: Chef, 2026-10-10, "keep obits" — in a small
+// town they are news.
+const AGG_BLOCKED = ['weather.com'];
 
 export const SOURCES = [
   // ---- Local journalism -------------------------------------------------

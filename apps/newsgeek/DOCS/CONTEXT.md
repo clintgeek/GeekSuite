@@ -60,7 +60,8 @@ Watchtower recreates the container with its old env.
     Don't hammer it to find out.
   - Google News town searches also return weather.com forecast pages and obituaries
     (Dignity Memorial, AL.com, Sports Illustrated high-school pages). weather.com is now
-    in the blocklist. **Obituaries are Chef's call** (open).
+    in the blocklist. **Obituaries stay** (Chef, the same day: "keep obits"), so legacy.com
+    is not blocked.
 - **Known follow-ups:**
   - Google News links are still news.google.com redirect wrappers.
   - NWS links point at the api.weather.gov alert URL, not a page for humans.

@@ -181,7 +181,14 @@ describe('dedupe layers', () => {
 describe('Google News aggregator', () => {
   const GN = SOURCES.find((s) => s.slug === 'gnews-malvern').feeds[0].url;
 
-  test('credited to the real publisher, suffix stripped; legacy.com (any subdomain) and directly-read publishers dropped', async () => {
+  test('obituaries are kept by default: the seeded blocklist does not drop legacy.com (Chef: "keep obits")', async () => {
+    const out = await poll('gnews-malvern', fakeFetch({ [GN]: ok(fixture('gnews.xml')) }), { directDomains: ['arkadelphian.com', 'kark.com'] });
+    assert.deepEqual(out.drops, { direct_publisher: 1 });
+    assert.equal(await Article.countDocuments({ publisherDomain: /legacy\.com$/ }), 2);
+  });
+
+  test('credited to the real publisher, suffix stripped; a blocked domain (any subdomain) and directly-read publishers dropped', async () => {
+    await Source.updateOne({ slug: 'gnews-malvern' }, { $set: { blockedDomains: ['legacy.com'] } });
     const out = await poll('gnews-malvern', fakeFetch({ [GN]: ok(fixture('gnews.xml')) }), { directDomains: ['arkadelphian.com', 'kark.com'] });
     assert.deepEqual(out.drops, { blocked_domain: 2, direct_publisher: 1 });
     assert.equal(out.counts.inserted, 2);

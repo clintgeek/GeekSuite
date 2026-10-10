@@ -47,8 +47,8 @@ function sourceDefinition(mongoose) {
       paywall: { type: String, enum: PAYWALLS, default: 'none' },
       content: { type: String, enum: CONTENT_LEVELS, default: 'excerpt' },
     },
-    // aggregator only: publisher domains whose items are dropped (legacy.com
-    // obituaries are ~25% of a Google News "Malvern" search).
+    // aggregator only: publisher domains whose items are dropped (weather.com
+    // forecast pages answer Google News town searches).
     blockedDomains: { type: [String], default: [] },
     notes: { type: String, default: '', maxlength: 2000 },
   };

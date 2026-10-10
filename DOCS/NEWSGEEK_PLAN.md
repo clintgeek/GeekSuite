@@ -318,8 +318,10 @@ for `"Malvern" Arkansas`, `"Arkadelphia" Arkansas`, and `"Hot Spring County" OR 
 plus `site:apnews.com when:1d` and `site:reuters.com` for wire coverage.
 - **Items are title only.** Links are `news.google.com/rss/articles/…` wrappers, and the
   real publisher is in `<source url=…>` and in a " - Publisher" title suffix.
-- **Mostly noise.** About 25% of the Malvern results are legacy.com obituaries, so the
-  aggregator needs a **source-domain blocklist**. Items whose publisher we already ingest
+- **Mostly noise, with one exception.** About 25% of the Malvern results are legacy.com
+  obituaries. **They stay** (Chef, 2026-10-10: "keep obits"; in a small town they're
+  news). The aggregator still has a **source-domain blocklist**, which starts with
+  weather.com forecast pages. Items whose publisher we already ingest
   directly are dropped as duplicates.
 
 **No working feed (not sources yet)**
