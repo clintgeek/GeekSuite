@@ -295,7 +295,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       # @geeksuite/tags: lowercase kebab-case, / for nesting — the gateway and
-      # the NoteGeek / BuJoGeek / ThingGeek frontends all spell tags with it.
+      # the NoteGeek / TodoGeek / ThingGeek frontends all spell tags with it.
       - name: Run vitest
         working-directory: packages/tags
         run: npx vitest run
@@ -380,8 +380,8 @@ jobs:
         working-directory: packages/user
         run: npm test
 
-  test-bujogeek:
-    name: bujogeek frontend tests
+  test-todogeek:
+    name: todogeek frontend tests
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -393,7 +393,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Run vitest
-        working-directory: apps/bujogeek/frontend
+        working-directory: apps/todogeek/frontend
         run: npx vitest run
 
   test-startgeek:
@@ -424,8 +424,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - app: bujogeek
-            dir: apps/bujogeek/backend
+          - app: todogeek
+            dir: apps/todogeek/backend
           - app: fitnessgeek
             dir: apps/fitnessgeek/backend
           - app: flockgeek
@@ -540,8 +540,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - app: bujogeek
-            dir: apps/bujogeek/frontend
+          - app: todogeek
+            dir: apps/todogeek/frontend
           - app: notegeek
             dir: apps/notegeek/frontend
           - app: bookgeek
@@ -580,8 +580,8 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - app: bujogeek
-            dir: apps/bujogeek/frontend
+          - app: todogeek
+            dir: apps/todogeek/frontend
           - app: notegeek
             dir: apps/notegeek/frontend
           - app: bookgeek

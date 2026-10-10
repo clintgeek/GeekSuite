@@ -4,11 +4,11 @@ import logger from '../../lib/logger.js';
 import { normalizeTag } from '@geeksuite/tags';
 import ical from 'node-ical';
 
-import Task from '../bujogeek/models/Task.js';
-import Habit from '../bujogeek/models/Habit.js';
-import HabitLog from '../bujogeek/models/HabitLog.js';
-import taskService from '../bujogeek/services/taskService.js';
-import habitService from '../bujogeek/services/habitService.js';
+import Task from '../todogeek/models/Task.js';
+import Habit from '../todogeek/models/Habit.js';
+import HabitLog from '../todogeek/models/HabitLog.js';
+import taskService from '../todogeek/services/taskService.js';
+import habitService from '../todogeek/services/habitService.js';
 
 import Note, { active as activeNote } from '../notegeek/models/Note.js';
 import { Book } from '../bookgeek/models/book.js';
@@ -54,7 +54,7 @@ function escapeRegex(str) {
 }
 
 /**
- * A BuJoGeek PRIVATE task (2026-10-01) never shows its words on StartGeek:
+ * A TodoGeek PRIVATE task (2026-10-01) never shows its words on StartGeek:
  * the start page is exactly what opens in a new tab mid-screen-share, and it
  * has no reveal. It reads "Private task" and carries no tags.
  */
@@ -260,7 +260,7 @@ export async function fetchGlanceToday(context, date) {
       };
     }
   } catch (err) {
-    logger.warn({ err }, 'glanceToday: bujo task fetch failed');
+    logger.warn({ err }, 'glanceToday: todogeek task fetch failed');
   }
 
   // ── Habits ──
@@ -291,7 +291,7 @@ export async function fetchGlanceToday(context, date) {
       );
     }
   } catch (err) {
-    logger.warn({ err }, 'glanceToday: bujo habit fetch failed');
+    logger.warn({ err }, 'glanceToday: todogeek habit fetch failed');
   }
 
   // ── Recent notes ──
@@ -416,7 +416,7 @@ export async function fetchGlanceToday(context, date) {
 
 // ── Search ──────────────────────────────────────────────────────────────────
 
-const APP_FOR_TYPE = { note: 'notegeek', task: 'bujogeek', book: 'bookgeek', bird: 'flockgeek' };
+const APP_FOR_TYPE = { note: 'notegeek', task: 'todogeek', book: 'bookgeek', bird: 'flockgeek' };
 
 // Newest first; results with no updatedAt sink to the bottom.
 function byUpdatedAtDesc(a, b) {
@@ -525,11 +525,11 @@ export async function searchThings(userId, term, options = {}) {
       for (const t of tasks) {
         results.push({
           id: t._id.toString(),
-          app: 'bujogeek',
+          app: 'todogeek',
           type: 'task',
           title: t.content || 'Untitled task',
           snippet: t.content ? t.content.substring(0, 120) : null,
-          url: 'https://bujogeek.clintgeek.com/',
+          url: 'https://todogeek.clintgeek.com/',
           updatedAt: t.updatedAt,
         });
       }

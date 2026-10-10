@@ -328,13 +328,13 @@ defaultPreference="dark">`. The theme-preboot inline script (`themePreboot()` fr
 falls back to `'auto'` (resolves via `prefers-color-scheme`) when there's no `geek_theme`
 cookie. So a cookie-less visitor on a light OS got preboot's light guess as the first
 paint, then this provider's own hardcoded "dark" default resolved the mode the instant it
-mounted — a real light-to-dark repaint, not just a mismatched initial value. bujogeek and
+mounted — a real light-to-dark repaint, not just a mismatched initial value. todogeek and
 notegeek never override `defaultPreference` (both stay on the shared `'auto'`), which is
 why only flockgeek showed this.
 
 Fix: dropped the `defaultPreference="dark"` override (now the shared `'auto'` default,
-matching bujogeek/notegeek and agreeing with preboot's assumption) and added the missing
-baseline `:root` / `:root[data-theme="dark"]` CSS snap block to `index.html` — bujogeek and
+matching todogeek/notegeek and agreeing with preboot's assumption) and added the missing
+baseline `:root` / `:root[data-theme="dark"]` CSS snap block to `index.html` — todogeek and
 notegeek's `index.html` both have this (colors matching their theme's `background.default`
 + `text.primary` exactly) but flockgeek's never did, so its very first paint (before the
 preboot script's effect could even show through) had no themed background at all. One

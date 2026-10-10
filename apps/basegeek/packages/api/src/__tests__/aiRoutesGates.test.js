@@ -211,7 +211,7 @@ describe('POST /api/ai/parse-json — the gate', () => {
   });
 
   it('attributes to the JWT app claim, not the appName in the body', async () => {
-    const { user, token } = await makeUserWithToken({ appClaim: 'bujogeek' });
+    const { user, token } = await makeUserWithToken({ appClaim: 'todogeek' });
 
     const res = await request(app)
       .post('/api/ai/parse-json')
@@ -219,13 +219,13 @@ describe('POST /api/ai/parse-json — the gate', () => {
       .send({ prompt: 'hi', config: { appName: 'fitnessgeek', provider: 'groq' } });
 
     expect(res.status).toBe(200);
-    expect(captured.config.appName).toBe('bujogeek');
+    expect(captured.config.appName).toBe('todogeek');
     // And the session's own user — not the one the body nominated below.
     expect(captured.config.userId).toBe(user._id.toString());
   });
 
   it('will not let a session spend another user\'s quota', async () => {
-    const { user, token } = await makeUserWithToken({ appClaim: 'bujogeek' });
+    const { user, token } = await makeUserWithToken({ appClaim: 'todogeek' });
 
     await request(app)
       .post('/api/ai/parse-json')

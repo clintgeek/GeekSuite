@@ -6,7 +6,7 @@
 // because a module that no test suite imports can carry a SyntaxError all the
 // way to production and nothing catches it (see 61d3109 — an unescaped
 // backtick inside a gql template literal in
-// apps/basegeek/packages/api/src/graphql/bujogeek/typeDefs.js crash-looped
+// apps/basegeek/packages/api/src/graphql/todogeek/typeDefs.js crash-looped
 // basegeek on 2026-09-05; every jest suite stayed green because none of them
 // imported that file).
 //

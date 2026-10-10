@@ -263,8 +263,8 @@ describe('the AISpend ledger', () => {
   });
 
   it('books a free call as zero rather than not booking it', async () => {
-    await aiService.recordSpend('groq', 'bujogeek', 'review', 0);
-    const row = await AISpend.findOne({ provider: 'groq', app: 'bujogeek' }).lean();
+    await aiService.recordSpend('groq', 'todogeek', 'review', 0);
+    const row = await AISpend.findOne({ provider: 'groq', app: 'todogeek' }).lean();
     expect(row).toMatchObject({ calls: 1, costUsd: 0 });
   });
 

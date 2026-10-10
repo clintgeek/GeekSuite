@@ -5,14 +5,14 @@ export { validateInput };
 
 /**
  * Input validation for the flockgeek gateway mutations — `DOCS/TODO_ORDER.md`
- * #22, the same layer bujogeek got in `3265b1c`. One strict schema per
+ * #22, the same layer todogeek got in `3265b1c`. One strict schema per
  * mutation family; every rejection is one shape (`GraphQLError`,
  * `extensions.code = 'BAD_USER_INPUT'`, `extensions.details [{path,message}]`)
  * built by the shared `validateInput`.
  *
  * ## Every date here is a CALENDAR date
  *
- * Unlike bujogeek — where a task's `dueDate` can carry a real reminder hour —
+ * Unlike todogeek — where a task's `dueDate` can carry a real reminder hour —
  * nothing FlockGeek records happens at a time of day. Hatch date, set date,
  * status date, group start/end, pairing date, harvest date, egg-collection
  * date, health-event date: all of them are days. Every form that writes one is

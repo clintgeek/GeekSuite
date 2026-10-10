@@ -264,7 +264,7 @@ a file-level operation.
 ## Gateway input validation (TODO_ORDER #22, 2026-09-05)
 
 The GraphQL gateway validates mutation arguments with zod before a resolver
-touches a service or a model. All four modules are covered now — bujogeek
+touches a service or a model. All four modules are covered now — todogeek
 (`3265b1c`), then notegeek and flockgeek, then **bookgeek**. Each has its own
 `src/graphql/<app>/validation.js` with one strict schema per mutation family;
 the machinery they are built from lives in
@@ -303,7 +303,7 @@ the machinery they are built from lives in
   would store 06:00Z and read back as the previous day west of UTC.
 - **notegeek — no date arguments at all.** `createdAt`/`updatedAt` are
   mongoose-managed. If one is ever added it is an *instant*.
-- **bujogeek — mixed.** `dueDate` can carry a real reminder hour, so it stays
+- **todogeek — mixed.** `dueDate` can carry a real reminder hour, so it stays
   an instant; only `toggleHabitLog`'s `date` is a calendar day. See that
   module's own doc comment.
 - **bookgeek — mixed, the other way round.** `updateBook`'s `publishedDate`
@@ -313,7 +313,7 @@ the machinery they are built from lives in
   whatever time-of-day they carry.
 
 **And dates have two floors, which is a second axis entirely.** A *scheduling*
-date — everything flockgeek and bujogeek write, plus bookgeek's
+date — everything flockgeek and todogeek write, plus bookgeek's
 `dateStarted`/`dateFinished` — is recent or near-future, and
 `calendarDateField()`/`instantField()` floor it at `MIN_DATE` (2000-01-01) to
 catch a typo or a unix-epoch zero. A *historical* date records a fact about
@@ -381,13 +381,13 @@ is a separate, still-open question (`DOCS/TODO_ORDER.md` #22).
 
 ## Gateway fixes (Q64, 2026-09-05)
 
-- **bujogeek** `taskService`'s two virtual-occurrence builders (in-range and
+- **todogeek** `taskService`'s two virtual-occurrence builders (in-range and
   the daily/all carry-forward) omitted `collectionId` and `recurrencePattern`
   on every synthetic row, so a recurring task filed into a collection read as
   unfiled from Today/Plan/Review; both now copy every field `TaskEditor`
   reseeds (`collectionId`, `recurrenceRule`, `recurrencePattern`, `tags`,
   `signifier`, `priority`) straight off the master — pinned in
-  `bujogeekRecurrenceUnification.test.js`.
+  `todogeekRecurrenceUnification.test.js`.
 - **notegeek** `renameTag`'s positional `$set: 'tags.$'` duplicated a tag
   already on the note (`a`→`b` on `[a, b]` gave `[b, b]`); now `$addToSet`s
   the new tag then `$pull`s the old one and returns whether any note actually

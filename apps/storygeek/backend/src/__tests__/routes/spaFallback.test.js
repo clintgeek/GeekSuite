@@ -7,7 +7,7 @@
 // /assets/<stale-hash>.js). Answering that with 200 text/html lets a runtime
 // StaleWhileRevalidate cache rule store the HTML body under the asset's URL,
 // poisoning the cache until the user clears site data (DOCS/CONTEXT.md
-// landmine; see the extname-404 guard bujogeek/notegeek/bookgeek/fitnessgeek
+// landmine; see the extname-404 guard todogeek/notegeek/bookgeek/fitnessgeek
 // already carry).
 //
 // No fixture build exists in this checkout (public/ is a build output, not

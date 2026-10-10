@@ -6,7 +6,7 @@ then pump that through the existing compose function and make beautiful markdown
 And: "button=eraser will work, we may as well do that."*
 
 **Parked, not in this work:** marking up ThingGeek photos (Chef isn't using ThingGeek yet)
-and a handwritten daily page in BuJoGeek (BuJoGeek is about to be torn apart). Both are
+and a handwritten daily page in TodoGeek (TodoGeek is about to be torn apart). Both are
 listed in `DOCS/SUITE_TODO.md`.
 
 ## 1. The side button scrolls; an eraser end erases

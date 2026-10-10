@@ -45,7 +45,7 @@ const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 export const APPS = {
   basegeek: 'apps/basegeek/packages/ui',
   bookgeek: 'apps/bookgeek/web',
-  bujogeek: 'apps/bujogeek/frontend',
+  todogeek: 'apps/todogeek/frontend',
   fitnessgeek: 'apps/fitnessgeek/frontend',
   flockgeek: 'apps/flockgeek/frontend',
   gamegeek: 'apps/gamegeek/frontend',

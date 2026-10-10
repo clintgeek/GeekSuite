@@ -111,7 +111,7 @@ const ModuleGrid = () => {
           label="Tasks"
           count={total}
           className="mod-tasks"
-          link={{ label: 'BujoGeek', href: 'https://bujogeek.clintgeek.com/' }}
+          link={{ label: 'TodoGeek', href: 'https://todogeek.clintgeek.com/' }}
           foot={taskFoot}
         >
           {overdue.length > 0 && (

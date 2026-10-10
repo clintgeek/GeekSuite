@@ -11,7 +11,7 @@ import {
 } from '@mui/material';
 
 export function LoginSplash({
-  appName,            // "note", "bujo", etc.
+  appName,            // "note", "todo", etc.
   appSuffix = "geek", // usually "geek"
   taglineLine1,       // "Think clearly." or "Journal calmly."
   taglineLine2,       // "Write boldly." (colored)

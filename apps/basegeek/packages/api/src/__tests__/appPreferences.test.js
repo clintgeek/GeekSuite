@@ -68,7 +68,7 @@ describe('appPreferences — canonical Map access', () => {
 
     await setAppPreferences(user, 'notegeek', { editorFontSize: 16 });
     const afterFirst = await User.findById(user._id);
-    await setAppPreferences(afterFirst, 'bujogeek', { dailyPageLayout: 'timeline' });
+    await setAppPreferences(afterFirst, 'todogeek', { dailyPageLayout: 'timeline' });
 
     const afterSecond = await User.findById(user._id);
     // partial patch of an existing app merges rather than replaces
@@ -77,7 +77,7 @@ describe('appPreferences — canonical Map access', () => {
     const final = await User.findById(user._id);
     expect(appPreferencesToObject(final)).toEqual({
       notegeek: { editorFontSize: 16, theme: 'dark' },
-      bujogeek: { dailyPageLayout: 'timeline' },
+      todogeek: { dailyPageLayout: 'timeline' },
     });
   });
 
@@ -136,7 +136,7 @@ describe('migrate-appprefs-to-map', () => {
       base({ _id: nullId, username: 'nulled', appPreferences: null }),
       base({ _id: missingId, username: 'missing' }), // no appPreferences field
       base({ _id: arrayId, username: 'arrayed', appPreferences: [] }),
-      base({ _id: jsonStringId, username: 'stringified', appPreferences: '{"bujogeek":{"x":1}}' }),
+      base({ _id: jsonStringId, username: 'stringified', appPreferences: '{"todogeek":{"x":1}}' }),
     ]);
 
     const dry = await migrateAppPrefsToMap({ dryRun: true, log: () => {} });
@@ -152,7 +152,7 @@ describe('migrate-appprefs-to-map', () => {
     expect(await raw(nullId)).toEqual({});
     expect(await raw(missingId)).toEqual({});
     expect(await raw(arrayId)).toEqual({});
-    expect(await raw(jsonStringId)).toEqual({ bujogeek: { x: 1 } }); // parsed
+    expect(await raw(jsonStringId)).toEqual({ todogeek: { x: 1 } }); // parsed
 
     // Every container now hydrates as a Map through the model.
     for (const id of [goodId, nullId, missingId, arrayId, jsonStringId]) {

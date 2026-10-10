@@ -7,14 +7,14 @@ const root = process.cwd();
 
 const checks = [
   {
-    file: 'apps/bujogeek/frontend/src/utils/constants.js',
+    file: 'apps/todogeek/frontend/src/utils/constants.js',
     patterns: [
       ['SIDEBAR_WIDTH = 220', /SIDEBAR_WIDTH\s*=\s*220/],
       ['TOPBAR_HEIGHT = 60', /TOPBAR_HEIGHT\s*=\s*60/],
     ],
   },
   {
-    file: 'apps/bujogeek/frontend/src/theme/theme.js',
+    file: 'apps/todogeek/frontend/src/theme/theme.js',
     patterns: [
       ['MuiDrawer width 220', /width:\s*220/],
       ['MuiAppBar height 60', /height:\s*60/],

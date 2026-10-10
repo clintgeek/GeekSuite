@@ -18,7 +18,7 @@ under `src/validation/schemas/` — `stories.js`, `characters.js`, `export.js`
 `characterName`'s neighbor-lookup, `characterId` in a relationship) are
 checked as non-empty bounded strings, **not** Mongo ObjectIds, so a
 malformed id still falls through to each route's existing "not found"
-handling instead of validation reinterpreting it — same call as bujogeek's
+handling instead of validation reinterpreting it — same call as todogeek's
 zod pass.
 
 **Route families and what they enforce:**

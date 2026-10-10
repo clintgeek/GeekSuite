@@ -7,7 +7,7 @@ export { validateInput };
 
 /**
  * Input validation for the notegeek gateway mutations — `DOCS/TODO_ORDER.md`
- * #22, the same layer bujogeek got in `3265b1c`. One strict schema per
+ * #22, the same layer todogeek got in `3265b1c`. One strict schema per
  * mutation family; every rejection is one shape (`GraphQLError`,
  * `extensions.code = 'BAD_USER_INPUT'`, `extensions.details [{path,message}]`)
  * built by the shared `validateInput`.

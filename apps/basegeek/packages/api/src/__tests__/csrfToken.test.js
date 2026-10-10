@@ -520,7 +520,7 @@ describe('a consumer backend proxying /auth/refresh (BURN_REVIEW #3)', () => {
       .post('/api/auth/refresh')
       .set('Cookie', PROXY_COOKIE)
       .set(CSRF_HEADER_NAME, TOKEN)
-      .send({ app: 'bujogeek' });
+      .send({ app: 'todogeek' });
 
     expect(res.status).toBe(200);
     expect(reached).toEqual(['refresh']);
@@ -544,7 +544,7 @@ describe('a consumer backend proxying /auth/refresh (BURN_REVIEW #3)', () => {
     const res = await request(buildProxiedApp())
       .post('/api/auth/refresh')
       .set('Cookie', PROXY_COOKIE)
-      .send({ app: 'bujogeek' });
+      .send({ app: 'todogeek' });
 
     expect(res.status).toBe(403);
     expect(res.body).toEqual({ error: 'csrf_token_missing' });
@@ -559,7 +559,7 @@ describe('a consumer backend proxying /auth/refresh (BURN_REVIEW #3)', () => {
       .post('/api/auth/refresh')
       .set('Cookie', PROXY_COOKIE)
       .set(CSRF_HEADER_NAME, OTHER_TOKEN)
-      .send({ app: 'bujogeek' });
+      .send({ app: 'todogeek' });
 
     expect(res.status).toBe(403);
     expect(res.body).toEqual({ error: 'csrf_token_invalid' });
@@ -572,9 +572,9 @@ describe('a consumer backend proxying /auth/refresh (BURN_REVIEW #3)', () => {
     const res = await request(buildProxiedApp())
       .post('/api/auth/refresh')
       .set('Cookie', PROXY_COOKIE)
-      .set('Origin', 'https://bujogeek.clintgeek.com')
+      .set('Origin', 'https://todogeek.clintgeek.com')
       .set(CSRF_HEADER_NAME, TOKEN)
-      .send({ app: 'bujogeek' });
+      .send({ app: 'todogeek' });
 
     expect(res.status).toBe(200);
     expect(reached).toEqual(['refresh']);
@@ -595,7 +595,7 @@ describe('a consumer backend proxying /auth/refresh (BURN_REVIEW #3)', () => {
     const res = await request(buildProxiedApp({ mode: 'report' }))
       .post('/api/auth/refresh')
       .set('Cookie', PROXY_COOKIE)
-      .send({ app: 'bujogeek' });
+      .send({ app: 'todogeek' });
 
     expect(res.status).toBe(200);
     expect(reached).toEqual(['refresh']);

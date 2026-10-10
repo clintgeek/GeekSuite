@@ -4,7 +4,7 @@
  *
  * The token rule and its exclusions (headings, code, URLs and link targets,
  * `C#`, `#1`, hex colours, over-long tags) live in `@geeksuite/tags`
- * (`findTagTokens` / `parseInlineTags`, moved there 2026-10-01 so BuJoGeek's
+ * (`findTagTokens` / `parseInlineTags`, moved there 2026-10-01 so TodoGeek's
  * add box reads `#tags` the same way). What is read comes out in the suite
  * standard: `#GeekSuite` tags the note `geek-suite`.
  *

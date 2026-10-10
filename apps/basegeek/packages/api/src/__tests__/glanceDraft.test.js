@@ -39,7 +39,7 @@ const { Query } = resolvers;
 const ALICE = new mongoose.Types.ObjectId();
 const ctx = (userId) => (userId ? { user: { id: String(userId) } } : {});
 
-const APPS = ['bujogeek', 'notegeek'];
+const APPS = ['todogeek', 'notegeek'];
 const conns = {};
 
 /** Queue one JSON payload for the single expected aiService.callAI call. */
@@ -299,7 +299,7 @@ describe('any failure degrades to no draft', () => {
 
 describe('the server drafts and nothing else', () => {
   test('no task and no note is written — the mutation is the client\'s to run', async () => {
-    const tasks = conns.bujogeek.collection('tasks');
+    const tasks = conns.todogeek.collection('tasks');
     const notes = conns.notegeek.collection('notes');
 
     const before = {

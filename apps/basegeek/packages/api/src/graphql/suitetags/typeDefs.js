@@ -1,12 +1,12 @@
 import { gql } from 'graphql-tag';
 
-// Tags across the suite (2026-10-01, DOCS/TAG_STANDARD.md). NoteGeek, BuJoGeek
+// Tags across the suite (2026-10-01, DOCS/TAG_STANDARD.md). NoteGeek, TodoGeek
 // and ThingGeek share one tag spelling (@geeksuite/tags), so a tag means the
 // same thing in each; these two queries read all three at once.
 export const typeDefs = gql`
   """How many of the caller's items carry a tag in one app."""
   type SuiteTagAppCount {
-    """notegeek | bujogeek | thinggeek"""
+    """notegeek | todogeek | thinggeek"""
     app: String!
     count: Int!
   }
@@ -20,7 +20,7 @@ export const typeDefs = gql`
   }
 
   """
-  An item carrying a tag, from any of the three apps. A private BuJoGeek task
+  An item carrying a tag, from any of the three apps. A private TodoGeek task
   is "Private task" with no snippet; a ThingGeek thing is its name only —
   never an identifier (serial, plate, receipt).
   """
@@ -37,7 +37,7 @@ export const typeDefs = gql`
 
   extend type Query {
     """
-    The caller's tags across NoteGeek, BuJoGeek and (for household members)
+    The caller's tags across NoteGeek, TodoGeek and (for household members)
     ThingGeek, with per-app counts. Sorted by total, then name.
     """
     suiteTags: [SuiteTag!]!

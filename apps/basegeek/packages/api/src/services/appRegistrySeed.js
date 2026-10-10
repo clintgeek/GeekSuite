@@ -10,7 +10,7 @@ import logger from '../lib/logger.js';
 export const DEFAULT_APPS = [
   { name: 'basegeek', displayName: 'baseGeek', description: 'Auth & shared services', icon: 'Dashboard', color: '#e8a849', url: 'https://basegeek.clintgeek.com', tag: 'platform', sortOrder: 0 },
   { name: 'notegeek', displayName: 'noteGeek', description: 'Notes & documents', icon: 'Note', color: '#a99df0', url: 'https://notegeek.clintgeek.com', tag: 'productivity', sortOrder: 1 },
-  { name: 'bujogeek', displayName: 'bujoGeek', description: 'Bullet journal & tasks', icon: 'Book', color: '#d4956a', url: 'https://bujogeek.clintgeek.com', tag: 'productivity', sortOrder: 2 },
+  { name: 'todogeek', displayName: 'todoGeek', description: 'Tasks, habits & lists', icon: 'Book', color: '#d4956a', url: 'https://todogeek.clintgeek.com', tag: 'productivity', sortOrder: 2 },
   { name: 'fitnessgeek', displayName: 'fitnessGeek', description: 'Nutrition & fitness', icon: 'FitnessCenter', color: '#7dac8e', url: 'https://fitnessgeek.clintgeek.com', tag: 'health', sortOrder: 3 },
   { name: 'storygeek', displayName: 'storyGeek', description: 'Story plotting & writing', icon: 'AutoStories', color: '#c76b8e', url: 'https://storygeek.clintgeek.com', tag: 'creative', sortOrder: 4 },
   { name: 'flockgeek', displayName: 'flockGeek', description: 'Flock management', icon: 'NatureOutlined', color: '#7dac8e', url: 'https://flockgeek.clintgeek.com', tag: 'management', sortOrder: 5 },

@@ -19,7 +19,7 @@ import { describe, expect, it } from 'vitest';
 import { alpha, decomposeColor, getContrastRatio, recomposeColor } from '@mui/material/styles';
 
 import { createGeekSuiteTheme } from '../createGeekSuiteTheme.js';
-import { createBuJoTheme } from '../../../../apps/bujogeek/frontend/src/theme/theme.js';
+import { createTodoTheme } from '../../../../apps/todogeek/frontend/src/theme/theme.js';
 import { createNoteTheme } from '../../../../apps/notegeek/frontend/src/theme/createAppTheme.js';
 import { createFitnessTheme } from '../../../../apps/fitnessgeek/frontend/src/theme/theme.jsx';
 import { createFlockTheme } from '../../../../apps/flockgeek/frontend/src/theme/theme.js';
@@ -28,7 +28,7 @@ import createBookTheme from '../../../../apps/bookgeek/web/src/theme/theme.js';
 import { createBaseGeekTheme } from '../../../../apps/basegeek/packages/ui/src/theme.js';
 import { SIDEBAR_CHIP_TINT, sidebarChipInk } from '../navigation/sidebarInk.js';
 import { geekInteraction } from '../designTokens.js';
-import { chrome as bujoChrome } from '../../../../apps/bujogeek/frontend/src/theme/chrome.js';
+import { chrome as todoChrome } from '../../../../apps/todogeek/frontend/src/theme/chrome.js';
 import * as fitnessChrome from '../../../../apps/fitnessgeek/frontend/src/components/Layout/chrome.js';
 
 /* ── color helpers ─────────────────────────────────────────────────────── */
@@ -62,7 +62,7 @@ function ratio(fg, bg, under = '#FFFFFF') {
 
 const THEMES = [
   { app: 'suite-default', modes: ['light', 'dark'], build: (mode) => createGeekSuiteTheme({ mode }) },
-  { app: 'bujogeek', modes: ['light', 'dark'], build: createBuJoTheme },
+  { app: 'todogeek', modes: ['light', 'dark'], build: createTodoTheme },
   { app: 'notegeek', modes: ['light', 'dark'], build: createNoteTheme },
   { app: 'fitnessgeek', modes: ['light', 'dark'], build: createFitnessTheme },
   { app: 'flockgeek', modes: ['light', 'dark'], build: createFlockTheme },
@@ -79,7 +79,7 @@ function pairsFor(theme) {
   const focusedLabel = theme.components?.MuiFormLabel?.styleOverrides?.root?.['&.Mui-focused'];
   // EVERY surface the palette declares, not just the canvas and the cards.
   // The 2026-09-05 axe pass found the muted tiers failing on the *tinted*
-  // surfaces an app adds beside those two (flockgeek's sidebar, bujogeek's
+  // surfaces an app adds beside those two (flockgeek's sidebar, todogeek's
   // warm/cream section grounds) — exactly the pairs a two-surface sweep could
   // not see. Anything non-string under `palette.background` (MUI's own
   // augmentations) is skipped.
@@ -209,17 +209,17 @@ function pairsFor(theme) {
  * recorded rather than silently patched:
  *
  *   `primary.contrastText on primary.main` — the suite blue (formerly #6098CC, now #4B7AA3) (and
- *   bujogeek, which uses the same ramp) and fitnessgeek's teal both take a
+ *   todogeek, which uses the same ramp) and fitnessgeek's teal both take a
  *   white label at ~3:1–3.75:1. Fixing it means darkening a brand accent or
  *   flipping to a dark label. TODO_ORDER #7 owns this.
  *
  *   `error.main (as text)` on warm dark papers — semanticDark.error #EF5350 is
- *   tuned for the suite's #1E1E1E paper; bujogeek, fitnessgeek and storygeek
+ *   tuned for the suite's #1E1E1E paper; todogeek, fitnessgeek and storygeek
  *   all sit on warmer, lighter dark surfaces where it lands at 4.07–4.36:1.
  *   The fix is a token change in designTokens.js affecting every dark theme.
  *
  *   `text.secondary` / `text.disabled` — suite-default's #757575 on the grey
- *   canvas, bujogeek's dark warm greys, and bookgeek reusing slate-500 for
+ *   canvas, todogeek's dark warm greys, and bookgeek reusing slate-500 for
  *   secondary in BOTH modes (its mode-tuned `muted` slot is more legible than
  *   its secondary). Part of the TODO_ORDER #3 text-tier sweep.
  *
@@ -285,35 +285,35 @@ describe.each(cases)('$app / $mode', ({ app, mode, theme }) => {
  * Some text sits on a ground the palette never declares, so the matrix above
  * cannot see it. Examples: an always-dark sidebar chrome that ignores the app
  * mode, or a component's own tint. The 2026-09-25 desktop harness pass found
- * five of these (FitnessGeek's section captions, BuJoGeek's nav rows, section
+ * five of these (FitnessGeek's section captions, TodoGeek's nav rows, section
  * captions, quick-add prompt and out-of-month day numbers). The chrome inks
  * are imported from the modules the sidebars paint with, so retuning one
  * re-runs its pair here.
  */
-const bujoLight = createBuJoTheme('light');
-const bujoDark = createBuJoTheme('dark');
+const todoLight = createTodoTheme('light');
+const todoDark = createTodoTheme('dark');
 
 const GROUND_PAIRS = [
-  // BuJoGeek sidebar: dark tobacco in both app modes.
-  ['bujogeek chrome: active row title', bujoChrome.text, bujoChrome.active, 4.5],
-  ['bujogeek chrome: hovered row title', bujoChrome.textHover, bujoChrome.bgHover, 4.5],
-  ['bujogeek chrome: inactive row title', bujoChrome.textMuted, bujoChrome.bg, 4.5],
-  ['bujogeek chrome: row description', bujoChrome.caption, bujoChrome.bg, 4.5],
-  ['bujogeek chrome: row description (hovered)', bujoChrome.caption, bujoChrome.bgHover, 4.5],
-  ['bujogeek chrome: row description (active)', bujoChrome.caption, bujoChrome.active, 4.5],
-  ['bujogeek chrome: section caption', bujoChrome.textDisabled, bujoChrome.bg, 4.5],
-  ['bujogeek chrome: wordmark', bujoChrome.logo, bujoChrome.bg, 4.5],
-  ['bujogeek chrome: "BJ" mark / accent (12px)', bujoChrome.logoAccent, bujoChrome.bg, 4.5],
-  ['bujogeek chrome: reminders-on toggle (hovered)', bujoChrome.accent, flatten(bujoChrome.accentBg, bujoChrome.bgHover), 4.5],
+  // TodoGeek sidebar: dark tobacco in both app modes.
+  ['todogeek chrome: active row title', todoChrome.text, todoChrome.active, 4.5],
+  ['todogeek chrome: hovered row title', todoChrome.textHover, todoChrome.bgHover, 4.5],
+  ['todogeek chrome: inactive row title', todoChrome.textMuted, todoChrome.bg, 4.5],
+  ['todogeek chrome: row description', todoChrome.caption, todoChrome.bg, 4.5],
+  ['todogeek chrome: row description (hovered)', todoChrome.caption, todoChrome.bgHover, 4.5],
+  ['todogeek chrome: row description (active)', todoChrome.caption, todoChrome.active, 4.5],
+  ['todogeek chrome: section caption', todoChrome.textDisabled, todoChrome.bg, 4.5],
+  ['todogeek chrome: wordmark', todoChrome.logo, todoChrome.bg, 4.5],
+  ['todogeek chrome: "BJ" mark / accent (12px)', todoChrome.logoAccent, todoChrome.bg, 4.5],
+  ['todogeek chrome: reminders-on toggle (hovered)', todoChrome.accent, flatten(todoChrome.accentBg, todoChrome.bgHover), 4.5],
   // FitnessGeek sidebar: #0C0A09 in both app modes.
   ['fitnessgeek chrome: row / section caption', fitnessChrome.MUTED, fitnessChrome.CHROME_BG, 4.5],
   ['fitnessgeek chrome: hovered row', fitnessChrome.INK, flatten('rgba(255, 255, 255, 0.04)', fitnessChrome.CHROME_BG), 4.5],
   ['fitnessgeek chrome: active row', fitnessChrome.INK, flatten('rgba(45, 212, 191, 0.12)', fitnessChrome.CHROME_BG), 4.5],
-  // BuJoGeek components on their own grounds.
-  ['bujogeek/light quick-add prompt: text.muted on parchment.warm', bujoLight.palette.text.muted, '#F4EFE8', 4.5],
-  ['bujogeek/dark quick-add prompt: text.muted on 2% white over background.default', bujoDark.palette.text.muted, flatten('rgba(255,255,255,0.02)', bujoDark.palette.background.default), 4.5],
-  ['bujogeek/light month grid, outside day: text.muted on 1.5% black over background.default', bujoLight.palette.text.muted, flatten('rgba(0,0,0,0.015)', bujoLight.palette.background.default), 4.5],
-  ['bujogeek/dark month grid, outside day: text.muted on 15% black over background.default', bujoDark.palette.text.muted, flatten('rgba(0,0,0,0.15)', bujoDark.palette.background.default), 4.5],
+  // TodoGeek components on their own grounds.
+  ['todogeek/light quick-add prompt: text.muted on parchment.warm', todoLight.palette.text.muted, '#F4EFE8', 4.5],
+  ['todogeek/dark quick-add prompt: text.muted on 2% white over background.default', todoDark.palette.text.muted, flatten('rgba(255,255,255,0.02)', todoDark.palette.background.default), 4.5],
+  ['todogeek/light month grid, outside day: text.muted on 1.5% black over background.default', todoLight.palette.text.muted, flatten('rgba(0,0,0,0.015)', todoLight.palette.background.default), 4.5],
+  ['todogeek/dark month grid, outside day: text.muted on 15% black over background.default', todoDark.palette.text.muted, flatten('rgba(0,0,0,0.15)', todoDark.palette.background.default), 4.5],
 ].map(([label, fg, bg, min]) => ({ label, fg, bg, min }));
 
 describe('grounds outside the palette', () => {

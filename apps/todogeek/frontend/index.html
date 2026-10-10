@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" type="image/svg+xml" href="/icons/favicon.svg" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+    <title>TodoGeek</title>
+    <!-- PWA Manifest and Meta Tags -->
+    <link rel="manifest" href="/manifest.json" />
+    <meta name="theme-color" media="(prefers-color-scheme: light)" content="#FBFBF8" />
+    <meta name="theme-color" media="(prefers-color-scheme: dark)" content="#141413" />
+    <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="TodoGeek" />
+    <!-- Baseline colors that snap immediately before MUI/React boots.
+         Must EXACTLY match the MUI theme's background.default and text.primary
+         (theme/pen.js — paper and ink, light and night) or you'll get a brief
+         repaint flash when React mounts. -->
+    <style>
+      :root                    { color-scheme: light; background-color: #FBFBF8; color: #121212; }
+      :root[data-theme="dark"] { color-scheme: dark;  background-color: #141413; color: #EDEDE8; }
+      body                     { margin: 0; background-color: inherit; color: inherit; }
+    </style>
+    <!-- Theme preboot script is injected by the themePreboot() Vite plugin
+         from @geeksuite/user — sets <html data-theme> from the shared
+         `geek_theme` cookie before React mounts. -->
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.jsx"></script>
+  </body>
+</html>

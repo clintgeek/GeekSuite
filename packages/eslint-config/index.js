@@ -47,7 +47,7 @@ export const appGlobals = {
   ...globals.node,
 };
 
-/** Vitest with `globals: true` (notegeek, bujogeek). */
+/** Vitest with `globals: true` (notegeek, todogeek). */
 export const testGlobals = {
   describe: 'readonly',
   it: 'readonly',

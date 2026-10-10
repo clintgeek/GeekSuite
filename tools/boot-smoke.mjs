@@ -26,7 +26,7 @@
 // below is either:
 //   - the app's own app.js (or equivalent) that builds the Express app and
 //     is deliberately split out from server.js for exactly this reason
-//     (bujogeek, fitnessgeek, storygeek all document this split), or
+//     (todogeek, fitnessgeek, storygeek all document this split), or
 //   - a documented FALLBACK: the deepest available module that still pulls
 //     in real route/import surface, for the four apps that have no such
 //     split. Each fallback's coverage gap is written out below and repeated
@@ -65,16 +65,16 @@ const TARGETS = [
   {
     app: 'thinggeek',
     modules: ['apps/thinggeek/backend/src/app.js'],
-    note: "app.js exports createApp() (the GameGeek/bujogeek shape) so it imports without connecting Mongo or listening.",
+    note: "app.js exports createApp() (the GameGeek/todogeek shape) so it imports without connecting Mongo or listening.",
   },
   {
     app: 'gamegeek',
     modules: ['apps/gamegeek/backend/src/app.js'],
-    note: "app.js exports createApp() and is split from server.js (the bujogeek shape) so it imports without connecting Mongo or listening.",
+    note: "app.js exports createApp() and is split from server.js (the todogeek shape) so it imports without connecting Mongo or listening.",
   },
   {
-    app: 'bujogeek',
-    modules: ['apps/bujogeek/backend/src/app.js'],
+    app: 'todogeek',
+    modules: ['apps/todogeek/backend/src/app.js'],
     note: "app.js exports createApp() and is split from server.js precisely so it can be imported without connecting Mongo or listening; its route imports run at module scope, so a plain import already exercises them.",
   },
   {

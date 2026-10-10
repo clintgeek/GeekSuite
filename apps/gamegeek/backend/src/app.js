@@ -49,7 +49,7 @@ export function createApp() {
   // CSRF: origin-check every cookie-authenticated mutation against the same
   // `allowedOrigins` the cors() config below uses — one list, no second
   // copy. Mounted before cors() on purpose — see
-  // apps/bujogeek/backend/src/app.js's comment (DOCS/SSO_OVERVIEW.md#csrf)
+  // apps/todogeek/backend/src/app.js's comment (DOCS/SSO_OVERVIEW.md#csrf)
   // for why a disallowed origin must be a deliberate 403 here, not whatever
   // shape cors() would otherwise give it.
   app.use(csrfGuard({ allowedOrigins, logger, appName: 'gamegeek' }));

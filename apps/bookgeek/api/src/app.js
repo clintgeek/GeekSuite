@@ -1,7 +1,7 @@
 /**
  * Build the BookGeek API Express app. No Mongo connect, no listen — that is
  * server.js's job — so this module imports cleanly in tests and in
- * tools/boot-smoke.mjs (Phase B, 2026-09-25; the gamegeek/bujogeek shape).
+ * tools/boot-smoke.mjs (Phase B, 2026-09-25; the gamegeek/todogeek shape).
  *
  * ORDER MATTERS and is exactly the order the old monolithic server.js used:
  *   trust proxy → csrfGuard → cors → cookie/body parsers → http logger →

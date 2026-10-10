@@ -280,7 +280,7 @@ app.get("*", (req, res, next) => {
   // A missing hashed asset must 404, never fall back to index.html: a
   // service worker that caches an HTML body under a .js/.css/.woff2 URL
   // poisons every load until the cache is cleared (DOCS/CONTEXT.md landmine;
-  // bujogeek/notegeek/bookgeek carry the same guard).
+  // todogeek/notegeek/bookgeek carry the same guard).
   if (path.extname(req.path)) {
     return res.status(404).type('text/plain').send('Not found');
   }

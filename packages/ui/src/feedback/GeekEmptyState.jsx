@@ -1,10 +1,10 @@
 /**
  * GeekEmptyState — the "there is nothing here yet" block.
  *
- * Seeded from bujogeek's `EmptyState` (TODO_ORDER #15). Structure is shared:
+ * Seeded from todogeek's `EmptyState` (TODO_ORDER #15). Structure is shared:
  * optional ornament/icon, a title in `text.primary`, a description in
  * `text.muted`, an optional action with a real 44px target. Identity — fonts,
- * alignment, the three-dot pause mark bujogeek uses instead of an icon — stays
+ * alignment, the three-dot pause mark todogeek uses instead of an icon — stays
  * the app's business via `icon`, `align` and the `*Sx` hooks.
  *
  * `text.muted` (not `text.disabled`) for the description: empty-state copy is

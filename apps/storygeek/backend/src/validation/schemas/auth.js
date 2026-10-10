@@ -5,7 +5,7 @@ import { z } from 'zod';
 // Anything else is already going to be rejected by basegeek; catching it
 // here just moves that rejection a hop earlier and skips the network call.
 const VALID_APPS = [
-  'basegeek', 'notegeek', 'bujogeek', 'fitnessgeek',
+  'basegeek', 'notegeek', 'todogeek', 'fitnessgeek',
   'storygeek', 'startgeek', 'flockgeek', 'musicgeek',
   'babelgeek', 'bookgeek',
 ];

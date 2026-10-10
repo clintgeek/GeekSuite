@@ -220,7 +220,7 @@ describe('POST /api/auth/register validates the app it is asked to mint for', ()
       username,
       email: `${username}@example.com`,
       password: 'password123',
-      app: 'BujoGeek',
+      app: 'TodoGeek',
     });
     expect(res.status).toBe(201);
   });

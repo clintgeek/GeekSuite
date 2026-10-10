@@ -181,7 +181,7 @@ export default defineConfig({
                   //
                   // This is a mitigation, not the cure. The cure is the
                   // extname-404 guard in the Express fallback, which
-                  // bujogeek/notegeek/bookgeek have and fitnessgeek does not.
+                  // todogeek/notegeek/bookgeek have and fitnessgeek does not.
                   cacheWillUpdate: async ({ response }) => {
                     if (!response || response.status !== 200) return null;
                     const type = response.headers.get('content-type') || '';
@@ -203,7 +203,7 @@ export default defineConfig({
     // (Tooltip, Chip, InputBase, Select, Button, Popover, createStyled all
     // appeared twice) and GeekShell/GeekAppFrame rendered through a MUI
     // ThemeContext the app's ThemeProvider never reaches. Suite standard —
-    // bujogeek, notegeek, flockgeek and storygeek all carry the same list.
+    // todogeek, notegeek, flockgeek and storygeek all carry the same list.
     // Do NOT list `@mui/system` explicitly: deduping `@mui/material` makes its
     // nested `@mui/system` a singleton transitively, while naming it here
     // breaks resolution (pnpm does not hoist it to a root-resolvable path).

@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import taskService from './src/graphql/bujogeek/services/taskService.js';
+import taskService from './src/graphql/todogeek/services/taskService.js';
 import { getAppConnection } from './src/graphql/shared/appConnections.js';
 
 async function runTest() {
@@ -18,9 +18,9 @@ async function runTest() {
 
   console.log('Constructed query:', JSON.stringify(query, null, 2));
 
-  const bujoConn = getAppConnection('bujogeek');
-  await new Promise(resolve => bujoConn.once('open', resolve));
-  const { default: Task } = await import('./src/graphql/bujogeek/models/Task.js');
+  const todoConn = getAppConnection('todogeek');
+  await new Promise(resolve => todoConn.once('open', resolve));
+  const { default: Task } = await import('./src/graphql/todogeek/models/Task.js');
 
   const results = await Task.find(query);
   console.log('Query using all filters returned', results.length, 'results');

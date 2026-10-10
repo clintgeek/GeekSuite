@@ -2,7 +2,7 @@
  * notegeekValidation.test.js
  *
  * Covers the zod input-validation gate in front of notegeek's five gateway
- * mutations (`DOCS/TODO_ORDER.md` #22 — the same layer bujogeek got in
+ * mutations (`DOCS/TODO_ORDER.md` #22 — the same layer todogeek got in
  * `3265b1c`):
  *   1. Every mutation family accepts its normal input and rejects unknown
  *      keys, out-of-bounds strings/arrays and off-enum values.
@@ -18,7 +18,7 @@
  *
  * NoteGeek takes no date arguments at all — `createdAt`/`updatedAt` are
  * mongoose-managed — so there is no calendar-vs-instant case to assert here;
- * that distinction is exercised in the bujogeek and flockgeek suites.
+ * that distinction is exercised in the todogeek and flockgeek suites.
  *
  * This is a pure unit suite: no Mongo, no resolvers — just the schemas.
  */

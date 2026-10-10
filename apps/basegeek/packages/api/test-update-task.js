@@ -18,7 +18,7 @@ const client = new ApolloClient({
 
 async function run() {
   try {
-    const { data: bujoData } = await client.query({
+    const { data: todoData } = await client.query({
       query: gql`
         query {
           dailyTasks(date: "2025-04-24") {
@@ -29,10 +29,10 @@ async function run() {
         }
       `
     });
-    console.log('Bujo Tasks:', bujoData.dailyTasks.map(t => t.id));
+    console.log('Todo Tasks:', todoData.dailyTasks.map(t => t.id));
 
-    if (bujoData.dailyTasks.length > 0) {
-      const taskId = bujoData.dailyTasks[0].id;
+    if (todoData.dailyTasks.length > 0) {
+      const taskId = todoData.dailyTasks[0].id;
       console.log('Attempting to update status for task:', taskId);
       const { data: updateData } = await client.mutate({
         mutation: gql`

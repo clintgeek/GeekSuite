@@ -6,7 +6,7 @@
  *
  * ## Why this exists
  *
- * Six backends (notegeek, bujogeek, fitnessgeek, storygeek, flockgeek,
+ * Six backends (notegeek, todogeek, fitnessgeek, storygeek, flockgeek,
  * bookgeek) expose `POST /api/auth/refresh` and `POST /api/auth/logout` as
  * thin proxies: the browser calls its own app's backend, the backend replays
  * the browser's `Cookie` (and `Authorization`) header to

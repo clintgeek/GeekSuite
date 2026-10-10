@@ -180,10 +180,10 @@ describe('resolveCaller', () => {
   });
 
   it('takes the app from the JWT app claim and ignores the body', () => {
-    const req = { user: { id: 'user-1', app: 'bujogeek' } };
+    const req = { user: { id: 'user-1', app: 'todogeek' } };
     const caller = resolveCaller(req, { appName: 'storygeek' });
     expect(caller).toMatchObject({
-      appId: 'bujogeek', userId: 'user-1', source: 'jwt', verified: true,
+      appId: 'todogeek', userId: 'user-1', source: 'jwt', verified: true,
     });
   });
 
@@ -254,7 +254,7 @@ describe('POST /api/ai/parse-json', () => {
   });
 
   it('attributes to the JWT app claim, not the appName in the body', async () => {
-    const { user, token } = await makeUserWithToken({ appClaim: 'bujogeek' });
+    const { user, token } = await makeUserWithToken({ appClaim: 'todogeek' });
 
     const res = await request(app)
       .post('/api/ai/parse-json')
@@ -262,7 +262,7 @@ describe('POST /api/ai/parse-json', () => {
       .send({ prompt: 'hi', config: { appName: 'storygeek', provider: 'groq' } });
 
     expect(res.status).toBe(200);
-    expect(captured.config.appName).toBe('bujogeek');
+    expect(captured.config.appName).toBe('todogeek');
     expect(captured.config.userId).toBe(user._id.toString());
   });
 

@@ -118,7 +118,7 @@ const HelpModal = ({ open, onClose }) => {
 
           <section>
             <h3 className="text-sm font-semibold text-white mb-2">
-              <span className="font-mono text-white/90">&gt;</span> Task → BujoGeek
+              <span className="font-mono text-white/90">&gt;</span> Task → TodoGeek
             </h3>
             <p className="text-sm text-white/70 leading-relaxed">
               <code className="font-mono text-white/90">&gt; Call the vet #flock /tomorrow !high</code>

@@ -2,7 +2,7 @@
  * cacheUpdates.js — what each mutation owes the Apollo cache.
  *
  * The rule is the suite's, written down in full at the top of
- * `apps/bujogeek/frontend/src/apolloClient.js`: **every mutation owns the cache
+ * `apps/todogeek/frontend/src/apolloClient.js`: **every mutation owns the cache
  * consequences of its own write.** notegeek's client is a bare
  * `new InMemoryCache()` with no type policies (`packages/api-client`), so
  * nothing is handled centrally, and until the 2026-09-05 going-over four of its

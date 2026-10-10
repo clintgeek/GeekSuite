@@ -3,7 +3,7 @@
 export const VALID_APPS = [
   'basegeek',
   'notegeek',
-  'bujogeek',
+  'todogeek',
   'fitnessgeek',
   'storygeek',
   'startgeek',

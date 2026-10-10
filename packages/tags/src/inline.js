@@ -1,7 +1,7 @@
 /**
  * Inline `#tags` — the reader for `#house/garage` written in running text.
  * Moved here from NoteGeek (`frontend/src/utils/inlineTags.js`, 2026-09-30) so
- * BuJoGeek's add box reads `#tags` by the same rule.
+ * TodoGeek's add box reads `#tags` by the same rule.
  *
  * ## The token rule
  *

@@ -4,7 +4,7 @@
  * attachUser.test.js — the two things `attachUser()` must never confuse.
  *
  * 1. **Who validates.** The default validator is an HTTP call to basegeek,
- *    which is right for the six consumer backends (bookgeek, bujogeek,
+ *    which is right for the six consumer backends (bookgeek, todogeek,
  *    fitnessgeek, flockgeek, notegeek, storygeek) and wrong for basegeek
  *    itself — there `BASEGEEK_URL` resolves to the same process, so the
  *    gateway spent an inbound request slot asking itself who the caller was.

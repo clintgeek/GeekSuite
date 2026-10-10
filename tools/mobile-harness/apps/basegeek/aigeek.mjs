@@ -35,7 +35,7 @@ const providerUsage = {
   } },
   cerebras: { calls: 642, freeCalls: 640, paidCalls: 2, tokens: 2088401, cost: 0.0062, appUsage: {
     codegeek: { calls: 500, freeCalls: 498, paidCalls: 2, tokens: 1700000, cost: 0.0062 },
-    bujogeek: { calls: 142, freeCalls: 142, paidCalls: 0, tokens: 388401, cost: 0 },
+    todogeek: { calls: 142, freeCalls: 142, paidCalls: 0, tokens: 388401, cost: 0 },
   } },
   anthropic: { calls: 98, freeCalls: 0, paidCalls: 98, tokens: 585844, cost: 1.7602, appUsage: {
     geekpr: { calls: 87, freeCalls: 0, paidCalls: 87, tokens: 512844, cost: 1.5385, features: {

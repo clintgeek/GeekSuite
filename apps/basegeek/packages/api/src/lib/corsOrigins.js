@@ -25,7 +25,7 @@ export const productionOrigins = [
   'https://geeksuite.clintgeek.com', // GeekSuite public portal
   'https://notegeek.clintgeek.com',  // NoteGeek production
   'https://fitnessgeek.clintgeek.com',  // FitnessGeek production
-  'https://bujogeek.clintgeek.com',  // BujoGeek production
+  'https://todogeek.clintgeek.com',  // TodoGeek production
   'https://bookgeek.clintgeek.com',  // epub library
   'https://gamegeek.clintgeek.com',  // GameGeek — video game library
   'https://thinggeek.clintgeek.com', // ThingGeek — household inventory (member-gated)

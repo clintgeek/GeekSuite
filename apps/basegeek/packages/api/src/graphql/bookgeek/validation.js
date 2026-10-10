@@ -5,7 +5,7 @@ export { validateInput };
 
 /**
  * Input validation for the bookgeek gateway mutations — `DOCS/TODO_ORDER.md`
- * #22, the last of the four gateway modules (bujogeek `3265b1c`, then
+ * #22, the last of the four gateway modules (todogeek `3265b1c`, then
  * notegeek and flockgeek `e23559c`). One strict schema per mutation family;
  * every rejection is one shape (`GraphQLError`, `extensions.code =
  * 'BAD_USER_INPUT'`, `extensions.details [{path,message}]`) built by the
@@ -25,7 +25,7 @@ export { validateInput };
  *
  * ## Every mutation here nests its payload under `input` — except four
  *
- * Unlike bujogeek/notegeek/flockgeek's flat argument lists, bookgeek's
+ * Unlike todogeek/notegeek/flockgeek's flat argument lists, bookgeek's
  * create/update/profile/filter mutations take a single `input` object (the
  * GraphQL `CreateBookInput`/`UpdateBookInput`/`BookProfileInput`/
  * `SaveLibraryFilterInput` types), so both the outer args object AND the
@@ -79,7 +79,7 @@ export { validateInput };
  * from the book and resends it on every save, so a 2000 floor made *Dune*
  * (1965) permanently uneditable — a rating change came back as
  * `BAD_USER_INPUT` (BURN_REVIEW #1). Every other gateway date — flockgeek's
- * hatch/set/pairing/harvest days, bujogeek's due dates and habit logs — is a
+ * hatch/set/pairing/harvest days, todogeek's due dates and habit logs — is a
  * scheduling value about a live flock or a live list and keeps the 2000
  * floor. `dateStarted`/`dateFinished` are real reading-progress timestamps
  * (when a session actually opened/closed the book), so they stay instants via

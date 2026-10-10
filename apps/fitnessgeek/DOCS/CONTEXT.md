@@ -617,7 +617,7 @@ docker build -f apps/fitnessgeek/Dockerfile . -t fitnessgeek-local
 
 `backend/jest.config.js` runs jest's **ESM** mode:
 `node --experimental-vm-modules node_modules/jest/bin/jest.js` with an empty
-`transform`, matching bujogeek, notegeek, flockgeek and storygeek. Practical
+`transform`, matching todogeek, notegeek, flockgeek and storygeek. Practical
 consequences when writing a test here:
 
 - `jest`, `describe`, `test`, `expect` come from `@jest/globals`.
@@ -785,7 +785,7 @@ is not where the win came from. Four things were.
 app's own and the one pnpm materializes for `packages/ui`'s `^5` peer (Tooltip,
 Chip, InputBase, SelectInput, Button, Popover and `createStyled` each appeared
 twice in the chunk dump). That is the suite-wide landmine in the root `DOCS/`,
-and fitnessgeek was the app still carrying it; bujogeek, notegeek, flockgeek and
+and fitnessgeek was the app still carrying it; todogeek, notegeek, flockgeek and
 storygeek all had the full list already. Adding `@mui/material` took 118 kB off
 the eager path and put `GeekShell`/`GeekAppFrame` on the same MUI ThemeContext
 as the rest of the app. Do **not** add `@mui/system` to the list — deduping
@@ -919,7 +919,7 @@ set and is the quicker check.
   real build, `vite preview` behaving identically to the Express fallback):
   `GET /assets/gone-DEAD.js` answered **200 text/html**. This was the
   suite-wide landmine in the root `DOCS/` (see `DOCS/PWA_STANDARD.md` §1a);
-  bujogeek, notegeek and bookgeek already carried the extname-404 guard, and
+  todogeek, notegeek and bookgeek already carried the extname-404 guard, and
   as of the Q53 pass so do fitnessgeek, storygeek, flockgeek and basegeek's
   gateway. startgeek (no Express backend, static bundle via the `serve` npm
   package) carried the equivalent gap through `serve -s`'s unconditional

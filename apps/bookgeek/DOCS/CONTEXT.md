@@ -279,7 +279,7 @@ envelope, `{ success: false, error: { message, code: 'VALIDATION_ERROR',
 details: [{ path, message }] } }`) plus one schema file per route family under
 `src/validation/schemas/`. Book ids in params are checked as non-empty bounded
 strings (`common.js`'s `idParam`/`bookIdParamsSchema`), **not** Mongo
-ObjectIds — same call as storygeek's and bujogeek's zod passes, so a malformed
+ObjectIds — same call as storygeek's and todogeek's zod passes, so a malformed
 id still falls through to the route's own existing "not found" or
 Mongoose-CastError handling instead of validation reinterpreting it.
 

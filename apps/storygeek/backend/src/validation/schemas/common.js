@@ -6,8 +6,8 @@ import { z } from 'zod';
  * 24-char hex ObjectId. A malformed id still reaches whatever the route
  * already does with one (Mongoose CastError -> existing catch block, or
  * `findById` returning null -> the route's own 404) instead of validation
- * reinterpreting "not found" as "bad request". Same call as bujogeek's zod
- * pass (apps/basegeek/packages/api/src/graphql/bujogeek/validation.js).
+ * reinterpreting "not found" as "bad request". Same call as todogeek's zod
+ * pass (apps/basegeek/packages/api/src/graphql/todogeek/validation.js).
  */
 const idParam = (label = 'id') => z.string().trim().min(1, `${label} is required`).max(64);
 

@@ -4,7 +4,7 @@ import { motion } from 'framer-motion'
 // The suite spells its own app names; the server sends the lowercase ids.
 const APP_LABELS = {
   notegeek: 'NoteGeek',
-  bujogeek: 'BujoGeek',
+  todogeek: 'TodoGeek',
   bookgeek: 'BookGeek',
   flockgeek: 'FlockGeek',
 }

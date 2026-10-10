@@ -1,5 +1,5 @@
 /**
- * Legacy-tolerant tag reads, for NoteGeek / BuJoGeek / ThingGeek.
+ * Legacy-tolerant tag reads, for NoteGeek / TodoGeek / ThingGeek.
  *
  * Every write now stores the suite standard (`@geeksuite/tags`: lowercase
  * kebab-case, `/` nesting). Tags written BEFORE the standard (`geekSuite`,

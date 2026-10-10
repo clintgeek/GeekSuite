@@ -1,8 +1,8 @@
 /**
  * ownership.js — fitnessgeek data-access guards.
  *
- * Mirrors the `requireUser` pattern used by the bujogeek service layer
- * (see ../bujogeek/services/taskService.js). Kept free of model imports so
+ * Mirrors the `requireUser` pattern used by the todogeek service layer
+ * (see ../todogeek/services/taskService.js). Kept free of model imports so
  * the models themselves can import it without creating a cycle.
  *
  * Rules encoded here:

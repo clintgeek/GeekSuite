@@ -35,7 +35,7 @@ import { initRefreshTokenStore, closeRefreshTokenStore, isRefreshTokenStoreConne
 import { seedMissingApps } from './services/appRegistrySeed.js';
 import { startOAuthRefreshJob, stopOAuthRefreshJob } from './services/oauthRefreshJobService.js';
 import { startAICatalogJob, stopAICatalogJob } from './services/aiCatalogJob.js';
-import reminderService from './graphql/bujogeek/services/reminderService.js';
+import reminderService from './graphql/todogeek/services/reminderService.js';
 import { startNoteIndexer, stopNoteIndexer } from './graphql/notegeek/indexer.js';
 import { startCatalogIndexer, stopCatalogIndexer } from './graphql/catalog/catalogIndexer.js';
 import { ApolloServer } from '@apollo/server';
@@ -433,7 +433,7 @@ app.get('/api/health/app/:appName', async (req, res) => {
     const fallback = {
       basegeek: 'https://basegeek.clintgeek.com',
       notegeek: 'https://notegeek.clintgeek.com',
-      bujogeek: 'https://bujogeek.clintgeek.com',
+      todogeek: 'https://todogeek.clintgeek.com',
       fitnessgeek: 'https://fitnessgeek.clintgeek.com',
       storygeek: 'https://storygeek.clintgeek.com',
       flockgeek: 'https://flockgeek.clintgeek.com',
@@ -534,13 +534,13 @@ try {
   logger.error({ err }, '[CatalogJob] failed to start');
 }
 
-// BuJoGeek task reminders. basegeek owns the task data and runs 24/7, so the
+// TodoGeek task reminders. basegeek owns the task data and runs 24/7, so the
 // 60-second sweep lives here rather than in the client. start() is a logged
 // no-op when VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY are unset.
 try {
   reminderService.start();
 } catch (err) {
-  logger.error({ err }, '[BujoReminders] failed to start');
+  logger.error({ err }, '[TodoReminders] failed to start');
 }
 
 // Fallback route for SPA (MUST be after all API and static routes)
@@ -548,7 +548,7 @@ try {
 // Paths with a file extension (e.g. a stale hashed /assets/*.css requested by
 // an old service worker after a deploy) must 404 — answering them with
 // index.html poisons browser/SW caches and renders the app unstyled.
-// DOCS/CONTEXT.md landmine; bujogeek/notegeek/bookgeek/fitnessgeek carry the
+// DOCS/CONTEXT.md landmine; todogeek/notegeek/bookgeek/fitnessgeek carry the
 // same guard.
 app.get('*', (req, res) => {
   if (path.extname(req.path)) {
@@ -650,7 +650,7 @@ installShutdownHooks(logger, server, {
     try {
       reminderService.stop()
     } catch (err) {
-      logger.error({ err }, 'Error stopping BuJoGeek reminder scheduler')
+      logger.error({ err }, 'Error stopping TodoGeek reminder scheduler')
     }
     try {
       await mongoose.disconnect()

@@ -3,7 +3,7 @@
 /**
  * @geeksuite/logger
  *
- * The pino setup that basegeek, bujogeek, fitnessgeek, flockgeek, storygeek,
+ * The pino setup that basegeek, todogeek, fitnessgeek, flockgeek, storygeek,
  * notegeek and bookgeek each hand-rolled independently — same level/env
  * logic, same dev pretty-print switch, same pino-http request-id wiring.
  * None of the originals redacted anything, so the redaction here (auth

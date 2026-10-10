@@ -44,7 +44,7 @@ const getModeLabel = (mode, engine, status, asking, drafting) => {
       ? 'Sign in to search the suite'
       : 'Sign in to capture'
   }
-  if (mode === 'task') return drafting ? 'Drafting…' : 'Task → BujoGeek'
+  if (mode === 'task') return drafting ? 'Drafting…' : 'Task → TodoGeek'
   if (mode === 'note') return drafting ? 'Drafting…' : 'Note → NoteGeek'
   if (mode === 'suite') return 'Suite search'
   if (mode === 'ask') return asking ? 'Thinking…' : 'Ask the suite'
@@ -280,7 +280,7 @@ const CommandBox = ({ onOpenSettings }) => {
   /**
    * The one place a task is written, whether the fields came from the parser
    * or from a draft the person confirmed. Unchanged from the parser's own
-   * path — including defaulting to today at 9am, as BujoGeek's quick-add does.
+   * path — including defaulting to today at 9am, as TodoGeek's quick-add does.
    */
   const createTaskFromFields = useCallback(
     async (fields) => {

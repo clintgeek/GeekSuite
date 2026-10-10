@@ -1,0 +1,563 @@
+import { format } from 'date-fns';
+import { GraphQLError } from 'graphql';
+import JournalEntry from './models/JournalEntry.js';
+import taskService from './services/taskService.js';
+import collectionService from './services/collectionService.js';
+import habitService from './services/habitService.js';
+import { batchLoad } from './batch.js';
+import reminderService from './services/reminderService.js';
+import reviewService from './services/reviewService.js';
+import { normalizeTags } from '@geeksuite/tags';
+import { spellingsOf } from '../shared/tagSpellings.js';
+import {
+  validateInput,
+  createTaskSchema,
+  updateTaskArgsSchema,
+  addSubtaskArgsSchema,
+  reorderSubtasksArgsSchema,
+  createHabitArgsSchema,
+  updateHabitArgsSchema,
+  toggleHabitLogArgsSchema,
+  createCollectionArgsSchema,
+  updateCollectionArgsSchema,
+  createJournalFromTemplateArgsSchema,
+  reviewDraftArgsSchema,
+} from './validation.js';
+
+const loadCollectionCounts = (collection, userId, context) =>
+  batchLoad(
+    context,
+    'collectionCounts',
+    String(collection._id ?? collection.id),
+    (ids) => collectionService.getCountsBatch(ids, userId)
+  );
+
+const loadHabitStreak = (habit, today, userId, context) =>
+  batchLoad(
+    context,
+    `habitStreak:${today || ''}`,
+    habit,
+    (habits) => habitService.getCurrentStreaksBatch(habits, userId, today || undefined)
+  );
+
+const validateCreateTask = validateInput(createTaskSchema);
+const validateUpdateTask = validateInput(updateTaskArgsSchema);
+const validateAddSubtask = validateInput(addSubtaskArgsSchema);
+const validateReorderSubtasks = validateInput(reorderSubtasksArgsSchema);
+const validateCreateHabit = validateInput(createHabitArgsSchema);
+const validateUpdateHabit = validateInput(updateHabitArgsSchema);
+const validateToggleHabitLog = validateInput(toggleHabitLogArgsSchema);
+const validateCreateCollection = validateInput(createCollectionArgsSchema);
+const validateUpdateCollection = validateInput(updateCollectionArgsSchema);
+const validateCreateJournalFromTemplate = validateInput(createJournalFromTemplateArgsSchema);
+const validateReviewDraft = validateInput(reviewDraftArgsSchema);
+
+/**
+ * Journal entries and templates take `tags` straight from GraphQL (no zod
+ * schema of their own); they are written in the suite standard all the same.
+ * Absent or null `tags` is left exactly as sent.
+ */
+const withNormalizedTags = (fields) =>
+  Array.isArray(fields?.tags) ? { ...fields, tags: normalizeTags(fields.tags) } : fields;
+
+/** Every stored spelling of any of `tags`, for `$in` (`shared/tagSpellings.js`). */
+async function spellingsOfAll(Model, scope, tags) {
+  const lists = await Promise.all(tags.map((t) => spellingsOf(Model, scope, t)));
+  return [...new Set(lists.flat())];
+}
+
+/**
+ * The service layer throws transport-agnostic errors tagged with a `code`;
+ * a caller-error (a transition the task's state does not allow) becomes a
+ * 400-style GraphQLError so the client's `handleApiError` can tell it apart
+ * from a server fault. Anything else propagates untouched.
+ */
+function rethrowUserError(err) {
+  if (err?.code === 'BAD_USER_INPUT') {
+    throw new GraphQLError(err.message, {
+      extensions: { code: 'BAD_USER_INPUT', http: { status: err.status ?? 400 } },
+    });
+  }
+  throw err;
+}
+
+export const resolvers = {
+  Query: {
+    tasks: async (_, { status, tags }, context) => {
+      const userId = context.user?.id;
+      if (!userId) return [];
+      const filter = { createdBy: userId };
+      if (status) filter.status = status;
+      const { default: Task } = await import('./models/Task.js');
+      // Any of the tags, in the suite standard — and any legacy spelling of
+      // them still stored (`geekSuite` for `geek-suite`) until the migration.
+      if (tags && tags.length > 0) filter.tags = { $in: await spellingsOfAll(Task, { createdBy: userId }, tags) };
+      return Task.find(filter).sort({ originalDate: -1 });
+    },
+    task: async (_, { id }, context) => {
+      const userId = context.user?.id;
+      if (!userId) return null;
+      return taskService.getTaskById(id, userId);
+    },
+    dailyTasks: async (_, { date, tzOffsetMinutes = null }, context) => {
+      const userId = context.user?.id;
+      if (!userId) return [];
+      const dateStr = date || format(new Date(), 'yyyy-MM-dd');
+      return taskService.getTasksForDateRange({ userId, startDate: dateStr, endDate: dateStr, viewType: 'daily', tzOffsetMinutes });
+    },
+    weeklyTasks: async (_, { date, tzOffsetMinutes = null }, context) => {
+      const userId = context.user?.id;
+      if (!userId) return [];
+      const dateStr = date || format(new Date(), 'yyyy-MM-dd');
+      return taskService.getTasksForDateRange({ userId, startDate: dateStr, endDate: dateStr, viewType: 'weekly', tzOffsetMinutes });
+    },
+    monthlyTasks: async (_, { startDate, endDate, tzOffsetMinutes = null }, context) => {
+      const userId = context.user?.id;
+      if (!userId) return [];
+      const sDate = startDate || format(new Date(), 'yyyy-MM-dd');
+      const eDate = endDate || format(new Date(), 'yyyy-MM-dd');
+      return taskService.getTasksForDateRange({ userId, startDate: sDate, endDate: eDate, viewType: 'monthly', tzOffsetMinutes });
+    },
+    allTasks: async (_, __, context) => {
+      const userId = context.user?.id;
+      if (!userId) return [];
+      return taskService.getTasksForDateRange({ userId, startDate: new Date(), endDate: new Date(), viewType: 'all' });
+    },
+    blockedTasks: async (_, __, context) => {
+      const userId = context.user?.id;
+      if (!userId) return [];
+      return taskService.getBlockedTasks(userId);
+    },
+    taskTags: async (_, __, context) => {
+      const userId = context.user?.id;
+      if (!userId) return [];
+      return taskService.getTagsForUser(userId);
+    },
+    tasksByTag: async (_, { tag }, context) => {
+      const userId = context.user?.id;
+      if (!userId) return [];
+      return taskService.getTasksByTags(userId, [tag]);
+    },
+    collections: async (_, __, context) => {
+      const userId = context.user?.id;
+      if (!userId) return [];
+      return collectionService.listCollections(userId);
+    },
+    collection: async (_, { id }, context) => {
+      const userId = context.user?.id;
+      if (!userId) return null;
+      return collectionService.findOwnedCollection(id, userId);
+    },
+    habits: async (_, { includeArchived = false }, context) => {
+      const userId = context.user?.id;
+      if (!userId) return [];
+      return habitService.listHabits(userId, includeArchived);
+    },
+    habitLogs: async (_, { startDate, endDate }, context) => {
+      const userId = context.user?.id;
+      if (!userId) return [];
+      return habitService.getLogs({ userId, startDate, endDate });
+    },
+    journalEntries: async (_, { type, tags }, context) => {
+      const userId = context.user?.id;
+      if (!userId) return [];
+      const filter = { createdBy: userId };
+      if (type) filter.type = type;
+      if (tags && tags.length > 0) filter.tags = { $in: await spellingsOfAll(JournalEntry, { createdBy: userId }, tags) };
+      return JournalEntry.find(filter).sort({ date: -1 });
+    },
+    journalEntry: async (_, { id }, context) => {
+      const userId = context.user?.id;
+      if (!userId) return null;
+      return JournalEntry.findOne({ _id: id, createdBy: userId });
+    },
+    templates: async (_, { type, isDefault }, context) => {
+      const userId = context.user?.id;
+      if (!userId) return [];
+      const filter = { createdBy: userId };
+      if (type) filter.type = type;
+      if (isDefault !== undefined) filter.isDefault = isDefault;
+      const { default: Template } = await import('./models/Template.js');
+      return Template.find(filter).sort({ name: 1 });
+    },
+    template: async (_, { id }, context) => {
+      const userId = context.user?.id;
+      if (!userId) return null;
+      const { default: Template } = await import('./models/Template.js');
+      return Template.findOne({ _id: id, createdBy: userId });
+    },
+
+    // Auth-gated even though the key is public: an unauthenticated caller has
+    // nothing to subscribe with, and the client reads null as "reminders off".
+    pushVapidKey: (_, __, context) => {
+      const userId = context.user?.id;
+      if (!userId) return null;
+      return reminderService.vapidPublicKey();
+    },
+    pushSubscriptions: async (_, __, context) => {
+      const userId = context.user?.id;
+      if (!userId) return [];
+      return reminderService.listSubscriptions(userId);
+    },
+    /**
+     * The weekly review draft (AI_IDEAS.md #1).
+     *
+     * Read-only by construction: it gathers facts, words them, and returns.
+     * The opt-in lives server-side (`appPreferences.todogeek.aiReviewDraft`),
+     * so a client that forgets to check it still cannot cause a model call —
+     * this resolver reads the preference itself and hands the service the
+     * answer. Opted out, the query answers with the deterministic draft
+     * rather than an error: the facts are worth having either way.
+     */
+    reviewDraft: async (_, rawArgs, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const { weekStart } = validateReviewDraft(rawArgs);
+
+      const { User } = await import('../../models/user.js');
+      const { getAppPreferences } = await import('../../lib/appPreferences.js');
+      const user = await User.findById(userId).select('appPreferences');
+      const optedIn = Boolean(user && getAppPreferences(user, 'todogeek').aiReviewDraft);
+
+      try {
+        return await reviewService.reviewDraft({ userId, weekStart, optedIn });
+      } catch (err) {
+        return rethrowUserError(err);
+      }
+    },
+  },
+
+  Mutation: {
+    createTask: async (_, rawArgs, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const args = validateCreateTask(rawArgs);
+      const taskData = { ...args, createdBy: userId };
+      if (args.createdAt) taskData.createdAt = new Date(args.createdAt);
+      if (args.dueDate) taskData.dueDate = new Date(args.dueDate);
+      if (args.updatedAt) taskData.updatedAt = new Date(args.updatedAt);
+      return taskService.createTask(taskData);
+    },
+    updateTask: async (_, rawArgs, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const { id, input, editScope } = validateUpdateTask(rawArgs);
+      // Sanitize: only pass fields that exist on the Task schema.
+      // taskType is a virtual, createdAt/updatedAt/createdBy are managed server-side.
+      const { taskType, createdAt, updatedAt, createdBy, __typename, ...safeInput } = input || {};
+      const task = await taskService.updateTask(id, safeInput, editScope, userId);
+      if (!task) throw new Error('Task not found');
+      return task;
+    },
+
+    // Add preference sync mutation if needed, or stick to the central /api/users/preferences
+    updateTodoPreferences: async (_, { theme }, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      
+      const { User } = await import('../../models/user.js');
+      const user = await User.findByIdAndUpdate(userId, { $set: { 'preferences.theme': theme } }, { new: true });
+      return user.preferences;
+    },
+    deleteTask: async (_, { id, editScope }, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const result = await taskService.deleteTask(id, editScope, userId);
+      if (!result) throw new Error('Task not found');
+      return { success: true, message: 'Task deleted successfully' };
+    },
+    updateTaskStatus: async (_, { id, status }, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const task = await taskService.updateTaskStatus(id, status, userId);
+      if (!task) throw new Error('Task not found');
+      return task;
+    },
+    blockTask: async (_, { id, reason }, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      let task;
+      try {
+        task = await taskService.blockTask(id, reason, userId);
+      } catch (err) {
+        rethrowUserError(err);
+      }
+      if (!task) throw new Error('Task not found');
+      return task;
+    },
+    unblockTask: async (_, { id }, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      let task;
+      try {
+        task = await taskService.unblockTask(id, userId);
+      } catch (err) {
+        rethrowUserError(err);
+      }
+      if (!task) throw new Error('Task not found');
+      return task;
+    },
+    addSubtask: async (_, rawArgs, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const { parentId, ...data } = validateAddSubtask(rawArgs);
+      try {
+        const { subtask } = await taskService.addSubtask({ parentId, userId, ...data });
+        return subtask;
+      } catch (err) {
+        return rethrowUserError(err);
+      }
+    },
+    reorderSubtasks: async (_, rawArgs, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const { parentId, orderedSubtaskIds } = validateReorderSubtasks(rawArgs);
+      let parent;
+      try {
+        parent = await taskService.reorderSubtasks(parentId, orderedSubtaskIds, userId);
+      } catch (err) {
+        return rethrowUserError(err);
+      }
+      if (!parent) throw new Error('Task not found');
+      return parent;
+    },
+    migrateTaskToFuture: async (_, { id, futureDate }, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      // Migrating always moves a single occurrence, never a whole series.
+      const task = await taskService.updateTask(
+        id,
+        { dueDate: new Date(futureDate), updatedAt: new Date() },
+        'THIS_INSTANCE',
+        userId
+      );
+      if (!task) throw new Error('Task not found');
+      return task;
+    },
+    saveDailyTaskOrder: async (_, { dateKey, orderedTaskIds }, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const doc = await taskService.saveDailyOrder({ userId, dateKey, orderedTaskIds });
+      return { success: true, updatedAt: doc.updatedAt.toISOString() };
+    },
+    createCollection: async (_, rawArgs, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const { name, description } = validateCreateCollection(rawArgs);
+      return collectionService.createCollection({ name, description, createdBy: userId });
+    },
+    updateCollection: async (_, rawArgs, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const { id, ...updates } = validateUpdateCollection(rawArgs);
+      const collection = await collectionService.updateCollection(id, updates, userId);
+      if (!collection) throw new Error('Collection not found');
+      return collection;
+    },
+    deleteCollection: async (_, { id, deleteTasks = false }, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const collection = await collectionService.deleteCollection(id, deleteTasks, userId);
+      if (!collection) throw new Error('Collection not found');
+      return {
+        success: true,
+        message: deleteTasks
+          ? 'Collection and its entries deleted'
+          : 'Collection deleted; its entries were kept',
+      };
+    },
+    createHabit: async (_, rawArgs, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const { name, daysOfWeek, color } = validateCreateHabit(rawArgs);
+      return habitService.createHabit({ name, daysOfWeek, color, createdBy: userId });
+    },
+    updateHabit: async (_, rawArgs, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const { id, ...updates } = validateUpdateHabit(rawArgs);
+      const habit = await habitService.updateHabit(id, updates, userId);
+      if (!habit) throw new Error('Habit not found');
+      return habit;
+    },
+    deleteHabit: async (_, { id }, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const habit = await habitService.deleteHabit(id, userId);
+      if (!habit) throw new Error('Habit not found');
+      return { success: true, message: 'Habit deleted with its history' };
+    },
+    toggleHabitLog: async (_, rawArgs, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const { habitId, date } = validateToggleHabitLog(rawArgs);
+      const result = await habitService.toggleHabitLog(habitId, date, userId);
+      if (!result) throw new Error('Habit not found');
+      return result;
+    },
+    createJournalEntry: async (_, args, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const entry = new JournalEntry({ ...withNormalizedTags(args), createdBy: userId, date: args.date ? new Date(args.date) : new Date() });
+      return entry.save();
+    },
+    updateJournalEntry: async (_, args, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const { id, ...updateFields } = args;
+      const entry = await JournalEntry.findOneAndUpdate({ _id: id, createdBy: userId }, withNormalizedTags(updateFields), { new: true, runValidators: true });
+      if (!entry) throw new Error('Entry not found');
+      return entry;
+    },
+    deleteJournalEntry: async (_, { id }, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const entry = await JournalEntry.findOneAndDelete({ _id: id, createdBy: userId });
+      if (!entry) throw new Error('Entry not found');
+      return { success: true, message: 'Entry deleted successfully' };
+    },
+    createJournalFromTemplate: async (_, rawArgs, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const { templateId, date } = validateCreateJournalFromTemplate(rawArgs);
+      const { default: Template } = await import('./models/Template.js');
+      const template = await Template.findOne({ _id: templateId, createdBy: userId });
+      if (!template) throw new Error('Template not found');
+      const entry = new JournalEntry({
+        title: template.name,
+        content: template.content,
+        type: template.type,
+        date: date ? new Date(date) : new Date(),
+        tags: normalizeTags(template.tags),
+        templateId: template._id,
+        createdBy: userId,
+      });
+      await entry.save();
+      template.lastUsed = new Date();
+      await template.save();
+      return entry;
+    },
+    createTemplate: async (_, args, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const { default: Template } = await import('./models/Template.js');
+      const template = new Template({ ...withNormalizedTags(args), createdBy: userId });
+      return template.save();
+    },
+    updateTemplate: async (_, { id, ...updateFields }, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const { default: Template } = await import('./models/Template.js');
+      const template = await Template.findOneAndUpdate({ _id: id, createdBy: userId }, withNormalizedTags(updateFields), { new: true, runValidators: true });
+      if (!template) throw new Error('Template not found');
+      return template;
+    },
+    deleteTemplate: async (_, { id }, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const { default: Template } = await import('./models/Template.js');
+      const template = await Template.findOneAndDelete({ _id: id, createdBy: userId });
+      if (!template) throw new Error('Template not found');
+      return { success: true, message: 'Template deleted successfully' };
+    },
+
+    savePushSubscription: async (_, { input }, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      return reminderService.saveSubscription(input, userId);
+    },
+    removePushSubscription: async (_, { endpoint }, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const removed = await reminderService.removeSubscription(endpoint, userId);
+      return {
+        success: removed,
+        message: removed ? 'Push subscription removed' : 'No such push subscription',
+      };
+    },
+  },
+
+  Task: {
+    id: (task) => task._id ? task._id.toString() : task.id?.toString(),
+    collectionId: (task) => (task.collectionId ? task.collectionId.toString() : null),
+    // A row from before the field existed, or a lean/virtual object without
+    // it, is simply not private.
+    private: (task) => task.private === true,
+    // Read in the suite standard, so a task tagged before it (`geekSuite`)
+    // shows — and is next saved as — `geek-suite` even before the migration.
+    tags: (task) => (Array.isArray(task.tags) ? normalizeTags(task.tags) : task.tags),
+    // Both sides of the parent/child link are resolved lazily and from the
+    // stored `subtasks` array, which is the order of record. A list view that
+    // does not select them pays nothing; one that does pays a single extra
+    // query per task that actually HAS children (the array is empty for
+    // almost every entry, and an empty array short-circuits before any I/O).
+    subtasks: async (task, _, context) => {
+      const userId = context.user?.id;
+      if (!userId) return [];
+      return taskService.getSubtasks(task, userId);
+    },
+    subtaskCount: (task) => (Array.isArray(task.subtasks) ? task.subtasks.length : 0),
+    completedSubtaskCount: async (task, _, context) => {
+      const userId = context.user?.id;
+      if (!userId) return 0;
+      const children = await taskService.getSubtasks(task, userId);
+      return children.filter((c) => c.status === 'completed').length;
+    },
+    parentTask: async (task, _, context) => {
+      const userId = context.user?.id;
+      if (!userId) return null;
+      return taskService.getParentTask(task, userId);
+    },
+  },
+  Collection: {
+    id: (collection) => collection._id ? collection._id.toString() : collection.id?.toString(),
+    // Counts and entries are resolved lazily so the list view never pays for
+    // the tasks it doesn't render.
+    tasks: async (collection, _, context) => {
+      const userId = context.user?.id;
+      if (!userId) return [];
+      return collectionService.getTasksForCollection(collection._id ?? collection.id, userId);
+    },
+    // Both counts share ONE batched aggregation per request, however many
+    // collections the list selects and whichever of the two fields it asks for.
+    taskCount: async (collection, _, context) => {
+      const userId = context.user?.id;
+      if (!userId) return 0;
+      const counts = await loadCollectionCounts(collection, userId, context);
+      return counts?.total ?? 0;
+    },
+    completedCount: async (collection, _, context) => {
+      const userId = context.user?.id;
+      if (!userId) return 0;
+      const counts = await loadCollectionCounts(collection, userId, context);
+      return counts?.completed ?? 0;
+    },
+  },
+  Habit: {
+    id: (habit) => (habit._id ? habit._id.toString() : habit.id?.toString()),
+    daysOfWeek: (habit) => habit.daysOfWeek ?? [],
+    archived: (habit) => Boolean(habit.archived),
+    // Resolved lazily and per-habit: the grid asks for it, a bare create does not.
+    currentStreak: async (habit, { today } = {}, context) => {
+      const userId = context.user?.id;
+      if (!userId) return 0;
+      // The caller's own day — see the field's comment in typeDefs. The
+      // `undefined` fallback is the old server-day behaviour, kept only for
+      // a caller that sends nothing.
+      return (await loadHabitStreak(habit, today, userId, context)) ?? 0;
+    },
+  },
+  HabitLog: {
+    id: (log) => (log._id ? log._id.toString() : log.id?.toString()),
+    habitId: (log) => (log.habitId ? log.habitId.toString() : null),
+  },
+  JournalEntry: {
+    id: (entry) => entry._id ? entry._id.toString() : entry.id?.toString(),
+    tags: (entry) => (Array.isArray(entry.tags) ? normalizeTags(entry.tags) : entry.tags),
+  },
+  Template: {
+    id: (template) => template._id ? template._id.toString() : template.id?.toString(),
+    tags: (template) => (Array.isArray(template.tags) ? normalizeTags(template.tags) : template.tags),
+  },
+  PushSubscription: { id: (sub) => (sub._id ? sub._id.toString() : sub.id?.toString()) },
+};

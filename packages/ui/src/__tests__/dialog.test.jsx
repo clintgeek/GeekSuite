@@ -313,7 +313,7 @@ describe('GeekDialog — node title in full mode', () => {
 
 /**
  * `dialogProps` is the pass-through slot every app primitive forwards its own
- * `...rest` into — fitnessgeek's PremiumDialog, bujogeek's BujoDialog,
+ * `...rest` into — fitnessgeek's PremiumDialog, todogeek's TodoDialog,
  * flockgeek's LedgerDialog, storygeek's CodexDialog all do `dialogProps={rest}`.
  * GeekDialog used to *assign* `PaperProps`, so anything a caller reached MUI
  * with through that slot was silently discarded (GeekSheet has always merged).

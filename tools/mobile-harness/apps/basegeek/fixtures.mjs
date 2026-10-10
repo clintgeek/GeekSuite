@@ -10,7 +10,7 @@ import { AI_OPS, AI_STATUS, ALIVE_MODELS, AI_FEATURE } from './aigeek.mjs';
 
 export const APPS = [
   { name: 'fitnessgeek', displayName: 'fitnessGeek', description: 'Nutrition & fitness', icon: 'FitnessCenter', color: '#7dac8e', url: 'https://fitnessgeek.clintgeek.com', tag: 'health' },
-  { name: 'bujogeek', displayName: 'bujoGeek', description: 'Bullet journal & tasks', icon: 'Book', color: '#d4956a', url: 'https://bujogeek.clintgeek.com', tag: 'productivity' },
+  { name: 'todogeek', displayName: 'todoGeek', description: 'Tasks, habits & lists', icon: 'Book', color: '#d4956a', url: 'https://todogeek.clintgeek.com', tag: 'productivity' },
   { name: 'notegeek', displayName: 'noteGeek', description: 'Notes & documents', icon: 'Note', color: '#a99df0', url: 'https://notegeek.clintgeek.com', tag: 'productivity' },
   { name: 'bookgeek', displayName: 'bookGeek', description: 'Library & reading', icon: 'MenuBook', color: '#5fa8d3', url: 'https://bookgeek.clintgeek.com', tag: 'reading' },
   { name: 'flockgeek', displayName: 'flockGeek', description: 'Flock management', icon: 'NatureOutlined', color: '#9a8f6a', url: 'https://flockgeek.clintgeek.com', tag: 'management' },

@@ -29,7 +29,7 @@
  * rule says.
  *
  * The *static* `getOrCreateStreak` did NOT move. basegeek's copy opens with
- * `requireUser(userId)` (fail-closed ownership, mirroring its bujogeek service
+ * `requireUser(userId)` (fail-closed ownership, mirroring its todogeek service
  * layer) and fitnessgeek's does not, because every fitnessgeek caller is
  * already past auth. Statics do not affect `schema.paths`, so the two writers
  * are free to disagree about them and neither is blocked on the other. Each

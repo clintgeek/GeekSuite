@@ -19,7 +19,7 @@ const ALICE = new mongoose.Types.ObjectId();
 const BOB = new mongoose.Types.ObjectId();
 const ctx = (userId) => (userId ? { user: { id: String(userId) } } : {});
 
-const APPS = ['bujogeek', 'notegeek', 'bookgeek', 'fitnessgeek', 'flockgeek'];
+const APPS = ['todogeek', 'notegeek', 'bookgeek', 'fitnessgeek', 'flockgeek'];
 
 const TARGET_DATE = '2026-01-15';
 const inDayWindow = () => new Date(`${TARGET_DATE}T12:00:00Z`);
@@ -59,9 +59,9 @@ beforeAll(async () => {
 
 afterEach(async () => {
   await Promise.all([
-    col('bujogeek', 'tasks').deleteMany({ __glanceTest: TEST_TAG }),
-    col('bujogeek', 'habits').deleteMany({ __glanceTest: TEST_TAG }),
-    col('bujogeek', 'habitlogs').deleteMany({ __glanceTest: TEST_TAG }),
+    col('todogeek', 'tasks').deleteMany({ __glanceTest: TEST_TAG }),
+    col('todogeek', 'habits').deleteMany({ __glanceTest: TEST_TAG }),
+    col('todogeek', 'habitlogs').deleteMany({ __glanceTest: TEST_TAG }),
     col('notegeek', 'notes').deleteMany({ __glanceTest: TEST_TAG }),
     col('bookgeek', 'books').deleteMany({ __glanceTest: TEST_TAG }),
     col('fitnessgeek', 'fooditems').deleteMany({ __glanceTest: TEST_TAG }),
@@ -101,7 +101,7 @@ describe('personal widgets are owner-scoped', () => {
 
   test("tasks.due contains only the caller's tasks due on the date", async () => {
     const when = inDayWindow();
-    await col('bujogeek', 'tasks').insertMany([
+    await col('todogeek', 'tasks').insertMany([
       { content: 'alice task', createdBy: ALICE, dueDate: when, status: 'pending' },
       { content: 'bob task', createdBy: BOB, dueDate: when, status: 'pending' },
     ]);
@@ -112,7 +112,7 @@ describe('personal widgets are owner-scoped', () => {
   });
 
   test('a non-ObjectId user id yields an empty result, not a cross-tenant one', async () => {
-    await col('bujogeek', 'tasks').insertOne({
+    await col('todogeek', 'tasks').insertOne({
       content: 'alice task',
       createdBy: ALICE,
       dueDate: inDayWindow(),
@@ -217,7 +217,7 @@ describe('deliberately shared data keeps working', () => {
 
 describe('glanceToday field correctness', () => {
   test('task content: "Buy eggs", dueDate: today -> in tasks.due', async () => {
-    await col('bujogeek', 'tasks').insertOne({
+    await col('todogeek', 'tasks').insertOne({
       content: 'Buy eggs',
       createdBy: ALICE,
       dueDate: new Date(FIELDS_DATE),
@@ -229,7 +229,7 @@ describe('glanceToday field correctness', () => {
   });
 
   test('pending task due after the date -> in tasks.upcoming, sorted, not in due/overdue', async () => {
-    await col('bujogeek', 'tasks').insertMany([
+    await col('todogeek', 'tasks').insertMany([
       { content: 'Later', createdBy: ALICE, dueDate: new Date('2026-01-20'), status: 'pending' },
       { content: 'Sooner', createdBy: ALICE, dueDate: new Date('2026-01-14'), status: 'pending' },
       { content: 'Done already', createdBy: ALICE, dueDate: new Date('2026-01-16'), status: 'completed' },
@@ -243,7 +243,7 @@ describe('glanceToday field correctness', () => {
   });
 
   test('signifier @ task -> in tasks.events', async () => {
-    await col('bujogeek', 'tasks').insertOne({
+    await col('todogeek', 'tasks').insertOne({
       content: 'Call vet',
       signifier: '@',
       createdBy: ALICE,
@@ -256,7 +256,7 @@ describe('glanceToday field correctness', () => {
   });
 
   test('cancelled task -> nowhere', async () => {
-    await col('bujogeek', 'tasks').insertOne({
+    await col('todogeek', 'tasks').insertOne({
       content: 'nope',
       createdBy: ALICE,
       dueDate: new Date(FIELDS_DATE),
@@ -272,7 +272,7 @@ describe('glanceToday field correctness', () => {
   });
 
   test('blocked task -> not in due/overdue; blockedCount = 1', async () => {
-    await col('bujogeek', 'tasks').insertOne({
+    await col('todogeek', 'tasks').insertOne({
       content: 'stuck',
       createdBy: ALICE,
       dueDate: new Date(FIELDS_DATE),
@@ -290,7 +290,7 @@ describe('glanceToday field correctness', () => {
   test('habit daysOfWeek: [] returned every day; [1] only on a Monday', async () => {
     const dailyHabit = new mongoose.Types.ObjectId();
     const monHabit = new mongoose.Types.ObjectId();
-    await col('bujogeek', 'habits').insertMany([
+    await col('todogeek', 'habits').insertMany([
       { _id: dailyHabit, name: 'Daily', daysOfWeek: [], createdBy: ALICE },
       { _id: monHabit, name: 'Monday', daysOfWeek: [1], createdBy: ALICE },
     ]);
@@ -339,7 +339,7 @@ describe('glanceToday field correctness', () => {
 
 describe('glanceSearch field correctness', () => {
   test('glanceSearch("eggs") finds the task via content', async () => {
-    await col('bujogeek', 'tasks').insertOne({
+    await col('todogeek', 'tasks').insertOne({
       content: 'Buy eggs',
       createdBy: ALICE,
       dueDate: new Date(FIELDS_DATE),
@@ -347,13 +347,13 @@ describe('glanceSearch field correctness', () => {
     });
 
     const results = await Query.glanceSearch(null, { query: 'eggs' }, ctx(ALICE));
-    const task = results.find((r) => r.app === 'bujogeek' && r.type === 'task');
+    const task = results.find((r) => r.app === 'todogeek' && r.type === 'task');
     expect(task).toBeDefined();
     expect(task.title).toBe('Buy eggs');
   });
 
   test('glanceSearch("a.*b") is literal', async () => {
-    await col('bujogeek', 'tasks').insertMany([
+    await col('todogeek', 'tasks').insertMany([
       { content: 'has a.*b inside', createdBy: ALICE, dueDate: new Date(FIELDS_DATE), status: 'pending' },
       { content: 'has ab inside', createdBy: ALICE, dueDate: new Date(FIELDS_DATE), status: 'pending' },
     ]);
@@ -364,10 +364,10 @@ describe('glanceSearch field correctness', () => {
   });
 });
 
-describe('BuJoGeek private tasks never show their words on StartGeek', () => {
+describe('TodoGeek private tasks never show their words on StartGeek', () => {
   test('glanceToday shows a private task as "Private task" with no tags', async () => {
     const when = inDayWindow();
-    await col('bujogeek', 'tasks').insertMany([
+    await col('todogeek', 'tasks').insertMany([
       { content: 'Fire Jane', createdBy: ALICE, dueDate: when, status: 'pending', private: true, tags: ['hr'] },
       { content: 'buy milk', createdBy: ALICE, dueDate: when, status: 'pending' },
     ]);
@@ -379,12 +379,12 @@ describe('BuJoGeek private tasks never show their words on StartGeek', () => {
   });
 
   test('glanceSearch never returns a private task', async () => {
-    await col('bujogeek', 'tasks').insertMany([
+    await col('todogeek', 'tasks').insertMany([
       { content: 'Fire Jane quietly', createdBy: ALICE, status: 'pending', private: true, updatedAt: new Date() },
       { content: 'Jane birthday card', createdBy: ALICE, status: 'pending', updatedAt: new Date() },
     ]);
     const search = await Query.glanceSearch(null, { query: 'Jane' }, ctx(ALICE));
-    const tasks = search.filter((r) => r.app === 'bujogeek');
+    const tasks = search.filter((r) => r.app === 'todogeek');
     expect(tasks.map((r) => r.title)).toEqual(['Jane birthday card']);
     expect(JSON.stringify(search)).not.toContain('Fire Jane');
   });

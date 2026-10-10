@@ -131,7 +131,7 @@ function buildComponents(themePalette) {
   // A focused MUI form label is painted with `primary.main`, and an accent
   // tuned to sit under a white button label is not automatically readable as
   // 12–15px text on the app's surfaces: the suite blue #4B7AA3 measures 3.12:1
-  // on bujogeek's dark paper and 4.17:1 on the suite's own light canvas (axe
+  // on todogeek's dark paper and 4.17:1 on the suite's own light canvas (axe
   // `color-contrast`, 2026-09-05). A label is copy, so it owes AA. Fold
   // `readableOn` over EVERY surface the palette declares rather than guessing
   // which one is hardest — in light mode the canvas is darker than the paper,

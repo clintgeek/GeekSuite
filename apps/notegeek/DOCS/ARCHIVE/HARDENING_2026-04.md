@@ -3,7 +3,7 @@
 Branch: `notegeek-pass` (cut from main @ `fa32096`).
 
 Scope: bring notegeek to the operational + security floor the other
-three hardened apps (basegeek, fitnessgeek, bujogeek) already sit at.
+three hardened apps (basegeek, fitnessgeek, todogeek) already sit at.
 
 Audit risk rating: **6/10** — higher than the three hardened apps
 pre-hardening because notegeek has a structural design flaw (parallel
@@ -37,7 +37,7 @@ Copy `/mnt/Media/Docker/notegeek/.env.production` (or `.env`) into
 `apps/notegeek/.env.production`. Confirm gitignored. Drop any
 `${VAR}` passthroughs from the new compose's `environment:` block
 that duplicate what `env_file: .env.production` already provides
-— same footgun bujogeek hit.
+— same footgun todogeek hit.
 
 ### 3. Stale-data handling
 

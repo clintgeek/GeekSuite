@@ -8,7 +8,7 @@ export const APPS = {
   gamegeek: { dir: 'apps/gamegeek/frontend', pkg: 'gamegeek-frontend', pm: 'pnpm', devBase: 'http://localhost:1811' },
   thinggeek: { dir: 'apps/thinggeek/frontend', pkg: 'thinggeek-frontend', pm: 'pnpm', devBase: 'http://localhost:1821' },
   fitnessgeek: { dir: 'apps/fitnessgeek/frontend', pkg: 'fitnessgeek-frontend', pm: 'pnpm', devBase: 'http://localhost:1821' },
-  bujogeek: { dir: 'apps/bujogeek/frontend', pkg: 'bujogeek-client', pm: 'pnpm', devBase: 'http://localhost:1851' },
+  todogeek: { dir: 'apps/todogeek/frontend', pkg: 'todogeek-client', pm: 'pnpm', devBase: 'http://localhost:1851' },
   notegeek: { dir: 'apps/notegeek/frontend', pkg: 'notegeek-frontend', pm: 'pnpm', devBase: 'http://localhost:1861' },
   flockgeek: { dir: 'apps/flockgeek/frontend', pkg: 'flockgeek-frontend', pm: 'pnpm', devBase: 'http://localhost:1901' },
   storygeek: { dir: 'apps/storygeek/frontend', pkg: 'storygeek-frontend', pm: 'pnpm', devBase: 'http://localhost:1871' },

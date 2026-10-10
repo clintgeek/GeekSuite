@@ -192,7 +192,7 @@ describe('toneForMode', () => {
     const strong = toneForMode(color, 'dark', { lightenBy: 0.6 });
     expect(getLuminance(strong)).toBeGreaterThan(getLuminance(gentle));
 
-    // The bujogeek call sites only ever needed the dark lift.
+    // The todogeek call sites only ever needed the dark lift.
     expect(toneForMode(color, 'light', { darkenBy: 0 })).toBe(color);
     expect(toneForMode(color, 'dark', { lightenBy: 0 })).toBe(color);
   });
@@ -210,10 +210,10 @@ describe('readableOn', () => {
   // The real pairs the axe pass flagged, so a regression here is a regression
   // in the burn-down (tools/mobile-harness/README.md "The a11y pass").
   const CASES = [
-    ['bujogeek aging.overdue on the dark canvas', '#B83C34', '#221F1B'],
-    ['bujogeek aging.fresh on the parchment canvas', '#5B9E6F', '#FAF8F5'],
-    ['bujogeek aging.warning on parchment', '#C97D35', '#FAF8F5'],
-    ['bujogeek ink[400] on a chip tint', '#918E88', '#EDEAE4'],
+    ['todogeek aging.overdue on the dark canvas', '#B83C34', '#221F1B'],
+    ['todogeek aging.fresh on the parchment canvas', '#5B9E6F', '#FAF8F5'],
+    ['todogeek aging.warning on parchment', '#C97D35', '#FAF8F5'],
+    ['todogeek ink[400] on a chip tint', '#918E88', '#EDEAE4'],
     ['storygeek gold on the leather canvas', '#C9A84C', '#1A1614'],
     ['a translucent cream ink on warm dark paper', 'rgba(255,245,220,0.28)', '#221F1B'],
   ];

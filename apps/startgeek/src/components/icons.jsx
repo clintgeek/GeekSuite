@@ -11,7 +11,7 @@ export const NotesIcon = ({ className = 'w-5 h-5' }) => (
   </svg>
 )
 
-export const BujoIcon = ({ className = 'w-5 h-5' }) => (
+export const TodoIcon = ({ className = 'w-5 h-5' }) => (
   <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} {...s}>
     <path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2" />
     <rect x="9" y="3" width="6" height="4" rx="1" />

@@ -44,7 +44,7 @@
  * `initialFocus` (MOBILE_UI_PLAN.md §4b): a child's own `autoFocus` loses the
  * race in sheet mode — the paper takes focus (see above) after the drawer has
  * finished sliding in, which lands after the child already tried. Rather than
- * a caller-derived timeout (bujogeek's 260ms guess), this primitive focuses
+ * a caller-derived timeout (todogeek's 260ms guess), this primitive focuses
  * the target itself once the *open transition actually ends*: sheet mode
  * hangs the check off `SwipeableDrawer`'s `SlideProps.onEntered`, dialog mode
  * off `Dialog`'s `TransitionProps.onEntered` — both fire once, after the

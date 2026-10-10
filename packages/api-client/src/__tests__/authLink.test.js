@@ -3,7 +3,7 @@
  * double-submit CSRF token.
  *
  * `authLink` (packages/api-client/src/index.js) is the one `setContext` link
- * every consumer app's Apollo client goes through — basegeek-ui, bujogeek,
+ * every consumer app's Apollo client goes through — basegeek-ui, todogeek,
  * notegeek, storygeek, bookgeek, fitnessgeek, flockgeek. GraphQL is POST-only,
  * so if this link forgets the header, every mutation to basegeek does too.
  * See DOCS/CONTEXT.md "CSRF: the double-submit token".

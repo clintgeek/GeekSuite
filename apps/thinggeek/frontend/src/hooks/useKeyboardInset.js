@@ -7,7 +7,7 @@ import { useEffect, useState } from 'react';
  * covers Save.
  *
  * Copied from NoteGeek (apps/notegeek/frontend/src/hooks/useKeyboardInset.js,
- * itself from BuJoGeek),
+ * itself from TodoGeek),
  * copied rather than imported: apps do not reach into each other.
  *
  * Chrome on Android resizes only the VISUAL viewport for the keyboard (the

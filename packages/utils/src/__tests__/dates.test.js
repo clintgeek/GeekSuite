@@ -340,7 +340,7 @@ describe('startOfLocalDay', () => {
   });
 
   it('gives a whole-day difference for a day-count across DST', () => {
-    // The carried-over/days-since arithmetic in bujogeek and flockgeek rounds,
+    // The carried-over/days-since arithmetic in todogeek and flockgeek rounds,
     // precisely because a DST day is 23 or 25 hours long.
     withTZ('America/Chicago', () => {
       const a = startOfLocalDay(new Date(2026, 2, 6, 9));  // Mar 6

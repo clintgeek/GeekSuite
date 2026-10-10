@@ -1,12 +1,12 @@
 /**
  * Tags across the suite — `suiteTags` and `taggedAcross` (typeDefs.js).
  *
- * NoteGeek, BuJoGeek and ThingGeek spell tags one way (`@geeksuite/tags`), so
+ * NoteGeek, TodoGeek and ThingGeek spell tags one way (`@geeksuite/tags`), so
  * `#house/garage` in a note, a task and a thing is the same tag. These read
  * all three for the signed-in user:
  *
  *   - NoteGeek  — the caller's notes (`userId`).
- *   - BuJoGeek  — the caller's tasks (`createdBy`). A PRIVATE task is
+ *   - TodoGeek  — the caller's tasks (`createdBy`). A PRIVATE task is
  *     "Private task" with no snippet, exactly like StartGeek's glance
  *     (`glance/resolvers.js` mapTask) — this list is a screen too.
  *   - ThingGeek — only for a household MEMBER (the gate in
@@ -23,22 +23,22 @@ import mongoose from 'mongoose';
 import { normalizeTag, normalizeTags } from '@geeksuite/tags';
 import householdModule from '@geeksuite/schemas/thinggeek/household';
 import Note, { active as activeNote } from '../notegeek/models/Note.js';
-import Task from '../bujogeek/models/Task.js';
+import Task from '../todogeek/models/Task.js';
 import { Thing } from '../thinggeek/models/thing.js';
 import { spellingsOf, subtreeSpellings } from '../shared/tagSpellings.js';
 import logger from '../../lib/logger.js';
 
 const { isMember, DEFAULT_HOUSEHOLD_ID } = householdModule;
 
-export const APPS = Object.freeze(['notegeek', 'bujogeek', 'thinggeek']);
+export const APPS = Object.freeze(['notegeek', 'todogeek', 'thinggeek']);
 const PER_APP_LIMIT = 50;
 const SNIPPET_MAX = 140;
 export const PRIVATE_TASK_LABEL = 'Private task';
 
 const URLS = {
   notegeek: (id) => `https://notegeek.clintgeek.com/notes/${id}`,
-  // BuJoGeek has no per-task page; its search reads `#tag` in a task's tags.
-  bujogeek: (_id, tag) => `https://bujogeek.clintgeek.com/search?q=${encodeURIComponent(`#${tag}`)}`,
+  // TodoGeek has no per-task page; its search reads `#tag` in a task's tags.
+  todogeek: (_id, tag) => `https://todogeek.clintgeek.com/search?q=${encodeURIComponent(`#${tag}`)}`,
   thinggeek: (id) => `https://thinggeek.clintgeek.com/thing/${id}`,
 };
 
@@ -51,7 +51,7 @@ function scopes(user) {
   return {
     // Archived notes are neither counted nor listed (NoteGeek spec §3 A2).
     notegeek: { model: Note, scope: { userId: owner, ...activeNote() } },
-    bujogeek: { model: Task, scope: { createdBy: owner } },
+    todogeek: { model: Task, scope: { createdBy: owner } },
     thinggeek: isMember(user) ? { model: Thing, scope: { householdId: DEFAULT_HOUSEHOLD_ID, deletedAt: null } } : null,
   };
 }
@@ -96,7 +96,7 @@ function noteRow(n, tag) {
 }
 
 function taskRow(t, tag) {
-  const base = { app: 'bujogeek', id: String(t._id), url: URLS.bujogeek(t._id, tag), updatedAt: t.updatedAt || null };
+  const base = { app: 'todogeek', id: String(t._id), url: URLS.todogeek(t._id, tag), updatedAt: t.updatedAt || null };
   if (t.private) return { ...base, title: PRIVATE_TASK_LABEL, snippet: null, tags: [] };
   return { ...base, title: t.content || 'Untitled task', snippet: plainSnippet(t.note), tags: normalizeTags(t.tags) };
 }
@@ -115,10 +115,10 @@ function thingRow(t, tag) {
 
 const PROJECTIONS = {
   notegeek: { title: 1, content: 1, type: 1, tags: 1, isLocked: 1, isEncrypted: 1, updatedAt: 1 },
-  bujogeek: { content: 1, note: 1, tags: 1, private: 1, updatedAt: 1 },
+  todogeek: { content: 1, note: 1, tags: 1, private: 1, updatedAt: 1 },
   thinggeek: { name: 1, tags: 1, updatedAt: 1 },
 };
-const ROWS = { notegeek: noteRow, bujogeek: taskRow, thinggeek: thingRow };
+const ROWS = { notegeek: noteRow, todogeek: taskRow, thinggeek: thingRow };
 
 /** One app's failure costs that app's rows, never the whole answer. */
 async function safely(app, fn, fallback) {

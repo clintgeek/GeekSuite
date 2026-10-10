@@ -103,7 +103,7 @@ For each app, update the auth logic to:
 1. FitnessGeek (already uses `geek_token` key)
 2. GeekSuite Landing (already uses `geek_token` key)
 3. StoryGeek (uses shared auth store)
-4. BuJoGeek (needs key change: `token` → `geek_token`)
+4. TodoGeek (needs key change: `token` → `geek_token`)
 5. NoteGeek (needs key change: `auth_token` → `geek_token`)
 6. FlockGeek (needs key change: `flockgeek_token` → `geek_token`)
 
@@ -118,7 +118,7 @@ For each app, update the auth logic to:
 2. Update `authService.js` to use `getToken()` from ssoTokens
 3. Add `syncSSOToLocalStorage()` call in `AuthContext.jsx` init
 
-### BuJoGeek
+### TodoGeek
 
 **Current state:** Uses `token` key (no refresh token).
 

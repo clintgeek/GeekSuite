@@ -109,14 +109,14 @@ describe('app preferences — PATCH/GET /api/users/preferences/:app', () => {
 
     await auth(request(app).patch('/api/users/preferences/notegeek'), token)
       .send({ editorFontSize: 16 });
-    await auth(request(app).patch('/api/users/preferences/bujogeek'), token)
+    await auth(request(app).patch('/api/users/preferences/todogeek'), token)
       .send({ dailyPageLayout: 'timeline' });
 
     const all = await auth(request(app).get('/api/users/preferences/apps'), token);
     expect(all.status).toBe(200);
     expect(all.body.appPreferences).toEqual({
       notegeek: { editorFontSize: 16 },
-      bujogeek: { dailyPageLayout: 'timeline' },
+      todogeek: { dailyPageLayout: 'timeline' },
     });
   });
 

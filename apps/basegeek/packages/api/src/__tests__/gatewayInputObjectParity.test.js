@@ -545,9 +545,9 @@ const FIXTURES = {
     },
   },
 
-  // ── bujogeek ───────────────────────────────────────────────────────────
+  // ── todogeek ───────────────────────────────────────────────────────────
   'Mutation.savePushSubscription': {
-    // apps/bujogeek/frontend/src/hooks/usePushReminders.js (subscription.toJSON())
+    // apps/todogeek/frontend/src/hooks/usePushReminders.js (subscription.toJSON())
     //
     // `savePushSubscription` returns `PushSubscription!` — non-null — so with
     // no resolver a bare `null` is an EXECUTION error, not the coercion error
@@ -568,7 +568,7 @@ const FIXTURES = {
     rootValue: { savePushSubscription: () => ({}) },
   },
   'Mutation.updateTask': {
-    // apps/bujogeek/frontend/src/components/tasks/TaskEditor.jsx buildPayload()
+    // apps/todogeek/frontend/src/components/tasks/TaskEditor.jsx buildPayload()
     //
     // `updateTask` returns `Task!` — see the `rootValue` note on
     // `savePushSubscription` above; same reason, same fix.

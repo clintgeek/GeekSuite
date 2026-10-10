@@ -40,7 +40,7 @@ export const ASK_TIMEOUT_MS = 5000; // 3000 → 5000 on 2026-09-06: a 70B free m
 const THING_TYPES = `
 The suite stores four kinds of Thing, each in its own app:
 - note  (app "notegeek")  — free text with a title, tags, and a body.
-- task  (app "bujogeek")  — a to-do or event with a due date, tags, priority.
+- task  (app "todogeek")  — a to-do or event with a due date, tags, priority.
 - book  (app "bookgeek")  — a title with authors and a shelf ("reading",
   "read", "want-to-read"). The library is shared, not per-user.
 - bird  (app "flockgeek") — a chicken with a name, tag id, breed, and status.
@@ -86,7 +86,7 @@ const PLAN_SCHEMA = {
       keywords: { type: 'array', items: { type: 'string' } },
       apps: {
         type: 'array',
-        items: { type: 'string', enum: ['notegeek', 'bujogeek', 'bookgeek', 'flockgeek'] },
+        items: { type: 'string', enum: ['notegeek', 'todogeek', 'bookgeek', 'flockgeek'] },
       },
       types: {
         type: 'array',
@@ -115,11 +115,11 @@ const ANSWER_SCHEMA = {
   },
 };
 
-// BujoGeek's capture grammar, as the deterministic parser implements it
+// TodoGeek's capture grammar, as the deterministic parser implements it
 // (`apps/startgeek/src/lib/parseTaskInput.js`). The model is asked for the
 // fields that grammar would have produced, so a drafted task and a typed one
 // are the same row.
-const BUJO_GRAMMAR = `The person types tasks in a shorthand their parser understands:
+const TODO_GRAMMAR = `The person types tasks in a shorthand their parser understands:
   #tag            a tag (letters, digits, hyphen, underscore)
   !high !medium !low   priority — high = 1, medium = 2, low = 3
   /today /tomorrow /friday /next-week /2026-03-15   a due date
@@ -133,7 +133,7 @@ shorthand would have produced.`;
 
 const DRAFT_TASK_SCHEMA = {
   name: 'GlanceTaskDraft',
-  description: 'The variables BujoGeek\'s createTask mutation takes.',
+  description: 'The variables TodoGeek\'s createTask mutation takes.',
   schema: {
     type: 'object',
     properties: {
@@ -166,9 +166,9 @@ const DRAFT_NOTE_SCHEMA = {
 };
 
 function draftTaskPrompt(today) {
-  return `You turn one line of plain English into a task for the person's own bullet journal.
+  return `You turn one line of plain English into a task for the person's own to-do list.
 
-${BUJO_GRAMMAR}
+${TODO_GRAMMAR}
 
 Today is ${today.iso} (${today.weekday}). Return JSON only, matching the schema.
 
@@ -209,7 +209,7 @@ const KNOWN_SIGNIFIERS = new Set(['*', '@', '-', '!', '?']);
 const DRAFT_KINDS = new Set(['task', 'note']);
 const MAX_TITLE = 60;
 
-const KNOWN_APPS = new Set(['notegeek', 'bujogeek', 'bookgeek', 'flockgeek']);
+const KNOWN_APPS = new Set(['notegeek', 'todogeek', 'bookgeek', 'flockgeek']);
 const KNOWN_TYPES = new Set(['note', 'task', 'book', 'bird']);
 const KNOWN_SHELVES = new Set(['reading', 'read', 'want-to-read']);
 

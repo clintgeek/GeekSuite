@@ -1,6 +1,6 @@
 /**
  * The suite tag standard — one spelling for every free-form tag in NoteGeek,
- * BuJoGeek and ThingGeek (Chef, 2026-10-01: "case-insensitive Kebab case is
+ * TodoGeek and ThingGeek (Chef, 2026-10-01: "case-insensitive Kebab case is
  * the standard we need to move to"). BookGeek and GameGeek genres are curated
  * vocabularies and do NOT use this.
  *
@@ -47,7 +47,7 @@
  * Matching is case-insensitive BY CONSTRUCTION: every stored tag is
  * lowercase, so comparing normalized strings exactly is the comparison.
  *
- * Limits: 100 characters a tag (`TAG_MAX_LENGTH`, NoteGeek/BuJoGeek; ThingGeek
+ * Limits: 100 characters a tag (`TAG_MAX_LENGTH`, NoteGeek/TodoGeek; ThingGeek
  * keeps its own 60) and 50 tags an item (`TAGS_MAX`). The normalizer does not
  * enforce them — the validators do, on the NORMALIZED value, because
  * normalizing can lengthen a tag (`GeekSuite` → `geek-suite`).

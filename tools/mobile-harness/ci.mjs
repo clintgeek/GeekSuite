@@ -8,7 +8,7 @@
 // in DOCS/MOBILE_UI_PLAN.md §2 (0 open across all apps).
 //
 //   pnpm --filter @geeksuite/mobile-harness run ci
-//   node ci.mjs --app bookgeek --app bujogeek      # a subset
+//   node ci.mjs --app bookgeek --app todogeek      # a subset
 //   node ci.mjs --no-build                          # reuse existing dist/
 //   node ci.mjs --enforce-a11y                      # a11y counts toward exit
 //   node ci.mjs --no-a11y                           # skip the axe pass entirely

@@ -69,7 +69,7 @@ const TaskRow = ({ task, late = false, today, aside = null }) => {
         aria-label={task.status === 'completed' ? 'Mark task pending' : 'Mark task complete'}
       />
       <a
-        href="https://bujogeek.clintgeek.com/"
+        href="https://todogeek.clintgeek.com/"
         target="_blank"
         rel="noopener noreferrer"
         className={`task-link flex-1 min-w-0 text-sm leading-snug transition-colors no-underline ${

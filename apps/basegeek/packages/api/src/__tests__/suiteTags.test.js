@@ -1,5 +1,5 @@
 /**
- * suiteTags.test.js — tags across NoteGeek, BuJoGeek and ThingGeek
+ * suiteTags.test.js — tags across NoteGeek, TodoGeek and ThingGeek
  * (graphql/suitetags). The rules that matter:
  *   1. per-app counts, in the suite standard (legacy spellings folded);
  *   2. owner-scoped notes/tasks; ThingGeek only for a household MEMBER, and
@@ -11,7 +11,7 @@ import mongoose from 'mongoose';
 import householdModule from '@geeksuite/schemas/thinggeek/household';
 
 const { default: Note } = await import('../graphql/notegeek/models/Note.js');
-const { default: Task } = await import('../graphql/bujogeek/models/Task.js');
+const { default: Task } = await import('../graphql/todogeek/models/Task.js');
 const { Thing } = await import('../graphql/thinggeek/models/thing.js');
 const { resolvers, PRIVATE_TASK_LABEL } = await import('../graphql/suitetags/resolvers.js');
 
@@ -63,9 +63,9 @@ describe('suiteTags', () => {
     expect(byTag['house/garage']).toEqual({
       tag: 'house/garage',
       total: 3,
-      apps: [{ app: 'notegeek', count: 1 }, { app: 'bujogeek', count: 1 }, { app: 'thinggeek', count: 1 }],
+      apps: [{ app: 'notegeek', count: 1 }, { app: 'todogeek', count: 1 }, { app: 'thinggeek', count: 1 }],
     });
-    expect(byTag['geek-suite'].apps).toEqual([{ app: 'bujogeek', count: 1 }]);
+    expect(byTag['geek-suite'].apps).toEqual([{ app: 'todogeek', count: 1 }]);
     expect(byTag.house.total).toBe(2); // my locked note + my private task; never the other user's
     expect(tags[0].tag).toBe('house/garage'); // sorted by total
   });
@@ -89,12 +89,12 @@ describe('taggedAcross', () => {
     await seed();
     const rows = await Query.taggedAcross(null, { tag: 'House/Garage' }, ctx(MEMBER));
     expect(rows.map((r) => `${r.app}:${r.title}`).sort()).toEqual([
-      'bujogeek:Buy pegboard', 'notegeek:Garage plan', 'thinggeek:Shop vac',
+      'notegeek:Garage plan', 'thinggeek:Shop vac', 'todogeek:Buy pegboard',
     ]);
     const note = rows.find((r) => r.app === 'notegeek');
     expect(note.snippet).toBe('Shelves along the north wall');
     expect(note.url).toMatch(/^https:\/\/notegeek\.clintgeek\.com\/notes\/[0-9a-f]{24}$/);
-    expect(rows.find((r) => r.app === 'bujogeek').url).toBe('https://bujogeek.clintgeek.com/search?q=%23house%2Fgarage');
+    expect(rows.find((r) => r.app === 'todogeek').url).toBe('https://todogeek.clintgeek.com/search?q=%23house%2Fgarage');
     expect(rows.find((r) => r.app === 'thinggeek').url).toMatch(/^https:\/\/thinggeek\.clintgeek\.com\/thing\//);
   });
 
@@ -110,7 +110,7 @@ describe('taggedAcross', () => {
     await seed();
     const rows = await Query.taggedAcross(null, { tag: 'hr' }, ctx(MEMBER));
     expect(rows).toHaveLength(1);
-    expect(rows[0]).toMatchObject({ app: 'bujogeek', title: PRIVATE_TASK_LABEL, snippet: null, tags: [] });
+    expect(rows[0]).toMatchObject({ app: 'todogeek', title: PRIVATE_TASK_LABEL, snippet: null, tags: [] });
     expect(JSON.stringify(rows)).not.toMatch(/Jane|legal/);
   });
 

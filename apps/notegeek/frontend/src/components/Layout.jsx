@@ -25,7 +25,7 @@ import NoteImporter from './new/NoteImporter';
  * of dead padding on desktop, where the bar never renders.
  *
  * `GeekToastProvider` is mounted *inside* `GeekShell` and *outside*
- * `GeekAppFrame` (TODO_ORDER #15 fan-out), same placement as bujogeek and
+ * `GeekAppFrame` (TODO_ORDER #15 fan-out), same placement as todogeek and
  * flockgeek: inside the shell so it can read `useGeekShell()` and clear the
  * sidebar/tab bar; outside the frame because the frame's route transition is
  * a framer-motion element and would drag a `position: fixed` toast along

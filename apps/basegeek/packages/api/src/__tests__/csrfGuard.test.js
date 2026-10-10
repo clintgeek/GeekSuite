@@ -132,7 +132,7 @@ describe('the resolved allow-list', () => {
     for (const origin of [
       'https://basegeek.clintgeek.com',
       'https://notegeek.clintgeek.com',
-      'https://bujogeek.clintgeek.com',
+      'https://todogeek.clintgeek.com',
       'https://fitnessgeek.clintgeek.com',
       'https://storygeek.clintgeek.com',
       'https://flockgeek.clintgeek.com',

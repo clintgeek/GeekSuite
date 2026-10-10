@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { validateInput } from '../shared/validation.js';
 
 /**
- * fitnessgeek's own validation.js, alongside notegeek/bujogeek/bookgeek/
+ * fitnessgeek's own validation.js, alongside notegeek/todogeek/bookgeek/
  * flockgeek's — see `../shared/validation.js` for the shared machinery
  * (`validateInput`'s `GraphQLError`/`BAD_USER_INPUT` shape).
  *

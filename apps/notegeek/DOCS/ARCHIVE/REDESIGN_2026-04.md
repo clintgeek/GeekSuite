@@ -10,12 +10,12 @@ a mid-fidelity Material-UI scaffold dressed with warm-neutral indigo.
 It doesn't feel like a finished GeekSuite app. The other four apps
 each own a distinct visual identity:
 
-- **bujogeek** — Analog Soul: parchment, Fraunces serif, paper grain.
+- **todogeek** — Analog Soul: parchment, Fraunces serif, paper grain.
 - **fitnessgeek** — Teal Modern Tracker: DM Serif Display + DM Sans, Stone palette.
 - **bookgeek** — Literary Library: slate-and-amber, Libre Baskerville body.
 - **basegeek** — Mission Control: warm stone, Geist, amber glow.
 
-Notegeek currently overlaps with bujogeek's territory (warm + Fraunces serif)
+Notegeek currently overlaps with todogeek's territory (warm + Fraunces serif)
 without owning the writing-tool space. This redesign claims that space.
 
 ## Direction — "Ink Studio"
@@ -201,7 +201,7 @@ This is the most distinctive typographic move; commit to it.
 - **MuiPaper** — no `backgroundImage` gradient, 1px border in
   `border` token, no default elevation.
 - **MuiCard** — 10px radius, 1px border, hover lifts shadow but does
-  NOT translateY (we're not bujogeek).
+  NOT translateY (we're not todogeek).
 - **MuiAppBar** — flat (elevation 0), 1px bottom border in `divider`,
   background = `paper` not `default`.
 - **MuiDrawer.paper** — background `paper`, 1px right border.

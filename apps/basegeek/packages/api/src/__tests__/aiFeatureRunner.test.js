@@ -12,7 +12,7 @@ beforeEach(() => _resetCounters());
 describe('runAIFeature', () => {
   test('routes through the app routing row with the feature tag and parses JSON', async () => {
     const ai = fakeAI(async () => '```json\n{"a": 1}\n```');
-    const r = await runAIFeature({ app: 'bujogeek', feature: 'review', userId: 'u1', system: 's', user: 'u', schema: SCHEMA, fallback: () => ({ a: 0 }), ai });
+    const r = await runAIFeature({ app: 'todogeek', feature: 'review', userId: 'u1', system: 's', user: 'u', schema: SCHEMA, fallback: () => ({ a: 0 }), ai });
     expect(r.data).toEqual({ a: 1 });
     expect(r.provenance).toMatchObject({ source: 'model', provider: 'groq', model: 'llama', callsToday: 1 });
     const cfg = ai.callAI.mock.calls[0][1];
@@ -21,7 +21,7 @@ describe('runAIFeature', () => {
     // `useAppConfig: true` used to mean here. The runner stopped saying it in
     // Phase 2 — `services/aiRoute.js` owns that vocabulary now — and the
     // routing it gets is identical.
-    expect(cfg).toMatchObject({ appName: 'bujogeek', feature: 'review' });
+    expect(cfg).toMatchObject({ appName: 'todogeek', feature: 'review' });
     expect(cfg.useAppConfig).toBeUndefined();
     expect(cfg.responseFormat.type).toBe('json_schema');
   });

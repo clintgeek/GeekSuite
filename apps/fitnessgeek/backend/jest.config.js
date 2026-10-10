@@ -4,7 +4,7 @@
 // ESM support: `node --experimental-vm-modules node_modules/jest/bin/jest.js`
 // (see the `test` script in package.json) with an empty `transform` so no
 // babel step rewrites the modules back to CommonJS. This is the same shape
-// bujogeek, notegeek, flockgeek and storygeek already use.
+// todogeek, notegeek, flockgeek and storygeek already use.
 //
 // Consequences for the test files themselves:
 //   - `jest`, `describe`, `it`/`test` and `expect` come from `@jest/globals`.

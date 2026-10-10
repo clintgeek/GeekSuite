@@ -7,13 +7,13 @@
  * What it touches
  * ---------------
  *   noteGeek.notes            tags   owner userId
- *   bujogeek.tasks            tags   owner createdBy
- *   bujogeek.journalentries   tags   owner createdBy
- *   bujogeek.templates        tags   owner createdBy
+ *   todogeek.tasks            tags   owner createdBy
+ *   todogeek.journalentries   tags   owner createdBy
+ *   todogeek.templates        tags   owner createdBy
  *   thinggeek.things          tags   owner householdId   (ThingGeek's 60-char cap)
  *
  * NOT touched: BookGeek / GameGeek genres (curated vocabularies), NoteGeek's
- * version history (`noteversions` — history is what it was), BuJoGeek's
+ * version history (`noteversions` — history is what it was), TodoGeek's
  * pinned tags in userGeek (the app normalizes them on read and on the next
  * pin).
  *
@@ -59,9 +59,9 @@ const { EJSON } = BSON;
 
 export const TARGETS = Object.freeze([
   { app: 'notegeek', db: 'noteGeek', collection: 'notes', owner: 'userId', maxLength: TAG_MAX_LENGTH },
-  { app: 'bujogeek', db: 'bujogeek', collection: 'tasks', owner: 'createdBy', maxLength: TAG_MAX_LENGTH },
-  { app: 'bujogeek', db: 'bujogeek', collection: 'journalentries', owner: 'createdBy', maxLength: TAG_MAX_LENGTH },
-  { app: 'bujogeek', db: 'bujogeek', collection: 'templates', owner: 'createdBy', maxLength: TAG_MAX_LENGTH },
+  { app: 'todogeek', db: 'todogeek', collection: 'tasks', owner: 'createdBy', maxLength: TAG_MAX_LENGTH },
+  { app: 'todogeek', db: 'todogeek', collection: 'journalentries', owner: 'createdBy', maxLength: TAG_MAX_LENGTH },
+  { app: 'todogeek', db: 'todogeek', collection: 'templates', owner: 'createdBy', maxLength: TAG_MAX_LENGTH },
   { app: 'thinggeek', db: 'thinggeek', collection: 'things', owner: 'householdId', maxLength: 60 },
 ]);
 
@@ -283,7 +283,7 @@ if (isMain) {
     return i === -1 ? null : args[i + 1] ?? null;
   };
   if (args.includes('--help') || args.includes('-h')) {
-    console.log('node scripts/migrate-tags-kebab.js [--apply [--rollback-dir DIR]] [--rollback FILE] [--app notegeek|bujogeek|thinggeek ...]\nDry run by default; see the header of this file.');
+    console.log('node scripts/migrate-tags-kebab.js [--apply [--rollback-dir DIR]] [--rollback FILE] [--app notegeek|todogeek|thinggeek ...]\nDry run by default; see the header of this file.');
     process.exit(0);
   }
   const base = process.env.MONGO_BASE_URI;

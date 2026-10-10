@@ -8,7 +8,7 @@
  * apps/notegeek/DOCS/CONTEXT.md §7 and theme/graphite.js (the palette, with
  * every pair measured in __tests__/theme/graphiteContrast.test.js).
  *
- * What it is not: BuJoGeek's paper + black + red, BookGeek's navy cloth and
+ * What it is not: TodoGeek's paper + black + red, BookGeek's navy cloth and
  * serif, GameGeek's neon stickers, StoryGeek's parchment, FitnessGeek's
  * cream and produce, BaseGeek's steel panel.
  *

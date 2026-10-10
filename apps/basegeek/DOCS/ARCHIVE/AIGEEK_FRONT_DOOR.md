@@ -435,7 +435,7 @@ in any of them.
 - `goingOverAiGeek.test.js` (12) and `conversationOwnership.test.js` (14) — green, stubs moved from
   `callAISmart` to `callAI`.
 - Five consumer suites had one assertion each on the runner's `useAppConfig: true`
-  (`glanceBrief`, `glanceDraft`, `notegeekSuggest`, `bujogeekReviewDraft`,
+  (`glanceBrief`, `glanceDraft`, `notegeekSuggest`, `todogeekReviewDraft`,
   `fitnessgeekQuickAddResolver`): re-pointed, since "nothing at all" is now that switch.
 - UI: `AppConfigDialog.test.jsx` (new, 13) — the tier options, the tolerant read of a legacy row,
   and both switches. The four existing aigeek suites (41) green.

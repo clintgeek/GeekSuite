@@ -8,8 +8,8 @@ import { sharedTypeDefs } from './shared/typeDefs.js';
 import { typeDefs as noteTypeDefs } from './notegeek/typeDefs.js';
 import { resolvers as noteResolvers } from './notegeek/resolvers.js';
 
-import { typeDefs as bujoTypeDefs } from './bujogeek/typeDefs.js';
-import { resolvers as bujoResolvers } from './bujogeek/resolvers.js';
+import { typeDefs as todoTypeDefs } from './todogeek/typeDefs.js';
+import { resolvers as todoResolvers } from './todogeek/resolvers.js';
 
 import { typeDefs as basegeekTypeDefs } from './basegeek/typeDefs.js';
 import { resolvers as basegeekResolvers } from './basegeek/resolvers.js';
@@ -87,7 +87,7 @@ export const typeDefs = mergeTypeDefs([
   sharedTypeDefs,
   basegeekTypeDefs,
   noteTypeDefs,
-  bujoTypeDefs,
+  todoTypeDefs,
   flockTypeDefs,
   fitnessTypeDefs,
   bookTypeDefs,
@@ -102,7 +102,7 @@ export const resolvers = mergeResolvers([
   dateScalarResolver,
   basegeekResolvers,
   noteResolvers,
-  bujoResolvers,
+  todoResolvers,
   flockResolvers,
   fitnessResolvers,
   bookResolvers,

@@ -1,5 +1,5 @@
 import mongoose from 'mongoose';
-import taskService from './src/graphql/bujogeek/services/taskService.js';
+import taskService from './src/graphql/todogeek/services/taskService.js';
 import { getAppConnection } from './src/graphql/shared/appConnections.js';
 
 async function runTest() {
@@ -10,8 +10,8 @@ async function runTest() {
     console.log(`Running getTasksForDateRange for user ${ userId } on date ${ dateStr }...`);
 
     // Explicitly wait for the connection to be ready before calling the service
-    const bujoConn = getAppConnection('bujogeek');
-    await new Promise(resolve => bujoConn.once('open', resolve));
+    const todoConn = getAppConnection('todogeek');
+    await new Promise(resolve => todoConn.once('open', resolve));
 
     const tasks = await taskService.getTasksForDateRange({
       userId,
@@ -27,7 +27,7 @@ async function runTest() {
     }
 
     // Also test a raw Task.find query
-    const { default: Task } = await import('./src/graphql/bujogeek/models/Task.js');
+    const { default: Task } = await import('./src/graphql/todogeek/models/Task.js');
     const rawTasks = await Task.find({ createdBy: userId });
     console.log(`\nRaw Task.find({ createdBy: '${ userId }' }) returned ${ rawTasks.length } tasks.`);
 

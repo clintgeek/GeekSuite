@@ -1,5 +1,5 @@
 // Tripwire: the merged gateway schema must import and build — the *same* way
-// the server boots it. On 2026-09-05 an unescaped backtick inside bujogeek's
+// the server boots it. On 2026-09-05 an unescaped backtick inside todogeek's
 // gql template literal made typeDefs.js a SyntaxError; every gateway suite
 // stayed green because none imported graphql/index.js, and basegeek
 // crash-looped in production.

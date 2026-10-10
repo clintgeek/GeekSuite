@@ -41,7 +41,7 @@ const FlockThemeBridge = ({ children }) => {
 // mounts. Overriding the *post-mount* default to "dark" meant a light-OS,
 // cookie-less visitor got a real light→dark repaint the instant this
 // provider read its state — the preboot script and this provider disagreeing
-// about what "no preference yet" means. bujogeek and notegeek never override
+// about what "no preference yet" means. todogeek and notegeek never override
 // this prop (both stay on the shared 'auto' default), which is what keeps
 // them flicker-free; flockgeek now matches them.
 export const AppThemeProvider = ({ children }) => (

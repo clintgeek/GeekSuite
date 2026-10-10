@@ -3,7 +3,7 @@
  *
  * Covers the zod input-validation gate in front of bookgeek's eight gateway
  * mutations (`DOCS/TODO_ORDER.md` #22 — the last of the four gateway
- * modules; bujogeek got it in `3265b1c`, notegeek and flockgeek in
+ * modules; todogeek got it in `3265b1c`, notegeek and flockgeek in
  * `e23559c`):
  *   1. Every mutation family accepts its normal input and rejects an unknown
  *      key (at both the outer-args level and, where a mutation nests its
@@ -13,7 +13,7 @@
  *      `extensions.code = 'BAD_USER_INPUT'` and a `details` array.
  *   3. Books and shelves are a SHARED household library — no owner key
  *      exists in any of these mutations' arguments, so there is nothing to
- *      strip before validation (unlike bujogeek/notegeek/flockgeek, which
+ *      strip before validation (unlike todogeek/notegeek/flockgeek, which
  *      defensively drop a payload `ownerId`/`userId`).
  *   4. Ids stay bounded strings, never ObjectId shapes — `updateBook` and
  *      `deleteBook` still degrade a malformed id to `null`/

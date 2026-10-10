@@ -154,7 +154,7 @@ function buildAllowPredicate(allowedOrigins) {
  *
  * Reads `req.cookies` when cookie-parser has run, and falls back to the raw
  * header so the guard works in backends that mount no cookie parser
- * (bujogeek) or mount it after this middleware.
+ * (todogeek) or mount it after this middleware.
  */
 function hasAuthCookie(req, cookieNames) {
   const parsed = req.cookies;

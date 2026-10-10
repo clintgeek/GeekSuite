@@ -2,7 +2,7 @@
  * flockgeekValidation.test.js
  *
  * Covers the zod input-validation gate in front of flockgeek's sixteen gateway
- * mutations (`DOCS/TODO_ORDER.md` #22 — the same layer bujogeek got in
+ * mutations (`DOCS/TODO_ORDER.md` #22 — the same layer todogeek got in
  * `3265b1c`):
  *   1. Every mutation family accepts its normal input and rejects unknown
  *      keys, out-of-bounds values and off-enum values.

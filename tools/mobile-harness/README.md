@@ -23,10 +23,10 @@ folds the shards' `summary.json` files into one SUMMARY.md with
 pnpm --filter @geeksuite/mobile-harness shoot -- --app bookgeek --base http://localhost:1801 --label wip
 
 # One app, built and served by the harness (what CI does)
-node tools/mobile-harness/shoot.mjs --app bujogeek --serve --label wip
+node tools/mobile-harness/shoot.mjs --app todogeek --serve --label wip
 
 # Skip the rebuild when dist/ is already current
-node tools/mobile-harness/shoot.mjs --app bujogeek --serve --no-build --label wip
+node tools/mobile-harness/shoot.mjs --app todogeek --serve --no-build --label wip
 
 # Add the 1280x900 desktop contexts
 node tools/mobile-harness/shoot.mjs --app basegeek --serve --viewports all
@@ -54,7 +54,7 @@ just the pixels. `out/` is gitignored. Exit code is 0 only when every scene is
 clean of *enforcing* violations (the three grammar rules; a11y only with
 `--enforce-a11y`).
 
-Apps: `bookgeek fitnessgeek bujogeek notegeek flockgeek storygeek basegeek startgeek`.
+Apps: `bookgeek fitnessgeek todogeek notegeek flockgeek storygeek basegeek startgeek`.
 
 ### Testing the probe itself
 
@@ -368,11 +368,11 @@ speak up in CI.
 
 **Baseline, the run that started this** — 140 scenes, 8 apps, iPhone 14 dark +
 light: 0 grammar violations, 0 page errors, **112 a11y findings**. Per app:
-fitnessgeek 29, bujogeek 28, storygeek 28, flockgeek 16, bookgeek 5,
+fitnessgeek 29, todogeek 28, storygeek 28, flockgeek 16, bookgeek 5,
 basegeek 2, notegeek 2, startgeek 2.
 
 **After the first burn (Q51)** — 0 grammar violations, 0 page errors,
-**39 a11y findings**. bujogeek, storygeek and flockgeek at zero.
+**39 a11y findings**. todogeek, storygeek and flockgeek at zero.
 
 **After the second burn (Q51, second half)** — 138 scenes walked (basegeek's
 two `/databases` scenes skip cleanly; the route is orphaned), 8 apps, both
@@ -384,7 +384,7 @@ came and went and not one of them was a false positive.
 | app | baseline | first burn | second burn | |
 |---|--:|--:|--:|---|
 | fitnessgeek | 29 | 29 | **0** | progress-bar names, 24 delete buttons named after their row, list markup, chart names, three tinted-surface contrasts |
-| bujogeek | 28 | **0** | 0 | contrast, checkbox names, `Select` labels, `role="img"` |
+| todogeek | 28 | **0** | 0 | contrast, checkbox names, `Select` labels, `role="img"` |
 | storygeek | 28 | **0** | 0 | gold overlines, icon-button names, transcript keyboard route |
 | flockgeek | 16 | **0** | 0 | `Select` labels, form labels, accordion nesting |
 | bookgeek | 5 | 4 | **0** | both fixes upstream in `packages/ui` — sidebar rows, account menu |
@@ -417,12 +417,12 @@ The rules that made up the list, worst first, and where they came from:
    `GeekDialog`'s scrolling body got `tabIndex={0}` (storygeek's Bookify summary
    had no keyboard route in), and the theme now runs the accent through
    `readableOn` for a focused `MuiFormLabel` — the suite blue measured 3.12:1 as
-   a label on bujogeek's dark paper and 4.17:1 on the suite's own light canvas.
+   a label on todogeek's dark paper and 4.17:1 on the suite's own light canvas.
    `GeekFab` now throws in development when `label` is missing, so the next
    nameless FAB fails at the call site instead of in a nightly run.
 3. **`button-name` and `aria-input-field-name` are mechanical but not
    thoughtless.** A name has to say *which* thing the control acts on —
-   bujogeek's task toggle is `Mark "Call the roofer" done`, not `Toggle`;
+   todogeek's task toggle is `Mark "Call the roofer" done`, not `Toggle`;
    fitnessgeek's weight-log delete is `Delete the 218.7 lbs entry from Sep 3`,
    because 24 buttons called "Delete" on one screen is not a name. A MUI
    `Select` wants a real `InputLabel` + `labelId`, not an `aria-label` bolted
@@ -462,7 +462,7 @@ the **end** of its app's `scenes` array:
 
 | App | Scene | Opt-in | Stubs |
 |---|---|---|---|
-| bujogeek | `11-review-draft` | `appPreferences.bujogeek.aiReviewDraft` (server) | `GetReviewDraft` |
+| todogeek | `11-review-draft` | `appPreferences.todogeek.aiReviewDraft` (server) | `GetReviewDraft` |
 | fitnessgeek | `11-quickadd-proposal` | `ai.features.natural_language_food_logging` (server; `localStorage['fitnessgeek:quickAddNL']` at ship time, corrected R129 — see below) | `ParseFoodEntry`, `GET /api/foods` |
 | notegeek | `05-suggestions` | `appPreferences.notegeek.suggestOnSave` (server) | `SuggestForNote` |
 | bookgeek | `07-what-next`, `08-edit-metadata-draft` | `appPreferences.bookgeek.libraryAssistant` (server) | `GetWhatNext`, `DraftBookMetadata` |

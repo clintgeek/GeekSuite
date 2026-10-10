@@ -15,7 +15,7 @@ const connections = {};
  * Get (or create) a mongoose connection for a specific database.
  * Connections are cached and reused.
  *
- * @param {string} dbName - Database name, e.g. 'bujogeek', 'notegeek'
+ * @param {string} dbName - Database name, e.g. 'todogeek', 'notegeek'
  * @returns {mongoose.Connection}
  */
 export function getAppConnection(appName) {

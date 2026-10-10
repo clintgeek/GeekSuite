@@ -124,12 +124,12 @@ const SHOW_MISSING = ARGV.has('--missing');
 const AS_JSON = ARGV.has('--json');
 
 // ── Where the documents live ────────────────────────────────────────────────
-// Every tree that talks to the gateway. bujogeek and notegeek are in here on
+// Every tree that talks to the gateway. todogeek and notegeek are in here on
 // purpose: they are audited like everything else even while another pass owns
 // the files.
 const DOCUMENT_ROOTS = [
   'apps/notegeek/frontend/src',
-  'apps/bujogeek/frontend/src',
+  'apps/todogeek/frontend/src',
   'apps/flockgeek/frontend/src',
   'apps/fitnessgeek/frontend/src',
   'apps/bookgeek/web/src',
@@ -435,7 +435,7 @@ function variablesObjectKeys(source, fromIndex) {
  *
  *   A. Apollo hooks —  `updateBird({ variables: { … } })`, after
  *      `const [updateBird] = useMutation(UPDATE_BIRD)`. flockgeek, bookgeek,
- *      fitnessgeek, bujogeek, notegeek.
+ *      fitnessgeek, todogeek, notegeek.
  *   B. The client directly — `apolloClient.mutate({ mutation: CREATE_API_KEY,
  *      variables: { … } })`. basegeek's packages/ui aigeek console.
  *   C. A hand-rolled transport — `gql(CREATE_TASK, { … })`, where the second

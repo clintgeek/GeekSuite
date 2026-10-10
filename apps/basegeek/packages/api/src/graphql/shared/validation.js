@@ -8,7 +8,7 @@ import { toUtcMidnight } from '@geeksuite/utils/dates';
  *
  * Each module owns its own `validation.js` with one strict schema per mutation
  * family; what lives here is only the machinery those schemas are built from,
- * so that a rejection from bujogeek, notegeek and flockgeek is the *same*
+ * so that a rejection from todogeek, notegeek and flockgeek is the *same*
  * rejection: a `GraphQLError` with `extensions.code = 'BAD_USER_INPUT'` and a
  * `details` array of `{ path, message }`.
  *

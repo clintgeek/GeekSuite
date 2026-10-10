@@ -2,7 +2,7 @@
 // One app, one running server, one label's worth of screenshots.
 //
 //   node shoot.mjs --app bookgeek --base http://localhost:1801 --label m6
-//   node shoot.mjs --app bujogeek --serve --label m6        # build + preview
+//   node shoot.mjs --app todogeek --serve --label m6        # build + preview
 //   node shoot.mjs --app basegeek --serve --viewports all   # + desktop
 import path from 'node:path';
 import { appSpec, APP_NAMES } from './lib/registry.mjs';

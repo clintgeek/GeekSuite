@@ -1,0 +1,828 @@
+# TodoGeek — Project Context
+
+Current state reference for development work. Update this when architecture, data models, or feature status changes significantly.
+
+> Renamed from BuJoGeek on 2026-10-10; older docs/logs under ARCHIVE use the old name.
+
+Last major revision: 2026-08-30 (bug/cleanup/feature pass — see git log for the commit series).
+Amended 2026-09-03: blocked ("parked") task state — gateway half.
+Amended 2026-09-05: first-load pass — routes are now `React.lazy`, `manualChunks` is a
+path-matching function, and the markdown renderer loads on demand. Entry chunk 1605 → 449 kB,
+`/today` 1606 → 1324 kB. See "Frontend — Bundle" below before touching `frontend/vite.config.js`
+or adding a heavy dependency.
+Amended 2026-09-05: BURN_REVIEW #8 fix — `TaskList.jsx`'s `getLocalDate` grouped tasks by the
+UTC day for `dueDate`/`createdAt`, which this app stores as **instants** (a task can carry a
+reminder time, `graphql/todogeek/validation.js:25-28,84-85`), not calendar dates. Now uses
+`localDateString` from `@geeksuite/utils`. Only call site in the frontend (grepped). See
+`DOCS/BURN_REVIEW.md` #8 for the full account and the two new regression tests
+(`__tests__/components/TaskList.test.jsx`, run under `TZ=America/Chicago`).
+
+Amended 2026-09-29: **Phase 1 "stupid simple" + the Red Pen identity** (`DOCS/SIMPLE_PLAN.md`,
+its "As built" section is the record). Routes are now Today / Upcoming / Done / Search; every other screen
+redirects to `/today` (its code and data untouched until Phase 4). All four views read `allTasks` through
+`context/PenContext.jsx` and slice it in `utils/penViews.js`. Pinned tags live in
+`appPreferences.todogeek.pinnedTags`. The Routes and Keyboard lines below are current; most of the rest of
+this file describes the retired screens and the old Today.
+
+Amended 2026-10-01: **Private tasks** — see "Private tasks" under Data Model. Gateway first
+(`Task.private`), then the UI (`context/PrivacyContext.jsx`, `components/pen/PenRow.jsx`).
+
+Amended 2026-10-01: **Tags follow the suite standard** (`@geeksuite/tags`, `DOCS/TAG_STANDARD.md`) —
+lowercase kebab-case, `/` nests. The add box reads `#tags` with the suite's one reader
+(`findTagTokens`, hex-colour skip off): `#GeekSuite` saves `geek-suite`, `#home/garage` is one nested tag
+(so `#work/tomorrow` with no space is a tag, not a date), and `C#`, `a#b`, `#1` are no longer tags. The
+underline still sits under the token as typed. The editor's Tags field, pins
+(`appPreferences.todogeek.pinnedTags`, normalized on read and on the next pin), the tag filter and the pin
+picker all compare in the standard spelling. The gateway normalizes every write and reads legacy spellings
+until `scripts/migrate-tags-kebab.js` runs (prod had 7 camelCase tags on 121 tasks).
+
+---
+
+## Project Overview
+
+**todogeek** is a daily-driver todo app (tasks, habits, lists). Daily ritual app: Today view → Review aging tasks → Plan ahead. Auto-migrating tasks, collections, habit tracking, template-based task creation, keyboard-first UX.
+
+Part of GeekSuite. Authenticates via `@geeksuite/auth` (basegeek SSO). **All data flows through Apollo to the basegeek GraphQL gateway** — the local Express backend serves only static files, the SSO proxy, `/api/me`, and `/api/health`. The todogeek data layer lives in `apps/basegeek/packages/api/src/graphql/todogeek/`.
+
+---
+
+## Tech Stack
+
+**Frontend:**
+- React 18 + Vite + VitePWA
+- Material-UI (MUI) v7, Framer Motion, Lucide icons
+- Apollo Client (GraphQL), React Router v6, date-fns
+
+**Backend (local, thin):**
+- Express, ES modules; SSO proxy + static serving only
+- pino + pino-http
+
+**Data layer (in basegeek):**
+- Mongoose models + services + GraphQL typeDefs/resolvers under `graphql/todogeek/`
+- Jest + mongodb-memory-server tests in `packages/api/src/__tests__/todogeek*.test.js`
+  (`node --experimental-vm-modules node_modules/jest/bin/jest.js todogeek --runInBand`)
+
+**Infrastructure:**
+- Single Docker container `todogeek` (port 5005); React build served by Express
+- basegeek GraphQL gateway at `GATEWAY_URL` (`host.docker.internal:4100`)
+
+---
+
+## Routes
+
+| Route | View |
+|-------|------|
+| `/` | Redirect → `/today` |
+| `/today` | Desk-calendar date, pinned tags, the add box, carried over (collapsed), today, Anytime |
+| `/upcoming` | The next 14 days as a timetable (empty days skipped), then Later by month |
+| `/done` | Finished tasks by day, searchable; the square un-completes |
+| `/search` | Every task, open or done (`?q=`) |
+| `/review` `/plan/*` `/templates/*` `/tags` `/collections/*` `/habits` `/journal` `/settings` `/tasks/*` … | Redirect → `/today` (`RETIRED_PATHS`, `components/layout/navConfig.jsx`) |
+| `/login` | Login (SSO splash) |
+
+Keyboard: `j/k` move, `x` done, `t` tomorrow, `d` pick a date, `e`/Enter edit (focus follows the task id,
+`hooks/useRowKeys.js`); `g→t/u/d/s` chords; `/` and `Cmd+N` the add box; `?` help. Phone: swipe right done,
+left tomorrow, long left pick a date (`hooks/useSwipe.js`).
+
+---
+
+## Data Model (gateway: `graphql/todogeek/models/`)
+
+### Task
+```
+content, signifier,
+status (pending|completed|cancelled|blocked|migrated_back|migrated_future),
+dueDate (UTC midnight = date-only; non-midnight = carries a due time),
+priority (1=High 2=Medium 3=Low, null=None), note, tags[],
+originalDate, originalDueDate, migratedFrom/To, isBacklog,
+completedAt, cancelledAt, blockedAt (mutually exclusive; set/cleared by
+  updateTaskStatus / blockTask / unblockTask), blockedReason (≤280 chars),
+recurrenceRule (RRULE string; ONLY recurrence mechanism — recurrencePattern is a
+  deprecated input shim translated server-side), seriesId, isSeriesMaster, exdates[],
+collectionId (undated collection tasks are excluded from log views/carry-forward),
+private (hide the words on a desktop; redacted from reminder pushes — see below),
+remindedAt (push reminder dedup), parentTask, subtasks[], createdBy, timestamps
+```
+Recurring tasks are virtual: masters are expanded per view window as
+`virtual_<masterId>_<epochMs>`; edits materialize overrides via editScope
+(THIS_INSTANCE / ALL_INSTANCES / FUTURE_INSTANCES — the last splits the series).
+
+#### Blocked ("parked") tasks — added 2026-09-03
+
+A blocked task is waiting on something outside itself. It **keeps its dueDate**
+— it is parked, not rescheduled — but it leaves the log entirely while blocked:
+`dailyTasks` / `weeklyTasks` / `monthlyTasks` filter `status: 'blocked'` out, so
+a blocked task is neither "due today" nor overdue. The `all` corpus (search,
+export, backlog) still sees it, and `blockedTasks` is the list view.
+
+- `blockTask(id, reason)` → `status: 'blocked'` + `blockedReason` + `blockedAt`.
+  Allowed from `pending` / `migrated_back` / `migrated_future`, and from
+  `blocked` itself (rewrites the reason, keeps the original `blockedAt` so
+  "parked since" never drifts). From `completed` / `cancelled` it is a
+  `BAD_USER_INPUT` (400) GraphQL error. A reason over 280 chars is the same
+  error, thrown before anything is written.
+- `unblockTask(id)` → back to `pending`, `blockedReason`/`blockedAt` cleared,
+  **dueDate untouched** — a date that has since passed simply reappears as
+  overdue. `BAD_USER_INPUT` when the task is not blocked.
+- `updateTaskStatus(id, 'blocked')` delegates to `blockTask` (one guard, one
+  place). Every other status clears the blocked fields, so completing or
+  cancelling straight from the blocked list works and un-parks the task.
+- **Recurrence**: a blocked series *master* stops expanding, exactly like
+  completed/cancelled. Blocking a single `virtual_…` occurrence materializes a
+  blocked override for that date, which suppresses that date's virtual — so
+  neither path can spawn a duplicate. (The daily view's ordinary carry-forward
+  of a series' previous, unblocked occurrence is unaffected.)
+- Reminders are unaffected by design: `reminderService`'s sweep only considers
+  `status: 'pending'`, so a parked task sends no push and resumes on unblock.
+- There is no summary/stats type in this schema, so the requested `blocked: Int`
+  count has no home yet — the frontend reads `blockedTasks.length`.
+
+#### Private tasks — added 2026-10-01
+
+Chef: a todo like "Fire Jane" should not be on a screen that is accidentally shared. **Desktop
+only** — on a phone it shows normally.
+
+- **Data:** `Task.private: Boolean` (default false). `createTask(private:)`,
+  `UpdateTaskInput.private`; `null` is read as false and never stored; rows without the key
+  resolve false (`Task.private` resolver). A series master's flag is copied onto its virtual
+  occurrences. Old bundles never send it. The gateway commit deploys first; the UI selects
+  `private` in every task query (pinned by `__tests__/graphql/taskSelections.test.js`).
+- **Server-side redaction:** a private task's reminder push is `{ title: "Private task due",
+  body: "Due hh:mm UTC", tags: [] }` — no content, tags or note in the payload
+  (`reminderService.buildPayload`, DOCS/REMINDERS.md). The AI weekly review facts carry
+  "Private task" and no blocked reason (`reviewService.gatherFacts`). **Not** redacted:
+  StartGeek's glance tasks and glance search (`graphql/glance/resolvers.js`) still return the
+  words — StartGeek has no reveal UI, so hiding there is a product call for Chef.
+- **Marking:** the add box's eye-slash **Private** tick box and the typed `(private)` token are
+  one thing — the line is the only state (`quickAdd.setPrivateToken`); the token is underlined
+  like `(daily)`. The inline editor has a Private checkbox. HelpSheet lists both.
+- **Desktop = `md`+ AND `(pointer: fine)`** (`useHidesPrivate`). There, every list (Today,
+  Upcoming, Done, Search — all `PenRow`) renders a private task as an eye-slash, an ink
+  redaction bar (width in 8-char steps) and one button named "Private task, hidden. Activate
+  to show." **The words, tags and note are not in the DOM** while hidden; the checkbox reads
+  "Done: Private task". The square, priority mark, kind glyph and date stay.
+- **Reveal:** click / Enter / Space on that button shows that one task in place (and the
+  eye-slash becomes a "Hide private task" button; clicking the words then opens the editor as
+  usual). Re-hides on that button, Escape, window `blur`, `visibilitychange` → hidden (every
+  revealed task), or `REVEAL_MS` = 60 s. An open editor counts as revealed while open, and is
+  `filter: blur()`-ed (not closed — the edit is kept) while the window is away. Nothing is
+  persisted; a reload starts hidden. Outside a `PrivacyProvider` (mounted inside
+  `PenProvider`) a row fails safe: hidden and not revealable.
+- **Phone:** words shown, a small grey eye-slash before them, ", private" for screen readers.
+- **Said out loud:** the add box's live region says "Added a private task."; no Pen toast ever
+  echoed task words (pinned by a test). Retired screens (`TaskRow`, `TaskList`, Review…) are
+  unreachable and were not changed.
+- **Tests:** gateway `todogeekPrivate.test.js`; UI `utils/privateToken.test.js`,
+  `pen/privateRows.test.jsx`, `pen/privateAddEdit.test.jsx`. Harness scenes `40`–`43`.
+
+### Collection
+`name, description, archived, createdBy, timestamps` — tasks reference it via `collectionId`; delete detaches by default, cascades on request.
+
+### Habit / HabitLog
+`Habit: name, daysOfWeek[0-6] (empty = daily), color, archived, createdBy`.
+`HabitLog: habitId, createdBy, date (UTC midnight)` — unique `(habitId, date)`.
+`currentStreak` computed server-side (scheduled days only; today-unlogged doesn't break).
+
+### PushSubscription
+`createdBy, endpoint (unique), keys{p256dh,auth}` — web-push reminders; see `DOCS/REMINDERS.md`.
+
+### TaskOrder / Template / JournalEntry
+Unchanged: per-day drag order (`dateKey 'yyyy-MM-dd'`, local dates), multi-line templates, journal entries.
+
+---
+
+**Frontend (2026-09-03):** Today renders a `BlockedSection` last (always visible, count in the
+header, empty state when none). `TaskRow` shows a plum BLOCKED chip, the reason as muted
+secondary text and "parked N days"; Block… / Unblock live in the row action strip and open
+`BlockTaskDialog` (optional reason, 280 max). Quick-add accepts `~blocked <reason>` as the
+last token (create → blockTask). ReviewPage excludes blocked tasks; BacklogList and TaskList
+render them with the indicator. PageHeader stats show "N blocked".
+
+## Invariants (do not regress)
+
+- **Ownership**: every gateway read/write is scoped by `createdBy` in the service layer (`requireUser` pattern). Cross-user ids behave as not-found. Covered by jest suites.
+- **Dates**: date-only values are UTC midnight; date KEYS on the client use date-fns `format(date, 'yyyy-MM-dd')` (local), never `toISOString()`.
+- **Sorting**: one canonical comparator (`compareTasks` in TaskContext, `sortTasks` in taskService) per `DOCS/SORTING_RULES.md`; completed/cancelled sink (cancelled last).
+- **Errors**: Apollo error shapes parsed by `handleApiError`, surfaced via the TaskProvider snackbar. Status toggles are optimistic with rollback.
+
+---
+
+## Local Express API (all that remains)
+
+- `POST /api/auth/*` — SSO passthrough to basegeek
+- `GET /api/me`, `GET /api/health`
+- Static SPA serving
+
+Everything else is GraphQL on the gateway: dailyTasks/weeklyTasks/monthlyTasks/allTasks,
+blockedTasks, task CRUD + updateTaskStatus + blockTask/unblockTask +
+migrateTaskToFuture + saveDailyTaskOrder, taskTags/tasksByTag,
+collections CRUD, habits CRUD + toggleHabitLog + habitLogs, templates, journal,
+pushVapidKey + save/removePushSubscription.
+
+---
+
+**TemplatePreview markdown styling (2026-09-05, TODO_ORDER #30):** the template preview
+(`components/templates/TemplatePreview.jsx`) rendered raw `ReactMarkdown` with none of its
+own styling — UA-blue links on dark paper, no code-block background, and the content box
+shared `background.paper` with the surrounding `Paper` (no visual separation). Added
+`remark-gfm` + `remark-breaks` (same versions storygeek pins) and a `components` map so
+links/code/blockquotes read from the theme palette (`primary.main`, `alpha(text.primary,
+0.08)`, `divider`), and switched the content box to `background.default` + a border. Still
+no `rehype-raw`, so literal HTML in a template body renders as inert text, not markup —
+same sanitization contract as storygeek's `Narration.jsx`. Added the app's first component
+test (`__tests__/components/TemplatePreview.test.jsx`, 7 cases) and, with it, the app's
+first `@testing-library/react` + `@testing-library/jest-dom` devDependencies and a
+`src/__tests__/setup.js` (vitest `setupFiles`) — none of that existed before this pass;
+prior coverage was utils/graphql only.
+
+**a11y pass (2026-09-05):** the mobile harness' axe run had todogeek at **28 findings — 0 now**. Named the task/subtask toggle after its entry (`TaskCheckbox` `label`), wired the four editor `Select`s to their `InputLabel`s via `labelId`, gave the recurrence glyph `role="img"`, and pulled every hardcoded `ink[300]`/`ink[400]`/low-alpha-cream *text* colour onto `palette.text.muted`/`.secondary` — the domain inks (aging, priority, signifier) now go through `theme/inks.js`, which measures each hue against the least forgiving ground it lands on instead of guessing a fixed nudge like `toneForMode` did.
+
+**Housekeeping note (2026-09-05):** `DOCS/SUITE_TODO.md` still listed a
+"todogeek duplicate model files (`userModel.js`/`User.js`,
+`templateModel.js`/`Template.js`)" cleanup item. Checked the repo — none of
+those files exist anywhere under `apps/todogeek`; they (plus the entire
+legacy REST routes/controllers layer) were already deleted in `3af40cc`
+("remove dead REST layer and orphaned frontend code", 2026-08-30). The TODO
+entry was stale; struck it.
+
+## Frontend — Bundle (2026-09-05)
+
+Before this pass todogeek had **no code splitting of any kind**: no
+`manualChunks`, no `React.lazy`, one 1605 kB entry script that every visitor
+downloaded in full before the first task row appeared. `pnpm build` ended with
+the "chunks are larger than 500 kB" warning. It no longer does. Numbers below
+are from `frontend/dist`, KiB (bytes / 1024), gzip via `zlib.gzipSync`.
+
+**First load** — the entry chunk plus everything `dist/index.html` references
+(`<script>`, `<link rel="modulepreload">`, `<link rel="stylesheet">`):
+
+| | before | after |
+|---|---|---|
+| entry chunk `index-*.js` | 1605.1 kB (gz 480.0) | **449.4 kB (gz 139.1)** |
+| first load, total | 1605.6 kB (gz 480.3) | **1010.1 kB (gz 309.7)** |
+| files on the critical path | 2 | 6 |
+| all built js + css | 1611.2 kB (gz 482.6) | 1621.7 kB (gz 509.3) |
+| chunks emitted | 3 | 44 |
+| chunks over 500 kB | 1 (the entry, 1605) | 0 (largest is the entry at 449) |
+
+**Route cost** — what a route pulls *beyond* the first load, following its
+static imports transitively. Before the pass every one of these was zero,
+because every page was already in the entry; the honest comparison is the
+right-hand column against 1605.6 kB.
+
+| route | after (extra) | total for a cold visit |
+|---|---|---|
+| `/today` (the default landing route) | 314.4 kB (gz 101.4) | **1324.0 kB (gz 410.8)** |
+| `/tags` | 285.3 kB (gz 90.2) | 1295.4 kB |
+| `/search` | 273.4 kB (gz 87.2) | 1283.5 kB |
+| `/collections/:id` | 306.3 kB (gz 99.1) | 1316.4 kB |
+| `/review` | 183.2 kB (gz 58.0) | 1193.3 kB |
+| `/plan/*` | 47.5 kB (gz 15.9) | 1057.6 kB |
+| `/habits` | 25.5 kB (gz 10.4) | 1035.6 kB |
+| `/templates` | 24.0 kB (gz 9.3) | 1034.1 kB |
+| `/collections` | 12.1 kB (gz 5.9) | 1022.2 kB |
+| `/login` | 5.8 kB (gz 2.3) | 1015.9 kB |
+| `/settings` | 3.4 kB (gz 1.5) | 1013.5 kB |
+
+Read `/today` as the real headline: **1605.6 → 1324.0 kB (gz 480.3 → 410.8)**
+for the screen everybody actually lands on. The shell-only number is the better
+one for `/plan`, `/habits`, `/templates` and `/settings`, which is most of the
+app.
+
+### 1. Route-level `React.lazy` (`src/App.jsx`)
+
+All twelve pages, `LoginPage`/`RegisterPage` included, are `lazy()` imports
+behind one `<Suspense>` around `<Routes>`. Nothing about what a route renders
+changed; the only visible difference is one chunk fetch before a route paints
+for the first time.
+
+The fallback is **`RouteFallback`**, which reuses `SkeletonLoader` — the app's
+own warm-parchment shimmer — at TodayPage's exact measure (720px, `px: {xs:1,
+sm:3}`, the FAB's `pb: 11` on mobile). Deliberately not a centred
+`CircularProgress`: every page in this app already loads into that skeleton
+while its data arrives, so a spinner handing off to a skeleton would be two
+different loading surfaces stacked on one navigation. Paper journal, unbroken.
+
+### 2. `manualChunks` as a path-matching function, and one group that is *not* here
+
+The object form of `manualChunks` matches by resolved module id and silently
+misses CommonJS proxies (fitnessgeek's finding — its `vendor: ['react',
+'react-dom']` came out as a 0.03 kB chunk). todogeek never had a `manualChunks`
+at all, so it went straight to the function form. `VENDOR_GROUPS` in
+`frontend/vite.config.js`:
+
+| chunk | contents | eager? |
+|---|---|---|
+| `react-vendor` | react, react-dom, scheduler, react-is, react-router + `@remix-run/router` | yes (166.5 kB) |
+| `apollo` | `@apollo/client`, graphql and its runtime tail | yes (221.4 kB) |
+| `motion` | framer-motion / motion-dom — pulled by `packages/ui`'s `GeekAppFrame`, not by app code | yes (125.4 kB) |
+| `date-fns` | date-fns | yes (46.9 kB) — via `AdapterDateFns` |
+| `markdown` | react-markdown + the whole unified/remark/micromark/mdast/hast tail | **no** (153.1 kB) |
+| — | `@mui/*`, `@emotion/*`, `@mui/x-date-pickers`, lucide | **unclaimed on purpose** |
+
+**There is no `mui` group, and that is the opposite of fitnessgeek's config.**
+It is measured, not assumed — same tree, four configurations:
+
+| grouping of `@mui` | shell first load | `/today` total | entry |
+|---|---|---|---|
+| **none — shipped** | **1010.1 kB (gz 310)** | **1324.0 kB** | 449.4 kB |
+| `@mui/system`+`utils`+`@emotion` only | 1030.6 kB (gz 317) | — | 384.1 kB |
+| explicit `@mui/material|system|base|…` | 1087.4 kB (gz 335) | 1339.2 kB | 165.3 kB |
+| naive `/^(@mui|@emotion)\//` | 1261.5 kB (gz 383) | 1343.4 kB | ~165 kB |
+
+A manual chunk goes eager the moment *any* eager module reaches it, so a `mui`
+group puts every `@mui/material` component the app uses **anywhere** onto the
+first load — including the ones only `TaskEditor` and the date pickers touch.
+Leaving `@mui` unclaimed lets rollup split it at module granularity: the shell's
+components go eager, the route-only ones ride their route's chunk. No group wins
+on both columns that matter.
+
+The last row is worth keeping: `/^(@mui|@emotion)\//` also swallows
+`@mui/x-date-pickers`, and because `App.jsx` wraps the whole tree in a
+`LocalizationProvider`, that one lazy regex character-class drags the entire
+136 kB picker tree onto the first load. Same trap, one level down.
+
+fitnessgeek's `mui` group is load-bearing for the *opposite* reason — without a
+MUI chunk boundary, rollup hoisted its chart vendors (nivo, recharts) into the
+entry's graph. todogeek has no chart library. **If a heavy route-only vendor is
+ever added here, re-measure before trusting this.**
+
+The trade being made: app code changes every deploy, so the 449 kB entry
+(gz 139) is re-fetched every deploy, ~284 kB of it MUI that did not change. The
+explicit `mui` group would keep that slice cached across deploys at the cost of
+77 kB on a cold load and 15 kB on `/today`. The one-line flip is recorded in
+`vite.config.js`.
+
+### 3. The markdown renderer loads on the click, not with the route
+
+`react-markdown` + `remark-gfm` + `remark-breaks` (added the same day for the
+template preview's styling) drag 153 kB of unified/micromark/mdast/hast with
+them, and the app has exactly one consumer: `TemplatePreview`. It is now
+`React.lazy`'d **at its call site**, `TemplateApplier.jsx`, which renders `null`
+until a template is opened for apply — so the `markdown` chunk is fetched when a
+preview actually renders and never otherwise. `TemplatePreview` itself stays a
+plain synchronous component, which is why the seven
+`__tests__/components/TemplatePreview.test.jsx` cases needed no changes. The
+Suspense fallback is the same centred `CircularProgress` the dialog already
+shows while `applyTemplate` is in flight, so a chunk fetch and a network fetch
+look identical.
+
+### 4. The FAB registry needed no handling
+
+`useGeekPrimaryAction` (`packages/ui/src/navigation/primaryActionContext.js`)
+registers in a mount effect and unregisters on unmount, as a stack — a lazy
+component simply registers when Suspense resolves it. todogeek has exactly one
+registrant, `components/today/QuickAddSheet.jsx`, rendered by `TodayPage` and
+`CollectionDetailPage`. Both are **eager within their own route chunk**: the
+only new boundary is at the route, so the sheet is in the same chunk as the page
+that renders it and registers on the same mount it always did. Nothing that
+registers a FAB sits behind an *additional* Suspense boundary. Same call
+fitnessgeek made, for the same reason. Harness scenes `02-add-sheet` and
+`08-collection-add-sheet` open the FAB's sheet on both pages and are clean.
+
+### 5. Service worker
+
+Precache-only — `VitePWA`'s `generateSW` with the default
+`globPatterns: ['**/*.{js,css,html,ico,png,svg}']` and exactly one runtime rule
+(the mandatory `auth-bypass` NetworkOnly). Verified after the split: **44 hashed
+`.js`/`.css` on disk, all 44 present in `dist/sw.js`'s 47-entry precache
+manifest** (the other three are `index.html`, `offline.html`, `favicon.svg`).
+New chunk names are covered automatically; there is nothing to maintain when the
+chunk list changes.
+
+The deploy path is safe at both ends, and neither end needed changing:
+
+- Registered routes in the built SW are exactly two — the `NavigationRoute`
+  bound to the precached `index.html`, and the auth `NetworkOnly`. A
+  `NavigationRoute` matches only `request.mode === 'navigate'`, so a `<script>`
+  or `<link>` request for a hashed chunk is never intercepted by it. A hashed
+  URL the SW does not have precached simply **falls through to the network**.
+- On the network it meets `backend/src/app.js`'s SPA fallback, which 404s any
+  path with a file extension ahead of `res.sendFile(index.html)` — the
+  suite-wide guard todogeek already carried before the Q53 sweep (`2d0f5a5`
+  lists todogeek under "already had it"). So a stale index can never be handed
+  an HTML document under a `.js` URL.
+- There is no StaleWhileRevalidate asset rule at all, so there is no runtime
+  cache for such a response to poison even if one arrived. That is why the
+  suite's `cacheWillUpdate` requirement reads "n/a" for todogeek in
+  `DOCS/PWA_STANDARD.md` §1a. **If todogeek ever adds a runtime asset rule, it
+  must ship with that plugin.**
+
+Note `vite preview` is *not* a proxy for this check: it answers
+`/assets/gone-DEAD.js` with 200 `text/html`, because it has its own
+unconditional SPA rewrite. The Express backend is what ships.
+
+### 6. How to re-measure
+
+No bundle visualizer is installed and none was added. First load is
+`dist/index.html`'s `<script>` + `modulepreload` + stylesheet list, sized on
+disk and gzipped with `zlib.gzipSync`. Route cost is the transitive closure of a
+route's chunk over the `import "./x.js"` statements in the emitted files, minus
+the eager closure. Two throwaway node scripts, no dependencies; the second is
+worth rewriting rather than keeping, it is fifteen lines.
+
+### What was left on the table
+
+- **`@mui/x-date-pickers` (136–158 kB) rides `/today`, `/review`, `/search`,
+  `/tags` and `/collections/:id`.** `TaskEditor` imports `DateTimePicker` at
+  module scope and `TaskList` imports it twice more; between them
+  `TaskEditor` (92.5 kB) + `useMobilePicker` (157.6 kB) are 250 kB of `/today`'s
+  314 kB route cost. Deferring it means only mounting `TaskEditor` while it is
+  open, and it is currently always-mounted-with-`open={bool}` — unmounting on
+  close would reset the dialog's internal state and kill MUI's close transition.
+  That is a behaviour change, so it was left alone. It is the single biggest
+  remaining win and it is one deliberate decision away.
+- **Apollo (221 kB) is above the router** — `main.jsx` mounts `ApolloProvider`
+  around `<App/>`, so the client is on the first paint by construction.
+- **framer-motion (125 kB) comes from `packages/ui`'s `GeekAppFrame`**, which
+  wraps every route transition. Out of this app's reach.
+- **date-fns (47 kB) is eager** because `App.jsx` wraps the tree in a
+  `LocalizationProvider dateAdapter={AdapterDateFns}` and the shell formats
+  dates. Moving the provider down is a tree change for ~10 kB gzipped; not worth
+  it.
+- **No drag-and-drop library exists** to split — the daily reorder is
+  framer-motion's `Reorder`, already in the eager `motion` chunk — and the only
+  export path (`utils/exportTasks.js`, JSON/Markdown) is a few dozen lines of
+  local code with no library behind it.
+
+---
+
+## Known Issues / Technical Debt
+
+- ~~Every Apollo query is `fetchPolicy: 'no-cache'`~~ — **superseded 2026-09-05** (`d53b008`
+  + same-day follow-up). The cache rule — four clauses, plus the one documented exception — is
+  the doc comment at the top of `apps/todogeek/frontend/src/apolloClient.js`; the `update`
+  functions it describes live in `graphql/cacheUpdates.js`. The task LOG views
+  (dailyTasks/weeklyTasks/monthlyTasks/allTasks/blockedTasks) remain `no-cache`, mirrored into
+  React state by `TaskContext` — that part of this line is still true, see the rule's own
+  "documented exception" section for why.
+- TaskContext still holds dual array/object state shapes (works, but a refactor candidate).
+- ~~Subtasks: schema fields exist (`parentTask`/`subtasks`, addSubtask mutation) but no frontend
+  UI.~~ — **done 2026-09-05** (`d53b008`).
+- CompletedSection not in keyboard nav.
+- No frontend test coverage (gateway suites cover the data layer).
+- Upcoming section reuses `monthlyTasks` for a 7-day window; the client-side filter does the real windowing.
+
+---
+
+## Environment
+
+| Var | Notes |
+|-----|-------|
+| `BASEGEEK_URL` | SSO base URL |
+| `GATEWAY_URL` | basegeek GraphQL gateway (compose) |
+| `PORT` | Default `5005` |
+| `CORS_ORIGINS`, `LOG_LEVEL` | Optional |
+| VAPID keys | Live in **basegeek** env — see `DOCS/REMINDERS.md` |
+
+Dev: backend on `5001`, frontend on `5173` (Vite).
+
+---
+
+## Going-over 2026-09-05 (frontend + thin backend)
+
+A read of the whole tree — every route, component, hook, context, graphql
+document, config and test — against the burn's priorities. What follows is
+what changed and what was deliberately left. Suite: vitest 103 → **136**,
+backend jest 39 → **39**; lint 45 → **44** warnings, 0 errors; harness 20
+scenes 0/0/0 with `--enforce-a11y`; `pnpm build` clean, entry chunk
+450.1 kB gz 139.2 (the Bundle table above still holds — the added query
+fields and `utils/dueDate.js` cost under a kilobyte).
+
+### Fixed
+
+- **The log queries did not select `collectionId` / `recurrenceRule` /
+  `seriesId` / `isSeriesMaster`, so editing a task from Today, Review, Plan,
+  Search or Tags silently filed it out of its collection and demoted its
+  recurring series to a plain task.** `TaskEditor` seeds its form from the task
+  object and always resends both; a task fetched without them seeded
+  `collectionId: ''` / `recurrenceFreq: 'none'` and posted `null` for each, and
+  `taskService.updateTask` obeyed. Changing a priority destroyed the filing.
+  Same omission hid the recurrence glyph (`TaskRow.jsx:540`) and stopped
+  `deleteTask` asking "this occurrence or the series?" for a real (non-virtual)
+  master. `GET_COLLECTION` and `GET_BLOCKED_TASKS` always selected all four,
+  which is why it read as a rendering gap rather than data loss. Fixed at the
+  queries, plus a guard in `buildPayload` that refuses to send a field the
+  editor could not have loaded. Pinned by
+  `__tests__/graphql/taskSelections.test.js`.
+- **`dueDate` is dual-natured and the whole frontend read it as one thing.**
+  The gateway is explicit (`graphql/todogeek/validation.js`): UTC midnight means
+  date-only, anything else carries a due time — the same test
+  `reminderService.hasDueTime` runs. The client used local accessors
+  everywhere, which is right for the timed half and exactly one day early for
+  the date-only half west of UTC. Review's Keep / Tomorrow / Move-to-date and
+  `migrateTaskToFuture` all produce date-only values, so a task filed for today
+  came back wearing an amber "yesterday" badge, sat in Tags' *Overdue* group,
+  marked the previous cell of the month grid, and showed a phantom "7:00 PM".
+  New `utils/dueDate.js` (`hasDueTime` / `dueDayKey` / `dueDayStart`) mirrors
+  the server's rule; applied in `TaskRow`, `SubtaskRow`, `TaskList` (grouping
+  *and* the scheduled-at line), `TagsPage`, `MonthlyCalendar`, `WeeklySpread`,
+  `TodayPage`'s Upcoming window and `exportTasks`. BURN_REVIEW #8's fix is
+  preserved — a 9pm-local task still groups under its local day; both
+  directions are now asserted. 12 cases in `__tests__/utils/dueDate.test.js`,
+  3 more in `__tests__/components/TaskList.test.jsx`.
+- **`TaskContext.migrateTask` threw on every call.** It rebuilt an
+  object-keyed-by-date structure with `Object.entries(prev)`, a shape nothing
+  has produced since the log views moved to arrays — so `tasks.filter` ran on a
+  task object and threw *inside* the try, after the mutation had succeeded. The
+  user saw "Failed to migrate task" and a list that never moved. Now merges in
+  place like `updateTaskStatus`. `__tests__/context/TaskContext.test.jsx`.
+- **`TaskContext.updateTask` missed steps and mis-keyed dates.** Its array
+  branch only looked at top-level rows, so editing a step from its parent's
+  expander left the old text on screen; its object branch keyed a task by the
+  *UTC* day of an instant `dueDate`. Both replaced by `mapTasksState`, which
+  also stops the merge dropping fields the mutation does not select.
+- **`/search`'s "Schedule Task" arrow always failed.** It called
+  `migrateTask(id, futureDate)` with a `futureDate` nothing ever set, i.e.
+  `format(null)` → "Invalid time value". The migration dialog beside it was
+  fully wired and unreachable; the arrow now opens it.
+- **Templates: three separate breaks.** `TemplateContext` spliced its list on
+  `t._id`, which is `undefined` on a GraphQL result — so a deleted template
+  stayed on screen and an edited one showed no change. `CREATE_TEMPLATE` /
+  `UPDATE_TEMPLATE` returned only `{ id, name }`, so a newly created template
+  entered the list with no `content` and "Apply Template" on it created **zero
+  tasks**. And `search` / `tags` were passed to `apolloClient.query` as
+  variables `templates(type:, isDefault:)` never declares, so the "Search
+  templates…" box refetched the identical list on every keystroke and filtered
+  nothing. Fixed with a shared `TEMPLATE_FIELDS` fragment, an id accessor, and
+  client-side search/tag filtering with the refetch keyed on `type` alone.
+  `__tests__/context/TemplateContext.test.jsx`.
+- **`TaskList` ordered by `t._id`**, which is always `undefined` (the gateway
+  returns `id`) — in the daily branch that collapses every row onto one Map
+  entry. Only `/search` renders this component today, so it was latent.
+- `ADD_SUBTASK` now selects `collectionId`, so `onSubtaskAdded` can evict the
+  parent collection's tallies (clause 3 of the cache rule).
+- **Backend:** the four `/api/auth/*` proxies had no axios timeout — axios
+  defaults to `0`, so a *hung* basegeek parked the handler and the browser
+  until the socket died. Now bounded by `BASEGEEK_TIMEOUT_MS` (default 8000),
+  the same knob `packages/user`'s `validateToken` uses; a timeout carries no
+  `.response` and lands in each handler's existing 502 branch. `server.js`'s
+  `shutdown` also dereferenced `server` before `listen()` had assigned it, so a
+  SIGTERM during `connectDB` was a TypeError instead of a clean exit.
+- One flaky test: `accessibleNames.test.jsx`'s editor cases mount the whole MUI
+  dialog and exceeded vitest's 5s default on a loaded build box. Given an
+  explicit 20s budget so a slow machine reads as slow.
+
+### Left in place, with reasons
+
+- **`TaskEditor` is always-mounted with `open={bool}` (Q55).** Unmounting it on
+  close is the single biggest remaining bundle win (≈250 kB of `/today`'s
+  314 kB route cost is `TaskEditor` + `useMobilePicker`) but it resets the
+  dialog's internal state and kills MUI's close transition. Behaviour change —
+  Chef's call, as the Bundle section already records.
+- **`TemplateApplier` is mounted by `TemplatesPage` and is unreachable**:
+  nothing calls its `handleOpen`, so `selectedTemplate` stays null and it always
+  renders null. `TemplateList`'s "Apply Template" opens `TemplateApply` instead.
+  Two consequences worth knowing: the styled markdown `TemplatePreview` (and its
+  7 tests) never renders in the running app, and the `markdown` chunk the Bundle
+  section describes as "loads on the click" is in practice never fetched —
+  `TemplateApply` shows a plain-text preview. Its `selectedTemplate._id` bug is
+  corrected so wiring it up later is safe, but deleting or wiring the component
+  is a feature decision, not a fix.
+- **`TaskContext` still holds the dual array/object state shape.** After this
+  pass nothing produces the object form, but `normalizeTasks`, `findTaskInState`
+  and `mapTasksState` still defend against it. Collapsing to one shape is a
+  clean follow-up; doing it mid-review would have been an unpinned refactor.
+- **The `view === 'all'` debounce effect in `TaskContext` is dead** —
+  `window.location.pathname.split('/')[2]` is never `'all'` for any route this
+  app has. It costs one timer per filter keystroke and nothing else. Left as
+  hygiene rather than mixed into behaviour fixes.
+- **`hooks/useTemplate.js` has no importers**, and `GET_TASKS`,
+  `GET_JOURNAL_ENTRY(-IES)` and the three journal-entry mutations have no
+  non-test call sites. Reported, not deleted.
+- **`getTaskAge` reads `originalDate` first**, so a task created three days ago
+  and deliberately re-dated to today still lands in "Carried forward". That is
+  arguably the right semantic, so it stayed — but it is a decision,
+  not an accident.
+- **Virtual recurring occurrences carry no `collectionId`** (the gateway builds
+  them by hand in `taskService.js` and omits it), so editing one still posts
+  `collectionId: null`. Harmless today because a virtual has no filing to lose,
+  but it is a gateway-side gap, not a client one.
+
+---
+
+## Night 2 — 2026-09-06 — the AI weekly review draft (stream R114)
+
+`DOCS/AI_IDEAS.md` idea #1, built against the `aiFeatureRunner` contract that
+landed at `a7f432d`. What is new, one line each:
+
+**Gateway (`apps/basegeek/packages/api/src/graphql/todogeek/`)**
+
+- `services/reviewService.js` — gathers the week's deterministic facts and
+  drafts from them. `gatherFacts`, `buildFallbackDraft`, `reconcileDraft`,
+  `factsForModel`, `reviewDraft`.
+- `typeDefs.js` — `reviewDraft(weekStart: String!): ReviewDraftResult!` plus
+  `ReviewFacts` / `ReviewCounts` / `ReviewHabitFact` / `ReviewTaskFact` /
+  `ReviewBlockedFact` / `ReviewCarryForward` / `ReviewDraft` / `AIProvenance`;
+  `aiDrafted: Boolean` on `JournalEntry` and on both journal mutations.
+- `resolvers.js` — the `reviewDraft` query; it reads the opt-in itself.
+- `validation.js` — `reviewDraftArgsSchema` (`calendarDateField` + a Monday check).
+- `models/JournalEntry.js` — `aiDrafted: Boolean` (default false).
+- `src/__tests__/todogeekReviewDraft.test.js` — 20 cases.
+
+**Frontend (`apps/todogeek/frontend/src/`)**
+
+- `components/review/ReviewDraftCard.jsx` — the card, behind the opt-in, on the
+  Weekly Review tab only.
+- `components/review/ReviewNoteDialog.jsx` — the written review editor (new; see
+  the decisions below).
+- `utils/reviewWeek.js`, `utils/provenanceLine.js`, `hooks/useTodoPreferences.js`.
+- `pages/ReviewPage.jsx` — wires the card, the editor, "Use as review" and
+  "Add as task"; `pages/SettingsPage.jsx` — an **Assistance** section with the
+  toggle; `graphql/queries.js` — `GET_REVIEW_DRAFT`; `graphql/mutations.js` —
+  `aiDrafted` on `CREATE_JOURNAL_ENTRY`.
+- Tests: `__tests__/components/ReviewDraftCard.test.jsx` (13),
+  `__tests__/components/ReviewNoteDialog.test.jsx` (3),
+  `__tests__/utils/reviewWeek.test.js` (4).
+
+### The decisions, and why
+
+**There was no "review document", so the weekly `JournalEntry` became one.**
+TodoGeek's `/review` has always been a *triage* ritual — keep / tomorrow /
+backlog / cancel — with a "Weekly Review" mode that had nowhere to write the
+review down. The only written-review shape in the schema is `JournalEntry`
+(`type: 'weekly'`), whose three mutations have been wired since inception with
+**no call site in the app** (the going-over of 2026-09-05 recorded exactly
+that). `ReviewNoteDialog` is that call site: a plain title + body form saving
+through the existing `createJournalEntry`. The AI card seeds it and nothing
+more — a review typed by hand here is the same row minus the mark.
+
+**The provenance mark is a new field, not a repurposed one.** `JournalEntry`
+has no free boolean and its `metadata` sub-document is mood/energy/location/
+weather — not a flag bag, and not exposed through GraphQL at all. Rather than
+overload it or smuggle the mark in as a tag (which would pollute the tag
+browser), `aiDrafted: Boolean` was added to the model and to both journal
+mutations. *Parity note:* unlike fitnessgeek's `UserSettings` there is no
+second declaration of this schema anywhere — todogeek's REST layer went in
+`3af40cc` — so adding a field is this model plus `typeDefs.js`, with no
+allow-list to keep in step and no tripwire needed.
+
+**The opt-in lives in the store the suite already has.** TodoGeek persists no
+settings of its own: theme is the suite-global `preferences` bag and reminders
+are a browser permission. The right home was `@geeksuite/user`'s per-app bag —
+`User.appPreferences.todogeek`, `PATCH /api/users/preferences/todogeek`, already
+bootstrapped by `AppBootstrapper` — reached through the new
+`useTodoPreferences()`. It is free-form (`Map` of `Mixed`), so `aiReviewDraft`
+needed no schema change. **The resolver reads the same preference**, so a client
+bug cannot spend a model call: opted out, `reviewDraft` still answers, with the
+deterministic draft and `provenance.reason: "opted_out"`.
+
+**The week is Monday-to-Sunday and the gateway insists on it.** `weekStart` is
+a `calendarDateField` that must be a Monday; anything else is `BAD_USER_INPUT`
+before a row is read. The client sends `localDateString(startOfWeek(now, {
+weekStartsOn: 1 }))` — the *local* Monday. `toISOString()` would be the previous
+Sunday anywhere west of UTC and the gateway would (correctly) reject it: the
+same class of bug as `DOCS/BURN_REVIEW.md` #8.
+
+**Facts are computed; the model only words them.** Counts come from one indexed
+`$or` query over the week (`dueDate` / `completedAt` / `cancelledAt` /
+`blockedAt` / `originalDate`), streaks from the existing `habitService`.
+`carriedForward` is "was on the week's plate and is still open" —
+`migratedFrom`/`migratedTo` are legacy fields nothing maintains, so they are not
+used. Recurring series count as their **materialised rows** (master + overrides),
+never their virtual expansions, which have no row to count.
+
+**An invented task is dropped, not fatal.** `reconcileDraft` keeps only
+`carryForward` titles that appear in the facts, snapping each back to the
+canonical title (so "Add as task" creates the task the user recognises, not the
+model's paraphrase), de-duplicates, and caps at three. Structural nonsense
+(empty summary, missing arrays) goes through `runAIFeature`'s `validate` and
+settles on the fallback instead.
+
+**"Add as task" files into today's log.** TodoGeek has no inbox and no default
+collection — an entry with no `collectionId` and today's date *is* the daily
+log. So the carry-forward becomes an ordinary `createTask` due today, through
+the same mutation and the same cache updates as a hand-typed one. The button
+disables once used, so a double-tap cannot create two.
+
+**The metric.** The resolver writes `{ metric: 'todogeek.review.draft_shown' }`
+with the source, reason, model and how many carry-forwards were dropped, every
+time a draft is produced. The *used* half is the `aiDrafted: true` flag on the
+saved `JournalEntry` — a durable row, not a log line, which is the number
+AI_IDEAS asks for ("drafts saved as reviews per month"). No extra mutation was
+added for it.
+
+**Cap 10/day**, per user per feature, enforced by the runner. Over it, the same
+deterministic draft with `reason: "cap"`.
+
+### What leaves the box
+
+Task titles (`content`), the collection name each belongs to, habit names with
+their streaks, and the week's counts. **Not** notes, tags, task bodies, or
+anything from another app. `factsForModel()` is the only projection serialised
+into the prompt, and a test asserts a task's `note` and `tags` never appear in it.
+
+### Left undone, with reasons
+
+- **No mobile-harness scene covers the card.** `tools/mobile-harness/apps/todogeek/scenes.mjs`
+  has no `/review` or `/settings` scene, and the tree is outside this stream's
+  scope. The harness is 20 scenes 0/0/0 with `--enforce-a11y`, unchanged. The
+  phone rules are held instead by two vitest cases on the card — every control
+  ≥ 44px, no text under 12px — plus a wrap assertion on the row that could
+  otherwise scroll sideways. **A `/review` scene with the preference seeded on
+  is the right follow-up** and belongs to whoever owns the harness fixtures.
+- **The draft always describes the *current* week.** A review written on Monday
+  for the week just gone would want `weekStart - 7`; there is no week picker.
+  One `weekStart` variable away, but it is a product decision about what the
+  Weekly Review tab means.
+- **`GET_JOURNAL_ENTRIES` still has no call site.** The weekly reviews saved
+  here are readable only through the gateway. A "past reviews" list is the
+  obvious next thing and is not this stream's.
+- **`ReviewNoteDialog` is reachable only from the draft card**, so a user who
+  never opts in cannot write a review by hand. Giving the Weekly Review tab its
+  own "Write it down" button is a two-line change and a product call.
+
+## Night 2 — 2026-09-06 — R125: TaskEditor's picker chunk was still eager (Q55)
+
+Q55 in the Bundle section above (2026-09-05) had already measured the cost and
+deliberately left it: `TaskEditor` is always-mounted with `open={bool}`, and
+`@mui/x-date-pickers`' `DateTimePicker` (plus the `useMobilePicker` tail
+behind it) was imported at its module top, so the picker chunk shipped with
+every route that renders the dialog — not just `/today`. Unmounting the
+dialog on close was rejected then, and stays rejected now: it resets form
+state and kills MUI's close transition. What changed is narrower — lazy-load
+the picker itself, not the dialog.
+
+**What changed**
+
+- New `components/tasks/TaskDueDateField.jsx` — just the `DateTimePicker`
+  that used to sit inline in `TaskEditor`'s "Details" section, same props,
+  same 44px-floor `slotProps` override. `TaskEditor.jsx` now does
+  `lazy(() => import('./TaskDueDateField'))` and wraps the one call site in
+  `<Suspense>` with a plain MUI `Skeleton` (44px, matches the field) as
+  fallback — reached for over the app's own warm-parchment `SkeletonBar`
+  purely because `Skeleton` is already inside `@mui/material`, which this
+  file pulls in eagerly regardless, so it's free; the app's shimmer skeleton
+  stays the multi-row, multi-second `SkeletonLoader` it always was, not a
+  44px one-chunk-fetch placeholder.
+- **Same shape, found while measuring, fixed alongside it:**
+  `components/tasks/TaskList.jsx` (the `/search` route's list, and the only
+  consumer of `TaskEditor` outside the four `/today`-family pages) carried its
+  *own* always-mounted (`open={migrationDialogOpen}`) "migrate to a future
+  date" `Dialog`, with its own top-level `DateTimePicker` import — the exact
+  same bug, independent of `TaskEditor`'s. New `components/tasks/
+  MigrationDateField.jsx` (identical extraction), `lazy()`'d once and reused
+  at both of `TaskList`'s two near-identical render branches (flat list,
+  grouped-by-date). Left its redundant per-file `LocalizationProvider` alone —
+  harmless, out of scope for a bundle fix.
+- New test: `__tests__/components/TaskEditor.test.jsx` — mocks
+  `TaskDueDateField` and asserts the mock module body never runs while
+  `open={false}` (a settled microtask later), then asserts it runs exactly
+  once after a rerender with `open`. This is the code-path proof the
+  build-size numbers below can't give by themselves: `TodoDialog`/`GeekDialog`
+  don't mount their body while closed (`keepMounted` unset), so `React.lazy`'s
+  factory is provably never invoked pre-open — the win is real, not an
+  artifact of chunking.
+
+**Habit editor, collection editor, `ReviewNoteDialog` — checked, left alone.**
+All three are plain `TextField`/`Select`/`Button` forms over `TodoDialog` (the
+habit and collection editors live inline in `HabitsPage.jsx` /
+`CollectionsPage.jsx`, both already behind their own route-level
+`React.lazy`); none imports `x-date-pickers`, `react-markdown`, or anything
+else with a heavy tail. No change needed.
+
+**Measured** (`pnpm build`, `frontend/dist`, KiB, gzip via `zlib.gzipSync` —
+same throwaway-script methodology as the Bundle section above; entry +
+modulepreload list from `dist/index.html` is byte-identical before/after,
+confirming the picker was never part of first load, only route cost):
+
+| route | extra, before | extra, after | Δ |
+|---|---|---|---|
+| `/today` | 315.8 kB (gz 102.2) | 111.7 kB (gz 41.4) | **−204.1 kB (gz −60.8)** |
+| `/tags` | 286.7 kB (gz 91.0) | 82.6 kB (gz 30.2) | −204.1 kB (gz −60.8) |
+| `/collections/:id` | 307.6 kB (gz 99.9) | 103.6 kB (gz 39.1) | −204.0 kB (gz −60.8) |
+| `/search` | 274.6 kB (gz 87.8) | 70.9 kB (gz 27.2) | −203.7 kB (gz −60.6) |
+
+`TaskEditor`'s own chunk: 92.31 kB (gz 28.71) → 44.73 kB (gz 15.72) — the rest
+of the always-mounted-dialog form logic (`Select`/`Autocomplete`/subtasks/
+recurrence), unaffected, stays where it was. Entry chunk: 462.17 kB
+(gz 142.89) → 462.23 kB (gz 142.94), i.e. unchanged within noise —
+`TaskEditor` was never part of it, so there was nothing here to move.
+
+New lazy chunks, fetched once (shared across both call sites, cached
+thereafter) on whichever picker-bearing dialog opens first:
+
+| chunk | size |
+|---|---|
+| `DateTimePicker-*.js` | 50.97 kB (gz 15.15) |
+| `useMobilePicker-*.js` | 161.43 kB (gz 49.35) |
+| `TaskDueDateField-*.js` | 0.57 kB (gz 0.34) |
+| `MigrationDateField-*.js` | 0.47 kB (gz 0.32) |
+
+**Tests**: 156 → **158** (the 2 new cases above), all green. **Lint**: 44 → 44
+warnings, 0 errors — no new ones from either changed file or the two new ones.
+**Harness**: `--app todogeek --enforce-a11y --viewports phone` — scene
+`04-task-editor` (the one that actually opens `TaskEditor`) is clean, 0
+violations. The run as a whole is **not** 0/0/0 right now (28 violations, all
+on scene `11-review-draft`, both themes) — but that scene and its violations
+come from an in-flight, uncommitted change to `tools/mobile-harness/apps/
+todogeek/{scenes,fixtures}.mjs` by another stream sharing this box tonight
+(`git status` shows it modified, outside this stream's scope — `tools/
+mobile-harness/**` is not touched here). Zero violations trace to any scene
+this stream's files can affect. `node tools/syntax-check.mjs`: clean, 846
+files.
+
+**Left alone, with reasons**: `TaskList.jsx`'s nested `LocalizationProvider`
+(redundant with `App.jsx`'s app-wide one, harmless, not a bundle cost); the
+habit/collection editors and `ReviewNoteDialog` (checked, genuinely light,
+see above).

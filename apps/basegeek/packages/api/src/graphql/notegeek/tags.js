@@ -4,7 +4,7 @@
  * A NoteGeek tag is a `/`-separated path, the way Bear does it: `house/garage`
  * is a tag of its own AND sits under `house`. Since 2026-10-01 the spelling
  * rule is the suite standard, `@geeksuite/tags` (lowercase kebab-case
- * segments — DOCS/TAG_STANDARD.md), shared with BuJoGeek, ThingGeek and the
+ * segments — DOCS/TAG_STANDARD.md), shared with TodoGeek, ThingGeek and the
  * NoteGeek frontend; this file only keeps the names the resolvers and
  * validators already import. `Work` and `work` are now ONE tag, so a
  * case-only rename is a no-op.

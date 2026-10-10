@@ -24,8 +24,8 @@ const { default: Note } = await import('../graphql/notegeek/models/Note.js');
 const { resolvers: noteResolvers } = await import('../graphql/notegeek/resolvers.js');
 const { updateNoteArgsSchema, createNoteArgsSchema } = await import('../graphql/notegeek/validation.js');
 
-const { default: TaskOrder } = await import('../graphql/bujogeek/models/TaskOrder.js');
-const { default: taskService } = await import('../graphql/bujogeek/services/taskService.js');
+const { default: TaskOrder } = await import('../graphql/todogeek/models/TaskOrder.js');
+const { default: taskService } = await import('../graphql/todogeek/services/taskService.js');
 
 const {
   updateFlockGroupArgsSchema,

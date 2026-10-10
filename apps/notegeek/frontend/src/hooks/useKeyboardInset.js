@@ -6,7 +6,7 @@ import { useEffect, useState } from 'react';
  * formatting toolbar docks this far above the bottom of the screen, so it
  * rides on top of the keyboard.
  *
- * Ported from BuJoGeek (apps/bujogeek/frontend/src/hooks/useKeyboardInset.js),
+ * Ported from TodoGeek (apps/todogeek/frontend/src/hooks/useKeyboardInset.js),
  * copied rather than imported: apps do not reach into each other.
  *
  * Chrome on Android resizes only the VISUAL viewport for the keyboard (the

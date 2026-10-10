@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- TodoGeek, Red Pen (DOCS/SIMPLE_PLAN.md § Identity item 10): the done
+       bullet — an ink disc on white paper — ticked in the red pen, the stroke
+       flicking out past the bullet the way a real tick does. Master for
+       icon-192/512. No text. -->
+  <rect width="512" height="512" rx="112" fill="#FBFBF8"/>
+  <circle cx="240" cy="276" r="150" fill="#121212"/>
+  <path d="M166 270 L232 334 L392 132" fill="none" stroke="#C8202A" stroke-width="46" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>

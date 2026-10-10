@@ -37,7 +37,7 @@ const { Query } = resolvers;
 const ALICE = new mongoose.Types.ObjectId();
 const ctx = (userId) => (userId ? { user: { id: String(userId) } } : {});
 
-const APPS = ['bujogeek', 'notegeek', 'bookgeek', 'fitnessgeek', 'flockgeek'];
+const APPS = ['todogeek', 'notegeek', 'bookgeek', 'fitnessgeek', 'flockgeek'];
 
 const conns = {};
 let TEST_TAG;
@@ -95,7 +95,7 @@ beforeEach(() => {
 
 afterEach(async () => {
   await Promise.all([
-    col('bujogeek', 'tasks').deleteMany({ __askTest: TEST_TAG }),
+    col('todogeek', 'tasks').deleteMany({ __askTest: TEST_TAG }),
     col('notegeek', 'notes').deleteMany({ __askTest: TEST_TAG }),
     col('bookgeek', 'books').deleteMany({ __askTest: TEST_TAG }),
     col('flockgeek', 'birds').deleteMany({ __askTest: TEST_TAG }),
@@ -371,7 +371,7 @@ describe('glanceSearch is unchanged by the refactor', () => {
   });
 
   test('regex metacharacters are still literal, results still newest-first', async () => {
-    await col('bujogeek', 'tasks').insertMany([
+    await col('todogeek', 'tasks').insertMany([
       { content: 'has a.*b inside', createdBy: ALICE, status: 'pending', updatedAt: new Date('2026-02-01') },
       { content: 'has ab inside', createdBy: ALICE, status: 'pending', updatedAt: new Date('2026-02-02') },
     ]);
@@ -382,7 +382,7 @@ describe('glanceSearch is unchanged by the refactor', () => {
   });
 
   test('the limit is respected and equals searchThings with no filters', async () => {
-    await col('bujogeek', 'tasks').insertMany([
+    await col('todogeek', 'tasks').insertMany([
       { content: 'omega one', createdBy: ALICE, status: 'pending', updatedAt: new Date('2026-02-01') },
       { content: 'omega two', createdBy: ALICE, status: 'pending', updatedAt: new Date('2026-02-02') },
       { content: 'omega three', createdBy: ALICE, status: 'pending', updatedAt: new Date('2026-02-03') },

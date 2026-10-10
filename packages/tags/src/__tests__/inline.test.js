@@ -60,7 +60,7 @@ describe('what counts as an inline tag', () => {
     expect(md('#abcde #facade1')).toEqual(['abcde', 'facade1']);
   });
 
-  it('hexColours: false reads an all-hex word as a tag (BuJoGeek one-liners)', () => {
+  it('hexColours: false reads an all-hex word as a tag (TodoGeek one-liners)', () => {
     expect(parseInlineTags('#cafe #add', { format: 'plain', hexColours: false })).toEqual(['cafe', 'add']);
     expect(parseInlineTags('#cafe #add', { format: 'plain' })).toEqual([]);
   });

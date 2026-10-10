@@ -30,7 +30,7 @@ async function run() {
     });
     console.log('Me:', meData);
 
-    const { data: bujoData } = await client.query({
+    const { data: todoData } = await client.query({
       query: gql`
         query {
           dailyTasks(date: "2025-04-24") {
@@ -41,7 +41,7 @@ async function run() {
         }
       `
     });
-    console.log('Bujo Tasks:', bujoData.dailyTasks.length);
+    console.log('Todo Tasks:', todoData.dailyTasks.length);
 
   } catch (err) {
     console.error('GraphQL Error:', err.message);

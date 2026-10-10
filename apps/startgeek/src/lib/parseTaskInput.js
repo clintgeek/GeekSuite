@@ -1,4 +1,4 @@
-// Copied from apps/bujogeek/frontend/src/utils/parseTaskInput.js; keep the two files in sync.
+// Copied from apps/todogeek/frontend/src/utils/parseTaskInput.js; keep the two files in sync.
 
 /**
  * Shared task-input parser used by InlineQuickAdd, CommandPalette, and any

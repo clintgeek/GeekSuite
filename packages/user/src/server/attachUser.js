@@ -30,7 +30,7 @@ const {
  *
  * The default validator asks basegeek over HTTP: `GET BASEGEEK_URL/api/users/me`
  * with the caller's token. That is right for the six consumer backends
- * (bookgeek, bujogeek, fitnessgeek, flockgeek, notegeek, storygeek) — basegeek
+ * (bookgeek, todogeek, fitnessgeek, flockgeek, notegeek, storygeek) — basegeek
  * is a different process and the only holder of `JWT_SECRET`.
  *
  * It is wrong for basegeek itself, which is the seventh caller: its `/graphql`

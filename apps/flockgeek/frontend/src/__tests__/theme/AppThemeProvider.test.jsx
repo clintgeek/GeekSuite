@@ -8,7 +8,7 @@ import { AppThemeProvider, useColorMode } from '../../theme/AppThemeProvider';
  * `prefers-color-scheme` guess, before React mounts) then flip to dark the
  * instant this provider mounted, because it hardcoded `defaultPreference="dark"`
  * — disagreeing with preboot, which always assumes 'auto' when there's no
- * `geek_theme` cookie. bujogeek and notegeek never override this prop, so
+ * `geek_theme` cookie. todogeek and notegeek never override this prop, so
  * they never disagree with preboot; this locks flockgeek to the same rule.
  *
  * The test setup's global `matchMedia` mock always reports

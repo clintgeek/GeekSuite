@@ -41,7 +41,7 @@ a fixture in `foodRanker.test.js`.
 
 **Deployed 2026-09-14** (commits `55f40d98`..`df39f675`). CI and the image release green;
 container recreated 23:44 UTC, `/api/health` 200, `/api/foods/suggest` live. The mobile
-harness run was red on two `color-contrast` findings in **bujogeek**, not here — it has failed
+harness run was red on two `color-contrast` findings in **todogeek**, not here — it has failed
 every push since 2026-09-12, and this work's own result was 0 violations and 0 page errors
 across 150 scenes.
 

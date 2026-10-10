@@ -103,7 +103,7 @@ const userSchema = new mongoose.Schema({
     },
 
     // ── App Preferences (namespaced per-app) ──
-    // e.g. { notegeek: { editorFontSize: 16 }, bujogeek: { dailyPageLayout: 'timeline' } }
+    // e.g. { notegeek: { editorFontSize: 16 }, todogeek: { dailyPageLayout: 'timeline' } }
     appPreferences: {
         type: Map,
         of: mongoose.Schema.Types.Mixed,

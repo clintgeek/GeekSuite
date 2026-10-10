@@ -1,7 +1,7 @@
 /**
  * @geeksuite/tags — the suite tag standard (lowercase kebab-case segments,
  * `/` for nesting). Pure ESM, no runtime dependencies; the gateway (Node) and
- * the NoteGeek / BuJoGeek / ThingGeek frontends (Vite) import the same file.
+ * the NoteGeek / TodoGeek / ThingGeek frontends (Vite) import the same file.
  * The rules are written out in `normalize.js` (and, for people, in
  * `DOCS/TAG_STANDARD.md`).
  */

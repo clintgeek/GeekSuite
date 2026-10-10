@@ -59,7 +59,7 @@ describe('BaseGeekHome', () => {
 
     await waitFor(() => expect(screen.getByText('fitnessGeek')).toBeInTheDocument());
 
-    const names = ['fitnessGeek', 'bujoGeek', 'noteGeek', 'bookGeek', 'gameGeek', 'storyGeek', 'thingGeek', 'flockGeek', 'startGeek'];
+    const names = ['fitnessGeek', 'todoGeek', 'noteGeek', 'bookGeek', 'gameGeek', 'storyGeek', 'thingGeek', 'flockGeek', 'startGeek'];
     // Every consecutive pair must appear in document order (a precedes b).
     for (let i = 0; i < names.length - 1; i += 1) {
       const a = screen.getByText(names[i]);
@@ -73,7 +73,7 @@ describe('BaseGeekHome', () => {
     renderWithProviders(<BaseGeekHome />);
     await waitFor(() => expect(screen.getByText('fitnessGeek')).toBeInTheDocument());
     // gameGeek, storyGeek and thingGeek were missing from the line until 2026-09-27.
-    for (const name of ['bujoGeek', 'noteGeek', 'bookGeek', 'gameGeek', 'storyGeek', 'thingGeek', 'flockGeek', 'startGeek']) {
+    for (const name of ['todoGeek', 'noteGeek', 'bookGeek', 'gameGeek', 'storyGeek', 'thingGeek', 'flockGeek', 'startGeek']) {
       expect(screen.getByText(name)).toBeInTheDocument();
     }
   });
@@ -119,7 +119,7 @@ describe('BaseGeekHome', () => {
     mockHealthyBackend();
     renderWithProviders(<BaseGeekHome />);
     await waitFor(() => expect(api.get).toHaveBeenCalledWith('/health/app/fitnessgeek'));
-    for (const name of ['bujogeek', 'notegeek', 'bookgeek', 'flockgeek', 'startgeek']) {
+    for (const name of ['todogeek', 'notegeek', 'bookgeek', 'flockgeek', 'startgeek']) {
       expect(api.get).toHaveBeenCalledWith(`/health/app/${name}`);
     }
   });

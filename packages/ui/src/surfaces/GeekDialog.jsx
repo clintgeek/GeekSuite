@@ -155,7 +155,7 @@ export const GeekDialog = forwardRef(function GeekDialog(
       data-geek-dialog="root"
       data-geek-dialog-mode={full ? 'full' : 'window'}
       // Merged, not replaced. `dialogProps` is the pass-through slot every app
-      // primitive forwards its own `...rest` into (PremiumDialog, BujoDialog,
+      // primitive forwards its own `...rest` into (PremiumDialog, TodoDialog,
       // LedgerDialog, CodexDialog), so a caller reaching MUI's `PaperProps`
       // through it used to have the whole object silently dropped by the
       // assignment below. `GeekSheet` has always merged; this now matches it.

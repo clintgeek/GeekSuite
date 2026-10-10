@@ -1,7 +1,7 @@
 /**
  * aiFeatureRunner — the one door every in-gateway AI feature walks through.
  *
- * The night-2 features (bujogeek review draft, fitnessgeek quick-add,
+ * The night-2 features (todogeek review draft, fitnessgeek quick-add,
  * notegeek suggestions, bookgeek what-next / metadata drafts — startgeek's
  * morning brief was removed 2026-09-25) share four obligations that are easy
  * to get slightly different each time:
@@ -37,7 +37,7 @@
  * Usage:
  *
  *   const result = await runAIFeature({
- *     app: 'bujogeek', feature: 'review', userId,
+ *     app: 'todogeek', feature: 'review', userId,
  *     system: '...', user: JSON.stringify(facts),
  *     schema: REVIEW_SCHEMA,            // JSON schema → parsed object, or omit for free text
  *     maxCallsPerDay: 10,

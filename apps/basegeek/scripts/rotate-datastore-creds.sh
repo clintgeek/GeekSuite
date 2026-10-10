@@ -43,7 +43,7 @@ BACKUP_ROOT="${ROTATE_BACKUP_ROOT:-$HOME/.geeksuite/rotation-backups}"
 SCAN_DIRS=("apps" "archive" "packages" "tools" "DOCS" "scripts")
 
 # Apps whose containers must be recreated to pick up a rewritten env file.
-RESTART_APPS=(basegeek bookgeek bujogeek fitnessgeek flockgeek notegeek storygeek)
+RESTART_APPS=(basegeek bookgeek todogeek fitnessgeek flockgeek notegeek storygeek)
 
 MODE="dry-run"
 RESTART=0

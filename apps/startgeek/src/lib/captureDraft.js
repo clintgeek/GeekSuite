@@ -3,7 +3,7 @@
 // the model has sent one back.
 //
 // The parser stays first, always. `parseTaskInput` is a straight copy of
-// BujoGeek's and is kept byte-identical to it, so the "did that work?" reading
+// TodoGeek's and is kept byte-identical to it, so the "did that work?" reading
 // lives here instead of inside it.
 
 import parseTaskInput from './parseTaskInput'
@@ -93,7 +93,7 @@ export function shouldDraft({ mode, text, askEnabled }) {
   return mode === 'task' ? !readTaskInput(text).ok : !readNoteInput(text).ok
 }
 
-/** `Fri 2:00 PM` — the same short form the chip row and BujoGeek both use. */
+/** `Fri 2:00 PM` — the same short form the chip row and TodoGeek both use. */
 export function formatDraftDate(value) {
   if (!value) return null
   const date = new Date(value)

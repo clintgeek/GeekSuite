@@ -24,7 +24,7 @@ import { geekLayout, geekShape } from '../designTokens.js';
 export const GEEKSUITE_APPS = [
   { id: 'basegeek', label: 'Mission Control', monogram: 'MC' },
   { id: 'notegeek', label: 'NoteGeek', monogram: 'NG' },
-  { id: 'bujogeek', label: 'BujoGeek', monogram: 'BJ' },
+  { id: 'todogeek', label: 'TodoGeek', monogram: 'BJ' },
   { id: 'fitnessgeek', label: 'FitnessGeek', monogram: 'FG' },
   { id: 'storygeek', label: 'StoryGeek', monogram: 'SG' },
   { id: 'flockgeek', label: 'FlockGeek', monogram: 'FL' },

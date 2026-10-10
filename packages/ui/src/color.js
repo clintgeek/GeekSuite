@@ -1,7 +1,7 @@
 /**
  * Color helpers that need the theme's *mode*, not just its palette.
  *
- * Every app that paints a domain color as text — bujogeek's aging inks,
+ * Every app that paints a domain color as text — todogeek's aging inks,
  * storygeek's genre swatches, fitnessgeek's BP categories — hit the same wall
  * on 2026-09-02: a hue tuned for one mode is unreadable in the other, so each
  * site grew its own `isDark ? lighten(c, 0.35) : c` branch. Four of them, four
@@ -50,7 +50,7 @@ const readableCache = new Map();
  * The same idea as `toneForMode`, but measured instead of guessed.
  *
  * `toneForMode` nudges a domain color by a fixed amount and hopes. The
- * 2026-09-05 a11y burn-down showed what that costs: bujogeek's aging inks
+ * 2026-09-05 a11y burn-down showed what that costs: todogeek's aging inks
  * landed at 2.4–4.0:1 as 12px text, storygeek's gold overlines at 2.5–3.7:1,
  * all of them "adjusted for the mode" and none of them readable. A fixed nudge
  * cannot know what surface the text ends up on — a chip tint is not the paper.
