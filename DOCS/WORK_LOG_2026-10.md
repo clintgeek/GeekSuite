@@ -145,3 +145,40 @@ nginx went from 69 live host names to 51, using Chef's list.
 - **Backup** of the pre-change `sites-available/` and `nginx.conf` is in the session scratchpad.
 - **Repo leftovers, harmless:** dead CORS origins for `geeksuite.` and `geekpr.`, and a
   geekPR entry in `appRegistrySeed.js`.
+
+## 2026-10-10 — NewsGeek: "Free to read" + the south half of Arkansas
+
+**Free to read** (Chef: "an easy button" for sources that need a subscription; metered counts):
+- **The switch:** per reader, stored server-side (`newsPrefs`), on the Latest view. When
+  on, the gateway leaves paywalled stories out of every list and says how many it hid.
+  Nothing is deleted.
+- **What counts as paywalled:**
+  - A source is judged by its own `access.paywall`.
+  - Google News items are judged by `PAYWALLED_DOMAINS` (Reuters, WEHCO papers, Gannett,
+    NYT/WSJ/WaPo and similar).
+  - The sources were set from each publisher's own markup (`isAccessibleForFree:false`,
+    Zephr): Sentinel-Record, Democrat-Gazette, The Verge, BBC (US metering).
+  - Malvern Daily Record per Chef.
+  - Applied to production with `docker exec newsgeek node scripts/set-paywalls.js`
+    (idempotent).
+- **Deploy:** two pushes. Gateway `b908fb95` went live first, then the UI `79011075`.
+
+**Sources** (Chef: "find all the sources you can" for the southern half of the state):
+- **Research:** five parallel passes; every feed fetched once.
+- **Live in production:** 30 → 88 sources, 117 places, ~2,400 articles after the first tick.
+  - New: Magnolia Reporter, Pine Bluff Commercial, KTAL, KTBS, Stuttgart Daily Leader,
+    Helena World, Hope-Prescott News, OBU Signal, Fordyce News-Advocate.
+  - New official feeds: the Governor, AG, State Police, ARDOT, Health, AGFC, UA Extension,
+    NPS Hot Springs, USACE, Clark County.
+  - New weather: NWS alerts for central/SW/SE Arkansas.
+  - New gap-fill: Google News searches for Gurdon, Hot Springs, Texarkana, Camden,
+    El Dorado and Hope.
+- **Place tagging is stricter:** Title Case or ALL CAPS only; Arkansas context by default;
+  common-word towns (Hope, Stamps, Magnolia) need strong context.
+- **Three spam domains** that took over old newspaper names are pinned out of the seed by a
+  test.
+- **The gap list** (Facebook-only sheriffs, closed weeklies, bot-blocked sites) is in
+  `apps/newsgeek/DOCS/CONTEXT.md`.
+- **Open:** three TownNews/Blox sites answer 429 (Malvern, Magnolia Reporter, Saline
+  Courier), most likely tripped by the day's research. The worker backs off; if they
+  stay red, the Sources screen shows it.
