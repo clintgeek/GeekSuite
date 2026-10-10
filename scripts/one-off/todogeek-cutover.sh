@@ -64,13 +64,24 @@ note "bujogeek container: $(docker inspect -f '{{.State.Status}}' bujogeek 2>/de
 note "DB bujogeek collections: $(mongo_eval 'db.getSiblingDB("bujogeek").getCollectionNames().length')"
 note "DB todogeek collections: $(mongo_eval 'db.getSiblingDB("todogeek").getCollectionNames().length')"
 
+# ------------------------------------------------------------------ 0. backup
+# Lesson from the real run (2026-10-10): take a fresh suite dump BEFORE the
+# first write, not just lean on last night's.
+say "0. Fresh suite backup"
+ask "Run scripts/backup/backup.sh now? (recommended before any write)"
+"${ROOT}/scripts/backup/backup.sh"
+
 # ------------------------------------------------------------------ 1. freeze
 say "1. Freeze — nginx swap and stop bujogeek"
 note "Copies ${NEW_CONF##*/} into ${SITES}"
 note "Moves the bujogeek vhost to ${RETIRED_CONF} (kept for rollback)"
 note "Old names answer 410 Gone; todogeek answers 502 until step 6."
 ask "Freeze now? TodoGeek/BuJoGeek go offline"
-cp "${NEW_CONF}" "${SITES}/clintgeek.com_todogeek.conf"
+if cmp -s "${NEW_CONF}" "${SITES}/clintgeek.com_todogeek.conf"; then
+  note "todogeek vhost already in place"
+else
+  cp "${NEW_CONF}" "${SITES}/clintgeek.com_todogeek.conf"
+fi
 if [ -f "${OLD_CONF}" ]; then mv "${OLD_CONF}" "${RETIRED_CONF}"; else note "old vhost already retired"; fi
 docker exec NGINX nginx -t || die "nginx -t failed — the old vhost is at ${RETIRED_CONF}; fix before reloading"
 docker exec NGINX nginx -s reload
@@ -102,18 +113,21 @@ fi
 
 # ------------------------------------------------------------------ 3. copy DB
 say "3. Copy Mongo DB bujogeek -> todogeek"
-existing="$(mongo_eval 'db.getSiblingDB("todogeek").getCollectionNames().length')"
+# Count DOCUMENTS, not collections: basegeek creates empty collections (and
+# their indexes) in todogeek the moment the new image boots.
+existing="$(mongo_eval 'const d=db.getSiblingDB("todogeek"); print(d.getCollectionNames().reduce((n,c)=>n+d[c].countDocuments(),0))')"
 if [ "${existing}" != 0 ]; then
-  note "DB todogeek already has ${existing} collection(s) — skipping the copy."
+  note "DB todogeek already holds ${existing} document(s) — skipping the copy."
   note "(If you didn't run this before, stop and look at it: Ctrl-C now.)"
 else
+  note "DB todogeek has only empty collections (basegeek made them at boot); they're replaced."
   note "DB bujogeek is read, not changed. It stays as the rollback copy."
   ask "Copy it?"
   docker exec "${MONGO}" sh -c '
     set -e
     A="-u $MONGO_INITDB_ROOT_USERNAME -p $MONGO_INITDB_ROOT_PASSWORD --authenticationDatabase admin"
     mongodump $A --quiet --db=bujogeek --archive=/tmp/bujogeek-cutover.arc
-    mongorestore $A --quiet --archive=/tmp/bujogeek-cutover.arc --nsFrom="bujogeek.*" --nsTo="todogeek.*"
+    mongorestore $A --quiet --drop --archive=/tmp/bujogeek-cutover.arc --nsFrom="bujogeek.*" --nsTo="todogeek.*"
     rm -f /tmp/bujogeek-cutover.arc'
 fi
 note "documents per collection, bujogeek vs todogeek:"
@@ -134,7 +148,7 @@ ask "Rewrite bujogeek -> todogeek in apps/todogeek/.env.production and .env.loca
 for f in apps/todogeek/.env.production apps/todogeek/.env.local; do
   [ -f "$f" ] || continue
   sed -i -E 's/bujo\.clintgeek/todogeek.clintgeek/g; s/bujogeek/todogeek/g' "$f"
-  left="$(grep -i bujo "$f" | cut -d= -f1 | tr '\n' ' ')"
+  left="$(grep -i bujo "$f" | cut -d= -f1 | tr '\n' ' ' || true)"
   note "$f: keys still naming bujo: ${left:-none}"
 done
 
