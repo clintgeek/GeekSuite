@@ -93,3 +93,36 @@ Also: `docker.service` enabled at boot (it was socket-activated only, so Docker 
 ## 2026-10-10 — BuJoGeek renamed TodoGeek
 
 The look had become a todo app, so the name followed: `apps/todogeek`, app key and Mongo DB `todogeek`, image `ghcr.io/clintgeek/todogeek`, domain `todogeek.clintgeek.com`. The old domain and the `bujo.` alias are retired with a 410, not a redirect (Chef: so nothing keeps using them). History (`DOCS/ARCHIVE`, `archive/`, dated logs) keeps the old name. Live data moves with a DB copy plus `scripts/rename-bujogeek-to-todogeek.js` (app key in user prefs, app registry, aiGeek configs/spends/keys). Push reminders belong to an origin, so each phone re-enables them on the new domain. Refresh now ignores an app claim that isn't a valid app.
+
+## 2026-10-10 — NewsGeek N0 live
+
+A new app: **NewsGeek**, a local-first news briefing at `newsgeek.clintgeek.com` (port 1830).
+Spec: `DOCS/NEWSGEEK_PLAN.md`; context: `apps/newsgeek/DOCS/CONTEXT.md`. Its look is "County
+Gazette": newsprint, Newsreader serif headlines, a front-page masthead, and blue reserved
+for official notices.
+
+N0 is the skeleton plus ingest, so a week of real articles piles up before N1's clustering
+is tuned against a labelled golden set.
+- **Sources:** 30 sources (32 feeds), each fetched and verified before it was seeded: 3
+  local, 8 state, 5 national/world, 5 tech, 4 official (NWS alerts for Clark and Hot
+  Spring County, plus city feeds), and 5 Google News gap-fill searches credited to the
+  real publisher.
+- **Ingest:** conditional GET, one request per host at a time, backoff that honours
+  Retry-After, `broken` and `stale` feed health, three-layer dedupe, and gazetteer place
+  tagging.
+- **Screens:** Latest (chronological, sections) and Sources (health, admin add/edit/check-now).
+- **Chef's calls:**
+  - obituaries are kept (legacy.com is not blocked; weather.com forecast pages are);
+  - News replaced Things in the StartGeek dock.
+- **Verified:**
+  - Tests: backend 82/82, frontend 136/136, basegeek api 148/148 suites,
+    themeContrast 595.
+  - Harness: 28 scenes, 0 violations; StartGeek 16, 0 violations.
+  - CI, release and harness green on `e7e35923`.
+  - First production tick: 1,116 articles.
+- **Open:**
+  - Malvern Daily Record answers 429 even to our first request. The worker backs off,
+    and if this continues the Sources screen will show it `broken`.
+  - nginx now warns that `server_names_hash` is at capacity. It's harmless today, but
+    the next vhost may need `server_names_hash_bucket_size 128`.
+

@@ -49,8 +49,12 @@ Watchtower recreates the container with its old env.
 ### 2026-10-10: N0 built (skeleton + ingest)
 
 - **Built:** the gateway module, the ingest backend, the County Gazette frontend
-  (Latest + Sources), and the harness scenes. All of it is on branch `newsgeek`, held until
-  the TodoGeek rename lands on main.
+  (Latest + Sources), and the harness scenes.
+- **Deployed the same day** (`e7e35923`): vhost `clintgeek.com_newsGeek.conf` (ThingGeek's
+  with port 1830 and a 1m body limit), `.env.production` (4 keys), and the first
+  `compose up -d` after Watchtower's session completed. The first production tick polled
+  32 feeds with 1 failure (Malvern 429 again) and stored 1,116 articles.
+- **StartGeek dock:** News replaced Things (Chef).
 - **First live tick** against real feeds, in a local container with a scratch Mongo:
   - 1,084 articles from 29 of the 30 sources in one tick (41 ms per tick afterwards).
   - **Malvern Daily Record answered 429 to our very first request.** Possibly it was still
