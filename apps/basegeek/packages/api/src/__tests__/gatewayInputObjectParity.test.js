@@ -708,6 +708,23 @@ const FIXTURES = {
   // sends an input object to basegeek's own schema, so the app has no case
   // here rather than a placeholder one.
 
+  // ── newsgeek ────────────────────────────────────────────────────────────
+  'Mutation.newsSetPrefs': {
+    // apps/newsgeek/frontend/src/graphql/mutations.js SET_NEWS_PREFS, sent by
+    // views/LatestView.jsx toggleFreeToRead() with the flipped switch value:
+    // `{ input: { freeToReadOnly: next } }`, nothing else. The gateway ships
+    // a deploy ahead of that frontend (gateway first, then the UI), so the
+    // payload is written here inline, as every fixture is; this test never
+    // reads the frontend tree and passes with or without it.
+    source: `
+      mutation NewsSetPrefs($input: NewsPrefsInput!) {
+        newsSetPrefs(input: $input) { __typename }
+      }
+    `,
+    rootValue: { newsSetPrefs: () => ({}) },
+    variables: { input: { freeToReadOnly: true } },
+  },
+
   // ── glance (StartGeek's calendar widget) ────────────────────────────────
   'Query.calendarEvents': {
     // apps/startgeek/src/components/CalendarModule.jsx (sources) +
@@ -806,8 +823,9 @@ describe('every input-object-taking root field is enumerated and accounted for',
   // 48 from 2026-10-02: thinggeek's Attic — create/update person, document
   // type and document (DOCS/THINGGEEK_PLAN.md "The Attic").
   // 50 from 2026-10-10: newsgeek's newsCreateSource / newsUpdateSource (NewsSourceInput).
-  test('the count matches the audit: 50 root fields take an input-object argument', () => {
-    expect(inputObjectRootFields()).toHaveLength(50);
+  // 51 from 2026-10-10 (later): newsgeek's newsSetPrefs (NewsPrefsInput), the "Free to read" switch.
+  test('the count matches the audit: 51 root fields take an input-object argument', () => {
+    expect(inputObjectRootFields()).toHaveLength(51);
   });
 
   test('FIXTURES and NO_FRONTEND_CALLER never claim the same field', () => {

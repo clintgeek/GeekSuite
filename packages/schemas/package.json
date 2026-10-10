@@ -42,7 +42,9 @@
     "./newsgeek/place": "./newsgeek/place.js",
     "./newsgeek/source": "./newsgeek/source.js",
     "./newsgeek/article": "./newsgeek/article.js",
-    "./newsgeek/health": "./newsgeek/health.js"
+    "./newsgeek/health": "./newsgeek/health.js",
+    "./newsgeek/paywalls": "./newsgeek/paywalls.js",
+    "./newsgeek/prefs": "./newsgeek/prefs.js"
   },
   "scripts": {
     "lint": "eslint ."

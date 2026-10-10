@@ -9,6 +9,7 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "seed": "node scripts/seed.js",
+    "set-paywalls": "node scripts/set-paywalls.js",
     "test": "node --test --test-concurrency=1 test/*.test.js",
     "lint": "eslint ."
   },

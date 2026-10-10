@@ -29,6 +29,7 @@ republishes articles, or a recommendation loop.
 | Official sources | **In v1, badged separately.** City/county notices and NWS alerts are `official`. They never count as coverage of a journalism story; they can sit beside one as "related official notice". |
 | Article text | **Never scraped, never reproduced.** We store the title, the feed's own excerpt, the link and the metadata. Reading happens at the publisher. |
 | Identity | **County Gazette**: the suite calls it NewsGeek, and the interface reads like a modern local paper. (Chef, 2026-10-10. Details in N2.) |
+| Paywalls | **A per-reader "Free to read" switch** (Chef, 2026-10-10), stored server-side per user, **off by default**. On, stories that need a subscription are hidden from the reader's lists; off, everything shows. Nothing is deleted. **Metered counts as paywalled** (`metered` and `hard` both hide). A direct source is judged by its own `access.paywall`; an aggregator (Google News) item by its real publisher's domain against `PAYWALLED_DOMAINS` (`@geeksuite/schemas/newsgeek/paywalls`, suffix match on a label boundary). Sources show a PAYWALL / METERED badge. |
 | AI in the critical path | **Local embeddings only** (`datageek_embeddings`, Ollama `mxbai-embed-large`, the same service NoteGeek uses). On-box, free, no provider. LLM features are phase 2 via aiGeek with `need:` routing. |
 
 ## Architecture (the ThingGeek/GameGeek pattern)
@@ -82,8 +83,11 @@ republishes articles, or a recommendation loop.
   mergedInto: storyId|null }  // merges keep the older id; ids never change meaning
 
 // Per user
-// NewsPrefs — newsgeek.prefs
-{ userId, homePlaces: [placeId],
+// NewsPrefs — newsgeek.prefs (one row per user, created on first write; no row = defaults)
+{ userId,                     // String, unique; always from the session, never from args
+  freeToReadOnly: false,      // the "Free to read" switch (2026-10-10). Built.
+  // N2, not built yet:
+  homePlaces: [placeId],
   sectionQuotas: { local: 8, state: 5, national: 5, world: 3, tech: 4 },
   order: 'important'|'chronological',
   followTerms: [String], muteTerms: [String], mutedSourceIds: [ObjectId] }
@@ -117,6 +121,7 @@ type NewsSource {
   sections: [String!]! places: [NewsPlace!]! status: String!
   access: NewsSourceAccess! feeds: [NewsFeed!]! blockedDomains: [String!]! notes: String!
   articlesLast7d: Int!
+  paywalled: Boolean!  # access.paywall is metered or hard (PAYWALLED_LEVELS)
 }
 
 type NewsArticle {
@@ -126,9 +131,15 @@ type NewsArticle {
   places: [NewsPlace!]!
 }
 
-type NewsArticlePage { items: [NewsArticle!]! nextBefore: Date }
+type NewsArticlePage {
+  items: [NewsArticle!]! nextBefore: Date
+  hiddenPaywalled: Int!  # what "Free to read" left out of this list (same filters, ignoring the cursor); 0 when off
+}
 
 type NewsViewer { isAdmin: Boolean! }
+
+type NewsPrefs { freeToReadOnly: Boolean! }       # per reader; defaults when never set
+input NewsPrefsInput { freeToReadOnly: Boolean }
 
 input NewsFeedInput { url: String! format: String pollEveryMin: Int }
 input NewsSourceInput {
@@ -139,6 +150,7 @@ input NewsSourceInput {
 
 extend type Query {
   newsViewer: NewsViewer!
+  newsPrefs: NewsPrefs!
   newsPlaces: [NewsPlace!]!
   newsSources(status: String): [NewsSource!]!
   newsSource(id: ID!): NewsSource
@@ -151,6 +163,7 @@ extend type Mutation {
   newsUpdateSource(id: ID!, input: NewsSourceInput!): NewsSource!     # admin; feeds replace by url, keeping poll state
   newsSetSourceStatus(id: ID!, status: String!): NewsSource!          # admin
   newsCheckSourceNow(id: ID!): NewsSource!                            # admin; sets nextPollAt = now
+  newsSetPrefs(input: NewsPrefsInput!): NewsPrefs!                    # any signed-in user; own row only (upsert)
 }
 ```
 
@@ -164,6 +177,11 @@ then `stale`, then `ok`.
 - `placeId` matches the place or any of its descendants.
 - Expired NWS alerts are excluded.
 - `retired` sources are excluded.
+- **"Free to read"** (the caller's `freeToReadOnly`): when on, articles from a source whose
+  `access.paywall` is `metered` or `hard` are excluded, and so are aggregator items whose
+  `publisherDomain` matches `PAYWALLED_DOMAINS` (one anchored regex, label-boundary suffix).
+  The exclusion is in the Mongo query, so pages stay full and the `before` cursor still works.
+  `hiddenPaywalled` costs one extra `countDocuments`, and only when the switch is on.
 
 ## Ingest
 

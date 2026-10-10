@@ -54,6 +54,22 @@ const TITLE = { paywall: 'none', content: 'title' };
 // town they are news.
 const AGG_BLOCKED = ['weather.com'];
 
+// Paywalls, from the 2026-10-10 check (apps/newsgeek/DOCS/CONTEXT.md has the
+// evidence): the publisher's own markup says `isAccessibleForFree: false`
+// and loads Zephr (hotsr, arkansasonline, theverge); BBC meters US readers
+// (2025); Malvern Daily Record is Chef's word (it rate-limits us, so we never
+// fetched its pages). The reader's "Free to read" switch hides metered and
+// hard alike. scripts/set-paywalls.js applies exactly this map to an
+// existing database; the seed only covers fresh installs.
+export const PAYWALL_BY_SLUG = {
+  'malvern-daily-record': 'hard',
+  'sentinel-record': 'hard',
+  'arkansas-democrat-gazette': 'hard',
+  'the-verge': 'metered',
+  'bbc-world': 'metered',
+};
+const walled = (slug, access) => ({ ...access, paywall: PAYWALL_BY_SLUG[slug] });
+
 export const SOURCES = [
   // ---- Local journalism -------------------------------------------------
   {
@@ -65,13 +81,13 @@ export const SOURCES = [
   {
     slug: 'malvern-daily-record', name: 'Malvern Daily Record', homepage: 'https://www.malvern-online.com',
     kind: 'journalism', sections: ['local'], places: ['hot-spring-county-ar', 'malvern-ar'],
-    feeds: [feed('https://www.malvern-online.com/search/?f=rss&t=article&l=50', 60)], access: EXCERPT,
+    feeds: [feed('https://www.malvern-online.com/search/?f=rss&t=article&l=50', 60)], access: walled('malvern-daily-record', EXCERPT),
     notes: 'RATE-LIMITS HARD (429 after 3–4 requests a minute). Poll every 60 min, this exact URL only. The only Hot Spring County source.',
   },
   {
     slug: 'sentinel-record', name: 'Sentinel-Record', homepage: 'https://www.hotsr.com',
     kind: 'journalism', sections: ['local'], places: ['garland-county-ar', 'hot-springs-ar'],
-    feeds: [feed('https://www.hotsr.com/rss/headlines/', 30)], access: EXCERPT,
+    feeds: [feed('https://www.hotsr.com/rss/headlines/', 30)], access: walled('sentinel-record', EXCERPT),
     notes: 'Hot Springs daily (~150 items).',
   },
 
@@ -103,8 +119,8 @@ export const SOURCES = [
   {
     slug: 'arkansas-democrat-gazette', name: 'Arkansas Democrat-Gazette', homepage: 'https://www.arkansasonline.com',
     kind: 'journalism', sections: ['state'], places: ['arkansas'],
-    feeds: [feed('https://www.arkansasonline.com/rss/headlines/', 15)], access: { paywall: 'metered', content: 'excerpt' },
-    notes: 'Paywalled (metered vs hard not verified).',
+    feeds: [feed('https://www.arkansasonline.com/rss/headlines/', 15)], access: walled('arkansas-democrat-gazette', EXCERPT),
+    notes: 'Paywalled (hard: isAccessibleForFree false + Zephr, 2026-10-10).',
   },
   {
     slug: 'arkansas-times', name: 'Arkansas Times', homepage: 'https://arktimes.com', kind: 'journalism', sections: ['state'], places: ['arkansas'],
@@ -132,7 +148,7 @@ export const SOURCES = [
   },
   {
     slug: 'bbc-world', name: 'BBC News', homepage: 'https://www.bbc.com/news', kind: 'journalism', sections: ['world'], places: [],
-    feeds: [feed('https://feeds.bbci.co.uk/news/world/rss.xml', 15)], access: EXCERPT, notes: 'World feed.',
+    feeds: [feed('https://feeds.bbci.co.uk/news/world/rss.xml', 15)], access: walled('bbc-world', EXCERPT), notes: 'World feed.',
   },
   {
     slug: 'guardian-us', name: 'The Guardian', homepage: 'https://www.theguardian.com', kind: 'journalism', sections: ['national'], places: ['us'],
@@ -150,7 +166,7 @@ export const SOURCES = [
   },
   {
     slug: 'the-verge', name: 'The Verge', homepage: 'https://www.theverge.com', kind: 'journalism', sections: ['tech'], places: [],
-    feeds: [feed('https://www.theverge.com/rss/index.xml', 30, 'atom')], access: EXCERPT, notes: 'Atom feed.',
+    feeds: [feed('https://www.theverge.com/rss/index.xml', 30, 'atom')], access: walled('the-verge', EXCERPT), notes: 'Atom feed.',
   },
   {
     slug: '404-media', name: '404 Media', homepage: 'https://www.404media.co', kind: 'journalism', sections: ['tech'], places: [],

@@ -3,20 +3,24 @@ import { GraphQLError } from 'graphql';
 import { NewsSource } from './models/source.js';
 import { NewsPlace } from './models/place.js';
 import { NewsArticle } from './models/article.js';
+import { NewsPrefs } from './models/prefs.js';
 import { requireAdminUser } from '../basegeek/resolvers.js';
 import constants from '@geeksuite/schemas/newsgeek/constants';
 import healthModule from '@geeksuite/schemas/newsgeek/health';
+import paywallsModule from '@geeksuite/schemas/newsgeek/paywalls';
 
 const {
-  SOURCE_KINDS, SECTIONS, SOURCE_STATUSES, FEED_FORMATS, PAYWALLS, CONTENT_LEVELS,
+  SOURCE_KINDS, SECTIONS, SOURCE_STATUSES, FEED_FORMATS, PAYWALLS, PAYWALLED_LEVELS, CONTENT_LEVELS,
 } = constants;
 const { feedHealth } = healthModule;
+const { PAYWALLED_DOMAIN_REGEX } = paywallsModule;
 
 /**
  * NewsGeek gateway — DOCS/NEWSGEEK_PLAN.md "Gateway API, N0".
  *
- * Every query needs a signed-in user; every mutation needs an admin
- * (requireAdminUser, checked BEFORE validation). Sources and places are
+ * Every query needs a signed-in user; every source mutation needs an admin
+ * (requireAdminUser, checked BEFORE validation). newsSetPrefs is per reader:
+ * any signed-in user, and only ever the caller's own row. Sources and places are
  * shaped in batch (one places read, one aggregation for articlesLast7d), so
  * there are no field resolvers and no N+1.
  */
@@ -141,6 +145,7 @@ async function shapeSources(docs) {
     blockedDomains: s.blockedDomains || [],
     notes: s.notes || '',
     articlesLast7d: counts.get(String(s._id)) || 0,
+    paywalled: isPaywalledSource(s),
   }));
 }
 
@@ -259,6 +264,39 @@ function duplicateSlugGuard(err) {
 }
 
 // ---------------------------------------------------------------------------
+// Prefs + paywalls
+// ---------------------------------------------------------------------------
+
+const PREFS_DEFAULTS = Object.freeze({ freeToReadOnly: false });
+
+const isPaywalledSource = (s) => PAYWALLED_LEVELS.includes(s.access?.paywall);
+
+function shapePrefs(row) {
+  return { freeToReadOnly: Boolean(row?.freeToReadOnly ?? PREFS_DEFAULTS.freeToReadOnly) };
+}
+
+/** The caller's prefs; userId comes from the session only. */
+async function prefsFor(user) {
+  const row = await NewsPrefs.findOne({ userId: String(user.id) }).lean();
+  return shapePrefs(row);
+}
+
+/**
+ * What the "Free to read" switch hides, as one Mongo clause over articles:
+ * everything from a metered/hard source, and aggregator (Google News) items
+ * whose real publisher's domain is a paywalled one. A direct source is judged
+ * by its own `access.paywall` only, so an admin's setting there wins.
+ */
+function paywalledClause(sources) {
+  const walled = sources.filter(isPaywalledSource).map((s) => s._id);
+  const aggregators = sources.filter((s) => s.kind === 'aggregator' && !isPaywalledSource(s)).map((s) => s._id);
+  const or = [];
+  if (walled.length) or.push({ sourceId: { $in: walled } });
+  if (aggregators.length) or.push({ sourceId: { $in: aggregators }, publisherDomain: { $regex: PAYWALLED_DOMAIN_REGEX } });
+  return or.length ? { $or: or } : null;
+}
+
+// ---------------------------------------------------------------------------
 // Articles
 // ---------------------------------------------------------------------------
 
@@ -282,7 +320,7 @@ async function placeWithDescendants(placeId) {
   return [...out].map((id) => new ObjectId(id));
 }
 
-async function articlePage(args) {
+async function articlePage(args, { freeToReadOnly = false } = {}) {
   const { section, placeId, sourceId, before } = args;
   if (section != null) oneOf(section, SECTIONS, 'section');
   let limit = args.limit == null ? DEFAULT_LIMIT : args.limit;
@@ -293,21 +331,30 @@ async function articlePage(args) {
   const sourceFilter = { status: { $ne: 'retired' } };
   if (section) sourceFilter.sections = section;
   if (sourceId != null) sourceFilter._id = toObjectId(sourceId, 'sourceId');
-  const sources = await NewsSource.find(sourceFilter, { name: 1, kind: 1, sections: 1 }).lean();
-  if (!sources.length) return { items: [], nextBefore: null };
+  const sources = await NewsSource.find(sourceFilter, { name: 1, kind: 1, sections: 1, access: 1 }).lean();
+  if (!sources.length) return { items: [], nextBefore: null, hiddenPaywalled: 0 };
 
   const now = new Date();
-  const filter = {
+  // Everything but the cursor: the whole current list.
+  const listFilter = {
     sourceId: { $in: sources.map((s) => s._id) },
     $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }],
   };
-  if (before != null) filter.publishedAt = { $lt: before };
-  if (placeId != null) filter.places = { $in: await placeWithDescendants(placeId) };
+  if (placeId != null) listFilter.places = { $in: await placeWithDescendants(placeId) };
 
-  const rows = await NewsArticle.find(filter, { embedding: 0 })
-    .sort({ publishedAt: -1, _id: -1 })
-    .limit(limit)
-    .lean();
+  const walled = freeToReadOnly ? paywalledClause(sources) : null;
+  const filter = { ...listFilter };
+  if (before != null) filter.publishedAt = { $lt: before };
+  if (walled) filter.$nor = [walled];
+
+  const [rows, hiddenPaywalled] = await Promise.all([
+    NewsArticle.find(filter, { embedding: 0 })
+      .sort({ publishedAt: -1, _id: -1 })
+      .limit(limit)
+      .lean(),
+    // The one extra count, only when something can be hidden.
+    walled ? NewsArticle.countDocuments({ $and: [listFilter, walled] }) : 0,
+  ]);
 
   const sourceMap = new Map(sources.map((s) => [String(s._id), s]));
   const placeMap = await loadPlaceMap(rows.map((a) => a.places || []));
@@ -333,6 +380,7 @@ async function articlePage(args) {
   return {
     items,
     nextBefore: items.length === limit ? items[items.length - 1].publishedAt : null,
+    hiddenPaywalled,
   };
 }
 
@@ -375,13 +423,33 @@ export const resolvers = {
       return (await shapeSources([doc]))[0];
     },
 
+    newsPrefs: async (_, __, { user }) => {
+      requireUser(user);
+      return prefsFor(user);
+    },
+
     newsArticles: async (_, args, { user }) => {
       requireUser(user);
-      return articlePage(args);
+      return articlePage(args, await prefsFor(user));
     },
   },
 
   Mutation: {
+    newsSetPrefs: async (_, { input }, { user }) => {
+      requireUser(user);
+      const userId = String(user.id);
+      const set = {};
+      if (input?.freeToReadOnly != null) set.freeToReadOnly = Boolean(input.freeToReadOnly);
+      const write = () => NewsPrefs.findOneAndUpdate(
+        { userId },
+        { $set: set, $setOnInsert: { userId } },
+        { upsert: true, new: true, setDefaultsOnInsert: true },
+      ).lean();
+      // Two first-ever writes racing on the unique userId: the loser retries as an update.
+      const row = await write().catch((err) => (err?.code === 11000 ? write() : Promise.reject(err)));
+      return shapePrefs(row);
+    },
+
     newsCreateSource: async (_, { input }, { user }) => {
       await requireAdminUser(user);
       const { patch, feeds } = await validateSourceInput(input, { creating: true });

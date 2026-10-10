@@ -9,7 +9,7 @@ at the repo root. This file is a dated decision log, and it should stay honest.
 |---|---|---|
 | Public host | `newsgeek.clintgeek.com` | nginx vhost: `/` → :1830, `/graphql` → basegeek :8987 (the frontend calls a relative `/graphql`) |
 | Container | `newsgeek`, image `ghcr.io/clintgeek/newsgeek:latest` | host port **1830**; dev frontend 1831 |
-| Database | Mongo `newsgeek`: `sources`, `places`, `articles` | Shared definitions are in `@geeksuite/schemas/newsgeek/*`. Add fields there, never in a model file. |
+| Database | Mongo `newsgeek`: `sources`, `places`, `articles`, `prefs` (per reader) | Shared definitions are in `@geeksuite/schemas/newsgeek/*`. Add fields there, never in a model file. |
 | Gateway | `apps/basegeek/packages/api/src/graphql/newsgeek/` | Reads need any signed-in user. Writes need an admin (`requireAdminUser`). |
 | Backend | `apps/newsgeek/backend` (`newsgeek-server`) | auth proxy, `/api/health`, the static frontend, the **ingest worker**, the retention purge |
 | Frontend | `apps/newsgeek/frontend` (`newsgeek-frontend`) | "County Gazette": Newsreader + Libre Franklin, newsprint `#F4F0E6`, blue reserved for *official* |
@@ -71,3 +71,48 @@ Watchtower recreates the container with its old env.
   - NWS links point at the api.weather.gov alert URL, not a page for humans.
   - The first tick after a fresh deploy polls all 32 feeds at once (still one request per
     host at a time). No jitter yet.
+
+### 2026-10-10: "Free to read" (paywalls)
+
+- **What it is:** a per-reader switch on Latest, stored in `newsgeek.prefs`
+  (`freeToReadOnly`, off by default). On, the gateway leaves paywalled stories out of
+  `newsArticles` and reports `hiddenPaywalled` ("14 paywalled stories hidden"). Nothing is
+  deleted. **Metered counts as paywalled** (Chef).
+- **Two tests for "paywalled":** a direct source by its own `access.paywall` (`metered` or
+  `hard`). An aggregator (Google News) item by its publisher's domain against
+  `PAYWALLED_DOMAINS` in `packages/schemas/newsgeek/paywalls.js`, matched as a suffix on a label
+  boundary (`obits.nwaonline.com` matches, `notreuters.com` doesn't). The domain list never
+  overrides a direct source's own setting. **Add domains there, not in the gateway.**
+- **Evidence (2026-10-10):**
+
+  | Source / domain | Level | How we know |
+  |---|---|---|
+  | Sentinel-Record (`hotsr.com`) | hard | the article markup says `isAccessibleForFree: false`; loads Zephr |
+  | Arkansas Democrat-Gazette (`arkansasonline.com`) | hard | the same markup and Zephr (WEHCO, like hotsr and nwaonline) |
+  | The Verge (`theverge.com`) | metered | `isAccessibleForFree: false` + Zephr; a metered allowance |
+  | BBC (`bbc.com`, `bbc.co.uk`) | metered | BBC began metering US readers in 2025 |
+  | Malvern Daily Record (`malvern-online.com`) | hard | **Chef confirmed.** Not detected: it rate-limits us, so we never fetched its article pages |
+  | Reuters (`reuters.com`) | (domain list) | paywall since 2024; reaches us only through Google News |
+  | NWA Democrat-Gazette (`nwaonline.com`) | (domain list) | WEHCO, the same stack as arkansasonline |
+  | Baxter Bulletin (`baxterbulletin.com`) | (domain list) | Gannett, metered |
+  | nytimes, wsj, washingtonpost, bloomberg, ft, economist, theatlantic, newyorker, wired, businessinsider, latimes, bostonglobe, newsweek | (domain list) | well-known subscription publishers |
+
+- **Existing databases:** the seed is insert-if-absent, so it never changes a live source's
+  paywall. `npm run set-paywalls` (`apps/newsgeek/backend/scripts/set-paywalls.js`) `$set`s
+  `access.paywall` on exactly the five slugs in `PAYWALL_BY_SLUG` (`src/seed/data.js`). It
+  touches no other field, prints `slug: old → new [set|unchanged|missing]`, is safe to run
+  twice, and takes `--dry-run`. In production, once the image that contains it is live:
+
+  ```
+  docker exec newsgeek node scripts/set-paywalls.js --dry-run
+  docker exec newsgeek node scripts/set-paywalls.js
+  ```
+- **Deploy order:** the gateway (new fields and ops, all additive) goes first. The frontend
+  calls `newsPrefs`, `newsSetPrefs` and `hiddenPaywalled`, so it ships only after basegeek is
+  live.
+- **Client cache:** the switch isn't a query argument, so a flip drops every cached
+  `newsArticles` list once the gateway has saved it, then refetches
+  (`resetArticleLists` in `graphql/cachePolicies.js`). Putting the mode into `keyArgs` through a
+  module variable was tried and dropped: Apollo memoizes reads per field and served the old
+  list after the write.
+

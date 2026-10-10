@@ -18,6 +18,9 @@ const SOURCE_STATUSES = ['discovered', 'verified', 'active', 'broken', 'retired'
 const FEED_FORMATS = ['rss', 'atom', 'nws'];
 
 const PAYWALLS = ['none', 'metered', 'hard'];
+// The levels the reader's "Free to read" switch hides. Metered counts (Chef,
+// 2026-10-10): a meter you've used up is a wall.
+const PAYWALLED_LEVELS = ['metered', 'hard'];
 const CONTENT_LEVELS = ['title', 'excerpt', 'full'];
 
 const PLACE_KINDS = ['town', 'county', 'region', 'state', 'country'];
@@ -38,6 +41,7 @@ const COLLECTIONS = {
   sources: 'sources',
   places: 'places',
   articles: 'articles',
+  prefs: 'prefs',
 };
 
 module.exports = {
@@ -46,6 +50,7 @@ module.exports = {
   SOURCE_STATUSES,
   FEED_FORMATS,
   PAYWALLS,
+  PAYWALLED_LEVELS,
   CONTENT_LEVELS,
   PLACE_KINDS,
   BROKEN_AFTER_FAILURES,

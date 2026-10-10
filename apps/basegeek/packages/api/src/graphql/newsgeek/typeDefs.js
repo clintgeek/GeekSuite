@@ -1,7 +1,8 @@
 import { gql } from 'graphql-tag';
 
 // NewsGeek — local-first news briefing. Contract: DOCS/NEWSGEEK_PLAN.md "Gateway API, N0".
-// Reads need a signed-in suite user; every mutation needs an admin (requireAdminUser).
+// Reads need a signed-in suite user; every source mutation needs an admin (requireAdminUser).
+// newsSetPrefs is the exception: any signed-in user, their own row only.
 // The gateway never calls the NewsGeek backend: "check now" sets the feeds' nextPollAt.
 export const typeDefs = gql`
   type NewsPlace {
@@ -47,6 +48,7 @@ export const typeDefs = gql`
     blockedDomains: [String!]!
     notes: String!
     articlesLast7d: Int!
+    paywalled: Boolean!  # access.paywall is metered or hard
   }
 
   type NewsArticle {
@@ -67,10 +69,22 @@ export const typeDefs = gql`
   type NewsArticlePage {
     items: [NewsArticle!]!
     nextBefore: Date
+    # Paywalled articles the reader's "Free to read" switch left out of this
+    # list (same filters, ignoring the cursor). 0 when the switch is off.
+    hiddenPaywalled: Int!
+  }
+
+  # Per reader. A user with no stored prefs gets the defaults.
+  type NewsPrefs {
+    freeToReadOnly: Boolean!
   }
 
   type NewsViewer {
     isAdmin: Boolean!
+  }
+
+  input NewsPrefsInput {
+    freeToReadOnly: Boolean
   }
 
   input NewsFeedInput {
@@ -95,6 +109,7 @@ export const typeDefs = gql`
 
   extend type Query {
     newsViewer: NewsViewer!
+    newsPrefs: NewsPrefs!
     newsPlaces: [NewsPlace!]!
     newsSources(status: String): [NewsSource!]!
     newsSource(id: ID!): NewsSource
@@ -107,5 +122,7 @@ export const typeDefs = gql`
     newsUpdateSource(id: ID!, input: NewsSourceInput!): NewsSource!
     newsSetSourceStatus(id: ID!, status: String!): NewsSource!
     newsCheckSourceNow(id: ID!): NewsSource!
+    # Any signed-in user; writes only the caller's own row (userId from the session).
+    newsSetPrefs(input: NewsPrefsInput!): NewsPrefs!
   }
 `;
