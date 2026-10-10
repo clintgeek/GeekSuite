@@ -19,7 +19,7 @@ APPS=(
   babelgeek
   basegeek
   bookgeek
-  bujogeek
+  todogeek
   fitnessgeek
   flockgeek
   gamegeek

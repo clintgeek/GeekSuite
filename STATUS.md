@@ -34,7 +34,7 @@ added. What they found had been live for weeks or months, not introduced today:
 
 - **Broken for users**: the medications page always empty; a barcode scan returning a random
   food; every Add/Edit Medication rejected at the gateway; Calibre rescan never worked since the
-  Node move; story creation dead; hatch events impossible to log; editing a task from most bujogeek
+  Node move; story creation dead; hatch events impossible to log; editing a task from most todogeek
   pages un-filed it and un-recurred it; Back in notegeek created two notes; every save failure
   invisible; storygeek's compose had no `env_file` at all.
 - **Security**: an unauthenticated route whose first act wiped the imported library; path traversal
@@ -68,7 +68,7 @@ any app name, several dead-but-mounted layers); Q22/Q38 deletions; Q48 triage.
 **Mobile.** Every app is at 0 findings in the mobile harness (`tools/mobile-harness`, 139 scenes,
 phone dark + light), and the workflow is enforcing. Root causes were structural, not one-offs:
 a notegeek GlobalStyles rule undoing the 44px input floor, controls bypassing the theme floor in
-bujogeek, chip/select floors missing in fitnessgeek's theme, pseudo-element hit areas the probe
+todogeek, chip/select floors missing in fitnessgeek's theme, pseudo-element hit areas the probe
 could not see (it can now). Shared empty/error/toast primitives are in all seven MUI apps (TODO #15
 done; #19 done).
 
@@ -85,7 +85,7 @@ were un-editable, `/api/ai/parse-json` was ungated, flipping `CSRF_TOKEN=enforce
 the suite out (the six auth proxies now forward the token), flockgeek REST let the body set the
 owner. Zod now guards every REST backend except flockgeek's and every gateway module.
 
-**Security and correctness.** Zod validation on fitnessgeek, storygeek, bookgeek and the bujogeek
+**Security and correctness.** Zod validation on fitnessgeek, storygeek, bookgeek and the todogeek
 gateway mutations; the Garmin password is encrypted at rest through the shared UserSettings schema
 (backfilled; `KEY_VAULT_SECRET` is now shared basegeek↔fitnessgeek — see `DEPLOY.md`); aiGeek
 routing and attribution keyed by API key with service keys (storygeek's minted, restart pending);
@@ -119,7 +119,7 @@ triage the consolidation follow-ups; Q11 `Databases.jsx`; Q14 CanonCard.
 | M0 shared grammar (`packages/ui`) | **Done** | GeekSheet, GeekDialog, GeekFab, `useGeekPrimaryAction`, compact top bar below md, dvh shell, safe areas, `viewport-fit=cover` in all 8 apps, 16px inputs on phones, hover-only actions visible on touch, drawer width scoped to left drawers, sheets close on Escape. UI tests 278 → 340. |
 | M1 BookGeek pilot | **Done** | App.jsx split into views; library (shelf strip, filter sheet, cards, FAB, top-bar search), detail sheet, full-screen reader, Settings page, Add book and basket on shared surfaces; runtime Tailwind CDN removed (closes TODO_ORDER #27). |
 | M2 fitnessgeek | **Done** | FAB for logging food, all dialogs full-screen below sm on the Studio Slate skin, grids, 44px targets. |
-| M2 bujogeek | **Done** | Quick-add FAB + sheet, row action sheet, full-screen editors on a BujoDialog skin, week strip + agenda on the monthly calendar, More sheet on GeekSheet. |
+| M2 todogeek | **Done** | Quick-add FAB + sheet, row action sheet, full-screen editors on a TodoDialog skin, week strip + agenda on the monthly calendar, More sheet on GeekSheet. |
 | M2 notegeek | **Done, not screenshot-verified** | Build, lint and 141 tests green. The dev server fails with a pre-existing esbuild optimizer fault (`styled_default is not a function`); production build is fine. |
 | M3 flockgeek | **Done** | Bottom tab bar, harvest FAB + sheet, four tables as cards with sort/filter sheets, eleven Ledger dialogs. |
 | M4 storygeek, basegeek | **Done** | storygeek: rails as sheets, flex play surface, Codex dialogs, Bookify full-screen. basegeek: console dialogs, responsive tables, scrollable tabs, dvh public pages. |
@@ -132,7 +132,7 @@ the moved Playwright path was mooted by the harness move — both closed 2026-09
 
 ### basegeek
 
-- **Home**: Applications lists the six key apps in order (fitnessgeek, bujogeek, notegeek,
+- **Home**: Applications lists the six key apps in order (fitnessgeek, todogeek, notegeek,
   bookgeek, flockgeek, startgeek); Infrastructure shows PostgreSQL and each service's version.
   bookgeek and startgeek are in the health proxy fallback and the seed. The production app
   registry in Mongo was not changed; the admin seed endpoint adds the two rows if wanted.
@@ -178,7 +178,7 @@ Step 5 (command routing fallback) landed 2026-09-05 (`dfe7473`).
 - BookGeek has no bottom tab bar; the shelf strip is its phone navigation.
 - BookGeek uses one serif (DM Serif Display); Libre Baskerville dropped.
 - BookGeek's basket toggle moved off the card into the detail sheet's More menu plus a Select mode.
-- bujogeek: tapping a day pill on the phone selects it for the agenda instead of navigating.
+- todogeek: tapping a day pill on the phone selects it for the agenda instead of navigating.
 
 ## How the work was verified
 
