@@ -9,6 +9,7 @@ import constants from '@geeksuite/schemas/newsgeek/constants';
 import { pollFeed, backoffMs, MAX_BACKOFF_MIN } from '../src/ingest/pollFeed.js';
 import { buildPlaceMatcher } from '../src/ingest/places.js';
 import { USER_AGENT } from '../src/ingest/fetchFeed.js';
+import { noJitter } from '../src/ingest/platform.js';
 import { runSeed } from '../src/seed/seed.js';
 import { SOURCES } from '../src/seed/data.js';
 import { startMongo, stopMongo, clearAll } from './helpers/mongo.js';
@@ -44,11 +45,14 @@ async function placeId(slug) {
   return String((await Place.findOne({ slug }).lean())._id);
 }
 
-/** Poll one feed of a source the way the worker does: re-read state from Mongo first. */
+/**
+ * Poll one feed of a source the way the worker does: re-read state from Mongo
+ * first. No jitter, so nextPollAt is exact (hygiene.test.js covers jitter).
+ */
 async function poll(slug, fetchImpl, { at = NOW, feedIndex = 0, directDomains = [] } = {}) {
   const source = await load(slug);
   return pollFeed({
-    source, feed: source.feeds[feedIndex], models, matcher: await matcher(), directDomains, fetchImpl, now: () => at,
+    source, feed: source.feeds[feedIndex], models, matcher: await matcher(), directDomains, fetchImpl, now: () => at, jitter: noJitter,
   });
 }
 

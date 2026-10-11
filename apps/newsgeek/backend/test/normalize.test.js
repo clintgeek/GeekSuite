@@ -6,7 +6,7 @@ import assert from 'node:assert/strict';
 import constants from '@geeksuite/schemas/newsgeek/constants';
 import {
   stripHtml, capOnWord, makeExcerpt, canonicalUrl, titleKey, stripPublisherSuffix,
-  resolvePublishedAt, domainMatches, decodeEntities, cleanTitle,
+  resolvePublishedAt, domainMatches, decodeEntities, cleanTitle, cleanExcerpt,
 } from '../src/ingest/normalize.js';
 
 const { EXCERPT_MAX } = constants;
@@ -107,5 +107,52 @@ describe('domainMatches', () => {
     assert.ok(domainMatches('obits.legacy.com', 'legacy.com'));
     assert.ok(domainMatches('www.legacy.com', 'legacy.com'));
     assert.ok(!domainMatches('notlegacy.com', 'legacy.com'));
+  });
+});
+
+describe('excerpt boilerplate (cleanExcerpt, 2026-10-11)', () => {
+  test('WordPress "The post … appeared first on …." footer is stripped', () => {
+    assert.equal(cleanExcerpt('Council met Tuesday. The post Council meets Tuesday appeared first on Arkansas Times.'), 'Council met Tuesday.');
+    assert.equal(cleanExcerpt('Text. The post Foo appeared first on arktimes.com'), 'Text.', 'a dotted site name, no final period');
+  });
+
+  test('only the LAST "The post" is a footer: an earlier "The post office" survives', () => {
+    assert.equal(
+      cleanExcerpt('The post office closed early. Lines formed. The post Office hours change appeared first on Hot Springs Village Voice.'),
+      'The post office closed early. Lines formed.',
+    );
+  });
+
+  test('trailing "Continue reading…" (with a quoted title or arrow) and "Read more »" are stripped', () => {
+    assert.equal(cleanExcerpt('Storm hit the town. Continue reading…'), 'Storm hit the town.');
+    assert.equal(cleanExcerpt('Storm hit. Continue reading “Storm hits Gurdon” →'), 'Storm hit.');
+    assert.equal(cleanExcerpt('The board met. Read More »'), 'The board met.');
+    assert.equal(cleanExcerpt('The board met. [Read more]'), 'The board met.');
+    assert.equal(cleanExcerpt('The board met.   Read more...  '), 'The board met.');
+  });
+
+  test('"[…]" / "[...]" become a plain ellipsis; whitespace is collapsed', () => {
+    assert.equal(cleanExcerpt('Story text here  […]'), 'Story text here…');
+    assert.equal(cleanExcerpt('Story\n text [...]'), 'Story text…');
+    assert.equal(cleanExcerpt('Story text [...] The post X appeared first on Y.'), 'Story text…', 'layers peel in one call');
+  });
+
+  test('never over-strips: "read more" inside a sentence, or mid-text boilerplate words, stay', () => {
+    for (const keep of [
+      'Go to the library where you can read more.',
+      'Visit the site to Read more',
+      'Officials said they will continue reading the ballots. Results Friday.',
+      'Lawmakers said they would continue reading',
+      'Continue reading the minutes, the mayor said, before the vote.',
+      'The post appeared first on the agenda, then the budget.',
+      'A list [a, b] of things.',
+    ]) assert.equal(cleanExcerpt(keep), keep, keep);
+  });
+
+  test('idempotent, and makeExcerpt applies it before the cap', () => {
+    const once = cleanExcerpt('A. The post B appeared first on C.');
+    assert.equal(cleanExcerpt(once), once);
+    assert.equal(makeExcerpt({ summary: '<p>The board met.</p><p>The post Board meets appeared first on <a href="x">The Arkadelphian</a>.</p>' }), 'The board met.');
+    assert.equal(makeExcerpt({ content: '<p>Body text. <a class="more-link">Continue reading</a></p>' }), 'Body text.');
   });
 });

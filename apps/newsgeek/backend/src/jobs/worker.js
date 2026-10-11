@@ -11,7 +11,16 @@
  *   - at most WORKER_CONCURRENCY feeds in flight (default 4);
  *   - at most ONE in flight per host (NPR's three feeds, Google News's five
  *     searches, go one after another);
- *   - ticks never overlap (single-flight): a slow tick swallows the next.
+ *   - ticks never overlap (single-flight): a slow tick swallows the next;
+ *   - PLATFORM THROTTLE (2026-10-11): every Blox/TownNews feed
+ *     (ingest/platform.js isBloxFeed) shares ONE limiter key and at least
+ *     BLOX_MIN_GAP_MS (90 s) between consecutive Blox requests, across ticks.
+ *     At most one Blox feed is polled per tick; the others stay due and lead
+ *     a later tick (oldest-due first). The last request time is the only
+ *     thing kept in memory: a restart forgets it (accepted — one early
+ *     request after a deploy);
+ *   - every nextPollAt is jittered ±10 % (pollFeed), so feeds stop polling
+ *     in lockstep after a deploy.
  *
  * Production only (or INGEST_AUTORUN=1); INGEST_DISABLED=1 is the kill
  * switch — the same shape as the purge's PURGE_* switches.
@@ -20,6 +29,7 @@ import { singleFlight, runPool } from '../lib/concurrency.js';
 import { buildPlaceMatcher } from '../ingest/places.js';
 import { pollFeed } from '../ingest/pollFeed.js';
 import { domainOf } from '../ingest/normalize.js';
+import { isBloxFeed, makeJitter, BLOX_LIMIT_KEY, BLOX_MIN_GAP_MS } from '../ingest/platform.js';
 
 export const TICK_MS = 60_000;
 
@@ -40,6 +50,27 @@ export function dueFeeds(sources, at) {
 }
 
 /**
+ * The platform throttle for one tick (pure). Non-Blox feeds all run; of the
+ * Blox feeds, only the first (most overdue) and only when the last Blox
+ * request ended at least `minGapMs` before `at`. The rest are deferred: they
+ * stay due and are picked up by a later tick. (With `minGapMs` 0 every Blox
+ * feed runs, one at a time through the shared limiter key.)
+ * @returns {{ run: object[], deferred: object[] }}
+ */
+export function throttleDue(due, { at, lastBloxAt = null, minGapMs = BLOX_MIN_GAP_MS } = {}) {
+  const run = [];
+  const deferred = [];
+  let bloxAllowed = lastBloxAt == null || at.getTime() - lastBloxAt.getTime() >= minGapMs;
+  for (const item of due) {
+    if (!isBloxFeed(item.feed.url)) { run.push(item); continue; }
+    if (bloxAllowed) { run.push(item); bloxAllowed = minGapMs <= 0; } else deferred.push(item);
+  }
+  return { run, deferred };
+}
+
+const limiterKey = (url) => (isBloxFeed(url) ? BLOX_LIMIT_KEY : hostOf(url));
+
+/**
  * Build a worker. `tick()` runs one pass (tests call it directly);
  * `start()` schedules it; `status()` feeds /api/health.
  */
@@ -49,9 +80,13 @@ export function createWorker({
   fetchOptions,
   concurrency = 4,
   now = () => new Date(),
+  jitter = makeJitter(),
+  bloxMinGapMs = BLOX_MIN_GAP_MS,
   log,
 } = {}) {
   const { Source, Place } = models;
+  // When the last Blox request ended (in memory only; see the header).
+  let lastBloxAt = null;
   const state = {
     enabled: false,
     running: false,
@@ -62,6 +97,7 @@ export function createWorker({
     feedsDue: null,
     lastTickPolled: null,
     lastTickFailed: null,
+    lastTickDeferred: null,
   };
   let stopping = false;
   let current = null;
@@ -77,18 +113,21 @@ export function createWorker({
     // duplicate: compare against every active non-aggregator homepage.
     const directDomains = [...new Set(sources.filter((s) => s.kind !== 'aggregator').map((s) => domainOf(s.homepage)).filter(Boolean))];
     const due = dueFeeds(sources, at);
+    const { run, deferred } = throttleDue(due, { at, lastBloxAt, minGapMs: bloxMinGapMs });
     state.activeSources = sources.length;
     state.feedsDue = due.length;
 
     let polled = 0;
     let failed = 0;
-    await runPool(due, {
+    await runPool(run, {
       concurrency,
-      keyOf: ({ feed }) => hostOf(feed.url),
+      keyOf: ({ feed }) => limiterKey(feed.url),
       worker: async ({ source, feed }) => {
         if (stopping) return;
+        const blox = isBloxFeed(feed.url);
+        if (blox) lastBloxAt = now();
         try {
-          const out = await pollFeed({ source, feed, models, matcher, directDomains, fetchImpl, fetchOptions, now, log });
+          const out = await pollFeed({ source, feed, models, matcher, directDomains, fetchImpl, fetchOptions, now, jitter, log });
           polled += 1;
           if (!out.ok) failed += 1;
         } catch (err) {
@@ -96,12 +135,16 @@ export function createWorker({
           // is due again next tick. Logged without the feed URL's query.
           failed += 1;
           log?.error({ event: 'feed_poll_error', source: source.slug, name: err?.name, code: err?.code }, 'feed poll errored');
+        } finally {
+          // The gap is measured from the END of a request to the next start.
+          if (blox) lastBloxAt = now();
         }
       },
     });
     state.lastTickPolled = polled;
     state.lastTickFailed = failed;
-    return { activeSources: sources.length, due: due.length, polled, failed };
+    state.lastTickDeferred = deferred.length;
+    return { activeSources: sources.length, due: due.length, polled, failed, deferred: deferred.length };
   }
 
   const tick = singleFlight(async () => {
@@ -163,4 +206,4 @@ export function createWorker({
   };
 }
 
-export default { createWorker, dueFeeds, TICK_MS };
+export default { createWorker, dueFeeds, throttleDue, TICK_MS };

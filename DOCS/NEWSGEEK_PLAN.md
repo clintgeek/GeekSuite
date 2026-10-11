@@ -3,7 +3,8 @@
 *Written 2026-10-10 from Chef's design conversation (pasted brainstorm: "build the news
 reader you wish Google News were") and the decisions below. Status: N0 live (ingest,
 Latest, Sources, reader-added sources, the Source sheet); the front page (Today, per-reader
-ranking) built 2026-10-11 ahead of clustering; N1/N2 not started.*
+ranking) built 2026-10-11 ahead of clustering; ingest hygiene (platform throttle, path
+rules, excerpt boilerplate, display-time duplicate collapse) built 2026-10-11; N1/N2 not started.*
 
 ## What it is
 
@@ -60,6 +61,7 @@ republishes articles, or a recommendation loop.
             lastFetchAt, lastOkAt, lastItemAt, consecutiveFailures, lastError }],
   status: 'discovered'|'verified'|'active'|'broken'|'retired',
   access: { paywall: 'none'|'metered'|'hard', content: 'title'|'excerpt'|'full' },
+  pathExclude: [String],                          // URL-path regexes dropped at ingest (2026-10-11, admin-only)
   notes, timestamps }
 
 // Place — newsgeek.places (gazetteer, data not code)
@@ -419,6 +421,123 @@ live.
   An alert is an official article; it expires out of the briefing when the alert expires.
 - **Times:** stored as UTC, and "today" is **America/Chicago**. That's the UTC-"today"
   landmine from the FitnessGeek sweep.
+
+### Ingest hygiene (2026-10-11)
+
+Measured in production on 2026-10-11 (the numbers are in `apps/newsgeek/DOCS/CONTEXT.md`):
+the six Blox papers all answered 429, Blox generic feeds were press releases and national
+wire, 631 excerpts ended in boilerplate, and 118 same-title groups (248 articles) in a week
+were one story told several times. Four fixes, none of them clustering.
+
+**1. Platform throttle** (backend, `src/ingest/platform.js`, `src/jobs/worker.js`).
+- Blox (TownNews) throttles us across all its sites, so the per-host limiter can't help. A
+  feed is Blox when its path is `/search/` and it has `f=rss` (`isBloxFeed`).
+- Every Blox feed shares ONE limiter key, `platform:blox`: one in flight, and at least
+  **90 s** from the end of one Blox request to the start of the next, across ticks. At most
+  one Blox feed per tick; the rest stay due and go oldest-first on later ticks (so six Blox
+  feeds take about 12 minutes to come round).
+- The last-request time is kept in memory only. A restart forgets it, so the first Blox
+  request after a deploy can come early. Accepted.
+- Blox feeds poll no faster than every **60 min**, whatever `pollEveryMin` says. Failure
+  backoff starts from that floor too.
+- **Jitter:** every computed `nextPollAt` (success, failure backoff, Retry-After) is spread
+  by ±10 % of its interval, so feeds stop polling in lockstep after a deploy. A Retry-After
+  is never brought forward. Tests inject the jitter.
+- `/api/health` reports `worker.lastTickDeferred` (Blox feeds held back by the last tick).
+
+**2. Per-source URL path rules** (`Source.pathExclude`).
+- A list of regular-expression sources, tested against the item URL's **pathname** and its
+  canonical URL's pathname (never the host or the query).
+- An item that matches is never stored. Poll stats count it as `drops.path_excluded`.
+- Validated in one place, `@geeksuite/schemas/newsgeek/pathRules` (`cleanPathExclude`):
+  entries trimmed, empties and duplicates dropped; at most **20**, each at most **200**
+  characters, each must compile (else `BAD_USER_INPUT`). The UI mirrors the same rules.
+- **Admins only** (`ADMIN_REQUIRED` otherwise, even for a reader's own source). A rule runs
+  on the worker's single thread for every item, so a pathological pattern from any reader
+  could stall ingest for everyone.
+- Defaults (`backend/src/seed/pathRules.js`, seeded on fresh installs; existing databases
+  get them through `scripts/set-path-rules.js`):
+  - the six Blox papers: `^/online_features/`, `/press_releases/`,
+    `^/news/(national|world|nation)/`, `^/ap/`;
+  - `guardian-us`: `^/sport/`, `^/football/`.
+- Stored articles that a rule now covers are deleted once by
+  `scripts/purge-path-excluded.js`. It is scoped to each article's own source and is a dry
+  run unless `--apply`.
+
+**3. Excerpt boilerplate** (`ingest/normalize.js` `cleanExcerpt`, applied before the cap).
+- Strips WordPress's `The post <…> appeared first on <…>.` (only the last "The post …",
+  so "the post office" earlier in the text survives).
+- Strips a trailing `Continue reading…` (with an optional quoted title or arrow) and
+  `Read more »` / `Read More` / `[Read more]`. These only count when they start a sentence
+  or the excerpt: "…where you can read more." stays.
+- `[…]` / `[...]` become a plain `…` (the text *was* cut).
+- Whitespace collapsed.
+- Every pattern is anchored at the END: nothing in the middle of an excerpt is ever
+  removed.
+- `scripts/clean-excerpts.js` re-applies the cleaner to stored excerpts (dry run unless
+  `--apply`).
+
+**4. Duplicate collapse** (gateway, display time, `graphql/newsgeek/dedupe.js`, pure).
+Nothing is merged in the database; clustering (N1) will replace this with real stories.
+- **Key:** the title normalised like `titleKey`. An aggregator's trailing " - Publisher"
+  is stripped (ingest already does; repeated for older rows).
+- **Obituary-shaped titles:** the title says "obituary", or the publisher is a known
+  obituary host (`OBITUARY_HOSTS`: legacy.com, dignitymemorial.com, tributearchive.com,
+  echovita.com). These keep only the text before the first ` - ` and drop
+  `Obituary (YYYY)`. "Elendle Buck Obituary (2026) - Arkadelphia, AR - Smith Family
+  Funeral Home" → `elendle buck`.
+- **Under-merge guards:**
+  - a one-word key never groups;
+  - a 2–3-word key groups only around an obituary-shaped member, so two "Police Beat"
+    columns stay apart;
+  - official sources never group;
+  - a group never holds two articles from one source.
+- **Group:** equal keys within **72 h** of the group's earliest member.
+- **Representative** (per reader):
+  1. a ★ Favorite source;
+  2. direct over aggregator;
+  3. the source's first section, local > state > other;
+  4. the earliest `publishedAt`.
+  The others become `alsoIn` (at most 5, the representative excluded).
+- **The wire rule (the group's section):**
+  - When **no member has an own Arkansas place** and some member's source is national or
+    world first, the group is filed under that section. "Own" means the article's places
+    minus the ones inherited from its source, as in the ranking.
+  - So AP copy carried by KATV and the Sentinel-Record stays out of State (and out of
+    Local).
+  - Otherwise the group takes the representative's per-story section.
+  - A lone article keeps the per-story rule unchanged.
+- **Today:** collapse runs over all candidates **before** the per-source cap and the
+  quotas. A group is one candidate, ranked as its representative in the group's section.
+  It counts once against the representative's source cap and once against the quota.
+  `moreCount` counts stories, not copies.
+- **newsArticles** (Everything and section pages): collapse runs **within each page**.
+  - The page fetches `limit × 2` rows (at most 200). One more read finds the other copies
+    of those stories within ±72 h, from the same list ignoring the section.
+  - A group sits where its newest copy on the page sits.
+  - A section page keeps a group only if the **group's** section is that page's, so the
+    wire copy leaves the State page for National.
+  - `nextBefore` is the `publishedAt` of the last returned group's newest page copy, so no
+    story between the copies is skipped.
+  - A group with a copy newer than `before` (in this list) was shown on an earlier page, so
+    its older copies never reappear as stories of their own. The cost: `alsoIn` lists only
+    the copies within reach of that page, and the representative is chosen among them.
+- **Cost:** `newsArticles` is one read more than before. `newsFrontPage` is still six reads
+  (the candidates now also carry title, titleKey, publisher and url).
+
+**Contract (2026-10-11, additive):**
+```graphql
+type NewsAlsoIn { publisher: String!  url: String!  sourceId: ID! }
+type NewsArticle { alsoIn: [NewsAlsoIn!]! }        # [] when none; ≤5; the representative excluded
+type NewsSource  { pathExclude: [String!]! }       # [] when none
+input NewsSourceInput { pathExclude: [String!] }   # admin only; replaces the list; ≤20, ≤200 chars, must compile
+```
+**Screens (change set B):**
+- Under a story (Today, Everything, section pages), a quiet "Also in KARK +2" button
+  (44px, `aria-expanded`) opens a list of the other copies' links. The headline is
+  unchanged.
+- The admin source form and the source page get "Skip URLs matching", a list of path
+  patterns with add and remove, validated as on the server.
 
 ## Clustering (the interesting part)
 

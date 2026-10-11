@@ -14,6 +14,8 @@
  */
 
 const gnews = (q) => `https://news.google.com/rss/search?q=${encodeURIComponent(q)}&hl=en-US&gl=US&ceid=US:en`;
+// A Google News location (topic) feed, by its topic id.
+const gnewsTopic = (id) => `https://news.google.com/rss/topics/${id}?hl=en-US&gl=US&ceid=US:en`;
 const feed = (url, pollEveryMin, format = 'rss') => ({ url, format, pollEveryMin });
 const access = (paywall, content) => ({ paywall, content });
 const nws = (zones) => `https://api.weather.gov/alerts/active?zone=${zones.join(',')}`;
@@ -472,6 +474,54 @@ export const SOUTH_SOURCES = [
     kind: 'aggregator', sections: ['local'], places: ['hempstead-county-ar', 'hope-ar', 'nevada-county-ar', 'prescott-ar'],
     feeds: [feed(gnews('"Hope" OR "Prescott" Arkansas when:7d'), 60)], access: access('none', 'title'), blockedDomains: AGG_BLOCKED,
     notes: 'Gap-fill: no free feed of its own. Title-only; credited to the item\'s <source>.',
+  },
+
+  // ---- 2026-10-11 (feed hygiene): Google News LOCATION feeds ---------------
+  // Google's own per-place topic pages, not keyword searches: fewer stray
+  // "Hot Springs, SD" hits than a text query.
+  {
+    slug: 'gnews-geo-hot-springs', name: 'Google News: Hot Springs (location)', homepage: 'https://news.google.com',
+    kind: 'aggregator', sections: ['local'], places: ['hot-springs-ar', 'garland-county-ar'],
+    feeds: [feed(gnewsTopic('CAAqIQgKIhtDQkFTRGdvSUwyMHZNSEYwT0RVU0FtVnVLQUFQAQ'), 60)], access: access('none', 'title'), blockedDomains: AGG_BLOCKED,
+    notes: 'Google News location feed',
+  },
+  {
+    slug: 'gnews-geo-little-rock', name: 'Google News: Little Rock (location)', homepage: 'https://news.google.com',
+    kind: 'aggregator', sections: ['local'], places: ['little-rock-ar', 'pulaski-county-ar'],
+    feeds: [feed(gnewsTopic('CAAqIQgKIhtDQkFTRGdvSUwyMHZNR1owZG1jU0FtVnVLQUFQAQ'), 60)], access: access('none', 'title'), blockedDomains: AGG_BLOCKED,
+    notes: 'Google News location feed',
+  },
+  {
+    slug: 'gnews-geo-conway', name: 'Google News: Conway (location)', homepage: 'https://news.google.com',
+    kind: 'aggregator', sections: ['local'], places: ['conway-ar', 'faulkner-county-ar'],
+    feeds: [feed(gnewsTopic('CAAqIQgKIhtDQkFTRGdvSUwyMHZNSEYwTURnU0FtVnVLQUFQAQ'), 60)], access: access('none', 'title'), blockedDomains: AGG_BLOCKED,
+    notes: 'Google News location feed',
+  },
+  {
+    slug: 'gnews-geo-malvern', name: 'Google News: Malvern (location)', homepage: 'https://news.google.com',
+    kind: 'aggregator', sections: ['local'], places: ['malvern-ar', 'hot-spring-county-ar'],
+    feeds: [feed(gnewsTopic('CAAqIQgKIhtDQkFTRGdvSUwyMHZNSEYwYkRZU0FtVnVLQUFQAQ'), 60)], access: access('none', 'title'), blockedDomains: AGG_BLOCKED,
+    notes: 'Google News location feed',
+  },
+
+  // ---- 2026-10-11: southwest papers with feeds ------------------------------
+  {
+    slug: 'texarkana-today', name: 'Texarkana Today', homepage: 'https://txktoday.com',
+    kind: 'journalism', sections: ['local'], places: ['texarkana-ar', 'miller-county-ar'],
+    feeds: [feed('https://txktoday.com/feed/', 30)], access: access('none', 'excerpt'),
+    notes: 'Verified 2026-10-11: WordPress, 15 items; seen 17×/week in Google News',
+  },
+  {
+    slug: 'camden-news', name: 'Camden News', homepage: 'https://www.camdenarknews.com',
+    kind: 'journalism', sections: ['local'], places: ['camden-ar', 'ouachita-county-ar'],
+    feeds: [feed('https://www.camdenarknews.com/rss/headlines/', 30)], access: access('hard', 'excerpt'),
+    notes: 'WEHCO, hard paywall; 150-item feed carries wire too (~6–10% overlaps D-G)',
+  },
+  {
+    slug: 'el-dorado-news-times', name: 'El Dorado News-Times', homepage: 'https://www.eldoradonews.com',
+    kind: 'journalism', sections: ['local'], places: ['el-dorado-ar', 'union-county-ar'],
+    feeds: [feed('https://www.eldoradonews.com/rss/headlines/', 30)], access: access('hard', 'excerpt'),
+    notes: 'WEHCO, hard paywall; 150-item feed carries wire too (~6–10% overlaps D-G)',
   },
 ];
 

@@ -48,6 +48,9 @@ export const typeDefs = gql`
     access: NewsSourceAccess!
     feeds: [NewsFeed!]!
     blockedDomains: [String!]!
+    # Ingest hygiene (2026-10-11): regex patterns tested against an item URL's
+    # pathname; a match is never stored. [] when none.
+    pathExclude: [String!]!
     notes: String!
     articlesLast7d: Int!
     paywalled: Boolean!  # access.paywall is metered or hard
@@ -97,6 +100,16 @@ export const typeDefs = gql`
     # "Arkansas", "Official"). If it can't be a chip it isn't in the score.
     section: String!
     why: [String!]!
+    # Duplicate collapse (2026-10-11, dedupe.js): other copies of this story
+    # (AP across three sites; an obituary on the paper and on legacy.com),
+    # at most 5, this one excluded. [] when none.
+    alsoIn: [NewsAlsoIn!]!
+  }
+
+  type NewsAlsoIn {
+    publisher: String!
+    url: String!
+    sourceId: ID!
   }
 
   # Today (the front page): sections in order, each capped by the reader's
@@ -200,6 +213,9 @@ export const typeDefs = gql`
     paywall: String
     content: String
     blockedDomains: [String!]
+    # Admins only (ADMIN_REQUIRED otherwise). Replaces the list: ≤20 patterns,
+    # each ≤200 characters and a valid regular expression (BAD_USER_INPUT).
+    pathExclude: [String!]
     notes: String
     defaultOn: Boolean   # admins only (ADMIN_REQUIRED otherwise); create defaults to true for admins
   }

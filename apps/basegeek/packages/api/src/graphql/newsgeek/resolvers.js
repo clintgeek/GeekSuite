@@ -11,9 +11,13 @@ import healthModule from '@geeksuite/schemas/newsgeek/health';
 import paywallsModule from '@geeksuite/schemas/newsgeek/paywalls';
 import feedUrlModule from '@geeksuite/schemas/newsgeek/feedUrl';
 import prefsSchemaModule from '@geeksuite/schemas/newsgeek/prefs';
+import pathRulesModule from '@geeksuite/schemas/newsgeek/pathRules';
 import {
   createContext, rankFrontPage, sectionClause, sectionOf, whyChips, LOCAL_WINDOW_DAYS,
 } from './ranking.js';
+import {
+  collapseDuplicates, dupInfo, DUP_WINDOW_MS, OBITUARY_HOSTS,
+} from './dedupe.js';
 
 const {
   SOURCE_KINDS, SECTIONS, SOURCE_STATUSES, FEED_FORMATS, PAYWALLS, PAYWALLED_LEVELS, CONTENT_LEVELS,
@@ -21,6 +25,7 @@ const {
 const { feedHealth } = healthModule;
 const { PAYWALLED_DOMAIN_REGEX, paywalledDomainRegex, isPaywalledDomain } = paywallsModule;
 const { normalizeFeedUrl } = feedUrlModule;
+const { cleanPathExclude } = pathRulesModule;
 const {
   READER_LINKS_MAX, READER_LINK_LABEL_MAX, READER_LINK_TEMPLATE_MAX, SUBSCRIBED_DOMAINS_MAX, MUTED_DOMAINS_MAX,
   HOME_PLACES_MAX, PRIORITY_SOURCES_MAX, SECTION_QUOTA_DEFAULTS, SECTION_QUOTA_MAX,
@@ -58,6 +63,11 @@ const {
  * that same per-story section (ranking.js sectionClause). newsFrontPage costs
  * six reads: prefs, sources, places, one 7-day count aggregation, the
  * candidates (one find, scoring fields only) and the chosen stories.
+ *
+ * Ingest hygiene (plan "Ingest hygiene", Chef 2026-10-11): copies of one story
+ * collapse into one item with `alsoIn` (dedupe.js) in Today and in
+ * newsArticles; a collapsed group counts once against its representative's
+ * source cap and quota. `pathExclude` (per-source URL path rules) is admin-only.
  */
 
 const DEFAULT_LIMIT = 50;
@@ -210,6 +220,7 @@ async function shapeSources(docs, viewer) {
     access: { paywall: s.access?.paywall || 'none', content: s.access?.content || 'excerpt' },
     feeds: (s.feeds || []).map((f) => shapeFeed(f, s.status)),
     blockedDomains: s.blockedDomains || [],
+    pathExclude: s.pathExclude || [],
     notes: s.notes || '',
     articlesLast7d: counts.get(String(s._id)) || 0,
     paywalled: isPaywalledSource(s),
@@ -389,6 +400,12 @@ async function validateSourceInput(input, { creating }) {
     patch.blockedDomains = domains;
   }
 
+  if (input.pathExclude != null) {
+    const cleaned = cleanPathExclude(input.pathExclude);
+    if (!cleaned.ok) throw badInput(cleaned.message);
+    patch.pathExclude = cleaned.rules;
+  }
+
   if (input.notes != null) patch.notes = cleanString(input.notes, 'notes', 2000);
   if (input.defaultOn != null) patch.defaultOn = Boolean(input.defaultOn);
 
@@ -459,6 +476,9 @@ const readerFeeds = (feeds) => feeds && feeds.map((f) => ({ ...f, pollEveryMin: 
 function assertAdderInput(input) {
   if (input.defaultOn != null) throw adminRequired('Only an admin can turn a source on for everyone');
   if (input.kind === 'aggregator') throw adminRequired('Only an admin can add an aggregator');
+  // A path rule runs on the ingest worker's single thread for every item; a
+  // pathological pattern would stall ingest for everyone (2026-10-11).
+  if (input.pathExclude != null) throw adminRequired('Only an admin can set URL path rules');
 }
 
 function duplicateSlugGuard(err) {
@@ -639,8 +659,11 @@ const rankingContext = (places, viewer, now) => createContext({
   now,
 });
 
-/** One article for this reader: its per-reader section and why-chips included. */
-function shapeArticle(a, src, placeMap, ctx) {
+/**
+ * One article for this reader: its per-reader section and why-chips included.
+ * `group` (a duplicate group, dedupe.js) supplies the group's section and alsoIn.
+ */
+function shapeArticle(a, src, placeMap, ctx, group = null) {
   return {
     id: String(a._id),
     title: a.title,
@@ -656,8 +679,9 @@ function shapeArticle(a, src, placeMap, ctx) {
     viaAggregator: src.kind === 'aggregator',
     sections: src.sections || [],
     places: placesOf(a.places, placeMap),
-    section: sectionOf(ctx, a, src),
+    section: group?.section || sectionOf(ctx, a, src),
     why: whyChips(ctx, a, src),
+    alsoIn: group?.alsoIn || [],
   };
 }
 
@@ -666,6 +690,55 @@ const placeMapOf = (places) => new Map(places.map((p) => [String(p._id), shapePl
 /** Not expired (NWS alerts leave when the alert does). */
 const unexpired = (now) => ({ $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }] });
 
+// newsArticles over-fetches so a page still holds up to `limit` stories after
+// duplicates collapse.
+const PAGE_FETCH_FACTOR = 2;
+const PAGE_FETCH_MAX = 200;
+// Copies of the page's stories looked up around it (dedupe.js), at most this many.
+const DUP_CONTEXT_MAX = 1000;
+const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+const OBITUARY_HOST_REGEX = new RegExp(`^(?:[^.]+\\.)*(?:${OBITUARY_HOSTS.map(escapeRegex).join('|')})$`, 'i');
+
+/**
+ * The other copies of this page's stories: articles in the same list (every
+ * filter but the section and the cursor) within DUP_WINDOW_MS of the page,
+ * whose title key matches a page row's, or that are obituary-shaped. One read.
+ */
+async function duplicateContext({ rows, base, walled, sourceMap }) {
+  const keys = new Set();
+  for (const r of rows) {
+    const info = dupInfo(r, sourceMap.get(String(r.sourceId)));
+    if (!info) continue;
+    keys.add(info.key);
+    if (r.titleKey) keys.add(r.titleKey);
+  }
+  if (!keys.size) return [];
+  const times = rows.map((r) => new Date(r.publishedAt).getTime());
+  const and = [
+    ...base,
+    { _id: { $nin: rows.map((r) => r._id) } },
+    { publishedAt: { $gte: new Date(Math.min(...times) - DUP_WINDOW_MS), $lte: new Date(Math.max(...times) + DUP_WINDOW_MS) } },
+    { $or: [{ titleKey: { $in: [...keys] } }, { title: { $regex: /obituary/i } }, { publisherDomain: { $regex: OBITUARY_HOST_REGEX } }] },
+  ];
+  if (walled) and.push({ $nor: [walled] });
+  return NewsArticle.find({ $and: and }, { embedding: 0 }).limit(DUP_CONTEXT_MAX).lean();
+}
+
+/**
+ * newsArticles. Newest first; duplicates collapse WITHIN the page (dedupe.js):
+ *  - the page fetches up to limit × 2 rows (≤200), plus one read for the
+ *    other copies of those stories around them (duplicateContext);
+ *  - a group sits where its newest copy on the page sits, and is shown as
+ *    its representative with `alsoIn`;
+ *  - section pages keep a group only when the GROUP's section is the page's
+ *    (wire carried by a state paper leaves State for National);
+ *  - `nextBefore` is the publishedAt of the newest page copy of the last
+ *    returned group, so nothing between is skipped;
+ *  - a group with a copy newer than `before` (in this list) was shown on an
+ *    earlier page, so its older copies do not reappear as stories of their
+ *    own on later pages. The cost: alsoIn on a page lists only the copies
+ *    within reach of that page (±72 h of it).
+ */
 async function articlePage(args, viewer) {
   const { freeToReadOnly } = viewer;
   const { section, placeId, sourceId, before } = args;
@@ -687,35 +760,58 @@ async function articlePage(args, viewer) {
 
   const now = new Date();
   const ctx = rankingContext(places, viewer, now);
-  // Everything but the cursor: the whole current list.
-  const list = [{ sourceId: { $in: sources.map((s) => s._id) } }, unexpired(now)];
-  if (placeId != null) list.push({ places: { $in: placeWithDescendants(placeId, places) } });
-  if (section) list.push(sectionClause(ctx, section, sources));
+  // Everything but the section and the cursor.
+  const base = [{ sourceId: { $in: sources.map((s) => s._id) } }, unexpired(now)];
+  if (placeId != null) base.push({ places: { $in: placeWithDescendants(placeId, places) } });
   // A hidden publisher is out of the list itself, so hiddenPaywalled never counts it.
   const muted = mutedClause(sources, viewer);
-  if (muted) list.push({ $nor: [muted] });
+  if (muted) base.push({ $nor: [muted] });
+  // Everything but the cursor: the whole current list.
+  const list = [...base];
+  if (section) list.push(sectionClause(ctx, section, sources));
 
   const walled = freeToReadOnly ? paywalledClause(sources, viewer) : null;
   const filter = { $and: [...list] };
   if (before != null) filter.$and.push({ publishedAt: { $lt: before } });
   if (walled) filter.$and.push({ $nor: [walled] });
 
+  const fetchN = Math.min(limit * PAGE_FETCH_FACTOR, PAGE_FETCH_MAX);
   const [rows, hiddenPaywalled] = await Promise.all([
     NewsArticle.find(filter, { embedding: 0 })
       .sort({ publishedAt: -1, _id: -1 })
-      .limit(limit)
+      .limit(fetchN)
       .lean(),
     // The one extra count, only when something can be hidden.
     walled ? NewsArticle.countDocuments({ $and: [...list, walled] }) : 0,
   ]);
+  if (!rows.length) return { items: [], nextBefore: null, hiddenPaywalled };
 
   const sourceMap = new Map(sources.map((s) => [String(s._id), s]));
   const placeMap = placeMapOf(places);
-  const items = rows.map((a) => shapeArticle(a, sourceMap.get(String(a.sourceId)), placeMap, ctx));
+  const context = await duplicateContext({ rows, base, walled, sourceMap });
+  const groups = collapseDuplicates({ ctx, articles: [...rows, ...context], sourceById: sourceMap });
 
+  const rowIndex = new Map(rows.map((r, i) => [String(r._id), i]));
+  const beforeMs = before != null ? new Date(before).getTime() : null;
+  const inThisList = (m) => !section || sectionOf(ctx, m.article, m.source) === section;
+  const kept = [];
+  for (const g of groups) {
+    const onPage = g.members.map((m) => rowIndex.get(String(m.article._id))).filter((i) => i != null);
+    if (!onPage.length) continue;                       // only copies around the page
+    if (section && g.section !== section) continue;     // the group belongs to another section
+    const shownEarlier = beforeMs != null && g.members.some((m) => !rowIndex.has(String(m.article._id))
+      && new Date(m.article.publishedAt).getTime() >= beforeMs && inThisList(m));
+    if (shownEarlier) continue;
+    kept.push({ g, pos: Math.min(...onPage) });
+  }
+  kept.sort((a, b) => a.pos - b.pos);
+  const page = kept.slice(0, limit);
+  const items = page.map(({ g }) => shapeArticle(g.rep, g.source, placeMap, ctx, g));
+
+  const more = rows.length === fetchN || kept.length > limit || items.length === limit;
   return {
     items,
-    nextBefore: items.length === limit ? items[items.length - 1].publishedAt : null,
+    nextBefore: items.length && more ? rows[page[page.length - 1].pos].publishedAt : null,
     hiddenPaywalled,
   };
 }
@@ -725,7 +821,10 @@ async function articlePage(args, viewer) {
 // ---------------------------------------------------------------------------
 
 // Scoring needs only these; the chosen stories are read in full afterwards.
-const CANDIDATE_FIELDS = { sourceId: 1, publishedAt: 1, expiresAt: 1, places: 1, publisherDomain: 1 };
+// Duplicate collapse (dedupe.js) also needs the title, publisher and link.
+const CANDIDATE_FIELDS = {
+  sourceId: 1, publishedAt: 1, expiresAt: 1, places: 1, publisherDomain: 1, title: 1, titleKey: 1, publisher: 1, url: 1,
+};
 
 async function frontPage(viewer) {
   const now = new Date();
@@ -753,7 +852,7 @@ async function frontPage(viewer) {
   ]);
 
   const ctx = rankingContext(places, viewer, now);
-  const ranked = rankFrontPage({ ctx, candidates, sources, counts, quotas: viewer.sectionQuotas });
+  const ranked = rankFrontPage({ ctx, candidates, sources, counts, quotas: viewer.sectionQuotas, collapse: collapseDuplicates });
   const chosen = ranked.flatMap((s) => s.items.map((e) => e.article._id));
   const full = chosen.length ? await NewsArticle.find({ _id: { $in: chosen } }, { embedding: 0 }).lean() : [];
   const byId = new Map(full.map((a) => [String(a._id), a]));
@@ -767,7 +866,7 @@ async function frontPage(viewer) {
       moreCount: s.moreCount,
       items: s.items
         .filter((e) => byId.has(String(e.article._id))) // purged between the two reads
-        .map((e) => shapeArticle(byId.get(String(e.article._id)), e.source, placeMap, ctx)),
+        .map((e) => shapeArticle(byId.get(String(e.article._id)), e.source, placeMap, ctx, { section: e.section, alsoIn: e.alsoIn })),
     })).filter((s) => s.items.length),
   };
 }

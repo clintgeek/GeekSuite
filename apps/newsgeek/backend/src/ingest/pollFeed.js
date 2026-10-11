@@ -14,14 +14,17 @@
  */
 import crypto from 'node:crypto';
 import constants from '@geeksuite/schemas/newsgeek/constants';
+import pathRulesModule from '@geeksuite/schemas/newsgeek/pathRules';
 import { fetchFeed, FetchError } from './fetchFeed.js';
 import { parseFeed } from './parse.js';
 import {
   cleanTitle, makeExcerpt, canonicalUrl, domainOf, domainMatches, stripPublisherSuffix,
   titleKey as makeTitleKey, resolvePublishedAt, collapseWhitespace,
 } from './normalize.js';
+import { effectivePollMin, makeJitter } from './platform.js';
 
 const { BROKEN_AFTER_FAILURES, ARTICLE_RETENTION_DAYS } = constants;
+const { compilePathRules, isPathExcluded } = pathRulesModule;
 
 const MIN_MS = 60 * 1000;
 const HOUR_MS = 60 * MIN_MS;
@@ -71,9 +74,12 @@ function isHttpUrl(s) {
 /**
  * One raw parsed item → an article document, or `{ drop: reason }`.
  * @param {object} raw          from parse.js
- * @param {object} ctx          { source, feed, fetchedAt, matcher, directDomains }
+ * @param {object} ctx          { source, feed, fetchedAt, matcher, directDomains, pathRules }
+ *   pathRules: compiled `source.pathExclude` (compiled here when omitted).
  */
-export function normalizeItem(raw, { source, feed, fetchedAt, matcher, directDomains = [] }) {
+export function normalizeItem(raw, {
+  source, feed, fetchedAt, matcher, directDomains = [], pathRules = compilePathRules(source.pathExclude),
+}) {
   const isAggregator = source.kind === 'aggregator';
 
   // Who wrote it. Aggregator items are credited to their <source>, never to
@@ -100,6 +106,10 @@ export function normalizeItem(raw, { source, feed, fetchedAt, matcher, directDom
   let url = String(raw.link || '').trim();
   if (!isHttpUrl(url) && isHttpUrl(String(raw.guid || '').trim())) url = String(raw.guid).trim();
   if (!isHttpUrl(url) || url.length > 4000) return { drop: 'no_link' };
+  // The source's own path rules (Blox press releases and national wire under
+  // /online_features/ and /news/national/; Guardian /sport/): the URL's
+  // pathname and its canonical form's.
+  if (isPathExcluded([url, canonicalUrl(url)], pathRules)) return { drop: 'path_excluded' };
 
   let guid = String(raw.guid || '').trim() || url || hash(`${title}|${raw.date || ''}`);
   if (guid.length > 2000) guid = `sha1:${hash(guid)}`;
@@ -239,9 +249,12 @@ function trimError(msg) {
   return s.length > ERROR_MAX ? `${s.slice(0, ERROR_MAX - 1)}…` : s;
 }
 
-async function recordFailure({ Source, source, feed, at, status, message, retryAfterMs, log }) {
+async function recordFailure({ Source, source, feed, at, status, message, retryAfterMs, jitter, log }) {
   const failures = (feed.consecutiveFailures || 0) + 1;
-  const delay = backoffMs(feed.pollEveryMin, failures, retryAfterMs);
+  const backoff = backoffMs(effectivePollMin(feed), failures, retryAfterMs);
+  // Jittered like every nextPollAt, but never earlier than a Retry-After asked.
+  const asked = Number.isFinite(retryAfterMs) ? Math.min(retryAfterMs, MAX_RETRY_AFTER_MS) : 0;
+  const delay = Math.max(jitter(backoff), asked);
   await writeFeedState(Source, source, feed, {
     lastFetchAt: at,
     lastHttpStatus: status ?? null,
@@ -272,9 +285,11 @@ async function recordFailure({ Source, source, feed, at, status, message, retryA
  * @param {Function} [args.fetchImpl]
  * @param {object} [args.fetchOptions]  { timeoutMs, maxBytes }
  * @param {() => Date} [args.now]
+ * @param {(ms: number) => number} [args.jitter]  spreads nextPollAt (platform.js makeJitter); tests pass noJitter
  */
 export async function pollFeed({
   source, feed, models, matcher = null, directDomains = [], fetchImpl, fetchOptions = {}, now = () => new Date(), log,
+  jitter = makeJitter(),
 }) {
   const { Source, Article } = models;
   const at = now();
@@ -284,7 +299,7 @@ export async function pollFeed({
     res = await fetchFeed(feed, { ...fetchOptions, ...(fetchImpl ? { fetchImpl } : {}), now });
   } catch (err) {
     if (!(err instanceof FetchError)) throw err;
-    return recordFailure({ Source, source, feed, at, status: err.status, message: err.message, retryAfterMs: err.retryAfterMs, log });
+    return recordFailure({ Source, source, feed, at, status: err.status, message: err.message, retryAfterMs: err.retryAfterMs, jitter, log });
   }
 
   let counts = { inserted: 0, dupGuid: 0, dupUrl: 0, dupTitle: 0, invalid: 0 };
@@ -296,11 +311,12 @@ export async function pollFeed({
     try {
       parsed = parseFeed(res.body, feed.format);
     } catch (err) {
-      return recordFailure({ Source, source, feed, at, status: res.status, message: `parse: ${err.message}`, retryAfterMs: null, log });
+      return recordFailure({ Source, source, feed, at, status: res.status, message: `parse: ${err.message}`, retryAfterMs: null, jitter, log });
     }
     const docs = [];
+    const pathRules = compilePathRules(source.pathExclude);
     for (const raw of parsed.items) {
-      const out = normalizeItem(raw, { source, feed, fetchedAt: at, matcher, directDomains });
+      const out = normalizeItem(raw, { source, feed, fetchedAt: at, matcher, directDomains, pathRules });
       if (out.drop) {
         drops[out.drop] = (drops[out.drop] || 0) + 1;
         continue;
@@ -317,7 +333,7 @@ export async function pollFeed({
     lastHttpStatus: res.status,
     lastError: null,
     consecutiveFailures: 0,
-    nextPollAt: new Date(at.getTime() + Math.max(1, Number(feed.pollEveryMin) || 15) * MIN_MS),
+    nextPollAt: new Date(at.getTime() + jitter(effectivePollMin(feed) * MIN_MS)),
   };
   // Conditional-GET validators: keep the old ones unless the server sent new ones.
   if (res.etag) fields.etag = res.etag;

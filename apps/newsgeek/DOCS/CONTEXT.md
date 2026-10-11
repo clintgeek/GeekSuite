@@ -19,7 +19,9 @@ at the repo root. This file is a dated decision log, and it should stay honest.
 - **When it runs:** in production, or with `INGEST_AUTORUN=1`. `INGEST_DISABLED=1` is the
   kill switch. It ticks every 60s.
 - **Concurrency:** 4 feeds at a time (`INGEST_CONCURRENCY`), never more than one request
-  per host. All state lives in Mongo, so a restart mid-tick re-polls and the dedupe
+  per host. **Blox (TownNews) feeds count as one host** (`platform:blox`): one in flight,
+  ≥90 s between requests, at most one per tick, polled no faster than hourly. Every
+  `nextPollAt` is jittered ±10 % (2026-10-11). All state lives in Mongo, so a restart mid-tick re-polls and the dedupe
   absorbs the repeats.
 - **The gateway never calls it.** "Check now" sets `feeds.nextPollAt = now`, and the next
   tick picks that up.
@@ -70,7 +72,7 @@ Watchtower recreates the container with its old env.
   - Google News links are still news.google.com redirect wrappers.
   - NWS links point at the api.weather.gov alert URL, not a page for humans.
   - The first tick after a fresh deploy polls all 32 feeds at once (still one request per
-    host at a time). No jitter yet.
+    host at a time). No jitter yet (added 2026-10-11).
 
 ### 2026-10-10: "Free to read" (paywalls)
 
@@ -265,4 +267,71 @@ Little Rock, Texarkana, Conway and the southern half of the state.
 - **Set Chef's ring after the deploy** (Settings → Home places): Arkadelphia, Clark County,
   Hot Springs, Little Rock, Conway, Garland County, Hot Spring County. Until a reader has a
   ring, Local is the source label, as before.
+
+### 2026-10-11: feed hygiene (step 2)
+
+- **Audit (production, 2026-10-11):**
+  - All six TownNews/Blox sites answer **429**: malvern-daily-record, saline-courier,
+    ashley-county-ledger, log-cabin-democrat, magnolia-reporter, ktbs (feeds
+    `…/search/?f=rss…`). The platform throttles us collectively, so the per-host limiter
+    doesn't help.
+  - Blox generic feeds are junk:
+    - Malvern: 50 of 50 article URLs under `/online_features/press_releases/`.
+    - Saline Courier: 50 of 50 the same.
+    - Ashley County Ledger: 27 press releases, 14 `/news/national/`, and more
+      `/online_features/…`.
+  - The Guardian US: 12 `/sport/` and 2 `/football/` of ~65 (TV listings like "NFL today:
+    How to watch…").
+  - Excerpts: **567** end in WordPress's "The post … appeared first on …", and **64** in
+    "Continue reading" / "Read more".
+  - Cross-source duplicates: **118** same-titleKey groups covering **248** articles in 7
+    days:
+    - AP copy across the TV sites, the Sentinel-Record and the Log Cabin;
+    - Advocate / Arkansas Times / KUAR co-publishing;
+    - obituaries as "Elendle Buck" (The Arkadelphian) and as "Elendle Buck Obituary (2026)
+      - Arkadelphia, AR - Smith Family Funeral Home" (Google News).
+  - Wire leak: AP stories carried by local and state papers have no Arkansas place of their
+    own, so per-story sectioning put them in State.
+- **What was built** (the rules are in the plan's "Ingest hygiene (2026-10-11)"):
+  - the Blox platform throttle with a 60-min floor, plus ±10 % jitter;
+  - per-source URL path rules (`pathExclude`, admin-only, validated in
+    `@geeksuite/schemas/newsgeek/pathRules`), dropped at ingest as `drops.path_excluded`;
+  - the excerpt cleaner (end-anchored);
+  - display-time duplicate collapse in the gateway (`dedupe.js`: `alsoIn`, the wire rule,
+    a group counts once in Today).
+- **New sources** (insert-if-absent, on the next boot):
+  - four Google News **location** feeds: `gnews-geo-hot-springs`, `-little-rock`,
+    `-conway`, `-malvern`;
+  - `texarkana-today` (free, WordPress);
+  - `camden-news` and `el-dorado-news-times` (WEHCO, hard paywall; their 150-item feeds
+    carry wire too). These two now have RSS, which supersedes the 2026-10-10 "no RSS" and
+    "Camden News: parked" gap notes.
+  - `camdenarknews.com` and `eldoradonews.com` are in `PAYWALLED_DOMAINS`.
+  - 95 seeded sources in all (was 88).
+- **The Blox throttle is in memory.** A restart (every main push) forgets the last Blox
+  request, so the first one after a deploy can come early. Six Blox feeds now take about
+  12 minutes to come round once, one every 2 minutes, because the gap is 90 s and ticks
+  are 60 s apart. If they keep answering 429, raise `BLOX_MIN_GAP_MS` rather than adding
+  feeds.
+- **Duplicate collapse is display only.** The database keeps every copy. Clustering (N1)
+  will replace it. Section pages collapse within the page, and an `alsoIn` there lists
+  only the copies within ±72 h of that page.
+- **Deploy order:** change set A (backend + gateway + schemas) is additive. The live UI
+  ignores `alsoIn` and `pathExclude`, and the backend only drops items and spaces out
+  polls. Change set B (UI) selects the new fields, so it ships after basegeek is live.
+- **After the image with A is live, in production, in this order** (each script prints
+  what it would do first; none prints the connection string):
+
+  ```
+  docker exec newsgeek node scripts/set-path-rules.js --dry-run
+  docker exec newsgeek node scripts/set-path-rules.js
+  docker exec newsgeek node scripts/purge-path-excluded.js
+  docker exec newsgeek node scripts/purge-path-excluded.js --apply
+  docker exec newsgeek node scripts/clean-excerpts.js
+  docker exec newsgeek node scripts/clean-excerpts.js --apply
+  ```
+  `set-path-rules` touches only `pathExclude` on the seven listed slugs.
+  `purge-path-excluded` deletes only articles whose URL path matches **their own**
+  source's rules. `clean-excerpts` writes only `excerpt`, only where the cleaner changes
+  it. All three are safe to run twice.
 

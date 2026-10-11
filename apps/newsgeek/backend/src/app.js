@@ -122,6 +122,7 @@ export function createApp(options = {}) {
           feedsDue: w.feedsDue,
           lastTickPolled: w.lastTickPolled,
           lastTickFailed: w.lastTickFailed,
+          lastTickDeferred: w.lastTickDeferred ?? null, // Blox feeds held back by the platform throttle
         }
         : null,
     });

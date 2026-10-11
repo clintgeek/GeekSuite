@@ -50,6 +50,11 @@
  *    against the aggregator. The section's quota is a CAP, never a target: a
  *    quiet section stays short, and an empty one is left out.
  *
+ * 4b. DUPLICATES (2026-10-11, dedupe.js): the resolver passes `collapse`, and
+ *    a group of copies of one story (AP across three sites) is ranked as ONE
+ *    candidate — its representative, in the GROUP's section (the wire rule)
+ *    — so it counts once against its representative's source cap and quota.
+ *
  * 5. WHY. Every story carries the chips that explain its score: the ring place
  *    that made it local ("Arkadelphia"), "Arkansas" when that is its locality,
  *    "★ Favorite" / "Less", "Official". If it can't be a chip it isn't in the
@@ -182,7 +187,7 @@ export function bestRingMatch(ctx, article, source) {
   return best;
 }
 
-const firstSection = (source) => (source.sections && source.sections[0]) || 'national';
+export const firstSection = (source) => (source.sections && source.sections[0]) || 'national';
 const labelledStateOrLocal = (source) => (source.sections || []).some((s) => s === 'state' || s === 'local');
 
 /** The story's section for this reader (header, 2). */
@@ -254,9 +259,8 @@ export function whyChips(ctx, article, source, loc = locality(ctx, article, sour
   return why;
 }
 
-/** One story's full judgement. */
-export function judge(ctx, article, source, countLast7d) {
-  const section = sectionOf(ctx, article, source);
+/** One story's full judgement. `section` overrides the per-story rule (a duplicate group's own section). */
+export function judge(ctx, article, source, countLast7d, section = sectionOf(ctx, article, source)) {
   const age = ctx.now - new Date(article.publishedAt).getTime();
   const fresh = freshness(age, countLast7d, windowMs(section));
   const loc = locality(ctx, article, source);
@@ -282,18 +286,23 @@ const byNewest = (a, b) => new Date(b.article.publishedAt) - new Date(a.article.
 /**
  * Today. `candidates` are the visible, unexpired articles of the last
  * LOCAL_WINDOW_DAYS (already filtered for Free to read and hidden publishers).
- * @returns {Array<{ key, title, items: Array<{ article, source, section, score, why }>, moreCount }>}
+ * `collapse({ ctx, articles, sourceById })` (dedupe.js collapseDuplicates)
+ * groups copies of one story; without it every article stands alone.
+ * @returns {Array<{ key, title, items: Array<{ article, source, section, score, why, alsoIn }>, moreCount }>}
  */
-export function rankFrontPage({ ctx, candidates, sources, counts = new Map(), quotas }) {
+export function rankFrontPage({ ctx, candidates, sources, counts = new Map(), quotas, collapse = null }) {
   const sourceById = new Map(sources.map((s) => [String(s._id), s]));
+  const units = collapse
+    ? collapse({ ctx, articles: candidates, sourceById })
+    : candidates.map((article) => ({ rep: article, source: sourceById.get(String(article.sourceId)), alsoIn: [], section: null }));
   const groups = new Map(SECTION_ORDER.map((k) => [k, []]));
-  for (const article of candidates) {
-    const source = sourceById.get(String(article.sourceId));
+  for (const unit of units) {
+    const { rep: article, source } = unit;
     if (!source) continue;
-    const j = judge(ctx, article, source, counts.get(String(source._id)) || 0);
+    const j = judge(ctx, article, source, counts.get(String(source._id)) || 0, unit.section || undefined);
     if (!j.inWindow) continue;
     if (!groups.has(j.section)) groups.set(j.section, []);
-    groups.get(j.section).push({ article, source, ...j });
+    groups.get(j.section).push({ article, source, alsoIn: unit.alsoIn || [], ...j });
   }
 
   const favoriteLeadMs = FAVORITE_LEAD_DAYS * DAY_MS;

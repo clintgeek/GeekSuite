@@ -12,6 +12,7 @@
  */
 
 import { SOUTH_PLACES, SOUTH_SOURCES } from './southArkansas.js';
+import { PATH_RULES_BY_SLUG } from './pathRules.js';
 
 const BASE_PLACES = [
   { slug: 'us', name: 'United States', kind: 'country', parent: null, aliases: ['U.S.', 'U.S.A.', 'United States of America'], fips: null },
@@ -246,6 +247,9 @@ const BASE_SOURCES = [
 // The south half of Arkansas (2026-10-10 research): its own module so the
 // starter list above stays readable. Same insert-if-absent seeding.
 export const PLACES = [...BASE_PLACES, ...SOUTH_PLACES];
-export const SOURCES = [...BASE_SOURCES, ...SOUTH_SOURCES];
+// Path rules (./pathRules.js) ride along on the sources they name.
+export const SOURCES = [...BASE_SOURCES, ...SOUTH_SOURCES].map((s) => (
+  PATH_RULES_BY_SLUG[s.slug] ? { ...s, pathExclude: [...PATH_RULES_BY_SLUG[s.slug]] } : s
+));
 
 export default { PLACES, SOURCES };

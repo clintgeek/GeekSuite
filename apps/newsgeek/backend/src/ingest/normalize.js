@@ -63,18 +63,56 @@ export function capOnWord(text, max = EXCERPT_MAX) {
   return `${cut.replace(/[\s,;:.\-–—]+$/, '')}…`;
 }
 
+// ---------------------------------------------------------------------------
+// Excerpt boilerplate (2026-10-11, plan "Ingest hygiene"). Production had 567
+// excerpts ending in WordPress's "The post … appeared first on …." and 64 in
+// "Continue reading" / "Read more". Every pattern is anchored at the END of
+// the excerpt, so nothing in the middle of the text is ever removed; the
+// "Continue reading" / "Read more" ones must also start a sentence (or the
+// excerpt), so "…where you can read more." stays.
+// ---------------------------------------------------------------------------
+
+// "The post <title> appeared first on <site>." The tempered token stops the
+// title part at another "The post ", so a body that mentions "the post
+// office" earlier is never swallowed: only the LAST "The post …" can match.
+const WP_FOOTER = /\s*The post (?:(?!The post ).){1,300}? appeared first on [^!?\n]{1,120}?\.?\s*$/;
+// After a sentence end (or at the very start): an optional "[", the phrase,
+// an optional quoted title (WordPress: Continue reading "Title"), an optional
+// arrow or ellipsis, an optional "]". Case-sensitive on purpose.
+const CONTINUE_READING = /(?:^|(?<=[.!?…"”')\]]))\s*(?:\[\s*)?Continue reading(?:\s+[“"][^”"]{1,200}[”"])?(?:\s*(?:→|»|›|\.{3}|…))?(?:\s*\])?\s*$/;
+const READ_MORE = /(?:^|(?<=[.!?…"”')\]]))\s*(?:\[\s*)?Read [Mm]ore(?:\s*(?:→|»|›|\.{3}|…))?(?:\s*\])?\s*$/;
+// "[…]" / "[...]" (WordPress's excerpt_more): the text WAS cut, so it becomes
+// a plain "…" rather than vanishing.
+const BRACKET_ELLIPSIS = /\s*\[\s*(?:…|\.{3})\s*\]\s*$/;
+
+/** Strip feed boilerplate from the END of an excerpt; whitespace collapsed. Pure, idempotent. */
+export function cleanExcerpt(text) {
+  let s = collapseWhitespace(text);
+  for (let i = 0; i < 4; i += 1) {
+    const before = s;
+    s = s.replace(WP_FOOTER, '');
+    s = s.replace(CONTINUE_READING, '');
+    s = s.replace(READ_MORE, '');
+    s = s.replace(BRACKET_ELLIPSIS, '…');
+    s = s.trim();
+    if (s === before) break;
+  }
+  return s;
+}
+
 /**
- * The excerpt we store: the feed's own summary/description, stripped and
- * capped; if there is none, a capped slice of the content stripped of HTML.
- * Sources marked `access.content: 'title'` (Hacker News, Google News) store none.
+ * The excerpt we store: the feed's own summary/description, stripped,
+ * cleaned of boilerplate and capped; if there is none, a capped slice of the
+ * content stripped of HTML. Sources marked `access.content: 'title'`
+ * (Hacker News, Google News) store none.
  */
 export function makeExcerpt({ summary, content }, { contentLevel } = {}) {
   if (contentLevel === 'title') return '';
-  const fromSummary = stripHtml(summary);
+  const fromSummary = cleanExcerpt(stripHtml(summary));
   if (fromSummary) return capOnWord(fromSummary);
   // Only the opening of a full text: cut the HTML before stripping so a
   // 1.4 MB feed never makes us strip whole articles.
-  const fromContent = stripHtml(String(content ?? '').slice(0, EXCERPT_MAX * 8));
+  const fromContent = cleanExcerpt(stripHtml(String(content ?? '').slice(0, EXCERPT_MAX * 8)));
   return capOnWord(fromContent);
 }
 
@@ -183,6 +221,6 @@ export function resolvePublishedAt(raw, fetchedAt) {
 }
 
 export default {
-  decodeEntities, stripHtml, capOnWord, makeExcerpt, cleanTitle, canonicalUrl, domainOf,
+  decodeEntities, stripHtml, capOnWord, makeExcerpt, cleanExcerpt, cleanTitle, canonicalUrl, domainOf,
   domainMatches, stripPublisherSuffix, titleKey, resolvePublishedAt, collapseWhitespace,
 };

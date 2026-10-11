@@ -50,6 +50,12 @@ function sourceDefinition(mongoose) {
     // aggregator only: publisher domains whose items are dropped (weather.com
     // forecast pages answer Google News town searches).
     blockedDomains: { type: [String], default: [] },
+    // Per-source URL path rules (2026-10-11, "Ingest hygiene"): regex source
+    // strings tested against an item's URL PATHNAME at ingest; a match is
+    // dropped (poll stats `drops.path_excluded`). Blox sites put press
+    // releases and national wire under /online_features/ and /news/national/.
+    // Validated by ./pathRules.js (count, length, must compile). Admins only.
+    pathExclude: { type: [String], default: [] },
     notes: { type: String, default: '', maxlength: 2000 },
     // Reader-added sources (plan "Reader-added sources"): who added it (suite
     // userId — readers and admins alike; null = seeded) and whether it is on for every

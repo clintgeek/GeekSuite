@@ -51,6 +51,11 @@ const PAYWALLED_DOMAINS = [
   'bostonglobe.com',
   'newsweek.com',
   'malvern-online.com', // Chef, 2026-10-10
+  // WEHCO, the same hard paywall stack as hotsr / arkansasonline (2026-10-11).
+  // Both now have direct sources (camden-news, el-dorado-news-times, marked
+  // hard); the domains are listed so their Google News copies hide too.
+  'camdenarknews.com',
+  'eldoradonews.com',
 ];
 
 const escapeRegex = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');

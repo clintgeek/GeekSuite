@@ -90,6 +90,7 @@ export async function runSeed({ Place, Source, data = {}, now = () => new Date()
       status: 'active',
       access: s.access,
       blockedDomains: s.blockedDomains || [],
+      pathExclude: s.pathExclude || [],
       notes: s.notes || '',
     }, at);
     if (inserted) sourcesInserted += 1;
