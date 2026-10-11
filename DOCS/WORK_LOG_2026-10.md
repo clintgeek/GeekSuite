@@ -268,3 +268,33 @@ Chef: sections were jumbled and The Arkadelphian never appeared.
   - The same obituary shows twice (direct and via Google News).
   - The Guardian's TV listings.
   - Google location feeds for the ring towns.
+
+## 2026-10-11 — NewsGeek step 2: feed hygiene
+
+Built from a production audit of the whole pipeline.
+- **Blox throttle:** six TownNews/Blox papers were returning 429 as a platform. They now
+  share one limiter (one request in flight, ≥90 s apart, polled hourly), and every feed's
+  next poll gets ±10% jitter.
+- **Path rules:** per-source URL path rules (admin-only), applied at ingest. Defaults: the
+  Blox papers skip `/online_features/`, `/press_releases/` and `/news/national|world/`;
+  the Guardian skips `/sport/` and `/football/`. Applied in production with
+  `set-path-rules`, then `purge-path-excluded --apply`, which deleted 164 articles
+  (Malvern 50/50 and Saline 50/50 press releases, Ashley 49, Guardian 15).
+- **Excerpts:** the end-anchored WordPress footer and "Continue reading" cleanup is live;
+  `clean-excerpts --apply` cleaned 784 stored excerpts.
+- **Duplicate collapse:** the same headline within 72 h shows as one story with an "Also
+  in …" line. Obituaries match by name. A wire copy with no own Arkansas place files
+  under National or World.
+- **Sources (88 → 95 seeded, 96 live):** Google News location feeds for Hot Springs,
+  Little Rock, Conway and Malvern; Texarkana Today; Camden News and El Dorado News-Times
+  (hard paywall).
+- **Checks:**
+  - Tests: basegeek 156/156 suites (3349), backend 219, frontend 271.
+  - Harness: 0 violations.
+  - Revert checks: 70 mutations, all red.
+- **Deploy:** server `e0bf28c9`, then UI `3282288c`.
+- **Still open, found on Chef's Today after the deploy:**
+  - Same-event stories with different headlines (3 Little Rock homicide items): this is
+    clustering, N1.
+  - Other towns' local news (DeWitt calendars) filling State.
+  - One source can fill a 5-slot block (NPR 4/5 in National).
