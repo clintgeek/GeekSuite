@@ -4,11 +4,11 @@
  * - newsCreateSource: any signed-in reader (on for them, off for others);
  * - newsUpdateSource / newsSetSourceStatus / newsCheckSourceNow: the adder or an admin;
  * - newsSetSourceDefaultOn: admins ("On for everyone");
- * - newsSetSourceOn / newsSetPrefs / newsSetSourceSubscribed / newsSetPublisherPref:
- *   any reader, their own prefs.
+ * - newsSetSourceOn / newsSetPrefs / newsSetSourceSubscribed / newsSetPublisherPref /
+ *   newsSetSourcePriority / newsSetHomePlaces: any reader, their own prefs.
  */
 import { gql } from '@apollo/client';
-import { SOURCE_FIELDS } from './queries';
+import { PLACE_FIELDS, SOURCE_FIELDS } from './queries';
 
 export const CREATE_NEWS_SOURCE = gql`
   mutation NewsCreateSource($input: NewsSourceInput!) {
@@ -102,4 +102,26 @@ export const SET_NEWS_PUBLISHER_PREF = gql`
       mutedDomains
     }
   }
+`;
+
+/** Today: the reader's priority for a source — favorite | normal | less. */
+export const SET_NEWS_SOURCE_PRIORITY = gql`
+  mutation NewsSetSourcePriority($id: ID!, $priority: String!) {
+    newsSetSourcePriority(id: $id, priority: $priority) {
+      id
+      priorityForMe
+    }
+  }
+`;
+
+/** Settings → Home places: the whole ring, closest first (replaces the list). */
+export const SET_NEWS_HOME_PLACES = gql`
+  mutation NewsSetHomePlaces($placeIds: [ID!]!) {
+    newsSetHomePlaces(placeIds: $placeIds) {
+      homePlaces {
+        ...NewsPlaceFields
+      }
+    }
+  }
+  ${PLACE_FIELDS}
 `;

@@ -1,4 +1,5 @@
-// NewsGeek (County Gazette): Latest, Sources, Source detail, the Add a
+// NewsGeek (County Gazette): Today (the ranked front page, `/`), a section
+// page (`/s/:section`), Everything (`/everything`, N0's Latest), Sources, Source detail, the Add a
 // source sheet, the Source sheet and Settings (DOCS/NEWSGEEK_PLAN.md "Screens", "Reader-added sources"). Deep
 // links everywhere; fixture modes ride on the URL (?__fixture=empty | nonadmin |
 // free, ?__discover=nofeed | existing), see fixtures.mjs.
@@ -39,9 +40,9 @@ const sourceSheet = (publisher) => async (page, h) => {
 };
 
 export const scenes = [
-  { name: '01-latest', goto: '/', wait: 1600 },
-  { name: '02-latest-local', goto: '/?section=local', wait: 1600 },
-  { name: '03-latest-empty', goto: '/?__fixture=empty', wait: 1600 },
+  { name: '01-latest', goto: '/everything', wait: 1600 },
+  { name: '02-latest-local', goto: '/everything?section=local', wait: 1600 },
+  { name: '03-latest-empty', goto: '/everything?__fixture=empty', wait: 1600 },
   { name: '04-sources-admin', goto: '/sources', wait: 1600 },
   { name: '05-sources-reader', goto: '/sources?__fixture=nonadmin', wait: 1600 },
   { name: '06-source-failing', goto: '/sources/s-katv', wait: 1600 },
@@ -54,7 +55,7 @@ export const scenes = [
     teardown: (page, h) => h.esc(),
   },
   // "Free to read" on: the switch set, "14 paywalled stories hidden" under the tabs.
-  { name: '08-latest-free-to-read', goto: '/?__fixture=free', wait: 1600 },
+  { name: '08-latest-free-to-read', goto: '/everything?__fixture=free', wait: 1600 },
   { name: '09-source-paywall', goto: '/sources/s-mal', wait: 1600 },
   // Reader-added sources: the Sources sections and Suggested, as a reader.
   { name: '10-sources-others', goto: '/sources?__fixture=nonadmin', wait: 1600, setup: scrollTo('#sources-others') },
@@ -104,11 +105,41 @@ export const scenes = [
   // …and a story that came through Google News: hide / subscribe by domain.
   { name: '22-source-sheet-aggregator', goto: '/', wait: 1600, setup: sourceSheet('Magnolia Reporter'), teardown: (page, h) => h.esc() },
   // "More from this source": Latest filtered, the "Showing: … ×" chip.
-  { name: '23-latest-filtered', goto: '/?source=s-ark', wait: 1600 },
+  { name: '23-latest-filtered', goto: '/everything?source=s-ark', wait: 1600 },
   // Settings → Publishers: a subscribed source, a subscribed domain, two hidden.
   { name: '24-settings-publishers', goto: '/settings', wait: 1600, setup: scrollTo('#settings-publishers') },
   // …and a reader who has set none: the empty states.
   { name: '25-settings-publishers-empty', goto: '/settings?__fixture=nonadmin', wait: 1600, setup: scrollTo('#settings-publishers') },
+  // Today (2026-10-11): the front page — Local, State, National, World, Tech,
+  // why-chips, "More <section> →", the end line.
+  { name: '26-today', goto: '/', wait: 1600 },
+  // …further down: State and National, their More links.
+  { name: '27-today-sections', goto: '/', wait: 1600, setup: scrollTo('[data-section="national"]') },
+  // …the end of the paper.
+  { name: '28-today-end', goto: '/', wait: 1600, setup: scrollTo('[data-testid="today-end"]') },
+  // …nothing yet.
+  { name: '29-today-empty', goto: '/?__fixture=empty', wait: 1600 },
+  // A section page from "More Local →": newest first, no flags.
+  { name: '30-section-local', goto: '/s/local', wait: 1600 },
+  // Settings → Home places: Chef's ring, closest first; move up/down, remove, add.
+  { name: '31-settings-home-places', goto: '/settings', wait: 1600 },
+  // …a reader with no ring.
+  { name: '32-settings-home-places-empty', goto: '/settings?__fixture=nonadmin', wait: 1600 },
+  // The Source sheet's Priority on Today (The Arkadelphian is a favorite).
+  {
+    name: '33-source-sheet-priority',
+    goto: '/',
+    wait: 1600,
+    async setup(page, h) {
+      if ((await sourceSheet('The Arkadelphian')(page, h)) === false) return false;
+      await page.locator('[data-testid="source-sheet"] [data-testid="priority-control"]').scrollIntoViewIfNeeded();
+      await h.settle(400);
+      return undefined;
+    },
+    teardown: (page, h) => h.esc(),
+  },
+  // A source's page: Priority on Today under I subscribe (KATV is Less).
+  { name: '34-source-priority-less', goto: '/sources/s-katv?__fixture=nonadmin', wait: 1600 },
 ];
 
 export const waivers = [];

@@ -1,12 +1,13 @@
 /**
- * The phone's tab bar: Latest · Sources. A newsprint strip under a hairline;
- * the current tab is set in bold with an ink rule over it, like a section
- * flag. N2 adds Briefing, Saved and More (Settings) — up to five tabs fit.
+ * The phone's tab bar: Today · Everything · Sources. A newsprint strip under
+ * a hairline; the current tab is set in bold with an ink rule over it, like a
+ * section flag. Three equal tabs are 120px each at 360px wide — "Everything"
+ * at 12px is ~70px. Up to five fit (Saved and More can join later).
  * Rendered only below md, as GeekShell's `bottomNav`.
  */
 import React from 'react';
 import { Box, ButtonBase, Typography } from '@mui/material';
-import { NewspaperOutlined as LatestIcon, RssFeedOutlined as SourcesIcon } from '@mui/icons-material';
+import { NewspaperOutlined as TodayIcon, RssFeedOutlined as SourcesIcon, ViewStreamOutlined as EverythingIcon } from '@mui/icons-material';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { geekLayout } from '@geeksuite/ui';
 import { GOTHIC } from '../theme/theme';
@@ -15,7 +16,8 @@ import { tabFor } from './navConfig';
 const TAB_BAR_HEIGHT = geekLayout?.bottomNavHeight ?? 56;
 
 const TABS = [
-  { id: 'latest', label: 'Latest', to: '/', icon: <LatestIcon aria-hidden="true" /> },
+  { id: 'today', label: 'Today', to: '/', icon: <TodayIcon aria-hidden="true" /> },
+  { id: 'everything', label: 'Everything', to: '/everything', icon: <EverythingIcon aria-hidden="true" /> },
   { id: 'sources', label: 'Sources', to: '/sources', icon: <SourcesIcon aria-hidden="true" /> },
 ];
 

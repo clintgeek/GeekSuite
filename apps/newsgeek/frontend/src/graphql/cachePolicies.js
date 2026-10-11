@@ -22,6 +22,8 @@ export const NEWS_TYPE_POLICIES = {
   NewsPrefs: { merge: true },
   Query: {
     fields: {
+      // Today has no arguments and no id: each answer is a fresh front page.
+      newsFrontPage: { merge: false },
       newsArticles: {
         keyArgs: ['section', 'placeId', 'sourceId'],
         merge(existing, incoming, { args, readField }) {
@@ -36,12 +38,15 @@ export const NEWS_TYPE_POLICIES = {
 };
 
 /**
- * Forget every cached `newsArticles` list (all filters, all pages) without
- * telling watchers — the caller refetches what is on screen, so nothing
- * flashes empty and no query fires twice.
+ * Forget every cached `newsArticles` list (all filters, all pages) and the
+ * cached front page (`newsFrontPage`, Today) without telling watchers — the
+ * caller refetches what is on screen, so nothing flashes empty and no query
+ * fires twice. Every pref that changes what the gateway returns (Free to
+ * read, the Source sheet's switches, priority, home places) changes both.
  */
 export function resetArticleLists(cache) {
   cache.evict({ id: 'ROOT_QUERY', fieldName: 'newsArticles', broadcast: false });
+  cache.evict({ id: 'ROOT_QUERY', fieldName: 'newsFrontPage', broadcast: false });
   cache.gc();
 }
 

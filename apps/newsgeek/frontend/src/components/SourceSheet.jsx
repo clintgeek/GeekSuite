@@ -7,8 +7,9 @@
  * Two kinds of story, two sheets:
  * - DIRECT (the source is the publisher): its badges and feed health, then
  *   "In my paper" (newsSetSourceOn), "I subscribe" (newsSetSourceSubscribed,
- *   kept through Free to read), "More from this source" (Latest filtered to
- *   it) and "Source details".
+ *   kept through Free to read), "Priority on Today" (★ Favorite / Normal /
+ *   Less, newsSetSourcePriority), "More from this source" (Everything
+ *   filtered to it) and "Source details".
  * - VIA AN AGGREGATOR (Google News): the real publisher and its domain, "via"
  *   the aggregator; "Hide this publisher" and "I subscribe" by domain
  *   (newsSetPublisherPref), "Look for a direct feed" (the Add sheet on
@@ -27,6 +28,7 @@ import { useNavigate } from 'react-router-dom';
 import HealthIndicator from './HealthIndicator';
 import InkSwitch from './InkSwitch';
 import KindBadge from './KindBadge';
+import PriorityControl from './PriorityControl';
 import PaywallBadge from './PaywallBadge';
 import { SET_NEWS_PUBLISHER_PREF, SET_NEWS_SOURCE_ON, SET_NEWS_SOURCE_SUBSCRIBED } from '../graphql/mutations';
 import { GET_NEWS_PUBLISHER_PREFS, GET_NEWS_SOURCE } from '../graphql/queries';
@@ -190,7 +192,8 @@ function DirectBody({ article, onChanged, go }) {
           onChange={toggleSubscribed}
           disabled={(retired && !source.subscribedByMe) || subState.loading}
         />
-        <SheetLink testId="sheet-more-from" onClick={() => go(`/?source=${encodeURIComponent(source.id)}`)}>
+        <PriorityControl source={source} onChanged={() => onChanged?.()} disabled={retired} sx={{ borderBottom: 1, borderColor: 'divider' }} />
+        <SheetLink testId="sheet-more-from" onClick={() => go(`/everything?source=${encodeURIComponent(source.id)}`)}>
           More from this source
         </SheetLink>
         <SheetLink testId="sheet-details" onClick={() => go(`/sources/${encodeURIComponent(source.id)}`)}>
@@ -208,7 +211,7 @@ function PublisherBody({ article, onChanged, onLookForFeed, go }) {
   const [setPref, prefState] = useMutation(SET_NEWS_PUBLISHER_PREF);
   const prefs = data?.newsPrefs;
   const moreFrom = (
-    <SheetLink testId="sheet-more-from" onClick={() => go(`/?source=${encodeURIComponent(article.sourceId)}`)}>
+    <SheetLink testId="sheet-more-from" onClick={() => go(`/everything?source=${encodeURIComponent(article.sourceId)}`)}>
       {`More from ${article.sourceName}`}
     </SheetLink>
   );

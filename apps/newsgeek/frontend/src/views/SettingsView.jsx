@@ -1,5 +1,7 @@
 /**
- * Settings (`/settings`). "Open-with links" — the reader's own URL
+ * Settings (`/settings`). First "Home places" (HomePlacesSettings): the
+ * reader's ring, closest first, which decides what is Local on Today. Then
+ * "Open-with links" — the reader's own URL
  * templates, offered in each story's ⋯ menu after "Open at publisher"
  * (NewsPrefs.readerLinks, max 5). Saved whole through
  * newsSetPrefs({ readerLinks }); the gateway re-checks every rule here and
@@ -12,6 +14,7 @@ import { Add as AddIcon, DeleteOutline as RemoveIcon } from '@mui/icons-material
 import { useMutation, useQuery } from '@apollo/client';
 import { useToast } from '@geeksuite/ui';
 import Column from '../components/Column';
+import HomePlacesSettings from '../components/HomePlacesSettings';
 import PublishersSettings from '../components/PublishersSettings';
 import { SET_NEWS_PREFS } from '../graphql/mutations';
 import { GET_NEWS_PREFS } from '../graphql/queries';
@@ -69,7 +72,9 @@ export default function SettingsView() {
         </Typography>
       </Box>
 
-      <Box component="section" aria-labelledby="settings-open-with" sx={{ mt: 6 }}>
+      <HomePlacesSettings />
+
+      <Box component="section" aria-labelledby="settings-open-with" sx={{ mt: 10 }}>
         <Typography id="settings-open-with" component="h2" sx={{ ...flagSx, color: 'text.primary', borderTop: 2, borderColor: 'text.primary', pt: 2, mb: 2 }}>
           Open-with links
         </Typography>

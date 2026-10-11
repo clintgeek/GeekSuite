@@ -61,6 +61,7 @@ export const SOURCE_FIELDS = gql`
     canEdit
     addedByName
     subscribedByMe
+    priorityForMe
   }
   ${PLACE_FIELDS}
   ${FEED_FIELDS}
@@ -177,4 +178,55 @@ export const GET_NEWS_SUGGESTED_SOURCES = gql`
       paywalled
     }
   }
+`;
+
+/**
+ * Today (`/`): the ranked front page (plan "Ranking: the briefing"). The
+ * gateway decides the sections, their order and their caps; each story says
+ * which section it landed in for this reader and `why` (chips).
+ */
+export const GET_NEWS_FRONT_PAGE = gql`
+  query NewsFrontPage {
+    newsFrontPage {
+      generatedAt
+      sections {
+        key
+        title
+        moreCount
+        items {
+          id
+          title
+          url
+          excerpt
+          publisher
+          publishedAt
+          expiresAt
+          sourceId
+          sourceName
+          sourceKind
+          publisherDomain
+          viaAggregator
+          sections
+          section
+          why
+          places {
+            id
+            name
+          }
+        }
+      }
+    }
+  }
+`;
+
+/** The reader's ring, closest first (Settings → Home places). NewsPrefs merges in the cache. */
+export const GET_NEWS_HOME_PLACES = gql`
+  query NewsHomePlaces {
+    newsPrefs {
+      homePlaces {
+        ...NewsPlaceFields
+      }
+    }
+  }
+  ${PLACE_FIELDS}
 `;

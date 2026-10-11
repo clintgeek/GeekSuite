@@ -12,7 +12,7 @@ import { useThemeMode } from '@geeksuite/user';
 import { GeekTopBar } from '@geeksuite/ui';
 import { SERIF } from '../theme/theme';
 import { displayNameFrom, initialsFrom, secondaryFrom } from '../utils/userDisplay';
-import { APP_ID, isBackPath, titleFor } from './navConfig';
+import { APP_ID, backFallback, isBackPath, titleFor } from './navConfig';
 
 export default function TopBar({ user, onSignOut }) {
   const theme = useTheme();
@@ -25,7 +25,7 @@ export default function TopBar({ user, onSignOut }) {
 
   const goBack = () => {
     if (window.history.length > 1 && location.key !== 'default') navigate(-1);
-    else navigate(location.pathname === '/settings' ? '/' : '/sources');
+    else navigate(backFallback(location.pathname));
   };
 
   return (

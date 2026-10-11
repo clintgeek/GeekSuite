@@ -6,6 +6,11 @@
  * Official notices carry the OFFICIAL badge and a spot-colour rule at the
  * left edge — the word does the work, the colour only repeats it.
  *
+ * On Today (`why` given) the story's why-chips (WhyChips) take the place of
+ * its place chips — the ring place that put it there is already a chip, and
+ * two rows of tags would out-shout the headline. `lead` sets the paper's lead
+ * story a size up; `headingLevel` is h3 under Today's section headings.
+ *
  * The publisher line is plain text. The Source sheet (plan "Source sheet")
  * opens from the ⋯ menu's "Source settings" (Chef, 2026-10-10: settings live
  * in the menu, not on the name); the headline is still the link to the
@@ -17,13 +22,14 @@ import { GOTHIC, SERIF } from '../theme/theme';
 import ArticleMenu from './ArticleMenu';
 import OfficialBadge from './OfficialBadge';
 import PlaceChips from './PlaceChips';
+import WhyChips from './WhyChips';
 import TimeAgo from './TimeAgo';
 
 const visuallyHidden = { position: 'absolute', width: 1, height: 1, p: 0, m: '-1px', border: 0, overflow: 'hidden', clip: 'rect(0 0 0 0)', clipPath: 'inset(50%)', whiteSpace: 'nowrap' };
 
 const publisherSx = { fontFamily: GOTHIC, fontSize: '0.8125rem', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'text.primary' };
 
-export default function ArticleItem({ article, readerLinks = [], onOpenSource }) {
+export default function ArticleItem({ article, readerLinks = [], onOpenSource, why, lead = false, headingLevel = 'h2' }) {
   const official = article.sourceKind === 'official';
   const publisher = article.publisher || article.sourceName;
   return (
@@ -31,6 +37,7 @@ export default function ArticleItem({ article, readerLinks = [], onOpenSource })
       component="article"
       data-testid="article"
       data-official={official ? 'true' : undefined}
+      data-lead={lead ? 'true' : undefined}
       sx={{
         position: 'relative',
         py: 4,
@@ -49,7 +56,11 @@ export default function ArticleItem({ article, readerLinks = [], onOpenSource })
         </Typography>
       </Box>
       <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: article.excerpt ? 1.5 : 0 }}>
-      <Typography variant="h4" component="h2" sx={{ flex: 1, minWidth: 0, fontSize: { xs: '1.3125rem', sm: '1.5rem' }, lineHeight: 1.2 }}>
+      <Typography
+        variant="h4"
+        component={headingLevel}
+        sx={{ flex: 1, minWidth: 0, fontSize: lead ? { xs: '1.75rem', sm: '2.125rem' } : { xs: '1.3125rem', sm: '1.5rem' }, lineHeight: lead ? 1.12 : 1.2 }}
+      >
         <Link
           href={article.url}
           target="_blank"
@@ -81,7 +92,7 @@ export default function ArticleItem({ article, readerLinks = [], onOpenSource })
           {article.excerpt}
         </Typography>
       ) : null}
-      <PlaceChips places={article.places} sx={{ mt: 2 }} />
+      {why ? <WhyChips why={why} official={official} sx={{ mt: 2 }} /> : <PlaceChips places={article.places} sx={{ mt: 2 }} />}
     </Box>
   );
 }

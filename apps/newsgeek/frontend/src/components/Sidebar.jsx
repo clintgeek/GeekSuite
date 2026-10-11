@@ -1,17 +1,17 @@
 /**
  * NewsGeek sidebar (md+): the suite GeekSidebar on newsprint.
  *
- *   Latest
+ *   Today
+ *   Everything
  *   Desk   Sources
  *   footer: user · Settings · Sign out
  *
- * N2 adds Briefing above Latest and Saved/Settings; the groups are already
- * shaped for them. A selected row is the shaded band with an ink rule at its
+ * Saved can join the first group later. A selected row is the shaded band with an ink rule at its
  * left edge (measured in __tests__/theme/gazetteContrast.test.js).
  */
 import React from 'react';
 import { Box, Typography } from '@mui/material';
-import { NewspaperOutlined as LatestIcon, RssFeedOutlined as SourcesIcon } from '@mui/icons-material';
+import { NewspaperOutlined as TodayIcon, RssFeedOutlined as SourcesIcon, ViewStreamOutlined as EverythingIcon } from '@mui/icons-material';
 import { useLocation } from 'react-router-dom';
 import { GeekSidebar } from '@geeksuite/ui';
 import { GOTHIC, SERIF, SIDEBAR_SX } from '../theme/theme';
@@ -52,7 +52,12 @@ const itemSx = {
 export default function Sidebar({ user, onSignOut }) {
   const location = useLocation();
   const sections = [
-    { items: [{ id: NAV.latest, label: 'Latest', icon: <LatestIcon />, to: '/' }] },
+    {
+      items: [
+        { id: NAV.today, label: 'Today', icon: <TodayIcon />, to: '/' },
+        { id: NAV.everything, label: 'Everything', icon: <EverythingIcon />, to: '/everything' },
+      ],
+    },
     { label: 'Desk', items: [{ id: NAV.sources, label: 'Sources', icon: <SourcesIcon />, to: '/sources' }] },
   ];
   return (

@@ -25,6 +25,15 @@
 // "Google News: South Arkansas"), every source carries subscribedByMe (the
 // reader subscribes to the Malvern Daily Record), and NewsPublisherPrefs
 // answers with one subscribed and two hidden publishers (none for `nonadmin`).
+//
+// Today (2026-10-11, plan "Ranking: the briefing"): newsFrontPage answers with
+// Local · State · National · World · Tech for Chef's ring (Arkadelphia, Clark
+// County, Hot Springs, Little Rock, Conway, Garland County, Hot Spring County),
+// each story carrying `section` and `why`; `empty` answers no sections, `free`
+// leaves paywalled sources out. Every source carries priorityForMe (The
+// Arkadelphian is a favorite, KATV is Less); newsSetSourcePriority and
+// newsSetHomePlaces answer with what they were sent. A reader (`nonadmin`)
+// has no home places.
 import { sessionRoutes, graphqlRoute, json } from '../../lib/net.mjs';
 
 const ago = (min) => new Date(Date.now() - min * 60000).toISOString();
@@ -38,7 +47,15 @@ const PLACES = [
   P('arkansas', 'Arkansas', 'state'),
   P('magnolia', 'Magnolia', 'city'),
   P('el-dorado', 'El Dorado', 'city'),
+  P('hot-springs', 'Hot Springs', 'town', 'garland'),
+  P('little-rock', 'Little Rock', 'town'),
+  P('conway', 'Conway', 'town'),
+  P('garland', 'Garland County'),
+  P('gurdon', 'Gurdon', 'town', 'clark'),
 ];
+const placeById = (id) => PLACES.find((p) => p.id === id);
+// Chef's ring, closest first.
+const HOME_PLACES = ['arkadelphia', 'clark', 'hot-springs', 'little-rock', 'conway', 'garland', 'hotspring'].map(placeById);
 const pl = (id) => {
   const p = PLACES.find((x) => x.id === id);
   return { __typename: 'NewsPlace', id: p.id, name: p.name };
@@ -154,18 +171,19 @@ const S = (id, name, o = {}) => ({
   addedByMe: false,
   addedByName: null,
   subscribedByMe: false,
+  priorityForMe: 'normal',
   ...o,
   paywalled: ['metered', 'hard'].includes((o.access ?? {}).paywall),
 });
 const WALL = (paywall, content = 'excerpt') => ({ __typename: 'NewsSourceAccess', paywall, content });
 const SOURCES = [
-  S('s-ark', 'The Arkadelphian', { sections: ['local'], places: [PLACES[0], PLACES[2]], articlesLast7d: 22, feeds: [F('s-ark-f1', 'ok')] }),
+  S('s-ark', 'The Arkadelphian', { sections: ['local'], places: [PLACES[0], PLACES[2]], articlesLast7d: 22, feeds: [F('s-ark-f1', 'ok')], priorityForMe: 'favorite' }),
   S('s-mal', 'Malvern Daily Record', { sections: ['local'], places: [PLACES[1], PLACES[3]], access: WALL('hard'), articlesLast7d: 9, feeds: [F('s-mal-f1', 'stale')], subscribedByMe: true }),
   S('s-nws', 'NWS Little Rock', {
     kind: 'official', sections: ['local', 'state'], articlesLast7d: 3,
     feeds: [F('s-nws-f1', 'ok', { format: 'nws', url: 'https://api.weather.gov/alerts/active.atom?zone=ARC019', pollEveryMin: 15 })],
   }),
-  S('s-katv', 'KATV', { sections: ['state'], places: [PLACES[4]], articlesLast7d: 31, feeds: [F('s-katv-f1', 'failing')] }),
+  S('s-katv', 'KATV', { sections: ['state'], places: [PLACES[4]], articlesLast7d: 31, feeds: [F('s-katv-f1', 'failing')], priorityForMe: 'less' }),
   S('s-adv', 'Arkansas Advocate', { sections: ['state'], places: [PLACES[4]], status: 'broken', notes: 'Moved to a new CMS in September; the old feed 404s.', articlesLast7d: 0, feeds: [F('s-adv-f1', 'broken')] }),
   S('s-npr', 'NPR', { sections: ['national', 'world'], places: [], articlesLast7d: 120 }),
   S('s-verge', 'The Verge', { sections: ['tech'], places: [], access: WALL('metered'), articlesLast7d: 40 }),
@@ -247,6 +265,71 @@ const publisherPrefs = (mode) => ({
   mutedDomains: mode === 'nonadmin' ? [] : ['legacy.com', 'weather.com'],
 });
 
+// ── Today: the front page ───────────────────────────────────────────────────
+const byId = (id) => ARTICLES.find((a) => a.id === id);
+const front = (id, section, why, o = {}) => ({ ...(byId(id) ?? A(id, 0, {})), ...o, section, why });
+const FRONT_SECTIONS = [
+  {
+    key: 'local', title: 'Local', moreCount: 7,
+    items: [
+      front('a1', 'local', ['Official', 'Clark County']),
+      front('a2', 'local', ['Arkadelphia', '★ Favorite']),
+      front('a4', 'local', ['Arkadelphia', '★ Favorite']),
+      front('g1', 'local', ['Gurdon'], A('g1', 600, {
+        title: 'Gurdon aldermen hire a new police chief after a four-month search',
+        excerpt: 'The council voted unanimously; the new chief starts Nov. 1.',
+        publisher: 'Gurdon Times', sourceId: 's-gurdon', sourceName: 'Gurdon Times', sourceKind: 'journalism',
+        sections: ['local'], places: [pl('gurdon')],
+      })),
+      front('a3', 'local', ['Hot Spring County']),
+    ],
+  },
+  {
+    key: 'state', title: 'State', moreCount: 11,
+    items: [
+      front('a6', 'state', ['Arkansas']),
+      front('a3g', 'state', ['Arkansas']),
+      front('a5', 'state', ['Arkansas', 'Less']),
+    ],
+  },
+  {
+    key: 'national', title: 'National', moreCount: 23,
+    items: [
+      front('a7', 'national', []),
+      front('n2', 'national', [], A('n2', 260, {
+        title: 'Weekly jobless claims fall to their lowest level since spring',
+        excerpt: 'Economists said the labor market remains steady heading into the holidays.',
+        publisher: 'NPR', sourceId: 's-npr', sourceName: 'NPR', sourceKind: 'journalism', sections: ['national'],
+      })),
+    ],
+  },
+  {
+    key: 'world', title: 'World', moreCount: 0,
+    items: [
+      front('w1', 'world', [], A('w1', 320, {
+        title: 'Ceasefire talks resume in Cairo with a new proposal on the table',
+        excerpt: 'Mediators said both sides had agreed to a framework for prisoner exchanges.',
+        publisher: 'NPR', sourceId: 's-npr', sourceName: 'NPR', sourceKind: 'journalism', sections: ['national', 'world'],
+      })),
+    ],
+  },
+  {
+    key: 'tech', title: 'Tech', moreCount: 5,
+    items: [front('a8', 'tech', [])],
+  },
+];
+const frontPageFor = (mode) => ({
+  __typename: 'NewsFrontPage',
+  generatedAt: ago(2),
+  sections: mode === 'empty'
+    ? []
+    : FRONT_SECTIONS.map((sec) => ({
+      __typename: 'NewsFrontSection',
+      ...sec,
+      items: sec.items.filter((a) => !(mode === 'free' && WALLED_IDS.has(a.sourceId))),
+    })).filter((sec) => sec.items.length),
+});
+
 // ── Ops ─────────────────────────────────────────────────────────────────────
 const fixtureOf = (pageUrl) => {
   try {
@@ -301,6 +384,14 @@ export async function routes(ctx) {
             readerLinks: (vars.input?.readerLinks ?? READER_LINKS).map((l) => ({ __typename: 'NewsReaderLink', ...l })),
           },
         };
+      case 'NewsFrontPage':
+        return { newsFrontPage: frontPageFor(mode) };
+      case 'NewsHomePlaces':
+        return { newsPrefs: { __typename: 'NewsPrefs', homePlaces: mode === 'nonadmin' ? [] : HOME_PLACES } };
+      case 'NewsSetHomePlaces':
+        return { newsSetHomePlaces: { __typename: 'NewsPrefs', homePlaces: (vars.placeIds ?? []).map(placeById).filter(Boolean) } };
+      case 'NewsSetSourcePriority':
+        return { newsSetSourcePriority: { __typename: 'NewsSource', id: vars.id, priorityForMe: vars.priority } };
       case 'NewsPublisherPrefs':
         return { newsPrefs: publisherPrefs(mode) };
       case 'NewsSetPublisherPref': {

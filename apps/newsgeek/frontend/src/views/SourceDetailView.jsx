@@ -12,7 +12,8 @@
  * Everyone else reads.
  *
  * Every reader gets "I subscribe" (plan "Source sheet"): their own flag,
- * newsSetSourceSubscribed. A subscribed source stays in their paper when
+ * newsSetSourceSubscribed. And "Priority on Today" (★ Favorite / Normal /
+ * Less, newsSetSourcePriority): Favorites lead their section, Less sinks. A subscribed source stays in their paper when
  * Free to read is on, paywall or not.
  */
 import React, { useState } from 'react';
@@ -33,6 +34,7 @@ import InkSwitch from '../components/InkSwitch';
 import KindBadge from '../components/KindBadge';
 import PaywallBadge from '../components/PaywallBadge';
 import PlaceChips from '../components/PlaceChips';
+import PriorityControl from '../components/PriorityControl';
 import TimeAgo from '../components/TimeAgo';
 import { resetArticleLists } from '../graphql/cachePolicies';
 import { CHECK_NEWS_SOURCE_NOW, SET_NEWS_SOURCE_DEFAULT_ON, SET_NEWS_SOURCE_STATUS, SET_NEWS_SOURCE_SUBSCRIBED } from '../graphql/mutations';
@@ -223,6 +225,12 @@ function SubscribeSwitch({ source }) {
   );
 }
 
+/** The reader's own priority for Today; a write drops the cached front page and lists. */
+function DetailPriority({ source }) {
+  const client = useApolloClient();
+  return <PriorityControl source={source} disabled={source.status === 'retired'} onChanged={() => resetArticleLists(client.cache)} sx={{ maxWidth: 480, pb: 0 }} />;
+}
+
 export default function SourceDetailView() {
   const { id } = useParams();
   const { isAdmin } = useViewer();
@@ -289,6 +297,7 @@ export default function SourceDetailView() {
           </Typography>
         ) : null}
         <SubscribeSwitch source={source} />
+        <DetailPriority source={source} />
         {source.canEdit || isAdmin ? <SourceActions source={source} isAdmin={isAdmin} /> : null}
       </Box>
 

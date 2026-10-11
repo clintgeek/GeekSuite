@@ -1,11 +1,14 @@
 /**
- * Latest (`/`): N0's reading view. The masthead, the section flags, then
- * every article newest first from `newsArticles`, paged by `before` with an
- * "Older stories" button — never infinite scroll. The briefing replaces this
- * as the front page in N2.
+ * Everything (`/everything`) and a section page (`/s/:section`): every story
+ * newest first from `newsArticles`, paged by `before` with an "Older
+ * stories" button — never infinite scroll. Today (`/`) is the ranked front
+ * page; this is the archive behind it (N0's Latest, moved 2026-10-11).
  *
- * The section lives in the URL (`?section=local`), so back and a reload
- * land on the same page of the paper.
+ * Everything: the masthead, then the section flags. The section lives in the
+ * URL (`?section=local`), so back and a reload land on the same page.
+ * A section page (`fixedSection`, from Today's "More <section> →"): a section
+ * heading instead of the masthead and no flags. Sections are per reader and
+ * per story (NewsArticle.section): the gateway files each story.
  *
  * "Free to read" (the reader's own pref, newsPrefs/newsSetPrefs): on, the
  * gateway leaves paywalled stories out and says how many. The switch moves at
@@ -15,7 +18,7 @@
  * The publisher line on each story opens the Source sheet (plan "Source
  * sheet"). Its switches change what the gateway returns, so after each one
  * the cached lists are dropped and the list refetched, as for Free to read.
- * "More from…" lands here as `/?source=<id>`: the list is that source only,
+ * "More from…" lands here as `/everything?source=<id>`: the list is that source only,
  * a "Showing: <name> ×" chip says so, and the section flags are put away
  * until the chip is dismissed (a source has fixed sections, so most flags
  * would only show an empty page). "Look for a direct feed" opens the Add a
@@ -38,8 +41,8 @@ import { resetArticleLists } from '../graphql/cachePolicies';
 import { SET_NEWS_PREFS } from '../graphql/mutations';
 import { GET_NEWS_ARTICLES, GET_NEWS_PREFS, GET_NEWS_SOURCE } from '../graphql/queries';
 import { EMPTY_LINE, articleVariables, hiddenPaywalledLine } from '../utils/articles';
-import { GOTHIC } from '../theme/theme';
-import { SECTIONS } from '../utils/vocab';
+import { GOTHIC, flagSx } from '../theme/theme';
+import { SECTIONS, SECTION_LABEL } from '../utils/vocab';
 import AddSourceSheet from './AddSourceSheet';
 
 /** "Look for a direct feed": the Add sheet, already looking. Its own component so Latest asks newsViewer only then. */
@@ -48,11 +51,29 @@ function LookForFeedSheet({ url, onClose }) {
   return <AddSourceSheet open onClose={onClose} initialUrl={url} autoRun isAdmin={isAdmin} />;
 }
 
-export default function LatestView() {
+/** A section page's heading: the section's name set big, and what the list is. */
+function SectionHeader({ section }) {
+  const label = SECTION_LABEL[section];
+  return (
+    <Box component="header" data-testid="section-header" sx={{ pt: 6, pb: 3, borderBottom: 2, borderColor: 'text.primary' }}>
+      <Typography component="p" sx={{ ...flagSx, color: 'text.secondary', mb: 1 }}>
+        Section
+      </Typography>
+      <Typography variant="h2" component="h1" sx={{ fontSize: { xs: '2.25rem', sm: '2.75rem' } }}>
+        {label}
+      </Typography>
+      <Typography sx={{ fontFamily: GOTHIC, fontSize: '0.875rem', color: 'text.secondary', mt: 2 }}>
+        {`Every ${label} story in your paper, newest first.`}
+      </Typography>
+    </Box>
+  );
+}
+
+export default function LatestView({ fixedSection = null }) {
   const [params, setParams] = useSearchParams();
   const raw = params.get('section');
-  const section = SECTIONS.includes(raw) ? raw : 'all';
-  const sourceId = params.get('source') || null;
+  const section = fixedSection || (SECTIONS.includes(raw) ? raw : 'all');
+  const sourceId = fixedSection ? null : params.get('source') || null;
   const [sheetArticle, setSheetArticle] = useState(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [feedUrl, setFeedUrl] = useState(null);
@@ -135,8 +156,8 @@ export default function LatestView() {
 
   return (
     <Column>
-      <Masthead />
-      {sourceId ? (
+      {fixedSection ? <SectionHeader section={fixedSection} /> : <Masthead edition="Everything, newest first" />}
+      {fixedSection ? null : sourceId ? (
         <Box data-testid="source-filter" sx={{ mt: 3, mb: 1 }}>
           <Box
             sx={{ display: 'inline-flex', alignItems: 'center', maxWidth: '100%', minHeight: 48, pl: 4, border: 2, borderColor: 'text.primary', borderRadius: '24px' }}
@@ -184,7 +205,7 @@ export default function LatestView() {
       {page && !items.length ? (
         <Box sx={{ py: 12, textAlign: 'center' }}>
           <Typography sx={{ fontStyle: 'italic', color: 'text.secondary', maxWidth: 420, mx: 'auto' }}>
-            {sourceId ? `Nothing from ${filterName} in your paper right now.` : EMPTY_LINE}
+            {sourceId ? `Nothing from ${filterName} in your paper right now.` : fixedSection ? `No ${SECTION_LABEL[fixedSection]} stories in your paper right now.` : EMPTY_LINE}
           </Typography>
         </Box>
       ) : null}

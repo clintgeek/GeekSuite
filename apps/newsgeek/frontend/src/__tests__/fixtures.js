@@ -61,6 +61,7 @@ export const source = (id, overrides = {}) => ({
   canEdit: false,
   addedByName: null,
   subscribedByMe: false,
+  priorityForMe: 'normal',
   ...overrides,
 });
 

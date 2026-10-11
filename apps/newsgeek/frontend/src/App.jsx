@@ -8,7 +8,7 @@
  */
 import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { Box, CircularProgress, Typography, useMediaQuery, useTheme } from '@mui/material';
-import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
+import { Navigate, Route, Routes, useLocation, useParams } from 'react-router-dom';
 import { useApolloClient } from '@apollo/client';
 import { getMe, loginRedirect, logout as logoutRequest, onLogout, startRefreshTimer, stopRefreshTimer } from '@geeksuite/auth';
 import { useUser } from '@geeksuite/user';
@@ -21,6 +21,8 @@ import Sidebar from './components/Sidebar';
 import TopBar from './components/TopBar';
 import { APP_ID } from './components/navConfig';
 import LatestView from './views/LatestView';
+import TodayView from './views/TodayView';
+import { SECTIONS } from './utils/vocab';
 import { SIDEBAR_SX } from './theme/theme';
 
 const SourcesView = lazy(() => import('./views/SourcesView'));
@@ -58,6 +60,31 @@ function RouteFallback() {
 
 const lazyRoute = (element) => <Suspense fallback={<RouteFallback />}>{element}</Suspense>;
 
+/** `/s/:section`: one section, newest first; an unknown section goes to Today. */
+function SectionPage() {
+  const { section } = useParams();
+  if (!SECTIONS.includes(section)) return <Navigate to="/" replace />;
+  return <LatestView key={section} fixedSection={section} />;
+}
+
+/**
+ * The route table. Today (`/`) is the front page; Everything (`/everything`)
+ * is every story newest first; `/s/:section` is one section of it.
+ */
+export function AppRoutes() {
+  return (
+    <Routes>
+      <Route path="/" element={<TodayView />} />
+      <Route path="/everything" element={<LatestView />} />
+      <Route path="/s/:section" element={<SectionPage />} />
+      <Route path="/sources" element={lazyRoute(<SourcesView />)} />
+      <Route path="/sources/:id" element={lazyRoute(<SourceDetailView />)} />
+      <Route path="/settings" element={lazyRoute(<SettingsView />)} />
+      <Route path="*" element={<Navigate to="/" replace />} />
+    </Routes>
+  );
+}
+
 function SignedIn({ user, onSignOut }) {
   const location = useLocation();
   const theme = useTheme();
@@ -72,13 +99,7 @@ function SignedIn({ user, onSignOut }) {
     >
       <GeekToastProvider>
         <AppMain transitionKey={location.pathname}>
-          <Routes>
-            <Route path="/" element={<LatestView />} />
-            <Route path="/sources" element={lazyRoute(<SourcesView />)} />
-            <Route path="/sources/:id" element={lazyRoute(<SourceDetailView />)} />
-            <Route path="/settings" element={lazyRoute(<SettingsView />)} />
-            <Route path="*" element={<Navigate to="/" replace />} />
-          </Routes>
+          <AppRoutes />
         </AppMain>
       </GeekToastProvider>
     </GeekShell>

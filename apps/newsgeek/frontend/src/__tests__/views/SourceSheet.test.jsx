@@ -51,7 +51,7 @@ function Where() {
   return <output data-testid="where">{`${loc.pathname}${loc.search}`}</output>;
 }
 
-function renderLatest(mocks, initialEntries = ['/']) {
+function renderLatest(mocks, initialEntries = ['/everything']) {
   return renderWithProviders(
     <>
       <LatestView />
@@ -182,7 +182,7 @@ describe('More from this source', () => {
     ]);
     const sheet = await openSheetFor('The Arkadelphian');
     await userEvent.click(await within(sheet).findByRole('button', { name: 'More from this source' }));
-    expect(screen.getByTestId('where')).toHaveTextContent('/?source=s1');
+    expect(screen.getByTestId('where')).toHaveTextContent('/everything?source=s1');
     expect(await screen.findByTestId('source-filter')).toHaveTextContent('Showing: The Arkadelphian');
     await waitFor(() => expect(asked).toEqual(['s1']));
     await waitFor(() => expect(screen.getAllByTestId('article')).toHaveLength(1));
@@ -191,14 +191,14 @@ describe('More from this source', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     expect(screen.queryByRole('tablist', { hidden: true })).toBeNull();
     await userEvent.click(screen.getByRole('button', { name: 'Show every source, not just The Arkadelphian' }));
-    expect(screen.getByTestId('where')).toHaveTextContent(/^\/$/);
+    expect(screen.getByTestId('where')).toHaveTextContent(/^\/everything$/);
     expect(screen.queryByTestId('source-filter')).toBeNull();
     expect(screen.getByRole('tab', { name: 'Tech' })).toBeInTheDocument();
     await waitFor(() => expect(screen.getAllByTestId('article')).toHaveLength(2));
   });
 
   it('a deep link opens filtered and names the source; an empty filtered list says whose', async () => {
-    renderLatest([articlesMock({ limit: 30, sourceId: 's1' }, []), sourceMock(ARK)], ['/?source=s1']);
+    renderLatest([articlesMock({ limit: 30, sourceId: 's1' }, []), sourceMock(ARK)], ['/everything?source=s1']);
     expect(await screen.findByText('Nothing from The Arkadelphian in your paper right now.')).toBeInTheDocument();
     expect(screen.getByTestId('source-filter')).toHaveTextContent('Showing: The Arkadelphian');
   });
@@ -317,7 +317,7 @@ describe('Source sheet — through an aggregator', () => {
     ]);
     const sheet = await openSheetFor('Magnolia Reporter');
     await userEvent.click(within(sheet).getByRole('button', { name: 'More from Google News: Malvern' }));
-    expect(screen.getByTestId('where')).toHaveTextContent('/?source=g1');
+    expect(screen.getByTestId('where')).toHaveTextContent('/everything?source=g1');
     expect(await screen.findByTestId('source-filter')).toHaveTextContent('Showing: Google News: Malvern');
   });
 
