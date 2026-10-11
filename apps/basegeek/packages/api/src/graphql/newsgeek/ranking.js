@@ -22,9 +22,16 @@
  *      places) is in the ring — The Arkadelphian (Arkadelphia, Clark County),
  *      not KATV (Arkansas) or Arkansas TV (Little Rock, Pulaski County,
  *      Arkansas). A reader with no ring: local = the source is labelled local.
- *    - else state: any of the article's places is in Arkansas (its ancestry
- *      contains the `arkansas` place), or the source is labelled state or local.
+ *    - else state: the SOURCE is statewide (its first section is `state`),
+ *      or the story has an OWN (non-inherited) Arkansas place — one off the
+ *      ring, since one on it already made the story local.
+ *    - else around ("Around Arkansas", Chef 2026-10-11): the source is
+ *      labelled local first (another town's paper) and the story names no
+ *      Arkansas place of its own: another town reporting its own town. On
+ *      Chef's Today that was DeWitt's "Calendar of Events" filling State.
  *    - else the source's FIRST section (national / world / tech).
+ *    A reader with NO ring keeps the old rule: local = labelled local; state =
+ *    any Arkansas place (own or inherited) or labelled state; no `around`.
  *
  * 3. THE SCORE, within a section:
  *      score = (FRESHNESS_SHARE·freshness + LOCALITY_SHARE·locality) × priority
@@ -45,7 +52,8 @@
  *      future) that are Local lead Local, newest first, exempt from the cap;
  *    - then favourites' stories no older than FAVORITE_LEAD_DAYS, by score;
  *    - then everything else by score (ties: newer first).
- *    At most PER_SOURCE_CAP stories per source per section; an aggregator
+ *    At most perSourceCap(quota) stories per source per section (PER_SOURCE_CAP
+ *    for a block of 8 or more, else half the block rounded up); an aggregator
  *    (Google News) item counts against its real publisher's domain, not
  *    against the aggregator. The section's quota is a CAP, never a target: a
  *    quiet section stays short, and an empty one is left out.
@@ -64,8 +72,9 @@
 const DAY_MS = 24 * 60 * 60 * 1000;
 const HOUR_MS = 60 * 60 * 1000;
 
-export const SECTION_ORDER = ['local', 'state', 'national', 'world', 'tech'];
-export const SECTION_TITLES = { local: 'Local', state: 'State', national: 'National', world: 'World', tech: 'Tech' };
+// Front-page order; "Around Arkansas" comes last (Chef, 2026-10-11).
+export const SECTION_ORDER = ['local', 'state', 'national', 'world', 'tech', 'around'];
+export const SECTION_TITLES = { local: 'Local', state: 'State', national: 'National', world: 'World', tech: 'Tech', around: 'Around Arkansas' };
 
 // --- The constants (the plan quotes these; keep the two in step) -----------
 export const WINDOW_DAYS = 7;
@@ -81,6 +90,8 @@ export const ARKANSAS_WEIGHT = 0.25;
 export const PRIORITY_WEIGHT = { favorite: 3, normal: 1, less: 0.3 };
 export const FAVORITE_LEAD_DAYS = 7;
 export const PER_SOURCE_CAP = 5;
+// Blocks this big get the full PER_SOURCE_CAP; smaller ones half (rounded up).
+export const FULL_CAP_MIN_QUOTA = 8;
 export const ARKANSAS_SLUG = 'arkansas';
 
 // Places at these levels never make a source ring-local (KATV covers "Arkansas").
@@ -190,15 +201,37 @@ export function bestRingMatch(ctx, article, source) {
 export const firstSection = (source) => (source.sections && source.sections[0]) || 'national';
 const labelledStateOrLocal = (source) => (source.sections || []).some((s) => s === 'state' || s === 'local');
 
+/** The article has a place of its own (not inherited from its source) in Arkansas. */
+export function hasOwnArkansasPlace(ctx, article, source) {
+  const inherited = new Set((source.places || []).map(String));
+  return (article.places || []).map(String).some((id) => !inherited.has(id) && inArkansas(ctx, id));
+}
+
 /** The story's section for this reader (header, 2). */
 export function sectionOf(ctx, article, source) {
-  if (ctx.ring.length) {
-    if (bestRingMatch(ctx, article, source).index >= 0) return 'local';
-  } else if ((source.sections || []).includes('local')) {
-    return 'local';
+  if (!ctx.ring.length) {
+    // No ring: the old rule, untouched (no `around`).
+    if ((source.sections || []).includes('local')) return 'local';
+    if ((article.places || []).some((id) => inArkansas(ctx, id)) || labelledStateOrLocal(source)) return 'state';
+    return firstSection(source);
   }
-  if ((article.places || []).some((id) => inArkansas(ctx, id)) || labelledStateOrLocal(source)) return 'state';
-  return firstSection(source);
+  if (bestRingMatch(ctx, article, source).index >= 0) return 'local';
+  if (hasOwnArkansasPlace(ctx, article, source)) return 'state';
+  // Otherwise the source's first section: a statewide source's story is
+  // State, a local paper's (off the ring, nothing of its own) is Around.
+  const first = firstSection(source);
+  return first === 'local' ? 'around' : first;
+}
+
+/**
+ * At most this many stories from one source in a block of `quota` (Chef,
+ * 2026-10-11): PER_SOURCE_CAP for a block of FULL_CAP_MIN_QUOTA or more,
+ * else half the block, rounded up — so one busy paper can't fill a 5-slot
+ * State block (3 of 5) or a 3-slot World block (2 of 3).
+ */
+export function perSourceCap(quota) {
+  const q = Math.max(0, Math.floor(Number(quota) || 0));
+  return q >= FULL_CAP_MIN_QUOTA ? PER_SOURCE_CAP : Math.ceil(q / 2);
 }
 
 export function ringWeight(index) {
@@ -316,12 +349,13 @@ export function rankFrontPage({ ctx, candidates, sources, counts = new Map(), qu
 
     const items = [];
     const perSource = new Map();
+    const cap = perSourceCap(quota);
     for (const e of [...alerts, ...leads, ...rest]) {
       if (items.length >= quota) break;
       if (!e.alert) {
         const k = capKey(e.article, e.source);
         const n = perSource.get(k) || 0;
-        if (n >= PER_SOURCE_CAP) continue;
+        if (n >= cap) continue;
         perSource.set(k, n + 1);
       }
       items.push(e);
@@ -368,19 +402,55 @@ export function localClause(ctx, sources) {
   return { $or: clauses };
 }
 
+/**
+ * Articles with an OWN Arkansas place: one not inherited from their source.
+ * Sources are grouped by the places they cover, so each group is one clause
+ * ($elemMatch: some place in Arkansas and not the source's own).
+ */
+function ownArkansasClause(ctx, sources) {
+  const arkansasPlaces = [...ctx.byId.values()].filter((p) => inArkansas(ctx, p.id)).map((p) => p.oid);
+  if (!arkansasPlaces.length) return NEVER;
+  const groups = new Map();
+  for (const s of sources) {
+    const covered = [...new Map((s.places || []).map((id) => [String(id), id])).values()];
+    const key = covered.map(String).sort().join(',');
+    if (!groups.has(key)) groups.set(key, { ids: [], covered });
+    groups.get(key).ids.push(s._id);
+  }
+  const clauses = [...groups.values()].map((g) => ({
+    sourceId: { $in: g.ids },
+    places: { $elemMatch: g.covered.length ? { $in: arkansasPlaces, $nin: g.covered } : { $in: arkansasPlaces } },
+  }));
+  return clauses.length ? { $or: clauses } : NEVER;
+}
+
 /** Articles in `section` for this reader. Must agree with sectionOf. */
 export function sectionClause(ctx, section, sources) {
   const local = localClause(ctx, sources);
   if (section === 'local') return local;
-  const arkansasPlaces = [...ctx.byId.values()].filter((p) => inArkansas(ctx, p.id)).map((p) => p.oid);
-  const state = {
-    $or: [
-      { sourceId: { $in: sources.filter(labelledStateOrLocal).map((s) => s._id) } },
-      ...(arkansasPlaces.length ? [{ places: { $in: arkansasPlaces } }] : []),
-    ],
-  };
+  const byFirst = (key) => sources.filter((s) => firstSection(s) === key).map((s) => s._id);
+
+  if (!ctx.ring.length) {
+    // No ring: the old rule (and no `around`).
+    if (section === 'around') return NEVER;
+    const arkansasPlaces = [...ctx.byId.values()].filter((p) => inArkansas(ctx, p.id)).map((p) => p.oid);
+    const state = {
+      $or: [
+        { sourceId: { $in: sources.filter(labelledStateOrLocal).map((s) => s._id) } },
+        ...(arkansasPlaces.length ? [{ places: { $in: arkansasPlaces } }] : []),
+      ],
+    };
+    if (section === 'state') return { $and: [{ $nor: [local] }, state] };
+    const mine = byFirst(section);
+    if (!mine.length) return NEVER;
+    return { $and: [{ $nor: [local, state] }, { sourceId: { $in: mine } }] };
+  }
+
+  const state = { $or: [{ sourceId: { $in: byFirst('state') } }, ownArkansasClause(ctx, sources)] };
   if (section === 'state') return { $and: [{ $nor: [local] }, state] };
-  const mine = sources.filter((s) => firstSection(s) === section).map((s) => s._id);
+  // around: a local-first source's story that is neither local nor state;
+  // every other section: the source's first section, likewise.
+  const mine = byFirst(section === 'around' ? 'local' : section);
   if (!mine.length) return NEVER;
   return { $and: [{ $nor: [local, state] }, { sourceId: { $in: mine } }] };
 }

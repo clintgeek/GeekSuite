@@ -363,7 +363,8 @@ else we can configure about it."
 
 - **Where:** the publisher line above every headline on Latest is a button ("Settings for
   <publisher>", 44px) that opens a sheet (bottom sheet on a phone, dialog from md up). The
-  headline still opens the article at the publisher.
+  headline still opens the article at the publisher, unless the reader chose another opener
+  for that publisher (see "Opening (Chef, 2026-10-11)").
 - **A direct source:** name, kind and paywall badges, feed health and stories this week;
   **In my paper** (`newsSetSourceOn`), **I subscribe** ("Keeps it when Free to read is on",
   heavier when the source is paywalled), **More from this source** (`/?source=<id>`) and
@@ -402,6 +403,73 @@ extend type Mutation {
 Stored in `newsgeek.prefs` (`packages/schemas/newsgeek/prefs.js`): `subscribedSourceIds`,
 `subscribedDomains`, `mutedDomains`. All additive: the gateway ships first, the UI after it is
 live.
+
+### Opening (Chef, 2026-10-11)
+How an outbound story link opens. Two per-reader settings.
+
+**1. This window or a new tab** (`NewsPrefs.openInNewTab`, default **true**, which was the
+behaviour before).
+- Set in Settings → **Reading** with the switch "Open stories in a new tab". The help line
+  says: "Off: stories open here, and Back brings you back to NewsGeek."
+- It applies to **every** outbound story link: the headline, "Open at publisher", the
+  open-with links in the ⋯ menu, and the Also-in links.
+- New tab: `target="_blank" rel="noopener noreferrer"`, or for menu items
+  `window.open(u, '_blank', 'noopener,noreferrer')`.
+- This window: a plain `<a href>` with no target and `rel="noreferrer"`, or for menu items
+  `window.location.assign(u)`.
+
+**2. A default opener per publisher** (`NewsPrefs.openers`). A reader can choose to open one
+publisher's stories with one of their open-with links instead of the original link.
+- **Link ids:** every reader link has `id` = a short hash of its **template** (12 hex
+  characters of SHA-256, `readerLinkId` in `packages/schemas/newsgeek/prefs.js`), computed by
+  the gateway. Renaming a link keeps its id. **Editing the template changes the id**, and the
+  overrides that pointed at it fall back to the original link, by design. `newsSetPrefs`
+  removes those entries when it replaces the links, and `newsPrefs` never returns an entry
+  whose link is gone.
+- **Keys:** a direct source by `sourceId`, or a publisher seen through an aggregator (Google
+  News) by `domain`. Each entry has exactly one of the two.
+- **`newsSetPublisherOpener(sourceId, domain, linkId)`** writes the caller's own row only.
+  - Exactly one of `sourceId` and `domain` must be given, otherwise `BAD_USER_INPUT`.
+  - The domain is normalised like the Source sheet's (`normalizePublisherDomain`).
+  - An unknown `sourceId` is `NOT_FOUND`.
+  - `linkId` must be one of the caller's current link ids (`BAD_USER_INPUT`).
+  - `linkId` null or omitted means back to the original link, and the entry is removed.
+  - At most **200** entries; replacing an existing one at the limit still works.
+- **Resolution** (frontend, one pure helper: `utils/openUrl.js` `resolveStoryUrl`):
+  - a direct source looks up the opener by `sourceId`;
+  - a Google News item looks it up by `publisherDomain`, matched as a suffix on a label
+    boundary (an opener for `reuters.com` covers `www.reuters.com` and `uk.reuters.com`);
+  - if an opener is found and its link still exists, the URL is
+    `buildReaderUrl(link.template, { url, title })`, with each value percent-encoded on
+    its own;
+  - otherwise it is the original `article.url`.
+
+**The changed tap rule.** Before, tapping a story always opened the publisher. Now tapping a
+story opens the publisher **unless the reader chose a different opener for that publisher**.
+There are two exceptions, and both always use the original link:
+- **"Open at publisher"** in the ⋯ menu always opens the original `article.url`;
+- **Also-in** links always open each outlet's own original URL.
+
+**Screens (change set B):**
+- **Source sheet** (⋯ → Source settings): **"Open stories with"** lists "Original link
+  (publisher)" and each of the reader's open-with links by label. For an aggregator item it is
+  keyed by domain, so the heading says "for <domain>". With no open-with links, the row is
+  disabled and links to "Add open-with links in Settings".
+- **Settings → Reading:** the new-tab switch.
+- **Settings → Publishers:** "Open with" lists the overrides ("The Arkadelphian → Example
+  reader", "reuters.com → …"), each with a "Use original" button.
+- After a change the prefs are refetched, so the visible headline links update at once.
+
+```graphql
+type NewsReaderLink { id: ID!  label: String!  template: String! }       # id added
+type NewsOpener { sourceId: ID  domain: String  linkId: ID! }
+type NewsPrefs { openInNewTab: Boolean!  openers: [NewsOpener!]! }      # added
+input NewsPrefsInput { openInNewTab: Boolean }                           # added
+extend type Mutation {
+  newsSetPublisherOpener(sourceId: ID, domain: String, linkId: ID): NewsPrefs!
+}
+```
+All additive: the gateway ships first, the UI after it is live.
 
 ## Ingest
 
@@ -598,13 +666,30 @@ The best (closest) matching entry wins.
    Spring NWS zone; not KATV "Arkansas", not Arkansas TV "Little Rock + Pulaski County +
    Arkansas"). A D-G story tagged Arkadelphia is Local; an AP story tagged Little Rock is
    Local. **A reader with no ring:** Local = the source is labelled local (the old rule).
-2. else **State**: the article has any Arkansas place (its ancestry contains `arkansas`),
-   or the source is labelled state or local. A Texarkana paper is State for Chef.
-3. else the source's **first** section (national, world, tech).
+2. else **State** (changed 2026-10-11, Chef): the **source** is statewide (its first section
+   is `state`), or the story has an **own** (non-inherited) Arkansas place. An own place on
+   the ring would already have made it Local, so in practice it is one off the ring.
+3. else **Around Arkansas** (`around`, new 2026-10-11): the source is labelled local first,
+   is not ring-local, and the story has no Arkansas place of its own. That is another town's
+   paper reporting its own town. A Texarkana paper's council story is Around for Chef; its
+   story naming Hot Springs is State; one naming Little Rock is Local.
+4. else the source's **first** section (national, world, tech).
+
+**Why Around exists** (Chef, 2026-10-11): on Chef's Today, State was filled by the DeWitt
+Era-Enterprise's "Calendar of Events", "Stuttgart Clean-Up" and "Band Parents Association…".
+That is another town's local news, not state news. Inherited places no longer count toward
+State, because every story a Texarkana paper prints inherits Texarkana.
+
+**A reader with no ring** keeps the old rule whole: Local = the source is labelled local;
+State = any Arkansas place (own or inherited) or the source is labelled state; else the first
+section. Around exists only for readers with a ring.
 
 `newsArticles(section)` filters by this same per-story section (`sectionClause`, the rule as
-a Mongo filter; a test proves the five section pages partition Everything and agree with
-Today). Every article carries `section` and `why`.
+a Mongo filter; the "own Arkansas place" test groups sources by the places they cover and uses
+`$elemMatch: { $in: <Arkansas places>, $nin: <the source's places> }`). A test proves the six
+section pages partition Everything and agree with Today. `/s/around` is the Around section
+page. Every article carries `section` and `why`. The duplicate wire rule (dedupe.js) is
+unchanged.
 
 ### The score (within a section)
 ```
@@ -625,11 +710,15 @@ The second factor is the hard absolute decay.
    future), newest first. They are exempt from the per-source cap.
 2. Then **favourites' stories no older than 7 days**, by score.
 3. Then everything else by score (ties: newer first).
-- **At most 5 stories per source per section** (`PER_SOURCE_CAP`, Chef 2026-10-11). A
-  Google News item counts against its real publisher's domain, not against the aggregator.
+- **The per-source cap depends on the block size** (`perSourceCap(quota)`, Chef 2026-10-11):
+  `PER_SOURCE_CAP` (5) for a block with a quota of 8 or more, otherwise `ceil(quota / 2)`. With
+  the defaults that is Local 5, State 3, National 3, World 2, Tech 2 and Around 2, so one busy
+  paper can't fill a five-slot block. A Google News item counts against its real publisher's
+  domain, not against the aggregator.
 - **Quotas are caps, never targets.** Defaults: Local 8, State 5, National 5, World 3,
-  Tech 4 (`sectionQuotas`, per reader; 0–20). A quiet section stays short, an empty section
-  is left out, and `moreCount` says how many stories in the window didn't fit.
+  Tech 4, Around 3 (`sectionQuotas`, per reader; 0–20). A quiet section stays short, an empty
+  section is left out, and `moreCount` says how many stories in the window didn't fit.
+- **Front-page order:** Local, State, National, World, Tech, **Around Arkansas** (last).
 - Candidates obey every list rule: visibility (on for me), Free to read with subscriptions,
   hidden publishers, expired alerts. **Nothing else is filtered** (opinion and columns stay).
 
@@ -660,7 +749,8 @@ extend type Mutation {
 ```
 
 ### Screens (change set B)
-- **Today** (`/`): the masthead, Free to read, then Local, State, National, World, Tech, each
+- **Today** (`/`): the masthead, Free to read, then Local, State, National, World, Tech
+  (and Around Arkansas last, from 2026-10-11), each
   a small-caps head, its stories with quiet why-chips, and "More <section> →" to
   `/s/<key>` when `moreCount` > 0. It ends: "That's today's paper. Everything, newest
   first →".

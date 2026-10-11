@@ -99,10 +99,10 @@ async function mkArticle(source, over = {}) {
 const FRONT = `{ newsFrontPage { generatedAt sections { key title moreCount items { id title section why sourceName } } } }`;
 const front = async (user = READER_A) => (await ok(FRONT, {}, user)).newsFrontPage;
 const shape = (fp) => Object.fromEntries(fp.sections.map((s) => [s.key, s.items.map((i) => i.title)]));
-const PREFS = `{ newsPrefs { homePlaces { id name } favoriteSourceIds lessSourceIds sectionQuotas { local state national world tech } } }`;
+const PREFS = `{ newsPrefs { homePlaces { id name } favoriteSourceIds lessSourceIds sectionQuotas { local state national world tech around } } }`;
 const SET_HOME = `mutation($ids: [ID!]!) { newsSetHomePlaces(placeIds: $ids) { homePlaces { id name } } }`;
 const SET_PRIO = `mutation($id: ID!, $p: String!) { newsSetSourcePriority(id: $id, priority: $p) { id priorityForMe } }`;
-const SET_PREFS = `mutation($input: NewsPrefsInput!) { newsSetPrefs(input: $input) { freeToReadOnly sectionQuotas { local state national world tech } } }`;
+const SET_PREFS = `mutation($input: NewsPrefsInput!) { newsSetPrefs(input: $input) { freeToReadOnly sectionQuotas { local state national world tech around } } }`;
 const ARTICLES = `query($section: String, $before: Date, $limit: Int) {
   newsArticles(section: $section, before: $before, limit: $limit) { nextBefore hiddenPaywalled items { id title section why } }
 }`;
@@ -193,7 +193,7 @@ describe('newsSetSourcePriority / priorityForMe', () => {
 });
 
 describe('sectionQuotas', () => {
-  const DEFAULTS = { local: 8, state: 5, national: 5, world: 3, tech: 4 };
+  const DEFAULTS = { local: 8, state: 5, national: 5, world: 3, tech: 4, around: 3 };
 
   it('defaults, overrides per section, null resets one, out of range is refused', async () => {
     expect((await ok(PREFS)).newsPrefs.sectionQuotas).toEqual(DEFAULTS);
@@ -203,11 +203,14 @@ describe('sectionQuotas', () => {
     expect((await ok(PREFS)).newsPrefs.sectionQuotas).toEqual({ ...DEFAULTS, tech: 0 });
     expect(await code(SET_PREFS, { input: { sectionQuotas: { state: 21 } } })).toBe('BAD_USER_INPUT');
     expect(await code(SET_PREFS, { input: { sectionQuotas: { state: -1 } } })).toBe('BAD_USER_INPUT');
+    await ok(SET_PREFS, { input: { sectionQuotas: { around: 6 } } });
+    expect((await ok(PREFS)).newsPrefs.sectionQuotas).toEqual({ ...DEFAULTS, tech: 0, around: 6 });
   });
 
   it('caps Today', async () => {
     const hill = await mkSource({ name: 'The Hill', sections: ['national'] });
-    for (let i = 0; i < 4; i += 1) await mkArticle(hill, { title: `h${i}`, age: (i + 1) * H });
+    const ap = await mkSource({ name: 'AP', sections: ['national'] });
+    for (let i = 0; i < 4; i += 1) await mkArticle(i % 2 ? ap : hill, { title: `h${i}`, age: (i + 1) * H });
     await ok(SET_PREFS, { input: { sectionQuotas: { national: 2 } } });
     const fp = await front();
     expect(fp.sections).toEqual([expect.objectContaining({ key: 'national', moreCount: 2 })]);
@@ -221,11 +224,12 @@ describe('newsFrontPage', () => {
     await setHome(['arkadelphia', 'clark', 'hot-springs', 'little-rock', 'garland']);
     const fp = await front();
     expect(fp.sections.map((s) => [s.key, s.title])).toEqual([
-      ['local', 'Local'], ['state', 'State'], ['national', 'National'], ['tech', 'Tech'],
+      ['local', 'Local'], ['state', 'State'], ['national', 'National'], ['tech', 'Tech'], ['around', 'Around Arkansas'],
     ]);
     const by = shape(fp);
     expect(by.local.sort()).toEqual(['AP Little Rock', 'Arkadelphian weekly', 'D-G about Arkadelphia']);
-    expect(by.state.sort()).toEqual(['D-G statehouse', 'Hill on Arkansas', 'Texarkana council']);
+    expect(by.state.sort()).toEqual(['D-G statehouse', 'Hill on Arkansas']);
+    expect(by.around).toEqual(['Texarkana council']);
     expect(by.national).toEqual(['Hill untagged']);
     expect(by.tech).toEqual(['Verge gadget']);
     const items = fp.sections.flatMap((s) => s.items.map((i) => ({ ...i, key: s.key })));
@@ -242,6 +246,7 @@ describe('newsFrontPage', () => {
     await seedPaper();
     const by = shape(await front());
     expect(by.local.sort()).toEqual(['Arkadelphian weekly', 'Texarkana council']);
+    expect(by.around).toBeUndefined();
   });
 
   it('a favourite leads its section, with the chip', async () => {
@@ -249,9 +254,9 @@ describe('newsFrontPage', () => {
     await setHome(['arkadelphia']);
     await mkArticle(s.texarkana, { title: 'Texarkana old', age: 6 * D });
     await setPrio(s.texarkana, 'favorite');
-    const state = (await front()).sections.find((x) => x.key === 'state');
-    expect(state.items.slice(0, 2).map((i) => i.title).sort()).toEqual(['Texarkana council', 'Texarkana old']);
-    expect(state.items[0].why).toEqual(['Arkansas', '★ Favorite']);
+    const around = (await front()).sections.find((x) => x.key === 'around');
+    expect(around.items.slice(0, 2).map((i) => i.title).sort()).toEqual(['Texarkana council', 'Texarkana old']);
+    expect(around.items[0].why).toEqual(['Arkansas', '★ Favorite']);
   });
 
   it('reader A’s prefs never change reader B’s paper', async () => {
@@ -322,13 +327,17 @@ describe('newsFrontPage', () => {
 });
 
 describe('newsArticles(section) uses the same per-story section', () => {
-  it('the five section pages partition Everything, and agree with Today', async () => {
-    await seedPaper();
+  it('the six section pages (Around included) partition Everything, and agree with Today', async () => {
+    const s = await seedPaper();
+    // Around's edges: a local paper's story naming an Arkansas place of its own is
+    // State; one naming a ring place is Local.
+    await mkArticle(s.texarkana, { title: 'Texarkana on Hot Springs', own: ['hot-springs'] });
+    await mkArticle(s.texarkana, { title: 'Texarkana on Little Rock', own: ['little-rock'] });
     await setHome(['arkadelphia', 'clark', 'little-rock']);
     const page = async (section) => (await ok(ARTICLES, { section })).newsArticles.items;
     const all = await page(undefined);
     const pages = {};
-    for (const key of ['local', 'state', 'national', 'world', 'tech']) pages[key] = await page(key);
+    for (const key of ['local', 'state', 'national', 'world', 'tech', 'around']) pages[key] = await page(key);
     const ids = Object.values(pages).flat().map((i) => i.id).sort();
     expect(ids).toEqual(all.map((i) => i.id).sort()); // every story, exactly once
     for (const [key, items] of Object.entries(pages)) for (const i of items) expect(i.section).toBe(key);
@@ -336,8 +345,16 @@ describe('newsArticles(section) uses the same per-story section', () => {
       const onPage = new Set(pages[s.key].map((i) => i.id));
       for (const i of s.items) expect(onPage.has(i.id)).toBe(true);
     }
-    expect(pages.local.map((i) => i.title).sort()).toEqual(['AP Little Rock', 'Arkadelphian weekly', 'D-G about Arkadelphia']);
+    expect(pages.local.map((i) => i.title).sort()).toEqual(['AP Little Rock', 'Arkadelphian weekly', 'D-G about Arkadelphia', 'Texarkana on Little Rock']);
+    expect(pages.state.map((i) => i.title).sort()).toEqual(['D-G statehouse', 'Hill on Arkansas', 'Texarkana on Hot Springs']);
+    expect(pages.around.map((i) => i.title)).toEqual(['Texarkana council']);
     expect(pages.national.map((i) => i.title)).toEqual(['Hill untagged']);
+  });
+
+  it('a reader with no ring has no Around page; an unknown section is refused', async () => {
+    await seedPaper();
+    expect((await ok(ARTICLES, { section: 'around' })).newsArticles.items).toEqual([]);
+    expect(await code(ARTICLES, { section: 'sports' })).toBe('BAD_USER_INPUT');
   });
 
   it('keeps paging and Free to read inside a section', async () => {

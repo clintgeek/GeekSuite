@@ -4,8 +4,8 @@
  * page", Chef 2026-10-11). No Mongo: plain rows in, sections out.
  */
 import {
-  createContext, ringIndex, sectionOf, rankFrontPage, judge, whyChips, typicalGapMs, freshness,
-  PER_SOURCE_CAP, RING_WEIGHTS, ARKANSAS_WEIGHT, WINDOW_DAYS,
+  createContext, ringIndex, sectionOf, rankFrontPage, judge, whyChips, typicalGapMs, freshness, perSourceCap,
+  PER_SOURCE_CAP, RING_WEIGHTS, ARKANSAS_WEIGHT, WINDOW_DAYS, SECTION_ORDER, SECTION_TITLES,
 } from '../graphql/newsgeek/ranking.js';
 
 const H = 3600 * 1000;
@@ -68,7 +68,7 @@ const A = (source, over = {}) => {
   };
 };
 
-const QUOTAS = { local: 8, state: 5, national: 5, world: 3, tech: 4 };
+const QUOTAS = { local: 8, state: 5, national: 5, world: 3, tech: 4, around: 3 };
 const rank = ({ candidates, sources = Object.values(SRC), counts = new Map(), quotas = QUOTAS, ctx = ctxFor() }) =>
   rankFrontPage({ ctx, candidates, sources, counts, quotas });
 const titlesIn = (sections, key) => (sections.find((s) => s.key === key)?.items || []).map((e) => e.article.title);
@@ -130,14 +130,45 @@ describe('the story’s section, per reader', () => {
     expect(sectionOf(ctx, A(SRC.arkTv), SRC.arkTv)).toBe('state');
   });
 
-  it('a local source outside the ring is State for this reader', () => {
-    expect(sectionOf(ctx, A(SRC.texarkana), SRC.texarkana)).toBe('state');
+  // Around Arkansas (Chef, 2026-10-11): on Chef's Today, State was DeWitt
+  // Era-Enterprise's "Calendar of Events" — another town's paper, not state news.
+  it('a local paper outside the ring reporting its own town is Around Arkansas, not State', () => {
+    expect(sectionOf(ctx, A(SRC.texarkana), SRC.texarkana)).toBe('around');
   });
 
-  it('a reader with no ring: Local is the source’s label (the old behaviour)', () => {
+  it('a local paper outside the ring naming an Arkansas place of its own is State', () => {
+    // Texarkana's paper on the statehouse in Little Rock is Local (Little Rock is on the ring);
+    // on something in Arkansas off the ring it is State.
+    expect(sectionOf(ctx, A(SRC.texarkana, { own: ['arkansas'] }), SRC.texarkana)).toBe('state');
+    expect(sectionOf(ctx, A(SRC.texarkana, { own: ['little-rock'] }), SRC.texarkana)).toBe('local');
+  });
+
+  it('a statewide source is State even when the story names no place of its own', () => {
+    expect(sectionOf(ctx, A(SRC.dg), SRC.dg)).toBe('state');
+    expect(sectionOf(ctx, A(SRC.arkTv), SRC.arkTv)).toBe('state');
+  });
+
+  it('an inherited Arkansas place alone never makes a story State', () => {
+    // texarkana's stories inherit Texarkana + Miller County; that is Around, not State.
+    const article = A(SRC.texarkana);
+    expect(article.places).toEqual([id('texarkana'), id('miller')]);
+    expect(sectionOf(ctx, article, SRC.texarkana)).toBe('around');
+  });
+
+  it('a national source never lands in Around', () => {
+    expect(sectionOf(ctx, A(SRC.hill), SRC.hill)).toBe('national');
+  });
+
+  it('Around is the last front-page section, titled “Around Arkansas”', () => {
+    expect(SECTION_ORDER).toEqual(['local', 'state', 'national', 'world', 'tech', 'around']);
+    expect(SECTION_TITLES.around).toBe('Around Arkansas');
+  });
+
+  it('a reader with no ring: Local is the source’s label (the old behaviour), and there is no Around', () => {
     const none = createContext({ places: PLACES, now: NOW });
     expect(sectionOf(none, A(SRC.texarkana), SRC.texarkana)).toBe('local');
     expect(sectionOf(none, A(SRC.dg, { own: ['arkadelphia'] }), SRC.dg)).toBe('state');
+    expect(sectionOf(none, A(SRC.hill, { own: ['texarkana'] }), SRC.hill)).toBe('state');
   });
 });
 
@@ -200,9 +231,33 @@ describe('locality and priority', () => {
   });
 });
 
-describe('diversity: at most PER_SOURCE_CAP stories per source per section', () => {
-  it('the cap is 5', () => {
+describe('diversity: at most perSourceCap(quota) stories per source per section', () => {
+  it('the cap is 5 for a block of 8 or more, else half the block rounded up', () => {
     expect(PER_SOURCE_CAP).toBe(5);
+    expect([8, 10, 20].map(perSourceCap)).toEqual([5, 5, 5]);
+    // State 5, National 5, World 3, Tech 4, Around 3 (Chef, 2026-10-11).
+    expect([5, 5, 3, 4, 3].map(perSourceCap)).toEqual([3, 3, 2, 2, 2]);
+    expect([0, 1, 2, 6, 7].map(perSourceCap)).toEqual([0, 1, 1, 3, 4]);
+  });
+
+  it('a 5-slot block where one source has 5 strong stories shows at most 3 of them', () => {
+    const big = S('big', { sections: ['state'] });
+    const small = S('small', { sections: ['state'] });
+    const counts = new Map([[big._id, 7], [small._id, 7]]);
+    const bigs = [1, 2, 3, 4, 5].map((i) => A(big, { age: i * H, title: `big${i}` }));
+    const weak = [1, 2].map((i) => A(small, { age: (3 + i) * D, title: `small${i}` }));
+    const ctx = ctxFor();
+    expect(judge(ctx, weak[0], small, 7).score).toBeLessThan(judge(ctx, bigs[4], big, 7).score);
+    const out = rank({ candidates: [...bigs, ...weak], sources: [big, small], counts });
+    expect(titlesIn(out, 'state')).toEqual(['big1', 'big2', 'big3', 'small1', 'small2']);
+  });
+
+  it('Local (quota 8) still allows 5 from one source', () => {
+    const big = S('big-local', { places: [id('arkadelphia')] });
+    const counts = new Map([[big._id, 7]]);
+    const bigs = [1, 2, 3, 4, 5, 6].map((i) => A(big, { age: i * H, title: `l${i}` }));
+    const out = rank({ candidates: bigs, sources: [big], counts });
+    expect(titlesIn(out, 'local')).toEqual(['l1', 'l2', 'l3', 'l4', 'l5']);
   });
 
   it('the 6th story from one source is held back while a lower-scored story from another gets in', () => {
@@ -213,7 +268,7 @@ describe('diversity: at most PER_SOURCE_CAP stories per source per section', () 
     const lower = A(small, { age: 3 * D, title: 'small' });
     const ctx = ctxFor();
     expect(judge(ctx, lower, small, 7).score).toBeLessThan(judge(ctx, bigs[5], big, 7).score);
-    const out = rank({ candidates: [...bigs, lower], sources: [big, small], counts, quotas: { ...QUOTAS, national: 6 } });
+    const out = rank({ candidates: [...bigs, lower], sources: [big, small], counts, quotas: { ...QUOTAS, national: 10 } });
     expect(titlesIn(out, 'national')).toEqual(['big1', 'big2', 'big3', 'big4', 'big5', 'small']);
     expect(out.find((s) => s.key === 'national').moreCount).toBe(1);
   });
@@ -237,19 +292,21 @@ describe('quotas are caps, never targets', () => {
   });
 
   it('a busy section stops at its quota and says how many more', () => {
-    const many = Array.from({ length: 9 }, (_, i) => A(SRC.hill, { age: (i + 1) * H, title: `h${i}` }));
-    const out = rank({ candidates: many, counts: new Map([[SRC.hill._id, 7]]), quotas: { ...QUOTAS, national: 3 } });
-    // 3 shown (under the cap of 5), 6 more.
+    const three = ['n1', 'n2', 'n3'].map((k) => S(k, { sections: ['national'] }));
+    const many = Array.from({ length: 9 }, (_, i) => A(three[i % 3], { age: (i + 1) * H, title: `h${i}` }));
+    const out = rank({ candidates: many, sources: three, counts: new Map(three.map((s) => [s._id, 7])), quotas: { ...QUOTAS, national: 3 } });
+    // 3 shown (three sources, each under its cap of 2), 6 more.
     expect(out.find((s) => s.key === 'national')).toMatchObject({ moreCount: 6 });
     expect(titlesIn(out, 'national')).toHaveLength(3);
   });
 
-  it('a quota of 0 leaves the section out; sections come in briefing order', () => {
+  it('a quota of 0 leaves the section out; sections come in briefing order, Around last', () => {
     const out = rank({
-      candidates: [A(SRC.verge), A(SRC.hill), A(SRC.dg), A(SRC.arkadelphian)],
+      candidates: [A(SRC.texarkana), A(SRC.verge), A(SRC.hill), A(SRC.dg), A(SRC.arkadelphian)],
       quotas: { ...QUOTAS, national: 0 },
     });
-    expect(out.map((s) => s.key)).toEqual(['local', 'state', 'tech']);
+    expect(out.map((s) => s.key)).toEqual(['local', 'state', 'tech', 'around']);
+    expect(out.at(-1).title).toBe('Around Arkansas');
   });
 
   it('stories outside the window never show (local keeps 10 days, others 7)', () => {

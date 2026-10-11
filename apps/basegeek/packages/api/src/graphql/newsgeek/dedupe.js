@@ -37,7 +37,7 @@
  *    the group goes to that section: wire copy carried by a state paper stays
  *    out of State. Otherwise the representative's per-story section.
  */
-import { sectionOf, inArkansas, firstSection } from './ranking.js';
+import { sectionOf, firstSection, hasOwnArkansasPlace } from './ranking.js';
 
 export const DUP_WINDOW_MS = 72 * 60 * 60 * 1000;
 export const ALSO_IN_MAX = 5;
@@ -120,12 +120,6 @@ function repCompare(ctx) {
     for (let i = 0; i < ra.length; i += 1) if (ra[i] !== rb[i]) return ra[i] - rb[i];
     return String(a.article._id).localeCompare(String(b.article._id));
   };
-}
-
-/** The article has a place of its own (not inherited from its source) in Arkansas. */
-function hasOwnArkansasPlace(ctx, article, source) {
-  const inherited = new Set((source.places || []).map(String));
-  return (article.places || []).map(String).some((id) => !inherited.has(id) && inArkansas(ctx, id));
 }
 
 /** The group's section (header, 4). `members` in representative order. */

@@ -880,6 +880,29 @@ describe('NewsPrefsInput accepts what the NewsGeek Settings page sends', () => {
     const errors = await coercionErrors(source, { input: { sectionQuotas: { sports: 3 } } }, rootValue);
     expect(errors.join(' ')).toMatch(/"sports" is not defined by type "NewsSectionQuotasInput"/);
   });
+
+  // newsgeek (2026-10-11): NewsSectionQuotasInput.around (Around Arkansas).
+  test('an around quota coerces cleanly', async () => {
+    expect(await coercionErrors(source, { input: { sectionQuotas: { around: 3, state: null } } }, rootValue)).toEqual([]);
+  });
+
+  // newsgeek (2026-10-11): NewsPrefsInput.openInNewTab, sent by Settings → Reading
+  // as `{ input: { openInNewTab: <the switch> } }`, nothing else.
+  test('openInNewTab coerces cleanly', async () => {
+    expect(await coercionErrors(source, { input: { openInNewTab: false } }, rootValue)).toEqual([]);
+  });
+
+  test('the guard is armed — a misspelt window flag is refused', async () => {
+    const errors = await coercionErrors(source, { input: { openInNewWindow: false } }, rootValue);
+    expect(errors.join(' ')).toMatch(/"openInNewWindow" is not defined by type "NewsPrefsInput"/);
+  });
+
+  test('a reader link id is read-only — NewsReaderLinkInput still has no id', () => {
+    const input = typeDefs.definitions.find((d) => d.kind === 'InputObjectTypeDefinition' && d.name.value === 'NewsReaderLinkInput');
+    const output = typeDefs.definitions.find((d) => d.kind === 'ObjectTypeDefinition' && d.name.value === 'NewsReaderLink');
+    expect(input.fields.map((f) => f.name.value)).toEqual(['label', 'template']);
+    expect(output.fields.map((f) => f.name.value)).toEqual(['id', 'label', 'template']);
+  });
 });
 
 describe('FitnessMedicationInput accepts what Medications.jsx actually sends', () => {

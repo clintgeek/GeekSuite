@@ -15,8 +15,21 @@
  * - `favoriteSourceIds` / `lessSourceIds`: a source's priority (a source is in
  *   at most one; Normal = neither).
  * - `sectionQuotas`: per-section caps for Today; a missing key = the default
- *   (SECTION_QUOTA_DEFAULTS). Caps, never targets.
+ *   (SECTION_QUOTA_DEFAULTS). Caps, never targets. `around` ("Around
+ *   Arkansas", 2026-10-11) is the last section.
+ *
+ * Opening (Chef, 2026-10-11; plan "Opening"):
+ * - `openInNewTab`: outbound story links open in a new tab (true, the
+ *   default and the old behaviour) or in this window (false).
+ * - `openers`: per publisher, open its stories with one of the reader's
+ *   open-with links instead of the original link. Each entry has exactly one
+ *   of `sourceId` (a direct source) or `domain` (a publisher seen through an
+ *   aggregator), and `linkId` = readerLinkId(that link's template). Editing a
+ *   template changes its id, so the gateway drops entries that point at a
+ *   link that no longer exists (the story opens at the publisher again).
  */
+const crypto = require('crypto');
+
 const READER_LINKS_MAX = 5;
 const READER_LINK_LABEL_MAX = 40;
 const READER_LINK_TEMPLATE_MAX = 500;
@@ -27,13 +40,38 @@ const MUTED_DOMAINS_MAX = 200;
 // Front page (2026-10-11).
 const HOME_PLACES_MAX = 12;
 const PRIORITY_SOURCES_MAX = 500;
-const SECTION_QUOTA_DEFAULTS = Object.freeze({ local: 8, state: 5, national: 5, world: 3, tech: 4 });
+const SECTION_QUOTA_DEFAULTS = Object.freeze({ local: 8, state: 5, national: 5, world: 3, tech: 4, around: 3 });
 const SECTION_QUOTA_MAX = 20;
+// Opening (2026-10-11).
+const OPENERS_MAX = 200;
+const READER_LINK_ID_LENGTH = 12;
+
+/**
+ * A reader link's stable id: a short hash of its TEMPLATE (not the label), so
+ * renaming a link keeps every per-publisher opener that points at it and
+ * editing the template retires them. 12 hex characters of SHA-256.
+ */
+function readerLinkId(template) {
+  return crypto.createHash('sha256').update(String(template ?? ''), 'utf8').digest('hex').slice(0, READER_LINK_ID_LENGTH);
+}
 
 function prefsDefinition() {
   return {
     userId: { type: String, required: true },
     freeToReadOnly: { type: Boolean, default: false },
+    // Opening (2026-10-11): true = outbound story links open in a new tab.
+    openInNewTab: { type: Boolean, default: true },
+    // Per-publisher default opener: { sourceId | domain, linkId }.
+    openers: {
+      type: [{
+        _id: false,
+        sourceId: { type: String, default: undefined },
+        domain: { type: String, default: undefined },
+        linkId: { type: String, required: true },
+      }],
+      default: [],
+      validate: { validator: (v) => !v || v.length <= OPENERS_MAX, message: `at most ${OPENERS_MAX} openers` },
+    },
     // Per-reader source switches (DOCS/NEWSGEEK_PLAN.md "Reader-added sources"):
     // sourcesOn turns on a source that is off by default for this reader;
     // sourcesOff turns off one that would otherwise show. Source ids.
@@ -92,6 +130,7 @@ function prefsDefinition() {
       national: { type: Number, min: 0, max: SECTION_QUOTA_MAX, default: undefined },
       world: { type: Number, min: 0, max: SECTION_QUOTA_MAX, default: undefined },
       tech: { type: Number, min: 0, max: SECTION_QUOTA_MAX, default: undefined },
+      around: { type: Number, min: 0, max: SECTION_QUOTA_MAX, default: undefined },
     },
   };
 }
@@ -107,4 +146,5 @@ module.exports = {
   prefsDefinition, createPrefsSchema, READER_LINKS_MAX, READER_LINK_LABEL_MAX, READER_LINK_TEMPLATE_MAX,
   SUBSCRIBED_DOMAINS_MAX, MUTED_DOMAINS_MAX,
   HOME_PLACES_MAX, PRIORITY_SOURCES_MAX, SECTION_QUOTA_DEFAULTS, SECTION_QUOTA_MAX,
+  OPENERS_MAX, READER_LINK_ID_LENGTH, readerLinkId,
 };

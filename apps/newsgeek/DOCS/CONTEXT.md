@@ -335,3 +335,27 @@ Little Rock, Texarkana, Conway and the southern half of the state.
   source's rules. `clean-excerpts` writes only `excerpt`, only where the cleaner changes
   it. All three are safe to run twice.
 
+### 2026-10-11: Opening, Around Arkansas, and the per-source cap
+
+- **Opening (Chef):** two new per-reader settings, `openInNewTab` (default true, the old
+  behaviour) and per-publisher `openers`. Each reader link now has an `id`, a 12-hex hash of
+  its template. Renaming a link keeps the id; editing the template changes it, and the
+  openers that used it go back to the original link (they are removed from the row, not
+  hidden). The rules are in the plan's "Opening (Chef, 2026-10-11)".
+- **The tap rule changed:** a story opens with the reader's chosen opener for that publisher.
+  "Open at publisher" and the Also-in links still always open the original URL.
+- **Around Arkansas** (Chef approved): State had filled up with another town's local news (the
+  DeWitt Era-Enterprise's "Calendar of Events", "Stuttgart Clean-Up"). For a reader with a ring,
+  State is now a statewide source or a story with an **own** Arkansas place. A local paper off
+  the ring reporting its own town goes to the new last section, `around` (default quota 3,
+  `/s/around`). Readers with no ring keep the old rule.
+- **The per-source cap is relative to the block:** `perSourceCap(quota)` is 5 for a quota of
+  8 or more, otherwise ceil(quota / 2). With the defaults that gives Local 5, State 3,
+  National 3, World 2, Tech 2 and Around 2.
+- **Deploy order:** change set A (gateway + schemas) is additive except for the section
+  rule, which the live UI survives: an `around` front-page section renders with its gateway
+  title. Its "More Around Arkansas →" link goes back to Today until B ships, because the live
+  UI only routes `/s/` for the five old sections. Change set B (UI) selects
+  `openInNewTab`, `openers` and `readerLinks.id`, so it ships only after basegeek is live.
+- **No migration:** a missing `openInNewTab` reads as true, and missing `openers` and
+  `sectionQuotas.around` read as the defaults.

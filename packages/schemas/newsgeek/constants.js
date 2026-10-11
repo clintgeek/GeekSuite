@@ -8,8 +8,14 @@
 // feeds) is a gap-filler whose items are credited to their real publisher.
 const SOURCE_KINDS = ['journalism', 'official', 'aggregator'];
 
-// Briefing sections, in briefing order.
+// Briefing sections, in briefing order. These are the labels a SOURCE carries.
 const SECTIONS = ['local', 'state', 'national', 'world', 'tech'];
+
+// The sections a STORY can land in for a reader (the gateway's per-story rule,
+// DOCS/NEWSGEEK_PLAN.md "The story's section"), in front-page order. `around`
+// ("Around Arkansas", Chef 2026-10-11) is never a source label: it is another
+// town's paper reporting its own town, for a reader with a ring.
+const STORY_SECTIONS = ['local', 'state', 'national', 'world', 'tech', 'around'];
 
 // discovered → verified → active; broken after repeated failures (or a stale
 // feed); retired by hand. Only `active` sources are polled.
@@ -47,6 +53,7 @@ const COLLECTIONS = {
 module.exports = {
   SOURCE_KINDS,
   SECTIONS,
+  STORY_SECTIONS,
   SOURCE_STATUSES,
   FEED_FORMATS,
   PAYWALLS,

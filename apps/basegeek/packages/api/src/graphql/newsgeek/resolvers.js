@@ -20,7 +20,7 @@ import {
 } from './dedupe.js';
 
 const {
-  SOURCE_KINDS, SECTIONS, SOURCE_STATUSES, FEED_FORMATS, PAYWALLS, PAYWALLED_LEVELS, CONTENT_LEVELS,
+  SOURCE_KINDS, SECTIONS, STORY_SECTIONS, SOURCE_STATUSES, FEED_FORMATS, PAYWALLS, PAYWALLED_LEVELS, CONTENT_LEVELS,
 } = constants;
 const { feedHealth } = healthModule;
 const { PAYWALLED_DOMAIN_REGEX, paywalledDomainRegex, isPaywalledDomain } = paywallsModule;
@@ -29,6 +29,7 @@ const { cleanPathExclude } = pathRulesModule;
 const {
   READER_LINKS_MAX, READER_LINK_LABEL_MAX, READER_LINK_TEMPLATE_MAX, SUBSCRIBED_DOMAINS_MAX, MUTED_DOMAINS_MAX,
   HOME_PLACES_MAX, PRIORITY_SOURCES_MAX, SECTION_QUOTA_DEFAULTS, SECTION_QUOTA_MAX,
+  OPENERS_MAX, readerLinkId,
 } = prefsSchemaModule;
 
 /**
@@ -63,6 +64,12 @@ const {
  * that same per-story section (ranking.js sectionClause). newsFrontPage costs
  * six reads: prefs, sources, places, one 7-day count aggregation, the
  * candidates (one find, scoring fields only) and the chosen stories.
+ *
+ * Opening (plan "Opening", Chef 2026-10-11), per reader: openInNewTab (default
+ * true) and openers — per publisher (a direct source by id, an aggregator's
+ * publisher by domain) one of the reader's open-with links, by its id (a hash
+ * of the template, readerLinkId). Replacing the links drops openers whose link
+ * is gone; newsPrefs never returns one that points at a missing link.
  *
  * Ingest hygiene (plan "Ingest hygiene", Chef 2026-10-11): copies of one story
  * collapse into one item with `alsoIn` (dedupe.js) in Today and in
@@ -490,7 +497,7 @@ function duplicateSlugGuard(err) {
 // Prefs + paywalls
 // ---------------------------------------------------------------------------
 
-const PREFS_DEFAULTS = Object.freeze({ freeToReadOnly: false });
+const PREFS_DEFAULTS = Object.freeze({ freeToReadOnly: false, openInNewTab: true });
 const SOURCE_PRIORITIES = ['favorite', 'normal', 'less'];
 
 const isPaywalledSource = (s) => PAYWALLED_LEVELS.includes(s.access?.paywall);
@@ -499,9 +506,16 @@ const isPaywalledSource = (s) => PAYWALLED_LEVELS.includes(s.access?.paywall);
 async function shapePrefs(row) {
   const homeIds = (row?.homePlaces || []).map(String).filter((id) => ObjectId.isValid(id));
   const placeMap = await loadPlaceMap([homeIds]);
+  const readerLinks = shapeReaderLinks(row);
+  const linkIds = new Set(readerLinks.map((l) => l.id));
   return {
     freeToReadOnly: Boolean(row?.freeToReadOnly ?? PREFS_DEFAULTS.freeToReadOnly),
-    readerLinks: (row?.readerLinks || []).map((l) => ({ label: l.label, template: l.template })),
+    openInNewTab: Boolean(row?.openInNewTab ?? PREFS_DEFAULTS.openInNewTab),
+    readerLinks,
+    // Only the openers that still point at one of the reader's links.
+    openers: (row?.openers || [])
+      .filter((o) => linkIds.has(o.linkId) && (o.sourceId || o.domain))
+      .map((o) => ({ sourceId: o.sourceId || null, domain: o.sourceId ? null : o.domain || null, linkId: o.linkId })),
     subscribedSourceIds: (row?.subscribedSourceIds || []).map(String),
     subscribedDomains: row?.subscribedDomains || [],
     mutedDomains: row?.mutedDomains || [],
@@ -511,6 +525,9 @@ async function shapePrefs(row) {
     sectionQuotas: resolveQuotas(row),
   };
 }
+
+/** The reader's links, each with its id (a hash of the template). */
+const shapeReaderLinks = (row) => (row?.readerLinks || []).map((l) => ({ id: readerLinkId(l.template), label: l.label, template: l.template }));
 
 /** NewsSectionQuotasInput → $set / $unset of the provided keys (null = back to the default). */
 function quotaUpdate(input) {
@@ -742,7 +759,7 @@ async function duplicateContext({ rows, base, walled, sourceMap }) {
 async function articlePage(args, viewer) {
   const { freeToReadOnly } = viewer;
   const { section, placeId, sourceId, before } = args;
-  if (section != null) oneOf(section, SECTIONS, 'section');
+  if (section != null) oneOf(section, STORY_SECTIONS, 'section');
   let limit = args.limit == null ? DEFAULT_LIMIT : args.limit;
   if (!Number.isInteger(limit) || limit < 1) throw badInput('limit must be a positive integer');
   limit = Math.min(limit, MAX_LIMIT);
@@ -993,10 +1010,14 @@ export const resolvers = {
       requireUser(user);
       const set = {};
       if (input?.freeToReadOnly != null) set.freeToReadOnly = Boolean(input.freeToReadOnly);
+      if (input?.openInNewTab != null) set.openInNewTab = Boolean(input.openInNewTab);
       if (input?.readerLinks != null) set.readerLinks = cleanReaderLinks(input.readerLinks);
       const quotas = input?.sectionQuotas != null ? quotaUpdate(input.sectionQuotas) : { set: {}, unset: {} };
       const update = { $set: { ...set, ...quotas.set } };
       if (Object.keys(quotas.unset).length) update.$unset = quotas.unset;
+      // New links, new ids: an opener whose link is gone lapses (back to the
+      // original), and is removed rather than left to wake up later.
+      if (set.readerLinks) update.$pull = { openers: { linkId: { $nin: set.readerLinks.map((l) => readerLinkId(l.template)) } } };
       const row = await writePrefs(String(user.id), update);
       return shapePrefs(row);
     },
@@ -1031,6 +1052,30 @@ export const resolvers = {
       }[priority];
       await writePrefs(viewer.userId, update);
       return shapeOneSource(doc._id, await viewerOf(user));
+    },
+
+    // Opening: the caller's opener for one publisher (a direct source by id,
+    // or an aggregator's publisher by domain). linkId null → the original.
+    newsSetPublisherOpener: async (_, { sourceId, domain, linkId }, { user }) => {
+      requireUser(user);
+      const hasSource = sourceId != null && sourceId !== '';
+      const hasDomain = domain != null && domain !== '';
+      if (hasSource === hasDomain) throw badInput('Give exactly one of sourceId or domain');
+      const key = hasSource
+        ? { sourceId: String((await sourceForWrite(sourceId))._id) }
+        : { domain: normalizePublisherDomain(domain) };
+      const userId = String(user.id);
+      const row = await NewsPrefs.findOne({ userId }, { readerLinks: 1, openers: 1 }).lean();
+      const same = (o) => (key.sourceId ? o.sourceId === key.sourceId : !o.sourceId && o.domain === key.domain);
+      const others = (row?.openers || []).filter((o) => !same(o));
+      if (linkId == null || linkId === '') {
+        if (!row || others.length === (row.openers || []).length) return shapePrefs(row);
+        return shapePrefs(await writePrefs(userId, { $set: { openers: others } }));
+      }
+      const id = String(linkId);
+      if (!shapeReaderLinks(row).some((l) => l.id === id)) throw badInput('That open-with link isn’t one of yours (it may have changed). Pick it again.');
+      if (others.length >= OPENERS_MAX) throw badInput(`You can set an opener for at most ${OPENERS_MAX} publishers`);
+      return shapePrefs(await writePrefs(userId, { $set: { openers: [...others, { ...key, linkId: id }] } }));
     },
 
     newsSetSourceOn: async (_, { id, on }, { user }) => {

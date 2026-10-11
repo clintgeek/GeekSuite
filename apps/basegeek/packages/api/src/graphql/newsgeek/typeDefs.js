@@ -95,7 +95,8 @@ export const typeDefs = gql`
     sections: [String!]!
     places: [NewsPlace!]!
     # Front page (2026-10-11), per reader: the story's own section for the
-    # caller (local | state | national | world | tech; ranking.js sectionOf),
+    # caller (local | state | national | world | tech | around; ranking.js
+    # sectionOf — "around" is Around Arkansas, for readers with a ring),
     # and why it is where it is, as chips ("Arkadelphia", "★ Favorite",
     # "Arkansas", "Official"). If it can't be a chip it isn't in the score.
     section: String!
@@ -120,20 +121,22 @@ export const typeDefs = gql`
   }
 
   type NewsFrontSection {
-    key: String!         # local | state | national | world | tech
+    key: String!         # local | state | national | world | tech | around
     title: String!
     items: [NewsArticle!]!
     # Stories in this section's window that didn't make the page.
     moreCount: Int!
   }
 
-  # Per-section caps for Today. Defaults: local 8, state 5, national 5, world 3, tech 4.
+  # Per-section caps for Today. Defaults: local 8, state 5, national 5, world 3,
+  # tech 4, around 3 (Around Arkansas, 2026-10-11).
   type NewsSectionQuotas {
     local: Int!
     state: Int!
     national: Int!
     world: Int!
     tech: Int!
+    around: Int!
   }
 
   input NewsSectionQuotasInput {
@@ -142,6 +145,7 @@ export const typeDefs = gql`
     national: Int
     world: Int
     tech: Int
+    around: Int
   }
 
   type NewsArticlePage {
@@ -169,13 +173,30 @@ export const typeDefs = gql`
     lessSourceIds: [ID!]!
     # Resolved: the reader's overrides over the defaults.
     sectionQuotas: NewsSectionQuotas!
+    # Opening (Chef, 2026-10-11). true (the default): outbound story links
+    # open in a new tab; false: in this window, so Back returns to NewsGeek.
+    openInNewTab: Boolean!
+    # Per publisher: open its stories with one of the reader's open-with
+    # links instead of the original. Only entries whose link still exists.
+    openers: [NewsOpener!]!
   }
 
   # "Open with…": a reader's own link template. {url} (required) and {title}
   # are replaced by the client; the gateway only stores it.
   type NewsReaderLink {
+    # A short hash of the template (2026-10-11): stable while the template
+    # is; editing the template gives a new id (openers on the old one lapse).
+    id: ID!
     label: String!
     template: String!
+  }
+
+  # A per-publisher opener: exactly one of sourceId (a direct source) or
+  # domain (a publisher seen through an aggregator), and the reader link.
+  type NewsOpener {
+    sourceId: ID
+    domain: String
+    linkId: ID!
   }
 
   type NewsViewer {
@@ -189,6 +210,8 @@ export const typeDefs = gql`
 
   input NewsPrefsInput {
     freeToReadOnly: Boolean
+    # Opening (2026-10-11): omitted = unchanged.
+    openInNewTab: Boolean
     # When provided, replaces the whole list (max 5); omitted = unchanged.
     readerLinks: [NewsReaderLinkInput!]
     # Today's per-section caps (0–20). Provided sections replace the stored
@@ -228,7 +251,7 @@ export const typeDefs = gql`
     newsSource(id: ID!): NewsSource
     # Chronological, newest first: Everything, or one section page. "section"
     # filters by the story's per-reader section (NewsArticle.section), not the
-    # source's labels (2026-10-11).
+    # source's labels (2026-10-11); "around" too.
     newsArticles(section: String, placeId: ID, sourceId: ID, before: Date, limit: Int): NewsArticlePage!
     # Today: the ranked front page for the caller (ranking.js).
     newsFrontPage: NewsFrontPage!
@@ -262,5 +285,10 @@ export const typeDefs = gql`
     newsSetHomePlaces(placeIds: [ID!]!): NewsPrefs!
     # The caller's priority for a source: favorite | normal | less.
     newsSetSourcePriority(id: ID!, priority: String!): NewsSource!
+    # The caller's opener for one publisher: exactly one of sourceId / domain
+    # (BAD_USER_INPUT otherwise; unknown sourceId → NOT_FOUND). linkId is one
+    # of the caller's NewsReaderLink ids; null or omitted = back to the
+    # original link (removes the entry). At most 200 entries.
+    newsSetPublisherOpener(sourceId: ID, domain: String, linkId: ID): NewsPrefs!
   }
 `;
