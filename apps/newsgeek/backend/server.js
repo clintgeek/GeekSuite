@@ -18,6 +18,7 @@ const { installShutdownHooks } = await import('@geeksuite/logger');
 const { default: createApp } = await import('./src/app.js');
 const { startPurgeSchedule } = await import('./src/jobs/purge.js');
 const { createWorker } = await import('./src/jobs/worker.js');
+const { createEmbedIndexer } = await import('./src/jobs/embedIndexer.js');
 const { runSeed } = await import('./src/seed/seed.js');
 const { default: Place } = await import('./src/models/Place.js');
 const { default: Source } = await import('./src/models/Source.js');
@@ -28,7 +29,9 @@ const PORT = Number(process.env.PORT) || 1830;
 const concurrency = Math.max(1, Math.min(16, Number(process.env.INGEST_CONCURRENCY) || 4));
 const worker = createWorker({ models: { Source, Place, Article }, concurrency, log: logger });
 
-const app = createApp({ workerStatus: worker.status });
+const embedIndexer = createEmbedIndexer({ Article, log: logger });
+
+const app = createApp({ workerStatus: worker.status, embedStatus: embedIndexer.status });
 
 async function connectDB() {
   logger.info('Connecting to MongoDB');
@@ -49,7 +52,7 @@ installShutdownHooks(logger, server, {
     purge.stop();
     // Start no new feed; give the in-flight tick a moment. Anything cut off
     // is simply polled again after the restart (state lives in Mongo).
-    await worker.stop({ waitMs: 5_000 });
+    await Promise.all([worker.stop({ waitMs: 5_000 }), embedIndexer.stop({ waitMs: 5_000 })]);
     // Still connecting (readyState 2)? disconnect() would wait out server
     // selection (30 s) and the force timer would fire mid-cleanup.
     if (mongoose.connection.readyState !== 1) return;
@@ -89,6 +92,11 @@ async function start() {
   // Ingest: first tick ~5 s after boot, then every 60 s. Production (or
   // INGEST_AUTORUN=1) only; INGEST_DISABLED=1 turns it off.
   worker.start();
+
+  // Embeddings (N1 clustering): first run ~15 s after boot, then every 60 s.
+  // Production (or EMBED_AUTORUN=1) only; EMBED_DISABLED=1 turns it off. Its
+  // own timers and state: a dead embeddings service never touches ingest.
+  embedIndexer.start();
 
   // Retention purge: ~60 s after boot, then daily. Production (or
   // PURGE_AUTORUN=1) only; PURGE_DISABLED=1 turns it off.

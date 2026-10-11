@@ -31,6 +31,7 @@ const __dirname = path.dirname(__filename);
  * @param {string} [options.publicPath]        default backend/public
  * @param {Function} [options.validateSession] attachUser's session check override
  * @param {() => object} [options.workerStatus] the ingest worker's status()
+ * @param {() => object} [options.embedStatus]  the embedding indexer's status()
  * @param {() => number} [options.dbState]     mongoose readyState override (tests)
  * @param {Function} [options.discoverFetch]   discovery's guarded fetch (tests pass a
  *   createSafeFetch with a fake resolver); default: the production SSRF guard
@@ -42,6 +43,7 @@ export function createApp(options = {}) {
     publicPath = path.join(__dirname, '..', 'public'),
     validateSession,
     workerStatus = () => null,
+    embedStatus = () => null,
     dbState = () => mongoose.connection.readyState,
     discoverFetch = safeFetch,
     discoverModels = { Place, Source },
@@ -105,9 +107,11 @@ export function createApp(options = {}) {
   }));
 
   // Health — no auth, so container/nginx checks work. Includes the ingest
-  // worker's last tick (as of that tick: active sources, feeds due).
+  // worker's last tick (as of that tick: active sources, feeds due) and the
+  // embedding indexer's queue.
   app.get('/api/health', (req, res) => {
     const w = workerStatus();
+    const e = embedStatus();
     res.status(200).json({
       status: 'healthy',
       database: dbState() === 1 ? 'connected' : 'disconnected',
@@ -123,6 +127,17 @@ export function createApp(options = {}) {
           lastTickPolled: w.lastTickPolled,
           lastTickFailed: w.lastTickFailed,
           lastTickDeferred: w.lastTickDeferred ?? null, // Blox feeds held back by the platform throttle
+        }
+        : null,
+      // N1 phase 1: the embedding queue. After a deploy, watch `pending` drain.
+      embed: e
+        ? {
+          enabled: e.enabled,
+          model: e.model,
+          lastRunAt: e.lastRunAt,
+          pending: e.pending,
+          lastError: e.lastError,
+          backoffUntil: e.backoffUntil,
         }
         : null,
     });
