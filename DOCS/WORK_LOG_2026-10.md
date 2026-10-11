@@ -214,3 +214,27 @@ Chef: "anyone should be able to add whatever they want. They can default off for
 - **Deploy:** two pushes, server `eb37495a` then UI `b88ab650`.
 - **Declined:** a built-in paywall-bypass link (skipthepaywall/archive mirrors). The
   open-with feature is generic and nothing is preset.
+
+## 2026-10-10 — NewsGeek: tap a publisher for its settings
+
+Chef: "click a source in the newslist and get to settings like marking it paid."
+- **The sheet:** every story's publisher line opens a Source sheet. Tapping the headline
+  still opens the publisher.
+  - **Direct source:** In my paper, **I subscribe** (keeps it when Free to read is on),
+    More from this source (Latest filtered with a "Showing: <name> ×" chip), and Source
+    details.
+  - **Google News item:** Hide this publisher (per-reader domain mute), I subscribe (by
+    domain), Look for a direct feed (opens Add a source prefilled), and More from the
+    search.
+- **Elsewhere:**
+  - an I subscribe switch on source detail;
+  - Settings → Publishers lists subscribed sources and subscribed or hidden domains.
+- **Rules:**
+  - Subscribed sources and domains survive Free to read.
+  - Muted domains only ever drop Google News items. Direct sources are muted with their
+    own on/off switch.
+- **Checks:**
+  - Tests: basegeek 152/152 suites (3274), frontend 218.
+  - Harness: 100 scenes, 0 violations.
+  - Revert checks: 40 mutations, all red.
+- **Deploy:** two pushes, server `95fbb67c` then UI `1d96212c`.
