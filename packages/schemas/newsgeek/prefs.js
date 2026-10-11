@@ -12,6 +12,10 @@
 const READER_LINKS_MAX = 5;
 const READER_LINK_LABEL_MAX = 40;
 const READER_LINK_TEMPLATE_MAX = 500;
+// Source sheet (Chef, 2026-10-10): publisher domains a reader subscribes to
+// (kept through "Free to read") or hides (aggregator items only).
+const SUBSCRIBED_DOMAINS_MAX = 100;
+const MUTED_DOMAINS_MAX = 200;
 
 function prefsDefinition() {
   return {
@@ -35,6 +39,24 @@ function prefsDefinition() {
       default: [],
       validate: { validator: (v) => !v || v.length <= READER_LINKS_MAX, message: `at most ${READER_LINKS_MAX} reader links` },
     },
+    // Source sheet (Chef, 2026-10-10; plan "Source sheet"):
+    // subscribedSourceIds: sources this reader pays for — "Free to read" keeps
+    //   their articles even when the source is paywalled.
+    // subscribedDomains: the same for aggregator (Google News) items, by the
+    //   publisher's domain (lower-case host, no www.; subdomains match).
+    // mutedDomains: aggregator items from these publishers never show for this
+    //   reader. Direct sources are switched off per source, never by domain.
+    subscribedSourceIds: { type: [String], default: [] },
+    subscribedDomains: {
+      type: [String],
+      default: [],
+      validate: { validator: (v) => !v || v.length <= SUBSCRIBED_DOMAINS_MAX, message: `at most ${SUBSCRIBED_DOMAINS_MAX} subscribed domains` },
+    },
+    mutedDomains: {
+      type: [String],
+      default: [],
+      validate: { validator: (v) => !v || v.length <= MUTED_DOMAINS_MAX, message: `at most ${MUTED_DOMAINS_MAX} hidden domains` },
+    },
   };
 }
 
@@ -47,4 +69,5 @@ function createPrefsSchema(mongoose) {
 
 module.exports = {
   prefsDefinition, createPrefsSchema, READER_LINKS_MAX, READER_LINK_LABEL_MAX, READER_LINK_TEMPLATE_MAX,
+  SUBSCRIBED_DOMAINS_MAX, MUTED_DOMAINS_MAX,
 };

@@ -209,3 +209,21 @@ Little Rock, Texarkana, Conway and the southern half of the state.
   tick polls them. The old `discovered` default is gone.
 - **Paywall `unknown` from discovery is stored as `none`** until someone marks it, because
   the source enum has no `unknown`.
+
+### 2026-10-10: the Source sheet (Chef: "click a source … marking it paid")
+
+- **What:** the publisher line on each story opens a sheet with the reader's own settings for
+  that source (in my paper, I subscribe) or, for a Google News story, for that publisher's
+  domain (hide, I subscribe, look for a direct feed). The plan's "Source sheet" has the rules
+  and the contract.
+- **Two change sets, gateway first.** The server part (prefs fields, `publisherDomain` /
+  `viaAggregator` / `subscribedByMe`, `newsSetSourceSubscribed`, `newsSetPublisherPref`, and the
+  `newsArticles` rules) is additive. The UI selects the new fields, so it ships only once
+  basegeek is live.
+- **Mutes are domain mutes for aggregator items only.** A direct source is switched off per
+  source. A test pins that a muted domain never hides a direct source on the same domain.
+- **Matching** reuses `paywalledDomainRegex()` from `packages/schemas/newsgeek/paywalls.js` for
+  the reader's own lists, so "subscribed" and "hidden" match exactly as the paywall list does.
+- **Client cache:** `NewsPrefs` merges (`cachePolicies.js`), because `GET_NEWS_PREFS` and the
+  new `GET_NEWS_PUBLISHER_PREFS` select different fields of the same object. Every sheet
+  switch drops the cached `newsArticles` lists and refetches, like Free to read.

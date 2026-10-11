@@ -16,9 +16,11 @@ const {
   SOURCE_KINDS, SECTIONS, SOURCE_STATUSES, FEED_FORMATS, PAYWALLS, PAYWALLED_LEVELS, CONTENT_LEVELS,
 } = constants;
 const { feedHealth } = healthModule;
-const { PAYWALLED_DOMAIN_REGEX, isPaywalledDomain } = paywallsModule;
+const { PAYWALLED_DOMAIN_REGEX, paywalledDomainRegex, isPaywalledDomain } = paywallsModule;
 const { normalizeFeedUrl } = feedUrlModule;
-const { READER_LINKS_MAX, READER_LINK_LABEL_MAX, READER_LINK_TEMPLATE_MAX } = prefsSchemaModule;
+const {
+  READER_LINKS_MAX, READER_LINK_LABEL_MAX, READER_LINK_TEMPLATE_MAX, SUBSCRIBED_DOMAINS_MAX, MUTED_DOMAINS_MAX,
+} = prefsSchemaModule;
 
 /**
  * NewsGeek gateway — DOCS/NEWSGEEK_PLAN.md "Gateway API, N0" and
@@ -37,6 +39,12 @@ const { READER_LINKS_MAX, READER_LINK_LABEL_MAX, READER_LINK_TEMPLATE_MAX } = pr
  * sees source S when S is not retired and S is default-on and not in their
  * sourcesOff, or S is in their sourcesOn, or they added S and it is not in
  * their sourcesOff.
+ *
+ * Source sheet (plan "Source sheet", Chef 2026-10-10), per reader:
+ * subscribedSourceIds keep a paywalled source through "Free to read";
+ * subscribedDomains do the same for aggregator items by publisher domain;
+ * mutedDomains drop aggregator items by publisher domain, whatever the switch.
+ * Domain matching is the paywall list's: a suffix on a label boundary.
  */
 
 const DEFAULT_LIMIT = 50;
@@ -197,6 +205,7 @@ async function shapeSources(docs, viewer) {
     addedByMe: isAdder(s, viewer),
     canEdit: viewer.isAdmin || isAdder(s, viewer),
     addedByName: viewer.isAdmin && s.addedBy ? (names.get(String(s.addedBy)) ?? null) : null,
+    subscribedByMe: viewer.subscribedSourceIds.has(String(s._id)),
   }));
 }
 
@@ -223,6 +232,9 @@ async function viewerOf(user, { withRole = true } = {}) {
     freeToReadOnly: Boolean(row?.freeToReadOnly ?? PREFS_DEFAULTS.freeToReadOnly),
     sourcesOn: new Set((row?.sourcesOn || []).map(String)),
     sourcesOff: new Set((row?.sourcesOff || []).map(String)),
+    subscribedSourceIds: new Set((row?.subscribedSourceIds || []).map(String)),
+    subscribedDomains: row?.subscribedDomains || [],
+    mutedDomains: row?.mutedDomains || [],
   };
 }
 
@@ -432,7 +444,28 @@ function shapePrefs(row) {
   return {
     freeToReadOnly: Boolean(row?.freeToReadOnly ?? PREFS_DEFAULTS.freeToReadOnly),
     readerLinks: (row?.readerLinks || []).map((l) => ({ label: l.label, template: l.template })),
+    subscribedSourceIds: (row?.subscribedSourceIds || []).map(String),
+    subscribedDomains: row?.subscribedDomains || [],
+    mutedDomains: row?.mutedDomains || [],
   };
+}
+
+/**
+ * A publisher domain from a reader (newsSetPublisherPref): trimmed, lower-case,
+ * no trailing dot, no leading `www.`. It must be a bare hostname — at least two
+ * labels of [a-z0-9-] (no edge hyphens, ≤63 each, ≤253 in all) with a
+ * letter-only (or xn--) top label, so URLs, paths, ports and IP addresses are
+ * refused.
+ */
+const HOST_LABEL = /^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$/;
+const TOP_LABEL = /^(?:[a-z]{2,63}|xn--[a-z0-9-]{1,59})$/;
+export function normalizePublisherDomain(value) {
+  const d = String(value ?? '').trim().toLowerCase().replace(/\.$/, '').replace(/^www\./, '');
+  const labels = d.split('.');
+  if (!d || d.length > 253 || labels.length < 2 || !labels.every((l) => HOST_LABEL.test(l)) || !TOP_LABEL.test(labels[labels.length - 1])) {
+    throw badInput(`Not a publisher domain: ${String(value ?? '').slice(0, 80)} (use a bare name like example.com)`);
+  }
+  return d;
 }
 
 const READER_LINK_PLACEHOLDERS = ['{url}', '{title}'];
@@ -487,13 +520,29 @@ async function writePrefs(userId, update) {
  * whose real publisher's domain is a paywalled one. A direct source is judged
  * by its own `access.paywall` only, so an admin's setting there wins.
  */
-function paywalledClause(sources) {
-  const walled = sources.filter(isPaywalledSource).map((s) => s._id);
+function paywalledClause(sources, viewer) {
+  // What the reader subscribes to is never hidden: a subscribed source, or an
+  // aggregator item whose publisher is (under) a subscribed domain.
+  const walled = sources.filter((s) => isPaywalledSource(s) && !viewer.subscribedSourceIds.has(String(s._id))).map((s) => s._id);
   const aggregators = sources.filter((s) => s.kind === 'aggregator' && !isPaywalledSource(s)).map((s) => s._id);
   const or = [];
   if (walled.length) or.push({ sourceId: { $in: walled } });
-  if (aggregators.length) or.push({ sourceId: { $in: aggregators }, publisherDomain: { $regex: PAYWALLED_DOMAIN_REGEX } });
+  if (aggregators.length) {
+    const byDomain = { sourceId: { $in: aggregators }, publisherDomain: { $regex: PAYWALLED_DOMAIN_REGEX } };
+    if (viewer.subscribedDomains.length) {
+      byDomain.$and = [{ publisherDomain: { $not: paywalledDomainRegex(viewer.subscribedDomains) } }];
+    }
+    or.push(byDomain);
+  }
   return or.length ? { $or: or } : null;
+}
+
+/** Aggregator items from a domain the reader hid. Direct sources are never muted by domain. */
+function mutedClause(sources, viewer) {
+  if (!viewer.mutedDomains.length) return null;
+  const aggregators = sources.filter((s) => s.kind === 'aggregator').map((s) => s._id);
+  if (!aggregators.length) return null;
+  return { sourceId: { $in: aggregators }, publisherDomain: { $regex: paywalledDomainRegex(viewer.mutedDomains) } };
 }
 
 // ---------------------------------------------------------------------------
@@ -543,11 +592,14 @@ async function articlePage(args, viewer) {
     $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }],
   };
   if (placeId != null) listFilter.places = { $in: await placeWithDescendants(placeId) };
+  // A hidden publisher is out of the list itself, so hiddenPaywalled never counts it.
+  const muted = mutedClause(sources, viewer);
+  if (muted) listFilter.$nor = [muted];
 
-  const walled = freeToReadOnly ? paywalledClause(sources) : null;
+  const walled = freeToReadOnly ? paywalledClause(sources, viewer) : null;
   const filter = { ...listFilter };
   if (before != null) filter.publishedAt = { $lt: before };
-  if (walled) filter.$nor = [walled];
+  if (walled) filter.$nor = [...(listFilter.$nor || []), walled];
 
   const [rows, hiddenPaywalled] = await Promise.all([
     NewsArticle.find(filter, { embedding: 0 })
@@ -574,6 +626,8 @@ async function articlePage(args, viewer) {
       sourceId: String(a.sourceId),
       sourceName: src.name,
       sourceKind: src.kind,
+      publisherDomain: a.publisherDomain || null,
+      viaAggregator: src.kind === 'aggregator',
       sections: src.sections || [],
       places: placesOf(a.places, placeMap),
     };
@@ -726,6 +780,47 @@ export const resolvers = {
       if (!on && !byDefault) update.$pull.sourcesOff = sid;
       await writePrefs(viewer.userId, update);
       return shapeOneSource(doc._id, await viewerOf(user));
+    },
+
+    // Source sheet: "I subscribe" for a source — the caller's own row only.
+    newsSetSourceSubscribed: async (_, { id, on }, { user }) => {
+      requireUser(user);
+      const doc = await sourceForWrite(id);
+      if (doc.status === 'retired' && on) throw badInput('This source is retired');
+      const viewer = await viewerOf(user);
+      const sid = String(doc._id);
+      await writePrefs(viewer.userId, on ? { $addToSet: { subscribedSourceIds: sid } } : { $pull: { subscribedSourceIds: sid } });
+      return shapeOneSource(doc._id, await viewerOf(user));
+    },
+
+    // Source sheet, aggregator items: "I subscribe" / "Hide this publisher" by
+    // domain. An omitted flag is left as it is. The caller's own row only.
+    newsSetPublisherPref: async (_, { domain, subscribed, muted }, { user }) => {
+      requireUser(user);
+      const d = normalizePublisherDomain(domain);
+      const userId = String(user.id);
+      const update = {};
+      const add = (field) => { update.$addToSet = { ...(update.$addToSet || {}), [field]: d }; };
+      const pull = (field) => { update.$pull = { ...(update.$pull || {}), [field]: d }; };
+      if (subscribed === true || muted === true) {
+        const row = await NewsPrefs.findOne({ userId }, { subscribedDomains: 1, mutedDomains: 1 }).lean();
+        const full = (field, max) => {
+          const list = row?.[field] || [];
+          return !list.includes(d) && list.length >= max;
+        };
+        if (subscribed === true && full('subscribedDomains', SUBSCRIBED_DOMAINS_MAX)) {
+          throw badInput(`You can subscribe to at most ${SUBSCRIBED_DOMAINS_MAX} publishers`);
+        }
+        if (muted === true && full('mutedDomains', MUTED_DOMAINS_MAX)) {
+          throw badInput(`You can hide at most ${MUTED_DOMAINS_MAX} publishers`);
+        }
+      }
+      if (subscribed === true) add('subscribedDomains');
+      if (subscribed === false) pull('subscribedDomains');
+      if (muted === true) add('mutedDomains');
+      if (muted === false) pull('mutedDomains');
+      if (!Object.keys(update).length) return prefsFor(user);
+      return shapePrefs(await writePrefs(userId, update));
     },
 
     newsSetSourceDefaultOn: async (_, { id, on }, { user }) => {

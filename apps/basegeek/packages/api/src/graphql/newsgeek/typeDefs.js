@@ -57,6 +57,8 @@ export const typeDefs = gql`
     addedByMe: Boolean!
     canEdit: Boolean!    # admin, or the caller added it
     addedByName: String  # admins only; null for everyone else
+    # Source sheet: the caller subscribes (kept through "Free to read").
+    subscribedByMe: Boolean!
   }
 
   # A publisher Google News keeps surfacing that no source reads directly.
@@ -80,6 +82,10 @@ export const typeDefs = gql`
     sourceId: ID!
     sourceName: String!
     sourceKind: String!
+    # The real publisher's host (lower-case, no www.); null when unknown.
+    publisherDomain: String
+    # The source is an aggregator (Google News): the publisher isn't the source.
+    viaAggregator: Boolean!
     sections: [String!]!
     places: [NewsPlace!]!
   }
@@ -96,6 +102,12 @@ export const typeDefs = gql`
   type NewsPrefs {
     freeToReadOnly: Boolean!
     readerLinks: [NewsReaderLink!]!
+    # Source sheet (Chef, 2026-10-10). Sources and publisher domains the reader
+    # subscribes to (kept through "Free to read"); publisher domains they hid
+    # (aggregator items only).
+    subscribedSourceIds: [ID!]!
+    subscribedDomains: [String!]!
+    mutedDomains: [String!]!
   }
 
   # "Open with…": a reader's own link template. {url} (required) and {title}
@@ -166,6 +178,11 @@ export const typeDefs = gql`
     newsCheckSourceNow(id: ID!): NewsSource!
     # Any signed-in user; the caller's own switch.
     newsSetSourceOn(id: ID!, on: Boolean!): NewsSource!
+    # Any signed-in user; the caller's own "I subscribe" for a source.
+    newsSetSourceSubscribed(id: ID!, on: Boolean!): NewsSource!
+    # Any signed-in user; the caller's own prefs for a publisher domain seen
+    # through an aggregator. Omitted flag = unchanged. domain must be a bare host.
+    newsSetPublisherPref(domain: String!, subscribed: Boolean, muted: Boolean): NewsPrefs!
     # Admin: "On for everyone".
     newsSetSourceDefaultOn(id: ID!, on: Boolean!): NewsSource!
     # Any signed-in user; writes only the caller's own row (userId from the session).

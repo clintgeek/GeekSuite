@@ -352,6 +352,52 @@ live frontend keeps working.
 - **`onForMe`** is exactly "the caller sees its articles", so it is false for a retired source.
   `newsSetSourceOn(on: true)` on a retired source returns `BAD_USER_INPUT`.
 
+### Source sheet (Chef, 2026-10-10)
+"Click a source in the newslist/newspaper and get to settings like marking it paid or whatever
+else we can configure about it."
+
+- **Where:** the publisher line above every headline on Latest is a button ("Settings for
+  <publisher>", 44px) that opens a sheet (bottom sheet on a phone, dialog from md up). The
+  headline still opens the article at the publisher.
+- **A direct source:** name, kind and paywall badges, feed health and stories this week;
+  **In my paper** (`newsSetSourceOn`), **I subscribe** ("Keeps it when Free to read is on",
+  heavier when the source is paywalled), **More from this source** (`/?source=<id>`) and
+  **Source details** (`/sources/:id`).
+- **A story through an aggregator** (Google News): the real publisher, its domain and "via
+  <aggregator>"; **Hide this publisher** and **I subscribe** by domain
+  (`newsSetPublisherPref`), **Look for a direct feed** (the Add a source sheet on
+  `https://<domain>`, already looking) and **More from <aggregator>**.
+- **`/?source=<id>`:** Latest asks `newsArticles(sourceId)`, shows a "Showing: <name> ×" pill,
+  and puts the section flags away until the pill is dismissed (a source has fixed sections, so
+  most flags would only show an empty page).
+- **I subscribe** is also on every source's detail page, for every reader. **Settings →
+  Publishers** lists subscribed sources (linked), subscribed publishers and hidden publishers
+  (each with Remove).
+- **Rules (per reader, the caller's own prefs row only):**
+  - Free to read on: a subscribed source is never hidden, paywall or not; an aggregator item
+    whose publisher domain is (under) a subscribed domain is never hidden. `hiddenPaywalled`
+    counts only what was actually hidden.
+  - A hidden publisher's aggregator items never show, whatever the switch. **Direct sources are
+    never hidden by domain**: they have their own on/off.
+  - Domains match like `PAYWALLED_DOMAINS`: a suffix on a label boundary (`nwaonline.com`
+    covers `obits.nwaonline.com`). Turning a switch off in the sheet removes the entry that
+    covers the story's domain.
+  - A domain is stored lower-case without `www.` and must be a bare hostname (URLs, paths,
+    ports and IP addresses are `BAD_USER_INPUT`). At most 100 subscribed and 200 hidden.
+
+```graphql
+type NewsArticle { publisherDomain: String  viaAggregator: Boolean! }   # added
+type NewsSource  { subscribedByMe: Boolean! }                           # added
+type NewsPrefs   { subscribedSourceIds: [ID!]!  subscribedDomains: [String!]!  mutedDomains: [String!]! }  # added
+extend type Mutation {
+  newsSetSourceSubscribed(id: ID!, on: Boolean!): NewsSource!   # NOT_FOUND / BAD_USER_INPUT like newsSetSourceOn
+  newsSetPublisherPref(domain: String!, subscribed: Boolean, muted: Boolean): NewsPrefs!  # omitted flag = unchanged
+}
+```
+Stored in `newsgeek.prefs` (`packages/schemas/newsgeek/prefs.js`): `subscribedSourceIds`,
+`subscribedDomains`, `mutedDomains`. All additive: the gateway ships first, the UI after it is
+live.
+
 ## Ingest
 
 - Poll each feed on its own interval: 15 min for TV, state and national sources, 30–60 min
