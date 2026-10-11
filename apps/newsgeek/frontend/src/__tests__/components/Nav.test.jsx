@@ -10,10 +10,10 @@ import BottomTabs from '../../components/BottomTabs';
 import { activeNavId, backFallback, tabFor, titleFor } from '../../components/navConfig';
 import { AppRoutes } from '../../App';
 import { GET_NEWS_ARTICLES, GET_NEWS_PREFS, GET_NEWS_SOURCE } from '../../graphql/queries';
-import { article, source } from '../fixtures';
+import { article, source, newsPrefs } from '../fixtures';
 import { renderWithProviders } from '../testUtils';
 
-const prefsMock = { request: { query: GET_NEWS_PREFS }, result: { data: { newsPrefs: { __typename: 'NewsPrefs', freeToReadOnly: false, readerLinks: [] } } }, maxUsageCount: 5 };
+const prefsMock = { request: { query: GET_NEWS_PREFS }, result: { data: { newsPrefs: { ...newsPrefs(), freeToReadOnly: false, readerLinks: [] } } }, maxUsageCount: 5 };
 const page = (items) => ({ data: { newsArticles: { __typename: 'NewsArticlePage', items, nextBefore: null, hiddenPaywalled: 0 } } });
 const articlesMock = (variables, items) => ({ request: { query: GET_NEWS_ARTICLES, variables }, result: page(items), maxUsageCount: 3 });
 
@@ -89,6 +89,15 @@ describe('Routes', () => {
     expect(await screen.findByRole('link', { name: /Tech headline/ })).toBeInTheDocument();
     expect(screen.getByRole('heading', { level: 1, name: 'Tech' })).toBeInTheDocument();
     expect(screen.queryByRole('tablist')).toBeNull();
+  });
+
+  // Around Arkansas (2026-10-11): a story section, never a source label.
+  it('`/s/around` is the Around Arkansas section page, with its own line', async () => {
+    renderWithProviders(<AppRoutes />, { initialEntries: ['/s/around'], mocks: [prefsMock, articlesMock({ limit: 30, section: 'around' }, [article('r1', { title: 'DeWitt calendar of events' })])] });
+    expect(await screen.findByRole('link', { name: /DeWitt calendar of events/ })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { level: 1, name: 'Around Arkansas' })).toBeInTheDocument();
+    expect(screen.getByText('Other Arkansas towns’ papers on their own towns, newest first.')).toBeInTheDocument();
+    expect(titleFor('/s/around')).toBe('Around Arkansas');
   });
 
   it('an unknown section page goes to Today', async () => {

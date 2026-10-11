@@ -42,6 +42,7 @@ import { SET_NEWS_PREFS } from '../graphql/mutations';
 import { GET_NEWS_ARTICLES, GET_NEWS_PREFS, GET_NEWS_SOURCE } from '../graphql/queries';
 import { EMPTY_LINE, articleVariables, hiddenPaywalledLine } from '../utils/articles';
 import { GOTHIC, flagSx } from '../theme/theme';
+import { openingPrefs } from '../utils/openUrl';
 import { SECTIONS, SECTION_LABEL } from '../utils/vocab';
 import AddSourceSheet from './AddSourceSheet';
 
@@ -63,7 +64,7 @@ function SectionHeader({ section }) {
         {label}
       </Typography>
       <Typography sx={{ fontFamily: GOTHIC, fontSize: '0.875rem', color: 'text.secondary', mt: 2 }}>
-        {`Every ${label} story in your paper, newest first.`}
+        {section === 'around' ? 'Other Arkansas towns’ papers on their own towns, newest first.' : `Every ${label} story in your paper, newest first.`}
       </Typography>
     </Box>
   );
@@ -83,7 +84,8 @@ export default function LatestView({ fixedSection = null }) {
   const client = useApolloClient();
   const prefsQ = useQuery(GET_NEWS_PREFS, { fetchPolicy: 'cache-and-network', nextFetchPolicy: 'cache-first' });
   const freeToRead = Boolean(prefsQ.data?.newsPrefs?.freeToReadOnly);
-  const readerLinks = prefsQ.data?.newsPrefs?.readerLinks ?? [];
+  // How a story opens (plan "Opening"): window mode, open-with links, openers.
+  const opening = openingPrefs(prefsQ.data?.newsPrefs);
   const [setPrefs, { loading: savingPrefs }] = useMutation(SET_NEWS_PREFS);
 
   const { data, error, networkStatus, fetchMore, refetch } = useQuery(GET_NEWS_ARTICLES, {
@@ -100,7 +102,7 @@ export default function LatestView({ fixedSection = null }) {
     try {
       await setPrefs({
         variables: { input: { freeToReadOnly: next } },
-        optimisticResponse: { newsSetPrefs: { __typename: 'NewsPrefs', freeToReadOnly: next, readerLinks } },
+        optimisticResponse: { newsSetPrefs: { __typename: 'NewsPrefs', ...prefsQ.data?.newsPrefs, freeToReadOnly: next } },
         update(cache, { data: res }) {
           if (res?.newsSetPrefs) cache.writeQuery({ query: GET_NEWS_PREFS, data: { newsPrefs: res.newsSetPrefs } });
         },
@@ -213,7 +215,7 @@ export default function LatestView({ fixedSection = null }) {
       {items.length ? (
         <Box component="section" aria-label="Stories">
           {items.map((a) => (
-            <ArticleItem key={a.id} article={a} readerLinks={readerLinks} onOpenSource={openSheet} />
+            <ArticleItem key={a.id} article={a} {...opening} onOpenSource={openSheet} />
           ))}
         </Box>
       ) : null}

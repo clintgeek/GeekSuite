@@ -78,3 +78,19 @@ export const viewerMock = (isAdmin) => ({
 
 /** Another copy of a story, as NewsArticle.alsoIn lists it. */
 export const copy = (publisher, url, sourceId = `s-${publisher.toLowerCase()}`) => ({ __typename: 'NewsAlsoIn', publisher, url, sourceId });
+
+/** A reader's open-with link as the gateway returns it (id = a hash of the template). */
+export const readerLink = (id, label, template = `https://example.com/${id}?u={url}`) => ({ __typename: 'NewsReaderLink', id, label, template });
+
+/** A per-publisher opener: exactly one of sourceId / domain. */
+export const opener = ({ sourceId = null, domain = null, linkId }) => ({ __typename: 'NewsOpener', sourceId, domain: sourceId ? null : domain, linkId });
+
+/** NewsPrefs as GET_NEWS_PREFS selects it (NewsPrefsFields), defaults filled in. */
+export const newsPrefs = (overrides = {}) => ({
+  __typename: 'NewsPrefs',
+  freeToReadOnly: false,
+  openInNewTab: true,
+  readerLinks: [],
+  openers: [],
+  ...overrides,
+});

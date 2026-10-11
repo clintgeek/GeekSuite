@@ -8,12 +8,14 @@
  * - DIRECT (the source is the publisher): its badges and feed health, then
  *   "In my paper" (newsSetSourceOn), "I subscribe" (newsSetSourceSubscribed,
  *   kept through Free to read), "Priority on Today" (★ Favorite / Normal /
- *   Less, newsSetSourcePriority), "More from this source" (Everything
- *   filtered to it) and "Source details".
+ *   Less, newsSetSourcePriority), "Open stories with" (OpenWithControl, by
+ *   source), "More from this source" (Everything filtered to it) and
+ *   "Source details".
  * - VIA AN AGGREGATOR (Google News): the real publisher and its domain, "via"
  *   the aggregator; "Hide this publisher" and "I subscribe" by domain
- *   (newsSetPublisherPref), "Look for a direct feed" (the Add sheet on
- *   https://<domain>), and "More from <aggregator>".
+ *   (newsSetPublisherPref), "Open stories with" (OpenWithControl, for the
+ *   domain), "Look for a direct feed" (the Add sheet on https://<domain>),
+ *   and "More from <aggregator>".
  *
  * Every switch moves at once (optimistic) and snaps back with a toast if the
  * gateway refuses; after a write `onChanged` lets the list drop its cached
@@ -28,6 +30,7 @@ import { useNavigate } from 'react-router-dom';
 import HealthIndicator from './HealthIndicator';
 import InkSwitch from './InkSwitch';
 import KindBadge from './KindBadge';
+import OpenWithControl from './OpenWithControl';
 import PriorityControl from './PriorityControl';
 import PaywallBadge from './PaywallBadge';
 import { SET_NEWS_PUBLISHER_PREF, SET_NEWS_SOURCE_ON, SET_NEWS_SOURCE_SUBSCRIBED } from '../graphql/mutations';
@@ -193,6 +196,7 @@ function DirectBody({ article, onChanged, go }) {
           disabled={(retired && !source.subscribedByMe) || subState.loading}
         />
         <PriorityControl source={source} onChanged={() => onChanged?.()} disabled={retired} sx={{ borderBottom: 1, borderColor: 'divider' }} />
+        <OpenWithControl article={article} go={go} />
         <SheetLink testId="sheet-more-from" onClick={() => go(`/everything?source=${encodeURIComponent(source.id)}`)}>
           More from this source
         </SheetLink>
@@ -279,6 +283,7 @@ function PublisherBody({ article, onChanged, onLookForFeed, go }) {
           onChange={(on) => change('subscribedDomains', 'subscribed', on)}
           disabled={prefState.loading}
         />
+        <OpenWithControl article={article} go={go} />
         <SheetLink testId="sheet-look-for-feed" onClick={() => onLookForFeed?.(`https://${domain}`)}>
           Look for a direct feed
         </SheetLink>

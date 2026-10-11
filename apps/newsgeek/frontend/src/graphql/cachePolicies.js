@@ -19,11 +19,17 @@
 export const NEWS_TYPE_POLICIES = {
   // One per reader, no id: GET_NEWS_PREFS and GET_NEWS_PUBLISHER_PREFS select
   // different fields of the same object, so merge rather than replace.
-  NewsPrefs: { merge: true },
+  // Its lists are replaced whole (no merge, no data-loss warning when one shrinks).
+  NewsPrefs: { merge: true, fields: { readerLinks: { merge: false }, openers: { merge: false } } },
   // The other copies of a story (feed hygiene): plain embedded objects with
   // no id, stored inside their article. A new answer replaces the list
   // whole (it can shrink when a copy expires) — no merge, no data-loss warning.
   NewsAlsoIn: { keyFields: false },
+  // Opening (2026-10-11): a reader link's id is a hash of its template, so
+  // two links with one template would share it. Links and openers live
+  // inside NewsPrefs and are replaced whole on every write — never normalised.
+  NewsReaderLink: { keyFields: false },
+  NewsOpener: { keyFields: false },
   NewsArticle: { fields: { alsoIn: { merge: false } } },
   Query: {
     fields: {

@@ -13,7 +13,7 @@ import { alsoInLabel } from '../../components/AlsoIn';
 import { GET_NEWS_ARTICLES, GET_NEWS_FRONT_PAGE, GET_NEWS_PREFS } from '../../graphql/queries';
 import LatestView from '../../views/LatestView';
 import TodayView from '../../views/TodayView';
-import { article, copy } from '../fixtures';
+import { article, copy, newsPrefs } from '../fixtures';
 import { renderWithProviders } from '../testUtils';
 
 const COPIES = [
@@ -22,7 +22,7 @@ const COPIES = [
   copy('Arkansas Times', 'https://arktimes.com/ap-story/'),
 ];
 
-const prefsMock = { request: { query: GET_NEWS_PREFS }, result: { data: { newsPrefs: { __typename: 'NewsPrefs', freeToReadOnly: false, readerLinks: [] } } }, maxUsageCount: 5 };
+const prefsMock = { request: { query: GET_NEWS_PREFS }, result: { data: { newsPrefs: { ...newsPrefs(), freeToReadOnly: false, readerLinks: [] } } }, maxUsageCount: 5 };
 
 describe('alsoInLabel', () => {
   it('names the first publisher and counts the rest', () => {

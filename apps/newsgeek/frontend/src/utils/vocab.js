@@ -3,8 +3,13 @@
  * packages/schemas/newsgeek/constants.js (CommonJS; the frontend keeps its
  * own copy rather than bundling it) — keep the two in step.
  */
+// The labels a SOURCE can carry (the source form, Add a source, Everything's flags).
 export const SECTIONS = ['local', 'state', 'national', 'world', 'tech'];
-export const SECTION_LABEL = { local: 'Local', state: 'State', national: 'National', world: 'World', tech: 'Tech' };
+// The sections a STORY can land in for a reader (NewsArticle.section; Today's
+// order). "Around Arkansas" (2026-10-11) is another town's paper reporting its
+// own town — never a source label. Mirrors constants.js STORY_SECTIONS.
+export const STORY_SECTIONS = [...SECTIONS, 'around'];
+export const SECTION_LABEL = { local: 'Local', state: 'State', national: 'National', world: 'World', tech: 'Tech', around: 'Around Arkansas' };
 
 export const SOURCE_KINDS = ['journalism', 'official', 'aggregator'];
 export const KIND_LABEL = { journalism: 'Journalism', official: 'Official', aggregator: 'Aggregator' };

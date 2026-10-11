@@ -1,12 +1,17 @@
 /**
  * Settings (`/settings`). First "Home places" (HomePlacesSettings): the
  * reader's ring, closest first, which decides what is Local on Today. Then
+ * "Reading" (plan "Opening", 2026-10-11): "Open stories in a new tab"
+ * (NewsPrefs.openInNewTab, on by default) — off, every outbound story link
+ * opens in this window and Back returns to NewsGeek. Then
  * "Open-with links" — the reader's own URL
  * templates, offered in each story's ⋯ menu after "Open at publisher"
  * (NewsPrefs.readerLinks, max 5). Saved whole through
  * newsSetPrefs({ readerLinks }); the gateway re-checks every rule here and
  * answers BAD_USER_INPUT otherwise. Then "Publishers" (PublishersSettings):
- * what the reader subscribes to or hid from the Source sheet.
+ * what the reader subscribes to or hid from the Source sheet, and which
+ * publishers open with one of these links. Editing a link's template gives
+ * it a new id, so the publishers that opened with it go back to the original.
  */
 import React, { useEffect, useState } from 'react';
 import { Box, Button, CircularProgress, IconButton, TextField, Typography } from '@mui/material';
@@ -15,6 +20,7 @@ import { useMutation, useQuery } from '@apollo/client';
 import { useToast } from '@geeksuite/ui';
 import Column from '../components/Column';
 import HomePlacesSettings from '../components/HomePlacesSettings';
+import InkSwitch from '../components/InkSwitch';
 import PublishersSettings from '../components/PublishersSettings';
 import { SET_NEWS_PREFS } from '../graphql/mutations';
 import { GET_NEWS_PREFS } from '../graphql/queries';
@@ -22,6 +28,9 @@ import { GOTHIC, flagSx } from '../theme/theme';
 import { MAX_LABEL, MAX_READER_LINKS, READER_LINK_HELP, READER_LINK_PLACEHOLDER, cleanReaderLinks, readerLinkErrors } from '../utils/readerLinks';
 
 const same = (a, b) => JSON.stringify(cleanReaderLinks(a)) === JSON.stringify(cleanReaderLinks(b));
+
+export const NEW_TAB_LABEL = 'Open stories in a new tab';
+export const NEW_TAB_HELP = 'Off: stories open here, and Back brings you back to NewsGeek.';
 
 export default function SettingsView() {
   const { notify } = useToast();
@@ -31,6 +40,23 @@ export default function SettingsView() {
   const [touched, setTouched] = useState(false);
   const [saveError, setSaveError] = useState('');
   const [setPrefs, { loading: saving }] = useMutation(SET_NEWS_PREFS);
+  const [setWindowPref, { loading: savingWindow }] = useMutation(SET_NEWS_PREFS);
+  const prefs = prefsQ.data?.newsPrefs;
+  const openInNewTab = prefs?.openInNewTab ?? true;
+
+  const toggleNewTab = async (next) => {
+    try {
+      await setWindowPref({
+        variables: { input: { openInNewTab: next } },
+        optimisticResponse: { newsSetPrefs: { ...prefs, __typename: 'NewsPrefs', openInNewTab: next } },
+        update(cache, { data }) {
+          if (data?.newsSetPrefs) cache.writeQuery({ query: GET_NEWS_PREFS, data: { newsPrefs: data.newsSetPrefs } });
+        },
+      });
+    } catch {
+      notify('Couldn’t change where stories open. Try again.', { tone: 'error' });
+    }
+  };
 
   // Seed the editor once the prefs arrive (and again after a save lands).
   useEffect(() => {
@@ -73,6 +99,26 @@ export default function SettingsView() {
       </Box>
 
       <HomePlacesSettings />
+
+      <Box component="section" aria-labelledby="settings-reading" data-testid="settings-reading" sx={{ mt: 10 }}>
+        <Typography id="settings-reading" component="h2" sx={{ ...flagSx, color: 'text.primary', borderTop: 2, borderColor: 'text.primary', pt: 2, mb: 2 }}>
+          Reading
+        </Typography>
+        <Box sx={{ py: 1, borderBottom: 1, borderColor: 'divider' }}>
+          <InkSwitch
+            checked={openInNewTab}
+            onChange={toggleNewTab}
+            disabled={!prefs || savingWindow}
+            label={NEW_TAB_LABEL}
+            labelPlacement="start"
+            sx={{ width: '100%', justifyContent: 'space-between', minHeight: 48 }}
+            labelSx={{ fontFamily: GOTHIC, fontSize: '1rem', fontWeight: 600, letterSpacing: 0, textTransform: 'none', whiteSpace: 'normal' }}
+          />
+          <Typography sx={{ fontFamily: GOTHIC, fontSize: '0.8125rem', lineHeight: 1.4, color: 'text.secondary', pb: 3, pr: 16 }}>
+            {NEW_TAB_HELP}
+          </Typography>
+        </Box>
+      </Box>
 
       <Box component="section" aria-labelledby="settings-open-with" sx={{ mt: 10 }}>
         <Typography id="settings-open-with" component="h2" sx={{ ...flagSx, color: 'text.primary', borderTop: 2, borderColor: 'text.primary', pt: 2, mb: 2 }}>

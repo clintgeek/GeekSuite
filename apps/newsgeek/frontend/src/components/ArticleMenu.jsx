@@ -1,8 +1,10 @@
 /**
- * The ⋯ on a story: "Open at publisher" first, then the reader's own
- * "Open with…" links in their order (NewsPrefs.readerLinks). With none set,
- * "Add open-with links…" goes to Settings. The headline itself always opens
- * the publisher — reader links live only here.
+ * The ⋯ on a story: "Open at publisher" first — ALWAYS the original URL,
+ * even when the reader chose another opener for this publisher (plan
+ * "Opening", 2026-10-11) — then the reader's own "Open with…" links in their
+ * order (NewsPrefs.readerLinks). With none set, "Add open-with links…" goes
+ * to Settings. Each item opens in a new tab or in this window, as the
+ * reader's `openInNewTab` says.
  *
  * Last, after a rule: "Source settings" opens the Source sheet for the story's
  * source or publisher (subscribe, hide, in my paper…), when the page passes
@@ -13,11 +15,11 @@ import { Divider, IconButton, ListItemText, Menu, MenuItem } from '@mui/material
 import { MoreHoriz as MoreIcon } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import { GOTHIC } from '../theme/theme';
+import { openOutbound } from '../utils/openUrl';
 import { buildReaderUrl } from '../utils/readerLinks';
 
-const openOut = (url) => window.open(url, '_blank', 'noopener,noreferrer');
-
-export default function ArticleMenu({ article, readerLinks = [], onOpenSource }) {
+export default function ArticleMenu({ article, readerLinks = [], openInNewTab = true, onOpenSource }) {
+  const openOut = (url) => openOutbound(url, openInNewTab);
   const [anchor, setAnchor] = useState(null);
   const navigate = useNavigate();
   const close = () => setAnchor(null);
@@ -49,7 +51,7 @@ export default function ArticleMenu({ article, readerLinks = [], onOpenSource })
           const url = buildReaderUrl(link.template, { url: article.url, title: article.title });
           return (
             <MenuItem
-              key={`${i}-${link.label}`}
+              key={`${i}-${link.id ?? link.label}`}
               sx={itemSx}
               disabled={!url}
               onClick={() => {

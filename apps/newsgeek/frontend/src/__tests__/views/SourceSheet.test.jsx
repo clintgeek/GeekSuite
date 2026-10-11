@@ -18,7 +18,7 @@ import ArticleItem from '../../components/ArticleItem';
 import LatestView from '../../views/LatestView';
 import SettingsView from '../../views/SettingsView';
 import SourceDetailView from '../../views/SourceDetailView';
-import { article, source, viewerMock, walledSource } from '../fixtures';
+import { article, source, viewerMock, walledSource, newsPrefs } from '../fixtures';
 import { renderWithProviders } from '../testUtils';
 
 vi.mock('../../api/discover', async (importActual) => {
@@ -28,7 +28,7 @@ vi.mock('../../api/discover', async (importActual) => {
 
 const page = (items, nextBefore = null, hiddenPaywalled = 0) => ({ data: { newsArticles: { __typename: 'NewsArticlePage', items, nextBefore, hiddenPaywalled } } });
 const articlesMock = (variables, items, extra = {}) => ({ request: { query: GET_NEWS_ARTICLES, variables }, result: page(items), ...extra });
-const prefsMock = { request: { query: GET_NEWS_PREFS }, result: { data: { newsPrefs: { __typename: 'NewsPrefs', freeToReadOnly: false, readerLinks: [] } } }, maxUsageCount: 5 };
+const prefsMock = { request: { query: GET_NEWS_PREFS }, result: { data: { newsPrefs: { ...newsPrefs(), freeToReadOnly: false, readerLinks: [] } } }, maxUsageCount: 5 };
 const pubPrefs = (subscribedDomains = [], mutedDomains = []) => ({ __typename: 'NewsPrefs', subscribedSourceIds: [], subscribedDomains, mutedDomains });
 const pubPrefsMock = (sub = [], muted = []) => ({ request: { query: GET_NEWS_PUBLISHER_PREFS }, result: { data: { newsPrefs: pubPrefs(sub, muted) } }, maxUsageCount: 5 });
 const sourceMock = (src, extra = {}) => ({ request: { query: GET_NEWS_SOURCE, variables: { id: src.id } }, result: { data: { newsSource: src } }, maxUsageCount: 5, ...extra });
@@ -358,7 +358,7 @@ describe('Source detail: I subscribe', () => {
 
 describe('Settings → Publishers', () => {
   const sourcesMock = (list) => ({ request: { query: GET_NEWS_SOURCES, variables: {} }, result: { data: { newsSources: list } }, maxUsageCount: 3 });
-  const settingsPrefs = { request: { query: GET_NEWS_PREFS }, result: { data: { newsPrefs: { __typename: 'NewsPrefs', freeToReadOnly: false, readerLinks: [] } } } };
+  const settingsPrefs = { request: { query: GET_NEWS_PREFS }, result: { data: { newsPrefs: { ...newsPrefs(), freeToReadOnly: false, readerLinks: [] } } } };
 
   it('lists subscribed sources (linked), subscribed publishers and hidden publishers', async () => {
     renderWithProviders(<SettingsView />, {

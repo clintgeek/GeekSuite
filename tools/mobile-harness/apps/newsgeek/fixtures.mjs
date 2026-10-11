@@ -39,6 +39,14 @@
 // gateway collapsed copies of it) and every source `pathExclude` ([] unless
 // set). KATV's pursuit story is an AP story the gateway collapsed: "Also in
 // KARK +2". The Arkadelphian skips two URL paths (admin form, source page).
+//
+// Opening (2026-10-11, plan "Opening"): NewsPrefs carries openInNewTab (true)
+// and openers — the Malvern Daily Record opens with "Example reader", and
+// magnoliareporter.com (through Google News) with "Example archive"; a reader
+// (`nonadmin`) has no links and no openers. Reader links carry ids.
+// newsSetPublisherOpener answers with the openers it was sent. Today ends
+// with "Around Arkansas" (another town's paper on its own town), which is
+// also `/s/around`.
 import { sessionRoutes, graphqlRoute, json } from '../../lib/net.mjs';
 
 const ago = (min) => new Date(Date.now() - min * 60000).toISOString();
@@ -267,9 +275,25 @@ const discoverAnswer = (which) => {
 // "Open with…" templates: neutral placeholders only, never a real service.
 // A reader (`nonadmin`) has none, so their ⋯ menu offers "Add open-with links…".
 const READER_LINKS = [
-  { __typename: 'NewsReaderLink', label: 'Example reader', template: 'https://example.com/read?u={url}' },
-  { __typename: 'NewsReaderLink', label: 'Example archive', template: 'https://example.org/save?u={url}&t={title}' },
+  { __typename: 'NewsReaderLink', id: 'ex-reader', label: 'Example reader', template: 'https://example.com/read?u={url}' },
+  { __typename: 'NewsReaderLink', id: 'ex-archive', label: 'Example archive', template: 'https://example.org/save?u={url}&t={title}' },
 ];
+const OP = (o) => ({ __typename: 'NewsOpener', sourceId: o.sourceId ?? null, domain: o.sourceId ? null : o.domain, linkId: o.linkId });
+const OPENERS = [OP({ sourceId: 's-mal', linkId: 'ex-reader' }), OP({ domain: 'magnoliareporter.com', linkId: 'ex-archive' })];
+const newsPrefsFor = (mode, over = {}) => ({
+  __typename: 'NewsPrefs',
+  freeToReadOnly: mode === 'free',
+  openInNewTab: true,
+  readerLinks: mode === 'nonadmin' ? [] : READER_LINKS,
+  openers: mode === 'nonadmin' ? [] : OPENERS,
+  ...over,
+});
+// newsSetPublisherOpener: this publisher's entry replaced, or removed (linkId null).
+const withOpener = (mode, vars) => {
+  const same = (o) => (vars.sourceId ? o.sourceId === vars.sourceId : !o.sourceId && o.domain === vars.domain);
+  const rest = newsPrefsFor(mode).openers.filter((o) => !same(o));
+  return newsPrefsFor(mode, { openers: vars.linkId ? [...rest, OP(vars)] : rest });
+};
 
 // The reader's publisher prefs (Settings → Publishers, the aggregator sheet).
 const publisherPrefs = (mode) => ({
@@ -331,7 +355,25 @@ const FRONT_SECTIONS = [
     key: 'tech', title: 'Tech', moreCount: 5,
     items: [front('a8', 'tech', [])],
   },
+  {
+    key: 'around', title: 'Around Arkansas', moreCount: 4,
+    items: [
+      front('r1', 'around', ['Arkansas'], A('r1', 380, {
+        title: 'Stuttgart Clean-Up set for Saturday morning at the city park',
+        excerpt: 'Volunteers meet at 8 a.m.; gloves and bags are provided.',
+        publisher: 'Stuttgart Daily Leader', sourceId: 's-stuttgart', sourceName: 'Stuttgart Daily Leader', sourceKind: 'journalism',
+        sections: ['local'], places: [],
+      })),
+      front('r2', 'around', ['Arkansas'], A('r2', 900, {
+        title: 'Calendar of Events: band boosters, a fish fry and the library book sale',
+        excerpt: 'What is on in DeWitt this week.',
+        publisher: 'DeWitt Era-Enterprise', sourceId: 's-dewitt', sourceName: 'DeWitt Era-Enterprise', sourceKind: 'journalism',
+        sections: ['local'], places: [],
+      })),
+    ],
+  },
 ];
+const AROUND_ITEMS = FRONT_SECTIONS.find((sec) => sec.key === 'around').items.map(({ why, section, ...a }) => a);
 const frontPageFor = (mode) => ({
   __typename: 'NewsFrontPage',
   generatedAt: ago(2),
@@ -359,6 +401,8 @@ const WALLED_IDS = new Set(SOURCES.filter((s) => s.paywalled).map((s) => s.id));
 const articlesFor = (vars, mode) => {
   if (mode === 'empty') return { __typename: 'NewsArticlePage', items: [], nextBefore: null, hiddenPaywalled: 0 };
   const free = mode === 'free';
+  // Around Arkansas is a story section, never a source label.
+  if (vars.section === 'around') return { __typename: 'NewsArticlePage', items: AROUND_ITEMS, nextBefore: null, hiddenPaywalled: 0 };
   const items = ARTICLES.filter((a) => (!vars.section || a.sections.includes(vars.section)) && (!vars.sourceId || a.sourceId === vars.sourceId) && !(free && WALLED_IDS.has(a.sourceId)));
   return { __typename: 'NewsArticlePage', items, nextBefore: ago(400), hiddenPaywalled: free ? 14 : 0 };
 };
@@ -389,15 +433,21 @@ export async function routes(ctx) {
       case 'NewsViewer':
         return { newsViewer: { __typename: 'NewsViewer', isAdmin: mode !== 'nonadmin' } };
       case 'NewsPrefs':
-        return { newsPrefs: { __typename: 'NewsPrefs', freeToReadOnly: mode === 'free', readerLinks: mode === 'nonadmin' ? [] : READER_LINKS } };
-      case 'NewsSetPrefs':
+        return { newsPrefs: newsPrefsFor(mode) };
+      case 'NewsSetPrefs': {
+        const cur = newsPrefsFor(mode);
         return {
-          newsSetPrefs: {
-            __typename: 'NewsPrefs',
-            freeToReadOnly: Boolean(vars.input?.freeToReadOnly),
-            readerLinks: (vars.input?.readerLinks ?? READER_LINKS).map((l) => ({ __typename: 'NewsReaderLink', ...l })),
-          },
+          newsSetPrefs: newsPrefsFor(mode, {
+            freeToReadOnly: vars.input?.freeToReadOnly ?? cur.freeToReadOnly,
+            openInNewTab: vars.input?.openInNewTab ?? cur.openInNewTab,
+            readerLinks: vars.input?.readerLinks
+              ? vars.input.readerLinks.map((l, i) => ({ __typename: 'NewsReaderLink', id: `link-${i}`, ...l }))
+              : cur.readerLinks,
+          }),
         };
+      }
+      case 'NewsSetPublisherOpener':
+        return { newsSetPublisherOpener: withOpener(mode, vars) };
       case 'NewsFrontPage':
         return { newsFrontPage: frontPageFor(mode) };
       case 'NewsHomePlaces':

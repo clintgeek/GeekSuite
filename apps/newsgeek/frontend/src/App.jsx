@@ -22,7 +22,7 @@ import TopBar from './components/TopBar';
 import { APP_ID } from './components/navConfig';
 import LatestView from './views/LatestView';
 import TodayView from './views/TodayView';
-import { SECTIONS } from './utils/vocab';
+import { STORY_SECTIONS } from './utils/vocab';
 import { SIDEBAR_SX } from './theme/theme';
 
 const SourcesView = lazy(() => import('./views/SourcesView'));
@@ -63,7 +63,7 @@ const lazyRoute = (element) => <Suspense fallback={<RouteFallback />}>{element}<
 /** `/s/:section`: one section, newest first; an unknown section goes to Today. */
 function SectionPage() {
   const { section } = useParams();
-  if (!SECTIONS.includes(section)) return <Navigate to="/" replace />;
+  if (!STORY_SECTIONS.includes(section)) return <Navigate to="/" replace />;
   return <LatestView key={section} fixedSection={section} />;
 }
 

@@ -13,12 +13,12 @@ import { GET_NEWS_FRONT_PAGE, GET_NEWS_PREFS } from '../../graphql/queries';
 import { SET_NEWS_PREFS } from '../../graphql/mutations';
 import { AppRoutes } from '../../App';
 import TodayView from '../../views/TodayView';
-import { article } from '../fixtures';
+import { article, newsPrefs } from '../fixtures';
 import { renderWithProviders } from '../testUtils';
 
 const prefsMock = (freeToReadOnly = false) => ({
   request: { query: GET_NEWS_PREFS },
-  result: { data: { newsPrefs: { __typename: 'NewsPrefs', freeToReadOnly, readerLinks: [] } } },
+  result: { data: { newsPrefs: { ...newsPrefs(), freeToReadOnly, readerLinks: [] } } },
   maxUsageCount: 5,
 });
 const story = (id, o = {}) => ({ ...article(id, o), section: o.section ?? 'local', why: o.why ?? [] });
@@ -43,6 +43,45 @@ const PAPER = [
   section('national', 'National', [story('n1', { title: 'Senate passes a stopgap', section: 'national' })], 12),
   section('tech', 'Tech', [], 0),
 ];
+
+describe('Today — opening (plan "Opening")', () => {
+  it('a headline follows the reader’s opener and window mode', async () => {
+    const prefs = {
+      request: { query: GET_NEWS_PREFS },
+      result: {
+        data: {
+          newsPrefs: newsPrefs({
+            openInNewTab: false,
+            readerLinks: [{ __typename: 'NewsReaderLink', id: 'aaa111', label: 'Reader one', template: 'https://example.com/read?u={url}' }],
+            openers: [{ __typename: 'NewsOpener', sourceId: 's1', domain: null, linkId: 'aaa111' }],
+          }),
+        },
+      },
+      maxUsageCount: 5,
+    };
+    renderWithProviders(<TodayView />, { mocks: [prefs, frontMock(PAPER)] });
+    const link = await screen.findByRole('link', { name: /Arkadelphia council meets Tuesday/ });
+    await waitFor(() => expect(link).toHaveAttribute('href', 'https://example.com/read?u=https%3A%2F%2Farkadelphian.com%2Fl1%2F'));
+    expect(link).not.toHaveAttribute('target');
+    expect(link).toHaveAttribute('rel', 'noreferrer');
+  });
+});
+
+describe('Today — Around Arkansas', () => {
+  it('prints Around Arkansas last, under its own heading, with “More Around Arkansas →” to /s/around', async () => {
+    const paper = [
+      ...PAPER,
+      section('around', 'Around Arkansas', [story('r1', { title: 'DeWitt calendar of events', section: 'around', why: ['Arkansas'] })], 4),
+    ];
+    renderWithProviders(<TodayView />, { mocks: [prefsMock(), frontMock(paper)] });
+    const blocks = await screen.findAllByTestId('front-section');
+    expect(blocks.map((b) => b.getAttribute('data-section'))).toEqual(['local', 'state', 'national', 'around']);
+    const around = blocks[3];
+    expect(within(around).getByRole('heading', { level: 2 })).toHaveTextContent('Around Arkansas');
+    expect(within(around).getByTestId('more-link')).toHaveAttribute('href', '/s/around');
+    expect(within(around).getByTestId('more-link')).toHaveTextContent('More Around Arkansas →');
+  });
+});
 
 describe('Today', () => {
   it('prints the sections in the gateway’s order, each with its heading, stories and why-chips', async () => {
@@ -116,7 +155,7 @@ describe('Today', () => {
           request: { query: SET_NEWS_PREFS, variables: { input: { freeToReadOnly: true } } },
           result: () => {
             calls.push(true);
-            return { data: { newsSetPrefs: { __typename: 'NewsPrefs', freeToReadOnly: true, readerLinks: [] } } };
+            return { data: { newsSetPrefs: { ...newsPrefs(), freeToReadOnly: true, readerLinks: [] } } };
           },
         },
         frontMock([section('local', 'Local', [story('free1', { title: 'A free story' })])], { result: () => { asked.push('front'); return frontMock([section('local', 'Local', [story('free1', { title: 'A free story' })])]).result; } }),

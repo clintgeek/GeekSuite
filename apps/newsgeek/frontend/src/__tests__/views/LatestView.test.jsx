@@ -4,20 +4,20 @@ import userEvent from '@testing-library/user-event';
 import { GET_NEWS_ARTICLES, GET_NEWS_PREFS } from '../../graphql/queries';
 import { SET_NEWS_PREFS } from '../../graphql/mutations';
 import LatestView from '../../views/LatestView';
-import { article } from '../fixtures';
+import { article, newsPrefs } from '../fixtures';
 import { renderWithProviders } from '../testUtils';
 
 const page = (items, nextBefore = null, hiddenPaywalled = 0) => ({ data: { newsArticles: { __typename: 'NewsArticlePage', items, nextBefore, hiddenPaywalled } } });
 const articlesMock = (variables, result) => ({ request: { query: GET_NEWS_ARTICLES, variables }, result });
 const prefsMock = (freeToReadOnly = false, readerLinks = []) => ({
   request: { query: GET_NEWS_PREFS },
-  result: { data: { newsPrefs: { __typename: 'NewsPrefs', freeToReadOnly, readerLinks } } },
+  result: { data: { newsPrefs: { ...newsPrefs(), freeToReadOnly, readerLinks } } },
 });
 const setPrefsMock = (freeToReadOnly, onCall = () => {}) => ({
   request: { query: SET_NEWS_PREFS, variables: { input: { freeToReadOnly } } },
   result: () => {
     onCall(freeToReadOnly);
-    return { data: { newsSetPrefs: { __typename: 'NewsPrefs', freeToReadOnly, readerLinks: [] } } };
+    return { data: { newsSetPrefs: { ...newsPrefs(), freeToReadOnly, readerLinks: [] } } };
   },
 });
 

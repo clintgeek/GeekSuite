@@ -5,10 +5,11 @@
  * - newsUpdateSource / newsSetSourceStatus / newsCheckSourceNow: the adder or an admin;
  * - newsSetSourceDefaultOn: admins ("On for everyone");
  * - newsSetSourceOn / newsSetPrefs / newsSetSourceSubscribed / newsSetPublisherPref /
- *   newsSetSourcePriority / newsSetHomePlaces: any reader, their own prefs.
+ *   newsSetSourcePriority / newsSetHomePlaces / newsSetPublisherOpener: any reader,
+ *   their own prefs.
  */
 import { gql } from '@apollo/client';
-import { PLACE_FIELDS, SOURCE_FIELDS } from './queries';
+import { NEWS_PREFS_FIELDS, PLACE_FIELDS, SOURCE_FIELDS } from './queries';
 
 export const CREATE_NEWS_SOURCE = gql`
   mutation NewsCreateSource($input: NewsSourceInput!) {
@@ -40,13 +41,24 @@ export const SET_NEWS_SOURCE_STATUS = gql`
 export const SET_NEWS_PREFS = gql`
   mutation NewsSetPrefs($input: NewsPrefsInput!) {
     newsSetPrefs(input: $input) {
-      freeToReadOnly
-      readerLinks {
-        label
-        template
-      }
+      ...NewsPrefsFields
     }
   }
+  ${NEWS_PREFS_FIELDS}
+`;
+
+/**
+ * Opening (2026-10-11): the reader's opener for one publisher — exactly one
+ * of sourceId (a direct source) or domain (an aggregator's publisher).
+ * linkId null = back to the original link.
+ */
+export const SET_NEWS_PUBLISHER_OPENER = gql`
+  mutation NewsSetPublisherOpener($sourceId: ID, $domain: String, $linkId: ID) {
+    newsSetPublisherOpener(sourceId: $sourceId, domain: $domain, linkId: $linkId) {
+      ...NewsPrefsFields
+    }
+  }
+  ${NEWS_PREFS_FIELDS}
 `;
 
 export const CHECK_NEWS_SOURCE_NOW = gql`

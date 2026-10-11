@@ -1,4 +1,4 @@
-// NewsGeek (County Gazette): Today (the ranked front page, `/`), a section
+// NewsGeek (County Gazette): Today (the ranked front page, `/`, Around Arkansas last), a section
 // page (`/s/:section`), Everything (`/everything`, N0's Latest), Sources, Source detail, the Add a
 // source sheet, the Source sheet and Settings (DOCS/NEWSGEEK_PLAN.md "Screens", "Reader-added sources"). Deep
 // links everywhere; fixture modes ride on the URL (?__fixture=empty | nonadmin |
@@ -36,6 +36,16 @@ const sourceSheet = (publisher) => async (page, h) => {
   await item.click();
   await page.locator('[data-testid="source-sheet"] [data-testid^="sheet-"]').first().waitFor({ timeout: 5000 });
   await h.settle(700);
+  return undefined;
+};
+
+// The Source sheet, scrolled to "Open stories with" (plan "Opening").
+const sheetOpenWith = (publisher) => async (page, h) => {
+  if ((await sourceSheet(publisher)(page, h)) === false) return false;
+  const control = page.locator('[data-testid="source-sheet"] [data-testid="open-with-control"]');
+  await control.waitFor({ timeout: 5000 });
+  await control.scrollIntoViewIfNeeded();
+  await h.settle(400);
   return undefined;
 };
 
@@ -181,6 +191,21 @@ export const scenes = [
   { name: '37-source-path-rule-error', goto: '/sources/s-ark', wait: 1600, setup: editPathRules('^/(press'), teardown: (page, h) => h.esc() },
   // The source page lists them read-only, for a reader too.
   { name: '38-source-path-rules-reader', goto: '/sources/s-ark?__fixture=nonadmin', wait: 1600, setup: scrollTo('[data-testid="detail-path-rules"]') },
+  // Around Arkansas (2026-10-11): the last section of Today…
+  { name: '39-today-around', goto: '/', wait: 1600, setup: scrollTo('[data-section="around"]') },
+  // …and its section page.
+  { name: '40-section-around', goto: '/s/around', wait: 1600 },
+  // Opening (2026-10-11): the Source sheet's "Open stories with" — a direct
+  // source that opens with "Example reader"…
+  { name: '41-source-sheet-open-with', goto: '/', wait: 1600, setup: sheetOpenWith('Malvern Daily Record'), teardown: (page, h) => h.esc() },
+  // …a publisher through Google News, keyed by domain ("for magnoliareporter.com")…
+  { name: '42-source-sheet-open-with-domain', goto: '/', wait: 1600, setup: sheetOpenWith('Magnolia Reporter'), teardown: (page, h) => h.esc() },
+  // …and a reader with no open-with links: disabled, "Add open-with links in Settings".
+  { name: '43-source-sheet-open-with-none', goto: '/?__fixture=nonadmin', wait: 1600, setup: sheetOpenWith('Malvern Daily Record'), teardown: (page, h) => h.esc() },
+  // Settings → Reading: "Open stories in a new tab".
+  { name: '44-settings-reading', goto: '/settings', wait: 1600, setup: scrollTo('#settings-reading') },
+  // Settings → Publishers → Open with: the overrides, each with "Use original".
+  { name: '45-settings-openers', goto: '/settings', wait: 1600, setup: scrollTo('[data-testid="publisher-openers"]') },
 ];
 
 export const waivers = [];

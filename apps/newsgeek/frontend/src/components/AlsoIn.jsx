@@ -7,11 +7,14 @@
  * Quiet on purpose: one line of small gothic in the secondary ink, a button
  * (44px tall) that opens the other publishers in one wrapped row, each a
  * link (44px target) to its copy at that publisher. Nothing at all when there are no other copies.
+ * Each link is that outlet's ORIGINAL url (never the reader's opener for the
+ * story), opened in a new tab or in this window as `openInNewTab` says.
  */
 import React, { useId, useState } from 'react';
 import { Box, ButtonBase, Link } from '@mui/material';
 import { ExpandMore as ExpandIcon, OpenInNew as OpenIcon } from '@mui/icons-material';
 import { GOTHIC } from '../theme/theme';
+import { linkTargetProps } from '../utils/openUrl';
 
 /** "Also in KARK +2" / "Also in KARK" / null. */
 export function alsoInLabel(alsoIn = []) {
@@ -52,7 +55,7 @@ const linkSx = {
   '&:focus-visible': { outline: '2px solid', outlineOffset: 2 },
 };
 
-export default function AlsoIn({ alsoIn, sx }) {
+export default function AlsoIn({ alsoIn, openInNewTab = true, sx }) {
   const [open, setOpen] = useState(false);
   const listId = `also-in-${useId().replace(/:/g, '')}`;
   const label = alsoInLabel(alsoIn);
@@ -72,7 +75,7 @@ export default function AlsoIn({ alsoIn, sx }) {
       >
         {alsoIn.map((copy) => (
           <Box component="li" key={copy.url} sx={{ display: 'flex' }}>
-            <Link href={copy.url} target="_blank" rel="noopener noreferrer" underline="always" sx={linkSx}>
+            <Link href={copy.url} {...linkTargetProps(openInNewTab)} underline="always" sx={linkSx}>
               {copy.publisher}
               <OpenIcon aria-hidden="true" sx={{ fontSize: 14, color: 'text.secondary' }} />
             </Link>

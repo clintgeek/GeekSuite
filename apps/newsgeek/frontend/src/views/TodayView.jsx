@@ -1,7 +1,7 @@
 /**
  * Today (`/`): the front page (plan "Ranking: the briefing"). The masthead,
  * Free to read, then the gateway's sections in its order (Local, State,
- * National, World, Tech): each a section flag, its stories, and "More
+ * National, World, Tech, Around Arkansas): each a section flag, its stories, and "More
  * <section> →" (the section page, newest first) when the cap left some out.
  * Quotas are caps, never targets, so a quiet section is short and an empty
  * one isn't printed. It has an end: "That's today's paper." — no infinite
@@ -33,6 +33,7 @@ import { resetArticleLists } from '../graphql/cachePolicies';
 import { SET_NEWS_PREFS } from '../graphql/mutations';
 import { GET_NEWS_FRONT_PAGE, GET_NEWS_PREFS } from '../graphql/queries';
 import { GOTHIC, SERIF, flagSx } from '../theme/theme';
+import { openingPrefs } from '../utils/openUrl';
 import { SECTION_LABEL } from '../utils/vocab';
 import AddSourceSheet from './AddSourceSheet';
 
@@ -59,7 +60,7 @@ const moreSx = {
 };
 
 /** One section of the paper: the flag, its stories, and "More <section> →". */
-function FrontSection({ section, first, readerLinks, onOpenSource }) {
+function FrontSection({ section, first, opening, onOpenSource }) {
   const title = section.title || SECTION_LABEL[section.key] || section.key;
   const headingId = `today-${section.key}`;
   return (
@@ -70,7 +71,7 @@ function FrontSection({ section, first, readerLinks, onOpenSource }) {
         </Typography>
       </Box>
       {section.items.map((a, i) => (
-        <ArticleItem key={a.id} article={a} why={a.why ?? []} lead={first && i === 0} headingLevel="h3" readerLinks={readerLinks} onOpenSource={onOpenSource} />
+        <ArticleItem key={a.id} article={a} why={a.why ?? []} lead={first && i === 0} headingLevel="h3" {...opening} onOpenSource={onOpenSource} />
       ))}
       {section.moreCount > 0 ? (
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', pt: 1 }}>
@@ -96,7 +97,8 @@ export default function TodayView() {
 
   const prefsQ = useQuery(GET_NEWS_PREFS, { fetchPolicy: 'cache-and-network', nextFetchPolicy: 'cache-first', skip: legacy });
   const freeToRead = Boolean(prefsQ.data?.newsPrefs?.freeToReadOnly);
-  const readerLinks = prefsQ.data?.newsPrefs?.readerLinks ?? [];
+  // How a story opens (plan "Opening"): window mode, open-with links, openers.
+  const opening = openingPrefs(prefsQ.data?.newsPrefs);
   const [setPrefs, { loading: savingPrefs }] = useMutation(SET_NEWS_PREFS);
 
   const { data, error, networkStatus, refetch } = useQuery(GET_NEWS_FRONT_PAGE, {
@@ -116,7 +118,7 @@ export default function TodayView() {
     try {
       await setPrefs({
         variables: { input: { freeToReadOnly: next } },
-        optimisticResponse: { newsSetPrefs: { __typename: 'NewsPrefs', freeToReadOnly: next, readerLinks } },
+        optimisticResponse: { newsSetPrefs: { __typename: 'NewsPrefs', ...prefsQ.data?.newsPrefs, freeToReadOnly: next } },
         update(cache, { data: res }) {
           if (res?.newsSetPrefs) cache.writeQuery({ query: GET_NEWS_PREFS, data: { newsPrefs: res.newsSetPrefs } });
         },
@@ -172,7 +174,7 @@ export default function TodayView() {
       ) : null}
 
       {sections.map((s, i) => (
-        <FrontSection key={s.key} section={s} first={i === 0} readerLinks={readerLinks} onOpenSource={openSheet} />
+        <FrontSection key={s.key} section={s} first={i === 0} opening={opening} onOpenSource={openSheet} />
       ))}
 
       {front ? (

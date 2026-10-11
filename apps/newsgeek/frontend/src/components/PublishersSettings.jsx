@@ -5,8 +5,13 @@
  *   page, where the switch lives.
  * - Publishers I subscribe to and Hidden publishers (domains, for stories that
  *   come through Google News): each with Remove (newsSetPublisherPref).
- * Removing changes what the gateway returns, so the cached story lists are
- * dropped (cachePolicies.js).
+ * - Open with (plan "Opening", 2026-10-11): the publishers whose stories open
+ *   with one of the reader's open-with links ("The Arkadelphian → Example
+ *   reader", "reuters.com → …"), each with "Use original"
+ *   (newsSetPublisherOpener, linkId null).
+ * Removing a subscription or a hidden publisher changes what the gateway
+ * returns, so the cached story lists are dropped (cachePolicies.js). An opener
+ * only changes where a headline goes: the prefs are replaced, nothing else.
  */
 import React from 'react';
 import { Box, Button, CircularProgress, Link, Typography } from '@mui/material';
@@ -15,8 +20,8 @@ import { useToast } from '@geeksuite/ui';
 import { Link as RouterLink } from 'react-router-dom';
 import PaywallBadge from './PaywallBadge';
 import { resetArticleLists } from '../graphql/cachePolicies';
-import { SET_NEWS_PUBLISHER_PREF } from '../graphql/mutations';
-import { GET_NEWS_PUBLISHER_PREFS, GET_NEWS_SOURCES } from '../graphql/queries';
+import { SET_NEWS_PUBLISHER_OPENER, SET_NEWS_PUBLISHER_PREF } from '../graphql/mutations';
+import { GET_NEWS_PREFS, GET_NEWS_PUBLISHER_PREFS, GET_NEWS_SOURCES } from '../graphql/queries';
 import { GOTHIC, flagSx } from '../theme/theme';
 import { withoutDomain } from '../utils/publishers';
 
@@ -61,6 +66,76 @@ function DomainList({ id, title, domains, empty, onRemove, removeLabel, testId, 
   );
 }
 
+/** Settings → Publishers → Open with: one row per opener, "Use original" each. */
+function OpenersList({ sources }) {
+  const { notify } = useToast();
+  const { data, error } = useQuery(GET_NEWS_PREFS, { fetchPolicy: 'cache-first' });
+  const [setOpener, { loading }] = useMutation(SET_NEWS_PUBLISHER_OPENER);
+  const prefs = data?.newsPrefs;
+  const nameOf = new Map((sources ?? []).map((src) => [src.id, src.name]));
+  const linkOf = new Map((prefs?.readerLinks ?? []).map((l) => [l.id, l.label]));
+  const rows = (prefs?.openers ?? [])
+    .filter((o) => linkOf.has(o.linkId))
+    .map((o) => ({ ...o, name: o.sourceId ? nameOf.get(o.sourceId) || 'A source' : o.domain, label: linkOf.get(o.linkId) }))
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  const restoreOriginal = async (row) => {
+    const key = row.sourceId ? { sourceId: row.sourceId } : { domain: row.domain };
+    const same = (o) => (row.sourceId ? o.sourceId === row.sourceId : !o.sourceId && o.domain === row.domain);
+    try {
+      await setOpener({
+        variables: { ...key, linkId: null },
+        optimisticResponse: { newsSetPublisherOpener: { ...prefs, __typename: 'NewsPrefs', openers: prefs.openers.filter((o) => !same(o)) } },
+        update(cache, { data: res }) {
+          if (res?.newsSetPublisherOpener) cache.writeQuery({ query: GET_NEWS_PREFS, data: { newsPrefs: res.newsSetPublisherOpener } });
+        },
+      });
+    } catch {
+      notify(`Couldn’t change ${row.name}. Try again.`, { tone: 'error' });
+    }
+  };
+
+  return (
+    <Box data-testid="publisher-openers">
+      <SubHead id="settings-openers">Open with</SubHead>
+      {!prefs ? (
+        error ? <Empty>Couldn’t load your open-with choices.</Empty> : <CircularProgress size={20} aria-label="Loading open-with choices" sx={{ color: 'text.secondary' }} />
+      ) : rows.length ? (
+        <Box component="ul" aria-labelledby="settings-openers" sx={{ listStyle: 'none', m: 0, p: 0 }}>
+          {rows.map((r) => (
+            <Box component="li" key={r.sourceId || r.domain} data-testid="opener-row" sx={rowSx}>
+              {/* relative: anchors the visually hidden " opens with " (else it escapes the column). */}
+              <Typography sx={{ ...nameSx, position: 'relative' }}>
+                {r.name}
+                <Box component="span" aria-hidden="true" sx={{ color: 'text.secondary', mx: 1 }}>
+                  →
+                </Box>
+                <Box component="span" sx={visuallyHiddenSx}>
+                  {' opens with '}
+                </Box>
+                {r.label}
+              </Typography>
+              <Button
+                color="inherit"
+                onClick={() => restoreOriginal(r)}
+                disabled={loading}
+                aria-label={`Open ${r.name} stories at the publisher`}
+                sx={{ minHeight: 44, flexShrink: 0, textDecoration: 'underline', textUnderlineOffset: '0.2em' }}
+              >
+                Use original
+              </Button>
+            </Box>
+          ))}
+        </Box>
+      ) : (
+        <Empty testId="publisher-openers-empty">Every publisher opens at its own site. Choose another way in a story’s Source settings.</Empty>
+      )}
+    </Box>
+  );
+}
+
+const visuallyHiddenSx = { position: 'absolute', width: 1, height: 1, p: 0, m: '-1px', border: 0, overflow: 'hidden', clip: 'rect(0 0 0 0)', clipPath: 'inset(50%)', whiteSpace: 'nowrap' };
+
 export default function PublishersSettings() {
   const client = useApolloClient();
   const { notify } = useToast();
@@ -98,7 +173,7 @@ export default function PublishersSettings() {
       <Typography id="settings-publishers" component="h2" sx={{ ...flagSx, color: 'text.primary', borderTop: 2, borderColor: 'text.primary', pt: 2, mb: 2 }}>
         Publishers
       </Typography>
-      <Typography sx={{ color: 'text.secondary' }}>Set from a story: tap the publisher’s name above the headline.</Typography>
+      <Typography sx={{ color: 'text.secondary' }}>Set from a story: its ⋯ menu → Source settings.</Typography>
 
       <SubHead id="settings-subscribed-sources">Sources I subscribe to</SubHead>
       {sourcesQ.data ? (
@@ -144,6 +219,7 @@ export default function PublishersSettings() {
             removeLabel={(d) => `Show ${d} again`}
             busy={loading}
           />
+          <OpenersList sources={sourcesQ.data?.newsSources} />
         </>
       ) : prefsQ.error ? (
         <Box role="alert" sx={{ mt: 4 }}>

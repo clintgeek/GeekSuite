@@ -118,17 +118,39 @@ export const GET_NEWS_ARTICLES = gql`
   }
 `;
 
+/**
+ * The prefs every story list needs: Free to read, and how a story opens
+ * (plan "Opening", 2026-10-11) — the window mode, the reader's open-with
+ * links (each with its gateway id, a hash of the template) and the
+ * per-publisher openers. GET_NEWS_PREFS, SET_NEWS_PREFS and
+ * SET_NEWS_PUBLISHER_OPENER all select exactly this, so a write can replace
+ * the cached prefs whole.
+ */
+export const NEWS_PREFS_FIELDS = gql`
+  fragment NewsPrefsFields on NewsPrefs {
+    freeToReadOnly
+    openInNewTab
+    readerLinks {
+      id
+      label
+      template
+    }
+    openers {
+      sourceId
+      domain
+      linkId
+    }
+  }
+`;
+
 /** The reader's own prefs (per user, server-side). Defaults when never set. */
 export const GET_NEWS_PREFS = gql`
   query NewsPrefs {
     newsPrefs {
-      freeToReadOnly
-      readerLinks {
-        label
-        template
-      }
+      ...NewsPrefsFields
     }
   }
+  ${NEWS_PREFS_FIELDS}
 `;
 
 /**
