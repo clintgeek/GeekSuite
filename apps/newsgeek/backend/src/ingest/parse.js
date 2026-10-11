@@ -3,6 +3,7 @@
  * into one raw item shape. No normalization here beyond picking fields —
  * src/ingest/normalize.js does the cleaning.
  *
+ * Result: { kind, title, link (the site's own link, '' when absent), items }
  * Raw item: { guid, link, title, summary, content, author, date, expires,
  *             sourceName, sourceUrl }
  */
@@ -86,6 +87,12 @@ function atomItem(e) {
   };
 }
 
+/** The feed's own site link: rel="alternate" (or no rel) only — never rel="self". */
+function atomSiteLink(feed) {
+  const pick = (feed.link || []).find((l) => typeof l === 'object' && (!l['@_rel'] || l['@_rel'] === 'alternate') && l['@_href']);
+  return pick ? pick['@_href'] : '';
+}
+
 function parseXml(body) {
   const check = XMLValidator.validate(body);
   if (check !== true) {
@@ -96,10 +103,12 @@ function parseXml(body) {
     const root = doc.rss || doc['rdf:RDF'];
     const channel = root.channel || {};
     const items = root.item || channel.item || [];
-    return { kind: 'rss', title: first(channel.title), items: items.map(rssItem) };
+    const links = Array.isArray(channel.link) ? channel.link : [channel.link];
+    const link = first(...links.filter((l) => typeof l !== 'object' || !l['@_rel']));
+    return { kind: 'rss', title: first(channel.title), link, items: items.map(rssItem) };
   }
   if (doc.feed) {
-    return { kind: 'atom', title: first(doc.feed.title), items: (doc.feed.entry || []).map(atomItem) };
+    return { kind: 'atom', title: first(doc.feed.title), link: atomSiteLink(doc.feed), items: (doc.feed.entry || []).map(atomItem) };
   }
   throw new FeedParseError('not an RSS or Atom document');
 }
@@ -134,7 +143,7 @@ function parseNws(body) {
       sourceUrl: '',
     };
   });
-  return { kind: 'nws', title: doc.title || 'NWS alerts', items };
+  return { kind: 'nws', title: doc.title || 'NWS alerts', link: '', items };
 }
 
 /**

@@ -9,10 +9,32 @@
  * DOCS/NEWSGEEK_PLAN.md "Data model" lists the prefs N2 will add (home
  * places, quotas, follows, mutes); they belong here too.
  */
+const READER_LINKS_MAX = 5;
+const READER_LINK_LABEL_MAX = 40;
+const READER_LINK_TEMPLATE_MAX = 500;
+
 function prefsDefinition() {
   return {
     userId: { type: String, required: true },
     freeToReadOnly: { type: Boolean, default: false },
+    // Per-reader source switches (DOCS/NEWSGEEK_PLAN.md "Reader-added sources"):
+    // sourcesOn turns on a source that is off by default for this reader;
+    // sourcesOff turns off one that would otherwise show. Source ids.
+    sourcesOn: { type: [String], default: [] },
+    sourcesOff: { type: [String], default: [] },
+    // "Open with…" links (Chef, 2026-10-10): the reader's own link templates,
+    // e.g. https://example.com/read?u={url}. Placeholders {url} (required) and
+    // {title}. Stored only; nothing ever fetches them. The gateway validates
+    // (scheme, placeholders, lengths); these limits are the backstop.
+    readerLinks: {
+      type: [{
+        _id: false,
+        label: { type: String, required: true, maxlength: READER_LINK_LABEL_MAX },
+        template: { type: String, required: true, maxlength: READER_LINK_TEMPLATE_MAX },
+      }],
+      default: [],
+      validate: { validator: (v) => !v || v.length <= READER_LINKS_MAX, message: `at most ${READER_LINKS_MAX} reader links` },
+    },
   };
 }
 
@@ -23,4 +45,6 @@ function createPrefsSchema(mongoose) {
   return schema;
 }
 
-module.exports = { prefsDefinition, createPrefsSchema };
+module.exports = {
+  prefsDefinition, createPrefsSchema, READER_LINKS_MAX, READER_LINK_LABEL_MAX, READER_LINK_TEMPLATE_MAX,
+};

@@ -44,7 +44,8 @@
     "./newsgeek/article": "./newsgeek/article.js",
     "./newsgeek/health": "./newsgeek/health.js",
     "./newsgeek/paywalls": "./newsgeek/paywalls.js",
-    "./newsgeek/prefs": "./newsgeek/prefs.js"
+    "./newsgeek/prefs": "./newsgeek/prefs.js",
+    "./newsgeek/feedUrl": "./newsgeek/feedUrl.js"
   },
   "scripts": {
     "lint": "eslint ."

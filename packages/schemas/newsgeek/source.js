@@ -51,6 +51,12 @@ function sourceDefinition(mongoose) {
     // forecast pages answer Google News town searches).
     blockedDomains: { type: [String], default: [] },
     notes: { type: String, default: '', maxlength: 2000 },
+    // Reader-added sources (plan "Reader-added sources"): who added it (suite
+    // userId — readers and admins alike; null = seeded) and whether it is on for every
+    // reader by default. A missing defaultOn reads as true — rows that predate
+    // the field are the starter list.
+    addedBy: { type: String, default: null },
+    defaultOn: { type: Boolean, default: true },
   };
 }
 
@@ -58,6 +64,7 @@ function createSourceSchema(mongoose) {
   const schema = new mongoose.Schema(sourceDefinition(mongoose), { timestamps: true });
   schema.index({ slug: 1 }, { unique: true });
   schema.index({ status: 1, 'feeds.nextPollAt': 1 });
+  schema.index({ addedBy: 1, createdAt: -1 });   // per-user add limits
   return schema;
 }
 

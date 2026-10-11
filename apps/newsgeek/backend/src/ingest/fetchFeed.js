@@ -1,8 +1,11 @@
 /**
  * One polite HTTP GET for one feed: conditional (ETag / If-Modified-Since),
  * an honest User-Agent, a timeout, and a body cap. `fetchImpl` is injectable
- * so tests never touch the network.
+ * so tests never touch the network; the default is the SSRF guard
+ * (../lib/safeFetch.js), never bare global fetch — a reader-added feed URL
+ * pointing at a private address is refused before any request is made.
  */
+import { safeFetch, UnsafeUrlError } from '../lib/safeFetch.js';
 
 export const USER_AGENT = 'NewsGeek/1.0 (+https://newsgeek.clintgeek.com)';
 export const DEFAULT_TIMEOUT_MS = 20_000;
@@ -44,7 +47,7 @@ function charsetOf(contentType, head) {
   return x ? x[1] : 'utf-8';
 }
 
-function decode(buf, contentType) {
+export function decode(buf, contentType) {
   const head = buf.subarray(0, 200).toString('latin1');
   const label = charsetOf(contentType, head);
   try {
@@ -54,7 +57,7 @@ function decode(buf, contentType) {
   }
 }
 
-async function readCapped(res, maxBytes) {
+export async function readCapped(res, maxBytes) {
   const declared = Number(res.headers.get('content-length'));
   if (Number.isFinite(declared) && declared > maxBytes) {
     try { await res.body?.cancel(); } catch { /* ignore */ }
@@ -84,7 +87,7 @@ async function readCapped(res, maxBytes) {
  * @throws {FetchError} on a non-2xx/304 answer, a timeout, a network error or an oversized body
  */
 export async function fetchFeed(feed, {
-  fetchImpl = globalThis.fetch,
+  fetchImpl = safeFetch,
   timeoutMs = DEFAULT_TIMEOUT_MS,
   maxBytes = DEFAULT_MAX_BYTES,
   now = () => new Date(),
@@ -98,8 +101,9 @@ export async function fetchFeed(feed, {
 
   let res;
   try {
-    res = await fetchImpl(feed.url, { method: 'GET', headers, redirect: 'follow', signal: AbortSignal.timeout(timeoutMs) });
+    res = await fetchImpl(feed.url, { method: 'GET', headers, signal: AbortSignal.timeout(timeoutMs) });
   } catch (err) {
+    if (err instanceof UnsafeUrlError) throw new FetchError(err.message);
     const timedOut = err?.name === 'TimeoutError' || err?.name === 'AbortError';
     const cause = err?.cause?.code || err?.code;
     throw new FetchError(timedOut ? `timeout after ${timeoutMs} ms` : `network error${cause ? ` (${cause})` : ''}`);

@@ -10,8 +10,8 @@ at the repo root. This file is a dated decision log, and it should stay honest.
 | Public host | `newsgeek.clintgeek.com` | nginx vhost: `/` → :1830, `/graphql` → basegeek :8987 (the frontend calls a relative `/graphql`) |
 | Container | `newsgeek`, image `ghcr.io/clintgeek/newsgeek:latest` | host port **1830**; dev frontend 1831 |
 | Database | Mongo `newsgeek`: `sources`, `places`, `articles`, `prefs` (per reader) | Shared definitions are in `@geeksuite/schemas/newsgeek/*`. Add fields there, never in a model file. |
-| Gateway | `apps/basegeek/packages/api/src/graphql/newsgeek/` | Reads need any signed-in user. Writes need an admin (`requireAdminUser`). |
-| Backend | `apps/newsgeek/backend` (`newsgeek-server`) | auth proxy, `/api/health`, the static frontend, the **ingest worker**, the retention purge |
+| Gateway | `apps/basegeek/packages/api/src/graphql/newsgeek/` | Reads need any signed-in user. Any reader may add a source (off for others); its adder may edit it; everything else needs an admin (`requireAdminUser`). |
+| Backend | `apps/newsgeek/backend` (`newsgeek-server`) | auth proxy, `/api/health`, `POST /api/discover`, the static frontend, the **ingest worker**, the retention purge. Every outbound request goes through the SSRF guard (`src/lib/safeFetch.js`). |
 | Frontend | `apps/newsgeek/frontend` (`newsgeek-frontend`) | "County Gazette": Newsreader + Libre Franklin, newsprint `#F4F0E6`, blue reserved for *official* |
 
 ## The ingest worker
@@ -179,3 +179,33 @@ Little Rock, Texarkana, Conway and the southern half of the state.
     - Dept of Education: bad TLS.
     - The Arkansas Press Association member list
       (`arkansaspress.org/apa-newspaper-members/`) is the place to look for new papers.
+
+### 2026-10-10: reader-added sources (server side)
+
+- **What:** the plan's "Reader-added sources" section. Any reader can add a source, which is
+  off for everyone else. Readers can switch sources on and off for themselves, and discovery
+  is at `POST /api/discover`. The built details are in the plan's "Built: the server side".
+- **Every outbound request goes through `src/lib/safeFetch.js`.** That covers the worker's
+  feeds as well as discovery. Never call `fetch` directly for a URL that came from a source
+  or a reader.
+  - The guard resolves the host and refuses any private, loopback, link-local or CGNAT
+    address, v4 or v6. It then connects to the address it vetted, through a custom `lookup`.
+  - It follows at most 5 redirects, checking each one again.
+  - Feeds whose host resolves to a private address now fail with
+    "That address isn't on the public internet." Every seeded feed is public.
+- **Tests never use the network.** A local server sits behind a test-only allow-list that
+  pairs an address with a port, so 127.0.0.1 is reachable on the fixture's port only. A
+  request body can't reach that allow-list.
+- **The discovery rate limit is in memory** (30 per user per hour, per process). Every
+  Watchtower restart resets it.
+- **Deploy order:** the gateway and backend go first. They only add fields and operations and
+  loosen permissions, so the live frontend keeps working. The frontend follows.
+- **"Open with…" links** (the same day, Chef): `NewsPrefs.readerLinks`, up to 5
+  `{ label, template }` per reader.
+  - The gateway validates and stores them and never fetches them.
+  - A template needs `{url}`, may also use `{title}`, and must be http(s) once filled in.
+  - The plan's "Open-with links" section has the details.
+- **New sources start `active`**, whether a reader or an admin adds them, so the next worker
+  tick polls them. The old `discovered` default is gone.
+- **Paywall `unknown` from discovery is stored as `none`** until someone marks it, because
+  the source enum has no `unknown`.

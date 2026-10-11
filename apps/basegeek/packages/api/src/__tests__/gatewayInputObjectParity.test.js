@@ -841,6 +841,35 @@ describe.each(Object.entries(FIXTURES))('%s', (key, fixture) => {
   });
 });
 
+// newsgeek (2026-10-10): NewsPrefsInput.readerLinks ([NewsReaderLinkInput!]), the
+// "Open with…" links. Caller: the Settings page apps/newsgeek/frontend is building
+// alongside this gateway change, which saves the whole list:
+// `{ input: { readerLinks: [{ label, template }, …] } }`. The root field
+// (newsSetPrefs) already has its FIXTURES entry for the Free-to-read switch;
+// this is the second real payload shape sent to it.
+describe('NewsPrefsInput accepts what the NewsGeek Settings page sends', () => {
+  const source = FIXTURES['Mutation.newsSetPrefs'].source;
+  const rootValue = FIXTURES['Mutation.newsSetPrefs'].rootValue;
+
+  test('a readerLinks list coerces cleanly', async () => {
+    const errors = await coercionErrors(source, {
+      input: { readerLinks: [{ label: 'Reader', template: 'https://example.com/read?u={url}&t={title}' }] },
+    }, rootValue);
+    expect(errors).toEqual([]);
+  });
+
+  test('an empty list (clear all) coerces too', async () => {
+    expect(await coercionErrors(source, { input: { readerLinks: [] } }, rootValue)).toEqual([]);
+  });
+
+  test('the guard is armed — an unknown link field is refused', async () => {
+    const errors = await coercionErrors(source, {
+      input: { readerLinks: [{ label: 'R', template: 'https://example.com/?u={url}', id: 'x' }] },
+    }, rootValue);
+    expect(errors.join(' ')).toMatch(/"id" is not defined by type "NewsReaderLinkInput"/);
+  });
+});
+
 describe('FitnessMedicationInput accepts what Medications.jsx actually sends', () => {
   test('an empty suggested_indications coerces too — the common case', async () => {
     // The value being `[]` is exactly why this went unnoticed as "probably

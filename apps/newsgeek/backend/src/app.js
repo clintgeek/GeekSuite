@@ -9,6 +9,10 @@ import { csrfGuard, meHandler } from '@geeksuite/user/server';
 import logger from './lib/logger.js';
 import { createSessionGate } from './middleware/authMiddleware.js';
 import createAuthRouter from './routes/authRoutes.js';
+import createDiscoverRouter from './routes/discoverRoutes.js';
+import { safeFetch } from './lib/safeFetch.js';
+import Place from './models/Place.js';
+import Source from './models/Source.js';
 
 // This file lives in backend/src, so the frontend build output ends up one
 // level up, at backend/public (see apps/newsgeek/Dockerfile).
@@ -28,6 +32,10 @@ const __dirname = path.dirname(__filename);
  * @param {Function} [options.validateSession] attachUser's session check override
  * @param {() => object} [options.workerStatus] the ingest worker's status()
  * @param {() => number} [options.dbState]     mongoose readyState override (tests)
+ * @param {Function} [options.discoverFetch]   discovery's guarded fetch (tests pass a
+ *   createSafeFetch with a fake resolver); default: the production SSRF guard
+ * @param {object} [options.discoverModels]    { Place, Source } override (tests)
+ * @param {() => number} [options.clock]       discovery rate-limit clock (tests)
  */
 export function createApp(options = {}) {
   const {
@@ -35,6 +43,9 @@ export function createApp(options = {}) {
     validateSession,
     workerStatus = () => null,
     dbState = () => mongoose.connection.readyState,
+    discoverFetch = safeFetch,
+    discoverModels = { Place, Source },
+    clock,
   } = options;
   const sessionGate = createSessionGate({ validateSession });
 
@@ -118,6 +129,10 @@ export function createApp(options = {}) {
 
   app.use('/api/auth', createAuthRouter({ sessionGate }));
   app.get('/api/me', ...sessionGate, meHandler());
+
+  // Reader-added sources: "paste a link, see what we'd add". Any signed-in
+  // user; a POST, so csrfGuard (above) checks its Origin like any mutation.
+  app.use('/api/discover', createDiscoverRouter({ sessionGate, fetchImpl: discoverFetch, models: discoverModels, clock, log: logger }));
 
   // Unknown /api paths answer JSON, not the SPA.
   app.use('/api', (req, res) => res.status(404).json({ code: 'NOT_FOUND', message: 'Route not found' }));

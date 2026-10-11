@@ -96,17 +96,20 @@ describe('gate', () => {
     }
   });
 
-  it('refuses every mutation to a non-admin with ADMIN_REQUIRED, and changes nothing', async () => {
+  // Since "Reader-added sources" (2026-10-10) any signed-in user may CREATE
+  // (newsgeekReaderSources.test.js); changing a source someone else added
+  // still needs an admin.
+  it("refuses a non-admin's changes to a source they did not add with ADMIN_REQUIRED, and changes nothing", async () => {
     const src = await mkSource({ status: 'discovered', feeds: [{ url: 'https://a.test/rss' }] });
     const id = String(src._id);
     const calls = [
-      [CREATE, { input: { name: 'N', kind: 'journalism' } }],
       [UPDATE, { id, input: { name: 'Changed' } }],
       [`mutation($id: ID!) { newsSetSourceStatus(id: $id, status: "active") { id } }`, { id }],
       [`mutation($id: ID!) { newsCheckSourceNow(id: $id) { id } }`, { id }],
     ];
     for (const [q, v] of calls) expect(await code(q, v, String(MEMBER))).toBe('ADMIN_REQUIRED');
     for (const [q, v] of calls) expect(await code(q, v, null)).toBe('UNAUTHENTICATED');
+    expect(await code(CREATE, { input: { name: 'N', kind: 'journalism' } }, null)).toBe('UNAUTHENTICATED');
     const after = await NewsSource.findById(id).lean();
     expect(after.name).toBe('Src');
     expect(after.status).toBe('discovered');
@@ -175,14 +178,15 @@ describe('mutations', () => {
     };
     const one = (await ok(CREATE, { input })).newsCreateSource;
     expect(one.slug).toBe('the-daily-leader');
-    expect(one.status).toBe('discovered');
+    expect(one.status).toBe('active'); // polled on the next tick (was 'discovered' before reader-added sources)
     expect(one.places.map((p) => p.name)).toEqual(['Malvern']);
     expect(one.access).toEqual({ paywall: 'metered', content: 'excerpt' });
     expect(one.blockedDomains).toEqual(['legacy.com']);
     expect(one.feeds[0]).toMatchObject({ format: 'rss', pollEveryMin: 15, health: 'never' });
-    const two = (await ok(CREATE, { input })).newsCreateSource;
+    // (A second source needs its own feed: one poll per feed, DUPLICATE_FEED.)
+    const two = (await ok(CREATE, { input: { ...input, feeds: [{ url: 'https://leader.test/rss2' }] } })).newsCreateSource;
     expect(two.slug).toBe('the-daily-leader-2');
-    expect(await code(CREATE, { input: { ...input, slug: 'the-daily-leader' } })).toBe('BAD_USER_INPUT');
+    expect(await code(CREATE, { input: { ...input, feeds: [], slug: 'the-daily-leader' } })).toBe('BAD_USER_INPUT');
   });
 
   it('validates enums, urls and ids', async () => {

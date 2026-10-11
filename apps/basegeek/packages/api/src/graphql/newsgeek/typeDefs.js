@@ -1,8 +1,10 @@
 import { gql } from 'graphql-tag';
 
 // NewsGeek — local-first news briefing. Contract: DOCS/NEWSGEEK_PLAN.md "Gateway API, N0".
-// Reads need a signed-in suite user; every source mutation needs an admin (requireAdminUser).
-// newsSetPrefs is the exception: any signed-in user, their own row only.
+// Reads need a signed-in suite user. Reader-added sources (plan "Reader-added sources"):
+// any signed-in user may create a source (off for everyone else); its adder may edit,
+// check, and set it active/retired; admins may do anything, plus "On for everyone".
+// newsSetPrefs / newsSetSourceOn write only the caller's own prefs row.
 // The gateway never calls the NewsGeek backend: "check now" sets the feeds' nextPollAt.
 export const typeDefs = gql`
   type NewsPlace {
@@ -49,6 +51,22 @@ export const typeDefs = gql`
     notes: String!
     articlesLast7d: Int!
     paywalled: Boolean!  # access.paywall is metered or hard
+    # Reader-added sources
+    defaultOn: Boolean!  # on for every reader unless they switch it off (missing = true)
+    onForMe: Boolean!    # the caller sees its articles (not retired + the visibility rule)
+    addedByMe: Boolean!
+    canEdit: Boolean!    # admin, or the caller added it
+    addedByName: String  # admins only; null for everyone else
+  }
+
+  # A publisher Google News keeps surfacing that no source reads directly.
+  type NewsSuggestion {
+    domain: String!
+    count: Int!
+    lastSeenAt: Date!
+    places: [NewsPlace!]!
+    sampleTitles: [String!]!
+    paywalled: Boolean!
   }
 
   type NewsArticle {
@@ -77,14 +95,29 @@ export const typeDefs = gql`
   # Per reader. A user with no stored prefs gets the defaults.
   type NewsPrefs {
     freeToReadOnly: Boolean!
+    readerLinks: [NewsReaderLink!]!
+  }
+
+  # "Open with…": a reader's own link template. {url} (required) and {title}
+  # are replaced by the client; the gateway only stores it.
+  type NewsReaderLink {
+    label: String!
+    template: String!
   }
 
   type NewsViewer {
     isAdmin: Boolean!
   }
 
+  input NewsReaderLinkInput {
+    label: String!
+    template: String!
+  }
+
   input NewsPrefsInput {
     freeToReadOnly: Boolean
+    # When provided, replaces the whole list (max 5); omitted = unchanged.
+    readerLinks: [NewsReaderLinkInput!]
   }
 
   input NewsFeedInput {
@@ -105,6 +138,7 @@ export const typeDefs = gql`
     content: String
     blockedDomains: [String!]
     notes: String
+    defaultOn: Boolean   # admins only (ADMIN_REQUIRED otherwise); create defaults to true for admins
   }
 
   extend type Query {
@@ -115,13 +149,25 @@ export const typeDefs = gql`
     newsSource(id: ID!): NewsSource
     # Chronological, newest first. N0's reading view. The briefing replaces it in N2.
     newsArticles(section: String, placeId: ID, sourceId: ID, before: Date, limit: Int): NewsArticlePage!
+    # Aggregator articles, last 30 days, grouped by publisher domain, minus domains a
+    # non-aggregator source already reads; top 30 by count.
+    newsSuggestedSources: [NewsSuggestion!]!
   }
 
   extend type Mutation {
+    # Any signed-in user. Non-admin: defaultOn false, status active, never an aggregator;
+    # 20 per rolling 24h and 200 in total (RATE_LIMITED). A feed URL another source
+    # already has → DUPLICATE_FEED with extensions.sourceId.
     newsCreateSource(input: NewsSourceInput!): NewsSource!
+    # The adder of that source, or an admin.
     newsUpdateSource(id: ID!, input: NewsSourceInput!): NewsSource!
+    # The adder may set only active / retired; admins any status.
     newsSetSourceStatus(id: ID!, status: String!): NewsSource!
     newsCheckSourceNow(id: ID!): NewsSource!
+    # Any signed-in user; the caller's own switch.
+    newsSetSourceOn(id: ID!, on: Boolean!): NewsSource!
+    # Admin: "On for everyone".
+    newsSetSourceDefaultOn(id: ID!, on: Boolean!): NewsSource!
     # Any signed-in user; writes only the caller's own row (userId from the session).
     newsSetPrefs(input: NewsPrefsInput!): NewsPrefs!
   }

@@ -183,6 +183,175 @@ then `stale`, then `ok`.
   The exclusion is in the Mongo query, so pages stay full and the `before` cursor still works.
   `hiddenPaywalled` costs one extra `countDocuments`, and only when the switch is on.
 
+## Reader-added sources (Chef, 2026-10-10)
+
+"Anyone should be able to add whatever they want. They can default off for others."
+
+### Rules
+- **Anyone signed in can add a source.**
+  - It is **on for them and off for everyone else** (`defaultOn: false`, `addedBy: <userId>`).
+  - The starter sources and anything an admin promotes are **on for everyone**
+    (`defaultOn: true`; a missing field reads as true, so existing rows need no migration).
+- **Per-reader switches:** any reader can turn any source on or off for themselves.
+  `NewsPrefs.sourcesOn` and `sourcesOff` hold the source ids.
+- **What a reader sees:** a reader sees source S when S is not retired and one of these holds:
+  - S is default-on and not in their `sourcesOff`;
+  - S is in their `sourcesOn`;
+  - they added S and it is not in their `sourcesOff`.
+
+  `newsArticles` only ever returns articles from sources the caller sees.
+- **One poll per feed.** Creating a source whose feed URL (normalized: lower-case host,
+  no trailing slash, no fragment) already belongs to a source fails with
+  `DUPLICATE_FEED`, and `extensions.sourceId` points at the existing one so the UI
+  can offer "Already here — turn it on".
+- **Edit rights:**
+  - **The adder** may edit, check-now, and set the status of their own source to
+    `active`/`retired`.
+  - **Admins** may do all of that on any source, plus `newsSetSourceDefaultOn`
+    ("On for everyone").
+  - Non-admins can never set `defaultOn` or `kind: 'aggregator'`.
+- **Visibility of the adder:** admins see `addedByName`; everyone else gets null. Everyone
+  gets `addedByMe`.
+- **Abuse limits:** at most **20 sources created per user per rolling 24h** and **200 sources
+  added per user in total** (`RATE_LIMITED`).
+- **SSRF guard (non-negotiable).** Every outbound fetch (the ingest worker AND discovery)
+  goes through one guard in the backend:
+  - http(s) only; ports 80, 443 and 8080 only;
+  - the hostname is resolved and **every** resolved address is refused if it is private,
+    loopback, link-local, CGNAT, multicast or unspecified (v4 and v6, including mapped
+    v4), and redirects are followed manually (max 5), re-checking each hop;
+  - no credentials in URLs;
+  - the existing timeout and body caps apply.
+
+  A refused URL is a clear error ("That address isn't on the public internet"), never a
+  fetch.
+
+### Discovery: `POST /api/discover` (newsgeek backend, any signed-in user)
+- **Request** `{ url }` → **response**
+  `{ ok, site: { name, homepage }, feeds: [{ url, format, items, newest, sampleTitles: [3] }],
+  paywall: { level: 'none'|'metered'|'hard'|'unknown', evidence }, suggest: { name, kind,
+  sections, placeSlugs }, existingSourceId, message }`.
+- **Finding feeds:**
+  - the page's `<link rel="alternate">` feeds;
+  - if the URL is itself a feed, use it;
+  - the usual paths: WordPress `/feed/`, Blox `/search/?f=rss&t=article&l=50`, CivicPlus
+    `RSSFeed.aspx?ModID=1&CID=All-newsflash.xml`, Wix `/blog-feed.xml`, `/rss`,
+    `/rss.xml`, `/feed.atom`, `/index.rss`.
+
+  Each candidate is validated by parsing it.
+- **Paywall:** one article page, checked with the same markers as the 2026-10-10 check
+  (`isAccessibleForFree`, Zephr/Piano, CherryRoad, PMPro, "premium content",
+  "subscribers only").
+- **Suggestions:**
+  - `kind`: `official` for .gov/.us/.mil/k12 hosts or CivicPlus, else `journalism`.
+  - `placeSlugs`: gazetteer matches over the site name and sample titles, using the same
+    matcher.
+- **Budget:** at most **10 requests** per discovery, and **30 discoveries per user per hour**.
+- **No feed:** respond `ok:false` with a plain message ("No feed found — this site only
+  publishes web pages").
+
+### Gateway additions
+```graphql
+type NewsSource {   # added fields
+  defaultOn: Boolean!  onForMe: Boolean!  addedByMe: Boolean!  canEdit: Boolean!
+  addedByName: String  # admins only, else null
+}
+type NewsSuggestion { domain: String!  count: Int!  lastSeenAt: Date!  places: [NewsPlace!]!  sampleTitles: [String!]!  paywalled: Boolean! }
+extend type Query {
+  newsSuggestedSources: [NewsSuggestion!]!   # aggregator articles, last 30 days, grouped by publisherDomain,
+                                             # minus domains any source already reads directly; top 30 by count
+}
+extend type Mutation {
+  newsSetSourceOn(id: ID!, on: Boolean!): NewsSource!         # any reader, own prefs
+  newsSetSourceDefaultOn(id: ID!, on: Boolean!): NewsSource!  # admin
+}
+# Changed: newsCreateSource is open to any signed-in user (rules above);
+# newsUpdateSource / newsSetSourceStatus / newsCheckSourceNow are open to the adder of that source.
+```
+
+### Screens (phone first)
+- **Sources:**
+  - A **+** button opens the **Add a source** sheet: paste a link, then a preview card
+    (name, feed, item count, newest, 3 headlines, paywall, suggested places), then
+    **Add**.
+  - On `DUPLICATE_FEED` the sheet offers "Already here — turn it on".
+  - Sections: **In your paper** (on for me), **From other readers** (off for me,
+    reader-added), **Turned off** (default-on but switched off). Each row has an on/off
+    switch.
+  - **Suggested** lists publishers seen in Google News results that we don't read
+    directly: "magnoliareporter.com — 14 stories — Magnolia, El Dorado". "Check" opens the
+    sheet prefilled with `https://<domain>`.
+- **Source detail:**
+  - for the adder or an admin: edit, check now, retire;
+  - for admins: **On for everyone**.
+
+### Open-with links (Chef, 2026-10-10)
+Each reader can keep up to five "Open with…" link templates, used to open an article in a
+reader service of their choosing.
+- **Stored per reader:** `NewsPrefs.readerLinks: [{ label, template }]`. Set it through
+  `newsSetPrefs(input: { readerLinks: [...] })`.
+  - Sending a list replaces the whole list, and `[]` clears it.
+  - Leaving it out leaves it unchanged, the same as `freeToReadOnly`.
+- **Rules** (otherwise `BAD_USER_INPUT`, with a message that names the link):
+  - at most 5 links;
+  - the label is trimmed and must be 1 to 40 characters;
+  - the template is at most 500 characters and must contain `{url}`;
+  - only `{url}` and `{title}` may appear as placeholders;
+  - once the placeholders are filled, the template must be an absolute `http:` or `https:` URL,
+    for example `https://example.com/read?u={url}`.
+- **The gateway only stores templates and never fetches them.** The client fills them in. No
+  defaults are seeded.
+
+```graphql
+type NewsReaderLink { label: String!  template: String! }
+type NewsPrefs { freeToReadOnly: Boolean!  readerLinks: [NewsReaderLink!]! }
+input NewsReaderLinkInput { label: String!  template: String! }
+input NewsPrefsInput { freeToReadOnly: Boolean  readerLinks: [NewsReaderLinkInput!] }
+```
+
+### Built: the server side (2026-10-10)
+The frontend ships after this; everything here is additive or loosens a permission, so the
+live frontend keeps working.
+- **SSRF guard:** `apps/newsgeek/backend/src/lib/safeFetch.js`. Both `fetchFeed` (the worker)
+  and discovery use it by default.
+  - Hand-written CIDR checks: v4 private, loopback, link-local, CGNAT, multicast, reserved and
+    TEST-NETs. v6 must be global unicast (2000::/3) outside documentation and 2001::/23.
+    Mapped, NAT64 and 6to4 addresses are judged by the v4 address inside.
+  - **IP pinning:** `http(s).request` gets a custom `lookup` that answers with the address that
+    was vetted, and `agent: false`. Host, SNI and the certificate check still use the hostname.
+  - A refused feed records `lastError: "That address isn't on the public internet."` and backs
+    off like any other failure.
+- **Discovery:** `POST /api/discover` (`src/discover/discover.js`, `src/routes/discoverRoutes.js`).
+  - It returns the plan's shape. When `ok` is false it adds `code`: `NO_FEED` or
+    `UNREACHABLE`.
+  - A bad or unsafe URL gets a 400 with `{ ok:false, code:'BAD_URL'|'UNSAFE_URL', message }`.
+  - Too many requests get a 429 with `{ ok:false, code:'RATE_LIMITED', retryAfterSec }` and a
+    `Retry-After` header.
+  - The 30-per-hour limit is in memory, per process, so a restart resets it.
+  - Each redirect hop counts against the 10-request budget, and one request is kept back for
+    the paywall check.
+  - A domain on `PAYWALLED_DOMAINS` reports `metered` even when the markup shows nothing.
+  - Paywall markers live in one function, `src/ingest/paywallMarkers.js`.
+- **Feed identity:** `packages/schemas/newsgeek/feedUrl.js` (`normalizeFeedUrl`) is used by
+  both the gateway and discovery. It also folds `http` into `https`, because two spellings of
+  one feed would mean two polls.
+- **Gateway codes:**
+  - `DUPLICATE_FEED` sets `extensions { sourceId, sourceName, feedUrl }`. It applies to
+    `newsUpdateSource` too, ignoring the source's own feeds.
+  - `RATE_LIMITED` sets `extensions { limit: 20|200, window: '24h'|'total' }`.
+  - Admin-only actions answer `ADMIN_REQUIRED`: someone else's source, a status other than
+    active/retired, `kind: 'aggregator'`, `defaultOn`.
+  - Admins are exempt from the add limits.
+- **`NewsSourceInput.defaultOn`** (optional, admins only): an admin's new source is on for
+  everyone unless it says `defaultOn: false`.
+- **Sources keep `addedBy` for admins too.** Only seeded rows have none.
+- **Every new source starts `active`**, the admin's included, and is polled on the next tick.
+  N0's `discovered` default existed only for the hand-entry form.
+- **Discovery can report `paywall.level: 'unknown'`, but `NewsSourceInput.paywall` only takes
+  none, metered or hard.** The sheet sends `none` until someone marks the source.
+- **`onForMe`** is exactly "the caller sees its articles", so it is false for a retired source.
+  `newsSetSourceOn(on: true)` on a retired source returns `BAD_USER_INPUT`.
+
 ## Ingest
 
 - Poll each feed on its own interval: 15 min for TV, state and national sources, 30–60 min
@@ -409,8 +578,8 @@ sturdiest first:
    a small-town weekly masthead with the date, one spot color for "official". Dark mode
    is the same paper at night.
 2. **StartGeek dock**: does NewsGeek earn a spot in the one-row dock?
-3. **Who can manage sources**: admin only (my default), or can any user propose a feed URL
-   that an admin approves?
+3. ~~Who can manage sources~~: decided 2026-10-10. Anyone can add one, and it is off for
+   everyone else ("Reader-added sources").
 4. **The default topic sections**: tech is a given. Which others (gaming, science,
    business, sports — Razorbacks?)?
 5. **Phase 2 summaries**: paid-first like NoteGeek/FitnessGeek, under the same caps?
