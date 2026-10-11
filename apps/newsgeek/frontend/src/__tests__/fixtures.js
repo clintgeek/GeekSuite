@@ -16,6 +16,7 @@ export const article = (id, overrides = {}) => ({
   sourceKind: 'journalism',
   publisherDomain: 'arkadelphian.com',
   viaAggregator: false,
+  alsoIn: [],
   sections: ['local'],
   places: [{ __typename: 'NewsPlace', id: 'clark', name: 'Clark County' }],
   ...overrides,
@@ -52,6 +53,7 @@ export const source = (id, overrides = {}) => ({
   access: { __typename: 'NewsSourceAccess', paywall: 'none', content: 'excerpt' },
   feeds: [feed(`${id}-f1`, 'ok')],
   blockedDomains: [],
+  pathExclude: [],
   notes: '',
   articlesLast7d: 12,
   paywalled: ['metered', 'hard'].includes(overrides.access?.paywall),
@@ -73,3 +75,6 @@ export const viewerMock = (isAdmin) => ({
   request: { query: GET_NEWS_VIEWER },
   result: { data: { newsViewer: { __typename: 'NewsViewer', isAdmin } } },
 });
+
+/** Another copy of a story, as NewsArticle.alsoIn lists it. */
+export const copy = (publisher, url, sourceId = `s-${publisher.toLowerCase()}`) => ({ __typename: 'NewsAlsoIn', publisher, url, sourceId });

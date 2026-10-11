@@ -39,6 +39,26 @@ const sourceSheet = (publisher) => async (page, h) => {
   return undefined;
 };
 
+// Source page → Edit → the "Skip URLs matching" section (admins only);
+// `bad` adds a row with that text and leaves it, so its error shows.
+const editPathRules = (bad) => async (page, h) => {
+  const edit = page.getByRole('button', { name: /^edit$/i });
+  if (!(await edit.count())) return false;
+  await edit.first().click();
+  const group = page.getByTestId('path-rules');
+  await group.waitFor({ timeout: 5000 });
+  await h.settle(500);
+  if (bad) {
+    await group.getByRole('button', { name: /add (another|a) pattern/i }).click();
+    const rows = group.getByRole('textbox');
+    await rows.last().fill(bad);
+    await rows.last().blur();
+  }
+  await group.scrollIntoViewIfNeeded();
+  await h.settle(400);
+  return undefined;
+};
+
 export const scenes = [
   { name: '01-latest', goto: '/everything', wait: 1600 },
   { name: '02-latest-local', goto: '/everything?section=local', wait: 1600 },
@@ -140,6 +160,27 @@ export const scenes = [
   },
   // A source's page: Priority on Today under I subscribe (KATV is Less).
   { name: '34-source-priority-less', goto: '/sources/s-katv?__fixture=nonadmin', wait: 1600 },
+  // Feed hygiene: KATV's AP story, collapsed — "Also in KARK +2", opened.
+  {
+    name: '35-today-also-in',
+    goto: '/',
+    wait: 1600,
+    async setup(page, h) {
+      const btn = page.getByRole('button', { name: 'Also in KARK +2' });
+      if (!(await btn.count())) return false;
+      await btn.first().click();
+      await page.locator('[data-testid="article"]').filter({ has: btn }).first().scrollIntoViewIfNeeded();
+      await page.evaluate(() => window.scrollBy(0, -120));
+      await h.settle(400);
+      return undefined;
+    },
+  },
+  // The admin's source form: "Skip URLs matching", two patterns…
+  { name: '36-source-path-rules', goto: '/sources/s-ark', wait: 1600, setup: editPathRules(), teardown: (page, h) => h.esc() },
+  // …and a pattern that doesn't compile, marked where it is.
+  { name: '37-source-path-rule-error', goto: '/sources/s-ark', wait: 1600, setup: editPathRules('^/(press'), teardown: (page, h) => h.esc() },
+  // The source page lists them read-only, for a reader too.
+  { name: '38-source-path-rules-reader', goto: '/sources/s-ark?__fixture=nonadmin', wait: 1600, setup: scrollTo('[data-testid="detail-path-rules"]') },
 ];
 
 export const waivers = [];

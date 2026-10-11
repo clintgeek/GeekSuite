@@ -20,6 +20,11 @@ export const NEWS_TYPE_POLICIES = {
   // One per reader, no id: GET_NEWS_PREFS and GET_NEWS_PUBLISHER_PREFS select
   // different fields of the same object, so merge rather than replace.
   NewsPrefs: { merge: true },
+  // The other copies of a story (feed hygiene): plain embedded objects with
+  // no id, stored inside their article. A new answer replaces the list
+  // whole (it can shrink when a copy expires) — no merge, no data-loss warning.
+  NewsAlsoIn: { keyFields: false },
+  NewsArticle: { fields: { alsoIn: { merge: false } } },
   Query: {
     fields: {
       // Today has no arguments and no id: each answer is a fresh front page.

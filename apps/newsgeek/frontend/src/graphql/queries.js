@@ -52,6 +52,7 @@ export const SOURCE_FIELDS = gql`
       ...NewsFeedFields
     }
     blockedDomains
+    pathExclude
     notes
     articlesLast7d
     paywalled
@@ -100,6 +101,11 @@ export const GET_NEWS_ARTICLES = gql`
         sourceKind
         publisherDomain
         viaAggregator
+        alsoIn {
+          publisher
+          url
+          sourceId
+        }
         sections
         places {
           id
@@ -206,6 +212,11 @@ export const GET_NEWS_FRONT_PAGE = gql`
           sourceKind
           publisherDomain
           viaAggregator
+          alsoIn {
+            publisher
+            url
+            sourceId
+          }
           sections
           section
           why

@@ -4,6 +4,14 @@
  * admin may pick `aggregator` (the gateway refuses it from anyone else). Sends NewsSourceInput exactly as the
  * contract names it; on edit, feeds replace by URL and keep their poll state
  * (the gateway's rule).
+ *
+ * "Skip URLs matching" (NewsSource.pathExclude, feed hygiene) is the admin's
+ * alone: a list of path patterns (regular expressions on the URL's pathname)
+ * whose items ingest drops. A reader never sees the section, and the field is
+ * sent only by an admin and only when the list changed (the gateway refuses
+ * it from anyone else, and an omitted field keeps the saved list). The rules
+ * mirror the gateway's (utils/pathRules.js): a bad pattern is marked where it
+ * is and Save refuses.
  */
 import React, { useMemo, useState } from 'react';
 import {
@@ -31,7 +39,8 @@ import { useMutation, useQuery } from '@apollo/client';
 import { useToast } from '@geeksuite/ui';
 import { CREATE_NEWS_SOURCE, UPDATE_NEWS_SOURCE } from '../graphql/mutations';
 import { GET_NEWS_PLACES, GET_NEWS_SOURCES } from '../graphql/queries';
-import { flagSx } from '../theme/theme';
+import { GOTHIC, flagSx } from '../theme/theme';
+import { PATH_RULES_MAX, PATH_RULE_EXAMPLE, pathRulesChange, pathRulesErrors } from '../utils/pathRules';
 import { formErrors, formFromSource, inputFromForm } from '../utils/sources';
 import {
   CONTENT_LABEL,
@@ -53,12 +62,86 @@ function Legend({ children }) {
   );
 }
 
+const MONO = 'ui-monospace, "SF Mono", Menlo, Consolas, monospace';
+
+/** Admin: the source's path patterns, one row each, with add/remove. */
+function PathRules({ rows, onChange, errors, showAll }) {
+  const [blurred, setBlurred] = useState(() => new Set());
+  const markBlurred = (i) => setBlurred((b) => new Set(b).add(i));
+  const setRow = (i, value) => onChange(rows.map((r, j) => (j === i ? value : r)));
+  const removeRow = (i) => {
+    onChange(rows.filter((_, j) => j !== i));
+    setBlurred((b) => new Set([...b].filter((j) => j !== i).map((j) => (j > i ? j - 1 : j))));
+  };
+  return (
+    <Box component="fieldset" data-testid="path-rules" sx={{ border: 0, p: 0, m: 0 }}>
+      <Legend>Skip URLs matching</Legend>
+      <Typography id="path-rules-help" sx={{ fontFamily: GOTHIC, fontSize: '0.8125rem', color: 'text.secondary', mb: 3 }}>
+        Stories whose link path matches a pattern are never collected — press releases, sponsored pages. Patterns are regular expressions on the path, e.g.{' '}
+        <Box component="code" sx={{ fontFamily: MONO, fontSize: '0.8125rem', color: 'text.primary' }}>
+          {PATH_RULE_EXAMPLE}
+        </Box>
+        .
+      </Typography>
+      <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+        {rows.map((row, i) => {
+          const err = showAll || blurred.has(i) ? errors.rows[i] : null;
+          const name = row.trim() || 'empty pattern';
+          return (
+            <Box key={i} data-testid="path-rule" sx={{ display: 'flex', gap: 1, alignItems: 'flex-start' }}>
+              <TextField
+                value={row}
+                onChange={(e) => setRow(i, e.target.value)}
+                onBlur={() => markBlurred(i)}
+                size="small"
+                fullWidth
+                placeholder={PATH_RULE_EXAMPLE}
+                error={Boolean(err)}
+                helperText={err || undefined}
+                inputProps={{
+                  'aria-label': `Skip pattern ${i + 1}`,
+                  'aria-describedby': 'path-rules-help',
+                  autoCapitalize: 'off',
+                  autoCorrect: 'off',
+                  spellCheck: false,
+                }}
+                sx={{
+                  '& input': { fontFamily: MONO, fontSize: '0.9375rem' },
+                  '& .MuiInputBase-root': { minHeight: 44 },
+                  // The suite theme's hover ink would hide the error edge on a pointer.
+                  '& .MuiOutlinedInput-root.Mui-error .MuiOutlinedInput-notchedOutline': { borderColor: 'error.main' },
+                }}
+              />
+              <IconButton aria-label={`Remove pattern ${name}`} onClick={() => removeRow(i)} sx={{ width: 44, height: 44, flexShrink: 0 }}>
+                <RemoveIcon />
+              </IconButton>
+            </Box>
+          );
+        })}
+        {errors.list && (showAll || blurred.size > 0) ? <FormHelperText error>{errors.list}</FormHelperText> : null}
+        <Button
+          startIcon={<AddIcon />}
+          color="inherit"
+          disabled={rows.length >= PATH_RULES_MAX}
+          onClick={() => onChange([...rows, ''])}
+          sx={{ alignSelf: 'flex-start', minHeight: 44 }}
+        >
+          {rows.length ? 'Add another pattern' : 'Add a pattern'}
+        </Button>
+      </Box>
+    </Box>
+  );
+}
+
 export default function SourceFormDialog({ open, onClose, source, onSaved, isAdmin = false }) {
   const theme = useTheme();
   const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
   const editing = Boolean(source);
   const [form, setForm] = useState(() => formFromSource(source));
   const [touched, setTouched] = useState(false);
+  // Admin only (see the header): the rows as typed, blanks and all.
+  const [pathRows, setPathRows] = useState(() => [...(source?.pathExclude ?? [])]);
+  const pathErrors = pathRulesErrors(isAdmin ? pathRows : []);
   const { notify } = useToast();
   const { data: placeData } = useQuery(GET_NEWS_PLACES, { skip: !open });
   const places = useMemo(() => placeData?.newsPlaces ?? [], [placeData]);
@@ -78,8 +161,16 @@ export default function SourceFormDialog({ open, onClose, source, onSaved, isAdm
   const submit = async (e) => {
     e.preventDefault();
     setTouched(true);
+    if (pathErrors.any) {
+      notify('Fix the patterns under “Skip URLs matching” before saving.', { tone: 'error' });
+      return;
+    }
     if (Object.keys(errors).length) return;
     const input = inputFromForm(form);
+    if (isAdmin) {
+      const pathExclude = pathRulesChange(source?.pathExclude, pathRows);
+      if (pathExclude) input.pathExclude = pathExclude;
+    }
     try {
       const res = editing ? await update({ variables: { id: source.id, input } }) : await create({ variables: { input } });
       const saved = editing ? res.data?.newsUpdateSource : res.data?.newsCreateSource;
@@ -227,6 +318,7 @@ export default function SourceFormDialog({ open, onClose, source, onSaved, isAdm
             minRows={2}
             helperText="One per line. Items linking to these are dropped (e.g. legacy.com for an aggregator)."
           />
+          {isAdmin ? <PathRules rows={pathRows} onChange={setPathRows} errors={pathErrors} showAll={touched} /> : null}
           <TextField label="Notes" value={form.notes} onChange={set('notes')} multiline minRows={2} />
         </DialogContent>
         <DialogActions sx={{ px: 6, py: 3, pb: 'calc(12px + env(safe-area-inset-bottom, 0px))' }}>

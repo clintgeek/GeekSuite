@@ -15,10 +15,15 @@
  * opens from the ⋯ menu's "Source settings" (Chef, 2026-10-10: settings live
  * in the menu, not on the name); the headline is still the link to the
  * publisher.
+ *
+ * When the gateway collapsed other copies of the story into this one
+ * (`alsoIn`, feed hygiene), a quiet "Also in KARK +2" line closes the item
+ * (AlsoIn); the headline still goes to this copy.
  */
 import React from 'react';
 import { Box, Link, Typography } from '@mui/material';
 import { GOTHIC, SERIF } from '../theme/theme';
+import AlsoIn from './AlsoIn';
 import ArticleMenu from './ArticleMenu';
 import OfficialBadge from './OfficialBadge';
 import PlaceChips from './PlaceChips';
@@ -93,6 +98,7 @@ export default function ArticleItem({ article, readerLinks = [], onOpenSource, w
         </Typography>
       ) : null}
       {why ? <WhyChips why={why} official={official} sx={{ mt: 2 }} /> : <PlaceChips places={article.places} sx={{ mt: 2 }} />}
+      <AlsoIn alsoIn={article.alsoIn} sx={{ mt: 1 }} />
     </Box>
   );
 }

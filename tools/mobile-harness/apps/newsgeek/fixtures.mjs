@@ -34,6 +34,11 @@
 // Arkadelphian is a favorite, KATV is Less); newsSetSourcePriority and
 // newsSetHomePlaces answer with what they were sent. A reader (`nonadmin`)
 // has no home places.
+//
+// Feed hygiene (2026-10-11): every article carries `alsoIn` ([] unless the
+// gateway collapsed copies of it) and every source `pathExclude` ([] unless
+// set). KATV's pursuit story is an AP story the gateway collapsed: "Also in
+// KARK +2". The Arkadelphian skips two URL paths (admin form, source page).
 import { sessionRoutes, graphqlRoute, json } from '../../lib/net.mjs';
 
 const ago = (min) => new Date(Date.now() - min * 60000).toISOString();
@@ -72,6 +77,7 @@ const A = (id, mins, o) => ({
   places: [],
   publisherDomain: 'example.com',
   viaAggregator: false,
+  alsoIn: [],
   ...o,
 });
 const ARTICLES = [
@@ -112,6 +118,12 @@ const ARTICLES = [
     excerpt: 'State police say speeds topped 100 mph before spike strips stopped the vehicle.',
     publisher: 'KATV', sourceId: 's-katv', sourceName: 'KATV', sourceKind: 'journalism',
     sections: ['state'], places: [pl('arkansas')],
+    // An AP story three other stations ran too; the gateway shows one copy.
+    alsoIn: [
+      { __typename: 'NewsAlsoIn', publisher: 'KARK', url: 'https://example.com/kark/pursuit-i30/', sourceId: 's-kark' },
+      { __typename: 'NewsAlsoIn', publisher: 'THV11', url: 'https://example.com/thv11/pursuit-i30/', sourceId: 's-thv11' },
+      { __typename: 'NewsAlsoIn', publisher: 'KNWA', url: 'https://example.com/knwa/pursuit-i30/', sourceId: 's-knwa' },
+    ],
   }),
   A('a6', 180, {
     title: 'Legislative panel hears testimony on rural hospital funding',
@@ -164,6 +176,7 @@ const S = (id, name, o = {}) => ({
   access: { __typename: 'NewsSourceAccess', paywall: 'none', content: 'excerpt' },
   feeds: [F(`${id}-f1`, 'ok')],
   blockedDomains: [],
+  pathExclude: [],
   notes: '',
   articlesLast7d: 14,
   defaultOn: true,
@@ -177,7 +190,8 @@ const S = (id, name, o = {}) => ({
 });
 const WALL = (paywall, content = 'excerpt') => ({ __typename: 'NewsSourceAccess', paywall, content });
 const SOURCES = [
-  S('s-ark', 'The Arkadelphian', { sections: ['local'], places: [PLACES[0], PLACES[2]], articlesLast7d: 22, feeds: [F('s-ark-f1', 'ok')], priorityForMe: 'favorite' }),
+  S('s-ark', 'The Arkadelphian', { sections: ['local'], places: [PLACES[0], PLACES[2]], articlesLast7d: 22, feeds: [F('s-ark-f1', 'ok')], priorityForMe: 'favorite',
+    pathExclude: ['^/online_features/press_releases/', '^/sponsored/'] }),
   S('s-mal', 'Malvern Daily Record', { sections: ['local'], places: [PLACES[1], PLACES[3]], access: WALL('hard'), articlesLast7d: 9, feeds: [F('s-mal-f1', 'stale')], subscribedByMe: true }),
   S('s-nws', 'NWS Little Rock', {
     kind: 'official', sections: ['local', 'state'], articlesLast7d: 3,

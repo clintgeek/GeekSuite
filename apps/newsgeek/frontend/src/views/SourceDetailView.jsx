@@ -15,6 +15,11 @@
  * newsSetSourceSubscribed. And "Priority on Today" (★ Favorite / Normal /
  * Less, newsSetSourcePriority): Favorites lead their section, Less sinks. A subscribed source stays in their paper when
  * Free to read is on, paywall or not.
+ *
+ * "Skips URLs matching" (pathExclude, feed hygiene) is in Access: shown to
+ * anyone when the source has patterns (like Blocked domains, it explains
+ * what the paper leaves out), and always to an admin, who changes it through
+ * Edit (the gateway takes the field from admins only).
  */
 import React, { useState } from 'react';
 import { Box, Button, CircularProgress, Link, MenuItem, TextField, Typography } from '@mui/material';
@@ -312,6 +317,21 @@ export default function SourceDetailView() {
         <Fact label="Paywall">{labelFor(PAYWALL_LABEL, source.access.paywall)}</Fact>
         <Fact label="Feed carries">{labelFor(CONTENT_LABEL, source.access.content)}</Fact>
         <Fact label="Blocked domains">{source.blockedDomains.length ? source.blockedDomains.join(', ') : '—'}</Fact>
+        {isAdmin || source.pathExclude?.length ? (
+          <Fact label="Skips URLs matching">
+            {source.pathExclude?.length ? (
+              <Box component="ul" data-testid="detail-path-rules" sx={{ listStyle: 'none', m: 0, p: 0 }}>
+                {source.pathExclude.map((p) => (
+                  <Box component="li" key={p} sx={{ fontFamily: 'ui-monospace, Menlo, monospace', fontSize: '0.875rem', overflowWrap: 'anywhere', py: 0.25 }}>
+                    {p}
+                  </Box>
+                ))}
+              </Box>
+            ) : (
+              '—'
+            )}
+          </Fact>
+        ) : null}
       </Box>
 
       {source.notes ? (
