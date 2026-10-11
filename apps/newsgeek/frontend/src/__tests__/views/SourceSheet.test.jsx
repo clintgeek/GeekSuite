@@ -61,28 +61,35 @@ function renderLatest(mocks, initialEntries = ['/']) {
   );
 }
 
+// The Source sheet opens from the story's ⋯ menu → "Source settings".
 const openSheetFor = async (name) => {
-  await userEvent.click(await screen.findByRole('button', { name: `Settings for ${name}` }));
+  const story = (await screen.findAllByTestId('article')).find((a) => within(a).queryByText(name));
+  await userEvent.click(within(story).getByRole('button', { name: /^More for/ }));
+  await userEvent.click(await screen.findByRole('menuitem', { name: 'Source settings' }));
   return screen.findByRole('dialog');
 };
 
-describe('the publisher line', () => {
-  it('is a button named "Settings for <publisher>"; the headline still links to the publisher', async () => {
+describe('Source settings lives in the ⋯ menu, not on the name', () => {
+  it('the publisher name is plain text; "Source settings" in the menu opens the sheet; the headline still links to the publisher', async () => {
     const onOpenSource = vi.fn();
     renderWithProviders(<ArticleItem article={DIRECT} onOpenSource={onOpenSource} />);
-    const btn = screen.getByRole('button', { name: 'Settings for The Arkadelphian' });
+    expect(screen.queryByRole('button', { name: /The Arkadelphian/ })).toBeNull();
+    expect(screen.getByText('The Arkadelphian').closest('button')).toBeNull();
     const link = screen.getByRole('link', { name: /Council meets Tuesday/ });
     expect(link).toHaveAttribute('href', 'https://arkadelphian.com/d1/');
     expect(link).toHaveAttribute('target', '_blank');
-    expect(link).not.toContainElement(btn);
-    await userEvent.click(btn);
+    await userEvent.click(screen.getByRole('button', { name: /^More for/ }));
+    const items = screen.getAllByRole('menuitem').map((m) => m.textContent);
+    expect(items[0]).toBe('Open at publisher');
+    expect(items[items.length - 1]).toBe('Source settings');
+    await userEvent.click(screen.getByRole('menuitem', { name: 'Source settings' }));
     expect(onOpenSource).toHaveBeenCalledWith(DIRECT);
   });
 
-  it('without a handler it stays plain text', () => {
+  it('without a handler the menu has no "Source settings"', async () => {
     renderWithProviders(<ArticleItem article={DIRECT} />);
-    expect(screen.queryByRole('button', { name: /Settings for/ })).toBeNull();
-    expect(screen.getByText('The Arkadelphian')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /^More for/ }));
+    expect(screen.queryByRole('menuitem', { name: 'Source settings' })).toBeNull();
   });
 });
 

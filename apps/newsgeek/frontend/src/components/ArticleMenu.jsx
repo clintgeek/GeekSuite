@@ -3,6 +3,10 @@
  * "Open with…" links in their order (NewsPrefs.readerLinks). With none set,
  * "Add open-with links…" goes to Settings. The headline itself always opens
  * the publisher — reader links live only here.
+ *
+ * Last, after a rule: "Source settings" opens the Source sheet for the story's
+ * source or publisher (subscribe, hide, in my paper…), when the page passes
+ * onOpenSource.
  */
 import React, { useState } from 'react';
 import { Divider, IconButton, ListItemText, Menu, MenuItem } from '@mui/material';
@@ -13,7 +17,7 @@ import { buildReaderUrl } from '../utils/readerLinks';
 
 const openOut = (url) => window.open(url, '_blank', 'noopener,noreferrer');
 
-export default function ArticleMenu({ article, readerLinks = [] }) {
+export default function ArticleMenu({ article, readerLinks = [], onOpenSource }) {
   const [anchor, setAnchor] = useState(null);
   const navigate = useNavigate();
   const close = () => setAnchor(null);
@@ -21,7 +25,7 @@ export default function ArticleMenu({ article, readerLinks = [] }) {
   return (
     <>
       <IconButton
-        aria-label={`More ways to open “${article.title}”`}
+        aria-label={`More for “${article.title}”`}
         aria-haspopup="menu"
         aria-expanded={anchor ? 'true' : undefined}
         onClick={(e) => setAnchor(e.currentTarget)}
@@ -68,6 +72,19 @@ export default function ArticleMenu({ article, readerLinks = [] }) {
             <ListItemText primary="Add open-with links…" />
           </MenuItem>
         )}
+        {onOpenSource ? <Divider /> : null}
+        {onOpenSource ? (
+          <MenuItem
+            sx={itemSx}
+            aria-haspopup="dialog"
+            onClick={() => {
+              close();
+              onOpenSource(article);
+            }}
+          >
+            <ListItemText primary="Source settings" />
+          </MenuItem>
+        ) : null}
       </Menu>
     </>
   );

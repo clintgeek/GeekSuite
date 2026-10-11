@@ -28,21 +28,21 @@ afterEach(() => open.mockRestore());
 describe('a story’s ⋯ menu', () => {
   it('lists "Open at publisher" first, then the reader’s links in order', async () => {
     renderWithProviders(<ArticleItem article={STORY} readerLinks={LINKS} />);
-    await userEvent.click(screen.getByRole('button', { name: 'More ways to open “Fire & ice”' }));
+    await userEvent.click(screen.getByRole('button', { name: 'More for “Fire & ice”' }));
     const items = within(await screen.findByRole('menu')).getAllByRole('menuitem');
     expect(items.map((i) => i.textContent)).toEqual(['Open at publisher', 'Reader one', 'Reader two']);
   });
 
   it('opens a reader link with the built URL and noopener,noreferrer', async () => {
     renderWithProviders(<ArticleItem article={STORY} readerLinks={LINKS} />);
-    await userEvent.click(screen.getByRole('button', { name: /More ways to open/ }));
+    await userEvent.click(screen.getByRole('button', { name: /More for/ }));
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Reader two' }));
     expect(open).toHaveBeenCalledWith('https://example.org/https%3A%2F%2Fpub.example%2Fa%3Fb%3D1?t=Fire%20%26%20ice', '_blank', 'noopener,noreferrer');
   });
 
   it('"Open at publisher" opens the article url', async () => {
     renderWithProviders(<ArticleItem article={STORY} readerLinks={LINKS} />);
-    await userEvent.click(screen.getByRole('button', { name: /More ways to open/ }));
+    await userEvent.click(screen.getByRole('button', { name: /More for/ }));
     await userEvent.click(await screen.findByRole('menuitem', { name: 'Open at publisher' }));
     expect(open).toHaveBeenCalledWith('https://pub.example/a?b=1', '_blank', 'noopener,noreferrer');
   });
@@ -54,7 +54,7 @@ describe('a story’s ⋯ menu', () => {
         <Route path="/settings" element={<p>settings page</p>} />
       </Routes>
     );
-    await userEvent.click(screen.getByRole('button', { name: /More ways to open/ }));
+    await userEvent.click(screen.getByRole('button', { name: /More for/ }));
     const items = within(await screen.findByRole('menu')).getAllByRole('menuitem');
     expect(items.map((i) => i.textContent)).toEqual(['Open at publisher', 'Add open-with links…']);
     await userEvent.click(items[1]);

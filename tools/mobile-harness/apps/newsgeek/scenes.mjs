@@ -25,11 +25,14 @@ const scrollTo = (selector) => async (page, h) => {
   return undefined;
 };
 
-// Tap a story's publisher line ("Settings for <publisher>"): the Source sheet.
+// A story's ⋯ menu → "Source settings": the Source sheet.
 const sourceSheet = (publisher) => async (page, h) => {
-  const btn = page.getByRole('button', { name: `Settings for ${publisher}` });
-  if (!(await btn.count())) return false;
-  await btn.first().click();
+  const story = page.locator('[data-testid="article"]').filter({ hasText: publisher }).first();
+  if (!(await story.count())) return false;
+  await story.getByRole('button', { name: /^More for/ }).click();
+  const item = page.getByRole('menuitem', { name: 'Source settings' });
+  await item.waitFor({ timeout: 5000 });
+  await item.click();
   await page.locator('[data-testid="source-sheet"] [data-testid^="sheet-"]').first().waitFor({ timeout: 5000 });
   await h.settle(700);
   return undefined;

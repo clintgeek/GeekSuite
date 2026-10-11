@@ -238,3 +238,4 @@ Chef: "click a source in the newslist and get to settings like marking it paid."
   - Harness: 100 scenes, 0 violations.
   - Revert checks: 40 mutations, all red.
 - **Deploy:** two pushes, server `95fbb67c` then UI `1d96212c`.
+- Follow-up (Chef): the Source sheet moved from the publisher name to the ⋯ menu as **Source settings** (last item, after a rule). The publisher name is plain text again. Frontend 218/218, 2 revert checks red, harness 100 scenes / 0 violations.

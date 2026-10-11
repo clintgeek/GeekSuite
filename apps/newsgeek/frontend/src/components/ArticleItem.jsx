@@ -6,13 +6,13 @@
  * Official notices carry the OFFICIAL badge and a spot-colour rule at the
  * left edge — the word does the work, the colour only repeats it.
  *
- * The publisher line is a button (plan "Source sheet"): it opens the Source
- * sheet for that source or publisher. A 44px target drawn at the line's own
- * size (negative margin), with a dotted rule under the name so a thumb knows
- * it is live; the headline is still the link to the publisher.
+ * The publisher line is plain text. The Source sheet (plan "Source sheet")
+ * opens from the ⋯ menu's "Source settings" (Chef, 2026-10-10: settings live
+ * in the menu, not on the name); the headline is still the link to the
+ * publisher.
  */
 import React from 'react';
-import { Box, ButtonBase, Link, Typography } from '@mui/material';
+import { Box, Link, Typography } from '@mui/material';
 import { GOTHIC, SERIF } from '../theme/theme';
 import ArticleMenu from './ArticleMenu';
 import OfficialBadge from './OfficialBadge';
@@ -41,34 +41,9 @@ export default function ArticleItem({ article, readerLinks = [], onOpenSource })
     >
       <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 2, rowGap: 1, mb: 1.5 }}>
         {official ? <OfficialBadge /> : null}
-        {onOpenSource ? (
-          <ButtonBase
-            onClick={() => onOpenSource(article)}
-            aria-label={`Settings for ${publisher}`}
-            aria-haspopup="dialog"
-            data-testid="publisher-button"
-            sx={{
-              ...publisherSx,
-              minHeight: 44,
-              minWidth: 44,
-              justifyContent: 'flex-start',
-              my: -3,
-              px: 1,
-              mx: -1,
-              borderRadius: '2px',
-              textAlign: 'left',
-              '& > span': { textDecoration: 'underline dotted', textDecorationThickness: '1px', textUnderlineOffset: '0.3em' },
-              '&:hover > span': { textDecorationStyle: 'solid' },
-              '&.Mui-focusVisible': { outline: '2px solid', outlineColor: 'text.primary', outlineOffset: 0 },
-            }}
-          >
-            <span>{publisher}</span>
-          </ButtonBase>
-        ) : (
-          <Typography component="span" sx={publisherSx}>
-            {publisher}
-          </Typography>
-        )}
+        <Typography component="span" sx={publisherSx}>
+          {publisher}
+        </Typography>
         <Typography component="span" sx={{ fontFamily: GOTHIC, fontSize: '0.8125rem', color: 'text.secondary' }}>
           <TimeAgo value={article.publishedAt} />
         </Typography>
@@ -89,7 +64,7 @@ export default function ArticleItem({ article, readerLinks = [], onOpenSource })
         </Link>
       </Typography>
       <Box sx={{ mt: -1.5, mr: -2 }}>
-        <ArticleMenu article={article} readerLinks={readerLinks} />
+        <ArticleMenu article={article} readerLinks={readerLinks} onOpenSource={onOpenSource} />
       </Box>
       </Box>
       {article.excerpt ? (
