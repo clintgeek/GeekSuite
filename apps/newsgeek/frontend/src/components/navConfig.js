@@ -18,6 +18,8 @@ export const ROUTES = [
   { path: '/', navId: NAV.latest, title: 'Latest', tab: 'latest' },
   { path: '/sources', navId: NAV.sources, title: 'Sources', tab: 'sources' },
   { path: '/sources/:id', navId: NAV.sources, title: 'Source', tab: 'sources', back: true },
+  // Phone: reached from the account menu (top bar), with a back arrow; md+: the sidebar footer.
+  { path: '/settings', navId: NAV.settings, title: 'Settings', tab: null, back: true },
 ];
 
 export function routeFor(pathname = '/') {

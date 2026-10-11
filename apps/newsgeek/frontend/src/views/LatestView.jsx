@@ -39,6 +39,7 @@ export default function LatestView() {
   const client = useApolloClient();
   const prefsQ = useQuery(GET_NEWS_PREFS, { fetchPolicy: 'cache-and-network', nextFetchPolicy: 'cache-first' });
   const freeToRead = Boolean(prefsQ.data?.newsPrefs?.freeToReadOnly);
+  const readerLinks = prefsQ.data?.newsPrefs?.readerLinks ?? [];
   const [setPrefs, { loading: savingPrefs }] = useMutation(SET_NEWS_PREFS);
 
   const { data, error, networkStatus, fetchMore, refetch } = useQuery(GET_NEWS_ARTICLES, {
@@ -52,7 +53,7 @@ export default function LatestView() {
     try {
       await setPrefs({
         variables: { input: { freeToReadOnly: next } },
-        optimisticResponse: { newsSetPrefs: { __typename: 'NewsPrefs', freeToReadOnly: next } },
+        optimisticResponse: { newsSetPrefs: { __typename: 'NewsPrefs', freeToReadOnly: next, readerLinks } },
         update(cache, { data: res }) {
           if (res?.newsSetPrefs) cache.writeQuery({ query: GET_NEWS_PREFS, data: { newsPrefs: res.newsSetPrefs } });
         },
@@ -127,7 +128,7 @@ export default function LatestView() {
       {items.length ? (
         <Box component="section" aria-label="Stories">
           {items.map((a) => (
-            <ArticleItem key={a.id} article={a} />
+            <ArticleItem key={a.id} article={a} readerLinks={readerLinks} />
           ))}
         </Box>
       ) : null}

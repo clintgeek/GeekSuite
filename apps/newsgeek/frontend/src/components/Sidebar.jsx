@@ -3,7 +3,7 @@
  *
  *   Latest
  *   Desk   Sources
- *   footer: user · Sign out
+ *   footer: user · Settings · Sign out
  *
  * N2 adds Briefing above Latest and Saved/Settings; the groups are already
  * shaped for them. A selected row is the shaded band with an ink rule at its
@@ -62,6 +62,7 @@ export default function Sidebar({ user, onSignOut }) {
       activeId={activeNavId(location.pathname)}
       footer={{
         user: user ? { name: displayNameFrom(user), secondary: secondaryFrom(user), initials: initialsFrom(user) } : undefined,
+        settings: { to: '/settings' },
         onSignOut,
       }}
       aria-label={`${APP_NAME} navigation`}

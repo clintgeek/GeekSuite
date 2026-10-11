@@ -1,6 +1,7 @@
 /**
- * Add / edit a source (admin). One column of plain fields, full-screen on a
- * phone, Save in the dialog's foot. Sends NewsSourceInput exactly as the
+ * Add by hand (admin) / edit a source (its adder or an admin). One column of
+ * plain fields, full-screen on a phone, Save in the dialog's foot. Only an
+ * admin may pick `aggregator` (the gateway refuses it from anyone else). Sends NewsSourceInput exactly as the
  * contract names it; on edit, feeds replace by URL and keep their poll state
  * (the gateway's rule).
  */
@@ -52,7 +53,7 @@ function Legend({ children }) {
   );
 }
 
-export default function SourceFormDialog({ open, onClose, source, onSaved }) {
+export default function SourceFormDialog({ open, onClose, source, onSaved, isAdmin = false }) {
   const theme = useTheme();
   const fullScreen = useMediaQuery(theme.breakpoints.down('sm'));
   const editing = Boolean(source);
@@ -109,7 +110,7 @@ export default function SourceFormDialog({ open, onClose, source, onSaved }) {
             helperText={show('homepage')}
           />
           <TextField select label="Kind" value={form.kind} onChange={set('kind')} helperText="Official sources (city notices, NWS) never count as coverage.">
-            {SOURCE_KINDS.map((k) => (
+            {SOURCE_KINDS.filter((k) => isAdmin || k !== 'aggregator' || form.kind === k).map((k) => (
               <MenuItem key={k} value={k}>
                 {KIND_LABEL[k]}
               </MenuItem>

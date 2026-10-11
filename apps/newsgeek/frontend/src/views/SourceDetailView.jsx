@@ -1,22 +1,37 @@
 /**
  * One source (`/sources/:id`): every feed's full health record, the places
- * it covers, and its access (paywall, what the feed carries). Admins get
- * "Check now" (sets the feeds' nextPollAt; the worker picks it up within a
- * minute), a status change and Edit. Everyone else reads.
+ * it covers, and its access (paywall, what the feed carries).
+ *
+ * Who gets which controls (plan "Reader-added sources" → Edit rights; the
+ * gateway enforces the same, the UI only hides what it would refuse):
+ * - the adder (`canEdit`) or an admin: "Check now" (sets the feeds'
+ *   nextPollAt; the worker picks it up within a minute), Edit, and Retire
+ *   (or "Bring back"); an admin gets the full status menu instead of Retire;
+ * - admins: "On for everyone" (newsSetSourceDefaultOn), and "Added by <name>"
+ *   when a reader added it. A non-admin adder sees "Added by you".
+ * Everyone else reads.
  */
 import React, { useState } from 'react';
 import { Box, Button, CircularProgress, Link, MenuItem, TextField, Typography } from '@mui/material';
-import { EditOutlined as EditIcon, OpenInNew as OpenIcon, Refresh as CheckIcon } from '@mui/icons-material';
-import { useMutation, useQuery } from '@apollo/client';
+import {
+  ArchiveOutlined as RetireIcon,
+  EditOutlined as EditIcon,
+  OpenInNew as OpenIcon,
+  Refresh as CheckIcon,
+  UnarchiveOutlined as RestoreIcon,
+} from '@mui/icons-material';
+import { useApolloClient, useMutation, useQuery } from '@apollo/client';
 import { Link as RouterLink, useParams } from 'react-router-dom';
 import { useToast } from '@geeksuite/ui';
 import Column from '../components/Column';
 import HealthIndicator from '../components/HealthIndicator';
+import InkSwitch from '../components/InkSwitch';
 import KindBadge from '../components/KindBadge';
 import PaywallBadge from '../components/PaywallBadge';
 import PlaceChips from '../components/PlaceChips';
 import TimeAgo from '../components/TimeAgo';
-import { CHECK_NEWS_SOURCE_NOW, SET_NEWS_SOURCE_STATUS } from '../graphql/mutations';
+import { resetArticleLists } from '../graphql/cachePolicies';
+import { CHECK_NEWS_SOURCE_NOW, SET_NEWS_SOURCE_DEFAULT_ON, SET_NEWS_SOURCE_STATUS } from '../graphql/mutations';
 import { GET_NEWS_SOURCE } from '../graphql/queries';
 import { useViewer } from '../hooks/useViewer';
 import { GOTHIC, flagSx } from '../theme/theme';
@@ -80,11 +95,39 @@ function FeedRecord({ feed }) {
   );
 }
 
-function AdminActions({ source }) {
+function SourceActions({ source, isAdmin }) {
   const { notify } = useToast();
+  const client = useApolloClient();
   const [editing, setEditing] = useState(false);
   const [checkNow, checkState] = useMutation(CHECK_NEWS_SOURCE_NOW, { variables: { id: source.id } });
   const [setStatus, statusState] = useMutation(SET_NEWS_SOURCE_STATUS);
+  const [setDefaultOn, defaultOnState] = useMutation(SET_NEWS_SOURCE_DEFAULT_ON);
+  const retired = source.status === 'retired';
+
+  const onRetire = async () => {
+    const status = retired ? 'active' : 'retired';
+    try {
+      await setStatus({ variables: { id: source.id, status } });
+      resetArticleLists(client.cache);
+      notify(retired ? 'Back in service.' : 'Retired. Nobody’s paper polls it now.', { tone: 'success' });
+    } catch (err) {
+      notify(err?.message || 'Could not change the status.', { tone: 'error' });
+    }
+  };
+
+  const onEveryone = async (on) => {
+    try {
+      await setDefaultOn({
+        variables: { id: source.id, on },
+        optimisticResponse: { newsSetSourceDefaultOn: { __typename: 'NewsSource', id: source.id, defaultOn: on, onForMe: Boolean(source.onForMe) } },
+      });
+      // Default-on decides what every reader's newsArticles returns.
+      resetArticleLists(client.cache);
+      notify(on ? 'On for everyone.' : 'Off by default. Readers who turned it on keep it.', { tone: 'success' });
+    } catch (err) {
+      notify(err?.message || 'Could not change that.', { tone: 'error' });
+    }
+  };
 
   const onCheck = async () => {
     try {
@@ -106,21 +149,37 @@ function AdminActions({ source }) {
   };
 
   return (
-    <Box data-testid="admin-actions" sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, alignItems: 'center', mt: 5 }}>
+    <Box data-testid="source-actions" sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, alignItems: 'center', mt: 5 }}>
       <Button variant="contained" disableElevation startIcon={<CheckIcon />} onClick={onCheck} disabled={checkState.loading}>
         {checkState.loading ? 'Queuing…' : 'Check now'}
       </Button>
       <Button variant="outlined" color="inherit" startIcon={<EditIcon />} onClick={() => setEditing(true)}>
         Edit
       </Button>
-      <TextField select size="small" label="Status" value={source.status} onChange={onStatus} disabled={statusState.loading} sx={{ minWidth: 160 }}>
-        {SOURCE_STATUSES.map((s) => (
-          <MenuItem key={s} value={s}>
-            {STATUS_LABEL[s]}
-          </MenuItem>
-        ))}
-      </TextField>
-      {editing ? <SourceFormDialog open source={source} onClose={() => setEditing(false)} /> : null}
+      {isAdmin ? (
+        <TextField select size="small" label="Status" value={source.status} onChange={onStatus} disabled={statusState.loading} sx={{ minWidth: 160 }}>
+          {SOURCE_STATUSES.map((s) => (
+            <MenuItem key={s} value={s}>
+              {STATUS_LABEL[s]}
+            </MenuItem>
+          ))}
+        </TextField>
+      ) : (
+        <Button variant="outlined" color="inherit" startIcon={retired ? <RestoreIcon /> : <RetireIcon />} onClick={onRetire} disabled={statusState.loading}>
+          {retired ? 'Bring back' : 'Retire'}
+        </Button>
+      )}
+      {isAdmin ? (
+        <InkSwitch
+          checked={source.defaultOn}
+          onChange={onEveryone}
+          disabled={defaultOnState.loading}
+          label="On for everyone"
+          labelPlacement="end"
+          data-testid="default-on"
+        />
+      ) : null}
+      {editing ? <SourceFormDialog open isAdmin={isAdmin} source={source} onClose={() => setEditing(false)} /> : null}
     </Box>
   );
 }
@@ -130,6 +189,9 @@ export default function SourceDetailView() {
   const { isAdmin } = useViewer();
   const { data, loading, error, refetch } = useQuery(GET_NEWS_SOURCE, { variables: { id }, fetchPolicy: 'cache-and-network' });
   const source = data?.newsSource;
+  // Admins see who added it (the gateway sends addedByName to admins only);
+  // the adder sees "you"; everyone else, nothing.
+  const addedBy = !source ? null : isAdmin ? (source.addedByName ? `Added by ${source.addedByName}` : null) : source.addedByMe ? 'Added by you' : null;
 
   if (loading && !data) {
     return (
@@ -182,7 +244,12 @@ export default function SourceDetailView() {
             <OpenIcon aria-hidden="true" sx={{ fontSize: 14 }} />
           </Link>
         ) : null}
-        {isAdmin ? <AdminActions source={source} /> : null}
+        {addedBy ? (
+          <Typography data-testid="added-by" sx={{ fontFamily: GOTHIC, fontSize: '0.875rem', color: 'text.secondary', mt: 2 }}>
+            {addedBy}
+          </Typography>
+        ) : null}
+        {source.canEdit || isAdmin ? <SourceActions source={source} isAdmin={isAdmin} /> : null}
       </Box>
 
       <SectionFlag>Feeds</SectionFlag>

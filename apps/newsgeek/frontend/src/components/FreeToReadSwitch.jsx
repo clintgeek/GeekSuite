@@ -8,6 +8,7 @@
 import React from 'react';
 import { FormControlLabel, Switch } from '@mui/material';
 import { flagSx } from '../theme/theme';
+import { INK_SWITCH_SX } from './inkSwitchSx';
 
 export default function FreeToReadSwitch({ checked, onChange, disabled = false }) {
   return (
@@ -30,14 +31,7 @@ export default function FreeToReadSwitch({ checked, onChange, disabled = false }
         gap: 1,
         '& .MuiFormControlLabel-label': { ...flagSx, fontSize: '0.8125rem', color: 'text.primary' },
         '& .MuiFormControlLabel-label.Mui-disabled': { color: 'text.secondary' },
-        // MUI's default unchecked thumb is near-white: invisible on newsprint.
-        // Ink thumbs in both states (inkSoft off, ink on) against the page;
-        // position, not colour, says which. Measured in gazetteContrast.
-        '& .MuiSwitch-thumb': { bgcolor: 'text.secondary', boxShadow: 'none' },
-        '& .MuiSwitch-track': { bgcolor: 'text.secondary', opacity: 0.25 },
-        '& .Mui-checked .MuiSwitch-thumb': { bgcolor: 'text.primary' },
-        '& .Mui-checked + .MuiSwitch-track': { bgcolor: 'text.primary', opacity: 0.5 },
-        '& .Mui-focusVisible .MuiSwitch-thumb': { outline: '2px solid', outlineColor: 'text.primary', outlineOffset: 2 },
+        ...INK_SWITCH_SX,
       }}
     />
   );

@@ -25,6 +25,7 @@ import { SIDEBAR_SX } from './theme/theme';
 
 const SourcesView = lazy(() => import('./views/SourcesView'));
 const SourceDetailView = lazy(() => import('./views/SourceDetailView'));
+const SettingsView = lazy(() => import('./views/SettingsView'));
 
 export function Booting({ label = 'Fetching the paper…' }) {
   return (
@@ -75,6 +76,7 @@ function SignedIn({ user, onSignOut }) {
             <Route path="/" element={<LatestView />} />
             <Route path="/sources" element={lazyRoute(<SourcesView />)} />
             <Route path="/sources/:id" element={lazyRoute(<SourceDetailView />)} />
+            <Route path="/settings" element={lazyRoute(<SettingsView />)} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </AppMain>

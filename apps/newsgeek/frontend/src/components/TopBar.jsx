@@ -25,7 +25,7 @@ export default function TopBar({ user, onSignOut }) {
 
   const goBack = () => {
     if (window.history.length > 1 && location.key !== 'default') navigate(-1);
-    else navigate('/sources');
+    else navigate(location.pathname === '/settings' ? '/' : '/sources');
   };
 
   return (
@@ -46,7 +46,11 @@ export default function TopBar({ user, onSignOut }) {
       themeMode={mode}
       onThemeToggle={toggleTheme}
       currentApp={APP_ID}
-      account={user ? { name: displayNameFrom(user), secondary: secondaryFrom(user), initials: initialsFrom(user), onSignOut } : undefined}
+      account={
+        user
+          ? { name: displayNameFrom(user), secondary: secondaryFrom(user), initials: initialsFrom(user), onSettings: () => navigate('/settings'), onSignOut }
+          : undefined
+      }
       sx={{
         bgcolor: 'background.default',
         color: 'text.primary',

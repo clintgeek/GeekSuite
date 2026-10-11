@@ -53,6 +53,11 @@ export const source = (id, overrides = {}) => ({
   notes: '',
   articlesLast7d: 12,
   paywalled: ['metered', 'hard'].includes(overrides.access?.paywall),
+  defaultOn: true,
+  onForMe: true,
+  addedByMe: false,
+  canEdit: false,
+  addedByName: null,
   ...overrides,
 });
 

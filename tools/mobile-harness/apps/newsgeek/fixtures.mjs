@@ -10,7 +10,16 @@
 //   ?__fixture=nonadmin     a plain reader: newsViewer.isAdmin is false
 //   ?__fixture=free         "Free to read" on: paywalled sources' items left out,
 //                           hiddenPaywalled = 14
-import { sessionRoutes, graphqlRoute } from '../../lib/net.mjs';
+//
+// Reader-added sources (plan "Reader-added sources"): every source carries
+// defaultOn / onForMe / addedByMe / canEdit / addedByName (admins only), the
+// list has one in each Sources section, and newsSuggestedSources answers.
+// POST /api/discover (NewsGeek's own backend, REST) is stubbed here too; its
+// answer rides on `?__discover=` in the page URL:
+//   (none)     a Magnolia Reporter preview: two feeds, headlines, places
+//   nofeed     ok:false, "No feed found — this site only publishes web pages"
+//   existing   existingSourceId → Hope Star, off for this reader ("Turn it on")
+import { sessionRoutes, graphqlRoute, json } from '../../lib/net.mjs';
 
 const ago = (min) => new Date(Date.now() - min * 60000).toISOString();
 
@@ -21,6 +30,8 @@ const PLACES = [
   P('arkadelphia', 'Arkadelphia', 'city', 'clark'),
   P('malvern', 'Malvern', 'city', 'hotspring'),
   P('arkansas', 'Arkansas', 'state'),
+  P('magnolia', 'Magnolia', 'city'),
+  P('el-dorado', 'El Dorado', 'city'),
 ];
 const pl = (id) => {
   const p = PLACES.find((x) => x.id === id);
@@ -122,6 +133,10 @@ const S = (id, name, o = {}) => ({
   blockedDomains: [],
   notes: '',
   articlesLast7d: 14,
+  defaultOn: true,
+  onForMe: true,
+  addedByMe: false,
+  addedByName: null,
   ...o,
   paywalled: ['metered', 'hard'].includes((o.access ?? {}).paywall),
 });
@@ -138,6 +153,72 @@ const SOURCES = [
   S('s-npr', 'NPR', { sections: ['national', 'world'], places: [], articlesLast7d: 120 }),
   S('s-verge', 'The Verge', { sections: ['tech'], places: [], access: WALL('metered'), articlesLast7d: 40 }),
   S('s-ars', 'Ars Technica', { sections: ['tech'], places: [], status: 'discovered', articlesLast7d: 0, feeds: [F('s-ars-f1', 'never')] }),
+  // Turned off: on for everyone, this reader switched it off.
+  S('s-wapo', 'Washington Post', { sections: ['national', 'world'], places: [], access: WALL('hard'), articlesLast7d: 210, onForMe: false }),
+  // From other readers: added by someone else, off for this reader.
+  S('s-hope', 'Hope Star', { sections: ['local'], places: [], articlesLast7d: 11, defaultOn: false, onForMe: false, addedByName: 'Heather' }),
+  S('s-camden', 'Camden News', { sections: ['local'], places: [], access: WALL('metered'), articlesLast7d: 6, defaultOn: false, onForMe: false, addedByName: 'Heather' }),
+  // In your paper, added by this reader.
+  S('s-gurdon', 'Gurdon Times', { sections: ['local'], places: [PLACES[0]], articlesLast7d: 4, defaultOn: false, onForMe: true, addedByMe: true, addedByName: 'Chef Crocker' }),
+];
+
+// Who's asking: canEdit for an admin or the adder; addedByName for admins only.
+const asSeenBy = (src, mode) => {
+  const admin = mode !== 'nonadmin';
+  return { ...src, canEdit: admin || src.addedByMe, addedByName: admin ? src.addedByName : null };
+};
+
+const SUGGESTED = [
+  { domain: 'magnoliareporter.com', count: 14, places: [P('magnolia', 'Magnolia', 'city'), P('el-dorado', 'El Dorado', 'city')], paywalled: false },
+  { domain: 'eldoradonews.com', count: 9, places: [P('el-dorado', 'El Dorado', 'city')], paywalled: true },
+  { domain: 'kawx.org', count: 3, places: [], paywalled: false },
+].map((s) => ({ __typename: 'NewsSuggestion', lastSeenAt: ago(90), sampleTitles: ['Council sets a budget hearing'], ...s }));
+
+// ── POST /api/discover ──────────────────────────────────────────────────────
+const discoverOf = (pageUrl) => {
+  try {
+    return new URL(pageUrl).searchParams.get('__discover') || '';
+  } catch {
+    return '';
+  }
+};
+const DISCOVERED = {
+  ok: true,
+  site: { name: 'Magnolia Reporter', homepage: 'https://www.magnoliareporter.com/' },
+  feeds: [
+    {
+      url: 'https://www.magnoliareporter.com/search/?f=rss&t=article&l=50',
+      format: 'rss', items: 50, newest: ago(40),
+      sampleTitles: [
+        'Magnolia council sets a budget hearing for the new fire station',
+        'Panthers roll past Arkadelphia 35-14 on homecoming night',
+        'Columbia County library extends its Saturday hours',
+      ],
+    },
+    { url: 'https://www.magnoliareporter.com/feed/', format: 'atom', items: 10, newest: ago(60 * 26), sampleTitles: ['Obituaries for the week', 'Letters to the editor', 'Weekend events'] },
+  ],
+  paywall: { level: 'none', evidence: 'No paywall markers on https://www.magnoliareporter.com/news/council-budget/' },
+  suggest: { name: 'Magnolia Reporter', kind: 'journalism', sections: ['local'], placeSlugs: ['el-dorado', 'magnolia'] },
+  existingSourceId: null,
+  message: 'Found 2 feeds.',
+};
+const discoverAnswer = (which) => {
+  if (which === 'nofeed') {
+    return {
+      ok: false, code: 'NO_FEED', site: { name: 'Example Hardware', homepage: 'https://examplehardware.com/' }, feeds: [],
+      paywall: { level: 'unknown', evidence: null }, suggest: null, existingSourceId: null,
+      message: 'No feed found — this site only publishes web pages',
+    };
+  }
+  if (which === 'existing') return { ...DISCOVERED, site: { name: 'Hope Star', homepage: 'https://www.hopestar.com/' }, existingSourceId: 's-hope', message: 'Already here — turn it on.' };
+  return DISCOVERED;
+};
+
+// "Open with…" templates: neutral placeholders only, never a real service.
+// A reader (`nonadmin`) has none, so their ⋯ menu offers "Add open-with links…".
+const READER_LINKS = [
+  { __typename: 'NewsReaderLink', label: 'Example reader', template: 'https://example.com/read?u={url}' },
+  { __typename: 'NewsReaderLink', label: 'Example archive', template: 'https://example.org/save?u={url}&t={title}' },
 ];
 
 // ── Ops ─────────────────────────────────────────────────────────────────────
@@ -161,6 +242,18 @@ const articlesFor = (vars, mode) => {
 
 export async function routes(ctx) {
   await sessionRoutes(ctx);
+  // After sessionRoutes: Playwright matches newest-first, so this wins over its /api/ catch-all.
+  await ctx.route('**/api/discover', async (r) => {
+    let pageUrl = '';
+    try {
+      pageUrl = r.request().frame().url();
+    } catch {
+      pageUrl = '';
+    }
+    // "~5 s" in real life; long enough here to be a real request.
+    await new Promise((res) => setTimeout(res, 150));
+    return json(r, discoverAnswer(discoverOf(pageUrl)));
+  });
   await graphqlRoute(ctx, (op, vars, r) => {
     let pageUrl = '';
     try {
@@ -173,17 +266,37 @@ export async function routes(ctx) {
       case 'NewsViewer':
         return { newsViewer: { __typename: 'NewsViewer', isAdmin: mode !== 'nonadmin' } };
       case 'NewsPrefs':
-        return { newsPrefs: { __typename: 'NewsPrefs', freeToReadOnly: mode === 'free' } };
+        return { newsPrefs: { __typename: 'NewsPrefs', freeToReadOnly: mode === 'free', readerLinks: mode === 'nonadmin' ? [] : READER_LINKS } };
       case 'NewsSetPrefs':
-        return { newsSetPrefs: { __typename: 'NewsPrefs', freeToReadOnly: Boolean(vars.input?.freeToReadOnly) } };
+        return {
+          newsSetPrefs: {
+            __typename: 'NewsPrefs',
+            freeToReadOnly: Boolean(vars.input?.freeToReadOnly),
+            readerLinks: (vars.input?.readerLinks ?? READER_LINKS).map((l) => ({ __typename: 'NewsReaderLink', ...l })),
+          },
+        };
       case 'NewsPlaces':
         return { newsPlaces: PLACES };
       case 'NewsArticles':
         return { newsArticles: articlesFor(vars, mode) };
       case 'NewsSources':
-        return { newsSources: SOURCES };
-      case 'NewsSource':
-        return { newsSource: SOURCES.find((s) => s.id === vars.id) ?? null };
+        return { newsSources: SOURCES.map((s) => asSeenBy(s, mode)) };
+      case 'NewsSource': {
+        const found = SOURCES.find((s) => s.id === vars.id);
+        return { newsSource: found ? asSeenBy(found, mode) : null };
+      }
+      case 'NewsSuggestedSources':
+        return { newsSuggestedSources: SUGGESTED };
+      case 'NewsSetSourceOn': {
+        const found = SOURCES.find((s) => s.id === vars.id) ?? { defaultOn: true };
+        return { newsSetSourceOn: { __typename: 'NewsSource', id: vars.id, onForMe: Boolean(vars.on), defaultOn: found.defaultOn } };
+      }
+      case 'NewsSetSourceDefaultOn': {
+        const found = SOURCES.find((s) => s.id === vars.id) ?? { onForMe: true };
+        return { newsSetSourceDefaultOn: { __typename: 'NewsSource', id: vars.id, defaultOn: Boolean(vars.on), onForMe: found.onForMe } };
+      }
+      case 'NewsCreateSource':
+        return { newsCreateSource: asSeenBy(S('s-new', vars.input?.name || 'New source', { defaultOn: false, addedByMe: true }), mode) };
       default:
         return undefined;
     }

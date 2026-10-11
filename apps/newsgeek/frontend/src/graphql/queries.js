@@ -55,6 +55,11 @@ export const SOURCE_FIELDS = gql`
     notes
     articlesLast7d
     paywalled
+    defaultOn
+    onForMe
+    addedByMe
+    canEdit
+    addedByName
   }
   ${PLACE_FIELDS}
   ${FEED_FIELDS}
@@ -108,6 +113,10 @@ export const GET_NEWS_PREFS = gql`
   query NewsPrefs {
     newsPrefs {
       freeToReadOnly
+      readerLinks {
+        label
+        template
+      }
     }
   }
 `;
@@ -128,4 +137,25 @@ export const GET_NEWS_SOURCE = gql`
     }
   }
   ${SOURCE_FIELDS}
+`;
+
+/**
+ * Publishers Google News keeps showing us that no source reads directly
+ * (plan "Reader-added sources" → Gateway additions). "Check" opens the Add
+ * sheet on `https://<domain>`.
+ */
+export const GET_NEWS_SUGGESTED_SOURCES = gql`
+  query NewsSuggestedSources {
+    newsSuggestedSources {
+      domain
+      count
+      lastSeenAt
+      places {
+        id
+        name
+      }
+      sampleTitles
+      paywalled
+    }
+  }
 `;
