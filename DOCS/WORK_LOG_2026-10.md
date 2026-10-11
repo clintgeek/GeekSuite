@@ -239,3 +239,32 @@ Chef: "click a source in the newslist and get to settings like marking it paid."
   - Revert checks: 40 mutations, all red.
 - **Deploy:** two pushes, server `95fbb67c` then UI `1d96212c`.
 - Follow-up (Chef): the Source sheet moved from the publisher name to the ⋯ menu as **Source settings** (last item, after a rule). The publisher name is plain text again. Frontend 218/218, 2 revert checks red, harness 100 scenes / 0 violations.
+
+## 2026-10-11 — NewsGeek: Today front page and fair ranking
+
+Chef: sections were jumbled and The Arkadelphian never appeared.
+- **Measured:** 662 articles/day, all sorted newest-first. The Arkadelphian (7/week, posted in
+  one batch) had its newest story at #1,282. The top 4 sources made up 38% of everything,
+  and the first 50 stories held nothing from Clark or Hot Spring County.
+- **Today** is the new home screen. It has Local / State / National / World / Tech blocks,
+  with quotas as caps (8/5/5/3/4) and at most 5 stories per source per block (Google News
+  is counted per publisher domain). Every story shows chips saying why it's there.
+  **Everything** is the old newest-first list. The tabs are Today · Everything · Sources.
+- **Per-story sections from the reader's home ring.** Chef's ring: Arkadelphia → Clark
+  County → Hot Springs → Little Rock → Conway → Garland County → Hot Spring County.
+- **Pace-fair freshness:** a story's age is judged against its source's own 7-day cadence.
+- **Priority:** ★ Favorite / Normal / Less, set in the Source sheet and on source detail.
+  Settings → Home places edits the ring.
+- **Chef's prefs set in production:** the ring above, and The Arkadelphian as ★ Favorite.
+  The deployed resolver was run as Chef: Local leads with 5 Arkadelphian stories, then
+  KARK on Little Rock and Hot Springs coverage.
+- **Checks:**
+  - Tests: basegeek 154/154 suites (3321), frontend 249.
+  - Harness: 136 scenes, 0 violations.
+  - Revert checks: 62 mutations, all red.
+- **Deploy:** two pushes, server `6f3c421b` then UI `4ab6599c`.
+- **Next (step 2, feed hygiene):**
+  - Blox feeds carry syndicated press releases; Malvern's 50 items were all PR.
+  - The same obituary shows twice (direct and via Google News).
+  - The Guardian's TV listings.
+  - Google location feeds for the ring towns.
