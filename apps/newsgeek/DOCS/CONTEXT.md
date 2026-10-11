@@ -227,3 +227,42 @@ Little Rock, Texarkana, Conway and the southern half of the state.
 - **Client cache:** `NewsPrefs` merges (`cachePolicies.js`), because `GET_NEWS_PREFS` and the
   new `GET_NEWS_PUBLISHER_PREFS` select different fields of the same object. Every sheet
   switch drops the cached `newsArticles` lists and refetches, like Free to read.
+
+### 2026-10-11: the front page (Today) and per-reader ranking
+
+- **Measured in production first** (the reason for it):
+  - 662 articles a day. "Latest/All" was pure newest-first, so volume won.
+  - Stories a week: Democrat-Gazette 278, AP via Google News 248, Sentinel-Record 174,
+    Reuters 152; The Arkadelphian 7, posted in one weekly batch.
+  - The Arkadelphian's newest story ranked **#1,282** in All. The first 50 stories in All
+    held **zero** from Clark or Hot Spring County (The Hill 10, AP 6, Engadget 6, Hacker
+    News 5…).
+  - Sections were source labels, and "All" interleaved them.
+- **What was built:** `newsFrontPage` (Today), ranked per reader by
+  `graphql/newsgeek/ranking.js`: per-story sections from the reader's ring (`homePlaces`),
+  pace-normalised freshness, ring-position locality, ★ Favorite / Less, at most
+  **5 stories per source per section** (Google News per publisher domain), quotas as caps.
+  The formula and constants are in the plan's "Ranking: the front page" and in the
+  module's header. `newsArticles(section)` now filters by the same per-story section.
+- **Behaviour change:** `newsArticles(section: "national")` no longer returns a
+  tech + national source's stories. A story belongs to exactly one section per reader, the
+  source's FIRST label when no place decides it. The five section pages partition
+  Everything (a test pins it).
+- **Inherited places don't make a story Local.** Ingest gives every article its source's
+  places, so the ranking subtracts them and only adds them back when the source is
+  ring-local (every place it covers, ignoring state/country, is in the ring). Otherwise
+  Arkansas TV (Little Rock + Pulaski) would make every one of its stories Local for anyone
+  with Little Rock in their ring. Cost: a Little Rock station story that names only
+  Little Rock reads as State, not Local.
+- **Cost:** `newsFrontPage` is six reads (a test counts them through the Mongoose debug
+  hook). The candidates are the last 10 days of visible articles with five fields each;
+  only the ~25 chosen are read in full. No new index: `publishedAt` already serves the
+  window.
+- **Deploy order:** the gateway first (everything is additive except the section filter
+  above, which the live Latest survives: it still gets articles, now per story). The UI
+  selects `newsFrontPage`, `why`, `priorityForMe` and `homePlaces`, so it ships only
+  once basegeek is live.
+- **Set Chef's ring after the deploy** (Settings → Home places): Arkadelphia, Clark County,
+  Hot Springs, Little Rock, Conway, Garland County, Hot Spring County. Until a reader has a
+  ring, Local is the source label, as before.
+

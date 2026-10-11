@@ -1,8 +1,9 @@
 # NewsGeek — plan and spec
 
 *Written 2026-10-10 from Chef's design conversation (pasted brainstorm: "build the news
-reader you wish Google News were") and the decisions below. Status: **planning — nothing
-built.***
+reader you wish Google News were") and the decisions below. Status: N0 live (ingest,
+Latest, Sources, reader-added sources, the Source sheet); the front page (Today, per-reader
+ranking) built 2026-10-11 ahead of clustering; N1/N2 not started.*
 
 ## What it is
 
@@ -86,9 +87,11 @@ republishes articles, or a recommendation loop.
 // NewsPrefs — newsgeek.prefs (one row per user, created on first write; no row = defaults)
 { userId,                     // String, unique; always from the session, never from args
   freeToReadOnly: false,      // the "Free to read" switch (2026-10-10). Built.
+  // Front page (2026-10-11). Built:
+  homePlaces: [placeId],      // the ring, ORDERED closest first, ≤12
+  favoriteSourceIds: [String], lessSourceIds: [String],   // a source is in at most one
+  sectionQuotas: { local?, state?, national?, world?, tech? },  // overrides; defaults 8/5/5/3/4
   // N2, not built yet:
-  homePlaces: [placeId],
-  sectionQuotas: { local: 8, state: 5, national: 5, world: 3, tech: 4 },
   order: 'important'|'chronological',
   followTerms: [String], muteTerms: [String], mutedSourceIds: [ObjectId] }
 // StoryState — newsgeek.storystate
@@ -444,33 +447,110 @@ picked from that set and re-measured whenever the model or the rule changes (the
 golden-set pattern). The thresholds are constants with their measurements beside them in
 comments.
 
-## Ranking: the briefing
+## Ranking: the front page (built 2026-10-11, before clustering)
 
-**Every story shows why it's there**: chips like "Clark County", "9 sources", "you follow
-*Arkansas legislature*", "official". If the reason can't be explained in a chip, it
-doesn't go into the score.
+**Why it was built before N1/N2.** Measured in production on 2026-10-11: 662 articles a day,
+and newest-first lets volume win. The Democrat-Gazette posts 278 a week, AP via Google
+News 248, the Sentinel-Record 174 and Reuters 152, against The Arkadelphian's 7 (one weekly
+batch). The Arkadelphian's newest story ranked #1,282 in "All", and the first 50 stories in
+"All" held nothing from Clark or Hot Spring County. Sections were source labels, and "All"
+interleaved them. Chef's fix, step 1: a front page that ranks **articles** fairly and
+personally. When clustering lands, the same rules rank stories and gain a coverage term.
 
-Within a section the score is a plain sum, written down where the code lives:
-- **locality**: a home place match beats a county match beats a state match;
+**Every story shows why it's there**: chips like "Arkadelphia", "★ Favorite", "Arkansas",
+"Official" (`NewsArticle.why`). If the reason can't be explained in a chip, it doesn't go
+into the score. The code is `apps/basegeek/packages/api/src/graphql/newsgeek/ranking.js`
+(pure; the header comment is the same formula) and its tests are
+`newsgeekRanking.test.js` + `newsgeekFrontPage.test.js`.
+
+### The ring (per reader)
+`homePlaces`: an **ordered** list of places, closest first, at most 12. Chef's:
+Arkadelphia, Clark County, Hot Springs (city), Little Rock, Conway, Garland County,
+Hot Spring County. A place matches a ring entry when the entry is the place itself or one
+of its **ancestors** in the gazetteer (Gurdon → Clark County). Hot Springs Village is under
+Garland County, not under the city of Hot Springs, so only a Garland County entry catches it.
+The best (closest) matching entry wins.
+
+### The story's section (per reader, at query time)
+1. **Local**: one of the story's *locality places* is in the ring. Locality places are the
+   article's own places (its tags minus the ones it inherited from its source at ingest),
+   plus the source's places when the source is **ring-local**: every place it covers,
+   ignoring state and country places, is in the ring (The Arkadelphian, the Clark/Hot
+   Spring NWS zone; not KATV "Arkansas", not Arkansas TV "Little Rock + Pulaski County +
+   Arkansas"). A D-G story tagged Arkadelphia is Local; an AP story tagged Little Rock is
+   Local. **A reader with no ring:** Local = the source is labelled local (the old rule).
+2. else **State**: the article has any Arkansas place (its ancestry contains `arkansas`),
+   or the source is labelled state or local. A Texarkana paper is State for Chef.
+3. else the source's **first** section (national, world, tech).
+
+`newsArticles(section)` filters by this same per-story section (`sectionClause`, the rule as
+a Mongo filter; a test proves the five section pages partition Everything and agree with
+Today). Every article carries `section` and `why`.
+
+### The score (within a section)
+```
+score     = (0.6 · freshness + 0.4 · locality) × priority
+freshness = exp(−(age / typicalGap) / 3) × max(0, 1 − age / window)
+typicalGap(source) = 7 days / max(1, its stories in the last 7 days), clamped to [1 h, 3 days]
+window    = 10 days for Local, 7 days for every other section (nothing older shows)
+locality  = ring weight of the best matching entry: 1.0, 0.9, 0.75, 0.65, 0.55, 0.5, 0.45,
+            then 0.4 for entries 8–12; else 0.25 if any place is in Arkansas; else 0
+priority  = ★ Favorite 3 · Normal 1 · Less 0.3
+```
+Freshness is **pace-normalised**: a 2-day-old story from a 7-a-week paper scores 0.37, a
+6-hour-old story from a 40-a-day wire 0.13, so the weekly paper's story is "fresh for it".
+The second factor is the hard absolute decay.
+
+### The fill (per section, greedy)
+1. **Active official alerts that are Local lead Local** (official source, `expiresAt` in the
+   future), newest first. They are exempt from the per-source cap.
+2. Then **favourites' stories no older than 7 days**, by score.
+3. Then everything else by score (ties: newer first).
+- **At most 5 stories per source per section** (`PER_SOURCE_CAP`, Chef 2026-10-11). A
+  Google News item counts against its real publisher's domain, not against the aggregator.
+- **Quotas are caps, never targets.** Defaults: Local 8, State 5, National 5, World 3,
+  Tech 4 (`sectionQuotas`, per reader; 0–20). A quiet section stays short, an empty section
+  is left out, and `moreCount` says how many stories in the window didn't fit.
+- Candidates obey every list rule: visibility (on for me), Free to read with subscriptions,
+  hidden publishers, expired alerts. **Nothing else is filtered** (opinion and columns stay).
+
+`newsFrontPage` costs six reads: prefs, sources, the gazetteer, one 7-day count
+aggregation, the candidates (one find, scoring fields only) and the chosen stories.
+
+### Not yet (when clustering and read state land)
 - **coverage**: log(distinct publishers), so syndication can't inflate it;
-- **freshness**: decay on `lastArticleAt`;
-- **follows**: a boost for followed terms. **Mutes** remove the story outright, never just
-  down-rank it.
+- **follows**: a boost for followed terms; **mutes** remove a story outright;
+- a **briefing floor** (a minimum score), **spill-over** of unused slots, the
+  `chronological` order, and read state (below). Until then the page ends honestly:
+  "That's today's paper. Everything, newest first →".
 
-The briefing is **sections in a fixed order with per-user caps**. Each section's quota
-and the total (default 25) are **maximums, never targets.**
-- A story makes the briefing only if it clears a **briefing floor**: a minimum score,
-  tuned on real data in N2. A story that can't clear it stays in the archive, whatever
-  slots are free.
-- **Unused slots spill over** to other sections' next-best stories that clear the floor,
-  highest score first.
-- **Nothing pads.** A quiet day gives a short briefing: "Quiet morning. 11 stories." A
-  short briefing is the app working, not failing.
+### Contract (2026-10-11, additive)
+```graphql
+type NewsArticle { section: String!  why: [String!]! }
+type NewsSource  { priorityForMe: String! }                 # favorite | normal | less
+type NewsPrefs   { homePlaces: [NewsPlace!]!  favoriteSourceIds: [ID!]!  lessSourceIds: [ID!]!
+                   sectionQuotas: NewsSectionQuotas! }       # resolved over the defaults
+input NewsPrefsInput { sectionQuotas: NewsSectionQuotasInput }   # null for a key = back to the default
+type NewsFrontPage { generatedAt: Date!  sections: [NewsFrontSection!]! }
+type NewsFrontSection { key: String!  title: String!  items: [NewsArticle!]!  moreCount: Int! }
+extend type Query    { newsFrontPage: NewsFrontPage! }
+extend type Mutation {
+  newsSetHomePlaces(placeIds: [ID!]!): NewsPrefs!                 # ≤12, distinct, known; replaces
+  newsSetSourcePriority(id: ID!, priority: String!): NewsSource!  # retired → only normal
+}
+```
 
-It has an end: "That's the briefing. *N* more stories in the archive." There's no
-infinite scroll on the briefing; a section's "more" opens that section's list.
-
-`chronological` order is offered for people who want it. Same caps and floor, newest first.
+### Screens (change set B)
+- **Today** (`/`): the masthead, Free to read, then Local, State, National, World, Tech, each
+  a small-caps head, its stories with quiet why-chips, and "More <section> →" to
+  `/s/<key>` when `moreCount` > 0. It ends: "That's today's paper. Everything, newest
+  first →".
+- **Section** (`/s/:section`): that section for this reader, newest first, paged.
+- **Everything** (`/everything`): the old Latest (all sections newest first, the section
+  flags, the `?source=` chip). The phone tabs are Today · Everything · Sources.
+- **Source sheet + source page**: a Priority control, ★ Favorite / Normal / Less.
+- **Settings → Home places**: the ring, closest first, with move up/down, remove and
+  "Add a place".
 
 ## Read state (written down so it can't drift)
 
@@ -484,6 +564,10 @@ infinite scroll on the briefing; a section's "more" opens that section's list.
 - "Dismiss" hides a story from this user's briefing for good, even if it grows.
 
 ## Screens (phone first)
+
+*As built on 2026-10-11, `/` is **Today** (article-level, "Ranking: the front page" above)
+and the old Latest is `/everything`. The Briefing described here is N2's story-level
+version of Today.*
 
 - **Briefing** (`/`): a date header, then sections with compact cards (headline, publisher
   count, time, why-chips), then the end-of-briefing line. Pull to refresh. Remembers its

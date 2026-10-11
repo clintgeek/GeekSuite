@@ -868,6 +868,18 @@ describe('NewsPrefsInput accepts what the NewsGeek Settings page sends', () => {
     }, rootValue);
     expect(errors.join(' ')).toMatch(/"id" is not defined by type "NewsReaderLinkInput"/);
   });
+
+  // newsgeek (2026-10-11): NewsPrefsInput.sectionQuotas (NewsSectionQuotasInput),
+  // Today's per-section caps. No page sends it yet (Settings will); the
+  // gateway's own shape — some sections, null to reset one — is pinned here.
+  test('a sectionQuotas override (with a null reset) coerces cleanly', async () => {
+    expect(await coercionErrors(source, { input: { sectionQuotas: { local: 10, tech: null } } }, rootValue)).toEqual([]);
+  });
+
+  test('the guard is armed — an unknown section is refused', async () => {
+    const errors = await coercionErrors(source, { input: { sectionQuotas: { sports: 3 } } }, rootValue);
+    expect(errors.join(' ')).toMatch(/"sports" is not defined by type "NewsSectionQuotasInput"/);
+  });
 });
 
 describe('FitnessMedicationInput accepts what Medications.jsx actually sends', () => {

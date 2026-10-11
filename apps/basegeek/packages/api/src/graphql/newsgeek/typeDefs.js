@@ -59,6 +59,9 @@ export const typeDefs = gql`
     addedByName: String  # admins only; null for everyone else
     # Source sheet: the caller subscribes (kept through "Free to read").
     subscribedByMe: Boolean!
+    # Front page (2026-10-11): the caller's priority for this source:
+    # favorite | normal | less (ranking.js PRIORITY_WEIGHT).
+    priorityForMe: String!
   }
 
   # A publisher Google News keeps surfacing that no source reads directly.
@@ -88,6 +91,44 @@ export const typeDefs = gql`
     viaAggregator: Boolean!
     sections: [String!]!
     places: [NewsPlace!]!
+    # Front page (2026-10-11), per reader: the story's own section for the
+    # caller (local | state | national | world | tech; ranking.js sectionOf),
+    # and why it is where it is, as chips ("Arkadelphia", "★ Favorite",
+    # "Arkansas", "Official"). If it can't be a chip it isn't in the score.
+    section: String!
+    why: [String!]!
+  }
+
+  # Today (the front page): sections in order, each capped by the reader's
+  # quota (a cap, never a target). Empty sections are omitted.
+  type NewsFrontPage {
+    generatedAt: Date!
+    sections: [NewsFrontSection!]!
+  }
+
+  type NewsFrontSection {
+    key: String!         # local | state | national | world | tech
+    title: String!
+    items: [NewsArticle!]!
+    # Stories in this section's window that didn't make the page.
+    moreCount: Int!
+  }
+
+  # Per-section caps for Today. Defaults: local 8, state 5, national 5, world 3, tech 4.
+  type NewsSectionQuotas {
+    local: Int!
+    state: Int!
+    national: Int!
+    world: Int!
+    tech: Int!
+  }
+
+  input NewsSectionQuotasInput {
+    local: Int
+    state: Int
+    national: Int
+    world: Int
+    tech: Int
   }
 
   type NewsArticlePage {
@@ -108,6 +149,13 @@ export const typeDefs = gql`
     subscribedSourceIds: [ID!]!
     subscribedDomains: [String!]!
     mutedDomains: [String!]!
+    # Front page (2026-10-11). The reader's ring, closest first: stories
+    # tagged with these places (or places inside them) are Local.
+    homePlaces: [NewsPlace!]!
+    favoriteSourceIds: [ID!]!
+    lessSourceIds: [ID!]!
+    # Resolved: the reader's overrides over the defaults.
+    sectionQuotas: NewsSectionQuotas!
   }
 
   # "Open with…": a reader's own link template. {url} (required) and {title}
@@ -130,6 +178,9 @@ export const typeDefs = gql`
     freeToReadOnly: Boolean
     # When provided, replaces the whole list (max 5); omitted = unchanged.
     readerLinks: [NewsReaderLinkInput!]
+    # Today's per-section caps (0–20). Provided sections replace the stored
+    # override; omitted ones are unchanged.
+    sectionQuotas: NewsSectionQuotasInput
   }
 
   input NewsFeedInput {
@@ -159,8 +210,12 @@ export const typeDefs = gql`
     newsPlaces: [NewsPlace!]!
     newsSources(status: String): [NewsSource!]!
     newsSource(id: ID!): NewsSource
-    # Chronological, newest first. N0's reading view. The briefing replaces it in N2.
+    # Chronological, newest first: Everything, or one section page. "section"
+    # filters by the story's per-reader section (NewsArticle.section), not the
+    # source's labels (2026-10-11).
     newsArticles(section: String, placeId: ID, sourceId: ID, before: Date, limit: Int): NewsArticlePage!
+    # Today: the ranked front page for the caller (ranking.js).
+    newsFrontPage: NewsFrontPage!
     # Aggregator articles, last 30 days, grouped by publisher domain, minus domains a
     # non-aggregator source already reads; top 30 by count.
     newsSuggestedSources: [NewsSuggestion!]!
@@ -187,5 +242,9 @@ export const typeDefs = gql`
     newsSetSourceDefaultOn(id: ID!, on: Boolean!): NewsSource!
     # Any signed-in user; writes only the caller's own row (userId from the session).
     newsSetPrefs(input: NewsPrefsInput!): NewsPrefs!
+    # The caller's ring, closest first (max 12, distinct, known places). Replaces the list.
+    newsSetHomePlaces(placeIds: [ID!]!): NewsPrefs!
+    # The caller's priority for a source: favorite | normal | less.
+    newsSetSourcePriority(id: ID!, priority: String!): NewsSource!
   }
 `;

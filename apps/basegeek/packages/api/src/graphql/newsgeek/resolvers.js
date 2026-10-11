@@ -11,6 +11,9 @@ import healthModule from '@geeksuite/schemas/newsgeek/health';
 import paywallsModule from '@geeksuite/schemas/newsgeek/paywalls';
 import feedUrlModule from '@geeksuite/schemas/newsgeek/feedUrl';
 import prefsSchemaModule from '@geeksuite/schemas/newsgeek/prefs';
+import {
+  createContext, rankFrontPage, sectionClause, sectionOf, whyChips, LOCAL_WINDOW_DAYS,
+} from './ranking.js';
 
 const {
   SOURCE_KINDS, SECTIONS, SOURCE_STATUSES, FEED_FORMATS, PAYWALLS, PAYWALLED_LEVELS, CONTENT_LEVELS,
@@ -20,6 +23,7 @@ const { PAYWALLED_DOMAIN_REGEX, paywalledDomainRegex, isPaywalledDomain } = payw
 const { normalizeFeedUrl } = feedUrlModule;
 const {
   READER_LINKS_MAX, READER_LINK_LABEL_MAX, READER_LINK_TEMPLATE_MAX, SUBSCRIBED_DOMAINS_MAX, MUTED_DOMAINS_MAX,
+  HOME_PLACES_MAX, PRIORITY_SOURCES_MAX, SECTION_QUOTA_DEFAULTS, SECTION_QUOTA_MAX,
 } = prefsSchemaModule;
 
 /**
@@ -45,6 +49,15 @@ const {
  * subscribedDomains do the same for aggregator items by publisher domain;
  * mutedDomains drop aggregator items by publisher domain, whatever the switch.
  * Domain matching is the paywall list's: a suffix on a label boundary.
+ *
+ * Front page (plan "Ranking: the front page", Chef 2026-10-11): newsFrontPage
+ * is Today, ranked per reader by ranking.js (the formula is in its header).
+ * Per reader: homePlaces (the ring), favoriteSourceIds / lessSourceIds
+ * (newsSetSourcePriority) and sectionQuotas. Every article carries its
+ * per-reader `section` and `why` chips, and newsArticles(section) filters by
+ * that same per-story section (ranking.js sectionClause). newsFrontPage costs
+ * six reads: prefs, sources, places, one 7-day count aggregation, the
+ * candidates (one find, scoring fields only) and the chosen stories.
  */
 
 const DEFAULT_LIMIT = 50;
@@ -143,9 +156,9 @@ async function loadPlaceMap(idLists) {
 const placesOf = (ids, map) => (ids || []).map((id) => map.get(String(id))).filter(Boolean);
 
 /** Articles in the last 7 days per source — ONE aggregation for the whole list. */
-async function countLast7d(sourceIds) {
+async function countLast7d(sourceIds, now = Date.now()) {
   if (!sourceIds.length) return new Map();
-  const since = new Date(Date.now() - 7 * DAY_MS);
+  const since = new Date(now - 7 * DAY_MS);
   const rows = await NewsArticle.aggregate([
     { $match: { sourceId: { $in: sourceIds }, publishedAt: { $gte: since } } },
     { $group: { _id: '$sourceId', n: { $sum: 1 } } },
@@ -206,6 +219,7 @@ async function shapeSources(docs, viewer) {
     canEdit: viewer.isAdmin || isAdder(s, viewer),
     addedByName: viewer.isAdmin && s.addedBy ? (names.get(String(s.addedBy)) ?? null) : null,
     subscribedByMe: viewer.subscribedSourceIds.has(String(s._id)),
+    priorityForMe: priorityFor(s._id, viewer),
   }));
 }
 
@@ -235,7 +249,27 @@ async function viewerOf(user, { withRole = true } = {}) {
     subscribedSourceIds: new Set((row?.subscribedSourceIds || []).map(String)),
     subscribedDomains: row?.subscribedDomains || [],
     mutedDomains: row?.mutedDomains || [],
+    homePlaces: (row?.homePlaces || []).map(String),
+    favoriteSourceIds: new Set((row?.favoriteSourceIds || []).map(String)),
+    lessSourceIds: new Set((row?.lessSourceIds || []).map(String)),
+    sectionQuotas: resolveQuotas(row),
   };
+}
+
+const priorityFor = (id, viewer) => {
+  if (viewer.favoriteSourceIds.has(String(id))) return 'favorite';
+  if (viewer.lessSourceIds.has(String(id))) return 'less';
+  return 'normal';
+};
+
+/** The reader's quota overrides over SECTION_QUOTA_DEFAULTS. */
+function resolveQuotas(row) {
+  const out = { ...SECTION_QUOTA_DEFAULTS };
+  for (const key of Object.keys(out)) {
+    const v = row?.sectionQuotas?.[key];
+    if (Number.isInteger(v)) out[key] = v;
+  }
+  return out;
 }
 
 // A missing defaultOn reads as true: rows that predate the field are the starter list.
@@ -437,17 +471,40 @@ function duplicateSlugGuard(err) {
 // ---------------------------------------------------------------------------
 
 const PREFS_DEFAULTS = Object.freeze({ freeToReadOnly: false });
+const SOURCE_PRIORITIES = ['favorite', 'normal', 'less'];
 
 const isPaywalledSource = (s) => PAYWALLED_LEVELS.includes(s.access?.paywall);
 
-function shapePrefs(row) {
+/** NewsPrefs. Async because homePlaces are shaped places (one read, order kept). */
+async function shapePrefs(row) {
+  const homeIds = (row?.homePlaces || []).map(String).filter((id) => ObjectId.isValid(id));
+  const placeMap = await loadPlaceMap([homeIds]);
   return {
     freeToReadOnly: Boolean(row?.freeToReadOnly ?? PREFS_DEFAULTS.freeToReadOnly),
     readerLinks: (row?.readerLinks || []).map((l) => ({ label: l.label, template: l.template })),
     subscribedSourceIds: (row?.subscribedSourceIds || []).map(String),
     subscribedDomains: row?.subscribedDomains || [],
     mutedDomains: row?.mutedDomains || [],
+    homePlaces: placesOf(homeIds, placeMap),
+    favoriteSourceIds: (row?.favoriteSourceIds || []).map(String),
+    lessSourceIds: (row?.lessSourceIds || []).map(String),
+    sectionQuotas: resolveQuotas(row),
   };
+}
+
+/** NewsSectionQuotasInput → $set / $unset of the provided keys (null = back to the default). */
+function quotaUpdate(input) {
+  const set = {};
+  const unset = {};
+  for (const [key, value] of Object.entries(input || {})) {
+    if (!(key in SECTION_QUOTA_DEFAULTS)) throw badInput(`Unknown section: ${key}`);
+    if (value == null) { unset[`sectionQuotas.${key}`] = ''; continue; }
+    if (!Number.isInteger(value) || value < 0 || value > SECTION_QUOTA_MAX) {
+      throw badInput(`A section quota must be a whole number from 0 to ${SECTION_QUOTA_MAX}`);
+    }
+    set[`sectionQuotas.${key}`] = value;
+  }
+  return { set, unset };
 }
 
 /**
@@ -549,10 +606,12 @@ function mutedClause(sources, viewer) {
 // Articles
 // ---------------------------------------------------------------------------
 
-/** The place and every descendant, from one read of the (small) gazetteer. */
-async function placeWithDescendants(placeId) {
+/** The whole (small) gazetteer, one read: ranking needs every ancestry. */
+const loadAllPlaces = () => NewsPlace.find({}, { slug: 1, name: 1, kind: 1, parentId: 1 }).lean();
+
+/** The place and every descendant, from the loaded gazetteer. */
+function placeWithDescendants(placeId, all) {
   const root = toObjectId(placeId, 'placeId');
-  const all = await NewsPlace.find({}, { parentId: 1 }).lean();
   const children = new Map();
   for (const p of all) {
     const key = p.parentId ? String(p.parentId) : null;
@@ -569,6 +628,44 @@ async function placeWithDescendants(placeId) {
   return [...out].map((id) => new ObjectId(id));
 }
 
+// What ranking and the section rule need from a source.
+const SOURCE_LIST_FIELDS = { name: 1, kind: 1, sections: 1, access: 1, places: 1 };
+
+const rankingContext = (places, viewer, now) => createContext({
+  places,
+  homePlaces: viewer.homePlaces,
+  favoriteSourceIds: viewer.favoriteSourceIds,
+  lessSourceIds: viewer.lessSourceIds,
+  now,
+});
+
+/** One article for this reader: its per-reader section and why-chips included. */
+function shapeArticle(a, src, placeMap, ctx) {
+  return {
+    id: String(a._id),
+    title: a.title,
+    url: a.url,
+    excerpt: a.excerpt || '',
+    publisher: a.publisher,
+    publishedAt: a.publishedAt,
+    expiresAt: a.expiresAt ?? null,
+    sourceId: String(a.sourceId),
+    sourceName: src.name,
+    sourceKind: src.kind,
+    publisherDomain: a.publisherDomain || null,
+    viaAggregator: src.kind === 'aggregator',
+    sections: src.sections || [],
+    places: placesOf(a.places, placeMap),
+    section: sectionOf(ctx, a, src),
+    why: whyChips(ctx, a, src),
+  };
+}
+
+const placeMapOf = (places) => new Map(places.map((p) => [String(p._id), shapePlace(p)]));
+
+/** Not expired (NWS alerts leave when the alert does). */
+const unexpired = (now) => ({ $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }] });
+
 async function articlePage(args, viewer) {
   const { freeToReadOnly } = viewer;
   const { section, placeId, sourceId, before } = args;
@@ -576,30 +673,32 @@ async function articlePage(args, viewer) {
   let limit = args.limit == null ? DEFAULT_LIMIT : args.limit;
   if (!Number.isInteger(limit) || limit < 1) throw badInput('limit must be a positive integer');
   limit = Math.min(limit, MAX_LIMIT);
+  if (placeId != null) toObjectId(placeId, 'placeId');
 
   // Which sources can contribute: the ones this reader sees (never retired),
-  // optionally in a section / one source.
+  // optionally one source. The section is the STORY's, per reader (below).
   const sourceFilter = visibleSourceClause(viewer);
-  if (section) sourceFilter.sections = section;
   if (sourceId != null) sourceFilter._id = toObjectId(sourceId, 'sourceId');
-  const sources = await NewsSource.find(sourceFilter, { name: 1, kind: 1, sections: 1, access: 1 }).lean();
+  const [sources, places] = await Promise.all([
+    NewsSource.find(sourceFilter, SOURCE_LIST_FIELDS).lean(),
+    loadAllPlaces(),
+  ]);
   if (!sources.length) return { items: [], nextBefore: null, hiddenPaywalled: 0 };
 
   const now = new Date();
+  const ctx = rankingContext(places, viewer, now);
   // Everything but the cursor: the whole current list.
-  const listFilter = {
-    sourceId: { $in: sources.map((s) => s._id) },
-    $or: [{ expiresAt: null }, { expiresAt: { $gt: now } }],
-  };
-  if (placeId != null) listFilter.places = { $in: await placeWithDescendants(placeId) };
+  const list = [{ sourceId: { $in: sources.map((s) => s._id) } }, unexpired(now)];
+  if (placeId != null) list.push({ places: { $in: placeWithDescendants(placeId, places) } });
+  if (section) list.push(sectionClause(ctx, section, sources));
   // A hidden publisher is out of the list itself, so hiddenPaywalled never counts it.
   const muted = mutedClause(sources, viewer);
-  if (muted) listFilter.$nor = [muted];
+  if (muted) list.push({ $nor: [muted] });
 
   const walled = freeToReadOnly ? paywalledClause(sources, viewer) : null;
-  const filter = { ...listFilter };
-  if (before != null) filter.publishedAt = { $lt: before };
-  if (walled) filter.$nor = [...(listFilter.$nor || []), walled];
+  const filter = { $and: [...list] };
+  if (before != null) filter.$and.push({ publishedAt: { $lt: before } });
+  if (walled) filter.$and.push({ $nor: [walled] });
 
   const [rows, hiddenPaywalled] = await Promise.all([
     NewsArticle.find(filter, { embedding: 0 })
@@ -607,36 +706,69 @@ async function articlePage(args, viewer) {
       .limit(limit)
       .lean(),
     // The one extra count, only when something can be hidden.
-    walled ? NewsArticle.countDocuments({ $and: [listFilter, walled] }) : 0,
+    walled ? NewsArticle.countDocuments({ $and: [...list, walled] }) : 0,
   ]);
 
   const sourceMap = new Map(sources.map((s) => [String(s._id), s]));
-  const placeMap = await loadPlaceMap(rows.map((a) => a.places || []));
-
-  const items = rows.map((a) => {
-    const src = sourceMap.get(String(a.sourceId));
-    return {
-      id: String(a._id),
-      title: a.title,
-      url: a.url,
-      excerpt: a.excerpt || '',
-      publisher: a.publisher,
-      publishedAt: a.publishedAt,
-      expiresAt: a.expiresAt ?? null,
-      sourceId: String(a.sourceId),
-      sourceName: src.name,
-      sourceKind: src.kind,
-      publisherDomain: a.publisherDomain || null,
-      viaAggregator: src.kind === 'aggregator',
-      sections: src.sections || [],
-      places: placesOf(a.places, placeMap),
-    };
-  });
+  const placeMap = placeMapOf(places);
+  const items = rows.map((a) => shapeArticle(a, sourceMap.get(String(a.sourceId)), placeMap, ctx));
 
   return {
     items,
     nextBefore: items.length === limit ? items[items.length - 1].publishedAt : null,
     hiddenPaywalled,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Today: the front page (ranking.js)
+// ---------------------------------------------------------------------------
+
+// Scoring needs only these; the chosen stories are read in full afterwards.
+const CANDIDATE_FIELDS = { sourceId: 1, publishedAt: 1, expiresAt: 1, places: 1, publisherDomain: 1 };
+
+async function frontPage(viewer) {
+  const now = new Date();
+  const [sources, places] = await Promise.all([
+    NewsSource.find(visibleSourceClause(viewer), SOURCE_LIST_FIELDS).lean(),
+    loadAllPlaces(),
+  ]);
+  if (!sources.length) return { generatedAt: now, sections: [] };
+  const ids = sources.map((s) => s._id);
+
+  // The same visibility, Free-to-read and hidden-publisher rules as newsArticles.
+  const and = [
+    { sourceId: { $in: ids } },
+    { publishedAt: { $gte: new Date(now.getTime() - LOCAL_WINDOW_DAYS * DAY_MS) } },
+    unexpired(now),
+  ];
+  const muted = mutedClause(sources, viewer);
+  if (muted) and.push({ $nor: [muted] });
+  const walled = viewer.freeToReadOnly ? paywalledClause(sources, viewer) : null;
+  if (walled) and.push({ $nor: [walled] });
+
+  const [counts, candidates] = await Promise.all([
+    countLast7d(ids, now.getTime()),
+    NewsArticle.find({ $and: and }, CANDIDATE_FIELDS).lean(),
+  ]);
+
+  const ctx = rankingContext(places, viewer, now);
+  const ranked = rankFrontPage({ ctx, candidates, sources, counts, quotas: viewer.sectionQuotas });
+  const chosen = ranked.flatMap((s) => s.items.map((e) => e.article._id));
+  const full = chosen.length ? await NewsArticle.find({ _id: { $in: chosen } }, { embedding: 0 }).lean() : [];
+  const byId = new Map(full.map((a) => [String(a._id), a]));
+  const placeMap = placeMapOf(places);
+
+  return {
+    generatedAt: now,
+    sections: ranked.map((s) => ({
+      key: s.key,
+      title: s.title,
+      moreCount: s.moreCount,
+      items: s.items
+        .filter((e) => byId.has(String(e.article._id))) // purged between the two reads
+        .map((e) => shapeArticle(byId.get(String(e.article._id)), e.source, placeMap, ctx)),
+    })).filter((s) => s.items.length),
   };
 }
 
@@ -746,6 +878,11 @@ export const resolvers = {
       return articlePage(args, await viewerOf(user, { withRole: false }));
     },
 
+    newsFrontPage: async (_, __, { user }) => {
+      requireUser(user);
+      return frontPage(await viewerOf(user, { withRole: false }));
+    },
+
     newsSuggestedSources: async (_, __, { user }) => {
       requireUser(user);
       return suggestedSources();
@@ -758,8 +895,43 @@ export const resolvers = {
       const set = {};
       if (input?.freeToReadOnly != null) set.freeToReadOnly = Boolean(input.freeToReadOnly);
       if (input?.readerLinks != null) set.readerLinks = cleanReaderLinks(input.readerLinks);
-      const row = await writePrefs(String(user.id), { $set: set });
+      const quotas = input?.sectionQuotas != null ? quotaUpdate(input.sectionQuotas) : { set: {}, unset: {} };
+      const update = { $set: { ...set, ...quotas.set } };
+      if (Object.keys(quotas.unset).length) update.$unset = quotas.unset;
+      const row = await writePrefs(String(user.id), update);
       return shapePrefs(row);
+    },
+
+    // The caller's ring, closest first. Replaces the whole list.
+    newsSetHomePlaces: async (_, { placeIds }, { user }) => {
+      requireUser(user);
+      if (placeIds.length > HOME_PLACES_MAX) throw badInput(`At most ${HOME_PLACES_MAX} home places`);
+      const ids = placeIds.map((id) => toObjectId(id, 'placeId'));
+      const strings = ids.map(String);
+      if (new Set(strings).size !== strings.length) throw badInput('A place is in the list twice');
+      if (ids.length && (await NewsPlace.countDocuments({ _id: { $in: ids } })) !== ids.length) throw badInput('Unknown placeId');
+      return shapePrefs(await writePrefs(String(user.id), { $set: { homePlaces: strings } }));
+    },
+
+    // The caller's priority for one source: favorite | normal | less.
+    newsSetSourcePriority: async (_, { id, priority }, { user }) => {
+      requireUser(user);
+      oneOf(priority, SOURCE_PRIORITIES, 'priority');
+      const doc = await sourceForWrite(id);
+      if (doc.status === 'retired' && priority !== 'normal') throw badInput('This source is retired');
+      const viewer = await viewerOf(user);
+      const sid = String(doc._id);
+      const list = priority === 'favorite' ? viewer.favoriteSourceIds : viewer.lessSourceIds;
+      if (priority !== 'normal' && !list.has(sid) && list.size >= PRIORITY_SOURCES_MAX) {
+        throw badInput(`At most ${PRIORITY_SOURCES_MAX} sources can be marked ${priority}`);
+      }
+      const update = {
+        favorite: { $addToSet: { favoriteSourceIds: sid }, $pull: { lessSourceIds: sid } },
+        less: { $addToSet: { lessSourceIds: sid }, $pull: { favoriteSourceIds: sid } },
+        normal: { $pull: { favoriteSourceIds: sid, lessSourceIds: sid } },
+      }[priority];
+      await writePrefs(viewer.userId, update);
+      return shapeOneSource(doc._id, await viewerOf(user));
     },
 
     newsSetSourceOn: async (_, { id, on }, { user }) => {

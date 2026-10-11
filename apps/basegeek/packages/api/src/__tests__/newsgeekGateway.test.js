@@ -334,7 +334,10 @@ describe('newsArticles', () => {
     const titles = async (v) => (await ok(ARTICLES, v)).newsArticles.items.map((a) => a.title).sort();
     expect(await titles({})).toEqual(['L', 'T']);
     expect(await titles({ section: 'tech' })).toEqual(['T']);
-    expect(await titles({ section: 'national' })).toEqual(['T']);
+    // The story's section is per reader (2026-10-11): a source labelled
+    // tech + national files its stories under its FIRST section, tech.
+    expect(await titles({ section: 'national' })).toEqual([]);
+    expect(await titles({ section: 'local' })).toEqual(['L']);
     expect(await titles({ sourceId: String(local._id) })).toEqual(['L']);
     expect(await titles({ sourceId: String(gone._id) })).toEqual([]);
     expect(await code(ARTICLES, { section: 'sports' })).toBe('BAD_USER_INPUT');
