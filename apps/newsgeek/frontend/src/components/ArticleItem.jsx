@@ -5,9 +5,14 @@
  * live only in the ⋯ menu (ArticleMenu). The excerpt is the feed's own, clamped to three lines.
  * Official notices carry the OFFICIAL badge and a spot-colour rule at the
  * left edge — the word does the work, the colour only repeats it.
+ *
+ * The publisher line is a button (plan "Source sheet"): it opens the Source
+ * sheet for that source or publisher. A 44px target drawn at the line's own
+ * size (negative margin), with a dotted rule under the name so a thumb knows
+ * it is live; the headline is still the link to the publisher.
  */
 import React from 'react';
-import { Box, Link, Typography } from '@mui/material';
+import { Box, ButtonBase, Link, Typography } from '@mui/material';
 import { GOTHIC, SERIF } from '../theme/theme';
 import ArticleMenu from './ArticleMenu';
 import OfficialBadge from './OfficialBadge';
@@ -16,8 +21,11 @@ import TimeAgo from './TimeAgo';
 
 const visuallyHidden = { position: 'absolute', width: 1, height: 1, p: 0, m: '-1px', border: 0, overflow: 'hidden', clip: 'rect(0 0 0 0)', clipPath: 'inset(50%)', whiteSpace: 'nowrap' };
 
-export default function ArticleItem({ article, readerLinks = [] }) {
+const publisherSx = { fontFamily: GOTHIC, fontSize: '0.8125rem', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'text.primary' };
+
+export default function ArticleItem({ article, readerLinks = [], onOpenSource }) {
   const official = article.sourceKind === 'official';
+  const publisher = article.publisher || article.sourceName;
   return (
     <Box
       component="article"
@@ -33,9 +41,34 @@ export default function ArticleItem({ article, readerLinks = [] }) {
     >
       <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 2, rowGap: 1, mb: 1.5 }}>
         {official ? <OfficialBadge /> : null}
-        <Typography component="span" sx={{ fontFamily: GOTHIC, fontSize: '0.8125rem', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'text.primary' }}>
-          {article.publisher || article.sourceName}
-        </Typography>
+        {onOpenSource ? (
+          <ButtonBase
+            onClick={() => onOpenSource(article)}
+            aria-label={`Settings for ${publisher}`}
+            aria-haspopup="dialog"
+            data-testid="publisher-button"
+            sx={{
+              ...publisherSx,
+              minHeight: 44,
+              minWidth: 44,
+              justifyContent: 'flex-start',
+              my: -3,
+              px: 1,
+              mx: -1,
+              borderRadius: '2px',
+              textAlign: 'left',
+              '& > span': { textDecoration: 'underline dotted', textDecorationThickness: '1px', textUnderlineOffset: '0.3em' },
+              '&:hover > span': { textDecorationStyle: 'solid' },
+              '&.Mui-focusVisible': { outline: '2px solid', outlineColor: 'text.primary', outlineOffset: 0 },
+            }}
+          >
+            <span>{publisher}</span>
+          </ButtonBase>
+        ) : (
+          <Typography component="span" sx={publisherSx}>
+            {publisher}
+          </Typography>
+        )}
         <Typography component="span" sx={{ fontFamily: GOTHIC, fontSize: '0.8125rem', color: 'text.secondary' }}>
           <TimeAgo value={article.publishedAt} />
         </Typography>

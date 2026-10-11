@@ -10,6 +10,10 @@
  * - admins: "On for everyone" (newsSetSourceDefaultOn), and "Added by <name>"
  *   when a reader added it. A non-admin adder sees "Added by you".
  * Everyone else reads.
+ *
+ * Every reader gets "I subscribe" (plan "Source sheet"): their own flag,
+ * newsSetSourceSubscribed. A subscribed source stays in their paper when
+ * Free to read is on, paywall or not.
  */
 import React, { useState } from 'react';
 import { Box, Button, CircularProgress, Link, MenuItem, TextField, Typography } from '@mui/material';
@@ -31,7 +35,8 @@ import PaywallBadge from '../components/PaywallBadge';
 import PlaceChips from '../components/PlaceChips';
 import TimeAgo from '../components/TimeAgo';
 import { resetArticleLists } from '../graphql/cachePolicies';
-import { CHECK_NEWS_SOURCE_NOW, SET_NEWS_SOURCE_DEFAULT_ON, SET_NEWS_SOURCE_STATUS } from '../graphql/mutations';
+import { CHECK_NEWS_SOURCE_NOW, SET_NEWS_SOURCE_DEFAULT_ON, SET_NEWS_SOURCE_STATUS, SET_NEWS_SOURCE_SUBSCRIBED } from '../graphql/mutations';
+import { SUBSCRIBE_HELP } from '../components/SourceSheet';
 import { GET_NEWS_SOURCE } from '../graphql/queries';
 import { useViewer } from '../hooks/useViewer';
 import { GOTHIC, flagSx } from '../theme/theme';
@@ -184,6 +189,40 @@ function SourceActions({ source, isAdmin }) {
   );
 }
 
+/** The reader's own "I subscribe" (any reader, any source that isn't retired). */
+function SubscribeSwitch({ source }) {
+  const { notify } = useToast();
+  const client = useApolloClient();
+  const [setSubscribed, { loading }] = useMutation(SET_NEWS_SOURCE_SUBSCRIBED);
+  const retired = source.status === 'retired';
+  const onChange = async (on) => {
+    try {
+      await setSubscribed({
+        variables: { id: source.id, on },
+        optimisticResponse: { newsSetSourceSubscribed: { __typename: 'NewsSource', id: source.id, subscribedByMe: on } },
+      });
+      // Free to read keeps or drops this source's stories by it.
+      resetArticleLists(client.cache);
+    } catch {
+      notify('Couldn’t change your subscription. Try again.', { tone: 'error' });
+    }
+  };
+  return (
+    <Box data-testid="detail-subscribe" sx={{ mt: 4 }}>
+      <InkSwitch
+        checked={source.subscribedByMe}
+        onChange={onChange}
+        disabled={loading || (retired && !source.subscribedByMe)}
+        label="I subscribe"
+        labelPlacement="end"
+      />
+      <Typography sx={{ fontFamily: GOTHIC, fontSize: '0.8125rem', color: source.paywalled ? 'text.primary' : 'text.secondary', fontWeight: source.paywalled ? 600 : 400 }}>
+        {SUBSCRIBE_HELP}
+      </Typography>
+    </Box>
+  );
+}
+
 export default function SourceDetailView() {
   const { id } = useParams();
   const { isAdmin } = useViewer();
@@ -249,6 +288,7 @@ export default function SourceDetailView() {
             {addedBy}
           </Typography>
         ) : null}
+        <SubscribeSwitch source={source} />
         {source.canEdit || isAdmin ? <SourceActions source={source} isAdmin={isAdmin} /> : null}
       </Box>
 

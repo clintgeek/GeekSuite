@@ -60,6 +60,7 @@ export const SOURCE_FIELDS = gql`
     addedByMe
     canEdit
     addedByName
+    subscribedByMe
   }
   ${PLACE_FIELDS}
   ${FEED_FIELDS}
@@ -96,6 +97,8 @@ export const GET_NEWS_ARTICLES = gql`
         sourceId
         sourceName
         sourceKind
+        publisherDomain
+        viaAggregator
         sections
         places {
           id
@@ -117,6 +120,22 @@ export const GET_NEWS_PREFS = gql`
         label
         template
       }
+    }
+  }
+`;
+
+/**
+ * The reader's publisher prefs (plan "Source sheet"): what they subscribe to
+ * (kept through Free to read) and the publishers they hid. Its own query so
+ * GET_NEWS_PREFS's callers stay as they are; NewsPrefs merges in the cache
+ * (cachePolicies.js), so the two never overwrite each other.
+ */
+export const GET_NEWS_PUBLISHER_PREFS = gql`
+  query NewsPublisherPrefs {
+    newsPrefs {
+      subscribedSourceIds
+      subscribedDomains
+      mutedDomains
     }
   }
 `;

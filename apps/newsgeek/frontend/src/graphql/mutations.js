@@ -4,7 +4,8 @@
  * - newsCreateSource: any signed-in reader (on for them, off for others);
  * - newsUpdateSource / newsSetSourceStatus / newsCheckSourceNow: the adder or an admin;
  * - newsSetSourceDefaultOn: admins ("On for everyone");
- * - newsSetSourceOn / newsSetPrefs: any reader, their own prefs.
+ * - newsSetSourceOn / newsSetPrefs / newsSetSourceSubscribed / newsSetPublisherPref:
+ *   any reader, their own prefs.
  */
 import { gql } from '@apollo/client';
 import { SOURCE_FIELDS } from './queries';
@@ -75,6 +76,30 @@ export const SET_NEWS_SOURCE_DEFAULT_ON = gql`
       id
       onForMe
       defaultOn
+    }
+  }
+`;
+
+/** Source sheet: the reader's own "I subscribe" for a source (kept through Free to read). */
+export const SET_NEWS_SOURCE_SUBSCRIBED = gql`
+  mutation NewsSetSourceSubscribed($id: ID!, $on: Boolean!) {
+    newsSetSourceSubscribed(id: $id, on: $on) {
+      id
+      subscribedByMe
+    }
+  }
+`;
+
+/**
+ * Source sheet, aggregator items: "I subscribe" / "Hide this publisher" by the
+ * publisher's domain. Send only the flag that changes; an omitted one is kept.
+ */
+export const SET_NEWS_PUBLISHER_PREF = gql`
+  mutation NewsSetPublisherPref($domain: String!, $subscribed: Boolean, $muted: Boolean) {
+    newsSetPublisherPref(domain: $domain, subscribed: $subscribed, muted: $muted) {
+      subscribedSourceIds
+      subscribedDomains
+      mutedDomains
     }
   }
 `;

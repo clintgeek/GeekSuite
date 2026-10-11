@@ -12,9 +12,14 @@
  * list (`resetArticleLists`) once the gateway has stored the new setting,
  * and the visible list is refetched. (A mode-in-keyArgs scheme was tried and
  * rejected: Apollo memoizes reads by field, not by a key function's hidden
- * input, and served the old list after the write.)
+ * input, and served the old list after the write.) The Source sheet's
+ * switches (in my paper, I subscribe, hide this publisher) change the same
+ * answer and go the same way.
  */
 export const NEWS_TYPE_POLICIES = {
+  // One per reader, no id: GET_NEWS_PREFS and GET_NEWS_PUBLISHER_PREFS select
+  // different fields of the same object, so merge rather than replace.
+  NewsPrefs: { merge: true },
   Query: {
     fields: {
       newsArticles: {

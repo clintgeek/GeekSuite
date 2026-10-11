@@ -1,5 +1,5 @@
-// NewsGeek (County Gazette): Latest, Sources, Source detail, and the Add a
-// source sheet (DOCS/NEWSGEEK_PLAN.md "Screens", "Reader-added sources"). Deep
+// NewsGeek (County Gazette): Latest, Sources, Source detail, the Add a
+// source sheet, the Source sheet and Settings (DOCS/NEWSGEEK_PLAN.md "Screens", "Reader-added sources"). Deep
 // links everywhere; fixture modes ride on the URL (?__fixture=empty | nonadmin |
 // free, ?__discover=nofeed | existing), see fixtures.mjs.
 
@@ -22,6 +22,16 @@ const scrollTo = (selector) => async (page, h) => {
   await el.first().scrollIntoViewIfNeeded();
   await page.evaluate(() => window.scrollBy(0, -80));
   await h.settle(400);
+  return undefined;
+};
+
+// Tap a story's publisher line ("Settings for <publisher>"): the Source sheet.
+const sourceSheet = (publisher) => async (page, h) => {
+  const btn = page.getByRole('button', { name: `Settings for ${publisher}` });
+  if (!(await btn.count())) return false;
+  await btn.first().click();
+  await page.locator('[data-testid="source-sheet"] [data-testid^="sheet-"]').first().waitFor({ timeout: 5000 });
+  await h.settle(700);
   return undefined;
 };
 
@@ -85,6 +95,17 @@ export const scenes = [
     },
     teardown: (page, h) => h.esc(),
   },
+  // The Source sheet (plan "Source sheet"): a direct, paywalled source the
+  // reader subscribes to ("Keeps it when Free to read is on" set heavier)…
+  { name: '21-source-sheet-direct', goto: '/', wait: 1600, setup: sourceSheet('Malvern Daily Record'), teardown: (page, h) => h.esc() },
+  // …and a story that came through Google News: hide / subscribe by domain.
+  { name: '22-source-sheet-aggregator', goto: '/', wait: 1600, setup: sourceSheet('Magnolia Reporter'), teardown: (page, h) => h.esc() },
+  // "More from this source": Latest filtered, the "Showing: … ×" chip.
+  { name: '23-latest-filtered', goto: '/?source=s-ark', wait: 1600 },
+  // Settings → Publishers: a subscribed source, a subscribed domain, two hidden.
+  { name: '24-settings-publishers', goto: '/settings', wait: 1600, setup: scrollTo('#settings-publishers') },
+  // …and a reader who has set none: the empty states.
+  { name: '25-settings-publishers-empty', goto: '/settings?__fixture=nonadmin', wait: 1600, setup: scrollTo('#settings-publishers') },
 ];
 
 export const waivers = [];

@@ -19,6 +19,12 @@
 //   (none)     a Magnolia Reporter preview: two feeds, headlines, places
 //   nofeed     ok:false, "No feed found — this site only publishes web pages"
 //   existing   existingSourceId → Hope Star, off for this reader ("Turn it on")
+//
+// Source sheet (plan "Source sheet"): every article carries publisherDomain /
+// viaAggregator, one story comes through Google News (Magnolia Reporter via
+// "Google News: South Arkansas"), every source carries subscribedByMe (the
+// reader subscribes to the Malvern Daily Record), and NewsPublisherPrefs
+// answers with one subscribed and two hidden publishers (none for `nonadmin`).
 import { sessionRoutes, graphqlRoute, json } from '../../lib/net.mjs';
 
 const ago = (min) => new Date(Date.now() - min * 60000).toISOString();
@@ -47,6 +53,8 @@ const A = (id, mins, o) => ({
   expiresAt: null,
   publishedAt: ago(mins),
   places: [],
+  publisherDomain: 'example.com',
+  viaAggregator: false,
   ...o,
 });
 const ARTICLES = [
@@ -67,6 +75,14 @@ const ARTICLES = [
     excerpt: 'Residents of the Ouachita Heights neighborhood say they were never notified.',
     publisher: 'Malvern Daily Record', sourceId: 's-mal', sourceName: 'Malvern Daily Record', sourceKind: 'journalism',
     sections: ['local'], places: [pl('malvern'), pl('hotspring')],
+  }),
+  // Through Google News: the real publisher is credited, the aggregator is "via".
+  A('a3g', 82, {
+    title: 'Magnolia council sets a budget hearing for the new fire station',
+    excerpt: '',
+    publisher: 'Magnolia Reporter', publisherDomain: 'magnoliareporter.com', viaAggregator: true,
+    sourceId: 's-gnews', sourceName: 'Google News: South Arkansas', sourceKind: 'aggregator',
+    sections: ['local'], places: [pl('magnolia')],
   }),
   A('a4', 95, {
     title: 'Fire damages a downtown Arkadelphia storefront',
@@ -137,13 +153,14 @@ const S = (id, name, o = {}) => ({
   onForMe: true,
   addedByMe: false,
   addedByName: null,
+  subscribedByMe: false,
   ...o,
   paywalled: ['metered', 'hard'].includes((o.access ?? {}).paywall),
 });
 const WALL = (paywall, content = 'excerpt') => ({ __typename: 'NewsSourceAccess', paywall, content });
 const SOURCES = [
   S('s-ark', 'The Arkadelphian', { sections: ['local'], places: [PLACES[0], PLACES[2]], articlesLast7d: 22, feeds: [F('s-ark-f1', 'ok')] }),
-  S('s-mal', 'Malvern Daily Record', { sections: ['local'], places: [PLACES[1], PLACES[3]], access: WALL('hard'), articlesLast7d: 9, feeds: [F('s-mal-f1', 'stale')] }),
+  S('s-mal', 'Malvern Daily Record', { sections: ['local'], places: [PLACES[1], PLACES[3]], access: WALL('hard'), articlesLast7d: 9, feeds: [F('s-mal-f1', 'stale')], subscribedByMe: true }),
   S('s-nws', 'NWS Little Rock', {
     kind: 'official', sections: ['local', 'state'], articlesLast7d: 3,
     feeds: [F('s-nws-f1', 'ok', { format: 'nws', url: 'https://api.weather.gov/alerts/active.atom?zone=ARC019', pollEveryMin: 15 })],
@@ -159,6 +176,7 @@ const SOURCES = [
   S('s-hope', 'Hope Star', { sections: ['local'], places: [], articlesLast7d: 11, defaultOn: false, onForMe: false, addedByName: 'Heather' }),
   S('s-camden', 'Camden News', { sections: ['local'], places: [], access: WALL('metered'), articlesLast7d: 6, defaultOn: false, onForMe: false, addedByName: 'Heather' }),
   // In your paper, added by this reader.
+  S('s-gnews', 'Google News: South Arkansas', { kind: 'aggregator', sections: ['local'], places: [], access: WALL('none', 'title'), articlesLast7d: 64, feeds: [F('s-gnews-f1', 'ok', { url: 'https://news.google.com/rss/search?q=Magnolia+Arkansas' })] }),
   S('s-gurdon', 'Gurdon Times', { sections: ['local'], places: [PLACES[0]], articlesLast7d: 4, defaultOn: false, onForMe: true, addedByMe: true, addedByName: 'Chef Crocker' }),
 ];
 
@@ -221,6 +239,14 @@ const READER_LINKS = [
   { __typename: 'NewsReaderLink', label: 'Example archive', template: 'https://example.org/save?u={url}&t={title}' },
 ];
 
+// The reader's publisher prefs (Settings → Publishers, the aggregator sheet).
+const publisherPrefs = (mode) => ({
+  __typename: 'NewsPrefs',
+  subscribedSourceIds: mode === 'nonadmin' ? [] : ['s-mal'],
+  subscribedDomains: mode === 'nonadmin' ? [] : ['nwaonline.com'],
+  mutedDomains: mode === 'nonadmin' ? [] : ['legacy.com', 'weather.com'],
+});
+
 // ── Ops ─────────────────────────────────────────────────────────────────────
 const fixtureOf = (pageUrl) => {
   try {
@@ -275,6 +301,15 @@ export async function routes(ctx) {
             readerLinks: (vars.input?.readerLinks ?? READER_LINKS).map((l) => ({ __typename: 'NewsReaderLink', ...l })),
           },
         };
+      case 'NewsPublisherPrefs':
+        return { newsPrefs: publisherPrefs(mode) };
+      case 'NewsSetPublisherPref': {
+        const cur = publisherPrefs(mode);
+        const edit = (list, on) => (on === true ? [...new Set([...list, vars.domain])] : on === false ? list.filter((d) => d !== vars.domain) : list);
+        return { newsSetPublisherPref: { ...cur, subscribedDomains: edit(cur.subscribedDomains, vars.subscribed), mutedDomains: edit(cur.mutedDomains, vars.muted) } };
+      }
+      case 'NewsSetSourceSubscribed':
+        return { newsSetSourceSubscribed: { __typename: 'NewsSource', id: vars.id, subscribedByMe: Boolean(vars.on) } };
       case 'NewsPlaces':
         return { newsPlaces: PLACES };
       case 'NewsArticles':

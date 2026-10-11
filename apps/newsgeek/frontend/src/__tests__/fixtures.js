@@ -14,6 +14,8 @@ export const article = (id, overrides = {}) => ({
   sourceId: 's1',
   sourceName: 'The Arkadelphian',
   sourceKind: 'journalism',
+  publisherDomain: 'arkadelphian.com',
+  viaAggregator: false,
   sections: ['local'],
   places: [{ __typename: 'NewsPlace', id: 'clark', name: 'Clark County' }],
   ...overrides,
@@ -58,6 +60,7 @@ export const source = (id, overrides = {}) => ({
   addedByMe: false,
   canEdit: false,
   addedByName: null,
+  subscribedByMe: false,
   ...overrides,
 });
 

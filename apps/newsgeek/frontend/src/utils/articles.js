@@ -1,9 +1,14 @@
-/** Latest's paging: `limit` per page, `before` = the previous page's nextBefore; "all" sends no section. */
+/**
+ * Latest's paging: `limit` per page, `before` = the previous page's nextBefore; "all" sends no section.
+ * Filtered to one source (`?source=<id>`, from the Source sheet's "More from…"), it sends `sourceId`
+ * and no section: the section flags are put away while a source filter is on.
+ */
 export const PAGE_SIZE = 30;
 
-export function articleVariables(section, before) {
+export function articleVariables(section, before, sourceId) {
   const vars = { limit: PAGE_SIZE };
-  if (section && section !== 'all') vars.section = section;
+  if (sourceId) vars.sourceId = sourceId;
+  else if (section && section !== 'all') vars.section = section;
   if (before) vars.before = before;
   return vars;
 }

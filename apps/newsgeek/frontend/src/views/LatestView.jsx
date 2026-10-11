@@ -11,9 +11,19 @@
  * gateway leaves paywalled stories out and says how many. The switch moves at
  * once (optimistic); the cached lists are dropped and the list refetched only
  * AFTER the gateway has stored the new setting (cachePolicies.js).
+ *
+ * The publisher line on each story opens the Source sheet (plan "Source
+ * sheet"). Its switches change what the gateway returns, so after each one
+ * the cached lists are dropped and the list refetched, as for Free to read.
+ * "More from…" lands here as `/?source=<id>`: the list is that source only,
+ * a "Showing: <name> ×" chip says so, and the section flags are put away
+ * until the chip is dismissed (a source has fixed sections, so most flags
+ * would only show an empty page). "Look for a direct feed" opens the Add a
+ * source sheet on https://<domain> and looks at once.
  */
-import React from 'react';
-import { Box, Button, CircularProgress, Typography } from '@mui/material';
+import React, { useState } from 'react';
+import { Box, Button, CircularProgress, IconButton, Typography } from '@mui/material';
+import { Close as CloseIcon } from '@mui/icons-material';
 import { NetworkStatus, useApolloClient, useMutation, useQuery } from '@apollo/client';
 import { useToast } from '@geeksuite/ui';
 import { useSearchParams } from 'react-router-dom';
@@ -22,17 +32,30 @@ import Column from '../components/Column';
 import FreeToReadSwitch from '../components/FreeToReadSwitch';
 import Masthead from '../components/Masthead';
 import SectionTabs from '../components/SectionTabs';
+import SourceSheet from '../components/SourceSheet';
+import { useViewer } from '../hooks/useViewer';
 import { resetArticleLists } from '../graphql/cachePolicies';
 import { SET_NEWS_PREFS } from '../graphql/mutations';
-import { GET_NEWS_ARTICLES, GET_NEWS_PREFS } from '../graphql/queries';
+import { GET_NEWS_ARTICLES, GET_NEWS_PREFS, GET_NEWS_SOURCE } from '../graphql/queries';
 import { EMPTY_LINE, articleVariables, hiddenPaywalledLine } from '../utils/articles';
 import { GOTHIC } from '../theme/theme';
 import { SECTIONS } from '../utils/vocab';
+import AddSourceSheet from './AddSourceSheet';
+
+/** "Look for a direct feed": the Add sheet, already looking. Its own component so Latest asks newsViewer only then. */
+function LookForFeedSheet({ url, onClose }) {
+  const { isAdmin } = useViewer();
+  return <AddSourceSheet open onClose={onClose} initialUrl={url} autoRun isAdmin={isAdmin} />;
+}
 
 export default function LatestView() {
   const [params, setParams] = useSearchParams();
   const raw = params.get('section');
   const section = SECTIONS.includes(raw) ? raw : 'all';
+  const sourceId = params.get('source') || null;
+  const [sheetArticle, setSheetArticle] = useState(null);
+  const [sheetOpen, setSheetOpen] = useState(false);
+  const [feedUrl, setFeedUrl] = useState(null);
 
   const { notify } = useToast();
 
@@ -43,11 +66,14 @@ export default function LatestView() {
   const [setPrefs, { loading: savingPrefs }] = useMutation(SET_NEWS_PREFS);
 
   const { data, error, networkStatus, fetchMore, refetch } = useQuery(GET_NEWS_ARTICLES, {
-    variables: articleVariables(section),
+    variables: articleVariables(section, null, sourceId),
     notifyOnNetworkStatusChange: true,
     fetchPolicy: 'cache-and-network',
     nextFetchPolicy: 'cache-first',
   });
+
+  // The filter chip's name; a story on the page already carries it.
+  const sourceQ = useQuery(GET_NEWS_SOURCE, { variables: { id: sourceId }, skip: !sourceId, fetchPolicy: 'cache-first' });
 
   const toggleFreeToRead = async (next) => {
     try {
@@ -72,6 +98,27 @@ export default function LatestView() {
   const loadingFirst = !page && networkStatus !== NetworkStatus.error;
   const loadingMore = networkStatus === NetworkStatus.fetchMore;
 
+  const filterName = sourceId ? sourceQ.data?.newsSource?.name || items.find((a) => a.sourceId === sourceId)?.sourceName || 'one source' : null;
+
+  const clearSource = () => {
+    setParams((prev) => {
+      const out = new URLSearchParams(prev);
+      out.delete('source');
+      return out;
+    });
+  };
+
+  // A Source sheet switch changed what the gateway returns.
+  const sheetChanged = () => {
+    resetArticleLists(client.cache);
+    refetch().catch(() => {});
+  };
+
+  const openSheet = (a) => {
+    setSheetArticle(a);
+    setSheetOpen(true);
+  };
+
   const pickSection = (next) => {
     setParams((prev) => {
       const out = new URLSearchParams(prev);
@@ -83,15 +130,30 @@ export default function LatestView() {
 
   const older = () => {
     if (!page?.nextBefore) return;
-    fetchMore({ variables: articleVariables(section, page.nextBefore) }).catch(() => {});
+    fetchMore({ variables: articleVariables(section, page.nextBefore, sourceId) }).catch(() => {});
   };
 
   return (
     <Column>
       <Masthead />
-      <Box sx={{ mt: 2 }}>
-        <SectionTabs value={section} onChange={pickSection} />
-      </Box>
+      {sourceId ? (
+        <Box data-testid="source-filter" sx={{ mt: 3, mb: 1 }}>
+          <Box
+            sx={{ display: 'inline-flex', alignItems: 'center', maxWidth: '100%', minHeight: 48, pl: 4, border: 2, borderColor: 'text.primary', borderRadius: '24px' }}
+          >
+            <Typography component="span" sx={{ fontFamily: GOTHIC, fontSize: '0.875rem', fontWeight: 700, color: 'text.primary', minWidth: 0, overflowWrap: 'anywhere' }}>
+              {`Showing: ${filterName}`}
+            </Typography>
+            <IconButton aria-label={`Show every source, not just ${filterName}`} onClick={clearSource} sx={{ width: 44, height: 44, flexShrink: 0, color: 'text.primary' }}>
+              <CloseIcon sx={{ fontSize: 20 }} />
+            </IconButton>
+          </Box>
+        </Box>
+      ) : (
+        <Box sx={{ mt: 2 }}>
+          <SectionTabs value={section} onChange={pickSection} />
+        </Box>
+      )}
       <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end', columnGap: 4, borderBottom: 1, borderColor: 'divider' }}>
         {hiddenLine ? (
           <Typography data-testid="hidden-paywalled" role="status" sx={{ mr: 'auto', fontFamily: GOTHIC, fontStyle: 'italic', fontSize: '0.8125rem', color: 'text.secondary' }}>
@@ -121,14 +183,16 @@ export default function LatestView() {
 
       {page && !items.length ? (
         <Box sx={{ py: 12, textAlign: 'center' }}>
-          <Typography sx={{ fontStyle: 'italic', color: 'text.secondary', maxWidth: 420, mx: 'auto' }}>{EMPTY_LINE}</Typography>
+          <Typography sx={{ fontStyle: 'italic', color: 'text.secondary', maxWidth: 420, mx: 'auto' }}>
+            {sourceId ? `Nothing from ${filterName} in your paper right now.` : EMPTY_LINE}
+          </Typography>
         </Box>
       ) : null}
 
       {items.length ? (
         <Box component="section" aria-label="Stories">
           {items.map((a) => (
-            <ArticleItem key={a.id} article={a} readerLinks={readerLinks} />
+            <ArticleItem key={a.id} article={a} readerLinks={readerLinks} onOpenSource={openSheet} />
           ))}
         </Box>
       ) : null}
@@ -144,6 +208,18 @@ export default function LatestView() {
           )}
         </Box>
       ) : null}
+
+      <SourceSheet
+        article={sheetArticle}
+        open={sheetOpen}
+        onClose={() => setSheetOpen(false)}
+        onChanged={sheetChanged}
+        onLookForFeed={(url) => {
+          setSheetOpen(false);
+          setFeedUrl(url);
+        }}
+      />
+      {feedUrl ? <LookForFeedSheet key={feedUrl} url={feedUrl} onClose={() => setFeedUrl(null)} /> : null}
     </Column>
   );
 }

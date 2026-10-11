@@ -1,9 +1,10 @@
 /**
- * Settings (`/settings`). For now one section: "Open-with links" — the
- * reader's own URL templates, offered in each story's ⋯ menu after "Open at
- * publisher" (NewsPrefs.readerLinks, max 5). Saved whole through
+ * Settings (`/settings`). "Open-with links" — the reader's own URL
+ * templates, offered in each story's ⋯ menu after "Open at publisher"
+ * (NewsPrefs.readerLinks, max 5). Saved whole through
  * newsSetPrefs({ readerLinks }); the gateway re-checks every rule here and
- * answers BAD_USER_INPUT otherwise.
+ * answers BAD_USER_INPUT otherwise. Then "Publishers" (PublishersSettings):
+ * what the reader subscribes to or hid from the Source sheet.
  */
 import React, { useEffect, useState } from 'react';
 import { Box, Button, CircularProgress, IconButton, TextField, Typography } from '@mui/material';
@@ -11,6 +12,7 @@ import { Add as AddIcon, DeleteOutline as RemoveIcon } from '@mui/icons-material
 import { useMutation, useQuery } from '@apollo/client';
 import { useToast } from '@geeksuite/ui';
 import Column from '../components/Column';
+import PublishersSettings from '../components/PublishersSettings';
 import { SET_NEWS_PREFS } from '../graphql/mutations';
 import { GET_NEWS_PREFS } from '../graphql/queries';
 import { GOTHIC, flagSx } from '../theme/theme';
@@ -147,6 +149,8 @@ export default function SettingsView() {
           </Box>
         )}
       </Box>
+
+      <PublishersSettings />
     </Column>
   );
 }
