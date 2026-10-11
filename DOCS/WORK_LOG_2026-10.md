@@ -182,3 +182,35 @@ nginx went from 69 live host names to 51, using Chef's list.
 - **Open:** three TownNews/Blox sites answer 429 (Malvern, Magnolia Reporter, Saline
   Courier), most likely tripped by the day's research. The worker backs off; if they
   stay red, the Sources screen shows it.
+
+## 2026-10-10 — NewsGeek: anyone can add sources; open-with links
+
+Chef: "anyone should be able to add whatever they want. They can default off for others."
+- **Add a source** (every reader): paste any link. `POST /api/discover` finds the feed and
+  returns a preview (feeds with counts, 3 headlines, paywall verdict, suggested
+  places). Tap **Add**. A new source is on for its adder and off for everyone else, and
+  others can switch it on under "From other readers". Admins can make one **On for
+  everyone**. A feed already in the system gets "Already here — turn it on" (one poll
+  per feed).
+- **Per-reader switches** on every source. **Suggested** ranks publishers seen in Google
+  News results that we don't read directly.
+- **SSRF guard** on every outbound fetch (worker and discovery):
+  - public addresses only, checked after DNS, with the vetted IP pinned against rebinding;
+  - each redirect re-checked;
+  - ports 80/443/8080 only.
+
+  Verified inside the production container: the LAN gateway, localhost, the metadata IP,
+  a mapped-v6 private address, userinfo, ftp and an odd port were all refused.
+- **Limits:** 20 adds/24h and 200 total per reader; 30 discoveries/hour (in memory,
+  resets on restart). Reader feeds poll at most every 30 min.
+- **Open-with links** (Settings): up to 5 per reader, http(s) templates with `{url}` and
+  `{title}`. Each placeholder value is encoded on its own. Tapping a story always opens
+  the publisher; the links live in a ⋯ menu. Nothing is preconfigured.
+- **Checks:**
+  - Tests: basegeek 151/151 suites (3237), backend 192, frontend 194.
+  - Harness: 80 scenes, 0 violations.
+  - Revert checks: guard 27/27, discovery 33/33, gateway 61, frontend 44, all red when
+    broken.
+- **Deploy:** two pushes, server `eb37495a` then UI `b88ab650`.
+- **Declined:** a built-in paywall-bypass link (skipthepaywall/archive mirrors). The
+  open-with feature is generic and nothing is preset.
