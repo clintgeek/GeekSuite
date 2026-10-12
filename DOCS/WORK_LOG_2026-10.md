@@ -298,3 +298,26 @@ Built from a production audit of the whole pipeline.
     clustering, N1.
   - Other towns' local news (DeWitt calendars) filling State.
   - One source can fill a 5-slot block (NPR 4/5 in National).
+
+## 2026-10-11 — NewsGeek: opening prefs, Around Arkansas, fair caps; N1 phase 1
+
+- **Opening:**
+  - Settings → Reading "Open stories in a new tab" (off: this window, and Back returns).
+  - Per-publisher "Open stories with" (Original, or one of the reader's open-with links),
+    keyed by source or Google News publisher domain.
+  - Tapping a story follows the opener. "Open at publisher" and Also-in links always open
+    the original.
+  - An edited or deleted link falls back to Original.
+- **Sections:** State now means a statewide source, or an own Arkansas place off the ring.
+  Other towns' papers go to a new **Around Arkansas** block (last, 3 slots).
+- **Per-source cap:** 5 when a block has ≥8 slots, otherwise half the slots.
+- **N1 phase 1:**
+  - Every article is embedded with the local mxbai service. The backfill of 3.5k articles
+    ran at ~58/min.
+  - Tools: export-cluster-candidates and eval-cluster-threshold. Labelling (Claude, with
+    Chef spot-checking 20) comes next.
+- **Checks:** basegeek 157/157 suites (3375), frontend 307, backend 264.
+- **Deploy:** N1 `f90186a3`, server `dbd86a33`, UI `96d86753`.
+- **Landmine:** the session that reported `updated=9` skipped basegeek, because its image
+  published after Watchtower had scanned it; the next pass picked it up. Before a UI push,
+  check that the gateway itself answers the new field.
