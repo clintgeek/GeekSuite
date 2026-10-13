@@ -7,11 +7,15 @@ import { parse as parseCsv } from "csv-parse/sync";
 import { execFile } from "child_process";
 import { promisify } from "util";
 import { Book } from "../models/book.js";
+import { BookReading, splitReaderFields, upsertReading, mergeReadings, readerId } from "../models/bookReading.js";
 import { resolveInLibrary } from "../libraryPaths.js";
 import { authenticateToken } from "../middleware/auth.js";
 import { validate } from "../validation/validate.js";
 import { calibreRescanQuerySchema } from "../validation/schemas/importJobs.js";
 import { withDerivedTags } from "../tags.js";
+
+/** Drop undefined values, so an upsert never `$unset`s what it doesn't know. */
+const definedOnly = (obj) => Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined));
 
 const router = express.Router();
 
@@ -776,7 +780,12 @@ router.post(
             source: "goodreads-import",
           };
 
-          await Book.create(newDoc);
+          // The Goodreads history is the IMPORTER's: shelf, rating, review,
+          // dates and read count go on their BookReading, never the shared
+          // row (PER_READER_SHELVES_PLAN.md).
+          const { catalog, reader } = splitReaderFields(newDoc);
+          const created = await Book.create(catalog);
+          await upsertReading(BookReading, readerId(req), created._id, definedOnly(reader));
           stats.created += 1;
           continue;
         }
@@ -820,7 +829,9 @@ router.post(
           continue;
         }
 
-        await Book.updateOne({ _id: book._id }, { $set: update }).exec();
+        const { catalog, reader } = splitReaderFields(update);
+        if (Object.keys(catalog).length) await Book.updateOne({ _id: book._id }, { $set: catalog }).exec();
+        await upsertReading(BookReading, readerId(req), book._id, reader);
         stats.updated += 1;
       }
 
@@ -870,42 +881,19 @@ router.post(
           continue;
         }
 
+        // Catalog blanks fill from the Goodreads copy; each reader's own
+        // shelf/rating/dates move per reader (PER_READER_SHELVES_PLAN.md).
         const update = {};
-
-        if (
-          (primary.rating === null || primary.rating === undefined) &&
-          typeof gr.rating === "number"
-        ) {
-          update.rating = gr.rating;
-        }
-
-        if (!primary.review && gr.review) {
-          update.review = gr.review;
-        }
-
-        if (!primary.dateFinished && gr.dateFinished) {
-          update.dateFinished = gr.dateFinished;
-        }
 
         if (!primary.dateAdded && gr.dateAdded) {
           update.dateAdded = gr.dateAdded;
         }
 
-        if (
-          (primary.readCount === null || primary.readCount === undefined) &&
-          typeof gr.readCount === "number" &&
-          gr.readCount > 0
-        ) {
-          update.readCount = gr.readCount;
-        }
-
-        if (!primary.shelf && gr.shelf) {
-          update.shelf = gr.shelf;
-        }
-
         if (!primary.goodreadsId && gr.goodreadsId) {
           update.goodreadsId = gr.goodreadsId;
         }
+
+        await mergeReadings(BookReading, gr._id, primary._id);
 
         if (Object.keys(update).length > 0) {
           await Book.updateOne({ _id: primary._id }, { $set: update }).exec();

@@ -4,8 +4,18 @@
  * purpose — the Kindle browser cannot run the SPA. See DOCS/CONTEXT.md.
  */
 import express from "express";
+import mongoose from "mongoose";
 import path from "path";
 import { Book } from "../models/book.js";
+import bookReadingModule from "../../../../../packages/schemas/bookgeek/bookReading.js";
+
+const { readerOverlay } = bookReadingModule;
+
+// The Kindle page has one shared PIN, not a person's login. Its shelves are
+// the Kindle owner's (PER_READER_SHELVES_PLAN.md): KINDLE_UI_USER_ID, the
+// same setting resolveKindleTargetEmail() already reads, else Chef.
+const KINDLE_READER_FALLBACK = "6818c2bddcf626909f6a93a1";
+const kindleReader = () => String(process.env.KINDLE_UI_USER_ID || "").trim() || KINDLE_READER_FALLBACK;
 import { escapeRegex, resolveInLibrary } from "../libraryPaths.js";
 import { sendMail } from "../services/emailService.js";
 import { normalizeDescription } from "../services/enrichment.js";
@@ -170,13 +180,16 @@ router.get("/kindle", requireKindleAuth, async (req, res) => {
         : { title: dir, "authors.0": 1 };
 
     const [items, total] = await Promise.all([
-      Book.find(filter)
-        .select("title authors shelf owned files")
-        .sort(sortObj)
-        .skip(skip)
-        .limit(limit)
-        .lean(),
-      Book.countDocuments(filter),
+      Book.aggregate([
+        ...readerOverlay(kindleReader()),
+        { $match: filter },
+        { $sort: sortObj },
+        { $skip: skip },
+        { $limit: limit },
+        { $project: { title: 1, authors: 1, shelf: 1, owned: 1, files: 1 } },
+      ]),
+      Book.aggregate([...readerOverlay(kindleReader()), { $match: filter }, { $count: "n" }])
+        .then(([row]) => row?.n ?? 0),
     ]);
 
     const totalPages = Math.max(1, Math.ceil(total / limit));
@@ -317,7 +330,10 @@ router.get("/kindle/books/:id", requireKindleAuth, async (req, res) => {
     }
 
     const id = req.params.id;
-    const book = await Book.findById(id).lean();
+    // The Kindle owner's shelf, not the shared row's legacy one.
+    const [book] = mongoose.isValidObjectId(id)
+      ? await Book.aggregate([{ $match: { _id: new mongoose.Types.ObjectId(id) } }, ...readerOverlay(kindleReader())])
+      : [];
     if (!book) {
       res.setHeader("Content-Type", "text/html; charset=utf-8");
       return res.status(404).send(kindleLayout("Book", "Not found"));

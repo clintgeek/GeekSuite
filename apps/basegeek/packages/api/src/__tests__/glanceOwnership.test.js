@@ -64,6 +64,7 @@ afterEach(async () => {
     col('todogeek', 'habitlogs').deleteMany({ __glanceTest: TEST_TAG }),
     col('notegeek', 'notes').deleteMany({ __glanceTest: TEST_TAG }),
     col('bookgeek', 'books').deleteMany({ __glanceTest: TEST_TAG }),
+    col('bookgeek', 'bookreadings').deleteMany({ __glanceTest: TEST_TAG }),
     col('fitnessgeek', 'fooditems').deleteMany({ __glanceTest: TEST_TAG }),
     col('fitnessgeek', 'foodlogs').deleteMany({ __glanceTest: TEST_TAG }),
     col('fitnessgeek', 'dailysummaries').deleteMany({ __glanceTest: TEST_TAG }),
@@ -197,19 +198,23 @@ describe('glanceSearch', () => {
 });
 
 describe('deliberately shared data keeps working', () => {
-  test("BookGeek's library is shared: every signed-in user sees the same shelf", async () => {
-    await col('bookgeek', 'books').insertMany([
-      { title: 'Shared Book - glance', authors: ['Someone'], shelf: 'reading', readingProgress: 10, pageCount: 100 },
-    ]);
+  test("BookGeek's catalog is shared, but the Reading shelf is the caller's own", async () => {
+    // PER_READER_SHELVES_PLAN.md: the shelf lives on Alice's BookReading.
+    const { insertedId } = await col('bookgeek', 'books').insertOne(
+      { title: 'Shared Book - glance', authors: ['Someone'], pageCount: 100, updatedAt: new Date() },
+    );
+    await col('bookgeek', 'bookreadings').insertOne(
+      { userId: String(ALICE), bookId: insertedId, shelf: 'reading', readingProgress: 10, updatedAt: new Date() },
+    );
 
     const alice = await Query.glanceToday(null, { date: TARGET_DATE }, ctx(ALICE));
     const bob = await Query.glanceToday(null, { date: TARGET_DATE }, ctx(BOB));
     const aBook = alice.reading.find((b) => b.title === 'Shared Book - glance');
-    const bBook = bob.reading.find((b) => b.title === 'Shared Book - glance');
     expect(aBook).toBeDefined();
-    expect(bBook).toBeDefined();
     expect(aBook.readingProgress).toBe(10);
+    expect(bob.reading.find((b) => b.title === 'Shared Book - glance')).toBeUndefined();
 
+    // The catalog itself is still everyone's to search…
     const search = await Query.glanceSearch(null, { query: 'glance' }, ctx(BOB));
     expect(search.filter((r) => r.app === 'bookgeek').length).toBeGreaterThanOrEqual(1);
   });
@@ -321,12 +326,13 @@ describe('glanceToday field correctness', () => {
   });
 
   test('shelf: reading, readingProgress: 42 -> 42', async () => {
-    await col('bookgeek', 'books').insertOne({
+    const { insertedId } = await col('bookgeek', 'books').insertOne({
       title: 'Dune',
       authors: ['Frank Herbert'],
-      shelf: 'reading',
-      readingProgress: 42,
       pageCount: 900,
+    });
+    await col('bookgeek', 'bookreadings').insertOne({
+      userId: String(ALICE), bookId: insertedId, shelf: 'reading', readingProgress: 42, updatedAt: new Date(),
     });
 
     const today = await Query.glanceToday(null, { date: FIELDS_DATE }, ctx(ALICE));

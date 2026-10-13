@@ -23,6 +23,7 @@ import mongoose from 'mongoose';
 const { Book } = await import('../graphql/bookgeek/models/book.js');
 const { Profile } = await import('../graphql/bookgeek/models/profile.js');
 const { resolvers } = await import('../graphql/bookgeek/resolvers.js');
+const { createBookFor, clearReadings } = await import('./helpers/bookReaders.js');
 const { default: bookShared } = await import('@geeksuite/schemas/bookgeek/book');
 const { deriveTagFields } = bookShared.tagVocabulary;
 
@@ -36,6 +37,7 @@ beforeAll(async () => {
 }, 60000);
 
 afterEach(async () => {
+  await clearReadings();
   await Promise.all([Book.deleteMany({}), Profile.deleteMany({})]);
 });
 
@@ -55,7 +57,7 @@ const book = (title, tags, extra = {}) => ({ title, tags, ...deriveTagFields(tag
  *   Snuff        Thrillers                                  Thriller                       —              —
  */
 const seed = () =>
-  Book.create([
+  createBookFor(ALICE, [
     book('Lock In', ['Science Fiction', 'Mystery Thriller']),
     book('The Sound of Gravel', ['Biography Memoir', 'jonestown'], { myTags: ['Must reread'] }),
     book('Dune', ['sf_horror', 'AUTO', 'Fiction'], { myTags: ['Fantasy'] }),
@@ -148,7 +150,7 @@ describe('tag: in a search', () => {
   });
 
   test('the term is a literal, never a regex', async () => {
-    await Book.create(book('Regex bait', ['(a+)+$', 'C++']));
+    await createBookFor(ALICE, book('Regex bait', ['(a+)+$', 'C++']));
     await expect(titles({ filter: { q: 'tag:"(a+)+$"' } })).resolves.toEqual(['Regex bait']);
     expect(await titles({ filter: { q: 'tag:c++' } })).toEqual(['Regex bait']);
     expect(await titles({ filter: { q: 'tag:.*' } })).toEqual([]);
@@ -173,7 +175,7 @@ describe('derive on write (gateway)', () => {
   });
 
   test('a tags write rederives libraryTags and unsortedTags in the same update', async () => {
-    const [b] = await Book.create([book('Old tab', ['Fiction'])]);
+    const [b] = await createBookFor(ALICE, [book('Old tab', ['Fiction'])]);
     const out = await Mutation.updateBook(null, { id: String(b._id), input: { tags: ['Thrillers', 'kurt', 'General'] } }, ctx(ALICE));
     expect(out.tags).toEqual(['Thrillers', 'kurt', 'General']);
     expect(out.libraryTags).toEqual(['Thriller']);
@@ -181,7 +183,7 @@ describe('derive on write (gateway)', () => {
   });
 
   test('myTags are stored as typed (trimmed, deduped), never mapped, and leave tags alone', async () => {
-    const [b] = await Book.create([book('Mine', ['Science Fiction', 'jonestown'])]);
+    const [b] = await createBookFor(ALICE, [book('Mine', ['Science Fiction', 'jonestown'])]);
     const out = await Mutation.updateBook(
       null,
       { id: String(b._id), input: { myTags: [' thrillers ', 'thrillers', 'Beach read'] } },
@@ -194,7 +196,7 @@ describe('derive on write (gateway)', () => {
   });
 
   test('myTags go through validation like tags', async () => {
-    const [b] = await Book.create([book('Bounds', [])]);
+    const [b] = await createBookFor(ALICE, [book('Bounds', [])]);
     await expect(
       Mutation.updateBook(null, { id: String(b._id), input: { myTags: ['x'.repeat(101)] } }, ctx(ALICE))
     ).rejects.toThrow();

@@ -598,6 +598,20 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
   // `onemin`, both deleted in September. Free-tier health now lives on the
   // request path, in `AIFreeTier.health`.
 
+  // BookGeek per-reader shelves (apps/bookgeek/DOCS/PER_READER_SHELVES_PLAN.md):
+  // one-time move of the shared rows' shelf/rating/dates/progress into Chef's
+  // BookReading records. Guarded by a marker, so it is a no-op after the first boot.
+  try {
+    const [{ migrateReaderFields }, { Book }, { BookReading }] = await Promise.all([
+      import('./graphql/bookgeek/migrateReaderFields.js'),
+      import('./graphql/bookgeek/models/book.js'),
+      import('./graphql/bookgeek/models/bookReading.js'),
+    ]);
+    await migrateReaderFields({ Book, BookReading, logger });
+  } catch (error) {
+    logger.error({ err: error }, 'BookGeek reader-field migration failed');
+  }
+
   // NoteGeek meaning-based search: the background embedding worker. Talks
   // only to the local embeddings container; see graphql/notegeek/indexer.js.
   try {

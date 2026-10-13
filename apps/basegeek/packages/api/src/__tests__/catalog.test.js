@@ -41,6 +41,7 @@ const { TICK_MS } = await import('../graphql/notegeek/indexer.js');
 const { _resetSemanticState, serviceIsDown, markServiceDown } = semantic;
 const { embeddingsConfig } = embeddings;
 
+const { createBookFor, clearReadings } = await import('./helpers/bookReaders.js');
 const ALICE = new mongoose.Types.ObjectId();
 const BOB = new mongoose.Types.ObjectId();
 const ctx = (userId) => ({ user: { id: String(userId) } });
@@ -95,6 +96,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
+  await clearReadings();
   globalThis.fetch = realFetch;
   delete process.env.EMBEDDINGS_URL;
   await Promise.all([
@@ -110,7 +112,9 @@ afterAll(async () => {
   await Promise.all([Book.db.close(), Game.db.close()]);
 });
 
-const mkBook = (fields = {}) => Book.create({ title: 'Untitled', owned: true, ...fields });
+// Shelf/rating/dates are a reader's (PER_READER_SHELVES_PLAN.md): the
+// fixtures' are Alice's, the caller in these tests.
+const mkBook = (fields = {}) => createBookFor(ALICE, { title: 'Untitled', owned: true, ...fields });
 const mkGame = (fields = {}) =>
   Game.create({
     householdId: 'default', title: 'Untitled', owned: true,

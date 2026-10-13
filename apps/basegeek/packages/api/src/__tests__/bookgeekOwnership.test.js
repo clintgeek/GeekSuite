@@ -16,13 +16,14 @@ import mongoose from 'mongoose';
 
 const { Book } = await import('../graphql/bookgeek/models/book.js');
 const { resolvers } = await import('../graphql/bookgeek/resolvers.js');
+const { createBookFor, clearReadings } = await import('./helpers/bookReaders.js');
 
 const ALICE = new mongoose.Types.ObjectId();
 const BOB = new mongoose.Types.ObjectId();
 const ctx = (userId) => (userId ? { user: { id: String(userId) } } : { user: null });
 
 const makeBook = (overrides = {}) =>
-  Book.create({
+  createBookFor(ALICE, {
     title: 'Dune',
     authors: ['Frank Herbert'],
     shelf: 'unread',
@@ -35,6 +36,7 @@ beforeAll(async () => {
 }, 60000);
 
 afterEach(async () => {
+  await clearReadings();
   await Book.deleteMany({});
 });
 
@@ -97,16 +99,23 @@ describe('bookgeek — the library stays deliberately shared', () => {
     expect(single.title).toBe('Neuromancer');
   });
 
-  test('shelves counts the whole library for any authenticated user', async () => {
+  test('shelves counts the whole catalog, but only the caller’s own shelves', async () => {
     await makeBook({ title: 'A', shelf: 'unread', owned: true });
     await makeBook({ title: 'B', shelf: 'read', owned: false, readCount: 1 });
 
+    // The catalog totals are shared…
     const stats = await resolvers.Query.shelves(null, {}, ctx(BOB));
     expect(stats.total).toBe(2);
     expect(stats.owned).toBe(1);
     expect(stats.unowned).toBe(1);
-    expect(stats.shelves.find((s) => s.id === 'unread').count).toBe(1);
-    expect(stats.shelves.find((s) => s.id === 'read').count).toBe(1);
+    // …the shelves are Alice's (makeBook files them under her), so for Bob
+    // both books are unread.
+    expect(stats.shelves.find((s) => s.id === 'unread').count).toBe(2);
+    expect(stats.shelves.find((s) => s.id === 'read').count).toBe(0);
+
+    const mine = await resolvers.Query.shelves(null, {}, ctx(ALICE));
+    expect(mine.shelves.find((s) => s.id === 'unread').count).toBe(1);
+    expect(mine.shelves.find((s) => s.id === 'read').count).toBe(1);
   });
 
   test('shelves counts the on-reader shelf and any custom shelf values', async () => {

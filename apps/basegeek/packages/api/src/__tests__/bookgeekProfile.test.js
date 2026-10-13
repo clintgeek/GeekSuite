@@ -17,6 +17,7 @@ const { Book } = await import('../graphql/bookgeek/models/book.js');
 const { Profile } = await import('../graphql/bookgeek/models/profile.js');
 const AIConfig = (await import('../models/AIConfig.js')).default;
 const { resolvers } = await import('../graphql/bookgeek/resolvers.js');
+const { createBookFor, clearReadings, BookReading } = await import('./helpers/bookReaders.js');
 
 const ALICE = String(new mongoose.Types.ObjectId());
 const BOB = String(new mongoose.Types.ObjectId());
@@ -31,6 +32,7 @@ beforeAll(async () => {
 }, 60000);
 
 afterEach(async () => {
+  await clearReadings();
   await Promise.all([Profile.deleteMany({}), Book.deleteMany({}), AIConfig.deleteMany({})]);
 });
 
@@ -222,17 +224,20 @@ describe('bookgeek profile — custom shelves', () => {
     expect(bob.customShelves).toHaveLength(1);
   });
 
-  test('removing a shelf clears it from every book sitting on it', async () => {
+  test('removing a shelf clears it from the caller’s books on it — and only the caller’s', async () => {
     await M.addBookShelf(null, { label: 'Comfort reads' }, ctx(ALICE));
-    await Book.create({ title: 'A', shelf: 'custom-comfort-reads' });
-    await Book.create({ title: 'B', shelf: 'custom-comfort-reads' });
-    await Book.create({ title: 'C', shelf: 'unread' });
+    await createBookFor(ALICE, { title: 'A', shelf: 'custom-comfort-reads' });
+    await createBookFor(ALICE, { title: 'B', shelf: 'custom-comfort-reads' });
+    await createBookFor(ALICE, { title: 'C', shelf: 'unread' });
+    // Bob has his own shelf with the same slug (a shelf is per reader).
+    await createBookFor(BOB, { title: 'D', shelf: 'custom-comfort-reads' });
 
     const res = await M.removeBookShelf(null, { id: 'custom-comfort-reads' }, ctx(ALICE));
     expect(res.clearedBooks).toBe(2);
     expect(res.profile.customShelves).toEqual([]);
-    expect(await Book.countDocuments({ shelf: 'custom-comfort-reads' })).toBe(0);
-    expect(await Book.countDocuments({ shelf: 'unread' })).toBe(1);
+    expect(await BookReading.countDocuments({ userId: String(ALICE), shelf: 'custom-comfort-reads' })).toBe(0);
+    expect(await BookReading.countDocuments({ userId: String(ALICE), shelf: 'unread' })).toBe(1);
+    expect(await BookReading.countDocuments({ userId: String(BOB), shelf: 'custom-comfort-reads' })).toBe(1);
   });
 
   test('a built-in shelf can never be removed', async () => {
@@ -241,8 +246,8 @@ describe('bookgeek profile — custom shelves', () => {
         'Only custom shelves can be removed'
       );
     }
-    await Book.create({ title: 'A', shelf: 'unread' });
-    expect(await Book.countDocuments({ shelf: 'unread' })).toBe(1);
+    await createBookFor(ALICE, { title: 'A', shelf: 'unread' });
+    expect(await BookReading.countDocuments({ shelf: 'unread' })).toBe(1);
   });
 
   test('shelves are per-user definitions', async () => {

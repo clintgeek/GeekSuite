@@ -21,6 +21,7 @@ import mongoose from 'mongoose';
 
 const { Book } = await import('../graphql/bookgeek/models/book.js');
 const { resolvers } = await import('../graphql/bookgeek/resolvers.js');
+const { createBookFor, clearReadings } = await import('./helpers/bookReaders.js');
 
 const ALICE = new mongoose.Types.ObjectId();
 const ctx = { user: { id: String(ALICE) } };
@@ -36,6 +37,7 @@ beforeAll(async () => {
 }, 60000);
 
 afterEach(async () => {
+  await clearReadings();
   await Book.deleteMany({});
 });
 
@@ -50,7 +52,7 @@ afterAll(async () => {
  * Alphabetical: Anathem, Blindsight, Cryptonomicon, Dune.
  */
 const seed = () =>
-  Book.create([
+  createBookFor(ALICE, [
     {
       title: 'Dune',
       authors: ['Frank Herbert'],
@@ -166,7 +168,7 @@ describe('the four sorts that used to fall through to title', () => {
 
 describe('the tiebreaker matches REST', () => {
   test('equal page counts break on title ascending, even sorting descending', async () => {
-    await Book.create([
+    await createBookFor(ALICE, [
       { title: 'Zebra', pageCount: 300, shelf: 'unread' },
       { title: 'Aardvark', pageCount: 300, shelf: 'unread' },
     ]);

@@ -32,6 +32,7 @@ jest.unstable_mockModule('../services/aiService.js', () => ({ default: aiService
 const { Book } = await import('../graphql/bookgeek/models/book.js');
 const { User } = await import('../models/user.js');
 const { resolvers } = await import('../graphql/bookgeek/resolvers.js');
+const { createBookFor, clearReadings } = await import('./helpers/bookReaders.js');
 const library = await import('../graphql/bookgeek/library.js');
 const { _resetCounters } = await import('../services/aiFeatureRunner.js');
 const { BookVector } = await import('../graphql/catalog/models/BookVector.js');
@@ -97,6 +98,7 @@ beforeEach(() => {
 });
 
 afterEach(async () => {
+  await clearReadings();
   globalThis.fetch = realFetch;
   await Book.deleteMany({});
   await BookVector.deleteMany({});
@@ -123,7 +125,7 @@ describe('bookgeek library assistant — authentication', () => {
 describe('whatNext — the candidate set is computed, not asked', () => {
   test('only in-the-library, not-finished books are offered to the model', async () => {
     await setOptIn(ALICE, true);
-    const [unread, reading, finished, abandoned, ghost, readCounted] = await Book.create([
+    const [unread, reading, finished, abandoned, ghost, readCounted] = await createBookFor(ALICE, [
       bookRow({ title: 'Unread One', dateAdded: new Date('2026-05-01') }), // newest → the "c1" label
       bookRow({ title: 'Reading One', shelf: 'reading' }),
       bookRow({ title: 'Finished One', shelf: 'read', dateFinished: new Date('2026-02-02'), readCount: 1 }),
@@ -162,7 +164,7 @@ describe('whatNext — the candidate set is computed, not asked', () => {
 
   test('the model sees titles, authors, tags, pages, shelf and dates — and nothing else', async () => {
     await setOptIn(ALICE, true);
-    await Book.create(
+    await createBookFor(ALICE, 
       bookRow({
         title: 'Lock In',
         authors: ['John Scalzi'],
@@ -173,7 +175,7 @@ describe('whatNext — the candidate set is computed, not asked', () => {
         rating: 4,
       })
     );
-    await Book.create(
+    await createBookFor(ALICE, 
       bookRow({
         title: 'Old Man War',
         authors: ['John Scalzi'],
@@ -211,7 +213,7 @@ describe('whatNext — the candidate set is computed, not asked', () => {
     for (let i = 0; i < 70; i += 1) {
       rows.push(bookRow({ title: `Book ${ i }`, dateAdded: new Date(2026, 0, 1 + i) }));
     }
-    await Book.create(rows);
+    await createBookFor(ALICE, rows);
 
     modelSays({ picks: [] });
     await Q.whatNext(null, { limit: 5 }, ctx(ALICE));
@@ -224,7 +226,7 @@ describe('whatNext — the candidate set is computed, not asked', () => {
 
   test('an id the model was never given is rejected — the fallback answers instead', async () => {
     await setOptIn(ALICE, true);
-    await Book.create(bookRow({ title: 'Real Book' }));
+    await createBookFor(ALICE, bookRow({ title: 'Real Book' }));
 
     modelSays({ picks: [{ bookId: String(new mongoose.Types.ObjectId()), why: 'invented' }] });
     const res = await Q.whatNext(null, { limit: 5 }, ctx(ALICE));
@@ -256,7 +258,7 @@ describe('whatNext — the candidate set is computed, not asked', () => {
     await setOptIn(ALICE, true);
     const rows = [];
     for (let i = 0; i < 5; i += 1) rows.push(bookRow({ title: `Shelf Book ${ i }` }));
-    await Book.create(rows);
+    await createBookFor(ALICE, rows);
 
     modelSays({ picks: [{ bookId: 'c1', why: 'kept one' }, { bookId: 'bogus', why: 'lost' }, { bookId: 'c2', why: 'kept two' }] });
     const res = await Q.whatNext(null, { limit: 5 }, ctx(ALICE));
@@ -278,7 +280,7 @@ describe('whatNext — the candidate set is computed, not asked', () => {
 describe('whatNext — the deterministic fallback', () => {
   test('opt-in off: no model call, still a useful shelf', async () => {
     await setOptIn(ALICE, false);
-    await Book.create([
+    await createBookFor(ALICE, [
       bookRow({ title: 'Dune Messiah', authors: ['Frank Herbert'], dateAdded: new Date('2026-01-01') }),
       bookRow({ title: 'Newest Thing', authors: ['Nobody At All'], dateAdded: new Date('2026-06-01') }),
       bookRow({
@@ -302,7 +304,7 @@ describe('whatNext — the deterministic fallback', () => {
   });
 
   test('a user who never opted in is off — the setting is not inherited', async () => {
-    await Book.create(bookRow({ title: 'Anything' }));
+    await createBookFor(ALICE, bookRow({ title: 'Anything' }));
     const res = await Q.whatNext(null, { limit: 5 }, ctx(BOB));
     expect(callAI).not.toHaveBeenCalled();
     expect(res.provenance.reason).toBe('disabled');
@@ -310,7 +312,7 @@ describe('whatNext — the deterministic fallback', () => {
 
   test('an unreachable model settles on the same ranking', async () => {
     await setOptIn(ALICE, true);
-    await Book.create(bookRow({ title: 'Anything' }));
+    await createBookFor(ALICE, bookRow({ title: 'Anything' }));
     callAI.mockRejectedValue(new Error('ECONNREFUSED'));
 
     const res = await Q.whatNext(null, { limit: 5 }, ctx(ALICE));
@@ -328,7 +330,7 @@ describe('whatNext — the deterministic fallback', () => {
 
   test('limit is clamped, never rejected, and never exceeded', async () => {
     await setOptIn(ALICE, false);
-    await Book.create([
+    await createBookFor(ALICE, [
       bookRow({ title: 'A' }),
       bookRow({ title: 'B' }),
       bookRow({ title: 'C' }),
@@ -350,7 +352,7 @@ describe('draftBookMetadata', () => {
 
   test('opt-in off: an empty description and the author\'s own tags', async () => {
     await setOptIn(ALICE, false);
-    const [target] = await Book.create([
+    const [target] = await createBookFor(ALICE, [
       bookRow({ title: 'Untagged Scalzi', authors: ['John Scalzi'], tags: [] }),
       bookRow({ title: 'Lock In', authors: ['John Scalzi'], tags: ['science fiction', 'mystery'] }),
       bookRow({ title: 'Redshirts', authors: ['John Scalzi'], tags: ['science fiction'] }),
@@ -367,7 +369,7 @@ describe('draftBookMetadata', () => {
 
   test('the model sees one book plus the library\'s tag names, and drafts from them', async () => {
     await setOptIn(ALICE, true);
-    const [target] = await Book.create([
+    const [target] = await createBookFor(ALICE, [
       bookRow({
         title: 'Lock In',
         authors: ['John Scalzi'],
@@ -397,7 +399,7 @@ describe('draftBookMetadata', () => {
 
   test('no more than two coined tags — a third settles on the fallback', async () => {
     await setOptIn(ALICE, true);
-    const [target] = await Book.create([
+    const [target] = await createBookFor(ALICE, [
       bookRow({ title: 'Lock In', authors: ['John Scalzi'] }),
       bookRow({ title: 'Other Scalzi', authors: ['John Scalzi'], tags: ['science fiction'] }),
     ]);
@@ -434,7 +436,7 @@ const mkBVec = (itemId, vector) =>
 describe('whatNext — the vector shortlist path (WHAT_NEXT_SPEC)', () => {
   /** One loved finished book + two candidates, with planted 3-dim vectors. */
   async function plant() {
-    const [loved, c1, c2] = await Book.create([
+    const [loved, c1, c2] = await createBookFor(ALICE, [
       bookRow({ title: 'Loved Space Book', shelf: 'read', rating: 5, readCount: 1, dateFinished: new Date('2026-03-01') }),
       bookRow({ title: 'Unread One', description: 'never sent' }),
       bookRow({ title: 'Unread Two' }),
@@ -471,7 +473,7 @@ describe('whatNext — the vector shortlist path (WHAT_NEXT_SPEC)', () => {
 
   test('no vectors → the legacy path: every candidate, no "because" key', async () => {
     await setOptIn(ALICE, true);
-    await Book.create(bookRow({ title: 'Plain Unread' }));
+    await createBookFor(ALICE, bookRow({ title: 'Plain Unread' }));
     modelSays({ picks: [] });
     await Q.whatNext(null, { limit: 5 }, ctx(ALICE));
     const sent = JSON.parse(callAI.mock.calls[0][1].messages[1].content);
@@ -483,7 +485,7 @@ describe('whatNext — the vector shortlist path (WHAT_NEXT_SPEC)', () => {
 describe('the assistant never writes', () => {
   test('a whatNext and a draft leave every book byte-identical', async () => {
     await setOptIn(ALICE, true);
-    const [target] = await Book.create([
+    const [target] = await createBookFor(ALICE, [
       bookRow({ title: 'Lock In', authors: ['John Scalzi'] }),
       bookRow({ title: 'Other', tags: ['science fiction'] }),
     ]);
@@ -502,7 +504,7 @@ describe('the assistant never writes', () => {
 describe('the daily cap is shared by both queries', () => {
   test('the two features draw on one counter', async () => {
     await setOptIn(ALICE, true);
-    const [target] = await Book.create([bookRow({ title: 'Lock In', authors: ['John Scalzi'] })]);
+    const [target] = await createBookFor(ALICE, [bookRow({ title: 'Lock In', authors: ['John Scalzi'] })]);
 
     // Burn the cap with drafts, then prove whatNext is capped too.
     modelSays({ description: 'ok', tags: [] });

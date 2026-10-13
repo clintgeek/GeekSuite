@@ -12,6 +12,7 @@ import habitService from '../todogeek/services/habitService.js';
 
 import Note, { active as activeNote } from '../notegeek/models/Note.js';
 import { Book } from '../bookgeek/models/book.js';
+import { BookReading, findBooksFor } from '../bookgeek/readerBooks.js';
 import Bird from '../flockgeek/models/Bird.js';
 import EggProduction from '../flockgeek/models/EggProduction.js';
 
@@ -318,19 +319,29 @@ export async function fetchGlanceToday(context, date) {
 
   // ── Reading ──
   try {
-    const books = await Book.find({ shelf: 'reading' })
+    // The CALLER's Reading shelf (apps/bookgeek/DOCS/PER_READER_SHELVES_PLAN.md),
+    // most recently touched by them first. The shelf used to live on the
+    // shared Book row, so everyone saw everyone's.
+    const readings = await BookReading.find({ userId: String(userId), shelf: 'reading' })
       .sort({ updatedAt: -1 })
       .limit(5)
       .lean();
+    const books = await Book.find({ _id: { $in: readings.map((r) => r.bookId) } }).lean();
+    const byId = new Map(books.map((b) => [String(b._id), b]));
 
-    result.reading = books.map((b) => ({
-      id: b._id.toString(),
-      title: b.title || 'Untitled',
-      authors: b.authors || [],
-      readingProgress: b.readingProgress ?? null,
-      pageCount: b.pageCount ?? null,
-      coverPath: b.coverPath || null,
-    }));
+    result.reading = readings
+      .filter((r) => byId.has(String(r.bookId)))
+      .map((r) => {
+        const b = byId.get(String(r.bookId));
+        return {
+          id: b._id.toString(),
+          title: b.title || 'Untitled',
+          authors: b.authors || [],
+          readingProgress: r.readingProgress ?? null,
+          pageCount: b.pageCount ?? null,
+          coverPath: b.coverPath || null,
+        };
+      });
   } catch (err) {
     logger.warn({ err }, 'glanceToday: book fetch failed');
   }
@@ -541,14 +552,12 @@ export async function searchThings(userId, term, options = {}) {
   // ── Books ──
   try {
     if (wants('book')) {
-      const books = await Book.find({
-        ...sinceClause,
-        ...(shelf ? { shelf } : {}),
-        $or: [{ title: regex }, { authors: regex }],
-      })
-        .sort({ updatedAt: -1 })
-        .limit(cap)
-        .lean();
+      // The catalog is shared; a shelf filter is the caller's shelf.
+      const books = await findBooksFor(userId, shelf ? { shelf } : {}, {
+        prematch: { ...sinceClause, $or: [{ title: regex }, { authors: regex }] },
+        sort: { updatedAt: -1 },
+        limit: cap,
+      });
 
       for (const b of books) {
         results.push({

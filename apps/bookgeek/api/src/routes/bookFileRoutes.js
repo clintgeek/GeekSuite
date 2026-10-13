@@ -13,6 +13,7 @@ import multer from "multer";
 import path from "path";
 import { Book } from "../models/book.js";
 import { Profile } from "../models/profile.js";
+import { BookReading, mergeReadings } from "../models/bookReading.js";
 import {
   libraryRoot as libraryRootPath,
   resolveInLibrary,
@@ -48,7 +49,7 @@ import {
   shouldReplaceDescription,
   tryCalibreEnrich,
 } from "../services/enrichment.js";
-import { cleanMyTags, deriveTagFields } from "../tags.js";
+import { deriveTagFields } from "../tags.js";
 
 const router = express.Router();
 
@@ -392,50 +393,22 @@ router.post("/api/books/merge", authenticateToken, validate({ body: mergeBodySch
     const secondary = aIsGr ? a : b;
     const primary = aIsGr ? b : a;
 
+    // Catalog fields fill the primary's blanks. Reader fields (shelf, rating,
+    // review, dates, read count, my tags) are each reader's own: every
+    // reader's record on the secondary fills THEIR record on the primary
+    // (PER_READER_SHELVES_PLAN.md) — myTags are unioned there, so the merged
+    // book still keeps both books' (DOCS/TAGS.md §4).
     const update = {};
-
-    if (
-      (primary.rating === null || primary.rating === undefined) &&
-      typeof secondary.rating === "number"
-    ) {
-      update.rating = secondary.rating;
-    }
-
-    if (!primary.review && secondary.review) {
-      update.review = secondary.review;
-    }
-
-    if (!primary.dateFinished && secondary.dateFinished) {
-      update.dateFinished = secondary.dateFinished;
-    }
 
     if (!primary.dateAdded && secondary.dateAdded) {
       update.dateAdded = secondary.dateAdded;
-    }
-
-    if (
-      (primary.readCount === null || primary.readCount === undefined) &&
-      typeof secondary.readCount === "number" &&
-      secondary.readCount > 0
-    ) {
-      update.readCount = secondary.readCount;
-    }
-
-    if (!primary.shelf && secondary.shelf) {
-      update.shelf = secondary.shelf;
     }
 
     if (!primary.goodreadsId && secondary.goodreadsId) {
       update.goodreadsId = secondary.goodreadsId;
     }
 
-    // Tags a person added in BookGeek are theirs wherever they were added:
-    // the merged book keeps both books' (DOCS/TAGS.md §4).
-    const primaryMine = Array.isArray(primary.myTags) ? [...primary.myTags] : [];
-    const mergedMine = cleanMyTags([...primaryMine, ...(Array.isArray(secondary.myTags) ? secondary.myTags : [])]);
-    if (mergedMine.length !== primaryMine.length) {
-      update.myTags = mergedMine;
-    }
+    await mergeReadings(BookReading, secondary._id, primary._id);
 
     let updatedPrimary = primary;
     if (Object.keys(update).length > 0) {

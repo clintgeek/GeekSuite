@@ -55,6 +55,7 @@
 import logger from '../../lib/logger.js';
 import { runAIFeature } from '../../services/aiFeatureRunner.js';
 import { Book } from './models/book.js';
+import { findBooksFor } from './readerBooks.js';
 import { catalogVectors, shortlistFromSeeds, moodQueryVector } from '../catalog/catalogSemantic.js';
 import { salvagePicks, shortId } from '../catalog/salvagePicks.js';
 
@@ -132,11 +133,12 @@ const tagList = (book) =>
  * field the shelf asks for next. What the *model* sees is a different and much
  * smaller thing — `whatNextContext()` builds it field by field.
  */
-export async function candidateBooks(limit = MAX_CANDIDATES) {
-  return Book.find({ $and: [IN_THE_LIBRARY, NOT_FINISHED] })
-    .sort({ dateAdded: -1, _id: -1 })
-    .limit(Math.max(1, limit))
-    .lean();
+export async function candidateBooks(userId, limit = MAX_CANDIDATES) {
+  // "Not finished" is the CALLER's (PER_READER_SHELVES_PLAN.md).
+  return findBooksFor(userId, { $and: [IN_THE_LIBRARY, NOT_FINISHED] }, {
+    sort: { dateAdded: -1, _id: -1 },
+    limit: Math.max(1, limit),
+  });
 }
 
 export const SEED_COUNT = 5;
@@ -145,12 +147,12 @@ export const RECENT_SEEDS = 2;
 export const SHORTLIST_SIZE = 20;
 
 /** The last N finished books, newest first, with the rating the user gave. */
-export async function recentlyFinishedBooks(limit = MAX_FINISHED) {
-  return Book.find({ $or: FINISHED_SIGNALS })
-    .select('title authors rating dateFinished updatedAt')
-    .sort({ dateFinished: -1, updatedAt: -1, _id: -1 })
-    .limit(Math.max(1, limit))
-    .lean();
+export async function recentlyFinishedBooks(userId, limit = MAX_FINISHED) {
+  return findBooksFor(userId, { $or: FINISHED_SIGNALS }, {
+    sort: { dateFinished: -1, updatedAt: -1, _id: -1 },
+    limit: Math.max(1, limit),
+    project: { title: 1, authors: 1, rating: 1, dateFinished: 1, updatedAt: 1 },
+  });
 }
 
 /**
@@ -376,8 +378,8 @@ function normalizePicks(picks, limit, byId) {
  */
 export async function whatNext({ userId, limit, enabled, mood }) {
   const [candidates, finished, vecs] = await Promise.all([
-    candidateBooks(MAX_CANDIDATES),
-    recentlyFinishedBooks(MAX_FINISHED),
+    candidateBooks(userId, MAX_CANDIDATES),
+    recentlyFinishedBooks(userId, MAX_FINISHED),
     catalogVectors('book', 'books'),
   ]);
   const byId = new Map(candidates.map((b) => [String(b._id), b]));
@@ -389,10 +391,11 @@ export async function whatNext({ userId, limit, enabled, mood }) {
   let shortlist = null;
   let seeds = [];
   if (vectorIds.size) {
-    const seedRows = await Book.find(
+    const seedRows = await findBooksFor(
+      userId,
       { $or: [{ rating: { $gte: 4 } }, ...FINISHED_SIGNALS] },
-      { title: 1, rating: 1, shelf: 1, readCount: 1, dateFinished: 1, updatedAt: 1 },
-    ).lean();
+      { project: { title: 1, rating: 1, shelf: 1, readCount: 1, dateFinished: 1, updatedAt: 1 } },
+    );
     seeds = pickBookSeeds(
       seedRows.map((r) => ({ ...r, finished: isFinishedBook(r) })),
       vectorIds,

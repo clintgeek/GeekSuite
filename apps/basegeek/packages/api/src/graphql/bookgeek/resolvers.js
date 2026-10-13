@@ -1,5 +1,6 @@
 import { Book } from "./models/book.js";
 import { Profile } from "./models/profile.js";
+import { findBooksFor, countBooksFor, findBookFor, overlayFor, saveReading, splitReaderFields, BookReading } from "./readerBooks.js";
 import bookSchemaModule from "@geeksuite/schemas/bookgeek/book";
 import AIConfig from "../../models/AIConfig.js";
 import mongoose from "mongoose";
@@ -86,15 +87,17 @@ function toNumber(value, type = "float") {
 }
 
 /**
- * BookGeek is a deliberately SHARED household library: the Book model carries
- * no owner/userId field, and the standalone bookgeek API serves files and
- * covers without per-book ownership. So the security boundary here is
- * "authenticated household member", not "row owner" — every query and mutation
- * requires a signed-in user, but no read is narrowed to the caller. Per-user
- * data in this app lives on the Profile model, which IS scoped to the caller
- * by `userId` in every profile resolver below — the library is shared, a
- * person's Kindle address, secret word, custom shelves and saved filters are
- * not. Device baskets stay in the standalone bookgeek API (file work).
+ * BookGeek's CATALOG is a deliberately SHARED household library: the Book
+ * model carries no owner/userId field, and the standalone bookgeek API serves
+ * files and covers without per-book ownership. So the boundary for catalog
+ * data is "authenticated household member", not "row owner".
+ *
+ * What a READER does with a book — shelf, rating, review, dates, progress,
+ * "my tags" — is theirs alone (PER_READER_SHELVES_PLAN.md, 2026-10-13): it
+ * lives in `BookReading`, and every read below that returns or filters by it
+ * goes through `readerOverlay` (readerBooks.js) for the caller. Profile data
+ * (Kindle address, secret word, custom shelves, saved filters) is per-user as
+ * before. Device baskets stay in the standalone bookgeek API (file work).
  */
 function requireUser(user) {
   if (!user?.id) {
@@ -110,6 +113,11 @@ function validObjectId(id) {
   return typeof id === "string" || id instanceof mongoose.Types.ObjectId
     ? mongoose.isValidObjectId(id)
     : false;
+}
+
+/** Valid ids → ObjectIds (aggregate `$match` does not cast strings). */
+function toObjectIds(ids) {
+  return ids.filter((id) => validObjectId(id)).map((id) => new mongoose.Types.ObjectId(String(id)));
 }
 
 function toBool(value) {
@@ -205,7 +213,7 @@ export const resolvers = {
       // library's and keep their exact semantics for old tabs; `filter` is the
       // faceted library's BookFilterInput (zod-checked below). Given both,
       // every one narrows.
-      requireUser(user);
+      const userId = requireUser(user);
       const { page = 1, limit = 50, sort = "title", sortDir = "asc" } = args;
       const { filter: filterInput, seed } = validateBooksFilter({ filter: args.filter, seed: args.seed });
       const pageNum = Math.max(1, page ?? 1);
@@ -223,6 +231,7 @@ export const resolvers = {
       // per seed (@geeksuite/collection/server `randomSortKey`).
       if (sortKey === "random") {
         const [result] = await Book.aggregate([
+          ...overlayFor(userId),
           { $match: filter },
           { $addFields: { __shuffle: randomSortKey(seed ?? 0) } },
           pageFacetStage({ sort: { __shuffle: 1, _id: 1 }, page: pageNum, limit: limitNum, project: { __shuffle: 0 } }),
@@ -282,8 +291,8 @@ export const resolvers = {
 
       const skip = (pageNum - 1) * limitNum;
       const [items, total] = await Promise.all([
-        Book.find(filter).sort(sortObj).skip(skip).limit(limitNum).lean(),
-        Book.countDocuments(filter),
+        findBooksFor(userId, filter, { sort: sortObj, skip, limit: limitNum }),
+        countBooksFor(userId, filter),
       ]);
 
       return {
@@ -298,18 +307,20 @@ export const resolvers = {
     // Keyword rows come from the existing `q` filter, title matches first;
     // the vector half silently drops out when the embeddings service is down.
     bookSearch: async (_, rawArgs, { user }) => {
-      requireUser(user);
+      const userId = requireUser(user);
       const { q, limit } = validateBookSearch(rawArgs ?? {});
       const limitNum = Math.min(50, limit ?? 20);
       const match = searchMatch(q);
-      const rows = await Book.find(match || {}, { title: 1 }).limit(200).lean();
+      // `searchMatch` reads `myTags`, which is the caller's — so the keyword
+      // rows come through the overlay too.
+      const rows = await findBooksFor(userId, match || {}, { limit: 200, project: { title: 1 } });
       const titleHit = new RegExp(searchRegex(q), 'i');
       const keywordRows = [
         ...rows.filter((r) => titleHit.test(r.title || '')),
         ...rows.filter((r) => !titleHit.test(r.title || '')),
       ];
       const hits = await searchCatalog({ kind: 'book', scope: 'books', q, keywordRows, limit: limitNum });
-      const books = await Book.find({ _id: { $in: hits.map((h) => h.id) } }).lean();
+      const books = await findBooksFor(userId, {}, { prematch: { _id: { $in: toObjectIds(hits.map((h) => h.id)) } } });
       const byId = new Map(books.map((b) => [String(b._id), b]));
       return { items: hits.filter((h) => byId.has(h.id)).map((h) => ({ book: byId.get(h.id), score: h.score, matchedBy: h.matchedBy })) };
     },
@@ -317,7 +328,7 @@ export const resolvers = {
     // caller's 4★+ books — or likeIds when given — and candidates are owned
     // books never finished, never read, not on the 'read' shelf.
     booksLike: async (_, rawArgs, { user }) => {
-      requireUser(user);
+      const userId = requireUser(user);
       const { likeIds, q, limit } = validateBooksLike(rawArgs ?? {});
       const limitNum = Math.min(25, limit ?? 10);
       let seeds;
@@ -327,18 +338,20 @@ export const resolvers = {
         const ids = likeIds.filter((v) => validObjectId(v));
         seeds = (await Book.find({ _id: { $in: ids } }, { _id: 1 }).lean()).map((b) => ({ id: String(b._id), weight: 1 }));
       } else {
-        seeds = (await Book.find({ rating: { $gte: 4 } }, { _id: 1 }).lean()).map((b) => ({ id: String(b._id), weight: 1 }));
+        // The CALLER's 4★+ books — someone else's taste is not a seed.
+        seeds = (await BookReading.find({ userId: String(userId), rating: { $gte: 4 } }, { bookId: 1 }).lean())
+          .map((r) => ({ id: String(r.bookId), weight: 1 }));
       }
-      const candidates = await Book.find(
+      // Unread BY THE CALLER: shelf/dateFinished/readCount are overlaid.
+      const candidates = await findBooksFor(
+        userId,
         {
-          owned: true,
-          _id: { $nin: seeds.map((s) => s.id) },
           shelf: { $ne: 'read' },
           dateFinished: null,
           $or: [{ readCount: 0 }, { readCount: null }, { readCount: { $exists: false } }],
         },
-        { _id: 1 },
-      ).lean();
+        { prematch: { owned: true, _id: { $nin: toObjectIds(seeds.map((s) => s.id)) } }, project: { _id: 1 } },
+      );
       const { items, reason } = await recommendCatalog({
         kind: 'book',
         scope: 'books',
@@ -348,7 +361,7 @@ export const resolvers = {
         limit: limitNum,
       });
       const lookupIds = [...new Set([...items.map((i) => i.id), ...items.map((i) => i.closestId).filter(Boolean)])];
-      const docs = await Book.find({ _id: { $in: lookupIds } }).lean();
+      const docs = await findBooksFor(userId, {}, { prematch: { _id: { $in: toObjectIds(lookupIds) } } });
       const byId = new Map(docs.map((b) => [String(b._id), b]));
       return {
         reason,
@@ -364,28 +377,28 @@ export const resolvers = {
     // Each facet's counts apply every active filter EXCEPT its own
     // (filters.js). Household-shared like `books`: no user narrowing.
     bookFacets: async (_, rawArgs, { user }) => {
-      requireUser(user);
+      const userId = requireUser(user);
       const { filter } = validateBookFacets(rawArgs ?? {});
-      const [result] = await Book.aggregate(facetsPipeline(filter ?? {}));
+      const [result] = await Book.aggregate([...overlayFor(userId), ...facetsPipeline(filter ?? {})]);
       return shapeFacets(result, filter ?? {});
     },
     book: async (_, { id }, { user }) => {
-      requireUser(user);
+      const userId = requireUser(user);
       if (!validObjectId(id)) return null;
-      return await Book.findById(id).lean();
+      return await findBookFor(userId, id);
     },
     shelves: async (_, __, { user }) => {
-      requireUser(user);
+      const userId = requireUser(user);
       const [total, owned, otherShelves, ...shelfCounts] = await Promise.all([
         Book.countDocuments({}),
         Book.countDocuments({ owned: true }),
-        // Every shelf value that is not a built-in: custom shelves.
-        Book.aggregate([
-          { $match: { shelf: { $type: "string", $nin: ["", ...shelfNames] } } },
+        // Every shelf value that is not a built-in: the caller's custom shelves.
+        BookReading.aggregate([
+          { $match: { userId: String(userId), shelf: { $type: "string", $nin: ["", ...shelfNames] } } },
           { $group: { _id: "$shelf", count: { $sum: 1 } } },
           { $sort: { _id: 1 } },
         ]),
-        ...shelfNames.map((name) => Book.countDocuments(shelfMatch(name))),
+        ...shelfNames.map((name) => countBooksFor(userId, shelfMatch(name))),
       ]);
 
       const counts = {};
@@ -446,7 +459,7 @@ export const resolvers = {
       const { bookId } = validateDraftBookMetadata(rawArgs);
       // Same "a malformed id is simply not found" rule the rest of the module
       // follows — but the field is non-null, so it is an error, not a null.
-      const book = validObjectId(bookId) ? await Book.findById(bookId).lean() : null;
+      const book = validObjectId(bookId) ? await findBookFor(userId, bookId) : null;
       if (!book) throw userError("Book not found", "NOT_FOUND");
       const enabled = await library.libraryAssistantEnabled(userId);
       return await library.draftBookMetadata({ userId, book, enabled });
@@ -454,13 +467,13 @@ export const resolvers = {
   },
   Mutation: {
     createBook: async (_, rawArgs, { user }) => {
-      requireUser(user);
+      const userId = requireUser(user);
       const { input } = validateCreateBook(rawArgs);
+      // The shelf is the creator's; the catalog row carries none.
       const doc = {
         title: input.title,
         authors: input.authors || [],
         isbn: input.isbn,
-        shelf: input.shelf || "want-to-read",
         owned: input.owned || false,
         dateAdded: new Date(),
         source: "manual",
@@ -470,26 +483,30 @@ export const resolvers = {
       };
 
       const book = await Book.create(doc);
-      return book.toObject ? book.toObject() : book;
+      await saveReading(userId, book._id, { shelf: input.shelf || "want-to-read" });
+      return await findBookFor(userId, book._id);
     },
     updateBook: async (_, rawArgs, { user }) => {
-      requireUser(user);
+      const userId = requireUser(user);
       const { id, input } = validateUpdateBook(rawArgs);
       if (!validObjectId(id)) return null;
+      // Catalog fields go to the shared Book; reader fields (shelf, rating,
+      // review, dates, progress, myTags) to the CALLER's BookReading only.
+      const { catalog, reader } = splitReaderFields(input);
       // `tags` is the import's; a write to it (an old tab) rederives the
       // canonical and Unsorted fields in the same $set. `myTags` is the
       // person's own, stored as typed (trimmed, deduped), never mapped.
-      const set = { ...input };
+      const set = { ...catalog };
       if (Array.isArray(input.tags)) Object.assign(set, deriveTagFields(input.tags));
       else if (input.tags === null) Object.assign(set, deriveTagFields([]));
-      if (Array.isArray(input.myTags)) set.myTags = cleanMyTags(input.myTags);
-      else if (input.myTags === null) set.myTags = [];
-      const updated = await Book.findByIdAndUpdate(
-        id,
-        { $set: set },
-        { new: true, lean: true }
-      );
-      return updated;
+      if (Array.isArray(input.myTags)) reader.myTags = cleanMyTags(input.myTags);
+      else if (input.myTags === null) reader.myTags = [];
+      const exists = Object.keys(set).length
+        ? await Book.findByIdAndUpdate(id, { $set: set }, { new: true, lean: true })
+        : await Book.findById(id, { _id: 1 }).lean();
+      if (!exists) return null;
+      await saveReading(userId, id, reader);
+      return await findBookFor(userId, id);
     },
     deleteBook: async (_, rawArgs, { user }) => {
       requireUser(user);
@@ -498,6 +515,8 @@ export const resolvers = {
       // Simplification: only deleting the book record here for now.
       // Full implementation should handle file deletion if requested.
       const res = await Book.deleteOne({ _id: id });
+      // Every reader's record of it goes with it.
+      if (res.deletedCount > 0) await BookReading.deleteMany({ bookId: id });
       return { success: res.deletedCount > 0, deletedId: id };
     },
     saveBookProfile: async (_, rawArgs, { user }) => {
@@ -636,8 +655,9 @@ export const resolvers = {
         { upsert: true, new: true, lean: true }
       );
     },
-    // Removing a shelf also clears it from any book sitting on it. Books are
-    // shared across users, so those books land back on Unread for everyone.
+    // Removing a shelf also clears it from the CALLER's books sitting on it —
+    // only theirs: a shelf is per reader, and another reader may have a
+    // custom shelf with the same slug.
     removeBookShelf: async (_, rawArgs, { user }) => {
       const userId = requireUser(user);
       const { id: rawId } = validateRemoveBookShelf(rawArgs);
@@ -651,7 +671,7 @@ export const resolvers = {
         { $pull: { customShelves: { id } } },
         { new: true, lean: true }
       );
-      const cleared = await Book.updateMany({ shelf: id }, { $unset: { shelf: "" } });
+      const cleared = await BookReading.updateMany({ userId: String(userId), shelf: id }, { $unset: { shelf: "" } });
 
       return { profile, clearedBooks: cleared?.modifiedCount ?? 0 };
     },

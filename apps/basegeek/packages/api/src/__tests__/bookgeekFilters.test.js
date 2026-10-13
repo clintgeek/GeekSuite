@@ -25,6 +25,7 @@ import mongoose from 'mongoose';
 const { Book } = await import('../graphql/bookgeek/models/book.js');
 const { Profile } = await import('../graphql/bookgeek/models/profile.js');
 const { resolvers } = await import('../graphql/bookgeek/resolvers.js');
+const { createBookFor, clearReadings } = await import('./helpers/bookReaders.js');
 const { default: bookShared } = await import('@geeksuite/schemas/bookgeek/book');
 const { deriveTagFields } = bookShared.tagVocabulary;
 
@@ -40,6 +41,7 @@ beforeAll(async () => {
 }, 60000);
 
 afterEach(async () => {
+  await clearReadings();
   await Promise.all([Book.deleteMany({}), Profile.deleteMany({})]);
 });
 
@@ -66,7 +68,7 @@ const file = (format) => ({ format, path: `/lib/x.${format.toLowerCase()}`, size
 // `philosophy`, `history`, `fantasy` and `memoir` map; `classic` stays Unsorted.
 const derived = (docs) => docs.map((d) => ({ ...d, ...deriveTagFields(d.tags) }));
 const seedLibrary = () =>
-  Book.create(derived([
+  createBookFor(ALICE, derived([
     { title: 'Anathem', authors: ['Neal Stephenson'], shelf: 'read', tags: ['sf', 'philosophy'], files: [file('EPUB')], language: 'en', owned: true, rating: 5, dateFinished: at(2021), readCount: 1, dateAdded: at(2020, 1) },
     { title: 'Cryptonomicon', authors: ['Neal Stephenson'], tags: ['sf', 'history'], files: [file('epub'), file('PDF')], language: 'en', rating: 3.5, dateFinished: at(2022), dateAdded: at(2020, 2) },
     { title: 'Dune', authors: ['Frank Herbert'], shelf: 'unread', series: { name: 'Dune', index: 1 }, tags: ['sf'], language: 'en', owned: true, dateAdded: at(2020, 3) },
@@ -109,8 +111,16 @@ describe('bookFacets — every facet, unfiltered', () => {
     expect(f.hasFile).toBe(6);
   });
 
-  test('the library is shared: Bob sees the same counts; signed out sees nothing', async () => {
-    expect(await facets(undefined, BOB)).toEqual(await facets(undefined, ALICE));
+  test('the catalog is shared, the shelves are not: Bob sees the same books, none of Alice’s shelves; signed out sees nothing', async () => {
+    // PER_READER_SHELVES_PLAN.md: the seeded shelves/ratings/dates are Alice's.
+    const [alice, bob] = [await facets(undefined, ALICE), await facets(undefined, BOB)];
+    expect(bob.total).toBe(alice.total);
+    expect(counts(bob.authors)).toEqual(counts(alice.authors));
+    expect(counts(bob.formats)).toEqual(counts(alice.formats));
+    // Every book is unread for Bob; he has no ratings and no read years.
+    expect(counts(bob.shelves)).toEqual({ unread: alice.total });
+    expect(bob.ratings.every((r) => r.count === 0) || bob.ratings.length === 0).toBe(true);
+    expect(bob.readYears).toEqual([]);
     await expect(Query.bookFacets(null, {}, ctx(null))).rejects.toThrow('Unauthorized');
     await expect(Query.books(null, {}, ctx(null))).rejects.toThrow('Unauthorized');
   });
@@ -186,7 +196,7 @@ describe('books(filter:)', () => {
   });
 
   test('search input is a literal, not a regex', async () => {
-    await Book.create({ title: 'C++ (Deluxe', authors: ['X'] });
+    await createBookFor(ALICE, { title: 'C++ (Deluxe', authors: ['X'] });
     expect(await titles({ filter: { q: 'C++ (' } })).toEqual(['C++ (Deluxe']);
     expect(await titles({ filter: { q: '(a+)+$' } })).toEqual([]);
     expect(await titles({ filter: { authorText: '.*' } })).toEqual([]);
