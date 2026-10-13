@@ -6,6 +6,7 @@ import FoodLog from '../models/FoodLog.js';
 import UserSettings from '../models/UserSettings.js';
 import logger from '../config/logger.js';
 import unifiedFoodService from '../services/unifiedFoodService.js';
+import recipeParseService, { MAX_RECIPE_TEXT } from '../services/recipeParseService.js';
 import { foodItemDedupeFilters, foodCatalogVisibilityFilter } from '@geeksuite/schemas/fitnessgeek/foodItem';
 
 // Apply authentication to all routes
@@ -202,6 +203,43 @@ router.get('/suggest', async (req, res) => {
     res.status(500).json({
       success: false,
       error: { message: 'Failed to suggest foods', code: 'FOOD_SUGGEST_ERROR' }
+    });
+  }
+});
+
+// POST /api/foods/recipe/parse — a pasted ingredient list → recipe rows for
+// the builder to REVIEW. Logs nothing, saves nothing (DOCS/RECIPES_PLAN.md §3).
+router.post('/recipe/parse', async (req, res) => {
+  try {
+    const text = String(req.body?.text || '');
+    if (!text.trim()) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'Paste an ingredient list', code: 'VALIDATION_ERROR' }
+      });
+    }
+    if (text.length > MAX_RECIPE_TEXT) {
+      return res.status(400).json({
+        success: false,
+        error: { message: 'That list is too long — paste just the ingredients', code: 'VALIDATION_ERROR' }
+      });
+    }
+
+    const started = Date.now();
+    const result = await recipeParseService.parseRecipeText(text, { userId: req.user.id });
+    logger.info({
+      userId: req.user.id,
+      lines: result.ingredients.length,
+      unresolved: result.ingredients.filter((i) => i.unresolved).length,
+      ms: Date.now() - started
+    }, 'Recipe parse');
+
+    res.json({ success: true, data: result });
+  } catch (error) {
+    logger.error({ err: error }, 'Recipe parse failed');
+    res.status(500).json({
+      success: false,
+      error: { message: 'Could not read that ingredient list', code: 'RECIPE_PARSE_ERROR' }
     });
   }
 });
