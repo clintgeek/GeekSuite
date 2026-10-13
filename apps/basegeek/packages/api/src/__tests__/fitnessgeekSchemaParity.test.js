@@ -424,6 +424,8 @@ const PAIRS = [
       'source_id',
       'user_id',
       'is_deleted',
+      // A single nested sub-schema (recipes, RECIPES_PLAN.md) — one path.
+      'recipe',
       'created_at',
       'updated_at',
     ],

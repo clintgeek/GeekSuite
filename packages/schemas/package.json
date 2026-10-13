@@ -18,6 +18,7 @@
     "./fitnessgeek/meal": "./fitnessgeek/meal.js",
     "./fitnessgeek/medication": "./fitnessgeek/medication.js",
     "./fitnessgeek/nutritionGoals": "./fitnessgeek/nutritionGoals.js",
+    "./fitnessgeek/recipe": "./fitnessgeek/recipe.js",
     "./fitnessgeek/userSettings": "./fitnessgeek/userSettings.js",
     "./fitnessgeek/weight": "./fitnessgeek/weight.js",
     "./fitnessgeek/weightGoals": "./fitnessgeek/weightGoals.js",

@@ -288,10 +288,53 @@ export const typeDefs = gql`
     is_verified: Boolean
     "Where the row came from: 'custom' (made by a person), 'usda', 'openfoodfacts', 'ai', …"
     source: String
+    "Set only on a recipe: the ingredients this food's per-serving nutrition is computed from."
+    recipe: FitnessRecipe
     user_id: String
     is_deleted: Boolean
     created_at: Date
     updated_at: Date
+  }
+
+  "A custom food built from ingredients (apps/fitnessgeek/DOCS/RECIPES_PLAN.md)."
+  type FitnessRecipe {
+    yield_servings: Float
+    ingredients: [FitnessRecipeIngredient]
+  }
+
+  type FitnessRecipeIngredient {
+    "Catalog row it came from, when there is one. Nutrition below is a snapshot, not a live link."
+    food_item_id: ID
+    name: String
+    "What the person typed: amount and unit, e.g. 1 lb."
+    amount: Float
+    unit: String
+    "That amount in servings of the ingredient."
+    servings: Float
+    "The ingredient's own serving, which amount/unit were converted against."
+    serving_size: Float
+    serving_unit: String
+    "Per ONE serving of the ingredient."
+    nutrition: NutritionData
+    "True when the nutrition came from an AI estimate rather than a catalog row."
+    estimated: Boolean
+  }
+
+  input FitnessRecipeInput {
+    yield_servings: Float!
+    ingredients: [FitnessRecipeIngredientInput!]!
+  }
+
+  input FitnessRecipeIngredientInput {
+    food_item_id: ID
+    name: String!
+    amount: Float
+    unit: String
+    servings: Float!
+    serving_size: Float
+    serving_unit: String
+    nutrition: NutritionDataInput!
+    estimated: Boolean
   }
 
   input FitnessFoodInput {
@@ -321,6 +364,13 @@ export const typeDefs = gql`
     scope as 'source': only 'FoodLogInput.food_item' reads it.
     """
     source_id: String
+    """
+    Makes this food a recipe. When sent, the server recomputes 'nutrition'
+    (per recipe serving) and sets the serving to 1 'serving'; the client's
+    'nutrition' / 'serving_*' are ignored. Read by 'addFitnessFood' /
+    'updateFitnessFood' only.
+    """
+    recipe: FitnessRecipeInput
   }
 
   type FoodLog {

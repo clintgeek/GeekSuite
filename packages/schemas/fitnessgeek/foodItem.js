@@ -154,6 +154,8 @@
  *     restates it in a doc comment; GraphQL types it as `String`.
  * None is a two-writer hazard. Fold them in whenever those files are touched.
  */
+const { recipeDefinition } = require('./recipe.js');
+
 const FOOD_SOURCES = Object.freeze([
   'nutritionix',
   'usda',
@@ -288,7 +290,11 @@ function foodItemDefinition(mongoose) {
       type: Boolean,
       default: false,
       index: true
-    }
+    },
+    // Present only on a recipe — a custom food built from ingredients.
+    // `nutrition` above is then per serving of the recipe, recomputed from
+    // this by the writer (fitnessgeek/recipe.js, DOCS/RECIPES_PLAN.md).
+    recipe: recipeDefinition(mongoose)
   };
 }
 

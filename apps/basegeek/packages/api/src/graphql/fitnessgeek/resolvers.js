@@ -19,6 +19,7 @@ import DailySummary from './models/DailySummary.js';
 import WeightGoals from './models/WeightGoals.js';
 import BodyComposition from './models/BodyComposition.js';
 import { isValidObjectId } from './ownership.js';
+import { recipeFields } from './recipeInput.js';
 import { toUtcMidnight, utcDateString, utcDayRange, utcMidnightToday } from '@geeksuite/utils/dates';
 import {
   bodyCompCurrent,
@@ -73,7 +74,11 @@ const assertAccessibleFoodItems = async (items, userId) => {
  * findOrCreate, which only reads the fields it names.
  */
 const toFoodItemDoc = (input = {}) => {
-  const { serving_size, serving_unit, ...rest } = input;
+  // `recipe` is only ever written by addFitnessFood/updateFitnessFood, which
+  // validate it and recompute the totals; a log's inline food must not carry
+  // one onto a (possibly global) catalog row.
+  // eslint-disable-next-line no-unused-vars
+  const { serving_size, serving_unit, recipe, ...rest } = input;
   return {
     ...rest,
     serving: { size: serving_size ?? 100, unit: serving_unit || 'g' },
@@ -1477,12 +1482,15 @@ export const resolvers = {
       // `id`/`source`/`source_id` exist on FitnessFoodInput only for
       // FoodLogInput.food_item's findOrCreate path — dropped here so this
       // mutation keeps minting a PRIVATE custom food and nothing else.
-      const { serving_size, serving_unit, id: _id, source: _source, source_id: _sourceId, ...rest } = input;
+      const { serving_size, serving_unit, id: _id, source: _source, source_id: _sourceId, recipe, ...rest } = input;
       const doc = {
         ...rest,
         serving: { size: serving_size, unit: serving_unit || 'g' },
         source: 'custom',
         user_id: user.id,
+        // A recipe's nutrition and serving come from its ingredients, never
+        // from the client (recipeInput.js).
+        ...(recipe ? recipeFields(recipe) : {}),
       };
       return new FoodItem(doc).save();
     },
@@ -1496,18 +1504,28 @@ export const resolvers = {
       // only fails the NEXT time something touches it. Dot paths, and only
       // for the keys the client actually sent. (BURN_REVIEW #19.)
       const {
-        serving_size, serving_unit, nutrition,
+        serving_size, serving_unit, nutrition, recipe,
         id: _id, source: _source, source_id: _sourceId,
         ...rest
       } = input;
       const update = { ...rest, updated_at: new Date() };
-      if (nutrition && typeof nutrition === 'object') {
-        for (const [key, value] of Object.entries(nutrition)) {
-          if (value !== undefined) update[`nutrition.${ key }`] = value;
+      if (recipe) {
+        // A recipe edit replaces the recipe, and with it the WHOLE per-serving
+        // nutrition — every key is recomputed, so replacing is the merge.
+        const fields = recipeFields(recipe);
+        update.recipe = fields.recipe;
+        update.nutrition = fields.nutrition;
+        update['serving.size'] = fields.serving.size;
+        update['serving.unit'] = fields.serving.unit;
+      } else {
+        if (nutrition && typeof nutrition === 'object') {
+          for (const [key, value] of Object.entries(nutrition)) {
+            if (value !== undefined) update[`nutrition.${ key }`] = value;
+          }
         }
+        if (serving_size != null) update['serving.size'] = serving_size;
+        if (serving_unit != null) update['serving.unit'] = serving_unit;
       }
-      if (serving_size != null) update['serving.size'] = serving_size;
-      if (serving_unit != null) update['serving.unit'] = serving_unit;
       const food = await FoodItem.findOneAndUpdate(
         { _id: id, user_id: user.id },
         update,
@@ -1768,6 +1786,11 @@ export const resolvers = {
     id: (f) => f._id.toString(),
     serving_size: (f) => f.serving?.size ?? f.serving_size ?? null,
     serving_unit: (f) => f.serving?.unit ?? f.serving_unit ?? null,
+  },
+  FitnessRecipeIngredient: {
+    food_item_id: (i) => (i.food_item_id ? String(i.food_item_id) : null),
+    serving_size: (i) => i.serving?.size ?? null,
+    serving_unit: (i) => i.serving?.unit ?? null,
   },
   FoodLog: { id: (l) => l._id.toString() },
   FitnessMeal: { id: (m) => m._id.toString() },
