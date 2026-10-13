@@ -277,7 +277,7 @@ const COPY_MEAL = gql`
 // declares `date` as a plain String, not the `Date` scalar; sending `Date!`
 // here was a validation error waiting on the routing bug above it.
 const GET_HOUSEHOLD_MEMBER_LOGS = gql`
-  query GetHouseholdMemberLogs($memberId: ID!, $date: String!) { fitnessHouseholdMemberLogs(memberId: $memberId, date: $date) { id log_date meal_type servings calculatedNutrition { calories_per_serving protein_grams carbs_grams fat_grams fiber_grams sugar_grams sodium_mg } food_item_id { id name brand } } }
+  query GetHouseholdMemberLogs($memberId: ID!, $date: String!) { fitnessHouseholdMemberLogs(memberId: $memberId, date: $date) { id log_date meal_type servings nutrition { calories_per_serving protein_grams carbs_grams fat_grams } calculatedNutrition { calories_per_serving protein_grams carbs_grams fat_grams fiber_grams sugar_grams sodium_mg } food_item_id { id name brand nutrition { calories_per_serving } } } }
 `;
 
 // Report types resolve to FitnessJSON scalars on the backend — select them

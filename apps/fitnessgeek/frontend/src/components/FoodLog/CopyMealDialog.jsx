@@ -19,6 +19,7 @@ import {
 } from '@mui/icons-material';
 import { readableOn } from '@geeksuite/ui';
 import { fitnessGeekService } from '../../services/fitnessGeekService';
+import { errorMessage } from '../../utils/errorMessage.js';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
 import DateField from '../primitives/DateField.jsx';
 
@@ -88,9 +89,10 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
 
   const loadHouseholdMembers = async () => {
     try {
-      const response = await fitnessGeekService.getHouseholdMembers();
-      if (response.data?.members) {
-        setHouseholdMembers(response.data.members);
+      // Resolves to the household itself, not `{ data }` — see HouseholdLogView.
+      const household = await fitnessGeekService.getHouseholdMembers();
+      if (household?.members) {
+        setHouseholdMembers(household.members);
       }
     } catch (error) {
       // Silently fail - household is optional
@@ -130,7 +132,7 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
       }, 1500);
 
     } catch (err) {
-      setError(err.response?.data?.error?.message || 'Failed to copy meal');
+      setError(errorMessage(err, 'Failed to copy meal'));
     } finally {
       setCopying(false);
     }

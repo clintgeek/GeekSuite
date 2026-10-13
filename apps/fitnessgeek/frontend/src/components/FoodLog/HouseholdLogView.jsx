@@ -27,6 +27,7 @@ import {
   Restaurant as MealIcon
 } from '@mui/icons-material';
 import { fitnessGeekService } from '../../services/fitnessGeekService';
+import { errorMessage } from '../../utils/errorMessage.js';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
 
 const MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack'];
@@ -58,22 +59,24 @@ const HouseholdLogView = ({ open, onClose, currentDate, onCopyMeal }) => {
     try {
       setLoading(true);
       setError('');
-      const response = await fitnessGeekService.getHouseholdMembers();
-      const members = response.data?.members?.filter(m => m.shares_food_logs) || [];
+      // The service resolves to the household itself (`apiService` unwraps
+      // the single GraphQL root field) — reading `.data.members` off it was
+      // always undefined, so this view said nobody was sharing, for everyone.
+      // Same double-unwrap HouseholdSettings had until 2026-09-19.
+      const household = await fitnessGeekService.getHouseholdMembers();
+      const members = household?.members?.filter(m => m.shares_food_logs) || [];
       setHouseholdMembers(members);
 
-      if (members.length === 0) {
+      if (!household?.household_id) {
+        setError('You are not part of a household. Go to Settings to create or join one.');
+      } else if (members.length === 0) {
         setError('No household members are sharing their food logs');
       } else if (members.length === 1) {
         // Auto-select if only one member
         setSelectedMember(members[0].user_id);
       }
     } catch (err) {
-      if (err.response?.status === 403 || err.response?.data?.error?.code === 'NOT_IN_HOUSEHOLD') {
-        setError('You are not part of a household. Go to Settings to create or join one.');
-      } else {
-        setError('Failed to load household members');
-      }
+      setError(errorMessage(err, 'Failed to load household members'));
     } finally {
       setLoading(false);
     }
@@ -83,11 +86,15 @@ const HouseholdLogView = ({ open, onClose, currentDate, onCopyMeal }) => {
     try {
       setLoadingLogs(true);
       setError('');
-      const response = await fitnessGeekService.getHouseholdMemberLogs(selectedMember, currentDate);
-      setMemberLogs(response.data?.logs || []);
-      setMemberName(response.data?.member_name || 'Household Member');
+      // Resolves to the log array itself; the member's name comes from the
+      // member list, which the logs query never carried.
+      const logs = await fitnessGeekService.getHouseholdMemberLogs(selectedMember, currentDate);
+      setMemberLogs(Array.isArray(logs) ? logs : []);
+      setMemberName(
+        householdMembers.find(m => m.user_id === selectedMember)?.display_name || 'Household Member'
+      );
     } catch (err) {
-      setError(err.response?.data?.error?.message || 'Failed to load member logs');
+      setError(errorMessage(err, 'Failed to load member logs'));
       setMemberLogs([]);
     } finally {
       setLoadingLogs(false);

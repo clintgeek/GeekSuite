@@ -32,6 +32,7 @@ import {
 import { useToast } from '@geeksuite/ui';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
 import { settingsService } from '../../services/settingsService';
+import { errorMessage } from '../../utils/errorMessage.js';
 
 const HouseholdSettings = () => {
   const { notify } = useToast();
@@ -86,12 +87,15 @@ const HouseholdSettings = () => {
 
     try {
       setSaving(true);
-      const response = await settingsService.createHousehold(displayName);
-      notify(response.data.message, { tone: 'success' });
+      // The service resolves to the bare `{ household_id }` — there is no
+      // `.data.message`. Reading one threw AFTER the household was created,
+      // so a success landed in the catch and said "Failed to create".
+      await settingsService.createHousehold(displayName);
+      notify('Household created', { tone: 'success' });
       setShowCreateDialog(false);
       await loadHouseholdSettings();
     } catch (err) {
-      notify(err.response?.data?.error?.message || 'Failed to create household', { tone: 'error' });
+      notify(errorMessage(err, 'Failed to create household'), { tone: 'error' });
     } finally {
       setSaving(false);
     }
@@ -109,12 +113,12 @@ const HouseholdSettings = () => {
 
     try {
       setSaving(true);
-      const response = await settingsService.joinHousehold(joinCode, displayName);
-      notify(response.data.message, { tone: 'success' });
+      await settingsService.joinHousehold(joinCode.trim(), displayName);
+      notify('Joined the household', { tone: 'success' });
       setShowJoinDialog(false);
       await loadHouseholdSettings();
     } catch (err) {
-      notify(err.response?.data?.error?.message || 'Failed to join household', { tone: 'error' });
+      notify(errorMessage(err, 'Failed to join household'), { tone: 'error' });
     } finally {
       setSaving(false);
     }
@@ -128,7 +132,7 @@ const HouseholdSettings = () => {
       setShowLeaveDialog(false);
       await loadHouseholdSettings();
     } catch (err) {
-      notify(err.response?.data?.error?.message || 'Failed to leave household', { tone: 'error' });
+      notify(errorMessage(err, 'Failed to leave household'), { tone: 'error' });
     } finally {
       setSaving(false);
     }
@@ -141,7 +145,7 @@ const HouseholdSettings = () => {
       setHouseholdData(prev => ({ ...prev, [field]: value }));
       notify('Sharing settings updated', { tone: 'success' });
     } catch (err) {
-      notify('Failed to update sharing settings', { tone: 'error' });
+      notify(errorMessage(err, 'Failed to update sharing settings'), { tone: 'error' });
     } finally {
       setSaving(false);
     }
@@ -390,7 +394,7 @@ const HouseholdSettings = () => {
             label="Household Code"
             value={joinCode}
             onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-            placeholder="e.g., A3F82B"
+            placeholder="e.g., 7D9169DE1A8F"
             sx={{ mb: 2 }}
             inputProps={{ style: { fontFamily: 'monospace', textTransform: 'uppercase' } }}
           />
