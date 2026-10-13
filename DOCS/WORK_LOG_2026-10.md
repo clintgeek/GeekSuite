@@ -362,3 +362,29 @@ Built from a production audit of the whole pipeline.
   - One unexplained backend flake: 1 failure in one full run, then 3 green reruns.
 - **Not checked:** I could not read production data beyond the household and food counts,
   because the classifier blocked further prod DB reads. Heather's join has not been retried.
+
+## 2026-10-13 — BookGeek: per-reader shelves (`0af432b1`)
+
+- **Why:** Chef: "the books can/should be all one big happy library, but my reading shelf is
+  my reading shelf". Shelf, rating, review, dates, readCount, progress and myTags lived on
+  the shared `Book` row. Spec: `apps/bookgeek/DOCS/PER_READER_SHELVES_PLAN.md`.
+- **Shape:**
+  - `BookReading` holds one row per reader per book, unique on `(userId, bookId)`.
+  - `readerOverlay(userId)` writes the caller's values over the row's, under the same field
+    names. Filters, sorts and facets are unchanged, and the GraphQL contract and web app
+    did not change.
+- **Who reads what:**
+  - Gateway reads and writes are per reader. StartGeek's Reading block and its book search
+    are the caller's.
+  - Goodreads import, merge and dedupe work per reader.
+  - The Kindle page shows the shelves of `KINDLE_UI_USER_ID`, falling back to Chef.
+- **Migration:** ran at boot on 2026-10-13 at 23:00Z, logging `books: 553, written: 553`.
+  - It is Chef's (his call), runs once (marker `per-reader-shelves-v1` in bookgeek
+    `migrations`), and merges per field.
+  - The legacy fields are still on `Book`. Remove them in a later step, after a while live.
+- **Checks:**
+  - Gateway 159/159 suites (3396). BookGeek API 241, web 339.
+  - Reverting to the old resolvers turns 6 tests red. The migration guard, the per-field
+    merge and `mergeReadings` were each mutation-checked red.
+- **Fixed along the way:** `fitnessgeekRecipes.test.js` leaked FoodItems into later suites,
+  which share one in-memory Mongo.

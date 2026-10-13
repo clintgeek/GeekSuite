@@ -8,6 +8,15 @@ BookGeek is the **authoritative library manager** — replacing both CalibreWeb 
 - **Calibre CLI** is a headless processor (format conversion, metadata extraction)
 - **Gemini (via aiGeek)** provides AI-powered recommendations
 
+
+### Per-reader shelves (2026-10-13)
+The catalog is shared; **shelf, rating, review, dateStarted/Finished, readCount,
+readingProgress and myTags are per reader**, in `bookreadings` — see
+`DOCS/PER_READER_SHELVES_PLAN.md`. Never write them onto `Book`: read through
+`readerOverlay(userId)` and write with `upsertReading` / `mergeReadings`
+(`packages/schemas/bookgeek/bookReading.js`). The legacy copies still on `Book`
+are Chef's pre-migration values, kept for rollback, read by nothing.
+
 ---
 
 ## Data Sources (One-Time Import)
