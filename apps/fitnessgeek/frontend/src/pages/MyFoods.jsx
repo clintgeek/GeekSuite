@@ -60,17 +60,18 @@ const MyFoods = () => {
   }, []);
 
   const handleEditFood = (food) => {
+    const nutrition = food.nutrition || {};
     setEditingFood(food);
     setEditForm({
       name: food.name,
       brand: food.brand || '',
-      calories_per_serving: food.nutrition.calories_per_serving,
-      protein_grams: food.nutrition.protein_grams,
-      carbs_grams: food.nutrition.carbs_grams,
-      fat_grams: food.nutrition.fat_grams,
-      fiber_grams: food.nutrition.fiber_grams || 0,
-      sugar_grams: food.nutrition.sugar_grams || 0,
-      sodium_mg: food.nutrition.sodium_mg || 0,
+      calories_per_serving: nutrition.calories_per_serving ?? 0,
+      protein_grams: nutrition.protein_grams ?? 0,
+      carbs_grams: nutrition.carbs_grams ?? 0,
+      fat_grams: nutrition.fat_grams ?? 0,
+      fiber_grams: nutrition.fiber_grams || 0,
+      sugar_grams: nutrition.sugar_grams || 0,
+      sodium_mg: nutrition.sodium_mg || 0,
       serving_size: food.serving_size || 100,
       serving_unit: food.serving_unit || 'g'
     });
@@ -150,9 +151,11 @@ const MyFoods = () => {
     if (!searchQuery) return true;
     const query = searchQuery.toLowerCase();
     return (
-      food.name.toLowerCase().includes(query) ||
-      (food.brand && food.brand.toLowerCase().includes(query)) ||
-      food.source.toLowerCase().includes(query)
+      // Every field optional-chained: `source` was never sent before
+      // 2026-10-13, and `.toLowerCase()` on it crashed on the first keystroke.
+      food.name?.toLowerCase().includes(query) ||
+      food.brand?.toLowerCase().includes(query) ||
+      food.source?.toLowerCase().includes(query)
     );
   });
 

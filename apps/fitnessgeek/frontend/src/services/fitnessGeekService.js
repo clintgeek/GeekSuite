@@ -80,10 +80,12 @@ export const fitnessGeekService = {
   },
 
   // Get all foods (global + custom)
-  getAllFoods: async (limit = 50) => {
+  // The My Foods library — the caller's own foods only. Without `mine` the
+  // gateway mixes in the shared catalog and caps the lot at 100.
+  getAllFoods: async () => {
     try {
       const response = await apiService.get('/foods', {
-        params: { limit }
+        params: { mine: true }
       });
       return response.data.data || response.data;
     } catch (error) {

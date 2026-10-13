@@ -10,7 +10,7 @@ export const useFoodManagement = () => {
   const loadFoods = async () => {
     setLoading(true);
     try {
-      const response = await fitnessGeekService.getAllFoods(1000);
+      const response = await fitnessGeekService.getAllFoods();
       setFoods(response || []);
     } catch (error) {
       console.error('Error loading foods:', error);

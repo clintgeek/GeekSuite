@@ -60,7 +60,7 @@ const SET_NUTRITION_GOALS = gql`
 `;
 
 const GET_FOOD_ITEMS = gql`
-  query GetFitnessFoods($search: String) { fitnessFoods(search: $search) { id name brand serving_size serving_unit nutrition { calories_per_serving protein_grams carbs_grams fat_grams fiber_grams sugar_grams sodium_mg } barcode is_verified } }
+  query GetFitnessFoods($search: String, $mine: Boolean) { fitnessFoods(search: $search, mine: $mine) { id name brand serving_size serving_unit nutrition { calories_per_serving protein_grams carbs_grams fat_grams fiber_grams sugar_grams sodium_mg } barcode is_verified source } }
 `;
 
 const GET_FOOD_LOGS = gql`
@@ -523,7 +523,11 @@ function routeRequest(method, url, data) {
       return { query: GET_DERIVED_MACROS, variables: { date: localDateString() } };
     }
     if (base === '/goals') return { query: GET_DERIVED_MACROS, variables: { date: localDateString() } };
-    if (base === '/foods') return { query: GET_FOOD_ITEMS, variables: { search: url.includes('search=') ? new URLSearchParams(url.split('?')[1]).get('search') : null } };
+    // `mine=true` is My Foods: the caller's own rows, not the shared catalog.
+    if (base === '/foods') {
+      const sp = new URLSearchParams(url.split('?')[1]);
+      return { query: GET_FOOD_ITEMS, variables: { search: sp.get('search') || null, mine: sp.get('mine') === 'true' } };
+    }
     // Single food item lookup: /foods/:id (24-char Mongo ObjectId)
     if (parts[0] === 'foods' && parts[1] && /^[0-9a-f]{24}$/i.test(parts[1])) {
       return { query: GET_FOOD_ITEM, variables: { id: parts[1] } };
