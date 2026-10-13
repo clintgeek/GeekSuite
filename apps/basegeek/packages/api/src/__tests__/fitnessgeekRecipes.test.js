@@ -35,6 +35,12 @@ const chili = (overrides = {}) => ({
   ...overrides,
 });
 
+// One in-memory Mongo serves every suite, run in sequence (jest.config.js):
+// rows left here were counted by the next suite's assertions.
+afterEach(async () => {
+  await FoodItem.deleteMany({});
+});
+
 describe('recipe math (shared with the frontend preview)', () => {
   test('per-serving nutrition is the batch total over the yield', () => {
     const n = recipeNutrition(chili().recipe);
