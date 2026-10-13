@@ -87,6 +87,19 @@ export const foodService = {
   },
 
   /**
+   * Turn a pasted ingredient list into builder rows. Nothing is logged and
+   * nothing is saved — each line comes back matched (with amount, unit and a
+   * nutrition snapshot) or `{ line, name, unresolved: true }`.
+   *
+   * @param {string} text
+   * @returns {Promise<Array>} the `ingredients` rows
+   */
+  parseRecipe: async (text) => {
+    const response = await restApi.post('/foods/recipe/parse', { text });
+    return response.data?.data?.ingredients || [];
+  },
+
+  /**
    * Get food by barcode
    * @param {string} barcode - UPC/EAN barcode
    */

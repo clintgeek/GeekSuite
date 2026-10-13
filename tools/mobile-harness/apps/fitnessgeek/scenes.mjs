@@ -3,7 +3,7 @@
 // needs a dialog open re-navigates and re-opens it rather than relying on a
 // previous scene's state.
 import { json, graphqlRoute } from '../../lib/net.mjs';
-import { OPS, SETTINGS, BODY_COMP_SUMMARY_EARLY, BODY_COMP_SCANS_EARLY, opsWithPlan, heatherOps } from './fixtures.mjs';
+import { OPS, FOODS, SETTINGS, BODY_COMP_SUMMARY_EARLY, BODY_COMP_SCANS_EARLY, opsWithPlan, heatherOps } from './fixtures.mjs';
 
 // The weight, dashboard and wizard scenes THROW when their anchor is missing instead of
 // returning false: a skip is silent (see scene 11's note), and these exist
@@ -11,6 +11,27 @@ import { OPS, SETTINGS, BODY_COMP_SUMMARY_EARLY, BODY_COMP_SCANS_EARLY, opsWithP
 const must = async (locator, what) => {
   if (!(await locator.count())) throw new Error(`missing: ${what}`);
   return locator;
+};
+
+// A saved recipe for the My Foods scenes: 6 servings, three ingredients, one
+// of them an AI estimate. Nutrition is what the gateway would compute.
+const ing = (name, amount, unit, servings, size, sunit, kcal, estimated = false) => ({
+  __typename: 'FitnessRecipeIngredient', food_item_id: null, name, amount, unit, servings,
+  serving_size: size, serving_unit: sunit, estimated,
+  nutrition: { __typename: 'NutritionData', calories_per_serving: kcal, protein_grams: 0, carbs_grams: 0, fat_grams: 0, fiber_grams: 0, sugar_grams: 0, sodium_mg: 0 },
+});
+const CHILI = {
+  __typename: 'FitnessFood', id: 'r1', name: 'Turkey chili', brand: null, serving_size: 1, serving_unit: 'serving',
+  source: 'custom', barcode: null, is_verified: false,
+  nutrition: { __typename: 'NutritionData', calories_per_serving: 248, protein_grams: 24, carbs_grams: 18, fat_grams: 8, fiber_grams: 6, sugar_grams: 4, sodium_mg: 520 },
+  recipe: {
+    __typename: 'FitnessRecipe', yield_servings: 6,
+    ingredients: [
+      ing('Ground turkey 93/7', 2, 'lb', 9.07, 100, 'g', 150),
+      ing('Kidney beans', 2, 'cup', 4, 0.5, 'cup', 110),
+      ing('Chili seasoning blend', 1, 'serving', 1, 1, 'serving', 30, true),
+    ],
+  },
 };
 
 // A page-scoped GraphQL stub for one scene. page.route() beats ctx.route(),
@@ -530,6 +551,31 @@ scenes.push(
     async setup(page) {
       await must(page.locator('[data-testid="experience-settings"]'), 'experience settings');
     },
+  },
+  {
+    // My Foods with a recipe in it (RECIPES_PLAN.md): the "Recipe · makes 6"
+    // label and the New recipe / New food buttons.
+    name: '26-my-foods-recipe',
+    setup: (page, h) => withPageOps(page, { ...OPS, GetFitnessFoods: { fitnessFoods: [...FOODS, CHILI] } }, async () => {
+      await page.goto(h.base + '/my-foods', { waitUntil: 'networkidle' });
+      await h.settle(1400);
+      await must(page.getByText('Turkey chili').first(), 'recipe row');
+      await must(page.getByRole('button', { name: /new recipe/i }), 'New recipe button');
+    }),
+    teardown: (page) => page.unroute('**/graphql'),
+  },
+  {
+    // The builder, pre-filled from that recipe: rows with amount + unit, an
+    // AI-estimate marker, the live per-serving preview.
+    name: '27-recipe-builder',
+    setup: (page, h) => withPageOps(page, { ...OPS, GetFitnessFoods: { fitnessFoods: [...FOODS, CHILI] } }, async () => {
+      await page.goto(h.base + '/my-foods', { waitUntil: 'networkidle' });
+      await h.settle(1400);
+      await (await must(page.getByRole('button', { name: /edit turkey chili/i }), 'edit recipe')).click();
+      await h.settle(900);
+      await must(page.getByRole('textbox', { name: /amount of ground turkey/i }).or(page.getByLabel(/amount of ground turkey/i)).first(), 'builder ingredient row');
+    }),
+    teardown: async (page, h) => { await h.esc(400); await page.unroute('**/graphql'); },
   },
 );
 

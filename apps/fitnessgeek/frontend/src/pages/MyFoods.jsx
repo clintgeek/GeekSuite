@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Box,
+  Button,
   Typography,
   List,
   CircularProgress,
@@ -8,14 +9,29 @@ import {
 } from '@mui/material';
 import {
   Restaurant as FoodIcon,
-  Search as SearchIcon
+  Search as SearchIcon,
+  Add as AddIcon
 } from '@mui/icons-material';
 import { useToast } from '@geeksuite/ui';
 import { useFoodManagement } from '../hooks/useFoodManagement.js';
 import FoodListItem from '../components/MyFoods/FoodListItem.jsx';
 import FoodEditDialog from '../components/MyFoods/FoodEditDialog.jsx';
+import RecipeBuilderDialog from '../components/MyFoods/RecipeBuilderDialog.jsx';
+import { foodService } from '../services/foodService.js';
+import { errorMessage } from '../utils/errorMessage.js';
 import FoodDeleteDialog from '../components/MyFoods/FoodDeleteDialog.jsx';
 import { Surface, SectionLabel, EmptyState, SurfaceSkeleton } from '../components/primitives';
+
+const EMPTY_FOOD_FORM = {
+  name: '',
+  brand: '',
+  calories_per_serving: '',
+  protein_grams: '',
+  carbs_grams: '',
+  fat_grams: '',
+  serving_size: 100,
+  serving_unit: 'g'
+};
 
 const MyFoods = () => {
   const {
@@ -59,7 +75,51 @@ const MyFoods = () => {
     loadFoods();
   }, []);
 
+  // Recipe builder: open for a new recipe, or pre-filled for a saved one.
+  const [builderOpen, setBuilderOpen] = useState(false);
+  const [builderFood, setBuilderFood] = useState(null);
+  // "New food": the same custom-food form the search page uses.
+  const [createForm, setCreateForm] = useState(null);
+  const [creating, setCreating] = useState(false);
+
+  const openBuilder = (food = null) => {
+    setBuilderFood(food);
+    setBuilderOpen(true);
+  };
+
+  const handleCreateFood = async () => {
+    if (!createForm?.name?.trim()) return;
+    setCreating(true);
+    try {
+      await foodService.create({
+        name: createForm.name.trim(),
+        brand: createForm.brand?.trim() || undefined,
+        nutrition: {
+          calories_per_serving: Number(createForm.calories_per_serving) || 0,
+          protein_grams: Number(createForm.protein_grams) || 0,
+          carbs_grams: Number(createForm.carbs_grams) || 0,
+          fat_grams: Number(createForm.fat_grams) || 0
+        },
+        serving: {
+          size: Number(createForm.serving_size) || 100,
+          unit: createForm.serving_unit || 'g'
+        }
+      });
+      notify(`Saved "${createForm.name.trim()}"`, { tone: 'success' });
+      setCreateForm(null);
+      loadFoods();
+    } catch (err) {
+      notify(errorMessage(err, 'Could not create that food.'), { tone: 'error' });
+    } finally {
+      setCreating(false);
+    }
+  };
+
   const handleEditFood = (food) => {
+    if (food.recipe) {
+      openBuilder(food);
+      return;
+    }
     const nutrition = food.nutrition || {};
     setEditingFood(food);
     setEditForm({
@@ -178,6 +238,15 @@ const MyFoods = () => {
         </Typography>
       </Box>
 
+      <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2 }}>
+        <Button variant="contained" startIcon={<AddIcon />} onClick={() => openBuilder(null)}>
+          New recipe
+        </Button>
+        <Button variant="outlined" startIcon={<AddIcon />} onClick={() => setCreateForm({ ...EMPTY_FOOD_FORM })}>
+          New food
+        </Button>
+      </Box>
+
       {/* Search — theme-aware, no hardcoded colors */}
       <TextField
         fullWidth
@@ -239,6 +308,25 @@ const MyFoods = () => {
         onClose={() => setEditDialogOpen(false)}
         onSave={handleEditSubmit}
         loading={editLoading}
+      />
+
+      {/* Recipe builder (new, or editing a recipe row) */}
+      <RecipeBuilderDialog
+        open={builderOpen}
+        food={builderFood}
+        onClose={() => setBuilderOpen(false)}
+        onSaved={() => loadFoods()}
+      />
+
+      {/* New food */}
+      <FoodEditDialog
+        open={Boolean(createForm)}
+        food={null}
+        form={createForm || EMPTY_FOOD_FORM}
+        onChange={setCreateForm}
+        onClose={() => setCreateForm(null)}
+        onSave={handleCreateFood}
+        loading={creating}
       />
 
       {/* Delete Dialog */}

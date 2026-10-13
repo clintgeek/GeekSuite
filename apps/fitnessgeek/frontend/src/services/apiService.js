@@ -59,8 +59,12 @@ const SET_NUTRITION_GOALS = gql`
   mutation SetNutritionGoals($input: NutritionGoalsInput!) { setNutritionGoals(input: $input) { id } }
 `;
 
+// A recipe is a food that remembers its ingredients (DOCS/RECIPES_PLAN.md).
+// Null on every non-recipe row.
+const RECIPE_FIELDS = `recipe { yield_servings ingredients { food_item_id name amount unit servings serving_size serving_unit nutrition { calories_per_serving protein_grams carbs_grams fat_grams fiber_grams sugar_grams sodium_mg } estimated } }`;
+
 const GET_FOOD_ITEMS = gql`
-  query GetFitnessFoods($search: String, $mine: Boolean) { fitnessFoods(search: $search, mine: $mine) { id name brand serving_size serving_unit nutrition { calories_per_serving protein_grams carbs_grams fat_grams fiber_grams sugar_grams sodium_mg } barcode is_verified source } }
+  query GetFitnessFoods($search: String, $mine: Boolean) { fitnessFoods(search: $search, mine: $mine) { id name brand serving_size serving_unit nutrition { calories_per_serving protein_grams carbs_grams fat_grams fiber_grams sugar_grams sodium_mg } barcode is_verified source ${RECIPE_FIELDS} } }
 `;
 
 const GET_FOOD_LOGS = gql`
@@ -89,7 +93,7 @@ const GET_FOOD_ITEM = gql`
 `;
 
 const ADD_FITNESS_FOOD = gql`
-  mutation AddFitnessFood($input: FitnessFoodInput!) { addFitnessFood(input: $input) { id name brand serving_size serving_unit nutrition { calories_per_serving protein_grams carbs_grams fat_grams fiber_grams sugar_grams sodium_mg } } }
+  mutation AddFitnessFood($input: FitnessFoodInput!) { addFitnessFood(input: $input) { id name brand serving_size serving_unit nutrition { calories_per_serving protein_grams carbs_grams fat_grams fiber_grams sugar_grams sodium_mg } ${RECIPE_FIELDS} } }
 `;
 
 const UPDATE_FITNESS_FOOD = gql`
@@ -404,6 +408,33 @@ function routeRequest(method, url, data) {
   // it tells an existing catalog row from a search result. `addFitnessFood` /
   // `updateFitnessFood` drop all three server-side, so POST/PUT /foods still
   // mints a private `source: 'custom'` food — carrying them here is inert there.
+  // `recipe` rides along on both food writes. The server recomputes the
+  // food's nutrition from it, so only the ingredient snapshot matters here.
+  // Synthetic ids ('usda_123') are fine to send — the server nulls them.
+  const normalizeRecipeInput = (recipe) => {
+    if (!recipe || typeof recipe !== 'object') return undefined;
+    const num = (v) => (v === undefined || v === null || v === '' ? undefined : Number(v));
+    return {
+      yield_servings: Number(recipe.yield_servings),
+      ingredients: (recipe.ingredients || []).map((ing) => {
+        const n = ing.nutrition || {};
+        const nutrition = {};
+        for (const key of NUTRITION_FIELDS) nutrition[key] = Number(n[key]) || 0;
+        return {
+          ...(ing.food_item_id ? { food_item_id: String(ing.food_item_id) } : {}),
+          name: ing.name,
+          ...(num(ing.amount) !== undefined ? { amount: num(ing.amount) } : {}),
+          ...(ing.unit ? { unit: String(ing.unit) } : {}),
+          servings: Number(ing.servings),
+          ...(num(ing.serving_size) !== undefined ? { serving_size: num(ing.serving_size) } : {}),
+          ...(ing.serving_unit ? { serving_unit: String(ing.serving_unit) } : {}),
+          nutrition,
+          ...(ing.estimated ? { estimated: true } : {}),
+        };
+      }),
+    };
+  };
+
   const normalizeFoodInput = (raw = {}) => {
     const serving_size = raw.serving_size ?? raw.serving?.size ?? 100;
     const serving_unit = raw.serving_unit ?? raw.serving?.unit ?? 'g';
@@ -425,6 +456,7 @@ function routeRequest(method, url, data) {
         sugar_grams: Number(n.sugar_grams) || 0,
         sodium_mg: Number(n.sodium_mg) || 0,
       },
+      ...(raw.recipe ? { recipe: normalizeRecipeInput(raw.recipe) } : {}),
       ...(raw.source ? { source: String(raw.source) } : {}),
       ...(raw.source_id != null && raw.source_id !== '' ? { source_id: String(raw.source_id) } : {}),
     };
@@ -457,6 +489,7 @@ function routeRequest(method, url, data) {
       serving_unit: String(serving_unit || 'g'),
       ...(raw.barcode ? { barcode: String(raw.barcode) } : {}),
       nutrition,
+      ...(raw.recipe ? { recipe: normalizeRecipeInput(raw.recipe) } : {}),
     };
   };
 

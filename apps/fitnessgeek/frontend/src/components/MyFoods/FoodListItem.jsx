@@ -23,11 +23,17 @@ const FoodListItem = ({ food, onEdit, onDelete }) => {
   const sourceName = getSourceName(food.source);
   const nutrition = food.nutrition || {};
   const calories = Math.round(nutrition.calories_per_serving || 0);
+  const isRecipe = Boolean(food.recipe);
+  const makes = Number(food.recipe?.yield_servings);
 
   return (
     <ListItem
       sx={{
-        px: 2.5,
+        pl: 2.5,
+        // Clear the two 44px action buttons: `px` here used to override the
+        // room MUI reserves for secondaryAction, so the macros ran under the
+        // edit icon. Spacing unit is 4px — 24 = 96px.
+        pr: 24,
         py: 1.5,
         borderBottom: (theme) => `1px solid ${theme.palette.divider}`,
         '&:last-child': { borderBottom: 'none' },
@@ -113,10 +119,23 @@ const FoodListItem = ({ food, onEdit, onDelete }) => {
           )}
           <Box
             component="span"
-            sx={{ color: sourceColor, fontWeight: 600, letterSpacing: '0.02em' }}
+            // The source colour is the dot's job. As ink it failed contrast —
+            // grey #757575 on the dark theme is 3.49:1 (first audited 2026-10-13).
+            sx={{ color: 'text.secondary', fontWeight: 600, letterSpacing: '0.02em' }}
           >
             {sourceName}
           </Box>
+          {isRecipe && (
+            <>
+              <Box component="span" sx={{ opacity: 0.5 }}>·</Box>
+              <Box component="span" sx={{ fontWeight: 600, color: 'text.primary' }}>Recipe</Box>
+              {makes > 0 && (
+                <Box component="span" sx={{ fontVariantNumeric: 'tabular-nums' }}>
+                  makes {Math.round(makes * 100) / 100}
+                </Box>
+              )}
+            </>
+          )}
           <Box component="span" sx={{ opacity: 0.5 }}>·</Box>
           <Box
             component="span"
