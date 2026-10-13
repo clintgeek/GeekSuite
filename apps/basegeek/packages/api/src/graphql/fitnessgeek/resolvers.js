@@ -758,19 +758,24 @@ export const resolvers = {
       if (!user) throw new Error('Unauthorized');
       return NutritionGoals.find({ user_id: user.id }).sort({ start_date: -1 });
     },
-    fitnessFoods: async (_, { search }, { user }) => {
+    fitnessFoods: async (_, { search, mine }, { user }) => {
       if (!user) throw new Error('Unauthorized');
-      const query = {
-        $or: [{ user_id: user.id }, { user_id: null }, { user_id: { $exists: false } }],
-        is_deleted: false,
-      };
+      // `mine` is the My Foods library: the caller's own rows only. Without
+      // it the shared catalog (USDA/OFF/AI rows) sorted in alongside and the
+      // 100-row cap below cut a person's own foods off the end of the list.
+      const query = mine
+        ? { user_id: user.id, is_deleted: false }
+        : {
+          $or: [{ user_id: user.id }, { user_id: null }, { user_id: { $exists: false } }],
+          is_deleted: false,
+        };
       // The search box's raw text reaches mongod as a regex. Unescaped, a
       // perfectly ordinary food name broke the search — `Oreo (` threw
       // "Unterminated group" out of the resolver, and `c++` / `50%+` / `*`
       // the same way — and a crafted `(a+)+$` was a ReDoS evaluated per
       // document. Escaped, the value can only ever mean itself.
       if (search) query.name = new RegExp(escapeRegex(search), 'i');
-      return FoodItem.find(query).sort({ name: 1 }).limit(100);
+      return FoodItem.find(query).sort({ name: 1 }).limit(mine ? 1000 : 100);
     },
     fitnessFood: async (_, { id }, { user }) => {
       if (!user) throw new Error('Unauthorized');

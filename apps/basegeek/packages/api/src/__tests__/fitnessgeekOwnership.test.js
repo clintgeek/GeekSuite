@@ -260,6 +260,19 @@ describe('food catalog — intentionally shared', () => {
     expect(names).not.toContain('secret shake');
   });
 
+  test('mine: true is the My Foods library — own rows only, none of the shared catalog', async () => {
+    await makeFood({ name: 'banana', user_id: null, source: 'usda' });
+    await makeFood({ name: 'apple', user_id: null, source: 'openfoodfacts' });
+    await makeFood({ name: 'zucchini bread' });
+    await makeFood({ name: 'bob chili', user_id: BOB });
+    await makeFood({ name: 'deleted dip', is_deleted: true });
+
+    const rows = await Q.fitnessFoods(null, { mine: true }, ctx(ALICE));
+    expect(rows.map((f) => f.name)).toEqual(['zucchini bread']);
+    // `source` rides along — My Foods' search box filters on it.
+    expect(rows[0].source).toBe('custom');
+  });
+
   test('catalog writes stay owner-scoped (global rows are not editable)', async () => {
     const global = await makeFood({ name: 'banana', user_id: null, source: 'usda' });
     const alicePrivate = await makeFood({ name: 'secret shake' });

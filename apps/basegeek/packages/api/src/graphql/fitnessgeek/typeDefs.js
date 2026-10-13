@@ -286,6 +286,8 @@ export const typeDefs = gql`
     nutrition: NutritionData
     barcode: String
     is_verified: Boolean
+    "Where the row came from: 'custom' (made by a person), 'usda', 'openfoodfacts', 'ai', …"
+    source: String
     user_id: String
     is_deleted: Boolean
     created_at: Date
@@ -809,7 +811,8 @@ export const typeDefs = gql`
     fitnessWeight(id: ID!): FitnessWeight
     activeNutritionGoals: NutritionGoals
     nutritionGoalsHistory: [NutritionGoals]
-    fitnessFoods(search: String): [FitnessFood]
+    "mine: true = only the caller's own rows (the My Foods library), not the shared catalog."
+    fitnessFoods(search: String, mine: Boolean): [FitnessFood]
     fitnessFood(id: ID!): FitnessFood
     foodLogs(date: Date, startDate: Date, endDate: Date, mealType: String): [FoodLog]
     foodLog(id: ID!): FoodLog
