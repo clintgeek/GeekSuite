@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Button, IconButton, Typography } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
+import { Link as RouterLink } from 'react-router-dom';
 import {
   Add as AddIcon,
   Close as RemoveIcon,
@@ -27,7 +28,7 @@ import { mealLabel, mealWord } from '../../utils/plainWords.js';
  */
 const ICONS = { breakfast: BreakfastIcon, lunch: LunchIcon, dinner: DinnerIcon, snack: SnackIcon };
 
-function MealCard({ mealType, foods = [], calories = 0, compact, onAdd, onRemove, removingIds }) {
+function MealCard({ mealType, foods = [], calories = 0, compact, onAdd, onRemove, removingIds, logHref }) {
   const theme = useTheme();
   const produce = theme.palette.produce?.[mealType] || {};
   const Icon = ICONS[mealType] || SnackIcon;
@@ -64,7 +65,33 @@ function MealCard({ mealType, foods = [], calories = 0, compact, onAdd, onRemove
         },
       }}
     >
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mt: 0.5 }}>
+      {/* The header row is a link to this meal in the log. Its ::after
+          stretches over the whole card, so a tap anywhere opens it, while Add
+          and the remove buttons sit above it and stay their own targets (a
+          link wrapping buttons is invalid and unreadable to a screen reader).
+          The row itself — not just the title — is the link, so its own box
+          is a full-width tap target. */}
+      <Box
+        {...(logHref ? {
+          component: RouterLink,
+          to: logHref,
+          'aria-label': `Open ${mealWord(mealType)} in the food log`,
+        } : {})}
+        sx={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1.25,
+          mt: 0.5,
+          minHeight: 48,
+          color: 'inherit',
+          textDecoration: 'none',
+          ...(logHref ? {
+            '&::after': { content: '""', position: 'absolute', inset: 0, borderRadius: '24px', zIndex: 0 },
+            '&:focus-visible': { outline: 'none' },
+            '&:focus-visible::after': { outline: `3px solid ${theme.palette.text.primary}`, outlineOffset: -3 },
+          } : {}),
+        }}
+      >
         <Box
           aria-hidden
           sx={{
@@ -118,7 +145,7 @@ function MealCard({ mealType, foods = [], calories = 0, compact, onAdd, onRemove
                   size="small"
                   aria-label={`Remove ${food.name} from ${mealWord(mealType)}`}
                   onClick={() => onRemove(food.logId)}
-                  sx={{ color: 'text.secondary', width: 44, height: 44, mr: -1 }}
+                  sx={{ color: 'text.secondary', width: 44, height: 44, mr: -1, position: 'relative', zIndex: 1 }}
                 >
                   <RemoveIcon fontSize="small" />
                 </IconButton>
@@ -147,6 +174,8 @@ function MealCard({ mealType, foods = [], calories = 0, compact, onAdd, onRemove
           fontWeight: 800,
           alignSelf: compact ? 'stretch' : 'flex-start',
           px: 3,
+          position: 'relative',
+          zIndex: 1,
           '@media (hover: hover)': { '&:hover': { bgcolor: produce.fill, filter: 'brightness(0.96)' } },
           '&:focus-visible': { outline: `3px solid ${theme.palette.text.primary}`, outlineOffset: 2 },
         }}
@@ -157,7 +186,11 @@ function MealCard({ mealType, foods = [], calories = 0, compact, onAdd, onRemove
   );
 }
 
-export default function MealCards({ meals = {}, compact = false, onAdd, onRemove, removingIds }) {
+/**
+ * `date` (YYYY-MM-DD) makes each card a link to that day's meal in the food
+ * log; without it the cards are not links.
+ */
+export default function MealCards({ meals = {}, compact = false, onAdd, onRemove, removingIds, date }) {
   return (
     <Box
       data-testid="meal-cards"
@@ -179,6 +212,7 @@ export default function MealCards({ meals = {}, compact = false, onAdd, onRemove
           onAdd={onAdd}
           onRemove={onRemove}
           removingIds={removingIds}
+          logHref={date ? `/food-log?date=${date}&meal=${mealType}` : undefined}
         />
       ))}
     </Box>

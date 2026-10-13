@@ -11,6 +11,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { GeekToastProvider } from '@geeksuite/ui';
+import { MemoryRouter } from 'react-router-dom';
 
 vi.mock('../../components/FoodSearch', () => ({
   // The stub exposes onClose as a button, so the page's handling of a
@@ -100,7 +101,7 @@ describe('the inline search box defaults to the clock, not a hardcoded snack', (
     setHour(8);
     render(
       <GeekToastProvider>
-        <FoodLog />
+        <MemoryRouter><FoodLog /></MemoryRouter>
       </GeekToastProvider>
     );
     expect(screen.getByTestId('meal-type').textContent).toBe('breakfast');
@@ -110,7 +111,7 @@ describe('the inline search box defaults to the clock, not a hardcoded snack', (
     setHour(18);
     render(
       <GeekToastProvider>
-        <FoodLog />
+        <MemoryRouter><FoodLog /></MemoryRouter>
       </GeekToastProvider>
     );
     expect(screen.getByTestId('meal-type').textContent).toBe('dinner');
@@ -132,7 +133,7 @@ describe('a finished one-shot log on the page shows where it went', () => {
 
     render(
       <GeekToastProvider>
-        <FoodLog />
+        <MemoryRouter><FoodLog /></MemoryRouter>
       </GeekToastProvider>
     );
     const input = document.createElement('input');

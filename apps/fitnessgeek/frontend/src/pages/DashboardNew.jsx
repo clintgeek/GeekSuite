@@ -393,6 +393,7 @@ const DashboardNew = () => {
             onAdd={setAddMeal}
             onRemove={isSimple ? undefined : handleRemoveFood}
             removingIds={removingLogIds}
+            date={today}
           />
         </Box>
 

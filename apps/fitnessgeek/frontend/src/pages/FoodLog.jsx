@@ -1,4 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Box,
   Alert,
@@ -69,7 +70,12 @@ const FoodLog = () => {
   const theme = useTheme();
   const { notify } = useToast();
   const { isSimple } = useExperience();
-  const [selectedDate, setSelectedDate] = useState(() => fitnessGeekService.formatDate(new Date()));
+  // `?date=YYYY-MM-DD&meal=lunch` — a tapped meal card on Home lands here, on
+  // that day, scrolled to that meal. Anything malformed is simply ignored.
+  const [searchParams] = useSearchParams();
+  const linkedDate = /^\d{4}-\d{2}-\d{2}$/.test(searchParams.get('date') || '') ? searchParams.get('date') : null;
+  const linkedMeal = ['breakfast', 'lunch', 'dinner', 'snack'].includes(searchParams.get('meal')) ? searchParams.get('meal') : null;
+  const [selectedDate, setSelectedDate] = useState(() => linkedDate || fitnessGeekService.formatDate(new Date()));
   const [showAddDialog, setShowAddDialog] = useState(false);
   // Bug: this used to hardcode 'snack' regardless of the clock, so tapping a
   // search result — the advertised "one tap to log it" path — logged
@@ -117,6 +123,18 @@ const FoodLog = () => {
     clearSuccessMessage,
     clearErrorMessage
   } = useFoodLog(selectedDate);
+
+  // Scroll to the linked meal once, after its rows have loaded — scrolling
+  // before then lands on a section that is about to grow.
+  const scrolledToLinkedMeal = useRef(false);
+  useEffect(() => {
+    if (!linkedMeal || loading || scrolledToLinkedMeal.current) return;
+    scrolledToLinkedMeal.current = true;
+    requestAnimationFrame(() => {
+      document.getElementById(`meal-section-${linkedMeal}`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  }, [linkedMeal, loading]);
 
   // One definition of "log this" and "take it back", shared with the full-page
   // search so a tap means the same thing on both surfaces.

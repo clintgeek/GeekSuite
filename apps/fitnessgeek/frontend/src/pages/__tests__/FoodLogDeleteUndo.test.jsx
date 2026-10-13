@@ -15,6 +15,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { GeekToastProvider } from '@geeksuite/ui';
+import { MemoryRouter } from 'react-router-dom';
 
 const deleteFoodLog = vi.fn();
 const logItems = vi.fn();
@@ -112,7 +113,7 @@ describe('deleting offers an undo that actually restores the row', () => {
   it('shows a toast with Undo, and Undo re-logs the exact item that was removed', async () => {
     render(
       <GeekToastProvider>
-        <FoodLog />
+        <MemoryRouter><FoodLog /></MemoryRouter>
       </GeekToastProvider>
     );
 
@@ -147,7 +148,7 @@ describe('deleting offers an undo that actually restores the row', () => {
 
     render(
       <GeekToastProvider>
-        <FoodLog />
+        <MemoryRouter><FoodLog /></MemoryRouter>
       </GeekToastProvider>
     );
 
