@@ -321,3 +321,44 @@ Built from a production audit of the whole pipeline.
 - **Landmine:** the session that reported `updated=9` skipped basegeek, because its image
   published after Watchtower had scanned it; the next pass picked it up. Before a UI push,
   check that the gateway itself answers the new field.
+
+## 2026-10-13 — FitnessGeek: household, My Foods, recipes
+
+- **Why nothing logged it:** all three bugs were client↔gateway shape mismatches. The
+  gateway answered 200, and the browser threw or rendered empty. REST logs stayed clean.
+- **Household** (`5bd8daa9`). Chef's settings row was the only one with a household id:
+  Heather had never got in.
+  - Join and Create read `response.data.message` off an already-unwrapped
+    `{household_id}`. That threw AFTER the server had succeeded, and the toast said "Failed".
+  - `HouseholdLogView` and `CopyMealDialog` had the same double-unwrap Settings had until
+    09-19. The view said "No household members are sharing" for everyone.
+  - Every catch read the Axios `err.response.data.error.message`, which an ApolloError never
+    has. The real reason ("Household not found") is now shown, through `utils/errorMessage.js`.
+  - Member logs showed 0 kcal: the view reads per-serving `nutrition`, and the query selected
+    only the pre-scaled `calculatedNutrition`.
+- **My Foods** (gateway `5e428971`, UI `d135ca33`):
+  - The search crashed on the first keystroke (`food.source.toLowerCase()`): `source` was not
+    on the GraphQL type.
+  - "My" foods were the caller's rows plus the whole shared catalog, A→Z, capped at 100. Now
+    `fitnessFoods(mine: true)`.
+- **Recipes** (spec `apps/fitnessgeek/DOCS/RECIPES_PLAN.md`; Chef chose builder + paste):
+  - Schema and gateway `b6f008de`: `FoodItem.recipe`, the shared math in
+    `packages/schemas/fitnessgeek/recipe.js`, and the server recomputes totals.
+  - Paste endpoint `c052aae1`: `POST /api/foods/recipe/parse`.
+  - Builder UI: built by a Sonnet subagent, then reviewed. It uses an ESM mirror of the
+    shared math, and a test pins the mirror to the shared file.
+- **Meal cards on Home** now open `/food-log?date=&meal=` (Chef asked mid-session). The
+  header row is a link stretched over the card, so Add and remove stay their own buttons.
+- **Harness caught three issues before push:**
+  - The meal links' tap targets were 27px tall.
+  - My Foods source labels failed contrast in dark mode (#757575, 3.49:1). Pre-existing:
+    no scene had ever shown My Foods.
+  - Row text ran under the edit and delete icons.
+  - New scenes 26 and 27 cover My Foods and the builder.
+- **Checks:**
+  - Gateway 158/158 suites (3385 tests). FitnessGeek backend 934. Frontend 512.
+  - Harness 152 scenes, 0 violations, a11y enforced.
+  - Every new test was reverted to red.
+  - One unexplained backend flake: 1 failure in one full run, then 3 green reruns.
+- **Not checked:** I could not read production data beyond the household and food counts,
+  because the classifier blocked further prod DB reads. Heather's join has not been retried.
