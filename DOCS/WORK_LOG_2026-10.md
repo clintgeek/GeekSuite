@@ -388,3 +388,23 @@ Built from a production audit of the whole pipeline.
     merge and `mergeReadings` were each mutation-checked red.
 - **Fixed along the way:** `fitnessgeekRecipes.test.js` leaked FoodItems into later suites,
   which share one in-memory Mongo.
+
+## 2026-10-14 — FitnessGeek: the Crocker household, and duplicate settings rows
+
+- **Heather joined** household `7D9169DE1A8F` with a direct data write: shares food logs and
+  meals, not weight (the Join defaults).
+- **Household names:** the household is named **Crocker**.
+  - Gateway `ae194447`, UI `39404c80`.
+  - A name is set on create and taken by whoever joins. A rename writes every member.
+- **Root cause of the flaky household:** duplicate `usersettings` rows, 9 rows for 5 users.
+  Heather had 3, created in the same millisecond. `getOrCreate` was find-then-insert, and the
+  "unique" `user_id` index was shadowed by a path-level non-unique one with the same name.
+  Mongoose only warned "Duplicate schema index", which shows in every test run.
+- **Fix** (`54824242`): `getOrCreate` is now an atomic upsert, and the path index is gone.
+- **Production, by hand, Chef approved:**
+  - Backed up all 9 rows to the session scratchpad.
+  - Deleted 4 duplicates. They differed only in `_id` and timestamps, or were empty defaults.
+    One belonged to a third user, `…afba`.
+  - Swapped `user_id_1` to a unique index.
+- **Heather's settings had never been written.** She may use FitnessGeek under another
+  account. Ask her.
