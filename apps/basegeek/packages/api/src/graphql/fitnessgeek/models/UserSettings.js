@@ -25,17 +25,23 @@ const fitnessConn = getAppConnection('fitnessgeek');
 
 const userSettingsSchema = createUserSettingsSchema(mongoose);
 
-// Static method to get or create user settings
+// Get or create, in ONE atomic upsert. The old find-then-insert raced: the
+// app's first load fires several settings reads at once, and each saw "no
+// row" and inserted one — Heather had three, created in the same
+// millisecond, and a household join landed on whichever findOne returned.
+// The unique user_id index makes a lost race an E11000, answered by a read.
 userSettingsSchema.statics.getOrCreate = async function(userId) {
   requireUser(userId);
-  let settings = await this.findOne({ user_id: userId });
-
-  if (!settings) {
-    settings = new this({ user_id: userId });
-    await settings.save();
+  try {
+    return await this.findOneAndUpdate(
+      { user_id: userId },
+      { $setOnInsert: { user_id: userId } },
+      { upsert: true, new: true, setDefaultsOnInsert: true }
+    );
+  } catch (err) {
+    if (err?.code === 11000) return this.findOne({ user_id: userId });
+    throw err;
   }
-
-  return settings;
 };
 
 // Static method to update user settings

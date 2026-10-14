@@ -68,8 +68,11 @@ function userSettingsDefinition(mongoose) {
   return {
     user_id: {
       type: String,
-      required: true,
-      index: true
+      required: true
+      // No path-level `index: true`: it declared a NON-unique `user_id_1`
+      // that shadowed the unique one below (same key, same name — mongoose
+      // kept the first and warned "Duplicate schema index"). With no unique
+      // index, a racing getOrCreate left Heather three settings rows.
     },
     dashboard: {
       // Dashboard component visibility settings
@@ -388,6 +391,12 @@ function userSettingsDefinition(mongoose) {
         type: String,
         index: true,
         sparse: true
+      },
+      // The household's name ("Crocker"), the same on every member's row:
+      // set on create, copied on join, and a rename writes every member.
+      name: {
+        type: String,
+        trim: true
       },
       // User's display name for household features
       display_name: {
