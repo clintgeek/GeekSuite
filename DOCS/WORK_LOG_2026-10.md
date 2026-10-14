@@ -406,5 +406,4 @@ Built from a production audit of the whole pipeline.
   - Deleted 4 duplicates. They differed only in `_id` and timestamps, or were empty defaults.
     One belonged to a third user, `…afba`.
   - Swapped `user_id_1` to a unique index.
-- **Heather's settings had never been written.** She may use FitnessGeek under another
-  account. Ask her.
+- Heather's settings had never been written because she hasn't set a goal yet (Chef, 2026-10-14). Right account; nothing to do.
