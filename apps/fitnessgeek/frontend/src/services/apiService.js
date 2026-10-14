@@ -232,7 +232,7 @@ const GET_DERIVED_MACROS = gql`
 `;
 
 const GET_HOUSEHOLD = gql`
-  query GetFitnessHousehold { fitnessHousehold { household_id display_name share_food_logs share_weight share_meals members { user_id display_name shares_food_logs shares_meals } } }
+  query GetFitnessHousehold { fitnessHousehold { household_id name display_name share_food_logs share_weight share_meals members { user_id display_name shares_food_logs shares_meals } } }
 `;
 
 const JOIN_HOUSEHOLD = gql`
@@ -242,8 +242,8 @@ const JOIN_HOUSEHOLD = gql`
 `;
 
 const CREATE_HOUSEHOLD = gql`
-  mutation CreateFitnessHousehold($display_name: String!) {
-    createFitnessHousehold(display_name: $display_name) { household_id }
+  mutation CreateFitnessHousehold($display_name: String!, $name: String) {
+    createFitnessHousehold(display_name: $display_name, name: $name) { household_id name }
   }
 `;
 
@@ -662,7 +662,7 @@ function routeRequest(method, url, data) {
     if (base === '/settings/household/create') {
       return {
         mutation: CREATE_HOUSEHOLD,
-        variables: { display_name: data.display_name || data.displayName || 'My Household' },
+        variables: { display_name: data.display_name || data.displayName || 'My Household', name: data.name || null },
       };
     }
     if (base === '/settings/household/join') {

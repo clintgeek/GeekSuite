@@ -66,10 +66,11 @@ export const settingsService = {
   },
 
   // Create a new household
-  createHousehold: async (displayName) => {
+  createHousehold: async (displayName, name) => {
     try {
       const response = await apiService.post('/settings/household/create', {
-        display_name: displayName
+        display_name: displayName,
+        name
       });
       return response.data;
     } catch (error) {

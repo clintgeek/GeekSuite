@@ -49,6 +49,7 @@ const HouseholdSettings = () => {
 
   // Form inputs
   const [displayName, setDisplayName] = useState('');
+  const [householdName, setHouseholdName] = useState('');
   const [joinCode, setJoinCode] = useState('');
   const [codeCopied, setCodeCopied] = useState(false);
 
@@ -72,6 +73,7 @@ const HouseholdSettings = () => {
       const household = await settingsService.getHouseholdSettings();
       setHouseholdData(household);
       setDisplayName(household?.display_name || '');
+      setHouseholdName(household?.name || '');
     } catch (err) {
       notify('Failed to load household settings', { tone: 'error' });
     } finally {
@@ -90,7 +92,7 @@ const HouseholdSettings = () => {
       // The service resolves to the bare `{ household_id }` — there is no
       // `.data.message`. Reading one threw AFTER the household was created,
       // so a success landed in the catch and said "Failed to create".
-      await settingsService.createHousehold(displayName);
+      await settingsService.createHousehold(displayName, householdName.trim() || undefined);
       notify('Household created', { tone: 'success' });
       setShowCreateDialog(false);
       await loadHouseholdSettings();
@@ -142,8 +144,8 @@ const HouseholdSettings = () => {
     try {
       setSaving(true);
       await settingsService.updateHouseholdSettings({ [field]: value });
-      setHouseholdData(prev => ({ ...prev, [field]: value }));
-      notify('Sharing settings updated', { tone: 'success' });
+      setHouseholdData(prev => ({ ...prev, [field]: value || null }));
+      notify(field === 'name' ? 'Household renamed' : 'Sharing settings updated', { tone: 'success' });
     } catch (err) {
       notify(errorMessage(err, 'Failed to update sharing settings'), { tone: 'error' });
     } finally {
@@ -202,6 +204,28 @@ const HouseholdSettings = () => {
         ) : (
           // In a household - show settings and members
           <>
+            {/* Household name — the household's, so a rename shows for everyone */}
+            <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start', mb: 2 }}>
+              <TextField
+                fullWidth
+                size="small"
+                label="Household Name"
+                value={householdName}
+                onChange={(e) => setHouseholdName(e.target.value)}
+                placeholder="e.g., Crocker"
+                inputProps={{ maxLength: 40 }}
+                helperText="Everyone in the household sees this name"
+              />
+              <Button
+                variant="outlined"
+                onClick={() => handleUpdateSharing('name', householdName.trim())}
+                disabled={saving || householdName.trim() === (householdData.name || '')}
+                sx={{ minHeight: 40, flexShrink: 0 }}
+              >
+                Save
+              </Button>
+            </Box>
+
             {/* Household Code */}
             <Box sx={{
               mb: 3,
@@ -357,6 +381,15 @@ const HouseholdSettings = () => {
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
             Create a household to share food logs and meals with family members.
           </Typography>
+          <TextField
+            fullWidth
+            label="Household Name"
+            value={householdName}
+            onChange={(e) => setHouseholdName(e.target.value)}
+            placeholder="e.g., Crocker"
+            inputProps={{ maxLength: 40 }}
+            sx={{ mb: 2 }}
+          />
           <TextField
             fullWidth
             label="Your Display Name"

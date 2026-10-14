@@ -21,6 +21,7 @@ const { fitnessGeekService } = await import('../../../services/fitnessGeekServic
 
 const HOUSEHOLD = {
   household_id: '7D9169DE1A8F',
+  name: 'Crocker',
   display_name: 'Clint',
   members: [{ user_id: 'heather', display_name: 'Heather', shares_food_logs: true, shares_meals: true }],
 };
@@ -43,6 +44,7 @@ describe('HouseholdLogView', () => {
     render(<HouseholdLogView open onClose={() => {}} currentDate="2026-10-13" onCopyMeal={() => {}} />);
 
     expect(await screen.findByText('Overnight oats')).toBeInTheDocument();
+    expect(screen.getByText('Crocker Food Logs')).toBeInTheDocument();
     expect(fitnessGeekService.getHouseholdMemberLogs).toHaveBeenCalledWith('heather', '2026-10-13');
     expect(screen.queryByText(/no household members are sharing/i)).not.toBeInTheDocument();
     expect(screen.getAllByText(/300/).length).toBeGreaterThan(0);

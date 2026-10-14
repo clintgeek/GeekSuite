@@ -70,3 +70,39 @@ describe('HouseholdSettings — join', () => {
     await waitFor(() => expect(notify).toHaveBeenCalledWith('Household not found', { tone: 'error' }));
   });
 });
+
+describe('HouseholdSettings — the household name', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('shows the name and saves a rename', async () => {
+    settingsService.getHouseholdSettings.mockResolvedValue({
+      household_id: '7D9169DE1A8F', name: 'Crocker', display_name: 'Clint', members: [],
+    });
+    settingsService.updateHouseholdSettings.mockResolvedValue({ household_id: '7D9169DE1A8F' });
+    const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
+    render(<HouseholdSettings />);
+
+    const field = await screen.findByLabelText(/household name/i);
+    expect(field).toHaveValue('Crocker');
+    await user.clear(field);
+    await user.type(field, 'The Crockers');
+    await user.click(screen.getByRole('button', { name: /^save$/i }));
+
+    await waitFor(() => expect(settingsService.updateHouseholdSettings).toHaveBeenCalledWith({ name: 'The Crockers' }));
+    expect(notify).toHaveBeenCalledWith('Household renamed', { tone: 'success' });
+  });
+
+  it('a new household is created with its name', async () => {
+    settingsService.getHouseholdSettings.mockResolvedValue(null);
+    settingsService.createHousehold.mockResolvedValue({ household_id: 'NEW123456789', name: 'Crocker' });
+    const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
+    render(<HouseholdSettings />);
+
+    await user.click(await screen.findByRole('button', { name: /create household/i }));
+    await user.type(screen.getByLabelText(/household name/i), 'Crocker');
+    await user.type(screen.getByLabelText(/your display name/i), 'Clint');
+    await user.click(screen.getByRole('button', { name: /^create$/i }));
+
+    await waitFor(() => expect(settingsService.createHousehold).toHaveBeenCalledWith('Clint', 'Crocker'));
+  });
+});

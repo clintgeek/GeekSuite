@@ -42,6 +42,7 @@ const HouseholdLogView = ({ open, onClose, currentDate, onCopyMeal }) => {
   const [selectedMember, setSelectedMember] = useState('');
   const [memberLogs, setMemberLogs] = useState([]);
   const [memberName, setMemberName] = useState('');
+  const [householdName, setHouseholdName] = useState('');
 
   useEffect(() => {
     if (open) {
@@ -65,6 +66,7 @@ const HouseholdLogView = ({ open, onClose, currentDate, onCopyMeal }) => {
       // Same double-unwrap HouseholdSettings had until 2026-09-19.
       const household = await fitnessGeekService.getHouseholdMembers();
       const members = household?.members?.filter(m => m.shares_food_logs) || [];
+      setHouseholdName(household?.name || '');
       setHouseholdMembers(members);
 
       if (!household?.household_id) {
@@ -153,7 +155,7 @@ const HouseholdLogView = ({ open, onClose, currentDate, onCopyMeal }) => {
       open={open}
       onClose={onClose}
       eyebrow="Household"
-      title="Household Food Logs"
+      title={householdName ? `${householdName} Food Logs` : 'Household Food Logs'}
       icon={PeopleIcon}
       maxWidth="md"
       secondaryAction={<Button onClick={onClose}>Close</Button>}
