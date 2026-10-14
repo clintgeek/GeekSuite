@@ -193,6 +193,12 @@ export const flattenSettingsUpdate = (input, prefix = '', out = {}) => {
  * shared), so without this a crafted `(name, brand)` could hand back another
  * user's PRIVATE custom food and populate it into the response.
  */
+/** A household name as stored: trimmed, at most 40 characters, or undefined. */
+const householdName = (raw) => {
+  const name = typeof raw === 'string' ? raw.trim().replace(/\s+/g, ' ').slice(0, 40) : '';
+  return name || undefined;
+};
+
 const resolveLogFoodItem = async (input, userId) => {
   const inline = input?.food_item;
   const inlineId = inline?.id ?? inline?._id;
@@ -985,6 +991,7 @@ export const resolvers = {
 
       return {
         household_id: settings.household?.household_id || null,
+        name: settings.household?.name || null,
         display_name: settings.household?.display_name || null,
         share_food_logs: settings.household?.share_food_logs ?? true,
         share_weight: settings.household?.share_weight ?? false,
@@ -1655,7 +1662,7 @@ export const resolvers = {
       };
     },
 
-    createFitnessHousehold: async (_, { display_name }, { user }) => {
+    createFitnessHousehold: async (_, { display_name, name }, { user }) => {
       if (!user) throw new Error('Unauthorized');
       const settings = await UserSettings.getOrCreate(user.id);
 
@@ -1664,6 +1671,7 @@ export const resolvers = {
       const householdId = crypto.randomBytes(6).toString('hex').toUpperCase();
       settings.household = {
         household_id: householdId,
+        name: householdName(name),
         display_name: display_name || 'Me',
         share_food_logs: true,
         share_weight: false,
@@ -1686,6 +1694,8 @@ export const resolvers = {
 
       settings.household = {
         household_id: household_id.toUpperCase(),
+        // A joiner takes the household's name — it is the household's, not theirs.
+        name: existingMember.household?.name || undefined,
         display_name: display_name || 'Family Member',
         share_food_logs: true,
         share_weight: false,
@@ -1702,6 +1712,16 @@ export const resolvers = {
       if (!settings.household?.household_id) throw new Error('You are not part of a household');
 
       if (input.display_name !== undefined) settings.household.display_name = input.display_name;
+      if (input.name !== undefined) {
+        // The name is the household's: a rename writes every member's row,
+        // or two members would see two names for one household.
+        const name = householdName(input.name);
+        settings.household.name = name;
+        await UserSettings.updateMany(
+          { 'household.household_id': settings.household.household_id, user_id: { $ne: user.id } },
+          name ? { $set: { 'household.name': name } } : { $unset: { 'household.name': '' } }
+        );
+      }
       if (input.share_food_logs !== undefined) settings.household.share_food_logs = input.share_food_logs;
       if (input.share_weight !== undefined) settings.household.share_weight = input.share_weight;
       if (input.share_meals !== undefined) settings.household.share_meals = input.share_meals;

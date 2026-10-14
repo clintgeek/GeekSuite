@@ -147,6 +147,7 @@ export const typeDefs = gql`
 
   type HouseholdSettings {
     household_id: String
+    name: String
     display_name: String
     share_food_logs: Boolean
     share_weight: Boolean
@@ -163,6 +164,8 @@ export const typeDefs = gql`
 
   type Household {
     household_id: String
+    "The household's name, e.g. Crocker. Same for every member."
+    name: String
     display_name: String
     share_food_logs: Boolean
     share_weight: Boolean
@@ -938,7 +941,7 @@ export const typeDefs = gql`
     # cannot know which day it is for its user, and guessing reset the streak
     # on any evening login while crediting days the user skipped.
     recordLoginStreak(date: String): LoginStreak
-    createFitnessHousehold(display_name: String!): Household
+    createFitnessHousehold(display_name: String!, name: String): Household
     joinFitnessHousehold(household_id: String!, display_name: String!): Household
     updateFitnessHouseholdSettings(input: FitnessJSON!): Household
     leaveFitnessHousehold: Boolean
