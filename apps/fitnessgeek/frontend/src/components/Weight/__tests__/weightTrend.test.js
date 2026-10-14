@@ -83,21 +83,33 @@ describe('buildWeightTrend', () => {
     expect(m.projection.points[1].x).toBe('2026-12-31');
   });
 
-  it('needs 14 days of means inside the 28-day fit window, not just a long run', () => {
-    // One unbroken run (the 25-day gap is under RUN_GAP_DAYS) spanning 31
-    // days — past the 14-day span gate — but the 28-day fit window holds only
-    // the last week of means, so there is still no slope to project.
-    const recent = logs(7).map((l, i) => ({ ...l, log_date: day(25 + i) }));
-    const m = buildWeightTrend([{ log_date: day(0), weight_value: 222 }, ...recent], { goal: GOAL });
-    expect(m.spanDays).toBeGreaterThanOrEqual(14);
+  // ── The program is the window (Chef, 2026-10-14: "seeing 2050 as a
+  // projection before I ever start a program is a bit discouraging"). ──
+
+  it('weigh-ins before the program start never unlock a projection', () => {
+    // Two months of flat pre-program weigh-ins, then one week into the program.
+    const before = Array.from({ length: 60 }, (_, i) => ({ log_date: `${day(i)}T00:00:00.000Z`, weight_value: 222 }));
+    const goal = { ...GOAL, startDate: day(60) };
+    const week = logs(7).map((l, i) => ({ ...l, log_date: `${day(60 + i)}T00:00:00.000Z` }));
+    const m = buildWeightTrend([...before, ...week], { goal, today: day(66) });
     expect(m.projection).toBeNull();
+    expect(m.pace).toMatchObject({ phase: 'too-early' });
   });
 
-  it('the span gate counts only the current run: history before a long gap does not unlock a projection', () => {
-    // A reading 70 days back, a gap longer than RUN_GAP_DAYS, one week since.
-    const recent = logs(7).map((l, i) => ({ ...l, log_date: day(70 + i) }));
-    const m = buildWeightTrend([{ log_date: day(0), weight_value: 222 }, ...recent], { goal: GOAL });
-    expect(m.spanDays).toBe(6);
-    expect(m.projection).toBeNull();
+  it('weigh-ins before the program start never bend the pace', () => {
+    // Flat 222 for two months, then losing 0.2/day for 30 days. The old
+    // last-6-weeks rate mixed the flat stretch in and crawled toward 2050.
+    const before = Array.from({ length: 60 }, (_, i) => ({ log_date: `${day(i)}T00:00:00.000Z`, weight_value: 222 }));
+    const goal = { ...GOAL, startDate: day(60), goalDate: '2027-03-31' };
+    const program = logs(30).map((l, i) => ({ ...l, log_date: `${day(60 + i)}T00:00:00.000Z` }));
+    const m = buildWeightTrend([...before, ...program], { goal, today: day(89) });
+    // ±0.1: the ±1.5 lb alternating water noise leaves a little residual.
+    expect(Math.abs(m.pace.slopePerWeek + 1.4)).toBeLessThan(0.1);
+    expect(m.projection.slopePerWeek).toBe(m.pace.slopePerWeek);
+    // Pre-program readings still draw as context dots…
+    expect(m.readings.some((r) => r.x < day(60))).toBe(true);
+    // …but the program's average line starts from program weigh-ins only.
+    expect(m.trend.find((p) => p.x === day(60)).y).toBeCloseTo(program[0].weight_value, 5);
   });
+
 });

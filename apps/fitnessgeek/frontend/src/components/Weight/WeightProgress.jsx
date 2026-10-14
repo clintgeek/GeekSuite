@@ -13,7 +13,7 @@ import {
 } from '@mui/icons-material';
 import { differenceInWeeks, differenceInDays, parseISO, format } from 'date-fns';
 import { readableOn } from '@geeksuite/ui';
-import { rollingMean, utcDateString } from '@geeksuite/utils';
+import { programPace } from './weightTrend.js';
 import { StatNumber, SectionLabel } from '../primitives';
 
 const WeightProgress = ({
@@ -58,92 +58,39 @@ const WeightProgress = ({
       ? (currentDelta === 0 ? 100 : 0)
       : Math.min(Math.max((currentDelta / goalDelta) * 100, 0), 100);
 
-    // Calculate time metrics
-    const weeksSinceStart = differenceInWeeks(today, startDate);
-    const weeksToGoal = differenceInWeeks(goalDate, today);
-    const daysToGoal = differenceInDays(goalDate, today);
-    const totalWeeks = differenceInWeeks(goalDate, startDate);
-    const timeProgressPercent = Math.min((weeksSinceStart / totalWeeks) * 100, 100);
+    // Calculate time metrics. Before the start date "time elapsed" is 0, not
+    // negative.
+    const weeksToGoal = Math.max(0, differenceInWeeks(goalDate, today));
+    const daysToGoal = Math.max(0, differenceInDays(goalDate, today));
+    const totalDays = Math.max(1, differenceInDays(goalDate, startDate));
+    const timeProgressPercent = Math.min(Math.max((differenceInDays(today, startDate) / totalDays) * 100, 0), 100);
 
-    // Calculate current rate using 6-week average (or all available data if less than 6 weeks)
-    const sixWeeksAgo = new Date(today);
-    sixWeeksAgo.setDate(sixWeeksAgo.getDate() - 42); // 6 weeks = 42 days
-
-    const recentLogs = weightLogs
-      .filter(log => {
-        const logDate = parseISO(log.log_date);
-        return logDate >= sixWeeksAgo && logDate <= today;
-      })
-      .sort((a, b) => new Date(a.log_date) - new Date(b.log_date));
-
-    let currentRate = 0;
-    let useGoalRateForProjection = false;
-
-    if (recentLogs.length >= 2) {
-      const firstLog = recentLogs[0];
-      const lastLog = recentLogs[recentLogs.length - 1];
-      const weeksDiff = differenceInWeeks(parseISO(lastLog.log_date), parseISO(firstLog.log_date)) || 1;
-      // 7-day trailing means at both ends, not the two raw readings. The
-      // caption below has always said "6-week average", but this subtracted
-      // one weigh-in from another — a reading-to-reading delta, so a water
-      // day at either end moved the rate by ~0.4 lb/week (BODY_DATA_PLAN §0).
-      // The means use every log, so the first one still sees the days
-      // before the six-week window.
-      const meanByDay = new Map(
-        rollingMean(
-          weightLogs.map((l) => ({ date: utcDateString(l.log_date), value: Number(l.weight_value) })),
-          { windowDays: 7 }
-        ).map((m) => [utcDateString(m.date), m.mean])
-      );
-      const firstMean = meanByDay.get(utcDateString(firstLog.log_date)) ?? firstLog.weight_value;
-      const lastMean = meanByDay.get(utcDateString(lastLog.log_date)) ?? lastLog.weight_value;
-      const weightChange = lastMean - firstMean;
-      currentRate = weightChange / weeksDiff;
-
-      // If less than 3 weeks of data, use goal rate for projection
-      if (weeksDiff < 3) {
-        useGoalRateForProjection = true;
-      }
-    } else {
-      useGoalRateForProjection = true;
-    }
-
-    // Calculate if on track
+    // PACE IS THE PROGRAM'S (weightTrend.js `programPace`, Chef 2026-10-14).
+    // This used to be "the last 6 weeks of logs", whatever the goal said —
+    // before a program, or early in one, that measured the flat weight of
+    // life before it, and remaining ÷ ~0 projected "2050". Now: weigh-ins on
+    // or after the start date only; no rate and no forecast until two weeks
+    // of them; and a forecast more than two plan-lengths out is not printed
+    // as a date.
     const remainingWeight = Math.abs(goal.targetWeight - currentWeight);
-    // No saved goal rate → no ahead/behind verdict (it used to be NaN, which
-    // rendered "On track" beside an off-track projection card).
-    const goalRateAbs = Math.abs(Number(goal.ratePerWeek)) || null;
-    const weeksNeeded = goalRateAbs ? remainingWeight / goalRateAbs : null;
-    const daysAheadBehind = weeksNeeded === null ? 0 : Math.round((weeksToGoal - weeksNeeded) * 7);
+    const pace = programPace(weightLogs, goal);
+    const measured = pace.phase === 'measured';
+    const currentRate = measured ? pace.slopePerWeek : null;
+    const useGoalRateForProjection = !measured;
 
-    // Projected completion date
-    let projectedDate;
-    if (useGoalRateForProjection) {
-      // Use goal date for first 3 weeks
+    let projectedDate = null;
+    let daysAheadBehind = 0;
+    if (!measured) {
+      // Not started, or too early to measure: the plan is the projection.
       projectedDate = goalDate;
-    } else {
-      // Use 6-week average rate
-      // `currentRate` is SIGNED — negative while losing. `Math.abs` on the
-      // quotient hid the case that matters: someone gaining 0.33 lb/week
-      // against a 20 lb loss goal got a tidy "60 weeks" and a projected
-      // completion date, rather than the truth, which is that this rate never
-      // arrives. A rate pointing the wrong way now yields Infinity and falls
-      // through to the isFinite guard below, which shows the goal date rather
-      // than a fabricated one.
-      const rateToUse = currentRate || goal.ratePerWeek;
-      const movingTowardGoal = (goal.targetWeight - currentWeight) === 0
-        || Math.sign(rateToUse) === Math.sign(goal.targetWeight - currentWeight);
-      const projectedWeeks = movingTowardGoal
-        ? Math.abs(remainingWeight / rateToUse)
-        : Infinity;
-      projectedDate = new Date(today);
-
-      // Validate projected weeks is a valid number
-      if (isNaN(projectedWeeks) || !isFinite(projectedWeeks)) {
-        projectedDate = goalDate; // Default to goal date
-      } else {
-        projectedDate.setDate(projectedDate.getDate() + (projectedWeeks * 7));
-      }
+    } else if (pace.projectedDate) {
+      projectedDate = new Date(`${pace.projectedDate}T12:00:00`);
+      daysAheadBehind = differenceInDays(goalDate, projectedDate);
+    } else if (pace.heading === 'toward' || pace.heading === 'flat') {
+      // Heading the right way, just slowly: behind by more than a plan.
+      daysAheadBehind = -totalDays;
+    } else if (pace.heading === 'away') {
+      daysAheadBehind = -totalDays;
     }
 
     // Status
@@ -159,12 +106,13 @@ const WeightProgress = ({
       daysToGoal,
       weeksToGoal,
       daysAheadBehind,
-      projectedDate: isNaN(projectedDate.getTime()) ? null : projectedDate,
+      projectedDate: projectedDate && !isNaN(projectedDate.getTime()) ? projectedDate : null,
       isOnTrack,
       isAhead,
       isBehind,
       timeProgressPercent,
-      useGoalRateForProjection
+      useGoalRateForProjection,
+      pace
     };
     } catch (error) {
       console.error('Error calculating weight progress insights:', error);
@@ -369,9 +317,10 @@ const WeightProgress = ({
               </Typography>
             </Box>
             <Typography variant="h6" sx={{ fontWeight: 700, color: theme.palette.text.primary }}>
-              {Math.abs(insights.currentRate || 0).toFixed(1)} {unit}/week
+              {insights.currentRate === null ? '—' : `${Math.abs(insights.currentRate).toFixed(1)} ${unit}/week`}
             </Typography>
             <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
+              {insights.currentRate === null ? `${rateWaitText(insights.pace)} · ` : 'Since your start · '}
               Goal: {Math.abs(insights.goalRate || 0).toFixed(1)} {unit}/week
             </Typography>
           </Box>
@@ -409,13 +358,10 @@ const WeightProgress = ({
               Projected Completion
             </Typography>
             <Typography variant="body1" sx={{ fontWeight: 700, color: theme.palette.text.primary }}>
-              {insights.projectedDate ? format(insights.projectedDate, 'MMMM dd, yyyy') : 'N/A'}
+              {projectionHeadline(insights)}
             </Typography>
             <Typography variant="caption" sx={{ color: projectionMuted }}>
-              {insights.useGoalRateForProjection
-                ? `On schedule at goal rate of ${Math.abs(insights.goalRate || 0).toFixed(1)} ${unit}/week`
-                : `At ${Math.abs(insights.currentRate || 0).toFixed(1)} ${unit}/week, your 7-day average over the last 6 weeks`
-              }
+              {projectionCaption(insights, unit)}
             </Typography>
           </Box>
         </Box>
@@ -423,5 +369,37 @@ const WeightProgress = ({
     </Card>
   );
 };
+
+const fmtDay = (d) => (d ? format(d, 'MMMM d, yyyy') : '');
+const fmtYmd = (ymd) => (ymd ? format(new Date(`${ymd}T12:00:00`), 'MMM d') : '');
+
+/** Why there's no measured rate yet. */
+function rateWaitText(pace) {
+  if (pace?.phase === 'not-started') return `Starts ${fmtYmd(pace.startDate)}`;
+  const left = Math.max(1, 14 - (pace?.programDays || 0));
+  return `Measured after 2 weeks in (${left} day${left === 1 ? '' : 's'} to go)`;
+}
+
+/** The projection tile's big line: a date only when there is an honest one. */
+function projectionHeadline(insights) {
+  const { pace } = insights;
+  if (!pace || pace.phase !== 'measured') return fmtDay(insights.projectedDate);
+  if (pace.projectedDate) return fmtDay(insights.projectedDate);
+  if (pace.heading === 'away') return 'Not on pace yet';
+  return 'Well behind plan';
+}
+
+/** …and what it is based on. */
+function projectionCaption(insights, unit) {
+  const { pace } = insights;
+  const goalRate = `${Math.abs(insights.goalRate || 0).toFixed(1)} ${unit}/week`;
+  if (!pace || pace.phase === 'none') return `Your plan, at ${goalRate}`;
+  if (pace.phase === 'not-started') return `Your plan, at ${goalRate} — the program starts ${fmtYmd(pace.startDate)}`;
+  if (pace.phase === 'too-early') return `Your plan, at ${goalRate}, until there are two weeks of weigh-ins to measure your own pace`;
+  const rate = `${Math.abs(pace.slopePerWeek || 0).toFixed(1)} ${unit}/week`;
+  if (pace.projectedDate) return `At ${rate}, your trend since starting ${fmtYmd(pace.startDate)}`;
+  if (pace.heading === 'away') return `Your trend since ${fmtYmd(pace.startDate)} is heading away from the target — early weeks are noisy`;
+  return `At ${rate} since ${fmtYmd(pace.startDate)}, the finish is more than twice the plan's length out`;
+}
 
 export default WeightProgress;

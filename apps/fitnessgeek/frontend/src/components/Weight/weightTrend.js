@@ -12,10 +12,19 @@
  *   - `trend`    — `rollingMean` over ALL logs (a mean near the start of the
  *                  goal window still includes the days before it — that is
  *                  what "trailing" means), one point per calendar day;
- *   - `projection` — only when the logs span ≥ 14 days, and only from the
- *                  smoothed trend: the least-squares slope of the 7-day means
- *                  over the last 28 days, extended from the latest mean
- *                  toward the goal date. It stops where it reaches the target.
+ *   - `projection` — from `programPace` (below): only once the PROGRAM has
+ *                  two weeks of weigh-ins, from the least-squares slope of
+ *                  every weigh-in since the program started, extended from
+ *                  the latest 7-day mean toward the goal date.
+ *                  It stops where it reaches the target.
+ *
+ * THE PROGRAM IS THE WINDOW (Chef, 2026-10-14: "seeing 2050 as a projection
+ * before I ever start a program is a bit discouraging"). The rate used to be
+ * the last 6 weeks / 28 days of logs whatever the goal said, so before a
+ * program — or in its first weeks — it was measuring the flat weight of
+ * life before the program, and remaining ÷ ~0 put the finish decades out.
+ * Now pace, average and projection count only weigh-ins on or after the
+ * goal's start date; readings before it still show as dots, for context.
  *
  * Every date is a CALENDAR day (`YYYY-MM-DD`, read in UTC via
  * `utcDateString`), never `parseISO(log_date)` — that reads a UTC-midnight
@@ -26,12 +35,14 @@ import { rollingMean, utcDateString } from '@geeksuite/utils';
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** The logs must span this many days before a projection is drawn. */
+/** The PROGRAM's weigh-ins must span this many days before a pace is measured. */
 export const PROJECTION_MIN_SPAN_DAYS = 14;
-/** The slope is fitted over this many days of 7-day means… */
-export const PROJECTION_FIT_DAYS = 28;
-/** …which themselves must span at least this long. */
-export const PROJECTION_MIN_FIT_SPAN_DAYS = 14;
+/**
+ * A projected finish later than this many plan-lengths past the start is not
+ * shown as a date — "June 2050" is a division by a near-zero early slope, not
+ * a forecast. The cards say how far behind plan instead.
+ */
+export const PROJECTION_MAX_PLAN_MULTIPLE = 2;
 /**
  * Two trend points further apart than this are not joined: the line breaks.
  * A 7-day mean restarts after a week with no readings anyway, and a line drawn
@@ -106,22 +117,99 @@ export function splitAtGaps(items, ymdOfItem) {
   return out;
 }
 
-export function buildWeightTrend(logs = [], { goal = null } = {}) {
-  const valid = (logs || [])
-    .map((l) => ({ x: utcDateString(l?.log_date), y: Number(l?.weight_value) }))
-    .filter((p) => p.x && Number.isFinite(p.y) && p.y > 0)
-    .sort((a, b) => (a.x < b.x ? -1 : a.x > b.x ? 1 : 0));
+const toPoints = (logs) => (logs || [])
+  .map((l) => ({ x: utcDateString(l?.log_date), y: Number(l?.weight_value) }))
+  .filter((p) => p.x && Number.isFinite(p.y) && p.y > 0)
+  .sort((a, b) => (a.x < b.x ? -1 : a.x > b.x ? 1 : 0));
+
+/** One 7-day trailing mean per calendar day, over `points` only. */
+function dailyMeans(points) {
+  const byDay = new Map();
+  for (const m of rollingMean(points.map((p) => ({ date: p.x, value: p.y })), { windowDays: 7 })) {
+    byDay.set(utcDateString(m.date), m.mean);
+  }
+  return [...byDay.entries()].map(([x, y]) => ({ x, y }));
+}
+
+/**
+ * How the PROGRAM is going, measured from its start — the one rule the chart
+ * and the progress cards share.
+ *
+ * @param {Array<{log_date: string, weight_value: number}>} logs
+ * @param {{enabled?: boolean, startDate: any, goalDate: any, startWeight: number, targetWeight: number}|null} goal
+ * @param {{today?: string}} [opts] `today` as YYYY-MM-DD (tests); defaults to the UTC calendar day
+ * @returns {{
+ *   phase: 'none'|'not-started'|'too-early'|'measured',
+ *   startDate: string|null, goalDate: string|null,
+ *   programDays: number,          // days of weigh-ins inside the program so far
+ *   trend: Array<{x: string, y: number}>,   // 7-day means of program weigh-ins only
+ *   slopePerWeek: number|null,    // signed, unit/week, since the start
+ *   projectedDate: string|null,   // YYYY-MM-DD the trend reaches the target
+ *   heading: 'toward'|'away'|'flat'|'done'|null,
+ *   onTrack: boolean|null,        // projected on or before the goal date
+ *   tooFar: boolean,              // projected past PROJECTION_MAX_PLAN_MULTIPLE plans
+ * }}
+ */
+export function programPace(logs = [], goal = null, { today } = {}) {
+  const base = {
+    phase: 'none', startDate: null, goalDate: null, programDays: 0, trend: [],
+    slopePerWeek: null, projectedDate: null, heading: null, onTrack: null, tooFar: false,
+  };
+  const startDate = goal && goal.enabled !== false ? utcDateString(goal.startDate) : '';
+  const goalDate = startDate ? utcDateString(goal.goalDate) : '';
+  const target = Number(goal?.targetWeight);
+  if (!startDate || !goalDate || !Number.isFinite(target)) return base;
+
+  const todayYmd = today || utcDateString(new Date());
+  const out = { ...base, startDate, goalDate };
+  if (todayYmd < startDate) return { ...out, phase: 'not-started' };
+
+  const program = toPoints(logs).filter((p) => p.x >= startDate && p.x <= todayYmd);
+  const trend = dailyMeans(program);
+  const programDays = program.length ? dayOf(program[program.length - 1].x) - dayOf(program[0].x) : 0;
+  if (programDays < PROJECTION_MIN_SPAN_DAYS) return { ...out, phase: 'too-early', programDays, trend };
+
+  // Pace = least-squares slope through every program weigh-in. Not through
+  // the 7-day means: near the start those average fewer days, which biases
+  // the slope; water noise in the raw readings cancels out in the fit.
+  const slope = slopeOf(program.map((p) => [dayOf(p.x), p.y]));
+  const measured = { ...out, phase: 'measured', programDays, trend };
+  if (slope === null) return measured;
+
+  const lastDay = dayOf(trend[trend.length - 1].x);
+  const lastMean = trend[trend.length - 1].y;
+  const toGo = target - lastMean;
+  const slopePerWeek = Math.round(slope * 7 * 100) / 100;
+  const goalDay = dayOf(goalDate);
+
+  if (Math.abs(toGo) < 0.05) {
+    return { ...measured, slopePerWeek, heading: 'done', projectedDate: ymdOf(lastDay), onTrack: true };
+  }
+  if (Math.abs(slope) < 1e-6) return { ...measured, slopePerWeek, heading: 'flat', onTrack: false, tooFar: true };
+  if (Math.sign(slope) !== Math.sign(toGo)) return { ...measured, slopePerWeek, heading: 'away', onTrack: false };
+
+  const finishDay = lastDay + Math.max(1, Math.round(toGo / slope));
+  const planDays = Math.max(1, goalDay - dayOf(startDate));
+  const tooFar = finishDay > dayOf(startDate) + PROJECTION_MAX_PLAN_MULTIPLE * planDays;
+  return {
+    ...measured,
+    slopePerWeek,
+    heading: 'toward',
+    projectedDate: tooFar ? null : ymdOf(finishDay),
+    onTrack: finishDay <= goalDay,
+    tooFar,
+  };
+}
+
+export function buildWeightTrend(logs = [], { goal = null, today } = {}) {
+  const valid = toPoints(logs);
 
   const empty = { readings: [], trend: [], goalLine: null, projection: null, spanDays: 0 };
   if (!valid.length) return empty;
 
   // One trend point per day: same-day readings share a window, so they share
   // a mean — keep the last, which is the same number.
-  const byDay = new Map();
-  for (const m of rollingMean(valid.map((p) => ({ date: p.x, value: p.y })), { windowDays: 7 })) {
-    byDay.set(utcDateString(m.date), m.mean);
-  }
-  const allTrend = [...byDay.entries()].map(([x, y]) => ({ x, y }));
+  const allTrend = dailyMeans(valid);
 
   const lastDay = dayOf(valid[valid.length - 1].x);
 
@@ -151,37 +239,42 @@ export function buildWeightTrend(logs = [], { goal = null } = {}) {
     ? [{ x: gStart, y: goal.startWeight }, { x: gEnd, y: goal.targetWeight }]
     : null;
 
+  // Pace, average and projection are the PROGRAM's (programPace): readings
+  // from before the start still show as dots, but the 7-day line inside the
+  // goal window is built from program weigh-ins only.
   let projection = null;
-  if (hasGoalLine && trend.length && spanDays >= PROJECTION_MIN_SPAN_DAYS) {
-    const fit = allTrend
-      .map((p) => [dayOf(p.x), p.y])
-      .filter(([d]) => d > lastDay - PROJECTION_FIT_DAYS);
-    const fitSpan = fit.length ? fit[fit.length - 1][0] - fit[0][0] : 0;
-    const slope = fitSpan >= PROJECTION_MIN_FIT_SPAN_DAYS ? slopeOf(fit) : null;
-    const goalDay = dayOf(gEnd);
-    const lastMean = allTrend[allTrend.length - 1].y;
-
-    if (slope !== null && goalDay > lastDay) {
-      const target = goal.targetWeight;
-      const toGo = target - lastMean;
-      // Heading toward the target: stop the line where it gets there.
-      const towards = toGo !== 0 && Math.sign(slope) === Math.sign(toGo);
-      const daysToTarget = towards ? toGo / slope : Infinity;
-      const onTrack = toGo === 0 || daysToTarget <= goalDay - lastDay;
-      const endDay = onTrack && toGo !== 0 ? lastDay + Math.max(1, Math.round(daysToTarget)) : goalDay;
-      const endY = onTrack ? target : lastMean + slope * (goalDay - lastDay);
-      projection = {
-        points: [
-          { x: ymdOf(lastDay), y: lastMean },
-          { x: ymdOf(endDay), y: Math.round(endY * 10) / 10 },
-        ],
-        onTrack,
-        slopePerWeek: Math.round(slope * 7 * 100) / 100,
-      };
+  let programTrend = trend;
+  let pace = null;
+  if (hasGoalLine) {
+    pace = programPace(logs, goal, { today });
+    programTrend = [
+      ...trend.filter((p) => p.x < gStart),
+      ...pace.trend.filter((p) => p.x <= gEnd),
+    ];
+    if (pace.phase === 'measured' && pace.slopePerWeek !== null && pace.trend.length) {
+      const last = pace.trend[pace.trend.length - 1];
+      const lastDay = dayOf(last.x);
+      const goalDay = dayOf(gEnd);
+      if (goalDay > lastDay) {
+        // Reaches the target before the goal date: stop there. Otherwise run
+        // to the goal date, showing where the trend lands by then.
+        const endX = pace.heading === 'toward' && pace.onTrack && pace.projectedDate ? pace.projectedDate : gEnd;
+        const endY = endX === gEnd && !(pace.heading === 'toward' && pace.onTrack)
+          ? last.y + (pace.slopePerWeek / 7) * (goalDay - lastDay)
+          : goal.targetWeight;
+        projection = {
+          points: [
+            { x: last.x, y: last.y },
+            { x: endX, y: Math.round(endY * 10) / 10 },
+          ],
+          onTrack: Boolean(pace.onTrack),
+          slopePerWeek: pace.slopePerWeek,
+        };
+      }
     }
   }
 
-  return { readings, trend, goalLine, projection, spanDays };
+  return { readings, trend: programTrend, goalLine, projection, spanDays, pace };
 }
 
 export default buildWeightTrend;

@@ -108,9 +108,9 @@ const WeightTimeline = ({ weightLogs = [], goal = null, unit = 'lbs' }) => {
           ))}
         </Box>
       </Box>
-      {!model.projection && model.goalLine && model.spanDays < 14 && (
+      {!model.projection && model.goalLine && paceHint(model.pace) && (
         <Typography sx={{ color: muted, fontSize: '0.8125rem', mb: 1 }}>
-          A projection appears once your weigh-ins span two weeks.
+          {paceHint(model.pace)}
         </Typography>
       )}
 
@@ -316,5 +316,19 @@ const LegendItem = ({ color, label, kind, suffix, muted }) => (
     )}
   </Box>
 );
+
+/**
+ * Why there is no projection line yet, in words — measured from the program's
+ * start (weightTrend.js `programPace`), never from older weigh-ins.
+ */
+function paceHint(pace) {
+  if (!pace) return null;
+  if (pace.phase === 'not-started') return 'Your program hasn’t started yet — the line follows your plan until it does.';
+  if (pace.phase === 'too-early') {
+    const left = Math.max(1, 14 - pace.programDays);
+    return `A projection from your own pace appears after two weeks of weigh-ins in the program (${left} more day${left === 1 ? '' : 's'}).`;
+  }
+  return null;
+}
 
 export default WeightTimeline;
