@@ -14,7 +14,7 @@ const DEFAULT_HOUSEHOLD_ID = 'default';
 
 const MEMBER_USER_IDS = Object.freeze([
   '6818c2bddcf626909f6a93a1', // clint@clintgeek.com
-  '689931bbe8828efb78d11bab', // heather (heathergeek03@gmail.com)
+  '6accca4a709004f8eb8635f5', // heather (heathergeek03@gmail.com) — re-registered 2026-10-12; the old id 689931bb… no longer exists
 ]);
 
 function unauthorized() {

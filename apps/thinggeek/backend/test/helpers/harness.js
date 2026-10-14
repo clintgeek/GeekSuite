@@ -20,7 +20,7 @@ const { invalidSession } = userServer;
 const { newVaultToken, vaultSessionRow, VAULT_COOKIE } = vaultSessionModule;
 
 export const CHEF_ID = '6818c2bddcf626909f6a93a1';
-export const HEATHER_ID = '689931bbe8828efb78d11bab';
+export const HEATHER_ID = '6accca4a709004f8eb8635f5';
 export const STRANGER_ID = '5f0000000000000000000001';
 /** One of the kids' accounts: signed in, not a household member. */
 export const KID_ID = '5f0000000000000000000002';

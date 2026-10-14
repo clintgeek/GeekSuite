@@ -19,7 +19,7 @@ firearms, tools, electronics, keyboards, appliances. The payoff moments are:
 | Topic | Decision |
 |---|---|
 | Name | **ThingGeek**, `thinggeek.clintgeek.com`, host port **1820** |
-| Who sees it | **Household members only.** Until suite households exist, a **member allowlist**: Chef (`6818c2bddcf626909f6a93a1`, clint@clintgeek.com) and Heather (`689931bbe8828efb78d11bab`, username `heather`). Every other account gets "not a member", enforced in the gateway AND the backend. The other two accounts in userGeek are the reason; they must not see firearms. |
+| Who sees it | **Household members only.** Until suite households exist, a **member allowlist**: Chef (`6818c2bddcf626909f6a93a1`, clint@clintgeek.com) and Heather (`6accca4a709004f8eb8635f5`, username `heather`). Every other account gets "not a member", enforced in the gateway AND the backend. The other two accounts in userGeek are the reason; they must not see firearms. |
 | Files | **App storage** on the box (`apps/thinggeek/data/files`), not Nextcloud. Nextcloud sync isn't backup, and writing into it is the documented ghost-file landmine. |
 | AI | **Tier punted.** The Ask feature is phase 2. **Privacy rule (agreed):** identifier fields (serials, VIN, hull, registration), document contents and money values **never** go to an AI provider. AI tools see "has a serial: yes", never the value. |
 | Insurance report | **Agreed as important.** CSV export plus a printable report page (the browser's print to PDF: photo, make/model, serial, value, receipt present), in MVP. |

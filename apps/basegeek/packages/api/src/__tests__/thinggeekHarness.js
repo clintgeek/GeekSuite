@@ -25,7 +25,7 @@ const thingResolvers = (await import('../graphql/thinggeek/resolvers.js')).resol
 export { Thing, ThingType, ThingFile, ThingProfile, thingResolvers };
 
 export const CHEF = '6818c2bddcf626909f6a93a1';
-export const HEATHER = '689931bbe8828efb78d11bab';
+export const HEATHER = '6accca4a709004f8eb8635f5';
 export const OUTSIDER = String(new mongoose.Types.ObjectId());
 export const OTHER_HOUSEHOLD = 'other-household';
 
