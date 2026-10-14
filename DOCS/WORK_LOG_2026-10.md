@@ -407,3 +407,17 @@ Built from a production audit of the whole pipeline.
     One belonged to a third user, `…afba`.
   - Swapped `user_id_1` to a unique index.
 - Heather's settings had never been written because she hasn't set a goal yet (Chef, 2026-10-14). Right account; nothing to do.
+
+## 2026-10-14 — FitnessGeek: goal projections measure from the program start (`65d69ecf`)
+
+- **Chef:** "Seeing 2050 as a projection before I ever start a program is a bit discouraging."
+- **Cause:** the progress card's rate covered the last 6 weeks of logs and the chart's covered
+  the last 28 days, whatever the goal said. Flat weight from before the program gave a slope
+  near zero, and remaining ÷ ~0 put the finish decades out.
+- **Fix:** `programPace` (in `weightTrend.js`) now drives both the chart and the cards.
+  - It counts only weigh-ins on or after the goal's start date.
+  - Before the start, or with under 14 days of program weigh-ins, it shows the plan's date
+    and no rate.
+  - The rate is a least-squares fit over every program weigh-in.
+  - A finish more than twice the plan's length out reads "Well behind plan", not a date.
+- **Checks:** 5 new tests, all red on the old code. Frontend 517. Harness 152/0.
