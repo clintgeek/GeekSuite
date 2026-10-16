@@ -910,12 +910,12 @@ export const typeDefs = gql`
     # all evening in US-Central. Same three args on the two AI reports below.
     fitnessFoodReportOverview(start: String, end: String, days: Int): FitnessFoodReport
     fitnessFoodReportTrends(start: String, end: String, days: Int): FitnessTrendReport
-    fitnessInsightsMorningBrief: FitnessInsight
+    fitnessInsightsMorningBrief(date: String): FitnessInsight
     fitnessInsightsDailySummary(date: String): FitnessInsight
-    fitnessInsightsCorrelations: FitnessInsight
+    fitnessInsightsCorrelations(date: String): FitnessInsight
     fitnessInsightsWeeklyReport(start: String, end: String, days: Int): FitnessInsight
     fitnessInsightsTrendWatch(start: String, end: String, days: Int): FitnessInsight
-    fitnessInsightsCoaching: FitnessInsight
+    fitnessInsightsCoaching(date: String): FitnessInsight
     fitnessInsightsContext(days: Int): FitnessJSON
 
     """

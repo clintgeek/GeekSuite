@@ -115,6 +115,14 @@ const requireCalendarDate = (date, field) => {
 };
 
 /**
+ * The additive form of `requireCalendarDate` for the AI-insight queries: a
+ * client that sends `date` (its local YYYY-MM-DD) gets answers about ITS day;
+ * an older client that sends nothing keeps the server's UTC day, as before.
+ * A malformed value is refused, never silently swapped for the server's day.
+ */
+const optionalCalendarDate = (date, field) => (date == null || date === '' ? undefined : requireCalendarDate(date, field));
+
+/**
  * The days a food report covers: `days` whole UTC days, inclusive.
  *
  * `start` (the first day) wins when sent. `end` (the last day, the caller's
@@ -1193,12 +1201,13 @@ export const resolvers = {
       };
     },
 
-    fitnessInsightsMorningBrief: async (_, __, { user }) => {
+    fitnessInsightsMorningBrief: async (_, { date }, { user }) => {
       if (!user) throw new Error('Unauthorized');
-      const context = await buildUserContext(user.id, { daysBack: 1 });
+      const day = optionalCalendarDate(date, 'fitnessInsightsMorningBrief');
+      const context = await buildUserContext(user.id, { daysBack: 1, date: day });
       const prompt = `You are a friendly health coach. Generate a morning brief based on yesterday's data:\n${ JSON.stringify(context, null, 2) }\nKeep it under 100 words.`;
       const response = await aiService.chat(prompt);
-      return { type: 'morning_brief', content: response, generatedAt: new Date(), context: { date: format(new Date(), 'yyyy-MM-dd') } };
+      return { type: 'morning_brief', content: response, generatedAt: new Date(), context: { date: day || format(new Date(), 'yyyy-MM-dd') } };
     },
 
     fitnessInsightsDailySummary: async (_, { date }, { user }) => {
@@ -1213,9 +1222,9 @@ export const resolvers = {
       return { type: 'daily_summary', content: response, generatedAt: new Date(), context: { date: targetDate } };
     },
 
-    fitnessInsightsCorrelations: async (_, __, { user }) => {
+    fitnessInsightsCorrelations: async (_, { date }, { user }) => {
       if (!user) throw new Error('Unauthorized');
-      const context = await buildUserContext(user.id, { daysBack: 30 });
+      const context = await buildUserContext(user.id, { daysBack: 30, date: optionalCalendarDate(date, 'fitnessInsightsCorrelations') });
       const prompt = `Analyze this 30-day health data for patterns:\n${ JSON.stringify(context, null, 2) }\nFormat as 3-5 findings, under 250 words.`;
       const response = await aiService.chat(prompt);
       return { type: 'correlations', content: response, generatedAt: new Date(), context: { daysAnalyzed: 30 } };
@@ -1239,9 +1248,9 @@ export const resolvers = {
       return { type: 'trend_watch', content: response, generatedAt: new Date(), context: trends.range };
     },
 
-    fitnessInsightsCoaching: async (_, __, { user }) => {
+    fitnessInsightsCoaching: async (_, { date }, { user }) => {
       if (!user) throw new Error('Unauthorized');
-      const context = await buildUserContext(user.id, { daysBack: 14 });
+      const context = await buildUserContext(user.id, { daysBack: 14, date: optionalCalendarDate(date, 'fitnessInsightsCoaching') });
       const prompt = `Provide coaching advice based on this 14-day data:\n${ JSON.stringify(context, null, 2) }\n2-3 action items, under 200 words.`;
       const response = await aiService.chat(prompt);
       return { type: 'coaching', content: response, generatedAt: new Date(), context: { daysAnalyzed: 14 } };
@@ -1472,6 +1481,18 @@ export const resolvers = {
       // add-to-log used parseLocalDate() here and wrote LOCAL midnight, which
       // lands on the previous UTC day west of UTC; this is the fixed version.
       const logDate = toUtcMidnight(date || format(new Date(), 'yyyy-MM-dd'));
+
+      // Every food on the meal must be one the caller can read (global, theirs
+      // or their household's) — a meal can hold a food that was never theirs
+      // (a copied meal, a household member who since left). Checked for all of
+      // them before anything is written, so a refusal logs nothing, same as
+      // copyFitnessMeal. A dangling reference (null) is skipped below as ever,
+      // and a soft-deleted food still counts: the meal points at it.
+      const foodIds = [...new Set(meal.food_items.filter((i) => i.food_item_id).map((i) => String(i.food_item_id._id)))];
+      if (foodIds.length) {
+        const readable = await FoodItem.findAccessibleMany(foodIds, user.id, { includeDeleted: true });
+        if (readable.length !== foodIds.length) throw new Error('Food item not found');
+      }
       for (const item of meal.food_items) {
         if (!item.food_item_id) continue; // dangling/deleted catalog reference
         const log = new FoodLog({

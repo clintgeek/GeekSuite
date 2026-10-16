@@ -167,6 +167,22 @@ describe('the AI-insight window covers whole calendar days', () => {
     expect(dateRange.start).toBe(dayAt(-3).toISOString().slice(0, 10));
   });
 
+  it('morning brief, correlations and coaching end on the client\'s date when it is sent', async () => {
+    // After 19:00 Central the server's UTC "today" is tomorrow. A client that
+    // sends its own day must get a window ending on THAT day, whatever the clock says.
+    const clientDay = '2026-03-04';
+    const Q = fitnessResolvers.Query;
+    await Q.fitnessInsightsMorningBrief(null, { date: clientDay }, ctx(ALICE));
+    expect(contextFromPrompt().dateRange.end).toBe(clientDay);
+    const brief = await Q.fitnessInsightsMorningBrief(null, { date: clientDay }, ctx(ALICE));
+    expect(brief.context.date).toBe(clientDay);
+    await Q.fitnessInsightsCorrelations(null, { date: clientDay }, ctx(ALICE));
+    expect(contextFromPrompt().dateRange.end).toBe(clientDay);
+    await Q.fitnessInsightsCoaching(null, { date: clientDay }, ctx(ALICE));
+    expect(contextFromPrompt().dateRange.end).toBe(clientDay);
+    await expect(Q.fitnessInsightsCoaching(null, { date: 'tomorrow' }, ctx(ALICE))).rejects.toThrow('YYYY-MM-DD');
+  });
+
   it('leaves a longer window inclusive at both ends', async () => {
     await fitnessResolvers.Query.fitnessInsightsCorrelations(null, {}, ctx(ALICE));
     const { dateRange } = contextFromPrompt();

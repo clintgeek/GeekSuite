@@ -185,6 +185,34 @@ describe('B9 — copyFitnessMeal from a household member', () => {
   });
 });
 
+describe('logMeal re-checks that the caller can read every food', () => {
+  const mealWith = (userId, foods) =>
+    Meal.create({
+      name: 'Shared plate', meal_type: 'dinner', user_id: userId,
+      food_items: foods.map((f) => ({ food_item_id: f._id, servings: 1 })),
+    });
+
+  test('a food the caller cannot read refuses the whole meal, logging nothing', async () => {
+    const strangers = await FoodItem.create({
+      name: 'secret shake', nutrition: { calories_per_serving: 300 }, serving: { size: 1, unit: 'cup' }, source: 'custom', user_id: STRANGER,
+    });
+    const mine = await FoodItem.create({
+      name: 'my toast', nutrition: { calories_per_serving: 90 }, serving: { size: 1, unit: 'slice' }, source: 'custom', user_id: HEATHER,
+    });
+    const meal = await mealWith(HEATHER, [mine, strangers]);
+    await expect(M.logMeal(null, { mealId: String(meal._id), date: '2026-10-15' }, ctx(HEATHER)))
+      .rejects.toThrow('Food item not found');
+    expect(await FoodLog.countDocuments({ user_id: HEATHER })).toBe(0);
+  });
+
+  test('a household member\'s food and the caller\'s own still log', async () => {
+    const chili = await chefsFood();
+    const meal = await mealWith(HEATHER, [chili]);
+    const logs = await M.logMeal(null, { mealId: String(meal._id), date: '2026-10-15' }, ctx(HEATHER));
+    expect(logs).toHaveLength(1);
+  });
+});
+
 describe('C5 — a tapped AI result belongs to whoever tapped it', () => {
   const aiResult = (overrides = {}) => ({
     id: 'ai_123',
