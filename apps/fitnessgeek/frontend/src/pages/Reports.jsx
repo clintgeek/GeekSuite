@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState, useMemo, useRef } from 'react';
 import {
   Container,
   Box,
@@ -27,6 +27,7 @@ import {
 import { reportsService } from '../services/reportsService.js';
 import { localDateString, localDateStringDaysAgo } from '@geeksuite/utils';
 import { insightsService } from '../services/insightsService.js';
+import { errorMessage } from '../utils/errorMessage.js';
 
 const RANGE_OPTIONS = ['7', '14', '30'];
 
@@ -57,56 +58,76 @@ const Reports = () => {
   const [trends, setTrends] = useState(null);
   const [weeklyCoach, setWeeklyCoach] = useState(null);
   const [trendWatch, setTrendWatch] = useState(null);
-  const [aiLoading, setAiLoading] = useState(false);
+  // Each AI panel loads, and fails, on its own: they go out to a model
+  // provider and can take many seconds, and the food report never waits for
+  // them (review P2 — the page used to show one spinner until both answered).
+  const [weeklyLoading, setWeeklyLoading] = useState(true);
+  const [trendLoading, setTrendLoading] = useState(true);
+  const [weeklyError, setWeeklyError] = useState(null);
+  const [trendError, setTrendError] = useState(null);
   const [exporting, setExporting] = useState(false);
+  // A range tap mid-load: only the newest request may write to the page.
+  const requestRef = useRef(0);
 
   useEffect(() => {
     fetchReports();
   }, [range]);
 
-  const fetchReports = async () => {
+  const fetchReports = () => {
+    const ticket = ++requestRef.current;
+    const current = () => ticket === requestRef.current;
+    const days = parseInt(range, 10);
+    const trendDays = Math.max(days, 21);
+    // Every window is anchored on the LOCAL calendar day, sent as `start`.
+    // Without it the server falls back to `subDays(new Date(), days - 1)` on
+    // a UTC container, so a report opened at 20:00 Central anchored on
+    // tomorrow: "the last 7 days" came out as 09-15 -> 09-21, dropping the
+    // user's own 09-14 from every total, average, ribbon and compliance
+    // percentage, and printing a range that ended tomorrow. The two AI
+    // panels and the CSV now send it too.
+    const start = localDateStringDaysAgo(days - 1);
+    const trendStart = localDateStringDaysAgo(trendDays - 1);
+    const value = (result) => (result.status === 'fulfilled' ? (result.value?.data ?? result.value) : null);
+
     setLoading(true);
-    setAiLoading(true);
     setError(null);
-    try {
-      const days = parseInt(range, 10);
-      // allSettled, not all: the two AI panels go out to a model provider and
-      // the two report panels do not. With Promise.all a single AI failure
-      // rejected the whole batch, so a provider hiccup blanked the food report
-      // the user actually came for and replaced the page with an error.
-      // `start` is sent explicitly, computed from the LOCAL calendar day.
-      // Without it the resolver falls back to `subDays(new Date(), days - 1)`
-      // on a UTC container, so a report opened at 20:00 Central anchored on
-      // tomorrow: "the last 7 days" came out as 09-15 -> 09-21, dropping the
-      // user's own 09-14 from every total, average, ribbon and compliance
-      // percentage, and printing a range that ended tomorrow.
-      const start = localDateStringDaysAgo(days - 1);
-      const [overviewData, trendsData, weeklyReport, trendSummary] = await Promise.allSettled([
-        reportsService.getOverview({ days, start }),
-        reportsService.getTrends({ days, start }),
-        insightsService.getWeeklyReport({ days }),
-        insightsService.getTrendWatch({ days: Math.max(days, 21) })
-      ]);
+    setWeeklyLoading(true);
+    setTrendLoading(true);
+    setWeeklyError(null);
+    setTrendError(null);
 
-      const value = (result) => (result.status === 'fulfilled' ? (result.value?.data ?? result.value) : null);
-
+    // The food report: shown the moment both halves answer.
+    Promise.allSettled([
+      reportsService.getOverview({ days, start }),
+      reportsService.getTrends({ days, start }),
+    ]).then(([overviewData, trendsData]) => {
+      if (!current()) return;
       setOverview(value(overviewData));
       setTrends(value(trendsData));
-      setWeeklyCoach(value(weeklyReport));
-      setTrendWatch(value(trendSummary));
-
-      // Only the report halves are load-bearing for this page; the AI panels
-      // render their own empty state.
+      // Only both halves failing is a page error; one half renders alone.
       if (overviewData.status === 'rejected' && trendsData.status === 'rejected') {
-        setError(overviewData.reason?.message || 'Unable to load reports');
+        setError(errorMessage(overviewData.reason, "Your reports didn't load. Try again."));
       }
-    } catch (err) {
-      console.error(err);
-      setError(err.message || 'Unable to load reports');
-    } finally {
       setLoading(false);
-      setAiLoading(false);
-    }
+    });
+
+    insightsService.getWeeklyReport({ days, start })
+      .then((r) => { if (current()) setWeeklyCoach(r?.data ?? r ?? null); })
+      .catch((err) => {
+        if (!current()) return;
+        setWeeklyCoach(null);
+        setWeeklyError(errorMessage(err, UNAVAILABLE_TEXT));
+      })
+      .finally(() => { if (current()) setWeeklyLoading(false); });
+
+    insightsService.getTrendWatch({ days: trendDays, start: trendStart })
+      .then((r) => { if (current()) setTrendWatch(r?.data ?? r ?? null); })
+      .catch((err) => {
+        if (!current()) return;
+        setTrendWatch(null);
+        setTrendError(errorMessage(err, UNAVAILABLE_TEXT));
+      })
+      .finally(() => { if (current()) setTrendLoading(false); });
   };
 
   const handleRangeChange = (_event, value) => {
@@ -116,7 +137,8 @@ const Reports = () => {
   const handleExport = async () => {
     try {
       setExporting(true);
-      const blob = await reportsService.export({ days: parseInt(range, 10) });
+      const days = parseInt(range, 10);
+      const blob = await reportsService.export({ days, start: localDateStringDaysAgo(days - 1) });
       const url = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
@@ -127,7 +149,7 @@ const Reports = () => {
       window.URL.revokeObjectURL(url);
     } catch (err) {
       console.error(err);
-      notify('Failed to export report', { tone: 'error' });
+      notify(errorMessage(err, "The report didn't download. Try again."), { tone: 'error' });
     } finally {
       setExporting(false);
     }
@@ -499,74 +521,84 @@ const Reports = () => {
             </Grid>
           </Grid>
 
-          {/* AI Summaries */}
-          <Grid container spacing={3} sx={{ mt: 1 }}>
-            <Grid item xs={12} md={6}>
-              <Surface sx={{ height: '100%' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 2 }}>
-                  <InsightsIcon sx={{ color: 'primary.main' }} />
-                  <Box>
-                    <SectionLabel>AI Coach</SectionLabel>
-                    <DisplayHeading size="card" sx={{ mt: 0.25 }}>
-                      Weekly Summary
-                    </DisplayHeading>
-                  </Box>
-                </Box>
-                {aiLoading ? (
-                  <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
-                    <CircularProgress size={24} />
-                  </Box>
-                ) : weeklyCoach?.content ? (
-                  <Box sx={{ color: theme.palette.text.primary, '& ul': { pl: 3 } }}>
-                    {renderInsightContent(weeklyCoach.content)}
-                  </Box>
-                ) : weeklyCoach?.ok === false ? (
-                  /* The model declined (cap, free tier having a day). A 200
-                     with a sentence, so it renders in place — no error tone
-                     for something that is simply not available this minute. */
-                  <Typography variant="body2" color="text.secondary">
-                    {weeklyCoach.message || UNAVAILABLE_TEXT}
-                  </Typography>
-                ) : (
-                  <Typography variant="body2" color="text.secondary">
-                    No AI summary available for this range yet.
-                  </Typography>
-                )}
-              </Surface>
-            </Grid>
-            <Grid item xs={12} md={6}>
-              <Surface sx={{ height: '100%' }}>
-                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 2 }}>
-                  <TrendingUpIcon sx={{ color: 'primary.main' }} />
-                  <Box>
-                    <SectionLabel>AI Insight</SectionLabel>
-                    <DisplayHeading size="card" sx={{ mt: 0.25 }}>
-                      Trend Watch
-                    </DisplayHeading>
-                  </Box>
-                </Box>
-                {aiLoading ? (
-                  <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
-                    <CircularProgress size={24} />
-                  </Box>
-                ) : trendWatch?.content ? (
-                  <Box sx={{ color: theme.palette.text.primary, '& ul': { pl: 3 } }}>
-                    {renderInsightContent(trendWatch.content)}
-                  </Box>
-                ) : trendWatch?.ok === false ? (
-                  <Typography variant="body2" color="text.secondary">
-                    {trendWatch.message || UNAVAILABLE_TEXT}
-                  </Typography>
-                ) : (
-                  <Typography variant="body2" color="text.secondary">
-                    Trend summary will appear once enough data is logged.
-                  </Typography>
-                )}
-              </Surface>
-            </Grid>
-          </Grid>
         </Box>
       )}
+
+      {/* AI Summaries — outside the food report's loading and error states,
+          so each panel shows up, loads and fails on its own. */}
+      <Grid container spacing={3} sx={{ mt: 1 }}>
+        <Grid item xs={12} md={6}>
+          <Surface sx={{ height: '100%' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 2 }}>
+              <InsightsIcon sx={{ color: 'primary.main' }} />
+              <Box>
+                <SectionLabel>AI Coach</SectionLabel>
+                <DisplayHeading size="card" sx={{ mt: 0.25 }}>
+                  Weekly Summary
+                </DisplayHeading>
+              </Box>
+            </Box>
+            {weeklyLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+                <CircularProgress size={24} aria-label="Loading the weekly summary" />
+              </Box>
+            ) : weeklyError ? (
+              <Typography data-testid="weekly-ai-error" variant="body2" color="text.secondary">
+                {weeklyError}
+              </Typography>
+            ) : weeklyCoach?.content ? (
+              <Box sx={{ color: theme.palette.text.primary, '& ul': { pl: 3 } }}>
+                {renderInsightContent(weeklyCoach.content)}
+              </Box>
+            ) : weeklyCoach?.ok === false ? (
+              /* The model declined (cap, free tier having a day). A 200
+                 with a sentence, so it renders in place — no error tone
+                 for something that is simply not available this minute. */
+              <Typography variant="body2" color="text.secondary">
+                {weeklyCoach.message || UNAVAILABLE_TEXT}
+              </Typography>
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                No AI summary available for this range yet.
+              </Typography>
+            )}
+          </Surface>
+        </Grid>
+        <Grid item xs={12} md={6}>
+          <Surface sx={{ height: '100%' }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 2 }}>
+              <TrendingUpIcon sx={{ color: 'primary.main' }} />
+              <Box>
+                <SectionLabel>AI Insight</SectionLabel>
+                <DisplayHeading size="card" sx={{ mt: 0.25 }}>
+                  Trend Watch
+                </DisplayHeading>
+              </Box>
+            </Box>
+            {trendLoading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', py: 3 }}>
+                <CircularProgress size={24} aria-label="Loading the trend watch" />
+              </Box>
+            ) : trendError ? (
+              <Typography data-testid="trend-ai-error" variant="body2" color="text.secondary">
+                {trendError}
+              </Typography>
+            ) : trendWatch?.content ? (
+              <Box sx={{ color: theme.palette.text.primary, '& ul': { pl: 3 } }}>
+                {renderInsightContent(trendWatch.content)}
+              </Box>
+            ) : trendWatch?.ok === false ? (
+              <Typography variant="body2" color="text.secondary">
+                {trendWatch.message || UNAVAILABLE_TEXT}
+              </Typography>
+            ) : (
+              <Typography variant="body2" color="text.secondary">
+                Trend summary will appear once enough data is logged.
+              </Typography>
+            )}
+          </Surface>
+        </Grid>
+      </Grid>
     </Container>
   );
 };
