@@ -23,7 +23,7 @@ export function caloriesSentence({ eaten = 0, goal = 0 }) {
   if (!(g > 0)) {
     return {
       headline: e > 0 ? `You've had ${fmt(e)} calories today` : 'Nothing logged yet today',
-      detail: e > 0 ? 'No daily target is set.' : 'Tap a meal below to add what you ate.',
+      detail: e > 0 ? 'Just keeping count. There is no daily target.' : 'Add what you ate and I’ll keep count.',
       state: 'nogoal',
     };
   }
