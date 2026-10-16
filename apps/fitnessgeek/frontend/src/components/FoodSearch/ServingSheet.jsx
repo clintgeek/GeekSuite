@@ -8,11 +8,15 @@ import { Remove as MinusIcon, Add as PlusIcon } from '@mui/icons-material';
 import { useTheme, alpha } from '@mui/material/styles';
 import { amountToServings } from '../../utils/recipeMath.js';
 import { convertAmount, formatServing, usLogUnits } from '../../utils/units.js';
+import { useBackToClose } from './useBackToClose.js';
 
 const MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack'];
 const mealLabel = (meal) => meal.charAt(0).toUpperCase() + meal.slice(1);
 const round = (v, p = 1) => Math.round((Number(v) || 0) * 10 ** p) / 10 ** p;
 const STEP = { serving: 0.25, oz: 0.5, 'fl oz': 1, cup: 0.25 };
+// What a person can be part-way through typing: "", "0", "0.", ".5", "1.25".
+const PARTIAL_NUMBER = /^\d*[.,]?\d*$/;
+const parseAmount = (raw) => Number.parseFloat(String(raw ?? '').replace(',', '.'));
 
 /**
  * The second tap, for the adds that need one.
@@ -22,20 +26,31 @@ const STEP = { serving: 0.25, oz: 0.5, 'fl oz': 1, cup: 0.25 };
  * `modalFood` state nothing ever set) with the two controls that actually get
  * used: how many, and which meal. "How many" can be servings or, when the
  * food has a weight or volume, oz / fl oz / cups.
+ *
+ * THE AMOUNT IS KEPT AS TYPED (REVIEW_2026-10 B11). It used to be parsed on
+ * every keystroke, so the "0" of "0.5" parsed to nothing and blanked the
+ * field — half a serving could not be typed — and an empty field then logged
+ * one serving. Now the box holds exactly what was typed, the number is read
+ * from it when it's used, and Log it waits for an amount above zero. It is a
+ * text box with a decimal keypad rather than `type="number"`, because a
+ * number input reports "" for a half-typed "0." and that is the same bug.
  */
 const ServingSheet = ({ open, food, defaultMealType = 'snack', onClose, onConfirm }) => {
   const theme = useTheme();
-  const [amount, setAmount] = useState(1);
+  const [amount, setAmount] = useState('1');
   const [unit, setUnit] = useState('serving');
   const [mealType, setMealType] = useState(defaultMealType);
 
   useEffect(() => {
     if (!open) return;
     const requested = Number(food?.requestedQuantity);
-    setAmount(requested > 0 ? requested : 1);
+    setAmount(String(requested > 0 ? requested : 1));
     setUnit('serving');
     setMealType(defaultMealType);
   }, [open, food, defaultMealType]);
+
+  // Back closes this sheet, not the page (and not the add sheet under it).
+  useBackToClose(Boolean(open && food), onClose);
 
   if (!food) return null;
 
@@ -46,14 +61,20 @@ const ServingSheet = ({ open, food, defaultMealType = 'snack', onClose, onConfir
   };
   const units = usLogUnits(serving);
   const servingText = formatServing(serving.size, serving.unit);
-  const servings = amountToServings(amount, unit, serving) || 0;
+  const parsed = parseAmount(amount);
+  const hasAmount = Number.isFinite(parsed) && parsed > 0;
+  const servings = hasAmount ? (amountToServings(parsed, unit, serving) || 0) : 0;
+  const canLog = hasAmount && servings > 0;
   const stepBy = STEP[unit] || 0.25;
-  const step = (delta) => setAmount((prev) => Math.max(stepBy, round((Number(prev) || 0) + delta, 2)));
+  const step = (delta) => setAmount((prev) => {
+    const current = parseAmount(prev);
+    return String(Math.max(stepBy, round((Number.isFinite(current) ? current : 0) + delta, 2)));
+  });
   const total = (key, places = 0) => round((nutrition[key] || 0) * servings, places);
   const switchUnit = (next) => {
     if (!next || next === unit) return;
-    const converted = convertAmount(Number(amount) || 1, unit, next, serving);
-    setAmount(converted ? round(converted, next === 'serving' ? 2 : 1) : 1);
+    const converted = convertAmount(hasAmount ? parsed : 1, unit, next, serving);
+    setAmount(String(converted ? round(converted, next === 'serving' ? 2 : 1) : 1));
     setUnit(next);
   };
   const amountLabel = unit === 'serving' ? 'Servings' : unit;
@@ -92,7 +113,7 @@ const ServingSheet = ({ open, food, defaultMealType = 'snack', onClose, onConfir
         <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 2, my: 2 }}>
           <IconButton
             onClick={() => step(-stepBy)}
-            disabled={Number(amount) <= stepBy}
+            disabled={!hasAmount || parsed <= stepBy}
             sx={{ width: 44, height: 44 }}
             aria-label={unit === 'serving' ? 'Fewer servings' : `Less (${unit})`}
           >
@@ -101,12 +122,17 @@ const ServingSheet = ({ open, food, defaultMealType = 'snack', onClose, onConfir
           <TextField
             value={amount}
             onChange={(e) => {
-              const next = Number.parseFloat(e.target.value);
-              setAmount(Number.isFinite(next) && next > 0 ? next : '');
+              const next = e.target.value.trim();
+              if (PARTIAL_NUMBER.test(next)) setAmount(next);
             }}
-            onBlur={() => { if (!amount) setAmount(1); }}
-            type="number"
-            inputProps={{ step: stepBy, min: stepBy, style: { textAlign: 'center', fontWeight: 700 } }}
+            // Read on the way out: "0.50" becomes 0.5, "2." becomes 2. Left
+            // empty (or 0) it stays that way, and Log it stays off.
+            onBlur={() => { if (hasAmount) setAmount(String(round(parsed, 3))); }}
+            inputProps={{
+              inputMode: 'decimal',
+              autoComplete: 'off',
+              style: { textAlign: 'center', fontWeight: 700 }
+            }}
             sx={{ width: 110 }}
             label={amountLabel}
           />
@@ -153,7 +179,8 @@ const ServingSheet = ({ open, food, defaultMealType = 'snack', onClose, onConfir
         <Button onClick={onClose} sx={{ color: 'text.secondary' }}>Cancel</Button>
         <Button
           variant="contained"
-          onClick={() => onConfirm?.({ ...food, servings: round(servings, 3) || 1 }, mealType)}
+          disabled={!canLog}
+          onClick={() => { if (canLog) onConfirm?.({ ...food, servings: round(servings, 3) }, mealType); }}
         >
           Log it
         </Button>

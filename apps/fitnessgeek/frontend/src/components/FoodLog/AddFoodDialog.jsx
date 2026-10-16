@@ -1,8 +1,9 @@
 import React from 'react';
-import { Box, Button } from '@mui/material';
+import { Box } from '@mui/material';
 import { Restaurant as FoodIcon } from '@mui/icons-material';
-import { useToast } from '@geeksuite/ui';
 import { UnifiedFoodSearch } from '../FoodSearch';
+import { useUndoToast } from '../FoodSearch/undoToast.jsx';
+import { useBackToClose } from '../FoodSearch/useBackToClose.js';
 import BarcodeScanner from '../BarcodeScanner/BarcodeScanner.jsx';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
 import { addedMessage, mealWord } from '../../utils/plainWords.js';
@@ -48,7 +49,9 @@ const AddFoodDialog = ({
   // yesterday's …" (SIMPLE_AND_FULL_PLAN.md item 2).
   date = null
 }) => {
-  const { notify } = useToast();
+  const { offerUndo } = useUndoToast(onUndo);
+  // Android's back gesture closes this sheet instead of leaving the page.
+  useBackToClose(Boolean(open), onClose);
 
   return (
     <>
@@ -99,19 +102,7 @@ const AddFoodDialog = ({
           try {
             const result = await onLogItems?.([{ ...food, servings: 1 }], mealType);
             if ((result?.ok ?? 0) > 0) {
-              const logIds = result?.logIds || [];
-              notify(addedMessage(mealType, food.name), {
-                tone: 'success',
-                action: logIds.length > 0 && onUndo ? (
-                  <Button
-                    size="small"
-                    sx={{ color: 'inherit', fontWeight: 700 }}
-                    onClick={() => onUndo(logIds)}
-                  >
-                    Undo
-                  </Button>
-                ) : undefined
-              });
+              offerUndo(addedMessage(mealType, food.name), result?.logIds || []);
               // The whole sheet is done, not just the scanner on top of it —
               // a definitive barcode scan has nothing left to pick.
               onClose?.();

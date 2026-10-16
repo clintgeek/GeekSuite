@@ -129,3 +129,29 @@ describe('scanning a barcode from the meal-slot sheet', () => {
     expect(onClose).not.toHaveBeenCalled();
   });
 });
+
+/** P2: Android's back gesture closes the add sheet instead of leaving the page. */
+describe('the back gesture', () => {
+  test('closes the open sheet', () => {
+    const onClose = vi.fn();
+    render(
+      <GeekToastProvider>
+        <AddFoodDialog open onClose={onClose} mealType="lunch" onLogItems={vi.fn()} />
+      </GeekToastProvider>
+    );
+    expect(window.history.state?.fgSheets?.length).toBeGreaterThan(0);
+    window.dispatchEvent(new PopStateEvent('popstate', { state: {} }));
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  test('a back that lands on the sheet\'s own entry (a nested sheet closing) leaves it open', () => {
+    const onClose = vi.fn();
+    render(
+      <GeekToastProvider>
+        <AddFoodDialog open onClose={onClose} mealType="lunch" onLogItems={vi.fn()} />
+      </GeekToastProvider>
+    );
+    window.dispatchEvent(new PopStateEvent('popstate', { state: window.history.state }));
+    expect(onClose).not.toHaveBeenCalled();
+  });
+});
