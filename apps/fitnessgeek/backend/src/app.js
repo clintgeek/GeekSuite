@@ -157,7 +157,10 @@ const corsMiddleware = cors({
     // @geeksuite/auth's request interceptor adds this to every non-GET call
     // this app's axios instance makes; without it on the allow-list a
     // cross-origin preflight for a REST mutation fails outright.
-    'X-CSRF-Token'
+    'X-CSRF-Token',
+    // Sent by describe-and-log on every press (contract C2); a cross-origin
+    // preflight would otherwise refuse the POST that carries it.
+    'Idempotency-Key'
   ]
 });
 

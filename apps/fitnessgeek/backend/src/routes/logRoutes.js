@@ -7,6 +7,10 @@ import DailySummary from '../models/DailySummary.js';
 import UserSettings from '../models/UserSettings.js';
 import logger from '../config/logger.js';
 import describeAndLogService from '../services/describeAndLogService.js';
+import { createIdempotencyStore, usableKey } from '../utils/idempotency.js';
+
+// One per process: `POST /describe` retries share it (contract C2).
+const describeIdempotency = createIdempotencyStore();
 
 // Apply authentication to all routes
 router.use(authenticateToken);
@@ -278,60 +282,17 @@ router.get('/date/:date', async (req, res) => {
 router.post('/describe', async (req, res) => {
   try {
     const userId = req.user.id;
-    // `mealType` is optional and additive: the meal card's "+ Add" already
-    // knows which meal this is, and the hour is only a guess at it.
-    const { text, date, hour, mealType } = req.body || {};
+    // C2: one key per Log-it press, reused on a retry of the same press. The
+    // same user + key within ten minutes gets the first answer back and
+    // nothing is written again — including when the retry lands while the
+    // first is still running. No header: exactly as before.
+    const key = usableKey(req.get('Idempotency-Key'));
+    const outcome = key
+      ? await describeIdempotency.run(`describe:${userId}`, key, () => describeOnce(req))
+      : await describeOnce(req);
 
-    if (!text || !String(text).trim()) {
-      return res.status(400).json({
-        success: false,
-        error: { message: 'Tell me what you ate', code: 'VALIDATION_ERROR' }
-      });
-    }
-    if (!date) {
-      return res.status(400).json({
-        success: false,
-        error: { message: 'A date is required', code: 'VALIDATION_ERROR' }
-      });
-    }
-
-    const started = Date.now();
-    const result = await describeAndLogService.logDescription(text, {
-      userId,
-      date: toUtcMidnight(date),
-      hour: Number.isFinite(Number(hour)) ? Number(hour) : undefined,
-      mealType: typeof mealType === 'string' ? mealType : undefined
-    });
-
-    // Nothing recognisable as food. Say so plainly rather than logging nothing
-    // and claiming success.
-    if (result.logged.length === 0 && result.skipped.length === 0) {
-      return res.status(422).json({
-        success: false,
-        error: {
-          message: "I couldn't find any food in that",
-          code: 'NOTHING_TO_LOG'
-        }
-      });
-    }
-
-    logger.info({
-      userId,
-      logged: result.logged.length,
-      skipped: result.skipped.length,
-      ms: Date.now() - started
-    }, 'Describe-and-log');
-
-    res.json({
-      success: true,
-      data: {
-        logged: result.logged,
-        skipped: result.skipped,
-        logIds: result.logIds,
-        questions: result.questions,
-        totalCalories: result.logged.reduce((sum, item) => sum + (item.calories || 0), 0)
-      }
-    });
+    if (outcome.replayed) res.set('Idempotent-Replayed', 'true');
+    res.status(outcome.status).json(outcome.body);
 
   } catch (error) {
     logger.error({ err: error }, 'Describe-and-log failed');
@@ -341,6 +302,81 @@ router.post('/describe', async (req, res) => {
     });
   }
 });
+
+/** The describe itself, as `{status, body}` so a retry can be answered from memory. */
+async function describeOnce(req) {
+  const userId = req.user.id;
+  // `mealType` is optional and additive: the meal card's "+ Add" already
+  // knows which meal this is, and the hour is only a guess at it.
+  const { text, date, hour, mealType } = req.body || {};
+
+  if (!text || !String(text).trim()) {
+    return {
+      status: 400,
+      body: { success: false, error: { message: 'Tell me what you ate', code: 'VALIDATION_ERROR' } }
+    };
+  }
+  if (!date) {
+    return {
+      status: 400,
+      body: { success: false, error: { message: 'A date is required', code: 'VALIDATION_ERROR' } }
+    };
+  }
+
+  const started = Date.now();
+  const result = await describeAndLogService.logDescription(text, {
+    userId,
+    date: toUtcMidnight(date),
+    hour: Number.isFinite(Number(hour)) ? Number(hour) : undefined,
+    mealType: typeof mealType === 'string' ? mealType : undefined
+  });
+
+  // Day words ("last night", "on monday") were taken out of the food text.
+  // The date is still the one the client sent — it asks the person — and
+  // this only says what was heard (Phase 3.17).
+  const dayHint = result.parsed?.dayHint ?? null;
+  const dayWords = result.parsed?.dayWords ?? [];
+
+  // Nothing recognisable as food. Say so plainly rather than logging nothing
+  // and claiming success.
+  if (result.logged.length === 0 && result.skipped.length === 0) {
+    return {
+      status: 422,
+      body: {
+        success: false,
+        error: {
+          message: "I couldn't find any food in that",
+          code: 'NOTHING_TO_LOG'
+        },
+        data: { dayHint, dayWords }
+      }
+    };
+  }
+
+  logger.info({
+    userId,
+    logged: result.logged.length,
+    skipped: result.skipped.length,
+    dayHint: dayHint || undefined,
+    ms: Date.now() - started
+  }, 'Describe-and-log');
+
+  return {
+    status: 200,
+    body: {
+      success: true,
+      data: {
+        logged: result.logged,
+        skipped: result.skipped,
+        logIds: result.logIds,
+        questions: result.questions,
+        totalCalories: result.logged.reduce((sum, item) => sum + (item.calories || 0), 0),
+        dayHint,
+        dayWords
+      }
+    }
+  };
+}
 
 router.post('/copy', async (req, res) => {
   try {
