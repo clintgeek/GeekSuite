@@ -48,7 +48,7 @@ export const DESTINATIONS = {
   health: { id: '/health', label: 'Health dashboard', to: '/health', Icon: TrendingUpIcon, description: 'Heart rate, stress and recovery' },
   reports: { id: '/reports', label: 'Reports', to: '/reports', Icon: InsightsIcon, description: 'How the week and the month went' },
   scan: { id: '/scan-import', label: 'Import a scan', to: '/scan-import', Icon: UploadFileIcon, description: 'Body-composition scans from the scale' },
-  search: { id: '/food-search', label: 'Find a food', to: '/food-search', Icon: SearchIcon, description: 'Search every food database' },
+  search: { id: '/food-search', label: 'Look up a specific food', to: '/food-search', Icon: SearchIcon, description: 'Pick one exact food or brand from every database' },
   myFoods: { id: '/my-foods', label: 'My foods', to: '/my-foods', Icon: LocalDiningIcon, description: 'Foods you made yourself' },
   myMeals: { id: '/my-meals', label: 'My meals', to: '/my-meals', Icon: RestaurantMenuIcon, description: 'Meals you saved to log in one tap' },
   wizard: { id: '/calorie-wizard', label: 'Calorie plan', to: '/calorie-wizard', Icon: CalculateIcon, description: 'Work out a daily calorie target' },

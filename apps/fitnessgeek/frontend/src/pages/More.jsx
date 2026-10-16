@@ -14,14 +14,7 @@ import { useExperience } from '../contexts/ExperienceContext.jsx';
  *
  * Big rows, one line of plain description each. Simple mode puts blood
  * pressure, meds and Settings first and the rest under "Everything else".
- *
- * The food search page is "Look up a specific food" here (REVIEW_2026-10):
- * "Find a food" read as the way to log one, and the way to log one is now
- * the meal cards' Add — say it, and it's worked out.
  */
-const LABELS = {
-  '/food-search': { label: 'Look up a specific food', description: 'Pick one exact food or brand from every database' },
-};
 
 export default function More() {
   const theme = useTheme();
@@ -47,7 +40,7 @@ export default function More() {
           >
             {group.items.map((item, i) => {
               const Icon = item.Icon;
-              const { label, description } = { label: item.label, description: item.description, ...LABELS[item.to] };
+              const { label, description } = item;
               return (
                 <Box component="li" key={item.id} sx={{ borderTop: i ? `1px solid ${theme.palette.divider}` : 'none' }}>
                   <ButtonBase
