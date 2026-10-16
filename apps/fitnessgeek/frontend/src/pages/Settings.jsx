@@ -26,6 +26,7 @@ import { useTheme, alpha } from '@mui/material/styles';
 import { GeekErrorState, useToast } from '@geeksuite/ui';
 import { settingsService } from '../services/settingsService.js';
 import logger from '../utils/logger.js';
+import { errorMessage } from '../utils/errorMessage.js';
 import { useThemeMode as useAppTheme } from '@geeksuite/user';
 import HouseholdSettings from '../components/Settings/HouseholdSettings';
 import ExperienceSettings from '../components/Settings/ExperienceSettings.jsx';
@@ -34,15 +35,20 @@ import {
 } from '../components/primitives';
 
 // ─── Dirty detection — compare a settings snapshot field-by-field ───
+// The sections this page edits. Only the ones the person changed are saved:
+// writing the whole loaded snapshot back could undo a change made elsewhere
+// (another tab, the plan wizard) since the page was opened.
+const EDITED_SECTIONS = ['theme', 'notifications', 'units', 'garmin', 'health_alerts'];
+
+const changedSections = (current, baseline) => {
+  if (!current || !baseline) return [];
+  return EDITED_SECTIONS.filter((k) => JSON.stringify(current[k]) !== JSON.stringify(baseline[k]));
+};
+
 const isDirty = (current, baseline, passwordSet) => {
   if (!current || !baseline) return false;
   if (passwordSet) return true;
-  // Compare the leaf values that the UI touches
-  const keys = ['theme', 'notifications', 'units', 'garmin', 'health_alerts'];
-  for (const k of keys) {
-    if (JSON.stringify(current[k]) !== JSON.stringify(baseline[k])) return true;
-  }
-  return false;
+  return changedSections(current, baseline).length > 0;
 };
 
 const Settings = () => {
@@ -55,6 +61,7 @@ const Settings = () => {
   const [garminPassword, setGarminPassword] = useState('');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [loadError, setLoadError] = useState(null);
   const { notify } = useToast();
 
   useEffect(() => {
@@ -65,8 +72,10 @@ const Settings = () => {
   const loadSettings = async () => {
     try {
       setLoading(true);
+      setLoadError(null);
       const response = await settingsService.getSettings();
-      const loaded = response.data;
+      const loaded = response?.data;
+      if (!loaded || typeof loaded !== 'object') throw new Error('No settings in the response');
       const g = loaded.garmin || settingsService.getDefaultGarminSettings();
       const normalizedGarmin = {
         enabled: !!g.enabled,
@@ -82,18 +91,12 @@ const Settings = () => {
       setSettings(normalized);
       setBaseline(JSON.parse(JSON.stringify(normalized)));
     } catch (err) {
-      console.error('Error loading settings:', err);
-      notify('Failed to load settings — showing defaults', { tone: 'error' });
-      const defaultSettings = {
-        dashboard: settingsService.getDefaultDashboardSettings(),
-        theme: 'light',
-        notifications: { enabled: true, daily_reminder: true, goal_reminders: true },
-        units: { weight: 'lbs', height: 'ft' },
-        garmin: settingsService.getDefaultGarminSettings(),
-      };
-      logger.debug('Settings: using default settings');
-      setSettings(defaultSettings);
-      setBaseline(JSON.parse(JSON.stringify(defaultSettings)));
+      // No defaults: a Save over a failed load used to write them back and
+      // turn Garmin off. Say so, offer a retry, and keep Save out of reach.
+      logger.error('Error loading settings:', err);
+      setLoadError(errorMessage(err, "Couldn't load your settings. Try again."));
+      setSettings(null);
+      setBaseline(null);
     } finally {
       setLoading(false);
     }
@@ -122,16 +125,26 @@ const Settings = () => {
   };
 
   const saveSettings = async () => {
+    if (!baseline || loadError) {
+      notify("Your settings didn't load, so there's nothing safe to save. Reload and try again.", { tone: 'error' });
+      return;
+    }
+    const sections = changedSections(settings, baseline);
+    const garminChanged = sections.includes('garmin') || garminUsername !== garminUsernameBaseline || !!garminPassword;
+    const payload = {};
+    for (const k of sections) {
+      if (k !== 'garmin') payload[k] = settings[k];
+    }
+    if (garminChanged) {
+      payload.garmin = {
+        enabled: settings.garmin?.enabled || false,
+        username: garminUsername || '',
+        ...(garminPassword ? { password: garminPassword } : {}),
+      };
+    }
+    if (Object.keys(payload).length === 0) return;
     try {
       setSaving(true);
-      const payload = {
-        ...settings,
-        garmin: {
-          enabled: settings.garmin?.enabled || false,
-          username: garminUsername || '',
-          ...(garminPassword ? { password: garminPassword } : {}),
-        },
-      };
       await settingsService.updateSettings(payload);
       // Reset baseline to current
       setBaseline(JSON.parse(JSON.stringify(settings)));
@@ -139,8 +152,8 @@ const Settings = () => {
       setGarminPassword('');
       notify('Settings saved', { tone: 'success' });
     } catch (err) {
-      console.error('Error saving settings:', err);
-      notify('Failed to save settings', { tone: 'error' });
+      logger.error('Error saving settings:', err);
+      notify(errorMessage(err, "Couldn't save your settings. Try again."), { tone: 'error' });
     } finally {
       setSaving(false);
     }
@@ -173,10 +186,12 @@ const Settings = () => {
 
   if (!settings) {
     return (
-      <Box sx={{ p: 2 }}>
+      <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 820, mx: 'auto' }}>
+        {/* Simple/Full and Larger text have their own read and save. */}
+        <ExperienceSettings />
         <GeekErrorState
           title="Couldn't load settings"
-          description="Something went wrong fetching your settings."
+          description={loadError || "Couldn't load your settings. Try again."}
           onRetry={loadSettings}
         />
       </Box>

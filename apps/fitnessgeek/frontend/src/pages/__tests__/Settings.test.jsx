@@ -75,3 +75,28 @@ describe('Settings — Health alerts', () => {
   });
 });
 
+
+describe('Settings — saves only what changed, never defaults (review P2)', () => {
+  it('a units change saves units alone — not Garmin, not the whole snapshot', async () => {
+    settingsService.updateSettings.mockClear();
+    render(<Settings />);
+    const toggle = await screen.findByRole('checkbox', { name: /Sleep apnea screening suggestion/i });
+    fireEvent.click(toggle);
+    fireEvent.click(screen.getByRole('button', { name: /Save/i }));
+    await waitFor(() => expect(settingsService.updateSettings).toHaveBeenCalled());
+    const payload = settingsService.updateSettings.mock.calls.at(-1)[0];
+    expect(Object.keys(payload)).toEqual(['health_alerts']);
+  });
+
+  it('a failed load shows the error, not defaults, and nothing can be saved', async () => {
+    settingsService.updateSettings.mockClear();
+    settingsService.getSettings.mockRejectedValueOnce(Object.assign(new Error('Request failed with status code 502'), { response: { status: 502 } }));
+    render(<Settings />);
+    expect(await screen.findByText("Couldn't load settings")).toBeInTheDocument();
+    expect(screen.getByText('FitnessGeek is restarting. Try again in a moment.')).toBeInTheDocument();
+    expect(screen.queryByText('Appearance')).toBeNull();
+    expect(screen.queryByRole('checkbox', { name: /Sleep apnea/i })).toBeNull();
+    expect(document.body.textContent).not.toMatch(/status code/);
+    expect(settingsService.updateSettings).not.toHaveBeenCalled();
+  });
+});
