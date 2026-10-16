@@ -229,9 +229,15 @@ export function buildWeightTrend(logs = [], { goal = null, today } = {}) {
   const hasGoalLine = goalOn && gStart && gEnd && goal.startWeight && goal.targetWeight;
 
   // With a goal the chart is the goal's window — widened back to the start of
-  // the current run when that is earlier; without one, everything.
+  // the current run when that is earlier, and forward to the latest reading
+  // once the goal date has passed; without one, everything. The end used to
+  // stop at the goal date, so the day after it every new weigh-in fell
+  // outside the window and the chart said "No weight data" over a page of
+  // weights.
+  const lastX = valid[valid.length - 1].x;
   const windowStart = hasGoalLine && runStart < gStart ? runStart : gStart;
-  const inWindow = (p) => !hasGoalLine || (p.x >= windowStart && p.x <= gEnd);
+  const windowEnd = hasGoalLine && lastX > gEnd ? lastX : gEnd;
+  const inWindow = (p) => !hasGoalLine || (p.x >= windowStart && p.x <= windowEnd);
   const readings = valid.filter(inWindow);
   const trend = allTrend.filter(inWindow);
 
@@ -249,7 +255,7 @@ export function buildWeightTrend(logs = [], { goal = null, today } = {}) {
     pace = programPace(logs, goal, { today });
     programTrend = [
       ...trend.filter((p) => p.x < gStart),
-      ...pace.trend.filter((p) => p.x <= gEnd),
+      ...pace.trend.filter((p) => p.x <= windowEnd),
     ];
     if (pace.phase === 'measured' && pace.slopePerWeek !== null && pace.trend.length) {
       const last = pace.trend[pace.trend.length - 1];

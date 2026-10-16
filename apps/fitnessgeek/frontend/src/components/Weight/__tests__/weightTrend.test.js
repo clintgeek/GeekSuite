@@ -113,3 +113,26 @@ describe('buildWeightTrend', () => {
   });
 
 });
+
+describe('buildWeightTrend — after the goal date has passed', () => {
+  it('still draws the weigh-ins made since, instead of an empty chart', () => {
+    const goal = {
+      enabled: true,
+      startWeight: 230,
+      targetWeight: 220,
+      startDate: '2026-01-01',
+      goalDate: '2026-03-01',
+    };
+    // Every reading is after the goal date: the old window (start → goal
+    // date) dropped them all, and the chart said "No weight data".
+    const logs = [
+      { weight_value: 221, log_date: '2026-10-10T00:00:00.000Z' },
+      { weight_value: 220.4, log_date: '2026-10-12T00:00:00.000Z' },
+      { weight_value: 220.1, log_date: '2026-10-15T00:00:00.000Z' },
+    ];
+    const model = buildWeightTrend(logs, { goal, today: '2026-10-16' });
+    expect(model.readings).toHaveLength(3);
+    expect(model.trend.length).toBeGreaterThan(0);
+    expect(model.trend[model.trend.length - 1].x).toBe('2026-10-15');
+  });
+});

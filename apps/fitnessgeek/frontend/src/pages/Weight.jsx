@@ -1,7 +1,8 @@
-import React, { lazy, useEffect } from 'react';
-import { Box, Typography, CircularProgress } from '@mui/material';
-import { useNavigate } from 'react-router-dom';
+import React, { lazy, useCallback, useEffect } from 'react';
+import { Box, Button, Typography, CircularProgress } from '@mui/material';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useToast } from '@geeksuite/ui';
+import { displayCalendarDate } from '@geeksuite/utils';
 import { useWeight } from '../hooks/useWeight.js';
 import { useBodyComp } from '../hooks/useBodyComp.js';
 // Imported by file, not through `../components/Weight`. The barrel used to
@@ -26,8 +27,18 @@ import { useExperience } from '../contexts/ExperienceContext.jsx';
 const WeightTimeline = lazy(() => import('../components/Weight/WeightTimeline.jsx'));
 
 const Weight = () => {
-  const { isSimple } = useExperience();
+  const { isSimple, goal: firstRunGoal } = useExperience();
   const navigate = useNavigate();
+  // `?add=1` — the Today strip's "Weigh in" — opens the weight dialog directly.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const autoOpenAdd = searchParams.get('add') === '1';
+  const clearAddParam = useCallback(() => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('add');
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
 
   // Use custom hook for weight operations
   const {
@@ -40,6 +51,7 @@ const Weight = () => {
     addWeightLog,
     updateWeightLog,
     deleteWeightLog,
+    restoreWeightLog,
     clearSuccessMessage,
     clearErrorMessage
   } = useWeight();
@@ -62,6 +74,27 @@ const Weight = () => {
     notify(error, { tone: 'error' });
     clearErrorMessage();
   }, [error, notify, clearErrorMessage]);
+
+  // Delete with an Undo, the same grammar as food: "Removed … · Undo". One
+  // mis-tap on the trash beside the pencil used to be permanent (B18).
+  const handleDelete = async (logId) => {
+    const log = weightLogs.find((l) => l.id === logId);
+    const removed = await deleteWeightLog(logId);
+    if (!removed) return; // the hook has already said why
+    const what = log ? `${parseFloat(log.weight_value).toFixed(1)} lbs` : 'that weight';
+    const when = log?.log_date
+      ? ` from ${displayCalendarDate(log.log_date, 'en-US', { month: 'short', day: 'numeric' })}`
+      : '';
+    notify(`Removed ${what}${when}`, {
+      tone: 'info',
+      duration: 10000,
+      action: log ? (
+        <Button size="small" sx={{ color: 'inherit', fontWeight: 700 }} onClick={() => restoreWeightLog(log)}>
+          Undo
+        </Button>
+      ) : undefined,
+    });
+  };
 
   if (loading) {
     return (
@@ -93,6 +126,7 @@ const Weight = () => {
           goal={weightGoal}
           currentWeight={currentWeight}
           unit="lbs"
+          firstRunGoal={firstRunGoal}
           onEditGoal={() => navigate('/calorie-wizard')}
         />
       </Box>
@@ -125,14 +159,19 @@ const Weight = () => {
 
       {/* Quick Add Weight (desktop card; the FAB on phones) */}
       <Box sx={{ mb: 3 }}>
-        <QuickAddWeight onAdd={addWeightLog} unit="lbs" />
+        <QuickAddWeight
+          onAdd={addWeightLog}
+          unit="lbs"
+          autoOpen={autoOpenAdd}
+          onAutoOpened={clearAddParam}
+        />
       </Box>
 
       {/* Weight Log List */}
       <Box sx={{ mb: 3 }}>
         <WeightLogList
           logs={weightLogs}
-          onDelete={deleteWeightLog}
+          onDelete={handleDelete}
           onUpdate={updateWeightLog}
           unit="lbs"
         />

@@ -2,6 +2,9 @@ import React, { useEffect, useState } from 'react';
 import { Alert, Button, TextField, Typography } from '@mui/material';
 import { Edit as EditIcon } from '@mui/icons-material';
 import { utcDateString } from '@geeksuite/utils';
+import { useGeekDialogFullScreen } from '@geeksuite/ui';
+import { errorMessage } from '../../utils/errorMessage.js';
+import { thumbSaveProps } from '../BloodPressure/thumbSave.jsx';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -22,6 +25,7 @@ const EditWeightDialog = ({ log, open, onClose, onSave, unit = 'lbs' }) => {
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+  const fullScreen = useGeekDialogFullScreen();
 
   useEffect(() => {
     if (!open || !log) return;
@@ -55,7 +59,7 @@ const EditWeightDialog = ({ log, open, onClose, onSave, unit = 'lbs' }) => {
       }
       onClose?.();
     } catch (err) {
-      setError(err?.message ? `That change was not saved: ${err.message}` : 'That change was not saved. Try again.');
+      setError(errorMessage(err, 'That change was not saved. Try again.'));
     } finally {
       setSaving(false);
     }
@@ -77,12 +81,15 @@ const EditWeightDialog = ({ log, open, onClose, onSave, unit = 'lbs' }) => {
       title="Edit weight"
       icon={EditIcon}
       maxWidth="xs"
-      primaryAction={
-        <Button onClick={handleSave} variant="contained" disabled={!valid || saving}>
-          {saving ? 'Saving…' : 'Save'}
-        </Button>
-      }
-      secondaryAction={<Button onClick={close} disabled={saving}>Cancel</Button>}
+      {...thumbSaveProps({
+        fullScreen,
+        save: (
+          <Button onClick={handleSave} variant="contained" disabled={!valid || saving}>
+            {saving ? 'Saving…' : 'Save'}
+          </Button>
+        ),
+        cancel: <Button onClick={close} disabled={saving}>Cancel</Button>,
+      })}
     >
       {error && (
         <Alert severity="error" sx={{ mb: 2 }} role="alert">
@@ -103,7 +110,7 @@ const EditWeightDialog = ({ log, open, onClose, onSave, unit = 'lbs' }) => {
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
         sx={{ mb: 2, mt: 1 }}
-        inputProps={{ step: '0.1', min: '0', max: '1000' }}
+        inputProps={{ inputMode: 'decimal', step: '0.1', min: '0', max: '1000' }}
         InputProps={{ endAdornment: unit }}
         error={value !== '' && !valid}
         helperText={value !== '' && !valid ? 'Enter a weight between 0 and 1000.' : ' '}

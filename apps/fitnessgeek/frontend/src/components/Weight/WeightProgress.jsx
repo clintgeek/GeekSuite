@@ -21,7 +21,11 @@ const WeightProgress = ({
   goal = null,
   currentWeight = null,
   unit = 'lbs',
-  onEditGoal
+  onEditGoal,
+  // The first run's answer, in her words (`experience.goal`). "Lose a little"
+  // was stored and never used (review Phase 2.14); here it turns the empty
+  // card into the next step.
+  firstRunGoal = null
 }) => {
   const theme = useTheme();
   const insights = useMemo(() => {
@@ -121,6 +125,34 @@ const WeightProgress = ({
   }, [weightLogs, goal, currentWeight, unit]);
 
   if (!goal || !goal.enabled || !insights) {
+    const noGoal = !goal || !goal.enabled;
+    // A goal with nothing to measure yet is not a missing goal.
+    const needsWeighIn = !noGoal && !currentWeight;
+    if (noGoal && firstRunGoal === 'lose' && onEditGoal) {
+      // One sentence, one button. No heading announcing what's missing.
+      return (
+        <Card sx={{
+          borderRadius: '20px',
+          boxShadow: theme.shadows[1],
+          border: `1px solid ${theme.palette.divider}`
+        }}>
+          <CardContent sx={{ p: 3 }}>
+            <Typography sx={{ color: 'text.primary', fontSize: '1.0625rem', lineHeight: 1.5, mb: 2 }}>
+              You said you&rsquo;d like to lose a little. Set a goal and this page will show how it&rsquo;s going.
+            </Typography>
+            <Button
+              variant="contained"
+              startIcon={<GoalIcon />}
+              onClick={onEditGoal}
+              fullWidth
+              sx={{ minHeight: 48, borderRadius: '999px', textTransform: 'none', fontWeight: 700, maxWidth: { sm: 320 } }}
+            >
+              Set your goal
+            </Button>
+          </CardContent>
+        </Card>
+      );
+    }
     return (
       <Card sx={{
         borderRadius: '20px',
@@ -130,12 +162,14 @@ const WeightProgress = ({
         <CardContent sx={{ p: 4, textAlign: 'center' }}>
           <GoalIcon sx={{ fontSize: 48, color: theme.palette.text.disabled, mb: 2 }} />
           <Typography variant="h6" sx={{ fontWeight: 700, color: theme.palette.text.primary, mb: 1 }}>
-            No Weight Goal Set
+            {needsWeighIn ? 'Weigh in to see your progress' : 'No weight goal yet'}
           </Typography>
           <Typography variant="body2" sx={{ color: theme.palette.text.secondary, mb: 3 }}>
-            Set a weight goal to track your progress and get personalized insights
+            {needsWeighIn
+              ? 'Your goal is set. Log a weight and your progress shows here.'
+              : 'Set a weight goal and this page will show how it’s going.'}
           </Typography>
-          {onEditGoal && (
+          {onEditGoal && !needsWeighIn && (
             <Button
               variant="contained"
               startIcon={<GoalIcon />}
@@ -147,7 +181,7 @@ const WeightProgress = ({
                 fontWeight: 700,
               }}
             >
-              Set Weight Goal
+              Set your goal
             </Button>
           )}
         </CardContent>

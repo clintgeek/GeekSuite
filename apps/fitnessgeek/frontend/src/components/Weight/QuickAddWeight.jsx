@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Box,
   Card,
@@ -7,35 +7,51 @@ import {
   Button,
   Alert
 } from '@mui/material';
-import {
-  Add as AddIcon,
-  MonitorWeight as WeightIcon
-} from '@mui/icons-material';
-import { useGeekPrimaryAction } from '@geeksuite/ui';
+import { MonitorWeight as WeightIcon } from '@mui/icons-material';
+import { useGeekDialogFullScreen } from '@geeksuite/ui';
 import { localDateString } from '@geeksuite/utils';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
 import DateField from '../primitives/DateField.jsx';
+import { errorMessage } from '../../utils/errorMessage.js';
+import { thumbSaveProps } from '../BloodPressure/thumbSave.jsx';
+import LogWeightFab from './LogWeightFab.jsx';
 
-const QuickAddWeight = ({ onAdd, unit = 'lbs' }) => {
+const SAVE_FAILED = "That weight didn't save. Check your connection and try again.";
+
+const QuickAddWeight = ({ onAdd, unit = 'lbs', autoOpen = false, onAutoOpened }) => {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState('');
-  const [date, setDate] = useState(localDateString());
+  // The dialog's day. Seeded when the dialog OPENS, not when the page
+  // mounted: an installed PWA kept alive overnight used to open this on
+  // yesterday, and since there is one weight per day, the morning weigh-in
+  // overwrote yesterday's (review B3).
+  const [date, setDate] = useState(() => localDateString());
   const [loading, setLoading] = useState(false);
   // This dialog had no error state at all, unlike AddBPDialog. Combined with
   // closing on failure, a failed weight save gave the user nothing to look at.
   const [error, setError] = useState('');
+  const fullScreen = useGeekDialogFullScreen();
 
-  // The page's thumb-zone action. `GeekFab` (mounted by the shell) reads the
-  // bottom-nav inset and the safe area, so the old hardcoded `bottom: 80` —
-  // which also rendered on desktop, beside the Quick Add card — is gone.
-  useGeekPrimaryAction({
-    label: 'Log weight',
-    icon: <AddIcon />,
-    onClick: () => setOpen(true)
-  });
+  const openDialog = () => {
+    setDate(localDateString());
+    setError('');
+    setOpen(true);
+  };
 
-  const handleSubmit = async () => {
-    if (!value || !date) return;
+  // `/weight?add=1` (the Today strip's "Weigh in") opens the dialog directly.
+  useEffect(() => {
+    if (!autoOpen) return;
+    openDialog();
+    onAutoOpened?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- open once per request; the callback identity is the caller's.
+  }, [autoOpen]);
+
+  // `fromCard`: the desktop card has no date field — it always means today,
+  // read at the moment of saving.
+  const handleSubmit = async ({ fromCard = false } = {}) => {
+    if (loading) return;
+    const day = fromCard ? localDateString() : date;
+    if (!value || !day) return;
 
     setLoading(true);
     setError('');
@@ -49,22 +65,22 @@ const QuickAddWeight = ({ onAdd, unit = 'lbs' }) => {
       // should have followed.
       const saved = await onAdd({
         value: parseFloat(value),
-        date: date
+        date: day
       });
 
       if (saved === false) {
-        setError('Could not save that weight. Check your connection and try again.');
+        setError(SAVE_FAILED);
         return;
       }
 
       setValue('');
-      setDate(localDateString());
       setError('');
       setOpen(false);
     } catch (err) {
       // A caller that throws instead of returning false is handled too, so
-      // this does not depend on which convention the hook uses.
-      setError(err?.message || 'Could not save that weight. Try again.');
+      // this does not depend on which convention the hook uses. Plain words
+      // only — never the raw `err.message`.
+      setError(errorMessage(err, SAVE_FAILED));
     } finally {
       setLoading(false);
     }
@@ -73,6 +89,11 @@ const QuickAddWeight = ({ onAdd, unit = 'lbs' }) => {
   const handleKeyPress = (e) => {
     if (e.key === 'Enter') {
       handleSubmit();
+    }
+  };
+  const handleCardKeyPress = (e) => {
+    if (e.key === 'Enter') {
+      handleSubmit({ fromCard: true });
     }
   };
 
@@ -103,10 +124,11 @@ const QuickAddWeight = ({ onAdd, unit = 'lbs' }) => {
               type="number"
               value={value}
               onChange={(e) => setValue(e.target.value)}
-              onKeyPress={handleKeyPress}
+              onKeyPress={handleCardKeyPress}
               size="small"
               sx={{ flexGrow: 1 }}
               inputProps={{
+                inputMode: 'decimal',
                 step: "0.1",
                 min: "0",
                 max: "1000"
@@ -117,7 +139,7 @@ const QuickAddWeight = ({ onAdd, unit = 'lbs' }) => {
             />
             <Button
               variant="contained"
-              onClick={handleSubmit}
+              onClick={() => handleSubmit({ fromCard: true })}
               disabled={!value || loading}
             >
               Add
@@ -126,24 +148,30 @@ const QuickAddWeight = ({ onAdd, unit = 'lbs' }) => {
         </CardContent>
       </Card>
 
+      {/* Phones: the thumb-zone "Log weight" button opens the dialog. */}
+      <LogWeightFab onClick={openDialog} />
+
       {/* Add Dialog */}
       <PremiumDialog
         open={open}
         onClose={() => { setError(''); setOpen(false); }}
         eyebrow="Tracking"
-        title="Log Weight"
+        title="Log weight"
         icon={WeightIcon}
         maxWidth="sm"
-        primaryAction={
-          <Button
-            onClick={handleSubmit}
-            variant="contained"
-            disabled={!value || loading}
-          >
-            Save
-          </Button>
-        }
-        secondaryAction={<Button onClick={() => { setError(''); setOpen(false); }}>Cancel</Button>}
+        {...thumbSaveProps({
+          fullScreen,
+          save: (
+            <Button
+              onClick={() => handleSubmit()}
+              variant="contained"
+              disabled={!value || loading}
+            >
+              {loading ? 'Saving…' : 'Save'}
+            </Button>
+          ),
+          cancel: <Button onClick={() => { setError(''); setOpen(false); }}>Cancel</Button>,
+        })}
       >
           {error && (
             <Alert severity="error" sx={{ mb: 2 }}>
@@ -159,6 +187,7 @@ const QuickAddWeight = ({ onAdd, unit = 'lbs' }) => {
             onKeyPress={handleKeyPress}
             sx={{ mb: 2, mt: 1 }}
             inputProps={{
+              inputMode: 'decimal',
               step: "0.1",
               min: "0",
               max: "1000"
@@ -166,7 +195,7 @@ const QuickAddWeight = ({ onAdd, unit = 'lbs' }) => {
             InputProps={{
               endAdornment: unit
             }}
-            helperText="Enter weight to one decimal place (e.g., 150.4)"
+            helperText="For example, 150.4"
             autoFocus
           />
           <DateField fullWidth value={date} onChange={setDate} />

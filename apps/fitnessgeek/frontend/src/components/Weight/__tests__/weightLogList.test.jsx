@@ -72,13 +72,33 @@ describe('WeightLogList', () => {
 
   it('a rejected save shows the server\'s reason', async () => {
     const user = userEvent.setup();
-    const onUpdate = vi.fn().mockRejectedValue(new Error('Weight record not found'));
+    // The server's reason arrives the way apiService rejects: an ApolloError
+    // with the text on graphQLErrors[0]. A bare `err.message` is never shown
+    // (errorMessage) — that is where "status code 502" used to leak from.
+    const err = new Error('Weight record not found');
+    err.graphQLErrors = [{ message: 'Weight record not found' }];
+    const onUpdate = vi.fn().mockRejectedValue(err);
     render(<WeightLogList logs={LOGS} onDelete={() => {}} onUpdate={onUpdate} />);
 
     await user.click(screen.getByRole('button', { name: /edit the 316\.4/i }));
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByRole('button', { name: /^save$/i }));
     expect(await within(dialog).findByRole('alert')).toHaveTextContent('Weight record not found');
+  });
+
+  it('a transport failure is plain words, not the raw error', async () => {
+    const user = userEvent.setup();
+    const err = new Error('Request failed with status code 502');
+    err.response = { status: 502 };
+    const onUpdate = vi.fn().mockRejectedValue(err);
+    render(<WeightLogList logs={LOGS} onDelete={() => {}} onUpdate={onUpdate} />);
+
+    await user.click(screen.getByRole('button', { name: /edit the 316\.4/i }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: /^save$/i }));
+    const alert = await within(dialog).findByRole('alert');
+    expect(alert).toHaveTextContent(/restarting/i);
+    expect(alert).not.toHaveTextContent(/status code/i);
   });
 
   it('warns that a re-import replaces an edited scale value', async () => {

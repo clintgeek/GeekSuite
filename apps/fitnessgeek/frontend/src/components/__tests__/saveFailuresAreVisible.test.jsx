@@ -39,7 +39,7 @@ describe('QuickAddWeight keeps the dialog open when the save fails', () => {
 
     await waitFor(() => expect(onAdd).toHaveBeenCalled());
     await waitFor(() =>
-      expect(screen.getByText(/could not save that weight/i)).toBeInTheDocument()
+      expect(screen.getByText(/that weight didn.t save/i)).toBeInTheDocument()
     );
     // The number the user typed is still there to retry with.
     expect(input).toHaveValue(184.2);
@@ -57,13 +57,16 @@ describe('QuickAddWeight keeps the dialog open when the save fails', () => {
     await user.click(screen.getAllByRole('button', { name: /^add$/i })[0]);
 
     await waitFor(() => expect(onAdd).toHaveBeenCalled());
-    expect(screen.queryByText(/could not save that weight/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/that weight didn.t save/i)).not.toBeInTheDocument();
   });
 
   it('handles a caller that throws as well as one that returns false', async () => {
     // So the dialog does not depend on which convention its parent uses.
     const user = userEvent.setup();
-    const onAdd = vi.fn().mockRejectedValue(new Error('Network unreachable'));
+    // In plain words: the raw `err.message` is never shown (errorMessage).
+    const err = new Error('Request failed with status code 502');
+    err.response = { status: 502 };
+    const onAdd = vi.fn().mockRejectedValue(err);
 
     render(<QuickAddWeight onAdd={onAdd} unit="lbs" />);
 
@@ -72,7 +75,30 @@ describe('QuickAddWeight keeps the dialog open when the save fails', () => {
     await user.click(screen.getAllByRole('button', { name: /^add$/i })[0]);
 
     await waitFor(() =>
-      expect(screen.getByText(/network unreachable/i)).toBeInTheDocument()
+      expect(screen.getByText(/restarting/i)).toBeInTheDocument()
     );
+    expect(screen.queryByText(/status code/i)).toBeNull();
+  });
+
+  it('the desktop card saves on the day it is saved, not the day the page mounted', async () => {
+    // One weight per day: a tab left open overnight used to save the
+    // morning weigh-in onto yesterday, overwriting it (review B3).
+    vi.useFakeTimers({ toFake: ['Date'] });
+    try {
+      vi.setSystemTime(new Date(2026, 9, 15, 21, 0, 0));
+      const user = userEvent.setup();
+      const onAdd = vi.fn().mockResolvedValue(true);
+      render(<QuickAddWeight onAdd={onAdd} unit="lbs" />);
+
+      vi.setSystemTime(new Date(2026, 9, 16, 7, 0, 0));
+      const input = screen.getAllByLabelText(/weight/i)[0];
+      await user.type(input, '184.2');
+      await user.click(screen.getAllByRole('button', { name: /^add$/i })[0]);
+
+      await waitFor(() => expect(onAdd).toHaveBeenCalled());
+      expect(onAdd.mock.calls[0][0].date).toBe('2026-10-16');
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });

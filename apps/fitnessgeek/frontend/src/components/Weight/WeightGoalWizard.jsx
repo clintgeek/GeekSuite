@@ -261,6 +261,7 @@ const WeightGoalWizard = ({ open, onClose, onSave, currentWeight, existingGoal, 
             type="number"
             value={startWeight}
             onChange={(e) => setStartWeight(e.target.value)}
+            inputProps={{ inputMode: 'decimal' }}
             error={!!errors.startWeight}
             helperText={errors.startWeight}
             fullWidth
@@ -282,6 +283,7 @@ const WeightGoalWizard = ({ open, onClose, onSave, currentWeight, existingGoal, 
             type="number"
             value={targetWeight}
             onChange={(e) => setTargetWeight(e.target.value)}
+            inputProps={{ inputMode: 'decimal' }}
             error={!!errors.targetWeight}
             helperText={errors.targetWeight}
             fullWidth

@@ -4,6 +4,7 @@ import { weightService } from '../services/weightService';
 // Legacy goals removed
 import { settingsService } from '../services/settingsService.js';
 import logger from '../utils/logger.js';
+import { errorMessage } from '../utils/errorMessage.js';
 
 export const useWeight = () => {
   const [weightLogs, setWeightLogs] = useState([]);
@@ -23,7 +24,7 @@ export const useWeight = () => {
       if (response.success) {
         setWeightLogs(response.data);
       } else {
-        setAutoCloseMessage('Failed to load weight logs', setError);
+        setAutoCloseMessage("Your weights didn't load. Try again.", setError);
       }
 
       // Load goals from settings wizard (legacy removed)
@@ -109,7 +110,7 @@ export const useWeight = () => {
         setWeightGoal(null);
       }
     } catch (error) {
-      setAutoCloseMessage('Failed to load weight data', setError);
+      setAutoCloseMessage(errorMessage(error, "Your weights didn't load. Try again."), setError);
       logger.error('Error loading weight data:', error);
     } finally {
       if (!silent) setLoading(false);
@@ -124,19 +125,18 @@ export const useWeight = () => {
         log_date: weightData.date
       });
 
-      if (response.success) {
+      if (response.success && response.data) {
         // Reload weight data to get the updated list
         await loadWeightData({ silent: true });
-        setAutoCloseMessage('Weight logged successfully!', setSuccess);
+        setAutoCloseMessage('Weight saved.', setSuccess);
         return true;
-      } else {
-        setAutoCloseMessage(response.message || 'Failed to add weight log', setError);
-        return false;
       }
-    } catch (error) {
-      setAutoCloseMessage('Failed to add weight log', setError);
-      logger.error('Error adding weight log:', error);
+      // The form that called this shows the failure inline; no second toast.
       return false;
+    } catch (error) {
+      logger.error('Error adding weight log:', error);
+      // Rethrown so the form can say why in plain words (errorMessage).
+      throw error;
     }
   };
 
@@ -163,23 +163,50 @@ export const useWeight = () => {
     return true;
   };
 
-  // Delete weight log
+  // Delete weight log. Resolves true only when the server says it deleted
+  // something: `deleteFitnessWeight` answers a Boolean, which apiService
+  // wraps as `{ success: true, data: false }` when nothing was removed — that
+  // used to read as "deleted successfully". The page owns the toast, since
+  // it carries an Undo (see `restoreWeightLog`).
   const deleteWeightLog = async (logId) => {
     try {
       const response = await weightService.deleteWeightLog(logId);
 
-      if (response.success) {
-        // Reload weight data to get the updated list
+      if (response?.success && response.data !== false) {
+        // Drop the row at once, then refresh behind it.
+        setWeightLogs((prev) => prev.filter((l) => l.id !== logId));
         await loadWeightData({ silent: true });
-        setAutoCloseMessage('Weight log deleted successfully!', setSuccess);
         return true;
-      } else {
-        setAutoCloseMessage(response.message || 'Failed to delete weight log', setError);
+      }
+      setAutoCloseMessage("That weight wasn't removed. Try again.", setError);
+      return false;
+    } catch (error) {
+      setAutoCloseMessage(errorMessage(error, "That weight wasn't removed. Try again."), setError);
+      logger.error('Error deleting weight log:', error);
+      return false;
+    }
+  };
+
+  // Undo of a delete: re-create the row from what was on screen — same day,
+  // value and note. It comes back as a new row (a delete can't hand back the
+  // old id). Resolves true or false; never throws.
+  const restoreWeightLog = async (log) => {
+    try {
+      const response = await weightService.createWeightLog({
+        weight_value: Number(log.weight_value),
+        log_date: utcDateString(log.log_date),
+        ...(log.notes ? { notes: log.notes } : {}),
+      });
+      if (!response?.success || !response?.data) {
+        setAutoCloseMessage("Couldn't put it back. Try again.", setError);
         return false;
       }
+      await loadWeightData({ silent: true });
+      setAutoCloseMessage('Put back.', setSuccess);
+      return true;
     } catch (error) {
-      setAutoCloseMessage('Failed to delete weight log', setError);
-      logger.error('Error deleting weight log:', error);
+      logger.error('Error restoring weight log:', error);
+      setAutoCloseMessage(errorMessage(error, "Couldn't put it back. Try again."), setError);
       return false;
     }
   };
@@ -230,6 +257,7 @@ export const useWeight = () => {
     addWeightLog,
     updateWeightLog,
     deleteWeightLog,
+    restoreWeightLog,
     loadWeightData,
     clearSuccessMessage,
     clearErrorMessage,
