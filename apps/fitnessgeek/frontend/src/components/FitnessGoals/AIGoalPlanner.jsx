@@ -26,6 +26,7 @@ import { BmrSourceNote, PlanComparison, ProteinBasisNote, previewMacros } from '
 import { minSafeCalories, computeWeeklySchedule, planTarget, weekenderHasRoom, weekenderSuggestion, MEASURED_ACTIVITY, usableMeasuredActivity, tdeeFor } from './planMath.js';
 import { influxService } from '../../services/influxService.js';
 import { localDateString } from '@geeksuite/utils';
+import { errorMessage } from '../../utils/errorMessage.js';
 
 const CalorieGoalWizard = () => {
   const { user } = useAuth();
@@ -411,7 +412,7 @@ const CalorieGoalWizard = () => {
       }
     } catch (error) {
       console.error('Failed to update profile:', error);
-      notify('Failed to update profile', { tone: 'error' });
+      notify(errorMessage(error, "Couldn't update your profile. Try again."), { tone: 'error' });
     }
   };
 
@@ -525,6 +526,7 @@ const CalorieGoalWizard = () => {
               <TextField
                 label="Age"
                 type="number"
+                inputMode="decimal"
                 value={profile.age}
                 onChange={(e) => setProfile(prev => ({ ...prev, age: e.target.value }))}
                 size="small"
@@ -532,6 +534,7 @@ const CalorieGoalWizard = () => {
               <TextField
                 label="Current Weight (lbs)"
                 type="number"
+                inputMode="decimal"
                 value={profile.weight}
                 onChange={(e) => setProfile(prev => ({ ...prev, weight: e.target.value }))}
                 size="small"
@@ -649,6 +652,7 @@ const CalorieGoalWizard = () => {
             <TextField
               label="Target Weight (lbs)"
               type="number"
+                inputMode="decimal"
               value={goal.targetWeight}
               onChange={(e) => setGoal(prev => ({ ...prev, targetWeight: e.target.value }))}
               size="small"
@@ -778,7 +782,9 @@ const CalorieGoalWizard = () => {
                   await settingsService.updateSettings({
                     nutrition_goal: {
                       enabled: true,
-                      start_date: startDate.toISOString(),
+                      // The LOCAL calendar day: toISOString() is UTC, so an evening
+                      // plan in Central stored tomorrow as its start.
+                      start_date: localDateString(startDate),
                       start_weight: plan.currentWeight,
                       target_weight: plan.targetWeight,
                       // The macro rules read goal_weight_lbs BEFORE target_weight
@@ -798,7 +804,7 @@ const CalorieGoalWizard = () => {
                       lean_mass_lb: plan.leanMassLb,
                       calc_inputs: plan.calcInputs,
                       timeline_weeks: plan.timeline,
-                      estimated_end_date: estimatedEnd.toISOString(),
+                      estimated_end_date: localDateString(estimatedEnd),
                       mode,
                       keto: ketoConfig
                     }
@@ -808,7 +814,7 @@ const CalorieGoalWizard = () => {
                   await loadExistingGoal();
                 } catch (e) {
                   console.error('Failed to save keto goal', e);
-                  notify('Failed to save keto goal', { tone: 'error' });
+                  notify(errorMessage(e, "Couldn't save your keto goal. Try again."), { tone: 'error' });
                 }
               }}
             >
@@ -870,7 +876,7 @@ const CalorieGoalWizard = () => {
                   notify('Keto goal removed.', { tone: 'success' });
                 } catch (e) {
                   console.error('Failed to remove keto goal', e);
-                  notify('Failed to remove keto goal', { tone: 'error' });
+                  notify(errorMessage(e, "Couldn't remove your keto goal. Try again."), { tone: 'error' });
                 }
               }}
             >
@@ -1091,7 +1097,7 @@ const CalorieGoalWizard = () => {
                       notify('Calorie goal removed.', { tone: 'success' });
                     } catch (e) {
                       console.error('Failed to remove nutrition goal', e);
-                      notify('Failed to remove calorie goal', { tone: 'error' });
+                      notify(errorMessage(e, "Couldn't remove your calorie goal. Try again."), { tone: 'error' });
                     }
                   }}
                 >
@@ -1117,7 +1123,9 @@ const CalorieGoalWizard = () => {
                       await settingsService.updateSettings({
                         nutrition_goal: {
                           enabled: true,
-                          start_date: startDate.toISOString(),
+                          // The LOCAL calendar day: toISOString() is UTC, so an evening
+                      // plan in Central stored tomorrow as its start.
+                      start_date: localDateString(startDate),
                           start_weight: plan.currentWeight,
                           target_weight: plan.targetWeight,
                           // The macro rules read goal_weight_lbs BEFORE target_weight
@@ -1137,7 +1145,7 @@ const CalorieGoalWizard = () => {
                           lean_mass_lb: plan.leanMassLb,
                           calc_inputs: plan.calcInputs,
                           timeline_weeks: plan.timeline,
-                          estimated_end_date: estimatedEnd.toISOString(),
+                          estimated_end_date: localDateString(estimatedEnd),
                           mode,
                           keto: mode === 'keto' ? ketoConfig : undefined
                         }
@@ -1148,7 +1156,7 @@ const CalorieGoalWizard = () => {
                       await loadExistingGoal();
                     } catch (e) {
                       console.error('Failed to save nutrition goal', e);
-                      notify('Failed to save calorie goal', { tone: 'error' });
+                      notify(errorMessage(e, "Couldn't save your calorie goal. Try again."), { tone: 'error' });
                     }
                   }}
                   sx={{ bgcolor: 'success.main', '&:hover': { bgcolor: 'success.dark' } }}

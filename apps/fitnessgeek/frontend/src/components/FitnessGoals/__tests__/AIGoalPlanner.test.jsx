@@ -155,3 +155,32 @@ describe('Calorie Wizard — Stepper navigation', () => {
     await screen.findByText('Choose your approach');
   });
 });
+
+describe('Calorie Wizard — an evening plan starts today (review P2)', () => {
+  const realTZ = process.env.TZ;
+  afterEach(() => {
+    vi.useRealTimers();
+    process.env.TZ = realTZ;
+  });
+
+  it('start_date is the LOCAL calendar day, not tomorrow in UTC', async () => {
+    process.env.TZ = 'America/Chicago';
+    vi.useFakeTimers({ toFake: ['Date'] });
+    // 22:30 Central on Oct 15 is already Oct 16 in UTC.
+    vi.setSystemTime(new Date('2026-10-16T03:30:00.000Z'));
+    await goToProfileStep();
+    await fillRequiredFieldsExceptHeight();
+    fireEvent.change(screen.getByLabelText(/^Height$/i), { target: { value: '5\'11"' } });
+    fireEvent.click(await screen.findByRole('button', { name: /Next: Set Goal/i }));
+    await screen.findByText('Set Your Weight Goal');
+    fireEvent.change(screen.getByLabelText(/Target Weight/i), { target: { value: '170' } });
+    fireEvent.click(screen.getByRole('button', { name: /Calculate My Plan/i }));
+    await screen.findByText('Your Personalized Calorie Plan');
+    fireEvent.click(screen.getByRole('button', { name: /Start Tracking/i }));
+    const { settingsService } = await import('../../../services/settingsService.js');
+    await waitFor(() => expect(settingsService.updateSettings).toHaveBeenCalled());
+    const goal = settingsService.updateSettings.mock.calls.at(-1)[0].nutrition_goal;
+    expect(goal.start_date).toBe('2026-10-15');
+    expect(goal.estimated_end_date).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+  });
+});

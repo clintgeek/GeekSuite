@@ -371,6 +371,7 @@ const Profile = () => {
             <TextField
               label="Age"
               type="number"
+              inputMode="numeric"
               value={editData.age}
               onChange={(e) => setEditData({ ...editData, age: e.target.value })}
             />
