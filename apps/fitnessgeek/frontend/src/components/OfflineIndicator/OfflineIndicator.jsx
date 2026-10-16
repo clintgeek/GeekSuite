@@ -1,65 +1,43 @@
 import React from 'react';
-import { Box, Chip, Snackbar, Alert } from '@mui/material';
-import {
-  CloudOff as OfflineIcon,
-  CloudQueue as SyncIcon,
-  Cloud as OnlineIcon
-} from '@mui/icons-material';
+import { Chip, Snackbar, Alert } from '@mui/material';
+import { CloudOff as OfflineIcon } from '@mui/icons-material';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus.js';
 
+/**
+ * Says so when there's no signal, and says what that means. There is no
+ * offline queue, so it never promises a sync (review B17).
+ */
+export const OFFLINE_BANNER = "You're offline. New entries won't save until you're back online.";
+
 const OfflineIndicator = () => {
-  const { isOnline, hasPendingSync } = useOnlineStatus();
+  const { isOnline } = useOnlineStatus();
   const [showNotification, setShowNotification] = React.useState(false);
 
   React.useEffect(() => {
-    if (!isOnline) {
-      setShowNotification(true);
-    }
+    setShowNotification(!isOnline);
   }, [isOnline]);
 
-  if (isOnline && !hasPendingSync) {
-    return null;
-  }
+  if (isOnline) return null;
 
   return (
     <>
-      {/* Status chip */}
-      {!isOnline && (
-        <Chip
-          icon={<OfflineIcon />}
-          label="Offline Mode"
-          color="warning"
-          size="small"
-          sx={{
-            position: 'fixed',
-            top: 70,
-            right: 16,
-            zIndex: 1300,
-            boxShadow: 2
-          }}
-        />
-      )}
+      <Chip
+        icon={<OfflineIcon />}
+        label="Offline"
+        color="warning"
+        size="small"
+        sx={{
+          position: 'fixed',
+          top: 70,
+          right: 16,
+          zIndex: 1300,
+          boxShadow: 2
+        }}
+      />
 
-      {hasPendingSync && isOnline && (
-        <Chip
-          icon={<SyncIcon />}
-          label="Syncing..."
-          color="info"
-          size="small"
-          sx={{
-            position: 'fixed',
-            top: 70,
-            right: 16,
-            zIndex: 1300,
-            boxShadow: 2
-          }}
-        />
-      )}
-
-      {/* Snackbar notification */}
       <Snackbar
-        open={showNotification && !isOnline}
-        autoHideDuration={6000}
+        open={showNotification}
+        autoHideDuration={8000}
         onClose={() => setShowNotification(false)}
         anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
       >
@@ -69,7 +47,7 @@ const OfflineIndicator = () => {
           icon={<OfflineIcon />}
           sx={{ width: '100%' }}
         >
-          You're offline. Data will be synced when you reconnect.
+          {OFFLINE_BANNER}
         </Alert>
       </Snackbar>
     </>
