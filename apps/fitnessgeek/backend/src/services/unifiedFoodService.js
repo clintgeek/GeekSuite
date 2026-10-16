@@ -21,6 +21,7 @@ import axios from 'axios';
 import logger from '../config/logger.js';
 import FoodItem from '../models/FoodItem.js';
 import FoodLog from '../models/FoodLog.js';
+import Meal from '../models/Meal.js';
 import UserSettings from '../models/UserSettings.js';
 import aiFoodService from './aiFoodService.js';
 import fatSecretService from './fatSecretService.js';
@@ -30,7 +31,7 @@ import calorieNinjasService from './calorieNinjasService.js';
 import unitConversion from './unitConversion.js';
 import cacheService from './cacheService.js';
 import { foodCatalogVisibilityFilter } from '@geeksuite/schemas/fitnessgeek/foodItem';
-import { parseFoodQuery, parseFragment, itemIsGroundedInQuery } from './foodQueryParser.js';
+import { parseFoodQuery, parseFragment, itemIsGroundedInQuery, normalizeQuery } from './foodQueryParser.js';
 import { rankFoodResults, isConfidentMatch } from './foodRanker.js';
 import { normalizeOpenFoodFactsNutrition } from './openFoodFactsNutrition.js';
 
@@ -45,6 +46,20 @@ const CONFIDENCE = {
   LOW: 40,          // Fuzzy match or less trusted source
   ESTIMATED: 20     // AI estimation (fallback)
 };
+
+/**
+ * Below this many letters, the deep search stays local: no catalog APIs, no
+ * model. Heather types word by word and every pause fired the deep search, so
+ * "Ha" went to five upstreams and an AI estimate and came back with a food
+ * called "Ha" (REVIEW_2026-10 §2). Two letters is a prefix, not a question.
+ */
+const MIN_DEEP_QUERY_LETTERS = 3;
+
+/** How many saved meals suggest may put above the foods. */
+const SUGGEST_MEAL_LIMIT = 3;
+
+/** The caption a log row written from a saved meal carries (see describeAndLogService). */
+const MEAL_NOTE_PREFIX = 'Added from meal: ';
 
 /** How many of the user's own foods to hold in the personal index. */
 const PERSONAL_INDEX_LIMIT = Number.parseInt(process.env.PERSONAL_INDEX_LIMIT || '200', 10);
@@ -160,9 +175,19 @@ class UnifiedFoodService {
     try {
       const personal = await this.getPersonalIndex(userId);
 
+      // ── A prefix, not a question: her own catalog only ───────────────
+      if (this.isTooShortForDeepSearch(parsed.normalized)) {
+        const [fragment] = parsed.fragments;
+        const local = await this.searchLocalDB(fragment.searchText, limit * 3, userId);
+        return this.withRequestedServings(
+          rankFoodResults(local, fragment, { personal, limit }),
+          fragment
+        );
+      }
+
       // ── The person separated their foods themselves ──────────────────
       if (parsed.explicitlySeparated) {
-        return this.searchSeparatedFragments(parsed.fragments, { limit, personal, includeAI });
+        return this.searchSeparatedFragments(parsed.fragments, { limit, personal, includeAI, userId });
       }
 
       // ── One dish. Search the whole phrase, as written ────────────────
@@ -199,7 +224,8 @@ class UnifiedFoodService {
         const decomposed = await this.searchSeparatedFragments(ingredients, {
           limit,
           personal,
-          includeAI
+          includeAI,
+          userId
         });
         return decomposed.map((item) => ({
           ...item,
@@ -238,8 +264,13 @@ class UnifiedFoodService {
    * logged recently, then their own custom foods. That is the empty state of
    * the box, and it is the answer most of the time.
    *
+   * Every food row carries `kind: 'food'`. With `includeMeals`, the person's
+   * saved meals whose names match come first, as `kind: 'meal'` rows (with no
+   * query: the meals they logged most recently). The shape is the C6 contract
+   * — see `toMealSuggestion`.
+   *
    * @param {string} query
-   * @param {{userId?: string, limit?: number}} [options]
+   * @param {{userId?: string, limit?: number, includeMeals?: boolean}} [options]
    * @returns {Promise<Array>}
    */
   async suggest(query, options = {}) {
@@ -248,22 +279,117 @@ class UnifiedFoodService {
     const parsed = parseFoodQuery(query);
 
     try {
-      const personal = await this.getPersonalIndex(userId);
+      const [personal, meals] = await Promise.all([
+        this.getPersonalIndex(userId),
+        options.includeMeals ? this.suggestMeals(query, userId) : []
+      ]);
+      const asFood = (rows) => rows.map((row) => ({ ...row, kind: 'food' }));
 
       if (parsed.fragments.length === 0) {
-        return this.startingShelf(userId, personal, limit);
+        return [...meals, ...asFood(await this.startingShelf(userId, personal, limit))];
       }
 
       const [fragment] = parsed.fragments;
       const candidates = await this.searchLocalDB(fragment.searchText, limit * 3, userId);
       const ranked = rankFoodResults(candidates, fragment, { personal, limit });
 
-      return this.withRequestedServings(ranked, fragment);
+      return [...meals, ...asFood(this.withRequestedServings(ranked, fragment))];
 
     } catch (error) {
       logger.warn({ err: error, query }, 'Suggest failed');
       return [];
     }
+  }
+
+  /**
+   * Saved meals for the suggest list: whose names contain every word typed,
+   * or — with no query — the ones logged most recently.
+   *
+   * Mongo only, on the `user_id` index: a person has tens of meals, not
+   * thousands, so the name test is cheap once the owner narrows it. A failure
+   * here costs the meals, never the foods.
+   */
+  async suggestMeals(query, userId) {
+    if (!userId) return [];
+    const words = normalizeQuery(query).split(' ').filter(Boolean);
+
+    try {
+      const filter = { user_id: userId, is_deleted: false };
+      if (words.length > 0) {
+        filter.$and = words.map((word) => ({
+          name: new RegExp(`(^|[^\\p{L}\\p{N}])${word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'iu')
+        }));
+      }
+
+      const meals = await Meal.find(filter)
+        .populate({ path: 'food_items.food_item_id', select: 'nutrition' })
+        .sort({ updated_at: -1 })
+        .limit(words.length > 0 ? SUGGEST_MEAL_LIMIT : 50)
+        .lean();
+      if (!meals?.length) return [];
+
+      if (words.length > 0) return meals.map((meal) => this.toMealSuggestion(meal));
+
+      // The starting shelf: meals by when they were last LOGGED. A log row
+      // written from a meal is captioned with its name, so that caption is
+      // the record of use.
+      const recentNotes = await FoodLog.find({
+        user_id: userId,
+        notes: { $regex: `^${MEAL_NOTE_PREFIX}` }
+      })
+        .sort({ created_at: -1 })
+        .limit(100)
+        .select('notes')
+        .lean();
+      const order = [];
+      for (const log of recentNotes || []) {
+        const name = String(log.notes || '').slice(MEAL_NOTE_PREFIX.length).trim().toLowerCase();
+        if (name && !order.includes(name)) order.push(name);
+      }
+
+      return meals
+        .map((meal) => ({ meal, rank: order.indexOf(String(meal.name || '').toLowerCase()) }))
+        .filter(({ rank }) => rank !== -1)
+        .sort((a, b) => a.rank - b.rank)
+        .slice(0, SUGGEST_MEAL_LIMIT)
+        .map(({ meal }) => ({ ...this.toMealSuggestion(meal), shelf: 'recent' }));
+
+    } catch (error) {
+      logger.warn({ err: error, userId }, 'Suggest meals failed');
+      return [];
+    }
+  }
+
+  /**
+   * One saved meal as a suggest row (contract C6). `nutrition` is the WHOLE
+   * meal — every component at its saved servings — in the same keys a food
+   * row uses, so a row renders its calories the same way either kind.
+   */
+  toMealSuggestion(meal) {
+    const keys = ['calories_per_serving', 'protein_grams', 'carbs_grams', 'fat_grams', 'fiber_grams', 'sugar_grams', 'sodium_mg'];
+    const totals = Object.fromEntries(keys.map((k) => [k, 0]));
+    const items = meal.food_items || [];
+    for (const item of items) {
+      const n = item?.food_item_id?.nutrition;
+      if (!n) continue;
+      const servings = Number(item.servings) > 0 ? Number(item.servings) : 1;
+      for (const k of keys) totals[k] += (Number(n[k]) || 0) * servings;
+    }
+    for (const k of keys) {
+      totals[k] = k === 'calories_per_serving' || k === 'sodium_mg'
+        ? Math.round(totals[k])
+        : Math.round(totals[k] * 10) / 10;
+    }
+
+    return {
+      kind: 'meal',
+      id: String(meal._id),
+      name: meal.name,
+      meal_type: meal.meal_type,
+      food_count: items.length,
+      nutrition: totals,
+      source: 'meal'
+    };
   }
 
   /**
@@ -308,12 +434,14 @@ class UnifiedFoodService {
    * Sequential `await` in a `for` loop is what made a four-item query cost
    * four round trips; these are independent questions and go out together.
    */
-  async searchSeparatedFragments(fragments, { limit, personal, includeAI }) {
+  async searchSeparatedFragments(fragments, { limit, personal, includeAI, userId = null }) {
     void includeAI;
     const perFragment = Math.max(4, Math.ceil(limit / Math.max(1, fragments.length)));
 
+    // `userId` reaches the local leg: without it, the ownership filter shows
+    // only global rows, and her own foods vanished from "a and b" searches.
     const settled = await Promise.allSettled(
-      fragments.map((fragment) => this.fetchCandidates(fragment.searchText, perFragment * 2))
+      fragments.map((fragment) => this.fetchCandidates(fragment.searchText, perFragment * 2, userId))
     );
 
     const out = [];
@@ -470,16 +598,19 @@ class UnifiedFoodService {
   /**
    * Look up food by barcode
    * @param {string} barcode - UPC/EAN barcode
+   * @param {string|null} [userId] - the caller; their own rows plus global ones
    * @returns {Promise<Object|null>} Food item or null
    */
-  async getByBarcode(barcode) {
+  async getByBarcode(barcode, userId = null) {
     if (!barcode) return null;
 
     try {
-      // Step 1: Check local database
+      // Step 1: Check local database — global rows and the caller's own,
+      // never another person's private food that happens to carry the code.
       const localFood = await FoodItem.findOne({
         barcode,
-        is_deleted: false
+        is_deleted: false,
+        ...foodCatalogVisibilityFilter(userId)
       });
 
       if (localFood) {
@@ -534,11 +665,19 @@ class UnifiedFoodService {
         return [];
       }
 
-      // Transform AI results to standard format
+      // Transform AI results to standard format.
+      //
+      // `source_id` is what the shared dedupe ladder's (source, source_id)
+      // rung matches on, so it is built from who asked and what the food is
+      // called: tapping "Ha" twice reuses the row the first tap made instead
+      // of minting another (C5). The owner is in it so one person's estimate
+      // is never resolved as somebody else's.
+      var owner = userId ? String(userId) : 'global';
       return result.food_items.map(function(item) {
         var nutrition = item.nutrition || {};
+        var key = normalizeQuery(item.name).replace(/\s+/g, '-');
         return {
-          id: 'ai_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9),
+          id: 'ai_' + key,
           name: item.name,
           brand: '',
           barcode: '',
@@ -556,6 +695,7 @@ class UnifiedFoodService {
             unit: item.estimated_serving_size || 'serving'
           },
           source: 'ai',
+          source_id: 'ai:' + owner + ':' + key,
           confidence: result.confidence || 'medium',
           meal_type: result.meal_type
         };
@@ -601,10 +741,12 @@ class UnifiedFoodService {
       if (foods.length < Math.min(5, limit)) {
         const escaped = String(query).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
         const prefix = new RegExp(`^${escaped}`, 'i');
+        // `$and`, not a second top-level `$or`: spreading `visibility` and
+        // then writing `$or` replaced the ownership clause with the name
+        // clause, so every prefix hit ignored who owned the row.
         const prefixHits = await FoodItem.find({
           is_deleted: false,
-          ...visibility,
-          $or: [{ name: prefix }, { brand: prefix }]
+          $and: [visibility, { $or: [{ name: prefix }, { brand: prefix }] }]
         })
           .limit(limit)
           .lean();
@@ -767,6 +909,12 @@ class UnifiedFoodService {
   // ============================================
   // INTERNAL: UTILITIES
   // ============================================
+
+  /** Too few letters to be worth anything beyond her own catalog. */
+  isTooShortForDeepSearch(normalized) {
+    const letters = String(normalized || '').match(/\p{L}/gu) || [];
+    return letters.length < MIN_DEEP_QUERY_LETTERS;
+  }
 
   /**
    * Detect if query looks like natural language

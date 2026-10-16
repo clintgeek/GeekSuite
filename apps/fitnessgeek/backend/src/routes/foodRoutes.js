@@ -23,7 +23,7 @@ router.get('/', async (req, res) => {
 
     if (barcode) {
       // Barcode lookup
-      const food = await unifiedFoodService.getByBarcode(barcode);
+      const food = await unifiedFoodService.getByBarcode(barcode, userId);
       foods = food ? [food] : [];
 
       logger.info({ userId, barcode, found: !!food }, 'Barcode lookup');
@@ -53,8 +53,10 @@ router.get('/', async (req, res) => {
       }, 'Food search');
 
     } else {
-      // Get all foods from local DB
-      const filter = { is_deleted: false };
+      // Get all foods from local DB — the ones this person may see: global
+      // rows and their own. Without the visibility filter this listed every
+      // user's private custom foods.
+      const filter = { is_deleted: false, ...foodCatalogVisibilityFilter(userId) };
       if (source) filter.source = source;
 
       const localFoods = await FoodItem.find(filter)
@@ -180,18 +182,23 @@ router.delete('/favorites/:foodId', async (req, res) => {
 // Declared before `/:id` so "suggest" is never read as an id.
 router.get('/suggest', async (req, res) => {
   try {
-    const { q = '', limit = 15 } = req.query;
+    const { q = '', limit = 15, meals } = req.query;
     const started = Date.now();
 
+    // `meals=1` opts in to saved meals at the top (contract C6). Opt-in so a
+    // tab still running the previous bundle — which would treat a meal row as
+    // a food and fail to log it — never receives one.
     const foods = await unifiedFoodService.suggest(q, {
       userId: req.user.id,
-      limit: Math.min(Number.parseInt(limit, 10) || 15, 50)
+      limit: Math.min(Number.parseInt(limit, 10) || 15, 50),
+      includeMeals: meals === '1' || meals === 'true'
     });
 
     logger.info({
       userId: req.user.id,
       query: q,
       count: foods.length,
+      meals: foods.filter((f) => f.kind === 'meal').length || undefined,
       ms: Date.now() - started,
       path: 'local'
     }, 'Food suggest');
