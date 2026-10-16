@@ -5,7 +5,8 @@ import { Add as AddIcon } from '@mui/icons-material';
 import { useGeekShell, useFocusMode } from '@geeksuite/ui';
 
 /**
- * The Weight page's "Log weight" button, in the thumb zone, with its words.
+ * A page's main action in the thumb zone, with its words ("Log weight",
+ * "Add BP").
  *
  * The shell's own FAB (`useGeekPrimaryAction`) collapses to an icon-only "+"
  * below `sm` — on a phone, exactly where this page is used, it was an
@@ -18,7 +19,7 @@ import { useGeekShell, useFocusMode } from '@geeksuite/ui';
  * frame: the route transition is a transformed element, and a transformed
  * ancestor becomes the containing block for `position: fixed`.
  */
-const LogWeightFab = ({ onClick, label = 'Log weight' }) => {
+const ThumbFab = ({ onClick, label, testId }) => {
   const { bottomInset = 0 } = useGeekShell() || {};
   const { focusMode } = useFocusMode() || {};
   if (focusMode || typeof document === 'undefined') return null;
@@ -28,7 +29,7 @@ const LogWeightFab = ({ onClick, label = 'Log weight' }) => {
       variant="extended"
       color="primary"
       onClick={onClick}
-      data-testid="log-weight-fab"
+      data-testid={testId}
       sx={(theme) => ({
         position: 'fixed',
         right: '16px',
@@ -54,4 +55,4 @@ const LogWeightFab = ({ onClick, label = 'Log weight' }) => {
   );
 };
 
-export default LogWeightFab;
+export default ThumbFab;

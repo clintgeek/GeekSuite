@@ -14,7 +14,7 @@ import PremiumDialog from '../primitives/PremiumDialog.jsx';
 import DateField from '../primitives/DateField.jsx';
 import { errorMessage } from '../../utils/errorMessage.js';
 import { thumbSaveProps } from '../BloodPressure/thumbSave.jsx';
-import LogWeightFab from './LogWeightFab.jsx';
+import ThumbFab from '../primitives/ThumbFab.jsx';
 
 const SAVE_FAILED = "That weight didn't save. Check your connection and try again.";
 
@@ -149,7 +149,7 @@ const QuickAddWeight = ({ onAdd, unit = 'lbs', autoOpen = false, onAutoOpened })
       </Card>
 
       {/* Phones: the thumb-zone "Log weight" button opens the dialog. */}
-      <LogWeightFab onClick={openDialog} />
+      <ThumbFab label="Log weight" testId="log-weight-fab" onClick={openDialog} />
 
       {/* Add Dialog */}
       <PremiumDialog

@@ -13,7 +13,7 @@ import {
   Add as AddIcon,
   MonitorHeart as BPIcon
 } from '@mui/icons-material';
-import { useGeekPrimaryAction } from '@geeksuite/ui';
+import ThumbFab from '../primitives/ThumbFab.jsx';
 import AddBPDialog from './AddBPDialog.jsx';
 import DateField from '../primitives/DateField.jsx';
 import { categorizeBP } from '../../utils/bpUtils.js';
@@ -74,13 +74,6 @@ const QuickAddBP = ({ onAdd, unit = "mmHg", autoOpen = false, onAutoOpened }) =>
     // eslint-disable-next-line react-hooks/exhaustive-deps -- open once per request; the callback identity is the caller's.
   }, [autoOpen]);
 
-  // The page's thumb-zone action. `GeekFab` (mounted by the shell) reads the
-  // bottom-nav inset and the safe area; the old `bottom: 80` guessed at both.
-  useGeekPrimaryAction({
-    label: 'Log blood pressure',
-    icon: <AddIcon />,
-    onClick: () => setShowDialog(true)
-  });
 
   const save = async (payload) => {
     setLoading(true);
@@ -159,6 +152,9 @@ const QuickAddBP = ({ onAdd, unit = "mmHg", autoOpen = false, onAutoOpened }) =>
 
   return (
     <>
+      {/* Phones: the thumb-zone "Add BP" button, with its words. */}
+      <ThumbFab label="Add BP" testId="add-bp-fab" onClick={() => setShowDialog(true)} />
+
       {/* Desktop version */}
       <Card sx={{
         width: '100%',
