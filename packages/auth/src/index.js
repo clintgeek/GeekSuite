@@ -1,5 +1,6 @@
 export { AuthProvider, useAuth } from './AuthProvider.jsx';
 export { default as GeekLogin } from './GeekLogin.jsx';
+export { createSessionKeeper, RETRY_DELAYS_MS } from './sessionKeeper.js';
 export {
   AUTH_CHANNEL,
   AUTH_LOGOUT,
@@ -10,6 +11,17 @@ export {
   broadcastLogout,
   startRefreshTimer,
   stopRefreshTimer,
+  refreshSession,
+  waitForRefresh,
+  sessionNeedsRefresh,
+  isSessionExpiredError,
+  readCachedUser,
+  writeCachedUser,
+  clearCachedUser,
+  USER_CACHE_KEY,
+  STALE_MARGIN_MS,
+  UNKNOWN_EXPIRY_MAX_AGE_MS,
+  resetRefreshStateForTests,
   setupAxiosInterceptors,
   csrfHeaders,
   readCsrfToken,

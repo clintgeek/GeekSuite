@@ -18,6 +18,19 @@ const TAB_ID = (() => {
 
 const REFRESH_INTERVAL_MS = 50 * 60 * 1000; // 50 minutes
 
+// Foreground refresh (2026-10-16, REVIEW_2026-10 B1). The access token lives
+// an hour. Android freezes a backgrounded PWA's timers, so the 50-minute
+// interval above can sleep straight through the expiry; when the app comes
+// back to the front, refresh first if the token has under STALE_MARGIN_MS
+// left. When the token's expiry can't be read (no stored copy, cookie-only
+// session), fall back to "the last refresh is older than
+// UNKNOWN_EXPIRY_MAX_AGE_MS".
+export const STALE_MARGIN_MS = 5 * 60 * 1000;
+export const UNKNOWN_EXPIRY_MAX_AGE_MS = 45 * 60 * 1000;
+
+/** localStorage key for the last user /api/me returned (see B2 below). */
+export const USER_CACHE_KEY = 'geeksuite:last-user';
+
 const GEEK_TOKEN_KEY = 'geek_token';
 const GEEK_REFRESH_TOKEN_KEY = 'geek_refresh_token';
 
@@ -205,8 +218,15 @@ function applyCsrfHeader(config) {
 }
 
 let refreshTimerId = null;
-let isRefreshing = false;
-let refreshQueue = [];
+let removeForegroundListeners = null;
+
+// Single-flight refresh. basegeek rotates the refresh token on every
+// /auth/refresh, so two concurrent refreshes from one tab race each other and
+// the loser replays a token that was just rotated — which basegeek reads as
+// reuse and answers 401. Every caller (axios, Apollo, getMe, the timer, the
+// foreground check) shares the one promise in flight.
+let refreshPromise = null;
+let lastRefreshAt = 0;
 
 // ---------------------------------------------------------------------------
 // Internal helpers
@@ -234,6 +254,53 @@ export function clearTokens() {
   if (typeof window === 'undefined') return;
   localStorage.removeItem(GEEK_TOKEN_KEY);
   localStorage.removeItem(GEEK_REFRESH_TOKEN_KEY);
+  // The session is over, so the remembered user goes with it.
+  clearCachedUser();
+}
+
+// ---------------------------------------------------------------------------
+// Last known user (2026-10-16, REVIEW_2026-10 B2)
+//
+// AuthProvider keeps the user it last saw so a failed /api/me that is NOT a
+// 401 — offline, a 502 while the fleet restarts, a timeout — doesn't read as
+// "signed out". localStorage rather than sessionStorage: an installed PWA that
+// Android killed in the background starts a fresh session, and that cold start
+// is exactly when the cache is needed. It holds what /api/me already returns
+// to the page; the token sitting next to it in the same storage is the more
+// sensitive thing. Every access is wrapped: blocked storage just means no
+// cache, never a crash.
+// ---------------------------------------------------------------------------
+
+export function readCachedUser() {
+  try {
+    if (typeof localStorage === 'undefined' || !localStorage) return null;
+    const raw = localStorage.getItem(USER_CACHE_KEY);
+    if (!raw) return null;
+    const user = JSON.parse(raw);
+    return user && typeof user === 'object' ? user : null;
+  } catch {
+    return null;
+  }
+}
+
+export function writeCachedUser(user) {
+  try {
+    if (typeof localStorage === 'undefined' || !localStorage) return;
+    if (user && typeof user === 'object') {
+      localStorage.setItem(USER_CACHE_KEY, JSON.stringify(user));
+    }
+  } catch {
+    // ignore: no cache is the safe answer
+  }
+}
+
+export function clearCachedUser() {
+  try {
+    if (typeof localStorage === 'undefined' || !localStorage) return;
+    localStorage.removeItem(USER_CACHE_KEY);
+  } catch {
+    // ignore
+  }
 }
 
 function getTokensFromUrl() {
@@ -293,17 +360,6 @@ export function broadcastLogout() {
   }
 }
 
-function processRefreshQueue(error, token = null) {
-  refreshQueue.forEach((promise) => {
-    if (error) {
-      promise.reject(error);
-    } else {
-      promise.resolve(token);
-    }
-  });
-  refreshQueue = [];
-}
-
 async function doTokenRefresh() {
   const apiBase = getApiBase();
 
@@ -317,15 +373,30 @@ async function doTokenRefresh() {
     body: JSON.stringify({}),
   });
 
-  if (res.status === 401 || res.status === 403) {
+  // 400 is basegeek's "Refresh token is required": there is no refresh
+  // cookie at all, so there is no session to keep.
+  if (res.status === 401 || res.status === 403 || res.status === 400) {
     clearTokens();
     const error = new Error('Session expired');
     error.status = res.status;
     throw error;
   }
 
+  if (!res.ok) {
+    // A 5xx (nginx while a container restarts, the app backend unable to
+    // reach basegeek) says nothing about the session. Stamp the status so
+    // callers can tell, and don't trust the body: it is often an HTML page.
+    const data = await res.json().catch(() => null);
+    const error = new Error(data?.message || 'Token refresh failed');
+    error.status = res.status;
+    // Apollo-shaped too: the shared error link surfaces this error as the
+    // operation's networkError, and readers look for `statusCode` there.
+    error.statusCode = res.status;
+    throw error;
+  }
+
   const data = await res.json();
-  if (!res.ok || data?.success === false) {
+  if (data?.success === false) {
     throw new Error(data?.message || 'Token refresh failed');
   }
 
@@ -339,6 +410,76 @@ async function doTokenRefresh() {
 // ---------------------------------------------------------------------------
 // Public API
 // ---------------------------------------------------------------------------
+
+/**
+ * Refresh the session once, shared by everyone who asks while it is in
+ * flight. Resolves with basegeek's refresh response. Rejects with an error
+ * whose `status` is 400/401/403 when the session is over (see
+ * isSessionExpiredError) and anything else when the refresh merely couldn't
+ * happen right now.
+ */
+export function refreshSession() {
+  if (!refreshPromise) {
+    refreshPromise = doTokenRefresh()
+      .then((data) => {
+        lastRefreshAt = Date.now();
+        return data;
+      })
+      .finally(() => {
+        refreshPromise = null;
+      });
+  }
+  return refreshPromise;
+}
+
+/**
+ * Resolves once any refresh in flight has settled (either way); resolves at
+ * once when there is none. Request paths await this so a request sent while
+ * the foreground refresh runs carries the new token rather than the old one.
+ */
+export function waitForRefresh() {
+  if (!refreshPromise) return Promise.resolve();
+  return refreshPromise.then(() => undefined, () => undefined);
+}
+
+/** Expiry of a JWT in ms since epoch, or null when it can't be read. */
+function tokenExpiryMs(token) {
+  if (!token || typeof token !== 'string') return null;
+  try {
+    const part = token.split('.')[1];
+    if (!part) return null;
+    const b64 = part.replace(/-/g, '+').replace(/_/g, '/');
+    const padded = b64 + '='.repeat((4 - (b64.length % 4)) % 4);
+    const exp = JSON.parse(atob(padded))?.exp;
+    return Number.isFinite(exp) ? exp * 1000 : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * True when the session should be refreshed before the next request: the
+ * stored token expires within STALE_MARGIN_MS (or already has), or — when its
+ * expiry can't be read — the last refresh is older than
+ * UNKNOWN_EXPIRY_MAX_AGE_MS.
+ */
+export function sessionNeedsRefresh(now = Date.now()) {
+  let token = null;
+  try {
+    token = getStoredToken();
+  } catch {
+    token = null;
+  }
+  const exp = tokenExpiryMs(token);
+  if (exp !== null) return exp - now < STALE_MARGIN_MS;
+  return !lastRefreshAt || now - lastRefreshAt > UNKNOWN_EXPIRY_MAX_AGE_MS;
+}
+
+/** Test hook: forget the last refresh time and any refresh in flight. */
+export function resetRefreshStateForTests() {
+  refreshPromise = null;
+  lastRefreshAt = 0;
+}
 
 /**
  * Fetch the current user from the app's own backend session cookie.
@@ -381,30 +522,18 @@ export async function getMe() {
   let res = await fetchMe();
 
   if (res.status === 401) {
-    // Attempt hydration refresh
-    if (!isRefreshing) {
-      isRefreshing = true;
-      try {
-        await doTokenRefresh();
-        processRefreshQueue(null);
-        // Retry fetchMe
-        res = await fetchMe();
-      } catch (error) {
-        processRefreshQueue(error);
-        return null;
-      } finally {
-        isRefreshing = false;
-      }
-    } else {
-      try {
-        await new Promise((resolve, reject) => {
-          refreshQueue.push({ resolve, reject });
-        });
-        res = await fetchMe();
-      } catch {
-        return null;
-      }
+    // Attempt hydration refresh. Only a refresh that says the session is over
+    // means "signed out" (null). One that couldn't happen — offline, a 502
+    // mid-restart — throws, so the caller can keep the user it knew and try
+    // again (REVIEW_2026-10 B2). Returning null here logged Heather out every
+    // time the fleet restarted while her token was due.
+    try {
+      await refreshSession();
+    } catch (error) {
+      if (isSessionExpiredError(error)) return null;
+      throw error;
     }
+    res = await fetchMe();
   }
 
   if (res.status === 401) {
@@ -500,14 +629,15 @@ export function onLogout(callback) {
 /**
  * True only for the failures that mean "this session is over".
  *
- * `doTokenRefresh()` stamps `error.status` with 401 or 403 on exactly those
- * two responses and throws a plain `Error` for everything else — a rejected
- * `fetch` (the wifi blinked, the laptop just woke), a 502 from nginx while the
- * container restarts, a 200 whose body is an HTML error page and blows up
+ * `doTokenRefresh()` throws with `error.status` 401 or 403 (and 400, "no
+ * refresh token at all") for those responses. Everything else is transient —
+ * a rejected `fetch` (the wifi blinked, the laptop just woke), a 502 from nginx
+ * while the container restarts (its error carries `status` 502, which is not
+ * in this list), a 200 whose body is an HTML error page and blows up
  * `res.json()`.
  */
-function isSessionExpiredError(error) {
-  return error?.status === 401 || error?.status === 403;
+export function isSessionExpiredError(error) {
+  return error?.status === 401 || error?.status === 403 || error?.status === 400;
 }
 
 /**
@@ -526,7 +656,7 @@ export function startRefreshTimer(onFailure) {
   stopRefreshTimer();
   async function autoRefresh() {
     try {
-      await doTokenRefresh();
+      await refreshSession();
     } catch (error) {
       if (!isSessionExpiredError(error)) {
         // Transient — leave the interval running and try again next tick.
@@ -546,6 +676,51 @@ export function startRefreshTimer(onFailure) {
     autoRefresh();
     refreshTimerId = setInterval(autoRefresh, REFRESH_INTERVAL_MS);
   }, initialDelay);
+
+  // The interval doesn't run while Android has the app frozen in the
+  // background, so also check on the way back to the front. Registered here,
+  // at sign-in, which is before the app's own screens mount and add theirs:
+  // listeners fire in order, so the refresh starts before a screen's
+  // foreground refetch, and waitForRefresh() holds that refetch until it lands.
+  removeForegroundListeners = addForegroundListener(() => {
+    if (sessionNeedsRefresh()) autoRefresh();
+  });
+}
+
+/**
+ * Call `fn` when the page comes back to the front (visibilitychange to
+ * visible, or window focus). Returns a remover. A no-op outside a browser.
+ */
+function addForegroundListener(fn) {
+  const win = typeof window !== 'undefined' ? window : null;
+  const doc = typeof document !== 'undefined' ? document : null;
+  const onVisibility = () => {
+    if (doc && doc.visibilityState && doc.visibilityState !== 'visible') return;
+    fn();
+  };
+  const onFocus = () => fn();
+  try {
+    if (doc && typeof doc.addEventListener === 'function') {
+      doc.addEventListener('visibilitychange', onVisibility);
+    }
+    if (win && typeof win.addEventListener === 'function') {
+      win.addEventListener('focus', onFocus);
+    }
+  } catch {
+    // ignore
+  }
+  return () => {
+    try {
+      if (doc && typeof doc.removeEventListener === 'function') {
+        doc.removeEventListener('visibilitychange', onVisibility);
+      }
+      if (win && typeof win.removeEventListener === 'function') {
+        win.removeEventListener('focus', onFocus);
+      }
+    } catch {
+      // ignore
+    }
+  };
 }
 
 /**
@@ -555,6 +730,10 @@ export function stopRefreshTimer() {
   if (refreshTimerId !== null) {
     clearInterval(refreshTimerId);
     refreshTimerId = null;
+  }
+  if (removeForegroundListeners) {
+    removeForegroundListeners();
+    removeForegroundListeners = null;
   }
 }
 
@@ -570,22 +749,30 @@ export function setupAxiosInterceptors(axiosInstance, onSessionExpired) {
   // Add a request interceptor to include the token in the Authorization header
   axiosInstance.interceptors.request.use(
     (config) => {
-      const token = getStoredToken();
-      if (token && !config.headers['Authorization']) {
-        config.headers['Authorization'] = `Bearer ${ token }`;
-      }
-      // Double-submit CSRF token on anything that can change state. Set here
-      // rather than at each call site so an app cannot forget it, read per
-      // request because basegeek rotates the cookie on every refresh, and
-      // *overwritten* rather than merged so a post-refresh replay cannot carry
-      // the pre-rotation value. See applyCsrfHeader().
-      applyCsrfHeader(config);
-      return config;
+      // A refresh in flight (the app just came back to the front) is about
+      // to replace the token; wait for it rather than send the old one.
+      // Synchronous when there is none, which is nearly always.
+      if (refreshPromise) return waitForRefresh().then(() => stampRequest(config));
+      return stampRequest(config);
     },
     (error) => {
       return Promise.reject(error);
     }
   );
+
+  function stampRequest(config) {
+    const token = getStoredToken();
+    if (token && !config.headers['Authorization']) {
+      config.headers['Authorization'] = `Bearer ${ token }`;
+    }
+    // Double-submit CSRF token on anything that can change state. Set here
+    // rather than at each call site so an app cannot forget it, read per
+    // request because basegeek rotates the cookie on every refresh, and
+    // *overwritten* rather than merged so a post-refresh replay cannot carry
+    // the pre-rotation value. See applyCsrfHeader().
+    applyCsrfHeader(config);
+    return config;
+  }
 
   // Add a response interceptor
   axiosInstance.interceptors.response.use(
@@ -634,51 +821,31 @@ export function setupAxiosInterceptors(axiosInstance, onSessionExpired) {
 
         originalRequest._retry = true;
 
-        if (!isRefreshing) {
-          isRefreshing = true;
-
-          try {
-            await doTokenRefresh();
-            // Process the queue queue
-            processRefreshQueue(null);
-
-            // Re-run the original request with the new token
-            const token = getStoredToken();
-            if (token) {
-              originalRequest.headers['Authorization'] = `Bearer ${ token }`;
-            }
-            return axiosInstance(originalRequest);
-          } catch (refreshError) {
-            // Refresh failed, queue needs to be rejected
-            processRefreshQueue(refreshError);
-
-            // Trigger logout procedure
+        try {
+          // Shared with every other caller: concurrent 401s wait on one
+          // refresh instead of each rotating the token in turn.
+          await refreshSession();
+        } catch (refreshError) {
+          // Only a refresh that says the session is over ends it. One that
+          // couldn't happen (offline, a 502 mid-restart) is surfaced as its
+          // own error and the session is left alone: logging out here, on
+          // every tab via the broadcast, is what a fleet restart used to do
+          // to anyone whose token was due (REVIEW_2026-10 B1).
+          if (isSessionExpiredError(refreshError)) {
             clearTokens();
             broadcastLogout();
             stopRefreshTimer();
             if (onSessionExpired) onSessionExpired();
-
-            return Promise.reject(refreshError);
-          } finally {
-            isRefreshing = false;
           }
-        } else {
-          // If a refresh is already in progress, wait for it to finish
-          return new Promise((resolve, reject) => {
-            refreshQueue.push({ resolve, reject });
-          })
-            .then(() => {
-              // Once refresh completes, replay original request with the new token
-              const token = getStoredToken();
-              if (token) {
-                originalRequest.headers['Authorization'] = `Bearer ${ token }`;
-              }
-              return axiosInstance(originalRequest);
-            })
-            .catch((err) => {
-              return Promise.reject(err);
-            });
+          return Promise.reject(refreshError);
         }
+
+        // Re-run the original request with the new token
+        const token = getStoredToken();
+        if (token) {
+          originalRequest.headers['Authorization'] = `Bearer ${ token }`;
+        }
+        return axiosInstance(originalRequest);
       }
 
       // If not 401 or retry already failed, reject everything else normally

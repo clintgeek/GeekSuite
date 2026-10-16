@@ -13,7 +13,11 @@ const httpLink = createHttpLink({
 
 // Exported (not just used below) so it can be unit-tested directly without
 // standing up a whole ApolloClient/link chain.
-export const authLink = setContext((_, { headers }) => {
+export const authLink = setContext(async (_, { headers }) => {
+    // A refresh in flight (the app just came back to the front, or another
+    // operation hit a 401) is about to replace the token: wait for it rather
+    // than send the old one. Resolves at once when there is none.
+    await waitForRefresh();
     // Extract token. In GeekSuite, it might be stored in localStorage by auth pkg
     const token = localStorage.getItem('geek_token');
     // Double-submit CSRF token for basegeek (see DOCS/CONTEXT.md "CSRF: the
@@ -30,7 +34,16 @@ export const authLink = setContext((_, { headers }) => {
 
 import { onError } from '@apollo/client/link/error';
 import { Observable } from '@apollo/client/utilities';
-import { logout, loginRedirect, csrfHeaders, isCsrfFailure, triggerCsrfReloadOnce } from '@geeksuite/auth';
+import {
+    logout,
+    loginRedirect,
+    csrfHeaders,
+    isCsrfFailure,
+    triggerCsrfReloadOnce,
+    refreshSession,
+    waitForRefresh,
+    isSessionExpiredError,
+} from '@geeksuite/auth';
 
 /**
  * errorLink, exported for testing: the shared Apollo error link every
@@ -96,7 +109,7 @@ export function reloadForStaleBundleOnce(now = Date.now()) {
     return true;
 }
 
-export const errorLink = (appName) => onError(({ graphQLErrors, networkError, operation, forward }) => {
+export const errorLink = (appName) => onError(({ graphQLErrors, networkError, response, operation, forward }) => {
     if (isSchemaMismatch(graphQLErrors, networkError)) {
         reloadForStaleBundleOnce();
         return;
@@ -156,12 +169,56 @@ export const errorLink = (appName) => onError(({ graphQLErrors, networkError, op
     }
 
     if (unauthenticated) {
-        // Asynchronously log out to clear tokens and broadcast to other tabs.
-        logout().then(() => {
-            if (appName) {
-                loginRedirect(appName, window.location.href);
-            }
-        }).catch((e) => console.error('GeekSuite Apollo 401 logout failed:', e));
+        // An expired access token is not an expired session (REVIEW_2026-10
+        // B1). The token lives an hour and the 50-minute refresh timer sleeps
+        // while Android has the app in the background, so "open the app after
+        // a while, tap something" used to land here and log out. Refresh once
+        // — shared with every other operation failing at the same moment and
+        // with the REST client, see refreshSession() — then send the
+        // operation again; authLink re-reads the new token on the way out.
+        //
+        // Only a refresh that says the session is over (401/403/400) logs out.
+        // A refresh that couldn't happen (offline, a 502 mid-restart) is
+        // surfaced as this operation's error and the session is left alone.
+        //
+        // As with the CSRF heal above, onError won't be called again for the
+        // retry's own failure, so a second 401 just reaches the caller.
+        return new Observable((observer) => {
+            let sub = null;
+            let closed = false;
+            refreshSession().then(
+                () => {
+                    if (closed) return;
+                    sub = forward(operation).subscribe({
+                        next: (result) => observer.next(result),
+                        error: (retryError) => observer.error(retryError),
+                        complete: () => observer.complete(),
+                    });
+                },
+                (refreshError) => {
+                    if (closed) return;
+                    if (isSessionExpiredError(refreshError)) {
+                        // Log out to clear tokens and broadcast to other tabs.
+                        logout().then(() => {
+                            if (appName) {
+                                loginRedirect(appName, window.location.href);
+                            }
+                        }).catch((e) => console.error('GeekSuite Apollo 401 logout failed:', e));
+                        if (networkError) observer.error(networkError);
+                        else {
+                            observer.next(response);
+                            observer.complete();
+                        }
+                        return;
+                    }
+                    observer.error(refreshError);
+                },
+            );
+            return () => {
+                closed = true;
+                if (sub) sub.unsubscribe();
+            };
+        });
     }
 });
 
