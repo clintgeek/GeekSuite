@@ -45,6 +45,7 @@ const NutritionInputs = ({
             value={values?.[f.key] ?? ''}
             onChange={handleChange(f.key)}
             fullWidth
+            inputProps={{ inputMode: 'decimal' }}
             InputProps={{ endAdornment: <InputAdornment position="end">{f.adorn}</InputAdornment> }}
           />
         </Grid>

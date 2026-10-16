@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { fitnessGeekService } from '../services/fitnessGeekService.js';
+import { errorMessage } from '../utils/errorMessage.js';
 
 export const useFoodManagement = () => {
   const [foods, setFoods] = useState([]);
@@ -14,7 +15,7 @@ export const useFoodManagement = () => {
       setFoods(response || []);
     } catch (error) {
       console.error('Error loading foods:', error);
-      setError('Failed to load foods');
+      setError(errorMessage(error, 'Failed to load foods'));
     } finally {
       setLoading(false);
     }
@@ -29,7 +30,7 @@ export const useFoodManagement = () => {
       return true;
     } catch (error) {
       console.error('Error updating food:', error);
-      setError('Failed to update food');
+      setError(errorMessage(error, 'Failed to update food'));
       return false;
     }
   };
@@ -43,7 +44,7 @@ export const useFoodManagement = () => {
       return true;
     } catch (error) {
       console.error('Error deleting food:', error);
-      setError('Failed to delete food');
+      setError(errorMessage(error, 'Failed to delete food'));
       return false;
     }
   };

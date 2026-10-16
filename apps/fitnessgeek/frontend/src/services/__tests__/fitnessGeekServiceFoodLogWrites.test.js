@@ -270,6 +270,16 @@ describe('updateFoodLog', () => {
     });
   });
 
+  // CONTRACTS C3: EditLogDialog's calorie and macro edits are per-serving
+  // overrides on the log's own snapshot.
+  it('passes the C3 calorie and macro overrides through', async () => {
+    mutate.mockResolvedValue({ data: { updateFoodLog: { id: 'log1' } } });
+
+    await fitnessGeekService.updateFoodLog('log1', { calories: 300, protein_grams: 12.5, carbs_grams: 0, log_date: '2026-10-14' });
+
+    expect(lastCall().variables.input).toEqual({ calories: 300, protein_grams: 12.5, carbs_grams: 0, log_date: '2026-10-14' });
+  });
+
   it('returns the REST-shaped envelope and never touches restClient', async () => {
     mutate.mockResolvedValue({ data: { updateFoodLog: { id: 'log1', servings: 2 } } });
 

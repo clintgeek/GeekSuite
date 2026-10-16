@@ -68,7 +68,7 @@ const GET_FOOD_ITEMS = gql`
 `;
 
 const GET_FOOD_LOGS = gql`
-  query GetFoodLogs($date: Date, $startDate: Date, $endDate: Date, $mealType: String) { foodLogs(date: $date, startDate: $startDate, endDate: $endDate, mealType: $mealType) { id log_date meal_type servings notes nutrition { calories_per_serving protein_grams carbs_grams fat_grams fiber_grams sugar_grams sodium_mg } calculatedNutrition { calories_per_serving protein_grams carbs_grams fat_grams fiber_grams sugar_grams sodium_mg } food_item_id { id name brand serving_size serving_unit barcode } } }
+  query GetFoodLogs($date: Date, $startDate: Date, $endDate: Date, $mealType: String) { foodLogs(date: $date, startDate: $startDate, endDate: $endDate, mealType: $mealType) { id log_date meal_type servings notes nutrition { calories_per_serving protein_grams carbs_grams fat_grams fiber_grams sugar_grams sodium_mg } calculatedNutrition { calories_per_serving protein_grams carbs_grams fat_grams fiber_grams sugar_grams sodium_mg } food_item_id { id name brand serving_size serving_unit barcode is_deleted } } }
 `;
 
 // The write half of the food log. Both return the populated log, matching what
@@ -533,6 +533,12 @@ function routeRequest(method, url, data) {
     if (isObjectId(foodId)) patch.food_item_id = String(foodId);
     const nutrition = normalizeLogNutrition(raw.nutrition);
     if (nutrition) patch.nutrition = nutrition;
+    // Per-serving overrides on this log's snapshot (CONTRACTS C3). The
+    // gateway validates the range and answers in plain words.
+    for (const key of ['calories', 'protein_grams', 'carbs_grams', 'fat_grams']) {
+      const value = Number(raw[key]);
+      if (raw[key] != null && raw[key] !== '' && Number.isFinite(value)) patch[key] = value;
+    }
     return patch;
   };
 

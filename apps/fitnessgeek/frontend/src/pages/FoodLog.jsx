@@ -38,9 +38,10 @@ import { useGeekPrimaryAction, useToast } from '@geeksuite/ui';
 import { Surface, SectionLabel, StatNumber } from '../components/primitives';
 import { useExperience } from '../contexts/ExperienceContext.jsx';
 import { friendlyDay } from '../utils/plainWords.js';
-import { localDateString } from '@geeksuite/utils';
+import { errorMessage as plainError } from '../utils/errorMessage.js';
 import { netCarbs as calcNetCarbs, ketoStatus } from '../utils/ketoMath.js';
 import { useFoodLogging } from '../hooks/useFoodLogging.js';
+import { useToday } from '../hooks/useToday.js';
 
 /**
  * The meal a log at this hour most likely belongs to. The FAB opens the food
@@ -75,7 +76,19 @@ const FoodLog = () => {
   const [searchParams] = useSearchParams();
   const linkedDate = /^\d{4}-\d{2}-\d{2}$/.test(searchParams.get('date') || '') ? searchParams.get('date') : null;
   const linkedMeal = ['breakfast', 'lunch', 'dinner', 'snack'].includes(searchParams.get('meal')) ? searchParams.get('meal') : null;
-  const [selectedDate, setSelectedDate] = useState(() => linkedDate || fitnessGeekService.formatDate(new Date()));
+  // B3: "today" is re-read when the app comes back to the foreground and at
+  // midnight. If the page was showing today, it moves to the new today — an
+  // installed PWA left open overnight used to log breakfast to yesterday. A
+  // day she navigated to on purpose (backfilling last night's dinner) stays.
+  const today = useToday();
+  const [selectedDate, setSelectedDate] = useState(() => linkedDate || today);
+  const lastToday = useRef(today);
+  useEffect(() => {
+    const was = lastToday.current;
+    if (was === today) return;
+    lastToday.current = today;
+    setSelectedDate((shown) => (shown === was ? today : shown));
+  }, [today]);
   const [showAddDialog, setShowAddDialog] = useState(false);
   // Bug: this used to hardcode 'snack' regardless of the clock, so tapping a
   // search result — the advertised "one tap to log it" path — logged
@@ -108,6 +121,8 @@ const FoodLog = () => {
   const {
     logs,
     loading,
+    loadProblem,
+    describeLastError,
     successMessage,
     errorMessage,
     nutritionSummary,
@@ -167,7 +182,7 @@ const FoodLog = () => {
       setCreateForm(null);
       if (created) await logItems([{ ...created, servings: 1 }], selectedMealType);
     } catch (error) {
-      showError(error?.message || 'Could not create that food.');
+      showError(plainError(error, 'Could not create that food.'));
     } finally {
       setCreatingFood(false);
     }
@@ -301,10 +316,13 @@ const FoodLog = () => {
   };
 
   // The page's one primary action, rendered by the shell in the thumb zone.
+  // Not in Simple (REVIEW_2026-10 Phase 1.6): the add box is already on the
+  // page, and the button sat over the Again chips.
   useGeekPrimaryAction({
     label: 'Log food',
     icon: <AddIcon />,
-    onClick: () => handleAddFood(mealTypeForNow())
+    onClick: () => handleAddFood(mealTypeForNow()),
+    hidden: isSimple
   });
 
   const handleEditLog = (log) => {
@@ -320,9 +338,15 @@ const FoodLog = () => {
       setEditingLog(null);
       // Floating toast near the thumb — same surface adding a food uses,
       // instead of the Alert that used to render below the whole page.
-      notify('Food log updated.', { tone: 'success' });
+      // A moved entry leaves this day's list, so say where it went.
+      if (updateData?.log_date && updateData.log_date !== selectedDate) {
+        const where = friendlyDay(updateData.log_date, today);
+        notify(`Moved to ${where === 'Today' || where === 'Yesterday' ? where.toLowerCase() : where}.`, { tone: 'success' });
+      } else {
+        notify('Food log updated.', { tone: 'success' });
+      }
     } else {
-      notify('Could not update that log. Try again.', { tone: 'error' });
+      notify(describeLastError?.('Could not update that log. Try again.') || 'Could not update that log. Try again.', { tone: 'error' });
     }
     setUpdatingLog(false);
   };
@@ -345,7 +369,7 @@ const FoodLog = () => {
 
     const success = await deleteFoodLog(logId);
     if (!success) {
-      notify('Could not delete that item. Try again.', { tone: 'error' });
+      notify(describeLastError?.('Could not delete that item. Try again.') || 'Could not delete that item. Try again.', { tone: 'error' });
       return;
     }
 
@@ -403,7 +427,7 @@ const FoodLog = () => {
   // "Today", "Yesterday", "Saturday, September 26" — in words and never
   // truncated (SIMPLE_AND_FULL_PLAN.md item 8). It used to drop to
   // "Sat, Sep 26" under 400px and still ran out of room beside the arrows.
-  const formatDate = (dateString) => friendlyDay(dateString, localDateString());
+  const formatDate = (dateString) => friendlyDay(dateString, today);
 
   return (
     // Bottom padding clears the thumb-zone "Log food" button, which used to
@@ -421,8 +445,10 @@ const FoodLog = () => {
             calories={nutritionSummary?.calories || 0}
             goal={nutritionSummary?.calorieGoal || 0}
             base={baseAdd.base}
-            add={baseAdd.add}
-            onSettings={() => {
+            // Simple: no "Includes N extra for today's activity", and no gear
+            // that opens "Adjust today" — it could change her goal (Phase 1.6).
+            add={isSimple ? 0 : baseAdd.add}
+            onSettings={isSimple ? undefined : () => {
               setShowCaloriePanel(prev => {
                 const next = !prev;
                 if (!prev && typeof window !== 'undefined') {
@@ -442,8 +468,16 @@ const FoodLog = () => {
         }
       />
 
+      {/* B19: the day on screen couldn't be (re)read. The rows above stay. */}
+      {loadProblem && (
+        <Box role="status" sx={{ display: 'flex', alignItems: 'center', flexWrap: 'wrap', gap: 1, mb: 2 }}>
+          <Typography sx={{ color: 'text.secondary', fontSize: '0.9375rem' }}>{loadProblem}</Typography>
+          <Button size="small" onClick={() => refreshLogs()} sx={{ minHeight: 44 }}>Try again</Button>
+        </Box>
+      )}
+
       {/* Calorie Goal Panel (toggle) */}
-      <Collapse in={showCaloriePanel} unmountOnExit>
+      <Collapse in={showCaloriePanel && !isSimple} unmountOnExit>
         <Surface id="calorie-goal-panel" sx={{ mb: 2 }}>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'stretch', sm: 'center' }}>
             <Box sx={{ flex: 1 }}>
@@ -453,6 +487,7 @@ const FoodLog = () => {
             <TextField
               label="Adjust today"
               type="number"
+              inputProps={{ inputMode: 'decimal' }}
               size="small"
               value={goalInput}
               onChange={(e) => setGoalInput(e.target.value)}

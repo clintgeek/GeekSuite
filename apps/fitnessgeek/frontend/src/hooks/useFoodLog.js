@@ -1,10 +1,14 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { fitnessGeekService } from '../services/fitnessGeekService.js';
 // Legacy goals removed
 import { settingsService } from '../services/settingsService.js';
 import { goalsService } from '../services/goalsService.js';
 import { foodService } from '../services/foodService.js';
 import logger from '../utils/logger.js';
+import { errorMessage as plainError } from '../utils/errorMessage.js';
+
+export const REFRESH_FAILED = "Couldn't refresh — showing what we had.";
+export const LOAD_FAILED = "Couldn't load this day. Try again in a moment.";
 
 export const useFoodLog = (selectedDate) => {
   const [logs, setLogs] = useState([]);
@@ -20,6 +24,18 @@ export const useFoodLog = (selectedDate) => {
   // (not per selectedDate) and shared by id across every meal section —
   // the same food logged at breakfast and dinner shows the same star.
   const [favoriteFoodIds, setFavoriteFoodIds] = useState(() => new Set());
+
+  // B19. The day on screen right now, the day the rows in `logs` belong to,
+  // and a counter so only the newest read may write the page. Fast arrow taps
+  // used to let a slow answer for Tuesday land on Wednesday.
+  const dateRef = useRef(selectedDate);
+  dateRef.current = selectedDate;
+  const logsDate = useRef(null);
+  const loadSeq = useRef(0);
+  // "stale" (rows kept from before) or "failed" (nothing to show), else null.
+  const [loadProblem, setLoadProblem] = useState(null);
+  // The last write failure, so the page can say why in plain words.
+  const lastError = useRef(null);
 
   // Load goals (prefer settings-based nutrition_goal; fallback to legacy /goals)
   const loadGoals = async () => {
@@ -82,32 +98,52 @@ export const useFoodLog = (selectedDate) => {
   };
 
   // Load food logs
+  //
+  // A failed refresh used to replace the day with [] — "my food is gone".
+  // Now the rows on screen stay and the page says it couldn't refresh; only a
+  // day that never loaded at all is shown empty, and says so. An answer for a
+  // day that is no longer on screen is dropped.
   const loadFoodLogs = async () => {
+    const date = selectedDate;
+    const seq = ++loadSeq.current;
+    const current = () => seq === loadSeq.current && dateRef.current === date;
     setLoading(true);
     try {
-      logger.debug('Loading logs for date:', selectedDate);
-      const response = await fitnessGeekService.getLogsForDate(selectedDate);
+      logger.debug('Loading logs for date:', date);
+      const response = await fitnessGeekService.getLogsForDate(date);
       logger.debug('Logs response received');
+      if (!current()) return;
 
       // The backend returns { success: true, data: logs }
+      let rows;
       if (response && response.success) {
-        setLogs(response.data || []);
+        rows = response.data || [];
       } else if (Array.isArray(response)) {
         // Fallback for direct array response
-        setLogs(response);
+        rows = response;
       } else if (response && response.data) {
         // Fallback for other response formats
-        setLogs(response.data);
+        rows = response.data;
       } else {
-        setLogs([]);
+        rows = [];
       }
+      setLogs(rows);
+      logsDate.current = date;
+      setLoadProblem(null);
 
       logger.debug('Logs state updated');
     } catch (error) {
       logger.error('Error loading food logs:', error);
-      setLogs([]);
+      if (!current()) return;
+      if (logsDate.current === date) {
+        setLoadProblem('stale');
+      } else {
+        // Yesterday's rows under today's heading would be worse than none.
+        setLogs([]);
+        setLoadProblem('failed');
+      }
     } finally {
-      setLoading(false);
+      if (seq === loadSeq.current) setLoading(false);
     }
   };
 
@@ -138,12 +174,15 @@ export const useFoodLog = (selectedDate) => {
 
       // The backend returns { success: true, data: log, message: '...' }
       if (response && response.success) {
+        lastError.current = null;
         await loadFoodLogs();
         return true;
       }
+      lastError.current = null;
       return false;
     } catch (error) {
       logger.error('Error updating food log:', error);
+      lastError.current = error;
       return false;
     }
   };
@@ -156,12 +195,15 @@ export const useFoodLog = (selectedDate) => {
 
       // The backend returns { success: true, data: log, message: '...' }
       if (response && response.success) {
+        lastError.current = null;
         await loadFoodLogs();
         return true;
       }
+      lastError.current = null;
       return false;
     } catch (error) {
       logger.error('Error deleting food log:', error);
+      lastError.current = error;
       return false;
     }
   };
@@ -183,7 +225,7 @@ export const useFoodLog = (selectedDate) => {
       }
     } catch (error) {
       logger.error('Error saving meal:', error);
-      setAutoCloseMessage('Error saving meal. Please try again.', setErrorMessage);
+      setAutoCloseMessage(plainError(error, 'Error saving meal. Please try again.'), setErrorMessage);
       return false;
     }
   };
@@ -297,6 +339,10 @@ export const useFoodLog = (selectedDate) => {
     logs,
     goals,
     loading,
+    // A plain sentence when the day on screen couldn't be (re)read, else null.
+    loadProblem: loadProblem === 'stale' ? REFRESH_FAILED : loadProblem === 'failed' ? LOAD_FAILED : null,
+    /** The last update/delete failure, in plain words (B6). */
+    describeLastError: (fallback) => plainError(lastError.current, fallback),
     successMessage,
     errorMessage,
     nutritionSummary: calculateNutritionSummary(),

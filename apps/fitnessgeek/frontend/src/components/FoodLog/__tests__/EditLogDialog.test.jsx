@@ -56,3 +56,93 @@ describe('EditLogDialog disambiguates the per-serving fields', () => {
     expect(screen.getByText(/Nutrition for 2 servings/i)).toBeInTheDocument();
   });
 });
+
+/**
+ * REVIEW_2026-10 Phase 2.12 + CONTRACTS C3: a described entry is an estimate,
+ * and "1.5 servings of a bowl of soup" is not a question anyone can answer —
+ * so the calories themselves are editable, and an entry can move to another
+ * day. Only what changed goes out, as the gateway's per-serving overrides.
+ */
+import { fireEvent } from '@testing-library/react';
+import { ExperienceContext } from '../../../contexts/ExperienceContext.jsx';
+
+describe('EditLogDialog: calories, macros and the day', () => {
+  const SOUP = {
+    id: 'log-soup',
+    servings: 1,
+    meal_type: 'lunch',
+    log_date: '2026-10-15T00:00:00.000Z',
+    nutrition: { calories_per_serving: 220, protein_grams: 10, carbs_grams: 20, fat_grams: 8, fiber_grams: 2 },
+    food_item_id: { id: 'f1', name: 'Chicken soup' }
+  };
+  const open = (log, { simple }) => {
+    const onSave = vi.fn();
+    render(withTheme(
+      <ExperienceContext.Provider value={{ isSimple: simple }}>
+        <EditLogDialog open onClose={vi.fn()} onSave={onSave} log={log} />
+      </ExperienceContext.Provider>
+    ));
+    return onSave;
+  };
+  const save = () => fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+
+  it('Simple: one Calories number for the whole entry, sent as the per-serving override', () => {
+    const onSave = open({ ...SOUP, servings: 2 }, { simple: true });
+    const calories = screen.getByLabelText('Calories');
+    expect(calories).toHaveValue('440');
+    expect(calories).toHaveAttribute('inputmode', 'decimal');
+    expect(screen.queryByLabelText(/protein/i)).toBeNull();
+
+    fireEvent.change(calories, { target: { value: '300' } });
+    save();
+    const [id, patch] = onSave.mock.calls[0];
+    expect(id).toBe('log-soup');
+    expect(patch.calories).toBe(150);
+    expect(patch).not.toHaveProperty('nutrition');
+    expect(patch).not.toHaveProperty('log_date');
+  });
+
+  it('Simple: nothing changed sends no override', () => {
+    const onSave = open(SOUP, { simple: true });
+    save();
+    expect(onSave.mock.calls[0][1]).not.toHaveProperty('calories');
+  });
+
+  it('Full: a macro edit sends only that macro', () => {
+    const onSave = open(SOUP, { simple: false });
+    fireEvent.change(screen.getByLabelText('Protein (per serving)'), { target: { value: '25' } });
+    save();
+    const patch = onSave.mock.calls[0][1];
+    expect(patch.protein_grams).toBe(25);
+    expect(patch).not.toHaveProperty('calories');
+    expect(patch).not.toHaveProperty('carbs_grams');
+  });
+
+  it('moves the entry to another day', () => {
+    const onSave = open(SOUP, { simple: true });
+    const dayField = screen.getByLabelText('Day');
+    expect(dayField).toHaveValue('2026-10-15');
+    fireEvent.change(dayField, { target: { value: '2026-10-14' } });
+    save();
+    expect(onSave.mock.calls[0][1].log_date).toBe('2026-10-14');
+  });
+
+  it('will not save a calorie number past what the server allows', () => {
+    const onSave = open(SOUP, { simple: true });
+    fireEvent.change(screen.getByLabelText('Calories'), { target: { value: '25000' } });
+    expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
+    save();
+    expect(onSave).not.toHaveBeenCalled();
+  });
+
+  it('the servings box brings up the decimal keypad and takes "0.5"', () => {
+    const onSave = open(SOUP, { simple: false });
+    const box = screen.getByLabelText('Servings');
+    expect(box).toHaveAttribute('inputmode', 'decimal');
+    fireEvent.change(box, { target: { value: '0.' } });
+    expect(box).toHaveValue('0.');
+    fireEvent.change(box, { target: { value: '0.5' } });
+    save();
+    expect(onSave.mock.calls[0][1].servings).toBe(0.5);
+  });
+});

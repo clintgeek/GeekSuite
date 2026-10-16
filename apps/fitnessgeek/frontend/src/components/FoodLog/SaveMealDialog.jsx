@@ -70,16 +70,21 @@ const SaveMealDialog = ({
   };
 
   // Calculate meal totals
+  //
+  // From the log's own per-serving snapshot (`log.nutrition`), which is what
+  // the day's totals use. This used to read `food_item.nutrition`, which the
+  // Food Log query never selects, so every preview said "0 cal".
   const mealTotals = logs.reduce(
     (totals, log) => {
       const food_item = log.food_item || log.food_item_id;
       const { servings } = log;
+      const snapshot = log.nutrition && Object.keys(log.nutrition).length > 0 ? log.nutrition : null;
+      const nutrition = snapshot || food_item?.nutrition;
 
-      if (!food_item || !food_item.nutrition) {
+      if (!nutrition) {
         return totals;
       }
 
-      const nutrition = food_item.nutrition;
       const servingsCount = typeof servings === 'string' ? parseFloat(servings) || 1 : (servings || 1);
 
       return {

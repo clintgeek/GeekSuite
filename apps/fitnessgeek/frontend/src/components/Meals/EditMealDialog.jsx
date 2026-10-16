@@ -102,6 +102,7 @@ const EditMealDialog = ({ open, onClose, meal, onSave, loading = false }) => {
               size="small"
               value={it.servings}
               onChange={(e) => handleChangeItemServings(idx, e.target.value)}
+              inputProps={{ inputMode: 'decimal', min: 0, step: 'any' }}
               sx={{ width: 120 }}
             />
             <IconButton color="error" onClick={() => handleRemoveItem(idx)}>

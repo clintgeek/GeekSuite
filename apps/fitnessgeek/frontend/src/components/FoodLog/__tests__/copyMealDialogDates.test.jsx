@@ -65,7 +65,10 @@ describe('CopyMealDialog targets the real adjacent calendar day', () => {
     expect(new Date(CURRENT_DATE).getDate()).toBe(18);
   });
 
-  it('defaults "Copy To" to tomorrow, not today', () => {
+  // REVIEW_2026-10 B10: the destination used to default to tomorrow, so a
+  // copy "worked" and the day on screen didn't change. It is the day on
+  // screen now, copied from the real previous calendar day.
+  it('defaults "Copy To" to the day on screen, and "Copy From" to the day before', () => {
     render(
       <CopyMealDialog open currentDate={CURRENT_DATE} onClose={() => {}} onCopyComplete={() => {}} />
     );
@@ -73,9 +76,9 @@ describe('CopyMealDialog targets the real adjacent calendar day', () => {
     const dateInputs = screen.getAllByLabelText('Date');
     const [fromInput, toInput] = dateInputs;
 
-    expect(fromInput.value).toBe(CURRENT_DATE);
-    expect(toInput.value).toBe(TOMORROW);
-    expect(toInput.value).not.toBe(CURRENT_DATE);
+    expect(toInput.value).toBe(CURRENT_DATE);
+    expect(toInput.value).not.toBe(TOMORROW);
+    expect(fromInput.value).toBe(YESTERDAY);
   });
 
   it('"Dinner → Tomorrow\'s Lunch" targets tomorrow, not today', () => {

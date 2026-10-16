@@ -1,12 +1,14 @@
-import React, { useCallback, useMemo, useState } from 'react';
-import { Box, Button, Typography } from '@mui/material';
+import React, { useCallback, useState } from 'react';
+import { Box, Typography } from '@mui/material';
 import { useToast } from '@geeksuite/ui';
 import { UnifiedFoodSearch } from '../components/FoodSearch';
+import { useUndoToast } from '../components/FoodSearch/undoToast.jsx';
 import BarcodeScanner from '../components/BarcodeScanner/BarcodeScanner.jsx';
 import FoodEditDialog from '../components/MyFoods/FoodEditDialog.jsx';
-import { fitnessGeekService } from '../services/fitnessGeekService.js';
 import { useFoodLogging } from '../hooks/useFoodLogging.js';
+import { useToday } from '../hooks/useToday.js';
 import { addedMessage } from '../utils/plainWords.js';
+import { errorMessage } from '../utils/errorMessage.js';
 
 const EMPTY_FOOD_FORM = {
   name: '',
@@ -44,13 +46,16 @@ const mealTypeForNow = (now = new Date()) => {
  */
 const FoodSearchPage = () => {
   const { notify } = useToast();
-  const today = useMemo(() => fitnessGeekService.formatDate(new Date()), []);
+  // Re-read on resume and at midnight: this page logs to "today", and a PWA
+  // left open overnight used to log breakfast to yesterday (B3).
+  const today = useToday();
   const [mealType, setMealType] = useState(() => mealTypeForNow());
   const [scannerOpen, setScannerOpen] = useState(false);
   const [createForm, setCreateForm] = useState(null);
   const [creating, setCreating] = useState(false);
 
   const { logItems, undoLogs, describeMeal, adjustLogCalories, createFood } = useFoodLogging({ date: today });
+  const { offerUndo } = useUndoToast(undoLogs);
 
   const handleCreate = useCallback(async () => {
     if (!createForm?.name) return;
@@ -76,7 +81,7 @@ const FoodSearchPage = () => {
         notify(`Created and logged "${created.name}"`, { tone: 'success' });
       }
     } catch (error) {
-      notify(error?.message || 'Could not create that food.', { tone: 'error' });
+      notify(errorMessage(error, 'Could not create that food.'), { tone: 'error' });
     } finally {
       setCreating(false);
     }
@@ -114,19 +119,7 @@ const FoodSearchPage = () => {
           try {
             const result = await logItems([{ ...food, servings: 1 }], mealType);
             if ((result?.ok ?? 0) > 0) {
-              const logIds = result?.logIds || [];
-              notify(addedMessage(mealType, food.name), {
-                tone: 'success',
-                action: logIds.length > 0 ? (
-                  <Button
-                    size="small"
-                    sx={{ color: 'inherit', fontWeight: 700 }}
-                    onClick={() => undoLogs(logIds)}
-                  >
-                    Undo
-                  </Button>
-                ) : undefined
-              });
+              offerUndo(addedMessage(mealType, food.name), result?.logIds || []);
               return true;
             }
             return false;

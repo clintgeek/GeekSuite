@@ -97,3 +97,19 @@ describe('SaveMealDialog food_items payload', () => {
     expect(screen.getByRole('button', { name: /Save Meal/i })).toBeDisabled();
   });
 });
+
+/**
+ * REVIEW_2026-10 P2: the preview read `food_item.nutrition`, which the Food
+ * Log query doesn't select, so a real meal previewed as "0 cal".
+ */
+describe('SaveMealDialog preview totals', () => {
+  it('adds up the log rows as the Food Log fetches them', () => {
+    const logs = [
+      { food_item_id: { id: 'egg', name: 'Egg' }, servings: 2, nutrition: { calories_per_serving: 70, protein_grams: 6, carbs_grams: 0, fat_grams: 5 } },
+      { food_item_id: { id: 'toast', name: 'Toast' }, servings: 1, nutrition: { calories_per_serving: 80, protein_grams: 3, carbs_grams: 15, fat_grams: 1 } }
+    ];
+    render(<SaveMealDialog open onClose={vi.fn()} onSave={vi.fn()} mealType="breakfast" logs={logs} />);
+    expect(screen.getByText('220 cal')).toBeInTheDocument();
+    expect(screen.getByText('15g protein')).toBeInTheDocument();
+  });
+});

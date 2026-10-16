@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Button,
   TextField,
@@ -11,6 +11,37 @@ import {
   CircularProgress
 } from '@mui/material';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
+
+const PARTIAL_NUMBER = /^\d*[.,]?\d*$/;
+
+/**
+ * A number box that keeps what's typed. The fields below used to parse every
+ * keystroke and render `value || ''`, so the "0" of "0.5" blanked the box and
+ * half a gram could not be typed (REVIEW_2026-10 B11). The parent still gets
+ * a number; this keeps the half-typed text. Decimal keypad on phones.
+ */
+function DecimalField({ value, onValue, fallback = 0, ...props }) {
+  const shown = (v) => (v ? String(v) : '');
+  const [text, setText] = useState(() => shown(value));
+  const [focused, setFocused] = useState(false);
+  useEffect(() => { if (!focused) setText(shown(value)); }, [value, focused]);
+  return (
+    <TextField
+      {...props}
+      value={text}
+      onFocus={() => setFocused(true)}
+      onBlur={() => setFocused(false)}
+      onChange={(e) => {
+        const next = e.target.value.trim();
+        if (!PARTIAL_NUMBER.test(next)) return;
+        setText(next);
+        const n = Number.parseFloat(next.replace(',', '.'));
+        onValue(Number.isFinite(n) ? n : fallback);
+      }}
+      inputProps={{ inputMode: 'decimal', autoComplete: 'off' }}
+    />
+  );
+}
 
 /**
  * The custom-food form. `food` absent means "create" — the search box's
@@ -50,12 +81,11 @@ const FoodEditDialog = ({ open, food, form, onChange, onClose, onSave, loading }
           />
 
           <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
-            <TextField
+            <DecimalField
               fullWidth
               label="Calories"
-              type="number"
-              value={form.calories_per_serving || ''}
-              onChange={(e) => onChange({ ...form, calories_per_serving: parseFloat(e.target.value) || 0 })}
+              value={form.calories_per_serving}
+              onValue={(n) => onChange({ ...form, calories_per_serving: n })}
               InputProps={{
                 endAdornment: <InputAdornment position="end">cal</InputAdornment>
               }}
@@ -63,32 +93,29 @@ const FoodEditDialog = ({ open, food, form, onChange, onClose, onSave, loading }
           </Box>
 
           <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 2, mb: 2 }}>
-            <TextField
+            <DecimalField
               fullWidth
               label="Protein"
-              type="number"
-              value={form.protein_grams || ''}
-              onChange={(e) => onChange({ ...form, protein_grams: parseFloat(e.target.value) || 0 })}
+              value={form.protein_grams}
+              onValue={(n) => onChange({ ...form, protein_grams: n })}
               InputProps={{
                 endAdornment: <InputAdornment position="end">g</InputAdornment>
               }}
             />
-            <TextField
+            <DecimalField
               fullWidth
               label="Carbs"
-              type="number"
-              value={form.carbs_grams || ''}
-              onChange={(e) => onChange({ ...form, carbs_grams: parseFloat(e.target.value) || 0 })}
+              value={form.carbs_grams}
+              onValue={(n) => onChange({ ...form, carbs_grams: n })}
               InputProps={{
                 endAdornment: <InputAdornment position="end">g</InputAdornment>
               }}
             />
-            <TextField
+            <DecimalField
               fullWidth
               label="Fat"
-              type="number"
-              value={form.fat_grams || ''}
-              onChange={(e) => onChange({ ...form, fat_grams: parseFloat(e.target.value) || 0 })}
+              value={form.fat_grams}
+              onValue={(n) => onChange({ ...form, fat_grams: n })}
               InputProps={{
                 endAdornment: <InputAdornment position="end">g</InputAdornment>
               }}
@@ -96,32 +123,29 @@ const FoodEditDialog = ({ open, food, form, onChange, onClose, onSave, loading }
           </Box>
 
           <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', gap: 2, mb: 2 }}>
-            <TextField
+            <DecimalField
               fullWidth
               label="Fiber"
-              type="number"
-              value={form.fiber_grams || ''}
-              onChange={(e) => onChange({ ...form, fiber_grams: parseFloat(e.target.value) || 0 })}
+              value={form.fiber_grams}
+              onValue={(n) => onChange({ ...form, fiber_grams: n })}
               InputProps={{
                 endAdornment: <InputAdornment position="end">g</InputAdornment>
               }}
             />
-            <TextField
+            <DecimalField
               fullWidth
               label="Sugar"
-              type="number"
-              value={form.sugar_grams || ''}
-              onChange={(e) => onChange({ ...form, sugar_grams: parseFloat(e.target.value) || 0 })}
+              value={form.sugar_grams}
+              onValue={(n) => onChange({ ...form, sugar_grams: n })}
               InputProps={{
                 endAdornment: <InputAdornment position="end">g</InputAdornment>
               }}
             />
-            <TextField
+            <DecimalField
               fullWidth
               label="Sodium"
-              type="number"
-              value={form.sodium_mg || ''}
-              onChange={(e) => onChange({ ...form, sodium_mg: parseFloat(e.target.value) || 0 })}
+              value={form.sodium_mg}
+              onValue={(n) => onChange({ ...form, sodium_mg: n })}
               InputProps={{
                 endAdornment: <InputAdornment position="end">mg</InputAdornment>
               }}
@@ -129,12 +153,12 @@ const FoodEditDialog = ({ open, food, form, onChange, onClose, onSave, loading }
           </Box>
 
           <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 2 }}>
-            <TextField
+            <DecimalField
               fullWidth
               label="Serving Size"
-              type="number"
-              value={form.serving_size || ''}
-              onChange={(e) => onChange({ ...form, serving_size: parseFloat(e.target.value) || 1 })}
+              value={form.serving_size}
+              onValue={(n) => onChange({ ...form, serving_size: n })}
+              fallback={1}
             />
             <FormControl fullWidth>
               <InputLabel>Unit</InputLabel>

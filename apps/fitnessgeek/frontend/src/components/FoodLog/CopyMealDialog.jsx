@@ -67,10 +67,12 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
   useEffect(() => {
     if (open) {
       loadHouseholdMembers();
-      // Set default dates
-      setFromDate(currentDate);
-      // Default to date is tomorrow
-      setToDate(shiftDate(currentDate, 1));
+      // Into the day on screen, from the day before it (REVIEW_2026-10 B10).
+      // The destination used to default to tomorrow: the copy worked, today
+      // didn't change, and it read as "copy doesn't work". The source is the
+      // day before so the default never copies a day onto itself.
+      setFromDate(shiftDate(currentDate, -1));
+      setToDate(currentDate);
       setFromMealType('');
       setToMealType('');
       setFromUserId('');
