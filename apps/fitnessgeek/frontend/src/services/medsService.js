@@ -61,9 +61,14 @@ export const medsService = {
     return response.data || response;
   },
 
+  // `deleteFitnessMedication` answers a Boolean. `response.data || response`
+  // turned a `false` into the (truthy) envelope, so a delete that didn't
+  // happen read as done. Resolves to the Boolean; throws on `false`.
   async remove(id) {
     const response = await apiService.delete(`/meds/${id}`);
-    return response.data || response;
+    const ok = response?.data;
+    if (ok === false) throw new Error('Medication was not removed');
+    return ok !== false;
   },
 };
 

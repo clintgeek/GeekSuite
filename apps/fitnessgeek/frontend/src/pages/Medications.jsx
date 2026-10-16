@@ -1,5 +1,6 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Box, Typography, TextField, Button, Chip, Stack, IconButton, ToggleButton, ToggleButtonGroup, FormControl, InputLabel, Select, MenuItem, Alert } from '@mui/material';
+import { useToast } from '@geeksuite/ui';
 import SearchIcon from '@mui/icons-material/Search';
 import EditIcon from '@mui/icons-material/Edit';
 import SaveIcon from '@mui/icons-material/Save';
@@ -10,9 +11,37 @@ import medsService from '../services/medsService.js';
 import { localDateString } from '@geeksuite/utils';
 import { Surface, SectionLabel, DisplayHeading, EmptyState } from '../components/primitives';
 import MedsChecklist from '../components/Home/MedsChecklist.jsx';
-import { useMedsToday } from '../hooks/useMedsToday.js';
+import { useMedsToday, announceMedsChanged } from '../hooks/useMedsToday.js';
+import { useToday } from '../hooks/useToday.js';
+import { errorMessage } from '../utils/errorMessage.js';
 
 const TIME_OPTIONS = ['morning', 'afternoon', 'evening', 'bedtime'];
+
+// A medication with no time of day set is one daily dose (checkIns.js). It
+// used to match none of the four slot groups below, so it saved and then
+// vanished from the list: no way to see, edit or remove it (REVIEW B14).
+const hasNoTime = (m) => !(m.times_of_day || []).length;
+const MED_GROUPS = [
+  { key: 'daily', label: 'Daily', match: hasNoTime },
+  ...TIME_OPTIONS.map((slot) => ({ key: slot, label: slot, match: (m) => (m.times_of_day || []).includes(slot) })),
+];
+const TYPE_ORDER = { rx: 0, otc: 1, supplement: 2 };
+const byTypeThenName = (a, b) => {
+  const tA = (a.med_type || 'rx');
+  const tB = (b.med_type || 'rx');
+  if (TYPE_ORDER[tA] !== TYPE_ORDER[tB]) return TYPE_ORDER[tA] - TYPE_ORDER[tB];
+  return (a.display_name || '').localeCompare(b.display_name || '');
+};
+
+// The fields a medication is saved with: what Undo re-creates a removed one from.
+const MED_INPUT_KEYS = ['display_name', 'is_supplement', 'med_type', 'rxcui', 'ingredient_name', 'brand_name', 'form', 'route', 'strength', 'dose_value', 'dose_unit', 'sig', 'times_of_day', 'suggested_indications', 'user_indications', 'notes'];
+const medInputFrom = (med) => {
+  const input = {};
+  for (const key of MED_INPUT_KEYS) {
+    if (med[key] !== undefined && med[key] !== null) input[key] = med[key];
+  }
+  return input;
+};
 
 function SuggestionChips({ suggestions, userTags, onChange }) {
   const selected = new Set(userTags || []);
@@ -40,11 +69,22 @@ function SuggestionChips({ suggestions, userTags, onChange }) {
 
 export default function Medications() {
   // Today's doses — the dose log had a backend and no UI until now.
-  const today = localDateString();
+  // useToday, not a date read at render: a resumed PWA must tick today (B3).
+  const today = useToday();
   const doses = useMedsToday(today);
+  const { notify } = useToast();
   const [q, setQ] = useState('');
   const [searching, setSearching] = useState(false);
   const [results, setResults] = useState([]);
+  // The query the last finished search ran, and whether it failed — so
+  // "nothing found" and "search is down" can both offer "add it as typed".
+  const [searchedFor, setSearchedFor] = useState('');
+  const [searchError, setSearchError] = useState(null);
+  const [listLoading, setListLoading] = useState(true);
+  const [loadError, setLoadError] = useState(null);
+  // One write at a time: 'save' | 'update' | the id being removed.
+  const [busy, setBusy] = useState(null);
+  const [formError, setFormError] = useState(null);
   const [selected, setSelected] = useState(null);
   const [details, setDetails] = useState(null);
   const [selectedStrength, setSelectedStrength] = useState(null);
@@ -79,22 +119,14 @@ export default function Medications() {
   // supply_start_date / days_supply fields are left alone: saves omit them,
   // and the backend keeps what's there.
   const buildExportText = () => {
-    const order = { rx: 0, otc: 1, supplement: 2 };
     const lines = [];
     lines.push('Medications & Supplements');
     lines.push(`Generated: ${new Date().toISOString()}`);
     lines.push('');
-    TIME_OPTIONS.forEach(slot => {
-      const slotMeds = (myMeds || [])
-        .filter(m => (m.times_of_day || []).includes(slot))
-        .sort((a, b) => {
-          const tA = (a.med_type || 'rx');
-          const tB = (b.med_type || 'rx');
-          if (order[tA] !== order[tB]) return order[tA] - order[tB];
-          return (a.display_name || '').localeCompare(b.display_name || '');
-        });
+    MED_GROUPS.forEach(group => {
+      const slotMeds = (myMeds || []).filter(group.match).sort(byTypeThenName);
       if (slotMeds.length === 0) return;
-      lines.push(`${slot.toUpperCase()}`);
+      lines.push(`${group.label.toUpperCase()}`);
       slotMeds.forEach(m => {
         const type = (m.med_type || 'rx').toUpperCase();
         const strength = m.strength ? ` ${m.strength}` : '';
@@ -139,17 +171,9 @@ export default function Medications() {
     const margin = 40;
     let y = margin;
 
-    const order = { rx: 0, otc: 1, supplement: 2 };
-    const bySlot = TIME_OPTIONS.map(slot => ({
-      slot,
-      meds: (myMeds || [])
-        .filter(m => (m.times_of_day || []).includes(slot))
-        .sort((a, b) => {
-          const tA = (a.med_type || 'rx');
-          const tB = (b.med_type || 'rx');
-          if (order[tA] !== order[tB]) return order[tA] - order[tB];
-          return (a.display_name || '').localeCompare(b.display_name || '');
-        })
+    const bySlot = MED_GROUPS.map(group => ({
+      slot: group.label,
+      meds: (myMeds || []).filter(group.match).sort(byTypeThenName),
     })).filter(s => s.meds.length > 0);
 
     // Header
@@ -255,26 +279,58 @@ export default function Medications() {
     doc.save(`medications_${localDateString()}.pdf`);
   };
 
-  useEffect(() => {
+  const loadMeds = useCallback(() => {
+    setListLoading(true);
     // medsService already unwraps the transport envelope — `list()` resolves to
     // the medication array itself, not `{ data: [...] }`. Reading `.data` off it
     // here (as this page used to) silently produced an empty list on every load.
-    medsService.list().then(r => setMyMeds(Array.isArray(r) ? r : [])).catch(() => {});
+    // A failed load says so; it used to read "No medications yet".
+    return medsService.list()
+      .then((r) => { setMyMeds(Array.isArray(r) ? r : []); setLoadError(null); })
+      .catch((err) => setLoadError(errorMessage(err, 'Check your connection and try again.')))
+      .finally(() => setListLoading(false));
   }, []);
 
+  useEffect(() => { loadMeds(); }, [loadMeds]);
+
+  // The list changed: this page's checklist and Home's both reload.
+  const changed = () => announceMedsChanged();
+
   const handleSearch = async () => {
-    if (!q) return;
+    const query = q.trim();
+    if (!query || searching) return;
     setSearching(true);
+    setSearchError(null);
     try {
-      const r = await medsService.search(q);
+      const r = await medsService.search(query);
       // Same rule: `search()` resolves to the candidate array.
       setResults(Array.isArray(r) ? r : []);
+    } catch (err) {
+      setResults([]);
+      setSearchError(errorMessage(err, "The medicine search isn't answering right now."));
     } finally {
+      setSearchedFor(query);
       setSearching(false);
     }
   };
 
+  // RxNorm doesn't know most supplements, and it can be down. Neither should
+  // stop her adding "Vitamin D" (REVIEW B16).
+  const addAsTyped = () => {
+    const name = searchedFor;
+    if (!name) return;
+    setSelected({ name, typed: true });
+    setDisplayName(name);
+    setDetails({ strengths: [], suggested: [] });
+    setUserTags([]);
+    setSelectedStrength(null);
+    setEditingMed(null);
+    setFormError(null);
+    scrollToEditorFocus();
+  };
+
   const selectCandidate = async (c) => {
+    setFormError(null);
     setSelected(c);
     setDisplayName(c?.name || '');
     try {
@@ -303,31 +359,51 @@ export default function Medications() {
   });
 
   const saveMedication = async () => {
+    if (busy) return;
     const payload = buildPayload();
-    // `save()` resolves to the saved medication itself, not `{ data: med }`.
-    // Gateway shape: `id`, not `_id` — `fitnessMedications`/`addFitnessMedication`
-    // never carry `_id`, so this dedupe always matched `undefined === undefined`
-    // and dropped every existing medication from the list on each add.
-    const saved = await medsService.save(payload);
-    if (!saved) return;
-    const savedId = saved.id ?? saved._id;
-    setMyMeds((prev) => [saved, ...prev.filter(m => (m.id ?? m._id) !== savedId)]);
-    setSelected(null);
-    setEditingMed(null);
+    setBusy('save');
+    setFormError(null);
+    try {
+      // `save()` resolves to the saved medication itself, not `{ data: med }`.
+      // Gateway shape: `id`, not `_id` — `fitnessMedications`/`addFitnessMedication`
+      // never carry `_id`, so this dedupe always matched `undefined === undefined`
+      // and dropped every existing medication from the list on each add.
+      const saved = await medsService.save(payload);
+      if (!saved) throw new Error('No medication came back');
+      const savedId = saved.id ?? saved._id;
+      setMyMeds((prev) => [saved, ...prev.filter(m => (m.id ?? m._id) !== savedId)]);
+      setSelected(null);
+      setEditingMed(null);
+      changed();
+    } catch (err) {
+      setFormError(errorMessage(err, "Couldn't save that medicine. Try again."));
+    } finally {
+      setBusy(null);
+    }
   };
 
   const updateMedication = async () => {
-    if (!editingMed) return;
+    if (!editingMed || busy) return;
     const payload = buildPayload();
     const editingId = editingMed.id ?? editingMed._id;
-    const saved = await medsService.update(editingId, payload);
-    if (!saved) return;
-    setMyMeds(prev => prev.map(m => ((m.id ?? m._id) === editingId ? saved : m)));
-    setSelected(null);
-    setEditingMed(null);
+    setBusy('update');
+    setFormError(null);
+    try {
+      const saved = await medsService.update(editingId, payload);
+      if (!saved) throw new Error('No medication came back');
+      setMyMeds(prev => prev.map(m => ((m.id ?? m._id) === editingId ? saved : m)));
+      setSelected(null);
+      setEditingMed(null);
+      changed();
+    } catch (err) {
+      setFormError(errorMessage(err, "Couldn't save your changes. Try again."));
+    } finally {
+      setBusy(null);
+    }
   };
 
   const cancelEdit = () => {
+    setFormError(null);
     setSelected(null);
     setEditingMed(null);
     setDisplayName('');
@@ -339,6 +415,7 @@ export default function Medications() {
   };
 
   const startEdit = async (m) => {
+    setFormError(null);
     setEditingMed(m);
     setSelected(null);
     setDisplayName(m.display_name || '');
@@ -361,10 +438,43 @@ export default function Medications() {
     scrollToEditorFocus();
   };
 
+  // Undo re-creates the removed medicine from the row's own fields — the same
+  // grammar as removing a food ("Removed … · Undo"). It comes back as a new
+  // medication; today's ticks for the old one don't follow it.
+  const restoreMed = async (med) => {
+    try {
+      const saved = await medsService.save(medInputFrom(med));
+      if (!saved) throw new Error('No medication came back');
+      setMyMeds((prev) => [saved, ...prev]);
+      changed();
+      notify(`${med.display_name || 'Medicine'} is back`, { tone: 'success' });
+    } catch (err) {
+      notify(errorMessage(err, "Couldn't bring it back. Try again."), { tone: 'error' });
+    }
+  };
+
   const removeMed = async (med) => {
+    if (busy) return;
     const medId = med.id ?? med._id;
-    await medsService.remove(medId);
-    setMyMeds(prev => prev.filter(m => (m.id ?? m._id) !== medId));
+    setBusy(medId);
+    try {
+      // Throws on a `false` answer: nothing was removed, so nothing is said to be.
+      await medsService.remove(medId);
+      setMyMeds(prev => prev.filter(m => (m.id ?? m._id) !== medId));
+      changed();
+      notify(`Removed ${med.display_name || 'medicine'}`, {
+        tone: 'info',
+        action: (
+          <Button size="small" sx={{ color: 'inherit', fontWeight: 800 }} onClick={() => restoreMed(med)}>
+            Undo
+          </Button>
+        ),
+      });
+    } catch (err) {
+      notify(errorMessage(err, "Couldn't remove that. Try again."), { tone: 'error' });
+    } finally {
+      setBusy(null);
+    }
   };
 
   // Helper to get med type color
@@ -421,18 +531,26 @@ export default function Medications() {
             label="Search medication (brand or generic)"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
           />
           <Button
             variant="contained"
             startIcon={<SearchIcon />}
             onClick={handleSearch}
-            disabled={searching}
+            disabled={searching || !q.trim()}
             sx={{ minWidth: 120, flexShrink: 0 }}
           >
-            Search
+            {searching ? 'Searching…' : 'Search'}
           </Button>
         </Stack>
+        {searchError && (
+          <Alert severity="warning" sx={{ mt: 2 }}>{searchError}</Alert>
+        )}
+        {!searching && searchedFor && !searchError && results.length === 0 && (
+          <Typography sx={{ mt: 2, color: 'text.secondary' }}>
+            Nothing found for &ldquo;{searchedFor}&rdquo;.
+          </Typography>
+        )}
         {results.length > 0 && (
           <Stack spacing={0.5} sx={{ mt: 2, maxHeight: 220, overflowY: 'auto' }}>
             {results.map((r, idx) => (
@@ -457,6 +575,15 @@ export default function Medications() {
               </Surface>
             ))}
           </Stack>
+        )}
+        {!searching && searchedFor && (
+          <Button
+            variant={results.length === 0 ? 'contained' : 'text'}
+            onClick={addAsTyped}
+            sx={{ mt: 2, minHeight: 44 }}
+          >
+            Add &ldquo;{searchedFor}&rdquo; as typed
+          </Button>
         )}
       </Surface>
 
@@ -543,20 +670,33 @@ export default function Medications() {
               </Stack>
             </Box>
 
+            {formError && <Alert severity="error">{formError}</Alert>}
             <Stack direction="row" spacing={1}>
               {editingMed ? (
-                <Button variant="contained" startIcon={<SaveIcon />} onClick={updateMedication}>Update</Button>
+                <Button variant="contained" startIcon={<SaveIcon />} onClick={updateMedication} disabled={Boolean(busy) || !displayName.trim()}>
+                  {busy === 'update' ? 'Saving…' : 'Update'}
+                </Button>
               ) : (
-                <Button variant="contained" startIcon={<SaveIcon />} onClick={saveMedication}>Save</Button>
+                <Button variant="contained" startIcon={<SaveIcon />} onClick={saveMedication} disabled={Boolean(busy) || !displayName.trim()}>
+                  {busy === 'save' ? 'Saving…' : 'Save'}
+                </Button>
               )}
-              <Button variant="outlined" onClick={cancelEdit}>Cancel</Button>
+              <Button variant="outlined" onClick={cancelEdit} disabled={Boolean(busy)}>Cancel</Button>
             </Stack>
           </Stack>
         </Surface>
       )}
 
       {/* Medications List */}
-      {myMeds.length === 0 ? (
+      {loadError && myMeds.length === 0 ? (
+        <Alert
+          severity="error"
+          sx={{ mb: 3 }}
+          action={<Button color="inherit" size="small" sx={{ minHeight: 44 }} onClick={loadMeds}>Try again</Button>}
+        >
+          Couldn&apos;t load your medications. {loadError}
+        </Alert>
+      ) : listLoading && myMeds.length === 0 ? null : myMeds.length === 0 ? (
         <Box sx={{ mb: 3 }}>
           <EmptyState
             icon={MedicationIcon}
@@ -571,19 +711,13 @@ export default function Medications() {
           <DisplayHeading size="card">Grouped by Time of Day</DisplayHeading>
         </Box>
         <Stack spacing={2}>
-          {TIME_OPTIONS.map(slot => (
+          {MED_GROUPS.filter(g => g.key !== 'daily' || myMeds.some(g.match)).map(({ key: slot, label, match }) => (
             <Box key={slot}>
-              <SectionLabel dot sx={{ mb: 1, textTransform: 'capitalize' }}>{slot}</SectionLabel>
+              <SectionLabel dot sx={{ mb: 1, textTransform: 'capitalize' }}>{label}</SectionLabel>
               <Stack spacing={1} sx={{ mt: 1 }}>
                 {myMeds
-                  .filter(m => (m.times_of_day || []).includes(slot))
-                  .sort((a, b) => {
-                    const order = { rx: 0, otc: 1, supplement: 2 };
-                    const tA = (a.med_type || 'rx');
-                    const tB = (b.med_type || 'rx');
-                    if (order[tA] !== order[tB]) return order[tA] - order[tB];
-                    return (a.display_name || '').localeCompare(b.display_name || '');
-                  })
+                  .filter(match)
+                  .sort(byTypeThenName)
                   .map(m => {
                     const typeInfo = getMedTypeColor(m.med_type);
 
@@ -650,7 +784,7 @@ export default function Medications() {
                             <IconButton size="small" color="primary" aria-label={`Edit ${m.display_name}`} onClick={() => startEdit(m)}>
                               <EditIcon fontSize="small" />
                             </IconButton>
-                            <IconButton size="small" color="error" aria-label={`Remove ${m.display_name}`} onClick={() => removeMed(m)}>
+                            <IconButton size="small" color="error" aria-label={`Remove ${m.display_name}`} onClick={() => removeMed(m)} disabled={Boolean(busy)}>
                               <DeleteIcon fontSize="small" />
                             </IconButton>
                           </Stack>
@@ -658,7 +792,7 @@ export default function Medications() {
                       </Surface>
                     );
                   })}
-                {myMeds.filter(m => (m.times_of_day || []).includes(slot)).length === 0 && (
+                {myMeds.filter(match).length === 0 && (
                   <Typography variant="caption" color="text.secondary">No medications set for {slot}.</Typography>
                 )}
               </Stack>
