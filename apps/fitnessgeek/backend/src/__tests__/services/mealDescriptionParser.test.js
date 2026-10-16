@@ -133,3 +133,68 @@ describe('a meal the person already picked', () => {
     expect(entries[0].mealType).toBe('dinner');
   });
 });
+
+describe('day words (Phase 3.17)', () => {
+  const full = (text, options = { hour: 13 }) => parseMealDescription(text, options);
+
+  test('"yesterday" is not a food, and is handed back as the hint', () => {
+    const result = full('eggs yesterday');
+    expect(shape(result.entries)).toEqual([['eggs', 1, 'lunch']]);
+    expect(result.dayHint).toBe('yesterday');
+    expect(result.dayWords).toEqual(['yesterday']);
+  });
+
+  test('"for dinner last night": the meal word still counts', () => {
+    const result = full('fried chicken and fries for dinner last night');
+    expect(shape(result.entries)).toEqual([['fried chicken', 1, 'dinner'], ['fries', 1, 'dinner']]);
+    expect(result.dayHint).toBe('yesterday');
+  });
+
+  test('"last night" on its own means dinner, yesterday', () => {
+    const result = full('nachos last night');
+    expect(shape(result.entries)).toEqual([['nachos', 1, 'dinner']]);
+    expect(result.dayHint).toBe('yesterday');
+  });
+
+  test('"this morning" is breakfast today: stripped, and no day to ask about', () => {
+    const result = full('pancakes this morning');
+    expect(shape(result.entries)).toEqual([['pancakes', 1, 'breakfast']]);
+    expect(result.dayHint).toBeNull();
+    expect(result.dayWords).toEqual(['this morning']);
+  });
+
+  test('"on monday" names the day', () => {
+    const result = full('pizza on monday');
+    expect(shape(result.entries)).toEqual([['pizza', 1, 'lunch']]);
+    expect(result.dayHint).toBe('monday');
+  });
+
+  test('"last tuesday night", "yesterday morning" — one phrase each', () => {
+    expect(shape(full('last tuesday night nachos').entries)).toEqual([['nachos', 1, 'dinner']]);
+    expect(full('last tuesday night nachos').dayHint).toBe('tuesday');
+    expect(shape(full('yesterday morning oatmeal').entries)).toEqual([['oatmeal', 1, 'breakfast']]);
+  });
+
+  test('a phrase that is only a day word logs nothing', () => {
+    const result = full('for dinner last night');
+    expect(result.entries).toEqual([]);
+    expect(result.dayHint).toBe('yesterday');
+  });
+
+  test('a bare weekday stays food: "Taco Tuesday" is a saved meal, TGI Fridays a place', () => {
+    expect(full('taco tuesday').entries[0].description).toBe('taco tuesday');
+    expect(full('taco tuesday').dayHint).toBeNull();
+    expect(full('tgi fridays burger').entries[0].description).toBe('tgi fridays burger');
+  });
+
+  test('a stated meal in the text still beats the meal the person picked', () => {
+    const result = parseMealDescription('eggs for breakfast yesterday, tacos last night, a beer', { hour: 13, mealType: 'lunch' });
+    expect(shape(result.entries)).toEqual([['eggs', 1, 'breakfast'], ['tacos', 1, 'dinner'], ['beer', 1, 'dinner']]);
+  });
+
+  test('no day words: no hint, nothing changes', () => {
+    const result = full('eggs and toast');
+    expect(result.dayHint).toBeNull();
+    expect(result.dayWords).toEqual([]);
+  });
+});

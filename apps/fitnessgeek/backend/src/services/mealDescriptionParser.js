@@ -41,6 +41,67 @@ const AND_SPLIT = /\s+(?:and|plus|&|\+)\s+/;
 /** What introduces a component clause rather than another dish. */
 const WITH_SPLIT = /\s+(?:with|w\/|topped\s+with|smothered\s+in|covered\s+in)\s+/;
 
+const WEEKDAYS = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
+const WEEKDAY = `(${WEEKDAYS.join('|')})`;
+const PART_OF_DAY = '(morning|afternoon|evening|night)';
+
+/** What a part of the day says about the meal, when nothing else does. */
+const MEAL_FROM_PART = { morning: 'breakfast', evening: 'dinner', night: 'dinner' };
+
+/**
+ * Words that say WHEN, not WHAT. Each pattern is stripped from the food text;
+ * `day` is the hint handed back (null = today, which needs no question), and
+ * `part` is the part of the day, if it names one.
+ *
+ * Order matters: longest first, so "the day before yesterday" is not read as
+ * "the day before" plus "yesterday", and "yesterday morning" is one phrase.
+ *
+ * A bare weekday is NOT a day word. "Taco Tuesday" is a meal Chef has saved,
+ * and "TGI Fridays" a place; a weekday only counts with "on", "last" or
+ * "this past" in front of it, or a part of the day or a meal after it.
+ */
+const DAY_PATTERNS = [
+  { re: /\b(?:on\s+|from\s+)?the\s+day\s+before\s+yesterday\b/, day: () => 'day_before_yesterday' },
+  { re: new RegExp(`\\b(?:on\\s+|from\\s+)?yesterday(?:\\s+${PART_OF_DAY})?\\b`), day: () => 'yesterday', part: (m) => m[1] },
+  { re: /\b(?:from\s+)?last\s+night\b/, day: () => 'yesterday', part: () => 'night' },
+  { re: new RegExp(`\\b(?:on\\s+|from\\s+)?(?:last|this\\s+past)\\s+${WEEKDAY}(?:\\s+${PART_OF_DAY})?\\b`), day: (m) => m[1], part: (m) => m[2] },
+  { re: new RegExp(`\\b(?:on\\s+|from\\s+)?${WEEKDAY}\\s+${PART_OF_DAY}\\b`), day: (m) => m[1], part: (m) => m[2] },
+  { re: new RegExp(`\\bon\\s+${WEEKDAY}\\b`), day: (m) => m[1] },
+  { re: new RegExp(`\\b${WEEKDAY}(?=\\s+(?:for|at)\\s+(?:breakfast|lunch|dinner|supper|brunch|snack)\\b)`), day: (m) => m[1] },
+  { re: new RegExp(`\\b(?:earlier\\s+)?(?:this|today)\\s+${PART_OF_DAY}\\b`), day: () => null, part: (m) => m[1] },
+  { re: /\btonight\b/, day: () => null, part: () => 'night' },
+  { re: /\b(?:earlier\s+)?today\b/, day: () => null }
+];
+
+/**
+ * Pull the day words out of a segment. "for dinner last night" leaves
+ * "for dinner", so the meal word still counts; "last night" on its own
+ * leaves an implied dinner, used only when nothing better says which meal.
+ *
+ * @returns {{text: string, day: string|null, impliedMeal: string|null, phrases: string[]}}
+ */
+export function extractDayWords(segment) {
+  let text = String(segment || '');
+  let day = null;
+  let impliedMeal = null;
+  const phrases = [];
+
+  for (const pattern of DAY_PATTERNS) {
+    let match = text.match(pattern.re);
+    while (match) {
+      phrases.push(match[0].trim());
+      const said = pattern.day(match);
+      if (said && !day) day = said;
+      const part = pattern.part ? pattern.part(match) : null;
+      if (part && !impliedMeal && MEAL_FROM_PART[part]) impliedMeal = MEAL_FROM_PART[part];
+      text = `${text.slice(0, match.index)} ${text.slice(match.index + match[0].length)}`;
+      match = text.match(pattern.re);
+    }
+  }
+
+  return { text: text.replace(/\s+/g, ' ').trim(), day, impliedMeal, phrases };
+}
+
 /** The meal a log at this hour most likely belongs to. */
 export function mealFromHour(hour) {
   const h = Number.isFinite(hour) ? hour : new Date().getHours();
@@ -100,23 +161,41 @@ function describeEntry(dishText, components) {
  *        meal card's "+ Add" — SIMPLE_AND_FULL_PLAN.md item 1), which beats
  *        the clock. A meal NAMED in the text ("eggs for breakfast") still
  *        wins over both: it is what he said.
- * @returns {{raw: string, normalized: string, entries: object[]}}
+ * @returns {{raw: string, normalized: string, entries: object[],
+ *   dayHint: string|null, dayWords: string[]}} `dayHint` is 'yesterday',
+ *   'day_before_yesterday', a weekday name, or null (today / not said).
  */
 export function parseMealDescription(text, options = {}) {
   const normalized = normalizeQuery(text);
   const raw = String(text || '');
-  if (!normalized) return { raw, normalized: '', entries: [] };
+  if (!normalized) return { raw, normalized: '', entries: [], dayHint: null, dayWords: [] };
 
-  const fallbackMeal = MEAL_TYPES.has(options.mealType) ? options.mealType : mealFromHour(options.hour);
+  const chosenMeal = MEAL_TYPES.has(options.mealType) ? options.mealType : null;
+  const fallbackMeal = chosenMeal || mealFromHour(options.hour);
   const segments = normalized.split(SEGMENT_SPLIT).map((s) => s.trim()).filter(Boolean);
 
   const entries = [];
   // A meal stated once carries forward: "breakfast: eggs, toast, coffee".
   let currentMeal = null;
+  // When, said in words ("last night", "on monday"). Never foods. The client
+  // owns the date — it asks the person and sends one — so this is only a
+  // hint about what to ask (Phase 3.17).
+  let dayHint = null;
+  const dayWords = [];
 
-  for (const [segmentIndex, segment] of segments.entries()) {
+  for (const [segmentIndex, rawSegment] of segments.entries()) {
+    const when = extractDayWords(rawSegment);
+    if (when.day && !dayHint) dayHint = when.day;
+    dayWords.push(...when.phrases);
+    const segment = when.text;
+    if (!segment) continue;
+
+    // A meal word in this segment wins; then what its day words imply ("last
+    // night" is dinner), which carries forward the same way; then a meal
+    // carried from earlier; then the meal the person picked; then the clock.
     const { meal, text: foodText } = extractMeal(segment);
     if (meal) currentMeal = meal;
+    else if (when.impliedMeal) currentMeal = when.impliedMeal;
     if (!foodText) continue;
 
     const mealType = currentMeal || fallbackMeal;
@@ -168,7 +247,7 @@ export function parseMealDescription(text, options = {}) {
     });
   }
 
-  return { raw, normalized, entries };
+  return { raw, normalized, entries, dayHint, dayWords };
 }
 
-export default { parseMealDescription, mealFromHour };
+export default { parseMealDescription, mealFromHour, extractDayWords };
