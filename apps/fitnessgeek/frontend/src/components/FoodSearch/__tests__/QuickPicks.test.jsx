@@ -37,7 +37,7 @@ describe('QuickPicks', () => {
     const chips = screen.getAllByRole('button', { name: /again$/ });
     expect(chips.map((c) => c.getAttribute('aria-label'))).toEqual(['Add Caesar salad to lunch again', 'Add Almonds to lunch again']);
     fireEvent.click(chips[0]);
-    expect(onPick).toHaveBeenCalledWith([expect.objectContaining({ id: 'caesar', name: 'Caesar salad', servings: 1 })]);
+    expect(onPick.mock.calls[0][0]).toEqual([expect.objectContaining({ id: 'caesar', name: 'Caesar salad', servings: 1 })]);
   });
 
   it('nothing to repeat → nothing shown', () => {

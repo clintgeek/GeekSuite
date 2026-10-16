@@ -7,7 +7,7 @@
  * apps/fitnessgeek/DOCS/THE_FOOD_SEARCH_PLAN.md.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { GeekToastProvider } from '@geeksuite/ui';
 import UnifiedFoodSearch from '../FoodSearch/UnifiedFoodSearch.jsx';
 
@@ -280,7 +280,7 @@ describe('describing a meal', () => {
     // SearchBar listens for the Enter key itself; there is no form element.
     fireEvent.keyDown(screen.getByPlaceholderText(/what did you eat/i), { key: 'Enter' });
     // The box's meal rides along, so the server need not guess it from the clock.
-    await waitFor(() => expect(describeMeal).toHaveBeenCalledWith('a dozen nachos with beef and cheese', { mealType: 'snack' }));
+    await waitFor(() => expect(describeMeal).toHaveBeenCalledWith('a dozen nachos with beef and cheese', expect.objectContaining({ mealType: 'snack', idempotencyKey: expect.any(String) })));
   });
 
   it('logs when the offer itself is tapped', async () => {
@@ -289,7 +289,7 @@ describe('describing a meal', () => {
     await vi.advanceTimersByTimeAsync(600);
 
     fireEvent.click(screen.getByText(/Log “eggs and toast”/));
-    await waitFor(() => expect(describeMeal).toHaveBeenCalledWith('eggs and toast', { mealType: 'snack' }));
+    await waitFor(() => expect(describeMeal).toHaveBeenCalledWith('eggs and toast', expect.objectContaining({ mealType: 'snack', idempotencyKey: expect.any(String) })));
   });
 
   it('clears the box once it is written, so the same meal is not logged twice', async () => {
@@ -600,5 +600,255 @@ describe('the idle list is folded where it would bury the page', () => {
 
     expect(await screen.findByText(/what did you eat/i)).toBeInTheDocument();
     expect(screen.queryByText('Your foods')).not.toBeInTheDocument();
+  });
+});
+
+/**
+ * REVIEW_2026-10, the food-box bugs Heather actually hits.
+ */
+const axiosError = (status) => Object.assign(new Error(`Request failed with status code ${status}`), {
+  isAxiosError: true,
+  response: { status, data: {} }
+});
+const deferred = () => {
+  let resolve;
+  let reject;
+  const promise = new Promise((res, rej) => { resolve = res; reject = rej; });
+  return { promise, resolve, reject };
+};
+
+describe('B6: errors in plain words', () => {
+  it('a 502 from the food databases says the app is restarting, not the status code', async () => {
+    search.mockRejectedValue(axiosError(502));
+    renderBox();
+    type('pancakes');
+    await vi.advanceTimersByTimeAsync(600);
+
+    expect(await screen.findByText(/FitnessGeek is restarting/i)).toBeInTheDocument();
+    expect(screen.queryByText(/status code/i)).toBeNull();
+  });
+
+  it('a 502 on describe says the same', async () => {
+    const onDescribe = vi.fn().mockRejectedValue(axiosError(502));
+    renderBox({ onDescribe });
+    fireEvent.change(screen.getByPlaceholderText(/what did you eat/i), { target: { value: 'two eggs' } });
+    await vi.advanceTimersByTimeAsync(600);
+    fireEvent.click(screen.getByText(/Log “two eggs”/));
+
+    expect(await screen.findByText(/FitnessGeek is restarting/i)).toBeInTheDocument();
+    expect(screen.queryByText(/status code/i)).toBeNull();
+  });
+
+  it('a failed tap-to-log never shows raw transport text', async () => {
+    const onLogItems = vi.fn().mockRejectedValue(Object.assign(new Error('Network Error'), { code: 'ERR_NETWORK' }));
+    suggest.mockResolvedValue([food('Egg')]);
+    renderBox({ onLogItems });
+    type('egg');
+    await vi.advanceTimersByTimeAsync(200);
+    fireEvent.click(await screen.findByText('Egg'));
+
+    expect(await screen.findByText(/No signal right now/i)).toBeInTheDocument();
+    expect(screen.queryByText('Network Error')).toBeNull();
+  });
+});
+
+describe('B7: one tap, one log', () => {
+  it('a second tap while the first is in flight does not log it again', async () => {
+    const pending = deferred();
+    const onLogItems = vi.fn(() => pending.promise);
+    suggest.mockResolvedValue([food('Egg')]);
+    renderBox({ onLogItems });
+    type('egg');
+    await vi.advanceTimersByTimeAsync(200);
+
+    const row = await screen.findByText('Egg');
+    fireEvent.click(row);
+    fireEvent.click(row);
+    // The tapped row says so at once.
+    expect(await screen.findByText('Adding…')).toBeInTheDocument();
+    expect(onLogItems).toHaveBeenCalledTimes(1);
+
+    await act(async () => { pending.resolve({ ok: 1, fail: 0, logIds: ['l1'] }); });
+    await waitFor(() => expect(screen.queryByText('Adding…')).toBeNull());
+  });
+
+  it('describe waits while a tapped row is still logging', async () => {
+    const pending = deferred();
+    const onLogItems = vi.fn(() => pending.promise);
+    const onDescribe = vi.fn().mockResolvedValue({ logged: [], skipped: [], logIds: [] });
+    suggest.mockResolvedValue([food('Egg')]);
+    renderBox({ onLogItems, onDescribe });
+    fireEvent.change(screen.getByPlaceholderText(/what did you eat/i), { target: { value: 'egg' } });
+    await vi.advanceTimersByTimeAsync(600);
+
+    fireEvent.click(await screen.findByText('Egg'));
+    fireEvent.click(screen.getByText(/Log “egg”/));
+    fireEvent.keyDown(screen.getByPlaceholderText(/what did you eat/i), { key: 'Enter' });
+    expect(onDescribe).not.toHaveBeenCalled();
+    await act(async () => { pending.resolve({ ok: 1, fail: 0, logIds: ['l1'] }); });
+  });
+
+  it('two presses of Log it send one describe', async () => {
+    const pending = deferred();
+    const onDescribe = vi.fn(() => pending.promise);
+    renderBox({ onDescribe });
+    fireEvent.change(screen.getByPlaceholderText(/what did you eat/i), { target: { value: 'two eggs' } });
+    await vi.advanceTimersByTimeAsync(600);
+    fireEvent.click(screen.getByText(/Log “two eggs”/));
+    fireEvent.keyDown(screen.getByPlaceholderText(/what did you eat/i), { key: 'Enter' });
+    expect(onDescribe).toHaveBeenCalledTimes(1);
+    await act(async () => { pending.resolve({ logged: [], skipped: [], logIds: [] }); });
+  });
+});
+
+describe('B8: undo says what happened', () => {
+  const tapToLog = async (onLogItems, name = 'Egg') => {
+    fireEvent.click(await screen.findByText(name));
+    await waitFor(() => expect(onLogItems).toHaveBeenCalled());
+  };
+
+  it('the toast changes to "Undone ✓"', async () => {
+    const onLogItems = vi.fn().mockResolvedValue({ ok: 1, fail: 0, logIds: ['l1'] });
+    const onUndo = vi.fn().mockResolvedValue({ deleted: ['l1'], failed: [] });
+    suggest.mockResolvedValue([food('Egg')]);
+    renderBox({ onLogItems, onUndo });
+    type('egg');
+    await vi.advanceTimersByTimeAsync(200);
+    await tapToLog(onLogItems);
+
+    fireEvent.click(await screen.findByRole('button', { name: /^undo$/i }));
+    expect(await screen.findByText('Undone ✓')).toBeInTheDocument();
+    expect(screen.queryByText(/Added to snacks/)).toBeNull();
+  });
+
+  it('a failed undo says so, and Try again retries only what failed', async () => {
+    const onLogItems = vi.fn().mockResolvedValue({ ok: 1, fail: 0, logIds: ['m1', 'm2'], perItem: [['m1', 'm2']] });
+    const onUndo = vi.fn()
+      .mockResolvedValueOnce({ deleted: ['m1'], failed: ['m2'] })
+      .mockResolvedValueOnce({ deleted: ['m2'], failed: [] });
+    suggest.mockResolvedValue([food('Taco night', { type: 'meal' })]);
+    renderBox({ onLogItems, onUndo });
+    type('taco');
+    await vi.advanceTimersByTimeAsync(200);
+    await tapToLog(onLogItems, 'Taco night');
+
+    fireEvent.click(await screen.findByRole('button', { name: /^undo$/i }));
+    expect(await screen.findByText("Couldn't undo — try again")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /try again/i }));
+    await waitFor(() => expect(onUndo).toHaveBeenLastCalledWith(['m2']));
+    expect(await screen.findByText('Undone ✓')).toBeInTheDocument();
+  });
+
+  it('a thrown undo is a failed undo, not a silent one', async () => {
+    const onLogItems = vi.fn().mockResolvedValue({ ok: 1, fail: 0, logIds: ['l1'] });
+    const onUndo = vi.fn().mockRejectedValue(new Error('Network Error'));
+    suggest.mockResolvedValue([food('Egg')]);
+    renderBox({ onLogItems, onUndo });
+    type('egg');
+    await vi.advanceTimersByTimeAsync(200);
+    await tapToLog(onLogItems);
+
+    fireEvent.click(await screen.findByRole('button', { name: /^undo$/i }));
+    expect(await screen.findByText("Couldn't undo — try again")).toBeInTheDocument();
+  });
+
+  it('the ribbon keeps a row whose delete failed', async () => {
+    let n = 0;
+    const onLogItems = vi.fn(async () => { n += 1; return { ok: 1, fail: 0, logIds: [`l${n}`] }; });
+    const onUndo = vi.fn().mockResolvedValue({ deleted: [], failed: ['l3'] });
+    suggest.mockResolvedValue([food('Egg')]);
+    renderBox({ onLogItems, onUndo });
+    type('egg');
+    await vi.advanceTimersByTimeAsync(200);
+    for (let i = 1; i <= 3; i += 1) {
+      fireEvent.click(await screen.findByText('Egg'));
+      await waitFor(() => expect(onLogItems).toHaveBeenCalledTimes(i));
+      await waitFor(() => expect(screen.queryByText('Adding…')).toBeNull());
+    }
+    expect(await screen.findByText('3 logged')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: /undo last/i }));
+    expect(await screen.findByText("Couldn't undo — try again")).toBeInTheDocument();
+    expect(screen.getByText('3 logged')).toBeInTheDocument();
+  });
+
+  it('the undo toast stays up for ten seconds, not four', async () => {
+    const onLogItems = vi.fn().mockResolvedValue({ ok: 1, fail: 0, logIds: ['l1'] });
+    suggest.mockResolvedValue([food('Egg')]);
+    renderBox({ onLogItems, onUndo: vi.fn() });
+    type('egg');
+    await vi.advanceTimersByTimeAsync(200);
+    await tapToLog(onLogItems);
+    await screen.findByRole('button', { name: /^undo$/i });
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(6000); });
+    expect(screen.getByRole('button', { name: /^undo$/i })).toBeInTheDocument();
+    await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
+    expect(screen.queryByRole('button', { name: /^undo$/i })).toBeNull();
+  });
+});
+
+describe('C2: one Idempotency-Key per press', () => {
+  it('a retry of the same words keeps its key; new words get a new one', async () => {
+    const onDescribe = vi.fn()
+      .mockRejectedValueOnce(Object.assign(new Error('timeout of 30000ms exceeded'), { code: 'ECONNABORTED' }))
+      .mockResolvedValue({ logged: [], skipped: [{ name: 'x' }], logIds: [] });
+    renderBox({ onDescribe });
+    const box = screen.getByPlaceholderText(/what did you eat/i);
+    fireEvent.change(box, { target: { value: 'two eggs' } });
+    await vi.advanceTimersByTimeAsync(600);
+
+    fireEvent.click(screen.getByText(/Log “two eggs”/));
+    await screen.findByText(/took too long/i);
+    fireEvent.click(screen.getByText(/Log “two eggs”/));
+    await waitFor(() => expect(onDescribe).toHaveBeenCalledTimes(2));
+    const first = onDescribe.mock.calls[0][1].idempotencyKey;
+    expect(first).toEqual(expect.any(String));
+    expect(onDescribe.mock.calls[1][1].idempotencyKey).toBe(first);
+
+    fireEvent.change(box, { target: { value: 'three eggs' } });
+    await vi.advanceTimersByTimeAsync(600);
+    fireEvent.click(screen.getByText(/Log “three eggs”/));
+    await waitFor(() => expect(onDescribe).toHaveBeenCalledTimes(3));
+    expect(onDescribe.mock.calls[2][1].idempotencyKey).not.toBe(first);
+  });
+});
+
+describe('stale deep results', () => {
+  it('a search still running when the box is cleared never lands', async () => {
+    const pending = deferred();
+    search.mockImplementation(() => pending.promise);
+    renderBox();
+    type('pancakes');
+    await vi.advanceTimersByTimeAsync(500);
+    expect(search).toHaveBeenCalledTimes(1);
+
+    type('');
+    await vi.advanceTimersByTimeAsync(200);
+    await act(async () => { pending.resolve([food('Pancakes, buttermilk')]); });
+    await vi.advanceTimersByTimeAsync(50);
+    expect(screen.queryByText('Pancakes, buttermilk')).toBeNull();
+  });
+});
+
+describe('the portion answer', () => {
+  it('does not say "Updated" when nothing was updated', async () => {
+    const onDescribe = vi.fn().mockResolvedValue({
+      ok: 1, fail: 0, logIds: ['log-n'],
+      logged: [{ logId: 'log-n', name: 'Nachos', servings: 1, loggedServings: 1, calories: 1150, nutrition: { calories_per_serving: 1150 } }],
+      skipped: [],
+      questions: [{ logId: 'log-n', name: 'Nachos', spread: 800, low: 400, high: 1200, logged: 1150 }],
+      totalCalories: 1150
+    });
+    const onAdjustCalories = vi.fn().mockResolvedValue(false);
+    renderBox({ onDescribe, onAdjustCalories });
+    fireEvent.change(screen.getByPlaceholderText(/what did you eat/i), { target: { value: 'nachos' } });
+    await vi.advanceTimersByTimeAsync(600);
+    fireEvent.click(screen.getByText(/^Log “/));
+    fireEvent.click(await screen.findByRole('button', { name: /smaller · ~400/i }));
+
+    await waitFor(() => expect(onAdjustCalories).toHaveBeenCalled());
+    expect(await screen.findByText('Could not update that.')).toBeInTheDocument();
+    expect(screen.queryByText(/Updated to 400 cal/)).toBeNull();
   });
 });

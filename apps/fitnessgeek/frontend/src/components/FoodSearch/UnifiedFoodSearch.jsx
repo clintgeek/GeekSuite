@@ -17,6 +17,9 @@ import QuickPicks from './QuickPicks';
 import { foodService } from '../../services/foodService';
 import { useSpeechInput } from '../../hooks/useSpeechInput.js';
 import { addedMessage } from '../../utils/plainWords.js';
+import { errorMessage } from '../../utils/errorMessage.js';
+import { useUndoToast, runUndo } from './undoToast.jsx';
+import { newIdempotencyKey } from './idempotency.js';
 
 /**
  * The food search box. One surface, two waves, no submit step.
@@ -69,6 +72,12 @@ import { addedMessage } from '../../utils/plainWords.js';
  * The box asked to describe a meal in its placeholder for a day before any of
  * this existed, and searched instead. Promising it and not doing it is worse
  * than not offering it.
+ *
+ * ONE WRITE AT A TIME (REVIEW_2026-10 B7). A tapped row shows "Adding…" at
+ * once, and while any write from this box is in flight — a row, a chip, a
+ * serving sheet, a describe, an undo — every other way to write is disabled.
+ * The guard is a ref as well as state, because two taps can land before the
+ * first re-render does.
  */
 
 const DEBOUNCE_LOCAL_MS = 150;
@@ -124,6 +133,7 @@ const UnifiedFoodSearch = ({
 }) => {
   const theme = useTheme();
   const { notify } = useToast();
+  const { offerUndo, sayUndoOutcome } = useUndoToast(onUndo);
   const muted = theme.palette.text.secondary;
   const ink = theme.palette.text.primary;
 
@@ -135,6 +145,8 @@ const UnifiedFoodSearch = ({
   const [adjusting, setAdjusting] = useState(null);
   const [session, setSession] = useState([]);   // what this sitting has logged
   const [busy, setBusy] = useState(false);
+  // Which row or chip the write in flight came from, so it can say "Adding…".
+  const [pendingKey, setPendingKey] = useState(null);
   const [describing, setDescribing] = useState(false);
   // At most one, and only when the backend judged it worth asking (§3.8).
   const [question, setQuestion] = useState(null);
@@ -148,6 +160,25 @@ const UnifiedFoodSearch = ({
   const deepAbort = useRef(null);
   const deepTimer = useRef(null);
   const seededRef = useRef(null);
+  // The query the deep results on screen are allowed to belong to.
+  const deepFor = useRef('');
+  const inFlight = useRef(false);
+  // The describe press being retried keeps its Idempotency-Key (C2).
+  const describeAttempt = useRef(null);
+
+  /** Take the box's one write slot, or say no if a write is already running. */
+  const beginWrite = useCallback((key = null) => {
+    if (inFlight.current) return false;
+    inFlight.current = true;
+    setBusy(true);
+    setPendingKey(key);
+    return true;
+  }, []);
+  const endWrite = useCallback(() => {
+    inFlight.current = false;
+    setBusy(false);
+    setPendingKey(null);
+  }, []);
 
   // ── Wave one: the local catalog, on every pause ──────────────────────
   useEffect(() => {
@@ -180,15 +211,20 @@ const UnifiedFoodSearch = ({
     deepAbort.current?.abort();
     const controller = new AbortController();
     deepAbort.current = controller;
+    deepFor.current = text;
 
     setLoadingDeep(true);
     setError(null);
     try {
       const foods = await foodService.search(text, { limit: 25, includeAI: true, signal: controller.signal });
-      if (!controller.signal.aborted) setDeepResults(Array.isArray(foods) ? foods : []);
+      // A late answer for a query that is no longer in the box is dropped,
+      // aborted or not — it used to land after the box was cleared.
+      if (!controller.signal.aborted && deepFor.current === text) {
+        setDeepResults(Array.isArray(foods) ? foods : []);
+      }
     } catch (err) {
-      if (err?.name !== 'CanceledError' && err?.name !== 'AbortError') {
-        setError(err?.message || 'Could not reach the food databases. Your own foods are still listed.');
+      if (err?.name !== 'CanceledError' && err?.name !== 'AbortError' && deepFor.current === text) {
+        setError(errorMessage(err, 'Could not reach the food databases. Your own foods are still listed.'));
       }
     } finally {
       if (!controller.signal.aborted) setLoadingDeep(false);
@@ -198,6 +234,10 @@ const UnifiedFoodSearch = ({
   useEffect(() => {
     clearTimeout(deepTimer.current);
     if (query.trim().length < MIN_QUERY) {
+      // Cleared (or down to one letter): the search still running is for
+      // something that is no longer there.
+      deepAbort.current?.abort();
+      deepFor.current = '';
       setDeepResults([]);
       setLoadingDeep(false);
       return undefined;
@@ -257,9 +297,21 @@ const UnifiedFoodSearch = ({
   const searching = query.trim().length >= MIN_QUERY;
 
   // ── Logging ──────────────────────────────────────────────────────────
-  const logFoods = useCallback(async (items, meal) => {
+  /** The ribbon forgets only what was really deleted. */
+  const forgetDeleted = useCallback((deleted) => {
+    if (!deleted?.length) return;
+    setSession((prev) => prev
+      .map((entry) => {
+        const ids = entry.logIds || [];
+        if (!ids.some((id) => deleted.includes(id))) return entry;
+        return { ...entry, logIds: ids.filter((id) => !deleted.includes(id)) };
+      })
+      .filter((entry) => (entry.logIds || []).length > 0));
+  }, []);
+
+  const logFoods = useCallback(async (items, meal, key = null) => {
     if (!items?.length || !onLogItems) return;
-    setBusy(true);
+    if (!beginWrite(key)) return;
     try {
       const result = await onLogItems(items, meal || mealType);
       const ok = result?.ok ?? items.length;
@@ -275,31 +327,23 @@ const UnifiedFoodSearch = ({
           ...prev,
           ...items.map((item, i) => ({ ...item, logIds: perItem[i] || [] }))
         ]);
-        notify(addedMessage(meal || mealType, items.length === 1 ? items[0].name : `${ok} items`), {
+        offerUndo(addedMessage(meal || mealType, items.length === 1 ? items[0].name : `${ok} items`), logIds, {
           tone: result?.fail ? 'warning' : 'success',
-          action: logIds.length > 0 && onUndo ? (
-            <Button
-              size="small"
-              sx={{ color: 'inherit', fontWeight: 700 }}
-              onClick={async () => {
-                await onUndo(logIds);
-                setSession((prev) => prev.filter((entry) => !entry.logIds?.some((id) => logIds.includes(id))));
-              }}
-            >
-              Undo
-            </Button>
-          ) : undefined
+          onDeleted: forgetDeleted
         });
       }
       if (result?.fail) {
-        notify(`${result.fail} item${result.fail === 1 ? '' : 's'} could not be logged.`, { tone: 'error' });
+        const fallback = items.length === 1
+          ? "Couldn't add that. Try again."
+          : `${result.fail} item${result.fail === 1 ? '' : 's'} could not be logged.`;
+        notify(errorMessage(result?.errors?.[0], fallback), { tone: 'error' });
       }
     } catch (err) {
-      notify(err?.message || 'Could not log that. Try again.', { tone: 'error' });
+      notify(errorMessage(err, 'Could not log that. Try again.'), { tone: 'error' });
     } finally {
-      setBusy(false);
+      endWrite();
     }
-  }, [onLogItems, onUndo, mealType, notify]);
+  }, [onLogItems, mealType, notify, offerUndo, forgetDeleted, beginWrite, endWrite]);
 
   /**
    * Send the sentence; the backend writes the log and tells us what landed.
@@ -312,14 +356,25 @@ const UnifiedFoodSearch = ({
     // `spoken` is the microphone's transcript, handed straight in: the box's
     // `query` state has not caught up with it yet on this render.
     const text = String(typeof spoken === 'string' ? spoken : query).trim();
-    if (!text || !onDescribe || describing) return;
+    if (!text || !onDescribe) return;
+    if (!beginWrite('describe')) return;
+
+    // Pressing Log it again on the same words after a failure is a retry of
+    // that press, and keeps its key — the first try may have written on the
+    // server after this end gave up on it (C2). New words, new press.
+    if (describeAttempt.current?.text !== text) {
+      describeAttempt.current = { text, key: newIdempotencyKey() };
+    }
+    const idempotencyKey = describeAttempt.current.key;
 
     setDescribing(true);
     setError(null);
     try {
       // The meal the person picked (a meal card's "+ Add", or the chips)
       // rides along, so "two eggs" from Lunch's sheet lands in lunch.
-      const result = await onDescribe(text, { mealType });
+      const result = await onDescribe(text, { mealType, idempotencyKey });
+      // It answered: whatever comes next is a new press.
+      describeAttempt.current = null;
       const logged = result?.logged || [];
       const skipped = result?.skipped || [];
       const logIds = result?.logIds || [];
@@ -373,20 +428,9 @@ const UnifiedFoodSearch = ({
           : result?.totalCalories;
         const summary = `${what} · ${Math.round(calories || 0)} cal`;
 
-        notify(addedMessage(logged[0]?.mealType || mealType, summary), {
+        offerUndo(addedMessage(logged[0]?.mealType || mealType, summary), logIds, {
           tone: skipped.length > 0 ? 'warning' : 'success',
-          action: logIds.length > 0 && onUndo ? (
-            <Button
-              size="small"
-              sx={{ color: 'inherit', fontWeight: 700 }}
-              onClick={async () => {
-                await onUndo(logIds);
-                setSession((prev) => prev.filter((item) => !item.logIds?.some((id) => logIds.includes(id))));
-              }}
-            >
-              Undo
-            </Button>
-          ) : undefined
+          onDeleted: forgetDeleted
         });
 
         // Chef: "the one-tap ... should close to show it completed
@@ -414,16 +458,14 @@ const UnifiedFoodSearch = ({
       }
     } catch (err) {
       // A 422 is a real answer ("no food in that"), not a fault; the server's
-      // own words are the clearest thing to show.
-      setError(
-        err?.response?.data?.error?.message
-        || err?.message
-        || 'Could not log that. Try again.'
-      );
+      // own words are the clearest thing to show. errorMessage passes them
+      // through and turns a 502 or a dead signal into plain words.
+      setError(errorMessage(err, 'Could not log that. Try again.'));
     } finally {
       setDescribing(false);
+      endWrite();
     }
-  }, [query, onDescribe, describing, onUndo, onClose, notify, mealType]);
+  }, [query, onDescribe, onClose, mealType, offerUndo, forgetDeleted, beginWrite, endWrite]);
 
   // ── Speak it ─────────────────────────────────────────────────────────
   // The transcript goes into the box (so he can see what was heard) and
@@ -445,14 +487,19 @@ const UnifiedFoodSearch = ({
   /** Answering re-scales the log that was already written. */
   const answerQuestion = useCallback(async (asked, targetCalories) => {
     if (!onAdjustCalories || !asked?.entry) { setQuestion(null); return; }
-    setBusy(true);
+    if (!beginWrite('portion')) return;
     try {
-      await onAdjustCalories(
+      const updated = await onAdjustCalories(
         asked.logId,
         asked.entry.nutrition,
         asked.entry.loggedServings ?? asked.entry.servings ?? 1,
         targetCalories
       );
+      // `false` means nothing was written; saying "Updated" then was a lie.
+      if (!updated) {
+        notify(errorMessage(null, 'Could not update that.'), { tone: 'error' });
+        return;
+      }
       setSession((prev) => prev.map((item) => (
         item.logIds?.includes(asked.logId)
           ? {
@@ -466,43 +513,41 @@ const UnifiedFoodSearch = ({
       )));
       notify(`Updated to ${Math.round(targetCalories)} cal`, { tone: 'success' });
     } catch (err) {
-      notify(err?.message || 'Could not update that.', { tone: 'error' });
+      notify(errorMessage(err, 'Could not update that.'), { tone: 'error' });
     } finally {
       setQuestion(null);
-      setBusy(false);
+      endWrite();
     }
-  }, [onAdjustCalories, notify]);
+  }, [onAdjustCalories, notify, beginWrite, endWrite]);
 
   const handleTap = useCallback((food) => {
     const servings = Number(food.requestedQuantity) > 0 ? Number(food.requestedQuantity) : 1;
-    logFoods([{ ...food, servings }], mealType);
+    logFoods([{ ...food, servings }], mealType, identityOf(food));
   }, [logFoods, mealType]);
 
-  const undoAll = useCallback(async () => {
-    const ids = session.flatMap((entry) => entry.logIds || []);
-    if (ids.length === 0 || !onUndo) return;
-    setBusy(true);
+  /** The ribbon's undos: same outcome toast, and only deleted rows leave. */
+  const undoIds = useCallback(async (ids) => {
+    if (!ids?.length || !onUndo) return;
+    if (!beginWrite('undo')) return;
     try {
-      await onUndo(ids);
-      setSession([]);
-      notify('Undone.', { tone: 'info' });
+      const { deleted, failed } = await runUndo(onUndo, ids);
+      forgetDeleted(deleted);
+      sayUndoOutcome(failed, undoIds);
     } finally {
-      setBusy(false);
+      endWrite();
     }
-  }, [session, onUndo, notify]);
+  }, [onUndo, forgetDeleted, sayUndoOutcome, beginWrite, endWrite]);
 
-  const undoLast = useCallback(async () => {
-    const last = session[session.length - 1];
-    if (!last?.logIds?.length || !onUndo) return;
-    setBusy(true);
-    try {
-      // A meal's several logs go together: it was one gesture, so it is one undo.
-      await onUndo(last.logIds);
-      setSession((prev) => prev.slice(0, -1));
-    } finally {
-      setBusy(false);
-    }
-  }, [session, onUndo]);
+  const undoAll = useCallback(
+    () => undoIds(session.flatMap((entry) => entry.logIds || [])),
+    [session, undoIds]
+  );
+
+  // A meal's several logs go together: it was one gesture, so it is one undo.
+  const undoLast = useCallback(
+    () => undoIds(session[session.length - 1]?.logIds || []),
+    [session, undoIds]
+  );
 
   // ── Rendering ────────────────────────────────────────────────────────
   const sectionHeading = (text) => (
@@ -575,6 +620,8 @@ const UnifiedFoodSearch = ({
       food={food}
       onTap={handleTap}
       onAdjust={setAdjusting}
+      pending={busy && pendingKey === identityOf(food)}
+      disabled={busy}
       ketoMode={ketoMode}
       dense={mode === 'dialog'}
     />
@@ -585,6 +632,7 @@ const UnifiedFoodSearch = ({
       role="button"
       tabIndex={0}
       aria-busy={describing}
+      aria-disabled={busy || undefined}
       onClick={() => describe()}
       onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); describe(); } }}
       sx={{
@@ -596,9 +644,9 @@ const UnifiedFoodSearch = ({
         py: 1,
         mb: 1,
         borderRadius: 2,
-        cursor: describing ? 'progress' : 'pointer',
-        opacity: describing ? 0.7 : 1,
-        pointerEvents: describing ? 'none' : 'auto',
+        cursor: describing ? 'progress' : busy ? 'default' : 'pointer',
+        opacity: busy ? 0.7 : 1,
+        pointerEvents: busy ? 'none' : 'auto',
         border: `1px solid ${alpha(theme.palette.primary.main, 0.4)}`,
         backgroundColor: alpha(theme.palette.primary.main, 0.06),
         '&:hover': { backgroundColor: alpha(theme.palette.primary.main, 0.12) },
@@ -772,7 +820,8 @@ const UnifiedFoodSearch = ({
           date={date}
           mealType={mealType}
           busy={busy}
-          onPick={(items) => logFoods(items, mealType)}
+          pendingKey={pendingKey}
+          onPick={(items, key) => logFoods(items, mealType, key)}
         />
       )}
 
@@ -871,7 +920,7 @@ const UnifiedFoodSearch = ({
         onClose={() => setAdjusting(null)}
         onConfirm={(food, meal) => {
           setAdjusting(null);
-          logFoods([food], meal);
+          logFoods([food], meal, identityOf(food));
         }}
       />
     </Box>

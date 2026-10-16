@@ -88,7 +88,7 @@ describe('the microphone', () => {
       instances[0].hear('two eggs and toast');
       instances[0].end();
     });
-    await waitFor(() => expect(onDescribe).toHaveBeenCalledWith('two eggs and toast', { mealType: 'lunch' }));
+    await waitFor(() => expect(onDescribe).toHaveBeenCalledWith('two eggs and toast', expect.objectContaining({ mealType: 'lunch', idempotencyKey: expect.any(String) })));
     expect(onDescribe).toHaveBeenCalledTimes(1);
   });
 

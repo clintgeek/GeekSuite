@@ -49,10 +49,15 @@ export const foodService = {
    * "+ Add", or the sheet's meal chips. The server uses it instead of the
    * hour; a meal named in the text itself still wins (SIMPLE_AND_FULL_PLAN.md).
    *
+   * `idempotencyKey` goes out as the `Idempotency-Key` header (C2): for the
+   * same key within ten minutes the server answers with its first response
+   * and writes nothing new, so retrying a press that timed out here cannot
+   * log the meal twice.
+   *
    * @param {string} text
-   * @param {{date: string, hour?: number, mealType?: string, signal?: AbortSignal}} options
+   * @param {{date: string, hour?: number, mealType?: string, idempotencyKey?: string, signal?: AbortSignal}} options
    */
-  describe: async (text, { date, hour, mealType, signal } = {}) => {
+  describe: async (text, { date, hour, mealType, idempotencyKey, signal } = {}) => {
     const response = await restApi.post(
       '/logs/describe',
       {
@@ -61,7 +66,10 @@ export const foodService = {
         hour: Number.isFinite(hour) ? hour : new Date().getHours(),
         ...(mealType ? { mealType } : {})
       },
-      { signal }
+      {
+        signal,
+        ...(idempotencyKey ? { headers: { 'Idempotency-Key': idempotencyKey } } : {})
+      }
     );
     return response.data?.data || null;
   },

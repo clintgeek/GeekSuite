@@ -45,7 +45,10 @@ const SessionRibbon = ({ items = [], onUndoAll, onUndoLast, busy = false }) => {
   const primary = theme.palette.primary.main;
 
   const totalCalories = items.reduce((sum, item) => {
-    const per = Number(item?.nutrition?.calories_per_serving) || 0;
+    // A saved meal carries no `nutrition` of its own — its total is
+    // `totalNutrition` — and was counted as 0 cal.
+    const source = item?.type === 'meal' ? (item?.totalNutrition || item?.nutrition) : item?.nutrition;
+    const per = Number(source?.calories_per_serving) || 0;
     return sum + per * (Number(item?.servings) || 1);
   }, 0);
   const displayed = useCountUp(Math.round(totalCalories));

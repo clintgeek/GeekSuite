@@ -41,6 +41,9 @@ vi.mock('../../utils/logger.js', () => ({
   default: { error: vi.fn(), warn: vi.fn(), info: vi.fn() }
 }));
 
+const forgetRecentLogs = vi.fn();
+vi.mock('../useRecentLogs.js', () => ({ forgetRecentLogs: (...a) => forgetRecentLogs(...a) }));
+
 const { useFoodLogging } = await import('../useFoodLogging.js');
 
 const food = (name) => ({ id: name, name, servings: 1, nutrition: { calories_per_serving: 100 } });
@@ -162,5 +165,82 @@ describe('describeMeal', () => {
       date: '2026-09-16',
       hour: expect.any(Number)
     }));
+  });
+});
+
+/**
+ * B7: a tap used to wait for `onChanged` — a whole page reload, nine calls on
+ * Home — before it returned, so there was no feedback for 1–3 s and a second
+ * tap logged it twice. The write returns when the WRITE is done; the reload
+ * follows on its own.
+ */
+describe('feedback first, refresh after', () => {
+  const never = () => new Promise(() => {});
+
+  it('logItems answers without waiting for the page to reload', async () => {
+    const onChanged = vi.fn(never);
+    const { result } = renderHook(() => useFoodLogging({ date: '2026-10-16', onChanged }));
+    let out;
+    await act(async () => { out = await result.current.logItems([food('Egg')], 'breakfast'); });
+    expect(out.ok).toBe(1);
+    expect(onChanged).toHaveBeenCalledTimes(1);   // still refreshed, just not awaited
+  });
+
+  it('describeMeal and undoLogs do not wait for it either', async () => {
+    describeApi.mockResolvedValue({ logged: [{ logId: 'd1', name: 'Fries' }], skipped: [], logIds: ['d1'] });
+    const onChanged = vi.fn(never);
+    const { result } = renderHook(() => useFoodLogging({ date: '2026-10-16', onChanged }));
+    let described;
+    let undone;
+    await act(async () => { described = await result.current.describeMeal('fries'); });
+    await act(async () => { undone = await result.current.undoLogs(['d1']); });
+    expect(described.ok).toBe(1);
+    expect(undone.deleted).toEqual(['d1']);
+  });
+
+  it('a failed refresh does not turn a good write into an error', async () => {
+    const onChanged = vi.fn().mockRejectedValue(new Error('502'));
+    const { result } = renderHook(() => useFoodLogging({ date: '2026-10-16', onChanged }));
+    let out;
+    await act(async () => { out = await result.current.logItems([food('Egg')], 'breakfast'); });
+    expect(out.ok).toBe(1);
+  });
+
+  it('drops the Again-chip cache after a log and after an undo', async () => {
+    const { result } = mount();
+    await act(async () => { await result.current.logItems([food('Egg')], 'breakfast'); });
+    expect(forgetRecentLogs).toHaveBeenCalledTimes(1);
+    await act(async () => { await result.current.undoLogs(['log-food']); });
+    expect(forgetRecentLogs).toHaveBeenCalledTimes(2);
+  });
+});
+
+/** B8: `allSettled` swallowed every failed delete, so a failed undo looked fine. */
+describe('undo says what it could not do', () => {
+  it('separates the logs that went from the ones that did not', async () => {
+    deleteFoodLog
+      .mockResolvedValueOnce({ success: true })
+      .mockRejectedValueOnce(new Error('Network Error'));
+    const { result } = mount();
+    let out;
+    await act(async () => { out = await result.current.undoLogs(['a', 'b']); });
+    expect(out).toEqual({ deleted: ['a'], failed: ['b'] });
+  });
+});
+
+/** C2: one Idempotency-Key per press, so a retried timeout is not a second log. */
+describe('describe idempotency', () => {
+  it('passes the press’s key through', async () => {
+    describeApi.mockResolvedValue({ logged: [], skipped: [], logIds: [] });
+    const { result } = mount();
+    await act(async () => { await result.current.describeMeal('toast', { idempotencyKey: 'key-1' }); });
+    expect(describeApi).toHaveBeenCalledWith('toast', expect.objectContaining({ idempotencyKey: 'key-1' }));
+  });
+
+  it('makes one when the caller did not', async () => {
+    describeApi.mockResolvedValue({ logged: [], skipped: [], logIds: [] });
+    const { result } = mount();
+    await act(async () => { await result.current.describeMeal('toast'); });
+    expect(describeApi.mock.calls[0][1].idempotencyKey).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
   });
 });

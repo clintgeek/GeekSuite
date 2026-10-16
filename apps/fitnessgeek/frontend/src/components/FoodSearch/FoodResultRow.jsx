@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Typography, IconButton, Chip, Tooltip } from '@mui/material';
+import { Box, Typography, IconButton, Chip, Tooltip, CircularProgress } from '@mui/material';
 import {
   Add as AddIcon,
   Check as StagedIcon,
@@ -23,6 +23,11 @@ import { formatServing } from '../../utils/units.js';
  * The whole row is the tap target (≥56px, comfortably over the 44px the
  * mobile harness enforces); the trailing button opens the serving editor for
  * the minority of adds that need one.
+ *
+ * `pending` is this row's own write in flight: it says "Adding…" at once,
+ * because the answer can take a few seconds on a phone and a row that does
+ * nothing visible gets tapped again. `disabled` is any write in flight in the
+ * box — the row ignores taps until it's done (REVIEW_2026-10 B7).
  */
 
 const SOURCE_LABEL = {
@@ -49,7 +54,9 @@ const FoodResultRow = ({
   staged = false,
   stagedCount = 0,
   ketoMode = false,
-  dense = false
+  dense = false,
+  pending = false,
+  disabled = false
 }) => {
   const theme = useTheme();
   const muted = theme.palette.text.secondary;
@@ -74,19 +81,25 @@ const FoodResultRow = ({
     ? formatServing(food.serving.size, food.serving.unit || 'g')
     : null;
 
-  const subtitle = [food?.brand, servingText, servings !== 1 ? `×${servings}` : null]
-    .filter(Boolean)
-    .join(' · ');
+  const subtitle = pending
+    ? 'Adding…'
+    : [food?.brand, servingText, servings !== 1 ? `×${servings}` : null]
+      .filter(Boolean)
+      .join(' · ');
+  const inert = disabled || pending;
+  const tap = () => { if (!inert) onTap?.(food); };
 
   return (
     <Box
       role="button"
       tabIndex={0}
-      onClick={() => onTap?.(food)}
+      aria-disabled={inert || undefined}
+      aria-busy={pending || undefined}
+      onClick={tap}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          onTap?.(food);
+          tap();
         }
       }}
       sx={{
@@ -96,7 +109,8 @@ const FoodResultRow = ({
         minHeight: dense ? 52 : 60,
         px: 1.5,
         py: 1,
-        cursor: 'pointer',
+        cursor: pending ? 'progress' : inert ? 'default' : 'pointer',
+        opacity: disabled && !pending ? 0.6 : 1,
         borderRadius: 2,
         border: '1px solid',
         borderColor: staged ? primary : 'transparent',
@@ -189,10 +203,17 @@ const FoodResultRow = ({
       )}
 
       {/* Trailing control: 44px, and it never swallows the row tap */}
+      {pending ? (
+        <Box sx={{ width: 44, height: 44, flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <CircularProgress size={20} aria-label={`Adding ${food?.name}`} />
+        </Box>
+      ) : (
       <Tooltip title={staged ? 'Remove from tray' : 'Adjust servings'} arrow>
         <IconButton
+          disabled={inert}
           onClick={(e) => {
             e.stopPropagation();
+            if (inert) return;
             if (staged) onTap?.(food);
             else onAdjust?.(food);
           }}
@@ -215,6 +236,7 @@ const FoodResultRow = ({
           )}
         </IconButton>
       </Tooltip>
+      )}
 
       {!staged && (
         <AddIcon sx={{ display: 'none' }} aria-hidden />

@@ -19,21 +19,38 @@ const rows = (response) => {
   return Array.isArray(data) ? data : [];
 };
 
-/** Drop the cache (after a write, or between tests). */
+/** Drop the cache. useFoodLogging calls this after every log, undo and adjust. */
 export function forgetRecentLogs() {
   cache.clear();
 }
+
+/**
+ * A food that has since been deleted can't be logged again (the write fails
+ * the catalog check), so it is not offered as a chip or as part of
+ * "Same as yesterday's".
+ */
+const loggable = (log) => {
+  const food = log?.food_item_id || log?.food_item;
+  return !(food && typeof food === 'object' && food.is_deleted);
+};
 
 async function load(date) {
   const hit = cache.get(date);
   if (hit && Date.now() - hit.at < TTL_MS) return hit.value;
   const start = daysBefore(date, RECENT_DAYS);
-  const [logs, meals] = await Promise.all([
-    apiService.get(`/logs?startDate=${start}&endDate=${date}`).then(rows).catch(() => []),
-    apiService.get('/meals').then(rows).catch(() => []),
+  const [logs, meals] = await Promise.allSettled([
+    apiService.get(`/logs?startDate=${start}&endDate=${date}`).then(rows),
+    apiService.get('/meals').then(rows),
   ]);
-  const value = { logs, meals };
-  cache.set(date, { at: Date.now(), value });
+  const value = {
+    logs: logs.status === 'fulfilled' ? logs.value.filter(loggable) : [],
+    meals: meals.status === 'fulfilled' ? meals.value : [],
+  };
+  // A failed read is not "no history". Caching it as empty hid the chips for
+  // two minutes after every deploy blip; only a clean answer is kept.
+  if (logs.status === 'fulfilled' && meals.status === 'fulfilled') {
+    cache.set(date, { at: Date.now(), value });
+  }
   return value;
 }
 

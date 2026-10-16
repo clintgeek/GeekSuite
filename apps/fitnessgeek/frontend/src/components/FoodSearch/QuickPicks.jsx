@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Box, Button, Chip, Typography } from '@mui/material';
+import { Box, Button, Chip, CircularProgress, Typography } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { Replay as AgainIcon, History as YesterdayIcon, RestaurantMenu as MealIcon } from '@mui/icons-material';
 import { useRecentLogs } from '../../hooks/useRecentLogs.js';
@@ -18,9 +18,12 @@ import { mealWord } from '../../utils/plainWords.js';
  *     meal (utils/againChips.js), each re-logged at its last servings.
  *
  * Both go through the box's own `logFoods`, so the toast, the Undo and the
- * session ribbon are the same as a tapped search result's.
+ * session ribbon are the same as a tapped search result's. `onPick(items, key)`
+ * names which one was tapped, so it can say "Adding…" while the rest wait.
  */
-export default function QuickPicks({ date, mealType, onPick, busy = false }) {
+const YESTERDAY_KEY = 'quick:yesterday';
+
+export default function QuickPicks({ date, mealType, onPick, busy = false, pendingKey = null }) {
   const theme = useTheme();
   const produce = theme.palette.produce?.[mealType] || {};
   const { logs, meals, loading } = useRecentLogs(date);
@@ -40,9 +43,9 @@ export default function QuickPicks({ date, mealType, onPick, busy = false }) {
         <Button
           variant="outlined"
           size="large"
-          startIcon={<YesterdayIcon />}
+          startIcon={pendingKey === YESTERDAY_KEY ? <CircularProgress size={18} color="inherit" /> : <YesterdayIcon />}
           disabled={busy}
-          onClick={() => onPick?.(yesterday)}
+          onClick={() => onPick?.(yesterday, YESTERDAY_KEY)}
           data-testid="same-as-yesterday"
           sx={{
             justifyContent: 'flex-start',
@@ -57,7 +60,7 @@ export default function QuickPicks({ date, mealType, onPick, busy = false }) {
           }}
         >
           <Box component="span" sx={{ display: 'flex', flexDirection: 'column', lineHeight: 1.25 }}>
-            <span>Same as yesterday&apos;s {meal}</span>
+            <span>{pendingKey === YESTERDAY_KEY ? 'Adding…' : <>Same as yesterday&apos;s {meal}</>}</span>
             <Box component="span" sx={{ fontSize: '0.9375rem', fontWeight: 600, color: 'text.secondary' }}>
               {yesterday.map((f) => f.name).slice(0, 3).join(', ')}{yesterday.length > 3 ? ` and ${yesterday.length - 3} more` : ''}
             </Box>
@@ -74,10 +77,12 @@ export default function QuickPicks({ date, mealType, onPick, busy = false }) {
             {chips.map((chip) => (
               <Chip
                 key={chip.key}
-                icon={chip.kind === 'meal' ? <MealIcon /> : undefined}
-                label={chip.label}
+                icon={pendingKey === `quick:${chip.key}`
+                  ? <CircularProgress size={16} color="inherit" />
+                  : chip.kind === 'meal' ? <MealIcon /> : undefined}
+                label={pendingKey === `quick:${chip.key}` ? 'Adding…' : chip.label}
                 disabled={busy}
-                onClick={() => onPick?.([chip.item])}
+                onClick={() => onPick?.([chip.item], `quick:${chip.key}`)}
                 aria-label={`Add ${chip.label} to ${meal} again`}
                 sx={{
                   height: 48,
