@@ -22,6 +22,7 @@ import TodayStrip from '../components/Home/TodayStrip.jsx';
 import MedsChecklist from '../components/Home/MedsChecklist.jsx';
 import FirstRun from '../components/Home/FirstRun.jsx';
 import AddFoodDialog from '../components/FoodLog/AddFoodDialog.jsx';
+import { useJustAdded } from '../components/FoodSearch/useJustAdded.jsx';
 
 import { fitnessGeekService } from '../services/fitnessGeekService.js';
 import { goalsService } from '../services/goalsService.js';
@@ -246,7 +247,9 @@ const DashboardNew = () => {
     }).catch(() => {});
   }, []);
 
-  const { logItems, undoLogs, describeMeal, adjustLogCalories } = useFoodLogging({ date: today, onChanged: loadDashboardData });
+  const { logItems, undoLogs, describeMeal, adjustLogCalories, updateLog, setLogCalories } = useFoodLogging({ date: today, onChanged: loadDashboardData });
+  // Full: a clean describe closes the sheet and leaves a "Just added" strip on the meal card.
+  const justAdded = useJustAdded({ setLogCalories, describeMeal, undoLogs });
 
   const handleRemoveFood = async (logId) => {
     if (!logId) return;
@@ -317,6 +320,9 @@ const DashboardNew = () => {
       onDescribe={describeMeal}
       onAdjustCalories={adjustLogCalories}
       onUndo={undoLogs}
+      onUpdateLog={updateLog}
+      onSetCalories={setLogCalories}
+      onJustAdded={justAdded.show}
       showBarcodeScanner={showBarcodeScanner}
       onShowBarcodeScanner={setShowBarcodeScanner}
       ketoMode={mode === 'keto'}
@@ -485,6 +491,7 @@ const DashboardNew = () => {
             onRemove={isSimple ? undefined : handleRemoveFood}
             removingIds={removingLogIds}
             date={today}
+            justAdded={justAdded}
           />
         </Box>
 

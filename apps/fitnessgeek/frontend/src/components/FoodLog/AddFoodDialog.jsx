@@ -1,11 +1,13 @@
 import React from 'react';
 import { Box } from '@mui/material';
 import { Restaurant as FoodIcon } from '@mui/icons-material';
-import { UnifiedFoodSearch } from '../FoodSearch';
+import { FoodComposer } from '../FoodSearch';
 import { useUndoToast } from '../FoodSearch/undoToast.jsx';
 import { useBackToClose } from '../FoodSearch/useBackToClose.js';
+import { mealOnDay } from '../FoodSearch/composerText.js';
 import BarcodeScanner from '../BarcodeScanner/BarcodeScanner.jsx';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
+import { useToday } from '../../hooks/useToday.js';
 import { addedMessage, mealWord } from '../../utils/plainWords.js';
 
 /**
@@ -22,7 +24,7 @@ import { addedMessage, mealWord } from '../../utils/plainWords.js';
  * BOTH single-shot paths close this whole sheet on success (Chef: "on the
  * one-tap or barcode scan, the modal should close to show it completed
  * successfully"). Describing a meal closes via `onClose` passed straight
- * into `UnifiedFoodSearch`, which calls it once a described log comes back
+ * into `FoodComposer`, which calls it once a described log comes back
  * clean. A barcode is scanned outside that component entirely, so the same
  * "close on success, stay open and show the error otherwise" has to be
  * built here: `onBarcodeScanned` returns whether the log actually wrote,
@@ -30,6 +32,20 @@ import { addedMessage, mealWord } from '../../utils/plainWords.js';
  * Tapping an individual result row is neither of these: it stays exactly as
  * it was, logging in place and growing the SessionRibbon tray, because
  * picking several items is a session the person ends, not the app.
+ *
+ * In Simple a describe does not close it either (Chef, 2026-10-16): the sheet
+ * stays on a result card with Done. FoodComposer decides; this passes
+ * `onJustAdded` through for Full's "Just added" strip.
+ *
+ * THE DAY IS IN THE TITLE when it isn't today: "Add to yesterday's dinner",
+ * "Add to Wednesday's dinner" (REVIEW_2026-10 Phase 1.5). Heather backfills
+ * (§2a), and the sheet never said which day it was writing to.
+ *
+ * IT DOESN'T BOUNCE ON A DESKTOP. Chef: "the entry form bounces around a lot
+ * on the desktop when trying to enter foods." The window was vertically
+ * centred, so every batch of results that changed its height moved the box
+ * under the cursor. It is anchored to the top now, at a fixed height, and the
+ * results scroll inside it. (Below `sm` it is full-screen, as before.)
  */
 const AddFoodDialog = ({
   open,
@@ -40,6 +56,9 @@ const AddFoodDialog = ({
   onDescribe,
   onAdjustCalories,
   onUndo,
+  onUpdateLog,
+  onSetCalories,
+  onJustAdded,
   onCreateFood,
   showBarcodeScanner,
   onShowBarcodeScanner,
@@ -50,6 +69,8 @@ const AddFoodDialog = ({
   date = null
 }) => {
   const { offerUndo } = useUndoToast(onUndo);
+  const today = useToday();
+  const day = date || today;
   // Android's back gesture closes this sheet instead of leaving the page.
   useBackToClose(Boolean(open), onClose);
 
@@ -61,9 +82,15 @@ const AddFoodDialog = ({
         maxWidth="sm"
         // One title, in words: "Add to lunch". It used to be an eyebrow, a
         // title and an icon saying "Log · Add Food" above a meal picker.
-        title={`Add to ${mealWord(mealType)}`}
+        title={`Add to ${mealOnDay(mealWord(mealType), day, today)}`}
         icon={FoodIcon}
         contentSx={{ px: { xs: 1.5, sm: 2.5 } }}
+        // Top-anchored, fixed height on a desktop; see the note above.
+        sx={{ '& .MuiDialog-container': { alignItems: { sm: 'flex-start' } } }}
+        PaperProps={{
+          'data-testid': 'add-food-dialog',
+          sx: { mt: { sm: '5vh' }, height: { sm: 'min(780px, 90vh)' }, maxHeight: { sm: '90vh' } },
+        }}
       >
         <Box sx={{ minHeight: 360 }}>
           {/* Folded here too, not just on the page. On a phone this dialog IS
@@ -71,7 +98,7 @@ const AddFoodDialog = ({
               meal's "+" both open it — so leaving the fold off here meant the
               fix never reached the place the complaint came from. Typing still
               shows results immediately; only the idle list folds. */}
-          <UnifiedFoodSearch
+          <FoodComposer
             mode="dialog"
             collapseIdleList
             mealType={mealType}
@@ -80,13 +107,16 @@ const AddFoodDialog = ({
             onDescribe={onDescribe}
             onAdjustCalories={onAdjustCalories}
             onUndo={onUndo}
+            onUpdateLog={onUpdateLog}
+            onSetCalories={onSetCalories}
+            onJustAdded={onJustAdded}
             onCreateFood={onCreateFood}
             onClose={onClose}
             onBarcodeClick={() => onShowBarcodeScanner?.(true)}
             initialQuery={initialQuery}
             ketoMode={ketoMode}
             showQuickPicks
-            date={date}
+            date={day}
           />
         </Box>
       </PremiumDialog>

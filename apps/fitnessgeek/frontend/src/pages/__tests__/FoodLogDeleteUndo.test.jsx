@@ -13,7 +13,7 @@
  * hands to `logItems`.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { GeekToastProvider } from '@geeksuite/ui';
 import { MemoryRouter } from 'react-router-dom';
 
@@ -28,7 +28,7 @@ const OATMEAL_LOG = {
   food_item: { _id: 'f1', name: 'Oatmeal', nutrition: { calories_per_serving: 200, protein_grams: 5, carbs_grams: 27, fat_grams: 3 } }
 };
 
-vi.mock('../../components/FoodSearch', () => ({ UnifiedFoodSearch: () => null }));
+vi.mock('../../components/FoodSearch', () => ({ FoodComposer: () => null }));
 vi.mock('../../components/FoodLog/NutritionSummary.jsx', () => ({ default: () => null }));
 vi.mock('../../components/FoodLog/CalorieSummary.jsx', () => ({ default: () => null }));
 vi.mock('../../components/FoodLog/SaveMealDialog.jsx', () => ({ default: () => null }));
@@ -157,5 +157,42 @@ describe('deleting offers an undo that actually restores the row', () => {
     await screen.findByText(/could not delete/i);
     expect(screen.queryByRole('button', { name: /undo/i })).toBeNull();
     expect(logItems).not.toHaveBeenCalled();
+  });
+
+  it('speaks the same undo grammar as an add: "Undone ✓", ten seconds', async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    try {
+      render(
+        <GeekToastProvider>
+          <MemoryRouter><FoodLog /></MemoryRouter>
+        </GeekToastProvider>
+      );
+      fireEvent.click(screen.getByText('Delete Oatmeal (breakfast)'));
+      await screen.findByText(/Deleted Oatmeal/i);
+      // Still there after six seconds (it used to be four).
+      await act(async () => { await vi.advanceTimersByTimeAsync(6000); });
+      fireEvent.click(screen.getByRole('button', { name: /^undo$/i }));
+      expect(await screen.findByText('Undone ✓')).toBeInTheDocument();
+      expect(screen.queryByText(/Deleted Oatmeal/i)).toBeNull();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it('a failed undo says so and offers Try again', async () => {
+    logItems
+      .mockResolvedValueOnce({ ok: 0, fail: 1, logIds: [], perItem: [[]] })
+      .mockResolvedValueOnce({ ok: 1, fail: 0, logIds: ['log3'], perItem: [['log3']] });
+    render(
+      <GeekToastProvider>
+        <MemoryRouter><FoodLog /></MemoryRouter>
+      </GeekToastProvider>
+    );
+    fireEvent.click(screen.getByText('Delete Oatmeal (breakfast)'));
+    fireEvent.click(await screen.findByRole('button', { name: /^undo$/i }));
+    expect(await screen.findByText("Couldn't undo — try again")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /try again/i }));
+    expect(await screen.findByText('Undone ✓')).toBeInTheDocument();
+    expect(logItems).toHaveBeenCalledTimes(2);
   });
 });

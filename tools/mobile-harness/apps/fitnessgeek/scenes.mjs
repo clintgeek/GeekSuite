@@ -3,7 +3,7 @@
 // needs a dialog open re-navigates and re-opens it rather than relying on a
 // previous scene's state.
 import { json, graphqlRoute } from '../../lib/net.mjs';
-import { OPS, FOODS, SETTINGS, BODY_COMP_SUMMARY_EARLY, BODY_COMP_SCANS_EARLY, opsWithPlan, heatherOps } from './fixtures.mjs';
+import { OPS, FOODS, SETTINGS, BODY_COMP_SUMMARY_EARLY, BODY_COMP_SCANS_EARLY, opsWithPlan, heatherOps, SUGGEST_FAGE, DEEP_FAGE, SUGGEST_SOUP, DESCRIBED_SOUP } from './fixtures.mjs';
 
 // The weight, dashboard and wizard scenes THROW when their anchor is missing instead of
 // returning false: a skip is silent (see scene 11's note), and these exist
@@ -313,19 +313,18 @@ export const scenes = [
       await page.goto(h.base + '/food-log', { waitUntil: 'networkidle' });
       await h.settle(1600);
 
-      const box = page.getByPlaceholder(/what did you eat/i).first();
-      if (!(await box.count())) return h.log('no describe box on the food log') ?? false;
-
+      // The composer (REVIEW_2026-10 §4): "Tell me what you ate", with Log it
+      // right under it. A sentence folds the list away.
+      const box = await must(page.getByLabel('Tell me what you ate').first(), 'the composer box on the food log');
       await box.fill('4 chocolate chip pancakes homemade');
       // Long enough for the 400ms deep-search debounce to come and go, so the
       // shot is of a settled surface rather than a spinner.
       await h.settle(900);
 
-      // The offer is the point of the scene: if the box no longer leads with
-      // it, describing has stopped being the primary path and this should fail
-      // rather than quietly photograph a search box.
-      const offer = page.getByText(/^Log “/).first();
-      if (!(await offer.count())) return h.log('no "Log …" offer under the box') ?? false;
+      // Log it is the point of the scene: if it isn't live under the box,
+      // describing has stopped being the primary path.
+      const logIt = await must(page.locator('[data-testid="log-it"]').first(), 'Log it under the box');
+      if (await logIt.isDisabled()) throw new Error('Log it is disabled with a sentence in the box');
     },
     teardown: (page, h) => h.esc(400),
   },
@@ -506,6 +505,9 @@ scenes.push(
     await h.settle(900);
     await must(page.getByRole('dialog'), 'add sheet');
     await must(page.locator('[data-testid="speak-button"]'), 'microphone button');
+    // The composer, empty: the box, Log it (dim), "Or tap one you've had".
+    await must(page.getByRole('dialog').getByLabel('Tell me what you ate'), 'the composer box');
+    await must(page.getByRole('dialog').locator('[data-testid="log-it"][disabled]'), 'Log it, dim until there are words');
   }, { dialog: true }),
   // Larger text, on Heather's home.
   heatherScene('22-larger-text', { ...HEATHER, larger_text: true }, async (page) => {
@@ -576,6 +578,321 @@ scenes.push(
       await must(page.getByRole('textbox', { name: /amount of ground turkey/i }).or(page.getByLabel(/amount of ground turkey/i)).first(), 'builder ingredient row');
     }),
     teardown: async (page, h) => { await h.esc(400); await page.unroute('**/graphql'); },
+  },
+);
+
+// ── The food composer (REVIEW_2026-10 §4, Phase 3.16) ────────────────────
+// "The harness has no picture of the add box while typing, thinking, after a
+// result or after an error. The surface she complains about is unaudited."
+// Every state gets a scene here, Simple (Heather) and Full (Chef). The REST
+// stubs are page-scoped and dropped in teardown; each scene re-navigates.
+const SUGGEST_RE = /\/api\/foods\/suggest/;
+const DEEP_RE = /\/api\/foods\?/;
+const DESCRIBE_RE = /\/api\/logs\/describe/;
+const wait = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
+const isoLocal = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+const YESTERDAY = (() => { const d = new Date(); d.setDate(d.getDate() - 1); return isoLocal(d); })();
+
+/**
+ * Stub the food REST calls. `suggest(q)` and `deep(q)` return rows for a
+ * query; `describe` is a response body, a status, or a function of the route.
+ */
+async function foodRoutes(page, { suggest = () => [], deep = () => [], suggestMs = 0, deepMs = 0, describe = DESCRIBED_SOUP } = {}) {
+  await page.route(DEEP_RE, async (r) => {
+    const q = new URL(r.request().url()).searchParams.get('search') || '';
+    if (deepMs) await wait(deepMs);
+    try { await json(r, { success: true, data: deep(q) }); } catch { /* the page moved on */ }
+  });
+  await page.route(SUGGEST_RE, async (r) => {
+    const q = new URL(r.request().url()).searchParams.get('q') || '';
+    if (suggestMs) await wait(suggestMs);
+    try { await json(r, { success: true, data: suggest(q) }); } catch { /* the page moved on */ }
+  });
+  await page.route(DESCRIBE_RE, async (r) => {
+    if (typeof describe === 'function') return describe(r);
+    if (typeof describe === 'number') return json(r, { success: false, error: { message: 'Internal error' } }, describe);
+    return json(r, { success: true, data: describe });
+  });
+}
+async function dropFoodRoutes(page) {
+  await page.unroute(DEEP_RE);
+  await page.unroute(SUGGEST_RE);
+  await page.unroute(DESCRIBE_RE);
+}
+
+const soupSuggest = (q) => (/soup|cracker/i.test(q) ? SUGGEST_SOUP : []);
+const fageSuggest = (q) => (/fag/i.test(q) ? SUGGEST_FAGE : []);
+const fageDeep = (q) => (/fage/i.test(q) ? DEEP_FAGE : []);
+
+/**
+ * Open the add sheet from a meal card and run `fn` inside it. `simple`
+ * scenes are Heather's page-scoped GraphQL; Full is the context's Chef.
+ */
+const composerScene = (name, { simple = false, path = '/dashboard', meal = 'lunch', routes = {}, fn, viewports, offline = false, sheet = true }) => ({
+  name,
+  ...(viewports ? { viewports } : {}),
+  async setup(page, h) {
+    await foodRoutes(page, routes);
+    try {
+      if (simple) await graphqlRoute(page, heatherOps(HEATHER));
+      await page.goto(h.base + path, { waitUntil: 'networkidle' });
+      await h.settle(1400);
+      let scope = page;
+      if (sheet) {
+        const add = await must(page.getByRole('button', { name: new RegExp(`^add to ${meal}$`, 'i') }).first(), `Add to ${meal}`);
+        await add.click();
+        await h.settle(900);
+        scope = await must(page.getByRole('dialog'), 'add sheet');
+      }
+      if (offline) {
+        await page.context().setOffline(true);
+        await h.settle(300);
+      }
+      await fn(page, h, scope);
+    } catch (err) {
+      if (offline) await page.context().setOffline(false);
+      await dropFoodRoutes(page);
+      if (simple) await page.unroute('**/graphql');
+      throw err;
+    }
+  },
+  async teardown(page, h) {
+    if (offline) await page.context().setOffline(false);
+    if (sheet) await h.esc(400);
+    await h.esc(300);
+    await dropFoodRoutes(page);
+    if (simple) await page.unroute('**/graphql');
+  },
+});
+
+const typeInto = async (scope, text, h, settle = 900) => {
+  const box = await must(scope.getByLabel('Tell me what you ate').first(), 'the composer box');
+  await box.fill(text);
+  await h.settle(settle);
+  return box;
+};
+const SOUP = 'a bowl of chicken soup and some crackers';
+
+scenes.push(
+  // Typing a sentence: the list folds into "Or pick an exact food (n)".
+  composerScene('28-composer-sentence', {
+    simple: true,
+    routes: { suggest: soupSuggest },
+    fn: async (page, h, sheet) => {
+      await typeInto(sheet, SOUP, h);
+      await must(sheet.locator('[data-testid="exact-food-toggle"][aria-expanded="false"]'), 'folded "Or pick an exact food"');
+      if (await sheet.getByText(/nothing found|fewer words/i).count()) throw new Error('"Nothing found" on a sentence');
+    },
+  }),
+  composerScene('28a-composer-sentence-full', {
+    routes: { suggest: soupSuggest },
+    fn: async (page, h, sheet) => {
+      await typeInto(sheet, SOUP, h);
+      await must(sheet.locator('[data-testid="exact-food-toggle"]'), '"Or pick an exact food"');
+    },
+  }),
+  // A short name: the list open, "+ Add" and "190 cal" on every row.
+  composerScene('29-composer-short-query', {
+    simple: true,
+    routes: { suggest: fageSuggest, deep: fageDeep },
+    fn: async (page, h, sheet) => {
+      await typeInto(sheet, 'fage', h, 1200);
+      await must(sheet.getByText('+ Add').first(), '"+ Add" pill');
+      await must(sheet.getByText('190 cal').first(), '"190 cal"');
+    },
+  }),
+  composerScene('29a-composer-short-query-full', {
+    routes: { suggest: fageSuggest, deep: fageDeep },
+    fn: async (page, h, sheet) => {
+      await typeInto(sheet, 'fage', h, 1200);
+      // After the first add, the pill is "Make it 2".
+      await (await must(sheet.getByRole('button', { name: /^Add Greek Yogurt, Plain Whole Milk/ }).first(), 'the yogurt row')).click();
+      await h.settle(900);
+      await must(sheet.getByRole('button', { name: /^Make it 2/ }), '"Make it 2"');
+    },
+  }),
+  // Thinking, past eight seconds: "Still working".
+  (() => {
+    let release = null;
+    return {
+      ...composerScene('30-composer-thinking', {
+        simple: true,
+        viewports: ['phone'],
+        routes: {
+          suggest: soupSuggest,
+          describe: async (r) => {
+            await new Promise((resolve) => { release = resolve; });
+            try { await json(r, { success: true, data: DESCRIBED_SOUP }); } catch { /* gone */ }
+          },
+        },
+        fn: async (page, h, sheet) => {
+          await typeInto(sheet, SOUP, h, 400);
+          await sheet.locator('[data-testid="log-it"]').click();
+          await h.settle(8400);
+          await must(sheet.getByText('Working it out…'), '"Working it out…"');
+          await must(sheet.getByText("Still working — this one's taking a moment."), '"Still working"');
+        },
+      }),
+      async teardown(page, h) {
+        release?.();
+        release = null;
+        await h.settle(400);
+        await h.esc(400);
+        await dropFoodRoutes(page);
+        await page.unroute('**/graphql');
+      },
+    };
+  })(),
+  // Simple's result card: it stays open on what landed.
+  composerScene('31-composer-result-simple', {
+    simple: true,
+    routes: { suggest: soupSuggest },
+    fn: async (page, h, sheet) => {
+      await typeInto(sheet, SOUP, h, 400);
+      await sheet.locator('[data-testid="log-it"]').click();
+      await h.settle(1200);
+      await must(sheet.locator('[data-testid="result-card"]'), 'result card');
+      await must(sheet.getByText('Added to lunch'), '"Added to lunch"');
+    },
+  }),
+  // …and its Fix sheet.
+  composerScene('31a-composer-fix-sheet', {
+    simple: true,
+    routes: { suggest: soupSuggest },
+    fn: async (page, h, sheet) => {
+      await typeInto(sheet, SOUP, h, 400);
+      await sheet.locator('[data-testid="log-it"]').click();
+      await h.settle(1200);
+      await (await must(sheet.getByRole('button', { name: 'Fix Chicken soup, 1 bowl' }), 'Fix')).click();
+      await h.settle(700);
+      await must(page.locator('[data-testid="fix-sheet"]'), 'Fix sheet');
+    },
+  }),
+  // Full: the sheet closes, and the meal card carries "Just added".
+  composerScene('32-full-just-added', {
+    routes: { suggest: soupSuggest },
+    fn: async (page, h, sheet) => {
+      await typeInto(sheet, SOUP, h, 400);
+      await sheet.locator('[data-testid="log-it"]').click();
+      await h.settle(1600);
+      if (await page.getByRole('dialog').count()) throw new Error('Full: the add sheet should have closed');
+      await must(page.locator('[data-testid="meal-card-lunch"] [data-testid="just-added"]'), '"Just added" on the lunch card');
+      await scrollToSection(page, h, '[data-testid="meal-card-lunch"]', 88);
+    },
+  }),
+  // …and on the Log page, on the meal section.
+  composerScene('32a-log-just-added', {
+    path: '/food-log',
+    sheet: false,
+    routes: { suggest: soupSuggest },
+    fn: async (page, h) => {
+      await typeInto(page, SOUP, h, 400);
+      await page.locator('[data-testid="log-it"]').first().click();
+      await h.settle(1600);
+      await must(page.locator('#meal-section-lunch [data-testid="just-added"]'), '"Just added" on the Log page lunch');
+      await scrollToSection(page, h, '#meal-section-lunch', 88);
+    },
+  }),
+  // Errors, with her words kept: no signal, and a failure.
+  composerScene('33-composer-offline', {
+    simple: true,
+    viewports: ['phone'],
+    offline: true,
+    fn: async (page, h, sheet) => {
+      await typeInto(sheet, SOUP, h, 600);
+      await must(sheet.getByText("No signal — I can't log this yet. Your words are saved here."), 'the offline line');
+      await must(sheet.locator('[data-testid="log-it"][disabled]'), 'Log it off while offline');
+    },
+  }),
+  composerScene('34-composer-failure', {
+    simple: true,
+    routes: { suggest: soupSuggest, describe: 500 },
+    fn: async (page, h, sheet) => {
+      await typeInto(sheet, SOUP, h, 400);
+      await sheet.locator('[data-testid="log-it"]').click();
+      await h.settle(1200);
+      await must(sheet.getByText("That didn't go through. Tap Log it to try again."), 'the failure line');
+    },
+  }),
+  // Day words: ask before logging.
+  composerScene('35-composer-day-chip', {
+    simple: true,
+    meal: 'dinner',
+    fn: async (page, h, sheet) => {
+      await typeInto(sheet, 'fried chicken and fries last night', h, 400);
+      await sheet.locator('[data-testid="log-it"]').click();
+      await h.settle(500);
+      await must(sheet.locator('[data-testid="day-confirm"]'), '"Log this to yesterday?"');
+    },
+  }),
+  // The add sheet on a day that isn't today names it.
+  composerScene('36-add-sheet-yesterday', {
+    path: `/food-log?date=${YESTERDAY}&meal=dinner`,
+    sheet: false,
+    fn: async (page, h) => {
+      await (await must(page.getByRole('button', { name: 'Add food to Dinner' }).first(), 'Dinner "+"')).click();
+      await h.settle(900);
+      await must(page.getByRole('dialog').getByText("Add to yesterday's dinner"), "the title \"Add to yesterday's dinner\"");
+    },
+  }),
+  {
+    /*
+     * DESKTOP LAYOUT STABILITY. Chef: "the entry form bounces around a lot on
+     * the desktop when trying to enter foods." Open the add dialog, record
+     * where the dialog and the box are, type a name that streams in wave one
+     * and then (late) wave two, and record again. The dialog's and the box's
+     * top edges may not move more than 2px, and a row under the pointer may
+     * not move when the late batch lands.
+     */
+    name: '37-desktop-add-dialog-stable',
+    viewports: ['desktop'],
+    async setup(page, h) {
+      await foodRoutes(page, { suggest: fageSuggest, deep: fageDeep, suggestMs: 250, deepMs: 1400 });
+      try {
+        await page.goto(h.base + '/food-log', { waitUntil: 'networkidle' });
+        await h.settle(1400);
+        await (await must(page.getByRole('button', { name: 'Add food to Lunch' }).first(), 'Lunch "+"')).click();
+        await h.settle(900);
+        const paper = await must(page.locator('[data-testid="add-food-dialog"]'), 'the add dialog');
+        const box = await must(paper.getByLabel('Tell me what you ate'), 'the composer box');
+        const tops = async () => ({ dialog: (await paper.boundingBox()).y, input: (await box.boundingBox()).y });
+        const before = await tops();
+
+        await box.click();
+        await box.pressSequentially('fage', { delay: 90 });
+        await h.settle(700);
+        const first = paper.locator('[data-testid="food-row"]').first();
+        await must(first, 'wave one rows');
+        const rowsAfterSuggest = await paper.locator('[data-testid="food-row"]').count();
+        await first.hover();
+        const rowTop = (await first.boundingBox()).y;
+        const mid = await tops();
+
+        await h.settle(2200);
+        const rowsAfterDeep = await paper.locator('[data-testid="food-row"]').count();
+        if (rowsAfterDeep <= rowsAfterSuggest) throw new Error(`wave two never landed (${rowsAfterSuggest} → ${rowsAfterDeep} rows)`);
+        const after = await tops();
+        const rowTopAfter = (await first.boundingBox()).y;
+
+        const moved = [];
+        for (const key of ['dialog', 'input']) {
+          for (const [label, at] of [['typing', mid], ['late batch', after]]) {
+            const dy = Math.abs(at[key] - before[key]);
+            if (dy > 2) moved.push(`${key} top moved ${dy.toFixed(1)}px (${label})`);
+          }
+        }
+        if (Math.abs(rowTopAfter - rowTop) > 2) moved.push(`hovered row moved ${(rowTopAfter - rowTop).toFixed(1)}px when the late batch landed`);
+        if (moved.length) throw new Error(`the add dialog bounced: ${moved.join('; ')}`);
+        h.log(`stable: dialog ${before.dialog}→${after.dialog}, input ${before.input}→${after.input}, row ${rowTop}→${rowTopAfter}, rows ${rowsAfterSuggest}→${rowsAfterDeep}`);
+      } catch (err) {
+        await dropFoodRoutes(page);
+        throw err;
+      }
+    },
+    async teardown(page, h) {
+      await h.esc(400);
+      await dropFoodRoutes(page);
+    },
   },
 );
 

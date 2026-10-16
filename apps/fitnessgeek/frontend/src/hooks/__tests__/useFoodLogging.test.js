@@ -23,13 +23,15 @@ import { renderHook, act } from '@testing-library/react';
 const addFoodToLog = vi.fn();
 const addMealToLog = vi.fn();
 const deleteFoodLog = vi.fn();
+const updateFoodLog = vi.fn();
 const describeApi = vi.fn();
 
 vi.mock('../../services/fitnessGeekService.js', () => ({
   fitnessGeekService: {
     addFoodToLog: (...a) => addFoodToLog(...a),
     addMealToLog: (...a) => addMealToLog(...a),
-    deleteFoodLog: (...a) => deleteFoodLog(...a)
+    deleteFoodLog: (...a) => deleteFoodLog(...a),
+    updateFoodLog: (...a) => updateFoodLog(...a)
   }
 }));
 
@@ -242,5 +244,52 @@ describe('describe idempotency', () => {
     const { result } = mount();
     await act(async () => { await result.current.describeMeal('toast'); });
     expect(describeApi.mock.calls[0][1].idempotencyKey).toMatch(/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/);
+  });
+});
+
+/** The composer's Fix sheet and "Make it 2" (REVIEW_2026-10 §4, CONTRACTS C3). */
+describe('fixing what was just logged', () => {
+  beforeEach(() => { updateFoodLog.mockResolvedValue({ success: true }); });
+
+  it('a calorie number goes out as the C3 per-serving override, macros moving with it', async () => {
+    const { result } = mount();
+    let nutrition;
+    await act(async () => {
+      nutrition = await result.current.setLogCalories('log-1', { calories_per_serving: 200, protein_grams: 10, carbs_grams: 20, fat_grams: 8 }, 2, 600);
+    });
+    // 600 total over 2 servings is 300 per serving; everything x1.5.
+    expect(updateFoodLog).toHaveBeenCalledWith('log-1', { calories: 300, protein_grams: 15, carbs_grams: 30, fat_grams: 12 });
+    expect(nutrition).toMatchObject({ calories_per_serving: 300, protein_grams: 15 });
+    expect(forgetRecentLogs).toHaveBeenCalled();
+  });
+
+  it('an entry with no calories yet still takes a number, without inventing macros', async () => {
+    const { result } = mount();
+    await act(async () => { await result.current.setLogCalories('log-2', { calories_per_serving: 0 }, 1, 150); });
+    expect(updateFoodLog).toHaveBeenCalledWith('log-2', { calories: 150 });
+  });
+
+  it('updateLog sends exactly the patch ("Make it 2")', async () => {
+    const { result } = mount();
+    await act(async () => { await result.current.updateLog('log-3', { servings: 2 }); });
+    expect(updateFoodLog).toHaveBeenCalledWith('log-3', { servings: 2 });
+  });
+});
+
+describe('describing onto a confirmed day (Phase 3.17)', () => {
+  it('sends the day she confirmed, and hands back what the server heard', async () => {
+    describeApi.mockResolvedValue({ logged: [{ logId: 'x' }], skipped: [], logIds: ['x'], dayHint: 'yesterday', dayWords: ['last night'] });
+    const { result } = mount();
+    let out;
+    await act(async () => { out = await result.current.describeMeal('fries last night', { mealType: 'dinner', date: '2026-09-15', idempotencyKey: 'k1' }); });
+    expect(describeApi).toHaveBeenCalledWith('fries last night', expect.objectContaining({ date: '2026-09-15', mealType: 'dinner', idempotencyKey: 'k1' }));
+    expect(out).toMatchObject({ dayHint: 'yesterday', dayWords: ['last night'] });
+  });
+
+  it('without one, the day on screen', async () => {
+    describeApi.mockResolvedValue({ logged: [], skipped: [], logIds: [] });
+    const { result } = mount();
+    await act(async () => { await result.current.describeMeal('fries', { mealType: 'dinner' }); });
+    expect(describeApi).toHaveBeenCalledWith('fries', expect.objectContaining({ date: '2026-09-16' }));
   });
 });

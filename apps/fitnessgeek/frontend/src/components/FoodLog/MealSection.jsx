@@ -67,7 +67,10 @@ const MealSection = ({
   // `favoriteFoodIds`/`toggleFavoriteId`). Both default to "nothing is
   // favourited yet" rather than undefined, so FoodLogItem never has to guess.
   favoriteFoodIds,
-  onFavoriteChange
+  onFavoriteChange,
+  // Full's "Just added" strip (useJustAdded's `renderFor`), shown at the top
+  // of this meal until her next action.
+  justAdded = null
 }) => {
   const theme = useTheme();
   const config = MEAL_CONFIG[mealType];
@@ -228,6 +231,7 @@ const MealSection = ({
 
       {/* Content */}
       <Box sx={{ p: { xs: 1.5, sm: 2 } }}>
+        {justAdded && <Box sx={{ mb: 1.5 }}>{justAdded}</Box>}
         {logs.length > 0 ? (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
             {logs.map((log) => {

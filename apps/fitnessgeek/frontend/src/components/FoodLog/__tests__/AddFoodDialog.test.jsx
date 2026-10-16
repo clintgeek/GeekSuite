@@ -8,7 +8,7 @@
  * "Add Food" sheet closes only once the write actually succeeds, and a
  * failure leaves everything open with the error visible in the scanner.
  *
- * `UnifiedFoodSearch` is stubbed — its own barcode-adjacent behaviour (the
+ * `FoodComposer` is stubbed — its own barcode-adjacent behaviour (the
  * describe-and-log close) is covered in its own test file. This file drives
  * the real `BarcodeScanner` through its jsdom-camera-less manual-entry path
  * (see BarcodeScanner.test.jsx for why that's the hermetic way in).
@@ -20,7 +20,7 @@ import userEvent from '@testing-library/user-event';
 import { GeekToastProvider } from '@geeksuite/ui';
 
 vi.mock('../../FoodSearch', () => ({
-  UnifiedFoodSearch: () => <div data-testid="unified-food-search" />
+  FoodComposer: () => <div data-testid="unified-food-search" />
 }));
 
 vi.mock('../../../services/fitnessGeekService', () => ({

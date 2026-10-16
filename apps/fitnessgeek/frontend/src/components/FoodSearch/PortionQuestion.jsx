@@ -19,6 +19,10 @@ import { readableOn } from '@geeksuite/ui';
  * So there is no "skip" button — leaving it alone is the skip, and it clears
  * itself the moment he logs something else.
  *
+ * Its buttons are at least 48px tall with 15px words (REVIEW_2026-10 Phase
+ * 1.7): they were 12px, the smallest text in the app, on the one question
+ * that changes the day's total.
+ *
  * The two choices are the model's own stated range rather than invented
  * adjustments, because "was it bigger?" is not a question anyone can answer
  * precisely, and "400 or 1,200?" is.
@@ -56,10 +60,10 @@ const PortionQuestion = ({ question, onAnswer, onDismiss, busy = false }) => {
         backgroundColor: alpha(theme.palette.warning.main, 0.08)
       }}
     >
-      <Typography sx={{ fontSize: '0.875rem', color: theme.palette.text.primary, fontWeight: 600 }}>
+      <Typography sx={{ fontSize: '1rem', color: theme.palette.text.primary, fontWeight: 700 }}>
         How big was the {name.toLowerCase()}?
       </Typography>
-      <Typography sx={{ fontSize: '0.75rem', color: muted, mb: 1 }}>
+      <Typography sx={{ fontSize: '0.9375rem', color: muted, mb: 1 }}>
         Logged at {Math.round(logged)} cal. It could reasonably be {Math.round(low)}–{Math.round(high)}.
       </Typography>
       <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
@@ -70,7 +74,7 @@ const PortionQuestion = ({ question, onAnswer, onDismiss, busy = false }) => {
             variant="outlined"
             disabled={busy}
             onClick={() => onAnswer(question, option.value)}
-            sx={{ minHeight: 44, borderRadius: 999, fontSize: 12, fontWeight: 600 }}
+            sx={{ minHeight: 48, borderRadius: 999, fontSize: '0.9375rem', fontWeight: 700, px: 2 }}
           >
             {option.label}
           </Button>
@@ -79,7 +83,7 @@ const PortionQuestion = ({ question, onAnswer, onDismiss, busy = false }) => {
           size="small"
           disabled={busy}
           onClick={onDismiss}
-          sx={{ minHeight: 44, fontSize: 12, color: muted }}
+          sx={{ minHeight: 48, fontSize: '0.9375rem', fontWeight: 700, color: muted, px: 2 }}
         >
           That&apos;s about right
         </Button>

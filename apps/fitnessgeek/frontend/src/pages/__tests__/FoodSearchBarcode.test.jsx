@@ -22,7 +22,7 @@ const logItems = vi.fn();
 const undoLogs = vi.fn();
 
 vi.mock('../../components/FoodSearch', () => ({
-  UnifiedFoodSearch: ({ onBarcodeClick }) => (
+  FoodComposer: ({ onBarcodeClick }) => (
     <button onClick={() => onBarcodeClick?.()}>Scan barcode</button>
   )
 }));

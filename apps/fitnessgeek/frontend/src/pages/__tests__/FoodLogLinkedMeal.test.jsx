@@ -17,7 +17,7 @@ vi.mock('../../hooks/useFoodLog.js', () => ({ useFoodLog: (...a) => useFoodLog(.
 vi.mock('../../hooks/useFoodLogging.js', () => ({
   useFoodLogging: () => ({ logItems: vi.fn(), undoLogs: vi.fn(), describeMeal: vi.fn(), adjustLogCalories: vi.fn(), createFood: vi.fn() }),
 }));
-vi.mock('../../components/FoodSearch', () => ({ UnifiedFoodSearch: () => null }));
+vi.mock('../../components/FoodSearch', () => ({ FoodComposer: () => null }));
 vi.mock('../../components/FoodLog/NutritionSummary.jsx', () => ({ default: () => null }));
 vi.mock('../../components/FoodLog/CalorieSummary.jsx', () => ({ default: () => null }));
 vi.mock('../../components/FoodLog/MealSection.jsx', () => ({ default: () => null }));

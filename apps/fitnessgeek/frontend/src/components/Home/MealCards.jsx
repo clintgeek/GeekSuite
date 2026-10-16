@@ -28,7 +28,7 @@ import { mealLabel, mealWord } from '../../utils/plainWords.js';
  */
 const ICONS = { breakfast: BreakfastIcon, lunch: LunchIcon, dinner: DinnerIcon, snack: SnackIcon };
 
-function MealCard({ mealType, foods = [], calories = 0, compact, onAdd, onRemove, removingIds, logHref }) {
+function MealCard({ mealType, foods = [], calories = 0, compact, onAdd, onRemove, removingIds, logHref, justAdded = null }) {
   const theme = useTheme();
   const produce = theme.palette.produce?.[mealType] || {};
   const Icon = ICONS[mealType] || SnackIcon;
@@ -160,6 +160,10 @@ function MealCard({ mealType, foods = [], calories = 0, compact, onAdd, onRemove
         </Box>
       )}
 
+      {/* Full's "Just added" strip: above the stretched link, so its own
+          buttons stay their own targets. */}
+      {justAdded}
+
       <Box sx={{ flex: 1 }} />
       <Button
         onClick={() => onAdd?.(mealType)}
@@ -189,8 +193,11 @@ function MealCard({ mealType, foods = [], calories = 0, compact, onAdd, onRemove
 /**
  * `date` (YYYY-MM-DD) makes each card a link to that day's meal in the food
  * log; without it the cards are not links.
+ *
+ * `justAdded` is useJustAdded()'s value (Full): the card a describe landed on
+ * carries a "Just added" strip with Fix and Undo until the next action.
  */
-export default function MealCards({ meals = {}, compact = false, onAdd, onRemove, removingIds, date }) {
+export default function MealCards({ meals = {}, compact = false, onAdd, onRemove, removingIds, date, justAdded = null }) {
   return (
     <Box
       data-testid="meal-cards"
@@ -213,6 +220,7 @@ export default function MealCards({ meals = {}, compact = false, onAdd, onRemove
           onRemove={onRemove}
           removingIds={removingIds}
           logHref={date ? `/food-log?date=${date}&meal=${mealType}` : undefined}
+          justAdded={justAdded?.renderFor?.(mealType, date) || null}
         />
       ))}
     </Box>

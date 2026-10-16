@@ -144,9 +144,11 @@ export const useFoodLogging = ({ date, onChanged }) => {
    * out here can still finish on the server; sending the same key again on
    * the retry gets that first answer back instead of a second copy.
    */
-  const describeMeal = useCallback(async (text, { mealType, idempotencyKey } = {}) => {
+  const describeMeal = useCallback(async (text, { mealType, idempotencyKey, date: onDay } = {}) => {
     const result = await foodService.describe(text, {
-      date,
+      // `onDay` is the day the person confirmed when the text named one
+      // ("last night" → yesterday). Otherwise the day on screen.
+      date: onDay || date,
       // The server runs UTC and cannot guess which meal 8pm is.
       hour: new Date().getHours(),
       // …and when the person already picked the meal, it doesn't have to.
@@ -167,7 +169,11 @@ export const useFoodLogging = ({ date, onChanged }) => {
       logged,
       skipped,
       questions: result?.questions || [],
-      totalCalories: result?.totalCalories ?? 0
+      totalCalories: result?.totalCalories ?? 0,
+      // What the server heard as a day (Phase 3.17). It never moves the date
+      // itself; the composer compares it with the day it sent.
+      dayHint: result?.dayHint ?? null,
+      dayWords: result?.dayWords || []
     };
   }, [date, refreshLater]);
 
@@ -204,13 +210,58 @@ export const useFoodLogging = ({ date, onChanged }) => {
     return true;
   }, [refreshLater]);
 
+  /**
+   * A partial edit of one log ("Make it 2", moving it to another day). The
+   * patch goes out as `FoodLogUpdateInput`, so only what is sent is written.
+   */
+  const updateLog = useCallback(async (logId, patch) => {
+    if (!logId || !patch) return false;
+    await fitnessGeekService.updateFoodLog(logId, patch);
+    refreshLater();
+    return true;
+  }, [refreshLater]);
+
+  /**
+   * Set one log to a calorie total, through the gateway's per-serving
+   * overrides (CONTRACTS C3: `calories`, `protein_grams`, `carbs_grams`,
+   * `fat_grams`). This is the Fix sheet's number and its Smaller / Bigger.
+   *
+   * Overrides are per serving, so the total is divided by the servings the
+   * row was logged at. The macros move with the calories, for the same reason
+   * `adjustLogCalories` scales them: a bigger plate has more of everything.
+   *
+   * @returns {Promise<object|false>} the new per-serving nutrition, or false
+   */
+  const setLogCalories = useCallback(async (logId, nutrition, servings, targetCalories) => {
+    const count = Number(servings) > 0 ? Number(servings) : 1;
+    const target = Number(targetCalories);
+    if (!logId || !Number.isFinite(target) || target < 0) return false;
+    const per = Number(nutrition?.calories_per_serving) || 0;
+    const factor = per > 0 ? target / (per * count) : null;
+    const round1 = (v) => Math.round(v * 10) / 10;
+    const patch = { calories: Math.round((target / count) * 10) / 10 };
+    for (const key of ['protein_grams', 'carbs_grams', 'fat_grams']) {
+      const value = Number(nutrition?.[key]);
+      if (factor != null && Number.isFinite(value)) patch[key] = round1(value * factor);
+    }
+    await fitnessGeekService.updateFoodLog(logId, patch);
+    refreshLater();
+    return {
+      ...(nutrition || {}),
+      calories_per_serving: patch.calories,
+      ...(patch.protein_grams != null ? { protein_grams: patch.protein_grams } : {}),
+      ...(patch.carbs_grams != null ? { carbs_grams: patch.carbs_grams } : {}),
+      ...(patch.fat_grams != null ? { fat_grams: patch.fat_grams } : {})
+    };
+  }, [refreshLater]);
+
   /** The "Can't find it? Create …" escape hatch. */
   const createFood = useCallback(async (payload) => {
     const created = await foodService.create(payload);
     return created?.data || created;
   }, []);
 
-  return { logItems, undoLogs, describeMeal, adjustLogCalories, createFood };
+  return { logItems, undoLogs, describeMeal, adjustLogCalories, updateLog, setLogCalories, createFood };
 };
 
 export default useFoodLogging;

@@ -1,7 +1,7 @@
 import React, { useCallback, useState } from 'react';
 import { Box, Typography } from '@mui/material';
 import { useToast } from '@geeksuite/ui';
-import { UnifiedFoodSearch } from '../components/FoodSearch';
+import { FoodComposer } from '../components/FoodSearch';
 import { useUndoToast } from '../components/FoodSearch/undoToast.jsx';
 import BarcodeScanner from '../components/BarcodeScanner/BarcodeScanner.jsx';
 import FoodEditDialog from '../components/MyFoods/FoodEditDialog.jsx';
@@ -43,6 +43,11 @@ const mealTypeForNow = (now = new Date()) => {
  * and one button — whose only job was to open a dialog that contained the
  * actual search. Reaching a text field took four interactions from the nav.
  * Now the page IS the search, and the field has focus when it loads.
+ *
+ * More calls it "Look up a specific food" (REVIEW_2026-10): the meal cards'
+ * Add is where you say what you ate; this is for the one branded thing. It
+ * is the same composer, and a describe here stays on its result card in both
+ * modes — there is no meal card on this page for a "Just added" strip.
  */
 const FoodSearchPage = () => {
   const { notify } = useToast();
@@ -54,7 +59,7 @@ const FoodSearchPage = () => {
   const [createForm, setCreateForm] = useState(null);
   const [creating, setCreating] = useState(false);
 
-  const { logItems, undoLogs, describeMeal, adjustLogCalories, createFood } = useFoodLogging({ date: today });
+  const { logItems, undoLogs, describeMeal, adjustLogCalories, updateLog, setLogCalories, createFood } = useFoodLogging({ date: today });
   const { offerUndo } = useUndoToast(undoLogs);
 
   const handleCreate = useCallback(async () => {
@@ -91,18 +96,21 @@ const FoodSearchPage = () => {
     <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 820, mx: 'auto' }}>
       <Box sx={{ mb: 2 }}>
         <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem' }}>
-          Your own foods come up first. Tap once to log it.
+          Say what you ate, or type a food&apos;s name to pick it from the list.
         </Typography>
       </Box>
 
-      <UnifiedFoodSearch
+      <FoodComposer
         mode="page"
         autoFocus
+        resultStyle="card"
         mealType={mealType}
         onMealTypeChange={setMealType}
         onLogItems={logItems}
         onDescribe={describeMeal}
         onAdjustCalories={adjustLogCalories}
+        onUpdateLog={updateLog}
+        onSetCalories={setLogCalories}
         onUndo={undoLogs}
         onBarcodeClick={() => setScannerOpen(true)}
         onCreateFood={(query) => setCreateForm({ ...EMPTY_FOOD_FORM, name: query })}

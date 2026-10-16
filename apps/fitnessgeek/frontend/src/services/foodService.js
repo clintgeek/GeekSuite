@@ -82,13 +82,18 @@ export const foodService = {
    * Called with no query it returns the starting shelf, which is the empty
    * state of the search box.
    *
+   * `meals: true` asks for saved meals too (CONTRACTS-DONE "C6"): up to
+   * three `kind: 'meal'` rows come first, each with whole-meal totals and a
+   * Meal id that logs through the gateway's `logMeal`, never as a food. It is
+   * opt-in on the server so an old bundle never receives a row it can't log.
+   *
    * @param {string} query
-   * @param {{limit?: number, signal?: AbortSignal}} [options]
+   * @param {{limit?: number, signal?: AbortSignal, meals?: boolean}} [options]
    */
   suggest: async (query, options = {}) => {
-    const { limit = 15, signal } = options;
+    const { limit = 15, signal, meals = false } = options;
     const response = await restApi.get('/foods/suggest', {
-      params: { q: query || '', limit },
+      params: { q: query || '', limit, ...(meals ? { meals: 1 } : {}) },
       signal
     });
     return response.data?.data || response.data || [];

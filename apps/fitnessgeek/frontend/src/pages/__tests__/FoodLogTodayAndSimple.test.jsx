@@ -21,7 +21,7 @@ vi.mock('@geeksuite/ui', async (importOriginal) => ({
 }));
 
 const seenDates = [];
-vi.mock('../../components/FoodSearch', () => ({ UnifiedFoodSearch: () => null }));
+vi.mock('../../components/FoodSearch', () => ({ FoodComposer: () => null }));
 vi.mock('../../components/FoodLog/NutritionSummary.jsx', () => ({ default: () => null }));
 vi.mock('../../components/FoodLog/MealSection.jsx', () => ({ default: () => null }));
 vi.mock('../../components/FoodLog/SaveMealDialog.jsx', () => ({ default: () => null }));

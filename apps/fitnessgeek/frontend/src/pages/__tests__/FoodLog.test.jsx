@@ -16,7 +16,7 @@ import { MemoryRouter } from 'react-router-dom';
 vi.mock('../../components/FoodSearch', () => ({
   // The stub exposes onClose as a button, so the page's handling of a
   // finished one-shot log can be driven without the real search box.
-  UnifiedFoodSearch: ({ mealType, onClose }) => (
+  FoodComposer: ({ mealType, onClose }) => (
     <div>
       <div data-testid="meal-type">{mealType}</div>
       {onClose && <button type="button" onClick={() => onClose({ mealType: 'dinner' })}>finish-log</button>}

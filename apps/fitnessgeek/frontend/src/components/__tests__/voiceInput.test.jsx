@@ -15,7 +15,9 @@ vi.mock('../../services/foodService', () => ({
   foodService: { suggest: vi.fn(() => Promise.resolve([])), search: vi.fn(() => Promise.resolve([])) },
 }));
 
-const { default: UnifiedFoodSearch } = await import('../FoodSearch/UnifiedFoodSearch.jsx');
+vi.mock('../../hooks/useRecentLogs.js', () => ({ useRecentLogs: () => ({ logs: [], meals: [], loading: false }) }));
+
+const { default: FoodComposer } = await import('../FoodSearch/FoodComposer.jsx');
 
 let instances = [];
 class FakeRecognition {
@@ -38,7 +40,7 @@ class FakeRecognition {
 const onDescribe = vi.fn();
 const renderBox = (props = {}) => render(
   <GeekToastProvider>
-    <UnifiedFoodSearch mode="dialog" mealType="lunch" onLogItems={vi.fn()} onDescribe={onDescribe} {...props} />
+    <FoodComposer mode="dialog" mealType="lunch" onLogItems={vi.fn()} onDescribe={onDescribe} {...props} />
   </GeekToastProvider>
 );
 
@@ -62,8 +64,9 @@ describe('the microphone', () => {
   it('is offered under the prefixed name Chrome on Android uses', () => {
     window.webkitSpeechRecognition = FakeRecognition;
     renderBox();
-    // The big button in the sheet, and the one in the box — both reachable.
-    expect(screen.getAllByRole('button', { name: /say what you ate/i }).length).toBeGreaterThanOrEqual(1);
+    // One big mic, beside Log it (not a glyph inside the box).
+    expect(screen.getAllByRole('button', { name: /say what you ate/i })).toHaveLength(1);
+    expect(screen.getByTestId('speak-button')).toBe(screen.getByRole('button', { name: /say what you ate/i }));
   });
 
   it('is a keyboard control with a pressed state, and shows that it is listening', async () => {
@@ -110,5 +113,20 @@ describe('the microphone', () => {
     expect(note).toHaveTextContent('FitnessGeek needs your microphone to hear you');
     expect(note.textContent).not.toMatch(/not-allowed/);
     expect(screen.queryByTestId('mic-listening')).toBeNull();
+  });
+
+  it('the result says what it heard (review §4, "Voice")', async () => {
+    window.webkitSpeechRecognition = FakeRecognition;
+    render(
+      <GeekToastProvider>
+        <FoodComposer mode="dialog" mealType="lunch" resultStyle="card" onLogItems={vi.fn()} onDescribe={onDescribe} />
+      </GeekToastProvider>
+    );
+    await act(async () => { fireEvent.click(screen.getByTestId('speak-button')); });
+    await act(async () => {
+      instances[0].hear('two eggs and toast');
+      instances[0].end();
+    });
+    expect(await screen.findByText('I heard: “two eggs and toast”')).toBeInTheDocument();
   });
 });

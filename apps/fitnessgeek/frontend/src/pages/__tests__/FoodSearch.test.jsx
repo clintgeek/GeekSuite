@@ -19,7 +19,7 @@ const logItems = vi.fn();
 // exposes exactly what this test needs — the `mealType` it was handed, and a
 // button that calls `onLogItems` the way tapping a real result row would.
 vi.mock('../../components/FoodSearch', () => ({
-  UnifiedFoodSearch: ({ mealType, onLogItems }) => (
+  FoodComposer: ({ mealType, onLogItems }) => (
     <div>
       <div data-testid="meal-type">{mealType}</div>
       <button onClick={() => onLogItems([{ id: 'f1', name: 'Eggs', servings: 1 }], mealType)}>

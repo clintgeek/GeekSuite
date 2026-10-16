@@ -24,7 +24,9 @@ import SaveMealDialog from '../components/FoodLog/SaveMealDialog.jsx';
 import EditLogDialog from '../components/FoodLog/EditLogDialog.jsx';
 import CopyMealDialog from '../components/FoodLog/CopyMealDialog.jsx';
 import HouseholdLogView from '../components/FoodLog/HouseholdLogView.jsx';
-import { UnifiedFoodSearch } from '../components/FoodSearch';
+import { FoodComposer } from '../components/FoodSearch';
+import { useJustAdded } from '../components/FoodSearch/useJustAdded.jsx';
+import { UndoAction, UNDO_TOAST_MS, UNDONE_MESSAGE, UNDO_FAILED_MESSAGE } from '../components/FoodSearch/undoToast.jsx';
 import FoodEditDialog from '../components/MyFoods/FoodEditDialog.jsx';
 import {
   DateNavigator,
@@ -69,7 +71,7 @@ const mealTypeForNow = (now = new Date()) => {
 
 const FoodLog = () => {
   const theme = useTheme();
-  const { notify } = useToast();
+  const { notify, dismiss } = useToast();
   const { isSimple } = useExperience();
   // `?date=YYYY-MM-DD&meal=lunch` — a tapped meal card on Home lands here, on
   // that day, scrolled to that meal. Anything malformed is simply ignored.
@@ -153,13 +155,19 @@ const FoodLog = () => {
 
   // One definition of "log this" and "take it back", shared with the full-page
   // search so a tap means the same thing on both surfaces.
-  const { logItems, undoLogs, describeMeal, adjustLogCalories, createFood } = useFoodLogging({
+  const { logItems, undoLogs, describeMeal, adjustLogCalories, updateLog, setLogCalories, createFood } = useFoodLogging({
     date: selectedDate,
     onChanged: async () => {
       await refreshLogs();
       await refreshGoals();
     }
   });
+
+  // Full's "Just added" strip on the meal a describe landed in (review Phase
+  // 2.11). It stays until her next action; moving to another day is one.
+  const justAdded = useJustAdded({ setLogCalories, describeMeal, undoLogs });
+  const clearJustAdded = justAdded.clear;
+  useEffect(() => { clearJustAdded(); }, [selectedDate, clearJustAdded]);
 
   const handleCreateFood = async () => {
     if (!createForm?.name) return;
@@ -295,9 +303,9 @@ const FoodLog = () => {
    * to close. Chef, 2026-09-22: "the one-shot didn't close on mobile" — the box
    * cleared, but on a phone the keyboard stayed up and the new entries were
    * below the fold, so nothing visibly said it was done. So: drop the keyboard,
-   * and bring the meal it landed in into view. Only a CLEAN log calls this
-   * (UnifiedFoodSearch decides); a skip or a portion question keeps the
-   * person at the box, where the thing to look at is.
+   * and bring the meal it landed in into view, where Full's "Just added" strip
+   * now is. FoodComposer calls this for a clean log in Full, and on Done after
+   * a result card (Simple, or anything that needed a look).
    */
   const showLoggedMeal = ({ mealType } = {}) => {
     if (typeof document === 'undefined') return;
@@ -373,20 +381,35 @@ const FoodLog = () => {
       return;
     }
 
-    notify(`Deleted ${food_item?.name || 'item'}`, {
+    // The same grammar as an add's undo (undoToast.jsx): ten seconds, then
+    // "Undone ✓" — or "Couldn't undo — try again" with a retry. It used to
+    // be four seconds and silent either way.
+    const restore = async () => {
+      const result = await logItems(
+        [{ ...food_item, servings: log.servings, nutrition: log.nutrition }],
+        log.meal_type
+      );
+      return (result?.ok ?? 0) > 0;
+    };
+    const undoAndSay = async (toastId) => {
+      const ok = await restore().catch(() => false);
+      dismiss?.(toastId);
+      if (ok) {
+        notify(UNDONE_MESSAGE, { tone: 'info' });
+        return;
+      }
+      let retryId = null;
+      retryId = notify(UNDO_FAILED_MESSAGE, {
+        tone: 'error',
+        duration: UNDO_TOAST_MS,
+        action: <UndoAction label="Try again" onUndo={() => undoAndSay(retryId)} />
+      });
+    };
+    let toastId = null;
+    toastId = notify(`Deleted ${food_item?.name || 'item'}`, {
       tone: 'info',
-      action: log && food_item ? (
-        <Button
-          size="small"
-          sx={{ color: 'inherit', fontWeight: 700 }}
-          onClick={() => logItems(
-            [{ ...food_item, servings: log.servings, nutrition: log.nutrition }],
-            log.meal_type
-          )}
-        >
-          Undo
-        </Button>
-      ) : undefined
+      duration: log && food_item ? UNDO_TOAST_MS : undefined,
+      action: log && food_item ? <UndoAction onUndo={() => undoAndSay(toastId)} /> : undefined
     });
   };
 
@@ -519,7 +542,7 @@ const FoodLog = () => {
           dedicated search page, where it is the content rather than something
           in front of the content. */}
       <Surface sx={{ p: { xs: 1.5, sm: 2 }, mb: 3 }}>
-        <UnifiedFoodSearch
+        <FoodComposer
           mode="page"
           collapseIdleList
           onClose={showLoggedMeal}
@@ -528,6 +551,9 @@ const FoodLog = () => {
           onLogItems={logItems}
           onDescribe={describeMeal}
           onAdjustCalories={adjustLogCalories}
+          onUpdateLog={updateLog}
+          onSetCalories={setLogCalories}
+          onJustAdded={justAdded.show}
           onUndo={undoLogs}
           onBarcodeClick={() => setShowBarcodeScanner(true)}
           onCreateFood={(query) => setCreateForm({ ...EMPTY_FOOD_FORM, name: query })}
@@ -556,6 +582,7 @@ const FoodLog = () => {
             mode={mode}
             favoriteFoodIds={favoriteFoodIds}
             onFavoriteChange={toggleFavoriteId}
+            justAdded={justAdded.renderFor(mealType, selectedDate)}
           />
         </Box>
       ))}
@@ -713,6 +740,9 @@ const FoodLog = () => {
         onDescribe={describeMeal}
         onAdjustCalories={adjustLogCalories}
         onUndo={undoLogs}
+        onUpdateLog={updateLog}
+        onSetCalories={setLogCalories}
+        onJustAdded={justAdded.show}
         onCreateFood={(query) => {
           setShowAddDialog(false);
           setCreateForm({ ...EMPTY_FOOD_FORM, name: query });

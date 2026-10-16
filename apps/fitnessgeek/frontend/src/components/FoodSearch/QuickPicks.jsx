@@ -6,6 +6,8 @@ import { useRecentLogs } from '../../hooks/useRecentLogs.js';
 import { rankAgainChips, yesterdaysMeal } from '../../utils/againChips.js';
 import { daysBefore } from '../../utils/experience.js';
 import { mealWord } from '../../utils/plainWords.js';
+import { useToday } from '../../hooks/useToday.js';
+import { mealOnDay } from './composerText.js';
 
 /**
  * One-tap logging (SIMPLE_AND_FULL_PLAN.md item 2), shown in the add box
@@ -23,8 +25,15 @@ import { mealWord } from '../../utils/plainWords.js';
  */
 const YESTERDAY_KEY = 'quick:yesterday';
 
-export default function QuickPicks({ date, mealType, onPick, busy = false, pendingKey = null }) {
+/**
+ * "Same as yesterday's lunch" names the actual day, counted from the day on
+ * screen (REVIEW_2026-10 Phase 1.5): backfilling Wednesday's dinner, the
+ * button copies Tuesday's and says "Same as Tuesday's dinner". `heading`
+ * goes above everything, and only when there is something under it.
+ */
+export default function QuickPicks({ date, mealType, onPick, busy = false, pendingKey = null, heading = null }) {
   const theme = useTheme();
+  const today = useToday();
   const produce = theme.palette.produce?.[mealType] || {};
   const { logs, meals, loading } = useRecentLogs(date);
 
@@ -36,9 +45,16 @@ export default function QuickPicks({ date, mealType, onPick, busy = false, pendi
 
   if (loading || (chips.length === 0 && yesterday.length === 0)) return null;
   const meal = mealWord(mealType);
+  const previous = daysBefore(date, 1);
+  const sameAs = `Same as ${mealOnDay(meal, previous, today)}`;
 
   return (
     <Box data-testid="quick-picks" sx={{ mb: 2, display: 'flex', flexDirection: 'column', gap: 1.5 }}>
+      {heading && (
+        <Typography component="h3" sx={{ fontSize: '1rem', fontWeight: 800, color: 'text.secondary', mt: 0.5 }}>
+          {heading}
+        </Typography>
+      )}
       {yesterday.length > 0 && (
         <Button
           variant="outlined"
@@ -60,7 +76,7 @@ export default function QuickPicks({ date, mealType, onPick, busy = false, pendi
           }}
         >
           <Box component="span" sx={{ display: 'flex', flexDirection: 'column', lineHeight: 1.25 }}>
-            <span>{pendingKey === YESTERDAY_KEY ? 'Adding…' : <>Same as yesterday&apos;s {meal}</>}</span>
+            <span>{pendingKey === YESTERDAY_KEY ? 'Adding…' : sameAs}</span>
             <Box component="span" sx={{ fontSize: '0.9375rem', fontWeight: 600, color: 'text.secondary' }}>
               {yesterday.map((f) => f.name).slice(0, 3).join(', ')}{yesterday.length > 3 ? ` and ${yesterday.length - 3} more` : ''}
             </Box>

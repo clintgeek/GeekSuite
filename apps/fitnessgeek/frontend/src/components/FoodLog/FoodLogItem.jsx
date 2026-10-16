@@ -15,7 +15,9 @@ import {
   StarBorder as StarBorderIcon
 } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
+import { useToast } from '@geeksuite/ui';
 import { foodService } from '../../services/foodService.js';
+import { errorMessage } from '../../utils/errorMessage.js';
 import { netCarbs as calcNetCarbs } from '../../utils/ketoMath.js';
 
 const SWIPE_THRESHOLD = 60;
@@ -33,6 +35,7 @@ const FoodLogItem = ({
   const theme = useTheme();
   const [isFavorite, setIsFavorite] = useState(initialFavorite);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
+  const { notify } = useToast();
 
   // Bug this fixes: `isFavorite` used to default to false and NOTHING ever
   // passed real data in (MealSection rendered this with no favourite prop at
@@ -104,7 +107,13 @@ const FoodLogItem = ({
       }
       onFavoriteChange?.(foodId, !isFavorite);
     } catch (error) {
+      // It used to fail in silence: the star just didn't change, and a second
+      // tap did the same thing (left over from REVIEW_2026-10 B6).
       console.error('Failed to toggle favorite:', error);
+      notify(
+        errorMessage(error, isFavorite ? "Couldn't take that out of your favorites. Try again." : "Couldn't add that to your favorites. Try again."),
+        { tone: 'error' }
+      );
     } finally {
       setFavoriteLoading(false);
     }

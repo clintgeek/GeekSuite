@@ -24,6 +24,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
+import { GeekToastProvider } from '@geeksuite/ui';
 import FoodLogItem from '../FoodLogItem.jsx';
 
 vi.mock('../../../services/foodService.js', () => ({
@@ -95,5 +96,22 @@ describe('favourite state reflects the real prop, not a stuck default', () => {
 
     await waitFor(() => expect(foodService.addFavorite).toHaveBeenCalledWith('f1'));
     expect(foodService.removeFavorite).not.toHaveBeenCalled();
+  });
+});
+
+describe('a favourite that did not save says so', () => {
+  it('shows a plain sentence when adding fails, and the star stays as it was', async () => {
+    foodService.addFavorite.mockRejectedValueOnce(Object.assign(new Error('Request failed with status code 500'), { response: { status: 500, data: {} } }));
+    render(
+      <GeekToastProvider>
+        <ThemeProvider theme={theme}>
+          <FoodLogItem log={LOG} isFavorite={false} />
+        </ThemeProvider>
+      </GeekToastProvider>
+    );
+    fireEvent.click(screen.getByRole('button', { name: /add to favorites/i }));
+    expect(await screen.findByText("Couldn't add that to your favorites. Try again.")).toBeInTheDocument();
+    expect(screen.queryByText(/status code/)).toBeNull();
+    expect(screen.getByRole('button', { name: /add to favorites/i })).toBeInTheDocument();
   });
 });

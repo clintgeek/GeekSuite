@@ -19,6 +19,9 @@ add('almonds', 'Almonds', 'snack', '2026-09-25');
 add('almonds', 'Almonds', 'snack', '2026-09-23');
 
 vi.mock('../../../hooks/useRecentLogs.js', () => ({ useRecentLogs: () => ({ logs, meals: [], loading: false }) }));
+// "Yesterday" is named relative to the real today, so pin it.
+let today = '2026-09-27';
+vi.mock('../../../hooks/useToday.js', () => ({ useToday: () => today }));
 const { default: QuickPicks } = await import('../QuickPicks.jsx');
 
 describe('QuickPicks', () => {
@@ -45,5 +48,33 @@ describe('QuickPicks', () => {
     // Breakfast has no yesterday; the only habits are other meals' (still chips).
     expect(screen.queryByRole('button', { name: /same as yesterday/i })).toBeNull();
     expect(container.querySelector('[data-testid="again-chips"]')).not.toBeNull();
+  });
+
+  it("names the actual day when the day on screen isn't today (review Phase 1.5)", () => {
+    // Backfilling Saturday the 26th, from Monday the 28th: the button copies
+    // Friday's lunch and says so, instead of "yesterday's".
+    today = '2026-09-28';
+    logs.push({
+      id: 'soup-25', meal_type: 'lunch', servings: 1, log_date: '2026-09-25T00:00:00.000Z',
+      nutrition: { calories_per_serving: 220 }, food_item_id: { id: 'soup', name: 'Chicken soup' },
+    });
+    try {
+      render(<QuickPicks date="2026-09-26" mealType="lunch" onPick={vi.fn()} />);
+      expect(screen.getByRole('button', { name: /same as friday's lunch/i })).toHaveTextContent('Chicken soup');
+      expect(screen.queryByRole('button', { name: /yesterday's/i })).toBeNull();
+    } finally {
+      logs.pop();
+      today = '2026-09-27';
+    }
+  });
+
+  it('on yesterday, it is the day before yesterday that gets copied — by name', () => {
+    today = '2026-09-28';
+    try {
+      render(<QuickPicks date="2026-09-27" mealType="lunch" onPick={vi.fn()} />);
+      expect(screen.getByRole('button', { name: /same as saturday's lunch/i })).toHaveTextContent('Caesar salad, Toast');
+    } finally {
+      today = '2026-09-27';
+    }
   });
 });

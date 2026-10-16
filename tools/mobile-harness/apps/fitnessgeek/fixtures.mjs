@@ -391,6 +391,11 @@ export const OPS = {
   GetWeeklySummary: { weeklySummary: {} },
   GetActiveNutritionGoals: { activeNutritionGoals: null },
   GetFitnessFoods: { fitnessFoods: FOODS },
+  // The composer's writes (a tapped row, "Make it 2", a Fix, Undo). Echoed
+  // back with an id, as the gateway would.
+  AddFoodLog: (vars) => ({ addFoodLog: { ...FOOD_LOGS[0], id: 'log-added', meal_type: vars.input?.meal_type || 'lunch', servings: vars.input?.servings ?? 1 } }),
+  UpdateFoodLog: (vars) => ({ updateFoodLog: { ...FOOD_LOGS[0], id: vars.id, ...(vars.input?.servings != null ? { servings: vars.input.servings } : {}) } }),
+  DeleteFoodLog: { deleteFoodLog: true },
   GetFitnessFood: { fitnessFood: FOODS[0] },
   GetFitnessMeals: { fitnessMeals: SAVED_MEALS },
   GetFitnessMedications: { fitnessMedications: MEDS },
@@ -517,6 +522,51 @@ export const opsWithPlan = (patch, extra = {}) => ({
   },
   ...extra,
 });
+
+// ── The food composer (REVIEW_2026-10 §4) ──────────────────────────────
+// REST shapes, as /api/foods/suggest and /api/foods?search= return them.
+const restFood = (id, name, brand, cal, size, unit, source = 'usda', extra = {}) => ({
+  id, kind: 'food', name, brand, source,
+  serving: { size, unit },
+  nutrition: { calories_per_serving: cal, protein_grams: 10, carbs_grams: 12, fat_grams: 5 },
+  ...extra,
+});
+/** Wave one for "fage": her own row first, then the catalog. */
+export const SUGGEST_FAGE = [
+  restFood('f1', 'Greek Yogurt, Plain Whole Milk', 'Fage', 190, 170, 'g', 'custom', { shelf: 'recent' }),
+  restFood('s2', 'Fage Total 2% Greek Yogurt', 'Fage', 150, 170, 'g', 'local'),
+  restFood('s3', 'Fage Total 0% Greek Yogurt', 'Fage', 90, 170, 'g', 'local'),
+];
+/** Wave two for "fage": more brands, plus one the first wave already had. */
+export const DEEP_FAGE = [
+  restFood('d1', 'Fage Total 5% Greek Yogurt', 'Fage', 190, 170, 'g', 'fatsecret'),
+  restFood('s2', 'Fage Total 2% Greek Yogurt', 'Fage', 150, 170, 'g', 'local'),
+  restFood('d3', 'Fage TruBlend Vanilla', 'Fage', 110, 150, 'g', 'openfoodfacts'),
+  restFood('d4', 'Fage Total Split Cup, Strawberry', 'Fage', 140, 150, 'g', 'fatsecret'),
+  restFood('d5', 'Greek Yogurt, Fage, Honey', 'Fage', 270, 150, 'g', 'usda'),
+  restFood('d6', 'Fage BestSelf Lactose Free', 'Fage', 110, 150, 'g', 'openfoodfacts'),
+];
+/** Suggest for the soup sentence: what "Or pick an exact food" counts. */
+export const SUGGEST_SOUP = [
+  { kind: 'meal', id: 'meal-1', name: 'Soup and crackers lunch', meal_type: 'lunch', food_count: 2, nutrition: { calories_per_serving: 350 }, source: 'meal' },
+  restFood('c1', 'Chicken Noodle Soup', 'Campbell\'s', 120, 1, 'cup', 'local'),
+  restFood('c2', 'Saltine Crackers', 'Premium', 60, 5, 'crackers', 'local'),
+];
+/** POST /api/logs/describe for "a bowl of chicken soup and some crackers". */
+export const DESCRIBED_SOUP = {
+  logged: [
+    { logId: 'desc-soup', name: 'Chicken soup, 1 bowl', servings: 1, loggedServings: 1, mealType: 'lunch', calories: 220,
+      nutrition: { calories_per_serving: 220, protein_grams: 14, carbs_grams: 20, fat_grams: 8 }, source: 'estimate', flags: [] },
+    { logId: 'desc-crk', name: 'Crackers, about 6', servings: 6, loggedServings: 1, mealType: 'lunch', calories: 130,
+      nutrition: { calories_per_serving: 130, protein_grams: 3, carbs_grams: 22, fat_grams: 3 }, source: 'estimate', flags: [] },
+  ],
+  skipped: [],
+  logIds: ['desc-soup', 'desc-crk'],
+  questions: [],
+  totalCalories: 350,
+  dayHint: null,
+  dayWords: [],
+};
 
 export async function routes(ctx, { base, scheme, viewport } = {}) {
   await sessionRoutes(ctx, USER);

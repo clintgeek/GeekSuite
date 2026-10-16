@@ -1,184 +1,97 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Box, Typography, Alert, Button, Skeleton, LinearProgress, Chip, Collapse, ButtonBase } from '@mui/material';
+import { Box, Typography, Skeleton, LinearProgress, Collapse, ButtonBase } from '@mui/material';
 import {
   AddCircleOutline as CreateIcon,
-  AutoAwesome as WandIcon,
   ExpandMore as ExpandIcon,
-  Mic as MicIcon,
 } from '@mui/icons-material';
 import { useTheme, alpha } from '@mui/material/styles';
-import { useToast, readableOn } from '@geeksuite/ui';
-import SearchBar from './SearchBar';
 import FoodResultRow from './FoodResultRow';
-import ServingSheet from './ServingSheet';
-import SessionRibbon from './SessionRibbon';
-import PortionQuestion from './PortionQuestion';
-import QuickPicks from './QuickPicks';
 import { foodService } from '../../services/foodService';
-import { useSpeechInput } from '../../hooks/useSpeechInput.js';
-import { addedMessage } from '../../utils/plainWords.js';
 import { errorMessage } from '../../utils/errorMessage.js';
-import { useUndoToast, runUndo } from './undoToast.jsx';
-import { newIdempotencyKey } from './idempotency.js';
+import { identityOf } from './entries.js';
 
 /**
- * The food search box. One surface, two waves, no submit step.
+ * The "exact food" list: the half of the composer you ask for.
  *
- * WHAT THIS REPLACES. The old version searched only when you pressed Enter or
- * a send arrow, then rendered a two-column grid of animated cards behind three
- * separately-collapsible browse accordions, and fed everything through a
- * classifier that split "chocolate chip pancakes" into chocolate, chip and
- * pancake. See DOCS/THE_FOOD_SEARCH_PLAN.md.
+ * FoodComposer owns the box, the sentence and everything that writes; this
+ * owns the two search waves and the rows. It used to be the whole surface,
+ * with the list first and describing as a pale row inside it
+ * (REVIEW_2026-10 §4). See FoodComposer.jsx for the surface it now serves.
  *
- * HOW IT WORKS NOW.
+ * THE TWO WAVES.
  *
  *   Wave one (150ms after you stop typing) hits `/foods/suggest` — your own
- *   catalog, favourites, recents, custom foods. No network beyond our own
- *   Mongo, so it paints while you are still typing.
+ *   catalog, favourites, recents, custom foods, and (with `meals=1`) up to
+ *   three of your saved meals. No network beyond our own Mongo, so it paints
+ *   while you are still typing.
  *
- *   Wave two (400ms, or immediately on Enter) hits `/foods?search=` — the food
- *   APIs and, where it earns its place, the model. It APPENDS. Nothing already
- *   on screen moves out from under a finger.
+ *   Wave two (400ms) hits `/foods?search=` — the food APIs and, where it earns
+ *   its place, the model. It never runs under three characters ("Ha" used to
+ *   come back with "hal PICKLED BABY BEETROOT", §2), and never for a sentence
+ *   unless the list has been opened: typing "a bowl of chicken soup" word by
+ *   word used to fire a model call on every pause.
  *
- * Tapping a row logs it at its default serving with an undo in the toast; the
- * trailing control opens the serving editor for the adds that need one. From
- * the second item onward a ribbon shows what this sitting has come to. That
- * is a *session* — you're picking several things — so the box (and any
- * dialog it's mounted in) stays open across every one of those taps; only
- * the person decides when a picking session is done.
+ * NOTHING MOVES UNDER A FINGER OR A POINTER. Chef: "the entry form bounces
+ * around a lot on the desktop". For one query, the order of rows is fixed the
+ * first time they are shown: a later batch is appended (or merged into a row
+ * already there), never sorted in above. The progress bar has its own reserved
+ * line, and the "couldn't reach the databases" note sits under the list, so
+ * neither pushes rows down when it appears.
  *
- * A described meal is a different gesture: one line, one tap, and the whole
- * thing is written. Chef's own words for the difference: "on the one-tap
- * [describe] or barcode scan, the modal should close to show it completed
- * successfully. Clicking individual items is fine with the pop up count/tray
- * it has." So a *clean* describe-and-log — logged something, nothing was
- * skipped, nothing needs answering — calls the optional `onClose` prop, which
- * a caller wires to whatever "done" means for it (AddFoodDialog closes the
- * sheet; the inline mounts on FoodLog/FoodSearch pass nothing, since clearing
- * the box, which already happens, IS "closed" when there's no sheet to close).
- * A partial result (a skip, or a portion question) never closes anything —
- * there's something on screen the person still needs to see.
- *
- * DESCRIBE IS THE PRIMARY PATH (2026-09-16). Chef does not want to be the
- * search operator — he wants to say what he ate and have it written
- * (DOCS/THE_DESCRIBE_AND_LOG_PLAN.md §1). So the first thing under the box is
- * "Log …", and Enter fires it. Search still runs underneath on its own
- * debounce and is still the right answer for picking one specific branded
- * item, which is exactly the role the plan assigns it.
- *
- * Enter used to re-run the deep search. Nothing is lost: wave two already
- * fires 400ms after you stop typing, so Enter was only ever impatience.
- *
- * The box asked to describe a meal in its placeholder for a day before any of
- * this existed, and searched instead. Promising it and not doing it is worse
- * than not offering it.
- *
- * ONE WRITE AT A TIME (REVIEW_2026-10 B7). A tapped row shows "Adding…" at
- * once, and while any write from this box is in flight — a row, a chip, a
- * serving sheet, a describe, an undo — every other way to write is disabled.
- * The guard is a ref as well as state, because two taps can land before the
- * first re-render does.
+ * SENTENCE MODE. When the box holds a sentence, the list folds into
+ * "Or pick an exact food (n)". "Nothing found" never shows — there is no
+ * such thing as nothing found for a sentence describe-and-log can read — and
+ * the "Create '<sentence>'" row is hidden.
  */
 
 const DEBOUNCE_LOCAL_MS = 150;
 const DEBOUNCE_DEEP_MS = 400;
-const MIN_QUERY = 2;
+const MIN_DEEP = 3;
 
-/** Stable identity for de-duplicating the two waves against each other. */
-const identityOf = (food) => {
-  if (!food) return '';
-  return (
-    food.id ||
-    food._id ||
-    `${food.source || '?'}::${food.compositeItem || ''}::${(food.name || '').toLowerCase()}`
-  );
-};
+/** A saved meal from suggest logs through `logMeal` (useFoodLogging's `type: 'meal'` branch). */
+const asRow = (row) => (row?.kind === 'meal' ? { ...row, type: 'meal' } : row);
 
 const UnifiedFoodSearch = ({
-  mode = 'page',
-  mealType = 'snack',
-  onMealTypeChange,
-  onLogItems,          // (items, mealType) => Promise<{ok, fail, logIds}>
-  onDescribe,          // (text) => Promise<{ok, fail, logIds, logged, skipped, questions}>
-  onAdjustCalories,    // (logId, nutrition, servings, targetCalories) => Promise<boolean>
-  onUndo,              // (logIds) => Promise<void>
-  onCreateFood,        // (query) => void
-  onClose,             // ({ mealType }) => void — a clean one-shot describe-and-log calls this
-  onBarcodeClick,
-  initialQuery = '',
-  ketoMode = false,
-  autoFocus = false,
-  /**
-   * Fold the idle list ("Your foods") behind its heading until asked for.
-   *
-   * With no query typed, `suggest('')` returns up to fifteen of your own
-   * foods — roughly 800px of rows. On the dedicated search page that IS the
-   * page and it belongs open. On the Food Log it sits between the search box
-   * and the meals, so arriving at the page to check what you ate means
-   * scrolling past your entire food catalogue first.
-   *
-   * Only the IDLE list folds. The moment there is a query, results are what
-   * was asked for and are always shown.
-   */
+  query = '',
+  sentence = false,
+  describeAvailable = false,
   collapseIdleList = false,
-  /**
-   * "Again" chips and "Same as yesterday's …" above the idle list
-   * (SIMPLE_AND_FULL_PLAN.md item 2). Needs `date`, the day being logged to.
-   */
-  showQuickPicks = false,
-  date = null,
-  /** The microphone (item 3). Shown only where the browser can listen. */
-  voice = true,
-  className
+  ketoMode = false,
+  dense = false,
+  busy = false,
+  pendingKey = null,
+  // `{ key, servings }` for the row whose add just landed ("Make it 2").
+  added = null,
+  onPick,
+  onAdjust,
+  onMore,
+  onCreateFood,
 }) => {
   const theme = useTheme();
-  const { notify } = useToast();
-  const { offerUndo, sayUndoOutcome } = useUndoToast(onUndo);
   const muted = theme.palette.text.secondary;
   const ink = theme.palette.text.primary;
 
-  const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState([]);
   const [deepResults, setDeepResults] = useState([]);
   const [loadingDeep, setLoadingDeep] = useState(false);
   const [error, setError] = useState(null);
-  const [adjusting, setAdjusting] = useState(null);
-  const [session, setSession] = useState([]);   // what this sitting has logged
-  const [busy, setBusy] = useState(false);
-  // Which row or chip the write in flight came from, so it can say "Adding…".
-  const [pendingKey, setPendingKey] = useState(null);
-  const [describing, setDescribing] = useState(false);
-  // At most one, and only when the backend judged it worth asking (§3.8).
-  const [question, setQuestion] = useState(null);
-
-  // Collapsed on arrival every time, deliberately not remembered: the folded
-  // state is about what the PAGE is for, not a preference. Someone who opened
-  // it once to log a snack still wants to see their log first tomorrow.
+  // Folded lists, closed on arrival every time and deliberately not
+  // remembered: the fold is about what the screen is for, not a preference.
   const [idleListOpen, setIdleListOpen] = useState(false);
+  const [sentenceListOpen, setSentenceListOpen] = useState(false);
 
   const localAbort = useRef(null);
   const deepAbort = useRef(null);
   const deepTimer = useRef(null);
-  const seededRef = useRef(null);
   // The query the deep results on screen are allowed to belong to.
   const deepFor = useRef('');
-  const inFlight = useRef(false);
-  // The describe press being retried keeps its Idempotency-Key (C2).
-  const describeAttempt = useRef(null);
 
-  /** Take the box's one write slot, or say no if a write is already running. */
-  const beginWrite = useCallback((key = null) => {
-    if (inFlight.current) return false;
-    inFlight.current = true;
-    setBusy(true);
-    setPendingKey(key);
-    return true;
-  }, []);
-  const endWrite = useCallback(() => {
-    inFlight.current = false;
-    setBusy(false);
-    setPendingKey(null);
-  }, []);
+  const text = String(query || '').trim();
+  const searching = text.length > 0;
+  const wantDeep = text.length >= MIN_DEEP && (!sentence || sentenceListOpen);
+
+  // A new sentence starts folded again.
+  useEffect(() => { if (!sentence) setSentenceListOpen(false); }, [sentence]);
 
   // ── Wave one: the local catalog, on every pause ──────────────────────
   useEffect(() => {
@@ -187,8 +100,8 @@ const UnifiedFoodSearch = ({
       const controller = new AbortController();
       localAbort.current = controller;
       try {
-        const foods = await foodService.suggest(query, { limit: 15, signal: controller.signal });
-        if (!controller.signal.aborted) setSuggestions(Array.isArray(foods) ? foods : []);
+        const foods = await foodService.suggest(text, { limit: 15, signal: controller.signal, meals: true });
+        if (!controller.signal.aborted) setSuggestions(Array.isArray(foods) ? foods.map(asRow) : []);
       } catch (err) {
         if (err?.name !== 'CanceledError' && err?.name !== 'AbortError') {
           // A failed suggest is not a failed search — wave two may still answer.
@@ -196,34 +109,27 @@ const UnifiedFoodSearch = ({
         }
       }
     }, DEBOUNCE_LOCAL_MS);
-
     return () => clearTimeout(handle);
-  }, [query]);
+  }, [text]);
 
   // ── Wave two: the food APIs, on a longer pause ───────────────────────
   const runDeepSearch = useCallback(async (term) => {
-    const text = String(term || '').trim();
-    if (text.length < MIN_QUERY) {
-      setDeepResults([]);
-      return;
-    }
-
     deepAbort.current?.abort();
     const controller = new AbortController();
     deepAbort.current = controller;
-    deepFor.current = text;
+    deepFor.current = term;
 
     setLoadingDeep(true);
     setError(null);
     try {
-      const foods = await foodService.search(text, { limit: 25, includeAI: true, signal: controller.signal });
+      const foods = await foodService.search(term, { limit: 25, includeAI: true, signal: controller.signal });
       // A late answer for a query that is no longer in the box is dropped,
       // aborted or not — it used to land after the box was cleared.
-      if (!controller.signal.aborted && deepFor.current === text) {
+      if (!controller.signal.aborted && deepFor.current === term) {
         setDeepResults(Array.isArray(foods) ? foods : []);
       }
     } catch (err) {
-      if (err?.name !== 'CanceledError' && err?.name !== 'AbortError' && deepFor.current === text) {
+      if (err?.name !== 'CanceledError' && err?.name !== 'AbortError' && deepFor.current === term) {
         setError(errorMessage(err, 'Could not reach the food databases. Your own foods are still listed.'));
       }
     } finally {
@@ -233,27 +139,19 @@ const UnifiedFoodSearch = ({
 
   useEffect(() => {
     clearTimeout(deepTimer.current);
-    if (query.trim().length < MIN_QUERY) {
-      // Cleared (or down to one letter): the search still running is for
-      // something that is no longer there.
+    if (!wantDeep) {
+      // Cleared, too short, or a sentence: the search still running is for
+      // something that is no longer asked for.
       deepAbort.current?.abort();
       deepFor.current = '';
       setDeepResults([]);
       setLoadingDeep(false);
+      setError(null);
       return undefined;
     }
-    deepTimer.current = setTimeout(() => runDeepSearch(query), DEBOUNCE_DEEP_MS);
+    deepTimer.current = setTimeout(() => runDeepSearch(text), DEBOUNCE_DEEP_MS);
     return () => clearTimeout(deepTimer.current);
-  }, [query, runDeepSearch]);
-
-  // A caller that already knows the query (a deep link, a barcode miss) seeds
-  // it once — never overwriting what the person has since typed.
-  useEffect(() => {
-    const seed = String(initialQuery || '').trim();
-    if (!seed || seededRef.current === seed) return;
-    seededRef.current = seed;
-    setQuery(seed);
-  }, [initialQuery]);
+  }, [text, wantDeep, runDeepSearch]);
 
   useEffect(() => () => {
     localAbort.current?.abort();
@@ -261,668 +159,231 @@ const UnifiedFoodSearch = ({
     clearTimeout(deepTimer.current);
   }, []);
 
-  // ── The one list ─────────────────────────────────────────────────────
+  // ── The one list, in a fixed order ───────────────────────────────────
   // Your own foods first (they arrived first and they are usually the answer),
-  // then whatever the databases added. De-duplicated across both waves.
+  // then whatever the databases added, de-duplicated across both waves. The
+  // order is remembered per query: a later batch only ever appends.
+  const order = useRef({ query: null, keys: [] });
   const results = useMemo(() => {
     const byIdentity = new Map();
-    for (const food of suggestions) {
-      byIdentity.set(identityOf(food), { ...food, tier: 'local' });
-    }
+    for (const food of suggestions) byIdentity.set(identityOf(food), { ...food, tier: 'local' });
     for (const food of deepResults) {
       const key = identityOf(food);
       if (!byIdentity.has(key)) byIdentity.set(key, { ...food, tier: 'deep' });
     }
-    return [...byIdentity.values()];
-  }, [suggestions, deepResults]);
+    const fresh = [...byIdentity.keys()];
+    const known = order.current.query === text ? order.current.keys.filter((k) => byIdentity.has(k)) : [];
+    const keys = [...known, ...fresh.filter((k) => !known.includes(k))];
+    order.current = { query: text, keys };
+    return keys.map((k) => byIdentity.get(k));
+  }, [suggestions, deepResults, text]);
 
   const decomposedFrom = useMemo(
     () => deepResults.find((r) => r.decomposedFrom)?.decomposedFrom || null,
     [deepResults]
   );
 
-  /** Results the backend split into parts, grouped under their fragment. */
+  const plain = useMemo(() => results.filter((r) => !r.compositeItem), [results]);
+  /** Results the backend split into parts, grouped under their fragment — after the plain rows. */
   const groups = useMemo(() => {
-    const composite = results.filter((r) => r.compositeItem);
-    if (composite.length === 0) return null;
     const map = new Map();
-    for (const food of composite) {
+    for (const food of results.filter((r) => r.compositeItem)) {
       if (!map.has(food.compositeItem)) map.set(food.compositeItem, []);
       map.get(food.compositeItem).push(food);
     }
     return [...map.entries()];
   }, [results]);
 
-  const plain = useMemo(() => results.filter((r) => !r.compositeItem), [results]);
-  const searching = query.trim().length >= MIN_QUERY;
-
-  // ── Logging ──────────────────────────────────────────────────────────
-  /** The ribbon forgets only what was really deleted. */
-  const forgetDeleted = useCallback((deleted) => {
-    if (!deleted?.length) return;
-    setSession((prev) => prev
-      .map((entry) => {
-        const ids = entry.logIds || [];
-        if (!ids.some((id) => deleted.includes(id))) return entry;
-        return { ...entry, logIds: ids.filter((id) => !deleted.includes(id)) };
-      })
-      .filter((entry) => (entry.logIds || []).length > 0));
-  }, []);
-
-  const logFoods = useCallback(async (items, meal, key = null) => {
-    if (!items?.length || !onLogItems) return;
-    if (!beginWrite(key)) return;
-    try {
-      const result = await onLogItems(items, meal || mealType);
-      const ok = result?.ok ?? items.length;
-      const logIds = result?.logIds || [];
-
-      if (ok > 0) {
-        // `perItem` groups the ids by the item that produced them. Pairing by
-        // index was wrong the moment one item wrote more than one log: a saved
-        // meal expands into several, and every later item took an id belonging
-        // to the meal — so undoing a row deleted somebody else's food.
-        const perItem = result?.perItem || items.map((_, i) => (logIds[i] ? [logIds[i]] : []));
-        setSession((prev) => [
-          ...prev,
-          ...items.map((item, i) => ({ ...item, logIds: perItem[i] || [] }))
-        ]);
-        offerUndo(addedMessage(meal || mealType, items.length === 1 ? items[0].name : `${ok} items`), logIds, {
-          tone: result?.fail ? 'warning' : 'success',
-          onDeleted: forgetDeleted
-        });
-      }
-      if (result?.fail) {
-        const fallback = items.length === 1
-          ? "Couldn't add that. Try again."
-          : `${result.fail} item${result.fail === 1 ? '' : 's'} could not be logged.`;
-        notify(errorMessage(result?.errors?.[0], fallback), { tone: 'error' });
-      }
-    } catch (err) {
-      notify(errorMessage(err, 'Could not log that. Try again.'), { tone: 'error' });
-    } finally {
-      endWrite();
-    }
-  }, [onLogItems, mealType, notify, offerUndo, forgetDeleted, beginWrite, endWrite]);
-
-  /**
-   * Send the sentence; the backend writes the log and tells us what landed.
-   *
-   * The query is cleared on success because it HAS been logged — leaving it in
-   * the box is an invitation to log it twice, and this is the path that exists
-   * so nobody has to think about it.
-   */
-  const describe = useCallback(async (spoken) => {
-    // `spoken` is the microphone's transcript, handed straight in: the box's
-    // `query` state has not caught up with it yet on this render.
-    const text = String(typeof spoken === 'string' ? spoken : query).trim();
-    if (!text || !onDescribe) return;
-    if (!beginWrite('describe')) return;
-
-    // Pressing Log it again on the same words after a failure is a retry of
-    // that press, and keeps its key — the first try may have written on the
-    // server after this end gave up on it (C2). New words, new press.
-    if (describeAttempt.current?.text !== text) {
-      describeAttempt.current = { text, key: newIdempotencyKey() };
-    }
-    const idempotencyKey = describeAttempt.current.key;
-
-    setDescribing(true);
-    setError(null);
-    try {
-      // The meal the person picked (a meal card's "+ Add", or the chips)
-      // rides along, so "two eggs" from Lunch's sheet lands in lunch.
-      const result = await onDescribe(text, { mealType, idempotencyKey });
-      // It answered: whatever comes next is a new press.
-      describeAttempt.current = null;
-      const logged = result?.logged || [];
-      const skipped = result?.skipped || [];
-      const logIds = result?.logIds || [];
-
-      if (logged.length > 0) {
-        setQuery('');
-        // `loggedServings` is the multiplier actually written, which is what
-        // the ribbon multiplies `calories_per_serving` by. `servings` is what
-        // was asked for, and the two differ whenever the estimate came back as
-        // a whole-dish total.
-        setSession((prev) => [
-          ...prev,
-          ...logged.map((entry) => ({
-            name: entry.name,
-            logIds: entry.logId ? [entry.logId] : [],
-            servings: entry.loggedServings ?? entry.servings ?? 1,
-            nutrition: entry.nutrition
-          }))
-        ]);
-
-        // One question, and only when it moves the day. It is attached to the
-        // entry it asks about so answering can re-scale that log's macros.
-        const asked = (result?.questions || [])[0] || null;
-        setQuestion(
-          asked
-            ? { ...asked, entry: logged.find((entry) => entry.logId === asked.logId) || null }
-            : null
-        );
-
-        // Name what he described, not how many rows it became. A saved meal
-        // writes one row per component, so "homemade quesadilla" is seven rows
-        // — and "Logged 7 items" for one quesadilla reads like something went
-        // wrong. Rows from the same saved meal count as the one thing he said.
-        const units = [];
-        const seenMeals = new Set();
-        for (const row of logged) {
-          const mealId = row?.savedMeal?.id;
-          if (mealId) {
-            if (seenMeals.has(mealId)) continue;
-            seenMeals.add(mealId);
-            units.push(row.savedMeal.name);
-          } else {
-            units.push(row.name);
-          }
-        }
-        const what = units.length === 1
-          ? units[0]
-          : units.length === 2 ? `${units[0]} and ${units[1]}` : `${units.length} items`;
-        const calories = logged.length === 1
-          ? logged[0].calories
-          : result?.totalCalories;
-        const summary = `${what} · ${Math.round(calories || 0)} cal`;
-
-        offerUndo(addedMessage(logged[0]?.mealType || mealType, summary), logIds, {
-          tone: skipped.length > 0 ? 'warning' : 'success',
-          onDeleted: forgetDeleted
-        });
-
-        // Chef: "the one-tap ... should close to show it completed
-        // successfully." Clean means nothing landed on the cutting-room
-        // floor and nothing needs answering — a skip or a portion question
-        // is something to look at, so those keep the sheet open even though
-        // the log write itself succeeded. The toast above still confirms it,
-        // with its own Undo, for whoever's sheet just closed under them.
-        if (skipped.length === 0 && !asked) {
-          // Which meal it landed in, so a caller with no sheet to close — the
-          // search built into the Food Log page — can show the result instead.
-          onClose?.({ mealType: logged[0]?.mealType ?? null });
-        }
-      }
-
-      // A described line can partly fail: the sanity rails reject one entry
-      // whose numbers are nonsense while its neighbours write fine. Saying so
-      // beats a log that quietly disagrees with what he told it.
-      if (skipped.length > 0) {
-        setError(
-          logged.length === 0
-            ? `Couldn't make sense of that: ${skipped.map((s) => s.name).join(', ')}.`
-            : `Logged the rest, but skipped ${skipped.map((s) => s.name).join(', ')} — the numbers looked wrong.`
-        );
-      }
-    } catch (err) {
-      // A 422 is a real answer ("no food in that"), not a fault; the server's
-      // own words are the clearest thing to show. errorMessage passes them
-      // through and turns a 502 or a dead signal into plain words.
-      setError(errorMessage(err, 'Could not log that. Try again.'));
-    } finally {
-      setDescribing(false);
-      endWrite();
-    }
-  }, [query, onDescribe, onClose, mealType, offerUndo, forgetDeleted, beginWrite, endWrite]);
-
-  // ── Speak it ─────────────────────────────────────────────────────────
-  // The transcript goes into the box (so he can see what was heard) and
-  // straight through describe-and-log, the same path typing takes.
-  const describeRef = useRef(describe);
-  describeRef.current = describe;
-  const speech = useSpeechInput({
-    onFinal: (text) => {
-      setQuery(text);
-      describeRef.current(text);
-    }
-  });
-  const micAvailable = voice && speech.supported && Boolean(onDescribe);
-  const toggleMic = useCallback(() => {
-    if (speech.listening) speech.stop();
-    else speech.start();
-  }, [speech]);
-
-  /** Answering re-scales the log that was already written. */
-  const answerQuestion = useCallback(async (asked, targetCalories) => {
-    if (!onAdjustCalories || !asked?.entry) { setQuestion(null); return; }
-    if (!beginWrite('portion')) return;
-    try {
-      const updated = await onAdjustCalories(
-        asked.logId,
-        asked.entry.nutrition,
-        asked.entry.loggedServings ?? asked.entry.servings ?? 1,
-        targetCalories
-      );
-      // `false` means nothing was written; saying "Updated" then was a lie.
-      if (!updated) {
-        notify(errorMessage(null, 'Could not update that.'), { tone: 'error' });
-        return;
-      }
-      setSession((prev) => prev.map((item) => (
-        item.logIds?.includes(asked.logId)
-          ? {
-            ...item,
-            nutrition: {
-              ...item.nutrition,
-              calories_per_serving: targetCalories / (item.servings || 1)
-            }
-          }
-          : item
-      )));
-      notify(`Updated to ${Math.round(targetCalories)} cal`, { tone: 'success' });
-    } catch (err) {
-      notify(errorMessage(err, 'Could not update that.'), { tone: 'error' });
-    } finally {
-      setQuestion(null);
-      endWrite();
-    }
-  }, [onAdjustCalories, notify, beginWrite, endWrite]);
-
-  const handleTap = useCallback((food) => {
-    const servings = Number(food.requestedQuantity) > 0 ? Number(food.requestedQuantity) : 1;
-    logFoods([{ ...food, servings }], mealType, identityOf(food));
-  }, [logFoods, mealType]);
-
-  /** The ribbon's undos: same outcome toast, and only deleted rows leave. */
-  const undoIds = useCallback(async (ids) => {
-    if (!ids?.length || !onUndo) return;
-    if (!beginWrite('undo')) return;
-    try {
-      const { deleted, failed } = await runUndo(onUndo, ids);
-      forgetDeleted(deleted);
-      sayUndoOutcome(failed, undoIds);
-    } finally {
-      endWrite();
-    }
-  }, [onUndo, forgetDeleted, sayUndoOutcome, beginWrite, endWrite]);
-
-  const undoAll = useCallback(
-    () => undoIds(session.flatMap((entry) => entry.logIds || [])),
-    [session, undoIds]
-  );
-
-  // A meal's several logs go together: it was one gesture, so it is one undo.
-  const undoLast = useCallback(
-    () => undoIds(session[session.length - 1]?.logIds || []),
-    [session, undoIds]
-  );
-
   // ── Rendering ────────────────────────────────────────────────────────
-  const sectionHeading = (text) => (
+  const sectionHeading = (label) => (
     <Typography
       component="h3"
-      sx={{
-        fontFamily: "inherit",
-        fontSize: '0.9375rem',
-        color: muted,
-        mt: 2,
-        mb: 0.5,
-        px: 1.5,
-        letterSpacing: '-0.01em'
-      }}
+      sx={{ fontSize: '0.9375rem', fontWeight: 700, color: muted, mt: 2, mb: 0.5, px: 1.5, letterSpacing: '-0.01em' }}
     >
-      {text}
+      {label}
     </Typography>
   );
 
   /**
-   * The same heading, but it opens and closes the list under it.
-   *
-   * Built on the plain one so the two cannot drift apart visually — this is
-   * the identical type, plus a count and a chevron. The count matters: folded,
-   * it is the only thing telling you the list is there at all.
+   * A heading that opens and closes the list under it, with a count. Folded,
+   * the count is the only thing telling you the list is there at all. A plain
+   * number, not a Chip: a small filled chip is the suite's standing contrast
+   * trap.
    */
-  const collapsibleHeading = (text, count, open, onToggle) => (
+  const collapsibleHeading = (label, count, open, onToggle, testId) => (
     <ButtonBase
       onClick={onToggle}
       aria-expanded={open}
+      data-testid={testId}
+      disabled={busy}
       sx={{
         width: '100%',
         justifyContent: 'flex-start',
         borderRadius: 2,
-        // 44px is the suite's tap floor; the heading's own margins do not
-        // count towards it.
-        minHeight: 44,
-        px: 0.5,
-        '&:hover': { bgcolor: alpha(theme.palette.text.primary, 0.04) },
+        // 44px is the suite's tap floor; the heading's own margins do not count.
+        minHeight: 48,
+        mt: 1,
+        px: 1.5,
+        gap: 1,
+        opacity: busy ? 0.6 : 1,
+        '@media (hover: hover)': { '&:hover': { bgcolor: alpha(theme.palette.text.primary, 0.04) } },
+        '&:focus-visible': { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: 2 },
       }}
     >
-      {sectionHeading(text)}
-      {/* A plain number, not a Chip. A small filled chip is the suite's
-          standing trap — it lands under the 12px text floor and its contrast
-          cannot be fixed with `readableOn`. This needs neither. */}
-      <Typography
-        component="span"
-        sx={{ ml: 1, mt: 2, mb: 0.5, color: muted, fontSize: '0.8125rem', fontVariantNumeric: 'tabular-nums' }}
-      >
-        {count}
-      </Typography>
       <ExpandIcon
         fontSize="small"
-        sx={{
-          ml: 'auto',
-          mt: 2,
-          mb: 0.5,
-          mr: 1,
-          color: muted,
-          transition: 'transform 150ms ease',
-          transform: open ? 'rotate(180deg)' : 'none',
-        }}
+        aria-hidden
+        sx={{ color: muted, transition: 'transform 150ms ease', transform: open ? 'none' : 'rotate(-90deg)' }}
       />
+      <Typography component="span" sx={{ fontSize: '1rem', fontWeight: 700, color: ink }}>{label}</Typography>
+      <Typography component="span" sx={{ color: muted, fontSize: '0.9375rem', fontVariantNumeric: 'tabular-nums' }}>
+        ({count})
+      </Typography>
     </ButtonBase>
   );
 
-  const renderRow = (food) => (
-    <FoodResultRow
-      key={identityOf(food)}
-      food={food}
-      onTap={handleTap}
-      onAdjust={setAdjusting}
-      pending={busy && pendingKey === identityOf(food)}
-      disabled={busy}
-      ketoMode={ketoMode}
-      dense={mode === 'dialog'}
-    />
+  const renderRow = (food) => {
+    const key = identityOf(food);
+    return (
+      <FoodResultRow
+        key={key}
+        food={food}
+        onTap={(f) => onPick?.(f, key)}
+        onAdjust={onAdjust}
+        onMore={onMore}
+        added={added?.key === key ? added : null}
+        pending={busy && pendingKey === key}
+        disabled={busy}
+        ketoMode={ketoMode}
+        dense={dense}
+      />
+    );
+  };
+
+  const rows = (
+    <>
+      {plain.map(renderRow)}
+      {groups.map(([fragment, foods]) => (
+        <Box key={fragment}>
+          {sectionHeading(fragment)}
+          {foods.map(renderRow)}
+        </Box>
+      ))}
+    </>
   );
 
-  const describeRow = searching && onDescribe ? (
-    <Box
-      role="button"
-      tabIndex={0}
-      aria-busy={describing}
-      aria-disabled={busy || undefined}
-      onClick={() => describe()}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); describe(); } }}
-      sx={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 1.5,
-        minHeight: 56,
-        px: 1.5,
-        py: 1,
-        mb: 1,
-        borderRadius: 2,
-        cursor: describing ? 'progress' : busy ? 'default' : 'pointer',
-        opacity: busy ? 0.7 : 1,
-        pointerEvents: busy ? 'none' : 'auto',
-        border: `1px solid ${alpha(theme.palette.primary.main, 0.4)}`,
-        backgroundColor: alpha(theme.palette.primary.main, 0.06),
-        '&:hover': { backgroundColor: alpha(theme.palette.primary.main, 0.12) },
-        '&:focus-visible': { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: 2 }
-      }}
-    >
-      <WandIcon sx={{ color: theme.palette.primary.main }} />
-      <Box sx={{ minWidth: 0 }}>
-        <Typography sx={{ fontSize: '0.9375rem', color: ink, fontWeight: 600 }}>
-          {describing ? 'Logging…' : <>Log &ldquo;{query.trim()}&rdquo;</>}
+  const notes = (
+    <>
+      {decomposedFrom && (
+        <Typography role="status" sx={{ color: muted, fontSize: '0.9375rem', px: 1.5, mt: 1 }}>
+          No single match for <strong>{decomposedFrom}</strong>, so its parts are listed.
         </Typography>
-        {/*
-          * `muted` at 12px measured 4.42:1 on this tinted panel — just under
-          * the 4.5 AA floor for normal text, which 12px is. `readableOn` walks
-          * it until it clears, and needs `under` because the panel is an
-          * alpha() tint: a translucent surface is a colour AND the paper below
-          * it, and measuring against the tint alone gets a different answer.
-          */}
-        <Typography
-          sx={{
-            fontSize: '0.75rem',
-            color: readableOn(muted, alpha(theme.palette.primary.main, 0.06), {
-              under: theme.palette.background.paper
-            })
-          }}
-        >
-          {describing
-            ? 'Working out what that comes to'
-            : 'Writes it straight to your log — undo is one tap'}
+      )}
+      {error && (
+        <Typography role="status" sx={{ color: ink, fontSize: '0.9375rem', px: 1.5, mt: 1 }}>
+          {error}
         </Typography>
-      </Box>
-    </Box>
-  ) : null;
+      )}
+    </>
+  );
 
-  const createRow = searching && onCreateFood ? (
-    <Box
-      role="button"
-      tabIndex={0}
-      onClick={() => onCreateFood(query.trim())}
-      onKeyDown={(e) => { if (e.key === 'Enter') onCreateFood(query.trim()); }}
+  // The bar has a line of its own whether or not it is showing, so the rows
+  // under it never jump when a search starts or ends.
+  const progress = (
+    <Box sx={{ height: 4, mb: 0.5 }}>
+      {loadingDeep && (
+        <LinearProgress sx={{ height: 2, borderRadius: 1, opacity: 0.7 }} aria-label="Searching food databases" />
+      )}
+    </Box>
+  );
+
+  const createRow = searching && !sentence && onCreateFood ? (
+    <ButtonBase
+      onClick={() => onCreateFood(text)}
+      disabled={busy}
       sx={{
-        display: 'flex',
-        alignItems: 'center',
+        width: '100%',
+        justifyContent: 'flex-start',
         gap: 1.5,
         minHeight: 56,
         px: 1.5,
         mt: 1,
         borderRadius: 2,
-        cursor: 'pointer',
         border: `1px dashed ${alpha(ink, 0.25)}`,
-        '&:hover': { backgroundColor: theme.palette.action.hover },
-        '&:focus-visible': { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: 2 }
+        '@media (hover: hover)': { '&:hover': { backgroundColor: theme.palette.action.hover } },
+        '&:focus-visible': { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: 2 },
       }}
     >
-      <CreateIcon sx={{ color: theme.palette.primary.main }} />
-      <Typography sx={{ fontSize: '0.875rem', color: ink }}>
-        Can&apos;t find it? Create <strong>&ldquo;{query.trim()}&rdquo;</strong>
+      <CreateIcon sx={{ color: theme.palette.primary.main }} aria-hidden />
+      <Typography component="span" sx={{ fontSize: '0.9375rem', color: ink, textAlign: 'left' }}>
+        Can&apos;t find it? Create <strong>&ldquo;{text}&rdquo;</strong>
       </Typography>
-    </Box>
+    </ButtonBase>
   ) : null;
 
+  // ── A sentence: the list is something you ask for ────────────────────
+  if (searching && sentence) {
+    const count = results.length;
+    if (count === 0 && !sentenceListOpen) return null;
+    return (
+      <Box data-testid="exact-food-list" data-folded={!sentenceListOpen}>
+        {collapsibleHeading('Or pick an exact food', count, sentenceListOpen, () => setSentenceListOpen((v) => !v), 'exact-food-toggle')}
+        <Collapse in={sentenceListOpen} unmountOnExit>
+          {progress}
+          {rows}
+          {notes}
+        </Collapse>
+      </Box>
+    );
+  }
+
+  // ── Nothing typed: your own foods, folded where they'd bury the page ──
+  if (!searching) {
+    if (plain.length === 0) return null;
+    if (!collapseIdleList) {
+      return (
+        <Box data-testid="exact-food-list">
+          {sectionHeading('Your foods')}
+          {rows}
+        </Box>
+      );
+    }
+    return (
+      <Box data-testid="exact-food-list" data-folded={!idleListOpen}>
+        {collapsibleHeading('Your foods', plain.length, idleListOpen, () => setIdleListOpen((v) => !v), 'your-foods-toggle')}
+        <Collapse in={idleListOpen} unmountOnExit>{rows}</Collapse>
+      </Box>
+    );
+  }
+
+  // ── A name ("fage"): the list, open ──────────────────────────────────
+  const empty = results.length === 0;
   return (
-    <Box className={className} sx={{ pb: session.length >= 2 ? 1 : 0 }}>
-      <SearchBar
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        onSubmit={() => (onDescribe ? describe() : runDeepSearch(query))}
-        onBarcodeClick={onBarcodeClick}
-        onMicClick={micAvailable ? toggleMic : undefined}
-        listening={speech.listening}
-        loading={loadingDeep}
-        autoFocus={autoFocus || mode === 'dialog'}
-        placeholder={onDescribe ? 'What did you eat?' : 'Search foods'}
-      />
-
-      {speech.listening && (
-        <Box
-          role="status"
-          aria-live="polite"
-          data-testid="mic-listening"
-          sx={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 1.5,
-            mt: -1.5,
-            mb: 2,
-            px: 2,
-            py: 1.5,
-            borderRadius: '18px',
-            bgcolor: alpha(theme.palette.primary.main, 0.1),
-            border: `2px solid ${theme.palette.primary.main}`,
-          }}
-        >
-          <Box
-            aria-hidden
-            sx={{
-              width: 14,
-              height: 14,
-              borderRadius: '50%',
-              bgcolor: theme.palette.primary.main,
-              flexShrink: 0,
-              animation: 'fgMicPulse 1.2s ease-in-out infinite',
-              '@keyframes fgMicPulse': {
-                '0%, 100%': { transform: 'scale(1)', opacity: 1 },
-                '50%': { transform: 'scale(1.5)', opacity: 0.55 },
-              },
-              '@media (prefers-reduced-motion: reduce)': { animation: 'none' },
-            }}
-          />
-          <Box sx={{ minWidth: 0, flex: 1 }}>
-            <Typography sx={{ fontWeight: 800, fontSize: '1.0625rem', color: ink }}>
-              Listening… say what you ate
-            </Typography>
-            {speech.interim && (
-              <Typography sx={{ fontSize: '1rem', color: ink, overflowWrap: 'anywhere' }}>
-                &ldquo;{speech.interim}&rdquo;
-              </Typography>
-            )}
-          </Box>
-          <Button variant="contained" onClick={speech.stop} sx={{ minHeight: 44, flexShrink: 0 }}>
-            Done
-          </Button>
-        </Box>
-      )}
-
-      {speech.errorText && (
-        <Alert severity="info" onClose={speech.clearError} sx={{ mb: 1.5, borderRadius: 2, fontSize: '1rem' }} data-testid="mic-error">
-          {speech.errorText}
-        </Alert>
-      )}
-
-      {onMealTypeChange && (
-        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 1.5 }}>
-          {['breakfast', 'lunch', 'dinner', 'snack'].map((meal) => (
-            <Chip
-              key={meal}
-              label={meal === 'snack' ? 'Snacks' : meal.charAt(0).toUpperCase() + meal.slice(1)}
-              onClick={() => onMealTypeChange(meal)}
-              aria-pressed={meal === mealType}
-              color={meal === mealType ? 'primary' : 'default'}
-              variant={meal === mealType ? 'filled' : 'outlined'}
-              sx={{ height: 44, borderRadius: 999, fontWeight: 600, '& .MuiChip-label': { px: 1.75 } }}
-            />
-          ))}
-        </Box>
-      )}
-
-      {/*
-        * The primary action, above the results, because describing is the
-        * point and searching is the fallback. It says exactly what it will
-        * write, so "no confirm step" does not become "no idea what happened".
-        */}
-      {describeRow}
-
-      {!searching && micAvailable && mode === 'dialog' && !speech.listening && (
-        <Button
-          variant="outlined"
-          size="large"
-          fullWidth
-          startIcon={<MicIcon />}
-          onClick={speech.start}
-          data-testid="speak-button"
-          sx={{ mb: 2, minHeight: 56, borderRadius: '18px', borderWidth: 2, '@media (hover: hover)': { '&:hover': { borderWidth: 2 } } }}
-        >
-          Say what you ate
-        </Button>
-      )}
-
-      {!searching && showQuickPicks && date && (
-        <QuickPicks
-          date={date}
-          mealType={mealType}
-          busy={busy}
-          pendingKey={pendingKey}
-          onPick={(items, key) => logFoods(items, mealType, key)}
-        />
-      )}
-
-      {/*
-        * Asked only after the food is already in the log, and only when the
-        * spread is wide enough to matter. Ignoring it costs nothing.
-        */}
-      <PortionQuestion
-        question={question}
-        busy={busy}
-        onAnswer={answerQuestion}
-        onDismiss={() => setQuestion(null)}
-      />
-
-      {/* Wave two in flight, under results that are already usable */}
-      {loadingDeep && (
-        <LinearProgress
-          sx={{ height: 2, borderRadius: 1, mb: 1, opacity: 0.7 }}
-          aria-label="Searching food databases"
-        />
-      )}
-
-      {decomposedFrom && (
-        <Alert
-          severity="info"
-          icon={<WandIcon />}
-          sx={{ mb: 1.5, borderRadius: 2, fontSize: '0.8125rem' }}
-        >
-          No single match for <strong>{decomposedFrom}</strong> — showing its parts instead.
-        </Alert>
-      )}
-
-      {error && (
-        <Alert severity="warning" onClose={() => setError(null)} sx={{ mb: 1.5, borderRadius: 2 }}>
-          {error}
-        </Alert>
-      )}
-
-      {/* Results */}
-      {groups ? (
-        groups.map(([fragment, foods]) => (
-          <Box key={fragment}>
-            {sectionHeading(fragment)}
-            {foods.map(renderRow)}
-          </Box>
-        ))
-      ) : searching || !collapseIdleList || plain.length === 0 ? (
-        <>
-          {!searching && plain.length > 0 && sectionHeading('Your foods')}
-          {plain.map(renderRow)}
-        </>
-      ) : (
-        <>
-          {collapsibleHeading('Your foods', plain.length, idleListOpen, () => setIdleListOpen((v) => !v))}
-          <Collapse in={idleListOpen} unmountOnExit>
-            {plain.map(renderRow)}
-          </Collapse>
-        </>
-      )}
-
-      {/* Nothing yet */}
-      {plain.length === 0 && !groups && (
+    <Box data-testid="exact-food-list" data-folded="false">
+      {progress}
+      {rows}
+      {empty && (
         loadingDeep ? (
-          <Box sx={{ mt: 1 }}>
-            {[0, 1, 2, 3].map((i) => (
+          <Box>
+            {[0, 1, 2].map((i) => (
               <Skeleton key={i} variant="rectangular" height={56} sx={{ borderRadius: 2, mb: 1 }} />
             ))}
           </Box>
         ) : (
-          <Box sx={{ textAlign: 'center', py: 5, px: 3 }}>
-            <Typography sx={{ fontFamily: "inherit", fontSize: '1.25rem', color: ink }}>
-              {searching ? 'Nothing found' : 'What did you eat?'}
+          <Box sx={{ textAlign: 'center', py: 3, px: 2 }} data-testid="no-match">
+            <Typography sx={{ fontSize: '1.0625rem', fontWeight: 700, color: ink }}>
+              No match in your foods yet
             </Typography>
-            <Typography sx={{ color: muted, fontSize: '0.875rem', mt: 0.5, maxWidth: 380, mx: 'auto' }}>
-              {searching
-                ? 'Try fewer words, or create it below.'
-                : 'Start typing — your own foods come up first. A sentence like “2 eggs and toast” works too.'}
+            <Typography sx={{ color: muted, fontSize: '0.9375rem', mt: 0.5, maxWidth: 380, mx: 'auto' }}>
+              {describeAvailable
+                ? 'Tap Log it and I’ll work it out.'
+                : onCreateFood ? 'You can create it below.' : 'Try another name.'}
             </Typography>
           </Box>
         )
       )}
-
+      {notes}
       {createRow}
-
-      <SessionRibbon
-        items={session}
-        onUndoAll={undoAll}
-        onUndoLast={undoLast}
-        busy={busy}
-      />
-
-      <ServingSheet
-        open={Boolean(adjusting)}
-        food={adjusting}
-        defaultMealType={mealType}
-        onClose={() => setAdjusting(null)}
-        onConfirm={(food, meal) => {
-          setAdjusting(null);
-          logFoods([food], meal, identityOf(food));
-        }}
-      />
     </Box>
   );
 };

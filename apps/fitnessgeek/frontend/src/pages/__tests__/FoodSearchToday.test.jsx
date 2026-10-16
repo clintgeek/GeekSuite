@@ -7,7 +7,7 @@ import { render, act } from '@testing-library/react';
 import { GeekToastProvider } from '@geeksuite/ui';
 
 const dates = [];
-vi.mock('../../components/FoodSearch', () => ({ UnifiedFoodSearch: () => null }));
+vi.mock('../../components/FoodSearch', () => ({ FoodComposer: () => null }));
 vi.mock('../../components/BarcodeScanner/BarcodeScanner.jsx', () => ({ default: () => null }));
 vi.mock('../../hooks/useFoodLogging.js', () => ({
   useFoodLogging: ({ date }) => {
