@@ -94,9 +94,14 @@ export function ingredientFromSaved(ing) {
   };
 }
 
+// US units first in the select; metric stays available after them.
+const US_FIRST = ['serving', 'oz', 'lb', 'cup', 'fl oz', 'tbsp', 'tsp'];
+const usRank = (u) => (US_FIRST.includes(u) ? US_FIRST.indexOf(u) : US_FIRST.length);
+
 /** Units the select offers: what converts, plus whatever the row has now. */
 export function unitOptions(row) {
-  const opts = unitsFor({ size: row.serving_size, unit: row.serving_unit });
+  const opts = [...unitsFor({ size: row.serving_size, unit: row.serving_unit })]
+    .sort((a, b) => usRank(a) - usRank(b));
   return opts.includes(row.unit) ? opts : [...opts, row.unit];
 }
 

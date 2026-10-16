@@ -134,21 +134,23 @@ const FoodEditDialog = ({ open, food, form, onChange, onClose, onSave, loading }
               label="Serving Size"
               type="number"
               value={form.serving_size || ''}
-              onChange={(e) => onChange({ ...form, serving_size: parseFloat(e.target.value) || 100 })}
+              onChange={(e) => onChange({ ...form, serving_size: parseFloat(e.target.value) || 1 })}
             />
             <FormControl fullWidth>
               <InputLabel>Unit</InputLabel>
               <Select
-                value={form.serving_unit || 'g'}
+                value={form.serving_unit || 'oz'}
                 onChange={(e) => onChange({ ...form, serving_unit: e.target.value })}
                 label="Unit"
               >
-                <MenuItem value="g">grams (g)</MenuItem>
-                <MenuItem value="ml">milliliters (ml)</MenuItem>
                 <MenuItem value="oz">ounces (oz)</MenuItem>
+                <MenuItem value="lb">pounds (lb)</MenuItem>
                 <MenuItem value="cup">cups</MenuItem>
+                <MenuItem value="fl oz">fluid ounces (fl oz)</MenuItem>
                 <MenuItem value="tbsp">tablespoons</MenuItem>
                 <MenuItem value="tsp">teaspoons</MenuItem>
+                <MenuItem value="g">grams (g)</MenuItem>
+                <MenuItem value="ml">milliliters (ml)</MenuItem>
               </Select>
             </FormControl>
           </Box>

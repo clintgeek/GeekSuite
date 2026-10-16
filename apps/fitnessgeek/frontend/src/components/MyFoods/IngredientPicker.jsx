@@ -2,13 +2,14 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Box, Button, CircularProgress, TextField, Typography } from '@mui/material';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
 import { foodService } from '../../services/foodService.js';
+import { formatServing } from '../../utils/units.js';
 
 const kcal = (food) => Math.round(Number(food?.nutrition?.calories_per_serving) || 0);
 
 const servingText = (food) => {
   const size = food?.serving?.size ?? food?.serving_size;
   const unit = food?.serving?.unit ?? food?.serving_unit;
-  return size ? `${Math.round(Number(size) * 10) / 10}${unit || ''}` : null;
+  return size ? formatServing(size, unit) : null;
 };
 
 /**

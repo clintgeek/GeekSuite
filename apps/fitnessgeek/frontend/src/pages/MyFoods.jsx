@@ -29,8 +29,8 @@ const EMPTY_FOOD_FORM = {
   protein_grams: '',
   carbs_grams: '',
   fat_grams: '',
-  serving_size: 100,
-  serving_unit: 'g'
+  serving_size: 1,
+  serving_unit: 'oz'
 };
 
 const MyFoods = () => {
@@ -101,8 +101,8 @@ const MyFoods = () => {
           fat_grams: Number(createForm.fat_grams) || 0
         },
         serving: {
-          size: Number(createForm.serving_size) || 100,
-          unit: createForm.serving_unit || 'g'
+          size: Number(createForm.serving_size) || 1,
+          unit: createForm.serving_unit || 'oz'
         }
       });
       notify(`Saved "${createForm.name.trim()}"`, { tone: 'success' });

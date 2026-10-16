@@ -421,3 +421,18 @@ Built from a production audit of the whole pipeline.
   - The rate is a least-squares fit over every program weigh-in.
   - A finish more than twice the plan's length out reads "Well behind plan", not a date.
 - **Checks:** 5 new tests, all red on the old code. Frontend 517. Harness 152/0.
+
+## 2026-10-15 — FitnessGeek: food amounts in US units
+
+- **Chef:** "I want ounces and other freedom units and not this grams crap." Scope picked:
+  food amounts only. Protein, carbs and fat stay in grams, as US labels print them.
+- **Display** (`utils/units.js` `formatServing`): metric servings read in US units.
+  - Grams become oz, and lb from a pound up. Millilitres become cup, fl oz, tbsp or tsp.
+  - Shown in food search rows, the ingredient picker and the recipe unit-mismatch warning.
+  - Stored data is unchanged. Foods keep the unit their source gave.
+- **Logging:** the serving sheet has a Servings / oz switch (fl oz / cup for poured foods),
+  with "1 serving = 3.5 oz". The amount converts to servings when logged.
+- **Entry:** new foods default to 1 oz. US units come first in the unit pickers, metric after
+  them. The recipe builder's unit list is sorted US-first too.
+- **Checks:** 7 new tests. The serving-sheet test is red on the old sheet. Frontend 524.
+  Harness 80/0, enforcing. The serving sheet has no harness scene, so it is unaudited there.

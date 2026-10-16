@@ -1,37 +1,69 @@
-// Simple unit conversions for frontend usage
-// Canonical base: grams for mass, milliliters for volume
+// Food amounts in US units.
+//
+// Foods are stored the way their source gave them, usually metric. These
+// helpers convert for display and entry only. Macros stay in grams, the way
+// US labels print them (Chef, 2026-10-15).
 
-export const MASS_UNITS = {
-  g: { label: 'g', factor: 1 },
-  oz: { label: 'oz', factor: 28.349523125 },
-  lb: { label: 'lb', factor: 453.59237 },
+import { MASS_UNITS, VOLUME_UNITS, canonicalUnit, amountToServings } from './recipeMath.js';
+
+const OZ = MASS_UNITS.oz;
+const LB = MASS_UNITS.lb;
+const FL_OZ = VOLUME_UNITS['fl oz'];
+const CUP = VOLUME_UNITS.cup;
+const TBSP = VOLUME_UNITS.tbsp;
+const TSP = VOLUME_UNITS.tsp;
+
+// One decimal from 1 up; two below, so 1 g reads 0.04 oz, not 0 oz.
+const tidy = (n) => {
+  const one = Math.round(n * 10) / 10;
+  return Math.abs(one) >= 1 ? one : Math.round(n * 100) / 100;
 };
 
-export const VOLUME_UNITS = {
-  ml: { label: 'ml', factor: 1 },
-  floz: { label: 'fl oz', factor: 29.5735295625 },
-  cup: { label: 'cup', factor: 236.5882365 },
-};
-
-export function toBase(value, unit, kind = 'mass') {
-  const map = kind === 'volume' ? VOLUME_UNITS : MASS_UNITS;
-  const meta = map[unit];
-  if (!meta) return Number(value) || 0;
-  return (Number(value) || 0) * meta.factor;
+/**
+ * A serving in US units: grams become oz (lb from a pound up), millilitres
+ * become cups, fl oz, tbsp or tsp. US units and words like "slice" pass through.
+ */
+export function usAmount(size, unit) {
+  const n = Number(size);
+  if (!Number.isFinite(n)) return { size, unit };
+  const u = canonicalUnit(unit);
+  if (u === 'g' || u === 'kg') {
+    const grams = n * MASS_UNITS[u];
+    return grams >= LB
+      ? { size: tidy(grams / LB), unit: 'lb' }
+      : { size: tidy(grams / OZ), unit: 'oz' };
+  }
+  if (u === 'ml' || u === 'l') {
+    const ml = n * VOLUME_UNITS[u];
+    if (ml >= 8 * FL_OZ) return { size: tidy(ml / CUP), unit: 'cup' };
+    if (ml >= FL_OZ) return { size: tidy(ml / FL_OZ), unit: 'fl oz' };
+    if (ml >= TBSP) return { size: tidy(ml / TBSP), unit: 'tbsp' };
+    return { size: tidy(ml / TSP), unit: 'tsp' };
+  }
+  return { size: tidy(n), unit };
 }
 
-export function fromBase(baseValue, unit, kind = 'mass') {
-  const map = kind === 'volume' ? VOLUME_UNITS : MASS_UNITS;
-  const meta = map[unit];
-  if (!meta) return Number(baseValue) || 0;
-  return (Number(baseValue) || 0) / meta.factor;
+/** "3.5 oz", "1 cup", "2 slice". Null when there is no size. */
+export function formatServing(size, unit) {
+  if (size == null || size === '' || !Number.isFinite(Number(size))) return null;
+  const us = usAmount(size, unit);
+  return us.unit ? `${us.size} ${us.unit}` : String(us.size);
 }
 
-export function formatNumber(n, digits = 1) {
-  const v = Number(n);
-  if (!isFinite(v)) return '0';
-  if (Math.abs(v) >= 100) return Math.round(v).toString();
-  return v.toFixed(digits);
+/** The US weight or volume units a food can be logged in, besides servings. */
+export function usLogUnits(serving) {
+  const u = canonicalUnit(serving?.unit);
+  if (!(Number(serving?.size) > 0)) return [];
+  if (u in MASS_UNITS) return ['oz'];
+  if (u in VOLUME_UNITS) return ['fl oz', 'cup'];
+  return [];
 }
 
-
+/** How many of `toUnit` one `fromUnit` of this food is (both may be 'serving'). */
+export function convertAmount(amount, fromUnit, toUnit, serving) {
+  const servings = amountToServings(amount, fromUnit, serving);
+  if (servings == null) return null;
+  if (toUnit === 'serving') return servings;
+  const perServing = amountToServings(1, toUnit, serving);
+  return perServing ? servings / perServing : null;
+}

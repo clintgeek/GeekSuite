@@ -9,6 +9,7 @@ import {
 } from '@mui/icons-material';
 import { useTheme, alpha } from '@mui/material/styles';
 import { netCarbs as calcNetCarbs } from '../../utils/ketoMath';
+import { formatServing } from '../../utils/units.js';
 
 /**
  * One search result, as a row.
@@ -70,7 +71,7 @@ const FoodResultRow = ({
 
   const sourceLabel = SOURCE_LABEL[String(food?.source || '').toLowerCase()] || food?.source;
   const servingText = food?.serving?.size
-    ? `${round(food.serving.size, 1)}${food.serving.unit || 'g'}`
+    ? formatServing(food.serving.size, food.serving.unit || 'g')
     : null;
 
   const subtitle = [food?.brand, servingText, servings !== 1 ? `×${servings}` : null]

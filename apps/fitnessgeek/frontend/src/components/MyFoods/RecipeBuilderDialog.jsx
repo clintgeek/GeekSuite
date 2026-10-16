@@ -31,6 +31,7 @@ import {
   withAmount,
   withUnit,
 } from '../../utils/recipeBuilder.js';
+import { formatServing } from '../../utils/units.js';
 
 const round1 = (n) => Math.round((Number(n) || 0) * 10) / 10;
 
@@ -227,8 +228,7 @@ const RecipeBuilderDialog = ({ open, food, onClose, onSaved }) => {
                         <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mt: 1 }}>
                           <WarningIcon fontSize="small" sx={{ color: 'warning.main', mt: '2px' }} aria-hidden />
                           <Typography sx={{ fontSize: '0.8125rem', color: 'text.primary' }}>
-                            That unit doesn&apos;t match this food&apos;s serving ({row.serving_size}
-                            {row.serving_unit}), so the amount is a guess. Pick a unit that fits.
+                            That unit doesn&apos;t match this food&apos;s serving ({formatServing(row.serving_size, row.serving_unit)}), so the amount is a guess. Pick a unit that fits.
                           </Typography>
                         </Box>
                       )}
