@@ -314,12 +314,12 @@ const GET_FOOD_REPORT_TRENDS = gql`
   }
 `;
 
-const GET_MORNING_BRIEF = gql` query GetMorningBrief { fitnessInsightsMorningBrief { type content generatedAt context } } `;
+const GET_MORNING_BRIEF = gql` query GetMorningBrief($date: String) { fitnessInsightsMorningBrief(date: $date) { type content generatedAt context } } `;
 const GET_DAILY_INSIGHT_SUMMARY = gql` query GetDailyInsightSummary($date: String) { fitnessInsightsDailySummary(date: $date) { type content generatedAt context } } `;
-const GET_CORRELATIONS = gql` query GetCorrelations { fitnessInsightsCorrelations { type content generatedAt context } } `;
+const GET_CORRELATIONS = gql` query GetCorrelations($date: String) { fitnessInsightsCorrelations(date: $date) { type content generatedAt context } } `;
 const GET_WEEKLY_INSIGHT_REPORT = gql` query GetWeeklyInsightReport($start: String, $days: Int) { fitnessInsightsWeeklyReport(start: $start, days: $days) { type content generatedAt context } } `;
 const GET_TREND_WATCH = gql` query GetTrendWatch($start: String, $days: Int) { fitnessInsightsTrendWatch(start: $start, days: $days) { type content generatedAt context } } `;
-const GET_COACHING = gql` query GetCoaching { fitnessInsightsCoaching { type content generatedAt context } } `;
+const GET_COACHING = gql` query GetCoaching($date: String) { fitnessInsightsCoaching(date: $date) { type content generatedAt context } } `;
 const GET_AI_CONTEXT = gql` query GetAiContext($days: Int) { fitnessInsightsContext(days: $days) } `;
 const AI_CHAT = gql` mutation AiChat($message: String!, $history: [ChatMessageInput]) { fitnessInsightsChat(message: $message, history: $history) { type content generatedAt } } `;
 
@@ -619,13 +619,13 @@ function routeRequest(method, url, data) {
       const sp = new URLSearchParams(url.split('?')[1]);
       return { query: GET_FOOD_REPORT_TRENDS, variables: { start: sp.get('start'), days: parseInt(sp.get('days')) || 30 } };
     }
-    if (base === '/insights/morning-brief') return { query: GET_MORNING_BRIEF };
+    if (base === '/insights/morning-brief') return { query: GET_MORNING_BRIEF, variables: { date: localDateString() } };
     if (base === '/insights/daily-summary') {
       const sp = new URLSearchParams(url.split('?')[1]);
       // Same rule as /summary above: the browser owns the calendar day.
       return { query: GET_DAILY_INSIGHT_SUMMARY, variables: { date: sp.get('date') || localDateString() } };
     }
-    if (base === '/insights/correlations') return { query: GET_CORRELATIONS };
+    if (base === '/insights/correlations') return { query: GET_CORRELATIONS, variables: { date: localDateString() } };
     if (base === '/insights/weekly-report') {
       const sp = new URLSearchParams(url.split('?')[1]);
       return { query: GET_WEEKLY_INSIGHT_REPORT, variables: { start: sp.get('start'), days: parseInt(sp.get('days')) || 7 } };
@@ -634,7 +634,7 @@ function routeRequest(method, url, data) {
       const sp = new URLSearchParams(url.split('?')[1]);
       return { query: GET_TREND_WATCH, variables: { start: sp.get('start'), days: parseInt(sp.get('days')) || 30 } };
     }
-    if (base === '/insights/coaching') return { query: GET_COACHING };
+    if (base === '/insights/coaching') return { query: GET_COACHING, variables: { date: localDateString() } };
     if (base === '/insights/context') {
       const sp = new URLSearchParams(url.split('?')[1]);
       return { query: GET_AI_CONTEXT, variables: { days: parseInt(sp.get('days')) || 7 } };
