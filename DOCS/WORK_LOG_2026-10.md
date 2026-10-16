@@ -436,3 +436,12 @@ Built from a production audit of the whole pipeline.
   them. The recipe builder's unit list is sorted US-first too.
 - **Checks:** 7 new tests. The serving-sheet test is red on the old sheet. Frontend 524.
   Harness 80/0, enforcing. The serving sheet has no harness scene, so it is unaudited there.
+
+## 2026-10-16 — FitnessGeek: full review for real use (`apps/fitnessgeek/DOCS/REVIEW_2026-10.md`)
+
+- **Chef:** complaints of "this or that doesn't work" now that Heather uses it.
+- Review only; nothing fixed. Covered: code bugs (19 P1, ~35 P2), a UX walkthrough as Heather,
+  a composer redesign for the food box, a phased plan, and 6 open decisions.
+- **Production logs:** CalorieNinjas key invalid; Redis caching reports disabled; deep and AI
+  search run on 2-letter prefixes.
+- Heather's own data was not read (permission guard).
