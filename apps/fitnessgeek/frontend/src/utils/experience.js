@@ -66,3 +66,9 @@ export function decideMode({ savedMode, activity, today }) {
   if (isExperienceMode(savedMode)) return savedMode;
   return hasRecentActivity(activity, today) ? 'full' : 'simple';
 }
+
+/** A stable per-person key from whatever the session carries (for per-user caches). */
+export const userKeyOf = (user) => {
+  const key = user?.id ?? user?._id ?? user?.userId ?? user?.email ?? null;
+  return key ? String(key) : null;
+};

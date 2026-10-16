@@ -15,13 +15,13 @@ export const streakService = {
     }
   },
 
-  // Record a login (called when user logs in)
-  async recordLogin() {
+  // Record a login for a calendar day (the browser's, YYYY-MM-DD).
+  async recordLogin({ date } = {}) {
     try {
-      const response = await apiService.post('/streaks/login');
+      const response = await apiService.post('/streaks/login', date ? { date } : undefined);
       return response;
     } catch (error) {
-      console.error('Error recording login:', error);
+      logger.error('Error recording login:', error);
       throw error;
     }
   }
