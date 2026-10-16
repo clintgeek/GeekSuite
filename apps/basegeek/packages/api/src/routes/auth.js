@@ -222,6 +222,18 @@ router.post('/refresh', async (req, res) => {
         });
     } catch (error) {
         req.log.error({ err: error }, 'Token refresh error');
+        // Clients end the session only on 400/401/403. A database or Redis
+        // blip is not the token's fault: answer 503 so they keep the session
+        // and retry. Only a problem with the token itself (bad signature,
+        // expired, malformed, unknown user) is a 401.
+        const tokenProblem = ['JsonWebTokenError', 'TokenExpiredError', 'NotBeforeError'].includes(error?.name)
+            || error?.code === 'USER_NOT_FOUND';
+        if (!tokenProblem) {
+            return res.status(503).json({
+                message: 'Sign-in service is busy. Try again in a moment.',
+                code: 'REFRESH_UNAVAILABLE'
+            });
+        }
         res.status(401).json({
             message: error.message,
             code: 'TOKEN_REFRESH_ERROR'

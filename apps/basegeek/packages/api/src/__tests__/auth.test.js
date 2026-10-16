@@ -231,6 +231,29 @@ describe('POST /api/auth/refresh', () => {
     expect(postRevokeAttempt.status).toBe(401);
   });
 
+  it('answers 503, not 401, when the database fails (a blip must not log the person out)', async () => {
+    await createTestUser({ email: 'blip@example.com', password: 'password123' });
+    const loginRes = await login('blip@example.com', 'password123');
+    const spy = jest.spyOn(User, 'findById').mockImplementationOnce(() => {
+      throw new Error('MongoNetworkError: connection closed');
+    });
+    const res = await refresh(loginRes.body.refreshToken);
+    spy.mockRestore();
+    expect(res.status).toBe(503);
+    expect(res.body.code).toBe('REFRESH_UNAVAILABLE');
+    expect(res.body.message).toBe('Sign-in service is busy. Try again in a moment.');
+  });
+
+  it('still answers 401 for a garbage refresh token and for a deleted user', async () => {
+    const bad = await refresh('not-a-jwt');
+    expect(bad.status).toBe(401);
+    await createTestUser({ email: 'gone@example.com', password: 'password123' });
+    const loginRes = await login('gone@example.com', 'password123');
+    await User.deleteMany({});
+    const res = await refresh(loginRes.body.refreshToken);
+    expect(res.status).toBe(401);
+  });
+
   it('returns 401 when called without a token', async () => {
     const res = await request(app)
       .post('/api/auth/refresh')

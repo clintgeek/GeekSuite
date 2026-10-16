@@ -153,7 +153,9 @@ export const rotateRefreshToken = async (oldRefreshToken, app = null) => {
   // Look up the user
   const user = await User.findById(stored.userId || userId);
   if (!user) {
-    throw new Error('User not found');
+    const err = new Error('User not found');
+    err.code = 'USER_NOT_FOUND'; // the session is over; /refresh answers 401, not 503
+    throw err;
   }
 
   // A password change ends every session, not just the one that made it.
