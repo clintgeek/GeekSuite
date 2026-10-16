@@ -1,7 +1,7 @@
 import React, { useMemo, lazy, Suspense } from 'react';
 import { ThemeProvider as MuiThemeProvider } from '@mui/material/styles';
 import { CssBaseline, Box, CircularProgress } from '@mui/material';
-import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter as Router, Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { FocusModeProvider } from '@geeksuite/ui';
 import { createAppTheme } from './theme/theme';
 
@@ -10,6 +10,7 @@ import Layout from './components/Layout/ModernLayout.jsx';
 import ProtectedRoute from './components/ProtectedRoute.jsx';
 import OfflineIndicator from './components/OfflineIndicator/OfflineIndicator.jsx';
 import PWAUpdatePrompt from './components/PWAUpdatePrompt.jsx';
+import ErrorBoundary from './components/ErrorBoundary.jsx';
 
 // Lazy load pages for code splitting
 const Dashboard = lazy(() => import('./pages/DashboardNew.jsx'));
@@ -49,6 +50,13 @@ const LoadingFallback = () => (
     <CircularProgress />
   </Box>
 );
+
+// "Something went wrong — Reload" instead of a white screen (review 0.16).
+// Keyed on the path so the nav gets a fresh try without a full reload.
+function RoutedErrorBoundary({ children }) {
+  const { pathname } = useLocation();
+  return <ErrorBoundary resetKey={pathname}>{children}</ErrorBoundary>;
+}
 
 // Auth-gated route table. A separate component (rather than inline JSX in
 // AppContent) because it needs `useAuth()`, and hooks only see the context
@@ -127,9 +135,11 @@ function AppContent() {
                 <Box sx={{
                   minHeight: '100vh'
                 }}>
-                  <Suspense fallback={<LoadingFallback />}>
-                    <AppRoutes />
-                  </Suspense>
+                  <RoutedErrorBoundary>
+                    <Suspense fallback={<LoadingFallback />}>
+                      <AppRoutes />
+                    </Suspense>
+                  </RoutedErrorBoundary>
                 </Box>
               </Router>
             </ExperienceProvider>
