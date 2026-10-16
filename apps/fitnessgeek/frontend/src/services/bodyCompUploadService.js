@@ -14,7 +14,52 @@
 // sends, and keeps working unchanged if/when `CSRF_TOKEN=enforce` ever
 // extends beyond basegeek (DOCS/THE_PLAN.md §2.1).
 
-import { csrfHeaders } from '@geeksuite/auth';
+// A 401 here gets ONE refresh-and-retry, then a plain "Please sign in again"
+// (review P2: raw fetch never refreshed, and the raw text reached the screen).
+// The auth package is read as a namespace so a build without `refreshSession`
+// still loads; it then simply doesn't retry.
+
+import * as auth from '@geeksuite/auth';
+import { SIGNED_OUT_MESSAGE } from '../utils/errorMessage.js';
+
+const { csrfHeaders } = auth;
+
+/**
+ * An Error carrying the HTTP status and body, Axios-shaped, so
+ * `errorMessage()` can tell a restart (502) from friendly server text.
+ */
+function httpError(response, body, fallback) {
+  const signedOut = response?.status === 401;
+  const error = new Error(signedOut ? SIGNED_OUT_MESSAGE : body?.error?.message || fallback);
+  error.code = body?.error?.code || `HTTP_${response?.status}`;
+  error.status = response?.status;
+  error.response = { status: response?.status, data: body };
+  return error;
+}
+
+/**
+ * Send a request; on a 401, refresh the session once and send it again.
+ * `send` builds the request fresh each time (headers carry the CSRF token,
+ * which a refresh may rotate).
+ */
+export async function fetchWithRefresh(send) {
+  const response = await send();
+  if (response.status !== 401 || typeof auth.refreshSession !== 'function') return response;
+  try {
+    await auth.refreshSession();
+  } catch {
+    return response;
+  }
+  return send();
+}
+
+async function readJson(response) {
+  try {
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Parse a filename out of a Content-Disposition header, if present.
@@ -33,11 +78,12 @@ function filenameFromContentDisposition(header) {
  * @returns {Promise<File>}
  */
 export async function fetchStagedShareFile(stagedId) {
-  const response = await fetch(`/api/body-comp/share-staged/${encodeURIComponent(stagedId)}`, {
+  const response = await fetchWithRefresh(() => fetch(`/api/body-comp/share-staged/${encodeURIComponent(stagedId)}`, {
     method: 'GET',
     credentials: 'include',
-  });
+  }));
 
+  if (response.status === 401) throw httpError(response, null, SIGNED_OUT_MESSAGE);
   if (!response.ok) {
     let code = 'STAGED_UPLOAD_NOT_FOUND';
     try {
@@ -69,27 +115,17 @@ export async function uploadBodyCompFile(file) {
   const formData = new FormData();
   formData.append('file', file, file.name);
 
-  const response = await fetch('/api/body-comp/uploads', {
+  const response = await fetchWithRefresh(() => fetch('/api/body-comp/uploads', {
     method: 'POST',
     credentials: 'include',
     // Do NOT set Content-Type manually — the browser needs to add the
     // multipart boundary itself.
     headers: { ...csrfHeaders('POST') },
     body: formData,
-  });
+  }));
 
-  let body = null;
-  try {
-    body = await response.json();
-  } catch {
-    // fall through to the generic error below
-  }
-
-  if (!response.ok || !body?.success) {
-    const error = new Error(body?.error?.message || 'Upload failed.');
-    error.code = body?.error?.code || `HTTP_${response.status}`;
-    throw error;
-  }
+  const body = await readJson(response);
+  if (!response.ok || !body?.success) throw httpError(response, body, 'Upload failed.');
 
   return body.data;
 }
@@ -110,24 +146,14 @@ export async function uploadBodyCompFile(file) {
  * @returns {Promise<{status: string, [key: string]: any}>}
  */
 export async function extractBodyCompUpload(uploadId) {
-  const response = await fetch(`/api/body-comp/uploads/${encodeURIComponent(uploadId)}/extract`, {
+  const response = await fetchWithRefresh(() => fetch(`/api/body-comp/uploads/${encodeURIComponent(uploadId)}/extract`, {
     method: 'POST',
     credentials: 'include',
     headers: { ...csrfHeaders('POST') },
-  });
+  }));
 
-  let body = null;
-  try {
-    body = await response.json();
-  } catch {
-    // fall through to the generic error below
-  }
-
-  if (!response.ok || !body?.success) {
-    const error = new Error(body?.error?.message || 'Extraction failed.');
-    error.code = body?.error?.code || `HTTP_${response.status}`;
-    throw error;
-  }
+  const body = await readJson(response);
+  if (!response.ok || !body?.success) throw httpError(response, body, 'Extraction failed.');
 
   return body.data;
 }
@@ -148,24 +174,14 @@ export async function extractBodyCompUpload(uploadId) {
  * @returns {Promise<{status: string, imported: number, skipped: number, failed: number, results: Array}>}
  */
 export async function importBodyCompXlsx(uploadId) {
-  const response = await fetch(`/api/body-comp/uploads/${encodeURIComponent(uploadId)}/import-xlsx`, {
+  const response = await fetchWithRefresh(() => fetch(`/api/body-comp/uploads/${encodeURIComponent(uploadId)}/import-xlsx`, {
     method: 'POST',
     credentials: 'include',
     headers: { ...csrfHeaders('POST') },
-  });
+  }));
 
-  let body = null;
-  try {
-    body = await response.json();
-  } catch {
-    // fall through to the generic error below
-  }
-
-  if (!response.ok || !body?.success) {
-    const error = new Error(body?.error?.message || 'Import failed.');
-    error.code = body?.error?.code || `HTTP_${response.status}`;
-    throw error;
-  }
+  const body = await readJson(response);
+  if (!response.ok || !body?.success) throw httpError(response, body, 'Import failed.');
 
   return body.data;
 }
@@ -188,25 +204,15 @@ export async function importBodyCompXlsx(uploadId) {
  * @returns {Promise<{status: string, [key: string]: any}>}
  */
 export async function acceptBodyCompUpload(uploadId, payload) {
-  const response = await fetch(`/api/body-comp/uploads/${encodeURIComponent(uploadId)}/accept`, {
+  const response = await fetchWithRefresh(() => fetch(`/api/body-comp/uploads/${encodeURIComponent(uploadId)}/accept`, {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json', ...csrfHeaders('POST') },
     body: JSON.stringify(payload),
-  });
+  }));
 
-  let body = null;
-  try {
-    body = await response.json();
-  } catch {
-    // fall through to the generic error below
-  }
-
-  if (!response.ok || !body?.success) {
-    const error = new Error(body?.error?.message || 'Could not save the scan.');
-    error.code = body?.error?.code || `HTTP_${response.status}`;
-    throw error;
-  }
+  const body = await readJson(response);
+  if (!response.ok || !body?.success) throw httpError(response, body, 'Could not save the scan.');
 
   return body.data;
 }

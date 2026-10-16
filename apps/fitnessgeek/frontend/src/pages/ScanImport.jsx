@@ -6,6 +6,7 @@ import CheckCircleIcon from '@mui/icons-material/CheckCircle';
 import ErrorOutlineIcon from '@mui/icons-material/ErrorOutline';
 import { useSearchParams } from 'react-router-dom';
 import { useToast } from '@geeksuite/ui';
+import { errorMessage as friendlyError } from '../utils/errorMessage.js';
 
 import {
   fetchStagedShareFile,
@@ -323,8 +324,9 @@ function ScanImport() {
       setStatus(STATUS.SUCCESS);
     } catch (error) {
       setStatus(STATUS.ERROR);
-      setErrorMessage(error.message || 'Upload failed.');
-      notify(error.message || 'Upload failed.', { tone: 'error' });
+      const message = friendlyError(error, "That didn't upload. Try again.");
+      setErrorMessage(message);
+      notify(message, { tone: 'error' });
     }
   }, [notify]);
 
@@ -351,7 +353,7 @@ function ScanImport() {
       .catch((error) => {
         if (cancelled) return;
         setStatus(STATUS.ERROR);
-        setErrorMessage(error.message || 'The shared file could not be retrieved.');
+        setErrorMessage(friendlyError(error, 'The shared file could not be retrieved — it may have expired.'));
       });
 
     // Clear the query params so a refresh doesn't try to re-claim an
@@ -384,7 +386,7 @@ function ScanImport() {
         notify(accepted.message || 'Could not save the scan.', { tone: 'error' });
       }
     } catch (error) {
-      notify(error.message || 'Could not save the scan.', { tone: 'error' });
+      notify(friendlyError(error, "Couldn't save the scan. Try again."), { tone: 'error' });
     } finally {
       setAccepting(false);
     }
