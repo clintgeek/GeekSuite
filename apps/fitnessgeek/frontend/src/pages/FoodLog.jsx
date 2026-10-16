@@ -376,6 +376,7 @@ const FoodLog = () => {
     const food_item = log?.food_item || log?.food_item_id;
 
     const success = await deleteFoodLog(logId);
+    if (success) justAdded.forget(logId);
     if (!success) {
       notify(describeLastError?.('Could not delete that item. Try again.') || 'Could not delete that item. Try again.', { tone: 'error' });
       return;

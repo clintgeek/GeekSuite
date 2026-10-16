@@ -258,6 +258,7 @@ const DashboardNew = () => {
     setRemovingLogIds((prev) => new Set(prev).add(logId));
     try {
       await fitnessGeekService.deleteFoodLog(logId);
+      justAdded.forget(logId);
       setTimeout(() => {
         loadDashboardData();
         setRemovingLogIds((prev) => {

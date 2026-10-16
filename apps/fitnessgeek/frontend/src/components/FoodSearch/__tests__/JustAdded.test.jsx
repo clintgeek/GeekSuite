@@ -93,6 +93,16 @@ describe('the "Just added" strip', () => {
     await waitFor(() => expect(within(screen.getByTestId('just-added')).getAllByTestId('entry-row')[0]).toHaveTextContent('300 cal'));
   });
 
+  it('drops an entry deleted elsewhere, and goes when the last one does', async () => {
+    renderHome();
+    await act(async () => { api.show(ENTRY); });
+    await act(async () => { api.forget('soup'); });
+    const strip = within(screen.getByTestId('meal-card-lunch')).getByTestId('just-added');
+    expect(within(strip).getAllByTestId('entry-row').map((r) => r.textContent)).toEqual(['Crackers130 calFix']);
+    await act(async () => { api.forget('crk'); });
+    expect(screen.queryByTestId('just-added')).toBeNull();
+  });
+
   it('is not shown on another day', async () => {
     renderHome({ date: '2026-10-13' });
     await act(async () => { api.show(ENTRY); });

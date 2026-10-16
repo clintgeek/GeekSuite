@@ -41,6 +41,15 @@ export function useJustAdded({ setLogCalories, describeMeal, undoLogs } = {}) {
 
   const clear = useCallback(() => { setEntry(null); setFixing(null); }, []);
   const show = useCallback((next) => { setEntry(next && next.items?.length ? next : null); }, []);
+  // An entry deleted somewhere else (the meal card's ✕, the Log row's delete)
+  // leaves the strip; a strip naming a removed food reads as a bug.
+  const forget = useCallback((logId) => {
+    setEntry((prev) => {
+      if (!prev || !logId) return prev;
+      const items = prev.items.filter((i) => i.logId !== logId);
+      return items.length ? { ...prev, items } : null;
+    });
+  }, []);
 
   const undoItems = useCallback(async (items) => {
     const ids = items.map((i) => i.logId).filter(Boolean);
@@ -78,7 +87,7 @@ export function useJustAdded({ setLogCalories, describeMeal, undoLogs } = {}) {
     );
   }, [entry, busy, fixing, fixes, undoItems, clear]);
 
-  return useMemo(() => ({ entry, show, clear, renderFor }), [entry, show, clear, renderFor]);
+  return useMemo(() => ({ entry, show, clear, forget, renderFor }), [entry, show, clear, forget, renderFor]);
 }
 
 export default useJustAdded;
