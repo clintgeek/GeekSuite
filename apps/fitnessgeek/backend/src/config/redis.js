@@ -57,6 +57,10 @@ class RedisClient {
       });
 
       await this.client.connect();
+      // Resolving IS the connection being up. Set it here as well as in the
+      // 'ready' handler so a caller awaiting connect() never reads a stale
+      // false because of event ordering.
+      this.isConnected = true;
       return this.client;
 
     } catch (error) {

@@ -26,10 +26,18 @@ async function start() {
     process.exit(1);
   }
 
-  // Connect to Redis (non-blocking — app continues if Redis fails)
-  redisClient.connect().catch(err => {
-    logger.warn({ err: err.message }, 'Redis connection failed — caching disabled');
-  });
+  // Connect to Redis (non-blocking — app continues if Redis fails). The
+  // status line waits for the attempt to settle: it used to be logged at
+  // `listen` time, before the connection had a chance to finish, so every
+  // boot announced "Redis caching: disabled" one line before "Redis client
+  // connected and ready" (REVIEW_2026-10 §2).
+  redisClient.connect()
+    .then(() => {
+      logger.info(`Redis caching: ${ redisClient.isReady() ? 'enabled' : 'disabled' }`);
+    })
+    .catch(err => {
+      logger.warn({ err: err.message }, 'Redis connection failed — caching disabled');
+    });
 
   // Arboleaf exports dropped into Nextcloud — DOCS/BODY_COMPOSITION_INTAKE.md
   // §11. After Mongo, because the boot scan writes; off unless configured.
@@ -39,7 +47,6 @@ async function start() {
     logger.info(`FitnessGeek API server running on port ${ PORT }`);
     logger.info(`Health check available at http://localhost:${ PORT }/health`);
     logger.info(`Environment: ${ process.env.NODE_ENV || 'development' }`);
-    logger.info(`Redis caching: ${ redisClient.isReady() ? 'enabled' : 'disabled' }`);
   });
 
   // Graceful shutdown: close the server, then each cleanup step on its own so
