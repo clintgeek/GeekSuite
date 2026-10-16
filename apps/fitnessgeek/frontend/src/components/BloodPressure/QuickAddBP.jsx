@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Card,
   CardContent,
@@ -6,7 +6,6 @@ import {
   TextField,
   Button,
   Box,
-  Alert,
   useTheme,
   Grid
 } from '@mui/material';
@@ -15,17 +14,21 @@ import {
   MonitorHeart as BPIcon
 } from '@mui/icons-material';
 import { useGeekPrimaryAction } from '@geeksuite/ui';
-import { localDateString } from '@geeksuite/utils';
 import AddBPDialog from './AddBPDialog.jsx';
 import DateField from '../primitives/DateField.jsx';
 import { categorizeBP } from '../../utils/bpUtils.js';
-import { nowLocalTime, combineDateTimeToISO } from './bpTimeUtils.js';
-
-// Mirrors `bloodPressureBounds` in `@geeksuite/schemas/fitnessgeek/bloodPressure.js`.
-// See AddBPDialog.jsx's copy of this comment — same reason, same numbers.
-const SYS_BOUNDS = { min: 60, max: 300 };
-const DIA_BOUNDS = { min: 30, max: 200 };
-const PULSE_BOUNDS = { min: 30, max: 250 };
+import { errorMessage } from '../../utils/errorMessage.js';
+import { useToday } from '../../hooks/useToday.js';
+import {
+  nowLocalTime,
+  measuredAtForSave,
+  oneMinuteLater,
+  localDayOf,
+  splitInstantToLocal,
+  isBPDuplicate,
+} from './bpTimeUtils.js';
+import { validateBPForm, DUPLICATE_MESSAGE } from './bpForm.js';
+import BPSaveError from './BPSaveError.jsx';
 
 /**
  * QuickAddBP — the desktop inline "add" card, plus the mobile FAB → dialog.
@@ -35,19 +38,41 @@ const PULSE_BOUNDS = { min: 30, max: 250 };
  * header): a home cuff is read morning and evening, and the old warning
  * would fire on exactly that normal second entry.
  */
-const QuickAddBP = ({ onAdd, unit = "mmHg" }) => {
+const QuickAddBP = ({ onAdd, unit = "mmHg", autoOpen = false, onAutoOpened }) => {
   const theme = useTheme();
   const [showDialog, setShowDialog] = useState(false);
   const [systolic, setSystolic] = useState('');
   const [diastolic, setDiastolic] = useState('');
   const [pulse, setPulse] = useState('');
-  const [date, setDate] = useState(localDateString());
-  // Defaults to right now, same as the mobile dialog — see AddBPDialog.jsx's
-  // `blankForm`. The common case (log a reading just taken) never touches
-  // date or time at all.
+  // Date and time default to right now, same as the mobile dialog — see
+  // AddBPDialog.jsx's `blankForm`. The common case (log a reading just
+  // taken) never touches either. Until the person edits one, the card shows
+  // TODAY as `useToday()` sees it: a tab left open overnight used to keep
+  // yesterday in the field and save the morning reading on the wrong day
+  // (review B3).
+  const today = useToday();
+  const [pickedDate, setPickedDate] = useState(null);
   const [time, setTime] = useState(nowLocalTime());
+  const [whenTouched, setWhenTouched] = useState(false);
+  const date = pickedDate ?? today;
   const [error, setError] = useState('');
+  const [duplicate, setDuplicate] = useState(null);
   const [loading, setLoading] = useState(false);
+
+  // Keep the shown clock current while untouched (a new day, or coming back
+  // to the tab); the instant actually saved is taken at Save either way.
+  useEffect(() => {
+    if (!whenTouched) setTime(nowLocalTime());
+  }, [today, whenTouched]);
+
+  // `/blood-pressure?add=1` (the Today strip's "Add BP") opens the add
+  // dialog straight away.
+  useEffect(() => {
+    if (!autoOpen) return;
+    setShowDialog(true);
+    onAutoOpened?.();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- open once per request; the callback identity is the caller's.
+  }, [autoOpen]);
 
   // The page's thumb-zone action. `GeekFab` (mounted by the shell) reads the
   // bottom-nav inset and the safe area; the old `bottom: 80` guessed at both.
@@ -57,66 +82,61 @@ const QuickAddBP = ({ onAdd, unit = "mmHg" }) => {
     onClick: () => setShowDialog(true)
   });
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
-    setError('');
-
-    // Validation
-    if (!systolic || !diastolic) {
-      setError('Please enter both systolic and diastolic values');
-      return;
-    }
-
-    const systolicNum = parseInt(systolic);
-    const diastolicNum = parseInt(diastolic);
-    const pulseNum = pulse ? parseInt(pulse) : null;
-
-    if (isNaN(systolicNum) || isNaN(diastolicNum)) {
-      setError('Please enter valid numbers');
-      return;
-    }
-
-    if (systolicNum < SYS_BOUNDS.min || systolicNum > SYS_BOUNDS.max) {
-      setError(`Systolic should be between ${SYS_BOUNDS.min}-${SYS_BOUNDS.max} mmHg`);
-      return;
-    }
-
-    if (diastolicNum < DIA_BOUNDS.min || diastolicNum > DIA_BOUNDS.max) {
-      setError(`Diastolic should be between ${DIA_BOUNDS.min}-${DIA_BOUNDS.max} mmHg`);
-      return;
-    }
-
-    if (systolicNum <= diastolicNum) {
-      setError('Systolic should be higher than diastolic');
-      return;
-    }
-
-    if (pulse && (pulseNum < PULSE_BOUNDS.min || pulseNum > PULSE_BOUNDS.max)) {
-      setError(`Pulse should be between ${PULSE_BOUNDS.min}-${PULSE_BOUNDS.max} bpm`);
-      return;
-    }
-
+  const save = async (payload) => {
     setLoading(true);
+    setError('');
+    setDuplicate(null);
     try {
-      await onAdd({
-        systolic: systolicNum,
-        diastolic: diastolicNum,
-        pulse: pulseNum,
-        date,
-        measured_at: combineDateTimeToISO(date, time),
-      });
+      await onAdd(payload);
 
       // Reset form
       setSystolic('');
       setDiastolic('');
       setPulse('');
-      setDate(localDateString());
+      setPickedDate(null);
+      setWhenTouched(false);
       setTime(nowLocalTime());
     } catch (err) {
-      setError(err.message || 'Failed to add blood pressure reading');
+      if (isBPDuplicate(err)) {
+        setDuplicate(payload);
+        setError(DUPLICATE_MESSAGE);
+      } else {
+        setError(errorMessage(err, "That reading didn't save. Try again."));
+      }
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    if (loading) return;
+    setError('');
+
+    const checked = validateBPForm({ systolic, diastolic, pulse });
+    if (checked.error) {
+      setError(checked.error);
+      return;
+    }
+
+    await save({
+      systolic: checked.systolic,
+      diastolic: checked.diastolic,
+      pulse: checked.pulse,
+      date,
+      measured_at: measuredAtForSave(date, time, { timeTouched: whenTouched }),
+    });
+  };
+
+  const saveOneMinuteLater = async () => {
+    if (!duplicate) return;
+    const later = oneMinuteLater(duplicate.measured_at);
+    const day = localDayOf(later) || duplicate.date;
+    const { time: t } = splitInstantToLocal(later);
+    if (t) setTime(t);
+    setPickedDate(day);
+    setWhenTouched(true);
+    await save({ ...duplicate, measured_at: later, date: day });
   };
 
   const getBPStatus = () => {
@@ -161,10 +181,11 @@ const QuickAddBP = ({ onAdd, unit = "mmHg" }) => {
               <Grid xs={12} sm={2}>
                 <TextField
                   fullWidth
-                  label="Systolic"
+                  label="Top number (systolic)"
                   type="number"
                   value={systolic}
                   onChange={(e) => setSystolic(e.target.value)}
+                  inputProps={{ inputMode: 'numeric' }}
                   InputProps={{
                     endAdornment: <Typography variant="caption">{unit}</Typography>
                   }}
@@ -175,10 +196,11 @@ const QuickAddBP = ({ onAdd, unit = "mmHg" }) => {
               <Grid xs={12} sm={2}>
                 <TextField
                   fullWidth
-                  label="Diastolic"
+                  label="Bottom number (diastolic)"
                   type="number"
                   value={diastolic}
                   onChange={(e) => setDiastolic(e.target.value)}
+                  inputProps={{ inputMode: 'numeric' }}
                   InputProps={{
                     endAdornment: <Typography variant="caption">{unit}</Typography>
                   }}
@@ -193,6 +215,7 @@ const QuickAddBP = ({ onAdd, unit = "mmHg" }) => {
                   type="number"
                   value={pulse}
                   onChange={(e) => setPulse(e.target.value)}
+                  inputProps={{ inputMode: 'numeric' }}
                   InputProps={{
                     endAdornment: <Typography variant="caption">bpm</Typography>
                   }}
@@ -201,7 +224,12 @@ const QuickAddBP = ({ onAdd, unit = "mmHg" }) => {
               </Grid>
 
               <Grid xs={12} sm={2}>
-                <DateField fullWidth value={date} onChange={setDate} size="small" />
+                <DateField
+                  fullWidth
+                  value={date}
+                  onChange={setPickedDate}
+                  size="small"
+                />
               </Grid>
 
               <Grid xs={12} sm={2}>
@@ -210,7 +238,7 @@ const QuickAddBP = ({ onAdd, unit = "mmHg" }) => {
                   label="Time"
                   type="time"
                   value={time}
-                  onChange={(e) => setTime(e.target.value)}
+                  onChange={(e) => { setTime(e.target.value); setWhenTouched(true); }}
                   size="small"
                   InputLabelProps={{ shrink: true }}
                   inputProps={{ step: 60 }}
@@ -252,11 +280,13 @@ const QuickAddBP = ({ onAdd, unit = "mmHg" }) => {
               </Box>
             )}
 
-            {error && (
-              <Alert severity="error" sx={{ mt: 2 }}>
-                {error}
-              </Alert>
-            )}
+            <BPSaveError
+              error={error}
+              duplicate={Boolean(duplicate)}
+              onSaveLater={saveOneMinuteLater}
+              busy={loading}
+              sx={{ mt: 2 }}
+            />
           </form>
         </CardContent>
       </Card>

@@ -15,6 +15,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { MemoryRouter } from 'react-router-dom';
 
 const EXISTING = {
   id: 'bp-1',
@@ -70,7 +71,7 @@ describe('BloodPressure page — editing a row', () => {
     // control is found by its aria-label and the save button with hidden:true
     // (scoped to the dialog, which is already known to be open).
     const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
-    render(<BloodPressure />);
+    render(<MemoryRouter><BloodPressure /></MemoryRouter>);
 
     // Wait for the initial load to land the one reading.
     await screen.findAllByText(/118\/76/);
@@ -78,10 +79,10 @@ describe('BloodPressure page — editing a row', () => {
     const editButtons = screen.getAllByLabelText(/edit the 118\/76 mmhg reading/i);
     await user.click(editButtons[0]);
 
-    // QuickAddBP's own desktop card also has a "Systolic" field, always
+    // QuickAddBP's own desktop card also has a systolic field, always
     // mounted — scope the query to the edit dialog so this isn't ambiguous.
     const dialog = await screen.findByRole('dialog');
-    const dialogSystolic = within(dialog).getByLabelText(/^systolic$/i);
+    const dialogSystolic = within(dialog).getByLabelText(/systolic/i);
 
     // The fields are seeded from an effect keyed on `open`/`initialValues`,
     // so wait for the value rather than asserting immediately on the

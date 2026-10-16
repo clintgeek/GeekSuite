@@ -12,6 +12,7 @@ import {
   Error as ErrorIcon
 } from '@mui/icons-material';
 import { parseISO, differenceInDays } from 'date-fns';
+import { newestReadingFirst } from './bpTimeUtils.js';
 import { categorizeBP } from '../../utils/bpUtils.js';
 
 // Icons per stage. The category itself — name, color, thresholds — comes
@@ -42,7 +43,10 @@ const BPInsights = ({ bpLogs = [] }) => {
       return null;
     }
 
-    const sortedLogs = [...bpLogs].sort((a, b) => new Date(b.log_date) - new Date(a.log_date));
+    // Newest by the instant it was taken, not by `log_date`: every reading on
+    // one day shares a `log_date`, so the morning reading could stay
+    // "latest" after the evening one was saved.
+    const sortedLogs = [...bpLogs].sort(newestReadingFirst);
     const latestReading = sortedLogs[0];
     const today = new Date();
 

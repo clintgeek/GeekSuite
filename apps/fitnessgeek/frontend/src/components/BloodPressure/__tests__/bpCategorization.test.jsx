@@ -81,8 +81,8 @@ describe('QuickAddBP — live-typing category matches the saved row', () => {
     const user = userEvent.setup();
     render(<QuickAddBP onAdd={async () => {}} />);
 
-    await user.type(screen.getByLabelText(/^systolic$/i), '190');
-    await user.type(screen.getByLabelText(/^diastolic$/i), '70');
+    await user.type(screen.getByLabelText(/systolic/i), '190');
+    await user.type(screen.getByLabelText(/diastolic/i), '70');
 
     expect(screen.getByText('Crisis')).toBeInTheDocument();
     expect(screen.queryByText('High Normal')).toBeNull();

@@ -3,8 +3,7 @@ import {
   Button,
   TextField,
   Box,
-  Typography,
-  Alert
+  Typography
 } from '@mui/material';
 import {
   MonitorHeart as BPIcon,
@@ -12,22 +11,25 @@ import {
   Edit as EditIcon
 } from '@mui/icons-material';
 import { localDateString } from '@geeksuite/utils';
+import { useGeekDialogFullScreen } from '@geeksuite/ui';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
 import DateField from '../primitives/DateField.jsx';
 import { categorizeBP } from '../../utils/bpUtils.js';
-import { nowLocalTime, combineDateTimeToISO, splitInstantToLocal } from './bpTimeUtils.js';
+import { errorMessage } from '../../utils/errorMessage.js';
+import {
+  nowLocalTime,
+  combineDateTimeToISO,
+  splitInstantToLocal,
+  measuredAtForSave,
+  oneMinuteLater,
+  localDayOf,
+  isBPDuplicate,
+} from './bpTimeUtils.js';
+import { thumbSaveProps } from './thumbSave.jsx';
+import BPSaveError from './BPSaveError.jsx';
+import { validateBPForm, DUPLICATE_MESSAGE } from './bpForm.js';
 
-// Mirrors `bloodPressureBounds` in `@geeksuite/schemas/fitnessgeek/bloodPressure.js`
-// (the actual source of truth, shared by the backend model and its zod request
-// validator). That package is CJS and mongoose-oriented, built for the two
-// Node backends that write this collection — it is not a frontend dependency
-// and pulling it into this bundle isn't the fix. These are typo guards, not a
-// clinical range (a genuine hypertensive-crisis reading must be storable), so
-// keeping this copy in sync is a matter of updating four numbers, not logic;
-// if the backend's bounds ever move, update these to match.
-const SYS_BOUNDS = { min: 60, max: 300 };
-const DIA_BOUNDS = { min: 30, max: 200 };
-const PULSE_BOUNDS = { min: 30, max: 250 };
+// The bounds and their messages live in `bpForm.js`, shared with QuickAddBP.
 
 /**
  * The blank-form defaults — date/time default to "now" so the common case
@@ -70,6 +72,15 @@ const AddBPDialog = ({ open, onClose, onAdd, mode = 'add', initialValues = null 
   const [time, setTime] = useState(nowLocalTime());
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  // Did the person touch the date or time? Untouched, a new reading was taken
+  // just now and is sent to the second (B13); an untouched edit keeps the
+  // row's own instant rather than a minute-rounded copy of it.
+  const [whenTouched, setWhenTouched] = useState(false);
+  const [timeTouched, setTimeTouched] = useState(false);
+  // The payload that hit `BP_DUPLICATE`, kept so "Save it one minute later"
+  // is one tap.
+  const [duplicate, setDuplicate] = useState(null);
+  const fullScreen = useGeekDialogFullScreen();
 
   // Re-seed the form every time the dialog opens. For "add" that's fresh
   // blanks with the clock reset to now; for "edit" it's the row being
@@ -105,80 +116,89 @@ const AddBPDialog = ({ open, onClose, onAdd, mode = 'add', initialValues = null 
       setTime(blank.time);
     }
     setError('');
+    setWhenTouched(false);
+    setTimeTouched(false);
+    setDuplicate(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps -- re-seed on open/mode/row change only; the setters are stable.
   }, [open, isEdit, initialValues]);
 
-  const handleSubmit = async (e) => {
-    e.preventDefault();
+  const resetForm = () => {
+    const blank = blankForm();
+    setSystolic(blank.systolic);
+    setDiastolic(blank.diastolic);
+    setPulse(blank.pulse);
+    setDate(blank.date);
+    setTime(blank.time);
     setError('');
+    setWhenTouched(false);
+    setTimeTouched(false);
+    setDuplicate(null);
+  };
 
-    // Validation
-    if (!systolic || !diastolic) {
-      setError('Please enter both systolic and diastolic values');
-      return;
-    }
-
-    const systolicNum = parseInt(systolic);
-    const diastolicNum = parseInt(diastolic);
-    const pulseNum = pulse ? parseInt(pulse) : null;
-
-    if (isNaN(systolicNum) || isNaN(diastolicNum)) {
-      setError('Please enter valid numbers');
-      return;
-    }
-
-    // Bounds are typo guards, not a clinical ceiling — a genuine hypertensive
-    // crisis reading must be storable. See `bloodPressureBounds`'s header in
-    // the shared schema; these numbers come from there, not a local guess,
-    // so the form and the backend can't disagree about what's legal.
-    if (systolicNum < SYS_BOUNDS.min || systolicNum > SYS_BOUNDS.max) {
-      setError(`Systolic should be between ${SYS_BOUNDS.min}-${SYS_BOUNDS.max} mmHg`);
-      return;
-    }
-
-    if (diastolicNum < DIA_BOUNDS.min || diastolicNum > DIA_BOUNDS.max) {
-      setError(`Diastolic should be between ${DIA_BOUNDS.min}-${DIA_BOUNDS.max} mmHg`);
-      return;
-    }
-
-    if (systolicNum <= diastolicNum) {
-      setError('Systolic should be higher than diastolic');
-      return;
-    }
-
-    if (pulse && (pulseNum < PULSE_BOUNDS.min || pulseNum > PULSE_BOUNDS.max)) {
-      setError(`Pulse should be between ${PULSE_BOUNDS.min}-${PULSE_BOUNDS.max} bpm`);
-      return;
-    }
-
+  const save = async (payload) => {
     setLoading(true);
+    setError('');
+    setDuplicate(null);
     try {
-      await onAdd({
-        systolic: systolicNum,
-        diastolic: diastolicNum,
-        pulse: pulseNum,
-        date,
-        measured_at: combineDateTimeToISO(date, time),
-      });
-
+      await onAdd(payload);
       // Reset form and close dialog. Only meaningful for "add" — "edit"
       // closes over its own row and the next open re-seeds from `useEffect`
-      // above — but resetting here too costs nothing and keeps this branch
-      // correct if a future caller reuses the same open dialog for a second
-      // add without unmounting it.
-      const blank = blankForm();
-      setSystolic(blank.systolic);
-      setDiastolic(blank.diastolic);
-      setPulse(blank.pulse);
-      setDate(blank.date);
-      setTime(blank.time);
-      setError('');
+      // above — but resetting here too costs nothing.
+      resetForm();
       onClose();
-    } catch (error) {
-      setError(error.message || `Failed to ${isEdit ? 'save' : 'add'} blood pressure reading`);
+    } catch (err) {
+      if (isBPDuplicate(err)) {
+        setDuplicate(payload);
+        setError(DUPLICATE_MESSAGE);
+      } else {
+        setError(errorMessage(err, isEdit ? "That change didn't save. Try again." : "That reading didn't save. Try again."));
+      }
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSubmit = async (e) => {
+    e?.preventDefault?.();
+    if (loading) return;
+    setError('');
+
+    const checked = validateBPForm({ systolic, diastolic, pulse });
+    if (checked.error) {
+      setError(checked.error);
+      return;
+    }
+
+    let measuredAt;
+    if (isEdit) {
+      // An edit of the numbers only sends the row's own instant back, so it
+      // neither moves the reading nor loses its seconds.
+      const hadTime = Boolean(splitInstantToLocal(initialValues?.measured_at).time);
+      measuredAt = !whenTouched && hadTime ? initialValues.measured_at : combineDateTimeToISO(date, time);
+    } else {
+      measuredAt = measuredAtForSave(date, time, { timeTouched });
+    }
+
+    await save({
+      systolic: checked.systolic,
+      diastolic: checked.diastolic,
+      pulse: checked.pulse,
+      date,
+      measured_at: measuredAt,
+    });
+  };
+
+  const saveOneMinuteLater = async () => {
+    if (!duplicate) return;
+    const later = oneMinuteLater(duplicate.measured_at);
+    const day = localDayOf(later);
+    // Show what is being saved, in case it fails again.
+    const { time: t } = splitInstantToLocal(later);
+    if (t) setTime(t);
+    if (day) setDate(day);
+    setWhenTouched(true);
+    setTimeTouched(true);
+    await save({ ...duplicate, measured_at: later, date: day || duplicate.date });
   };
 
   const handleClose = () => {
@@ -212,30 +232,34 @@ const AddBPDialog = ({ open, onClose, onAdd, mode = 'add', initialValues = null 
       title={isEdit ? 'Edit Reading' : 'Add Reading'}
       icon={BPIcon}
       maxWidth="sm"
-      primaryAction={
-        <Button
-          onClick={handleSubmit}
-          variant="contained"
-          startIcon={isEdit ? <EditIcon /> : <AddIcon />}
-          disabled={loading}
-        >
-          {loading ? 'Saving...' : 'Save'}
-        </Button>
-      }
-      secondaryAction={
-        <Button onClick={handleClose} disabled={loading}>
-          Cancel
-        </Button>
-      }
+      {...thumbSaveProps({
+        fullScreen,
+        save: (
+          <Button
+            onClick={handleSubmit}
+            variant="contained"
+            startIcon={isEdit ? <EditIcon /> : <AddIcon />}
+            disabled={loading}
+          >
+            {loading ? 'Saving…' : 'Save'}
+          </Button>
+        ),
+        cancel: (
+          <Button onClick={handleClose} disabled={loading}>
+            Cancel
+          </Button>
+        ),
+      })}
     >
         <Box component="form" onSubmit={handleSubmit} sx={{ mt: 1 }}>
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
             <TextField
               fullWidth
-              label="Systolic"
+              label="Top number (systolic)"
               type="number"
               value={systolic}
               onChange={(e) => setSystolic(e.target.value)}
+              inputProps={{ inputMode: 'numeric' }}
               InputProps={{
                 endAdornment: <Typography variant="caption">mmHg</Typography>
               }}
@@ -244,10 +268,11 @@ const AddBPDialog = ({ open, onClose, onAdd, mode = 'add', initialValues = null 
 
             <TextField
               fullWidth
-              label="Diastolic"
+              label="Bottom number (diastolic)"
               type="number"
               value={diastolic}
               onChange={(e) => setDiastolic(e.target.value)}
+              inputProps={{ inputMode: 'numeric' }}
               InputProps={{
                 endAdornment: <Typography variant="caption">mmHg</Typography>
               }}
@@ -260,6 +285,7 @@ const AddBPDialog = ({ open, onClose, onAdd, mode = 'add', initialValues = null 
               type="number"
               value={pulse}
               onChange={(e) => setPulse(e.target.value)}
+              inputProps={{ inputMode: 'numeric' }}
               InputProps={{
                 endAdornment: <Typography variant="caption">bpm</Typography>
               }}
@@ -281,7 +307,7 @@ const AddBPDialog = ({ open, onClose, onAdd, mode = 'add', initialValues = null 
             <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
               <DateField
                 value={date}
-                onChange={setDate}
+                onChange={(v) => { setDate(v); setWhenTouched(true); }}
                 size="medium"
                 sx={{ flex: '1 1 160px', minWidth: 0 }}
               />
@@ -289,7 +315,7 @@ const AddBPDialog = ({ open, onClose, onAdd, mode = 'add', initialValues = null 
                 label="Time"
                 type="time"
                 value={time}
-                onChange={(e) => setTime(e.target.value)}
+                onChange={(e) => { setTime(e.target.value); setWhenTouched(true); setTimeTouched(true); }}
                 size="medium"
                 InputLabelProps={{ shrink: true }}
                 inputProps={{ step: 60 }}
@@ -319,11 +345,12 @@ const AddBPDialog = ({ open, onClose, onAdd, mode = 'add', initialValues = null 
               </Box>
             )}
 
-            {error && (
-              <Alert severity="error">
-                {error}
-              </Alert>
-            )}
+            <BPSaveError
+              error={error}
+              duplicate={Boolean(duplicate)}
+              onSaveLater={saveOneMinuteLater}
+              busy={loading}
+            />
           </Box>
         </Box>
     </PremiumDialog>

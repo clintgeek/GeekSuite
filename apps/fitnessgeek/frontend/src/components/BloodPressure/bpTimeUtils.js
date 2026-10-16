@@ -138,3 +138,70 @@ export function formatLocalTime(measuredAt) {
   if (isDayResolutionInstant(d)) return '';
   return d.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
 }
+
+/**
+ * The `measured_at` to send for a new reading.
+ *
+ * The time field only knows minutes, and the cuff instructions say to take
+ * two readings back to back — so two readings saved from untouched forms in
+ * the same minute used to land on the same instant and hit the
+ * `(userId, measured_at)` unique index (review B13). When the person did not
+ * edit the time, the reading was taken just now: send the real instant, to
+ * the millisecond. A time the person typed is sent as they typed it.
+ *
+ * @param {string} date `YYYY-MM-DD` from the form
+ * @param {string} time `HH:MM` from the form
+ * @param {{ timeTouched?: boolean, now?: Date }} [opts]
+ * @returns {string|null}
+ */
+export function measuredAtForSave(date, time, { timeTouched = false, now = new Date() } = {}) {
+  if (timeTouched) return combineDateTimeToISO(date, time);
+  const today = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  if (!date || date === today) return now.toISOString();
+  // A backdated day with the clock left alone: that day at this minute,
+  // with this moment's seconds so a second backdated reading doesn't collide.
+  const base = combineDateTimeToISO(date, time);
+  if (!base) return null;
+  const d = new Date(base);
+  d.setSeconds(now.getSeconds(), now.getMilliseconds());
+  return d.toISOString();
+}
+
+/** The same reading one minute later — the one-tap answer to a duplicate. */
+export function oneMinuteLater(measuredAt) {
+  const d = new Date(measuredAt);
+  if (Number.isNaN(d.getTime())) return null;
+  return new Date(d.getTime() + 60000).toISOString();
+}
+
+/** The local calendar day of an instant, `YYYY-MM-DD`. */
+export function localDayOf(measuredAt) {
+  const d = new Date(measuredAt);
+  if (Number.isNaN(d.getTime())) return '';
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/**
+ * Did the gateway refuse this because a reading already sits at that instant?
+ * Contract C1: `extensions.code === 'BP_DUPLICATE'` on the first GraphQL error.
+ */
+export function isBPDuplicate(err) {
+  const gql = err?.graphQLErrors?.[0] || err?.cause?.graphQLErrors?.[0];
+  return gql?.extensions?.code === 'BP_DUPLICATE';
+}
+
+const instantMs = (log) => {
+  const m = log?.measured_at ? new Date(log.measured_at).getTime() : NaN;
+  if (Number.isFinite(m)) return m;
+  const d = log?.log_date ? new Date(log.log_date).getTime() : NaN;
+  return Number.isFinite(d) ? d : -Infinity;
+};
+
+/**
+ * Newest reading first, by the instant it was taken. Sorting by `log_date`
+ * alone tied every reading on one day, so the morning reading could show as
+ * "latest" after the evening one was saved.
+ */
+export function newestReadingFirst(a, b) {
+  return instantMs(b) - instantMs(a);
+}

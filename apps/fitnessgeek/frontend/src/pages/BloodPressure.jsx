@@ -1,4 +1,5 @@
-import React, { lazy, Suspense, useState, useEffect, useMemo } from 'react';
+import React, { lazy, Suspense, useState, useEffect, useMemo, useCallback } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import {
   Container,
   Typography,
@@ -26,8 +27,10 @@ import BPLogList from '../components/BloodPressure/BPLogList.jsx';
 import AddBPDialog from '../components/BloodPressure/AddBPDialog.jsx';
 import { bpService } from '../services/bpService.js';
 import { fitnessGeekService } from '../services/fitnessGeekService.js';
-import { localDateString } from '@geeksuite/utils';
+import { localDateString, displayCalendarDate, utcDateString } from '@geeksuite/utils';
 import logger from '../utils/logger.js';
+import { errorMessage } from '../utils/errorMessage.js';
+import { isBPDuplicate } from '../components/BloodPressure/bpTimeUtils.js';
 
 // Charts and the report are lazy: between them they pulled Nivo (line + pie,
 // ~530 kB raw), Recharts with its Redux/immer tail (~400 kB raw) and — through
@@ -48,6 +51,16 @@ const BloodPressure = () => {
   const [loading, setLoading] = useState(true);
   const [showReport, setShowReport] = useState(false);
   const [hrSeries, setHrSeries] = useState([]);
+  // `?add=1` — the Today strip's "Add BP" — opens the add dialog directly.
+  const [searchParams, setSearchParams] = useSearchParams();
+  const autoOpenAdd = searchParams.get('add') === '1';
+  const clearAddParam = useCallback(() => {
+    setSearchParams((prev) => {
+      const next = new URLSearchParams(prev);
+      next.delete('add');
+      return next;
+    }, { replace: true });
+  }, [setSearchParams]);
 
   // Calculate the best default time range based on available data
   const getBestTimeRange = (data) => {
@@ -143,20 +156,22 @@ const BloodPressure = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps -- mount-only load; loadBPData now closes over `notify` from useToast(), which the linter can't prove is stable.
   }, []);
 
-  const loadBPData = async () => {
-    setLoading(true);
+  // `silent` refreshes in place: a reload after a save, delete or undo must
+  // not swap the page for its spinner (and unmount an open dialog).
+  const loadBPData = async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true);
     try {
       const response = await bpService.getBPLogs();
       if (response.success) {
         setBPLogs(response.data);
       } else {
-        notify('Failed to load blood pressure logs', { tone: 'error' });
+        notify("Your blood pressure readings didn't load. Try again.", { tone: 'error' });
       }
     } catch (error) {
-      notify('Failed to load blood pressure data', { tone: 'error' });
+      notify(errorMessage(error, "Your blood pressure readings didn't load. Try again."), { tone: 'error' });
       logger.error('Error loading BP data:', error);
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
@@ -184,10 +199,10 @@ const BloodPressure = () => {
         measured_at: bpData.measured_at
       });
 
-      if (response.success) {
+      if (response.success && response.data) {
         // Reload BP data to get the updated list
-        await loadBPData();
-        notify('Blood pressure reading logged successfully!', { tone: 'success' });
+        await loadBPData({ silent: true });
+        notify('Blood pressure saved.', { tone: 'success' });
       } else {
         // A soft failure is still a failure. Falling through here let
         // AddBPDialog's `await onAdd(...)` resolve normally, so it cleared the
@@ -197,16 +212,14 @@ const BloodPressure = () => {
     } catch (error) {
       // The old "one reading per calendar day" rejection is gone — multiple
       // readings a day are the normal case now (see the shared schema's
-      // header). What can still collide is the exact same instant: a
-      // retried request or a double-tap hits the `(userId, measured_at)`
-      // unique index and comes back as this specific, already-recorded
-      // reading, not "you already logged today".
-      if (error.message && error.message.includes('already been recorded')) {
-        notify('This exact reading has already been recorded.', { tone: 'error' });
-      } else {
-        notify('Failed to add blood pressure reading', { tone: 'error' });
-      }
-      logger.error('Error adding BP reading:', error);
+      // header). What can still collide is the exact same instant, which
+      // the gateway reports as `extensions.code: 'BP_DUPLICATE'` (contract
+      // C1). This used to test `error.message` for "already been recorded" —
+      // text the gateway never sent, so the duplicate case fell through to
+      // the generic toast. The form that made the reading shows the error
+      // inline (with "Save it one minute later" for a duplicate), so no
+      // second toast here.
+      logger.error(isBPDuplicate(error) ? 'BP reading collided with an existing one' : 'Error adding BP reading:', error);
       // Re-throw, like handleSaveEditBP below. Without this the dialog closed
       // and blanked the form on every failure while a 3-second toast was the
       // only trace — so a reading logged on bad signal was simply gone, and
@@ -243,9 +256,9 @@ const BloodPressure = () => {
         measured_at: bpData.measured_at
       });
 
-      if (response.success) {
-        await loadBPData();
-        notify('Blood pressure reading updated successfully!', { tone: 'success' });
+      if (response.success && response.data) {
+        await loadBPData({ silent: true });
+        notify('Reading updated.', { tone: 'success' });
         setEditingLog(null);
       } else {
         // Same reasoning as handleAddBP: a falsy `success` must not look like
@@ -253,11 +266,7 @@ const BloodPressure = () => {
         throw new Error(response.message || 'Failed to update blood pressure reading');
       }
     } catch (error) {
-      if (error.message && error.message.includes('already been recorded')) {
-        notify('This exact reading has already been recorded.', { tone: 'error' });
-      } else {
-        notify('Failed to update blood pressure reading', { tone: 'error' });
-      }
+      // Shown inline by the edit dialog (see handleAddBP).
       logger.error('Error updating BP reading:', error);
       // Re-throw so AddBPDialog's own try/catch keeps the dialog open and
       // shows the error inline, instead of closing on a failed save.
@@ -265,29 +274,59 @@ const BloodPressure = () => {
     }
   };
 
-  const handleDeleteBP = async (logId) => {
+  // Re-create a deleted reading from the row we had on screen. It comes back
+  // as a new row (a delete can't hand back the old id), with the same
+  // numbers, day and instant.
+  const undoDelete = async (log) => {
     try {
-      const response = await bpService.deleteBPLog(logId);
-
-      if (response.success) {
-        // Reload BP data to get the updated list
-        await loadBPData();
-        notify('Blood pressure reading deleted successfully!', { tone: 'success' });
-      } else {
-        notify(response.message || 'Failed to delete blood pressure reading', { tone: 'error' });
-      }
+      const response = await bpService.createBPLog({
+        systolic: log.systolic,
+        diastolic: log.diastolic,
+        pulse: log.pulse ?? null,
+        date: utcDateString(log.log_date),
+        measured_at: log.measured_at,
+        notes: log.notes || undefined,
+      });
+      if (!response?.success || !response?.data) throw new Error('no row');
+      await loadBPData({ silent: true });
+      notify('Put back.', { tone: 'success' });
     } catch (error) {
-      notify('Failed to delete blood pressure reading', { tone: 'error' });
-      logger.error('Error deleting BP reading:', error);
+      logger.error('Error undoing BP delete:', error);
+      notify(errorMessage(error, "Couldn't put it back. Try again."), { tone: 'error' });
     }
   };
 
-  const getCurrentBP = () => {
-    if (bpLogs.length === 0) {
-      return null;
+  const handleDeleteBP = async (logId) => {
+    const log = bpLogs.find((l) => (l.id || l._id) === logId);
+    try {
+      const response = await bpService.deleteBPLog(logId);
+
+      // `deleteBloodPressure` answers a Boolean; apiService wraps it as
+      // `{ success: true, data: false }` when nothing was deleted, which
+      // used to read as "deleted successfully".
+      if (response?.success && response.data !== false) {
+        await loadBPData({ silent: true });
+        const what = log ? `${log.systolic}/${log.diastolic}` : 'that reading';
+        const when = log?.log_date
+          ? ` from ${displayCalendarDate(log.log_date, 'en-US', { month: 'short', day: 'numeric' })}`
+          : '';
+        // Same grammar as food: "Removed … · Undo", long enough to reach.
+        notify(`Removed ${what}${when}`, {
+          tone: 'info',
+          duration: 10000,
+          action: log ? (
+            <Button size="small" sx={{ color: 'inherit', fontWeight: 700 }} onClick={() => undoDelete(log)}>
+              Undo
+            </Button>
+          ) : undefined,
+        });
+      } else {
+        notify("That reading wasn't removed. Try again.", { tone: 'error' });
+      }
+    } catch (error) {
+      notify(errorMessage(error, "That reading wasn't removed. Try again."), { tone: 'error' });
+      logger.error('Error deleting BP reading:', error);
     }
-    const sortedLogs = [...bpLogs].sort((a, b) => new Date(b.log_date) - new Date(a.log_date));
-    return sortedLogs[0];
   };
 
   if (loading) {
@@ -303,8 +342,6 @@ const BloodPressure = () => {
       </Box>
     );
   }
-
-  const currentBP = getCurrentBP();
 
   return (
     <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 960, mx: 'auto' }}>
@@ -405,7 +442,12 @@ const BloodPressure = () => {
       {/* Quick Add and Log List Grid */}
       <Grid container spacing={3}>
         <Grid item xs={12}>
-          <QuickAddBP onAdd={handleAddBP} unit="mmHg" />
+          <QuickAddBP
+            onAdd={handleAddBP}
+            unit="mmHg"
+            autoOpen={autoOpenAdd}
+            onAutoOpened={clearAddParam}
+          />
         </Grid>
         <Grid item xs={12} sx={{ width: '100%' }}>
           <BPLogList

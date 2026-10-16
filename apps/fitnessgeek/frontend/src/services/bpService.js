@@ -44,7 +44,9 @@ export const bpService = {
       diastolic: bpData.diastolic,
       pulse: bpData.pulse,
       log_date: bpData.date,
-      ...(bpData.measured_at ? { measured_at: bpData.measured_at } : {})
+      ...(bpData.measured_at ? { measured_at: bpData.measured_at } : {}),
+      // Only an undo of a delete carries a note back; a new reading has none.
+      ...(bpData.notes ? { notes: bpData.notes } : {})
     });
     return response;
   },
