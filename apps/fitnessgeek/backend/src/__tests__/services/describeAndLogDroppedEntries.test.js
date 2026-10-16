@@ -22,6 +22,13 @@ const estimateDishes = jest.fn();
 // the idiom this suite already uses (see routes/weightValidation.test.js).
 const mod = (p) => new URL(p, import.meta.url).pathname;
 
+// Household lookups hit UserSettings; none of these tests is about that.
+jest.unstable_mockModule(mod('../../services/householdAccess.js'), () => ({
+  __esModule: true,
+  householdMemberIds: async () => [],
+  foodReadableFilter: () => ({}),
+  default: {}
+}));
 jest.unstable_mockModule(mod('../../services/aiFoodService.js'), () => ({
   __esModule: true,
   default: { estimateDishes },

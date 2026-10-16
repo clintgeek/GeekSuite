@@ -42,6 +42,13 @@ class FakeFoodLog {
 }
 FakeFoodLog.findOne = jest.fn(async ({ _id }) => savedLogs.find((l) => l._id === _id) || null);
 
+// Household lookups hit UserSettings; none of these tests is about that.
+jest.unstable_mockModule(mod('../../services/householdAccess.js'), () => ({
+  __esModule: true,
+  householdMemberIds: async () => [],
+  foodReadableFilter: () => ({}),
+  default: {}
+}));
 jest.unstable_mockModule(mod('../../models/FoodItem.js'), () => ({
   __esModule: true,
   default: { findOne, find, create }
@@ -272,6 +279,34 @@ describe('the background judge', () => {
     expect(row.nutrition.protein_grams).toBeCloseTo(9.5, 1);
     expect(row.notes).toMatch(/Adjusted 1200 → 570 cal on review: two slices is about 570/);
     expect(updateFromLogs).toHaveBeenCalled();
+  });
+
+  test('never rescales an entry she already adjusted while the judge was thinking', async () => {
+    const logged = await logOneEstimate(1200);
+    judgeEntries.mockImplementation(async () => {
+      // She answers the portion question ("Smaller · ~800") before the
+      // judge comes back: the gateway rewrites the row's nutrition.
+      savedLogs[0].nutrition = { ...savedLogs[0].nutrition, calories_per_serving: 800, protein_grams: 13.3 };
+      return { ok: true, verdicts: [{ index: 0, reasonable: false, betterCalories: 570, why: 'two slices is about 570' }] };
+    });
+
+    const out = await reviewLoggedEntries(logged, { userId: 'u1', date: '2026-09-15' });
+
+    expect(out.corrected).toBe(0);
+    expect(savedLogs[0].nutrition.calories_per_serving).toBe(800);
+    expect(savedLogs[0].nutrition.protein_grams).toBe(13.3);
+    expect(savedLogs[0].notes).toBeUndefined();
+  });
+
+  test('never rescales an entry whose servings she changed', async () => {
+    const logged = await logOneEstimate(1200);
+    judgeEntries.mockImplementation(async () => {
+      savedLogs[0].servings = 2;
+      return { ok: true, verdicts: [{ index: 0, reasonable: false, betterCalories: 570, why: '' }] };
+    });
+
+    expect((await reviewLoggedEntries(logged, { userId: 'u1', date: '2026-09-15' })).corrected).toBe(0);
+    expect(savedLogs[0].nutrition.calories_per_serving).toBe(1200);
   });
 
   test('leaves a merely imprecise entry alone', async () => {

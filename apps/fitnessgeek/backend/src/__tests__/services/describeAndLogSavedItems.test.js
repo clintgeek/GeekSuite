@@ -17,12 +17,13 @@ import { describe, test, expect, beforeEach, jest } from '@jest/globals';
 
 const mod = (p) => new URL(p, import.meta.url).pathname;
 
+const populateCalls = [];
 const chain = (value) => {
   const self = {
     sort: () => self,
     limit: () => self,
     select: () => self,
-    populate: () => self,
+    populate: (arg) => { populateCalls.push(arg); return self; },
     lean: async () => value,
     then: (resolve, reject) => Promise.resolve(value).then(resolve, reject)
   };
@@ -44,6 +45,14 @@ class FakeFoodLog {
   }
 }
 
+// The household rule (C4) is unit-tested in householdAccess.test.js; here it
+// only has to be the filter the meal's components are read through.
+jest.unstable_mockModule(mod('../../services/householdAccess.js'), () => ({
+  __esModule: true,
+  householdMemberIds: async (userId) => (userId === 'u1' ? ['u-household'] : []),
+  foodReadableFilter: (userId, members) => ({ readableBy: [userId, ...members] }),
+  default: {}
+}));
 jest.unstable_mockModule(mod('../../models/FoodItem.js'), () => ({
   __esModule: true,
   default: { findOne, find, create }
@@ -120,11 +129,22 @@ const everyEntryAccountedFor = (result) => {
 
 beforeEach(() => {
   savedLogs.length = 0;
+  populateCalls.length = 0;
   findOne.mockReset().mockImplementation(() => chain(null));
   find.mockReset().mockImplementation(() => chain([]));
   create.mockClear();
   mealFind.mockReset().mockImplementation(() => chain([quesadillaMeal()]));
   estimateDishes.mockReset().mockImplementation(async () => ({ ok: false, dishes: [], reason: 'unavailable' }));
+});
+
+describe('whose food a saved meal may log (C4)', () => {
+  test('components are read through the household rule: his, his household\'s, or global', async () => {
+    await run('homemade quesadilla');
+    expect(populateCalls).toContainEqual({
+      path: 'food_items.food_item_id',
+      match: { readableBy: ['u1', 'u-household'] }
+    });
+  });
 });
 
 describe('the matching rule', () => {

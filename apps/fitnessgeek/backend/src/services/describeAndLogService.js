@@ -40,6 +40,7 @@ import { rankFoodResults, isConfidentMatch } from './foodRanker.js';
 import { parseMealDescription } from './mealDescriptionParser.js';
 import { parseFoodQuery, normalizeQuery, tokenize } from './foodQueryParser.js';
 import { matchSavedItem, matchSavedMealSpans } from './savedItemMatcher.js';
+import { householdMemberIds, foodReadableFilter } from './householdAccess.js';
 
 /**
  * How wide the model's own calorie range must be before it is worth asking
@@ -135,9 +136,14 @@ export async function loadSavedItems(userId) {
   if (!userId) return none;
 
   try {
+    // A meal's components are logged as they are, so they are read under the
+    // same rule as any logged food (C4): global, his own, or his household's.
+    // A component owned by anyone else populates to null and is skipped by
+    // name as missing, never logged.
+    const members = await householdMemberIds(userId);
     const [meals, foods] = await Promise.all([
       Meal.find({ user_id: userId, is_deleted: false })
-        .populate('food_items.food_item_id')
+        .populate({ path: 'food_items.food_item_id', match: foodReadableFilter(userId, members) })
         .sort({ updated_at: -1 })
         .lean(),
       FoodItem.find({
@@ -384,6 +390,17 @@ export async function reviewLoggedEntries(logged, { userId, date } = {}) {
   const estimates = (logged || []).filter((row) => row.source === 'estimate' && row.logId);
   if (estimates.length === 0) return { reviewed: 0, corrected: 0 };
 
+  // What each row said when the judge was asked, taken BEFORE the judge is
+  // awaited. The judge takes seconds; in that time she may answer the portion
+  // question or edit the entry (`adjustLogCalories` → the gateway's
+  // `updateFoodLog`, which rewrites `nutrition`). If the row no longer says
+  // this, a person has decided, and the judge's opinion is about a number
+  // that is gone. It must not rescale her answer.
+  const startedFrom = estimates.map((row) => ({
+    calories: Number(row.nutrition?.calories_per_serving),
+    servings: Number(row.loggedServings ?? row.servings)
+  }));
+
   const verdicts = await aiFoodService.judgeEntries(
     estimates.map((row) => ({
       name: row.name,
@@ -409,6 +426,19 @@ export async function reviewLoggedEntries(logged, { userId, date } = {}) {
     try {
       const log = await FoodLog.findOne({ _id: row.logId, user_id: userId });
       if (!log) continue;
+
+      const before = startedFrom[verdict.index];
+      const nowCalories = Number(log.nutrition?.calories_per_serving);
+      const nowServings = Number(log.servings);
+      const changed =
+        (Number.isFinite(before.calories) && nowCalories !== before.calories) ||
+        (Number.isFinite(before.servings) && Number.isFinite(nowServings) && nowServings !== before.servings);
+      if (changed) {
+        logger.info({
+          logId: row.logId, name: row.name, judged: before.calories, now: nowCalories
+        }, 'Judge correction skipped — the entry was already adjusted by the person');
+        continue;
+      }
 
       // Scale the macros by the same factor. If the total was twice what it
       // should be, the macros were too — and leaving them would fail the very
