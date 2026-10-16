@@ -277,6 +277,52 @@ describe('per-user mode — every subfolder of the root is a user (§11.1, 2026-
     expect(ledger.map((e) => e.userId)).toEqual(['user-clint']);
   });
 
+  test('a folder whose user re-registered imports for the NEW id once the cache expires, without a restart', async () => {
+    // Heather re-registered on 2026-10-12; her folder kept feeding the dead id.
+    let clock = 0;
+    const ids = { heather: 'user-heather-old' };
+    const lookup = async (name) => ids[name.toLowerCase()] ?? null;
+    const d = await userDir('heather');
+    await fs.writeFile(path.join(d, 'first.xlsx'), REAL_EXPORT);
+
+    const importer = startBodyCompFolderImport({
+      root, settle: FAST, debounceMs: 10, rescanMs: 30, resolveUser: lookup, now: () => clock,
+    });
+    await importer.idle();
+    expect(ledger.find((e) => e.folder === 'heather')?.userId).toBe('user-heather-old');
+
+    ids.heather = 'user-heather-new';
+    clock += 11 * 60 * 1000;
+    await fs.writeFile(path.join(d, 'second.xlsx'), Buffer.concat([REAL_EXPORT, Buffer.from(' ')]));
+    await waitFor(() => ledger.filter((e) => e.folder === 'heather').length === 2);
+    await importer.stop();
+
+    expect(ledger.find((e) => e.filename === 'second.xlsx').userId).toBe('user-heather-new');
+  });
+
+  test('a folder whose user no longer exists stops importing once the cache expires', async () => {
+    let clock = 0;
+    const ids = { heather: 'user-heather-old' };
+    const lookup = async (name) => ids[name.toLowerCase()] ?? null;
+    const d = await userDir('heather');
+
+    const importer = startBodyCompFolderImport({
+      root, settle: FAST, debounceMs: 10, rescanMs: 30, resolveUser: lookup, now: () => clock,
+    });
+    await importer.idle();
+
+    delete ids.heather;
+    clock += 11 * 60 * 1000;
+    // Let at least one rescan see the expired mapping before the file lands.
+    await new Promise((r) => setTimeout(r, 120));
+    await fs.writeFile(path.join(d, 'orphan.xlsx'), REAL_EXPORT);
+    await new Promise((r) => setTimeout(r, 300));
+    await importer.idle();
+    await importer.stop();
+
+    expect(ledger.filter((e) => e.folder === 'heather')).toEqual([]);
+  });
+
   test('files loose in the root, and dot-folders, are never treated as users', async () => {
     await fs.writeFile(path.join(root, 'loose.xlsx'), REAL_EXPORT);
     await userDir('.sync-cache');

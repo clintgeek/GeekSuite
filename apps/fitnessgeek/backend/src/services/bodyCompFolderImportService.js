@@ -41,6 +41,10 @@ const SETTLE_INTERVAL_MS = 1_000;
 const SETTLE_ATTEMPTS = 30;
 const SETTLED_AGE_MS = 30_000;
 const RESCAN_MS = 15 * 60 * 1000;
+// How long a folder's resolved user id is trusted before it is looked up
+// again. Heather re-registered on 2026-10-12 and her folder kept importing
+// into the dead account until a restart, because the mapping never expired.
+const USER_CACHE_MS = 10 * 60 * 1000;
 // A real export is ~25 KB for a handful of scans. Anything this big isn't one.
 const MAX_BYTES = 10 * 1024 * 1024;
 
@@ -181,7 +185,8 @@ export async function processFile({ root, folder, userId, filename, settle }) {
  *     folders, no lookup. The original mode, kept as an override.
  *
  * @param {{root?: string, folders?: string, rescanMs?: number, debounceMs?: number,
- *   settle?: Object, resolveUser?: (folderName: string) => Promise<string|null>}} [options]
+ *   settle?: Object, resolveUser?: (folderName: string) => Promise<string|null>,
+ *   userCacheMs?: number, now?: () => number}} [options]
  *   Defaults come from the environment; the overrides exist for tests.
  */
 export function startBodyCompFolderImport({
@@ -191,6 +196,8 @@ export function startBodyCompFolderImport({
   debounceMs = DEBOUNCE_MS,
   settle,
   resolveUser = resolveImportUser,
+  userCacheMs = USER_CACHE_MS,
+  now = () => Date.now(),
 } = {}) {
   const explicit = parseImportFolders(folders);
   if (!root) {
@@ -204,7 +211,7 @@ export function startBodyCompFolderImport({
   const queued = new Set();
   const debounces = new Map();
   const watchers = new Map(); // folder -> fs.FSWatcher
-  const known = new Map(); // folder -> userId, for folders already resolved
+  const known = new Map(); // folder -> { userId, at }, for folders already resolved
   const warnedUnknown = new Set();
 
   const debounce = (key, fn) => {
@@ -245,7 +252,16 @@ export function startBodyCompFolderImport({
       const watcher = fs.watch(path.join(root, entry.folder), (_event, filename) => {
         if (!filename) return;
         const name = filename.toString();
-        debounce(`${entry.folder}/${name}`, () => enqueue(entry, name));
+        debounce(`${entry.folder}/${name}`, () => {
+          if (!perUser) return enqueue(entry, name);
+          // Per-user mode: whoever the folder maps to NOW. The watcher
+          // outlives the scan that started it, so it must not hold on to the
+          // id it began with; a folder that stopped mapping to anyone imports
+          // nothing until it does again.
+          userFor(entry.folder)
+            .then((userId) => { if (userId) enqueue({ folder: entry.folder, userId }, name); })
+            .catch(() => {});
+        });
       });
       watcher.on('error', (error) => {
         // The rescan still covers this folder; the watch only made it prompt.
@@ -255,6 +271,43 @@ export function startBodyCompFolderImport({
     } catch (error) {
       logger.warn({ folder: entry.folder, code: error?.code }, 'body-comp folder import: cannot watch folder, relying on the periodic rescan');
     }
+  };
+
+  // The user a per-user folder belongs to, or null. The answer is trusted for
+  // `userCacheMs`, then looked up again — an account can be replaced under
+  // a folder (Heather, 2026-10-12) and a restart must not be what notices.
+  const userFor = async (name) => {
+    const cached = known.get(name);
+    if (cached && now() - cached.at < userCacheMs) return cached.userId;
+
+    let userId;
+    try {
+      userId = await resolveUser(name);
+    } catch (error) {
+      // A stale mapping beats none while the lookup is down: the id was right
+      // the last time anyone could check.
+      if (cached) {
+        logger.warn({ folder: name, err: error }, 'body-comp folder import: user lookup failed, keeping the last known user for now');
+        return cached.userId;
+      }
+      logger.warn({ folder: name, err: error }, 'body-comp folder import: user lookup failed, will retry on the next scan');
+      return null;
+    }
+
+    if (!userId) {
+      known.delete(name);
+      if (!warnedUnknown.has(name)) {
+        warnedUnknown.add(name);
+        logger.warn({ folder: name }, 'body-comp folder import: no user matches this folder name (username or email), skipping');
+      }
+      return null;
+    }
+    if (!cached || cached.userId !== userId) {
+      logger.info({ folder: name, userId, was: cached?.userId }, 'body-comp folder import: folder mapped to a user');
+    }
+    known.set(name, { userId, at: now() });
+    warnedUnknown.delete(name);
+    return userId;
   };
 
   // The folders to import from right now: the explicit list, or every
@@ -271,25 +324,8 @@ export function startBodyCompFolderImport({
     const entries = [];
     for (const d of dirents) {
       if (!d.isDirectory() || d.name.startsWith('.')) continue;
-      let userId = known.get(d.name);
-      if (!userId) {
-        try {
-          userId = await resolveUser(d.name);
-        } catch (error) {
-          logger.warn({ folder: d.name, err: error }, 'body-comp folder import: user lookup failed, will retry on the next scan');
-          continue;
-        }
-        if (!userId) {
-          if (!warnedUnknown.has(d.name)) {
-            warnedUnknown.add(d.name);
-            logger.warn({ folder: d.name }, 'body-comp folder import: no user matches this folder name (username or email), skipping');
-          }
-          continue;
-        }
-        known.set(d.name, userId);
-        warnedUnknown.delete(d.name);
-        logger.info({ folder: d.name, userId }, 'body-comp folder import: folder mapped to a user');
-      }
+      const userId = await userFor(d.name);
+      if (!userId) continue;
       entries.push({ folder: d.name, userId });
     }
     return entries;
