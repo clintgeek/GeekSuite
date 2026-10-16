@@ -445,3 +445,51 @@ Built from a production audit of the whole pipeline.
 - **Production logs:** CalorieNinjas key invalid; Redis caching reports disabled; deep and AI
   search run on 2-letter prefixes.
 - Heather's own data was not read (permission guard).
+
+## 2026-10-16 — FitnessGeek: the review, fixed (36 commits, local, not pushed)
+
+- **Chef:** "Let's get it all fixed." Then: "the entry form bounces around a lot on the
+  desktop."
+- **Decisions:**
+  - Household members read each other's foods.
+  - Simple: a result card after a describe. Full: a "Just added" strip.
+  - Offline is honest; the queue is deferred.
+  - All local, one push.
+- **How:** two shared helpers first (`useToday`, plain-words `errorMessage`), then five
+  agents split by file ownership (suite auth, gateway, backend, food path, rest of the app).
+  Then the composer redesign as one commit, then follow-ups. Every fix has a test that is red
+  on the old file.
+- **What she'll notice:**
+  - The add sheet opens on "Tell me what you ate" with a big Log it and a mic. A sentence
+    folds the list away, and "Try fewer words" is gone. Rows say "+ Add" and "cal", then
+    "Make it 2".
+  - Simple stays on "✓ Added to lunch" with Fix and Undo all.
+  - The day is named when it isn't today, and day words ask first.
+  - Home leads with "What did you eat?".
+- **Suite-wide (`5c286484`):** an expired token refreshes and retries instead of signing out,
+  and a 502 on `/api/me` keeps the user. basegeek's refresh answers 503, not 401, on a
+  database blip (`14135314`).
+- **Found while fixing:** the search prefix fallback overwrote the ownership filter, so a
+  half-typed word could show another user's private foods (`49351e07`).
+- **Desktop bounce (`f8e06eb5`):** the add dialog was centred and grew as results streamed
+  in. It moved 24 px while typing and 95 px on the late batch, and a hovered row moved
+  119 px. Now it's top-anchored with a fixed height, and harness scene 37 asserts 0 px.
+- **Checks at HEAD:**
+
+  | Suite | Result |
+  |---|---|
+  | Frontend | 752 |
+  | Backend | 986 |
+  | api (gateway) | 164 suites / 3,456 |
+  | auth | 69 |
+  | api-client | 24 |
+  | themeContrast | 595 |
+  | Harness, enforcing | 104 scenes, 0/0/0 |
+
+- **Deploy notes for the push:**
+  - Gateway and REST share `packages/schemas/fitnessgeek/dailySummary.js`, so ship both from
+    this commit.
+  - A frontend that lands before the gateway gets a 400 on a calorie edit for a few minutes.
+  - No new env vars, so no `docker compose up -d` is needed.
+  - **CalorieNinjas needs a new key (Chef).**
+- **Left over:** `DOCS/SUITE_TODO.md` §4, "Follow-ups from the FitnessGeek review fixes".

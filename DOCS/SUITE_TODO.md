@@ -96,6 +96,28 @@ Pull from here when planning the next pass; update as work lands or priorities s
 
 ## 4. Shared Libraries & Refactors
 
+- **Follow-ups from the FitnessGeek review fixes (2026-10-16)**, see
+  `apps/fitnessgeek/DOCS/REVIEW_2026-10.md`:
+  - **B2 in other apps.** `packages/auth` now has `connectionProblem` and `retry()`, and a
+    session keeper that keeps the last user through a 502. Only fitnessgeek's ProtectedRoute
+    uses them.
+    - flockgeek, todogeek and storygeek use AuthProvider, so they keep the user, but they
+      redirect when there is no cached user.
+    - bookgeek, gamegeek, newsgeek, thinggeek and notegeek call `getMe()` directly and show
+      their own "can't reach" or splash screen. They get B2 only by adopting
+      `createSessionKeeper`.
+    - newsgeek, gamegeek and thinggeek render `err.message` on that path.
+  - **GeekFab can't show a label on phones**, so fitnessgeek drew its own
+    (`components/primitives/ThumbFab.jsx`). Fix it in `packages/ui` and retire ThumbFab.
+  - **An offline queue for FitnessGeek entries** (Chef deferred it). Today the banner and the
+    composer say it won't save, and the typed words are kept.
+  - **FitnessGeek voice** still logs as soon as she stops talking. The result now shows
+    "I heard: '…'". Consider a confirm step if mishearings show up.
+  - **Gateway "today" from server UTC** remains in `fitnessInsightsChat` and the Garmin and
+    weight `new Date()` fallbacks.
+  - **An undone medication delete comes back under a new id**, so that day's ticks for it
+    are lost.
+
 - ~~**Wire `installShutdownHooks`**~~ — **done 2026-10-06** (`9725bb97`): all nine backends (basegeek, bookgeek, todogeek, fitnessgeek, flockgeek, gamegeek, notegeek, storygeek, thinggeek) shut down through it, each `onClose` carrying exactly its old cleanup. todogeek/gamegeek/thinggeek create the server up front so a pre-`listen()` signal still cleans up; fitnessgeek lost a stray SIGINT handler that raced the real one. The hook itself is pinned by a real-SIGTERM test in `packages/logger` (`d6f1934e`). Behaviour change: notegeek/todogeek/gamegeek/thinggeek now exit 0 (was 1) when the 15 s force-exit fires; a second signal still exits 1.
 - **FitnessGeek Secrets Parity**: `KEY_VAULT_SECRET` **is** set in the fitnessgeek container (64 chars, checked 2026-09-16). What remains is running the Garmin password backfill (`scripts/encryptGarminPasswords.js`) — Chef's call, same shape as basegeek's encrypt-keys migration, which ran 2026-09-16.
 - **GraphQL Gateway Consolidation Follow-ups**:
