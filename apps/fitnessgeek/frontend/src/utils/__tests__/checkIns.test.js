@@ -3,7 +3,7 @@
  * checklist it counts (DOCS/SIMPLE_AND_FULL_PLAN.md item 6).
  */
 import { describe, it, expect } from 'vitest';
-import { medsChecklist, todayStrip } from '../checkIns.js';
+import { medsChecklist, newestReading, todayStrip } from '../checkIns.js';
 
 const TODAY = '2026-09-27';
 const at = (day) => ({ log_date: `${day}T00:00:00.000Z` });
@@ -13,13 +13,13 @@ describe('todayStrip', () => {
 
   it('weighed today, no BP yet, 2 of 3 doses', () => {
     const items = todayStrip({ weights: [at(TODAY)], bloodPressures: [at('2026-09-20')], meds: { taken: 2, total: 3 }, today: TODAY });
-    expect(values(items)).toBe('Weighed ✓ · BP — · Meds 2 of 3');
+    expect(values(items)).toBe('Weighed ✓ · Add BP + · Meds 2 of 3');
     expect(items.map((i) => i.done)).toEqual([true, false, false]);
   });
 
   it('every dose taken reads ✓, not "3 of 3"', () => {
     const items = todayStrip({ weights: [], bloodPressures: [at(TODAY)], meds: { taken: 3, total: 3 }, today: TODAY });
-    expect(values(items)).toBe('Weighed — · BP ✓ · Meds ✓');
+    expect(values(items)).toBe('Weigh in + · BP ✓ · Meds ✓');
   });
 
   it('no medications, no meds check-in', () => {
@@ -29,11 +29,26 @@ describe('todayStrip', () => {
 
   it("yesterday's weigh-in is not today's", () => {
     const [weight] = todayStrip({ weights: [at('2026-09-26')], today: TODAY });
-    expect(weight).toMatchObject({ done: false, value: '—', spoken: 'Not weighed yet today' });
+    expect(weight).toMatchObject({ done: false, label: 'Weigh in', value: '+', spoken: 'Weigh in. Not weighed yet today' });
   });
 
-  it('each check-in is a place to go', () => {
-    expect(todayStrip({ meds: { taken: 0, total: 1 }, today: TODAY }).map((i) => i.to)).toEqual(['/weight', '/blood-pressure', '/medications']);
+  it('not done yet opens the quick-add directly; done goes to the page', () => {
+    expect(todayStrip({ meds: { taken: 0, total: 1 }, today: TODAY }).map((i) => i.to)).toEqual(['/weight?add=1', '/blood-pressure?add=1', '/medications']);
+    expect(todayStrip({ weights: [at(TODAY)], bloodPressures: [at(TODAY)], today: TODAY }).map((i) => i.to)).toEqual(['/weight', '/blood-pressure']);
+  });
+});
+
+describe('newestReading', () => {
+  it('two readings on one day: the later measured_at wins, whatever the order', () => {
+    const morning = { id: 'am', log_date: `${TODAY}T00:00:00.000Z`, measured_at: `${TODAY}T12:05:00.000Z` };
+    const evening = { id: 'pm', log_date: `${TODAY}T00:00:00.000Z`, measured_at: `${TODAY}T23:40:00.000Z` };
+    expect(newestReading([morning, evening]).id).toBe('pm');
+    expect(newestReading([evening, morning]).id).toBe('pm');
+  });
+
+  it('rows without a time fall back to the day, and nothing is null', () => {
+    expect(newestReading([at('2026-09-25'), at(TODAY)]).log_date).toBe(`${TODAY}T00:00:00.000Z`);
+    expect(newestReading([])).toBeNull();
   });
 });
 

@@ -7,6 +7,7 @@ import {
   Whatshot as StreakIcon,
 } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
+import { Link as RouterLink, useNavigate } from 'react-router-dom';
 import { useToast } from '@geeksuite/ui';
 
 import StatCard from '../components/Dashboard/StatCard.jsx';
@@ -31,8 +32,10 @@ import { settingsService } from '../services/settingsService.js';
 import { bodyCompService } from '../services/bodyCompService.js';
 import { useFoodLogging } from '../hooks/useFoodLogging.js';
 import { useMedsToday } from '../hooks/useMedsToday.js';
+import { useToday } from '../hooks/useToday.js';
 import { useExperience } from '../contexts/ExperienceContext.jsx';
-import { todayStrip } from '../utils/checkIns.js';
+import { newestReading, todayStrip } from '../utils/checkIns.js';
+import { errorMessage } from '../utils/errorMessage.js';
 import { caloriesSentence, greetingFor, mealTypeForHour } from '../utils/plainWords.js';
 import { MEAL_ORDER } from '../theme/theme.jsx';
 
@@ -48,8 +51,44 @@ import { MEAL_ORDER } from '../theme/theme.jsx';
  * streak cards, removing a food with Undo, and the insights card — just
  * calmer: no day-of-year counter, no truncated date, no ALL-CAPS labels.
  *
- * A Simple person who never chose a mode sees the three-step first run once.
+ * A Simple person who hasn't finished it sees the three-step first run once —
+ * never while their saved settings couldn't be read (`experience.known`).
+ *
+ * "Today" comes from useToday(): an installed PWA resumed in the morning is on
+ * the new day — greeting, date, meals and meds — not the one it was opened on.
  */
+
+// The streak query answers through apiService's envelope: { success, data }.
+const streakDays = (res) => {
+  const body = res?.data ?? res;
+  const n = Number(body?.currentStreak);
+  return Number.isFinite(n) ? n : 0;
+};
+
+// The hour, re-read when the app comes back, so "Good morning" isn't still
+// on screen at lunch after a resume.
+function useHourNow() {
+  const [hour, setHour] = useState(() => new Date().getHours());
+  useEffect(() => {
+    const check = () => setHour(new Date().getHours());
+    const onVisible = () => { if (document.visibilityState === 'visible') check(); };
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('focus', check);
+    const timer = setInterval(check, 5 * 60 * 1000);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('focus', check);
+      clearInterval(timer);
+    };
+  }, []);
+  return hour;
+}
+
+// "2026-10-16" → "Friday, October 16", built at local noon so it never slips a day.
+const longDay = (day) => {
+  const [y, m, d] = String(day).split('-').map(Number);
+  return new Date(y, (m || 1) - 1, d || 1, 12).toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' });
+};
 
 // Wraps a service call so a missing method (or a sync throw) lands in
 // allSettled as a rejection instead of escaping it.
@@ -63,9 +102,11 @@ const DashboardNew = () => {
   const { notify } = useToast();
   const theme = useTheme();
   const experience = useExperience();
-  const { isSimple, firstRunDone, savedMode, displayName, completeFirstRun } = experience;
+  const { isSimple, firstRunDone, displayName, completeFirstRun } = experience;
+  const navigate = useNavigate();
 
-  const today = fitnessGeekService.formatDate(new Date());
+  const today = useToday();
+  const hour = useHourNow();
   const [loading, setLoading] = useState(true);
   const [removingLogIds, setRemovingLogIds] = useState(new Set());
   const [logsById, setLogsById] = useState({});
@@ -99,12 +140,11 @@ const DashboardNew = () => {
 
   const loadDashboardData = useCallback(async () => {
     try {
-      const [summaryResult, goalsResult, weightResult, bpResult, garminResult, logsResult, streakResult, weightsResult, bpsResult] =
+      const [summaryResult, goalsResult, weightResult, garminResult, logsResult, streakResult, weightsResult, bpsResult] =
         await Promise.allSettled([
           safe(() => fitnessGeekService.getDailySummary(today)),
           safe(() => goalsService.getDerivedMacros()),
           safe(() => weightService.getWeightStats()),
-          safe(() => bpService.getCurrentBP()),
           // `today` (local) — NOT the no-argument form: the containers run
           // UTC, and an evening dashboard asked Garmin about tomorrow.
           safe(() => fitnessGeekService.getGarminDaily(today)),
@@ -151,7 +191,8 @@ const DashboardNew = () => {
       setProteinBasis(payload?.rules?.protein_basis || null);
 
       const weight = value(weightResult)?.data ? weightStatView(value(weightResult).data) : null;
-      const bp = value(bpResult);
+      // The newest reading by when it was taken, not the first row of the day.
+      const bp = newestReading(rowsOf(value(bpsResult)));
       const garmin = value(garminResult);
       const streak = value(streakResult);
 
@@ -178,7 +219,7 @@ const DashboardNew = () => {
             steps: garmin?.steps
               ? { value: garmin.steps, trend: garmin.steps > 8000 ? 'up' : 'down', trendValue: garmin.steps > 8000 ? `${((garmin.steps - 8000) / 1000).toFixed(1)}k` : '' }
               : prev.stats.steps,
-            streak: { value: streak?.currentStreak || 0 },
+            streak: { value: streakDays(streak) },
           },
           meals,
         };
@@ -241,7 +282,7 @@ const DashboardNew = () => {
       }
     } catch (err) {
       console.error('Failed to remove food log:', err);
-      notify("Couldn't remove that. Try again.", { tone: 'error' });
+      notify(errorMessage(err, "Couldn't remove that. Try again."), { tone: 'error' });
       setRemovingLogIds((prev) => {
         const next = new Set(prev);
         next.delete(logId);
@@ -252,9 +293,12 @@ const DashboardNew = () => {
 
   const mode = nutritionGoal?.mode || 'standard';
   const netCarbLimit = nutritionGoal?.keto?.net_carb_limit_g ?? 20;
-  const hour = new Date().getHours();
   const greeting = `${greetingFor(hour)}${displayName ? `, ${displayName}` : ''}`;
   const sentence = caloriesSentence({ eaten: data.calories.consumed, goal: data.calories.goal });
+  // The first run asked her goal; "lose a little" with no target gets the one
+  // step that helps, not "No daily target is set" (review Phase 2.14).
+  const offerTarget = !(data.calories.goal > 0) && experience.goal === 'lose';
+  const detailText = offerTarget ? 'A daily target makes losing a little easier.' : sentence.detail;
   const byMeal = useMemo(() => Object.fromEntries(MEAL_ORDER.map((m) => [m, data.meals[m]?.calories || 0])), [data.meals]);
   const strip = todayStrip({
     weights: checkIns.weights,
@@ -280,17 +324,28 @@ const DashboardNew = () => {
     />
   );
 
-  // ── First run: Simple, never chose, never finished it ──────────────
-  if (!experience.loading && isSimple && !savedMode && !firstRunDone) {
+  // A failed first-run save says so; it used to vanish without a word.
+  const finishFirstRun = async (answers) => {
+    const result = await completeFirstRun(answers);
+    if (result && result.ok === false) {
+      notify(errorMessage(result.error, "Couldn't save that. Try again."), { tone: 'error' });
+    }
+    return result;
+  };
+
+  // ── First run: Simple, never finished it, and we actually know that ──
+  // A derived mode is saved now (ExperienceContext), so "never chose" can't
+  // be the test; first_run_done is.
+  if (!experience.loading && experience.known !== false && isSimple && !firstRunDone) {
     const firstMeal = mealTypeForHour(hour);
     return (
       <Container maxWidth="sm" sx={{ py: { xs: 2, sm: 4 }, px: { xs: 2, sm: 3 } }}>
         <FirstRun
           suggestedName={displayName || ''}
           mealType={firstMeal}
-          onFinish={(answers) => completeFirstRun(answers)}
+          onFinish={finishFirstRun}
           onTryLogging={async (answers) => {
-            await completeFirstRun(answers);
+            await finishFirstRun(answers);
             setAddMeal(firstMeal);
           }}
         />
@@ -306,7 +361,7 @@ const DashboardNew = () => {
         {greeting}
       </Typography>
       <Typography sx={{ mt: 0.25, fontSize: '1.0625rem', color: 'text.secondary', fontWeight: 600 }}>
-        {new Date().toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric' })}
+        {longDay(today)}
       </Typography>
     </Box>
   );
@@ -335,6 +390,22 @@ const DashboardNew = () => {
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: { xs: 2, sm: 2.5 } }}>
         {heading}
 
+        {/* Simple: the one thing she came to do, first and above the fold —
+            even with Larger text (review Phase 2.13). It opens the add sheet
+            on the meal for this hour. */}
+        {isSimple && (
+          <Button
+            variant="contained"
+            size="large"
+            fullWidth
+            data-testid="what-did-you-eat"
+            onClick={() => setAddMeal(mealTypeForHour(hour))}
+            sx={{ minHeight: 64, borderRadius: '20px', fontSize: '1.25rem', fontWeight: 800, textTransform: 'none' }}
+          >
+            What did you eat?
+          </Button>
+        )}
+
         {!isSimple && <PlanAccuracyBanner nutritionGoal={nutritionGoal} scanBmr={scanBmr} />}
 
         {/* The one question, answered: a plate and a sentence. */}
@@ -348,19 +419,39 @@ const DashboardNew = () => {
               : '0 18px 40px -28px rgba(92,64,32,0.45)',
           }}
         >
-          <Box sx={{ display: 'flex', flexDirection: { xs: 'column', sm: 'row' }, alignItems: 'center', gap: { xs: 2, sm: 4 } }}>
+          <Box
+            sx={{
+              display: 'flex',
+              // Simple: a smaller plate beside the sentence, so the page is
+              // short enough for "What did you eat?" and the meals to show.
+              flexDirection: isSimple ? 'row' : { xs: 'column', sm: 'row' },
+              alignItems: 'center',
+              gap: isSimple ? 2 : { xs: 2, sm: 4 },
+            }}
+          >
             <PlateRing
               eaten={data.calories.consumed}
               goal={data.calories.goal}
               byMeal={byMeal}
-              size={isSimple ? 200 : 180}
-              label={`${sentence.headline}. ${sentence.detail}.`}
+              size={isSimple ? 104 : 180}
+              showNumber={!isSimple}
+              label={`${sentence.headline}. ${detailText}.`}
             />
-            <Box sx={{ minWidth: 0, textAlign: { xs: 'center', sm: 'left' } }}>
-              <Typography component="h2" data-testid="calories-sentence" sx={{ fontSize: { xs: '1.625rem', sm: '2rem' }, fontWeight: 800, lineHeight: 1.2 }}>
+            <Box sx={{ minWidth: 0, textAlign: isSimple ? 'left' : { xs: 'center', sm: 'left' } }}>
+              <Typography component="h2" data-testid="calories-sentence" sx={{ fontSize: isSimple ? { xs: '1.375rem', sm: '1.75rem' } : { xs: '1.625rem', sm: '2rem' }, fontWeight: 800, lineHeight: 1.2 }}>
                 {sentence.headline}
               </Typography>
-              <Typography sx={{ mt: 0.75, fontSize: '1.125rem', color: 'text.secondary' }}>{sentence.detail}</Typography>
+              <Typography sx={{ mt: 0.75, fontSize: '1.125rem', color: 'text.secondary' }}>{detailText}</Typography>
+              {offerTarget && (
+                <Button
+                  variant="outlined"
+                  data-testid="set-daily-target"
+                  onClick={() => navigate('/calorie-wizard')}
+                  sx={{ mt: 1.5, minHeight: 48, borderRadius: '999px', fontWeight: 800, textTransform: 'none' }}
+                >
+                  Set your daily target
+                </Button>
+              )}
             </Box>
           </Box>
           {!isSimple && (
@@ -396,6 +487,21 @@ const DashboardNew = () => {
             date={today}
           />
         </Box>
+
+        {/* No medications yet: a quiet way in, so she can start. */}
+        {isSimple && !meds.loading && !meds.loadError && meds.total === 0 && (
+          <Box>
+            <Button
+              component={RouterLink}
+              to="/medications"
+              variant="text"
+              data-testid="track-meds"
+              sx={{ minHeight: 48, fontWeight: 700, textTransform: 'none', fontSize: '1.0625rem' }}
+            >
+              Track your meds
+            </Button>
+          </Box>
+        )}
 
         {isSimple && meds.total > 0 && (
           <Surface ref={medsRef} sx={{ borderRadius: '24px', scrollMarginTop: 88 }}>

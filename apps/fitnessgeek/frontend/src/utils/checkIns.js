@@ -61,22 +61,24 @@ export function medsChecklist(meds = [], logs = []) {
 export function todayStrip({ weights, bloodPressures, meds, today }) {
   const weighed = onDay(weights, today);
   const bp = onDay(bloodPressures, today);
+  // Not done yet is an action, not a status (review Phase 1.8): "Weigh in"
+  // and "Add BP" open the quick-add directly; done reads "Weighed ✓".
   const items = [
     {
       id: 'weight',
-      label: 'Weighed',
+      label: weighed ? 'Weighed' : 'Weigh in',
       done: weighed,
-      value: weighed ? '✓' : '—',
-      spoken: weighed ? 'Weighed today' : 'Not weighed yet today',
-      to: '/weight',
+      value: weighed ? '✓' : '+',
+      spoken: weighed ? 'Weighed today' : 'Weigh in. Not weighed yet today',
+      to: weighed ? '/weight' : '/weight?add=1',
     },
     {
       id: 'bp',
-      label: 'BP',
+      label: bp ? 'BP' : 'Add BP',
       done: bp,
-      value: bp ? '✓' : '—',
-      spoken: bp ? 'Blood pressure taken today' : 'No blood pressure yet today',
-      to: '/blood-pressure',
+      value: bp ? '✓' : '+',
+      spoken: bp ? 'Blood pressure taken today' : 'Add blood pressure. None yet today',
+      to: bp ? '/blood-pressure' : '/blood-pressure?add=1',
     },
   ];
   // No medications, no meds check-in: "Meds 0 of 0" is noise.
@@ -92,4 +94,26 @@ export function todayStrip({ weights, bloodPressures, meds, today }) {
     });
   }
   return items;
+}
+
+/** When a reading was taken: its own time, else its calendar day. */
+const readingTime = (row) => {
+  const raw = row?.measured_at ?? row?.log_date ?? row?.date ?? null;
+  const t = raw ? new Date(raw).getTime() : NaN;
+  return Number.isFinite(t) ? t : -Infinity;
+};
+
+/**
+ * The newest blood pressure reading by when it was TAKEN (measured_at), not
+ * by its calendar day: two readings on one day are sorted by time, so the
+ * evening reading is "current", not the morning one.
+ */
+export function newestReading(rows) {
+  const list = Array.isArray(rows) ? rows : [];
+  let best = null;
+  for (const row of list) {
+    if (!row) continue;
+    if (best === null || readingTime(row) > readingTime(best)) best = row;
+  }
+  return best;
 }

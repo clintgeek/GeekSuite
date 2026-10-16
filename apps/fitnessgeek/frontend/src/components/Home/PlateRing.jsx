@@ -16,7 +16,9 @@ import { useTheme, alpha } from '@mui/material/styles';
  */
 const MEALS = ['breakfast', 'lunch', 'dinner', 'snack'];
 
-export default function PlateRing({ eaten = 0, goal = 0, byMeal = {}, size = 200, label }) {
+/* `showNumber={false}` leaves the well empty — Simple Home, where the
+ * sentence beside the plate already says the number (review Phase 2.13). */
+export default function PlateRing({ eaten = 0, goal = 0, byMeal = {}, size = 200, label, showNumber = true }) {
   const theme = useTheme();
   const produce = theme.palette.produce || {};
   const isDark = theme.palette.mode === 'dark';
@@ -78,7 +80,9 @@ export default function PlateRing({ eaten = 0, goal = 0, byMeal = {}, size = 200
           <circle cx={size / 2} cy={size / 2} r={r + stroke / 2 - 1} fill="none" stroke={produce.snack?.text || theme.palette.secondary.main} strokeWidth={2.5} />
         )}
       </svg>
+      {showNumber && (
       <Box
+        data-testid="plate-number"
         sx={{
           position: 'absolute',
           inset: 0,
@@ -96,6 +100,7 @@ export default function PlateRing({ eaten = 0, goal = 0, byMeal = {}, size = 200
           {left === null ? 'eaten' : over ? 'over' : 'left'}
         </Typography>
       </Box>
+      )}
     </Box>
   );
 }

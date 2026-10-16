@@ -62,16 +62,33 @@ vi.mock('../../hooks/useFoodLogging.js', () => ({
   useFoodLogging: () => ({ logItems: vi.fn(), undoLogs: vi.fn(), describeMeal: vi.fn(), adjustLogCalories: vi.fn() }),
 }));
 vi.mock('../../components/Dashboard/AIInsightsCard.jsx', () => ({ default: () => <div data-testid="insights" /> }));
+const notify = vi.fn();
 vi.mock('@geeksuite/ui', async (importOriginal) => ({
   ...(await importOriginal()),
-  useToast: () => ({ notify: vi.fn() }),
+  useToast: () => ({ notify }),
+}));
+// "Today" is useToday()'s answer (review B3) — pinned here so the fixtures
+// stay on one day; a test moves it to play a PWA resumed the next morning.
+let todayValue = TODAY;
+vi.mock('../../hooks/useToday.js', () => ({ useToday: () => todayValue, default: () => todayValue }));
+const navigateSpy = vi.fn();
+vi.mock('react-router-dom', async (importOriginal) => ({
+  ...(await importOriginal()),
+  useNavigate: () => navigateSpy,
 }));
 
 const { ExperienceContext } = await import('../../contexts/ExperienceContext.jsx');
+const { fitnessGeekService } = await import('../../services/fitnessGeekService.js');
+const { goalsService } = await import('../../services/goalsService.js');
+const { bpService } = await import('../../services/bpService.js');
+const { streakService } = await import('../../services/streakService.js');
+const { medsService } = await import('../../services/medsService.js');
+const { mealTypeForHour } = await import('../../utils/plainWords.js');
 const { default: DashboardNew } = await import('../DashboardNew.jsx');
 
 const experience = (over = {}) => ({
   loading: false,
+  known: true,
   savedMode: 'full',
   effectiveMode: 'full',
   isSimple: false,
@@ -96,7 +113,7 @@ const renderHome = (value) => render(
   </ThemeProvider>
 );
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => { vi.clearAllMocks(); todayValue = TODAY; });
 
 describe('Home answers in words', () => {
   it('"You have 660 calories left today", with a plate that says the same', async () => {
@@ -132,7 +149,8 @@ describe('the Today strip', () => {
     renderHome(experience());
     const strip = await screen.findByTestId('today-strip');
     expect(within(strip).getByTestId('today-strip-weight')).toHaveAttribute('data-done', 'true');
-    expect(within(strip).getByTestId('today-strip-bp')).toHaveTextContent('BP—');
+    expect(within(strip).getByTestId('today-strip-bp')).toHaveTextContent('Add BP+');
+    expect(within(strip).getByTestId('today-strip-bp')).toHaveAttribute('href', '/blood-pressure?add=1');
     expect(await within(strip).findByTestId('today-strip-meds')).toHaveTextContent('Meds1 of 3');
   });
 });
@@ -166,6 +184,32 @@ describe('first run', () => {
     expect(screen.queryByTestId('meal-cards')).toBeNull();
   });
 
+  it('shows to a Simple person whose derived mode was saved but who never finished it', async () => {
+    renderHome(experience({ ...SIMPLE, savedMode: 'simple', firstRunDone: false }));
+    expect(await screen.findByTestId('first-run')).toBeInTheDocument();
+  });
+
+  it('never while the saved settings could not be read', async () => {
+    renderHome(experience({ ...SIMPLE, savedMode: null, firstRunDone: false, known: false }));
+    expect(await screen.findByTestId('meal-cards')).toBeInTheDocument();
+    expect(screen.queryByTestId('first-run')).toBeNull();
+  });
+
+  it('a failed first-run save tells her, in plain words', async () => {
+    const completeFirstRun = vi.fn(() => Promise.resolve({ ok: false, error: { networkError: { statusCode: 503 } } }));
+    renderHome(experience({ ...SIMPLE, savedMode: null, firstRunDone: false, completeFirstRun }));
+    await screen.findByTestId('first-run');
+    // Walk the first run to its end with whatever buttons it offers.
+    for (let i = 0; i < 6 && !completeFirstRun.mock.calls.length; i += 1) {
+      const next = screen.queryByRole('button', { name: /^(Next|Continue|Done|Skip|Start|Let's go|Finish|Maybe later|Not now)/i })
+        || screen.queryAllByRole('button').find((b) => /lose|track|maintain/i.test(b.textContent));
+      if (!next) break;
+      await act(async () => { fireEvent.click(next); });
+    }
+    expect(completeFirstRun).toHaveBeenCalled();
+    expect(notify).toHaveBeenCalledWith('FitnessGeek is restarting. Try again in a moment.', { tone: 'error' });
+  });
+
   it('never to Full, and never again once done', async () => {
     const { unmount } = renderHome(experience({ savedMode: null, firstRunDone: false }));
     expect(await screen.findByTestId('meal-cards')).toBeInTheDocument();
@@ -174,5 +218,92 @@ describe('first run', () => {
     renderHome(experience({ ...SIMPLE, savedMode: 'simple', firstRunDone: true }));
     expect(await screen.findByTestId('meal-cards')).toBeInTheDocument();
     expect(screen.queryByTestId('first-run')).toBeNull();
+  });
+});
+
+describe('a PWA resumed the next morning (review B3)', () => {
+  it("Home reads useToday()'s day, not the day it was opened", async () => {
+    todayValue = '2026-10-16';
+    renderHome(experience());
+    await screen.findByTestId('meal-cards');
+    expect(fitnessGeekService.getLogsForDate).toHaveBeenCalledWith('2026-10-16');
+    expect(screen.getByText('Friday, October 16')).toBeInTheDocument();
+  });
+});
+
+describe('Simple Home: Add first (review Phase 2.13)', () => {
+  it('a big "What did you eat?" right under the greeting opens the sheet on this hour\'s meal', async () => {
+    renderHome(experience(SIMPLE));
+    const button = await screen.findByTestId('what-did-you-eat');
+    const hero = screen.getByTestId('home-hero');
+    // Above the plate in the page.
+    expect(button.compareDocumentPosition(hero) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    await act(async () => { fireEvent.click(button); });
+    const sheet = await screen.findByRole('dialog');
+    const meal = mealTypeForHour(new Date().getHours());
+    expect(within(sheet).getByText(new RegExp(`^Add to ${meal === 'snack' ? 'snacks?' : meal}$`))).toBeInTheDocument();
+  });
+
+  it('the plate does not repeat the number the sentence says', async () => {
+    renderHome(experience(SIMPLE));
+    await screen.findByTestId('calories-sentence');
+    expect(screen.queryByTestId('plate-number')).toBeNull();
+    expect(document.body.textContent.match(/660/g)).toHaveLength(1);
+  });
+
+  it('Full keeps the number in the plate and has no big Add button', async () => {
+    renderHome(experience());
+    await screen.findByTestId('calories-sentence');
+    expect(screen.getByTestId('plate-number')).toBeInTheDocument();
+    expect(screen.queryByTestId('what-did-you-eat')).toBeNull();
+  });
+});
+
+describe('the first-run goal is used (review Phase 2.14)', () => {
+  it('"lose a little" with no target: one sentence and Set your daily target, not "No daily target is set"', async () => {
+    goalsService.getDerivedMacros.mockResolvedValueOnce({ data: {} });
+    fitnessGeekService.getDailySummary.mockResolvedValueOnce({ data: { totals: { calories: 480 }, meals: {} } });
+    renderHome(experience({ ...SIMPLE, goal: 'lose' }));
+    const button = await screen.findByTestId('set-daily-target');
+    expect(document.body.textContent).not.toMatch(/No daily target is set/);
+    await act(async () => { fireEvent.click(button); });
+    expect(navigateSpy).toHaveBeenCalledWith('/calorie-wizard');
+  });
+
+  it('no offer when a target exists', async () => {
+    renderHome(experience({ ...SIMPLE, goal: 'lose' }));
+    await screen.findByTestId('calories-sentence');
+    expect(screen.queryByTestId('set-daily-target')).toBeNull();
+  });
+});
+
+describe('Simple Home with no medications', () => {
+  it('offers a quiet "Track your meds" to /medications', async () => {
+    medsService.list.mockResolvedValueOnce([]);
+    medsService.getLogsByDate.mockResolvedValueOnce([]);
+    renderHome(experience(SIMPLE));
+    const link = await screen.findByTestId('track-meds');
+    expect(link).toHaveAttribute('href', '/medications');
+    expect(screen.queryByRole('heading', { name: 'Did you take your meds?' })).toBeNull();
+  });
+});
+
+describe('Full numbers', () => {
+  it('the streak card reads the response envelope', async () => {
+    streakService.getLoginStreak.mockResolvedValueOnce({ success: true, data: { currentStreak: 12, longestStreak: 30 } });
+    renderHome(experience());
+    const region = await screen.findByRole('region', { name: 'Your numbers' });
+    await screen.findByText('12');
+    expect(within(region).getByText('12')).toBeInTheDocument();
+  });
+
+  it('the BP card shows the newest reading by time taken, not the first row of the day', async () => {
+    bpService.getCurrentBP.mockResolvedValueOnce({ systolic: 128, diastolic: 84, measured_at: `${TODAY}T12:05:00.000Z`, log_date: `${TODAY}T00:00:00.000Z` });
+    bpService.getBPLogs.mockResolvedValueOnce({ data: [
+      { systolic: 128, diastolic: 84, measured_at: `${TODAY}T12:05:00.000Z`, log_date: `${TODAY}T00:00:00.000Z` },
+      { systolic: 117, diastolic: 76, measured_at: `${TODAY}T23:40:00.000Z`, log_date: `${TODAY}T00:00:00.000Z` },
+    ] });
+    renderHome(experience());
+    expect(await screen.findByText('117/76')).toBeInTheDocument();
   });
 });
