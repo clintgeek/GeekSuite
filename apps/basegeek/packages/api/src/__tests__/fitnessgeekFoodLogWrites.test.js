@@ -136,7 +136,11 @@ describe('schema — the shape a client actually sends', () => {
     const t = fieldTypes(inputDef('FoodLogUpdateInput'));
     expect(Object.values(t)).not.toContain('required');
     expect(Object.keys(t).sort()).toEqual(
-      ['food_item_id', 'log_date', 'meal_type', 'notes', 'nutrition', 'servings'].sort()
+      [
+        'food_item_id', 'log_date', 'meal_type', 'notes', 'nutrition', 'servings',
+        // C3 (2026-10-16): per-serving overrides on the log's own snapshot.
+        'calories', 'protein_grams', 'carbs_grams', 'fat_grams',
+      ].sort()
     );
   });
 
@@ -280,13 +284,34 @@ describe('addFoodLog — findOrCreate', () => {
             log_date: '2026-03-01',
             meal_type: 'snack',
             servings: 1,
-            food_item: searchResult({ id: 'ai_1', name: 'secret shake', brand: 'acme', source: 'ai', source_id: undefined }),
+            food_item: searchResult({ id: 'off_1', name: 'secret shake', brand: 'acme', source: 'openfoodfacts', source_id: undefined }),
           },
         },
         ctx(BOB)
       )
     ).rejects.toThrow('Food item not found');
     expect(await FoodLog.countDocuments({ user_id: BOB })).toBe(0);
+  });
+
+  test('an AI result never resolves to another user\'s private food either', async () => {
+    // Since C5 (2026-10-16) an AI result is the tapper's own row, and its
+    // dedupe only looks at rows the caller can see — so the crafted
+    // (name, brand) mints BOB's own row instead of handing back ALICE's.
+    const alices = await makeFood({ name: 'secret shake', brand: 'acme' });
+    const log = await M.addFoodLog(
+      null,
+      {
+        input: {
+          log_date: '2026-03-01',
+          meal_type: 'snack',
+          servings: 1,
+          food_item: searchResult({ id: 'ai_1', name: 'secret shake', brand: 'acme', source: 'ai', source_id: undefined }),
+        },
+      },
+      ctx(BOB)
+    );
+    expect(String(log.food_item_id._id)).not.toBe(String(alices._id));
+    expect(log.food_item_id.user_id).toBe(BOB);
   });
 
   test('neither food_item nor food_item_id is a not-found, not a crash', async () => {

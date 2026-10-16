@@ -207,7 +207,8 @@ describe('weights, blood pressure, medications — personal data', () => {
     await expect(
       M.updateFitnessWeight(null, { id: String(w._id), input: { weight_value: 1 } }, ctx(BOB))
     ).rejects.toThrow('Weight record not found');
-    expect(await M.deleteFitnessWeight(null, { id: String(w._id) }, ctx(BOB))).toBe(false);
+    // Not found is an error since 2026-10-16 (it used to be `false`, which the page read as success).
+    await expect(M.deleteFitnessWeight(null, { id: String(w._id) }, ctx(BOB))).rejects.toMatchObject({ extensions: { code: 'NOT_FOUND' } });
     expect((await Weight.findById(w._id)).weight_value).toBe(180);
   });
 
@@ -218,7 +219,7 @@ describe('weights, blood pressure, medications — personal data', () => {
     await expect(
       M.updateBloodPressure(null, { id: String(bp._id), input: { systolic: 190 } }, ctx(BOB))
     ).rejects.toThrow('Blood pressure record not found');
-    expect(await M.deleteBloodPressure(null, { id: String(bp._id) }, ctx(BOB))).toBe(false);
+    await expect(M.deleteBloodPressure(null, { id: String(bp._id) }, ctx(BOB))).rejects.toMatchObject({ extensions: { code: 'NOT_FOUND' } });
   });
 
   test('medication reads and writes are owner-scoped', async () => {
@@ -228,7 +229,7 @@ describe('weights, blood pressure, medications — personal data', () => {
     await expect(
       M.updateFitnessMedication(null, { id: String(med._id), input: { display_name: 'pwned' } }, ctx(BOB))
     ).rejects.toThrow('Medication not found');
-    expect(await M.deleteFitnessMedication(null, { id: String(med._id) }, ctx(BOB))).toBe(false);
+    await expect(M.deleteFitnessMedication(null, { id: String(med._id) }, ctx(BOB))).rejects.toMatchObject({ extensions: { code: 'NOT_FOUND' } });
     expect((await Medication.findById(med._id)).display_name).toBe('lisinopril');
   });
 });

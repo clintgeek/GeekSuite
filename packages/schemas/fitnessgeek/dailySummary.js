@@ -234,10 +234,15 @@ function emptyMealBreakdown() {
  *
  * Behaviours that are shipped and deliberate, on both sides:
  *
- *   - **The populated catalog row is the source, not `log.nutrition`.** See the
- *     header. A log whose `food_item_id` was not populated, or whose food has
- *     no `nutrition` block, contributes NOTHING — it is skipped whole, not
- *     counted as zero-with-a-multiplier.
+ *   - **The log's own `nutrition` snapshot is the source when it carries any
+ *     number; otherwise the populated catalog row.** (2026-10-16. Until then
+ *     this read the catalog row only, so an edited log's calories — the
+ *     describe-and-log judge's correction, and the food-log edit's calorie
+ *     override — showed on the Food Log row and never on the Home ring.)
+ *     Every snapshot leaf defaults to 0, so an all-zero snapshot means "never
+ *     written" and falls back to the food; a real zero-calorie food is zero
+ *     either way. A log with neither contributes NOTHING — it is skipped
+ *     whole, not counted as zero-with-a-multiplier.
  *   - **`servings || 1`**, so a missing or zero serving count means one.
  *   - **`net_carbs_grams` is derived per log and floored per log**:
  *     `max(0, (carbs − fiber) × servings)`. Flooring per log rather than on the
@@ -253,6 +258,11 @@ function emptyMealBreakdown() {
  * @param {Array} logs - food logs, `food_item_id` POPULATED.
  * @returns {{totals: Object, meals: Object}}
  */
+const SNAPSHOT_KEYS = Object.freeze([
+  'calories_per_serving', 'protein_grams', 'carbs_grams', 'fat_grams',
+  'fiber_grams', 'sugar_grams', 'sodium_mg',
+]);
+
 function summarizeFoodLogs(logs) {
   const totals = emptyDailyTotals();
   const meals = emptyMealBreakdown();
@@ -261,12 +271,15 @@ function summarizeFoodLogs(logs) {
     const food = log.food_item_id;
     const multiplier = log.servings || 1;
 
-    // Skip if food or nutrition is missing
-    if (!food || !food.nutrition) {
+    const snapshot = log.nutrition;
+    const hasSnapshot = !!snapshot && SNAPSHOT_KEYS.some((k) => Number(snapshot[k]) > 0);
+
+    // Skip if neither the log nor its food carries nutrition
+    if (!hasSnapshot && (!food || !food.nutrition)) {
       return;
     }
 
-    const n = food.nutrition;
+    const n = hasSnapshot ? snapshot : food.nutrition;
 
     // Add to totals (with null safety)
     totals.calories += ((n.calories_per_serving || 0) * multiplier);

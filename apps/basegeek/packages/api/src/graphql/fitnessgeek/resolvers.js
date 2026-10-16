@@ -1,4 +1,4 @@
-import { GraphQLScalarType, Kind } from 'graphql';
+import { GraphQLError, GraphQLScalarType, Kind } from 'graphql';
 import crypto from 'crypto';
 import logger from '../../lib/logger.js';
 import { format, subDays } from 'date-fns';
@@ -19,6 +19,7 @@ import DailySummary from './models/DailySummary.js';
 import WeightGoals from './models/WeightGoals.js';
 import BodyComposition from './models/BodyComposition.js';
 import { isValidObjectId } from './ownership.js';
+import { maskResolverErrors } from './errors.js';
 import { recipeFields } from './recipeInput.js';
 import { toUtcMidnight, utcDateString, utcDayRange, utcMidnightToday } from '@geeksuite/utils/dates';
 import {
@@ -114,6 +115,40 @@ const requireCalendarDate = (date, field) => {
 };
 
 /**
+ * The days a food report covers: `days` whole UTC days, inclusive.
+ *
+ * `start` (the first day) wins when sent. `end` (the last day, the caller's
+ * local today) is the other way to say it, added 2026-10-16 for the review's
+ * P2: with neither, the window ends on the SERVER's today — and the
+ * containers run UTC, so after 19:00 Central "the last 7 days" ran through
+ * tomorrow and dropped the user's real first day. Reports.jsx sends `start`.
+ *
+ * @returns {{ startDate: Date, endDate: Date }} 00:00:00.000Z of the first
+ *   day and 23:59:59.999Z of the last
+ */
+const reportWindow = ({ start, end, days }, field) => {
+  let startDate;
+  if (start) {
+    startDate = new Date(start);
+    if (Number.isNaN(startDate.getTime())) {
+      throw new GraphQLError(`${field}: \`start\` must be a YYYY-MM-DD calendar date`, { extensions: { code: 'BAD_USER_INPUT' } });
+    }
+  } else if (end != null && end !== '') {
+    if (typeof end !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(end) || Number.isNaN(toUtcMidnight(end).getTime())) {
+      throw new GraphQLError(`${field}: \`end\` must be a YYYY-MM-DD calendar date`, { extensions: { code: 'BAD_USER_INPUT' } });
+    }
+    startDate = new Date(toUtcMidnight(end).getTime() - (days - 1) * 86400000);
+  } else {
+    startDate = subDays(new Date(), days - 1);
+  }
+  startDate.setUTCHours(0, 0, 0, 0);
+  const endDate = new Date(startDate);
+  endDate.setUTCDate(endDate.getUTCDate() + (days - 1));
+  endDate.setUTCHours(23, 59, 59, 999);
+  return { startDate, endDate };
+};
+
+/**
  * Sub-document paths under `UserSettings` whose value is a whole opaque blob
  * (`Schema.Types.Mixed`) and must be written as ONE value, not merged key by
  * key. `garmin.oauth1_token` / `oauth2_token` are Garmin's own token objects:
@@ -193,6 +228,73 @@ export const flattenSettingsUpdate = (input, prefix = '', out = {}) => {
  * shared), so without this a crafted `(name, brand)` could hand back another
  * user's PRIVATE custom food and populate it into the response.
  */
+/** A GraphQLError a person can read, with a machine code beside it. */
+const userError = (message, code = 'BAD_USER_INPUT') => new GraphQLError(message, { extensions: { code } });
+
+/**
+ * The food-log edit's per-serving overrides (C3): GraphQL field → snapshot
+ * path, with the bound each must sit inside.
+ */
+const LOG_NUTRITION_OVERRIDES = Object.freeze([
+  { field: 'calories', path: 'calories_per_serving', max: 10000, label: 'Calories', unit: '' },
+  { field: 'protein_grams', path: 'protein_grams', max: 1000, label: 'Protein', unit: ' grams' },
+  { field: 'carbs_grams', path: 'carbs_grams', max: 1000, label: 'Carbs', unit: ' grams' },
+  { field: 'fat_grams', path: 'fat_grams', max: 1000, label: 'Fat', unit: ' grams' },
+]);
+
+/** Every key a log's nutrition snapshot carries. */
+const LOG_NUTRITION_KEYS = [
+  'calories_per_serving', 'protein_grams', 'carbs_grams', 'fat_grams',
+  'fiber_grams', 'sugar_grams', 'sodium_mg',
+];
+
+/**
+ * The overrides an update input carries, validated, as `{ path: number }`.
+ * Refuses (BAD_USER_INPUT, plain words) anything negative, not a number, or
+ * past the bound — a typo of 18000 calories is not a meal.
+ */
+const logNutritionOverrides = (input = {}) => {
+  const out = {};
+  for (const { field, path, max, label, unit } of LOG_NUTRITION_OVERRIDES) {
+    const raw = input[field];
+    if (raw == null) continue;
+    const value = Number(raw);
+    if (!Number.isFinite(value) || value < 0 || value > max) {
+      throw userError(`${label} must be between 0 and ${max.toLocaleString('en-US')}${unit}.`);
+    }
+    out[path] = value;
+  }
+  return out;
+};
+
+/**
+ * A log's new calendar day, or a refusal. The client sends YYYY-MM-DD; the
+ * Date scalar hands it over as that day's UTC midnight. "Sane" is a real
+ * date between 2000 and a year from now — far enough for any backfill,
+ * close enough to catch a year typed as 2206.
+ */
+const saneLogDate = (raw) => {
+  const day = toUtcMidnight(raw);
+  const t = day?.getTime?.();
+  const ceiling = Date.now() + 366 * 86400000;
+  if (!Number.isFinite(t) || t < Date.UTC(2000, 0, 1) || t > ceiling) {
+    throw userError("That date doesn't look right. Pick a day on the calendar.");
+  }
+  return day;
+};
+
+/**
+ * C1: the `(userId, measured_at)` unique index refusing a second reading in
+ * the same instant (the cuff instructions say to take two back to back, and
+ * the form only has minutes). Mirrors REST's friendly 409 in
+ * bloodPressureController.js; anything else is rethrown untouched.
+ */
+const bpDuplicateOr = (err) => (
+  err?.code === 11000
+    ? userError('You already saved a reading at that time.', 'BP_DUPLICATE')
+    : err
+);
+
 /** A household name as stored: trimmed, at most 40 characters, or undefined. */
 const householdName = (raw) => {
   const name = typeof raw === 'string' ? raw.trim().replace(/\s+/g, ' ').slice(0, 40) : '';
@@ -204,7 +306,13 @@ const resolveLogFoodItem = async (input, userId) => {
   const inlineId = inline?.id ?? inline?._id;
 
   if (inline && !(inlineId && isValidObjectId(inlineId))) {
-    const created = await FoodItem.findOrCreate(toFoodItemDoc(inline), userId);
+    const doc = toFoodItemDoc(inline);
+    // A tapped AI search result is the tapper's food, not a global catalog
+    // row everyone then sees in search (C5, review P2). Catalog sources
+    // (USDA, OpenFoodFacts, barcodes) stay global and shared.
+    const created = doc.source === 'ai'
+      ? await FoodItem.findOrCreateOwned(doc, userId)
+      : await FoodItem.findOrCreate(doc, userId);
     const accessible = created && await FoodItem.findAccessible(created._id, userId);
     if (!accessible) throw new Error('Food item not found');
     return accessible;
@@ -634,8 +742,11 @@ const getBodyCompContext = async (userId, endDate) => {
   };
 };
 
+/** Blood-pressure readings, newest first — by day, then by the instant taken. */
+const BP_NEWEST_FIRST = { log_date: -1, measured_at: -1, created_at: -1, _id: -1 };
+
 const getBPContext = async (userId, startDate, endDate) => {
-  const readings = await BloodPressure.find({ userId: userId, log_date: { $gte: startDate, $lte: endDate } }).sort({ log_date: -1 }).lean();
+  const readings = await BloodPressure.find({ userId: userId, log_date: { $gte: startDate, $lte: endDate } }).sort(BP_NEWEST_FIRST).lean();
   if (!readings.length) return null;
   const systolics = readings.map(r => r.systolic);
   const diastolics = readings.map(r => r.diastolic);
@@ -844,7 +955,12 @@ export const resolvers = {
     },
     bloodPressures: async (_, __, { user }) => {
       if (!user) throw new Error('Unauthorized');
-      return BloodPressure.find({ userId: user.id }).sort({ log_date: -1 });
+      // Newest first, and newest first WITHIN a day: `log_date` alone left
+      // a morning and an evening reading in index order, so Home and the BP
+      // page could call the morning one "current" (review P2). `log_date`
+      // leads so a reading backfilled to an earlier day never jumps ahead of
+      // today's; `measured_at` then orders the day.
+      return BloodPressure.find({ userId: user.id }).sort(BP_NEWEST_FIRST);
     },
     bloodPressure: async (_, { id }, { user }) => {
       if (!user) throw new Error('Unauthorized');
@@ -1017,13 +1133,9 @@ export const resolvers = {
       return FoodLog.getLogsForDate(memberId, date);
     },
 
-    fitnessFoodReportOverview: async (_, { start, days = 7 }, { user }) => {
+    fitnessFoodReportOverview: async (_, { start, end, days = 7 }, { user }) => {
       if (!user) throw new Error('Unauthorized');
-      const startDate = start ? new Date(start) : subDays(new Date(), days - 1);
-      startDate.setUTCHours(0, 0, 0, 0);
-      const endDate = new Date(startDate);
-      endDate.setUTCDate(endDate.getUTCDate() + (days - 1));
-      endDate.setUTCHours(23, 59, 59, 999);
+      const { startDate, endDate } = reportWindow({ start, end, days }, 'fitnessFoodReportOverview');
       const logs = await FoodLog.find({ user_id: user.id, log_date: { $gte: startDate, $lte: endDate } }).populate('food_item_id').lean();
       const daily = buildDaily(logs);
       const totals = sumTotals(daily);
@@ -1055,7 +1167,8 @@ export const resolvers = {
         if (!Object.keys(targets).length) targets = null;
       }
       return {
-        range: { start: format(startDate, 'yyyy-MM-dd'), end: format(endDate, 'yyyy-MM-dd'), days },
+        // UTC strings: the window is UTC days, and date-fns `format` is local time.
+        range: { start: utcDateString(startDate), end: utcDateString(endDate), days },
         totals, averages, daily, meals, topFoods: top,
         goalCompliance: Object.keys(goalCompliance).length ? goalCompliance : null,
         targets,
@@ -1065,13 +1178,9 @@ export const resolvers = {
       };
     },
 
-    fitnessFoodReportTrends: async (_, { start, days = 30 }, { user }) => {
+    fitnessFoodReportTrends: async (_, { start, end, days = 30 }, { user }) => {
       if (!user) throw new Error('Unauthorized');
-      const startDate = start ? new Date(start) : subDays(new Date(), days - 1);
-      startDate.setUTCHours(0, 0, 0, 0);
-      const endDate = new Date(startDate);
-      endDate.setUTCDate(endDate.getUTCDate() + (days - 1));
-      endDate.setUTCHours(23, 59, 59, 999);
+      const { startDate, endDate } = reportWindow({ start, end, days }, 'fitnessFoodReportTrends');
       const logs = await FoodLog.find({ user_id: user.id, log_date: { $gte: startDate, $lte: endDate } }).populate('food_item_id').lean();
       const daily = buildDaily(logs);
       const rolling = rollingAverage(daily, 7);
@@ -1079,7 +1188,7 @@ export const resolvers = {
       // One weight per day — a duplicated day would count twice in every mean.
       const weights = onePerDay(weightsRaw).map(w => ({ date: utcDateString(w.log_date), weight: w.weight_value }));
       return {
-        range: { start: format(startDate, 'yyyy-MM-dd'), end: format(endDate, 'yyyy-MM-dd'), days },
+        range: { start: utcDateString(startDate), end: utcDateString(endDate), days },
         daily, rolling, weights, highlights: trendHighlights(daily, weights)
       };
     },
@@ -1112,18 +1221,18 @@ export const resolvers = {
       return { type: 'correlations', content: response, generatedAt: new Date(), context: { daysAnalyzed: 30 } };
     },
 
-    fitnessInsightsWeeklyReport: async (parent, { start, days = 7 }, context) => {
+    fitnessInsightsWeeklyReport: async (parent, { start, end, days = 7 }, context) => {
       if (!context.user) throw new Error('Unauthorized');
-      const report = await resolvers.Query.fitnessFoodReportOverview(parent, { start, days }, context);
+      const report = await resolvers.Query.fitnessFoodReportOverview(parent, { start, end, days }, context);
       if (!report.daily.length) return { type: 'weekly_report', content: 'No data found.', generatedAt: new Date(), context: report.range };
       const prompt = `Summarize this ${ days }-day food report:\n${ JSON.stringify(report, null, 2) }\nUnder 180 words.`;
       const response = await aiService.chat(prompt);
       return { type: 'weekly_report', content: response, generatedAt: new Date(), context: report.range };
     },
 
-    fitnessInsightsTrendWatch: async (parent, { start, days = 30 }, context) => {
+    fitnessInsightsTrendWatch: async (parent, { start, end, days = 30 }, context) => {
       if (!context.user) throw new Error('Unauthorized');
-      const trends = await resolvers.Query.fitnessFoodReportTrends(parent, { start, days }, context);
+      const trends = await resolvers.Query.fitnessFoodReportTrends(parent, { start, end, days }, context);
       if (!trends.daily.length) return { type: 'trend_watch', content: 'No data found.', generatedAt: new Date(), context: trends.range };
       const prompt = `Provide a trend watch summary for this ${ days }-day data:\n${ JSON.stringify(trends, null, 2) }\nUnder 160 words.`;
       const response = await aiService.chat(prompt);
@@ -1474,8 +1583,11 @@ export const resolvers = {
     },
     deleteFitnessWeight: async (_, { id }, { user }) => {
       if (!user) throw new Error('Unauthorized');
+      // Same as deleteBloodPressure: nothing deleted is an error, not `false`.
+      if (!isValidObjectId(id)) throw userError('That weight was already deleted.', 'NOT_FOUND');
       const result = await Weight.deleteOne({ _id: id, userId: user.id });
-      return result.deletedCount === 1;
+      if (result.deletedCount !== 1) throw userError('That weight was already deleted.', 'NOT_FOUND');
+      return true;
     },
     setNutritionGoals: async (_, { input }, { user }) => {
       if (!user) throw new Error('Unauthorized');
@@ -1566,19 +1678,51 @@ export const resolvers = {
     updateFoodLog: async (_, { id, input }, { user }) => {
       if (!user) throw new Error('Unauthorized');
       if (!isValidObjectId(id)) throw new Error('Food log not found');
+      // Everything is checked before anything is written.
+      const overrides = logNutritionOverrides(input || {});
+      const newDay = input?.log_date != null ? saneLogDate(input.log_date) : null;
       // Partial patch (FoodLogUpdateInput): only the fields actually supplied
       // are written, so a servings-only edit no longer has to resend
       // food_item_id — and therefore no longer re-runs the accessibility
       // check against a food that may since have been soft-deleted.
       if (input?.food_item_id) await assertAccessibleFoodItems([input], user.id);
+      // Owner-scoped read first: the day it is moving FROM needs its summary
+      // recomputed too, and an override needs the snapshot it lands on.
+      const before = await FoodLog.findOne({ _id: id, user_id: user.id }).populate('food_item_id');
+      if (!before) throw new Error('Food log not found');
+
       const patch = { updated_at: new Date() };
       for (const key of ['meal_type', 'servings', 'notes', 'nutrition', 'food_item_id']) {
         if (input?.[key] != null) patch[key] = input[key];
       }
-      if (input?.log_date != null) patch.log_date = toUtcMidnight(input.log_date);
+      if (newDay) patch.log_date = newDay;
+
+      // C3: calorie/macro overrides land on the log's own snapshot, per
+      // serving, and leave every other macro as it was. A whole `nutrition`
+      // in the same input takes them on top; a snapshot never written (all
+      // zeros, the schema default) is seeded from the food first, so fixing
+      // the calories does not zero the macros.
+      if (Object.keys(overrides).length) {
+        if (patch.nutrition) {
+          patch.nutrition = { ...patch.nutrition, ...overrides };
+        } else {
+          const snap = before.nutrition || {};
+          const written = LOG_NUTRITION_KEYS.some((k) => Number(snap[k]) > 0);
+          const base = written ? snap : (before.food_item_id?.nutrition || {});
+          patch.nutrition = {
+            ...Object.fromEntries(LOG_NUTRITION_KEYS.map((k) => [k, Number(base[k]) || 0])),
+            ...overrides,
+          };
+        }
+      }
+
       const log = await FoodLog.findOneAndUpdate({ _id: id, user_id: user.id }, patch, { new: true }).populate('food_item_id');
       if (!log) throw new Error('Food log not found');
       await DailySummary.updateFromLogs(user.id, log.log_date);
+      // Moved to another day: the old day loses the entry.
+      if (utcDateString(before.log_date) !== utcDateString(log.log_date)) {
+        await DailySummary.updateFromLogs(user.id, before.log_date);
+      }
       return log;
     },
     deleteFoodLog: async (_, { id }, { user }) => {
@@ -1629,23 +1773,46 @@ export const resolvers = {
     },
     deleteFitnessMedication: async (_, { id }, { user }) => {
       if (!user) throw new Error('Unauthorized');
-      const result = await Medication.deleteOne({ _id: id, user_id: user.id });
+      if (!isValidObjectId(id)) throw userError('That medication was already removed.', 'NOT_FOUND');
+      const med = await Medication.findOne({ _id: id, user_id: user.id });
+      if (!med) throw userError('That medication was already removed.', 'NOT_FOUND');
+      // Its dose logs go with it, as REST's DELETE /api/medications/:id does
+      // (medicationRoutes.js). Left behind, they were orphans the checklist
+      // could still trip over. The `medicationlogs` collection is REST's
+      // model (single writer of doses); this only deletes, by owner and id,
+      // so it goes through the raw collection rather than a second schema.
+      await Medication.db.collection('medicationlogs').deleteMany({ user_id: user.id, medication_id: med._id });
+      const result = await Medication.deleteOne({ _id: med._id, user_id: user.id });
       return result.deletedCount === 1;
     },
     addBloodPressure: async (_, { input }, { user }) => {
       if (!user) throw new Error('Unauthorized');
-      return new BloodPressure({ ...input, userId: user.id }).save();
+      try {
+        return await new BloodPressure({ ...input, userId: user.id }).save();
+      } catch (err) {
+        throw bpDuplicateOr(err);
+      }
     },
     updateBloodPressure: async (_, { id, input }, { user }) => {
       if (!user) throw new Error('Unauthorized');
-      const bp = await BloodPressure.findOneAndUpdate({ _id: id, userId: user.id }, { ...input, updated_at: new Date() }, { new: true });
+      let bp;
+      try {
+        bp = await BloodPressure.findOneAndUpdate({ _id: id, userId: user.id }, { ...input, updated_at: new Date() }, { new: true });
+      } catch (err) {
+        throw bpDuplicateOr(err);
+      }
       if (!bp) throw new Error('Blood pressure record not found');
       return bp;
     },
     deleteBloodPressure: async (_, { id }, { user }) => {
       if (!user) throw new Error('Unauthorized');
+      // `false` used to come back for a reading that wasn't there, and the
+      // page said "Deleted successfully" anyway (review P2). Nothing deleted
+      // is an error the client sees.
+      if (!isValidObjectId(id)) throw userError('That reading was already deleted.', 'NOT_FOUND');
       const result = await BloodPressure.deleteOne({ _id: id, userId: user.id });
-      return result.deletedCount === 1;
+      if (result.deletedCount !== 1) throw userError('That reading was already deleted.', 'NOT_FOUND');
+      return true;
     },
 
     recordLoginStreak: async (_, { date } = {}, { user }) => {
@@ -1770,6 +1937,14 @@ export const resolvers = {
       const sourceLogs = await FoodLog.find(query);
       if (!sourceLogs.length) throw new Error('No food logs found for the source date/meal');
 
+      // Every food the copy will point at must be one the copier can read:
+      // global, theirs, or their household's (C4). Checked for all of them
+      // before anything is written, so a refusal copies nothing. A food since
+      // soft-deleted still counts — the copy carries its own nutrition.
+      const foodIds = [...new Set(sourceLogs.map((l) => String(l.food_item_id)).filter((v) => v && v !== 'null'))];
+      const readable = await FoodItem.findAccessibleMany(foodIds, user.id, { includeDeleted: true });
+      if (readable.length !== foodIds.length) throw new Error('Food item not found');
+
       const newLogs = [];
       const targetDate = new Date(to_date);
 
@@ -1817,3 +1992,10 @@ export const resolvers = {
   FitnessMedication: { id: (m) => m._id.toString() },
   BloodPressure: { id: (b) => b._id.toString() },
 };
+
+// Errors never leak (review B13): every fitnessgeek Query and Mutation goes
+// through the mask in errors.js — deliberate messages pass, E11000 / CastError
+// / ValidationError / bugs are logged here and answered with one plain
+// sentence. Field resolvers above are synchronous and read-only; not wrapped.
+resolvers.Query = maskResolverErrors(resolvers.Query, 'Query');
+resolvers.Mutation = maskResolverErrors(resolvers.Mutation, 'Mutation');

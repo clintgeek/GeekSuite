@@ -427,13 +427,26 @@ export const typeDefs = gql`
   since been soft-deleted still works.
   """
   input FoodLogUpdateInput {
-    "Same UTC-midnight normalization as 'FoodLogInput.log_date'."
+    """
+    Moves the entry to another day. Send a plain 'YYYY-MM-DD'; same UTC-midnight
+    normalization as 'FoodLogInput.log_date'. Must be a real day between 2000
+    and a year from now. Both days' summaries are recomputed.
+    """
     log_date: Date
     meal_type: String
     food_item_id: ID
     servings: Float
     notes: String
     nutrition: NutritionDataInput
+    """
+    Per-serving overrides on THIS log's nutrition snapshot (the catalog food is
+    untouched); any left out keep their value. calories 0-10000, the three
+    macros 0-1000 grams. 'calories' is the snapshot's 'calories_per_serving'.
+    """
+    calories: Float
+    protein_grams: Float
+    carbs_grams: Float
+    fat_grams: Float
   }
 
   type MealItem {
@@ -891,13 +904,17 @@ export const typeDefs = gql`
     derivedMacros(date: String): DerivedMacros
     fitnessHousehold: Household
     fitnessHouseholdMemberLogs(memberId: ID!, date: String!): [FoodLog]
-    fitnessFoodReportOverview(start: String, days: Int): FitnessFoodReport
-    fitnessFoodReportTrends(start: String, days: Int): FitnessTrendReport
+    # Report windows: \`days\` whole days from \`start\` (YYYY-MM-DD). Or send
+    # \`end\` instead — the caller's local today, the window's LAST day. With
+    # neither, the window ends on the server's UTC today, which is tomorrow
+    # all evening in US-Central. Same three args on the two AI reports below.
+    fitnessFoodReportOverview(start: String, end: String, days: Int): FitnessFoodReport
+    fitnessFoodReportTrends(start: String, end: String, days: Int): FitnessTrendReport
     fitnessInsightsMorningBrief: FitnessInsight
     fitnessInsightsDailySummary(date: String): FitnessInsight
     fitnessInsightsCorrelations: FitnessInsight
-    fitnessInsightsWeeklyReport(start: String, days: Int): FitnessInsight
-    fitnessInsightsTrendWatch(start: String, days: Int): FitnessInsight
+    fitnessInsightsWeeklyReport(start: String, end: String, days: Int): FitnessInsight
+    fitnessInsightsTrendWatch(start: String, end: String, days: Int): FitnessInsight
     fitnessInsightsCoaching: FitnessInsight
     fitnessInsightsContext(days: Int): FitnessJSON
 

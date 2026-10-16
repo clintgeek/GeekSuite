@@ -86,13 +86,11 @@
  * ---------------------------------------------------------------
  * `nutrition` exists so a log keeps the numbers it was written with, in case
  * the catalog row changes later — and `calculatedNutrition` reads it first,
- * falling back to the populated food. `DailySummary.updateFromLogs` does the
- * opposite: it reads `log.food_item_id.nutrition` only and ignores the stored
- * snapshot entirely, so editing a catalog row silently restates every past
- * day's totals. Both sides do this identically, so it is not a consolidation
- * hazard and nothing was changed — but it is the kind of thing that is much
- * easier to see from here than from either app. Recorded in §12 of the plan as
- * a follow-up.
+ * falling back to the populated food. `DailySummary.updateFromLogs` used to do
+ * the opposite — read `log.food_item_id.nutrition` only — so an edited log
+ * never reached the day's totals. Since 2026-10-16 it reads the snapshot too
+ * (any non-zero leaf), falling back to the food; see `summarizeFoodLogs` in
+ * dailySummary.js.
  *
  * WHY `mongoose` IS A PARAMETER, AND WHY THIS MODULE IS CJS
  * --------------------------------------------------------

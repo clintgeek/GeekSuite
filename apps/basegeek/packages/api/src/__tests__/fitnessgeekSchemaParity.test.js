@@ -1308,10 +1308,15 @@ describe('ownership guards stayed app-side (statics policy)', () => {
     // only, because only it is multi-tenant at the model layer.
     const statics = (M) => Object.keys(M.schema.statics).sort();
     expect(statics(FoodItemRest)).toEqual(['findOrCreate', 'search']);
+    // `findOrCreateOwned` (C5, 2026-10-16) is the gateway's: a tapped AI
+    // result is minted owned by the tapper. It reuses the shared ladder's
+    // rungs (`foodItemDedupeFilters`) and attrs (`newFoodItemAttrs`), scoped
+    // to what the caller can see — ownership policy, so it stays app-side.
     expect(statics(FoodItemGraphQL)).toEqual([
       'findAccessible',
       'findAccessibleMany',
       'findOrCreate',
+      'findOrCreateOwned',
       'search',
     ]);
     // The shared module attaches no statics at all.
@@ -1358,7 +1363,7 @@ describe('ownership guards stayed app-side (statics policy)', () => {
     expect(String(FoodItemRest.schema.statics.findOrCreate)).not.toContain('findAccessible');
   });
 
-  test('search stayed app-side on both, and now agrees with foodCatalogFilter (Q41, fixed 2026-09-06)', () => {
+  test('search stayed app-side on both, and now agrees with foodCatalogFilter (Q41, fixed 2026-09-06)', async () => {
     // Byte-identical copies, still not promoted as statics — but both now
     // build their "who can see this" clause from the shared
     // `foodCatalogVisibilityFilter` instead of each hand-rolling
@@ -1368,7 +1373,12 @@ describe('ownership guards stayed app-side (statics policy)', () => {
       String(FoodItemRest.schema.statics.search)
     );
     expect(String(FoodItemRest.schema.statics.search)).toContain('foodCatalogVisibilityFilter');
-    expect(String(FoodItemGraphQL.schema.statics.findAccessible)).toContain('foodCatalogFilter');
+    // findAccessible reads through `foodReadFilter` since C4 (2026-10-16):
+    // `foodCatalogFilter` plus the caller's household. See ownership.js.
+    expect(String(FoodItemGraphQL.schema.statics.findAccessible)).toContain('readScope');
+    const { foodReadFilter, foodCatalogFilter } = await import('../graphql/fitnessgeek/ownership.js');
+    expect(foodReadFilter('me', [])).toEqual(foodCatalogFilter('me'));
+    expect(foodReadFilter('me', ['them']).$or).toEqual([...foodCatalogFilter('me').$or, { user_id: { $in: ['them'] } }]);
   });
 });
 

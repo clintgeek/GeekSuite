@@ -60,4 +60,18 @@ userSettingsSchema.statics.updateSettings = async function(userId, updateData) {
   return settings;
 };
 
+// The other members of the caller's household, as user ids — [] when the
+// caller has no household. Read-only; used by the food read scope
+// (ownership.js `foodReadFilter`) so a household member's food can be logged.
+userSettingsSchema.statics.householdMemberIds = async function(userId) {
+  requireUser(userId);
+  const own = await this.findOne({ user_id: userId }).select('household.household_id').lean();
+  const householdId = own?.household?.household_id;
+  if (!householdId) return [];
+  const members = await this.find({ 'household.household_id': householdId, user_id: { $ne: userId } })
+    .select('user_id')
+    .lean();
+  return members.map((m) => String(m.user_id)).filter(Boolean);
+};
+
 export default fitnessConn.model('UserSettings', userSettingsSchema);
