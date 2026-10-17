@@ -5,5 +5,5 @@ export {
   GEEK_TOAST_MAX,
   GeekToastProvider,
 } from './GeekToastProvider.jsx';
-export { GeekToastContext, useToast } from './toastContext.js';
+export { GeekToastClearanceContext, GeekToastContext, useGeekToastClearance, useToast } from './toastContext.js';
 export { GeekUpdateIndicator, useServiceWorkerUpdating } from './GeekUpdateIndicator.jsx';

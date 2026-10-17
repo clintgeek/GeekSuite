@@ -7,9 +7,11 @@ export {
   GEEK_TOAST_MAX,
   GeekEmptyState,
   GeekErrorState,
+  GeekToastClearanceContext,
   GeekToastContext,
   GeekToastProvider,
   GeekUpdateIndicator,
+  useGeekToastClearance,
   useServiceWorkerUpdating,
   useToast,
 } from './feedback';

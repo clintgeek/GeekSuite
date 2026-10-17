@@ -18,20 +18,34 @@
  *     `GeekBottomNav`.
  *   - **At most three at once.** A fourth message evicts the oldest rather
  *     than growing a column that eats the screen.
+ *   - **One column, never side by side.** The stack is an explicit flex
+ *     column. Two toasts used to sit in a row on a phone, the second clipped
+ *     off the right edge.
+ *   - **Above a sheet's sticky footer.** A sheet's "Done" ribbon or Save bar
+ *     registers with `useGeekToastClearance(ref)` and the stack rises above
+ *     it, so a ten-second toast never covers the button under the thumb.
+ *   - **Inside the open dialog.** A modal marks everything outside itself
+ *     `aria-hidden` and traps focus, so a toast rendered at the app root was
+ *     invisible to a screen reader and its Undo couldn't be reached by Tab.
+ *     While a dialog or drawer is open, the stack is portalled into that
+ *     modal's focus-trapped content; it moves back out as soon as the modal
+ *     starts to close, so it never fades or slides away with it.
+ *     Menus and popovers don't count, they're too brief to host anything.
  *
  * One `Snackbar` holds the stack. MUI's own `autoHideDuration` is per-Snackbar
  * and would expire the whole stack together, so each toast carries its own
  * timer.
  */
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import IconButton from '@mui/material/IconButton';
+import Portal from '@mui/material/Portal';
 import Snackbar from '@mui/material/Snackbar';
 import Stack from '@mui/material/Stack';
 import { geekLayout } from '../designTokens.js';
 import { useGeekShell } from '../navigation/shellContext.js';
-import { GeekToastContext } from './toastContext.js';
+import { GeekToastClearanceContext, GeekToastContext, activeModalHost, openModals, trapRootOf } from './toastContext.js';
 
 export const GEEK_TOAST_MAX = 3;
 export const GEEK_TOAST_DURATION = 4000;
@@ -39,6 +53,47 @@ export const GEEK_TOAST_DURATION = 4000;
 const TONES = new Set(['info', 'success', 'warning', 'error']);
 
 let nextId = 0;
+
+// Server render and the first client paint have no DOM to measure.
+const useIsoLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
+
+/** Follows `activeModalHost()` while `watching`: modals come and go under it. */
+function useModalHost(watching) {
+  const [host, setHost] = useState(null);
+  useIsoLayoutEffect(() => {
+    if (!watching || typeof document === 'undefined') {
+      setHost(null);
+      return undefined;
+    }
+    if (typeof MutationObserver !== 'function') {
+      setHost(activeModalHost(document));
+      return undefined;
+    }
+    // A closing modal says so in its trap root's inline style; watch just
+    // those few elements' style, never the whole page's.
+    const leaving = new MutationObserver(() => setHost(activeModalHost(document)));
+    const update = () => {
+      leaving.disconnect();
+      openModals(document).forEach((modal) => {
+        leaving.observe(trapRootOf(modal), { attributes: true, attributeFilter: ['style'] });
+      });
+      setHost(activeModalHost(document));
+    };
+    update();
+    // Modals mount and unmount as children of <body>; one stacked on top of
+    // another flips the lower one's aria-hidden.
+    const added = new MutationObserver(update);
+    added.observe(document.body, { childList: true });
+    const hidden = new MutationObserver(update);
+    hidden.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['aria-hidden'] });
+    return () => {
+      added.disconnect();
+      hidden.disconnect();
+      leaving.disconnect();
+    };
+  }, [watching]);
+  return host;
+}
 
 /**
  * MUI's `Alert` gives you the close button *or* a custom `action`, never both,
@@ -77,6 +132,29 @@ export function GeekToastProvider({
   const [toasts, setToasts] = useState([]);
   const timers = useRef(new Map());
   const { isMobile, hasNav, bottomInset } = useGeekShell();
+
+  // Sticky footers the stack must clear (useGeekToastClearance).
+  const clearances = useRef(new Set());
+  const [lift, setLift] = useState(0);
+  const remeasure = useCallback(() => {
+    let most = 0;
+    clearances.current.forEach((measure) => {
+      most = Math.max(most, Number(measure()) || 0);
+    });
+    setLift(Math.round(most));
+  }, []);
+  const register = useCallback(
+    (measure) => {
+      clearances.current.add(measure);
+      remeasure();
+      return () => {
+        clearances.current.delete(measure);
+        remeasure();
+      };
+    },
+    [remeasure]
+  );
+  const clearance = useMemo(() => ({ register, remeasure }), [register, remeasure]);
 
   const clearTimer = useCallback((id) => {
     const handle = timers.current.get(id);
@@ -142,57 +220,78 @@ export function GeekToastProvider({
 
   const value = useMemo(() => ({ notify, dismiss }), [notify, dismiss]);
 
+  const showing = toasts.length > 0;
+  const host = useModalHost(showing);
+  // A toast arriving is the moment the footer's place matters most.
+  useIsoLayoutEffect(() => {
+    if (showing) remeasure();
+  }, [showing, toasts.length, remeasure]);
+
   const origin =
     anchorOrigin || { vertical: 'bottom', horizontal: isMobile ? 'center' : 'left' };
   const clearsSidebar = !isMobile && hasNav && origin.horizontal === 'left';
+  // A full-screen sheet covers the bottom nav, so inside a modal its height
+  // is no longer in the way. The footer clearance already counts everything
+  // below the footer's top, so it replaces the default gap rather than adding.
+  const navGap = (host ? 0 : bottomInset) + 24;
+  const bottom = Math.max(navGap, lift + 8);
+
+  const snackbar = (
+    <Snackbar
+      open={showing}
+      anchorOrigin={origin}
+      data-geek-toasts
+      sx={{
+        // `bottomInset` is the GeekBottomNav's height when one is mounted;
+        // the safe-area inset keeps the stack off the iOS home indicator.
+        bottom: lift > 0 ? `${bottom}px` : `calc(${bottom}px + env(safe-area-inset-bottom, 0px))`,
+        ...(clearsSidebar
+          ? { left: `${geekLayout.sidebarWidth + 24}px` }
+          : null),
+        ...sx,
+      }}
+    >
+      <Box
+        data-geek-toast-stack
+        sx={{ display: 'flex', flexDirection: 'column', gap: '8px', width: '100%', maxWidth: 480, minWidth: 0 }}
+      >
+        {toasts.map((toast) => (
+          <Alert
+            key={toast.id}
+            severity={toast.severity}
+            variant="standard"
+            data-geek-toast={toast.severity}
+            onClose={toast.action ? undefined : () => dismiss(toast.id)}
+            action={
+              toast.action ? (
+                <Stack direction="row" spacing={0.5} alignItems="center">
+                  {toast.action}
+                  <IconButton
+                    size="small"
+                    color="inherit"
+                    aria-label="Dismiss"
+                    onClick={() => dismiss(toast.id)}
+                  >
+                    <CloseGlyph />
+                  </IconButton>
+                </Stack>
+              ) : undefined
+            }
+            sx={{ alignItems: 'center', boxShadow: 3 }}
+          >
+            {toast.message}
+          </Alert>
+        ))}
+      </Box>
+    </Snackbar>
+  );
 
   return (
     <GeekToastContext.Provider value={value}>
-      {children}
-      <Snackbar
-        open={toasts.length > 0}
-        anchorOrigin={origin}
-        data-geek-toasts
-        sx={{
-          // `bottomInset` is the GeekBottomNav's height when one is mounted;
-          // the safe-area inset keeps the stack off the iOS home indicator.
-          bottom: `calc(${bottomInset + 24}px + env(safe-area-inset-bottom, 0px))`,
-          ...(clearsSidebar
-            ? { left: `${geekLayout.sidebarWidth + 24}px` }
-            : null),
-          ...sx,
-        }}
-      >
-        <Stack spacing={1} sx={{ width: '100%', maxWidth: 480 }}>
-          {toasts.map((toast) => (
-            <Alert
-              key={toast.id}
-              severity={toast.severity}
-              variant="standard"
-              data-geek-toast={toast.severity}
-              onClose={toast.action ? undefined : () => dismiss(toast.id)}
-              action={
-                toast.action ? (
-                  <Stack direction="row" spacing={0.5} alignItems="center">
-                    {toast.action}
-                    <IconButton
-                      size="small"
-                      color="inherit"
-                      aria-label="Dismiss"
-                      onClick={() => dismiss(toast.id)}
-                    >
-                      <CloseGlyph />
-                    </IconButton>
-                  </Stack>
-                ) : undefined
-              }
-              sx={{ alignItems: 'center', boxShadow: 3 }}
-            >
-              {toast.message}
-            </Alert>
-          ))}
-        </Stack>
-      </Snackbar>
+      <GeekToastClearanceContext.Provider value={clearance}>
+        {children}
+        {host ? <Portal container={host}>{snackbar}</Portal> : snackbar}
+      </GeekToastClearanceContext.Provider>
     </GeekToastContext.Provider>
   );
 }
