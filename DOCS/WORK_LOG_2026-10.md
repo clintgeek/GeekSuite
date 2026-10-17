@@ -491,5 +491,6 @@ Built from a production audit of the whole pipeline.
     this commit.
   - A frontend that lands before the gateway gets a 400 on a calorie edit for a few minutes.
   - No new env vars, so no `docker compose up -d` is needed.
-  - **CalorieNinjas needs a new key (Chef).**
+  - CalorieNinjas: removed as a source (`57175fa4`). It became API Ninjas, whose free tier
+    locks calories and protein. Chef: "Well fuck them then."
 - **Left over:** `DOCS/SUITE_TODO.md` §4, "Follow-ups from the FitnessGeek review fixes".
