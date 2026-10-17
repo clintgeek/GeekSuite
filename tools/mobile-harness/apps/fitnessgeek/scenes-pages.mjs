@@ -462,18 +462,37 @@ const chartBox = (page, testid) => page.locator(`[data-testid="${testid}"] + *`)
 
 // Tap the right half of a chart on a phone and check the tooltip stays inside
 // the card and keeps its words on one line each.
+/** The chart's box once it has stopped moving (smooth scroll, nivo animating in). */
+async function stableBox(box, h) {
+  let b = null;
+  for (let i = 0; i < 20; i++) {
+    const next = await box.boundingBox();
+    if (next && b && Math.abs(next.x - b.x) < 0.5 && Math.abs(next.y - b.y) < 0.5 && Math.abs(next.height - b.height) < 0.5) return next;
+    b = next;
+    await h.settle(100);
+  }
+  return b;
+}
+
 async function tapChartTooltip(page, h, box) {
   // Measure only once the chart has stopped moving: right after a smooth
   // scroll, and while nivo animates in, the box drifts, and a tap aimed at the
   // old box lands beside the chart (flaky 53d/53e, 2026-10-18).
-  let b = null;
-  for (let i = 0; i < 20; i++) {
-    const next = await box.boundingBox();
-    if (next && b && Math.abs(next.x - b.x) < 0.5 && Math.abs(next.y - b.y) < 0.5 && Math.abs(next.height - b.height) < 0.5) break;
-    b = next;
-    await h.settle(100);
-  }
+  let b = await stableBox(box, h);
   if (!b) throw new Error('chart has no box');
+  // On a shorter viewport (CI's runner) the chart's middle can sit under the
+  // fixed bottom nav, and the tap lands on the nav. Put the middle at ~40%.
+  const vh = page.viewportSize()?.height || 800;
+  const mid = b.y + b.height * 0.5;
+  if (mid < vh * 0.2 || mid > vh * 0.65) {
+    await page.evaluate((dy) => {
+      const root = document.scrollingElement;
+      const main = document.querySelector('main');
+      (main && main.scrollHeight > main.clientHeight ? main : root).scrollBy(0, dy);
+    }, Math.round(mid - vh * 0.4));
+    b = await stableBox(box, h);
+    if (!b) throw new Error('chart has no box after scrolling');
+  }
   const tipLoc = page.locator('[data-testid="chart-tooltip"]');
   // A plain tap must be enough. A touch pointer "leaves" as the finger
   // lifts, and that used to disarm the tooltip the tap had just armed, so it
@@ -481,8 +500,8 @@ async function tapChartTooltip(page, h, box) {
   // ONE plain tap at a fresh point; if taps stop arming the tooltip, all fail.
   for (const fx of [0.7, 0.55, 0.85]) {
     await page.touchscreen.tap(b.x + b.width * fx, b.y + b.height * 0.5);
-    await h.settle(700);
-    if (await tipLoc.count()) break;
+    // A slow runner can take well over 700 ms to draw it; wait for it.
+    if (await tipLoc.first().waitFor({ state: 'attached', timeout: 2000 }).then(() => true, () => false)) break;
   }
   await need(tipLoc, 'the tooltip after a plain tap');
   const tip = tipLoc;
