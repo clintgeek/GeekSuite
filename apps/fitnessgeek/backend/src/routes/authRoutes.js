@@ -27,6 +27,22 @@ const upstreamTimeoutMs = () => {
   return Number.isFinite(raw) && raw > 0 ? raw : DEFAULT_UPSTREAM_TIMEOUT_MS;
 };
 
+/**
+ * Clear a leftover legacy `geek_refresh` cookie so it can never be read
+ * again. It may have been set host-only or on the parent domain, so both
+ * are expired. Appended to whatever basegeek set, never replacing it.
+ */
+function expireLegacyRefreshCookie(req, res) {
+  if (!req.cookies?.geek_refresh) return;
+  const host = req.hostname || '';
+  const parent = host.split('.').slice(-2).join('.');
+  const expired = ['geek_refresh=; Path=/; Max-Age=0; HttpOnly; Secure; SameSite=Lax'];
+  if (parent && parent !== host) expired.push(`geek_refresh=; Path=/; Domain=.${parent}; Max-Age=0; HttpOnly; Secure; SameSite=Lax`);
+  const existing = res.getHeader('Set-Cookie');
+  const list = existing ? (Array.isArray(existing) ? existing : [existing]) : [];
+  res.setHeader('Set-Cookie', [...list, ...expired]);
+}
+
 function forwardSetCookieHeaders(req, res, upstreamHeaders) {
   const setCookie = upstreamHeaders && upstreamHeaders['set-cookie'];
   if (!setCookie) return;
@@ -122,9 +138,13 @@ router.post('/register', async (req, res, next) => {
 
 router.post('/refresh', async (req, res) => {
   try {
-    const bodyRefreshToken = req.body?.refreshToken;
-    const cookieRefreshToken = req.cookies?.geek_refresh || req.cookies?.geek_refresh_token;
-    const refreshToken = bodyRefreshToken || cookieRefreshToken;
+    // basegeek sets and rotates ONLY `geek_refresh_token` (the same name every
+    // other app proxy reads). This used to prefer a legacy `geek_refresh`
+    // cookie, and a browser still holding one replayed that stale token on
+    // every refresh: basegeek saw rotation reuse, revoked the whole session,
+    // and the app bounced to sign-in even right after logging in
+    // (2026-10-17). Cookie first, body as a fallback, like basegeek.
+    const refreshToken = req.cookies?.geek_refresh_token || req.body?.refreshToken;
     const app = req.body?.app || APP_NAME;
 
     const payload = { app };
@@ -139,6 +159,7 @@ router.post('/refresh', async (req, res) => {
     );
 
     forwardSetCookieHeaders(req, res, response.headers);
+    expireLegacyRefreshCookie(req, res);
     res.setHeader('Cache-Control', 'no-store');
     return res.status(response.status).json(response.data);
   } catch (error) {
