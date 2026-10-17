@@ -3,10 +3,9 @@
  * Where a toast lands, and whether it can be reached (FitnessGeek d-fixes,
  * 2026-10-17; the harness found all three on a phone):
  *
- *   - while a dialog is open, the stack lives inside the dialog's focus-trapped
- *     content, never under the modal's `aria-hidden` — a screen reader
- *     couldn't reach the toast's Undo, and Tab couldn't either;
- *   - it moves back out to the page when the dialog closes;
+ *   - the stack always renders at the page root, never inside a dialog: a
+ *     toast fired as a sheet closes used to mount inside the closing sheet and
+ *     hop, and a quick tap on Undo hit a detached button (BookGeek lastRead);
  *   - a sticky footer registered with `useGeekToastClearance` pushes the stack
  *     above it — the ten-second toast used to cover a sheet's Done;
  *   - the stack is one flex column.
@@ -19,7 +18,7 @@ import { act, useRef, useEffect } from 'react';
 import { createRoot } from 'react-dom/client';
 import Dialog from '@mui/material/Dialog';
 import { GeekToastProvider } from '../feedback/GeekToastProvider.jsx';
-import { activeModalHost, useGeekToastClearance, useToast } from '../feedback/toastContext.js';
+import { useGeekToastClearance, useToast } from '../feedback/toastContext.js';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -62,36 +61,29 @@ afterEach(async () => {
 });
 
 describe('a toast while a dialog is open', () => {
-  it('renders inside the dialog, not under its aria-hidden', async () => {
+  it('renders at the page root, not inside the dialog', async () => {
     await mount(<Dialog open onClose={() => {}}><button type="button">Inside</button></Dialog>);
-    await act(async () => { api.notify('Added to lunch ✓', { action: <button type="button">Undo</button> }); });
-    const el = toast();
-    expect(el).toBeTruthy();
-    expect(el.closest('[aria-hidden="true"]')).toBeNull();
-    expect(el.closest('.MuiDialog-root')).toBeTruthy();
-    // Inside the focus trap's root, so Tab can reach Undo.
-    expect(el.closest('.MuiDialog-container')).toBeTruthy();
+    await act(async () => { api.notify('Added to lunch ✓', { duration: 0 }); });
+    expect(toast()).toBeTruthy();
+    expect(toast().closest('.MuiDialog-root')).toBeNull();
   });
 
-  it('goes back to the page once the dialog is gone', async () => {
+  it("fired as the dialog closes, its Undo is the same button before and after — and it works", async () => {
+    let undone = 0;
     function Page({ open }) {
       return <Dialog open={open} onClose={() => {}} transitionDuration={0}><p>Sheet</p></Dialog>;
     }
     await mount(<Page open />);
-    await act(async () => { api.notify('Saved', { duration: 0 }); });
-    expect(toast().closest('.MuiDialog-root')).toBeTruthy();
+    await act(async () => {
+      api.notify('Moved to Read', { duration: 0, action: <button type="button" onClick={() => { undone += 1; }}>Undo</button> });
+    });
+    const before = Array.from(document.querySelectorAll('button')).find((b) => b.textContent === 'Undo');
     await act(async () => { root.render(<GeekToastProvider><Grab /><Page open={false} /></GeekToastProvider>); });
-    await act(async () => { await new Promise((r) => setTimeout(r, 20)); });
-    expect(toast()).toBeTruthy();
-    expect(toast().closest('.MuiDialog-root')).toBeNull();
-    expect(toast().closest('[aria-hidden="true"]')).toBeNull();
-  });
-
-  it('a menu or popover is never the host', () => {
-    const popover = document.createElement('div');
-    popover.className = 'MuiPopover-root MuiModal-root';
-    document.body.appendChild(popover);
-    expect(activeModalHost(document)).toBeNull();
+    const after = Array.from(document.querySelectorAll('button')).find((b) => b.textContent === 'Undo');
+    expect(after).toBe(before);
+    expect(before.isConnected).toBe(true);
+    await act(async () => { before.click(); });
+    expect(undone).toBe(1);
   });
 });
 
@@ -119,20 +111,5 @@ describe('the stack', () => {
     const stack = document.querySelectorAll('[data-geek-toast]')[0].parentElement;
     expect(window.getComputedStyle(stack).flexDirection).toBe('column');
     expect(document.querySelectorAll('[data-geek-toast]')).toHaveLength(2);
-  });
-});
-
-describe('a dialog on its way out', () => {
-  it('is not a host: a toast arriving as it closes lands on the page', async () => {
-    function Page({ open }) {
-      return <Dialog open={open} onClose={() => {}} transitionDuration={10000}><p>Sheet</p></Dialog>;
-    }
-    await mount(<Page open />);
-    await act(async () => { root.render(<GeekToastProvider><Grab /><Page open={false} /></GeekToastProvider>); });
-    // Still mounted, fading out.
-    expect(document.querySelector('.MuiDialog-root')).toBeTruthy();
-    await act(async () => { api.notify('Added to lunch ✓', { duration: 0 }); });
-    expect(toast()).toBeTruthy();
-    expect(toast().closest('.MuiDialog-root')).toBeNull();
   });
 });

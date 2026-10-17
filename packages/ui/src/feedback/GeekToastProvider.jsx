@@ -24,13 +24,13 @@
  *   - **Above a sheet's sticky footer.** A sheet's "Done" ribbon or Save bar
  *     registers with `useGeekToastClearance(ref)` and the stack rises above
  *     it, so a ten-second toast never covers the button under the thumb.
- *   - **Inside the open dialog.** A modal marks everything outside itself
- *     `aria-hidden` and traps focus, so a toast rendered at the app root was
- *     invisible to a screen reader and its Undo couldn't be reached by Tab.
- *     While a dialog or drawer is open, the stack is portalled into that
- *     modal's focus-trapped content; it moves back out as soon as the modal
- *     starts to close, so it never fades or slides away with it.
- *     Menus and popovers don't count, they're too brief to host anything.
+ *   - **Always at the root, never portalled into a dialog.** Portalling the
+ *     stack into the open modal (so screen readers could reach Undo) was tried
+ *     on 2026-10-17 and pulled the same day: a toast fired as a sheet closed
+ *     mounted inside the closing sheet, then hopped to the next container, and
+ *     a quick tap on Undo during the hop hit a detached button (BookGeek's
+ *     lastRead tests caught it; FitnessGeek's describe-then-close has the same
+ *     shape). The Snackbar layer already sits above modals visually.
  *
  * One `Snackbar` holds the stack. MUI's own `autoHideDuration` is per-Snackbar
  * and would expire the whole stack together, so each toast carries its own
@@ -40,12 +40,11 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 import Alert from '@mui/material/Alert';
 import Box from '@mui/material/Box';
 import IconButton from '@mui/material/IconButton';
-import Portal from '@mui/material/Portal';
 import Snackbar from '@mui/material/Snackbar';
 import Stack from '@mui/material/Stack';
 import { geekLayout } from '../designTokens.js';
 import { useGeekShell } from '../navigation/shellContext.js';
-import { GeekToastClearanceContext, GeekToastContext, activeModalHost, openModals, trapRootOf } from './toastContext.js';
+import { GeekToastClearanceContext, GeekToastContext } from './toastContext.js';
 
 export const GEEK_TOAST_MAX = 3;
 export const GEEK_TOAST_DURATION = 4000;
@@ -56,44 +55,6 @@ let nextId = 0;
 
 // Server render and the first client paint have no DOM to measure.
 const useIsoLayoutEffect = typeof window === 'undefined' ? useEffect : useLayoutEffect;
-
-/** Follows `activeModalHost()` while `watching`: modals come and go under it. */
-function useModalHost(watching) {
-  const [host, setHost] = useState(null);
-  useIsoLayoutEffect(() => {
-    if (!watching || typeof document === 'undefined') {
-      setHost(null);
-      return undefined;
-    }
-    if (typeof MutationObserver !== 'function') {
-      setHost(activeModalHost(document));
-      return undefined;
-    }
-    // A closing modal says so in its trap root's inline style; watch just
-    // those few elements' style, never the whole page's.
-    const leaving = new MutationObserver(() => setHost(activeModalHost(document)));
-    const update = () => {
-      leaving.disconnect();
-      openModals(document).forEach((modal) => {
-        leaving.observe(trapRootOf(modal), { attributes: true, attributeFilter: ['style'] });
-      });
-      setHost(activeModalHost(document));
-    };
-    update();
-    // Modals mount and unmount as children of <body>; one stacked on top of
-    // another flips the lower one's aria-hidden.
-    const added = new MutationObserver(update);
-    added.observe(document.body, { childList: true });
-    const hidden = new MutationObserver(update);
-    hidden.observe(document.body, { subtree: true, attributes: true, attributeFilter: ['aria-hidden'] });
-    return () => {
-      added.disconnect();
-      hidden.disconnect();
-      leaving.disconnect();
-    };
-  }, [watching]);
-  return host;
-}
 
 /**
  * MUI's `Alert` gives you the close button *or* a custom `action`, never both,
@@ -221,7 +182,6 @@ export function GeekToastProvider({
   const value = useMemo(() => ({ notify, dismiss }), [notify, dismiss]);
 
   const showing = toasts.length > 0;
-  const host = useModalHost(showing);
   // A toast arriving is the moment the footer's place matters most.
   useIsoLayoutEffect(() => {
     if (showing) remeasure();
@@ -230,10 +190,9 @@ export function GeekToastProvider({
   const origin =
     anchorOrigin || { vertical: 'bottom', horizontal: isMobile ? 'center' : 'left' };
   const clearsSidebar = !isMobile && hasNav && origin.horizontal === 'left';
-  // A full-screen sheet covers the bottom nav, so inside a modal its height
-  // is no longer in the way. The footer clearance already counts everything
-  // below the footer's top, so it replaces the default gap rather than adding.
-  const navGap = (host ? 0 : bottomInset) + 24;
+  // The footer clearance already counts everything below the footer's top,
+  // so it replaces the default gap rather than adding to it.
+  const navGap = bottomInset + 24;
   const bottom = Math.max(navGap, lift + 8);
 
   const snackbar = (
@@ -290,7 +249,7 @@ export function GeekToastProvider({
     <GeekToastContext.Provider value={value}>
       <GeekToastClearanceContext.Provider value={clearance}>
         {children}
-        {host ? <Portal container={host}>{snackbar}</Portal> : snackbar}
+        {snackbar}
       </GeekToastClearanceContext.Provider>
     </GeekToastContext.Provider>
   );

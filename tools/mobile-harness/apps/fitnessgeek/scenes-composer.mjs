@@ -388,13 +388,17 @@ export const scenes = [
     fn: async (page, h, sheet) => {
       await (await must(sheet.getByTestId('same-as-household'), 'the household pick')).click();
       await h.settle(1000);
-      // The toast used to render outside the sheet, under the modal's
-      // aria-hidden, so a screen reader couldn't reach its Undo (d-fixes).
-      // getByRole only finds what the accessibility tree exposes.
-      const hidden = await page.locator('[data-geek-toast]').first().evaluate((el) => Boolean(el.closest('[aria-hidden="true"]')));
-      if (hidden) throw new Error('the toast is under aria-hidden while the sheet is open');
-      await must(page.getByRole('alert').getByRole('button', { name: 'Undo' }), 'the toast Undo, reachable by role');
-      await must(sheet.getByTestId('session-ribbon'), 'the ribbon');
+      // The toast stays at the page root (portalling it into the sheet was
+      // pulled: it hopped as the sheet closed). It must be visible, carry
+      // Undo, and sit clear of the ribbon's Done.
+      const toastEl = await must(page.locator('[data-geek-toast]').first(), 'the toast');
+      await must(page.locator('[data-geek-toast] button', { hasText: 'Undo' }).first(), 'the toast Undo');
+      const ribbon = await must(sheet.getByTestId('session-ribbon'), 'the ribbon');
+      const t = await toastEl.boundingBox();
+      const r = await ribbon.boundingBox();
+      if (t && r && t.y + t.height > r.y + 1 && t.y < r.y + r.height - 1) {
+        throw new Error(`the toast overlaps the ribbon: toast ${Math.round(t.y)}-${Math.round(t.y + t.height)} ribbon ${Math.round(r.y)}-${Math.round(r.y + r.height)}`);
+      }
     },
   }),
 
