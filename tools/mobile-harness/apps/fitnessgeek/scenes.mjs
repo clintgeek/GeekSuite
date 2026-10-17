@@ -2,16 +2,13 @@
 // AI quick-add scene (R115/R126). Scenes are independent: any scene that
 // needs a dialog open re-navigates and re-opens it rather than relying on a
 // previous scene's state.
-import { json, graphqlRoute } from '../../lib/net.mjs';
-import { OPS, FOODS, SETTINGS, BODY_COMP_SUMMARY_EARLY, BODY_COMP_SCANS_EARLY, opsWithPlan, heatherOps, SUGGEST_FAGE, DEEP_FAGE, SUGGEST_SOUP, DESCRIBED_SOUP } from './fixtures.mjs';
+import { json } from '../../lib/net.mjs';
+import { OPS, FOODS, BODY_COMP_SUMMARY_EARLY, BODY_COMP_SCANS_EARLY, opsWithPlan, experienceOf, DESCRIBED_SOUP } from './fixtures.mjs';
+import {
+  must, withPageOps, scrollToSection, HEATHER, SPEECH_STUB, heatherScene, foodRoutes, dropFoodRoutes,
+  soupSuggest, fageSuggest, fageDeep, composerScene, typeInto, SOUP, YESTERDAY,
+} from './helpers.mjs';
 
-// The weight, dashboard and wizard scenes THROW when their anchor is missing instead of
-// returning false: a skip is silent (see scene 11's note), and these exist
-// to prove specific UI is on screen.
-const must = async (locator, what) => {
-  if (!(await locator.count())) throw new Error(`missing: ${what}`);
-  return locator;
-};
 
 // A saved recipe for the My Foods scenes: 6 servings, three ingredients, one
 // of them an AI estimate. Nutrition is what the gateway would compute.
@@ -34,18 +31,6 @@ const CHILI = {
   },
 };
 
-// A page-scoped GraphQL stub for one scene. page.route() beats ctx.route(),
-// so it is dropped again whether setup succeeds or throws — the runner skips
-// teardown on a throw, and one page serves every scene of a viewport.
-async function withPageOps(page, ops, fn) {
-  await graphqlRoute(page, ops);
-  try {
-    return await fn();
-  } catch (err) {
-    await page.unroute('**/graphql');
-    throw err;
-  }
-}
 
 // A saved plan calculated after the BMR fix, from Mifflin — so the stale
 // banner stands down and the measured-BMR offer can show.
@@ -57,26 +42,6 @@ const SCAN_PLAN = {
   bmr: 1749, tdee: 2711, daily_calorie_target: 2211, weekly_schedule: Array(7).fill(2211),
 };
 
-// Scroll a section to just under the sticky top bar, then let the lazy chart
-// in it arrive. THROWS when the anchor is missing: a scene that returns false
-// is skipped silently (scene 11's note), and a missing section is a regression.
-async function scrollToSection(page, h, selector, offset = 72) {
-  const el = page.locator(selector).first();
-  if (!(await el.count())) throw new Error(`missing: ${selector}`);
-  // scrollIntoView finds whichever ancestor actually scrolls (the shell's
-  // main pane, not necessarily the window), then that ancestor backs off by
-  // `offset` so the sticky top bar does not sit on the section's heading.
-  await el.evaluate((node, off) => {
-    node.scrollIntoView({ block: 'start' });
-    let p = node.parentElement;
-    while (p && !(p.scrollHeight > p.clientHeight && /(auto|scroll)/.test(getComputedStyle(p).overflowY))) {
-      p = p.parentElement;
-    }
-    (p || document.scrollingElement).scrollBy(0, -off);
-  }, offset);
-  await h.settle(1200);
-  return true;
-}
 
 // The opt-in is server-side now (`ai.features.natural_language_food_logging`
 // on the settings document, R124 — see
@@ -87,22 +52,26 @@ async function scrollToSection(page, h, selector, offset = 72) {
 // for a matching request — README "Night 2"), and must stay the LAST scene
 // in the file for the same reason.
 
+// The wizard scenes are Full's: in Simple, /calorie-wizard opens the one-screen
+// quick target instead (wave A). Chef is Full by the default rule (he has
+// logs), but these say so outright rather than lean on it.
+const FULL_USER = { GetFitnessExperience: experienceOf({ mode: 'full', first_run_done: true }) };
+
 export const scenes = [
   { name: '01-home', goto: '/dashboard', wait: 1600 },
   { name: '02-log', goto: '/food-log', wait: 1600 },
   {
     // The FAB opens the food dialog with the meal pre-picked from the clock.
+    // Phone only: desktop has no FAB (it used to skip there silently).
     name: '03-food-dialog',
+    viewports: ['phone'],
     goto: '/food-log',
     wait: 1600,
     async setup(page, h) {
-      const fab = page.getByRole('button', { name: /log food/i }).first();
-      if (!(await fab.count())) {
-        h.log('no "Log food" FAB found at', h.viewport, h.scheme);
-        return false;
-      }
+      const fab = await must(page.getByRole('button', { name: /log food/i }).first(), 'the "Log food" FAB');
       await fab.click();
       await h.settle(900);
+      await must(page.getByRole('dialog'), 'the add sheet');
     },
     teardown: (page, h) => h.esc(),
   },
@@ -114,10 +83,10 @@ export const scenes = [
     async setup(page, h) {
       // Copy Meal moved out of the stacked row ahead of the date and under
       // the meals, in words (SIMPLE_AND_FULL_PLAN.md item 8).
-      const copy = page.getByRole('button', { name: /copy a meal/i }).first();
-      if (!(await copy.count())) return false;
+      const copy = await must(page.getByRole('button', { name: /copy a meal/i }).first(), 'Copy a meal');
       await copy.click();
       await h.settle(800);
+      await must(page.getByRole('dialog'), 'Copy Meal dialog');
     },
     teardown: (page, h) => h.esc(400),
   },
@@ -178,26 +147,27 @@ export const scenes = [
     wait: 1600,
     viewports: ['phone'],
     async setup(page, h) {
-      const wfab = page.getByRole('button', { name: /log weight/i }).first();
-      if (!(await wfab.count())) return false;
+      const wfab = await must(page.getByRole('button', { name: /log weight/i }).first(), 'the "Log weight" FAB');
       await wfab.click();
       await h.settle(800);
+      await must(page.getByRole('dialog'), 'weight dialog');
     },
     teardown: (page, h) => h.esc(400),
   },
   // Blood pressure, with its FAB.
   { name: '07-bp', goto: '/blood-pressure', wait: 1800 },
-  // Reports: averages coverage line, and the day ribbon WITH targets — its
-  // compliance legend only renders when targets exist (none did until
-  // 2026-09-23), so this is the first time it gets a contrast check.
+  // Reports: Food comes first now — the averages coverage line, and the day
+  // ribbon WITH targets. The ribbon's "Goal:" legend went in wave A; each day
+  // card says its status in words instead ("a bit over", "over"), so that is
+  // the anchor, and the meal rows carry protein.
   {
     name: '07r-reports',
     goto: '/reports',
     wait: 1800,
     async setup(page, h) {
-      await must(page.getByText('Goal:').first(), 'day ribbon compliance legend');
-      // Body & recovery now sits above the food report; scroll past it so
-      // this shot is still of the averages and the ribbon.
+      await must(page.locator('[data-testid="reports-food"]'), 'the Food section');
+      await must(page.locator('[data-testid="day-status"]').first(), 'day ribbon status words');
+      await must(page.locator('[data-testid="meal-row"]').first(), 'meal rows');
       await scrollToSection(page, h, '[data-testid="report-days-logged"]', 96);
     },
   },
@@ -238,27 +208,33 @@ export const scenes = [
     wait: 1800,
     viewports: ['phone'],
     async setup(page, h) {
-      const bfab = page.getByRole('button', { name: /^log (bp|blood pressure)$/i }).first();
-      if (!(await bfab.count())) return false;
+      // It used to skip silently (no PNG for weeks); now a missing FAB fails.
+      const bfab = await must(page.getByRole('button', { name: /^log (bp|blood pressure)$/i }).first(), 'the "Log blood pressure" FAB');
       await bfab.click();
       await h.settle(800);
+      await must(page.getByRole('dialog', { name: /log blood pressure/i }), 'BP dialog');
     },
     teardown: (page, h) => h.esc(400),
   },
-  // Profile: the Edit Profile dialog is another PremiumDialog conversion, and
-  // the page hosts HouseholdSettings' three converted dialogs.
-  { name: '09-profile', goto: '/profile', wait: 1400 },
+  // Profile folded into Settings in wave A: /profile still works and lands on
+  // the "About you" section (#you). 09 proves the redirect; 10 is the section
+  // itself, scrolled under the top bar — the old Edit Profile dialog is gone.
   {
-    name: '10-profile-edit',
+    name: '09-profile',
     goto: '/profile',
     wait: 1400,
-    async setup(page, h) {
-      const edit = page.getByRole('button', { name: /edit profile/i }).first();
-      if (!(await edit.count())) return false;
-      await edit.click();
-      await h.settle(800);
+    async setup(page) {
+      if (!/\/settings#you$/.test(page.url())) throw new Error(`/profile landed on ${page.url()}, not /settings#you`);
+      await must(page.locator('[data-testid="about-you"]'), 'About you');
     },
-    teardown: (page, h) => h.esc(400),
+  },
+  {
+    name: '10-settings-about-you',
+    goto: '/settings#you',
+    wait: 1400,
+    async setup(page, h) {
+      await scrollToSection(page, h, '[data-testid="about-you"]', 88);
+    },
   },
   {
     /*
@@ -380,7 +356,7 @@ export const scenes = [
     // Calorie wizard over a saved plan built from the scans: the metabolism
     // card names the source (plan D1).
     name: '16-wizard-scan-source',
-    setup: (page, h) => withPageOps(page, opsWithPlan(SCAN_PLAN), async () => {
+    setup: (page, h) => withPageOps(page, opsWithPlan(SCAN_PLAN, FULL_USER), async () => {
       await page.goto(h.base + '/calorie-wizard', { waitUntil: 'networkidle' });
       await h.settle(1600);
       await must(page.locator('[data-testid="bmr-source"][data-source="scan"]'), 'scan BMR source note');
@@ -399,7 +375,7 @@ export const scenes = [
       plan_type: 'weekender',
       weekly_schedule: [1764, 1764, 1764, 1764, 1764, 2415, 2415],
       daily_calorie_target: 1950,
-    }), async () => {
+    }, FULL_USER), async () => {
       await page.goto(h.base + '/calorie-wizard', { waitUntil: 'networkidle' });
       await h.settle(1600);
       await (await must(page.getByRole('button', { name: /^change plan$/i }).first(), 'Change plan')).click();
@@ -446,34 +422,6 @@ export const scenes = [
 // Page-scoped stubs again, so these sit after everything above. Heather is
 // the Simple face: no logs of any kind, two medications. The scenes THROW on
 // a missing anchor — a skip would say PASS while covering nothing.
-const HEATHER = { mode: 'simple', first_run_done: true, preferred_name: 'Heather' };
-
-// A recognizer the page can detect, so the microphone renders the same way
-// whether or not this Chromium build exposes the Web Speech API. The shot is
-// of the mic's idle state; nothing here listens.
-const SPEECH_STUB = () => {
-  if (!window.SpeechRecognition && !window.webkitSpeechRecognition) {
-    window.webkitSpeechRecognition = class {
-      start() {}
-      stop() {}
-      abort() {}
-    };
-  }
-};
-
-const heatherScene = (name, experience, fn, extra = {}) => ({
-  name,
-  ...extra,
-  setup: (page, h) => withPageOps(page, heatherOps(experience), async () => {
-    await page.goto(h.base + (extra.path || '/dashboard'), { waitUntil: 'networkidle' });
-    await h.settle(1600);
-    await fn(page, h);
-  }),
-  teardown: async (page, h) => {
-    if (extra.dialog) await h.esc(400);
-    await page.unroute('**/graphql');
-  },
-});
 
 scenes.push(
   // Simple home: the plate in words, the Today strip, four meal cards.
@@ -582,96 +530,8 @@ scenes.push(
 );
 
 // ── The food composer (REVIEW_2026-10 §4, Phase 3.16) ────────────────────
-// "The harness has no picture of the add box while typing, thinking, after a
-// result or after an error. The surface she complains about is unaudited."
-// Every state gets a scene here, Simple (Heather) and Full (Chef). The REST
-// stubs are page-scoped and dropped in teardown; each scene re-navigates.
-const SUGGEST_RE = /\/api\/foods\/suggest/;
-const DEEP_RE = /\/api\/foods\?/;
-const DESCRIBE_RE = /\/api\/logs\/describe/;
-const wait = (ms) => new Promise((resolve) => { setTimeout(resolve, ms); });
-const isoLocal = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-const YESTERDAY = (() => { const d = new Date(); d.setDate(d.getDate() - 1); return isoLocal(d); })();
-
-/**
- * Stub the food REST calls. `suggest(q)` and `deep(q)` return rows for a
- * query; `describe` is a response body, a status, or a function of the route.
- */
-async function foodRoutes(page, { suggest = () => [], deep = () => [], suggestMs = 0, deepMs = 0, describe = DESCRIBED_SOUP } = {}) {
-  await page.route(DEEP_RE, async (r) => {
-    const q = new URL(r.request().url()).searchParams.get('search') || '';
-    if (deepMs) await wait(deepMs);
-    try { await json(r, { success: true, data: deep(q) }); } catch { /* the page moved on */ }
-  });
-  await page.route(SUGGEST_RE, async (r) => {
-    const q = new URL(r.request().url()).searchParams.get('q') || '';
-    if (suggestMs) await wait(suggestMs);
-    try { await json(r, { success: true, data: suggest(q) }); } catch { /* the page moved on */ }
-  });
-  await page.route(DESCRIBE_RE, async (r) => {
-    if (typeof describe === 'function') return describe(r);
-    if (typeof describe === 'number') return json(r, { success: false, error: { message: 'Internal error' } }, describe);
-    return json(r, { success: true, data: describe });
-  });
-}
-async function dropFoodRoutes(page) {
-  await page.unroute(DEEP_RE);
-  await page.unroute(SUGGEST_RE);
-  await page.unroute(DESCRIBE_RE);
-}
-
-const soupSuggest = (q) => (/soup|cracker/i.test(q) ? SUGGEST_SOUP : []);
-const fageSuggest = (q) => (/fag/i.test(q) ? SUGGEST_FAGE : []);
-const fageDeep = (q) => (/fage/i.test(q) ? DEEP_FAGE : []);
-
-/**
- * Open the add sheet from a meal card and run `fn` inside it. `simple`
- * scenes are Heather's page-scoped GraphQL; Full is the context's Chef.
- */
-const composerScene = (name, { simple = false, path = '/dashboard', meal = 'lunch', routes = {}, fn, viewports, offline = false, sheet = true }) => ({
-  name,
-  ...(viewports ? { viewports } : {}),
-  async setup(page, h) {
-    await foodRoutes(page, routes);
-    try {
-      if (simple) await graphqlRoute(page, heatherOps(HEATHER));
-      await page.goto(h.base + path, { waitUntil: 'networkidle' });
-      await h.settle(1400);
-      let scope = page;
-      if (sheet) {
-        const add = await must(page.getByRole('button', { name: new RegExp(`^add to ${meal}$`, 'i') }).first(), `Add to ${meal}`);
-        await add.click();
-        await h.settle(900);
-        scope = await must(page.getByRole('dialog'), 'add sheet');
-      }
-      if (offline) {
-        await page.context().setOffline(true);
-        await h.settle(300);
-      }
-      await fn(page, h, scope);
-    } catch (err) {
-      if (offline) await page.context().setOffline(false);
-      await dropFoodRoutes(page);
-      if (simple) await page.unroute('**/graphql');
-      throw err;
-    }
-  },
-  async teardown(page, h) {
-    if (offline) await page.context().setOffline(false);
-    if (sheet) await h.esc(400);
-    await h.esc(300);
-    await dropFoodRoutes(page);
-    if (simple) await page.unroute('**/graphql');
-  },
-});
-
-const typeInto = async (scope, text, h, settle = 900) => {
-  const box = await must(scope.getByLabel('Tell me what you ate').first(), 'the composer box');
-  await box.fill(text);
-  await h.settle(settle);
-  return box;
-};
-const SOUP = 'a bowl of chicken soup and some crackers';
+// Every state gets a scene here, Simple (Heather) and Full (Chef); the
+// helpers (composerScene, foodRoutes…) live in helpers.mjs.
 
 scenes.push(
   // Typing a sentence: the list folds into "Or pick an exact food (n)".
@@ -830,7 +690,7 @@ scenes.push(
     path: `/food-log?date=${YESTERDAY}&meal=dinner`,
     sheet: false,
     fn: async (page, h) => {
-      await (await must(page.getByRole('button', { name: 'Add food to Dinner' }).first(), 'Dinner "+"')).click();
+      await (await must(page.locator('#meal-section-dinner').getByRole('button', { name: /^add to dinner$/i }).first(), 'Dinner "+ Add"')).click();
       await h.settle(900);
       await must(page.getByRole('dialog').getByText(/^Add to \w+’s dinner \(yesterday\)$/), 'the title "Add to <weekday>’s dinner (yesterday)"');
     },
@@ -851,7 +711,7 @@ scenes.push(
       try {
         await page.goto(h.base + '/food-log', { waitUntil: 'networkidle' });
         await h.settle(1400);
-        await (await must(page.getByRole('button', { name: 'Add food to Lunch' }).first(), 'Lunch "+"')).click();
+        await (await must(page.locator('#meal-section-lunch').getByRole('button', { name: /^add to lunch$/i }).first(), 'Lunch "+ Add"')).click();
         await h.settle(900);
         const paper = await must(page.locator('[data-testid="add-food-dialog"]'), 'the add dialog');
         const box = await must(paper.getByLabel('Tell me what you ate'), 'the composer box');
@@ -895,6 +755,26 @@ scenes.push(
     },
   },
 );
+
+// ── Wave A (2026-10-17) ─────────────────────────────────────────────────
+// Every state the UX-review fixes built, and every screen that had no
+// picture. Kept in their own files by area; each exports `scenes` and an
+// optional `tail` — scenes that change something a page cannot take back
+// (page.clock, an init script), which run after everything else.
+import * as composerWave from './scenes-composer.mjs';
+import * as pagesWave from './scenes-pages.mjs';
+import * as settingsWave from './scenes-settings.mjs';
+
+const WAVES = [composerWave, pagesWave, settingsWave];
+for (const w of WAVES) scenes.push(...(w.scenes || []));
+for (const w of WAVES) scenes.push(...(w.tail || []));
+
+// FG_SCENES=<regex> walks only the matching scenes — for iterating on a few
+// without the whole run. Unset in CI.
+if (process.env.FG_SCENES) {
+  const only = new RegExp(process.env.FG_SCENES);
+  scenes.splice(0, scenes.length, ...scenes.filter((s) => only.test(s.name)));
+}
 
 // Known, ticketed violations. Each one should die when the app is fixed —
 // an empty list is the goal, not a permanent parking lot.

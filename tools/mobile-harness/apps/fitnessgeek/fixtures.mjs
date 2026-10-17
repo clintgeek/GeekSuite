@@ -58,12 +58,19 @@ const HISTORY = Array.from({ length: 27 }, (_, i) => i + 1).flatMap((n) => {
   if (n % 4 === 1) rows.push(foodLog(`h${n}d`, 'Sourdough Toast', 'Boudin', 'lunch', 2, nut(120, 4, 22, 1, 1), d));
   if (n % 7 === 2 || n % 7 === 5) rows.push(foodLog(`h${n}e`, 'Ribeye, grilled', null, 'dinner', 1.5, nut(310, 26, 0, 23, 0), d));
   if (n % 2 === 0) rows.push(foodLog(`h${n}f`, 'Almonds', 'Blue Diamond', 'snack', 1, nut(164, 6, 6, 14, 3.5), d));
+  // Catalog names as OpenFoodFacts really spells them — long, and sometimes
+  // shouted — so the Again chips and rows show their clamps (L13, A4).
+  if (n % 3 === 0) rows.push(foodLog(`h${n}g`, 'Breaded Southern Fried Chicken Breast', 'Tyson', 'lunch', 1, nut(260, 19, 14, 14, 1), d));
+  if (n % 5 === 0) rows.push(foodLog(`h${n}h`, 'Queso Quesadilla Cheese', 'Cacique', 'lunch', 1, nut(110, 6, 1, 9, 0), d));
+  if (n % 2 === 1) rows.push(foodLog(`h${n}i`, 'CHOCOLATE PEANUT BUTTER protein bar', 'ONE', 'snack', 1, nut(220, 20, 23, 8, 1), d));
   return rows;
 });
 // Food ids keyed by name, so history rows share today's food ids.
 const FOOD_ID = Object.fromEntries(
   [['Greek Yogurt, Plain Whole Milk', 'f-l1'], ['Blueberries', 'f-l2'], ['Chicken Caesar Salad', 'f-l3'],
-    ['Sourdough Toast', 'f-l4'], ['Ribeye, grilled', 'f-l5'], ['Almonds', 'f-l7']]
+    ['Sourdough Toast', 'f-l4'], ['Ribeye, grilled', 'f-l5'], ['Almonds', 'f-l7'],
+    ['Breaded Southern Fried Chicken Breast', 'f-off1'], ['Queso Quesadilla Cheese', 'f-off2'],
+    ['CHOCOLATE PEANUT BUTTER protein bar', 'f-off3']]
 );
 for (const row of HISTORY) row.food_item_id.id = FOOD_ID[row.food_item_id.name] || row.food_item_id.id;
 
@@ -71,6 +78,19 @@ for (const row of HISTORY) row.food_item_id.id = FOOD_ID[row.food_item_id.name] 
 export const foodLogsFor = (today, history) => (vars = {}) => ({
   foodLogs: vars.startDate ? [...history, ...today] : today,
 });
+
+const memberLog = (id, name, brand, meal, servings, n, day) => {
+  const row = foodLog(id, name, brand, meal, servings, n, day);
+  return { ...row, food_item_id: { ...row.food_item_id, nutrition: { __typename: 'Nutrition', calories_per_serving: n.calories_per_serving } } };
+};
+/** Sarah's log for one day: breakfast, lunch and a three-food dinner. */
+export const sarahDay = (day) => [
+  memberLog(`s-${day}-1`, 'Overnight oats with berries', null, 'breakfast', 1, nut(310, 11, 52, 7, 6), day),
+  memberLog(`s-${day}-2`, 'Turkey and Swiss on rye', null, 'lunch', 1, nut(420, 31, 36, 16, 4), day),
+  memberLog(`s-${day}-3`, 'Grilled salmon', null, 'dinner', 1, nut(367, 39, 0, 22, 0), day),
+  memberLog(`s-${day}-4`, 'Rice pilaf', 'Near East', 'dinner', 1, nut(220, 5, 44, 3, 1), day),
+  memberLog(`s-${day}-5`, 'Green beans, steamed', null, 'dinner', 1, nut(44, 2, 10, 0, 4), day),
+];
 
 export const SAVED_MEALS = [
   {
@@ -412,7 +432,9 @@ export const OPS = {
       ],
     },
   },
-  GetHouseholdMemberLogs: { fitnessHouseholdMemberLogs: FOOD_LOGS.slice(0, 3) },
+  // Sarah shares food logs: a whole day, so "Same as Sarah's dinner" (L7),
+  // Copy Meal's "Whose log" and the household view all have something real.
+  GetHouseholdMemberLogs: (vars = {}) => ({ fitnessHouseholdMemberLogs: sarahDay(vars.date || TODAY) }),
   GetGarminStatus: { garminStatus: { __typename: 'GarminStatus', connected: true, last_sync: daysAgo(0) } },
   GetGarminDaily: {
     garminDaily: {
@@ -439,9 +461,11 @@ export const OPS = {
         protein: [150, 171, 158, 166, 165][i], carbs: [140, 150, 139, 170, 141][i],
         fat: [66, 70, 69, 80, 70][i], fiber: [20, 24, 19, 25, 22][i], sugar: [30, 36, 29, 41, 34][i],
       })),
+      // Summed over the range, as the gateway sends them (the page divides
+      // by days logged): calories add up to the five days' 8,800, protein to 810.
       meals: {
-        breakfast: { calories: 420, count: 5 }, lunch: { calories: 610, count: 5 },
-        dinner: { calories: 620, count: 5 }, snack: { calories: 110, count: 3 },
+        breakfast: { calories: 2100, protein: 140, count: 5 }, lunch: { calories: 3050, protein: 290, count: 5 },
+        dinner: { calories: 3100, protein: 330, count: 5 }, snack: { calories: 550, protein: 50, count: 3 },
       },
       topFoods: [
         { name: 'Greek yogurt, plain', count: 5, calories: 650 },
@@ -528,24 +552,33 @@ export const opsWithPlan = (patch, extra = {}) => ({
 const restFood = (id, name, brand, cal, size, unit, source = 'usda', extra = {}) => ({
   id, kind: 'food', name, brand, source,
   serving: { size, unit },
-  nutrition: { calories_per_serving: cal, protein_grams: 10, carbs_grams: 12, fat_grams: 5 },
+  nutrition: { calories_per_serving: cal, protein_grams: 10, carbs_grams: 12, fat_grams: 5, ...(extra.macros || {}) },
   ...extra,
 });
 /** Wave one for "fage": her own row first, then the catalog. */
 export const SUGGEST_FAGE = [
   restFood('f1', 'Greek Yogurt, Plain Whole Milk', 'Fage', 190, 170, 'g', 'custom', { shelf: 'recent' }),
-  restFood('s2', 'Fage Total 2% Greek Yogurt', 'Fage', 150, 170, 'g', 'local'),
-  restFood('s3', 'Fage Total 0% Greek Yogurt', 'Fage', 90, 170, 'g', 'local'),
+  restFood('s2', 'Fage Total 2% Greek Yogurt, Plain Lowfat', 'Fage', 150, 170, 'g', 'openfoodfacts'),
+  restFood('s3', 'Fage Total 0% Greek Yogurt, Plain Nonfat', 'Fage', 90, 170, 'g', 'openfoodfacts'),
 ];
 /** Wave two for "fage": more brands, plus one the first wave already had. */
 export const DEEP_FAGE = [
   restFood('d1', 'Fage Total 5% Greek Yogurt', 'Fage', 190, 170, 'g', 'fatsecret'),
-  restFood('s2', 'Fage Total 2% Greek Yogurt', 'Fage', 150, 170, 'g', 'local'),
+  restFood('s2', 'Fage Total 2% Greek Yogurt, Plain Lowfat', 'Fage', 150, 170, 'g', 'openfoodfacts'),
   restFood('d3', 'Fage TruBlend Vanilla', 'Fage', 110, 150, 'g', 'openfoodfacts'),
   restFood('d4', 'Fage Total Split Cup, Strawberry', 'Fage', 140, 150, 'g', 'fatsecret'),
   restFood('d5', 'Greek Yogurt, Fage, Honey', 'Fage', 270, 150, 'g', 'usda'),
   restFood('d6', 'Fage BestSelf Lactose Free', 'Fage', 110, 150, 'g', 'openfoodfacts'),
 ];
+/** Long catalog names, as OpenFoodFacts spells them (L13, A4): "chicken", "bar", "queso". */
+export const SUGGEST_LONG = [
+  restFood('f-off1', 'Breaded Southern Fried Chicken Breast', 'Tyson', 260, 112, 'g', 'custom', { shelf: 'recent', macros: { protein_grams: 19, carbs_grams: 14, fat_grams: 14 } }),
+  restFood('o2', 'CHOCOLATE PEANUT BUTTER protein bar', 'ONE', 220, 60, 'g', 'openfoodfacts', { macros: { protein_grams: 20, carbs_grams: 23, fat_grams: 8 } }),
+  restFood('o3', 'Queso Quesadilla Cheese', 'Cacique', 110, 28, 'g', 'openfoodfacts', { macros: { protein_grams: 6, carbs_grams: 1, fat_grams: 9 } }),
+  restFood('s2', 'Fage Total 2% Greek Yogurt, Plain Lowfat', 'Fage', 150, 170, 'g', 'openfoodfacts', { macros: { protein_grams: 17, carbs_grams: 6, fat_grams: 4 } }),
+  restFood('s3', 'Fage Total 0% Greek Yogurt, Plain Nonfat', 'Fage', 90, 170, 'g', 'openfoodfacts', { macros: { protein_grams: 18, carbs_grams: 5, fat_grams: 0 } }),
+];
+
 /** Suggest for the soup sentence: what "Or pick an exact food" counts. */
 export const SUGGEST_SOUP = [
   { kind: 'meal', id: 'meal-1', name: 'Soup and crackers lunch', meal_type: 'lunch', food_count: 2, nutrition: { calories_per_serving: 350 }, source: 'meal' },
