@@ -507,3 +507,38 @@ Built from a production audit of the whole pipeline.
 - **Headline claims verified in code** before writing. The "two daily targets" suspicion was
   refuted against production: one stored target per person.
 - **Six calls for Chef in §4,** including the SpO2 surfaces that already exist. Six phases in §5.
+
+## 2026-10-17 → 18 (overnight) — FitnessGeek: the UX review, built (local, not pushed)
+
+- **Chef:** "Just make it as perfect as you know how. My wife is both beautiful and
+  non-technical. She needs to use it and enjoy it and not need lessons on it." Then: "go for it…
+  you're going to be on your own."
+- **Waves:**
+  - **A (behaviour):** six parallel agents, nine commits.
+  - **B:** the copy sweep, one commit.
+  - **C:** the colour system (one commit) plus 112 harness scenes. Then a fix round for what the
+    new scenes caught.
+- **What Heather will notice:**
+  - Tap a food twice and it's "Egg ×2", not two entries. "Same as Chef's dinner" is one tap.
+  - A Done button and a ribbon from the first item.
+  - Home never shows an empty day when it just couldn't load.
+  - The Simple Food Log is name / amount / cal, and you tap a row to edit it.
+  - Settings is one page, where she can change her name and goal.
+  - "Set your daily target" is one question.
+  - Adding a med is "What's it called?" / "When do you take it?".
+  - BP is judged by the week, and the weight pace is told honestly.
+  - Typed words survive closing the sheet.
+  - Calm colours: produce colours mean meals only, and one green button per screen.
+  - One plain voice throughout.
+- **Bugs found along the way:**
+  - The BP report had one person's name and date of birth hard-coded (`38ca0408`).
+  - Toasts overlapped and were hidden from screen readers inside dialogs: fixed suite-wide in
+    `packages/ui` (`3a39011d`).
+- **Checks at HEAD:**
+  - Frontend 977, backend 986, packages/ui 831 (incl. themeContrast).
+  - Harness 610 scene-runs (phone and desktop), 0/0/0, enforcing, no waivers.
+- **Deploy notes:**
+  - It's frontend-heavy. The backend changed only the meal parser (`f416a3a7`). The gateway is
+    unchanged since `463cbdad`.
+  - `packages/ui` and `packages/auth` changes ship to every app on the push.
+  - No new env vars.

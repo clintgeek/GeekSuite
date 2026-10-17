@@ -117,6 +117,23 @@ Pull from here when planning the next pass; update as work lands or priorities s
     weight `new Date()` fallbacks.
   - **An undone medication delete comes back under a new id**, so that day's ticks for it
     are lost.
+- **Follow-ups from the FitnessGeek UX build (2026-10-17/18)**, see
+  `apps/fitnessgeek/DOCS/UX_REVIEW_2026-10-17.md`:
+  - **SpO2 surfaces** (Activity, the Health dashboard sleep tab with its sleep-apnea alert, the
+    Settings toggle) still exist. That's against Chef's stance; it's his call.
+  - **Garmin pages merge** (Activity plus the Health dashboard into one page with Today / Last
+    night / Trends). Not done; only Chef uses them.
+  - **"Change password"** was dropped from Settings because it was a dead control. Bringing it
+    back needs a backend proxy that asks for the current password.
+  - **BP donut tooltip close-on-scroll** is proven only by a unit test: the phone emulator's tap
+    never opened it. Check on a real phone.
+  - **Overlapping meal-impact chart labels** for two meals five minutes apart (existing marker
+    style).
+  - **"Typical day: 2,000"** on the Log page when no plan is enabled, versus Home's "Just keeping
+    count". Consistent wording would be nice; it's not a number disagreement for real users.
+  - **Shell `<main>` scrollable-region:** fixed locally on Activity (a Refresh button). Other
+    apps' scroll-only pages could trip the same axe rule.
+  - **Unused files** the copy sweep found: five Dashboard components and `aiService.js`.
 
 - ~~**Wire `installShutdownHooks`**~~ — **done 2026-10-06** (`9725bb97`): all nine backends (basegeek, bookgeek, todogeek, fitnessgeek, flockgeek, gamegeek, notegeek, storygeek, thinggeek) shut down through it, each `onClose` carrying exactly its old cleanup. todogeek/gamegeek/thinggeek create the server up front so a pre-`listen()` signal still cleans up; fitnessgeek lost a stray SIGINT handler that raced the real one. The hook itself is pinned by a real-SIGTERM test in `packages/logger` (`d6f1934e`). Behaviour change: notegeek/todogeek/gamegeek/thinggeek now exit 0 (was 1) when the 15 s force-exit fires; a second signal still exits 1.
 - **FitnessGeek Secrets Parity**: `KEY_VAULT_SECRET` **is** set in the fitnessgeek container (64 chars, checked 2026-09-16). What remains is running the Garmin password backfill (`scripts/encryptGarminPasswords.js`) — Chef's call, same shape as basegeek's encrypt-keys migration, which ran 2026-09-16.
