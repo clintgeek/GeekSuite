@@ -30,27 +30,57 @@ describe('AIInsightsCard: nothing is pulled until you open it', () => {
 
   it('starts collapsed and makes no AI call', async () => {
     renderCard();
-    expect(screen.getByRole('button', { name: 'Expand AI insights' })).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByRole('button', { name: 'Show notes from the AI' })).toHaveAttribute('aria-expanded', 'false');
     await new Promise((r) => setTimeout(r, 50));
     expect(calls()).toBe(0);
   });
 
   it('opening it fetches the current tab once', async () => {
     renderCard();
-    fireEvent.click(screen.getByRole('button', { name: 'Expand AI insights' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Show notes from the AI' }));
     await waitFor(() => expect(calls()).toBe(1));
     expect(insightsService.getMorningBrief.mock.calls.length + insightsService.getDailySummary.mock.calls.length).toBe(1);
   });
 
   it('picking a tab while collapsed opens it and fetches that tab', async () => {
     renderCard();
-    fireEvent.click(screen.getByText('Coach'));
+    fireEvent.click(screen.getByText('Advice'));
     await waitFor(() => expect(insightsService.getCoaching).toHaveBeenCalledTimes(1));
-    expect(screen.getByRole('button', { name: 'Collapse AI insights' })).toHaveAttribute('aria-expanded', 'true');
+    expect(screen.getByRole('button', { name: 'Hide notes from the AI' })).toHaveAttribute('aria-expanded', 'true');
   });
 
   it('refresh is off while collapsed', () => {
     renderCard();
     expect(screen.getByRole('button', { name: /^Refresh/ })).toBeDisabled();
+  });
+});
+
+describe('AIInsightsCard: Notes from the AI (UX review 2026-10-17, D-11)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('is called Notes from the AI, with plain tab names', () => {
+    renderCard();
+    expect(screen.getByRole('heading', { name: 'Notes from the AI' })).toBeInTheDocument();
+    for (const name of ['Advice', 'Patterns', 'Ask']) expect(screen.getByText(name)).toBeInTheDocument();
+    expect(screen.queryByText(/AI Insights|Coach|Ask AI|Morning Brief|Daily Summary/)).toBeNull();
+  });
+
+  it('a note ends with what it was written from, when, and that it can be wrong', async () => {
+    insightsService.getCoaching.mockResolvedValueOnce({
+      ok: true, type: 'coaching', content: 'Eat more beans.', generatedAt: new Date().toISOString(), context: { daysAnalyzed: 14 },
+    });
+    renderCard();
+    fireEvent.click(screen.getByText('Advice'));
+    expect(await screen.findByText('Eat more beans.')).toBeInTheDocument();
+    expect(screen.getByTestId('ai-note-footer').textContent)
+      .toMatch(/^Written by AI from your last 14 days of logs · \d{1,2}:\d{2} (am|pm) · It can be wrong — check the numbers above\.$/);
+    expect(screen.queryByText(/^Generated/)).toBeNull();
+  });
+
+  it('a failure shows plain words, never the raw error', async () => {
+    insightsService.getCoaching.mockRejectedValueOnce(new Error('Request failed with status code 500'));
+    renderCard();
+    fireEvent.click(screen.getByText('Advice'));
+    expect(await screen.findByTestId('ai-notes-error')).not.toHaveTextContent(/status code/);
   });
 });

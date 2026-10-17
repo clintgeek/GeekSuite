@@ -149,6 +149,17 @@ export function metricTrend(points, { end, scale = 1, windowDays = WINDOW_DAYS, 
   return { current, change, segments: series.length ? splitAtGaps(series, (p) => p.x) : [] };
 }
 
+/**
+ * The week every change is compared with, stated once at the top of the
+ * section (UX review 2026-10-17, D-6): the 7 days ending 30 days before
+ * today — the same window `metricTrend` starts looking from.
+ */
+export function comparisonWindow(end) {
+  return { from: addDays(end, -(PERIOD_DAYS + WINDOW_DAYS - 1)), to: addDays(end, -PERIOD_DAYS) };
+}
+
+const sameWindow = (a, b) => !!a && !!b && utcDateString(a.from) === b.from && utcDateString(a.to) === b.to;
+
 /** "−3 bpm" / "+1.5 h" / "0 ms" with a true minus sign. */
 export function signedValue(n, { decimals = 0, unit = '' } = {}) {
   if (num(n) === null) return '—';
@@ -163,23 +174,29 @@ export function signedValue(n, { decimals = 0, unit = '' } = {}) {
  * way is "good" depends on the metric (and, for weight, on the goal), so the
  * direction is said, not graded.
  *
+ * With `window` (the section's stated comparison week), a change measured
+ * against exactly that week carries no dates — the section header already
+ * said them. One measured against another week (readings missing that week)
+ * still names its own, because then the header would be wrong for it.
+ *
  * @returns {{kind: 'delta'|'level'|'pending', amount?: string, text: string}|null}
  */
-export function describeTrendChange(change, { decimals = 0, unit = '', steady = 0 } = {}) {
+export function describeTrendChange(change, { decimals = 0, unit = '', steady = 0, window = null } = {}) {
   if (!change) return null;
   if (!change.available) {
     return change.availableFrom
       ? { kind: 'pending', text: `Change from ${formatDay(change.availableFrom)}` }
       : null;
   }
+  const stated = sameWindow(change.baseline, window);
   const span = formatSpan(change.baseline.from, change.baseline.to);
   const rounded = roundTo(change.delta, decimals);
   // Judge "level" on the unrounded mean difference: 0.6 bpm is inside the
   // noise even though it prints as 1.
   if (Math.abs(change.delta) < steady || rounded === 0) {
-    return { kind: 'level', text: `About level with ${span}` };
+    return { kind: 'level', text: stated ? 'About level' : `About level with ${span}` };
   }
-  return { kind: 'delta', amount: signedValue(rounded, { decimals, unit }), text: `vs ${span}` };
+  return { kind: 'delta', amount: signedValue(rounded, { decimals, unit }), text: stated ? '' : `vs ${span}` };
 }
 
 /**
@@ -187,13 +204,13 @@ export function describeTrendChange(change, { decimals = 0, unit = '', steady = 
  * today or yesterday, and "· 2 days" when the week is thin — an average of
  * two readings should not pass for a week's.
  */
-export function windowCaption(current, end, { lead = '7-day average' } = {}) {
+export function windowCaption(current, end, { lead = '7-day average', staleLead = null } = {}) {
   if (!current) return '';
   const thin = typeof current.count === 'number' && current.count < MIN_SPARK_COUNT
     ? ` · ${current.count} ${current.count === 1 ? 'day' : 'days'}`
     : '';
   if (current.to >= addDays(end, -1)) return `${lead}${thin}`;
-  return `${lead} to ${formatDay(current.to)}${thin}`;
+  return `${staleLead || `${lead} to`} ${formatDay(current.to)}${thin}`;
 }
 
 /**
@@ -230,8 +247,9 @@ export function garminCards(payload, { end }) {
       unit: 'h / night', deltaUnit: 'h', decimals: 1, steady: 0.2, minSpan: 1.5,
       meaning: 'Time asleep, per night.',
     }),
+    // A week's total, not an average: "279 min in the last 7 days" (D-7).
     intensity: card('intensity', 'Intensity minutes', intensityMinutes, {
-      unit: 'min / week', deltaUnit: 'min', decimals: 0, steady: 15, minSpan: 60, scale: 7,
+      unit: 'min', deltaUnit: 'min', lead: 'in the last 7 days', staleLead: 'in the 7 days to', decimals: 0, steady: 15, minSpan: 60, scale: 7,
       meaning: `Moderate + 2 × vigorous minutes (the WHO equivalence), per week. The guideline is ${WEEKLY_INTENSITY_GUIDELINE}.`,
     }),
     steps: card('steps', 'Steps', (d) => d.steps, {
@@ -294,9 +312,11 @@ export function weightModel(logs, stats, { end }) {
   let change = null;
   if (num(s.totalChange) !== null) {
     const v = roundTo(s.totalChange, 1);
+    // Against the section's stated week, no dates (D-6); otherwise its own.
+    const stated = s.referenceDate && utcDateString(s.referenceDate) === comparisonWindow(end).to;
     change = Math.abs(v) < STEADY_LB
-      ? { kind: 'level', text: `About level with the week to ${formatDay(s.referenceDate)}` }
-      : { kind: 'delta', amount: signedLb(v), text: `vs the week to ${formatDay(s.referenceDate)}` };
+      ? { kind: 'level', text: stated ? 'About level' : `About level with the week to ${formatDay(s.referenceDate)}` }
+      : { kind: 'delta', amount: signedLb(v), text: stated ? '' : `vs the week to ${formatDay(s.referenceDate)}` };
   } else if (s.availableFrom) {
     change = { kind: 'pending', text: `Change from ${formatDay(s.availableFrom)}` };
   }

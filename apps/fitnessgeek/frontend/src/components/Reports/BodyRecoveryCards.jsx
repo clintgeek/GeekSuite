@@ -103,7 +103,7 @@ const Meaning = ({ children }) =>
  * One Garmin metric: current 7-day mean, the change vs ~30 days earlier (or
  * the date it will exist), a 90-day sparkline and what the number means.
  */
-export const TrendCard = ({ card, end, extra }) => {
+export const TrendCard = ({ card, end, extra, window }) => {
   if (!card.current) {
     return <NoReadings label={card.label}>No readings in the last {TREND_DAYS} days.</NoReadings>;
   }
@@ -111,6 +111,7 @@ export const TrendCard = ({ card, end, extra }) => {
     decimals: card.decimals,
     unit: card.deltaUnit || '',
     steady: card.steady,
+    window,
   });
   return (
     <Card label={card.label} testId={`trend-${card.key}`}>
@@ -119,7 +120,7 @@ export const TrendCard = ({ card, end, extra }) => {
         value={card.current.mean}
         decimals={card.decimals}
         unit={card.unit}
-        sub={windowCaption(card.current, end)}
+        sub={windowCaption(card.current, end, { lead: card.lead, staleLead: card.staleLead })}
         segments={card.segments}
         end={end}
         minSpan={card.minSpan}
@@ -132,8 +133,8 @@ export const TrendCard = ({ card, end, extra }) => {
   );
 };
 
-/** Weekly intensity minutes, with where that sits against the 150-minute guideline. */
-export const IntensityCard = ({ card, end }) => {
+/** Intensity minutes over the last 7 days, with where that sits against the 150-minute guideline. */
+export const IntensityCard = ({ card, end, window }) => {
   const weekly = card.current ? Math.round(card.current.mean) : null;
   const vsGuideline = weekly === null
     ? null
@@ -144,6 +145,7 @@ export const IntensityCard = ({ card, end }) => {
     <TrendCard
       card={card}
       end={end}
+      window={window}
       extra={vsGuideline ? <Typography sx={{ ...caption, color: 'text.primary' }}>{vsGuideline}</Typography> : null}
     />
   );
@@ -161,12 +163,12 @@ const Figure = ({ label, value, unit, decimals = 0, note }) => (
 );
 
 /** Stress and Body Battery as daily means — one compact card, no sparkline. */
-export const StressBatteryCard = ({ stress, high, low, end }) => {
+export const StressBatteryCard = ({ stress, high, low, end, window }) => {
   const label = 'Stress & Body Battery';
   if (!stress.current && !high.current && !low.current) {
     return <NoReadings label={label}>No readings in the last {TREND_DAYS} days.</NoReadings>;
   }
-  const change = describeTrendChange(stress.change, { decimals: 0, unit: stress.deltaUnit, steady: stress.steady });
+  const change = describeTrendChange(stress.change, { decimals: 0, unit: stress.deltaUnit, steady: stress.steady, window });
   return (
     <Card label={label} testId="trend-stress">
       <SectionLabel>{label}</SectionLabel>
@@ -179,7 +181,7 @@ export const StressBatteryCard = ({ stress, high, low, end }) => {
       {change && (
         <ChangeLine
           change={change.kind === 'delta'
-            ? { ...change, text: `in stress ${change.text}` }
+            ? { ...change, text: change.text ? `in stress ${change.text}` : 'in stress' }
             : change.kind === 'level'
               ? { ...change, text: change.text.replace(/^About/, 'Stress about') }
               : change}

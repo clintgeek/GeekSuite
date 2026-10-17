@@ -26,6 +26,8 @@ import {
   Chat as ChatIcon
 } from '@mui/icons-material';
 import { insightsService } from '../../services/insightsService.js';
+import { errorMessage } from '../../utils/errorMessage.js';
+import { AINoteFooter, AI_NOTES_NAME, lastDaysSource } from '../Reports/aiNotes.jsx';
 
 /**
  * The sentence the backend sends with `ok: false`. Kept here as the local
@@ -33,6 +35,23 @@ import { insightsService } from '../../services/insightsService.js';
  * HTTP status or a provider name, neither of which is the user's business.
  */
 const UNAVAILABLE_TEXT = "The assistant isn't available right now.";
+
+/**
+ * What each kind of note was written from, for its footer (D-11). The
+ * server's own `context.daysAnalyzed` wins when it sends one; otherwise the
+ * window each generator reads (aiInsightsService: the brief and summary read
+ * since yesterday, coaching 14 days, patterns 30).
+ */
+export function noteSource(insight) {
+  const n = Number(insight?.context?.daysAnalyzed);
+  switch (insight?.type) {
+    case 'morning_brief': return "from yesterday's logs";
+    case 'daily_summary': return "from today's logs";
+    case 'coaching': return lastDaysSource(Number.isFinite(n) && n > 0 ? n : 14);
+    case 'correlations': return lastDaysSource(Number.isFinite(n) && n > 0 ? n : 30);
+    default: return Number.isFinite(n) && n > 0 ? lastDaysSource(n) : 'from your logs';
+  }
+}
 
 const AIInsightsCard = () => {
   const theme = useTheme();
@@ -90,7 +109,7 @@ const AIInsightsCard = () => {
       // The `error` branch is now only for a genuinely broken request.
       setInsight(data);
     } catch (err) {
-      setError(err.message || 'Failed to load insights');
+      setError(errorMessage(err, "Couldn't load these notes. Try again."));
     } finally {
       setLoading(false);
     }
@@ -119,17 +138,17 @@ const AIInsightsCard = () => {
           : response.content
       }]);
     } catch (err) {
-      setChatHistory([...newHistory, { role: 'assistant', content: 'Sorry, I encountered an error. Please try again.' }]);
+      setChatHistory([...newHistory, { role: 'assistant', content: errorMessage(err, "Couldn't get an answer. Try again.") }]);
     } finally {
       setChatLoading(false);
     }
   };
 
   const tabs = [
-    { id: 'daily', label: isMorning ? 'Morning Brief' : 'Daily Summary', icon: isMorning ? MorningIcon : EveningIcon },
-    { id: 'coaching', label: 'Coach', icon: CoachIcon },
-    { id: 'correlations', label: 'Trends', icon: TrendsIcon },
-    { id: 'chat', label: 'Ask AI', icon: ChatIcon }
+    { id: 'daily', label: isMorning ? 'This morning' : 'Today', icon: isMorning ? MorningIcon : EveningIcon },
+    { id: 'coaching', label: 'Advice', icon: CoachIcon },
+    { id: 'correlations', label: 'Patterns', icon: TrendsIcon },
+    { id: 'chat', label: 'Ask', icon: ChatIcon }
   ];
 
   const stripFormatting = (text = '') => text.replace(/\*\*(.*?)\*\*/g, '$1');
@@ -229,15 +248,14 @@ const AIInsightsCard = () => {
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <AIIcon sx={{ color: theme.palette.text.secondary, fontSize: 18 }} />
             <Typography
+              component="h2"
               sx={{
-                fontWeight: 600,
-                fontSize: '0.75rem',
-                textTransform: 'uppercase',
-                letterSpacing: '0.06em',
+                fontWeight: 700,
+                fontSize: '0.875rem',
                 color: theme.palette.text.secondary,
               }}
             >
-              AI Insights
+              {AI_NOTES_NAME}
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', gap: 0.25 }}>
@@ -245,7 +263,7 @@ const AIInsightsCard = () => {
               size="small"
               onClick={() => loadInsight(activeTab)}
               disabled={!expanded || loading || activeTab === 'chat'}
-              aria-label={`Refresh ${tabs.find((t) => t.id === activeTab)?.label || 'insight'}`}
+              aria-label={`Refresh ${tabs.find((t) => t.id === activeTab)?.label || 'notes'}`}
               sx={{ p: 0.5 }}
             >
               <RefreshIcon sx={{ fontSize: 16 }} />
@@ -253,7 +271,7 @@ const AIInsightsCard = () => {
             <IconButton
               size="small"
               onClick={() => setExpanded(!expanded)}
-              aria-label={expanded ? 'Collapse AI insights' : 'Expand AI insights'}
+              aria-label={expanded ? 'Hide notes from the AI' : 'Show notes from the AI'}
               aria-expanded={expanded}
               sx={{ p: 0.5 }}
             >
@@ -389,20 +407,20 @@ const AIInsightsCard = () => {
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', py: 2 }}>
                 <CircularProgress size={18} sx={{ color: accentColor }} />
                 <Typography sx={{ ml: 1.5, color: theme.palette.text.secondary, fontSize: '0.8125rem' }}>
-                  Analyzing...
+                  Reading your logs…
                 </Typography>
               </Box>
             ) : error ? (
               <Box sx={{ textAlign: 'center', py: 2 }}>
-                <Typography sx={{ color: theme.palette.error.main, fontSize: '0.8125rem', mb: 0.5 }}>
+                <Typography data-testid="ai-notes-error" sx={{ color: theme.palette.text.secondary, fontSize: '0.8125rem', mb: 0.5 }}>
                   {error}
                 </Typography>
                 <Button
                   size="small"
                   onClick={() => loadInsight(activeTab)}
-                  sx={{ textTransform: 'none', fontSize: '0.75rem' }}
+                  sx={{ textTransform: 'none', fontSize: '0.75rem', minHeight: 44 }}
                 >
-                  Try Again
+                  Try again
                 </Button>
               </Box>
             ) : insight?.ok === false ? (
@@ -415,29 +433,20 @@ const AIInsightsCard = () => {
                 <Button
                   size="small"
                   onClick={() => loadInsight(activeTab)}
-                  sx={{ textTransform: 'none', fontSize: '0.75rem' }}
+                  sx={{ textTransform: 'none', fontSize: '0.75rem', minHeight: 44 }}
                 >
-                  Try Again
+                  Try again
                 </Button>
               </Box>
             ) : insight?.content ? (
               <Box>
                 {renderInsightContent(insight.content)}
-                <Typography
-                  sx={{
-                    display: 'block',
-                    mt: 1,
-                    color: theme.palette.text.disabled,
-                    fontSize: '0.75rem',
-                  }}
-                >
-                  Generated {new Date(insight.generatedAt).toLocaleTimeString()}
-                </Typography>
+                <AINoteFooter source={noteSource(insight)} generatedAt={insight.generatedAt} sx={{ mt: 1 }} />
               </Box>
             ) : (
               <Box sx={{ textAlign: 'center', py: 2 }}>
                 <Typography sx={{ color: theme.palette.text.secondary, fontSize: '0.8125rem' }}>
-                  Click refresh to generate insights
+                  Nothing here yet. Tap refresh to try again.
                 </Typography>
               </Box>
             )}

@@ -81,10 +81,18 @@ beforeEach(() => {
 const renderSection = () => render(<MemoryRouter><BodyRecoverySection /></MemoryRouter>);
 
 describe('Body & recovery', () => {
-  it('says it is a 90-day view, independent of the page range', async () => {
+  it('labels itself as the last 90 days, with no apology for the range toggle (D-5)', async () => {
     renderSection();
-    expect(screen.getByText(/90-day trends/)).toBeInTheDocument();
-    expect(screen.getByText(/applies to the food report only/)).toBeInTheDocument();
+    expect(screen.getByText('Body and recovery · last 90 days')).toBeInTheDocument();
+    expect(screen.queryByText(/toggle/)).toBeNull();
+    await screen.findByTestId('trend-restingHR');
+  });
+
+  it('states the comparison week once, at the top (D-6)', async () => {
+    renderSection();
+    expect(screen.getByTestId('body-recovery-window')).toHaveTextContent(
+      'Each number is a 7-day average, compared with the same week a month ago (Aug 18–24).',
+    );
     await screen.findByTestId('trend-restingHR');
   });
 
@@ -99,15 +107,20 @@ describe('Body & recovery', () => {
     const card = await screen.findByTestId('trend-restingHR');
     expect(within(card).getByText('56')).toBeInTheDocument();
     expect(within(card).getByText('−4 bpm')).toBeInTheDocument();
-    expect(within(card).getByText('vs Aug 18–24')).toBeInTheDocument();
+    // The header named the week; the card doesn't repeat it (D-6).
+    expect(within(card).queryByText(/Aug 18/)).toBeNull();
     expect(within(card).getByText(/Lower is better/)).toBeInTheDocument();
   });
 
-  it('intensity minutes are weekly, moderate + 2 × vigorous, against 150', async () => {
+  it('intensity minutes are a 7-day total, moderate + 2 × vigorous, against 150', async () => {
     renderSection();
     const card = await screen.findByTestId('trend-intensity');
     // (20 + 2 × 5) × 7 = 210
     expect(within(card).getByText('210')).toBeInTheDocument();
+    // A sum, so not called an average (D-7): "210 min in the last 7 days".
+    expect(within(card).getByText('min')).toBeInTheDocument();
+    expect(within(card).getByText('in the last 7 days')).toBeInTheDocument();
+    expect(within(card).queryByText(/min \/ week|7-day average/)).toBeNull();
     expect(within(card).getByText(/At or above the 150-minute guideline/)).toBeInTheDocument();
     expect(within(card).getByText(/Moderate \+ 2 × vigorous/)).toBeInTheDocument();
   });
@@ -144,14 +157,16 @@ describe('Body & recovery', () => {
   it('without Influx (200 not_enabled, what the endpoint now sends): the quiet line, not the outage message', async () => {
     influx.getTrends.mockResolvedValue({ available: false, reason: 'not_enabled', days: [], fitnessAge: null, activeKcal30: null });
     renderSection();
-    expect(await screen.findByTestId('garmin-not-connected')).toHaveTextContent(/Health Dashboard connection/);
+    const notice = await screen.findByTestId('garmin-not-connected');
+    expect(notice).toHaveTextContent('Heart rate, sleep and activity trends show here once Garmin is connected.');
+    expect(within(notice).getByRole('link', { name: 'Connect Garmin' })).toHaveAttribute('href', '/settings#garmin');
     expect(screen.queryByText(/aren't available right now/)).toBeNull();
   });
 
   it('without Influx (403): the body cards stay, and one quiet line replaces the Garmin cards', async () => {
     influx.getTrends.mockRejectedValue(Object.assign(new Error('Forbidden'), { response: { status: 403 } }));
     renderSection();
-    expect(await screen.findByTestId('garmin-not-connected')).toHaveTextContent(/Health Dashboard connection/);
+    expect(await screen.findByTestId('garmin-not-connected')).toHaveTextContent(/once Garmin is connected/);
     expect(screen.queryByTestId('trend-restingHR')).toBeNull();
     expect(screen.getByTestId('trend-weight')).toBeInTheDocument();
     expect(screen.getByTestId('trend-bp')).toBeInTheDocument();

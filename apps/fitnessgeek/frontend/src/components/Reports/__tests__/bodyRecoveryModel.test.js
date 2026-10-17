@@ -8,6 +8,7 @@ import { describe, it, expect } from 'vitest';
 import {
   addDays,
   bpModel,
+  comparisonWindow,
   describeTrendChange,
   fitnessAgeGap,
   fitnessAgeModel,
@@ -114,6 +115,20 @@ describe('describeTrendChange', () => {
   it('calls a change inside the noise "about level"', () => {
     expect(describeTrendChange(change(0.6), { unit: 'bpm', steady: 1 })).toEqual({ kind: 'level', text: 'About level with Aug 18–24' });
   });
+
+  // UX review 2026-10-17, D-6: the section states its comparison week once,
+  // so a change against exactly that week carries no dates.
+  it('against the stated week, no dates', () => {
+    const window = comparisonWindow(END);
+    expect(window).toEqual({ from: '2026-08-18', to: '2026-08-24' });
+    expect(describeTrendChange(change(-3.4), { unit: 'bpm', window })).toEqual({ kind: 'delta', amount: '−3 bpm', text: '' });
+    expect(describeTrendChange(change(0.6), { unit: 'bpm', steady: 1, window })).toEqual({ kind: 'level', text: 'About level' });
+  });
+
+  it('against another week (readings missing), it names its own', () => {
+    const other = { available: true, delta: -3, baseline: { from: '2026-08-23', to: '2026-08-29', mean: 60 } };
+    expect(describeTrendChange(other, { unit: 'bpm', window: comparisonWindow(END) }).text).toBe('vs Aug 23–29');
+  });
 });
 
 describe('windowCaption', () => {
@@ -169,9 +184,14 @@ describe('weightModel', () => {
     expect(m.change).toEqual({ kind: 'pending', text: 'Change from Oct 9' });
   });
 
-  it('a change vs the week to the reference date', () => {
+  it('a change against the section\'s stated week carries no dates (D-6)', () => {
     const m = weightModel([], { currentMean: 201.3, latestDate: END, totalChange: -3.2, referenceDate: '2026-08-24' }, { end: END });
-    expect(m.change).toEqual({ kind: 'delta', amount: '−3.2 lb', text: 'vs the week to Aug 24' });
+    expect(m.change).toEqual({ kind: 'delta', amount: '−3.2 lb', text: '' });
+  });
+
+  it('a change against another week names it', () => {
+    const m = weightModel([], { currentMean: 201.3, latestDate: '2026-09-20', totalChange: -3.2, referenceDate: '2026-08-21' }, { end: END });
+    expect(m.change).toEqual({ kind: 'delta', amount: '−3.2 lb', text: 'vs the week to Aug 21' });
   });
 });
 

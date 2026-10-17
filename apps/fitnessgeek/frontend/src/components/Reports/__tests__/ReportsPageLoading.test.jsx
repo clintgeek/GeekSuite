@@ -56,9 +56,9 @@ describe('Reports — the food report does not wait for the AI', () => {
     insightsService.getWeeklyReport.mockImplementation(never);
     insightsService.getTrendWatch.mockImplementation(never);
     renderReports();
-    expect((await screen.findAllByText('avg / day')).length).toBeGreaterThan(0);
-    expect(screen.getByLabelText('Loading the weekly summary')).toBeInTheDocument();
-    expect(screen.getByLabelText('Loading the trend watch')).toBeInTheDocument();
+    expect((await screen.findAllByText('a day')).length).toBeGreaterThan(0);
+    expect(screen.getByLabelText('Loading the summary')).toBeInTheDocument();
+    expect(screen.getByLabelText('Loading the trends')).toBeInTheDocument();
   });
 
   it('one AI panel answering does not wait for the other', async () => {
@@ -66,7 +66,7 @@ describe('Reports — the food report does not wait for the AI', () => {
     insightsService.getTrendWatch.mockImplementation(never);
     renderReports();
     expect(await screen.findByText('You ate well this week.')).toBeInTheDocument();
-    expect(screen.getByLabelText('Loading the trend watch')).toBeInTheDocument();
+    expect(screen.getByLabelText('Loading the trends')).toBeInTheDocument();
   });
 });
 
@@ -79,7 +79,7 @@ describe('Reports — failures in plain words', () => {
     expect(screen.getByTestId('trend-ai-error')).toHaveTextContent("The assistant isn't available right now.");
     expect(screen.queryByText(/status code|E11000/)).toBeNull();
     // and the food report still rendered
-    expect(screen.getAllByText('avg / day').length).toBeGreaterThan(0);
+    expect(screen.getAllByText('a day').length).toBeGreaterThan(0);
   });
 
   it('a report failure shows a sentence, not raw GraphQL text', async () => {
