@@ -77,13 +77,20 @@ lines.push('');
 lines.push('| app | scenes | grammar | a11y | page errors | build/serve | result |');
 lines.push('|---|--:|--:|--:|--:|---|---|');
 for (const app of apps) {
-  const s = shards.find((x) => (x.apps || []).includes(app));
-  if (!s) {
+  // An app can run as several shards (FitnessGeek does); its row adds them up.
+  const mine = shards.filter((x) => (x.apps || []).includes(app));
+  if (!mine.length) {
     lines.push(`| ${app} | · | · | · | · | · | **MISSING** (no summary.json) |`);
     continue;
   }
-  const f = (s.failures || []).filter((x) => x.app === app);
-  const m = s.summary || {};
+  const f = mine.flatMap((x) => (x.failures || []).filter((y) => y.app === app));
+  const m = {
+    scenesRun: mine.reduce((n, x) => n + (x.summary?.scenesRun || 0), 0),
+    violations: mine.flatMap((x) => x.summary?.violations || []),
+    a11y: mine.flatMap((x) => x.summary?.a11y || []),
+    errors: mine.flatMap((x) => x.summary?.errors || []),
+    ok: mine.every((x) => x.summary?.ok),
+  };
   const ok = m.ok && !f.length;
   lines.push(
     `| ${app} | ${m.scenesRun ?? '·'} | ${(m.violations || []).length} | ${(m.a11y || []).length} | ` +

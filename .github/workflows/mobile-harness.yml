@@ -59,6 +59,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       apps: ${{ steps.list.outputs.apps }}
+      shards: ${{ steps.list.outputs.shards }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -70,9 +71,22 @@ jobs:
           apps=$(node --input-type=module -e "import { APP_NAMES } from './tools/mobile-harness/lib/registry.mjs'; console.log(JSON.stringify(APP_NAMES))")
           echo "apps: $apps"
           echo "apps=$apps" >> "$GITHUB_OUTPUT"
+          # One shard per app, except FitnessGeek: 166 scenes × phone and
+          # desktop outgrew one 25-minute job on 2026-10-17 (the job was
+          # cancelled at the timeout). Its scenes are all numbered, and
+          # FG_SCENES filters them, so it runs as three balanced shards.
+          shards=$(node --input-type=module -e "
+            import { APP_NAMES } from './tools/mobile-harness/lib/registry.mjs';
+            const split = { fitnessgeek: [['0-3', '^[0-3]'], ['4+6', '^[46]'], ['5', '^5']] };
+            const out = APP_NAMES.flatMap((app) => split[app]
+              ? split[app].map(([part, scenes]) => ({ app, label: app + ' ' + part, key: app + '-' + part.replace('+', ''), scenes }))
+              : [{ app, label: app, key: app, scenes: '' }]);
+            console.log(JSON.stringify(out));")
+          echo "shards: $shards"
+          echo "shards=$shards" >> "$GITHUB_OUTPUT"
 
   shard:
-    name: mobile grammar · ${{ matrix.app }}
+    name: mobile grammar · ${{ matrix.shard.label }}
     needs: apps
     runs-on: ubuntu-latest
     # One app, phone + desktop. The slowest app ran ~8-10 min inside the old
@@ -81,7 +95,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        app: ${{ fromJSON(needs.apps.outputs.apps) }}
+        shard: ${{ fromJSON(needs.apps.outputs.shards) }}
     steps:
       - uses: actions/checkout@v4
       - uses: pnpm/action-setup@v4
@@ -109,7 +123,7 @@ jobs:
         run: npx playwright install --with-deps chromium
         working-directory: tools/mobile-harness
 
-      - name: Build, serve and probe ${{ matrix.app }}
+      - name: Build, serve and probe ${{ matrix.shard.label }}
         # All four categories are enforcing. The three grammar rules have been
         # green since 2026-09-05 14:54; the axe-core a11y category joined them
         # later the same day at 0 findings across all eight apps. Drop
@@ -118,13 +132,17 @@ jobs:
         # ALL_VIEWPORTS). It has been enforcing since 2026-09-25, when the
         # desktop pass reached 0. Drop it only to deliberately un-gate
         # desktop, and say why.
-        run: pnpm --filter @geeksuite/mobile-harness run ci -- --enforce-a11y --desktop --app ${{ matrix.app }}
+        env:
+          # Empty for every app but a split one: the app's own scene filter
+          # (FitnessGeek's FG_SCENES) ignores an empty value and runs all.
+          FG_SCENES: ${{ matrix.shard.scenes }}
+        run: pnpm --filter @geeksuite/mobile-harness run ci -- --enforce-a11y --desktop --app ${{ matrix.shard.app }}
 
       - name: Upload screenshots and SUMMARY.md
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: mobile-harness-${{ matrix.app }}-${{ github.run_id }}
+          name: mobile-harness-${{ matrix.shard.key }}-${{ github.run_id }}
           path: tools/mobile-harness/out/
           retention-days: 14
           if-no-files-found: warn
