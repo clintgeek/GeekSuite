@@ -1,39 +1,28 @@
 import React, { useMemo } from 'react';
-import { Box, Typography, Card, CardContent, Chip } from '@mui/material';
+import { Box, Typography, Card, CardContent } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
-import { readableOn, toneForMode } from '@geeksuite/ui';
+import { readableOn } from '@geeksuite/ui';
 import {
   Favorite as HeartIcon,
   TrendingUp as TrendingUpIcon,
   TrendingDown as TrendingDownIcon,
   TrendingFlat as TrendingFlatIcon,
-  CheckCircle as CheckIcon,
-  Warning as WarningIcon,
-  Error as ErrorIcon
 } from '@mui/icons-material';
-import { parseISO, differenceInDays } from 'date-fns';
-import { newestReadingFirst } from './bpTimeUtils.js';
+import { parseISO } from 'date-fns';
+import { newestReadingFirst, readingWhen } from './bpTimeUtils.js';
 import { categorizeBP } from '../../utils/bpUtils.js';
+import { bpStageWords } from '../../utils/plainWords.js';
 
-// Icons per stage. The category itself — name, color, thresholds — comes
-// from the one shared categoriser; this just decorates its output.
-const CATEGORY_ICONS = {
-  Normal: CheckIcon,
-  Elevated: WarningIcon,
-  'Stage 1': WarningIcon,
-  'Stage 2': ErrorIcon,
-  Crisis: ErrorIcon,
-  Unknown: HeartIcon,
-};
+/**
+ * "Is my blood pressure OK?" — answered with the week, not one reading
+ * (review D-1). The headline used to be the LAST reading's category, so one
+ * good morning painted an elevated week "Normal". Now it leads with the
+ * 7-day average's category in plain words, then the last reading, then a
+ * count of readings in the healthy range ("1 of 14", never "7%").
+ */
 
-const getBPCategory = (systolic, diastolic) => {
-  const category = categorizeBP(systolic, diastolic);
-  return {
-    name: category.stage,
-    color: category.color,
-    icon: CATEGORY_ICONS[category.stage] || HeartIcon
-  };
-};
+// The category itself — name, thresholds — comes from the one shared categoriser.
+const getBPCategory = (systolic, diastolic) => ({ name: categorizeBP(systolic, diastolic).stage });
 
 const BPInsights = ({ bpLogs = [] }) => {
   const theme = useTheme();
@@ -105,12 +94,15 @@ const BPInsights = ({ bpLogs = [] }) => {
     });
     const healthyPercentage = Math.round((healthyReadings.length / sortedLogs.length) * 100);
 
-    // Get current category
+    // The last reading's category, and the week's — the week leads.
     const currentCategory = getBPCategory(latestReading.systolic, latestReading.diastolic);
+    const weekCategory = avg7Systolic ? getBPCategory(avg7Systolic, avg7Diastolic) : null;
 
     return {
       latestReading,
       currentCategory,
+      weekCategory,
+      healthyCount: healthyReadings.length,
       avg7Systolic,
       avg7Diastolic,
       avg30Systolic,
@@ -133,10 +125,10 @@ const BPInsights = ({ bpLogs = [] }) => {
         <CardContent sx={{ p: 4, textAlign: 'center' }}>
           <HeartIcon sx={{ fontSize: 48, color: theme.palette.text.disabled, mb: 2 }} />
           <Typography variant="h6" sx={{ fontWeight: 700, color: theme.palette.text.primary, mb: 1 }}>
-            No Blood Pressure Data
+            No readings yet
           </Typography>
           <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>
-            Start tracking your blood pressure to see insights
+            Log a reading and this shows how your blood pressure is doing.
           </Typography>
         </CardContent>
       </Card>
@@ -166,7 +158,17 @@ const BPInsights = ({ bpLogs = [] }) => {
 
   const trendTint = `${getTrendColor()}${isDark ? '20' : '10'}`;
 
-  const CategoryIcon = insights.currentCategory.icon;
+  const last = insights.latestReading;
+  const lastWords = `${last.systolic}/${last.diastolic} · ${bpStageWords(insights.currentCategory.name).phrase.replace(/ \(.*\)$/, '')} · ${readingWhen(last)}`;
+  const headline = insights.weekCategory
+    ? `Your average this week: ${insights.avg7Systolic}/${insights.avg7Diastolic} — ${bpStageWords(insights.weekCategory.name).phrase}`
+    : `Your last reading: ${last.systolic}/${last.diastolic} — ${bpStageWords(insights.currentCategory.name).phrase}`;
+  const tile = {
+    p: 2,
+    borderRadius: '12px',
+    backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : theme.palette.background.default,
+    border: `1px solid ${theme.palette.divider}`
+  };
 
   return (
     <Card sx={{
@@ -190,29 +192,14 @@ const BPInsights = ({ bpLogs = [] }) => {
           }}>
             <HeartIcon sx={{ fontSize: 28, color: 'white' }} />
           </Box>
-          <Box sx={{ flex: 1 }}>
-            <Typography variant="h6" sx={{ fontWeight: 700, color: theme.palette.text.primary, mb: 0.5 }}>
-              Blood Pressure Insights
+          <Box sx={{ flex: 1, minWidth: 0 }}>
+            <Typography component="h2" data-testid="bp-headline" sx={{ fontWeight: 800, fontSize: { xs: '1.1875rem', sm: '1.375rem' }, lineHeight: 1.3, color: theme.palette.text.primary, mb: 0.5 }}>
+              {headline}
             </Typography>
-            <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>
-              {insights.latestReading.systolic}/{insights.latestReading.diastolic} mmHg
+            <Typography data-testid="bp-last-reading" sx={{ fontSize: '1rem', color: theme.palette.text.secondary }}>
+              {insights.weekCategory ? `Last reading ${lastWords}` : 'No readings in the last 7 days'}
             </Typography>
           </Box>
-        </Box>
-
-        {/* Current Category */}
-        <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
-          <CategoryIcon sx={{ fontSize: 20, color: insights.currentCategory.color }} />
-          <Chip
-            label={insights.currentCategory.name}
-            sx={{
-              backgroundColor: `${insights.currentCategory.color}15`,
-              color: toneForMode(insights.currentCategory.color, theme, { lightenBy: 0, darkenBy: 0.35 }),
-              fontWeight: 700,
-              border: `1px solid ${insights.currentCategory.color}30`,
-              borderRadius: '999px'
-            }}
-          />
         </Box>
 
         {/* Insights Grid */}
@@ -223,12 +210,7 @@ const BPInsights = ({ bpLogs = [] }) => {
         }}>
           {/* 7-Day Average */}
           {insights.avg7Systolic && (
-            <Box sx={{
-              p: 2,
-              borderRadius: '12px',
-              backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : theme.palette.background.default,
-              border: `1px solid ${theme.palette.divider}`
-            }}>
+            <Box sx={tile}>
               <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontWeight: 600, display: 'block', mb: 1 }}>
                 7-Day Average
               </Typography>
@@ -243,12 +225,7 @@ const BPInsights = ({ bpLogs = [] }) => {
 
           {/* 30-Day Average */}
           {insights.avg30Systolic && (
-            <Box sx={{
-              p: 2,
-              borderRadius: '12px',
-              backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : theme.palette.background.default,
-              border: `1px solid ${theme.palette.divider}`
-            }}>
+            <Box sx={tile}>
               <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontWeight: 600, display: 'block', mb: 1 }}>
                 30-Day Average
               </Typography>
@@ -281,23 +258,14 @@ const BPInsights = ({ bpLogs = [] }) => {
             </Typography>
           </Box>
 
-          {/* Healthy Readings */}
-          <Box sx={{
-            p: 2,
-            borderRadius: '12px',
-            backgroundColor: insights.healthyPercentage >= 70
-              ? (isDark ? 'rgba(16, 185, 129, 0.15)' : 'rgba(16, 185, 129, 0.05)')
-              : (isDark ? 'rgba(239, 68, 68, 0.15)' : 'rgba(239, 68, 68, 0.05)'),
-            border: `1px solid ${insights.healthyPercentage >= 70 ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)'}`
-          }}>
+          {/* Healthy readings: a count, not a percent, and no red tile
+              saying it without words (review D-1). */}
+          <Box sx={tile} data-testid="bp-healthy-range">
             <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontWeight: 600, display: 'block', mb: 1 }}>
-              Healthy Range
+              Healthy range
             </Typography>
             <Typography variant="h6" sx={{ fontWeight: 700, color: theme.palette.text.primary }}>
-              {insights.healthyPercentage}%
-            </Typography>
-            <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-              of {insights.totalReadings} readings
+              {insights.healthyCount} of {insights.totalReadings} readings
             </Typography>
           </Box>
         </Box>

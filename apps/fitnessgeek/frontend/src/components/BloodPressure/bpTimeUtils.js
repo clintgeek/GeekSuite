@@ -22,6 +22,7 @@
  * see `packages/utils/src/dates.js`'s header for why that arithmetic is a
  * trap even when it happens to be correct.
  */
+import { utcDateString, localDateString } from '@geeksuite/utils';
 
 const pad = (n) => String(n).padStart(2, '0');
 
@@ -204,4 +205,20 @@ const instantMs = (log) => {
  */
 export function newestReadingFirst(a, b) {
   return instantMs(b) - instantMs(a);
+}
+
+const WHEN_MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** When a reading was taken, in words: "today 7:42 AM", "yesterday", "Oct 13". */
+export function readingWhen(reading, today = localDateString()) {
+  const at = reading?.measured_at;
+  const timed = at && !isDayResolutionInstant(at);
+  const day = timed ? localDayOf(at) : utcDateString(reading?.log_date || at);
+  if (!day) return '';
+  const [y, m, d] = day.split('-').map(Number);
+  const [ty, tm, td] = today.split('-').map(Number);
+  const diff = Math.round((Date.UTC(ty, tm - 1, td) - Date.UTC(y, m - 1, d)) / 86400000);
+  const word = diff === 0 ? 'today' : diff === 1 ? 'yesterday' : `${WHEN_MONTHS[m - 1]} ${d}${y !== ty ? `, ${y}` : ''}`;
+  const time = timed ? formatLocalTime(at) : '';
+  return time ? `${word} ${time}` : word;
 }

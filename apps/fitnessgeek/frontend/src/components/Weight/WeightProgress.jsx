@@ -2,9 +2,6 @@ import React, { useMemo } from 'react';
 import { Box, Typography, Card, CardContent, LinearProgress, Chip, Button } from '@mui/material';
 import { useTheme, alpha } from '@mui/material/styles';
 import {
-  TrendingUp as TrendingUpIcon,
-  TrendingDown as TrendingDownIcon,
-  TrendingFlat as TrendingFlatIcon,
   Flag as GoalIcon,
   Edit as EditIcon,
   CalendarToday as CalendarIcon,
@@ -12,8 +9,8 @@ import {
   ArrowForward as ArrowIcon
 } from '@mui/icons-material';
 import { differenceInWeeks, differenceInDays, parseISO, format } from 'date-fns';
-import { readableOn } from '@geeksuite/ui';
-import { programPace } from './weightTrend.js';
+import { utcDateString } from '@geeksuite/utils';
+import { programPace, neededPacePerWeek, trendSince } from './weightTrend.js';
 import { StatNumber, SectionLabel } from '../primitives';
 
 const WeightProgress = ({
@@ -25,7 +22,9 @@ const WeightProgress = ({
   // The first run's answer, in her words (`experience.goal`). "Lose a little"
   // was stored and never used (review Phase 2.14); here it turns the empty
   // card into the next step.
-  firstRunGoal = null
+  firstRunGoal = null,
+  // Simple (review L25): the trend in words first, and no chip or pace maths.
+  simple = false
 }) => {
   const theme = useTheme();
   const insights = useMemo(() => {
@@ -128,6 +127,13 @@ const WeightProgress = ({
     const noGoal = !goal || !goal.enabled;
     // A goal with nothing to measure yet is not a missing goal.
     const needsWeighIn = !noGoal && !currentWeight;
+    // Simple with no goal still leads with the trend, once there is one.
+    const looseTrend = simple && noGoal ? trendSince(weightLogs, null) : null;
+    const trendLine = looseTrend ? (
+      <Typography component="h2" data-testid="weight-trend-words" sx={{ fontSize: { xs: '1.5rem', sm: '1.75rem' }, fontWeight: 800, lineHeight: 1.2, mb: 1.5, textAlign: 'left' }}>
+        {trendWords(looseTrend, unitWord(unit))}
+      </Typography>
+    ) : null;
     if (noGoal && firstRunGoal === 'lose' && onEditGoal) {
       // One sentence, one button. No heading announcing what's missing.
       return (
@@ -137,6 +143,7 @@ const WeightProgress = ({
           border: `1px solid ${theme.palette.divider}`
         }}>
           <CardContent sx={{ p: 3 }}>
+            {trendLine}
             <Typography sx={{ color: 'text.primary', fontSize: '1.0625rem', lineHeight: 1.5, mb: 2 }}>
               You said you&rsquo;d like to lose a little. Set a goal and this page will show how it&rsquo;s going.
             </Typography>
@@ -160,6 +167,7 @@ const WeightProgress = ({
         border: `1px solid ${theme.palette.divider}`
       }}>
         <CardContent sx={{ p: 4, textAlign: 'center' }}>
+          {trendLine}
           <GoalIcon sx={{ fontSize: 48, color: theme.palette.text.disabled, mb: 2 }} />
           <Typography variant="h6" sx={{ fontWeight: 700, color: theme.palette.text.primary, mb: 1 }}>
             {needsWeighIn ? 'Weigh in to see your progress' : 'No weight goal yet'}
@@ -189,39 +197,30 @@ const WeightProgress = ({
     );
   }
 
-  // Theme palette only — no hex literals (F10). Status colours are domain
-  // colours: as a fill they are tinted with `alpha`, and as TEXT they go
-  // through `readableOn` against the tint they actually sit on, the way
-  // BPInsights does it.
+  // Theme palette only — no hex literals (F10). Nothing on this card is red
+  // (review D-2: the plan says "nothing turns red"): behind plan is lemon,
+  // with the words "Behind plan" — never colour alone.
   const isDark = theme.palette.mode === 'dark';
-  const paper = theme.palette.background.paper;
-
-  const getTrendIcon = () => {
-    if (insights.isAhead) return <TrendingUpIcon sx={{ color: theme.palette.success.main }} />;
-    if (insights.isBehind) return <TrendingDownIcon sx={{ color: theme.palette.error.main }} />;
-    return <TrendingFlatIcon sx={{ color: theme.palette.primary.main }} />;
-  };
-
-  const getStatusColor = () => {
-    if (insights.isAhead) return theme.palette.success.main;
-    if (insights.isBehind) return theme.palette.error.main;
-    return theme.palette.primary.main;
-  };
-
-  const statusTint = alpha(getStatusColor(), isDark ? 0.14 : 0.08);
-  const statusInk = readableOn(getStatusColor(), statusTint, { under: paper });
-
+  const produce = theme.palette.produce || {};
+  const u = unitWord(unit);
   const tileBg = isDark ? alpha(theme.palette.text.primary, 0.04) : theme.palette.background.default;
+  const tile = { p: 2, borderRadius: '12px', backgroundColor: tileBg, border: `1px solid ${theme.palette.divider}` };
 
-  const projectionTone = insights.isOnTrack ? theme.palette.success.main : theme.palette.error.main;
-  const projectionTint = alpha(projectionTone, isDark ? 0.12 : 0.06);
-  const projectionMuted = readableOn(theme.palette.text.secondary, projectionTint, { under: paper });
+  const total = Math.abs(goal.targetWeight - goal.startWeight);
+  const moved = (total * (insights.progressPercent || 0)) / 100;
+  const losing = goal.targetWeight < goal.startWeight;
+  const movedWord = goal.targetWeight === goal.startWeight ? 'kept' : losing ? 'lost' : 'gained';
+  const progressText = total > 0
+    ? `${trim1(moved)} of ${trim1(total)} ${u} ${movedWord}`
+    : 'Holding steady';
+  const basis = `From your 7-day average, ${Number(currentWeight).toFixed(1)} ${u}`;
+  const trend = simple ? trendSince(weightLogs, goal, currentWeight) : null;
 
-  const getStatusText = () => {
-    if (insights.isAhead) return `${Math.abs(insights.daysAheadBehind)} days ahead`;
-    if (insights.isBehind) return `${Math.abs(insights.daysAheadBehind)} days behind`;
-    return 'On track';
-  };
+  const status = insights.isAhead
+    ? { label: 'Ahead of plan', bg: alpha(theme.palette.primary.main, isDark ? 0.16 : 0.1), ink: theme.palette.text.primary }
+    : insights.isBehind
+      ? { label: 'Behind plan', bg: produce.dinner?.fill, ink: produce.dinner?.ink }
+      : { label: 'On track', bg: alpha(theme.palette.primary.main, isDark ? 0.16 : 0.1), ink: theme.palette.text.primary };
 
   return (
     <Card sx={{
@@ -230,7 +229,18 @@ const WeightProgress = ({
       border: `1px solid ${theme.palette.divider}`
     }}>
       <CardContent sx={{ p: { xs: 2.5, sm: 3 } }}>
-        {/* Editorial header — goal values as primary display */}
+        {/* Simple leads with the trend in words (review L25): how it's going,
+            not the goal maths. */}
+        {trend && (
+          <Box sx={{ mb: 2.5 }}>
+            <Typography component="h2" data-testid="weight-trend-words" sx={{ fontSize: { xs: '1.5rem', sm: '1.75rem' }, fontWeight: 800, lineHeight: 1.2 }}>
+              {trendWords(trend, u)}
+            </Typography>
+            <Typography sx={{ mt: 0.5, fontSize: '1rem', color: 'text.secondary' }}>{basis}</Typography>
+          </Box>
+        )}
+
+        {/* The goal: start → target */}
         <Box
           sx={{
             display: 'flex',
@@ -241,7 +251,7 @@ const WeightProgress = ({
           }}
         >
           <Box sx={{ flex: 1, minWidth: 0 }}>
-            <SectionLabel sx={{ mb: 1 }}>Active Weight Goal</SectionLabel>
+            <SectionLabel sx={{ mb: 1 }}>Your goal</SectionLabel>
             <Box
               sx={{
                 display: 'flex',
@@ -252,7 +262,7 @@ const WeightProgress = ({
             >
               <StatNumber
                 value={goal.startWeight}
-                unit={unit}
+                unit={u}
                 size="display"
                 decimals={0}
                 color={alpha(theme.palette.text.primary, 0.5)}
@@ -260,7 +270,7 @@ const WeightProgress = ({
               <ArrowIcon sx={{ color: 'text.secondary', fontSize: 20, alignSelf: 'center' }} />
               <StatNumber
                 value={goal.targetWeight}
-                unit={unit}
+                unit={u}
                 size="display"
                 decimals={0}
                 color={theme.palette.primary.main}
@@ -274,10 +284,9 @@ const WeightProgress = ({
               onClick={onEditGoal}
               sx={{
                 borderRadius: '999px',
-                textTransform: 'uppercase',
+                textTransform: 'none',
                 fontWeight: 700,
-                fontSize: '0.75rem',
-                letterSpacing: '0.1em',
+                minHeight: 44,
                 color: theme.palette.primary.main,
                 flexShrink: 0,
                 '&:hover': {
@@ -285,25 +294,25 @@ const WeightProgress = ({
                 },
               }}
             >
-              Edit
+              Change goal
             </Button>
           )}
         </Box>
 
-        {/* Progress Bar */}
-        <Box sx={{ mb: 3 }}>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 1 }}>
-            <Typography variant="body2" sx={{ fontWeight: 600, color: theme.palette.text.primary }}>
-              {(insights.progressPercent || 0).toFixed(1)}% Complete
+        {/* Progress: a count, not a percent (review D-2) */}
+        <Box sx={{ mb: simple ? 0 : 3 }}>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, mb: 1, flexWrap: 'wrap' }}>
+            <Typography variant="body2" data-testid="weight-progress-count" sx={{ fontWeight: 700, color: theme.palette.text.primary }}>
+              {progressText}
             </Typography>
             <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>
-              {(insights.remainingWeight || 0).toFixed(1)} {unit} to go
+              {trim1(insights.remainingWeight || 0)} {u} to go
             </Typography>
           </Box>
           <LinearProgress
             variant="determinate"
             value={insights.progressPercent}
-            aria-label={`Progress to goal weight: ${(insights.progressPercent || 0).toFixed(1)}% complete`}
+            aria-label={`Progress to goal weight: ${progressText}`}
             sx={{
               height: 12,
               borderRadius: '999px',
@@ -314,126 +323,175 @@ const WeightProgress = ({
               }
             }}
           />
+          {/* One basis for "to go", said out loud (review D-3). */}
+          {!trend && (
+            <Typography data-testid="weight-basis" sx={{ mt: 1, fontSize: '0.9375rem', color: 'text.secondary' }}>
+              {basis}
+            </Typography>
+          )}
         </Box>
 
-        {/* Status Chip */}
-        <Box sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
-          {getTrendIcon()}
-          <Chip
-            label={getStatusText()}
-            sx={{
-              backgroundColor: statusTint,
-              color: statusInk,
-              fontWeight: 700,
-              border: `1px solid ${alpha(getStatusColor(), 0.3)}`,
-              borderRadius: '999px'
-            }}
-          />
-        </Box>
-
-        {/* Insights Grid */}
-        <Box sx={{
-          display: 'grid',
-          gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
-          gap: 2
-        }}>
-          {/* Current Rate */}
-          <Box sx={{
-            p: 2,
-            borderRadius: '12px',
-            backgroundColor: tileBg,
-            border: `1px solid ${theme.palette.divider}`
-          }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-              <SpeedIcon sx={{ fontSize: 18, color: theme.palette.primary.main }} />
-              <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontWeight: 600 }}>
-                Current Rate
-              </Typography>
+        {/* Simple stops there: no chip, no pace maths (review L25). */}
+        {!simple && (
+          <>
+            <Box sx={{ mb: 3 }}>
+              <Chip
+                label={status.label}
+                data-testid="weight-status"
+                sx={{
+                  backgroundColor: status.bg,
+                  color: status.ink,
+                  fontWeight: 700,
+                  borderRadius: '999px'
+                }}
+              />
             </Box>
-            <Typography variant="h6" sx={{ fontWeight: 700, color: theme.palette.text.primary }}>
-              {insights.currentRate === null ? '—' : `${Math.abs(insights.currentRate).toFixed(1)} ${unit}/week`}
-            </Typography>
-            <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-              {insights.currentRate === null ? `${rateWaitText(insights.pace)} · ` : 'Since your start · '}
-              Goal: {Math.abs(insights.goalRate || 0).toFixed(1)} {unit}/week
-            </Typography>
-          </Box>
 
-          {/* Time Remaining */}
-          <Box sx={{
-            p: 2,
-            borderRadius: '12px',
-            backgroundColor: tileBg,
-            border: `1px solid ${theme.palette.divider}`
-          }}>
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
-              <CalendarIcon sx={{ fontSize: 18, color: theme.palette.primary.main }} />
-              <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontWeight: 600 }}>
-                Time Remaining
-              </Typography>
+            <Box sx={{
+              display: 'grid',
+              gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
+              gap: 2
+            }}>
+              {/* Pace: hers beside the one the dates need (review D-2) */}
+              <Box sx={tile} data-testid="weight-pace">
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                  <SpeedIcon sx={{ fontSize: 18, color: theme.palette.primary.main }} />
+                  <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontWeight: 600 }}>
+                    Your pace
+                  </Typography>
+                </Box>
+                <Typography sx={{ fontWeight: 700, color: theme.palette.text.primary, lineHeight: 1.4 }}>
+                  {paceSentence(insights, goal, u)}
+                </Typography>
+                {insights.currentRate === null && (
+                  <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
+                    {rateWaitText(insights.pace)}
+                  </Typography>
+                )}
+              </Box>
+
+              {/* Time Remaining */}
+              <Box sx={tile}>
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
+                  <CalendarIcon sx={{ fontSize: 18, color: theme.palette.primary.main }} />
+                  <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontWeight: 600 }}>
+                    Time Remaining
+                  </Typography>
+                </Box>
+                <Typography variant="h6" sx={{ fontWeight: 700, color: theme.palette.text.primary }}>
+                  {insights.weeksToGoal || 0} weeks
+                </Typography>
+                <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
+                  {insights.daysToGoal || 0} days until {goal?.goalDate ? fmtYmd(utcDateString(goal.goalDate)) : 'N/A'}
+                </Typography>
+              </Box>
+
+              {/* Projection, in words (review D-2) */}
+              <Box sx={{ ...tile, gridColumn: { xs: '1', sm: 'span 2' } }} data-testid="weight-projection">
+                <Typography variant="body1" sx={{ fontWeight: 700, color: theme.palette.text.primary }}>
+                  {projectionHeadline(insights, goal)}
+                </Typography>
+                <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
+                  {projectionCaption(insights, goal, u)}
+                </Typography>
+              </Box>
             </Box>
-            <Typography variant="h6" sx={{ fontWeight: 700, color: theme.palette.text.primary }}>
-              {insights.weeksToGoal || 0} weeks
-            </Typography>
-            <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-              {insights.daysToGoal || 0} days until {goal?.goalDate ? format(parseISO(goal.goalDate), 'MMM dd') : 'N/A'}
-            </Typography>
-          </Box>
-
-          {/* Projected Completion */}
-          <Box sx={{
-            p: 2,
-            borderRadius: '12px',
-            backgroundColor: projectionTint,
-            border: `1px solid ${alpha(projectionTone, 0.25)}`,
-            gridColumn: { xs: '1', sm: 'span 2' }
-          }}>
-            <Typography variant="caption" sx={{ color: projectionMuted, fontWeight: 600, display: 'block', mb: 1 }}>
-              Projected Completion
-            </Typography>
-            <Typography variant="body1" sx={{ fontWeight: 700, color: theme.palette.text.primary }}>
-              {projectionHeadline(insights)}
-            </Typography>
-            <Typography variant="caption" sx={{ color: projectionMuted }}>
-              {projectionCaption(insights, unit)}
-            </Typography>
-          </Box>
-        </Box>
+          </>
+        )}
       </CardContent>
     </Card>
   );
 };
 
-const fmtDay = (d) => (d ? format(d, 'MMMM d, yyyy') : '');
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+const unitWord = (unit) => (unit === 'lbs' ? 'lb' : unit);
+/** 12.1 → "12.1", 37 → "37". */
+const trim1 = (n) => (Math.round((Number(n) || 0) * 10) / 10).toFixed(1).replace(/\.0$/, '');
 const fmtYmd = (ymd) => (ymd ? format(new Date(`${ymd}T12:00:00`), 'MMM d') : '');
+const todayYmd = () => format(new Date(), 'yyyy-MM-dd');
+const yearOf = (ymd) => Number(String(ymd).slice(0, 4));
+const monthName = (ymd) => {
+  const name = MONTHS[Number(String(ymd).slice(5, 7)) - 1] || '';
+  return yearOf(ymd) === yearOf(todayYmd()) ? name : `${name} ${yearOf(ymd)}`;
+};
+
+/** "late February", "early March 2027" — a forecast is a part of a month, not a day. */
+function whenInWords(ymd) {
+  const day = Number(String(ymd).slice(8, 10));
+  const part = day <= 10 ? 'early' : day <= 20 ? 'mid' : 'late';
+  return `${part} ${monthName(ymd)}`;
+}
+
+/** 88 days → "about 3 months"; 12 → "about 2 weeks"; 3 → "a few days". */
+function gapInWords(days) {
+  const d = Math.abs(Math.round(days));
+  if (d < 7) return 'a few days';
+  if (d < 45) {
+    const w = Math.round(d / 7);
+    return `about ${w} week${w === 1 ? '' : 's'}`;
+  }
+  const m = Math.round(d / 30.4);
+  return `about ${m} month${m === 1 ? '' : 's'}`;
+}
+
+/** "Down 12.1 lb since June" (Simple's headline). */
+function trendWords({ change, since }, u) {
+  if (Math.abs(change) < 0.5) return `About the same since ${monthName(since)}`;
+  return `${change < 0 ? 'Down' : 'Up'} ${trim1(Math.abs(change))} ${u} since ${monthName(since)}`;
+}
+
+/**
+ * "You're losing 1.3 lb a week. To reach 195 by Dec 1 you'd need 1.5."
+ * The needed pace is the dates' (neededPacePerWeek), not the stored rate.
+ */
+function paceSentence(insights, goal, u) {
+  const needed = neededPacePerWeek(goal);
+  const goalVerb = goal.targetWeight < goal.startWeight ? 'lose' : 'gain';
+  const by = `To reach ${trim1(goal.targetWeight)} by ${fmtYmd(utcDateString(goal.goalDate))}`;
+  if (goal.targetWeight === goal.startWeight || needed === null) {
+    return insights.currentRate === null
+      ? `Your goal is to stay at ${trim1(goal.targetWeight)} ${u}.`
+      : `You're ${insights.currentRate < 0 ? 'losing' : 'gaining'} ${Math.abs(insights.currentRate).toFixed(1)} ${u} a week.`;
+  }
+  const need = needed.toFixed(1);
+  if (insights.currentRate === null) return `${by} you'd need to ${goalVerb} ${need} ${u} a week.`;
+  const rate = insights.currentRate;
+  if (Math.abs(rate) < 0.05) return `Your weight is holding steady. ${by} you'd need to ${goalVerb} ${need} ${u} a week.`;
+  const verb = rate < 0 ? 'losing' : 'gaining';
+  const sameWay = (rate < 0) === (goalVerb === 'lose');
+  return `You're ${verb} ${Math.abs(rate).toFixed(1)} ${u} a week. ${by} you'd need ${sameWay ? need : `to ${goalVerb} ${need}`}.`;
+}
 
 /** Why there's no measured rate yet. */
 function rateWaitText(pace) {
-  if (pace?.phase === 'not-started') return `Starts ${fmtYmd(pace.startDate)}`;
+  if (pace?.phase === 'not-started') return `Your own pace shows once you start, ${fmtYmd(pace.startDate)}`;
   const left = Math.max(1, 14 - (pace?.programDays || 0));
-  return `Measured after 2 weeks in (${left} day${left === 1 ? '' : 's'} to go)`;
+  return `Your own pace shows after 2 weeks in (${left} day${left === 1 ? '' : 's'} to go)`;
 }
 
-/** The projection tile's big line: a date only when there is an honest one. */
-function projectionHeadline(insights) {
+/** The projection's big line: a time of month only when there is an honest one. */
+function projectionHeadline(insights, goal) {
   const { pace } = insights;
-  if (!pace || pace.phase !== 'measured') return fmtDay(insights.projectedDate);
-  if (pace.projectedDate) return fmtDay(insights.projectedDate);
-  if (pace.heading === 'away') return 'Not on pace yet';
-  return 'Well behind plan';
+  if (!pace || pace.phase !== 'measured') return `Your plan finishes ${fmtYmd(utcDateString(goal.goalDate))}`;
+  if (pace.projectedDate) return `At this pace: ${whenInWords(pace.projectedDate)}`;
+  if (pace.heading === 'away') return 'Not heading toward your goal yet';
+  return 'At this pace: well past your goal date';
 }
 
-/** …and what it is based on. */
-function projectionCaption(insights, unit) {
+/** …and what it means against the goal date. */
+function projectionCaption(insights, goal, u) {
   const { pace } = insights;
-  const goalRate = `${Math.abs(insights.goalRate || 0).toFixed(1)} ${unit}/week`;
+  const goalRate = `${Math.abs(insights.goalRate || 0).toFixed(1)} ${u} a week`;
   if (!pace || pace.phase === 'none') return `Your plan, at ${goalRate}`;
   if (pace.phase === 'not-started') return `Your plan, at ${goalRate} — the program starts ${fmtYmd(pace.startDate)}`;
   if (pace.phase === 'too-early') return `Your plan, at ${goalRate}, until there are two weeks of weigh-ins to measure your own pace`;
-  const rate = `${Math.abs(pace.slopePerWeek || 0).toFixed(1)} ${unit}/week`;
-  if (pace.projectedDate) return `At ${rate}, your trend since starting ${fmtYmd(pace.startDate)}`;
-  if (pace.heading === 'away') return `Your trend since ${fmtYmd(pace.startDate)} is heading away from the target — early weeks are noisy`;
-  return `At ${rate} since ${fmtYmd(pace.startDate)}, the finish is more than twice the plan's length out`;
+  if (pace.projectedDate) {
+    const days = insights.daysAheadBehind;
+    if (Math.abs(days) <= 7) return 'That’s right about your goal date.';
+    return `That’s ${gapInWords(days)} ${days < 0 ? 'after' : 'before'} your goal date.`;
+  }
+  if (pace.heading === 'away') return `Your trend since ${fmtYmd(pace.startDate)} is going the other way — early weeks are noisy`;
+  return `At this pace the finish is more than twice the plan’s length out`;
 }
 
 export default WeightProgress;

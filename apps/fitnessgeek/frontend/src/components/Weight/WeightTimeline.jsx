@@ -1,11 +1,15 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef } from 'react';
 import { Box, Typography } from '@mui/material';
 import { useTheme, alpha } from '@mui/material/styles';
 import { ResponsiveLine } from '@nivo/line';
-import { displayCalendarDate, utcDateString } from '@geeksuite/utils';
+import { utcDateString } from '@geeksuite/utils';
 import { readableOn } from '@geeksuite/ui';
 import { Surface, SectionLabel, DisplayHeading, buildChartTheme } from '../primitives';
 import { buildWeightTrend, splitAtGaps } from './weightTrend.js';
+import ChartTooltip from './chartTooltip.jsx';
+import { massDomain, tooltipDay, useTooltipGuard } from './chartTips.js';
+
+const MARGIN = { top: 12, right: 16, bottom: 40, left: 40 };
 
 // Series ids double as legend labels and tooltip names.
 export const SERIES = Object.freeze({
@@ -19,7 +23,6 @@ const WeightTimeline = ({ weightLogs = [], goal = null, unit = 'lbs' }) => {
   const theme = useTheme();
   const primary = theme.palette.primary.main;
   const muted = theme.palette.text.secondary;
-  const ink = theme.palette.text.primary;
   const chartTheme = useMemo(() => buildChartTheme(theme), [theme]);
 
   // §0: the line is a 7-day trailing mean; raw readings are faint dots; the
@@ -44,14 +47,14 @@ const WeightTimeline = ({ weightLogs = [], goal = null, unit = 'lbs' }) => {
     return lines;
   }, [model, muted, primary, projectionColor]);
 
-  const yAxisDomain = useMemo(() => {
-    const allYValues = chartData.flatMap((line) => line.data.map((point) => point.y));
-    if (allYValues.length === 0) return ['auto', 'auto'];
-    const min = Math.min(...allYValues);
-    const max = Math.max(...allYValues);
-    const padding = (max - min) * 0.12 || 2;
-    return [Math.floor(min - padding), Math.ceil(max + padding)];
-  }, [chartData]);
+  // At least 10 lb tall (review D-4), so scale noise isn't drawn as a cliff.
+  const yAxisDomain = useMemo(
+    () => massDomain(chartData.flatMap((line) => line.data.map((point) => point.y)), 10),
+    [chartData],
+  );
+  const chartRef = useRef(null);
+  const guard = useTooltipGuard();
+  const u = unit === 'lbs' ? 'lb' : unit;
 
   if (!model.readings.length) {
     return (
@@ -114,13 +117,17 @@ const WeightTimeline = ({ weightLogs = [], goal = null, unit = 'lbs' }) => {
         </Typography>
       )}
 
-      <Box sx={{ height: { xs: 280, sm: 340 } }}>
+      {/* The y-axis unit, said once (review D-4). */}
+      <Typography data-testid="weight-y-unit" aria-hidden sx={{ color: muted, fontSize: '0.8125rem', fontWeight: 600, mb: 0.25 }}>
+        {u}
+      </Typography>
+      <Box ref={chartRef} {...guard.handlers} sx={{ height: { xs: 280, sm: 340 } }}>
         <ResponsiveLine
           data={chartData}
           theme={chartTheme}
           role="img"
           ariaLabel={`Weight over time, in ${unit}: a 7-day average line over each reading${model.goalLine ? ', against the goal line' : ''}`}
-          margin={{ top: 12, right: 16, bottom: 40, left: 40 }}
+          margin={MARGIN}
           xScale={{ type: 'time', format: '%Y-%m-%d', useUTC: false, precision: 'day' }}
           xFormat="time:%Y-%m-%d"
           yScale={{ type: 'linear', min: yAxisDomain[0], max: yAxisDomain[1] }}
@@ -154,58 +161,20 @@ const WeightTimeline = ({ weightLogs = [], goal = null, unit = 'lbs' }) => {
           enableArea={false}
           enableSlices="x"
           enableGridX={false}
-          sliceTooltip={({ slice }) => (
-            <Box
-              sx={{
-                background: theme.palette.background.paper,
-                px: 1.75,
-                py: 1.25,
-                borderRadius: 1.5,
-                border: `1px solid ${theme.palette.divider}`,
-                boxShadow: theme.shadows[4],
-                minWidth: 170,
-              }}
-            >
-              <Typography
-                sx={{
-                  fontFamily: "inherit",
-                  fontSize: '0.75rem',
-                  fontWeight: 700,
-                  textTransform: 'uppercase',
-                  letterSpacing: '0.12em',
-                  color: muted,
-                  mb: 0.75,
-                  display: 'block',
-                }}
-              >
-                {displayCalendarDate(slice.points[0].data.xFormatted, 'en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
-              </Typography>
-              {slice.points.map((point) => (
-                <Box
-                  key={point.id}
-                  sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 1.5, mb: 0.25 }}
-                >
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
-                    <Box sx={{ width: 8, height: 8, borderRadius: '50%', backgroundColor: point.seriesColor }} />
-                    <Typography sx={{ fontSize: '0.75rem', color: muted, fontWeight: 600 }}>
-                      {point.seriesId}
-                    </Typography>
-                  </Box>
-                  <Typography
-                    sx={{
-                      fontFamily: "inherit",
-                      fontVariantNumeric: 'tabular-nums',
-                      fontSize: '0.8125rem',
-                      fontWeight: 600,
-                      color: ink,
-                    }}
-                  >
-                    {Number(point.data.yFormatted).toFixed(1)} {unit}
-                  </Typography>
-                </Box>
-              ))}
-            </Box>
-          )}
+          sliceTooltip={({ slice }) => (guard.armed() ? (
+            <ChartTooltip
+              chartRef={chartRef}
+              marginLeft={MARGIN.left}
+              x={slice.x}
+              title={tooltipDay(slice.points[0]?.data?.xFormatted)}
+              rows={slice.points.map((point) => ({
+                key: point.id,
+                label: point.seriesId === SERIES.readings ? 'Weigh-in' : point.seriesId,
+                value: `${Number(point.data.yFormatted).toFixed(1)} ${u}`,
+                color: point.seriesColor,
+              }))}
+            />
+          ) : null)}
           layers={[
             'grid',
             'markers',

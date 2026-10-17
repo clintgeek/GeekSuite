@@ -81,6 +81,28 @@ describe('Weight page — logging', () => {
     expect(createWeightLog.mock.calls[0][0]).toMatchObject({ weight_value: 217.9, log_date: '2026-10-16' });
   });
 
+  it('a day that already has a weight says so, and the button reads Replace (review L5)', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2026, 9, 15, 19, 0, 0));
+    renderAt();
+    fireEvent.click(await screen.findByTestId('log-weight-fab'));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByTestId('weight-replace-note')).toHaveTextContent('You already have 218.7 for today. Saving replaces it.');
+    fireEvent.change(within(dialog).getByLabelText(/weight \(lbs\)/i), { target: { value: '219.4' } });
+    expect(within(dialog).getByRole('button', { name: 'Replace', hidden: true })).toBeEnabled();
+
+    // Backfilling the day before, which has none: an ordinary Save.
+    fireEvent.change(within(dialog).getByLabelText('Date'), { target: { value: '2026-10-14' } });
+    expect(within(dialog).queryByTestId('weight-replace-note')).toBeNull();
+    expect(within(dialog).getByRole('button', { name: 'Save', hidden: true })).toBeInTheDocument();
+
+    // The next day, it names the day it would replace.
+    fireEvent.change(within(dialog).getByLabelText('Date'), { target: { value: '2026-10-15' } });
+    vi.setSystemTime(new Date(2026, 9, 16, 7, 0, 0));
+    fireEvent.change(within(dialog).getByLabelText(/weight \(lbs\)/i), { target: { value: '219.5' } });
+    expect(within(dialog).getByTestId('weight-replace-note')).toHaveTextContent('You already have 218.7 for yesterday. Saving replaces it.');
+  });
+
   it('?add=1 opens the weight dialog directly', async () => {
     renderAt('/weight?add=1');
     const dialog = await screen.findByRole('dialog');

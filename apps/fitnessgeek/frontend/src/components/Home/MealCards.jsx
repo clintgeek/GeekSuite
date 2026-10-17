@@ -11,7 +11,7 @@ import {
   Cookie as SnackIcon,
 } from '@mui/icons-material';
 import { MEAL_ORDER } from '../../theme/theme.jsx';
-import { mealLabel, mealWord } from '../../utils/plainWords.js';
+import { amountName, mealLabel, mealWord, mergeByName } from '../../utils/plainWords.js';
 
 /**
  * Today's meals as four big cards (SIMPLE_AND_FULL_PLAN.md item 1): Breakfast,
@@ -25,25 +25,33 @@ import { mealLabel, mealWord } from '../../utils/plainWords.js';
  *
  * `compact` (Simple) shows the first two foods and a count; Full lists every
  * food with a remove button, which Chef uses.
+ *
+ * Amounts show (review L4): "Egg ×2" when an entry isn't one serving, and in
+ * compact cards two entries with the same name merge into one line, "Egg ×2",
+ * so she can check what she logged instead of adding another to be safe.
  */
 const ICONS = { breakfast: BreakfastIcon, lunch: LunchIcon, dinner: DinnerIcon, snack: SnackIcon };
 
-function MealCard({ mealType, foods = [], calories = 0, compact, onAdd, onRemove, removingIds, logHref, justAdded = null }) {
+function MealCard({ mealType, foods = [], calories = 0, compact, onAdd, onRemove, removingIds, logHref, justAdded = null, unknown = false }) {
   const theme = useTheme();
   const produce = theme.palette.produce?.[mealType] || {};
   const Icon = ICONS[mealType] || SnackIcon;
   const label = mealLabel(mealType);
-  const shown = compact ? foods.slice(0, 2) : foods;
-  const hidden = foods.length - shown.length;
+  const rows = compact ? mergeByName(foods) : foods;
+  const shown = compact ? rows.slice(0, 2) : rows;
+  const hidden = rows.length - shown.length;
   const cal = Math.round(calories || 0);
 
   return (
     <Box
       component="section"
+      id={`meal-card-${mealType}`}
       aria-labelledby={`meal-card-${mealType}-title`}
       data-testid={`meal-card-${mealType}`}
       sx={{
         position: 'relative',
+        // Clear of the sticky top bar when Home scrolls a card into view.
+        scrollMarginTop: 88,
         display: 'flex',
         flexDirection: 'column',
         gap: 1.5,
@@ -112,7 +120,8 @@ function MealCard({ mealType, foods = [], calories = 0, compact, onAdd, onRemove
             {label}
           </Typography>
           <Typography sx={{ fontSize: '1rem', color: 'text.secondary', fontWeight: 600 }}>
-            {foods.length === 0 ? 'Nothing yet' : `${cal.toLocaleString('en-US')} cal`}
+            {/* A meal that couldn't be read is unknown ("—"), never "Nothing yet". */}
+            {unknown ? '—' : foods.length === 0 ? 'Nothing yet' : `${cal.toLocaleString('en-US')} cal`}
           </Typography>
         </Box>
       </Box>
@@ -133,7 +142,7 @@ function MealCard({ mealType, foods = [], calories = 0, compact, onAdd, onRemove
               }}
             >
               <Typography sx={{ flex: 1, minWidth: 0, fontSize: '1.0625rem', color: 'text.primary', lineHeight: 1.35, overflowWrap: 'anywhere' }}>
-                {food.name}
+                {amountName(food.name, food.servings)}
               </Typography>
               {!compact && (
                 <Typography sx={{ fontSize: '1rem', color: 'text.secondary', fontWeight: 700, whiteSpace: 'nowrap' }}>
@@ -196,8 +205,11 @@ function MealCard({ mealType, foods = [], calories = 0, compact, onAdd, onRemove
  *
  * `justAdded` is useJustAdded()'s value (Full): the card a describe landed on
  * carries a "Just added" strip with Fix and Undo until the next action.
+ *
+ * `unknown` (review L1): the day couldn't be read and there is nothing from
+ * before to show, so no card claims "Nothing yet".
  */
-export default function MealCards({ meals = {}, compact = false, onAdd, onRemove, removingIds, date, justAdded = null }) {
+export default function MealCards({ meals = {}, compact = false, onAdd, onRemove, removingIds, date, justAdded = null, unknown = false }) {
   return (
     <Box
       data-testid="meal-cards"
@@ -221,6 +233,7 @@ export default function MealCards({ meals = {}, compact = false, onAdd, onRemove
           removingIds={removingIds}
           logHref={date ? `/food-log?date=${date}&meal=${mealType}` : undefined}
           justAdded={justAdded?.renderFor?.(mealType, date) || null}
+          unknown={unknown}
         />
       ))}
     </Box>

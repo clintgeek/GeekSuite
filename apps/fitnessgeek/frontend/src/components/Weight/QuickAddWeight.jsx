@@ -9,7 +9,7 @@ import {
 } from '@mui/material';
 import { MonitorWeight as WeightIcon } from '@mui/icons-material';
 import { useGeekDialogFullScreen } from '@geeksuite/ui';
-import { localDateString } from '@geeksuite/utils';
+import { localDateString, utcDateString } from '@geeksuite/utils';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
 import DateField from '../primitives/DateField.jsx';
 import { errorMessage } from '../../utils/errorMessage.js';
@@ -17,8 +17,33 @@ import { thumbSaveProps } from '../BloodPressure/thumbSave.jsx';
 import ThumbFab from '../primitives/ThumbFab.jsx';
 
 const SAVE_FAILED = "That weight didn't save. Check your connection and try again.";
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
-const QuickAddWeight = ({ onAdd, unit = 'lbs', autoOpen = false, onAutoOpened }) => {
+/** "today", "yesterday", "Oct 13" — for "You already have 218.7 for today". */
+function dayWords(ymd, todayYmd) {
+  if (ymd === todayYmd) return 'today';
+  const [y, m, d] = ymd.split('-').map(Number);
+  const [ty, tm, td] = todayYmd.split('-').map(Number);
+  const diff = Math.round((Date.UTC(ty, tm - 1, td) - Date.UTC(y, m - 1, d)) / 86400000);
+  if (diff === 1) return 'yesterday';
+  return `${MONTHS[m - 1]} ${d}${y !== ty ? `, ${y}` : ''}`;
+}
+
+/**
+ * One weight per day (the gateway keeps one row per day), so saving on a day
+ * that already has one REPLACES it. That used to happen without a word — an
+ * evening weigh-in, or a backfill with the date left on today, silently
+ * overwrote the morning's (review L5). `existingLogs` is the page's weight
+ * log; when the chosen day has a weight, the field says so and the button
+ * reads "Replace".
+ */
+function weightOnDay(logs, ymd) {
+  if (!ymd) return null;
+  const hit = (Array.isArray(logs) ? logs : []).find((l) => l?.log_date && utcDateString(l.log_date) === ymd);
+  return hit && Number.isFinite(Number(hit.weight_value)) ? Number(hit.weight_value) : null;
+}
+
+const QuickAddWeight = ({ onAdd, unit = 'lbs', autoOpen = false, onAutoOpened, existingLogs = [] }) => {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState('');
   // The dialog's day. Seeded when the dialog OPENS, not when the page
@@ -86,6 +111,15 @@ const QuickAddWeight = ({ onAdd, unit = 'lbs', autoOpen = false, onAutoOpened })
     }
   };
 
+  const todayYmd = localDateString();
+  const replaceNote = (ymd) => {
+    const had = weightOnDay(existingLogs, ymd);
+    return had === null ? null : `You already have ${had.toFixed(1)} for ${dayWords(ymd, todayYmd)}. Saving replaces it.`;
+  };
+  const dialogNote = replaceNote(date);
+  // The desktop card always means today; it says so once a weight is typed.
+  const cardNote = value ? replaceNote(todayYmd) : null;
+
   const handleKeyPress = (e) => {
     if (e.key === 'Enter') {
       handleSubmit();
@@ -136,13 +170,15 @@ const QuickAddWeight = ({ onAdd, unit = 'lbs', autoOpen = false, onAutoOpened })
               InputProps={{
                 endAdornment: unit
               }}
+              helperText={cardNote || undefined}
+              FormHelperTextProps={{ 'data-testid': 'weight-replace-note-card' }}
             />
             <Button
               variant="contained"
               onClick={() => handleSubmit({ fromCard: true })}
               disabled={!value || loading}
             >
-              Add
+              {cardNote ? 'Replace' : 'Add'}
             </Button>
           </Box>
         </CardContent>
@@ -167,7 +203,7 @@ const QuickAddWeight = ({ onAdd, unit = 'lbs', autoOpen = false, onAutoOpened })
               variant="contained"
               disabled={!value || loading}
             >
-              {loading ? 'Saving…' : 'Save'}
+              {loading ? 'Saving…' : dialogNote ? 'Replace' : 'Save'}
             </Button>
           ),
           cancel: <Button onClick={() => { setError(''); setOpen(false); }}>Cancel</Button>,
@@ -195,7 +231,8 @@ const QuickAddWeight = ({ onAdd, unit = 'lbs', autoOpen = false, onAutoOpened })
             InputProps={{
               endAdornment: unit
             }}
-            helperText="For example, 150.4"
+            helperText={dialogNote || 'For example, 150.4'}
+            FormHelperTextProps={dialogNote ? { 'data-testid': 'weight-replace-note' } : undefined}
             autoFocus
           />
           <DateField fullWidth value={date} onChange={setDate} />

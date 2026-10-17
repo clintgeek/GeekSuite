@@ -35,8 +35,9 @@ const logsEndingAt = (weight) => [
   { id: 'l3', log_date: '2026-09-19T00:00:00.000Z', weight_value: weight },
 ];
 
+// The count replaced "32.7% Complete" (review D-2): "10 of 20 lb lost".
 const percentTexts = () =>
-  screen.queryAllByText(/\d+\.\d%\s*Complete/i).map((el) => el.textContent);
+  screen.queryAllByTestId('weight-progress-count').map((el) => el.textContent);
 
 describe('WeightProgress percentage', () => {
   beforeAll(() => {
@@ -59,15 +60,15 @@ describe('WeightProgress percentage', () => {
       <WeightProgress weightLogs={logsEndingAt(210)} goal={GOAL} currentWeight={210} unit="lbs" />
     );
     const texts = percentTexts().join(' ');
-    expect(texts).not.toMatch(/50\.0%/);
-    expect(texts).toMatch(/0\.0%/);
+    expect(texts).not.toMatch(/^10 of/);
+    expect(texts).toBe('0 of 20 lb lost');
   });
 
   it('does not read 100% when the user has gained the full goal distance', () => {
     render(
       <WeightProgress weightLogs={logsEndingAt(220)} goal={GOAL} currentWeight={220} unit="lbs" />
     );
-    expect(percentTexts().join(' ')).not.toMatch(/100\.0%/);
+    expect(percentTexts().join(' ')).toBe('0 of 20 lb lost');
   });
 
   it('still reads 50% for genuine halfway progress', () => {
@@ -75,14 +76,14 @@ describe('WeightProgress percentage', () => {
     render(
       <WeightProgress weightLogs={logsEndingAt(190)} goal={GOAL} currentWeight={190} unit="lbs" />
     );
-    expect(percentTexts().join(' ')).toMatch(/50\.0%/);
+    expect(percentTexts().join(' ')).toBe('10 of 20 lb lost');
   });
 
   it('reads 100% at the target', () => {
     render(
       <WeightProgress weightLogs={logsEndingAt(180)} goal={GOAL} currentWeight={180} unit="lbs" />
     );
-    expect(percentTexts().join(' ')).toMatch(/100\.0%/);
+    expect(percentTexts().join(' ')).toBe('20 of 20 lb lost');
   });
 
   it('reads 100%, not more, past the target', () => {
@@ -90,8 +91,7 @@ describe('WeightProgress percentage', () => {
       <WeightProgress weightLogs={logsEndingAt(175)} goal={GOAL} currentWeight={175} unit="lbs" />
     );
     const texts = percentTexts().join(' ');
-    expect(texts).toMatch(/100\.0%/);
-    expect(texts).not.toMatch(/12[0-9]\.\d%/);
+    expect(texts).toBe('20 of 20 lb lost');
   });
 
   it('renders a maintenance goal without NaN', () => {

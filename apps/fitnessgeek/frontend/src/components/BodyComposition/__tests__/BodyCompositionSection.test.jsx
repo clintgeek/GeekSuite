@@ -122,3 +122,16 @@ describe('states', () => {
     expect(screen.getByText(/couldn.t load its scan history/)).toBeInTheDocument();
   });
 });
+
+describe('Add a scan, where the scans are (review IA-5)', () => {
+  it('the header links to the scan import once there are scans', () => {
+    renderSection({ summary: EARLY });
+    expect(screen.getByRole('link', { name: 'Add a scan' })).toHaveAttribute('href', '/scan-import');
+  });
+
+  it('not on the empty state, which has its own Import button', () => {
+    renderSection({ summary: { total_scans: 0 } });
+    expect(screen.queryByRole('link', { name: 'Add a scan' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Import a scan' })).toBeInTheDocument();
+  });
+});

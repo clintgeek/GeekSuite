@@ -40,6 +40,9 @@ import { isBPDuplicate } from '../components/BloodPressure/bpTimeUtils.js';
 // SurfaceSkeleton the size of the card it replaces, so nothing jumps.
 const BPChartNivo = lazy(() => import('../components/BloodPressure/BPChartNivo.jsx'));
 const BPCategoryDistribution = lazy(() => import('../components/BloodPressure/BPCategoryDistribution.jsx'));
+
+// The donut's title names the window the range toggle chose.
+const RANGE_WORDS = { '7': 'last 7 days', '30': 'last 30 days', '365': 'last year', all: 'all time' };
 const BPHRChart = lazy(() => import('../components/BloodPressure/BPHRChart.jsx'));
 const BPReport = lazy(() => import('../components/BloodPressure/BPReport.jsx'));
 
@@ -352,18 +355,13 @@ const BloodPressure = () => {
         </Typography>
       </Box>
 
-      {/* Insights and Category Distribution - Stacked */}
+      {/* The answer first: the week's average, in words (review D-1). */}
       <Box sx={{ mb: 3 }}>
         <BPInsights bpLogs={bpLogs} />
       </Box>
 
-      <Box sx={{ mb: 3 }}>
-        <SuspenseSurface rows={3} height={220}>
-          <BPCategoryDistribution bpLogs={bpLogs} />
-        </SuspenseSurface>
-      </Box>
-
-      {/* Blood Pressure Chart */}
+      {/* Charts. The range toggle sits ABOVE the donut and the trend it
+          governs, and the donut's title names the window (review D-1). */}
       {bpLogs.length > 0 && (
         <>
           {/* Time Range + Report — matches Reports page control bar */}
@@ -381,6 +379,8 @@ const BloodPressure = () => {
               size="small"
               value={timeRangeState}
               exclusive
+              aria-label="Which readings to show"
+              data-testid="bp-range-toggle"
               onChange={(_e, v) => { if (v) handleTimeRangeChange(v); }}
               sx={{
                 '& .MuiToggleButton-root': {
@@ -418,6 +418,12 @@ const BloodPressure = () => {
               {insufficientDataMessage}
             </Typography>
           )}
+
+          <Box sx={{ mb: 3 }}>
+            <SuspenseSurface rows={3} height={220}>
+              <BPCategoryDistribution bpLogs={filteredBPLogs} windowLabel={RANGE_WORDS[timeRangeState]} />
+            </SuspenseSurface>
+          </Box>
 
           <Box sx={{ mb: 3 }}>
             <SuspenseSurface rows={4} height={320}>

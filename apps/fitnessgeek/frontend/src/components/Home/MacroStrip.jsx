@@ -4,7 +4,9 @@ import { useTheme, alpha } from '@mui/material/styles';
 import NetCarbMeter from '../Dashboard/NetCarbMeter.jsx';
 
 /**
- * Full mode's macros, in words: "Protein · 96 of 156 g". Carried over from the
+ * Full mode's macros, in words: "Protein · 96 of 156g". Over target says so
+ * in words — "99 of 78g · 21 over" — so the full bar's colour isn't carrying
+ * "over" alone (review D-14; no colour without words). Carried over from the
  * old DailyTicket's macro strip (protein / carbs / fat, or fat / protein / net
  * carbs in keto), minus the ALL-CAPS labels and the monospace. Simple mode
  * does not show this (plan: macros stay out of the way).
@@ -17,17 +19,18 @@ function MacroBar({ label, current = 0, goal = 0, fill, note, testid }) {
   const pct = goal > 0 ? Math.min(1, current / goal) : 0;
   const cur = Math.round(current);
   const tgt = Math.round(goal);
+  const over = tgt > 0 && cur > tgt ? cur - tgt : 0;
   return (
     <Box sx={{ minWidth: 0 }}>
       <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', gap: 1, mb: 0.75 }}>
         <Typography sx={{ fontSize: '1rem', fontWeight: 800, color: 'text.primary' }}>{label}</Typography>
         <Typography sx={{ fontSize: '1rem', color: 'text.secondary', whiteSpace: 'nowrap' }}>
-          {cur} of {tgt} g
+          {cur} of {tgt}g{over > 0 ? ` · ${over} over` : ''}
         </Typography>
       </Box>
       <Box
         role="img"
-        aria-label={`${label}: ${cur} of ${tgt} grams`}
+        aria-label={`${label}: ${cur} of ${tgt} grams${over > 0 ? `, ${over} over` : ''}`}
         sx={{ height: 10, borderRadius: 999, bgcolor: alpha(theme.palette.text.primary, 0.08), overflow: 'hidden' }}
       >
         <Box sx={{ width: `${pct * 100}%`, height: '100%', borderRadius: 999, bgcolor: fill }} />

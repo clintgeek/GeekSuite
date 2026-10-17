@@ -101,9 +101,8 @@ describe('WeightProgress with logs straddling local midnight (America/Chicago)',
     // "Current Rate" card: must show a real number of lbs/week, never NaN.
     // Scoped to the "Current Rate" stat itself — "Goal: 1.0 lbs/week" sits
     // right next to it and would otherwise double-match a bare regex.
-    const rateLabel = screen.getByText('Current Rate');
-    const rateCard = rateLabel.closest('div').parentElement;
-    expect(rateCard.textContent).toMatch(/lbs\/week/);
+    const rateCard = screen.getByTestId('weight-pace');
+    expect(rateCard.textContent).toMatch(/lb a week/);
     expect(rateCard.textContent).not.toMatch(/NaN/);
 
     // "Projected Completion" card: must show a real formatted date, never

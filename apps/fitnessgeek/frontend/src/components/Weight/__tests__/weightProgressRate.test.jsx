@@ -38,8 +38,8 @@ describe('WeightProgress current rate', () => {
 
   it('follows the smoothed trend (~1 lb/week), not the noisy endpoints', () => {
     render(<WeightProgress weightLogs={logs} goal={GOAL} currentWeight={212} unit="lbs" />);
-    const card = screen.getByText('Current Rate').closest('div').parentElement;
-    const rate = Number(card.textContent.match(/(\d+\.\d) lbs\/week/)[1]);
+    const card = screen.getByTestId('weight-pace');
+    const rate = Number(card.textContent.match(/losing (\d+\.\d) lb a week/)[1]);
     // Raw endpoints give ~0.4; the 7-day means give ~1.1 (whole-week divisor).
     expect(rate).toBeGreaterThanOrEqual(0.9);
     expect(rate).toBeLessThanOrEqual(1.4);
@@ -64,7 +64,8 @@ describe('WeightProgress — pace is measured from the program start', () => {
     const goal = { enabled: true, startDate: start, goalDate: ymd(start, 180), startWeight: 222, targetWeight: 195, ratePerWeek: -1 };
     render(<WeightProgress weightLogs={flatBefore(today, 60)} goal={goal} currentWeight={222} unit="lbs" />);
     expect(screen.getByText(/the program starts/i)).toBeInTheDocument();
-    expect(screen.getByText(/^—$/)).toBeInTheDocument();
+    // No measured pace yet: only the pace the dates need.
+    expect(screen.getByTestId('weight-pace')).not.toHaveTextContent(/You're (losing|gaining)/);
     expect(screen.queryByText(/20[4-9]\d/)).toBeNull();
   });
 
@@ -83,8 +84,8 @@ describe('WeightProgress — pace is measured from the program start', () => {
     const program = Array.from({ length: 36 }, (_, i) => ({ log_date: `${ymd(start, i)}T00:00:00.000Z`, weight_value: Math.round((222 - 0.15 * i) * 10) / 10 }));
     render(<WeightProgress weightLogs={[...flatBefore(start, 60), ...program]} goal={goal} currentWeight={216.8} unit="lbs" />);
     // 0.15 lb/day = 1.05/week, measured since start — not diluted by the flat months.
-    expect(screen.getByText(/^1\.[01] lbs\/week$/)).toBeInTheDocument();
-    expect(screen.getByText(/your trend since starting/i)).toBeInTheDocument();
+    expect(screen.getByTestId('weight-pace')).toHaveTextContent(/You're losing 1\.[01] lb a week\./);
+    expect(screen.getByTestId('weight-projection')).toHaveTextContent(/^At this pace: (early|mid|late) /);
     expect(screen.queryByText(/20[4-9]\d/)).toBeNull();
   });
 });

@@ -283,4 +283,59 @@ export function buildWeightTrend(logs = [], { goal = null, today } = {}) {
   return { readings, trend: programTrend, goalLine, projection, spanDays, pace };
 }
 
+/**
+ * THE weight "now" for every "to go" in the app (review D-3): the 7-day
+ * trailing mean at the latest weigh-in — the number the chart's line ends on,
+ * Home's weight card shows, and the goal card measures from. One basis, so
+ * the goal card and the calorie plan never disagree by a pound because one
+ * read the latest scale reading and the other the average.
+ *
+ * Same maths as weightService.getWeightStats().currentMean.
+ *
+ * @param {Array<{log_date: string, weight_value: number}>} logs any order
+ * @returns {number|null}
+ */
+export function currentAverage(logs = []) {
+  const means = dailyMeans(toPoints(logs));
+  return means.length ? means[means.length - 1].y : null;
+}
+
+/**
+ * The pace the goal's DATES need, unit/week, unsigned: start to target over
+ * start to goal date — the goal line on the chart. Not `ratePerWeek`, which
+ * is what was asked for when the plan was made and can disagree with the
+ * dates (review D-2: "Goal 1.0 lb/week" beside a goal line needing 1.5).
+ * Null without both dates and weights.
+ */
+export function neededPacePerWeek(goal) {
+  const start = goal ? utcDateString(goal.startDate) : '';
+  const end = goal ? utcDateString(goal.goalDate) : '';
+  const from = Number(goal?.startWeight);
+  const to = Number(goal?.targetWeight);
+  if (!start || !end || !Number.isFinite(from) || !Number.isFinite(to)) return null;
+  const weeks = (dayOf(end) - dayOf(start)) / 7;
+  if (!(weeks > 0)) return null;
+  return Math.abs(to - from) / weeks;
+}
+
+/**
+ * The trend in words for Simple (review L25): how far the 7-day average has
+ * moved since a start. With a goal the start is the goal's (its date and
+ * weight, the same numbers as "12.1 of 37 lb lost"); without one, the first
+ * weigh-in, once there are two weeks of them.
+ *
+ * @returns {{change: number, since: string}|null} change signed (unit), since YYYY-MM-DD
+ */
+export function trendSince(logs = [], goal = null, current = null) {
+  const now = Number.isFinite(Number(current)) && current !== null ? Number(current) : currentAverage(logs);
+  if (now === null) return null;
+  const start = goal && goal.enabled !== false ? utcDateString(goal.startDate) : '';
+  if (start && Number.isFinite(Number(goal.startWeight))) {
+    return { change: now - Number(goal.startWeight), since: start };
+  }
+  const points = toPoints(logs);
+  if (points.length < 2 || dayOf(points[points.length - 1].x) - dayOf(points[0].x) < PROJECTION_MIN_SPAN_DAYS) return null;
+  return { change: now - points[0].y, since: points[0].x };
+}
+
 export default buildWeightTrend;

@@ -251,11 +251,18 @@ describe('Simple Home: Add first (review Phase 2.13)', () => {
     expect(document.body.textContent.match(/660/g)).toHaveLength(1);
   });
 
-  it('Full keeps the number in the plate and has no big Add button', async () => {
+  it('Full keeps a number in the plate and has no big Add button', async () => {
     renderHome(experience());
     await screen.findByTestId('calories-sentence');
     expect(screen.getByTestId('plate-number')).toBeInTheDocument();
     expect(screen.queryByTestId('what-did-you-eat')).toBeNull();
+  });
+
+  it("Full's plate says how much is eaten (72%), not 660 a third time (review D-14)", async () => {
+    renderHome(experience());
+    await screen.findByTestId('calories-sentence');
+    expect(screen.getByTestId('plate-number')).toHaveTextContent('72%eaten');
+    expect(document.body.textContent.match(/660/g)).toHaveLength(1);
   });
 });
 
@@ -267,7 +274,8 @@ describe('the first-run goal is used (review Phase 2.14)', () => {
     const button = await screen.findByTestId('set-daily-target');
     expect(document.body.textContent).not.toMatch(/No daily target is set/);
     await act(async () => { fireEvent.click(button); });
-    expect(navigateSpy).toHaveBeenCalledWith('/calorie-wizard');
+    // Simple: the quick "How fast?" form, not the full wizard (wave A).
+    expect(navigateSpy).toHaveBeenCalledWith('/calorie-wizard?quick=1');
   });
 
   it('no offer when a target exists', async () => {

@@ -57,6 +57,14 @@ import { MEAL_ORDER } from '../theme/theme.jsx';
  *
  * "Today" comes from useToday(): an installed PWA resumed in the morning is on
  * the new day — greeting, date, meals and meds — not the one it was opened on.
+ *
+ * A failed read is not an empty day (review L1). During a fleet restart, or on
+ * a weak signal, the day's reads fail; Home used to turn that into "Nothing
+ * logged yet today", empty cards and "Weigh in +", and the natural response
+ * was to log breakfast again. Now each read that fails keeps what was on
+ * screen for this day; one that never succeeded shows as unknown, never as
+ * "nothing"; and one line in place of the plate sentence says so, with Try
+ * again. Food Log does the same (loadProblem, B19).
  */
 
 // The streak query answers through apiService's envelope: { success, data }.
@@ -99,6 +107,18 @@ const rowsOf = (res) => {
   return Array.isArray(d) ? d : [];
 };
 
+export const HOME_LOAD_PROBLEM = "Can't reach FitnessGeek right now. What you logged is safe.";
+
+// The landed meal's card, scrolled into view once the sheet has gone (review
+// L12) — after a frame, so the reload has had its chance to fill it.
+const showMealCard = (mealType) => {
+  if (!mealType || typeof document === 'undefined') return;
+  requestAnimationFrame(() => {
+    document.getElementById(`meal-card-${mealType}`)
+      ?.scrollIntoView?.({ behavior: 'smooth', block: 'start' });
+  });
+};
+
 const DashboardNew = () => {
   const { notify } = useToast();
   const theme = useTheme();
@@ -116,7 +136,16 @@ const DashboardNew = () => {
   const [proteinBasis, setProteinBasis] = useState(null);
   const [addMeal, setAddMeal] = useState(null);
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
-  const [checkIns, setCheckIns] = useState({ weights: [], bloodPressures: [] });
+  // null = couldn't be read, and nothing from before (todayStrip leaves it out).
+  const [checkIns, setCheckIns] = useState({ weights: null, bloodPressures: null });
+  // Which of the day's reads have succeeded for `known.day`. A read that
+  // fails keeps the last good value for the same day; one that has never
+  // succeeded is unknown, and Home never draws "nothing" from it.
+  const [known, setKnown] = useState({ day: null, logs: false, summary: false, goals: false });
+  const [loadProblem, setLoadProblem] = useState(false);
+  // The day the data on screen belongs to; a failed read keeps it only for that day.
+  const shownDayRef = useRef(null);
+  const [retrying, setRetrying] = useState(false);
   const [data, setData] = useState({
     calories: { consumed: 0, goal: 0 },
     netCarbs: 0,
@@ -156,11 +185,33 @@ const DashboardNew = () => {
         ]);
 
       const value = (r) => (r.status === 'fulfilled' ? r.value : null);
+      const ok = (r) => r.status === 'fulfilled';
+      const logsOk = ok(logsResult);
+      const summaryOk = ok(summaryResult);
+      const goalsOk = ok(goalsResult);
 
-      setCheckIns({
-        weights: rowsOf(value(weightsResult)),
-        bloodPressures: rowsOf(value(bpsResult)),
+      // What's on screen is this day's: a failed read may keep it. Yesterday's
+      // meals are never shown as today's.
+      const sameDay = shownDayRef.current === today;
+      shownDayRef.current = today;
+
+      // A failed check-in read keeps what this day already showed (null if
+      // nothing), so a blip never turns "Weighed ✓" into "Weigh in +".
+      setCheckIns((prev) => ({
+        weights: ok(weightsResult) ? rowsOf(value(weightsResult)) : (sameDay ? prev.weights : null),
+        bloodPressures: ok(bpsResult) ? rowsOf(value(bpsResult)) : (sameDay ? prev.bloodPressures : null),
+      }));
+      setKnown((prev) => {
+        const same = prev.day === today;
+        return {
+          day: today,
+          logs: logsOk || (same && prev.logs),
+          summary: summaryOk || (same && prev.summary),
+          goals: goalsOk || (same && prev.goals),
+        };
       });
+      // The reads that decide what the plate and the cards say.
+      setLoadProblem(!logsOk || !summaryOk || !goalsOk);
 
       const foodLogs = rowsOf(value(logsResult));
       const rawById = {};
@@ -172,10 +223,11 @@ const DashboardNew = () => {
         const food = log.food_item_id || log.food_item || {};
         const per = log.nutrition?.calories_per_serving || food.nutrition?.calories_per_serving || 0;
         const servings = log.servings || 1;
-        meals[mealType].foods.push({ logId: id, name: food.name || 'Unknown food', calories: Math.round(per * servings) });
+        // Servings ride along, so the card can say "Egg ×2" (review L4).
+        meals[mealType].foods.push({ logId: id, name: food.name || 'Unknown food', calories: Math.round(per * servings), servings });
         meals[mealType].calories += per * servings;
       }
-      setLogsById(rawById);
+      if (logsOk) setLogsById(rawById);
 
       const summary = value(summaryResult)?.data || value(summaryResult) || null;
       // The summary's own meal totals win when present (it is the stored day).
@@ -198,20 +250,24 @@ const DashboardNew = () => {
       const streak = value(streakResult);
 
       setData((prev) => {
-        const goal = num(todayTargets?.target_calories ?? todayTargets?.calories ?? payload?.calories?.daily)
-          ?? (summary?.calorieGoal || prev.calories.goal);
+        // A failed read keeps the last good value, for this day only.
+        const keep = (isOk, fresh, old, empty) => (isOk ? fresh : sameDay ? old : empty);
+        const goal = goalsOk
+          ? num(todayTargets?.target_calories ?? todayTargets?.calories ?? payload?.calories?.daily) ?? (summary?.calorieGoal || prev.calories.goal)
+          : (summary?.calorieGoal || (sameDay ? prev.calories.goal : 0));
         let bpTrend = 'normal';
         let bpTrendValue = '';
         if (bp && (bp.systolic >= 140 || bp.diastolic >= 90)) { bpTrend = 'up'; bpTrendValue = 'High'; }
         else if (bp && (bp.systolic < 90 || bp.diastolic < 60)) { bpTrend = 'down'; bpTrendValue = 'Low'; }
+        const freshMacros = {
+          protein: { current: summary?.totals?.protein_grams || 0, goal: num(todayTargets?.protein_g ?? payload?.fixed?.protein_g) ?? summary?.proteinGoal ?? 150 },
+          carbs: { current: summary?.totals?.carbs_grams || 0, goal: num(todayTargets?.carbs_g) ?? summary?.carbsGoal ?? 250 },
+          fat: { current: summary?.totals?.fat_grams || 0, goal: num(todayTargets?.fat_g ?? payload?.fixed?.fat_g) ?? summary?.fatGoal ?? 65 },
+        };
         return {
-          calories: { consumed: summary?.totals?.calories || 0, goal: goal || 0 },
-          netCarbs: summary?.totals?.net_carbs_grams || 0,
-          macros: {
-            protein: { current: summary?.totals?.protein_grams || 0, goal: num(todayTargets?.protein_g ?? payload?.fixed?.protein_g) ?? summary?.proteinGoal ?? 150 },
-            carbs: { current: summary?.totals?.carbs_grams || 0, goal: num(todayTargets?.carbs_g) ?? summary?.carbsGoal ?? 250 },
-            fat: { current: summary?.totals?.fat_grams || 0, goal: num(todayTargets?.fat_g ?? payload?.fixed?.fat_g) ?? summary?.fatGoal ?? 65 },
-          },
+          calories: { consumed: keep(summaryOk, summary?.totals?.calories || 0, prev.calories.consumed, 0), goal: goal || 0 },
+          netCarbs: keep(summaryOk, summary?.totals?.net_carbs_grams || 0, prev.netCarbs, 0),
+          macros: keep(summaryOk, freshMacros, prev.macros, freshMacros),
           stats: {
             weight: weight || prev.stats.weight,
             bloodPressure: bp
@@ -222,7 +278,7 @@ const DashboardNew = () => {
               : prev.stats.steps,
             streak: { value: streakDays(streak) },
           },
-          meals,
+          meals: keep(logsOk, meals, prev.meals, {}),
         };
       });
     } catch (err) {
@@ -300,8 +356,13 @@ const DashboardNew = () => {
   const greeting = `${greetingFor(hour)}${displayName ? `, ${displayName}` : ''}`;
   const sentence = caloriesSentence({ eaten: data.calories.consumed, goal: data.calories.goal });
   // The first run asked her goal; "lose a little" with no target gets the one
-  // step that helps, not "No daily target is set" (review Phase 2.14).
-  const offerTarget = !(data.calories.goal > 0) && experience.goal === 'lose';
+  // step that helps, not "No daily target is set" (review Phase 2.14) — but
+  // only when the target was actually read, never off a failed read.
+  const offerTarget = !loadProblem && known.goals && !(data.calories.goal > 0) && experience.goal === 'lose';
+  const retryLoad = async () => {
+    setRetrying(true);
+    try { await loadDashboardData(); } finally { setRetrying(false); }
+  };
   const detailText = offerTarget ? 'A daily target makes losing a little easier.' : sentence.detail;
   const byMeal = useMemo(() => Object.fromEntries(MEAL_ORDER.map((m) => [m, data.meals[m]?.calories || 0])), [data.meals]);
   const strip = todayStrip({
@@ -314,7 +375,10 @@ const DashboardNew = () => {
   const addDialog = (
     <AddFoodDialog
       open={Boolean(addMeal)}
-      onClose={() => setAddMeal(null)}
+      onClose={({ mealType } = {}) => {
+        setAddMeal(null);
+        showMealCard(mealType);
+      }}
       mealType={addMeal || 'snack'}
       onMealTypeChange={setAddMeal}
       onLogItems={logItems}
@@ -441,19 +505,41 @@ const DashboardNew = () => {
               goal={data.calories.goal}
               byMeal={byMeal}
               size={isSimple ? 104 : 180}
-              showNumber={!isSimple}
-              label={`${sentence.headline}. ${detailText}.`}
+              // Full: "72%" in the well; the sentence already says what's left.
+              showNumber={!isSimple && !loadProblem}
+              centre="percent"
+              label={loadProblem ? HOME_LOAD_PROBLEM : `${sentence.headline}. ${detailText}.`}
             />
             <Box sx={{ minWidth: 0, textAlign: isSimple ? 'left' : { xs: 'center', sm: 'left' } }}>
-              <Typography component="h2" data-testid="calories-sentence" sx={{ fontSize: isSimple ? { xs: '1.375rem', sm: '1.75rem' } : { xs: '1.625rem', sm: '2rem' }, fontWeight: 800, lineHeight: 1.2 }}>
-                {sentence.headline}
-              </Typography>
-              <Typography sx={{ mt: 0.75, fontSize: '1.125rem', color: 'text.secondary' }}>{detailText}</Typography>
+              {loadProblem ? (
+                // In place of the sentence: never "Nothing logged yet" from a failed read.
+                <Box role="status" data-testid="home-load-problem">
+                  <Typography sx={{ fontSize: '1.125rem', fontWeight: 700, lineHeight: 1.35 }}>
+                    {HOME_LOAD_PROBLEM}
+                  </Typography>
+                  <Button
+                    variant="outlined"
+                    onClick={retryLoad}
+                    disabled={retrying}
+                    sx={{ mt: 1.25, minHeight: 48, borderRadius: '999px', fontWeight: 800, textTransform: 'none' }}
+                  >
+                    {retrying ? 'Trying…' : 'Try again'}
+                  </Button>
+                </Box>
+              ) : (
+                <>
+                  <Typography component="h2" data-testid="calories-sentence" sx={{ fontSize: isSimple ? { xs: '1.375rem', sm: '1.75rem' } : { xs: '1.625rem', sm: '2rem' }, fontWeight: 800, lineHeight: 1.2 }}>
+                    {sentence.headline}
+                  </Typography>
+                  <Typography sx={{ mt: 0.75, fontSize: '1.125rem', color: 'text.secondary' }}>{detailText}</Typography>
+                </>
+              )}
               {offerTarget && (
                 <Button
                   variant="outlined"
                   data-testid="set-daily-target"
-                  onClick={() => navigate('/calorie-wizard')}
+                  // Simple: the one-screen "How fast?" form; Full: the whole plan.
+                  onClick={() => navigate(isSimple ? '/calorie-wizard?quick=1' : '/calorie-wizard')}
                   sx={{ mt: 1.5, minHeight: 48, borderRadius: '999px', fontWeight: 800, textTransform: 'none' }}
                 >
                   Set your daily target
@@ -461,7 +547,7 @@ const DashboardNew = () => {
               )}
             </Box>
           </Box>
-          {!isSimple && (
+          {!isSimple && known.summary && (
             <Box sx={{ mt: 3, pt: 2.5, borderTop: `1px solid ${theme.palette.divider}` }}>
               <MacroStrip
                 protein={data.macros.protein}
@@ -493,6 +579,7 @@ const DashboardNew = () => {
             removingIds={removingLogIds}
             date={today}
             justAdded={justAdded}
+            unknown={!known.logs}
           />
         </Box>
 

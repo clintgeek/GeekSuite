@@ -36,6 +36,11 @@ describe('todayStrip', () => {
     expect(todayStrip({ meds: { taken: 0, total: 1 }, today: TODAY }).map((i) => i.to)).toEqual(['/weight?add=1', '/blood-pressure?add=1', '/medications']);
     expect(todayStrip({ weights: [at(TODAY)], bloodPressures: [at(TODAY)], today: TODAY }).map((i) => i.to)).toEqual(['/weight', '/blood-pressure']);
   });
+
+  it('a read that failed (null) is left out, never offered as "Weigh in +" (review L1)', () => {
+    expect(todayStrip({ weights: null, bloodPressures: [], meds: { taken: 1, total: 2 }, today: TODAY }).map((i) => i.id)).toEqual(['bp', 'meds']);
+    expect(todayStrip({ weights: [at(TODAY)], bloodPressures: null, today: TODAY }).map((i) => `${i.label} ${i.value}`)).toEqual(['Weighed ✓']);
+  });
 });
 
 describe('newestReading', () => {

@@ -17,8 +17,13 @@ import { useTheme, alpha } from '@mui/material/styles';
 const MEALS = ['breakfast', 'lunch', 'dinner', 'snack'];
 
 /* `showNumber={false}` leaves the well empty — Simple Home, where the
- * sentence beside the plate already says the number (review Phase 2.13). */
-export default function PlateRing({ eaten = 0, goal = 0, byMeal = {}, size = 200, label, showNumber = true }) {
+ * sentence beside the plate already says the number (review Phase 2.13).
+ * `centre="percent"` puts how much of the target is eaten in the well
+ * ("72%") instead of what's left — Full Home, where the sentence says
+ * "660 left" and the detail "1,680 eaten of 2,340", so a third copy of the
+ * same number told him nothing new (review D-14). With no target there is
+ * no percent, and the well stays empty. */
+export default function PlateRing({ eaten = 0, goal = 0, byMeal = {}, size = 200, label, showNumber = true, centre = 'left' }) {
   const theme = useTheme();
   const produce = theme.palette.produce || {};
   const isDark = theme.palette.mode === 'dark';
@@ -31,6 +36,8 @@ export default function PlateRing({ eaten = 0, goal = 0, byMeal = {}, size = 200
   const scale = g > 0 ? g : Math.max(e, 1);
   const over = g > 0 && e > g;
   const left = g > 0 ? Math.max(0, Math.round(g - e)) : null;
+  const percent = centre === 'percent';
+  const showWell = showNumber && !(percent && !(g > 0));
 
   // One arc per meal, laid end to end, capped at a full rim.
   let offset = 0;
@@ -80,7 +87,7 @@ export default function PlateRing({ eaten = 0, goal = 0, byMeal = {}, size = 200
           <circle cx={size / 2} cy={size / 2} r={r + stroke / 2 - 1} fill="none" stroke={produce.snack?.text || theme.palette.secondary.main} strokeWidth={2.5} />
         )}
       </svg>
-      {showNumber && (
+      {showWell && (
       <Box
         data-testid="plate-number"
         sx={{
@@ -94,10 +101,12 @@ export default function PlateRing({ eaten = 0, goal = 0, byMeal = {}, size = 200
         }}
       >
         <Typography sx={{ fontSize: size * 0.2, fontWeight: 800, lineHeight: 1, color: 'text.primary' }}>
-          {left === null ? Math.round(e).toLocaleString('en-US') : over ? `+${Math.round(e - g).toLocaleString('en-US')}` : left.toLocaleString('en-US')}
+          {percent
+            ? `${Math.round((e / g) * 100).toLocaleString('en-US')}%`
+            : left === null ? Math.round(e).toLocaleString('en-US') : over ? `+${Math.round(e - g).toLocaleString('en-US')}` : left.toLocaleString('en-US')}
         </Typography>
         <Typography sx={{ fontSize: '1rem', fontWeight: 700, color: 'text.secondary', mt: 0.5 }}>
-          {left === null ? 'eaten' : over ? 'over' : 'left'}
+          {percent ? 'eaten' : left === null ? 'eaten' : over ? 'over' : 'left'}
         </Typography>
       </Box>
       )}

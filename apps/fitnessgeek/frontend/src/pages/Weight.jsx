@@ -127,6 +127,7 @@ const Weight = () => {
           currentWeight={currentWeight}
           unit="lbs"
           firstRunGoal={firstRunGoal}
+          simple={isSimple}
           onEditGoal={() => navigate('/calorie-wizard')}
         />
       </Box>
@@ -161,6 +162,7 @@ const Weight = () => {
       <Box sx={{ mb: 3 }}>
         <QuickAddWeight
           onAdd={addWeightLog}
+          existingLogs={weightLogs}
           unit="lbs"
           autoOpen={autoOpenAdd}
           onAutoOpened={clearAddParam}

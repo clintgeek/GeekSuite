@@ -170,7 +170,7 @@ describe('BPInsights — the latest reading', () => {
       { id: 'pm', systolic: 121, diastolic: 79, log_date: '2026-10-16T00:00:00.000Z', measured_at: '2026-10-17T01:00:00.000Z' },
     ];
     render(<BPInsights bpLogs={logs} />);
-    expect(screen.getByText(/121\/79 mmHg/)).toBeInTheDocument();
-    expect(screen.queryByText(/150\/95 mmHg/)).toBeNull();
+    expect(screen.getByText(/121\/79/)).toBeInTheDocument();
+    expect(screen.queryByText(/150\/95/)).toBeNull();
   });
 });

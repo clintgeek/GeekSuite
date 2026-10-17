@@ -19,10 +19,25 @@ const BodyCompTrend = lazy(() => import('./BodyCompTrend.jsx'));
  * inside this section, not a blank page.
  */
 const BodyCompositionSection = ({ summary, scans = [], loading, error, scansError, onRetry }) => {
+  // "Add a scan" sits where the scans are (review IA-5); the empty state has
+  // its own Import button, so the header only offers it once there are some.
   const header = (
-    <Box sx={{ mb: 2 }}>
-      <SectionLabel sx={{ mb: 0.75 }}>Body composition</SectionLabel>
-      <DisplayHeading size="card">What it&rsquo;s made of</DisplayHeading>
+    <Box sx={{ mb: 2, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
+      <Box>
+        <SectionLabel sx={{ mb: 0.75 }}>Body composition</SectionLabel>
+        <DisplayHeading size="card">What it&rsquo;s made of</DisplayHeading>
+      </Box>
+      {summary?.total_scans > 0 && !error && (
+        <Button
+          component={RouterLink}
+          to="/scan-import"
+          variant="text"
+          data-testid="add-a-scan"
+          sx={{ minHeight: 44, fontWeight: 700, textTransform: 'none' }}
+        >
+          Add a scan
+        </Button>
+      )}
     </Box>
   );
 

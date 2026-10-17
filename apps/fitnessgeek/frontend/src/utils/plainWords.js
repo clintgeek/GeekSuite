@@ -83,3 +83,51 @@ export function mealTypeForHour(hour) {
   if (hour < 21) return 'dinner';
   return 'snack';
 }
+
+/**
+ * A blood pressure category in plain words (review D-1). `label` is for a
+ * legend ("A little high"); `phrase` is for the middle of a sentence, with
+ * the medical name in brackets on first mention ("a little high (elevated)").
+ * Stages are bpUtils' BP_STAGES names.
+ */
+const BP_WORDS = {
+  Normal: { label: 'Normal', phrase: 'normal' },
+  Elevated: { label: 'A little high', phrase: 'a little high (elevated)' },
+  'Stage 1': { label: 'High (stage 1)', phrase: 'high (stage 1)' },
+  'Stage 2': { label: 'High (stage 2)', phrase: 'high (stage 2)' },
+  Crisis: { label: 'Very high (crisis)', phrase: 'very high (crisis)' },
+};
+export function bpStageWords(stage) {
+  return BP_WORDS[stage] || { label: 'Unknown', phrase: 'not readable' };
+}
+
+/* Amounts on Home's meal cards (review L4). */
+const servingsOf = (food) => {
+  const n = Number(food?.servings);
+  return Number.isFinite(n) && n > 0 ? n : 1;
+};
+
+/** "Egg", "Egg ×2", "Rice ×1.5" — whole or up to two decimals, never "×1". */
+export function amountName(name, servings = 1) {
+  const n = Math.round((Number(servings) || 1) * 100) / 100;
+  return n === 1 ? name : `${name} ×${n}`;
+}
+
+/** Compact cards: identical names (ignoring case and spaces) become one line. */
+export function mergeByName(foods = []) {
+  const merged = [];
+  const byKey = new Map();
+  for (const food of foods) {
+    const key = String(food?.name || '').trim().toLowerCase();
+    const seen = byKey.get(key);
+    if (seen) {
+      seen.servings += servingsOf(food);
+      seen.calories = (seen.calories || 0) + (food.calories || 0);
+    } else {
+      const row = { ...food, servings: servingsOf(food) };
+      byKey.set(key, row);
+      merged.push(row);
+    }
+  }
+  return merged;
+}

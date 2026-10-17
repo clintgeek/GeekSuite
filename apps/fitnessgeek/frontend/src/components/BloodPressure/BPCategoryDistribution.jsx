@@ -2,15 +2,25 @@ import React, { useMemo } from 'react';
 import { Box, Typography, Card, CardContent } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { ResponsivePie } from '@nivo/pie';
-import { categorizeBP } from '../../utils/bpUtils.js';
+import { categorizeBP, BP_STAGES } from '../../utils/bpUtils.js';
+import { bpStageWords } from '../../utils/plainWords.js';
 
 // Category name and color come from the one shared categoriser.
 const getBPCategory = (systolic, diastolic) => {
   const category = categorizeBP(systolic, diastolic);
   return { name: category.stage, color: category.color };
 };
+const ORDER = Object.values(BP_STAGES);
 
-const BPCategoryDistribution = ({ bpLogs = [] }) => {
+/**
+ * Readings by range, for the window the page's range toggle chose (review
+ * D-1): the toggle sits above this card and the title names the window, so
+ * the donut never shows an unstated span. The legend is in plain words —
+ * "Normal · A little high · High (stage 1)".
+ *
+ * `windowLabel`: "last 30 days", "all time", …
+ */
+const BPCategoryDistribution = ({ bpLogs = [], windowLabel = '' }) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
   const chartData = useMemo(() => {
@@ -30,12 +40,14 @@ const BPCategoryDistribution = ({ bpLogs = [] }) => {
     });
 
     // Convert to Nivo format
-    return Object.entries(categoryCounts).map(([name, data]) => ({
-      id: name,
-      label: name,
-      value: data.count,
-      color: data.color
-    }));
+    return Object.entries(categoryCounts)
+      .sort(([a], [b]) => ORDER.indexOf(a) - ORDER.indexOf(b))
+      .map(([name, data]) => ({
+        id: name,
+        label: bpStageWords(name).label,
+        value: data.count,
+        color: data.color
+      }));
   }, [bpLogs]);
 
   if (chartData.length === 0) {
@@ -54,7 +66,7 @@ const BPCategoryDistribution = ({ bpLogs = [] }) => {
             color: theme.palette.text.secondary
           }}>
             <Typography variant="body2">
-              No data for category distribution
+              No readings{windowLabel ? ` in the ${windowLabel}` : ''}
             </Typography>
           </Box>
         </CardContent>
@@ -69,8 +81,8 @@ const BPCategoryDistribution = ({ bpLogs = [] }) => {
       border: `1px solid ${theme.palette.divider}`
     }}>
       <CardContent sx={{ p: 3 }}>
-        <Typography variant="h6" sx={{ fontWeight: 700, color: theme.palette.text.primary, mb: 2 }}>
-          Category Distribution
+        <Typography variant="h6" component="h2" data-testid="bp-donut-title" sx={{ fontWeight: 700, color: theme.palette.text.primary, mb: 2 }}>
+          Readings by range{windowLabel ? `, ${windowLabel}` : ''}
         </Typography>
 
         {/* @nivo/pie forwards `role` to its <svg> but not `ariaLabel` (the line
@@ -78,7 +90,7 @@ const BPCategoryDistribution = ({ bpLogs = [] }) => {
             steps out of the accessibility tree. */}
         <Box
           role="img"
-          aria-label="Share of readings in each blood pressure category"
+          aria-label={`Readings by range${windowLabel ? `, ${windowLabel}` : ''}: ${chartData.map((d) => `${d.label} ${d.value}`).join(', ')}`}
           sx={{ height: 280 }}
         >
           <ResponsivePie
@@ -117,7 +129,7 @@ const BPCategoryDistribution = ({ bpLogs = [] }) => {
                   {datum.label}
                 </Typography>
                 <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>
-                  {datum.value} readings ({Math.round((datum.value / bpLogs.length) * 100)}%)
+                  {datum.value} of {bpLogs.length} readings
                 </Typography>
               </Box>
             )}
@@ -125,7 +137,7 @@ const BPCategoryDistribution = ({ bpLogs = [] }) => {
         </Box>
 
         {/* Legend */}
-        <Box sx={{
+        <Box data-testid="bp-donut-legend" sx={{
           display: 'flex',
           flexWrap: 'wrap',
           gap: 2,

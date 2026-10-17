@@ -55,7 +55,12 @@ export function medsChecklist(meds = [], logs = []) {
 /**
  * The Today strip's three check-ins.
  *
- * @param {{weights?: object[], bloodPressures?: object[], meds?: {taken: number, total: number}|null, today: string}} input
+ * `weights: null` (or `bloodPressures: null`) means the read FAILED and there
+ * was nothing from before to show: that check-in is left out rather than
+ * offered as "Weigh in +" — a failed read is not an empty day (review L1).
+ * An empty array, or no key at all, is a day with none.
+ *
+ * @param {{weights?: object[]|null, bloodPressures?: object[]|null, meds?: {taken: number, total: number}|null, today: string}} input
  * @returns {{id: string, label: string, done: boolean, value: string, spoken: string, to: string}[]}
  */
 export function todayStrip({ weights, bloodPressures, meds, today }) {
@@ -64,7 +69,7 @@ export function todayStrip({ weights, bloodPressures, meds, today }) {
   // Not done yet is an action, not a status (review Phase 1.8): "Weigh in"
   // and "Add BP" open the quick-add directly; done reads "Weighed ✓".
   const items = [
-    {
+    weights !== null && {
       id: 'weight',
       label: weighed ? 'Weighed' : 'Weigh in',
       done: weighed,
@@ -72,7 +77,7 @@ export function todayStrip({ weights, bloodPressures, meds, today }) {
       spoken: weighed ? 'Weighed today' : 'Weigh in. Not weighed yet today',
       to: weighed ? '/weight' : '/weight?add=1',
     },
-    {
+    bloodPressures !== null && {
       id: 'bp',
       label: bp ? 'BP' : 'Add BP',
       done: bp,
@@ -80,7 +85,7 @@ export function todayStrip({ weights, bloodPressures, meds, today }) {
       spoken: bp ? 'Blood pressure taken today' : 'Add blood pressure. None yet today',
       to: bp ? '/blood-pressure' : '/blood-pressure?add=1',
     },
-  ];
+  ].filter(Boolean);
   // No medications, no meds check-in: "Meds 0 of 0" is noise.
   if (meds && meds.total > 0) {
     const all = meds.taken >= meds.total;

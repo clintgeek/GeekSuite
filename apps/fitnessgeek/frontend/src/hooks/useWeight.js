@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { rollingMean, utcDateString } from '@geeksuite/utils';
+import { utcDateString } from '@geeksuite/utils';
+import { currentAverage } from '../components/Weight/weightTrend.js';
 import { weightService } from '../services/weightService';
 // Legacy goals removed
 import { settingsService } from '../services/settingsService.js';
@@ -220,11 +221,8 @@ export const useWeight = () => {
       // If no logs exist, use start weight from goals
       return weightGoal && weightGoal.enabled ? weightGoal.startWeight : null;
     }
-    const smoothed = rollingMean(
-      weightLogs.map((l) => ({ date: utcDateString(l.log_date), value: Number(l.weight_value) })),
-      { windowDays: 7 }
-    );
-    return smoothed.length ? smoothed[smoothed.length - 1].mean : null;
+    // The one "now" every "to go" measures from (review D-3).
+    return currentAverage(weightLogs);
   };
 
   // Clear messages

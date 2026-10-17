@@ -1,9 +1,11 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef } from 'react';
 import { Box, Typography } from '@mui/material';
 import { useTheme, alpha } from '@mui/material/styles';
 import { ResponsiveLine } from '@nivo/line';
 import { Surface, SectionLabel, buildChartTheme } from '../primitives';
-import { bodyCompTrendSeries, formatDay } from './bodyCompFormat.js';
+import { bodyCompTrendSeries } from './bodyCompFormat.js';
+import ChartTooltip from '../Weight/chartTooltip.jsx';
+import { tooltipDay, useTooltipGuard } from '../Weight/chartTips.js';
 
 /**
  * Fat and lean mass over time — two small charts, stacked, sharing one time
@@ -18,12 +20,16 @@ import { bodyCompTrendSeries, formatDay } from './bodyCompFormat.js';
  *
  * Each panel's y-range is at least `MIN_SPAN_LB` tall, so a week of ±0.3 lb
  * wobble does not fill the panel and look like a cliff — scaling to the noise
- * would undo the smoothing.
+ * would undo the smoothing. 10 lb (review D-4): at 6, a lean axis of 138–144
+ * drew normal ±1 lb scale noise as cliffs.
+ *
+ * The tooltip is the weight chart's (../Weight/chartTooltip.jsx): it waits
+ * for a real touch, has a width of its own, and stays inside the panel.
  *
  * The line is a 7-day trailing mean (`rollingMean`); raw scans are faint dots
  * and are never joined (FITNESSGEEK_BODY_DATA_PLAN §0).
  */
-export const MIN_SPAN_LB = 6;
+export const MIN_SPAN_LB = 10;
 
 export function yRange(points) {
   const ys = points.map((p) => p.y).filter((y) => Number.isFinite(y));
@@ -35,13 +41,16 @@ export function yRange(points) {
   return [Math.floor(mid - span / 2 - 0.5), Math.ceil(mid + span / 2 + 0.5)];
 }
 
-const Panel = ({ label, series, color, xMin, xMax, chartTheme, theme, showAxis }) => {
+const MARGIN_LEFT = 40;
+
+const Panel = ({ label, series, color, xMin, xMax, chartTheme, showAxis }) => {
   const data = [
     { id: `${label} readings`, color: alpha(color, 0.4), data: series.readings },
     { id: `${label} 7-day average`, color, data: series.trend },
   ];
   const [yMin, yMax] = yRange([...series.readings, ...series.trend]);
-  const muted = theme.palette.text.secondary;
+  const chartRef = useRef(null);
+  const guard = useTooltipGuard();
 
   return (
     <Box>
@@ -49,13 +58,13 @@ const Panel = ({ label, series, color, xMin, xMax, chartTheme, theme, showAxis }
         <Box sx={{ width: 14, height: 2, backgroundColor: color, flexShrink: 0 }} />
         <Typography sx={{ fontSize: '0.8125rem', fontWeight: 600, color: 'text.primary' }}>{label}</Typography>
       </Box>
-      <Box sx={{ height: showAxis ? 150 : 124 }}>
+      <Box ref={chartRef} {...guard.handlers} sx={{ height: showAxis ? 150 : 124 }}>
         <ResponsiveLine
           data={data}
           theme={chartTheme}
           role="img"
           ariaLabel={`${label} over time, in pounds: a 7-day average line over each scan`}
-          margin={{ top: 8, right: 12, bottom: showAxis ? 32 : 8, left: 40 }}
+          margin={{ top: 8, right: 12, bottom: showAxis ? 32 : 8, left: MARGIN_LEFT }}
           xScale={{ type: 'time', format: '%Y-%m-%d', useUTC: false, precision: 'day', min: xMin, max: xMax }}
           xFormat="time:%Y-%m-%d"
           yScale={{ type: 'linear', min: yMin, max: yMax }}
@@ -68,27 +77,20 @@ const Panel = ({ label, series, color, xMin, xMax, chartTheme, theme, showAxis }
           enableSlices="x"
           curve="monotoneX"
           lineWidth={2.5}
-          sliceTooltip={({ slice }) => (
-            <Box
-              sx={{
-                background: theme.palette.background.paper,
-                px: 1.5,
-                py: 1,
-                borderRadius: 1.5,
-                border: `1px solid ${theme.palette.divider}`,
-                boxShadow: theme.shadows[4],
-              }}
-            >
-              <Typography sx={{ fontSize: '0.75rem', fontWeight: 700, color: muted, mb: 0.5 }}>
-                {formatDay(slice.points[0].data.xFormatted)}
-              </Typography>
-              {slice.points.map((p) => (
-                <Typography key={p.id} sx={{ fontSize: '0.8125rem', color: 'text.primary', fontFamily: "inherit" }}>
-                  {p.seriesId.endsWith('readings') ? 'Scan' : '7-day avg'} {Number(p.data.yFormatted).toFixed(1)} lb
-                </Typography>
-              ))}
-            </Box>
-          )}
+          sliceTooltip={({ slice }) => (guard.armed() ? (
+            <ChartTooltip
+              chartRef={chartRef}
+              marginLeft={MARGIN_LEFT}
+              x={slice.x}
+              title={tooltipDay(slice.points[0]?.data?.xFormatted)}
+              rows={slice.points.map((p) => ({
+                key: p.id,
+                label: p.seriesId.endsWith('readings') ? 'Scan' : '7-day avg',
+                value: `${Number(p.data.yFormatted).toFixed(1)} lb`,
+                color: p.seriesColor,
+              }))}
+            />
+          ) : null)}
           layers={[
             'grid',
             'axes',
@@ -125,6 +127,11 @@ const BodyCompTrend = ({ scans = [] }) => {
       <Typography sx={{ color: 'text.secondary', fontSize: '0.8125rem', mb: 2 }}>
         Line: 7-day average · dots: each scan
       </Typography>
+      {model.days >= 2 && (
+        <Typography data-testid="bodycomp-y-unit" aria-hidden sx={{ color: 'text.secondary', fontSize: '0.8125rem', fontWeight: 600, mb: 0.5 }}>
+          lb
+        </Typography>
+      )}
       {model.days < 2 ? (
         <Typography sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>
           The trend appears once you have scans on two different days.
@@ -138,7 +145,6 @@ const BodyCompTrend = ({ scans = [] }) => {
             xMin={xMin}
             xMax={xMax}
             chartTheme={chartTheme}
-            theme={theme}
             showAxis={false}
           />
           <Panel
@@ -148,7 +154,6 @@ const BodyCompTrend = ({ scans = [] }) => {
             xMin={xMin}
             xMax={xMax}
             chartTheme={chartTheme}
-            theme={theme}
             showAxis
           />
         </Box>

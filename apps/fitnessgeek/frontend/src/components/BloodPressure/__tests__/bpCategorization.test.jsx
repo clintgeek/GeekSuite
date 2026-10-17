@@ -47,8 +47,9 @@ describe('BPInsights — dangerous reading', () => {
   it('190/70 is reported as Crisis, not Stage 2 Hypertension', () => {
     render(<BPInsights bpLogs={[DANGEROUS_READING]} />);
 
-    expect(screen.getByText('Crisis')).toBeInTheDocument();
-    expect(screen.queryByText(/Stage 2 Hypertension/)).toBeNull();
+    // In plain words now (review D-1), with the medical name in brackets.
+    expect(screen.getByTestId('bp-headline')).toHaveTextContent('190/70 — very high (crisis)');
+    expect(screen.queryByText(/stage 2/i)).toBeNull();
     expect(screen.queryByText(/Hypertensive Crisis/)).toBeNull();
   });
 });
@@ -57,9 +58,9 @@ describe('BPCategoryDistribution — dangerous reading', () => {
   it('190/70 is counted under Crisis, not Stage 2', () => {
     render(<BPCategoryDistribution bpLogs={[DANGEROUS_READING]} />);
 
-    const chart = screen.getByRole('img', { name: /share of readings/i });
-    expect(within(chart.parentElement).getByText(/Crisis \(1\)/)).toBeInTheDocument();
-    expect(screen.queryByText(/Stage 2 \(1\)/)).toBeNull();
+    const chart = screen.getByRole('img', { name: /readings by range/i });
+    expect(within(chart.parentElement).getByText(/Very high \(crisis\) \(1\)/)).toBeInTheDocument();
+    expect(screen.queryByText(/stage 2\) \(1\)/i)).toBeNull();
   });
 });
 
