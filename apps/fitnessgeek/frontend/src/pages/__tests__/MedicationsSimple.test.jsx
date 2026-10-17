@@ -149,7 +149,9 @@ describe('L16 — Simple: the two-question add', () => {
     medsService.list.mockResolvedValue([{ ...MED, times_of_day: ['afternoon'] }]);
     render({ simple: true });
     expect(await screen.findByRole('button', { name: 'Edit Lisinopril' })).toBeInTheDocument();
-    expect(screen.getByText('Midday')).toBeInTheDocument();
+    // The list's group and today's checklist both say Midday now (utils/medSlots.js).
+    expect(screen.getAllByText('Midday').length).toBeGreaterThan(0);
+    expect(screen.queryByText('Afternoon')).toBeNull();
     expect(screen.queryByText('RX')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Copy text' })).toBeNull();
   });

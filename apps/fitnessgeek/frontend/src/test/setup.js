@@ -27,3 +27,11 @@ if (!window.ResizeObserver) {
     disconnect() {}
   };
 }
+
+// The composer keeps a typed draft per (day, meal) in sessionStorage
+// (FoodSearch/composerDraft.js). Clear it so one test's draft never appears in
+// the next test's box.
+import { afterEach } from 'vitest';
+afterEach(() => {
+  try { window.sessionStorage.clear(); } catch { /* storage unavailable */ }
+});

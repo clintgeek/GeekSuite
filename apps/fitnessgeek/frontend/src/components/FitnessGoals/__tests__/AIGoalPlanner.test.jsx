@@ -25,7 +25,7 @@ vi.mock('../../../services/influxService.js', () => ({ influxService: { getTrend
 // No 7-day average here: the plan starts from the latest weigh-in, as these
 // tests were written against.
 vi.mock('../../../services/weightService.js', () => ({
-  weightService: { getWeightStats: vi.fn(async () => ({ success: true, data: { currentMean: null } })) },
+  weightService: { getWeightLogs: vi.fn(async () => ({ success: true, data: [] })) },
 }));
 vi.mock('../../../services/userService.js', () => ({
   userService: {

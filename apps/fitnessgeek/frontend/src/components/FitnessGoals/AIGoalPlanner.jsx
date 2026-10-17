@@ -25,6 +25,7 @@ import { weightService } from '../../services/weightService.js';
 import { localDateString } from '@geeksuite/utils';
 import { useExperience } from '../../contexts/ExperienceContext.jsx';
 import { errorMessage } from '../../utils/errorMessage.js';
+import { currentAverage } from '../Weight/weightTrend.js';
 
 const CalorieGoalWizard = () => {
   const { user } = useAuth();
@@ -228,12 +229,14 @@ const CalorieGoalWizard = () => {
     }
   };
 
-  // The latest 7-day mean of weigh-ins (weightService.getWeightStats, the
-  // number Home's weight card shows). Null when it can't be had.
+  // The 7-day average the weight goal card shows, computed by the SAME helper
+  // (weightTrend.currentAverage) over the same logs, so the wizard's "to lose"
+  // and the card's "to go" can't drift apart (review D-3). Null when it can't
+  // be had.
   const loadAverageWeight = async () => {
     try {
-      const stats = await weightService.getWeightStats();
-      const mean = Number(stats?.data?.currentMean);
+      const response = await weightService.getWeightLogs();
+      const mean = Number(currentAverage(Array.isArray(response?.data) ? response.data : []));
       return Number.isFinite(mean) && mean > 0 ? mean : null;
     } catch {
       return null;

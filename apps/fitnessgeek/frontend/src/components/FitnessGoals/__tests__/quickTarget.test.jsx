@@ -15,7 +15,7 @@ vi.mock('../../../services/settingsService.js', () => ({
   settingsService: { getSettings: vi.fn(), updateSettings: vi.fn(() => Promise.resolve({})) },
 }));
 vi.mock('../../../services/weightService.js', () => ({
-  weightService: { getWeightStats: vi.fn() },
+  weightService: { getWeightLogs: vi.fn() },
 }));
 vi.mock('../../../services/userService.js', () => ({
   userService: { getProfile: vi.fn(), getLatestWeight: vi.fn(), updateProfile: vi.fn(() => Promise.resolve({ success: true })) },
@@ -38,11 +38,15 @@ const { default: CalorieGoalWizard } = await import('../AIGoalPlanner.jsx');
 
 const HEATHER = { age: 52, height: '5\'4"', gender: 'female' };
 
-function setup({ simple = true, goal = 'lose', profile = HEATHER, mean = 180.4, latest = 178.6, nutrition_goal = null } = {}) {
+function setup({ simple = true, goal = 'lose', profile = HEATHER, mean = 180.4, latest = 178.6, nutrition_goal = null, logs: givenLogs = null } = {}) {
   settingsService.getSettings.mockResolvedValue({ data: { nutrition_goal } });
   userService.getProfile.mockResolvedValue({ profile });
   userService.getLatestWeight.mockResolvedValue(latest);
-  weightService.getWeightStats.mockResolvedValue({ success: true, data: { currentMean: mean } });
+  // Seven daily weigh-ins at `mean`: the card's helper (currentAverage) reads 7-day average = mean.
+  const logs = mean == null ? [] : Array.from({ length: 7 }, (_, i) => ({
+    log_date: `2026-10-${String(10 + i).padStart(2, '0')}T00:00:00.000Z`, weight_value: mean,
+  }));
+  weightService.getWeightLogs.mockResolvedValue({ success: true, data: givenLogs || logs });
   const value = { isSimple: simple, effectiveMode: simple ? 'simple' : 'full', goal };
   render(
     <ExperienceContext.Provider value={value}>
@@ -132,6 +136,20 @@ describe('Quick target — Simple', () => {
     expect(screen.queryByText('How fast?')).toBeNull();
     expect(result.textContent).toContain(`Your daily target: ${expectedTarget({ rate: 0 }).toLocaleString('en-US')} calories.`);
     expect(result.textContent).toContain('keep your weight about where it is');
+  });
+
+  it('starts from the SAME 7-day average the weight card computes (D-3)', async () => {
+    const { currentAverage } = await import('../../Weight/weightTrend.js');
+    const logs = [
+      { log_date: '2026-10-10T00:00:00.000Z', weight_value: 182 },
+      { log_date: '2026-10-12T00:00:00.000Z', weight_value: 181 },
+      { log_date: '2026-10-14T00:00:00.000Z', weight_value: 179 },
+      { log_date: '2026-10-16T00:00:00.000Z', weight_value: 178 },
+    ];
+    setup({ logs });
+    const card = currentAverage(logs);
+    expect((await screen.findByTestId('quick-known')).textContent)
+      .toContain(`${Math.round(card * 10) / 10} lb (your 7-day average)`);
   });
 
   it('falls back to the latest weigh-in, and says so, without an average', async () => {
