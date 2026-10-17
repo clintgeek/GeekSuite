@@ -494,3 +494,16 @@ Built from a production audit of the whole pipeline.
   - CalorieNinjas: removed as a source (`57175fa4`). It became API Ninjas, whose free tier
     locks calories and protein. Chef: "Well fuck them then."
 - **Left over:** `DOCS/SUITE_TODO.md` §4, "Follow-ups from the FitnessGeek review fixes".
+
+## 2026-10-17 — FitnessGeek: second UX and visual review (`apps/fitnessgeek/DOCS/UX_REVIEW_2026-10-17.md`)
+
+- **Chef:** "closely examine the UI/UX … from 'could someone use it without instruction' to the
+  colors."
+- Report only. Three parallel read-only reviews: learnability, visual, nav/copy/data. The full
+  reports are in `ux-review-2026-10-17/`.
+- **Verdict:** logging food now works without instruction. The risk has moved to quantity
+  display, old screens never made Simple, and a few dishonest numbers (failed Home load, BP
+  "Normal", weight pace).
+- **Headline claims verified in code** before writing. The "two daily targets" suspicion was
+  refuted against production: one stored target per person.
+- **Six calls for Chef in §4,** including the SpO2 surfaces that already exist. Six phases in §5.
