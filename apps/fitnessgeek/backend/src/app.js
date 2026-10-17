@@ -200,7 +200,7 @@ app.get('/health', healthHandler);
 app.get('/api/health', healthHandler);
 
 // Circuit breaker stats for the external food/fitness APIs (USDA,
-// OpenFoodFacts, CalorieNinjas, Garmin — DOCS/TODO_ORDER.md #23). Read-only,
+// OpenFoodFacts, Garmin — DOCS/TODO_ORDER.md #23). Read-only,
 // no auth — matches /api/health above.
 app.get('/api/health/breakers', (req, res) => {
   res.status(200).json({

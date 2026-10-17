@@ -35,7 +35,7 @@ const SOURCE_TRUST = {
   usda: 40,
   nutritionix: 30,
   openfoodfacts: 22,
-  calorieninjas: 12,
+  calorieninjas: 12, // source removed 2026-10-16; foods already saved from it still rank
   ai: 4
 };
 

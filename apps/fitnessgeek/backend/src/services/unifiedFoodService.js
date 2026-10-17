@@ -27,7 +27,6 @@ import aiFoodService from './aiFoodService.js';
 import fatSecretService from './fatSecretService.js';
 import foodApiService from './foodApiService.js';
 import aiClassificationCacheService from './aiClassificationCacheService.js';
-import calorieNinjasService from './calorieNinjasService.js';
 import unitConversion from './unitConversion.js';
 import cacheService from './cacheService.js';
 import { foodCatalogVisibilityFilter } from '@geeksuite/schemas/fitnessgeek/foodItem';
@@ -72,7 +71,7 @@ const PERSONAL_INDEX_LIMIT = Number.parseInt(process.env.PERSONAL_INDEX_LIMIT ||
  * `fetchCandidates` fans four independent lookups out with `Promise.allSettled`,
  * which by definition waits for the slowest one. Under normal operation every
  * leg answers in well under a second (measured live, 2026-09-19: full search
- * including real network calls to FatSecret/USDA/OpenFoodFacts/CalorieNinjas
+ * including real network calls to FatSecret/USDA/OpenFoodFacts
  * ran 0.6–2.4s end to end). But each leg's OWN worst case is much larger and
  * is not, and should not be, this file's problem to fix:
  *   - `searchLocalDB` (Mongo): `serverSelectionTimeoutMS: 5000` is set in
@@ -88,11 +87,11 @@ const PERSONAL_INDEX_LIMIT = Number.parseInt(process.env.PERSONAL_INDEX_LIMIT ||
  *     (`planSummary: "IXSCAN {_fts:'text', _ftsx:1}"`, mongod's own slow-query
  *     log) — the index is not the problem, and this constant is not a
  *     substitute for one being missing.
- *   - `fatSecretService` has no circuit breaker (only usda/openfoodfacts/
- *     calorieninjas do, see `lib/breakers.js`) and its own axios timeout is
+ *   - `fatSecretService` has no circuit breaker (only usda/openfoodfacts
+ *     do, see `lib/breakers.js`) and its own axios timeout is
  *     10s — a slow FatSecret response is a full 10s today with nothing here
  *     to stop it.
- *   - `foodApiService` / `calorieNinjasService` are behind opossum breakers
+ *   - `foodApiService` is behind opossum breakers
  *     with a 6s timeout each (`lib/breakers.js`), which already caps them
  *     below this deadline in the closed/half-open state.
  *
@@ -542,7 +541,6 @@ class UnifiedFoodService {
     if (!searchText) return [];
 
     const fetchLimit = Math.min(Math.max(limit, 10) * 2, 40);
-    const useCalorieNinjas = this.detectNaturalLanguage(searchText);
 
     // USDA and OpenFoodFacts go through `foodApiService`, which is Redis-cached
     // (7 days) and wrapped in the shared 'usda' / 'openfoodfacts' circuit
@@ -560,12 +558,9 @@ class UnifiedFoodService {
       withDeadline(this.searchLocalDB(searchText, fetchLimit, userId), FETCH_LEG_DEADLINE_MS, [], 'searchLocalDB'),
       withDeadline(fatSecretService.searchFoods(searchText, fetchLimit), FETCH_LEG_DEADLINE_MS, [], 'fatSecret'),
       withDeadline(foodApiService.searchFoods(searchText, fetchLimit), FETCH_LEG_DEADLINE_MS, [], 'foodApi'),
-      useCalorieNinjas
-        ? withDeadline(calorieNinjasService.searchFoods(searchText), FETCH_LEG_DEADLINE_MS, [], 'calorieNinjas')
-        : Promise.resolve([])
     ]);
 
-    const [local, fatsecret, external, cn] = settled.map((r) =>
+    const [local, fatsecret, external] = settled.map((r) =>
       (r.status === 'fulfilled' && Array.isArray(r.value)) ? r.value : []
     );
 
@@ -573,11 +568,10 @@ class UnifiedFoodService {
       query: searchText,
       local: local.length,
       fatsecret: fatsecret.length,
-      external: external.length,
-      calorieninjas: cn.length
+      external: external.length
     }, 'Candidate fetch');
 
-    return this.deduplicateResults([...local, ...fatsecret, ...external, ...cn], fetchLimit);
+    return this.deduplicateResults([...local, ...fatsecret, ...external], fetchLimit);
   }
 
   /**
@@ -914,38 +908,6 @@ class UnifiedFoodService {
   isTooShortForDeepSearch(normalized) {
     const letters = String(normalized || '').match(/\p{L}/gu) || [];
     return letters.length < MIN_DEEP_QUERY_LETTERS;
-  }
-
-  /**
-   * Detect if query looks like natural language
-   */
-  detectNaturalLanguage(query) {
-    // Natural language indicators:
-    // - Contains numbers with food (e.g., "2 tacos")
-    // - Contains conversational words/phrases
-    // - Multiple words that aren't just brand + product
-    // - Vague descriptors that need AI interpretation
-    const nlPatterns = [
-      /\d+\s+\w+/,           // "2 tacos"
-      /\band\b/i,            // "tacos and beer"
-      /\bwith\b/i,           // "burger with fries"
-      /\ba\s+\w+/i,          // "a sandwich"
-      /\ban\s+\w+/i,         // "an apple"
-      /\bfor\s+(breakfast|lunch|dinner|snack)/i,
-      /\b(like|similar|kind of|sort of|type of)\b/i,  // "like apple fritters"
-      /\b(those|that|these|this)\s+(things?|stuff|food)/i,  // "those things"
-      /\b(from|at)\s+the\b/i,  // "from the donut shop"
-      /\bor\s+(something|anything)/i,  // "or something"
-      /\b(what|which|that)\s+(is|are|was|were)/i,  // "what is"
-      /\b(some|any)\s+\w+/i,  // "some breakfast"
-      /\bthat\s+\w+\s+\w+/i   // "that pastry thing"
-    ];
-
-    // Also check word count - if >5 words, likely natural language
-    const wordCount = query.split(/\s+/).length;
-    if (wordCount > 5) return true;
-
-    return nlPatterns.some(pattern => pattern.test(query));
   }
 
   /**

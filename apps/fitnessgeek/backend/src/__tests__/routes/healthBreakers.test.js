@@ -24,11 +24,11 @@ describe('GET /api/health/breakers', () => {
   test('reports every upstream breaker instantiated by the service modules', async () => {
     const res = await request(app).get('/api/health/breakers');
 
-    // usda + openfoodfacts (foodApiService.js), calorieninjas
-    // (calorieNinjasService.js), and garmin (garminConnectService.js) are
+    // usda + openfoodfacts (foodApiService.js) and garmin
+    // (garminConnectService.js) are
     // all required transitively by app.js's routes, so their breakers exist
     // by the time this request runs.
-    for (const name of ['usda', 'openfoodfacts', 'calorieninjas', 'garmin']) {
+    for (const name of ['usda', 'openfoodfacts', 'garmin']) {
       expect(res.body.breakers[name]).toEqual({
         state: expect.stringMatching(/^(open|halfOpen|closed)$/),
         stats: expect.objectContaining({

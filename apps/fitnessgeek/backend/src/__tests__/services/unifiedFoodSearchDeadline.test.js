@@ -1,7 +1,7 @@
 /**
  * unifiedFoodService.fetchCandidates — the per-leg deadline.
  *
- * `fetchCandidates` fans searchLocalDB / FatSecret / foodApi / CalorieNinjas
+ * `fetchCandidates` fans searchLocalDB / FatSecret / foodApi
  * out with `Promise.allSettled`, which by definition waits for the slowest
  * leg. Measured live against production on 2026-09-19, `searchLocalDB` alone
  * sometimes took ~10s and returned nothing — a MongoDB server-selection
@@ -57,7 +57,6 @@ const after = (ms, value) => new Promise((resolve) => setTimeout(() => resolve(v
 
 const foodApiSearch = jest.fn(async () => []);
 const fatSecretSearch = jest.fn(async () => []);
-const calorieNinjasSearch = jest.fn(async () => []);
 const findMock = jest.fn(() => chain([]));
 
 jest.unstable_mockModule(mod('../../models/FoodItem.js'), () => ({
@@ -79,10 +78,6 @@ jest.unstable_mockModule(mod('../../services/foodApiService.js'), () => ({
 jest.unstable_mockModule(mod('../../services/fatSecretService.js'), () => ({
   __esModule: true,
   default: { searchFoods: fatSecretSearch }
-}));
-jest.unstable_mockModule(mod('../../services/calorieNinjasService.js'), () => ({
-  __esModule: true,
-  default: { searchFoods: calorieNinjasSearch }
 }));
 jest.unstable_mockModule(mod('../../services/aiClassificationCacheService.js'), () => ({
   __esModule: true,

@@ -1,5 +1,5 @@
 // Circuit breakers around fitnessgeek's external food/fitness upstreams
-// (USDA, OpenFoodFacts, CalorieNinjas, Garmin). DOCS/TODO_ORDER.md #23.
+// (USDA, OpenFoodFacts, Garmin). DOCS/TODO_ORDER.md #23.
 //
 // Each named upstream gets exactly ONE breaker (module-level registry, keyed
 // by name) so that state — closed / open / half-open — is shared across
@@ -42,7 +42,6 @@ const UPSTREAM_DEFAULTS = {
   usda: REST_DEFAULTS,
   nutritionix: REST_DEFAULTS, // no live call site today (grepped, not found) — reserved
   openfoodfacts: REST_DEFAULTS,
-  calorieninjas: REST_DEFAULTS,
   garmin: GARMIN_DEFAULTS,
 };
 

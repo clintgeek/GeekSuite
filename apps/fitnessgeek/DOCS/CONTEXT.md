@@ -3,13 +3,13 @@
 How this app is actually built, run and deployed. Paths, ports and commands
 here override any reasonable-looking default.
 
-**2026-10-16 (CalorieNinjas → API Ninjas):** the nutrition-parsing source moved to
-`https://api.api-ninjas.com/v1/nutrition` (`services/calorieNinjasService.js`, internal source id
-still `calorieninjas`). The key is `API_NINJAS_API_KEY` in `.env.production`; the old
-`CALORIENINJAS_API_KEY` is still read as a fallback. On API Ninjas' free tier `calories` and
-`protein_g` are premium-only, so a free key returns no usable foods and the source switches itself
-off with one warning naming the variable. A new key needs `docker compose up -d fitnessgeek`
-(see the landmine below).
+**2026-10-16 (CalorieNinjas removed):** CalorieNinjas became API Ninjas, and the old
+`api.calorieninjas.com` rejected every key. The key itself still works at
+`api.api-ninjas.com`, but on the free tier `calories` and `protein_g` come back as
+"premium only" strings, which is useless to a calorie tracker. Chef: "Well fuck them then." The
+source is gone: service, fetch leg, breaker. Food search is local + FatSecret + USDA/OFF
+(+ AI). Foods already saved with `source: 'calorieninjas'` stay, and still rank and label as
+"Estimate". `CALORIENINJAS_API_KEY` in `.env.production` is now unread.
 
 **2026-09-15 (landmine — a Watchtower deploy does NOT pick up `.env.production` edits):**
 `docker-compose.yml` loads runtime env with `env_file: .env.production`, and compose resolves

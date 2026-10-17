@@ -40,7 +40,6 @@ const usda = (name, calories = 220) => ({
 
 const foodApiSearch = jest.fn(async () => []);
 const fatSecretSearch = jest.fn(async () => []);
-const calorieNinjasSearch = jest.fn(async () => []);
 const classify = jest.fn(async () => ({ type: 'unknown', items: [] }));
 const parseFood = jest.fn(async () => ({ ok: false, source: 'fallback', data: {} }));
 const findMock = jest.fn(() => chain([]));
@@ -65,10 +64,6 @@ jest.unstable_mockModule(mod('../../services/fatSecretService.js'), () => ({
   __esModule: true,
   default: { searchFoods: fatSecretSearch }
 }));
-jest.unstable_mockModule(mod('../../services/calorieNinjasService.js'), () => ({
-  __esModule: true,
-  default: { searchFoods: calorieNinjasSearch }
-}));
 jest.unstable_mockModule(mod('../../services/aiClassificationCacheService.js'), () => ({
   __esModule: true,
   default: { getOrCompute: async (userId, input, compute) => compute(input) }
@@ -90,7 +85,6 @@ const names = (results) => results.map((r) => r.name);
 beforeEach(() => {
   foodApiSearch.mockImplementation(async () => []);
   fatSecretSearch.mockImplementation(async () => []);
-  calorieNinjasSearch.mockImplementation(async () => []);
   classify.mockImplementation(async () => ({ type: 'unknown', items: [] }));
   findMock.mockImplementation(() => chain([]));
 });

@@ -25,7 +25,6 @@ const chain = (value) => {
 
 const foodApiSearch = jest.fn(async () => []);
 const fatSecretSearch = jest.fn(async () => []);
-const calorieNinjasSearch = jest.fn(async () => []);
 const classify = jest.fn(async () => ({ type: 'unknown', items: [] }));
 const parseFood = jest.fn(async () => ({ ok: false, source: 'fallback', data: {} }));
 const foodFind = jest.fn(() => chain([]));
@@ -57,10 +56,6 @@ jest.unstable_mockModule(mod('../../services/fatSecretService.js'), () => ({
   __esModule: true,
   default: { searchFoods: fatSecretSearch }
 }));
-jest.unstable_mockModule(mod('../../services/calorieNinjasService.js'), () => ({
-  __esModule: true,
-  default: { searchFoods: calorieNinjasSearch }
-}));
 jest.unstable_mockModule(mod('../../services/aiClassificationCacheService.js'), () => ({
   __esModule: true,
   default: { getOrCompute: async (userId, input, compute) => compute(input) }
@@ -86,7 +81,7 @@ const own = (name, extra = {}) => ({
 const admits = (filter, userId) => JSON.stringify(filter).includes(`{"user_id":"${userId}"}`);
 
 beforeEach(() => {
-  for (const fn of [foodApiSearch, fatSecretSearch, calorieNinjasSearch]) {
+  for (const fn of [foodApiSearch, fatSecretSearch]) {
     fn.mockReset();
     fn.mockImplementation(async () => []);
   }
@@ -115,7 +110,6 @@ describe('a two-letter prefix', () => {
 
     expect(fatSecretSearch).not.toHaveBeenCalled();
     expect(foodApiSearch).not.toHaveBeenCalled();
-    expect(calorieNinjasSearch).not.toHaveBeenCalled();
     expect(classify).not.toHaveBeenCalled();
     expect(parseFood).not.toHaveBeenCalled();
     expect(results.map((r) => r.source)).not.toContain('ai');
