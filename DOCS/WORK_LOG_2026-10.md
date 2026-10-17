@@ -542,3 +542,17 @@ Built from a production audit of the whole pipeline.
     unchanged since `463cbdad`.
   - `packages/ui` and `packages/auth` changes ship to every app on the push.
   - No new env vars.
+
+## 2026-10-17 — GameGeek: export the filtered library as CSV
+
+- **Chef:** "Bookgeek has an easy export of whatever list of books you currently have filtered.
+  Let's add that to gamegeek."
+- **What it does:** an "Export" button in the library header (a round icon on phones) downloads
+  every game the current filter and sort match. It walks all pages, 100 at a time, through
+  `GetGamesExport` (the same arguments as `GetGames`), not just the rows loaded so far.
+- **Columns:** title, year, release date, developers, publishers, series and #, genres, tags,
+  copies (platform · store), owned, shelf, rating, favorite, last played, time to beat, date
+  added, and the GameGeek ID. **No hours played.**
+- **Same safety as BookGeek's export:** RFC 4180 quoting, formula-injection defence, a UTF-8
+  BOM. The CSV core is copied rather than shared, so no shared-package change was needed.
+- **Checks:** GameGeek 150 tests (11 new). Harness 82/0, enforcing.

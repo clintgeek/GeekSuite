@@ -154,6 +154,61 @@ export const GET_GAMES = gql`
   ${GAME_CARD_FIELDS}
 `;
 
+/**
+ * The library export (utils/exportGamesCsv.js): GetGames' own arguments, so it
+ * matches exactly what the filter and sort show, with the extra columns a
+ * spreadsheet wants. No hours (Chef doesn't track playtime).
+ */
+export const GET_GAMES_EXPORT = gql`
+  query GetGamesExport(
+    $page: Int
+    $limit: Int
+    $owned: String
+    $sort: String
+    $sortDir: String
+    $filter: GameFilterInput
+    $seed: Int
+  ) {
+    games(page: $page, limit: $limit, owned: $owned, sort: $sort, sortDir: $sortDir, filter: $filter, seed: $seed) {
+      games {
+        id
+        title
+        releaseYear
+        releaseDate
+        developers
+        publishers
+        series {
+          name
+          index
+        }
+        genres
+        tags
+        autoTags
+        owned
+        createdAt
+        timeToBeat {
+          main
+        }
+        copies {
+          id
+          platform
+          format
+          storefront
+        }
+        me {
+          shelf
+          rating
+          favorite
+          lastPlayedAt
+        }
+      }
+      total
+      page
+      pages
+    }
+  }
+`;
+
 /** Live counts for every filter-panel section. Each facet excludes its own selections (server rule). */
 export const GET_GAME_FACETS = gql`
   query GetGameFacets($filter: GameFilterInput) {

@@ -39,6 +39,7 @@ import GameRow from '../components/GameRow';
 import ShelfStrip from '../components/ShelfStrip';
 import SaveLibraryView from '../components/SaveLibraryView';
 import WhatNextSheet, { WhatNextButton } from '../components/WhatNextSheet';
+import ExportGamesButton from '../components/ExportGamesButton';
 import { useWhatNext } from '../hooks/useWhatNext';
 import { gamePath, isFabVisible } from '../components/navConfig';
 import { DEFAULT_OPEN, SECTIONS, SECTIONS_OPEN_KEY, activeChips } from '../utils/facets';
@@ -233,7 +234,13 @@ export default function LibraryView() {
               onSave={() => setSaveOpen(true)}
               view={view}
               onToggleView={toggleView}
-              actions={playAssistant ? <WhatNextButton onClick={whatNext.openSheet} isDesktop={isDesktop} /> : null}
+              actions={
+                <>
+                  {playAssistant ? <WhatNextButton onClick={whatNext.openSheet} isDesktop={isDesktop} /> : null}
+                  {/* Exports what the FILTER matches, every page, not just the rows loaded. */}
+                  <ExportGamesButton variables={lib.variables(1)} customShelves={customShelves} isDesktop={isDesktop} />
+                </>
+              }
             />
             <Box sx={{ position: 'relative', mt: 1.5 }}>
               <LinearProgress
