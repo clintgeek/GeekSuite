@@ -33,14 +33,27 @@ const useCountUp = (target, duration = 380) => {
 };
 
 /**
- * What you have logged in this sitting, and one way to take it back.
+ * What you have logged in this sitting, a way to take the last one back, and
+ * Done.
  *
  * This is what the staging tray became. The tray existed because logging was a
  * two-step commit; now a tap logs, so there is nothing to stage — but there IS
- * something worth showing once you are mid-meal: how much you have put down so
- * far. It stays out of the way for a single item and appears from the second.
+ * something worth showing: that it landed, how much, and how to finish.
+ *
+ * FROM THE FIRST ITEM (L10). It used to wait for the second, and the only way
+ * out of a picking session was the sheet's ✕, which reads as "cancel what I
+ * did here" — so Heather hesitated, or tapped the food again "to be sure".
+ * Now one tap shows "✓ 1 added to lunch · 190 cal" with a Done that closes
+ * the sheet.
+ *
+ * NO "UNDO ALL" (L11). A red Undo all sat beside Undo last, two small buttons
+ * apart, with no redo: one slip took back the whole sitting. Undo last stays;
+ * each toast still has its own Undo.
+ *
+ * `where` is the meal in words ("lunch", "Thursday's dinner"), or null when
+ * the sitting spans meals.
  */
-const SessionRibbon = ({ items = [], onUndoAll, onUndoLast, busy = false }) => {
+const SessionRibbon = ({ items = [], where = null, onUndoLast, onDone, busy = false }) => {
   const theme = useTheme();
   const primary = theme.palette.primary.main;
 
@@ -53,11 +66,12 @@ const SessionRibbon = ({ items = [], onUndoAll, onUndoLast, busy = false }) => {
   }, 0);
   const displayed = useCountUp(Math.round(totalCalories));
 
-  // One item is a toast's job, not a dock's.
-  if (items.length < 2) return null;
+  if (items.length < 1) return null;
 
   return (
     <Box
+      data-testid="session-ribbon"
+      role="status"
       sx={{
         position: 'sticky',
         bottom: 0,
@@ -65,52 +79,49 @@ const SessionRibbon = ({ items = [], onUndoAll, onUndoLast, busy = false }) => {
         mt: 2,
         display: 'flex',
         alignItems: 'center',
-        gap: 1.5,
+        gap: 1,
         px: 2,
-        py: 1.25,
+        py: 1,
         borderRadius: 3,
         border: `1px solid ${alpha(primary, 0.35)}`,
         backgroundColor: theme.palette.background.paper,
         backdropFilter: 'blur(8px)',
         boxShadow: `0 10px 30px -18px ${alpha(theme.palette.common.black, 0.6)}`,
         animation: `${riseIn} 260ms cubic-bezier(0.22, 1, 0.36, 1)`,
-        pb: `calc(${theme.spacing(1.25)} + var(--safe-area-inset-bottom, 0px))`
+        pb: `calc(${theme.spacing(1)} + var(--safe-area-inset-bottom, 0px))`
       }}
     >
-      <LoggedIcon sx={{ color: primary, fontSize: 20, flexShrink: 0 }} />
+      <LoggedIcon sx={{ color: primary, fontSize: 22, flexShrink: 0 }} aria-hidden />
       <Box sx={{ minWidth: 0, flex: 1 }}>
-        <Typography sx={{ fontSize: '0.875rem', fontWeight: 700, color: 'text.primary' }}>
-          {items.length} logged
+        <Typography sx={{ fontSize: '1rem', fontWeight: 800, color: 'text.primary', lineHeight: 1.3 }}>
+          {items.length} added{where ? ` to ${where}` : ''}
         </Typography>
-        <Typography
-          sx={{ fontSize: '0.75rem', color: 'text.secondary', fontFamily: "inherit" }}
-        >
-          {displayed} cal this sitting
+        <Typography sx={{ fontSize: '0.9375rem', color: 'text.secondary', lineHeight: 1.3 }}>
+          {displayed.toLocaleString('en-US')} cal
         </Typography>
       </Box>
 
-      <Button
-        size="small"
-        onClick={onUndoLast}
-        disabled={busy}
-        sx={{ color: 'text.secondary', fontSize: '0.75rem', minHeight: 44 }}
-      >
-        Undo last
-      </Button>
-      <Button
-        size="small"
-        startIcon={<UndoIcon />}
-        onClick={onUndoAll}
-        disabled={busy}
-        sx={{
-          color: theme.palette.error.main,
-          fontSize: '0.75rem',
-          minHeight: 44,
-          flexShrink: 0
-        }}
-      >
-        Undo all
-      </Button>
+      {onUndoLast && (
+        <Button
+          startIcon={<UndoIcon />}
+          onClick={onUndoLast}
+          disabled={busy}
+          sx={{ color: 'text.primary', fontSize: '0.9375rem', fontWeight: 700, minHeight: 44, flexShrink: 0 }}
+        >
+          Undo last
+        </Button>
+      )}
+      {onDone && (
+        <Button
+          variant="contained"
+          onClick={onDone}
+          disabled={busy}
+          data-testid="session-done"
+          sx={{ minHeight: 48, borderRadius: 999, fontWeight: 800, fontSize: '1rem', px: 2.5, boxShadow: 'none', flexShrink: 0 }}
+        >
+          Done
+        </Button>
+      )}
     </Box>
   );
 };

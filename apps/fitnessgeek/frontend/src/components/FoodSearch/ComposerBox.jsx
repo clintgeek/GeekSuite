@@ -28,6 +28,13 @@ import { slashFocusProps } from '@geeksuite/ui';
  * box or the button (Chef: "the entry form bounces around").
  *
  * It is the `/` target wherever it appears (suite slash focus, priority 30).
+ *
+ * ONE PRIMARY AT A TIME (L20). For a short name ("fage") the list is open
+ * and its rows are the main way in, so Log it steps back to an outlined
+ * "Just log 'fage'" (`quiet`). For a sentence it is the filled primary.
+ *
+ * `micDisabled` turns the mic off without hiding it — offline, where the
+ * speech service can't work and used to say the microphone was broken (L18).
  */
 const ComposerBox = ({
   value,
@@ -37,6 +44,8 @@ const ComposerBox = ({
   listening = false,
   thinking = false,
   canLog = true,
+  quiet = false,
+  micDisabled = false,
   disabled = false,
   status = null,
   statusTone = 'muted',
@@ -122,7 +131,7 @@ const ComposerBox = ({
 
       <Box sx={{ display: 'flex', gap: 1, mt: 1.5 }}>
         <Button
-          variant="contained"
+          variant={quiet && !thinking ? 'outlined' : 'contained'}
           size="large"
           fullWidth
           onClick={() => { if (!thinking && canLog) onSubmit?.(); }}
@@ -137,15 +146,16 @@ const ComposerBox = ({
             fontSize: '1.125rem',
             fontWeight: 800,
             boxShadow: 'none',
+            ...(quiet && !thinking ? { borderWidth: 2, '&:hover': { borderWidth: 2 } } : {}),
             ...(thinking ? { pointerEvents: 'none' } : {}),
           }}
         >
-          {thinking ? 'Working it out…' : 'Log it'}
+          {thinking ? 'Working it out…' : quiet && value?.trim() ? `Just log '${value.trim()}'` : 'Log it'}
         </Button>
         {onMicClick && (
           <IconButton
             onClick={onMicClick}
-            disabled={thinking || disabled}
+            disabled={thinking || disabled || (micDisabled && !listening)}
             aria-label={listening ? 'Stop listening' : 'Say what you ate'}
             aria-pressed={listening}
             data-testid="speak-button"

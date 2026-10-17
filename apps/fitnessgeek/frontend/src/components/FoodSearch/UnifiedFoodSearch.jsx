@@ -9,6 +9,7 @@ import FoodResultRow from './FoodResultRow';
 import { foodService } from '../../services/foodService';
 import { errorMessage } from '../../utils/errorMessage.js';
 import { identityOf } from './entries.js';
+import SignInButton, { isSignedOutMessage } from './SignInButton.jsx';
 
 /**
  * The "exact food" list: the half of the composer you ask for.
@@ -60,7 +61,8 @@ const UnifiedFoodSearch = ({
   dense = false,
   busy = false,
   pendingKey = null,
-  // `{ key, servings }` for the row whose add just landed ("Make it 2").
+  // `{ [rowKey]: { servings } }`: what this sitting has written per row, so
+  // a row can say "2 added ✓" and offer "Make it 3" (L2).
   added = null,
   onPick,
   onAdjust,
@@ -251,7 +253,7 @@ const UnifiedFoodSearch = ({
         onTap={(f) => onPick?.(f, key)}
         onAdjust={onAdjust}
         onMore={onMore}
-        added={added?.key === key ? added : null}
+        added={added?.[key] || null}
         pending={busy && pendingKey === key}
         disabled={busy}
         ketoMode={ketoMode}
@@ -280,9 +282,12 @@ const UnifiedFoodSearch = ({
         </Typography>
       )}
       {error && (
-        <Typography role="status" sx={{ color: ink, fontSize: '0.9375rem', px: 1.5, mt: 1 }}>
-          {error}
-        </Typography>
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap', px: 1.5, mt: 1 }}>
+          <Typography role="status" sx={{ color: ink, fontSize: '0.9375rem' }}>
+            {error}
+          </Typography>
+          {isSignedOutMessage(error) && <SignInButton />}
+        </Box>
       )}
     </>
   );

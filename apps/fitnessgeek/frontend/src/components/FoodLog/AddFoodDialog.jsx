@@ -4,7 +4,7 @@ import { Restaurant as FoodIcon } from '@mui/icons-material';
 import { FoodComposer } from '../FoodSearch';
 import { useUndoToast } from '../FoodSearch/undoToast.jsx';
 import { useBackToClose } from '../FoodSearch/useBackToClose.js';
-import { mealOnDay } from '../FoodSearch/composerText.js';
+import { sheetTitle } from '../FoodSearch/composerText.js';
 import BarcodeScanner from '../BarcodeScanner/BarcodeScanner.jsx';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
 import { useToday } from '../../hooks/useToday.js';
@@ -39,7 +39,10 @@ import { addedMessage, mealWord } from '../../utils/plainWords.js';
  *
  * THE DAY IS IN THE TITLE when it isn't today: "Add to yesterday's dinner",
  * "Add to Wednesday's dinner" (REVIEW_2026-10 Phase 1.5). Heather backfills
- * (§2a), and the sheet never said which day it was writing to.
+ * (§2a), and the sheet never said which day it was writing to. On a
+ * backfilled day the whole sheet names days by weekday (L22), so the title
+ * says which weekday "yesterday" is: "Add to Thursday's dinner (yesterday)",
+ * above "Same as Wednesday's dinner".
  *
  * IT DOESN'T BOUNCE ON A DESKTOP. Chef: "the entry form bounces around a lot
  * on the desktop when trying to enter foods." The window was vertically
@@ -82,7 +85,7 @@ const AddFoodDialog = ({
         maxWidth="sm"
         // One title, in words: "Add to lunch". It used to be an eyebrow, a
         // title and an icon saying "Log · Add Food" above a meal picker.
-        title={`Add to ${mealOnDay(mealWord(mealType), day, today)}`}
+        title={sheetTitle(mealWord(mealType), day, today)}
         icon={FoodIcon}
         contentSx={{ px: { xs: 1.5, sm: 2.5 } }}
         // Top-anchored, fixed height on a desktop; see the note above.

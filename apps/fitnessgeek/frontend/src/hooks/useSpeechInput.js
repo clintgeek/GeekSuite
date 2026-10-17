@@ -17,7 +17,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
  * Errors come back as a plain reason, never the recognizer's codes:
  *   'denied'   — the person (or the browser) refused the microphone
  *   'no-speech' — it listened and heard nothing
- *   'other'    — anything else (network, aborted, no microphone)
+ *   'offline'  — no signal: the recognizer needs the network (L18), and
+ *                "the microphone isn't working" sent her looking for a fault
+ *   'other'    — anything else (aborted, no microphone)
  */
 
 export function getSpeechRecognition(win = typeof window !== 'undefined' ? window : undefined) {
@@ -27,12 +29,14 @@ export function getSpeechRecognition(win = typeof window !== 'undefined' ? windo
 const reasonFor = (code) => {
   if (code === 'not-allowed' || code === 'service-not-allowed') return 'denied';
   if (code === 'no-speech') return 'no-speech';
+  if (code === 'network' || (typeof navigator !== 'undefined' && navigator.onLine === false)) return 'offline';
   return 'other';
 };
 
 export const SPEECH_ERROR_TEXT = {
   denied: 'FitnessGeek needs your microphone to hear you. Allow it in your browser settings, or type instead.',
   'no-speech': "I didn't hear anything. Tap the microphone and try again.",
+  offline: "No signal — I can't hear you without it. You can type instead.",
   other: "The microphone isn't working right now. You can type instead.",
 };
 

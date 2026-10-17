@@ -3,7 +3,7 @@
  * the day words (a mirror of the backend's, Phase 3.17).
  */
 import { describe, it, expect } from 'vitest';
-import { isSentence, detectDayWords, resolveDayHint, dayInWords, mealOnDay, describeFailure } from '../composerText.js';
+import { isSentence, detectDayWords, resolveDayHint, dayInWords, mealOnDay, describeFailure, sheetDayWords, sheetMealOnDay, sheetTitle } from '../composerText.js';
 
 describe('isSentence', () => {
   it.each([
@@ -65,5 +65,33 @@ describe('describeFailure', () => {
   });
   it('signed out is its own sentence', () => {
     expect(describeFailure({ response: { status: 401, data: {} } }).message).toBe('Please sign in again.');
+  });
+});
+
+describe('L21: number words count as a number', () => {
+  it.each([
+    ['two eggs', true], ['a couple eggs', true], ['half bagel', true], ['a few crackers', true],
+    ['dozen wings', true], ['twelve almonds', true], ['one banana', true],
+    ['twix', false], ['tenderloin', false], ['honeydew', false],
+  ])('%j → %s', (text, expected) => expect(isSentence(text)).toBe(expected));
+});
+
+describe('L22: one way of naming days in a sheet', () => {
+  // Wednesday.
+  const today = '2026-10-14';
+
+  it("today's sheet speaks relatively", () => {
+    expect(sheetDayWords('2026-10-13', today, today)).toBe('yesterday');
+    expect(sheetMealOnDay('lunch', '2026-10-13', today, today)).toBe("yesterday's lunch");
+    expect(sheetTitle('lunch', today, today)).toBe('Add to lunch');
+  });
+
+  it('a backfilled sheet uses weekdays throughout, and the title says which one yesterday was', () => {
+    expect(sheetTitle('dinner', '2026-10-13', today)).toBe("Add to Tuesday's dinner (yesterday)");
+    expect(sheetMealOnDay('dinner', '2026-10-12', today, '2026-10-13')).toBe("Monday's dinner");
+    expect(sheetDayWords('2026-10-13', today, '2026-10-13')).toBe('Tuesday');
+    expect(sheetDayWords(today, today, '2026-10-13')).toBe('today');
+    expect(sheetTitle('dinner', '2026-10-12', today)).toBe("Add to Monday's dinner");
+    expect(sheetTitle('dinner', '2026-10-03', today)).toBe('Add to dinner on Saturday, October 3');
   });
 });

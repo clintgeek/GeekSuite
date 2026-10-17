@@ -12,7 +12,9 @@ import QuickPicks from './QuickPicks';
 import EntryList from './EntryList.jsx';
 import FixSheet from './FixSheet.jsx';
 import { useEntryFixes } from './useEntryFixes.js';
-import { identityOf, applyItemChange, entryFromLogged } from './entries.js';
+import { identityOf, applyItemChange, entryFromLogged, withAmount } from './entries.js';
+import SignInButton, { isSignedOutMessage } from './SignInButton.jsx';
+import { readDraft, writeDraft, draftsAvailable } from './composerDraft.js';
 import { useSpeechInput } from '../../hooks/useSpeechInput.js';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus.js';
 import { useToday } from '../../hooks/useToday.js';
@@ -25,11 +27,12 @@ import {
   isSentence,
   detectDayWords,
   resolveDayHint,
-  dayInWords,
-  mealOnDay,
+  sheetDayWords,
+  sheetMealOnDay,
   describeFailure,
   NOTHING_TO_LOG_MESSAGE,
   OFFLINE_COMPOSER_MESSAGE,
+  OFFLINE_UNSAVED_MESSAGE,
   STILL_WORKING_MESSAGE,
 } from './composerText.js';
 
@@ -71,9 +74,21 @@ import {
  *             couldn't find a food in that…", and "Logged the soup. I couldn't
  *             work out 'crackers'. [Pick crackers]".
  *
- * Tapping a list row is a picking session, as before: it logs in place, the
- * ribbon counts from the second item, and nothing closes. Its pill becomes
- * "Make it 2" (FoodResultRow).
+ * Tapping a list row is a picking session, as before: it logs in place and
+ * nothing closes. The ribbon shows from the first item, with Done (L10). Its
+ * pill becomes "Make it 2" (FoodResultRow).
+ *
+ * A SECOND TAP IS ANOTHER SERVING (L2). Heather taps "Egg" twice for two
+ * eggs (§2a). The second tap on the same row — or the same Again chip — in
+ * one sitting adds a serving to the entry already written instead of writing
+ * a second one: one entry, two servings, and its Undo takes back the whole
+ * entry. `addedByKey` remembers what each row or chip wrote, for this meal
+ * and day only.
+ *
+ * THE WORDS OUTLIVE THE SHEET (L18). The add sheet unmounts on close, and
+ * "Your words are saved here" was only true while it stayed open. In the
+ * sheet the draft is kept per day and meal in sessionStorage
+ * (composerDraft.js), restored on reopen and cleared once something logs.
  *
  * ONE WRITE AT A TIME (REVIEW_2026-10 B7). A tapped row shows "Adding…" at
  * once, and while any write from this box is in flight — a row, a chip, a
@@ -145,7 +160,9 @@ const FoodComposer = ({
   const day = date || today;
   const afterDescribe = resultStyle || (isSimple ? 'card' : 'close');
 
-  const [query, setQuery] = useState('');
+  // The sheet's draft: what she typed last time for this day and meal (L18).
+  const keepDraft = mode === 'dialog';
+  const [query, setQuery] = useState(() => (keepDraft && !String(initialQuery || '').trim() ? readDraft(day, mealType) : ''));
   const [session, setSession] = useState([]);   // what this sitting has logged
   const [busy, setBusy] = useState(false);
   // Which row or chip the write in flight came from, so it can say "Adding…".
@@ -159,8 +176,12 @@ const FoodComposer = ({
   const [question, setQuestion] = useState(null);
   const [adjusting, setAdjusting] = useState(null);
   const [fixing, setFixing] = useState(null);
-  // The row whose add just landed, for "Make it 2".
-  const [added, setAdded] = useState(null);
+  // What each row or chip has written this sitting, by its key:
+  // `{ logIds, servings, name, mealType, date }`. A second tap on the same
+  // key adds a serving to that entry (L2); the row and the chip count it.
+  const [addedByKey, setAddedByKey] = useState({});
+  const addedRef = useRef(addedByKey);
+  addedRef.current = addedByKey;
 
   const inputRef = useRef(null);
   const seededRef = useRef(null);
@@ -170,6 +191,32 @@ const FoodComposer = ({
 
   const sentence = isSentence(query);
   const typed = query.trim();
+
+  // Keep the draft as she types; an empty box keeps nothing. The key moves
+  // with the meal chips, and the old key's draft goes with it.
+  const draftKeyRef = useRef(null);
+  useEffect(() => {
+    if (!keepDraft) return;
+    const key = `${day}|${mealType}`;
+    if (draftKeyRef.current && draftKeyRef.current !== key) {
+      const [oldDay, oldMeal] = draftKeyRef.current.split('|');
+      writeDraft(oldDay, oldMeal, '');
+    }
+    draftKeyRef.current = key;
+    writeDraft(day, mealType, query);
+  }, [keepDraft, day, mealType, query]);
+  const forgetDraft = useCallback(() => {
+    if (keepDraft) writeDraft(day, mealType, '');
+  }, [keepDraft, day, mealType]);
+
+  /** An error toast; "Please sign in again." comes with a Sign in button (L24). */
+  const sayError = useCallback((err, fallback) => {
+    const text = errorMessage(err, fallback);
+    notify(text, {
+      tone: 'error',
+      ...(isSignedOutMessage(text) ? { action: <SignInButton variant="text" sx={{ color: 'inherit' }} /> } : {}),
+    });
+  }, [notify]);
 
   /** Take the box's one write slot, or say no if a write is already running. */
   const beginWrite = useCallback((key = null) => {
@@ -204,7 +251,6 @@ const FoodComposer = ({
   const changeQuery = useCallback((value) => {
     setQuery(value);
     setDayAsk(null);
-    setAdded(null);
     // Editing the words answers the error; the message has done its job.
     setFailure((f) => (f?.kind === 'offline' ? f : null));
   }, []);
@@ -220,7 +266,10 @@ const FoodComposer = ({
         return { ...entry, logIds: ids.filter((id) => !deleted.includes(id)) };
       })
       .filter((entry) => (entry.logIds || []).length > 0));
-    setAdded((a) => (a && a.logIds.some((id) => deleted.includes(id)) ? null : a));
+    setAddedByKey((prev) => {
+      const next = Object.fromEntries(Object.entries(prev).filter(([, a]) => !a.logIds.some((id) => deleted.includes(id))));
+      return Object.keys(next).length === Object.keys(prev).length ? prev : next;
+    });
   }, []);
 
   const logFoods = useCallback(async (items, meal, key = null) => {
@@ -241,57 +290,101 @@ const FoodComposer = ({
         const perItem = result?.perItem || items.map((_, i) => (logIds[i] ? [logIds[i]] : []));
         setSession((prev) => [
           ...prev,
-          ...items.map((item, i) => ({ ...item, logIds: perItem[i] || [] }))
+          ...items.map((item, i) => ({ ...item, logIds: perItem[i] || [], mealType: meal || mealType, date: day }))
         ]);
-        offerUndo(addedMessage(meal || mealType, items.length === 1 ? items[0].name : `${ok} items`), logIds, {
+        // "Egg ×2", not "Egg", when it wasn't one (L4).
+        const what = items.length === 1 ? withAmount(items[0].name, items[0].type === 'household-meal' ? 1 : items[0].servings) : `${ok} items`;
+        offerUndo(addedMessage(meal || mealType, what), logIds, {
           tone: result?.fail ? 'warning' : 'success',
           onDeleted: forgetDeleted
         });
+        forgetDraft();
       }
       if (result?.fail) {
         const fallback = items.length === 1
           ? "Couldn't add that. Try again."
           : `${result.fail} item${result.fail === 1 ? '' : 's'} could not be logged.`;
-        notify(errorMessage(result?.errors?.[0], fallback), { tone: 'error' });
+        sayError(result?.errors?.[0], fallback);
       }
       return result;
     } catch (err) {
-      notify(errorMessage(err, 'Could not log that. Try again.'), { tone: 'error' });
+      sayError(err, 'Could not log that. Try again.');
       return null;
     } finally {
       endWrite();
     }
-  }, [onLogItems, onJustAdded, mealType, notify, offerUndo, forgetDeleted, beginWrite, endWrite]);
+  }, [onLogItems, onJustAdded, mealType, day, offerUndo, forgetDeleted, forgetDraft, sayError, beginWrite, endWrite]);
 
-  const handlePick = useCallback(async (food, key) => {
-    const servings = Number(food.requestedQuantity) > 0 ? Number(food.requestedQuantity) : 1;
-    const written = await logFoods([{ ...food, servings }], mealType, key);
-    const ids = written?.perItem?.[0] || written?.logIds || [];
-    if ((written?.ok ?? 0) > 0 && ids.length === 1 && food.type !== 'meal') {
-      setAdded({ key, logIds: ids, servings, name: food.name });
-    } else {
-      setAdded(null);
-    }
-  }, [logFoods, mealType]);
+  /** What this key wrote earlier in this sitting, if it can take another serving. */
+  const priorFor = useCallback((key) => {
+    const prior = key ? addedRef.current[key] : null;
+    if (!prior || prior.logIds.length !== 1 || prior.mealType !== mealType || prior.date !== day) return null;
+    return prior;
+  }, [mealType, day]);
 
-  /** "Make it 2": the entry just written becomes two servings, not a second entry. */
-  const handleMore = useCallback(async (food, count) => {
-    if (!added?.logIds?.[0] || !onUpdateLog) return;
-    if (!beginWrite(added.key)) return;
+  /**
+   * One entry, `count` servings: "Make it 2", and a second tap on the same
+   * row or chip (L2). `asTap` is the second tap, which says what is now in
+   * the log and offers the Undo that takes back the whole entry.
+   */
+  const setServings = useCallback(async (key, count, { asTap = false } = {}) => {
+    const prior = priorFor(key);
+    if (!prior || !onUpdateLog) return;
+    if (!beginWrite(key)) return;
+    const logId = prior.logIds[0];
     try {
-      const ok = await onUpdateLog(added.logIds[0], { servings: count });
+      const ok = await onUpdateLog(logId, { servings: count });
       if (!ok) throw new Error('not updated');
-      setAdded((a) => (a ? { ...a, servings: count } : a));
+      setAddedByKey((prev) => (prev[key] ? { ...prev, [key]: { ...prev[key], servings: count } } : prev));
       setSession((prev) => prev.map((item) => (
-        item.logIds?.includes(added.logIds[0]) ? { ...item, servings: count } : item
+        item.logIds?.includes(logId) ? { ...item, servings: count } : item
       )));
-      notify(`Changed to ${count} ✓ · ${food.name}`, { tone: 'success' });
+      if (asTap) {
+        offerUndo(addedMessage(prior.mealType, withAmount(prior.name, count)), [logId], { onDeleted: forgetDeleted });
+      } else {
+        notify(`Changed to ${count} ✓ · ${prior.name}`, { tone: 'success' });
+      }
     } catch (err) {
-      notify(errorMessage(err, "Couldn't change that. Try again."), { tone: 'error' });
+      sayError(err, "Couldn't change that. Try again.");
     } finally {
       endWrite();
     }
-  }, [added, onUpdateLog, notify, beginWrite, endWrite]);
+  }, [priorFor, onUpdateLog, notify, offerUndo, forgetDeleted, sayError, beginWrite, endWrite]);
+
+  /**
+   * A row or a chip: the first tap writes an entry; the next tap on the same
+   * one, in this sitting, makes it one more serving (L2).
+   */
+  const pickOne = useCallback(async (item, key) => {
+    const single = item && item.type !== 'meal' && item.kind !== 'meal' && item.type !== 'household-meal';
+    const prior = single && onUpdateLog ? priorFor(key) : null;
+    if (prior) {
+      await setServings(key, Math.round((Number(prior.servings) || 1) + 1), { asTap: true });
+      return;
+    }
+    const written = await logFoods([item], mealType, key);
+    const ids = written?.perItem?.[0] || written?.logIds || [];
+    if (single && key && (written?.ok ?? 0) > 0 && ids.length === 1) {
+      setAddedByKey((prev) => ({
+        ...prev,
+        [key]: { logIds: ids, servings: Number(item.servings) || 1, name: item.name, mealType, date: day },
+      }));
+    }
+  }, [onUpdateLog, priorFor, setServings, logFoods, mealType, day]);
+
+  const handlePick = useCallback((food, key) => {
+    const servings = Number(food.requestedQuantity) > 0 ? Number(food.requestedQuantity) : 1;
+    return pickOne({ ...food, servings }, key);
+  }, [pickOne]);
+
+  /** The quick picks: one food is a pick like a row; several go as one gesture. */
+  const handleQuick = useCallback((items, key) => (
+    items?.length === 1 ? pickOne(items[0], key) : logFoods(items, mealType, key)
+  ), [pickOne, logFoods, mealType]);
+
+  /** The row's or chip's "Make it N". */
+  const handleMore = useCallback((key, count) => setServings(key, count), [setServings]);
+  const rowMore = useCallback((food, count) => handleMore(identityOf(food), count), [handleMore]);
 
   // ── Describe-and-log ─────────────────────────────────────────────────
   /**
@@ -306,7 +399,6 @@ const FoodComposer = ({
     setDayAsk(null);
     setFailure(null);
     setQuestion(null);
-    setAdded(null);
     setResult(null);
 
     // Pressing Log it again on the same words after a failure is a retry of
@@ -340,6 +432,7 @@ const FoodComposer = ({
       // It has been logged — leaving it in the box is an invitation to log
       // it twice, and this path exists so nobody has to think about it.
       setQuery('');
+      forgetDraft();
       // `loggedServings` is the multiplier actually written, which is what
       // the ribbon multiplies `calories_per_serving` by.
       setSession((prev) => [
@@ -348,7 +441,9 @@ const FoodComposer = ({
           name: entry.name,
           logIds: entry.logId ? [entry.logId] : [],
           servings: entry.loggedServings ?? entry.servings ?? 1,
-          nutrition: entry.nutrition
+          nutrition: entry.nutrition,
+          mealType: entry.mealType || mealType,
+          date: onDay,
         }))
       ]);
 
@@ -370,11 +465,18 @@ const FoodComposer = ({
 
       const clean = skipped.length === 0 && !asked && !dayMove;
       if (afterDescribe === 'close' && clean) {
-        offerUndo(addedMessage(landed, `${whatWasLogged(logged)} · ${Math.round((logged.length === 1 ? logged[0].calories : response?.totalCalories) || 0)} cal`), logIds, {
-          tone: 'success',
-          onDeleted: forgetDeleted
-        });
-        onJustAdded?.({ mealType: landed, date: onDay, items, heard: spoken });
+        // With a "Just added" strip there is no toast (L12): the strip says
+        // what landed and has the Undo, and the snackbar sat on top of it,
+        // covering its Undo and Done for ten seconds. Without one, the toast
+        // is the only confirmation, so it keeps its Undo.
+        if (onJustAdded) {
+          onJustAdded({ mealType: landed, date: onDay, items, heard: spoken });
+        } else {
+          offerUndo(addedMessage(landed, `${whatWasLogged(logged)} · ${Math.round((logged.length === 1 ? logged[0].calories : response?.totalCalories) || 0)} cal`), logIds, {
+            tone: 'success',
+            onDeleted: forgetDeleted
+          });
+        }
         // Which meal it landed in, so a caller with no sheet to close — the
         // composer built into the Food Log page — can bring it into view.
         onClose?.({ mealType: landed });
@@ -399,7 +501,7 @@ const FoodComposer = ({
       setThinking(false);
       endWrite();
     }
-  }, [onDescribe, onJustAdded, onClose, mealType, today, afterDescribe, offerUndo, forgetDeleted, beginWrite, endWrite]);
+  }, [onDescribe, onJustAdded, onClose, mealType, today, afterDescribe, offerUndo, forgetDeleted, forgetDraft, beginWrite, endWrite]);
 
   /** Log it: ask about the day first when the words name another one. */
   const pressLogIt = useCallback((spoken) => {
@@ -430,6 +532,9 @@ const FoodComposer = ({
     }
   });
   const micAvailable = voice && speech.supported && Boolean(onDescribe);
+  // Offline the speech service can't work, and its error said the microphone
+  // was broken (L18). The mic stays visible, turned off, under "No signal".
+  const micOff = !isOnline;
   const toggleMic = useCallback(() => {
     if (speech.listening) speech.stop();
     else speech.start();
@@ -449,7 +554,7 @@ const FoodComposer = ({
       );
       // `false` means nothing was written; saying "Updated" then was a lie.
       if (!updated) {
-        notify(errorMessage(null, 'Could not update that.'), { tone: 'error' });
+        sayError(null, 'Could not update that.');
         return;
       }
       setSession((prev) => prev.map((item) => (
@@ -463,12 +568,12 @@ const FoodComposer = ({
       } : prev));
       notify(`Updated to ${Math.round(targetCalories)} cal`, { tone: 'success' });
     } catch (err) {
-      notify(errorMessage(err, 'Could not update that.'), { tone: 'error' });
+      sayError(err, 'Could not update that.');
     } finally {
       setQuestion(null);
       endWrite();
     }
-  }, [onAdjustCalories, notify, beginWrite, endWrite]);
+  }, [onAdjustCalories, notify, sayError, beginWrite, endWrite]);
 
   /** The ribbon's undos: same outcome toast, and only deleted rows leave. */
   const undoIds = useCallback(async (ids) => {
@@ -484,10 +589,6 @@ const FoodComposer = ({
     }
   }, [onUndo, forgetDeleted, sayUndoOutcome, beginWrite, endWrite]);
 
-  const undoAll = useCallback(
-    () => undoIds(session.flatMap((entry) => entry.logIds || [])),
-    [session, undoIds]
-  );
   // A meal's several logs go together: it was one gesture, so it is one undo.
   const undoLast = useCallback(
     () => undoIds(session[session.length - 1]?.logIds || []),
@@ -508,6 +609,14 @@ const FoodComposer = ({
       setResult({ ...result, items: left });
     }
   }, [result, undoIds]);
+
+  /** The ribbon's Done (L10): the sitting is over, and the sheet closes. */
+  const finishSession = useCallback(() => {
+    const meal = session[session.length - 1]?.mealType ?? mealType;
+    setSession([]);
+    setAddedByKey({});
+    onClose?.({ mealType: meal });
+  }, [session, mealType, onClose]);
 
   const finishResult = useCallback(() => {
     const meal = result?.mealType ?? mealType;
@@ -534,15 +643,15 @@ const FoodComposer = ({
       const settled = await Promise.allSettled(result.items.map((i) => onUpdateLog(i.logId, { log_date: target })));
       const failed = settled.filter((s) => s.status === 'rejected' || s.value === false);
       if (failed.length) {
-        notify(errorMessage(failed[0]?.reason, "Couldn't move that. Try again."), { tone: 'error' });
+        sayError(failed[0]?.reason, "Couldn't move that. Try again.");
         return;
       }
       setResult((prev) => (prev ? { ...prev, date: target, dayMove: null, items: prev.items.map((i) => ({ ...i, date: target })) } : prev));
-      notify(`Moved to ${dayInWords(target, today)} ✓`, { tone: 'success' });
+      notify(`Moved to ${sheetDayWords(target, today, day)} ✓`, { tone: 'success' });
     } finally {
       endWrite();
     }
-  }, [result, onUpdateLog, today, notify, beginWrite, endWrite]);
+  }, [result, onUpdateLog, today, day, notify, sayError, beginWrite, endWrite]);
 
   const fixes = useEntryFixes({
     setLogCalories: onSetCalories,
@@ -557,18 +666,32 @@ const FoodComposer = ({
 
   // ── Rendering ────────────────────────────────────────────────────────
   const offline = !isOnline;
+  // The day words in this sheet, in one style (L22).
+  const dayWords = (d) => sheetDayWords(d, today, day);
   const status = useMemo(() => {
-    if (offline) return { text: OFFLINE_COMPOSER_MESSAGE, tone: 'strong' };
+    // "Saved here" only where the draft really outlives the sheet (L18).
+    if (offline) return { text: keepDraft && !draftsAvailable() ? OFFLINE_UNSAVED_MESSAGE : OFFLINE_COMPOSER_MESSAGE, tone: 'strong' };
     if (thinking) return { text: slow ? STILL_WORKING_MESSAGE : 'I’m working out the calories.', tone: slow ? 'strong' : 'muted' };
     if (failure) return { text: failure.message, tone: 'strong' };
     if (typed && sentence && onDescribe) return { text: 'I’ll work out the calories. You can fix anything after.', tone: 'muted' };
     return { text: null, tone: 'muted' };
-  }, [offline, thinking, slow, failure, typed, sentence, onDescribe]);
+  }, [offline, keepDraft, thinking, slow, failure, typed, sentence, onDescribe]);
+
+  // "1 added to lunch": the sitting's meal, when it is one meal on one day.
+  const sessionWhere = session.length
+    && session.every((e) => e.mealType === session[0].mealType && e.date === session[0].date)
+    ? sheetMealOnDay(mealWord(session[0].mealType || mealType), session[0].date || day, today, day)
+    : null;
 
   const pillButton = { minHeight: 48, borderRadius: 999, fontWeight: 800, fontSize: '1rem', px: 2.5, boxShadow: 'none' };
 
   if (result) {
-    const where = mealOnDay(mealWord(result.mealType), result.date, today);
+    // Entries that landed in different meals are named per row (L6); the
+    // header then names only the day.
+    const mixed = new Set(result.items.map((i) => i.mealType || result.mealType)).size > 1;
+    const where = mixed
+      ? (result.date === today ? 'today' : dayWords(result.date))
+      : sheetMealOnDay(mealWord(result.mealType), result.date, today, day);
     return (
       <Box className={className} data-testid="result-card" sx={{ pb: 1 }}>
         <Box
@@ -588,7 +711,7 @@ const FoodComposer = ({
               I heard: &ldquo;{result.heard}&rdquo;
             </Typography>
           )}
-          <EntryList items={result.items} onFix={onSetCalories || onDescribe ? setFixing : undefined} busy={busy} />
+          <EntryList items={result.items} onFix={onSetCalories || onDescribe ? setFixing : undefined} busy={busy} showMeal={mixed} />
 
           <PortionQuestion question={question} busy={busy} onAnswer={answerQuestion} onDismiss={() => setQuestion(null)} />
 
@@ -611,10 +734,10 @@ const FoodComposer = ({
             <Box sx={{ mt: 1.5 }} data-testid="day-move">
               <Typography sx={{ fontSize: '1rem', color: 'text.primary', fontWeight: 600 }}>
                 {result.dayMove.words ? <>You said &ldquo;{result.dayMove.words}&rdquo;. </> : null}
-                This is in {dayInWords(result.date, today)}&apos;s log.
+                This is in {dayWords(result.date)}&apos;s log.
               </Typography>
               <Button variant="outlined" disabled={busy || !onUpdateLog} onClick={moveResultDay} sx={{ ...pillButton, mt: 1, borderWidth: 2, '&:hover': { borderWidth: 2 } }}>
-                Move it to {dayInWords(result.dayMove.target, today)}
+                Move it to {dayWords(result.dayMove.target)}
               </Button>
             </Box>
           )}
@@ -636,15 +759,18 @@ const FoodComposer = ({
   }
 
   return (
-    <Box className={className} sx={{ pb: session.length >= 2 ? 1 : 0 }}>
+    <Box className={className} sx={{ pb: session.length >= 1 ? 1 : 0 }}>
       <ComposerBox
         value={query}
         onChange={(e) => changeQuery(e.target.value)}
         onSubmit={() => (onDescribe ? pressLogIt() : null)}
         onMicClick={micAvailable ? toggleMic : undefined}
+        micDisabled={micOff}
         listening={speech.listening}
         thinking={thinking}
         canLog={Boolean(typed) && Boolean(onDescribe) && !offline && !busy && !dayAsk}
+        // A short name opens the list, and its rows lead (L20).
+        quiet={Boolean(typed) && !sentence && Boolean(onDescribe)}
         autoFocus={autoFocus || mode === 'dialog'}
         inputRef={inputRef}
         status={status.text}
@@ -700,6 +826,12 @@ const FoodComposer = ({
         </Box>
       )}
 
+      {failure?.kind === 'signed-out' && (
+        <Box sx={{ mb: 2 }}>
+          <SignInButton sx={{ minHeight: 48, px: 3 }} />
+        </Box>
+      )}
+
       {speech.errorText && (
         <Alert severity="info" onClose={speech.clearError} sx={{ mb: 1.5, borderRadius: 2, fontSize: '1rem' }} data-testid="mic-error">
           {speech.errorText}
@@ -721,14 +853,14 @@ const FoodComposer = ({
           }}
         >
           <Typography id="composer-day-question" sx={{ fontSize: '1.0625rem', fontWeight: 800, color: 'text.primary', mb: 1 }}>
-            Log this to {dayInWords(dayAsk.target, today)}?
+            Log this to {dayWords(dayAsk.target)}?
           </Typography>
           <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
             <Button variant="contained" onClick={() => runDescribe(dayAsk.text, dayAsk.target, { spoken: dayAsk.spoken, askedDay: true })} sx={{ ...pillButton, minWidth: 96 }}>
               Yes
             </Button>
             <Button variant="outlined" onClick={() => runDescribe(dayAsk.text, day, { spoken: dayAsk.spoken, askedDay: true })} sx={{ ...pillButton, borderWidth: 2, '&:hover': { borderWidth: 2 } }}>
-              No, {dayInWords(day, today)}
+              No, {dayWords(day)}
             </Button>
           </Box>
         </Box>
@@ -773,7 +905,9 @@ const FoodComposer = ({
           busy={busy}
           pendingKey={pendingKey}
           heading="Or tap one you’ve had"
-          onPick={(items, key) => logFoods(items, mealType, key)}
+          added={addedByKey}
+          onPick={handleQuick}
+          onMore={onUpdateLog ? handleMore : undefined}
         />
       )}
 
@@ -786,10 +920,10 @@ const FoodComposer = ({
         dense={mode === 'dialog'}
         busy={busy}
         pendingKey={pendingKey}
-        added={added}
+        added={addedByKey}
         onPick={handlePick}
         onAdjust={setAdjusting}
-        onMore={onUpdateLog ? handleMore : undefined}
+        onMore={onUpdateLog ? rowMore : undefined}
         onCreateFood={onCreateFood}
       />
 
@@ -807,8 +941,9 @@ const FoodComposer = ({
 
       <SessionRibbon
         items={session}
-        onUndoAll={undoAll}
-        onUndoLast={undoLast}
+        where={sessionWhere}
+        onUndoLast={onUndo ? undoLast : undefined}
+        onDone={finishSession}
         busy={busy}
       />
 

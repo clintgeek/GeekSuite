@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, Typography, IconButton, Chip, Tooltip, CircularProgress, ButtonBase, Button } from '@mui/material';
+import { Box, Typography, Chip, CircularProgress, ButtonBase, Button } from '@mui/material';
 import {
   Star as FavoriteIcon,
   History as RecentIcon,
@@ -33,6 +33,21 @@ import { formatServing } from '../../utils/units.js';
  * was the other candidate; nobody finds a long-press, and a button that says
  * what it does needs no explaining. The tune button still opens the serving
  * sheet for amounts in ounces or cups.
+ *
+ * A SECOND TAP ON THE ROW IS ANOTHER ONE, NOT ANOTHER ENTRY (L2). Her habit is
+ * to tap the row again, not the pill; that used to write a second entry and
+ * then offer "Make it 2" on it — three eggs. Now the composer adds a serving
+ * to the entry already written, and the subtitle counts: "2 added ✓", with
+ * the pill offering "Make it 3".
+ *
+ * LONG NAMES WRAP (L13, A4). Real OpenFoodFacts names are long and the end is
+ * the part that tells them apart ("Fage Total 0% Greek…" vs "2%"), so the
+ * name gets two lines on a phone and "190 cal" moves into the subtitle there
+ * ("Fage · 6 oz · 190 cal"). Between a phone and a wide desktop the macros
+ * go into the subtitle too, instead of crowding the name.
+ *
+ * The amount button says "Amount" (L14): a tooltip doesn't exist on a touch
+ * screen, and an unlabelled sliders icon said nothing.
  *
  * The main area and the trailing buttons are siblings, not nested: a button
  * inside a button is unreachable to a screen reader (axe nested-interactive).
@@ -70,7 +85,8 @@ const FoodResultRow = ({
   food,
   onTap,
   onAdjust,
-  // "Make it N": `added` is `{ servings }` for the row whose add just landed.
+  // `added` is `{ servings }` once this row's food is in the log this sitting:
+  // the subtitle counts, and the pill becomes "Make it N".
   added = null,
   onMore,
   ketoMode = false,
@@ -106,13 +122,17 @@ const FoodResultRow = ({
   const detail = isMeal
     ? ['Saved meal', count ? `${count} food${count === 1 ? '' : 's'}` : null]
     : [food?.brand, servingText, servings !== 1 ? `×${servings}` : null];
-  const canMore = Boolean(added && onMore && !isMeal);
+  const isAdded = Boolean(added && !isMeal);
+  const canMore = Boolean(isAdded && onMore);
+  const addedCount = Math.round((Number(added?.servings) || 1) * 100) / 100;
+  const addedText = addedCount > 1 ? `${addedCount} added ✓` : 'Added ✓';
   const subtitle = pending
     ? 'Adding…'
-    : [canMore ? 'Added ✓' : null, ...detail].filter(Boolean).join(' · ');
+    : [isAdded ? addedText : null, ...detail].filter(Boolean).join(' · ');
   const inert = disabled || pending;
   const tap = () => { if (!inert) onTap?.(food); };
-  const nextCount = Math.round((Number(added?.servings) || 1) + 1);
+  const nextCount = Math.round(addedCount + 1);
+  const macros = isMeal ? null : `P${protein} ${carbLabel}${carbValue} F${fat}`;
 
   const pill = (
     <Box
@@ -153,7 +173,7 @@ const FoodResultRow = ({
         onClick={tap}
         aria-disabled={inert || undefined}
         aria-busy={pending || undefined}
-        aria-label={`${canMore ? 'Add another' : 'Add'} ${food?.name}, ${calories} cal`}
+        aria-label={`${isAdded ? 'Add another' : 'Add'} ${food?.name}, ${calories} cal`}
         sx={{
           flex: 1,
           minWidth: 0,
@@ -186,38 +206,53 @@ const FoodResultRow = ({
                 fontSize: '1rem',
                 fontWeight: 700,
                 color: 'text.primary',
+                lineHeight: 1.3,
                 overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap'
+                overflowWrap: 'anywhere',
+                // Two lines on a phone, where the end of the name is the part
+                // that matters; one is plenty on a wide screen.
+                display: '-webkit-box',
+                WebkitBoxOrient: 'vertical',
+                WebkitLineClamp: { xs: 2, lg: 1 },
+                whiteSpace: 'normal'
               }}
             >
               {food?.name}
             </Typography>
           </Box>
-          {subtitle && (
-            <Typography
-              component="span"
-              sx={{
-                display: 'block',
-                fontSize: '0.8125rem',
-                color: canMore && !pending ? 'text.primary' : muted,
-                fontWeight: canMore && !pending ? 700 : 400,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
-                whiteSpace: 'nowrap'
-              }}
-            >
-              {subtitle}
-            </Typography>
-          )}
+          <Typography
+            component="span"
+            data-testid="food-row-subtitle"
+            sx={{
+              display: 'block',
+              fontSize: '0.875rem',
+              lineHeight: 1.35,
+              color: isAdded && !pending ? 'text.primary' : muted,
+              fontWeight: isAdded && !pending ? 700 : 400,
+            }}
+          >
+            {subtitle}
+            {/* Phone: the calories live here, beside the brand and serving. */}
+            {!pending && (
+              <Box component="span" sx={{ display: { xs: 'inline', sm: 'none' } }}>
+                {subtitle ? ' · ' : ''}{calories} cal
+              </Box>
+            )}
+            {/* Tablet and narrow desktop: the macros, rather than a column. */}
+            {!pending && macros && (
+              <Box component="span" sx={{ display: { xs: 'none', sm: 'inline', lg: 'none' } }}>
+                {subtitle ? ' · ' : ''}{macros}
+              </Box>
+            )}
+          </Typography>
         </Box>
 
-        <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1.25, flexShrink: 0 }}>
+        <Box sx={{ display: { xs: 'none', sm: 'flex' }, alignItems: 'baseline', gap: 1.25, flexShrink: 0 }}>
           <Typography component="span" sx={{ fontSize: '0.9375rem', fontWeight: 700, color: 'text.primary', whiteSpace: 'nowrap' }}>
             {calories} cal
           </Typography>
           {!isMeal && (
-            <Box component="span" sx={{ display: { xs: 'none', sm: 'flex' }, gap: 1 }}>
+            <Box component="span" sx={{ display: { xs: 'none', lg: 'flex' }, gap: 1 }}>
               <Typography component="span" sx={{ fontSize: '0.8125rem', color: muted }}>P{protein}</Typography>
               <Typography component="span" sx={{ fontSize: '0.8125rem', color: muted }}>
                 {carbLabel}
@@ -274,18 +309,30 @@ const FoodResultRow = ({
 
       {/* The serving sheet, for amounts in ounces or cups. Not for a meal. */}
       {!isMeal && onAdjust && (
-        <Tooltip title="Change the amount" arrow>
-          <span>
-            <IconButton
-              disabled={inert}
-              onClick={() => { if (!inert) onAdjust?.(food); }}
-              sx={{ width: 44, height: 44, flexShrink: 0, color: muted }}
-              aria-label={`Change the amount of ${food?.name}`}
-            >
-              <AdjustIcon fontSize="small" />
-            </IconButton>
-          </span>
-        </Tooltip>
+        <ButtonBase
+          disabled={inert}
+          onClick={() => { if (!inert) onAdjust?.(food); }}
+          aria-label={`Change the amount of ${food?.name}`}
+          data-testid="amount-button"
+          sx={{
+            width: 60,
+            minHeight: 48,
+            flexShrink: 0,
+            display: 'flex',
+            flexDirection: 'column',
+            gap: 0.25,
+            borderRadius: 2,
+            color: theme.palette.text.secondary,
+            opacity: inert ? 0.6 : 1,
+            '&:focus-visible': { outline: `2px solid ${primary}`, outlineOffset: 2 },
+            '@media (hover: hover)': { '&:hover': { bgcolor: theme.palette.action.hover } },
+          }}
+        >
+          <AdjustIcon fontSize="small" aria-hidden />
+          <Box component="span" aria-hidden sx={{ fontSize: '0.8125rem', fontWeight: 700, lineHeight: 1.1 }}>
+            Amount
+          </Box>
+        </ButtonBase>
       )}
     </Box>
   );

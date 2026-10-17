@@ -7,10 +7,17 @@
  */
 import { errorMessage, transportMessage, RESTARTING_MESSAGE, TIMEOUT_MESSAGE, OFFLINE_MESSAGE, SIGNED_OUT_MESSAGE } from '../../utils/errorMessage.js';
 
+const NUMBER_WORDS = /\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|half|dozen|a\s+couple|a\s+few)\b/;
+
 /**
  * A sentence, not a food's name: three or more words, a number, "and",
  * "with", "&", "+" or a comma. "fage" and "greek yogurt" are names; "2 eggs",
  * "eggs and toast" and "a bowl of soup" are sentences.
+ *
+ * A number said as a word counts as a number (L21): "two eggs", "a couple
+ * eggs", "half bagel", "a few crackers", "dozen wings". Heather says amounts
+ * the way she'd tell a friend, and "two eggs" opened the list and ran a deep
+ * search as if "two" were part of a name.
  *
  * In sentence mode the list folds away and the deep search does not run, so
  * typing a sentence word by word no longer fires a model call per pause (§2).
@@ -21,6 +28,7 @@ export function isSentence(text) {
   if (/\d/.test(t)) return true;
   if (/[&+,]/.test(t)) return true;
   if (/\b(and|with)\b/.test(t)) return true;
+  if (NUMBER_WORDS.test(t)) return true;
   return t.split(/\s+/).filter(Boolean).length >= 3;
 }
 
@@ -123,10 +131,45 @@ export function mealOnDay(meal, day, today) {
   return possessive ? `${possessive} ${meal}` : `${meal} on ${dayInWords(day, today)}`;
 }
 
+// ── One way of naming days in a sheet (L22) ───────────────────────────
+// On today's sheet, days are relative: "yesterday's lunch", "Log this to
+// yesterday?". On a backfilled sheet the relative words collide — the title
+// said "yesterday's dinner" while the quick pick said "Same as Wednesday's
+// dinner" — so the whole sheet uses weekdays, and the title says which
+// weekday "yesterday" was: "Add to Thursday's dinner (yesterday)".
+
+/** `day` named for a sheet that is writing to `sheetDay`. */
+export function sheetDayWords(day, today, sheetDay) {
+  if (!day || !today) return '';
+  const back = daysBetween(day, today);
+  if (sheetDay && sheetDay !== today && back >= 1 && back < 7) {
+    return parseDay(day).toLocaleDateString('en-US', { weekday: 'long' });
+  }
+  return dayInWords(day, today);
+}
+
+/** "lunch", "yesterday's lunch" (today's sheet), "Wednesday's dinner" (a backfilled one). */
+export function sheetMealOnDay(meal, day, today, sheetDay) {
+  if (!day || !today || day === today) return meal;
+  const words = sheetDayWords(day, today, sheetDay);
+  if (!words || words.includes(',')) return `${meal} on ${words}`;
+  return `${words}'s ${meal}`;
+}
+
+/** The add sheet's title: "Add to lunch", "Add to Thursday's dinner (yesterday)". */
+export function sheetTitle(meal, day, today) {
+  const where = sheetMealOnDay(meal, day, today, day);
+  return day && today && daysBetween(day, today) === 1 ? `Add to ${where} (yesterday)` : `Add to ${where}`;
+}
+
 // ── What a failed Log it says ──────────────────────────────────────────
 export const NOTHING_TO_LOG_MESSAGE = "I couldn't find a food in that. Try naming the food, like 'chicken soup'.";
 export const RETRY_MESSAGE = "That didn't go through. Tap Log it to try again.";
+// "Saved here" is only true when the words outlive the sheet (L18): the draft
+// keeps them in sessionStorage. Where that can't be written (a private
+// window, blocked storage) the line says what will actually work.
 export const OFFLINE_COMPOSER_MESSAGE = "No signal — I can't log this yet. Your words are saved here.";
+export const OFFLINE_UNSAVED_MESSAGE = "No signal — I can't log this yet. Keep this open and tap Log it when you're back.";
 export const STILL_WORKING_MESSAGE = "Still working — this one's taking a moment.";
 
 const SHORT_REASON = {

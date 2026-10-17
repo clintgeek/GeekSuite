@@ -19,6 +19,9 @@ add('almonds', 'Almonds', 'snack', '2026-09-25');
 add('almonds', 'Almonds', 'snack', '2026-09-23');
 
 vi.mock('../../../hooks/useRecentLogs.js', () => ({ useRecentLogs: () => ({ logs, meals: [], loading: false }) }));
+let household = [];
+const householdCalls = [];
+vi.mock('../useHouseholdMeals.js', () => ({ useHouseholdMeals: (...a) => { householdCalls.push(a); return household; } }));
 // "Yesterday" is named relative to the real today, so pin it.
 let today = '2026-09-27';
 vi.mock('../../../hooks/useToday.js', () => ({ useToday: () => today }));
@@ -76,5 +79,30 @@ describe('QuickPicks', () => {
     } finally {
       today = '2026-09-27';
     }
+  });
+
+  it("L7: \"Same as Chef's dinner\" for a sharing member who logged this meal today, named as he named himself", () => {
+    household = [{ userId: 'chef-1', name: 'Chef', foods: ['Steak', 'Baked potato', 'Salad', 'Roll'], calories: 1100, count: 4 }];
+    try {
+      const onPick = vi.fn();
+      render(<QuickPicks date="2026-09-27" mealType="dinner" onPick={onPick} />);
+      expect(householdCalls.at(-1)).toEqual(['2026-09-27', 'dinner']);
+      const pick = screen.getByRole('button', { name: "Same as Chef's dinner" });
+      expect(pick).toHaveTextContent('Steak, Baked potato, Salad and 1 more');
+      fireEvent.click(pick);
+      expect(onPick).toHaveBeenCalledWith([expect.objectContaining({
+        type: 'household-meal', name: "Chef's dinner", fromUserId: 'chef-1', fromDate: '2026-09-27', fromMealType: 'dinner',
+        nutrition: { calories_per_serving: 1100 },
+      })], 'quick:household:chef-1');
+    } finally {
+      household = [];
+    }
+  });
+
+  it('L7: nothing shared for this meal → no pick, and nothing at all when there is nothing else', () => {
+    household = [];
+    const { container } = render(<QuickPicks date="2026-09-27" mealType="dinner" onPick={vi.fn()} />);
+    expect(screen.queryByRole('button', { name: /same as chef/i })).toBeNull();
+    expect(container.querySelector('[data-testid="same-as-household"]')).toBeNull();
   });
 });

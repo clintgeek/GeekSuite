@@ -32,9 +32,16 @@ vi.mock('../../services/foodService', () => ({
 // Wednesday. The day chip and the sheet's day words count from here.
 const TODAY = '2026-10-14';
 vi.mock('../../hooks/useToday.js', () => ({ useToday: () => '2026-10-14' }));
-vi.mock('../../hooks/useRecentLogs.js', () => ({ useRecentLogs: () => ({ logs: [], meals: [], loading: false }), forgetRecentLogs: vi.fn() }));
+// The quick picks' sources; empty unless a test fills them.
+const recent = { logs: [], meals: [], loading: false };
+vi.mock('../../hooks/useRecentLogs.js', () => ({ useRecentLogs: () => recent, forgetRecentLogs: vi.fn() }));
+let household = [];
+vi.mock('../FoodSearch/useHouseholdMeals.js', () => ({ useHouseholdMeals: () => household }));
+const loginRedirect = vi.fn();
+vi.mock('@geeksuite/auth', async (importOriginal) => ({ ...(await importOriginal()), loginRedirect: (...a) => loginRedirect(...a) }));
 
 const { default: FoodComposer } = await import('../FoodSearch/FoodComposer.jsx');
+const { forgetDrafts } = await import('../FoodSearch/composerDraft.js');
 
 const food = (name, overrides = {}) => ({
   id: name.toLowerCase().replace(/\s+/g, '-'),
@@ -66,6 +73,10 @@ beforeEach(() => {
   suggest.mockResolvedValue([]);
   search.mockResolvedValue([]);
   setOnline(true);
+  recent.logs = [];
+  recent.meals = [];
+  household = [];
+  forgetDrafts();
 });
 
 afterEach(() => {
@@ -695,7 +706,9 @@ describe('Simple stays open on what landed (Chef, 2026-10-16)', () => {
     renderBox({ onDescribe: vi.fn().mockResolvedValue(twoThings), mealType: 'lunch', date: '2026-10-13' }, { simple: true });
     type('soup');
     logIt();
-    expect(await screen.findByText("Added to yesterday's lunch")).toBeInTheDocument();
+    // L22: on a backfilled sheet, days are weekdays — the title says
+    // "Tuesday's lunch (yesterday)", and so does everything under it.
+    expect(await screen.findByText("Added to Tuesday's lunch")).toBeInTheDocument();
   });
 });
 
@@ -1098,11 +1111,12 @@ describe('B8: undo says what happened', () => {
       await waitFor(() => expect(onLogItems).toHaveBeenCalledTimes(i));
       await waitFor(() => expect(screen.queryByText('Adding…')).toBeNull());
     }
-    expect(await screen.findByText('3 logged')).toBeInTheDocument();
+    // No onUpdateLog here, so each tap is its own entry.
+    expect(await screen.findByText('3 added to snacks')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /undo last/i }));
     expect(await screen.findByText("Couldn't undo — try again")).toBeInTheDocument();
-    expect(screen.getByText('3 logged')).toBeInTheDocument();
+    expect(screen.getByText('3 added to snacks')).toBeInTheDocument();
   });
 
   it('the undo toast stays up for ten seconds, not four', async () => {
@@ -1179,5 +1193,292 @@ describe('the portion answer', () => {
     await waitFor(() => expect(onAdjustCalories).toHaveBeenCalled());
     expect(await screen.findByText('Could not update that.')).toBeInTheDocument();
     expect(screen.queryByText(/Updated to 400 cal/)).toBeNull();
+  });
+});
+
+// ── UX review 2026-10-17, wave A ───────────────────────────────────────
+
+describe('L2: her habitual second tap is a second serving, not a third egg', () => {
+  const egg = () => food('Egg', { nutrition: { calories_per_serving: 72 } });
+
+  it('tap, tap → one entry with 2 servings; the row counts and offers the next number', async () => {
+    // REVIEW_2026-10 §2a: she taps "Egg" twice, a minute apart, for two eggs.
+    const onLogItems = vi.fn().mockResolvedValue({ ok: 1, fail: 0, logIds: ['egg-1'], perItem: [['egg-1']] });
+    const onUpdateLog = vi.fn().mockResolvedValue(true);
+    const onUndo = vi.fn().mockResolvedValue({ deleted: ['egg-1'], failed: [] });
+    suggest.mockResolvedValue([egg()]);
+    renderBox({ onLogItems, onUpdateLog, onUndo, mealType: 'breakfast' });
+    type('egg');
+    await vi.advanceTimersByTimeAsync(200);
+
+    fireEvent.click(await screen.findByText('Egg'));
+    await waitFor(() => expect(onLogItems).toHaveBeenCalledTimes(1));
+    await screen.findByText(/Added ✓/);
+    fireEvent.click(screen.getByText('Egg'));
+
+    await waitFor(() => expect(onUpdateLog).toHaveBeenCalledWith('egg-1', { servings: 2 }));
+    expect(onLogItems).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText(/2 added ✓/)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Make it 3 Egg' })).toBeInTheDocument();
+    // L4: the toast says the amount.
+    expect(await screen.findByText('Added to breakfast ✓ · Egg ×2')).toBeInTheDocument();
+    // The ribbon is one entry, not two.
+    expect(screen.getByText('1 added to breakfast')).toBeInTheDocument();
+
+    // Undo takes back the whole entry.
+    const toast = screen.getByText('Added to breakfast ✓ · Egg ×2').closest('.MuiSnackbarContent-root, [role="alert"]') || document.body;
+    fireEvent.click(within(toast).getAllByRole('button', { name: /^undo$/i }).pop());
+    await waitFor(() => expect(onUndo).toHaveBeenCalledWith(['egg-1']));
+  });
+
+  it('without a way to edit an entry, a second tap still logs one more (never nothing)', async () => {
+    const onLogItems = vi.fn().mockResolvedValue({ ok: 1, fail: 0, logIds: ['egg-1'], perItem: [['egg-1']] });
+    suggest.mockResolvedValue([egg()]);
+    renderBox({ onLogItems });
+    type('egg');
+    await vi.advanceTimersByTimeAsync(200);
+    fireEvent.click(await screen.findByText('Egg'));
+    await waitFor(() => expect(onLogItems).toHaveBeenCalledTimes(1));
+    await waitFor(() => expect(screen.queryByText('Adding…')).toBeNull());
+    fireEvent.click(screen.getByText('Egg'));
+    await waitFor(() => expect(onLogItems).toHaveBeenCalledTimes(2));
+  });
+
+  it('an Again chip counts the same way: "Added ✓ · Make it 2", and a second tap makes it 2 (L14)', async () => {
+    recent.logs = ['2026-10-12', '2026-10-13'].map((day, i) => ({
+      id: `e${i}`, meal_type: 'breakfast', servings: 1, log_date: `${day}T00:00:00.000Z`,
+      nutrition: { calories_per_serving: 72 }, food_item_id: { id: 'egg', name: 'Egg' },
+    }));
+    const onLogItems = vi.fn().mockResolvedValue({ ok: 1, fail: 0, logIds: ['egg-9'], perItem: [['egg-9']] });
+    const onUpdateLog = vi.fn().mockResolvedValue(true);
+    renderBox({ onLogItems, onUpdateLog, mealType: 'breakfast', showQuickPicks: true, date: TODAY });
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Add Egg to breakfast again' }));
+    await waitFor(() => expect(onLogItems).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText('Egg · Added ✓')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Make it 2 Egg' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Add another Egg to breakfast' }));
+    await waitFor(() => expect(onUpdateLog).toHaveBeenCalledWith('egg-9', { servings: 2 }));
+    expect(onLogItems).toHaveBeenCalledTimes(1);
+    expect(await screen.findByText('Egg · 2 added ✓')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Make it 3 Egg' }));
+    await waitFor(() => expect(onUpdateLog).toHaveBeenLastCalledWith('egg-9', { servings: 3 }));
+  });
+
+  it('a chip that re-logs two says so ("Toast ×2")', async () => {
+    recent.logs = ['2026-10-12', '2026-10-13'].map((day, i) => ({
+      id: `t${i}`, meal_type: 'breakfast', servings: 2, log_date: `${day}T00:00:00.000Z`,
+      nutrition: { calories_per_serving: 80 }, food_item_id: { id: 'toast', name: 'Toast' },
+    }));
+    renderBox({ mealType: 'breakfast', showQuickPicks: true, date: TODAY });
+    expect(await screen.findByText('Toast ×2')).toBeInTheDocument();
+  });
+});
+
+describe('L10 + L11: the sitting shows from the first item, with Done', () => {
+  it('"1 added to lunch" and Done after one tap; Done closes; there is no Undo all', async () => {
+    const onClose = vi.fn();
+    const onLogItems = vi.fn().mockResolvedValue({ ok: 1, fail: 0, logIds: ['f1'], perItem: [['f1']] });
+    suggest.mockResolvedValue([food('Fage', { nutrition: { calories_per_serving: 190 } })]);
+    renderBox({ onLogItems, onClose, onUndo: vi.fn(), mealType: 'lunch' });
+    type('fage');
+    await vi.advanceTimersByTimeAsync(200);
+    fireEvent.click(await screen.findByText('Fage'));
+
+    const ribbon = await screen.findByTestId('session-ribbon');
+    expect(within(ribbon).getByText('1 added to lunch')).toBeInTheDocument();
+    expect(within(ribbon).queryByRole('button', { name: /undo all/i })).toBeNull();
+    expect(within(ribbon).getByRole('button', { name: /undo last/i })).toBeInTheDocument();
+    fireEvent.click(within(ribbon).getByRole('button', { name: 'Done' }));
+    expect(onClose).toHaveBeenCalledWith({ mealType: 'lunch' });
+  });
+});
+
+describe('L12: with a "Just added" strip, no toast sits on top of it', () => {
+  const pancakes = {
+    ok: 1, fail: 0, logIds: ['log-1'], skipped: [], questions: [], totalCalories: 880,
+    logged: [{ logId: 'log-1', name: 'Chocolate chip pancakes', loggedServings: 1, mealType: 'breakfast', calories: 880, nutrition: { calories_per_serving: 880 } }],
+  };
+
+  it('Full with a strip: the strip gets the entries, and there is no toast or Undo', async () => {
+    const onJustAdded = vi.fn();
+    renderBox({ onDescribe: vi.fn().mockResolvedValue(pancakes), onJustAdded, onUndo: vi.fn(), onClose: vi.fn() });
+    type('pancakes');
+    logIt();
+    await waitFor(() => expect(onJustAdded).toHaveBeenLastCalledWith(expect.objectContaining({ mealType: 'breakfast' })));
+    await vi.advanceTimersByTimeAsync(50);
+    expect(screen.queryByText(/Added to breakfast ✓/)).toBeNull();
+    expect(screen.queryByRole('button', { name: /^undo$/i })).toBeNull();
+  });
+
+  it('with no strip to show it, the toast still says what landed, with Undo', async () => {
+    renderBox({ onDescribe: vi.fn().mockResolvedValue(pancakes), onUndo: vi.fn(), onClose: vi.fn() });
+    type('pancakes');
+    logIt();
+    expect(await screen.findByText('Added to breakfast ✓ · Chocolate chip pancakes · 880 cal')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /^undo$/i })).toBeInTheDocument();
+  });
+});
+
+describe('L4 + L6: the result card says amounts, and the meal per row when they differ', () => {
+  it('"Pancakes ×2" when two servings were written', async () => {
+    const onDescribe = vi.fn().mockResolvedValue({
+      ok: 1, fail: 0, logIds: ['p'], skipped: [], questions: [], totalCalories: 400,
+      logged: [{ logId: 'p', name: 'Pancakes', loggedServings: 2, mealType: 'breakfast', calories: 400, nutrition: { calories_per_serving: 200 } }],
+    });
+    renderBox({ onDescribe, mealType: 'breakfast' }, { simple: true });
+    type('two pancakes');
+    logIt();
+    const card = await screen.findByTestId('result-card');
+    expect(within(card).getByText('Pancakes ×2')).toBeInTheDocument();
+  });
+
+  it('entries in two meals: each row names its meal, and the header names only the day', async () => {
+    const onDescribe = vi.fn().mockResolvedValue({
+      ok: 2, fail: 0, logIds: ['c', 'f'], skipped: [], questions: [], totalCalories: 700,
+      logged: [
+        { logId: 'c', name: 'Fried chicken', loggedServings: 1, mealType: 'lunch', calories: 400, nutrition: { calories_per_serving: 400 } },
+        { logId: 'f', name: 'Fries', loggedServings: 1, mealType: 'dinner', calories: 300, nutrition: { calories_per_serving: 300 } },
+      ],
+    });
+    renderBox({ onDescribe, mealType: 'lunch', date: TODAY }, { simple: true });
+    type('fried chicken, fries tonight');
+    logIt();
+    const card = await screen.findByTestId('result-card');
+    expect(within(card).getByText('Added to today')).toBeInTheDocument();
+    expect(within(card).getAllByTestId('entry-meal').map((m) => m.textContent)).toEqual(['Lunch', 'Dinner']);
+  });
+
+  it('one meal: no per-row meal, the header names it', async () => {
+    const onDescribe = vi.fn().mockResolvedValue({
+      ok: 1, fail: 0, logIds: ['s'], skipped: [], questions: [], totalCalories: 220,
+      logged: [{ logId: 's', name: 'Soup', loggedServings: 1, mealType: 'lunch', calories: 220, nutrition: { calories_per_serving: 220 } }],
+    });
+    renderBox({ onDescribe, mealType: 'lunch' }, { simple: true });
+    type('a bowl of soup');
+    logIt();
+    const card = await screen.findByTestId('result-card');
+    expect(within(card).getByText('Added to lunch')).toBeInTheDocument();
+    expect(within(card).queryByTestId('entry-meal')).toBeNull();
+  });
+});
+
+describe('L13 + A4 + L14: a result row has room for a long name', () => {
+  const long = () => food('Fage Total 0% Greek Yogurt, Plain Nonfat', { brand: 'Fage', serving: { size: 170, unit: 'g' }, nutrition: { calories_per_serving: 190, protein_grams: 18, carbs_grams: 6, fat_grams: 0 } });
+
+  it('the name wraps instead of cutting off, and "190 cal" sits in a 14px subtitle', async () => {
+    suggest.mockResolvedValue([long()]);
+    renderBox();
+    type('fage');
+    await vi.advanceTimersByTimeAsync(200);
+    const name = await screen.findByText('Fage Total 0% Greek Yogurt, Plain Nonfat');
+    expect(name).not.toHaveStyle({ whiteSpace: 'nowrap' });
+    const subtitle = within(screen.getByTestId('food-row')).getByTestId('food-row-subtitle');
+    expect(subtitle).toHaveTextContent(/Fage · .* · 190 cal/);
+    expect(subtitle).toHaveStyle({ fontSize: '0.875rem' });
+  });
+
+  it('the amount button says "Amount"', async () => {
+    suggest.mockResolvedValue([long()]);
+    renderBox();
+    type('fage');
+    await vi.advanceTimersByTimeAsync(200);
+    const button = await screen.findByRole('button', { name: /change the amount of fage/i });
+    expect(button).toHaveTextContent('Amount');
+  });
+});
+
+describe('L20: one primary at a time', () => {
+  it('a short name: the rows lead, and Log it steps back to "Just log \'fage\'"', async () => {
+    renderBox({ onDescribe: vi.fn() });
+    type('fage');
+    const button = screen.getByTestId('log-it');
+    expect(button).toHaveTextContent("Just log 'fage'");
+    expect(button.className).toMatch(/MuiButton-outlined/);
+    expect(button.className).not.toMatch(/MuiButton-contained/);
+  });
+
+  it('a sentence: Log it is the filled primary', async () => {
+    renderBox({ onDescribe: vi.fn() });
+    type('two eggs and toast');
+    const button = screen.getByTestId('log-it');
+    expect(button).toHaveTextContent(/^Log it$/);
+    expect(button.className).toMatch(/MuiButton-contained/);
+  });
+});
+
+describe('L21: number words make a sentence', () => {
+  it('"two eggs" folds the list and needs no deep search', async () => {
+    suggest.mockResolvedValue([food('Egg')]);
+    renderBox({ onDescribe: vi.fn() });
+    type('two eggs');
+    await vi.advanceTimersByTimeAsync(600);
+    expect(search).not.toHaveBeenCalled();
+    expect(screen.getByTestId('log-it')).toHaveTextContent(/^Log it$/);
+  });
+});
+
+describe('L22: one way of naming days in a backfilled sheet', () => {
+  it('on yesterday\'s sheet, "last Monday" asks about Monday and offers "No, Tuesday"', async () => {
+    const onDescribe = vi.fn();
+    renderBox({ onDescribe, date: '2026-10-13' });
+    type('pizza last monday');
+    logIt();
+    expect(await screen.findByText('Log this to Monday?')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'No, Tuesday' })).toBeInTheDocument();
+    expect(onDescribe).not.toHaveBeenCalled();
+  });
+});
+
+describe('L7: "Same as Chef\'s dinner"', () => {
+  it('copies the member\'s meal through the box\'s logger, with the standard toast and an Undo that removes the copies', async () => {
+    household = [{ userId: 'chef-1', name: 'Chef', foods: ['Steak', 'Salad'], calories: 900, count: 2 }];
+    const onLogItems = vi.fn().mockResolvedValue({ ok: 1, fail: 0, logIds: ['c1', 'c2'], perItem: [['c1', 'c2']] });
+    const onUndo = vi.fn().mockResolvedValue({ deleted: ['c1', 'c2'], failed: [] });
+    renderBox({ onLogItems, onUndo, mealType: 'dinner', showQuickPicks: true, date: TODAY });
+
+    const pick = await screen.findByRole('button', { name: "Same as Chef's dinner" });
+    expect(pick).toHaveTextContent('Steak, Salad');
+    fireEvent.click(pick);
+    await waitFor(() => expect(onLogItems).toHaveBeenCalledWith(
+      [expect.objectContaining({ type: 'household-meal', fromUserId: 'chef-1', fromDate: TODAY, fromMealType: 'dinner' })],
+      'dinner'
+    ));
+    expect(await screen.findByText("Added to dinner ✓ · Chef's dinner")).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: /^undo$/i }));
+    await waitFor(() => expect(onUndo).toHaveBeenCalledWith(['c1', 'c2']));
+  });
+
+  it('no member logged this meal → no pick', async () => {
+    household = [];
+    renderBox({ mealType: 'dinner', showQuickPicks: true, date: TODAY });
+    await vi.advanceTimersByTimeAsync(50);
+    expect(screen.queryByRole('button', { name: /same as chef/i })).toBeNull();
+  });
+});
+
+describe('L24: "Please sign in again." comes with a Sign in button', () => {
+  it('a signed-out describe shows Sign in, which goes to the suite sign-in and back here', async () => {
+    const onDescribe = vi.fn().mockRejectedValue({ response: { status: 401 } });
+    renderBox({ onDescribe });
+    type('two eggs and toast');
+    logIt();
+    expect(await screen.findByText('Please sign in again.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    expect(loginRedirect).toHaveBeenCalledWith('fitnessgeek', window.location.href);
+  });
+
+  it('a signed-out tap-to-log toast has a Sign in button too', async () => {
+    const onLogItems = vi.fn().mockRejectedValue({ response: { status: 401 } });
+    suggest.mockResolvedValue([food('Egg')]);
+    renderBox({ onLogItems });
+    type('egg');
+    await vi.advanceTimersByTimeAsync(200);
+    fireEvent.click(await screen.findByText('Egg'));
+    expect(await screen.findByText('Please sign in again.')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
+    expect(loginRedirect).toHaveBeenCalled();
   });
 });

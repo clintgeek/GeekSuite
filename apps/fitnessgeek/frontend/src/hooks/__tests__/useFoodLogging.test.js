@@ -25,13 +25,15 @@ const addMealToLog = vi.fn();
 const deleteFoodLog = vi.fn();
 const updateFoodLog = vi.fn();
 const describeApi = vi.fn();
+const copyMeal = vi.fn();
 
 vi.mock('../../services/fitnessGeekService.js', () => ({
   fitnessGeekService: {
     addFoodToLog: (...a) => addFoodToLog(...a),
     addMealToLog: (...a) => addMealToLog(...a),
     deleteFoodLog: (...a) => deleteFoodLog(...a),
-    updateFoodLog: (...a) => updateFoodLog(...a)
+    updateFoodLog: (...a) => updateFoodLog(...a),
+    copyMeal: (...a) => copyMeal(...a)
   }
 }));
 
@@ -291,5 +293,22 @@ describe('describing onto a confirmed day (Phase 3.17)', () => {
     const { result } = mount();
     await act(async () => { await result.current.describeMeal('fries', { mealType: 'dinner' }); });
     expect(describeApi).toHaveBeenCalledWith('fries', expect.objectContaining({ date: '2026-09-16' }));
+  });
+});
+
+describe('"Same as Chef\'s dinner" (L7)', () => {
+  it('copies through the household copy path into this day and meal, and hands back the copies for Undo', async () => {
+    copyMeal.mockResolvedValue([{ id: 'c1' }, { id: 'c2' }]);
+    const { result } = mount();
+    let out;
+    await act(async () => {
+      out = await result.current.logItems([{
+        type: 'household-meal', name: "Chef's dinner", fromUserId: 'chef-1', fromDate: '2026-09-16', fromMealType: 'dinner', servings: 1,
+      }], 'dinner');
+    });
+    expect(copyMeal).toHaveBeenCalledWith('2026-09-16', '2026-09-16', 'dinner', 'dinner', 'chef-1');
+    expect(addFoodToLog).not.toHaveBeenCalled();
+    expect(out).toMatchObject({ ok: 1, fail: 0, logIds: ['c1', 'c2'], perItem: [['c1', 'c2']] });
+    expect(forgetRecentLogs).toHaveBeenCalled();
   });
 });

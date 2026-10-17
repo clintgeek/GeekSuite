@@ -13,6 +13,17 @@ export const identityOf = (food) => {
   );
 };
 
+/**
+ * "Egg ×2": the name with its amount when the amount isn't one (L4). Home,
+ * the toast and the result card all said "Egg" for two eggs, so nothing
+ * confirmed what she did and the safe-looking move was to add another.
+ */
+export function withAmount(name, servings) {
+  const n = Number(servings);
+  if (!name || !Number.isFinite(n) || n <= 0 || Math.abs(n - 1) < 1e-9) return name;
+  return `${name} ×${Math.round(n * 100) / 100}`;
+}
+
 const roundTo10 = (n) => Math.max(10, Math.round(n / 10) * 10);
 
 /** The Smaller and Bigger numbers for an entry. */

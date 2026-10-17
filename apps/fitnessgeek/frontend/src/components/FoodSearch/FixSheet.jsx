@@ -6,6 +6,7 @@ import { errorMessage } from '../../utils/errorMessage.js';
 import { describeFailure } from './composerText.js';
 import { newIdempotencyKey } from './idempotency.js';
 import { portionChoices } from './entries.js';
+import SignInButton, { isSignedOutMessage } from './SignInButton.jsx';
 
 /**
  * Fix one thing that was just logged (REVIEW_2026-10 §4, "Fix opens one small
@@ -146,7 +147,11 @@ export default function FixSheet({ item, onClose, fixes }) {
         </Box>
 
         {error && (
-          <Alert severity="warning" sx={{ mt: 2, borderRadius: 2, fontSize: '1rem', color: theme.palette.text.primary }}>
+          <Alert
+            severity="warning"
+            action={isSignedOutMessage(error) ? <SignInButton /> : undefined}
+            sx={{ mt: 2, borderRadius: 2, fontSize: '1rem', color: theme.palette.text.primary, alignItems: 'center' }}
+          >
             {error}
           </Alert>
         )}

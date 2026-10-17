@@ -16,8 +16,11 @@ vi.mock('../../services/foodService', () => ({
 }));
 
 vi.mock('../../hooks/useRecentLogs.js', () => ({ useRecentLogs: () => ({ logs: [], meals: [], loading: false }) }));
+vi.mock('../FoodSearch/useHouseholdMeals.js', () => ({ useHouseholdMeals: () => [] }));
 
 const { default: FoodComposer } = await import('../FoodSearch/FoodComposer.jsx');
+const { forgetDrafts } = await import('../FoodSearch/composerDraft.js');
+const setOnline = (online) => Object.defineProperty(window.navigator, 'onLine', { configurable: true, get: () => online });
 
 let instances = [];
 class FakeRecognition {
@@ -46,11 +49,14 @@ const renderBox = (props = {}) => render(
 
 beforeEach(() => {
   instances = [];
+  forgetDrafts();
+  setOnline(true);
   onDescribe.mockReset();
   onDescribe.mockResolvedValue({ ok: 1, fail: 0, logIds: ['x'], logged: [{ logId: 'x', name: 'Eggs', calories: 140, mealType: 'lunch' }], skipped: [], questions: [] });
 });
 
 afterEach(() => {
+  setOnline(true);
   delete window.SpeechRecognition;
   delete window.webkitSpeechRecognition;
 });
@@ -128,5 +134,30 @@ describe('the microphone', () => {
       instances[0].end();
     });
     expect(await screen.findByText('I heard: “two eggs and toast”')).toBeInTheDocument();
+  });
+
+  /** L18: offline, the mic said the microphone was broken. */
+  it('offline, the mic is off under the same "No signal" line', async () => {
+    window.webkitSpeechRecognition = FakeRecognition;
+    setOnline(false);
+    renderBox();
+    expect(screen.getByTestId('speak-button')).toBeDisabled();
+    expect(screen.getByTestId('composer-status')).toHaveTextContent(/^No signal/);
+    fireEvent.click(screen.getByTestId('speak-button'));
+    expect(instances).toHaveLength(0);
+
+    setOnline(true);
+    await act(async () => { window.dispatchEvent(new Event('online')); });
+    expect(screen.getByTestId('speak-button')).toBeEnabled();
+  });
+
+  it('a network failure from the recognizer says "No signal", not that the microphone is broken', async () => {
+    window.SpeechRecognition = FakeRecognition;
+    renderBox();
+    await act(async () => { fireEvent.click(screen.getByTestId('speak-button')); });
+    await act(async () => { instances[0].fail('network'); });
+    const note = screen.getByTestId('mic-error');
+    expect(note).toHaveTextContent(/^No signal/);
+    expect(note.textContent).not.toMatch(/isn't working/);
   });
 });

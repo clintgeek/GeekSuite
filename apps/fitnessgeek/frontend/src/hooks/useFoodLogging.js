@@ -58,6 +58,23 @@ export const useFoodLogging = ({ date, onChanged }) => {
         // logging a meal produced nothing to undo and the toast quietly came
         // up without its button. Undo only means something if it covers
         // everything that was written.
+        // "Same as Chef's dinner" (L7): the gateway's household copy path
+        // copies that member's meal into this person's log, on this day and
+        // into this meal, and answers with the new rows — so Undo removes
+        // exactly the copies.
+        if (item?.type === 'household-meal') {
+          const copied = await fitnessGeekService.copyMeal(
+            item.fromDate || date,
+            date,
+            item.fromMealType || mealType,
+            mealType,
+            item.fromUserId
+          );
+          return (Array.isArray(copied) ? copied : [])
+            .map((log) => log?.id || log?._id)
+            .filter(Boolean)
+            .map(String);
+        }
         if (item?.type === 'meal' && (item._id || item.id)) {
           const response = await fitnessGeekService.addMealToLog(item._id || item.id, date, mealType);
           return (response?.data?.logs || [])
