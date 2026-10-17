@@ -1395,7 +1395,7 @@ describe('L20: one primary at a time', () => {
     renderBox({ onDescribe: vi.fn() });
     type('fage');
     const button = screen.getByTestId('log-it');
-    expect(button).toHaveTextContent("Just log 'fage'");
+    expect(button).toHaveTextContent("Just log ‘fage’");
     expect(button.className).toMatch(/MuiButton-outlined/);
     expect(button.className).not.toMatch(/MuiButton-contained/);
   });

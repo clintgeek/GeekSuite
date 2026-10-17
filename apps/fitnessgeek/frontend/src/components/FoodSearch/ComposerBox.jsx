@@ -34,7 +34,7 @@ import { slashFocusProps } from '@geeksuite/ui';
  *
  * ONE PRIMARY AT A TIME (L20). For a short name ("fage") the list is open
  * and its rows are the main way in, so Log it steps back to an outlined
- * "Just log 'fage'" (`quiet`). For a sentence it is the filled primary.
+ * "Just log ‘fage’" (`quiet`). For a sentence it is the filled primary.
  *
  * `micDisabled` turns the mic off without hiding it — offline, where the
  * speech service can't work and used to say the microphone was broken (L18).
@@ -170,7 +170,7 @@ const ComposerBox = ({
             ...(thinking ? { pointerEvents: 'none' } : {}),
           }}
         >
-          {thinking ? 'Working it out…' : quiet && value?.trim() ? `Just log '${value.trim()}'` : 'Log it'}
+          {thinking ? 'Working it out…' : quiet && value?.trim() ? `Just log ‘${value.trim()}’` : 'Log it'}
         </Button>
         {onMicClick && (
           <IconButton

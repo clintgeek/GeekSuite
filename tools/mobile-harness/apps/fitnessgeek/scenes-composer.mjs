@@ -354,7 +354,7 @@ export const scenes = [
     fn: async (page, h, sheet) => {
       await typeInto(sheet, 'fage', h, 1200);
       const logIt = await must(sheet.getByTestId('log-it'), 'Log it');
-      if (!/Just log 'fage'/.test(await logIt.innerText())) throw new Error(`name mode button reads "${await logIt.innerText()}"`);
+      if (!/Just log ‘fage’/.test(await logIt.innerText())) throw new Error(`name mode button reads "${await logIt.innerText()}"`);
       if (!/MuiButton-outlined/.test(await logIt.getAttribute('class'))) throw new Error('"Just log \'fage\'" should be outlined');
       await must(sheet.getByTestId('food-row'), 'the open list');
     },
