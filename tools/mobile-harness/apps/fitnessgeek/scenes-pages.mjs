@@ -463,16 +463,27 @@ const chartBox = (page, testid) => page.locator(`[data-testid="${testid}"] + *`)
 // Tap the right half of a chart on a phone and check the tooltip stays inside
 // the card and keeps its words on one line each.
 async function tapChartTooltip(page, h, box) {
-  const b = await box.boundingBox();
+  // Measure only once the chart has stopped moving: right after a smooth
+  // scroll, and while nivo animates in, the box drifts, and a tap aimed at the
+  // old box lands beside the chart (flaky 53d/53e, 2026-10-18).
+  let b = null;
+  for (let i = 0; i < 20; i++) {
+    const next = await box.boundingBox();
+    if (next && b && Math.abs(next.x - b.x) < 0.5 && Math.abs(next.y - b.y) < 0.5 && Math.abs(next.height - b.height) < 0.5) break;
+    b = next;
+    await h.settle(100);
+  }
   if (!b) throw new Error('chart has no box');
-  const x = b.x + b.width * 0.7;
-  const y = b.y + b.height * 0.5;
   const tipLoc = page.locator('[data-testid="chart-tooltip"]');
-  await page.touchscreen.tap(x, y);
-  await h.settle(700);
   // A plain tap must be enough. A touch pointer "leaves" as the finger
   // lifts, and that used to disarm the tooltip the tap had just armed, so it
-  // took a tap plus a mouse move (fixed in chartTips.js, d-fixes).
+  // took a tap plus a mouse move (fixed in chartTips.js, d-fixes). Each try is
+  // ONE plain tap at a fresh point; if taps stop arming the tooltip, all fail.
+  for (const fx of [0.7, 0.55, 0.85]) {
+    await page.touchscreen.tap(b.x + b.width * fx, b.y + b.height * 0.5);
+    await h.settle(700);
+    if (await tipLoc.count()) break;
+  }
   await need(tipLoc, 'the tooltip after a plain tap');
   const tip = tipLoc;
   const t = await tip.first().boundingBox();
