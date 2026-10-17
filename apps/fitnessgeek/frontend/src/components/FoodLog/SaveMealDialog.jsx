@@ -10,7 +10,10 @@ import {
 import {
   Restaurant as FoodIcon
 } from '@mui/icons-material';
+import { useGeekDialogFullScreen } from '@geeksuite/ui';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
+import { thumbSaveProps } from '../BloodPressure/thumbSave.jsx';
+import { mealWord } from '../../utils/plainWords.js';
 
 const SaveMealDialog = ({
   open,
@@ -21,6 +24,8 @@ const SaveMealDialog = ({
   loading = false
 }) => {
   const [mealName, setMealName] = useState('');
+  // Save at the bottom on a phone, like Edit entry (UX review L9).
+  const fullScreen = useGeekDialogFullScreen();
 
   // `log.food_item_id` is the gateway's populated FoodLog row — a flat
   // FitnessFood object with `id`, never `_id`. Without the `.id` read, a
@@ -97,41 +102,37 @@ const SaveMealDialog = ({
     { calories: 0, protein: 0, carbs: 0, fat: 0 }
   );
 
-  const mealTypeName = {
-    breakfast: 'Breakfast',
-    lunch: 'Lunch',
-    dinner: 'Dinner',
-    snack: 'Snack'
-  }[mealType];
-
   return (
     <PremiumDialog
       open={open}
       onClose={handleClose}
-      eyebrow="My Meals"
-      title={`Save ${mealTypeName}`}
+      eyebrow="My meals"
+      title={`Save ${mealWord(mealType)} as a meal`}
       icon={FoodIcon}
       maxWidth="sm"
-      primaryAction={
-        <Button
-          onClick={handleSave}
-          variant="contained"
-          disabled={!mealName.trim() || loading || unresolvedCount === logs.length}
-        >
-          {loading ? 'Saving...' : 'Save Meal'}
-        </Button>
-      }
-      secondaryAction={
-        <Button onClick={handleClose} disabled={loading}>
-          Cancel
-        </Button>
-      }
+      {...thumbSaveProps({
+        fullScreen,
+        save: (
+          <Button
+            onClick={handleSave}
+            variant="contained"
+            disabled={!mealName.trim() || loading || unresolvedCount === logs.length}
+          >
+            {loading ? 'Saving…' : 'Save'}
+          </Button>
+        ),
+        cancel: (
+          <Button onClick={handleClose} disabled={loading}>
+            Cancel
+          </Button>
+        ),
+      })}
     >
         <Box sx={{ mb: 3 }}>
           <TextField
             autoFocus
             fullWidth
-            label="Meal Name"
+            label="Meal name"
             placeholder="e.g., El P's Ench and Marg"
             value={mealName}
             onChange={(e) => setMealName(e.target.value)}

@@ -268,7 +268,7 @@ const MyFoods = () => {
           copy={
             searchQuery
               ? 'Try a different word, or clear the search to see everything in your library.'
-              : "Anything you search and log builds up here. Add a custom food, or log something from the Food Log — we'll remember it."
+              : 'Foods you create, and foods you log often, show up here. + New food makes one now.'
           }
         />
       ) : (

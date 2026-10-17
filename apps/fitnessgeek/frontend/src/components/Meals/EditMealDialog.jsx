@@ -11,9 +11,13 @@ import {
   InputLabel
 } from '@mui/material';
 import { Delete as DeleteIcon } from '@mui/icons-material';
+import { useGeekDialogFullScreen } from '@geeksuite/ui';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
+import { thumbSaveProps } from '../BloodPressure/thumbSave.jsx';
 
 const EditMealDialog = ({ open, onClose, meal, onSave, loading = false }) => {
+  // Save at the bottom on a phone (UX review L9).
+  const fullScreen = useGeekDialogFullScreen();
   const [form, setForm] = useState({ name: '', meal_type: 'breakfast', food_items: [] });
 
   useEffect(() => {
@@ -62,14 +66,15 @@ const EditMealDialog = ({ open, onClose, meal, onSave, loading = false }) => {
       eyebrow="My Meals"
       title="Edit Meal"
       maxWidth="sm"
-      primaryAction={
-        <Button onClick={handleSubmit} variant="contained" disabled={!canSave}>
-          {loading ? 'Saving...' : 'Save'}
-        </Button>
-      }
-      secondaryAction={
-        <Button onClick={onClose} disabled={loading}>Cancel</Button>
-      }
+      {...thumbSaveProps({
+        fullScreen,
+        save: (
+          <Button onClick={handleSubmit} variant="contained" disabled={!canSave}>
+            {loading ? 'Saving…' : 'Save'}
+          </Button>
+        ),
+        cancel: <Button onClick={onClose} disabled={loading}>Cancel</Button>,
+      })}
     >
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mb: 2 }}>
           <TextField

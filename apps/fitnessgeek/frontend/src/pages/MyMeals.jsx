@@ -18,7 +18,8 @@ import {
   Restaurant as MealIcon,
   PlaylistAdd as LogIcon,
 } from '@mui/icons-material';
-import { useToast } from '@geeksuite/ui';
+import { useToast, useGeekDialogFullScreen } from '@geeksuite/ui';
+import { thumbSaveProps } from '../components/BloodPressure/thumbSave.jsx';
 import { fitnessGeekService } from '../services/fitnessGeekService.js';
 import EditMealDialog from '../components/Meals/EditMealDialog.jsx';
 import { useUndoToast } from '../components/FoodSearch/undoToast.jsx';
@@ -47,6 +48,8 @@ const mealTypeForNow = (now = new Date()) => {
 
 const MyMeals = () => {
   const { notify } = useToast();
+  // "Log it" sits at the bottom on a phone, like every save (UX review L9).
+  const fullScreen = useGeekDialogFullScreen();
   const [meals, setMeals] = useState([]);
   const [loading, setLoading] = useState(true);
   const [query, setQuery] = useState('');
@@ -327,21 +330,24 @@ const MyMeals = () => {
         eyebrow="Log a meal"
         title={mealToLog ? `Log ${mealToLog.name}` : 'Log a meal'}
         maxWidth="xs"
-        primaryAction={
-          <Button
-            onClick={confirmLog}
-            variant="contained"
-            disabled={logging || !logDay}
-            startIcon={logging ? <CircularProgress size={16} color="inherit" /> : <LogIcon />}
-          >
-            {logging ? 'Adding…' : 'Log it'}
-          </Button>
-        }
-        secondaryAction={
-          <Button onClick={() => setMealToLog(null)} disabled={logging}>
-            Cancel
-          </Button>
-        }
+        {...thumbSaveProps({
+          fullScreen,
+          save: (
+            <Button
+              onClick={confirmLog}
+              variant="contained"
+              disabled={logging || !logDay}
+              startIcon={logging ? <CircularProgress size={16} color="inherit" /> : <LogIcon />}
+            >
+              {logging ? 'Adding…' : 'Log it'}
+            </Button>
+          ),
+          cancel: (
+            <Button onClick={() => setMealToLog(null)} disabled={logging}>
+              Cancel
+            </Button>
+          ),
+        })}
       >
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 2 }} role="group" aria-label="Meal">
           {MEALS.map((meal) => (

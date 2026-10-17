@@ -10,7 +10,9 @@ import {
   MenuItem,
   CircularProgress
 } from '@mui/material';
+import { useGeekDialogFullScreen } from '@geeksuite/ui';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
+import { thumbSaveProps } from '../BloodPressure/thumbSave.jsx';
 
 const PARTIAL_NUMBER = /^\d*[.,]?\d*$/;
 
@@ -49,6 +51,8 @@ function DecimalField({ value, onValue, fallback = 0, ...props }) {
  * the escape hatch the old search never had: it dead-ended at "Nothing found".
  */
 const FoodEditDialog = ({ open, food, form, onChange, onClose, onSave, loading }) => {
+  // Save/Create at the bottom on a phone (UX review L9).
+  const fullScreen = useGeekDialogFullScreen();
   return (
     <PremiumDialog
       open={open}
@@ -56,12 +60,15 @@ const FoodEditDialog = ({ open, food, form, onChange, onClose, onSave, loading }
       eyebrow="My Foods"
       title={food ? `Edit ${food.name ?? 'food'}` : 'Create a food'}
       maxWidth="sm"
-      primaryAction={
-        <Button onClick={onSave} variant="contained" disabled={loading}>
-          {loading ? <CircularProgress size={20} /> : (food ? 'Save' : 'Create')}
-        </Button>
-      }
-      secondaryAction={<Button onClick={onClose}>Cancel</Button>}
+      {...thumbSaveProps({
+        fullScreen,
+        save: (
+          <Button onClick={onSave} variant="contained" disabled={loading}>
+            {loading ? <CircularProgress size={20} /> : (food ? 'Save' : 'Create')}
+          </Button>
+        ),
+        cancel: <Button onClick={onClose}>Cancel</Button>,
+      })}
     >
       <Box sx={{ pt: 1 }}>
           <TextField

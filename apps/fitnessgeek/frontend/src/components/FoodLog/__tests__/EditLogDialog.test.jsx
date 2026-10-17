@@ -12,8 +12,8 @@
  * a bare `<NutritionInputs />` with no `qualifier` prop must keep reading
  * exactly "Calories", so a future second caller isn't surprised.
  */
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { render, screen, within } from '@testing-library/react';
 import { ThemeProvider, createTheme } from '@mui/material/styles';
 import NutritionInputs from '../NutritionInputs.jsx';
 import EditLogDialog from '../EditLogDialog.jsx';
@@ -84,7 +84,7 @@ describe('EditLogDialog: calories, macros and the day', () => {
     ));
     return onSave;
   };
-  const save = () => fireEvent.click(screen.getByRole('button', { name: /save changes/i }));
+  const save = () => fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
 
   it('Simple: one Calories number for the whole entry, sent as the per-serving override', () => {
     const onSave = open({ ...SOUP, servings: 2 }, { simple: true });
@@ -130,7 +130,7 @@ describe('EditLogDialog: calories, macros and the day', () => {
   it('will not save a calorie number past what the server allows', () => {
     const onSave = open(SOUP, { simple: true });
     fireEvent.change(screen.getByLabelText('Calories'), { target: { value: '25000' } });
-    expect(screen.getByRole('button', { name: /save changes/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^save$/i })).toBeDisabled();
     save();
     expect(onSave).not.toHaveBeenCalled();
   });
@@ -144,5 +144,50 @@ describe('EditLogDialog: calories, macros and the day', () => {
     fireEvent.change(box, { target: { value: '0.5' } });
     save();
     expect(onSave.mock.calls[0][1].servings).toBe(0.5);
+  });
+});
+
+/**
+ * UX review L9 and L15: Save at the bottom on a phone, labelled "Save" (not
+ * "Save Changes"); and "Remove" inside the dialog, since Simple's rows lost
+ * their trash icon.
+ */
+describe('EditLogDialog: Save under the thumb, Remove inside', () => {
+  const EGG = {
+    id: 'log-egg',
+    servings: 1,
+    meal_type: 'breakfast',
+    log_date: '2026-10-15',
+    nutrition: { calories_per_serving: 78, protein_grams: 6, carbs_grams: 1, fat_grams: 5 },
+    food_item_id: { id: 'f2', name: 'Egg' }
+  };
+  const originalMatchMedia = window.matchMedia;
+  afterEach(() => { window.matchMedia = originalMatchMedia; });
+
+  it('on a phone, Save is the one full-width button at the bottom', () => {
+    window.matchMedia = (query) => ({
+      matches: true, media: query, onchange: null,
+      addListener: () => {}, removeListener: () => {},
+      addEventListener: () => {}, removeEventListener: () => {}, dispatchEvent: () => false,
+    });
+    render(withTheme(
+      <ExperienceContext.Provider value={{ isSimple: true }}>
+        <EditLogDialog open onClose={vi.fn()} onSave={vi.fn()} log={EGG} />
+      </ExperienceContext.Provider>
+    ));
+    const bottom = screen.getByTestId('thumb-save');
+    expect(within(bottom).getByRole('button', { name: /^save$/i, hidden: true })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /^save$/i, hidden: true })).toHaveLength(1);
+  });
+
+  it('Remove hands the entry back to the page', () => {
+    const onRemove = vi.fn();
+    render(withTheme(
+      <ExperienceContext.Provider value={{ isSimple: true }}>
+        <EditLogDialog open onClose={vi.fn()} onSave={vi.fn()} onRemove={onRemove} log={EGG} />
+      </ExperienceContext.Provider>
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Remove Egg' }));
+    expect(onRemove).toHaveBeenCalledWith('log-egg');
   });
 });

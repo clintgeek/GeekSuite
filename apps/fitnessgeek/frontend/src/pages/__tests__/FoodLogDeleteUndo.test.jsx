@@ -123,7 +123,7 @@ describe('deleting offers an undo that actually restores the row', () => {
 
     // The toast, not a bottom-of-page Alert — consistent with add's feedback.
     const undoButton = await screen.findByRole('button', { name: /undo/i });
-    expect(await screen.findByText(/Deleted Oatmeal/i)).toBeInTheDocument();
+    expect(await screen.findByText(/Removed Oatmeal/i)).toBeInTheDocument();
 
     fireEvent.click(undoButton);
 
@@ -154,7 +154,7 @@ describe('deleting offers an undo that actually restores the row', () => {
 
     fireEvent.click(screen.getByText('Delete Oatmeal (breakfast)'));
 
-    await screen.findByText(/could not delete/i);
+    await screen.findByText(/couldn.t remove that/i);
     expect(screen.queryByRole('button', { name: /undo/i })).toBeNull();
     expect(logItems).not.toHaveBeenCalled();
   });
@@ -168,12 +168,12 @@ describe('deleting offers an undo that actually restores the row', () => {
         </GeekToastProvider>
       );
       fireEvent.click(screen.getByText('Delete Oatmeal (breakfast)'));
-      await screen.findByText(/Deleted Oatmeal/i);
+      await screen.findByText(/Removed Oatmeal/i);
       // Still there after six seconds (it used to be four).
       await act(async () => { await vi.advanceTimersByTimeAsync(6000); });
       fireEvent.click(screen.getByRole('button', { name: /^undo$/i }));
       expect(await screen.findByText('Undone ✓')).toBeInTheDocument();
-      expect(screen.queryByText(/Deleted Oatmeal/i)).toBeNull();
+      expect(screen.queryByText(/Removed Oatmeal/i)).toBeNull();
     } finally {
       vi.useRealTimers();
     }

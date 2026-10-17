@@ -8,8 +8,6 @@ import {
   List,
   ListItem,
   ListItemText,
-  ListItemSecondaryAction,
-  IconButton,
   Chip,
   CircularProgress,
   Alert,
@@ -17,26 +15,33 @@ import {
   InputLabel,
   Select,
   MenuItem,
-  Divider,
-  Tooltip
+  Divider
 } from '@mui/material';
 import {
   People as PeopleIcon,
   ContentCopy as CopyIcon,
-  Add as AddIcon,
   Restaurant as MealIcon
 } from '@mui/icons-material';
 import { fitnessGeekService } from '../../services/fitnessGeekService';
 import { errorMessage } from '../../utils/errorMessage.js';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
+import { mealLabel, mealWord } from '../../utils/plainWords.js';
+import { useToday } from '../../hooks/useToday.js';
+import { dayName } from './dayWords.js';
 
 const MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack'];
 
+/**
+ * What someone in the household ate on the day on screen, with a plain
+ * "Copy to your log" on each meal (UX review L7). A copy opens Copy a meal
+ * already filled in, so it shows the sentence first and ends with the same
+ * "Copied to …" toast and Undo as any other copy.
+ */
 const HouseholdLogView = ({ open, onClose, currentDate, onCopyMeal }) => {
+  const today = useToday();
   const [loading, setLoading] = useState(true);
   const [loadingLogs, setLoadingLogs] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
 
   const [householdMembers, setHouseholdMembers] = useState([]);
   const [selectedMember, setSelectedMember] = useState('');
@@ -112,34 +117,25 @@ const HouseholdLogView = ({ open, onClose, currentDate, onCopyMeal }) => {
   };
 
   const handleCopyMeal = (mealType) => {
-    if (onCopyMeal) {
-      onCopyMeal({
-        fromDate: currentDate,
-        fromMealType: mealType,
-        fromUserId: selectedMember,
-        memberName: memberName
-      });
-    }
-    setSuccess(`Ready to copy ${memberName}'s ${mealType}`);
-    setTimeout(() => setSuccess(''), 2000);
+    onCopyMeal?.({
+      fromDate: currentDate,
+      fromMealType: mealType,
+      fromUserId: selectedMember,
+      memberName: memberName
+    });
   };
 
   const handleCopyAll = () => {
-    if (onCopyMeal) {
-      onCopyMeal({
-        fromDate: currentDate,
-        fromMealType: null,
-        fromUserId: selectedMember,
-        memberName: memberName
-      });
-    }
-    setSuccess(`Ready to copy all of ${memberName}'s meals`);
-    setTimeout(() => setSuccess(''), 2000);
+    onCopyMeal?.({
+      fromDate: currentDate,
+      fromMealType: null,
+      fromUserId: selectedMember,
+      memberName: memberName
+    });
   };
 
-  const formatMealType = (type) => {
-    return type.charAt(0).toUpperCase() + type.slice(1);
-  };
+  const day = currentDate ? dayName(currentDate, today) : '';
+  const onDay = day === 'today' || day === 'tomorrow' ? day : `on ${day}`;
 
   const calculateMealCalories = (logs) => {
     return logs.reduce((sum, log) => {
@@ -171,11 +167,6 @@ const HouseholdLogView = ({ open, onClose, currentDate, onCopyMeal }) => {
                 {error}
               </Alert>
             )}
-            {success && (
-              <Alert severity="success" sx={{ mb: 2 }}>
-                {success}
-              </Alert>
-            )}
 
             {householdMembers.length > 0 && (
               <>
@@ -200,18 +191,19 @@ const HouseholdLogView = ({ open, onClose, currentDate, onCopyMeal }) => {
                 {selectedMember && (
                   <>
                     {/* Date Info */}
-                    <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                    <Box sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 1 }}>
                       <Typography variant="subtitle1">
-                        {memberName}'s meals on <strong>{currentDate}</strong>
+                        What {memberName} ate {onDay}
                       </Typography>
                       {memberLogs.length > 0 && (
                         <Button
-                          variant="contained"
-                          size="small"
+                          variant="outlined"
                           startIcon={<CopyIcon />}
                           onClick={handleCopyAll}
+                          aria-label={`Copy ${memberName}'s whole day to your log`}
+                          sx={{ minHeight: 44 }}
                         >
-                          Copy All Meals
+                          Copy the whole day
                         </Button>
                       )}
                     </Box>
@@ -222,7 +214,7 @@ const HouseholdLogView = ({ open, onClose, currentDate, onCopyMeal }) => {
                       </Box>
                     ) : memberLogs.length === 0 ? (
                       <Alert severity="info">
-                        {memberName} hasn't logged any food for this date
+                        {memberName} hasn't logged anything {onDay}.
                       </Alert>
                     ) : (
                       // Meal Sections
@@ -244,7 +236,7 @@ const HouseholdLogView = ({ open, onClose, currentDate, onCopyMeal }) => {
                                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                                   <MealIcon color="primary" fontSize="small" />
                                   <Typography variant="subtitle1" fontWeight={600}>
-                                    {formatMealType(mealType)}
+                                    {mealLabel(mealType)}
                                   </Typography>
                                   <Chip
                                     label={`${Math.round(totalCals)} cal`}
@@ -253,15 +245,14 @@ const HouseholdLogView = ({ open, onClose, currentDate, onCopyMeal }) => {
                                     variant="outlined"
                                   />
                                 </Box>
-                                <Tooltip title={`Copy ${mealType} to your log`}>
-                                  <IconButton
-                                    size="small"
-                                    onClick={() => handleCopyMeal(mealType)}
-                                    color="primary"
-                                  >
-                                    <CopyIcon />
-                                  </IconButton>
-                                </Tooltip>
+                                <Button
+                                  startIcon={<CopyIcon />}
+                                  onClick={() => handleCopyMeal(mealType)}
+                                  aria-label={`Copy ${memberName}'s ${mealWord(mealType)} to your log`}
+                                  sx={{ minHeight: 44 }}
+                                >
+                                  Copy to your log
+                                </Button>
                               </Box>
 
                               <List dense sx={{ py: 0 }}>

@@ -3,55 +3,16 @@ import {
   Box,
   Typography,
   Button,
-  Avatar,
-  IconButton
+  Avatar
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import {
   Add as AddIcon,
-  Save as SaveIcon,
-  Coffee as BreakfastIcon,
-  Restaurant as LunchIcon,
-  DinnerDining as DinnerIcon,
-  Cookie as SnackIcon
+  Save as SaveIcon
 } from '@mui/icons-material';
 import FoodLogItem from './FoodLogItem.jsx';
-
-// Meal type configuration with modern cyan theme
-const MEAL_CONFIG = {
-  breakfast: {
-    title: 'Breakfast',
-    icon: BreakfastIcon,
-    emoji: '🌅',
-    gradient: 'linear-gradient(135deg, #f59e0b, #d97706)',
-    lightBg: 'rgba(245, 158, 11, 0.08)',
-    darkBg: 'rgba(245, 158, 11, 0.15)'
-  },
-  lunch: {
-    title: 'Lunch',
-    icon: LunchIcon,
-    emoji: '☀️',
-    gradient: 'linear-gradient(135deg, #10b981, #059669)',
-    lightBg: 'rgba(16, 185, 129, 0.08)',
-    darkBg: 'rgba(16, 185, 129, 0.15)'
-  },
-  dinner: {
-    title: 'Dinner',
-    icon: DinnerIcon,
-    emoji: '🌙',
-    gradient: 'linear-gradient(135deg, #0D9488, #0F766E)',
-    lightBg: 'rgba(13, 148, 136, 0.08)',
-    darkBg: 'rgba(13, 148, 136, 0.15)'
-  },
-  snack: {
-    title: 'Snacks',
-    icon: SnackIcon,
-    emoji: '🍎',
-    gradient: 'linear-gradient(135deg, #8b5cf6, #7c3aed)',
-    lightBg: 'rgba(139, 92, 246, 0.08)',
-    darkBg: 'rgba(139, 92, 246, 0.15)'
-  }
-};
+import { mealLook, mealIcon } from './mealLook.js';
+import { mealLabel, mealWord } from '../../utils/plainWords.js';
 
 const MealSection = ({
   mealType,
@@ -70,11 +31,16 @@ const MealSection = ({
   onFavoriteChange,
   // Full's "Just added" strip (useJustAdded's `renderFor`), shown at the top
   // of this meal until her next action.
-  justAdded = null
+  justAdded = null,
+  // Simple (UX review L15): the header keeps only "+ Add", and rows are the
+  // plain tappable kind. Full labels "Save as a meal".
+  simple = false
 }) => {
   const theme = useTheme();
-  const config = MEAL_CONFIG[mealType];
-  const IconComponent = config.icon;
+  const IconComponent = mealIcon(mealType);
+  const look = mealLook(mealType, theme);
+  const title = mealLabel(mealType);
+  const meal = mealWord(mealType);
 
   // Calculate meal totals
   const mealTotals = logs.reduce(
@@ -140,14 +106,16 @@ const MealSection = ({
         justifyContent: 'space-between',
         alignItems: 'center',
         p: { xs: 2, sm: 2.5 },
-        background: theme.palette.mode === 'dark' ? config.darkBg : config.lightBg,
-        borderBottom: `1px solid ${theme.palette.divider}`
+        flexWrap: 'wrap',
+        gap: 1,
+        background: look.headerBg,
+        borderBottom: (logs.length > 0 || justAdded) ? `1px solid ${theme.palette.divider}` : 'none'
       }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <Avatar
             sx={{
-              background: config.gradient,
-              color: '#ffffff',
+              background: look.badge,
+              color: look.badgeInk,
               width: { xs: 40, sm: 44 },
               height: { xs: 40, sm: 44 },
               boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
@@ -162,13 +130,9 @@ const MealSection = ({
                 fontWeight: 700,
                 fontSize: { xs: '1.0625rem', sm: '1.125rem' },
                 color: theme.palette.text.primary,
-                display: 'flex',
-                alignItems: 'center',
-                gap: 0.5
               }}
             >
-              <span>{config.emoji}</span>
-              {config.title}
+              {title}
             </Typography>
             <Typography
               variant="body2"
@@ -178,61 +142,55 @@ const MealSection = ({
                 fontWeight: 600
               }}
             >
-              {Math.round(mealTotals.calories)} cal
+              {logs.length === 0 ? 'Nothing yet' : `${Math.round(mealTotals.calories).toLocaleString('en-US')} cal`}
             </Typography>
           </Box>
         </Box>
 
         <Box sx={{ display: 'flex', gap: { xs: 0.5, sm: 1 }, alignItems: 'center' }}>
-          {/* Save Meal Button */}
-          {logs.length > 0 && onSaveMeal && (
-            <IconButton
+          {/* Save as a meal — Full only, and labelled: the bare floppy disk
+              read as "save my log" (UX review L15). */}
+          {!simple && logs.length > 0 && onSaveMeal && (
+            <Button
               onClick={handleSaveMeal}
-              sx={{
-                color: theme.palette.text.secondary,
-                backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : theme.palette.background.default,
-                border: `1px solid ${theme.palette.divider}`,
-                width: 44,
-                height: 44,
-                '&:hover': {
-                  backgroundColor: theme.palette.action.hover,
-                  borderColor: theme.palette.divider
-                }
-              }}
-              aria-label={`Save ${config.title} as a meal`}
+              startIcon={<SaveIcon />}
+              aria-label={`Save ${meal} as a meal`}
+              sx={{ minHeight: 44, color: 'text.secondary', fontWeight: 700, textTransform: 'none' }}
             >
-              <SaveIcon sx={{ fontSize: 20 }} />
-            </IconButton>
+              Save as a meal
+            </Button>
           )}
 
-          {/* Add Food Button */}
+          {/* + Add — the same word as the Home meal cards. */}
           {onAddFood && (
-            <IconButton
+            <Button
               onClick={handleAddFood}
+              startIcon={<AddIcon />}
+              aria-label={`Add to ${meal}`}
               sx={{
-                color: 'white',
-                background: config.gradient,
+                minHeight: 44,
+                px: 2,
+                borderRadius: 999,
+                color: look.badgeInk,
+                background: look.badge,
+                fontWeight: 800,
+                textTransform: 'none',
                 boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
-                width: 44,
-                height: 44,
-                '&:hover': {
-                  boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)',
-                  transform: 'scale(1.05)'
-                },
-                transition: 'all 0.2s ease'
+                '&:hover': { background: look.badge, boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)' }
               }}
-              aria-label={`Add food to ${config.title}`}
             >
-              <AddIcon sx={{ fontSize: 22 }} />
-            </IconButton>
+              Add
+            </Button>
           )}
         </Box>
       </Box>
 
-      {/* Content */}
+      {/* Content. Empty, the header already says "Nothing yet" (the
+          same words as Home) and its "+ Add" is the button. */}
+      {(logs.length > 0 || justAdded) && (
       <Box sx={{ p: { xs: 1.5, sm: 2 } }}>
-        {justAdded && <Box sx={{ mb: 1.5 }}>{justAdded}</Box>}
-        {logs.length > 0 ? (
+        {justAdded && <Box sx={{ mb: logs.length > 0 ? 1.5 : 0 }}>{justAdded}</Box>}
+        {logs.length > 0 && (
           <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
             {logs.map((log) => {
               const food_item = log.food_item || log.food_item_id;
@@ -248,44 +206,14 @@ const MealSection = ({
                   mode={mode}
                   isFavorite={Boolean(foodId && favoriteFoodIds?.has(String(foodId)))}
                   onFavoriteChange={onFavoriteChange}
+                  simple={simple}
                 />
               );
             })}
           </Box>
-        ) : (
-          <Box sx={{
-            textAlign: 'center',
-            py: { xs: 3, sm: 4 },
-            color: theme.palette.text.disabled
-          }}>
-            <Typography variant="body2" sx={{ mb: 1.5, fontSize: '0.9375rem', color: theme.palette.text.secondary }}>
-              No foods logged yet
-            </Typography>
-            {onAddFood && (
-              <Button
-                onClick={handleAddFood}
-                startIcon={<AddIcon />}
-                variant="outlined"
-                sx={{
-                  minHeight: 44,
-                  borderRadius: '999px',
-                  borderColor: theme.palette.divider,
-                  color: theme.palette.text.secondary,
-                  fontWeight: 600,
-                  textTransform: 'none',
-                  px: 2,
-                  '&:hover': {
-                    borderColor: theme.palette.divider,
-                    backgroundColor: theme.palette.action.hover
-                  }
-                }}
-              >
-                Add Food
-              </Button>
-            )}
-          </Box>
         )}
       </Box>
+      )}
     </Box>
   );
 };

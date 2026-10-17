@@ -13,12 +13,15 @@ import {
   Grid
 } from '@mui/material';
 import NutritionInputs from './NutritionInputs.jsx';
+import { useGeekDialogFullScreen } from '@geeksuite/ui';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
 import DateField from '../primitives/DateField.jsx';
+import { thumbSaveProps } from '../BloodPressure/thumbSave.jsx';
 import { useExperience } from '../../contexts/ExperienceContext.jsx';
 import { rowDay } from '../../utils/experience.js';
 import {
-  Restaurant as FoodIcon
+  Restaurant as FoodIcon,
+  DeleteOutline as RemoveIcon
 } from '@mui/icons-material';
 
 const PARTIAL_NUMBER = /^\d*[.,]?\d*$/;
@@ -41,15 +44,22 @@ const MACROS = ['protein_grams', 'carbs_grams', 'fat_grams'];
  *
  * "Day" moves the entry (`log_date`), which is how last night's dinner logged
  * this morning gets back to last night.
+ *
+ * Save sits at the bottom on a phone (thumbSaveProps, UX review L9): with the
+ * keyboard up, the only button she could see was ✕, which reads as cancel.
+ * "Remove" lives here too (`onRemove`), because Simple's rows have no trash
+ * icon any more (L15); the page shows the usual "Removed X" toast with Undo.
  */
 const EditLogDialog = ({
   open,
   onClose,
   onSave,
   log,
-  loading = false
+  loading = false,
+  onRemove
 }) => {
   const { isSimple } = useExperience();
+  const fullScreen = useGeekDialogFullScreen();
   const [servings, setServings] = useState('1');
   const [mealType, setMealType] = useState('dinner');
   const [notes, setNotes] = useState('');
@@ -151,30 +161,33 @@ const EditLogDialog = ({
     { value: 'breakfast', label: 'Breakfast' },
     { value: 'lunch', label: 'Lunch' },
     { value: 'dinner', label: 'Dinner' },
-    { value: 'snack', label: 'Snack' }
+    { value: 'snack', label: 'Snacks' }
   ];
 
   return (
     <PremiumDialog
       open={open}
       onClose={handleClose}
-      eyebrow="Food Log"
-      title="Edit Entry"
+      eyebrow="Food log"
+      title="Edit entry"
       maxWidth="sm"
-      primaryAction={
-        <Button
-          onClick={handleSave}
-          variant="contained"
-          disabled={!canSave}
-        >
-          {loading ? 'Saving...' : 'Save Changes'}
-        </Button>
-      }
-      secondaryAction={
-        <Button onClick={handleClose} disabled={loading}>
-          Cancel
-        </Button>
-      }
+      {...thumbSaveProps({
+        fullScreen,
+        save: (
+          <Button
+            onClick={handleSave}
+            variant="contained"
+            disabled={!canSave}
+          >
+            {loading ? 'Saving…' : 'Save'}
+          </Button>
+        ),
+        cancel: (
+          <Button onClick={handleClose} disabled={loading}>
+            Cancel
+          </Button>
+        ),
+      })}
     >
         <Box sx={{ mb: 3 }}>
           {/* Food Item Info */}
@@ -317,6 +330,22 @@ const EditLogDialog = ({
                   size="small"
                 />
               </Box>
+            </Box>
+          )}
+
+          {/* Remove — the row's trash icon, moved in here. Undo is in the toast. */}
+          {onRemove && log && (
+            <Box sx={{ mt: 3, pt: 2, borderTop: 1, borderColor: 'divider' }}>
+              <Button
+                color="error"
+                startIcon={<RemoveIcon />}
+                onClick={() => onRemove(log._id || log.id)}
+                disabled={loading}
+                aria-label={food_item?.name ? `Remove ${food_item.name}` : 'Remove'}
+                sx={{ minHeight: 48 }}
+              >
+                Remove
+              </Button>
             </Box>
           )}
         </Box>

@@ -73,7 +73,7 @@ describe('CopyMealDialog targets the real adjacent calendar day', () => {
       <CopyMealDialog open currentDate={CURRENT_DATE} onClose={() => {}} onCopyComplete={() => {}} />
     );
 
-    const dateInputs = screen.getAllByLabelText('Date');
+    const dateInputs = screen.getAllByLabelText('Day');
     const [fromInput, toInput] = dateInputs;
 
     expect(toInput.value).toBe(CURRENT_DATE);
@@ -81,39 +81,30 @@ describe('CopyMealDialog targets the real adjacent calendar day', () => {
     expect(fromInput.value).toBe(YESTERDAY);
   });
 
-  it('"Dinner → Tomorrow\'s Lunch" targets tomorrow, not today', () => {
+  // UX review L3: no preset lands on tomorrow any more. Each one fills in
+  // "the day before → the day on screen", and only fills the form.
+  it('"Fill in: yesterday\'s dinner → today\'s dinner" reads yesterday, writes the day on screen', () => {
     render(
       <CopyMealDialog open currentDate={CURRENT_DATE} onClose={() => {}} onCopyComplete={() => {}} />
     );
 
-    fireEvent.click(screen.getByText("Dinner → Tomorrow's Lunch"));
+    fireEvent.click(screen.getByText(/^Fill in: .*dinner → .*dinner$/));
 
-    const [fromInput, toInput] = screen.getAllByLabelText('Date');
-    expect(fromInput.value).toBe(CURRENT_DATE);
-    expect(toInput.value).toBe(TOMORROW);
-  });
-
-  it('"Yesterday\'s Dinner → Today\'s Lunch" reads from yesterday, not two days back', () => {
-    render(
-      <CopyMealDialog open currentDate={CURRENT_DATE} onClose={() => {}} onCopyComplete={() => {}} />
-    );
-
-    fireEvent.click(screen.getByText("Yesterday's Dinner → Today's Lunch"));
-
-    const [fromInput, toInput] = screen.getAllByLabelText('Date');
+    const [fromInput, toInput] = screen.getAllByLabelText('Day');
     expect(fromInput.value).toBe(YESTERDAY);
     expect(toInput.value).toBe(CURRENT_DATE);
   });
 
-  it('"Copy Entire Day" targets tomorrow, not today', () => {
+  it('"Fill in: all of …" reads the day before and writes the day on screen, never tomorrow', () => {
     render(
       <CopyMealDialog open currentDate={CURRENT_DATE} onClose={() => {}} onCopyComplete={() => {}} />
     );
 
-    fireEvent.click(screen.getByText('Copy Entire Day'));
+    fireEvent.click(screen.getByText(/^Fill in: all of /));
 
-    const [fromInput, toInput] = screen.getAllByLabelText('Date');
-    expect(fromInput.value).toBe(CURRENT_DATE);
-    expect(toInput.value).toBe(TOMORROW);
+    const [fromInput, toInput] = screen.getAllByLabelText('Day');
+    expect(fromInput.value).toBe(YESTERDAY);
+    expect(toInput.value).toBe(CURRENT_DATE);
+    expect(toInput.value).not.toBe(TOMORROW);
   });
 });

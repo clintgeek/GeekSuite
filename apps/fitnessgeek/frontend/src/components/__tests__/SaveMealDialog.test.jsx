@@ -42,7 +42,7 @@ describe('SaveMealDialog food_items payload', () => {
     );
 
     fireEvent.change(screen.getByLabelText(/Meal Name/i), { target: { value: 'Test Meal' } });
-    fireEvent.click(screen.getByRole('button', { name: /Save Meal/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^save$/i }));
 
     expect(onSave).toHaveBeenCalledTimes(1);
     const payload = onSave.mock.calls[0][0];
@@ -82,7 +82,7 @@ describe('SaveMealDialog food_items payload', () => {
     expect(screen.queryByText(/could not be saved/i)).toBeNull();
   });
 
-  it('disables Save Meal when nothing in the meal resolves to a catalog id', () => {
+  it('disables Save when nothing in the meal resolves to a catalog id', () => {
     render(
       <SaveMealDialog
         open
@@ -94,7 +94,7 @@ describe('SaveMealDialog food_items payload', () => {
     );
 
     fireEvent.change(screen.getByLabelText(/Meal Name/i), { target: { value: 'Test Meal' } });
-    expect(screen.getByRole('button', { name: /Save Meal/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /^save$/i })).toBeDisabled();
   });
 });
 

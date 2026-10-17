@@ -117,26 +117,30 @@ const FoodListItem = ({ food, onEdit, onDelete }) => {
               <Box component="span" sx={{ opacity: 0.5 }}>·</Box>
             </>
           )}
-          <Box
-            component="span"
-            // The source colour is the dot's job. As ink it failed contrast —
-            // grey #757575 on the dark theme is 3.49:1 (first audited 2026-10-13).
-            sx={{ color: 'text.secondary', fontWeight: 600, letterSpacing: '0.02em' }}
-          >
-            {sourceName}
-          </Box>
+          {sourceName && (
+            <>
+              <Box
+                component="span"
+                // The source colour is the dot's job. As ink it failed contrast —
+                // grey #757575 on the dark theme is 3.49:1 (first audited 2026-10-13).
+                sx={{ color: 'text.secondary', fontWeight: 600, letterSpacing: '0.02em' }}
+              >
+                {sourceName}
+              </Box>
+              <Box component="span" sx={{ opacity: 0.5 }}>·</Box>
+            </>
+          )}
           {isRecipe && (
             <>
-              <Box component="span" sx={{ opacity: 0.5 }}>·</Box>
               <Box component="span" sx={{ fontWeight: 600, color: 'text.primary' }}>Recipe</Box>
               {makes > 0 && (
                 <Box component="span" sx={{ fontVariantNumeric: 'tabular-nums' }}>
                   makes {Math.round(makes * 100) / 100}
                 </Box>
               )}
+              <Box component="span" sx={{ opacity: 0.5 }}>·</Box>
             </>
           )}
-          <Box component="span" sx={{ opacity: 0.5 }}>·</Box>
           <Box
             component="span"
             sx={{

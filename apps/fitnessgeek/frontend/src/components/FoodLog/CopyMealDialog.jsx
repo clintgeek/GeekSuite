@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Button,
   FormControl,
@@ -9,19 +9,21 @@ import {
   Typography,
   Alert,
   CircularProgress,
-  Chip,
-  Divider
+  Chip
 } from '@mui/material';
-import {
-  ContentCopy as CopyIcon,
-  ArrowForward as ArrowIcon,
-  People as PeopleIcon
-} from '@mui/icons-material';
-import { readableOn } from '@geeksuite/ui';
+import { ContentCopy as CopyIcon } from '@mui/icons-material';
+import { readableOn, useGeekDialogFullScreen } from '@geeksuite/ui';
 import { fitnessGeekService } from '../../services/fitnessGeekService';
 import { errorMessage } from '../../utils/errorMessage.js';
+import { mealLabel, mealWord } from '../../utils/plainWords.js';
+import { useToday } from '../../hooks/useToday.js';
+import { rowDay } from '../../utils/experience.js';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
 import DateField from '../primitives/DateField.jsx';
+import { thumbSaveProps } from '../BloodPressure/thumbSave.jsx';
+import { useUndoToast } from '../FoodSearch/undoToast.jsx';
+import { dayName, mealOnDayShort } from './dayWords.js';
+import { WHOLE_DAY, copySummary, plural } from './copyWords.js';
 
 const MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack'];
 
@@ -48,10 +50,25 @@ const shiftDate = (dateString, deltaDays) => {
   return fitnessGeekService.formatDate(date);
 };
 
+/**
+ * Copy a meal from another day, or from someone in the household.
+ *
+ * It used to copy the whole day by default, with Copy top-right, a summary in
+ * ISO dates and no way back (UX review L3). Now:
+ *   - nothing copies until a source meal is chosen; "Whole day" is an option
+ *     you pick, never the empty default;
+ *   - "Whose log" says what the From select is (Mine, or a name);
+ *   - the summary is a sentence, with the number of foods it will add;
+ *   - Copy sits at the bottom on a phone (thumbSaveProps);
+ *   - a copy ends with the standard toast, whose Undo removes what was added.
+ *
+ * In Simple the page hides its link: "Same as …" in the add sheet covers her.
+ */
 const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = null }) => {
+  const fullScreen = useGeekDialogFullScreen();
+  const today = useToday();
   const [copying, setCopying] = useState(false);
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
 
   // Form state
   const [fromDate, setFromDate] = useState(currentDate);
@@ -62,6 +79,19 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
   // Household state
   const [householdMembers, setHouseholdMembers] = useState([]);
   const [fromUserId, setFromUserId] = useState('');
+
+  // How many foods the chosen source holds (null = not known yet).
+  const [sourceCount, setSourceCount] = useState(null);
+
+  // Undo removes exactly what the copy added, then the page refreshes.
+  const undoCopy = useCallback(async (logIds) => {
+    const settled = await Promise.allSettled(logIds.map((id) => fitnessGeekService.deleteFoodLog(id)));
+    const deleted = [];
+    const failed = [];
+    settled.forEach((r, i) => (r.status === 'fulfilled' ? deleted : failed).push(logIds[i]));
+    return { deleted, failed };
+  }, []);
+  const { offerUndo } = useUndoToast(undoCopy);
 
   // Load household members when dialog opens
   useEffect(() => {
@@ -77,13 +107,13 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
       setToMealType('');
       setFromUserId('');
       setError('');
-      setSuccess('');
 
       if (prefill) {
         setFromDate(prefill.fromDate || currentDate);
-        setFromMealType(prefill.fromMealType || '');
+        // A household "Copy the whole day" sends no meal: that is a choice.
+        setFromMealType(prefill.fromMealType || WHOLE_DAY);
         setToDate(prefill.targetDate || currentDate);
-        setToMealType(prefill.toMealType ?? prefill.fromMealType ?? '');
+        setToMealType(prefill.toMealType ?? '');
         setFromUserId(prefill.fromUserId || '');
       }
     }
@@ -102,167 +132,170 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
     }
   };
 
-  const handleCopy = async () => {
-    if (!fromDate || !toDate) {
-      setError('Please select both source and destination dates');
-      return;
+  // Count what's there, so the summary can say "(3 foods)" and an empty
+  // meal can say so before Copy is tapped. A failed count isn't a blocker.
+  useEffect(() => {
+    if (!open || !fromDate || !fromMealType) {
+      setSourceCount(null);
+      return undefined;
     }
+    let cancelled = false;
+    setSourceCount(null);
+    (async () => {
+      try {
+        const rows = fromUserId
+          ? await fitnessGeekService.getHouseholdMemberLogs(fromUserId, fromDate)
+          : await fitnessGeekService.getLogsForDate(fromDate);
+        if (cancelled || !Array.isArray(rows)) return;
+        const onDay = rows.filter((r) => { const d = rowDay(r); return !d || d === fromDate; });
+        const inMeal = fromMealType === WHOLE_DAY ? onDay : onDay.filter((r) => r.meal_type === fromMealType);
+        setSourceCount(inMeal.length);
+      } catch {
+        if (!cancelled) setSourceCount(null);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [open, fromDate, fromMealType, fromUserId]);
 
+  const sharingMembers = householdMembers.filter((m) => m.shares_food_logs);
+  const whose = fromUserId ? (householdMembers.find((m) => m.user_id === fromUserId)?.display_name || 'their') : null;
+  const ownerWord = whose ? `${whose}'s` : 'your';
+  const fromMealWords = fromMealType === WHOLE_DAY ? 'whole day' : mealWord(fromMealType);
+  const sameSpot = !fromUserId && fromDate === toDate
+    && (fromMealType === WHOLE_DAY || !toMealType || toMealType === fromMealType);
+  const nothingThere = sourceCount === 0;
+  const canCopy = Boolean(fromDate && toDate && fromMealType) && !sameSpot && !nothingThere && !copying;
+
+  const handleCopy = async () => {
+    if (!canCopy) return;
     try {
       setCopying(true);
       setError('');
-      setSuccess('');
 
+      const wholeDay = fromMealType === WHOLE_DAY;
       const response = await fitnessGeekService.copyMeal(
         fromDate,
         toDate,
-        fromMealType || null,
-        toMealType || null,
+        wholeDay ? null : fromMealType,
+        wholeDay ? null : (toMealType || null),
         fromUserId || null
       );
 
-      setSuccess(response.message || 'Meal copied successfully!');
-
-      // Notify parent to refresh
-      if (onCopyComplete) {
-        onCopyComplete(toDate);
+      // The gateway answers with the new log rows (`[{ id }]`).
+      const ids = (Array.isArray(response) ? response : [])
+        .map((r) => r?.id || r?._id)
+        .filter(Boolean);
+      if (Array.isArray(response) && ids.length === 0) {
+        setError(`There was nothing in ${ownerWord} ${fromMealWords} on ${dayName(fromDate, today)} to copy.`);
+        return;
       }
 
-      // Close after short delay
-      setTimeout(() => {
-        onClose();
-      }, 1500);
+      const where = wholeDay
+        ? dayName(toDate, today)
+        : mealOnDayShort(mealWord(toMealType || fromMealType), toDate, today);
+      const what = ids.length > 0 ? plural(ids.length, 'food') : null;
+      offerUndo(`Copied to ${where} ✓${what ? ` · ${what}` : ''}`, ids, {
+        onDeleted: () => onCopyComplete?.(toDate)
+      });
 
+      onCopyComplete?.(toDate);
+      onClose();
     } catch (err) {
-      setError(errorMessage(err, 'Failed to copy meal'));
+      setError(errorMessage(err, "Couldn't copy that. Try again."));
     } finally {
       setCopying(false);
     }
   };
 
-  const formatMealType = (type) => {
-    return type ? type.charAt(0).toUpperCase() + type.slice(1) : 'All Meals';
+  // "Fill in: …" presets. They only fill the form; the summary below and the
+  // Copy button do the copying. Every one lands on the day on screen —
+  // never tomorrow (the old "Dinner → Tomorrow's Lunch" chip did).
+  const previous = shiftDate(currentDate, -1);
+  const prevWord = currentDate === today ? 'yesterday' : dayName(previous, today);
+  const curWord = dayName(currentDate, today);
+  const presets = [
+    { key: 'dinner', label: `Fill in: ${prevWord}'s dinner → ${curWord}'s dinner`, meal: 'dinner' },
+    { key: 'lunch', label: `Fill in: ${prevWord}'s lunch → ${curWord}'s lunch`, meal: 'lunch' },
+    { key: 'all', label: `Fill in: all of ${prevWord} → ${curWord}`, meal: WHOLE_DAY },
+  ];
+  const fillIn = (preset) => {
+    setFromDate(previous);
+    setFromMealType(preset.meal);
+    setToDate(currentDate);
+    setToMealType('');
+    setError('');
   };
 
-  // Quick copy presets
-  const handleQuickCopy = (preset) => {
-    // Computed lazily per-preset (not hoisted to one shared `tomorrow`) so
-    // neither branch pays for a shift it doesn't use.
-    switch (preset) {
-      case 'dinner-to-lunch':
-        setFromDate(currentDate);
-        setFromMealType('dinner');
-        setToDate(shiftDate(currentDate, 1));
-        setToMealType('lunch');
-        break;
-      case 'yesterday-dinner':
-        setFromDate(shiftDate(currentDate, -1));
-        setFromMealType('dinner');
-        setToDate(currentDate);
-        setToMealType('lunch');
-        break;
-      case 'all-to-tomorrow':
-        setFromDate(currentDate);
-        setFromMealType('');
-        setToDate(shiftDate(currentDate, 1));
-        setToMealType('');
-        break;
-      default:
-        break;
-    }
-  };
+  let summary;
+  if (!fromMealType) {
+    summary = 'Choose which meal to copy.';
+  } else if (sameSpot) {
+    summary = "That's the same meal. Pick another day or meal to copy from.";
+  } else if (nothingThere) {
+    summary = `There's nothing in ${ownerWord} ${fromMealWords} on ${dayName(fromDate, today)}.`;
+  } else {
+    summary = copySummary({ whose, fromDate, fromMeal: fromMealType, toDate, toMeal: toMealType, count: sourceCount, today });
+  }
 
   return (
     <PremiumDialog
       open={open}
       onClose={onClose}
-      eyebrow="Food Log"
-      title="Copy Meal"
+      eyebrow="Food log"
+      title="Copy a meal"
       icon={CopyIcon}
       maxWidth="sm"
-      primaryAction={
-        <Button
-          variant="contained"
-          onClick={handleCopy}
-          disabled={copying || !fromDate || !toDate}
-          startIcon={copying ? <CircularProgress size={20} /> : <CopyIcon />}
-        >
-          {copying ? 'Copying...' : 'Copy Meal'}
-        </Button>
-      }
-      secondaryAction={
-        <Button onClick={onClose} disabled={copying}>
-          Cancel
-        </Button>
-      }
+      {...thumbSaveProps({
+        fullScreen,
+        save: (
+          <Button
+            variant="contained"
+            onClick={handleCopy}
+            disabled={!canCopy}
+            startIcon={copying ? <CircularProgress size={20} color="inherit" /> : <CopyIcon />}
+          >
+            {copying ? 'Copying…' : 'Copy'}
+          </Button>
+        ),
+        cancel: (
+          <Button onClick={onClose} disabled={copying}>
+            Cancel
+          </Button>
+        ),
+      })}
     >
-        {/* Quick Presets */}
-        <Box sx={{ mb: 3 }}>
-          <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-            Quick Copy
-          </Typography>
-          <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+        {/* Presets that fill the form in */}
+        <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 3 }}>
+          {presets.map((preset) => (
             <Chip
-              label="Dinner → Tomorrow's Lunch"
-              onClick={() => handleQuickCopy('dinner-to-lunch')}
+              key={preset.key}
+              label={preset.label}
+              onClick={() => fillIn(preset)}
               variant="outlined"
-              color="primary"
-              sx={{ height: 40, fontSize: '0.8125rem' }}
+              sx={{ height: 40, fontSize: '0.875rem' }}
             />
-            <Chip
-              label="Yesterday's Dinner → Today's Lunch"
-              onClick={() => handleQuickCopy('yesterday-dinner')}
-              variant="outlined"
-              color="primary"
-              sx={{ height: 40, fontSize: '0.8125rem' }}
-            />
-            <Chip
-              label="Copy Entire Day"
-              onClick={() => handleQuickCopy('all-to-tomorrow')}
-              variant="outlined"
-              sx={{ height: 40, fontSize: '0.8125rem' }}
-            />
-          </Box>
+          ))}
         </Box>
 
-        <Divider sx={{ my: 2 }} />
-
-        {/* Source Selection */}
+        {/* Source */}
         <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-          Copy From
+          Copy from
         </Typography>
         <Box sx={{ display: 'flex', gap: 2, mb: 3, flexWrap: 'wrap' }}>
-          <DateField value={fromDate} onChange={setFromDate} sx={{ minWidth: 150 }} />
-          <FormControl size="small" sx={{ minWidth: 130 }}>
-            <InputLabel id="copy-meal-from-label">Meal</InputLabel>
-            <Select
-              labelId="copy-meal-from-label"
-              value={fromMealType}
-              onChange={(e) => setFromMealType(e.target.value)}
-              label="Meal"
-            >
-              <MenuItem value="">All Meals</MenuItem>
-              {MEAL_TYPES.map(type => (
-                <MenuItem key={type} value={type}>
-                  {formatMealType(type)}
-                </MenuItem>
-              ))}
-            </Select>
-          </FormControl>
-
-          {/* Household member selector */}
-          {householdMembers.length > 0 && (
+          {/* Whose log — only when someone in the household shares theirs. */}
+          {sharingMembers.length > 0 && (
             <FormControl size="small" sx={{ minWidth: 150 }}>
-              <InputLabel id="copy-meal-from-user-label">From</InputLabel>
+              <InputLabel id="copy-meal-from-user-label" shrink>Whose log</InputLabel>
               <Select
                 labelId="copy-meal-from-user-label"
                 value={fromUserId}
                 onChange={(e) => setFromUserId(e.target.value)}
-                label="From"
-                startAdornment={fromUserId ? <PeopleIcon sx={{ mr: 1, fontSize: 18 }} /> : null}
+                label="Whose log"
+                displayEmpty
+                notched
               >
-                <MenuItem value="">My Log</MenuItem>
-                {householdMembers.filter(m => m.shares_food_logs).map(member => (
+                <MenuItem value="">Mine</MenuItem>
+                {sharingMembers.map(member => (
                   <MenuItem key={member.user_id} value={member.user_id}>
                     {member.display_name}
                   </MenuItem>
@@ -270,38 +303,61 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
               </Select>
             </FormControl>
           )}
-        </Box>
-
-        {/* Arrow */}
-        <Box sx={{ display: 'flex', justifyContent: 'center', my: 1 }}>
-          <ArrowIcon color="action" sx={{ fontSize: 32 }} />
-        </Box>
-
-        {/* Destination Selection */}
-        <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-          Copy To
-        </Typography>
-        <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap' }}>
-          <DateField value={toDate} onChange={setToDate} sx={{ minWidth: 150 }} />
-          <FormControl size="small" sx={{ minWidth: 130 }}>
-            <InputLabel id="copy-meal-to-label">Meal</InputLabel>
+          <DateField label="Day" value={fromDate} onChange={setFromDate} sx={{ minWidth: 150 }} />
+          <FormControl size="small" sx={{ minWidth: 150 }}>
+            <InputLabel id="copy-meal-from-label" shrink>Which meal</InputLabel>
             <Select
-              labelId="copy-meal-to-label"
-              value={toMealType}
-              onChange={(e) => setToMealType(e.target.value)}
-              label="Meal"
+              labelId="copy-meal-from-label"
+              value={fromMealType}
+              onChange={(e) => setFromMealType(e.target.value)}
+              label="Which meal"
+              displayEmpty
+              notched
+              renderValue={(v) => (v ? (v === WHOLE_DAY ? 'Whole day' : mealLabel(v)) : 'Choose a meal')}
             >
-              <MenuItem value="">Same as Source</MenuItem>
               {MEAL_TYPES.map(type => (
                 <MenuItem key={type} value={type}>
-                  {formatMealType(type)}
+                  {mealLabel(type)}
                 </MenuItem>
               ))}
+              <MenuItem value={WHOLE_DAY}>Whole day</MenuItem>
             </Select>
           </FormControl>
         </Box>
 
-        {/* Summary */}
+        {/* Destination */}
+        <Typography variant="subtitle2" color="text.secondary" gutterBottom>
+          Copy into
+        </Typography>
+        <Box sx={{ display: 'flex', gap: 2, mb: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+          <DateField label="Day" value={toDate} onChange={setToDate} sx={{ minWidth: 150 }} />
+          {fromMealType === WHOLE_DAY ? (
+            <Typography sx={{ color: 'text.secondary', fontSize: '0.9375rem' }}>
+              Each meal goes into the same meal.
+            </Typography>
+          ) : (
+            <FormControl size="small" sx={{ minWidth: 150 }}>
+              <InputLabel id="copy-meal-to-label" shrink>Into which meal</InputLabel>
+              <Select
+                labelId="copy-meal-to-label"
+                value={toMealType}
+                onChange={(e) => setToMealType(e.target.value)}
+                label="Into which meal"
+                displayEmpty
+                notched
+              >
+                <MenuItem value="">Same meal</MenuItem>
+                {MEAL_TYPES.map(type => (
+                  <MenuItem key={type} value={type}>
+                    {mealLabel(type)}
+                  </MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+          )}
+        </Box>
+
+        {/* What will happen, in words */}
         <Box sx={{
           mt: 3,
           p: 2,
@@ -313,33 +369,25 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
           {/* action.hover is a tint over the dialog paper, not the paper: the
               summary read 4.4:1 as text.secondary before it was measured. */}
           <Typography
-            variant="body2"
+            data-testid="copy-summary"
+            role="status"
             sx={(theme) => ({
-              color: readableOn(theme.palette.text.secondary, theme.palette.action.hover, {
-                under: theme.palette.background.paper,
-              }),
+              fontSize: '1rem',
+              fontWeight: 600,
+              color: fromMealType && !sameSpot && !nothingThere
+                ? theme.palette.text.primary
+                : readableOn(theme.palette.text.secondary, theme.palette.action.hover, {
+                  under: theme.palette.background.paper,
+                }),
             })}
           >
-            Will copy: <strong>{formatMealType(fromMealType)}</strong> from{' '}
-            <strong>{fromDate}</strong>
-            {fromUserId && householdMembers.find(m => m.user_id === fromUserId) && (
-              <> ({householdMembers.find(m => m.user_id === fromUserId).display_name}'s log)</>
-            )}
-            <br />
-            To: <strong>{toMealType ? formatMealType(toMealType) : formatMealType(fromMealType)}</strong> on{' '}
-            <strong>{toDate}</strong>
+            {summary}
           </Typography>
         </Box>
 
-        {/* Messages */}
         {error && (
           <Alert severity="error" sx={{ mt: 2 }}>
             {error}
-          </Alert>
-        )}
-        {success && (
-          <Alert severity="success" sx={{ mt: 2 }}>
-            {success}
           </Alert>
         )}
     </PremiumDialog>

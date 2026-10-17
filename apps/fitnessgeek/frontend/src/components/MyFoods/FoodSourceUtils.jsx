@@ -46,7 +46,14 @@ export const getSourceName = (source) => {
       return 'Open Food Facts';
     case 'custom':
       return 'My Foods';
+    case undefined:
+    case null:
+    case '':
+    case 'unknown':
+      // An unknown source says nothing (UX review §2.7): "Unknown" was
+      // printed in bold on four rows of five.
+      return null;
     default:
-      return source || 'Unknown';
+      return source;
   }
 };

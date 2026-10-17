@@ -5,7 +5,8 @@ import {
   IconButton,
   Chip,
   Tooltip,
-  Avatar
+  Avatar,
+  ButtonBase
 } from '@mui/material';
 import {
   Edit as EditIcon,
@@ -19,6 +20,7 @@ import { useToast } from '@geeksuite/ui';
 import { foodService } from '../../services/foodService.js';
 import { errorMessage } from '../../utils/errorMessage.js';
 import { netCarbs as calcNetCarbs } from '../../utils/ketoMath.js';
+import { amountLabel } from './amount.js';
 
 const SWIPE_THRESHOLD = 60;
 
@@ -30,7 +32,11 @@ const FoodLogItem = ({
   swipeEnabled = true,
   isFavorite: initialFavorite = false,
   onFavoriteChange,
-  mode = 'standard'
+  mode = 'standard',
+  // Simple (UX review L15): the name, the amount and "190 cal", and the whole
+  // row opens Edit. No macro shorthand, no star/pencil/trash, no swipe —
+  // Remove is inside Edit, with the usual Undo.
+  simple = false
 }) => {
   const theme = useTheme();
   const [isFavorite, setIsFavorite] = useState(initialFavorite);
@@ -76,9 +82,52 @@ const FoodLogItem = ({
   const totalCarbs = Math.round(nutrition.carbs_grams * servingsCount * 10) / 10;
   const totalFat = Math.round(nutrition.fat_grams * servingsCount * 10) / 10;
 
+  const handleEditSimple = () => onEdit?.(log);
+
   // Keto: compute net carbs from the resolved nutrition snapshot (scaled by servings)
   const { netCarbs: rawNetCarbs, isMissingFiber } = calcNetCarbs(nutrition);
   const totalNetCarbs = Math.round(rawNetCarbs * servingsCount * 10) / 10;
+
+  if (simple) {
+    const amount = amountLabel(log);
+    return (
+      <ButtonBase
+        onClick={handleEditSimple}
+        aria-label={`Edit ${food_item.name}${amount ? `, ${amount}` : ''}, ${totalCalories.toLocaleString('en-US')} cal`}
+        data-testid="food-log-row"
+        sx={{
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1.5,
+          minHeight: 56,
+          px: 2,
+          py: 1.25,
+          textAlign: 'left',
+          borderRadius: '12px',
+          border: `1px solid ${theme.palette.divider}`,
+          backgroundColor: theme.palette.background.paper,
+          '&:focus-visible': { outline: `3px solid ${theme.palette.text.primary}`, outlineOffset: 2 },
+          '@media (hover: hover)': { '&:hover': { backgroundColor: theme.palette.action.hover } },
+        }}
+      >
+        <Typography
+          component="span"
+          sx={{ flex: 1, minWidth: 0, fontSize: '1.0625rem', fontWeight: 600, color: 'text.primary', lineHeight: 1.35, overflowWrap: 'anywhere' }}
+        >
+          {food_item.name}
+          {amount && (
+            <Box component="span" sx={{ color: 'text.secondary', fontWeight: 700, ml: 0.75, whiteSpace: 'nowrap' }}>
+              {amount}
+            </Box>
+          )}
+        </Typography>
+        <Typography component="span" sx={{ fontSize: '1rem', fontWeight: 700, color: 'text.secondary', whiteSpace: 'nowrap', fontVariantNumeric: 'tabular-nums' }}>
+          {totalCalories.toLocaleString('en-US')} cal
+        </Typography>
+      </ButtonBase>
+    );
+  }
 
   const handleDelete = () => {
     if (onDelete && (log.id || log._id)) {
@@ -249,7 +298,7 @@ const FoodLogItem = ({
           <Box sx={{ textAlign: 'center', color: 'white' }}>
             <DeleteIcon sx={{ fontSize: 24 }} />
             <Typography variant="caption" sx={{ display: 'block', fontWeight: 600, fontSize: '0.75rem' }}>
-              Delete
+              Remove
             </Typography>
           </Box>
         </Box>
@@ -540,7 +589,7 @@ const FoodLogItem = ({
               <EditIcon sx={{ fontSize: 18 }} />
             </IconButton>
           </Tooltip>
-          <Tooltip title="Delete">
+          <Tooltip title="Remove">
             <IconButton
               size="small"
               onClick={handleDelete}

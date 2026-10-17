@@ -39,7 +39,8 @@ import { goalsService } from '../services/goalsService.js';
 import { useGeekPrimaryAction, useToast } from '@geeksuite/ui';
 import { Surface, SectionLabel, StatNumber } from '../components/primitives';
 import { useExperience } from '../contexts/ExperienceContext.jsx';
-import { friendlyDay } from '../utils/plainWords.js';
+import { friendlyDay, mealWord } from '../utils/plainWords.js';
+import { mealOnDayL22 } from '../components/FoodLog/dayWords.js';
 import { errorMessage as plainError } from '../utils/errorMessage.js';
 import { netCarbs as calcNetCarbs, ketoStatus } from '../utils/ketoMath.js';
 import { useFoodLogging } from '../hooks/useFoodLogging.js';
@@ -351,10 +352,10 @@ const FoodLog = () => {
         const where = friendlyDay(updateData.log_date, today);
         notify(`Moved to ${where === 'Today' || where === 'Yesterday' ? where.toLowerCase() : where}.`, { tone: 'success' });
       } else {
-        notify('Food log updated.', { tone: 'success' });
+        notify('Saved', { tone: 'success' });
       }
     } else {
-      notify(describeLastError?.('Could not update that log. Try again.') || 'Could not update that log. Try again.', { tone: 'error' });
+      notify(describeLastError?.("Couldn't save that. Try again.") || "Couldn't save that. Try again.", { tone: 'error' });
     }
     setUpdatingLog(false);
   };
@@ -362,6 +363,14 @@ const FoodLog = () => {
   const handleEditCancel = () => {
     setShowEditDialog(false);
     setEditingLog(null);
+  };
+
+  // "Remove" inside Edit (UX review L15): Simple's rows have no trash icon.
+  // Same path, same "Removed X" toast and Undo as the row's own button.
+  const handleRemoveFromEdit = (logId) => {
+    setShowEditDialog(false);
+    setEditingLog(null);
+    handleDeleteLog(logId);
   };
 
   const handleDeleteLog = async (logId) => {
@@ -378,10 +387,11 @@ const FoodLog = () => {
     const success = await deleteFoodLog(logId);
     if (success) justAdded.forget(logId);
     if (!success) {
-      notify(describeLastError?.('Could not delete that item. Try again.') || 'Could not delete that item. Try again.', { tone: 'error' });
+      notify(describeLastError?.("Couldn't remove that. Try again.") || "Couldn't remove that. Try again.", { tone: 'error' });
       return;
     }
 
+    // The same words as Home (UX review IA-6): "Removed X" with Undo.
     // The same grammar as an add's undo (undoToast.jsx): ten seconds, then
     // "Undone ✓" — or "Couldn't undo — try again" with a retry. It used to
     // be four seconds and silent either way.
@@ -407,7 +417,7 @@ const FoodLog = () => {
       });
     };
     let toastId = null;
-    toastId = notify(`Deleted ${food_item?.name || 'item'}`, {
+    toastId = notify(`Removed ${food_item?.name || 'that'}`, {
       tone: 'info',
       duration: log && food_item ? UNDO_TOAST_MS : undefined,
       action: log && food_item ? <UndoAction onUndo={() => undoAndSay(toastId)} /> : undefined
@@ -543,6 +553,18 @@ const FoodLog = () => {
           dedicated search page, where it is the content rather than something
           in front of the content. */}
       <Surface sx={{ p: { xs: 1.5, sm: 2 }, mb: 3 }}>
+        {/* On a backfilled day the box names the day, the way the add sheet
+            does: "Add to Thursday's dinner (yesterday)". Only the date card
+            above it used to (UX review L22). */}
+        {selectedDate !== today && (
+          <Typography
+            component="h2"
+            data-testid="inline-add-day"
+            sx={{ fontSize: '1.0625rem', fontWeight: 800, color: 'text.primary', mb: 1, px: 0.5 }}
+          >
+            {`Add to ${mealOnDayL22(mealWord(selectedMealType), selectedDate, today)}`}
+          </Typography>
+        )}
         <FoodComposer
           mode="page"
           collapseIdleList
@@ -584,13 +606,17 @@ const FoodLog = () => {
             favoriteFoodIds={favoriteFoodIds}
             onFavoriteChange={toggleFavoriteId}
             justAdded={justAdded.renderFor(mealType, selectedDate)}
+            simple={isSimple}
           />
         </Box>
       ))}
 
       {/* Copy Meal and Household, which used to be a row of buttons stacked
           ahead of the date. Copying yesterday's meal is now one tap in the
-          add box ("Same as yesterday's …"); this is for any other day. */}
+          add box ("Same as yesterday's …"); this is for any other day.
+          Neither is in Simple: "Same as …" in the add sheet covers her, and
+          Copy a meal is a Full-sized form (Chef, 2026-10-17, UX review L3). */}
+      {!isSimple && (
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mb: 1 }}>
         <Button
           variant="text"
@@ -600,7 +626,6 @@ const FoodLog = () => {
         >
           Copy a meal from another day
         </Button>
-        {!isSimple && (
           <Button
             variant="text"
             startIcon={<PeopleIcon />}
@@ -609,8 +634,8 @@ const FoodLog = () => {
           >
             What your household ate
           </Button>
-        )}
       </Box>
+      )}
 
       {/* Macros and the calorie panel are Full-mode detail (plan: Simple
           keeps macros out of the way). */}
@@ -783,6 +808,7 @@ const FoodLog = () => {
           open={showEditDialog}
           onClose={handleEditCancel}
           onSave={handleUpdateLog}
+          onRemove={handleRemoveFromEdit}
           log={editingLog}
           loading={updatingLog}
         />

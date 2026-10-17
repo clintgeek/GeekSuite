@@ -3,8 +3,8 @@
  * tap" and had no way to log one (REVIEW_2026-10 P2 / Phase 2.15). "Log this"
  * goes through the same logItems → logMeal path as the add box's Again chips.
  */
-import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { GeekToastProvider } from '@geeksuite/ui';
 import { localDateString } from '@geeksuite/utils';
 
@@ -68,5 +68,24 @@ describe('My Meals: Log this', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Log Taco night' }));
     fireEvent.click(screen.getByRole('button', { name: 'Log it' }));
     expect(await screen.findByText(/FitnessGeek is restarting/i)).toBeInTheDocument();
+  });
+});
+
+// UX review L9: on a phone, "Log it" is the full-width button at the bottom.
+describe('My Meals: Log this, under the thumb', () => {
+  const originalMatchMedia = window.matchMedia;
+  afterEach(() => { window.matchMedia = originalMatchMedia; });
+
+  it('puts "Log it" in the bottom bar on a phone, and only there', async () => {
+    window.matchMedia = (query) => ({
+      matches: true, media: query, onchange: null,
+      addListener: () => {}, removeListener: () => {},
+      addEventListener: () => {}, removeEventListener: () => {}, dispatchEvent: () => false,
+    });
+    renderPage();
+    fireEvent.click(await screen.findByRole('button', { name: 'Log Taco night' }));
+    const bottom = await screen.findByTestId('thumb-save');
+    expect(within(bottom).getByRole('button', { name: 'Log it', hidden: true })).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: 'Log it', hidden: true })).toHaveLength(1);
   });
 });
