@@ -20,7 +20,7 @@ import {
   PictureAsPdf as PdfIcon
 } from '@mui/icons-material';
 import { useToast } from '@geeksuite/ui';
-import { SuspenseSurface } from '../components/primitives';
+import { EmptyState, SuspenseSurface } from '../components/primitives';
 import BPInsights from '../components/BloodPressure/BPInsights.jsx';
 import QuickAddBP from '../components/BloodPressure/QuickAddBP.jsx';
 import BPLogList from '../components/BloodPressure/BPLogList.jsx';
@@ -359,9 +359,33 @@ const BloodPressure = () => {
         </Typography>
       </Box>
 
-      {/* The answer first: the week's average, in words (review D-1). */}
+      {/* The answer first: the week's average, in words (review D-1). A
+          brand-new account has no average, and on a phone its only way in
+          was the floating button: give the page its own first step. */}
       <Box sx={{ mb: 3 }}>
-        <BPInsights bpLogs={bpLogs} />
+        {bpLogs.length === 0 ? (
+          <EmptyState
+            icon={BPIcon}
+            title="No readings yet"
+            copy="Log a reading and I’ll show your average here."
+            action={(
+              <Button
+                variant="contained"
+                size="large"
+                onClick={() => setSearchParams((prev) => {
+                  const next = new URLSearchParams(prev);
+                  next.set('add', '1');
+                  return next;
+                })}
+                sx={{ minHeight: 56, fontWeight: 800 }}
+              >
+                Log your first reading
+              </Button>
+            )}
+          />
+        ) : (
+          <BPInsights bpLogs={bpLogs} />
+        )}
       </Box>
 
       {/* Charts. The range toggle sits ABOVE the donut and the trend it
@@ -459,14 +483,17 @@ const BloodPressure = () => {
             onAutoOpened={clearAddParam}
           />
         </Grid>
-        <Grid item xs={12} sx={{ width: '100%' }}>
-          <BPLogList
-            logs={bpLogs}
-            onDelete={handleDeleteBP}
-            onEdit={handleEditBP}
-            unit="mmHg"
-          />
-        </Grid>
+        {/* The empty state above already says "No readings yet". */}
+        {bpLogs.length > 0 ? (
+          <Grid item xs={12} sx={{ width: '100%' }}>
+            <BPLogList
+              logs={bpLogs}
+              onDelete={handleDeleteBP}
+              onEdit={handleEditBP}
+              unit="mmHg"
+            />
+          </Grid>
+        ) : null}
       </Grid>
 
       {/* Edit dialog — a separate instance from QuickAddBP's own "add"
