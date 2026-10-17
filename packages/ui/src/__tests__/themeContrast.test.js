@@ -21,7 +21,12 @@ import { alpha, decomposeColor, getContrastRatio, recomposeColor } from '@mui/ma
 import { createGeekSuiteTheme } from '../createGeekSuiteTheme.js';
 import { createTodoTheme } from '../../../../apps/todogeek/frontend/src/theme/theme.js';
 import { createNoteTheme } from '../../../../apps/notegeek/frontend/src/theme/createAppTheme.js';
-import { createFitnessTheme } from '../../../../apps/fitnessgeek/frontend/src/theme/theme.jsx';
+import {
+  createFitnessTheme,
+  mealColors as fitnessMealColors,
+  macroColors as fitnessMacroColors,
+  MEAL_ORDER as FITNESS_MEALS,
+} from '../../../../apps/fitnessgeek/frontend/src/theme/theme.jsx';
 import { createFlockTheme } from '../../../../apps/flockgeek/frontend/src/theme/theme.js';
 import { createStoryTheme } from '../../../../apps/storygeek/frontend/src/theme/theme.js';
 import createBookTheme from '../../../../apps/bookgeek/web/src/theme/theme.js';
@@ -292,6 +297,39 @@ describe.each(cases)('$app / $mode', ({ app, mode, theme }) => {
  * are imported from the modules the sidebars paint with, so retuning one
  * re-runs its pair here.
  */
+/**
+ * FitnessGeek's Market Morning pairs that live outside the palette matrix:
+ * each meal's ink on its produce fill (the "+ Add" pill, the Food log avatar)
+ * and its secondary text on its card tint, the macro ramp as bars against the
+ * progress track and as words on paper, the track itself, and the tonal
+ * button (theme.jsx, review 2026-10-16 A1/A2/B1/B2).
+ */
+function fitnessGroundPairs() {
+  const pairs = [];
+  for (const mode of ['light', 'dark']) {
+    const t = createFitnessTheme(mode);
+    const p = t.palette;
+    const paper = p.background.paper;
+    for (const meal of FITNESS_MEALS) {
+      const c = fitnessMealColors(meal, mode);
+      pairs.push([`fitnessgeek/${mode} ${meal}: ink on produce fill`, c.ink, c.fill, 4.5]);
+      pairs.push([`fitnessgeek/${mode} ${meal}: text.secondary on produce tint`, p.text.secondary, c.tint, 4.5]);
+    }
+    const macros = fitnessMacroColors(mode);
+    for (const [name, colour] of Object.entries(macros)) {
+      pairs.push([`fitnessgeek/${mode} macro ${name}: bar on track`, colour, p.track, 3]);
+      // Fibre is a bar or dot only, never words; the other three are words too.
+      pairs.push([`fitnessgeek/${mode} macro ${name}: on paper`, colour, paper, name === 'fiber' ? 3 : 4.5]);
+    }
+    pairs.push([`fitnessgeek/${mode} primary bar on track`, p.primary.main, p.track, 3]);
+    pairs.push([`fitnessgeek/${mode} tonal button: ink on tonal`, p.tonal.ink, p.tonal.bg, 4.5]);
+    pairs.push([`fitnessgeek/${mode} tonal button pressed: ink on hover`, p.tonal.ink, p.tonal.hover, 4.5]);
+    pairs.push([`fitnessgeek/${mode} disabled button: label on fill`, p.action.disabled, p.action.disabledBackground, mode === 'dark' ? 4.5 : 3]);
+    pairs.push([`fitnessgeek/${mode} focus ring on paper`, p.primary.main, paper, 3]);
+  }
+  return pairs;
+}
+
 const todoLight = createTodoTheme('light');
 const todoDark = createTodoTheme('dark');
 
@@ -307,10 +345,14 @@ const GROUND_PAIRS = [
   ['todogeek chrome: wordmark', todoChrome.logo, todoChrome.bg, 4.5],
   ['todogeek chrome: "BJ" mark / accent (12px)', todoChrome.logoAccent, todoChrome.bg, 4.5],
   ['todogeek chrome: reminders-on toggle (hovered)', todoChrome.accent, flatten(todoChrome.accentBg, todoChrome.bgHover), 4.5],
-  // FitnessGeek sidebar: #0C0A09 in both app modes.
+  // FitnessGeek sidebar: the chalkboard, in both app modes.
   ['fitnessgeek chrome: row / section caption', fitnessChrome.MUTED, fitnessChrome.CHROME_BG, 4.5],
-  ['fitnessgeek chrome: hovered row', fitnessChrome.INK, flatten('rgba(255, 255, 255, 0.04)', fitnessChrome.CHROME_BG), 4.5],
-  ['fitnessgeek chrome: active row', fitnessChrome.INK, flatten('rgba(45, 212, 191, 0.12)', fitnessChrome.CHROME_BG), 4.5],
+  ['fitnessgeek chrome: wordmark / row ink', fitnessChrome.INK, fitnessChrome.CHROME_BG, 4.5],
+  ['fitnessgeek chrome: lemon accent', fitnessChrome.ACCENT, fitnessChrome.CHROME_BG, 3],
+  ['fitnessgeek chrome: hovered row', fitnessChrome.INK, flatten(fitnessChrome.HOVER_BG, fitnessChrome.CHROME_BG), 4.5],
+  ['fitnessgeek chrome: active row', fitnessChrome.INK, flatten(fitnessChrome.ACTIVE_BG, fitnessChrome.CHROME_BG), 4.5],
+  ['fitnessgeek chrome: caption on active row', fitnessChrome.MUTED, flatten(fitnessChrome.ACTIVE_BG, fitnessChrome.CHROME_BG), 4.5],
+  ...fitnessGroundPairs(),
   // TodoGeek components on their own grounds.
   ['todogeek/light quick-add prompt: text.muted on parchment.warm', todoLight.palette.text.muted, '#F4EFE8', 4.5],
   ['todogeek/dark quick-add prompt: text.muted on 2% white over background.default', todoDark.palette.text.muted, flatten('rgba(255,255,255,0.02)', todoDark.palette.background.default), 4.5],

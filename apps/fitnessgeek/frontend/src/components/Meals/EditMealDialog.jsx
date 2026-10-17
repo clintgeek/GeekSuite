@@ -10,7 +10,7 @@ import {
   FormControl,
   InputLabel
 } from '@mui/material';
-import { Delete as DeleteIcon } from '@mui/icons-material';
+import { DeleteOutline as DeleteIcon } from '@mui/icons-material';
 import { useGeekDialogFullScreen } from '@geeksuite/ui';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
 import { thumbSaveProps } from '../BloodPressure/thumbSave.jsx';
@@ -111,7 +111,7 @@ const EditMealDialog = ({ open, onClose, meal, onSave, loading = false }) => {
               inputProps={{ inputMode: 'decimal', min: 0, step: 'any' }}
               sx={{ width: 120 }}
             />
-            <IconButton color="error" aria-label={`Remove ${it.displayName}`} onClick={() => handleRemoveItem(idx)}>
+            <IconButton aria-label={`Remove ${it.displayName}`} onClick={() => handleRemoveItem(idx)} sx={{ color: 'text.secondary', '&:hover, &:active': { color: 'error.main' } }}>
               <DeleteIcon />
             </IconButton>
           </Box>

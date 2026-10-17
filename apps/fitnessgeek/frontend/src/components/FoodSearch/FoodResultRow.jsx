@@ -4,7 +4,8 @@ import {
   Star as FavoriteIcon,
   History as RecentIcon,
   Tune as AdjustIcon,
-  RestaurantMenu as MealIcon
+  RestaurantMenu as MealIcon,
+  Check as CheckIcon
 } from '@mui/icons-material';
 import { useTheme, alpha } from '@mui/material/styles';
 import { netCarbs as calcNetCarbs } from '../../utils/ketoMath';
@@ -98,6 +99,7 @@ const FoodResultRow = ({
   const theme = useTheme();
   const muted = theme.palette.text.secondary;
   const primary = theme.palette.primary.main;
+  const tonal = theme.palette.tonal || { bg: alpha(primary, 0.12), ink: primary };
   const isMeal = food?.kind === 'meal' || food?.type === 'meal';
 
   const nutrition = (isMeal ? (food?.nutrition || food?.totalNutrition) : food?.nutrition) || {};
@@ -126,10 +128,24 @@ const FoodResultRow = ({
   const isAdded = Boolean(added && !isMeal);
   const canMore = Boolean(isAdded && onMore);
   const addedCount = Math.round((Number(added?.servings) || 1) * 100) / 100;
-  const addedText = addedCount > 1 ? `${addedCount} added ✓` : 'Added ✓';
+  // "Added" / "2 added", with a drawn check rather than a ✓ glyph (C11).
+  const addedWords = addedCount > 1 ? `${addedCount} added` : 'Added';
+  const detailText = detail.filter(Boolean).join(' · ');
   const subtitle = pending
     ? 'Adding…'
-    : [isAdded ? addedText : null, ...detail].filter(Boolean).join(' · ');
+    : (
+      <>
+        {isAdded && (
+          <Box component="span" sx={{ whiteSpace: 'nowrap' }}>
+            {addedWords}
+            <CheckIcon aria-hidden sx={{ fontSize: 18, ml: 0.25, verticalAlign: '-0.2em', color: primary }} />
+          </Box>
+        )}
+        {isAdded && detailText ? ' · ' : ''}
+        {detailText}
+      </>
+    );
+  const hasSubtitle = pending || isAdded || Boolean(detailText);
   const inert = disabled || pending;
   const tap = () => { if (!inert) onTap?.(food); };
   const nextCount = Math.round(addedCount + 1);
@@ -148,8 +164,10 @@ const FoodResultRow = ({
         alignItems: 'center',
         justifyContent: 'center',
         borderRadius: 999,
-        bgcolor: primary,
-        color: theme.palette.primary.contrastText,
+        // Tonal, not filled (visual review B1): eight filled basil pills
+        // drowned Log it. One filled basil per view.
+        bgcolor: tonal.bg,
+        color: tonal.ink,
         fontSize: '0.9375rem',
         fontWeight: 800,
         opacity: disabled && !pending ? 0.6 : 1,
@@ -197,7 +215,7 @@ const FoodResultRow = ({
         <Box sx={{ minWidth: 0, flex: 1 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.75 }}>
             {food?.shelf === 'favorite' && (
-              <FavoriteIcon sx={{ fontSize: 14, color: theme.palette.warning.main, flexShrink: 0 }} />
+              <FavoriteIcon sx={{ fontSize: 14, color: theme.palette.produce?.dinner?.text || theme.palette.warning.main, flexShrink: 0 }} />
             )}
             {food?.shelf === 'recent' && (
               <RecentIcon sx={{ fontSize: 14, color: muted, flexShrink: 0 }} />
@@ -237,13 +255,13 @@ const FoodResultRow = ({
             {/* Phone: the calories live here, beside the brand and serving. */}
             {!pending && (
               <Box component="span" sx={{ display: { xs: 'inline', sm: 'none' } }}>
-                {subtitle ? ' · ' : ''}{fmt(calories)} cal
+                {hasSubtitle ? ' · ' : ''}{fmt(calories)} cal
               </Box>
             )}
             {/* Tablet and narrow desktop: the macros, rather than a column. */}
             {!pending && macros && (
               <Box component="span" sx={{ display: { xs: 'none', sm: 'inline', lg: 'none' } }}>
-                {subtitle ? ' · ' : ''}{macros}
+                {hasSubtitle ? ' · ' : ''}{macros}
               </Box>
             )}
           </Typography>
@@ -265,14 +283,11 @@ const FoodResultRow = ({
             component="span"
             label={sourceLabel}
             size="small"
-            variant="outlined"
+            // An info tag, not an action (visual review B5).
+            variant="tag"
             sx={{
               display: { xs: 'none', md: 'inline-flex' },
-              height: 24,
-              fontSize: '0.8125rem',
               flexShrink: 0,
-              color: muted,
-              borderColor: theme.palette.divider,
             }}
           />
         )}

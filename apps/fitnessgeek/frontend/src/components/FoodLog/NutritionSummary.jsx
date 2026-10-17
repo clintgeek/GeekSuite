@@ -6,7 +6,8 @@ import {
   IconButton,
   Tooltip
 } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
+import { useTheme, alpha } from '@mui/material/styles';
+import { trackColor, macroColors } from '../../theme/theme.jsx';
 import { fmt } from '../../utils/plainWords.js';
 import {
   LocalFireDepartment as CaloriesIcon,
@@ -30,6 +31,11 @@ const NutritionSummary = ({
   onCalorieSettingsClick
 }) => {
   const theme = useTheme();
+  // Macros have their own warm ramp (visual review B2): produce colours mean
+  // meals only. Calories are basil, the app's own colour.
+  const macro = theme.palette.macro || macroColors(theme.palette.mode);
+  const track = trackColor(theme);
+  const isDark = theme.palette.mode === 'dark';
 
   const {
     calories = 0,
@@ -60,7 +66,7 @@ const NutritionSummary = ({
       goal: effectiveCalorieGoal,
       progress: calorieProgress,
       icon: CaloriesIcon,
-      color: theme.palette.success.main,
+      color: theme.palette.primary.main,
       unit: 'cal',
       hasGoal: true, // Always show progress for calories
       isRDA: calorieGoal === 0
@@ -71,7 +77,7 @@ const NutritionSummary = ({
       goal: effectiveProteinGoal,
       progress: proteinProgress,
       icon: ProteinIcon,
-      color: theme.palette.info.main,
+      color: macro.protein,
       unit: 'g',
       hasGoal: true, // Always show progress for macros
       isRDA: proteinGoal === 0
@@ -82,7 +88,7 @@ const NutritionSummary = ({
       goal: effectiveCarbsGoal,
       progress: carbsProgress,
       icon: CarbsIcon,
-      color: theme.palette.warning.main,
+      color: macro.carbs,
       unit: 'g',
       hasGoal: true, // Always show progress for macros
       isRDA: carbsGoal === 0
@@ -93,7 +99,7 @@ const NutritionSummary = ({
       goal: effectiveFatGoal,
       progress: fatProgress,
       icon: FatIcon,
-      color: theme.palette.secondary.main,
+      color: macro.fat,
       unit: 'g',
       hasGoal: true, // Always show progress for macros
       isRDA: fatGoal === 0
@@ -123,8 +129,9 @@ const NutritionSummary = ({
               sx={{
                 textAlign: 'center',
                 p: { xs: 1, sm: 1.5 },
-                borderRadius: 1,
-                backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : theme.palette.grey[50],
+                // A nested tile: a smaller radius than its card (review B6).
+                borderRadius: '16px',
+                backgroundColor: isDark ? alpha(theme.palette.text.primary, 0.04) : theme.palette.background.default,
                 border: 'none',
                 position: 'relative'
               }}
@@ -138,7 +145,7 @@ const NutritionSummary = ({
                       position: 'absolute',
                       top: 6,
                       right: 6,
-                      color: theme.palette.text.disabled
+                      color: theme.palette.text.secondary
                     }}
                     aria-label="Change your daily target"
                   >
@@ -235,7 +242,7 @@ const NutritionSummary = ({
                     sx={{
                       height: 4,
                       borderRadius: 2,
-                      backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.1)' : theme.palette.grey[200],
+                      backgroundColor: track,
                       '& .MuiLinearProgress-bar': {
                         backgroundColor: item.color,
                         borderRadius: 2

@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, LinearProgress, Typography } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
+import { trackColor } from '../../theme/theme.jsx';
 import { ketoStatus } from '../../utils/ketoMath';
 import KetoStatusChip from './KetoStatusChip';
 
@@ -81,10 +82,7 @@ const NetCarbMeter = ({ consumed = 0, limitG = 20, sx }) => {
           height: 10,
           borderRadius: 5,
           mb: 1,
-          backgroundColor:
-            theme.palette.mode === 'dark'
-              ? 'rgba(255,255,255,0.08)'
-              : 'rgba(0,0,0,0.06)',
+          backgroundColor: trackColor(theme),
           '& .MuiLinearProgress-bar': {
             borderRadius: 5,
             backgroundColor: barColor,

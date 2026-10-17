@@ -435,12 +435,13 @@ const DashboardNew = () => {
   }
 
   // The day, in full words, under the greeting — never "Friday, Septem…".
+  // On a desktop the top bar already says it, so it shows once (review C6).
   const heading = (
     <Box>
       <Typography component="h1" sx={{ fontSize: { xs: isSimple ? '1.875rem' : '1.625rem', sm: '2.25rem' }, fontWeight: 800, lineHeight: 1.15 }}>
         {greeting}
       </Typography>
-      <Typography sx={{ mt: 0.25, fontSize: '1.0625rem', color: 'text.secondary', fontWeight: 600 }}>
+      <Typography sx={{ mt: 0.25, fontSize: '1.0625rem', color: 'text.secondary', fontWeight: 600, display: { xs: 'block', md: 'none' } }}>
         {longDay(today)}
       </Typography>
     </Box>

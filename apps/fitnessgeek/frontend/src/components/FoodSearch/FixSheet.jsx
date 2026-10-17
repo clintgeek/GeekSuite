@@ -77,7 +77,16 @@ export default function FixSheet({ item, onClose, fixes }) {
     run('actually', () => fixes.redescribe(item, text, key));
   };
 
-  const bigButton = { minHeight: 52, borderRadius: '16px', fontSize: '1.0625rem', fontWeight: 800, flex: '1 1 0', px: 1 };
+  // Pills, like every button in the app (visual review B6). A choice with a
+  // number says it on two lines on purpose — "Smaller" over "~150" — rather
+  // than wrapping wherever the width runs out ("Smaller ·" / "~150").
+  const bigButton = { minHeight: 56, borderRadius: 999, fontSize: '1.0625rem', fontWeight: 800, flex: '1 1 0', px: 1.5, lineHeight: 1.2 };
+  const twoLines = (word, number) => (
+    <Box component="span" sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+      <span>{word}</span>
+      <Box component="span" sx={{ fontSize: '0.9375rem', fontWeight: 700 }}>~{fmt(number)}</Box>
+    </Box>
+  );
 
   return (
     <Dialog open={open} onClose={() => !working && onClose?.()} maxWidth="xs" fullWidth aria-labelledby="fix-sheet-title" data-testid="fix-sheet">
@@ -95,11 +104,11 @@ export default function FixSheet({ item, onClose, fixes }) {
           <Button variant="outlined" sx={bigButton} disabled={Boolean(working)} onClick={() => onClose?.()}>
             About right
           </Button>
-          <Button variant="outlined" sx={bigButton} disabled={Boolean(working)} onClick={() => setTo(smaller)}>
-            {working === `cal-${smaller}` ? <CircularProgress size={20} color="inherit" /> : `Smaller · ~${fmt(smaller)}`}
+          <Button variant="outlined" sx={bigButton} disabled={Boolean(working)} onClick={() => setTo(smaller)} aria-label={`Smaller · ~${fmt(smaller)}`}>
+            {working === `cal-${smaller}` ? <CircularProgress size={20} color="inherit" aria-hidden /> : twoLines('Smaller', smaller)}
           </Button>
-          <Button variant="outlined" sx={bigButton} disabled={Boolean(working)} onClick={() => setTo(bigger)}>
-            {working === `cal-${bigger}` ? <CircularProgress size={20} color="inherit" /> : `Bigger · ~${fmt(bigger)}`}
+          <Button variant="outlined" sx={bigButton} disabled={Boolean(working)} onClick={() => setTo(bigger)} aria-label={`Bigger · ~${fmt(bigger)}`}>
+            {working === `cal-${bigger}` ? <CircularProgress size={20} color="inherit" aria-hidden /> : twoLines('Bigger', bigger)}
           </Button>
         </Box>
 
@@ -116,7 +125,7 @@ export default function FixSheet({ item, onClose, fixes }) {
             disabled={Boolean(working)}
             sx={{ flex: 1, '& input': { fontSize: '1.125rem', fontWeight: 700 } }}
           />
-          <Button type="submit" variant="contained" disabled={!canSave || Boolean(working)} sx={{ minHeight: 56, borderRadius: '16px', fontWeight: 800, px: 3 }}>
+          <Button type="submit" variant="contained" disabled={!canSave || Boolean(working)} sx={{ minHeight: 56, borderRadius: 999, fontWeight: 800, px: 3 }}>
             Save
           </Button>
         </Box>
@@ -140,8 +149,8 @@ export default function FixSheet({ item, onClose, fixes }) {
             variant="outlined"
             fullWidth
             disabled={!actually.trim() || Boolean(working)}
-            startIcon={working === 'actually' ? <CircularProgress size={18} color="inherit" /> : null}
-            sx={{ mt: 1, minHeight: 52, borderRadius: '16px', fontWeight: 800, fontSize: '1.0625rem', borderWidth: 2, '@media (hover: hover)': { '&:hover': { borderWidth: 2 } } }}
+            startIcon={working === 'actually' ? <CircularProgress size={18} color="inherit" aria-hidden /> : null}
+            sx={{ mt: 1, minHeight: 52, borderRadius: 999, fontWeight: 800, fontSize: '1.0625rem', borderWidth: 2, '@media (hover: hover)': { '&:hover': { borderWidth: 2 } } }}
           >
             {working === 'actually' ? 'Working it out…' : 'Log this instead'}
           </Button>

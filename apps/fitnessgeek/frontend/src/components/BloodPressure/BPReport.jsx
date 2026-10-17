@@ -21,7 +21,7 @@ import {
 } from '@mui/icons-material';
 import BPChartNivo from './BPChartNivo.jsx';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
-import { categorizeBP } from '../../utils/bpUtils.js';
+import { categorizeBP, bpToneColor } from '../../utils/bpUtils.js';
 import { localDateString, toUtcMidnight, utcDateString } from '@geeksuite/utils';
 import { dayRange, shortDay } from '../../utils/dates.js';
 import { ThemeProvider } from '@mui/material/styles';
@@ -30,6 +30,11 @@ import { createAppTheme } from '../../theme/theme';
 // The report node is the html2canvas source and stays white; render its contents
 // with a light theme so text/dividers stay readable when the app is in dark mode.
 const lightReportTheme = createAppTheme('light');
+// The report prints on white whatever the app's mode, so it reads the light
+// Market Morning set: basil for the header, the cream divider for rules.
+const REPORT_INK = lightReportTheme.palette.primary.main;
+const REPORT_RULE = lightReportTheme.palette.divider;
+const REPORT_PANEL = lightReportTheme.palette.background.default;
 
 /**
  * Who the report is for, from the signed-in account. This used to be one
@@ -338,13 +343,13 @@ const BPReport = ({ bpLogs, onClose }) => {
               width: 50,
               height: 50,
               borderRadius: '50%',
-              bgcolor: '#1976d2',
+              bgcolor: REPORT_INK,
               mr: 2
             }}>
               <HeartIcon sx={{ color: 'white', fontSize: 24 }} />
             </Box>
             <Box sx={{ flex: 1 }}>
-              <Typography variant="h4" sx={{ fontWeight: 700, color: '#1976d2' }}>
+              <Typography variant="h4" sx={{ fontWeight: 700, color: REPORT_INK }}>
                 Blood pressure report
               </Typography>
               <Typography variant="body1" color="text.secondary">
@@ -366,7 +371,7 @@ const BPReport = ({ bpLogs, onClose }) => {
           </Box>
 
           {/* Disclaimer */}
-          <Box sx={{ mb: 2, p: 2, bgcolor: '#f5f5f5', borderRadius: 1 }}>
+          <Box sx={{ mb: 2, p: 2, bgcolor: REPORT_PANEL, borderRadius: 1 }}>
             <Typography variant="body2" color="text.secondary">
               Based on data from the American Heart Association. This report is not intended to be used for medical purposes.
             </Typography>
@@ -404,7 +409,7 @@ const BPReport = ({ bpLogs, onClose }) => {
             <Box sx={{
               height: 200,
               width: '100%',
-              border: '1px solid #e0e0e0',
+              border: `1px solid ${REPORT_RULE}`,
               borderRadius: 1,
               overflow: 'hidden'
             }}>
@@ -428,7 +433,7 @@ const BPReport = ({ bpLogs, onClose }) => {
                   key={index}
                   sx={{
                     p: 1.5,
-                    border: '1px solid #e0e0e0',
+                    border: `1px solid ${REPORT_RULE}`,
                     borderRadius: 1,
                     backgroundColor: '#ffffff'
                   }}
@@ -524,10 +529,10 @@ const BPReport = ({ bpLogs, onClose }) => {
             </Typography>
             <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
               {[
-                { stage: 'Normal', color: '#4caf50', range: '< 120/80' },
-                { stage: 'Elevated', color: '#ff9800', range: '120–129/< 80' },
-                { stage: 'Stage 1', color: '#f44336', range: '130–139/80–89' },
-                { stage: 'Stage 2', color: '#d32f2f', range: '≥ 140/≥ 90' }
+                { stage: 'Normal', color: bpToneColor('success'), range: '< 120/80' },
+                { stage: 'Elevated', color: bpToneColor('warning'), range: '120–129/< 80' },
+                { stage: 'Stage 1', color: bpToneColor('tomato'), range: '130–139/80–89' },
+                { stage: 'Stage 2', color: bpToneColor('error'), range: '≥ 140/≥ 90' }
               ].map((cat) => (
                 <Box key={cat.stage} sx={{
                   display: 'flex',
@@ -563,7 +568,7 @@ const BPReport = ({ bpLogs, onClose }) => {
             justifyContent: 'space-between',
             alignItems: 'center',
             pt: 2,
-            borderTop: '1px solid #e0e0e0'
+            borderTop: `1px solid ${REPORT_RULE}`
           }}>
             <Typography variant="body2" color="text.secondary">
               Made with FitnessGeek on {madeOn}

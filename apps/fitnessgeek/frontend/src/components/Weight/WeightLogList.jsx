@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { Box, Button, IconButton, Typography } from '@mui/material';
+import { Box, Button, Chip, IconButton, Typography } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import {
   DeleteOutline as DeleteIcon,
   EditOutlined as EditIcon,
@@ -93,26 +94,15 @@ const WeightLogList = ({ logs, onDelete, onUpdate, unit = 'lbs' }) => {
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.25, flexWrap: 'wrap' }}>
                   <Typography sx={{ color: 'text.secondary', fontSize: '0.8125rem' }}>{when}</Typography>
                   {fromScale && (
-                    // Outlined in the text ink rather than a filled chip: a
-                    // 12px label on a tinted fill is the contrast landmine
-                    // the harness keeps finding, and a source marker should be
-                    // quieter than the value it annotates anyway.
-                    <Box
+                    // The app's one info-tag shape (visual review B5): round,
+                    // ink on a 6% ink wash, 14px bold — ink on it stays well
+                    // over AA, unlike the 12px-on-tint landmine.
+                    <Chip
                       component="span"
+                      variant="tag"
+                      label="Scale"
                       title="Imported from the scale"
-                      sx={{
-                        px: 0.75,
-                        border: (t) => `1px solid ${t.palette.divider}`,
-                        borderRadius: '6px',
-                        color: 'text.secondary',
-                        fontSize: '0.75rem',
-                        fontWeight: 500,
-                        letterSpacing: '0.02em',
-                        lineHeight: 1.6,
-                      }}
-                    >
-                      Scale
-                    </Box>
+                    />
                   )}
                 </Box>
                 {log.notes && (
@@ -135,7 +125,13 @@ const WeightLogList = ({ logs, onDelete, onUpdate, unit = 'lbs' }) => {
               <IconButton
                 onClick={() => onDelete(log.id)}
                 aria-label={`Remove the ${weight} ${u} weigh-in from ${when}`}
-                sx={{ width: 44, height: 44, color: 'text.secondary' }}
+                // Quiet at rest; red only under the thumb (B7).
+                sx={{
+                  width: 44,
+                  height: 44,
+                  color: 'text.secondary',
+                  '&:hover, &:active': { color: 'error.main', bgcolor: (t) => alpha(t.palette.error.main, 0.08) },
+                }}
               >
                 <DeleteIcon fontSize="small" />
               </IconButton>

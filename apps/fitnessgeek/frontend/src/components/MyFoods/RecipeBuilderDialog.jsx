@@ -14,7 +14,8 @@ import {
   ContentPaste as PasteIcon,
   WarningAmber as WarningIcon,
 } from '@mui/icons-material';
-import { useToast } from '@geeksuite/ui';
+import { useToast, useGeekDialogFullScreen } from '@geeksuite/ui';
+import { thumbSaveProps } from '../BloodPressure/thumbSave.jsx';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
 import SectionLabel from '../primitives/SectionLabel.jsx';
 import IngredientPicker from './IngredientPicker.jsx';
@@ -47,6 +48,7 @@ const macrosKnown = (per) => ['protein_grams', 'carbs_grams', 'fat_grams'].some(
  */
 const RecipeBuilderDialog = ({ open, food, onClose, onSaved }) => {
   const { notify } = useToast();
+  const fullScreen = useGeekDialogFullScreen();
   const [name, setName] = useState('');
   const [rows, setRows] = useState([]);
   const [yieldText, setYieldText] = useState('');
@@ -134,12 +136,17 @@ const RecipeBuilderDialog = ({ open, food, onClose, onSaved }) => {
         onClose={onClose}
         title={food ? `Edit ${food.name ?? 'recipe'}` : 'New recipe'}
         maxWidth="sm"
-        primaryAction={
-          <Button variant="contained" onClick={handleSave} disabled={!summary.canSave || saving}>
-            {saving ? <CircularProgress size={20} aria-label="Saving" /> : 'Save recipe'}
-          </Button>
-        }
-        secondaryAction={<Button onClick={onClose}>Cancel</Button>}
+        // On a phone Save goes in the footer under the thumb, not the header
+        // (visual review B8).
+        {...thumbSaveProps({
+          fullScreen,
+          save: (
+            <Button variant="contained" onClick={handleSave} disabled={!summary.canSave || saving}>
+              {saving ? <CircularProgress size={20} aria-label="Saving" /> : 'Save recipe'}
+            </Button>
+          ),
+          cancel: <Button onClick={onClose}>Cancel</Button>,
+        })}
       >
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
           <TextField
@@ -168,7 +175,7 @@ const RecipeBuilderDialog = ({ open, food, onClose, onSaved }) => {
                       <Typography sx={{ flex: 1, minWidth: 0, color: 'text.primary' }}>
                         Couldn’t match &ldquo;{row.line || row.name}&rdquo;
                       </Typography>
-                      <Button size="small" variant="outlined" onClick={() => setPickerFor(row.key)}>
+                      <Button size="small" variant="tonal" onClick={() => setPickerFor(row.key)}>
                         Pick a food
                       </Button>
                       <IconButton
@@ -186,7 +193,7 @@ const RecipeBuilderDialog = ({ open, food, onClose, onSaved }) => {
                           {row.name}
                         </Typography>
                         {row.estimated && (
-                          <Chip label="estimate" size="small" variant="outlined" sx={{ flexShrink: 0 }} />
+                          <Chip label="estimate" size="small" variant="tag" sx={{ flexShrink: 0 }} />
                         )}
                         <IconButton
                           size="small"
@@ -245,10 +252,10 @@ const RecipeBuilderDialog = ({ open, food, onClose, onSaved }) => {
               </Typography>
             )}
             <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1.5 }}>
-              <Button variant="outlined" startIcon={<AddIcon />} onClick={() => setPickerFor('new')}>
+              <Button variant="tonal" startIcon={<AddIcon />} onClick={() => setPickerFor('new')}>
                 Add ingredient
               </Button>
-              <Button variant="outlined" startIcon={<PasteIcon />} onClick={() => setPasteOpen((v) => !v)}>
+              <Button variant="tonal" startIcon={<PasteIcon />} onClick={() => setPasteOpen((v) => !v)}>
                 Paste ingredients
               </Button>
             </Box>
@@ -266,7 +273,8 @@ const RecipeBuilderDialog = ({ open, food, onClose, onSaved }) => {
                 onChange={(e) => setPasteText(e.target.value)}
               />
               <Box sx={{ display: 'flex', gap: 1 }}>
-                <Button variant="contained" onClick={handleParse} disabled={parsing || !pasteText.trim()}>
+                {/* Tonal: Save is this dialog's one filled button (visual review B1). */}
+                <Button variant="tonal" onClick={handleParse} disabled={parsing || !pasteText.trim()}>
                   {parsing ? <CircularProgress size={20} aria-label="Reading list" /> : 'Add to recipe'}
                 </Button>
                 <Button onClick={() => setPasteOpen(false)}>Cancel paste</Button>

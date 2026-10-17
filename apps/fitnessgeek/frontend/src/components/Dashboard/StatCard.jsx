@@ -116,9 +116,10 @@ export default function StatCard({
 
       {/* Value — uses StatNumber for numbers, falls back to plain Typography for strings like "180/80" */}
       {isNumeric ? (
-        <StatNumber value={numericValue} unit={unit} size="display" />
+        // A real gap before the unit: "0 days", not "0days" (review C7).
+        <StatNumber value={numericValue} unit={unit} size="display" sx={{ gap: 1 }} />
       ) : (
-        <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5 }}>
+        <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 1 }}>
           <Typography
             sx={{
               fontFamily: "inherit",

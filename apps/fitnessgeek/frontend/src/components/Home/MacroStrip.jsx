@@ -1,7 +1,8 @@
 import React from 'react';
 import { Box, Typography } from '@mui/material';
-import { useTheme, alpha } from '@mui/material/styles';
+import { useTheme } from '@mui/material/styles';
 import NetCarbMeter from '../Dashboard/NetCarbMeter.jsx';
+import { macroColors, trackColor } from '../../theme/theme.jsx';
 
 /**
  * Full mode's macros, in words: "Protein · 96 of 156g". Over target says so
@@ -11,8 +12,11 @@ import NetCarbMeter from '../Dashboard/NetCarbMeter.jsx';
  * carbs in keto), minus the ALL-CAPS labels and the monospace. Simple mode
  * does not show this (plan: macros stay out of the way).
  *
- * Bars are fills in produce colours, and each carries an accessible name that
- * reads the number — a bare progress bar has none (CONTEXT.md a11y pass).
+ * Bars are fills in the macro ramp (basil, cinnamon, the muted ink), not the
+ * produce: the plate ring just above uses the produce for meals, and "Fat"
+ * in tomato read as Breakfast (visual review B2). Each bar carries an
+ * accessible name that reads the number — a bare progress bar has none
+ * (CONTEXT.md a11y pass).
  */
 function MacroBar({ label, current = 0, goal = 0, fill, note, testid }) {
   const theme = useTheme();
@@ -31,9 +35,9 @@ function MacroBar({ label, current = 0, goal = 0, fill, note, testid }) {
       <Box
         role="img"
         aria-label={`${label}: ${cur} of ${tgt} grams${over > 0 ? `, ${over} over` : ''}`}
-        sx={{ height: 10, borderRadius: 999, bgcolor: alpha(theme.palette.text.primary, 0.08), overflow: 'hidden' }}
+        sx={{ height: 10, borderRadius: 999, bgcolor: trackColor(theme), overflow: 'hidden' }}
       >
-        <Box sx={{ width: `${pct * 100}%`, height: '100%', borderRadius: 999, bgcolor: fill }} />
+        <Box data-testid={`macro-fill-${label.toLowerCase()}`} sx={{ width: `${pct * 100}%`, height: '100%', borderRadius: 999, bgcolor: fill }} />
       </Box>
       {note && (
         <Typography data-testid={testid} sx={{ fontSize: '0.9375rem', color: 'text.secondary', mt: 0.5 }}>
@@ -46,16 +50,16 @@ function MacroBar({ label, current = 0, goal = 0, fill, note, testid }) {
 
 export default function MacroStrip({ protein, carbs, fat, mode = 'standard', netCarbsConsumed = 0, netCarbLimit = 20, proteinNote = null }) {
   const theme = useTheme();
-  const p = theme.palette.produce || {};
+  const m = theme.palette.macro || macroColors(theme.palette.mode);
   const bars = mode === 'keto'
     ? [
-      { label: 'Fat', ...fat, fill: p.dinner?.fill },
-      { label: 'Protein', ...protein, fill: p.lunch?.fill, note: proteinNote, testid: 'macro-note-protein' },
+      { label: 'Fat', ...fat, fill: m.fat },
+      { label: 'Protein', ...protein, fill: m.protein, note: proteinNote, testid: 'macro-note-protein' },
     ]
     : [
-      { label: 'Protein', ...protein, fill: p.lunch?.fill, note: proteinNote, testid: 'macro-note-protein' },
-      { label: 'Carbs', ...carbs, fill: p.dinner?.fill },
-      { label: 'Fat', ...fat, fill: p.breakfast?.fill },
+      { label: 'Protein', ...protein, fill: m.protein, note: proteinNote, testid: 'macro-note-protein' },
+      { label: 'Carbs', ...carbs, fill: m.carbs },
+      { label: 'Fat', ...fat, fill: m.fat },
     ];
 
   return (

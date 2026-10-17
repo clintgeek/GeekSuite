@@ -239,10 +239,12 @@ const MyFoods = () => {
       </Box>
 
       <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2 }}>
-        <Button variant="contained" startIcon={<AddIcon />} onClick={() => openBuilder(null)}>
+        {/* Second-rank actions on a reading page: tonal, not filled basil
+            (visual review B1). */}
+        <Button variant="tonal" startIcon={<AddIcon />} onClick={() => openBuilder(null)}>
           New recipe
         </Button>
-        <Button variant="outlined" startIcon={<AddIcon />} onClick={() => setCreateForm({ ...EMPTY_FOOD_FORM })}>
+        <Button variant="tonal" startIcon={<AddIcon />} onClick={() => setCreateForm({ ...EMPTY_FOOD_FORM })}>
           New food
         </Button>
       </Box>

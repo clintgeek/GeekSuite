@@ -6,8 +6,8 @@ import { categorizeBP, BP_STAGES } from '../../utils/bpUtils.js';
 import { bpStageWords } from '../../utils/plainWords.js';
 
 // Category name and color come from the one shared categoriser.
-const getBPCategory = (systolic, diastolic) => {
-  const category = categorizeBP(systolic, diastolic);
+const getBPCategory = (systolic, diastolic, mode) => {
+  const category = categorizeBP(systolic, diastolic, mode);
   return { name: category.stage, color: category.color };
 };
 const ORDER = Object.values(BP_STAGES);
@@ -29,7 +29,7 @@ const BPCategoryDistribution = ({ bpLogs = [], windowLabel = '' }) => {
     // Count readings by category
     const categoryCounts = {};
     bpLogs.forEach(log => {
-      const category = getBPCategory(log.systolic, log.diastolic);
+      const category = getBPCategory(log.systolic, log.diastolic, theme.palette.mode);
       if (!categoryCounts[category.name]) {
         categoryCounts[category.name] = {
           count: 0,
@@ -48,15 +48,11 @@ const BPCategoryDistribution = ({ bpLogs = [], windowLabel = '' }) => {
         value: data.count,
         color: data.color
       }));
-  }, [bpLogs]);
+  }, [bpLogs, theme.palette.mode]);
 
   if (chartData.length === 0) {
     return (
-      <Card sx={{
-        borderRadius: '20px',
-        boxShadow: theme.shadows[1],
-        border: `1px solid ${theme.palette.divider}`
-      }}>
+      <Card>
         <CardContent sx={{ p: 4 }}>
           <Box sx={{
             display: 'flex',
@@ -75,11 +71,7 @@ const BPCategoryDistribution = ({ bpLogs = [], windowLabel = '' }) => {
   }
 
   return (
-    <Card sx={{
-      borderRadius: '20px',
-      boxShadow: theme.shadows[1],
-      border: `1px solid ${theme.palette.divider}`
-    }}>
+    <Card>
       <CardContent sx={{ p: 3 }}>
         <Typography variant="h6" component="h2" data-testid="bp-donut-title" sx={{ fontWeight: 700, color: theme.palette.text.primary, mb: 2 }}>
           Readings by range{windowLabel ? `, ${windowLabel}` : ''}
@@ -107,7 +99,9 @@ const BPCategoryDistribution = ({ bpLogs = [], windowLabel = '' }) => {
             enableArcLinkLabels={false}
             arcLabel={d => `${d.value}`}
             arcLabelsSkipAngle={10}
-            arcLabelsTextColor="#ffffff"
+            // The stage tones are deep by day (paper on them 5:1 and up)
+            // and pale at night, where the walnut reads on them instead.
+            arcLabelsTextColor={isDark ? theme.palette.background.default : theme.palette.background.paper}
             arcLabelsRadiusOffset={0.55}
             theme={{
               labels: {
@@ -121,7 +115,7 @@ const BPCategoryDistribution = ({ bpLogs = [], windowLabel = '' }) => {
               <Box sx={{
                 backgroundColor: theme.palette.background.paper,
                 border: `1px solid ${theme.palette.divider}`,
-                borderRadius: '8px',
+                borderRadius: '12px',
                 padding: '8px 12px',
                 boxShadow: theme.shadows[3]
               }}>

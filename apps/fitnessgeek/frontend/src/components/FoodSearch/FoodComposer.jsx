@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { Alert, Box, Button, Chip, Typography } from '@mui/material';
-import { QrCodeScanner as BarcodeIcon, CheckCircle as AddedIcon, Undo as UndoIcon } from '@mui/icons-material';
+import { QrCodeScanner as BarcodeIcon, CheckCircle as AddedIcon, Undo as UndoIcon, Check as CheckIcon } from '@mui/icons-material';
 import { useTheme, alpha } from '@mui/material/styles';
 import { useToast } from '@geeksuite/ui';
 import ComposerBox from './ComposerBox.jsx';
@@ -670,9 +670,9 @@ const FoodComposer = ({
   const dayWords = (d) => sheetDayWords(d, today, day);
   const status = useMemo(() => {
     // "Saved here" only where the draft really outlives the sheet (L18).
-    if (offline) return { text: keepDraft && !draftsAvailable() ? OFFLINE_UNSAVED_MESSAGE : OFFLINE_COMPOSER_MESSAGE, tone: 'strong' };
-    if (thinking) return { text: slow ? STILL_WORKING_MESSAGE : 'I’m working out the calories.', tone: slow ? 'strong' : 'muted' };
-    if (failure) return { text: failure.message, tone: 'strong' };
+    if (offline) return { text: keepDraft && !draftsAvailable() ? OFFLINE_UNSAVED_MESSAGE : OFFLINE_COMPOSER_MESSAGE, tone: 'strong', kind: 'offline' };
+    if (thinking) return { text: slow ? STILL_WORKING_MESSAGE : 'I’m working out the calories.', tone: slow ? 'strong' : 'muted', kind: 'thinking' };
+    if (failure) return { text: failure.message, tone: 'strong', kind: failure.kind === 'offline' ? 'offline' : 'failure' };
     if (typed && sentence && onDescribe) return { text: 'I’ll work out the calories. You can fix anything after.', tone: 'muted' };
     return { text: null, tone: 'muted' };
   }, [offline, keepDraft, thinking, slow, failure, typed, sentence, onDescribe]);
@@ -747,8 +747,8 @@ const FoodComposer = ({
               Undo all
             </Button>
             <Box sx={{ flex: 1 }} />
-            <Button variant="contained" onClick={finishResult} disabled={busy} data-testid="result-done" sx={{ ...pillButton, minHeight: 52, px: 3.5 }}>
-              Done ✓
+            <Button variant="contained" onClick={finishResult} disabled={busy} data-testid="result-done" endIcon={<CheckIcon sx={{ fontSize: 18 }} aria-hidden />} sx={{ ...pillButton, minHeight: 52, px: 3.5 }}>
+              Done
             </Button>
           </Box>
         </Box>
@@ -775,6 +775,7 @@ const FoodComposer = ({
         inputRef={inputRef}
         status={status.text}
         statusTone={status.tone}
+        statusKind={status.kind}
       />
 
       {speech.listening && (
@@ -886,9 +887,23 @@ const FoodComposer = ({
               onClick={() => onMealTypeChange(m)}
               disabled={busy}
               aria-pressed={m === mealType}
-              color={m === mealType ? 'primary' : 'default'}
-              variant={m === mealType ? 'filled' : 'outlined'}
-              sx={{ height: 44, borderRadius: 999, fontWeight: 700, fontSize: '0.9375rem', '& .MuiChip-label': { px: 1.75 } }}
+              variant="outlined"
+              // Chosen is basil at 8% with a basil edge, not a filled basil
+              // chip competing with Log it (visual review B2).
+              sx={{
+                height: 44,
+                borderRadius: 999,
+                fontWeight: 700,
+                fontSize: '0.9375rem',
+                '& .MuiChip-label': { px: 1.75 },
+                ...(m === mealType ? {
+                  bgcolor: alpha(theme.palette.primary.main, 0.08),
+                  borderColor: theme.palette.primary.main,
+                  borderWidth: 2,
+                  color: 'text.primary',
+                  '&&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.14) },
+                } : {}),
+              }}
             />
           ))}
         </Box>

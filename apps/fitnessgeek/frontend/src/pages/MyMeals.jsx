@@ -13,9 +13,10 @@ import {
   Chip,
 } from '@mui/material';
 import {
-  Edit as EditIcon,
-  Delete as DeleteIcon,
-  Restaurant as MealIcon,
+  EditOutlined as EditIcon,
+  DeleteOutline as DeleteIcon,
+  // A book of meals, so My meals stops sharing My foods' cutlery (C12).
+  MenuBook as MealIcon,
   PlaylistAdd as LogIcon,
 } from '@mui/icons-material';
 import { useToast, useGeekDialogFullScreen } from '@geeksuite/ui';
@@ -241,16 +242,19 @@ const MyMeals = () => {
                       >
                         Log this
                       </Button>
+                      {/* Outlined, secondary ink; Delete is red only under a
+                          finger or pointer (visual review B7). */}
                       <IconButton
                         aria-label={`Edit ${m.name}`}
                         onClick={() => handleEdit(m)}
+                        sx={{ color: 'text.secondary' }}
                       >
                         <EditIcon />
                       </IconButton>
                       <IconButton
                         aria-label={`Delete ${m.name}`}
-                        color="error"
                         onClick={() => requestDelete(m)}
+                        sx={{ color: 'text.secondary', '&:hover, &:active': { color: 'error.main' } }}
                       >
                         <DeleteIcon />
                       </IconButton>

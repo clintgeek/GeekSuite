@@ -271,7 +271,8 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
               label={preset.label}
               onClick={() => fillIn(preset)}
               variant="outlined"
-              sx={{ height: 40, fontSize: '0.875rem' }}
+              // An action pill: 44 tall, round (visual review B5/B6).
+              sx={{ height: 44, borderRadius: 999, fontSize: '0.875rem' }}
             />
           ))}
         </Box>
@@ -361,7 +362,8 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
           mt: 3,
           p: 2,
           bgcolor: 'action.hover',
-          borderRadius: 2,
+          // A nested tile: smaller than the dialog's radius (B6).
+          borderRadius: '16px',
           border: '1px solid',
           borderColor: 'divider'
         }}>

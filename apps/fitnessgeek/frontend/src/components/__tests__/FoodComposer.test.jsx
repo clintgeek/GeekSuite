@@ -644,7 +644,7 @@ describe('Simple stays open on what landed (Chef, 2026-10-16)', () => {
     // It did not close itself.
     expect(onClose).not.toHaveBeenCalled();
 
-    fireEvent.click(within(card).getByRole('button', { name: 'Done ✓' }));
+    fireEvent.click(within(card).getByRole('button', { name: 'Done' }));
     expect(onClose).toHaveBeenCalledWith({ mealType: 'lunch' });
     expect(screen.queryByTestId('result-card')).toBeNull();
   });
@@ -1213,12 +1213,12 @@ describe('L2: her habitual second tap is a second serving, not a third egg', () 
 
     fireEvent.click(await screen.findByText('Egg'));
     await waitFor(() => expect(onLogItems).toHaveBeenCalledTimes(1));
-    await screen.findByText(/Added ✓/);
+    await screen.findByText(/Added/, { selector: '[data-testid="food-row-subtitle"] span' });
     fireEvent.click(screen.getByText('Egg'));
 
     await waitFor(() => expect(onUpdateLog).toHaveBeenCalledWith('egg-1', { servings: 2 }));
     expect(onLogItems).toHaveBeenCalledTimes(1);
-    expect(await screen.findByText(/2 added ✓/)).toBeInTheDocument();
+    expect(await screen.findByText(/2 added/, { selector: '[data-testid="food-row-subtitle"] span' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Make it 3 Egg' })).toBeInTheDocument();
     // L4: the toast says the amount.
     expect(await screen.findByText('Added to breakfast ✓ · Egg ×2')).toBeInTheDocument();
@@ -1244,7 +1244,7 @@ describe('L2: her habitual second tap is a second serving, not a third egg', () 
     await waitFor(() => expect(onLogItems).toHaveBeenCalledTimes(2));
   });
 
-  it('an Again chip counts the same way: "Added ✓ · Make it 2", and a second tap makes it 2 (L14)', async () => {
+  it('an Again chip counts the same way: "Added · Make it 2", and a second tap makes it 2 (L14)', async () => {
     recent.logs = ['2026-10-12', '2026-10-13'].map((day, i) => ({
       id: `e${i}`, meal_type: 'breakfast', servings: 1, log_date: `${day}T00:00:00.000Z`,
       nutrition: { calories_per_serving: 72 }, food_item_id: { id: 'egg', name: 'Egg' },
@@ -1255,13 +1255,13 @@ describe('L2: her habitual second tap is a second serving, not a third egg', () 
 
     fireEvent.click(await screen.findByRole('button', { name: 'Add Egg to breakfast again' }));
     await waitFor(() => expect(onLogItems).toHaveBeenCalledTimes(1));
-    expect(await screen.findByText('Egg · Added ✓')).toBeInTheDocument();
+    expect(await screen.findByText('Egg · Added')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Make it 2 Egg' })).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Add another Egg to breakfast' }));
     await waitFor(() => expect(onUpdateLog).toHaveBeenCalledWith('egg-9', { servings: 2 }));
     expect(onLogItems).toHaveBeenCalledTimes(1);
-    expect(await screen.findByText('Egg · 2 added ✓')).toBeInTheDocument();
+    expect(await screen.findByText('Egg · 2 added')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Make it 3 Egg' }));
     await waitFor(() => expect(onUpdateLog).toHaveBeenLastCalledWith('egg-9', { servings: 3 }));

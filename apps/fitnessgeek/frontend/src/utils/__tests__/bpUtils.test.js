@@ -66,3 +66,39 @@ describe('categorizeBP', () => {
   // task treats as a fixed contract not to be altered — flagging it here
   // rather than asserting behavior the function doesn't have.
 });
+
+/*
+ * Visual review B3: the stage colours were Tailwind (emerald, amber, orange,
+ * red), off the Market Morning palette, and the same in both modes. They are
+ * now the theme's semantic tones, mode-aware.
+ */
+import { createFitnessTheme } from '../../theme/theme.jsx';
+
+describe('categorizeBP colours come from the theme', () => {
+  const light = createFitnessTheme('light').palette;
+  const dark = createFitnessTheme('dark').palette;
+
+  it('Normal = success, Elevated = warning, Stage 2 and Crisis = error (light)', () => {
+    expect(categorizeBP(118, 76).color).toBe(light.success.main);
+    expect(categorizeBP(125, 75).color).toBe(light.warning.main);
+    expect(categorizeBP(160, 85).color).toBe(light.error.main);
+    expect(categorizeBP(190, 70).color).toBe(light.error.main);
+  });
+
+  it('Stage 1 is the tomato text tone, not an orange', () => {
+    expect(categorizeBP(135, 75).color).toBe(light.produce.breakfast.text);
+    expect(categorizeBP(135, 75, 'dark').color).toBe(dark.produce.breakfast.text);
+  });
+
+  it('takes the night tones in dark mode', () => {
+    expect(categorizeBP(118, 76, 'dark').color).toBe(dark.success.main);
+    expect(categorizeBP(125, 75, 'dark').color).toBe(dark.warning.main);
+    expect(categorizeBP(190, 70, 'dark').color).toBe(dark.error.main);
+  });
+
+  it('names the job in `tone`, and Unknown is muted ink', () => {
+    expect(categorizeBP(118, 76).tone).toBe('success');
+    expect(categorizeBP(undefined, 80).tone).toBe('muted');
+    expect(categorizeBP(undefined, 80).color).toBe(light.text.muted);
+  });
+});

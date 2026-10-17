@@ -19,13 +19,13 @@ const Login = () => {
       onLogin={handleLogin}
       loading={loading}
       error={error}
-      // FitnessGeek branding (Blue/Energy)
+      // FitnessGeek branding: Market Morning's basil and lemon
       logoColor="text.primary"
       logoSuffixColor="primary.main"
-      // Custom ink wash for FitnessGeek
+      // A warm wash: basil and the lemon of the morning light
       inkColors={[
-        'rgba(37, 99, 235, 0.08)', // Blue
-        'rgba(59, 130, 246, 0.06)'  // Lighter Blue
+        'rgba(47, 107, 53, 0.08)', // Basil
+        'rgba(246, 201, 69, 0.10)'  // Lemon
       ]}
     />
   );

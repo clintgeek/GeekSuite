@@ -203,7 +203,7 @@ const EditLogDialog = ({
             }}>
               <FoodIcon sx={{ fontSize: 32, color: 'primary.main' }} />
               <Box sx={{ flex: 1 }}>
-                <Typography variant="h6" fontWeight={600}>
+                <Typography variant="h6">
                   {food_item.name}
                 </Typography>
                 {!isSimple && (
@@ -253,6 +253,7 @@ const EditLogDialog = ({
                 min={0.25}
                 max={10}
                 step={0.25}
+                aria-label="Servings"
                 sx={{ flex: 1 }}
               />
               <TextField
@@ -316,18 +317,22 @@ const EditLogDialog = ({
                 <Chip
                   label={`${fmt(perServingCalories * (servingsOk ? servingsCount : 0))} cal`}
                   size="small"
+                  variant="tag"
                 />
                 <Chip
                   label={`Protein ${fmt(nutrition.protein_grams * parseFloat(servings))}g`}
                   size="small"
+                  variant="tag"
                 />
                 <Chip
                   label={`Carbs ${fmt(nutrition.carbs_grams * parseFloat(servings))}g`}
                   size="small"
+                  variant="tag"
                 />
                 <Chip
                   label={`Fat ${fmt(nutrition.fat_grams * parseFloat(servings))}g`}
                   size="small"
+                  variant="tag"
                 />
               </Box>
             </Box>

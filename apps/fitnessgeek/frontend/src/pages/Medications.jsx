@@ -2,9 +2,9 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Box, Typography, TextField, Button, Chip, Stack, IconButton, ToggleButton, ToggleButtonGroup, FormControl, InputLabel, Select, MenuItem, Alert } from '@mui/material';
 import { useToast, useGeekDialogFullScreen } from '@geeksuite/ui';
 import SearchIcon from '@mui/icons-material/Search';
-import EditIcon from '@mui/icons-material/Edit';
+import EditIcon from '@mui/icons-material/EditOutlined';
 import SaveIcon from '@mui/icons-material/Save';
-import DeleteIcon from '@mui/icons-material/Delete';
+import DeleteIcon from '@mui/icons-material/DeleteOutline';
 import MedicationIcon from '@mui/icons-material/Medication';
 import AddIcon from '@mui/icons-material/Add';
 import medsService from '../services/medsService.js';
@@ -559,13 +559,15 @@ export default function Medications() {
     }
   };
 
-  // Helper to get med type color
+  // The med type, in words. It shows as a quiet info tag (visual review B5);
+  // the blue/green/orange Material tints it used to carry meant nothing
+  // here and glared at night.
   const getMedTypeColor = (type) => {
     switch(type) {
-      case 'rx': return { bg: '#E3F2FD', color: '#1565C0', label: 'Prescription' };
-      case 'otc': return { bg: '#E8F5E9', color: '#2E7D32', label: 'Over the counter' };
-      case 'supplement': return { bg: '#FFF3E0', color: '#E65100', label: 'Supplement' };
-      default: return { bg: '#F5F5F5', color: '#616161', label: 'Other' };
+      case 'rx': return { label: 'Prescription' };
+      case 'otc': return { label: 'Over the counter' };
+      case 'supplement': return { label: 'Supplement' };
+      default: return { label: 'Other' };
     }
   };
 
@@ -887,26 +889,18 @@ export default function Medications() {
 
                             {!isSimple && (
                             <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', alignItems: 'center' }}>
-                              <Chip
-                                size="small"
-                                label={typeInfo.label}
-                                sx={{
-                                  bgcolor: typeInfo.bg,
-                                  color: typeInfo.color,
-                                  fontWeight: 700,
-                                  fontSize: '0.75rem',
-                                  height: 20,
-                                }}
-                              />
+                              <Chip variant="tag" size="small" label={typeInfo.label} />
                             </Box>
                             )}
                           </Box>
 
                           <Stack direction="row" spacing={0.5}>
-                            <IconButton size="small" color="primary" aria-label={`Edit ${m.display_name}`} onClick={() => startEdit(m)}>
+                            {/* One quiet icon set (visual review B7): text.secondary at rest;
+                                remove turns red only under a finger or the pointer. */}
+                            <IconButton size="small" aria-label={`Edit ${m.display_name}`} onClick={() => startEdit(m)} sx={{ color: 'text.secondary' }}>
                               <EditIcon fontSize="small" />
                             </IconButton>
-                            <IconButton size="small" color="error" aria-label={`Remove ${m.display_name}`} onClick={() => removeMed(m)} disabled={Boolean(busy)}>
+                            <IconButton size="small" aria-label={`Remove ${m.display_name}`} onClick={() => removeMed(m)} disabled={Boolean(busy)} sx={{ color: 'text.secondary', '&:hover, &:active': { color: 'error.main' } }}>
                               <DeleteIcon fontSize="small" />
                             </IconButton>
                           </Stack>

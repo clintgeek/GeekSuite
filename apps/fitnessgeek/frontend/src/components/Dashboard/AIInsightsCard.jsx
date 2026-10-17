@@ -12,7 +12,7 @@ import {
   Button,
   Divider
 } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
+import { useTheme, alpha } from '@mui/material/styles';
 import {
   AutoAwesome as AIIcon,
   Refresh as RefreshIcon,
@@ -300,19 +300,16 @@ const AIInsightsCard = () => {
                 onClick={() => { setActiveTab(tab.id); setExpanded(true); }}
                 size="small"
                 sx={{
-                  borderRadius: 1.5,
-                  fontWeight: 600,
-                  fontSize: '0.75rem',
+                  borderRadius: 999,
+                  fontWeight: 700,
                   height: { xs: 44, sm: 32 },
-                  backgroundColor: isActive
-                    ? isDark ? 'rgba(13, 148, 136, 0.15)' : 'rgba(13, 148, 136, 0.08)'
-                    : 'transparent',
+                  backgroundColor: isActive ? alpha(accentColor, isDark ? 0.15 : 0.08) : 'transparent',
                   color: isActive ? accentColor : theme.palette.text.secondary,
                   border: `1px solid ${isActive ? accentColor : theme.palette.divider}`,
                   '&:hover': {
                     backgroundColor: isActive
-                      ? isDark ? 'rgba(13, 148, 136, 0.2)' : 'rgba(13, 148, 136, 0.12)'
-                      : isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+                      ? alpha(accentColor, isDark ? 0.2 : 0.12)
+                      : alpha(theme.palette.text.primary, isDark ? 0.05 : 0.03),
                   },
                 }}
               />
@@ -351,8 +348,8 @@ const AIInsightsCard = () => {
                           py: 1,
                           borderRadius: 2,
                           backgroundColor: msg.role === 'user'
-                            ? isDark ? 'rgba(13, 148, 136, 0.15)' : 'rgba(13, 148, 136, 0.08)'
-                            : isDark ? 'rgba(255,255,255,0.05)' : 'rgba(0,0,0,0.03)',
+                            ? alpha(accentColor, isDark ? 0.15 : 0.08)
+                            : alpha(theme.palette.text.primary, isDark ? 0.05 : 0.03),
                           border: `1px solid ${theme.palette.divider}`,
                         }}
                       >

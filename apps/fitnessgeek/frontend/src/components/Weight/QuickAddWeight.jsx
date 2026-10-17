@@ -137,11 +137,7 @@ const QuickAddWeight = ({ onAdd, unit = 'lbs', autoOpen = false, onAutoOpened, e
       {/* Quick Add Card for desktop */}
       <Card sx={{
         width: '100%',
-        display: { xs: 'none', md: 'block' },
-        backgroundColor: 'background.paper',
-        borderRadius: 2,
-        boxShadow: 1,
-        border: 'none'
+        display: { xs: 'none', md: 'block' }
       }}>
         <CardContent sx={{ p: 3 }}>
           {/* The card submits WITHOUT opening the dialog, so it needs its own

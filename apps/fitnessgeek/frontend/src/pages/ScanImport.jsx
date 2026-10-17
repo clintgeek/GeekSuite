@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Box, Typography, Button, CircularProgress } from '@mui/material';
+import { alpha } from '@mui/material/styles';
 import UploadFileIcon from '@mui/icons-material/UploadFile';
 import InsertDriveFileIcon from '@mui/icons-material/InsertDriveFile';
 import CheckCircleIcon from '@mui/icons-material/CheckCircle';
@@ -95,10 +96,9 @@ function ValidationCheckRow({ check }) {
         py: 1,
         px: 1.25,
         borderRadius: 1.5,
-        bgcolor: check.ok ? 'action.hover' : 'error.main',
         // A failing row gets a light tinted background, not a loud solid
         // one — this still needs to read as "flagged," not "broken."
-        backgroundColor: check.ok ? 'action.hover' : 'rgba(211, 47, 47, 0.08)',
+        bgcolor: (t) => (check.ok ? t.palette.action.hover : alpha(t.palette.error.main, 0.08)),
       }}
     >
       <Typography sx={{ fontSize: '0.8125rem', fontWeight: 600 }}>{check.label}</Typography>

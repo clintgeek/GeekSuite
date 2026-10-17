@@ -1,7 +1,8 @@
 import React, { useMemo } from 'react';
 import { Box, Button, Chip, CircularProgress, Typography } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
-import { Replay as AgainIcon, History as YesterdayIcon, RestaurantMenu as MealIcon, People as PeopleIcon } from '@mui/icons-material';
+import { Replay as AgainIcon, History as YesterdayIcon, RestaurantMenu as MealIcon, People as PeopleIcon, Check as CheckIcon } from '@mui/icons-material';
+import { mealColors } from '../../theme/theme.jsx';
 import { useRecentLogs } from '../../hooks/useRecentLogs.js';
 import { rankAgainChips, yesterdaysMeal } from '../../utils/againChips.js';
 import { daysBefore } from '../../utils/experience.js';
@@ -31,7 +32,7 @@ import { useHouseholdMeals } from './useHouseholdMeals.js';
  *
  * AN AGAIN CHIP COUNTS LIKE A ROW (L14). Most of her habitual foods are chips
  * now, and a chip could only say "one more entry". Once tapped it says
- * "Egg · Added ✓" (then "2 added ✓"), and "Make it 2" sits beside it;
+ * "Egg · Added" with a check (then "2 added"), and "Make it 2" sits beside it;
  * `added[key]` is what the box has written for it this sitting. A chip that
  * re-logs more than one serving says so: "Toast ×2".
  */
@@ -57,7 +58,7 @@ export default function QuickPicks({
 }) {
   const theme = useTheme();
   const today = useToday();
-  const produce = theme.palette.produce?.[mealType] || {};
+  const produce = theme.palette.produce?.[mealType] || mealColors(mealType, theme.palette.mode);
   const { logs, meals, loading } = useRecentLogs(date);
   const household = useHouseholdMeals(date, mealType);
 
@@ -95,7 +96,7 @@ export default function QuickPicks({
         <Button
           variant="outlined"
           size="large"
-          startIcon={pendingKey === YESTERDAY_KEY ? <CircularProgress size={18} color="inherit" /> : <YesterdayIcon />}
+          startIcon={pendingKey === YESTERDAY_KEY ? <CircularProgress size={18} color="inherit" aria-hidden /> : <YesterdayIcon />}
           disabled={busy}
           onClick={() => onPick?.(yesterday, YESTERDAY_KEY)}
           data-testid="same-as-yesterday"
@@ -118,7 +119,7 @@ export default function QuickPicks({
             key={key}
             variant="outlined"
             size="large"
-            startIcon={pendingKey === key ? <CircularProgress size={18} color="inherit" /> : <PeopleIcon />}
+            startIcon={pendingKey === key ? <CircularProgress size={18} color="inherit" aria-hidden /> : <PeopleIcon />}
             disabled={busy}
             aria-label={label}
             data-testid="same-as-household"
@@ -155,24 +156,32 @@ export default function QuickPicks({
               const name = isMeal ? chip.label : withAmount(chip.label, chip.item?.servings);
               const done = !isMeal ? added?.[key] : null;
               const count = Math.round((Number(done?.servings) || 1) * 100) / 100;
-              const doneText = count > 1 ? `${count} added ✓` : 'Added ✓';
+              const doneWords = count > 1 ? `${count} added` : 'Added';
               const next = Math.round(count + 1);
               return (
                 <Box key={chip.key} sx={{ display: 'inline-flex', alignItems: 'center', gap: 0.5, maxWidth: '100%' }}>
                   <Chip
                     icon={pendingKey === key
-                      ? <CircularProgress size={16} color="inherit" />
+                      ? <CircularProgress size={16} color="inherit" aria-hidden />
                       : isMeal ? <MealIcon /> : undefined}
-                    label={pendingKey === key ? 'Adding…' : done ? `${chip.label} · ${doneText}` : name}
+                    label={pendingKey === key ? 'Adding…' : done ? (
+                      <>
+                        {`${chip.label} · ${doneWords}`}
+                        <CheckIcon aria-hidden sx={{ fontSize: 18, ml: 0.25, verticalAlign: '-0.2em', color: 'primary.main' }} />
+                      </>
+                    ) : name}
                     disabled={busy}
                     onClick={() => onPick?.([chip.item], key)}
                     aria-label={done ? `Add another ${chip.label} to ${meal}` : `Add ${name} to ${meal} again`}
+                    // An action pill: the theme's warm outline, not the
+                    // 1.26:1 divider (visual review B5).
+                    variant="outlined"
                     sx={{
                       height: 48,
                       borderRadius: 999,
                       fontSize: '1rem',
                       bgcolor: theme.palette.background.paper,
-                      border: `1.5px solid ${theme.palette.divider}`,
+                      borderWidth: 1.5,
                       color: 'text.primary',
                       maxWidth: '100%',
                       '& .MuiChip-label': { px: 1.75, fontSize: '1rem', fontWeight: 700 },

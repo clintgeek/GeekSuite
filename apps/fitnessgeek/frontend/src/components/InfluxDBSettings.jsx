@@ -194,7 +194,7 @@ export default function InfluxDBSettings({ onSettingsChange }) {
             <Stack spacing={2}>
               <Stack direction="row" justifyContent="space-between" alignItems="center">
                 <Box>
-                  <Typography variant="h6">Use the home data server (InfluxDB)</Typography>
+                  <Typography variant="h6" id="influx-toggle-title">Use the home data server (InfluxDB)</Typography>
                   <Typography variant="body2" color="text.secondary">
                     Read your Garmin data from the home data server instead of straight from Garmin.
                   </Typography>
@@ -205,6 +205,7 @@ export default function InfluxDBSettings({ onSettingsChange }) {
                       checked={settings.influxEnabled}
                       onChange={handleToggleInflux}
                       disabled={saving}
+                      inputProps={{ 'aria-labelledby': 'influx-toggle-title' }}
                     />
                   }
                   label=""

@@ -9,13 +9,14 @@ import {
   ButtonBase
 } from '@mui/material';
 import {
-  Edit as EditIcon,
-  Delete as DeleteIcon,
+  EditOutlined as EditIcon,
+  DeleteOutline as DeleteIcon,
   Restaurant as FoodIcon,
   Star as StarIcon,
   StarBorder as StarBorderIcon
 } from '@mui/icons-material';
-import { useTheme } from '@mui/material/styles';
+import { useTheme, alpha } from '@mui/material/styles';
+import { mealColors } from '../../theme/theme.jsx';
 import { useToast } from '@geeksuite/ui';
 import { foodService } from '../../services/foodService.js';
 import { errorMessage } from '../../utils/errorMessage.js';
@@ -40,6 +41,7 @@ const FoodLogItem = ({
   simple = false
 }) => {
   const theme = useTheme();
+  const starInk = (theme.palette.produce?.dinner || mealColors('dinner', theme.palette.mode)).text;
   const [isFavorite, setIsFavorite] = useState(initialFavorite);
   const [favoriteLoading, setFavoriteLoading] = useState(false);
   const { notify } = useToast();
@@ -261,6 +263,7 @@ const FoodLogItem = ({
             alignItems: 'center',
             justifyContent: 'center',
             backgroundColor: theme.palette.primary.main,
+            color: theme.palette.primary.contrastText,
             opacity: translateX > 0 ? 1 : 0,
             pointerEvents: translateX > 0 ? 'auto' : 'none',
             transition: 'opacity 0.15s ease',
@@ -268,7 +271,7 @@ const FoodLogItem = ({
             zIndex: 0
           }}
         >
-          <Box sx={{ textAlign: 'center', color: 'white' }}>
+          <Box sx={{ textAlign: 'center', color: 'inherit' }}>
             <EditIcon sx={{ fontSize: 24 }} />
             <Typography variant="caption" sx={{ display: 'block', fontWeight: 600, fontSize: '0.75rem' }}>
               Edit
@@ -288,7 +291,8 @@ const FoodLogItem = ({
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            backgroundColor: '#ef4444',
+            backgroundColor: theme.palette.error.main,
+            color: theme.palette.error.contrastText,
             opacity: translateX < 0 ? 1 : 0,
             pointerEvents: translateX < 0 ? 'auto' : 'none',
             transition: 'opacity 0.15s ease',
@@ -296,7 +300,7 @@ const FoodLogItem = ({
             zIndex: 0
           }}
         >
-          <Box sx={{ textAlign: 'center', color: 'white' }}>
+          <Box sx={{ textAlign: 'center', color: 'inherit' }}>
             <DeleteIcon sx={{ fontSize: 24 }} />
             <Typography variant="caption" sx={{ display: 'block', fontWeight: 600, fontSize: '0.75rem' }}>
               Remove
@@ -348,7 +352,8 @@ const FoodLogItem = ({
       {/* Food Icon */}
       <Avatar
         sx={{
-          backgroundColor: theme.palette.primary.main,
+          backgroundColor: theme.palette.tonal?.bg || alpha(theme.palette.primary.main, 0.12),
+          color: theme.palette.tonal?.ink || theme.palette.primary.main,
           width: { xs: 36, sm: 40 },
           height: { xs: 36, sm: 40 },
           flexShrink: 0,
@@ -400,45 +405,20 @@ const FoodLogItem = ({
           <Chip
             label={`${totalCalories.toLocaleString('en-US')} cal`}
             size="small"
-            sx={{
-              height: 24,
-              borderRadius: '999px',
-              backgroundColor: theme.palette.primary.main,
-              color: theme.palette.primary.contrastText,
-              fontWeight: 700,
-              fontSize: '0.75rem',
-              '& .MuiChip-label': { px: 1.5 }
-            }}
+            // Info tags, not filled basil (visual review B1/B5).
+            variant="tag"
           />
           <Chip
             label={macroLine({ protein: totalProtein, carbs: totalCarbs, fat: totalFat }, { dense: true })}
             size="small"
-            sx={{
-              height: 24,
-              borderRadius: '999px',
-              backgroundColor: `${theme.palette.primary.main}1a`,
-              color: theme.palette.primary.main,
-              fontWeight: 600,
-              fontSize: '0.75rem',
-              border: `1px solid ${theme.palette.primary.main}33`,
-              '& .MuiChip-label': { px: 1.25 }
-            }}
+            variant="tag"
+            sx={{ color: theme.palette.text.secondary }}
           />
           {mode === 'keto' && (
             <Chip
               label={`${totalNetCarbs}g net carbs${isMissingFiber ? '*' : ''}`}
               size="small"
-              sx={{
-                height: 24,
-                borderRadius: '999px',
-                backgroundColor: `${theme.palette.warning.main}1a`,
-                color: theme.palette.warning.main,
-                fontWeight: 700,
-                fontSize: '0.75rem',
-                fontFamily: 'inherit',
-                border: `1px solid ${theme.palette.warning.main}33`,
-                '& .MuiChip-label': { px: 1.25 }
-              }}
+              variant="tag"
             />
           )}
         </Box>
@@ -452,15 +432,7 @@ const FoodLogItem = ({
           <Chip
             label={`${totalCalories.toLocaleString('en-US')} cal`}
             size="small"
-            sx={{
-              height: 24,
-              borderRadius: '999px',
-              backgroundColor: theme.palette.primary.main,
-              color: theme.palette.primary.contrastText,
-              fontWeight: 700,
-              fontSize: '0.75rem',
-              '& .MuiChip-label': { px: 1 }
-            }}
+            variant="tag"
           />
           <Typography
             variant="caption"
@@ -492,16 +464,9 @@ const FoodLogItem = ({
           <Chip
             label={`${servingsCount} serving${servingsCount !== 1 ? 's' : ''}`}
             size="small"
-            sx={{
-              height: 24,
-              borderRadius: '999px',
-              backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : theme.palette.background.default,
-              color: theme.palette.text.secondary,
-              fontWeight: 600,
-              fontSize: '0.75rem',
-              border: `1px solid ${theme.palette.divider}`,
-              '& .MuiChip-label': { px: 1.25 }
-            }}
+            // An info tag (visual review B5).
+            variant="tag"
+            sx={{ '& .MuiChip-label': { px: 1.25 } }}
           />
         </Box>
 
@@ -510,7 +475,7 @@ const FoodLogItem = ({
           <Typography
             variant="caption"
             sx={{
-              color: theme.palette.text.disabled,
+              color: theme.palette.text.secondary,
               fontSize: '0.8125rem',
               mt: 1,
               display: 'block',
@@ -527,22 +492,20 @@ const FoodLogItem = ({
       {/* Action Buttons */}
       {showActions && (
         <Box sx={{ display: 'flex', gap: 0.75, flexShrink: 0 }}>
+          {/* One outlined icon set in the secondary ink (visual review B7).
+              A favourite's star is lemon's deep ink (5.49:1), and Remove
+              turns error red only under a finger or pointer, not at rest. */}
           <Tooltip title={isFavorite ? 'Remove from favorites' : 'Add to favorites'}>
             <IconButton
               size="small"
               onClick={handleToggleFavorite}
               disabled={favoriteLoading}
               sx={{
-                color: isFavorite ? '#f59e0b' : theme.palette.text.secondary,
-                backgroundColor: isFavorite ? 'rgba(245, 158, 11, 0.1)' : 'transparent',
-                border: `1px solid ${isFavorite ? 'rgba(245, 158, 11, 0.3)' : theme.palette.divider}`,
-                '&:hover': {
-                  backgroundColor: 'rgba(245, 158, 11, 0.15)',
-                  borderColor: 'rgba(245, 158, 11, 0.4)'
-                }
+                color: isFavorite ? starInk : theme.palette.text.secondary,
+                '&:hover': { backgroundColor: alpha(starInk, 0.1) }
               }}
             >
-              {isFavorite ? <StarIcon sx={{ fontSize: 18 }} /> : <StarBorderIcon sx={{ fontSize: 18 }} />}
+              {isFavorite ? <StarIcon sx={{ fontSize: 20 }} /> : <StarBorderIcon sx={{ fontSize: 20 }} />}
             </IconButton>
           </Tooltip>
           <Tooltip title="Edit">
@@ -550,16 +513,11 @@ const FoodLogItem = ({
               size="small"
               onClick={handleEdit}
               sx={{
-                color: theme.palette.primary.main,
-                backgroundColor: `${theme.palette.primary.main}1a`,
-                border: `1px solid ${theme.palette.primary.main}33`,
-                '&:hover': {
-                  backgroundColor: `${theme.palette.primary.main}33`,
-                  borderColor: `${theme.palette.primary.main}4d`
-                }
+                color: theme.palette.text.secondary,
+                '&:hover': { backgroundColor: theme.palette.action.hover }
               }}
             >
-              <EditIcon sx={{ fontSize: 18 }} />
+              <EditIcon sx={{ fontSize: 20 }} />
             </IconButton>
           </Tooltip>
           <Tooltip title="Remove">
@@ -567,16 +525,14 @@ const FoodLogItem = ({
               size="small"
               onClick={handleDelete}
               sx={{
-                color: '#ef4444',
-                backgroundColor: 'rgba(239, 68, 68, 0.1)',
-                border: '1px solid rgba(239, 68, 68, 0.2)',
-                '&:hover': {
-                  backgroundColor: 'rgba(239, 68, 68, 0.2)',
-                  borderColor: 'rgba(239, 68, 68, 0.3)'
+                color: theme.palette.text.secondary,
+                '&:hover, &:active': {
+                  color: theme.palette.error.main,
+                  backgroundColor: alpha(theme.palette.error.main, 0.1)
                 }
               }}
             >
-              <DeleteIcon sx={{ fontSize: 18 }} />
+              <DeleteIcon sx={{ fontSize: 20 }} />
             </IconButton>
           </Tooltip>
         </Box>

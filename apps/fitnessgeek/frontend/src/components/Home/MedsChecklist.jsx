@@ -12,7 +12,9 @@ import { Link as RouterLink } from 'react-router-dom';
  */
 export default function MedsChecklist({ items = [], taken = 0, total = 0, onToggle, saving, error, title = 'Did you take your meds?' }) {
   const theme = useTheme();
-  const leaf = theme.palette.produce?.lunch || {};
+  // Taken is the app's "done" look: basil at 8% with a basil edge and a
+  // basil tick (visual review B2) — leaf is Lunch's colour.
+  const basil = theme.palette.primary.main;
 
   return (
     <Box component="section" aria-labelledby="meds-checklist-title" data-testid="meds-checklist">
@@ -54,9 +56,9 @@ export default function MedsChecklist({ items = [], taken = 0, total = 0, onTogg
                 px: 2,
                 borderRadius: '20px',
                 textAlign: 'left',
-                bgcolor: item.taken ? leaf.tint : theme.palette.background.paper,
-                border: `1px solid ${theme.palette.divider}`,
-                '@media (hover: hover)': { '&:hover': { bgcolor: item.taken ? leaf.tint : alpha(theme.palette.text.primary, 0.03) } },
+                bgcolor: item.taken ? alpha(basil, 0.08) : theme.palette.background.paper,
+                border: `1px solid ${item.taken ? basil : theme.palette.divider}`,
+                '@media (hover: hover)': { '&:hover': { bgcolor: item.taken ? alpha(basil, 0.08) : alpha(theme.palette.text.primary, 0.03) } },
                 '&:focus-visible': { outline: `3px solid ${theme.palette.primary.main}`, outlineOffset: 2 },
               }}
             >
@@ -69,8 +71,8 @@ export default function MedsChecklist({ items = [], taken = 0, total = 0, onTogg
                   flexShrink: 0,
                   display: 'grid',
                   placeItems: 'center',
-                  bgcolor: item.taken ? leaf.fill : 'transparent',
-                  color: leaf.ink,
+                  bgcolor: item.taken ? basil : 'transparent',
+                  color: theme.palette.primary.contrastText,
                   border: item.taken ? 'none' : `2.5px solid ${theme.palette.text.secondary}`,
                 }}
               >

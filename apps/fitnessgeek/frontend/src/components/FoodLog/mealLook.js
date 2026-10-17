@@ -4,53 +4,36 @@ import {
   DinnerDining as DinnerIcon,
   Cookie as SnackIcon
 } from '@mui/icons-material';
+import { mealColors } from '../../theme/theme.jsx';
 
-// Each meal's icon and colours. The colours are the retired Studio Slate
-// gradients; wave C replaces them with Market Morning's produce colours, and
-// `mealLook()` below is the ONE place this component reads a meal colour
-// from, so that is a change to one function. The titles come from
-// plainWords' mealLabel(), the same words as Home; the emoji are gone
-// (UX review IA-6).
-const MEAL_CONFIG = {
-  breakfast: {
-    icon: BreakfastIcon,
-    gradient: 'linear-gradient(135deg, #f59e0b, #d97706)',
-    lightBg: 'rgba(245, 158, 11, 0.08)',
-    darkBg: 'rgba(245, 158, 11, 0.15)'
-  },
-  lunch: {
-    icon: LunchIcon,
-    gradient: 'linear-gradient(135deg, #10b981, #059669)',
-    lightBg: 'rgba(16, 185, 129, 0.08)',
-    darkBg: 'rgba(16, 185, 129, 0.15)'
-  },
-  dinner: {
-    icon: DinnerIcon,
-    gradient: 'linear-gradient(135deg, #0D9488, #0F766E)',
-    lightBg: 'rgba(13, 148, 136, 0.08)',
-    darkBg: 'rgba(13, 148, 136, 0.15)'
-  },
-  snack: {
-    icon: SnackIcon,
-    gradient: 'linear-gradient(135deg, #8b5cf6, #7c3aed)',
-    lightBg: 'rgba(139, 92, 246, 0.08)',
-    darkBg: 'rgba(139, 92, 246, 0.15)'
-  }
+// Each meal's icon. The colours are Market Morning's produce (visual review
+// A1): the same meal is the same colour here as on Home's meal cards —
+// tomato Breakfast, leaf Lunch, lemon Dinner, plum Snacks. The retired Studio
+// Slate gradients put white on amber (2.15:1) and called Dinner teal. The
+// titles come from plainWords' mealLabel(), the same words as Home.
+const MEAL_ICONS = {
+  breakfast: BreakfastIcon,
+  lunch: LunchIcon,
+  dinner: DinnerIcon,
+  snack: SnackIcon
 };
 
 /**
  * A meal's colours for this theme: `badge` (the icon disc and the Add
- * button's fill), `badgeInk` (what sits on it) and `headerBg` (the header's
- * tint). Wave C: swap the body for `theme.palette.produce[mealType]`.
+ * button's fill), `badgeInk` (the ink that always sits on it), `headerBg`
+ * (the header's tint) and `edge` (the produce edge along the top). Read from
+ * `theme.palette.produce`, falling back to mealColors() for a bare MUI theme.
  */
 export function mealLook(mealType, theme) {
-  const config = MEAL_CONFIG[mealType] || MEAL_CONFIG.snack;
+  const mode = theme?.palette?.mode === 'dark' ? 'dark' : 'light';
+  const produce = theme?.palette?.produce?.[mealType] || mealColors(mealType, mode);
   return {
-    badge: config.gradient,
-    badgeInk: '#ffffff',
-    headerBg: theme.palette.mode === 'dark' ? config.darkBg : config.lightBg,
+    badge: produce.fill,
+    badgeInk: produce.ink,
+    headerBg: produce.tint,
+    edge: produce.fill,
   };
 }
 
 /** The meal's icon component. */
-export const mealIcon = (mealType) => (MEAL_CONFIG[mealType] || MEAL_CONFIG.snack).icon;
+export const mealIcon = (mealType) => MEAL_ICONS[mealType] || MEAL_ICONS.snack;

@@ -7,6 +7,9 @@ import {
   Clear as ClearIcon,
   Mic as MicIcon,
   Stop as StopIcon,
+  HourglassEmpty as ThinkingIcon,
+  CloudOff as OfflineIcon,
+  ErrorOutline as FailureIcon,
 } from '@mui/icons-material';
 import { slashFocusProps } from '@geeksuite/ui';
 
@@ -35,7 +38,18 @@ import { slashFocusProps } from '@geeksuite/ui';
  *
  * `micDisabled` turns the mic off without hiding it — offline, where the
  * speech service can't work and used to say the microphone was broken (L18).
+ *
+ * `statusKind` gives the line under the button an icon, so "working on it",
+ * "no signal" and "that didn't go through" stop looking alike (visual review
+ * A3): an hourglass in the secondary ink, a cloud in warning ochre, an
+ * outlined error mark in the error red. The words stay in the ink.
  */
+const STATUS_ICONS = {
+  thinking: { Icon: ThinkingIcon, color: 'text.secondary' },
+  offline: { Icon: OfflineIcon, color: 'warning.main' },
+  failure: { Icon: FailureIcon, color: 'error.main' },
+};
+
 const ComposerBox = ({
   value,
   onChange,
@@ -49,12 +63,14 @@ const ComposerBox = ({
   disabled = false,
   status = null,
   statusTone = 'muted',
+  statusKind = null,
   autoFocus = false,
   inputRef,
 }) => {
   const theme = useTheme();
   const helperId = useId();
   const labelId = useId();
+  const statusIcon = status ? STATUS_ICONS[statusKind] : null;
 
   const handleKeyDown = (e) => {
     // An IME still composing a word owns its Enter.
@@ -139,10 +155,14 @@ const ComposerBox = ({
           aria-disabled={thinking || undefined}
           aria-busy={thinking || undefined}
           data-testid="log-it"
-          startIcon={thinking ? <CircularProgress size={20} color="inherit" aria-hidden /> : <CheckIcon />}
+          startIcon={thinking
+            // A thicker stroke in the button's own label colour: the thin
+            // default vanished into the basil (visual review A3).
+            ? <CircularProgress size={20} thickness={5} aria-hidden sx={{ color: theme.palette.primary.contrastText }} />
+            : <CheckIcon />}
           sx={{
             minHeight: 56,
-            borderRadius: '18px',
+            borderRadius: 999,
             fontSize: '1.125rem',
             fontWeight: 800,
             boxShadow: 'none',
@@ -163,7 +183,8 @@ const ComposerBox = ({
               width: 56,
               height: 56,
               flexShrink: 0,
-              borderRadius: '18px',
+              // A circle beside the pill (visual review B6).
+              borderRadius: '50%',
               border: `2px solid ${theme.palette.primary.main}`,
               color: listening ? theme.palette.primary.contrastText : theme.palette.primary.main,
               bgcolor: listening ? theme.palette.primary.main : 'transparent',
@@ -183,15 +204,24 @@ const ComposerBox = ({
         role="status"
         aria-live="polite"
         data-testid="composer-status"
+        data-status-kind={statusIcon ? statusKind : undefined}
         sx={{
           minHeight: '2.9em',
           mt: 1,
           fontSize: '1rem',
           lineHeight: 1.45,
-          color: statusTone === 'strong' ? 'text.primary' : 'text.secondary',
+          color: statusTone === 'strong' || statusIcon ? 'text.primary' : 'text.secondary',
           fontWeight: statusTone === 'strong' ? 700 : 400,
+          ...(statusIcon ? { display: 'flex', alignItems: 'flex-start', gap: 1 } : {}),
         }}
       >
+        {statusIcon && (
+          <statusIcon.Icon
+            aria-hidden
+            data-testid={`composer-status-${statusKind}`}
+            sx={{ color: statusIcon.color, fontSize: 20, mt: '0.15em', flexShrink: 0 }}
+          />
+        )}
         {status ?? 'Say it like you’d tell a friend. I’ll work out the calories.'}
       </Typography>
     </Box>

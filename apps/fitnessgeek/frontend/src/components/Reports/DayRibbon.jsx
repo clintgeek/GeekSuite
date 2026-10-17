@@ -73,7 +73,7 @@ const DayCard = ({ day, calorieTarget }) => {
         flexShrink: 0,
         width: { xs: 140, sm: 152 },
         borderRadius: '14px',
-        backgroundColor: isDark ? alpha(ink, 0.04) : '#FDFCFB',
+        backgroundColor: isDark ? alpha(ink, 0.04) : theme.palette.background.paper,
         border: `1px solid ${theme.palette.divider}`,
         p: { xs: 1.5, sm: 1.75 },
         ...(status?.over && {
@@ -83,7 +83,7 @@ const DayCard = ({ day, calorieTarget }) => {
       }}
     >
       <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.75, mb: 1 }}>
-        <Typography sx={{ fontSize: '1.125rem', fontWeight: 400, color: ink, lineHeight: 1 }}>
+        <Typography sx={{ fontSize: '1.125rem', fontWeight: 700, color: ink, lineHeight: 1 }}>
           {dayOfWeek}
         </Typography>
         <Typography sx={{ fontVariantNumeric: 'tabular-nums', fontSize: '0.75rem', fontWeight: 600, color: muted }}>

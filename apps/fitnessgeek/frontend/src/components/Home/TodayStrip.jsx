@@ -7,13 +7,13 @@ import { Link as RouterLink } from 'react-router-dom';
  * "Weighed ✓ · BP — · Meds 2 of 3" (SIMPLE_AND_FULL_PLAN.md item 6).
  *
  * Each check-in is a link to the place you do it, so the strip is navigation
- * as much as a status line. Done reads as a leaf-filled ✓ with ink on it;
+ * as much as a status line. Done reads as a basil-filled ✓ (basil means
+ * done; leaf means Lunch — visual review B2);
  * not yet is an em dash, never red — missing a weigh-in is not an error.
  * The items come from `todayStrip()` (utils/checkIns.js).
  */
 export default function TodayStrip({ items = [], onMedsClick }) {
   const theme = useTheme();
-  const produce = theme.palette.produce || {};
   if (items.length === 0) return null;
 
   return (
@@ -64,8 +64,8 @@ export default function TodayStrip({ items = [], onMedsClick }) {
                 placeItems: 'center',
                 fontWeight: 800,
                 fontSize: '1rem',
-                bgcolor: item.done ? produce.lunch?.fill : alpha(theme.palette.text.primary, 0.06),
-                color: item.done ? produce.lunch?.ink : 'text.secondary',
+                bgcolor: item.done ? theme.palette.primary.main : alpha(theme.palette.text.primary, 0.06),
+                color: item.done ? theme.palette.primary.contrastText : 'text.secondary',
               }}
             >
               {item.value}

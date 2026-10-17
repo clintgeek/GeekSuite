@@ -12,6 +12,7 @@ import {
   LinearProgress
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
+import { trackColor } from '../theme/theme.jsx';
 import {
   ContentCopy as CopyIcon,
   People as PeopleIcon,
@@ -479,9 +480,11 @@ const FoodLog = () => {
 
   return (
     // Bottom padding clears the thumb-zone "Log food" button, which used to
-    // sit on top of the last meal's empty-state text (plan item 8). The top
-    // bar already says "Food log", so the page no longer says it twice more.
-    <Box sx={{ p: { xs: 2, sm: 3 }, pb: { xs: 14, md: 6 }, maxWidth: 960, mx: 'auto', display: 'flex', flexDirection: 'column' }}>
+    // sit on top of the last meal's empty-state text (plan item 8): its 56px
+    // plus its 16px gap and a breath, above the safe area (visual review C1;
+    // 56px of padding wasn't enough). The top bar already says "Food log", so
+    // the page no longer says it twice more.
+    <Box sx={{ p: { xs: 2, sm: 3 }, pb: { xs: 'calc(88px + env(safe-area-inset-bottom))', md: 6 }, maxWidth: 960, mx: 'auto', display: 'flex', flexDirection: 'column' }}>
       {/* Date Navigation with compact calorie card */}
       <DateNavigator
         selectedDate={selectedDate}
@@ -725,9 +728,7 @@ const FoodLog = () => {
               sx={{
                 height: 8,
                 borderRadius: 4,
-                backgroundColor: theme.palette.mode === 'dark'
-                  ? 'rgba(255,255,255,0.08)'
-                  : theme.palette.grey[200],
+                backgroundColor: trackColor(theme),
                 '& .MuiLinearProgress-bar': {
                   backgroundColor: barColor,
                   borderRadius: 4

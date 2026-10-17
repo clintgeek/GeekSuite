@@ -329,10 +329,10 @@ const HouseholdSettings = () => {
                       secondary={
                         <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5 }}>
                           {member.shares_food_logs && (
-                            <Chip label="Food logs" size="small" variant="outlined" />
+                            <Chip label="Food logs" size="small" variant="tag" />
                           )}
                           {member.shares_meals && (
-                            <Chip label="Meals" size="small" variant="outlined" />
+                            <Chip label="Meals" size="small" variant="tag" />
                           )}
                         </Box>
                       }

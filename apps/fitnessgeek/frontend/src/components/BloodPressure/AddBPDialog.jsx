@@ -3,7 +3,9 @@ import {
   Button,
   TextField,
   Box,
-  Typography
+  Typography,
+  useTheme,
+  alpha
 } from '@mui/material';
 import {
   MonitorHeart as BPIcon,
@@ -64,6 +66,7 @@ const blankForm = () => ({
  * exists to support.
  */
 const AddBPDialog = ({ open, onClose, onAdd, mode = 'add', initialValues = null }) => {
+  const theme = useTheme();
   const isEdit = mode === 'edit';
 
   const [systolic, setSystolic] = useState('');
@@ -219,7 +222,7 @@ const AddBPDialog = ({ open, onClose, onAdd, mode = 'add', initialValues = null 
     // will get once it lands in BPLogList/BPInsights/BPReport. No local
     // "High Normal" band here; that band never existed in the AHA guidelines
     // and let the live-typing category disagree with what got saved.
-    const category = categorizeBP(sys, dia);
+    const category = categorizeBP(sys, dia, theme.palette.mode);
     return { status: bpStageWords(category.stage).label, color: category.color };
   };
 
@@ -332,12 +335,14 @@ const AddBPDialog = ({ open, onClose, onAdd, mode = 'add', initialValues = null 
                 <Typography
                   variant="body2"
                   sx={{
-                    fontWeight: 600,
-                    color: bpStatus.color,
-                    backgroundColor: `${bpStatus.color}20`,
-                    px: 1,
+                    fontWeight: 700,
+                    // Ink on the stage's wash: the tone alone on its tint
+                    // dipped under AA (success 4.35:1).
+                    color: 'text.primary',
+                    backgroundColor: alpha(bpStatus.color, 0.14),
+                    px: 1.5,
                     py: 0.5,
-                    borderRadius: 1
+                    borderRadius: 999
                   }}
                 >
                   {bpStatus.status}

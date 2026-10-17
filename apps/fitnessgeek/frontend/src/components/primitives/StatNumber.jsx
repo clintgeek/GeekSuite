@@ -103,7 +103,8 @@ const StatNumber = ({
       sx={{
         display: 'inline-flex',
         alignItems: 'baseline',
-        gap: 0.5,
+        // A real space before the unit, so "0 days" never reads "0days" (C7).
+        gap: 1,
         justifyContent: align === 'right' ? 'flex-end' : 'flex-start',
         ...sx,
       }}

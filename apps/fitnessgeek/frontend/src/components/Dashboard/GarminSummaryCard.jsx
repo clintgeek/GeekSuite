@@ -1,6 +1,6 @@
 import React from 'react';
 import { Card, CardContent, Typography, Box, Fade, Grid } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
+import { useTheme, alpha } from '@mui/material/styles';
 import { clockTime, shortDay } from '../../utils/dates.js';
 import { DirectionsWalk as StepsIcon, LocalFireDepartment as FireIcon, Bedtime as SleepIcon, Favorite as HeartIcon } from '@mui/icons-material';
 
@@ -41,9 +41,9 @@ const GarminSummaryCard = ({ steps, activeCalories, sleepMinutes, restingHR, fet
           }, {
             label: 'Sleep', value: sleepText, color: theme.palette.secondary.main, Icon: SleepIcon
           }].map((item) => (
-            <Box key={item.label} sx={{ textAlign: 'center', p: 1.5, borderRadius: 1, backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.05)' : theme.palette.grey[50], border: 'none', position: 'relative' }}>
+            <Box key={item.label} sx={{ textAlign: 'center', p: 1.5, borderRadius: '16px', backgroundColor: alpha(theme.palette.text.primary, theme.palette.mode === 'dark' ? 0.04 : 0.03), border: 'none', position: 'relative' }}>
               <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', mb: 1 }}>
-                <Box sx={{ bgcolor: item.color, color: '#fff', width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', mr: 0.75 }}>
+                <Box sx={{ bgcolor: item.color, color: theme.palette.mode === 'dark' ? theme.palette.background.default : '#FFFFFF', width: 28, height: 28, borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', mr: 0.75 }}>
                   <item.Icon sx={{ fontSize: { xs: '1rem', sm: '1.25rem' } }} />
                 </Box>
                 <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontWeight: 500, fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>

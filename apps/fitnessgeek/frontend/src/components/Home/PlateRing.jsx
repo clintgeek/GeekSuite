@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, Typography } from '@mui/material';
 import { useTheme, alpha } from '@mui/material/styles';
+import { trackColor } from '../../theme/theme.jsx';
 
 /**
  * The calorie ring, drawn as a plate (DOCS/SIMPLE_AND_FULL_PLAN.md,
@@ -49,7 +50,9 @@ export default function PlateRing({ eaten = 0, goal = 0, byMeal = {}, size = 200
     return arc;
   }).filter((a) => a.len > 0.5);
 
-  const rimTrack = isDark ? alpha('#F7EDE0', 0.08) : '#F3E9D8';
+  // The rim is the app's one track colour (review A2/A5): a touch deeper
+  // than the old cream, so the lemon arc no longer melts into it.
+  const rimTrack = trackColor(theme);
   const plate = theme.palette.background.paper;
   const well = isDark ? alpha('#F7EDE0', 0.03) : '#FFFBF3';
 
@@ -100,7 +103,7 @@ export default function PlateRing({ eaten = 0, goal = 0, byMeal = {}, size = 200
           textAlign: 'center',
         }}
       >
-        <Typography sx={{ fontSize: size * 0.2, fontWeight: 800, lineHeight: 1, color: 'text.primary' }}>
+        <Typography sx={{ fontSize: Math.max(28, size * 0.2), fontWeight: 800, lineHeight: 1, color: 'text.primary' }}>
           {percent
             ? `${Math.round((e / g) * 100).toLocaleString('en-US')}%`
             : left === null ? Math.round(e).toLocaleString('en-US') : over ? `+${Math.round(e - g).toLocaleString('en-US')}` : left.toLocaleString('en-US')}

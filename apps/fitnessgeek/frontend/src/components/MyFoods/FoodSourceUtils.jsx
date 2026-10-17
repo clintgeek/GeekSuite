@@ -21,18 +21,23 @@ export const getSourceIcon = (source) => {
   }
 };
 
-export const getSourceColor = (source) => {
+/**
+ * The source's dot colour, from the theme's semantic set (visual review B3) —
+ * not MUI's green/blue/orange/purple. A dot only, never ink.
+ */
+export const getSourceColor = (source, theme) => {
+  const p = theme?.palette || {};
   switch (source?.toLowerCase()) {
     case 'usda':
-      return '#4CAF50'; // Green
+      return p.success?.main || '#2F7D32';
     case 'nutritionix':
-      return '#2196F3'; // Blue
+      return p.info?.main || '#2A5F8F';
     case 'openfoodfacts':
-      return '#FF9800'; // Orange
+      return p.warning?.main || '#9A5B00';
     case 'custom':
-      return '#9C27B0'; // Purple
+      return p.primary?.main || '#2F6B35';
     default:
-      return '#757575'; // Grey
+      return p.text?.muted || p.text?.secondary || '#6B5847';
   }
 };
 

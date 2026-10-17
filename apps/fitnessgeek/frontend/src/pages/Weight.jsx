@@ -111,8 +111,9 @@ const Weight = () => {
   }
 
   return (
-    // Bottom padding clears the thumb-zone "Log weight" button (plan item 8).
-    <Box sx={{ p: { xs: 2, sm: 3 }, pb: { xs: 14, md: 6 }, maxWidth: 960, mx: 'auto' }}>
+    // Bottom padding clears the thumb-zone "Log weight" button (plan item 8):
+    // its 56px, its 16px lift and a gap, above the safe area (visual C1).
+    <Box sx={{ p: { xs: 2, sm: 3 }, pb: { xs: 'calc(88px + env(safe-area-inset-bottom))', md: 6 }, maxWidth: 960, mx: 'auto' }}>
       {/* The top bar says "Weight"; one plain line says what's here. */}
       <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem', mb: 2.5 }}>
         {isSimple

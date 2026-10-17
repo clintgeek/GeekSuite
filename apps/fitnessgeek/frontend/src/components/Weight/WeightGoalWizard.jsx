@@ -10,7 +10,7 @@ import {
   Chip,
   Divider
 } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
+import { useTheme, alpha } from '@mui/material/styles';
 import {
   TrendingDown as LoseIcon,
   TrendingUp as GainIcon,
@@ -359,10 +359,12 @@ const WeightGoalWizard = ({ open, onClose, onSave, currentWeight, existingGoal, 
                   label={selectedRate.description}
                   size="small"
                   sx={{
-                    backgroundColor: selectedRate.safe ? 'rgba(16, 185, 129, 0.1)' : 'rgba(239, 68, 68, 0.1)',
-                    color: selectedRate.safe ? '#059669' : '#dc2626',
-                    fontWeight: 600,
-                    border: `1px solid ${selectedRate.safe ? 'rgba(16, 185, 129, 0.2)' : 'rgba(239, 68, 68, 0.2)'}`,
+                    // The theme's semantic tones, not Tailwind (visual B3):
+                    // a safety read, so too-fast is the error tone, in words.
+                    backgroundColor: alpha(selectedRate.safe ? theme.palette.success.main : theme.palette.error.main, 0.12),
+                    color: theme.palette.text.primary,
+                    fontWeight: 700,
+                    height: 28,
                     borderRadius: '999px'
                   }}
                 />
@@ -383,10 +385,10 @@ const WeightGoalWizard = ({ open, onClose, onSave, currentWeight, existingGoal, 
           <Box sx={{
             p: 3,
             borderRadius: '16px',
-            background: isDark
-              ? 'linear-gradient(135deg, rgba(6, 182, 212, 0.15), rgba(8, 145, 178, 0.15))'
-              : 'linear-gradient(135deg, rgba(6, 182, 212, 0.05), rgba(8, 145, 178, 0.05))',
-            border: '2px solid rgba(6, 182, 212, 0.2)'
+            // Basil at 8% with a basil edge — the app's one "chosen" look
+            // (visual B2), replacing Studio Slate's cyan gradient.
+            backgroundColor: alpha(theme.palette.primary.main, isDark ? 0.12 : 0.08),
+            border: `1px solid ${theme.palette.primary.main}`
           }}>
             <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 700, color: theme.palette.text.primary }}>
               Your goal in short

@@ -136,7 +136,7 @@ export function MetabolismCard({ plan, scanLoadFailed = false }) {
   return (
     <Card data-testid="metabolism-card">
       <CardContent>
-        <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
+        <Typography variant="h6" sx={{ mb: 2 }}>
           What you burn
         </Typography>
         <Box sx={{ mb: 2 }}>

@@ -31,12 +31,15 @@ const Surface = React.forwardRef(function Surface(
   const isDark = theme.palette.mode === 'dark';
   const ink = theme.palette.text.primary;
   const canvas = theme.palette.background.paper;
+  // Night cards need a firmer edge than the divider to lift off the walnut
+  // (review A10); the theme's `cardBorder` is the divider in the morning.
+  const edge = theme.palette.cardBorder || theme.palette.divider;
 
   const base = {
     position: 'relative',
     borderRadius: variant === 'ticket' ? '20px' : '16px',
     backgroundColor: canvas,
-    border: `1px solid ${theme.palette.divider}`,
+    border: `1px solid ${edge}`,
     boxShadow: 'none',
     padding: padded ? { xs: 2, sm: 2.5 } : 0,
     transition:
@@ -52,11 +55,11 @@ const Surface = React.forwardRef(function Surface(
     ticket: {
       // Receipt aesthetic told by the perforation alone — no heavy border.
       // Subtle warmth on light mode, canvas on dark.
-      backgroundColor: isDark ? canvas : '#FDFCFB',
-      border: `1px solid ${theme.palette.divider}`,
+      backgroundColor: canvas,
+      border: `1px solid ${edge}`,
       boxShadow: isDark
         ? '0 12px 32px -16px rgba(0, 0, 0, 0.5)'
-        : '0 12px 32px -20px rgba(28, 25, 23, 0.14)',
+        : '0 12px 32px -20px rgba(92, 64, 32, 0.16)',
       // Leave room at the top for the perforation to sit inside the card
       paddingTop: 0,
       // Dashed "tear" line — now sits INSIDE the card at the top,
@@ -98,7 +101,7 @@ const Surface = React.forwardRef(function Surface(
           borderColor: variant === 'ghost' ? theme.palette.primary.main : alpha(ink, 0.28),
           boxShadow: isDark
             ? '0 10px 24px -10px rgba(0, 0, 0, 0.5)'
-            : '0 10px 24px -14px rgba(28, 25, 23, 0.22)',
+            : '0 10px 24px -14px rgba(92, 64, 32, 0.24)',
         },
         '&:active': {
           transform: 'translateY(0)',

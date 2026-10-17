@@ -137,7 +137,7 @@ describe('EditLogDialog: calories, macros and the day', () => {
 
   it('the servings box brings up the decimal keypad and takes "0.5"', () => {
     const onSave = open(SOUP, { simple: false });
-    const box = screen.getByLabelText('Servings');
+    const box = screen.getByRole('textbox', { name: 'Servings' });
     expect(box).toHaveAttribute('inputmode', 'decimal');
     fireEvent.change(box, { target: { value: '0.' } });
     expect(box).toHaveValue('0.');

@@ -216,6 +216,9 @@ export default function MealCards({ meals = {}, compact = false, onAdd, onRemove
       sx={{
         display: 'grid',
         gap: { xs: 1.5, sm: 2 },
+        // Simple: a "Nothing yet" tile keeps its own height instead of
+        // stretching to a full neighbour's (review C8).
+        alignItems: compact ? 'start' : 'stretch',
         gridTemplateColumns: compact
           ? { xs: 'repeat(2, minmax(0, 1fr))', md: 'repeat(4, minmax(0, 1fr))' }
           : { xs: '1fr', sm: 'repeat(2, minmax(0, 1fr))' },

@@ -27,3 +27,13 @@ describe('MacroStrip over target', () => {
     expect(screen.queryByText(/Protein.*over/)).toBeNull();
   });
 });
+
+describe('MacroStrip colours (visual review B2)', () => {
+  it('draws macros in the macro ramp, not the meal produce', () => {
+    renderStrip();
+    // Protein basil, Carbs cinnamon, Fat the muted ink — tomato/leaf/lemon mean meals.
+    expect(screen.getByTestId('macro-fill-protein')).toHaveStyle({ backgroundColor: 'rgb(47, 107, 53)' });
+    expect(screen.getByTestId('macro-fill-carbs')).toHaveStyle({ backgroundColor: 'rgb(138, 90, 60)' });
+    expect(screen.getByTestId('macro-fill-fat')).toHaveStyle({ backgroundColor: 'rgb(107, 88, 71)' });
+  });
+});

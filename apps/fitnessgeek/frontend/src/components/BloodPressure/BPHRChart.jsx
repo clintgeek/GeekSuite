@@ -5,7 +5,7 @@ import { ResponsiveLine } from '@nivo/line';
 import { buildChartTheme } from '../primitives/chartTheme.js';
 
 // Q52a: ported from Recharts to @nivo/line so this page carries ONE chart
-// library instead of two. Same series, same teal stroke, same 250px band,
+// library instead of two. Same series, the app's basil stroke (was Studio Slate teal), same 250px band,
 // same "N bpm — Heart Rate" tooltip.
 //
 // The x axis is the reading's ORDINAL POSITION, labelled with its formatted
@@ -15,8 +15,6 @@ import { buildChartTheme } from '../primitives/chartTheme.js';
 // Recharts version it replaces was a category axis too, so an ordinal keeps
 // the visual identical. Keying on the formatted label instead would collapse
 // two readings that land in the same minute into one point.
-const STROKE = '#0D9488';
-
 const formatClock = (timeValue) => {
   if (typeof timeValue === 'number') {
     // Unix timestamp, seconds or milliseconds
@@ -68,15 +66,12 @@ const BPHRChart = ({ data = [], title = 'Heart rate today' }) => {
     return { min: Math.min(...values) - 5, max: Math.max(...values) + 5 };
   }, [points]);
 
-  const series = useMemo(() => [{ id: 'Heart rate', color: STROKE, data: points }], [points]);
+  const stroke = theme.palette.primary.main;
+  const series = useMemo(() => [{ id: 'Heart rate', color: stroke, data: points }], [points, stroke]);
   const tickValues = useMemo(() => spacedIndices(points.length), [points.length]);
 
   return (
-    <Card sx={{
-      borderRadius: '20px',
-      boxShadow: '0 4px 12px rgba(15, 23, 42, 0.08)',
-      border: `1px solid ${theme.palette.divider}`
-    }}>
+    <Card>
       <CardContent sx={{ p: 3 }}>
         <Typography variant="h6" sx={{ mb: 2, fontWeight: 700, color: 'text.primary' }}>
           {title}
@@ -131,9 +126,9 @@ const BPHRChart = ({ data = [], title = 'Heart rate today' }) => {
                   backgroundColor: theme.palette.background.paper,
                   color: theme.palette.text.primary,
                   border: `1px solid ${theme.palette.divider}`,
-                  borderRadius: '8px',
+                  borderRadius: '12px',
                   padding: '8px 12px',
-                  boxShadow: '0 4px 12px rgba(15, 23, 42, 0.1)',
+                  boxShadow: theme.shadows[4],
                 }}>
                   <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
                     {labels[slice.points[0].data.x] ?? ''}

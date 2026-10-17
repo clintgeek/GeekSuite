@@ -48,7 +48,7 @@ const WeightTimeline = ({ weightLogs = [], goal = null, unit = 'lbs' }) => {
     const lines = [];
     if (model.goalLine) lines.push({ id: SERIES.goal, color: muted, data: model.goalLine });
     if (model.readings.length) {
-      lines.push({ id: SERIES.readings, color: alpha(primary, 0.45), data: model.readings });
+      lines.push({ id: SERIES.readings, color: alpha(primary, 0.7), data: model.readings });
       lines.push({ id: SERIES.trend, color: primary, data: model.trend });
     }
     if (model.projection) {
@@ -88,7 +88,7 @@ const WeightTimeline = ({ weightLogs = [], goal = null, unit = 'lbs' }) => {
 
   const legend = [
     { key: 'trend', label: LEGEND.trend, color: primary, kind: 'line' },
-    { key: 'readings', label: LEGEND.readings, color: alpha(primary, 0.45), kind: 'dot' },
+    { key: 'readings', label: LEGEND.readings, color: alpha(primary, 0.7), kind: 'dot' },
     model.goalLine && { key: 'goal', label: LEGEND.goal, color: muted, kind: 'dash' },
     model.projection && {
       key: 'projection',
@@ -228,7 +228,9 @@ const WeightTimeline = ({ weightLogs = [], goal = null, unit = 'lbs' }) => {
               }),
             // Points, drawn by hand: pointSize can't vary per series in this
             // @nivo/line version. Only the raw readings get a dot — small,
-            // faint, no ring — so the eye follows the average, not the noise.
+            // no ring — so the eye follows the average, not the noise. At 70%
+            // and 3.5px they still read (3.3:1 by day, 5:1 at night; the old
+            // 45% dots nearly vanished — visual review A6).
             ({ points }) =>
               points
                 .filter(({ seriesId }) => seriesId === SERIES.readings)
@@ -237,7 +239,7 @@ const WeightTimeline = ({ weightLogs = [], goal = null, unit = 'lbs' }) => {
                     key={point.id}
                     cx={point.x}
                     cy={point.y}
-                    r={2.5}
+                    r={3.5}
                     fill={point.seriesColor ?? point.borderColor}
                     stroke="none"
                   />

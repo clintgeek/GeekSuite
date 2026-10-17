@@ -49,11 +49,30 @@ export const BP_STAGES = Object.freeze({
  * and/or higher than 120" — strictly greater, which is why 180/120 is Stage 2
  * and 181/121 is Crisis.
  *
+ * Colours come from the app's Market Morning semantic set (visual review B3),
+ * not Tailwind: Normal = success, Elevated = warning, Stage 1 = the tomato
+ * text tone, Stage 2 and Crisis = error, Unknown = muted ink. `tone` names
+ * the job; `color` is that tone in the given mode, so a caller passes
+ * `theme.palette.mode` and never draws a day colour at night.
+ *
  * @param {number} systolic
  * @param {number} diastolic
- * @returns {{stage: string, category: string, color: string}}
+ * @param {'light'|'dark'} [mode]
+ * @returns {{stage: string, category: string, color: string, tone: string}}
  */
-export const categorizeBP = (systolic, diastolic) => {
+export const BP_TONES = Object.freeze({
+  light: { success: '#2F7D32', warning: '#9A5B00', tomato: '#B23A22', error: '#B3261E', muted: '#6B5847' },
+  dark: { success: '#8BCB7E', warning: '#F2B45A', tomato: '#FF8A70', error: '#FF9A8A', muted: '#C4B29D' },
+});
+
+/** The colour for a BP tone in one mode. */
+export const bpToneColor = (tone, mode = 'light') => {
+  const set = BP_TONES[mode === 'dark' ? 'dark' : 'light'];
+  return set[tone] || set.muted;
+};
+
+export const categorizeBP = (systolic, diastolic, mode = 'light') => {
+  const result = (stage, tone) => ({ stage, category: stage, tone, color: bpToneColor(tone, mode) });
   // A missing or unparseable reading is not a category. Saying "Normal" here
   // would be the same class of lie the bugs above told.
   //
@@ -64,36 +83,36 @@ export const categorizeBP = (systolic, diastolic) => {
   // and null are rejected before any coercion happens.
   const blank = (v) => v === null || v === undefined || (typeof v === 'string' && v.trim() === '');
   if (blank(systolic) || blank(diastolic)) {
-    return { stage: 'Unknown', category: 'Unknown', color: '#78716C' };
+    return result('Unknown', 'muted');
   }
 
   const sys = Number(systolic);
   const dia = Number(diastolic);
 
   if (!Number.isFinite(sys) || !Number.isFinite(dia)) {
-    return { stage: 'Unknown', category: 'Unknown', color: '#78716C' };
+    return result('Unknown', 'muted');
   }
 
   // A physiologically impossible reading is a data error, not a category — and
   // a zero or negative value is what a half-filled form looks like.
   if (sys <= 0 || dia <= 0) {
-    return { stage: 'Unknown', category: 'Unknown', color: '#78716C' };
+    return result('Unknown', 'muted');
   }
 
   if (sys > 180 || dia > 120) {
-    return { stage: BP_STAGES.CRISIS, category: BP_STAGES.CRISIS, color: '#dc2626' };
+    return result(BP_STAGES.CRISIS, 'error');
   }
   if (sys >= 140 || dia >= 90) {
-    return { stage: BP_STAGES.STAGE_2, category: BP_STAGES.STAGE_2, color: '#ef4444' };
+    return result(BP_STAGES.STAGE_2, 'error');
   }
   if (sys >= 130 || dia >= 80) {
-    return { stage: BP_STAGES.STAGE_1, category: BP_STAGES.STAGE_1, color: '#f97316' };
+    return result(BP_STAGES.STAGE_1, 'tomato');
   }
   if (sys >= 120) {
     // Reaching here means diastolic is already below 80.
-    return { stage: BP_STAGES.ELEVATED, category: BP_STAGES.ELEVATED, color: '#f59e0b' };
+    return result(BP_STAGES.ELEVATED, 'warning');
   }
-  return { stage: BP_STAGES.NORMAL, category: BP_STAGES.NORMAL, color: '#10b981' };
+  return result(BP_STAGES.NORMAL, 'success');
 };
 
 /**

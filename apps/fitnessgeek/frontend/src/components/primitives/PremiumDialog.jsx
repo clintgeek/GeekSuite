@@ -160,7 +160,7 @@ const PremiumDialog = ({
         backgroundImage: 'none',
         boxShadow: theme.palette.mode === 'dark'
           ? '0 24px 64px -16px rgba(0, 0, 0, 0.7)'
-          : '0 24px 64px -20px rgba(28, 25, 23, 0.25)',
+          : '0 24px 64px -20px rgba(92, 64, 32, 0.28)',
         // Dashed rules are the identity; the primitive draws solid ones.
         '& [data-geek-dialog="header"]': { borderBottomStyle: 'dashed' },
         '& [data-geek-dialog="title"]': { overflow: 'visible' },

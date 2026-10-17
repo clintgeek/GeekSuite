@@ -1,6 +1,6 @@
 import React from 'react';
 import { Box, ButtonBase, Switch, Typography } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
+import { useTheme, alpha } from '@mui/material/styles';
 import { Check as CheckIcon } from '@mui/icons-material';
 import { useToast } from '@geeksuite/ui';
 import { Surface } from '../primitives';
@@ -98,7 +98,7 @@ export default function ExperienceSettings({ children, id }) {
                 minHeight: 88,
                 borderRadius: '20px',
                 border: `2px solid ${on ? theme.palette.primary.main : theme.palette.divider}`,
-                bgcolor: on ? theme.palette.produce?.lunch?.tint : 'background.paper',
+                bgcolor: on ? alpha(theme.palette.primary.main, 0.08) : 'background.paper',
                 '&:focus-visible': { outline: `3px solid ${theme.palette.primary.main}`, outlineOffset: 2 },
               }}
             >

@@ -55,7 +55,7 @@ const SleepStageTile = ({ icon: Icon, minutes = 0, label, color }) => {
       sx={{
         textAlign: 'center',
         p: 1.75,
-        borderRadius: 2,
+        borderRadius: '16px',
         backgroundColor: (t) => alpha(color, t.palette.mode === 'dark' ? 0.12 : 0.08),
         border: (t) => `1px solid ${alpha(color, t.palette.mode === 'dark' ? 0.22 : 0.14)}`,
         height: '100%',
@@ -105,7 +105,7 @@ const MetricTile = ({ icon: Icon, label, value, unit, color, subtext }) => {
       sx={{
         textAlign: 'center',
         p: 1.75,
-        borderRadius: 2,
+        borderRadius: '16px',
         backgroundColor: (t) => alpha(color, t.palette.mode === 'dark' ? 0.12 : 0.08),
         border: (t) => `1px solid ${alpha(color, t.palette.mode === 'dark' ? 0.2 : 0.14)}`,
         height: '100%',
@@ -157,7 +157,9 @@ const MetricTile = ({ icon: Icon, label, value, unit, color, subtext }) => {
           sx={{
             fontFamily: "inherit",
             fontSize: '0.75rem',
-            color: 'text.disabled',
+            // Readable on the tinted tiles in both modes (text.disabled
+            // measured 3.97:1 at night).
+            color: 'text.secondary',
           }}
         >
           {subtext}
@@ -284,13 +286,8 @@ const ActivityCard = ({ activity }) => {
             icon={<FireIcon sx={{ fontSize: 16 }} />}
             label={`${fmt(activity.calories)} cal`}
             size="small"
-            sx={{
-              bgcolor: theme.palette.warning.main + '20',
-              color: theme.palette.warning.dark,
-              fontWeight: 600,
-              fontFamily: "inherit",
-              flexShrink: 0,
-            }}
+            variant="tag"
+            sx={{ flexShrink: 0 }}
           />
         )}
       </Box>
@@ -569,7 +566,7 @@ const Activity = () => {
                   <Typography color="text.secondary">
                     No sleep details for last night yet
                   </Typography>
-                  <Typography variant="caption" color="text.disabled">
+                  <Typography variant="caption" color="text.secondary">
                     They show up after your watch syncs with Garmin Connect.
                   </Typography>
                 </Box>
@@ -584,7 +581,7 @@ const Activity = () => {
                         icon={DeepSleepIcon}
                         minutes={sleepData.deepSleepMinutes}
                         label="Deep"
-                        color="#6366f1"
+                        color={theme.palette.info.main}
                       />
                     </Grid>
                   )}
@@ -594,7 +591,7 @@ const Activity = () => {
                         icon={LightSleepIcon}
                         minutes={sleepData.lightSleepMinutes}
                         label="Light"
-                        color="#3b82f6"
+                        color={theme.palette.primary.main}
                       />
                     </Grid>
                   )}
@@ -604,7 +601,7 @@ const Activity = () => {
                         icon={RemIcon}
                         minutes={sleepData.remSleepMinutes}
                         label="REM"
-                        color="#a855f7"
+                        color={theme.palette.secondary.main}
                       />
                     </Grid>
                   )}
@@ -614,7 +611,7 @@ const Activity = () => {
                         icon={AwakeIcon}
                         minutes={sleepData.awakeSleepMinutes}
                         label="Awake"
-                        color="#fbbf24"
+                        color={theme.palette.warning.main}
                       />
                     </Grid>
                   )}
@@ -645,7 +642,7 @@ const Activity = () => {
                           label="Avg SpO₂"
                           value={sleepData.avgSpO2}
                           unit="%"
-                          color="#ef4444"
+                          color={theme.palette.info.main}
                           subtext={sleepData.minSpO2 ? `Low: ${sleepData.minSpO2}%` : null}
                         />
                       </Grid>
@@ -656,7 +653,7 @@ const Activity = () => {
                           label="Heart-rate variability (HRV)"
                           value={sleepData.avgOvernightHrv}
                           unit="ms"
-                          color="#22c55e"
+                          color={theme.palette.success.main}
                           subtext={sleepData.hrvStatus || null}
                         />
                       </Grid>
@@ -666,7 +663,7 @@ const Activity = () => {
                         <MetricTile
                           label="Breaths a minute"
                           value={Math.round(sleepData.avgRespiration * 10) / 10}
-                          color="#0ea5e9"
+                          color={theme.palette.secondary.main}
                           subtext={sleepData.minRespiration && sleepData.maxRespiration
                             ? `${sleepData.minRespiration}–${sleepData.maxRespiration}`
                             : null}
@@ -678,7 +675,7 @@ const Activity = () => {
                         <MetricTile
                           label="Body Battery"
                           value={`+${sleepData.bodyBatteryChange}`}
-                          color="#fbbf24"
+                          color={theme.palette.warning.main}
                           subtext="Recovery"
                         />
                       </Grid>

@@ -360,7 +360,19 @@ const Reports = () => {
               exclusive
               onChange={handleRangeChange}
               aria-label="How many days"
-              sx={{ '& .MuiToggleButtonGroup-grouped': { minHeight: 44, minWidth: 44 } }}
+              // A pill like every other control (visual review B6); the chosen
+              // range is basil, the app's "selected" look (B2).
+              sx={{
+                borderRadius: 999,
+                '& .MuiToggleButtonGroup-grouped': { minHeight: 44, minWidth: 44 },
+                '& .MuiToggleButtonGroup-grouped:first-of-type': { borderTopLeftRadius: 999, borderBottomLeftRadius: 999, pl: 1.75 },
+                '& .MuiToggleButtonGroup-grouped:last-of-type': { borderTopRightRadius: 999, borderBottomRightRadius: 999, pr: 1.75 },
+                '& .MuiToggleButton-root.Mui-selected': {
+                  bgcolor: alpha(theme.palette.primary.main, 0.12),
+                  color: 'primary.main',
+                  '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.16) },
+                },
+              }}
             >
               {RANGE_OPTIONS.map((option) => (
                 <ToggleButton key={option} value={option} sx={{ px: 1.25, whiteSpace: 'nowrap' }}>
@@ -369,7 +381,7 @@ const Reports = () => {
               ))}
             </ToggleButtonGroup>
             <Button
-              variant="contained"
+              variant="tonal"
               startIcon={<DownloadIcon />}
               onClick={handleExport}
               disabled={exporting || loading}

@@ -1,6 +1,7 @@
 import React, { useRef, useEffect, useState } from 'react';
 import { Box, Button, TextField, Typography, ButtonBase } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
+import { useTheme, alpha } from '@mui/material/styles';
+import { trackColor } from '../../theme/theme.jsx';
 import { Check as CheckIcon } from '@mui/icons-material';
 import { mealWord } from '../../utils/plainWords.js';
 
@@ -59,7 +60,7 @@ export default function FirstRun({ suggestedName = '', mealType = 'breakfast', o
     <Box data-testid="first-run" sx={{ maxWidth: 560, mx: 'auto', py: { xs: 2, sm: 4 }, display: 'flex', flexDirection: 'column', gap: 3 }}>
       <Box aria-hidden sx={{ display: 'flex', gap: 1 }}>
         {[1, 2, 3].map((n) => (
-          <Box key={n} sx={{ height: 8, flex: 1, borderRadius: 999, bgcolor: n <= step ? produce.breakfast?.fill : theme.palette.divider }} />
+          <Box key={n} sx={{ height: 8, flex: 1, borderRadius: 999, bgcolor: n <= step ? theme.palette.primary.main : trackColor(theme) }} />
         ))}
       </Box>
       <Typography sx={{ color: 'text.secondary', fontWeight: 700, fontSize: '1rem' }}>Step {step} of 3</Typography>
@@ -102,7 +103,7 @@ export default function FirstRun({ suggestedName = '', mealType = 'breakfast', o
                     minHeight: 72,
                     borderRadius: '20px',
                     border: `2px solid ${chosen ? theme.palette.primary.main : theme.palette.divider}`,
-                    bgcolor: chosen ? produce.lunch?.tint : theme.palette.background.paper,
+                    bgcolor: chosen ? alpha(theme.palette.primary.main, 0.08) : theme.palette.background.paper,
                     '&:focus-visible': { outline: `3px solid ${theme.palette.primary.main}`, outlineOffset: 2 },
                   }}
                 >

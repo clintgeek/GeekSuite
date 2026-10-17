@@ -38,7 +38,8 @@ const ThumbFab = ({ onClick, label, testId }) => {
         minHeight: 56,
         px: 2.5,
         gap: 1,
-        borderRadius: '16px',
+        // A pill, like every other button in the app (review B6).
+        borderRadius: 999,
         fontSize: '1rem',
         fontWeight: 700,
         textTransform: 'none',

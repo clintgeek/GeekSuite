@@ -5,6 +5,7 @@ import { ResponsiveLine } from '@nivo/line';
 import { Surface, SectionLabel, buildChartTheme } from '../primitives';
 import { bodyCompTrendSeries } from './bodyCompFormat.js';
 import ChartTooltip from '../Weight/chartTooltip.jsx';
+import { macroColors } from '../../theme/theme.jsx';
 import { tooltipDay, useTooltipGuard } from '../Weight/chartTips.js';
 
 /**
@@ -45,7 +46,7 @@ const MARGIN_LEFT = 40;
 
 const Panel = ({ label, series, color, xMin, xMax, chartTheme, showAxis }) => {
   const data = [
-    { id: `${label} readings`, color: alpha(color, 0.4), data: series.readings },
+    { id: `${label} readings`, color: alpha(color, 0.7), data: series.readings },
     { id: `${label} 7-day average`, color, data: series.trend },
   ];
   const [yMin, yMax] = yRange([...series.readings, ...series.trend]);
@@ -102,7 +103,7 @@ const Panel = ({ label, series, color, xMin, xMax, chartTheme, showAxis }) => {
             ({ points }) =>
               points
                 .filter((p) => p.seriesId.endsWith('readings'))
-                .map((p) => <circle key={p.id} cx={p.x} cy={p.y} r={2.5} fill={p.seriesColor} />),
+                .map((p) => <circle key={p.id} cx={p.x} cy={p.y} r={3.5} fill={p.seriesColor} />),
             'slices',
             'mesh',
           ]}
@@ -141,7 +142,9 @@ const BodyCompTrend = ({ scans = [] }) => {
           <Panel
             label="Fat mass"
             series={model.fat}
-            color={theme.palette.warning.main}
+            // The Fat macro's colour, not warning ochre: fat mass is a body
+            // measure, not a warning (visual review C14).
+            color={macroColors(theme.palette.mode).fat}
             xMin={xMin}
             xMax={xMax}
             chartTheme={chartTheme}

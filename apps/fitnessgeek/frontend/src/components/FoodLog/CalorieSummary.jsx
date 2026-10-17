@@ -1,8 +1,9 @@
 import React from 'react';
 import { Box, Typography, IconButton, Tooltip, LinearProgress } from '@mui/material';
-import { useTheme, alpha } from '@mui/material/styles';
+import { useTheme } from '@mui/material/styles';
 import { LocalFireDepartment as CaloriesIcon, Settings as SettingsIcon } from '@mui/icons-material';
 import { fmt } from '../../utils/plainWords.js';
+import { trackColor, macroColors } from '../../theme/theme.jsx';
 
 const DEFAULT_RDA = 2000;
 
@@ -20,6 +21,9 @@ const CalorieSummary = ({
 }) => {
   const theme = useTheme();
   const amber = theme.palette.warning.main;
+  // Every progress track is the warm `track` groove (visual review A2).
+  const track = trackColor(theme);
+  const carbsColor = (theme.palette.macro || macroColors(theme.palette.mode)).carbs;
 
   // ─── Keto mode ───────────────────────────────────────────────────────────
   if (mode === 'keto') {
@@ -45,7 +49,7 @@ const CalorieSummary = ({
       }}>
         <Box sx={{ display: 'grid', gridTemplateColumns: '1fr auto', rowGap: 0.5, columnGap: 1 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Box sx={{ width: 16, height: 16, borderRadius: '50%', backgroundColor: amber, flexShrink: 0 }} />
+            <Box sx={{ width: 16, height: 16, borderRadius: '50%', backgroundColor: carbsColor, flexShrink: 0 }} />
             <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontWeight: 800, fontSize: '0.9375rem' }}>
               Net carbs
             </Typography>
@@ -86,7 +90,7 @@ const CalorieSummary = ({
               sx={{
                 height: 4,
                 borderRadius: 2,
-                backgroundColor: alpha(amber, 0.15),
+                backgroundColor: track,
                 '& .MuiLinearProgress-bar': { backgroundColor: barColor, transition: 'background-color 0.3s ease' }
               }}
             />
@@ -122,7 +126,7 @@ const CalorieSummary = ({
       columnGap: 1
     }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-        <CaloriesIcon sx={{ color: theme.palette.success.main }} />
+        <CaloriesIcon sx={{ color: theme.palette.primary.main }} />
         <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontWeight: 800, fontSize: '0.9375rem' }}>
           Calories
         </Typography>
@@ -153,8 +157,8 @@ const CalorieSummary = ({
           sx={{
             height: 4,
             borderRadius: 2,
-            backgroundColor: embedded ? theme.palette.grey[300] : theme.palette.grey[200],
-            '& .MuiLinearProgress-bar': { backgroundColor: theme.palette.success.main }
+            backgroundColor: track,
+            '& .MuiLinearProgress-bar': { backgroundColor: theme.palette.primary.main }
           }}
         />
         <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.25 }}>

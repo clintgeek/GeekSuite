@@ -22,7 +22,7 @@ import {
   ExpandMore as ExpandIcon,
   Check as CheckIcon,
 } from '@mui/icons-material';
-import { useTheme } from '@mui/material/styles';
+import { useTheme, alpha } from '@mui/material/styles';
 import { GeekErrorState, useToast } from '@geeksuite/ui';
 import { useAuth } from '@geeksuite/auth';
 import { settingsService } from '../services/settingsService.js';
@@ -111,7 +111,7 @@ function GoalChoice({ selected, onClick, title }) {
         width: '100%',
         borderRadius: '16px',
         border: `2px solid ${selected ? theme.palette.primary.main : theme.palette.divider}`,
-        bgcolor: selected ? theme.palette.produce?.lunch?.tint : 'background.paper',
+        bgcolor: selected ? alpha(theme.palette.primary.main, 0.08) : 'background.paper',
         '&:focus-visible': { outline: `3px solid ${theme.palette.primary.main}`, outlineOffset: 2 },
       }}
     >

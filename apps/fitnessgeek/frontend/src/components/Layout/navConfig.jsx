@@ -16,24 +16,26 @@
  * saying what each page needs before it shows anything (review IA-9). Full
  * mode lists it all.
  */
-import HomeIcon from '@mui/icons-material/Home';
-import RestaurantIcon from '@mui/icons-material/Restaurant';
-import MonitorWeightIcon from '@mui/icons-material/MonitorWeight';
-import MonitorHeartIcon from '@mui/icons-material/MonitorHeart';
-import MedicationIcon from '@mui/icons-material/Medication';
-import FitnessCenterIcon from '@mui/icons-material/FitnessCenter';
-import TrendingUpIcon from '@mui/icons-material/TrendingUp';
-import SearchIcon from '@mui/icons-material/Search';
-import LocalDiningIcon from '@mui/icons-material/LocalDining';
-import RestaurantMenuIcon from '@mui/icons-material/RestaurantMenu';
-import CalculateIcon from '@mui/icons-material/Calculate';
-import InsightsIcon from '@mui/icons-material/Insights';
-import UploadFileIcon from '@mui/icons-material/UploadFile';
-import SettingsIcon from '@mui/icons-material/Settings';
-import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
+import HomeIcon from '@mui/icons-material/HomeOutlined';
+import RestaurantIcon from '@mui/icons-material/RestaurantOutlined';
+import MonitorWeightIcon from '@mui/icons-material/MonitorWeightOutlined';
+import MonitorHeartIcon from '@mui/icons-material/MonitorHeartOutlined';
+import MedicationIcon from '@mui/icons-material/MedicationOutlined';
+import FitnessCenterIcon from '@mui/icons-material/FitnessCenterOutlined';
+import TrendingUpIcon from '@mui/icons-material/TrendingUpOutlined';
+import SearchIcon from '@mui/icons-material/SearchOutlined';
+import KitchenIcon from '@mui/icons-material/KitchenOutlined';
+import MenuBookIcon from '@mui/icons-material/MenuBookOutlined';
+import CalculateIcon from '@mui/icons-material/CalculateOutlined';
+import InsightsIcon from '@mui/icons-material/InsightsOutlined';
+import UploadFileIcon from '@mui/icons-material/UploadFileOutlined';
+import SettingsIcon from '@mui/icons-material/SettingsOutlined';
+import MoreHorizIcon from '@mui/icons-material/MoreHorizOutlined';
 
 export const APP_NAME = 'fitnessgeek';
 
+// One outlined icon set (visual review B7); My foods is the kitchen and My
+// meals the recipe book, so the two no longer share a crossed fork (C12).
 const icon = (Icon, size = 20) => <Icon sx={{ fontSize: size }} />;
 
 /**
@@ -53,8 +55,8 @@ export const DESTINATIONS = {
   reports: { id: '/reports', label: 'Reports', to: '/reports', Icon: InsightsIcon, description: 'How the week and the month went' },
   scan: { id: '/scan-import', label: 'Import a scan', to: '/scan-import', Icon: UploadFileIcon, description: 'Body-composition scans from the scale', simpleDescription: 'Body-composition scans — needs the smart scale' },
   search: { id: '/food-search', label: 'Look up a specific food', to: '/food-search', Icon: SearchIcon, description: 'Pick one exact food or brand from every database' },
-  myFoods: { id: '/my-foods', label: 'My foods', to: '/my-foods', Icon: LocalDiningIcon, description: 'Foods you made yourself' },
-  myMeals: { id: '/my-meals', label: 'My meals', to: '/my-meals', Icon: RestaurantMenuIcon, description: 'Meals you saved to log in one tap' },
+  myFoods: { id: '/my-foods', label: 'My foods', to: '/my-foods', Icon: KitchenIcon, description: 'Foods you made yourself' },
+  myMeals: { id: '/my-meals', label: 'My meals', to: '/my-meals', Icon: MenuBookIcon, description: 'Meals you saved to log in one tap' },
   wizard: { id: '/calorie-wizard', label: 'Calorie plan', to: '/calorie-wizard', Icon: CalculateIcon, description: 'Work out a daily calorie target' },
   settings: { id: '/settings', label: 'Settings', to: '/settings', Icon: SettingsIcon, simple: true, description: 'Simple or Full, larger text, and more' },
 };

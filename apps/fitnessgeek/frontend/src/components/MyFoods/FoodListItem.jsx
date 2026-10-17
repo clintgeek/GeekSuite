@@ -6,9 +6,10 @@ import {
   IconButton,
 } from '@mui/material';
 import {
-  Edit as EditIcon,
-  Delete as DeleteIcon,
+  EditOutlined as EditIcon,
+  DeleteOutline as DeleteIcon,
 } from '@mui/icons-material';
+import { useTheme, alpha } from '@mui/material/styles';
 import { getSourceColor, getSourceName } from './FoodSourceUtils.jsx';
 import { fmt, macroLine } from '../../utils/plainWords.js';
 
@@ -16,11 +17,12 @@ import { fmt, macroLine } from '../../utils/plainWords.js';
  * FoodListItem — a clean row rendered inside the parent Surface list.
  *
  * Matches the row pattern used by MyMeals.jsx: no per-row border, no hardcoded
- * colors. Source color appears as a 6px accent dot, not an avatar. Numbers use
- * JetBrains Mono with tabular-nums.
+ * colors. Source color appears as an 8px accent dot, not an avatar. Numbers use
+ * tabular figures.
  */
 const FoodListItem = ({ food, onEdit, onDelete }) => {
-  const sourceColor = getSourceColor(food.source);
+  const theme = useTheme();
+  const sourceColor = getSourceColor(food.source, theme);
   const sourceName = getSourceName(food.source);
   const nutrition = food.nutrition || {};
   const calories = Math.round(nutrition.calories_per_serving || 0);
@@ -41,18 +43,24 @@ const FoodListItem = ({ food, onEdit, onDelete }) => {
       }}
       secondaryAction={
         <Box sx={{ display: 'flex', gap: 0.5 }}>
+          {/* Outlined icons in the secondary ink; Delete turns red only
+              under a finger or pointer (visual review B7). */}
           <IconButton
             aria-label={`Edit ${food.name}`}
             onClick={() => onEdit(food)}
             size="small"
+            sx={{ color: 'text.secondary' }}
           >
             <EditIcon fontSize="small" />
           </IconButton>
           <IconButton
             aria-label={`Delete ${food.name}`}
             onClick={() => onDelete(food)}
-            color="error"
             size="small"
+            sx={{
+              color: 'text.secondary',
+              '&:hover, &:active': { color: 'error.main', bgcolor: alpha(theme.palette.error.main, 0.1) },
+            }}
           >
             <DeleteIcon fontSize="small" />
           </IconButton>

@@ -175,7 +175,7 @@ const SaveMealDialog = ({
                   <Chip
                     label={`${servings} serving${servings !== 1 ? 's' : ''}`}
                     size="small"
-                    variant="outlined"
+                    variant="tag"
                   />
                 </Box>
               );
@@ -188,10 +188,10 @@ const SaveMealDialog = ({
             Altogether
           </Typography>
           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-            <Chip label={`${fmt(mealTotals.calories)} cal`} size="small" />
-            <Chip label={`Protein ${fmt(mealTotals.protein)}g`} size="small" />
-            <Chip label={`Carbs ${fmt(mealTotals.carbs)}g`} size="small" />
-            <Chip label={`Fat ${fmt(mealTotals.fat)}g`} size="small" />
+            <Chip label={`${fmt(mealTotals.calories)} cal`} size="small" variant="tag" />
+            <Chip label={`Protein ${fmt(mealTotals.protein)}g`} size="small" variant="tag" />
+            <Chip label={`Carbs ${fmt(mealTotals.carbs)}g`} size="small" variant="tag" />
+            <Chip label={`Fat ${fmt(mealTotals.fat)}g`} size="small" variant="tag" />
           </Box>
         </Box>
     </PremiumDialog>

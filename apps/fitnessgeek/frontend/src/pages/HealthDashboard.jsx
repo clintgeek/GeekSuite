@@ -176,6 +176,7 @@ export default function HealthDashboard() {
               </Typography>
               <DateField
                 label={false}
+                inputProps={{ 'aria-label': 'Date' }}
                 size="small"
                 value={selectedDate}
                 onChange={handleDateChange}

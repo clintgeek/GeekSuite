@@ -9,6 +9,7 @@ import {
   Fade
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
+import { trackColor } from '../../theme/theme.jsx';
 
 const MetricCard = ({
   title,
@@ -82,7 +83,8 @@ const MetricCard = ({
             <Avatar
               sx={{
                 bgcolor: colorConfig.iconColor,
-                color: '#fff',
+                // White on the day tones; the walnut on the pale night tones.
+                color: theme.palette.mode === 'dark' ? theme.palette.background.default : '#FFFFFF',
                 mr: 2,
                 width: { xs: 40, sm: 48 },
                 height: { xs: 40, sm: 48 }
@@ -124,7 +126,7 @@ const MetricCard = ({
                 sx={{
                   height: 6,
                   borderRadius: 3,
-                  backgroundColor: theme.palette.mode === 'dark' ? 'rgba(255,255,255,0.1)' : theme.palette.grey[200],
+                  backgroundColor: trackColor(theme),
                   '& .MuiLinearProgress-bar': {
                     backgroundColor: colorConfig.iconColor
                   }

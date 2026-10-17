@@ -7,7 +7,8 @@ import {
   ToggleButtonGroup,
   ToggleButton,
 } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
+import { useTheme, alpha } from '@mui/material/styles';
+import { macroColors } from '../../theme/theme.jsx';
 import { previewMacros, ProteinBasisNote } from './planProvenance.jsx';
 
 /**
@@ -84,6 +85,10 @@ const KetoPlanStep = ({ ketoConfig, onChange, calorieTarget, baseGoal = null, le
       : null;
   const gramEquivalents = preview ? preview.grams : null;
 
+  // Macros in their own ramp, not the semantic tones (visual review B2):
+  // fat was error red, protein success, carbs warning ochre.
+  const macro = macroColors(theme.palette.mode);
+
   // ── section label style ────────────────────────────────────────────────────
   const labelSx = {
     fontFamily: 'inherit',
@@ -106,7 +111,7 @@ const KetoPlanStep = ({ ketoConfig, onChange, calorieTarget, baseGoal = null, le
             fontFamily: 'inherit',
             fontSize: '1.5rem',
             fontWeight: 700,
-            color: theme.palette.warning.main,
+            color: macro.carbs,
             mb: 1,
           }}
         >
@@ -122,10 +127,10 @@ const KetoPlanStep = ({ ketoConfig, onChange, calorieTarget, baseGoal = null, le
           valueLabelDisplay="auto"
           valueLabelFormat={(v) => `${v}g`}
           sx={{
-            color: theme.palette.warning.main,
+            color: theme.palette.primary.main,
             '& .MuiSlider-thumb': {
               '&:hover, &.Mui-focusVisible': {
-                boxShadow: `0 0 0 8px ${theme.palette.warning.main}22`,
+                boxShadow: `0 0 0 8px ${alpha(theme.palette.primary.main, 0.14)}`,
               },
             },
           }}
@@ -148,20 +153,19 @@ const KetoPlanStep = ({ ketoConfig, onChange, calorieTarget, baseGoal = null, le
               <Chip
                 key={key}
                 label={PRESET_LABELS[key]}
-                variant={isSelected ? 'filled' : 'outlined'}
+                variant="outlined"
                 onClick={() => handlePresetChange(key)}
+                // Chosen = basil at 8% with a basil edge, the app's one
+                // selected look (B2); ink text either way.
                 sx={
                   isSelected
                     ? {
-                        bgcolor: theme.palette.warning.main,
-                        color: theme.palette.getContrastText(theme.palette.warning.main),
-                        '&:hover': { bgcolor: theme.palette.warning.dark },
-                        fontFamily: 'inherit',
+                        bgcolor: alpha(theme.palette.primary.main, 0.08),
+                        borderColor: theme.palette.primary.main,
+                        color: 'text.primary',
+                        '&&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.14) },
                       }
-                    : {
-                        fontFamily: 'inherit',
-                        borderColor: theme.palette.divider,
-                      }
+                    : undefined
                 }
               />
             );
@@ -185,21 +189,21 @@ const KetoPlanStep = ({ ketoConfig, onChange, calorieTarget, baseGoal = null, le
               <Box
                 sx={{
                   width: `${fat_pct}%`,
-                  bgcolor: theme.palette.error.main,
+                  bgcolor: macro.fat,
                   transition: 'width 200ms ease-out',
                 }}
               />
               <Box
                 sx={{
                   width: `${protein_pct}%`,
-                  bgcolor: theme.palette.success.main,
+                  bgcolor: macro.protein,
                   transition: 'width 200ms ease-out',
                 }}
               />
               <Box
                 sx={{
                   width: `${carb_pct}%`,
-                  bgcolor: theme.palette.warning.main,
+                  bgcolor: macro.carbs,
                   transition: 'width 200ms ease-out',
                 }}
               />
@@ -208,9 +212,9 @@ const KetoPlanStep = ({ ketoConfig, onChange, calorieTarget, baseGoal = null, le
             {/* Bar legend */}
             <Box sx={{ display: 'flex', gap: 2, mb: 1 }}>
               {[
-                { label: 'Fat', pct: fat_pct, color: theme.palette.error.main },
-                { label: 'Protein', pct: protein_pct, color: theme.palette.success.main },
-                { label: 'Carbs', pct: carb_pct, color: theme.palette.warning.main },
+                { label: 'Fat', pct: fat_pct, color: macro.fat },
+                { label: 'Protein', pct: protein_pct, color: macro.protein },
+                { label: 'Carbs', pct: carb_pct, color: macro.carbs },
               ].map(({ label, pct, color }) => (
                 <Box key={label} sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                   <Box sx={{ width: 8, height: 8, borderRadius: '50%', bgcolor: color }} />

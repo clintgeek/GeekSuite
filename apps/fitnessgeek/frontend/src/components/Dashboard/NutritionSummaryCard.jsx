@@ -8,6 +8,7 @@ import {
   Grid
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
+import { macroColors } from '../../theme/theme.jsx';
 import { RestaurantMenu as NutritionIcon } from '@mui/icons-material';
 
 const NutritionSummaryCard = ({
@@ -24,24 +25,26 @@ const NutritionSummaryCard = ({
   ...props
 }) => {
   const theme = useTheme();
+  // The macro ramp (visual review B2), not success/warning/error: fat isn't an error.
+  const m = theme.palette.macro || macroColors(theme.palette.mode);
 
   // Standard macro layout: Protein | Carbs | Fat
   // Keto macro layout:    Fat | Protein | Net Carbs
   const macros = mode === 'keto'
     ? [
-        { label: 'Fat',      value: fat,              color: theme.palette.error.main   },
-        { label: 'Protein',  value: protein,           color: theme.palette.success.main },
+        { label: 'Fat',      value: fat,              color: m.fat     },
+        { label: 'Protein',  value: protein,           color: m.protein },
         {
           label: `Net carbs${hasMissingFiber ? '*' : ''}`,
           value: netCarbsConsumed,
-          color: theme.palette.warning.main,
+          color: m.carbs,
           subLabel: `of ${netCarbLimit}g limit`,
         },
       ]
     : [
-        { label: 'Protein', value: protein, color: theme.palette.success.main },
-        { label: 'Carbs',   value: carbs,   color: theme.palette.warning.main },
-        { label: 'Fat',     value: fat,     color: theme.palette.error.main   },
+        { label: 'Protein', value: protein, color: m.protein },
+        { label: 'Carbs',   value: carbs,   color: m.carbs },
+        { label: 'Fat',     value: fat,     color: m.fat },
       ];
 
   return (

@@ -3,7 +3,7 @@ import { Box, Typography, Card, CardContent, LinearProgress, Chip, Button } from
 import { useTheme, alpha } from '@mui/material/styles';
 import {
   Flag as GoalIcon,
-  Edit as EditIcon,
+  EditOutlined as EditIcon,
   CalendarToday as CalendarIcon,
   Speed as SpeedIcon,
   ArrowForward as ArrowIcon
@@ -13,6 +13,7 @@ import { shortDay } from '../../utils/dates.js';
 import { utcDateString } from '@geeksuite/utils';
 import { programPace, neededPacePerWeek, trendSince } from './weightTrend.js';
 import { StatNumber, SectionLabel } from '../primitives';
+import { trackColor } from '../../theme/theme.jsx';
 
 const WeightProgress = ({
   weightLogs = [],
@@ -138,11 +139,7 @@ const WeightProgress = ({
     if (noGoal && firstRunGoal === 'lose' && onEditGoal) {
       // One sentence, one button. No heading announcing what's missing.
       return (
-        <Card sx={{
-          borderRadius: '20px',
-          boxShadow: theme.shadows[1],
-          border: `1px solid ${theme.palette.divider}`
-        }}>
+        <Card>
           <CardContent sx={{ p: 3 }}>
             {trendLine}
             <Typography sx={{ color: 'text.primary', fontSize: '1.0625rem', lineHeight: 1.5, mb: 2 }}>
@@ -162,15 +159,11 @@ const WeightProgress = ({
       );
     }
     return (
-      <Card sx={{
-        borderRadius: '20px',
-        boxShadow: theme.shadows[1],
-        border: `1px solid ${theme.palette.divider}`
-      }}>
+      <Card>
         <CardContent sx={{ p: 4, textAlign: 'center' }}>
           {trendLine}
           <GoalIcon sx={{ fontSize: 48, color: theme.palette.text.disabled, mb: 2 }} />
-          <Typography variant="h6" sx={{ fontWeight: 700, color: theme.palette.text.primary, mb: 1 }}>
+          <Typography variant="h6" sx={{ color: theme.palette.text.primary, mb: 1 }}>
             {needsWeighIn ? 'Weigh in to see your progress' : 'No weight goal yet'}
           </Typography>
           <Typography variant="body2" sx={{ color: theme.palette.text.secondary, mb: 3 }}>
@@ -199,13 +192,14 @@ const WeightProgress = ({
   }
 
   // Theme palette only — no hex literals (F10). Nothing on this card is red
-  // (review D-2: the plan says "nothing turns red"): behind plan is lemon,
-  // with the words "Behind plan" — never colour alone.
+  // (review D-2: the plan says "nothing turns red"): behind plan is a warm
+  // warning tint with the words "Behind plan" — never colour alone. The
+  // produce colours mean meals only (visual review B2), so not lemon.
   const isDark = theme.palette.mode === 'dark';
-  const produce = theme.palette.produce || {};
   const u = unitWord(unit);
   const tileBg = isDark ? alpha(theme.palette.text.primary, 0.04) : theme.palette.background.default;
-  const tile = { p: 2, borderRadius: '12px', backgroundColor: tileBg, border: `1px solid ${theme.palette.divider}` };
+  // Nested tiles take the smaller radius inside the card (B6).
+  const tile = { p: 2, borderRadius: '16px', backgroundColor: tileBg, border: `1px solid ${theme.palette.divider}` };
 
   const total = Math.abs(goal.targetWeight - goal.startWeight);
   const moved = (total * (insights.progressPercent || 0)) / 100;
@@ -220,15 +214,11 @@ const WeightProgress = ({
   const status = insights.isAhead
     ? { label: 'Ahead of plan', bg: alpha(theme.palette.primary.main, isDark ? 0.16 : 0.1), ink: theme.palette.text.primary }
     : insights.isBehind
-      ? { label: 'Behind plan', bg: produce.dinner?.fill, ink: produce.dinner?.ink }
+      ? { label: 'Behind plan', bg: alpha(theme.palette.warning.main, isDark ? 0.2 : 0.14), ink: theme.palette.text.primary }
       : { label: 'On track', bg: alpha(theme.palette.primary.main, isDark ? 0.16 : 0.1), ink: theme.palette.text.primary };
 
   return (
-    <Card sx={{
-      borderRadius: '20px',
-      boxShadow: theme.shadows[1],
-      border: `1px solid ${theme.palette.divider}`
-    }}>
+    <Card>
       <CardContent sx={{ p: { xs: 2.5, sm: 3 } }}>
         {/* Simple leads with the trend in words (review L25): how it's going,
             not the goal maths. */}
@@ -266,7 +256,8 @@ const WeightProgress = ({
                 unit={u}
                 size="display"
                 decimals={0}
-                color={alpha(theme.palette.text.primary, 0.5)}
+                // Muted ink, not alpha grey: it read as "disabled" (A7).
+                color={theme.palette.text.muted || theme.palette.text.secondary}
               />
               <ArrowIcon sx={{ color: 'text.secondary', fontSize: 20, alignSelf: 'center' }} />
               <StatNumber
@@ -281,19 +272,10 @@ const WeightProgress = ({
           {onEditGoal && (
             <Button
               size="small"
+              variant="tonal"
               startIcon={<EditIcon />}
               onClick={onEditGoal}
-              sx={{
-                borderRadius: '999px',
-                textTransform: 'none',
-                fontWeight: 700,
-                minHeight: 44,
-                color: theme.palette.primary.main,
-                flexShrink: 0,
-                '&:hover': {
-                  backgroundColor: alpha(theme.palette.primary.main, 0.1),
-                },
-              }}
+              sx={{ minHeight: 44, flexShrink: 0 }}
             >
               Change goal
             </Button>
@@ -317,7 +299,7 @@ const WeightProgress = ({
             sx={{
               height: 12,
               borderRadius: '999px',
-              backgroundColor: alpha(theme.palette.text.primary, isDark ? 0.1 : 0.06),
+              backgroundColor: trackColor(theme),
               '& .MuiLinearProgress-bar': {
                 borderRadius: '999px',
                 backgroundColor: theme.palette.primary.main
@@ -343,7 +325,8 @@ const WeightProgress = ({
                   backgroundColor: status.bg,
                   color: status.ink,
                   fontWeight: 700,
-                  borderRadius: '999px'
+                  borderRadius: '999px',
+                  height: 28
                 }}
               />
             </Box>
@@ -379,7 +362,7 @@ const WeightProgress = ({
                     Time left
                   </Typography>
                 </Box>
-                <Typography variant="h6" sx={{ fontWeight: 700, color: theme.palette.text.primary }}>
+                <Typography variant="h6" sx={{ color: theme.palette.text.primary }}>
                   {insights.weeksToGoal || 0} {(insights.weeksToGoal || 0) === 1 ? 'week' : 'weeks'}
                 </Typography>
                 <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>

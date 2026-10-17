@@ -1,6 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { Box, Button, ButtonBase, CircularProgress, Collapse, TextField, Typography } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
+import { useTheme, alpha } from '@mui/material/styles';
 import { Check as CheckIcon, ExpandMore as ExpandIcon } from '@mui/icons-material';
 import { useInRouterContext, useNavigate } from 'react-router-dom';
 import { useToast } from '@geeksuite/ui';
@@ -68,7 +68,9 @@ function BigChoice({ selected, onClick, title, body, testId }) {
         width: '100%',
         borderRadius: '20px',
         border: `2px solid ${selected ? theme.palette.primary.main : theme.palette.divider}`,
-        bgcolor: selected ? theme.palette.produce?.lunch?.tint : 'background.paper',
+        // Chosen = basil at 8% with the basil border (visual review B2): the
+        // Lunch leaf tint meant "lunch" everywhere else.
+        bgcolor: selected ? alpha(theme.palette.primary.main, 0.08) : 'background.paper',
         '&:focus-visible': { outline: `3px solid ${theme.palette.primary.main}`, outlineOffset: 2 },
       }}
     >
@@ -327,7 +329,10 @@ function QuickTargetForm({ initialProfile, weightBasis, maintain, targetWeight, 
       <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.25, pb: 'calc(16px + var(--safe-area-inset-bottom, 0px))' }}>
         {saved ? (
           <>
-            <Typography role="status" sx={{ fontWeight: 700, fontSize: '1.0625rem', textAlign: 'center' }}>Saved ✓</Typography>
+            {/* The check is an icon, like Log it's, not a text glyph (C11). */}
+            <Typography role="status" sx={{ fontWeight: 700, fontSize: '1.0625rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 0.75 }}>
+              Saved <CheckIcon aria-hidden sx={{ fontSize: 18, color: 'primary.main' }} />
+            </Typography>
             {inRouter && <DoneButton />}
           </>
         ) : (

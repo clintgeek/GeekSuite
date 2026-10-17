@@ -24,7 +24,9 @@ const ModeSelector = ({ value, onChange }) => {
     },
     {
       mode: 'keto',
-      accentColor: theme.palette.warning.main,
+      // Basil for both: the chosen card is the app's one selected look
+      // (visual review B2), and warning ochre isn't a mode.
+      accentColor: theme.palette.primary.main,
       title: 'Keto',
       subtitle: 'Hard carb cap. Fat as fuel.',
       typical: '~20g net carbs a day',
@@ -49,13 +51,13 @@ const ModeSelector = ({ value, onChange }) => {
               position: 'relative',
               flex: 1,
               p: 3,
-              borderRadius: 2,
+              borderRadius: '24px',
               cursor: 'pointer',
               border: isSelected
                 ? `2px solid ${accentColor}`
                 : `1px solid ${theme.palette.divider}`,
               background: isSelected
-                ? alpha(accentColor, 0.06)
+                ? alpha(accentColor, 0.08)
                 : theme.palette.background.paper,
               boxShadow: isSelected
                 ? `inset 0 0 0 1px ${alpha(accentColor, 0.3)}`

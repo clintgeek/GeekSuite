@@ -35,7 +35,7 @@ export const buildChartTheme = (theme) => {
     },
     grid: {
       line: {
-        stroke: isDark ? 'rgba(255,255,255,0.05)' : 'rgba(28, 25, 23, 0.05)',
+        stroke: isDark ? 'rgba(247, 237, 224, 0.08)' : 'rgba(92, 64, 32, 0.12)',
         strokeWidth: 1,
         strokeDasharray: '2 4',
       },
@@ -52,9 +52,12 @@ export const buildChartTheme = (theme) => {
       container: {
         background: theme.palette.background.paper,
         color: theme.palette.text.primary,
-        fontSize: 12,
-        borderRadius: 8,
-        border: `1px solid ${theme.palette.divider}`,
+        // The same paper card as every other tooltip in the app, at a
+        // readable size.
+        fontSize: 14,
+        borderRadius: 12,
+        border: `1px solid ${theme.palette.cardBorder || theme.palette.divider}`,
+        boxShadow: isDark ? '0 10px 24px -12px rgba(0, 0, 0, 0.7)' : '0 10px 24px -14px rgba(92, 64, 32, 0.3)',
       },
     },
   };

@@ -102,23 +102,34 @@ const MealSection = ({
     }}>
       {/* Header */}
       <Box sx={{
+        position: 'relative',
         display: 'flex',
         justifyContent: 'space-between',
         alignItems: 'center',
         p: { xs: 2, sm: 2.5 },
+        pt: { xs: 2.75, sm: 3.25 },
         flexWrap: 'wrap',
         gap: 1,
-        background: look.headerBg,
+        bgcolor: look.headerBg,
+        // The produce edge along the top, as on Home's meal cards.
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          left: 0,
+          right: 0,
+          top: 0,
+          height: 6,
+          bgcolor: look.edge,
+        },
         borderBottom: (logs.length > 0 || justAdded) ? `1px solid ${theme.palette.divider}` : 'none'
       }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
           <Avatar
             sx={{
-              background: look.badge,
+              bgcolor: look.badge,
               color: look.badgeInk,
               width: { xs: 40, sm: 44 },
               height: { xs: 40, sm: 44 },
-              boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)'
             }}
           >
             <IconComponent sx={{ fontSize: { xs: 20, sm: 24 } }} />
@@ -172,11 +183,12 @@ const MealSection = ({
                 px: 2,
                 borderRadius: 999,
                 color: look.badgeInk,
-                background: look.badge,
+                bgcolor: look.badge,
                 fontWeight: 800,
                 textTransform: 'none',
-                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.15)',
-                '&:hover': { background: look.badge, boxShadow: '0 4px 12px rgba(0, 0, 0, 0.2)' }
+                boxShadow: 'none',
+                // Ink on the produce fill, the Home card's "+ Add" (5.4–10:1).
+                '&:hover, &:active': { bgcolor: look.badge, filter: 'brightness(0.94)' }
               }}
             >
               Add

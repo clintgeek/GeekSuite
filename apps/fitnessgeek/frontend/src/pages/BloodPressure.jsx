@@ -348,7 +348,9 @@ const BloodPressure = () => {
   }
 
   return (
-    <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 960, mx: 'auto' }}>
+    // On a phone the page's last card clears the "Add BP" ThumbFab (visual
+    // review C1): it used to sit over the end of the readings list.
+    <Box sx={{ p: { xs: 2, sm: 3 }, pb: { xs: 'calc(88px + env(safe-area-inset-bottom))', md: 3 }, maxWidth: 960, mx: 'auto' }}>
       {/* Editorial header */}
       <Box sx={{ mb: 3 }}>
         <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem' }}>
@@ -398,7 +400,7 @@ const BloodPressure = () => {
             </ToggleButtonGroup>
             <Button
               onClick={() => setShowReport(true)}
-              variant="outlined"
+              variant="tonal"
               size="small"
               startIcon={<PdfIcon />}
             >

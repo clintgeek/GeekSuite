@@ -58,13 +58,23 @@ describe('the weight goal card (Full)', () => {
     expect(screen.getByTestId('weight-basis')).toHaveTextContent('From your 7-day average, 219.9 lb');
   });
 
-  it('behind plan is said in words, in lemon, never red, and without a day count', () => {
+  // Visual review B2: the produce colours mean meals only, so "behind" is a
+  // warm warning wash (warning.main #9A5B00 at 14%), still never red.
+  it('behind plan is said in words, in a warning wash, never red, and without a day count', () => {
     renderCard();
     const chip = screen.getByTestId('weight-status');
     expect(chip).toHaveTextContent('Behind plan');
     expect(document.body.textContent).not.toMatch(/days behind/);
     const bg = window.getComputedStyle(chip).backgroundColor;
-    expect(bg).toBe('rgb(246, 201, 69)'); // produce lemon fill
+    expect(bg).toBe('rgba(154, 91, 0, 0.14)');
+    expect(bg).not.toBe('rgb(246, 201, 69)'); // not the Dinner lemon
+  });
+
+  it('the start weight is muted ink, not alpha grey (A7)', () => {
+    renderCard();
+    // StatNumber renders the start weight first, then the target in basil.
+    const start = screen.getAllByText('232')[0];
+    expect(window.getComputedStyle(start).color).toBe('rgb(107, 88, 71)'); // text.muted #6B5847
   });
 
   it('the projection is in words, against the goal date', () => {

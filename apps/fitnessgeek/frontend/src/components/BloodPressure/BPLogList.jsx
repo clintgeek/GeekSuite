@@ -11,23 +11,37 @@ import {
   ListItemText,
   ListItemSecondaryAction
 } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
-import { toneForMode } from '@geeksuite/ui';
+import { useTheme, alpha } from '@mui/material/styles';
 import { localDateString, utcDateString } from '@geeksuite/utils';
 import { categorizeBP } from '../../utils/bpUtils.js';
 import { bpStageWords } from '../../utils/plainWords.js';
 import { nearDay } from '../../utils/dates.js';
 import { formatLocalTime } from './bpTimeUtils.js';
 import {
-  Delete as DeleteIcon,
-  Edit as EditIcon,
-  MonitorHeart as BPIcon
+  DeleteOutline as DeleteIcon,
+  EditOutlined as EditIcon,
+  MonitorHeartOutlined as BPIcon
 } from '@mui/icons-material';
 
 const BPLogList = ({ logs, onDelete, onEdit, unit = "mmHg" }) => {
   const theme = useTheme();
-  // Status hues are tuned for dark tints; darken for legible text on light-mode tints.
-  const statusTextColor = (color) => toneForMode(color, theme, { lightenBy: 0, darkenBy: 0.35 });
+  // The stage colour is the theme's semantic tone for this mode (bpUtils), as
+  // the tag's wash and the heart icon; the words are ink, because success
+  // green on its own tint measured 4.35:1. One info-tag shape (visual review
+  // B5): round, 28px, no border.
+  const stageTag = (color) => ({
+    backgroundColor: alpha(color, 0.14),
+    color: 'text.primary',
+    fontWeight: 700,
+    height: 28,
+    borderRadius: 999,
+    '& .MuiChip-label': { fontSize: '0.875rem' },
+  });
+  // Remove is quiet at rest and only turns red under the thumb (B7).
+  const quietDelete = {
+    color: 'text.secondary',
+    '&:hover, &:active': { color: 'error.main', backgroundColor: alpha(theme.palette.error.main, 0.08) },
+  };
 
   // `log_date` is a CALENDAR date stored at UTC midnight, not an instant.
   // Rendering it with a plain `toLocaleDateString` showed the previous day for
@@ -40,14 +54,7 @@ const BPLogList = ({ logs, onDelete, onEdit, unit = "mmHg" }) => {
 
   if (logs.length === 0) {
     return (
-      <Card sx={{
-        width: '100%',
-        display: 'block',
-        backgroundColor: 'background.paper',
-        borderRadius: 2,
-        boxShadow: 1,
-        border: 'none'
-      }}>
+      <Card sx={{ width: '100%', display: 'block' }}>
         <CardContent sx={{ p: 4 }}>
           <Box sx={{
             display: 'flex',
@@ -79,19 +86,12 @@ const BPLogList = ({ logs, onDelete, onEdit, unit = "mmHg" }) => {
   });
 
   return (
-    <Card sx={{
-      width: '100%',
-      display: 'block',
-      backgroundColor: 'background.paper',
-      borderRadius: 2,
-      boxShadow: 1,
-      border: 'none'
-    }}>
+    <Card sx={{ width: '100%', display: 'block' }}>
       <CardContent sx={{ p: 3 }}>
 
         <List sx={{ p: 0, m: 0, width: '100%' }}>
           {sortedLogs.map((log) => {
-            const bpStatus = categorizeBP(log.systolic, log.diastolic);
+            const bpStatus = categorizeBP(log.systolic, log.diastolic, theme.palette.mode);
             const readingLabel = `${log.systolic}/${log.diastolic} ${unit} reading from ${formatDate(log.log_date)}`;
             const deleteLabel = `Remove the ${readingLabel}`;
             const editLabel = `Edit the ${readingLabel}`;
@@ -106,7 +106,7 @@ const BPLogList = ({ logs, onDelete, onEdit, unit = "mmHg" }) => {
                 key={log.id || log._id}
                 sx={{
                   border: `1px solid ${theme.palette.divider}`,
-                  borderRadius: 1,
+                  borderRadius: '16px',
                   mb: 1,
                   backgroundColor: theme.palette.background.paper,
                   '&:last-child': { mb: 0 },
@@ -126,19 +126,13 @@ const BPLogList = ({ logs, onDelete, onEdit, unit = "mmHg" }) => {
                   <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', mb: 0.5 }}>
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
                       <BPIcon sx={{ color: bpStatus.color, fontSize: 24 }} />
-                      <Typography variant="h6" sx={{ fontWeight: 600, fontSize: '1rem' }}>
+                      <Typography variant="h6" sx={{ fontSize: '1rem' }}>
                         {log.systolic}/{log.diastolic} {unit}
                       </Typography>
                       <Chip
                         label={bpStageWords(bpStatus.stage).label}
                         size="small"
-                        sx={{
-                          backgroundColor: `${bpStatus.color}20`,
-                          color: statusTextColor(bpStatus.color),
-                          fontWeight: 600,
-                          fontSize: '0.75rem',
-                          height: 20
-                        }}
+                        sx={stageTag(bpStatus.color)}
                       />
                     </Box>
                     <Box sx={{ display: 'flex', alignItems: 'center' }}>
@@ -157,7 +151,7 @@ const BPLogList = ({ logs, onDelete, onEdit, unit = "mmHg" }) => {
                         edge="end"
                         aria-label={deleteLabel}
                         onClick={() => onDelete(log.id || log._id)}
-                        sx={{ color: 'error.main', p: 0.5 }}
+                        sx={{ ...quietDelete, p: 0.5 }}
                         size="small"
                       >
                         <DeleteIcon fontSize="small" />
@@ -184,7 +178,7 @@ const BPLogList = ({ logs, onDelete, onEdit, unit = "mmHg" }) => {
                   {/* Left: Icon + BP Reading */}
                   <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flex: '0 0 auto' }}>
                     <BPIcon sx={{ color: bpStatus.color, fontSize: 28 }} />
-                    <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                    <Typography variant="h6">
                       {log.systolic}/{log.diastolic} {unit}
                     </Typography>
                   </Box>
@@ -207,12 +201,7 @@ const BPLogList = ({ logs, onDelete, onEdit, unit = "mmHg" }) => {
                     <Chip
                       label={bpStageWords(bpStatus.stage).label}
                       size="small"
-                      sx={{
-                        backgroundColor: `${bpStatus.color}20`,
-                        color: statusTextColor(bpStatus.color),
-                        fontWeight: 600,
-                        fontSize: '0.75rem'
-                      }}
+                      sx={stageTag(bpStatus.color)}
                     />
                   </Box>
 
@@ -244,7 +233,7 @@ const BPLogList = ({ logs, onDelete, onEdit, unit = "mmHg" }) => {
                       edge="end"
                       aria-label={deleteLabel}
                       onClick={() => onDelete(log.id || log._id)}
-                      sx={{ color: 'error.main' }}
+                      sx={quietDelete}
                     >
                       <DeleteIcon />
                     </IconButton>

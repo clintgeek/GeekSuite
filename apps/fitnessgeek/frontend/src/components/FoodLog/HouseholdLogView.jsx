@@ -172,8 +172,9 @@ const HouseholdLogView = ({ open, onClose, currentDate, onCopyMeal }) => {
                 {/* Member Selector */}
                 <Box sx={{ mb: 3 }}>
                   <FormControl fullWidth size="small">
-                    <InputLabel>Whose log</InputLabel>
+                    <InputLabel id="household-whose-log">Whose log</InputLabel>
                     <Select
+                      labelId="household-whose-log"
                       value={selectedMember}
                       onChange={(e) => setSelectedMember(e.target.value)}
                       label="Whose log"
@@ -196,7 +197,7 @@ const HouseholdLogView = ({ open, onClose, currentDate, onCopyMeal }) => {
                       </Typography>
                       {memberLogs.length > 0 && (
                         <Button
-                          variant="outlined"
+                          variant="tonal"
                           startIcon={<CopyIcon />}
                           onClick={handleCopyAll}
                           aria-label={`Copy ${memberName}’s whole day to your log`}
@@ -240,8 +241,7 @@ const HouseholdLogView = ({ open, onClose, currentDate, onCopyMeal }) => {
                                   <Chip
                                     label={`${fmt(totalCals)} cal`}
                                     size="small"
-                                    color="primary"
-                                    variant="outlined"
+                                    variant="tag"
                                   />
                                 </Box>
                                 <Button

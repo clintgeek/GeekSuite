@@ -1,6 +1,6 @@
 import React, { useMemo } from 'react';
 import { Box, Typography, Card, CardContent } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
+import { useTheme, alpha } from '@mui/material/styles';
 import { readableOn } from '@geeksuite/ui';
 import {
   Favorite as HeartIcon,
@@ -117,14 +117,10 @@ const BPInsights = ({ bpLogs = [] }) => {
 
   if (!insights) {
     return (
-      <Card sx={{
-        borderRadius: '20px',
-        boxShadow: theme.shadows[1],
-        border: `1px solid ${theme.palette.divider}`
-      }}>
+      <Card>
         <CardContent sx={{ p: 4, textAlign: 'center' }}>
           <HeartIcon sx={{ fontSize: 48, color: theme.palette.text.disabled, mb: 2 }} />
-          <Typography variant="h6" sx={{ fontWeight: 700, color: theme.palette.text.primary, mb: 1 }}>
+          <Typography variant="h6" sx={{ color: theme.palette.text.primary, mb: 1 }}>
             No readings yet
           </Typography>
           <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>
@@ -137,11 +133,11 @@ const BPInsights = ({ bpLogs = [] }) => {
 
   const getTrendIcon = () => {
     if (insights.trend === 'improving') {
-      return <TrendingDownIcon sx={{ fontSize: 20, color: '#10b981' }} />;
+      return <TrendingDownIcon sx={{ fontSize: 20, color: getTrendColor() }} />;
     } else if (insights.trend === 'worsening') {
-      return <TrendingUpIcon sx={{ fontSize: 20, color: '#ef4444' }} />;
+      return <TrendingUpIcon sx={{ fontSize: 20, color: getTrendColor() }} />;
     }
-    return <TrendingFlatIcon sx={{ fontSize: 20, color: theme.palette.primary.main }} />;
+    return <TrendingFlatIcon sx={{ fontSize: 20, color: getTrendColor() }} />;
   };
 
   const getTrendText = () => {
@@ -156,7 +152,7 @@ const BPInsights = ({ bpLogs = [] }) => {
     return theme.palette.primary.main;
   };
 
-  const trendTint = `${getTrendColor()}${isDark ? '20' : '10'}`;
+  const trendTint = alpha(getTrendColor(), isDark ? 0.12 : 0.06);
 
   const last = insights.latestReading;
   const lastWords = `${last.systolic}/${last.diastolic} · ${bpStageWords(insights.currentCategory.name).phrase.replace(/ \(.*\)$/, '')} · ${readingWhen(last)}`;
@@ -165,18 +161,15 @@ const BPInsights = ({ bpLogs = [] }) => {
     : `Your last reading: ${last.systolic}/${last.diastolic} — ${bpStageWords(insights.currentCategory.name).phrase}`;
   const tile = {
     p: 2,
-    borderRadius: '12px',
-    backgroundColor: isDark ? 'rgba(255,255,255,0.05)' : theme.palette.background.default,
+    // Nested tiles take the smaller radius inside the card's 24 (review B6);
+    // at night a faint cream lift, not a third near-identical brown (A10).
+    borderRadius: '16px',
+    backgroundColor: isDark ? alpha(theme.palette.text.primary, 0.04) : theme.palette.background.default,
     border: `1px solid ${theme.palette.divider}`
   };
 
   return (
-    <Card sx={{
-      borderRadius: '20px',
-      boxShadow: theme.shadows[1],
-      border: `1px solid ${theme.palette.divider}`,
-      background: theme.palette.background.paper
-    }}>
+    <Card>
       <CardContent sx={{ p: 3 }}>
         {/* Header */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
@@ -187,10 +180,9 @@ const BPInsights = ({ bpLogs = [] }) => {
             backgroundColor: theme.palette.primary.main,
             display: 'flex',
             alignItems: 'center',
-            justifyContent: 'center',
-            boxShadow: '0 4px 12px rgba(6, 182, 212, 0.3)'
+            justifyContent: 'center'
           }}>
-            <HeartIcon sx={{ fontSize: 28, color: 'white' }} />
+            <HeartIcon sx={{ fontSize: 28, color: theme.palette.primary.contrastText }} />
           </Box>
           <Box sx={{ flex: 1, minWidth: 0 }}>
             <Typography component="h2" data-testid="bp-headline" sx={{ fontWeight: 800, fontSize: { xs: '1.1875rem', sm: '1.375rem' }, lineHeight: 1.3, color: theme.palette.text.primary, mb: 0.5 }}>
@@ -214,7 +206,7 @@ const BPInsights = ({ bpLogs = [] }) => {
               <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontWeight: 600, display: 'block', mb: 1 }}>
                 7-day average
               </Typography>
-              <Typography variant="h6" sx={{ fontWeight: 700, color: theme.palette.text.primary }}>
+              <Typography variant="h6" sx={{ color: theme.palette.text.primary }}>
                 {insights.avg7Systolic}/{insights.avg7Diastolic}
               </Typography>
               <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
@@ -229,7 +221,7 @@ const BPInsights = ({ bpLogs = [] }) => {
               <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontWeight: 600, display: 'block', mb: 1 }}>
                 30-day average
               </Typography>
-              <Typography variant="h6" sx={{ fontWeight: 700, color: theme.palette.text.primary }}>
+              <Typography variant="h6" sx={{ color: theme.palette.text.primary }}>
                 {insights.avg30Systolic}/{insights.avg30Diastolic}
               </Typography>
               <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
@@ -241,9 +233,9 @@ const BPInsights = ({ bpLogs = [] }) => {
           {/* Trend */}
           <Box sx={{
             p: 2,
-            borderRadius: '12px',
+            borderRadius: '16px',
             backgroundColor: trendTint,
-            border: `1px solid ${getTrendColor()}30`
+            border: `1px solid ${alpha(getTrendColor(), 0.3)}`
           }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
               {getTrendIcon()}
@@ -253,7 +245,7 @@ const BPInsights = ({ bpLogs = [] }) => {
                 Last 30 days
               </Typography>
             </Box>
-            <Typography variant="h6" sx={{ fontWeight: 700, color: getTrendColor() }}>
+            <Typography variant="h6" sx={{ color: getTrendColor() }}>
               {getTrendText()}
             </Typography>
           </Box>
@@ -264,7 +256,7 @@ const BPInsights = ({ bpLogs = [] }) => {
             <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontWeight: 600, display: 'block', mb: 1 }}>
               Healthy range
             </Typography>
-            <Typography variant="h6" sx={{ fontWeight: 700, color: theme.palette.text.primary }}>
+            <Typography variant="h6" sx={{ color: theme.palette.text.primary }}>
               {insights.healthyCount} of {insights.totalReadings} readings
             </Typography>
           </Box>

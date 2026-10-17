@@ -77,7 +77,9 @@ export default function PlanAccuracyBanner({ nutritionGoal, scanBmr }) {
   if (kind === 'scan' && (dismissedKey === key || readDismissed(key))) return null;
 
   const stale = kind === 'stale';
-  const accent = stale ? theme.palette.produce?.dinner?.fill || theme.palette.warning.main : theme.palette.produce?.lunch?.fill || theme.palette.info.main;
+  // One colour per job (visual review B2): the semantic warning / info
+  // tones, not the dinner lemon and lunch leaf, which mean meals.
+  const accent = stale ? theme.palette.warning.main : theme.palette.info.main;
   const Icon = stale ? WarningIcon : ScanIcon;
 
   return (
