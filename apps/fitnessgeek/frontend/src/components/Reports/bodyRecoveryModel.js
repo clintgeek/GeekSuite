@@ -158,6 +158,39 @@ export function comparisonWindow(end) {
   return { from: addDays(end, -(PERIOD_DAYS + WINDOW_DAYS - 1)), to: addDays(end, -PERIOD_DAYS) };
 }
 
+/**
+ * The week the cards ACTUALLY compare with. `metricTrend` starts looking at
+ * `comparisonWindow(end)`, but when the history starts later than that (a
+ * new watch, a gap) the baseline is the first week there is — and the header
+ * said one week while every card said "vs" another (d-fixes). The header
+ * states the week most cards share; a card on a different one still names
+ * its own. With no change to compare, the planned week.
+ *
+ * @param {Object<string, {change?: object}>|null} cards garminCards()' result
+ * @returns {{from: string, to: string, planned: boolean}}
+ */
+export function sharedComparisonWindow(cards, end) {
+  const planned = comparisonWindow(end);
+  const plannedKey = `${planned.from}|${planned.to}`;
+  const counts = new Map();
+  Object.values(cards || {}).forEach((c) => {
+    const b = c?.change?.available ? c.change.baseline : null;
+    if (!b?.from || !b?.to) return;
+    const key = `${utcDateString(b.from)}|${utcDateString(b.to)}`;
+    counts.set(key, (counts.get(key) || 0) + 1);
+  });
+  let best = plannedKey;
+  let most = 0;
+  counts.forEach((n, key) => {
+    if (n > most || (n === most && key === plannedKey)) {
+      best = key;
+      most = n;
+    }
+  });
+  const [from, to] = best.split('|');
+  return { from, to, planned: best === plannedKey };
+}
+
 const sameWindow = (a, b) => !!a && !!b && utcDateString(a.from) === b.from && utcDateString(a.to) === b.to;
 
 /** "−3 bpm" / "+1.5 h" / "0 ms" with a true minus sign. */
@@ -300,7 +333,7 @@ export function fitnessAgeGap(model) {
  * (`weightService.getWeightStats()` — 7-day mean now vs the 7-day mean ~30
  * days earlier), plus the sparkline from `buildWeightTrend`'s 7-day line.
  */
-export function weightModel(logs, stats, { end }) {
+export function weightModel(logs, stats, { end, window = null }) {
   const trend = buildWeightTrend(logs || []).trend;
   const from = addDays(end, -(TREND_DAYS - 1));
   const series = trend.filter((p) => p.x >= from && p.x <= end);
@@ -313,7 +346,7 @@ export function weightModel(logs, stats, { end }) {
   if (num(s.totalChange) !== null) {
     const v = roundTo(s.totalChange, 1);
     // Against the section's stated week, no dates (D-6); otherwise its own.
-    const stated = s.referenceDate && utcDateString(s.referenceDate) === comparisonWindow(end).to;
+    const stated = s.referenceDate && utcDateString(s.referenceDate) === (window || comparisonWindow(end)).to;
     change = Math.abs(v) < STEADY_LB
       ? { kind: 'level', text: stated ? 'About level' : `About level with the week to ${formatDay(s.referenceDate)}` }
       : { kind: 'delta', amount: signedLb(v), text: stated ? '' : `vs the week to ${formatDay(s.referenceDate)}` };

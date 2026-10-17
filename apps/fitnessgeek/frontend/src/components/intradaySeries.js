@@ -114,4 +114,50 @@ export const EMPTY_INTRADAY = Object.freeze({
   heartRate: [], stress: [], bodyBattery: [], breathing: [],
 });
 
-export default { toDate, toTimeSeries, formatClockTime, normalizeIntraday, EMPTY_INTRADAY };
+/** YYYY-MM-DD of an instant, on this device's calendar. */
+const localYmd = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+
+/**
+ * The day's food-log rows as meals with a real time, for Meal impact.
+ *
+ * The GraphQL rows carry the food's name at `food_item_id.name`, calories per
+ * serving at `nutrition.calories_per_serving` (times `servings`), and a
+ * `log_date` that is the calendar day at UTC midnight — no time of day. This
+ * read `entry.name` and `entry.calories`, which don't exist, so every card
+ * said "Meal" and "0 cal", and took `log_date` as the time, so every meal sat
+ * at midnight (d-fixes).
+ *
+ * The only real clock is `created_at`, when the row was written. That is
+ * when she ate only if she logged it that day, so a row written on another
+ * day (backfilled) is left out rather than given an invented time.
+ *
+ * @param {Array<object>} logs GetFoodLogs rows
+ * @param {string} date the day shown, YYYY-MM-DD
+ * @returns {{meals: Array<{name: string, time: string, calories: number, protein: number|null, mealType: string}>, untimed: number}}
+ */
+export const mealsFromLogs = (logs, date) => {
+  const rows = Array.isArray(logs) ? logs : [];
+  const meals = [];
+  let untimed = 0;
+  for (const row of rows) {
+    const at = toDate(row?.created_at);
+    if (!at || (date && localYmd(at) !== date)) {
+      untimed += 1;
+      continue;
+    }
+    const servings = Number(row?.servings) || 1;
+    const n = row?.nutrition || {};
+    const protein = Number(n.protein_grams);
+    meals.push({
+      name: row?.food_item_id?.name || 'Food',
+      time: at.toISOString(),
+      calories: Math.round((Number(n.calories_per_serving) || 0) * servings),
+      protein: Number.isFinite(protein) ? Math.round(protein * servings) : null,
+      mealType: row?.meal_type || 'snack',
+    });
+  }
+  meals.sort((a, b) => a.time.localeCompare(b.time));
+  return { meals, untimed };
+};
+
+export default { toDate, toTimeSeries, formatClockTime, normalizeIntraday, EMPTY_INTRADAY, mealsFromLogs };

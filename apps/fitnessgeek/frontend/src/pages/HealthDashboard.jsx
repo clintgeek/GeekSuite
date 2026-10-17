@@ -11,8 +11,10 @@ import {
   CircularProgress,
   Card,
   CardContent,
-  Button
+  Button,
+  useMediaQuery
 } from '@mui/material';
+import { useTheme } from '@mui/material/styles';
 import {
   TrendingUp as DashboardIcon,
   Bedtime as SleepIcon,
@@ -54,6 +56,10 @@ const TAB_TITLES = [
 export default function HealthDashboard() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState(0);
+  // Five tabs don't fit a phone's width: "Settings" was cut off the end. On a
+  // phone they scroll sideways (with arrows); from md up they share the row.
+  const theme = useTheme();
+  const tabsFit = useMediaQuery(theme.breakpoints.up('md'));
 
   // Reflect the current tab in document.title so browser history is readable
   useEffect(() => {
@@ -212,7 +218,14 @@ export default function HealthDashboard() {
 
         {/* Tabs */}
         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
-          <Tabs value={activeTab} onChange={handleTabChange} variant="fullWidth">
+          <Tabs
+            value={activeTab}
+            onChange={handleTabChange}
+            variant={tabsFit ? 'fullWidth' : 'scrollable'}
+            scrollButtons={tabsFit ? false : 'auto'}
+            allowScrollButtonsMobile
+            data-testid="health-tabs"
+          >
             <Tab icon={<DashboardIcon />} label="Overview" />
             <Tab icon={<SleepIcon />} label="Sleep analysis" />
             <Tab icon={<MealIcon />} label="Meal impact" />

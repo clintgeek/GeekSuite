@@ -96,6 +96,20 @@ describe('Body & recovery', () => {
     await screen.findByTestId('trend-restingHR');
   });
 
+  // Garmin's history starting 32 days back (the harness fixture's shape): the
+  // cards compare with the first week there is, Aug 23–29, and the header
+  // said "Aug 18–24" above them — two different weeks (d-fixes). The header
+  // states the week the cards actually use.
+  it('the header names the week the cards compare with, even when the history starts later', async () => {
+    influx.getTrends.mockResolvedValue({ ...TRENDS, days: TRENDS.days.slice(-32) });
+    renderSection();
+    const card = await screen.findByTestId('trend-restingHR');
+    const header = screen.getByTestId('body-recovery-window');
+    expect(header).toHaveTextContent('Each number is a 7-day average, compared with the week of Aug 23–29.');
+    expect(within(card).queryByText(/vs /)).toBeNull();
+    expect(within(card).queryByText(/Aug 18/)).toBeNull();
+  });
+
   it('asks for 90 days ending on the local calendar day', async () => {
     renderSection();
     await screen.findByTestId('trend-restingHR');

@@ -715,6 +715,12 @@ scenes.push(
         await h.settle(900);
         const paper = await must(page.locator('[data-testid="add-food-dialog"]'), 'the add dialog');
         const box = await must(paper.getByLabel('Tell me what you ate'), 'the composer box');
+        // Earlier scenes in this context may have left words in today's lunch
+        // draft: they now survive closing the sheet (L18, d-fixes).
+        if (await box.inputValue()) {
+          await box.fill('');
+          await h.settle(600);
+        }
         const tops = async () => ({ dialog: (await paper.boundingBox()).y, input: (await box.boundingBox()).y });
         const before = await tops();
 

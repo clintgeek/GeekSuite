@@ -6,9 +6,9 @@ import { useBodyRecoveryTrends } from '../../hooks/useBodyRecoveryTrends.js';
 import { formatSpan } from '../BodyComposition/bodyCompFormat.js';
 import {
   bpModel,
-  comparisonWindow,
   fitnessAgeModel,
   garminCards,
+  sharedComparisonWindow,
   weightModel,
 } from './bodyRecoveryModel.js';
 import {
@@ -60,7 +60,10 @@ const SourceNotice = ({ children, action, testId }) => (
  * apologise for the toggle (UX review 2026-10-17, D-5).
  *
  * The comparison week is said once, in the header (D-6); a card names its
- * own dates only when its source forces a different window.
+ * own dates only when its source forces a different window. The header's
+ * week is the one the cards actually used (sharedComparisonWindow) — it used
+ * to be the planned week even when the history started later, so it said
+ * "Sep 11–17" above cards comparing with Sep 16–22.
  *
  * Four sources (Garmin trends, body-comp summary, weights, BP), each landing
  * or failing on its own. A user without the Influx connection (a 403) sees
@@ -76,11 +79,12 @@ const BodyRecoverySection = () => {
     [garmin, end],
   );
   const fitnessAge = useMemo(() => (garmin.status === 'ok' ? fitnessAgeModel(garmin.data) : null), [garmin]);
-  const weightM = useMemo(() => weightModel(weight.logs, weight.stats, { end }), [weight, end]);
+  const compareWindow = useMemo(() => sharedComparisonWindow(cards, end), [cards, end]);
+  const weightM = useMemo(() => weightModel(weight.logs, weight.stats, { end, window: compareWindow }), [weight, end, compareWindow]);
   const bpM = useMemo(() => bpModel(bp.logs, { end }), [bp, end]);
 
   const garminPending = garmin.status === 'loading';
-  const compareWindow = useMemo(() => comparisonWindow(end), [end]);
+  const span = formatSpan(compareWindow.from, compareWindow.to);
 
   let garminNotice = null;
   if (garmin.status === 'not_connected') {
@@ -118,7 +122,9 @@ const BodyRecoverySection = () => {
       <Box sx={{ mb: 2.5 }}>
         <DisplayHeading size="card" id="body-recovery-heading">Body and recovery, last 90 days</DisplayHeading>
         <Typography data-testid="body-recovery-window" sx={{ color: 'text.secondary', fontSize: '0.875rem', lineHeight: 1.55, mt: 0.75, maxWidth: 720 }}>
-          {`Each number is a 7-day average, compared with the same week a month ago (${formatSpan(compareWindow.from, compareWindow.to)}).`}
+          {compareWindow.planned
+            ? `Each number is a 7-day average, compared with the same week a month ago (${span}).`
+            : `Each number is a 7-day average, compared with the week of ${span}.`}
         </Typography>
       </Box>
 

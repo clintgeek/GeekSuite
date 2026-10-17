@@ -490,7 +490,7 @@ const Settings = () => {
               startIcon={garminSaving ? <CircularProgress size={16} color="inherit" /> : null}
               sx={{ mt: 2, minHeight: 44 }}
             >
-              {garminSaving ? 'Saving…' : connected ? 'Save Garmin login' : 'Connect Garmin'}
+              {garminSaving ? 'Saving…' : connected ? 'Update Garmin login' : 'Connect Garmin'}
             </Button>
           )}
         </Surface>

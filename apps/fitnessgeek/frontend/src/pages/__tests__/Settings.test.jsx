@@ -153,7 +153,15 @@ describe('Settings — saves as it changes (IA-3)', () => {
     fireEvent.click(connect);
     await waitFor(() => expect(settingsService.updateSettings).toHaveBeenCalledTimes(1));
     expect(settingsService.updateSettings.mock.calls[0][0]).toEqual({ garmin: { enabled: true, username: 'h@example.com', password: 'pw' } });
-    expect(await screen.findByRole('button', { name: 'Save Garmin login' })).toBeInTheDocument();
+    // Connected now: the same button updates the login (d-fixes; it said "Save").
+    expect(await screen.findByRole('button', { name: 'Update Garmin login' })).toBeInTheDocument();
+  });
+
+  it('a connected Garmin account offers "Update Garmin login"', async () => {
+    settingsService.getSettings.mockResolvedValue({ data: { ...SETTINGS, garmin: { enabled: true, username: 'h@example.com' } } });
+    mount();
+    expect(await screen.findByRole('button', { name: 'Update Garmin login' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Save Garmin login' })).toBeNull();
   });
 
   it('the theme saves on change, through the account, with no settings write', async () => {

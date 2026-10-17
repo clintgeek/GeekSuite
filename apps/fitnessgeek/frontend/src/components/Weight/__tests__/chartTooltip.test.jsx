@@ -7,10 +7,12 @@ import { describe, it, expect, vi } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 
 let lineProps = [];
+// Stands in for nivo's slice, which hides its tooltip on touchend.
+const sliceTouchEnd = vi.fn();
 vi.mock('@nivo/line', () => ({
   ResponsiveLine: (props) => {
     lineProps.push(props);
-    return null;
+    return <svg><rect data-testid="nivo-slice" onTouchEnd={sliceTouchEnd} /></svg>;
   },
 }));
 
@@ -96,6 +98,72 @@ describe('the weight chart tooltip', () => {
     expect(style.whiteSpace).toBe('nowrap');
     expect(style.minWidth).toBe('168px');
     expect(chart).toBeTruthy();
+  });
+});
+
+/**
+ * A plain tap on a phone: pointerdown, pointerup, then a touch pointerleave
+ * as the finger lifts. The leave used to disarm the tap that had just armed
+ * it, so a tap alone never showed the tooltip (harness 53d/53e, d-fixes).
+ */
+// React builds onPointerLeave from pointerout with a relatedTarget outside.
+const pointer = (type, el, pointerType) => {
+  const leave = type === 'pointerleave';
+  const event = new Event(leave ? 'pointerout' : type, { bubbles: true });
+  Object.defineProperty(event, 'pointerType', { value: pointerType });
+  if (leave) Object.defineProperty(event, 'relatedTarget', { value: document.body });
+  fireEvent(el, event);
+};
+describe('a touch on the weight chart', () => {
+  const tipAfter = (steps) => {
+    lineProps = [];
+    render(<WeightTimeline weightLogs={weightLogs} unit="lbs" />);
+    const box = screen.getByTestId('weight-y-unit').nextElementSibling;
+    steps(box);
+    const Tip = lineProps.at(-1).sliceTooltip;
+    return render(<Tip slice={slice(100)} />).container;
+  };
+
+  it('a plain tap shows the tooltip: the finger lifting is not leaving', () => {
+    const container = tipAfter((box) => {
+      pointer('pointerdown', box, 'touch');
+      pointer('pointerup', box, 'touch');
+      pointer('pointerleave', box, 'touch');
+    });
+    expect(container).not.toBeEmptyDOMElement();
+  });
+
+  it('a touch that becomes a scroll shows nothing', () => {
+    const container = tipAfter((box) => {
+      pointer('pointerdown', box, 'touch');
+      pointer('pointercancel', box, 'touch');
+      pointer('pointerleave', box, 'touch');
+    });
+    expect(container).toBeEmptyDOMElement();
+  });
+
+  it("a tap's touchend never reaches nivo's slice, which would hide the tooltip", () => {
+    sliceTouchEnd.mockClear();
+    render(<WeightTimeline weightLogs={weightLogs} unit="lbs" />);
+    const box = screen.getByTestId('weight-y-unit').nextElementSibling;
+    const slice = screen.getByTestId('nivo-slice');
+    pointer('pointerdown', slice, 'touch');
+    fireEvent.touchEnd(slice);
+    expect(sliceTouchEnd).not.toHaveBeenCalled();
+    // A touch that became a scroll: nivo may hide it.
+    pointer('pointerdown', slice, 'touch');
+    pointer('pointercancel', slice, 'touch');
+    fireEvent.touchEnd(slice);
+    expect(sliceTouchEnd).toHaveBeenCalledTimes(1);
+    expect(box).toBeTruthy();
+  });
+
+  it('a mouse leaving the chart still hides it', () => {
+    const container = tipAfter((box) => {
+      pointer('pointerdown', box, 'mouse');
+      pointer('pointerleave', box, 'mouse');
+    });
+    expect(container).toBeEmptyDOMElement();
   });
 });
 

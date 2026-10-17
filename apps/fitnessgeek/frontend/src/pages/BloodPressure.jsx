@@ -66,7 +66,9 @@ const BloodPressure = () => {
     }, { replace: true });
   }, [setSearchParams]);
 
-  // Calculate the best default time range based on available data
+  // Calculate the best default time range based on available data. It
+  // starts at 30 days, as the plan said ("last 30 days"): a week of readings
+  // used to open the donut on 7d. 7d is still a tap away.
   const getBestTimeRange = (data) => {
     if (!data || data.length === 0) return 'all';
 
@@ -74,7 +76,6 @@ const BloodPressure = () => {
     const mostRecentDate = new Date(sortedData[0].log_date);
 
     const ranges = [
-      { key: '7', days: 7 },
       { key: '30', days: 30 },
       { key: '365', days: 365 },
       { key: 'all', days: Infinity }

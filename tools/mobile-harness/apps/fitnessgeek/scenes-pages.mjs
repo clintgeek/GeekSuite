@@ -470,17 +470,11 @@ async function tapChartTooltip(page, h, box) {
   const tipLoc = page.locator('[data-testid="chart-tooltip"]');
   await page.touchscreen.tap(x, y);
   await h.settle(700);
-  let how = 'tap';
-  if (!(await tipLoc.count())) {
-    // A phone's tap leaves an emulated mouse behind; if the tap alone shows
-    // nothing, say so and see whether a touch-then-move does.
-    await page.mouse.move(x - 6, y);
-    await page.mouse.move(x, y);
-    await h.settle(700);
-    how = 'tap then mouse move (a plain tap showed no tooltip)';
-  }
-  const tip = await need(tipLoc, `the tooltip after ${how}`);
-  h.log(`tooltip via ${how}`);
+  // A plain tap must be enough. A touch pointer "leaves" as the finger
+  // lifts, and that used to disarm the tooltip the tap had just armed, so it
+  // took a tap plus a mouse move (fixed in chartTips.js, d-fixes).
+  await need(tipLoc, 'the tooltip after a plain tap');
+  const tip = tipLoc;
   const t = await tip.first().boundingBox();
   if (!t) throw new Error('tooltip has no box');
   if (t.x < b.x - 1 || t.x + t.width > b.x + b.width + 1) {
@@ -725,13 +719,18 @@ async function influxRoutes(page, { sleep = SLEEP_ANALYSIS, recovery = RECOVERY,
   });
 }
 
+// The day's rows with the time each was written (created_at), as the gateway
+// sends them: breakfast at 7:10 and 7:15, lunch at 12:20. Meal impact times
+// meals by created_at; log_date is only the day.
+const timedDay = () => logDay().map((r, i) => ({ ...r, created_at: iso([7, 7, 12][i], [10, 15, 20][i]) }));
+
 // A Health-dashboard scene: influx on, the REST answers up, the tab clicked.
 const healthScene = (name, tabName, check, { influxOn = true, answers } = {}) => ({
   name,
   async setup(page, h) {
     await influxRoutes(page, answers);
     try {
-      await withOps(page, { ...OPS, ...FULL, ...(influxOn ? INFLUX_ON : {}), ...ledger(logDay()), ...GARMIN_ON }, async () => {
+      await withOps(page, { ...OPS, ...FULL, ...(influxOn ? INFLUX_ON : {}), ...ledger(timedDay()), ...GARMIN_ON }, async () => {
         await page.goto(h.base + '/health', { waitUntil: 'networkidle' });
         await h.settle(1500);
         if (tabName) {
@@ -750,6 +749,24 @@ const healthScene = (name, tabName, check, { influxOn = true, answers } = {}) =>
     await page.unroute('**/api/influx/**');
   },
 });
+
+// Every Health tab whole: none with its label cut, and the selected one on
+// screen. On a phone five full-width tabs cut "Settings" off the end; they
+// scroll sideways now (d-fixes).
+async function assertTabsWhole(page, h) {
+  const vp = page.viewportSize();
+  const tabs = await page.getByRole('tab').evaluateAll((els) => els.map((el) => {
+    const r = el.getBoundingClientRect();
+    const label = el.innerText.trim();
+    return { label, clipped: el.scrollWidth > el.clientWidth + 1, x: r.x, right: r.right, selected: el.getAttribute('aria-selected') === 'true' };
+  }));
+  h.log(`tabs ${JSON.stringify(tabs.map((t) => [t.label, Math.round(t.x), Math.round(t.right)]))}`);
+  if (tabs.length !== 5) throw new Error(`expected 5 tabs, saw ${tabs.length}`);
+  const cut = tabs.filter((t) => t.clipped);
+  if (cut.length) throw new Error(`tab labels cut: ${cut.map((t) => t.label).join(', ')}`);
+  const sel = tabs.find((t) => t.selected);
+  if (!sel || sel.x < -0.5 || sel.right > vp.width + 0.5) throw new Error(`the selected tab is off screen: ${JSON.stringify(sel)}`);
+}
 
 const garminScenes = [
   // Activity with a connected Garmin: today so far, the night's sleep, recent workouts.
@@ -772,8 +789,9 @@ const garminScenes = [
   }, { influxOn: false }),
 
   // Health, Overview: heart rate, stress and Body Battery through the day.
-  healthScene('59a-health-overview', 'Overview', async (page) => {
+  healthScene('59a-health-overview', 'Overview', async (page, h) => {
     await need(page.getByRole('tab', { name: /overview/i, selected: true }), 'Overview selected');
+    await assertTabsWhole(page, h);
     await need(page.locator('svg[role="img"]').first(), 'a chart');
   }),
   // Sleep analysis: the score, the metric cards, and the accordions below.
@@ -784,6 +802,12 @@ const garminScenes = [
   // Meal impact: how her heart rate answered the day's meals.
   healthScene('59c-health-meal-impact', 'Meal impact', async (page) => {
     await need(page.getByRole('tab', { name: /meal impact/i, selected: true }), 'Meal impact selected');
+    // Cards name the food and its calories. They read fields the rows don't
+    // have, so every card said "Meal" and "0 cal" (d-fixes).
+    await need(page.getByText('Greek yogurt', { exact: true }).first(), 'the Greek yogurt card');
+    await need(page.getByText(/· 190 cal ·/).first(), 'its calories');
+    if (await page.getByText(/· 0 cal ·/).count()) throw new Error('a card says 0 cal');
+    if (await page.getByText('Meal', { exact: true }).count()) throw new Error('a card is called "Meal"');
   }),
   // Recovery coach: the readiness score and the two notes.
   healthScene('59d-health-recovery', 'Recovery coach', async (page) => {
@@ -791,8 +815,9 @@ const garminScenes = [
     await need(page.getByText('Protect tonight’s sleep'), 'a recovery note');
   }),
   // Settings tab: the data-server switch and the baselines.
-  healthScene('59e-health-settings', 'Settings', async (page) => {
+  healthScene('59e-health-settings', 'Settings', async (page, h) => {
     await need(page.getByRole('tab', { name: /settings/i, selected: true }), 'Settings selected');
+    await assertTabsWhole(page, h);
   }),
   // The days the server has nothing for: sleep and recovery say so in a sentence.
   healthScene('59f-health-sleep-none', 'Sleep analysis', async (page) => {

@@ -352,13 +352,16 @@ const Activity = () => {
   const [sleepData, setSleepData] = useState(null);
   const [activities, setActivities] = useState([]);
   const [garminStatus, setGarminStatus] = useState(null);
+  // "Refresh" at the foot of the page asks again without blanking it.
+  const [refreshing, setRefreshing] = useState(false);
 
   useEffect(() => {
     loadData();
   }, []);
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async ({ quiet = false } = {}) => {
+    if (quiet) setRefreshing(true);
+    else setLoading(true);
     setError(null);
     setGarminNotEnabled(false);
 
@@ -404,6 +407,7 @@ const Activity = () => {
       setError(errorMessage(err, "Couldn’t load your activity. Try again."));
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
   };
 
@@ -751,12 +755,26 @@ const Activity = () => {
         />
       )}
 
-      {/* Last Sync Info */}
-      {dailyData?.fetchedAt && (
-        <Box sx={{ mt: 3, textAlign: 'center' }}>
-          <Typography variant="caption" color="text.secondary">
-            {`Updated ${whenWords(dailyData.fetchedAt)}`}
-          </Typography>
+      {/* When it was last fetched, and a way to fetch again. Garmin syncs
+          through the day, and the only way to see a walk that just synced
+          was to leave and come back. It is also the page's one control: the
+          shell's scrolling <main> held nothing that could take focus, so a
+          keyboard couldn't scroll it (axe scrollable-region-focusable). */}
+      {!garminNotEnabled && !error && (
+        <Box sx={{ mt: 3, display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'center', gap: 1 }}>
+          {dailyData?.fetchedAt && (
+            <Typography variant="caption" color="text.secondary">
+              {`Updated ${whenWords(dailyData.fetchedAt)}`}
+            </Typography>
+          )}
+          <Button
+            onClick={() => loadData({ quiet: true })}
+            disabled={refreshing}
+            data-testid="activity-refresh"
+            sx={{ minHeight: 44, textTransform: 'none', fontWeight: 700 }}
+          >
+            {refreshing ? 'Refreshing…' : 'Refresh'}
+          </Button>
         </Box>
       )}
     </Box>

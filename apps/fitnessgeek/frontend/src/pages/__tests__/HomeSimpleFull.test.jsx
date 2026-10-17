@@ -12,7 +12,7 @@
  * The mode comes from a real ExperienceContext value, not a mock of the page.
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent, within, act } from '@testing-library/react';
+import { render, screen, fireEvent, within, act, waitForElementToBeRemoved } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
 import { createFitnessTheme } from '../../theme/theme.jsx';
@@ -85,6 +85,7 @@ const { streakService } = await import('../../services/streakService.js');
 const { medsService } = await import('../../services/medsService.js');
 const { mealTypeForHour } = await import('../../utils/plainWords.js');
 const { default: DashboardNew } = await import('../DashboardNew.jsx');
+const { forgetDrafts } = await import('../../components/FoodSearch/composerDraft.js');
 
 const experience = (over = {}) => ({
   loading: false,
@@ -113,7 +114,7 @@ const renderHome = (value) => render(
   </ThemeProvider>
 );
 
-beforeEach(() => { vi.clearAllMocks(); todayValue = TODAY; });
+beforeEach(() => { vi.clearAllMocks(); todayValue = TODAY; forgetDrafts(); });
 
 describe('Home answers in words', () => {
   it('"You have 660 calories left today", with a plate that says the same', async () => {
@@ -141,6 +142,41 @@ describe('meal cards', () => {
     await screen.findByTestId('meal-cards');
     expect(screen.getAllByRole('button', { name: /^Add to / }).map((b) => b.getAttribute('aria-label')))
       .toEqual(['Add to breakfast', 'Add to lunch', 'Add to dinner', 'Add to snacks']);
+  });
+});
+
+/**
+ * L18 from Home: the sheet's words outlive closing it. Closing used to reset
+ * the meal to snack while the sheet was still on its way out, so the lunch
+ * draft moved to snack and "Add to lunch" opened on an empty box — and
+ * "Your words are saved here" wasn't true.
+ */
+describe('the add sheet keeps her words when closed (L18)', () => {
+  const closeAndReopen = async (reopen) => {
+    const sheet = await screen.findByRole('dialog');
+    const box = within(sheet).getByLabelText('Tell me what you ate');
+    fireEvent.change(box, { target: { value: 'chicken noodle soup' } });
+    fireEvent.keyDown(sheet, { key: 'Escape' });
+    await waitForElementToBeRemoved(() => screen.queryByRole('dialog'));
+    await act(async () => { fireEvent.click(reopen()); });
+    const again = await screen.findByRole('dialog');
+    return within(again).getByLabelText('Tell me what you ate');
+  };
+
+  it("from a meal card's Add", async () => {
+    renderHome(experience(SIMPLE));
+    await screen.findByTestId('meal-cards');
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Add to lunch' })); });
+    const box = await closeAndReopen(() => screen.getByRole('button', { name: 'Add to lunch' }));
+    expect(box).toHaveValue('chicken noodle soup');
+  });
+
+  it('from "What did you eat?"', async () => {
+    renderHome(experience(SIMPLE));
+    const button = await screen.findByTestId('what-did-you-eat');
+    await act(async () => { fireEvent.click(button); });
+    const box = await closeAndReopen(() => screen.getByTestId('what-did-you-eat'));
+    expect(box).toHaveValue('chicken noodle soup');
   });
 });
 

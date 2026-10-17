@@ -31,6 +31,7 @@ import {
   toDate,
   formatClockTime,
   normalizeIntraday,
+  mealsFromLogs,
 } from './intradaySeries.js';
 
 /**
@@ -238,6 +239,8 @@ export default function MealImpactVisualization({ date }) {
   const [loading, setLoading] = useState(true);
   const [intradayData, setIntradayData] = useState(null);
   const [meals, setMeals] = useState([]);
+  // Rows logged on another day: no real time, so not on the chart.
+  const [untimedCount, setUntimedCount] = useState(0);
   const [mealImpacts, setMealImpacts] = useState([]);
 
   // Fetch intraday data and meals
@@ -265,20 +268,11 @@ export default function MealImpactVisualization({ date }) {
         }
         // (if available===false we leave intradayData null — chart just won't render)
 
-        // Transform meals to have time property (response format: { success, data: [...] })
-        const logs = mealsResponse.data || mealsResponse.entries || [];
-        const mealsWithTime = logs.map(entry => {
-          // Try various date fields - FoodLog uses log_date and created_at
-          const timestamp = entry.log_date || entry.created_at || entry.loggedAt || entry.createdAt;
-          const dateObj = timestamp ? new Date(timestamp) : new Date();
-          return {
-            name: entry.name || entry.foodName || 'Meal',
-            time: isNaN(dateObj.getTime()) ? new Date().toISOString() : dateObj.toISOString(),
-            calories: entry.calories || 0,
-            mealType: entry.meal_type || 'snack'
-          };
-        });
-        setMeals(mealsWithTime);
+        // GetFoodLogs rows, timed by when they were written (mealsFromLogs).
+        const logs = mealsResponse?.data || [];
+        const { meals: timed, untimed } = mealsFromLogs(logs, date);
+        setMeals(timed);
+        setUntimedCount(untimed);
       } catch (err) {
         // Defensive: backend should no longer 500, but handle it quietly.
         console.warn('Meal impact data unavailable:', err.message);
@@ -323,7 +317,9 @@ export default function MealImpactVisualization({ date }) {
   if (!meals || meals.length === 0) {
     return (
       <Alert severity="info">
-        No meals logged for this date. Log meals to see their physiological impact!
+        {untimedCount > 0
+          ? 'These meals were added later, so I don’t know when you ate them. Meals you log as you eat show here.'
+          : 'No meals logged for this day. Log a meal as you eat it to see how your body answered.'}
       </Alert>
     );
   }

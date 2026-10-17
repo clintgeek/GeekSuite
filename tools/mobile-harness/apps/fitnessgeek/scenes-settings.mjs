@@ -153,7 +153,7 @@ const settingsFull = [
   stubbed('61b-settings-garmin', {
     ...FULL_SETTINGS,
     async fn(page, h) {
-      await must(page.getByRole('button', { name: /^(update|save) garmin login$/i }), 'update-the-login button');
+      await must(page.getByRole('button', { name: 'Update Garmin login', exact: true }), '"Update Garmin login" (it said "Save", d-fixes)');
       if (await page.getByRole('button', { name: /^connect garmin$/i }).count()) throw new Error('"Connect Garmin" showing for a saved login');
       if ((await page.getByLabel('Garmin email').inputValue()) !== 'chef@example.com') throw new Error('Garmin email did not fill');
       await scrollToSection(page, h, '#garmin', 80);
@@ -461,6 +461,22 @@ const reports = [
     ops: REPORT_OPS, path: '/reports', wait: 2000,
     async fn(page, h) {
       await must(page.locator('[data-testid="trend-restingHR"]'), 'resting HR card');
+      // The header names the week the cards compare with. It said "Sep 11–17"
+      // above cards that each said "vs Sep 16–22" (d-fixes): the cards that
+      // share the header's week say no dates of their own.
+      const header = await page.locator('[data-testid="body-recovery-window"]').innerText();
+      const garmin = ['restingHR', 'hrv', 'sleepScore', 'sleepHours', 'intensity', 'steps', 'stress'];
+      const cards = await page.locator(garmin.map((k) => `[data-testid="trend-${k}"]`).join(', ')).allInnerTexts();
+      if (cards.length !== garmin.length) throw new Error(`expected ${garmin.length} Garmin cards, saw ${cards.length}`);
+      h.log(`header: ${header}`);
+      // A card whose own history forces a different week still names it; the
+      // header's week is the one most cards share, so those are the minority.
+      const own = cards.filter((t) => /\bvs [A-Z][a-z]{2} \d/.test(t)).map((t) => t.match(/vs [^\n]+/)[0]);
+      h.log(`cards naming their own week: ${JSON.stringify(own)}`);
+      if (own.length * 2 >= cards.length) throw new Error(`most cards name a different week from the header ("${header}"): ${JSON.stringify(own)}`);
+      const span = (header.match(/\(([^)]+)\)|week of ([^.]+)\./) || []).slice(1).find(Boolean);
+      if (!span) throw new Error(`the header names no week: "${header}"`);
+      if (own.some((v) => v.includes(span))) throw new Error(`a card repeats the header's week ${span}`);
       await scrollToSection(page, h, '#body-recovery', 88);
     },
   }),
@@ -522,6 +538,28 @@ const bloodPressure = [
       if (!/^Last reading 118\/74 · normal · today 7:42\s?AM$/.test((await last.innerText()).replace(/\s+/g, ' '))) throw new Error(`last reading: ${await last.innerText()}`);
       const healthy = await must(page.locator('[data-testid="bp-healthy-range"]'), 'healthy range');
       if (!/1 of 14 readings/.test(await healthy.innerText())) throw new Error(`healthy range: ${await healthy.innerText()}`);
+      // At the very bottom of the page the "Log BP" button covers nothing:
+      // the page leaves room under its last card (d-fixes).
+      await page.evaluate(() => {
+        const main = document.querySelector('main');
+        if (main) main.scrollTop = main.scrollHeight;
+        window.scrollTo(0, document.body.scrollHeight);
+      });
+      await page.waitForTimeout(500);
+      const fab = await page.locator('[data-testid="add-bp-fab"]').boundingBox();
+      if (fab) {
+        const covered = await page.evaluate(({ x, y, w, hh }) => {
+          const hits = [];
+          document.querySelectorAll('main .MuiCard-root, main [class*="MuiPaper-root"]').forEach((el) => {
+            const r = el.getBoundingClientRect();
+            if (r.width && r.x < x + w && x < r.right && r.y < y + hh && y < r.bottom) hits.push(`${Math.round(r.y)}-${Math.round(r.bottom)}`);
+          });
+          return hits;
+        }, { x: fab.x, y: fab.y, w: fab.width, hh: fab.height });
+        if (covered.length) throw new Error(`at the bottom, Log BP covers a card: ${covered.join(', ')}`);
+        await page.evaluate(() => { const m = document.querySelector('main'); if (m) m.scrollTop = 0; window.scrollTo(0, 0); });
+        await page.waitForTimeout(300);
+      }
     },
   }),
   // The charts: range toggle above the donut, "Readings by range, last N days", and the plain legend.
@@ -530,11 +568,33 @@ const bloodPressure = [
     async fn(page, h) {
       await must(page.locator('[data-testid="bp-range-toggle"]'), 'range toggle');
       const title = await must(page.locator('[data-testid="bp-donut-title"]'), 'donut title');
-      if (!/^Readings by range, last \d+ days$/.test((await title.innerText()).trim())) throw new Error(`donut title: ${await title.innerText()}`);
+      // The plan's window: it opened on 7 days (d-fixes).
+      if ((await title.innerText()).trim() !== 'Readings by range, last 30 days') throw new Error(`donut title: ${await title.innerText()}`);
       await must(page.locator('[data-testid="bp-donut-legend"]'), 'legend');
       const toggleTop = (await page.locator('[data-testid="bp-range-toggle"]').boundingBox()).y;
       const titleTop = (await title.boundingBox()).y;
       if (toggleTop > titleTop) throw new Error('the range toggle is below the donut');
+      if (page.viewportSize().width < 600) {
+        // A tapped slice's tooltip: whole lines, and gone after a scroll. It
+        // stayed up over the page, one word per line (d-fixes).
+        const donut = await must(page.locator('[data-testid="bp-donut-legend"]').locator('xpath=preceding-sibling::div[@role="img"][1]'), 'the donut');
+        await donut.scrollIntoViewIfNeeded();
+        await h.settle(300);
+        const d = await donut.boundingBox();
+        await page.touchscreen.tap(d.x + d.width * 0.82, d.y + d.height * 0.5);
+        await h.settle(500);
+        const tip = page.locator('[data-testid="bp-donut-tooltip"]');
+        if (await tip.count()) {
+          const t = await tip.boundingBox();
+          h.log(`donut tooltip ${Math.round(t.width)}x${Math.round(t.height)}`);
+          if (t.height > 70) throw new Error(`the donut tooltip wraps: ${Math.round(t.width)}x${Math.round(t.height)}`);
+          await page.mouse.wheel(0, 240);
+          await h.settle(600);
+          if (await tip.count()) throw new Error('the donut tooltip stayed up after a scroll');
+        } else {
+          h.log('donut tooltip: a tap showed none here');
+        }
+      }
       await scrollToSection(page, h, '[data-testid="bp-range-toggle"]', 88);
     },
   }),

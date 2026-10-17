@@ -2,6 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Box, Typography, Button } from '@mui/material';
 import { Undo as UndoIcon, CheckCircle as LoggedIcon } from '@mui/icons-material';
 import { useTheme, alpha, keyframes } from '@mui/material/styles';
+import { useGeekToastClearance } from '@geeksuite/ui';
 
 const riseIn = keyframes`
   from { transform: translateY(100%); opacity: 0; }
@@ -50,6 +51,11 @@ const useCountUp = (target, duration = 380) => {
  * apart, with no redo: one slip took back the whole sitting. Undo last stays;
  * each toast still has its own Undo.
  *
+ * TOASTS STAY ABOVE IT. The ten-second "Added ✓ · Undo" toast used to land
+ * right over Done on a phone, so the button she reaches for to finish was
+ * under a toast for ten seconds. The ribbon registers itself with the toast
+ * stack, which rises above it.
+ *
  * `where` is the meal in words ("lunch", "Thursday's dinner"), or null when
  * the sitting spans meals.
  */
@@ -65,11 +71,14 @@ const SessionRibbon = ({ items = [], where = null, onUndoLast, onDone, busy = fa
     return sum + per * (Number(item?.servings) || 1);
   }, 0);
   const displayed = useCountUp(Math.round(totalCalories));
+  const ribbonRef = useRef(null);
+  useGeekToastClearance(ribbonRef, items.length > 0);
 
   if (items.length < 1) return null;
 
   return (
     <Box
+      ref={ribbonRef}
       data-testid="session-ribbon"
       role="status"
       sx={{

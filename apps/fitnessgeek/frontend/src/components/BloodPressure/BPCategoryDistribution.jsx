@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Typography, Card, CardContent } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { ResponsivePie } from '@nivo/pie';
@@ -19,10 +19,27 @@ const ORDER = Object.values(BP_STAGES);
  * "Normal · A little high · High (stage 1)".
  *
  * `windowLabel`: "last 30 days", "all time", …
+ *
+ * THE TOOLTIP LETS GO. On a phone, a tap on a slice shows its tooltip, and
+ * nothing ever told nivo the finger had gone: it stayed up over the page
+ * after a scroll, squeezed to one word per line at the card's edge. A scroll
+ * now closes it (the pie is remounted, which is the only way nivo lets go
+ * of a tooltip from outside), and its lines never wrap.
  */
 const BPCategoryDistribution = ({ bpLogs = [], windowLabel = '' }) => {
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
+  const [pieKey, setPieKey] = useState(0);
+  const tipShown = useRef(false);
+  useEffect(() => {
+    const close = () => {
+      if (!tipShown.current) return;
+      tipShown.current = false;
+      setPieKey((k) => k + 1);
+    };
+    window.addEventListener('scroll', close, true);
+    return () => window.removeEventListener('scroll', close, true);
+  }, []);
   const chartData = useMemo(() => {
     if (!bpLogs || bpLogs.length === 0) return [];
 
@@ -86,6 +103,7 @@ const BPCategoryDistribution = ({ bpLogs = [], windowLabel = '' }) => {
           sx={{ height: 280 }}
         >
           <ResponsivePie
+            key={pieKey}
             data={chartData}
             role="presentation"
             margin={{ top: 20, right: 20, bottom: 20, left: 20 }}
@@ -111,22 +129,26 @@ const BPCategoryDistribution = ({ bpLogs = [], windowLabel = '' }) => {
                 }
               }
             }}
-            tooltip={({ datum }) => (
-              <Box sx={{
-                backgroundColor: theme.palette.background.paper,
-                border: `1px solid ${theme.palette.divider}`,
-                borderRadius: '12px',
-                padding: '8px 12px',
-                boxShadow: theme.shadows[3]
-              }}>
-                <Typography variant="body2" sx={{ fontWeight: 600, color: theme.palette.text.primary }}>
-                  {datum.label}
-                </Typography>
-                <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>
-                  {datum.value} of {bpLogs.length} readings
-                </Typography>
-              </Box>
-            )}
+            tooltip={({ datum }) => {
+              tipShown.current = true;
+              return (
+                <Box data-testid="bp-donut-tooltip" sx={{
+                  whiteSpace: 'nowrap',
+                  backgroundColor: theme.palette.background.paper,
+                  border: `1px solid ${theme.palette.divider}`,
+                  borderRadius: '12px',
+                  padding: '8px 12px',
+                  boxShadow: theme.shadows[3]
+                }}>
+                  <Typography variant="body2" sx={{ fontWeight: 600, color: theme.palette.text.primary }}>
+                    {datum.label}
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>
+                    {datum.value} of {bpLogs.length} readings
+                  </Typography>
+                </Box>
+              );
+            }}
           />
         </Box>
 

@@ -58,6 +58,29 @@ const writeOps = () => {
 
 const rect = (b) => (b ? { x: b.x, y: b.y, w: b.width, h: b.height } : null);
 const intersects = (a, b) => Boolean(a && b && a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h);
+
+// Every toast on screen: inside the viewport, none on top of another, and
+// none on top of `avoid` (the ribbon's Done). Two toasts used to sit side by
+// side on a phone with the second clipped off the right edge, and the 10 s
+// toast sat over Done (d-fixes).
+const assertToastsClear = async (page, h, { min = 1, avoid = null, what = 'toast' } = {}) => {
+  const vp = page.viewportSize();
+  const boxes = [];
+  const toasts = page.locator('[data-geek-toast]');
+  for (let i = 0; i < await toasts.count(); i += 1) boxes.push(rect(await toasts.nth(i).boundingBox()));
+  h.log(`${what}s ${JSON.stringify(boxes)}${avoid ? ` · avoid ${JSON.stringify(avoid)}` : ''}`);
+  if (boxes.length < min) throw new Error(`expected at least ${min} ${what}(s), saw ${boxes.length}`);
+  boxes.forEach((b, i) => {
+    if (b.x < 0 || b.y < 0 || b.x + b.w > vp.width + 0.5 || b.y + b.h > vp.height + 0.5) {
+      throw new Error(`${what} ${i + 1} runs off the screen: ${JSON.stringify(b)} in ${vp.width}×${vp.height}`);
+    }
+    boxes.slice(i + 1).forEach((o, j) => {
+      if (intersects(b, o)) throw new Error(`${what}s ${i + 1} and ${i + j + 2} overlap: ${JSON.stringify(b)} / ${JSON.stringify(o)}`);
+    });
+    if (avoid && intersects(b, avoid)) throw new Error(`${what} ${i + 1} covers ${JSON.stringify(avoid)}: ${JSON.stringify(b)}`);
+  });
+  return boxes;
+};
 const clearDrafts = (page) => page.evaluate(() => { try { sessionStorage.clear(); } catch { /* blocked */ } });
 
 /**
@@ -186,6 +209,9 @@ export const scenes = [
       await must(sheet.getByRole('button', { name: /^Make it 3/ }), '"Make it 3"');
       // One entry with two servings: still "1 added", now 144 cal.
       await must(sheet.getByTestId('session-ribbon').filter({ hasText: '1 added to breakfast' }).filter({ hasText: '144 cal' }), 'the ribbon "1 added to breakfast · 144 cal"');
+      // Two toasts are up now: stacked, both on screen, neither over Done.
+      const done = rect(await sheet.getByTestId('session-done').boundingBox());
+      await assertToastsClear(page, h, { min: 2, avoid: done });
       await dismissToasts(page, h);
     },
   }),
@@ -248,8 +274,8 @@ export const scenes = [
 
   // ── 42  The ribbon, and the toast that arrives with it ────────────────
   // While the 10 s toast is up. The snackbar is bottom-left/centre; the ribbon
-  // is the sheet's sticky foot. Reports in the run log when they overlap and
-  // what is on top at the middle of Done.
+  // is the sheet's sticky foot. Asserts they don't overlap and that Done is
+  // what's on top at the middle of Done.
   sheetScene('42-ribbon-with-toast', {
     experience: 'simple', meal: 'breakfast', suggest: eggSuggest,
     fn: async (page, h, sheet) => {
@@ -265,7 +291,10 @@ export const scenes = [
         return top === el || el.contains(top) ? 'Done' : `${top?.tagName}.${String(top?.className).slice(0, 40)}`;
       });
       h.log(`toast ${JSON.stringify(sb)} · Done ${JSON.stringify(db)} · overlap=${intersects(sb, db)} · on top at Done's centre: ${topmost}`);
-      // Not an assertion: the shot is the evidence (the toast covers Done for ten seconds; reported to c-visual).
+      // The toast used to sit over Done for ten seconds on a phone (d-fixes):
+      // the ribbon registers itself, and the toasts rise above it.
+      if (topmost !== 'Done') throw new Error(`Done is covered: on top at its centre is ${topmost}`);
+      await assertToastsClear(page, h, { avoid: db });
     },
   }),
   // Ten seconds later, the toast gone: only the ribbon is left.
@@ -359,9 +388,12 @@ export const scenes = [
     fn: async (page, h, sheet) => {
       await (await must(sheet.getByTestId('same-as-household'), 'the household pick')).click();
       await h.settle(1000);
-      // A locator, not getByRole: the dialog's modal marks everything outside it aria-hidden, the toast included.
-      h.log('toast aria-hidden:', await page.locator('.MuiSnackbar-root').first().evaluate((el) => `${el.closest('[aria-hidden="true"]') ? 'yes' : 'no'}`));
-      await must(page.locator('.MuiSnackbar-root button', { hasText: 'Undo' }), 'the toast Undo');
+      // The toast used to render outside the sheet, under the modal's
+      // aria-hidden, so a screen reader couldn't reach its Undo (d-fixes).
+      // getByRole only finds what the accessibility tree exposes.
+      const hidden = await page.locator('[data-geek-toast]').first().evaluate((el) => Boolean(el.closest('[aria-hidden="true"]')));
+      if (hidden) throw new Error('the toast is under aria-hidden while the sheet is open');
+      await must(page.getByRole('alert').getByRole('button', { name: 'Undo' }), 'the toast Undo, reachable by role');
       await must(sheet.getByTestId('session-ribbon'), 'the ribbon');
     },
   }),
@@ -418,12 +450,10 @@ export const scenes = [
       await h.settle(1000);
       const box = await must(page.getByRole('dialog').getByLabel('Tell me what you ate'), 'the box');
       const words = await box.inputValue();
-      // KNOWN APP BUG (c-harness manifest, "App bugs found"): closing the
-      // Home sheet resets mealType to snack while it is still mounted, so the
-      // draft moves from …:lunch to …:snack and the reopened lunch box is
-      // empty. Logged, not thrown, so the gate stays usable; make this a
-      // throw again the day the draft survives.
-      if (words !== SOUP) h.log(`APP BUG L18: the words did not come back (box says "${words}")`);
+      // L18: closing the Home sheet used to reset the meal to snack while it
+      // was still mounted, so the lunch draft moved to snack and this box
+      // came back empty (fixed in DashboardNew, d-fixes).
+      if (words !== SOUP) throw new Error(`the words did not come back (box says "${words}")`);
     },
   }),
 

@@ -74,4 +74,16 @@ describe('the BP page order', () => {
     expect(toggle.compareDocumentPosition(title) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
     expect(within(toggle).getByRole('button', { pressed: true })).toBeInTheDocument();
   });
+
+  // The plan said "last 30 days"; a week of readings opened on 7d (d-fixes).
+  it('opens on the last 30 days, even with a week of readings', async () => {
+    vi.resetModules();
+    vi.doMock('../../../services/bpService.js', () => ({ bpService: { getBPLogs: vi.fn(() => Promise.resolve({ success: true, data: LOGS })), getCurrentBP: vi.fn() } }));
+    const { MemoryRouter } = await import('react-router-dom');
+    const { default: BloodPressure } = await import('../../../pages/BloodPressure.jsx');
+    render(<MemoryRouter><BloodPressure /></MemoryRouter>);
+    const toggle = await screen.findByTestId('bp-range-toggle');
+    expect(await screen.findByTestId('bp-donut-title', {}, { timeout: 5000 })).toHaveTextContent('Readings by range, last 30 days');
+    expect(within(toggle).getByRole('button', { pressed: true })).toHaveAccessibleName('30 days');
+  });
 });

@@ -135,7 +135,18 @@ const DashboardNew = () => {
   const [nutritionGoal, setNutritionGoal] = useState(null);
   const [scanBmr, setScanBmr] = useState(null);
   const [proteinBasis, setProteinBasis] = useState(null);
-  const [addMeal, setAddMeal] = useState(null);
+  // The add sheet: whether it's open, and which meal it's on. Two pieces on
+  // purpose (L18): closing used to null the meal while the sheet was still
+  // on its way out, the composer saw "snack", and the lunch draft moved to
+  // snack — so reopening lunch showed an empty box. The meal now stays put
+  // when the sheet closes.
+  const [addOpen, setAddOpen] = useState(false);
+  const [addMeal, setAddMealOnly] = useState('snack');
+  const setAddMeal = useCallback((meal) => {
+    if (!meal) { setAddOpen(false); return; }
+    setAddMealOnly(meal);
+    setAddOpen(true);
+  }, []);
   const [showBarcodeScanner, setShowBarcodeScanner] = useState(false);
   // null = couldn't be read, and nothing from before (todayStrip leaves it out).
   const [checkIns, setCheckIns] = useState({ weights: null, bloodPressures: null });
@@ -383,13 +394,13 @@ const DashboardNew = () => {
 
   const addDialog = (
     <AddFoodDialog
-      open={Boolean(addMeal)}
+      open={addOpen}
       onClose={({ mealType } = {}) => {
-        setAddMeal(null);
+        setAddOpen(false);
         showMealCard(mealType);
       }}
-      mealType={addMeal || 'snack'}
-      onMealTypeChange={setAddMeal}
+      mealType={addMeal}
+      onMealTypeChange={(meal) => meal && setAddMealOnly(meal)}
       onLogItems={logItems}
       onDescribe={describeMeal}
       onAdjustCalories={adjustLogCalories}

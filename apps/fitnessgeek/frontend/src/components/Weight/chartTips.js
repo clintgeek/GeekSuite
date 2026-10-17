@@ -45,9 +45,23 @@ export function massDomain(values, minSpan = 10) {
  * Arms the tooltip only on a real touch or a real pointer movement over the
  * chart. Spread `handlers` on the box around the chart and read `armed()`
  * in the tooltip.
+ *
+ * A TAP IS A REAL TOUCH. A touch pointer "leaves" the moment the finger
+ * lifts, so disarming on every pointerleave threw away the tap that had just
+ * armed it, and a plain tap never showed a tooltip — only a tap followed by a
+ * mouse move did. Now only a mouse leaving disarms. A touch that turns into a
+ * scroll is cancelled by the browser (pointercancel), and that disarms, so
+ * the made-up moves after a scroll still show nothing.
+ *
+ * NIVO HIDES ON TOUCHEND. Its slices show the tooltip on touchstart and hide
+ * it again on touchend, so a tap showed it for the length of the tap. A tap's
+ * touchend is stopped at the chart's box, so the tooltip stays until the next
+ * touch or the mouse leaves; a touch that became a scroll still lets nivo
+ * hide it.
  */
 export function useTooltipGuard() {
   const armedRef = useRef(false);
+  const scrolledRef = useRef(false);
   const [, bump] = useState(0);
   const arm = (on) => {
     if (armedRef.current === on) return;
@@ -55,10 +69,14 @@ export function useTooltipGuard() {
     bump((n) => n + 1);
   };
   const handlers = {
-    onPointerDown: () => arm(true),
+    onPointerDown: () => { scrolledRef.current = false; arm(true); },
     // Moves the browser makes up after a tap or a scroll don't move.
     onPointerMove: (e) => { if (e.movementX || e.movementY) arm(true); },
-    onPointerLeave: () => arm(false),
+    onPointerLeave: (e) => { if (e.pointerType !== 'touch' && e.pointerType !== 'pen') arm(false); },
+    // The finger started a scroll, not a tap.
+    onPointerCancel: () => { scrolledRef.current = true; arm(false); },
+    // A tap's touchend never reaches nivo's slice, which would hide the tooltip.
+    onTouchEndCapture: (e) => { if (!scrolledRef.current) e.stopPropagation(); },
   };
   return { armed: () => armedRef.current, handlers };
 }
