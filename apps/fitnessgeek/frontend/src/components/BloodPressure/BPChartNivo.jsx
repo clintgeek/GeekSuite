@@ -119,7 +119,7 @@ const BPChartNivo = ({ data, unit = 'mmHg' }) => {
     return (
       <Surface sx={{ textAlign: 'center', py: 5 }}>
         <SectionLabel sx={{ justifyContent: 'center', mb: 1.5 }}>
-          Blood Pressure Trend
+          Your blood pressure over time
         </SectionLabel>
         <Typography sx={{ color: muted, fontSize: '0.875rem' }}>
           No readings yet in this range.
@@ -148,8 +148,6 @@ const BPChartNivo = ({ data, unit = 'mmHg' }) => {
         sx={{
           fontSize: '0.75rem',
           fontWeight: 700,
-          textTransform: 'uppercase',
-          letterSpacing: '0.12em',
           color: muted,
         }}
       >
@@ -171,15 +169,14 @@ const BPChartNivo = ({ data, unit = 'mmHg' }) => {
         }}
       >
         <Box>
-          <SectionLabel sx={{ mb: 0.75 }}>Blood Pressure</SectionLabel>
-          <DisplayHeading size="card">Systolic / Diastolic</DisplayHeading>
+          <DisplayHeading size="card">Your blood pressure over time</DisplayHeading>
         </Box>
         <Box sx={{ display: 'flex', gap: { xs: 1.25, sm: 2 }, flexWrap: 'wrap' }}>
-          <LegendItem color={systolicColor} label="Systolic" />
-          <LegendItem color={diastolicColor} label="Diastolic" />
-          <LegendItem color={theme.palette.success.main} label="Normal 120" isDashed />
-          <LegendItem color={theme.palette.warning.main} label="Elevated 130" isDashed />
-          <LegendItem color={theme.palette.error.light} label="Stage 1 · 140" isDashed />
+          <LegendItem color={systolicColor} label="Top number (systolic)" />
+          <LegendItem color={diastolicColor} label="Bottom number (diastolic)" />
+          <LegendItem color={theme.palette.success.main} label="Normal · 120" isDashed />
+          <LegendItem color={theme.palette.warning.main} label="A little high · 130" isDashed />
+          <LegendItem color={theme.palette.error.light} label="High (stage 1) · 140" isDashed />
         </Box>
       </Box>
 
@@ -252,8 +249,6 @@ const BPChartNivo = ({ data, unit = 'mmHg' }) => {
                     fontFamily: "inherit",
                     fontSize: '0.75rem',
                     fontWeight: 700,
-                    textTransform: 'uppercase',
-                    letterSpacing: '0.12em',
                     color: muted,
                     mb: 0.75,
                     display: 'block',
@@ -281,7 +276,7 @@ const BPChartNivo = ({ data, unit = 'mmHg' }) => {
                         }}
                       />
                       <Typography sx={{ fontSize: '0.75rem', color: muted, fontWeight: 600 }}>
-                        Systolic
+                        Top
                       </Typography>
                     </Box>
                     <Typography
@@ -316,7 +311,7 @@ const BPChartNivo = ({ data, unit = 'mmHg' }) => {
                         }}
                       />
                       <Typography sx={{ fontSize: '0.75rem', color: muted, fontWeight: 600 }}>
-                        Diastolic
+                        Bottom
                       </Typography>
                     </Box>
                     <Typography

@@ -9,6 +9,7 @@ import {
 import { useTheme, alpha } from '@mui/material/styles';
 import { netCarbs as calcNetCarbs } from '../../utils/ketoMath';
 import { formatServing } from '../../utils/units.js';
+import { fmt, grams } from '../../utils/plainWords.js';
 
 /**
  * One food in the "exact food" list, as a row.
@@ -64,7 +65,7 @@ import { formatServing } from '../../utils/units.js';
 
 const SOURCE_LABEL = {
   usda: 'USDA',
-  openfoodfacts: 'OFF',
+  openfoodfacts: 'Open Food Facts',
   fatsecret: 'Brand',
   nutritionix: 'Nutritionix',
   calorieninjas: 'Estimate',
@@ -132,7 +133,8 @@ const FoodResultRow = ({
   const inert = disabled || pending;
   const tap = () => { if (!inert) onTap?.(food); };
   const nextCount = Math.round(addedCount + 1);
-  const macros = isMeal ? null : `P${protein} ${carbLabel}${carbValue} F${fat}`;
+  // Full's dense row form (review U-4): "P 18 · C 8 · F 10 g", whole grams.
+  const macros = isMeal ? null : `P ${grams(protein)} · ${carbLabel} ${grams(carbValue)} · F ${grams(fat)} g`;
 
   const pill = (
     <Box
@@ -173,7 +175,7 @@ const FoodResultRow = ({
         onClick={tap}
         aria-disabled={inert || undefined}
         aria-busy={pending || undefined}
-        aria-label={`${isAdded ? 'Add another' : 'Add'} ${food?.name}, ${calories} cal`}
+        aria-label={`${isAdded ? 'Add another' : 'Add'} ${food?.name}, ${fmt(calories)} cal`}
         sx={{
           flex: 1,
           minWidth: 0,
@@ -235,7 +237,7 @@ const FoodResultRow = ({
             {/* Phone: the calories live here, beside the brand and serving. */}
             {!pending && (
               <Box component="span" sx={{ display: { xs: 'inline', sm: 'none' } }}>
-                {subtitle ? ' · ' : ''}{calories} cal
+                {subtitle ? ' · ' : ''}{fmt(calories)} cal
               </Box>
             )}
             {/* Tablet and narrow desktop: the macros, rather than a column. */}
@@ -249,16 +251,11 @@ const FoodResultRow = ({
 
         <Box sx={{ display: { xs: 'none', sm: 'flex' }, alignItems: 'baseline', gap: 1.25, flexShrink: 0 }}>
           <Typography component="span" sx={{ fontSize: '0.9375rem', fontWeight: 700, color: 'text.primary', whiteSpace: 'nowrap' }}>
-            {calories} cal
+            {fmt(calories)} cal
           </Typography>
           {!isMeal && (
             <Box component="span" sx={{ display: { xs: 'none', lg: 'flex' }, gap: 1 }}>
-              <Typography component="span" sx={{ fontSize: '0.8125rem', color: muted }}>P{protein}</Typography>
-              <Typography component="span" sx={{ fontSize: '0.8125rem', color: muted }}>
-                {carbLabel}
-                {carbValue}
-              </Typography>
-              <Typography component="span" sx={{ fontSize: '0.8125rem', color: muted }}>F{fat}</Typography>
+              <Typography component="span" sx={{ fontSize: '0.8125rem', color: muted, whiteSpace: 'nowrap' }}>{macros}</Typography>
             </Box>
           )}
         </Box>

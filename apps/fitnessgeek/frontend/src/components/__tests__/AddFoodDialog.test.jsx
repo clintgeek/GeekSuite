@@ -55,9 +55,9 @@ describe('AddFoodDialog', () => {
    */
   it.each([
     ['2026-10-14', 'Add to dinner'],
-    ['2026-10-13', "Add to Tuesday's dinner (yesterday)"],
-    ['2026-10-12', "Add to Monday's dinner"],
-    ['2026-10-03', 'Add to dinner on Saturday, October 3'],
+    ['2026-10-13', "Add to Tuesday’s dinner (yesterday)"],
+    ['2026-10-12', "Add to Monday’s dinner"],
+    ['2026-10-03', 'Add to dinner on Oct 3'],
   ])('on %s the title says %j', async (date, title) => {
     render(
       <GeekToastProvider>
@@ -122,7 +122,7 @@ describe('AddFoodDialog', () => {
           <AddFoodDialog open onClose={vi.fn()} mealType="lunch" onLogItems={vi.fn()} onDescribe={vi.fn()} />
         </GeekToastProvider>
       );
-      expect(await screen.findByText("No signal — I can't log this yet. Keep this open and tap Log it when you're back.")).toBeInTheDocument();
+      expect(await screen.findByText("No signal — I can’t log this yet. Keep this open and tap Log it when you’re back.")).toBeInTheDocument();
       expect(screen.queryByText(/Your words are saved here/)).toBeNull();
     } finally {
       setItem.mockRestore();

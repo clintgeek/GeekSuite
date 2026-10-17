@@ -79,16 +79,14 @@ describe('toTimeSeries', () => {
 });
 
 describe('formatClockTime', () => {
-  const at = new Date(2026, 8, 6, 14, 5); // local time, so the assertion is stable
+  const at = new Date(2026, 8, 6, 8, 5); // local time, so the assertion is stable
 
-  it('is HH:MM by default', () => {
-    expect(formatClockTime(at)).toBe(
-      at.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-    );
+  it('is "8:05 AM" by default — no zero-padded hour', () => {
+    expect(formatClockTime(at)).toMatch(/^8:05\sAM$/);
   });
 
   it('adds the calendar day when asked', () => {
-    expect(formatClockTime(at, { withDate: true })).toContain('Sep');
+    expect(formatClockTime(at, { withDate: true })).toMatch(/^Sep 6(, 2026)?, 8:05\sAM$/);
   });
 
   it('is empty rather than "Invalid Date" for unparseable input', () => {

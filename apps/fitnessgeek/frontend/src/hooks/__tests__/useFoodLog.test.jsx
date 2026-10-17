@@ -31,13 +31,13 @@ describe('useFoodLog', () => {
     await act(async () => { await result.current.refreshLogs(); });
 
     expect(result.current.logs).toHaveLength(1);
-    expect(result.current.loadProblem).toBe("Couldn't refresh — showing what we had.");
+    expect(result.current.loadProblem).toBe('Couldn’t refresh — showing what was here before.');
   });
 
   it('says so when a day never loaded, rather than showing an empty day as fact', async () => {
     getLogsForDate.mockRejectedValueOnce(new Error('Network Error'));
     const { result } = renderHook(() => useFoodLog('2026-10-16'));
-    await waitFor(() => expect(result.current.loadProblem).toBe("Couldn't load this day. Try again in a moment."));
+    await waitFor(() => expect(result.current.loadProblem).toBe('Couldn’t load this day. Try again in a moment.'));
     expect(result.current.logs).toEqual([]);
   });
 

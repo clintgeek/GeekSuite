@@ -16,7 +16,7 @@ import { errorMessage } from '../../utils/errorMessage.js';
 import { thumbSaveProps } from '../BloodPressure/thumbSave.jsx';
 import ThumbFab from '../primitives/ThumbFab.jsx';
 
-const SAVE_FAILED = "That weight didn't save. Check your connection and try again.";
+const SAVE_FAILED = "Couldn’t save that weight. Check your connection and try again.";
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 /** "today", "yesterday", "Oct 13" — for "You already have 218.7 for today". */
@@ -44,6 +44,7 @@ function weightOnDay(logs, ymd) {
 }
 
 const QuickAddWeight = ({ onAdd, unit = 'lbs', autoOpen = false, onAutoOpened, existingLogs = [] }) => {
+  const unitWord = unit === 'lbs' ? 'lb' : unit;
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState('');
   // The dialog's day. Seeded when the dialog OPENS, not when the page
@@ -154,7 +155,7 @@ const QuickAddWeight = ({ onAdd, unit = 'lbs', autoOpen = false, onAutoOpened, e
           )}
           <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
             <TextField
-              label={`Weight (${unit})`}
+              label="Weight"
               type="number"
               value={value}
               onChange={(e) => setValue(e.target.value)}
@@ -168,7 +169,7 @@ const QuickAddWeight = ({ onAdd, unit = 'lbs', autoOpen = false, onAutoOpened, e
                 max: "1000"
               }}
               InputProps={{
-                endAdornment: unit
+                endAdornment: unitWord
               }}
               helperText={cardNote || undefined}
               FormHelperTextProps={{ 'data-testid': 'weight-replace-note-card' }}
@@ -178,7 +179,7 @@ const QuickAddWeight = ({ onAdd, unit = 'lbs', autoOpen = false, onAutoOpened, e
               onClick={() => handleSubmit({ fromCard: true })}
               disabled={!value || loading}
             >
-              {cardNote ? 'Replace' : 'Add'}
+              {cardNote ? 'Replace' : 'Log'}
             </Button>
           </Box>
         </CardContent>
@@ -191,7 +192,6 @@ const QuickAddWeight = ({ onAdd, unit = 'lbs', autoOpen = false, onAutoOpened, e
       <PremiumDialog
         open={open}
         onClose={() => { setError(''); setOpen(false); }}
-        eyebrow="Tracking"
         title="Log weight"
         icon={WeightIcon}
         maxWidth="sm"
@@ -216,7 +216,7 @@ const QuickAddWeight = ({ onAdd, unit = 'lbs', autoOpen = false, onAutoOpened, e
           )}
           <TextField
             fullWidth
-            label={`Weight (${unit})`}
+            label="Weight"
             type="number"
             value={value}
             onChange={(e) => setValue(e.target.value)}
@@ -229,7 +229,7 @@ const QuickAddWeight = ({ onAdd, unit = 'lbs', autoOpen = false, onAutoOpened, e
               max: "1000"
             }}
             InputProps={{
-              endAdornment: unit
+              endAdornment: unitWord
             }}
             helperText={dialogNote || 'For example, 150.4'}
             FormHelperTextProps={dialogNote ? { 'data-testid': 'weight-replace-note' } : undefined}

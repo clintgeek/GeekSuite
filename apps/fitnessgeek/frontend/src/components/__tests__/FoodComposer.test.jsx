@@ -470,7 +470,7 @@ describe('describing a meal', () => {
     type('a bowl of chicken soup and some crackers');
     logIt();
 
-    expect(await screen.findByText("Logged Chicken soup. I couldn't work out 'crackers'.")).toBeInTheDocument();
+    expect(await screen.findByText("Added Chicken soup. I couldn’t work out “crackers”.")).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Pick crackers' }));
     // Back to the box, filtered to the fragment, with the list open.
     await waitFor(() => expect(theBox()).toHaveValue('crackers'));
@@ -516,7 +516,7 @@ describe('describing a meal', () => {
     type('pancakes and 41 beef flautas');
     logIt();
 
-    await screen.findByText(/couldn't work out 'Beef flautas'/i);
+    await screen.findByText(/couldn’t work out “Beef flautas”/i);
     expect(onClose).not.toHaveBeenCalled();
   });
 
@@ -531,7 +531,7 @@ describe('describing a meal', () => {
     type('mystery food');
     logIt();
 
-    await screen.findByText(/couldn't work out 'mystery'/i);
+    await screen.findByText(/couldn’t work out “mystery”/i);
     expect(onClose).not.toHaveBeenCalled();
     expect(theBox()).toHaveValue('mystery food');
   });
@@ -545,7 +545,7 @@ describe('describing a meal', () => {
     type('asdfgh');
     logIt();
 
-    expect(await screen.findByText("I couldn't find a food in that. Try naming the food, like 'chicken soup'.")).toBeInTheDocument();
+    expect(await screen.findByText("I couldn’t find a food in that. Try naming the food, like “chicken soup”.")).toBeInTheDocument();
     expect(theBox()).toHaveValue('asdfgh');
   });
 
@@ -557,7 +557,7 @@ describe('describing a meal', () => {
     type('two eggs');
     logIt();
 
-    expect(await screen.findByText("That didn't go through. Tap Log it to try again.")).toBeInTheDocument();
+    expect(await screen.findByText("That didn’t go through. Tap Log it to try again.")).toBeInTheDocument();
     expect(theBox()).toHaveValue('two eggs');
     logIt();
     await waitFor(() => expect(describeMeal).toHaveBeenCalledTimes(2));
@@ -591,10 +591,10 @@ describe('thinking (Phase 1.3)', () => {
     // Everything else that writes is off.
     expect(screen.getByRole('button', { name: /Add Egg/ })).toHaveAttribute('aria-disabled', 'true');
     expect(screen.getByRole('button', { name: 'Lunch' })).toHaveClass('Mui-disabled');
-    expect(screen.queryByText("Still working — this one's taking a moment.")).toBeNull();
+    expect(screen.queryByText("Still working — this one’s taking a moment.")).toBeNull();
 
     await act(async () => { await vi.advanceTimersByTimeAsync(8100); });
-    expect(screen.getByText("Still working — this one's taking a moment.")).toBeInTheDocument();
+    expect(screen.getByText("Still working — this one’s taking a moment.")).toBeInTheDocument();
     await act(async () => { finish({ logged: [], skipped: [], logIds: [] }); });
   });
 });
@@ -606,7 +606,7 @@ describe('offline: honest (Chef, 2026-10-16)', () => {
     renderBox({ onDescribe });
     type('two eggs and toast');
 
-    expect(screen.getByText("No signal — I can't log this yet. Your words are saved here.")).toBeInTheDocument();
+    expect(screen.getByText("No signal — I can’t log this yet. Your words are saved here.")).toBeInTheDocument();
     expect(screen.getByTestId('log-it')).toBeDisabled();
     fireEvent.keyDown(theBox(), { key: 'Enter' });
     expect(onDescribe).not.toHaveBeenCalled();
@@ -708,7 +708,7 @@ describe('Simple stays open on what landed (Chef, 2026-10-16)', () => {
     logIt();
     // L22: on a backfilled sheet, days are weekdays — the title says
     // "Tuesday's lunch (yesterday)", and so does everything under it.
-    expect(await screen.findByText("Added to Tuesday's lunch")).toBeInTheDocument();
+    expect(await screen.findByText("Added to Tuesday’s lunch")).toBeInTheDocument();
   });
 });
 
@@ -770,7 +770,7 @@ describe('day words ask first (Phase 3.17)', () => {
     const move = await screen.findByRole('button', { name: 'Move it to yesterday' });
     fireEvent.click(move);
     await waitFor(() => expect(onUpdateLog).toHaveBeenCalledWith('x', { log_date: '2026-10-13' }));
-    expect(await screen.findByText("Added to yesterday's dinner")).toBeInTheDocument();
+    expect(await screen.findByText("Added to yesterday’s dinner")).toBeInTheDocument();
   });
 });
 
@@ -837,8 +837,8 @@ describe('the portion question', () => {
     await logItNow();
 
     expect(await screen.findByRole('button', { name: /smaller · ~400/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /bigger · ~1200/i })).toBeInTheDocument();
-    expect(screen.getByText(/logged at 1150 cal/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /bigger · ~1,200/i })).toBeInTheDocument();
+    expect(screen.getByText(/logged at 1,150 cal/i)).toBeInTheDocument();
   });
 
   it('its buttons are big enough to hit: 15px words (Phase 1.7)', async () => {
@@ -865,7 +865,7 @@ describe('the portion question', () => {
     renderBox2();
     await logItNow();
 
-    fireEvent.click(await screen.findByRole('button', { name: /that's about right/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /that’s about right/i }));
     await waitFor(() => expect(screen.queryByText(/how big was/i)).toBeNull());
     expect(adjust).not.toHaveBeenCalled();
   });
@@ -981,7 +981,7 @@ describe('B6: errors in plain words', () => {
     type('two eggs');
     logIt();
 
-    expect(await screen.findByText("FitnessGeek is restarting. That didn't go through. Tap Log it to try again.")).toBeInTheDocument();
+    expect(await screen.findByText("FitnessGeek is restarting. That didn’t go through. Tap Log it to try again.")).toBeInTheDocument();
     expect(screen.queryByText(/status code/i)).toBeNull();
   });
 
@@ -1079,7 +1079,7 @@ describe('B8: undo says what happened', () => {
     await tapToLog(onLogItems, 'Taco night');
 
     fireEvent.click(await screen.findByRole('button', { name: /^undo$/i }));
-    expect(await screen.findByText("Couldn't undo — try again")).toBeInTheDocument();
+    expect(await screen.findByText("Couldn’t undo — try again")).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /try again/i }));
     await waitFor(() => expect(onUndo).toHaveBeenLastCalledWith(['m2']));
     expect(await screen.findByText('Undone ✓')).toBeInTheDocument();
@@ -1095,7 +1095,7 @@ describe('B8: undo says what happened', () => {
     await tapToLog(onLogItems);
 
     fireEvent.click(await screen.findByRole('button', { name: /^undo$/i }));
-    expect(await screen.findByText("Couldn't undo — try again")).toBeInTheDocument();
+    expect(await screen.findByText("Couldn’t undo — try again")).toBeInTheDocument();
   });
 
   it('the ribbon keeps a row whose delete failed', async () => {
@@ -1115,7 +1115,7 @@ describe('B8: undo says what happened', () => {
     expect(await screen.findByText('3 added to snacks')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: /undo last/i }));
-    expect(await screen.findByText("Couldn't undo — try again")).toBeInTheDocument();
+    expect(await screen.findByText("Couldn’t undo — try again")).toBeInTheDocument();
     expect(screen.getByText('3 added to snacks')).toBeInTheDocument();
   });
 
@@ -1191,7 +1191,7 @@ describe('the portion answer', () => {
     fireEvent.click(await screen.findByRole('button', { name: /smaller · ~400/i }));
 
     await waitFor(() => expect(onAdjustCalories).toHaveBeenCalled());
-    expect(await screen.findByText('Could not update that.')).toBeInTheDocument();
+    expect(await screen.findByText('Couldn’t update that. Try again.')).toBeInTheDocument();
     expect(screen.queryByText(/Updated to 400 cal/)).toBeNull();
   });
 });
@@ -1439,14 +1439,14 @@ describe('L7: "Same as Chef\'s dinner"', () => {
     const onUndo = vi.fn().mockResolvedValue({ deleted: ['c1', 'c2'], failed: [] });
     renderBox({ onLogItems, onUndo, mealType: 'dinner', showQuickPicks: true, date: TODAY });
 
-    const pick = await screen.findByRole('button', { name: "Same as Chef's dinner" });
+    const pick = await screen.findByRole('button', { name: "Same as Chef’s dinner" });
     expect(pick).toHaveTextContent('Steak, Salad');
     fireEvent.click(pick);
     await waitFor(() => expect(onLogItems).toHaveBeenCalledWith(
       [expect.objectContaining({ type: 'household-meal', fromUserId: 'chef-1', fromDate: TODAY, fromMealType: 'dinner' })],
       'dinner'
     ));
-    expect(await screen.findByText("Added to dinner ✓ · Chef's dinner")).toBeInTheDocument();
+    expect(await screen.findByText("Added to dinner ✓ · Chef’s dinner")).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /^undo$/i }));
     await waitFor(() => expect(onUndo).toHaveBeenCalledWith(['c1', 'c2']));
   });
@@ -1459,13 +1459,13 @@ describe('L7: "Same as Chef\'s dinner"', () => {
   });
 });
 
-describe('L24: "Please sign in again." comes with a Sign in button', () => {
+describe('L24: "You’re signed out. Sign in again." comes with a Sign in button', () => {
   it('a signed-out describe shows Sign in, which goes to the suite sign-in and back here', async () => {
     const onDescribe = vi.fn().mockRejectedValue({ response: { status: 401 } });
     renderBox({ onDescribe });
     type('two eggs and toast');
     logIt();
-    expect(await screen.findByText('Please sign in again.')).toBeInTheDocument();
+    expect(await screen.findByText('You’re signed out. Sign in again.')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
     expect(loginRedirect).toHaveBeenCalledWith('fitnessgeek', window.location.href);
   });
@@ -1477,7 +1477,7 @@ describe('L24: "Please sign in again." comes with a Sign in button', () => {
     type('egg');
     await vi.advanceTimersByTimeAsync(200);
     fireEvent.click(await screen.findByText('Egg'));
-    expect(await screen.findByText('Please sign in again.')).toBeInTheDocument();
+    expect(await screen.findByText('You’re signed out. Sign in again.')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
     expect(loginRedirect).toHaveBeenCalled();
   });

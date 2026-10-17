@@ -75,7 +75,7 @@ const HouseholdSettings = () => {
       setDisplayName(household?.display_name || '');
       setHouseholdName(household?.name || '');
     } catch (err) {
-      notify('Failed to load household settings', { tone: 'error' });
+      notify(errorMessage(err, 'Couldn’t load your household. Try again.'), { tone: 'error' });
     } finally {
       setLoading(false);
     }
@@ -83,7 +83,7 @@ const HouseholdSettings = () => {
 
   const handleCreateHousehold = async () => {
     if (!displayName.trim()) {
-      notify('Please enter your display name', { tone: 'error' });
+      notify('Add the name your family will see.', { tone: 'error' });
       return;
     }
 
@@ -97,7 +97,7 @@ const HouseholdSettings = () => {
       setShowCreateDialog(false);
       await loadHouseholdSettings();
     } catch (err) {
-      notify(errorMessage(err, 'Failed to create household'), { tone: 'error' });
+      notify(errorMessage(err, 'Couldn’t create the household. Try again.'), { tone: 'error' });
     } finally {
       setSaving(false);
     }
@@ -105,11 +105,11 @@ const HouseholdSettings = () => {
 
   const handleJoinHousehold = async () => {
     if (!joinCode.trim()) {
-      notify('Please enter the household code', { tone: 'error' });
+      notify('Enter the code from your family member’s phone.', { tone: 'error' });
       return;
     }
     if (!displayName.trim()) {
-      notify('Please enter your display name', { tone: 'error' });
+      notify('Add the name your family will see.', { tone: 'error' });
       return;
     }
 
@@ -120,7 +120,7 @@ const HouseholdSettings = () => {
       setShowJoinDialog(false);
       await loadHouseholdSettings();
     } catch (err) {
-      notify(errorMessage(err, 'Failed to join household'), { tone: 'error' });
+      notify(errorMessage(err, 'Couldn’t join the household. Try again.'), { tone: 'error' });
     } finally {
       setSaving(false);
     }
@@ -130,11 +130,11 @@ const HouseholdSettings = () => {
     try {
       setSaving(true);
       await settingsService.leaveHousehold();
-      notify('Successfully left household', { tone: 'success' });
+      notify('You left the household', { tone: 'success' });
       setShowLeaveDialog(false);
       await loadHouseholdSettings();
     } catch (err) {
-      notify(errorMessage(err, 'Failed to leave household'), { tone: 'error' });
+      notify(errorMessage(err, 'Couldn’t leave the household. Try again.'), { tone: 'error' });
     } finally {
       setSaving(false);
     }
@@ -149,7 +149,7 @@ const HouseholdSettings = () => {
       // word (UX review IA-3).
       notify('Saved', { tone: 'success', duration: 2000 });
     } catch (err) {
-      notify(errorMessage(err, "Couldn't save that. Try again."), { tone: 'error' });
+      notify(errorMessage(err, 'Couldn’t save that. Try again.'), { tone: 'error' });
       if (field === 'name') setHouseholdName(householdData?.name || '');
     } finally {
       setSaving(false);
@@ -179,11 +179,11 @@ const HouseholdSettings = () => {
       <CardContent>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
           <PeopleIcon color="primary" />
-          <Typography variant="h6">Household Sharing</Typography>
+          <Typography variant="h6">Household sharing</Typography>
         </Box>
 
         <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-          Share food logs and meals with family members. See what they ate and easily copy their meals.
+          Share food logs and meals with your family. See what they ate, and copy a meal in a tap.
         </Typography>
 
         {!isInHousehold ? (
@@ -194,14 +194,14 @@ const HouseholdSettings = () => {
               startIcon={<CreateIcon />}
               onClick={() => setShowCreateDialog(true)}
             >
-              Create Household
+              Create a household
             </Button>
             <Button
               variant="outlined"
               startIcon={<JoinIcon />}
               onClick={() => setShowJoinDialog(true)}
             >
-              Join Household
+              Join a household
             </Button>
           </Box>
         ) : (
@@ -214,7 +214,7 @@ const HouseholdSettings = () => {
               <TextField
                 fullWidth
                 size="small"
-                label="Household Name"
+                label="Household name"
                 value={householdName}
                 onChange={(e) => setHouseholdName(e.target.value)}
                 onBlur={() => {
@@ -222,9 +222,9 @@ const HouseholdSettings = () => {
                   if (next !== (householdData.name || '')) handleUpdateSharing('name', next);
                 }}
                 onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
-                placeholder="e.g., Crocker"
+                placeholder="Like Crocker"
                 inputProps={{ maxLength: 40 }}
-                helperText="Everyone in the household sees this name"
+                helperText="Everyone in the household sees this name."
               />
             </Box>
 
@@ -238,10 +238,10 @@ const HouseholdSettings = () => {
               borderColor: 'primary.200'
             }}>
               <Typography variant="subtitle2" color="text.secondary" gutterBottom>
-                Household Code
+                Household code
               </Typography>
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                <Typography variant="h5" sx={{ fontFamily: 'monospace', fontWeight: 600 }}>
+                <Typography variant="h5" sx={{ fontWeight: 800, letterSpacing: '0.04em', fontVariantNumeric: 'tabular-nums' }}>
                   {householdData.household_id}
                 </Typography>
                 {/*
@@ -266,7 +266,7 @@ const HouseholdSettings = () => {
                 </IconButton>
               </Box>
               <Typography variant="caption" color="text.secondary">
-                Share this code with family members so they can join
+                Share this code with your family so they can join.
               </Typography>
             </Box>
 
@@ -274,7 +274,7 @@ const HouseholdSettings = () => {
 
             {/* Your Sharing Settings */}
             <Typography variant="subtitle2" gutterBottom>
-              Your Sharing Preferences
+              What you share
             </Typography>
             <Box sx={{ mb: 3 }}>
               <FormControlLabel
@@ -313,7 +313,7 @@ const HouseholdSettings = () => {
 
             {/* Household Members */}
             <Typography variant="subtitle2" gutterBottom>
-              Household Members
+              Who’s in it
             </Typography>
             {householdData.members?.length > 0 ? (
               <List dense>
@@ -329,7 +329,7 @@ const HouseholdSettings = () => {
                       secondary={
                         <Box sx={{ display: 'flex', gap: 0.5, mt: 0.5 }}>
                           {member.shares_food_logs && (
-                            <Chip label="Food Logs" size="small" variant="outlined" />
+                            <Chip label="Food logs" size="small" variant="outlined" />
                           )}
                           {member.shares_meals && (
                             <Chip label="Meals" size="small" variant="outlined" />
@@ -342,7 +342,7 @@ const HouseholdSettings = () => {
               </List>
             ) : (
               <Typography variant="body2" color="text.secondary" sx={{ fontStyle: 'italic' }}>
-                No other members yet. Share the code above to invite family members.
+                No one else yet. Share the code above to invite your family.
               </Typography>
             )}
 
@@ -355,7 +355,7 @@ const HouseholdSettings = () => {
               onClick={() => setShowLeaveDialog(true)}
               size="small"
             >
-              Leave Household
+              Leave household
             </Button>
           </>
         )}
@@ -365,8 +365,7 @@ const HouseholdSettings = () => {
       <PremiumDialog
         open={showCreateDialog}
         onClose={() => setShowCreateDialog(false)}
-        eyebrow="Household"
-        title="Create Household"
+        title="Create a household"
         icon={CreateIcon}
         maxWidth="xs"
         primaryAction={
@@ -381,24 +380,24 @@ const HouseholdSettings = () => {
         secondaryAction={<Button onClick={() => setShowCreateDialog(false)}>Cancel</Button>}
       >
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Create a household to share food logs and meals with family members.
+            Create a household to share food logs and meals with your family.
           </Typography>
           <TextField
             fullWidth
-            label="Household Name"
+            label="Household name"
             value={householdName}
             onChange={(e) => setHouseholdName(e.target.value)}
-            placeholder="e.g., Crocker"
+            placeholder="Like Crocker"
             inputProps={{ maxLength: 40 }}
             sx={{ mb: 2 }}
           />
           <TextField
             fullWidth
-            label="Your Display Name"
+            label="Your name"
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="e.g., Clint"
-            helperText="This is how family members will see you"
+            placeholder="Like Clint"
+            helperText="The name your family sees."
           />
       </PremiumDialog>
 
@@ -406,8 +405,7 @@ const HouseholdSettings = () => {
       <PremiumDialog
         open={showJoinDialog}
         onClose={() => setShowJoinDialog(false)}
-        eyebrow="Household"
-        title="Join Household"
+        title="Join a household"
         icon={JoinIcon}
         maxWidth="xs"
         primaryAction={
@@ -422,24 +420,24 @@ const HouseholdSettings = () => {
         secondaryAction={<Button onClick={() => setShowJoinDialog(false)}>Cancel</Button>}
       >
           <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-            Enter the household code shared by a family member.
+            Enter the code from your family member’s phone. It’s in their Settings, under Household sharing.
           </Typography>
           <TextField
             fullWidth
-            label="Household Code"
+            label="Household code"
             value={joinCode}
             onChange={(e) => setJoinCode(e.target.value.toUpperCase())}
-            placeholder="e.g., 7D9169DE1A8F"
+            placeholder="Like 7D9169DE1A8F"
             sx={{ mb: 2 }}
-            inputProps={{ style: { fontFamily: 'monospace', textTransform: 'uppercase' } }}
+            inputProps={{ style: { fontWeight: 800, letterSpacing: '0.04em', fontVariantNumeric: 'tabular-nums' } }}
           />
           <TextField
             fullWidth
-            label="Your Display Name"
+            label="Your name"
             value={displayName}
             onChange={(e) => setDisplayName(e.target.value)}
-            placeholder="e.g., Sarah"
-            helperText="This is how family members will see you"
+            placeholder="Like Sarah"
+            helperText="The name your family sees."
           />
       </PremiumDialog>
 
@@ -447,8 +445,7 @@ const HouseholdSettings = () => {
       <PremiumDialog
         open={showLeaveDialog}
         onClose={() => setShowLeaveDialog(false)}
-        eyebrow="Confirm"
-        title="Leave Household"
+        title="Leave the household?"
         maxWidth="xs"
         primaryAction={
           <Button
@@ -463,7 +460,7 @@ const HouseholdSettings = () => {
         secondaryAction={<Button onClick={() => setShowLeaveDialog(false)}>Cancel</Button>}
       >
         <Typography>
-          Are you sure you want to leave this household? You will no longer be able to see other members' food logs.
+          You won’t see your family’s food logs or meals any more. You can join again with the code.
         </Typography>
       </PremiumDialog>
     </Card>

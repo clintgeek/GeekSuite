@@ -28,6 +28,8 @@ import {
   TrendingUp as ReadinessIcon
 } from '@mui/icons-material';
 
+const PRIORITY_WORDS = { HIGH: 'Do this first', MEDIUM: 'Worth doing', LOW: 'Nice to have' };
+
 /**
  * Readiness gauge component
  */
@@ -58,7 +60,7 @@ function ReadinessGauge({ score }) {
               {score}
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Readiness Score
+              Ready-for-today score
             </Typography>
             <Chip label={getLabel()} color={color} size="small" sx={{ mt: 1 }} />
           </Box>
@@ -67,7 +69,7 @@ function ReadinessGauge({ score }) {
               variant="determinate"
               value={score}
               color={color}
-              aria-label={`Readiness score: ${score} out of 100`}
+              aria-label={`Ready-for-today score: ${score} out of 100`}
               sx={{ height: 10, borderRadius: 1 }}
             />
           </Box>
@@ -111,7 +113,7 @@ function RecommendationCard({ recommendation }) {
               <Typography variant="h6">{recommendation.title}</Typography>
             </Stack>
             <Chip
-              label={recommendation.priority}
+              label={PRIORITY_WORDS[recommendation.priority] || recommendation.priority}
               color={getPriorityColor()}
               size="small"
             />
@@ -120,7 +122,7 @@ function RecommendationCard({ recommendation }) {
             {recommendation.message}
           </Typography>
           <Alert severity={getPriorityColor()} icon={false}>
-            <strong>Action:</strong> {recommendation.action}
+            <strong>Try this:</strong> {recommendation.action}
           </Alert>
         </Stack>
       </CardContent>
@@ -169,8 +171,8 @@ export default function RecoveryCoach({ date }) {
   if (!data || !data.available) {
     return (
       <Alert severity="info">
-        <AlertTitle>No Data Available</AlertTitle>
-        Recovery recommendations require InfluxDB integration with sleep and intraday metrics.
+        <AlertTitle>Nothing to go on yet</AlertTitle>
+        Recovery notes need last night’s sleep and today’s readings from the home data server.
       </Alert>
     );
   }
@@ -189,7 +191,7 @@ export default function RecoveryCoach({ date }) {
             than wired to a fake destination; re-add it once there's a real
             AI analysis surface to send the recovery context to. */}
         <Stack direction="row" justifyContent="space-between" alignItems="center">
-          <Typography variant="h5">AI Recovery Coach</Typography>
+          <Typography variant="h5">Recovery notes from the AI</Typography>
         </Stack>
 
         {/* Readiness Score */}
@@ -201,27 +203,27 @@ export default function RecoveryCoach({ date }) {
           icon={<TrainingIcon />}
         >
           <AlertTitle>
-            <strong>Training Recommendation</strong>
+            <strong>How hard to go today</strong>
           </AlertTitle>
-          {readinessScore >= 80 && 'Excellent recovery! Ready for high-intensity training or personal records.'}
-          {readinessScore >= 70 && readinessScore < 80 && 'Good recovery. Moderate-to-high intensity training recommended.'}
-          {readinessScore >= 50 && readinessScore < 70 && 'Moderate recovery. Stick to moderate intensity, listen to your body.'}
-          {readinessScore >= 30 && readinessScore < 50 && 'Low recovery. Light activity only (walking, yoga, stretching).'}
-          {readinessScore < 30 && 'Very low recovery. Take a full rest day. Prioritize sleep and recovery.'}
+          {readinessScore >= 80 && 'Well recovered. A hard workout is fine today.'}
+          {readinessScore >= 70 && readinessScore < 80 && 'Recovered. A moderate to hard workout suits today.'}
+          {readinessScore >= 50 && readinessScore < 70 && 'Partly recovered. Keep it moderate and listen to your body.'}
+          {readinessScore >= 30 && readinessScore < 50 && 'Not well recovered. Keep it light: a walk, yoga or stretching.'}
+          {readinessScore < 30 && 'Run down. Take a rest day and put sleep first.'}
         </Alert>
 
         {/* Recommendations */}
         {recommendations.length > 0 ? (
           <>
-            <Typography variant="h6">Personalized Recommendations</Typography>
+            <Typography variant="h6">For you today</Typography>
             {recommendations.map((rec, idx) => (
               <RecommendationCard key={idx} recommendation={rec} />
             ))}
           </>
         ) : (
           <Alert severity="success" icon={<CheckIcon />}>
-            <AlertTitle>All Systems Go!</AlertTitle>
-            No specific concerns detected. Maintain your current recovery practices.
+            <AlertTitle>Nothing to change</AlertTitle>
+            Nothing stands out today. Keep doing what you’re doing.
           </Alert>
         )}
 
@@ -230,15 +232,15 @@ export default function RecoveryCoach({ date }) {
           <CardContent>
             <Typography variant="h6" gutterBottom>
               <NutritionIcon sx={{ verticalAlign: 'middle', mr: 1 }} />
-              Today's Nutrition Focus
+              What to eat today
             </Typography>
             <List dense>
               {readinessScore < 60 && (
                 <ListItem>
                   <ListItemIcon><CheckIcon color="primary" /></ListItemIcon>
                   <ListItemText
-                    primary="Prioritize protein and anti-inflammatory foods"
-                    secondary="Target 1g protein per lb bodyweight. Include omega-3s, colorful vegetables."
+                    primary="Put protein and whole foods first"
+                    secondary="About 1g of protein per lb of body weight, plus oily fish and colorful vegetables."
                   />
                 </ListItem>
               )}
@@ -255,8 +257,8 @@ export default function RecoveryCoach({ date }) {
                 <ListItem>
                   <ListItemIcon><CheckIcon color="primary" /></ListItemIcon>
                   <ListItemText
-                    primary="Include adaptogens and B-vitamins"
-                    secondary="Ashwagandha, rhodiola, B-complex. Avoid excessive caffeine."
+                    primary="Include adaptogens and B vitamins"
+                    secondary="Ashwagandha, rhodiola, B-complex. Go easy on caffeine."
                   />
                 </ListItem>
               )}
@@ -264,7 +266,7 @@ export default function RecoveryCoach({ date }) {
                 <ListItemIcon><CheckIcon color="primary" /></ListItemIcon>
                 <ListItemText
                   primary="Stay hydrated"
-                  secondary="Half your bodyweight in ounces of water. More if training."
+                  secondary="About half your body weight in ounces of water, more if you work out."
                 />
               </ListItem>
             </List>
@@ -276,7 +278,7 @@ export default function RecoveryCoach({ date }) {
           <CardContent>
             <Typography variant="h6" gutterBottom>
               <SleepIcon sx={{ verticalAlign: 'middle', mr: 1 }} />
-              Tonight's Sleep Strategy
+              Tonight’s sleep
             </Typography>
             <List dense>
               {data.context?.sleep?.deepSleepPercent < 20 && (
@@ -284,15 +286,15 @@ export default function RecoveryCoach({ date }) {
                   <ListItem>
                     <ListItemIcon><CheckIcon color="primary" /></ListItemIcon>
                     <ListItemText
-                      primary="Cool your bedroom to 65-68°F"
-                      secondary="Lower temperature promotes deep sleep and growth hormone release"
+                      primary="Cool your bedroom to 65–68°F"
+                      secondary="A cooler room helps deep sleep"
                     />
                   </ListItem>
                   <ListItem>
                     <ListItemIcon><CheckIcon color="primary" /></ListItemIcon>
                     <ListItemText
-                      primary="Finish dinner by 7pm"
-                      secondary="Late meals interfere with deep sleep quality"
+                      primary="Finish dinner by 7 PM"
+                      secondary="A late meal can cut into deep sleep"
                     />
                   </ListItem>
                 </>
@@ -300,15 +302,15 @@ export default function RecoveryCoach({ date }) {
               <ListItem>
                 <ListItemIcon><CheckIcon color="primary" /></ListItemIcon>
                 <ListItemText
-                  primary="No screens 1 hour before bed"
-                  secondary="Blue light suppresses melatonin production"
+                  primary="No screens for an hour before bed"
+                  secondary="Screen light can keep you awake"
                 />
               </ListItem>
               <ListItem>
                 <ListItemIcon><CheckIcon color="primary" /></ListItemIcon>
                 <ListItemText
-                  primary="Consistent sleep schedule"
-                  secondary="Aim for same bedtime/wake time daily, even weekends"
+                  primary="Keep the same bedtime"
+                  secondary="Go to bed and get up at the same times every day, weekends too"
                 />
               </ListItem>
             </List>

@@ -116,8 +116,7 @@ const BodyRecoverySection = () => {
   return (
     <Box component="section" aria-labelledby="body-recovery-heading" id="body-recovery" sx={{ mb: 5 }}>
       <Box sx={{ mb: 2.5 }}>
-        <SectionLabel sx={{ mb: 0.75 }}>Body and recovery · last 90 days</SectionLabel>
-        <DisplayHeading size="card" id="body-recovery-heading">How your body is trending</DisplayHeading>
+        <DisplayHeading size="card" id="body-recovery-heading">Body and recovery, last 90 days</DisplayHeading>
         <Typography data-testid="body-recovery-window" sx={{ color: 'text.secondary', fontSize: '0.875rem', lineHeight: 1.55, mt: 0.75, maxWidth: 720 }}>
           {`Each number is a 7-day average, compared with the same week a month ago (${formatSpan(compareWindow.from, compareWindow.to)}).`}
         </Typography>
@@ -127,7 +126,7 @@ const BodyRecoverySection = () => {
         <Box sx={{ mb: 3 }}>{garminNotice}</Box>
       ) : (
         <>
-          <Group label="Heart & recovery">
+          <Group label="Heart and recovery">
             {garminPending || !cards ? <Skeletons n={3} /> : (
               <Box sx={grid}>
                 <TrendCard card={cards.restingHR} end={end} window={compareWindow} />

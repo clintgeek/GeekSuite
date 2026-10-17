@@ -35,11 +35,11 @@ describe('QuickAddWeight keeps the dialog open when the save fails', () => {
 
     const input = screen.getAllByLabelText(/weight/i)[0];
     await user.type(input, '184.2');
-    await user.click(screen.getAllByRole('button', { name: /^add$/i })[0]);
+    await user.click(screen.getAllByRole('button', { name: /^log$/i })[0]);
 
     await waitFor(() => expect(onAdd).toHaveBeenCalled());
     await waitFor(() =>
-      expect(screen.getByText(/that weight didn.t save/i)).toBeInTheDocument()
+      expect(screen.getByText(/couldn.t save that weight/i)).toBeInTheDocument()
     );
     // The number the user typed is still there to retry with.
     expect(input).toHaveValue(184.2);
@@ -54,10 +54,10 @@ describe('QuickAddWeight keeps the dialog open when the save fails', () => {
 
     const input = screen.getAllByLabelText(/weight/i)[0];
     await user.type(input, '184.2');
-    await user.click(screen.getAllByRole('button', { name: /^add$/i })[0]);
+    await user.click(screen.getAllByRole('button', { name: /^log$/i })[0]);
 
     await waitFor(() => expect(onAdd).toHaveBeenCalled());
-    expect(screen.queryByText(/that weight didn.t save/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/couldn.t save that weight/i)).not.toBeInTheDocument();
   });
 
   it('handles a caller that throws as well as one that returns false', async () => {
@@ -72,7 +72,7 @@ describe('QuickAddWeight keeps the dialog open when the save fails', () => {
 
     const input = screen.getAllByLabelText(/weight/i)[0];
     await user.type(input, '190');
-    await user.click(screen.getAllByRole('button', { name: /^add$/i })[0]);
+    await user.click(screen.getAllByRole('button', { name: /^log$/i })[0]);
 
     await waitFor(() =>
       expect(screen.getByText(/restarting/i)).toBeInTheDocument()
@@ -93,7 +93,7 @@ describe('QuickAddWeight keeps the dialog open when the save fails', () => {
       vi.setSystemTime(new Date(2026, 9, 16, 7, 0, 0));
       const input = screen.getAllByLabelText(/weight/i)[0];
       await user.type(input, '184.2');
-      await user.click(screen.getAllByRole('button', { name: /^add$/i })[0]);
+      await user.click(screen.getAllByRole('button', { name: /^log$/i })[0]);
 
       await waitFor(() => expect(onAdd).toHaveBeenCalled());
       expect(onAdd.mock.calls[0][0].date).toBe('2026-10-16');

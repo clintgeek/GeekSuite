@@ -74,7 +74,7 @@ describe('Weight page — logging', () => {
 
     fireEvent.click(fab);
     const dialog = await screen.findByRole('dialog');
-    fireEvent.change(within(dialog).getByLabelText(/weight \(lbs\)/i), { target: { value: '217.9' } });
+    fireEvent.change(within(dialog).getByLabelText(/^weight/i), { target: { value: '217.9' } });
     fireEvent.click(within(dialog).getByRole('button', { name: /^save$/i, hidden: true }));
 
     await waitFor(() => expect(createWeightLog).toHaveBeenCalledTimes(1));
@@ -88,7 +88,7 @@ describe('Weight page — logging', () => {
     fireEvent.click(await screen.findByTestId('log-weight-fab'));
     const dialog = await screen.findByRole('dialog');
     expect(within(dialog).getByTestId('weight-replace-note')).toHaveTextContent('You already have 218.7 for today. Saving replaces it.');
-    fireEvent.change(within(dialog).getByLabelText(/weight \(lbs\)/i), { target: { value: '219.4' } });
+    fireEvent.change(within(dialog).getByLabelText(/^weight/i), { target: { value: '219.4' } });
     expect(within(dialog).getByRole('button', { name: 'Replace', hidden: true })).toBeEnabled();
 
     // Backfilling the day before, which has none: an ordinary Save.
@@ -99,14 +99,14 @@ describe('Weight page — logging', () => {
     // The next day, it names the day it would replace.
     fireEvent.change(within(dialog).getByLabelText('Date'), { target: { value: '2026-10-15' } });
     vi.setSystemTime(new Date(2026, 9, 16, 7, 0, 0));
-    fireEvent.change(within(dialog).getByLabelText(/weight \(lbs\)/i), { target: { value: '219.5' } });
+    fireEvent.change(within(dialog).getByLabelText(/^weight/i), { target: { value: '219.5' } });
     expect(within(dialog).getByTestId('weight-replace-note')).toHaveTextContent('You already have 218.7 for yesterday. Saving replaces it.');
   });
 
   it('?add=1 opens the weight dialog directly', async () => {
     renderAt('/weight?add=1');
     const dialog = await screen.findByRole('dialog');
-    expect(within(dialog).getByLabelText(/weight \(lbs\)/i)).toBeInTheDocument();
+    expect(within(dialog).getByLabelText(/^weight/i)).toBeInTheDocument();
   });
 });
 
@@ -114,10 +114,10 @@ describe('Weight page — delete', () => {
   it('says "Removed …" with an Undo that re-creates the row', async () => {
     deleteWeightLog.mockResolvedValue({ success: true, data: true });
     renderAt();
-    fireEvent.click(await screen.findByLabelText(/delete the 218.7 lbs entry/i));
+    fireEvent.click(await screen.findByLabelText(/remove the 218.7 lb weigh-in/i));
 
     await waitFor(() => expect(notify).toHaveBeenCalledWith(
-      'Removed 218.7 lbs from Oct 15',
+      'Removed 218.7 lb from Oct 15',
       expect.objectContaining({ action: expect.anything() }),
     ));
     const [, opts] = notify.mock.calls.find(([m]) => /^Removed/.test(m));
@@ -134,12 +134,12 @@ describe('Weight page — delete', () => {
   it('a delete answered false shows no success', async () => {
     deleteWeightLog.mockResolvedValue({ success: true, data: false });
     renderAt();
-    fireEvent.click(await screen.findByLabelText(/delete the 218.7 lbs entry/i));
+    fireEvent.click(await screen.findByLabelText(/remove the 218.7 lb weigh-in/i));
 
     await waitFor(() => expect(notify).toHaveBeenCalled());
     const messages = notify.mock.calls.map(([m]) => m);
     expect(messages.some((m) => /removed 218|deleted successfully/i.test(m))).toBe(false);
-    expect(messages.some((m) => /wasn.t removed/i.test(m))).toBe(true);
+    expect(messages.some((m) => /couldn.t remove that weight/i.test(m))).toBe(true);
   });
 });
 

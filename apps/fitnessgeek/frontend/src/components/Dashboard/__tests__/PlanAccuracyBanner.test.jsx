@@ -38,15 +38,15 @@ describe('PlanAccuracyBanner', () => {
   });
   afterEach(() => vi.restoreAllMocks());
 
-  it('shows the stale-plan banner as one sentence, Check my target → the wizard, and no dismiss', () => {
+  it('shows the stale-plan banner as one sentence, Review my plan → the wizard, and no Not now', () => {
     renderBanner(STALE, SCAN);
     const banner = screen.getByTestId('plan-accuracy-banner');
     expect(banner).toHaveAttribute('data-kind', 'stale');
-    expect(banner.textContent).toMatch(/^Your daily calorie target is probably too high\.Check my target$/);
+    expect(banner.textContent).toMatch(/^Your daily calorie target is probably too high\.Review my plan$/);
     // Plain words: no formula talk on the home screen (SIMPLE_AND_FULL_PLAN.md item 4).
     expect(banner.textContent).not.toMatch(/formula|Sep 20|BMR/);
-    expect(screen.getByRole('link', { name: 'Check my target' })).toHaveAttribute('href', '/calorie-wizard');
-    expect(screen.queryByRole('button', { name: 'Dismiss' })).toBeNull();
+    expect(screen.getByRole('link', { name: 'Review my plan' })).toHaveAttribute('href', '/calorie-wizard');
+    expect(screen.queryByRole('button', { name: 'Not now' })).toBeNull();
     // Only one banner, even though a scan BMR is also available.
     expect(screen.getAllByTestId('plan-accuracy-banner')).toHaveLength(1);
     expect(screen.queryByText(/measured BMR from your body scans/)).toBeNull();
@@ -57,15 +57,15 @@ describe('PlanAccuracyBanner', () => {
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('offers the scan BMR with both numbers, and Update my plan → the wizard', () => {
+  it('offers the scan BMR with both numbers, and Review my plan → the wizard', () => {
     renderBanner(CURRENT_MIFFLIN, SCAN);
-    expect(screen.getByText('Your body scans suggest 2,104 calories a day at rest — your plan uses 2,330.')).toBeInTheDocument();
-    expect(screen.getByRole('link', { name: 'Update my plan' })).toHaveAttribute('href', '/calorie-wizard');
+    expect(screen.getByText('Your body scans say you burn 2,104 calories a day at rest (BMR). Your plan uses 2,330.')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Review my plan' })).toHaveAttribute('href', '/calorie-wizard');
   });
 
   it('remembers a dismissal per plan', () => {
     const { unmount } = renderBanner(CURRENT_MIFFLIN, SCAN);
-    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
     expect(screen.queryByTestId('plan-accuracy-banner')).toBeNull();
     unmount();
 
@@ -84,7 +84,7 @@ describe('PlanAccuracyBanner', () => {
     vi.spyOn(Storage.prototype, 'setItem').mockImplementation(() => { throw new Error('QuotaExceeded'); });
     renderBanner(CURRENT_MIFFLIN, SCAN);
     expect(screen.getByTestId('plan-accuracy-banner')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Dismiss' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Not now' }));
     expect(screen.queryByTestId('plan-accuracy-banner')).toBeNull();
   });
 });

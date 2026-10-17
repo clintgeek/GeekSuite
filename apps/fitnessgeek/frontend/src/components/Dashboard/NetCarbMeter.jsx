@@ -34,16 +34,14 @@ const NetCarbMeter = ({ consumed = 0, limitG = 20, sx }) => {
       {/* Label row */}
       <Typography
         sx={{
-          fontSize: '0.75rem',
+          fontSize: '0.875rem',
           fontFamily: "inherit",
           fontWeight: 700,
-          textTransform: 'uppercase',
-          letterSpacing: '0.1em',
           color: theme.palette.text.secondary,
           mb: 0.75,
         }}
       >
-        Net Carbs Today
+        Net carbs today
       </Typography>
 
       {/* Large numeric display */}
@@ -70,7 +68,7 @@ const NetCarbMeter = ({ consumed = 0, limitG = 20, sx }) => {
             ml: 0.75,
           }}
         >
-          / {limitG}g
+          of {limitG}g
         </Typography>
       </Typography>
 

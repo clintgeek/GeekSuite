@@ -67,7 +67,7 @@ export function todayStrip({ weights, bloodPressures, meds, today }) {
   const weighed = onDay(weights, today);
   const bp = onDay(bloodPressures, today);
   // Not done yet is an action, not a status (review Phase 1.8): "Weigh in"
-  // and "Add BP" open the quick-add directly; done reads "Weighed ✓".
+  // and "Log BP" open the quick-add directly; done reads "Weighed ✓".
   const items = [
     weights !== null && {
       id: 'weight',
@@ -79,10 +79,10 @@ export function todayStrip({ weights, bloodPressures, meds, today }) {
     },
     bloodPressures !== null && {
       id: 'bp',
-      label: bp ? 'BP' : 'Add BP',
+      label: bp ? 'BP' : 'Log BP',
       done: bp,
       value: bp ? '✓' : '+',
-      spoken: bp ? 'Blood pressure taken today' : 'Add blood pressure. None yet today',
+      spoken: bp ? 'Blood pressure taken today' : 'Log blood pressure. None yet today',
       to: bp ? '/blood-pressure' : '/blood-pressure?add=1',
     },
   ].filter(Boolean);

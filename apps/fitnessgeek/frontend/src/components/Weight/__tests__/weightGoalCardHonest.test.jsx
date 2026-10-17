@@ -42,7 +42,7 @@ describe('the weight goal card (Full)', () => {
 
   it("puts her pace beside the pace the goal's dates need — not the stored 1.0", () => {
     renderCard();
-    expect(screen.getByTestId('weight-pace')).toHaveTextContent("You're losing 1.3 lb a week. To reach 195 by Dec 1 you'd need 1.6.");
+    expect(screen.getByTestId('weight-pace')).toHaveTextContent('You’re losing 1.3 lb a week. To reach 195 by Dec 1 you’d need 1.6.');
     expect(document.body.textContent).not.toMatch(/Goal: 1\.0/);
   });
 

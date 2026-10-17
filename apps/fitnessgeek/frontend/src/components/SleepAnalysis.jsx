@@ -48,6 +48,12 @@ function getQualityColor(score) {
   return 'error';
 }
 
+/** Garmin's ALL-CAPS words ("GOOD", "BALANCED") in sentence case. */
+const sentenceWord = (word) => (typeof word === 'string' && word
+  ? word.charAt(0).toUpperCase() + word.slice(1).toLowerCase().replace(/_/g, ' ')
+  : word);
+const HRV_WORDS = { HIGH: 'High', BALANCED: 'Balanced', LOW: 'Low', UNBALANCED: 'Unbalanced' };
+
 /**
  * Quality label with emoji
  */
@@ -160,7 +166,7 @@ function RecommendationItem({ recommendation }) {
         secondary={
           <>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
-              <strong>Suggestion:</strong> {recommendation.suggestion}
+              <strong>Try this:</strong> {recommendation.suggestion}
             </Typography>
             <Typography variant="caption" color="text.secondary" sx={{ display: 'block', mt: 0.5 }}>
               {recommendation.impact}
@@ -202,7 +208,7 @@ export default function SleepAnalysis({ date }) {
         console.warn('Sleep analysis unavailable:', err.message);
         // Synthesize the same shape as a backend "unavailable" response so the
         // existing !data.available empty-state renders instead of an error alert.
-        setData({ available: false, message: 'Sleep data could not be loaded.' });
+        setData({ available: false, message: 'Couldn’t load your sleep for this night. Try again.' });
       } finally {
         setLoading(false);
       }
@@ -219,7 +225,7 @@ export default function SleepAnalysis({ date }) {
     return (
       <Card>
         <CardContent>
-          <Typography>Loading sleep analysis...</Typography>
+          <Typography>Loading your sleep…</Typography>
         </CardContent>
       </Card>
     );
@@ -230,8 +236,8 @@ export default function SleepAnalysis({ date }) {
       <Card>
         <CardContent>
           <Alert severity="info">
-            <AlertTitle>No Sleep Data Available</AlertTitle>
-            {data?.message || 'No sleep data found for this date'}
+            <AlertTitle>No sleep for this night</AlertTitle>
+            {data?.message || 'Your watch hasn’t sent sleep for this night yet.'}
           </Alert>
         </CardContent>
       </Card>
@@ -248,18 +254,18 @@ export default function SleepAnalysis({ date }) {
           <Stack direction="row" justifyContent="space-between" alignItems="center" sx={{ mb: 2 }}>
             <Stack direction="row" spacing={1} alignItems="center">
               <BedtimeIcon color="primary" />
-              <Typography variant="h5">Sleep Analysis</Typography>
+              <Typography variant="h5">Your sleep</Typography>
             </Stack>
             <Stack direction="row" spacing={1} alignItems="center">
               {qualityScore != null ? (
                 <>
-                  <Tooltip title="Garmin's sleep score for this night — the same number your watch shows" arrow>
+                  <Tooltip title="Garmin’s sleep score for this night — the same number your watch shows" arrow>
                     <Typography variant="h4" color={`${getQualityColor(qualityScore)}.main`}>
                       {qualityScore}/100
                     </Typography>
                   </Tooltip>
                   <Chip
-                    label={`${qualityLabel} ${getQualityEmoji(qualityLabel)}`}
+                    label={`${sentenceWord(qualityLabel)} ${getQualityEmoji(qualityLabel)}`}
                     color={getQualityColor(qualityScore)}
                     size="large"
                   />
@@ -276,16 +282,16 @@ export default function SleepAnalysis({ date }) {
           <Grid container spacing={2} sx={{ mb: 2 }}>
             <Grid item xs={6} sm={3}>
               <MetricCard
-                label="Total Sleep"
+                label="Time asleep"
                 value={Math.floor(metrics.architecture.asleepMinutes / 60)}
                 unit={`h ${metrics.architecture.asleepMinutes % 60}m`}
                 color={metrics.architecture.asleepMinutes >= 420 ? 'success' : 'warning'}
-                tooltip="Time asleep, not counting time awake in bed (target: 7-9 hours)"
+                tooltip="Time asleep, not counting time awake in bed (aim for 7–9 hours)"
               />
             </Grid>
             <Grid item xs={6} sm={3}>
               <MetricCard
-                label="Deep Sleep"
+                label="Deep sleep"
                 value={metrics.architecture.deepPercent}
                 unit="%"
                 color={metrics.architecture.deepPercent >= 15 ? 'success' : 'warning'}
@@ -306,18 +312,18 @@ export default function SleepAnalysis({ date }) {
                 higherIsBetter
                 tooltip={
                   metrics.hrvRecovery.baselineHRV != null
-                    ? `Garmin's overnight HRV, against your ${metrics.hrvRecovery.baselineHRV} ms average over the nights before`
-                    : "Garmin's overnight HRV. A comparison appears once there are three nights to compare against."
+                    ? `Garmin’s overnight heart-rate variability (HRV), against your ${metrics.hrvRecovery.baselineHRV} ms average over the nights before`
+                    : 'Garmin’s overnight heart-rate variability (HRV). A comparison appears once there are three nights to compare against.'
                 }
               />
             </Grid>
             <Grid item xs={6} sm={3}>
               <MetricCard
-                label="Sleep Efficiency"
+                label="Asleep while in bed"
                 value={metrics.architecture.sleepEfficiency}
                 unit="%"
                 color={metrics.architecture.sleepEfficiency >= 90 ? 'success' : 'warning'}
-                tooltip="Time asleep / time in bed (target: >90%)"
+                tooltip="How much of your time in bed you were asleep (aim for over 90%)"
               />
             </Grid>
           </Grid>
@@ -325,7 +331,7 @@ export default function SleepAnalysis({ date }) {
           {/* Warnings */}
           {warnings.length > 0 && (
             <Alert severity="warning" sx={{ mb: 2 }}>
-              <AlertTitle>Areas of Concern</AlertTitle>
+              <AlertTitle>Worth a look</AlertTitle>
               <List dense>
                 {warnings.map((warning, idx) => (
                   <ListItem key={idx} sx={{ py: 0 }}>
@@ -347,25 +353,25 @@ export default function SleepAnalysis({ date }) {
         <AccordionSummary expandIcon={<ExpandMoreIcon />}>
           <Stack direction="row" spacing={1} alignItems="center">
             <BedtimeIcon />
-            <Typography variant="h6">Sleep Architecture</Typography>
+            <Typography variant="h6">Sleep stages</Typography>
           </Stack>
         </AccordionSummary>
         <AccordionDetails>
           <Grid container spacing={2}>
             <Grid item xs={12} md={6}>
-              <Typography variant="subtitle2" gutterBottom>Sleep Stage Distribution</Typography>
+              <Typography variant="subtitle2" gutterBottom>Time in each stage</Typography>
               <ProgressMetric
-                label="Deep Sleep"
+                label="Deep sleep"
                 value={metrics.architecture.deepPercent}
                 color={metrics.architecture.deepPercent >= 20 ? 'success' : 'error'}
               />
               <ProgressMetric
-                label="Light Sleep"
+                label="Light sleep"
                 value={metrics.architecture.lightPercent}
                 color="info"
               />
               <ProgressMetric
-                label="REM Sleep"
+                label="REM sleep"
                 value={metrics.architecture.remPercent}
                 color={metrics.architecture.remPercent >= 20 ? 'success' : 'warning'}
               />
@@ -376,7 +382,7 @@ export default function SleepAnalysis({ date }) {
               />
             </Grid>
             <Grid item xs={12} md={6}>
-              <Typography variant="subtitle2" gutterBottom>Sleep Quality Factors</Typography>
+              <Typography variant="subtitle2" gutterBottom>How settled you were</Typography>
               <Stack spacing={1}>
                 <Typography variant="body2">
                   <strong>Time in bed:</strong> {Math.floor(metrics.architecture.totalMinutes / 60)}h {metrics.architecture.totalMinutes % 60}m
@@ -393,7 +399,7 @@ export default function SleepAnalysis({ date }) {
                   <strong>Stage changes:</strong> {metrics.continuity.transitionsPerHour} per hour asleep
                 </Typography>
                 <Typography variant="body2">
-                  <strong>Stage Transitions:</strong> {metrics.continuity.stageTransitions}
+                  <strong>Stage changes in all:</strong> {metrics.continuity.stageTransitions}
                 </Typography>
               </Stack>
             </Grid>
@@ -410,14 +416,14 @@ export default function SleepAnalysis({ date }) {
         <AccordionSummary expandIcon={<ExpandMoreIcon />}>
           <Stack direction="row" spacing={1} alignItems="center">
             <HeartIcon />
-            <Typography variant="h6">Cardiovascular Recovery</Typography>
+            <Typography variant="h6">Heart rate overnight</Typography>
           </Stack>
         </AccordionSummary>
         <AccordionDetails>
           <Grid container spacing={2}>
             <Grid item xs={12} sm={6} md={3}>
               <MetricCard
-                label="Resting HR"
+                label="Resting heart rate"
                 value={metrics.cardiovascular.restingHeartRate}
                 unit="bpm"
                 tooltip="10th percentile HR during sleep"
@@ -425,7 +431,7 @@ export default function SleepAnalysis({ date }) {
             </Grid>
             <Grid item xs={12} sm={6} md={3}>
               <MetricCard
-                label="Avg Sleep HR"
+                label="Average while asleep"
                 value={metrics.cardiovascular.avgHeartRate}
                 unit="bpm"
                 tooltip="Average heart rate throughout sleep"
@@ -433,10 +439,10 @@ export default function SleepAnalysis({ date }) {
             </Grid>
             <Grid item xs={12} sm={6} md={3}>
               <MetricCard
-                label="Deep Sleep HR"
+                label="Average in deep sleep"
                 value={metrics.cardiovascular.avgDeepSleepHR}
                 unit="bpm"
-                tooltip="Average HR during deep sleep stages"
+                tooltip="Average heart rate during deep sleep"
               />
             </Grid>
           </Grid>
@@ -456,7 +462,7 @@ export default function SleepAnalysis({ date }) {
         <AccordionSummary expandIcon={<ExpandMoreIcon />}>
           <Stack direction="row" spacing={1} alignItems="center">
             <BrainIcon />
-            <Typography variant="h6">HRV & Recovery Status</Typography>
+            <Typography variant="h6">Heart-rate variability (HRV) and recovery</Typography>
           </Stack>
         </AccordionSummary>
         <AccordionDetails>
@@ -464,32 +470,32 @@ export default function SleepAnalysis({ date }) {
             <Grid item xs={12} md={6}>
               <Stack spacing={2}>
                 <Box>
-                  <Typography variant="subtitle2" gutterBottom>HRV Metrics</Typography>
+                  <Typography variant="subtitle2" gutterBottom>HRV</Typography>
                   <Typography variant="body2">
                     <strong>Last night:</strong> {metrics.hrvRecovery.avgHRV ?? '—'}{metrics.hrvRecovery.avgHRV != null && ' ms'}
                   </Typography>
                   {metrics.hrvRecovery.baselineHRV != null ? (
                     <>
                       <Typography variant="body2">
-                        <strong>Your baseline:</strong> {metrics.hrvRecovery.baselineHRV} ms
+                        <strong>Your usual:</strong> {metrics.hrvRecovery.baselineHRV} ms
                         {metrics.hrvRecovery.baselineNights ? ` (${metrics.hrvRecovery.baselineNights} nights before)` : ''}
                       </Typography>
                       <Typography variant="body2">
                         <strong>Difference:</strong> {metrics.hrvRecovery.hrvDeviation > 0 ? '+' : ''}{metrics.hrvRecovery.hrvDeviation}%
                         <Chip
                           size="small"
-                          label={metrics.hrvRecovery.hrvStatus}
+                          label={HRV_WORDS[metrics.hrvRecovery.hrvStatus] || sentenceWord(metrics.hrvRecovery.hrvStatus)}
                           color={metrics.hrvRecovery.hrvStatus === 'HIGH' ? 'success' : metrics.hrvRecovery.hrvStatus === 'BALANCED' ? 'info' : 'warning'}
                           sx={{ ml: 1 }}
                         />
                       </Typography>
                       <Typography variant="caption" color="text.secondary">
-                        Within ±10% of your baseline reads as balanced.
+                        Within 10% either side of your usual reads as balanced.
                       </Typography>
                     </>
                   ) : (
                     <Typography variant="body2" color="text.secondary">
-                      No baseline yet — it needs three nights before this one
+                      No usual yet — it needs three nights before this one
                       {typeof metrics.hrvRecovery.baselineNights === 'number' ? ` (have ${metrics.hrvRecovery.baselineNights})` : ''}.
                     </Typography>
                   )}
@@ -515,17 +521,17 @@ export default function SleepAnalysis({ date }) {
               </Stack>
             </Grid>
             <Grid item xs={12} md={6}>
-              <Typography variant="subtitle2" gutterBottom>Stress During Sleep</Typography>
+              <Typography variant="subtitle2" gutterBottom>Stress while asleep</Typography>
               <Typography variant="body2" paragraph>
-                <strong>Average Stress:</strong> {metrics.stress.avgStress}/100
+                <strong>Average stress:</strong> {metrics.stress.avgStress}/100
               </Typography>
               <Typography variant="body2" paragraph>
-                <strong>Stress Spikes:</strong> {metrics.stress.stressSpikes} events
+                <strong>Stress spikes:</strong> {metrics.stress.stressSpikes}
               </Typography>
               <Alert severity={metrics.stress.avgStress < 40 ? 'success' : 'warning'}>
                 {metrics.stress.avgStress < 40
-                  ? '✓ Low stress during sleep indicates good autonomic nervous system recovery'
-                  : '⚠️ Elevated stress during sleep may indicate incomplete recovery or anxiety'}
+                  ? '✓ Low stress while asleep: your body was recovering'
+                  : 'Stress stayed up while you slept. You may not be fully recovered.'}
               </Alert>
             </Grid>
           </Grid>
@@ -541,14 +547,14 @@ export default function SleepAnalysis({ date }) {
         <AccordionSummary expandIcon={<ExpandMoreIcon />}>
           <Stack direction="row" spacing={1} alignItems="center">
             <AirIcon />
-            <Typography variant="h6">Respiratory Health</Typography>
+            <Typography variant="h6">Breathing</Typography>
           </Stack>
         </AccordionSummary>
         <AccordionDetails>
           <Grid container spacing={2}>
             <Grid item xs={12} sm={6} md={3}>
               <MetricCard
-                label="Avg Respiration"
+                label="Breaths a minute"
                 value={metrics.respiration.avgRespirationRate}
                 unit="bpm"
                 tooltip="Average breaths per minute during sleep"

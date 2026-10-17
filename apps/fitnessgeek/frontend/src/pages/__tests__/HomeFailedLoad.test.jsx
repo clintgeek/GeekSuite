@@ -85,7 +85,7 @@ const renderHome = (value) => render(
   </ThemeProvider>
 );
 
-const PROBLEM = "Can't reach FitnessGeek right now. What you logged is safe.";
+const PROBLEM = 'Can’t reach FitnessGeek right now. What you logged is safe.';
 const goodDay = () => {
   fitnessGeekService.getDailySummary.mockImplementation(() => Promise.resolve({ data: { totals: { calories: 670 }, calorieGoal: 1650, meals: {} } }));
   fitnessGeekService.getLogsForDate.mockImplementation(() => Promise.resolve([

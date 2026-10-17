@@ -26,7 +26,7 @@ import { useUndoToast } from '../components/FoodSearch/undoToast.jsx';
 import { useFoodLogging } from '../hooks/useFoodLogging.js';
 import { useToday } from '../hooks/useToday.js';
 import { errorMessage } from '../utils/errorMessage.js';
-import { addedMessage, friendlyDay, mealLabel } from '../utils/plainWords.js';
+import { addedMessage, fmt, friendlyDay, mealLabel } from '../utils/plainWords.js';
 import {
   Surface,
   SectionLabel,
@@ -83,7 +83,7 @@ const MyMeals = () => {
       const data = await fitnessGeekService.getMeals();
       setMeals(data || []);
     } catch (e) {
-      notify(errorMessage(e, 'Failed to load meals'), { tone: 'error' });
+      notify(errorMessage(e, 'Couldn’t load your meals. Try again.'), { tone: 'error' });
     } finally {
       setLoading(false);
     }
@@ -108,9 +108,10 @@ const MyMeals = () => {
       setDeleting(true);
       await fitnessGeekService.deleteMeal(mealToDelete._id || mealToDelete.id);
       await loadMeals();
+      notify(`Deleted ${mealToDelete.name}`, { tone: 'success' });
       setMealToDelete(null);
     } catch (e) {
-      notify(errorMessage(e, 'Failed to delete meal'), { tone: 'error' });
+      notify(errorMessage(e, 'Couldn’t delete that meal. Try again.'), { tone: 'error' });
     } finally {
       setDeleting(false);
     }
@@ -124,8 +125,9 @@ const MyMeals = () => {
       setEditOpen(false);
       setEditingMeal(null);
       await loadMeals();
+      notify('Meal saved', { tone: 'success' });
     } catch (e) {
-      notify(errorMessage(e, 'Failed to save meal'), { tone: 'error' });
+      notify(errorMessage(e, 'Couldn’t save that meal. Try again.'), { tone: 'error' });
     } finally {
       setSaving(false);
     }
@@ -147,10 +149,10 @@ const MyMeals = () => {
         offerUndo(addedMessage(logMealType, `${mealToLog.name}${day}`), result.logIds);
         setMealToLog(null);
       } else {
-        notify(errorMessage(result?.errors?.[0], "Couldn't log that meal. Try again."), { tone: 'error' });
+        notify(errorMessage(result?.errors?.[0], 'Couldn’t log that meal. Try again.'), { tone: 'error' });
       }
     } catch (e) {
-      notify(errorMessage(e, "Couldn't log that meal. Try again."), { tone: 'error' });
+      notify(errorMessage(e, 'Couldn’t log that meal. Try again.'), { tone: 'error' });
     } finally {
       setLogging(false);
     }
@@ -171,7 +173,7 @@ const MyMeals = () => {
       {/* Editorial header */}
       <Box sx={{ mb: 3 }}>
         <SectionLabel sx={{ mb: 0.75 }}>Library · Meals</SectionLabel>
-        <DisplayHeading size="page">My Meals</DisplayHeading>
+        <DisplayHeading size="page">My meals</DisplayHeading>
         <Typography sx={{ color: 'text.secondary', mt: 0.5, fontSize: '0.9375rem' }}>
           Save your favorite combinations and reuse them in a single tap.
         </Typography>
@@ -196,7 +198,7 @@ const MyMeals = () => {
           copy={
             query
               ? 'Try a different search, or clear the filter to see everything.'
-              : 'Save a meal from the Food Log when you log something worth remembering. It\'ll show up here, ready to reuse.'
+              : 'Save a meal from the Food log when you log something worth remembering. It’ll show up here, ready to reuse.'
           }
         />
       ) : (
@@ -212,7 +214,7 @@ const MyMeals = () => {
               borderBottom: (theme) => `1px dashed ${theme.palette.divider}`,
             }}
           >
-            <SectionLabel count={filtered.length}>Saved Meals</SectionLabel>
+            <SectionLabel count={filtered.length}>Your meals</SectionLabel>
           </Box>
           <List sx={{ p: 0 }}>
             {filtered.map((m) => {
@@ -275,11 +277,8 @@ const MyMeals = () => {
                           mt: 0.25,
                         }}
                       >
-                        <Box
-                          component="span"
-                          sx={{ textTransform: 'capitalize' }}
-                        >
-                          {m.meal_type || 'meal'}
+                        <Box component="span">
+                          {m.meal_type ? mealLabel(m.meal_type) : 'Any meal'}
                         </Box>
                         <Box component="span" sx={{ opacity: 0.5 }}>·</Box>
                         <Box
@@ -301,7 +300,7 @@ const MyMeals = () => {
                                 fontVariantNumeric: 'tabular-nums',
                               }}
                             >
-                              {totalCals} kcal
+                              {fmt(totalCals)} cal
                             </Box>
                           </>
                         )}
@@ -327,7 +326,6 @@ const MyMeals = () => {
       <PremiumDialog
         open={!!mealToLog}
         onClose={() => !logging && setMealToLog(null)}
-        eyebrow="Log a meal"
         title={mealToLog ? `Log ${mealToLog.name}` : 'Log a meal'}
         maxWidth="xs"
         {...thumbSaveProps({
@@ -370,7 +368,6 @@ const MyMeals = () => {
       <PremiumDialog
         open={!!mealToDelete}
         onClose={() => !deleting && setMealToDelete(null)}
-        eyebrow="Confirm"
         title="Delete this meal?"
         maxWidth="xs"
         primaryAction={
@@ -391,8 +388,8 @@ const MyMeals = () => {
         }
       >
         <DialogContentText>
-          <strong>{mealToDelete?.name}</strong> will be permanently removed from your
-          saved meals library. This can't be undone.
+          <strong>{mealToDelete?.name}</strong> will be deleted from your saved
+          meals. This can’t be undone.
         </DialogContentText>
       </PremiumDialog>
     </Box>

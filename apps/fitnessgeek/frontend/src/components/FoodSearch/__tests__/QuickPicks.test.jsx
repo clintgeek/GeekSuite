@@ -31,7 +31,7 @@ describe('QuickPicks', () => {
   it("\"Same as yesterday's lunch\" logs exactly yesterday's lunch, at its servings", () => {
     const onPick = vi.fn();
     render(<QuickPicks date="2026-09-27" mealType="lunch" onPick={onPick} />);
-    const same = screen.getByRole('button', { name: /same as yesterday's lunch/i });
+    const same = screen.getByRole('button', { name: /same as yesterday’s lunch/i });
     expect(same).toHaveTextContent('Caesar salad, Toast');
     fireEvent.click(same);
     expect(onPick.mock.calls[0][0].map((i) => [i.name, i.servings])).toEqual([['Caesar salad', 1], ['Toast', 2]]);
@@ -63,8 +63,8 @@ describe('QuickPicks', () => {
     });
     try {
       render(<QuickPicks date="2026-09-26" mealType="lunch" onPick={vi.fn()} />);
-      expect(screen.getByRole('button', { name: /same as friday's lunch/i })).toHaveTextContent('Chicken soup');
-      expect(screen.queryByRole('button', { name: /yesterday's/i })).toBeNull();
+      expect(screen.getByRole('button', { name: /same as friday’s lunch/i })).toHaveTextContent('Chicken soup');
+      expect(screen.queryByRole('button', { name: /yesterday’s/i })).toBeNull();
     } finally {
       logs.pop();
       today = '2026-09-27';
@@ -75,7 +75,7 @@ describe('QuickPicks', () => {
     today = '2026-09-28';
     try {
       render(<QuickPicks date="2026-09-27" mealType="lunch" onPick={vi.fn()} />);
-      expect(screen.getByRole('button', { name: /same as saturday's lunch/i })).toHaveTextContent('Caesar salad, Toast');
+      expect(screen.getByRole('button', { name: /same as saturday’s lunch/i })).toHaveTextContent('Caesar salad, Toast');
     } finally {
       today = '2026-09-27';
     }
@@ -87,11 +87,11 @@ describe('QuickPicks', () => {
       const onPick = vi.fn();
       render(<QuickPicks date="2026-09-27" mealType="dinner" onPick={onPick} />);
       expect(householdCalls.at(-1)).toEqual(['2026-09-27', 'dinner']);
-      const pick = screen.getByRole('button', { name: "Same as Chef's dinner" });
+      const pick = screen.getByRole('button', { name: "Same as Chef’s dinner" });
       expect(pick).toHaveTextContent('Steak, Baked potato, Salad and 1 more');
       fireEvent.click(pick);
       expect(onPick).toHaveBeenCalledWith([expect.objectContaining({
-        type: 'household-meal', name: "Chef's dinner", fromUserId: 'chef-1', fromDate: '2026-09-27', fromMealType: 'dinner',
+        type: 'household-meal', name: "Chef’s dinner", fromUserId: 'chef-1', fromDate: '2026-09-27', fromMealType: 'dinner',
         nutrition: { calories_per_serving: 1100 },
       })], 'quick:household:chef-1');
     } finally {

@@ -159,7 +159,7 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
 
   const sharingMembers = householdMembers.filter((m) => m.shares_food_logs);
   const whose = fromUserId ? (householdMembers.find((m) => m.user_id === fromUserId)?.display_name || 'their') : null;
-  const ownerWord = whose ? `${whose}'s` : 'your';
+  const ownerWord = whose ? `${whose}’s` : 'your';
   const fromMealWords = fromMealType === WHOLE_DAY ? 'whole day' : mealWord(fromMealType);
   const sameSpot = !fromUserId && fromDate === toDate
     && (fromMealType === WHOLE_DAY || !toMealType || toMealType === fromMealType);
@@ -201,7 +201,7 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
       onCopyComplete?.(toDate);
       onClose();
     } catch (err) {
-      setError(errorMessage(err, "Couldn't copy that. Try again."));
+      setError(errorMessage(err, 'Couldn’t copy that. Try again.'));
     } finally {
       setCopying(false);
     }
@@ -214,8 +214,8 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
   const prevWord = currentDate === today ? 'yesterday' : dayName(previous, today);
   const curWord = dayName(currentDate, today);
   const presets = [
-    { key: 'dinner', label: `Fill in: ${prevWord}'s dinner → ${curWord}'s dinner`, meal: 'dinner' },
-    { key: 'lunch', label: `Fill in: ${prevWord}'s lunch → ${curWord}'s lunch`, meal: 'lunch' },
+    { key: 'dinner', label: `Fill in: ${prevWord}’s dinner → ${curWord}’s dinner`, meal: 'dinner' },
+    { key: 'lunch', label: `Fill in: ${prevWord}’s lunch → ${curWord}’s lunch`, meal: 'lunch' },
     { key: 'all', label: `Fill in: all of ${prevWord} → ${curWord}`, meal: WHOLE_DAY },
   ];
   const fillIn = (preset) => {
@@ -230,9 +230,9 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
   if (!fromMealType) {
     summary = 'Choose which meal to copy.';
   } else if (sameSpot) {
-    summary = "That's the same meal. Pick another day or meal to copy from.";
+    summary = 'That’s the same meal. Pick another day or meal to copy from.';
   } else if (nothingThere) {
-    summary = `There's nothing in ${ownerWord} ${fromMealWords} on ${dayName(fromDate, today)}.`;
+    summary = `There’s nothing in ${ownerWord} ${fromMealWords} on ${dayName(fromDate, today)}.`;
   } else {
     summary = copySummary({ whose, fromDate, fromMeal: fromMealType, toDate, toMeal: toMealType, count: sourceCount, today });
   }
@@ -241,7 +241,6 @@ const CopyMealDialog = ({ open, onClose, currentDate, onCopyComplete, prefill = 
     <PremiumDialog
       open={open}
       onClose={onClose}
-      eyebrow="Food log"
       title="Copy a meal"
       icon={CopyIcon}
       maxWidth="sm"

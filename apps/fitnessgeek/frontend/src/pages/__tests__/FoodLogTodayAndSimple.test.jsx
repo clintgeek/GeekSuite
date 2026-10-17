@@ -121,7 +121,7 @@ describe('Phase 1.6: Simple keeps the Log page to the point', () => {
   it('Simple hides the calorie gear, the activity line and the floating button', async () => {
     renderPage({ simple: true });
     await act(async () => { await vi.advanceTimersByTimeAsync(10); });
-    expect(screen.queryByLabelText('calorie-goal-settings')).toBeNull();
+    expect(screen.queryByLabelText('Change your daily target')).toBeNull();
     expect(screen.queryByTestId('activity-allowance')).toBeNull();
     expect(primaryAction).toHaveBeenCalledWith(expect.objectContaining({ hidden: true }));
   });
@@ -129,7 +129,7 @@ describe('Phase 1.6: Simple keeps the Log page to the point', () => {
   it('Full keeps all three', async () => {
     renderPage({ simple: false });
     expect(await screen.findByTestId('activity-allowance')).toBeInTheDocument();
-    expect(screen.getByLabelText('calorie-goal-settings')).toBeInTheDocument();
+    expect(screen.getByLabelText('Change your daily target')).toBeInTheDocument();
     expect(primaryAction).not.toHaveBeenCalledWith(expect.objectContaining({ hidden: true }));
   });
 });

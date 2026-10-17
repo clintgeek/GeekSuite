@@ -19,7 +19,7 @@ describe('weightStatView — the dashboard Weight card', () => {
   });
 
   it('"--" only when there is genuinely no weight', () => {
-    expect(weightStatView({ currentMean: null, totalChange: null, reason: 'no_data' })).toEqual({ value: '--', unit: '', caption: 'No weigh-ins yet' });
-    expect(weightStatView(null).value).toBe('--');
+    expect(weightStatView({ currentMean: null, totalChange: null, reason: 'no_data' })).toEqual({ value: '—', unit: '', caption: 'No weigh-ins yet' });
+    expect(weightStatView(null).value).toBe('—');
   });
 });

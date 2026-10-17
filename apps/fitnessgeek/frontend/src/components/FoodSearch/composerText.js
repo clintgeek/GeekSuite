@@ -6,6 +6,7 @@
  * we call that day out loud.
  */
 import { errorMessage, transportMessage, RESTARTING_MESSAGE, TIMEOUT_MESSAGE, OFFLINE_MESSAGE, SIGNED_OUT_MESSAGE } from '../../utils/errorMessage.js';
+import { shortDay } from '../../utils/dates.js';
 
 const NUMBER_WORDS = /\b(one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|half|dozen|a\s+couple|a\s+few)\b/;
 
@@ -99,7 +100,7 @@ const daysBetween = (from, to) => Math.round((parseDay(to) - parseDay(from)) / 8
 /**
  * A day as a person says it in the middle of a sentence: "today",
  * "yesterday", "tomorrow", "Wednesday" (within the last week), else
- * "Saturday, October 3".
+ * "Oct 3".
  */
 export function dayInWords(day, today) {
   if (!day || !today) return '';
@@ -109,20 +110,22 @@ export function dayInWords(day, today) {
   if (back === -1) return 'tomorrow';
   const date = parseDay(day);
   if (back > 1 && back < 7) return date.toLocaleDateString('en-US', { weekday: 'long' });
-  const sameYear = date.getFullYear() === parseDay(today).getFullYear();
-  return date.toLocaleDateString('en-US', { weekday: 'long', month: 'long', day: 'numeric', ...(sameYear ? {} : { year: 'numeric' }) });
+  return shortDay(day, today);
 }
+
+/** A far day ("Oct 3") reads "lunch on Oct 3", never "Oct 3’s lunch". */
+const isDate = (words) => /\d/.test(words);
 
 /** "yesterday's", "Wednesday's" — or null when the day needs "on …" instead. */
 export function dayPossessive(day, today) {
   const words = dayInWords(day, today);
-  if (!words || words.includes(',')) return null;
-  return `${words}'s`;
+  if (!words || isDate(words)) return null;
+  return `${words}’s`;
 }
 
 /**
  * "lunch" today; "yesterday's lunch", "Wednesday's dinner"; "lunch on
- * Saturday, October 3" further back. `meal` is already a word ("lunch",
+ * Oct 3" further back. `meal` is already a word ("lunch",
  * "snacks").
  */
 export function mealOnDay(meal, day, today) {
@@ -152,8 +155,8 @@ export function sheetDayWords(day, today, sheetDay) {
 export function sheetMealOnDay(meal, day, today, sheetDay) {
   if (!day || !today || day === today) return meal;
   const words = sheetDayWords(day, today, sheetDay);
-  if (!words || words.includes(',')) return `${meal} on ${words}`;
-  return `${words}'s ${meal}`;
+  if (!words || isDate(words)) return `${meal} on ${words}`;
+  return `${words}’s ${meal}`;
 }
 
 /** The add sheet's title: "Add to lunch", "Add to Thursday's dinner (yesterday)". */
@@ -163,14 +166,14 @@ export function sheetTitle(meal, day, today) {
 }
 
 // ── What a failed Log it says ──────────────────────────────────────────
-export const NOTHING_TO_LOG_MESSAGE = "I couldn't find a food in that. Try naming the food, like 'chicken soup'.";
-export const RETRY_MESSAGE = "That didn't go through. Tap Log it to try again.";
+export const NOTHING_TO_LOG_MESSAGE = 'I couldn’t find a food in that. Try naming the food, like “chicken soup”.';
+export const RETRY_MESSAGE = 'That didn’t go through. Tap Log it to try again.';
 // "Saved here" is only true when the words outlive the sheet (L18): the draft
 // keeps them in sessionStorage. Where that can't be written (a private
 // window, blocked storage) the line says what will actually work.
-export const OFFLINE_COMPOSER_MESSAGE = "No signal — I can't log this yet. Your words are saved here.";
-export const OFFLINE_UNSAVED_MESSAGE = "No signal — I can't log this yet. Keep this open and tap Log it when you're back.";
-export const STILL_WORKING_MESSAGE = "Still working — this one's taking a moment.";
+export const OFFLINE_COMPOSER_MESSAGE = 'No signal — I can’t log this yet. Your words are saved here.';
+export const OFFLINE_UNSAVED_MESSAGE = 'No signal — I can’t log this yet. Keep this open and tap Log it when you’re back.';
+export const STILL_WORKING_MESSAGE = 'Still working — this one’s taking a moment.';
 
 const SHORT_REASON = {
   [RESTARTING_MESSAGE]: 'FitnessGeek is restarting.',

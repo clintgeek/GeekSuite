@@ -35,9 +35,9 @@ const reasonFor = (code) => {
 
 export const SPEECH_ERROR_TEXT = {
   denied: 'FitnessGeek needs your microphone to hear you. Allow it in your browser settings, or type instead.',
-  'no-speech': "I didn't hear anything. Tap the microphone and try again.",
-  offline: "No signal — I can't hear you without it. You can type instead.",
-  other: "The microphone isn't working right now. You can type instead.",
+  'no-speech': "I didn’t hear anything. Tap the microphone and try again.",
+  offline: "No signal — I can’t hear you without it. You can type instead.",
+  other: "The microphone isn’t working right now. You can type instead.",
 };
 
 export function useSpeechInput({ onFinal, lang = 'en-US' } = {}) {

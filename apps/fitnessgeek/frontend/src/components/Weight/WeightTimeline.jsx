@@ -19,6 +19,16 @@ export const SERIES = Object.freeze({
   projection: 'Projection',
 });
 
+// What a person reads: the legend (review V-2) and the tooltip rows. The ids
+// above stay as they are; tests and the custom layers key on them.
+const LEGEND = Object.freeze({
+  trend: '7-day average',
+  readings: 'Weigh-ins',
+  goal: 'Goal',
+  projection: 'At this pace',
+});
+const TIP_LABEL = { [SERIES.readings]: 'Weigh-in', [SERIES.projection]: 'At this pace' };
+
 const WeightTimeline = ({ weightLogs = [], goal = null, unit = 'lbs' }) => {
   const theme = useTheme();
   const primary = theme.palette.primary.main;
@@ -59,12 +69,12 @@ const WeightTimeline = ({ weightLogs = [], goal = null, unit = 'lbs' }) => {
   if (!model.readings.length) {
     return (
       <Surface sx={{ textAlign: 'center', py: 5 }}>
-        <SectionLabel sx={{ justifyContent: 'center', mb: 1.5 }}>Weight trend</SectionLabel>
+        <SectionLabel sx={{ justifyContent: 'center', mb: 1.5 }}>Your weight trend</SectionLabel>
         <Typography sx={{ color: muted, fontSize: '0.875rem' }}>
-          No weight data to display yet.
+          No weigh-ins yet.
         </Typography>
         <Typography sx={{ color: muted, fontSize: '0.75rem', mt: 0.5 }}>
-          Log your first weight entry to see your trend.
+          Weigh in and your trend shows here.
         </Typography>
       </Surface>
     );
@@ -77,12 +87,12 @@ const WeightTimeline = ({ weightLogs = [], goal = null, unit = 'lbs' }) => {
   const statusInk = projectionColor ? readableOn(projectionColor, paper, { under: paper }) : null;
 
   const legend = [
-    { key: 'trend', label: SERIES.trend, color: primary, kind: 'line' },
-    { key: 'readings', label: SERIES.readings, color: alpha(primary, 0.45), kind: 'dot' },
-    model.goalLine && { key: 'goal', label: SERIES.goal, color: muted, kind: 'dash' },
+    { key: 'trend', label: LEGEND.trend, color: primary, kind: 'line' },
+    { key: 'readings', label: LEGEND.readings, color: alpha(primary, 0.45), kind: 'dot' },
+    model.goalLine && { key: 'goal', label: LEGEND.goal, color: muted, kind: 'dash' },
     model.projection && {
       key: 'projection',
-      label: SERIES.projection,
+      label: LEGEND.projection,
       color: projectionColor,
       kind: 'dash',
       suffix: { label: model.projection.onTrack ? 'On track' : 'Off track', color: statusInk },
@@ -102,8 +112,7 @@ const WeightTimeline = ({ weightLogs = [], goal = null, unit = 'lbs' }) => {
         }}
       >
         <Box>
-          <SectionLabel sx={{ mb: 0.75 }}>Weight trend</SectionLabel>
-          <DisplayHeading size="card">Your curve</DisplayHeading>
+          <DisplayHeading size="card">Your weight trend</DisplayHeading>
         </Box>
         <Box sx={{ display: 'flex', columnGap: 2, rowGap: 1, flexWrap: 'wrap' }}>
           {legend.map(({ key, ...item }) => (
@@ -126,13 +135,13 @@ const WeightTimeline = ({ weightLogs = [], goal = null, unit = 'lbs' }) => {
           data={chartData}
           theme={chartTheme}
           role="img"
-          ariaLabel={`Weight over time, in ${unit}: a 7-day average line over each reading${model.goalLine ? ', against the goal line' : ''}`}
+          ariaLabel={`Weight over time, in ${u}: a 7-day average line over each weigh-in${model.goalLine ? ', against the goal line' : ''}`}
           margin={MARGIN}
           xScale={{ type: 'time', format: '%Y-%m-%d', useUTC: false, precision: 'day' }}
           xFormat="time:%Y-%m-%d"
           yScale={{ type: 'linear', min: yAxisDomain[0], max: yAxisDomain[1] }}
           axisBottom={{
-            format: '%b %d',
+            format: '%b %-d',
             tickRotation: 0,
             tickSize: 0,
             tickPadding: 12,
@@ -169,7 +178,7 @@ const WeightTimeline = ({ weightLogs = [], goal = null, unit = 'lbs' }) => {
               title={tooltipDay(slice.points[0]?.data?.xFormatted)}
               rows={slice.points.map((point) => ({
                 key: point.id,
-                label: point.seriesId === SERIES.readings ? 'Weigh-in' : point.seriesId,
+                label: TIP_LABEL[point.seriesId] || point.seriesId,
                 value: `${Number(point.data.yFormatted).toFixed(1)} ${u}`,
                 color: point.seriesColor,
               }))}
@@ -263,8 +272,6 @@ const LegendItem = ({ color, label, kind, suffix, muted }) => (
       sx={{
         fontSize: '0.75rem',
         fontWeight: 700,
-        textTransform: 'uppercase',
-        letterSpacing: '0.12em',
         color: muted,
       }}
     >
@@ -275,8 +282,6 @@ const LegendItem = ({ color, label, kind, suffix, muted }) => (
         sx={{
           fontSize: '0.75rem',
           fontWeight: 700,
-          textTransform: 'uppercase',
-          letterSpacing: '0.08em',
           color: suffix.color,
         }}
       >

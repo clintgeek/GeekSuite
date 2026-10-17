@@ -47,7 +47,7 @@ export const DESTINATIONS = {
   log: { id: '/food-log', label: 'Food log', to: '/food-log', Icon: RestaurantIcon, simple: true },
   weight: { id: '/weight', label: 'Weight', to: '/weight', Icon: MonitorWeightIcon, simple: true, description: 'Log your weight and see the trend' },
   bp: { id: '/blood-pressure', label: 'Blood pressure', to: '/blood-pressure', Icon: MonitorHeartIcon, simple: true, description: 'Log a reading' },
-  meds: { id: '/medications', label: 'Medications', to: '/medications', Icon: MedicationIcon, simple: true, description: 'Your medicines, and today’s doses' },
+  meds: { id: '/medications', label: 'Medications', to: '/medications', Icon: MedicationIcon, simple: true, description: 'Your meds, and today’s doses' },
   activity: { id: '/activity', label: 'Activity', to: '/activity', Icon: FitnessCenterIcon, description: 'Steps, workouts and sleep from Garmin', simpleDescription: 'Steps and sleep — needs a Garmin watch' },
   health: { id: '/health', label: 'Health dashboard', to: '/health', Icon: TrendingUpIcon, description: 'Heart rate, stress and recovery', simpleDescription: 'Live heart rate and stress — needs setup' },
   reports: { id: '/reports', label: 'Reports', to: '/reports', Icon: InsightsIcon, description: 'How the week and the month went' },

@@ -105,11 +105,11 @@ const MyFoods = () => {
           unit: createForm.serving_unit || 'oz'
         }
       });
-      notify(`Saved "${createForm.name.trim()}"`, { tone: 'success' });
+      notify(`Saved ${createForm.name.trim()}`, { tone: 'success' });
       setCreateForm(null);
       loadFoods();
     } catch (err) {
-      notify(errorMessage(err, 'Could not create that food.'), { tone: 'error' });
+      notify(errorMessage(err, 'Couldn’t save that food. Try again.'), { tone: 'error' });
     } finally {
       setCreating(false);
     }
@@ -234,7 +234,7 @@ const MyFoods = () => {
       {/* Editorial header */}
       <Box sx={{ mb: 3 }}>
         <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem' }}>
-          Your custom entries and everything you've saved for quick access.
+          Your custom entries and everything you’ve saved for quick access.
         </Typography>
       </Box>
 
@@ -264,7 +264,7 @@ const MyFoods = () => {
       {filteredFoods.length === 0 ? (
         <EmptyState
           icon={FoodIcon}
-          title={searchQuery ? 'Nothing matches that' : 'Your library is empty'}
+          title={searchQuery ? 'Nothing matches that' : 'No foods yet'}
           copy={
             searchQuery
               ? 'Try a different word, or clear the search to see everything in your library.'
@@ -284,7 +284,7 @@ const MyFoods = () => {
               borderBottom: (theme) => `1px dashed ${theme.palette.divider}`,
             }}
           >
-            <SectionLabel count={filteredFoods.length}>Saved Foods</SectionLabel>
+            <SectionLabel count={filteredFoods.length}>Your foods</SectionLabel>
           </Box>
           <List sx={{ p: 0 }}>
             {filteredFoods.map((food) => (

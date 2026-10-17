@@ -64,7 +64,7 @@ import { Surface } from '../components/primitives';
  */
 
 const SAVED = ['Saved', { tone: 'success', duration: 2000 }];
-const COULDNT = "Couldn't save that. Try again.";
+const COULDNT = 'Couldn’t save that. Try again.';
 
 const GOALS = [
   { id: 'lose', title: 'Lose a little weight' },
@@ -189,7 +189,7 @@ function AboutYou({ profile, profileError, onRetryProfile, onProfileSaved }) {
       </Box>
 
       {profileError ? (
-        <GeekErrorState title="Couldn't load your details" description={profileError} onRetry={onRetryProfile} />
+        <GeekErrorState title="Couldn’t load your details" description={profileError} onRetry={onRetryProfile} />
       ) : !profile ? (
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 2 }}><CircularProgress size={24} aria-label="Loading your details" /></Box>
       ) : (
@@ -321,7 +321,7 @@ const Settings = () => {
       // No defaults: a save over a failed load used to write them back and
       // turn Garmin off. Say so, offer a retry, and keep the switches away.
       logger.error('Error loading settings:', err);
-      setLoadError(errorMessage(err, "Couldn't load your settings. Try again."));
+      setLoadError(errorMessage(err, 'Couldn’t load your settings. Try again.'));
       setSettings(null);
     } finally {
       setLoading(false);
@@ -342,7 +342,7 @@ const Settings = () => {
     } catch (err) {
       logger.error('Error loading profile:', err);
       setProfile(null);
-      setProfileError(errorMessage(err, "Couldn't load your details. Try again."));
+      setProfileError(errorMessage(err, 'Couldn’t load your details. Try again.'));
     }
   };
 
@@ -404,7 +404,7 @@ const Settings = () => {
       notify(...SAVED);
     } catch (err) {
       logger.error('Error saving Garmin login:', err);
-      notify(errorMessage(err, "Couldn't save your Garmin login. Try again."), { tone: 'error' });
+      notify(errorMessage(err, 'Couldn’t save your Garmin login. Try again.'), { tone: 'error' });
     } finally {
       setGarminSaving(false);
     }
@@ -437,8 +437,8 @@ const Settings = () => {
     if (!settings) {
       return (
         <GeekErrorState
-          title="Couldn't load settings"
-          description={loadError || "Couldn't load your settings. Try again."}
+          title="Couldn’t load settings"
+          description={loadError || 'Couldn’t load your settings. Try again.'}
           onRetry={loadSettings}
         />
       );
@@ -490,7 +490,7 @@ const Settings = () => {
               startIcon={garminSaving ? <CircularProgress size={16} color="inherit" /> : null}
               sx={{ mt: 2, minHeight: 44 }}
             >
-              {garminSaving ? 'Saving…' : connected ? 'Update Garmin login' : 'Connect Garmin'}
+              {garminSaving ? 'Saving…' : connected ? 'Save Garmin login' : 'Connect Garmin'}
             </Button>
           )}
         </Surface>
@@ -509,7 +509,7 @@ const Settings = () => {
             sx={{ display: 'flex' }}
           />
           <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
-            Suggests screening when your watch records blood-oxygen dips overnight. Wrist readings are noisy with movement and sleep position — turn this off if you've already discussed them with your doctor.
+            Suggests screening when your watch records blood-oxygen dips overnight. Wrist readings are noisy with movement and sleep position — turn this off if you’ve already discussed them with your doctor.
           </Typography>
         </Surface>
       </>

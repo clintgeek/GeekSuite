@@ -57,7 +57,7 @@ const renderHarness = (props = {}) =>
   );
 
 const scan = async (user, barcode = '01234567890') => {
-  const input = await screen.findByPlaceholderText('Enter 8-14 digit barcode');
+  const input = await screen.findByPlaceholderText('8–14 digits');
   await user.type(input, barcode);
   await user.click(await screen.findByRole('button', { name: /look up barcode/i }));
 };
@@ -108,11 +108,11 @@ describe('scanning a barcode from the meal-slot sheet', () => {
     await scan(user);
 
     await waitFor(() => expect(onLogItems).toHaveBeenCalled());
-    expect(await screen.findByText('Could not log that item. Try again.')).toBeInTheDocument();
+    expect(await screen.findByText('Couldn’t add that. Try again.')).toBeInTheDocument();
     expect(onClose).not.toHaveBeenCalled();
     // The scanner itself is still mounted/open — its own "look up" field is
     // still on screen, not swapped for the (stubbed) search box.
-    expect(screen.getByPlaceholderText('Enter 8-14 digit barcode')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('8–14 digits')).toBeInTheDocument();
   });
 
   test('a thrown log error keeps the sheet open the same way a reported failure does', async () => {
@@ -125,7 +125,7 @@ describe('scanning a barcode from the meal-slot sheet', () => {
     renderHarness({ onLogItems, onClose });
     await scan(user);
 
-    expect(await screen.findByText('Could not log that item. Try again.')).toBeInTheDocument();
+    expect(await screen.findByText('Couldn’t add that. Try again.')).toBeInTheDocument();
     expect(onClose).not.toHaveBeenCalled();
   });
 });

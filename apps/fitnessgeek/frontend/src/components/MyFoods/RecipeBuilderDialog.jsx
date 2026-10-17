@@ -32,8 +32,11 @@ import {
   withUnit,
 } from '../../utils/recipeBuilder.js';
 import { formatServing } from '../../utils/units.js';
+import { fmt, macroLine } from '../../utils/plainWords.js';
 
-const round1 = (n) => Math.round((Number(n) || 0) * 10) / 10;
+// No protein, carbs or fat on any ingredient means "not known", not zero
+// (review U-4): the builder used to print "P 0g · C 0g · F 0g".
+const macrosKnown = (per) => ['protein_grams', 'carbs_grams', 'fat_grams'].some((k) => Number(per?.[k]) > 0);
 
 /**
  * The recipe builder (DOCS/RECIPES_PLAN.md §2–3): a custom food that remembers
@@ -90,7 +93,7 @@ const RecipeBuilderDialog = ({ open, food, onClose, onSaved }) => {
       setPasteText('');
       setPasteOpen(false);
     } catch (err) {
-      notify(errorMessage(err, 'Could not read that ingredient list.'), { tone: 'error' });
+      notify(errorMessage(err, 'Couldn’t read that ingredient list. Try again.'), { tone: 'error' });
     } finally {
       setParsing(false);
     }
@@ -111,11 +114,11 @@ const RecipeBuilderDialog = ({ open, food, onClose, onSaved }) => {
       };
       if (food?.id ?? food?._id) await foodService.update(food.id ?? food._id, input);
       else await foodService.create(input);
-      notify(food ? `Updated "${input.name}"` : `Saved "${input.name}"`, { tone: 'success' });
+      notify(`Saved ${input.name}`, { tone: 'success' });
       onSaved?.();
       onClose();
     } catch (err) {
-      notify(errorMessage(err, 'Could not save that recipe.'), { tone: 'error' });
+      notify(errorMessage(err, 'Couldn’t save that recipe. Try again.'), { tone: 'error' });
     } finally {
       setSaving(false);
     }
@@ -129,7 +132,6 @@ const RecipeBuilderDialog = ({ open, food, onClose, onSaved }) => {
       <PremiumDialog
         open={open}
         onClose={onClose}
-        eyebrow="My Foods"
         title={food ? `Edit ${food.name ?? 'recipe'}` : 'New recipe'}
         maxWidth="sm"
         primaryAction={
@@ -164,7 +166,7 @@ const RecipeBuilderDialog = ({ open, food, onClose, onSaved }) => {
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <WarningIcon sx={{ color: 'warning.main', flexShrink: 0 }} aria-hidden />
                       <Typography sx={{ flex: 1, minWidth: 0, color: 'text.primary' }}>
-                        Couldn&apos;t match &ldquo;{row.line || row.name}&rdquo;
+                        Couldn’t match &ldquo;{row.line || row.name}&rdquo;
                       </Typography>
                       <Button size="small" variant="outlined" onClick={() => setPickerFor(row.key)}>
                         Pick a food
@@ -221,14 +223,14 @@ const RecipeBuilderDialog = ({ open, food, onClose, onSaved }) => {
                         <Typography
                           sx={{ ml: 'auto', fontWeight: 700, fontVariantNumeric: 'tabular-nums', whiteSpace: 'nowrap' }}
                         >
-                          {rowCalories(row)} kcal
+                          {fmt(rowCalories(row))} cal
                         </Typography>
                       </Box>
                       {row.unitMismatch && (
                         <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mt: 1 }}>
                           <WarningIcon fontSize="small" sx={{ color: 'warning.main', mt: '2px' }} aria-hidden />
                           <Typography sx={{ fontSize: '0.8125rem', color: 'text.primary' }}>
-                            That unit doesn&apos;t match this food&apos;s serving ({formatServing(row.serving_size, row.serving_unit)}), so the amount is a guess. Pick a unit that fits.
+                            That unit doesn’t match this food’s serving ({formatServing(row.serving_size, row.serving_unit)}), so the amount is a guess. Pick a unit that fits.
                           </Typography>
                         </Box>
                       )}
@@ -293,13 +295,13 @@ const RecipeBuilderDialog = ({ open, food, onClose, onSaved }) => {
             {per ? (
               <>
                 <Typography sx={{ fontWeight: 700, fontSize: '1.25rem', fontVariantNumeric: 'tabular-nums' }}>
-                  {per.calories_per_serving} kcal per serving
+                  {fmt(per.calories_per_serving)} cal per serving
                 </Typography>
                 <Typography sx={{ color: 'text.secondary', fontVariantNumeric: 'tabular-nums' }}>
-                  P {round1(per.protein_grams)}g · C {round1(per.carbs_grams)}g · F {round1(per.fat_grams)}g
+                  {macrosKnown(per) ? macroLine({ protein: per.protein_grams, carbs: per.carbs_grams, fat: per.fat_grams }) : macroLine({})}
                 </Typography>
                 <Typography sx={{ color: 'text.secondary', fontSize: '0.875rem', mt: 0.5 }}>
-                  Whole batch {batchKcal} kcal
+                  Whole batch {fmt(batchKcal)} cal
                 </Typography>
               </>
             ) : (

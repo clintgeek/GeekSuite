@@ -58,9 +58,11 @@ describe('summary card', () => {
     renderSection({ summary: EARLY });
     expect(screen.getByText(/Average of 8 scans · Sep 15–22 · latest scan Sep 22/)).toBeInTheDocument();
     expect(screen.getByText('44.2')).toBeInTheDocument();
-    for (const label of ['Fat mass', 'Lean mass', 'Skeletal muscle', 'Body water', 'Visceral fat index', 'BMR (scale)']) {
+    for (const label of ['Fat mass', 'Lean mass', 'Skeletal muscle', 'Body water', 'Belly fat score (visceral fat)', 'Calories at rest (BMR)']) {
       expect(screen.getByText(label)).toBeInTheDocument();
     }
+    // Commas at 1,000 and above (review U-3): calories at rest read "2,107".
+    expect(screen.getByText('2,107')).toBeInTheDocument();
   });
 
   it('does not show the stored-but-hidden fields (D7)', () => {
@@ -89,7 +91,7 @@ describe('change card', () => {
 
   it('once it exists: the reading, the three deltas, and both windows named', () => {
     renderSection({ summary: LATER });
-    expect(screen.getByText("Of the 8.0 lb you've lost, about 7.0 lb was fat and 1.0 lb lean.")).toBeInTheDocument();
+    expect(screen.getByText("Of the 8.0 lb you’ve lost, about 7.0 lb was fat and 1.0 lb lean.")).toBeInTheDocument();
     const card = screen.getByText('Change').closest('div').parentElement;
     expect(card.textContent).toContain('−7.0');
     expect(card.textContent).toContain('−1.0');

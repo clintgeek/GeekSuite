@@ -28,18 +28,18 @@ describe('BPLogList — dangerous reading', () => {
   it('190/70 shows Crisis, not Stage 1', () => {
     render(<BPLogList logs={[DANGEROUS_READING]} onDelete={() => {}} />);
 
-    // Rendered twice (mobile + desktop layouts).
-    expect(screen.getAllByText('Crisis').length).toBeGreaterThan(0);
-    expect(screen.queryByText('Stage 1')).toBeNull();
+    // Rendered twice (mobile + desktop layouts), in plain words (review D-1).
+    expect(screen.getAllByText('Very high (crisis)').length).toBeGreaterThan(0);
+    expect(screen.queryByText(/stage 1/i)).toBeNull();
   });
 
-  it('names the delete button after the reading, not a bare "delete"', () => {
+  it('names the remove button after the reading, not a bare "delete"', () => {
     render(<BPLogList logs={[DANGEROUS_READING]} onDelete={() => {}} />);
 
     expect(
-      screen.getAllByRole('button', { name: /delete the 190\/70 mmhg reading/i }).length
+      screen.getAllByRole('button', { name: /remove the 190\/70 mmhg reading/i }).length
     ).toBeGreaterThan(0);
-    expect(screen.queryByRole('button', { name: /^delete$/i })).toBeNull();
+    expect(screen.queryByRole('button', { name: /^(delete|remove)$/i })).toBeNull();
   });
 });
 
@@ -72,7 +72,7 @@ describe('AddBPDialog — live-typing category matches the saved row', () => {
     await user.type(screen.getByLabelText(/systolic/i), '190');
     await user.type(screen.getByLabelText(/diastolic/i), '70');
 
-    expect(screen.getByText('Crisis')).toBeInTheDocument();
+    expect(screen.getByText('Very high (crisis)')).toBeInTheDocument();
     expect(screen.queryByText('High Normal')).toBeNull();
   });
 });
@@ -85,7 +85,7 @@ describe('QuickAddBP — live-typing category matches the saved row', () => {
     await user.type(screen.getByLabelText(/systolic/i), '190');
     await user.type(screen.getByLabelText(/diastolic/i), '70');
 
-    expect(screen.getByText('Crisis')).toBeInTheDocument();
+    expect(screen.getByText('Very high (crisis)')).toBeInTheDocument();
     expect(screen.queryByText('High Normal')).toBeNull();
   });
 });

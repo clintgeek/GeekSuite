@@ -84,7 +84,7 @@ describe('L16 — Simple: the two-question add', () => {
     expect(screen.getByText('When do you take it?')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Copy text' })).toBeNull();
     expect(screen.queryByRole('button', { name: /Download/ })).toBeNull();
-    expect(screen.queryByLabelText(/Search medication/i)).toBeNull();
+    expect(screen.queryByLabelText(/Medication name/i)).toBeNull();
     expect(screen.queryByLabelText('Type')).toBeNull();
     expect(screen.queryByText(/indications|what it.s for/i)).toBeNull();
   });
@@ -152,7 +152,7 @@ describe('L16 — Simple: the two-question add', () => {
     // The list's group and today's checklist both say Midday now (utils/medSlots.js).
     expect(screen.getAllByText('Midday').length).toBeGreaterThan(0);
     expect(screen.queryByText('Afternoon')).toBeNull();
-    expect(screen.queryByText('RX')).toBeNull();
+    expect(screen.queryByText('Prescription')).toBeNull();
     expect(screen.queryByRole('button', { name: 'Copy text' })).toBeNull();
   });
 });
@@ -178,13 +178,13 @@ describe('a saved medicine leaves a clean form', () => {
     render();
     await screen.findByText('No medications yet');
     const addTyped = async (n) => {
-      fireEvent.change(screen.getByLabelText(/Search medication/i), { target: { value: n } });
+      fireEvent.change(screen.getByLabelText(/Medication name/i), { target: { value: n } });
       fireEvent.click(screen.getByRole('button', { name: /^Search$/i }));
       fireEvent.click(await screen.findByRole('button', { name: `Add “${n}” as typed` }));
       await screen.findByLabelText('Display name');
     };
     await addTyped('Vitamin D');
-    fireEvent.click(screen.getByRole('button', { name: 'morning' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Morning' }));
     fireEvent.click(screen.getByRole('button', { name: /^Save$/ }));
     await waitFor(() => expect(medsService.save).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(screen.queryByLabelText('Display name')).toBeNull());
@@ -228,11 +228,11 @@ describe('L23 — the checklist can tick yesterday', () => {
     medsService.list.mockResolvedValue([MED]);
     render();
     await screen.findByRole('checkbox', { name: 'Lisinopril, morning' });
-    expect(screen.getByText("Today's doses")).toBeInTheDocument();
+    expect(screen.getByText('Today’s doses')).toBeInTheDocument();
 
     fireEvent.click(screen.getByRole('button', { name: 'Yesterday' }));
     await waitFor(() => expect(medsService.getLogsByDate).toHaveBeenLastCalledWith('2026-10-15'));
-    expect(screen.getByText("Yesterday's doses")).toBeInTheDocument();
+    expect(screen.getByText('Yesterday’s doses')).toBeInTheDocument();
     expect(screen.getByText(/Showing yesterday, Oct 15/)).toBeInTheDocument();
 
     const box = within(screen.getByTestId('meds-checklist')).getByRole('checkbox', { name: 'Lisinopril, morning' });

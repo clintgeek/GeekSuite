@@ -25,7 +25,7 @@ import {
 import { fitnessGeekService } from '../../services/fitnessGeekService';
 import { errorMessage } from '../../utils/errorMessage.js';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
-import { mealLabel, mealWord } from '../../utils/plainWords.js';
+import { fmt, mealLabel, mealWord } from '../../utils/plainWords.js';
 import { useToday } from '../../hooks/useToday.js';
 import { dayName } from './dayWords.js';
 
@@ -75,15 +75,15 @@ const HouseholdLogView = ({ open, onClose, currentDate, onCopyMeal }) => {
       setHouseholdMembers(members);
 
       if (!household?.household_id) {
-        setError('You are not part of a household. Go to Settings to create or join one.');
+        setError('You’re not part of a household yet. Start or join one in Settings.');
       } else if (members.length === 0) {
-        setError('No household members are sharing their food logs');
+        setError('No one in your household is sharing their food log yet.');
       } else if (members.length === 1) {
         // Auto-select if only one member
         setSelectedMember(members[0].user_id);
       }
     } catch (err) {
-      setError(errorMessage(err, 'Failed to load household members'));
+      setError(errorMessage(err, 'Couldn’t load your household. Try again.'));
     } finally {
       setLoading(false);
     }
@@ -98,10 +98,10 @@ const HouseholdLogView = ({ open, onClose, currentDate, onCopyMeal }) => {
       const logs = await fitnessGeekService.getHouseholdMemberLogs(selectedMember, currentDate);
       setMemberLogs(Array.isArray(logs) ? logs : []);
       setMemberName(
-        householdMembers.find(m => m.user_id === selectedMember)?.display_name || 'Household Member'
+        householdMembers.find(m => m.user_id === selectedMember)?.display_name || 'Household member'
       );
     } catch (err) {
-      setError(errorMessage(err, 'Failed to load member logs'));
+      setError(errorMessage(err, 'Couldn’t load that log. Try again.'));
       setMemberLogs([]);
     } finally {
       setLoadingLogs(false);
@@ -150,8 +150,7 @@ const HouseholdLogView = ({ open, onClose, currentDate, onCopyMeal }) => {
     <PremiumDialog
       open={open}
       onClose={onClose}
-      eyebrow="Household"
-      title={householdName ? `${householdName} Food Logs` : 'Household Food Logs'}
+      title={householdName ? `${householdName} food logs` : 'Household food logs'}
       icon={PeopleIcon}
       maxWidth="md"
       secondaryAction={<Button onClick={onClose}>Close</Button>}
@@ -173,11 +172,11 @@ const HouseholdLogView = ({ open, onClose, currentDate, onCopyMeal }) => {
                 {/* Member Selector */}
                 <Box sx={{ mb: 3 }}>
                   <FormControl fullWidth size="small">
-                    <InputLabel>Select Household Member</InputLabel>
+                    <InputLabel>Whose log</InputLabel>
                     <Select
                       value={selectedMember}
                       onChange={(e) => setSelectedMember(e.target.value)}
-                      label="Select Household Member"
+                      label="Whose log"
                     >
                       {householdMembers.map(member => (
                         <MenuItem key={member.user_id} value={member.user_id}>
@@ -200,7 +199,7 @@ const HouseholdLogView = ({ open, onClose, currentDate, onCopyMeal }) => {
                           variant="outlined"
                           startIcon={<CopyIcon />}
                           onClick={handleCopyAll}
-                          aria-label={`Copy ${memberName}'s whole day to your log`}
+                          aria-label={`Copy ${memberName}’s whole day to your log`}
                           sx={{ minHeight: 44 }}
                         >
                           Copy the whole day
@@ -214,7 +213,7 @@ const HouseholdLogView = ({ open, onClose, currentDate, onCopyMeal }) => {
                       </Box>
                     ) : memberLogs.length === 0 ? (
                       <Alert severity="info">
-                        {memberName} hasn't logged anything {onDay}.
+                        {memberName} hasn’t logged anything {onDay}.
                       </Alert>
                     ) : (
                       // Meal Sections
@@ -239,7 +238,7 @@ const HouseholdLogView = ({ open, onClose, currentDate, onCopyMeal }) => {
                                     {mealLabel(mealType)}
                                   </Typography>
                                   <Chip
-                                    label={`${Math.round(totalCals)} cal`}
+                                    label={`${fmt(totalCals)} cal`}
                                     size="small"
                                     color="primary"
                                     variant="outlined"
@@ -248,7 +247,7 @@ const HouseholdLogView = ({ open, onClose, currentDate, onCopyMeal }) => {
                                 <Button
                                   startIcon={<CopyIcon />}
                                   onClick={() => handleCopyMeal(mealType)}
-                                  aria-label={`Copy ${memberName}'s ${mealWord(mealType)} to your log`}
+                                  aria-label={`Copy ${memberName}’s ${mealWord(mealType)} to your log`}
                                   sx={{ minHeight: 44 }}
                                 >
                                   Copy to your log
@@ -263,12 +262,12 @@ const HouseholdLogView = ({ open, onClose, currentDate, onCopyMeal }) => {
                                   return (
                                     <ListItem key={log._id || idx} sx={{ px: 0 }}>
                                       <ListItemText
-                                        primary={food.name || 'Unknown Food'}
+                                        primary={food.name || 'A food'}
                                         secondary={
                                           <Box component="span" sx={{ display: 'flex', gap: 1 }}>
                                             <span>{log.servings} serving{log.servings !== 1 ? 's' : ''}</span>
                                             <span>•</span>
-                                            <span>{Math.round(cals)} cal</span>
+                                            <span>{fmt(cals)} cal</span>
                                           </Box>
                                         }
                                       />

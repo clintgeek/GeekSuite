@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import {
   Box, Paper, Typography, TextField, Button, CircularProgress, Chip, Card, CardContent,
-  Stepper, Step, StepLabel, StepButton, Divider, FormControl, InputLabel, Select, MenuItem, Alert
+  Stepper, Step, StepLabel, StepButton, Divider, FormControl, InputLabel, Select, MenuItem, Alert, InputAdornment
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import {
@@ -26,6 +26,9 @@ import { localDateString } from '@geeksuite/utils';
 import { useExperience } from '../../contexts/ExperienceContext.jsx';
 import { errorMessage } from '../../utils/errorMessage.js';
 import { currentAverage } from '../Weight/weightTrend.js';
+import { fmt, macroLine } from '../../utils/plainWords.js';
+
+const lbAdornment = { endAdornment: <InputAdornment position="end">lb</InputAdornment> };
 
 const CalorieGoalWizard = () => {
   const { user } = useAuth();
@@ -305,11 +308,11 @@ const CalorieGoalWizard = () => {
 
       if (Object.keys(profileUpdates).length > 0) {
         await userService.updateProfile(profileUpdates);
-        notify('Profile updated successfully!', { tone: 'success' });
+        notify('Profile saved', { tone: 'success' });
       }
     } catch (error) {
       console.error('Failed to update profile:', error);
-      notify(errorMessage(error, "Couldn't update your profile. Try again."), { tone: 'error' });
+      notify(errorMessage(error, 'Couldn’t save your profile. Try again.'), { tone: 'error' });
     }
   };
 
@@ -336,7 +339,8 @@ const CalorieGoalWizard = () => {
     )
     : null;
 
-  const steps = ['Your Approach', 'Your Profile', 'Set Your Goal', 'Your Calorie Plan'];
+  // Short, so the four labels fit on a phone without wrapping a word a line.
+  const steps = ['Approach', 'About you', 'Goal', 'Plan'];
 
   if (quick) {
     return (
@@ -360,9 +364,9 @@ const CalorieGoalWizard = () => {
       {/* Header */}
       <Box sx={{ textAlign: 'center', mb: 4 }}>
         <FoodIcon sx={{ fontSize: 64, color: 'primary.main', mb: 2 }} />
-        <Typography variant="h4" sx={{ fontWeight: 600, mb: 1 }}>Calorie Goal Wizard</Typography>
+        <Typography variant="h4" sx={{ fontWeight: 600, mb: 1 }}>Calorie plan</Typography>
         <Typography variant="body1" sx={{ color: 'text.secondary', mb: 3 }}>
-          Set your weight goal and get a personalized calorie plan
+          Tell me your goal and I’ll work out how much to eat each day.
         </Typography>
       </Box>
 
@@ -385,8 +389,8 @@ const CalorieGoalWizard = () => {
         <Alert severity="warning" sx={{ mb: 3 }}>
           This plan was calculated with a unit error that made its calorie
           target too high — by more than 20% for many people. The original
-          height, weight and age weren&apos;t saved, so it can&apos;t be
-          corrected automatically. Re-run the planner to get an accurate
+          height, weight and age weren’t saved, so it can’t be
+          corrected automatically. Make a new plan to get an accurate
           target.
         </Alert>
       )}
@@ -412,7 +416,7 @@ const CalorieGoalWizard = () => {
             Choose your approach
           </Typography>
           <Typography variant="body2" color="text.secondary" sx={{ mb: 3 }}>
-            This shapes how your goals and dashboard are displayed.
+            This changes what your targets and Home show.
           </Typography>
           <ModeSelector value={mode} onChange={setMode} />
           <Box sx={{ display: 'flex', justifyContent: 'flex-end', mt: 3 }}>
@@ -428,7 +432,7 @@ const CalorieGoalWizard = () => {
         <Paper sx={{ p: 3, mb: 3 }}>
           <Typography variant="h6" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
             <CalculateIcon sx={{ color: 'primary.main' }} />
-            Your Profile
+            About you
           </Typography>
 
           {isLoadingProfile ? (
@@ -446,9 +450,10 @@ const CalorieGoalWizard = () => {
                 size="small"
               />
               <TextField
-                label="Current Weight (lbs)"
+                label="Weight now"
                 type="number"
                 inputMode="decimal"
+                InputProps={lbAdornment}
                 value={profile.weight}
                 onChange={(e) => setProfile(prev => ({ ...prev, weight: e.target.value }))}
                 size="small"
@@ -471,8 +476,8 @@ const CalorieGoalWizard = () => {
                 error={!!profile.height && parseHeightToInches(profile.height) === null}
                 helperText={
                   !!profile.height && parseHeightToInches(profile.height) === null
-                    ? "Can't read that height — try 5'11\", 5 ft 11, or 71 (inches)"
-                    : "Formats: 5'11\", 5 ft 11, or 71 (inches)"
+                    ? "I can’t read that height. Try 5'11\", 5 ft 11, or 71 (inches)."
+                    : "Like 5'11\", 5 ft 11, or 71 (inches)"
                 }
               />
               <FormControl size="small">
@@ -492,21 +497,21 @@ const CalorieGoalWizard = () => {
               <FormControl size="small">
                 {/* labelId links the label to the select: without it the
                     control had no accessible name at all. */}
-                <InputLabel id="wizard-activity-level-label">Activity Level</InputLabel>
+                <InputLabel id="wizard-activity-level-label">Activity level</InputLabel>
                 <Select
                   labelId="wizard-activity-level-label"
                   value={profile.activityLevel}
                   onChange={(e) => setProfile(prev => ({ ...prev, activityLevel: e.target.value }))}
-                  label="Activity Level"
+                  label="Activity level"
                 >
-                  <MenuItem value="sedentary">Sedentary (little to no exercise)</MenuItem>
-                  <MenuItem value="light">Lightly Active (light exercise 1-3 days/week)</MenuItem>
-                  <MenuItem value="moderate">Moderately Active (moderate exercise 3-5 days/week)</MenuItem>
-                  <MenuItem value="very">Very Active (hard exercise 6-7 days/week)</MenuItem>
-                  <MenuItem value="extra">Extra Active (very hard exercise, physical job)</MenuItem>
+                  <MenuItem value="sedentary">Sedentary (little or no exercise)</MenuItem>
+                  <MenuItem value="light">Lightly active (light exercise 1–3 days a week)</MenuItem>
+                  <MenuItem value="moderate">Moderately active (exercise 3–5 days a week)</MenuItem>
+                  <MenuItem value="very">Very active (hard exercise 6–7 days a week)</MenuItem>
+                  <MenuItem value="extra">Extra active (very hard exercise or a physical job)</MenuItem>
                   {measuredActivity && (
                     <MenuItem value={MEASURED_ACTIVITY}>
-                      {`Measured by Garmin (+${measuredActivity.mean.toLocaleString('en-US')} kcal/day, last ${measuredActivity.days} days)`}
+                      {`Measured by Garmin (+${measuredActivity.mean.toLocaleString('en-US')} cal a day, last ${measuredActivity.days} days)`}
                     </MenuItem>
                   )}
                   {!measuredActivity && profile.activityLevel === MEASURED_ACTIVITY && (
@@ -516,7 +521,7 @@ const CalorieGoalWizard = () => {
               </FormControl>
               {profile.activityLevel === MEASURED_ACTIVITY && measuredActivity && (
                 <Typography variant="caption" data-testid="measured-activity-note" sx={{ color: 'text.secondary', gridColumn: '1 / -1' }}>
-                  Your BMR plus the activity your watch measured. It leaves out digestion (about 10% of what you eat), so it errs low — the safe direction for losing weight.
+                  Your calories at rest (BMR) plus the activity your watch measured. It leaves out digestion (about 10% of what you eat), so it errs low — the safe direction for losing weight.
                 </Typography>
               )}
             </Box>
@@ -537,7 +542,7 @@ const CalorieGoalWizard = () => {
                 parseHeightToInches(profile.height) === null
               }
             >
-              Save Profile
+              Save details
             </Button>
             <Button
               variant="contained"
@@ -548,7 +553,7 @@ const CalorieGoalWizard = () => {
               }
               sx={{ bgcolor: 'primary.main', '&:hover': { bgcolor: 'primary.dark' } }}
             >
-              Next: Set Goal
+              Next: set goal
             </Button>
           </Box>
         </Paper>
@@ -559,43 +564,44 @@ const CalorieGoalWizard = () => {
         <Paper sx={{ p: 3, mb: 3 }}>
           <Typography variant="h6" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
             <TrendingUpIcon sx={{ color: 'primary.main' }} />
-            Set Your Weight Goal
+            Set your weight goal
           </Typography>
 
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mb: 3 }}>
             <TextField
-              label="Target Weight (lbs)"
+              label="Goal weight"
               type="number"
-                inputMode="decimal"
+              inputMode="decimal"
+              InputProps={lbAdornment}
               value={goal.targetWeight}
               onChange={(e) => setGoal(prev => ({ ...prev, targetWeight: e.target.value }))}
               size="small"
             />
             <FormControl size="small">
-              <InputLabel>Weight Change Rate</InputLabel>
+              <InputLabel>How fast</InputLabel>
               <Select
                 value={goal.weightChangeRate}
                 onChange={(e) => setGoal(prev => ({ ...prev, weightChangeRate: e.target.value }))}
-                label="Weight Change Rate"
+                label="How fast"
               >
-                <MenuItem value="0.5">0.5 lb/week (slow & steady)</MenuItem>
-                <MenuItem value="1">1 lb/week (recommended)</MenuItem>
-                <MenuItem value="1.5">1.5 lb/week (moderate)</MenuItem>
-                <MenuItem value="2">2 lb/week (aggressive)</MenuItem>
-                <MenuItem value="2.5">2.5 lb/week (very aggressive)</MenuItem>
+                <MenuItem value="0.5">½ lb a week (slow and steady)</MenuItem>
+                <MenuItem value="1">1 lb a week (recommended)</MenuItem>
+                <MenuItem value="1.5">1½ lb a week (moderate)</MenuItem>
+                <MenuItem value="2">2 lb a week (fast)</MenuItem>
+                <MenuItem value="2.5">2½ lb a week (very fast)</MenuItem>
               </Select>
             </FormControl>
             <FormControl size="small">
-              <InputLabel>Plan Type</InputLabel>
+              <InputLabel>Plan type</InputLabel>
               <Select
                 value={goal.planType}
                 onChange={(e) => setGoal(prev => ({ ...prev, planType: e.target.value }))}
-                label="Plan Type"
+                label="Plan type"
               >
-                <MenuItem value="standard">Standard (same every day)</MenuItem>
-                <MenuItem value="weekender">Weekender (Fri/Sat higher)</MenuItem>
-                <MenuItem value="auto">Auto (recalculate if over)</MenuItem>
-                <MenuItem value="stepFlex" disabled>Step/workout flex (coming soon)</MenuItem>
+                <MenuItem value="standard">Standard (the same every day)</MenuItem>
+                <MenuItem value="weekender">Weekend boost (more on Fri and Sat)</MenuItem>
+                <MenuItem value="auto">Auto (adjusts if you go over)</MenuItem>
+                <MenuItem value="stepFlex" disabled>Step or workout flex (coming soon)</MenuItem>
               </Select>
             </FormControl>
           </Box>
@@ -605,25 +611,25 @@ const CalorieGoalWizard = () => {
             <Card sx={{ mb: 3, bgcolor: 'background.default' }}>
               <CardContent>
                 <Typography variant="subtitle1" sx={{ fontWeight: 600, mb: 2 }}>
-                  Goal Preview
+                  At a glance
                 </Typography>
                 <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
                   <Box>
-                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>Current Weight</Typography>
-                    <Typography variant="h6">{profile.weight} lbs</Typography>
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>Weight now</Typography>
+                    <Typography variant="h6">{profile.weight} lb</Typography>
                   </Box>
                   <Box>
-                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>Target Weight</Typography>
-                    <Typography variant="h6">{goal.targetWeight} lbs</Typography>
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>Goal weight</Typography>
+                    <Typography variant="h6">{goal.targetWeight} lb</Typography>
                   </Box>
                   <Box>
-                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>Weight to Lose</Typography>
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>To lose</Typography>
                     <Typography variant="h6" sx={{ color: theme.palette.error.main }}>
-                      {Math.abs(parseFloat(profile.weight) - parseFloat(goal.targetWeight)).toFixed(1)} lbs
+                      {Math.abs(parseFloat(profile.weight) - parseFloat(goal.targetWeight)).toFixed(1)} lb
                     </Typography>
                   </Box>
                   <Box>
-                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>Timeline</Typography>
+                    <Typography variant="body2" sx={{ color: 'text.secondary' }}>How long</Typography>
                     <Typography variant="h6">
                       {Math.ceil(Math.abs(parseFloat(profile.weight) - parseFloat(goal.targetWeight)) / parseFloat(goal.weightChangeRate))} weeks
                     </Typography>
@@ -639,8 +645,8 @@ const CalorieGoalWizard = () => {
               on a BMR of 0. */}
           {heightError && (
             <Alert severity="error" sx={{ mb: 3 }}>
-              We couldn't calculate your plan — the height on your profile
-              couldn't be read. Go back to Step 1 and re-enter it (e.g. 5'11", 5 ft 11, or 71 inches).
+              Your plan can’t be worked out without your height. Go back to
+              About you and enter it, like 5'11", 5 ft 11, or 71 (inches).
             </Alert>
           )}
 
@@ -657,7 +663,7 @@ const CalorieGoalWizard = () => {
               disabled={!goal.targetWeight || !goal.weightChangeRate}
               sx={{ bgcolor: 'primary.main', '&:hover': { bgcolor: 'primary.dark' } }}
             >
-              Calculate My Plan
+              Work out my plan
             </Button>
           </Box>
         </Paper>
@@ -667,12 +673,12 @@ const CalorieGoalWizard = () => {
       {!hasExistingGoal && mode === 'keto' && plan && activeStep === 3 && (
         <Box sx={{ mt: 2 }}>
           <Typography variant="h5" sx={{ fontFamily: 'inherit', mb: 3 }}>
-            Configure Your Keto Plan
+            Set up your keto plan
           </Typography>
           <PlanComparison saved={savedSnapshot} next={plan} />
           <Box sx={{ mb: 3 }}>
             <Typography variant="body2" sx={{ color: 'text.primary' }}>
-              BMR {Number(plan.bmr).toLocaleString('en-US')} cal a day · daily target {Number(plan.dailyCalories).toLocaleString('en-US')} cal
+              Calories at rest (BMR) {fmt(plan.bmr)} cal a day · your target {fmt(plan.dailyCalories)} cal
             </Typography>
             <BmrSourceNote source={plan.bmrSource} leanMassLb={plan.leanMassLb} scans={plan.bmrScans} scanLoadFailed={scanLoadFailed} />
           </Box>
@@ -692,16 +698,16 @@ const CalorieGoalWizard = () => {
                   await settingsService.updateSettings({
                     nutrition_goal: nutritionGoalPayload(plan, { mode, keto: ketoConfig }),
                   });
-                  notify('Keto goal saved. Tracking started!', { tone: 'success' });
+                  notify(`Keto plan saved. Your target is now ${fmt(plan.dailyCalories)} calories a day`, { tone: 'success' });
                   setHasExistingGoal(true);
                   await loadExistingGoal();
                 } catch (e) {
                   console.error('Failed to save keto goal', e);
-                  notify(errorMessage(e, "Couldn't save your keto goal. Try again."), { tone: 'error' });
+                  notify(errorMessage(e, 'Couldn’t save your keto plan. Try again.'), { tone: 'error' });
                 }
               }}
             >
-              Start Tracking
+              Save plan
             </Button>
           </Box>
         </Box>
@@ -712,22 +718,22 @@ const CalorieGoalWizard = () => {
         <Paper sx={{ p: 3 }}>
           <Typography variant="h6" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
             <CheckCircleIcon sx={{ color: theme.palette.warning.main }} />
-            Your Keto Plan
+            Your keto plan
           </Typography>
           <Card sx={{ mb: 3, bgcolor: 'background.default', border: '2px solid', borderColor: 'warning.main' }}>
             <CardContent>
               <Typography variant="h5" sx={{ fontWeight: 600, mb: 1, color: 'warning.main', fontFamily: 'inherit' }}>
-                {ketoConfig.net_carb_limit_g}g net carbs / day
+                {ketoConfig.net_carb_limit_g}g net carbs a day
               </Typography>
               <Typography variant="body2" sx={{ color: 'text.secondary', mb: 2 }}>
                 {ketoConfig.macro_split?.preset === 'lazy'
-                  ? 'Lazy Keto — watching the carb cap only.'
-                  : `Macro split: ${ketoConfig.macro_split?.fat_pct ?? 70}% fat · ${ketoConfig.macro_split?.protein_pct ?? 25}% protein · ${ketoConfig.macro_split?.carb_pct ?? 5}% carbs`}
+                  ? 'Lazy keto: watching the carb cap only.'
+                  : `Split: ${ketoConfig.macro_split?.fat_pct ?? 70}% fat · ${ketoConfig.macro_split?.protein_pct ?? 25}% protein · ${ketoConfig.macro_split?.carb_pct ?? 5}% carbs`}
               </Typography>
               <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                 <Chip label={`${Number(plan.dailyCalories).toLocaleString('en-US')} cal a day`} variant="outlined" />
                 <Chip label={`${ketoConfig.track_net_carbs ? 'Net carbs' : 'Total carbs'}`} variant="outlined" color="warning" />
-                {plan.weightToLose > 0 && <Chip label={`${plan.weightToLose.toFixed(1)} lbs to goal`} variant="outlined" />}
+                {plan.weightToLose > 0 && <Chip label={`${plan.weightToLose.toFixed(1)} lb to goal`} variant="outlined" />}
               </Box>
             </CardContent>
           </Card>
@@ -746,7 +752,7 @@ const CalorieGoalWizard = () => {
               }}
               sx={{ bgcolor: 'primary.main', '&:hover': { bgcolor: 'primary.dark' } }}
             >
-              Update
+              Change plan
             </Button>
             <Button
               variant="outlined"
@@ -756,14 +762,14 @@ const CalorieGoalWizard = () => {
                   await settingsService.updateSettings({ nutrition_goal: { enabled: false } });
                   setHasExistingGoal(false);
                   setPlan(null);
-                  notify('Keto goal removed.', { tone: 'success' });
+                  notify('Keto plan removed', { tone: 'success' });
                 } catch (e) {
                   console.error('Failed to remove keto goal', e);
-                  notify(errorMessage(e, "Couldn't remove your keto goal. Try again."), { tone: 'error' });
+                  notify(errorMessage(e, 'Couldn’t remove your keto plan. Try again.'), { tone: 'error' });
                 }
               }}
             >
-              Remove Goal
+              Remove plan
             </Button>
           </Box>
         </Paper>
@@ -774,7 +780,7 @@ const CalorieGoalWizard = () => {
         <Paper sx={{ p: 3 }}>
           <Typography variant="h6" sx={{ mb: 3, display: 'flex', alignItems: 'center', gap: 1 }}>
             <CheckCircleIcon sx={{ color: 'success.main' }} />
-            Your Personalized Calorie Plan
+            Your calorie plan
           </Typography>
 
           {/* Saved vs new — only while re-running over an existing plan */}
@@ -784,23 +790,23 @@ const CalorieGoalWizard = () => {
           <Card sx={{ mb: 3, bgcolor: 'background.default', border: '2px solid', borderColor: 'primary.main' }}>
             <CardContent>
               <Typography variant="h5" sx={{ fontWeight: 600, mb: 2, color: 'primary.main' }}>
-                Your daily target: {Number(plan.dailyCalories).toLocaleString('en-US')} calories
+                Your daily target: {fmt(plan.dailyCalories)} calories
               </Typography>
               <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
-                This will help you lose {plan.weightChangeRate} lb per week safely and sustainably.
+                That’s about {plan.weightChangeRate} lb a week, at a safe pace.
               </Typography>
               <Typography variant="body2" sx={{ mb: 1, color: 'text.secondary' }}>
-                Plan Type: {plan.planType === 'standard' ? 'Standard' : plan.planType === 'weekender' ? 'Weekender' : 'Auto adjust'}
+                Plan type: {plan.planType === 'standard' ? 'Standard' : plan.planType === 'weekender' ? 'Weekend boost (more on Fri and Sat)' : 'Auto adjust'}
               </Typography>
               <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                <Chip label={`${ plan.weightToLose.toFixed(1) } lbs to lose`} color="primary" />
+                <Chip label={`${ plan.weightToLose.toFixed(1) } lb to lose`} color="primary" />
                 <Chip label={`${ plan.timeline } weeks`} variant="outlined" />
                 <Chip label={`${ plan.weightChangeRate } lb/week`} variant="outlined" />
               </Box>
               {standardMacroPreview && (
                 <Box sx={{ mt: 2 }} data-testid="macro-preview">
                   <Typography variant="body2" sx={{ color: 'text.primary', fontFamily: "inherit", fontVariantNumeric: 'tabular-nums' }}>
-                    Protein {standardMacroPreview.grams.protein_g}g · Fat {standardMacroPreview.grams.fat_g}g · Carbs {standardMacroPreview.grams.carbs_g}g
+                    {macroLine({ protein: standardMacroPreview.grams.protein_g, carbs: standardMacroPreview.grams.carbs_g, fat: standardMacroPreview.grams.fat_g })}
                   </Typography>
                   <ProteinBasisNote rules={standardMacroPreview.rules} />
                 </Box>
@@ -812,31 +818,31 @@ const CalorieGoalWizard = () => {
           <Card sx={{ mb: 3 }}>
             <CardContent>
               <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
-                Weekly Targets
+                Your week
               </Typography>
               <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(4, minmax(0, 1fr))', sm: 'repeat(7, minmax(0, 1fr))' }, gap: 1 }}>
                 {plan.schedule.map((d) => (
                   <Box key={d.day} sx={{ textAlign: 'center', p: 1, border: '1px solid', borderColor: 'divider', borderRadius: 1 }}>
                     <Typography variant="body2" sx={{ color: 'text.secondary' }}>{d.day}</Typography>
-                    <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>{d.calories}</Typography>
+                    <Typography variant="subtitle1" sx={{ fontWeight: 600 }}>{fmt(d.calories)}</Typography>
                   </Box>
                 ))}
               </Box>
               {plan.floored && (
                 <Typography variant="body2" data-testid="plan-floor-note" sx={{ color: 'text.secondary', mt: 1.5 }}>
-                  {`Your target is at the safety floor (${plan.rules?.minSafeCalories?.toLocaleString('en-US')} cal, 80% of your BMR), so this plan loses about ${plan.weightChangeRate} lb/week, not ${plan.requestedRate}. The timeline uses ${plan.weightChangeRate}.`}
+                  {`Your target is at the safety floor (${plan.rules?.minSafeCalories?.toLocaleString('en-US')} cal, 80% of your calories at rest), so this plan loses about ${plan.weightChangeRate} lb a week, not ${plan.requestedRate}. The timeline uses ${plan.weightChangeRate}.`}
                 </Typography>
               )}
               {plan.planType === 'weekender' && !weekenderHasRoom(plan.schedule) && (
                 <Typography variant="body2" data-testid="plan-weekender-note" sx={{ color: 'text.secondary', mt: 1 }}>
                   {plan.weekenderSuggestion
-                    ? `No room for bigger weekends at this rate: every day is already at the floor. At ${plan.weekenderSuggestion.rate} lb/week you'd eat ${plan.weekenderSuggestion.weekday.toLocaleString('en-US')} on other days and ${plan.weekenderSuggestion.weekend.toLocaleString('en-US')} on Fri and Sat.`
-                    : 'No room for bigger weekends: every day is already at the safety floor, even at the slowest rate.'}
+                    ? `No room for a weekend boost at this rate: every day is already at the floor. At ${plan.weekenderSuggestion.rate} lb a week you’d eat ${plan.weekenderSuggestion.weekday.toLocaleString('en-US')} on other days and ${plan.weekenderSuggestion.weekend.toLocaleString('en-US')} on Fri and Sat.`
+                    : 'No room for a weekend boost: every day is already at the safety floor, even at the slowest rate.'}
                 </Typography>
               )}
               {plan.rules?.autoAdjust && (
                 <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 1 }}>
-                  Auto mode: If you go over on a day, remaining days will adjust while staying above {Number(plan.rules.minSafeCalories).toLocaleString('en-US')} cal.
+                  Auto: if you go over on a day, the rest of the week adjusts, staying above {fmt(plan.rules.minSafeCalories)} cal.
                 </Typography>
               )}
             </CardContent>
@@ -849,10 +855,10 @@ const CalorieGoalWizard = () => {
             <Card>
               <CardContent>
                 <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
-                  Your Deficit
+                  Under your daily burn
                 </Typography>
                 <Box sx={{ mb: 2 }}>
-                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>Daily Calorie Deficit</Typography>
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>How far under, each day</Typography>
                   {/* The plan, not a problem: neutral ink (D-12). */}
                   <Typography variant="h6" sx={{ color: 'text.primary' }}>
                     {Number(plan.weeklyDeficit).toLocaleString('en-US')} cal a day
@@ -862,7 +868,7 @@ const CalorieGoalWizard = () => {
                   </Typography>
                 </Box>
                 <Box>
-                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>Safety Check</Typography>
+                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>Safety check</Typography>
                   {/* `calculationValid` (bmr > 0) gates this before the calorie
                       floor does. dailyCalories >= 1200 is true of every plan,
                       including one built on a BMR that never actually
@@ -883,7 +889,7 @@ const CalorieGoalWizard = () => {
                   </Typography>
                   <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                     {!plan.rules?.calculationValid
-                      ? "Your height couldn't be read, so this plan isn't reliable"
+                      ? 'Your height couldn’t be read, so this plan isn’t reliable'
                       : 'Minimum recommended: 1,200 cal a day'}
                   </Typography>
                 </Box>
@@ -895,32 +901,32 @@ const CalorieGoalWizard = () => {
           <Card sx={{ mb: 3 }}>
             <CardContent>
               <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
-                Tips for Success
+                Tips
               </Typography>
               <ul style={{ margin: 0, paddingLeft: '1rem' }}>
                 <li>
                   <Typography variant="body2">
-                    Track your calories consistently using the food logging feature
+                    Log what you eat every day
                   </Typography>
                 </li>
                 <li>
                   <Typography variant="body2">
-                    Weigh yourself weekly to monitor progress
+                    Weigh in at least once a week
                   </Typography>
                 </li>
                 <li>
                   <Typography variant="body2">
-                    If you're not losing weight, reduce calories by 100-200 per day
+                    If you’re not losing weight, eat 100–200 calories less a day
                   </Typography>
                 </li>
                 <li>
                   <Typography variant="body2">
-                    If you're losing too fast, increase calories by 100-200 per day
+                    If you’re losing too fast, eat 100–200 calories more a day
                   </Typography>
                 </li>
                 <li>
                   <Typography variant="body2">
-                    Focus on protein-rich foods to maintain muscle mass
+                    Eat plenty of protein to keep your muscle
                   </Typography>
                 </li>
               </ul>
@@ -945,7 +951,7 @@ const CalorieGoalWizard = () => {
                   }}
                   sx={{ bgcolor: 'primary.main', '&:hover': { bgcolor: 'primary.dark' } }}
                 >
-                  Update
+                  Change plan
                 </Button>
                 <Button
                   variant="outlined"
@@ -955,14 +961,14 @@ const CalorieGoalWizard = () => {
                       await settingsService.updateSettings({ nutrition_goal: { enabled: false } });
                       setHasExistingGoal(false);
                       setPlan(null);
-                      notify('Calorie goal removed.', { tone: 'success' });
+                      notify('Plan removed', { tone: 'success' });
                     } catch (e) {
                       console.error('Failed to remove nutrition goal', e);
-                      notify(errorMessage(e, "Couldn't remove your calorie goal. Try again."), { tone: 'error' });
+                      notify(errorMessage(e, 'Couldn’t remove your plan. Try again.'), { tone: 'error' });
                     }
                   }}
                 >
-                  Remove Goal
+                  Remove plan
                 </Button>
               </>
             ) : (
@@ -980,18 +986,18 @@ const CalorieGoalWizard = () => {
                       await settingsService.updateSettings({
                         nutrition_goal: nutritionGoalPayload(plan, { mode, keto: mode === 'keto' ? ketoConfig : undefined }),
                       });
-                      notify('Calorie goal saved. Tracking started!', { tone: 'success' });
+                      notify(`Plan saved. Your target is now ${fmt(plan.dailyCalories)} calories a day`, { tone: 'success' });
                       setHasExistingGoal(true);
                       // Refresh from backend to ensure we reflect the persisted state
                       await loadExistingGoal();
                     } catch (e) {
                       console.error('Failed to save nutrition goal', e);
-                      notify(errorMessage(e, "Couldn't save your calorie goal. Try again."), { tone: 'error' });
+                      notify(errorMessage(e, 'Couldn’t save your plan. Try again.'), { tone: 'error' });
                     }
                   }}
                   sx={{ bgcolor: 'success.main', '&:hover': { bgcolor: 'success.dark' } }}
                 >
-                  Start Tracking
+                  Save plan
                 </Button>
               </>
             )}

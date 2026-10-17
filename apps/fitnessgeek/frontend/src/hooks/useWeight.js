@@ -25,7 +25,7 @@ export const useWeight = () => {
       if (response.success) {
         setWeightLogs(response.data);
       } else {
-        setAutoCloseMessage("Your weights didn't load. Try again.", setError);
+        setAutoCloseMessage("Couldn’t load your weights. Try again.", setError);
       }
 
       // Load goals from settings wizard (legacy removed)
@@ -111,7 +111,7 @@ export const useWeight = () => {
         setWeightGoal(null);
       }
     } catch (error) {
-      setAutoCloseMessage(errorMessage(error, "Your weights didn't load. Try again."), setError);
+      setAutoCloseMessage(errorMessage(error, "Couldn’t load your weights. Try again."), setError);
       logger.error('Error loading weight data:', error);
     } finally {
       if (!silent) setLoading(false);
@@ -129,7 +129,7 @@ export const useWeight = () => {
       if (response.success && response.data) {
         // Reload weight data to get the updated list
         await loadWeightData({ silent: true });
-        setAutoCloseMessage('Weight saved.', setSuccess);
+        setAutoCloseMessage('Weight saved', setSuccess);
         return true;
       }
       // The form that called this shows the failure inline; no second toast.
@@ -160,7 +160,7 @@ export const useWeight = () => {
     // Show the saved row at once, then refresh behind it.
     setWeightLogs((prev) => prev.map((l) => (l.id === logId ? { ...l, ...response.data } : l)));
     await loadWeightData({ silent: true });
-    setAutoCloseMessage('Weight updated', setSuccess);
+    setAutoCloseMessage('Weight saved', setSuccess);
     return true;
   };
 
@@ -179,10 +179,10 @@ export const useWeight = () => {
         await loadWeightData({ silent: true });
         return true;
       }
-      setAutoCloseMessage("That weight wasn't removed. Try again.", setError);
+      setAutoCloseMessage("Couldn’t remove that weight. Try again.", setError);
       return false;
     } catch (error) {
-      setAutoCloseMessage(errorMessage(error, "That weight wasn't removed. Try again."), setError);
+      setAutoCloseMessage(errorMessage(error, "Couldn’t remove that weight. Try again."), setError);
       logger.error('Error deleting weight log:', error);
       return false;
     }
@@ -199,15 +199,15 @@ export const useWeight = () => {
         ...(log.notes ? { notes: log.notes } : {}),
       });
       if (!response?.success || !response?.data) {
-        setAutoCloseMessage("Couldn't put it back. Try again.", setError);
+        setAutoCloseMessage('Couldn’t undo — try again', setError);
         return false;
       }
       await loadWeightData({ silent: true });
-      setAutoCloseMessage('Put back.', setSuccess);
+      setAutoCloseMessage('Undone ✓', setSuccess);
       return true;
     } catch (error) {
       logger.error('Error restoring weight log:', error);
-      setAutoCloseMessage(errorMessage(error, "Couldn't put it back. Try again."), setError);
+      setAutoCloseMessage(errorMessage(error, 'Couldn’t undo — try again'), setError);
       return false;
     }
   };

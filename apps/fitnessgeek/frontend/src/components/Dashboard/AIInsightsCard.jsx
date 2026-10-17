@@ -34,7 +34,7 @@ import { AINoteFooter, AI_NOTES_NAME, lastDaysSource } from '../Reports/aiNotes.
  * default for the rare case a response omits it — never assembled from an
  * HTTP status or a provider name, neither of which is the user's business.
  */
-const UNAVAILABLE_TEXT = "The assistant isn't available right now.";
+const UNAVAILABLE_TEXT = 'The assistant isn’t available right now.';
 
 /**
  * What each kind of note was written from, for its footer (D-11). The
@@ -45,8 +45,8 @@ const UNAVAILABLE_TEXT = "The assistant isn't available right now.";
 export function noteSource(insight) {
   const n = Number(insight?.context?.daysAnalyzed);
   switch (insight?.type) {
-    case 'morning_brief': return "from yesterday's logs";
-    case 'daily_summary': return "from today's logs";
+    case 'morning_brief': return 'from yesterday’s logs';
+    case 'daily_summary': return 'from today’s logs';
     case 'coaching': return lastDaysSource(Number.isFinite(n) && n > 0 ? n : 14);
     case 'correlations': return lastDaysSource(Number.isFinite(n) && n > 0 ? n : 30);
     default: return Number.isFinite(n) && n > 0 ? lastDaysSource(n) : 'from your logs';
@@ -109,7 +109,7 @@ const AIInsightsCard = () => {
       // The `error` branch is now only for a genuinely broken request.
       setInsight(data);
     } catch (err) {
-      setError(errorMessage(err, "Couldn't load these notes. Try again."));
+      setError(errorMessage(err, 'Couldn’t load these notes. Try again.'));
     } finally {
       setLoading(false);
     }
@@ -138,7 +138,7 @@ const AIInsightsCard = () => {
           : response.content
       }]);
     } catch (err) {
-      setChatHistory([...newHistory, { role: 'assistant', content: errorMessage(err, "Couldn't get an answer. Try again.") }]);
+      setChatHistory([...newHistory, { role: 'assistant', content: errorMessage(err, 'I couldn’t answer that just now. Try again.') }]);
     } finally {
       setChatLoading(false);
     }
@@ -338,7 +338,7 @@ const AIInsightsCard = () => {
                 }}>
                   {chatHistory.length === 0 ? (
                     <Typography sx={{ color: theme.palette.text.secondary, fontStyle: 'italic', fontSize: '0.8125rem' }}>
-                      Ask about your health data...
+                      Ask about your food, weight or sleep…
                     </Typography>
                   ) : (
                     chatHistory.map((msg, idx) => (
@@ -370,7 +370,7 @@ const AIInsightsCard = () => {
                     <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                       <CircularProgress size={14} />
                       <Typography sx={{ color: theme.palette.text.secondary, fontSize: '0.75rem' }}>
-                        Thinking...
+                        Thinking…
                       </Typography>
                     </Box>
                   )}
@@ -380,7 +380,7 @@ const AIInsightsCard = () => {
                   <TextField
                     fullWidth
                     size="small"
-                    placeholder="Ask about your health data..."
+                    placeholder="Ask about your food, weight or sleep…"
                     value={chatMessage}
                     onChange={(e) => setChatMessage(e.target.value)}
                     onKeyPress={(e) => e.key === 'Enter' && handleSendChat()}
@@ -396,7 +396,7 @@ const AIInsightsCard = () => {
                     onClick={handleSendChat}
                     disabled={!chatMessage.trim() || chatLoading}
                     size="small"
-                    aria-label="Send question to the AI coach"
+                    aria-label="Send your question"
                     sx={{ p: 0.75 }}
                   >
                     <SendIcon sx={{ fontSize: 18, color: chatMessage.trim() ? accentColor : theme.palette.text.disabled }} />

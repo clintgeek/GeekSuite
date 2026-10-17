@@ -2,7 +2,7 @@ import React, { lazy } from 'react';
 import { Box, Button, Typography } from '@mui/material';
 import { Accessibility as BodyIcon } from '@mui/icons-material';
 import { Link as RouterLink } from 'react-router-dom';
-import { Surface, SectionLabel, DisplayHeading, EmptyState, SurfaceSkeleton, SuspenseSurface } from '../primitives';
+import { Surface, DisplayHeading, EmptyState, SurfaceSkeleton, SuspenseSurface } from '../primitives';
 import BodyCompSummaryCard from './BodyCompSummaryCard.jsx';
 import BodyCompChangeCard from './BodyCompChangeCard.jsx';
 
@@ -24,8 +24,7 @@ const BodyCompositionSection = ({ summary, scans = [], loading, error, scansErro
   const header = (
     <Box sx={{ mb: 2, display: 'flex', alignItems: 'flex-end', justifyContent: 'space-between', gap: 2, flexWrap: 'wrap' }}>
       <Box>
-        <SectionLabel sx={{ mb: 0.75 }}>Body composition</SectionLabel>
-        <DisplayHeading size="card">What it&rsquo;s made of</DisplayHeading>
+        <DisplayHeading size="card">What your weight is made of</DisplayHeading>
       </Box>
       {summary?.total_scans > 0 && !error && (
         <Button
@@ -53,7 +52,7 @@ const BodyCompositionSection = ({ summary, scans = [], loading, error, scansErro
     body = (
       <Surface role="alert">
         <Typography sx={{ color: 'text.primary', fontWeight: 600, mb: 0.5 }}>
-          Body composition didn&rsquo;t load.
+          Your scans didn&rsquo;t load.
         </Typography>
         <Typography sx={{ color: 'text.secondary', fontSize: '0.875rem', mb: 1.5 }}>
           Your weight above is unaffected. Try again in a moment.
@@ -70,7 +69,7 @@ const BodyCompositionSection = ({ summary, scans = [], loading, error, scansErro
       <EmptyState
         icon={BodyIcon}
         title="No scans yet"
-        copy="Scans arrive on their own when your scale's export lands in the Nextcloud folder, or you can import one yourself."
+        copy="Scans arrive on their own when your scale&rsquo;s export lands in the Nextcloud folder, or you can import one yourself."
         action={
           <Button component={RouterLink} to="/scan-import" variant="contained" sx={{ minHeight: 44 }}>
             Import a scan
@@ -99,7 +98,7 @@ const BodyCompositionSection = ({ summary, scans = [], loading, error, scansErro
   }
 
   return (
-    <Box component="section" aria-label="Body composition" id="body-composition">
+    <Box component="section" aria-label="What your weight is made of" id="body-composition">
       {header}
       {body}
     </Box>

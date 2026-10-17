@@ -20,17 +20,17 @@ const KetoStatusChip = ({ netCarbsConsumed = 0, limitG = 20 }) => {
   let icon;
 
   if (pct >= 1) {
-    label = 'Over limit';
+    label = 'Over your limit';
     color = 'error';
     variant = 'filled';
     icon = undefined;
   } else if (pct >= 0.7) {
-    label = 'Approaching cap';
+    label = 'Close to your limit';
     color = 'warning';
     variant = 'filled';
     icon = undefined;
   } else {
-    label = 'In range';
+    label = 'Under your limit';
     color = 'success';
     variant = 'outlined';
     icon = <CheckIcon fontSize="inherit" />;

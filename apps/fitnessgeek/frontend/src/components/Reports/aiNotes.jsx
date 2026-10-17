@@ -27,7 +27,8 @@ export function lastDaysSource(days) {
 }
 
 /**
- * When it was written: "9:40 am" today, "Oct 16, 9:40 pm" on another day.
+ * When it was written: "9:40 AM" today, "Oct 16, 9:40 PM" on another day
+ * (the same clock style as the rest of the app).
  * Panels are cached for hours, so an evening note can still be up next
  * morning — and then the time alone would be a fib.
  */
@@ -36,7 +37,7 @@ export function writtenAt(generatedAt, now = new Date()) {
   const d = generatedAt instanceof Date ? generatedAt : new Date(generatedAt);
   if (Number.isNaN(d.getTime())) return null;
   const h = d.getHours();
-  const time = `${h % 12 || 12}:${String(d.getMinutes()).padStart(2, '0')} ${h < 12 ? 'am' : 'pm'}`;
+  const time = `${h % 12 || 12}:${String(d.getMinutes()).padStart(2, '0')} ${h < 12 ? 'AM' : 'PM'}`;
   const sameDay = d.getFullYear() === now.getFullYear()
     && d.getMonth() === now.getMonth()
     && d.getDate() === now.getDate();
@@ -44,7 +45,7 @@ export function writtenAt(generatedAt, now = new Date()) {
 }
 
 /**
- * "Written by AI from your last 7 days of logs · 9:40 am · It can be wrong —
+ * "Written by AI from your last 7 days of logs · 9:40 AM · It can be wrong —
  * check the numbers above."
  */
 export function aiFooterText({ source, generatedAt, now } = {}) {

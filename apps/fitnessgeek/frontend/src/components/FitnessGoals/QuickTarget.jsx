@@ -177,7 +177,7 @@ function QuickTargetForm({ initialProfile, weightBasis, maintain, targetWeight, 
     try {
       await settingsService.updateSettings({ nutrition_goal: nutritionGoalPayload(plan, { mode: 'standard' }) });
     } catch (err) {
-      notify(errorMessage(err, "Couldn't save your target. Try again."), { tone: 'error' });
+      notify(errorMessage(err, 'Couldn’t save your target. Try again.'), { tone: 'error' });
       setSaving(false);
       return;
     }
@@ -192,7 +192,7 @@ function QuickTargetForm({ initialProfile, weightBasis, maintain, targetWeight, 
     }
     setSaving(false);
     setSaved(true);
-    notify(`Saved. Your daily target is ${cal(plan.dailyCalories)} calories.`, { tone: 'success' });
+    notify(`Your target is now ${cal(plan.dailyCalories)} calories a day`, { tone: 'success' });
     onSaved?.();
   };
 
@@ -209,7 +209,7 @@ function QuickTargetForm({ initialProfile, weightBasis, maintain, targetWeight, 
           Set your daily target
         </Typography>
         <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem', mt: 1 }}>
-          {maintain ? "I'll work out how much to eat to stay about where you are." : "Pick a speed and I'll work out how much to eat each day."}
+          {maintain ? 'I’ll work out how much to eat to stay about where you are.' : 'Pick a speed and I’ll work out how much to eat each day.'}
         </Typography>
         {currentTarget && (
           <Typography sx={{ color: 'text.secondary', fontSize: '1rem', mt: 0.5 }} data-testid="quick-current-target">
@@ -234,7 +234,7 @@ function QuickTargetForm({ initialProfile, weightBasis, maintain, targetWeight, 
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
           {!allKnown && !editing && (
             <Typography sx={{ fontSize: '1rem', color: 'text.secondary' }}>
-              A few things first. They're used to work out your calorie target.
+              A few things first. They’re used to work out your calorie target.
             </Typography>
           )}
           {ask('weight') && (
@@ -300,7 +300,7 @@ function QuickTargetForm({ initialProfile, weightBasis, maintain, targetWeight, 
           <Typography sx={{ fontSize: '1.0625rem', color: 'text.primary', mt: 0.5 }}>{outcome}</Typography>
           {plan.floored && !maintain && (
             <Typography sx={{ fontSize: '1rem', color: 'text.secondary', mt: 1 }} data-testid="quick-floor-note">
-              {`I won't set it lower than ${cal(plan.rules.minSafeCalories)}, so it's a little slower than you picked.`}
+              {`I won’t set it lower than ${cal(plan.rules.minSafeCalories)}, so it’s a little slower than you picked.`}
             </Typography>
           )}
           <Button

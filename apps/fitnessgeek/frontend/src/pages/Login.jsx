@@ -14,8 +14,8 @@ const Login = () => {
       appSuffix="geek"
       taglineLine1="Train smarter."
       taglineLine2="Live stronger."
-      description="Your personal command center for health tracking, workout analytics, and nutrition planning."
-      features={['Workout Logs', 'Nutrition Tracking', 'Progress Charts', 'Body Metrics']}
+      description="What you eat, your weight and your blood pressure, all in one place."
+      features={['Food log', 'Weight', 'Blood pressure', 'Medications']}
       onLogin={handleLogin}
       loading={loading}
       error={error}

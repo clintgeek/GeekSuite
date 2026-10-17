@@ -75,12 +75,12 @@ afterEach(() => {
 });
 
 describe('B14 — a med with no time of day', () => {
-  it('shows in a "Daily" group, where it can be edited and removed', async () => {
+  it('shows in a "Once a day" group, where it can be edited and removed', async () => {
     medsService.list.mockResolvedValue([{ ...MED, id: 'd1', display_name: 'Vitamin D', med_type: 'supplement', times_of_day: [] }]);
     render();
     expect(await screen.findByRole('button', { name: 'Edit Vitamin D' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Remove Vitamin D' })).toBeInTheDocument();
-    expect(screen.getByText('Daily')).toBeInTheDocument();
+    expect(screen.getByText('Once a day')).toBeInTheDocument();
   });
 });
 
@@ -95,7 +95,7 @@ describe('a failed list read', () => {
 });
 
 async function openTypedEditor(name = 'Vitamin D') {
-  fireEvent.change(screen.getByLabelText(/Search medication/i), { target: { value: name } });
+  fireEvent.change(screen.getByLabelText(/Medication name/i), { target: { value: name } });
   fireEvent.click(screen.getByRole('button', { name: /^Search$/i }));
   fireEvent.click(await screen.findByRole('button', { name: `Add “${name}” as typed` }));
   await screen.findByLabelText('Display name');
@@ -143,7 +143,7 @@ describe('B15 — saves are guarded and say when they fail', () => {
     await screen.findByText('No medications yet');
     await openTypedEditor();
     fireEvent.click(screen.getByRole('button', { name: /^Save$/ }));
-    expect(await screen.findByText("Couldn't save that medicine. Try again.")).toBeInTheDocument();
+    expect(await screen.findByText('Couldn’t save that medication. Try again.')).toBeInTheDocument();
     expect(screen.queryByText(/E11000/)).toBeNull();
   });
 
@@ -190,7 +190,7 @@ describe('B18 — remove has Undo', () => {
     medsService.remove.mockRejectedValue(new Error('Medication was not removed'));
     render();
     fireEvent.click(await screen.findByRole('button', { name: 'Remove Lisinopril' }));
-    expect(await screen.findByText("Couldn't remove that. Try again.")).toBeInTheDocument();
+    expect(await screen.findByText('Couldn’t remove that. Try again.')).toBeInTheDocument();
     expect(screen.queryByText('Removed Lisinopril')).toBeNull();
     expect(screen.getByRole('button', { name: 'Remove Lisinopril' })).toBeInTheDocument();
   });

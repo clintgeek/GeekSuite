@@ -3,7 +3,7 @@
  * is not a success (review B18), and `?add=1` opens the add dialog (Phase 1.8).
  */
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter } from 'react-router-dom';
 
 const ROW = {
@@ -58,7 +58,7 @@ describe('BloodPressure page — delete', () => {
   it('says "Removed …" with an Undo that puts the same reading back', async () => {
     deleteBPLog.mockResolvedValue({ success: true, data: true });
     renderAt();
-    const del = await screen.findAllByLabelText(/delete the 118\/76/i);
+    const del = await screen.findAllByLabelText(/remove the 118\/76/i);
     fireEvent.click(del[0]);
 
     await waitFor(() => expect(notify).toHaveBeenCalledWith(
@@ -83,20 +83,20 @@ describe('BloodPressure page — delete', () => {
   it('a delete the server answers false is not reported as done', async () => {
     deleteBPLog.mockResolvedValue({ success: true, data: false });
     renderAt();
-    const del = await screen.findAllByLabelText(/delete the 118\/76/i);
+    const del = await screen.findAllByLabelText(/remove the 118\/76/i);
     fireEvent.click(del[0]);
 
     await waitFor(() => expect(notify).toHaveBeenCalled());
     const messages = notify.mock.calls.map(([m]) => m);
     expect(messages.some((m) => /removed 118|deleted successfully/i.test(m))).toBe(false);
-    expect(notify).toHaveBeenCalledWith(expect.stringMatching(/wasn.t removed/i), expect.objectContaining({ tone: 'error' }));
+    expect(notify).toHaveBeenCalledWith(expect.stringMatching(/couldn.t remove that reading/i), expect.objectContaining({ tone: 'error' }));
   });
 });
 
 describe('BloodPressure page — ?add=1', () => {
   it('opens the add dialog directly', async () => {
     renderAt('/blood-pressure?add=1');
-    expect(await screen.findByRole('dialog')).toBeInTheDocument();
-    expect(screen.getByText('Add Reading')).toBeInTheDocument();
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText('Log blood pressure')).toBeInTheDocument();
   });
 });

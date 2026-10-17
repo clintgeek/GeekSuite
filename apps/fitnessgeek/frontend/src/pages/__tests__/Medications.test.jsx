@@ -83,7 +83,7 @@ describe('the medication search', () => {
 
     medsService.search.mockResolvedValue([{ rxcui: '29046', name: 'Lisinopril', score: 100 }]);
 
-    fireEvent.change(screen.getByLabelText(/Search medication/i), { target: { value: 'lisin' } });
+    fireEvent.change(screen.getByLabelText(/Medication name/i), { target: { value: 'lisin' } });
     fireEvent.click(screen.getByRole('button', { name: /^Search$/i }));
 
     expect(await screen.findByText('Lisinopril')).toBeInTheDocument();

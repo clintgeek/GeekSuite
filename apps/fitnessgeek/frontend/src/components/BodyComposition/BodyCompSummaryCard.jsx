@@ -88,11 +88,15 @@ const BodyCompSummaryCard = ({ summary }) => {
         }}
       >
         <Figure label="Fat mass" value={current.fat_mass_lb} unit="lb" />
-        <Figure label="Lean mass" value={current.lean_mass_lb} unit="lb" />
+        <Figure label="Lean mass" value={current.lean_mass_lb} unit="lb" note="Everything that isn’t fat" />
         <Figure label="Skeletal muscle" value={current.skeletal_muscle_lb} unit="lb" />
         <Figure label="Body water" value={current.body_water_pct} unit="%" />
-        <Figure label="Visceral fat index" value={current.visceral_fat_index} />
-        <Figure label="BMR (scale)" value={current.bmr_kcal} decimals={0} unit="kcal" />
+        <Figure
+          label="Belly fat score (visceral fat)"
+          value={current.visceral_fat_index}
+          note="Your scale’s own scale; lower is better"
+        />
+        <Figure label="Calories at rest (BMR)" value={current.bmr_kcal} decimals={0} unit="cal" note="From your scale" />
       </Box>
     </Surface>
   );

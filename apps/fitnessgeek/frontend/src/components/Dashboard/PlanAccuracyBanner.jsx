@@ -1,11 +1,10 @@
 import React, { useState } from 'react';
-import { Box, Button, IconButton, Typography } from '@mui/material';
+import { Box, Button, Typography } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { Link as RouterLink } from 'react-router-dom';
 import {
   ReportProblemOutlined as WarningIcon,
   Science as ScanIcon,
-  Close as CloseIcon,
 } from '@mui/icons-material';
 import { isPlanCalculationStale } from '@geeksuite/utils';
 import { Surface } from '../primitives';
@@ -93,27 +92,30 @@ export default function PlanAccuracyBanner({ nutritionGoal, scanBmr }) {
         <Typography sx={{ flex: '1 1 14rem', fontWeight: 700, color: 'text.primary', fontSize: '1.0625rem', lineHeight: 1.4 }}>
           {stale
             ? 'Your daily calorie target is probably too high.'
-            : `Your body scans suggest ${fmt(scanBmr.bmr)} calories a day at rest — your plan uses ${fmt(nutritionGoal.bmr)}.`}
+            : `Your body scans say you burn ${fmt(scanBmr.bmr)} calories a day at rest (BMR). Your plan uses ${fmt(nutritionGoal.bmr)}.`}
         </Typography>
         <Button
           component={RouterLink}
           to={WIZARD_ROUTE}
-          variant={stale ? 'contained' : 'outlined'}
+          variant="outlined"
           sx={{ minHeight: 48, flexShrink: 0 }}
         >
-          {stale ? 'Check my target' : 'Update my plan'}
+          Review my plan
         </Button>
+        {/* One shape for both banners (review §2.7): an outlined "Review my
+            plan" and, where it may be put off, a "Not now" — never an
+            unlabelled ✕. The stale banner stays undismissable (see above). */}
         {!stale && (
-          <IconButton
-            aria-label="Dismiss"
+          <Button
+            variant="text"
             onClick={() => {
               writeDismissed(key);
               setDismissedKey(key);
             }}
-            sx={{ color: 'text.secondary', width: 48, height: 48 }}
+            sx={{ minHeight: 48, flexShrink: 0, color: 'text.secondary' }}
           >
-            <CloseIcon />
-          </IconButton>
+            Not now
+          </Button>
         )}
       </Box>
     </Surface>

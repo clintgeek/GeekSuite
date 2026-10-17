@@ -7,7 +7,7 @@ import { useOnlineStatus } from '../../hooks/useOnlineStatus.js';
  * Says so when there's no signal, and says what that means. There is no
  * offline queue, so it never promises a sync (review B17).
  */
-export const OFFLINE_BANNER = "You're offline. New entries won't save until you're back online.";
+export const OFFLINE_BANNER = 'You’re offline. New entries won’t save until you’re back online.';
 
 const OfflineIndicator = () => {
   const { isOnline } = useOnlineStatus();

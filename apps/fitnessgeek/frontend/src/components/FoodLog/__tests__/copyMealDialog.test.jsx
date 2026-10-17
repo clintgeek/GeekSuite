@@ -107,7 +107,7 @@ describe('Copy a meal — no copy without a chosen meal', () => {
     renderDialog();
     await choose('Which meal', 'Dinner');
     await waitFor(() => expect(screen.getByTestId('copy-summary'))
-      .toHaveTextContent("There's nothing in your dinner on Thursday."));
+      .toHaveTextContent('There’s nothing in your dinner on Thursday.'));
     expect(screen.getByRole('button', { name: /^copy$/i, hidden: true })).toBeDisabled();
   });
 });
@@ -125,7 +125,7 @@ describe('Copy a meal — whose log, in words', () => {
     await choose('Whose log', 'Chef');
     await choose('Which meal', 'Dinner');
     await waitFor(() => expect(screen.getByTestId('copy-summary'))
-      .toHaveTextContent("Copy Chef's dinner from Thursday into today's dinner (3 foods)"));
+      .toHaveTextContent('Copy Chef’s dinner from Thursday into today’s dinner (3 foods)'));
     expect(svc.getHouseholdMemberLogs).toHaveBeenCalledWith('chef', THURSDAY);
   });
 });
@@ -142,7 +142,7 @@ describe('Copy a meal — Copy, then Undo', () => {
 
     fireEvent.click(screen.getByRole('button', { name: /^copy$/i, hidden: true }));
     await waitFor(() => expect(svc.copyMeal).toHaveBeenCalledWith(THURSDAY, TODAY, 'dinner', null, 'chef'));
-    expect(await screen.findByText("Copied to today's dinner ✓ · 3 foods")).toBeInTheDocument();
+    expect(await screen.findByText('Copied to today’s dinner ✓ · 3 foods')).toBeInTheDocument();
     expect(onCopyComplete).toHaveBeenCalledWith(TODAY);
     expect(onClose).toHaveBeenCalled();
 

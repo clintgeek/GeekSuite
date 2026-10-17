@@ -42,7 +42,7 @@ function SparklineChart({ data, color, height = 60, showGradient = true }) {
   if (series.length === 0) {
     return (
       <Box sx={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <Typography variant="caption" color="text.secondary">No data</Typography>
+        <Typography variant="caption" color="text.secondary">No readings</Typography>
       </Box>
     );
   }
@@ -154,7 +154,7 @@ function MetricCardWithChart({
             {/* Target indicator */}
             {target && (
               <Typography variant="caption" color="text.secondary">
-                Target: {target}
+                {`Aim for ${target}`}
               </Typography>
             )}
 
@@ -178,7 +178,7 @@ function DetailedChart({ data, label, color, yAxisLabel, height = 200 }) {
   if (series.length === 0) {
     return (
       <Box sx={{ height, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-        <Typography variant="body2" color="text.secondary">No data available</Typography>
+        <Typography variant="body2" color="text.secondary">No readings for this day</Typography>
       </Box>
     );
   }
@@ -194,7 +194,7 @@ function DetailedChart({ data, label, color, yAxisLabel, height = 200 }) {
         xScale={{ type: 'time', format: 'native', useUTC: false }}
         yScale={{ type: 'linear', min: 'auto', max: 'auto' }}
         axisBottom={{
-          format: '%H:%M',
+          format: '%-I:%M %p',
           tickSize: 0,
           tickPadding: 10,
           tickValues: 5,
@@ -309,7 +309,7 @@ export default function IntradayDashboard({
         <Grid item xs={12} md={4}>
           <MetricCardWithChart
             icon={<HeartIcon />}
-            label="Heart Rate"
+            label="Heart rate"
             currentValue={currentHR}
             unit="bpm"
             data={data.heartRate}
@@ -320,13 +320,13 @@ export default function IntradayDashboard({
         <Grid item xs={12} md={4}>
           <MetricCardWithChart
             icon={<StressIcon />}
-            label="Stress Level"
+            label="Stress"
             currentValue={currentStress}
             unit="/100"
             data={data.stress}
             color={theme.palette.warning.main}
-            target="< 40"
-            tooltipText="Stress score based on HRV (0-100, lower is better)"
+            target="under 40"
+            tooltipText="Garmin’s stress score from heart-rate variability (HRV), 0–100. Lower is calmer."
           />
         </Grid>
         <Grid item xs={12} md={4}>
@@ -337,7 +337,7 @@ export default function IntradayDashboard({
             unit="/100"
             data={data.bodyBattery}
             color={theme.palette.success.main}
-            tooltipText="Energy reserves (charged during rest, depleted during activity/stress)"
+            tooltipText="Garmin’s 0–100 energy estimate: it charges while you rest and drains with activity and stress."
           />
         </Grid>
       </Grid>
@@ -348,10 +348,10 @@ export default function IntradayDashboard({
           <Grid item xs={12}>
             <Card>
               <CardContent>
-                <Typography variant="h6" gutterBottom>Heart Rate Trend</Typography>
+                <Typography variant="h6" gutterBottom>Heart rate through the day</Typography>
                 <DetailedChart
                   data={data.heartRate}
-                  label="Heart Rate"
+                  label="Heart rate"
                   color={theme.palette.error.main}
                   yAxisLabel="bpm"
                   height={250}
@@ -362,7 +362,7 @@ export default function IntradayDashboard({
           <Grid item xs={12} md={6}>
             <Card>
               <CardContent>
-                <Typography variant="h6" gutterBottom>Stress Pattern</Typography>
+                <Typography variant="h6" gutterBottom>Stress through the day</Typography>
                 <DetailedChart
                   data={data.stress}
                   label="Stress"
@@ -393,7 +393,7 @@ export default function IntradayDashboard({
       {/* Toggle View Button */}
       <Box sx={{ mt: 2, textAlign: 'center' }}>
         <Chip
-          label={viewMode === 'summary' ? 'Show Detailed Charts' : 'Show Summary Only'}
+          label={viewMode === 'summary' ? 'Show the charts' : 'Hide the charts'}
           onClick={() => setViewMode(viewMode === 'summary' ? 'detailed' : 'summary')}
           clickable
           color="primary"

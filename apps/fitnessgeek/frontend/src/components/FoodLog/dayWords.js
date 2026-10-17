@@ -45,10 +45,10 @@ export function dayName(day, today) {
  */
 export function mealOnDayL22(meal, day, today) {
   const back = daysBack(day, today);
-  if (back === 0) return `today's ${meal}`;
-  if (back === 1) return `${weekday(day)}'s ${meal} (yesterday)`;
-  if (back === -1) return `${weekday(day)}'s ${meal} (tomorrow)`;
-  if (back > 1 && back < 7) return `${weekday(day)}'s ${meal}`;
+  if (back === 0) return `today’s ${meal}`;
+  if (back === 1) return `${weekday(day)}’s ${meal} (yesterday)`;
+  if (back === -1) return `${weekday(day)}’s ${meal} (tomorrow)`;
+  if (back > 1 && back < 7) return `${weekday(day)}’s ${meal}`;
   return `${meal} on ${shortDate(day, today)}`;
 }
 
@@ -59,5 +59,5 @@ export function mealOnDayL22(meal, day, today) {
 export function mealOnDayShort(meal, day, today) {
   const name = dayName(day, today);
   if (name.includes(' ')) return `${meal} on ${name}`;
-  return `${name}'s ${meal}`;
+  return `${name}’s ${meal}`;
 }

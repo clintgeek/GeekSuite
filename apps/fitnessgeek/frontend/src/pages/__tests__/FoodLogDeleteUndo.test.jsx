@@ -190,7 +190,7 @@ describe('deleting offers an undo that actually restores the row', () => {
     );
     fireEvent.click(screen.getByText('Delete Oatmeal (breakfast)'));
     fireEvent.click(await screen.findByRole('button', { name: /^undo$/i }));
-    expect(await screen.findByText("Couldn't undo — try again")).toBeInTheDocument();
+    expect(await screen.findByText("Couldn’t undo — try again")).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /try again/i }));
     expect(await screen.findByText('Undone ✓')).toBeInTheDocument();
     expect(logItems).toHaveBeenCalledTimes(2);

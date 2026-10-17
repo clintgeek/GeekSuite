@@ -23,6 +23,7 @@ import MedsChecklist from '../components/Home/MedsChecklist.jsx';
 import FirstRun from '../components/Home/FirstRun.jsx';
 import AddFoodDialog from '../components/FoodLog/AddFoodDialog.jsx';
 import { useJustAdded } from '../components/FoodSearch/useJustAdded.jsx';
+import { UndoAction, UNDO_TOAST_MS, UNDONE_MESSAGE, UNDO_FAILED_MESSAGE } from '../components/FoodSearch/undoToast.jsx';
 
 import { fitnessGeekService } from '../services/fitnessGeekService.js';
 import { goalsService } from '../services/goalsService.js';
@@ -107,7 +108,7 @@ const rowsOf = (res) => {
   return Array.isArray(d) ? d : [];
 };
 
-export const HOME_LOAD_PROBLEM = "Can't reach FitnessGeek right now. What you logged is safe.";
+export const HOME_LOAD_PROBLEM = 'Can’t reach FitnessGeek right now. What you logged is safe.';
 
 // The landed meal's card, scrolled into view once the sheet has gone (review
 // L12) — after a frame, so the reload has had its chance to fill it.
@@ -120,7 +121,7 @@ const showMealCard = (mealType) => {
 };
 
 const DashboardNew = () => {
-  const { notify } = useToast();
+  const { notify, dismiss } = useToast();
   const theme = useTheme();
   const experience = useExperience();
   const { isSimple, firstRunDone, displayName, completeFirstRun } = experience;
@@ -155,7 +156,7 @@ const DashboardNew = () => {
       fat: { current: 0, goal: 65 },
     },
     stats: {
-      weight: { value: '--', unit: '', caption: '' },
+      weight: { value: '—', unit: '', caption: '' },
       bloodPressure: { systolic: null, diastolic: null, trend: null, trendValue: '' },
       steps: { value: null, trend: null, trendValue: '' },
       streak: { value: 0 },
@@ -283,7 +284,7 @@ const DashboardNew = () => {
       });
     } catch (err) {
       console.error('Error loading dashboard:', err);
-      notifyRef.current("Couldn't load today. Try again in a moment.", { tone: 'error' });
+      notifyRef.current('Couldn’t load today. Try again in a moment.', { tone: 'error' });
     } finally {
       setLoading(false);
     }
@@ -324,25 +325,33 @@ const DashboardNew = () => {
         });
       }, 220);
       if (food_item) {
-        // Undo re-logs through the same `logItems` the add box uses.
-        notify(`Removed ${food_item.name || 'item'}`, {
+        // Undo re-logs through the same `logItems` the add box uses, and
+        // speaks the Food Log's undo grammar (undoToast.jsx): "Undone ✓", or
+        // "Couldn’t undo — try again" with a retry. It used to be silent.
+        const undoAndSay = async (toastId) => {
+          const result = await logItems([{ ...food_item, servings: log?.servings, nutrition: log?.nutrition }], log?.meal_type).catch(() => null);
+          dismiss?.(toastId);
+          if ((result?.ok ?? 0) > 0) {
+            notify(UNDONE_MESSAGE, { tone: 'info' });
+            return;
+          }
+          let retryId = null;
+          retryId = notify(UNDO_FAILED_MESSAGE, {
+            tone: 'error',
+            duration: UNDO_TOAST_MS,
+            action: <UndoAction label="Try again" onUndo={() => undoAndSay(retryId)} />,
+          });
+        };
+        let toastId = null;
+        toastId = notify(`Removed ${food_item.name || 'that'}`, {
           tone: 'info',
-          action: (
-            <Button
-              size="small"
-              sx={{ color: 'inherit', fontWeight: 800 }}
-              onClick={async () => {
-                await logItems([{ ...food_item, servings: log?.servings, nutrition: log?.nutrition }], log?.meal_type);
-              }}
-            >
-              Undo
-            </Button>
-          ),
+          duration: UNDO_TOAST_MS,
+          action: <UndoAction onUndo={() => undoAndSay(toastId)} />,
         });
       }
     } catch (err) {
       console.error('Failed to remove food log:', err);
-      notify(errorMessage(err, "Couldn't remove that. Try again."), { tone: 'error' });
+      notify(errorMessage(err, 'Couldn’t remove that. Try again.'), { tone: 'error' });
       setRemovingLogIds((prev) => {
         const next = new Set(prev);
         next.delete(logId);
@@ -399,7 +408,7 @@ const DashboardNew = () => {
   const finishFirstRun = async (answers) => {
     const result = await completeFirstRun(answers);
     if (result && result.ok === false) {
-      notify(errorMessage(result.error, "Couldn't save that. Try again."), { tone: 'error' });
+      notify(errorMessage(result.error, 'Couldn’t save that. Try again.'), { tone: 'error' });
     }
     return result;
   };
@@ -569,7 +578,7 @@ const DashboardNew = () => {
 
         <Box component="section" aria-labelledby="todays-meals">
           <Typography id="todays-meals" component="h2" sx={{ fontSize: '1.375rem', fontWeight: 800, mb: 1.5 }}>
-            Today&apos;s meals
+            Today’s meals
           </Typography>
           <MealCards
             meals={data.meals}
@@ -620,7 +629,7 @@ const DashboardNew = () => {
             <StatCard
               icon={WeightIcon}
               label="Weight"
-              value={data.stats.weight.value ?? '--'}
+              value={data.stats.weight.value ?? '—'}
               unit={data.stats.weight.unit}
               caption={data.stats.weight.caption}
               plainValue
@@ -630,7 +639,7 @@ const DashboardNew = () => {
             <StatCard
               icon={BPIcon}
               label="Blood pressure"
-              value={data.stats.bloodPressure.systolic ? `${data.stats.bloodPressure.systolic}/${data.stats.bloodPressure.diastolic}` : '--'}
+              value={data.stats.bloodPressure.systolic ? `${data.stats.bloodPressure.systolic}/${data.stats.bloodPressure.diastolic}` : '—'}
               unit="mmHg"
               trend={data.stats.bloodPressure.trend}
               trendValue={data.stats.bloodPressure.trendValue}
@@ -640,7 +649,7 @@ const DashboardNew = () => {
             <StatCard
               icon={StepsIcon}
               label="Steps"
-              value={data.stats.steps.value?.toLocaleString() ?? '--'}
+              value={data.stats.steps.value?.toLocaleString('en-US') ?? '—'}
               trend={data.stats.steps.trend}
               trendValue={data.stats.steps.trendValue}
               color={statTone.steps}

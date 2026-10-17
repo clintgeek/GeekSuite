@@ -147,7 +147,7 @@ describe('QuickAddBP card — a tab left open overnight', () => {
 
     type(screen.getByLabelText(/systolic/i), '128');
     type(screen.getByLabelText(/diastolic/i), '82');
-    fireEvent.click(screen.getByRole('button', { name: /^add$/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^log$/i }));
 
     await waitFor(() => expect(onAdd).toHaveBeenCalledTimes(1));
     expect(onAdd.mock.calls[0][0].date).toBe('2026-10-16');

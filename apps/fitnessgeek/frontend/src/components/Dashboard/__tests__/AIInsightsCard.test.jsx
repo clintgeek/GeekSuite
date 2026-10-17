@@ -73,7 +73,7 @@ describe('AIInsightsCard: Notes from the AI (UX review 2026-10-17, D-11)', () =>
     fireEvent.click(screen.getByText('Advice'));
     expect(await screen.findByText('Eat more beans.')).toBeInTheDocument();
     expect(screen.getByTestId('ai-note-footer').textContent)
-      .toMatch(/^Written by AI from your last 14 days of logs · \d{1,2}:\d{2} (am|pm) · It can be wrong — check the numbers above\.$/);
+      .toMatch(/^Written by AI from your last 14 days of logs · \d{1,2}:\d{2} (AM|PM) · It can be wrong — check the numbers above\.$/);
     expect(screen.queryByText(/^Generated/)).toBeNull();
   });
 

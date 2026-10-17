@@ -83,6 +83,8 @@ describe('D-5 — order and intro', () => {
     renderReports();
     const food = await screen.findByTestId('reports-food');
     expect(within(food).getByRole('button', { name: '7 days' })).toBeInTheDocument();
+    // The words are what shows, not "7d" behind an aria-label (review §2 toggle).
+    expect(within(food).getByRole('button', { name: '30 days' })).toHaveTextContent(/^30 days$/);
     expect(within(screen.getByTestId('reports-ai-notes')).queryByRole('button', { name: '7 days' })).toBeNull();
   });
 
@@ -175,9 +177,9 @@ describe('D-11 — Notes from the AI', () => {
       await screen.findByText('Protein is up.');
       const footers = screen.getAllByTestId('ai-note-footer').map((f) => f.textContent);
       expect(footers).toEqual([
-        'Written by AI from your last 7 days of logs · 9:40 am · It can be wrong — check the numbers above.',
+        'Written by AI from your last 7 days of logs · 9:40 AM · It can be wrong — check the numbers above.',
         // trend watch always reads at least three weeks, and says so
-        'Written by AI from your last 21 days of logs · 9:41 am · It can be wrong — check the numbers above.',
+        'Written by AI from your last 21 days of logs · 9:41 AM · It can be wrong — check the numbers above.',
       ]);
     } finally {
       vi.useRealTimers();
@@ -197,7 +199,7 @@ describe('D-11 — Notes from the AI', () => {
     insightsService.getWeeklyReport.mockResolvedValue({ type: 'weekly_report', content: 'No data found.', generatedAt: new Date().toISOString() });
     insightsService.getTrendWatch.mockResolvedValue({ type: 'trend_watch', content: 'No data found.', generatedAt: new Date().toISOString() });
     renderReports();
-    expect(await screen.findByTestId('weekly-ai-empty')).toHaveTextContent("Log a few days and I'll write a summary here.");
+    expect(await screen.findByTestId('weekly-ai-empty')).toHaveTextContent('Log a few days and I’ll write a summary here.');
     expect(await screen.findByTestId('trend-ai-empty')).toHaveTextContent('Nothing stands out yet.');
     expect(screen.queryByText('No data found.')).toBeNull();
     expect(screen.queryByTestId('ai-note-footer')).toBeNull();

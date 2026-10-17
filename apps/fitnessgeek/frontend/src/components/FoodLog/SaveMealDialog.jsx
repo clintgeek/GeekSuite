@@ -13,7 +13,7 @@ import {
 import { useGeekDialogFullScreen } from '@geeksuite/ui';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
 import { thumbSaveProps } from '../BloodPressure/thumbSave.jsx';
-import { mealWord } from '../../utils/plainWords.js';
+import { fmt, mealWord } from '../../utils/plainWords.js';
 
 const SaveMealDialog = ({
   open,
@@ -106,7 +106,6 @@ const SaveMealDialog = ({
     <PremiumDialog
       open={open}
       onClose={handleClose}
-      eyebrow="My meals"
       title={`Save ${mealWord(mealType)} as a meal`}
       icon={FoodIcon}
       maxWidth="sm"
@@ -133,20 +132,21 @@ const SaveMealDialog = ({
             autoFocus
             fullWidth
             label="Meal name"
-            placeholder="e.g., El P's Ench and Marg"
+            placeholder="For example, Taco night"
             value={mealName}
             onChange={(e) => setMealName(e.target.value)}
             sx={{ mb: 2 }}
           />
 
           <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
-            This meal contains {logs.length} item{logs.length !== 1 ? 's' : ''}:
+            This meal has {logs.length} food{logs.length !== 1 ? 's' : ''}:
           </Typography>
 
           {unresolvedCount > 0 && (
             <Typography variant="body2" color="warning.main" sx={{ mb: 1 }}>
-              {unresolvedCount} item{unresolvedCount !== 1 ? 's' : ''} could not be saved to the
-              meal — no catalog entry
+              {unresolvedCount === 1
+                ? '1 food can’t go in a saved meal — it isn’t in the food list.'
+                : `${unresolvedCount} foods can’t go in a saved meal — they aren’t in the food list.`}
             </Typography>
           )}
 
@@ -170,7 +170,7 @@ const SaveMealDialog = ({
                 >
                   <FoodIcon sx={{ fontSize: 20, color: 'text.secondary' }} />
                   <Typography variant="body2" sx={{ flex: 1 }}>
-                    {food_item?.name || 'Unknown Food'}
+                    {food_item?.name || 'A food'}
                   </Typography>
                   <Chip
                     label={`${servings} serving${servings !== 1 ? 's' : ''}`}
@@ -185,13 +185,13 @@ const SaveMealDialog = ({
           <Divider sx={{ my: 2 }} />
 
           <Typography variant="body2" fontWeight={600} gutterBottom>
-            Total Nutrition:
+            Altogether
           </Typography>
           <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
-            <Chip label={`${Math.round(mealTotals.calories)} cal`} size="small" />
-            <Chip label={`${Math.round(mealTotals.protein)}g protein`} size="small" />
-            <Chip label={`${Math.round(mealTotals.carbs)}g carbs`} size="small" />
-            <Chip label={`${Math.round(mealTotals.fat)}g fat`} size="small" />
+            <Chip label={`${fmt(mealTotals.calories)} cal`} size="small" />
+            <Chip label={`Protein ${fmt(mealTotals.protein)}g`} size="small" />
+            <Chip label={`Carbs ${fmt(mealTotals.carbs)}g`} size="small" />
+            <Chip label={`Fat ${fmt(mealTotals.fat)}g`} size="small" />
           </Box>
         </Box>
     </PremiumDialog>

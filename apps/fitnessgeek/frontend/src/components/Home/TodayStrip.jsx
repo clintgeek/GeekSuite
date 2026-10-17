@@ -19,7 +19,7 @@ export default function TodayStrip({ items = [], onMedsClick }) {
   return (
     <Box
       component="nav"
-      aria-label="Today's check-ins"
+      aria-label="Today’s check-ins"
       data-testid="today-strip"
       sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}
     >

@@ -25,7 +25,10 @@ import {
 import { fitnessGeekService } from '../../services/fitnessGeekService';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
 import { loadZXing } from '../../utils/zxingLoader.js';
+import { errorMessage } from '../../utils/errorMessage.js';
 import './BarcodeScanner.css';
+
+const CAMERA_UNAVAILABLE = 'FitnessGeek can’t use the camera here. Type the barcode instead.';
 
 const BarcodeScanner = ({ open, onClose, onBarcodeScanned }) => {
   const [error, setError] = useState(null);
@@ -159,7 +162,7 @@ const BarcodeScanner = ({ open, onClose, onBarcodeScanned }) => {
       console.log('Selected camera:', selectedCam?.label);
     } catch (err) {
       console.error('Error detecting cameras:', err);
-      setCameraError('Could not access camera');
+      setCameraError(CAMERA_UNAVAILABLE);
       setMode('manual');
     }
   };
@@ -178,7 +181,7 @@ const BarcodeScanner = ({ open, onClose, onBarcodeScanned }) => {
     stopScanner();
 
     if (!/^[0-9]{8,14}$/.test(barcode)) {
-      setError('Invalid barcode format. Must be 8-14 digits.');
+      setError('A barcode is 8–14 digits. Check the number and try again.');
       return;
     }
 
@@ -188,7 +191,7 @@ const BarcodeScanner = ({ open, onClose, onBarcodeScanned }) => {
     try {
       const food = await fitnessGeekService.getFoodByBarcode(barcode);
       if (!food) {
-        setError('No product found for this barcode. Try manual entry or a different barcode.');
+        setError('That barcode isn’t in the food databases. Try typing the food instead.');
         return;
       }
 
@@ -208,10 +211,10 @@ const BarcodeScanner = ({ open, onClose, onBarcodeScanned }) => {
       if (logged) {
         onClose();
       } else {
-        setError('Could not log that item. Try again.');
+        setError('Couldn’t add that. Try again.');
       }
-    } catch {
-      setError('Failed to lookup barcode.');
+    } catch (err) {
+      setError(errorMessage(err, 'Couldn’t look up that barcode. Try again, or type the food.'));
     } finally {
       setIsLoading(false);
     }
@@ -343,7 +346,9 @@ const BarcodeScanner = ({ open, onClose, onBarcodeScanned }) => {
       }
     } catch (err) {
       console.error('Error starting scanner:', err);
-      setCameraError(err.message || 'Failed to access camera. Check permissions.');
+      setCameraError(err?.name === 'NotAllowedError'
+        ? 'FitnessGeek needs your camera to scan. Allow it in your browser settings, or type the barcode.'
+        : CAMERA_UNAVAILABLE);
       setMode('manual');
     } finally {
       setIsLoading(false);
@@ -489,13 +494,14 @@ const BarcodeScanner = ({ open, onClose, onBarcodeScanned }) => {
           disabled={isLoading}
           sx={{ flex: 1 }}
         >
-          {isScanning ? 'Stop Camera' : 'Start Camera'}
+          {isScanning ? 'Stop camera' : 'Start camera'}
         </Button>
         {isScanning && hasTorch && (
           <Button
             variant={torchOn ? 'contained' : 'outlined'}
             onClick={toggleTorch}
             color={torchOn ? 'warning' : 'primary'}
+            aria-label={torchOn ? 'Turn the light off' : 'Turn the light on'}
             sx={{ minWidth: 'auto', px: 2 }}
           >
             {torchOn ? <TorchOnIcon /> : <TorchOffIcon />}
@@ -518,7 +524,7 @@ const BarcodeScanner = ({ open, onClose, onBarcodeScanned }) => {
         }}
         fullWidth
         autoFocus
-        placeholder="Enter 8-14 digit barcode"
+        placeholder="8–14 digits"
         disabled={isLoading}
       />
       <Button
@@ -529,12 +535,12 @@ const BarcodeScanner = ({ open, onClose, onBarcodeScanned }) => {
         fullWidth
         sx={{ mt: 2 }}
       >
-        {isLoading ? 'Looking up...' : 'Look Up Barcode'}
+        {isLoading ? 'Looking up…' : 'Look up barcode'}
       </Button>
 
       {scanHistory.length > 0 && (
         <Box sx={{ mt: 3 }}>
-          <Typography variant="subtitle2" sx={{ mb: 1 }}>Recent Scans:</Typography>
+          <Typography variant="subtitle2" sx={{ mb: 1 }}>Recent scans</Typography>
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1 }}>
             {scanHistory.map((b, i) => (
               <Chip
@@ -554,8 +560,7 @@ const BarcodeScanner = ({ open, onClose, onBarcodeScanned }) => {
     <PremiumDialog
       open={open}
       onClose={handleClose}
-      eyebrow="Log"
-      title="Scan Barcode"
+      title="Scan a barcode"
       maxWidth="sm"
       contentSx={{ px: 0, py: 0 }}
       secondaryAction={<Button onClick={handleClose}>Cancel</Button>}
@@ -572,7 +577,7 @@ const BarcodeScanner = ({ open, onClose, onBarcodeScanned }) => {
             />
             <Tab
               value="manual"
-              label="Manual"
+              label="Type it"
               icon={<KeyboardIcon />}
               iconPosition="start"
             />

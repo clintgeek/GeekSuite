@@ -21,6 +21,7 @@ import { foodService } from '../../services/foodService.js';
 import { errorMessage } from '../../utils/errorMessage.js';
 import { netCarbs as calcNetCarbs } from '../../utils/ketoMath.js';
 import { amountLabel } from './amount.js';
+import { macroLine } from '../../utils/plainWords.js';
 
 const SWIPE_THRESHOLD = 60;
 
@@ -160,7 +161,7 @@ const FoodLogItem = ({
       // tap did the same thing (left over from REVIEW_2026-10 B6).
       console.error('Failed to toggle favorite:', error);
       notify(
-        errorMessage(error, isFavorite ? "Couldn't take that out of your favorites. Try again." : "Couldn't add that to your favorites. Try again."),
+        errorMessage(error, isFavorite ? 'Couldn’t take that out of your favorites. Try again.' : 'Couldn’t add that to your favorites. Try again.'),
         { tone: 'error' }
       );
     } finally {
@@ -397,7 +398,7 @@ const FoodLogItem = ({
           mb: 1
         }}>
           <Chip
-            label={`${totalCalories} cal`}
+            label={`${totalCalories.toLocaleString('en-US')} cal`}
             size="small"
             sx={{
               height: 24,
@@ -410,35 +411,7 @@ const FoodLogItem = ({
             }}
           />
           <Chip
-            label={`P: ${totalProtein}g`}
-            size="small"
-            sx={{
-              height: 24,
-              borderRadius: '999px',
-              backgroundColor: `${theme.palette.primary.main}1a`,
-              color: theme.palette.primary.main,
-              fontWeight: 600,
-              fontSize: '0.75rem',
-              border: `1px solid ${theme.palette.primary.main}33`,
-              '& .MuiChip-label': { px: 1.25 }
-            }}
-          />
-          <Chip
-            label={`C: ${totalCarbs}g`}
-            size="small"
-            sx={{
-              height: 24,
-              borderRadius: '999px',
-              backgroundColor: `${theme.palette.primary.main}1a`,
-              color: theme.palette.primary.main,
-              fontWeight: 600,
-              fontSize: '0.75rem',
-              border: `1px solid ${theme.palette.primary.main}33`,
-              '& .MuiChip-label': { px: 1.25 }
-            }}
-          />
-          <Chip
-            label={`F: ${totalFat}g`}
+            label={macroLine({ protein: totalProtein, carbs: totalCarbs, fat: totalFat }, { dense: true })}
             size="small"
             sx={{
               height: 24,
@@ -453,7 +426,7 @@ const FoodLogItem = ({
           />
           {mode === 'keto' && (
             <Chip
-              label={`${totalNetCarbs}g nc${isMissingFiber ? '*' : ''}`}
+              label={`${totalNetCarbs}g net carbs${isMissingFiber ? '*' : ''}`}
               size="small"
               sx={{
                 height: 24,
@@ -477,7 +450,7 @@ const FoodLogItem = ({
           mb: 1
         }}>
           <Chip
-            label={`${totalCalories} cal`}
+            label={`${totalCalories.toLocaleString('en-US')} cal`}
             size="small"
             sx={{
               height: 24,
@@ -497,7 +470,7 @@ const FoodLogItem = ({
               fontWeight: 500
             }}
           >
-            {totalProtein}P / {totalCarbs}C / {totalFat}F
+            {macroLine({ protein: totalProtein, carbs: totalCarbs, fat: totalFat }, { dense: true })}
           </Typography>
           {mode === 'keto' && (
             <Typography
@@ -509,7 +482,7 @@ const FoodLogItem = ({
                 fontFamily: 'inherit'
               }}
             >
-              · {totalNetCarbs}g nc{isMissingFiber ? '*' : ''}
+              · {totalNetCarbs}g net carbs{isMissingFiber ? '*' : ''}
             </Typography>
           )}
         </Box>

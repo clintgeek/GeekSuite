@@ -75,8 +75,8 @@ describe('Reports — failures in plain words', () => {
     insightsService.getWeeklyReport.mockRejectedValue(rawGraphQLError('Request failed with status code 502'));
     insightsService.getTrendWatch.mockRejectedValue(rawGraphQLError('E11000 duplicate key error collection: x'));
     renderReports();
-    expect(await screen.findByTestId('weekly-ai-error')).toHaveTextContent("The assistant isn't available right now.");
-    expect(screen.getByTestId('trend-ai-error')).toHaveTextContent("The assistant isn't available right now.");
+    expect(await screen.findByTestId('weekly-ai-error')).toHaveTextContent('The assistant isn’t available right now.');
+    expect(screen.getByTestId('trend-ai-error')).toHaveTextContent('The assistant isn’t available right now.');
     expect(screen.queryByText(/status code|E11000/)).toBeNull();
     // and the food report still rendered
     expect(screen.getAllByText('a day').length).toBeGreaterThan(0);
@@ -87,7 +87,7 @@ describe('Reports — failures in plain words', () => {
     reportsService.getOverview.mockRejectedValue(raw);
     reportsService.getTrends.mockRejectedValue(raw);
     renderReports();
-    expect(await screen.findByText("Your reports didn't load. Try again.")).toBeInTheDocument();
+    expect(await screen.findByText('Couldn’t load your reports. Try again.')).toBeInTheDocument();
     expect(screen.queryByText(/Cast to ObjectId/)).toBeNull();
   });
 
@@ -115,6 +115,6 @@ describe('Reports — every window is the local calendar', () => {
     fireEvent.click(button);
     await waitFor(() => expect(notify).toHaveBeenCalled());
     expect(reportsService.export).toHaveBeenCalledWith({ days: 7, start: localDateStringDaysAgo(6) });
-    expect(notify).toHaveBeenCalledWith("The report didn't download. Try again.", { tone: 'error' });
+    expect(notify).toHaveBeenCalledWith('Couldn’t download the report. Try again.', { tone: 'error' });
   });
 });

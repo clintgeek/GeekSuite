@@ -17,6 +17,7 @@ import ThumbFab from '../primitives/ThumbFab.jsx';
 import AddBPDialog from './AddBPDialog.jsx';
 import DateField from '../primitives/DateField.jsx';
 import { categorizeBP } from '../../utils/bpUtils.js';
+import { bpStageWords } from '../../utils/plainWords.js';
 import { errorMessage } from '../../utils/errorMessage.js';
 import { useToday } from '../../hooks/useToday.js';
 import {
@@ -94,7 +95,7 @@ const QuickAddBP = ({ onAdd, unit = "mmHg", autoOpen = false, onAutoOpened }) =>
         setDuplicate(payload);
         setError(DUPLICATE_MESSAGE);
       } else {
-        setError(errorMessage(err, "That reading didn't save. Try again."));
+        setError(errorMessage(err, 'Couldn’t save that reading. Try again.'));
       }
     } finally {
       setLoading(false);
@@ -145,15 +146,15 @@ const QuickAddBP = ({ onAdd, unit = "mmHg", autoOpen = false, onAutoOpened }) =>
     // "High Normal" band here; that band never existed in the AHA guidelines
     // and let the live-typing category disagree with what got saved.
     const category = categorizeBP(sys, dia);
-    return { status: category.stage, color: category.color };
+    return { status: bpStageWords(category.stage).label, color: category.color };
   };
 
   const bpStatus = getBPStatus();
 
   return (
     <>
-      {/* Phones: the thumb-zone "Add BP" button, with its words. */}
-      <ThumbFab label="Add BP" testId="add-bp-fab" onClick={() => setShowDialog(true)} />
+      {/* Phones: the thumb-zone "Log BP" button, with its words. */}
+      <ThumbFab label="Log BP" testId="add-bp-fab" onClick={() => setShowDialog(true)} />
 
       {/* Desktop version */}
       <Card sx={{
@@ -168,7 +169,7 @@ const QuickAddBP = ({ onAdd, unit = "mmHg", autoOpen = false, onAutoOpened }) =>
           <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
             <BPIcon sx={{ mr: 1, color: theme.palette.primary.main }} />
             <Typography variant="h6" sx={{ fontWeight: 600, color: theme.palette.text.primary }}>
-              Quick Add Blood Pressure
+              Log blood pressure
             </Typography>
           </Box>
 
@@ -249,7 +250,7 @@ const QuickAddBP = ({ onAdd, unit = "mmHg", autoOpen = false, onAutoOpened }) =>
                   disabled={loading}
                   startIcon={<AddIcon />}
                 >
-                  {loading ? 'Adding...' : 'Add'}
+                  {loading ? 'Saving…' : 'Log'}
                 </Button>
               </Grid>
             </Grid>
@@ -258,7 +259,7 @@ const QuickAddBP = ({ onAdd, unit = "mmHg", autoOpen = false, onAutoOpened }) =>
             {bpStatus && (
               <Box sx={{ mt: 2, display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Typography variant="body2">
-                  Status:
+                  This reading is
                 </Typography>
                 <Typography
                   variant="body2"

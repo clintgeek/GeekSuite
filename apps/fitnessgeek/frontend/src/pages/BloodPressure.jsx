@@ -27,7 +27,8 @@ import BPLogList from '../components/BloodPressure/BPLogList.jsx';
 import AddBPDialog from '../components/BloodPressure/AddBPDialog.jsx';
 import { bpService } from '../services/bpService.js';
 import { fitnessGeekService } from '../services/fitnessGeekService.js';
-import { localDateString, displayCalendarDate, utcDateString } from '@geeksuite/utils';
+import { localDateString, utcDateString } from '@geeksuite/utils';
+import { shortDay } from '../utils/dates.js';
 import logger from '../utils/logger.js';
 import { errorMessage } from '../utils/errorMessage.js';
 import { isBPDuplicate } from '../components/BloodPressure/bpTimeUtils.js';
@@ -150,7 +151,7 @@ const BloodPressure = () => {
   // Check if we have enough data points for the selected range
   const hasEnoughData = filteredBPLogs.length >= 2;
   const insufficientDataMessage = !hasEnoughData && filteredBPLogs.length > 0 ?
-    `Only ${filteredBPLogs.length} data point${filteredBPLogs.length === 1 ? '' : 's'} in this range. Try a larger time range.` : null;
+    `Only ${filteredBPLogs.length} reading${filteredBPLogs.length === 1 ? '' : 's'} in this range. Try a longer one.` : null;
 
   // Load BP data on mount
   useEffect(() => {
@@ -168,10 +169,10 @@ const BloodPressure = () => {
       if (response.success) {
         setBPLogs(response.data);
       } else {
-        notify("Your blood pressure readings didn't load. Try again.", { tone: 'error' });
+        notify('Couldn’t load your blood pressure readings. Try again.', { tone: 'error' });
       }
     } catch (error) {
-      notify(errorMessage(error, "Your blood pressure readings didn't load. Try again."), { tone: 'error' });
+      notify(errorMessage(error, 'Couldn’t load your blood pressure readings. Try again.'), { tone: 'error' });
       logger.error('Error loading BP data:', error);
     } finally {
       if (!silent) setLoading(false);
@@ -205,7 +206,7 @@ const BloodPressure = () => {
       if (response.success && response.data) {
         // Reload BP data to get the updated list
         await loadBPData({ silent: true });
-        notify('Blood pressure saved.', { tone: 'success' });
+        notify('Blood pressure saved', { tone: 'success' });
       } else {
         // A soft failure is still a failure. Falling through here let
         // AddBPDialog's `await onAdd(...)` resolve normally, so it cleared the
@@ -261,7 +262,7 @@ const BloodPressure = () => {
 
       if (response.success && response.data) {
         await loadBPData({ silent: true });
-        notify('Reading updated.', { tone: 'success' });
+        notify('Saved', { tone: 'success' });
         setEditingLog(null);
       } else {
         // Same reasoning as handleAddBP: a falsy `success` must not look like
@@ -292,10 +293,10 @@ const BloodPressure = () => {
       });
       if (!response?.success || !response?.data) throw new Error('no row');
       await loadBPData({ silent: true });
-      notify('Put back.', { tone: 'success' });
+      notify('Undone ✓', { tone: 'success' });
     } catch (error) {
       logger.error('Error undoing BP delete:', error);
-      notify(errorMessage(error, "Couldn't put it back. Try again."), { tone: 'error' });
+      notify(errorMessage(error, 'Couldn’t undo — try again'), { tone: 'error' });
     }
   };
 
@@ -311,7 +312,7 @@ const BloodPressure = () => {
         await loadBPData({ silent: true });
         const what = log ? `${log.systolic}/${log.diastolic}` : 'that reading';
         const when = log?.log_date
-          ? ` from ${displayCalendarDate(log.log_date, 'en-US', { month: 'short', day: 'numeric' })}`
+          ? ` from ${shortDay(utcDateString(log.log_date))}`
           : '';
         // Same grammar as food: "Removed … · Undo", long enough to reach.
         notify(`Removed ${what}${when}`, {
@@ -324,10 +325,10 @@ const BloodPressure = () => {
           ) : undefined,
         });
       } else {
-        notify("That reading wasn't removed. Try again.", { tone: 'error' });
+        notify('Couldn’t remove that reading. Try again.', { tone: 'error' });
       }
     } catch (error) {
-      notify(errorMessage(error, "That reading wasn't removed. Try again."), { tone: 'error' });
+      notify(errorMessage(error, 'Couldn’t remove that reading. Try again.'), { tone: 'error' });
       logger.error('Error deleting BP reading:', error);
     }
   };
@@ -390,9 +391,9 @@ const BloodPressure = () => {
                 },
               }}
             >
-              <ToggleButton value="7">7d</ToggleButton>
-              <ToggleButton value="30">30d</ToggleButton>
-              <ToggleButton value="365">1y</ToggleButton>
+              <ToggleButton value="7" aria-label="7 days">7d</ToggleButton>
+              <ToggleButton value="30" aria-label="30 days">30d</ToggleButton>
+              <ToggleButton value="365" aria-label="1 year">1y</ToggleButton>
               <ToggleButton value="all">All</ToggleButton>
             </ToggleButtonGroup>
             <Button
@@ -401,7 +402,7 @@ const BloodPressure = () => {
               size="small"
               startIcon={<PdfIcon />}
             >
-              View Report
+              View report
             </Button>
           </Box>
 
@@ -429,7 +430,7 @@ const BloodPressure = () => {
             <SuspenseSurface rows={4} height={320}>
               <BPChartNivo
                 data={filteredBPLogs}
-                title="Blood Pressure Trend"
+                title="Your blood pressure over time"
               />
             </SuspenseSurface>
           </Box>
@@ -438,7 +439,7 @@ const BloodPressure = () => {
           {hrSeries && hrSeries.length > 0 && (
             <Box sx={{ mb: 3 }}>
               <SuspenseSurface rows={4} height={300}>
-                <BPHRChart data={hrSeries} title="Heart Rate (Garmin)" />
+                <BPHRChart data={hrSeries} title="Heart rate (Garmin)" />
               </SuspenseSurface>
             </Box>
           )}

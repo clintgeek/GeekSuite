@@ -149,7 +149,7 @@ describe('the Today strip', () => {
     renderHome(experience());
     const strip = await screen.findByTestId('today-strip');
     expect(within(strip).getByTestId('today-strip-weight')).toHaveAttribute('data-done', 'true');
-    expect(within(strip).getByTestId('today-strip-bp')).toHaveTextContent('Add BP+');
+    expect(within(strip).getByTestId('today-strip-bp')).toHaveTextContent('Log BP+');
     expect(within(strip).getByTestId('today-strip-bp')).toHaveAttribute('href', '/blood-pressure?add=1');
     expect(await within(strip).findByTestId('today-strip-meds')).toHaveTextContent('Meds1 of 3');
   });

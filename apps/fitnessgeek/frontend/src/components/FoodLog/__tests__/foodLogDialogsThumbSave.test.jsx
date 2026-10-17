@@ -41,6 +41,6 @@ describe('Food Log dialogs: Save under the thumb', () => {
 
   it('Create a food', () => {
     render(<FoodEditDialog open food={null} form={{ name: 'Soup' }} onChange={vi.fn()} onClose={vi.fn()} onSave={vi.fn()} />);
-    onlyAtTheBottom(/^create$/i);
+    onlyAtTheBottom(/^save food$/i);
   });
 });

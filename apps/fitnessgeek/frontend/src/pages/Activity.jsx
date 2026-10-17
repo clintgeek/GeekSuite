@@ -32,6 +32,15 @@ import { GeekEmptyState, GeekErrorState, toneForMode } from '@geeksuite/ui';
 import { fitnessGeekService } from '../services/fitnessGeekService';
 import { Surface, SectionLabel, DisplayHeading, StatNumber, EmptyState } from '../components/primitives';
 import { localDateString } from '@geeksuite/utils';
+import { errorMessage } from '../utils/errorMessage.js';
+import { nearDay, clockTime } from '../utils/dates.js';
+import { fmt } from '../utils/plainWords.js';
+
+/** "today at 8:30 AM", "Thursday at 8:30 AM", "Oct 3 at 8:30 AM". */
+const whenWords = (instant) => {
+  const day = nearDay(instant);
+  return `${day === 'Today' || day === 'Yesterday' ? day.toLowerCase() : day} at ${clockTime(instant)}`;
+};
 
 /**
  * Duration-formatted sleep tile. Renders "Nh Mm" in mono.
@@ -75,8 +84,6 @@ const SleepStageTile = ({ icon: Icon, minutes = 0, label, color }) => {
         sx={{
           fontSize: '0.75rem',
           fontWeight: 700,
-          textTransform: 'uppercase',
-          letterSpacing: '0.1em',
           color: 'text.secondary',
         }}
       >
@@ -121,7 +128,7 @@ const MetricTile = ({ icon: Icon, label, value, unit, color, subtext }) => {
             letterSpacing: '-0.02em',
           }}
         >
-          {value ?? '--'}
+          {value ?? '—'}
         </Typography>
         {unit && (
           <Typography
@@ -129,8 +136,6 @@ const MetricTile = ({ icon: Icon, label, value, unit, color, subtext }) => {
               fontFamily: "inherit",
               fontSize: '0.75rem',
               fontWeight: 600,
-              textTransform: 'uppercase',
-              letterSpacing: '0.08em',
               color: 'text.secondary',
             }}
           >
@@ -142,8 +147,6 @@ const MetricTile = ({ icon: Icon, label, value, unit, color, subtext }) => {
         sx={{
           fontSize: '0.75rem',
           fontWeight: 700,
-          textTransform: 'uppercase',
-          letterSpacing: '0.1em',
           color: 'text.secondary',
         }}
       >
@@ -272,14 +275,14 @@ const ActivityCard = ({ activity }) => {
                 letterSpacing: '0.02em',
               }}
             >
-              {activity.startTimeLocal ? new Date(activity.startTimeLocal).toLocaleString() : 'Unknown time'}
+              {activity.startTimeLocal ? `${nearDay(activity.startTimeLocal)} at ${clockTime(activity.startTimeLocal)}` : 'Time not known'}
             </Typography>
           </Box>
         </Box>
         {activity.calories != null && (
           <Chip
             icon={<FireIcon sx={{ fontSize: 16 }} />}
-            label={`${activity.calories} kcal`}
+            label={`${fmt(activity.calories)} cal`}
             size="small"
             sx={{
               bgcolor: theme.palette.warning.main + '20',
@@ -401,7 +404,7 @@ const Activity = () => {
       }
     } catch (err) {
       console.error('Error loading activity data:', err);
-      setError(err.message || 'Failed to load activity data');
+      setError(errorMessage(err, "Couldn’t load your activity. Try again."));
     } finally {
       setLoading(false);
     }
@@ -423,7 +426,6 @@ const Activity = () => {
     <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 960, mx: 'auto' }}>
       {/* Editorial header */}
       <Box sx={{ mb: 3 }}>
-        <SectionLabel sx={{ mb: 0.75 }}>Tracking · Activity</SectionLabel>
         <DisplayHeading size="page">Activity</DisplayHeading>
         <Typography sx={{ color: 'text.secondary', mt: 0.5, fontSize: '0.9375rem' }}>
           Your Garmin fitness data and recent activities.
@@ -433,17 +435,17 @@ const Activity = () => {
       {garminNotEnabled ? (
         <GeekEmptyState
           icon={<WorkoutIcon sx={{ fontSize: 28 }} />}
-          title="Garmin isn't connected"
+          title="Garmin isn’t connected"
           description="Connect your Garmin account in Settings to see steps, sleep, heart rate and activities here."
           action={
-            <Button component={RouterLink} to="/settings" variant="outlined">
-              Go to Settings
+            <Button component={RouterLink} to="/settings#garmin" variant="outlined">
+              Connect Garmin
             </Button>
           }
         />
       ) : error ? (
         <GeekErrorState
-          title="Couldn't load activity data"
+          title="Couldn’t load your activity"
           error={error}
           onRetry={loadData}
         />
@@ -453,30 +455,30 @@ const Activity = () => {
       {dailyData && (
         <>
           <Box sx={{ mb: 2 }}>
-            <SectionLabel>Today's Summary</SectionLabel>
+            <SectionLabel>Today so far</SectionLabel>
           </Box>
           <Grid container spacing={2} sx={{ mb: 4 }}>
             <Grid item xs={6} sm={3}>
               <StatCard
                 icon={StepsIcon}
                 label="Steps"
-                value={dailyData.steps?.toLocaleString()}
+                value={dailyData.steps != null ? fmt(dailyData.steps) : null}
                 color={theme.palette.primary.main}
               />
             </Grid>
             <Grid item xs={6} sm={3}>
               <StatCard
                 icon={FireIcon}
-                label="Active Calories"
-                value={dailyData.activeCalories}
-                unit="kcal"
+                label="Calories from activity"
+                value={dailyData.activeCalories != null ? fmt(dailyData.activeCalories) : null}
+                unit="cal"
                 color={theme.palette.warning.main}
               />
             </Grid>
             <Grid item xs={6} sm={3}>
               <StatCard
                 icon={HeartIcon}
-                label="Resting HR"
+                label="Resting heart rate"
                 value={dailyData.restingHR}
                 unit="bpm"
                 color={theme.palette.error.main}
@@ -498,13 +500,13 @@ const Activity = () => {
       {dailyData?.heartRate && (
         <>
           <Box sx={{ mb: 2 }}>
-            <SectionLabel>Heart Rate</SectionLabel>
+            <SectionLabel>Heart rate today</SectionLabel>
           </Box>
           <Surface sx={{ mb: 4 }}>
             <Grid container spacing={3}>
               <Grid item xs={4}>
                 <Box sx={{ textAlign: 'center' }}>
-                  <SectionLabel sx={{ mb: 0.75, justifyContent: 'center' }}>Min</SectionLabel>
+                  <SectionLabel sx={{ mb: 0.75, justifyContent: 'center' }}>Lowest</SectionLabel>
                   <StatNumber
                     value={dailyData.heartRate.minHeartRate}
                     unit="bpm"
@@ -526,7 +528,7 @@ const Activity = () => {
               </Grid>
               <Grid item xs={4}>
                 <Box sx={{ textAlign: 'center' }}>
-                  <SectionLabel sx={{ mb: 0.75, justifyContent: 'center' }}>Max</SectionLabel>
+                  <SectionLabel sx={{ mb: 0.75, justifyContent: 'center' }}>Highest</SectionLabel>
                   <StatNumber
                     value={dailyData.heartRate.maxHeartRate}
                     unit="bpm"
@@ -544,13 +546,13 @@ const Activity = () => {
       {sleepData && (
         <>
           <Box sx={{ mb: 2 }}>
-            <SectionLabel>Sleep Details</SectionLabel>
+            <SectionLabel>Last night’s sleep</SectionLabel>
           </Box>
           <Surface sx={{ mb: 4 }}>
             <Box>
               {sleepData.sleepScore && (
                 <Box sx={{ textAlign: 'center', mb: 3 }}>
-                  <SectionLabel sx={{ justifyContent: 'center', mb: 1 }}>Sleep Score</SectionLabel>
+                  <SectionLabel sx={{ justifyContent: 'center', mb: 1 }}>Sleep score</SectionLabel>
                   <StatNumber
                     value={sleepData.sleepScore}
                     size="hero"
@@ -565,10 +567,10 @@ const Activity = () => {
                 <Box sx={{ textAlign: 'center', py: 2 }}>
                   <SleepIcon sx={{ fontSize: 48, color: 'text.disabled', mb: 1 }} />
                   <Typography color="text.secondary">
-                    No detailed sleep data available for today
+                    No sleep details for last night yet
                   </Typography>
                   <Typography variant="caption" color="text.disabled">
-                    Sleep data syncs after your device uploads to Garmin Connect
+                    They show up after your watch syncs with Garmin Connect.
                   </Typography>
                 </Box>
               )}
@@ -623,9 +625,9 @@ const Activity = () => {
               {(sleepData.sleepStartTime || sleepData.sleepEndTime) && (
                 <Box sx={{ mt: 3, textAlign: 'center' }}>
                   <Typography variant="body2" color="text.secondary">
-                    {sleepData.sleepStartTime && new Date(sleepData.sleepStartTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    {sleepData.sleepStartTime && sleepData.sleepEndTime && ' → '}
-                    {sleepData.sleepEndTime && new Date(sleepData.sleepEndTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                    {sleepData.sleepStartTime && clockTime(sleepData.sleepStartTime)}
+                    {sleepData.sleepStartTime && sleepData.sleepEndTime && ' to '}
+                    {sleepData.sleepEndTime && clockTime(sleepData.sleepEndTime)}
                   </Typography>
                 </Box>
               )}
@@ -634,7 +636,7 @@ const Activity = () => {
               {(sleepData.avgSpO2 || sleepData.avgOvernightHrv || sleepData.avgRespiration || sleepData.bodyBatteryChange != null) && (
                 <Box sx={{ mt: 3 }}>
                   <Box sx={{ textAlign: 'center', mb: 2 }}>
-                    <SectionLabel sx={{ justifyContent: 'center' }}>Health Metrics</SectionLabel>
+                    <SectionLabel sx={{ justifyContent: 'center' }}>Overnight</SectionLabel>
                   </Box>
                   <Grid container spacing={1.5}>
                     {sleepData.avgSpO2 && (
@@ -651,7 +653,7 @@ const Activity = () => {
                     {sleepData.avgOvernightHrv && (
                       <Grid item xs={6} sm={3}>
                         <MetricTile
-                          label="HRV"
+                          label="Heart-rate variability (HRV)"
                           value={sleepData.avgOvernightHrv}
                           unit="ms"
                           color="#22c55e"
@@ -662,7 +664,7 @@ const Activity = () => {
                     {sleepData.avgRespiration && (
                       <Grid item xs={6} sm={3}>
                         <MetricTile
-                          label="Breaths/min"
+                          label="Breaths a minute"
                           value={Math.round(sleepData.avgRespiration * 10) / 10}
                           color="#0ea5e9"
                           subtext={sleepData.minRespiration && sleepData.maxRespiration
@@ -699,13 +701,13 @@ const Activity = () => {
                   <Grid container spacing={2} alignItems="center">
                     {sleepData.avgSleepStress != null && (
                       <Grid item xs={4}>
-                        <SectionLabel sx={{ mb: 0.5 }}>Sleep Stress</SectionLabel>
+                        <SectionLabel sx={{ mb: 0.5 }}>Sleep stress</SectionLabel>
                         <StatNumber value={sleepData.avgSleepStress} size="body" />
                       </Grid>
                     )}
                     {sleepData.restlessMoments != null && (
                       <Grid item xs={4}>
-                        <SectionLabel sx={{ mb: 0.5 }}>Restless</SectionLabel>
+                        <SectionLabel sx={{ mb: 0.5 }}>Restless moments</SectionLabel>
                         <StatNumber value={sleepData.restlessMoments} unit="×" size="body" />
                       </Grid>
                     )}
@@ -738,7 +740,7 @@ const Activity = () => {
 
       {/* Recent Activities */}
       <Box sx={{ mb: 2 }}>
-        <SectionLabel>Recent Activities</SectionLabel>
+        <SectionLabel>Recent activities</SectionLabel>
       </Box>
       {activities.length > 0 ? (
         activities.map((activity, index) => (
@@ -756,7 +758,7 @@ const Activity = () => {
       {dailyData?.fetchedAt && (
         <Box sx={{ mt: 3, textAlign: 'center' }}>
           <Typography variant="caption" color="text.secondary">
-            Last updated: {new Date(dailyData.fetchedAt).toLocaleString()}
+            {`Updated ${whenWords(dailyData.fetchedAt)}`}
           </Typography>
         </Box>
       )}

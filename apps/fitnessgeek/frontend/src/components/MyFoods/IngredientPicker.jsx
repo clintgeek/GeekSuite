@@ -73,7 +73,6 @@ const IngredientPicker = ({ open, onClose, onPick, title = 'Add an ingredient' }
     <PremiumDialog
       open={open}
       onClose={onClose}
-      eyebrow="Recipe"
       title={title}
       maxWidth="sm"
       secondaryAction={<Button onClick={onClose}>Cancel</Button>}
@@ -114,7 +113,7 @@ const IngredientPicker = ({ open, onClose, onPick, title = 'Add an ingredient' }
                 </Typography>
               </Box>
               <Typography sx={{ fontWeight: 700, flexShrink: 0, fontVariantNumeric: 'tabular-nums' }}>
-                {kcal(food)} kcal
+                {kcal(food).toLocaleString('en-US')} cal
               </Typography>
             </Button>
           </Box>

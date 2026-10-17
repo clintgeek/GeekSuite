@@ -21,7 +21,8 @@ import {
 import BPChartNivo from './BPChartNivo.jsx';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
 import { categorizeBP } from '../../utils/bpUtils.js';
-import { displayCalendarDate, localDateString, toUtcMidnight, utcDateString } from '@geeksuite/utils';
+import { localDateString, toUtcMidnight, utcDateString } from '@geeksuite/utils';
+import { dayRange, shortDay } from '../../utils/dates.js';
 import { ThemeProvider } from '@mui/material/styles';
 import { createAppTheme } from '../../theme/theme';
 
@@ -116,12 +117,13 @@ const BPReport = ({ bpLogs, onClose }) => {
     };
   }, [bpLogs]);
 
-  // Both boundaries are UTC-midnight calendar dates — render them as such.
-  const formatWeekRange = (start, end) => {
-    const startStr = displayCalendarDate(start, 'en-US', { month: 'short', day: 'numeric' });
-    const endStr = displayCalendarDate(end, 'en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-    return `${startStr} - ${endStr}`;
-  };
+  // Both boundaries are UTC-midnight calendar dates — take the calendar day
+  // with `utcDateString`, then say it the app's way: "Mar 1–7".
+  const formatWeekRange = (start, end) => dayRange(utcDateString(start), utcDateString(end));
+  // The report's own period carries its year: it's a page handed to a doctor.
+  const withYear = (text, ymd) => (/\d{4}/.test(text) ? text : `${text}, ${String(ymd).slice(0, 4)}`);
+  const period = stats ? withYear(dayRange(stats.dateRange.start, stats.dateRange.end), stats.dateRange.end) : '';
+  const madeOn = shortDay(localDateString(), undefined, { withYear: true });
 
   const exportToPDF = async () => {
     if (!reportRef.current) return;
@@ -170,20 +172,20 @@ const BPReport = ({ bpLogs, onClose }) => {
   const exportToMarkdown = () => {
     if (!stats) return;
 
-    let markdown = `# Blood Pressure Report\n\n`;
-    markdown += `**Generated:** ${new Date().toLocaleDateString()}\n`;
-    markdown += `**Period:** ${stats.dateRange.start} - ${stats.dateRange.end}\n`;
+    let markdown = `# Blood pressure report\n\n`;
+    markdown += `**Made:** ${madeOn}\n`;
+    markdown += `**Period:** ${period}\n`;
     markdown += `**Patient:** Clint Crocker (Jun 8, 1978, Male)\n\n`;
 
     markdown += `## Summary\n\n`;
-    markdown += `- **Total Readings:** ${stats.totalReadings}\n`;
+    markdown += `- **Readings:** ${stats.totalReadings}\n`;
     Object.entries(stats.categoryCounts).forEach(([category, data]) => {
-      markdown += `- **${category}:** ${data.count} days\n`;
+      markdown += `- **${category}:** ${data.count} ${data.count === 1 ? 'reading' : 'readings'}\n`;
     });
     markdown += `\n`;
 
-    markdown += `## Blood Pressure Readings\n\n`;
-    markdown += `| Week | Systolic Range | Diastolic Range | Readings | Category |\n`;
+    markdown += `## Readings by week\n\n`;
+    markdown += `| Week | Systolic range | Diastolic range | Readings | Category |\n`;
     markdown += `|------|----------------|-----------------|----------|----------|\n`;
 
     stats.weeklyData.forEach(week => {
@@ -191,10 +193,10 @@ const BPReport = ({ bpLogs, onClose }) => {
       markdown += `| ${weekRange} | ${week.systolicRange.min}-${week.systolicRange.max} | ${week.diastolicRange.min}-${week.diastolicRange.max} | ${week.count} | ${week.category.stage} |\n`;
     });
 
-    markdown += `\n## Blood Pressure Categories\n\n`;
+    markdown += `\n## Blood pressure categories\n\n`;
     markdown += `- **Normal:** < 120/80 mmHg\n`;
-    markdown += `- **Elevated:** 120-129/< 80 mmHg\n`;
-    markdown += `- **Stage 1:** 130-139/80-89 mmHg\n`;
+    markdown += `- **Elevated:** 120–129/< 80 mmHg\n`;
+    markdown += `- **Stage 1:** 130–139/80–89 mmHg\n`;
     markdown += `- **Stage 2:** ≥ 140/≥ 90 mmHg\n\n`;
 
     markdown += `*Data provided by FitnessGeek*\n`;
@@ -240,12 +242,11 @@ const BPReport = ({ bpLogs, onClose }) => {
       <PremiumDialog
         open={true}
         onClose={onClose}
-        eyebrow="Health"
-        title="Blood Pressure Report"
+        title="Blood pressure report"
         maxWidth="md"
         secondaryAction={<Button onClick={onClose}>Close</Button>}
       >
-        <Typography>No blood pressure data available for the selected time range.</Typography>
+        <Typography>No readings in this range yet.</Typography>
       </PremiumDialog>
     );
   }
@@ -254,8 +255,7 @@ const BPReport = ({ bpLogs, onClose }) => {
     <PremiumDialog
       open={true}
       onClose={onClose}
-      eyebrow="Health"
-      title="Blood Pressure Report"
+      title="Blood pressure report"
       icon={HeartIcon}
       maxWidth="lg"
       contentSx={{ px: { xs: 1.5, sm: 2 }, py: 2 }}
@@ -313,10 +313,10 @@ const BPReport = ({ bpLogs, onClose }) => {
             </Box>
             <Box sx={{ flex: 1 }}>
               <Typography variant="h4" sx={{ fontWeight: 700, color: '#1976d2' }}>
-                Blood Pressure Report
+                Blood pressure report
               </Typography>
               <Typography variant="body1" color="text.secondary">
-                {stats.dateRange.start} - {stats.dateRange.end}
+                {period}
               </Typography>
             </Box>
             <Box sx={{ textAlign: 'right' }}>
@@ -352,7 +352,7 @@ const BPReport = ({ bpLogs, onClose }) => {
                       {data.count}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">
-                      Days {category}
+                      {category} {data.count === 1 ? 'reading' : 'readings'}
                     </Typography>
                   </Box>
                 </Grid>
@@ -363,7 +363,7 @@ const BPReport = ({ bpLogs, onClose }) => {
           {/* Blood Pressure Chart */}
           <Box sx={{ mb: 2 }}>
             <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
-              Blood Pressure Trend
+              Over time
             </Typography>
             <Box sx={{
               height: 200,
@@ -382,7 +382,7 @@ const BPReport = ({ bpLogs, onClose }) => {
           {/* Weekly Data Table */}
           <Box sx={{ mb: 2 }}>
             <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
-              Blood Pressure Readings ({stats.totalReadings})
+              Readings by week ({stats.totalReadings} in all)
             </Typography>
             {/* Phones get the same rows as stacked cards — a five-column
                 table at 390px is a horizontal scroll nobody performs. */}
@@ -418,11 +418,11 @@ const BPReport = ({ bpLogs, onClose }) => {
                   <Box sx={{ display: 'grid', gridTemplateColumns: 'auto 1fr', columnGap: 1.5, rowGap: 0.25 }}>
                     <Typography variant="body2" color="text.secondary">Systolic</Typography>
                     <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      {week.systolicRange.min} - {week.systolicRange.max}
+                      {week.systolicRange.min}–{week.systolicRange.max}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">Diastolic</Typography>
                     <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                      {week.diastolicRange.min} - {week.diastolicRange.max}
+                      {week.diastolicRange.min}–{week.diastolicRange.max}
                     </Typography>
                     <Typography variant="body2" color="text.secondary">Readings</Typography>
                     <Typography variant="body2" sx={{ fontWeight: 600 }}>{week.count}</Typography>
@@ -436,8 +436,8 @@ const BPReport = ({ bpLogs, onClose }) => {
                 <TableHead>
                   <TableRow>
                     <TableCell sx={{ fontWeight: 600 }}>Week</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>Systolic Range</TableCell>
-                    <TableCell sx={{ fontWeight: 600 }}>Diastolic Range</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Systolic range</TableCell>
+                    <TableCell sx={{ fontWeight: 600 }}>Diastolic range</TableCell>
                     <TableCell sx={{ fontWeight: 600 }}>Readings</TableCell>
                     <TableCell sx={{ fontWeight: 600 }}>Category</TableCell>
                   </TableRow>
@@ -449,10 +449,10 @@ const BPReport = ({ bpLogs, onClose }) => {
                         {formatWeekRange(week.weekStart, week.weekEnd)}
                       </TableCell>
                       <TableCell>
-                        {week.systolicRange.min} - {week.systolicRange.max}
+                        {week.systolicRange.min}–{week.systolicRange.max}
                       </TableCell>
                       <TableCell>
-                        {week.diastolicRange.min} - {week.diastolicRange.max}
+                        {week.diastolicRange.min}–{week.diastolicRange.max}
                       </TableCell>
                       <TableCell>
                         {week.count}
@@ -484,13 +484,13 @@ const BPReport = ({ bpLogs, onClose }) => {
           {/* Legend */}
           <Box sx={{ mb: 2 }}>
             <Typography variant="subtitle2" sx={{ fontWeight: 600, mb: 1 }}>
-              Blood Pressure Categories
+              Blood pressure categories
             </Typography>
             <Box sx={{ display: 'flex', gap: 2, flexWrap: 'wrap' }}>
               {[
                 { stage: 'Normal', color: '#4caf50', range: '< 120/80' },
-                { stage: 'Elevated', color: '#ff9800', range: '120-129/< 80' },
-                { stage: 'Stage 1', color: '#f44336', range: '130-139/80-89' },
+                { stage: 'Elevated', color: '#ff9800', range: '120–129/< 80' },
+                { stage: 'Stage 1', color: '#f44336', range: '130–139/80–89' },
                 { stage: 'Stage 2', color: '#d32f2f', range: '≥ 140/≥ 90' }
               ].map((cat) => (
                 <Box key={cat.stage} sx={{
@@ -530,7 +530,7 @@ const BPReport = ({ bpLogs, onClose }) => {
             borderTop: '1px solid #e0e0e0'
           }}>
             <Typography variant="body2" color="text.secondary">
-              Data provided by FitnessGeek on {new Date().toLocaleDateString()}
+              Made with FitnessGeek on {madeOn}
             </Typography>
             <Typography variant="body2" color="text.secondary">
               1 of 1

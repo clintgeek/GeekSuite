@@ -11,8 +11,7 @@ const FoodDeleteDialog = ({ open, food, onClose, onConfirm, loading }) => {
     <PremiumDialog
       open={open}
       onClose={onClose}
-      eyebrow="Confirm"
-      title="Delete Food?"
+      title="Delete this food?"
       maxWidth="xs"
       primaryAction={
         <Button
@@ -27,9 +26,8 @@ const FoodDeleteDialog = ({ open, food, onClose, onConfirm, loading }) => {
       secondaryAction={<Button onClick={onClose}>Cancel</Button>}
     >
       <Typography>
-        Are you sure you want to delete "{food?.name}"?
-        This will remove it from your saved foods but preserve any historical logs.
-        You can always search for it again to re-add it.
+        “{food?.name}” leaves your foods. Days you already logged it keep it,
+        and you can search for it again any time.
       </Typography>
     </PremiumDialog>
   );

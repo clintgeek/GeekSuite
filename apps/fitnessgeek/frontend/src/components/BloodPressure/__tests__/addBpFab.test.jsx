@@ -7,10 +7,10 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import QuickAddBP from '../QuickAddBP.jsx';
 
 describe('QuickAddBP thumb button', () => {
-  it('is labelled "Add BP" and opens the form', async () => {
+  it('is labelled "Log BP" and opens the form', async () => {
     render(<QuickAddBP onAdd={async () => {}} />);
     const fab = screen.getByTestId('add-bp-fab');
-    expect(fab).toHaveTextContent('Add BP');
+    expect(fab).toHaveTextContent('Log BP');
     fireEvent.click(fab);
     expect(await screen.findByRole('dialog')).toBeInTheDocument();
   });

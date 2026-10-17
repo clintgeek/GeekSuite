@@ -123,7 +123,7 @@ const BodyCompTrend = ({ scans = [] }) => {
 
   return (
     <Surface>
-      <SectionLabel sx={{ mb: 0.75 }}>Trend</SectionLabel>
+      <SectionLabel sx={{ mb: 0.75 }}>Fat and lean mass over time</SectionLabel>
       <Typography sx={{ color: 'text.secondary', fontSize: '0.8125rem', mb: 2 }}>
         Line: 7-day average · dots: each scan
       </Typography>

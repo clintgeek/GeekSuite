@@ -84,7 +84,7 @@ describe('WeightProgress — pace is measured from the program start', () => {
     const program = Array.from({ length: 36 }, (_, i) => ({ log_date: `${ymd(start, i)}T00:00:00.000Z`, weight_value: Math.round((222 - 0.15 * i) * 10) / 10 }));
     render(<WeightProgress weightLogs={[...flatBefore(start, 60), ...program]} goal={goal} currentWeight={216.8} unit="lbs" />);
     // 0.15 lb/day = 1.05/week, measured since start — not diluted by the flat months.
-    expect(screen.getByTestId('weight-pace')).toHaveTextContent(/You're losing 1\.[01] lb a week\./);
+    expect(screen.getByTestId('weight-pace')).toHaveTextContent(/You’re losing 1\.[01] lb a week\./);
     expect(screen.getByTestId('weight-projection')).toHaveTextContent(/^At this pace: (early|mid|late) /);
     expect(screen.queryByText(/20[4-9]\d/)).toBeNull();
   });

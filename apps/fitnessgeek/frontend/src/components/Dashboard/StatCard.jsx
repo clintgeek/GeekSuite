@@ -18,9 +18,9 @@ const statEnter = keyframes`
  *
  * Props:
  *   icon        : MUI icon component
- *   label       : SectionLabel text (rendered uppercase)
+ *   label       : SectionLabel text (sentence case, as written)
  *   value       : number or string (string passes through for things like "180/80")
- *   unit        : small unit suffix (kcal, bpm, %, etc.)
+ *   unit        : small unit suffix, shown as written (cal, lb, mmHg, bpm, %)
  *   trend       : 'up' | 'down' | null
  *   trendValue  : string shown next to the trend arrow
  *   color       : accent color for the icon + hover border. Prefer a
@@ -130,7 +130,7 @@ export default function StatCard({
               color: 'text.primary',
             }}
           >
-            {value || '--'}
+            {value || '—'}
           </Typography>
           {unit && (
             <Typography
@@ -138,8 +138,6 @@ export default function StatCard({
                 fontFamily: "inherit",
                 fontSize: '0.75rem',
                 fontWeight: 600,
-                textTransform: 'uppercase',
-                letterSpacing: '0.08em',
                 color: 'text.secondary',
               }}
             >

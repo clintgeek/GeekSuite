@@ -83,10 +83,10 @@ const FoodSearchPage = () => {
       setCreateForm(null);
       if (created) {
         await logItems([{ ...created, servings: 1 }], mealType);
-        notify(`Created and logged "${created.name}"`, { tone: 'success' });
+        notify(addedMessage(mealType, created.name), { tone: 'success' });
       }
     } catch (error) {
-      notify(errorMessage(error, 'Could not create that food.'), { tone: 'error' });
+      notify(errorMessage(error, 'Couldn’t create that food. Try again.'), { tone: 'error' });
     } finally {
       setCreating(false);
     }
@@ -96,7 +96,7 @@ const FoodSearchPage = () => {
     <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 820, mx: 'auto' }}>
       <Box sx={{ mb: 2 }}>
         <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem' }}>
-          Say what you ate, or type a food&apos;s name to pick it from the list.
+          Say what you ate, or type a food’s name to pick it from the list.
         </Typography>
       </Box>
 

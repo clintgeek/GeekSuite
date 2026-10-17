@@ -235,7 +235,7 @@ export function garminCards(payload, { end }) {
       unit: 'bpm', deltaUnit: 'bpm', decimals: 0, steady: 1, minSpan: 6,
       meaning: 'Lower is better. It tends to fall over weeks as fitness improves.',
     }),
-    hrv: card('hrv', 'Overnight HRV', (d) => d.overnightHRV, {
+    hrv: card('hrv', 'Overnight heart-rate variability (HRV)', (d) => d.overnightHRV, {
       unit: 'ms', deltaUnit: 'ms', decimals: 0, steady: 2, minSpan: 10,
       meaning: 'Higher usually means better recovered. Compare it with your own, not anyone else’s.',
     }),
@@ -250,7 +250,7 @@ export function garminCards(payload, { end }) {
     // A week's total, not an average: "279 min in the last 7 days" (D-7).
     intensity: card('intensity', 'Intensity minutes', intensityMinutes, {
       unit: 'min', deltaUnit: 'min', lead: 'in the last 7 days', staleLead: 'in the 7 days to', decimals: 0, steady: 15, minSpan: 60, scale: 7,
-      meaning: `Moderate + 2 × vigorous minutes (the WHO equivalence), per week. The guideline is ${WEEKLY_INTENSITY_GUIDELINE}.`,
+      meaning: `Moderate minutes, plus vigorous minutes counted twice, per week. The guideline is ${WEEKLY_INTENSITY_GUIDELINE}.`,
     }),
     steps: card('steps', 'Steps', (d) => d.steps, {
       unit: '/ day', deltaUnit: 'steps', decimals: 0, steady: 300, minSpan: 2000,

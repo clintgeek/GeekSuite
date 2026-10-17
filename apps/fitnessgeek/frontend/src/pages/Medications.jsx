@@ -17,6 +17,7 @@ import MedsChecklist from '../components/Home/MedsChecklist.jsx';
 import { useMedsToday, announceMedsChanged } from '../hooks/useMedsToday.js';
 import { useToday } from '../hooks/useToday.js';
 import { errorMessage } from '../utils/errorMessage.js';
+import { shortDay } from '../utils/dates.js';
 
 const TIME_OPTIONS = ['morning', 'afternoon', 'evening', 'bedtime'];
 
@@ -43,11 +44,9 @@ const SIMPLE_TIMES = [
   { value: 'evening', label: 'Evening' },
   { value: 'bedtime', label: 'Bedtime' },
 ];
-// The list's group names in Simple, in the same words as the form.
-const SIMPLE_GROUP_LABELS = { daily: 'Once a day', morning: 'Morning', afternoon: 'Midday', evening: 'Evening', bedtime: 'Bedtime' };
-
-// "Oct 16", for saying which day the checklist is ticking.
-const shortDate = (ymd) => new Date(`${ymd}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+// The list's group names, in the same words as the form — Simple and Full
+// alike ("Midday", never the stored key "afternoon").
+const SLOT_WORD = { daily: 'Once a day', morning: 'Morning', afternoon: 'Midday', evening: 'Evening', bedtime: 'Bedtime' };
 
 const TYPE_ORDER = { rx: 0, otc: 1, supplement: 2 };
 const byTypeThenName = (a, b) => {
@@ -156,18 +155,18 @@ export default function Medications() {
   // and the backend keeps what's there.
   const buildExportText = () => {
     const lines = [];
-    lines.push('Medications & Supplements');
-    lines.push(`Generated: ${new Date().toISOString()}`);
+    lines.push('Medications and supplements');
+    lines.push(`Made: ${shortDay(localDateString(), undefined, { withYear: true })}`);
     lines.push('');
     MED_GROUPS.forEach(group => {
       const slotMeds = (myMeds || []).filter(group.match).sort(byTypeThenName);
       if (slotMeds.length === 0) return;
-      lines.push(`${group.label.toUpperCase()}`);
+      lines.push(`${(SLOT_WORD[group.key] || group.label).toUpperCase()}`);
       slotMeds.forEach(m => {
         const type = (m.med_type || 'rx').toUpperCase();
         const strength = m.strength ? ` ${m.strength}` : '';
         const tags = (m.user_indications || []).join(', ');
-        lines.push(`- ${m.display_name}${strength} [${type}]${tags ? ` | Indications: ${tags}` : ''}`);
+        lines.push(`- ${m.display_name}${strength} [${type}]${tags ? ` | What it’s for: ${tags}` : ''}`);
       });
       lines.push('');
     });
@@ -208,17 +207,17 @@ export default function Medications() {
     let y = margin;
 
     const bySlot = MED_GROUPS.map(group => ({
-      slot: group.label,
+      slot: SLOT_WORD[group.key] || group.label,
       meds: (myMeds || []).filter(group.match).sort(byTypeThenName),
     })).filter(s => s.meds.length > 0);
 
     // Header
     doc.setFont('helvetica', 'bold');
     doc.setFontSize(18);
-    doc.text('Medications & Supplements', margin, y);
+    doc.text('Medications and supplements', margin, y);
     doc.setFont('helvetica', 'normal');
     doc.setFontSize(10);
-    doc.text(`Generated: ${new Date().toLocaleString()}`, margin, y + 16);
+    doc.text(`Made: ${shortDay(localDateString(), undefined, { withYear: true })}`, margin, y + 16);
     y += 36;
 
     // Legend
@@ -246,7 +245,7 @@ export default function Medications() {
     const columns = [
       { key: 'name', title: 'Name', width: 240 },
       { key: 'type', title: 'Type', width: 80 },
-      { key: 'ind', title: 'Indications', width: 210 },
+      { key: 'ind', title: 'What it’s for', width: 210 },
     ];
 
     const drawTableHeader = () => {
@@ -343,7 +342,7 @@ export default function Medications() {
       setResults(Array.isArray(r) ? r : []);
     } catch (err) {
       setResults([]);
-      setSearchError(errorMessage(err, "The medicine search isn't answering right now."));
+      setSearchError(errorMessage(err, 'Couldn’t search just now. Try again, or add it as typed.'));
     } finally {
       setSearchedFor(query);
       setSearching(false);
@@ -413,7 +412,7 @@ export default function Medications() {
       cancelEdit();
       changed();
     } catch (err) {
-      setFormError(errorMessage(err, "Couldn't save that medicine. Try again."));
+      setFormError(errorMessage(err, 'Couldn’t save that medication. Try again.'));
     } finally {
       setBusy(null);
     }
@@ -432,7 +431,7 @@ export default function Medications() {
       cancelEdit();
       changed();
     } catch (err) {
-      setFormError(errorMessage(err, "Couldn't save your changes. Try again."));
+      setFormError(errorMessage(err, 'Couldn’t save your changes. Try again.'));
     } finally {
       setBusy(null);
     }
@@ -530,9 +529,9 @@ export default function Medications() {
       if (!saved) throw new Error('No medication came back');
       setMyMeds((prev) => [saved, ...prev]);
       changed();
-      notify(`${med.display_name || 'Medicine'} is back`, { tone: 'success' });
+      notify('Undone ✓', { tone: 'success' });
     } catch (err) {
-      notify(errorMessage(err, "Couldn't bring it back. Try again."), { tone: 'error' });
+      notify(errorMessage(err, 'Couldn’t undo — try again'), { tone: 'error' });
     }
   };
 
@@ -545,7 +544,7 @@ export default function Medications() {
       await medsService.remove(medId);
       setMyMeds(prev => prev.filter(m => (m.id ?? m._id) !== medId));
       changed();
-      notify(`Removed ${med.display_name || 'medicine'}`, {
+      notify(`Removed ${med.display_name || 'that medication'}`, {
         tone: 'info',
         action: (
           <Button size="small" sx={{ color: 'inherit', fontWeight: 800 }} onClick={() => restoreMed(med)}>
@@ -554,7 +553,7 @@ export default function Medications() {
         ),
       });
     } catch (err) {
-      notify(errorMessage(err, "Couldn't remove that. Try again."), { tone: 'error' });
+      notify(errorMessage(err, 'Couldn’t remove that. Try again.'), { tone: 'error' });
     } finally {
       setBusy(null);
     }
@@ -563,10 +562,10 @@ export default function Medications() {
   // Helper to get med type color
   const getMedTypeColor = (type) => {
     switch(type) {
-      case 'rx': return { bg: '#E3F2FD', color: '#1565C0', label: 'RX' };
-      case 'otc': return { bg: '#E8F5E9', color: '#2E7D32', label: 'OTC' };
-      case 'supplement': return { bg: '#FFF3E0', color: '#E65100', label: 'SUPPLEMENT' };
-      default: return { bg: '#F5F5F5', color: '#616161', label: 'OTHER' };
+      case 'rx': return { bg: '#E3F2FD', color: '#1565C0', label: 'Prescription' };
+      case 'otc': return { bg: '#E8F5E9', color: '#2E7D32', label: 'Over the counter' };
+      case 'supplement': return { bg: '#FFF3E0', color: '#E65100', label: 'Supplement' };
+      default: return { bg: '#F5F5F5', color: '#616161', label: 'Other' };
     }
   };
 
@@ -576,7 +575,7 @@ export default function Medications() {
         <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem' }}>
           {isSimple
             ? 'Tick off your doses each day, and keep your list of medications here.'
-            : <>Tick off today&apos;s doses, manage your medicines, and export a list for your doctor.</>}
+            : <>Tick off today&rsquo;s doses, keep your list of medications, and export it for your doctor.</>}
         </Typography>
       </Box>
 
@@ -596,11 +595,11 @@ export default function Medications() {
           </ToggleButtonGroup>
           {day === 'yesterday' && (
             <Typography sx={{ color: 'text.secondary', fontSize: '1rem', mb: 1.5 }}>
-              Showing yesterday, {shortDate(yesterday)}. Ticks here are saved for yesterday.
+              Showing yesterday, {shortDay(yesterday, today)}. Ticks here are saved for yesterday.
             </Typography>
           )}
           <MedsChecklist
-            title={day === 'yesterday' ? "Yesterday's doses" : "Today's doses"}
+            title={day === 'yesterday' ? 'Yesterday’s doses' : 'Today’s doses'}
             items={doses.items}
             taken={doses.taken}
             total={doses.total}
@@ -630,13 +629,13 @@ export default function Medications() {
       <Surface sx={{ mb: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 2 }}>
           <SearchIcon sx={{ color: 'primary.main' }} />
-          <SectionLabel>Search Medications</SectionLabel>
+          <SectionLabel>Find a medication</SectionLabel>
         </Box>
         <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
           <TextField
             fullWidth
             size="small"
-            label="Search medication (brand or generic)"
+            label="Medication name (brand or generic)"
             value={q}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
@@ -700,7 +699,7 @@ export default function Medications() {
         <Surface ref={editorRef} sx={{ mb: 3 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 2 }}>
             <MedicationIcon sx={{ color: 'primary.main' }} />
-            <SectionLabel>{editingMed ? 'Edit Medication' : 'Add Medication'}</SectionLabel>
+            <SectionLabel>{editingMed ? 'Edit medication' : 'Add a medication'}</SectionLabel>
           </Box>
           <Stack spacing={2}>
             <TextField inputRef={nameInputRef} label="Display name" value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
@@ -726,8 +725,8 @@ export default function Medications() {
             <FormControl fullWidth>
               <InputLabel id="type-label">Type</InputLabel>
               <Select labelId="type-label" label="Type" value={medType} onChange={(e) => setMedType(e.target.value)}>
-                <MenuItem value="rx">Rx (Prescription)</MenuItem>
-                <MenuItem value="otc">OTC (Over-the-counter)</MenuItem>
+                <MenuItem value="rx">Prescription</MenuItem>
+                <MenuItem value="otc">Over the counter</MenuItem>
                 <MenuItem value="supplement">Supplement</MenuItem>
               </Select>
             </FormControl>
@@ -736,10 +735,10 @@ export default function Medications() {
               <ToggleButtonGroup
                 value={timesOfDay}
                 onChange={(e, v) => setTimesOfDay(v)}
-                aria-label="time-of-day"
+                aria-label="Time of day"
               >
                 {TIME_OPTIONS.map(t => (
-                  <ToggleButton key={t} value={t} aria-label={t}>{t}</ToggleButton>
+                  <ToggleButton key={t} value={t} aria-label={SLOT_WORD[t]}>{SLOT_WORD[t]}</ToggleButton>
                 ))}
               </ToggleButtonGroup>
             </Box>
@@ -783,7 +782,7 @@ export default function Medications() {
             <Stack direction="row" spacing={1}>
               {editingMed ? (
                 <Button variant="contained" startIcon={<SaveIcon />} onClick={updateMedication} disabled={Boolean(busy) || !displayName.trim()}>
-                  {busy === 'update' ? 'Saving…' : 'Update'}
+                  {busy === 'update' ? 'Saving…' : 'Save'}
                 </Button>
               ) : (
                 <Button variant="contained" startIcon={<SaveIcon />} onClick={saveMedication} disabled={Boolean(busy) || !displayName.trim()}>
@@ -803,7 +802,7 @@ export default function Medications() {
           sx={{ mb: 3 }}
           action={<Button color="inherit" size="small" sx={{ minHeight: 44 }} onClick={loadMeds}>Try again</Button>}
         >
-          Couldn&apos;t load your medications. {loadError}
+          Couldn&rsquo;t load your medications. {loadError}
         </Alert>
       ) : listLoading && myMeds.length === 0 ? null : myMeds.length === 0 ? (
         <Box sx={{ mb: 3 }}>
@@ -822,21 +821,20 @@ export default function Medications() {
             <EmptyState
               icon={MedicationIcon}
               title="No medications yet"
-              copy="Search for a medication above to add it to your list. You'll be able to group by time of day and export the list for your doctor."
+              copy="Find a medication above to add it to your list. You can group them by time of day and export the list for your doctor."
             />
           )}
         </Box>
       ) : (
       <Surface sx={{ mb: 3 }}>
         <Box sx={{ mb: 2.5 }}>
-          <SectionLabel sx={{ mb: 0.75 }}>My Medications</SectionLabel>
-          <DisplayHeading size="card">Grouped by Time of Day</DisplayHeading>
+          <DisplayHeading size="card">Your medications, by time of day</DisplayHeading>
         </Box>
         <Stack spacing={2}>
           {/* Simple names the groups in the form's words and skips empty ones. */}
           {MED_GROUPS.filter(g => (g.key !== 'daily' && !isSimple) || myMeds.some(g.match)).map(({ key: slot, label, match }) => (
             <Box key={slot}>
-              <SectionLabel dot sx={{ mb: 1, textTransform: 'capitalize' }}>{isSimple ? SIMPLE_GROUP_LABELS[slot] : label}</SectionLabel>
+              <SectionLabel dot sx={{ mb: 1 }}>{SLOT_WORD[slot] || label}</SectionLabel>
               <Stack spacing={1} sx={{ mt: 1 }}>
                 {myMeds
                   .filter(match)
@@ -897,7 +895,6 @@ export default function Medications() {
                                   color: typeInfo.color,
                                   fontWeight: 700,
                                   fontSize: '0.75rem',
-                                  letterSpacing: '0.06em',
                                   height: 20,
                                 }}
                               />
@@ -918,7 +915,7 @@ export default function Medications() {
                     );
                   })}
                 {myMeds.filter(match).length === 0 && (
-                  <Typography variant="caption" color="text.secondary">No medications set for {slot}.</Typography>
+                  <Typography variant="caption" color="text.secondary">Nothing for {(SLOT_WORD[slot] || slot).toLowerCase()} yet.</Typography>
                 )}
               </Stack>
             </Box>

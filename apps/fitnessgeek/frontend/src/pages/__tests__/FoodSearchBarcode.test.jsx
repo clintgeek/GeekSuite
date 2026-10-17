@@ -56,7 +56,7 @@ const renderPage = () =>
 
 const scan = async (user, barcode = '01234567890') => {
   await user.click(screen.getByRole('button', { name: /scan barcode/i }));
-  const input = await screen.findByPlaceholderText('Enter 8-14 digit barcode');
+  const input = await screen.findByPlaceholderText('8–14 digits');
   await user.type(input, barcode);
   await user.click(await screen.findByRole('button', { name: /look up barcode/i }));
 };
@@ -92,7 +92,7 @@ describe('scanning a barcode on the full-page search', () => {
     expect(await screen.findByText(/^Added to .* ✓ · Test Food$/)).toBeInTheDocument();
     // The scanner's own field is gone once it has closed.
     await waitFor(() =>
-      expect(screen.queryByPlaceholderText('Enter 8-14 digit barcode')).not.toBeInTheDocument()
+      expect(screen.queryByPlaceholderText('8–14 digits')).not.toBeInTheDocument()
     );
   });
 
@@ -106,7 +106,7 @@ describe('scanning a barcode on the full-page search', () => {
     await scan(user);
 
     await waitFor(() => expect(logItems).toHaveBeenCalled());
-    expect(await screen.findByText('Could not log that item. Try again.')).toBeInTheDocument();
-    expect(screen.getByPlaceholderText('Enter 8-14 digit barcode')).toBeInTheDocument();
+    expect(await screen.findByText('Couldn’t add that. Try again.')).toBeInTheDocument();
+    expect(screen.getByPlaceholderText('8–14 digits')).toBeInTheDocument();
   });
 });

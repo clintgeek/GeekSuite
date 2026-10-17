@@ -45,7 +45,7 @@ export const getSourceName = (source) => {
     case 'openfoodfacts':
       return 'Open Food Facts';
     case 'custom':
-      return 'My Foods';
+      return 'My foods';
     case undefined:
     case null:
     case '':

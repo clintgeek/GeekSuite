@@ -44,9 +44,9 @@ describe('HouseholdLogView', () => {
     render(<HouseholdLogView open onClose={() => {}} currentDate="2026-10-13" onCopyMeal={() => {}} />);
 
     expect(await screen.findByText('Overnight oats')).toBeInTheDocument();
-    expect(screen.getByText('Crocker Food Logs')).toBeInTheDocument();
+    expect(screen.getByText('Crocker food logs')).toBeInTheDocument();
     expect(fitnessGeekService.getHouseholdMemberLogs).toHaveBeenCalledWith('heather', '2026-10-13');
-    expect(screen.queryByText(/no household members are sharing/i)).not.toBeInTheDocument();
+    expect(screen.queryByText(/no household members are sharing|no one in your household is sharing/i)).not.toBeInTheDocument();
     expect(screen.getAllByText(/300/).length).toBeGreaterThan(0);
   });
 
@@ -69,7 +69,7 @@ describe('HouseholdLogView', () => {
 
     render(<HouseholdLogView open onClose={() => {}} currentDate="2026-10-13" onCopyMeal={onCopyMeal} />);
 
-    const copy = await screen.findByRole('button', { name: "Copy Heather's breakfast to your log" });
+    const copy = await screen.findByRole('button', { name: 'Copy Heather’s breakfast to your log' });
     expect(copy).toHaveTextContent('Copy to your log');
     expect(screen.getByText(/^What Heather ate/)).toBeInTheDocument();
     expect(screen.queryByText('2026-10-13')).toBeNull();

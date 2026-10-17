@@ -43,8 +43,9 @@ describe('WeightLogList renders the calendar day it was given', () => {
       />
     );
 
-    expect(screen.getByText('Feb 26, 2026')).toBeInTheDocument();
-    expect(screen.queryByText('Feb 25, 2026')).toBeNull();
+    // No year in the current year (review U-5): "Feb 26" in 2026, "Feb 26, 2026" after.
+    expect(screen.getByText(/^Feb 26(, 2026)?$/)).toBeInTheDocument();
+    expect(screen.queryByText(/^Feb 25(, 2026)?$/)).toBeNull();
   });
 
   it('marks the entry logged on the viewer\'s own today as "Today"', () => {

@@ -7,6 +7,7 @@ import {
   Tooltip
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
+import { fmt } from '../../utils/plainWords.js';
 import {
   LocalFireDepartment as CaloriesIcon,
   FitnessCenter as ProteinIcon,
@@ -129,7 +130,7 @@ const NutritionSummary = ({
               }}
             >
               {item.label === 'Calories' && onCalorieSettingsClick && (
-                <Tooltip title="Calorie goal settings">
+                <Tooltip title="Change your daily target">
                   <IconButton
                     size="small"
                     onClick={onCalorieSettingsClick}
@@ -139,7 +140,7 @@ const NutritionSummary = ({
                       right: 6,
                       color: theme.palette.text.disabled
                     }}
-                    aria-label="calorie-goal-settings"
+                    aria-label="Change your daily target"
                   >
                     <SettingsIcon fontSize="inherit" />
                   </IconButton>
@@ -185,7 +186,7 @@ const NutritionSummary = ({
                   mb: 0.5
                 }}
               >
-                {Math.round(item.value)}
+                {fmt(item.value)}
                 <Typography
                   component="span"
                   variant="caption"
@@ -215,7 +216,7 @@ const NutritionSummary = ({
                         fontSize: '0.75rem'
                       }}
                     >
-                      {item.isRDA ? 'RDA' : 'Goal'}: {item.goal}
+                      {item.isRDA ? 'Typical day' : 'Target'}: {fmt(item.goal)}
                     </Typography>
                     <Typography
                       variant="caption"
@@ -230,7 +231,7 @@ const NutritionSummary = ({
                   <LinearProgress
                     variant="determinate"
                     value={item.progress}
-                    aria-label={`${item.label}: ${Math.round(item.value)}${item.unit} of ${item.goal} ${item.isRDA ? 'RDA' : 'goal'}`}
+                    aria-label={`${item.label}: ${fmt(item.value)} ${item.unit} of ${fmt(item.goal)}${item.isRDA ? ' on a typical day' : ''}`}
                     sx={{
                       height: 4,
                       borderRadius: 2,

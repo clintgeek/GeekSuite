@@ -5,7 +5,32 @@
  */
 import { MEAL_LABELS } from '../theme/theme.jsx';
 
-const fmt = (n) => Math.round(Number(n) || 0).toLocaleString('en-US');
+/** A whole number with commas at 1,000 and above: "1,680". */
+export const fmt = (n) => Math.round(Number(n) || 0).toLocaleString('en-US');
+
+/** "1,680 cal" — "cal" next to a number, "calories" in a sentence; never kcal. */
+export const cal = (n) => `${fmt(n)} cal`;
+
+const known = (n) => n !== null && n !== undefined && n !== '' && Number.isFinite(Number(n));
+
+/** Whole grams, "<1" for a trace, "—" when unknown (never a fake 0). */
+export function grams(n) {
+  if (!known(n)) return '—';
+  const v = Number(n);
+  if (v > 0 && v < 0.5) return '<1';
+  return fmt(v);
+}
+
+/**
+ * Protein, carbs and fat, always in that order (review U-4).
+ * Default: "Protein 18g · Carbs 8g · Fat 10g". `dense` (Full's list rows):
+ * "P 18 · C 8 · F 10 g". Unknown amounts read "—".
+ */
+export function macroLine({ protein, carbs, fat } = {}, { dense = false } = {}) {
+  if (dense) return `P ${grams(protein)} · C ${grams(carbs)} · F ${grams(fat)} g`;
+  const g = (n) => (known(n) ? `${grams(n)}g` : '—');
+  return `Protein ${g(protein)} · Carbs ${g(carbs)} · Fat ${g(fat)}`;
+}
 
 /** "Breakfast", "Lunch", "Dinner", "Snacks". */
 export const mealLabel = (mealType) => MEAL_LABELS[mealType] || 'Snacks';
@@ -22,7 +47,7 @@ export function caloriesSentence({ eaten = 0, goal = 0 }) {
   const g = Math.round(Number(goal) || 0);
   if (!(g > 0)) {
     return {
-      headline: e > 0 ? `You've had ${fmt(e)} calories today` : 'Nothing logged yet today',
+      headline: e > 0 ? `You’ve had ${fmt(e)} calories today` : 'Nothing logged yet today',
       detail: e > 0 ? 'Just keeping count. There is no daily target.' : 'Add what you ate and I’ll keep count.',
       state: 'nogoal',
     };
@@ -36,10 +61,10 @@ export function caloriesSentence({ eaten = 0, goal = 0 }) {
     };
   }
   if (left === 0) {
-    return { headline: "You've hit your calories for today", detail: `${fmt(e)} eaten of ${fmt(g)}`, state: 'even' };
+    return { headline: 'You’ve hit your calories for today', detail: `${fmt(e)} eaten of ${fmt(g)}`, state: 'even' };
   }
   return {
-    headline: `You're ${fmt(-left)} calories over today`,
+    headline: `You’re ${fmt(-left)} calories over today`,
     detail: `${fmt(e)} eaten of ${fmt(g)}`,
     state: 'over',
   };

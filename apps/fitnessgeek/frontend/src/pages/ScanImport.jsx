@@ -46,9 +46,9 @@ const XLSX_MIME_TYPE = 'application/vnd.openxmlformats-officedocument.spreadshee
 
 const ERROR_MESSAGES = {
   no_file: 'No file was shared.',
-  unsupported_type: 'That file type is not supported. Share a PDF or an image.',
-  file_too_large: 'That file is too large.',
-  server_error: 'Something went wrong receiving the shared file.',
+  unsupported_type: 'FitnessGeek can’t read that kind of file. Share a PDF or an image.',
+  file_too_large: 'That file is too big. The limit is 10MB.',
+  server_error: 'Couldn’t receive the shared file. Try sharing it again.',
 };
 
 const STATUS = {
@@ -80,7 +80,7 @@ const STATUS = {
  */
 function formatCheckValue(key, value) {
   if (value === null || value === undefined || Number.isNaN(value)) return '—';
-  return key === 'bmr_kcal' ? Math.round(value).toString() : value.toFixed(1);
+  return key === 'bmr_kcal' ? Math.round(value).toLocaleString('en-US') : value.toFixed(1);
 }
 
 /** One row of the mismatch/verification table — a label plus computed vs. printed. */
@@ -128,7 +128,7 @@ const PRIMARY_LABELS = {
   bone_mass_lb: 'Bone mass',
   skeletal_muscle_lb: 'Skeletal muscle',
   subcutaneous_fat_lb: 'Subcutaneous fat',
-  visceral_fat_index: 'Visceral fat index',
+  visceral_fat_index: 'Belly fat score (visceral fat)',
   height_cm: 'Height',
   'left_arm.muscle_lb': 'Left arm muscle',
   'right_arm.muscle_lb': 'Right arm muscle',
@@ -156,7 +156,7 @@ function MismatchGuidance({ classification, accepting, onAccept }) {
     return (
       <Box sx={{ mt: 1.5, textAlign: 'left' }}>
         <Typography sx={{ fontSize: '0.8125rem', color: 'success.main', fontWeight: 600, mb: 1 }}>
-          The measurements check out — only a printed figure on the report didn't match what we recomputed from it.
+          The measurements check out — only a printed figure on the report didn’t match what I worked out from it.
         </Typography>
         <Button
           variant="contained"
@@ -176,10 +176,10 @@ function MismatchGuidance({ classification, accepting, onAccept }) {
       <Typography sx={{ fontSize: '0.8125rem', color: 'error.main', fontWeight: 600, mb: 0.5 }}>
         {classification.suspectPrimaries.length > 0
           ? `Double-check: ${classification.suspectPrimaries.map(labelForPrimary).join(', ')}`
-          : 'A stored measurement could not be confirmed.'}
+          : 'A measurement couldn’t be confirmed.'}
       </Typography>
       <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary' }}>
-        Share the report again for a clean read — this can't be saved as-is.
+        Share the report again for a clean read — this can’t be saved as-is.
       </Typography>
     </Box>
   );
@@ -211,15 +211,15 @@ function xlsxImportSummary(extraction) {
   if (extraction.status === 'unreadable') {
     return {
       tone: 'error',
-      title: "Couldn't read this file.",
-      detail: extraction.message || 'Could not read this file as a spreadsheet export.',
+      title: 'Couldn’t read this file',
+      detail: extraction.message || 'It doesn’t look like a spreadsheet export from your scale’s app.',
     };
   }
 
   const { imported = 0, skipped = 0, failed = 0 } = extraction;
   const parts = [`imported ${imported} scan${imported === 1 ? '' : 's'}`];
   if (skipped > 0) parts.push(`skipped ${skipped} already present`);
-  if (failed > 0) parts.push(`could not verify ${failed}`);
+  if (failed > 0) parts.push(`couldn’t check ${failed}`);
   const detail = `${parts.join(', ')}.`;
 
   return {
@@ -229,7 +229,7 @@ function xlsxImportSummary(extraction) {
     // error. Only "nothing imported AND something failed the gate" reads as
     // an error tone.
     tone: imported > 0 || failed === 0 ? 'success' : 'error',
-    title: imported > 0 ? 'Scan history imported.' : skipped > 0 ? 'Already imported.' : 'Nothing to import.',
+    title: imported > 0 ? 'Scan history imported' : skipped > 0 ? 'Already imported' : 'Nothing to import',
     detail: detail.charAt(0).toUpperCase() + detail.slice(1),
   };
 }
@@ -240,20 +240,20 @@ function extractionSummary(extraction) {
 
   switch (extraction?.status) {
     case 'saved':
-      return { tone: 'success', title: 'Scan saved.', detail: 'Your body-composition scan was read, verified, and logged.' };
+      return { tone: 'success', title: 'Scan saved', detail: 'Your body-composition scan was read, checked and saved.' };
     case 'duplicate':
-      return { tone: 'success', title: 'Already imported.', detail: extraction.message || 'This scan was already imported.' };
+      return { tone: 'success', title: 'Already imported', detail: extraction.message || 'This scan was already imported.' };
     case 'mismatch':
       return {
         tone: 'error',
-        title: 'Needs a look.',
-        detail: "Some numbers on the report didn't match what we recomputed from it, so nothing was saved yet.",
+        title: 'Needs a look',
+        detail: 'Some numbers on the report didn’t match what I worked out from it, so nothing is saved yet.',
       };
     case 'incomplete':
       return {
         tone: 'error',
-        title: 'Could not read enough of the scan.',
-        detail: extraction.message || 'The scan could not be fully read.',
+        title: 'Couldn’t read enough of the scan',
+        detail: extraction.message || 'Part of the scan couldn’t be read. Try a clearer photo of the report.',
       };
     case 'refused':
       // Only reachable from a failed accept attempt — see
@@ -262,14 +262,14 @@ function extractionSummary(extraction) {
       // went stale between the mismatch and the click.
       return {
         tone: 'error',
-        title: 'Could not save this.',
-        detail: extraction.message || 'A stored measurement could not be confirmed.',
+        title: 'Couldn’t save this',
+        detail: extraction.message || 'A measurement couldn’t be confirmed.',
       };
     case 'extraction_failed':
     default:
       return {
         tone: 'error',
-        title: "Couldn't read this scan right now.",
+        title: 'Couldn’t read this scan right now',
         detail: extraction?.message || 'Try again, or share a clearer photo of the report.',
       };
   }
@@ -324,7 +324,7 @@ function ScanImport() {
       setStatus(STATUS.SUCCESS);
     } catch (error) {
       setStatus(STATUS.ERROR);
-      const message = friendlyError(error, "That didn't upload. Try again.");
+      const message = friendlyError(error, "That didn’t upload. Try again.");
       setErrorMessage(message);
       notify(message, { tone: 'error' });
     }
@@ -337,7 +337,7 @@ function ScanImport() {
 
     if (shareError) {
       setStatus(STATUS.ERROR);
-      setErrorMessage(ERROR_MESSAGES[shareError] || 'The shared file could not be received.');
+      setErrorMessage(ERROR_MESSAGES[shareError] || 'Couldn’t receive the shared file. Try sharing it again.');
       return;
     }
 
@@ -353,7 +353,7 @@ function ScanImport() {
       .catch((error) => {
         if (cancelled) return;
         setStatus(STATUS.ERROR);
-        setErrorMessage(friendlyError(error, 'The shared file could not be retrieved — it may have expired.'));
+        setErrorMessage(friendlyError(error, 'Couldn’t get the shared file — it may have expired. Share it again.'));
       });
 
     // Clear the query params so a refresh doesn't try to re-claim an
@@ -381,12 +381,12 @@ function ScanImport() {
       });
       setExtraction(accepted);
       if (accepted.status === 'saved' || accepted.status === 'duplicate') {
-        notify(accepted.status === 'saved' ? 'Scan saved.' : 'This scan was already imported.', { tone: 'success' });
+        notify(accepted.status === 'saved' ? 'Scan saved' : 'This scan was already imported', { tone: 'success' });
       } else {
-        notify(accepted.message || 'Could not save the scan.', { tone: 'error' });
+        notify(accepted.message || 'Couldn’t save the scan. Try again.', { tone: 'error' });
       }
     } catch (error) {
-      notify(friendlyError(error, "Couldn't save the scan. Try again."), { tone: 'error' });
+      notify(friendlyError(error, "Couldn’t save the scan. Try again."), { tone: 'error' });
     } finally {
       setAccepting(false);
     }
@@ -407,7 +407,7 @@ function ScanImport() {
     <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 720, mx: 'auto' }}>
       <Box sx={{ mb: 3 }}>
         <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem' }}>
-          Share a body-composition report from your scale's app, or choose a file below.
+          Share a body-composition report from your scale’s app, or choose a file below.
         </Typography>
       </Box>
 
@@ -434,7 +434,7 @@ function ScanImport() {
           <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 1.5, py: 2 }}>
             <CircularProgress size={32} />
             <Typography sx={{ fontSize: '0.875rem', color: 'text.secondary' }}>
-              {status === STATUS.CLAIMING && 'Retrieving shared file…'}
+              {status === STATUS.CLAIMING && 'Getting the shared file…'}
               {status === STATUS.UPLOADING && 'Uploading…'}
               {status === STATUS.EXTRACTING && 'Reading your scan…'}
               {status === STATUS.IMPORTING && 'Importing your scan history…'}

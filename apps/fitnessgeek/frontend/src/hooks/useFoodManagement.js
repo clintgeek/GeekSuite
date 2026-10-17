@@ -15,7 +15,7 @@ export const useFoodManagement = () => {
       setFoods(response || []);
     } catch (error) {
       console.error('Error loading foods:', error);
-      setError(errorMessage(error, 'Failed to load foods'));
+      setError(errorMessage(error, 'Couldn’t load your foods. Try again.'));
     } finally {
       setLoading(false);
     }
@@ -25,12 +25,12 @@ export const useFoodManagement = () => {
     try {
       await fitnessGeekService.updateFood(foodId, data);
       await loadFoods();
-      setSuccessMessage('Food updated successfully');
+      setSuccessMessage('Food saved');
       setTimeout(() => setSuccessMessage(''), 3000);
       return true;
     } catch (error) {
       console.error('Error updating food:', error);
-      setError(errorMessage(error, 'Failed to update food'));
+      setError(errorMessage(error, 'Couldn’t save that food. Try again.'));
       return false;
     }
   };
@@ -39,12 +39,12 @@ export const useFoodManagement = () => {
     try {
       await fitnessGeekService.deleteFood(foodId);
       await loadFoods();
-      setSuccessMessage('Food deleted successfully');
+      setSuccessMessage('Food deleted');
       setTimeout(() => setSuccessMessage(''), 3000);
       return true;
     } catch (error) {
       console.error('Error deleting food:', error);
-      setError(errorMessage(error, 'Failed to delete food'));
+      setError(errorMessage(error, 'Couldn’t delete that food. Try again.'));
       return false;
     }
   };

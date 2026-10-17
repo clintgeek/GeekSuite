@@ -5,7 +5,8 @@ import {
   EditOutlined as EditIcon,
   MonitorWeight as WeightIcon,
 } from '@mui/icons-material';
-import { displayCalendarDate, localDateString, utcDateString } from '@geeksuite/utils';
+import { localDateString, utcDateString } from '@geeksuite/utils';
+import { nearDay } from '../../utils/dates.js';
 import { Surface, SectionLabel, StatNumber, EmptyState } from '../primitives';
 import EditWeightDialog from './EditWeightDialog.jsx';
 
@@ -31,23 +32,14 @@ const WeightLogList = ({ logs, onDelete, onUpdate, unit = 'lbs' }) => {
   const [showAll, setShowAll] = useState(false);
 
   // `log_date` is a CALENDAR date stored at UTC midnight, not an instant —
-  // same class of bug already fixed in BPLogList. Compare calendar-day
-  // strings via `utcDateString`/`localDateString` and render with
-  // `displayCalendarDate` (which forces `timeZone: 'UTC'`), never
-  // `new Date(log_date).toDateString()`, which is the day before west of UTC.
-  const formatDate = (dateString) => {
-    const day = utcDateString(dateString);
-    const today = localDateString();
-    if (day === today) return 'Today';
-
-    // "Yesterday" from the viewer's own local calendar, not
-    // `Date.now() - 86400000` — that drifts across a DST transition.
-    const now = new Date();
-    const yesterday = localDateString(new Date(now.getFullYear(), now.getMonth(), now.getDate() - 1));
-    if (day === yesterday) return 'Yesterday';
-
-    return displayCalendarDate(dateString, 'en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-  };
+  // same class of bug already fixed in BPLogList. Take the calendar-day
+  // string with `utcDateString` and compare it with the viewer's own
+  // `localDateString` today, never `new Date(log_date).toDateString()`,
+  // which is the day before west of UTC. Words per review U-5: "Today",
+  // "Yesterday", a weekday for the last week, else "Oct 13" (the year only
+  // when it isn't this year).
+  const formatDate = (dateString) => nearDay(utcDateString(dateString), localDateString());
+  const u = unit === 'lbs' ? 'lb' : unit;
 
   const sortedLogs = [...(logs || [])].sort((a, b) => {
     const da = utcDateString(a.log_date);
@@ -72,7 +64,7 @@ const WeightLogList = ({ logs, onDelete, onUpdate, unit = 'lbs' }) => {
       <Box sx={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', mb: 1 }}>
         <SectionLabel>Weight log</SectionLabel>
         <Typography sx={{ color: 'text.secondary', fontSize: '0.75rem' }}>
-          {sortedLogs.length} {sortedLogs.length === 1 ? 'entry' : 'entries'}
+          {sortedLogs.length} {sortedLogs.length === 1 ? 'weigh-in' : 'weigh-ins'}
         </Typography>
       </Box>
 
@@ -97,7 +89,7 @@ const WeightLogList = ({ logs, onDelete, onUpdate, unit = 'lbs' }) => {
               }}
             >
               <Box sx={{ flex: 1, minWidth: 0 }}>
-                <StatNumber value={weight} decimals={1} unit={unit} size="body" />
+                <StatNumber value={weight} decimals={1} unit={u} size="body" />
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mt: 0.25, flexWrap: 'wrap' }}>
                   <Typography sx={{ color: 'text.secondary', fontSize: '0.8125rem' }}>{when}</Typography>
                   {fromScale && (
@@ -134,7 +126,7 @@ const WeightLogList = ({ logs, onDelete, onUpdate, unit = 'lbs' }) => {
               {onUpdate && (
                 <IconButton
                   onClick={() => { setEditing(log); setEditOpen(true); }}
-                  aria-label={`Edit the ${weight} ${unit} entry from ${when}`}
+                  aria-label={`Edit the ${weight} ${u} weigh-in from ${when}`}
                   sx={{ width: 44, height: 44, color: 'text.secondary' }}
                 >
                   <EditIcon fontSize="small" />
@@ -142,7 +134,7 @@ const WeightLogList = ({ logs, onDelete, onUpdate, unit = 'lbs' }) => {
               )}
               <IconButton
                 onClick={() => onDelete(log.id)}
-                aria-label={`Delete the ${weight} ${unit} entry from ${when}`}
+                aria-label={`Remove the ${weight} ${u} weigh-in from ${when}`}
                 sx={{ width: 44, height: 44, color: 'text.secondary' }}
               >
                 <DeleteIcon fontSize="small" />

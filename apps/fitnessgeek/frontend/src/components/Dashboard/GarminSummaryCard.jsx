@@ -1,6 +1,7 @@
 import React from 'react';
 import { Card, CardContent, Typography, Box, Fade, Grid } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
+import { clockTime, shortDay } from '../../utils/dates.js';
 import { DirectionsWalk as StepsIcon, LocalFireDepartment as FireIcon, Bedtime as SleepIcon, Favorite as HeartIcon } from '@mui/icons-material';
 
 const Metric = ({ value, label, color }) => {
@@ -17,10 +18,10 @@ const Metric = ({ value, label, color }) => {
   );
 };
 
-const GarminSummaryCard = ({ steps, activeCalories, sleepMinutes, restingHR, fetchedAt, lastSyncAt, title = "Today's Activity", timeout = 700 }) => {
+const GarminSummaryCard = ({ steps, activeCalories, sleepMinutes, restingHR, fetchedAt, lastSyncAt, title = 'Today’s activity', timeout = 700 }) => {
   const theme = useTheme();
   const sleepText = sleepMinutes != null ? `${Math.floor(sleepMinutes / 60)}h ${sleepMinutes % 60}m` : '—';
-  const timeText = fetchedAt ? new Date(fetchedAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+  const timeText = fetchedAt ? clockTime(fetchedAt) : '';
   return (
     <Fade in timeout={timeout}>
       <Box sx={{
@@ -32,11 +33,11 @@ const GarminSummaryCard = ({ steps, activeCalories, sleepMinutes, restingHR, fet
       }}>
         <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, 1fr)', sm: 'repeat(4, 1fr)' }, gap: { xs: 1.5, sm: 2 } }}>
           {[{
-            label: 'Resting HR', value: restingHR ?? '—', color: theme.palette.info.main, Icon: HeartIcon
+            label: 'Resting heart rate', value: restingHR ?? '—', color: theme.palette.info.main, Icon: HeartIcon
           }, {
             label: 'Steps', value: steps ?? '—', color: theme.palette.primary.main, Icon: StepsIcon
           }, {
-            label: 'Active kcal', value: activeCalories != null ? `${activeCalories}` : '—', color: theme.palette.success.main, Icon: FireIcon
+            label: 'From activity', value: activeCalories != null ? `${activeCalories}` : '—', color: theme.palette.success.main, Icon: FireIcon
           }, {
             label: 'Sleep', value: sleepText, color: theme.palette.secondary.main, Icon: SleepIcon
           }].map((item) => (
@@ -53,7 +54,7 @@ const GarminSummaryCard = ({ steps, activeCalories, sleepMinutes, restingHR, fet
                 {item.value}
                 {item.label === 'Steps' ? null : (
                   <Typography component="span" variant="caption" sx={{ color: theme.palette.text.secondary, ml: 0.5, fontSize: { xs: '0.75rem', sm: '0.875rem' } }}>
-                    {item.label === 'Resting HR' ? '' : (item.label === 'Active kcal' ? 'kcal' : '')}
+                    {item.label === 'Resting heart rate' ? '' : (item.label === 'From activity' ? 'cal' : '')}
                   </Typography>
                 )}
               </Typography>
@@ -70,7 +71,7 @@ const GarminSummaryCard = ({ steps, activeCalories, sleepMinutes, restingHR, fet
               )}
               {lastSyncAt && (
                 <Typography variant="caption" sx={{ color: theme.palette.text.disabled, display: 'block' }}>
-                  Last sync {new Date(lastSyncAt).toLocaleDateString()}
+                  Last synced {shortDay(lastSyncAt)}
                 </Typography>
               )}
             </Box>

@@ -26,6 +26,10 @@ import {
   Info as InfoIcon
 } from '@mui/icons-material';
 import { useToast } from '@geeksuite/ui';
+import { errorMessage } from '../utils/errorMessage.js';
+import { shortDay } from '../utils/dates.js';
+
+const UNREACHABLE = 'FitnessGeek couldn’t reach the home data server. Try again in a moment.';
 
 /**
  * InfluxDB Settings Component
@@ -80,7 +84,7 @@ export default function InfluxDBSettings({ onSettingsChange }) {
       });
     } catch (err) {
       console.error('Error fetching settings:', err);
-      notify('Failed to load settings', { tone: 'error' });
+      notify(errorMessage(err, 'Couldn’t load these settings. Try again.'), { tone: 'error' });
     } finally {
       setLoading(false);
     }
@@ -95,15 +99,14 @@ export default function InfluxDBSettings({ onSettingsChange }) {
       // This used to read `response.connected`, which the route has never sent,
       // so a working InfluxDB still reported "Connection Failed".
       const response = await influxService.getStatus();
-      setConnectionStatus({
-        success: !!response?.serverConnected,
-        error: response?.error || undefined
-      });
+      // The route's `error` is the driver's own text ("connect ECONNREFUSED…");
+      // it is not shown — a person gets one plain sentence instead.
+      setConnectionStatus({ success: !!response?.serverConnected });
     } catch (err) {
       console.error('Error testing connection:', err);
       setConnectionStatus({
         success: false,
-        error: err.response?.data?.error || 'Connection test failed'
+        error: errorMessage(err, UNREACHABLE)
       });
     } finally {
       setTestingConnection(false);
@@ -122,8 +125,8 @@ export default function InfluxDBSettings({ onSettingsChange }) {
       setSettings(prev => ({ ...prev, influxEnabled: newValue }));
       notify(
         newValue
-          ? 'InfluxDB enabled! Your health data will now come from your personal InfluxDB instance.'
-          : 'Switched back to legacy Garmin API.',
+          ? 'Home data server on. Your Garmin data now comes from it'
+          : 'Home data server off. Your Garmin data comes straight from Garmin again',
         { tone: 'success' }
       );
 
@@ -138,7 +141,7 @@ export default function InfluxDBSettings({ onSettingsChange }) {
       }
     } catch (err) {
       console.error('Error updating settings:', err);
-      notify(err.response?.data?.error || 'Failed to update settings', { tone: 'error' });
+      notify(errorMessage(err, 'Couldn’t save that setting. Try again.'), { tone: 'error' });
     } finally {
       setSaving(false);
     }
@@ -159,10 +162,10 @@ export default function InfluxDBSettings({ onSettingsChange }) {
       });
 
       setSettings(prev => ({ ...prev, healthBaselines: newBaselines }));
-      notify('Health baselines updated successfully!', { tone: 'success' });
+      notify('Your usual numbers are saved', { tone: 'success' });
     } catch (err) {
       console.error('Error updating baselines:', err);
-      notify(err.response?.data?.error || 'Failed to update baselines', { tone: 'error' });
+      notify(errorMessage(err, 'Couldn’t save your usual numbers. Try again.'), { tone: 'error' });
     } finally {
       setSaving(false);
     }
@@ -182,7 +185,7 @@ export default function InfluxDBSettings({ onSettingsChange }) {
         {/* Header */}
         <Typography variant="h5">
           <StorageIcon sx={{ verticalAlign: 'middle', mr: 1 }} />
-          Data Source Settings
+          Where your Garmin data comes from
         </Typography>
 
         {/* Main Toggle Card */}
@@ -191,9 +194,9 @@ export default function InfluxDBSettings({ onSettingsChange }) {
             <Stack spacing={2}>
               <Stack direction="row" justifyContent="space-between" alignItems="center">
                 <Box>
-                  <Typography variant="h6">Enable InfluxDB Integration</Typography>
+                  <Typography variant="h6">Use the home data server (InfluxDB)</Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Use your personal InfluxDB instance for health data instead of Garmin API
+                    Read your Garmin data from the home data server instead of straight from Garmin.
                   </Typography>
                 </Box>
                 <FormControlLabel
@@ -211,14 +214,14 @@ export default function InfluxDBSettings({ onSettingsChange }) {
               <Divider />
 
               <Alert severity="info" icon={<InfoIcon />}>
-                <AlertTitle>About InfluxDB Mode</AlertTitle>
-                When enabled, fitnessGeek will pull health metrics from your personal InfluxDB
-                instance (populated by Garmin data sync). This provides:
+                <AlertTitle>What the home data server adds</AlertTitle>
+                When it’s on, FitnessGeek reads your Garmin data from the home data server,
+                which your Garmin sync fills. That adds:
                 <ul style={{ marginTop: 8, marginBottom: 0 }}>
-                  <li>More comprehensive intraday metrics (heart rate, stress, body battery)</li>
-                  <li>Advanced sleep analysis with HRV, cardiovascular recovery, and respiratory metrics</li>
-                  <li>AI-powered recovery coaching based on combined health data</li>
-                  <li>Meal impact visualization showing physiological responses to food</li>
+                  <li>Heart rate, stress and Body Battery through the day</li>
+                  <li>A closer look at your sleep: heart-rate variability (HRV), recovery and breathing</li>
+                  <li>Recovery notes written by AI from all of it</li>
+                  <li>How your heart rate answered each meal</li>
                 </ul>
               </Alert>
 
@@ -230,7 +233,7 @@ export default function InfluxDBSettings({ onSettingsChange }) {
                     disabled={testingConnection}
                     startIcon={testingConnection ? <CircularProgress size={20} /> : <SyncIcon />}
                   >
-                    Test Connection
+                    Check the connection
                   </Button>
 
                   {connectionStatus && (
@@ -240,13 +243,13 @@ export default function InfluxDBSettings({ onSettingsChange }) {
                     >
                       {connectionStatus.success ? (
                         <>
-                          <AlertTitle>Connection Successful</AlertTitle>
-                          FitnessGeek can reach your InfluxDB instance.
+                          <AlertTitle>Connected</AlertTitle>
+                          FitnessGeek can reach the home data server.
                         </>
                       ) : (
                         <>
-                          <AlertTitle>Connection Failed</AlertTitle>
-                          {connectionStatus.error || 'InfluxDB did not answer.'}
+                          <AlertTitle>Not connected</AlertTitle>
+                          {connectionStatus.error || UNREACHABLE}
                         </>
                       )}
                     </Alert>
@@ -263,44 +266,43 @@ export default function InfluxDBSettings({ onSettingsChange }) {
             <CardContent>
               <Stack spacing={2}>
                 <Box>
-                  <Typography variant="h6">Health Baselines</Typography>
+                  <Typography variant="h6">Your usual numbers</Typography>
                   <Typography variant="body2" color="text.secondary">
-                    Set your baseline metrics for more accurate recovery analysis
+                    What’s normal for you, so recovery notes can tell a good day from a tired one.
                   </Typography>
                 </Box>
 
                 <Alert severity="info" icon={<InfoIcon />}>
-                  These values help the AI recovery coach provide more personalized recommendations.
-                  Your typical HRV and resting HR serve as reference points for detecting recovery status.
+                  The AI compares each day with these. Leave a box empty if you don’t know it yet.
                 </Alert>
 
                 <TextField
-                  label="Weekly Average HRV"
+                  label="Usual heart-rate variability (HRV)"
                   value={hrvInput}
                   onChange={(e) => setHrvInput(e.target.value)}
                   type="number"
                   InputProps={{
                     endAdornment: <InputAdornment position="end">ms</InputAdornment>
                   }}
-                  helperText="Your typical HRV over a week (e.g., 60)"
+                  helperText="Your average over a week, such as 60"
                   fullWidth
                 />
 
                 <TextField
-                  label="Resting Heart Rate"
+                  label="Usual resting heart rate"
                   value={hrInput}
                   onChange={(e) => setHrInput(e.target.value)}
                   type="number"
                   InputProps={{
                     endAdornment: <InputAdornment position="end">bpm</InputAdornment>
                   }}
-                  helperText="Your typical resting HR (e.g., 55)"
+                  helperText="Such as 55"
                   fullWidth
                 />
 
                 {settings.healthBaselines.lastUpdated && (
                   <Typography variant="caption" color="text.secondary">
-                    Last updated: {new Date(settings.healthBaselines.lastUpdated).toLocaleDateString()}
+                    {`Last saved ${shortDay(settings.healthBaselines.lastUpdated)}`}
                   </Typography>
                 )}
 
@@ -310,7 +312,7 @@ export default function InfluxDBSettings({ onSettingsChange }) {
                   disabled={saving}
                   startIcon={saving ? <CircularProgress size={20} /> : <CheckIcon />}
                 >
-                  Update Baselines
+                  {saving ? 'Saving…' : 'Save'}
                 </Button>
               </Stack>
             </CardContent>
@@ -321,62 +323,62 @@ export default function InfluxDBSettings({ onSettingsChange }) {
         <Card variant="outlined">
           <CardContent>
             <Typography variant="h6" gutterBottom>
-              Feature Availability
+              What’s on
             </Typography>
             <Stack spacing={1}>
               <Stack direction="row" spacing={1} alignItems="center">
                 <Chip
-                  label="Sleep Analysis"
+                  label="Sleep analysis"
                   color={settings.influxEnabled ? 'success' : 'default'}
                   size="small"
                   icon={settings.influxEnabled ? <CheckIcon /> : <InfoIcon />}
                 />
                 <Typography variant="body2" color="text.secondary">
-                  {settings.influxEnabled ? 'Available' : 'Requires InfluxDB'}
+                  {settings.influxEnabled ? 'On' : 'Needs the home data server'}
                 </Typography>
               </Stack>
               <Stack direction="row" spacing={1} alignItems="center">
                 <Chip
-                  label="Intraday Metrics"
+                  label="Through the day"
                   color={settings.influxEnabled ? 'success' : 'default'}
                   size="small"
                   icon={settings.influxEnabled ? <CheckIcon /> : <InfoIcon />}
                 />
                 <Typography variant="body2" color="text.secondary">
-                  {settings.influxEnabled ? 'Available' : 'Requires InfluxDB'}
+                  {settings.influxEnabled ? 'On' : 'Needs the home data server'}
                 </Typography>
               </Stack>
               <Stack direction="row" spacing={1} alignItems="center">
                 <Chip
-                  label="AI Recovery Coach"
+                  label="Recovery coach"
                   color={settings.influxEnabled ? 'success' : 'default'}
                   size="small"
                   icon={settings.influxEnabled ? <CheckIcon /> : <InfoIcon />}
                 />
                 <Typography variant="body2" color="text.secondary">
-                  {settings.influxEnabled ? 'Available' : 'Requires InfluxDB'}
+                  {settings.influxEnabled ? 'On' : 'Needs the home data server'}
                 </Typography>
               </Stack>
               <Stack direction="row" spacing={1} alignItems="center">
                 <Chip
-                  label="Meal Impact Analysis"
+                  label="Meal impact"
                   color={settings.influxEnabled ? 'success' : 'default'}
                   size="small"
                   icon={settings.influxEnabled ? <CheckIcon /> : <InfoIcon />}
                 />
                 <Typography variant="body2" color="text.secondary">
-                  {settings.influxEnabled ? 'Available' : 'Requires InfluxDB'}
+                  {settings.influxEnabled ? 'On' : 'Needs the home data server'}
                 </Typography>
               </Stack>
               <Stack direction="row" spacing={1} alignItems="center">
                 <Chip
-                  label="Basic Health Tracking"
+                  label="Steps, sleep and heart rate"
                   color="success"
                   size="small"
                   icon={<CheckIcon />}
                 />
                 <Typography variant="body2" color="text.secondary">
-                  Always Available
+                  Always on
                 </Typography>
               </Stack>
             </Stack>

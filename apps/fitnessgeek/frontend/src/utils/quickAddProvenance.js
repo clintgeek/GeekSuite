@@ -16,7 +16,7 @@ export function provenanceLine(provenance) {
     if (reason === 'cap') {
       const cap = provenance?.cap;
       return cap
-        ? `no model — that is today's ${cap} drafts used; split from your own words`
+        ? `no model — that is today’s ${cap} drafts used; split from your own words`
         : 'no model — the daily draft limit is used up; split from your own words';
     }
     if (reason === 'disabled') {

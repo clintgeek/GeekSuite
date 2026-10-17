@@ -31,7 +31,7 @@ describe('RecoveryCoach — AI Analysis button', () => {
     const onRequestAIAnalysis = vi.fn();
     render(<RecoveryCoach date="2026-09-19" onRequestAIAnalysis={onRequestAIAnalysis} />);
 
-    await screen.findByText('AI Recovery Coach');
+    await screen.findByText('Recovery notes from the AI');
 
     expect(screen.queryByRole('button', { name: /Get Full AI Analysis/i })).toBeNull();
   });

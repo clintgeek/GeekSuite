@@ -1,5 +1,6 @@
 import { useCallback } from 'react';
 import { useToast } from '@geeksuite/ui';
+import { cal } from '../../utils/plainWords.js';
 
 /**
  * What the Fix sheet does, built from useFoodLogging's functions, so the
@@ -15,7 +16,7 @@ export function useEntryFixes({ setLogCalories, describeMeal, undoLogs, onChange
     const nutrition = await setLogCalories?.(item.logId, item.nutrition, item.servings, target);
     if (!nutrition) throw new Error('not updated');
     onChanged?.(item, { ...item, calories: Math.round(target), nutrition });
-    notify(`Updated to ${Math.round(target)} cal`, { tone: 'success' });
+    notify(`Updated to ${cal(target)}`, { tone: 'success' });
   }, [setLogCalories, onChanged, notify]);
 
   const redescribe = useCallback(async (item, text, key) => {

@@ -57,14 +57,13 @@ const FoodEditDialog = ({ open, food, form, onChange, onClose, onSave, loading }
     <PremiumDialog
       open={open}
       onClose={onClose}
-      eyebrow="My Foods"
       title={food ? `Edit ${food.name ?? 'food'}` : 'Create a food'}
       maxWidth="sm"
       {...thumbSaveProps({
         fullScreen,
         save: (
           <Button onClick={onSave} variant="contained" disabled={loading}>
-            {loading ? <CircularProgress size={20} /> : (food ? 'Save' : 'Create')}
+            {loading ? <CircularProgress size={20} /> : (food ? 'Save' : 'Save food')}
           </Button>
         ),
         cancel: <Button onClick={onClose}>Cancel</Button>,
@@ -162,7 +161,7 @@ const FoodEditDialog = ({ open, food, form, onChange, onClose, onSave, loading }
           <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))', gap: 2 }}>
             <DecimalField
               fullWidth
-              label="Serving Size"
+              label="Serving size"
               value={form.serving_size}
               onValue={(n) => onChange({ ...form, serving_size: n })}
               fallback={1}

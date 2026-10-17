@@ -35,9 +35,9 @@ const { settingsService } = await import('../../../services/settingsService');
 
 const fillAndJoin = async () => {
   const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
-  await user.click(await screen.findByRole('button', { name: /join household/i }));
+  await user.click(await screen.findByRole('button', { name: /join a household/i }));
   await user.type(screen.getByLabelText(/household code/i), '7d9169de1a8f');
-  await user.type(screen.getByLabelText(/your display name/i), 'Heather');
+  await user.type(screen.getByLabelText(/your name/i), 'Heather');
   await user.click(screen.getByRole('button', { name: /^join$/i }));
 };
 
@@ -99,9 +99,9 @@ describe('HouseholdSettings — the household name', () => {
     const user = userEvent.setup({ delay: null, pointerEventsCheck: 0 });
     render(<HouseholdSettings />);
 
-    await user.click(await screen.findByRole('button', { name: /create household/i }));
+    await user.click(await screen.findByRole('button', { name: /create a household/i }));
     await user.type(screen.getByLabelText(/household name/i), 'Crocker');
-    await user.type(screen.getByLabelText(/your display name/i), 'Clint');
+    await user.type(screen.getByLabelText(/your name/i), 'Clint');
     await user.click(screen.getByRole('button', { name: /^create$/i }));
 
     await waitFor(() => expect(settingsService.createHousehold).toHaveBeenCalledWith('Clint', 'Crocker'));

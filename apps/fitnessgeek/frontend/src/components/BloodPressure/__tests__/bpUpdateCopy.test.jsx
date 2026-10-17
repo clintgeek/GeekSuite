@@ -58,8 +58,8 @@ describe('AddBPDialog — edit mode actually edits', () => {
       <AddBPDialog open mode="edit" initialValues={row} onClose={() => {}} onAdd={async () => {}} />
     );
 
-    expect(screen.getByText('Edit Reading')).toBeInTheDocument();
-    expect(screen.queryByText('Add Reading')).toBeNull();
+    expect(screen.getByText('Edit blood pressure')).toBeInTheDocument();
+    expect(screen.queryByText('Log blood pressure')).toBeNull();
   });
 
   it('pre-fills systolic, diastolic, pulse, date and time from the row', () => {

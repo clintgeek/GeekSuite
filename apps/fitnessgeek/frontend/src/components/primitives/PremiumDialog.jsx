@@ -10,7 +10,7 @@ import DisplayHeading from './DisplayHeading.jsx';
  *
  * Now a thin skin over `GeekDialog` (MOBILE_UI_PLAN.md §2): the primitive owns
  * the rule — full-screen below `sm`, header of close ✕ / title / primary
- * action — and this wrapper owns the identity: the uppercase eyebrow, the DM
+ * action — and this wrapper owns the identity: the sentence-case eyebrow, the DM
  * Serif Display title, and the dashed rules above and below the body. It used
  * to fake full-screen with `xs` margins and a `100vh` cap, which left an
  * unscrollable page behind a card on a phone.
@@ -21,7 +21,8 @@ import DisplayHeading from './DisplayHeading.jsx';
  *
  * Props (all of the original API, plus the two mobile-header slots):
  *   open, onClose, maxWidth, fullWidth — passed through to GeekDialog
- *   eyebrow                            — small uppercase tick label
+ *   eyebrow                            — small context label (a date or a meal
+ *                                        only; never a second heading)
  *   title                              — the rounded display heading
  *   subtitle                           — optional muted body copy. Moves to the
  *                                        top of the body when full-screen, so

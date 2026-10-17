@@ -14,10 +14,10 @@
  * trace) is not shown either; the caller's fallback is.
  */
 
-export const OFFLINE_MESSAGE = "No signal right now. Try again when you're back online.";
+export const OFFLINE_MESSAGE = 'No signal right now. Try again when you’re back online.';
 export const RESTARTING_MESSAGE = 'FitnessGeek is restarting. Try again in a moment.';
 export const TIMEOUT_MESSAGE = 'That took too long. Try again.';
-export const SIGNED_OUT_MESSAGE = 'Please sign in again.';
+export const SIGNED_OUT_MESSAGE = 'You’re signed out. Sign in again.';
 
 const TECHNICAL = /E11000|duplicate key|Cast to|ValidationError|MongoServerError|stack|at \w+ \(|Unexpected token|Cannot read propert|is not defined|undefined|status code \d{3}|ECONN|ETIMEDOUT|socket hang up|Network Error/i;
 
@@ -64,7 +64,7 @@ function serverText(err) {
   return text;
 }
 
-export function errorMessage(err, fallback = "That didn't go through. Try again.") {
+export function errorMessage(err, fallback = 'That didn’t go through. Try again.') {
   return transportMessage(err) || serverText(err) || fallback;
 }
 

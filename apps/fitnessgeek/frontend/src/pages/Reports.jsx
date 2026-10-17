@@ -50,7 +50,7 @@ const metricUnits = { protein: 'g', carbs: 'g', fat: 'g', fiber: 'g', sugar: 'g'
 const commas = (n) => Math.round(Number(n) || 0).toLocaleString('en-US');
 
 /** The sentence the backend sends with `ok: false`; local default only. */
-const UNAVAILABLE_TEXT = "The assistant isn't available right now.";
+const UNAVAILABLE_TEXT = 'The assistant isn’t available right now.';
 
 // What the server writes in place of a summary when there was nothing to
 // summarise (backend and gateway each have their own wording). Shown as the
@@ -249,7 +249,7 @@ const Reports = () => {
       setTrends(value(trendsData));
       // Only both halves failing is a page error; one half renders alone.
       if (overviewData.status === 'rejected' && trendsData.status === 'rejected') {
-        setError(errorMessage(overviewData.reason, "Your reports didn't load. Try again."));
+        setError(errorMessage(overviewData.reason, 'Couldn’t load your reports. Try again.'));
       }
       setLoading(false);
     });
@@ -291,7 +291,7 @@ const Reports = () => {
       window.URL.revokeObjectURL(url);
     } catch (err) {
       console.error(err);
-      notify(errorMessage(err, "The report didn't download. Try again."), { tone: 'error' });
+      notify(errorMessage(err, 'Couldn’t download the report. Try again.'), { tone: 'error' });
     } finally {
       setExporting(false);
     }
@@ -351,7 +351,9 @@ const Reports = () => {
           <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
             {/* `size="small"` renders under the 44px tap floor the mobile
                 harness enforces (MOBILE_UI_PLAN 6). The compact look is kept;
-                only the hit area grows. */}
+                only the hit area grows. The labels are words ("7 days"),
+                not "7d" — three of them fit a 360px phone row, and the
+                Export button wraps under them. */}
             <ToggleButtonGroup
               size="small"
               value={range}
@@ -361,8 +363,8 @@ const Reports = () => {
               sx={{ '& .MuiToggleButtonGroup-grouped': { minHeight: 44, minWidth: 44 } }}
             >
               {RANGE_OPTIONS.map((option) => (
-                <ToggleButton key={option} value={option} aria-label={`${option} days`}>
-                  {option}d
+                <ToggleButton key={option} value={option} sx={{ px: 1.25, whiteSpace: 'nowrap' }}>
+                  {`${option} days`}
                 </ToggleButton>
               ))}
             </ToggleButtonGroup>
@@ -383,7 +385,7 @@ const Reports = () => {
           </Box>
         ) : error ? (
           <GeekErrorState
-            title="Couldn't load reports"
+            title="Couldn’t load your reports"
             error={error}
             onRetry={fetchReports}
           />
@@ -462,12 +464,9 @@ const Reports = () => {
                   )}
                 </Surface>
 
-                {/* Goal Compliance */}
-                <Surface>
-                  <Box sx={{ mb: 2.5 }}>
-                    <SectionLabel sx={{ mb: 0.75 }}>Goal Compliance</SectionLabel>
-                    <DisplayHeading size="card">On-Target Days</DisplayHeading>
-                  </Box>
+                {/* Days on target */}
+                <Surface data-testid="days-on-target">
+                  <SectionLabel sx={{ mb: 2 }}>Days on target</SectionLabel>
                   {goalComplianceEntries.length ? goalComplianceEntries.map(([metric, detail]) => (
                     <Box key={metric} sx={{ mb: 2, '&:last-child': { mb: 0 } }}>
                       <Box sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.75 }}>
@@ -488,20 +487,20 @@ const Reports = () => {
                       <LinearProgress
                         variant="determinate"
                         value={detail.percentage}
-                        aria-label={`${metricLabels[metric] || metric} compliance: ${Math.round(detail.percentage)}%`}
+                        aria-label={`${metricLabels[metric] || metric}: ${detail.daysWithin} days on target`}
                         sx={{ borderRadius: 999 }}
                       />
                     </Box>
                   )) : (
                     <Typography variant="body2" color="text.secondary">
-                      No active nutrition goals recorded.
+                      Set a daily target and I’ll count the days you hit it.
                     </Typography>
                   )}
                 </Surface>
               </Grid>
 
               <Grid item xs={12} md={4}>
-                {/* Top Foods */}
+                {/* Top foods */}
                 <Surface padded={false} sx={{ mb: 3 }}>
                   <Box
                     sx={{
@@ -511,7 +510,7 @@ const Reports = () => {
                       borderBottom: `1px dashed ${theme.palette.divider}`,
                     }}
                   >
-                    <SectionLabel>Top Foods</SectionLabel>
+                    <SectionLabel>Your top foods</SectionLabel>
                   </Box>
                   <Box sx={{ p: 2.5 }}>
                     {overview?.topFoods?.length ? overview.topFoods.map((food) => (
@@ -555,7 +554,7 @@ const Reports = () => {
                   </Box>
                 </Surface>
 
-                {/* Trend Highlights */}
+                {/* What stands out */}
                 <Surface padded={false}>
                   <Box
                     sx={{
@@ -565,7 +564,7 @@ const Reports = () => {
                       borderBottom: `1px dashed ${theme.palette.divider}`,
                     }}
                   >
-                    <SectionLabel>Trend Highlights</SectionLabel>
+                    <SectionLabel>What stands out</SectionLabel>
                   </Box>
                   <Box sx={{ p: 2.5 }}>
                     {trends?.highlights?.length ? trends.highlights.map((item, idx) => (
@@ -607,7 +606,7 @@ const Reports = () => {
               error={weeklyError}
               data={weeklyCoach}
               empty={nothingLogged}
-              emptyText="Log a few days and I'll write a summary here."
+              emptyText="Log a few days and I’ll write a summary here."
               emptyPattern={EMPTY_SUMMARY}
               source={lastDaysSource(days)}
             />

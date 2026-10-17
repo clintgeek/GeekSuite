@@ -112,7 +112,7 @@ export default function QuickPicks({
 
       {household.map((member) => {
         const key = householdKey(member.userId);
-        const label = `Same as ${member.name}'s ${meal}`;
+        const label = `Same as ${member.name}’s ${meal}`;
         return (
           <Button
             key={key}
@@ -124,7 +124,7 @@ export default function QuickPicks({
             data-testid="same-as-household"
             onClick={() => onPick?.([{
               type: 'household-meal',
-              name: `${member.name}'s ${meal}`,
+              name: `${member.name}’s ${meal}`,
               fromUserId: member.userId,
               fromDate: date,
               fromMealType: mealType,

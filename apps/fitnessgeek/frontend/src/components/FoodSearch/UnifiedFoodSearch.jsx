@@ -132,7 +132,7 @@ const UnifiedFoodSearch = ({
       }
     } catch (err) {
       if (err?.name !== 'CanceledError' && err?.name !== 'AbortError' && deepFor.current === term) {
-        setError(errorMessage(err, 'Could not reach the food databases. Your own foods are still listed.'));
+        setError(errorMessage(err, 'Couldn’t reach the food databases. Your own foods are still listed.'));
       }
     } finally {
       if (!controller.signal.aborted) setLoadingDeep(false);
@@ -321,7 +321,7 @@ const UnifiedFoodSearch = ({
     >
       <CreateIcon sx={{ color: theme.palette.primary.main }} aria-hidden />
       <Typography component="span" sx={{ fontSize: '0.9375rem', color: ink, textAlign: 'left' }}>
-        Can&apos;t find it? Create <strong>&ldquo;{text}&rdquo;</strong>
+        Can’t find it? Create <strong>&ldquo;{text}&rdquo;</strong>
       </Typography>
     </ButtonBase>
   ) : null;

@@ -58,7 +58,7 @@ export function useMedsToday(dateArg) {
         setMeds(asArray(m.value));
         setLoadError(null);
       } else {
-        setLoadError(errorMessage(m.reason, "Couldn't load your medicines."));
+        setLoadError(errorMessage(m.reason, 'Couldn’t load your meds. Try again.'));
       }
       setLogs(l.status === 'fulfilled' ? asArray(l.value) : []);
       setLoading(false);
@@ -88,7 +88,7 @@ export function useMedsToday(dateArg) {
       return true;
     } catch (err) {
       setLogs((prev) => prev.filter((log) => log !== optimistic));
-      setError(errorMessage(err, `Couldn't save ${item.name}. Try again.`));
+      setError(errorMessage(err, `Couldn’t save ${item.name}. Try again.`));
       return false;
     } finally {
       setSaving(null);

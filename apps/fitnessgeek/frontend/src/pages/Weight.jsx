@@ -2,7 +2,8 @@ import React, { lazy, useCallback, useEffect } from 'react';
 import { Box, Button, Typography, CircularProgress } from '@mui/material';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useToast } from '@geeksuite/ui';
-import { displayCalendarDate } from '@geeksuite/utils';
+import { utcDateString } from '@geeksuite/utils';
+import { shortDay } from '../utils/dates.js';
 import { useWeight } from '../hooks/useWeight.js';
 import { useBodyComp } from '../hooks/useBodyComp.js';
 // Imported by file, not through `../components/Weight`. The barrel used to
@@ -81,9 +82,9 @@ const Weight = () => {
     const log = weightLogs.find((l) => l.id === logId);
     const removed = await deleteWeightLog(logId);
     if (!removed) return; // the hook has already said why
-    const what = log ? `${parseFloat(log.weight_value).toFixed(1)} lbs` : 'that weight';
+    const what = log ? `${parseFloat(log.weight_value).toFixed(1)} lb` : 'that weight';
     const when = log?.log_date
-      ? ` from ${displayCalendarDate(log.log_date, 'en-US', { month: 'short', day: 'numeric' })}`
+      ? ` from ${shortDay(utcDateString(log.log_date))}`
       : '';
     notify(`Removed ${what}${when}`, {
       tone: 'info',

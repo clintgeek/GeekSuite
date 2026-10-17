@@ -77,10 +77,25 @@ describe('recipe builder: live preview and save', () => {
     await user.type(screen.getByLabelText(/makes \(servings\)/i), '4');
 
     // (400 + 260) / 4 = 165
-    expect(screen.getByText('165 kcal per serving')).toBeInTheDocument();
-    expect(screen.getByText('Whole batch 660 kcal')).toBeInTheDocument();
+    expect(screen.getByText('165 cal per serving')).toBeInTheDocument();
+    expect(screen.getByText('Whole batch 660 cal')).toBeInTheDocument();
     // per-row kcal follows the unit conversion
-    expect(screen.getByText('260 kcal')).toBeInTheDocument();
+    expect(screen.getByText('260 cal')).toBeInTheDocument();
+  });
+
+  it('writes protein, carbs and fat in words, and a dash when none is known (review U-4)', async () => {
+    const plain = { id: 'b'.repeat(24), name: 'Mystery stew', serving: { size: 1, unit: 'cup' }, nutrition: macros(300), source: 'custom' };
+    svc.suggest.mockResolvedValue([chicken, plain]);
+    const { user } = setup();
+
+    await addIngredient(user, 'Chicken breast');
+    await user.type(screen.getByLabelText(/makes \(servings\)/i), '1');
+    expect(screen.getByText('Protein 30g · Carbs 0g · Fat 8g')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Remove Chicken breast' }));
+    await addIngredient(user, 'Mystery stew');
+    expect(screen.getByText('Protein — · Carbs — · Fat —')).toBeInTheDocument();
+    expect(screen.queryByText(/P 0g/)).toBeNull();
   });
 
   it('keeps Save disabled until name, a resolved ingredient and a yield exist', async () => {
@@ -198,7 +213,7 @@ describe('recipe builder: paste', () => {
     expect(await screen.findByText('Ground beef')).toBeInTheDocument();
     expect(screen.getByLabelText('Amount of Ground beef')).toHaveValue(2);
     expect(screen.getByLabelText('Unit for Ground beef')).toHaveValue('lb');
-    expect(screen.getByText('2268 kcal')).toBeInTheDocument(); // 250 x 9.07
+    expect(screen.getByText('2,268 cal')).toBeInTheDocument(); // 250 x 9.07
     expect(screen.getAllByText('estimate')).toHaveLength(1);
     expect(screen.getByText(/doesn.t match this food.s serving/i)).toBeInTheDocument();
     expect(screen.getByText(/couldn.t match .a pinch of love./i)).toBeInTheDocument();
@@ -232,7 +247,7 @@ describe('recipe builder: editing', () => {
     expect(screen.getByLabelText(/recipe name/i)).toHaveValue('Chili');
     expect(screen.getByLabelText(/makes \(servings\)/i)).toHaveValue(6);
     expect(screen.getByLabelText('Amount of Ground beef')).toHaveValue(2);
-    expect(screen.getByText('378 kcal per serving')).toBeInTheDocument(); // 250 x 9.07 / 6
+    expect(screen.getByText('378 cal per serving')).toBeInTheDocument(); // 250 x 9.07 / 6
 
     await user.click(saveButton());
     await waitFor(() => expect(svc.update).toHaveBeenCalledTimes(1));

@@ -17,7 +17,7 @@ describe('FirstRun', () => {
     fireEvent.change(name, { target: { value: 'Heather' } });
     fireEvent.click(screen.getByRole('button', { name: 'Next' }));
 
-    expect(screen.getByRole('heading', { name: "Nice to meet you, Heather. What's your goal?" })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Nice to meet you, Heather. What’s your goal?' })).toBeInTheDocument();
     const steady = screen.getByRole('radio', { name: /keep my weight steady/i });
     expect(steady).toHaveAttribute('aria-checked', 'false');
     fireEvent.click(steady);

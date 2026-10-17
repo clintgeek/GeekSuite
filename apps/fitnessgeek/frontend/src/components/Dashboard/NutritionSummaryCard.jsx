@@ -14,7 +14,7 @@ const NutritionSummaryCard = ({
   protein = 0,
   carbs = 0,
   fat = 0,
-  title = "Today's Nutrition",
+  title = 'Today’s food',
   timeout = 700,
   // Keto mode props
   mode = 'standard',
@@ -32,10 +32,10 @@ const NutritionSummaryCard = ({
         { label: 'Fat',      value: fat,              color: theme.palette.error.main   },
         { label: 'Protein',  value: protein,           color: theme.palette.success.main },
         {
-          label: `Net Carbs${hasMissingFiber ? '*' : ''}`,
+          label: `Net carbs${hasMissingFiber ? '*' : ''}`,
           value: netCarbsConsumed,
           color: theme.palette.warning.main,
-          subLabel: `/ ${netCarbLimit}g limit`,
+          subLabel: `of ${netCarbLimit}g limit`,
         },
       ]
     : [

@@ -29,7 +29,7 @@ export default function MedsChecklist({ items = [], taken = 0, total = 0, onTogg
 
       {total === 0 ? (
         <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem' }}>
-          No medicines added yet.{' '}
+          No meds added yet.{' '}
           <Box component={RouterLink} to="/medications" sx={{ color: 'primary.main', fontWeight: 800 }}>
             Add one
           </Box>

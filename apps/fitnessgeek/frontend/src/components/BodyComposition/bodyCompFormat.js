@@ -81,7 +81,7 @@ export function describeChange(change) {
 
   if (!haveParts) {
     if (W === 0) return 'Your weight is about where it was.';
-    return W < 0 ? `You've lost about ${lb(w)}.` : `You've gained about ${lb(w)}.`;
+    return W < 0 ? `You’ve lost about ${lb(w)}.` : `You’ve gained about ${lb(w)}.`;
   }
 
   const F = dir(f);
@@ -97,23 +97,23 @@ export function describeChange(change) {
   const verb = W < 0 ? 'lost' : 'gained';
   // Both parts moved with the weight: say how it splits.
   if (F === W && L === W) {
-    return `Of the ${lb(w)} you've ${verb}, about ${lb(f)} was fat and ${lb(l)} lean.`;
+    return `Of the ${lb(w)} you’ve ${verb}, about ${lb(f)} was fat and ${lb(l)} lean.`;
   }
   // Only fat moved with it.
   if (F === W && L === 0) {
-    return `Of the ${lb(w)} you've ${verb}, about ${lb(f)} was fat; lean mass held steady.`;
+    return `Of the ${lb(w)} you’ve ${verb}, about ${lb(f)} was fat; lean mass held steady.`;
   }
   if (F === W && L === -W) {
-    return `You've ${verb} ${lb(w)}: about ${lb(f)} of fat ${W < 0 ? 'lost' : 'gained'}, while lean mass ${L > 0 ? 'rose' : 'fell'} ${lb(l)}.`;
+    return `You’ve ${verb} ${lb(w)}: about ${lb(f)} of fat ${W < 0 ? 'lost' : 'gained'}, while lean mass ${L > 0 ? 'rose' : 'fell'} ${lb(l)}.`;
   }
   // Only lean moved with it.
   if (L === W && F === 0) {
-    return `Of the ${lb(w)} you've ${verb}, about ${lb(l)} was lean mass; fat held steady.`;
+    return `Of the ${lb(w)} you’ve ${verb}, about ${lb(l)} was lean mass; fat held steady.`;
   }
   if (L === W && F === -W) {
-    return `You've ${verb} ${lb(w)}: about ${lb(l)} of lean mass ${W < 0 ? 'lost' : 'gained'}, while fat ${F > 0 ? 'rose' : 'fell'} ${lb(f)}.`;
+    return `You’ve ${verb} ${lb(w)}: about ${lb(l)} of lean mass ${W < 0 ? 'lost' : 'gained'}, while fat ${F > 0 ? 'rose' : 'fell'} ${lb(f)}.`;
   }
-  return `You've ${verb} about ${lb(w)}.`;
+  return `You’ve ${verb} about ${lb(w)}.`;
 }
 
 /**

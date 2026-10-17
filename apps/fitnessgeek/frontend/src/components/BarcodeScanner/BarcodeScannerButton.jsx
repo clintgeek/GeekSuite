@@ -4,7 +4,7 @@ import { QrCodeScanner as BarcodeIcon } from '@mui/icons-material';
 
 const BarcodeScannerButton = ({ onClick, disabled = false, size = 'small', color = 'primary' }) => {
   return (
-    <Tooltip title="Scan Barcode">
+    <Tooltip title="Scan a barcode">
       <IconButton
         onClick={onClick}
         disabled={disabled}

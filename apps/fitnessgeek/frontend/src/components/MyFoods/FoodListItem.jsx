@@ -10,6 +10,7 @@ import {
   Delete as DeleteIcon,
 } from '@mui/icons-material';
 import { getSourceColor, getSourceName } from './FoodSourceUtils.jsx';
+import { fmt, macroLine } from '../../utils/plainWords.js';
 
 /**
  * FoodListItem — a clean row rendered inside the parent Surface list.
@@ -148,7 +149,7 @@ const FoodListItem = ({ food, onEdit, onDelete }) => {
               fontVariantNumeric: 'tabular-nums',
             }}
           >
-            {calories} kcal
+            {fmt(calories)} cal
           </Box>
           <Box component="span" sx={{ opacity: 0.5 }}>·</Box>
           <Box
@@ -159,9 +160,7 @@ const FoodListItem = ({ food, onEdit, onDelete }) => {
               fontSize: '0.75rem',
             }}
           >
-            {Math.round(nutrition.protein_grams || 0)}P/
-            {Math.round(nutrition.carbs_grams || 0)}C/
-            {Math.round(nutrition.fat_grams || 0)}F
+            {macroLine({ protein: nutrition.protein_grams, carbs: nutrition.carbs_grams, fat: nutrition.fat_grams }, { dense: true })}
           </Box>
         </Typography>
       </Box>

@@ -39,7 +39,7 @@ export function useBodyComp() {
     } else {
       logger.error('[useBodyComp] summary failed:', s.status === 'rejected' ? s.reason : s.value);
       setSummary(null);
-      setError('Body composition could not be loaded.');
+      setError('Couldn’t load what your weight is made of. Try again.');
     }
 
     if (sc.status === 'fulfilled' && sc.value?.success && Array.isArray(sc.value.data)) {
@@ -48,7 +48,7 @@ export function useBodyComp() {
     } else {
       logger.error('[useBodyComp] scans failed:', sc.status === 'rejected' ? sc.reason : sc.value);
       setScans([]);
-      setScansError('The scan history could not be loaded.');
+      setScansError('Couldn’t load your scan history. Try again.');
     }
     setLoading(false);
   }, []);

@@ -66,19 +66,19 @@ describe('BarcodeScanner (camera-less environment)', () => {
 
     // jsdom exposes no navigator.mediaDevices, so detectCameras() reports
     // "not supported" and the component switches itself to manual mode.
-    expect(await screen.findByPlaceholderText('Enter 8-14 digit barcode')).toBeInTheDocument();
+    expect(await screen.findByPlaceholderText('8–14 digits')).toBeInTheDocument();
   });
 
   test('rejects a barcode that fails the 8-14 digit format before calling the lookup service', async () => {
     const user = userEvent.setup();
     setup();
 
-    const input = await screen.findByPlaceholderText('Enter 8-14 digit barcode');
+    const input = await screen.findByPlaceholderText('8–14 digits');
     await user.type(input, '123');
     await user.click(await screen.findByRole('button', { name: /look up barcode/i }));
 
     expect(
-      await screen.findByText('Invalid barcode format. Must be 8-14 digits.')
+      await screen.findByText('A barcode is 8–14 digits. Check the number and try again.')
     ).toBeInTheDocument();
     expect(fitnessGeekService.getFoodByBarcode).not.toHaveBeenCalled();
   });
@@ -96,7 +96,7 @@ describe('BarcodeScanner (camera-less environment)', () => {
 
     setup({ onBarcodeScanned, onClose });
 
-    const input = await screen.findByPlaceholderText('Enter 8-14 digit barcode');
+    const input = await screen.findByPlaceholderText('8–14 digits');
     await user.type(input, '01234567890');
     await user.click(await screen.findByRole('button', { name: /look up barcode/i }));
 
@@ -112,12 +112,12 @@ describe('BarcodeScanner (camera-less environment)', () => {
 
     setup({ onClose });
 
-    const input = await screen.findByPlaceholderText('Enter 8-14 digit barcode');
+    const input = await screen.findByPlaceholderText('8–14 digits');
     await user.type(input, '01234567890');
     await user.click(await screen.findByRole('button', { name: /look up barcode/i }));
 
     expect(
-      await screen.findByText(/No product found for this barcode/)
+      await screen.findByText(/That barcode isn’t in the food databases/)
     ).toBeInTheDocument();
     expect(onClose).not.toHaveBeenCalled();
   });
@@ -135,12 +135,12 @@ describe('BarcodeScanner (camera-less environment)', () => {
 
     setup({ onBarcodeScanned, onClose });
 
-    const input = await screen.findByPlaceholderText('Enter 8-14 digit barcode');
+    const input = await screen.findByPlaceholderText('8–14 digits');
     await user.type(input, '01234567890');
     await user.click(await screen.findByRole('button', { name: /look up barcode/i }));
 
     await waitFor(() => expect(onBarcodeScanned).toHaveBeenCalledWith(food));
-    expect(await screen.findByText('Could not log that item. Try again.')).toBeInTheDocument();
+    expect(await screen.findByText('Couldn’t add that. Try again.')).toBeInTheDocument();
     expect(onClose).not.toHaveBeenCalled();
   });
 
@@ -153,11 +153,11 @@ describe('BarcodeScanner (camera-less environment)', () => {
 
     setup({ onBarcodeScanned, onClose });
 
-    const input = await screen.findByPlaceholderText('Enter 8-14 digit barcode');
+    const input = await screen.findByPlaceholderText('8–14 digits');
     await user.type(input, '01234567890');
     await user.click(await screen.findByRole('button', { name: /look up barcode/i }));
 
-    expect(await screen.findByText('Could not log that item. Try again.')).toBeInTheDocument();
+    expect(await screen.findByText('Couldn’t add that. Try again.')).toBeInTheDocument();
     expect(onClose).not.toHaveBeenCalled();
   });
 
@@ -168,7 +168,7 @@ describe('BarcodeScanner (camera-less environment)', () => {
     const user = userEvent.setup();
 
     const { unmount } = setup({ onBarcodeScanned });
-    const input = await screen.findByPlaceholderText('Enter 8-14 digit barcode');
+    const input = await screen.findByPlaceholderText('8–14 digits');
     await user.type(input, '01234567890');
     await user.click(await screen.findByRole('button', { name: /look up barcode/i }));
     await waitFor(() => expect(onBarcodeScanned).toHaveBeenCalledTimes(1));
@@ -179,7 +179,7 @@ describe('BarcodeScanner (camera-less environment)', () => {
     // Fresh mount reads the history back and offers it as a one-tap re-scan.
     const onBarcodeScanned2 = vi.fn();
     setup({ onBarcodeScanned: onBarcodeScanned2 });
-    await screen.findByPlaceholderText('Enter 8-14 digit barcode');
+    await screen.findByPlaceholderText('8–14 digits');
     fireEvent.click(screen.getByText('01234567890'));
 
     await waitFor(() => expect(onBarcodeScanned2).toHaveBeenCalledWith(food));

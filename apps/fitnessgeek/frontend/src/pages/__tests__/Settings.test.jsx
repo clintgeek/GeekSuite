@@ -106,7 +106,7 @@ describe('Settings — what the page holds', () => {
   it('Profile is folded in: About you, Household once, Account with email and Sign out', async () => {
     mount();
     expect(await screen.findByRole('heading', { name: 'About you' })).toBeInTheDocument();
-    expect(screen.getByRole('heading', { name: 'How it looks' })).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'How much FitnessGeek shows' })).toBeInTheDocument();
     expect(screen.getAllByTestId('household')).toHaveLength(1);
     expect(await screen.findByTestId('account-email')).toHaveTextContent('heather@example.com');
     fireEvent.click(screen.getByRole('button', { name: 'Sign out' }));
@@ -153,7 +153,7 @@ describe('Settings — saves as it changes (IA-3)', () => {
     fireEvent.click(connect);
     await waitFor(() => expect(settingsService.updateSettings).toHaveBeenCalledTimes(1));
     expect(settingsService.updateSettings.mock.calls[0][0]).toEqual({ garmin: { enabled: true, username: 'h@example.com', password: 'pw' } });
-    expect(await screen.findByRole('button', { name: 'Update Garmin login' })).toBeInTheDocument();
+    expect(await screen.findByRole('button', { name: 'Save Garmin login' })).toBeInTheDocument();
   });
 
   it('the theme saves on change, through the account, with no settings write', async () => {
@@ -169,7 +169,7 @@ describe('Settings — saves as it changes (IA-3)', () => {
   it('a failed load shows the error, not defaults, and nothing can be saved', async () => {
     settingsService.getSettings.mockRejectedValueOnce(Object.assign(new Error('Request failed with status code 502'), { response: { status: 502 } }));
     mount();
-    expect(await screen.findByText("Couldn't load settings")).toBeInTheDocument();
+    expect(await screen.findByText('Couldn’t load settings')).toBeInTheDocument();
     expect(screen.getByText('FitnessGeek is restarting. Try again in a moment.')).toBeInTheDocument();
     expect(screen.queryByRole('checkbox', { name: /Sleep apnea/i })).toBeNull();
     expect(screen.queryByRole('checkbox', { name: /Garmin/i })).toBeNull();
@@ -221,7 +221,7 @@ describe('Settings — About you (IA-2)', () => {
   it('a failed profile read writes nothing and offers a retry', async () => {
     userService.getProfile.mockRejectedValueOnce(new Error('boom'));
     mount();
-    expect(await screen.findByText("Couldn't load your details")).toBeInTheDocument();
+    expect(await screen.findByText('Couldn’t load your details')).toBeInTheDocument();
     expect(screen.queryByLabelText('Age')).toBeNull();
     expect(userService.updateProfile).not.toHaveBeenCalled();
   });

@@ -52,7 +52,7 @@ describe('the headline', () => {
     getSleepAnalysis.mockResolvedValue(analysis());
     render(<SleepAnalysis date="2026-09-22" />);
     expect(await screen.findByText('82/100')).toBeInTheDocument();
-    expect(screen.getByText(/GOOD/)).toBeInTheDocument();
+    expect(screen.getByText(/^Good /)).toBeInTheDocument();
   });
 
   it('says there is no score rather than printing a blank or a zero', async () => {
@@ -116,9 +116,9 @@ describe('HRV against a real baseline', () => {
     }));
     render(<SleepAnalysis date="2026-09-22" />);
     await screen.findByText('82/100');
-    expect(screen.getByText(/no baseline yet/i)).toBeInTheDocument();
+    expect(screen.getByText(/no usual yet/i)).toBeInTheDocument();
     expect(screen.getByText(/have 2/)).toBeInTheDocument();
-    expect(screen.queryByText('BALANCED')).toBeNull();
+    expect(screen.queryByText(/^balanced$/i)).toBeNull();
   });
 
   it('a strong HRV night is not shown as a red arrow', async () => {

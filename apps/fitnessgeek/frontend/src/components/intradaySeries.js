@@ -10,6 +10,8 @@
  * parse once, drop the rows that will not parse, and hand back a nivo series.
  */
 
+import { shortDay, clockTime } from '../utils/dates.js';
+
 /** A `Date` if the value parses, otherwise null. */
 export const toDate = (value) => {
   if (value instanceof Date) return Number.isNaN(value.getTime()) ? null : value;
@@ -51,20 +53,13 @@ export const toTimeSeries = (rows, id, color) => {
 };
 
 /**
- * The tooltip's time text. Matches what the chart.js `callbacks.title` used
- * to produce: HH:MM by default, "Mon D, HH:MM" for the detailed charts.
+ * The tooltip's time text: "2:05 PM" by default, "Sep 6, 2:05 PM" for the
+ * detailed charts. No zero-padded hours (review U-5).
  */
 export const formatClockTime = (value, { withDate = false } = {}) => {
   const date = toDate(value);
   if (!date) return '';
-  return withDate
-    ? date.toLocaleString([], {
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit',
-      })
-    : date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  return withDate ? `${shortDay(date)}, ${clockTime(date)}` : clockTime(date);
 };
 
 

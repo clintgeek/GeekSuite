@@ -2,6 +2,7 @@ import React from 'react';
 import { Box, Typography, IconButton, Tooltip, LinearProgress } from '@mui/material';
 import { useTheme, alpha } from '@mui/material/styles';
 import { LocalFireDepartment as CaloriesIcon, Settings as SettingsIcon } from '@mui/icons-material';
+import { fmt } from '../../utils/plainWords.js';
 
 const DEFAULT_RDA = 2000;
 
@@ -45,13 +46,13 @@ const CalorieSummary = ({
         <Box sx={{ display: 'grid', gridTemplateColumns: '1fr auto', rowGap: 0.5, columnGap: 1 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
             <Box sx={{ width: 16, height: 16, borderRadius: '50%', backgroundColor: amber, flexShrink: 0 }} />
-            <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.08em' }}>
-              Net Carbs
+            <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontWeight: 800, fontSize: '0.9375rem' }}>
+              Net carbs
             </Typography>
           </Box>
           {onSettings && (
-            <Tooltip title="Calorie goal settings">
-              <IconButton size="small" onClick={onSettings} aria-label="calorie-goal-settings">
+            <Tooltip title="Change your daily target">
+              <IconButton size="small" onClick={onSettings} aria-label="Change your daily target">
                 <SettingsIcon fontSize="inherit" />
               </IconButton>
             </Tooltip>
@@ -91,7 +92,7 @@ const CalorieSummary = ({
             />
             <Box sx={{ display: 'flex', justifyContent: 'space-between', mt: 0.25 }}>
               <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-                {carbsLeft}g left · {Math.round(calories)} cal
+                {carbsLeft}g left · {fmt(calories)} cal
               </Typography>
               <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
                 limit {netCarbLimit}g
@@ -127,8 +128,8 @@ const CalorieSummary = ({
         </Typography>
       </Box>
       {onSettings && (
-        <Tooltip title="Calorie goal settings">
-          <IconButton size="small" onClick={onSettings} aria-label="calorie-goal-settings">
+        <Tooltip title="Change your daily target">
+          <IconButton size="small" onClick={onSettings} aria-label="Change your daily target">
             <SettingsIcon fontSize="inherit" />
           </IconButton>
         </Tooltip>
@@ -136,7 +137,7 @@ const CalorieSummary = ({
 
       <Box sx={{ display: 'flex', alignItems: 'baseline', gap: 0.5 }}>
         <Typography variant="h5" sx={{ fontWeight: 700, lineHeight: 1 }}>
-          {Math.round(calories)}
+          {fmt(calories)}
         </Typography>
         <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>cal</Typography>
       </Box>
@@ -148,7 +149,7 @@ const CalorieSummary = ({
         <LinearProgress
           variant="determinate"
           value={progress}
-          aria-label={`Calories: ${Math.round(calories)} of ${effectiveGoal} cal`}
+          aria-label={`Calories: ${fmt(calories)} of ${fmt(effectiveGoal)} cal`}
           sx={{
             height: 4,
             borderRadius: 2,
@@ -171,7 +172,7 @@ const CalorieSummary = ({
         </Box>
         {!usingRda && base > 0 && add > 0 && (
           <Typography data-testid="activity-allowance" sx={{ color: theme.palette.text.secondary, fontSize: '0.9375rem', mt: 0.5 }}>
-            Includes {Math.round(add).toLocaleString('en-US')} extra for today&apos;s activity.
+            Includes {Math.round(add).toLocaleString('en-US')} extra for today’s activity.
           </Typography>
         )}
       </Box>

@@ -21,6 +21,7 @@ import PremiumDialog from '../primitives/PremiumDialog.jsx';
  * success does (QuickAddWeight's own header has the story).
  */
 const EditWeightDialog = ({ log, open, onClose, onSave, unit = 'lbs' }) => {
+  const unitWord = unit === 'lbs' ? 'lb' : unit;
   const [value, setValue] = useState('');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
@@ -54,12 +55,12 @@ const EditWeightDialog = ({ log, open, onClose, onSave, unit = 'lbs' }) => {
         notes: notes.trim(),
       });
       if (saved !== true) {
-        setError('That change was not saved. Check your connection and try again.');
+        setError('Couldn’t save that change. Check your connection and try again.');
         return;
       }
       onClose?.();
     } catch (err) {
-      setError(errorMessage(err, 'That change was not saved. Try again.'));
+      setError(errorMessage(err, 'Couldn’t save that change. Try again.'));
     } finally {
       setSaving(false);
     }
@@ -98,22 +99,21 @@ const EditWeightDialog = ({ log, open, onClose, onSave, unit = 'lbs' }) => {
       )}
       {fromScale && (
         <Typography sx={{ color: 'text.secondary', fontSize: '0.875rem', mb: 2, lineHeight: 1.5 }}>
-          This weight came from the scale. If you import an export that includes this day again,
-          the scale&rsquo;s value replaces your edit.
+          This came from the scale. A later scale import for this day will replace your edit.
         </Typography>
       )}
       <TextField
         fullWidth
-        label={`Weight (${unit})`}
+        label="Weight"
         type="number"
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={(e) => { if (e.key === 'Enter') handleSave(); }}
         sx={{ mb: 2, mt: 1 }}
         inputProps={{ inputMode: 'decimal', step: '0.1', min: '0', max: '1000' }}
-        InputProps={{ endAdornment: unit }}
+        InputProps={{ endAdornment: unitWord }}
         error={value !== '' && !valid}
-        helperText={value !== '' && !valid ? 'Enter a weight between 0 and 1000.' : ' '}
+        helperText={value !== '' && !valid ? 'Enter a weight between 0 and 1,000.' : ' '}
         autoFocus
       />
       <TextField

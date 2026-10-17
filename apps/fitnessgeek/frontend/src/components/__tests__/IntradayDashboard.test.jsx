@@ -33,7 +33,7 @@ describe('the Overview cards', () => {
   it('shows no minutes-long "trend" chip', async () => {
     getIntraday.mockResolvedValue({ heartRate: rising, stress: [], bodyBattery: [], breathing: [] });
     render(<IntradayDashboard date="2026-09-21" />);
-    await screen.findByText('Heart Rate');
+    await screen.findByText('Heart rate');
     // The old chip rendered |last10avg - prev10avg| = 10 as a bare number.
     expect(screen.queryByText('10')).toBeNull();
     expect(screen.queryByTestId('TrendingUpIcon')).toBeNull();
@@ -49,7 +49,7 @@ describe('the Overview cards', () => {
   it('shows a dash, not a zero, for a day with no readings', async () => {
     getIntraday.mockResolvedValue({ heartRate: [], stress: [], bodyBattery: [], breathing: [] });
     render(<IntradayDashboard date="2026-09-21" />);
-    await screen.findByText('Heart Rate');
+    await screen.findByText('Heart rate');
     expect(screen.getAllByText('—')).toHaveLength(3);
     expect(screen.getAllByText('No readings for this day')).toHaveLength(3);
     expect(screen.queryByText('0')).toBeNull();

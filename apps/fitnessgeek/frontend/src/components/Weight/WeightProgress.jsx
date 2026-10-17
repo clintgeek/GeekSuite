@@ -9,6 +9,7 @@ import {
   ArrowForward as ArrowIcon
 } from '@mui/icons-material';
 import { differenceInWeeks, differenceInDays, parseISO, format } from 'date-fns';
+import { shortDay } from '../../utils/dates.js';
 import { utcDateString } from '@geeksuite/utils';
 import { programPace, neededPacePerWeek, trendSince } from './weightTrend.js';
 import { StatNumber, SectionLabel } from '../primitives';
@@ -370,19 +371,19 @@ const WeightProgress = ({
                 )}
               </Box>
 
-              {/* Time Remaining */}
+              {/* Time left */}
               <Box sx={tile}>
                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 1 }}>
                   <CalendarIcon sx={{ fontSize: 18, color: theme.palette.primary.main }} />
                   <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontWeight: 600 }}>
-                    Time Remaining
+                    Time left
                   </Typography>
                 </Box>
                 <Typography variant="h6" sx={{ fontWeight: 700, color: theme.palette.text.primary }}>
-                  {insights.weeksToGoal || 0} weeks
+                  {insights.weeksToGoal || 0} {(insights.weeksToGoal || 0) === 1 ? 'week' : 'weeks'}
                 </Typography>
                 <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-                  {insights.daysToGoal || 0} days until {goal?.goalDate ? fmtYmd(utcDateString(goal.goalDate)) : 'N/A'}
+                  {insights.daysToGoal || 0} {(insights.daysToGoal || 0) === 1 ? 'day' : 'days'} until {goal?.goalDate ? fmtYmd(utcDateString(goal.goalDate)) : '—'}
                 </Typography>
               </Box>
 
@@ -407,7 +408,8 @@ const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 
 const unitWord = (unit) => (unit === 'lbs' ? 'lb' : unit);
 /** 12.1 → "12.1", 37 → "37". */
 const trim1 = (n) => (Math.round((Number(n) || 0) * 10) / 10).toFixed(1).replace(/\.0$/, '');
-const fmtYmd = (ymd) => (ymd ? format(new Date(`${ymd}T12:00:00`), 'MMM d') : '');
+/** "Dec 1", with the year only when it isn't this year. */
+const fmtYmd = (ymd) => (ymd ? shortDay(ymd) : '');
 const todayYmd = () => format(new Date(), 'yyyy-MM-dd');
 const yearOf = (ymd) => Number(String(ymd).slice(0, 4));
 const monthName = (ymd) => {
@@ -451,15 +453,15 @@ function paceSentence(insights, goal, u) {
   if (goal.targetWeight === goal.startWeight || needed === null) {
     return insights.currentRate === null
       ? `Your goal is to stay at ${trim1(goal.targetWeight)} ${u}.`
-      : `You're ${insights.currentRate < 0 ? 'losing' : 'gaining'} ${Math.abs(insights.currentRate).toFixed(1)} ${u} a week.`;
+      : `You’re ${insights.currentRate < 0 ? 'losing' : 'gaining'} ${Math.abs(insights.currentRate).toFixed(1)} ${u} a week.`;
   }
   const need = needed.toFixed(1);
-  if (insights.currentRate === null) return `${by} you'd need to ${goalVerb} ${need} ${u} a week.`;
+  if (insights.currentRate === null) return `${by} you’d need to ${goalVerb} ${need} ${u} a week.`;
   const rate = insights.currentRate;
-  if (Math.abs(rate) < 0.05) return `Your weight is holding steady. ${by} you'd need to ${goalVerb} ${need} ${u} a week.`;
+  if (Math.abs(rate) < 0.05) return `Your weight is holding steady. ${by} you’d need to ${goalVerb} ${need} ${u} a week.`;
   const verb = rate < 0 ? 'losing' : 'gaining';
   const sameWay = (rate < 0) === (goalVerb === 'lose');
-  return `You're ${verb} ${Math.abs(rate).toFixed(1)} ${u} a week. ${by} you'd need ${sameWay ? need : `to ${goalVerb} ${need}`}.`;
+  return `You’re ${verb} ${Math.abs(rate).toFixed(1)} ${u} a week. ${by} you’d need ${sameWay ? need : `to ${goalVerb} ${need}`}.`;
 }
 
 /** Why there's no measured rate yet. */

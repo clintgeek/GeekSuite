@@ -13,7 +13,7 @@ describe('todayStrip', () => {
 
   it('weighed today, no BP yet, 2 of 3 doses', () => {
     const items = todayStrip({ weights: [at(TODAY)], bloodPressures: [at('2026-09-20')], meds: { taken: 2, total: 3 }, today: TODAY });
-    expect(values(items)).toBe('Weighed ✓ · Add BP + · Meds 2 of 3');
+    expect(values(items)).toBe('Weighed ✓ · Log BP + · Meds 2 of 3');
     expect(items.map((i) => i.done)).toEqual([true, false, false]);
   });
 

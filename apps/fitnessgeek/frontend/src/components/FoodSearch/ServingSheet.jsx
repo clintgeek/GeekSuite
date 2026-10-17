@@ -9,9 +9,9 @@ import { useTheme, alpha } from '@mui/material/styles';
 import { amountToServings } from '../../utils/recipeMath.js';
 import { convertAmount, formatServing, usLogUnits } from '../../utils/units.js';
 import { useBackToClose } from './useBackToClose.js';
+import { cal, macroLine, mealLabel } from '../../utils/plainWords.js';
 
 const MEAL_TYPES = ['breakfast', 'lunch', 'dinner', 'snack'];
-const mealLabel = (meal) => meal.charAt(0).toUpperCase() + meal.slice(1);
 const round = (v, p = 1) => Math.round((Number(v) || 0) * 10 ** p) / 10 ** p;
 const STEP = { serving: 0.25, oz: 0.5, 'fl oz': 1, cup: 0.25 };
 // What a person can be part-way through typing: "", "0", "0.", ".5", "1.25".
@@ -168,9 +168,9 @@ const ServingSheet = ({ open, food, defaultMealType = 'snack', onClose, onConfir
             fontFamily: "inherit"
           }}
         >
-          <Typography sx={{ fontWeight: 700 }}>{total('calories_per_serving')} cal</Typography>
+          <Typography sx={{ fontWeight: 700 }}>{cal(total('calories_per_serving'))}</Typography>
           <Typography sx={{ color: 'text.secondary', fontSize: '0.875rem' }}>
-            P{total('protein_grams', 1)} · C{total('carbs_grams', 1)} · F{total('fat_grams', 1)}
+            {macroLine({ protein: total('protein_grams', 1), carbs: total('carbs_grams', 1), fat: total('fat_grams', 1) })}
           </Typography>
         </Box>
       </DialogContent>

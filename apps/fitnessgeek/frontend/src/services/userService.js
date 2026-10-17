@@ -13,7 +13,9 @@ export const userService = {
       return { success: true, data: user };
     } catch (error) {
       console.error('Failed to update profile:', error.response?.data || error.message);
-      throw new Error(error.response?.data?.message || error.message || 'Failed to update profile');
+      // Rethrown as it came, so errorMessage() can still read the status and
+      // the server's words; a new Error(error.message) lost both.
+      throw error;
     }
   },
 
@@ -27,7 +29,7 @@ export const userService = {
       return payload?.user || payload?.data?.user || payload?.data || payload || null;
     } catch (error) {
       console.error('Failed to get profile:', error.response?.data || error.message);
-      throw new Error(error.response?.data?.message || error.message || 'Failed to get profile');
+      throw error;
     }
   },
 

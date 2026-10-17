@@ -25,14 +25,14 @@ describe('ProtectedRoute and a connection problem', () => {
     auth = { loading: false, isAuthenticated: true, connectionProblem: true, retry: vi.fn() };
     mount();
     expect(screen.getByText('Weight page')).toBeInTheDocument();
-    expect(screen.getByTestId('connection-problem')).toHaveTextContent("Can't reach FitnessGeek — retrying");
+    expect(screen.getByTestId('connection-problem')).toHaveTextContent('Can’t reach FitnessGeek — retrying');
   });
 
   it('no known user and unreachable: waits, never redirects to sign in', () => {
     auth = { loading: false, isAuthenticated: false, connectionProblem: true, retry: vi.fn() };
     mount();
     expect(screen.queryByText('Sign in page')).toBeNull();
-    expect(screen.getByText("Can't reach FitnessGeek — retrying")).toBeInTheDocument();
+    expect(screen.getByText('Can’t reach FitnessGeek — retrying')).toBeInTheDocument();
   });
 
   it('really signed out still goes to sign in', () => {

@@ -15,7 +15,7 @@ import { useToast } from '@geeksuite/ui';
  */
 export const UNDO_TOAST_MS = 10000;
 export const UNDONE_MESSAGE = 'Undone ✓';
-export const UNDO_FAILED_MESSAGE = "Couldn't undo — try again";
+export const UNDO_FAILED_MESSAGE = "Couldn’t undo — try again";
 
 /** One tap only: the button disables itself while its delete is in flight. */
 export function UndoAction({ label = 'Undo', onUndo }) {

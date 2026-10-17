@@ -64,7 +64,7 @@ describe('SaveMealDialog food_items payload', () => {
     );
 
     expect(
-      screen.getByText(/1 item could not be saved to the meal/i)
+      screen.getByText(/1 food can’t go in a saved meal/i)
     ).toBeInTheDocument();
   });
 
@@ -79,7 +79,7 @@ describe('SaveMealDialog food_items payload', () => {
       />
     );
 
-    expect(screen.queryByText(/could not be saved/i)).toBeNull();
+    expect(screen.queryByText(/can’t go in a saved meal/i)).toBeNull();
   });
 
   it('disables Save when nothing in the meal resolves to a catalog id', () => {
@@ -110,6 +110,6 @@ describe('SaveMealDialog preview totals', () => {
     ];
     render(<SaveMealDialog open onClose={vi.fn()} onSave={vi.fn()} mealType="breakfast" logs={logs} />);
     expect(screen.getByText('220 cal')).toBeInTheDocument();
-    expect(screen.getByText('15g protein')).toBeInTheDocument();
+    expect(screen.getByText('Protein 15g')).toBeInTheDocument();
   });
 });

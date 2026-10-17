@@ -32,7 +32,7 @@ beforeEach(() => {
   influxService.getStatus.mockReset();
 });
 
-describe('Test Connection', () => {
+describe('Check the connection', () => {
   it('reads serverConnected, the key the route actually sends', async () => {
     influxService.getStatus.mockResolvedValue({
       userEnabled: true,
@@ -41,13 +41,15 @@ describe('Test Connection', () => {
     });
 
     render(<InfluxDBSettings />);
-    fireEvent.click(await screen.findByRole('button', { name: /Test Connection/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /Check the connection/i }));
 
-    expect(await screen.findByText(/Connection Successful/i)).toBeInTheDocument();
+    expect(await screen.findByText(/^Connected$/)).toBeInTheDocument();
     expect(screen.queryByText(/undefined/)).toBeNull();
   });
 
-  it('reports the failure the route describes', async () => {
+  // The route's own text ("connect ECONNREFUSED") is a driver message, not a
+  // sentence for a person (review T-1): the failure is said in plain words.
+  it('reports the failure in plain words, never the driver text', async () => {
     influxService.getStatus.mockResolvedValue({
       userEnabled: true,
       serverConnected: false,
@@ -55,9 +57,10 @@ describe('Test Connection', () => {
     });
 
     render(<InfluxDBSettings />);
-    fireEvent.click(await screen.findByRole('button', { name: /Test Connection/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /Check the connection/i }));
 
-    expect(await screen.findByText(/Connection Failed/i)).toBeInTheDocument();
-    expect(screen.getByText(/ECONNREFUSED/)).toBeInTheDocument();
+    expect(await screen.findByText(/Not connected/)).toBeInTheDocument();
+    expect(screen.getByText('FitnessGeek couldn’t reach the home data server. Try again in a moment.')).toBeInTheDocument();
+    expect(screen.queryByText(/ECONNREFUSED/)).toBeNull();
   });
 });

@@ -30,7 +30,7 @@ describe('ExperienceSettings', () => {
     mount(value());
     expect(screen.getByRole('radio', { name: /^Simple/ })).toHaveAttribute('aria-checked', 'true');
     expect(screen.getByRole('radio', { name: /^Full/ })).toHaveAttribute('aria-checked', 'false');
-    expect(screen.getByText(/You haven't chosen yet, so you're seeing Simple/)).toBeInTheDocument();
+    expect(screen.getByText(/You haven’t chosen yet, so you’re seeing Simple/)).toBeInTheDocument();
   });
 
   it('choosing Full saves Full', async () => {

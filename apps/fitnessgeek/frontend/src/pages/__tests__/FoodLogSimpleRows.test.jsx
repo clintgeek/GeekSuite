@@ -121,6 +121,7 @@ describe('Simple Food Log rows', () => {
 
     expect(screen.queryByText(/18P/)).toBeNull();
     expect(screen.queryByText(/P: 18g/)).toBeNull();
+    expect(screen.queryByText(/P 18 · C 8 · F 10 g/)).toBeNull();
     expect(screen.queryByRole('button', { name: /favorites/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /^remove$/i })).toBeNull();
     expect(screen.queryByRole('button', { name: /^edit$/i })).toBeNull();
@@ -162,6 +163,12 @@ describe('Full Food Log', () => {
     expect(within(section).getByRole('button', { name: 'Save breakfast as a meal' })).toHaveTextContent('Save as a meal');
     expect(screen.getByRole('button', { name: /copy a meal from another day/i })).toBeInTheDocument();
   });
+
+  it('a row writes protein, carbs and fat one way: "P 18 · C 8 · F 10 g" (review U-4)', () => {
+    renderPage({ simple: false });
+    expect(screen.getAllByText('P 18 · C 8 · F 10 g').length).toBeGreaterThan(0);
+    expect(screen.queryByText(/18P|P: 18g/)).toBeNull();
+  });
 });
 
 describe('Both modes', () => {
@@ -176,7 +183,7 @@ describe('Both modes', () => {
 
   it('on yesterday, the inline add box names the day the way the sheet does', () => {
     renderPage({ simple: true, url: '/food-log?date=2026-10-15' });
-    expect(screen.getByTestId('inline-add-day')).toHaveTextContent("Add to Thursday's dinner (yesterday)");
+    expect(screen.getByTestId('inline-add-day')).toHaveTextContent('Add to Thursday’s dinner (yesterday)');
   });
 
   it('on today, the inline add box adds no day line', () => {

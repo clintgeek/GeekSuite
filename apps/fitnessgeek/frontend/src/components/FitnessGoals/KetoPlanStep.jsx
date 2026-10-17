@@ -22,8 +22,8 @@ const KETO_PRESETS = {
 
 const PRESET_LABELS = {
   classic:      'Classic 70/25/5',
-  high_protein: 'High Protein 60/35/5',
-  lazy:         'Lazy Keto',
+  high_protein: 'High protein 60/35/5',
+  lazy:         'Lazy keto',
 };
 
 /**
@@ -87,9 +87,8 @@ const KetoPlanStep = ({ ketoConfig, onChange, calorieTarget, baseGoal = null, le
   // ── section label style ────────────────────────────────────────────────────
   const labelSx = {
     fontFamily: 'inherit',
-    fontSize: '0.75rem',
-    textTransform: 'uppercase',
-    letterSpacing: '0.08em',
+    fontSize: '0.875rem',
+    fontWeight: 700,
     color: 'text.secondary',
     mb: 1,
   };
@@ -99,7 +98,7 @@ const KetoPlanStep = ({ ketoConfig, onChange, calorieTarget, baseGoal = null, le
 
       {/* ── A. Net Carb Limit ──────────────────────────────────────────────── */}
       <Box>
-        <Typography sx={labelSx}>Daily Net Carb Limit</Typography>
+        <Typography sx={labelSx}>Net carbs a day, at most</Typography>
 
         {/* Live value */}
         <Typography
@@ -133,13 +132,13 @@ const KetoPlanStep = ({ ketoConfig, onChange, calorieTarget, baseGoal = null, le
         />
 
         <Typography variant="caption" color="text.secondary">
-          Most keto protocols target 20g or less
+          Most keto plans aim for 20g or less
         </Typography>
       </Box>
 
       {/* ── B. Macro Split Presets ─────────────────────────────────────────── */}
       <Box>
-        <Typography sx={labelSx}>Macro Split</Typography>
+        <Typography sx={labelSx}>Fat, protein and carbs</Typography>
 
         {/* Preset chips */}
         <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mb: 2 }}>
@@ -232,21 +231,21 @@ const KetoPlanStep = ({ ketoConfig, onChange, calorieTarget, baseGoal = null, le
                   display: 'block',
                 }}
               >
-                Fat {gramEquivalents.fat_g}g · Protein {gramEquivalents.protein_g}g · Carbs {gramEquivalents.carbs_g}g
+                Protein {gramEquivalents.protein_g}g · Carbs {gramEquivalents.carbs_g}g · Fat {gramEquivalents.fat_g}g
               </Typography>
             )}
             {preview && <ProteinBasisNote rules={preview.rules} />}
           </>
         ) : (
           <Typography variant="caption" color="text.secondary">
-            Track only the carb cap — no macro split
+            Track only the carb cap, with no split
           </Typography>
         )}
       </Box>
 
       {/* ── C. Net vs Total Carbs Toggle ───────────────────────────────────── */}
       <Box>
-        <Typography sx={labelSx}>Carb Tracking Method</Typography>
+        <Typography sx={labelSx}>How to count carbs</Typography>
 
         <ToggleButtonGroup
           exclusive
@@ -264,7 +263,7 @@ const KetoPlanStep = ({ ketoConfig, onChange, calorieTarget, baseGoal = null, le
               px: 2,
             }}
           >
-            Net Carbs (carbs − fiber)
+            Net carbs (carbs minus fiber)
           </ToggleButton>
           <ToggleButton
             value="total"
@@ -275,7 +274,7 @@ const KetoPlanStep = ({ ketoConfig, onChange, calorieTarget, baseGoal = null, le
               px: 2,
             }}
           >
-            Total Carbs
+            Total carbs
           </ToggleButton>
         </ToggleButtonGroup>
 

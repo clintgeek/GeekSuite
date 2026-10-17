@@ -56,7 +56,7 @@ describe('the meds checklist', () => {
     render(<Harness />);
     const lisinopril = await screen.findByRole('checkbox', { name: 'Lisinopril, morning' });
     await act(async () => { fireEvent.click(lisinopril); });
-    await waitFor(() => expect(screen.getByText("Couldn't save Lisinopril. Try again.")).toBeInTheDocument());
+    await waitFor(() => expect(screen.getByText('Couldn’t save Lisinopril. Try again.')).toBeInTheDocument());
     expect(screen.getByRole('checkbox', { name: 'Lisinopril, morning' })).toHaveAttribute('aria-checked', 'false');
   });
 });

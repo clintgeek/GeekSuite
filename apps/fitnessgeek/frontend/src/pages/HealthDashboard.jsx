@@ -41,9 +41,9 @@ const RecoveryCoach = lazy(() => import('../components/RecoveryCoach'));
 
 const TAB_TITLES = [
   'Overview',
-  'Sleep Analysis',
-  'Meal Impact',
-  'Recovery Coach',
+  'Sleep analysis',
+  'Meal impact',
+  'Recovery coach',
   'Settings',
 ];
 
@@ -57,9 +57,9 @@ export default function HealthDashboard() {
 
   // Reflect the current tab in document.title so browser history is readable
   useEffect(() => {
-    const tabName = TAB_TITLES[activeTab] || 'Health Dashboard';
+    const tabName = TAB_TITLES[activeTab] || 'Health dashboard';
     const previousTitle = document.title;
-    document.title = `${tabName} · Health Dashboard · FitnessGeek`;
+    document.title = `${tabName} · Health dashboard · FitnessGeek`;
     return () => {
       document.title = previousTitle;
     };
@@ -118,14 +118,14 @@ export default function HealthDashboard() {
           </Box>
 
           <Alert severity="info">
-            <AlertTitle>InfluxDB Integration Required</AlertTitle>
-            The Health Dashboard requires InfluxDB integration to display advanced analytics.
-            Enable it in settings to unlock:
+            <AlertTitle>Turn on the home data server first</AlertTitle>
+            This page reads your Garmin data from the home data server (InfluxDB).
+            Turn it on below to see:
             <ul style={{ marginTop: 8, marginBottom: 0 }}>
-              <li>Real-time intraday metrics (heart rate, stress, body battery)</li>
-              <li>Comprehensive sleep analysis with HRV and cardiovascular recovery</li>
-              <li>Meal impact visualization showing physiological responses</li>
-              <li>AI-powered recovery coaching with personalized recommendations</li>
+              <li>Heart rate, stress and Body Battery through the day</li>
+              <li>How you slept, with heart-rate variability (HRV) and recovery</li>
+              <li>How your heart rate answered each meal</li>
+              <li>Recovery notes written by AI</li>
             </ul>
           </Alert>
 
@@ -150,7 +150,7 @@ export default function HealthDashboard() {
         <Stack direction="row" justifyContent="space-between" alignItems="flex-end" spacing={2}>
           <Box>
             <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem' }}>
-              Deep analytics powered by your InfluxDB health data.
+              Your Garmin data through the day, from the home data server.
             </Typography>
           </Box>
           <Button
@@ -172,7 +172,7 @@ export default function HealthDashboard() {
               alignItems={{ xs: 'stretch', sm: 'center' }}
             >
               <Typography variant="body1" sx={{ fontWeight: 600 }}>
-                Viewing:
+                Day
               </Typography>
               <DateField
                 label={false}
@@ -213,9 +213,9 @@ export default function HealthDashboard() {
         <Box sx={{ borderBottom: 1, borderColor: 'divider' }}>
           <Tabs value={activeTab} onChange={handleTabChange} variant="fullWidth">
             <Tab icon={<DashboardIcon />} label="Overview" />
-            <Tab icon={<SleepIcon />} label="Sleep Analysis" />
-            <Tab icon={<MealIcon />} label="Meal Impact" />
-            <Tab icon={<CoachIcon />} label="Recovery Coach" />
+            <Tab icon={<SleepIcon />} label="Sleep analysis" />
+            <Tab icon={<MealIcon />} label="Meal impact" />
+            <Tab icon={<CoachIcon />} label="Recovery coach" />
             <Tab icon={<SettingsIcon />} label="Settings" />
           </Tabs>
         </Box>

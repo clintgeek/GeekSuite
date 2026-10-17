@@ -164,7 +164,7 @@ const Figure = ({ label, value, unit, decimals = 0, note }) => (
 
 /** Stress and Body Battery as daily means — one compact card, no sparkline. */
 export const StressBatteryCard = ({ stress, high, low, end, window }) => {
-  const label = 'Stress & Body Battery';
+  const label = 'Stress and Body Battery';
   if (!stress.current && !high.current && !low.current) {
     return <NoReadings label={label}>No readings in the last {TREND_DAYS} days.</NoReadings>;
   }
@@ -205,11 +205,11 @@ export const FitnessAgeCard = ({ model }) => {
       <StatNumber value={model.current} decimals={0} unit="years" size="display" />
       {gap && <Typography sx={{ ...caption, color: 'text.primary' }}>{gap}{model.chronological !== null ? ` (${model.chronological})` : ''}</Typography>}
       <Typography sx={caption}>
-        {model.achievable !== null ? `Achievable: ${model.achievable}` : ''}
+        {model.achievable !== null ? `Garmin thinks you could reach ${model.achievable}` : ''}
         {model.achievable !== null && model.asOf ? ' · ' : ''}
         {model.asOf ? `as of ${formatDay(model.asOf)}` : ''}
       </Typography>
-      <Meaning>Garmin’s estimate from VO2 max. It moves over months, not weeks.</Meaning>
+      <Meaning>Garmin’s estimate from your fitness level (VO2 max). It moves over months, not weeks.</Meaning>
     </Card>
   );
 };

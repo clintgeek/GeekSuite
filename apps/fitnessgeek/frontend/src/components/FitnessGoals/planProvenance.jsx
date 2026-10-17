@@ -9,6 +9,15 @@ import { MEASURED_ACTIVITY } from './planMath.js';
  * change to the number you eat to is shown, never slipped in).
  */
 
+// The activity levels in words, for the TDEE line ("sedentary" was shown raw).
+const ACTIVITY_WORDS = {
+  sedentary: 'little or no exercise',
+  light: 'light exercise 1–3 days a week',
+  moderate: 'exercise 3–5 days a week',
+  very: 'hard exercise 6–7 days a week',
+  extra: 'very hard exercise or a physical job',
+};
+
 const fmt = (n) => (Number.isFinite(Number(n)) ? Math.round(Number(n)).toLocaleString('en-US') : '—');
 const fmtLb = (n) => {
   const v = Number(n);
@@ -35,7 +44,7 @@ export function BmrSourceNote({ source, leanMassLb, scans, scanLoadFailed = fals
       sx={{ color: 'text.secondary', display: 'block' }}
     >
       {bmrSourceText({ source, leanMassLb, scans })}
-      {source !== 'scan' && scanLoadFailed ? " Your body scans couldn't be loaded just now." : ''}
+      {source !== 'scan' && scanLoadFailed ? ' Your body scans couldn’t be loaded just now.' : ''}
     </Typography>
   );
 }
@@ -86,7 +95,7 @@ export function PlanComparison({ saved, next }) {
       {showAverage && (
         <Row label="Weekly average per day" before={weeklyAverage(saved.schedule)} after={weeklyAverage(next.schedule)} />
       )}
-      <Row label="BMR" before={saved.bmr} after={next.bmr} />
+      <Row label="Calories at rest (BMR)" before={saved.bmr} after={next.bmr} />
       <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 0.5 }}>
         {saved.stale
           ? 'Your saved plan was calculated with a formula error fixed on Sep 20. Nothing changes until you save.'
@@ -128,23 +137,23 @@ export function MetabolismCard({ plan, scanLoadFailed = false }) {
     <Card data-testid="metabolism-card">
       <CardContent>
         <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
-          Your Metabolism
+          What you burn
         </Typography>
         <Box sx={{ mb: 2 }}>
-          <Typography variant="body2" sx={{ color: 'text.secondary' }}>Basal Metabolic Rate (BMR)</Typography>
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>Calories at rest (BMR)</Typography>
           <Typography variant="h6">{Number(plan.bmr).toLocaleString('en-US')} cal a day</Typography>
           <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
-            Calories your body burns at rest
+            What your body burns doing nothing at all
           </Typography>
           <BmrSourceNote source={plan.bmrSource} leanMassLb={plan.leanMassLb} scans={plan.bmrScans} scanLoadFailed={scanLoadFailed} />
         </Box>
         <Box>
-          <Typography variant="body2" sx={{ color: 'text.secondary' }}>Total Daily Energy Expenditure (TDEE)</Typography>
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>Calories you burn in a day (TDEE)</Typography>
           <Typography variant="h6">{Number(plan.tdee).toLocaleString('en-US')} cal a day</Typography>
           <Typography variant="caption" sx={{ color: 'text.secondary' }}>
             {plan.activityLevel === MEASURED_ACTIVITY
-              ? 'Your BMR plus the activity your watch measured (30-day average)'
-              : `Calories you burn with activity level: ${plan.activityLevel}`}
+              ? 'Your calories at rest plus the activity your watch measured (30-day average)'
+              : `Your calories at rest plus ${ACTIVITY_WORDS[plan.activityLevel] || 'your usual activity'}`}
           </Typography>
         </Box>
       </CardContent>

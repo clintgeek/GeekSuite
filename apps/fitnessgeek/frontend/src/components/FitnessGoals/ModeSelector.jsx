@@ -20,14 +20,14 @@ const ModeSelector = ({ value, onChange }) => {
       accentColor: theme.palette.primary.main,
       title: 'Standard',
       subtitle: 'Count calories. Flexible macros.',
-      typical: '~2,100 kcal / day',
+      typical: '~2,100 cal a day',
     },
     {
       mode: 'keto',
       accentColor: theme.palette.warning.main,
       title: 'Keto',
       subtitle: 'Hard carb cap. Fat as fuel.',
-      typical: '~20g net carbs / day',
+      typical: '~20g net carbs a day',
     },
   ];
 

@@ -19,6 +19,7 @@ import DateField from '../primitives/DateField.jsx';
 import { thumbSaveProps } from '../BloodPressure/thumbSave.jsx';
 import { useExperience } from '../../contexts/ExperienceContext.jsx';
 import { rowDay } from '../../utils/experience.js';
+import { fmt, mealLabel } from '../../utils/plainWords.js';
 import {
   Restaurant as FoodIcon,
   DeleteOutline as RemoveIcon
@@ -158,17 +159,16 @@ const EditLogDialog = ({
   };
 
   const mealTypeOptions = [
-    { value: 'breakfast', label: 'Breakfast' },
-    { value: 'lunch', label: 'Lunch' },
-    { value: 'dinner', label: 'Dinner' },
-    { value: 'snack', label: 'Snacks' }
+    { value: 'breakfast', label: mealLabel('breakfast') },
+    { value: 'lunch', label: mealLabel('lunch') },
+    { value: 'dinner', label: mealLabel('dinner') },
+    { value: 'snack', label: mealLabel('snack') }
   ];
 
   return (
     <PremiumDialog
       open={open}
       onClose={handleClose}
-      eyebrow="Food log"
       title="Edit entry"
       maxWidth="sm"
       {...thumbSaveProps({
@@ -303,7 +303,7 @@ const EditLogDialog = ({
             onChange={(e) => setNotes(e.target.value)}
             multiline
             rows={2}
-            placeholder="Add any notes about this food..."
+            placeholder="Anything to remember about this food…"
           />
 
           {/* Nutrition Preview — Full only; Simple's Calories field IS the total. */}
@@ -314,19 +314,19 @@ const EditLogDialog = ({
               </Typography>
               <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
                 <Chip
-                  label={`${Math.round(perServingCalories * (servingsOk ? servingsCount : 0))} cal`}
+                  label={`${fmt(perServingCalories * (servingsOk ? servingsCount : 0))} cal`}
                   size="small"
                 />
                 <Chip
-                  label={`${Math.round(nutrition.protein_grams * parseFloat(servings) * 10) / 10}g protein`}
+                  label={`Protein ${fmt(nutrition.protein_grams * parseFloat(servings))}g`}
                   size="small"
                 />
                 <Chip
-                  label={`${Math.round(nutrition.carbs_grams * parseFloat(servings) * 10) / 10}g carbs`}
+                  label={`Carbs ${fmt(nutrition.carbs_grams * parseFloat(servings))}g`}
                   size="small"
                 />
                 <Chip
-                  label={`${Math.round(nutrition.fat_grams * parseFloat(servings) * 10) / 10}g fat`}
+                  label={`Fat ${fmt(nutrition.fat_grams * parseFloat(servings))}g`}
                   size="small"
                 />
               </Box>

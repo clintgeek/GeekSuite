@@ -18,15 +18,15 @@ describe('KetoPlanStep gram equivalents', () => {
     render(<KetoPlanStep ketoConfig={KETO} onChange={() => {}} calorieTarget={2000} baseGoal={{ target_weight: 250 }} leanMassLb={177} />);
     const served = servedAt(2000, 177);
     expect(served.protein_g).toBe(177);
-    expect(screen.getByText(`Fat ${served.fat_g}g · Protein ${served.protein_g}g · Carbs ${served.carbs_g}g`)).toBeInTheDocument();
+    expect(screen.getByText(`Protein ${served.protein_g}g · Carbs ${served.carbs_g}g · Fat ${served.fat_g}g`)).toBeInTheDocument();
     expect(screen.getByTestId('protein-basis').textContent).toMatch(/lean mass/);
   });
 
   it('match the % split without lean mass, with no lean-mass line', () => {
     render(<KetoPlanStep ketoConfig={KETO} onChange={() => {}} calorieTarget={2000} baseGoal={{ target_weight: 250 }} leanMassLb={null} />);
     const served = servedAt(2000, null);
-    expect(screen.getByText(`Fat ${served.fat_g}g · Protein ${served.protein_g}g · Carbs ${served.carbs_g}g`)).toBeInTheDocument();
-    expect(screen.getByText('Fat 156g · Protein 125g · Carbs 25g')).toBeInTheDocument();
+    expect(screen.getByText(`Protein ${served.protein_g}g · Carbs ${served.carbs_g}g · Fat ${served.fat_g}g`)).toBeInTheDocument();
+    expect(screen.getByText('Protein 125g · Carbs 25g · Fat 156g')).toBeInTheDocument();
     expect(screen.queryByTestId('protein-basis')).toBeNull();
   });
 });

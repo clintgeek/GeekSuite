@@ -92,8 +92,8 @@ const StatNumber = ({
   const animated = useCountUp(isNumeric ? numericValue : 0, 420, animate && isNumeric);
 
   const displayValue = isNumeric
-    ? (animate ? animated : numericValue).toFixed(decimals)
-    : value ?? '--';
+    ? (animate ? animated : numericValue).toLocaleString('en-US', { minimumFractionDigits: decimals, maximumFractionDigits: decimals })
+    : value ?? '—';
 
   const sizeStyles = SIZE_MAP[size] || SIZE_MAP.display;
   const textColor = color || theme.palette.text.primary;

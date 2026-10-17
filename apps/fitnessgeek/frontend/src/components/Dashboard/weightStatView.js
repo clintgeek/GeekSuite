@@ -16,7 +16,7 @@ export function weightStatView(stats) {
   const mean = typeof stats?.currentMean === 'number' && Number.isFinite(stats.currentMean) ? stats.currentMean : null;
   const change = typeof stats?.totalChange === 'number' && Number.isFinite(stats.totalChange) ? stats.totalChange : null;
   if (mean === null) {
-    return { value: '--', unit: '', caption: stats?.reason === 'no_data' || !stats ? 'No weigh-ins yet' : '' };
+    return { value: '—', unit: '', caption: stats?.reason === 'no_data' || !stats ? 'No weigh-ins yet' : '' };
   }
   const value = mean.toFixed(1);
   if (change !== null) {

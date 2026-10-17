@@ -37,7 +37,7 @@ export default function ExperienceSettings({ children, id }) {
     const before = effectiveMode;
     const result = await setMode(mode);
     if (!result.ok) {
-      notify("Couldn't save that. Try again.", { tone: 'error' });
+      notify('Couldn’t save that. Try again.', { tone: 'error' });
       return;
     }
     if (before === mode) {
@@ -53,7 +53,7 @@ export default function ExperienceSettings({ children, id }) {
           onUndo={async () => {
             const back = await setMode(before);
             dismiss?.(toastId);
-            notify(back.ok ? `Back to ${modeName(before)}` : "Couldn't switch back. Try again.", { tone: back.ok ? 'info' : 'error' });
+            notify(back.ok ? `Back to ${modeName(before)}` : 'Couldn’t switch back. Try again.', { tone: back.ok ? 'info' : 'error' });
           }}
         />
       ),
@@ -62,16 +62,16 @@ export default function ExperienceSettings({ children, id }) {
 
   const toggleLarger = async (on) => {
     const result = await setLargerText(on);
-    notify(result.ok ? 'Saved' : "Couldn't save that. Try again.", result.ok ? { tone: 'success', duration: 2000 } : { tone: 'error' });
+    notify(result.ok ? 'Saved' : 'Couldn’t save that. Try again.', result.ok ? { tone: 'success', duration: 2000 } : { tone: 'error' });
   };
 
   return (
     <Surface sx={{ mb: 2, borderRadius: '24px' }} data-testid="experience-settings" id={id}>
       <Typography component="h2" sx={{ fontSize: '1.375rem', fontWeight: 800, mb: 0.5 }}>
-        How it looks
+        How much FitnessGeek shows
       </Typography>
       <Typography sx={{ color: 'text.secondary', fontSize: '1rem', mb: 2 }}>
-        {savedMode ? 'Saved as soon as you choose.' : `You haven't chosen yet, so you're seeing ${modeName(effectiveMode)}. Saved as soon as you choose.`}
+        {savedMode ? 'Saved as soon as you choose.' : `You haven’t chosen yet, so you’re seeing ${modeName(effectiveMode)}. Saved as soon as you choose.`}
       </Typography>
       {effectiveMode === 'full' && (
         <Typography sx={{ color: 'text.primary', fontSize: '1rem', mb: 2 }} data-testid="simple-view-line">

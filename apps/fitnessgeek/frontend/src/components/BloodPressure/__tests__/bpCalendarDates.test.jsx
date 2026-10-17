@@ -42,9 +42,9 @@ describe('BPLogList renders the calendar day it was given', () => {
     );
 
     // Rendered twice (mobile + desktop layouts); both must say the 26th.
-    const matches = screen.getAllByText(/Feb 26, 2026/);
+    const matches = screen.getAllByText(/Feb 26/);
     expect(matches.length).toBeGreaterThan(0);
-    expect(screen.queryByText(/Feb 25, 2026/)).toBeNull();
+    expect(screen.queryByText(/Feb 25/)).toBeNull();
   });
 
   it('never prints a time of day for a date that has none', () => {
@@ -116,9 +116,9 @@ describe('BPReport groups by the UTC calendar week', () => {
     );
 
     // The phone and desktop layouts each render the range once.
-    expect(screen.getAllByText('Mar 1 - Mar 7, 2026').length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/^Mar 1–7(, 2026)?$/).length).toBeGreaterThan(0);
     // The bug's tell: the Sunday reading landing in the week starting Feb 22.
-    expect(screen.queryByText(/Feb 22 - Feb 28/)).toBeNull();
+    expect(screen.queryByText(/Feb 22/)).toBeNull();
   });
 
   it('prints the reporting period as calendar days, not raw ISO instants', () => {
@@ -129,6 +129,7 @@ describe('BPReport groups by the UTC calendar week', () => {
       />
     );
 
-    expect(screen.getAllByText(/2026-03-01 - 2026-03-01/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText('Mar 1, 2026').length).toBeGreaterThan(0);
+    expect(screen.queryByText(/2026-03-01/)).toBeNull();
   });
 });

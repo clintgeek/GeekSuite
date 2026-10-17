@@ -3,6 +3,7 @@ import { Alert, Box, Button, CircularProgress, Dialog, DialogContent, DialogTitl
 import { useTheme } from '@mui/material/styles';
 import { useBackToClose } from './useBackToClose.js';
 import { errorMessage } from '../../utils/errorMessage.js';
+import { cal, fmt } from '../../utils/plainWords.js';
 import { describeFailure } from './composerText.js';
 import { newIdempotencyKey } from './idempotency.js';
 import { portionChoices } from './entries.js';
@@ -60,7 +61,7 @@ export default function FixSheet({ item, onClose, fixes }) {
       await fn();
       onClose?.();
     } catch (err) {
-      setError(what === 'actually' ? describeFailure(err).message : errorMessage(err, "Couldn't change that. Try again."));
+      setError(what === 'actually' ? describeFailure(err).message : errorMessage(err, "Couldn’t change that. Try again."));
     } finally {
       setWorking(null);
     }
@@ -85,7 +86,7 @@ export default function FixSheet({ item, onClose, fixes }) {
           Fix {item.name}
         </Typography>
         <Typography component="span" sx={{ display: 'block', fontSize: '1rem', color: 'text.secondary' }}>
-          Logged at {Math.round(item.calories || 0)} cal
+          Logged at {cal(item.calories || 0)}
         </Typography>
       </DialogTitle>
       <DialogContent sx={{ pb: 3 }}>
@@ -95,10 +96,10 @@ export default function FixSheet({ item, onClose, fixes }) {
             About right
           </Button>
           <Button variant="outlined" sx={bigButton} disabled={Boolean(working)} onClick={() => setTo(smaller)}>
-            {working === `cal-${smaller}` ? <CircularProgress size={20} color="inherit" /> : `Smaller · ~${smaller}`}
+            {working === `cal-${smaller}` ? <CircularProgress size={20} color="inherit" /> : `Smaller · ~${fmt(smaller)}`}
           </Button>
           <Button variant="outlined" sx={bigButton} disabled={Boolean(working)} onClick={() => setTo(bigger)}>
-            {working === `cal-${bigger}` ? <CircularProgress size={20} color="inherit" /> : `Bigger · ~${bigger}`}
+            {working === `cal-${bigger}` ? <CircularProgress size={20} color="inherit" /> : `Bigger · ~${fmt(bigger)}`}
           </Button>
         </Box>
 

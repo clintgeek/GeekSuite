@@ -13,8 +13,10 @@ import {
 } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { toneForMode } from '@geeksuite/ui';
-import { displayCalendarDate, localDateString, utcDateString } from '@geeksuite/utils';
+import { localDateString, utcDateString } from '@geeksuite/utils';
 import { categorizeBP } from '../../utils/bpUtils.js';
+import { bpStageWords } from '../../utils/plainWords.js';
+import { nearDay } from '../../utils/dates.js';
 import { formatLocalTime } from './bpTimeUtils.js';
 import {
   Delete as DeleteIcon,
@@ -31,14 +33,10 @@ const BPLogList = ({ logs, onDelete, onEdit, unit = "mmHg" }) => {
   // Rendering it with a plain `toLocaleDateString` showed the previous day for
   // every reader west of UTC, and the "time" that used to sit beside it was
   // always 7:00 PM — UTC midnight in Central, not a time anybody logged.
-  // `displayCalendarDate` forces `timeZone: 'UTC'`; the time is gone.
-  const formatDate = (dateString) =>
-    displayCalendarDate(dateString, 'en-US', {
-      weekday: 'short',
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric'
-    });
+  // `utcDateString` takes the stored calendar day; the time is gone. Words
+  // per review U-5: "Today", "Yesterday", a weekday for the last week, else
+  // "Oct 13" (the year only when it isn't this year).
+  const formatDate = (dateString) => nearDay(utcDateString(dateString), localDateString());
 
   if (logs.length === 0) {
     return (
@@ -59,7 +57,7 @@ const BPLogList = ({ logs, onDelete, onEdit, unit = "mmHg" }) => {
             color: theme.palette.text.secondary
           }}>
             <Typography variant="body2">
-              No blood pressure readings recorded yet
+              No readings yet
             </Typography>
           </Box>
         </CardContent>
@@ -95,12 +93,8 @@ const BPLogList = ({ logs, onDelete, onEdit, unit = "mmHg" }) => {
           {sortedLogs.map((log) => {
             const bpStatus = categorizeBP(log.systolic, log.diastolic);
             const readingLabel = `${log.systolic}/${log.diastolic} ${unit} reading from ${formatDate(log.log_date)}`;
-            const deleteLabel = `Delete the ${readingLabel}`;
+            const deleteLabel = `Remove the ${readingLabel}`;
             const editLabel = `Edit the ${readingLabel}`;
-            // Compare the stored calendar day against the reader's calendar day —
-            // `new Date(utcMidnight).toDateString()` is yesterday west of UTC, so
-            // today's reading never read as today.
-            const isToday = utcDateString(log.log_date) === localDateString();
             // An instant, unlike `log_date` — rendered in the viewer's own
             // timezone, not forced to UTC. Empty string (not a fabricated
             // time) when the row has none yet.
@@ -136,7 +130,7 @@ const BPLogList = ({ logs, onDelete, onEdit, unit = "mmHg" }) => {
                         {log.systolic}/{log.diastolic} {unit}
                       </Typography>
                       <Chip
-                        label={bpStatus.stage}
+                        label={bpStageWords(bpStatus.stage).label}
                         size="small"
                         sx={{
                           backgroundColor: `${bpStatus.color}20`,
@@ -181,7 +175,6 @@ const BPLogList = ({ logs, onDelete, onEdit, unit = "mmHg" }) => {
                     <Typography variant="body2" color="text.secondary">
                       {formatDate(log.log_date)}
                       {timeLabel && ` • ${timeLabel}`}
-                      {isToday && ' • Today'}
                     </Typography>
                   </Box>
                 </Box>
@@ -212,7 +205,7 @@ const BPLogList = ({ logs, onDelete, onEdit, unit = "mmHg" }) => {
                   {/* Status Chip */}
                   <Box sx={{ flex: '0 0 auto' }}>
                     <Chip
-                      label={bpStatus.stage}
+                      label={bpStageWords(bpStatus.stage).label}
                       size="small"
                       sx={{
                         backgroundColor: `${bpStatus.color}20`,
@@ -229,11 +222,6 @@ const BPLogList = ({ logs, onDelete, onEdit, unit = "mmHg" }) => {
                       {formatDate(log.log_date)}
                       {timeLabel && ` • ${timeLabel}`}
                     </Typography>
-                    {isToday && (
-                      <Typography variant="body2" color="text.secondary">
-                        • Today
-                      </Typography>
-                    )}
                   </Box>
 
                   {/* Edit Button */}

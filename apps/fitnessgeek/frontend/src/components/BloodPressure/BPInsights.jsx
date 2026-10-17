@@ -146,7 +146,7 @@ const BPInsights = ({ bpLogs = [] }) => {
 
   const getTrendText = () => {
     if (insights.trend === 'improving') return 'Improving';
-    if (insights.trend === 'worsening') return 'Needs Attention';
+    if (insights.trend === 'worsening') return 'Going up';
     return 'Stable';
   };
 
@@ -212,13 +212,13 @@ const BPInsights = ({ bpLogs = [] }) => {
           {insights.avg7Systolic && (
             <Box sx={tile}>
               <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontWeight: 600, display: 'block', mb: 1 }}>
-                7-Day Average
+                7-day average
               </Typography>
               <Typography variant="h6" sx={{ fontWeight: 700, color: theme.palette.text.primary }}>
                 {insights.avg7Systolic}/{insights.avg7Diastolic}
               </Typography>
               <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-                {insights.last7DaysCount} readings
+                {insights.last7DaysCount} {insights.last7DaysCount === 1 ? 'reading' : 'readings'}
               </Typography>
             </Box>
           )}
@@ -227,13 +227,13 @@ const BPInsights = ({ bpLogs = [] }) => {
           {insights.avg30Systolic && (
             <Box sx={tile}>
               <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontWeight: 600, display: 'block', mb: 1 }}>
-                30-Day Average
+                30-day average
               </Typography>
               <Typography variant="h6" sx={{ fontWeight: 700, color: theme.palette.text.primary }}>
                 {insights.avg30Systolic}/{insights.avg30Diastolic}
               </Typography>
               <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-                {insights.last30DaysCount} readings
+                {insights.last30DaysCount} {insights.last30DaysCount === 1 ? 'reading' : 'readings'}
               </Typography>
             </Box>
           )}
@@ -250,7 +250,7 @@ const BPInsights = ({ bpLogs = [] }) => {
               {/* The tint is a surface, so the label is measured against it —
                   text.secondary read 4.39:1 on the light trend panel. */}
               <Typography variant="caption" sx={{ color: readableOn(theme.palette.text.secondary, trendTint, { under: theme.palette.background.paper }), fontWeight: 600 }}>
-                30-Day Trend
+                Last 30 days
               </Typography>
             </Box>
             <Typography variant="h6" sx={{ fontWeight: 700, color: getTrendColor() }}>

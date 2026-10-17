@@ -18,7 +18,7 @@ describe('OfflineIndicator', () => {
     setOnline(false);
     await act(async () => { window.dispatchEvent(new Event('offline')); });
     const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent("You're offline. New entries won't save until you're back online.");
+    expect(alert).toHaveTextContent('You’re offline. New entries won’t save until you’re back online.');
     expect(document.body.textContent).not.toMatch(/sync/i);
   });
 

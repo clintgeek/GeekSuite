@@ -3,7 +3,7 @@ import { Navigate, useLocation } from 'react-router-dom';
 import { Box, Button, CircularProgress, Typography } from '@mui/material';
 import { useAuth } from '@geeksuite/auth';
 
-export const CANT_REACH = "Can't reach FitnessGeek — retrying";
+export const CANT_REACH = 'Can’t reach FitnessGeek — retrying';
 
 /**
  * A small, non-blocking line while the session check can't reach the

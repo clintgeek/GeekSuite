@@ -7,8 +7,8 @@ import { foodService } from '../services/foodService.js';
 import logger from '../utils/logger.js';
 import { errorMessage as plainError } from '../utils/errorMessage.js';
 
-export const REFRESH_FAILED = "Couldn't refresh — showing what we had.";
-export const LOAD_FAILED = "Couldn't load this day. Try again in a moment.";
+export const REFRESH_FAILED = 'Couldn’t refresh — showing what was here before.';
+export const LOAD_FAILED = 'Couldn’t load this day. Try again in a moment.';
 
 export const useFoodLog = (selectedDate) => {
   const [logs, setLogs] = useState([]);
@@ -216,16 +216,16 @@ export const useFoodLog = (selectedDate) => {
 
       // The backend returns { success: true, data: meal, message: '...' }
       if (response && response.success) {
-        setAutoCloseMessage('Meal saved successfully!', setSuccessMessage);
+        setAutoCloseMessage('Meal saved', setSuccessMessage);
         await loadFoodLogs();
         return true;
       } else {
-        setAutoCloseMessage('Failed to save meal. Please try again.', setErrorMessage);
+        setAutoCloseMessage('Couldn’t save that meal. Try again.', setErrorMessage);
         return false;
       }
     } catch (error) {
       logger.error('Error saving meal:', error);
-      setAutoCloseMessage(plainError(error, 'Error saving meal. Please try again.'), setErrorMessage);
+      setAutoCloseMessage(plainError(error, 'Couldn’t save that meal. Try again.'), setErrorMessage);
       return false;
     }
   };

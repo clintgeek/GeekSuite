@@ -39,16 +39,16 @@ describe('describeChange', () => {
     expect(describeChange({ available: false, available_from: '2026-10-04' })).toBeNull();
   });
   it('splits a loss into fat and lean (the brief\'s example)', () => {
-    expect(describeChange(ch(-8, -7, -1))).toBe("Of the 8.0 lb you've lost, about 7.0 lb was fat and 1.0 lb lean.");
+    expect(describeChange(ch(-8, -7, -1))).toBe("Of the 8.0 lb you’ve lost, about 7.0 lb was fat and 1.0 lb lean.");
   });
   it('says lean held when only fat moved', () => {
-    expect(describeChange(ch(-5, -4.8, -0.2))).toBe("Of the 5.0 lb you've lost, about 4.8 lb was fat; lean mass held steady.");
+    expect(describeChange(ch(-5, -4.8, -0.2))).toBe("Of the 5.0 lb you’ve lost, about 4.8 lb was fat; lean mass held steady.");
   });
   it('is honest when a loss was mostly lean', () => {
-    expect(describeChange(ch(-3, 0.5, -3.5))).toBe("You've lost 3.0 lb: about 3.5 lb of lean mass lost, while fat rose 0.5 lb.");
+    expect(describeChange(ch(-3, 0.5, -3.5))).toBe("You’ve lost 3.0 lb: about 3.5 lb of lean mass lost, while fat rose 0.5 lb.");
   });
   it('is honest about a gain', () => {
-    expect(describeChange(ch(3, 2, 1))).toBe("Of the 3.0 lb you've gained, about 2.0 lb was fat and 1.0 lb lean.");
+    expect(describeChange(ch(3, 2, 1))).toBe("Of the 3.0 lb you’ve gained, about 2.0 lb was fat and 1.0 lb lean.");
   });
   it('names a recomposition hiding behind a flat scale', () => {
     expect(describeChange(ch(0.2, -1.5, 1.7))).toBe(
@@ -56,7 +56,7 @@ describe('describeChange', () => {
     );
   });
   it('falls back to weight alone without the parts', () => {
-    expect(describeChange(ch(-2, null, null))).toBe("You've lost about 2.0 lb.");
+    expect(describeChange(ch(-2, null, null))).toBe("You’ve lost about 2.0 lb.");
   });
 });
 

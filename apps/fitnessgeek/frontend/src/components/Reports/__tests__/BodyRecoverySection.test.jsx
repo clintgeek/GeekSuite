@@ -83,7 +83,7 @@ const renderSection = () => render(<MemoryRouter><BodyRecoverySection /></Memory
 describe('Body & recovery', () => {
   it('labels itself as the last 90 days, with no apology for the range toggle (D-5)', async () => {
     renderSection();
-    expect(screen.getByText('Body and recovery · last 90 days')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: 'Body and recovery, last 90 days' })).toBeInTheDocument();
     expect(screen.queryByText(/toggle/)).toBeNull();
     await screen.findByTestId('trend-restingHR');
   });
@@ -122,7 +122,7 @@ describe('Body & recovery', () => {
     expect(within(card).getByText('in the last 7 days')).toBeInTheDocument();
     expect(within(card).queryByText(/min \/ week|7-day average/)).toBeNull();
     expect(within(card).getByText(/At or above the 150-minute guideline/)).toBeInTheDocument();
-    expect(within(card).getByText(/Moderate \+ 2 × vigorous/)).toBeInTheDocument();
+    expect(within(card).getByText(/vigorous minutes counted twice/)).toBeInTheDocument();
   });
 
   it('fitness age against actual age, dated', async () => {

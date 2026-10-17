@@ -142,6 +142,20 @@ const FoodLog = () => {
     clearErrorMessage
   } = useFoodLog(selectedDate);
 
+  // Save-meal's "Meal saved" (and a failed food create) were an Alert at
+  // the bottom of a long page, off-screen on a phone (review T-2). They
+  // are toasts now, like every other result on this page.
+  useEffect(() => {
+    if (!successMessage) return;
+    notify(successMessage, { tone: 'success' });
+    clearSuccessMessage();
+  }, [successMessage, notify, clearSuccessMessage]);
+  useEffect(() => {
+    if (!errorMessage) return;
+    notify(errorMessage, { tone: 'error' });
+    clearErrorMessage();
+  }, [errorMessage, notify, clearErrorMessage]);
+
   // Scroll to the linked meal once, after its rows have loaded — scrolling
   // before then lands on a section that is about to grow.
   const scrolledToLinkedMeal = useRef(false);
@@ -191,7 +205,7 @@ const FoodLog = () => {
       setCreateForm(null);
       if (created) await logItems([{ ...created, servings: 1 }], selectedMealType);
     } catch (error) {
-      showError(plainError(error, 'Could not create that food.'));
+      showError(plainError(error, 'Couldn’t save that food. Try again.'));
     } finally {
       setCreatingFood(false);
     }
@@ -259,7 +273,7 @@ const FoodLog = () => {
         }
       });
 
-      setGoalSavedMsg('Today\'s calorie target updated.');
+      setGoalSavedMsg('Today’s target saved');
       setTimeout(() => setGoalSavedMsg(''), 3000);
       await refreshGoals();
     } catch (e) {
@@ -350,12 +364,12 @@ const FoodLog = () => {
       // A moved entry leaves this day's list, so say where it went.
       if (updateData?.log_date && updateData.log_date !== selectedDate) {
         const where = friendlyDay(updateData.log_date, today);
-        notify(`Moved to ${where === 'Today' || where === 'Yesterday' ? where.toLowerCase() : where}.`, { tone: 'success' });
+        notify(`Moved to ${where === 'Today' || where === 'Yesterday' ? where.toLowerCase() : where}`, { tone: 'success' });
       } else {
         notify('Saved', { tone: 'success' });
       }
     } else {
-      notify(describeLastError?.("Couldn't save that. Try again.") || "Couldn't save that. Try again.", { tone: 'error' });
+      notify(describeLastError?.('Couldn’t save that. Try again.') || 'Couldn’t save that. Try again.', { tone: 'error' });
     }
     setUpdatingLog(false);
   };
@@ -387,13 +401,13 @@ const FoodLog = () => {
     const success = await deleteFoodLog(logId);
     if (success) justAdded.forget(logId);
     if (!success) {
-      notify(describeLastError?.("Couldn't remove that. Try again.") || "Couldn't remove that. Try again.", { tone: 'error' });
+      notify(describeLastError?.('Couldn’t remove that. Try again.') || 'Couldn’t remove that. Try again.', { tone: 'error' });
       return;
     }
 
     // The same words as Home (UX review IA-6): "Removed X" with Undo.
     // The same grammar as an add's undo (undoToast.jsx): ten seconds, then
-    // "Undone ✓" — or "Couldn't undo — try again" with a retry. It used to
+    // "Undone ✓" — or 'Couldn’t undo — try again' with a retry. It used to
     // be four seconds and silent either way.
     const restore = async () => {
       const result = await logItems(
@@ -515,11 +529,11 @@ const FoodLog = () => {
         <Surface id="calorie-goal-panel" sx={{ mb: 2 }}>
           <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems={{ xs: 'stretch', sm: 'center' }}>
             <Box sx={{ flex: 1 }}>
-              <SectionLabel sx={{ mb: 0.75 }}>Calorie Goal Today</SectionLabel>
-              <StatNumber value={todayCalorieGoal} unit="kcal" size="display" />
+              <SectionLabel sx={{ mb: 0.75 }}>Today’s target</SectionLabel>
+              <StatNumber value={todayCalorieGoal} unit="cal" size="display" />
             </Box>
             <TextField
-              label="Adjust today"
+              label="Change today’s target"
               type="number"
               inputProps={{ inputMode: 'decimal' }}
               size="small"
@@ -731,10 +745,10 @@ const FoodLog = () => {
               }}
             >
               {status === 'over'
-                ? `Over limit by ${Math.round(totalNetCarbs - netCarbLimit)}g`
+                ? `${Math.round(totalNetCarbs - netCarbLimit)}g over your limit`
                 : status === 'approaching'
-                  ? `Approaching cap — ${Math.round(netCarbLimit - totalNetCarbs)}g remaining`
-                  : `In range — ${Math.round(netCarbLimit - totalNetCarbs)}g remaining`}
+                  ? `Close to your limit — ${Math.round(netCarbLimit - totalNetCarbs)}g left`
+                  : `${Math.round(netCarbLimit - totalNetCarbs)}g left`}
             </Typography>
           </Surface>
         );
@@ -751,7 +765,7 @@ const FoodLog = () => {
             fontSize: '0.75rem'
           }}
         >
-          * No fiber data available — shown as total carbs
+          * No fiber listed for this food, so it counts all its carbs
         </Typography>
       )}
 
@@ -843,26 +857,6 @@ const FoodLog = () => {
           setShowCopyDialog(true);
         }}
       />
-
-      {/* Save-Meal Success/Error — the only producer left here.
-          Edit and delete used to report through this same pair of state
-          slots, rendered as an Alert below the header, date nav, quick
-          actions, search box and all four meal sections: likely off-screen
-          on a phone, gone in 3 seconds regardless, and the reason deleting
-          near the top of a long day's log read as a silent failure. They now
-          use the floating toast (see handleUpdateLog/handleDeleteLog above),
-          matching how adding a food already reports. saveMeal wasn't part of
-          that bug, so it still lands here. */}
-      {successMessage && (
-        <Alert severity="success" sx={{ mt: 2 }} onClose={clearSuccessMessage}>
-          {successMessage}
-        </Alert>
-      )}
-      {errorMessage && (
-        <Alert severity="error" sx={{ mt: 2 }} onClose={clearErrorMessage}>
-          {errorMessage}
-        </Alert>
-      )}
 
       {/* Loading Indicator */}
       {loading && (

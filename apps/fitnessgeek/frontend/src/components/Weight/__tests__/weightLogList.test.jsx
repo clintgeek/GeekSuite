@@ -45,7 +45,7 @@ describe('WeightLogList', () => {
 
     await user.click(screen.getByRole('button', { name: /edit the 316\.4/i }));
     const dialog = await screen.findByRole('dialog');
-    const field = within(dialog).getByLabelText(/weight \(lbs\)/i);
+    const field = within(dialog).getByLabelText(/^weight/i);
     await user.clear(field);
     await user.type(field, '316.8');
     const note = within(dialog).getByLabelText(/note/i);
@@ -57,7 +57,7 @@ describe('WeightLogList', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   }, 15000); // userEvent typing into two MUI fields runs past 5 s under a full parallel suite
 
-  it('a failed save stays open and says it was not saved', async () => {
+  it('a failed save stays open and says it couldn’t save', async () => {
     const user = userEvent.setup();
     const onUpdate = vi.fn().mockResolvedValue(false);
     render(<WeightLogList logs={LOGS} onDelete={() => {}} onUpdate={onUpdate} />);
@@ -66,7 +66,7 @@ describe('WeightLogList', () => {
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByRole('button', { name: /^save$/i }));
 
-    expect(await within(dialog).findByRole('alert')).toHaveTextContent(/not saved/i);
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(/couldn.t save that change/i);
     expect(screen.getByRole('dialog')).toBeInTheDocument();
   });
 

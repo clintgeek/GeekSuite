@@ -66,7 +66,7 @@ export default function FirstRun({ suggestedName = '', mealType = 'breakfast', o
 
       {step === 1 && (
         <Step n={1}>
-          {heading('Welcome! What should we call you?')}
+          {heading('Welcome! What should I call you?')}
           <TextField
             label="Your name"
             value={name}
@@ -84,7 +84,7 @@ export default function FirstRun({ suggestedName = '', mealType = 'breakfast', o
 
       {step === 2 && (
         <Step n={2}>
-          {heading(name.trim() ? `Nice to meet you, ${name.trim()}. What's your goal?` : "What's your goal?")}
+          {heading(name.trim() ? `Nice to meet you, ${name.trim()}. What’s your goal?` : 'What’s your goal?')}
           <Box role="radiogroup" aria-labelledby="first-run-step-2" sx={{ display: 'flex', flexDirection: 'column', gap: 1.25 }}>
             {GOALS.map((g) => {
               const chosen = goal === g.id;

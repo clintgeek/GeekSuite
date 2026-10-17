@@ -69,7 +69,7 @@ describe('Weight & body page', () => {
     getScans.mockRejectedValue(new Error('boom'));
     renderPage();
     expect(await screen.findAllByTestId('weight-log-row')).toHaveLength(2);
-    expect(await screen.findByText(/body composition didn.t load/i)).toBeInTheDocument();
+    expect(await screen.findByText(/your scans didn.t load/i)).toBeInTheDocument();
     expect(screen.getByText(/your weight above is unaffected/i)).toBeInTheDocument();
   });
 
@@ -82,7 +82,7 @@ describe('Weight & body page', () => {
     await user.click(await screen.findByRole('button', { name: /edit the 316\.4/i }));
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByRole('button', { name: /^save$/i }));
-    expect(await within(dialog).findByRole('alert')).toHaveTextContent(/not saved/i);
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent(/couldn.t save that change/i);
     expect(updateWeightLog).toHaveBeenCalledWith('w2', { weight_value: 316.4, notes: '' });
   });
 

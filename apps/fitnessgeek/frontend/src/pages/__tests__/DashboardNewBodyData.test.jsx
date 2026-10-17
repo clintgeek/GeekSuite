@@ -66,7 +66,7 @@ describe('DashboardNew — body data', () => {
 
   it('shows no banner without a plan', async () => {
     setup({ ng: null });
-    await screen.findByText('Today\'s meals');
+    await screen.findByText('Today’s meals');
     expect(screen.queryByTestId('plan-accuracy-banner')).toBeNull();
   });
 
@@ -77,7 +77,7 @@ describe('DashboardNew — body data', () => {
 
   it('no protein caption on the goal-weight rule', async () => {
     setup({ basis: 'goal_weight' });
-    await screen.findByText('Today\'s meals');
+    await screen.findByText('Today’s meals');
     expect(screen.queryByTestId('macro-note-protein')).toBeNull();
   });
 

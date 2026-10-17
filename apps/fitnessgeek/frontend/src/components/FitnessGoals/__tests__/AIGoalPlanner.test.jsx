@@ -70,7 +70,7 @@ async function goToProfileStep() {
 
 async function fillRequiredFieldsExceptHeight() {
   fireEvent.change(screen.getByLabelText(/^Age$/i), { target: { value: '30' } });
-  fireEvent.change(screen.getByLabelText(/Current Weight/i), { target: { value: '180' } });
+  fireEvent.change(screen.getByLabelText(/Weight now/i), { target: { value: '180' } });
 
   // MUI's Select isn't a native <select>: it's a div acting as a listbox
   // trigger, so it has to be opened and an option clicked rather than
@@ -102,9 +102,9 @@ describe('Calorie Wizard — height parsing and the Safety Check', () => {
     // This is the exact string the OLD placeholder told the user to type.
     fireEvent.change(screen.getByLabelText(/^Height$/i), { target: { value: "5'11" } });
 
-    expect(await screen.findByText(/Can't read that height/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /Next: Set Goal/i })).toBeDisabled();
-    expect(screen.getByRole('button', { name: /Save Profile/i })).toBeDisabled();
+    expect(await screen.findByText(/can’t read that height/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /Next: set goal/i })).toBeDisabled();
+    expect(screen.getByRole('button', { name: /Save details/i })).toBeDisabled();
 
     // The bug this replaces: a "Safe" verdict rendered over a calculation
     // that never happened. With Next disabled, that verdict is unreachable —
@@ -122,9 +122,9 @@ describe('Calorie Wizard — height parsing and the Safety Check', () => {
     fireEvent.change(screen.getByLabelText(/^Height$/i), { target: { value } });
 
     await waitFor(() => {
-      expect(screen.queryByText(/Can't read that height/i)).toBeNull();
+      expect(screen.queryByText(/can’t read that height/i)).toBeNull();
     });
-    expect(screen.getByRole('button', { name: /Next: Set Goal/i })).not.toBeDisabled();
+    expect(screen.getByRole('button', { name: /Next: set goal/i })).not.toBeDisabled();
   });
 
   it('a valid height reaches a real plan whose Safety Check reflects an actual calculation', async () => {
@@ -132,13 +132,13 @@ describe('Calorie Wizard — height parsing and the Safety Check', () => {
     await fillRequiredFieldsExceptHeight();
     fireEvent.change(screen.getByLabelText(/^Height$/i), { target: { value: '5\'11"' } });
 
-    fireEvent.click(await screen.findByRole('button', { name: /Next: Set Goal/i }));
-    await screen.findByText('Set Your Weight Goal');
+    fireEvent.click(await screen.findByRole('button', { name: /Next: set goal/i }));
+    await screen.findByText('Set your weight goal');
 
-    fireEvent.change(screen.getByLabelText(/Target Weight/i), { target: { value: '170' } });
-    fireEvent.click(screen.getByRole('button', { name: /Calculate My Plan/i }));
+    fireEvent.change(screen.getByLabelText(/Goal weight/i), { target: { value: '170' } });
+    fireEvent.click(screen.getByRole('button', { name: /Work out my plan/i }));
 
-    await screen.findByText('Your Personalized Calorie Plan');
+    await screen.findByText('Your calorie plan');
     // A real BMR was computed (5'11" @ 30/male/180lbs is well above the 1200
     // floor), so the Safety Check should report the honest verdict — not the
     // "Calculation error" state reserved for a height that never parsed.
@@ -156,7 +156,7 @@ describe('Calorie Wizard — Stepper navigation', () => {
 
   it('the Stepper header is clickable for a step already completed', async () => {
     await goToProfileStep();
-    fireEvent.click(screen.getByRole('button', { name: 'Your Approach' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Approach' }));
     await screen.findByText('Choose your approach');
   });
 });
@@ -176,12 +176,12 @@ describe('Calorie Wizard — an evening plan starts today (review P2)', () => {
     await goToProfileStep();
     await fillRequiredFieldsExceptHeight();
     fireEvent.change(screen.getByLabelText(/^Height$/i), { target: { value: '5\'11"' } });
-    fireEvent.click(await screen.findByRole('button', { name: /Next: Set Goal/i }));
-    await screen.findByText('Set Your Weight Goal');
-    fireEvent.change(screen.getByLabelText(/Target Weight/i), { target: { value: '170' } });
-    fireEvent.click(screen.getByRole('button', { name: /Calculate My Plan/i }));
-    await screen.findByText('Your Personalized Calorie Plan');
-    fireEvent.click(screen.getByRole('button', { name: /Start Tracking/i }));
+    fireEvent.click(await screen.findByRole('button', { name: /Next: set goal/i }));
+    await screen.findByText('Set your weight goal');
+    fireEvent.change(screen.getByLabelText(/Goal weight/i), { target: { value: '170' } });
+    fireEvent.click(screen.getByRole('button', { name: /Work out my plan/i }));
+    await screen.findByText('Your calorie plan');
+    fireEvent.click(screen.getByRole('button', { name: /^Save plan$/i }));
     const { settingsService } = await import('../../../services/settingsService.js');
     await waitFor(() => expect(settingsService.updateSettings).toHaveBeenCalled());
     const goal = settingsService.updateSettings.mock.calls.at(-1)[0].nutrition_goal;

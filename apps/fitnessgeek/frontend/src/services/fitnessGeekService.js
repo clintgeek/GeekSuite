@@ -2,6 +2,7 @@ import { apiService } from './apiService.js';
 import { localDateString } from '@geeksuite/utils';
 import logger from '../utils/logger.js';
 import { restClient as restApi } from './restClient.js';
+import { mealLabel } from '../utils/plainWords.js';
 
 // Calendar date as a plain 'YYYY-MM-DD' string — the wire format every food-log
 // mutation takes, which the gateway normalizes to UTC midnight. Callers already
@@ -426,15 +427,8 @@ export const fitnessGeekService = {
   },
 
   // Get meal type display name
-  getMealTypeName: (mealType) => {
-    const names = {
-      breakfast: 'Breakfast',
-      lunch: 'Lunch',
-      dinner: 'Dinner',
-      snack: 'Snack'
-    };
-    return names[mealType] || mealType;
-  },
+  // "Snacks" as a name, like every other meal label (review C-5).
+  getMealTypeName: (mealType) => mealLabel(mealType),
 
   // Get meal type icon
   getMealTypeIcon: (mealType) => {

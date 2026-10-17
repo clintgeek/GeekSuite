@@ -20,7 +20,7 @@ const NutritionInputs = ({
   };
 
   const baseFields = [
-    { key: 'calories_per_serving', label: `Calories${qualifier}`, adorn: 'kcal' },
+    { key: 'calories_per_serving', label: `Calories${qualifier}`, adorn: 'cal' },
     { key: 'protein_grams', label: `Protein${qualifier}`, adorn: 'g' },
     { key: 'carbs_grams', label: `Carbs${qualifier}`, adorn: 'g' },
     { key: 'fat_grams', label: `Fat${qualifier}`, adorn: 'g' }

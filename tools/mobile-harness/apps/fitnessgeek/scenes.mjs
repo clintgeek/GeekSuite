@@ -164,7 +164,7 @@ export const scenes = [
     goto: '/weight',
     wait: 1800,
     async setup(page, h) {
-      const edit = await must(page.getByRole('button', { name: /^edit the .* entry from/i }).first(), 'weight log edit button');
+      const edit = await must(page.getByRole('button', { name: /^edit the .* weigh-in from/i }).first(), 'weight log edit button');
       await edit.scrollIntoViewIfNeeded();
       await edit.click();
       await h.settle(800);
@@ -238,7 +238,7 @@ export const scenes = [
     wait: 1800,
     viewports: ['phone'],
     async setup(page, h) {
-      const bfab = page.getByRole('button', { name: /log blood pressure/i }).first();
+      const bfab = page.getByRole('button', { name: /^log (bp|blood pressure)$/i }).first();
       if (!(await bfab.count())) return false;
       await bfab.click();
       await h.settle(800);
@@ -384,14 +384,14 @@ export const scenes = [
       await page.goto(h.base + '/calorie-wizard', { waitUntil: 'networkidle' });
       await h.settle(1600);
       await must(page.locator('[data-testid="bmr-source"][data-source="scan"]'), 'scan BMR source note');
-      await scrollToSection(page, h, 'text=Your Metabolism', 96);
+      await scrollToSection(page, h, 'text=What you burn', 96);
     }),
     teardown: (page) => page.unroute('**/graphql'),
   },
   {
     // Re-running the wizard over a saved (stale) weekender plan: old vs new,
-    // before anything is saved (plan D2). Walks Update → Continue → Next →
-    // Calculate, with the profile coming from USER in fixtures.mjs.
+    // before anything is saved (plan D2). Walks Change plan → Continue → Next →
+    // Work out my plan, with the profile coming from USER in fixtures.mjs.
     name: '17-wizard-old-vs-new',
     setup: (page, h) => withPageOps(page, opsWithPlan({
       // A weekender moves calories to Sat/Sun and keeps the weekly average
@@ -402,7 +402,7 @@ export const scenes = [
     }), async () => {
       await page.goto(h.base + '/calorie-wizard', { waitUntil: 'networkidle' });
       await h.settle(1600);
-      await (await must(page.getByRole('button', { name: /^update$/i }).first(), 'Update')).click();
+      await (await must(page.getByRole('button', { name: /^change plan$/i }).first(), 'Change plan')).click();
       await h.settle(500);
       await (await must(page.getByRole('button', { name: /^continue$/i }).first(), 'Continue')).click();
       await h.settle(500);
@@ -410,7 +410,7 @@ export const scenes = [
       if (await next.isDisabled()) throw new Error('profile incomplete: Next: Set Goal is disabled');
       await next.click();
       await h.settle(500);
-      await (await must(page.getByRole('button', { name: /calculate my plan/i }).first(), 'Calculate My Plan')).click();
+      await (await must(page.getByRole('button', { name: /work out my plan/i }).first(), 'Work out my plan')).click();
       await h.settle(900);
       await must(page.locator('[data-testid="plan-comparison"]'), 'old-vs-new card');
       await scrollToSection(page, h, '[data-testid="plan-comparison"]', 120);
@@ -730,7 +730,7 @@ scenes.push(
           await sheet.locator('[data-testid="log-it"]').click();
           await h.settle(8400);
           await must(sheet.getByText('Working it out…'), '"Working it out…"');
-          await must(sheet.getByText("Still working — this one's taking a moment."), '"Still working"');
+          await must(sheet.getByText('Still working — this one’s taking a moment.'), '"Still working"');
         },
       }),
       async teardown(page, h) {
@@ -800,7 +800,7 @@ scenes.push(
     offline: true,
     fn: async (page, h, sheet) => {
       await typeInto(sheet, SOUP, h, 600);
-      await must(sheet.getByText("No signal — I can't log this yet. Your words are saved here."), 'the offline line');
+      await must(sheet.getByText('No signal — I can’t log this yet. Your words are saved here.'), 'the offline line');
       await must(sheet.locator('[data-testid="log-it"][disabled]'), 'Log it off while offline');
     },
   }),
@@ -811,7 +811,7 @@ scenes.push(
       await typeInto(sheet, SOUP, h, 400);
       await sheet.locator('[data-testid="log-it"]').click();
       await h.settle(1200);
-      await must(sheet.getByText("That didn't go through. Tap Log it to try again."), 'the failure line');
+      await must(sheet.getByText('That didn’t go through. Tap Log it to try again.'), 'the failure line');
     },
   }),
   // Day words: ask before logging.
@@ -832,7 +832,7 @@ scenes.push(
     fn: async (page, h) => {
       await (await must(page.getByRole('button', { name: 'Add food to Dinner' }).first(), 'Dinner "+"')).click();
       await h.settle(900);
-      await must(page.getByRole('dialog').getByText("Add to yesterday's dinner"), "the title \"Add to yesterday's dinner\"");
+      await must(page.getByRole('dialog').getByText(/^Add to \w+’s dinner \(yesterday\)$/), 'the title "Add to <weekday>’s dinner (yesterday)"');
     },
   }),
   {

@@ -45,7 +45,7 @@ const spacedIndices = (length, count = 6) => {
   return Array.from({ length: count }, (_, i) => Math.round(i * step));
 };
 
-const BPHRChart = ({ data = [], title = 'Heart Rate (Today)' }) => {
+const BPHRChart = ({ data = [], title = 'Heart rate today' }) => {
   const theme = useTheme();
   const chartTheme = useMemo(() => buildChartTheme(theme), [theme]);
 
@@ -68,7 +68,7 @@ const BPHRChart = ({ data = [], title = 'Heart Rate (Today)' }) => {
     return { min: Math.min(...values) - 5, max: Math.max(...values) + 5 };
   }, [points]);
 
-  const series = useMemo(() => [{ id: 'Heart Rate', color: STROKE, data: points }], [points]);
+  const series = useMemo(() => [{ id: 'Heart rate', color: STROKE, data: points }], [points]);
   const tickValues = useMemo(() => spacedIndices(points.length), [points.length]);
 
   return (
@@ -113,7 +113,7 @@ const BPHRChart = ({ data = [], title = 'Heart Rate (Today)' }) => {
                 tickSize: 0,
                 tickPadding: 8,
                 tickValues: 5,
-                legend: 'BPM',
+                legend: 'bpm',
                 legendOffset: -40,
                 legendPosition: 'middle',
                 format: (v) => `${Math.round(v)}`,

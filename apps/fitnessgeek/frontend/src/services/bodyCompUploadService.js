@@ -92,7 +92,7 @@ export async function fetchStagedShareFile(stagedId) {
     } catch {
       // non-JSON error body — keep the default code
     }
-    const error = new Error('The shared file could not be retrieved — it may have expired.');
+    const error = new Error('Couldn’t open the shared file — it may have expired. Share it again.');
     error.code = code;
     throw error;
   }
@@ -125,7 +125,7 @@ export async function uploadBodyCompFile(file) {
   }));
 
   const body = await readJson(response);
-  if (!response.ok || !body?.success) throw httpError(response, body, 'Upload failed.');
+  if (!response.ok || !body?.success) throw httpError(response, body, 'Couldn’t upload that file. Try again.');
 
   return body.data;
 }
@@ -153,7 +153,7 @@ export async function extractBodyCompUpload(uploadId) {
   }));
 
   const body = await readJson(response);
-  if (!response.ok || !body?.success) throw httpError(response, body, 'Extraction failed.');
+  if (!response.ok || !body?.success) throw httpError(response, body, 'Couldn’t read that scan. Try again.');
 
   return body.data;
 }
@@ -181,7 +181,7 @@ export async function importBodyCompXlsx(uploadId) {
   }));
 
   const body = await readJson(response);
-  if (!response.ok || !body?.success) throw httpError(response, body, 'Import failed.');
+  if (!response.ok || !body?.success) throw httpError(response, body, 'Couldn’t import that scan. Try again.');
 
   return body.data;
 }
@@ -212,7 +212,7 @@ export async function acceptBodyCompUpload(uploadId, payload) {
   }));
 
   const body = await readJson(response);
-  if (!response.ok || !body?.success) throw httpError(response, body, 'Could not save the scan.');
+  if (!response.ok || !body?.success) throw httpError(response, body, 'Couldn’t save the scan. Try again.');
 
   return body.data;
 }

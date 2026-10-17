@@ -19,7 +19,7 @@ import { useSpeechInput } from '../../hooks/useSpeechInput.js';
 import { useOnlineStatus } from '../../hooks/useOnlineStatus.js';
 import { useToday } from '../../hooks/useToday.js';
 import { useExperience } from '../../contexts/ExperienceContext.jsx';
-import { addedMessage, mealWord } from '../../utils/plainWords.js';
+import { addedMessage, cal, mealLabel, mealWord } from '../../utils/plainWords.js';
 import { errorMessage } from '../../utils/errorMessage.js';
 import { useUndoToast, runUndo } from './undoToast.jsx';
 import { newIdempotencyKey } from './idempotency.js';
@@ -121,7 +121,7 @@ function whatWasLogged(logged) {
   return `${units.length} items`;
 }
 
-const quoted = (names) => names.map((n) => `'${n}'`).join(' or ');
+const quoted = (names) => names.map((n) => `“${n}”`).join(' or ');
 
 const FoodComposer = ({
   mode = 'page',
@@ -209,7 +209,7 @@ const FoodComposer = ({
     if (keepDraft) writeDraft(day, mealType, '');
   }, [keepDraft, day, mealType]);
 
-  /** An error toast; "Please sign in again." comes with a Sign in button (L24). */
+  /** An error toast; the signed-out line comes with a Sign in button (L24). */
   const sayError = useCallback((err, fallback) => {
     const text = errorMessage(err, fallback);
     notify(text, {
@@ -302,13 +302,13 @@ const FoodComposer = ({
       }
       if (result?.fail) {
         const fallback = items.length === 1
-          ? "Couldn't add that. Try again."
-          : `${result.fail} item${result.fail === 1 ? '' : 's'} could not be logged.`;
+          ? "Couldn’t add that. Try again."
+          : `Couldn’t add ${result.fail} of them. Try again.`;
         sayError(result?.errors?.[0], fallback);
       }
       return result;
     } catch (err) {
-      sayError(err, 'Could not log that. Try again.');
+      sayError(err, 'Couldn’t log that. Try again.');
       return null;
     } finally {
       endWrite();
@@ -345,7 +345,7 @@ const FoodComposer = ({
         notify(`Changed to ${count} ✓ · ${prior.name}`, { tone: 'success' });
       }
     } catch (err) {
-      sayError(err, "Couldn't change that. Try again.");
+      sayError(err, "Couldn’t change that. Try again.");
     } finally {
       endWrite();
     }
@@ -424,7 +424,7 @@ const FoodComposer = ({
         // The rails threw out everything, or there was nothing to read.
         const names = skipped.map((s) => s.name).filter(Boolean);
         setFailure(names.length
-          ? { kind: 'nothing', message: `I couldn't work out ${quoted(names)}. Try naming the food, like 'chicken soup'.`, picks: names }
+          ? { kind: 'nothing', message: `I couldn’t work out ${quoted(names)}. Try naming the food, like “chicken soup”.`, picks: names }
           : { kind: 'nothing', message: NOTHING_TO_LOG_MESSAGE });
         return;
       }
@@ -472,7 +472,7 @@ const FoodComposer = ({
         if (onJustAdded) {
           onJustAdded({ mealType: landed, date: onDay, items, heard: spoken });
         } else {
-          offerUndo(addedMessage(landed, `${whatWasLogged(logged)} · ${Math.round((logged.length === 1 ? logged[0].calories : response?.totalCalories) || 0)} cal`), logIds, {
+          offerUndo(addedMessage(landed, `${whatWasLogged(logged)} · ${cal((logged.length === 1 ? logged[0].calories : response?.totalCalories) || 0)}`), logIds, {
             tone: 'success',
             onDeleted: forgetDeleted
           });
@@ -554,7 +554,7 @@ const FoodComposer = ({
       );
       // `false` means nothing was written; saying "Updated" then was a lie.
       if (!updated) {
-        sayError(null, 'Could not update that.');
+        sayError(null, 'Couldn’t update that. Try again.');
         return;
       }
       setSession((prev) => prev.map((item) => (
@@ -566,9 +566,9 @@ const FoodComposer = ({
         ...prev,
         items: prev.items.map((i) => (i.logId === asked.logId ? { ...i, calories: Math.round(targetCalories) } : i)),
       } : prev));
-      notify(`Updated to ${Math.round(targetCalories)} cal`, { tone: 'success' });
+      notify(`Updated to ${cal(targetCalories)}`, { tone: 'success' });
     } catch (err) {
-      sayError(err, 'Could not update that.');
+      sayError(err, 'Couldn’t update that. Try again.');
     } finally {
       setQuestion(null);
       endWrite();
@@ -643,7 +643,7 @@ const FoodComposer = ({
       const settled = await Promise.allSettled(result.items.map((i) => onUpdateLog(i.logId, { log_date: target })));
       const failed = settled.filter((s) => s.status === 'rejected' || s.value === false);
       if (failed.length) {
-        sayError(failed[0]?.reason, "Couldn't move that. Try again.");
+        sayError(failed[0]?.reason, "Couldn’t move that. Try again.");
         return;
       }
       setResult((prev) => (prev ? { ...prev, date: target, dayMove: null, items: prev.items.map((i) => ({ ...i, date: target })) } : prev));
@@ -718,7 +718,7 @@ const FoodComposer = ({
           {result.skipped.length > 0 && (
             <Box sx={{ mt: 1.5 }} data-testid="partial">
               <Typography sx={{ fontSize: '1rem', color: 'text.primary', fontWeight: 600 }}>
-                Logged {result.what}. I couldn&apos;t work out {quoted(result.skipped)}.
+                Added {result.what}. I couldn’t work out {quoted(result.skipped)}.
               </Typography>
               <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap', mt: 1 }}>
                 {result.skipped.map((name) => (
@@ -734,7 +734,7 @@ const FoodComposer = ({
             <Box sx={{ mt: 1.5 }} data-testid="day-move">
               <Typography sx={{ fontSize: '1rem', color: 'text.primary', fontWeight: 600 }}>
                 {result.dayMove.words ? <>You said &ldquo;{result.dayMove.words}&rdquo;. </> : null}
-                This is in {dayWords(result.date)}&apos;s log.
+                This is in {dayWords(result.date)}’s log.
               </Typography>
               <Button variant="outlined" disabled={busy || !onUpdateLog} onClick={moveResultDay} sx={{ ...pillButton, mt: 1, borderWidth: 2, '&:hover': { borderWidth: 2 } }}>
                 Move it to {dayWords(result.dayMove.target)}
@@ -882,7 +882,7 @@ const FoodComposer = ({
           {['breakfast', 'lunch', 'dinner', 'snack'].map((m) => (
             <Chip
               key={m}
-              label={m === 'snack' ? 'Snacks' : m.charAt(0).toUpperCase() + m.slice(1)}
+              label={mealLabel(m)}
               onClick={() => onMealTypeChange(m)}
               disabled={busy}
               aria-pressed={m === mealType}

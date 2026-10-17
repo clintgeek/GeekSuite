@@ -2,6 +2,7 @@ import React from 'react';
 import { Box, Button, Typography } from '@mui/material';
 import { useTheme, alpha } from '@mui/material/styles';
 import { readableOn } from '@geeksuite/ui';
+import { cal, fmt } from '../../utils/plainWords.js';
 
 /**
  * The one question describe-and-log is allowed to ask.
@@ -42,8 +43,8 @@ const PortionQuestion = ({ question, onAnswer, onDismiss, busy = false }) => {
 
   /** The end that is NOT what we already logged is the one worth offering. */
   const options = [
-    { label: `Smaller · ~${Math.round(low)}`, value: low },
-    { label: `Bigger · ~${Math.round(high)}`, value: high }
+    { label: `Smaller · ~${fmt(low)}`, value: low },
+    { label: `Bigger · ~${fmt(high)}`, value: high }
   ].filter((option) => Math.abs(option.value - logged) > 25);
 
   if (options.length === 0) return null;
@@ -64,7 +65,7 @@ const PortionQuestion = ({ question, onAnswer, onDismiss, busy = false }) => {
         How big was the {name.toLowerCase()}?
       </Typography>
       <Typography sx={{ fontSize: '0.9375rem', color: muted, mb: 1 }}>
-        Logged at {Math.round(logged)} cal. It could reasonably be {Math.round(low)}–{Math.round(high)}.
+        Logged at {cal(logged)}. It could reasonably be {fmt(low)}–{fmt(high)}.
       </Typography>
       <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
         {options.map((option) => (
@@ -85,7 +86,7 @@ const PortionQuestion = ({ question, onAnswer, onDismiss, busy = false }) => {
           onClick={onDismiss}
           sx={{ minHeight: 48, fontSize: '0.9375rem', fontWeight: 700, color: muted, px: 2 }}
         >
-          That&apos;s about right
+          That’s about right
         </Button>
       </Box>
     </Box>

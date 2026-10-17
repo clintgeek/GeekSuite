@@ -107,7 +107,7 @@ describe('the microphone', () => {
     await act(async () => { fireEvent.click(screen.getByTestId('speak-button')); });
     await act(async () => { instances[0].fail('no-speech'); });
     expect(onDescribe).not.toHaveBeenCalled();
-    expect(screen.getByTestId('mic-error')).toHaveTextContent("I didn't hear anything");
+    expect(screen.getByTestId('mic-error')).toHaveTextContent("I didn’t hear anything");
   });
 
   it('a refused microphone gets a plain sentence, not an error code', async () => {
@@ -158,6 +158,6 @@ describe('the microphone', () => {
     await act(async () => { instances[0].fail('network'); });
     const note = screen.getByTestId('mic-error');
     expect(note).toHaveTextContent(/^No signal/);
-    expect(note.textContent).not.toMatch(/isn't working/);
+    expect(note.textContent).not.toMatch(/isn’t working/);
   });
 });

@@ -32,12 +32,12 @@ describe('scan uploads and an expired sign-in', () => {
     expect(fetch).toHaveBeenCalledTimes(2);
   });
 
-  it('a refresh that fails says "Please sign in again", never the raw text', async () => {
+  it('a refresh that fails says "You’re signed out. Sign in again.", never the raw text', async () => {
     refreshSession.mockRejectedValue(Object.assign(new Error('Token refresh failed'), { status: 401 }));
     fetch.mockResolvedValue(res(401, { success: false, error: { message: 'jwt expired' } }));
     const err = await extractBodyCompUpload('u1').catch((e) => e);
-    expect(err.message).toBe('Please sign in again.');
-    expect(errorMessage(err, 'x')).toBe('Please sign in again.');
+    expect(err.message).toBe('You’re signed out. Sign in again.');
+    expect(errorMessage(err, 'x')).toBe('You’re signed out. Sign in again.');
     expect(fetch).toHaveBeenCalledTimes(1);
   });
 

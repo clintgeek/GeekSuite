@@ -15,6 +15,7 @@ import { useGeekDialogFullScreen } from '@geeksuite/ui';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
 import DateField from '../primitives/DateField.jsx';
 import { categorizeBP } from '../../utils/bpUtils.js';
+import { bpStageWords } from '../../utils/plainWords.js';
 import { errorMessage } from '../../utils/errorMessage.js';
 import {
   nowLocalTime,
@@ -151,7 +152,7 @@ const AddBPDialog = ({ open, onClose, onAdd, mode = 'add', initialValues = null 
         setDuplicate(payload);
         setError(DUPLICATE_MESSAGE);
       } else {
-        setError(errorMessage(err, isEdit ? "That change didn't save. Try again." : "That reading didn't save. Try again."));
+        setError(errorMessage(err, isEdit ? 'Couldn’t save that change. Try again.' : 'Couldn’t save that reading. Try again.'));
       }
     } finally {
       setLoading(false);
@@ -219,7 +220,7 @@ const AddBPDialog = ({ open, onClose, onAdd, mode = 'add', initialValues = null 
     // "High Normal" band here; that band never existed in the AHA guidelines
     // and let the live-typing category disagree with what got saved.
     const category = categorizeBP(sys, dia);
-    return { status: category.stage, color: category.color };
+    return { status: bpStageWords(category.stage).label, color: category.color };
   };
 
   const bpStatus = getBPStatus();
@@ -228,8 +229,7 @@ const AddBPDialog = ({ open, onClose, onAdd, mode = 'add', initialValues = null 
     <PremiumDialog
       open={open}
       onClose={handleClose}
-      eyebrow="Health"
-      title={isEdit ? 'Edit Reading' : 'Add Reading'}
+      title={isEdit ? 'Edit blood pressure' : 'Log blood pressure'}
       icon={BPIcon}
       maxWidth="sm"
       {...thumbSaveProps({
@@ -327,7 +327,7 @@ const AddBPDialog = ({ open, onClose, onAdd, mode = 'add', initialValues = null 
             {bpStatus && (
               <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                 <Typography variant="body2">
-                  Status:
+                  This reading is
                 </Typography>
                 <Typography
                   variant="body2"

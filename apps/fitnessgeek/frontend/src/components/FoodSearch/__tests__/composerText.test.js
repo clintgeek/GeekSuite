@@ -45,26 +45,26 @@ describe('days in words', () => {
     expect(dayInWords('2026-10-13', today)).toBe('yesterday');
     expect(dayInWords('2026-10-15', today)).toBe('tomorrow');
     expect(dayInWords('2026-10-12', today)).toBe('Monday');
-    expect(dayInWords('2026-10-03', today)).toBe('Saturday, October 3');
+    expect(dayInWords('2026-10-03', today)).toBe('Oct 3');
   });
   it('a meal on a day', () => {
     expect(mealOnDay('dinner', today, today)).toBe('dinner');
-    expect(mealOnDay('dinner', '2026-10-13', today)).toBe("yesterday's dinner");
-    expect(mealOnDay('dinner', '2026-10-12', today)).toBe("Monday's dinner");
-    expect(mealOnDay('dinner', '2026-10-03', today)).toBe('dinner on Saturday, October 3');
+    expect(mealOnDay('dinner', '2026-10-13', today)).toBe("yesterday’s dinner");
+    expect(mealOnDay('dinner', '2026-10-12', today)).toBe("Monday’s dinner");
+    expect(mealOnDay('dinner', '2026-10-03', today)).toBe('dinner on Oct 3');
   });
 });
 
 describe('describeFailure', () => {
   it('a 422 says how to fix it', () => {
-    expect(describeFailure({ response: { status: 422, data: {} } }).message).toBe("I couldn't find a food in that. Try naming the food, like 'chicken soup'.");
+    expect(describeFailure({ response: { status: 422, data: {} } }).message).toBe("I couldn’t find a food in that. Try naming the food, like “chicken soup”.");
   });
   it('a dropped connection is "tap Log it to try again", never raw text', () => {
     const msg = describeFailure(Object.assign(new Error('Network Error'), { code: 'ERR_NETWORK' })).message;
-    expect(msg).toBe("No signal. That didn't go through. Tap Log it to try again.");
+    expect(msg).toBe("No signal. That didn’t go through. Tap Log it to try again.");
   });
   it('signed out is its own sentence', () => {
-    expect(describeFailure({ response: { status: 401, data: {} } }).message).toBe('Please sign in again.');
+    expect(describeFailure({ response: { status: 401, data: {} } }).message).toBe('You’re signed out. Sign in again.');
   });
 });
 
@@ -82,16 +82,16 @@ describe('L22: one way of naming days in a sheet', () => {
 
   it("today's sheet speaks relatively", () => {
     expect(sheetDayWords('2026-10-13', today, today)).toBe('yesterday');
-    expect(sheetMealOnDay('lunch', '2026-10-13', today, today)).toBe("yesterday's lunch");
+    expect(sheetMealOnDay('lunch', '2026-10-13', today, today)).toBe("yesterday’s lunch");
     expect(sheetTitle('lunch', today, today)).toBe('Add to lunch');
   });
 
   it('a backfilled sheet uses weekdays throughout, and the title says which one yesterday was', () => {
-    expect(sheetTitle('dinner', '2026-10-13', today)).toBe("Add to Tuesday's dinner (yesterday)");
-    expect(sheetMealOnDay('dinner', '2026-10-12', today, '2026-10-13')).toBe("Monday's dinner");
+    expect(sheetTitle('dinner', '2026-10-13', today)).toBe("Add to Tuesday’s dinner (yesterday)");
+    expect(sheetMealOnDay('dinner', '2026-10-12', today, '2026-10-13')).toBe("Monday’s dinner");
     expect(sheetDayWords('2026-10-13', today, '2026-10-13')).toBe('Tuesday');
     expect(sheetDayWords(today, today, '2026-10-13')).toBe('today');
-    expect(sheetTitle('dinner', '2026-10-12', today)).toBe("Add to Monday's dinner");
-    expect(sheetTitle('dinner', '2026-10-03', today)).toBe('Add to dinner on Saturday, October 3');
+    expect(sheetTitle('dinner', '2026-10-12', today)).toBe("Add to Monday’s dinner");
+    expect(sheetTitle('dinner', '2026-10-03', today)).toBe('Add to dinner on Oct 3');
   });
 });

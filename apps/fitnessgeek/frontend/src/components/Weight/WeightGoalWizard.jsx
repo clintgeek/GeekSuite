@@ -17,19 +17,21 @@ import {
   TrendingFlat as MaintainIcon,
   Flag as GoalIcon
 } from '@mui/icons-material';
-import { addWeeks, differenceInDays, format } from 'date-fns';
+import { addWeeks, format } from 'date-fns';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
+import { shortDay } from '../../utils/dates.js';
 
 const RATE_OPTIONS = [
   { value: 0.5, label: '0.5', safe: true, description: 'Very gradual' },
   { value: 1, label: '1', safe: true, description: 'Moderate' },
-  { value: 1.5, label: '1.5', safe: true, description: 'Aggressive' },
-  { value: 2, label: '2', safe: true, description: 'Very aggressive' },
-  { value: 2.5, label: '2.5', safe: false, description: 'Extreme (risky)' },
-  { value: 3, label: '3', safe: false, description: 'Maximum (risky)' }
+  { value: 1.5, label: '1.5', safe: true, description: 'Fast' },
+  { value: 2, label: '2', safe: true, description: 'Very fast' },
+  { value: 2.5, label: '2.5', safe: false, description: 'Too fast for most people' },
+  { value: 3, label: '3', safe: false, description: 'Too fast for most people' }
 ];
 
 const WeightGoalWizard = ({ open, onClose, onSave, currentWeight, existingGoal, unit = 'lbs' }) => {
+  const unitWord = unit === 'lbs' ? 'lb' : unit;
   const theme = useTheme();
   const isDark = theme.palette.mode === 'dark';
   const [goalType, setGoalType] = useState('lose'); // 'lose', 'gain', 'maintain'
@@ -108,22 +110,22 @@ const WeightGoalWizard = ({ open, onClose, onSave, currentWeight, existingGoal, 
     const target = parseFloat(targetWeight);
 
     if (!startWeight || isNaN(start) || start <= 0) {
-      newErrors.startWeight = 'Please enter a valid starting weight';
+      newErrors.startWeight = 'Enter your starting weight';
     }
 
     if (!targetWeight || isNaN(target) || target <= 0) {
-      newErrors.targetWeight = 'Please enter a valid target weight';
+      newErrors.targetWeight = 'Enter the weight you’re aiming for';
     }
 
     if (start && target) {
       if (goalType === 'lose' && target >= start) {
-        newErrors.targetWeight = 'Target must be less than starting weight';
+        newErrors.targetWeight = 'To lose, your goal needs to be below your starting weight';
       }
       if (goalType === 'gain' && target <= start) {
-        newErrors.targetWeight = 'Target must be greater than starting weight';
+        newErrors.targetWeight = 'To gain, your goal needs to be above your starting weight';
       }
       if (goalType === 'maintain' && target !== start) {
-        newErrors.targetWeight = 'Target should equal starting weight for maintenance';
+        newErrors.targetWeight = 'To stay steady, your goal is your starting weight';
       }
     }
 
@@ -168,19 +170,14 @@ const WeightGoalWizard = ({ open, onClose, onSave, currentWeight, existingGoal, 
     ? Math.ceil(weightDifference / ratePerWeek)
     : 0;
 
-  const daysToGoal = goalDate
-    ? differenceInDays(goalDate, new Date())
-    : 0;
-
   const selectedRate = RATE_OPTIONS.find(opt => opt.value === ratePerWeek);
 
   return (
     <PremiumDialog
       open={open}
       onClose={handleCancel}
-      eyebrow="Tracking"
-      title={existingGoal?.enabled ? 'Edit Weight Goal' : 'Set Weight Goal'}
-      subtitle="Track your progress with a personalized plan"
+      title={existingGoal?.enabled ? 'Change your goal' : 'Set your goal'}
+      subtitle="Pick a weight to aim for and a pace."
       icon={GoalIcon}
       maxWidth="sm"
       primaryAction={
@@ -195,7 +192,7 @@ const WeightGoalWizard = ({ open, onClose, onSave, currentWeight, existingGoal, 
             fontWeight: 700,
           }}
         >
-          {existingGoal?.enabled ? 'Update Goal' : 'Set Goal'}
+          {existingGoal?.enabled ? 'Save' : 'Set goal'}
         </Button>
       }
       secondaryAction={
@@ -216,7 +213,7 @@ const WeightGoalWizard = ({ open, onClose, onSave, currentWeight, existingGoal, 
         {/* Goal Type Selection */}
         <Box sx={{ mb: 3 }}>
           <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600, color: theme.palette.text.primary }}>
-            What's your goal?
+            What’s your goal?
           </Typography>
           <ToggleButtonGroup
             value={goalType}
@@ -241,15 +238,15 @@ const WeightGoalWizard = ({ open, onClose, onSave, currentWeight, existingGoal, 
           >
             <ToggleButton value="lose">
               <LoseIcon sx={{ mr: 1, fontSize: 20 }} />
-              Lose Weight
+              Lose weight
             </ToggleButton>
             <ToggleButton value="gain">
               <GainIcon sx={{ mr: 1, fontSize: 20 }} />
-              Gain Weight
+              Gain weight
             </ToggleButton>
             <ToggleButton value="maintain">
               <MaintainIcon sx={{ mr: 1, fontSize: 20 }} />
-              Maintain
+              Stay steady
             </ToggleButton>
           </ToggleButtonGroup>
         </Box>
@@ -257,7 +254,7 @@ const WeightGoalWizard = ({ open, onClose, onSave, currentWeight, existingGoal, 
         {/* Weight Inputs */}
         <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
           <TextField
-            label="Starting Weight"
+            label="Starting weight"
             type="number"
             value={startWeight}
             onChange={(e) => setStartWeight(e.target.value)}
@@ -266,7 +263,7 @@ const WeightGoalWizard = ({ open, onClose, onSave, currentWeight, existingGoal, 
             helperText={errors.startWeight}
             fullWidth
             InputProps={{
-              endAdornment: <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>{unit}</Typography>
+              endAdornment: <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>{unitWord}</Typography>
             }}
             sx={{
               '& .MuiOutlinedInput-root': {
@@ -279,7 +276,7 @@ const WeightGoalWizard = ({ open, onClose, onSave, currentWeight, existingGoal, 
             }}
           />
           <TextField
-            label="Target Weight"
+            label="Goal"
             type="number"
             value={targetWeight}
             onChange={(e) => setTargetWeight(e.target.value)}
@@ -288,7 +285,7 @@ const WeightGoalWizard = ({ open, onClose, onSave, currentWeight, existingGoal, 
             helperText={errors.targetWeight}
             fullWidth
             InputProps={{
-              endAdornment: <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>{unit}</Typography>
+              endAdornment: <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>{unitWord}</Typography>
             }}
             sx={{
               '& .MuiOutlinedInput-root': {
@@ -306,7 +303,7 @@ const WeightGoalWizard = ({ open, onClose, onSave, currentWeight, existingGoal, 
         {goalType !== 'maintain' && (
           <>
             <Typography variant="subtitle2" sx={{ mb: 1.5, fontWeight: 600, color: theme.palette.text.primary }}>
-              {goalType === 'lose' ? 'Weight Loss' : 'Weight Gain'} Rate (per week)
+              How fast? ({unitWord} a week)
             </Typography>
             <ToggleButtonGroup
               value={ratePerWeek}
@@ -349,7 +346,7 @@ const WeightGoalWizard = ({ open, onClose, onSave, currentWeight, existingGoal, 
                     {option.label}
                   </Typography>
                   <Typography variant="caption" sx={{ fontSize: '0.75rem', opacity: 0.8 }}>
-                    {unit}/week
+                    {unitWord}/week
                   </Typography>
                 </ToggleButton>
               ))}
@@ -371,7 +368,7 @@ const WeightGoalWizard = ({ open, onClose, onSave, currentWeight, existingGoal, 
                 />
                 {!selectedRate.safe && (
                   <Alert severity="warning" sx={{ mt: 2, borderRadius: '12px' }}>
-                    This rate may be unsafe for most people. Consult a healthcare professional.
+                    This pace is too fast for most people. Check with your doctor first.
                   </Alert>
                 )}
               </Box>
@@ -392,31 +389,31 @@ const WeightGoalWizard = ({ open, onClose, onSave, currentWeight, existingGoal, 
             border: '2px solid rgba(6, 182, 212, 0.2)'
           }}>
             <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 700, color: theme.palette.text.primary }}>
-              Your Goal Summary
+              Your goal in short
             </Typography>
             <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1.5 }}>
               <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                 <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>
-                  Total {goalType === 'lose' ? 'loss' : 'gain'} needed:
+                  To {goalType === 'lose' ? 'lose' : 'gain'}
                 </Typography>
                 <Typography variant="body2" sx={{ fontWeight: 700, color: theme.palette.text.primary }}>
-                  {weightDifference.toFixed(1)} {unit}
+                  {weightDifference.toFixed(1)} {unitWord}
                 </Typography>
               </Box>
               <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                 <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>
-                  Estimated duration:
+                  About how long
                 </Typography>
                 <Typography variant="body2" sx={{ fontWeight: 700, color: theme.palette.text.primary }}>
-                  {weeksToGoal} weeks ({daysToGoal} days)
+                  {weeksToGoal} {weeksToGoal === 1 ? 'week' : 'weeks'}
                 </Typography>
               </Box>
               <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
                 <Typography variant="body2" sx={{ color: theme.palette.text.secondary }}>
-                  Projected goal date:
+                  You’d get there
                 </Typography>
                 <Typography variant="body2" sx={{ fontWeight: 700, color: theme.palette.primary.main }}>
-                  {format(goalDate, 'MMM dd, yyyy')}
+                  {shortDay(goalDate)}
                 </Typography>
               </Box>
             </Box>

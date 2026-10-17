@@ -24,6 +24,8 @@ import {
 } from '@mui/icons-material';
 import { ResponsiveLine } from '@nivo/line';
 import { buildChartTheme } from './primitives/chartTheme.js';
+import { clockTime } from '../utils/dates.js';
+import { fmt, grams } from '../utils/plainWords.js';
 import {
   toTimeSeries,
   toDate,
@@ -120,8 +122,7 @@ function MealImpactCard({ meal, hrImpact, stressImpact, batteryImpact }) {
   const theme = useTheme();
 
   const getMealTime = () => {
-    const date = new Date(meal.time);
-    return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    return clockTime(meal.time);
   };
 
   const getImpactColor = (change, metric) => {
@@ -144,7 +145,7 @@ function MealImpactCard({ meal, hrImpact, stressImpact, batteryImpact }) {
                   {meal.name}
                 </Typography>
                 <Typography variant="caption" color="text.secondary">
-                  {getMealTime()} • {meal.calories} cal • {meal.protein}g protein
+                  {`${getMealTime()} · ${fmt(meal.calories)} cal · Protein ${grams(meal.protein)}${grams(meal.protein) === '—' ? '' : 'g'}`}
                 </Typography>
               </Box>
             </Stack>
@@ -158,7 +159,7 @@ function MealImpactCard({ meal, hrImpact, stressImpact, batteryImpact }) {
                 <Stack spacing={0.5}>
                   <Stack direction="row" spacing={0.5} alignItems="center">
                     <HeartIcon fontSize="small" />
-                    <Typography variant="caption" color="text.secondary">Heart Rate</Typography>
+                    <Typography variant="caption" color="text.secondary">Heart rate</Typography>
                   </Stack>
                   <Typography variant="body2">
                     {hrImpact.preAvg} → {hrImpact.postAvg} bpm
@@ -214,11 +215,11 @@ function MealImpactCard({ meal, hrImpact, stressImpact, batteryImpact }) {
           {/* Interpretation */}
           <Box>
             <Typography variant="caption" color="text.secondary">
-              {hrImpact && hrImpact.change > 15 && '⚠️ Significant HR spike may indicate high-carb meal or insulin response. '}
-              {stressImpact && stressImpact.change > 15 && '⚠️ Elevated stress after eating could indicate food sensitivity or digestive issues. '}
-              {batteryImpact && batteryImpact.change < -15 && '⚠️ Large energy drop suggests meal was not satiating or caused blood sugar crash. '}
+              {hrImpact && hrImpact.change > 15 && 'Your heart rate rose a lot after this meal. A carb-heavy meal can do that. '}
+              {stressImpact && stressImpact.change > 15 && 'Your stress went up after eating. Something in it may not agree with you. '}
+              {batteryImpact && batteryImpact.change < -15 && 'Your energy dropped after this meal. It may not have kept you full. '}
               {(!hrImpact || hrImpact.change < 10) && (!stressImpact || stressImpact.change < 10) && (!batteryImpact || batteryImpact.change > -10) &&
-                '✓ Meal had minimal physiological impact - well-balanced.'}
+                '✓ This meal barely moved your heart rate, stress or energy.'}
             </Typography>
           </Box>
         </Stack>
@@ -338,12 +339,12 @@ export default function MealImpactVisualization({ date }) {
       case 'heartRate':
         data = intradayData?.heartRate;
         color = theme.palette.error.main;
-        label = 'Heart Rate (bpm)';
+        label = 'Heart rate (bpm)';
         break;
       case 'stress':
         data = intradayData?.stress;
         color = theme.palette.warning.main;
-        label = 'Stress Level';
+        label = 'Stress';
         break;
       case 'bodyBattery':
         data = intradayData?.bodyBattery;
@@ -380,7 +381,7 @@ export default function MealImpactVisualization({ date }) {
         <CardContent>
           <Stack spacing={2}>
             <Stack direction="row" justifyContent="space-between" alignItems="center">
-              <Typography variant="h6">Meal Impact Analysis</Typography>
+              <Typography variant="h6">How your body answered each meal</Typography>
               <ToggleButtonGroup
                 value={selectedMetric}
                 exclusive
@@ -390,7 +391,7 @@ export default function MealImpactVisualization({ date }) {
               >
                 <ToggleButton value="heartRate">
                   <HeartIcon fontSize="small" sx={{ mr: 0.5 }} />
-                  HR
+                  Heart
                 </ToggleButton>
                 <ToggleButton value="stress">
                   <StressIcon fontSize="small" sx={{ mr: 0.5 }} />
@@ -412,7 +413,7 @@ export default function MealImpactVisualization({ date }) {
                   justifyContent: 'center',
                 }}>
                   <Typography variant="body2" color="text.secondary">
-                    No sensor data for this day — meal impact needs the Garmin/InfluxDB feed.
+                    No watch readings for this day. This needs Garmin data from the home data server.
                   </Typography>
                 </Box>
               ) : (
@@ -426,7 +427,7 @@ export default function MealImpactVisualization({ date }) {
                   xScale={{ type: 'time', format: 'native', useUTC: false }}
                   yScale={{ type: 'linear', min: 'auto', max: 'auto' }}
                   axisBottom={{
-                    format: '%H:%M',
+                    format: '%-I:%M %p',
                     tickSize: 0,
                     tickPadding: 10,
                     tickValues: 5,
@@ -475,11 +476,11 @@ export default function MealImpactVisualization({ date }) {
 
             <Alert severity="info" icon={<MealIcon />}>
               <Typography variant="body2">
-                Meal markers show when you ate. Look for patterns:
+                Each marker is a meal you logged. Look for patterns over a few days:
                 <ul style={{ marginTop: 8, marginBottom: 0, paddingLeft: 20 }}>
-                  <li>HR spikes after meals = high-carb or insulin response</li>
-                  <li>Stress increases = possible food sensitivity or digestive stress</li>
-                  <li>Energy drops = blood sugar crash or non-satiating meal</li>
+                  <li>Heart rate rising after meals can mean a carb-heavy meal</li>
+                  <li>Stress rising can mean a food doesn’t agree with you</li>
+                  <li>Energy dropping can mean a meal didn’t keep you full</li>
                 </ul>
               </Typography>
             </Alert>
@@ -488,7 +489,7 @@ export default function MealImpactVisualization({ date }) {
       </Card>
 
       {/* Individual Meal Impact Cards */}
-      <Typography variant="h6" sx={{ mb: 2 }}>Individual Meal Impacts</Typography>
+      <Typography variant="h6" sx={{ mb: 2 }}>Meal by meal</Typography>
       {mealImpacts.map((impact, idx) => (
         <MealImpactCard
           key={idx}

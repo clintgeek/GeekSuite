@@ -110,7 +110,7 @@ describe('a favourite that did not save says so', () => {
       </GeekToastProvider>
     );
     fireEvent.click(screen.getByRole('button', { name: /add to favorites/i }));
-    expect(await screen.findByText("Couldn't add that to your favorites. Try again.")).toBeInTheDocument();
+    expect(await screen.findByText('Couldn’t add that to your favorites. Try again.')).toBeInTheDocument();
     expect(screen.queryByText(/status code/)).toBeNull();
     expect(screen.getByRole('button', { name: /add to favorites/i })).toBeInTheDocument();
   });
