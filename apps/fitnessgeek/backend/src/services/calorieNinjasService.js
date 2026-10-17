@@ -1,10 +1,20 @@
 /**
- * CalorieNinjas API Service
+ * API Ninjas nutrition (formerly CalorieNinjas)
  *
- * Provides natural language food parsing and nutrition lookup.
- * Free tier: 10,000 API calls/month
+ * Natural-language food parsing and nutrition lookup ("2 eggs and toast").
+ * CalorieNinjas became API Ninjas; the old api.calorieninjas.com answered
+ * `400 Invalid API Key.` to every call (REVIEW_2026-10 §2).
  *
- * @see https://calorieninjas.com/api
+ * On API Ninjas' FREE tier `calories` and `protein_g` are premium-only: the
+ * field holds a string ("Only available for premium subscribers.") instead of
+ * a number. A food with no calories is worse than no food — mapped naively it
+ * logs as 0 cal — so such items are dropped, and a key that only ever gets
+ * locked calories switches this source off like a bad key does.
+ *
+ * The internal source id stays 'calorieninjas' (ranker weights, breaker,
+ * foods already stored with it).
+ *
+ * @see https://api-ninjas.com/api/nutrition
  */
 
 import axios from 'axios';
@@ -32,6 +42,7 @@ const BAD_KEY_COOLDOWN_MS = 6 * 60 * 60 * 1000;
  * 401/403 are the conventional shapes of the same answer.
  */
 export function isInvalidKeyError(error) {
+  // API Ninjas and the old CalorieNinjas both answer a bad key this way.
   const status = error?.response?.status;
   if (![400, 401, 403].includes(status)) return false;
   const data = error.response.data;
@@ -39,10 +50,20 @@ export function isInvalidKeyError(error) {
   return /invalid\s*api\s*key|api\s*key\s*(is\s*)?invalid/i.test(text);
 }
 
+/** A real number, not the free tier's "Only available for premium subscribers." */
+export function hasNumericCalories(item) {
+  const v = item?.calories;
+  return (typeof v === 'number' || (typeof v === 'string' && v.trim() !== '' && !Number.isNaN(Number(v))))
+    && Number.isFinite(Number(v));
+}
+
 class CalorieNinjasService {
   constructor() {
-    this.apiKey = process.env.CALORIENINJAS_API_KEY;
-    this.baseUrl = 'https://api.calorieninjas.com/v1';
+    // The old variable name still works, so a container with only that set
+    // keeps running.
+    this.apiKey = process.env.API_NINJAS_API_KEY || process.env.CALORIENINJAS_API_KEY;
+    this.keyName = process.env.API_NINJAS_API_KEY ? 'API_NINJAS_API_KEY' : 'CALORIENINJAS_API_KEY';
+    this.baseUrl = 'https://api.api-ninjas.com/v1';
     // Set when the upstream rejected the key: until then, this source is
     // skipped without a call. See BAD_KEY_COOLDOWN_MS.
     this.keyRejectedUntil = 0;
@@ -69,7 +90,7 @@ class CalorieNinjasService {
    */
   async searchFoods(query) {
     if (!this.isConfigured()) {
-      logger.debug('CalorieNinjas not configured, skipping');
+      logger.debug('API Ninjas not configured, skipping');
       return [];
     }
 
@@ -82,7 +103,7 @@ class CalorieNinjasService {
     }
 
     try {
-      const cacheKey = cacheService.key('calorieninjas', 'search', query.toLowerCase());
+      const cacheKey = cacheService.key('apininjas', 'search', query.toLowerCase());
 
       const items = await cacheService.wrap(cacheKey, async () => {
         try {
@@ -94,11 +115,24 @@ class CalorieNinjasService {
             timeout: 10000
           }));
 
-          if (!response.data || !response.data.items) {
+          // API Ninjas answers a bare array; CalorieNinjas wrapped it in `items`.
+          const raw = Array.isArray(response.data) ? response.data : response.data?.items;
+          if (!Array.isArray(raw) || raw.length === 0) {
             return [];
           }
 
-          return response.data.items.map(item => this.transformToStandardFormat(item));
+          const usable = raw.filter(hasNumericCalories);
+          if (usable.length === 0) {
+            // Every item came back with calories locked: a free-tier key.
+            if (!this.isKeyRejected()) {
+              logger.warn({
+                retryAfterHours: BAD_KEY_COOLDOWN_MS / 3600000
+              }, `API Ninjas returned no calories for ${this.keyName} (calories are premium-only on the free tier) — skipping this source`);
+            }
+            this.keyRejectedUntil = Date.now() + BAD_KEY_COOLDOWN_MS;
+            return null;
+          }
+          return usable.map(item => this.transformToStandardFormat(item));
         } catch (error) {
           if (isInvalidKeyError(error)) {
             // A configuration failure, not a search failure: say it once, by
@@ -107,7 +141,7 @@ class CalorieNinjasService {
               logger.warn({
                 status: error.response?.status,
                 retryAfterHours: BAD_KEY_COOLDOWN_MS / 3600000
-              }, 'CalorieNinjas rejected CALORIENINJAS_API_KEY as invalid — skipping this source until it is renewed');
+              }, `API Ninjas rejected ${this.keyName} as invalid — skipping this source until it is renewed`);
             }
             this.keyRejectedUntil = Date.now() + BAD_KEY_COOLDOWN_MS;
             return null;
@@ -117,7 +151,7 @@ class CalorieNinjasService {
             error: error.message,
             status: error.response?.status,
             data: error.response?.data
-          }, 'CalorieNinjas search failed');
+          }, 'API Ninjas nutrition search failed');
           // null, not []: a failure must not be cached for a week as "this
           // query has no results".
           return null;
@@ -131,7 +165,7 @@ class CalorieNinjasService {
         query,
         error: error.message,
         status: error.response?.status
-      }, 'CalorieNinjas search failed');
+      }, 'API Ninjas nutrition search failed');
       return [];
     }
   }
@@ -145,19 +179,20 @@ class CalorieNinjasService {
     return {
       id: `cn_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
       name: item.name || 'Unknown',
-      brand: '', // CalorieNinjas doesn't provide brand info
+      brand: '', // no brand from this endpoint
       barcode: '',
       nutrition: {
-        calories_per_serving: Math.round(item.calories || 0),
-        protein_grams: Math.round((item.protein_g || 0) * 10) / 10,
-        carbs_grams: Math.round((item.carbohydrates_total_g || 0) * 10) / 10,
-        fat_grams: Math.round((item.fat_total_g || 0) * 10) / 10,
-        fiber_grams: Math.round((item.fiber_g || 0) * 10) / 10,
-        sugar_grams: Math.round((item.sugar_g || 0) * 10) / 10,
-        sodium_mg: Math.round(item.sodium_mg || 0)
+        calories_per_serving: Math.round(Number(item.calories)),
+        // Premium-only on the free tier too; a locked string reads as unknown (0).
+        protein_grams: Math.round((Number(item.protein_g) || 0) * 10) / 10,
+        carbs_grams: Math.round((Number(item.carbohydrates_total_g) || 0) * 10) / 10,
+        fat_grams: Math.round((Number(item.fat_total_g) || 0) * 10) / 10,
+        fiber_grams: Math.round((Number(item.fiber_g) || 0) * 10) / 10,
+        sugar_grams: Math.round((Number(item.sugar_g) || 0) * 10) / 10,
+        sodium_mg: Math.round(Number(item.sodium_mg) || 0)
       },
       serving: {
-        size: item.serving_size_g || 100,
+        size: Number(item.serving_size_g) || 100,
         unit: 'g'
       },
       source: 'calorieninjas',
@@ -172,8 +207,8 @@ class CalorieNinjasService {
   getStatus() {
     return {
       enabled: this.isConfigured(),
-      name: 'CalorieNinjas',
-      rateLimit: '10,000/month'
+      name: 'API Ninjas',
+      keyName: this.keyName
     };
   }
 }

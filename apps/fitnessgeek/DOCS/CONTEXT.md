@@ -3,6 +3,14 @@
 How this app is actually built, run and deployed. Paths, ports and commands
 here override any reasonable-looking default.
 
+**2026-10-16 (CalorieNinjas → API Ninjas):** the nutrition-parsing source moved to
+`https://api.api-ninjas.com/v1/nutrition` (`services/calorieNinjasService.js`, internal source id
+still `calorieninjas`). The key is `API_NINJAS_API_KEY` in `.env.production`; the old
+`CALORIENINJAS_API_KEY` is still read as a fallback. On API Ninjas' free tier `calories` and
+`protein_g` are premium-only, so a free key returns no usable foods and the source switches itself
+off with one warning naming the variable. A new key needs `docker compose up -d fitnessgeek`
+(see the landmine below).
+
 **2026-09-15 (landmine — a Watchtower deploy does NOT pick up `.env.production` edits):**
 `docker-compose.yml` loads runtime env with `env_file: .env.production`, and compose resolves
 that at **container-create** time, baking the values into the container. Watchtower pulls a new

@@ -1,7 +1,12 @@
 /**
- * CalorieNinjas — a rejected key is a configuration failure, not a search
- * failure. Production answered `400 Invalid API Key.` on every call for days
- * (REVIEW_2026-10 §2) and every search paid a round trip for it.
+ * API Ninjas nutrition (formerly CalorieNinjas).
+ *
+ * - A rejected key is a configuration failure, not a search failure.
+ *   Production answered `400 Invalid API Key.` on every call for days
+ *   (REVIEW_2026-10 §2): CalorieNinjas had become API Ninjas.
+ * - API Ninjas answers a bare array.
+ * - On the free tier `calories` is a string ("Only available for premium
+ *   subscribers."). Such a food must never become a 0-calorie row.
  */
 import { describe, test, expect, beforeEach, jest } from '@jest/globals';
 
@@ -90,5 +95,34 @@ describe('an ordinary failure', () => {
     axiosGet.mockResolvedValueOnce({ data: { items: [] } });
     await service.searchFoods('eggs');
     expect(axiosGet).toHaveBeenCalledTimes(2);
+  });
+});
+
+const LOCKED = 'Only available for premium subscribers.';
+
+describe('API Ninjas', () => {
+  test('calls api-ninjas.com and reads its bare-array answer', async () => {
+    axiosGet.mockResolvedValueOnce({ data: [{ name: 'egg', calories: 72, protein_g: 6.3, fat_total_g: 4.8, serving_size_g: 50 }] });
+    const [egg] = await service.searchFoods('an egg');
+    expect(axiosGet.mock.calls[0][0]).toBe('https://api.api-ninjas.com/v1/nutrition');
+    expect(egg).toMatchObject({ name: 'egg', source: 'calorieninjas', serving: { size: 50, unit: 'g' } });
+    expect(egg.nutrition).toMatchObject({ calories_per_serving: 72, protein_grams: 6.3, fat_grams: 4.8 });
+  });
+
+  test('a free-tier answer (calories locked) is never a 0-calorie food, and switches the source off once', async () => {
+    axiosGet.mockResolvedValue({ data: [{ name: 'egg', calories: LOCKED, protein_g: LOCKED, fat_total_g: 4.8, serving_size_g: 50 }] });
+    expect(await service.searchFoods('an egg')).toEqual([]);
+    expect(await service.searchFoods('toast')).toEqual([]);
+    expect(axiosGet).toHaveBeenCalledTimes(1);
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect(warn.mock.calls[0][1]).toMatch(/CALORIENINJAS_API_KEY.*premium/);
+  });
+
+  test('a locked protein reads as unknown, not NaN, when calories are real', async () => {
+    axiosGet.mockResolvedValueOnce({ data: [{ name: 'rice', calories: 206, protein_g: LOCKED, carbohydrates_total_g: 45 }] });
+    const [rice] = await service.searchFoods('a cup of rice');
+    expect(rice.nutrition.calories_per_serving).toBe(206);
+    expect(rice.nutrition.protein_grams).toBe(0);
+    expect(Number.isNaN(rice.nutrition.protein_grams)).toBe(false);
   });
 });
