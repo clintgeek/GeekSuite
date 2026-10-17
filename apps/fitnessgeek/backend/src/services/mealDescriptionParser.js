@@ -177,6 +177,13 @@ export function parseMealDescription(text, options = {}) {
   const entries = [];
   // A meal stated once carries forward: "breakfast: eggs, toast, coffee".
   let currentMeal = null;
+  // "fried chicken, fries last night": a day word on one comma segment is
+  // about the whole description. When no segment names a meal outright, the
+  // first meal a day word implies covers every segment, so the plate is not
+  // split across lunch and dinner. A stated meal still wins from its segment on.
+  const whens = segments.map((s) => extractDayWords(s));
+  const anyStatedMeal = whens.some((w) => w.text && extractMeal(w.text).meal);
+  if (!anyStatedMeal) currentMeal = whens.map((w) => w.impliedMeal).find(Boolean) || null;
   // When, said in words ("last night", "on monday"). Never foods. The client
   // owns the date — it asks the person and sends one — so this is only a
   // hint about what to ask (Phase 3.17).
@@ -184,7 +191,7 @@ export function parseMealDescription(text, options = {}) {
   const dayWords = [];
 
   for (const [segmentIndex, rawSegment] of segments.entries()) {
-    const when = extractDayWords(rawSegment);
+    const when = whens[segmentIndex];
     if (when.day && !dayHint) dayHint = when.day;
     dayWords.push(...when.phrases);
     const segment = when.text;

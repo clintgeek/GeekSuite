@@ -198,3 +198,24 @@ describe('day words (Phase 3.17)', () => {
     expect(result.dayWords).toEqual([]);
   });
 });
+
+describe('a day word covers the whole description (L6)', () => {
+  const meals = (text, hour = 12) => parse(text, hour).map((e) => e.mealType);
+
+  test('"fried chicken, fries last night" at noon is all dinner, on yesterday', () => {
+    expect(meals('fried chicken, fries last night')).toEqual(['dinner', 'dinner']);
+    expect(parseMealDescription('fried chicken, fries last night', { hour: 12 }).dayHint).toBe('yesterday');
+  });
+  test('"toast, coffee this morning" is all breakfast', () => {
+    expect(meals('toast, coffee this morning', 19)).toEqual(['breakfast', 'breakfast']);
+  });
+  test('stated meals still split as stated', () => {
+    expect(meals('eggs for breakfast, a sandwich for lunch', 19)).toEqual(['breakfast', 'lunch']);
+  });
+  test('"pizza, salad yesterday" keeps both on the yesterday hint', () => {
+    const r = parseMealDescription('pizza, salad yesterday', { hour: 12 });
+    expect(r.dayHint).toBe('yesterday');
+    expect(r.entries).toHaveLength(2);
+    expect(r.entries[0].mealType).toBe(r.entries[1].mealType);
+  });
+});
