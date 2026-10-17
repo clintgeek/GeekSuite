@@ -1,4 +1,5 @@
-import React, { useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { userService } from '../../services/userService.js';
 import {
   Box,
   Typography,
@@ -30,7 +31,37 @@ import { createAppTheme } from '../../theme/theme';
 // with a light theme so text/dividers stay readable when the app is in dark mode.
 const lightReportTheme = createAppTheme('light');
 
+/**
+ * Who the report is for, from the signed-in account. This used to be one
+ * person's name and birthday typed into the component, so anyone else's
+ * export — Heather's, to her doctor — carried it.
+ */
+export function patientName(user) {
+  if (!user) return '';
+  const full = [user.firstName || user.first_name, user.lastName || user.last_name].filter(Boolean).join(' ');
+  return user.name || full || user.username || (user.email ? String(user.email).split('@')[0] : '');
+}
+
+export function patientDetails(profile) {
+  const age = Number(profile?.age);
+  const sex = profile?.gender ? String(profile.gender) : '';
+  const parts = [];
+  if (Number.isFinite(age) && age > 0) parts.push(`${age} yr`);
+  if (sex) parts.push(sex.charAt(0).toUpperCase() + sex.slice(1));
+  return parts.join(' · ');
+}
+
 const BPReport = ({ bpLogs, onClose }) => {
+  const [me, setMe] = useState(null);
+  useEffect(() => {
+    let live = true;
+    userService.getProfile()
+      .then((user) => { if (live) setMe(user || null); })
+      .catch(() => {});
+    return () => { live = false; };
+  }, []);
+  const name = patientName(me);
+  const details = patientDetails(me?.profile || me);
   const reportRef = useRef(null);
 
   // Calculate statistics
@@ -175,7 +206,8 @@ const BPReport = ({ bpLogs, onClose }) => {
     let markdown = `# Blood pressure report\n\n`;
     markdown += `**Made:** ${madeOn}\n`;
     markdown += `**Period:** ${period}\n`;
-    markdown += `**Patient:** Clint Crocker (Jun 8, 1978, Male)\n\n`;
+    if (name) markdown += `**Patient:** ${name}${details ? ` (${details})` : ''}\n\n`;
+    else markdown += `\n`;
 
     markdown += `## Summary\n\n`;
     markdown += `- **Readings:** ${stats.totalReadings}\n`;
@@ -320,12 +352,16 @@ const BPReport = ({ bpLogs, onClose }) => {
               </Typography>
             </Box>
             <Box sx={{ textAlign: 'right' }}>
-              <Typography variant="body1" sx={{ fontWeight: 600 }}>
-                Clint Crocker
-              </Typography>
-              <Typography variant="body2" color="text.secondary">
-                Jun 8, 1978 (47 yr) • Male
-              </Typography>
+              {name && (
+                <Typography variant="body1" sx={{ fontWeight: 600 }} data-testid="bp-report-patient">
+                  {name}
+                </Typography>
+              )}
+              {details && (
+                <Typography variant="body2" color="text.secondary">
+                  {details}
+                </Typography>
+              )}
             </Box>
           </Box>
 
