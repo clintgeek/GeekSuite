@@ -145,9 +145,12 @@ const HouseholdSettings = () => {
       setSaving(true);
       await settingsService.updateHouseholdSettings({ [field]: value });
       setHouseholdData(prev => ({ ...prev, [field]: value || null }));
-      notify(field === 'name' ? 'Household renamed' : 'Sharing settings updated', { tone: 'success' });
+      // Every setting on the page saves as it changes, with the same quiet
+      // word (UX review IA-3).
+      notify('Saved', { tone: 'success', duration: 2000 });
     } catch (err) {
-      notify(errorMessage(err, 'Failed to update sharing settings'), { tone: 'error' });
+      notify(errorMessage(err, "Couldn't save that. Try again."), { tone: 'error' });
+      if (field === 'name') setHouseholdName(householdData?.name || '');
     } finally {
       setSaving(false);
     }
@@ -205,25 +208,24 @@ const HouseholdSettings = () => {
           // In a household - show settings and members
           <>
             {/* Household name — the household's, so a rename shows for everyone */}
-            <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start', mb: 2 }}>
+            {/* Saved when she leaves the box (or presses Enter), like every
+                other setting on the page — no Save button of its own. */}
+            <Box sx={{ mb: 2 }}>
               <TextField
                 fullWidth
                 size="small"
                 label="Household Name"
                 value={householdName}
                 onChange={(e) => setHouseholdName(e.target.value)}
+                onBlur={() => {
+                  const next = householdName.trim();
+                  if (next !== (householdData.name || '')) handleUpdateSharing('name', next);
+                }}
+                onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
                 placeholder="e.g., Crocker"
                 inputProps={{ maxLength: 40 }}
                 helperText="Everyone in the household sees this name"
               />
-              <Button
-                variant="outlined"
-                onClick={() => handleUpdateSharing('name', householdName.trim())}
-                disabled={saving || householdName.trim() === (householdData.name || '')}
-                sx={{ minHeight: 40, flexShrink: 0 }}
-              >
-                Save
-              </Button>
             </Box>
 
             {/* Household Code */}

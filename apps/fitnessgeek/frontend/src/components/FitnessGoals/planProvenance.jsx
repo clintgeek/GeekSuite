@@ -1,6 +1,7 @@
 import React from 'react';
-import { Box, Typography } from '@mui/material';
+import { Box, Card, CardContent, Typography } from '@mui/material';
 import { macroRules, macrosForCalories } from '@geeksuite/utils';
+import { MEASURED_ACTIVITY } from './planMath.js';
 
 /**
  * Where a plan's BMR came from, and what a saved plan changes to.
@@ -49,7 +50,7 @@ const isUniform = (schedule) => {
   return nums.length !== 7 || nums.every((n) => n === nums[0]);
 };
 
-const Row = ({ label, before, after, unit = 'kcal' }) => {
+const Row = ({ label, before, after, unit = 'cal' }) => {
   const delta = Number.isFinite(Number(before)) && Number.isFinite(Number(after)) ? Math.round(after - before) : null;
   return (
     <Box sx={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr) auto', gap: 1, alignItems: 'baseline', py: 0.5 }}>
@@ -113,5 +114,40 @@ export function ProteinBasisNote({ rules }) {
     <Typography variant="caption" data-testid="protein-basis" sx={{ color: 'text.secondary', display: 'block' }}>
       Protein is set from your lean mass: {fmtLb(per) ?? per} g per lb × {fmtLb(rules.lean_mass_lb)} lb.
     </Typography>
+  );
+}
+
+/**
+ * "Your Metabolism": the BMR and TDEE a plan was built on. The full wizard's
+ * result shows it beside the deficit; the quick target keeps it behind "How
+ * this was worked out".
+ */
+export function MetabolismCard({ plan, scanLoadFailed = false }) {
+  if (!plan) return null;
+  return (
+    <Card data-testid="metabolism-card">
+      <CardContent>
+        <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
+          Your Metabolism
+        </Typography>
+        <Box sx={{ mb: 2 }}>
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>Basal Metabolic Rate (BMR)</Typography>
+          <Typography variant="h6">{Number(plan.bmr).toLocaleString('en-US')} cal a day</Typography>
+          <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
+            Calories your body burns at rest
+          </Typography>
+          <BmrSourceNote source={plan.bmrSource} leanMassLb={plan.leanMassLb} scans={plan.bmrScans} scanLoadFailed={scanLoadFailed} />
+        </Box>
+        <Box>
+          <Typography variant="body2" sx={{ color: 'text.secondary' }}>Total Daily Energy Expenditure (TDEE)</Typography>
+          <Typography variant="h6">{Number(plan.tdee).toLocaleString('en-US')} cal a day</Typography>
+          <Typography variant="caption" sx={{ color: 'text.secondary' }}>
+            {plan.activityLevel === MEASURED_ACTIVITY
+              ? 'Your BMR plus the activity your watch measured (30-day average)'
+              : `Calories you burn with activity level: ${plan.activityLevel}`}
+          </Typography>
+        </Box>
+      </CardContent>
+    </Card>
   );
 }

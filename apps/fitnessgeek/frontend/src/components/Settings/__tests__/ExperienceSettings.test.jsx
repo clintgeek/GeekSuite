@@ -48,4 +48,28 @@ describe('ExperienceSettings', () => {
     await act(async () => { fireEvent.click(toggle); });
     expect(v.setLargerText).toHaveBeenCalledWith(true);
   });
+
+  it('switching to Full offers Undo, and Undo goes back to Simple (L19)', async () => {
+    const v = value({ savedMode: 'simple' });
+    mount(v);
+    await act(async () => { fireEvent.click(screen.getByRole('radio', { name: /^Full/ })); });
+    expect(await screen.findByText('Switched to Full')).toBeInTheDocument();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Undo' })); });
+    expect(v.setMode).toHaveBeenLastCalledWith('simple');
+    expect(await screen.findByText('Back to Simple')).toBeInTheDocument();
+  });
+
+  it('the Larger text switch says Saved', async () => {
+    mount(value({ savedMode: 'simple' }));
+    await act(async () => { fireEvent.click(screen.getByRole('checkbox', { name: 'Larger text' })); });
+    expect(await screen.findByText('Saved')).toBeInTheDocument();
+  });
+
+  it('in Full it says what Simple is; in Simple it does not', () => {
+    const { unmount } = mount(value({ effectiveMode: 'full', savedMode: 'full' }));
+    expect(screen.getByTestId('simple-view-line')).toBeInTheDocument();
+    unmount();
+    mount(value());
+    expect(screen.queryByTestId('simple-view-line')).toBeNull();
+  });
 });

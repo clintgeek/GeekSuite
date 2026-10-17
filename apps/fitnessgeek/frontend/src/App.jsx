@@ -23,7 +23,6 @@ const MyMeals = lazy(() => import('./pages/MyMeals.jsx'));
 const Weight = lazy(() => import('./pages/Weight.jsx'));
 const BloodPressure = lazy(() => import('./pages/BloodPressure.jsx'));
 const Medications = lazy(() => import('./pages/Medications.jsx'));
-const Profile = lazy(() => import('./pages/Profile.jsx'));
 const Settings = lazy(() => import('./pages/Settings.jsx'));
 const Activity = lazy(() => import('./pages/Activity.jsx'));
 const Reports = lazy(() => import('./pages/Reports.jsx'));
@@ -103,7 +102,9 @@ function AppRoutes() {
         <Route path="scan-import" element={<ScanImport />} />
         {/* Legacy goals route removed */}
         <Route path="calorie-wizard" element={<AIGoalPlanner />} />
-        <Route path="profile" element={<Profile />} />
+        {/* Profile folded into Settings (UX review IA-2); old links and
+            installed shortcuts land on its "About you" section. */}
+        <Route path="profile" element={<Navigate to="/settings#you" replace />} />
         <Route path="settings" element={<Settings />} />
         {/* Everything that isn't Home, Log or Weight (SIMPLE_AND_FULL_PLAN.md item 6). */}
         <Route path="more" element={<More />} />

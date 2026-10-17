@@ -19,6 +19,11 @@ vi.mock('../../../services/influxService.js', () => ({ influxService: { getTrend
 vi.mock('../../../services/settingsService.js', () => ({
   settingsService: { getSettings: vi.fn(), updateSettings: vi.fn() },
 }));
+// No 7-day average here: the plan starts from the latest weigh-in, as these
+// tests were written against.
+vi.mock('../../../services/weightService.js', () => ({
+  weightService: { getWeightStats: vi.fn(async () => ({ success: true, data: { currentMean: null } })) },
+}));
 vi.mock('../../../services/userService.js', () => ({
   userService: { getProfile: vi.fn(), getLatestWeight: vi.fn() },
 }));

@@ -13,19 +13,17 @@ import { userService } from '../../services/userService.js';
 import { settingsService } from '../../services/settingsService.js';
 import { bodyCompService } from '../../services/bodyCompService.js';
 import { useAuth } from '@geeksuite/auth';
-import {
-  mifflinStJeorBMR,
-  resolveBmr,
-  tdeeFromBMR,
-  BMR_CALC_VERSION,
-  isPlanCalculationStale,
-} from '@geeksuite/utils';
+import { isPlanCalculationStale } from '@geeksuite/utils';
 import ModeSelector from './ModeSelector';
 import KetoPlanStep from './KetoPlanStep';
-import { BmrSourceNote, PlanComparison, ProteinBasisNote, previewMacros } from './planProvenance.jsx';
-import { minSafeCalories, computeWeeklySchedule, planTarget, weekenderHasRoom, weekenderSuggestion, MEASURED_ACTIVITY, usableMeasuredActivity, tdeeFor } from './planMath.js';
+import { BmrSourceNote, MetabolismCard, PlanComparison, ProteinBasisNote, previewMacros } from './planProvenance.jsx';
+import { planTarget, weekenderHasRoom, weekenderSuggestion, MEASURED_ACTIVITY, usableMeasuredActivity } from './planMath.js';
+import { parseHeightToInches, buildCaloriePlan, nutritionGoalPayload } from './calorieCalc.js';
+import QuickTarget from './QuickTarget.jsx';
 import { influxService } from '../../services/influxService.js';
+import { weightService } from '../../services/weightService.js';
 import { localDateString } from '@geeksuite/utils';
+import { useExperience } from '../../contexts/ExperienceContext.jsx';
 import { errorMessage } from '../../utils/errorMessage.js';
 
 const CalorieGoalWizard = () => {
@@ -71,6 +69,8 @@ const CalorieGoalWizard = () => {
   // previews merge the fields the save leaves untouched — the settings
   // mutation MERGES into nutrition_goal, it does not replace it.
   const [savedGoal, setSavedGoal] = useState(null);
+  const [weightGoalTarget, setWeightGoalTarget] = useState(null);
+  const [goalLoaded, setGoalLoaded] = useState(false);
 
   // The body-scan BMR summary (`bodyCompositionSummary.bmr`). `source ===
   // 'scan'` means the server found a usable lean mass: a 14-day mean, latest
@@ -89,6 +89,22 @@ const CalorieGoalWizard = () => {
   // knows about. Distinct from "field is empty" (which just disables the
   // Next/Calculate buttons via the existing required-field check).
   const [heightError, setHeightError] = useState(false);
+  // Where the prefilled weight came from: 'average' (7-day), 'latest', or null.
+  const [weightBasis, setWeightBasis] = useState(null);
+
+  // Simple's one-screen quick target (IA-1, L8): in Simple, or when Home
+  // links here with ?quick=1. Read from window.location rather than the
+  // router so the wizard still mounts on its own in a test. Full, without
+  // the flag, is the four-step wizard, unchanged.
+  const { isSimple, goal: experienceGoal } = useExperience();
+  const [quickFlag] = useState(() => {
+    try {
+      return new URLSearchParams(window.location.search).get('quick') === '1';
+    } catch {
+      return false;
+    }
+  });
+  const quick = isSimple || quickFlag;
 
   // Load user profile and any existing saved goal on mount
   useEffect(() => {
@@ -115,6 +131,11 @@ const CalorieGoalWizard = () => {
       // so it cannot be silently recomputed — the only honest handling is to
       // say so and let the user re-enter three fields.
       setPlanStale(isPlanCalculationStale(ng));
+      // The weight goal's target, for the quick target's save (it asks how
+      // fast, not where to).
+      const wg = data?.weight_goal;
+      const wgTarget = Number(wg?.targetWeight);
+      setWeightGoalTarget(wg && (wg.enabled || wg.is_active) && wgTarget > 0 ? wgTarget : null);
       setSavedGoal(ng && ng.enabled ? ng : null);
       if (ng && ng.enabled) {
         const computedWeeklyDeficit = (ng.weight_change_rate || 0) * 500;
@@ -166,6 +187,8 @@ const CalorieGoalWizard = () => {
       }
     } catch {
       // no-op
+    } finally {
+      setGoalLoaded(true);
     }
   };
 
@@ -176,18 +199,25 @@ const CalorieGoalWizard = () => {
       // Profile (baseGeek), latest weight (fitnessGeek) and the body-scan
       // BMR in parallel. The profile step's spinner covers all three, so a
       // plan can't be calculated before we know whether a scan exists.
-      const [userData, latestWeight] = await Promise.all([
+      const [userData, latestWeight, averageWeight] = await Promise.all([
         userService.getProfile(),
         userService.getLatestWeight(),
+        loadAverageWeight(),
         loadScanBmr(),
         loadMeasuredActivity(),
       ]);
 
+      // The 7-day average is the plan's starting weight — the same basis as
+      // the weight goal card's "to go" (D-3). Before, this was the single
+      // latest weigh-in, and the wizard's "lb to lose" and the card's "to go"
+      // disagreed by more than a pound. The latest reading is the fallback.
+      const startWeight = averageWeight || latestWeight;
+      setWeightBasis(averageWeight ? 'average' : (latestWeight ? 'latest' : null));
       setProfile({
-        age: userData.profile?.age || '',
-        height: userData.profile?.height || '',
-        gender: userData.profile?.gender || '',
-        weight: latestWeight ? latestWeight.toString() : '',
+        age: userData?.profile?.age || '',
+        height: userData?.profile?.height || '',
+        gender: userData?.profile?.gender || '',
+        weight: startWeight ? startWeight.toString() : '',
         activityLevel: 'sedentary',
         currentFitnessLevel: 'beginner'
       });
@@ -195,6 +225,18 @@ const CalorieGoalWizard = () => {
       console.error('Failed to load user profile:', error);
     } finally {
       setIsLoadingProfile(false);
+    }
+  };
+
+  // The latest 7-day mean of weigh-ins (weightService.getWeightStats, the
+  // number Home's weight card shows). Null when it can't be had.
+  const loadAverageWeight = async () => {
+    try {
+      const stats = await weightService.getWeightStats();
+      const mean = Number(stats?.data?.currentMean);
+      return Number.isFinite(mean) && mean > 0 ? mean : null;
+    } catch {
+      return null;
     }
   };
 
@@ -224,178 +266,30 @@ const CalorieGoalWizard = () => {
     }
   };
 
-  // `calculateBMR` returns three distinct things and callers must not blur
-  // them together:
-  //   0    — a required field is simply empty (normal, mid-entry state)
-  //   null — every field is filled in, but the height string doesn't match
-  //          any format we understand (the actual bug: this used to fall
-  //          through to 0 as well, which is indistinguishable from "empty"
-  //          and let a broken calculation masquerade as a real one)
-  //   N    — a real BMR
-  const calculateBMR = () => {
-    const { age, weight, height, gender } = profile;
-    if (!age || !weight || !height || !gender) return 0;
-
-    const heightInches = parseHeightToInches(height);
-    if (heightInches === null) return null;
-
-    // The formula itself lives in `@geeksuite/utils/energy`, imported by the
-    // backend's `fitnessGoalService` too. It used to be written out here, in
-    // kg/cm form, applied to the pounds in this form's "Current Weight (lbs)"
-    // field and the inches `parseHeightToInches` returns — inflating every
-    // BMR by 11-45%, worse the heavier the user. The parameter names carry
-    // the units now precisely so that cannot recur silently.
-    return mifflinStJeorBMR({ weightLb: weight, heightIn: heightInches, age, gender });
-  };
-
-  // Accepts the handful of height notations a person would actually type.
-  // Anything that doesn't match one of these returns null — it does NOT fall
-  // back to a guess. That null is load-bearing: it's what lets calculateBMR
-  // tell "couldn't parse this" apart from "field is empty", which is the
-  // difference between a visible error and a silent 1200-calorie floor
-  // reported as "Safe".
-  const parseHeightToInches = (height) => {
-    if (!height) return null;
-    const trimmed = String(height).trim();
-
-    // 5'11" — the closing inch mark is REQUIRED here, on purpose. The old
-    // placeholder read "5'11" (no closing quote) while the old regex
-    // demanded one; typing exactly what the placeholder showed produced an
-    // unparseable height that silently became a BMR of 0. The fix is a
-    // correct placeholder ("5'11\"", below) plus a visible error for
-    // anything that still doesn't match — not loosening this pattern to
-    // swallow the very typo that caused the bug. (The other two formats
-    // below have no such landmine, so those get the leniency instead.)
-    const feetInches = trimmed.match(/^(\d+)\s*'\s*(\d{1,2})"$/);
-    if (feetInches) {
-      return parseInt(feetInches[1], 10) * 12 + parseInt(feetInches[2], 10);
-    }
-
-    // 5 ft 11, 5ft 11in, 5 feet 11 inches
-    const feetWord = trimmed.match(/^(\d+)\s*(?:ft|feet)\.?\s*(\d{1,2})?\s*(?:in|inches)?\.?$/i);
-    if (feetWord) {
-      const feet = parseInt(feetWord[1], 10);
-      const inches = feetWord[2] ? parseInt(feetWord[2], 10) : 0;
-      return feet * 12 + inches;
-    }
-
-    // A bare number, optionally tagged in/inches/" — treated as total inches.
-    // Range-checked against plausible adult height so a typo like "6" (feet,
-    // not inches) or "511" doesn't get silently accepted as something valid.
-    const bareInches = trimmed.match(/^(\d{2,3})\s*(?:in|inches|")?$/i);
-    if (bareInches) {
-      const inches = parseInt(bareInches[1], 10);
-      if (inches >= 36 && inches <= 96) return inches;
-    }
-
-    return null;
-  };
-
-  // Shared with the backend; the multiplier table moved to
-  // `@geeksuite/utils/energy` alongside the BMR formula so the two cannot
-  // drift. An unrecognised activity level now falls back to `sedentary` (the
-  // smallest factor) rather than producing `NaN`, which is what
-  // `bmr * undefined` did here before.
-  const calculateTDEE = (bmr) => tdeeFor({ bmr, activityLevel: profile.activityLevel, measured: measuredActivity, tdeeFromBMR });
-
-  // Floor, schedule and the delivered rate live in planMath.js (pure, tested).
-  const getMinSafeCalories = (bmr) => minSafeCalories(bmr);
-
+  // The plan arithmetic lives in calorieCalc.js (pure, shared with the
+  // quick target): Mifflin-St Jeor or Katch-McArdle, TDEE, the safety floor
+  // and the rate the floor really delivers.
   const calculateCaloriePlan = () => {
-    let bmr = calculateBMR();
+    const next = buildCaloriePlan({ profile, goal, usableLeanMassLb, scanBmr, measuredActivity });
 
-    // Belt-and-suspenders: the Step 1 "Next" button is now gated on a
-    // parseable height (see the Height TextField below), so in practice this
-    // branch shouldn't be reachable from the UI. But this function used to
-    // be the ONLY place the bug lived — a null/0 height silently became a
-    // BMR of 0, then a "Safe" plan — so it gets its own guard rather than
-    // trusting the earlier gate to always hold.
-    if (bmr === null) {
+    // Belt-and-suspenders: the Step 1 "Next" button is gated on a parseable
+    // height, so in practice this branch shouldn't be reachable from the UI.
+    // But a null/0 height used to become a BMR of 0, then a "Safe" plan — so
+    // it gets its own guard rather than trusting the earlier gate.
+    if (next.heightError) {
       setHeightError(true);
       return;
     }
     setHeightError(false);
 
-    // Plan D1: measured lean mass beats an estimate from weight, height, age
-    // and sex. `resolveBmr` picks Katch-McArdle when handed a usable lean mass
-    // and says so; otherwise the Mifflin figure computed above stands.
-    const resolved = resolveBmr({
-      leanMassLb: usableLeanMassLb,
-      mifflin: bmr > 0 ? { weightLb: profile.weight, heightIn: parseHeightToInches(profile.height), age: profile.age, gender: profile.gender } : null,
-    });
-    const bmrSource = resolved.source;
-    if (bmrSource === 'scan') bmr = resolved.bmr;
-
-    const tdee = calculateTDEE(bmr);
-    const weightToLose = parseFloat(profile.weight) - parseFloat(goal.targetWeight);
-    const minSafe = getMinSafeCalories(bmr);
-    // When the requested rate would put the target under the safety floor,
-    // the target is clamped UP to it — and then the plan can't deliver the
-    // requested rate. The timeline, the saved rate and the tracker's pace all
-    // use the rate it DOES deliver (planMath.js; Chef, 2026-09-23: "2 lb/week"
-    // at the floor was really ~1.7, so "50 weeks" was ~59).
-    const { dailyCalories, floored, requestedRate, effectiveRate } = planTarget({
-      tdee, requestedRate: goal.weightChangeRate, minSafe,
-    });
-    const weeklyDeficit = Math.round(tdee - dailyCalories);
-    const timeline = effectiveRate > 0 ? Math.ceil(Math.abs(weightToLose) / effectiveRate) : 0;
-
     setGoal(prev => ({
       ...prev,
-      dailyCalories,
-      weeklyDeficit,
-      timeline
+      dailyCalories: next.dailyCalories,
+      weeklyDeficit: next.weeklyDeficit,
+      timeline: next.timeline
     }));
 
-    // Create the plan
-    const plan = {
-      currentWeight: parseFloat(profile.weight),
-      targetWeight: parseFloat(goal.targetWeight),
-      weightToLose: Math.abs(weightToLose),
-      bmr,
-      bmrSource,
-      leanMassLb: bmrSource === 'scan' ? resolved.lean_mass_lb : null,
-      bmrScans: bmrSource === 'scan' ? (scanBmr?.scans ?? null) : null,
-      tdee,
-      // Carried so the SAVE can persist what this BMR was computed from.
-      // A plan that stores only its outputs cannot be re-derived, audited,
-      // or repaired — which is exactly the position every plan saved before
-      // 2026-09-20 is in.
-      calcInputs: {
-        weight_lb: parseFloat(profile.weight),
-        height_in: parseHeightToInches(profile.height),
-        age: parseFloat(profile.age),
-        gender: profile.gender,
-        activity_level: profile.activityLevel,
-        // The measured activity this TDEE was built on, when it was.
-        ...(profile.activityLevel === MEASURED_ACTIVITY && measuredActivity ? { active_kcal: measuredActivity.mean } : {}),
-      },
-      dailyCalories,
-      weeklyDeficit,
-      timeline,
-      activityLevel: profile.activityLevel,
-      weightChangeRate: effectiveRate,
-      requestedRate,
-      floored,
-      planType: goal.planType,
-      schedule: computeWeeklySchedule(goal.planType, dailyCalories, minSafe),
-      weekenderSuggestion: goal.planType === 'weekender'
-        ? weekenderSuggestion({ tdee, minSafe, currentRate: effectiveRate })
-        : null,
-      rules: {
-        minSafeCalories: minSafe,
-        capPercent: 20,
-        autoAdjust: goal.planType === 'auto',
-        // A real Mifflin-St Jeor BMR for an adult is always comfortably
-        // above zero. The Safety Check card reads this — not just
-        // dailyCalories >= 1200 — so a floored, never-actually-computed
-        // plan can't be reported "Safe" just because the floor happens to
-        // sit at the minimum.
-        calculationValid: bmr > 0
-      }
-    };
-
-    setPlan(plan);
+    setPlan(next);
     setActiveStep(3);
   };
 
@@ -440,6 +334,23 @@ const CalorieGoalWizard = () => {
     : null;
 
   const steps = ['Your Approach', 'Your Profile', 'Set Your Goal', 'Your Calorie Plan'];
+
+  if (quick) {
+    return (
+      <QuickTarget
+        loading={isLoadingProfile || !goalLoaded}
+        initialProfile={profile}
+        weightBasis={weightBasis}
+        maintain={experienceGoal === 'maintain'}
+        targetWeight={weightGoalTarget ?? (Number(savedGoal?.target_weight) > 0 ? Number(savedGoal.target_weight) : null)}
+        currentTarget={Number(savedGoal?.daily_calorie_target) > 0 ? Math.round(savedGoal.daily_calorie_target) : null}
+        usableLeanMassLb={usableLeanMassLb}
+        scanBmr={scanBmr}
+        scanLoadFailed={scanLoadFailed}
+        onSaved={loadExistingGoal}
+      />
+    );
+  }
 
   return (
     <Box sx={{ maxWidth: 800, mx: 'auto', p: 3 }}>
@@ -758,7 +669,7 @@ const CalorieGoalWizard = () => {
           <PlanComparison saved={savedSnapshot} next={plan} />
           <Box sx={{ mb: 3 }}>
             <Typography variant="body2" sx={{ color: 'text.primary' }}>
-              BMR {plan.bmr} calories/day · daily target {plan.dailyCalories} calories
+              BMR {Number(plan.bmr).toLocaleString('en-US')} cal a day · daily target {Number(plan.dailyCalories).toLocaleString('en-US')} cal
             </Typography>
             <BmrSourceNote source={plan.bmrSource} leanMassLb={plan.leanMassLb} scans={plan.bmrScans} scanLoadFailed={scanLoadFailed} />
           </Box>
@@ -775,39 +686,8 @@ const CalorieGoalWizard = () => {
               variant="contained"
               onClick={async () => {
                 try {
-                  const startDate = new Date();
-                  const estimatedEnd = new Date();
-                  estimatedEnd.setDate(startDate.getDate() + (plan.timeline * 7));
-                  const weeklyNumbers = plan.schedule.map(d => d.calories);
                   await settingsService.updateSettings({
-                    nutrition_goal: {
-                      enabled: true,
-                      // The LOCAL calendar day: toISOString() is UTC, so an evening
-                      // plan in Central stored tomorrow as its start.
-                      start_date: localDateString(startDate),
-                      start_weight: plan.currentWeight,
-                      target_weight: plan.targetWeight,
-                      // The macro rules read goal_weight_lbs BEFORE target_weight
-                      // (@geeksuite/utils macros.js) and the settings write merges, so a
-                      // stale goal_weight_lbs would outlive every new target. Write both.
-                      goal_weight_lbs: plan.targetWeight,
-                      activity_level: plan.activityLevel,
-                      weight_change_rate: plan.weightChangeRate,
-                      plan_type: plan.planType,
-                      daily_calorie_target: plan.dailyCalories,
-                      weekly_schedule: weeklyNumbers,
-                      min_safe_calories: plan.rules.minSafeCalories,
-                      bmr: plan.bmr,
-                      tdee: plan.tdee,
-                      bmr_calc_version: BMR_CALC_VERSION,
-                      bmr_source: plan.bmrSource,
-                      lean_mass_lb: plan.leanMassLb,
-                      calc_inputs: plan.calcInputs,
-                      timeline_weeks: plan.timeline,
-                      estimated_end_date: localDateString(estimatedEnd),
-                      mode,
-                      keto: ketoConfig
-                    }
+                    nutrition_goal: nutritionGoalPayload(plan, { mode, keto: ketoConfig }),
                   });
                   notify('Keto goal saved. Tracking started!', { tone: 'success' });
                   setHasExistingGoal(true);
@@ -842,7 +722,7 @@ const CalorieGoalWizard = () => {
                   : `Macro split: ${ketoConfig.macro_split?.fat_pct ?? 70}% fat · ${ketoConfig.macro_split?.protein_pct ?? 25}% protein · ${ketoConfig.macro_split?.carb_pct ?? 5}% carbs`}
               </Typography>
               <Box sx={{ display: 'flex', gap: 1, flexWrap: 'wrap' }}>
-                <Chip label={`${plan.dailyCalories} kcal / day`} variant="outlined" />
+                <Chip label={`${Number(plan.dailyCalories).toLocaleString('en-US')} cal a day`} variant="outlined" />
                 <Chip label={`${ketoConfig.track_net_carbs ? 'Net carbs' : 'Total carbs'}`} variant="outlined" color="warning" />
                 {plan.weightToLose > 0 && <Chip label={`${plan.weightToLose.toFixed(1)} lbs to goal`} variant="outlined" />}
               </Box>
@@ -901,7 +781,7 @@ const CalorieGoalWizard = () => {
           <Card sx={{ mb: 3, bgcolor: 'background.default', border: '2px solid', borderColor: 'primary.main' }}>
             <CardContent>
               <Typography variant="h5" sx={{ fontWeight: 600, mb: 2, color: 'primary.main' }}>
-                Daily Target: {plan.dailyCalories} calories
+                Your daily target: {Number(plan.dailyCalories).toLocaleString('en-US')} calories
               </Typography>
               <Typography variant="body2" sx={{ mb: 2, color: 'text.secondary' }}>
                 This will help you lose {plan.weightChangeRate} lb per week safely and sustainably.
@@ -941,7 +821,7 @@ const CalorieGoalWizard = () => {
               </Box>
               {plan.floored && (
                 <Typography variant="body2" data-testid="plan-floor-note" sx={{ color: 'text.secondary', mt: 1.5 }}>
-                  {`Your target is at the safety floor (${plan.rules?.minSafeCalories?.toLocaleString('en-US')} kcal, 80% of your BMR), so this plan loses about ${plan.weightChangeRate} lb/week, not ${plan.requestedRate}. The timeline uses ${plan.weightChangeRate}.`}
+                  {`Your target is at the safety floor (${plan.rules?.minSafeCalories?.toLocaleString('en-US')} cal, 80% of your BMR), so this plan loses about ${plan.weightChangeRate} lb/week, not ${plan.requestedRate}. The timeline uses ${plan.weightChangeRate}.`}
                 </Typography>
               )}
               {plan.planType === 'weekender' && !weekenderHasRoom(plan.schedule) && (
@@ -953,7 +833,7 @@ const CalorieGoalWizard = () => {
               )}
               {plan.rules?.autoAdjust && (
                 <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block', mt: 1 }}>
-                  Auto mode: If you go over on a day, remaining days will adjust while staying above {plan.rules.minSafeCalories} kcal.
+                  Auto mode: If you go over on a day, remaining days will adjust while staying above {Number(plan.rules.minSafeCalories).toLocaleString('en-US')} cal.
                 </Typography>
               )}
             </CardContent>
@@ -961,30 +841,7 @@ const CalorieGoalWizard = () => {
 
           {/* Detailed Breakdown */}
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 3, mb: 3 }}>
-            <Card>
-              <CardContent>
-                <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
-                  Your Metabolism
-                </Typography>
-                <Box sx={{ mb: 2 }}>
-                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>Basal Metabolic Rate (BMR)</Typography>
-                  <Typography variant="h6">{plan.bmr} calories/day</Typography>
-                  <Typography variant="caption" sx={{ color: 'text.secondary', display: 'block' }}>
-                    Calories your body burns at rest
-                  </Typography>
-                  <BmrSourceNote source={plan.bmrSource} leanMassLb={plan.leanMassLb} scans={plan.bmrScans} scanLoadFailed={!hasExistingGoal && scanLoadFailed} />
-                </Box>
-                <Box>
-                  <Typography variant="body2" sx={{ color: 'text.secondary' }}>Total Daily Energy Expenditure (TDEE)</Typography>
-                  <Typography variant="h6">{plan.tdee} calories/day</Typography>
-                  <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                    {plan.activityLevel === MEASURED_ACTIVITY
-                      ? 'Your BMR plus the activity your watch measured (30-day average)'
-                      : `Calories you burn with activity level: ${plan.activityLevel}`}
-                  </Typography>
-                </Box>
-              </CardContent>
-            </Card>
+            <MetabolismCard plan={plan} scanLoadFailed={!hasExistingGoal && scanLoadFailed} />
 
             <Card>
               <CardContent>
@@ -993,11 +850,12 @@ const CalorieGoalWizard = () => {
                 </Typography>
                 <Box sx={{ mb: 2 }}>
                   <Typography variant="body2" sx={{ color: 'text.secondary' }}>Daily Calorie Deficit</Typography>
-                  <Typography variant="h6" sx={{ color: theme.palette.error.main }}>
-                    {plan.weeklyDeficit} calories/day
+                  {/* The plan, not a problem: neutral ink (D-12). */}
+                  <Typography variant="h6" sx={{ color: 'text.primary' }}>
+                    {Number(plan.weeklyDeficit).toLocaleString('en-US')} cal a day
                   </Typography>
                   <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-                    {plan.weeklyDeficit * 7} calories/week = {plan.weightChangeRate} lb/week
+                    {(plan.weeklyDeficit * 7).toLocaleString('en-US')} cal a week = {plan.weightChangeRate} lb a week
                   </Typography>
                 </Box>
                 <Box>
@@ -1023,7 +881,7 @@ const CalorieGoalWizard = () => {
                   <Typography variant="caption" sx={{ color: 'text.secondary' }}>
                     {!plan.rules?.calculationValid
                       ? "Your height couldn't be read, so this plan isn't reliable"
-                      : 'Minimum recommended: 1,200 calories/day'}
+                      : 'Minimum recommended: 1,200 cal a day'}
                   </Typography>
                 </Box>
               </CardContent>
@@ -1116,39 +974,8 @@ const CalorieGoalWizard = () => {
                   variant="contained"
                   onClick={async () => {
                     try {
-                      const startDate = new Date();
-                      const estimatedEnd = new Date();
-                      estimatedEnd.setDate(startDate.getDate() + (plan.timeline * 7));
-                      const weeklyNumbers = plan.schedule.map(d => d.calories);
                       await settingsService.updateSettings({
-                        nutrition_goal: {
-                          enabled: true,
-                          // The LOCAL calendar day: toISOString() is UTC, so an evening
-                      // plan in Central stored tomorrow as its start.
-                      start_date: localDateString(startDate),
-                          start_weight: plan.currentWeight,
-                          target_weight: plan.targetWeight,
-                          // The macro rules read goal_weight_lbs BEFORE target_weight
-                          // (@geeksuite/utils macros.js) and the settings write merges, so a
-                          // stale goal_weight_lbs would outlive every new target. Write both.
-                          goal_weight_lbs: plan.targetWeight,
-                          activity_level: plan.activityLevel,
-                          weight_change_rate: plan.weightChangeRate,
-                          plan_type: plan.planType,
-                          daily_calorie_target: plan.dailyCalories,
-                          weekly_schedule: weeklyNumbers,
-                          min_safe_calories: plan.rules.minSafeCalories,
-                          bmr: plan.bmr,
-                          tdee: plan.tdee,
-                          bmr_calc_version: BMR_CALC_VERSION,
-                          bmr_source: plan.bmrSource,
-                          lean_mass_lb: plan.leanMassLb,
-                          calc_inputs: plan.calcInputs,
-                          timeline_weeks: plan.timeline,
-                          estimated_end_date: localDateString(estimatedEnd),
-                          mode,
-                          keto: mode === 'keto' ? ketoConfig : undefined
-                        }
+                        nutrition_goal: nutritionGoalPayload(plan, { mode, keto: mode === 'keto' ? ketoConfig : undefined }),
                       });
                       notify('Calorie goal saved. Tracking started!', { tone: 'success' });
                       setHasExistingGoal(true);

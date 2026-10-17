@@ -1,15 +1,18 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Box, Typography, TextField, Button, Chip, Stack, IconButton, ToggleButton, ToggleButtonGroup, FormControl, InputLabel, Select, MenuItem, Alert } from '@mui/material';
-import { useToast } from '@geeksuite/ui';
+import { useToast, useGeekDialogFullScreen } from '@geeksuite/ui';
 import SearchIcon from '@mui/icons-material/Search';
 import EditIcon from '@mui/icons-material/Edit';
 import SaveIcon from '@mui/icons-material/Save';
 import DeleteIcon from '@mui/icons-material/Delete';
 import MedicationIcon from '@mui/icons-material/Medication';
-import LocalPharmacyIcon from '@mui/icons-material/LocalPharmacy';
+import AddIcon from '@mui/icons-material/Add';
 import medsService from '../services/medsService.js';
-import { localDateString } from '@geeksuite/utils';
+import { localDateString, localDateStringDaysAgo } from '@geeksuite/utils';
 import { Surface, SectionLabel, DisplayHeading, EmptyState } from '../components/primitives';
+import PremiumDialog from '../components/primitives/PremiumDialog.jsx';
+import { thumbSaveProps } from '../components/BloodPressure/thumbSave.jsx';
+import { useExperience } from '../contexts/ExperienceContext.jsx';
 import MedsChecklist from '../components/Home/MedsChecklist.jsx';
 import { useMedsToday, announceMedsChanged } from '../hooks/useMedsToday.js';
 import { useToday } from '../hooks/useToday.js';
@@ -25,6 +28,27 @@ const MED_GROUPS = [
   { key: 'daily', label: 'Daily', match: hasNoTime },
   ...TIME_OPTIONS.map((slot) => ({ key: slot, label: slot, match: (m) => (m.times_of_day || []).includes(slot) })),
 ];
+
+// Simple's "When do you take it?" (UX review L16), mapped onto the stored
+// `times_of_day` slots (MED_TIME_OF_DAY in @geeksuite/schemas):
+//   Morning → 'morning', Midday → 'afternoon', Evening → 'evening',
+//   Bedtime → 'bedtime'. Any of the four can be picked together.
+//   Once a day → no slots at all (`[]`). That is already what "one daily
+//   dose" means everywhere: medsChecklist (utils/checkIns.js) gives it one
+//   tick with no time label, and the list shows it under "Daily". So
+//   picking Once a day clears the times, and picking a time clears Once a day.
+const SIMPLE_TIMES = [
+  { value: 'morning', label: 'Morning' },
+  { value: 'afternoon', label: 'Midday' },
+  { value: 'evening', label: 'Evening' },
+  { value: 'bedtime', label: 'Bedtime' },
+];
+// The list's group names in Simple, in the same words as the form.
+const SIMPLE_GROUP_LABELS = { daily: 'Once a day', morning: 'Morning', afternoon: 'Midday', evening: 'Evening', bedtime: 'Bedtime' };
+
+// "Oct 16", for saying which day the checklist is ticking.
+const shortDate = (ymd) => new Date(`${ymd}T12:00:00`).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+
 const TYPE_ORDER = { rx: 0, otc: 1, supplement: 2 };
 const byTypeThenName = (a, b) => {
   const tA = (a.med_type || 'rx');
@@ -71,8 +95,20 @@ export default function Medications() {
   // Today's doses — the dose log had a backend and no UI until now.
   // useToday, not a date read at render: a resumed PWA must tick today (B3).
   const today = useToday();
-  const doses = useMedsToday(today);
+  // The page's checklist can tick yesterday too, for a dose she forgot to
+  // tick last night (L23). Worked out from `today`, so it moves with it.
+  const [day, setDay] = useState('today');
+  const yesterday = localDateStringDaysAgo(1, new Date(`${today}T12:00:00`));
+  const doses = useMedsToday(day === 'yesterday' ? yesterday : today);
   const { notify } = useToast();
+  const { isSimple } = useExperience();
+  const fullScreen = useGeekDialogFullScreen();
+  // Simple's add/edit is a dialog with two questions (L16).
+  const [adding, setAdding] = useState(false);
+  const [suggestions, setSuggestions] = useState([]);
+  const [lookupDown, setLookupDown] = useState(false);
+  // The name a suggestion filled in: no point searching for it again.
+  const pickedRef = useRef('');
   const [q, setQ] = useState('');
   const [searching, setSearching] = useState(false);
   const [results, setResults] = useState([]);
@@ -372,8 +408,9 @@ export default function Medications() {
       if (!saved) throw new Error('No medication came back');
       const savedId = saved.id ?? saved._id;
       setMyMeds((prev) => [saved, ...prev.filter(m => (m.id ?? m._id) !== savedId)]);
-      setSelected(null);
-      setEditingMed(null);
+      // A clean form for the next one: the last medicine's times used to
+      // carry over into it.
+      cancelEdit();
       changed();
     } catch (err) {
       setFormError(errorMessage(err, "Couldn't save that medicine. Try again."));
@@ -392,8 +429,7 @@ export default function Medications() {
       const saved = await medsService.update(editingId, payload);
       if (!saved) throw new Error('No medication came back');
       setMyMeds(prev => prev.map(m => ((m.id ?? m._id) === editingId ? saved : m)));
-      setSelected(null);
-      setEditingMed(null);
+      cancelEdit();
       changed();
     } catch (err) {
       setFormError(errorMessage(err, "Couldn't save your changes. Try again."));
@@ -412,6 +448,53 @@ export default function Medications() {
     setSelectedStrength(null);
     setDetails(null);
     setMedType('rx');
+    setAdding(false);
+    setSuggestions([]);
+    setLookupDown(false);
+    pickedRef.current = '';
+  };
+
+  const startSimpleAdd = () => {
+    cancelEdit();
+    setAdding(true);
+    scrollToEditorFocus();
+  };
+
+  // Live suggestions while she types a name in Simple. RxNorm is a hint, not
+  // a gate: whatever she typed can be saved, picked or not, found or not.
+  useEffect(() => {
+    if (!isSimple || !adding || editingMed) return undefined;
+    const query = displayName.trim();
+    if (query.length < 2 || query === pickedRef.current) {
+      setSuggestions([]);
+      return undefined;
+    }
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const r = await medsService.search(query);
+        if (cancelled) return;
+        setSuggestions(Array.isArray(r) ? r.slice(0, 6) : []);
+        setLookupDown(false);
+      } catch (_) {
+        if (cancelled) return;
+        setSuggestions([]);
+        setLookupDown(true);
+      }
+    }, 300);
+    return () => { cancelled = true; clearTimeout(timer); };
+  }, [displayName, isSimple, adding, editingMed]);
+
+  const pickSuggestion = (c) => {
+    pickedRef.current = c?.name || '';
+    setSuggestions([]);
+    // Fills the name and keeps the rxcui and details the save path sends.
+    selectCandidate(c);
+  };
+
+  // Once a day is no times at all; see SIMPLE_TIMES.
+  const toggleSimpleTime = (slot) => {
+    setTimesOfDay((prev) => (prev.includes(slot) ? prev.filter((t) => t !== slot) : [...prev, slot]));
   };
 
   const startEdit = async (m) => {
@@ -491,14 +574,33 @@ export default function Medications() {
     <Box sx={{ p: { xs: 2, sm: 3 }, maxWidth: 960, mx: 'auto' }}>
       <Box sx={{ mb: 3 }}>
         <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem' }}>
-          Tick off today&apos;s doses, manage your medicines, and export a list for your doctor.
+          {isSimple
+            ? 'Tick off your doses each day, and keep your list of medications here.'
+            : <>Tick off today&apos;s doses, manage your medicines, and export a list for your doctor.</>}
         </Typography>
       </Box>
 
       {doses.total > 0 && (
         <Surface sx={{ mb: 3, borderRadius: '24px' }}>
+          {/* Today or yesterday (L23). The checklist's own heading names the
+              day too, so which one she's ticking is said in words. */}
+          <ToggleButtonGroup
+            exclusive
+            value={day}
+            onChange={(e, v) => { if (v) setDay(v); }}
+            aria-label="Which day to tick"
+            sx={{ mb: 2, '& .MuiToggleButton-root': { minHeight: 44, px: 2.5, textTransform: 'none', fontWeight: 700, fontSize: '1rem' } }}
+          >
+            <ToggleButton value="today">Today</ToggleButton>
+            <ToggleButton value="yesterday">Yesterday</ToggleButton>
+          </ToggleButtonGroup>
+          {day === 'yesterday' && (
+            <Typography sx={{ color: 'text.secondary', fontSize: '1rem', mb: 1.5 }}>
+              Showing yesterday, {shortDate(yesterday)}. Ticks here are saved for yesterday.
+            </Typography>
+          )}
           <MedsChecklist
-            title="Today's doses"
+            title={day === 'yesterday' ? "Yesterday's doses" : "Today's doses"}
             items={doses.items}
             taken={doses.taken}
             total={doses.total}
@@ -509,16 +611,22 @@ export default function Medications() {
         </Surface>
       )}
 
-      {/* Export Buttons */}
-      {/* `size="small"` renders these under the 44px tap floor the mobile
-          harness enforces. minHeight only — the compact look is unchanged. */}
-      <Box sx={{ mb: 3, display: 'flex', gap: 1, flexWrap: 'wrap', '& .MuiButton-root': { minHeight: 44, minWidth: 44 } }}>
-        <Button size="small" variant="outlined" onClick={handleCopyExport}>Copy text</Button>
-        <Button size="small" variant="outlined" onClick={handleDownloadExport}>Download .txt</Button>
-        <Button size="small" variant="outlined" onClick={handleDownloadPdf}>Download PDF</Button>
-      </Box>
+      {/* Simple: one big Add, then a two-question dialog (L16). */}
+      {isSimple && myMeds.length > 0 && (
+        <Button
+          variant="contained"
+          size="large"
+          fullWidth
+          startIcon={<AddIcon />}
+          onClick={startSimpleAdd}
+          sx={{ mb: 3, minHeight: 56, fontSize: '1.0625rem', fontWeight: 800 }}
+        >
+          Add a medication
+        </Button>
+      )}
 
       {/* Search Surface */}
+      {!isSimple && (
       <Surface sx={{ mb: 3 }}>
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 2 }}>
           <SearchIcon sx={{ color: 'primary.main' }} />
@@ -586,8 +694,9 @@ export default function Medications() {
           </Button>
         )}
       </Surface>
+      )}
 
-      {(selected || editingMed) && (
+      {!isSimple && (selected || editingMed) && (
         <Surface ref={editorRef} sx={{ mb: 3 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, mb: 2 }}>
             <MedicationIcon sx={{ color: 'primary.main' }} />
@@ -637,13 +746,13 @@ export default function Medications() {
 
             {((details?.suggested?.length || 0) > 0) && (
               <Box>
-                <Typography variant="caption" color="text.secondary">Suggested indications (editable)</Typography>
+                <Typography variant="caption" color="text.secondary">Suggestions for what it&rsquo;s for (tap to keep or drop)</Typography>
                 <SuggestionChips suggestions={details.suggested} userTags={userTags} onChange={setUserTags} />
               </Box>
             )}
 
             <Box>
-              <Typography variant="caption" color="text.secondary">Your indications</Typography>
+              <Typography variant="caption" color="text.secondary">What it&rsquo;s for</Typography>
               <Stack direction="row" spacing={1} flexWrap="wrap" sx={{ mt: 1 }}>
                 {(userTags || []).map(tag => (
                   <Chip
@@ -655,7 +764,7 @@ export default function Medications() {
                 ))}
               </Stack>
               <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1} sx={{ mt: 1 }}>
-                <TextField size="small" label="Add tag" value={newTag} onChange={(e) => setNewTag(e.target.value)} onKeyDown={(e) => {
+                <TextField size="small" label="Add what it’s for" value={newTag} onChange={(e) => setNewTag(e.target.value)} onKeyDown={(e) => {
                   if (e.key === 'Enter') {
                     const t = newTag.trim();
                     if (t && !userTags.includes(t)) setUserTags([...userTags, t]);
@@ -698,11 +807,24 @@ export default function Medications() {
         </Alert>
       ) : listLoading && myMeds.length === 0 ? null : myMeds.length === 0 ? (
         <Box sx={{ mb: 3 }}>
-          <EmptyState
-            icon={MedicationIcon}
-            title="No medications yet"
-            copy="Search for a medication above to add it to your list. You'll be able to group by time of day and export the list for your doctor."
-          />
+          {isSimple ? (
+            <EmptyState
+              icon={MedicationIcon}
+              title="No medications yet"
+              copy="Add the ones you take, and you can tick them off each day."
+              action={(
+                <Button variant="contained" size="large" startIcon={<AddIcon />} onClick={startSimpleAdd} sx={{ minHeight: 56, fontWeight: 800 }}>
+                  Add a medication
+                </Button>
+              )}
+            />
+          ) : (
+            <EmptyState
+              icon={MedicationIcon}
+              title="No medications yet"
+              copy="Search for a medication above to add it to your list. You'll be able to group by time of day and export the list for your doctor."
+            />
+          )}
         </Box>
       ) : (
       <Surface sx={{ mb: 3 }}>
@@ -711,9 +833,10 @@ export default function Medications() {
           <DisplayHeading size="card">Grouped by Time of Day</DisplayHeading>
         </Box>
         <Stack spacing={2}>
-          {MED_GROUPS.filter(g => g.key !== 'daily' || myMeds.some(g.match)).map(({ key: slot, label, match }) => (
+          {/* Simple names the groups in the form's words and skips empty ones. */}
+          {MED_GROUPS.filter(g => (g.key !== 'daily' && !isSimple) || myMeds.some(g.match)).map(({ key: slot, label, match }) => (
             <Box key={slot}>
-              <SectionLabel dot sx={{ mb: 1, textTransform: 'capitalize' }}>{label}</SectionLabel>
+              <SectionLabel dot sx={{ mb: 1, textTransform: 'capitalize' }}>{isSimple ? SIMPLE_GROUP_LABELS[slot] : label}</SectionLabel>
               <Stack spacing={1} sx={{ mt: 1 }}>
                 {myMeds
                   .filter(match)
@@ -764,6 +887,7 @@ export default function Medications() {
                               </Typography>
                             )}
 
+                            {!isSimple && (
                             <Box sx={{ display: 'flex', gap: 0.75, flexWrap: 'wrap', alignItems: 'center' }}>
                               <Chip
                                 size="small"
@@ -778,6 +902,7 @@ export default function Medications() {
                                 }}
                               />
                             </Box>
+                            )}
                           </Box>
 
                           <Stack direction="row" spacing={0.5}>
@@ -802,6 +927,134 @@ export default function Medications() {
       </Surface>
       )}
 
+      {/* Export Buttons: under the list, and only once there is a list
+          (L16). Simple doesn't show them. */}
+      {/* `size="small"` renders these under the 44px tap floor the mobile
+          harness enforces. minHeight only — the compact look is unchanged. */}
+      {!isSimple && myMeds.length > 0 && (
+      <Box sx={{ mb: 3, display: 'flex', gap: 1, flexWrap: 'wrap', '& .MuiButton-root': { minHeight: 44, minWidth: 44 } }}>
+        <Button size="small" variant="outlined" onClick={handleCopyExport}>Copy text</Button>
+        <Button size="small" variant="outlined" onClick={handleDownloadExport}>Download .txt</Button>
+        <Button size="small" variant="outlined" onClick={handleDownloadPdf}>Download PDF</Button>
+      </Box>
+      )}
+
+
+      {isSimple && (
+        <PremiumDialog
+          open={Boolean(adding || editingMed)}
+          onClose={() => { if (!busy) cancelEdit(); }}
+          title={editingMed ? 'Edit medication' : 'Add a medication'}
+          icon={MedicationIcon}
+          maxWidth="sm"
+          {...thumbSaveProps({
+            fullScreen,
+            save: (
+              <Button
+                variant="contained"
+                startIcon={<SaveIcon />}
+                onClick={editingMed ? updateMedication : saveMedication}
+                disabled={Boolean(busy) || !displayName.trim()}
+              >
+                {busy ? 'Saving…' : 'Save'}
+              </Button>
+            ),
+            cancel: <Button onClick={cancelEdit} disabled={Boolean(busy)}>Cancel</Button>,
+          })}
+        >
+          <Stack spacing={3} sx={{ mt: 1 }}>
+            <Box>
+              <Typography component="label" htmlFor="simple-med-name" sx={{ display: 'block', fontSize: '1.125rem', fontWeight: 800, mb: 1 }}>
+                What&rsquo;s it called?
+              </Typography>
+              <TextField
+                id="simple-med-name"
+                inputRef={nameInputRef}
+                fullWidth
+                autoComplete="off"
+                placeholder="For example, Vitamin D"
+                value={displayName}
+                onChange={(e) => {
+                  setDisplayName(e.target.value);
+                  if (!e.target.value.trim()) { setSelected(null); pickedRef.current = ''; }
+                }}
+              />
+              {suggestions.length > 0 && (
+                <Box sx={{ mt: 1.5 }}>
+                  <Typography sx={{ color: 'text.secondary', fontSize: '0.9375rem', mb: 1 }}>
+                    Tap one to use it, or just keep typing.
+                  </Typography>
+                  <Stack spacing={0.75} role="list" aria-label="Suggestions">
+                    {suggestions.map((c, idx) => (
+                      <Surface
+                        key={`${c.rxcui}-${idx}`}
+                        role="listitem"
+                        variant="inset"
+                        interactive
+                        onClick={() => pickSuggestion(c)}
+                        sx={{ py: 1.25, px: 1.5, minHeight: 44, display: 'flex', alignItems: 'center' }}
+                      >
+                        <Typography sx={{ fontWeight: 600, fontSize: '1rem' }}>{c.name}</Typography>
+                      </Surface>
+                    ))}
+                  </Stack>
+                </Box>
+              )}
+              {lookupDown && suggestions.length === 0 && (
+                <Typography sx={{ color: 'text.secondary', fontSize: '0.9375rem', mt: 1 }}>
+                  I can&rsquo;t look names up right now. Type it and save, that&rsquo;s fine.
+                </Typography>
+              )}
+            </Box>
+
+            <Box>
+              <Typography id="simple-med-when" sx={{ fontSize: '1.125rem', fontWeight: 800, mb: 1 }}>
+                When do you take it?
+              </Typography>
+              <Box
+                role="group"
+                aria-labelledby="simple-med-when"
+                sx={{
+                  display: 'grid',
+                  gridTemplateColumns: '1fr 1fr',
+                  gap: 1,
+                  '& .MuiToggleButton-root': {
+                    minHeight: 56,
+                    borderRadius: '16px',
+                    textTransform: 'none',
+                    fontSize: '1.0625rem',
+                    fontWeight: 700,
+                    border: (t) => `1px solid ${t.palette.divider}`,
+                  },
+                }}
+              >
+                {SIMPLE_TIMES.map(({ value, label }) => (
+                  <ToggleButton
+                    key={value}
+                    value={value}
+                    selected={timesOfDay.includes(value)}
+                    onChange={() => toggleSimpleTime(value)}
+                    color="primary"
+                  >
+                    {label}
+                  </ToggleButton>
+                ))}
+                <ToggleButton
+                  value="once"
+                  selected={timesOfDay.length === 0}
+                  onChange={() => setTimesOfDay([])}
+                  color="primary"
+                  sx={{ gridColumn: '1 / -1' }}
+                >
+                  Once a day
+                </ToggleButton>
+              </Box>
+            </Box>
+
+            {formError && <Alert severity="error">{formError}</Alert>}
+          </Stack>
+        </PremiumDialog>
+      )}
     </Box>
   );
 }

@@ -13,6 +13,11 @@ vi.mock('../../../services/influxService.js', () => ({ influxService: { getTrend
 vi.mock('../../../services/settingsService.js', () => ({
   settingsService: { getSettings: vi.fn(), updateSettings: vi.fn(() => Promise.resolve({})) },
 }));
+// No 7-day average here: the plan starts from the latest weigh-in, as these
+// tests were written against.
+vi.mock('../../../services/weightService.js', () => ({
+  weightService: { getWeightStats: vi.fn(async () => ({ success: true, data: { currentMean: null } })) },
+}));
 vi.mock('../../../services/userService.js', () => ({
   userService: { getProfile: vi.fn(), getLatestWeight: vi.fn(), updateProfile: vi.fn() },
 }));
@@ -85,17 +90,17 @@ describe('CalorieGoalWizard — BMR source (plan D1)', () => {
     setup();
     await runToPlan();
     const expected = katchMcArdleBMR({ leanMassLb: 177 });
-    expect(screen.getByText(`${expected} calories/day`)).toBeInTheDocument();
+    expect(screen.getByText(`${expected.toLocaleString("en-US")} cal a day`)).toBeInTheDocument();
     const note = screen.getByTestId('bmr-source');
     expect(note).toHaveAttribute('data-source', 'scan');
     expect(note.textContent).toMatch(/Measured — from your body scans: 177 lb lean mass, averaged over 8 scans/);
-    expect(screen.getByText(`${tdeeFromBMR(expected, 'sedentary')} calories/day`)).toBeInTheDocument();
+    expect(screen.getByText(`${tdeeFromBMR(expected, "sedentary").toLocaleString("en-US")} cal a day`)).toBeInTheDocument();
   });
 
   it('falls back to Mifflin-St Jeor when the scans are too old, and says so', async () => {
     setup({ summary: STALE_SCAN_SUMMARY });
     await runToPlan();
-    expect(screen.getByText(`${mifflinStJeorBMR(PROFILE)} calories/day`)).toBeInTheDocument();
+    expect(screen.getByText(`${mifflinStJeorBMR(PROFILE).toLocaleString("en-US")} cal a day`)).toBeInTheDocument();
     const note = screen.getByTestId('bmr-source');
     expect(note).toHaveAttribute('data-source', 'mifflin');
     expect(note.textContent).toMatch(/Estimated from weight, height, age and sex \(Mifflin-St Jeor\)/);
@@ -106,7 +111,7 @@ describe('CalorieGoalWizard — BMR source (plan D1)', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {});
     setup({ summary: new Error('network') });
     await runToPlan();
-    expect(screen.getByText(`${mifflinStJeorBMR(PROFILE)} calories/day`)).toBeInTheDocument();
+    expect(screen.getByText(`${mifflinStJeorBMR(PROFILE).toLocaleString("en-US")} cal a day`)).toBeInTheDocument();
     const note = screen.getByTestId('bmr-source');
     expect(note).toHaveAttribute('data-source', 'mifflin');
     expect(note.textContent).toMatch(/couldn't be loaded/);
@@ -174,7 +179,7 @@ describe('CalorieGoalWizard — old vs new (plan D2)', () => {
 
     const cmp = screen.getByTestId('plan-comparison');
     const newBmr = katchMcArdleBMR({ leanMassLb: 177 });
-    expect(cmp.textContent).toContain(`3,314 → ${newBmr.toLocaleString('en-US')} kcal`);
+    expect(cmp.textContent).toContain(`3,314 → ${newBmr.toLocaleString('en-US')} cal`);
     expect(cmp.textContent).toMatch(/Daily target2,977 → /);
     expect(cmp.textContent).toMatch(/formula error fixed on Sep 20/);
     expect(cmp.textContent).toMatch(/Nothing changes until you save/);
@@ -205,7 +210,7 @@ describe('CalorieGoalWizard — a plan pinned at the safety floor (2026-09-23)',
     setup({ nutrition_goal: CHEF_FLOORED_PLAN });
     await screen.findByText('Your Personalized Calorie Plan');
     expect(screen.getByTestId('plan-floor-note').textContent).toBe(
-      'Your target is at the safety floor (1,691 kcal, 80% of your BMR), so this plan loses about 1.7 lb/week, not 2. The timeline uses 1.7.',
+      'Your target is at the safety floor (1,691 cal, 80% of your BMR), so this plan loses about 1.7 lb/week, not 2. The timeline uses 1.7.',
     );
     expect(screen.getByTestId('plan-weekender-note').textContent).toBe(
       "No room for bigger weekends at this rate: every day is already at the floor. At 1.5 lb/week you'd eat 1,691 on other days and 2,027 on Fri and Sat.",
@@ -245,7 +250,7 @@ describe('CalorieGoalWizard — measured activity (TRENDS_PLAN D4)', () => {
     await screen.findByText('Your Personalized Calorie Plan');
 
     const bmr = katchMcArdleBMR({ leanMassLb: 177 });
-    expect(screen.getByText(`${bmr + 480} calories/day`)).toBeInTheDocument();
+    expect(screen.getByText(`${(bmr + 480).toLocaleString("en-US")} cal a day`)).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: /Start Tracking/i }));
     await waitFor(() => expect(settingsService.updateSettings).toHaveBeenCalled());
     const ng = settingsService.updateSettings.mock.calls.at(-1)[0].nutrition_goal;
@@ -264,3 +269,19 @@ describe('CalorieGoalWizard — measured activity (TRENDS_PLAN D4)', () => {
   });
 });
 
+
+describe('CalorieGoalWizard — result numbers (D-12)', () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it('"Your daily target: 2,600 calories", one unit with commas, and the deficit in plain ink', async () => {
+    setup({ summary: STALE_SCAN_SUMMARY });
+    await runToPlan();
+    const heading = screen.getByText(/^Your daily target: [\d,]+ calories$/);
+    expect(heading.textContent).toMatch(/\d,\d{3} calories$/);
+    expect(screen.queryByText(/Daily Target:/)).toBeNull();
+    expect(document.body.textContent).not.toMatch(/kcal|calories\/day/);
+    const deficit = screen.getByText(/^500 cal a day$/);
+    // The plan, not a problem: not the error red (default theme #d32f2f).
+    expect(getComputedStyle(deficit).color).not.toBe('rgb(211, 47, 47)');
+  });
+});

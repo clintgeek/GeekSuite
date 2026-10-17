@@ -74,7 +74,7 @@ describe('HouseholdSettings — join', () => {
 describe('HouseholdSettings — the household name', () => {
   beforeEach(() => vi.clearAllMocks());
 
-  it('shows the name and saves a rename', async () => {
+  it('shows the name and saves a rename when she leaves the box — no Save button (IA-3)', async () => {
     settingsService.getHouseholdSettings.mockResolvedValue({
       household_id: '7D9169DE1A8F', name: 'Crocker', display_name: 'Clint', members: [],
     });
@@ -86,10 +86,11 @@ describe('HouseholdSettings — the household name', () => {
     expect(field).toHaveValue('Crocker');
     await user.clear(field);
     await user.type(field, 'The Crockers');
-    await user.click(screen.getByRole('button', { name: /^save$/i }));
+    expect(screen.queryByRole('button', { name: /^save$/i })).toBeNull();
+    await user.tab();
 
     await waitFor(() => expect(settingsService.updateHouseholdSettings).toHaveBeenCalledWith({ name: 'The Crockers' }));
-    expect(notify).toHaveBeenCalledWith('Household renamed', { tone: 'success' });
+    expect(notify).toHaveBeenCalledWith('Saved', expect.objectContaining({ tone: 'success' }));
   });
 
   it('a new household is created with its name', async () => {

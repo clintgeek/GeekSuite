@@ -22,6 +22,11 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 
 vi.mock('../../../services/influxService.js', () => ({ influxService: { getTrends: vi.fn(async () => ({ available: false, days: [], activeKcal30: null })) } }));
+// No 7-day average here: the plan starts from the latest weigh-in, as these
+// tests were written against.
+vi.mock('../../../services/weightService.js', () => ({
+  weightService: { getWeightStats: vi.fn(async () => ({ success: true, data: { currentMean: null } })) },
+}));
 vi.mock('../../../services/userService.js', () => ({
   userService: {
     getProfile: vi.fn(() => Promise.resolve({ profile: {} })),

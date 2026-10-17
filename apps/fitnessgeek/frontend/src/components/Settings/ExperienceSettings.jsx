@@ -5,45 +5,79 @@ import { Check as CheckIcon } from '@mui/icons-material';
 import { useToast } from '@geeksuite/ui';
 import { Surface } from '../primitives';
 import { useExperience } from '../../contexts/ExperienceContext.jsx';
+import { UndoAction, UNDO_TOAST_MS } from '../FoodSearch/undoToast.jsx';
 
 /**
- * "How FitnessGeek looks" — Simple or Full, and Larger text
- * (DOCS/SIMPLE_AND_FULL_PLAN.md items 5 and the per-person setting).
+ * "How it looks" — Simple or Full, Larger text, and (as `children`) the
+ * theme (DOCS/SIMPLE_AND_FULL_PLAN.md item 5; UX review IA-2, L19).
  *
  * Each choice saves the moment it is made, as a partial write of just that
- * key (CONTEXT.md, "Settings writes are PARTIAL"); the rest of the Settings
- * page keeps its Save button. Until someone chooses, the app shows the mode
- * their history suggests, and this says so.
+ * key (CONTEXT.md, "Settings writes are PARTIAL"), like everything else on
+ * the Settings page now. Until someone chooses, the app shows the mode their
+ * history suggests, and this says so.
+ *
+ * A switch of mode reshapes the whole app, and a stray tap does it, so its
+ * toast offers Undo (L19).
  */
 const MODES = [
   { id: 'simple', title: 'Simple', body: 'Today, your meals, and the check-ins. Big buttons, nothing to set up.' },
   { id: 'full', title: 'Full', body: 'Everything: macros, reports, body scans, Garmin and more.' },
 ];
 
-export default function ExperienceSettings() {
+const modeName = (mode) => (mode === 'simple' ? 'Simple' : 'Full');
+
+export default function ExperienceSettings({ children, id }) {
   const theme = useTheme();
-  const { notify } = useToast();
+  const { notify, dismiss } = useToast();
   const { effectiveMode, savedMode, largerText, setMode, setLargerText } = useExperience();
 
   const choose = async (mode) => {
     if (mode === savedMode) return;
+    // Undo goes back to the face she was looking at, chosen or not.
+    const before = effectiveMode;
     const result = await setMode(mode);
-    notify(result.ok ? `Switched to ${mode === 'simple' ? 'Simple' : 'Full'}` : "Couldn't save that. Try again.", { tone: result.ok ? 'success' : 'error' });
+    if (!result.ok) {
+      notify("Couldn't save that. Try again.", { tone: 'error' });
+      return;
+    }
+    if (before === mode) {
+      notify('Saved', { tone: 'success', duration: 2000 });
+      return;
+    }
+    let toastId = null;
+    toastId = notify(`Switched to ${modeName(mode)}`, {
+      tone: 'success',
+      duration: UNDO_TOAST_MS,
+      action: (
+        <UndoAction
+          onUndo={async () => {
+            const back = await setMode(before);
+            dismiss?.(toastId);
+            notify(back.ok ? `Back to ${modeName(before)}` : "Couldn't switch back. Try again.", { tone: back.ok ? 'info' : 'error' });
+          }}
+        />
+      ),
+    });
   };
 
   const toggleLarger = async (on) => {
     const result = await setLargerText(on);
-    if (!result.ok) notify("Couldn't save that. Try again.", { tone: 'error' });
+    notify(result.ok ? 'Saved' : "Couldn't save that. Try again.", result.ok ? { tone: 'success', duration: 2000 } : { tone: 'error' });
   };
 
   return (
-    <Surface sx={{ mb: 2, borderRadius: '24px' }} data-testid="experience-settings">
+    <Surface sx={{ mb: 2, borderRadius: '24px' }} data-testid="experience-settings" id={id}>
       <Typography component="h2" sx={{ fontSize: '1.375rem', fontWeight: 800, mb: 0.5 }}>
-        How FitnessGeek looks
+        How it looks
       </Typography>
       <Typography sx={{ color: 'text.secondary', fontSize: '1rem', mb: 2 }}>
-        {savedMode ? 'Saved as soon as you choose.' : `You haven't chosen yet, so you're seeing ${effectiveMode === 'simple' ? 'Simple' : 'Full'}. Saved as soon as you choose.`}
+        {savedMode ? 'Saved as soon as you choose.' : `You haven't chosen yet, so you're seeing ${modeName(effectiveMode)}. Saved as soon as you choose.`}
       </Typography>
+      {effectiveMode === 'full' && (
+        <Typography sx={{ color: 'text.primary', fontSize: '1rem', mb: 2 }} data-testid="simple-view-line">
+          Want less on the screen? Simple shows today, your meals and the check-ins, with bigger buttons. You can come back to Full here any time.
+        </Typography>
+      )}
 
       <Box role="radiogroup" aria-label="Simple or Full" sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 1.25, mb: 2.5 }}>
         {MODES.map((m) => {
@@ -102,6 +136,7 @@ export default function ExperienceSettings() {
           inputProps={{ 'aria-label': 'Larger text', 'data-testid': 'larger-text-switch' }}
         />
       </Box>
+      {children}
     </Surface>
   );
 }
