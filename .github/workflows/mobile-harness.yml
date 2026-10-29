@@ -88,7 +88,10 @@ jobs:
   shard:
     name: mobile grammar · ${{ matrix.shard.label }}
     needs: apps
-    runs-on: ubuntu-latest
+    # Pinned, not ubuntu-latest: on 2026-10-29 ubuntu-latest became 26.04 and
+    # Playwright 1.58.2 refused it ("does not support chromium on ubuntu26.04"),
+    # failing every shard. Move this forward together with a Playwright bump.
+    runs-on: ubuntu-24.04
     # One app, phone + desktop. The slowest app ran ~8-10 min inside the old
     # single job; 25 leaves room for growth and still catches a hang early.
     timeout-minutes: 25
