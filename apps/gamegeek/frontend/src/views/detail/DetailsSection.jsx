@@ -1,10 +1,10 @@
 /**
- * Catalogue facts: genres, modes, time to beat, the description, and where
- * else it lives. Genres and tags are links into the filtered library.
+ * Catalogue facts: genres, modes, time to beat and the description. Where
+ * else it lives (store pages, IGDB, RAWG) is MediaSection's links row.
+ * Genres and tags are links into the filtered library.
  */
 import React, { useState } from 'react';
-import { Box, Button, ButtonBase, Link, Tooltip, Typography, alpha } from '@mui/material';
-import { OpenInNew as ExternalIcon } from '@mui/icons-material';
+import { Box, Button, ButtonBase, Tooltip, Typography, alpha } from '@mui/material';
 import { Link as RouterLink, useLocation } from 'react-router-dom';
 import { libraryPath } from '../../components/navConfig';
 import { formatCalendarDate } from '../../utils/dates';
@@ -135,42 +135,44 @@ function ChipList({ filterKey, items }) {
   );
 }
 
-export function externalLinks(game) {
-  const ids = game.externalIds || {};
-  const links = [];
-  if (ids.steamAppId) links.push({ id: 'steam', label: 'Steam store page', href: `https://store.steampowered.com/app/${encodeURIComponent(ids.steamAppId)}/` });
-  if (ids.gog) links.push({ id: 'gog', label: 'GOG', href: `https://www.gog.com/en/game/${encodeURIComponent(ids.gog)}` });
-  if (ids.igdb) links.push({ id: 'igdb', label: 'IGDB', href: `https://www.igdb.com/search?type=1&q=${encodeURIComponent(game.title)}` });
-  return links;
-}
-
 export default function DetailsSection({ game, onFindMetadata }) {
   const [expanded, setExpanded] = useState(false);
   const ttb = game.timeToBeat || {};
   const ttbText = [ttb.main && `${ttb.main} h story`, ttb.extra && `${ttb.extra} h + extras`, ttb.complete && `${ttb.complete} h 100%`].filter(Boolean).join(' · ');
   const description = (game.description || '').trim();
   const long = description.length > 420;
-  const links = externalLinks(game);
   const provenance = enrichmentLine(game.enrichment);
   const tags = tagList(game);
 
   return (
     <Section title="Details" id="details">
       {provenance ? (
-        <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', mb: 1.5 }} data-testid="metadata-provenance">
+        <Typography
+          sx={{ fontSize: '0.75rem', color: 'text.secondary', mb: 1.5, display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 1 }}
+          data-testid="metadata-provenance"
+        >
           {provenance.text}
           {provenance.link && onFindMetadata ? (
-            <>
-              {' — '}
-              <Box
-                component="button"
-                type="button"
-                onClick={onFindMetadata}
-                sx={{ all: 'unset', cursor: 'pointer', color: 'primary.main', fontWeight: 600, fontSize: 'inherit', minHeight: 24 }}
-              >
-                Find metadata…
-              </Box>
-            </>
+            // A full 44px target on a phone, still reading as part of the line.
+            <Box
+              component="button"
+              type="button"
+              onClick={onFindMetadata}
+              sx={{
+                all: 'unset',
+                cursor: 'pointer',
+                color: 'primary.main',
+                fontWeight: 600,
+                fontSize: 'inherit',
+                display: 'inline-flex',
+                alignItems: 'center',
+                minHeight: 44,
+                minWidth: 44,
+                '&:focus-visible': { outline: '2px solid', outlineColor: 'primary.main', outlineOffset: 2, borderRadius: '4px' },
+              }}
+            >
+              Find metadata…
+            </Box>
           ) : null}
         </Typography>
       ) : null}
@@ -203,25 +205,7 @@ export default function DetailsSection({ game, onFindMetadata }) {
         <Fact label="Tags">{tags.length ? <ChipList filterKey="tags" items={tags} /> : null}</Fact>
         <Fact label="Steam app">{game.externalIds?.steamAppId}</Fact>
       </Box>
-      {links.length ? (
-        <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 1, mt: 1.5 }}>
-          {links.map((l) => (
-            <Button
-              key={l.id}
-              component={Link}
-              href={l.href}
-              target="_blank"
-              rel="noopener noreferrer"
-              variant="outlined"
-              endIcon={<ExternalIcon sx={{ fontSize: 16 }} />}
-              sx={{ color: 'text.primary', textDecoration: 'none' }}
-            >
-              {l.label}
-            </Button>
-          ))}
-        </Box>
-      ) : null}
-      {!description && !(game.genres || []).length && !links.length ? (
+      {!description && !(game.genres || []).length ? (
         <Typography sx={{ fontSize: '0.875rem', color: 'text.secondary', mt: 1 }}>
           No details yet. More → Edit details fills them in.
         </Typography>

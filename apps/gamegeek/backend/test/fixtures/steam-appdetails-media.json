@@ -1,0 +1,48 @@
+{
+  "367520": {
+    "success": true,
+    "data": {
+      "type": "game",
+      "name": "Hollow Knight",
+      "steam_appid": 367520,
+      "header_image": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/367520/3c3489495136b26b34f8a9543c7f5645b99d388c/header.jpg?t=1776125684",
+      "screenshots": [
+        {
+          "id": 0,
+          "path_thumbnail": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/367520/ss_5384f9f8b96a0b9934b2bc35a4058376211636d2.600x338.jpg?t=1776125684",
+          "path_full": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/367520/ss_5384f9f8b96a0b9934b2bc35a4058376211636d2.1920x1080.jpg?t=1776125684"
+        },
+        {
+          "id": 1,
+          "path_thumbnail": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/367520/ss_d5b6edd94e77ba6db31c44d8a3c09d807ab27751.600x338.jpg?t=1776125684",
+          "path_full": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/367520/ss_d5b6edd94e77ba6db31c44d8a3c09d807ab27751.1920x1080.jpg?t=1776125684"
+        },
+        {
+          "id": 2,
+          "path_thumbnail": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/367520/ss_a81e4231cc8d55f58b51a4a938898af46503cae5.600x338.jpg?t=1776125684",
+          "path_full": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/367520/ss_a81e4231cc8d55f58b51a4a938898af46503cae5.1920x1080.jpg?t=1776125684"
+        }
+      ],
+      "movies": [
+        {
+          "id": 256695695,
+          "name": "The Grimm Troupe Free Content Pack 02",
+          "thumbnail": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/256695695/movie.293x165.jpg?t=1505700570",
+          "dash_av1": "https://video.akamai.steamstatic.com/store_trailers/367520/123471/b9044001968838dad1ff38d1abaaaeb7547e9692/1750517739/dash_av1.mpd?t=1505700570",
+          "dash_h264": "https://video.akamai.steamstatic.com/store_trailers/367520/123471/b9044001968838dad1ff38d1abaaaeb7547e9692/1750517739/dash_h264.mpd?t=1505700570",
+          "hls_h264": "https://video.akamai.steamstatic.com/store_trailers/367520/123471/b9044001968838dad1ff38d1abaaaeb7547e9692/1750517739/hls_264_master.m3u8?t=1505700570",
+          "highlight": false
+        },
+        {
+          "id": 256679401,
+          "name": "Release Trailer",
+          "thumbnail": "https://shared.akamai.steamstatic.com/store_item_assets/steam/apps/256679401/movie.293x165.jpg?t=1497589417",
+          "dash_av1": "https://video.akamai.steamstatic.com/store_trailers/367520/89922/b71b6a50e9aa2334fddca8fa2197cb26a3640832/1750517691/dash_av1.mpd?t=1497589417",
+          "dash_h264": "https://video.akamai.steamstatic.com/store_trailers/367520/89922/b71b6a50e9aa2334fddca8fa2197cb26a3640832/1750517691/dash_h264.mpd?t=1497589417",
+          "hls_h264": "https://video.akamai.steamstatic.com/store_trailers/367520/89922/b71b6a50e9aa2334fddca8fa2197cb26a3640832/1750517691/hls_264_master.m3u8?t=1497589417",
+          "highlight": true
+        }
+      ]
+    }
+  }
+}

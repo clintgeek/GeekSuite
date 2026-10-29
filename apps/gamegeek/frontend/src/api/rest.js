@@ -61,6 +61,10 @@ export const searchMetadata = (q, { limit = 12, signal } = {}) =>
 
 export const getSteamCandidate = (appId) => request(`/metadata/steam/${encodeURIComponent(appId)}`);
 
+/** Store links, screenshots and trailers for the detail page (DOCS/METADATA_ENRICHMENT.md §Media and links). */
+export const getGameMedia = (gameId, { signal } = {}) =>
+  request(`/games/${encodeURIComponent(gameId)}/media`, { signal });
+
 export function uploadCover(gameId, file) {
   const form = new FormData();
   form.append('cover', file);

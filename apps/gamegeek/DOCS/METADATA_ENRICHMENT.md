@@ -155,6 +155,69 @@ matched as 'X'" or "No match yet".
   - "Refresh metadata".
 - **Library:** covers simply appear as they land. No per-card spinners.
 
+## Media and links
+
+*Added 2026-10-29.* The detail page shows a game's screenshots and trailers and links out
+to its store and database pages. Nothing here writes to the game.
+
+**Endpoint (gamegeek backend, auth and household scoped):** `GET /api/games/:id/media` →
+
+```js
+{ links:       [{ kind: 'steam'|'igdb'|'rawg', label, url }],
+  screenshots: [{ thumb, full, source: 'steam'|'igdb' }],
+  videos:      [{ kind: 'steam', title, thumb, hls, mp4, url }      // url = store page
+              | { kind: 'youtube', title, youtubeId, thumb, url }],
+  source, fetchedAt, partial, errors: ['steam'|'igdb'|'rawg'] }
+```
+
+- **Sources:**
+  - Steam appdetails (keyless) when there's a `steamAppId`;
+  - IGDB (`fields url, screenshots.image_id, artworks.image_id, videos.*`) when there's an IGDB id and keys;
+  - RAWG `/games/{id}` when there's a RAWG id and a key, used only for the `slug`, since the public page is `rawg.io/games/<slug>`.
+  - IGDB's web URL is a slug too, and comes from the API's `url`.
+- **Order:** Steam screenshots win; IGDB fills only when Steam has none (screenshots, then
+  artworks). Trailers follow the same rule on their own.
+- **Steam trailers are HLS/DASH only** (checked live 2026-10-29; the old `mp4`/`webm` fields are gone, but
+  are still read if present). The viewer plays HLS in a plain `<video>` where the browser can
+  (Safari, Chrome on Android); elsewhere it shows the poster and "Watch on Steam". No hls.js.
+- **IGDB trailers are YouTube ids.** They open in YouTube; there's no iframe embed.
+- **Timeouts and partial results:** the providers run in parallel, each under a 6 s deadline. A
+  slow or failing one leaves `partial: true` and its name in `errors`, and the answer is still a 200.
+  Steam calls go through the enrichment worker's shared Steam pacer, with no retry; a 429 pauses
+  that pacer for 60 s.
+- **Cache:** the Mongo collection `gamemediacache`, keyed by the provider ids
+  (`steam:<id>|igdb:<id>|rawg:<id>`), not by game. A full answer lasts 7 days; an answer
+  with any failure lasts 15 minutes. A TTL index clears expired entries. Concurrent opens of
+  the same game share one fetch. Changing a game's ids (Find metadata, unlink) changes the key, so the
+  next open fetches fresh.
+- **URLs are allow-listed in the mapper:** https only, on `*.steamstatic.com` /
+  `steamcdn-a.akamaihd.net`, `images.igdb.com`, `i.ytimg.com`/`youtube.com`, `igdb.com`, `rawg.io`.
+- **Images are hotlinked, not proxied.** The app has no Content-Security-Policy (not in
+  `index.html`, the backend, or the nginx vhost), so the browser loads them directly. The
+  service worker sends those hosts **NetworkOnly** (`gamegeek-media-bypass`): there are hundreds of
+  them, they're opaque cross-origin responses (Chrome pads each one in the quota), and the HTTP
+  cache covers a reopen. **If a CSP is ever added**, it needs `img-src` for those hosts and
+  `media-src` for `video.*.steamstatic.com`.
+
+**UI, on the detail page.** The Media section sits full width, right under the action bar,
+so on a phone it's the first thing you scroll to.
+
+- **The strip** swipes sideways. The lead trailer comes first, with a lime play badge, then the
+  screenshots, then any other trailers.
+- **A tap** opens the full-screen viewer:
+  - it shows "3 of 12";
+  - swipe, the arrow keys or the arrow buttons move between items;
+  - the close button, Escape or Android back (`hooks/useBackToClose.js`) close it.
+- **Links** sit at the bottom of the same section: Steam store, GOG, IGDB, RAWG, "Watch a
+  trailer" (a YouTube search), and "Search on Steam" for a game with no Steam id.
+  - They're built on the client from the game's ids, so they never wait on the fetch.
+  - IGDB shows a title search until the real page URL arrives.
+  - RAWG appears once its slug does.
+  - They live here rather than in ⋯ More so that they're one scroll away on a phone, not two
+    taps and a sheet.
+- **Loading** shows skeleton tiles. **No media** turns the section into "Links" only. A
+  **failure** shows one quiet line, "Couldn't load screenshots.", and keeps the links.
+
 ## Keys
 
 - **IGDB:** register an app at dev.twitch.tv/console → Client ID + Client Secret.

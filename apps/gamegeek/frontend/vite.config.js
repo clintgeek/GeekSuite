@@ -91,6 +91,18 @@ export default defineConfig({
             options: { cacheName: 'api-bypass' },
           },
           {
+            // Screenshots and trailer posters hotlinked from the providers
+            // (DOCS/METADATA_ENRICHMENT.md §Media and links). Never cached by
+            // the SW: there are hundreds per library, they're cross-origin
+            // (opaque — Chrome pads each one to megabytes of quota), and the
+            // browser's own HTTP cache already handles a reopen. Must sit
+            // BEFORE the catch-all below, which would otherwise claim them.
+            urlPattern: ({ url }) =>
+              /(^|\.)steamstatic\.com$|^steamcdn-a\.akamaihd\.net$|^images\.igdb\.com$|^i\.ytimg\.com$/.test(url.hostname),
+            handler: 'NetworkOnly',
+            options: { cacheName: 'gamegeek-media-bypass' },
+          },
+          {
             // Anything the precache missed (fonts outside globPatterns, a
             // cross-origin script). Guarded: PWA_STANDARD §1a rule 3.
             urlPattern: ({ request }) => ['style', 'script', 'font', 'image'].includes(request.destination),

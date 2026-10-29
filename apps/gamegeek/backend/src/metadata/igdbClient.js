@@ -7,6 +7,7 @@
  */
 import { createRateLimiter } from '../lib/rateLimiter.js';
 import { IGDB_GAME_FIELDS, IGDB_DETAIL_FIELDS, IGDB_TAG_FIELDS, IGDB_EXTERNAL_GAME_FIELDS } from './igdb.js';
+import { IGDB_MEDIA_FIELDS } from './media.js';
 
 const TWITCH_TOKEN_URL = 'https://id.twitch.tv/oauth2/token';
 const IGDB_BASE_URL = 'https://api.igdb.com/v4';
@@ -118,6 +119,16 @@ export async function fetchIgdbGame(id, options = {}) {
 }
 
 /**
+ * The detail page's media for one game (page URL, screenshots, artworks,
+ * YouTube videos), or null. One request, behind the shared 4/s limiter.
+ */
+export async function fetchIgdbMedia(id, options = {}) {
+  assertIgdbId(id);
+  const rows = await igdbQuery('games', `fields ${IGDB_MEDIA_FIELDS}; where id = ${id}; limit 1;`, options);
+  return Array.isArray(rows) && rows.length ? rows[0] : null;
+}
+
+/**
  * `game_time_to_beats` rows for one game (hastily / normally / completely,
  * in seconds). Asked for with `fields *` so a renamed column can't turn the
  * whole call into a 400 — the normalizer reads what it recognizes.
@@ -165,6 +176,7 @@ export default {
   resetIgdbTokenCache,
   searchIgdbGames,
   fetchIgdbGame,
+  fetchIgdbMedia,
   fetchIgdbTimeToBeat,
   fetchIgdbTagsById,
   fetchIgdbExternalGamesBySteam,

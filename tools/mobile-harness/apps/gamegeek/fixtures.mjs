@@ -450,6 +450,38 @@ function coverSvg(title, color) {
     `<foreignObject x="44" y="560" width="512" height="220"><div xmlns="http://www.w3.org/1999/xhtml" style="font:800 52px/1.02 Impact,'Arial Black',sans-serif;color:#fff;text-transform:uppercase;letter-spacing:-.01em">${t}</div></foreignObject></svg>`;
 }
 
+// Store links + media (apps/gamegeek/DOCS/METADATA_ENRICHMENT.md §Media and
+// links). Never the real providers: Hades gets a Steam trailer and six
+// same-origin SVG "screenshots"; every other game answers empty (links only);
+// Celeste's request never answers, so its detail shows the loading skeleton.
+const SHOT_COLOURS = ['#6b1d1d', '#3b1f4a', '#1d3b4f', '#5a3a12', '#1f4a2c', '#4a1d3b'];
+export const MEDIA_LOADING_GAME = 'g4';
+export const GAME_MEDIA = {
+  g1: {
+    links: [
+      { kind: 'steam', label: 'Steam store', url: 'https://store.steampowered.com/app/1145360/' },
+      { kind: 'igdb', label: 'IGDB', url: 'https://www.igdb.com/games/hades--1' },
+    ],
+    screenshots: SHOT_COLOURS.map((_, i) => ({ thumb: `/harness-shot/hades-${i + 1}.svg`, full: `/harness-shot/hades-${i + 1}.svg`, source: 'steam' })),
+    videos: [
+      { kind: 'steam', title: 'Launch Trailer', thumb: '/harness-shot/hades-trailer.svg', hls: null, mp4: null, url: 'https://store.steampowered.com/app/1145360/' },
+    ],
+    source: 'steam',
+    fetchedAt: T('2026-10-29'),
+    partial: false,
+    errors: [],
+  },
+};
+const EMPTY_MEDIA = { links: [], screenshots: [], videos: [], source: null, fetchedAt: null, partial: false, errors: [] };
+
+function shotSvg(label, color) {
+  return `<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="720" viewBox="0 0 1280 720">` +
+    `<rect width="1280" height="720" fill="${color}"/>` +
+    `<path d="M0 560 L320 380 L560 520 L860 300 L1280 540 L1280 720 L0 720 Z" fill="#000" fill-opacity=".35"/>` +
+    `<circle cx="980" cy="180" r="90" fill="#FFE03D" fill-opacity=".55"/>` +
+    `<text x="60" y="110" font-family="Impact,'Arial Black',sans-serif" font-size="64" fill="#fff" fill-opacity=".85">${label}</text></svg>`;
+}
+
 export async function routes(ctx) {
   await sessionRoutes(ctx);
   await ctx.route('**/api/metadata/providers', (r) => json(r, { igdb: false, steamStore: true }));
@@ -462,6 +494,16 @@ export async function routes(ctx) {
     const id = /\/api\/games\/([^/]+)\/cover/.exec(r.request().url())[1];
     const g = GAMES.find((x) => x.id === id) || GAMES[1];
     return svg(r, coverSvg(g.title, g.coverColor || '#333'));
+  });
+  await ctx.route(/\/harness-shot\/hades-([a-z0-9]+)\.svg/, (r) => {
+    const n = /\/harness-shot\/hades-([a-z0-9]+)\.svg/.exec(r.request().url())[1];
+    if (n === 'trailer') return svg(r, shotSvg('HADES — LAUNCH TRAILER', '#2a0f12'));
+    return svg(r, shotSvg(`HADES · SHOT ${n}`, SHOT_COLOURS[(Number(n) - 1) % SHOT_COLOURS.length]));
+  });
+  await ctx.route(/\/api\/games\/([^/]+)\/media/, (r) => {
+    const id = /\/api\/games\/([^/]+)\/media/.exec(r.request().url())[1];
+    if (id === MEDIA_LOADING_GAME) return undefined; // never answers: the loading state
+    return json(r, GAME_MEDIA[id] ?? EMPTY_MEDIA);
   });
   await ctx.route('**/api/metadata/enrich/status', (r) => json(r, METADATA_STATUS));
   await ctx.route('**/api/metadata/enrich/run', (r) => json(r, { started: true }, 202));

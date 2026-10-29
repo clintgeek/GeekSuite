@@ -3,7 +3,7 @@
 // every scene navigates for itself.
 
 import { json, graphqlRoute } from '../../lib/net.mjs';
-import { OPS, GAME_WHAT_NEXT_RESULT } from './fixtures.mjs';
+import { OPS, GAME_WHAT_NEXT_RESULT, MEDIA_LOADING_GAME } from './fixtures.mjs';
 
 // The play-assistant strip is opt-in (`appPreferences.gamegeek.playAssistant`),
 // so the '24-what-next' scene stubs bootstrap the way bookgeek's
@@ -329,6 +329,72 @@ export const scenes = [
       await card.hover({ position: { x: 40, y: 60 } });
       await h.settle(400);
     },
+  },
+  {
+    // Store links + media (DOCS/METADATA_ENRICHMENT.md §Media and links):
+    // Hades has a Steam trailer and six screenshots — the swipe strip, the
+    // lime trailer badge, and the links row (Steam store, IGDB, Watch a
+    // trailer) under it.
+    name: '25-detail-media',
+    goto: '/game/g1',
+    wait: 1600,
+    async setup(page, h) {
+      const strip = page.getByTestId('media-strip');
+      await strip.waitFor({ timeout: 3000 }).catch(() => {});
+      if (!(await strip.count())) throw new Error('the media strip did not render for a game with media');
+      await page.locator('#media-heading').evaluate((el) => el.closest('section').scrollIntoView({ block: 'center' }));
+      await h.settle(500);
+    },
+    teardown: (page, h) => h.esc(),
+  },
+  {
+    // A screenshot tile tapped: the full-screen viewer, "2 of 7", close and
+    // the arrows. Escape (Android back's stand-in here) closes it.
+    name: '26-media-viewer',
+    goto: '/game/g1',
+    wait: 1600,
+    async setup(page, h) {
+      const tile = page.getByRole('button', { name: 'Hades screenshot 1' });
+      await tile.waitFor({ timeout: 3000 }).catch(() => {});
+      if (!(await tile.count())) throw new Error('no screenshot tile to open');
+      await tile.click();
+      await page.getByTestId('media-viewer').waitFor({ timeout: 3000 });
+      await h.settle(600);
+    },
+    teardown: async (page, h) => {
+      await h.esc();
+      await h.esc();
+    },
+  },
+  {
+    // A game no provider knows (no store ids): no Media section, just the
+    // "Links" one — Watch a trailer and Search on Steam.
+    name: '27-detail-links-only',
+    goto: '/game/g5',
+    wait: 1600,
+    async setup(page, h) {
+      const links = page.getByTestId('game-links');
+      await links.waitFor({ timeout: 3000 }).catch(() => {});
+      if (!(await links.count())) throw new Error('the links row did not render for a game with no media');
+      if (await page.getByTestId('media-strip').count()) throw new Error('a game with no media drew a strip');
+      await page.locator('#media-heading').evaluate((el) => el.closest('section').scrollIntoView({ block: 'center' }));
+      await h.settle(400);
+    },
+    teardown: (page, h) => h.esc(),
+  },
+  {
+    // The media request still out: skeleton tiles, links already there. The
+    // fixture never answers for this game, so this scene navigates itself
+    // (a `goto` waits for network idle, which would never come).
+    name: '28-media-loading',
+    async setup(page, h) {
+      await page.goto(`${h.base}/game/${MEDIA_LOADING_GAME}`, { waitUntil: 'domcontentloaded' });
+      const skeleton = page.getByTestId('media-loading');
+      await skeleton.waitFor({ timeout: 5000 });
+      await page.locator('#media-heading').evaluate((el) => el.closest('section').scrollIntoView({ block: 'center' }));
+      await h.settle(600);
+    },
+    teardown: (page, h) => h.esc(),
   },
   {
     // The "What should I play?" strip (DOCS/WHAT_NEXT_SPEC.md): opt-in pref

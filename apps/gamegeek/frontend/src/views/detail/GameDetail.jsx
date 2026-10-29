@@ -41,6 +41,8 @@ import ShelfSheet from './ShelfSheet';
 import StatusSection from './StatusSection';
 import UnlinkMetadataDialog from './UnlinkMetadataDialog';
 import { useDetailActions } from './useDetailActions';
+import MediaSection from './MediaSection';
+import { useGameMedia } from '../../hooks/useGameMedia';
 
 
 export default function GameDetail() {
@@ -66,6 +68,7 @@ export default function GameDetail() {
   const setShelf = useSetShelf(customShelves);
   const resolveInstallFlag = useResolveInstallFlag();
   const actions = useDetailActions(id);
+  const media = useGameMedia(id);
 
   const close = () => navigate(libraryPath(location.search));
   const closePanel = () => setPanel(null);
@@ -131,6 +134,9 @@ export default function GameDetail() {
               <InstallDecisionBanner game={game} onResolve={(action) => resolveInstallFlag(game, action)} />
             </Box>
           ) : null}
+          <Box sx={{ gridColumn: '1 / -1', minWidth: 0 }}>
+            <MediaSection game={game} status={media.status} media={media.media} />
+          </Box>
           <Box sx={{ display: 'grid', gap: 1.5, minWidth: 0 }}>
             <StatusSection game={game} customShelves={customShelves} onChangeShelf={() => setPanel('shelf')} />
             <RatingSection ref={ratingRef} game={game} onRate={rate} />

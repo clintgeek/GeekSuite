@@ -1,0 +1,38 @@
+[
+  {
+    "id": 14593,
+    "url": "https://www.igdb.com/games/hollow-knight",
+    "screenshots": [
+      {
+        "id": 19843,
+        "image_id": "wtzarvdnr6mgg3irdnz2"
+      },
+      {
+        "id": 19844,
+        "image_id": "rbu4dazhkdr5mkkd0qyt"
+      }
+    ],
+    "artworks": [
+      {
+        "id": 5114,
+        "image_id": "ar4ck"
+      },
+      {
+        "id": 5115,
+        "image_id": "wtzarvdnr6mgg3irdnz2"
+      }
+    ],
+    "videos": [
+      {
+        "id": 10862,
+        "name": "Trailer",
+        "video_id": "UAO2urG23S4"
+      },
+      {
+        "id": 10863,
+        "name": "Bad id",
+        "video_id": "javascript:alert(1)"
+      }
+    ]
+  }
+]
