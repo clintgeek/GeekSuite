@@ -196,26 +196,31 @@ describe('notes(tag:, prefix:) narrows on both, instead of dropping one', () => 
 // ───────────────────────────────────────────────────────────────────────────
 describe('saveDailyOrder survives a day containing a recurring task', () => {
   // The rendered day contains synthetic ids (`virtual_<masterId>_<epochMs>`)
-  // and the drag handlers post the list verbatim. `orderedTaskIds` is
-  // `[ObjectId]`, and ONE bad element fails the whole array cast — so the
-  // mutation 500'd and the ordinary tasks' order was lost with it.
-  test('virtual occurrence ids are dropped, real ids are kept in order', async () => {
+  // and the drag handlers post the list verbatim. `orderedTaskIds` was
+  // `[ObjectId]`, and ONE bad element failed the whole array cast — so the
+  // mutation 500'd and the ordinary tasks' order was lost with it. The first
+  // fix dropped the virtual ids; since 2026-10-29 the field is `[String]` and
+  // they are KEPT, so a dragged repeating task stays where it was put
+  // (todogeekDailyOrder.test.js has the rest).
+  test('virtual occurrence ids are kept in place among the real ids', async () => {
     const realA = String(new mongoose.Types.ObjectId());
     const realB = String(new mongoose.Types.ObjectId());
+    const virtual = `virtual_${new mongoose.Types.ObjectId()}_1757030400000`;
     const doc = await taskService.saveDailyOrder({
       userId: ALICE,
       dateKey: '2026-09-05',
-      orderedTaskIds: [realA, `virtual_${new mongoose.Types.ObjectId()}_1757030400000`, realB],
+      orderedTaskIds: [realA, virtual, realB],
     });
-    expect(doc.orderedTaskIds.map(String)).toEqual([realA, realB]);
+    expect(doc.orderedTaskIds.map(String)).toEqual([realA, virtual, realB]);
   });
 
-  test('an all-virtual day saves an empty order rather than throwing', async () => {
+  test('an all-virtual day saves its order rather than throwing', async () => {
+    const virtual = `virtual_${new mongoose.Types.ObjectId()}_1757116800000`;
     const doc = await taskService.saveDailyOrder({
       userId: ALICE,
       dateKey: '2026-09-06',
-      orderedTaskIds: [`virtual_${new mongoose.Types.ObjectId()}_1757116800000`],
+      orderedTaskIds: [virtual],
     });
-    expect(doc.orderedTaskIds).toEqual([]);
+    expect(doc.orderedTaskIds.map(String)).toEqual([virtual]);
   });
 });

@@ -5,6 +5,7 @@ import mongoose from 'mongoose';
 import { normalizeTag } from '@geeksuite/tags';
 import { spellingsOf } from '../../shared/tagSpellings.js';
 import rrulePkg from 'rrule';
+import { isOrderTaskId, MAX_ORDERED_TASK_IDS } from '../validation.js';
 
 const { rrulestr, RRule } = rrulePkg;
 
@@ -599,9 +600,13 @@ class TaskService {
       const dateKey = this.formatDateKey(startDate);
       const orderDoc = await TaskOrder.findOne({ userId, dateKey }).lean();
       if (orderDoc && Array.isArray(orderDoc.orderedTaskIds) && orderDoc.orderedTaskIds.length > 0) {
+        // Stored ids are strings (or, in rows older than 2026-10-29,
+        // ObjectIds) — compared as strings either way.
         const idToTask = new Map(sorted.map(t => [String(t._id), t]));
-        const inOrder = orderDoc.orderedTaskIds.map(id => String(id)).filter(id => idToTask.has(id)).map(id => idToTask.get(id));
-        const remaining = sorted.filter(t => !orderDoc.orderedTaskIds.map(x => String(x)).includes(String(t._id)));
+        const stored = orderDoc.orderedTaskIds.map(id => String(id));
+        const storedSet = new Set(stored);
+        const inOrder = stored.filter(id => idToTask.has(id)).map(id => idToTask.get(id));
+        const remaining = sorted.filter(t => !storedSet.has(String(t._id)));
         return [...inOrder, ...remaining];
       }
     }
@@ -681,29 +686,44 @@ class TaskService {
   }
 
   /**
-   * Persist a day's manual task order.
+   * Persist a day's manual task order — one row per (user, dateKey), upserted,
+   * so saving the same list twice is a no-op.
    *
    * The list the client sends is the list it RENDERED, and a rendered day
-   * contains virtual occurrences of recurring masters — ids of the form
-   * `virtual_<masterId>_<epochMs>` (see `expandOccurrences`). `TaskOrder`
-   * declares `orderedTaskIds` as `[ObjectId]`, and one bad element fails the
-   * WHOLE array cast, so dragging any row on a day that held a recurring task
-   * threw `Cast to [ObjectId] failed` — and the ordinary tasks' order was lost
-   * along with it. They are dropped here rather than rejected: the read side
-   * matches stored ids against the day's real tasks and could never match a
-   * virtual one anyway, so keeping them would buy nothing even if the cast
-   * allowed it.
+   * contains virtual occurrences of repeating tasks — `virtual_<masterId>_<epochMs>`
+   * (see `expandOccurrences`). Until 2026-10-29 `orderedTaskIds` was
+   * `[ObjectId]` and those ids were DROPPED here, so a dragged repeating task
+   * snapped back on the next read. The field is `[String]` now and they are
+   * kept. Anything that is neither shape is rejected (BAD_USER_INPUT), as is a
+   * list longer than MAX_ORDERED_TASK_IDS; the resolver checks the same thing
+   * first (`saveDailyTaskOrderArgsSchema`), this is the service's own guard.
+   * Duplicates keep their first place.
    */
   async saveDailyOrder({ userId, dateKey, orderedTaskIds }) {
     this.requireUser(userId);
-    const persistable = (Array.isArray(orderedTaskIds) ? orderedTaskIds : [])
-      .map((id) => String(id))
-      .filter((id) => mongoose.isValidObjectId(id));
+    if (typeof dateKey !== 'string' || !dateKey) throw badRequest('dateKey is required');
+    const ids = Array.isArray(orderedTaskIds) ? orderedTaskIds.map((id) => String(id)) : [];
+    if (ids.length > MAX_ORDERED_TASK_IDS) throw badRequest(`at most ${MAX_ORDERED_TASK_IDS} task ids`);
+    const bad = ids.find((id) => !isOrderTaskId(id));
+    if (bad !== undefined) throw badRequest('orderedTaskIds holds something that is not a task id');
+    const persistable = [...new Set(ids)];
     return TaskOrder.findOneAndUpdate(
       { userId, dateKey },
       { orderedTaskIds: persistable, updatedAt: new Date() },
       { new: true, upsert: true }
     );
+  }
+
+  /**
+   * The caller's saved order for one day, as id strings — `[]` when there is
+   * none. Scoped by `userId` like every read here: another user's row for the
+   * same day is never seen. Rows written before the ids became strings hold
+   * ObjectIds; `String()` reads both the same.
+   */
+  async getDailyOrder({ userId, dateKey }) {
+    this.requireUser(userId);
+    const doc = await TaskOrder.findOne({ userId, dateKey }).lean();
+    return Array.isArray(doc?.orderedTaskIds) ? doc.orderedTaskIds.map((id) => String(id)) : [];
   }
 
   /**

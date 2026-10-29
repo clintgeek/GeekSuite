@@ -309,6 +309,12 @@ export const typeDefs = gql`
     monthlyTasks(startDate: String, endDate: String, tzOffsetMinutes: Int): [Task!]!
     allTasks: [Task!]!
     """
+    The caller's manual task order for one LOCAL day (\`yyyy-MM-dd\`), as
+    saved by saveDailyTaskOrder — real task ids and \`virtual_<masterId>_<epochMs>\`
+    occurrence ids, in order. Empty when nothing was saved for that day.
+    """
+    dailyTaskOrder(dateKey: String!): [ID!]!
+    """
     Parked tasks — status 'blocked' — newest-blocked first. Blocked tasks keep
     their dueDate but are filtered out of dailyTasks/weeklyTasks/monthlyTasks,
     so this query is the only place they surface as a list.

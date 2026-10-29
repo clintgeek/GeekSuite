@@ -213,3 +213,40 @@ export const reviewDraftArgsSchema = z
     ),
   })
   .strict();
+
+/**
+ * The per-day manual order (`saveDailyTaskOrder` / `dailyTaskOrder`) —
+ * TodoGeek's Today drag-to-reorder, 2026-10-29.
+ *
+ * The ids here are NOT owned-resource lookups — nothing is fetched by them;
+ * the list is stored as sent and matched against the caller's own tasks when
+ * read — so the "ids are deliberately NOT format-validated" rule above, which
+ * exists to keep "malformed" and "not yours" indistinguishable, does not apply.
+ * Their SHAPE is checked instead, so the stored list can only ever hold the
+ * two kinds of id a rendered day contains: a real task's ObjectId, or a
+ * repeating task's virtual occurrence, `virtual_<masterId>_<epochMs>`.
+ *
+ * `dateKey` is the client's LOCAL calendar day, `yyyy-MM-dd`, kept as a
+ * string (the key of the stored row, never a Date).
+ */
+export const MAX_ORDERED_TASK_IDS = 500;
+const OBJECT_ID = /^[0-9a-f]{24}$/i;
+const VIRTUAL_ID = /^virtual_[0-9a-f]{24}_\d{1,16}$/i;
+export const isOrderTaskId = (id) => typeof id === 'string' && (OBJECT_ID.test(id) || VIRTUAL_ID.test(id));
+
+export const orderTaskIdString = z
+  .string()
+  .refine(isOrderTaskId, { message: 'must be a task id or a virtual_<id>_<epochMs> occurrence id' });
+
+export const dateKeyString = z
+  .string()
+  .regex(/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$/, 'must be a calendar day, yyyy-MM-dd');
+
+export const saveDailyTaskOrderArgsSchema = z
+  .object({
+    dateKey: dateKeyString,
+    orderedTaskIds: z.array(orderTaskIdString).max(MAX_ORDERED_TASK_IDS),
+  })
+  .strict();
+
+export const dailyTaskOrderArgsSchema = z.object({ dateKey: dateKeyString }).strict();

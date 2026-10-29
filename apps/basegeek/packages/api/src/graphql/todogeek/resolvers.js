@@ -22,6 +22,8 @@ import {
   updateCollectionArgsSchema,
   createJournalFromTemplateArgsSchema,
   reviewDraftArgsSchema,
+  saveDailyTaskOrderArgsSchema,
+  dailyTaskOrderArgsSchema,
 } from './validation.js';
 
 const loadCollectionCounts = (collection, userId, context) =>
@@ -51,6 +53,8 @@ const validateCreateCollection = validateInput(createCollectionArgsSchema);
 const validateUpdateCollection = validateInput(updateCollectionArgsSchema);
 const validateCreateJournalFromTemplate = validateInput(createJournalFromTemplateArgsSchema);
 const validateReviewDraft = validateInput(reviewDraftArgsSchema);
+const validateSaveDailyTaskOrder = validateInput(saveDailyTaskOrderArgsSchema);
+const validateDailyTaskOrder = validateInput(dailyTaskOrderArgsSchema);
 
 /**
  * Journal entries and templates take `tags` straight from GraphQL (no zod
@@ -98,6 +102,14 @@ export const resolvers = {
       const userId = context.user?.id;
       if (!userId) return null;
       return taskService.getTaskById(id, userId);
+    },
+    // The caller's manual order for one local day (Today's drag-to-reorder).
+    // Signed out reads as "no order", like dailyTasks.
+    dailyTaskOrder: async (_, rawArgs, context) => {
+      const userId = context.user?.id;
+      if (!userId) return [];
+      const { dateKey } = validateDailyTaskOrder(rawArgs);
+      return taskService.getDailyOrder({ userId, dateKey });
     },
     dailyTasks: async (_, { date, tzOffsetMinutes = null }, context) => {
       const userId = context.user?.id;
@@ -334,10 +346,16 @@ export const resolvers = {
       if (!task) throw new Error('Task not found');
       return task;
     },
-    saveDailyTaskOrder: async (_, { dateKey, orderedTaskIds }, context) => {
+    saveDailyTaskOrder: async (_, rawArgs, context) => {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
-      const doc = await taskService.saveDailyOrder({ userId, dateKey, orderedTaskIds });
+      const { dateKey, orderedTaskIds } = validateSaveDailyTaskOrder(rawArgs);
+      let doc;
+      try {
+        doc = await taskService.saveDailyOrder({ userId, dateKey, orderedTaskIds });
+      } catch (err) {
+        return rethrowUserError(err);
+      }
       return { success: true, updatedAt: doc.updatedAt.toISOString() };
     },
     createCollection: async (_, rawArgs, context) => {
