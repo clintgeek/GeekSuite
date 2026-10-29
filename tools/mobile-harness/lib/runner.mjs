@@ -15,8 +15,6 @@ export async function loadApp(app) {
   return { fixtures, scenes: scenes.scenes || [], waivers: scenes.waivers || [] };
 }
 
-const settle = (page) => async (ms = 600) => page.waitForTimeout(ms);
-
 export async function runApp({
   app,
   base,
@@ -37,9 +35,21 @@ export async function runApp({
       const spec = viewportSpec(key);
       const ctx = await newContext(browser, key, { base });
       await fixtures.routes(ctx, { base, scheme: spec.scheme, viewport: spec.label });
-      const page = await ctx.newPage();
       const pageErrors = [];
-      page.on('pageerror', (e) => pageErrors.push(String(e.message || e)));
+      // HARNESS_CPU_THROTTLE=4 slows this machine's Chromium down to roughly
+      // a CI runner's speed, to reproduce timing-only failures locally. Off
+      // by default; Chromium only (CDP).
+      const throttle = Number(process.env.HARNESS_CPU_THROTTLE || 0);
+      const openPage = async () => {
+        const p = await ctx.newPage();
+        if (throttle > 1) {
+          const cdp = await ctx.newCDPSession(p);
+          await cdp.send('Emulation.setCPUThrottlingRate', { rate: throttle });
+        }
+        p.on('pageerror', (e) => pageErrors.push(String(e.message || e)));
+        return p;
+      };
+      let page = await openPage();
 
       const h = {
         page,
@@ -47,7 +57,7 @@ export async function runApp({
         viewport: spec.label,
         scheme: spec.scheme,
         isPhone: spec.label === 'phone',
-        settle: settle(page),
+        settle: (ms = 600) => page.waitForTimeout(ms),
         async esc(ms = 500) {
           await page.keyboard.press('Escape');
           await page.waitForTimeout(ms);
@@ -59,6 +69,17 @@ export async function runApp({
         if (scene.viewports && !scene.viewports.includes(spec.label)) continue;
         const name = scene.name;
         try {
+          // `freshPage: true` starts the scene in a new tab. One page serves a
+          // whole viewport, and every page.click() before this scene left
+          // Chromium's mouse cursor parked where it clicked, across
+          // navigations. A phone has no cursor; a parked one is moved back
+          // over its old spot right after a touch tap, so the tap's own
+          // mouseleave hides a tap-opened tooltip (53d/53e, 2026-10-29).
+          if (scene.freshPage) {
+            await page.close();
+            page = await openPage();
+            h.page = page;
+          }
           if (scene.goto) {
             await page.goto(base + scene.goto, { waitUntil: 'networkidle' });
             await page.waitForTimeout(scene.wait ?? 1200);

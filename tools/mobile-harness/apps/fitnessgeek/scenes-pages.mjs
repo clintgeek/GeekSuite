@@ -494,6 +494,12 @@ async function tapChartTooltip(page, h, box) {
     if (!b) throw new Error('chart has no box after scrolling');
   }
   const tipLoc = page.locator('[data-testid="chart-tooltip"]');
+  // These scenes run with `freshPage` (runner.mjs): a mouse cursor left
+  // parked by an earlier scene's page.click() — 53b/53c click the Log weight
+  // button — is moved back over its spot right after a tap, and that
+  // mouseleave makes nivo hide the tooltip the tap just opened (CI
+  // 2026-10-29: "missing after a plain tap", "tooltip has no box"). A phone
+  // has no cursor, so the scene starts on a page that never had one.
   // A plain tap must be enough. A touch pointer "leaves" as the finger
   // lifts, and that used to disarm the tooltip the tap had just armed, so it
   // took a tap plus a mouse move (fixed in chartTips.js, d-fixes). Each try is
@@ -560,7 +566,7 @@ const weightScenes = [
     await scrollToSection(page, h, 'text=Weight trend', 88);
     await need(page.locator('[data-testid="weight-y-unit"]'), 'the lb caption');
     await tapChartTooltip(page, h, chartBox(page, 'weight-y-unit'));
-  }, { path: '/weight', wait: 1800, viewports: ['phone'] }),
+  }, { path: '/weight', wait: 1800, viewports: ['phone'], freshPage: true }),
 
   // The body-composition trend, the same tap.
   pageScene('53e-bodycomp-tooltip', () => fullWeight(), async (page, h) => {
@@ -568,7 +574,7 @@ const weightScenes = [
     await scrollToSection(page, h, 'text=Line: 7-day average · dots: each scan', 160);
     await need(page.locator('[data-testid="bodycomp-y-unit"]'), 'the lb caption');
     await tapChartTooltip(page, h, page.locator('svg[aria-label*="over time, in pounds"]').first());
-  }, { path: '/weight', wait: 1800, viewports: ['phone'] }),
+  }, { path: '/weight', wait: 1800, viewports: ['phone'], freshPage: true }),
 
   // A brand-new account's Weight page: no logs, no goal, and a way to start.
   pageScene('57a-weight-empty', () => newAccount('full'), async (page) => {

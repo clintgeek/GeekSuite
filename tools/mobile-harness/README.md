@@ -45,6 +45,10 @@ node tools/mobile-harness/ci.mjs --no-a11y
 
 # Unit coverage for the probe itself (no app build needed — static fixtures)
 node tools/mobile-harness/selftest.mjs
+
+# Slow Chromium down (CDP CPU throttling) to reproduce a CI-only timing
+# failure on a fast machine. Off by default; 4 is roughly a GitHub runner.
+HARNESS_CPU_THROTTLE=4 FG_SCENES='^5' node tools/mobile-harness/ci.mjs --app fitnessgeek
 ```
 
 Screenshots land in `out/<label>/<app>/<app>-<scene>-<scheme>[-desktop].png`,
@@ -152,6 +156,13 @@ The runner navigates to `base + goto` (`networkidle`), waits `wait` ms
 **Scenes are independent.** Nothing is carried between them, so a scene that
 needs a sheet open must open it itself. That costs a navigation and buys a
 harness that does not collapse when one interaction changes.
+
+One thing *is* carried: each viewport runs its scenes in one tab, and a
+`page.click()` leaves Chromium's mouse cursor parked where it clicked, across
+navigations. A phone has no cursor. A scene that proves something about a
+touch tap, where a stray mouse "leave" would undo it (the fitnessgeek chart
+tooltips, 53d/53e), sets `freshPage: true` and starts in a new tab that has
+never seen a mouse.
 
 Prefer a deep link over a click when the app offers one (`/aigeek?tab=keys`
 beats clicking a tab that only exists after a query resolves).
