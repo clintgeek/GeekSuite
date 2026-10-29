@@ -193,6 +193,8 @@ describe('phone: shown, with the mark', () => {
 const pen = {};
 vi.mock('../../context/PenContext', () => ({ usePen: () => pen }));
 vi.mock('../../hooks/usePinnedTags', () => ({ default: () => ({ pinned: [], toggle: vi.fn(), setPinned: vi.fn(), loaded: true }) }));
+// Today's saved manual order (hooks/useDailyOrder.js): none here — the normal rule.
+vi.mock('../../hooks/useDailyOrder', () => ({ default: () => ({ ids: [], loaded: true, save: vi.fn() }) }));
 
 const { default: TodayPage } = await import('../../pages/TodayPage');
 const { default: UpcomingPage } = await import('../../pages/UpcomingPage');
@@ -230,6 +232,10 @@ describe('every list hides them on a desktop', () => {
     expect(screen.getAllByRole('button', { name: HIDDEN_LABEL }).length).toBeGreaterThanOrEqual(3);
     // The add box's own placeholder is the only "Jane"-free text we expect; no task words.
     expect(container.textContent).not.toMatch(/Jane/);
+    // Nor in a name: the reorder grip says "Move Private task" (2026-10-29).
+    const named = [...container.querySelectorAll('[aria-label]')].map((el) => el.getAttribute('aria-label'));
+    expect(named.join(' | ')).not.toMatch(/Jane/);
+    expect(screen.getAllByRole('button', { name: 'Move Private task' }).length).toBeGreaterThanOrEqual(2);
   });
 
   it('Upcoming', () => {

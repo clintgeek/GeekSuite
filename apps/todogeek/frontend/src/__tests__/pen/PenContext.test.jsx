@@ -164,3 +164,17 @@ describe('dueDateOn', () => {
     expect([moved.getFullYear(), moved.getMonth(), moved.getDate(), moved.getHours(), moved.getMinutes()]).toEqual([2026, 9, 1, 14, 30]);
   });
 });
+
+describe('the day turns over on its own', () => {
+  it('a page left open past midnight moves `now` to the new day', async () => {
+    vi.useFakeTimers({ now: new Date(2026, 9, 29, 23, 59, 30), toFake: ['setTimeout', 'clearTimeout', 'Date'] });
+    const { ref } = mount();
+    await act(async () => {});
+    expect(ref.current.now.getDate()).toBe(29);
+    await act(async () => { vi.advanceTimersByTime(29 * 1000); });
+    expect(ref.current.now.getDate()).toBe(29);
+    await act(async () => { vi.advanceTimersByTime(3 * 1000); });
+    expect(ref.current.now.getDate()).toBe(30);
+    expect(ref.current.now.getMonth()).toBe(9);
+  });
+});

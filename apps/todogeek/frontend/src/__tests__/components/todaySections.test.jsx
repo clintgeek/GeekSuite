@@ -1,5 +1,6 @@
 /**
- * The three Today sections render at all.
+ * The old Today sections render at all. (TodaySection, the old drag list,
+ * was deleted 2026-10-29: the Pen Today's reorder replaced it.)
  *
  * Written because the suite went green while `pnpm build` failed: a
  * duplicated `onMoveToTomorrow` in `OverdueSection`'s parameter list is a
@@ -18,7 +19,6 @@ import { MemoryRouter } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
 import { createTodoTheme } from '../../theme/theme';
 import OverdueSection from '../../components/today/OverdueSection';
-import TodaySection from '../../components/today/TodaySection';
 import UpcomingSection from '../../components/today/UpcomingSection';
 
 vi.mock('@apollo/client', async () => {
@@ -59,7 +59,6 @@ const mount = (Section, props = {}) =>
 
 describe.each([
   ['OverdueSection', OverdueSection],
-  ['TodaySection', TodaySection],
   ['UpcomingSection', UpcomingSection],
 ])('%s', (name, Section) => {
   it('mounts and shows the task', () => {

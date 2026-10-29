@@ -71,3 +71,39 @@ describe('useRowKeys', () => {
     input.remove();
   });
 });
+
+describe('useRowKeys — Alt+↑ / Alt+↓ (Today’s manual order)', () => {
+  function setupMove(onMove) {
+    const spies = { onDone: vi.fn(), onTomorrow: vi.fn(), onPickDate: vi.fn(), onEdit: vi.fn(), ...(onMove ? { onMove } : {}) };
+    render(<Harness tasks={[A, B, C]} spies={spies} onFocus={() => {}} />);
+    return (k, extra = {}) => act(() => { fireEvent.keyDown(window, { key: k, ...extra }); });
+  }
+
+  it('moves the focused task by one', () => {
+    const onMove = vi.fn();
+    const key = setupMove(onMove);
+    key('j'); key('j');
+    key('ArrowDown', { altKey: true });
+    expect(onMove).toHaveBeenLastCalledWith(B, 1);
+    key('ArrowUp', { altKey: true });
+    expect(onMove).toHaveBeenLastCalledWith(B, -1);
+  });
+
+  it('does nothing with no task focused, with Shift too, or plain arrows', () => {
+    const onMove = vi.fn();
+    const key = setupMove(onMove);
+    key('ArrowDown', { altKey: true });
+    key('j');
+    key('ArrowDown', { altKey: true, shiftKey: true });
+    key('ArrowDown');
+    expect(onMove).not.toHaveBeenCalled();
+  });
+
+  it('Alt still does not fire the one-key actions', () => {
+    const onMove = vi.fn();
+    const spiesKey = setupMove(onMove);
+    spiesKey('j');
+    spiesKey('x', { altKey: true });
+    expect(onMove).not.toHaveBeenCalled();
+  });
+});

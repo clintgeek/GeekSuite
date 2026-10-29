@@ -26,6 +26,7 @@ const KEYS = [
   ['t', 'tomorrow'],
   ['d', 'pick a date'],
   ['e  Enter', 'edit'],
+  ['Alt ↑  Alt ↓', 'move it up, down (Today)'],
   ['Esc', 'hide private tasks again'],
   ['/', 'the add box, or search'],
   ['g t  g u  g d  g s', 'Today, Upcoming, Done, Search'],
@@ -35,6 +36,7 @@ const SWIPES = [
   ['swipe right', 'done'],
   ['swipe left', 'tomorrow'],
   ['long swipe left', 'pick a date'],
+  ['hold ⋮⋮ and drag', 'reorder (Today)'],
 ];
 
 function Table({ title, rows }) {

@@ -6,7 +6,7 @@ import {
   GET_TASKS, GET_ALL_TASKS, GET_DAILY_TASKS, GET_WEEKLY_TASKS, GET_MONTHLY_TASKS
 } from '../graphql/queries';
 import {
-  CREATE_TASK, UPDATE_TASK, DELETE_TASK, UPDATE_TASK_STATUS, MIGRATE_TASK_TO_FUTURE, SAVE_DAILY_TASK_ORDER,
+  CREATE_TASK, UPDATE_TASK, DELETE_TASK, UPDATE_TASK_STATUS, MIGRATE_TASK_TO_FUTURE,
   BLOCK_TASK, UNBLOCK_TASK, ADD_SUBTASK, REORDER_SUBTASKS
 } from '../graphql/mutations';
 // The cache rule these `update` functions implement is written down at the
@@ -964,17 +964,6 @@ const TaskProvider = ({ children }) => {
     }
   }, [apolloClient, handleApiError]);
 
-  const saveDailyOrder = useCallback(async (dateKey, orderedTaskIds) => {
-    try {
-      await apolloClient.mutate({
-        mutation: SAVE_DAILY_TASK_ORDER,
-        variables: { dateKey, orderedTaskIds }
-      });
-    } catch (error) {
-      handleApiError(error, 'Failed to save task order');
-    }
-  }, [apolloClient, handleApiError]);
-
   const value = useMemo(() => ({
     // State
     tasks,
@@ -1001,7 +990,6 @@ const TaskProvider = ({ children }) => {
     unblockTask,
     deleteTask,
     migrateTask,
-    saveDailyOrder,
 
     // Subtasks (removal is deleteTask — a step is an ordinary task)
     addSubtask,
@@ -1029,7 +1017,6 @@ const TaskProvider = ({ children }) => {
     unblockTask,
     deleteTask,
     migrateTask,
-    saveDailyOrder,
     addSubtask,
     reorderSubtasks,
     getTaskFromState,

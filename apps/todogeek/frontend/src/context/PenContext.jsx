@@ -94,6 +94,16 @@ export function PenProvider({ children }) {
     return () => document.removeEventListener('visibilitychange', onVisible);
   }, [signedIn, refresh]);
 
+  // Midnight: a page left open (a desktop tab, a PWA in the foreground) moves
+  // to the new day by itself — Today's sections, and the day its manual
+  // order is read and saved under (hooks/useDailyOrder.js). Re-armed from
+  // each new `now`, so it also corrects itself after a sleep.
+  useEffect(() => {
+    const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 1);
+    const timer = setTimeout(() => setNow(new Date()), Math.max(1000, next.getTime() - Date.now()));
+    return () => clearTimeout(timer);
+  }, [now]);
+
   // A pending delete is sent when its window closes, or now if we unmount.
   useEffect(() => () => {
     deleteTimers.current.forEach(({ timer, commit }) => { clearTimeout(timer); commit(); });

@@ -16,6 +16,8 @@ process.env.TZ = 'America/Chicago';
 const pen = {};
 vi.mock('../../context/PenContext', () => ({ usePen: () => pen }));
 vi.mock('../../hooks/usePinnedTags', () => ({ default: () => ({ pinned: ['work'], toggle: vi.fn(), setPinned: vi.fn(), loaded: true }) }));
+// Today's saved manual order (hooks/useDailyOrder.js): none here — the normal rule.
+vi.mock('../../hooks/useDailyOrder', () => ({ default: () => ({ ids: [], loaded: true, save: vi.fn() }) }));
 
 const { default: TodayPage } = await import('../../pages/TodayPage');
 const { default: UpcomingPage } = await import('../../pages/UpcomingPage');

@@ -9,6 +9,8 @@ import { useCallback, useEffect, useRef, useState } from 'react';
  *   t       move to tomorrow
  *   d       pick a date
  *   e       edit inline (Enter does the same)
+ *   Alt+↑ / Alt+↓   move the focused task up / down (only when the list
+ *                   passes `onMove(task, -1 | 1)` — Today's manual order)
  *   Escape  clear focus
  *
  * Focus is tracked by TASK ID, never by position (DOCS/TODOGEEK_REVIEW_2026-09
@@ -70,9 +72,17 @@ export default function useRowKeys({ tasks = [], enabled = true, getId, ...actio
   useEffect(() => {
     if (!enabled) return undefined;
     const handler = (e) => {
-      if (isTyping(e.target) || e.metaKey || e.ctrlKey || e.altKey) return;
+      if (isTyping(e.target) || e.metaKey || e.ctrlKey) return;
       const list = tasksRef.current;
       const idx = focusedRef.current === null ? -1 : list.findIndex((t) => idFor(t) === focusedRef.current);
+
+      if (e.altKey) {
+        const delta = e.key === 'ArrowUp' ? -1 : e.key === 'ArrowDown' ? 1 : 0;
+        if (!delta || idx < 0 || e.shiftKey || !actionsRef.current.onMove) return;
+        e.preventDefault();
+        actionsRef.current.onMove(list[idx], delta);
+        return;
+      }
 
       if (e.key === 'g') { lastGRef.current = e.timeStamp || Date.now(); return; }
       const afterG = lastGRef.current && ((e.timeStamp || Date.now()) - lastGRef.current) < CHORD_WINDOW_MS;

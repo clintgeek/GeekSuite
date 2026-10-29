@@ -4,6 +4,9 @@
  * task id (hooks/useRowKeys.js).
  *
  * @param {object[]} order  the rows in on-screen order (keyboard j/k order)
+ * @param {object} [sorting]  Today's manual order: `onMove(task, ±1)` (Alt+↑/↓
+ *   and the grip's arrows) and `onDragEnd(task)`; rows rendered with
+ *   `{ sortable: true }` get the grip.
  */
 import { useCallback, useState } from 'react';
 import PenRow from './PenRow';
@@ -13,7 +16,7 @@ import useRowKeys from '../../hooks/useRowKeys';
 import { usePen } from '../../context/PenContext';
 import { isDone, taskId } from '../../utils/penViews';
 
-export default function usePenRows(order) {
+export default function usePenRows(order, { onMove, onDragEnd } = {}) {
   const pen = usePen();
   const [expandedId, setExpandedId] = useState(null);
   const [picking, setPicking] = useState(null);
@@ -33,9 +36,10 @@ export default function usePenRows(order) {
     onTomorrow,
     onPickDate,
     onEdit: onToggleExpand,
+    onMove,
   });
 
-  const renderRow = (task, { context = 'list', crossed = false } = {}) => {
+  const renderRow = (task, { context = 'list', crossed = false, sortable = false, sortMotion = false } = {}) => {
     const id = taskId(task);
     const expanded = expandedId === id;
     return (
@@ -51,6 +55,10 @@ export default function usePenRows(order) {
         onDone={onDone}
         onTomorrow={onTomorrow}
         onPickDate={onPickDate}
+        sortable={sortable}
+        sortMotion={sortMotion}
+        onMove={sortable ? onMove : undefined}
+        onDragEnd={sortable ? onDragEnd : undefined}
         editor={expanded ? (
           <InlineEditor
             task={task}

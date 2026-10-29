@@ -572,3 +572,15 @@ export const GET_REVIEW_DRAFT = gql`
     }
   }
 `;
+
+/**
+ * Today's manual order for one LOCAL day (`yyyy-MM-dd`) — real task ids and
+ * `virtual_<seriesId>_<epochMs>` occurrence ids, Today block then Anytime
+ * block (utils/manualOrder.js). Written by SAVE_DAILY_TASK_ORDER, whose
+ * `update` rewrites this root field (apolloClient.js, clause 2).
+ */
+export const GET_DAILY_TASK_ORDER = gql`
+  query GetDailyTaskOrder($dateKey: String!) {
+    dailyTaskOrder(dateKey: $dateKey)
+  }
+`;
