@@ -211,6 +211,93 @@ export const scenes = [
       await page.keyboard.press('Escape');
     },
   },
+  // ── Today's manual order (2026-10-29). These THROW when the grips or the move are missing. ──
+  {
+    // A grip at the end of every Today row; the words where they were.
+    name: '50-today-grips',
+    goto: '/today',
+    wait: 1400,
+    async setup(page) {
+      const today = page.getByRole('region', { name: 'Today' });
+      const grips = await today.locator('[data-drag-handle]').count();
+      const rows = await today.locator('[data-row-id]').count();
+      if (!rows || grips !== rows) throw new Error(`Today: ${grips} grips for ${rows} rows`);
+      if (!(await today.getByRole('button', { name: 'Move Pick up the dry cleaning' }).count())) {
+        throw new Error('no "Move <words>" grip on Today');
+      }
+      await page.mouse.move(5, 5);
+    },
+  },
+  {
+    // Anytime has its own grips; the carried-over rows have none.
+    name: '51-anytime-grips',
+    goto: '/today',
+    wait: 1400,
+    async setup(page) {
+      const anytime = page.getByRole('region', { name: 'Anytime' });
+      const grips = await anytime.locator('[data-drag-handle]').count();
+      if (grips !== 3) throw new Error(`Anytime: expected 3 grips, found ${grips}`);
+      const late = page.getByRole('region', { name: 'Carried over' });
+      await late.getByRole('button', { name: /carried over/i }).click();
+      await page.waitForTimeout(200);
+      if (await late.locator('[data-drag-handle]').count()) throw new Error('a carried-over row has a grip');
+      await anytime.scrollIntoViewIfNeeded();
+      await page.mouse.move(5, 5);
+    },
+  },
+  {
+    // Desktop: j selects the first Today task, Alt+↓ moves it one place
+    // down — the page says so, and the order is saved for today.
+    name: '52-reorder-alt-down',
+    goto: '/today',
+    wait: 1400,
+    viewports: ['desktop'],
+    async setup(page) {
+      const today = page.getByRole('region', { name: 'Today' });
+      const before = await today.locator('[data-row-id]').evaluateAll((els) => els.map((el) => el.dataset.rowId));
+      const saved = page.waitForRequest((r) => /SaveDailyTaskOrder/.test(r.postData() || ''), { timeout: 3000 });
+      await page.keyboard.press('j');
+      await page.keyboard.press('Alt+ArrowDown');
+      await saved;
+      await page.waitForTimeout(250);
+      const after = await today.locator('[data-row-id]').evaluateAll((els) => els.map((el) => el.dataset.rowId));
+      if (after[0] !== before[1] || after[1] !== before[0]) throw new Error(`Alt+↓ did not move the first task down: ${before.join()} → ${after.join()}`);
+      const said = await page.locator('[data-order-said]').textContent();
+      if (!/^Moved ‘.+’ to position 2 of \d+\.$/.test(said || '')) throw new Error(`live region said "${said}"`);
+    },
+  },
+  {
+    // Phone, mid-drag: a finger rests on the grip of the first Today task
+    // (past the hold), then moves down two rows. Shot while still held.
+    name: '53-reorder-mid-drag',
+    goto: '/today',
+    wait: 1400,
+    viewports: ['phone'],
+    async setup(page) {
+      const grip = page.getByRole('region', { name: 'Today' }).locator('[data-drag-handle]').first();
+      if (!(await grip.count())) throw new Error('no grip to hold');
+      await grip.scrollIntoViewIfNeeded();
+      const box = await grip.boundingBox();
+      const x = box.x + box.width / 2;
+      const y = box.y + box.height / 2;
+      const fire = (type, cy, target) => page.evaluate(({ type, x, cy, target }) => {
+        const el = target ? document.querySelector('section[aria-label="Today"] [data-drag-handle]') : window;
+        el.dispatchEvent(new PointerEvent(type, {
+          bubbles: true, cancelable: true, pointerId: 9, pointerType: 'touch', isPrimary: true, clientX: x, clientY: cy, button: 0,
+        }));
+      }, { type, x, cy, target });
+      await fire('pointerdown', y, true);
+      await page.waitForTimeout(300); // past HOLD_MS
+      for (let i = 1; i <= 8; i += 1) {
+        await fire('pointermove', y + i * 14, false);
+        await page.waitForTimeout(30);
+      }
+      await page.waitForTimeout(250);
+      const lifted = await page.locator('section[aria-label="Today"] li[data-row-id]').first().evaluate((el) => getComputedStyle(el).transform);
+      const moved = await page.locator('section[aria-label="Today"] li[data-row-id]').evaluateAll((els) => els.some((el) => getComputedStyle(el).transform !== 'none'));
+      if (!moved) throw new Error(`holding and moving the grip did not drag a row (${lifted})`);
+    },
+  },
   // Retired screens: their URLs land on Today. These throw if they do not.
   ...['/review', '/plan/weekly', '/plan/monthly', '/plan/backlog', '/habits', '/collections/c1', '/templates', '/tags', '/settings', '/tasks/daily'].map((from) => ({
     name: `20-redirect${from.replace(/\//g, '-')}`,

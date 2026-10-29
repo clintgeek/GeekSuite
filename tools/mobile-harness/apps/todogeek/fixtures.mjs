@@ -138,6 +138,12 @@ export const OPS = {
   UpdateTask: ({ id, input }) => ({ updateTask: { ...byId(id), ...input } }),
   CreateTask: (vars) => ({ createTask: task({ ...vars, id: `new${++taskSeq}` }) }),
   DeleteTask: () => ({ deleteTask: { __typename: 'DeleteResponse', success: true } }),
+  // Today's manual order (drag-to-reorder): none saved, so the page opens in
+  // the normal order; a save answers like the gateway.
+  GetDailyTaskOrder: { dailyTaskOrder: [] },
+  SaveDailyTaskOrder: () => ({
+    saveDailyTaskOrder: { __typename: 'SaveOrderResponse', success: true, updatedAt: new Date().toISOString() },
+  }),
 };
 
 export async function routes(ctx) {
