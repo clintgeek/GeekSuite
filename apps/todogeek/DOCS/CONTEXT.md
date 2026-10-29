@@ -27,6 +27,9 @@ this file describes the retired screens and the old Today.
 Amended 2026-10-01: **Private tasks** — see "Private tasks" under Data Model. Gateway first
 (`Task.private`), then the UI (`context/PrivacyContext.jsx`, `components/pen/PenRow.jsx`).
 
+Amended 2026-10-29: **Today drag-to-reorder** — per-day manual order for Today and Anytime; gateway
+`dailyTaskOrder` query and string ids in `TaskOrder`. See "TaskOrder" under Data Model.
+
 Amended 2026-10-01: **Tags follow the suite standard** (`@geeksuite/tags`, `DOCS/TAG_STANDARD.md`) —
 lowercase kebab-case, `/` nests. The add box reads `#tags` with the suite's one reader
 (`findTagTokens`, hex-colour skip off): `#GeekSuite` saves `geek-suite`, `#home/garage` is one nested tag
@@ -80,8 +83,8 @@ Part of GeekSuite. Authenticates via `@geeksuite/auth` (basegeek SSO). **All dat
 | `/review` `/plan/*` `/templates/*` `/tags` `/collections/*` `/habits` `/journal` `/settings` `/tasks/*` … | Redirect → `/today` (`RETIRED_PATHS`, `components/layout/navConfig.jsx`) |
 | `/login` | Login (SSO splash) |
 
-Keyboard: `j/k` move, `x` done, `t` tomorrow, `d` pick a date, `e`/Enter edit (focus follows the task id,
-`hooks/useRowKeys.js`); `g→t/u/d/s` chords; `/` and `Cmd+N` the add box; `?` help. Phone: swipe right done,
+Keyboard: `j/k` move, `x` done, `t` tomorrow, `d` pick a date, `e`/Enter edit, Alt+↑/↓ reorder (Today
+only) (focus follows the task id, `hooks/useRowKeys.js`); `g→t/u/d/s` chords; `/` and `Cmd+N` the add box; `?` help. Phone: swipe right done,
 left tomorrow, long left pick a date (`hooks/useSwipe.js`).
 
 ---
@@ -187,7 +190,30 @@ only** — on a phone it shows normally.
 `createdBy, endpoint (unique), keys{p256dh,auth}` — web-push reminders; see `DOCS/REMINDERS.md`.
 
 ### TaskOrder / Template / JournalEntry
-Unchanged: per-day drag order (`dateKey 'yyyy-MM-dd'`, local dates), multi-line templates, journal entries.
+`TaskOrder`: `userId, dateKey ('yyyy-MM-dd', the client's LOCAL day), orderedTaskIds [String], updatedAt` —
+unique `(userId, dateKey)`, upserted. Today's manual order (2026-10-29; rules in `DOCS/SORTING_RULES.md`
+§ "Manual order (Today)"):
+- **Read** `dailyTaskOrder(dateKey: String!): [ID!]!` — the caller's own row only (`[]` signed out or none).
+  `dailyTasks` still applies the same row to its own result, unchanged.
+- **Write** `saveDailyTaskOrder(dateKey, orderedTaskIds)` — Today ids then Anytime ids. Validated
+  (`validation.js` `saveDailyTaskOrderArgsSchema`, and again in `taskService.saveDailyOrder`): `dateKey` is
+  `yyyy-MM-dd`; at most 500 ids, each a 24-hex ObjectId or `virtual_<24-hex>_<digits>`; anything else is
+  BAD_USER_INPUT. Duplicates keep their first place.
+- **Ids are strings** since 2026-10-29. They were `[ObjectId]`, which cannot hold a repeating task's
+  `virtual_…` occurrence id, so those were dropped and a dragged repeat snapped back. Rows written before
+  still hold ObjectIds; every reader goes through `String(id)`, so both read the same. No migration.
+- **Frontend:** `hooks/useDailyOrder.js` (query + optimistic save, rollback + toast), `utils/manualOrder.js`
+  (the merge), `pages/TodayPage.jsx` (framer-motion `Reorder` groups, live region), the grip in
+  `components/pen/PenRow.jsx` (`dragListener={false}` + `useDragControls`; touch must rest `HOLD_MS` = 200ms
+  first), Alt+↑/↓ in `hooks/useRowKeys.js`. PenContext now also moves `now` on at local midnight, so a page
+  left open reads the new day's (empty) order. The old drag code (`components/today/TodaySection.jsx`,
+  `components/tasks/TaskList.jsx` and its test, `TaskContext.saveDailyOrder`) was unreachable and is deleted.
+- **Tests:** gateway `todogeekDailyOrder.test.js` (+ `goingOverGateway.test.js`'s two order cases, now
+  "virtual ids kept"); UI `utils/manualOrder.test.js`, `hooks/useDailyOrder.test.jsx`, `pen/reorder.test.jsx`,
+  `pen/dragGrip.test.jsx`, Alt cases in `pen/rowKeys.test.jsx`, midnight in `pen/PenContext.test.jsx`.
+  Harness scenes `50`–`53`.
+
+Templates and journal entries: unchanged.
 
 ---
 
@@ -215,7 +241,7 @@ render them with the indicator. PageHeader stats show "N blocked".
 
 Everything else is GraphQL on the gateway: dailyTasks/weeklyTasks/monthlyTasks/allTasks,
 blockedTasks, task CRUD + updateTaskStatus + blockTask/unblockTask +
-migrateTaskToFuture + saveDailyTaskOrder, taskTags/tasksByTag,
+migrateTaskToFuture + saveDailyTaskOrder/dailyTaskOrder, taskTags/tasksByTag,
 collections CRUD, habits CRUD + toggleHabitLog + habitLogs, templates, journal,
 pushVapidKey + save/removePushSubscription.
 
