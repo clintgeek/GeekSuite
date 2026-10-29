@@ -556,3 +556,27 @@ Built from a production audit of the whole pipeline.
 - **Same safety as BookGeek's export:** RFC 4180 quoting, formula-injection defence, a UTF-8
   BOM. The CSV core is copied rather than shared, so no shared-package change was needed.
 - **Checks:** GameGeek 150 tests (11 new). Harness 82/0, enforcing.
+
+## 2026-10-29 — GameGeek store links + media; TodoGeek drag-to-reorder (after a power outage)
+
+- **Power outage on 10-29:** every app came back healthy. The backup network share did NOT
+  remount: the NAS was still booting, so the mount failed with exit 32 and nothing retries it.
+  Proposed `x-systemd.automount` (see the backups memory note). The TodoGeek agent was resumed
+  from its saved transcript; its partial gateway work was intact.
+- **GameGeek (`886e2467`):** every game page gets:
+  - A Media section: trailer first, then screenshots, with a full-screen viewer.
+  - Links: Steam store, IGDB, RAWG, Watch a trailer, and Search on Steam when there's no id.
+  - The data comes from `GET /api/games/:id/media`: Steam first, IGDB filling in, cached 7 days
+    in `gamemediacache`.
+  - Steam trailers are HLS now: they play inline on Android and Safari. Images are hotlinked;
+    there's no CSP anywhere in the suite (noted).
+- **TodoGeek (`de16d181`…`2393fd72`):** drag to reorder on the Today page.
+  - A grip on each row; touch needs a 200 ms hold, so scrolling never drags. Alt+↑/↓ on desktop.
+  - The order is saved per day. New tasks slot in by priority.
+  - The gateway gains a `dailyTaskOrder` read and keeps repeating-task ids. The old orphaned drag
+    code is deleted. Today now rolls over at local midnight.
+  - **Open for Chef:** a real-iPhone touch check, and whether re-prioritised tasks should re-slot
+    after a drag (today a save freezes the whole arrangement).
+- **Checks:**
+  - Gateway 3,480. TodoGeek frontend 438. GameGeek backend 593, frontend 178.
+  - Harness: todogeek 70/0, gamegeek 98/0, both enforcing.
