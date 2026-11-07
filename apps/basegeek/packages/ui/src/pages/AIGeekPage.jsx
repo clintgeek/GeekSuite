@@ -136,7 +136,7 @@ export default function AIGeekPage() {
 
       <StatusNav
         attentionCount={attentionCount}
-        hasWarning={(state.status?.attention || []).some(item => item.severity === 'warn')}
+        hasWarning={(state.status?.attention || []).some(item => item.severity === 'warn' || item.severity === 'error')}
         onJump={jumpToSection}
       />
 

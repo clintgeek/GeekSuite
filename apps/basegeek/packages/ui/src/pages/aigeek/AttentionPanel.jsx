@@ -13,8 +13,8 @@
  * `attention` array is meant to feed a StartGeek glance card later, and a
  * condition evaluated in a React component could not go there.
  *
- * Severity is `warn` or `info` and lands on theme tokens (`warning.main`,
- * `info.main`), never a hex: this page renders in both schemes and the
+ * Severity is `error`, `warn` or `info` and lands on theme tokens (`error.main`,
+ * `warning.main`, `info.main`), never a hex: this page renders in both schemes and the
  * semantic colours carry a per-mode value that clears 4.5:1 on that mode's
  * paper (DOCS/GEEK_SUITE_DESIGN_LANGUAGE.md).
  *
@@ -36,6 +36,7 @@ import {
   Typography,
 } from '@mui/material';
 import {
+  ErrorOutline as ErrorIcon,
   WarningAmber as WarningIcon,
   InfoOutlined as InfoIcon,
   Refresh as RefreshIcon,
@@ -44,11 +45,16 @@ import { GeekEmptyState, GeekErrorState } from '@geeksuite/ui';
 import { formatAgo } from './format';
 
 const SEVERITY = {
+  // `key_unreadable` (2026-11-06): a stored provider key no longer decrypts.
+  error: { token: 'error.main', icon: ErrorIcon, label: 'Error' },
   warn: { token: 'warning.main', icon: WarningIcon, label: 'Warning' },
   info: { token: 'info.main', icon: InfoIcon, label: 'For information' },
 };
 
 const severityOf = (item) => SEVERITY[item?.severity] || SEVERITY.info;
+
+/** An error is never quieter than a warning anywhere a warning is counted. */
+const isWarnOrWorse = (item) => item?.severity === 'warn' || item?.severity === 'error';
 
 /**
  * The one action a row offers, or nothing.
@@ -196,7 +202,7 @@ export default function AttentionPanel({
           {items.length > 0 && (
             <Chip
               size="small"
-              color={items.some(item => item.severity === 'warn') ? 'warning' : 'info'}
+              color={items.some(item => item.severity === 'error') ? 'error' : items.some(isWarnOrWorse) ? 'warning' : 'info'}
               label={items.length}
               sx={{ fontSize: 12 }}
             />

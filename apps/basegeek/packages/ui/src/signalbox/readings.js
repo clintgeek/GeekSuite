@@ -173,7 +173,8 @@ export function annunciate(attention = []) {
     if (!item?.kind) continue;
     const entry = counts.get(item.kind) || { count: 0, severity: 'info' };
     entry.count += 1;
-    if (item.severity === 'warn') entry.severity = 'warn';
+    // The board has two lamp colours; an `error` item lights the louder one.
+    if (item.severity === 'warn' || item.severity === 'error') entry.severity = 'warn';
     counts.set(item.kind, entry);
   }
   const known = ANNUNCIATOR_KINDS.map(({ kind, label }) => {
@@ -202,7 +203,7 @@ export function annunciate(attention = []) {
 export function lineStatus({ lamps = [], attention = [] } = {}) {
   const faults = lamps.filter((s) => s === LAMP.FAULT).length;
   const cautions = lamps.filter((s) => s === LAMP.WARN).length
-    + (attention || []).filter((item) => item?.severity === 'warn').length;
+    + (attention || []).filter((item) => item?.severity === 'warn' || item?.severity === 'error').length;
   const checking = lamps.filter((s) => s === LAMP.UNKNOWN).length;
 
   let message;
