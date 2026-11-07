@@ -4,7 +4,6 @@ import logger from '../../lib/logger.js';
 import { format, subDays } from 'date-fns';
 import pkg from 'garmin-connect';
 const { GarminConnect } = pkg;
-import aiService from '../../services/aiService.js';
 import UserSettings from './models/UserSettings.js';
 import { resolveActiveNutritionGoal } from './nutritionGoalBridge.js';
 import Weight from './models/Weight.js';
@@ -33,6 +32,7 @@ import derivationModule from '@geeksuite/schemas/fitnessgeek/bodyCompositionDeri
 import { leanMassFor, loadBodyCompScans, toBodyCompPoint } from './bodyCompPoints.js';
 import { validateExperienceInput, validateFitnessMealsArgs, validateParseFoodEntryArgs } from './validation.js';
 import { runAIFeature } from '../../services/aiFeatureRunner.js';
+import { runInsight, sanitizeChatHistory, CHAT_MAX_CALLS_PER_DAY } from './insightsAI.js';
 import {
   QUICK_ADD_SCHEMA,
   QUICK_ADD_SYSTEM_PROMPT,
@@ -1206,8 +1206,7 @@ export const resolvers = {
       const day = optionalCalendarDate(date, 'fitnessInsightsMorningBrief');
       const context = await buildUserContext(user.id, { daysBack: 1, date: day });
       const prompt = `You are a friendly health coach. Generate a morning brief based on yesterday's data:\n${ JSON.stringify(context, null, 2) }\nKeep it under 100 words.`;
-      const response = await aiService.chat(prompt);
-      return { type: 'morning_brief', content: response, generatedAt: new Date(), context: { date: day || format(new Date(), 'yyyy-MM-dd') } };
+      return runInsight({ userId: user.id, feature: 'brief', type: 'morning_brief', messages: [{ role: 'user', content: prompt }], context: { date: day || format(new Date(), 'yyyy-MM-dd') } });
     },
 
     fitnessInsightsDailySummary: async (_, { date }, { user }) => {
@@ -1218,16 +1217,14 @@ export const resolvers = {
       // day's food captioned as Tuesday's summary.
       const context = await buildUserContext(user.id, { daysBack: 1, date: targetDate });
       const prompt = `Generate a daily health summary for ${ targetDate }:\n${ JSON.stringify(context, null, 2) }\nFormat with 2-3 key insights, under 150 words.`;
-      const response = await aiService.chat(prompt);
-      return { type: 'daily_summary', content: response, generatedAt: new Date(), context: { date: targetDate } };
+      return runInsight({ userId: user.id, feature: 'summary', type: 'daily_summary', messages: [{ role: 'user', content: prompt }], context: { date: targetDate } });
     },
 
     fitnessInsightsCorrelations: async (_, { date }, { user }) => {
       if (!user) throw new Error('Unauthorized');
       const context = await buildUserContext(user.id, { daysBack: 30, date: optionalCalendarDate(date, 'fitnessInsightsCorrelations') });
       const prompt = `Analyze this 30-day health data for patterns:\n${ JSON.stringify(context, null, 2) }\nFormat as 3-5 findings, under 250 words.`;
-      const response = await aiService.chat(prompt);
-      return { type: 'correlations', content: response, generatedAt: new Date(), context: { daysAnalyzed: 30 } };
+      return runInsight({ userId: user.id, feature: 'correlations', type: 'correlations', messages: [{ role: 'user', content: prompt }], context: { daysAnalyzed: 30 } });
     },
 
     fitnessInsightsWeeklyReport: async (parent, { start, end, days = 7 }, context) => {
@@ -1235,8 +1232,7 @@ export const resolvers = {
       const report = await resolvers.Query.fitnessFoodReportOverview(parent, { start, end, days }, context);
       if (!report.daily.length) return { type: 'weekly_report', content: 'No data found.', generatedAt: new Date(), context: report.range };
       const prompt = `Summarize this ${ days }-day food report:\n${ JSON.stringify(report, null, 2) }\nUnder 180 words.`;
-      const response = await aiService.chat(prompt);
-      return { type: 'weekly_report', content: response, generatedAt: new Date(), context: report.range };
+      return runInsight({ userId: context.user.id, feature: 'weeklyReport', type: 'weekly_report', messages: [{ role: 'user', content: prompt }], context: report.range });
     },
 
     fitnessInsightsTrendWatch: async (parent, { start, end, days = 30 }, context) => {
@@ -1244,16 +1240,14 @@ export const resolvers = {
       const trends = await resolvers.Query.fitnessFoodReportTrends(parent, { start, end, days }, context);
       if (!trends.daily.length) return { type: 'trend_watch', content: 'No data found.', generatedAt: new Date(), context: trends.range };
       const prompt = `Provide a trend watch summary for this ${ days }-day data:\n${ JSON.stringify(trends, null, 2) }\nUnder 160 words.`;
-      const response = await aiService.chat(prompt);
-      return { type: 'trend_watch', content: response, generatedAt: new Date(), context: trends.range };
+      return runInsight({ userId: context.user.id, feature: 'trendWatch', type: 'trend_watch', messages: [{ role: 'user', content: prompt }], context: trends.range });
     },
 
     fitnessInsightsCoaching: async (_, { date }, { user }) => {
       if (!user) throw new Error('Unauthorized');
       const context = await buildUserContext(user.id, { daysBack: 14, date: optionalCalendarDate(date, 'fitnessInsightsCoaching') });
       const prompt = `Provide coaching advice based on this 14-day data:\n${ JSON.stringify(context, null, 2) }\n2-3 action items, under 200 words.`;
-      const response = await aiService.chat(prompt);
-      return { type: 'coaching', content: response, generatedAt: new Date(), context: { daysAnalyzed: 14 } };
+      return runInsight({ userId: user.id, feature: 'coaching', type: 'coaching', messages: [{ role: 'user', content: prompt }], context: { daysAnalyzed: 14 } });
     },
 
     fitnessInsightsContext: async (_, { days = 7 }, { user }) => {
@@ -1449,11 +1443,10 @@ export const resolvers = {
       const systemPrompt = `You are a helpful health assistant with access to the user's health data.\n\nUSER HEALTH DATA (LAST 30 DAYS):\n${ JSON.stringify(context, null, 2) }\n\nAnswer based on the actual data provided.`;
       const messages = [
         { role: 'system', content: systemPrompt },
-        ...(history || []),
+        ...sanitizeChatHistory(history),
         { role: 'user', content: message }
       ];
-      const response = await aiService.chatWithHistory(messages);
-      return { type: 'chat', content: response, generatedAt: new Date() };
+      return runInsight({ userId: user.id, feature: 'chat', type: 'chat', messages, maxTokens: 2000, maxCallsPerDay: CHAT_MAX_CALLS_PER_DAY });
     },
 
     updateGarminWeight: async (_, { date, weightLbs, timezone }, { user }) => {

@@ -123,16 +123,21 @@ describe('the AI-insight window covers whole calendar days', () => {
     });
   };
 
-  // The insight resolvers all end in `aiService.chat(prompt)`. Stub it and the
+  // The insight resolvers all end in `aiService.callAI(prompt)` (via the
+  // feature runner). Stub it and the
   // prompt IS the assertion: it carries the serialized context whole, so the
   // window the resolver built is directly readable.
   let originalChat;
   let lastPrompt;
   beforeAll(() => {
-    originalChat = aiService.chat;
-    aiService.chat = async (prompt) => { lastPrompt = prompt; return 'stubbed coaching'; };
+    // Since 2026-11-06 the insights go through `runAIFeature`, which hands
+    // `callAI` the last user turn as its prompt — the same string `chat()`
+    // used to get. The need resolver is stubbed empty so no catalog is read.
+    originalChat = { callAI: aiService.callAI, resolveNeedCandidates: aiService.resolveNeedCandidates };
+    aiService.callAI = async (prompt) => { lastPrompt = prompt; return 'stubbed coaching'; };
+    aiService.resolveNeedCandidates = async () => [];
   });
-  afterAll(() => { aiService.chat = originalChat; });
+  afterAll(() => { Object.assign(aiService, originalChat); });
 
   const contextFromPrompt = () => JSON.parse(lastPrompt.slice(lastPrompt.indexOf('{'), lastPrompt.lastIndexOf('}') + 1));
 

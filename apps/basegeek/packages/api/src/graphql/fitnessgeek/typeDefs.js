@@ -779,6 +779,13 @@ export const typeDefs = gql`
     content: String
     generatedAt: Date
     context: FitnessJSON
+    # Governed insights (2026-11-06): false when no model answered (daily cap,
+    # aiGeek down or slow, an empty answer). Then content is null and message
+    # is the sentence to show in place. Null on answers from older gateways.
+    ok: Boolean
+    reason: String
+    message: String
+    provenance: AIProvenance
   }
 
   input ChatMessageInput {

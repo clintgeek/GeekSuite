@@ -410,10 +410,14 @@ describe('AI context — smoothed weight, body composition', () => {
   let originalChat;
   let lastPrompt;
   beforeAll(() => {
-    originalChat = aiService.chat;
-    aiService.chat = async (prompt) => { lastPrompt = prompt; return 'stubbed'; };
+    // Since 2026-11-06 the insights go through `runAIFeature`, which hands
+    // `callAI` the last user turn as its prompt — the same string `chat()`
+    // used to get. The need resolver is stubbed empty so no catalog is read.
+    originalChat = { callAI: aiService.callAI, resolveNeedCandidates: aiService.resolveNeedCandidates };
+    aiService.callAI = async (prompt) => { lastPrompt = prompt; return 'stubbed'; };
+    aiService.resolveNeedCandidates = async () => [];
   });
-  afterAll(() => { aiService.chat = originalChat; });
+  afterAll(() => { Object.assign(aiService, originalChat); });
 
   const weigh = (offset, value, stamp) => Weight.collection.insertOne({
     userId: ALICE, weight_value: value, log_date: dayAt(offset), source: 'manual', notes: '',
