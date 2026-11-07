@@ -314,14 +314,18 @@ const GET_FOOD_REPORT_TRENDS = gql`
   }
 `;
 
-const GET_MORNING_BRIEF = gql` query GetMorningBrief($date: String) { fitnessInsightsMorningBrief(date: $date) { type content generatedAt context } } `;
-const GET_DAILY_INSIGHT_SUMMARY = gql` query GetDailyInsightSummary($date: String) { fitnessInsightsDailySummary(date: $date) { type content generatedAt context } } `;
-const GET_CORRELATIONS = gql` query GetCorrelations($date: String) { fitnessInsightsCorrelations(date: $date) { type content generatedAt context } } `;
-const GET_WEEKLY_INSIGHT_REPORT = gql` query GetWeeklyInsightReport($start: String, $days: Int) { fitnessInsightsWeeklyReport(start: $start, days: $days) { type content generatedAt context } } `;
-const GET_TREND_WATCH = gql` query GetTrendWatch($start: String, $days: Int) { fitnessInsightsTrendWatch(start: $start, days: $days) { type content generatedAt context } } `;
-const GET_COACHING = gql` query GetCoaching($date: String) { fitnessInsightsCoaching(date: $date) { type content generatedAt context } } `;
+// `ok reason message`: the gateway's governed insights (2026-11-06) answer a
+// model outage or a spent daily cap with `{ ok: false, message }` instead of
+// a GraphQL error; the card, Reports panels and chat render that in place.
+// DEPLOY ORDER: basegeek must serve these fields before this bundle ships.
+const GET_MORNING_BRIEF = gql` query GetMorningBrief($date: String) { fitnessInsightsMorningBrief(date: $date) { type content generatedAt context ok reason message } } `;
+const GET_DAILY_INSIGHT_SUMMARY = gql` query GetDailyInsightSummary($date: String) { fitnessInsightsDailySummary(date: $date) { type content generatedAt context ok reason message } } `;
+const GET_CORRELATIONS = gql` query GetCorrelations($date: String) { fitnessInsightsCorrelations(date: $date) { type content generatedAt context ok reason message } } `;
+const GET_WEEKLY_INSIGHT_REPORT = gql` query GetWeeklyInsightReport($start: String, $days: Int) { fitnessInsightsWeeklyReport(start: $start, days: $days) { type content generatedAt context ok reason message } } `;
+const GET_TREND_WATCH = gql` query GetTrendWatch($start: String, $days: Int) { fitnessInsightsTrendWatch(start: $start, days: $days) { type content generatedAt context ok reason message } } `;
+const GET_COACHING = gql` query GetCoaching($date: String) { fitnessInsightsCoaching(date: $date) { type content generatedAt context ok reason message } } `;
 const GET_AI_CONTEXT = gql` query GetAiContext($days: Int) { fitnessInsightsContext(days: $days) } `;
-const AI_CHAT = gql` mutation AiChat($message: String!, $history: [ChatMessageInput]) { fitnessInsightsChat(message: $message, history: $history) { type content generatedAt } } `;
+const AI_CHAT = gql` mutation AiChat($message: String!, $history: [ChatMessageInput]) { fitnessInsightsChat(message: $message, history: $history) { type content generatedAt ok reason message } } `;
 
 const GET_GARMIN_STATUS = gql`
   query GetGarminStatus { garminStatus { enabled hasCredentials hasTokens lastConnectedAt } }

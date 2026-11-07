@@ -12,7 +12,7 @@
  *
  * **These routes no longer fail with a 5xx because a model was unavailable.**
  * Since the backend moved onto aiGeek's feature door
- * (apps/basegeek/DOCS/AIGEEK_FRONT_DOOR.md §4), an unavailable model is a
+ * (apps/basegeek/DOCS/ARCHIVE/AIGEEK_FRONT_DOOR.md §4), an unavailable model is a
  * **200** carrying either a deterministic answer or the one friendly
  * sentence. So each method below returns the body and lets the caller read
  * `meta.ok` / `ok`; the `catch` blocks are for real transport failures only,
