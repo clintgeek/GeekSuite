@@ -425,7 +425,7 @@ some of these may differ once the in-flight work lands).
 | Package | Command | Result at time of writing |
 |---|---|---|
 | `packages/ui` | `npx vitest run` | **340 passed**, 8 files — matches `STATUS.md` |
-| `apps/basegeek/packages/api` | `node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --forceExit` | The `Cannot find module '@geeksuite/logger'` failure seen earlier this pass was a transient burn-session artifact (an uncommitted `packages/logger` not yet linked); resolved once it landed (`61997ed`) and the workspace was reinstalled. The suite has grown fast the same day as more gateway modules gained zod validation and shared schemas — `DOCS/BURN_QUEUE.md` cites **1082** for the api suite as of the R70 stream (09-05). Re-run `pnpm install` at the repo root if a local run disagrees, and treat any single number here as a snapshot, not a contract. |
+| `apps/basegeek/packages/api` | `node --experimental-vm-modules node_modules/jest/bin/jest.js --forceExit` (= `npm test`). **No `--runInBand`** (2026-11-06): in band the heap grows ~25 MB per file and 179 files hit Node's ~4 GB ceiling; without it `jest.config.js`'s `workerIdleMemoryLimit` recycles the one worker, peak 1.3 GB, 205 s. 3626 tests / 179 suites as of 2026-11-06. | The `Cannot find module '@geeksuite/logger'` failure seen earlier this pass was a transient burn-session artifact (an uncommitted `packages/logger` not yet linked); resolved once it landed (`61997ed`) and the workspace was reinstalled. The suite has grown fast the same day as more gateway modules gained zod validation and shared schemas — `DOCS/BURN_QUEUE.md` cites **1082** for the api suite as of the R70 stream (09-05). Re-run `pnpm install` at the repo root if a local run disagrees, and treat any single number here as a snapshot, not a contract. |
 | `apps/bookgeek/api` | `npm test` (`node --test test/*.test.js`) | **78 passed**, 2 suites |
 | `apps/todogeek/frontend` | `npx vitest run` | **64 passed**, 3 files |
 | `apps/todogeek/backend`, `apps/fitnessgeek/backend`, `apps/flockgeek/backend`, `apps/storygeek/backend`, `apps/notegeek/backend` | `pnpm test` (jest, mongodb-memory-server) — this is CI's `test-backends` matrix | fitnessgeek: **45 passed** (one run showed 1 flaky failure in `auth.test.js` on a `responseTime` assertion under load, reran clean — treat as flaky, not broken); flockgeek: **57 passed**, 5 suites; storygeek: `npm test` runs both `test:node` (**65 passed**) and `test:jest` (**41 passed**) = 106 total; notegeek backend: **96 passed / 9 skipped**, 3 of 10 suites skipped |
@@ -602,7 +602,7 @@ hourly after that:
 
 | what | when | what it does |
 |---|---|---|
-| discovery | last one older than 24 h | per provider with a key: list models → free candidates (modality-filtered) → probe each → write `AIModel` / `AIFreeTier` / `AIPricing`; retire models the provider stopped listing **and demote their free rows**; prune rows for providers off the roster **and for roster providers with no key** |
+| discovery | last one older than 24 h | per provider with a key: list models → free candidates (modality-filtered) → probe each → write `AIModel` / `AIFreeTier` / `AIPricing`; retire models the provider stopped listing **and demote their free rows** (skipped when the listing looks truncated — `counts.truncatedListing`); prune rows for providers off the roster; **park** (never delete) the rows of a roster provider with no key — `providerDisabledAt` set, unparked when the key returns. If any stored key fails to decrypt, nothing is parked that run (`keyUnreadable`). A failed discovery is retried after 6 h (`AI_CATALOG_DISCOVERY_RETRY_HOURS`), not 24 h (2026-11-06) |
 | re-probe | last one older than 6 h | every free row of a configured provider gets one probe; alive rows revived |
 | golden set | last one older than 24 h | six questions with known answers, scored by code, against up to four `structured` rows — never-scored first, then stalest. ~24 provider calls, which is the whole daily budget; that is why it has a gate of its own on an hourly tick (`AI_CATALOG_GOLDEN_HOURS`) |
 
@@ -610,7 +610,8 @@ hourly after that:
 
 | the row answered | what happens | why |
 |---|---|---|
-| 404 / 410 / `model_not_found` | **retired** — `isFree: false`, cooling cleared | the vendor withdrew the slug; cooling a retirement is a slower way of failing forever |
+| HTTP 404 / 410, or a **structured** `model_not_found` code | **retired** — `isFree: false`, cooling cleared | the vendor withdrew the slug; cooling a retirement is a slower way of failing forever |
+| no HTTP status, message reads like auth (`auth`) or "not found" (`not_found_text`) | cooled, **never retired** (2026-11-06) | prose is a guess; before this, a status-less auth error retired healthy models |
 | **402** | cooled **24 h** | pay-as-you-go with no credit. Not transient, not terminal — it works the moment the account is funded (Cerebras and, since 2026-09-16, several Ollama Cloud rows) |
 | 401 / 403 / 400 | cooled 30 d | the model exists; this call was refused |
 | 429 / 5xx / timeout | untouched | the provider is having a bad minute, which says nothing about the model |
@@ -683,9 +684,54 @@ Every real call's `x-ratelimit-*` headers are written back into the row (`AIFree
 the ceilings, `.observed` for what is left, debounced to one write per row per minute), and a 429
 cools the provider for exactly its own `retry-after`. Every call books one `AISpend` row per UTC day
 / provider / app / feature — OpenRouter's own `usage.cost` where it reported one, `AIPricing`
-per-1M × tokens otherwise, 0 for free rows. **Do not add a quota or a price to a file.** If a number
-looks wrong, the fix is a probe or a header, not a table; the three tables that disagreed about
-Groq's TPM are why this section exists.
+per-1M × tokens otherwise, 0 for rows the free-tier catalog lists. A call with **no trustworthy price**
+(no `AIPricing` row, or the schema-default 0/0) is booked as `costUnknown: +1`, never as $0 (2026-11-06)
+— and a *paid* attempt without a trustworthy price is refused before the call. **Do not add a quota
+or a price to a file.** If a number looks wrong, the fix is a probe or a header, not a table; the
+three tables that disagreed about Groq's TPM are why this section exists.
+
+### Paid spend: is the running container actually capped?
+
+Every paid attempt (paid-first, paid fallback, and since 2026-11-06 **any pin the free-tier catalog
+does not list as free**) goes through the governor, which reserves its estimate against the day's
+budget in `AISpendBudget` before dispatch and settles or releases it after. The caps come from
+`AI_PAID_PER_DAY_USD` and `AI_PAID_PER_CALL_USD`; **unset means the code defaults, $0.05/day and
+$0.01/call** (`services/aiRoute.js`). Both names are in `apps/basegeek/.env.production`, but a
+Watchtower deploy does not pick up env changes (`compose up -d` does), so check the running process:
+
+```
+docker exec basegeek printenv AI_PAID_PER_DAY_USD AI_PAID_PER_CALL_USD
+```
+
+These two are dollar figures, not secrets. A blank line means that cap is at its default. Paid routing
+also needs the app's routing row to have `allowPaid: true` **and** the caller to present that app's
+API key: an app named only by a login token (JWT) is untrusted and never spends (2026-11-06).
+
+### Rotating `KEY_VAULT_SECRET` (basegeek + fitnessgeek)
+
+`@geeksuite/crypto-vault` writes one ciphertext version (`v1:`) under one key and has **no key
+ring**, so there is no re-encrypt-in-place. A rotation is a re-entry: everything sealed under the
+old secret has to be typed in again. What is sealed under it:
+
+- basegeek `AIConfig.apiKey` — every AI provider key (aiGeek console)
+- basegeek `OAuthConnection` tokens — users reconnect the integration
+- fitnessgeek's Garmin password (its `KEY_VAULT_SECRET` is basegeek's value, copied by line)
+
+Procedure:
+1. Generate a new 64-hex secret. Put it in **both** `apps/basegeek/.env.production` and
+   `apps/fitnessgeek/.env.production` with an editor. Never echo it.
+2. `docker compose up -d --no-deps basegeek` and the same for fitnessgeek (a Watchtower restart
+   keeps the old env).
+3. Re-enter every provider key in the aiGeek console, then
+   `node scripts/check-provider.js` (above) for each. Have users reconnect OAuth integrations and
+   re-enter the Garmin password.
+4. Watch the next catalog run. While keys are unreadable the run records them in
+   `AICatalogRun.keyUnreadable` and **parks nothing** — a wrong secret cools the catalog, it does not
+   delete it (before 2026-11-06 it pruned every keyless provider's rows). The status page raises it
+   as an alert.
+
+Legacy plaintext keys are still accepted on read (`AIConfig` logs a warning); `scripts/encrypt-keys.js
+--yes` seals them under the current secret.
 
 ### Rollback
 

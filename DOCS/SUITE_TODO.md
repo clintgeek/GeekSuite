@@ -18,6 +18,15 @@ Pull from here when planning the next pass; update as work lands or priorities s
 - **Suite-wide Documentation & Backlog Consolidation** (Stream 1–4): Establishing canonical Sage session files (`THE_CONTEXT.md`, `THE_PLAN.md`, `THE_STEPS.md`), tracking `GRAPHQL.md`, moving completed sprint docs to `ARCHIVE/`, and updating `README.md`.
 - **Mobile Harness CI Ratchet**: Maintaining 0 findings across **150** scenes in `.github/workflows/mobile-harness.yml`. (Was written as 139; corrected 2026-09-16.)
   - Note, learned 2026-09-16: a scene whose `setup` returns `false` is **skipped, not failed**, so the run still reports PASS. fitnessgeek's scene 11 covered nothing for two days that way. A skipped scene is silent — check the per-scene lines, not just the total.
+- **aiGeek hardening pass (2026-11-06)** — built locally, uncommitted; see `WORK_LOG_2026-11.md`. Left open:
+  - **CI:** `ci.yml`'s `test-basegeek` step passes `--runInBand`, which overrides `workerIdleMemoryLimit`; in band the api suite now exceeds Node's ~4 GB heap. Drop the flag before the push.
+  - **Before deploy:** fitnessgeek's dishJudge pin (`openrouter/openai/gpt-oss-120b`) is refused unless `AIFreeTier` lists it free, or fitnessgeek has `allowPaid` + a non-0/0 `AIPricing` row under the caps. Check in prod (read-only) first. Gateway before the fitnessgeek bundle (new `FitnessInsight` fields).
+  - REST sessions survive a password change for up to an hour (`authenticateToken` skips `passwordChangedAt`) — needs a per-request user lookup; a deliberate change.
+  - The admin TestPromptPanel calls as a JWT, so it no longer gets paid routing; a role check in the route if that matters.
+  - fitnessgeek's REST insights twin (`/api/insights`) — unused in-suite but publicly reachable; delete once access logs confirm.
+  - aiGeek UsagePanel shows session-wide call counts against a per-user daily cap, and no `costUnknown` yet.
+  - A provider may bill a request cancelled mid-flight; the per-call cap and OpenRouter's credit limit are the backstop.
+  - `goingOverFitnessGlance` DST case still red (pre-existing).
 
 ---
 

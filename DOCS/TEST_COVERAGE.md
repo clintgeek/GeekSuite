@@ -2,6 +2,25 @@
 
 _Generated 2026-04-21; updated 2026-08-30. Qualitative survey — not measured via coverage tooling._
 
+> **2026-11-06 — the tables below are stale; these counts are not.** Measured runs
+> from the aiGeek hardening pass (everything else in this file predates months of
+> growth — treat its "not tested" lists as history, not a gap list):
+>
+> | Package | Command | Result |
+> |---|---|---|
+> | basegeek api | `npm test` (no `--runInBand`; see RUNBOOK §9) | 179 suites, 3626 passed, 1 skipped, 1 failing — the pre-existing DST case in `goingOverFitnessGlance` ("leaves a longer window inclusive at both ends") |
+> | basegeek ui | `npx vitest run` | 20 files, 255 passed |
+> | fitnessgeek backend | `npm test` | 71 suites, 995 passed |
+> | fitnessgeek frontend | `npx vitest run` | 986 passed |
+> | storygeek backend | `npm test` | node:test 103 passed; jest 9 suites, 98 passed |
+>
+> aiGeek specifically — formerly "aiRoutes … untested" — now has route, runner,
+> governor and catalog suites (`src/__tests__/ai*.test.js`, ~1150 tests), including the
+> hardening suites `aiHardening*` (paid pins, the reservation under concurrency,
+> cancellation, per-call provider metadata, summarizer locality, durable caps, atomic
+> usage counters, dashboard), `authHardening*` (mint authority, key narrowing, JWT app
+> trust), `aiCatalogHardening` and `fitnessInsightsGoverned*`.
+
 > **2026-08-30 update:** basegeek's GraphQL gateway is now the best-tested
 > surface in the suite — 21 jest suites / 344 passing tests, including ownership
 > (IDOR) suites for every app module (todogeek, fitnessgeek, storygeek,

@@ -11,6 +11,27 @@ Phase 1 (`AIGEEK_CATALOG_JOB.md`) is live: the catalog feeds itself, `AIModel.ro
 `AIAppConfig.{tier: 'auto', sticky, allowPaid, dailyCap}`, and the minimal UI for the last three.
 `callAISmart` is gone. §6 (the adapter registry) was built in parallel by another agent.
 
+> **Changed 2026-11-06 (hardening pass after the aiGeek audit).** This file is still the design of
+> record — code cites it from here, `DOCS/ARCHIVE/` — but where it disagrees with the list below,
+> the list wins:
+> - **§1 pins:** a pin is free only if `AIFreeTier` lists it `isFree: true`. Any other pin is a
+>   governed **paid** attempt: it needs the app's `allowPaid`, a trusted app (API key, not a JWT
+>   claim), a non-0/0 `AIPricing` row, and room under the caps. Refused → 503, `recordRefusal`.
+>   `callAI` no longer accepts a caller-supplied `config.route`.
+> - **§3 governor:** the daily cap is a reservation (`AISpendBudget`), claimed atomically before
+>   dispatch and settled/released after; a write error refuses. Unknown cost is `costUnknown`,
+>   never $0. The token estimate counts the whole conversation, system prompt included.
+> - **§4 feature door:** `POST /api/ai/feature` now hands `need` to the runner (fallback, demotion,
+>   60 s cache, paid-first). The runner's timeout and a client disconnect abort the HTTP call and
+>   stop the walk (`AbortSignal` through the adapters). Per-feature daily caps are durable
+>   (`AIFeatureQuota`, one atomic conditional `$inc` per claim, 2-day TTL); if Mongo is down the
+>   runner degrades to the in-process counter with a warning — the paid budget is the fail-closed
+>   guard, not this cap.
+> - **`lastProviderInfo` is gone** (§2, §4, §5): metadata is per call — `config.onInfo` or
+>   `aiService.callAIWithInfo()`. Two concurrent requests used to read each other's.
+> - **Summarization** stays on the attempt's own provider; a paid attempt is never summarized,
+>   and an unavailable provider truncates instead.
+
 ## Why
 
 `aiService.callAI` accepts eleven ways of saying where a request should go — `tier: free | rotation |

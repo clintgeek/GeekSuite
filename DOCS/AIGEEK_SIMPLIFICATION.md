@@ -515,6 +515,15 @@ budget.
 > call and then goes to the need's own picks. Both rows point at
 > `openrouter/openai/gpt-4.1-mini`, with caps of $0.05/call and $0.50/day. Every other app is
 > still free. Tests: `__tests__/aiPaidFirst.test.js`.
+>
+> **Correction 2026-11-06 (audit).** "Done for FitnessGeek" was only half true: FitnessGeek's
+> GraphQL insights and chat called `aiService.chat()` directly — no routing row, no need, no
+> cap, so no paid-first. They now go through `runAIFeature` (`graphql/fitnessgeek/insightsAI.js`,
+> need `prose:balanced`), which is where paid-first lives. Two other sentences above are no
+> longer true either: **a pin is no longer planned unpaid** — a pin the free-tier catalog does not
+> list as free is a governed paid attempt, refused without the app's `allowPaid` and a trusted
+> price — and the caps quoted here are whatever `AI_PAID_PER_*_USD` the running container has
+> (RUNBOOK §12, "Paid spend"); the code defaults are $0.01/call and $0.05/day.
 
 ### Stage 2 — shrink the catalog to a shortlist, and re-scope the golden set
 

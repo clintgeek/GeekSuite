@@ -234,7 +234,7 @@ only a live 429 cooldown; `/providers` dropped the blended per-1K cost field (no
 
 Net: `aiService.js` from 3,562 to roughly 1,100 lines.
 
-**Shipped 2026-09-07.** Design of record: `apps/basegeek/DOCS/AIGEEK_FRONT_DOOR.md`. As built:
+**Shipped 2026-09-07.** Design of record: `apps/basegeek/DOCS/ARCHIVE/AIGEEK_FRONT_DOOR.md`. As built:
 `resolveRoute` in `aiRoute.js` is pure and table-tested over every legacy input; a request pin
 outranks a row pin; `allowPaid` comes only from the row and any free signal vetoes it. A pin
 degrades to `auto` (hint `pin_unavailable`) on a cooling row, an inactive model, or an id missing
