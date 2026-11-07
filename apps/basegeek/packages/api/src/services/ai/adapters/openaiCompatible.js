@@ -173,7 +173,11 @@ export async function call(pc, request = {}) {
     temperature = pc.temperature ?? 0.7,
     tools = null,
     toolChoice = null,
-    timeoutMs = ADAPTER_TIMEOUT_MS
+    timeoutMs = ADAPTER_TIMEOUT_MS,
+    // The caller's AbortSignal (a feature timeout, a client that hung up).
+    // Handed to axios so an abandoned call stops at the socket instead of
+    // running to the 60 s adapter timeout for an answer nobody will read.
+    signal = null
   } = request;
 
   const body = {
@@ -217,7 +221,8 @@ export async function call(pc, request = {}) {
         'Authorization': `Bearer ${pc.apiKey}`,
         ...(pc.extraHeaders || {})
       },
-      timeout: timeoutMs
+      timeout: timeoutMs,
+      ...(signal && { signal })
     });
   } catch (error) {
     // One line, at warn, with no `err` and no `data` — see

@@ -55,99 +55,100 @@ class AIUsageService {
       const currentDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
       const currentHour = new Date(now.getFullYear(), now.getMonth(), now.getDate(), now.getHours());
 
-      // Get-or-create, atomically.
+      if (!provider || !modelId || !userId) {
+        throw new Error('trackUsage: provider, modelId and userId are required');
+      }
+
+      const key = { provider, modelId, userId, date: currentDay };
+
+      // Every write below is an atomic operator on the row, never
+      // read-modify-`save()`.
       //
-      // This used to be `findOne` → `new AIUsage(...)` → `save()`. `AIUsage`
-      // has a unique `{provider, modelId, userId, date}` index, so the first
-      // two concurrent calls of a day both found nothing, both constructed a
-      // row, and the loser hit E11000 — swallowed by the catch below into
-      // `{success:false}`, which `aiService.js` awaits and never inspects.
-      // The result was a lost usage record and a free-tier ceiling that could
-      // be sailed past. An upsert cannot lose that race.
-      const existing = await AIUsage.findOne({ provider, modelId, userId, date: currentDay });
-      let usage = existing;
-      if (!usage) {
-        usage = await AIUsage.findOneAndUpdate(
-          { provider, modelId, userId, date: currentDay },
-          { $setOnInsert: { provider, modelId, userId, date: currentDay } },
-          { upsert: true, new: true, setDefaultsOnInsert: true }
-        );
-      }
+      // Get-or-create was the first race (2026-09): two first-calls of a day
+      // both found nothing and the loser hit E11000 on the unique
+      // `{provider, modelId, userId, date}` index. The second race outlived
+      // that fix until 2026-11-06: the counters were read, incremented in
+      // memory and `save()`d, which writes `$set: {count: read + 1}` — N
+      // concurrent calls all read the same count and booked as one, and the
+      // free-tier ceiling this row watches could be sailed past.
+      const freeLimits = await this.currentFreeLimits(provider, modelId);
 
-      // The limits are read fresh and written onto the row every call, not
-      // frozen into it at insert. The row is still where the usage tab reads
-      // them from, so it now shows what is actually in force rather than what
-      // was in force at the day's first call.
-      usage.freeLimits = await this.currentFreeLimits(provider, modelId);
+      // 1. The row exists. A lost insert race is the other caller's success.
+      await AIUsage.updateOne(
+        key,
+        {
+          $setOnInsert: {
+            currentMinute: { requests: 0, tokens: 0, audioSeconds: 0, timestamp: currentMinute },
+            currentDay: { requests: 0, tokens: 0, audioSeconds: 0, date: currentDay },
+            currentHour: { audioSeconds: 0, timestamp: currentHour }
+          }
+        },
+        { upsert: true, setDefaultsOnInsert: true, runValidators: true }
+      ).catch((err) => {
+        if (err?.code !== 11000) throw err;
+      });
 
-      // Reset counters if time period has changed
-      if (usage.currentMinute.timestamp.getTime() !== currentMinute.getTime()) {
-        logger.info(`Resetting minute counters for ${provider}/${modelId} - old: ${usage.currentMinute.timestamp}, new: ${currentMinute}`);
-        usage.currentMinute = {
-          requests: 0,
-          tokens: 0,
-          audioSeconds: 0,
-          timestamp: currentMinute
-        };
-      }
+      // 2. Roll a window over when time has moved past it. Conditional on
+      // the stored stamp being OLDER, so concurrent callers reset it once and
+      // a call that started a moment ago cannot roll it backwards.
+      const olderThan = (path, at) => ({ ...key, $or: [{ [path]: { $lt: at } }, { [path]: null }] });
+      await Promise.all([
+        AIUsage.updateOne(olderThan('currentMinute.timestamp', currentMinute),
+          { $set: { currentMinute: { requests: 0, tokens: 0, audioSeconds: 0, timestamp: currentMinute } } }),
+        AIUsage.updateOne(olderThan('currentDay.date', currentDay),
+          { $set: { currentDay: { requests: 0, tokens: 0, audioSeconds: 0, date: currentDay } } }),
+        AIUsage.updateOne(olderThan('currentHour.timestamp', currentHour),
+          { $set: { currentHour: { audioSeconds: 0, timestamp: currentHour } } })
+      ]);
 
-      if (usage.currentDay.date.getTime() !== currentDay.getTime()) {
-        usage.currentDay = {
-          requests: 0,
-          tokens: 0,
-          audioSeconds: 0,
-          date: currentDay
-        };
-      }
+      // 3. The counts: one `$inc`. The limits are read fresh and written onto
+      // the row every call, not frozen into it at insert — the usage tab
+      // reads them from here.
+      const counted = await AIUsage.findOneAndUpdate(
+        key,
+        {
+          $inc: {
+            'currentMinute.requests': requests,
+            'currentMinute.tokens': totalTokens,
+            'currentMinute.audioSeconds': audioSeconds,
+            'currentDay.requests': requests,
+            'currentDay.tokens': totalTokens,
+            'currentDay.audioSeconds': audioSeconds,
+            'currentHour.audioSeconds': audioSeconds
+          },
+          $set: { freeLimits }
+        },
+        { new: true }
+      ).lean();
+      if (!counted) throw new Error('trackUsage: usage row vanished between upsert and increment');
 
-      if (usage.currentHour.timestamp.getTime() !== currentHour.getTime()) {
-        usage.currentHour = {
-          audioSeconds: 0,
-          timestamp: currentHour
-        };
-      }
-
-      // Update usage counters
-      usage.currentMinute.requests += requests;
-      usage.currentMinute.tokens += totalTokens;
-      usage.currentMinute.audioSeconds += audioSeconds;
-
-      usage.currentDay.requests += requests;
-      usage.currentDay.tokens += totalTokens;
-      usage.currentDay.audioSeconds += audioSeconds;
-
-      usage.currentHour.audioSeconds += audioSeconds;
-
-      // Calculate usage percentages
-      usage.usagePercentages = {
-        requestsPerMinute: this.calculatePercentage(usage.currentMinute.requests, usage.freeLimits.requestsPerMinute),
-        requestsPerDay: this.calculatePercentage(usage.currentDay.requests, usage.freeLimits.requestsPerDay),
-        tokensPerMinute: this.calculatePercentage(usage.currentMinute.tokens, usage.freeLimits.tokensPerMinute),
-        tokensPerDay: this.calculatePercentage(usage.currentDay.tokens, usage.freeLimits.tokensPerDay),
-        audioSecondsPerHour: this.calculatePercentage(usage.currentHour.audioSeconds, usage.freeLimits.audioSecondsPerHour),
-        audioSecondsPerDay: this.calculatePercentage(usage.currentDay.audioSeconds, usage.freeLimits.audioSecondsPerDay)
+      // 4. The derived flags, from the counts as they stand after this
+      // call's `$inc`. Under concurrency the last writer's view wins; these
+      // are a display summary recomputed on every call, not a counter.
+      const usagePercentages = {
+        requestsPerMinute: this.calculatePercentage(counted.currentMinute.requests, freeLimits.requestsPerMinute),
+        requestsPerDay: this.calculatePercentage(counted.currentDay.requests, freeLimits.requestsPerDay),
+        tokensPerMinute: this.calculatePercentage(counted.currentMinute.tokens, freeLimits.tokensPerMinute),
+        tokensPerDay: this.calculatePercentage(counted.currentDay.tokens, freeLimits.tokensPerDay),
+        audioSecondsPerHour: this.calculatePercentage(counted.currentHour.audioSeconds, freeLimits.audioSecondsPerHour),
+        audioSecondsPerDay: this.calculatePercentage(counted.currentDay.audioSeconds, freeLimits.audioSecondsPerDay)
       };
+      const flags = (threshold) => Object.fromEntries(
+        Object.entries(usagePercentages).map(([name, pct]) => [name, pct >= threshold])
+      );
+      const isNearLimit = flags(this.nearLimitThreshold);
+      const isAtLimit = flags(this.atLimitThreshold);
+      await AIUsage.updateOne(key, { $set: { usagePercentages, isNearLimit, isAtLimit } });
 
-      // Update limit status
-      usage.isNearLimit = {
-        requestsPerMinute: usage.usagePercentages.requestsPerMinute >= this.nearLimitThreshold,
-        requestsPerDay: usage.usagePercentages.requestsPerDay >= this.nearLimitThreshold,
-        tokensPerMinute: usage.usagePercentages.tokensPerMinute >= this.nearLimitThreshold,
-        tokensPerDay: usage.usagePercentages.tokensPerDay >= this.nearLimitThreshold,
-        audioSecondsPerHour: usage.usagePercentages.audioSecondsPerHour >= this.nearLimitThreshold,
-        audioSecondsPerDay: usage.usagePercentages.audioSecondsPerDay >= this.nearLimitThreshold
+      const usage = {
+        currentMinute: counted.currentMinute,
+        currentDay: counted.currentDay,
+        currentHour: counted.currentHour,
+        freeLimits,
+        usagePercentages,
+        isNearLimit,
+        isAtLimit
       };
-
-      usage.isAtLimit = {
-        requestsPerMinute: usage.usagePercentages.requestsPerMinute >= this.atLimitThreshold,
-        requestsPerDay: usage.usagePercentages.requestsPerDay >= this.atLimitThreshold,
-        tokensPerMinute: usage.usagePercentages.tokensPerMinute >= this.atLimitThreshold,
-        tokensPerDay: usage.usagePercentages.tokensPerDay >= this.atLimitThreshold,
-        audioSecondsPerHour: usage.usagePercentages.audioSecondsPerHour >= this.atLimitThreshold,
-        audioSecondsPerDay: usage.usagePercentages.audioSecondsPerDay >= this.atLimitThreshold
-      };
-
-      await usage.save();
 
       return {
         success: true,

@@ -17,7 +17,7 @@ describe('runAIFeature', () => {
     expect(r.provenance).toMatchObject({ source: 'model', provider: 'groq', model: 'llama', callsToday: 1 });
     const cfg = ai.callAI.mock.calls[0][1];
     // No routing switch: "nothing at all" is `auto` reading the app's routing
-    // row (DOCS/AIGEEK_FRONT_DOOR.md §1), which is exactly what
+    // row (DOCS/ARCHIVE/AIGEEK_FRONT_DOOR.md §1), which is exactly what
     // `useAppConfig: true` used to mean here. The runner stopped saying it in
     // Phase 2 — `services/aiRoute.js` owns that vocabulary now — and the
     // routing it gets is identical.

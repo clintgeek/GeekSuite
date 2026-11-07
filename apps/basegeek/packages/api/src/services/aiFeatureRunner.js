@@ -50,6 +50,7 @@ import logger from '../lib/logger.js';
 import aiService from './aiService.js';
 import { internalCaller } from './callerIdentity.js';
 import { textOnly } from './ai/adapters/imageContent.js';
+import AIFeatureQuota from '../models/AIFeatureQuota.js';
 
 export const DEFAULT_TIMEOUT_MS = 6000;
 export const DEFAULT_MAX_CALLS_PER_DAY = 20;
@@ -72,10 +73,52 @@ export const DEFAULT_HTTP_MAX_CALLS_PER_DAY = 200;
 // fast llama kept generating past its JSON and took 15 s+ (2026-09-06 live).
 export const DEFAULT_MAX_TOKENS = 600;
 
-// In-process, per-day counter. Restarts reset it, which is the right failure
-// direction for a ceiling meant to bound cost, not to enforce fairness: a
-// redeploy costs at most one extra day's cap. Keyed `app:feature:user:YYYY-MM-DD`.
+// The durable counter lives in `AIFeatureQuota` (one document per
+// `app:feature:bucket:YYYY-MM-DD`, claimed atomically — see `claimSlot`).
+// This map is two things, neither of them the source of truth:
+//   - the last count this process saw per key, which is what the synchronous
+//     `callsToday()` reports;
+//   - the counter itself while the store cannot be written (see `claimSlot`
+//     for why that degrades rather than refuses).
+// Until 2026-11-06 this map WAS the cap, and every restart (every push to
+// main restarts the fleet) handed every user a fresh day.
 const counters = new Map();
+
+/**
+ * How long a claim may take before the store is treated as unavailable.
+ * Mongoose buffers commands while disconnected (10 s by default), and a
+ * feature whose whole budget is 6 s cannot spend that waiting on a counter.
+ */
+export const QUOTA_STORE_TIMEOUT_MS = 1500;
+
+/** Keys whose last claim came from the in-process fallback, not the store. */
+const memoryClaims = new Set();
+
+/** A pending `_resetCounters()` store wipe; claims wait for it. */
+let resetting = null;
+
+/**
+ * Every durable key this process has claimed on in the last few days — what
+ * `_resetCounters` deletes. Scoped rather than `deleteMany({})` because test
+ * workers share one Mongo, and one suite's reset must not wipe another's
+ * counters mid-test. Swept in `sweep` to three days, so it stays small.
+ */
+const touched = new Set();
+
+/** The durable store. `null` = in-process only (`_setQuotaStore`). */
+let quotaStore = AIFeatureQuota;
+
+/**
+ * Test seam: `null` counts in process only — for a suite running under fake
+ * timers, where a Mongo round trip never settles — and no argument restores
+ * the real store. Returns the previous store.
+ */
+export function _setQuotaStore(store = AIFeatureQuota) {
+  const previous = quotaStore;
+  quotaStore = store;
+  return previous;
+}
+const TOUCHED_KEEP_MS = 2 * 24 * 60 * 60 * 1000;
 
 /**
  * Resolved needs, briefly.
@@ -186,23 +229,187 @@ function sweep(now) {
   for (const key of counters.keys()) {
     if (!key.endsWith(today)) counters.delete(key);
   }
+  for (const key of memoryClaims) {
+    if (!key.endsWith(today)) memoryClaims.delete(key);
+  }
+  const oldest = utcDay(new Date(new Date(now).getTime() - TOUCHED_KEEP_MS));
+  for (const key of touched) {
+    if (key.slice(-10) < oldest) touched.delete(key);
+  }
 }
 
+/**
+ * The last count this process saw for the key — synchronous, so it cannot ask
+ * the store. Exact for any key this process has claimed on today; 0 for one it
+ * has not touched since boot.
+ */
 export function callsToday({ app, feature, userId, now = new Date() }) {
   return counters.get(counterKey(app, feature, userId, now)) || 0;
 }
 
-/** Test hook. */
+/**
+ * Test hook. Clears the in-process mirror at once and the durable counters
+ * asynchronously; returns the wipe's promise, and every claim waits on it, so
+ * the older suites that call this without `await` stay correct.
+ */
 export function _resetCounters() {
   counters.clear();
+  memoryClaims.clear();
+  const ids = [...touched];
+  touched.clear();
+  const wipe = Promise.resolve()
+    .then(() => (ids.length && quotaStore ? quotaStore.deleteMany({ _id: { $in: ids } }) : null))
+    .catch((err) => logger.warn({ err: err?.message }, '[aiFeature] could not clear the durable cap counters'));
+  resetting = wipe;
+  wipe.finally(() => { if (resetting === wipe) resetting = null; });
+  return wipe;
 }
 
-function withTimeout(promise, ms, label) {
+function withStoreDeadline(promise) {
   let timer;
-  const timeout = new Promise((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+  const deadline = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`cap store timed out after ${QUOTA_STORE_TIMEOUT_MS}ms`)), QUOTA_STORE_TIMEOUT_MS);
   });
-  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+  return Promise.race([promise, deadline]).finally(() => clearTimeout(timer));
+}
+
+/**
+ * Take one slot of today's cap, atomically: `count < cap` and `$inc` are one
+ * write, so N concurrent calls cannot all read "one left" and all go.
+ *
+ * Returns `{ ok: true, count }` (count INCLUDING this claim) or
+ * `{ ok: false, count }` (the count that refused it).
+ *
+ * **When the store cannot be written, this degrades to the in-process
+ * counter, with a warning, rather than refusing.** The judgement: this cap is
+ * a runaway-loop bound on a mostly free path, not the money guard. Paid
+ * spend is governed separately by `AISpendBudget`'s reservation, which
+ * already fails closed when its ledger cannot be written — so the dollars are
+ * protected either way. Failing closed here would turn a Mongo blip into
+ * every AI feature in the suite answering with its fallback, to protect free
+ * quota the providers' own rate limits already bound. The degraded counter
+ * is per-process and resets on restart: the old behaviour, for exactly as
+ * long as the store is down.
+ */
+async function claimSlot({ key, app, feature, bucket, day, cap }) {
+  if (!(cap > 0)) return { ok: false, count: counters.get(key) || 0 };
+  if (!quotaStore) return claimInMemory(key, cap);
+  if (resetting) await resetting;
+  touched.add(key);
+  try {
+    const dayStart = new Date(`${day}T00:00:00.000Z`);
+    const expireAt = new Date(dayStart.getTime() + 2 * 24 * 60 * 60 * 1000);
+    const claim = (upsert) => withStoreDeadline(Promise.resolve().then(() => quotaStore.findOneAndUpdate(
+      { _id: key, count: { $lt: cap } },
+      {
+        $inc: { count: 1 },
+        ...(upsert ? { $setOnInsert: { app, feature, bucket, day, expireAt } } : {}),
+      },
+      { upsert, new: true }
+    ).lean()));
+    let doc;
+    try {
+      doc = await claim(true);
+    } catch (err) {
+      // E11000 means the document exists and its count is at the cap (the
+      // filter missed, so the upsert tried to insert a second `_id`), or a
+      // concurrent first-of-the-day insert won. A plain conditional `$inc`
+      // tells the two apart.
+      if (err?.code !== 11000) throw err;
+      doc = await claim(false);
+    }
+    if (doc) {
+      memoryClaims.delete(key);
+      counters.set(key, doc.count);
+      return { ok: true, count: doc.count };
+    }
+    const current = await withStoreDeadline(Promise.resolve().then(() => quotaStore.findById(key).select('count').lean()));
+    const count = current?.count ?? cap;
+    counters.set(key, count);
+    return { ok: false, count };
+  } catch (err) {
+    logger.warn({ app, feature, err: err?.message }, '[aiFeature] cap store unavailable — counting in process for now');
+    return claimInMemory(key, cap);
+  }
+}
+
+function claimInMemory(key, cap) {
+  const used = counters.get(key) || 0;
+  if (used >= cap) return { ok: false, count: used };
+  counters.set(key, used + 1);
+  memoryClaims.add(key);
+  return { ok: true, count: used + 1 };
+}
+
+/** Give back a claim whose call was never dispatched. Never rejects. */
+async function releaseSlot(key) {
+  const mirrored = counters.get(key) || 0;
+  if (mirrored > 0) counters.set(key, mirrored - 1);
+  if (memoryClaims.has(key)) return;
+  try {
+    await withStoreDeadline(Promise.resolve().then(() => quotaStore.updateOne(
+      { _id: key, count: { $gt: 0 } },
+      { $inc: { count: -1 } }
+    )));
+  } catch (err) {
+    // The slot stays spent until the day rolls over: errs toward refusing.
+    logger.warn({ key, err: err?.message }, '[aiFeature] could not release an unused cap claim');
+  }
+}
+
+/**
+ * `callAIWithInfo` against whatever `ai` this run was handed: `{ content,
+ * info }` for THIS call. The real service has the method; an injected double
+ * may only have `callAI` and a hand-set `lastProviderInfo`, which is read from
+ * that double — never from the singleton, which stopped writing one on
+ * 2026-11-06 because concurrent calls overwrote each other's copy. Defined
+ * here rather than imported because a dozen suites mock `aiService.js` with a
+ * default export only.
+ */
+async function callWithInfo(ai, prompt, config) {
+  if (typeof ai?.callAIWithInfo === 'function') return ai.callAIWithInfo(prompt, config);
+  const content = await ai.callAI(prompt, config);
+  return { content, info: ai?.lastProviderInfo || {} };
+}
+
+/**
+ * Run `work(signal)` under a deadline that CANCELS it, not merely stops
+ * waiting for it.
+ *
+ * This was `Promise.race([promise, timeout])` until 2026-11-06, which answered
+ * the caller on time and left the call running behind it: `callAI` walked on
+ * to the next free row and then to the governed PAID attempt, wrote health and
+ * a sticky repin and booked spend — for an answer nobody would read. Now the
+ * deadline aborts the signal `callAI` checks before every attempt and hands to
+ * the adapter's HTTP request. `outer` is the caller's own signal (the HTTP
+ * door's client hanging up); either one firing cancels the call.
+ */
+function withTimeout(work, ms, label, outer = null) {
+  const controller = new AbortController();
+  let timer;
+  let onOuter;
+  const deadline = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new Error(`${label} timed out after ${ms}ms`));
+    }, ms);
+    if (outer) {
+      onOuter = () => {
+        controller.abort();
+        reject(new Error(`${label} aborted by the caller`));
+      };
+      if (outer.aborted) onOuter();
+      else outer.addEventListener('abort', onOuter, { once: true });
+    }
+  });
+  const running = Promise.resolve().then(() => work(controller.signal));
+  // The losing side of the race still settles — with the abort error, once the
+  // signal lands. That rejection is expected and has nobody to report to.
+  running.catch(() => {});
+  return Promise.race([running, deadline]).finally(() => {
+    clearTimeout(timer);
+    if (outer && onOuter) outer.removeEventListener('abort', onOuter);
+  });
 }
 
 /**
@@ -253,7 +460,7 @@ function provenance(source, extra = {}) {
     callsToday: 0,
     cap: null,
     // What one call cost, in dollars, from the same figure `AISpend` booked
-    // (`aiService.updateStats` → `lastProviderInfo.costUsd`). `null` means
+    // (`aiService.updateStats` → the call's own `info.costUsd`). `null` means
     // "nobody told us", which is not the same as free — a free row books 0.
     costUsd: null,
     // Which legacy field, routing-row value or degradation produced the route
@@ -341,6 +548,25 @@ export async function runFeatureCore(opts) {
      * measurably meets this today" is a reason to fall back, not to refuse.
      */
     need = null,
+    /**
+     * The caller's own AbortSignal — the HTTP door passes one that fires when
+     * the client hangs up. Combined with this run's timeout in `withTimeout`.
+     */
+    signal = null,
+    /**
+     * Whether `app` is an identity we issued (callerIdentity's `trustedApp`).
+     * `false` — a JWT that named its own app, an unattributed caller — gets no
+     * paid-first and no paid step from that app's row: the row is someone
+     * else's budget. In-process callers leave the default.
+     */
+    appTrusted = true,
+    /**
+     * Refuse rather than fall back when `need` resolves to nothing. For the
+     * HTTP door's `vision` needs: a text-only model handed an image answers
+     * confidently about nothing, so "no vision row today" is a refusal
+     * (`detail: 'need_unresolved'`), not an `auto` walk to a blind model.
+     */
+    requireNeed = false,
     maxCallsPerDay = DEFAULT_MAX_CALLS_PER_DAY,
     timeoutMs = DEFAULT_TIMEOUT_MS,
     temperature = 0.2,
@@ -362,12 +588,18 @@ export async function runFeatureCore(opts) {
   });
 
   sweep(now);
-  const key = counterKey(app, feature, quotaBucket(userId, quotaKey), now);
-  const used = counters.get(key) || 0;
-  if (used >= maxCallsPerDay) {
-    logger.info({ app, feature, used, cap: maxCallsPerDay }, '[aiFeature] daily cap reached');
-    return refuse('cap', { callsToday: used, cap: maxCallsPerDay });
+  const bucket = quotaBucket(userId, quotaKey);
+  const key = counterKey(app, feature, bucket, now);
+  // Claimed BEFORE need resolution, so a capped caller costs no catalog read
+  // and `cap` still outranks `need_unresolved`; released below when the call
+  // is refused before it dispatches.
+  const slot = await claimSlot({ key, app, feature, bucket: bucket || 'anon', day: utcDay(now), cap: maxCallsPerDay });
+  if (!slot.ok) {
+    logger.info({ app, feature, used: slot.count, cap: maxCallsPerDay }, '[aiFeature] daily cap reached');
+    return refuse('cap', { callsToday: slot.count, cap: maxCallsPerDay });
   }
+  // `used` keeps its old meaning: the calls before this one.
+  const used = slot.count - 1;
 
   // A need is resolved only when nothing was pinned outright, and only ever
   // best-effort: a resolver that throws must not cost the caller their call.
@@ -388,6 +620,19 @@ export async function runFeatureCore(opts) {
       logger.warn({ app, feature, need, err: err?.message }, '[aiFeature] need resolution failed');
       needInfo = { asked: need, resolved: false, why: ['the need resolver was unavailable'] };
     }
+  }
+
+  // Before the cap is counted: a refusal for want of a qualifying model is not
+  // a call.
+  if (requireNeed && needInfo && !needPin) {
+    await releaseSlot(key);
+    return {
+      ok: false,
+      data: null,
+      reason: 'unavailable',
+      detail: 'need_unresolved',
+      provenance: provenance('none', { reason: 'unavailable', callsToday: used, cap: maxCallsPerDay, need: needInfo }),
+    };
   }
 
   const pinned = explicitPin || needPin;
@@ -435,7 +680,7 @@ export async function runFeatureCore(opts) {
   // rows (vision rows for a vision need), not the app's general free walk.
   // A call with no need already goes `auto`, which plans paid-first itself.
   let paidFirst = null;
-  if (needPin && !explicitPin) {
+  if (needPin && !explicitPin && appTrusted !== false) {
     try {
       paidFirst = (await ai.paidFirstFor?.(caller.appId)) ?? null;
     } catch {
@@ -447,11 +692,15 @@ export async function runFeatureCore(opts) {
   const failedPicks = [];
 
   let content;
-  counters.set(key, used + 1);
+  // This call's own metadata, handed back with its content. It was read off
+  // the shared `ai.lastProviderInfo` after the loop until 2026-11-06, which a
+  // concurrent call could overwrite in between (NoteGeek's Compose fan-out is
+  // nine of these at once).
+  let info = {};
   for (let i = 0; i < attemptPins.length; i += 1) {
     const attemptPin = attemptPins[i];
     try {
-      content = await callOnce(attemptPin);
+      ({ content, info } = await callOnce(attemptPin));
       if (needPin && attemptPin?.provider) ai.noteNeedSuccess?.(attemptPin.provider, attemptPin.model);
       if (attemptPin?.paidOnly && needInfo) {
         needInfo = { ...needInfo, provider: paidFirst.provider, model: paidFirst.model, paidFirst: true, why: ['the app\'s paid-first model'] };
@@ -477,7 +726,7 @@ export async function runFeatureCore(opts) {
       }
       // A timeout ends it outright (withTimeout's own error), and so does
       // having already spent a timeout's worth on fast failures.
-      const timedOut = /timed out after/.test(String(err?.message || ''));
+      const timedOut = /timed out after|aborted by the caller/.test(String(err?.message || ''));
       const outOfTime = timedOut || Date.now() - startedAt >= timeoutMs;
       if (i === attemptPins.length - 1 || outOfTime) {
         logger.warn({ app, feature, err: err?.message, tried: failedPicks }, '[aiFeature] model call failed');
@@ -488,13 +737,13 @@ export async function runFeatureCore(opts) {
   }
 
   async function callOnce(attemptPin) {
-    return withTimeout(
-      ai.callAI(prompt, {
+    return withTimeout((callSignal) => callWithInfo(ai, prompt, {
         messages: turns,
         // No routing switch. "Nothing at all" is `auto` reading the app's
-        // routing row (DOCS/AIGEEK_FRONT_DOOR.md §1), which is exactly what
+        // routing row (DOCS/ARCHIVE/AIGEEK_FRONT_DOOR.md §1), which is exactly what
         // `useAppConfig: true` used to mean here and no longer has to say.
         appName: caller.appId,
+        appTrusted,
         feature: caller.feature,
         // The credential's user, and only the credential's. `quotaKey` never
         // reaches this object: it counts a cap and means nothing else.
@@ -504,13 +753,14 @@ export async function runFeatureCore(opts) {
         temperature,
         maxTokens,
         ...(schema ? { responseFormat: { type: 'json_schema', json_schema: schema } } : {}),
+        signal: callSignal,
       }),
       timeoutMs,
-      label
+      label,
+      signal
     );
   }
 
-  const info = ai.lastProviderInfo || {};
   const meta = {
     model: info.model || null,
     provider: info.provider || null,

@@ -92,6 +92,14 @@ export function adapterErrorCode(status, error) {
   if (Number.isInteger(status)) return `http_${status}`;
   const message = String(error?.message || '');
   const code = String(error?.code || '');
+  // The caller's own AbortSignal firing (axios: `CanceledError`, code
+  // `ERR_CANCELED`). Not the provider's fault and not a timeout of theirs, so
+  // it gets its own code — `callAI` reads it to skip every health and
+  // rate-limit write for a call nobody is waiting on any more. Checked before
+  // the timeout pattern, whose `aborted` would otherwise claim an AbortError.
+  if (error?.name === 'CanceledError' || error?.name === 'AbortError' || /^err_canceled$/i.test(code)) {
+    return 'aborted';
+  }
   if (/timeout|etimedout|econnaborted|aborted/i.test(`${code} ${message}`)) return 'timeout';
   if (/econnrefused|enotfound|eai_again|socket hang up|network error/i.test(`${code} ${message}`)) {
     return 'network';

@@ -1,4 +1,4 @@
-import APIKey, { DEFAULT_KEY_PERMISSIONS } from '../../models/APIKey.js';
+import APIKey from '../../models/APIKey.js';
 import AIConfig from '../../models/AIConfig.js';
 import { encrypt } from '@geeksuite/crypto-vault';
 import AIPricing from '../../models/AIPricing.js';
@@ -6,6 +6,7 @@ import AIFreeTier from '../../models/AIFreeTier.js';
 import AIAppConfig from '../../models/AIAppConfig.js';
 import AISpend from '../../models/AISpend.js';
 import { readTraffic } from './aiTraffic.js';
+import { invalidateStatusCache } from '../../services/aiStatusService.js';
 import { normalizeTier } from '../../services/aiRoute.js';
 import aiService from '../../services/aiService.js';
 import aiDirectorService from '../../services/aiDirectorService.js';
@@ -13,6 +14,13 @@ import aiUsageService from '../../services/aiUsageService.js';
 import { User } from '../../models/user.js';
 import { PROVIDER_IDS, keyHintFor } from '../../config/aiProviders.js';
 import { GraphQLError } from 'graphql';
+import {
+  mintAuthority,
+  isAdminUser,
+  checkKeyTerms,
+  escalationMessage,
+  DEFAULT_KEY_TERMS
+} from '../../services/apiKeyPolicy.js';
 
 const requireAuth = (user) => {
   if (!user) {
@@ -52,6 +60,41 @@ export const requireAdminUser = async (user) => {
 
 // Same list the REST config route uses — one table, in config/aiProviders.js.
 const CONFIG_PROVIDERS = PROVIDER_IDS;
+
+/**
+ * requireMintAuthority — the GraphQL half of the Q62 mint gate.
+ *
+ * `createAPIKey` and `regenerateAPIKey` only ever checked that someone was
+ * logged in (audit 2026-11-06, B1), so the REST gate on `POST /api/api-keys`
+ * was a locked front door beside an open side door. The decision is
+ * `services/apiKeyPolicy.js#mintAuthority`, the one REST calls; the thrown
+ * shape mirrors `requireAdminUser` (ADMIN_REQUIRED / admin_required).
+ *
+ * @returns {Promise<boolean>} whether the caller is an admin (B2 needs it)
+ */
+const requireMintAuthority = async (user, appName) => {
+  const decision = await mintAuthority(user, appName);
+  if (!decision.allowed) {
+    throw new GraphQLError('admin role required to mint a key for an app you do not already hold', {
+      extensions: { code: 'ADMIN_REQUIRED', error: 'admin_required' }
+    });
+  }
+  return decision.isAdmin;
+};
+
+/**
+ * requireNarrowing — B2: a non-admin may only narrow a key. Mirrors the REST
+ * 403 `escalation_refused` body, `fields` included.
+ */
+const requireNarrowing = ({ isAdmin, current, requested }) => {
+  const check = checkKeyTerms({ isAdmin, current, requested });
+  if (!check.ok) {
+    throw new GraphQLError(escalationMessage(check.fields), {
+      extensions: { code: 'ESCALATION_REFUSED', error: 'escalation_refused', fields: check.fields }
+    });
+  }
+  return check.terms;
+};
 
 export const resolvers = {
   Query: {
@@ -292,10 +335,20 @@ export const resolvers = {
     // ----------------------------------------------------------------------
     // API Keys
     // ----------------------------------------------------------------------
-    createAPIKey: async (_, { name, appName, description, permissions = DEFAULT_KEY_PERMISSIONS, rateLimit, expiresAt }, { user }) => {
+    createAPIKey: async (_, { name, appName, description, permissions, rateLimit, expiresAt }, { user }) => {
       requireAuth(user);
       if (!name || !appName) throw new GraphQLError('Name and app name are required');
       if (!/^[a-zA-Z0-9_-]+$/.test(appName)) throw new GraphQLError('App name can only contain letters, numbers, hyphens, and underscores');
+
+      // B1 + B2: the REST mint gate, then the narrowing rule — both from
+      // services/apiKeyPolicy.js, before a key is generated. Unnamed (or null)
+      // permissions and limits take DEFAULT_KEY_TERMS, as they always did.
+      const isAdmin = await requireMintAuthority(user, appName);
+      const terms = requireNarrowing({
+        isAdmin,
+        current: DEFAULT_KEY_TERMS,
+        requested: { permissions, rateLimit, expiresAt }
+      });
 
       const { apiKey, keyPrefix, keyHash } = APIKey.generateAPIKey();
 
@@ -305,18 +358,16 @@ export const resolvers = {
         name: name.trim(),
         appName: appName.trim(),
         description: description?.trim(),
-        permissions,
-        rateLimit: {
-          requestsPerMinute: rateLimit?.requestsPerMinute || 60,
-          requestsPerHour: rateLimit?.requestsPerHour || 1000,
-          requestsPerDay: rateLimit?.requestsPerDay || 10000
-        },
-        expiresAt: expiresAt ? new Date(expiresAt) : null,
+        permissions: terms.permissions,
+        rateLimit: terms.rateLimit,
+        expiresAt: terms.expiresAt,
         createdBy: user.id
       });
 
       try {
         await apiKeyDoc.save();
+        // The status page counts keys per app and warns on expiry.
+        invalidateStatusCache();
         return {
           apiKey,
           keyInfo: {
@@ -342,21 +393,24 @@ export const resolvers = {
       const apiKeyDoc = await APIKey.findOne({ keyId: id, createdBy: user.id, isActive: true });
       if (!apiKeyDoc) throw new GraphQLError('API key not found');
 
-      if (name !== undefined) apiKeyDoc.name = name.trim();
+      // B2: only an admin may widen a key; its creator may narrow it or echo
+      // it back unchanged (the edit dialog resubmits every field).
+      const terms = requireNarrowing({
+        isAdmin: await isAdminUser(user),
+        current: apiKeyDoc,
+        requested: { permissions, rateLimit: rateLimit ?? undefined, expiresAt }
+      });
+
+      if (name !== undefined && name !== null) apiKeyDoc.name = name.trim();
       if (description !== undefined) apiKeyDoc.description = description?.trim();
-      if (permissions !== undefined) apiKeyDoc.permissions = permissions;
-      if (rateLimit !== undefined) {
-        apiKeyDoc.rateLimit = {
-          requestsPerMinute: rateLimit.requestsPerMinute || apiKeyDoc.rateLimit.requestsPerMinute,
-          requestsPerHour: rateLimit.requestsPerHour || apiKeyDoc.rateLimit.requestsPerHour,
-          requestsPerDay: rateLimit.requestsPerDay || apiKeyDoc.rateLimit.requestsPerDay
-        };
-      }
-      if (expiresAt !== undefined) apiKeyDoc.expiresAt = expiresAt ? new Date(expiresAt) : null;
-      if (isActive !== undefined) apiKeyDoc.isActive = isActive;
+      if (permissions !== undefined) apiKeyDoc.permissions = terms.permissions;
+      if (rateLimit !== undefined) apiKeyDoc.rateLimit = terms.rateLimit;
+      if (expiresAt !== undefined) apiKeyDoc.expiresAt = terms.expiresAt;
+      if (isActive !== undefined && isActive !== null) apiKeyDoc.isActive = isActive;
       
       apiKeyDoc.lastModifiedBy = user.id;
       await apiKeyDoc.save();
+      invalidateStatusCache();
 
       return {
         id: apiKeyDoc.keyId,
@@ -383,6 +437,7 @@ export const resolvers = {
       apiKeyDoc.isActive = false;
       apiKeyDoc.lastModifiedBy = user.id;
       await apiKeyDoc.save();
+      invalidateStatusCache();
 
       return { success: true, message: 'API key deleted successfully' };
     },
@@ -391,6 +446,10 @@ export const resolvers = {
       requireAuth(user);
       const apiKeyDoc = await APIKey.findOne({ keyId: id, createdBy: user.id, isActive: true });
       if (!apiKeyDoc) throw new GraphQLError('API key not found');
+
+      // B1: same rule as REST regenerate — holding the key is proven by the
+      // query above; a key for an app outside VALID_APPS stays an admin's.
+      await requireMintAuthority(user, apiKeyDoc.appName);
 
       const { apiKey, keyPrefix, keyHash } = APIKey.generateAPIKey();
       
@@ -441,7 +500,10 @@ export const resolvers = {
         const newKey = typeof providerConfig.apiKey === 'string' ? providerConfig.apiKey.trim() : '';
         const hasNewKey = newKey !== '' && newKey !== '***';
 
-        const updateData = { enabled: providerConfig.enabled || false };
+        // Written only when sent — see `POST /api/ai/config`: `|| false`
+        // switched a provider off on any save that did not repeat it.
+        const updateData = {};
+        if (typeof providerConfig.enabled === 'boolean') updateData.enabled = providerConfig.enabled;
         if (providerConfig.provider === 'cloudflare' && providerConfig.accountId) {
           updateData.accountId = providerConfig.accountId.trim();
         }
@@ -455,11 +517,14 @@ export const resolvers = {
           );
         } else {
           // No upsert without a key: AIConfig.apiKey is required.
-          await AIConfig.updateOne({ provider: providerConfig.provider }, { $set: updateData });
+          if (Object.keys(updateData).length > 0) {
+            await AIConfig.updateOne({ provider: providerConfig.provider }, { $set: updateData });
+          }
         }
       }
 
       await aiService.loadConfigurations();
+      invalidateStatusCache();
       return { success: true };
     },
 
@@ -476,6 +541,7 @@ export const resolvers = {
       }
       const result = await AIConfig.deleteOne({ provider });
       await aiService.loadConfigurations();
+      invalidateStatusCache();
       return { success: true, provider, removed: result.deletedCount > 0 };
     },
 
@@ -491,6 +557,7 @@ export const resolvers = {
     resetAIStats: async (_, __, { user }) => {
       await requireAdminUser(user);
       aiService.resetSessionStats();
+      invalidateStatusCache();
       return true;
     },
 
@@ -516,6 +583,7 @@ export const resolvers = {
     deleteModelPricing: async (_, { provider, modelId }, { user }) => {
       await requireAdminUser(user);
       await AIPricing.deleteOne({ provider, modelId });
+      invalidateStatusCache();
       return true;
     },
 
@@ -523,6 +591,7 @@ export const resolvers = {
     deleteModelFreeTier: async (_, { provider, modelId }, { user }) => {
       await requireAdminUser(user);
       await AIFreeTier.deleteOne({ provider, modelId });
+      invalidateStatusCache();
       return true;
     },
 
@@ -544,6 +613,7 @@ export const resolvers = {
         { $set: { override: value } },
         { upsert: true, new: true }
       );
+      invalidateStatusCache();
       return { success: true, provider: row.provider, modelId: row.modelId, override: row.override };
     },
 
@@ -576,9 +646,12 @@ export const resolvers = {
         dailyCap: Number.isFinite(Number(config.dailyCap)) && Number(config.dailyCap) > 0
           ? Math.floor(Number(config.dailyCap))
           : null,
-        notes: config.notes || '',
-        enabled: config.enabled !== false
+        notes: config.notes || ''
       };
+      // `enabled` only when sent: `config.enabled !== false` re-enabled a
+      // routing row an admin had switched off on any save that did not repeat
+      // the flag. A new row takes the model's default (enabled).
+      if (typeof config.enabled === 'boolean') update.enabled = config.enabled;
       // Paid-first (2026-09-24) is written only when the caller sent it: the
       // admin UI predates it, and a save from there must not switch a
       // paid-first app back to free by omission.
@@ -590,12 +663,14 @@ export const resolvers = {
         update,
         { upsert: true, new: true }
       );
+      invalidateStatusCache();
       return result;
     },
 
     deleteAIAppConfig: async (_, { appName }, { user }) => {
       await requireAdminUser(user);
       await AIAppConfig.deleteOne({ appName });
+      invalidateStatusCache();
       return true;
     }
   }

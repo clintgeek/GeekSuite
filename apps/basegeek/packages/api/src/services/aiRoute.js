@@ -54,7 +54,7 @@ import { declaresAppRouting } from './callerIdentity.js';
  * values resolve here, with a hint, and are rewritten to `auto` the next time
  * the row is saved. No data migration: a tolerant read is cheaper than a
  * migration that has to be right the first time (see the Rollback section of
- * DOCS/AIGEEK_FRONT_DOOR.md — rows are read tolerantly in *both* directions,
+ * DOCS/ARCHIVE/AIGEEK_FRONT_DOOR.md — rows are read tolerantly in *both* directions,
  * so the Phase 2 revert is a `git revert` and nothing else).
  */
 export const LEGACY_AUTO_TIERS = Object.freeze(['free', 'rotation']);
@@ -106,7 +106,7 @@ function route({ mode, provider = null, model = null, allowPaid = false, singleA
  *      provider called `meta-llama`.
  *   2. `provider: '<roster id>'` with a `model`. The plain form.
  *   3. `provider: '<roster id>'` with no model. The table in
- *      DOCS/AIGEEK_FRONT_DOOR.md §1 is silent on this one, so: it is a pin,
+ *      DOCS/ARCHIVE/AIGEEK_FRONT_DOOR.md §1 is silent on this one, so: it is a pin,
  *      on that provider's `defaultModel` — which §2 keeps in
  *      `aiProviders.js` for exactly this and for the probe. A caller that
  *      names a backend and no model still named a backend, and answering it
@@ -272,7 +272,13 @@ export function resolveRoute(config = {}, appRow = null, ctx = {}) {
   }
   if (!appRow) hints.push('no_row');
 
-  const allowPaid = appRow?.allowPaid === true && !free;
+  // `appTrusted: false` is a caller whose app id was not issued by us — a JWT
+  // that named its own app at login, an unattributed key (callerIdentity's
+  // `trustedApp`, 2026-11-06). Its app's row may say `allowPaid`, but the row
+  // is somebody else's money: no paid step and no paid-first for it. The
+  // doors set this from the credential AFTER any body-derived config, and
+  // in-process callers leave it undefined, keeping their row's policy.
+  const allowPaid = appRow?.allowPaid === true && !free && cfg.appTrusted !== false;
   // Paid-first: the row names one paid model to try before the free walk.
   // Only with allowPaid — the same money gate — and never on a free signal.
   const paidFirst = allowPaid && appRow?.paidFirst === true && appRow.paidProvider && appRow.paidModel

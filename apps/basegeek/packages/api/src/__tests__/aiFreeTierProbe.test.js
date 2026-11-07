@@ -871,22 +871,34 @@ describe('the catalog reconciles itself', () => {
     expect(demote.filter.modelId).toEqual({ $nin: ['still-here'] });
   });
 
-  it('prunes rows for a roster provider we hold no key for', async () => {
+  it('parks — never deletes — rows for a roster provider we hold no key for', async () => {
     // together carried 416 catalog models and 16 free rows for a provider
-    // nothing could reach; pruneUnknownProviders only removes providers that
-    // have LEFT the roster, so nothing ever cleaned these.
+    // nothing could reach. Until 2026-11-06 these were DELETED, taking human
+    // overrides, quality and latency history with them (C2); now they are
+    // marked out of service and restored when the key returns.
     const deps = { model: collection(), freeTier: collection(), pricing: collection() };
-    const out = await probe.pruneUnconfiguredProviders(
-      { configured: ['groq', 'gemini'], roster: ['groq', 'gemini', 'together', 'llmgateway'] },
+    const out = await probe.parkUnconfiguredProviders(
+      { configured: ['groq', 'gemini'], roster: ['groq', 'gemini', 'together', 'llmgateway'], now: NOW_MS },
       deps
     );
-    expect(out).toEqual({ AIModel: 7, AIFreeTier: 7, AIPricing: 7 });
-    expect(deps.model.writes[0].filter).toEqual({ provider: { $in: ['together', 'llmgateway'] } });
+    expect(out).toEqual({ AIModel: 2, AIFreeTier: 2 });
+    expect(deps.model.writes[0]).toMatchObject({
+      op: 'updateMany',
+      filter: { provider: { $in: ['together', 'llmgateway'] }, isActive: true },
+      update: { $set: { isActive: false, providerDisabledAt: new Date(NOW_MS) } },
+    });
+    expect(deps.freeTier.writes[0]).toMatchObject({
+      op: 'updateMany',
+      filter: { provider: { $in: ['together', 'llmgateway'] }, isFree: true },
+      update: { $set: { isFree: false, providerDisabledAt: new Date(NOW_MS) } },
+    });
+    for (const c of Object.values(deps)) expect(c.writes.some((w) => w.op === 'deleteMany')).toBe(false);
+    expect(deps.pricing.writes).toEqual([]);
   });
 
-  it('prunes nothing when every roster provider has a key', async () => {
+  it('parks nothing when every roster provider has a key', async () => {
     const deps = { model: collection(), freeTier: collection(), pricing: collection() };
-    const out = await probe.pruneUnconfiguredProviders(
+    const out = await probe.parkUnconfiguredProviders(
       { configured: ['groq', 'gemini'], roster: ['groq', 'gemini'] },
       deps
     );
@@ -894,9 +906,19 @@ describe('the catalog reconciles itself', () => {
     expect(deps.model.writes).toEqual([]);
   });
 
+  it('unparks exactly the parked rows of a provider that has a key again', async () => {
+    const deps = { model: collection(), freeTier: collection() };
+    await probe.unparkConfiguredProviders({ configured: ['together'] }, deps);
+    expect(deps.freeTier.writes[0]).toMatchObject({
+      filter: { provider: { $in: ['together'] }, providerDisabledAt: { $ne: null } },
+      update: { $set: { isFree: true, providerDisabledAt: null } },
+    });
+    expect(deps.model.writes[0].update).toEqual({ $set: { isActive: true, providerDisabledAt: null } });
+  });
+
   it('never touches AIConfig — a job that can delete a key can lose Chef’s keys', async () => {
     const deps = { model: collection(), freeTier: collection(), pricing: collection(), config: collection() };
-    await probe.pruneUnconfiguredProviders({ configured: [], roster: ['together'] }, deps);
+    await probe.parkUnconfiguredProviders({ configured: [], roster: ['together'] }, deps);
     expect(deps.config.writes).toEqual([]);
   });
 });

@@ -13,7 +13,7 @@
  *
  * `resolveRoute` is that decision as one pure function, so it can be tested as
  * a table rather than as a fixture farm. Every legacy input in
- * DOCS/AIGEEK_FRONT_DOOR.md §1 appears below; if a row is missing from the
+ * DOCS/ARCHIVE/AIGEEK_FRONT_DOOR.md §1 appears below; if a row is missing from the
  * table, the vocabulary is bigger than the doc admits.
  *
  * Nothing here touches Mongo, a clock, or a provider. That is the point of the

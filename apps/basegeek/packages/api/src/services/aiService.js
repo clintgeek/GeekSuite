@@ -29,7 +29,13 @@ import AIFreeTier, {
 } from '../models/AIFreeTier.js';
 import AIAppConfig from '../models/AIAppConfig.js';
 import AIUsage from '../models/AIUsage.js';
-import AISpend, { spendDay, recordRefusal } from '../models/AISpend.js';
+import AISpend, {
+  spendDay,
+  recordRefusal,
+  reserveDailyBudget,
+  settleDailyBudget,
+  releaseDailyBudget
+} from '../models/AISpend.js';
 import AIStickyPick, { stickyKey } from '../models/AIStickyPick.js';
 // The routing decision is pure and lives next door (Phase 2). aiService owns
 // the I/O the decision needs — is this row cooling, what has today cost — and
@@ -73,6 +79,54 @@ import { countTextTokens, countMessageTokens } from './tokenCounter.js';
  * only with `allowPaid` and the budget's blessing.
  */
 const MAX_FREE_TIER_ATTEMPTS = 3;
+
+/**
+ * The error a cancelled `callAI` throws: the caller's AbortSignal fired (a
+ * feature runner's deadline, an HTTP client that hung up) and the walk stopped.
+ *
+ * It exists because a deadline used to be a `Promise.race` and nothing else —
+ * the caller got its fallback and the abandoned call carried on behind it: the
+ * next free row, then the governed PAID attempt, then the health writes, the
+ * sticky repin and the spend booking, all for an answer nobody would read. The
+ * code is `aborted`, which `aiFailureEnvelope` renders as a timeout.
+ */
+export function callAbortedError() {
+  const error = new Error('aborted: the caller stopped waiting for this AI call');
+  error.name = 'AbortError';
+  error.code = 'aborted';
+  return error;
+}
+
+/**
+ * An `AIPricing` row as a price the governor may trust, or `null`.
+ *
+ * Only a finite, non-negative figure counts, and at least one side must be
+ * above zero. The second rule is the one that matters: `AIPricing` declares
+ * both prices `required` with `default: 0`, so a row written without a price
+ * reads back as 0/0 — indistinguishable from "this model is free". A model is
+ * free because the free-tier catalog says so (`AIFreeTier.isFree`), never
+ * because a price row happens to be empty; a 0/0 row for a model the free
+ * tier does not list is an unknown price, and the governor refuses unknown.
+ */
+function trustedPricing(row) {
+  if (!row) return null;
+  const n = (v) => {
+    if (v === null || v === undefined || v === '') return null;
+    const x = Number(v);
+    return Number.isFinite(x) && x >= 0 ? x : null;
+  };
+  const inputPrice = n(row.inputPrice);
+  const outputPrice = n(row.outputPrice);
+  if (!(inputPrice > 0) && !(outputPrice > 0)) return null;
+  return { inputPrice: inputPrice ?? 0, outputPrice: outputPrice ?? 0 };
+}
+
+/** Did this failure come from our own AbortSignal rather than the provider? */
+function isAbortFailure(error, signal) {
+  if (signal?.aborted) return true;
+  return error?.code === 'aborted' || error?.code === 'ERR_CANCELED'
+    || error?.name === 'AbortError' || error?.name === 'CanceledError';
+}
 
 /**
  * Read a positive integer from an env var, falling back to `fallback` when
@@ -356,6 +410,14 @@ class AIService {
         logger.debug(`  ${config.provider}: enabled=${config.enabled}, apiKey=${config.apiKey ? 'Set' : 'Not Set'}`);
         if (this.providers[config.provider]) {
           const decryptedKey = config.getDecryptedKey();
+          if (config.apiKey && !decryptedKey) {
+            // A stored key that decrypts to nothing reads exactly like "no
+            // key" from here on. Say so, by provider — never the key.
+            logger.warn(
+              { provider: config.provider },
+              '[aiService] stored API key did not decrypt — check KEY_VAULT_SECRET (wrong or rotated?); provider treated as keyless'
+            );
+          }
           this.providers[config.provider].apiKey = decryptedKey ? decryptedKey.trim() : '';
           this.providers[config.provider].enabled = config.enabled;
           this.providers[config.provider].model = this.rotationProviderOverrides[config.provider]?.model || this.providers[config.provider].model;
@@ -750,7 +812,7 @@ class AIService {
   /**
    * Summarize text intelligently using cloud API
    */
-  async summarizeText(text, targetTokens = 4000) {
+  async summarizeText(text, targetTokens = 4000, via = null) {
     const currentTokens = this.estimateTokens(text);
 
     if (currentTokens <= targetTokens) {
@@ -761,27 +823,23 @@ class AIService {
     const startTime = Date.now();
 
     try {
-      // Use a fast, free provider for summarization - load balance between Cerebras and Together
-      let summarizationProvider = null;
-
-      // Cerebras first (fastest), then Together, then Groq — skipping any that
-      // is inside its own `retry-after`. This used to consult the static
-      // per-minute token table; a summarization is a 2,000-token call and the
-      // provider's 429 is the only honest answer to whether it will take one.
-      for (const candidate of ['cerebras', 'together', 'groq']) {
-        const pc = this.providers[candidate];
-        if (pc?.enabled && pc.apiKey && !this.isRateLimited(candidate)) {
-          summarizationProvider = candidate;
-          break;
-        }
-      }
-
-      if (!summarizationProvider) {
-        logger.info('⚠️  No summarization provider available, using truncation');
+      // WHO summarizes is the attempt's own route, and nobody else.
+      //
+      // This used to pick the first of cerebras → together → groq that had a
+      // key, whatever the request had been routed to — so a conversation
+      // pinned to one vendor, or routed to a free row precisely because of
+      // where it may go, had its whole history shipped to a different vendor
+      // first, outside every routing decision (2026-11-06). `via` is the
+      // provider/model the attempt is about to call; with no `via`, or with
+      // that provider inside its retry-after, nothing is sent anywhere and the
+      // text is truncated instead.
+      const summarizationProvider = via?.provider || null;
+      const pc = summarizationProvider ? this.providers[summarizationProvider] : null;
+      if (!pc || !pc.apiKey || pc.enabled === false || this.isRateLimited(summarizationProvider)) {
+        logger.info('⚠️  No summarization route for this attempt, using truncation');
         return text.substring(0, Math.floor(targetTokens / 0.75));
       }
 
-      const providerConfig = this.providers[summarizationProvider];
       const targetChars = Math.floor(targetTokens / 0.75);
 
       // Call the AI provider to summarize, through the same adapter a real
@@ -792,7 +850,7 @@ class AIService {
       // and its own error handling. The three candidates above are all
       // `shape: 'openai'` rows; if a future candidate is not, the registry
       // will speak its dialect and this code will not have to know.
-      const result = (await callAdapter(summarizationProvider, providerConfig, {
+      const result = (await this.callProvider(summarizationProvider, null, {
         messages: [
           {
             role: 'system',
@@ -803,12 +861,13 @@ class AIService {
             content: text
           }
         ],
-        model: providerConfig.model,
+        model: via.model || pc.model,
         maxTokens: Math.min(2000, targetTokens),
         temperature: 0.3, // Low temperature for consistent summarization
         // A summarization is a step on the way to the *real* call, so it gets
         // a tenth of the adapter's patience: 10 s, as it always had.
-        timeoutMs: 10000
+        timeoutMs: 10000,
+        signal: via.signal || null
       })).content;
       const resultTokens = this.estimateTokens(result);
 
@@ -824,7 +883,7 @@ class AIService {
   }  /**
    * Summarize messages array intelligently
    */
-  async summarizeMessages(messages, targetTokens = 4000) {
+  async summarizeMessages(messages, targetTokens = 4000, via = null) {
     if (!messages || messages.length === 0) return messages;
 
     // Calculate total tokens
@@ -849,7 +908,7 @@ class AIService {
     const systemTokens = systemMsg ? this.estimateTokens(systemMsg.content) : 0;
     const availableTokens = Math.max(1000, targetTokens - systemTokens); // Ensure positive minimum
 
-    const summarizedText = await this.summarizeText(conversationText, availableTokens);
+    const summarizedText = await this.summarizeText(conversationText, availableTokens, via);
 
     // Return condensed messages
     const result = [
@@ -863,8 +922,21 @@ class AIService {
   /**
    * Smart preprocessing: summarize if needed based on provider context limits
    */
-  async preprocessContext(prompt, messages, targetProvider) {
+  async preprocessContext(prompt, messages, target) {
     if (!this.summarizationEnabled) {
+      return { prompt, messages };
+    }
+
+    // `target` is the attempt about to be made — `{ provider, model, paid,
+    // signal }` from `callAI`, or a bare provider id from older callers. The
+    // summary is written by that same provider and model (see
+    // `summarizeText`), and never for a PAID attempt: a summarization call is
+    // a second model call the governor did not price, so a paid attempt that
+    // is over its context sends as-is and the context gate in `callAI` skips
+    // it rather than spending ungoverned money to shrink it.
+    const via = typeof target === 'string' ? { provider: target, model: null, paid: false } : (target || {});
+    const targetProvider = via.provider;
+    if (via.paid) {
       return { prompt, messages };
     }
 
@@ -907,13 +979,13 @@ class AIService {
     // Summarize
     if (messages) {
       logger.info(`🔄 Attempting to summarize ${messages.length} messages from ${estimatedTokens} → ${threshold} tokens`);
-      const summarizedMessages = await this.summarizeMessages(messages, threshold);
+      const summarizedMessages = await this.summarizeMessages(messages, threshold, via);
       const newEstimate = countMessageTokens(summarizedMessages);
       logger.info(`✅ Summarization complete: ${estimatedTokens} → ${newEstimate} tokens (${messages.length} → ${summarizedMessages.length} messages)`);
       const newPrompt = summarizedMessages.map(m => `${m.role}: ${m.content}`).join('\n');
       return { prompt: newPrompt, messages: summarizedMessages };
     } else {
-      const summarizedPrompt = await this.summarizeText(prompt, threshold);
+      const summarizedPrompt = await this.summarizeText(prompt, threshold, via);
       return { prompt: summarizedPrompt, messages: null };
     }
   }
@@ -1460,7 +1532,7 @@ class AIService {
    * Every `auto` call reads this now, not only the ones that said
    * `useAppConfig` — the row is where `allowPaid`, `sticky` and the token
    * defaults live, and "nothing at all" is `auto` reading the app's row per
-   * DOCS/AIGEEK_FRONT_DOOR.md §1. A pin skips it (see `callAI`), so the extra
+   * DOCS/ARCHIVE/AIGEEK_FRONT_DOOR.md §1. A pin skips it (see `callAI`), so the extra
    * query is one indexed `findOne` on the path that was already doing it for
    * the majority of callers.
    *
@@ -1574,12 +1646,55 @@ class AIService {
    * default, which is what `aiProviders.js` keeps `defaultModel` for now that
    * the rotation no longer walks it (§2).
    */
-  planPinAttempt(route) {
+  async planPinAttempt(route) {
     const modelId = route.model || this.providers[route.provider]?.model || null;
+    // A pin used to be planned `paid: false` unconditionally, and the governor
+    // only runs for paid attempts — so every pin was ungoverned and unpriced:
+    // `/openai/v1` with a paid OpenRouter slug, `/feature` and `/parse-json`
+    // with an explicit provider+model, a `tier: 'specific'` row. None of them
+    // met `allowPaid` or a cap (hardening pass, 2026-11-06). A pin is now FREE
+    // only when the free-tier catalog lists it; anything else is a paid
+    // attempt, priced from `AIPricing` (or unpriced, which the governor
+    // refuses). Whether the app may spend at all is `callAI`'s next question.
+    const cost = await this.classifyPinCost(route.provider, modelId);
+    if (cost.free) {
+      return {
+        attempts: [{ provider: route.provider, modelId, freeRow: null, paid: false, knownFree: true, sticky: false, pin: true }],
+        hints: []
+      };
+    }
     return {
-      attempts: [{ provider: route.provider, modelId, freeRow: null, paid: false, sticky: false }],
-      hints: []
+      attempts: [{ provider: route.provider, modelId, freeRow: null, paid: true, sticky: false, pin: true, pricing: cost.pricing }],
+      hints: ['paid_pin']
     };
+  }
+
+  /**
+   * Is this pinned model free, and if not, what does it cost?
+   *
+   * Free means the free-tier catalog says so: an `AIFreeTier` row for this
+   * provider/model with `isFree: true`. `config/aiProviders.js` carries no
+   * per-provider "always free" fact to lean on (it says every provider is a
+   * free-tier one, while OpenRouter sells paid models through the same key),
+   * so the catalog row is the only evidence. Everything else is paid, priced
+   * by `trustedPricing` — `null` when unknown. A catalog that cannot be read
+   * says "paid, unknown price", which the governor refuses: fail closed.
+   *
+   * @returns {Promise<{free: boolean, pricing: {inputPrice: number, outputPrice: number}|null}>}
+   */
+  async classifyPinCost(provider, modelId) {
+    if (!provider || !modelId) return { free: false, pricing: null };
+    try {
+      const [freeRow, priceRow] = await Promise.all([
+        AIFreeTier.findOne({ provider, modelId, isFree: true }).lean(),
+        AIPricing.findOne({ provider, modelId }).lean()
+      ]);
+      if (freeRow) return { free: true, pricing: null };
+      return { free: false, pricing: trustedPricing(priceRow) };
+    } catch (error) {
+      logger.warn({ err: error, provider, modelId }, '[Paid] could not classify a pin — treating it as paid with no price');
+      return { free: false, pricing: null };
+    }
   }
 
   /**
@@ -1615,10 +1730,7 @@ class AIService {
       let pricing = null;
       try {
         const row = await AIPricing.findOne({ provider: route.paidFirst.provider, modelId: route.paidFirst.model }).lean();
-        const n = (v) => (Number.isFinite(Number(v)) ? Number(v) : null);
-        if (row && (n(row.inputPrice) !== null || n(row.outputPrice) !== null)) {
-          pricing = { inputPrice: n(row.inputPrice) ?? 0, outputPrice: n(row.outputPrice) ?? 0 };
-        }
+        pricing = trustedPricing(row);
       } catch {
         pricing = null;
       }
@@ -1786,19 +1898,12 @@ class AIService {
       // the governor would wave it through. Only a finite number counts as a
       // price; a row with neither side priced is `null` — unpriced — and the
       // governor refuses it (Phase 1's rule: unknown is never free).
-      const finiteOrNull = (value) => {
-        const n = Number(value);
-        return Number.isFinite(n) ? n : null;
-      };
+      // (and a 0/0 row — the schema's defaults — is no price either; see
+      // `trustedPricing`).
       const priceOf = new Map();
       for (const p of prices) {
-        const inputPrice = finiteOrNull(p.inputPrice);
-        const outputPrice = finiteOrNull(p.outputPrice);
-        if (inputPrice === null && outputPrice === null) continue;
-        priceOf.set(this.freeTierKey(p.provider, p.modelId), {
-          inputPrice: inputPrice ?? 0,
-          outputPrice: outputPrice ?? 0
-        });
+        const pricing = trustedPricing(p);
+        if (pricing) priceOf.set(this.freeTierKey(p.provider, p.modelId), pricing);
       }
 
       return usable
@@ -1848,23 +1953,48 @@ class AIService {
    * two reads it needs. Above both caps sits the credit limit on the
    * OpenRouter key, which Chef sets and this code cannot see.
    */
-  async paidGovernorVerdict({ provider, modelId, promptTokens = 0, maxTokens = 0, pricing = undefined }) {
+  async paidGovernorVerdict({ provider, modelId, promptTokens = 0, maxTokens = 0, pricing = undefined, reserve = false }) {
     let priced = pricing;
     if (priced === undefined) {
       try {
-        const row = await AIPricing.findOne({ provider, modelId }).lean();
-        priced = row ? { inputPrice: Number(row.inputPrice) || 0, outputPrice: Number(row.outputPrice) || 0 } : null;
+        // `|| 0` on each side used to turn a row with no usable price into a
+        // $0 estimate — which every cap waves through. A sticky paid pick
+        // reaches here with no `pricing` of its own, so this lookup was its
+        // only price check (2026-11-06).
+        priced = trustedPricing(await AIPricing.findOne({ provider, modelId }).lean());
       } catch {
         priced = null;
       }
     }
     const estimateUsd = estimatePaidCostUsd(priced, promptTokens, maxTokens);
-    const verdict = paidBudgetVerdict({
-      spentTodayUsd: await this.spentTodayUsd(),
-      estimateUsd,
-      caps: paidCaps()
-    });
-    return { ...verdict, caps: paidCaps() };
+    const caps = paidCaps();
+    const spentTodayUsd = await this.spentTodayUsd();
+    const verdict = paidBudgetVerdict({ spentTodayUsd, estimateUsd, caps });
+    if (!verdict.ok || !reserve) return { ...verdict, caps, reservation: null };
+
+    // The read above is advice; this is the decision. "Read today's total,
+    // compare, call, book afterwards" let N concurrent paid attempts all read
+    // the same total and all pass — eight $0.01 calls against a $0.05 day
+    // spent $0.08 (2026-11-06). The estimate is now RESERVED on the day's
+    // budget document with one conditional update, so two attempts cannot
+    // both take room only one of them fits; `callAI` settles it to the real
+    // cost or releases it. A ledger we cannot write is not permission to
+    // spend: any failure here refuses the attempt.
+    let reservation = null;
+    try {
+      reservation = await reserveDailyBudget({
+        estimateUsd: verdict.estimateUsd,
+        perDayUsd: caps.perDayUsd,
+        externalSpentUsd: spentTodayUsd
+      });
+    } catch (error) {
+      logger.warn({ err: error, provider, modelId }, '[Paid] could not reserve against the daily budget — refusing the paid attempt');
+      return { ok: false, reason: 'paid_ledger_unreadable', estimateUsd: verdict.estimateUsd, spentTodayUsd, caps, reservation: null };
+    }
+    if (!reservation) {
+      return { ok: false, reason: 'paid_budget_per_day', estimateUsd: verdict.estimateUsd, spentTodayUsd, caps, reservation: null };
+    }
+    return { ...verdict, caps, reservation };
   }
 
   /**
@@ -1959,6 +2089,32 @@ class AIService {
       frequencyPenalty = null
     } = config;
 
+    // The caller's AbortSignal. Only a real one: `/parse-json` spreads a
+    // request body's `config` into this object, and a JSON `{aborted: true}`
+    // handed to axios as a `signal` would throw inside the adapter.
+    const signal = typeof AbortSignal !== 'undefined' && config.signal instanceof AbortSignal
+      ? config.signal
+      : null;
+    if (signal?.aborted) throw callAbortedError();
+
+    // Where THIS call's metadata goes — which provider and model answered,
+    // the tool calls, the finish reason, the cost. It used to be written onto
+    // `this.lastProviderInfo`, a field on a process-wide singleton that every
+    // front door read back *after* its await, so two overlapping calls raced
+    // and whichever finished writing last was reported to both: the wrong
+    // `model`, `tool_calls` and `finish_reason` to an OpenAI SDK, the wrong
+    // `costUsd` in a feature's provenance (hardening pass, 2026-11-06). The
+    // metadata is call-local now; `callAIWithInfo` below is how a caller asks
+    // for it. Never allowed to throw into the call it is reporting on.
+    const reportInfo = (info) => {
+      if (typeof config.onInfo !== 'function') return;
+      try {
+        config.onInfo(info);
+      } catch (err) {
+        logger.debug({ err }, '[AIService] onInfo callback threw — ignored');
+      }
+    };
+
     // Fingerprint for structured-output cache-key segregation (item 2).
     const structuredFingerprint = this.structuredOutputFingerprint(responseFormat, tools, toolChoice);
 
@@ -1982,12 +2138,18 @@ class AIService {
     // switched them back on, and the free-tier block overwrote
     // `requestedProvider` again — three writers to the same four variables,
     // each correct on its own and none of them able to say what the caller
-    // had actually asked for. See DOCS/AIGEEK_FRONT_DOOR.md §1 for the table.
+    // had actually asked for. See DOCS/ARCHIVE/AIGEEK_FRONT_DOOR.md §1 for the table.
     const providerIds = Object.keys(this.providers);
     const routeCtx = { providerIds, appId, conversationId };
     let appRow = null;
-    let route = config.route?.mode ? config.route : null;
-    if (!route) {
+    // There is no way to hand `callAI` a pre-built Route. There used to be —
+    // `config.route` was taken verbatim when it had a `mode` — and
+    // `/parse-json` spreads a request BODY's `config` into this object, so any
+    // `ai:call` credential could send `{route: {mode: 'auto', allowPaid: true,
+    // paidFirst: …}}` and spend against an app whose row says no (2026-11-06).
+    // Nothing in the codebase used it.
+    let route = null;
+    {
       // A pin does not read the routing row, so it does not pay for the
       // query. Everything else does: `allowPaid`, `sticky` and the token
       // defaults all live on the row, and "nothing at all" is `auto` reading
@@ -2026,8 +2188,31 @@ class AIService {
 
     // ── The attempt plan ────────────────────────────────────────────────────
     const planned = route.mode === 'pin'
-      ? this.planPinAttempt(route)
+      ? await this.planPinAttempt(route)
       : await this.planAutoAttempts(route, { appId });
+
+    // A paid pin needs the same permission the auto walk's paid step does:
+    // the caller app's own `allowPaid`. A request pin does not otherwise read
+    // the routing row, so it is read here, read-only — and a row that cannot
+    // be read, or no row at all, is not permission.
+    for (const attempt of planned.attempts) {
+      if (!attempt.pin || !attempt.paid) continue;
+      let gateRow = appRow;
+      if (!gateRow) {
+        try {
+          gateRow = await this.findAppConfig(appId);
+        } catch (error) {
+          logger.warn({ err: error, appId }, '[Paid] could not read the routing row — refusing the paid pin');
+          gateRow = null;
+        }
+      }
+      // An app id the caller's credential did not prove (`appTrusted:
+      // false`) cannot spend that app's money, whatever its row says.
+      if (gateRow?.allowPaid !== true || config.appTrusted === false) {
+        attempt.refused = 'paid_not_allowed';
+        planned.hints.push('paid_pin_refused');
+      }
+    }
     const attemptPlan = planned.attempts;
     const routeHints = [...route.hints, ...planned.hints];
 
@@ -2073,11 +2258,32 @@ class AIService {
     let retiredSticky = null;
 
     for (const attempt of attemptPlan) {
+      // A cancelled call starts no new attempt — above all no paid one. Checked
+      // at the top of every attempt and again after each await below that
+      // could have outlived the caller.
+      if (signal?.aborted) throw callAbortedError();
+
       const currentProvider = attempt.provider;
       if (!currentProvider) continue;
 
       const providerConfig = this.providers[currentProvider];
       if (!providerConfig || !providerConfig.apiKey || providerConfig.enabled === false) {
+        continue;
+      }
+
+      // A pin to a paid model from an app that may not spend (see the plan
+      // step above). Refused before the cache and before any I/O, and counted
+      // like a governor refusal so "the cap bit" and "the app may not pay"
+      // both show up in the ledger. The wording keeps `aiFailureEnvelope`'s
+      // `/no .*providers/` match: to the caller this is a 503, nothing left to
+      // try — not a 500 that says nothing.
+      if (attempt.refused) {
+        const model = attempt.modelId || providerConfig.model;
+        logger.info({ app: appId, feature: featureId, model: `${currentProvider}/${model}`, reason: attempt.refused }, 'paid pin refused — the app does not allow paid calls');
+        recordRefusal(currentProvider, appId, featureId);
+        const refusal = new Error(`paid_not_allowed: no providers left to try — ${currentProvider}/${model} is not a free-tier model and this app does not allow paid calls`);
+        refusal.code = 'paid_not_allowed';
+        lastError = refusal;
         continue;
       }
 
@@ -2106,7 +2312,7 @@ class AIService {
         : this.getCacheKey(cacheSubject, currentProvider, providerModel, temperature, cacheNamespace, structuredFingerprint);
       const cached = bypassCache ? null : this.getCachedResponse(cacheKeyBase);
       if (cached) {
-        this.lastProviderInfo = {
+        reportInfo({
           provider: currentProvider,
           model: providerModel,
           cached: true,
@@ -2116,14 +2322,30 @@ class AIService {
           // A cache hit spends nothing. Zero, not null: "we did not pay for
           // this" is a fact, unlike "we were not told what it cost".
           costUsd: 0
-        };
+        });
         return cached.content;
       }
 
-      const preprocessed = await this.preprocessContext(basePrompt, normalizedMessages, currentProvider);
+      const preprocessed = await this.preprocessContext(basePrompt, normalizedMessages, {
+        provider: currentProvider,
+        model: providerModel,
+        paid: !!attempt.paid,
+        signal
+      });
+      if (signal?.aborted) throw callAbortedError();
       const processedPrompt = preprocessed.prompt;
       const processedMessages = normalizeMessages(preprocessed.messages);
-      const estimatedTokens = this.estimateTokens(processedPrompt);
+      // What this request will actually put in front of the model: the whole
+      // conversation — system prompt, history and the current turn — when
+      // there is one, and the bare prompt only when there is not. This counted
+      // `processedPrompt` alone until 2026-11-06, which for the feature runner
+      // and `/openai/v1` is just the LAST user turn: a 20,000-token system
+      // prompt plus history estimated as a one-liner, so the context gate
+      // below waved it at a model that could not hold it and the paid
+      // governor priced a long call as a short one. Both read this number.
+      const estimatedTokens = Array.isArray(processedMessages) && processedMessages.length > 0
+        ? countMessageTokens(processedMessages)
+        : this.estimateTokens(processedPrompt);
 
       if (userId) {
         const availability = await aiUsageService.checkIfModelAvailable(currentProvider, providerModel, userId);
@@ -2146,6 +2368,17 @@ class AIService {
         continue;
       }
 
+      // Tool-calling capability check (ahead of the governor, so a skip never
+      // has a budget reservation to undo): unlike structured output (which has a
+      // prompt-injection fallback), tool calling demands a machine-parseable
+      // tool_calls response shape that can only come from native provider
+      // support. Skip incapable providers — the rotation will try the next.
+      if (tools && Array.isArray(tools) && tools.length > 0 &&
+          !aiModelCapabilitiesService.supportsTools(currentProvider, providerModel)) {
+        logger.debug(`Skipping ${currentProvider}/${providerModel}: tools requested but provider lacks native tool-calling`);
+        continue;
+      }
+
       // ── The governor (§3) ─────────────────────────────────────────────────
       //
       // The only place in this codebase that decides to spend money, and it
@@ -2154,13 +2387,23 @@ class AIService {
       // a daily cap is that the calls above it do not happen, and a feature
       // that would have been answered by a paid model falls to its
       // deterministic fallback like any other free-tier miss.
+      // This attempt's hold on the day's paid budget, if it has one. Settled to
+      // the real cost after the call, released on failure or abort — exactly
+      // once (`takeReservation` hands it out and forgets it).
+      let reservation = null;
+      const takeReservation = () => {
+        const held = reservation;
+        reservation = null;
+        return held;
+      };
       if (attempt.paid) {
         const verdict = await this.paidGovernorVerdict({
           provider: currentProvider,
           modelId: providerModel,
           promptTokens: estimatedTokens,
           maxTokens,
-          pricing: attempt.pricing
+          pricing: attempt.pricing,
+          reserve: true
         });
         if (!verdict.ok) {
           logger.info(
@@ -2194,16 +2437,7 @@ class AIService {
           },
           '[Paid] governor cleared a paid fallback attempt'
         );
-      }
-
-      // Tool-calling capability check: unlike structured output (which has a
-      // prompt-injection fallback), tool calling demands a machine-parseable
-      // tool_calls response shape that can only come from native provider
-      // support. Skip incapable providers — the rotation will try the next.
-      if (tools && Array.isArray(tools) && tools.length > 0 &&
-          !aiModelCapabilitiesService.supportsTools(currentProvider, providerModel)) {
-        logger.debug(`Skipping ${currentProvider}/${providerModel}: tools requested but provider lacks native tool-calling`);
-        continue;
+        reservation = verdict.reservation;
       }
 
       // Structured-output dispatch decision (items 4 + 5):
@@ -2236,8 +2470,17 @@ class AIService {
         }
       }
 
+      // The last await before money can move was the governor's; a caller that
+      // gave up while it read the ledger is not dispatched, and its
+      // reservation goes back.
+      if (signal?.aborted) {
+        await releaseDailyBudget(takeReservation());
+        throw callAbortedError();
+      }
+
       try {
         const result = await this.callProvider(currentProvider, dispatchPrompt, {
+          signal,
           maxTokens,
           temperature,
           model: providerModel,
@@ -2251,6 +2494,19 @@ class AIService {
           presencePenalty,
           frequencyPenalty
         });
+
+        // An answer that arrived after the caller gave up (a provider that
+        // ignored the abort, or answered in the same tick) is dropped whole:
+        // no cache entry, no health, no sticky repin, no stats. Nobody is
+        // reading it, and the post-call writes are each a claim that the call
+        // *served* someone.
+        if (signal?.aborted) {
+          // The provider DID answer, so the money moved: the reservation is
+          // reconciled to what it reported (or held at the estimate when it
+          // reported nothing), not released.
+          await settleDailyBudget(takeReservation(), result?.costUsd ?? null);
+          throw callAbortedError();
+        }
 
         if (needsJSONRepair && result?.content) {
           result.content = this.repairJSONContent(result.content);
@@ -2280,8 +2536,15 @@ class AIService {
           providerModel,
           appId,
           featureId,
-          result.costUsd ?? null
+          result.costUsd ?? null,
+          // A free-tier row, or a pin the free-tier catalog lists: a missing
+          // price means $0 for these and "unknown" for everything else.
+          { knownFree: !!(freeRow || attempt.knownFree) }
         );
+        // Reconcile the reservation to what the ledger just booked. An unknown
+        // or unreported cost keeps the whole estimate counted (`booked` is
+        // undefined only when a test has stubbed `updateStats`).
+        await settleDailyBudget(takeReservation(), booked?.costUsd ?? null);
 
         const trackingUserId = userId || 'session';
         // trackUsage RESOLVES with `{success:false, error}` rather than
@@ -2307,7 +2570,7 @@ class AIService {
         // is exempt: the caller named that model, an empty completion with
         // `finish_reason: tool_calls` is a legitimate answer, and there is
         // nowhere else to go anyway.
-        if ((freeRow || attempt.paid) && !String(result?.content ?? '').trim()) {
+        if ((freeRow || (attempt.paid && !attempt.pin)) && !String(result?.content ?? '').trim()) {
           if (freeRow) {
             this.markFreeTierFailure(currentProvider, providerModel, 'empty_content', freeRow.health);
           }
@@ -2336,7 +2599,7 @@ class AIService {
           });
         }
 
-        this.lastProviderInfo = {
+        reportInfo({
           provider: currentProvider,
           model: providerModel,
           cached: false,
@@ -2347,9 +2610,19 @@ class AIService {
           // say *why* a request landed where it did without re-deriving it.
           hints: routeHints,
           costUsd: booked?.costUsd ?? null
-        };
+        });
         return result.content;
       } catch (error) {
+        // A failed call spent nothing we know of: hand the reservation back.
+        // (One that was already settled — an empty paid answer, thrown after
+        // it was booked — is gone from `reservation` and stays spent.)
+        await releaseDailyBudget(takeReservation());
+
+        // Our own cancellation is not the provider's failure: no rate-limit
+        // mark, no cooling, no retirement, and no next attempt.
+        if (isAbortFailure(error, signal)) {
+          throw error?.code === 'aborted' ? error : callAbortedError();
+        }
         lastError = error;
 
         if (error.message.includes('429') || error.message.includes('rate limit') || error.message.includes('quota')) {
@@ -2403,6 +2676,20 @@ class AIService {
     throw lastError || new Error('All AI providers failed');
   }
 
+  /**
+   * `callAI`, plus the metadata of *this* call: `{ content, info }`, where
+   * `info` is `{ provider, model, cached, toolCalls, finishReason, hints,
+   * costUsd }` — the object every front door used to read off the shared
+   * `lastProviderInfo` after its await, and got the wrong call's copy whenever
+   * two requests overlapped. `info` is `{}` only when something stood in for
+   * `callAI` and reported nothing (a test stub).
+   */
+  async callAIWithInfo(prompt, config = {}) {
+    let info = null;
+    const content = await this.callAI(prompt, { ...config, onInfo: (i) => { info = i; } });
+    return { content, info: info || {} };
+  }
+
   /*
    * `callAISmart` was deleted here in Phase 2 (2026-09-07).
    *
@@ -2415,8 +2702,9 @@ class AIService {
    * routing}` shape on both branches and three test files pinned it (Q46).
    *
    * Phase 2 has one front door, so the shim has no reason to exist: the route
-   * calls `callAI` directly and builds `routing` from `lastProviderInfo`,
-   * which is where the shim was getting it from anyway. The Q46 rule it
+   * calls `callAI` directly and builds `routing` from the call's own metadata
+   * (`callAIWithInfo` — it read the shared `lastProviderInfo` until that field
+   * was removed on 2026-11-06). The Q46 rule it
    * carried — a provider's own words never reach the caller — moved with it
    * and is enforced by the route's `resolveFailure` catch, which is where the
    * other three front doors have always enforced it.
@@ -2449,7 +2737,9 @@ class AIService {
       stop = null,
       seed = null,
       presencePenalty = null,
-      frequencyPenalty = null
+      frequencyPenalty = null,
+      signal = null,
+      timeoutMs = undefined
     } = config;
 
     // Pass messages + structured-output + sampling params to every adapter.
@@ -2460,7 +2750,9 @@ class AIService {
     const request = {
       prompt,
       maxTokens, temperature, model, messages, responseFormat, tools, toolChoice,
-      topP, stop, seed, presencePenalty, frequencyPenalty
+      topP, stop, seed, presencePenalty, frequencyPenalty,
+      ...(signal ? { signal } : {}),
+      ...(timeoutMs ? { timeoutMs } : {})
     };
 
     // Until Phase 2 this was a ten-case switch over ten `call<Provider>`
@@ -2569,9 +2861,14 @@ class AIService {
    * provider in a *different unit* from AIPricing — see the note on
    * `this.providers`.
    */
-  async resolveCostUsd(provider, modelId, inputTokens, outputTokens, reported = null) {
+  async resolveCostUsd(provider, modelId, inputTokens, outputTokens, reported = null, { knownFree = false } = {}) {
     if (reported != null && Number.isFinite(Number(reported))) return Number(reported);
-    if (!modelId) return 0;
+    // 3., revised 2026-11-06: zero is the truth for a row the free-tier
+    // catalog lists, and `null` — unknown — for anything else. Booking an
+    // unpriced call as $0 made it indistinguishable from a free one, on the
+    // ledger, on the status page and in `provenance.costUsd`.
+    const unknown = knownFree ? 0 : null;
+    if (!modelId) return unknown;
 
     const key = this.freeTierKey(provider, modelId);
     const now = Date.now();
@@ -2579,21 +2876,19 @@ class AIService {
     if (!price || now - price.at > 10 * 60 * 1000) {
       try {
         const row = await AIPricing.findOne({ provider, modelId }).lean();
-        price = {
-          at: now,
-          inputPrice: Number(row?.inputPrice) || 0,
-          outputPrice: Number(row?.outputPrice) || 0
-        };
+        price = { at: now, pricing: trustedPricing(row) };
+        this.pricingCache.set(key, price);
       } catch (error) {
-        logger.debug({ err: error, provider, modelId }, '[AIService] price lookup failed — booking 0');
-        price = { at: now, inputPrice: 0, outputPrice: 0 };
+        // Not cached: a failed read is not a fact about the model.
+        logger.warn({ err: error, provider, modelId }, '[AIService] price lookup failed — cost booked as unknown');
+        return unknown;
       }
-      this.pricingCache.set(key, price);
     }
+    if (!price.pricing) return unknown;
 
     // AIPricing stores dollars per 1,000,000 tokens (priceUnit: per_1m_tokens).
-    const cost = (inputTokens / 1e6) * price.inputPrice + (outputTokens / 1e6) * price.outputPrice;
-    return Number.isFinite(cost) ? cost : 0;
+    const cost = (inputTokens / 1e6) * price.pricing.inputPrice + (outputTokens / 1e6) * price.pricing.outputPrice;
+    return Number.isFinite(cost) ? cost : unknown;
   }
 
   /**
@@ -2608,7 +2903,12 @@ class AIService {
    */
   recordSpend(provider, appId, featureId, costUsd, now = new Date()) {
     const key = { day: spendDay(now), provider, app: appId || 'unknown', feature: featureId || '' };
-    const inc = { $inc: { calls: 1, costUsd: Number(costUsd) || 0 } };
+    // An unknown cost books the call and counts it in `costUnknown`, never as
+    // $0 — "free" and "we were not told" are different facts (2026-11-06).
+    const known = costUsd !== null && costUsd !== undefined && Number.isFinite(Number(costUsd));
+    const inc = known
+      ? { $inc: { calls: 1, costUsd: Number(costUsd) } }
+      : { $inc: { calls: 1, costUnknown: 1 } };
     return AISpend.updateOne(key, inc, { upsert: true })
       // Two calls in the same millisecond both find no document and both try
       // to insert one; the unique index refuses the loser with E11000. The
@@ -2645,10 +2945,15 @@ class AIService {
    * `costPer1kTokens` rate. Cost is resolved once now, from the response or
    * from the price table, and a call is "free" when it cost nothing.
    */
-    async updateStats(provider, inputTokens, outputTokens, modelId = null, appName = 'unknown', feature = null, reportedCostUsd = null) {
+    async updateStats(provider, inputTokens, outputTokens, modelId = null, appName = 'unknown', feature = null, reportedCostUsd = null, { knownFree = false } = {}) {
     const totalTokens = inputTokens + outputTokens;
-    const actualCost = await this.resolveCostUsd(provider, modelId, inputTokens, outputTokens, reportedCostUsd);
-    const isFreeUsage = actualCost === 0;
+    const resolvedCost = await this.resolveCostUsd(provider, modelId, inputTokens, outputTokens, reportedCostUsd, { knownFree });
+    // `null` is an unknown cost: booked as such on the ledger, counted as a
+    // paid call here (unknown is never free), and summed as 0 only in the
+    // in-process session totals, which have no way to say "unknown".
+    const costUnknown = resolvedCost === null;
+    const actualCost = costUnknown ? 0 : resolvedCost;
+    const isFreeUsage = !costUnknown && actualCost === 0;
 
     this.sessionStats.totalCalls++;
     this.sessionStats.totalTokens += totalTokens;
@@ -2733,9 +3038,9 @@ class AIService {
     // sessionStats above is in-process and dies with the container. The ledger
     // is the part that survives a deploy, and the only place a month of
     // spending can be read from.
-    this.recordSpend(provider, appId, featureId, actualCost);
+    this.recordSpend(provider, appId, featureId, resolvedCost);
 
-    return { costUsd: actualCost, totalTokens, isFreeUsage };
+    return { costUsd: resolvedCost, totalTokens, isFreeUsage, costUnknown };
   }
 
   /**

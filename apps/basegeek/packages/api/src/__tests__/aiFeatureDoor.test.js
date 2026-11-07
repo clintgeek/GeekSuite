@@ -47,7 +47,7 @@ const { default: aiRoutes } = await import('../routes/aiRoutes.js');
 const { default: aiService } = await import('../services/aiService.js');
 const { default: AIFreeTier } = await import('../models/AIFreeTier.js');
 const { default: AIModel } = await import('../models/AIModel.js');
-const { _resetCounters } = await import('../services/aiFeatureRunner.js');
+const { _resetCounters, _resetNeedCache } = await import('../services/aiFeatureRunner.js');
 
 function buildApp() {
   const app = express();
@@ -124,7 +124,9 @@ beforeAll(async () => {
       nextFailure = null;
       throw failure;
     }
-    aiService.lastProviderInfo = {
+    // Reported the way the real `callAI` reports it: through the call's own
+    // `onInfo` (the shared `lastProviderInfo` field is gone, 2026-11-06).
+    config?.onInfo?.({
       provider: 'groq',
       model: 'llama-3.3-70b-versatile',
       cached: false,
@@ -132,7 +134,7 @@ beforeAll(async () => {
       finishReason: 'stop',
       hints: ['app_config'],
       costUsd: 0,
-    };
+    });
     if (nextAnswer !== null) {
       const answer = nextAnswer;
       nextAnswer = null;
@@ -148,6 +150,9 @@ afterEach(async () => {
   nextFailure = null;
   nextAnswer = null;
   _resetCounters();
+  // The door now hands `need` to the runner, whose resolution is cached for
+  // 60 s process-wide (2026-11-06) — one case's pick must not answer the next.
+  _resetNeedCache();
   await User.deleteMany({});
   await APIKey.deleteMany({});
   await AIFreeTier.deleteMany({});
@@ -621,11 +626,11 @@ describe('POST /api/ai/feature — an explicit pin', () => {
     // usual one" instead of failing the turn.
     const apiKey = await makeApiKey();
     const original = aiService.callAI;
-    aiService.callAI = async () => {
-      aiService.lastProviderInfo = {
+    aiService.callAI = async (_prompt, config) => {
+      config?.onInfo?.({
         provider: 'cerebras', model: 'someone-else', cached: false,
         hints: ['explicit_pin', 'pin_unavailable'], costUsd: 0,
-      };
+      });
       return 'the story continues';
     };
     try {

@@ -591,7 +591,7 @@ describe('a caller that names nothing takes the same walk as a free-tier caller'
    * It used to read "non-free callers walk exactly the list they always did"
    * and pinned the generic provider walk: the requested (or default) provider
    * followed by `fallbackOrder`, each called with *its own default model*.
-   * That walk is what DOCS/AIGEEK_FRONT_DOOR.md §2 deletes — "this is now the
+   * That walk is what DOCS/ARCHIVE/AIGEEK_FRONT_DOOR.md §2 deletes — "this is now the
    * walk for every auto caller, not only freeOnly; the old provider default
    * model rotation is gone" — because it is the mechanism behind R130 and
    * F-22 both: a request that named no model was answered by whichever
@@ -642,6 +642,10 @@ describe('a caller that names nothing takes the same walk as a free-tier caller'
 
   it('still honours an explicit model on the requested provider', async () => {
     enable('groq');
+    // A pin is free only when the free-tier catalog lists it (2026-11-06);
+    // anything else is paid and needs the app's allowPaid. This case is about
+    // honouring the pin, so the pinned model is a listed free row.
+    await AIFreeTier.create({ provider: 'groq', modelId: 'a-model-i-named', isFree: true });
     const calls = fakeProviderLayer({ 'groq/a-model-i-named': 'ok' });
     await expect(aiService.callAI('hello', { provider: 'groq', model: 'a-model-i-named', noFallback: true }))
       .resolves.toBe('ok');
@@ -653,7 +657,7 @@ describe('a caller that names nothing takes the same walk as a free-tier caller'
 /* ── (f) Phase 2: the auto walk, the pin, sticky picks and the governor ────── */
 
 /**
- * Everything below is Phase 2 (DOCS/AIGEEK_FRONT_DOOR.md). The free-tier state
+ * Everything below is Phase 2 (DOCS/ARCHIVE/AIGEEK_FRONT_DOOR.md). The free-tier state
  * machine above is unchanged — these cases pin what was built *on top of* it:
  * one route resolution, one walk for every auto caller, a pin that degrades
  * only when the catalog says so, sticky picks, and money behind a governor.
@@ -714,9 +718,12 @@ describe('a pin is a promise for callers that said so, and a preference otherwis
     ]);
 
     const calls = fakeProviderLayer({ 'cerebras/awake': 'ok' });
-    await expect(aiService.callAI('hello', { appName: 'geekpr' })).resolves.toBe('ok');
+    // The call's own metadata (`callAIWithInfo`) — the shared
+    // `lastProviderInfo` field this read was removed on 2026-11-06.
+    const { content, info } = await aiService.callAIWithInfo('hello', { appName: 'geekpr' });
+    expect(content).toBe('ok');
     expect(calls).toEqual(['cerebras/awake']);
-    expect(aiService.lastProviderInfo.hints).toContain('pin_unavailable');
+    expect(info.hints).toContain('pin_unavailable');
   });
 
   it('keeps a cooling pin when the caller said noFallback', async () => {
@@ -751,6 +758,12 @@ describe('a pin is a promise for callers that said so, and a preference otherwis
     // observed and incomplete by construction, and refusing every unknown id
     // would turn a missed discovery run into a total outage.
     enable('groq');
+    // "No opinion" is the MODEL catalog's (`AIModel`); whether the pin costs
+    // money is a separate question, answered by the free-tier list since
+    // 2026-11-06 — an unlisted model is paid and refused without allowPaid
+    // (aiHardeningPaidPins.test.js). Listed free here, so only the
+    // no-opinion rule is under test.
+    await AIFreeTier.create({ provider: 'groq', modelId: 'unknown-to-us', isFree: true });
     const calls = fakeProviderLayer({ 'groq/unknown-to-us': 'ok' });
     await expect(aiService.callAI('hello', {
       provider: 'groq', model: 'unknown-to-us', appName: 'geekpr',

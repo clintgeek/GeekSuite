@@ -15,16 +15,29 @@
  *
  *   API key   → the key's `appName`. A key belongs to one app; that is the
  *               whole point of minting one per backend.
- *   JWT       → the token's `app` claim, which baseGeek mints and
- *               `authenticateToken` already validates against VALID_APPS.
+ *   JWT       → the token's `app` claim, for *attribution only* — see
+ *               "trustedApp" below.
  *   internal  → an in-process caller (askService) naming itself in code.
  *   otherwise → `unattributed`. Not a bucket anyone should be in, and named
  *               so it shows up in the usage table as the anomaly it is.
  *
- * `verified` answers "did the appId come from the credential?" — false for the
- * unattributed bucket and for a JWT with no `app` claim (an old token, or one
- * minted before the claim existed). The user behind such a token is still
- * known; the app is not.
+ * `verified` / `trustedApp` answer "is appId an app identity we issued?" —
+ * true only for an API key (minted under the Q62/B1 gate) and an in-process
+ * caller. Since 2026-11-06 (audit B3) that is *false for every JWT caller*,
+ * app claim or not. The claim is legitimately "which app the user signed
+ * into" — login, refresh and register take it from the request body and the
+ * only check is VALID_APPS membership — so any user could log in with
+ * `app: 'storygeek'` and, while this said `verified: true`, call aiGeek as
+ * storygeek with storygeek's AIAppConfig row (allowPaid / paidFirst) and
+ * spend. A JWT caller keeps its claimed appId, because attribution and the
+ * per-app usage table still want it; it does not get to be that app for
+ * anything that costs money. `trustedApp` is the field routing should read
+ * (`verified` is kept, equal to it, for the readers that already exist).
+ *
+ * Binding the claim to the request's Origin was considered and rejected: the
+ * JWT callers that matter are server-to-server (StoryGeek forwarding a
+ * player's token) and send no Origin, and a hostile user with curl sends
+ * whatever Origin they like — it would only stop the attacker who isn't one.
  *
  * Everything here is pure. No I/O, no model imports — `models/AIAppConfig.js`
  * imports `normalizeAppId` from this file for its `normalizeAppName` static,
@@ -142,7 +155,8 @@ export function declaresAppRouting(body = {}) {
  * @param {import('express').Request} req  the request, after auth middleware
  * @param {object} [body]                  the parsed body (defaults to req.body)
  * @returns {{appId: string, feature: string|null, userId: string|null,
- *            source: 'api_key'|'jwt'|'internal'|'unattributed', verified: boolean}}
+ *            source: 'api_key'|'jwt'|'internal'|'unattributed', verified: boolean,
+ *            trustedApp: boolean}}
  */
 export function resolveCaller(req, body = undefined) {
   const payload = body === undefined ? (req?.body || {}) : (body || {});
@@ -168,13 +182,15 @@ export function resolveCaller(req, body = undefined) {
       userId: claimed || owner || normalizeUserId(user.id),
       source: 'api_key',
       verified: appId !== UNATTRIBUTED,
+      trustedApp: appId !== UNATTRIBUTED,
     };
   }
 
   // ── JWT ──────────────────────────────────────────────────────────────────
   // authenticateToken already rejected an `app` claim outside VALID_APPS, so a
-  // claim that survived to here is one of ours. A token without one is old or
-  // app-less: the user is verified, the app is not.
+  // claim that survived to here names one of ours — but the *user* chose it in
+  // the login body (B3, see the header). The user is verified; the app is
+  // attribution only, never a trusted identity.
   if (user?.id) {
     const appId = normalizeAppId(user.app);
     return {
@@ -182,7 +198,8 @@ export function resolveCaller(req, body = undefined) {
       feature,
       userId: normalizeUserId(String(user.id)),
       source: 'jwt',
-      verified: !!appId,
+      verified: false,
+      trustedApp: false,
     };
   }
 
@@ -192,6 +209,7 @@ export function resolveCaller(req, body = undefined) {
     userId: null,
     source: UNATTRIBUTED,
     verified: false,
+    trustedApp: false,
   };
 }
 
@@ -279,6 +297,7 @@ export function internalCaller({ appId, userId = null, feature = null }) {
     userId: normalizeUserId(userId),
     source: 'internal',
     verified: true,
+    trustedApp: true,
   };
 }
 

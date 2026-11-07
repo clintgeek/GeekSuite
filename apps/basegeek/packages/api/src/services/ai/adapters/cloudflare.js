@@ -44,7 +44,11 @@ export async function call(pc, request = {}) {
     maxTokens = pc.maxTokens ?? 1000,
     temperature = pc.temperature ?? 0.7,
     responseFormat = null,
-    timeoutMs = ADAPTER_TIMEOUT_MS
+    timeoutMs = ADAPTER_TIMEOUT_MS,
+    // The caller's AbortSignal (a feature timeout, a client that hung up).
+    // Handed to axios so an abandoned call stops at the socket instead of
+    // running to the 60 s adapter timeout for an answer nobody will read.
+    signal = null
   } = request;
 
   const accountId = pc.accountId;
@@ -111,7 +115,8 @@ export async function call(pc, request = {}) {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${pc.apiKey}`
         },
-        timeout: timeoutMs
+        timeout: timeoutMs,
+        ...(signal && { signal })
       }
     );
   } catch (error) {

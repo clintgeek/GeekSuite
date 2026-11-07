@@ -143,7 +143,11 @@ export async function call(pc, request = {}) {
     responseFormat = null,
     tools = null,
     toolChoice = null,
-    timeoutMs = ADAPTER_TIMEOUT_MS
+    timeoutMs = ADAPTER_TIMEOUT_MS,
+    // The caller's AbortSignal (a feature timeout, a client that hung up).
+    // Handed to axios so an abandoned call stops at the socket instead of
+    // running to the 60 s adapter timeout for an answer nobody will read.
+    signal = null
   } = request;
 
   // Gemini's contents[] takes role 'user' or 'model' (not 'assistant'),
@@ -228,7 +232,8 @@ export async function call(pc, request = {}) {
         'Content-Type': 'application/json',
         'x-goog-api-key': pc.apiKey
       },
-      timeout: timeoutMs
+      timeout: timeoutMs,
+      ...(signal && { signal })
     });
   } catch (error) {
     throwAdapterError(pc.id, error, model);

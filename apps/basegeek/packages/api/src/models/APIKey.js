@@ -22,6 +22,11 @@ import crypto from 'crypto';
  * special mint; the reach that adds is the `ai:stats` read family (`/status`,
  * `/stats`, `/capabilities`, `/admin/stats`, `/routing`) — all reads of what
  * the system is doing, for a key that already belongs to an app.
+ *
+ * It is also the ceiling for a non-admin mint (audit 2026-11-06, B2):
+ * `services/apiKeyPolicy.js` lets a non-admin key holder mint only a subset of
+ * this list, so `ai:director` stays out of the default deliberately — adding
+ * it here would hand it to every key holder.
  */
 export const DEFAULT_KEY_PERMISSIONS = ['ai:call', 'ai:models', 'ai:providers', 'ai:usage', 'ai:stats'];
 

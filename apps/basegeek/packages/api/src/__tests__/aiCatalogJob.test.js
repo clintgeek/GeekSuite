@@ -208,26 +208,37 @@ describe('tick', () => {
     expect(discovery.log.filter(l => l.call !== 'runGoldenSet')).toEqual([]);
   });
 
-  it('re-runs discovery when the last run an hour ago completed with write errors', async () => {
+  it('retries a discovery that completed with write errors after the retry interval, not after 24 h', async () => {
     // 2026-09-07 live: every AIModel upsert threw on a `name` path conflict,
     // the run still got a document, and the 24 h gate would have held the
-    // broken catalog for a day. A run with error text is not a run.
+    // broken catalog for a day. A run with error text is not a run — but
+    // since 2026-11-06 (C1) it is not retried on the very next tick either:
+    // a persistent failure re-listing and re-probing everything hourly spent
+    // 24x the quota and starved the 6 h re-probe. It waits the 6 h retry.
     const now = Date.UTC(2026, 8, 7, 12, 0, 0);
-    const runs = fakeRuns([{
-      kind: 'discovery', startedAt: new Date(now - HOUR), finishedAt: new Date(now - HOUR),
+    const failed = (agoH) => fakeRuns([{
+      kind: 'discovery', startedAt: new Date(now - agoH * HOUR), finishedAt: new Date(now - agoH * HOUR),
       error: null, counts: { alive: 0, listedError: "Updating the path 'name' would create a conflict at 'name'" },
     }]);
-    const { job, discovery } = makeJob({ at: now, runs });
-    await job.tick();
-    expect(discovery.log.some(l => l.call === 'discover')).toBe(true);
+    const early = makeJob({ at: now, runs: failed(1) });
+    await early.job.tick();
+    expect(early.discovery.log.some(l => l.call === 'discover')).toBe(false);
+
+    const due = makeJob({ at: now, runs: failed(6) });
+    await due.job.tick();
+    expect(due.discovery.log.some(l => l.call === 'discover')).toBe(true);
   });
 
   it('treats an aborted run (error set) the same way', async () => {
     const now = Date.UTC(2026, 8, 7, 12, 0, 0);
-    const runs = fakeRuns([{ kind: 'discovery', startedAt: new Date(now - HOUR), finishedAt: new Date(now - HOUR), error: 'boom' }]);
-    const { job, discovery } = makeJob({ at: now, runs });
-    await job.tick();
-    expect(discovery.log.some(l => l.call === 'discover')).toBe(true);
+    const aborted = (agoH) => fakeRuns([{ kind: 'discovery', startedAt: new Date(now - agoH * HOUR), finishedAt: new Date(now - agoH * HOUR), error: 'boom' }]);
+    const early = makeJob({ at: now, runs: aborted(1) });
+    await early.job.tick();
+    expect(early.discovery.log.some(l => l.call === 'discover')).toBe(false);
+
+    const due = makeJob({ at: now, runs: aborted(6) });
+    await due.job.tick();
+    expect(due.discovery.log.some(l => l.call === 'discover')).toBe(true);
   });
 
   it('re-runs discovery once the last one is 24 h old', async () => {

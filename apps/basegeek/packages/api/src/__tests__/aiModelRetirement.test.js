@@ -33,6 +33,7 @@ const { default: aiService } = await import('../services/aiService.js');
 const { default: AIFreeTier, isRetirement } = await import('../models/AIFreeTier.js');
 const { default: AIModel } = await import('../models/AIModel.js');
 const { default: AIAppConfig } = await import('../models/AIAppConfig.js');
+const { default: AIPricing } = await import('../models/AIPricing.js');
 
 const patched = [];
 function patch(obj, key, value) {
@@ -195,6 +196,10 @@ describe('a live 404 retires the model it was called on', () => {
     enable('groq', 'cerebras');
     await AIModel.create({ provider: 'groq', modelId: 'retire-fixture-paid', name: 'x', isActive: true });
     await AIFreeTier.create({ provider: 'cerebras', modelId: 'retire-fixture-b', isFree: true });
+    // A model with no free-tier row is a PAID pin since 2026-11-06: it is
+    // only attempted for an app that allows paid, at a known price.
+    await AIAppConfig.create({ appName: 'startgeek', tier: 'auto', allowPaid: true });
+    await AIPricing.create({ provider: 'groq', modelId: 'retire-fixture-paid', inputPrice: 0.01, outputPrice: 0.01 });
 
     fakeProviderLayer({
       'groq/retire-fixture-paid': providerError('Groq', 404, { error: { code: 'model_not_found' } }),
@@ -209,5 +214,7 @@ describe('a live 404 retires the model it was called on', () => {
     const row = await AIModel.findOne({ provider: 'groq', modelId: 'retire-fixture-paid' }).lean();
     expect(row.isActive).toBe(false);
     expect(row.retiredReason).toBe('http_404');
+    await AIPricing.deleteMany({ modelId: 'retire-fixture-paid' });
+    await AIAppConfig.deleteMany({ appName: 'startgeek' });
   });
 });

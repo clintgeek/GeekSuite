@@ -1,14 +1,32 @@
 import express from 'express';
-import { authenticateToken, lookupRole } from '../middleware/auth.js';
+import { authenticateToken } from '../middleware/auth.js';
 import APIKey, { DEFAULT_KEY_PERMISSIONS } from '../models/APIKey.js';
-import { VALID_APPS } from '../config/validApps.js';
-import { normalizeAppId } from '../services/callerIdentity.js';
-import logger from '../lib/logger.js';
+import { invalidateStatusCache } from '../services/aiStatusService.js';
+import {
+  mintAuthority,
+  isAdminUser,
+  checkKeyTerms,
+  escalationMessage,
+  DEFAULT_KEY_TERMS
+} from '../services/apiKeyPolicy.js';
 
 const router = express.Router();
 
 // Apply JWT authentication to all routes (API key management requires user login)
 router.use(authenticateToken);
+
+// Every write here changes what `GET /api/ai/status` reports (keys per app,
+// keys expiring), and that document is memoized for 60 s. Drop the memo just
+// before a successful write answers, so the page shows the change.
+router.use((req, res, next) => {
+  if (req.method === 'GET') return next();
+  const json = res.json.bind(res);
+  res.json = (body) => {
+    if (res.statusCode < 400) invalidateStatusCache();
+    return json(body);
+  };
+  return next();
+});
 
 /**
  * The permission set a key is minted with when the caller names none. The
@@ -25,68 +43,55 @@ export const DEFAULT_PERMISSIONS = DEFAULT_KEY_PERMISSIONS;
  * the whole aiGeek trust model in one request: `services/callerIdentity.js`
  * routes and bills a call by the *key's* app, precisely so a body field cannot
  * choose whose AIAppConfig row answers and whose quota pays — and the mint
- * route handed out the field that decides it. A caller could mint
- * `appName: 'storygeek'`, route through storygeek's provider row, and spend
- * storygeek's free-tier allowance, from an ordinary user account.
+ * route handed out the field that decides it.
  *
- * The rule now:
- *
- *   admin                      → may mint for any app, including one not yet
- *                                in VALID_APPS (that is how a new app gets its
- *                                first key).
- *   app is in VALID_APPS and
- *   the caller already holds an
- *   active key for it          → may mint another, and rotate the ones they
- *                                hold. This is what "owns the app" can mean
- *                                against the data that exists: there is no
- *                                owner field on models/App.js, and inventing
- *                                one would be a schema and a migration for a
- *                                registry nothing else reads that way.
- *   anyone else                → 403 admin_required.
- *
- * The consequence worth stating plainly: an app's *first* key is an admin act.
- * That is the point — it is the moment the app name stops being a string
- * anyone can type and starts being a credential.
+ * The rule (admin; or the caller already holds an active key for an app in
+ * VALID_APPS; anyone else 403 admin_required) now lives in
+ * `services/apiKeyPolicy.js`, because the GraphQL mutations that mint and
+ * rotate keys never had it (audit 2026-11-06, B1). This wrapper only turns
+ * the decision into this router's response shapes.
  *
  * @param {import('express').Request} req
  * @param {import('express').Response} res
- * @param {string} appName  the app the key is for (raw; normalized here)
- * @returns {Promise<boolean>} true when the response has been sent
+ * @param {string} appName  the app the key is for (raw; normalized by the policy)
+ * @returns {Promise<{sent: true} | {sent: false, isAdmin: boolean}>}
  */
 async function assertMintAuthority(req, res, appName) {
-  const userId = req.user?.id;
-  const app = normalizeAppId(appName);
-
-  let role = null;
+  let decision;
   try {
-    role = await lookupRole(userId);
+    decision = await mintAuthority(req.user, appName);
   } catch (err) {
     req.log.error({ err }, 'Mint authority role lookup failed');
     res.status(500).json({
       success: false,
       error: { message: 'Failed to check permissions', code: 'ROLE_CHECK_ERROR' }
     });
-    return true;
+    return { sent: true };
   }
 
-  if (role === 'admin') return false;
+  if (decision.allowed) return { sent: false, isAdmin: decision.isAdmin };
 
-  if (app && VALID_APPS.includes(app)) {
-    const holdsKeyForApp = await APIKey.exists({
-      appName: app,
-      createdBy: userId,
-      isActive: true
-    });
-    if (holdsKeyForApp) return false;
-  }
-
-  req.log.warn({ app }, 'Refused to mint an API key for an app the caller does not hold');
+  req.log.warn({ app: decision.app }, 'Refused to mint an API key for an app the caller does not hold');
   res.status(403).json({
     error: 'admin_required',
     message: 'admin role required to mint a key for an app you do not already hold',
     code: 'ADMIN_REQUIRED'
   });
-  return true;
+  return { sent: true };
+}
+
+/**
+ * refuseEscalation — B2's 403. Same top-level shape as admin_required, plus
+ * `fields`, so a client can say *which* part of the key it may not widen.
+ */
+function refuseEscalation(req, res, fields) {
+  req.log.warn({ fields }, 'Refused a non-admin API key escalation');
+  res.status(403).json({
+    error: 'escalation_refused',
+    message: escalationMessage(fields),
+    code: 'ESCALATION_REFUSED',
+    fields
+  });
 }
 
 // GET /api/api-keys - List all API keys for the authenticated user
@@ -139,8 +144,8 @@ router.post('/', async (req, res) => {
       name,
       appName,
       description,
-      permissions = DEFAULT_PERMISSIONS,
-      rateLimit = {},
+      permissions,
+      rateLimit,
       expiresAt
     } = req.body;
 
@@ -169,7 +174,20 @@ router.post('/', async (req, res) => {
     // Who may mint for this app — see assertMintAuthority above. Placed after
     // the shape checks so a malformed request still gets its 400, and before
     // the key is generated so an unauthorized one is never created at all.
-    if (await assertMintAuthority(req, res, appName)) return;
+    const authority = await assertMintAuthority(req, res, appName);
+    if (authority.sent) return;
+
+    // B2: a non-admin mint is measured against the default key and may only
+    // narrow it — holding a storygeek key is not a licence to mint storygeek
+    // an `ai:director` key at the schema's rate ceiling. Unnamed fields take
+    // the defaults, exactly as before.
+    const check = checkKeyTerms({
+      isAdmin: authority.isAdmin,
+      current: DEFAULT_KEY_TERMS,
+      requested: { permissions, rateLimit, expiresAt }
+    });
+    if (!check.ok) return refuseEscalation(req, res, check.fields);
+    const terms = check.terms;
 
     // Generate API key
     const { apiKey, keyPrefix, keyHash } = APIKey.generateAPIKey();
@@ -181,13 +199,9 @@ router.post('/', async (req, res) => {
       name: name.trim(),
       appName: appName.trim(),
       description: description?.trim(),
-      permissions,
-      rateLimit: {
-        requestsPerMinute: rateLimit.requestsPerMinute || 60,
-        requestsPerHour: rateLimit.requestsPerHour || 1000,
-        requestsPerDay: rateLimit.requestsPerDay || 10000
-      },
-      expiresAt: expiresAt ? new Date(expiresAt) : null,
+      permissions: terms.permissions,
+      rateLimit: terms.rateLimit,
+      expiresAt: terms.expiresAt,
       createdBy: userId
     });
 
@@ -316,20 +330,33 @@ router.put('/:keyId', async (req, res) => {
       });
     }
 
+    // B2: the creator of a key could rewrite it into a different key —
+    // `ai:director`, rate limits at the schema maximum, no expiry. Only an
+    // admin may widen; anyone else may narrow or leave a field as it is
+    // (the edit dialog resubmits every field, so equal must pass).
+    let isAdmin;
+    try {
+      isAdmin = await isAdminUser(req.user);
+    } catch (err) {
+      req.log.error({ err }, 'API key update role lookup failed');
+      return res.status(500).json({
+        success: false,
+        error: { message: 'Failed to check permissions', code: 'ROLE_CHECK_ERROR' }
+      });
+    }
+    const check = checkKeyTerms({
+      isAdmin,
+      current: apiKey,
+      requested: { permissions, rateLimit: rateLimit ?? undefined, expiresAt }
+    });
+    if (!check.ok) return refuseEscalation(req, res, check.fields);
+
     // Update fields
     if (name !== undefined) apiKey.name = name.trim();
     if (description !== undefined) apiKey.description = description?.trim();
-    if (permissions !== undefined) apiKey.permissions = permissions;
-    if (rateLimit !== undefined) {
-      apiKey.rateLimit = {
-        requestsPerMinute: rateLimit.requestsPerMinute || apiKey.rateLimit.requestsPerMinute,
-        requestsPerHour: rateLimit.requestsPerHour || apiKey.rateLimit.requestsPerHour,
-        requestsPerDay: rateLimit.requestsPerDay || apiKey.rateLimit.requestsPerDay
-      };
-    }
-    if (expiresAt !== undefined) {
-      apiKey.expiresAt = expiresAt ? new Date(expiresAt) : null;
-    }
+    if (permissions !== undefined) apiKey.permissions = check.terms.permissions;
+    if (rateLimit !== undefined) apiKey.rateLimit = check.terms.rateLimit;
+    if (expiresAt !== undefined) apiKey.expiresAt = check.terms.expiresAt;
     if (isActive !== undefined) apiKey.isActive = isActive;
 
     apiKey.lastModifiedBy = userId;
@@ -436,7 +463,7 @@ router.post('/:keyId/regenerate', async (req, res) => {
     // holds this key, so the only question left is the app: a key minted for
     // an app that is not in VALID_APPS — one that predates the mint gate, or
     // an admin's deliberate exception — stays an admin's to rotate.
-    if (await assertMintAuthority(req, res, apiKeyDoc.appName)) return;
+    if ((await assertMintAuthority(req, res, apiKeyDoc.appName)).sent) return;
 
     // Generate new API key
     const { apiKey, keyPrefix, keyHash } = APIKey.generateAPIKey();

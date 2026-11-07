@@ -12,7 +12,7 @@
  * returning a document that silently lacks a batch.
  */
 import { jest } from '@jest/globals';
-import { _resetCounters, _resetNeedCache } from '../services/aiFeatureRunner.js';
+import { _resetCounters, _resetNeedCache, _setQuotaStore } from '../services/aiFeatureRunner.js';
 import {
   composeNote,
   segmentFragments,
@@ -413,9 +413,12 @@ describe('one fan-out resolves its need once', () => {
 describe('the REDUCE call gets room to write the whole document (live 2026-10-08)', () => {
   // 13 notes / 86k chars: every MAP chunk answered, then the reduce timed out
   // at the 25 s per-call limit and the compose came back empty.
-  afterEach(() => jest.useRealTimers());
+  afterEach(() => { jest.useRealTimers(); _setQuotaStore(); });
 
   test('a 30 s reduce still lands, and it is asked for the larger budget', async () => {
+    // The daily cap is a Mongo counter now, and a Mongo round trip never
+    // settles under fake timers; count in process for this one test.
+    _setQuotaStore(null);
     jest.useFakeTimers();
     const big = Array.from({ length: 40 }, (_, i) => `fragment ${i} ` + 'x'.repeat(400)).join('\n\n');
     const reduceOpts = [];

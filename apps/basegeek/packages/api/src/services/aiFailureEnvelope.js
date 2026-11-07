@@ -130,6 +130,9 @@ export function classifyFailure(error) {
   // 80 characters of a vendor's prose is a guess.
   const code = typeof error?.code === 'string' ? error.code : '';
   if (code === 'timeout') return 'timeout';
+  // The call was cancelled on our side — a feature deadline or a client that
+  // hung up (`callAI`'s abort). To whoever is still reading, that is a timeout.
+  if (code === 'aborted') return 'timeout';
   if (code === 'rate_limited') return 'rate_limited';
   if (code === 'network') return 'upstream_error';
 

@@ -149,21 +149,23 @@ function patch(obj, key, value) {
 
 /**
  * Stub callAI. `impl` receives (prompt, config) and returns the assistant text;
- * `providerInfo` is merged onto aiService.lastProviderInfo, which is how the
- * proxy learns about tool calls and finish reasons (openaiProxy.js:273, 354).
+ * `providerInfo` is reported through the call's own `onInfo` — the way the
+ * real `callAI` does since the shared `lastProviderInfo` field went
+ * (2026-11-06) — which is how the proxy learns about tool calls and finish
+ * reasons.
  */
 function stubCallAI(impl = () => 'hello world', providerInfo = {}) {
   const calls = [];
   patch(aiService, 'callAI', async (prompt, config) => {
     calls.push({ prompt, config });
-    aiService.lastProviderInfo = {
+    config?.onInfo?.({
       provider: 'groq',
       model: 'llama-3.3-70b-versatile',
       cached: false,
       toolCalls: null,
       finishReason: 'stop',
       ...providerInfo,
-    };
+    });
     return typeof impl === 'function' ? await impl(prompt, config) : impl;
   });
   return calls;
@@ -220,6 +222,15 @@ beforeAll(async () => {
   app = buildApp();
   KEY = await makeApiKey();
 }, 60000);
+
+// Every pinned model in this file is treated as a free-tier row. Since
+// 2026-11-06 a pin the free-tier catalog does not list is a PAID attempt that
+// needs the app's allowPaid (aiHardeningPaidPins.test.js pins that rule);
+// this file is about the OpenAI wire contract, so cost classification is
+// held constant rather than seeded per model.
+beforeEach(() => {
+  patch(aiService, 'classifyPinCost', async () => ({ free: true, pricing: null }));
+});
 
 afterEach(async () => {
   while (patched.length) {
@@ -673,7 +684,7 @@ describe('tools and tool_choice', () => {
    * a pinned-but-incapable `cerebras` was skipped and **groq answered
    * instead**, out of `fallbackOrder`, on groq's own default model.
    *
-   * That is the generic provider walk, which DOCS/AIGEEK_FRONT_DOOR.md §2
+   * That is the generic provider walk, which DOCS/ARCHIVE/AIGEEK_FRONT_DOOR.md §2
    * deletes: a request that named a backend is not answered by a different
    * one (F-22, "a model pin is a promise"). The capability skip itself is
    * untouched and is what still runs here — it just has nowhere else to go on

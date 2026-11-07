@@ -22,6 +22,14 @@ const aiModelSchema = new mongoose.Schema({
   // record; this is the ONLY failure memory a paid or pinned model has.
   retiredAt: { type: Date, default: null },
   retiredReason: { type: String, default: null },
+  /**
+   * Set when the catalog job PARKED this row because its provider has no
+   * usable key or is switched off (`parkUnconfiguredProviders`, 2026-11-06 —
+   * it used to delete). Cleared, and the row's previous live state restored,
+   * when the provider is configured again. Everything else on the row —
+   * override, quality, latency, health — is kept through the park.
+   */
+  providerDisabledAt: { type: Date, default: null },
 
   isActive: {
     type: Boolean,

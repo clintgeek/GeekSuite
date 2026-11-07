@@ -64,7 +64,17 @@ const aiSpendSchema = new mongoose.Schema({
    *
    * It is deliberately *not* part of `calls`: nothing happened.
    */
-  refusals: { type: Number, default: 0 }
+  refusals: { type: Number, default: 0 },
+  /**
+   * Calls whose cost nobody could tell us: no reported figure and no
+   * trustworthy `AIPricing` row, on a model the free-tier catalog does not
+   * list. Booked here and NOT as `costUsd: 0`, which is what they were until
+   * 2026-11-06 — indistinguishable from a free call on every dashboard that
+   * sums this collection. Such a call is rare by construction (the governor
+   * refuses an unpriced paid attempt before it happens), which is exactly why
+   * one appearing deserves to be seen.
+   */
+  costUnknown: { type: Number, default: 0 }
 }, {
   timestamps: true
 });
@@ -79,6 +89,131 @@ export function spendDay(now = new Date()) {
 
 const aiGeekConnection = getAIGeekConnection();
 const AISpend = aiGeekConnection.model('AISpend', aiSpendSchema);
+
+/**
+ * AISpendBudget — one document per UTC day: what the paid governor has
+ * RESERVED for calls in flight, and what those calls SETTLED at.
+ *
+ * Added 2026-11-06 because the governor's check was a read: sum today's
+ * `AISpend`, add the estimate, compare with the cap, call, and book the cost
+ * afterwards. N paid attempts arriving together all read the same sum and all
+ * passed. A reservation is one conditional `findOneAndUpdate` on this
+ * document, so the check and the claim are a single atomic write and two
+ * attempts cannot both take room that only one fits.
+ *
+ * Why a separate collection rather than a field on `AISpend`: those rows are
+ * per (day, provider, app, feature) and every dashboard sums them; a day-total
+ * row among them would appear as a phantom app. They stay exactly as they
+ * were — this document is the governor's, and only the governor reads it.
+ *
+ * `_id` IS the day. Upserting on a secondary unique index races before the
+ * index exists (mongoose builds indexes in the background), and two
+ * documents for one day would split the budget in half; `_id` is unique from
+ * the first write. `day` is repeated as a plain field for whoever reads it.
+ */
+const aiSpendBudgetSchema = new mongoose.Schema({
+  _id: { type: String, match: /^\d{4}-\d{2}-\d{2}$/ },
+  day: { type: String },
+  /** Estimates held by paid calls that have been cleared and not yet settled. */
+  reservedUsd: { type: Number, default: 0 },
+  /** What governed calls actually cost once settled (an unknown cost settles at its estimate). */
+  settledUsd: { type: Number, default: 0 }
+}, {
+  timestamps: true,
+  collection: 'aispendbudgets'
+});
+
+export const AISpendBudget = aiGeekConnection.model('AISpendBudget', aiSpendBudgetSchema);
+
+/**
+ * Floating-point slack on the cap comparison: five reservations of $0.01 sum
+ * to 0.05000000000000001, and a cap of $0.05 is meant to admit all five.
+ */
+const CAP_EPSILON_USD = 1e-9;
+
+/**
+ * Reserve `estimateUsd` against today's paid cap, atomically.
+ *
+ * Two conditions, both evaluated inside the one update:
+ *   reserved + settled + estimate ≤ cap   — governed spend, exact under concurrency
+ *   reserved + external + estimate ≤ cap  — `externalSpentUsd` is today's
+ *     `AISpend` total as the caller just read it, which also covers spend that
+ *     never went through a reservation (booked before this document existed,
+ *     or by a path that is not governed).
+ *
+ * @returns {Promise<{day: string, amountUsd: number}|null>} the reservation,
+ *   or `null` when it does not fit. THROWS when the ledger cannot be written —
+ *   the governor turns that into a refusal (fail closed).
+ */
+export async function reserveDailyBudget({ estimateUsd, perDayUsd, externalSpentUsd = 0, now = new Date() }) {
+  const day = spendDay(now);
+  const amount = Number(estimateUsd);
+  if (!Number.isFinite(amount) || amount < 0) return null;
+  const external = Number.isFinite(Number(externalSpentUsd)) ? Number(externalSpentUsd) : Number.POSITIVE_INFINITY;
+  if (!Number.isFinite(external)) return null;
+
+  await AISpendBudget.updateOne(
+    { _id: day },
+    { $setOnInsert: { day, reservedUsd: 0, settledUsd: 0 } },
+    { upsert: true }
+  ).catch((err) => {
+    // Two first-of-the-day reservations both tried the insert; one lost. The
+    // document exists either way, which is all this step is for.
+    if (err?.code !== 11000) throw err;
+  });
+
+  const limit = Number(perDayUsd) + CAP_EPSILON_USD;
+  const doc = await AISpendBudget.findOneAndUpdate(
+    {
+      _id: day,
+      $expr: {
+        $and: [
+          { $lte: [{ $add: ['$reservedUsd', '$settledUsd', amount] }, limit] },
+          { $lte: [{ $add: ['$reservedUsd', external, amount] }, limit] }
+        ]
+      }
+    },
+    { $inc: { reservedUsd: amount } },
+    { new: true }
+  ).lean();
+  return doc ? { day, amountUsd: amount } : null;
+}
+
+/**
+ * Turn a reservation into spend: release the estimate, book the actual cost.
+ * An unknown actual (`null`) keeps the whole estimate counted — the
+ * conservative reading of "we were billed something".
+ *
+ * Never rejects. A settle that cannot be written leaves the estimate reserved
+ * until the day rolls over, which errs toward refusing, not toward spending.
+ */
+export function settleDailyBudget(reservation, actualUsd = null) {
+  if (!reservation) return Promise.resolve(null);
+  const actual = actualUsd !== null && actualUsd !== undefined && Number.isFinite(Number(actualUsd))
+    ? Number(actualUsd)
+    : reservation.amountUsd;
+  return AISpendBudget.updateOne(
+    { _id: reservation.day },
+    { $inc: { reservedUsd: -reservation.amountUsd, settledUsd: actual } }
+  )
+    .catch((err) => {
+      logger.warn({ err, day: reservation.day }, '[AISpend] could not settle a paid reservation — it stays held until the day rolls over');
+    })
+    .then(() => reservation);
+}
+
+/** Give a reservation back (the call failed or was never made). Never rejects. */
+export function releaseDailyBudget(reservation) {
+  if (!reservation) return Promise.resolve(null);
+  return AISpendBudget.updateOne(
+    { _id: reservation.day },
+    { $inc: { reservedUsd: -reservation.amountUsd } }
+  )
+    .catch((err) => {
+      logger.warn({ err, day: reservation.day }, '[AISpend] could not release a paid reservation — it stays held until the day rolls over');
+    })
+    .then(() => reservation);
+}
 
 /**
  * Book one governor refusal against the day's bucket.

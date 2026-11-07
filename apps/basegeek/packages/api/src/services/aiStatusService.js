@@ -41,7 +41,7 @@ import { isEncrypted } from '@geeksuite/crypto-vault';
 import AICatalogRun from '../models/AICatalogRun.js';
 import AIFreeTier, { isFreeTierCooling } from '../models/AIFreeTier.js';
 import AIStickyPick from '../models/AIStickyPick.js';
-import AISpend, { spendDay } from '../models/AISpend.js';
+import AISpend, { spendDay, AISpendBudget } from '../models/AISpend.js';
 import AIAppConfig from '../models/AIAppConfig.js';
 import AIModel from '../models/AIModel.js';
 import APIKey from '../models/APIKey.js';
@@ -50,7 +50,7 @@ import { PROVIDER_IDS, AI_PROVIDERS } from '../config/aiProviders.js';
 import { normalizeAppId } from './callerIdentity.js';
 import { paidCaps } from './aiRoute.js';
 import aiService from './aiService.js';
-import { getInstance as catalogJobInstance } from './aiCatalogJob.js';
+import { getInstance as catalogJobInstance, isCleanRun } from './aiCatalogJob.js';
 
 /* ───────────────────────────── the thresholds ───────────────────────────── */
 
@@ -130,15 +130,14 @@ export function agoText(at, now = new Date()) {
 /**
  * Did this run actually leave the catalog current?
  *
- * The same predicate `aiCatalogJob.lastRunAt` schedules on, and for the same
- * reason: on 2026-09-07 every `AIModel` upsert in the first live run threw on
- * a `name` path conflict and the run still "completed". A run that wrote
- * nothing is a run that did not happen, however cleanly it finished.
+ * The job's own predicate (`aiCatalogJob.isCleanRun`), re-exported so the
+ * page and the scheduler cannot disagree: on 2026-09-07 every `AIModel`
+ * upsert in the first live run threw on a `name` path conflict and the run
+ * still "completed". This file kept a copy until 2026-11-06, and the copy had
+ * drifted — it ignored `deactivateError`, so a run that could not retire
+ * withdrawn models showed as clean here while the job retried it.
  */
-export function isCleanRun(doc) {
-  if (!doc) return false;
-  return !doc.error && !doc.counts?.listedError && !doc.counts?.probeError;
-}
+export { isCleanRun };
 
 /** `{ alive, dead, unknown }` totalled across a run's per-provider counters. */
 function runTotals(doc) {
@@ -165,6 +164,8 @@ export function defaultDeps() {
     freeTier: AIFreeTier,
     stickyPick: AIStickyPick,
     spend: AISpend,
+    /** The governor's per-day reservation document (`_id` is the day). */
+    spendBudget: AISpendBudget,
     appConfig: AIAppConfig,
     model: AIModel,
     apiKey: APIKey,
@@ -457,12 +458,115 @@ function plaintextKeyItems({ configs, isEncryptedFn }) {
   return [{
     kind: 'plaintext_keys',
     severity: 'info',
-    text: `${n} provider keys are stored unencrypted — run the encrypt-keys migration`,
+    text: `${n} provider key${n === 1 ? ' is' : 's are'} stored unencrypted — run the encrypt-keys migration`,
   }];
 }
 
-/** Warnings first, then the table's own order within a severity. */
+/**
+ * What the latest discovery's key audit and parking step recorded
+ * (`aiCatalogJob.runDiscovery`, C2 2026-11-06). Provider ids only — never a
+ * key, a hint or a document id.
+ *
+ *   key_unreadable    error  a stored key would not decrypt. Almost always a
+ *                            wrong or rotated KEY_VAULT_SECRET; the run parked
+ *                            nothing because of it, and every call on those
+ *                            providers is failing as "no key".
+ *   key_not_loaded    warn   AIConfig holds a readable, enabled key this
+ *                            process has not loaded — a restart or a config
+ *                            reload away from working.
+ *   providers_parked  info   rows set aside for providers with no usable key
+ *   providers_unparked info  rows restored because a key came back
+ *   listing_truncated info   a provider's listing hit the page cap, so the
+ *                            catalog may be missing some of its models
+ */
+function catalogAuditItems({ lastDiscovery, labels }) {
+  if (!lastDiscovery) return [];
+  const since = asDate(lastDiscovery.finishedAt) || asDate(lastDiscovery.startedAt);
+  const names = (ids) => ids.map((id) => labels[id] || id).join(', ');
+  const list = (value) => (Array.isArray(value) ? value.filter((v) => typeof v === 'string' && v) : []);
+  const total = (value) => Object.values(value && typeof value === 'object' ? value : {})
+    .reduce((sum, n) => sum + int(n), 0);
+  const items = [];
+
+  const unreadable = list(lastDiscovery.keyUnreadable);
+  if (unreadable.length > 0) {
+    items.push({
+      kind: 'key_unreadable',
+      severity: 'error',
+      text: `${names(unreadable)}: stored key would not decrypt — check KEY_VAULT_SECRET (wrong or rotated?)`,
+      since,
+    });
+  }
+  const notLoaded = list(lastDiscovery.keyNotLoaded);
+  if (notLoaded.length > 0) {
+    items.push({
+      kind: 'key_not_loaded',
+      severity: 'warn',
+      text: `${names(notLoaded)}: a key is saved but not loaded — reload the AI config or restart`,
+      since,
+    });
+  }
+  const parked = total(lastDiscovery.parked);
+  if (parked > 0) {
+    items.push({
+      kind: 'providers_parked',
+      severity: 'info',
+      text: `${parked} catalog row(s) parked for providers with no usable key`,
+      since,
+    });
+  }
+  const unparked = total(lastDiscovery.unparked);
+  if (unparked > 0) {
+    items.push({
+      kind: 'providers_unparked',
+      severity: 'info',
+      text: `${unparked} parked catalog row(s) restored — their provider has a key again`,
+      since,
+    });
+  }
+  const truncated = list(lastDiscovery.counts?.truncatedListing);
+  if (truncated.length > 0) {
+    items.push({
+      kind: 'listing_truncated',
+      severity: 'info',
+      text: `${names(truncated)}: model listing was cut off at the page cap — the catalog may be missing models`,
+      since,
+    });
+  }
+  return items;
+}
+
+/**
+ * `cost_unknown` — calls this month whose price nobody could tell us.
+ *
+ * `AISpend.costUnknown` (2026-11-06). Those calls book `costUsd: 0`, so every
+ * dollar figure on this page is a floor while this is non-zero. Rare by
+ * construction — the governor refuses an unpriced paid attempt — which is
+ * why one appearing is worth a line.
+ */
+function costUnknownItems({ monthRows }) {
+  let n = 0;
+  let first = null;
+  for (const row of monthRows) {
+    const unknown = int(row?.costUnknown);
+    if (unknown <= 0) continue;
+    n += unknown;
+    if (!first || row.day < first) first = row.day;
+  }
+  if (n === 0) return [];
+  return [{
+    kind: 'cost_unknown',
+    severity: 'warn',
+    text: `${n} call(s) this month had no known price — the spend figures are a floor`,
+    since: new Date(`${first}T00:00:00.000Z`),
+  }];
+}
+
+/** Errors, then warnings, then the table's own order within a severity. */
 const KIND_ORDER = [
+  'key_unreadable',
+  'key_not_loaded',
+  'cost_unknown',
   'provider_dead',
   'provider_listing_failed',
   'discovery_stale',
@@ -471,10 +575,15 @@ const KIND_ORDER = [
   'key_expiring',
   'paid_budget_hit',
   'plaintext_keys',
+  'providers_parked',
+  'providers_unparked',
+  'listing_truncated',
 ];
 
+const SEVERITY_RANK = { error: 0, warn: 1 };
+
 function sortAttention(items) {
-  const rank = (item) => (item.severity === 'warn' ? 0 : 1);
+  const rank = (item) => SEVERITY_RANK[item.severity] ?? 2;
   return items
     .map((item, index) => ({ item, index }))
     .sort((a, b) =>
@@ -519,13 +628,22 @@ export async function buildStatus({ now = new Date(), deps = {} } = {}) {
     stickies,
     configs,
     catalogModels,
+    budgetToday,
   ] = await Promise.all([
     d.catalogRun.findOne({ kind: 'discovery' }).sort({ startedAt: -1 }).lean(),
     d.catalogRun.findOne({ kind: 'probe' }).sort({ startedAt: -1 }).lean(),
     // The scheduler's definition of "a run that counts", so the page and the
     // job agree about when the catalog was last actually refreshed.
     d.catalogRun
-      .findOne({ kind: 'discovery', error: null, 'counts.listedError': null, 'counts.probeError': null })
+      // Every field in `aiCatalogJob.UNCLEAN_COUNT_FIELDS`, deactivateError
+      // included (it was missing until 2026-11-06).
+      .findOne({
+        kind: 'discovery',
+        error: null,
+        'counts.listedError': null,
+        'counts.probeError': null,
+        'counts.deactivateError': null,
+      })
       .sort({ startedAt: -1 })
       .lean(),
     d.freeTier.find({ isFree: true }).lean(),
@@ -539,6 +657,8 @@ export async function buildStatus({ now = new Date(), deps = {} } = {}) {
     // are a subset of these, so filtering in memory costs nothing and keeps the
     // query to a shape the rules can be tested against with a fake collection.
     d.model.find({}).select('provider modelId isActive retiredAt retiredReason').lean(),
+    // One document, `_id` = today: what the paid governor holds and settled.
+    d.spendBudget ? d.spendBudget.findOne({ _id: todayKey }).lean() : null,
   ]);
 
   const providers = d.providers() || {};
@@ -677,24 +797,34 @@ export async function buildStatus({ now = new Date(), deps = {} } = {}) {
   let monthUsd = 0;
   let todayUsd = 0;
   let paidCallsMonth = 0;
+  let costUnknownMonth = 0;
+  let costUnknownToday = 0;
   const byAppKey = new Map();
 
   for (const row of monthRows) {
     const cost = Number(row.costUsd) || 0;
     const calls = int(row.calls);
+    const unknown = int(row.costUnknown);
     monthUsd += cost;
-    if (row.day === todayKey) todayUsd += cost;
-    // The ledger buckets free and paid calls of one app/feature/provider/day
-    // into one document, so this is the closest honest figure the schema can
-    // give: calls from a bucket that cost something. It over-counts a bucket
-    // that mixed a paid fallback in with free answers.
+    costUnknownMonth += unknown;
+    if (row.day === todayKey) {
+      todayUsd += cost;
+      costUnknownToday += unknown;
+    }
+    // "Not known to be free." The ledger buckets free and paid calls of one
+    // app/feature/provider/day into one document, so a bucket that cost
+    // something counts all its calls — it over-counts a bucket that mixed a
+    // paid fallback in with free answers. A bucket that booked $0 still has
+    // its unknown-cost calls counted: until 2026-11-06 they read as free.
     if (cost > 0) paidCallsMonth += calls;
+    else paidCallsMonth += unknown;
 
     const key = `${row.app || 'unknown'}\u0000${row.feature || ''}`;
     const bucket = byAppKey.get(key)
-      || { app: row.app || 'unknown', feature: row.feature || '', usd: 0, calls: 0 };
+      || { app: row.app || 'unknown', feature: row.feature || '', usd: 0, calls: 0, costUnknown: 0 };
     bucket.usd += cost;
     bucket.calls += calls;
+    bucket.costUnknown += unknown;
     byAppKey.set(key, bucket);
   }
 
@@ -704,6 +834,20 @@ export async function buildStatus({ now = new Date(), deps = {} } = {}) {
     capPerDayUsd: usd(caps.perDayUsd),
     capPerCallUsd: usd(caps.perCallUsd),
     paidCallsMonth,
+    /**
+     * Calls with no known price (`AISpend.costUnknown`). They are booked at
+     * $0, so while these are non-zero `monthUsd` / `todayUsd` are floors.
+     */
+    costUnknownMonth,
+    costUnknownToday,
+    /**
+     * The paid governor's view of today (`AISpendBudget`): estimates held by
+     * paid calls in flight, and what governed calls settled at. The cap is
+     * checked against reserved + settled, so this — not `todayUsd` — is how
+     * close today is to `capPerDayUsd`.
+     */
+    reservedTodayUsd: usd(budgetToday?.reservedUsd),
+    settledTodayUsd: usd(budgetToday?.settledUsd),
     byApp: [...byAppKey.values()]
       .map((row) => ({ ...row, usd: usd(row.usd) }))
       .sort((a, b) => b.usd - a.usd || a.app.localeCompare(b.app) || a.feature.localeCompare(b.feature)),
@@ -779,6 +923,8 @@ export async function buildStatus({ now = new Date(), deps = {} } = {}) {
   /* ── attention ─────────────────────────────────────────────────────────── */
 
   const attention = sortAttention([
+    ...catalogAuditItems({ lastDiscovery, labels: d.labels }),
+    ...costUnknownItems({ monthRows }),
     ...providerDeadItems({
       providerIds: d.providerIds,
       labels: d.labels,
@@ -830,7 +976,12 @@ export async function cachedStatus({ now = new Date(), deps = {}, ttlMs = STATUS
   return value;
 }
 
-/** Drop the memo. Called by `POST /catalog/run`, and by tests between cases. */
+/**
+ * Drop the memo. Called by `POST /catalog/run`, by every admin write that
+ * changes what this page reports (provider keys and config, routing rows,
+ * pricing and free-tier rows, catalog overrides, stats resets — see
+ * routes/aiRoutes.js and graphql/basegeek/resolvers.js), and by tests.
+ */
 export function invalidateStatusCache() {
   cached = null;
 }

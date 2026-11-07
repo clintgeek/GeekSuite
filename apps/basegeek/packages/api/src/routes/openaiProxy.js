@@ -597,7 +597,18 @@ router.post('/chat/completions', async (req, res) => {
       cacheNamespace = `${cacheNamespace}|${promptHash}`;
     }
 
+    // A client that hangs up has stopped waiting, so the call stops too: no
+    // next attempt, no paid fallback, no socket held open for 60 s (callAI
+    // checks the signal before every attempt; the adapter hands it to axios).
+    // `res` 'close' with the response unfinished is the disconnect — after a
+    // normal reply `writableEnded` is already true and nothing is aborted.
+    const clientGone = new AbortController();
+    res.on('close', () => {
+      if (!res.writableEnded) clientGone.abort();
+    });
+
     const callConfig = {
+      signal: clientGone.signal,
       temperature,
       maxTokens,
       messages,
@@ -606,6 +617,10 @@ router.post('/chat/completions', async (req, res) => {
       freeOnly: useFreeAlias,
       useAppConfig: useAppAlias,
       appName: caller.appId,
+      // Whether the key proved this app id; an untrusted one gets no paid
+      // step from the app's row (Track B, 2026-11-06). From the credential,
+      // never the body — `callConfig` names every field it carries.
+      appTrusted: caller.trustedApp,
       feature: caller.feature,
       cacheNamespace,
       // Pass through standard OpenAI params. Each of these now survives all
@@ -661,8 +676,12 @@ router.post('/chat/completions', async (req, res) => {
     // unreachable case where something throws after the first byte.
     if (stream) {
       let result;
+      // This call's own metadata (`callAIWithInfo`), never a shared field: two
+      // overlapping completions used to read each other's model, tool calls
+      // and finish reason off `aiService.lastProviderInfo`.
+      let providerInfo;
       try {
-        result = await aiService.callAI(promptForRouting, callConfig);
+        ({ content: result, info: providerInfo } = await aiService.callAIWithInfo(promptForRouting, callConfig));
       } catch (error) {
         // F-23: the same envelope the non-streaming path returns, from the
         // same allowlist — nothing the provider said reaches the caller.
@@ -679,7 +698,6 @@ router.post('/chat/completions', async (req, res) => {
       try {
         const formatted = assistantText(result);
         const created = Math.floor(Date.now() / 1000);
-        const providerInfo = aiService.lastProviderInfo || {};
         const responseModel = echoedModel(providerInfo);
 
         const id = `chatcmpl-${Date.now()}`;
@@ -783,10 +801,9 @@ router.post('/chat/completions', async (req, res) => {
     }
 
     // Non-streaming response
-    const result = await aiService.callAI(promptForRouting, callConfig);
+    const { content: result, info: providerInfo } = await aiService.callAIWithInfo(promptForRouting, callConfig);
     const formatted = assistantText(result);
     const created = Math.floor(Date.now() / 1000);
-    const providerInfo = aiService.lastProviderInfo || {};
     const responseModel = echoedModel(providerInfo);
 
     const promptTokens = countMessageTokens(messages);
@@ -794,7 +811,7 @@ router.post('/chat/completions', async (req, res) => {
 
     // Surface OpenAI-style tool_calls when the provider returned them.
     // Gemini emits functionCall parts and Groq OpenAI-shaped tool_calls; the
-    // call*() methods normalize both onto lastProviderInfo.toolCalls.
+    // adapters normalize both onto the call's own `info.toolCalls`.
     const assistantMessage = { role: 'assistant', content: formatted };
     let finishReason = 'stop';
     if (Array.isArray(providerInfo.toolCalls) && providerInfo.toolCalls.length > 0) {

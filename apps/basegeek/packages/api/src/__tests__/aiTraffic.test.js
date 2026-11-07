@@ -53,7 +53,7 @@ describe('aiTraffic — the fold', () => {
       { day: '2026-09-27', app: 'storygeek', calls: 2, costUsd: 0.012, refusals: 1 },
       { day: '2026-09-27', app: 'notegeek', calls: 5, costUsd: 0.003 },
     ], { now: NOW, days: 1 });
-    expect(out.days).toEqual([{ day: '2026-09-27', calls: 17, costUsd: 0.015, refusals: 1 }]);
+    expect(out.days).toEqual([{ day: '2026-09-27', calls: 17, costUsd: 0.015, refusals: 1, costUnknown: 0 }]);
   });
 
   it("breaks today (and only today) down by app, busiest first", () => {
@@ -65,9 +65,9 @@ describe('aiTraffic — the fold', () => {
       { day: '2026-09-27', calls: 2 },
     ], { now: NOW, days: 2 });
     expect(out.apps).toEqual([
-      { app: 'storygeek', calls: 13, costUsd: 0 },
-      { app: 'notegeek', calls: 5, costUsd: 0 },
-      { app: 'unknown', calls: 2, costUsd: 0 },
+      { app: 'storygeek', calls: 13, costUsd: 0, costUnknown: 0 },
+      { app: 'notegeek', calls: 5, costUsd: 0, costUnknown: 0 },
+      { app: 'unknown', calls: 2, costUsd: 0, costUnknown: 0 },
     ]);
   });
 

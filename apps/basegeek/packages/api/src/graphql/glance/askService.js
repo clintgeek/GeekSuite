@@ -231,12 +231,25 @@ export function degradedIntent(query) {
   };
 }
 
-function withTimeout(promise, ms, label) {
+/**
+ * `work(signal)` under a deadline that cancels it. A bare `Promise.race` used
+ * to answer Ask on time and leave the model call walking the free rows behind
+ * it — writing health and spend for an answer nobody would read. The signal
+ * reaches `callAI`, which stops before its next attempt, and the adapter's
+ * HTTP request, which stops at the socket.
+ */
+function withTimeout(work, ms, label) {
+  const controller = new AbortController();
   let timer;
   const timeout = new Promise((_, reject) => {
-    timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+    timer = setTimeout(() => {
+      controller.abort();
+      reject(new Error(`${label} timed out after ${ms}ms`));
+    }, ms);
   });
-  return Promise.race([promise, timeout]).finally(() => clearTimeout(timer));
+  const running = Promise.resolve().then(() => work(controller.signal));
+  running.catch(() => {});
+  return Promise.race([running, timeout]).finally(() => clearTimeout(timer));
 }
 
 function parseJson(raw) {
@@ -308,6 +321,21 @@ function callerId(context) {
   return context?.user?.id || context?.user?._id || null;
 }
 
+/**
+ * `callAIWithInfo` against whatever `ai` Ask was handed: `{ content,
+ * info }` for THIS call. The real service has the method; an injected double
+ * may only have `callAI` and a hand-set `lastProviderInfo`, which is read from
+ * that double — never from the singleton, which stopped writing one on
+ * 2026-11-06 because concurrent calls overwrote each other's copy. Defined
+ * here rather than imported because a dozen suites mock `aiService.js` with a
+ * default export only.
+ */
+async function callWithInfo(ai, prompt, config) {
+  if (typeof ai?.callAIWithInfo === 'function') return ai.callAIWithInfo(prompt, config);
+  const content = await ai.callAI(prompt, config);
+  return { content, info: ai?.lastProviderInfo || {} };
+}
+
 async function callModel({ system, user, schema, context, feature = null }) {
   // In-process caller: there is no request body to distrust and no credential
   // to read, so Ask names itself. `internalCaller` normalizes the id the same
@@ -320,8 +348,7 @@ async function callModel({ system, user, schema, context, feature = null }) {
     feature,
   });
 
-  const content = await withTimeout(
-    aiService.callAI(user, {
+  const { content, info } = await withTimeout((signal) => callWithInfo(aiService, user, {
       messages: [
         { role: 'system', content: system },
         { role: 'user', content: user },
@@ -340,12 +367,12 @@ async function callModel({ system, user, schema, context, feature = null }) {
       // A plan, a one-line answer or a draft is a few hundred tokens at most;
       // without a cap the provider default (4000) let a free model run for 15 s.
       maxTokens: 400,
+      signal,
     }),
     ASK_TIMEOUT_MS,
     schema.name
   );
 
-  const info = aiService.lastProviderInfo || {};
   return {
     parsed: parseJson(content),
     provider: info.provider || null,

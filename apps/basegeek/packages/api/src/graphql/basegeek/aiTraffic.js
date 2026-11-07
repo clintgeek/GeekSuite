@@ -63,13 +63,18 @@ const money = (value) => {
  * zero rather than silently closing the gap between its neighbours. Rows
  * outside the window are ignored rather than trusted to have been filtered.
  *
- * @param {Array<{day, app, calls, costUsd, refusals}>} rows
+ * `costUnknown` counts calls whose price nobody could tell us
+ * (`AISpend.costUnknown`). They are booked at `costUsd: 0`, so a day's
+ * `costUsd` is a floor whenever its `costUnknown` is non-zero — the field is
+ * here so the console can say so instead of drawing them as free.
+ *
+ * @param {Array<{day, app, calls, costUsd, refusals, costUnknown}>} rows
  * @param {{ now?: Date, days?: number }} [options]
  */
 export function buildTraffic(rows, { now = new Date(), days = DEFAULT_TRAFFIC_DAYS } = {}) {
   const keys = trafficWindow({ now, days });
   const today = keys[keys.length - 1];
-  const byDay = new Map(keys.map((key) => [key, { day: key, calls: 0, costUsd: 0, refusals: 0 }]));
+  const byDay = new Map(keys.map((key) => [key, { day: key, calls: 0, costUsd: 0, refusals: 0, costUnknown: 0 }]));
   const byApp = new Map();
 
   for (const row of rows || []) {
@@ -80,12 +85,15 @@ export function buildTraffic(rows, { now = new Date(), days = DEFAULT_TRAFFIC_DA
     bucket.calls += calls;
     bucket.costUsd += cost;
     bucket.refusals += int(row.refusals);
+    const unknown = int(row.costUnknown);
+    bucket.costUnknown += unknown;
 
     if (row.day === today) {
       const app = String(row.app || 'unknown');
-      const entry = byApp.get(app) || { app, calls: 0, costUsd: 0 };
+      const entry = byApp.get(app) || { app, calls: 0, costUsd: 0, costUnknown: 0 };
       entry.calls += calls;
       entry.costUsd += cost;
+      entry.costUnknown += unknown;
       byApp.set(app, entry);
     }
   }
@@ -108,7 +116,7 @@ export async function readTraffic(model, { now = new Date(), days = DEFAULT_TRAF
   const keys = trafficWindow({ now, days });
   const rows = await model
     .find({ day: { $gte: keys[0], $lte: keys[keys.length - 1] } })
-    .select('day app calls costUsd refusals')
+    .select('day app calls costUsd refusals costUnknown')
     .lean();
   return buildTraffic(rows, { now, days });
 }

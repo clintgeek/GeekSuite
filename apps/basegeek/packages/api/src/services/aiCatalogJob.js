@@ -18,7 +18,10 @@
  *   2. **Re-probe** when the last one is older than `AI_CATALOG_PROBE_HOURS`
  *      (6). Every free row with a configured provider gets one probe; alive
  *      rows are revived, dead rows cooled 30 days.
- *   3. **Prune** catalog rows whose provider has left the roster. `AIConfig` —
+ *   3. **Park** (never delete) catalog rows of a roster provider with no usable
+ *      key, and restore them when the key returns — unless a stored key will
+ *      not decrypt, in which case nothing is parked and the run says so.
+ *   4. **Prune** catalog rows whose provider has left the roster. `AIConfig` —
  *      the encrypted keys — is never touched by this job.
  *
  * The first tick waits `bootDelayMs` (60 s) so `aiService` has loaded the
@@ -45,11 +48,24 @@ import AICatalogRun from '../models/AICatalogRun.js';
 import AIFreeTier from '../models/AIFreeTier.js';
 import AIModel from '../models/AIModel.js';
 import AIPricing from '../models/AIPricing.js';
+import AIConfig from '../models/AIConfig.js';
 import { PROVIDER_IDS } from '../config/aiProviders.js';
 
 export const DEFAULT_TICK_MS = 60 * 60 * 1000;
 export const DEFAULT_DISCOVERY_HOURS = 24;
 export const DEFAULT_PROBE_HOURS = 6;
+/**
+ * How long a FAILED discovery waits before it is tried again (2026-11-06, C1).
+ *
+ * A failed run never satisfies the 24 h schedule, which is right — but it used
+ * to mean "due again on the very next tick", so a persistent failure (a write
+ * that always throws, a vendor whose listing is down for a day) re-listed and
+ * re-probed every free candidate of every provider every hour: ~24x the
+ * intended quota spend, and it starved the 6 h re-probe sweep, which only ran
+ * on ticks where discovery did not. Six hours matches the re-probe cadence: a
+ * broken catalog is retried four times a day, not twenty-four.
+ */
+export const DEFAULT_DISCOVERY_RETRY_HOURS = 6;
 /**
  * How often the golden set runs. Daily, and that number is load-bearing.
  *
@@ -60,6 +76,19 @@ export const DEFAULT_PROBE_HOURS = 6;
  */
 export const DEFAULT_GOLDEN_HOURS = 24;
 export const DEFAULT_BOOT_DELAY_MS = 60 * 1000;
+
+/**
+ * The one definition of a run that counts — the schedule's and (it should be)
+ * the status page's. Any recorded failure makes a run unclean: an abort, a
+ * listing write, a probe write, or the deactivation sweep (`deactivateError`,
+ * which until 2026-11-06 was recorded and then ignored — a run that could not
+ * retire withdrawn models still held the schedule for 24 h).
+ */
+export const UNCLEAN_COUNT_FIELDS = ['listedError', 'probeError', 'deactivateError'];
+export function isCleanRun(doc) {
+  if (!doc || doc.error) return false;
+  return UNCLEAN_COUNT_FIELDS.every((f) => !doc.counts?.[f]);
+}
 
 /** Read a positive number from the environment, else the default. */
 function envHours(name, fallback) {
@@ -88,6 +117,7 @@ export class AICatalogJob {
       intervalMs = DEFAULT_TICK_MS,
       discoveryHours = envHours('AI_CATALOG_DISCOVERY_HOURS', DEFAULT_DISCOVERY_HOURS),
       probeHours = envHours('AI_CATALOG_PROBE_HOURS', DEFAULT_PROBE_HOURS),
+      discoveryRetryHours = envHours('AI_CATALOG_DISCOVERY_RETRY_HOURS', DEFAULT_DISCOVERY_RETRY_HOURS),
       goldenHours = envHours('AI_CATALOG_GOLDEN_HOURS', DEFAULT_GOLDEN_HOURS),
       bootDelayMs = DEFAULT_BOOT_DELAY_MS,
       now = () => Date.now(),
@@ -97,6 +127,9 @@ export class AICatalogJob {
     this.intervalMs = intervalMs;
     this.discoveryMs = discoveryHours * 60 * 60 * 1000;
     this.probeMs = probeHours * 60 * 60 * 1000;
+    // Never longer than the normal interval: a retry that waited longer than a
+    // success would be a punishment, not a backoff.
+    this.discoveryRetryMs = Math.min(discoveryRetryHours * 60 * 60 * 1000, this.discoveryMs);
     this.goldenMs = goldenHours * 60 * 60 * 1000;
     this.bootDelayMs = bootDelayMs;
     this.now = now;
@@ -107,6 +140,9 @@ export class AICatalogJob {
     this.freeTier = deps.freeTier || AIFreeTier;
     this.model = deps.model || AIModel;
     this.pricing = deps.pricing || AIPricing;
+    // Read only, never written: to tell "no key" from "a key the vault cannot
+    // read" before parking anything (see `auditUnconfigured`).
+    this.aiConfig = deps.aiConfig || AIConfig;
     this.providerIds = deps.providers || PROVIDER_IDS;
     this.log = deps.log || logger;
 
@@ -138,7 +174,7 @@ export class AICatalogJob {
     }
     this.isRunning = true;
     this.log.info(
-      `[CatalogJob] starting (tick ${this.intervalMs}ms, discovery ${this.discoveryMs / 3600000}h, probe ${this.probeMs / 3600000}h, first tick in ${this.bootDelayMs}ms)`
+      `[CatalogJob] starting (tick ${this.intervalMs}ms, discovery ${this.discoveryMs / 3600000}h (retry ${this.discoveryRetryMs / 3600000}h), probe ${this.probeMs / 3600000}h, first tick in ${this.bootDelayMs}ms)`
     );
 
     // The boot tick waits for aiService to load the provider keys out of
@@ -178,11 +214,73 @@ export class AICatalogJob {
     // day while the catalog stays wrong. Such runs are kept for the status page
     // but do not satisfy the schedule; the next tick retries.
     const doc = await this.catalogRun
-      .findOne({ kind, error: null, 'counts.listedError': null, 'counts.probeError': null })
+      .findOne({ kind, error: null, ...Object.fromEntries(UNCLEAN_COUNT_FIELDS.map((f) => [`counts.${f}`, null])) })
       .sort({ startedAt: -1 })
       .lean();
     const at = doc?.finishedAt || doc?.startedAt;
     return at ? new Date(at).getTime() : null;
+  }
+
+  /**
+   * Is a discovery due? Measured from the last ATTEMPT, not the last success:
+   * after a clean run, `discoveryMs` (24 h); after a failed one,
+   * `discoveryRetryMs` (6 h). See `DEFAULT_DISCOVERY_RETRY_HOURS`.
+   */
+  async discoveryDue(now) {
+    const latest = await this.catalogRun.findOne({ kind: 'discovery' }).sort({ startedAt: -1 }).lean();
+    const at = latest ? new Date(latest.finishedAt || latest.startedAt).getTime() : null;
+    if (!Number.isFinite(at)) return true;
+    return now - at >= (isCleanRun(latest) ? this.discoveryMs : this.discoveryRetryMs);
+  }
+
+  /**
+   * Of the roster providers `aiService` sees as unusable, which may we park?
+   *
+   * `aiService` cannot tell "no key" from "a key that would not decrypt" —
+   * both arrive as an empty `apiKey` — so this asks `AIConfig` directly:
+   *
+   *   parkable   — no AIConfig row, no stored key, or switched off.
+   *   unreadable — a stored key that decrypts to nothing (wrong or rotated
+   *                KEY_VAULT_SECRET). Any one of these stops ALL parking.
+   *   notLoaded  — a readable, enabled key `aiService` has not loaded yet.
+   *
+   * Only provider ids leave this function; no key, plaintext or cipher, is
+   * logged or returned.
+   */
+  async auditUnconfigured(candidates) {
+    const out = { parkable: [], unreadable: [], notLoaded: [] };
+    if (candidates.length === 0) return out;
+    const docs = await this.aiConfig.find({});
+    const byProvider = new Map((docs || []).map((d) => [d.provider, d]));
+    for (const id of candidates) {
+      const doc = byProvider.get(id);
+      if (!doc || !doc.apiKey) { out.parkable.push(id); continue; }
+      let plain = null;
+      try {
+        plain = typeof doc.getDecryptedKey === 'function' ? doc.getDecryptedKey() : doc.apiKey;
+      } catch {
+        plain = null;
+      }
+      if (!String(plain || '').trim()) { out.unreadable.push(id); continue; }
+      if (doc.enabled === false) { out.parkable.push(id); continue; }
+      out.notLoaded.push(id);
+    }
+    return out;
+  }
+
+  /** Put back what an earlier run parked, for every provider usable again. */
+  async unparkConfigured(run) {
+    if (typeof this.discovery.unparkConfiguredProviders !== 'function') return;
+    try {
+      const res = await this.discovery.unparkConfiguredProviders({ configured: this.configuredProviders() }, this.writeDeps);
+      const n = Object.values(res || {}).reduce((a, b) => a + (b || 0), 0);
+      if (n > 0) {
+        run.unparked = res;
+        this.log.info({ unparked: res }, `[CatalogJob] restored ${n} parked row(s) for providers configured again`);
+      }
+    } catch (err) {
+      this.log.warn({ err }, '[CatalogJob] unpark failed');
+    }
   }
 
   /**
@@ -201,8 +299,7 @@ export class AICatalogJob {
 
       let dueDiscovery = true;
       try {
-        const last = await this.lastRunAt('discovery');
-        dueDiscovery = last === null || now - last >= this.discoveryMs;
+        dueDiscovery = await this.discoveryDue(now);
       } catch (err) {
         this.log.warn({ err }, '[CatalogJob] could not read the last discovery run — running one');
       }
@@ -221,9 +318,13 @@ export class AICatalogJob {
       } catch (err) {
         this.log.warn({ err }, '[CatalogJob] could not read the last probe run — running one');
       }
-      // A discovery run just probed every candidate; re-probing the same rows
-      // minutes later spends free quota to learn nothing.
-      if (dueProbe && !out.discovery) {
+      // A discovery run that completed its probing just probed every
+      // candidate; re-probing the same rows minutes later spends free quota to
+      // learn nothing. One that aborted, or whose probe writes failed, probed
+      // nothing we kept — skipping the sweep for it is how a failing discovery
+      // starved the re-probe for as long as it kept failing (C1, 2026-11-06).
+      const discoveryProbed = Boolean(out.discovery) && !out.discovery.error && !out.discovery.counts?.probeError;
+      if (dueProbe && !discoveryProbed) {
         try {
           out.probe = await this.runProbeSweep();
         } catch (err) {
@@ -308,6 +409,14 @@ export class AICatalogJob {
 
     if (providers.length === 0) {
       run.error = 'no provider is configured with a key';
+      // When EVERY key reads as missing, the likeliest cause is the vault, not
+      // nine simultaneous key deletions. Say which.
+      try {
+        const audit = await this.auditUnconfigured(this.providerIds);
+        if (audit.unreadable.length > 0) run.keyUnreadable = audit.unreadable;
+      } catch (err) {
+        this.log.warn({ err }, '[CatalogJob] could not read AIConfig to audit keys');
+      }
       run.finishedAt = new Date(this.now());
       this.log.warn('[CatalogJob] discovery skipped — no provider has a key');
       await this.writeRun(run);
@@ -315,6 +424,7 @@ export class AICatalogJob {
     }
 
     this.log.info({ providers }, `[CatalogJob] discovery starting for ${providers.length} provider(s)`);
+    await this.unparkConfigured(run);
     try {
       // Rows a human denied are still listed (the AIModel row stays current)
       // but are never probed — a denied row costs no quota and no verdict can
@@ -344,22 +454,34 @@ export class AICatalogJob {
         this.log.warn({ err }, '[CatalogJob] prune failed');
       }
 
-      // And rows for a provider still in the roster that we hold no key for.
-      // Those were never pruned by anything: inert, because selection skips a
-      // keyless provider, but read on every status build and wrong in every
-      // count the console shows.
+      // And rows for a roster provider we cannot use right now — no key, or
+      // switched off. PARKED, not deleted (C2, 2026-11-06): the rows keep
+      // their overrides, quality and latency history and come back when the
+      // key does. Never when any stored key is unreadable — that is a vault
+      // problem wearing the costume of "no key", and it is recorded instead.
       try {
-        const stale = await this.discovery.pruneUnconfiguredProviders(
-          { configured: this.configuredProviders(), roster: this.providerIds },
-          this.writeDeps
-        );
-        const n = Object.values(stale).reduce((a, b) => a + (b || 0), 0);
-        if (n > 0) {
-          run.prunedUnconfigured = stale;
-          this.log.info({ pruned: stale }, `[CatalogJob] pruned ${n} row(s) for providers with no credential`);
+        const configured = this.configuredProviders();
+        const audit = await this.auditUnconfigured(this.providerIds.filter((id) => !configured.includes(id)));
+        if (audit.unreadable.length > 0) run.keyUnreadable = audit.unreadable;
+        if (audit.notLoaded.length > 0) run.keyNotLoaded = audit.notLoaded;
+        if (audit.unreadable.length > 0) {
+          this.log.error(
+            { providers: audit.unreadable },
+            '[CatalogJob] stored key(s) did not decrypt — check KEY_VAULT_SECRET; parking NOTHING this run'
+          );
+        } else if (audit.parkable.length > 0 && typeof this.discovery.parkUnconfiguredProviders === 'function') {
+          const parked = await this.discovery.parkUnconfiguredProviders(
+            { configured: this.providerIds.filter((id) => !audit.parkable.includes(id)), roster: this.providerIds, now: this.now() },
+            this.writeDeps
+          );
+          const n = Object.values(parked || {}).reduce((a, b) => a + (b || 0), 0);
+          if (n > 0) {
+            run.parked = parked;
+            this.log.info({ parked, providers: audit.parkable }, `[CatalogJob] parked ${n} row(s) for providers with no usable credential`);
+          }
         }
       } catch (err) {
-        this.log.warn({ err }, '[CatalogJob] unconfigured prune failed');
+        this.log.warn({ err }, '[CatalogJob] parking unconfigured providers failed — nothing parked');
       }
 
       this.log.info({ counts, perProvider: run.perProvider }, '[CatalogJob] discovery complete');
@@ -382,6 +504,7 @@ export class AICatalogJob {
     const startedAt = new Date(this.now());
     const run = { kind: 'probe', startedAt, perProvider: {}, pruned: {}, error: null };
 
+    await this.unparkConfigured(run);
     try {
       const configured = new Set(this.configuredProviders());
       const all = await this.freeTier.find({ isFree: true }).lean();
@@ -402,6 +525,8 @@ export class AICatalogJob {
         rows,
         callProvider: this.learningCallProvider(),
         updateOne: (query, update) => this.freeTier.updateOne(query, update),
+        // A retirement found here is recorded on the AIModel row too (C4).
+        updateModel: (query, update) => this.model.updateOne(query, update),
         options: { mark: true, revive: true, timeout: this.discovery.DEFAULT_PROBE_TIMEOUT_MS, now: this.now() }
       });
 
@@ -534,4 +659,4 @@ export function stopAICatalogJob() {
   if (instance) instance.stop();
 }
 
-export default { AICatalogJob, getInstance, startAICatalogJob, stopAICatalogJob };
+export default { AICatalogJob, getInstance, startAICatalogJob, stopAICatalogJob, isCleanRun };

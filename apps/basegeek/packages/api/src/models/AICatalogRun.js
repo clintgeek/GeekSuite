@@ -34,7 +34,23 @@ const aiCatalogRunSchema = new mongoose.Schema({
   // listedError/probeError text). Added 2026-09-07: the first live run set
   // this and the strict schema silently dropped it.
   counts: { type: mongoose.Schema.Types.Mixed, default: null },
-  error: { type: String, default: null }
+  error: { type: String, default: null },
+  /**
+   * Providers whose stored `AIConfig.apiKey` is present but would not decrypt
+   * (a wrong or rotated KEY_VAULT_SECRET). When this is non-empty the run did
+   * NOT park anything: an unreadable key looks exactly like no key to
+   * `aiService`, and acting on that would take a whole catalog offline. The
+   * status page should alert on it. Added 2026-11-06.
+   */
+  keyUnreadable: { type: [String], default: undefined },
+  /**
+   * Providers `aiService` sees as keyless while `AIConfig` holds a readable,
+   * enabled key — keys not loaded into this process yet. Not parked either.
+   */
+  keyNotLoaded: { type: [String], default: undefined },
+  /** `{ AIModel: n, AIFreeTier: n }` parked / restored this run (soft, reversible). */
+  parked: { type: mongoose.Schema.Types.Mixed, default: undefined },
+  unparked: { type: mongoose.Schema.Types.Mixed, default: undefined }
 }, {
   timestamps: true
 });

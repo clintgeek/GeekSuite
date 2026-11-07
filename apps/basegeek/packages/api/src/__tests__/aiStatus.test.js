@@ -142,6 +142,8 @@ function healthyDeps(overrides = {}) {
     ]),
     stickyPick: fakeCollection([]),
     spend: fakeCollection([]),
+    // The governor's per-day reservation document (Track D, 2026-11-06).
+    spendBudget: fakeCollection([]),
     appConfig: fakeCollection([
       { appName: 'storygeek', tier: 'auto', sticky: 'per-conversation', allowPaid: false, dailyCap: null, lastSeen: hoursAgo(3) },
     ]),
@@ -203,7 +205,8 @@ describe('a clean catalog needs nobody', () => {
     });
     expect(result.spend).toEqual({
       monthUsd: 0, todayUsd: 0, capPerDayUsd: 0.05, capPerCallUsd: 0.01,
-      paidCallsMonth: 0, byApp: [],
+      paidCallsMonth: 0, costUnknownMonth: 0, costUnknownToday: 0,
+      reservedTodayUsd: 0, settledTodayUsd: 0, byApp: [],
     });
     expect(result.apps).toEqual([{
       app: 'storygeek', tier: 'auto', sticky: 'per-conversation', allowPaid: false, paidFirst: null,
@@ -741,8 +744,8 @@ describe('spend', () => {
       paidCallsMonth: 15,
     });
     expect(result.spend.byApp).toEqual([
-      { app: 'storygeek', feature: 'gm', usd: 0.03, calls: 15 },
-      { app: 'notegeek', feature: 'suggest', usd: 0, calls: 40 },
+      { app: 'storygeek', feature: 'gm', usd: 0.03, calls: 15, costUnknown: 0 },
+      { app: 'notegeek', feature: 'suggest', usd: 0, calls: 40, costUnknown: 0 },
     ]);
   });
 

@@ -187,6 +187,29 @@ export async function listModels(provider, pc, deps = {}) {
   }
 }
 
+/**
+ * The single page `listModels` asks for, per provider that pages at all.
+ * Must match the `per_page` / `page_size` / `pageSize` in the URLs above.
+ */
+export const LISTING_PAGE_SIZE = { cloudflare: 100, cohere: 100, gemini: 200 };
+
+/**
+ * `true` when this listing may not be the whole catalog: it filled its one
+ * page, or the provider handed back a next-page token. `syncResults` then
+ * skips `deactivateUnlisted` for that provider — a model on page two is not a
+ * model that was withdrawn. Pagination would be the complete answer; skipping
+ * the sweep is the safe one, and costs only a slower retirement of models
+ * that genuinely disappeared (the probe and the request path still retire
+ * those on their own 404s).
+ */
+export function listingMayBeTruncated(provider, raw) {
+  if (raw?.nextPageToken || raw?.next_page_token) return true;
+  const info = raw?.result_info;
+  if (info && Number(info.total_count) > Number(info.count || 0) * Number(info.page || 1)) return true;
+  const size = LISTING_PAGE_SIZE[provider];
+  return Boolean(size) && listingCount(raw) >= size;
+}
+
 /** How many models a raw listing contained, whatever shape it arrived in. */
 export function listingCount(raw) {
   if (Array.isArray(raw)) return raw.length;
@@ -514,9 +537,15 @@ export async function probeRow(row, { callProvider, timeoutMs = DEFAULT_PROBE_TI
  * @param {Array} deps.rows          AIFreeTier documents (or plain objects)
  * @param {Function} deps.callProvider
  * @param {Function} [deps.updateOne] (filter, update) => Promise — omit for a dry run
+ * @param {Function} [deps.updateModel] (filter, update) => Promise on AIModel.
+ *                                   With it, a retirement here is recorded on the
+ *                                   catalog row too (`retiredAt`/`retiredReason`,
+ *                                   `isActive: false`) and a revival clears it —
+ *                                   the same single state `writeDead`/`writeAlive`
+ *                                   and `aiService.retireModel` keep.
  * @param {object} [deps.options]    { mark, revive, timeout, now }
  */
-export async function runProbe({ rows, callProvider, updateOne = null, options = {} }) {
+export async function runProbe({ rows, callProvider, updateOne = null, updateModel = null, options = {} }) {
   const { mark = false, revive = false, timeout = DEFAULT_PROBE_TIMEOUT_MS, now = Date.now() } = options;
   const results = [];
 
@@ -563,6 +592,7 @@ export async function runProbe({ rows, callProvider, updateOne = null, options =
           }
         }
       );
+      if (updateModel) await retireCatalogModel({ provider: row.provider, modelId: row.modelId, code: outcome.code, at: new Date(now) }, updateModel);
       result.marked = `retired (${outcome.code})`;
     } else if (updateOne && mark && outcome.status === 'dead') {
       await updateOne(
@@ -601,6 +631,14 @@ export async function runProbe({ rows, callProvider, updateOne = null, options =
           }
         }
       );
+      if (updateModel) {
+        // Only a row that carries a retirement is touched: a revival must not
+        // leave `retiredAt` behind to keep the model_retired alert lit.
+        await updateModel(
+          { provider: row.provider, modelId: row.modelId, retiredAt: { $ne: null } },
+          { $set: { isActive: true, retiredAt: null, retiredReason: null } }
+        );
+      }
       result.marked = 'revived';
     }
 
@@ -938,7 +976,10 @@ export async function discover({ providers, probeProvider, listProvider, timeout
       }
     }
 
-    results.push({ kind: 'listing', provider, count: listingCount(raw), candidates: candidates.length });
+    results.push({
+      kind: 'listing', provider, count: listingCount(raw), candidates: candidates.length,
+      ...(listingMayBeTruncated(provider, raw) ? { truncated: true } : {})
+    });
 
     for (const modelId of candidates) {
       const t = Date.now();
@@ -984,6 +1025,23 @@ export async function discover({ providers, probeProvider, listProvider, timeout
  * alive write, the same way `fitness` is rewritten on every probe rather than
  * only when it changes.
  */
+/**
+ * Record a retirement on the `AIModel` row, once.
+ *
+ * Two writes on purpose. The first takes the model out of the active list
+ * every time. The second stamps `retiredAt` only if it is not already set: a
+ * still-listed slug that keeps answering 404 is re-probed by every discovery,
+ * and re-stamping the date each day would keep the status page's 14-day
+ * `model_retired` alert lit forever for one withdrawal.
+ *
+ * @param {{provider: string, modelId: string, code: string, at: Date}} args
+ * @param {Function} updateOne  AIModel's `(filter, update) => Promise`
+ */
+export async function retireCatalogModel({ provider, modelId, code, at }, updateOne) {
+  await updateOne({ provider, modelId }, { $set: { isActive: false, lastChecked: at } });
+  await updateOne({ provider, modelId, retiredAt: null }, { $set: { retiredAt: at, retiredReason: code } });
+}
+
 export async function writeAlive({ provider, modelId, fitness = null, name = null, capabilities = null, contextTokens = null, maxOutputTokens = null, acceptsImageInput = null, now = new Date(), denied = false }, deps) {
   const at = new Date(now);
   // `denied` carries a human's `deny` override through: the probe verdict is
@@ -1019,6 +1077,9 @@ export async function writeAlive({ provider, modelId, fitness = null, name = nul
         $set: {
           isActive: true,
           lastChecked: at,
+          // It answered: whatever retired it is no longer true.
+          retiredAt: null,
+          retiredReason: null,
           ...(name ? { name } : {}),
           ...caps,
           ...(contextTokens ? { contextTokens } : {}),
@@ -1069,7 +1130,11 @@ export async function writeDead({ provider, modelId, code = 'unknown', now = new
     }
   );
   if (deps.model) {
-    await deps.model.updateOne({ provider, modelId }, { $set: { isActive: false, lastChecked: at } });
+    if (retired) {
+      await retireCatalogModel({ provider, modelId, code, at }, (f, u) => deps.model.updateOne(f, u));
+    } else {
+      await deps.model.updateOne({ provider, modelId }, { $set: { isActive: false, lastChecked: at } });
+    }
   }
   return { provider, modelId, wrote: retired ? 'retired' : 'dead' };
 }
@@ -1092,12 +1157,18 @@ export async function writeDead({ provider, modelId, code = 'unknown', now = new
  */
 export async function writeListed(row, deps) {
   const at = new Date(row.now || Date.now());
-  const { provider, modelId, name, capabilities, contextTokens, maxOutputTokens, role, inputPrice, outputPrice, acceptsImageInput } = row;
+  const { provider, modelId, name, capabilities, contextTokens, maxOutputTokens, role, inputPrice, outputPrice, acceptsImageInput, probeRetired = false } = row;
   await deps.model.updateOne(
     { provider, modelId },
     {
       $set: {
-        isActive: true,
+        // The provider lists it, so it is offered again — and a row that is
+        // active again must not keep a `retiredAt`, or the status page reports
+        // a withdrawal for 14 days about a model that is serving. The one
+        // exception is a row THIS run's probe just retired (`probeRetired`,
+        // set by `syncResults`): the probe is the stronger fact, and
+        // `writeDead` will record it right after.
+        ...(probeRetired ? {} : { isActive: true, retiredAt: null, retiredReason: null }),
         lastChecked: at,
         ...(name ? { name } : {}),
         ...(capabilities ? capabilitiesUpdate(capabilities, 'openrouter-listing') : {}),
@@ -1246,42 +1317,93 @@ export async function deactivateUnlisted({ provider, listedIds, now = new Date()
 }
 
 /**
+ * Catalog rows for a provider that is still in the roster but that we cannot
+ * use right now — no key, or switched off — are PARKED, not deleted.
+ *
+ * History: on 2026-09-16 this was `pruneUnconfiguredProviders` and it ran
+ * `deleteMany`, on the theory that discovery rebuilds the rows within a day of
+ * a key returning. It rebuilds the rows; it does not rebuild what was learned
+ * about them — a human's `override` (deny/allow), the golden-set `quality`
+ * score, `latency` history, `health`. Switching a provider off for an evening
+ * cost all of that. Worse, a wrong `KEY_VAULT_SECRET` makes every stored key
+ * decrypt to null, `aiService` then sees every provider as keyless, and the
+ * next discovery would have deleted the whole catalog (audit 2026-11-06, C2).
+ *
+ * Parking is reversible and loses nothing:
+ *
+ *   - `AIFreeTier` rows that were `isFree: true` become `isFree: false` with
+ *     `providerDisabledAt` set. Selection reads `isFree: true`, so they are out
+ *     of every candidate list (they already were — `selectFreeTierCandidates`
+ *     skips a keyless provider — but now the status counts agree).
+ *   - `AIModel` rows that were `isActive: true` become `isActive: false` with
+ *     `providerDisabledAt` set.
+ *   - `AIPricing` is left alone: a price is a fact about the vendor, not about
+ *     our key, and nothing routes on it for a keyless provider.
+ *
+ * Only rows that were live are marked, so `unparkConfiguredProviders` puts
+ * back exactly what this took away and never resurrects a row that was
+ * already retired or demoted for its own reasons.
+ *
+ * `AIConfig` is never touched here — see the note on `pruneUnknownProviders`.
+ *
+ * @returns {{AIModel?: number, AIFreeTier?: number}} rows parked this call
+ */
+export async function parkUnconfiguredProviders({ configured = [], roster = PROVIDERS, now = Date.now() } = {}, deps) {
+  const unconfigured = roster.filter((id) => !configured.includes(id));
+  const out = {};
+  if (unconfigured.length === 0) return out;
+  const at = new Date(now);
+  const provider = { $in: unconfigured };
+  if (deps.freeTier?.updateMany) {
+    const res = await deps.freeTier.updateMany(
+      { provider, isFree: true },
+      { $set: { isFree: false, providerDisabledAt: at } }
+    );
+    out.AIFreeTier = res?.modifiedCount ?? res?.nModified ?? 0;
+  }
+  if (deps.model?.updateMany) {
+    const res = await deps.model.updateMany(
+      { provider, isActive: true },
+      { $set: { isActive: false, providerDisabledAt: at } }
+    );
+    out.AIModel = res?.modifiedCount ?? res?.nModified ?? 0;
+  }
+  return out;
+}
+
+/**
+ * The other half: a provider that has a key again gets back exactly the rows
+ * `parkUnconfiguredProviders` took out, with everything they had learned.
+ * Run before discovery and before the probe sweep, so the rows are back in
+ * the very run that can re-verify them.
+ *
+ * @returns {{AIModel?: number, AIFreeTier?: number}} rows restored this call
+ */
+export async function unparkConfiguredProviders({ configured = [] } = {}, deps) {
+  const out = {};
+  if (configured.length === 0) return out;
+  const filter = { provider: { $in: configured }, providerDisabledAt: { $ne: null } };
+  if (deps.freeTier?.updateMany) {
+    const res = await deps.freeTier.updateMany(filter, { $set: { isFree: true, providerDisabledAt: null } });
+    out.AIFreeTier = res?.modifiedCount ?? res?.nModified ?? 0;
+  }
+  if (deps.model?.updateMany) {
+    const res = await deps.model.updateMany(filter, { $set: { isActive: true, providerDisabledAt: null } });
+    out.AIModel = res?.modifiedCount ?? res?.nModified ?? 0;
+  }
+  return out;
+}
+
+/**
  * Catalog rows naming a provider that has left the roster are orphans: `llm7`,
  * `onemin`, `anthropic`. They are removed from the *catalog* collections only.
+ * This one still deletes: a roster edit is a code change, deliberate and
+ * reviewed, and no key — readable or not — makes a provider come back.
  *
  * `AIConfig` is never touched by this job. That collection holds the encrypted
  * provider credentials, and a job that can delete a key on the strength of a
  * roster edit is a job that can lose Chef's keys.
  */
-/**
- * Catalog rows for a provider that is still in the roster but that we hold no
- * credential for.
- *
- * `pruneUnknownProviders` below only removes providers that have LEFT the
- * roster, so a provider whose key was never added — or was pulled — kept its
- * rows indefinitely. On 2026-09-16 that was `together` (416 catalog models, 16
- * free rows) and `llmgateway` (273 and 1) for providers nothing could reach.
- * They were inert, because selection skips a row whose provider has no key, but
- * they were read on every status build and every candidate selection and they
- * made every count in the console wrong.
- *
- * Deleting is safe and reversible in the way that matters: discovery rebuilds
- * the rows within a day of a key being added. `AIConfig` is never touched here
- * — see the note on `pruneUnknownProviders`.
- */
-export async function pruneUnconfiguredProviders({ configured = [], roster = PROVIDERS } = {}, deps) {
-  const unconfigured = roster.filter((id) => !configured.includes(id));
-  const out = {};
-  if (unconfigured.length === 0) return out;
-  const filter = { provider: { $in: unconfigured } };
-  for (const [label, collection] of Object.entries({ AIModel: deps.model, AIFreeTier: deps.freeTier, AIPricing: deps.pricing })) {
-    if (!collection) continue;
-    const res = await collection.deleteMany(filter);
-    out[label] = res?.deletedCount ?? 0;
-  }
-  return out;
-}
-
 export async function pruneUnknownProviders({ providers = PROVIDERS, now = Date.now() } = {}, deps) {
   const filter = { provider: { $nin: providers } };
   const out = {};
@@ -1304,6 +1426,19 @@ export async function syncResults(results, deps, { now = Date.now() } = {}) {
   const counts = { alive: 0, dead: 0, unknown: 0, listed: 0, deactivated: 0 };
   const listedByProvider = new Map();
   const listedByModel = new Map();
+  // Providers whose listing filled its one page: what it did not show may be
+  // on page two, so nothing is deactivated for being absent (C5, 2026-11-06).
+  const truncated = new Set(
+    results.filter((r) => r.kind === 'listing' && r.truncated).map((r) => r.provider)
+  );
+  if (truncated.size > 0) counts.truncatedListing = [...truncated].sort();
+  // Rows this run's probe is about to retire: the listing must not re-activate
+  // them a moment before `writeDead` records the retirement.
+  const probeRetired = new Set(
+    results
+      .filter((r) => r.kind === 'probe' && r.status === 'dead' && isRetirement(r.code))
+      .map((r) => `${r.provider}/${r.modelId}`)
+  );
 
   for (const row of results) {
     if (row.kind !== 'listed') continue;
@@ -1311,7 +1446,7 @@ export async function syncResults(results, deps, { now = Date.now() } = {}) {
     listedByProvider.get(row.provider).push(row.modelId);
     listedByModel.set(`${row.provider}/${row.modelId}`, row);
     try {
-      await writeListed({ ...row, now }, deps);
+      await writeListed({ ...row, now, probeRetired: probeRetired.has(`${row.provider}/${row.modelId}`) }, deps);
       counts.listed++;
     } catch (err) {
       counts.listedError = safeErrorText(err?.message || 'error');
@@ -1380,6 +1515,7 @@ export async function syncResults(results, deps, { now = Date.now() } = {}) {
   }
 
   for (const [provider, listedIds] of listedByProvider) {
+    if (truncated.has(provider)) continue;
     try {
       const res = await deactivateUnlisted({ provider, listedIds, now }, deps);
       counts.deactivated += res.deactivated;
@@ -1622,7 +1758,11 @@ export default {
   writeListed,
   deactivateUnlisted,
   pruneUnknownProviders,
-  pruneUnconfiguredProviders,
+  parkUnconfiguredProviders,
+  unparkConfiguredProviders,
+  retireCatalogModel,
+  listingMayBeTruncated,
+  LISTING_PAGE_SIZE,
   parseRateLimitHeaders,
   parseResetToMs,
   renderTable,

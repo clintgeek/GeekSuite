@@ -64,6 +64,14 @@ const aiFreeTierSchema = new mongoose.Schema({
     default: null
   },
   /**
+   * Set when the catalog job PARKED this row because its provider has no
+   * usable key or is switched off (`parkUnconfiguredProviders`, 2026-11-06 —
+   * it used to delete). Cleared, and the row's previous live state restored,
+   * when the provider is configured again. Everything else on the row —
+   * override, quality, latency, health — is kept through the park.
+   */
+  providerDisabledAt: { type: Date, default: null },
+  /**
    * How well this row answers the catalog probe, as of `probedAt`.
    *
    *   `structured` — returned parseable JSON with the fields the probe asked
@@ -303,7 +311,38 @@ export const HARD_FAILURE_STATUSES = new Set([400, 401, 403, 404, 410]); // 410:
  * means, or a row the probe marks would be revived by the next call.
  */
 export const HARD_FAILURE_PATTERN =
-  /model_not_found|does not exist|no longer|not found|wrong api key|unauthorized/i;
+  /model_not_found|does not exist|no longer|not found|wrong api key|invalid api key|incorrect api key|unauthorized|forbidden/i;
+
+/**
+ * The credential half of the pattern above, split out 2026-11-06.
+ *
+ * Until then every status-less hard failure was coded `model_not_found`, which
+ * is a RETIREMENT code — so an adapter that threw "unauthorized" with no HTTP
+ * status (a raw SDK error, a rotated key) retired a perfectly good model. A
+ * refused key is a key problem: hard (cool the row, stop spending calls on it)
+ * but never a reason to believe the vendor withdrew the slug.
+ */
+export const AUTH_FAILURE_PATTERN = /wrong api key|invalid api key|incorrect api key|unauthorized|forbidden/i;
+
+/**
+ * The "model is gone" words, when they arrive WITHOUT a status. Hard — the row
+ * cools — but coded `not_found_text`, not `model_not_found`: 80 characters of
+ * a vendor's prose are a guess, and retirement is permanent. Only a real
+ * 404/410 or a structured `model_not_found` error code retires.
+ */
+export const GONE_TEXT_PATTERN = /model_not_found|does not exist|no longer|not found/i;
+
+/** A provider's own structured "no such model" code, wherever it carries it. */
+function structuredModelNotFound(error) {
+  const candidates = [
+    error?.code,
+    error?.error?.code,
+    error?.body?.error?.code,
+    error?.response?.data?.error?.code,
+    error?.response?.data?.code,
+  ];
+  return candidates.some((c) => c === 'model_not_found');
+}
 
 /**
  * The subset of hard failures that mean **the model is gone**, as opposed to
@@ -322,6 +361,8 @@ export const HARD_FAILURE_PATTERN =
  * unavailable for free. The paid version is available now." Every pin to them
  * fell back silently, all day, and nothing learned.
  */
+// `model_not_found` here means the STRUCTURED code only (see
+// `classifyFreeTierFailure`); message words alone produce `not_found_text`.
 export const RETIREMENT_CODES = new Set(['http_404', 'http_410', 'model_not_found']);
 
 /** `true` when this failure means the model no longer exists. */
@@ -345,8 +386,16 @@ export function classifyFreeTierFailure(error) {
     return { hard: HARD_FAILURE_STATUSES.has(status), code: `http_${status}`, status };
   }
 
-  if (HARD_FAILURE_PATTERN.test(message)) {
+  // A fact first: the provider said so in a field, not in prose.
+  if (structuredModelNotFound(error)) {
     return { hard: true, code: 'model_not_found', status: null };
+  }
+  // Then the guesses — hard, so the row cools, but never a retirement code.
+  if (AUTH_FAILURE_PATTERN.test(message)) {
+    return { hard: true, code: 'auth', status: null };
+  }
+  if (GONE_TEXT_PATTERN.test(message)) {
+    return { hard: true, code: 'not_found_text', status: null };
   }
 
   if (/timeout|etimedout|econnaborted|aborted/i.test(message)) {

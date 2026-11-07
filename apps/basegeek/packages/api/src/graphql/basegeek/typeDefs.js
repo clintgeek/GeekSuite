@@ -132,12 +132,16 @@ export const typeDefs = gql`
     calls: Int!
     costUsd: Float!
     refusals: Int!
+    "Calls with no known price, booked at $0 — while non-zero, costUsd is a floor."
+    costUnknown: Int!
   }
 
   type AITrafficApp {
     app: String!
     calls: Int!
     costUsd: Float!
+    "Calls with no known price, booked at $0 — while non-zero, costUsd is a floor."
+    costUnknown: Int!
   }
 
   """

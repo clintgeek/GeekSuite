@@ -63,20 +63,20 @@ beforeAll(async () => {
   //
   // This used to stub `callAISmart`, the 57-line shim between the route and
   // `callAI`. Phase 2 deleted it — `/conversation/message` calls `callAI` and
-  // reads `lastProviderInfo` itself — so the stub moved down one level. The
+  // reads the call's own metadata (onInfo) — so the stub moved down one level. The
   // *rule* being pinned is unchanged and is the important part: a provider
   // failure must reach the caller as the allowlisted envelope, never as the
   // provider's own words (Q46). It is now a throw rather than a resolved
   // `{success:false}`, which is what `callAI` has always done and what the
   // shim was translating.
   originalCallAI = aiService.callAI;
-  aiService.callAI = async () => {
+  aiService.callAI = async (_prompt, config) => {
     if (nextSmartFailure) {
       const error = nextSmartFailure;
       nextSmartFailure = null;
       throw new Error(error);
     }
-    aiService.lastProviderInfo = {
+    config?.onInfo?.({
       provider: 'groq',
       model: 'llama-3.1-8b-instant',
       cached: false,
@@ -84,7 +84,7 @@ beforeAll(async () => {
       finishReason: 'stop',
       hints: [],
       costUsd: 0,
-    };
+    });
     return 'the assistant answer';
   };
 }, 60000);

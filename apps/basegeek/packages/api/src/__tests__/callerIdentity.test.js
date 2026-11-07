@@ -180,10 +180,13 @@ describe('resolveCaller', () => {
   });
 
   it('takes the app from the JWT app claim and ignores the body', () => {
+    // The claim is attribution, not identity (audit 2026-11-06, B3): the user
+    // chose it in the login body, so it is never `verified` / `trustedApp`.
+    // See authHardeningCaller.test.js.
     const req = { user: { id: 'user-1', app: 'todogeek' } };
     const caller = resolveCaller(req, { appName: 'storygeek' });
     expect(caller).toMatchObject({
-      appId: 'todogeek', userId: 'user-1', source: 'jwt', verified: true,
+      appId: 'todogeek', userId: 'user-1', source: 'jwt', verified: false, trustedApp: false,
     });
   });
 
@@ -212,7 +215,7 @@ describe('resolveCaller', () => {
 
   it('names an in-process caller without a request at all', () => {
     expect(internalCaller({ appId: 'StartGeek', userId: 'u1', feature: 'Plan' }))
-      .toEqual({ appId: 'startgeek', feature: 'plan', userId: 'u1', source: 'internal', verified: true });
+      .toEqual({ appId: 'startgeek', feature: 'plan', userId: 'u1', source: 'internal', verified: true, trustedApp: true });
   });
 });
 

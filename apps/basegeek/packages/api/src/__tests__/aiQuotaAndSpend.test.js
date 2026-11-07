@@ -221,9 +221,17 @@ describe('resolveCostUsd', () => {
     expect(await aiService.resolveCostUsd('groq', 'priced', 1_000_000, 2_000_000, null)).toBeCloseTo(3.5, 9);
   });
 
-  it('books zero for a model nobody has priced, and for no model at all', async () => {
-    expect(await aiService.resolveCostUsd('groq', 'unpriced', 1_000_000, 1_000_000, null)).toBe(0);
-    expect(await aiService.resolveCostUsd('groq', null, 1_000_000, 1_000_000, null)).toBe(0);
+  // Contract change, 2026-11-06: a price nobody gave us is UNKNOWN (`null`),
+  // not $0 — booking it as zero made an unpriced call look free on every
+  // dashboard. Zero is still the answer for a known free-tier row.
+  it('books an unknown cost for a model nobody has priced, and for no model at all', async () => {
+    expect(await aiService.resolveCostUsd('groq', 'unpriced', 1_000_000, 1_000_000, null)).toBeNull();
+    expect(await aiService.resolveCostUsd('groq', null, 1_000_000, 1_000_000, null)).toBeNull();
+  });
+
+  it('books zero for an unpriced model the free-tier catalog lists', async () => {
+    expect(await aiService.resolveCostUsd('groq', 'unpriced', 1_000_000, 1_000_000, null, { knownFree: true })).toBe(0);
+    expect(await aiService.resolveCostUsd('groq', null, 1_000_000, 1_000_000, null, { knownFree: true })).toBe(0);
   });
 
   it('caches the price lookup rather than querying per call', async () => {

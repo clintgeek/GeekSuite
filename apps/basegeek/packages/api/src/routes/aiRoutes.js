@@ -65,6 +65,22 @@ for (const legacyPath of ['/v1/chat/completions', '/v1/models']) {
 router.use(authenticateJWTOrAPIKey());
 
 /**
+ * dropsStatusMemo — for an admin write that changes what `GET /status`
+ * reports. The status document is memoized for 60 s, so without this an admin
+ * who saved a key or switched a provider off and looked at the page was shown
+ * the minute-old state they had just changed. Drops the memo just before a
+ * successful JSON answer goes out, so the caller's next read is fresh.
+ */
+function dropsStatusMemo(req, res, next) {
+  const json = res.json.bind(res);
+  res.json = (body) => {
+    if (res.statusCode < 400) invalidateStatusCache();
+    return json(body);
+  };
+  next();
+}
+
+/**
  * requireAdminUser — the admin gate for the provider-credential routes.
  *
  * The router already authenticated the caller above, so this only has to
@@ -453,7 +469,7 @@ router.post('/conversation/message', async (req, res) => {
     // `callAISmart` used to sit between this route and `callAI`, wrapping the
     // answer in `{success, content, routing}`. It was the last survivor of the
     // second routing stack (Phase 0's note on it is in aiService.js) and Phase
-    // 2 deleted it: it read `routing` out of `lastProviderInfo`, which is
+    // 2 deleted it: it read `routing` out of the call's metadata, which is
     // right here, and its `{success:false}` resolution only existed so this
     // route could throw the string back — which Q46 then had to stop it
     // doing. So the route calls `callAI` directly and builds the same two
@@ -464,7 +480,14 @@ router.post('/conversation/message', async (req, res) => {
     // translation `/call` and `/parse-json` use, so `resolveRoute` is the only
     // reader of that vocabulary anywhere in the service. A free signal is a
     // hint on `auto` and a veto on `allowPaid`, so "free" still means free.
+    // A client that hangs up mid-turn stops the call (see /feature).
+    const clientGone = new AbortController();
+    res.on('close', () => {
+      if (!res.writableEnded) clientGone.abort();
+    });
+
     const routingOptions = {
+      signal: clientGone.signal,
       conversationId,
       taskTypeHint: metadata?.taskTypeHint,
       userId: caller.userId || userId,
@@ -472,6 +495,8 @@ router.post('/conversation/message', async (req, res) => {
       feature: caller.feature,
     };
     applyRoutingSwitches(routingOptions, { ...req.body, provider });
+    // From the credential, after everything body-derived (Track B).
+    routingOptions.appTrusted = caller.trustedApp;
 
     /**
      * One turn, in the shape the two branches below want. Resolves rather than
@@ -482,11 +507,13 @@ router.post('/conversation/message', async (req, res) => {
     const askModel = async () => {
       const startedAt = Date.now();
       try {
-        const content = await aiService.callAI(
+        // The call's own metadata, not the shared `lastProviderInfo` field
+        // this read until 2026-11-06 — two players' turns overlapping used to
+        // swap each other's `routing.provider`.
+        const { content, info } = await aiService.callAIWithInfo(
           allMessages[allMessages.length - 1]?.content || '',
           { ...routingOptions, messages: allMessages }
         );
-        const info = aiService.lastProviderInfo || {};
         return {
           success: true,
           content,
@@ -769,7 +796,7 @@ router.post('/conversation/:conversationId/archive', async (req, res) => {
 });
 
 // ============================================================================
-// The feature door (Phase 2, DOCS/AIGEEK_FRONT_DOOR.md §4)
+// The feature door (Phase 2, DOCS/ARCHIVE/AIGEEK_FRONT_DOOR.md §4)
 // ============================================================================
 //
 // `aiFeatureRunner` has been the one door every *in-gateway* AI feature walks
@@ -989,70 +1016,41 @@ router.post('/feature', async (req, res) => {
     }
 
     /*
-     * Resolve the need to a concrete model, unless the caller pinned one.
+     * The need goes to the runner as a NEED, not as a pin.
      *
-     * An explicit pin wins: a human override beats the resolver every time.
-     * A resolution that comes back null is not a failure — the call proceeds
-     * on the ordinary rotation exactly as before, which is why this never
-     * throws and never blocks. `needPick` is reported in provenance either
-     * way, so "why did I get this model" has an answer.
+     * Until 2026-11-06 this route resolved it itself — `aiService.resolveNeed`,
+     * one pick — and handed the runner that pick as an explicit
+     * provider/model. So the HTTP door had none of what a need buys an
+     * in-process caller: no second and third candidate when the first fails
+     * at the provider (`resolveNeedCandidates`), no demotion of a row that
+     * just failed this need, no shared 60 s resolution across a fan-out, and
+     * no paid-first for an app whose row names one — a StoryGeek turn on a
+     * pick whose upstream was out of capacity simply failed. `runFeatureCore`
+     * does all of that given `need`; an explicit provider+model still wins
+     * there, exactly as before.
+     *
+     * `vision` is the one need where falling back is worse than refusing. For
+     * every other task the `auto` walk is a fair second answer: a row that is
+     * merely unranked still speaks the language and still returns something
+     * usable. A text-only model handed an image does not — it cannot see the
+     * attachment at all, so it answers confidently about nothing, burns a call
+     * and a day's quota, and hands the caller a plausible fabrication.
+     * Observed 2026-09-17: with no vision row resolvable, a body-composition
+     * scan went to `groq/qwen/qwen3.8-27b`, which returned no readable figures.
+     * So a vision need asks the runner to refuse when nothing resolves
+     * (`requireNeed`). When something does resolve, the runner tries each
+     * vision-capable candidate in turn and, if all of them fail, reports
+     * `unavailable` — it never degrades to a blind model. (The comment that
+     * stood here said a resolved vision row that failed "still degrades to the
+     * walk"; it did not — a pick was one pinned attempt, and its failure was
+     * the feature's.)
+     *
+     * Reads `parsedNeed.tasks` rather than sniffing the raw string for a
+     * `'vision'` prefix: a compound need may name vision anywhere in it
+     * (`'structured+vision:balanced'`).
      */
-    let needPick = null;
-    if (need && !wantsPin) {
-      try {
-        needPick = await aiService.resolveNeed(need);
-      } catch (needError) {
-        // The rotation is a complete answer on its own; a resolver fault must
-        // not cost the caller their turn.
-        req.log.warn({ err: needError, need }, '[ai] /feature could not resolve need');
-      }
-    }
-
-    // `vision` is the one need where falling back is worse than refusing.
-    //
-    // For every other task the rotation is a fair second answer: a row that is
-    // merely unranked still speaks the language and still returns something
-    // usable. A text-only model handed an image does not — it cannot see the
-    // attachment at all, so it answers confidently about nothing, burns a call
-    // and a day's quota, and hands the caller a plausible fabrication.
-    //
-    // Observed 2026-09-17: with no vision row resolvable, a body-composition
-    // scan went to `groq/qwen/qwen3.8-27b`, which returned no readable figures.
-    // The arithmetic gate caught it downstream — but the gate is the last line,
-    // not the first, and a caller that asked for vision is entitled to be told
-    // no rather than handed an answer from something blind.
-    //
-    // Deliberately narrow: only when the caller named a vision task, and only
-    // when nothing resolved. A vision row that resolves and then fails still
-    // degrades to the walk as before.
-    //
-    // Reads `parsedNeed.tasks` rather than sniffing the raw string for a
-    // `'vision'` prefix: now that a need can be a `+`-joined compound, vision
-    // is not always the first task named (`'structured+vision:balanced'` is
-    // just as valid as `'vision+structured:balanced'`), and a prefix check
-    // would silently stop catching this case for exactly the callers this
-    // guard exists for.
-    if (!needPick && !wantsPin && parsedNeed?.tasks.includes('vision')) {
-      req.log.warn({ need, feature }, '[ai] /feature refusing a vision need with no vision-capable row');
-      // A 200 with `ok: false`, like every other refusal this door makes.
-      //
-      // This returned `503 { success: false, error: { code } }` when it was
-      // written, which broke three of this route's own promises at once: the
-      // documented status (a model failure is a 200, so consumers never parse a
-      // 5xx), the envelope key (`ok`, not `success`), and the `reason` enum. A
-      // caller branching on `body.ok` — which is what the JSDoc tells them to
-      // do — got `undefined` and fell through to its success path.
-      //
-      // Refusing rather than degrading to a blind model is still right; see
-      // the block above. Only the shape was wrong.
-      return res.json({
-        ok: false,
-        reason: 'unavailable',
-        detail: 'no_vision_model',
-        provenance: { source: 'none', reason: 'no_vision_model', model: null, provider: null, cached: false, costUsd: 0, hints: [] },
-        content: null,
-      });
-    }
+    const passNeed = !!need && !wantsPin;
+    const needsVision = passNeed && !!parsedNeed?.tasks.includes('vision');
 
     // Whether the cap may be split by the body's `quotaKey`. For a key
     // caller, `caller.userId` is the key's *owner* — the admin who minted it
@@ -1077,8 +1075,20 @@ router.post('/feature', async (req, res) => {
       req.log.debug({ err: rowError }, '[ai] /feature could not read the routing row cap');
     }
 
+    // The client hanging up cancels the call (the runner combines this with
+    // its own deadline): no further attempt, no paid fallback, no bookkeeping
+    // for an answer nobody will receive.
+    const clientGone = new AbortController();
+    res.on('close', () => {
+      if (!res.writableEnded) clientGone.abort();
+    });
+
     const core = await runFeatureCore({
+      signal: clientGone.signal,
       app: caller.appId,
+      // Whether the credential proved this app id (Track B, 2026-11-06): an
+      // untrusted one gets no paid step from the app's row.
+      appTrusted: caller.trustedApp,
       feature,
       // The cap is keyed `app:feature:userId:day`, exactly as in process. A
       // service key carries no session, so `userId` is null and the app-wide
@@ -1096,27 +1106,33 @@ router.post('/feature', async (req, res) => {
       ...(schema ? { schema } : {}),
       ...(typeof conversationId === 'string' && conversationId ? { conversationId } : {}),
       ...(wantsPin ? { provider, model } : {}),
-      // Not marked `noFallback`: a resolved pick is the gateway's best read of
-      // the catalog, not a promise from the caller, so a row that turns out
-      // unusable degrades to the ordinary walk rather than failing the turn.
-      ...(needPick ? { provider: needPick.provider, model: needPick.modelId } : {}),
+      ...(passNeed ? { need, ...(needsVision ? { requireNeed: true } : {}) } : {}),
       ...(Number.isFinite(Number(temperature)) ? { temperature: Number(temperature) } : {}),
       ...(maxTokens !== undefined ? { maxTokens: positiveIntOr(maxTokens, undefined) } : {}),
       maxCallsPerDay: positiveIntOr(maxCallsPerDay, rowCap ?? DEFAULT_HTTP_MAX_CALLS_PER_DAY),
       timeoutMs: clampTimeout(timeoutMs)
     });
 
-    // What the need did, attached to whatever the runner reported. A caller
-    // that asked for `structured:fast` can see which row served it and on what
-    // measurement, which is the question the old pinned-slug setup could not
-    // answer at all.
-    const provenance = need
-      ? {
-          ...core.provenance,
-          need: needPick
-            ? { asked: need, resolved: true, provider: needPick.provider, model: needPick.modelId, why: needPick.why }
-            : { asked: need, resolved: false, why: ['nothing in the catalog measurably meets this need'] }
-        }
+    // A vision need with no vision-capable row: the refusal this door has
+    // always made, in the shape it has always had — a 200 with `ok: false`
+    // (never a 5xx a consumer must parse), `detail: 'no_vision_model'`.
+    if (needsVision && core.detail === 'need_unresolved') {
+      req.log.warn({ need, feature }, '[ai] /feature refusing a vision need with no vision-capable row');
+      return res.json({
+        ok: false,
+        reason: 'unavailable',
+        detail: 'no_vision_model',
+        provenance: { source: 'none', reason: 'no_vision_model', model: null, provider: null, cached: false, costUsd: 0, hints: [] },
+        content: null,
+      });
+    }
+
+    // What the need did. The runner reports `{asked, resolved, provider,
+    // model, why}` (plus `fellBackFrom` / `paidFirst` when they happened) — the
+    // shape this door has always returned. A need sent WITH an explicit pin is
+    // not resolved at all; it is reported unresolved, as it always was.
+    const provenance = need && !core.provenance?.need
+      ? { ...core.provenance, need: { asked: need, resolved: false, why: ['an explicit provider/model pin was used instead'] } }
       : core.provenance;
 
     return res.json(
@@ -1275,10 +1291,12 @@ router.post('/parse-json', async (req, res) => {
 
     // Identity is stamped last so nothing in the body can survive it.
     config.appName = caller.appId;
+    // From the credential, after the body: a body cannot claim a trusted app.
+    config.appTrusted = caller.trustedApp;
     config.feature = caller.feature;
     config.userId = caller.userId;
 
-    const response = await aiService.callAI(prompt, config);
+    const { content: response, info } = await aiService.callAIWithInfo(prompt, config);
     const parsedResult = aiService.parseJSONResponse(response);
 
     res.json({
@@ -1288,7 +1306,7 @@ router.post('/parse-json', async (req, res) => {
         rawResponse: response,
         // The provider that answered, not the process default — the same bug
         // /call carried, fixed the same way.
-        provider: aiService.lastProviderInfo?.provider || aiService.currentProvider
+        provider: info?.provider || aiService.currentProvider
       }
     });
 
@@ -1353,7 +1371,7 @@ router.get('/providers', async (req, res) => {
 // that decides which vendor answers every rotation call the suite makes next,
 // for every app and every user. Same class of thing as `/config`, so the same
 // gate.
-router.post('/provider', requireAdminUser, async (req, res) => {
+router.post('/provider', requireAdminUser, dropsStatusMemo, async (req, res) => {
   try {
     const { provider } = req.body;
 
@@ -1447,7 +1465,7 @@ router.get('/models/:provider', async (req, res) => {
 // Q45, admin: spends the suite's provider credential against the vendor's
 // catalog API and rewrites the shared AIModel collection every app then routes
 // against. Not a per-caller operation in any reading.
-router.post('/models/:provider/refresh', requireAdminUser, async (req, res) => {
+router.post('/models/:provider/refresh', requireAdminUser, dropsStatusMemo, async (req, res) => {
   try {
     const { provider } = req.params;
 
@@ -1707,7 +1725,7 @@ router.post('/director/recommend', async (req, res) => {
 // Q45, admin: spends the suite's provider credentials against every vendor's
 // catalog API and rewrites the shared AIModel collection every app then routes
 // against. Not a per-caller operation in any reading.
-router.post('/director/force-refresh', requireAdminUser, async (req, res) => {
+router.post('/director/force-refresh', requireAdminUser, dropsStatusMemo, async (req, res) => {
   try {
     // The roster, not a copy of three of it typed here — which is why a
     // force-refresh never touched cerebras, cloudflare, ollama, openrouter,
@@ -1865,7 +1883,7 @@ router.get('/usage/:provider', async (req, res) => {
 // counters blinds `/stats` and the AIGeek console for everyone at once.
 // (`/provider-health` was the third blinded reader; it went with the second
 // routing stack, 2026-09-07.)
-router.post('/reset-stats', requireAdminUser, async (req, res) => {
+router.post('/reset-stats', requireAdminUser, dropsStatusMemo, async (req, res) => {
   try {
     aiService.resetSessionStats();
 
@@ -1928,7 +1946,7 @@ router.get('/config', requireAdminUser, async (req, res) => {
 });
 
 // POST /api/ai/config - Update AI configuration
-router.post('/config', requireAdminUser, async (req, res) => {
+router.post('/config', requireAdminUser, dropsStatusMemo, async (req, res) => {
   try {
     // Only providers actually present in the body are touched. A provider may
     // now arrive with no apiKey at all — the client can no longer read the
@@ -1945,7 +1963,13 @@ router.post('/config', requireAdminUser, async (req, res) => {
       const newKey = typeof config.apiKey === 'string' ? config.apiKey.trim() : '';
       const hasNewKey = newKey !== '' && newKey !== '***';
 
-      const updateData = { enabled: config.enabled || false };
+      // `enabled` is written only when the body says it. It was
+      // `config.enabled || false`, so a save that carried only a key or an
+      // account id switched the provider OFF without anyone asking — and a
+      // new row upserted that way started disabled. An omitted field keeps
+      // what is stored (or the model's default, `true`, on a new row).
+      const updateData = {};
+      if (typeof config.enabled === 'boolean') updateData.enabled = config.enabled;
 
       // Handle Cloudflare-specific fields
       if (config.provider === 'cloudflare' && config.accountId) {
@@ -1962,7 +1986,9 @@ router.post('/config', requireAdminUser, async (req, res) => {
       } else {
         // No upsert without a key: AIConfig.apiKey is required, so creating a
         // keyless doc would only throw. Nothing stored, nothing to update.
-        await AIConfig.updateOne({ provider: config.provider }, { $set: updateData });
+        if (Object.keys(updateData).length > 0) {
+          await AIConfig.updateOne({ provider: config.provider }, { $set: updateData });
+        }
       }
     }
 
