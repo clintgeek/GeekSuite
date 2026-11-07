@@ -6,7 +6,7 @@
  * **None of these answers 5xx because a model was unavailable.** Every
  * generator in `aiInsightsService` now returns `{ ok: false, reason, message }`
  * instead of throwing when aiGeek's feature door declines
- * (`apps/basegeek/DOCS/AIGEEK_FRONT_DOOR.md` §4), and each route relays that
+ * (`apps/basegeek/DOCS/ARCHIVE/AIGEEK_FRONT_DOOR.md` §4), and each route relays that
  * as a **200** so the card can render the sentence in place instead of
  * showing an error state about an API the user has never heard of. Insight
  * prose has no deterministic fallback — a brief with the words taken out is

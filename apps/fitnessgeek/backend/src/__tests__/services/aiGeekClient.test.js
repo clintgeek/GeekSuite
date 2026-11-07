@@ -3,7 +3,7 @@
  * and the four ways that call can fail without anyone seeing a stack trace.
  *
  * Contract under test: `POST /api/ai/feature` from
- * apps/basegeek/DOCS/AIGEEK_FRONT_DOOR.md §4.
+ * apps/basegeek/DOCS/ARCHIVE/AIGEEK_FRONT_DOOR.md §4.
  *
  *   request  { feature, messages?, system?, user?, schema?, timeoutMs?,
  *              conversationId?, maxTokens?, temperature?, maxCallsPerDay?,

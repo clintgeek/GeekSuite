@@ -5,7 +5,7 @@ import diceService from './diceService.js';
  * aiService — StoryGeek's gateway to aiGeek's feature door.
  *
  * **Model policy: StoryGeek does not pick models any more.** Every call goes
- * to `POST /api/ai/feature` (apps/basegeek/DOCS/AIGEEK_FRONT_DOOR.md §4) as
+ * to `POST /api/ai/feature` (apps/basegeek/DOCS/ARCHIVE/AIGEEK_FRONT_DOOR.md §4) as
  * one of two features:
  *
  *   - `gm`  — narration. Carries `conversationId: <storyId>`, so aiGeek's
@@ -135,7 +135,8 @@ class AIService {
    * @param {string} name    `gm` or `aux`
    * @param {object} payload `messages`, and optionally `system`, `schema`,
    *                         `conversationId`, `maxTokens`, `temperature`, and
-   *                         a `provider`+`model` pin, and `quotaKey`
+   *                         a `provider`+`model` pin, `quotaKey`, and
+   *                         `need` (`<task>:<weight>`, e.g. 'structured:fast')
    * @param {object} options `{ timeoutMs, userToken }`
    * @returns {Promise<{ok: boolean, data: any, reason: string|null,
    *                    message?: string, provenance: object}>}
@@ -175,6 +176,11 @@ class AIService {
     // bucket selector, never a claim of identity and never load-bearing for
     // auth (the credential settles that).
     if (payload.quotaKey != null) body.quotaKey = String(payload.quotaKey);
+    // What the call needs, as a capability rather than a model id. Passed
+    // through unvalidated, like fitnessgeek's aiGeekClient: aiGeek owns the
+    // grammar, an unresolvable need degrades to the ordinary routing walk,
+    // and a pin below still wins over it.
+    if (payload.need != null) body.need = String(payload.need);
     // provider + model together are a pin. One without the other is not a
     // route aiGeek accepts, so it is not one that gets sent.
     if (payload.provider && payload.model) {
@@ -275,7 +281,8 @@ class AIService {
       conversationId: config.conversationId,
       quotaKey: config.quotaKey,
       provider: config.provider,
-      model: config.model
+      model: config.model,
+      need: config.need
     }, {
       userToken,
       timeoutMs: config.timeoutMs ?? (feature === 'gm' ? GM_TIMEOUT_MS : AUX_TIMEOUT_MS)
@@ -316,6 +323,7 @@ class AIService {
       temperature: typeof config.temperature === 'number' ? config.temperature : 0.2,
       conversationId: config.conversationId,
       quotaKey: config.quotaKey,
+      need: config.need,
       timeoutMs: config.timeoutMs ?? AUX_TIMEOUT_MS
     }, userToken, 'aux');
   }

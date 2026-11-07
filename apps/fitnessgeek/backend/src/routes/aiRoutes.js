@@ -2,7 +2,7 @@
  * AI routes — the legacy REST surface for FitnessGeek's AI features.
  *
  * Three things changed here when these calls moved onto aiGeek's feature door
- * (`POST /api/ai/feature`, see apps/basegeek/DOCS/AIGEEK_FRONT_DOOR.md):
+ * (`POST /api/ai/feature`, see apps/basegeek/DOCS/ARCHIVE/AIGEEK_FRONT_DOOR.md):
  *
  *  1. **No route 500s because a model was busy.** Every AI failure is now a
  *     200 carrying either a deterministic answer (`/parse-food`,

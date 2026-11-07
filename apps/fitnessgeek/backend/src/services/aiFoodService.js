@@ -686,15 +686,19 @@ Return JSON: {"verdicts":[{"index":1,"reasonable":true},{"index":2,"reasonable":
    * This is a CHEAP call - just classification, no nutrition estimation
    *
    * @param {string} input - User's food input
+   * @param {{userId?: string|null}} [options] - `userId` is the per-day cap
+   *        bucket (`quotaKey`), as for `foodParse`; without it every search
+   *        shared one app-wide bucket (audit 2026-11-06)
    * @returns {Promise<Object>} Classification result
    */
-  async classifyFoodInput(input) {
+  async classifyFoodInput(input, options = {}) {
     const classificationContext = this.prepareClassificationInput(input);
     const prompt = this.buildClassificationPrompt(
       classificationContext.normalizedInput,
       classificationContext
     );
     const result = await aiGeekClient.feature('foodClassify', {
+      quotaKey: options.userId || undefined,
       // Same reasoning as `foodParse`: this call exists to be parsed as JSON
       // (`parseClassificationResponse` below) and it sits on the search path
       // a person is waiting on, so `structured:fast` is what it actually
@@ -767,7 +771,7 @@ Return JSON: {"verdicts":[{"index":1,"reasonable":true},{"index":2,"reasonable":
    * @param {Array} results - API results to score
    * @returns {Promise<Array>} Results with AI confidence scores applied
    */
-  async scoreResultsRelevance(originalQuery, results) {
+  async scoreResultsRelevance(originalQuery, results, options = {}) {
     if (!results || results.length === 0) {
       return results;
     }
@@ -800,6 +804,7 @@ Scoring guide:
     // Scoring is a ranking nicety, so the fallback is the caller's own order.
     // `ok: false` here is not worth telling anyone about.
     const result = await aiGeekClient.feature('foodScore', {
+      quotaKey: options.userId || undefined,
       system: 'You are a food matching expert. Return ONLY valid JSON.',
       user: prompt,
       maxTokens: 400,
@@ -838,7 +843,7 @@ Scoring guide:
    * @param {Array} topResults - Top results to validate
    * @returns {Promise<Object>} Validation result with issues
    */
-  async sanityCheckResults(originalQuery, topResults) {
+  async sanityCheckResults(originalQuery, topResults, options = {}) {
     if (!topResults || topResults.length === 0) {
       return { valid: true, issues: [] };
     }
@@ -865,6 +870,7 @@ Flag issues like wrong food type, brand mismatches, or irrelevant items.`;
 
     // No model, no objection: the results stand as they came from the APIs.
     const result = await aiGeekClient.feature('foodSanityCheck', {
+      quotaKey: options.userId || undefined,
       system: 'You are a food matching expert. Return ONLY valid JSON.',
       user: prompt,
       maxTokens: 200,

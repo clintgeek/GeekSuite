@@ -580,8 +580,11 @@ class UnifiedFoodService {
   async classifyInput(userId, input) {
     var self = this;
     void self;
+    // The person is the classifier's cap bucket (`quotaKey`); the
+    // 'anonymous' sentinel the cache keys on is not a person.
+    var quotaUser = userId && userId !== 'anonymous' ? String(userId) : null;
     return aiClassificationCacheService.getOrCompute(userId, input, function(inp) {
-      return aiFoodService.classifyFoodInput(inp);
+      return aiFoodService.classifyFoodInput(inp, { userId: quotaUser });
     });
   }
 

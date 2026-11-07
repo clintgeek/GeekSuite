@@ -1,6 +1,6 @@
 /**
  * What StoryGeek does when a model cannot serve — re-pointed to the aiGeek
- * feature door (Phase 2, apps/basegeek/DOCS/AIGEEK_FRONT_DOOR.md §4).
+ * feature door (Phase 2, apps/basegeek/DOCS/ARCHIVE/AIGEEK_FRONT_DOOR.md §4).
  *
  * This file used to pin the 2026-09-05 fix to `resolveGMModel()`:
  * `STORYGEEK_FREE_ONLY` defaulted on, so every turn asked aiGeek's director
