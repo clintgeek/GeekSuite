@@ -51,7 +51,7 @@ jobs:
         # open handle keeps the process alive forever ("Jest did not exit one
         # second after the test run has completed"). Hunting the handle is
         # backlogged; forceExit is safe post-"Ran all test suites".
-        run: node --experimental-vm-modules node_modules/jest/bin/jest.js --runInBand --forceExit
+        run: node --experimental-vm-modules node_modules/jest/bin/jest.js --forceExit
 
   test-bookgeek:
     name: bookgeek api tests
@@ -555,6 +555,9 @@ jobs:
       # friends against the gateway's own typeDefs, both directions.
       # See DOCS/RUNBOOK.md's "gql argument audit" entry.
       - run: node tools/gql-arg-audit.mjs
+      # DOCS/GRAPHQL.md §4 is generated from the typeDefs. Fail the build if a
+      # typeDefs change lands without `node tools/gql-surface.mjs --write`.
+      - run: node tools/gql-surface.mjs --check
 
   boot-smoke:
     name: boot smoke (import-time + env)
