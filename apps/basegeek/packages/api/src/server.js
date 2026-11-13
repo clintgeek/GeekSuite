@@ -25,6 +25,7 @@ import openaiProxyRoutes from './routes/openaiProxy.js';
 import apiKeyRoutes from './routes/apiKeys.js';
 import appsRoutes from './routes/apps.js';
 import ambientRoutes from './routes/ambient.js';
+import backdropRoutes from './routes/backdrops.js';
 import { connectAIGeekDB, getAIGeekConnection } from './config/database.js';
 import { userGeekConn } from './models/user.js';
 import { requireConnection } from './lib/requireConnection.js';
@@ -35,6 +36,7 @@ import { initRefreshTokenStore, closeRefreshTokenStore, isRefreshTokenStoreConne
 import { seedMissingApps } from './services/appRegistrySeed.js';
 import { startOAuthRefreshJob, stopOAuthRefreshJob } from './services/oauthRefreshJobService.js';
 import { startAICatalogJob, stopAICatalogJob } from './services/aiCatalogJob.js';
+import { startBackdropJob, stopBackdropJob } from './services/backdropJob.js';
 import reminderService from './graphql/todogeek/services/reminderService.js';
 import { startNoteIndexer, stopNoteIndexer } from './graphql/notegeek/indexer.js';
 import { startCatalogIndexer, stopCatalogIndexer } from './graphql/catalog/catalogIndexer.js';
@@ -239,6 +241,9 @@ app.use('/api/apps', appsRoutes);
 // (`git log --diff-filter=D -- apps/basegeek/packages/api/src/routes/oauthConnections.js`)
 // minus the internal-token endpoint.
 app.use('/api/ambient', ambientRoutes);
+// Wallpapers for StartGeek and the login screen. Public, read-only; see
+// routes/backdrops.js and DOCS/BACKDROP_SERVICE_PLAN.md.
+app.use('/api/backdrops', backdropRoutes);
 // Infrastructure browsers — admin only. Each router applies `requireAdmin`
 // itself (a `router.use` at the top of the file) so the gate travels with the
 // router and cannot be lost by a re-mount here.
@@ -534,6 +539,14 @@ try {
   logger.error({ err }, '[CatalogJob] failed to start');
 }
 
+// Wallpaper batch (hourly tick; refresh every 48 h; see services/backdropJob.js).
+// `BACKDROP_JOB=off` disables it.
+try {
+  startBackdropJob();
+} catch (err) {
+  logger.error({ err }, '[BackdropJob] failed to start');
+}
+
 // TodoGeek task reminders. basegeek owns the task data and runs 24/7, so the
 // 60-second sweep lives here rather than in the client. start() is a logged
 // no-op when VAPID_PUBLIC_KEY / VAPID_PRIVATE_KEY are unset.
@@ -650,6 +663,11 @@ installShutdownHooks(logger, server, {
       stopAICatalogJob()
     } catch (err) {
       logger.error({ err }, 'Error stopping AI catalog job')
+    }
+    try {
+      stopBackdropJob()
+    } catch (err) {
+      logger.error({ err }, 'Error stopping backdrop job')
     }
     try {
       stopNoteIndexer()
