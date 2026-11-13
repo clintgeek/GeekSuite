@@ -2,6 +2,33 @@
 
 What shipped, as it landed. Wanted-but-not-done lives in `SUITE_TODO.md`.
 
+## 2026-11-13 — NoteGeek sidebar + sketch palette; backdrop service
+
+- **NoteGeek** (`6f641af2`, pushed): the desktop sidebar collapses from a toggle in the
+  top bar's left slot, remembered per device (`notegeek:navCollapsed`). On desktop the
+  sketch editor's tldraw colour/size panel moved from top-right to bottom-left, above
+  the zoom controls. The move is a CSS override against tldraw 2.4.6 class names.
+  Checks: 837 tests, harness 234 scenes clean.
+- **Backdrop service** (`60678d93`, `3b875e41`; local until Chef calls the push).
+  Picsum went down (522), and StartGeek's hot-linked wallpaper went with it.
+  - basegeek now keeps a 48 h batch of ~10 wallpapers from Bing, Picsum and
+    LoremFlickr, in landscape and portrait crops, and serves it publicly at
+    `/api/backdrops`.
+  - `@geeksuite/backdrop` picks and preloads a photo.
+  - StartGeek and the login screen use it.
+  - StartGeek joined the pnpm workspace.
+  - Plan and as-built notes: `DOCS/BACKDROP_SERVICE_PLAN.md`.
+  - Checks:
+    - api backdrops 16 (mutation-checked) and the full suite (only the known
+      `goingOverFitnessGlance` failure, which is timezone-dependent: red in Chicago
+      evenings, green in UTC);
+    - helper 5;
+    - StartGeek 24;
+    - basegeek ui 255;
+    - harness: basegeek 68 and StartGeek 16, clean (no-photo state only);
+    - the StartGeek Docker image builds from the workspace and still 404s a missing
+      asset.
+
 ## 2026-11-06 — aiGeek hardening pass (committed + pushed 2026-11-07: gateway first, FitnessGeek bundle after)
 
 Fixes for the 14 P0/P1 findings of the 2026-11-06 aiGeek audit. Every new regression test
