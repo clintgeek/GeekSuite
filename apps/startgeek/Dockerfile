@@ -1,24 +1,21 @@
 # ---------- BUILD STAGE ----------
-# Vite build → /app/dist. Standalone app (no @geeksuite workspace deps),
-# so npm + its own lockfile is enough; no pnpm workspace dance needed.
+# Vite build → /app/apps/startgeek/dist. StartGeek joined the pnpm workspace
+# on 2026-11-13 to share @geeksuite/backdrop with basegeek's login
+# (DOCS/BACKDROP_SERVICE_PLAN.md), so it builds the way gamegeek does:
+# workspace manifests + shared packages + this app, one frozen install.
 FROM node:20-alpine AS build
 
 WORKDIR /app
 
-# Copy the manifest first so `npm ci` is cached across rebuilds that
-# only touch source. The extra `npm install @rollup/rollup-linux-x64-musl`
-# works around https://github.com/npm/cli/issues/4828 — npm ci silently
-# drops platform-specific optional deps (rollup's native binary) when
-# the host lockfile was produced on a different platform, which breaks
-# `vite build` at runtime.
-COPY apps/startgeek/package.json apps/startgeek/package-lock.json ./
-RUN npm ci \
- && npm install --no-save @rollup/rollup-linux-x64-musl
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml .npmrc ./
+COPY packages ./packages
+COPY apps/startgeek ./apps/startgeek
 
-# Copy the rest of the app source + build. .dockerignore at the repo
-# root already excludes node_modules and .git.
-COPY apps/startgeek/. .
-RUN npm run build
+RUN npm install -g pnpm@10
+RUN pnpm install --frozen-lockfile
+
+WORKDIR /app/apps/startgeek
+RUN pnpm run build
 
 # ---------- PRODUCTION STAGE ----------
 # Serve the static dist. Keeps the final image tiny and removes the
@@ -28,7 +25,7 @@ FROM node:20-alpine AS prod
 WORKDIR /app
 RUN npm install -g serve@14
 
-COPY --from=build /app/dist ./dist
+COPY --from=build /app/apps/startgeek/dist ./dist
 
 EXPOSE 3000
 # No `-s`/`--single`: startgeek has no client-side router (no react-router

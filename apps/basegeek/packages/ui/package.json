@@ -19,6 +19,7 @@
     "@fontsource/b612-mono": "^5.3.0",
     "@fontsource/big-shoulders-stencil-display": "^5.3.0",
     "@geeksuite/api-client": "workspace:*",
+    "@geeksuite/backdrop": "workspace:*",
     "@geeksuite/ui": "workspace:*",
     "@geeksuite/user": "workspace:*",
     "@mui/icons-material": "^5.18.0",

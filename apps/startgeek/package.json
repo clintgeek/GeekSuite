@@ -12,6 +12,7 @@
     "test": "node --test src/lib/*.test.js"
   },
   "dependencies": {
+    "@geeksuite/backdrop": "workspace:*",
     "framer-motion": "^10.16.5",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

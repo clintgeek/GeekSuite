@@ -444,19 +444,31 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: npm
-          cache-dependency-path: apps/startgeek/package-lock.json
-      # Standalone app (no @geeksuite workspace deps) — npm + its own
-      # lockfile, no pnpm workspace install (see apps/startgeek/Dockerfile).
-      - name: Install dependencies
-        working-directory: apps/startgeek
-        run: npm ci
+          cache: pnpm
+      # A pnpm workspace member since 2026-11-13 (@geeksuite/backdrop; see
+      # apps/startgeek/Dockerfile).
+      - run: pnpm install --frozen-lockfile
       - name: Run node --test
         working-directory: apps/startgeek
-        run: npm test
+        run: pnpm test
+
+  test-backdrop:
+    name: shared backdrop helper tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      # No dependencies: plain JS and node --test (DOCS/BACKDROP_SERVICE_PLAN.md).
+      - name: Run node --test
+        working-directory: packages/backdrop
+        run: node --test src/*.test.js
 
   test-backends:
     name: backend auth tests (${{ matrix.app }})

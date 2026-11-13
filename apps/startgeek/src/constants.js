@@ -3,8 +3,7 @@ export const INTERVALS = {
   CLOCK_UPDATE: 1000,                 // 1 second
   WEATHER_REFRESH: 15 * 60 * 1000,    // 15 minutes
   GLANCE_REFRESH: 5 * 60 * 1000,      // 5 minutes
-  GLANCE_STALE: 60 * 1000,            // 1 minute
-  BACKGROUND_TIMEOUT: 8000            // 8 seconds
+  GLANCE_STALE: 60 * 1000             // 1 minute
 }
 
 // Animation durations (in seconds for framer-motion)

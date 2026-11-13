@@ -1,9 +1,7 @@
-import { useLayoutEffect, useRef, useState, useEffect } from 'react'
-import { INTERVALS } from '../constants'
+import { useState, useEffect } from 'react'
+import { loadBackdrop } from '@geeksuite/backdrop'
 import { useSettings } from '../hooks/useSettings'
-
-const MAX_RETRIES = 3
-const RETRY_DELAY = 2000
+import { BASEGEEK } from '../lib/basegeek'
 
 // Adaptive scrim ramp: linear, clamped. A luminance of 0 (black wallpaper)
 // maps to 0.75x the fixed scrim alphas below; 1 (white wallpaper) maps to
@@ -48,60 +46,23 @@ const sampleLuminance = (img) => {
 const BackgroundManager = () => {
   const { settings } = useSettings()
   const photo = settings.backdrop === 'photo'
-  const retriesRef = useRef(0)
   const [bgUrl, setBgUrl] = useState(null)
   const [scrimAlpha, setScrimAlpha] = useState(1)
 
-  useLayoutEffect(() => {
+  // One wallpaper per page load, from basegeek's backdrop service
+  // (DOCS/BACKDROP_SERVICE_PLAN.md): a batch basegeek refreshes every 48 h
+  // from several public sources and serves from our own origin. Until
+  // 2026-11-13 this hot-linked picsum.photos directly, and when Picsum went
+  // down the wallpaper simply vanished. The helper picks the crop for this
+  // viewport (portrait on an upright phone), preloads it, tries another
+  // photo if one fails, and resolves null if there is nothing — in which
+  // case the plain ground stays, as before.
+  useEffect(() => {
     if (!photo || bgUrl) return
-
     let cancelled = false
-
-    const loadBackground = () => {
-      // Fetch a wallpaper sized to the actual screen instead of always
-      // pulling a fixed 1920×1080 — a phone at 3x DPR needs far less than a
-      // desktop, and a huge desktop is capped rather than requesting more.
-      const dpr = window.devicePixelRatio || 1
-      const width = Math.min(Math.round(window.innerWidth * dpr), 1920)
-      const height = Math.round((width * 1080) / 1920)
-      const url = `https://picsum.photos/${width}/${height}.webp?t=${Date.now()}`
-      const img = new Image()
-      let settled = false
-
-      const timeout = setTimeout(() => {
-        if (!settled) {
-          settled = true
-          handleFailure()
-        }
-      }, INTERVALS.BACKGROUND_TIMEOUT)
-
-      img.onload = () => {
-        if (settled || cancelled) return
-        settled = true
-        clearTimeout(timeout)
-        setBgUrl(url)
-        retriesRef.current = 0
-      }
-
-      img.onerror = () => {
-        if (settled) return
-        settled = true
-        clearTimeout(timeout)
-        handleFailure()
-      }
-
-      img.src = url
-    }
-
-    const handleFailure = () => {
-      if (cancelled) return
-      if (retriesRef.current < MAX_RETRIES) {
-        retriesRef.current++
-        setTimeout(loadBackground, RETRY_DELAY)
-      }
-    }
-
-    loadBackground()
+    loadBackdrop({ base: BASEGEEK }).then((picked) => {
+      if (!cancelled && picked) setBgUrl(picked.url)
+    })
     return () => {
       cancelled = true
     }
@@ -111,12 +72,11 @@ const BackgroundManager = () => {
   // second, independent image load. This never touches the <img> that
   // drives the visible wallpaper above: that one is fetched plain (no
   // `crossOrigin`) so it always renders regardless of what the host does
-  // with CORS. This probe alone sets `crossOrigin="anonymous"` — picsum.photos
-  // answers with `Access-Control-Allow-Origin: *` when an Origin header is
-  // present (confirmed by hand), so the probe loads and samples cleanly. If
-  // a future wallpaper source doesn't answer CORS at all, the probe's image
-  // load itself fails (onerror) rather than the visible wallpaper; if some
-  // host answers the request but the canvas still ends up tainted,
+  // with CORS. This probe alone sets `crossOrigin="anonymous"` — basegeek's
+  // cors() allow-list includes start.clintgeek.com, so the probe loads and
+  // samples cleanly. If CORS ever stops answering, the probe's image load
+  // itself fails (onerror) rather than the visible wallpaper; if the host
+  // answers the request but the canvas still ends up tainted,
   // `sampleLuminance` catches that too. Either way this falls back to
   // scrimAlpha = 1, today's fixed scrim.
   useEffect(() => {

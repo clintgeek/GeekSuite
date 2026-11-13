@@ -66,7 +66,10 @@ control or the `,` key. Block list, defaults, and allowed values live in
 A block with no data stays hidden even when on. Logged out, only `weather`
 and the backdrop/clock controls show.
 
-- **Backdrop** `photo` (default): picsum wallpaper, blurred, behind a scrim.
+- **Backdrop** `photo` (default): a wallpaper from basegeek's backdrop service
+  (`/api/backdrops`, DOCS/BACKDROP_SERVICE_PLAN.md), blurred, behind a scrim.
+  Portrait crop on an upright phone. Until 2026-11-13 this hot-linked Picsum,
+  and the wallpaper vanished whenever Picsum was down.
   `void`: no photo, flat ground with a faint grid.
 - **Clock** `12` (default) or `24`.
 
@@ -78,10 +81,9 @@ The Photo-mode scrim's darkness follows the wallpaper's own luminance —
 averages its luma, and maps it through a clamped linear ramp
 (`scrimFactorForLuminance`: luminance 0 → 0.75x, 1 → 1.4x the fixed scrim
 alphas) into a `--scrim-alpha` CSS custom property on the backdrop root.
-`.wallpaper-scrim` in `index.css` consumes it via `calc()`. picsum.photos
-answers CORS with `Access-Control-Allow-Origin: *` (confirmed by hand, needs
-an `Origin` header to appear — a plain `curl -I` won't show it), so sampling
-works today; if a future host doesn't answer CORS, the probe's `onload` never
+`.wallpaper-scrim` in `index.css` consumes it via `calc()`. The wallpaper
+comes from basegeek, whose cors() allow-list includes start.clintgeek.com, so
+sampling works; if that ever stops answering CORS, the probe's `onload` never
 fires (or `getImageData` throws on a tainted canvas) and it's caught, falling
 back to `--scrim-alpha: 1` — the original fixed scrim, unchanged. The probe
 is deliberately separate from the `<img>` that drives the visible wallpaper,
@@ -97,7 +99,9 @@ state to wire the ramp against.
 - Framer Motion 10
 - `serve` for static production
 - ESLint 8 with its own `.eslintrc.cjs`
-- Standalone `npm` app with its own `package-lock.json`; no pnpm workspace or `workspace:*` dependencies.
+- pnpm workspace member since 2026-11-13 (was a standalone npm app with its
+  own `package-lock.json`). One workspace dependency, `@geeksuite/backdrop`,
+  shared with basegeek's login. Dockerfile and CI install from the workspace.
 
 ## File Map
 
@@ -233,7 +237,8 @@ service worker and the container config. Lint stays at 0 warnings
   `text/html` guard that refuses to store an SPA-fallback body under an asset
   URL; `install` uses per-URL `cache.add().catch()`; navigation falls back to
   `/offline.html`. Cross-origin responses (`type !== 'basic'`) are never cached,
-  so bookgeek covers and picsum wallpapers cannot poison it.
+  so bookgeek covers cannot poison it. Backdrops are under `/api/` and so
+  network-only; their immutable cache headers make the browser cache do the work.
 
 ### Left in place, with reasons
 
@@ -242,15 +247,12 @@ service worker and the container config. Lint stays at 0 warnings
   lives inside `CommandBox` — and the visible result is at least honest: the dot
   does not move, because `refetch()` only runs on success. Making it speak means
   lifting `Toast` to a provider, which is a larger change than this pass.
-- **`BackgroundManager`'s retry timers are not cleared on unmount.** Both the
-  load timeout and the `RETRY_DELAY` retry are guarded by a `cancelled` flag and
-  a `settled` flag, so nothing sets state after unmount; what is left is a
-  dangling timer and at most one wasted image request. Not worth the churn.
 - **`GlanceContext.todayIso()` uses the offset-subtraction trick**
   (`new Date(t - getTimezoneOffset()*60000).toISOString()`). `@geeksuite/utils`
   has `localDateString`, which reads the local calendar fields directly and is
-  the suite's preferred form — but startgeek is a standalone npm app with no
-  workspace dependencies by design (`TODO_ORDER.md` #5), and the trick is
+  the suite's preferred form — but startgeek was a standalone npm app with no
+  workspace dependencies by design (`TODO_ORDER.md` #5; it joined the workspace
+  on 2026-11-13 for `@geeksuite/backdrop`), and the trick is
   *correct*, not merely lucky: the offset is sampled at `t`, so it survives DST.
   Left alone rather than opening a dependency question over a working function.
 - **No component test runner.** `SessionContext`, `GlanceContext` and
