@@ -1,12 +1,16 @@
 import React, { useState, useRef } from 'react';
 import {
   Box,
+  IconButton,
   InputBase,
+  Tooltip,
   useMediaQuery,
   useTheme,
   alpha,
 } from '@mui/material';
 import SearchOutlinedIcon from '@mui/icons-material/SearchOutlined';
+import MenuIcon from '@mui/icons-material/Menu';
+import MenuOpenIcon from '@mui/icons-material/MenuOpen';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { GeekTopBar } from '@geeksuite/ui';
 import { useThemeMode } from '../theme/ThemeModeProvider.jsx';
@@ -15,6 +19,7 @@ import NewNoteMenu from './new/NewNoteMenu';
 import useAuthStore from '../store/authStore';
 import useNoteStore from '../store/noteStore';
 import useTagStore from '../store/tagStore';
+import useNavStore from '../store/navStore';
 import { pageTitle } from './navConfig';
 import { displayNameFrom, initialsFrom, secondaryFrom } from '../utils/userDisplay';
 
@@ -45,6 +50,8 @@ function Header() {
   const { clearTags } = useTagStore();
   const [searchQuery, setSearchQuery] = useState('');
   const searchRef = useRef(null);
+  const navCollapsed = useNavStore((s) => s.navCollapsed);
+  const toggleNav = useNavStore((s) => s.toggleNav);
 
   const handleSearchSubmit = (e) => {
     e.preventDefault();
@@ -150,10 +157,28 @@ function Header() {
     </>
   );
 
+  // Desktop: fold the sidebar away and back (Layout.jsx). Phones have no
+  // sidebar, so no leading control at all.
+  const navLabel = navCollapsed ? 'Show sidebar' : 'Hide sidebar';
+  const leading =
+    isMobile || !isAuthenticated ? null : (
+      <Tooltip title={navLabel}>
+        <IconButton
+          onClick={toggleNav}
+          aria-label={navLabel}
+          aria-expanded={navCollapsed ? 'false' : 'true'}
+          edge="start"
+          sx={{ color: 'text.secondary', minWidth: 44, minHeight: 44 }}
+        >
+          {navCollapsed ? <MenuIcon /> : <MenuOpenIcon />}
+        </IconButton>
+      </Tooltip>
+    );
+
   return (
     <GeekTopBar
       title={pageTitle(location.pathname)}
-      leading={null}
+      leading={leading}
       search={isMobile ? undefined : search}
       actions={<NewNoteMenu />}
       mobileActions={null}

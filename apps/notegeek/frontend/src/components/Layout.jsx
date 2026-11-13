@@ -7,6 +7,7 @@ import Sidebar from './Sidebar';
 import MobileBottomNav from './MobileBottomNav';
 import Header from './Header';
 import useEditorChrome from '../store/editorChromeStore';
+import useNavStore from '../store/navStore';
 import NoteImporter from './new/NoteImporter';
 
 /**
@@ -49,12 +50,15 @@ function Layout({ children }) {
     // own head — Back, the ⋯ menu — is still at the top of the sheet.
     const writing = useEditorChrome((s) => s.writing);
     const tuckTopBar = isMobile && fillFrame && writing;
+    // Desktop can fold the sidebar away; the toggle lives in the top bar's
+    // leading slot (Header.jsx), so it is reachable either way.
+    const navCollapsed = useNavStore((s) => s.navCollapsed);
 
     return (
         <GeekShell
             // Desktop only: a phone has no drawer (Header.jsx); its tag tree
             // opens from the Notes page instead.
-            nav={showNavigation && !isMobile ? <Sidebar /> : undefined}
+            nav={showNavigation && !isMobile && !navCollapsed ? <Sidebar /> : undefined}
             topBar={tuckTopBar ? null : <Header />}
             // Not on a single note: MobileBottomNav hides itself there
             // (`shouldHide`), but passing it anyway still made the frame

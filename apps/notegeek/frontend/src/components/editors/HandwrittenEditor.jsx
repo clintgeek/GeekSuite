@@ -510,6 +510,20 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
                         position: 'absolute !important',
                         inset: '0 !important',
                     },
+                    // Desktop: tldraw parks its colour/size panel top-right,
+                    // over the writing (Chef, 2026-11-13). Pin it bottom-left
+                    // instead, stacked above the zoom controls. It's absolute
+                    // against .tlui-layout (position: relative); the columns
+                    // between are unpositioned, so they don't capture it.
+                    ...(!isMobile && {
+                        '& .tlui-style-panel__wrapper': {
+                            position: 'absolute',
+                            left: 0,
+                            bottom: 48,
+                            margin: '8px',
+                            maxHeight: 'calc(100% - 64px)',
+                        },
+                    }),
                     // Hide tldraw's action bar on mobile (it overlaps our toolbar)
                     ...(isMobile && {
                         '& .tlui-layout__bottom': {
