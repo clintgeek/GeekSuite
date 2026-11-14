@@ -1,7 +1,8 @@
 /**
  * The sketch editor's toolbar — one floating bar at every size.
  *
- * It began as the phone toolbar (Move, Write, Pen, Undo, Fullscreen). Chef
+ * It began as the phone toolbar (Move, Write, Pen, Undo, Fullscreen; Paper
+ * joined 2026-11-14). Chef
  * preferred it to tldraw's own UI on tablet and desktop too (2026-11-14), but
  * with all the tools there: so from 720px up the same bar carries every
  * tldraw tool, with the shape family and the zoom controls each collapsed
@@ -40,6 +41,7 @@ import ZoomOutIcon from '@mui/icons-material/ZoomOut';
 import FullscreenIcon from '@mui/icons-material/Fullscreen';
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
 import { graphiteTokens } from '../../theme/tokens';
+import { PaperPicker } from './Paper';
 
 /** The width from which the bar carries every tool (tablet portrait and up). */
 export const FULL_TOOLBAR_QUERY = '(min-width: 720px)';
@@ -83,8 +85,10 @@ const SHAPES = [
 const SHAPE_TOOL_IDS = new Set(['geo', 'arrow', 'line', 'frame']);
 
 function PenStylePicker({ editor, fine, onFineChange }) {
-    const theme = useTheme();
-    const palette = DefaultColorThemePalette[theme.palette.mode === 'dark' ? 'darkMode' : 'lightMode'];
+    // tldraw's scheme, not the app's: on paper the page is light even in dark
+    // mode, and the swatches must show the ink as it will look (Paper.jsx).
+    const isDark = useValue('dark ink', () => editor.user.getIsDarkMode(), [editor]);
+    const palette = DefaultColorThemePalette[isDark ? 'darkMode' : 'lightMode'];
     const color = useValue('pen color', () => editor.getStyleForNextShape(DefaultColorStyle), [editor]);
     const size = useValue('pen size', () => editor.getStyleForNextShape(DefaultSizeStyle), [editor]);
     const [anchor, setAnchor] = useState(null);
@@ -348,6 +352,8 @@ export default function DrawingToolbar({ containerRef, onFullscreenChange, fine,
 
             {/* Pen colour and size */}
             <PenStylePicker editor={editor} fine={fine} onFineChange={onFineChange} />
+            {/* Paper colour and lines (Paper.jsx) */}
+            <PaperPicker />
 
             <Divider />
 

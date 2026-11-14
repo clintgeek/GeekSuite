@@ -18,6 +18,15 @@ What shipped, as it landed. Wanted-but-not-done lives in `SUITE_TODO.md`.
   arrow, line, frame), Text, Sticky note, Insert image, Redo, Zoom ▾. Left out: laser,
   embeds, the rarer geo shapes. Checks: 844 tests (new toolbar tests mutation-checked),
   harness clean; the tldraw slider waiver is gone with the style panel.
+  Then **sketch paper**: a Paper button on the toolbar (every size) with Colour (Match
+  theme, White #ffffff, Warm paper #f4eedf, Soft grey #e5e7ea, Engineering green #e1ebd6)
+  and Lines (Plain, Lined, Graph, Dot grid). Kept per sketch in tldraw's document meta
+  (`paperColor`/`paperPattern`); the last pick is this device's default
+  (`notegeek:sketchPaper`) for sketches that never chose. Any real paper forces tldraw's
+  light scheme so black ink stays black in dark mode. The ruling is tldraw's `Background`
+  component, drawn from the camera, so it pans/zooms and drops out when zoomed far out.
+  Model `paperModel.js` (not `paper.js`: it would collide with `Paper.jsx` on a
+  case-insensitive disk). Exports/print stay on white.
 - **Backdrop service** (`60678d93`, `3b875e41`; pushed and live 22:58 UTC, first batch
   8 Bing photos — Bing's archive serves 8 a day, and Picsum/LoremFlickr were down).
   Picsum went down (522), and StartGeek's hot-linked wallpaper went with it.

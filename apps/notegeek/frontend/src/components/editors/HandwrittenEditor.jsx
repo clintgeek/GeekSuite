@@ -19,6 +19,7 @@ import '@tldraw/tldraw/tldraw.css';
 import EditorErrorBoundary from './EditorErrorBoundary';
 import { surfaces } from '../../theme/tokens';
 import DrawingToolbar from './DrawingToolbar';
+import { PaperBackground, PaperSync } from './Paper';
 
 const SAVE_DEBOUNCE_MS = 400;
 
@@ -43,6 +44,7 @@ const HIDDEN_TLDRAW_COMPONENTS = {
     HelpMenu: null,          // Hide help menu
     DebugMenu: null,         // Hide debug menu
     SharePanel: null,        // Hide share panel
+    Background: PaperBackground, // the sketch's paper colour and ruling (Paper.jsx)
 };
 
 /**
@@ -150,11 +152,7 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
             fineHandlerOffRef.current = editor.sideEffects.registerBeforeCreateHandler('shape', fineStrokeHandler(editor, fineRef));
         }
 
-        // Apply dark mode preference based on MUI theme mode
-        const isDark = theme.palette.mode === 'dark';
-        // tldraw 2.4 renamed isDarkMode to colorScheme, and its validator rejects
-        // the old key, so every theme sync used to throw.
-        editor.user.updateUserPreferences({ colorScheme: isDark ? 'dark' : 'light' });
+        // tldraw's colour scheme follows the paper and the app theme: PaperSync.
 
         if (content) {
             loadSnapshot(content, editor);
@@ -183,7 +181,7 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
             });
         }
     // eslint-disable-next-line react-hooks/exhaustive-deps -- content intentionally excluded; initial load only
-    }, [loadSnapshot, readOnly, debouncedSave, theme.palette.mode, sketchApiRef]);
+    }, [loadSnapshot, readOnly, debouncedSave, sketchApiRef]);
 
     // Hold the S Pen's side button to scroll the page; an eraser end erases
     // (DOCS/HANDWRITING.md §1). A capture-phase listener on the container, so
@@ -244,13 +242,6 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
         loadSnapshot(content, editorRef.current);
     }, [content, loadSnapshot]);
 
-    // Sync dark mode preference with Tldraw when theme changes
-    useEffect(() => {
-        if (editorRef.current) {
-            const isDark = theme.palette.mode === 'dark';
-            editorRef.current.user.updateUserPreferences({ colorScheme: isDark ? 'dark' : 'light' });
-        }
-    }, [theme.palette.mode, isLoading]);
 
     useEffect(() => {
         return () => {
@@ -310,6 +301,9 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
                     components={HIDDEN_TLDRAW_COMPONENTS}
                     options={TLDRAW_OPTIONS}
                 >
+                {/* Paper colour + tldraw's colour scheme (light on any paper, so
+                    black ink stays black; the app's theme on "Match theme"). */}
+                <PaperSync />
                 {/* The drawing toolbar. It must render INSIDE <Tldraw>: it calls
                     useEditor(), which only resolves within tldraw's context. As a
                     sibling it threw on every phone and the error boundary took

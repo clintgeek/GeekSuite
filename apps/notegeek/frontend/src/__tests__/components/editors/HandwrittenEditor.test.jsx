@@ -89,6 +89,13 @@ vi.mock('@tldraw/tldraw', async () => {
             getCurrentToolId: vi.fn(() => tool),
             getCanUndo: vi.fn(() => false),
             getCanRedo: vi.fn(() => true),
+            // tldraw's document record: meta is where the sketch keeps its paper.
+            document: { id: 'document:document', name: '', meta: {} },
+            getDocumentSettings: vi.fn(() => editor.document),
+            updateDocumentSettings: vi.fn((settings) => { editor.document = { ...editor.document, ...settings }; return editor; }),
+            getCamera: vi.fn(() => ({ x: 0, y: 0, z: 1 })),
+            container: null,
+            getContainer: vi.fn(() => editor.container || (editor.container = document.createElement('div'))),
             redo: vi.fn(),
             zoomIn: vi.fn(),
             zoomOut: vi.fn(),
@@ -103,8 +110,11 @@ vi.mock('@tldraw/tldraw', async () => {
             }),
             user: {
                 getIsDynamicResizeMode: vi.fn(() => false),
+                colorScheme: 'light',
+                getIsDarkMode: vi.fn(() => editor.user.colorScheme === 'dark'),
                 updateUserPreferences: vi.fn((prefs) => {
                     if ('isDarkMode' in prefs) throw new Error('ValidationError: At isDarkMode: Unexpected property');
+                    if (prefs.colorScheme) editor.user.colorScheme = prefs.colorScheme;
                 }),
             },
             store: {
@@ -281,15 +291,15 @@ describe('HandwrittenEditor', () => {
             await screen.findByRole('button', { name: 'Select' });
             expect(names(bars[0])).toEqual([
                 'Select', 'Move', 'Write', 'Highlighter', 'Eraser', 'Shapes', 'Text', 'Sticky note', 'Insert image',
-                'Pen colour and size', 'Undo', 'Redo', 'Zoom, 100%', 'Fullscreen',
+                'Pen colour and size', 'Paper', 'Undo', 'Redo', 'Zoom, 100%', 'Fullscreen',
             ]);
         });
 
-        it('on a phone, only Move, Write, Pen, Undo and Fullscreen', async () => {
+        it('on a phone, only Move, Write, Pen, Paper, Undo and Fullscreen', async () => {
             setViewport(true);
             render(<HandwrittenEditor content="" setContent={setContent} />, { wrapper: AllProviders });
             const bar = await screen.findByRole('toolbar', { name: 'Drawing tools' });
-            expect(names(bar)).toEqual(['Move', 'Write', 'Pen colour and size', 'Undo', 'Fullscreen']);
+            expect(names(bar)).toEqual(['Move', 'Write', 'Pen colour and size', 'Paper', 'Undo', 'Fullscreen']);
         });
 
         it("tools go through tldraw's own tool actions", async () => {
@@ -319,7 +329,7 @@ describe('HandwrittenEditor', () => {
             await user.click(screen.getByRole('button', { name: 'Shapes' }));
             await user.click(within(await screen.findByRole('dialog', { name: 'Shapes' })).getByRole('button', { name: 'Arrow' }));
             expect(editor.setCurrentTool).toHaveBeenLastCalledWith('arrow');
-        });
+        }, 15000); // two menus open and close (MUI transitions): ~4 s alone, more on a busy runner
 
         it('Zoom opens zoom in, out, 100% and fit', async () => {
             const user = userEvent.setup();
@@ -333,6 +343,45 @@ describe('HandwrittenEditor', () => {
             expect(editor.zoomIn).toHaveBeenCalledTimes(1);
             expect(editor.zoomOut).toHaveBeenCalledTimes(1);
             expect(editor.zoomToFit).toHaveBeenCalledTimes(1);
+        });
+    });
+
+    describe('paper', () => {
+        afterEach(() => localStorage.removeItem('notegeek:sketchPaper'));
+
+        it("a sketch that never chose uses this device's last paper: tldraw goes light, the ground is the paper", async () => {
+            localStorage.setItem('notegeek:sketchPaper', JSON.stringify({ color: 'warm', pattern: 'lined' }));
+            render(<HandwrittenEditor content="" setContent={setContent} />, { wrapper: AllProviders });
+            await screen.findByTestId('tldraw-mock');
+            const editor = tl.editors.at(-1);
+            await waitFor(() => expect(editor.user.updateUserPreferences).toHaveBeenLastCalledWith({ colorScheme: 'light' }));
+            expect(editor.getContainer().style.getPropertyValue('--color-background')).toBe('#f4eedf');
+            // Nothing is written to the sketch until someone picks.
+            expect(editor.updateDocumentSettings).not.toHaveBeenCalled();
+        });
+
+        it('picking paper saves it on the sketch and makes it the device default', async () => {
+            const user = userEvent.setup();
+            render(<HandwrittenEditor content="" setContent={setContent} />, { wrapper: AllProviders });
+            const editor = tl.editors.at(-1);
+            await user.click(await screen.findByRole('button', { name: 'Paper' }));
+            const menu = await screen.findByRole('dialog', { name: 'Paper' });
+            await user.click(within(menu).getByRole('button', { name: 'Paper: Engineering green' }));
+            await user.click(within(menu).getByRole('button', { name: 'Lines: Graph' }));
+            expect(editor.getDocumentSettings().meta).toEqual({ paperColor: 'green', paperPattern: 'graph' });
+            expect(JSON.parse(localStorage.getItem('notegeek:sketchPaper'))).toEqual({ color: 'green', pattern: 'graph' });
+        });
+
+        it("the sketch's own paper wins over the device's", async () => {
+            localStorage.setItem('notegeek:sketchPaper', JSON.stringify({ color: 'warm', pattern: 'lined' }));
+            const user = userEvent.setup();
+            render(<HandwrittenEditor content="" setContent={setContent} />, { wrapper: AllProviders });
+            const editor = tl.editors.at(-1);
+            editor.document = { ...editor.document, meta: { paperColor: 'grey', paperPattern: 'dots' } };
+            await user.click(await screen.findByRole('button', { name: 'Paper' }));
+            const menu = await screen.findByRole('dialog', { name: 'Paper' });
+            expect(within(menu).getByRole('button', { name: 'Paper: Soft grey' })).toHaveAttribute('aria-pressed', 'true');
+            expect(within(menu).getByRole('button', { name: 'Lines: Dot grid' })).toHaveAttribute('aria-pressed', 'true');
         });
     });
 

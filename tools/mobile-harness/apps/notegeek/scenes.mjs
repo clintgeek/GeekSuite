@@ -604,6 +604,29 @@ export const scenes = [
     teardown: (page, h) => h.esc(400),
   },
   {
+    // Sketch paper (2026-11-14): the Paper menu, then Warm paper + Lined, so
+    // the screenshot shows the ruled page behind the toolbar.
+    name: '03q-sketch-paper',
+    goto: '/notes/new?type=handwritten',
+    wait: 2500,
+    async setup(page, h) {
+      await h.settle(800);
+      await page.getByRole('button', { name: 'Paper', exact: true }).click();
+      await h.settle(400);
+      const menu = page.getByRole('dialog', { name: 'Paper' });
+      if (!(await menu.count())) throw new Error('paper menu did not open');
+      await menu.getByRole('button', { name: 'Paper: Warm paper' }).click();
+      await menu.getByRole('button', { name: 'Lines: Lined' }).click();
+      await h.settle(300);
+      const bg = await page.locator('.tl-background').first().evaluate((el) => getComputedStyle(el).backgroundColor);
+      if (bg !== 'rgb(244, 238, 223)') throw new Error(`paper is ${bg}, not warm`);
+    },
+    teardown: async (page, h) => {
+      await h.esc(300);
+      await page.evaluate(() => localStorage.removeItem('notegeek:sketchPaper'));
+    },
+  },
+  {
     // A NEW sketch note on a phone (2026-09-26). The mobile drawing toolbar
     // called useEditor() from outside <Tldraw>, and EditorErrorBoundary caught
     // the throw, so this crashed for Chef without any uncaught page error. It
