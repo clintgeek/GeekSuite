@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
-import { Box, TextField, Button, Typography, Alert, Tabs, Tab, useTheme, CircularProgress } from '@mui/material';
+import { Box, TextField, Button, Alert, Tabs, Tab, CircularProgress } from '@mui/material';
 import { useNavigate, useLocation } from 'react-router-dom';
-import AuthFrame from '../signalbox/AuthFrame';
+import AuthFrame from '../components/AuthFrame';
+import { START } from '../components/authLook';
 import api from '../api';
 import { useBaseGeekAuth } from '../components/AuthContext';
 import { safeRedirect } from '../utils/safeRedirect';
 
 export default function LoginPage() {
-  const theme = useTheme();
   const [tab, setTab] = useState(0);
   const [form, setForm] = useState({ identifier: '', email: '', password: '' });
   const [error, setError] = useState('');
@@ -23,7 +23,8 @@ export default function LoginPage() {
   const [appInfo, setAppInfo] = useState(null);
   useEffect(() => {
     if (app && app !== 'basegeek') {
-      setAppInfo({ name: app.charAt(0).toUpperCase() + app.slice(1) });
+      // notegeek → NoteGeek
+      setAppInfo({ name: app.charAt(0).toUpperCase() + app.slice(1).replace(/geek$/i, 'Geek') });
     }
   }, [app]);
 
@@ -41,7 +42,7 @@ export default function LoginPage() {
       <Box sx={{
         display: 'flex', justifyContent: 'center', alignItems: 'center',
         minHeight: '100vh', '@supports (height: 100dvh)': { minHeight: '100dvh' },
-        backgroundColor: theme.palette.surfaces.deep,
+        backgroundColor: START.ground,
       }}>
         <CircularProgress />
       </Box>
@@ -78,24 +79,7 @@ export default function LoginPage() {
   };
 
   return (
-    <AuthFrame subtitle="GeekSuite sign-in">
-      {appInfo && (
-        <Alert severity="info" sx={{ mb: 2.5, fontSize: '0.8125rem' }}>
-          Signing in via baseGeek to access {appInfo.name}
-        </Alert>
-      )}
-
-      {!appInfo && (
-        <Typography sx={{
-          color: 'text.secondary',
-          fontSize: '0.85rem',
-          textAlign: 'center',
-          mb: 2.5,
-        }}>
-          Sign in to your GeekSuite account
-        </Typography>
-      )}
-
+    <AuthFrame lede={appInfo ? `to continue to ${appInfo.name}` : undefined}>
       <Tabs
         value={tab}
         onChange={(_, v) => setTab(v)}

@@ -98,8 +98,9 @@ image uses, server-side brightness or resizing.
 - `packages/backdrop`: `loadBackdrop({ base })` → `{ url, credit, source, orientation } | null`.
 - StartGeek: `BackgroundManager.jsx` uses the helper; StartGeek builds from the
   pnpm workspace (Dockerfile, CI) and no longer has its own package-lock.
-- Login: `AuthFrame.jsx` paints the photo behind the card under a scrim of
-  `surfaces.base` at 0.78.
+- Login: `AuthFrame.jsx` paints the photo behind the card. Since the same day's
+  "GeekSuite Login" rework it copies StartGeek's background exactly (blur, scrim
+  gradient, glow) rather than a Signal Box scrim.
 - On day one Picsum (522) and LoremFlickr (500) were both down, so the first
   batch will be all Bing. That is the fill rule working, not a bug.
 - **Check after deploy:** `GET https://basegeek.clintgeek.com/api/backdrops`

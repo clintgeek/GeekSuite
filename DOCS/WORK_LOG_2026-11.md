@@ -9,7 +9,8 @@ What shipped, as it landed. Wanted-but-not-done lives in `SUITE_TODO.md`.
   sketch editor's tldraw colour/size panel moved from top-right to bottom-left, above
   the zoom controls. The move is a CSS override against tldraw 2.4.6 class names.
   Checks: 837 tests, harness 234 scenes clean.
-- **Backdrop service** (`60678d93`, `3b875e41`; local until Chef calls the push).
+- **Backdrop service** (`60678d93`, `3b875e41`; pushed and live 22:58 UTC, first batch
+  8 Bing photos — Bing's archive serves 8 a day, and Picsum/LoremFlickr were down).
   Picsum went down (522), and StartGeek's hot-linked wallpaper went with it.
   - basegeek now keeps a 48 h batch of ~10 wallpapers from Bing, Picsum and
     LoremFlickr, in landscape and portrait crops, and serves it publicly at
@@ -28,6 +29,12 @@ What shipped, as it landed. Wanted-but-not-done lives in `SUITE_TODO.md`.
     - harness: basegeek 68 and StartGeek 16, clean (no-photo state only);
     - the StartGeek Docker image builds from the workspace and still 404s a missing
       asset.
+- **GeekSuite Login** (Chef: "de-theme the login page … styled exactly like startgeek").
+  The SSO door dropped the Signal Box look: StartGeek's wallpaper, scrim and glow, its
+  thin Geist clock and date, and a dark-glass card titled "GeekSuite Login" ("to continue
+  to NoteGeek" when an app sent you). It no longer follows basegeek's light/dark mode.
+  Tokens copied from StartGeek into `components/authLook.js`; `AuthFrame` moved out of
+  `signalbox/`. Geist is self-hosted via `@fontsource/geist(-mono)`.
 
 ## 2026-11-06 — aiGeek hardening pass (committed + pushed 2026-11-07: gateway first, FitnessGeek bundle after)
 

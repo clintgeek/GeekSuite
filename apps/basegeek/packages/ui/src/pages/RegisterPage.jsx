@@ -1,13 +1,13 @@
 import { useState, useEffect } from 'react';
-import { Box, TextField, Button, Typography, Alert, useTheme, CircularProgress } from '@mui/material';
+import { Box, TextField, Button, Alert, CircularProgress } from '@mui/material';
 import { useNavigate, useLocation } from 'react-router-dom';
-import AuthFrame from '../signalbox/AuthFrame';
+import AuthFrame from '../components/AuthFrame';
+import { START } from '../components/authLook';
 import api from '../api';
 import { useBaseGeekAuth } from '../components/AuthContext';
 import { safeRedirect } from '../utils/safeRedirect';
 
 export default function RegisterPage() {
-  const theme = useTheme();
   const [form, setForm] = useState({ username: '', email: '', password: '' });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -32,7 +32,7 @@ export default function RegisterPage() {
       <Box sx={{
         display: 'flex', justifyContent: 'center', alignItems: 'center',
         minHeight: '100vh', '@supports (height: 100dvh)': { minHeight: '100dvh' },
-        backgroundColor: theme.palette.surfaces.deep,
+        backgroundColor: START.ground,
       }}>
         <CircularProgress />
       </Box>
@@ -58,7 +58,7 @@ export default function RegisterPage() {
   };
 
   return (
-    <AuthFrame subtitle="Create a GeekSuite account">
+    <AuthFrame title="Create a GeekSuite account">
       <form onSubmit={handleSubmit}>
         <TextField label="Username" name="username" value={form.username} onChange={handleChange} fullWidth margin="dense" required autoFocus size="small" />
         <TextField label="Email" name="email" type="email" value={form.email} onChange={handleChange} fullWidth margin="dense" required size="small" />
