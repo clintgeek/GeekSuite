@@ -511,14 +511,15 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
                         inset: '0 !important',
                     },
                     // Desktop: tldraw parks its colour/size panel top-right,
-                    // over the writing (Chef, 2026-11-13). Pin it bottom-left
-                    // instead, stacked above the zoom controls. It's absolute
+                    // over the writing (Chef, 2026-11-13). Pin it bottom-right
+                    // instead (Chef first got bottom-left, then asked for right),
+                    // lifted clear of the help button. It's absolute
                     // against .tlui-layout (position: relative); the columns
                     // between are unpositioned, so they don't capture it.
                     ...(!isMobile && {
                         '& .tlui-style-panel__wrapper': {
                             position: 'absolute',
-                            left: 0,
+                            right: 0,
                             bottom: 48,
                             margin: '8px',
                             maxHeight: 'calc(100% - 64px)',

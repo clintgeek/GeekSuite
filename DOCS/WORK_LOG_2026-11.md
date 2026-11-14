@@ -9,6 +9,8 @@ What shipped, as it landed. Wanted-but-not-done lives in `SUITE_TODO.md`.
   sketch editor's tldraw colour/size panel moved from top-right to bottom-left, above
   the zoom controls. The move is a CSS override against tldraw 2.4.6 class names.
   Checks: 837 tests, harness 234 scenes clean.
+  Follow-up (Chef, after tablet testing): the panel goes bottom-RIGHT, not left — lifted
+  48px clear of the help button. Harness clean.
 - **Backdrop service** (`60678d93`, `3b875e41`; pushed and live 22:58 UTC, first batch
   8 Bing photos — Bing's archive serves 8 a day, and Picsum/LoremFlickr were down).
   Picsum went down (522), and StartGeek's hot-linked wallpaper went with it.
