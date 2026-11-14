@@ -11,6 +11,13 @@ What shipped, as it landed. Wanted-but-not-done lives in `SUITE_TODO.md`.
   Checks: 837 tests, harness 234 scenes clean.
   Follow-up (Chef, after tablet testing): the panel goes bottom-RIGHT, not left — lifted
   48px clear of the help button. Harness clean.
+  Then (2026-11-14): new sketches start on Small (Fine is still in the pen picker), and
+  tldraw's own UI is gone at every size. One floating bar everywhere
+  (`components/editors/DrawingToolbar.jsx`): phones keep Move/Write/Pen/Undo/Fullscreen;
+  from 720px it carries every tool — Select, Highlighter, Eraser, Shapes ▾ (geo shapes,
+  arrow, line, frame), Text, Sticky note, Insert image, Redo, Zoom ▾. Left out: laser,
+  embeds, the rarer geo shapes. Checks: 844 tests (new toolbar tests mutation-checked),
+  harness clean; the tldraw slider waiver is gone with the style panel.
 - **Backdrop service** (`60678d93`, `3b875e41`; pushed and live 22:58 UTC, first batch
   8 Bing photos — Bing's archive serves 8 a day, and Picsum/LoremFlickr were down).
   Picsum went down (522), and StartGeek's hot-linked wallpaper went with it.

@@ -588,12 +588,12 @@ export const scenes = [
     teardown: (page, h) => h.esc(400),
   },
   {
-    // The pen's colour and size on a phone (2026-09-27). tldraw's style panel
-    // is hidden there, so this popup is the only way to change the pen.
+    // The pen's colour and size (2026-09-27, phone; every size since
+    // 2026-11-14). tldraw's style panel is hidden, so this popup is the only
+    // way to change the pen.
     name: '03p-sketch-pen',
     goto: '/notes/new?type=handwritten',
     wait: 2500,
-    viewports: ['phone'],
     async setup(page, h) {
       await h.settle(800);
       await page.getByRole('button', { name: 'Pen colour and size' }).click();
@@ -1710,17 +1710,6 @@ export const scenes = [
 // Known, ticketed violations. Each one should die when the app is fixed —
 // an empty list is the goal, not a permanent parking lot.
 export const waivers = [
-  {
-    // tldraw's own style panel (desktop): its opacity slider thumb has no
-    // accessible name. That's third-party markup inside <Tldraw>; labelling it
-    // from outside would mean patching tldraw's DOM after every render. Scoped
-    // to this rule, this element and the sketch scene only. Drop it when
-    // tldraw labels the thumb.
-    rule: 'aria-input-field-name',
-    match: 'tlui-slider__thumb',
-    scenes: ['03s-sketch-new', '10-editor-sketch', '14b-print-sketch'],
-    reason: 'tldraw 2.4 style-panel slider thumb is unlabelled (third-party UI)',
-  },
   {
     // tldraw's image shape (a photo sketch note's pages, HANDWRITING.md §3)
     // renders <img class="tl-image"> with no alt. 2.4.6 has no alt-text prop

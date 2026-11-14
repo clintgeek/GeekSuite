@@ -1,8 +1,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { CircularProgress, Box, useTheme, useMediaQuery, IconButton, Tooltip, Popover, Typography } from '@mui/material';
+import { CircularProgress, Box, useTheme } from '@mui/material';
 import {
-    Box as TlBox, Tldraw, useEditor, useValue,
-    DefaultColorStyle, DefaultSizeStyle, DefaultColorThemePalette,
+    Box as TlBox, Tldraw, DefaultSizeStyle,
     exportToBlob, getPointerInfo,
 } from '@tldraw/tldraw';
 import { attachPenButton } from '../../utils/penButton';
@@ -18,12 +17,8 @@ const screenBoundsOf = (el) => {
 };
 import '@tldraw/tldraw/tldraw.css';
 import EditorErrorBoundary from './EditorErrorBoundary';
-import GestureOutlinedIcon from '@mui/icons-material/GestureOutlined';
-import PanToolOutlinedIcon from '@mui/icons-material/PanToolOutlined';
-import UndoIcon from '@mui/icons-material/Undo';
-import FullscreenIcon from '@mui/icons-material/Fullscreen';
-import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
-import { graphiteTokens, surfaces } from '../../theme/tokens';
+import { surfaces } from '../../theme/tokens';
+import DrawingToolbar from './DrawingToolbar';
 
 const SAVE_DEBOUNCE_MS = 400;
 
@@ -36,8 +31,10 @@ const TLDRAW_OPTIONS = {
     // Improve touch responsiveness
     maxPointsPerDrawShape: 200,
 };
-// Components to hide on mobile for a cleaner UI
-const MOBILE_HIDDEN_COMPONENTS = {
+// tldraw's own UI is hidden at every size: the sketch uses our DrawingToolbar
+// (./DrawingToolbar.jsx) — the phone's short bar, and on tablet/desktop the
+// same single bar with every tool (Chef, 2026-11-14).
+const HIDDEN_TLDRAW_COMPONENTS = {
     Toolbar: null,           // Hide default toolbar (we have custom)
     StylePanel: null,        // Hide style panel
     NavigationPanel: null,   // Hide navigation/zoom
@@ -47,234 +44,6 @@ const MOBILE_HIDDEN_COMPONENTS = {
     DebugMenu: null,         // Hide debug menu
     SharePanel: null,        // Hide share panel
 };
-const NO_HIDDEN_COMPONENTS = {};
-
-// Pen styles for the phone toolbar. tldraw's own style panel is hidden on
-// phones (it covers the canvas), so the pen's colour and size were unreachable
-// there (Chef, 2026-09-27). White is left out: it's invisible on the page.
-const PEN_COLORS = ['black', 'grey', 'blue', 'light-blue', 'violet', 'light-violet', 'green', 'light-green', 'yellow', 'orange', 'red', 'light-red'];
-// "Fine" is finer than tldraw's smallest size: see utils/finePen.js.
-const PEN_SIZES = [
-    { value: 'fine', label: 'Fine', dot: 3 },
-    { value: 's', label: 'Small', dot: 5 },
-    { value: 'm', label: 'Medium', dot: 8 },
-    { value: 'l', label: 'Large', dot: 11 },
-    { value: 'xl', label: 'Extra large', dot: 15 },
-];
-const colorName = (c) => c.replace('-', ' ');
-
-function PenStylePicker({ editor, fine, onFineChange }) {
-    const theme = useTheme();
-    const palette = DefaultColorThemePalette[theme.palette.mode === 'dark' ? 'darkMode' : 'lightMode'];
-    const color = useValue('pen color', () => editor.getStyleForNextShape(DefaultColorStyle), [editor]);
-    const size = useValue('pen size', () => editor.getStyleForNextShape(DefaultSizeStyle), [editor]);
-    const [anchor, setAnchor] = useState(null);
-    const current = size === 's' && fine ? 'fine' : size;
-    const dot = (PEN_SIZES.find((s) => s.value === current) || PEN_SIZES[0]).dot;
-
-    const chooseSize = (value) => {
-        // Fine is size 's' plus a scale on new strokes; everything else is
-        // tldraw's own size and turns Fine off.
-        onFineChange(value === 'fine');
-        choose(DefaultSizeStyle, value === 'fine' ? 's' : value);
-    };
-
-    const choose = (style, value) => {
-        // Restyle what's selected, and every stroke from now on.
-        editor.setStyleForSelectedShapes(style, value);
-        editor.setStyleForNextShapes(style, value);
-        if (editor.getCurrentToolId() === 'hand') editor.setCurrentTool('draw');
-    };
-
-    const swatch = {
-        minWidth: 44, minHeight: 44, width: 44, height: 44,
-        borderRadius: 2, border: '2px solid transparent',
-    };
-
-    return (
-        <>
-            <Tooltip title="Pen colour and size" placement="top">
-                <IconButton
-                    aria-label="Pen colour and size"
-                    aria-haspopup="dialog"
-                    aria-expanded={anchor ? 'true' : 'false'}
-                    size="small"
-                    onClick={(e) => setAnchor(e.currentTarget)}
-                >
-                    <Box
-                        aria-hidden
-                        sx={{
-                            width: dot + 4, height: dot + 4, borderRadius: '50%',
-                            bgcolor: palette[color]?.solid ?? 'text.primary',
-                            boxShadow: (t) => `0 0 0 1px ${t.palette.divider}`,
-                        }}
-                    />
-                </IconButton>
-            </Tooltip>
-            <Popover
-                open={Boolean(anchor)}
-                anchorEl={anchor}
-                onClose={() => setAnchor(null)}
-                anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-                transformOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-                slotProps={{ paper: { role: 'dialog', 'aria-label': 'Pen colour and size', sx: { p: 3, mb: 2 } } }}
-            >
-                <Typography component="h2" variant="caption" sx={{ display: 'block', mb: 1, color: 'text.secondary' }}>
-                    Size
-                </Typography>
-                <Box role="group" aria-label="Pen size" sx={{ display: 'flex', gap: 1, mb: 3 }}>
-                    {PEN_SIZES.map((s) => (
-                        <IconButton
-                            key={s.value}
-                            aria-label={`Size: ${s.label}`}
-                            aria-pressed={current === s.value ? 'true' : 'false'}
-                            onClick={() => chooseSize(s.value)}
-                            sx={{ ...swatch, borderColor: current === s.value ? 'primary.main' : 'divider' }}
-                        >
-                            <Box aria-hidden sx={{ width: s.dot, height: s.dot, borderRadius: '50%', bgcolor: 'text.primary' }} />
-                        </IconButton>
-                    ))}
-                </Box>
-                <Typography component="h2" variant="caption" sx={{ display: 'block', mb: 1, color: 'text.secondary' }}>
-                    Colour
-                </Typography>
-                <Box role="group" aria-label="Pen colour" sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, 44px)', gap: 1 }}>
-                    {PEN_COLORS.map((c) => (
-                        <IconButton
-                            key={c}
-                            aria-label={`Colour: ${colorName(c)}`}
-                            aria-pressed={color === c ? 'true' : 'false'}
-                            onClick={() => choose(DefaultColorStyle, c)}
-                            sx={{ ...swatch, borderColor: color === c ? 'primary.main' : 'transparent' }}
-                        >
-                            <Box aria-hidden sx={{ width: 24, height: 24, borderRadius: '50%', bgcolor: palette[c]?.solid }} />
-                        </IconButton>
-                    ))}
-                </Box>
-            </Popover>
-        </>
-    );
-}
-
-// Minimal mobile toolbar - Move, Write, Pen style, Undo, Fullscreen
-function MobileDrawingToolbar({ containerRef, onFullscreenChange, fine, onFineChange }) {
-    const editor = useEditor();
-    const hl = graphiteTokens(useTheme());
-    const currentTool = useValue('current tool', () => editor.getCurrentToolId(), [editor]);
-    const canUndo = useValue('can undo', () => editor.getCanUndo(), [editor]);
-    const [isFullscreen, setIsFullscreen] = useState(false);
-
-    useEffect(() => {
-        const handleFullscreenChange = () => {
-            const isNowFullscreen = !!document.fullscreenElement;
-            setIsFullscreen(isNowFullscreen);
-            if (onFullscreenChange) onFullscreenChange(isNowFullscreen);
-        };
-        document.addEventListener('fullscreenchange', handleFullscreenChange);
-        return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
-    }, [onFullscreenChange]);
-
-    const toggleFullscreen = async () => {
-        try {
-            if (!document.fullscreenElement && containerRef?.current) {
-                await containerRef.current.requestFullscreen();
-            } else if (document.exitFullscreen) {
-                await document.exitFullscreen();
-            }
-        } catch (err) {
-            console.warn('Fullscreen not supported:', err);
-        }
-    };
-
-    return (
-        <Box
-            sx={{
-                position: 'absolute',
-                bottom: 16,
-                left: '50%',
-                transform: 'translateX(-50%)',
-                display: 'flex',
-                alignItems: 'center',
-                gap: 0.5,
-                bgcolor: 'background.paper',
-                borderRadius: 3,
-                boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
-                px: 1.5,
-                py: 0.75,
-                zIndex: 100,
-                border: '1px solid',
-                borderColor: 'divider',
-            }}
-        >
-            {/* Move */}
-            <Tooltip title="Move" placement="top">
-                <IconButton
-                    aria-label="Move"
-                    size="small"
-                    onClick={() => editor.setCurrentTool('hand')}
-                    sx={{
-                        // The active tool is highlighted (Graphite): ink on highlighter.
-                        bgcolor: currentTool === 'hand' ? hl.hl : 'transparent',
-                        color: currentTool === 'hand' ? hl.onHl : 'text.secondary',
-                        '&:hover': {
-                            bgcolor: currentTool === 'hand' ? hl.hl : 'action.hover',
-                        },
-                    }}
-                >
-                    <PanToolOutlinedIcon fontSize="small" />
-                </IconButton>
-            </Tooltip>
-
-            {/* Write */}
-            <Tooltip title="Write" placement="top">
-                <IconButton
-                    aria-label="Write"
-                    size="small"
-                    onClick={() => editor.setCurrentTool('draw')}
-                    sx={{
-                        // The active tool is highlighted (Graphite): ink on highlighter.
-                        bgcolor: currentTool === 'draw' ? hl.hl : 'transparent',
-                        color: currentTool === 'draw' ? hl.onHl : 'text.secondary',
-                        '&:hover': {
-                            bgcolor: currentTool === 'draw' ? hl.hl : 'action.hover',
-                        },
-                    }}
-                >
-                    <GestureOutlinedIcon fontSize="small" />
-                </IconButton>
-            </Tooltip>
-
-            {/* Pen colour and size */}
-            <PenStylePicker editor={editor} fine={fine} onFineChange={onFineChange} />
-
-            <Box sx={{ width: 1, height: 24, bgcolor: 'divider', mx: 0.5 }} />
-
-            {/* Undo */}
-            <IconButton
-                aria-label="Undo"
-                size="small"
-                onClick={() => editor.undo()}
-                disabled={!canUndo}
-                sx={{ opacity: canUndo ? 1 : 0.3 }}
-            >
-                <UndoIcon fontSize="small" />
-            </IconButton>
-
-            <Box sx={{ width: 1, height: 24, bgcolor: 'divider', mx: 0.5 }} />
-
-            {/* Fullscreen */}
-            <Tooltip title={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'} placement="top">
-                <IconButton
-                    aria-label={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-                    size="small"
-                    onClick={toggleFullscreen}
-                >
-                    {isFullscreen ? <FullscreenExitIcon fontSize="small" /> : <FullscreenIcon fontSize="small" />}
-                </IconButton>
-            </Tooltip>
-        </Box>
-    );
-}
 
 /**
  * A photo sketch note (DOCS/HANDWRITING.md §3) opens with its first page in
@@ -316,8 +85,10 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
     const [isLoading, setIsLoading] = useState(true);
     // The Fine pen: a ref the side effect reads live, and state for the
     // picker. Editor state only — it never goes into the saved document.
-    const fineRef = useRef(true);
-    const [penFine, setPenFineState] = useState(true);
+    // Off by default: new sketches start on Small (Chef, 2026-11-14); Fine is
+    // one choice away in the pen picker.
+    const fineRef = useRef(false);
+    const [penFine, setPenFineState] = useState(false);
     const setPenFine = useCallback((value) => {
         fineRef.current = value;
         setPenFineState(value);
@@ -325,7 +96,6 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
     const fineHandlerOffRef = useRef(null);
     const photoFitPendingRef = useRef(false);
     const theme = useTheme();
-    const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
     const loadSnapshot = useCallback((serialized, editor) => {
         if (!serialized) return;
@@ -365,9 +135,10 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
 
         // Set initial tool to draw for better mobile experience
         editor.setCurrentTool('draw');
-        // Handwriting wants a fine pen: tldraw's default (m) wrote fat lines,
-        // and even 's' was too thick (Chef, 2026-09-27). New sketches start
-        // on Fine: size 's' plus FINE_SCALE on each new stroke.
+        // Handwriting wants a thin pen: tldraw's default (m) wrote fat lines
+        // (Chef, 2026-09-27). New sketches start on Small ('s'); Fine (size
+        // 's' plus FINE_SCALE on each new stroke) was the default until
+        // 2026-11-14.
         editor.setStyleForNextShapes(DefaultSizeStyle, 's');
         // The same no-stacking rule as the store listener below: a remount
         // drops the previous editor's handler before registering this one.
@@ -495,8 +266,6 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
     // eslint-disable-next-line react-hooks/exhaustive-deps -- unmount only
     }, []);
 
-    const hiddenMobileComponents = isMobile ? MOBILE_HIDDEN_COMPONENTS : NO_HIDDEN_COMPONENTS;
-
     return (
         <EditorErrorBoundary title="Drawing canvas failed to load" message="The handwritten editor encountered an error.">
             {/* Container uses absolute positioning within the flex layout */}
@@ -510,30 +279,14 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
                         position: 'absolute !important',
                         inset: '0 !important',
                     },
-                    // Desktop: tldraw parks its colour/size panel top-right,
-                    // over the writing (Chef, 2026-11-13). Pin it bottom-right
-                    // instead (Chef first got bottom-left, then asked for right),
-                    // lifted clear of the help button. It's absolute
-                    // against .tlui-layout (position: relative); the columns
-                    // between are unpositioned, so they don't capture it.
-                    ...(!isMobile && {
-                        '& .tlui-style-panel__wrapper': {
-                            position: 'absolute',
-                            right: 0,
-                            bottom: 48,
-                            margin: '8px',
-                            maxHeight: 'calc(100% - 64px)',
-                        },
-                    }),
-                    // Hide tldraw's action bar on mobile (it overlaps our toolbar)
-                    ...(isMobile && {
-                        '& .tlui-layout__bottom': {
-                            display: 'none',
-                        },
-                        '& .tlui-layout__top': {
-                            display: 'none',
-                        },
-                    }),
+                    // tldraw's own top and bottom bars are hidden at every
+                    // size; DrawingToolbar replaces them.
+                    '& .tlui-layout__bottom': {
+                        display: 'none',
+                    },
+                    '& .tlui-layout__top': {
+                        display: 'none',
+                    },
                 }}
             >
                 {isLoading && (
@@ -554,15 +307,15 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
                 <Tldraw
                     onMount={handleMount}
                     readOnly={readOnly}
-                    components={hiddenMobileComponents}
+                    components={HIDDEN_TLDRAW_COMPONENTS}
                     options={TLDRAW_OPTIONS}
                 >
-                {/* Custom mobile toolbar. It must render INSIDE <Tldraw>: it calls
+                {/* The drawing toolbar. It must render INSIDE <Tldraw>: it calls
                     useEditor(), which only resolves within tldraw's context. As a
                     sibling it threw on every phone and the error boundary took
                     the whole sketch editor down. */}
-                {isMobile && !readOnly && !isLoading && (
-                    <MobileDrawingToolbar
+                {!readOnly && !isLoading && (
+                    <DrawingToolbar
                         containerRef={containerRef}
                         fine={penFine}
                         onFineChange={setPenFine}

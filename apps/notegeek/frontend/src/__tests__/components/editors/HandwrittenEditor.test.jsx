@@ -28,7 +28,7 @@ const AllProviders = ({ children }) => (
 // that reaches it "opens" tldraw's (Radix) context menu. getPointerInfo is
 // tldraw's, field for field. So the S Pen button is tested against the
 // handlers it has to get around, not against a mock that would accept anything.
-const tl = vi.hoisted(() => ({ renders: [], editors: [], contextMenus: [], longPresses: [], exportToBlob: null }));
+const tl = vi.hoisted(() => ({ renders: [], editors: [], contextMenus: [], longPresses: [], exportToBlob: null, insertMedia: null }));
 
 vi.mock('@tldraw/tldraw', async () => {
     const React = await import('react');
@@ -41,6 +41,7 @@ vi.mock('@tldraw/tldraw', async () => {
 
     const DefaultColorStyle = { id: 'tldraw:color' };
     const DefaultSizeStyle = { id: 'tldraw:size' };
+    const GeoShapeGeoStyle = { id: 'tldraw:geo', values: new Set(['rectangle', 'ellipse', 'triangle', 'diamond', 'star', 'cloud', 'heart']) };
     const swatches = Object.fromEntries(['black', 'grey', 'blue', 'light-blue', 'violet', 'light-violet', 'green', 'light-green', 'yellow', 'orange', 'red', 'light-red', 'white'].map((c) => [c, { solid: '#123456' }]));
     const DefaultColorThemePalette = { lightMode: swatches, darkMode: swatches };
 
@@ -54,7 +55,7 @@ vi.mock('@tldraw/tldraw', async () => {
     };
 
     const makeEditor = () => {
-        const styles = new Map([[DefaultColorStyle, 'black'], [DefaultSizeStyle, 'm']]);
+        const styles = new Map([[DefaultColorStyle, 'black'], [DefaultSizeStyle, 'm'], [GeoShapeGeoStyle, 'rectangle']]);
         let tool = 'select';
         const editor = {
             // tldraw's tool state chart: `draw` has children idle/drawing, and
@@ -87,6 +88,13 @@ vi.mock('@tldraw/tldraw', async () => {
             listeners: [],
             getCurrentToolId: vi.fn(() => tool),
             getCanUndo: vi.fn(() => false),
+            getCanRedo: vi.fn(() => true),
+            redo: vi.fn(),
+            zoomIn: vi.fn(),
+            zoomOut: vi.fn(),
+            resetZoom: vi.fn(),
+            zoomToFit: vi.fn(),
+            run: vi.fn((fn) => fn()),
             setCurrentTool: vi.fn((id) => { tool = id; return editor; }),
             undo: vi.fn(),
             updateViewportScreenBounds: vi.fn((b) => {
@@ -128,12 +136,15 @@ vi.mock('@tldraw/tldraw', async () => {
     function Tldraw({ onMount, options, components, children }) {
         tl.renders.push({ options, components });
         // Like tldraw: the editor is rebuilt, and onMount runs again, whenever
-        // options or components change identity.
+        // options or components change identity. `tl.rebuild()` forces one,
+        // for the no-stacking tests (the layout no longer swaps components).
+        const [generation, setGeneration] = React.useState(0);
+        tl.rebuild = () => setGeneration((g) => g + 1);
         const editor = React.useMemo(() => {
             const e = makeEditor();
             tl.editors.push(e);
             return e;
-        }, [options, components]);
+        }, [options, components, generation]); // eslint-disable-line react-hooks/exhaustive-deps
         React.useEffect(() => { onMount?.(editor); }, [editor]); // eslint-disable-line react-hooks/exhaustive-deps
         // tldraw's canvas handlers, as in useCanvasEvents.ts.
         const onPointerDown = (e) => {
@@ -175,6 +186,23 @@ vi.mock('@tldraw/tldraw', async () => {
         return editor;
     };
 
+    // tldraw's useTools(): tool items keyed by id, each with onSelect(source).
+    // Like tldraw it needs the UI context, which <Tldraw>'s children are in.
+    tl.insertMedia = vi.fn();
+    const useTools = () => {
+        const editor = useEditor();
+        const item = (id, run) => ({ id, onSelect: vi.fn(() => (run ? run() : editor.setCurrentTool(id))) });
+        const ids = ['select', 'hand', 'eraser', 'draw', 'arrow', 'line', 'frame', 'text', 'note', 'laser', 'embed', 'highlight'];
+        return Object.fromEntries([
+            ...ids.map((id) => [id, item(id)]),
+            ['asset', item('asset', () => tl.insertMedia())],
+            ...[...GeoShapeGeoStyle.values].map((id) => [id, item(id, () => editor.run(() => {
+                editor.setStyleForNextShapes(GeoShapeGeoStyle, id);
+                editor.setCurrentTool('geo');
+            }))]),
+        ]);
+    };
+
     // tldraw's exportToBlob: ({ editor, ids, format, opts }) => Promise<Blob>.
     tl.exportToBlob = vi.fn(async ({ ids }) => {
         if (!ids?.length) throw new Error('Could not construct SVG.');
@@ -182,7 +210,7 @@ vi.mock('@tldraw/tldraw', async () => {
     });
     const exportToBlob = (...args) => tl.exportToBlob(...args);
 
-    return { Tldraw, useEditor, useValue: (_name, fn) => fn(), Box, DefaultColorStyle, DefaultSizeStyle, DefaultColorThemePalette, exportToBlob, getPointerInfo };
+    return { Tldraw, useEditor, useTools, useValue: (_name, fn) => fn(), Box, DefaultColorStyle, DefaultSizeStyle, GeoShapeGeoStyle, DefaultColorThemePalette, exportToBlob, getPointerInfo };
 });
 
 const observers = [];
@@ -195,8 +223,9 @@ global.ResizeObserver = class ResizeObserver {
 
 const setViewport = (phone) => {
     window.matchMedia = vi.fn().mockImplementation((query) => ({
-        // MUI's down('md') is "(max-width:899.95px)": phones match it.
-        matches: phone && /max-width/.test(query),
+        // A phone matches max-width queries; a tablet or desktop matches the
+        // toolbar's "(min-width: 720px)".
+        matches: phone ? /max-width/.test(query) : /min-width/.test(query),
         media: query,
         onchange: null,
         addListener: vi.fn(),
@@ -229,12 +258,88 @@ describe('HandwrittenEditor', () => {
         expect(screen.queryByText(/failed to load/i)).not.toBeInTheDocument();
     });
 
-    it('renders the phone drawing toolbar inside <Tldraw> (it calls useEditor)', async () => {
-        setViewport(true);
+    it.each([['a phone', true], ['a tablet or desktop', false]])('on %s, renders our drawing toolbar inside <Tldraw> (it calls useEditor) and hides tldraw\'s own', async (_, phone) => {
+        // One toolbar at every size since 2026-11-14 (Chef preferred the phone's).
+        setViewport(phone);
         render(<HandwrittenEditor content="" setContent={setContent} />, { wrapper: AllProviders });
         expect(await screen.findByRole('button', { name: 'Write' })).toBeInTheDocument();
         expect(screen.getByRole('button', { name: 'Undo' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Pen colour and size' })).toBeInTheDocument();
+        expect(screen.getByRole('button', { name: 'Fullscreen' })).toBeInTheDocument();
         expect(screen.queryByText(/failed to load/i)).not.toBeInTheDocument();
+        const { components } = tl.renders.at(-1);
+        expect(components).toMatchObject({ Toolbar: null, StylePanel: null, NavigationPanel: null });
+    });
+
+    describe('the toolbar on a tablet or desktop: every tool, one bar', () => {
+        const names = (bar) => within(bar).getAllByRole('button').map((b) => b.getAttribute('aria-label'));
+
+        it('carries every tool; a phone keeps the short bar', async () => {
+            render(<HandwrittenEditor content="" setContent={setContent} />, { wrapper: AllProviders });
+            const bars = await screen.findAllByRole('toolbar', { name: 'Drawing tools' });
+            expect(bars).toHaveLength(1);
+            await screen.findByRole('button', { name: 'Select' });
+            expect(names(bars[0])).toEqual([
+                'Select', 'Move', 'Write', 'Highlighter', 'Eraser', 'Shapes', 'Text', 'Sticky note', 'Insert image',
+                'Pen colour and size', 'Undo', 'Redo', 'Zoom, 100%', 'Fullscreen',
+            ]);
+        });
+
+        it('on a phone, only Move, Write, Pen, Undo and Fullscreen', async () => {
+            setViewport(true);
+            render(<HandwrittenEditor content="" setContent={setContent} />, { wrapper: AllProviders });
+            const bar = await screen.findByRole('toolbar', { name: 'Drawing tools' });
+            expect(names(bar)).toEqual(['Move', 'Write', 'Pen colour and size', 'Undo', 'Fullscreen']);
+        });
+
+        it("tools go through tldraw's own tool actions", async () => {
+            const user = userEvent.setup();
+            render(<HandwrittenEditor content="" setContent={setContent} />, { wrapper: AllProviders });
+            const editor = tl.editors.at(-1);
+            await user.click(await screen.findByRole('button', { name: 'Eraser' }));
+            expect(editor.setCurrentTool).toHaveBeenLastCalledWith('eraser');
+            await user.click(screen.getByRole('button', { name: 'Highlighter' }));
+            expect(editor.setCurrentTool).toHaveBeenLastCalledWith('highlight');
+            await user.click(screen.getByRole('button', { name: 'Insert image' }));
+            expect(tl.insertMedia).toHaveBeenCalledTimes(1);
+            await user.click(screen.getByRole('button', { name: 'Redo' }));
+            expect(editor.redo).toHaveBeenCalledTimes(1);
+        });
+
+        it('Shapes opens the shape family; picking one sets the geo style and closes the menu', async () => {
+            const user = userEvent.setup();
+            render(<HandwrittenEditor content="" setContent={setContent} />, { wrapper: AllProviders });
+            const editor = tl.editors.at(-1);
+            await user.click(await screen.findByRole('button', { name: 'Shapes' }));
+            const menu = await screen.findByRole('dialog', { name: 'Shapes' });
+            await user.click(within(menu).getByRole('button', { name: 'Ellipse' }));
+            expect(editor.setStyleForNextShapes).toHaveBeenLastCalledWith(expect.objectContaining({ id: 'tldraw:geo' }), 'ellipse');
+            expect(editor.setCurrentTool).toHaveBeenLastCalledWith('geo');
+            await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Shapes' })).not.toBeInTheDocument());
+            await user.click(screen.getByRole('button', { name: 'Shapes' }));
+            await user.click(within(await screen.findByRole('dialog', { name: 'Shapes' })).getByRole('button', { name: 'Arrow' }));
+            expect(editor.setCurrentTool).toHaveBeenLastCalledWith('arrow');
+        });
+
+        it('Zoom opens zoom in, out, 100% and fit', async () => {
+            const user = userEvent.setup();
+            render(<HandwrittenEditor content="" setContent={setContent} />, { wrapper: AllProviders });
+            const editor = tl.editors.at(-1);
+            await user.click(await screen.findByRole('button', { name: 'Zoom, 100%' }));
+            const menu = await screen.findByRole('dialog', { name: 'Zoom, 100%' });
+            await user.click(within(menu).getByRole('button', { name: 'Zoom in' }));
+            await user.click(within(menu).getByRole('button', { name: 'Zoom out' }));
+            await user.click(within(menu).getByRole('button', { name: 'Zoom to fit' }));
+            expect(editor.zoomIn).toHaveBeenCalledTimes(1);
+            expect(editor.zoomOut).toHaveBeenCalledTimes(1);
+            expect(editor.zoomToFit).toHaveBeenCalledTimes(1);
+        });
+    });
+
+    it('a read-only sketch has no drawing toolbar', async () => {
+        render(<HandwrittenEditor content="" setContent={setContent} readOnly />, { wrapper: AllProviders });
+        await screen.findByTestId('tldraw-mock');
+        expect(screen.queryByRole('button', { name: 'Write' })).not.toBeInTheDocument();
     });
 
     it('keeps <Tldraw> options and components stable across re-renders, so the editor is built once', async () => {
@@ -249,14 +354,11 @@ describe('HandwrittenEditor', () => {
     });
 
     it('drops the previous store listener when onMount runs again', async () => {
-        // Switching between phone and desktop layouts legitimately swaps the
-        // components object, which rebuilds tldraw's editor.
-        const { rerender } = render(<HandwrittenEditor content="" setContent={setContent} />, { wrapper: AllProviders });
+        // tldraw can rebuild its editor (a new options/components identity),
+        // and then runs onMount again on the new one.
+        render(<HandwrittenEditor content="" setContent={setContent} />, { wrapper: AllProviders });
         await screen.findByTestId('tldraw-mock');
-        setViewport(true);
-        await act(async () => { window.dispatchEvent(new Event('resize')); });
-        rerender(<HandwrittenEditor content="" setContent={setContent} />);
-        await screen.findByRole('button', { name: 'Write' });
+        await act(async () => { tl.rebuild(); });
         expect(tl.editors.length).toBeGreaterThanOrEqual(2);
         expect(tl.editors[0].unsubscribes[0]).toHaveBeenCalledTimes(1);
         const live = tl.editors.flatMap((e) => e.unsubscribes).filter((off) => off.mock.calls.length === 0);
@@ -581,18 +683,30 @@ describe('HandwrittenEditor', () => {
         };
         const drawing = (editor) => { editor.setCurrentTool('draw'); editor.toolState = 'drawing'; };
 
-        it('is the default: a new stroke gets scale 0.5', async () => {
+        // Fine is a choice in the pen picker; new sketches start on Small
+        // (Chef, 2026-11-14).
+        const chooseFine = async (user) => {
+            await user.click(await screen.findByRole('button', { name: 'Pen colour and size' }));
+            await user.click(screen.getByRole('button', { name: 'Size: Fine' }));
+        };
+
+        it('is NOT the default: a new sketch is on Small, and a new stroke keeps scale 1', async () => {
+            const user = userEvent.setup();
             render(<HandwrittenEditor content="" setContent={setContent} />, { wrapper: AllProviders });
             await screen.findByTestId('tldraw-mock');
             const editor = tl.editors.at(-1);
             expect(editor.setStyleForNextShapes).toHaveBeenCalledWith(DefaultSizeStyle, 's');
             drawing(editor);
-            expect(liveHandler(editor)(newStroke(), 'user').props.scale).toBe(0.5);
+            expect(liveHandler(editor)(newStroke(), 'user').props.scale).toBe(1);
+            await user.click(await screen.findByRole('button', { name: 'Pen colour and size' }));
+            expect(screen.getByRole('button', { name: 'Size: Small' })).toHaveAttribute('aria-pressed', 'true');
+            expect(screen.getByRole('button', { name: 'Size: Fine' })).toHaveAttribute('aria-pressed', 'false');
         });
 
         it('sets the scale rather than multiplying it, so a long stroke is not halved again when tldraw splits it', async () => {
+            const user = userEvent.setup();
             render(<HandwrittenEditor content="" setContent={setContent} />, { wrapper: AllProviders });
-            await screen.findByTestId('tldraw-mock');
+            await chooseFine(user);
             const editor = tl.editors.at(-1);
             drawing(editor);
             // tldraw's continuation shape copies the previous (Fine) scale.
@@ -633,19 +747,21 @@ describe('HandwrittenEditor', () => {
             expect(handler(remote, 'remote')).toBe(remote);
         });
 
-        it('on a phone: Fine is listed first and pressed; Small brings scale 1 back, Fine returns it', async () => {
+        it('Fine is listed first; choosing it halves new strokes, Small brings scale 1 back', async () => {
             setViewport(true);
             const user = userEvent.setup();
             render(<HandwrittenEditor content="" setContent={setContent} />, { wrapper: AllProviders });
             await user.click(await screen.findByRole('button', { name: 'Pen colour and size' }));
             const sizes = within(screen.getByRole('group', { name: 'Pen size' })).getAllByRole('button');
             expect(sizes.map((b) => b.getAttribute('aria-label'))).toEqual(['Size: Fine', 'Size: Small', 'Size: Medium', 'Size: Large', 'Size: Extra large']);
-            expect(sizes[0]).toHaveAttribute('aria-pressed', 'true');
-            expect(sizes[1]).toHaveAttribute('aria-pressed', 'false');
 
             const editor = tl.editors.at(-1);
             const handler = liveHandler(editor);
-            await user.click(sizes[1]);
+            await user.click(sizes[0]);
+            expect(screen.getByRole('button', { name: 'Size: Fine' })).toHaveAttribute('aria-pressed', 'true');
+            drawing(editor);
+            expect(handler(newStroke(), 'user').props.scale).toBe(0.5);
+            await user.click(screen.getByRole('button', { name: 'Size: Small' }));
             expect(editor.setStyleForNextShapes).toHaveBeenLastCalledWith(DefaultSizeStyle, 's');
             expect(screen.getByRole('button', { name: 'Size: Small' })).toHaveAttribute('aria-pressed', 'true');
             drawing(editor);
@@ -662,20 +778,17 @@ describe('HandwrittenEditor', () => {
             render(<HandwrittenEditor content="" setContent={setContent} />, { wrapper: AllProviders });
             const pen = await screen.findByRole('button', { name: 'Pen colour and size' });
             const dotWidth = () => parseFloat(getComputedStyle(pen.querySelector('[aria-hidden]')).width);
-            const fine = dotWidth();
+            const small = dotWidth();
             await user.click(pen);
-            await user.click(screen.getByRole('button', { name: 'Size: Small' }));
-            expect(fine).toBeGreaterThan(0);
-            expect(dotWidth()).toBeGreaterThan(fine);
+            await user.click(screen.getByRole('button', { name: 'Size: Fine' }));
+            expect(dotWidth()).toBeGreaterThan(0);
+            expect(dotWidth()).toBeLessThan(small);
         });
 
         it('does not stack handlers when tldraw rebuilds its editor', async () => {
-            const { rerender } = render(<HandwrittenEditor content="" setContent={setContent} />, { wrapper: AllProviders });
+            render(<HandwrittenEditor content="" setContent={setContent} />, { wrapper: AllProviders });
             await screen.findByTestId('tldraw-mock');
-            setViewport(true);
-            await act(async () => { window.dispatchEvent(new Event('resize')); });
-            rerender(<HandwrittenEditor content="" setContent={setContent} />);
-            await screen.findByRole('button', { name: 'Write' });
+            await act(async () => { tl.rebuild(); });
             expect(tl.editors.length).toBeGreaterThanOrEqual(2);
             expect(tl.editors[0].beforeCreateOffs[0]).toHaveBeenCalledTimes(1);
             const live = tl.editors.flatMap((e) => e.beforeCreateOffs).filter((off) => off.mock.calls.length === 0);
