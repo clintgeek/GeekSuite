@@ -54,6 +54,11 @@ export default function TranscribeDialog({
     onRetry,
     onCompose,
     onKeepPlain,
+    // AUTO_TRANSCRIBE_SPEC.md §5: the sketch was already read, for exactly this
+    // content. `reused` is a short "where it came from" line; Transcribe again
+    // is the only way to spend another request.
+    reused = null,
+    onTranscribeAgain = null,
 }) {
     const theme = useTheme();
     const phone = useMediaQuery(theme.breakpoints.down('sm'));
@@ -91,6 +96,18 @@ export default function TranscribeDialog({
                     </Typography>
                     {reviewing && model ? (
                         <Chip size="small" variant="outlined" label={model} sx={mono} />
+                    ) : null}
+                    {reviewing && reused ? (
+                        <>
+                            <Typography variant="caption" component="p" data-testid="transcript-reused" sx={{ ...mono, color: 'text.secondary' }}>
+                                {reused}
+                            </Typography>
+                            {onTranscribeAgain ? (
+                                <Button size="small" onClick={onTranscribeAgain} disabled={saving} sx={button}>
+                                    Transcribe again
+                                </Button>
+                            ) : null}
+                        </>
                     ) : null}
                 </Box>
             </DialogTitle>

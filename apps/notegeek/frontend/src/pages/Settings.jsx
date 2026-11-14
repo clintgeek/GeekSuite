@@ -23,6 +23,7 @@ import InfoIcon from '@mui/icons-material/InfoOutlined';
 import AccountIcon from '@mui/icons-material/PersonOutlined';
 import FontSizeIcon from '@mui/icons-material/TextFields';
 import SuggestIcon from '@mui/icons-material/AutoAwesomeOutlined';
+import SketchIcon from '@mui/icons-material/GestureOutlined';
 import { useAppPreferences, useUser } from '@geeksuite/user';
 import useAuthStore from '../store/authStore';
 import { useThemeMode } from '../theme/ThemeModeProvider';
@@ -109,6 +110,14 @@ function Settings() {
 
     const handleFontSizeChange = async (_event, newValue) => {
         await updateAppPreferences({ editorFontSize: newValue });
+    };
+
+    // Automatic sketch transcription (DOCS/AUTO_TRANSCRIBE_SPEC.md): ON unless
+    // switched off (Chef, 2026-11-14). The gateway reads the same flag before
+    // it sends a page anywhere. Convert works either way.
+    const autoTranscribe = appPrefs?.autoTranscribeSketches !== false;
+    const handleAutoTranscribeToggle = async (event) => {
+        await updateAppPreferences({ autoTranscribeSketches: event.target.checked });
     };
 
     const handleSuggestToggle = async (event) => {
@@ -205,6 +214,34 @@ function Settings() {
                             checked={suggestOnSave}
                             onChange={handleSuggestToggle}
                             inputProps={{ 'aria-label': 'Suggest tags and links' }}
+                            sx={{
+                                '& .MuiSwitch-switchBase.Mui-checked': {
+                                    color: 'primary.main',
+                                },
+                                '& .MuiSwitch-switchBase.Mui-checked + .MuiSwitch-track': {
+                                    backgroundColor: 'primary.main',
+                                },
+                            }}
+                        />
+                    }
+                    divider={false}
+                />
+            </SettingsSection>
+
+            {/* Sketches */}
+            <SettingsSection title="Sketches">
+                <SettingsRow
+                    icon={<SketchIcon sx={{ fontSize: 20, color: 'text.secondary' }} />}
+                    primary="Make sketches searchable automatically"
+                    secondary={autoTranscribe
+                        ? 'On — about 90 seconds after you stop writing, the page is sent to OpenRouter to read the handwriting (up to 30 a day). Your drawing is never changed.'
+                        : 'Off — sketches are only read when you use Convert handwriting to text'}
+                    action={
+                        <Switch
+                            edge="end"
+                            checked={autoTranscribe}
+                            onChange={handleAutoTranscribeToggle}
+                            inputProps={{ 'aria-label': 'Make sketches searchable automatically' }}
                             sx={{
                                 '& .MuiSwitch-switchBase.Mui-checked': {
                                     color: 'primary.main',

@@ -346,6 +346,20 @@ describe('HandwrittenEditor', () => {
         });
     });
 
+    it('reports ink edits to automatic transcription — strokes only, never the camera or a load', async () => {
+        const onInkEdit = vi.fn();
+        render(<HandwrittenEditor content="" setContent={setContent} onInkEdit={onInkEdit} />, { wrapper: AllProviders });
+        await screen.findByTestId('tldraw-mock');
+        const editor = tl.editors.at(-1);
+        const listener = editor.listeners.at(-1);
+        act(() => listener({ source: 'user', changes: { added: {}, updated: { 'camera:page:page': [{}, {}] }, removed: {} } }));
+        expect(onInkEdit).not.toHaveBeenCalled();
+        act(() => listener({ source: 'user', changes: { added: { 'shape:a': {} }, updated: {}, removed: {} } }));
+        expect(onInkEdit).toHaveBeenCalledTimes(1);
+        // Saving still happens either way: the same listener serialises the store.
+        expect(editor.store.getSnapshot).toHaveBeenCalled();
+    });
+
     describe('paper', () => {
         afterEach(() => localStorage.removeItem('notegeek:sketchPaper'));
 

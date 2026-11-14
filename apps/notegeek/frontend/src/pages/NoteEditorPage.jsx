@@ -6,7 +6,9 @@ import { Box, CircularProgress, Typography, Button } from '@mui/material';
 import BackIcon from '@mui/icons-material/ArrowBack';
 import { useQuery, useMutation } from '@apollo/client';
 import { GET_NOTE_BY_ID } from '../graphql/queries';
-import { CREATE_NOTE, UPDATE_NOTE, COMPOSE_NOTE, TRANSCRIBE_SKETCH } from '../graphql/mutations';
+import { CREATE_NOTE, UPDATE_NOTE, COMPOSE_NOTE, TRANSCRIBE_SKETCH, SAVE_SKETCH_TRANSCRIPT_EDIT } from '../graphql/mutations';
+import { useAutoTranscribe } from '../hooks/useAutoTranscribe';
+import TranscriptStatus from '../components/notes/TranscriptStatus';
 import ComposeDialog from '../components/editors/ComposeDialog';
 import TranscribeDialog from '../components/editors/TranscribeDialog';
 import FoldInSheet from '../components/foldin/FoldInSheet';
@@ -96,6 +98,10 @@ function NoteEditorPage() {
   // string: the old string reached only a button that compared it against
   // 'Saved', so every error message it was ever set to rendered nowhere.
   const [isSaving, setIsSaving] = useState(false);
+  const isSavingRef = useRef(false);
+  isSavingRef.current = isSaving;
+  // Set where readOnlyMeta is computed (below); read by automatic transcription.
+  const readOnlyMetaRef = useRef(false);
   const [saveError, setSaveError] = useState(null);
   const [saveEmpty, setSaveEmpty] = useState(false);
   const [lastSavedAt, setLastSavedAt] = useState(null);
@@ -419,8 +425,27 @@ function NoteEditorPage() {
   const sketchApiRef = useRef(null);
   const transcribeRunRef = useRef(0);
   const [transcribeSketchMutation] = useMutation(TRANSCRIBE_SKETCH);
+  const [saveTranscriptEdit] = useMutation(SAVE_SKETCH_TRANSCRIPT_EDIT);
   const [transcribe, setTranscribe] = useState(null);
   const canTranscribe = isHandwritten && sketchHasShapes(content);
+
+  // ── Automatic transcription (DOCS/AUTO_TRANSCRIBE_SPEC.md) ─────────────
+  // The open sketch reads itself ~90 s after the last pen stroke. Autosave
+  // knows nothing about it: only ink edits (onInkEdit) start the debounce,
+  // and a pending save just makes it wait.
+  const autoTranscribeOn = appPrefs?.autoTranscribeSketches !== false;
+  const exportSketchPage = useCallback(async () => {
+    const api = sketchApiRef.current;
+    if (!api || !api.hasShapes?.()) return null;
+    return await api.exportPng();
+  }, []);
+  const { view: transcriptView, setView: setTranscriptView, onInkEdit } = useAutoTranscribe({
+    noteId: isHandwritten ? savedNoteId : null,
+    enabled: autoTranscribeOn,
+    active: isHandwritten && !readOnlyMetaRef.current,
+    exportPage: exportSketchPage,
+    isBusy: () => dirtyRef.current || isSavingRef.current,
+  });
 
   const revokeImage = (url) => {
     if (url && typeof URL.revokeObjectURL === 'function') URL.revokeObjectURL(url);
@@ -438,7 +463,23 @@ function NoteEditorPage() {
     return saveErrorMessage(err);
   };
 
-  const handleTranscribe = async () => {
+  /**
+   * The writer corrected the reading: keep the corrections as the sketch's
+   * transcript (searchable, and never overwritten by automatic runs).
+   * Best effort — Convert's own result never waits on it failing.
+   */
+  const keepTranscriptCorrections = async (t) => {
+    const noteId = savedNoteIdRef.current;
+    if (!noteId || !t?.text?.trim() || t.text === t.original) return;
+    try {
+      const { data } = await saveTranscriptEdit({ variables: { noteId, text: t.text, forHash: t.forHash || undefined } });
+      if (data?.saveSketchTranscriptEdit) setTranscriptView(data.saveSketchTranscriptEdit);
+    } catch {
+      // The new note is what the writer asked for; this is a bonus.
+    }
+  };
+
+  const handleTranscribe = async ({ forceRead = false } = {}) => {
     const run = ++transcribeRunRef.current;
     const stale = () => run !== transcribeRunRef.current;
     // The new note links back to this sketch, so it has to exist on the
@@ -447,7 +488,7 @@ function NoteEditorPage() {
 
     setTranscribe((t) => {
       revokeImage(t?.imageUrl);
-      return { open: true, stage: 'working', step: 'export', text: '', error: null, model: null, imageUrl: null, saving: false };
+      return { open: true, stage: 'working', step: 'export', text: '', original: '', forHash: null, reused: null, error: null, model: null, imageUrl: null, saving: false };
     });
 
     let exported;
@@ -463,11 +504,28 @@ function NoteEditorPage() {
     if (stale()) return;
 
     const imageUrl = typeof URL.createObjectURL === 'function' ? URL.createObjectURL(exported.blob) : null;
-    setTranscribe((t) => ({ ...t, step: 'read', imageUrl }));
+
+    // AUTO_TRANSCRIBE_SPEC.md §5: this exact sketch was already read (an
+    // automatic run, an earlier Convert, or the writer's corrections). Show
+    // that instead of paying again; "Transcribe again" is the explicit way
+    // to spend a request. Only when nothing is unsaved: the stored reading is
+    // for the SAVED sketch.
+    const stored = transcriptView;
+    if (!forceRead && !dirtyRef.current && stored?.current && stored.text?.trim()) {
+      const by = stored.edited || stored.source === 'user'
+        ? 'Already transcribed · with your corrections'
+        : `Already transcribed · ${stored.source === 'convert' ? 'by an earlier conversion' : 'automatically'}`;
+      setTranscribe((t) => ({
+        ...t, stage: 'review', step: 'read', imageUrl, text: stored.text, original: stored.text,
+        forHash: stored.contentHash, reused: by, model: stored.edited ? null : stored.model,
+      }));
+      return;
+    }
+    setTranscribe((t) => ({ ...t, step: 'read', imageUrl, reused: null }));
 
     try {
       const { data } = await transcribeSketchMutation({
-        variables: { image: exported.base64, mediaType: exported.mediaType },
+        variables: { image: exported.base64, mediaType: exported.mediaType, noteId: savedNoteIdRef.current || undefined },
       });
       if (stale()) return;
       const result = data?.transcribeSketch;
@@ -475,7 +533,7 @@ function NoteEditorPage() {
         setTranscribe((t) => ({ ...t, stage: 'error', error: 'The model read nothing back from that page. Try again.' }));
         return;
       }
-      setTranscribe((t) => ({ ...t, stage: 'review', text: result.text, model: result.provenance?.model || null }));
+      setTranscribe((t) => ({ ...t, stage: 'review', text: result.text, original: result.text, model: result.provenance?.model || null }));
     } catch (err) {
       if (stale()) return;
       setTranscribe((t) => ({ ...t, stage: 'error', error: transcribeErrorMessage(err) }));
@@ -514,6 +572,7 @@ function NoteEditorPage() {
   const handleTranscriptKeepPlain = async () => {
     if (!transcribe?.text?.trim()) return;
     setTranscribe((t) => ({ ...t, saving: true }));
+    keepTranscriptCorrections(transcribe);
     const ok = await saveFromSketch(transcribe.text, { composed: false });
     if (!ok) setTranscribe((t) => (t ? { ...t, saving: false } : t));
   };
@@ -521,6 +580,7 @@ function NoteEditorPage() {
   const handleTranscriptCompose = () => {
     if (!transcribe?.text?.trim()) return;
     // Hidden, not closed: "Back to transcript" in Compose returns to it.
+    keepTranscriptCorrections(transcribe);
     setTranscribe((t) => ({ ...t, open: false }));
     handleCompose(transcribe.text);
   };
@@ -939,6 +999,7 @@ function NoteEditorPage() {
 
   const isCanvas = isMindMap || isHandwritten;
   const readOnlyMeta = !isEditMode && isMindMap;
+  readOnlyMetaRef.current = readOnlyMeta;
   const saveState = {
     saving: isSaving,
     error: saveError,
@@ -970,7 +1031,12 @@ function NoteEditorPage() {
             readOnly={readOnlyMeta}
             compact={isCanvas}
             leading={<BackButton onBack={handleBack} />}
-            status={<SaveStatus {...saveState} />}
+            status={isHandwritten
+              ? <>
+                  <SaveStatus {...saveState} />
+                  <TranscriptStatus view={transcriptView} />
+                </>
+              : <SaveStatus {...saveState} />}
             alert={<SaveAlert {...saveState} onRetry={() => handleSaveRef.current()} />}
             // Mounted only when the writer has switched suggestions on: the
             // strip owns a lazy query, and a feature that is off should cost
@@ -1015,7 +1081,7 @@ function NoteEditorPage() {
                 onFoldIn={canFoldIn ? () => setFoldInOpen(true) : undefined}
                 onCompose={canCompose ? () => handleCompose() : undefined}
                 isComposing={isComposing}
-                onTranscribe={isHandwritten ? handleTranscribe : undefined}
+                onTranscribe={isHandwritten ? () => handleTranscribe() : undefined}
                 canTranscribe={canTranscribe}
                 isTranscribing={transcribe?.stage === 'working'}
                 onPrint={handlePrint}
@@ -1047,7 +1113,7 @@ function NoteEditorPage() {
             onChange={handleContentChange}
             readOnly={readOnlyMeta}
             isLoading={isLoadingSelected}
-            {...(isHandwritten ? { sketchApiRef } : {})}
+            {...(isHandwritten ? { sketchApiRef, onInkEdit } : {})}
           />
         </Box>
       </NoteShell>
@@ -1138,9 +1204,11 @@ function NoteEditorPage() {
           imageUrl={transcribe.imageUrl}
           saving={transcribe.saving}
           onClose={closeTranscribe}
-          onRetry={handleTranscribe}
+          onRetry={() => handleTranscribe({ forceRead: Boolean(transcribe.reused) })}
           onCompose={handleTranscriptCompose}
           onKeepPlain={handleTranscriptKeepPlain}
+          reused={transcribe.reused}
+          onTranscribeAgain={transcribe.reused ? () => handleTranscribe({ forceRead: true }) : null}
         />
       ) : null}
 

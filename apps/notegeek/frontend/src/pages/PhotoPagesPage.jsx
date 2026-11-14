@@ -22,7 +22,7 @@ import ArrowUpward from '@mui/icons-material/ArrowUpward';
 import ArrowDownward from '@mui/icons-material/ArrowDownward';
 import DeleteOutline from '@mui/icons-material/DeleteOutline';
 import { useToast } from '@geeksuite/ui';
-import { CREATE_NOTE, COMPOSE_NOTE, TRANSCRIBE_SKETCH } from '../graphql/mutations';
+import { CREATE_NOTE, COMPOSE_NOTE, TRANSCRIBE_SKETCH, SAVE_SKETCH_TRANSCRIPT_EDIT } from '../graphql/mutations';
 import { onNoteCreated } from '../graphql/cacheUpdates';
 import TranscribeDialog from '../components/editors/TranscribeDialog';
 import ComposeDialog from '../components/editors/ComposeDialog';
@@ -221,6 +221,7 @@ export default function PhotoPagesPage({ prepare = preparePhotoPageSet, loadSnap
   const urlsRef = useRef(new Set());
 
   const [createNoteMutation] = useMutation(CREATE_NOTE, { update: onNoteCreated });
+  const [saveTranscriptEdit] = useMutation(SAVE_SKETCH_TRANSCRIPT_EDIT);
   const [transcribeMutation] = useMutation(TRANSCRIBE_SKETCH);
   const [composeMutation] = useMutation(COMPOSE_NOTE);
 
@@ -395,6 +396,14 @@ export default function PhotoPagesPage({ prepare = preparePhotoPageSet, loadSnap
         const id = data?.createNote?.id;
         if (!id) throw new Error('The photos were not saved. Try again.');
         photoNoteRef.current = { signature: sig, id, title: photoTitle };
+        // The reviewed reading becomes the photo note's own searchable text
+        // (Chef, 2026-11-14: AUTO_TRANSCRIBE_SPEC.md, photo decision 1b). Free:
+        // the pages were already read, and the writer already corrected it.
+        // Best effort — the two notes are what was asked for.
+        const reviewed = (transcribe?.text || body || '').trim();
+        if (reviewed) {
+          saveTranscriptEdit({ variables: { noteId: id, text: reviewed } }).catch(() => {});
+        }
       }
       const { id: sketchId, title: sketchTitle } = photoNoteRef.current;
       let created;

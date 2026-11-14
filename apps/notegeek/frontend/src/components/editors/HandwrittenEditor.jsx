@@ -7,6 +7,7 @@ import {
 import { attachPenButton } from '../../utils/penButton';
 import { exportSketchPng, exportSketchForPrint } from '../../utils/sketchExport';
 import { fineStrokeHandler } from '../../utils/finePen';
+import { isInkEdit } from '../../utils/inkEdit';
 
 // tldraw 2.4's updateViewportScreenBounds takes a Box and calls .equals() on
 // it. Passed the container element, as this file used to, it threw on every
@@ -77,7 +78,10 @@ function fitFirstPhotoPage(editor) {
  * to text" without importing tldraw itself (this file is lazy-loaded; the
  * page is not). Cleared on unmount.
  */
-const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef = null }) => {
+const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef = null, onInkEdit = null }) => {
+    // Read live by the store listener, so a new callback never rebuilds anything.
+    const onInkEditRef = useRef(onInkEdit);
+    onInkEditRef.current = onInkEdit;
     const editorRef = useRef(null);
     const unsubscribeRef = useRef(null);
     const isApplyingSnapshot = useRef(false);
@@ -168,8 +172,9 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
         }
 
         if (!readOnly) {
-            unsubscribeRef.current = editor.store.listen(() => {
+            unsubscribeRef.current = editor.store.listen((entry) => {
                 if (isApplyingSnapshot.current) return;
+                if (isInkEdit(entry)) onInkEditRef.current?.();
 
                 const snapshot = editor.store.getSnapshot();
                 const serialized = JSON.stringify(snapshot);

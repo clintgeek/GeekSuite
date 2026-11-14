@@ -1,4 +1,5 @@
 import { gql } from '@apollo/client';
+import { SKETCH_TRANSCRIPT_FIELDS } from './mutations';
 
 export const GET_NOTES = gql`
     query GetNotes($tag: String, $prefix: String, $under: String, $type: String, $limit: Int) {
@@ -206,6 +207,15 @@ export const NOTE_TITLES = gql`
             title
             type
             updatedAt
+        }
+    }
+`;
+
+/** A sketch's automatic transcript state (DOCS/AUTO_TRANSCRIBE_SPEC.md). */
+export const SKETCH_TRANSCRIPT = gql`
+    query SketchTranscript($noteId: ID!) {
+        sketchTranscript(noteId: $noteId) {
+            ${SKETCH_TRANSCRIPT_FIELDS}
         }
     }
 `;

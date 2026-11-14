@@ -29,6 +29,7 @@ vi.setConfig({ testTimeout: 30000 });
 const createNote = vi.fn();
 const updateNote = vi.fn();
 const composeNote = vi.fn();
+const saveSketchTranscriptEdit = vi.fn(() => Promise.resolve({ data: {} }));
 const transcribeSketch = vi.fn();
 const notify = vi.fn();
 
@@ -44,6 +45,7 @@ vi.mock('@apollo/client', async () => {
         UpdateNote: updateNote,
         ComposeNote: composeNote,
         TranscribeSketch: transcribeSketch,
+        SaveSketchTranscriptEdit: saveSketchTranscriptEdit,
       }[name] || vi.fn().mockResolvedValue({ data: {} });
       return [fn, { loading: false }];
     },
@@ -329,6 +331,12 @@ describe('the result: two new notes, photos first, nothing replaced', () => {
     expect(mdVars.content.split('\n')[0]).toBe('From photos: [Shopping](/notes/photo-1)');
     expect(mdVars.content).toContain('--- page 1 ---  \nmilk  \neggs\n\n--- page 2 ---  \nbread');
     expect(notify).toHaveBeenCalledWith(expect.stringMatching(/photos as a sketch note, and the text as a new note/), { tone: 'success' });
+    // The reviewed reading is also the photo note's own searchable text
+    // (AUTO_TRANSCRIBE_SPEC.md, photo decision 1b) — free: no new request.
+    expect(saveSketchTranscriptEdit).toHaveBeenCalledWith({
+      variables: { noteId: 'photo-1', text: '--- page 1 ---\nmilk\neggs\n\n--- page 2 ---\nbread' },
+    });
+    expect(transcribeSketch).toHaveBeenCalledTimes(2);
   });
 
   it('Compose it: no Replace, Back to transcript, and the composed heading titles the new note', async () => {

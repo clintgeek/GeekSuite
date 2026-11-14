@@ -126,8 +126,8 @@ export const COMPOSE_NOTE = gql`
  * GraphQL error with `extensions.details`, never an empty `text`.
  */
 export const TRANSCRIBE_SKETCH = gql`
-    mutation TranscribeSketch($image: String!, $mediaType: String!, $source: String) {
-        transcribeSketch(image: $image, mediaType: $mediaType, source: $source) {
+    mutation TranscribeSketch($image: String!, $mediaType: String!, $source: String, $noteId: ID) {
+        transcribeSketch(image: $image, mediaType: $mediaType, source: $source, noteId: $noteId) {
             text
             provenance {
                 source
@@ -223,6 +223,38 @@ export const FOLD_IN_APPLY = gql`
             }
             versionId
             applied
+        }
+    }
+`;
+
+// ── Automatic sketch transcription (DOCS/AUTO_TRANSCRIBE_SPEC.md) ──────────
+export const SKETCH_TRANSCRIPT_FIELDS = `
+    status
+    contentHash
+    current
+    text
+    edited
+    source
+    provider
+    model
+    at
+    retryAt
+    error
+    autoEnabled
+`;
+
+export const AUTO_TRANSCRIBE_SKETCH = gql`
+    mutation AutoTranscribeSketch($noteId: ID!, $image: String!, $mediaType: String!) {
+        autoTranscribeSketch(noteId: $noteId, image: $image, mediaType: $mediaType) {
+            ${SKETCH_TRANSCRIPT_FIELDS}
+        }
+    }
+`;
+
+export const SAVE_SKETCH_TRANSCRIPT_EDIT = gql`
+    mutation SaveSketchTranscriptEdit($noteId: ID!, $text: String!, $forHash: String) {
+        saveSketchTranscriptEdit(noteId: $noteId, text: $text, forHash: $forHash) {
+            ${SKETCH_TRANSCRIPT_FIELDS}
         }
     }
 `;

@@ -30,6 +30,10 @@ const createNote = vi.fn();
 const updateNote = vi.fn();
 const composeNote = vi.fn();
 const transcribeSketch = vi.fn();
+const saveSketchTranscriptEdit = vi.fn();
+const autoTranscribeSketch = vi.fn();
+// The sketch's stored automatic transcript (AUTO_TRANSCRIBE_SPEC.md §5).
+const transcriptState = { current: undefined };
 const notify = vi.fn();
 const exportPng = vi.fn();
 const note = { current: null };
@@ -63,6 +67,7 @@ vi.mock('@apollo/client', async () => {
     useQuery: (doc) => {
       const name = doc?.definitions?.[0]?.name?.value;
       if (name === 'GetNoteById') return { data: { note: note.current }, loading: false, error: undefined };
+      if (name === 'SketchTranscript') return { data: transcriptState.current ? { sketchTranscript: transcriptState.current } : undefined, loading: false };
       return { data: undefined, loading: false, error: undefined };
     },
     useMutation: (doc) => {
@@ -72,6 +77,8 @@ vi.mock('@apollo/client', async () => {
         UpdateNote: updateNote,
         ComposeNote: composeNote,
         TranscribeSketch: transcribeSketch,
+        SaveSketchTranscriptEdit: saveSketchTranscriptEdit,
+        AutoTranscribeSketch: autoTranscribeSketch,
       }[name] || vi.fn().mockResolvedValue({ data: {} });
       return [fn, { loading: false }];
     },
@@ -119,6 +126,8 @@ const COMPOSED = '# Roof quote\n\n- call the roofer\n- quote by Friday\n';
 
 beforeEach(() => {
   vi.clearAllMocks();
+  transcriptState.current = undefined;
+  saveSketchTranscriptEdit.mockResolvedValue({ data: {} });
   note.current = sketch();
   exportPng.mockResolvedValue({
     blob: new Blob(['png'], { type: 'image/png' }),
@@ -187,7 +196,9 @@ describe('reading the page', () => {
     await startTranscribe();
     expect(exportPng).toHaveBeenCalledTimes(1);
     expect(transcribeSketch).toHaveBeenCalledWith({
-      variables: { image: 'iVBORw0KGgoAAAA', mediaType: 'image/png' },
+      // noteId: the gateway keeps the reading for this sketch, so the next
+      // automatic run and the next Convert needn't pay for it again.
+      variables: { image: 'iVBORw0KGgoAAAA', mediaType: 'image/png', noteId: 'sketch-1' },
     });
   });
 
@@ -286,5 +297,70 @@ describe('composing it', () => {
     await act(async () => { within(menu).getByRole('menuitem', { name: 'Compose a document from this note' }).click(); });
     await screen.findByRole('button', { name: /save as a new note/i });
     expect(screen.getByRole('button', { name: /replace this note/i })).toBeInTheDocument();
+  });
+});
+
+describe('reusing a stored transcript (AUTO_TRANSCRIBE_SPEC.md §5)', () => {
+  const HASH = 'a'.repeat(64);
+  const stored = (over = {}) => ({
+    status: 'searchable', current: true, contentHash: HASH, text: 'buy milk\neggs', edited: false,
+    source: 'auto', model: 'openai/gpt-4.1-mini', provider: 'openrouter', at: '2026-11-14T10:00:00.000Z',
+    retryAt: null, error: null, autoEnabled: true, ...over,
+  });
+
+  it('a current transcript opens straight into review, with no request spent', async () => {
+    transcriptState.current = stored();
+    renderEditor();
+    const box = await startTranscribe();
+    expect(box).toHaveValue('buy milk\neggs');
+    expect(transcribeSketch).not.toHaveBeenCalled();
+    expect(screen.getByTestId('transcript-reused')).toHaveTextContent('Already transcribed · automatically');
+    expect(screen.getByRole('button', { name: 'Transcribe again' })).toBeInTheDocument();
+  });
+
+  it('Transcribe again is the explicit way to spend a request', async () => {
+    transcriptState.current = stored();
+    renderEditor();
+    await startTranscribe();
+    await act(async () => { screen.getByRole('button', { name: 'Transcribe again' }).click(); });
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Transcript' })).toHaveValue(TRANSCRIPT));
+    expect(transcribeSketch).toHaveBeenCalledTimes(1);
+  });
+
+  it("the writer's corrections show as such, and are what Convert offers", async () => {
+    transcriptState.current = stored({ text: 'buy oat milk', edited: true, source: 'user', model: null });
+    renderEditor();
+    const box = await startTranscribe();
+    expect(box).toHaveValue('buy oat milk');
+    expect(screen.getByTestId('transcript-reused')).toHaveTextContent('with your corrections');
+  });
+
+  it('an untouched reading is not saved again as a correction', async () => {
+    transcriptState.current = stored();
+    renderEditor();
+    await startTranscribe();
+    await act(async () => { screen.getByRole('button', { name: /keep as plain text/i }).click(); });
+    expect(createNote).toHaveBeenCalledTimes(1);
+    expect(saveSketchTranscriptEdit).not.toHaveBeenCalled();
+  });
+
+  it('corrections made in review are kept as the sketch transcript, for the content they were made against', async () => {
+    transcriptState.current = stored();
+    renderEditor();
+    const box = await startTranscribe();
+    fireEvent.change(box, { target: { value: 'buy milk\neggs\nbread' } });
+    await act(async () => { screen.getByRole('button', { name: /keep as plain text/i }).click(); });
+    expect(saveSketchTranscriptEdit).toHaveBeenCalledWith({
+      variables: { noteId: 'sketch-1', text: 'buy milk\neggs\nbread', forHash: HASH },
+    });
+    // The new note is still made exactly as before.
+    expect(createNote).toHaveBeenCalledTimes(1);
+  });
+
+  it('an out-of-date transcript is not reused: the page is read as before', async () => {
+    transcriptState.current = stored({ status: 'waiting', current: false, text: null });
+    renderEditor();
+    await startTranscribe();
+    expect(transcribeSketch).toHaveBeenCalledTimes(1);
   });
 });
