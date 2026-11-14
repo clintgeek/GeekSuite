@@ -116,9 +116,12 @@ const stripOuterFence = (text) => {
  * @param {'sketch'|'photo'} [opts.source]  which prompt reads it; 'sketch' by default
  * @param {string} opts.userId
  * @param {object} [opts.ai]       injectable aiService, for tests
+ * @param {number} [opts.dailyCap]  this call's cap on the shared `transcribe` counter.
+ *        Convert uses 40; automatic runs pass 30 so the last 10 stay Convert's
+ *        (sketchTranscript.js).
  * @returns {Promise<{ text: string, provenance: object }>}
  */
-export async function transcribeSketch({ image, mediaType, source = 'sketch', userId, ai = undefined }) {
+export async function transcribeSketch({ image, mediaType, source = 'sketch', userId, ai = undefined, dailyCap = TRANSCRIBE_DAILY_CAP }) {
   const result = await runAIFeature({
     app: 'notegeek',
     feature: 'transcribe',
@@ -139,7 +142,7 @@ export async function transcribeSketch({ image, mediaType, source = 'sketch', us
       },
     ],
     need: TRANSCRIBE_NEED,
-    maxCallsPerDay: TRANSCRIBE_DAILY_CAP,
+    maxCallsPerDay: dailyCap,
     timeoutMs: TRANSCRIBE_TIMEOUT_MS,
     maxTokens: TRANSCRIBE_MAX_TOKENS,
     // Reading, not writing: nothing here wants variety.

@@ -12,6 +12,8 @@ import {
   suggestForNoteArgsSchema,
   composeNoteArgsSchema,
   transcribeSketchArgsSchema,
+  autoTranscribeSketchArgsSchema,
+  saveSketchTranscriptEditArgsSchema,
   foldInPreviewArgsSchema,
   foldInApplyArgsSchema,
   archiveNotesArgsSchema,
@@ -23,6 +25,9 @@ import { sanitizeNoteArgs } from './sanitize.js';
 import { suggestForNote } from './suggest.js';
 import { composeNote, composeNotes } from './compose.js';
 import { transcribeSketch } from './transcribe.js';
+import {
+  autoTranscribeSketch, getSketchTranscript, rememberConvertReading, saveSketchTranscriptEdit,
+} from './sketchTranscript.js';
 import { foldInPreview, planOperations, applyPlan, refusalFor } from './foldin.js';
 import NoteVersion from './models/NoteVersion.js';
 import {
@@ -67,6 +72,8 @@ const validateDeleteTag = validateInput(deleteTagArgsSchema);
 const validateSuggestForNote = validateInput(suggestForNoteArgsSchema);
 const validateComposeNote = validateInput(composeNoteArgsSchema);
 const validateTranscribeSketch = validateInput(transcribeSketchArgsSchema);
+const validateAutoTranscribeSketch = validateInput(autoTranscribeSketchArgsSchema);
+const validateSaveSketchTranscriptEdit = validateInput(saveSketchTranscriptEditArgsSchema);
 const validateFoldInPreview = validateInput(foldInPreviewArgsSchema);
 const validateFoldInApply = validateInput(foldInApplyArgsSchema);
 const validateArchiveNotes = validateInput(archiveNotesArgsSchema);
@@ -169,6 +176,12 @@ const badTagInput = (message, path = 'newTag') =>
 
 export const resolvers = {
   Query: {
+    /** A sketch's automatic transcript state (sketchTranscript.js). */
+    sketchTranscript: async (_, { noteId }, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      return await getSketchTranscript({ noteId, userId });
+    },
     /** A note's history, newest first. Content omitted — see versions.js. */
     noteVersions: async (_, { noteId }, context) => {
       const userId = context.user?.id;
@@ -733,8 +746,30 @@ export const resolvers = {
     transcribeSketch: async (_, rawArgs, context) => {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
-      const { image, mediaType, source } = validateTranscribeSketch(rawArgs);
-      return await transcribeSketch({ image, mediaType, source, userId });
+      const { image, mediaType, source, noteId } = validateTranscribeSketch(rawArgs);
+      const result = await transcribeSketch({ image, mediaType, source, userId });
+      // A sketch's page (not a photo): keep the reading so the automatic run
+      // and the next Convert don't pay for it again. Best effort.
+      if (noteId && source === 'sketch') {
+        await rememberConvertReading({ noteId, userId, text: result.text, provenance: result.provenance });
+      }
+      return result;
+    },
+
+    /** Automatic transcription (sketchTranscript.js). Failures come back as status. */
+    autoTranscribeSketch: async (_, rawArgs, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const { noteId } = validateAutoTranscribeSketch(rawArgs);
+      const { image, mediaType } = validateTranscribeSketch({ image: rawArgs.image, mediaType: rawArgs.mediaType });
+      return await autoTranscribeSketch({ noteId, userId, image, mediaType });
+    },
+
+    saveSketchTranscriptEdit: async (_, rawArgs, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const { noteId, text, forHash } = validateSaveSketchTranscriptEdit(rawArgs);
+      return await saveSketchTranscriptEdit({ noteId, userId, text, forHash });
     },
 
     /**

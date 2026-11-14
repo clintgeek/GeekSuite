@@ -14,11 +14,13 @@
  *   - code:     the code (content is `{ language, code }` JSON, or a raw string
  *               from before that format)
  *   - mindmap:  the node labels, one per line
- *   - handwritten (sketch / photo pages): no text — the title alone, or nothing
+ *   - handwritten (sketch / photo pages): the title and the recognised handwriting
+ *               (sketchTranscript, AUTO_TRANSCRIBE_SPEC.md) — never the drawing data
  *   - locked / encrypted notes: the title alone. Their body may be ciphertext,
  *     and search already refuses to show it, so it is not embedded either.
  */
 
+import { sketchSearchText } from './sketchText.js';
 import { createHash } from 'node:crypto';
 
 /** A passage closes once it reaches this many words at a paragraph boundary... */
@@ -88,7 +90,9 @@ export function noteText(note) {
     case 'text': return { title, body: htmlToText(note.content) };
     case 'code': return { title, body: codeText(note.content).trim() };
     case 'mindmap': return { title, body: mindmapText(note.content) };
-    default: return { title, body: '' }; // handwritten, unknown
+    // A sketch's text is its transcript (sketchTranscript.js), never its drawing data.
+    case 'handwritten': return { title, body: sketchSearchText(note.sketchTranscript) };
+    default: return { title, body: '' }; // unknown
   }
 }
 

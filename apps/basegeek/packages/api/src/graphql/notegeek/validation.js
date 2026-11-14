@@ -380,6 +380,9 @@ export const transcribeSketchArgsSchema = z
       })
       .nullish()
       .transform((v) => v ?? 'sketch'),
+    // Optional (AUTO_TRANSCRIBE_SPEC.md §5): which sketch this page came from,
+    // so the reading is kept for it and Convert needn't pay for it again.
+    noteId: idString.nullish(),
   })
   .strict()
   .superRefine((args, ctx) => {
@@ -392,3 +395,17 @@ export const transcribeSketchArgsSchema = z
       });
     }
   });
+
+// ── automatic transcription (AUTO_TRANSCRIBE_SPEC.md) ──────────────────────
+
+/** The page image is checked by transcribeSketchArgsSchema; this is the rest. */
+export const autoTranscribeSketchArgsSchema = z.object({ noteId: idString }).passthrough();
+
+export const TRANSCRIPT_EDIT_MAX = DOC_CONTENT_MAX;
+export const saveSketchTranscriptEditArgsSchema = z
+  .object({
+    noteId: idString,
+    text: z.string().max(TRANSCRIPT_EDIT_MAX, 'That transcript is too long.'),
+    forHash: z.string().regex(/^[0-9a-f]{64}$/, 'forHash must be a content hash.').nullish(),
+  })
+  .strict();

@@ -22,6 +22,9 @@ const ctx = (userId) => (userId ? { user: { id: userId } } : {});
 beforeAll(async () => {
   await AIUsage.db.asPromise();
   await Note.db.asPromise();
+  // searchNotes needs the text index, which Mongoose builds in the background
+  // after the model loads; without this the search can win the race.
+  await Note.init();
 }, 60000);
 
 afterEach(async () => {

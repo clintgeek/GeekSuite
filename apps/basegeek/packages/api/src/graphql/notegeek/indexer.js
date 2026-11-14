@@ -154,6 +154,8 @@ export async function indexNote(note) {
 async function pickNext(now) {
   const head = await Note.findOne(dueFilter(now), {
     _id: 1, userId: 1, title: 1, type: 1, isLocked: 1, isEncrypted: 1, updatedAt: 1, embeddingHash: 1, embeddingAttempts: 1,
+    // A sketch's text is its transcript (chunking.js); small, so always read.
+    'sketchTranscript.text': 1, 'sketchTranscript.edited': 1,
   }).sort({ updatedAt: 1 }).lean();
   if (!head) return null;
   if (TEXT_TYPES.includes(head.type) && !head.isLocked && !head.isEncrypted) {

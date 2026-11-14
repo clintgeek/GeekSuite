@@ -97,6 +97,29 @@ export const typeDefs = gql`
     provenance: AIProvenance
   }
 
+  """
+  A sketch's automatic transcript (AUTO_TRANSCRIBE_SPEC.md): derived,
+  searchable text kept beside the strokes, never written into them.
+  status: empty (nothing drawn) | off (locked, encrypted or photo pages) |
+  waiting | transcribing | searchable | retry | failed.
+  text is set only when status is searchable: the user's corrections when they
+  were made for this exact content (edited: true), else the machine reading.
+  """
+  type SketchTranscriptState {
+    status: String!
+    contentHash: String
+    current: Boolean!
+    text: String
+    edited: Boolean
+    source: String
+    provider: String
+    model: String
+    at: String
+    retryAt: String
+    error: String
+    autoEnabled: Boolean!
+  }
+
 
   """
   One anchored change Fold-in proposes. The model never writes the note: it
@@ -350,6 +373,8 @@ export const typeDefs = gql`
   }
 
   type Query {
+    """A sketch's automatic transcript state (AUTO_TRANSCRIBE_SPEC.md)."""
+    sketchTranscript(noteId: ID!): SketchTranscriptState!
     """
     The note list. tag = exactly that tag; prefix = any tag starting with
     the string; under = the nested-tag view, the tag itself or anything
@@ -425,7 +450,17 @@ export const typeDefs = gql`
     source is 'sketch' (the default) or 'photo' — a photographed notebook
     page, read with rules for ruled lines and printed text.
     Changes nothing. Failures are errors, never an empty transcript."""
-    transcribeSketch(image: String!, mediaType: String!, source: String): SketchTranscript!
+    transcribeSketch(image: String!, mediaType: String!, source: String, noteId: ID): SketchTranscript!
+    """Automatic transcription of a sketch's page (AUTO_TRANSCRIBE_SPEC.md).
+    The client calls it 90 s after the last pen stroke; the server skips
+    unchanged content, runs one request per sketch, and reports failures in
+    the returned status rather than as errors. Uses at most 30 of the day's 40
+    transcriptions; Convert keeps the rest."""
+    autoTranscribeSketch(noteId: ID!, image: String!, mediaType: String!): SketchTranscriptState!
+    """Keep the user's corrections to a sketch's transcript (from Convert's
+    review, or a photo note's reviewed pages), for the content hash they were
+    made against — the sketch as saved now when forHash is absent."""
+    saveSketchTranscriptEdit(noteId: ID!, text: String!, forHash: String): SketchTranscriptState!
     """Pin or unpin a note. Scoped to the owner, like every other note mutation."""
     setNotePinned(id: ID!, pinned: Boolean!): Note!
     """

@@ -625,6 +625,15 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
     logger.error({ err: error }, 'BookGeek reader-field migration failed');
   }
 
+  // NoteGeek word search reads `wordText`, not raw `content` (sketches index
+  // their transcript, not their drawing data). Swaps the old text index once.
+  try {
+    const { ensureNoteWordIndex } = await import('./graphql/notegeek/wordIndex.js');
+    await ensureNoteWordIndex({ log: logger });
+  } catch (error) {
+    logger.error({ err: error }, 'NoteGeek word index update failed');
+  }
+
   // NoteGeek meaning-based search: the background embedding worker. Talks
   // only to the local embeddings container; see graphql/notegeek/indexer.js.
   try {

@@ -2,6 +2,27 @@
 
 What shipped, as it landed. Wanted-but-not-done lives in `SUITE_TODO.md`.
 
+## 2026-11-14 — NoteGeek: sketches searchable by their handwriting
+
+- **Automatic sketch transcription** (spec + as-built: `apps/notegeek/DOCS/AUTO_TRANSCRIBE_SPEC.md`).
+  - The open sketch sends its page to the existing `transcribeSketch` (OpenRouter, via the
+    gateway) ~90 s after the last pen stroke. Autosave never triggers it.
+  - The gateway hashes what's saved (shapes and assets only), skips unchanged content, runs
+    one request per sketch (an atomic claim), never lets an older result land on a newer
+    one, and hands the text to the existing indexer.
+  - Default ON, with a Settings toggle. Automatic runs get at most 30 a day; Convert keeps
+    10.
+  - Convert reuses a current transcript ("Transcribe again" spends a request), and
+    corrections made in review are kept and never overwritten.
+  - Photo notes keep their reviewed reading (free) and are never auto-read.
+  - Word search now reads `wordText` (the transcript for sketches, the content for
+    everything else). The old `{ title, content, tags }` text index is swapped once at
+    gateway start-up, so sketch JSON no longer matches "draw"/"shape".
+- **Local-inference spike PARKED** before any code (`LOCAL_INFERENCE_SPEC.md`); the
+  transformers.js install was backed out.
+- **Earlier the same night:** the GeekSuite Login (StartGeek look), the NoteGeek one-bar
+  toolbar, the Small pen default, and sketch paper — all live.
+
 ## 2026-11-13 — NoteGeek sidebar + sketch palette; backdrop service
 
 - **NoteGeek** (`6f641af2`, pushed): the desktop sidebar collapses from a toggle in the

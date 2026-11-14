@@ -1,4 +1,5 @@
 import mongoose from 'mongoose';
+import { sketchSearchText } from '../sketchText.js';
 import { getAppConnection } from '../../shared/appConnections.js';
 
 const noteConn = getAppConnection('notegeek');
@@ -89,6 +90,43 @@ const NoteSchema = new mongoose.Schema(
     embeddingAttempts: { type: Number, default: 0 },
     embeddingRetryAt: { type: Date, default: null },
     embeddingError: { type: String, default: null },
+    // ── Word search (AUTO_TRANSCRIBE_SPEC.md) ──────────────────────────────
+    // What the `$text` index reads instead of `content`. For every type but a
+    // sketch it IS the content (kept by the middleware below); for a sketch it
+    // is the recognised handwriting (sketchTranscript.js), never the tldraw
+    // JSON, which made "draw" or "shape" match every sketch.
+    wordText: { type: String, default: '' },
+    // ── Automatic handwriting transcription (sketchTranscript.js) ──────────
+    // Derived from the strokes, never written into `content`. Writes here use
+    // `timestamps: false`: background reading is not an edit.
+    sketchTranscript: {
+      type: new mongoose.Schema({
+        text: { type: String, default: null },        // the latest machine reading
+        hash: { type: String, default: null },        // the content hash it was read from
+        source: { type: String, default: null },      // 'auto' | 'convert'
+        provider: { type: String, default: null },
+        model: { type: String, default: null },
+        at: { type: Date, default: null },
+        status: { type: String, enum: ['pending', 'processing', 'searchable', 'stale', 'failed'], default: 'pending' },
+        submittedHash: { type: String, default: null }, // the hash the running (or last) request read
+        claimedAt: { type: Date, default: null },
+        attempts: { type: Number, default: 0 },
+        retryAt: { type: Date, default: null },
+        failedHash: { type: String, default: null },  // given up on for this content
+        error: { type: String, default: null },
+        // The user's corrections from Convert's review box, for the content
+        // they were made against. Automatic runs never overwrite them.
+        edited: {
+          type: new mongoose.Schema({
+            text: { type: String, default: '' },
+            hash: { type: String, default: null },
+            at: { type: Date, default: null },
+          }, { _id: false }),
+          default: undefined,
+        },
+      }, { _id: false }),
+      default: undefined,
+    },
     // ── [[Links]] (links.js) ───────────────────────────────────────────────
     // Outgoing links parsed from the body on save: `key` is the lowercased
     // title (or `id:<hex>` for an in-app /notes/<id> link), `noteId` the
@@ -125,6 +163,47 @@ NoteSchema.pre('save', function markStaleOnSave() {
     this.embeddingRetryAt = null;
   }
 });
+/**
+ * `wordText` follows `content` for every type but a sketch, whose word-search
+ * text is its transcript (set by sketchTranscript.js). Middleware, like the
+ * embedding state above, so no write path can forget it.
+ */
+const SKETCH = 'handwritten';
+function wordTextFor(type, content, transcript) {
+  if (type !== SKETCH) return typeof content === 'string' ? content : '';
+  return sketchSearchText(transcript);
+}
+NoteSchema.pre('save', function keepWordText() {
+  if (this.isNew || this.isModified('content') || this.isModified('type')) {
+    this.wordText = wordTextFor(this.type, this.content, this.sketchTranscript);
+  }
+});
+// insertMany skips 'save' middleware; an import or a script must still be searchable.
+NoteSchema.pre('insertMany', function keepWordTextOnInsertMany(next, docs) {
+  for (const doc of Array.isArray(docs) ? docs : []) {
+    if (doc && doc.wordText === undefined) doc.wordText = wordTextFor(doc.type || 'text', doc.content, doc.sketchTranscript);
+  }
+  next();
+});
+NoteSchema.pre('findOneAndUpdate', async function keepWordTextOnUpdate() {
+  const update = this.getUpdate();
+  if (!update || Array.isArray(update)) return;
+  const field = (f) => (f in update ? update[f] : update.$set?.[f]);
+  const content = field('content');
+  const type = field('type');
+  if (content === undefined && type === undefined) return;
+  // A typeless body write, or a type change without a body: read what's stored.
+  const stored = (type === undefined || type === SKETCH || content === undefined)
+    ? await this.model.findOne(this.getQuery(), { type: 1, content: 1, sketchTranscript: 1 }).lean()
+    : null;
+  const effectiveType = type ?? stored?.type;
+  if (effectiveType === SKETCH) {
+    // A sketch's body is drawing data: word search reads its transcript instead.
+    this.set({ wordText: wordTextFor(SKETCH, null, stored?.sketchTranscript) });
+  } else {
+    this.set({ wordText: wordTextFor(effectiveType, content ?? stored?.content) });
+  }
+});
 NoteSchema.pre('findOneAndUpdate', function markStaleOnUpdate() {
   const update = this.getUpdate();
   if (!update || Array.isArray(update)) return;
@@ -141,7 +220,10 @@ NoteSchema.index({ embeddingState: 1, updatedAt: 1 });
 NoteSchema.index({ userId: 1, 'links.noteId': 1 });
 NoteSchema.index({ userId: 1, 'links.key': 1 });
 NoteSchema.index({ updatedAt: 1 });
-NoteSchema.index({ title: 'text', content: 'text', tags: 'text' });
+// Word search reads `wordText`, not `content` (see above). The deployed index
+// was { title, content, tags }; ensureNoteWordIndex() swaps it once at start-up.
+export const WORD_INDEX_KEYS = { title: 'text', wordText: 'text', tags: 'text' };
+NoteSchema.index(WORD_INDEX_KEYS);
 // The `notes` query sorts pinned notes first, then by the requested order —
 // this compound index serves that shape directly for the default sort.
 NoteSchema.index({ pinned: -1, updatedAt: -1 });
