@@ -18,6 +18,9 @@ What shipped, as it landed. Wanted-but-not-done lives in `SUITE_TODO.md`.
   - Word search now reads `wordText` (the transcript for sketches, the content for
     everything else). The old `{ title, content, tags }` text index is swapped once at
     gateway start-up, so sketch JSON no longer matches "draw"/"shape".
+- **Pen side button erases** while held (Chef: "I'm on for eraser"); it scrolled since
+  2026-09-29. A second button reported as the middle button scrolls — unverified on the
+  Lenovo pen. `utils/penButton.js`, HANDWRITING.md §1.
 - **Local-inference spike PARKED** before any code (`LOCAL_INFERENCE_SPEC.md`); the
   transformers.js install was backed out.
 - **Earlier the same night:** the GeekSuite Login (StartGeek look), the NoteGeek one-bar

@@ -9,7 +9,16 @@ And: "button=eraser will work, we may as well do that."*
 and a handwritten daily page in TodoGeek (TodoGeek is about to be torn apart). Both are
 listed in `DOCS/SUITE_TODO.md`.
 
-## 1. The side button scrolls; an eraser end erases
+## 1. The side button erases; a second button scrolls; an eraser end erases
+
+*Changed again 2026-11-14. Chef: "I'm on for eraser." Hold the side button to erase, let
+go to write. Fingers already pan and zoom in pen mode, and fixing a word mid-sentence is
+the commonest reach. A **second** button, if the pen has one and the browser reports it as
+the middle button (`button === 1` / `buttons & 4`), scrolls while held. That mapping is
+unverified on a device: nothing documents how Chrome on Android reports a stylus's
+secondary button, and Lenovo's own pen settings may take the button before the browser
+sees it. The bullets below describe the 2026-09-29 behaviour where they say the side
+button scrolls; `utils/penButton.js` is current.*
 
 *Changed 2026-09-29. Chef: "Button on the S-pen should let me scroll. That's way more
 useful." Until then the side button was the eraser; the toolbar eraser is still there.*

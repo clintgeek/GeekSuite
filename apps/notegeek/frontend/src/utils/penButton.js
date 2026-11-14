@@ -2,10 +2,15 @@
  * penButton.js — what a pen's buttons do on the sketch canvas
  * (DOCS/HANDWRITING.md §1).
  *
- * - **The S Pen side button scrolls.** Hold it and drag to move around the
- *   page (tldraw's `hand` tool); let go and the pen is back. Chef, 2026-09-29:
- *   "Button on the S-pen should let me scroll. That's way more useful." It
- *   was the eraser until then.
+ * - **The side button erases** while held (tldraw's `eraser`); let go and the
+ *   pen is back. Chef, 2026-11-14: "I'm on for eraser" — fingers already pan
+ *   in pen mode, and fixing a word mid-sentence is the commonest reach. (It
+ *   scrolled from 2026-09-29 until then; the eraser before that.) Lenovo's
+ *   own convention agrees: hold the button nearest the tip to erase.
+ * - **A second button scrolls**, IF the pen has one and the browser reports
+ *   it as the auxiliary ("middle") button — `button === 1` / `buttons & 4`.
+ *   Unverified on a device: no source documents how Chrome on Android maps
+ *   a stylus's secondary button. Harmless if it never arrives.
  * - **An eraser end still erases.** A pen that reports its rubber end with the
  *   eraser bit (`buttons & 32`) gets the eraser for that stroke. `button === 5`
  *   (Surface/Wacom eraser end) is tldraw's own and is left alone.
@@ -19,8 +24,8 @@
  *
  *   1. stops the event before tldraw's own (React, bubble-phase) handler
  *      sees it, so there is no right_click and no context menu;
- *   2. remembers the current tool and switches to `hand` (side button) or
- *      `eraser` (eraser bit);
+ *   2. remembers the current tool and switches to `eraser` (side button or
+ *      eraser bit) or `hand` (a second button);
  *   3. dispatches the press to tldraw as a primary pointer_down, which is
  *      what starts a pan or an erase (tldraw starts those on buttons 0, 1, 5);
  *   4. on that pointer's `pointerup` OR `pointercancel`, dispatches the lift
@@ -39,8 +44,10 @@
  * @returns {() => void} detach
  */
 export const BARREL_BUTTON = 2;
+export const SECOND_BUTTON = 1;
 export const TLDRAW_ERASER_BUTTON = 5;
 const BARREL_BIT = 2;
+const SECOND_BIT = 4;
 const ERASER_BIT = 32;
 
 /** The tool a pen press should borrow, or null to leave the press alone. */
@@ -48,7 +55,8 @@ export function penButtonTool(e) {
   if (e.pointerType !== 'pen') return null;
   if (e.button === TLDRAW_ERASER_BUTTON) return null; // tldraw's own
   if ((e.buttons & ERASER_BIT) !== 0) return 'eraser';
-  if (e.button === BARREL_BUTTON || (e.buttons & BARREL_BIT) !== 0) return 'hand';
+  if (e.button === BARREL_BUTTON || (e.buttons & BARREL_BIT) !== 0) return 'eraser';
+  if (e.button === SECOND_BUTTON || (e.buttons & SECOND_BIT) !== 0) return 'hand';
   return null;
 }
 
