@@ -350,6 +350,7 @@ the typeDefs. Only the module notes under the block are hand-maintained — put 
 
 | Field | Returns |
 |---|---|
+| `sketchTranscript(noteId: ID!)` | `SketchTranscriptState!` |
 | `notes(tag: String, prefix: String, under: String, type: String, limit: Int, sort: String)` | `[Note!]!` |
 | `note(id: ID!)` | `Note` |
 | `noteVersions(noteId: ID!)` | `[NoteVersion!]!` |
@@ -375,7 +376,9 @@ the typeDefs. Only the module notes under the block are hand-maintained — put 
 | `composeNotes(noteIds: [ID!]!)` | `ComposedNotes!` |
 | `foldInPreview(noteId: ID!, input: String!)` | `FoldInProposal!` |
 | `foldInApply(noteId: ID!, baseUpdatedAt: String!, operations: [FoldInOperationInput!]!)` | `FoldInResult!` |
-| `transcribeSketch(image: String!, mediaType: String!, source: String)` | `SketchTranscript!` |
+| `transcribeSketch(image: String!, mediaType: String!, source: String, noteId: ID)` | `SketchTranscript!` |
+| `autoTranscribeSketch(noteId: ID!, image: String!, mediaType: String!)` | `SketchTranscriptState!` |
+| `saveSketchTranscriptEdit(noteId: ID!, text: String!, forHash: String)` | `SketchTranscriptState!` |
 | `setNotePinned(id: ID!, pinned: Boolean!)` | `Note!` |
 | `archiveNotes(ids: [ID!]!)` | `ArchiveResult!` |
 | `restoreNotes(ids: [ID!]!)` | `ArchiveResult!` |
