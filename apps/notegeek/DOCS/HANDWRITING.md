@@ -48,6 +48,13 @@ useful." Until then the side button was the eraser; the toolbar eraser is still 
 
 ## 2. Handwriting to Markdown
 
+*Amended 2026-11-14 (BUJO_HANDWRITING.md): the shared transcription rules changed. Rule 4
+no longer writes every bullet as `- `: it keeps a dot, a dash, a circle, a cross, `>`,
+`<`, `!` and `?` distinct, so a handwritten bullet journal survives transcription. Rule 7
+copies Markdown and TodoGeek shorthand the writer wrote. "Keep as plain text" turns journal
+marks into real Markdown checkboxes and list items. Where this section says the prompt is
+byte-identical to an earlier one, or quotes rule 4, `transcribe.js` is current.*
+
 ### The flow
 1. On a **sketch note**, the ⋯ menu gets **"Convert handwriting to text"**. It's disabled
    when the sketch is empty.

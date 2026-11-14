@@ -25,49 +25,13 @@
  *   gateway that predates the field never sees it from an ordinary entry.
  */
 import { format } from 'date-fns';
-import { localDateString } from '@geeksuite/utils';
 
 const PRIORITY_WORD = { 1: 'high', 2: 'medium', 3: 'low' };
 const KIND_WORD = { '@': 'event', '-': 'note', '?': 'question', '!': 'important' };
 
-/**
- * @param {object} parsed  a `parseTaskInput` result
- * @param {{ today?: Date }} [options]
- * @returns {{ input: object|null, noteGeekNote: string|null }}
- *   `input` is null when there is nothing to add (no words left).
- */
-export function toCreateInput(parsed, { today = new Date() } = {}) {
-  if (!parsed?.content) return { input: null, noteGeekNote: null };
-
-  const tags = [...(parsed.tags || [])];
-  if (parsed.blocked && !tags.some((t) => t.toLowerCase() === 'blocked')) tags.push('blocked');
-
-  const noteParts = [parsed.note, parsed.blockedReason ? `Blocked: ${parsed.blockedReason}` : null].filter(Boolean);
-
-  let dueDate;
-  if (parsed.recurrenceRule) {
-    const anchor = parsed.dueDate ? new Date(parsed.dueDate) : new Date(today);
-    if (!parsed.dueDate) anchor.setHours(9, 0, 0, 0);
-    dueDate = anchor;
-  } else if (parsed.dueDate) {
-    dueDate = parsed.hasTime ? new Date(parsed.dueDate) : localDateString(parsed.dueDate);
-  } else {
-    dueDate = localDateString(today);
-  }
-
-  const input = {
-    content: parsed.content,
-    signifier: parsed.signifier || '*',
-    dueDate,
-  };
-  if (parsed.priority) input.priority = parsed.priority;
-  if (tags.length) input.tags = tags;
-  if (noteParts.length) input.note = noteParts.join('\n');
-  if (parsed.recurrenceRule) input.recurrenceRule = parsed.recurrenceRule;
-  if (parsed.private) input.private = true;
-
-  return { input, noteGeekNote: parsed.noteGeekNote || null };
-}
+// The line → createTask mapping lives in the shared grammar package, so
+// NoteGeek's handwritten journal lines become the same task (2026-11-14).
+export { toCreateInput } from '@geeksuite/task-grammar';
 
 /** "today", "tomorrow", "Friday 3 October", with ", at 2pm" when timed. */
 export function spokenDate(parsed, now = new Date()) {

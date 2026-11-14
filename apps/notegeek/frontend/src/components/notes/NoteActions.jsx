@@ -22,6 +22,7 @@ import AutoAwesomeMosaic from '@mui/icons-material/AutoAwesomeMosaic';
 import HistoryIcon from '@mui/icons-material/History';
 import Visibility from '@mui/icons-material/Visibility';
 import ArrowBack from '@mui/icons-material/ArrowBack';
+import ChecklistOutlined from '@mui/icons-material/ChecklistOutlined';
 import TextSnippetOutlined from '@mui/icons-material/TextSnippetOutlined';
 import PushPin from '@mui/icons-material/PushPin';
 import PushPinOutlined from '@mui/icons-material/PushPinOutlined';
@@ -107,6 +108,9 @@ function NoteActions({
   onTranscribe,
   canTranscribe = false,
   isTranscribing = false,
+  // Journal lines → TodoGeek (DOCS/BUJO_HANDWRITING.md). Sketches only, same
+  // gating as Convert: there has to be something on the page to read.
+  onSendTasks,
   // Print / Save as PDF (hooks/useNotePrint.js). The browser's print
   // dialog is where "Save as PDF" lives, on Android and desktop alike, so
   // one item says both.
@@ -249,6 +253,16 @@ function NoteActions({
             <ListItemIcon><TextSnippetOutlined fontSize="small" /></ListItemIcon>
             <ListItemText
               primary="Convert handwriting to text"
+              secondary={canTranscribe ? null : 'Write something first'}
+              secondaryTypographyProps={{ sx: { fontFamily: theme.typography.fontFamilyMono, fontSize: '0.75rem' } }}
+            />
+          </MenuItem>
+        )}
+        {onSendTasks && (
+          <MenuItem onClick={run(onSendTasks)} disabled={!canTranscribe || isTranscribing} sx={itemSx}>
+            <ListItemIcon><ChecklistOutlined fontSize="small" /></ListItemIcon>
+            <ListItemText
+              primary="Send tasks to TodoGeek"
               secondary={canTranscribe ? null : 'Write something first'}
               secondaryTypographyProps={{ sx: { fontFamily: theme.typography.fontFamilyMono, fontSize: '0.75rem' } }}
             />

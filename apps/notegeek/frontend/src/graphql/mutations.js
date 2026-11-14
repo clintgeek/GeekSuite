@@ -240,6 +240,7 @@ export const SKETCH_TRANSCRIPT_FIELDS = `
     at
     retryAt
     error
+    sentTaskKeys
     autoEnabled
 `;
 
@@ -254,6 +255,33 @@ export const AUTO_TRANSCRIBE_SKETCH = gql`
 export const SAVE_SKETCH_TRANSCRIPT_EDIT = gql`
     mutation SaveSketchTranscriptEdit($noteId: ID!, $text: String!, $forHash: String) {
         saveSketchTranscriptEdit(noteId: $noteId, text: $text, forHash: $forHash) {
+            ${SKETCH_TRANSCRIPT_FIELDS}
+        }
+    }
+`;
+
+// ── Journal lines → TodoGeek (DOCS/BUJO_HANDWRITING.md) ────────────────────
+// TodoGeek's own createTask, through the same gateway. The input is built by
+// TodoGeek's grammar (@geeksuite/task-grammar), so a handwritten line makes
+// the task the same line makes typed into TodoGeek's add box.
+export const CREATE_TODO_TASK = gql`
+    mutation CreateTodoTask(
+        $content: String!, $signifier: String, $status: String, $priority: Int, $tags: [String],
+        $dueDate: Date, $note: String, $recurrenceRule: String, $private: Boolean
+    ) {
+        createTask(
+            content: $content, signifier: $signifier, status: $status, priority: $priority, tags: $tags,
+            dueDate: $dueDate, note: $note, recurrenceRule: $recurrenceRule, private: $private
+        ) {
+            id
+            content
+        }
+    }
+`;
+
+export const RECORD_SKETCH_TASKS_SENT = gql`
+    mutation RecordSketchTasksSent($noteId: ID!, $keys: [String!]!) {
+        recordSketchTasksSent(noteId: $noteId, keys: $keys) {
             ${SKETCH_TRANSCRIPT_FIELDS}
         }
     }

@@ -604,6 +604,12 @@ export const scenes = [
     teardown: (page, h) => h.esc(400),
   },
   {
+    // The pen diagnostic (2026-11-14): unlinked, but a screen all the same.
+    name: '90-labs-pen',
+    goto: '/labs/pen',
+    wait: 800,
+  },
+  {
     // Sketch paper (2026-11-14): the Paper menu, then Warm paper + Lined, so
     // the screenshot shows the ruled page behind the toolbar.
     name: '03q-sketch-paper',
@@ -986,6 +992,27 @@ export const scenes = [
       if (!(await page.getByRole('button', { name: 'Back to transcript' }).count())) {
         throw new Error('Compose from a sketch has no "Back to transcript"');
       }
+      await h.settle(500);
+    },
+    teardown: (page, h) => h.esc(400),
+  },
+  {
+    // "Send tasks to TodoGeek" (DOCS/BUJO_HANDWRITING.md): the page read as a
+    // bullet journal. The stubbed transcript has one journal line, with a
+    // word the model could not read, so the row shows its "Check the [?]".
+    name: '12d-sketch-send-tasks',
+    async setup(page, h) {
+      await openSketchToTranscribe(page, h);
+      await page.getByRole('button', { name: /more note actions/i }).first().click();
+      await h.settle(400);
+      const item = page.getByRole('menuitem', { name: /send tasks to todogeek/i });
+      if (!(await item.count())) throw new Error('⋯ menu has no "Send tasks to TodoGeek" on a sketch');
+      await item.click();
+      const row = page.getByRole('checkbox', { name: /Task: ask Heather/ });
+      await row.waitFor({ timeout: 20000 });
+      if (!(await row.isChecked())) throw new Error('an open task line is not ticked by default');
+      if (!(await page.getByText('Check the [?]').count())) throw new Error('the unreadable word is not flagged');
+      if (!(await page.getByRole('button', { name: 'Send 1 to TodoGeek' }).count())) throw new Error('no Send button for the ticked line');
       await h.settle(500);
     },
     teardown: (page, h) => h.esc(400),

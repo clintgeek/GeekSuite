@@ -38,15 +38,34 @@ export function backLinkLine({ sketchId, sketchTitle, source = 'sketch' }) {
 }
 
 /**
+ * A journal mark at the start of a line, as the Markdown that draws it
+ * (DOCS/BUJO_HANDWRITING.md, "handwritten Markdown"): a box becomes a
+ * task-list item, a crossed line a ticked one, a circled line a list item
+ * that keeps its circle. Everything else is already Markdown or plain words:
+ * "* " and "- " are list items as written, "#" a heading, "> " a quotation.
+ * Only the mark changes — never the words.
+ */
+export function journalMarkAsMarkdown(line) {
+  const m = /^(\s*)(?:[-*]\s+)?\[( |x|X)?\]\s+(?=\S)/.exec(line);
+  if (m) return `${m[1]}- [${m[2] && m[2] !== ' ' ? 'x' : ' '}] ${line.slice(m[0].length)}`;
+  const done = /^(\s*)(?:x|X|×)\s+(?=\S)/.exec(line);
+  if (done) return `${done[1]}- [x] ${line.slice(done[0].length)}`;
+  const event = /^(\s*)(?:o|O|○)\s+(?=\S)/.exec(line);
+  if (event) return `${event[1]}- ○ ${line.slice(event[0].length)}`;
+  return line;
+}
+
+/**
  * A transcript kept as plain text, made to read the same in Markdown.
  *
  * Markdown joins consecutive lines into one paragraph, which turned a
  * handwritten list of lines into one run-on sentence. A line followed by
- * another non-blank line gets a hard break (two trailing spaces). Nothing
- * else changes: no words, no order, no markup the writer did not write.
+ * another non-blank line gets a hard break (two trailing spaces). Journal
+ * marks become the Markdown that draws them (above). Nothing else changes:
+ * no words, no order, no markup the writer did not write.
  */
 export function plainTextAsMarkdown(text) {
-  const lines = String(text || '').replace(/\r\n?/g, '\n').split('\n');
+  const lines = String(text || '').replace(/\r\n?/g, '\n').split('\n').map(journalMarkAsMarkdown);
   return lines
     .map((line, i) => {
       const next = lines[i + 1];

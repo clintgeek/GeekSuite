@@ -6,7 +6,12 @@ import { Box, CircularProgress, Typography, Button } from '@mui/material';
 import BackIcon from '@mui/icons-material/ArrowBack';
 import { useQuery, useMutation } from '@apollo/client';
 import { GET_NOTE_BY_ID } from '../graphql/queries';
-import { CREATE_NOTE, UPDATE_NOTE, COMPOSE_NOTE, TRANSCRIBE_SKETCH, SAVE_SKETCH_TRANSCRIPT_EDIT } from '../graphql/mutations';
+import {
+  CREATE_NOTE, UPDATE_NOTE, COMPOSE_NOTE, TRANSCRIBE_SKETCH, SAVE_SKETCH_TRANSCRIPT_EDIT,
+  CREATE_TODO_TASK, RECORD_SKETCH_TASKS_SENT,
+} from '../graphql/mutations';
+import SendTasksDialog from '../components/editors/SendTasksDialog';
+import { journalLines, taskInputFor } from '../utils/journalLines';
 import { useAutoTranscribe } from '../hooks/useAutoTranscribe';
 import TranscriptStatus from '../components/notes/TranscriptStatus';
 import ComposeDialog from '../components/editors/ComposeDialog';
@@ -577,6 +582,96 @@ function NoteEditorPage() {
     if (!ok) setTranscribe((t) => (t ? { ...t, saving: false } : t));
   };
 
+  // ── Journal lines → TodoGeek (DOCS/BUJO_HANDWRITING.md) ────────────────
+  // The page read as a bullet journal. Uses the stored transcript when it is
+  // for exactly this sketch (no request spent); otherwise reads the page the
+  // way Convert does. Tasks are TodoGeek's own createTask, built by its own
+  // grammar. The sketch is never changed; sent lines are remembered so they
+  // are not offered twice.
+  const [createTodoTask] = useMutation(CREATE_TODO_TASK);
+  const [recordTasksSent] = useMutation(RECORD_SKETCH_TASKS_SENT);
+  const [sendTasks, setSendTasks] = useState(null);
+  const sendTasksRunRef = useRef(0);
+
+  const rowsFromText = (text, sentKeys = []) => journalLines(text).map((e) => {
+    const sent = sentKeys.includes(e.key);
+    return { ...e, sent, on: e.defaultOn && !sent };
+  });
+
+  const openSendTasks = async () => {
+    const run = ++sendTasksRunRef.current;
+    const stale = () => run !== sendTasksRunRef.current;
+    if (dirtyRef.current || !savedNoteIdRef.current) handleSaveRef.current();
+
+    const stored = transcriptView;
+    if (!dirtyRef.current && stored?.current && stored.text?.trim()) {
+      setSendTasks({ open: true, stage: 'review', rows: rowsFromText(stored.text, stored.sentTaskKeys || []), error: null, sending: false, result: null });
+      return;
+    }
+    setSendTasks({ open: true, stage: 'working', rows: [], error: null, sending: false, result: null });
+    try {
+      const api = sketchApiRef.current;
+      if (!api) throw new Error('The sketch is still loading. Try again in a moment.');
+      const exported = await api.exportPng();
+      const { data } = await transcribeSketchMutation({
+        variables: { image: exported.base64, mediaType: exported.mediaType, noteId: savedNoteIdRef.current || undefined },
+      });
+      if (stale()) return;
+      const text = data?.transcribeSketch?.text || '';
+      setSendTasks((t) => (t ? { ...t, stage: 'review', rows: rowsFromText(text, stored?.sentTaskKeys || []) } : t));
+    } catch (err) {
+      if (stale()) return;
+      setSendTasks((t) => (t ? { ...t, stage: 'error', error: err?.graphQLErrors?.length || err?.networkError ? transcribeErrorMessage(err) : (err?.message || 'Could not read the page.') } : t));
+    }
+  };
+
+  const closeSendTasks = () => {
+    sendTasksRunRef.current += 1;
+    setSendTasks(null);
+  };
+
+  const handleSendTasks = async () => {
+    const chosen = (sendTasks?.rows || []).filter((r) => r.on && r.text.trim());
+    if (!chosen.length) return;
+    if (!savedNoteIdRef.current) await handleSaveRef.current();
+    const sketchId = savedNoteIdRef.current;
+    setSendTasks((t) => ({ ...t, sending: true }));
+    const now = new Date();
+    const sentKeys = [];
+    let failed = 0;
+    // One at a time, in page order: TodoGeek lists them in the order they arrive.
+    for (const row of chosen) {
+      const input = taskInputFor(row, { now, sketch: sketchId ? { id: sketchId, title } : null, origin: window.location.origin });
+      if (!input) { failed += 1; continue; }
+      try {
+        await createTodoTask({ variables: input });
+        sentKeys.push(row.key);
+      } catch {
+        failed += 1;
+      }
+    }
+    if (sentKeys.length && sketchId) {
+      try {
+        const { data } = await recordTasksSent({ variables: { noteId: sketchId, keys: sentKeys } });
+        if (data?.recordSketchTasksSent) setTranscriptView(data.recordSketchTasksSent);
+      } catch {
+        // The tasks are in TodoGeek; only the "already sent" memory was lost.
+      }
+    }
+    const todoGeekUrl = window.location.hostname.includes('notegeek')
+      ? `${window.location.protocol}//${window.location.hostname.replace('notegeek', 'todogeek')}/today`
+      : null;
+    setSendTasks((t) => (t ? {
+      ...t,
+      sending: false,
+      stage: sentKeys.length ? 'done' : 'review',
+      error: null,
+      rows: t.rows.map((r) => (sentKeys.includes(r.key) ? { ...r, sent: true, on: false } : r)),
+      result: { sent: sentKeys.length, failed, todoGeekUrl },
+    } : t));
+    if (!sentKeys.length) notify('Nothing was added to TodoGeek. Try again in a moment.', { tone: 'error' });
+  };
+
   const handleTranscriptCompose = () => {
     if (!transcribe?.text?.trim()) return;
     // Hidden, not closed: "Back to transcript" in Compose returns to it.
@@ -1082,6 +1177,7 @@ function NoteEditorPage() {
                 onCompose={canCompose ? () => handleCompose() : undefined}
                 isComposing={isComposing}
                 onTranscribe={isHandwritten ? () => handleTranscribe() : undefined}
+                onSendTasks={isHandwritten ? () => openSendTasks() : undefined}
                 canTranscribe={canTranscribe}
                 isTranscribing={transcribe?.stage === 'working'}
                 onPrint={handlePrint}
@@ -1209,6 +1305,22 @@ function NoteEditorPage() {
           onKeepPlain={handleTranscriptKeepPlain}
           reused={transcribe.reused}
           onTranscribeAgain={transcribe.reused ? () => handleTranscribe({ forceRead: true }) : null}
+        />
+      ) : null}
+
+      {sendTasks ? (
+        <SendTasksDialog
+          open={sendTasks.open}
+          stage={sendTasks.stage}
+          rows={sendTasks.rows}
+          error={sendTasks.error}
+          sending={sendTasks.sending}
+          result={sendTasks.result}
+          onToggle={(key, on) => setSendTasks((t) => ({ ...t, rows: t.rows.map((r) => (r.key === key ? { ...r, on } : r)) }))}
+          onTextChange={(key, text) => setSendTasks((t) => ({ ...t, rows: t.rows.map((r) => (r.key === key ? { ...r, text } : r)) }))}
+          onSend={handleSendTasks}
+          onClose={closeSendTasks}
+          onRetry={openSendTasks}
         />
       ) : null}
 

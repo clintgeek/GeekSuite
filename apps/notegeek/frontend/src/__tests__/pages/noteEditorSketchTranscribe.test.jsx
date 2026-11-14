@@ -32,6 +32,8 @@ const composeNote = vi.fn();
 const transcribeSketch = vi.fn();
 const saveSketchTranscriptEdit = vi.fn();
 const autoTranscribeSketch = vi.fn();
+const createTodoTask = vi.fn();
+const recordSketchTasksSent = vi.fn();
 // The sketch's stored automatic transcript (AUTO_TRANSCRIBE_SPEC.md §5).
 const transcriptState = { current: undefined };
 const notify = vi.fn();
@@ -79,6 +81,8 @@ vi.mock('@apollo/client', async () => {
         TranscribeSketch: transcribeSketch,
         SaveSketchTranscriptEdit: saveSketchTranscriptEdit,
         AutoTranscribeSketch: autoTranscribeSketch,
+        CreateTodoTask: createTodoTask,
+        RecordSketchTasksSent: recordSketchTasksSent,
       }[name] || vi.fn().mockResolvedValue({ data: {} });
       return [fn, { loading: false }];
     },
@@ -128,6 +132,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   transcriptState.current = undefined;
   saveSketchTranscriptEdit.mockResolvedValue({ data: {} });
+  createTodoTask.mockResolvedValue({ data: { createTask: { id: 't1', content: 'x' } } });
+  recordSketchTasksSent.mockResolvedValue({ data: {} });
   note.current = sketch();
   exportPng.mockResolvedValue({
     blob: new Blob(['png'], { type: 'image/png' }),
@@ -362,5 +368,97 @@ describe('reusing a stored transcript (AUTO_TRANSCRIBE_SPEC.md §5)', () => {
     renderEditor();
     await startTranscribe();
     expect(transcribeSketch).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('Send tasks to TodoGeek (BUJO_HANDWRITING.md)', () => {
+  const HASH = 'b'.repeat(64);
+  const JOURNAL = '# Standup\n* call the roofer !high #house\n[ ] book flights\nx renew passport\n- the old site goes away\no dentist';
+  const storedJournal = (over = {}) => ({
+    status: 'searchable', current: true, contentHash: HASH, text: JOURNAL, edited: false, source: 'auto',
+    model: 'openai/gpt-4.1-mini', provider: 'openrouter', at: '2026-11-14T10:00:00.000Z', retryAt: null, error: null,
+    sentTaskKeys: [], autoEnabled: true, ...over,
+  });
+
+  async function openSend() {
+    const menu = await openMenu();
+    const item = within(menu).getByRole('menuitem', { name: /send tasks to todogeek/i });
+    await act(async () => { item.click(); });
+    return screen.findByRole('dialog', { name: /send tasks to todogeek/i });
+  }
+  const box = (dialog, name) => within(dialog).getByRole('checkbox', { name });
+
+  it('lists the journal lines from the stored transcript — no request spent — with open things ticked', async () => {
+    transcriptState.current = storedJournal();
+    renderEditor();
+    const dialog = await openSend();
+    expect(transcribeSketch).not.toHaveBeenCalled();
+    expect(box(dialog, /Task: call the roofer/)).toBeChecked();
+    expect(box(dialog, /Task: book flights/)).toBeChecked();
+    expect(box(dialog, /Event: dentist/)).toBeChecked();
+    expect(box(dialog, /Done: renew passport/)).not.toBeChecked();
+    expect(box(dialog, /Note: the old site goes away/)).not.toBeChecked();
+    // Prose and headings are not entries.
+    expect(within(dialog).queryByRole('checkbox', { name: /Standup/ })).not.toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Send 3 to TodoGeek' })).toBeInTheDocument();
+  });
+
+  it("sends the ticked lines as TodoGeek tasks, built by TodoGeek's grammar, and remembers them", async () => {
+    transcriptState.current = storedJournal();
+    renderEditor();
+    const dialog = await openSend();
+    await act(async () => { within(dialog).getByRole('button', { name: 'Send 3 to TodoGeek' }).click(); });
+    await waitFor(() => expect(createTodoTask).toHaveBeenCalledTimes(3));
+    const sent = createTodoTask.mock.calls.map(([{ variables }]) => variables);
+    expect(sent[0]).toMatchObject({ content: 'call the roofer', signifier: '*', priority: 1, tags: ['house'] });
+    expect(sent[0].dueDate).toMatch(/^\d{4}-\d{2}-\d{2}$/); // no date written: today, date-only
+    expect(sent[0].note).toMatch(/^From sketch: Tuesday — .*\/notes\/sketch-1$/);
+    expect(sent[1]).toMatchObject({ content: 'book flights', signifier: '*' });
+    expect(sent[2]).toMatchObject({ content: 'dentist', signifier: '@' });
+    expect(recordSketchTasksSent).toHaveBeenCalledTimes(1);
+    expect(recordSketchTasksSent.mock.calls[0][0].variables).toMatchObject({ noteId: 'sketch-1' });
+    expect(recordSketchTasksSent.mock.calls[0][0].variables.keys).toHaveLength(3);
+    expect(await screen.findByText('3 entries were added to TodoGeek.')).toBeInTheDocument();
+    // The sketch itself is never written by this.
+    expect(updateNote).not.toHaveBeenCalled();
+    expect(createNote).not.toHaveBeenCalled();
+  });
+
+  it('a line already sent is shown as such and not ticked again', async () => {
+    const { journalLines } = await import('../../utils/journalLines');
+    const key = journalLines(JOURNAL)[0].key;
+    transcriptState.current = storedJournal({ sentTaskKeys: [key] });
+    renderEditor();
+    const dialog = await openSend();
+    expect(box(dialog, /Task: call the roofer/)).not.toBeChecked();
+    expect(within(dialog).getByText('Already sent')).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: 'Send 2 to TodoGeek' })).toBeInTheDocument();
+  });
+
+  it('with no current transcript it reads the page first, the way Convert does', async () => {
+    transcribeSketch.mockResolvedValueOnce({ data: { transcribeSketch: { text: '* buy milk', provenance: { model: 'm' } } } });
+    renderEditor();
+    const dialog = await openSend();
+    await waitFor(() => expect(box(dialog, /Task: buy milk/)).toBeChecked());
+    expect(transcribeSketch).toHaveBeenCalledWith({ variables: { image: 'iVBORw0KGgoAAAA', mediaType: 'image/png', noteId: 'sketch-1' } });
+  });
+
+  it('a task that fails is reported, the rest still go, and only what went is remembered', async () => {
+    transcriptState.current = storedJournal();
+    createTodoTask.mockRejectedValueOnce(new Error('gateway down'));
+    renderEditor();
+    const dialog = await openSend();
+    await act(async () => { within(dialog).getByRole('button', { name: 'Send 3 to TodoGeek' }).click(); });
+    expect(await screen.findByText('2 entries were added to TodoGeek.')).toBeInTheDocument();
+    expect(screen.getByText(/1 entry was not added/)).toBeInTheDocument();
+    expect(recordSketchTasksSent.mock.calls[0][0].variables.keys).toHaveLength(2);
+  });
+
+  it('a page with no journal marks says so, and shows the marks', async () => {
+    transcriptState.current = storedJournal({ text: 'just some prose\nand more prose' });
+    renderEditor();
+    const dialog = await openSend();
+    expect(within(dialog).getByText('No journal lines on this page.')).toBeInTheDocument();
+    expect(within(dialog).queryByRole('button', { name: /to TodoGeek/ })).not.toBeInTheDocument();
   });
 });

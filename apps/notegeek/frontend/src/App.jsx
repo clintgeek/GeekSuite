@@ -21,6 +21,7 @@ import SearchResults from './components/SearchResults';
 import TagNotesList from './components/TagNotesList';
 import QuickCaptureHome from './pages/QuickCaptureHome';
 import Settings from './pages/Settings';
+import PenLab from './pages/PenLab';
 import ShareTarget from './pages/ShareTarget';
 import ArchivedNotes from './pages/ArchivedNotes';
 
@@ -146,6 +147,8 @@ function App() {
                                 <Route path="/search" element={<Layout><SearchResults /></Layout>} />
                                 <Route path="/archived" element={<Layout><ArchivedNotes /></Layout>} />
                                 <Route path="/settings" element={<Layout><Settings /></Layout>} />
+                                {/* A diagnostic, not linked from anywhere (pages/PenLab.jsx). */}
+                                <Route path="/labs/pen" element={<Layout><PenLab /></Layout>} />
                             </>
                         )}
 

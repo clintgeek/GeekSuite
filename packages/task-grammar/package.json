@@ -1,0 +1,16 @@
+{
+  "name": "@geeksuite/task-grammar",
+  "version": "0.1.0",
+  "private": true,
+  "description": "TodoGeek's one-line task grammar (signifiers, !priority, #tags, /dates, plain-word dates) and the createTask input it becomes. Shared so NoteGeek's handwritten journal lines mean exactly what the same line means typed into TodoGeek. Pure ESM, Node and browser.",
+  "type": "module",
+  "main": "src/index.js",
+  "exports": {
+    ".": "./src/index.js"
+  },
+  "sideEffects": false,
+  "dependencies": {
+    "@geeksuite/tags": "workspace:*",
+    "@geeksuite/utils": "workspace:*"
+  }
+}

@@ -20,6 +20,7 @@
     "@geeksuite/api-client": "workspace:*",
     "@geeksuite/auth": "workspace:*",
     "@geeksuite/tags": "workspace:*",
+    "@geeksuite/task-grammar": "workspace:*",
     "@geeksuite/ui": "workspace:*",
     "@geeksuite/user": "workspace:*",
     "@geeksuite/utils": "workspace:*",

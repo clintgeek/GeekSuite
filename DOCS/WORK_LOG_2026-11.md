@@ -21,6 +21,20 @@ What shipped, as it landed. Wanted-but-not-done lives in `SUITE_TODO.md`.
 - **Pen side button erases** while held (Chef: "I'm on for eraser"); it scrolled since
   2026-09-29. A second button reported as the middle button scrolls — unverified on the
   Lenovo pen. `utils/penButton.js`, HANDWRITING.md §1.
+- **Handwritten bullet journal → TodoGeek, and handwritten Markdown** (overnight, Sage's
+  decisions on Chef's grant; all in `apps/notegeek/DOCS/BUJO_HANDWRITING.md`).
+  - The transcription prompt keeps list marks distinct (dot `*` task, dash `-` note, circle
+    `o` event, cross `x` done, `>` `<` `!` `?`) and copies the writer's own Markdown and
+    TodoGeek shorthand.
+  - TodoGeek's line parser moved to the shared `packages/task-grammar`; TodoGeek re-exports
+    it, and NoteGeek reads handwritten lines with the same code.
+  - ⋯ → "Send tasks to TodoGeek" lists a sketch's journal lines (open ones ticked,
+    editable, with what was understood), creates TodoGeek tasks, and remembers what was
+    sent.
+  - "Keep as plain text" draws journal marks as Markdown checkboxes and list items.
+  - `/labs/pen` shows what a pen sends the browser. The Lenovo pen's button is taken by
+    Lenovo's own menu before the browser sees it.
+  - **Not verified with real handwriting or a real model**: first thing to test.
 - **Local-inference spike PARKED** before any code (`LOCAL_INFERENCE_SPEC.md`); the
   transformers.js install was backed out.
 - **Earlier the same night:** the GeekSuite Login (StartGeek look), the NoteGeek one-bar

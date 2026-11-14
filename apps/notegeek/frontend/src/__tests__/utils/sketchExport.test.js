@@ -15,6 +15,7 @@ import {
   derivedNoteContent,
   derivedNoteTitle,
   firstHeading,
+  journalMarkAsMarkdown,
   plainTextAsMarkdown,
 } from '../../utils/sketchToText';
 
@@ -162,9 +163,26 @@ describe('the derived note', () => {
     expect(body).toBe('From photos: [Kitchen](/notes/p1)\n\na  \nb\n');
   });
 
-  it('keeps a plain transcript\'s line breaks in Markdown, and changes nothing else', () => {
-    const text = 'milk\neggs\n\n-> call roofer\n[ ] quote by Fri';
-    expect(plainTextAsMarkdown(text)).toBe('milk  \neggs\n\n-> call roofer  \n[ ] quote by Fri');
+  it('keeps a plain transcript\'s line breaks in Markdown, and changes no words', () => {
+    const text = 'milk\neggs\n\n-> call roofer\nquote by Fri';
+    expect(plainTextAsMarkdown(text)).toBe('milk  \neggs\n\n-> call roofer  \nquote by Fri');
     expect(plainTextAsMarkdown(text).replace(/ {2}$/gm, '')).toBe(text);
+  });
+
+  it('journal marks become the Markdown that draws them (BUJO_HANDWRITING.md, 2026-11-14)', () => {
+    // Until then "[ ] quote by Fri" was kept as typed, and rendered as stray brackets.
+    expect(journalMarkAsMarkdown('[ ] quote by Fri')).toBe('- [ ] quote by Fri');
+    expect(journalMarkAsMarkdown('[x] pay rent')).toBe('- [x] pay rent');
+    expect(journalMarkAsMarkdown('- [ ] already markdown')).toBe('- [ ] already markdown');
+    expect(journalMarkAsMarkdown('x renew passport')).toBe('- [x] renew passport');
+    expect(journalMarkAsMarkdown('o dentist 2pm')).toBe('- ○ dentist 2pm');
+    expect(journalMarkAsMarkdown('  x indented')).toBe('  - [x] indented');
+  });
+
+  it('what is already Markdown, or plain words, is left exactly alone', () => {
+    for (const line of ['* a task', '- a note', '# Heading', '> a quotation', '1. first', '! important', '? a question',
+      'xylophone lessons', 'ok then', 'x', '**bold** words', '#work stuff']) {
+      expect(journalMarkAsMarkdown(line)).toBe(line);
+    }
   });
 });
