@@ -466,6 +466,10 @@ the app was down over its due time, should it arrive late or be skipped?
 - **Input Validation (Zod)**:
   - Migrate remaining ad-hoc `if (!field)` route checks to Zod schemas.
   - Priority: FlockGeek REST routes (if retained per Q22) and NoteGeek gateway resolvers.
+- **Red in CI: FitnessGeek `53d-weight-tooltip` (and once `53e-bodycomp-tooltip`), phone** (found 2026-11-14; parked by Chef).
+  - CI says "tooltip leaves the chart: tip 266-435 chart 17-373" in both modes, on two runs (`5da487b2`, `5b79d3e1`). Last green FitnessGeek run was `f4404367` (2026-11-07), and no FitnessGeek code changed since.
+  - Passes locally with `FG_SCENES='^53d'`, also with `TZ=UTC` and `HARNESS_CPU_THROTTLE=4`. CI saves no screenshot for a scene that throws.
+  - Suspect the date: the fixture weights are placed relative to today, so the tapped slice moves, and `tooltipShift` (chartTips.js) chooses its side from `slice.x` while nivo flips on the pointer's side. Release images still ship (release ignores this job).
 - **Mobile Harness CI Coverage**:
   - Add remaining edge scenes and modal interaction sequences to `tools/mobile-harness`.
 - ~~**Flaky: `aiFreeTierRouting > "resets the counters in the mirror and in Mongo"`**~~ —
