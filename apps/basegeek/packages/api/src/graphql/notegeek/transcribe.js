@@ -58,6 +58,14 @@ export const TRANSCRIBE_TIMEOUT_MS = 45000;
 export const TRANSCRIBE_MAX_TOKENS = 2500;
 
 /**
+ * Rule 4 keeps list marks DISTINCT (2026-11-14, BUJO_HANDWRITING.md): it used
+ * to turn every bullet into "- ", which lost a bullet journal's grammar (a dot
+ * is a task, a dash a note, a circle an event, a cross done). The marks chosen
+ * are TodoGeek's own signifiers where it has one ("*" task, "-" note, "!",
+ * "?", "x", "<", ">") and are also plain Markdown list marks, so the same
+ * transcript reads as a journal and as Markdown. Rule 7 keeps Markdown and
+ * TodoGeek modifiers the WRITER wrote ("#", "**", "#tag", "/friday", "!high").
+ *
  * The rules every transcription follows, sketch or photo. Shared text, so the
  * photo prompt cannot drift from the sketch prompt: it is these rules plus
  * the photo ones, never a rewrite of them.
@@ -65,10 +73,10 @@ export const TRANSCRIBE_MAX_TOKENS = 2500;
 const TRANSCRIBE_RULES = `1. TRANSCRIBE FAITHFULLY. Write the words exactly as written, in the order they appear, with the writer's own spelling, abbreviations, numbers and punctuation.
 2. NEVER INVENT, SUMMARISE OR TIDY. Do not add words, fix grammar, correct spelling, reorder, merge, expand abbreviations, add headings, or improve anything. That is someone else's job, later.
 3. KEEP THE LAYOUT. Keep line breaks where the writer broke lines, keep blank lines between separate blocks, and keep list structure and indentation.
-4. RENDER MARKS AS TEXT. Bullets as "- ", numbered items as written ("1."), arrows as "->" (or "<-", "<->"), an empty checkbox as "[ ]" and a ticked one as "[x]", underlining or boxes around words as the words alone.
+4. RENDER MARKS AS TEXT, AND KEEP LIST MARKS DISTINCT. The mark that opens a line says what kind of line it is, so never merge different marks into one. At the start of a line write: a dot bullet as "* ", a dash as "- ", an open circle as "o ", a cross or an X (including a bullet that has been crossed through) as "x ", a right angle bracket as "> ", a left angle bracket as "< ", an exclamation mark as "! ", a question mark as "? ", an empty checkbox as "[ ]" and a ticked or crossed one as "[x]". Numbered items as written ("1."). Arrows inside a line as "->" (or "<-", "<->"). Underlining or boxes around words as the words alone.
 5. MARK WHAT YOU CANNOT READ. Write "[?]" for each word you cannot read with confidence. Never guess a word and present it as read.
 6. DRAWINGS GET ONE SHORT PHRASE. A drawing, diagram or doodle becomes "[drawing: ...]" with a few words saying what it is, and nothing more. Transcribe any words written inside or beside it.
-7. PLAIN TEXT ONLY. No Markdown formatting, no code fences, no commentary, no "Here is the transcription". If the page has no writing at all, reply with exactly "[no writing]".`;
+7. PLAIN TEXT ONLY. Add no Markdown formatting of your own, no code fences, no commentary, no "Here is the transcription". But marks the writer wrote are the writer's words: a "#" or "##" before a heading, "**" or "_" around words, backticks, a ">" before a quotation, "#tags", "/friday" style dates and "!high" style words are copied exactly as written, in place. If the page has no writing at all, reply with exactly "[no writing]".`;
 
 export const TRANSCRIBE_PROMPT = `You are transcribing a page of handwriting — a sketch-pad note written with a stylus. Your only job is to write down, as plain text, exactly what is written on the page.
 

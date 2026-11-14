@@ -379,6 +379,7 @@ the typeDefs. Only the module notes under the block are hand-maintained — put 
 | `transcribeSketch(image: String!, mediaType: String!, source: String, noteId: ID)` | `SketchTranscript!` |
 | `autoTranscribeSketch(noteId: ID!, image: String!, mediaType: String!)` | `SketchTranscriptState!` |
 | `saveSketchTranscriptEdit(noteId: ID!, text: String!, forHash: String)` | `SketchTranscriptState!` |
+| `recordSketchTasksSent(noteId: ID!, keys: [String!]!)` | `SketchTranscriptState!` |
 | `setNotePinned(id: ID!, pinned: Boolean!)` | `Note!` |
 | `archiveNotes(ids: [ID!]!)` | `ArchiveResult!` |
 | `restoreNotes(ids: [ID!]!)` | `ArchiveResult!` |

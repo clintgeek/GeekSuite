@@ -114,6 +114,9 @@ const NoteSchema = new mongoose.Schema(
         retryAt: { type: Date, default: null },
         failedHash: { type: String, default: null },  // given up on for this content
         error: { type: String, default: null },
+        // Journal lines of this sketch already sent to TodoGeek, as line keys
+        // (BUJO_HANDWRITING.md), so the dialog doesn't offer them twice.
+        sentTaskKeys: { type: [String], default: undefined },
         // The user's corrections from Convert's review box, for the content
         // they were made against. Automatic runs never overwrite them.
         edited: {

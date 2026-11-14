@@ -14,6 +14,7 @@ import {
   getSketchTranscript,
   rememberConvertReading,
   saveSketchTranscriptEdit,
+  recordSketchTasksSent,
   transcriptView,
   AUTO_TRANSCRIBE_DAILY_CAP,
   CLAIM_STALE_MS,
@@ -311,6 +312,26 @@ describe('word search reads wordText, never sketch JSON', () => {
     expect(await Note.countDocuments({ $text: { $search: 'garage' } })).toBe(1);
     // Idempotent.
     expect(await ensureNoteWordIndex()).toMatchObject({ filled: 0, sketches: 0, dropped: 0, created: false });
+  });
+});
+
+describe('journal lines sent to TodoGeek (BUJO_HANDWRITING.md)', () => {
+  test('sent line keys are remembered per sketch, deduped, and survive a new reading', async () => {
+    const id = await sketch();
+    let view = await recordSketchTasksSent({ noteId: id, userId: USER, keys: ['k1', 'k2'], now: T0 });
+    expect(view.sentTaskKeys).toEqual(['k1', 'k2']);
+    view = await recordSketchTasksSent({ noteId: id, userId: USER, keys: ['k2', 'k3'], now: T0 });
+    expect(view.sentTaskKeys).toEqual(['k1', 'k2', 'k3']);
+    await run(id, reading('* buy milk'));
+    expect((await stored(id)).sketchTranscript.sentTaskKeys).toEqual(['k1', 'k2', 'k3']);
+    expect((await stored(id)).updatedAt.getTime()).toBe((await stored(id)).createdAt.getTime());
+  });
+
+  test("someone else's sketch, or a note that is not a sketch, is refused", async () => {
+    const theirs = await sketch(undefined, { userId: new mongoose.Types.ObjectId() });
+    await expect(recordSketchTasksSent({ noteId: theirs, userId: USER, keys: ['k'] })).rejects.toThrow(/not found/i);
+    const md = await Note.create({ title: 'm', content: 'x', type: 'markdown', userId: USER });
+    await expect(recordSketchTasksSent({ noteId: String(md._id), userId: USER, keys: ['k'] })).rejects.toThrow(/sketch/i);
   });
 });
 

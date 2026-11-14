@@ -160,6 +160,20 @@ describe('transcribeSketch prompt', () => {
     expect(TRANSCRIBE_PROMPT).toMatch(/"\[ \]".*"\[x\]"/);
     expect(TRANSCRIBE_PROMPT).toMatch(/PLAIN TEXT ONLY/);
   });
+
+  test("the prompt keeps a bullet journal's marks distinct, and the writer's own Markdown (BUJO_HANDWRITING.md)", () => {
+    // A dot is a task, a dash a note, a circle an event, a cross done: merging
+    // them into one bullet (the old "Bullets as '- '") lost the journal.
+    expect(TRANSCRIBE_PROMPT).toMatch(/KEEP LIST MARKS DISTINCT/);
+    expect(TRANSCRIBE_PROMPT).not.toMatch(/Bullets as "- "/);
+    for (const mark of ['a dot bullet as "* "', 'a dash as "- "', 'an open circle as "o "', 'as "x "', 'as "> "', 'as "< "', 'as "! "', 'as "? "']) {
+      expect(TRANSCRIBE_PROMPT).toContain(mark);
+    }
+    // The writer's own marks are copied, never added.
+    expect(TRANSCRIBE_PROMPT).toMatch(/Add no Markdown formatting of your own/);
+    expect(TRANSCRIBE_PROMPT).toMatch(/"#tags", "\/friday" style dates and "!high" style words are copied exactly/);
+    expect(TRANSCRIBE_PHOTO_PROMPT).toMatch(/KEEP LIST MARKS DISTINCT/);
+  });
 });
 
 describe('transcribeSketch failures are errors, never an empty transcript', () => {

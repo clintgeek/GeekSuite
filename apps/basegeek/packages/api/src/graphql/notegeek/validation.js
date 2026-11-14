@@ -401,6 +401,13 @@ export const transcribeSketchArgsSchema = z
 /** The page image is checked by transcribeSketchArgsSchema; this is the rest. */
 export const autoTranscribeSketchArgsSchema = z.object({ noteId: idString }).passthrough();
 
+export const recordSketchTasksSentArgsSchema = z
+  .object({
+    noteId: idString,
+    keys: z.array(z.string().trim().min(1).max(80)).min(1).max(200),
+  })
+  .strict();
+
 export const TRANSCRIPT_EDIT_MAX = DOC_CONTENT_MAX;
 export const saveSketchTranscriptEditArgsSchema = z
   .object({

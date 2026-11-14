@@ -117,6 +117,8 @@ export const typeDefs = gql`
     at: String
     retryAt: String
     error: String
+    "Keys of journal lines already sent to TodoGeek from this sketch."
+    sentTaskKeys: [String!]!
     autoEnabled: Boolean!
   }
 
@@ -461,6 +463,9 @@ export const typeDefs = gql`
     review, or a photo note's reviewed pages), for the content hash they were
     made against — the sketch as saved now when forHash is absent."""
     saveSketchTranscriptEdit(noteId: ID!, text: String!, forHash: String): SketchTranscriptState!
+    """Remember that these journal lines of a sketch were sent to TodoGeek
+    (BUJO_HANDWRITING.md), so they are not offered again."""
+    recordSketchTasksSent(noteId: ID!, keys: [String!]!): SketchTranscriptState!
     """Pin or unpin a note. Scoped to the owner, like every other note mutation."""
     setNotePinned(id: ID!, pinned: Boolean!): Note!
     """

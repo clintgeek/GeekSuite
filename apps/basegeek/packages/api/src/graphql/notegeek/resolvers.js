@@ -14,6 +14,7 @@ import {
   transcribeSketchArgsSchema,
   autoTranscribeSketchArgsSchema,
   saveSketchTranscriptEditArgsSchema,
+  recordSketchTasksSentArgsSchema,
   foldInPreviewArgsSchema,
   foldInApplyArgsSchema,
   archiveNotesArgsSchema,
@@ -27,6 +28,7 @@ import { composeNote, composeNotes } from './compose.js';
 import { transcribeSketch } from './transcribe.js';
 import {
   autoTranscribeSketch, getSketchTranscript, rememberConvertReading, saveSketchTranscriptEdit,
+  recordSketchTasksSent,
 } from './sketchTranscript.js';
 import { foldInPreview, planOperations, applyPlan, refusalFor } from './foldin.js';
 import NoteVersion from './models/NoteVersion.js';
@@ -74,6 +76,7 @@ const validateComposeNote = validateInput(composeNoteArgsSchema);
 const validateTranscribeSketch = validateInput(transcribeSketchArgsSchema);
 const validateAutoTranscribeSketch = validateInput(autoTranscribeSketchArgsSchema);
 const validateSaveSketchTranscriptEdit = validateInput(saveSketchTranscriptEditArgsSchema);
+const validateRecordSketchTasksSent = validateInput(recordSketchTasksSentArgsSchema);
 const validateFoldInPreview = validateInput(foldInPreviewArgsSchema);
 const validateFoldInApply = validateInput(foldInApplyArgsSchema);
 const validateArchiveNotes = validateInput(archiveNotesArgsSchema);
@@ -763,6 +766,13 @@ export const resolvers = {
       const { noteId } = validateAutoTranscribeSketch(rawArgs);
       const { image, mediaType } = validateTranscribeSketch({ image: rawArgs.image, mediaType: rawArgs.mediaType });
       return await autoTranscribeSketch({ noteId, userId, image, mediaType });
+    },
+
+    recordSketchTasksSent: async (_, rawArgs, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      const { noteId, keys } = validateRecordSketchTasksSent(rawArgs);
+      return await recordSketchTasksSent({ noteId, userId, keys });
     },
 
     saveSketchTranscriptEdit: async (_, rawArgs, context) => {

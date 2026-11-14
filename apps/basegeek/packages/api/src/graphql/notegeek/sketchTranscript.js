@@ -91,6 +91,7 @@ export function transcriptView(note, { now = Date.now(), autoEnabled = true } = 
     at: t.at ? new Date(t.at).toISOString() : null,
     retryAt: status === 'retry' && t.retryAt ? new Date(t.retryAt).toISOString() : null,
     error: status === 'retry' || status === 'failed' ? (t.error || null) : null,
+    sentTaskKeys: Array.isArray(t.sentTaskKeys) ? t.sentTaskKeys : [],
     autoEnabled,
   };
 }
@@ -277,6 +278,29 @@ export async function saveSketchTranscriptEdit({ noteId, userId, text, forHash, 
   await Note.updateOne(
     { _id: noteId, userId },
     { $set: { 'sketchTranscript.edited': next.edited, ...indexFields(next) } },
+    { timestamps: false },
+  );
+  const autoEnabled = await isAutoTranscribeOn(userId);
+  return transcriptView(await Note.findOne({ _id: noteId, userId }, NOTE_FIELDS).lean(), { now, autoEnabled });
+}
+
+/** How many sent-line keys a sketch keeps (newest win). */
+export const MAX_SENT_TASK_KEYS = 500;
+
+/**
+ * Journal lines of this sketch were sent to TodoGeek (BUJO_HANDWRITING.md).
+ * Remembered per sketch so the "Send tasks" dialog marks them as sent rather
+ * than offering them again. Only keys — the tasks themselves live in TodoGeek.
+ */
+export async function recordSketchTasksSent({ noteId, userId, keys, now = Date.now() }) {
+  if (!mongoose.isValidObjectId(noteId)) throw notFound();
+  const note = await Note.findOne({ _id: noteId, userId }, NOTE_FIELDS).lean();
+  if (!note) throw notFound();
+  if (note.type !== 'handwritten') throw new Error('Only a sketch has journal lines.');
+  const merged = [...new Set([...(note.sketchTranscript?.sentTaskKeys || []), ...keys])].slice(-MAX_SENT_TASK_KEYS);
+  await Note.updateOne(
+    { _id: noteId, userId },
+    { $set: { 'sketchTranscript.sentTaskKeys': merged } },
     { timestamps: false },
   );
   const autoEnabled = await isAutoTranscribeOn(userId);
