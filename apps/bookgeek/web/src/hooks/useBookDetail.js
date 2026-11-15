@@ -15,7 +15,8 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@apollo/client";
 import { useToast } from "@geeksuite/ui";
 import { GET_BOOK } from "../graphql/queries.js";
-import { authFetch } from "../utils/authFetch";
+import { apiUrl, authFetch } from "../utils/authFetch";
+import { isAsIsFormat } from "../utils/comic";
 import { calendarDayToIso, isoToCalendarDay, todayAsCalendarIso } from "../utils/lastRead";
 import { notifyMovedToRead } from "../views/detail/movedToReadToast";
 import { bookIdOf, useBookActions } from "./useBookActions";
@@ -146,6 +147,21 @@ export function useBookDetail({ bookId, onClose, onDeleted }) {
   async function handleDownload(book, format) {
     const id = bookIdOf(book);
     if (!id) return;
+
+    // A comic archive or a PDF is handed to the browser's own downloader.
+    // The fetch-then-blob below holds the whole file in memory first, which
+    // is fine for a 2 MB ebook and not for a 300 MB manga volume on a phone.
+    if (isAsIsFormat(format)) {
+      setDownloadOpen(false);
+      setDownloadError(null);
+      const a = document.createElement("a");
+      a.href = apiUrl(`/books/${ id }/download/${ format }`);
+      a.download = "";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      return;
+    }
 
     setConvertingFormat(format);
     setDownloadOpen(false);

@@ -33,6 +33,7 @@ import {
 import { GeekDialog, GeekSheet, useToast } from "@geeksuite/ui";
 import { formatDescriptionForDisplay } from "../utils/bookDisplay";
 import { hasEpubFile } from "./detail/bookFacts";
+import { hasComicFile, hasEbookFile } from "../utils/comic";
 import CoverTools from "./detail/CoverTools";
 import DetailHero from "./detail/DetailHero";
 import DownloadSheet from "./detail/DownloadSheet";
@@ -189,7 +190,14 @@ export default function BookDetailModal({
       }
       : null,
     !epubAvailable
-      ? { key: "no-epub", tone: "text.muted", text: "No EPUB yet — attach or convert one from ⋯" }
+      ? {
+        key: "no-epub",
+        tone: "text.muted",
+        // A comic has nothing for the in-app reader, and nothing to convert.
+        text: hasComicFile(selectedBook) && !hasEbookFile(selectedBook)
+          ? "A comic file — download it to read in a comic reader"
+          : "No EPUB yet — attach or convert one from ⋯",
+      }
       : null,
   ].filter(Boolean);
 

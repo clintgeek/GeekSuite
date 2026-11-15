@@ -26,6 +26,7 @@ import {
 } from "@mui/icons-material";
 import { GeekSheet, useToast } from "@geeksuite/ui";
 import { bookId } from "./bookFacts";
+import { BOOK_FILE_ACCEPT } from "../../utils/comic";
 
 function ActionRow({ icon, label, secondary, onClick, disabled, danger }) {
   return (
@@ -119,14 +120,14 @@ export default function MoreSheet({
         <ActionRow
           icon={<UploadFileIcon fontSize="small" />}
           label="Upload book file"
-          secondary={uploadFile ? uploadFile.name : "Attach an EPUB, MOBI, AZW3, PDF…"}
+          secondary={uploadFile ? uploadFile.name : "Attach an EPUB, MOBI, PDF, CBZ…"}
           onClick={() => fileInputRef.current?.click()}
         />
         <input
           ref={fileInputRef}
           type="file"
           hidden
-          accept=".epub,.mobi,.azw3,.pdf,.fb2,.rtf,.txt,.html"
+          accept={BOOK_FILE_ACCEPT}
           onChange={handleUploadFileChange}
         />
         {uploadFile ? (

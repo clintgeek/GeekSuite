@@ -1,13 +1,12 @@
 import { z } from 'zod';
 import { idParam, bookIdParamsSchema } from './common.js';
-
-/** server.js's own hand-checked list for GET /api/books/:id/download/:format. */
-const DOWNLOAD_FORMATS = ['epub', 'azw3', 'mobi'];
+// One list for the route, this schema and ensureFormat: src/formats.js.
+import { DOWNLOAD_FORMATS } from '../../formats.js';
 
 /**
  * GET /api/books/:id/download/:format — the handler already lowercases the
  * param and rejects anything outside this exact list by hand
- * (`if (!requestedFormat || !["epub","azw3","mobi"].includes(...))`); this
+ * (`DOWNLOAD_FORMATS`: the ebooks, plus comic archives and PDF since 2026-11-15); this
  * turns that into a typed 400 up front. Same status code (400) on an
  * invalid format, different response body — see the report.
  */

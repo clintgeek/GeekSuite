@@ -14,7 +14,10 @@ const CALIBRE_EBOOK_CONVERT_BIN =
 
 const execFileAsync = promisify(execFile);
 
-export const SUPPORTED_FORMATS = ["epub", "azw3", "mobi"];
+import { CONVERTIBLE_FORMATS, DOWNLOAD_FORMATS, isAsIsFormat } from "./formats.js";
+
+/** The formats `ensureFormat` will convert TO. Downloads accept more (formats.js). */
+export const SUPPORTED_FORMATS = CONVERTIBLE_FORMATS;
 
 /**
  * Re-exported so this module has one answer to "where is the library", not a
@@ -139,9 +142,11 @@ export async function ensureFormat(book, format, opts = {}) {
     throw new EnsureFormatError("Book not found", 404);
   }
   const requestedFormat = String(format || "").toLowerCase();
-  if (!requestedFormat || !SUPPORTED_FORMATS.includes(requestedFormat)) {
+  if (!requestedFormat || !DOWNLOAD_FORMATS.includes(requestedFormat)) {
     throw new EnsureFormatError("Invalid format", 400);
   }
+  // Comic archives and PDF are handed back as stored, or not at all.
+  const asIs = isAsIsFormat(requestedFormat);
 
   const root = libraryRoot();
   const logTag = opts.logTag || "ensureFormat";
@@ -188,6 +193,12 @@ export async function ensureFormat(book, format, opts = {}) {
 
   // If the requested format is missing (or its on-disk file is gone),
   // generate it on demand from another available file.
+  if (!fullPath && asIs) {
+    throw new EnsureFormatError(
+      `No ${ requestedFormat.toUpperCase() } file for this book`,
+      404
+    );
+  }
   if (!fullPath) {
     // Only files still inside the library are candidate sources; an escaping
     // row is dropped here rather than being converted from (which would also

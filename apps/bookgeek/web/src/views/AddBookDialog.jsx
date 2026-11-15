@@ -18,6 +18,7 @@ import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
 import Typography from "@mui/material/Typography";
 import { GeekDialog } from "@geeksuite/ui";
+import { BOOK_FILE_ACCEPT } from "../utils/comic";
 
 const FORM_ID = "add-book-form";
 
@@ -119,7 +120,7 @@ export default function AddBookDialog({
                 Choose file…
                 <input
                   type="file"
-                  accept=".epub,.mobi,.azw3,.pdf,.fb2,.rtf,.txt,.html"
+                  accept={BOOK_FILE_ACCEPT}
                   hidden
                   onChange={(e) => {
                     const file = e.target.files?.[0] || null;

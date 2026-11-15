@@ -159,6 +159,37 @@ ebook-convert input.mobi output.epub
 
 ---
 
+## Comics and manga (2026-11-15)
+
+**Formats live in one file**, `api/src/formats.js` (mirrored for the web in
+`web/src/utils/comic.js`):
+
+| Kind | Formats | Download behaviour |
+|---|---|---|
+| Convertible | `epub`, `azw3`, `mobi` | a missing one is made by `ebook-convert` |
+| As-is | `cbz`, `cbr`, `cb7`, `cbt`, `pdf` | the stored file, or a 404 — never converted to |
+
+Add a format there, never in a route or a schema. `ensureFormat` refuses to
+convert TO an as-is format (`test/comicFormats.test.js`).
+
+- **Download:** as-is formats are a plain link the browser downloads
+  (`useBookDetail.handleDownload`); ebooks keep the fetch-then-blob path so a
+  failed conversion can show a toast. A manga volume is too big to hold in memory.
+- **Upload limits:** multer 1 GB; **nginx 120 MB** (`clintgeek.com_bookGeek.conf`).
+  nginx is the one that bites.
+- **What makes a book a comic** (`comicKind`): a comic-archive file, or a
+  `comics` / `comic book` / `graphic novel` tag → "Comic"; any tag saying manga,
+  manhwa or manhua → "Manga", whatever the file is. A bare "comic" tag does not
+  count ("Comic fantasy").
+- **The card** wears one caption above the title: "MANGA · VOL. 3" (the volume is
+  `series.index`). **The download sheet** lists as-is files first and hides the
+  ebook rows when the book has no ebook file.
+- **Deliberately ignored (Chef, 2026-11-15):** comics in the in-app reader, in Send
+  to Kindle and in device baskets. Don't build or propose them.
+- Not built: cover or metadata extraction from an archive.
+
+---
+
 ## Shelves (2026-09-03)
 
 A book has one `shelf` string. Built-in ids: `reading`, `on-reader`, `unread`,

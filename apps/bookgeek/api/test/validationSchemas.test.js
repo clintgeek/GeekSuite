@@ -89,11 +89,12 @@ describe("downloadParamsSchema", () => {
       const result = downloadParamsSchema.safeParse({ id: "abc123", format });
       assert.equal(result.success, true, `expected ${format} to pass`);
     }
-    assert.deepEqual(DOWNLOAD_FORMATS, ["epub", "azw3", "mobi"]);
+    // Ebooks, then the as-is ones: comic archives and PDF (2026-11-15).
+    assert.deepEqual(DOWNLOAD_FORMATS, ["epub", "azw3", "mobi", "cbz", "cbr", "cb7", "cbt", "pdf"]);
   });
 
   test("rejects an unsupported format (bounds: enum)", () => {
-    const result = downloadParamsSchema.safeParse({ id: "abc123", format: "pdf" });
+    const result = downloadParamsSchema.safeParse({ id: "abc123", format: "docx" });
     assert.equal(result.success, false);
   });
 

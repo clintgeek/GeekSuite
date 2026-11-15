@@ -72,6 +72,33 @@ export const scenes = [
     teardown: (page, h) => h.esc(),
   },
   {
+    // A manga volume (2026-11-15): the card wears "MANGA · VOL. 3", and the
+    // download sheet offers the CBZ as it is — no EPUB/AZW3/MOBI rows, since
+    // there is nothing to convert a comic archive into.
+    name: '03d-detail-comic-download',
+    goto: '/',
+    async setup(page, h) {
+      const line = page.getByTestId('book-card-comic').first();
+      if (!(await line.count())) throw new Error('no comic line on any card');
+      const text = (await line.innerText()).trim().toUpperCase();
+      if (text !== 'MANGA · VOL. 3') throw new Error(`the comic line reads "${text}"`);
+      await page.getByText('Delicious in Dungeon', { exact: true }).first().click();
+      await h.settle(1000);
+      await page.getByRole('button', { name: 'More actions' }).click();
+      await h.settle(500);
+      await page.getByText('Download / Convert', { exact: true }).first().click();
+      await h.settle(600);
+      // Scoped to the sheet: the desktop filter panel behind it lists EPUB too.
+      const sheet = page.getByRole('dialog').filter({ hasText: 'Comic files download as they are.' });
+      await sheet.waitFor({ timeout: 5000 });
+      if (!(await sheet.getByText('CBZ', { exact: true }).count())) throw new Error('the download sheet has no CBZ row');
+      for (const format of ['EPUB', 'AZW3', 'MOBI']) {
+        if (await sheet.getByText(format, { exact: true }).count()) throw new Error(`a comic's download sheet offers ${format}`);
+      }
+    },
+    teardown: async (page, h) => { await h.esc(); await h.esc(); },
+  },
+  {
     // The book page's tags (DOCS/TAGS.md §5): canonical and My tags as
     // chips, the raw import tags opened under "Source tags".
     name: '03b-detail-source-tags',

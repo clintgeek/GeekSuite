@@ -19,6 +19,10 @@ const BOOK_ROWS = [
   ['b6', 'God Bless You, Mr. Rosewater', ['Kurt Vonnegut Jr.'], 'read', 3, 290, '1965-01-01', 100, ['Fiction', 'Classics', 'Humor', 'Satire', 'Literature', 'American', 'kurt', 'Vonnegut', 'Literary Fiction'], 'Dial Press', '#334155'],
   ['b7', 'A Year and a Day on Just a Few Acres', ['Peter Larson'], 'unread', 0, 294, '2014-01-01', 0, ['Nonfiction', 'Agriculture', 'Self-Help', 'Food', 'homesteading', 'preppers'], 'Independent', '#78350f'],
   ['b8', 'Breaking Free', ['Rachel Jeffs'], 'read', 0, 400, '2017-11-14', 100, ['Memoir', 'Biography', 'FLDS', 'Cults', 'Religious Cults', 'Book Club', 'Must Read', 'Fundamentalist Church of Jesus Christ of Latter Day Saints'], 'Harper', '#1e3a5f'],
+  // A manga volume (2026-11-15): a comic archive, tagged Manga, third in its
+  // series. Its card wears "MANGA · VOL. 3" and its download sheet offers the
+  // CBZ as it is, with no ebook conversions.
+  ['b9', 'Delicious in Dungeon', ['Ryoko Kui'], 'unread', 0, 192, '2017-11-21', 0, ['Manga', 'Fantasy', 'Comics', 'Food'], 'Yen Press', '#7c2d12'],
 ];
 
 // Per-book extras the filter panel needs to show something real: formats as
@@ -38,6 +42,7 @@ const EXTRAS = {
   b6: { files: ['MOBI'], dateFinished: '2022-07-19' },
   b7: { files: ['PDF'], noCover: true },
   b8: { files: ['EPUB'], dateFinished: '2024-01-28', myTags: ['Must reread'] },
+  b9: { files: ['CBZ'], series: { name: 'Delicious in Dungeon', index: 3 }, noCover: true },
 };
 
 export const BOOKS = BOOK_ROWS.map(

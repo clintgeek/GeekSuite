@@ -3,6 +3,7 @@ import Database from "better-sqlite3";
 import fs from "fs/promises";
 import path from "path";
 import multer from "multer";
+import { COMIC_FORMATS } from "../formats.js";
 import { parse as parseCsv } from "csv-parse/sync";
 import { execFile } from "child_process";
 import { promisify } from "util";
@@ -239,6 +240,7 @@ router.post("/calibre/rescan", authenticateToken, validate({ query: calibreResca
             "rtf",
             "txt",
             "html",
+            ...COMIC_FORMATS,
           ];
 
           for (const entry of entries) {

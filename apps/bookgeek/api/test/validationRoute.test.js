@@ -83,7 +83,7 @@ describe("validate() through a real app — the 400 envelope", () => {
   });
 
   test("an invalid format is rejected before the handler runs, with the shared 400 envelope", async () => {
-    const res = await send("/api/books/abc123/download/pdf");
+    const res = await send("/api/books/abc123/download/docx");
     assert.equal(res.status, 400);
     assert.deepEqual(reached, []);
     assert.equal(res.json.success, false);

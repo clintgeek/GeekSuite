@@ -22,6 +22,7 @@ import {
 import { fetchImageBuffer, isAllowedCoverHost } from "../coverFetch.js";
 import { logger } from "../utils/logger.js";
 import { ensureFormat, EnsureFormatError } from "../ebookFormats.js";
+import { DOWNLOAD_FORMATS } from "../formats.js";
 import { authenticateToken } from "../middleware/auth.js";
 import { sendMail } from "../services/emailService.js";
 import { validate } from "../validation/validate.js";
@@ -64,7 +65,9 @@ const uploadToTemp = {
         uploadInstance = multer({
           dest: tempPath(),
           limits: {
-            fileSize: 200 * 1024 * 1024,
+            // A manga volume runs far past an ebook's few MB. nginx caps the
+            // request body before this does (see DOCS/CONTEXT.md).
+            fileSize: 1024 * 1024 * 1024,
           },
         });
       }
@@ -245,7 +248,7 @@ router.get("/api/books/:id/download/:format", authenticateToken, validate({ para
     }
 
     const requestedFormat = String(req.params.format || "").toLowerCase();
-    if (!requestedFormat || !["epub", "azw3", "mobi"].includes(requestedFormat)) {
+    if (!requestedFormat || !DOWNLOAD_FORMATS.includes(requestedFormat)) {
       return res.status(400).json({ error: "Invalid format" });
     }
 

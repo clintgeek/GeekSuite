@@ -21,12 +21,17 @@
  * title and author are the shelf-edge label under it. The pile you haven't
  * read wears a PriceSticker; a book in progress or a five-star book gets a
  * hand-lettered ShelfTalker. Hover lifts the book off the shelf, not the card.
+ *
+ * Comics (2026-11-15): a comic or manga (utils/comic.js) wears one small
+ * line above its title, "MANGA · VOL. 3". Every volume of a series has the
+ * same title, so on a comic the volume is the part that identifies the card.
  */
 import React from "react";
 import { Box, ButtonBase, Checkbox, Typography, alpha, useTheme } from "@mui/material";
 import { Check as CheckIcon } from "@mui/icons-material";
 import { API_BASE, getCoverUrl } from "../utils/bookDisplay";
 import { canRate } from "../utils/rating";
+import { comicLine } from "../utils/comic";
 import StarRating from "./StarRating";
 import BookCover from "./BookCover";
 import PriceSticker from "./PriceSticker";
@@ -64,6 +69,8 @@ export default function BookCard({
   const shelfLabel = shelf && shelf.id !== "all" ? shelf.label : null;
   const shelfColor =
     theme.palette.shelf?.[book.shelf] ?? theme.palette.shelf?.custom ?? "text.muted";
+
+  const comic = comicLine(book);
 
   const rateable = Boolean(onRate) && !selectMode && canRate(book);
 
@@ -124,6 +131,24 @@ export default function BookCard({
         </Box>
         <ShelfPlank sx={{ mb: 1 }} />
 
+        {comic && (
+          <Typography
+            variant="caption"
+            component="p"
+            data-testid="book-card-comic"
+            noWrap
+            sx={{
+              color: "text.secondary",
+              px: 0.5,
+              fontWeight: 600,
+              letterSpacing: "0.06em",
+              textTransform: "uppercase",
+              lineHeight: 1.4,
+            }}
+          >
+            {comic}
+          </Typography>
+        )}
         <Typography
           variant="body1"
           sx={{

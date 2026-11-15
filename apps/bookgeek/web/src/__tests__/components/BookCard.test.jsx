@@ -8,6 +8,23 @@ import { renderWithProviders } from '../testUtils';
 const [reading42, read100, wantToRead0] = BOOKS; // Lock In, The Sound of Gravel, The Road to Jonestown
 
 describe('BookCard', () => {
+  it('a manga volume wears its kind and volume above the title', () => {
+    const manga = {
+      ...wantToRead0,
+      title: 'Berserk',
+      libraryTags: ['Manga'],
+      series: { name: 'Berserk', index: 3 },
+      files: [{ format: 'CBZ', path: 'uploads/b9/berserk-03.cbz', size: 250000000 }],
+    };
+    renderWithProviders(<BookCard book={manga} shelves={SHELVES} />);
+    expect(screen.getByTestId('book-card-comic')).toHaveTextContent('Manga · Vol. 3');
+  });
+
+  it('an ordinary book has no comic line', () => {
+    renderWithProviders(<BookCard book={reading42} shelves={SHELVES} />);
+    expect(screen.queryByTestId('book-card-comic')).not.toBeInTheDocument();
+  });
+
   it('renders the title, author and shelf status row', () => {
     renderWithProviders(<BookCard book={reading42} shelves={SHELVES} />);
     expect(screen.getByText('Lock In')).toBeInTheDocument();
