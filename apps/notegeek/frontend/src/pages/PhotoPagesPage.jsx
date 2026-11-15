@@ -22,7 +22,7 @@ import ArrowUpward from '@mui/icons-material/ArrowUpward';
 import ArrowDownward from '@mui/icons-material/ArrowDownward';
 import DeleteOutline from '@mui/icons-material/DeleteOutline';
 import { useToast } from '@geeksuite/ui';
-import { CREATE_NOTE, COMPOSE_NOTE, TRANSCRIBE_SKETCH, SAVE_SKETCH_TRANSCRIPT_EDIT } from '../graphql/mutations';
+import { CREATE_NOTE, CREATE_PHOTO_NOTE, COMPOSE_NOTE, TRANSCRIBE_SKETCH } from '../graphql/mutations';
 import { onNoteCreated } from '../graphql/cacheUpdates';
 import TranscribeDialog from '../components/editors/TranscribeDialog';
 import ComposeDialog from '../components/editors/ComposeDialog';
@@ -221,7 +221,7 @@ export default function PhotoPagesPage({ prepare = preparePhotoPageSet, loadSnap
   const urlsRef = useRef(new Set());
 
   const [createNoteMutation] = useMutation(CREATE_NOTE, { update: onNoteCreated });
-  const [saveTranscriptEdit] = useMutation(SAVE_SKETCH_TRANSCRIPT_EDIT);
+  const [createPhotoNoteMutation] = useMutation(CREATE_PHOTO_NOTE, { update: onNoteCreated });
   const [transcribeMutation] = useMutation(TRANSCRIBE_SKETCH);
   const [composeMutation] = useMutation(COMPOSE_NOTE);
 
@@ -390,20 +390,19 @@ export default function PhotoPagesPage({ prepare = preparePhotoPageSet, loadSnap
           notify(exact.message, { tone: 'error' });
           return false;
         }
-        const { data } = await createNoteMutation({
-          variables: { title: photoTitle, content: snapshot, type: 'handwritten', tags },
+        // The reviewed reading becomes the photo note's own searchable text
+        // (Chef, 2026-11-14: AUTO_TRANSCRIBE_SPEC.md, photo decision 1b). Free:
+        // the pages were already read, and the writer already corrected it.
+        // Sent WITH the create (C6, review 1.21): it used to be a follow-up
+        // call, and a photo note whose follow-up failed was unsearchable
+        // forever.
+        const reviewed = (transcribe?.text || body || '').trim();
+        const { data } = await createPhotoNoteMutation({
+          variables: { title: photoTitle, content: snapshot, type: 'handwritten', tags, transcriptText: reviewed || undefined },
         });
         const id = data?.createNote?.id;
         if (!id) throw new Error('The photos were not saved. Try again.');
         photoNoteRef.current = { signature: sig, id, title: photoTitle };
-        // The reviewed reading becomes the photo note's own searchable text
-        // (Chef, 2026-11-14: AUTO_TRANSCRIBE_SPEC.md, photo decision 1b). Free:
-        // the pages were already read, and the writer already corrected it.
-        // Best effort — the two notes are what was asked for.
-        const reviewed = (transcribe?.text || body || '').trim();
-        if (reviewed) {
-          saveTranscriptEdit({ variables: { noteId: id, text: reviewed } }).catch(() => {});
-        }
       }
       const { id: sketchId, title: sketchTitle } = photoNoteRef.current;
       let created;

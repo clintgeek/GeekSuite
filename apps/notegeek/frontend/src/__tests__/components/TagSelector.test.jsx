@@ -77,3 +77,28 @@ describe('TagSelector', () => {
         expect(within(listbox).getAllByRole('option').map((o) => o.textContent)).toEqual(['house/garage', 'house/kitchen']);
     });
 });
+
+describe('TagSelector — a typed tag is not lost on blur (review 1.21)', () => {
+    beforeEach(() => {
+        useTagStore.getState().tags = TAGS;
+    });
+
+    it('commits what was typed when the field loses focus', () => {
+        const onChange = vi.fn();
+        renderWithProviders(<TagSelector selectedTags={['work']} onChange={onChange} />);
+        const input = screen.getByRole('combobox', { name: 'Tags' });
+        fireEvent.focus(input);
+        fireEvent.change(input, { target: { value: 'Garden / Beds' } });
+        fireEvent.blur(input);
+        expect(onChange).toHaveBeenLastCalledWith(['work', 'garden/beds']);
+    });
+
+    it('a blur with nothing typed changes nothing', () => {
+        const onChange = vi.fn();
+        renderWithProviders(<TagSelector selectedTags={['work']} onChange={onChange} />);
+        const input = screen.getByRole('combobox', { name: 'Tags' });
+        fireEvent.focus(input);
+        fireEvent.blur(input);
+        expect(onChange).not.toHaveBeenCalled();
+    });
+});

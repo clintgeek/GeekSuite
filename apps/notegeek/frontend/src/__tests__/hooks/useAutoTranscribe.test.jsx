@@ -20,7 +20,7 @@ vi.mock('@apollo/client', async () => {
   };
 });
 
-const { useAutoTranscribe, AUTO_TRANSCRIBE_DELAY_MS, BUSY_RECHECK_MS } = await import('../../hooks/useAutoTranscribe');
+const { useAutoTranscribe, AUTO_TRANSCRIBE_DELAY_MS, BUSY_RECHECK_MS, NETWORK_RETRY_MS, MAX_RETRY_MS } = await import('../../hooks/useAutoTranscribe');
 
 const PAGE = { base64: 'iVBOR', mediaType: 'image/png' };
 const searchable = { status: 'searchable', current: true, text: 'buy milk', autoEnabled: true };
@@ -186,5 +186,83 @@ describe('failures stay quiet', () => {
     act(() => result.current.onInkEdit());
     await advance(AUTO_TRANSCRIBE_DELAY_MS);
     expect(autoTranscribe).not.toHaveBeenCalled();
+  });
+});
+
+describe('transcription state (review 2.8)', () => {
+  it('an edit made while a read is in flight never comes back as current for the older ink', async () => {
+    let release;
+    autoTranscribe.mockImplementationOnce(() => new Promise((resolve) => {
+      release = () => resolve({ data: { autoTranscribeSketch: searchable } });
+    }));
+    const { result } = setup();
+    act(() => result.current.onInkEdit());
+    await advance(AUTO_TRANSCRIBE_DELAY_MS);
+    act(() => result.current.onInkEdit()); // a new line, mid-request
+    await act(async () => { release(); });
+    expect(result.current.view.current).toBe(false);
+    expect(result.current.view.text).toBeNull();
+    expect(result.current.view.status).toBe('waiting');
+  });
+
+  it('export errors back off, doubling, instead of re-exporting every 2 minutes forever', async () => {
+    const exportPage = vi.fn(async () => { throw Object.assign(new Error('Could not turn the sketch into an image.'), { code: 'encode' }); });
+    const { result } = setup({ exportPage });
+    act(() => result.current.onInkEdit());
+    await advance(AUTO_TRANSCRIBE_DELAY_MS);
+    expect(exportPage).toHaveBeenCalledTimes(1);
+    expect(result.current.view.status).toBe('retry');
+    await advance(NETWORK_RETRY_MS);
+    expect(exportPage).toHaveBeenCalledTimes(2);
+    await advance(NETWORK_RETRY_MS); // the second wait is twice as long
+    expect(exportPage).toHaveBeenCalledTimes(2);
+    await advance(NETWORK_RETRY_MS);
+    expect(exportPage).toHaveBeenCalledTimes(3);
+    // ...and never longer than an hour between tries.
+    for (let i = 0; i < 8; i += 1) await advance(MAX_RETRY_MS);
+    expect(exportPage.mock.calls.length).toBeGreaterThanOrEqual(8);
+    expect(exportPage.mock.calls.length).toBeLessThanOrEqual(14); // every 2 min would be ~240
+    expect(autoTranscribe).not.toHaveBeenCalled();
+  });
+
+  it('a page over the size limit waits for the next edit instead of retrying', async () => {
+    const exportPage = vi.fn(async () => { throw Object.assign(new Error('This page is too big to send'), { code: 'too_large' }); });
+    const { result } = setup({ exportPage });
+    act(() => result.current.onInkEdit());
+    await advance(AUTO_TRANSCRIBE_DELAY_MS);
+    expect(result.current.view.status).toBe('failed');
+    await advance(5 * MAX_RETRY_MS);
+    expect(exportPage).toHaveBeenCalledTimes(1);
+  });
+
+  it('a photo or locked note (the gateway says off) is never exported or uploaded, even after markup', async () => {
+    queryResult.current = { sketchTranscript: { status: 'off', autoEnabled: true } };
+    const exportPage = vi.fn(async () => PAGE);
+    const { result } = setup({ exportPage });
+    act(() => result.current.onInkEdit());
+    await advance(AUTO_TRANSCRIBE_DELAY_MS * 3);
+    expect(exportPage).not.toHaveBeenCalled();
+    expect(autoTranscribe).not.toHaveBeenCalled();
+    expect(result.current.view.status).toBe('off');
+  });
+
+  it('once the gateway answers off, later ink edits send nothing', async () => {
+    autoTranscribe.mockResolvedValueOnce({ data: { autoTranscribeSketch: { status: 'off', autoEnabled: true } } });
+    const exportPage = vi.fn(async () => PAGE);
+    const { result } = setup({ exportPage });
+    act(() => result.current.onInkEdit());
+    await advance(AUTO_TRANSCRIBE_DELAY_MS);
+    act(() => result.current.onInkEdit());
+    await advance(AUTO_TRANSCRIBE_DELAY_MS * 3);
+    expect(exportPage).toHaveBeenCalledTimes(1);
+  });
+
+  it('"Transcribe now" reads straight away, and says when the page is too long to read well', async () => {
+    queryResult.current = { sketchTranscript: { status: 'failed', autoEnabled: true } };
+    const { result } = setup({ exportPage: vi.fn(async () => ({ ...PAGE, tooLong: true })) });
+    act(() => result.current.transcribeNow());
+    await advance(0);
+    expect(autoTranscribe).toHaveBeenCalledTimes(1);
+    expect(result.current.view.tooLong).toBe(true);
   });
 });

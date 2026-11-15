@@ -33,6 +33,12 @@ vi.mock('../../store/noteStore', () => {
   return { default: useStore };
 });
 
+const { toast } = vi.hoisted(() => ({ toast: { notify: vi.fn() } }));
+vi.mock('@geeksuite/ui', async () => {
+  const actual = await vi.importActual('@geeksuite/ui');
+  return { ...actual, useToast: () => ({ notify: toast.notify, dismiss: vi.fn() }) };
+});
+
 import QuickCaptureHome from '../../pages/QuickCaptureHome';
 
 describe('QuickCaptureHome — Pinned group', () => {
@@ -92,5 +98,66 @@ describe('QuickCaptureHome — Fold into a note', () => {
     expect(screen.getByLabelText('Find a note')).toBeInTheDocument();
     // Picking is not saving: nothing was created.
     expect(mockStore.createNote).not.toHaveBeenCalled();
+  });
+});
+
+describe('QuickCaptureHome — capture integrity (review 1.21, 3.5)', () => {
+  beforeEach(() => {
+    mockStore.notes = [];
+    mockStore.isLoadingList = false;
+    mockStore.listError = null;
+    mockStore.selectedError = null;
+    mockStore.fetchNotes = vi.fn();
+    mockStore.createNote = vi.fn();
+  });
+
+  const box = () => screen.getByRole('textbox', { name: 'Quick capture' });
+
+  it('keeps line breaks', async () => {
+    mockStore.createNote = vi.fn().mockResolvedValue({ id: 'n9' });
+    renderWithProviders(<QuickCaptureHome />);
+    fireEvent.change(box(), { target: { value: 'groceries\n- milk\n- eggs\n' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await vi.waitFor(() => expect(mockStore.createNote).toHaveBeenCalledTimes(1));
+    expect(mockStore.createNote.mock.calls[0][0].content).toBe('groceries\n- milk\n- eggs');
+  });
+
+  it('a double tap saves once', async () => {
+    let resolve;
+    mockStore.createNote = vi.fn(() => new Promise((r) => { resolve = r; }));
+    renderWithProviders(<QuickCaptureHome />);
+    fireEvent.change(box(), { target: { value: 'one thought' } });
+    const save = screen.getByRole('button', { name: 'Save' });
+    fireEvent.click(save);
+    fireEvent.click(save);
+    expect(mockStore.createNote).toHaveBeenCalledTimes(1);
+    resolve({ id: 'n1' });
+    await vi.waitFor(() => expect(box().value).toBe(''));
+  });
+
+  it('says so when the save fails, and keeps the text', async () => {
+    mockStore.createNote = vi.fn().mockResolvedValue(null);
+    mockStore.selectedError = 'Network down';
+    renderWithProviders(<QuickCaptureHome />);
+    fireEvent.change(box(), { target: { value: 'do not lose me' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await vi.waitFor(() => expect(toast.notify).toHaveBeenCalledWith(expect.stringMatching(/not saved — Network down/i), { tone: 'error' }));
+    expect(box().value).toBe('do not lose me');
+  });
+
+  it('fetches only what it shows, and keeps cached notes on screen while refreshing', () => {
+    mockStore.notes = [note('n1', 'Groceries')];
+    mockStore.isLoadingList = true;
+    const { container } = renderWithProviders(<QuickCaptureHome />);
+    expect(mockStore.fetchNotes).toHaveBeenCalledWith({ limit: 12 });
+    expect(screen.getByText('Groceries')).toBeInTheDocument();
+    expect(container.querySelectorAll('.MuiSkeleton-root')).toHaveLength(0);
+  });
+
+  it('shows a failed load as an error, not "Nothing here yet"', () => {
+    mockStore.listError = 'Failed to fetch notes';
+    renderWithProviders(<QuickCaptureHome />);
+    expect(screen.queryByText('Nothing here yet')).toBeNull();
+    expect(screen.getByRole('button', { name: /retry|try again/i })).toBeInTheDocument();
   });
 });

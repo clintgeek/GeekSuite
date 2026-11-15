@@ -28,7 +28,7 @@ const AllProviders = ({ children }) => (
 // that reaches it "opens" tldraw's (Radix) context menu. getPointerInfo is
 // tldraw's, field for field. So the S Pen button is tested against the
 // handlers it has to get around, not against a mock that would accept anything.
-const tl = vi.hoisted(() => ({ renders: [], editors: [], contextMenus: [], longPresses: [], exportToBlob: null, insertMedia: null }));
+const tl = vi.hoisted(() => ({ renders: [], editors: [], contextMenus: [], longPresses: [], loads: [], exportToBlob: null, insertMedia: null }));
 
 vi.mock('@tldraw/tldraw', async () => {
     const React = await import('react');
@@ -77,7 +77,12 @@ vi.mock('@tldraw/tldraw', async () => {
             events: [],
             dispatch: vi.fn((info) => { editor.events.push({ ...info, toolAtDispatch: tool }); return editor; }),
             complete: vi.fn(() => editor),
-            getInstanceState: vi.fn(() => ({ isReadonly: false })),
+            instance: { isReadonly: false, isPenMode: false },
+            getInstanceState: vi.fn(() => editor.instance),
+            updateInstanceState: vi.fn((partial) => { editor.instance = { ...editor.instance, ...partial }; return editor; }),
+            assetHandlers: {},
+            registerExternalAssetHandler: vi.fn((type, fn) => { editor.assetHandlers[type] = fn; return editor; }),
+            setCamera: vi.fn(() => editor),
             shapeIds: new Set(),
             getCurrentPageShapeIds: vi.fn(() => editor.shapeIds),
             getCurrentPageBounds: vi.fn(() => (editor.shapeIds.size ? { x: 0, y: 0, w: 900, h: 400 } : undefined)),
@@ -117,21 +122,38 @@ vi.mock('@tldraw/tldraw', async () => {
                     if (prefs.colorScheme) editor.user.colorScheme = prefs.colorScheme;
                 }),
             },
+            // Like tldraw 2.4's store: listen(fn, { scope, source }) filters
+            // what reaches fn (`editor.emit` delivers an entry the way the
+            // store's history flush would); changes made inside
+            // mergeRemoteChanges are 'remote'.
+            listenerFilters: [],
+            remote: false,
+            emit: (entry) => {
+                const e = { source: 'user', changes: { added: {}, updated: {}, removed: {} }, ...entry };
+                editor.listeners.forEach((fn, i) => {
+                    const f = editor.listenerFilters[i] || {};
+                    if (f.source && f.source !== 'all' && f.source !== e.source) return;
+                    const ids = Object.keys({ ...e.changes.added, ...e.changes.updated, ...e.changes.removed });
+                    const docIds = ids.filter((id) => !/^(camera|instance|pointer|instance_page_state):/.test(id));
+                    if (f.scope === 'document' && ids.length && !docIds.length) return;
+                    if (f.scope === 'session' && ids.length === docIds.length) return;
+                    fn(e);
+                });
+            },
             store: {
-                listen: vi.fn((fn) => {
+                listen: vi.fn((fn, filters) => {
                     editor.listeners.push(fn);
+                    editor.listenerFilters.push(filters);
                     const off = vi.fn();
                     editor.unsubscribes.push(off);
                     return off;
                 }),
-                getSnapshot: vi.fn(() => ({ store: {}, schema: {} })),
-                // Like tldraw: loading a snapshot puts its shape records on
-                // the page (sorted by index), where the camera can find them.
-                loadSnapshot: vi.fn((snap) => {
-                    editor.pageShapes = Object.values(snap?.store || {})
-                        .filter((r) => r?.typeName === 'shape')
-                        .sort((a, b) => String(a.index).localeCompare(String(b.index)));
-                }),
+                // tldraw 2.4.6: Store.getSnapshot is deprecated (it warns on
+                // every call); getStoreSnapshot is the same body.
+                getSnapshot: vi.fn(() => { throw new Error('[tldraw] `Store.getSnapshot` is deprecated'); }),
+                getStoreSnapshot: vi.fn(() => ({ store: {}, schema: {} })),
+                loadSnapshot: vi.fn(() => { throw new Error('[tldraw] `Store.loadSnapshot` is deprecated'); }),
+                mergeRemoteChanges: vi.fn((fn) => { editor.remote = true; try { fn(); } finally { editor.remote = false; } }),
             },
             pageShapes: [],
             isDisposed: false,
@@ -143,8 +165,8 @@ vi.mock('@tldraw/tldraw', async () => {
         return editor;
     };
 
-    function Tldraw({ onMount, options, components, children }) {
-        tl.renders.push({ options, components });
+    function Tldraw({ onMount, options, components, children, ...rest }) {
+        tl.renders.push({ options, components, props: rest });
         // Like tldraw: the editor is rebuilt, and onMount runs again, whenever
         // options or components change identity. `tl.rebuild()` forces one,
         // for the no-stacking tests (the layout no longer swaps components).
@@ -213,6 +235,21 @@ vi.mock('@tldraw/tldraw', async () => {
         ]);
     };
 
+    // tldraw's loadSnapshot(store, snapshot). Like tldraw: it puts the
+    // snapshot's shape records on the page (sorted by index), where the camera
+    // can find them. tl.loads records whether it ran as a remote change.
+    const loadSnapshot = vi.fn((store, snap) => {
+        const editor = tl.editors.find((e) => e.store === store);
+        if (!snap || !('store' in snap)) throw new Error('Failed to migrate store snapshot');
+        tl.loads.push({ remote: editor?.remote });
+        editor.pageShapes = Object.values(snap?.store || {})
+            .filter((r) => r?.typeName === 'shape')
+            .sort((a, b) => String(a.index).localeCompare(String(b.index)));
+        editor.shapeIds = new Set(editor.pageShapes.map((r) => r.id));
+    });
+    tl.loadSnapshot = loadSnapshot;
+    const AssetRecordType = { createId: () => `asset:${Math.random().toString(36).slice(2)}`, create: (r) => r };
+
     // tldraw's exportToBlob: ({ editor, ids, format, opts }) => Promise<Blob>.
     tl.exportToBlob = vi.fn(async ({ ids }) => {
         if (!ids?.length) throw new Error('Could not construct SVG.');
@@ -220,7 +257,7 @@ vi.mock('@tldraw/tldraw', async () => {
     });
     const exportToBlob = (...args) => tl.exportToBlob(...args);
 
-    return { Tldraw, useEditor, useTools, useValue: (_name, fn) => fn(), Box, DefaultColorStyle, DefaultSizeStyle, GeoShapeGeoStyle, DefaultColorThemePalette, exportToBlob, getPointerInfo };
+    return { Tldraw, useEditor, useTools, useValue: (_name, fn) => fn(), Box, DefaultColorStyle, DefaultSizeStyle, GeoShapeGeoStyle, DefaultColorThemePalette, exportToBlob, getPointerInfo, loadSnapshot, AssetRecordType };
 });
 
 const observers = [];
@@ -246,6 +283,9 @@ const setViewport = (phone) => {
     }));
 };
 
+// MUI popovers and transitions: seconds per test on a busy runner.
+vi.setConfig({ testTimeout: 20000 });
+
 describe('HandwrittenEditor', () => {
     let setContent;
     const realMatchMedia = window.matchMedia;
@@ -256,7 +296,9 @@ describe('HandwrittenEditor', () => {
         tl.editors.length = 0;
         tl.contextMenus.length = 0;
         tl.longPresses.length = 0;
+        tl.loads.length = 0;
         tl.exportToBlob?.mockClear();
+        localStorage.clear();
         observers.length = 0;
         setViewport(false);
     });
@@ -291,15 +333,15 @@ describe('HandwrittenEditor', () => {
             await screen.findByRole('button', { name: 'Select' });
             expect(names(bars[0])).toEqual([
                 'Select', 'Move', 'Write', 'Highlighter', 'Eraser', 'Shapes', 'Text', 'Sticky note', 'Insert image',
-                'Pen colour and size', 'Paper', 'Undo', 'Redo', 'Zoom, 100%', 'Fullscreen',
+                'Pen colour and size', 'Paper', 'Undo', 'Redo', 'Zoom, 100%', 'More', 'Fullscreen',
             ]);
         });
 
-        it('on a phone, only Move, Write, Pen, Paper, Undo and Fullscreen', async () => {
+        it('on a phone, the short bar: Move, Write, Eraser, Pen, Paper, Undo, More, Fullscreen (D2)', async () => {
             setViewport(true);
             render(<HandwrittenEditor content="" setContent={setContent} />, { wrapper: AllProviders });
             const bar = await screen.findByRole('toolbar', { name: 'Drawing tools' });
-            expect(names(bar)).toEqual(['Move', 'Write', 'Pen colour and size', 'Paper', 'Undo', 'Fullscreen']);
+            expect(names(bar)).toEqual(['Move', 'Write', 'Eraser', 'Pen colour and size', 'Paper', 'Undo', 'More', 'Fullscreen']);
         });
 
         it("tools go through tldraw's own tool actions", async () => {
@@ -329,7 +371,7 @@ describe('HandwrittenEditor', () => {
             await user.click(screen.getByRole('button', { name: 'Shapes' }));
             await user.click(within(await screen.findByRole('dialog', { name: 'Shapes' })).getByRole('button', { name: 'Arrow' }));
             expect(editor.setCurrentTool).toHaveBeenLastCalledWith('arrow');
-        }, 15000); // two menus open and close (MUI transitions): ~4 s alone, more on a busy runner
+        }); // two menus open and close (MUI transitions): ~4 s alone, more on a busy runner
 
         it('Zoom opens zoom in, out, 100% and fit', async () => {
             const user = userEvent.setup();
@@ -351,13 +393,12 @@ describe('HandwrittenEditor', () => {
         render(<HandwrittenEditor content="" setContent={setContent} onInkEdit={onInkEdit} />, { wrapper: AllProviders });
         await screen.findByTestId('tldraw-mock');
         const editor = tl.editors.at(-1);
-        const listener = editor.listeners.at(-1);
-        act(() => listener({ source: 'user', changes: { added: {}, updated: { 'camera:page:page': [{}, {}] }, removed: {} } }));
+        act(() => editor.emit({ changes: { added: {}, updated: { 'camera:page:page': [{}, {}] }, removed: {} } }));
         expect(onInkEdit).not.toHaveBeenCalled();
-        act(() => listener({ source: 'user', changes: { added: { 'shape:a': {} }, updated: {}, removed: {} } }));
+        act(() => editor.emit({ changes: { added: { 'shape:a': {} }, updated: {}, removed: {} } }));
         expect(onInkEdit).toHaveBeenCalledTimes(1);
-        // Saving still happens either way: the same listener serialises the store.
-        expect(editor.store.getSnapshot).toHaveBeenCalled();
+        // Saving still happens: the debounce serialises the store, once.
+        await waitFor(() => expect(editor.store.getStoreSnapshot).toHaveBeenCalledTimes(1));
     });
 
     describe('paper', () => {
@@ -425,7 +466,9 @@ describe('HandwrittenEditor', () => {
         expect(tl.editors.length).toBeGreaterThanOrEqual(2);
         expect(tl.editors[0].unsubscribes[0]).toHaveBeenCalledTimes(1);
         const live = tl.editors.flatMap((e) => e.unsubscribes).filter((off) => off.mock.calls.length === 0);
-        expect(live).toHaveLength(1);
+        // One document listener (saving) and one session listener (the camera).
+        expect(live).toHaveLength(2);
+        expect(live.every((off) => tl.editors.at(-1).unsubscribes.includes(off))).toBe(true);
     });
 
     it('sets the colour scheme with colorScheme, not the retired isDarkMode', async () => {
@@ -482,8 +525,8 @@ describe('HandwrittenEditor', () => {
             render(<HandwrittenEditor content="" setContent={setContent} />, { wrapper: AllProviders });
             await screen.findByTestId('tldraw-mock');
             const editor = tl.editors.at(-1);
-            editor.store.getSnapshot.mockReturnValue({ store: { 'shape:1': { typeName: 'shape' } }, schema: {} });
-            act(() => { editor.listeners.at(-1)(); });
+            editor.store.getStoreSnapshot.mockReturnValue({ store: { 'shape:1': { typeName: 'shape' } }, schema: {} });
+            act(() => { editor.emit({ changes: { added: { 'shape:1': {} }, updated: {}, removed: {} } }); });
             await act(async () => { vi.advanceTimersByTime(1000); });
             expect(setContent).toHaveBeenCalledWith(expect.stringContaining('shape:1'));
         } finally {
@@ -575,6 +618,15 @@ describe('HandwrittenEditor', () => {
             fire('pointerdown', { button: 2, buttons: 2 });
             fire('pointerup', { button: 2 });
             expect(editor.getCurrentToolId()).toBe('select');
+        });
+
+        it('a pen lifted outside the sketch still ends the erase (review 2.11)', async () => {
+            const editor = await mount();
+            fire('pointerdown', { button: 2, buttons: 2, pointerId: 7 });
+            expect(editor.getCurrentToolId()).toBe('eraser');
+            // The lift happens over the page chrome, outside the container.
+            act(() => { document.body.dispatchEvent(new PointerEvent('pointerup', { pointerType: 'pen', button: 2, pointerId: 7, bubbles: true })); });
+            expect(editor.getCurrentToolId()).toBe('draw');
         });
 
         it('only the pressing pointer ends it', async () => {
@@ -737,12 +789,14 @@ describe('HandwrittenEditor', () => {
             expect(setContent).not.toHaveBeenCalled();
         });
 
-        it('leaves an ordinary sketch (no images) where it always opened', async () => {
+        it('an ordinary saved sketch opens with all of its ink in view, no further in than 100% (review 2.11)', async () => {
             render(<HandwrittenEditor content={snap(shape('shape:a', 'draw', 'a1', 0, { props: {} }))} setContent={setContent} />, { wrapper: AllProviders });
             const editor = tl.editors.at(-1);
-            await waitFor(() => expect(editor.store.loadSnapshot).toHaveBeenCalled());
-            await waitFor(() => expect(editor.updateViewportScreenBounds).toHaveBeenCalledTimes(2));
-            expect(editor.zoomToBounds).not.toHaveBeenCalled();
+            editor.getCurrentPageBounds.mockReturnValue({ x: 0, y: 0, w: 900, h: 2400 });
+            await waitFor(() => expect(editor.zoomToBounds).toHaveBeenCalledTimes(1));
+            expect(editor.zoomToBounds).toHaveBeenCalledWith({ x: 0, y: 0, w: 900, h: 2400 }, { targetZoom: 1, inset: 32 });
+            expect(tl.loads).toHaveLength(1);
+            expect(setContent).not.toHaveBeenCalled();
         });
     });
 
@@ -876,6 +930,333 @@ describe('HandwrittenEditor', () => {
             render(<HandwrittenEditor content="" setContent={setContent} readOnly />, { wrapper: AllProviders });
             await screen.findByTestId('tldraw-mock');
             expect(tl.editors.at(-1).sideEffects.registerBeforeCreateHandler).not.toHaveBeenCalled();
+        });
+    });
+});
+
+// ── Review 2026-11 (DOCS/NOTEGEEK_TODOGEEK_REVIEW_2026-11.md) ──────────────
+describe('HandwrittenEditor — the 2026-11 review', () => {
+    let setContent;
+    const SHAPE = (id) => ({ changes: { added: { [id]: { id, typeName: 'shape' } }, updated: {}, removed: {} } });
+    const snapOf = (ids) => ({ store: Object.fromEntries(ids.map((id) => [id, { id, typeName: 'shape', index: 'a1', x: 0, y: 0, props: {} }])), schema: {} });
+    const json = (ids) => JSON.stringify(snapOf(ids));
+    const mount = async (props = {}) => {
+        const utils = render(<HandwrittenEditor content="" setContent={setContent} {...props} />, { wrapper: AllProviders });
+        await screen.findByTestId('tldraw-mock');
+        return { ...utils, editor: tl.editors.at(-1) };
+    };
+    const container = () => screen.getByTestId('tldraw-mock').parentElement;
+
+    beforeEach(() => {
+        setContent = vi.fn();
+        tl.renders.length = 0;
+        tl.editors.length = 0;
+        tl.loads.length = 0;
+        observers.length = 0;
+        localStorage.clear();
+        setViewport(false);
+    });
+
+    describe('2.1 saving without serialising every pointer frame', () => {
+        it('listens to user changes to the document only, and serialises once per pause with the current API', async () => {
+            vi.useFakeTimers({ shouldAdvanceTime: true });
+            try {
+                const { editor } = await mount();
+                expect(editor.listenerFilters[0]).toEqual({ scope: 'document', source: 'user' });
+                editor.store.getStoreSnapshot.mockReturnValue(snapOf(['shape:1']));
+                // a stroke: dozens of store changes, one per pointer frame
+                for (let i = 0; i < 50; i += 1) act(() => editor.emit(SHAPE('shape:1')));
+                // hovering, panning: session records, never the document listener
+                for (let i = 0; i < 50; i += 1) act(() => editor.emit({ changes: { added: {}, updated: { 'pointer:pointer': [{}, {}], 'camera:page:page': [{}, {}] }, removed: {} } }));
+                expect(editor.store.getStoreSnapshot).not.toHaveBeenCalled();
+                await act(async () => { vi.advanceTimersByTime(500); });
+                expect(editor.store.getStoreSnapshot).toHaveBeenCalledTimes(1);
+                expect(setContent).toHaveBeenCalledTimes(1);
+                expect(editor.store.getSnapshot).not.toHaveBeenCalled(); // deprecated: warns every call
+            } finally {
+                vi.useRealTimers();
+            }
+        });
+
+        it('a load is a remote change: it never comes back as a save', async () => {
+            await mount({ content: json(['shape:a']) });
+            expect(tl.loads).toEqual([{ remote: true }]);
+            expect(tl.editors.at(-1).store.loadSnapshot).not.toHaveBeenCalled();
+        });
+    });
+
+    describe('1.17 our own save coming back never reloads the canvas', () => {
+        it('the echo of a save is ignored even after more ink; outside content (History restore) is loaded', async () => {
+            vi.useFakeTimers({ shouldAdvanceTime: true });
+            try {
+                const { editor, rerender } = await mount();
+                editor.store.getStoreSnapshot.mockReturnValue(snapOf(['shape:1']));
+                act(() => editor.emit(SHAPE('shape:1')));
+                await act(async () => { vi.advanceTimersByTime(500); });
+                const saved = setContent.mock.calls.at(-1)[0];
+                // The writer starts the next word before the page echoes the save.
+                editor.store.getStoreSnapshot.mockReturnValue(snapOf(['shape:1', 'shape:2']));
+                act(() => editor.emit(SHAPE('shape:2')));
+                // ...and that next stroke is itself saved before the first echo lands.
+                await act(async () => { vi.advanceTimersByTime(500); });
+                expect(setContent.mock.calls.at(-1)[0]).toContain('shape:2');
+                rerender(<HandwrittenEditor content={saved} setContent={setContent} />);
+                expect(tl.loads).toHaveLength(0); // shape:2 survives the stale echo
+                // A version restored from History is not ours: it loads.
+                rerender(<HandwrittenEditor content={json(['shape:old'])} setContent={setContent} />);
+                expect(tl.loads).toEqual([{ remote: true }]);
+            } finally {
+                vi.useRealTimers();
+            }
+        });
+    });
+
+    describe('1.2 pending strokes are handed over, never dropped', () => {
+        it('on unmount', async () => {
+            const { editor, unmount } = await mount();
+            editor.store.getStoreSnapshot.mockReturnValue(snapOf(['shape:1']));
+            act(() => editor.emit(SHAPE('shape:1')));
+            expect(setContent).not.toHaveBeenCalled();
+            unmount();
+            expect(setContent).toHaveBeenCalledWith(expect.stringContaining('shape:1'));
+        });
+
+        it('when the app is hidden, or the page goes away', async () => {
+            const { editor } = await mount();
+            editor.store.getStoreSnapshot.mockReturnValue(snapOf(['shape:1']));
+            act(() => editor.emit(SHAPE('shape:1')));
+            const vis = vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
+            try {
+                act(() => { document.dispatchEvent(new Event('visibilitychange')); });
+            } finally {
+                vis.mockRestore();
+            }
+            expect(setContent).toHaveBeenCalledTimes(1);
+            editor.store.getStoreSnapshot.mockReturnValue(snapOf(['shape:1', 'shape:2']));
+            act(() => editor.emit(SHAPE('shape:2')));
+            act(() => { window.dispatchEvent(new Event('pagehide')); });
+            expect(setContent).toHaveBeenCalledTimes(2);
+        });
+
+        it('the page can flush first: flush() returns the pending body, or null', async () => {
+            const api = { current: null };
+            const { editor } = await mount({ sketchApiRef: api });
+            expect(api.current.flush()).toBeNull();
+            editor.store.getStoreSnapshot.mockReturnValue(snapOf(['shape:1']));
+            act(() => editor.emit(SHAPE('shape:1')));
+            let out;
+            act(() => { out = api.current.flush(); });
+            expect(out).toContain('shape:1');
+            expect(setContent).toHaveBeenCalledWith(out);
+        });
+    });
+
+    describe('1.18 images', () => {
+        it('tldraw is told the size limits, and a file goes through our handler (shrunk, refused by name)', async () => {
+            const { editor } = await mount();
+            expect(tl.renders.at(-1).props).toMatchObject({ maxImageDimension: 1600 });
+            expect(tl.renders.at(-1).props.maxAssetSize).toBeGreaterThan(0);
+            expect(editor.registerExternalAssetHandler).toHaveBeenCalledWith('file', expect.any(Function));
+            await expect(editor.assetHandlers.file({ file: new File(['x'], 'notes.pdf', { type: 'application/pdf' }) })).rejects.toThrow(/notes\.pdf/);
+            expect(await screen.findByText(/“notes\.pdf” is not an image/)).toBeInTheDocument();
+        });
+    });
+
+    describe('2.2 pickers and tooltips render inside the sketch (visible in fullscreen)', () => {
+        it('the pen picker portals into the container', async () => {
+            const user = userEvent.setup();
+            await mount();
+            await user.click(screen.getByRole('button', { name: 'Pen colour and size' }));
+            const dialog = await screen.findByRole('dialog', { name: 'Pen colour and size' });
+            expect(container().contains(dialog)).toBe(true);
+        });
+    });
+
+    describe('2.3 pen mode from the first touch', () => {
+        it('a device that has had a pen opens in pen mode; a pen press is remembered', async () => {
+            const { editor, unmount } = await mount();
+            expect(editor.updateInstanceState).not.toHaveBeenCalledWith({ isPenMode: true });
+            act(() => { screen.getByTestId('tl-canvas').dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'pen', button: 0, buttons: 1, bubbles: true })); });
+            unmount();
+            const again = await mount();
+            expect(again.editor.instance.isPenMode).toBe(true);
+        });
+
+        it('"Finger draws" keeps pen mode off, and is remembered', async () => {
+            localStorage.setItem('notegeek:sketchPenSeen', '1');
+            const user = userEvent.setup();
+            const { editor } = await mount();
+            expect(editor.instance.isPenMode).toBe(true);
+            await user.click(screen.getByRole('button', { name: 'More' }));
+            await user.click(await screen.findByRole('checkbox', { name: 'Finger draws' }));
+            await waitFor(() => expect(editor.instance.isPenMode).toBe(false));
+            expect(localStorage.getItem('notegeek:sketchFingerDraws')).toBe('1');
+        });
+    });
+
+    describe('2.4 palm and handedness', () => {
+        it('in pen mode, a palm on the toolbar presses nothing; a fingertip with the pen away still works', async () => {
+            localStorage.setItem('notegeek:sketchPenSeen', '1');
+            const { editor } = await mount();
+            const eraser = screen.getByRole('button', { name: 'Eraser' });
+            const press = (init) => {
+                act(() => { eraser.dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'touch', bubbles: true, cancelable: true, ...init })); });
+                act(() => { eraser.click(); });
+            };
+            press({ width: 40, height: 40 }); // a palm
+            expect(editor.setCurrentTool).not.toHaveBeenCalledWith('eraser');
+            await new Promise((r) => setTimeout(r, 850));
+            press({ width: 8, height: 8 }); // a fingertip, no pen nearby
+            expect(editor.setCurrentTool).toHaveBeenLastCalledWith('eraser');
+        });
+
+        it('the bar can sit on any edge, remembered on this device', async () => {
+            const user = userEvent.setup();
+            await mount();
+            await user.click(screen.getByRole('button', { name: 'More' }));
+            await user.click(await screen.findByRole('button', { name: 'Toolbar: Left' }));
+            // (More is still open, so the page behind it is aria-hidden.)
+            const bar = screen.getByRole('toolbar', { name: 'Drawing tools', hidden: true });
+            expect(bar).toHaveAttribute('data-bar-position', 'left');
+            expect(bar).toHaveAttribute('aria-orientation', 'vertical');
+            expect(localStorage.getItem('notegeek:sketchBarPosition')).toBe('left');
+        });
+    });
+
+    describe('2.5 / 2.6 the short bar and its More', () => {
+        it('More holds Select, Redo, Highlighter and Zoom to fit', async () => {
+            setViewport(true);
+            const user = userEvent.setup();
+            const { editor } = await mount();
+            await user.click(screen.getByRole('button', { name: 'More' }));
+            const more = await screen.findByRole('dialog', { name: 'More' });
+            for (const name of ['Select', 'Redo', 'Highlighter', 'Zoom to fit']) expect(within(more).getByRole('button', { name })).toBeInTheDocument();
+            await user.click(within(more).getByRole('button', { name: 'Zoom to fit' }));
+            expect(editor.zoomToFit).toHaveBeenCalled();
+        });
+
+        it("the bar follows the container's width, not the viewport's", async () => {
+            // A desktop viewport, but the sketch has only 760px beside the sidebar.
+            const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, right: 760, bottom: 700, width: 760, height: 700, x: 0, y: 0, toJSON: () => ({}) });
+            try {
+                await mount();
+                expect(screen.getByRole('toolbar', { name: 'Drawing tools' })).toHaveAttribute('data-bar-full', 'false');
+                expect(screen.queryByRole('button', { name: 'Shapes' })).not.toBeInTheDocument();
+            } finally {
+                rect.mockRestore();
+            }
+        });
+    });
+
+    describe('2.11 sketch usability', () => {
+        it('a saved sketch opens to be read (hand tool); the first pen touch arms the pen', async () => {
+            const { editor, unmount } = await mount({ content: json(['shape:a']) });
+            expect(editor.getCurrentToolId()).toBe('hand');
+            act(() => { screen.getByTestId('tl-canvas').dispatchEvent(new PointerEvent('pointerdown', { pointerType: 'pen', button: 0, buttons: 1, bubbles: true })); });
+            expect(editor.getCurrentToolId()).toBe('draw');
+            unmount();
+            // a new sketch is ready to write on
+            const fresh = await mount();
+            expect(fresh.editor.getCurrentToolId()).toBe('draw');
+        });
+
+        it('the camera is remembered per sketch and restored on opening', async () => {
+            vi.useFakeTimers({ shouldAdvanceTime: true });
+            try {
+                const { editor, unmount } = await mount({ content: json(['shape:a']), noteId: 'n1' });
+                editor.getCamera.mockReturnValue({ x: -120, y: -900, z: 1.5 });
+                act(() => editor.emit({ changes: { added: {}, updated: { 'camera:page:page': [{}, {}] }, removed: {} } }));
+                await act(async () => { vi.advanceTimersByTime(1000); });
+                unmount();
+                const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, right: 390, bottom: 700, width: 390, height: 700, x: 0, y: 0, toJSON: () => ({}) });
+                try {
+                    const again = await mount({ content: json(['shape:a']), noteId: 'n1' });
+                    await act(async () => { vi.advanceTimersByTime(300); });
+                    expect(again.editor.setCamera).toHaveBeenCalledWith({ x: -120, y: -900, z: 1.5 });
+                    expect(again.editor.zoomToBounds).not.toHaveBeenCalled();
+                } finally {
+                    rect.mockRestore();
+                }
+            } finally {
+                vi.useRealTimers();
+            }
+        });
+
+        it('D8: the first ink writes the paper it was written on into the sketch', async () => {
+            localStorage.setItem('notegeek:sketchPaper', JSON.stringify({ color: 'warm', pattern: 'lined' }));
+            const { editor } = await mount();
+            expect(editor.updateDocumentSettings).not.toHaveBeenCalled();
+            act(() => editor.emit(SHAPE('shape:1')));
+            expect(editor.updateDocumentSettings).toHaveBeenCalledWith({ meta: { paperColor: 'warm', paperPattern: 'lined' } });
+            act(() => editor.emit(SHAPE('shape:2')));
+            expect(editor.updateDocumentSettings).toHaveBeenCalledTimes(1);
+        });
+
+        it('the ink swatches sit on the paper, so dark ink shows on a dark popover', async () => {
+            localStorage.setItem('notegeek:sketchPaper', JSON.stringify({ color: 'warm', pattern: 'plain' }));
+            const user = userEvent.setup();
+            await mount();
+            await user.click(screen.getByRole('button', { name: 'Pen colour and size' }));
+            const colours = await screen.findByRole('group', { name: 'Pen colour' });
+            expect(getComputedStyle(colours).backgroundColor).toBe('rgb(244, 238, 223)');
+        });
+
+        it('the bar clears the gesture bar (safe-area inset)', async () => {
+            await mount();
+            const bar = screen.getByRole('toolbar', { name: 'Drawing tools' });
+            const css = [...document.querySelectorAll('style')].map((s) => s.textContent).join('\n');
+            const cls = [...bar.classList].find((c) => css.includes(`.${c}{`) && css.includes('safe-area-inset-bottom'));
+            expect(cls).toBeTruthy();
+        });
+    });
+
+    describe('2.12 cheap wins', () => {
+        it('two fingers tapped together undo; a pinch does not', async () => {
+            const { editor } = await mount();
+            const canvas = screen.getByTestId('tl-canvas');
+            const fire = (type, id, x = 10) => act(() => { canvas.dispatchEvent(new PointerEvent(type, { pointerType: 'touch', pointerId: id, clientX: x, clientY: 10, bubbles: true })); });
+            fire('pointerdown', 1); fire('pointerdown', 2); fire('pointerup', 1); fire('pointerup', 2);
+            expect(editor.undo).toHaveBeenCalledTimes(1);
+            fire('pointerdown', 3); fire('pointerdown', 4); fire('pointermove', 4, 80); fire('pointerup', 3); fire('pointerup', 4);
+            expect(editor.undo).toHaveBeenCalledTimes(1);
+        });
+
+        it('Share as image hands a PNG to the share sheet', async () => {
+            const user = userEvent.setup();
+            const { editor } = await mount();
+            editor.shapeIds = new Set(['shape:a']);
+            const realGetContext = HTMLCanvasElement.prototype.getContext;
+            const realToBlob = HTMLCanvasElement.prototype.toBlob;
+            HTMLCanvasElement.prototype.getContext = () => ({ fillRect() {}, drawImage() {}, set fillStyle(_v) {} });
+            HTMLCanvasElement.prototype.toBlob = function toBlob(cb, type) { cb(new Blob(['png'], { type })); };
+            global.createImageBitmap = vi.fn(async () => ({ width: 100, height: 100, close() {} }));
+            navigator.canShare = vi.fn(() => true);
+            navigator.share = vi.fn(async () => {});
+            try {
+                await user.click(screen.getByRole('button', { name: 'More' }));
+                await user.click(await screen.findByRole('button', { name: 'Share as image' }));
+                await waitFor(() => expect(navigator.share).toHaveBeenCalledTimes(1));
+                const [{ files }] = navigator.share.mock.calls[0];
+                expect(files[0].name).toBe('sketch.png');
+                expect(files[0].type).toBe('image/png');
+            } finally {
+                HTMLCanvasElement.prototype.getContext = realGetContext;
+                HTMLCanvasElement.prototype.toBlob = realToBlob;
+                delete global.createImageBitmap;
+                delete navigator.canShare;
+                delete navigator.share;
+            }
+        });
+
+        it('the pen picker offers the last pens used, one tap each', async () => {
+            const user = userEvent.setup();
+            const { editor } = await mount();
+            await user.click(screen.getByRole('button', { name: 'Pen colour and size' }));
+            await user.click(await screen.findByRole('button', { name: 'Colour: blue' }));
+            await user.click(screen.getByRole('button', { name: 'Colour: red' }));
+            const strip = screen.getByRole('group', { name: 'Recent pens' });
+            await user.click(within(strip).getByRole('button', { name: 'Recent pen: blue, Small' }));
+            expect(editor.setStyleForNextShapes).toHaveBeenLastCalledWith(DefaultColorStyle, 'blue');
         });
     });
 });

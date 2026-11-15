@@ -13,21 +13,21 @@ import { MemoryRouter, Routes, Route } from 'react-router-dom';
 import { MockedProvider } from '@apollo/client/testing';
 import { GeekToastProvider } from '@geeksuite/ui';
 import { createNoteTheme } from '../../../theme/createAppTheme';
-import { GET_NOTES } from '../../../graphql/queries';
+import { GET_NOTES_PAGE as GET_NOTES } from '../../../graphql/queries';
 import { ARCHIVE_NOTES, RESTORE_NOTES } from '../../../graphql/archive';
 import NoteList from '../../../components/NoteList';
 
 const iso = (h) => new Date(Date.now() - h * 3600e3).toISOString();
 const note = (id, title, type = 'markdown', h = 1) => ({
-  id, title, content: `${title} body`, type, tags: [], pinned: false, pinnedAt: null, createdAt: iso(h + 100), updatedAt: iso(h),
+  id, title, preview: `${title} body`, type, tags: [], pinned: false, pinnedAt: null, createdAt: iso(h + 100), updatedAt: iso(h),
 });
 const NOTES = [
   note('a', 'Alpha plan', 'markdown', 1),
   note('b', 'Beta notes', 'text', 2),
   note('s', 'Sketch of the shed', 'handwritten', 3),
 ];
-const VARS = { tag: undefined, prefix: undefined, under: undefined, type: null, limit: 200 };
-const listMock = () => ({ request: { query: GET_NOTES, variables: VARS }, result: { data: { notes: NOTES } }, maxUsageCount: 10 });
+const VARS = { tag: undefined, prefix: undefined, under: undefined, type: null, sort: 'updatedAt_desc', first: 100 };
+const listMock = () => ({ request: { query: GET_NOTES, variables: VARS }, result: { data: { notesPage: { notes: NOTES, nextCursor: null, hasMore: false } } }, maxUsageCount: 10 });
 
 function renderList(extraMocks = []) {
   return render(

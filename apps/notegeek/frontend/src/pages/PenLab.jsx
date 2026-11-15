@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Box, Button, Typography, useTheme } from '@mui/material';
+import { penButtonTool, TLDRAW_ERASER_BUTTON } from '../utils/penButton';
 
 /**
  * PenLab — /labs/pen. What a pen actually sends the browser.
@@ -31,13 +32,25 @@ function describePointer(e) {
   };
 }
 
-/** What penButton.js would do with this event. */
+/**
+ * What NoteGeek would do with this event — asked of penButton.js itself
+ * (review 2.11), not a copy of its rules that could drift.
+ *
+ * Only a PRESS chooses a tool. A button pressed mid-stroke arrives as a
+ * chorded pointermove, and nothing acts on it: the stroke carries on as ink
+ * (HANDWRITING.md §1, "Not handled"). The lab used to call that "eraser".
+ */
 function verdict(row) {
   if (row.pointerType !== 'pen') return '';
-  if (row.button === 5) return 'tldraw eraser (button 5)';
-  if (row.buttons & 32) return 'eraser (eraser bit)';
-  if (row.button === 2 || row.buttons & 2) return 'eraser (side button)';
-  if (row.button === 1 || row.buttons & 4) return 'scroll (second button)';
+  const e = { pointerType: row.pointerType, button: row.button, buttons: row.buttons };
+  if (row.event !== 'pointerdown') {
+    const chorded = row.event === 'pointermove' && penButtonTool({ ...e, button: -1 });
+    return chorded ? 'nothing mid-stroke (lift, then press with the button)' : '';
+  }
+  if (row.button === TLDRAW_ERASER_BUTTON) return 'tldraw eraser (button 5)';
+  const tool = penButtonTool(e);
+  if (tool === 'eraser') return (row.buttons & 32) ? 'eraser (eraser bit)' : 'eraser (side button)';
+  if (tool === 'hand') return 'scroll (second button)';
   return 'write';
 }
 

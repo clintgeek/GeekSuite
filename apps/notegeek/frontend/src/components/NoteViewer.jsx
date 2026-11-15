@@ -30,6 +30,7 @@ import CallMerge from '@mui/icons-material/CallMerge';
 import ArchiveOutlined from '@mui/icons-material/ArchiveOutlined';
 import UnarchiveOutlined from '@mui/icons-material/UnarchiveOutlined';
 import ArchivedBanner from './notes/ArchivedBanner';
+import DeletedBanner from './notes/DeletedBanner';
 import { useNoteArchiveState } from '../hooks/useNoteArchiveState';
 import { useArchiveNotes } from '../hooks/useArchiveNotes';
 import FoldInSheet from './foldin/FoldInSheet';
@@ -75,7 +76,7 @@ function NoteViewer() {
 
     // Archive / Restore (DOCS/COMPOSE_MANY_AND_ARCHIVE_SPEC.md U6). The
     // viewer stays on the note: the banner appears, the toast has Undo.
-    const { archived, archivedAt } = useNoteArchiveState(id);
+    const { archived, archivedAt, deletedAt } = useNoteArchiveState(id);
     const { archive, restore, busy: isArchiving } = useArchiveNotes();
     const handleArchiveToggle = () => (archived ? restore([id]) : archive([id]));
 
@@ -242,6 +243,10 @@ function NoteViewer() {
                         </IconButton>
                     </Tooltip>
                 </Box>
+
+                {deletedAt ? (
+                    <DeletedBanner noteId={id} deletedAt={deletedAt} sx={{ mb: 1.5, mx: 0.5 }} />
+                ) : null}
 
                 {archived ? (
                     <ArchivedBanner

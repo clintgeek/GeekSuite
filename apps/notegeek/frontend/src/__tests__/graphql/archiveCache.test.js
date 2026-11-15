@@ -13,7 +13,7 @@ import { onNotesArchived } from '../../graphql/cacheUpdates';
 
 const NOTES_VARS = { tag: null, prefix: null, under: null, type: null, limit: 200 };
 const NOTE = (id, extra = {}) => ({
-  __typename: 'Note', id, title: id, content: 'x', type: 'markdown', tags: ['house'],
+  __typename: 'Note', id, title: id, content: 'x', preview: 'x', deletedAt: null, type: 'markdown', tags: ['house'],
   pinned: false, pinnedAt: null, createdAt: '2026-09-01T00:00:00.000Z', updatedAt: '2026-09-01T00:00:00.000Z', ...extra,
 });
 
@@ -31,7 +31,7 @@ beforeEach(() => {
   cache.writeQuery({
     query: NOTE_ARCHIVE_STATE,
     variables: { id: 'a' },
-    data: { note: { __typename: 'Note', id: 'a', archived: false, archivedAt: null } },
+    data: { note: { __typename: 'Note', id: 'a', archived: false, archivedAt: null, deletedAt: null } },
   });
 });
 
@@ -59,7 +59,7 @@ describe('onNotesArchived', () => {
     cache.writeQuery({
       query: NOTE_ARCHIVE_STATE,
       variables: { id: 'a' },
-      data: { note: { __typename: 'Note', id: 'a', archived: true, archivedAt: '2026-10-08T00:00:00.000Z' } },
+      data: { note: { __typename: 'Note', id: 'a', archived: true, archivedAt: '2026-10-08T00:00:00.000Z', deletedAt: null } },
     });
     onNotesArchived(false)(cache, { data: { restoreNotes: { ids: ['a'], count: 1 } } });
     const state = read(NOTE_ARCHIVE_STATE, { id: 'a' });
@@ -72,7 +72,7 @@ describe('onNotesArchived', () => {
     cache.writeQuery({
       query: NOTE_ARCHIVE_STATE,
       variables: { id: 'b' },
-      data: { note: { __typename: 'Note', id: 'b', archived: false, archivedAt: null } },
+      data: { note: { __typename: 'Note', id: 'b', archived: false, archivedAt: null, deletedAt: null } },
     });
     onNotesArchived(true)(cache, { data: { archiveNotes: { ids: ['a'], count: 1 } } });
     expect(read(NOTE_ARCHIVE_STATE, { id: 'b' }).note.archived).toBe(false);

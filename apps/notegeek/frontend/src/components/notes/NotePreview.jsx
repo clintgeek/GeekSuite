@@ -1,4 +1,6 @@
-import React, { memo, useEffect, useMemo, useRef, useState } from 'react';
+import React, { memo, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import { getApolloContext } from '@apollo/client';
+import { NOTE_THUMB_CONTENT } from '../../graphql/queries';
 import { Box, useTheme, alpha } from '@mui/material';
 import { decodeCodeNote } from '../../utils/previewText';
 import { cachedGeometry, mindMapGeometry, sketchGeometry, thumbnailKey, tintCodeLine } from '../../utils/thumbnails';
@@ -223,6 +225,23 @@ function NoteThumbInner({ note }) {
   const [ref, inView] = useInView();
   const key = thumbnailKey(note);
   const meta = noteTypeMeta(type);
+  // List rows no longer carry the body (5.1): a sketch's is megabytes. The
+  // tile fetches its own note's body once it is near the screen — one note,
+  // only the ones actually scrolled to, and from the cache when the note was
+  // opened before (same `note(id)` entry as the editor's).
+  const apollo = useContext(getApolloContext())?.client || null;
+  const [fetched, setFetched] = useState(null);
+  const body = typeof note.content === 'string' ? note.content : fetched;
+  useEffect(() => {
+    if (typeof note.content === 'string' || !inView || !apollo) return undefined;
+    if (type !== 'handwritten' && type !== 'mindmap') return undefined;
+    if (cachedGeometry(type, key) !== undefined) return undefined;
+    let alive = true;
+    apollo.query({ query: NOTE_THUMB_CONTENT, variables: { id: note.id || note._id }, fetchPolicy: 'cache-first' })
+      .then(({ data }) => { if (alive) setFetched(data?.note?.content || ''); })
+      .catch(() => {});
+    return () => { alive = false; };
+  }, [apollo, inView, type, key, note.content, note.id, note._id]);
 
   // Parse off the render path: once the tile is near the viewport, in an
   // idle slot, one note per task. A 1MB sketch is ~10ms of JSON.parse; eight
@@ -236,8 +255,9 @@ function NoteThumbInner({ note }) {
       setGeometry(hit);
       return undefined;
     }
+    if (typeof body !== 'string') return undefined; // still fetching
     const run = () => setGeometry(
-      type === 'handwritten' ? sketchGeometry(note.content, key) : mindMapGeometry(note.content, key)
+      type === 'handwritten' ? sketchGeometry(body, key) : mindMapGeometry(body, key)
     );
     if (typeof window.requestIdleCallback === 'function') {
       const id = window.requestIdleCallback(run, { timeout: 500 });
@@ -245,7 +265,7 @@ function NoteThumbInner({ note }) {
     }
     const id = window.setTimeout(run, 0);
     return () => window.clearTimeout(id);
-  }, [inView, type, key, note.content]);
+  }, [inView, type, key, body]);
 
   const color = noteTypeColor(theme, type);
 

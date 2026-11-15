@@ -1,17 +1,79 @@
 import { gql } from '@apollo/client';
 import { SKETCH_TRANSCRIPT_FIELDS } from './mutations';
 
-export const GET_NOTES = gql`
-    query GetNotes($tag: String, $prefix: String, $under: String, $type: String, $limit: Int) {
-        notes(tag: $tag, prefix: $prefix, under: $under, type: $type, limit: $limit) {
+/**
+ * The note list (5.1/5.2, review 2026-11). Light rows: `preview` is the
+ * server's plain-text excerpt, and `content` is deliberately NOT selected — a
+ * list of 200 notes used to carry every multi-MB sketch body on every visit
+ * (the gateway does not even read `content` when it is not selected). A
+ * sketch or mind-map row's thumbnail fetches its own note's body lazily, once
+ * it scrolls into view (components/notes/NotePreview.jsx).
+ *
+ * `sort` is the server's: updatedAt_desc (default) | updatedAt_asc |
+ * createdAt_desc | createdAt_asc | title_asc | title_desc (case-insensitive).
+ * Needs the gateway from 2026-11-15 — an older one rejects `preview`.
+ */
+export const NOTE_LIST_FIELDS = `
             id
             title
-            content
+            preview
             type
             tags
             pinned
             pinnedAt
             createdAt
+            updatedAt
+`;
+
+/** Home's few rows (and the store behind it). */
+export const GET_NOTES = gql`
+    query GetNotes($tag: String, $prefix: String, $under: String, $type: String, $limit: Int, $sort: String) {
+        notes(tag: $tag, prefix: $prefix, under: $under, type: $type, limit: $limit, sort: $sort) {
+            ${NOTE_LIST_FIELDS}
+        }
+    }
+`;
+
+/**
+ * The Notes page, a page at a time (5.2): keyset paging on the server, so
+ * notes past the newest 200 are reachable and A–Z is A–Z of every note.
+ * `after` is the previous page's `nextCursor`.
+ */
+export const GET_NOTES_PAGE = gql`
+    query GetNotesPage($tag: String, $prefix: String, $under: String, $type: String, $sort: String, $first: Int, $after: String) {
+        notesPage(tag: $tag, prefix: $prefix, under: $under, type: $type, sort: $sort, first: $first, after: $after) {
+            notes {
+                ${NOTE_LIST_FIELDS}
+            }
+            nextCursor
+            hasMore
+        }
+    }
+`;
+
+/**
+ * Recently deleted (C4, decision D1): soft-deleted notes, newest first. The
+ * server purges anything deleted more than 30 days ago.
+ */
+export const DELETED_NOTES = gql`
+    query DeletedNotes($limit: Int) {
+        deletedNotes(limit: $limit) {
+            ${NOTE_LIST_FIELDS}
+            deletedAt
+        }
+    }
+`;
+
+/**
+ * One note's body, for a list row's thumbnail. Same root field and arguments
+ * as GET_NOTE_BY_ID, so it shares that cache entry: a note opened before
+ * draws its thumbnail with no request at all.
+ */
+export const NOTE_THUMB_CONTENT = gql`
+    query NoteThumbContent($id: ID!) {
+        note(id: $id) {
+            id
+            content
             updatedAt
         }
     }

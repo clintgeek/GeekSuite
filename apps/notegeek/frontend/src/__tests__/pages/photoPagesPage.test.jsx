@@ -42,6 +42,8 @@ vi.mock('@apollo/client', async () => {
       const name = doc?.definitions?.[0]?.name?.value;
       const fn = {
         CreateNote: createNote,
+        // The photo note itself (C6): same create, with its reviewed text.
+        CreatePhotoNote: createNote,
         UpdateNote: updateNote,
         ComposeNote: composeNote,
         TranscribeSketch: transcribeSketch,
@@ -333,9 +335,9 @@ describe('the result: two new notes, photos first, nothing replaced', () => {
     expect(notify).toHaveBeenCalledWith(expect.stringMatching(/photos as a sketch note, and the text as a new note/), { tone: 'success' });
     // The reviewed reading is also the photo note's own searchable text
     // (AUTO_TRANSCRIBE_SPEC.md, photo decision 1b) — free: no new request.
-    expect(saveSketchTranscriptEdit).toHaveBeenCalledWith({
-      variables: { noteId: 'photo-1', text: '--- page 1 ---\nmilk\neggs\n\n--- page 2 ---\nbread' },
-    });
+    // Sent WITH the create (C6, review 1.21), not as a follow-up that could fail.
+    expect(photoVars.transcriptText).toBe('--- page 1 ---\nmilk\neggs\n\n--- page 2 ---\nbread');
+    expect(saveSketchTranscriptEdit).not.toHaveBeenCalled();
     expect(transcribeSketch).toHaveBeenCalledTimes(2);
   });
 

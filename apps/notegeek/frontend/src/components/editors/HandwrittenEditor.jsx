@@ -1,13 +1,21 @@
-import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { CircularProgress, Box, useTheme } from '@mui/material';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { CircularProgress, Box, Snackbar, useTheme } from '@mui/material';
 import {
-    Box as TlBox, Tldraw, DefaultSizeStyle,
-    exportToBlob, getPointerInfo,
+    Box as TlBox, Tldraw, DefaultSizeStyle, AssetRecordType,
+    exportToBlob, getPointerInfo, loadSnapshot as loadTldrawSnapshot, useEditor, useValue,
 } from '@tldraw/tldraw';
 import { attachPenButton } from '../../utils/penButton';
-import { exportSketchPng, exportSketchForPrint } from '../../utils/sketchExport';
+import { exportSketchPng, exportSketchForPrint, PRINT_MAX_EDGE } from '../../utils/sketchExport';
 import { fineStrokeHandler } from '../../utils/finePen';
 import { isInkEdit } from '../../utils/inkEdit';
+import { attachTwoFingerTap } from '../../utils/twoFingerTap';
+import {
+    readBarPosition, writeBarPosition, readCamera, writeCamera,
+    readFingerDraws, writeFingerDraws, readPenSeen, writePenSeen,
+} from '../../utils/penPrefs';
+import { SKETCH_IMAGE_INPUT_MAX_BYTES, SKETCH_IMAGE_MAX_EDGE, sketchImageHandler } from '../../utils/sketchImages';
+import { paperFromMeta, readDevicePaper } from './paperModel';
+import { SketchPortalContext } from './sketchPortal';
 
 // tldraw 2.4's updateViewportScreenBounds takes a Box and calls .equals() on
 // it. Passed the container element, as this file used to, it threw on every
@@ -23,6 +31,10 @@ import DrawingToolbar from './DrawingToolbar';
 import { PaperBackground, PaperSync } from './Paper';
 
 const SAVE_DEBOUNCE_MS = 400;
+/** How long the camera must rest before it is remembered for this sketch. */
+const CAMERA_SAVE_MS = 600;
+/** Our own recent saves, recognised when they come back as `content`. */
+const ECHOES_KEPT = 3;
 
 // <Tldraw>'s props must keep their identity across renders. tldraw rebuilds
 // its editor when `options` or `components` change, so objects built inline
@@ -73,19 +85,69 @@ function fitFirstPhotoPage(editor) {
 }
 
 /**
- * `sketchApiRef` (optional): filled with `{ exportPng, exportForPrint, hasShapes }` once the
- * editor mounts, so the page can export this sketch for "Convert handwriting
- * to text" without importing tldraw itself (this file is lazy-loaded; the
- * page is not). Cleared on unmount.
+ * The first view of a saved sketch (review 2.11): where the writer left it on
+ * this device, or else the whole page in view (never past 100%). A photo
+ * note's first page as before. Camera only — never the document.
  */
-const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef = null, onInkEdit = null }) => {
+function applyFirstView(editor, noteId) {
+    if (!editor || editor.isDisposed) return;
+    const saved = readCamera(noteId);
+    if (saved && editor.setCamera) {
+        editor.setCamera(saved);
+        return;
+    }
+    if (fitFirstPhotoPage(editor)) return;
+    const bounds = editor.getCurrentPageBounds?.();
+    if (bounds) editor.zoomToBounds?.(bounds, { targetZoom: 1, inset: 32 });
+}
+
+/**
+ * Pen mode (tldraw's palm rejection: the pen draws, fingers pan) from the
+ * first touch on a device that has had a pen, instead of from the first pen
+ * stroke of every visit (review 2.3). "Finger draws" keeps it off.
+ */
+function PenModeSync({ fingerDraws }) {
+    const editor = useEditor();
+    const penMode = useValue('pen mode', () => Boolean(editor.getInstanceState?.()?.isPenMode), [editor]);
+    useEffect(() => {
+        if (fingerDraws && penMode) editor.updateInstanceState?.({ isPenMode: false });
+        else if (!fingerDraws && !penMode && readPenSeen()) editor.updateInstanceState?.({ isPenMode: true });
+    }, [editor, fingerDraws, penMode]);
+    return null;
+}
+
+/**
+ * `sketchApiRef` (optional): filled with `{ exportPng, exportForPrint,
+ * hasShapes, flush }` once the editor mounts, so the page can export this
+ * sketch for "Convert handwriting to text" without importing tldraw itself
+ * (this file is lazy-loaded; the page is not). Cleared on unmount.
+ *
+ * `flush()` serialises any strokes still waiting on the 400 ms debounce,
+ * hands them to `setContent`, and returns the string (or null when nothing
+ * was pending) — for the page's own save on hide/unmount (review 1.2).
+ *
+ * `noteId` (optional): the camera is remembered per sketch on this device.
+ */
+const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef = null, onInkEdit = null, noteId = null }) => {
     // Read live by the store listener, so a new callback never rebuilds anything.
     const onInkEditRef = useRef(onInkEdit);
     onInkEditRef.current = onInkEdit;
+    const setContentRef = useRef(setContent);
+    setContentRef.current = setContent;
+    const noteIdRef = useRef(noteId);
+    noteIdRef.current = noteId;
     const editorRef = useRef(null);
     const unsubscribeRef = useRef(null);
-    const isApplyingSnapshot = useRef(false);
-    const lastSavedSnapshot = useRef(content || '');
+    const cameraUnsubscribeRef = useRef(null);
+    const cameraTimerRef = useRef(null);
+    // Saving (review 2.1): the store listener only marks the sketch dirty;
+    // the snapshot is serialised once, when the 400 ms debounce fires.
+    const dirtyRef = useRef(false);
+    // The last body known to match the canvas (loaded, or handed to setContent).
+    const lastKnownRef = useRef(content || '');
+    // Our own recent saves: when one of them comes back as `content`, it is
+    // an echo, never a reason to reload (review 1.17).
+    const emittedRef = useRef([]);
     const saveTimeoutRef = useRef(null);
     const containerRef = useRef(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -100,31 +162,104 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
         setPenFineState(value);
     }, []);
     const fineHandlerOffRef = useRef(null);
-    const photoFitPendingRef = useRef(false);
+    const firstViewPendingRef = useRef(false);
+    // A saved sketch opens to be looked at (the hand tool); the pen's first
+    // touch arms it (review 2.11). Any tool chosen by hand disarms this.
+    const armOnPenRef = useRef(false);
+    const paperWrittenRef = useRef(false);
+    const [fingerDraws, setFingerDrawsState] = useState(() => readFingerDraws());
+    const [barPosition, setBarPositionState] = useState(() => readBarPosition());
+    const [notice, setNotice] = useState(null);
     const theme = useTheme();
+
+    const setFingerDraws = useCallback((on) => {
+        writeFingerDraws(on);
+        setFingerDrawsState(on);
+    }, []);
+    const setBarPosition = useCallback((pos) => {
+        writeBarPosition(pos);
+        setBarPositionState(pos);
+    }, []);
 
     const loadSnapshot = useCallback((serialized, editor) => {
         if (!serialized) return;
         try {
             const snapshot = JSON.parse(serialized);
-            isApplyingSnapshot.current = true;
-            editor.store.loadSnapshot(snapshot);
-            lastSavedSnapshot.current = serialized;
+            // As a REMOTE change: the store listener (source 'user') never
+            // sees a load, so loading can't echo back as a save, and it is
+            // not on the undo stack. tldraw's listeners run a frame later, so
+            // the old "applying" flag never covered them.
+            editor.store.mergeRemoteChanges(() => loadTldrawSnapshot(editor.store, snapshot));
+            lastKnownRef.current = serialized;
         } catch (error) {
             console.warn('HandwrittenEditor - Invalid snapshot, ignoring.', error);
-        } finally {
-            isApplyingSnapshot.current = false;
         }
     }, []);
 
-    const debouncedSave = useCallback((serialized) => {
+    /** Serialise now if anything is pending; hand it to the page. */
+    const flush = useCallback(() => {
         if (saveTimeoutRef.current) {
             clearTimeout(saveTimeoutRef.current);
+            saveTimeoutRef.current = null;
         }
+        const editor = editorRef.current;
+        if (!dirtyRef.current || !editor) return null;
+        dirtyRef.current = false;
+        let serialized;
+        try {
+            serialized = JSON.stringify(editor.store.getStoreSnapshot());
+        } catch (error) {
+            console.warn('HandwrittenEditor - could not serialise the sketch.', error);
+            return null;
+        }
+        if (serialized === lastKnownRef.current) return null;
+        lastKnownRef.current = serialized;
+        emittedRef.current = [serialized, ...emittedRef.current].slice(0, ECHOES_KEPT);
+        setContentRef.current?.(serialized);
+        return serialized;
+    }, []);
+
+    const scheduleSave = useCallback(() => {
+        if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
         saveTimeoutRef.current = setTimeout(() => {
-            setContent(serialized);
+            saveTimeoutRef.current = null;
+            flush();
         }, SAVE_DEBOUNCE_MS);
-    }, [setContent]);
+    }, [flush]);
+
+    /** D8: on the first ink, the sketch keeps the paper it was written on. */
+    const keepPaperOnFirstInk = (editor) => {
+        if (paperWrittenRef.current) return;
+        paperWrittenRef.current = true;
+        const meta = editor.getDocumentSettings?.()?.meta || {};
+        if (meta.paperColor && meta.paperPattern) return;
+        const paper = paperFromMeta(meta, readDevicePaper());
+        editor.updateDocumentSettings?.({ meta: { ...meta, paperColor: paper.color, paperPattern: paper.pattern } });
+    };
+
+    const shareImage = useCallback(async () => {
+        const editor = editorRef.current;
+        if (!editor) return;
+        try {
+            const { blob } = await exportSketchPng(editor, { exportToBlob, maxEdge: PRINT_MAX_EDGE, maxBytes: Infinity, base64: false });
+            const file = typeof File === 'function' ? new File([blob], 'sketch.png', { type: 'image/png' }) : null;
+            if (file && navigator.canShare?.({ files: [file] }) && navigator.share) {
+                await navigator.share({ files: [file], title: 'Sketch' });
+                return;
+            }
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'sketch.png';
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 10_000);
+        } catch (err) {
+            if (err?.name === 'AbortError') return; // the share sheet was closed
+            setNotice(err?.message || 'The sketch could not be turned into an image.');
+        }
+    }, []);
 
     const handleMount = useCallback((editor) => {
         editorRef.current = editor;
@@ -136,16 +271,10 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
                 // one image per photographed page.
                 exportForPrint: () => exportSketchForPrint(editor, { exportToBlob }),
                 hasShapes: () => editor.getCurrentPageShapeIds().size > 0,
+                flush,
             };
         }
 
-        // Set initial tool to draw for better mobile experience
-        editor.setCurrentTool('draw');
-        // Handwriting wants a thin pen: tldraw's default (m) wrote fat lines
-        // (Chef, 2026-09-27). New sketches start on Small ('s'); Fine (size
-        // 's' plus FINE_SCALE on each new stroke) was the default until
-        // 2026-11-14.
-        editor.setStyleForNextShapes(DefaultSizeStyle, 's');
         // The same no-stacking rule as the store listener below: a remount
         // drops the previous editor's handler before registering this one.
         if (fineHandlerOffRef.current) {
@@ -154,15 +283,35 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
         }
         if (!readOnly) {
             fineHandlerOffRef.current = editor.sideEffects.registerBeforeCreateHandler('shape', fineStrokeHandler(editor, fineRef));
+            // An inserted or pasted image is shrunk, and refused by name if
+            // it would make the sketch unsaveable (review 1.18).
+            editor.registerExternalAssetHandler?.('file', sketchImageHandler({
+                currentChars: () => (lastKnownRef.current || '').length,
+                onRefuse: setNotice,
+                AssetRecordType,
+            }));
+            // A device that has had a pen starts in pen mode (review 2.3).
+            if (readPenSeen() && !readFingerDraws()) editor.updateInstanceState?.({ isPenMode: true });
         }
 
         // tldraw's colour scheme follows the paper and the app theme: PaperSync.
 
+        let hasInk = false;
         if (content) {
             loadSnapshot(content, editor);
+            hasInk = editor.getCurrentPageShapeIds?.().size > 0;
             // Done by the bounds update below, once the viewport is measured.
-            photoFitPendingRef.current = Boolean(firstPhotoShape(editor));
+            firstViewPendingRef.current = true;
         }
+
+        // A saved sketch opens to be read, an empty one to be written on.
+        // Handwriting wants a thin pen: tldraw's default (m) wrote fat lines
+        // (Chef, 2026-09-27). New sketches start on Small ('s'); Fine (size
+        // 's' plus FINE_SCALE on each new stroke) was the default until
+        // 2026-11-14.
+        armOnPenRef.current = hasInk && !readOnly;
+        editor.setCurrentTool(hasInk ? 'hand' : 'draw');
+        editor.setStyleForNextShapes(DefaultSizeStyle, 's');
 
         // If onMount runs again, the previous editor's listener must go first,
         // or listeners stack up (one per mount) on stores that are gone.
@@ -170,31 +319,64 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
             unsubscribeRef.current();
             unsubscribeRef.current = null;
         }
+        if (cameraUnsubscribeRef.current) {
+            cameraUnsubscribeRef.current();
+            cameraUnsubscribeRef.current = null;
+        }
 
         if (!readOnly) {
+            // Document records changed by the user only: not the camera, the
+            // pointer or the selection (session), and not a load (remote). The
+            // whole sketch used to be serialised and compared on every
+            // pointer frame, hover included (review 2.1).
             unsubscribeRef.current = editor.store.listen((entry) => {
-                if (isApplyingSnapshot.current) return;
-                if (isInkEdit(entry)) onInkEditRef.current?.();
-
-                const snapshot = editor.store.getSnapshot();
-                const serialized = JSON.stringify(snapshot);
-
-                if (serialized !== lastSavedSnapshot.current) {
-                    lastSavedSnapshot.current = serialized;
-                    debouncedSave(serialized);
+                dirtyRef.current = true;
+                if (isInkEdit(entry)) {
+                    keepPaperOnFirstInk(editor);
+                    onInkEditRef.current?.();
                 }
-            });
+                scheduleSave();
+            }, { scope: 'document', source: 'user' });
         }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- content intentionally excluded; initial load only
-    }, [loadSnapshot, readOnly, debouncedSave, sketchApiRef]);
 
-    // Hold the S Pen's side button to scroll the page; an eraser end erases
+        // The camera, remembered per sketch on this device (review 2.11).
+        cameraUnsubscribeRef.current = editor.store.listen((entry) => {
+            const touched = Object.keys({ ...entry?.changes?.updated, ...entry?.changes?.added }).some((id) => id.startsWith('camera:'));
+            if (!touched || !noteIdRef.current) return;
+            if (cameraTimerRef.current) clearTimeout(cameraTimerRef.current);
+            cameraTimerRef.current = setTimeout(() => {
+                cameraTimerRef.current = null;
+                writeCamera(noteIdRef.current, editor.getCamera?.());
+            }, CAMERA_SAVE_MS);
+        }, { scope: 'session' });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- content intentionally excluded; initial load only
+    }, [loadSnapshot, readOnly, scheduleSave, flush, sketchApiRef]);
+
+    // Hold the S Pen's side button to erase; an eraser end erases
     // (DOCS/HANDWRITING.md §1). A capture-phase listener on the container, so
-    // it runs before tldraw's own handlers; see utils/penButton.js.
+    // it runs before tldraw's own handlers; see utils/penButton.js. Also: a
+    // pen's first press remembers this device has a pen, and arms a sketch
+    // that opened to be looked at; two fingers tapped together undo.
     useEffect(() => {
         const container = containerRef.current;
         if (!container || readOnly || isLoading) return undefined;
-        return attachPenButton(container, () => editorRef.current, { getPointerInfo });
+        const onPenDown = (e) => {
+            if (e.pointerType !== 'pen') return;
+            writePenSeen();
+            const editor = editorRef.current;
+            if (!armOnPenRef.current || !editor || !e.target?.closest?.('.tl-canvas')) return;
+            if (e.button !== 0 || (e.buttons & ~1) !== 0) return; // a button press: penButton's
+            armOnPenRef.current = false;
+            if (editor.getCurrentToolId() === 'hand') editor.setCurrentTool('draw');
+        };
+        container.addEventListener('pointerdown', onPenDown, { capture: true });
+        const detachPen = attachPenButton(container, () => editorRef.current, { getPointerInfo });
+        const detachTap = attachTwoFingerTap(container, () => editorRef.current?.undo());
+        return () => {
+            container.removeEventListener('pointerdown', onPenDown, { capture: true });
+            detachPen();
+            detachTap();
+        };
     }, [readOnly, isLoading]);
 
     // Use ResizeObserver for reliable viewport bounds updates
@@ -207,10 +389,10 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
                 // This tells tldraw exactly where its container is on screen
                 // Critical for correct touch/mouse coordinate calculation
                 editorRef.current.updateViewportScreenBounds(screenBoundsOf(container));
-                // A photo sketch note's first-open fit, now that the viewport is real.
-                if (photoFitPendingRef.current && container.getBoundingClientRect().width > 1) {
-                    photoFitPendingRef.current = false;
-                    fitFirstPhotoPage(editorRef.current);
+                // A saved sketch's first view, now that the viewport is real.
+                if (firstViewPendingRef.current && container.getBoundingClientRect().width > 1) {
+                    firstViewPendingRef.current = false;
+                    applyFirstView(editorRef.current, noteIdRef.current);
                 }
             }
         };
@@ -240,26 +422,66 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
         };
     }, [isLoading]); // Re-run when loading completes
 
-
+    // `content` changed. Reload ONLY what came from outside — a History
+    // restore, a conflict resolved in favour of the other device. Our own
+    // saves coming back (possibly after the writer has drawn more) are
+    // echoes: reloading one wiped the first stroke of the next word (1.17).
     useEffect(() => {
-        if (!editorRef.current) return;
-        if (!content || content === lastSavedSnapshot.current) return;
-        loadSnapshot(content, editorRef.current);
+        const editor = editorRef.current;
+        if (!editor || !content) return;
+        if (content === lastKnownRef.current || emittedRef.current.includes(content)) return;
+        if (saveTimeoutRef.current) {
+            clearTimeout(saveTimeoutRef.current);
+            saveTimeoutRef.current = null;
+        }
+        dirtyRef.current = false;
+        loadSnapshot(content, editor);
     }, [content, loadSnapshot]);
 
+    // The app is hidden or the page is going away: save the pending strokes
+    // now, not 400 ms from now — Android may freeze the PWA first (1.2).
+    useEffect(() => {
+        if (readOnly) return undefined;
+        const onHide = () => { if (document.visibilityState === 'hidden') flush(); };
+        document.addEventListener('visibilitychange', onHide);
+        window.addEventListener('pagehide', flush);
+        return () => {
+            document.removeEventListener('visibilitychange', onHide);
+            window.removeEventListener('pagehide', flush);
+        };
+    }, [readOnly, flush]);
 
     useEffect(() => {
         return () => {
+            // Unmount: the pending strokes are handed over, never dropped (1.2).
+            flush();
             if (sketchApiRef) sketchApiRef.current = null;
             if (fineHandlerOffRef.current) fineHandlerOffRef.current();
             if (unsubscribeRef.current) {
                 unsubscribeRef.current();
+            }
+            if (cameraUnsubscribeRef.current) cameraUnsubscribeRef.current();
+            if (cameraTimerRef.current) {
+                clearTimeout(cameraTimerRef.current);
+                if (noteIdRef.current && editorRef.current) writeCamera(noteIdRef.current, editorRef.current.getCamera?.());
             }
             if (saveTimeoutRef.current) {
                 clearTimeout(saveTimeoutRef.current);
             }
         };
     // eslint-disable-next-line react-hooks/exhaustive-deps -- unmount only
+    }, []);
+
+    // Pickers and tooltips portal into the container (visible in fullscreen).
+    const portal = useMemo(() => ({ container: () => containerRef.current, position: barPosition }), [barPosition]);
+    const disarm = useCallback(() => { armOnPenRef.current = false; }, []);
+    const onFullscreenChange = useCallback(() => {
+        // Update tldraw bounds after fullscreen change
+        setTimeout(() => {
+            if (editorRef.current && containerRef.current) {
+                editorRef.current.updateViewportScreenBounds(screenBoundsOf(containerRef.current));
+            }
+        }, 100);
     }, []);
 
     return (
@@ -300,35 +522,47 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
                         <CircularProgress />
                     </Box>
                 )}
-                <Tldraw
-                    onMount={handleMount}
-                    readOnly={readOnly}
-                    components={HIDDEN_TLDRAW_COMPONENTS}
-                    options={TLDRAW_OPTIONS}
-                >
-                {/* Paper colour + tldraw's colour scheme (light on any paper, so
-                    black ink stays black; the app's theme on "Match theme"). */}
-                <PaperSync />
-                {/* The drawing toolbar. It must render INSIDE <Tldraw>: it calls
-                    useEditor(), which only resolves within tldraw's context. As a
-                    sibling it threw on every phone and the error boundary took
-                    the whole sketch editor down. */}
-                {!readOnly && !isLoading && (
-                    <DrawingToolbar
-                        containerRef={containerRef}
-                        fine={penFine}
-                        onFineChange={setPenFine}
-                        onFullscreenChange={() => {
-                            // Update tldraw bounds after fullscreen change
-                            setTimeout(() => {
-                                if (editorRef.current && containerRef.current) {
-                                    editorRef.current.updateViewportScreenBounds(screenBoundsOf(containerRef.current));
-                                }
-                            }, 100);
-                        }}
-                    />
-                )}
-                </Tldraw>
+                <SketchPortalContext.Provider value={portal}>
+                    <Tldraw
+                        onMount={handleMount}
+                        readOnly={readOnly}
+                        components={HIDDEN_TLDRAW_COMPONENTS}
+                        options={TLDRAW_OPTIONS}
+                        maxImageDimension={SKETCH_IMAGE_MAX_EDGE}
+                        maxAssetSize={SKETCH_IMAGE_INPUT_MAX_BYTES}
+                    >
+                    {/* Paper colour + tldraw's colour scheme (light on any paper, so
+                        black ink stays black; the app's theme on "Match theme"). */}
+                    <PaperSync />
+                    {!readOnly && <PenModeSync fingerDraws={fingerDraws} />}
+                    {/* The drawing toolbar. It must render INSIDE <Tldraw>: it calls
+                        useEditor(), which only resolves within tldraw's context. As a
+                        sibling it threw on every phone and the error boundary took
+                        the whole sketch editor down. */}
+                    {!readOnly && !isLoading && (
+                        <DrawingToolbar
+                            containerRef={containerRef}
+                            fine={penFine}
+                            onFineChange={setPenFine}
+                            position={barPosition}
+                            onPositionChange={setBarPosition}
+                            fingerDraws={fingerDraws}
+                            onFingerDrawsChange={setFingerDraws}
+                            onToolPicked={disarm}
+                            onShareImage={shareImage}
+                            onFullscreenChange={onFullscreenChange}
+                        />
+                    )}
+                    </Tldraw>
+                </SketchPortalContext.Provider>
+                <Snackbar
+                    open={Boolean(notice)}
+                    message={notice || ''}
+                    autoHideDuration={8000}
+                    onClose={(_e, reason) => { if (reason !== 'clickaway') setNotice(null); }}
+                    anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+                    sx={{ position: 'absolute' }}
+                />
             </Box>
         </EditorErrorBoundary>
     );

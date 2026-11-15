@@ -29,6 +29,7 @@ const NOTE_A = {
   id: 'a',
   title: 'Roof quote',
   content: 'call back',
+  preview: 'call back',
   type: 'text',
   tags: ['house'],
   pinned: false,
@@ -110,5 +111,27 @@ describe('onNoteCreated / onNoteUpdated', () => {
     // belongs to is not something the client can decide honestly.
     fn(cache);
     expect(readNotes()).toBeNull();
+  });
+});
+
+describe('onNoteUpdated — the slim autosave (review 5.7)', () => {
+  beforeEach(() => {
+    cache.writeQuery({ query: GET_NOTE_BY_ID, variables: { id: 'a' }, data: { note: { ...NOTE_A, isLocked: false, isEncrypted: false } } });
+  });
+
+  it('leaves the tag index and the lists alone when the tags did not change', () => {
+    onNoteUpdated(cache, { data: { updateNote: { id: 'a' } } }, { variables: { id: 'a', content: 'x' }, context: { tagsChanged: false } });
+    expect(readTags()).toEqual(['home', 'house']);
+    expect(readNotes()).not.toBeNull();
+  });
+
+  it('still evicts them when the tags changed, or when the caller does not say', () => {
+    onNoteUpdated(cache, { data: { updateNote: { id: 'a' } } }, { variables: { id: 'a' }, context: { tagsChanged: true } });
+    expect(readTags()).toBeNull();
+  });
+
+  it('writes the body it sent onto the cached note (the response no longer carries it)', () => {
+    onNoteUpdated(cache, { data: { updateNote: { id: 'a' } } }, { variables: { id: 'a', content: 'new body' }, context: { tagsChanged: false } });
+    expect(cache.readQuery({ query: GET_NOTE_BY_ID, variables: { id: 'a' } }).note.content).toBe('new body');
   });
 });

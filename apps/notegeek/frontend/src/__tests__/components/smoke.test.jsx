@@ -4,6 +4,7 @@ import { MemoryRouter } from 'react-router-dom';
 import { MantineProvider } from '@mantine/core';
 import { MockedProvider } from '@apollo/client/testing';
 import { gql } from '@apollo/client';
+import { GET_NOTES_PAGE } from '../../graphql/queries';
 import ThemeModeProvider from '../../theme/ThemeModeProvider';
 
 // Component Imports
@@ -18,16 +19,13 @@ import AppErrorBoundary from '../../components/AppErrorBoundary';
 import Layout from '../../components/Layout';
 
 // Minimal mocks for Apollo queries used by NoteList / Sidebar inside Layout
-const GET_NOTES = gql`
-    query GetNotes($tag: String, $prefix: String, $under: String, $type: String, $limit: Int) {
-        notes(tag: $tag, prefix: $prefix, under: $under, type: $type, limit: $limit) { id title content type tags pinned pinnedAt createdAt updatedAt }
-    }
-`;
+// The list query NoteList sends (graphql/queries.js).
+
 const GET_TAGS = gql`
     query GetNoteTags { noteTags }
 `;
 const apolloMocks = [
-    { request: { query: GET_NOTES, variables: { tag: undefined, prefix: undefined, under: undefined, type: null, limit: 200 } }, result: { data: { notes: [] } } },
+    { request: { query: GET_NOTES_PAGE, variables: { tag: undefined, prefix: undefined, under: undefined, type: null, sort: 'updatedAt_desc', first: 100 } }, result: { data: { notesPage: { notes: [], nextCursor: null, hasMore: false } } } },
     { request: { query: GET_TAGS }, result: { data: { noteTags: [] } } },
 ];
 

@@ -5,7 +5,6 @@ import { CircularProgress, Box } from '@mui/material';
 import Layout from './components/Layout';
 import AppErrorBoundary from './components/AppErrorBoundary';
 import useAuthStore from './store/authStore';
-import useNoteStore from './store/noteStore';
 import './App.css';
 
 // Import actual page components
@@ -14,7 +13,8 @@ import Register from './components/Register';
 
 // Import main app components
 import NoteList from './components/NoteList';
-import NoteEditorPage from './pages/NoteEditorPage';
+import NoteEditorRoute from './pages/NoteEditorRoute';
+import DeletedNotes from './pages/DeletedNotes';
 import PhotoPagesPage from './pages/PhotoPagesPage';
 import NotePage from './pages/NotePage';
 import SearchResults from './components/SearchResults';
@@ -38,21 +38,6 @@ function getSafeReturnTo() {
         // ignore malformed query strings
     }
     return '/';
-}
-
-// NewNoteWrapper component to clear state before showing editor
-function NewNoteWrapper() {
-    const { clearSelectedNote } = useNoteStore();
-    const [key, setKey] = useState(0);
-
-    // Clear any selected note when mounting this component
-    useEffect(() => {
-        clearSelectedNote();
-        // Force a remount of NoteEditorPage by changing its key
-        setKey(prev => prev + 1);
-    }, [clearSelectedNote]);
-
-    return <NoteEditorPage key={key} />;
 }
 
 // Main App Component
@@ -134,7 +119,7 @@ function App() {
                         {/* Add other protected routes here */}
                         {isAuthenticated && (
                             <>
-                                <Route path="/notes/new" element={<Layout><NewNoteWrapper /></Layout>} />
+                                <Route path="/notes/new" element={<Layout><NoteEditorRoute /></Layout>} />
                                 {/* Photo of a page (DOCS/HANDWRITING.md §3). A static segment, so it
                                     outranks /notes/:id. */}
                                 <Route path="/notes/photo" element={<Layout><PhotoPagesPage /></Layout>} />
@@ -142,10 +127,11 @@ function App() {
                                 <Route path="/notes/undefined/edit" element={<Navigate to="/" replace />} />
                                 <Route path="/notes" element={<Layout><NoteList /></Layout>} />
                                 <Route path="/notes/:id" element={<Layout><NotePage /></Layout>} />
-                                <Route path="/notes/:id/edit" element={<Layout><NoteEditorPage /></Layout>} />
+                                <Route path="/notes/:id/edit" element={<Layout><NoteEditorRoute /></Layout>} />
                                 <Route path="/tags/:tag" element={<Layout><TagNotesList /></Layout>} />
                                 <Route path="/search" element={<Layout><SearchResults /></Layout>} />
                                 <Route path="/archived" element={<Layout><ArchivedNotes /></Layout>} />
+                                <Route path="/deleted" element={<Layout><DeletedNotes /></Layout>} />
                                 <Route path="/settings" element={<Layout><Settings /></Layout>} />
                                 {/* A diagnostic, not linked from anywhere (pages/PenLab.jsx). */}
                                 <Route path="/labs/pen" element={<Layout><PenLab /></Layout>} />

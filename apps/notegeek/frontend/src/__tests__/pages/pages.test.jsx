@@ -59,12 +59,13 @@ vi.mock('@geeksuite/user', () => ({
     usePreferences: vi.fn(() => ({ preferences: {}, loaded: true })),
 }));
 
-// Mock ResizeObserver for Mantine
-global.ResizeObserver = vi.fn().mockImplementation(() => ({
-    observe: vi.fn(),
-    unobserve: vi.fn(),
-    disconnect: vi.fn(),
-}));
+// Mock ResizeObserver for Mantine — a class: MUI's multi-line capture box
+// (TextareaAutosize) constructs one with `new`.
+global.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+};
 
 // Mock matchMedia
 Object.defineProperty(window, 'matchMedia', {

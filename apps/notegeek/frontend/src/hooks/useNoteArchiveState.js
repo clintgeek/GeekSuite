@@ -15,7 +15,7 @@ export function useNoteArchiveState(noteId) {
     fetchPolicy: 'cache-and-network',
   });
   const note = data?.note;
-  return { archived: Boolean(note?.archived), archivedAt: note?.archivedAt || null };
+  return { archived: Boolean(note?.archived), archivedAt: note?.archivedAt || null, deletedAt: note?.deletedAt || null };
 }
 
 export default useNoteArchiveState;

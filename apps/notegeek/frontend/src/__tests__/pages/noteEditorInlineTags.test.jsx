@@ -66,6 +66,8 @@ function renderEditor(route) {
       <MemoryRouter initialEntries={[route]}>
         <Routes>
           <Route path="/notes/new" element={<NoteEditorPage />} />
+          {/* After the first save the address becomes /notes/<id>/edit (1.20); same element, same editor. */}
+          <Route path="/notes/:id/edit" element={<NoteEditorPage />} />
         </Routes>
       </MemoryRouter>
     </ThemeProvider>

@@ -186,3 +186,13 @@ describe('the derived note', () => {
     }
   });
 });
+
+describe('a page too long to read well (review 2.7)', () => {
+  it('flags ink whose longest edge shrinks below half a pixel per page unit', async () => {
+    const { tooLongToRead, readableScale, MIN_READABLE_SCALE } = await import('../../utils/sketchExport');
+    expect(MIN_READABLE_SCALE).toBe(0.5);
+    expect(tooLongToRead({ w: 900, h: 1400 })).toBe(false); // about two phone screens
+    expect(tooLongToRead({ w: 900, h: 4200 })).toBe(true); // a meeting's worth
+    expect(readableScale({ w: 10, h: 10 })).toBe(2); // never above tldraw's 2x
+  });
+});

@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Autocomplete, TextField, Chip, useTheme } from '@mui/material';
 import LocalOfferOutlined from '@mui/icons-material/LocalOfferOutlined';
 import useTagStore from '../store/tagStore';
@@ -12,10 +12,28 @@ import { normalizeTags, filterTagOptions } from '../utils/tagPath';
  * what is saved. The text field is left alone while typing: normalizing it
  * live would eat the space in `geek s…` before the next word arrived. The
  * options are full paths, matched against the normalized query.
+ *
+ * A tag typed and then left (tap the body, close the keyboard) is committed
+ * on blur (review 2026-11, 1.21). It used to be cleared without a word —
+ * `clearOnBlur` — so a phone user who never pressed Enter lost the tag.
  */
 function TagSelector({ selectedTags, onChange, disabled = false }) {
   const { tags, fetchTags } = useTagStore();
   const theme = useTheme();
+  const [inputValue, setInputValue] = useState('');
+  const inputRef = useRef('');
+  inputRef.current = inputValue;
+  const selectedRef = useRef(selectedTags);
+  selectedRef.current = selectedTags;
+
+  const commitTyped = () => {
+    const typed = inputRef.current;
+    if (!typed || !typed.trim()) return;
+    const next = normalizeTags([...(selectedRef.current || []), typed]);
+    setInputValue('');
+    inputRef.current = '';
+    if (next.length !== (selectedRef.current || []).length) onChange(next);
+  };
 
   useEffect(() => {
     fetchTags();
@@ -27,7 +45,17 @@ function TagSelector({ selectedTags, onChange, disabled = false }) {
       id="tags-selector"
       options={tags.map(tag => tag.name || tag)}
       value={selectedTags}
-      onChange={(event, newValue) => onChange(normalizeTags(newValue))}
+      onChange={(event, newValue) => {
+        inputRef.current = '';
+        onChange(normalizeTags(newValue));
+      }}
+      inputValue={inputValue}
+      onInputChange={(_event, value) => {
+        // MUI resets the text itself on select and on blur ('reset'/'clear');
+        // the blur handler below has already read it by then.
+        setInputValue(value);
+      }}
+      onBlur={commitTyped}
       filterOptions={(options, state) => filterTagOptions(options, state.inputValue)}
       disabled={disabled}
       freeSolo

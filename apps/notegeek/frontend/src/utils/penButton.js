@@ -114,14 +114,23 @@ export function attachPenButton(container, getEditor, { getPointerInfo }) {
   };
 
   const opts = { capture: true };
+  // The lift is heard on the WINDOW too (review 2.11): a pen lifted outside
+  // the container (over the toolbar, the page chrome, off the edge) never
+  // sent its pointerup here, and the eraser stayed on. `finish` only acts
+  // for the pressing pointer, once.
+  const win = container.ownerDocument?.defaultView || globalThis.window;
   container.addEventListener('pointerdown', onPointerDown, opts);
   container.addEventListener('pointerup', finish, opts);
   container.addEventListener('pointercancel', finish, opts);
   container.addEventListener('contextmenu', onContextMenu, opts);
+  win?.addEventListener('pointerup', finish, opts);
+  win?.addEventListener('pointercancel', finish, opts);
   return () => {
     container.removeEventListener('pointerdown', onPointerDown, opts);
     container.removeEventListener('pointerup', finish, opts);
     container.removeEventListener('pointercancel', finish, opts);
     container.removeEventListener('contextmenu', onContextMenu, opts);
+    win?.removeEventListener('pointerup', finish, opts);
+    win?.removeEventListener('pointercancel', finish, opts);
   };
 }

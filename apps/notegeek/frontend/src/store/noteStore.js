@@ -175,14 +175,17 @@ const useNoteStore = create((set, get) => {
             }
         },
 
-        // Action to delete a note
+        // Action to delete a note — a soft delete since C4: it waits in
+        // Recently deleted for 30 days, and the toast offers Undo.
         deleteNote: async (noteId) => {
             set({ isLoadingSelected: true, selectedError: null }); // Can use selected or list loading state
             try {
                 await deleteNoteApi(noteId);
                 set({ selectedNote: null, isLoadingSelected: false }); // Clear selection on delete
-                // Refetch or remove from list
-                 get().fetchNotes(); // Easiest way to refresh list
+                // Drop the row where it is shown. This used to call
+                // `fetchNotes()` with NO filters — an unbounded refetch of
+                // every note, bodies included, on every delete (3.5).
+                get().dropNotes([noteId]);
                 return true; // Indicate success
             } catch (error) {
                  const errorMessage = error.response?.data?.message || 'Failed to delete note';

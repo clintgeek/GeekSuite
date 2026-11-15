@@ -58,6 +58,8 @@ export const NOTE_ARCHIVE_STATE = gql`
             id
             archived
             archivedAt
+            # Recently deleted (C4): a deleted note still opens by id.
+            deletedAt
         }
     }
 `;

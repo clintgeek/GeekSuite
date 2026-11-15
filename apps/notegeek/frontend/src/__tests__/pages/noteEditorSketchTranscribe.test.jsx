@@ -97,13 +97,20 @@ vi.mock('@geeksuite/ui', async () => {
 vi.mock('../../components/notes/NoteTypeRouter', async () => {
   const actual = await vi.importActual('../../components/notes/NoteTypeRouter');
   const React = await vi.importActual('react');
-  function FakeEditor({ sketchApiRef }) {
+  function FakeEditor({ sketchApiRef, onChange }) {
     React.useEffect(() => {
       if (!sketchApiRef) return undefined;
       sketchApiRef.current = { exportPng, hasShapes: () => true };
       return () => { sketchApiRef.current = null; };
     }, [sketchApiRef]);
-    return <div data-testid="editor" />;
+    // A stroke: the sketch hands the page a new snapshot.
+    return (
+      <div data-testid="editor">
+        <button type="button" onClick={() => onChange?.(JSON.stringify({ store: { 'shape:new': { id: 'shape:new', typeName: 'shape', type: 'draw' } } }))}>
+          ink
+        </button>
+      </div>
+    );
   }
   return { ...actual, default: FakeEditor };
 });
@@ -129,6 +136,8 @@ const TRANSCRIPT = 'call roofer\nquote by Fri\n[drawing: a house]';
 const COMPOSED = '# Roof quote\n\n- call the roofer\n- quote by Friday\n';
 
 beforeEach(() => {
+  // Convert's corrections are carried per sketch on this device (transcriptCorrections.js): one test's must not leak into the next.
+  localStorage.removeItem('notegeek:sketchCorrections');
   vi.clearAllMocks();
   transcriptState.current = undefined;
   saveSketchTranscriptEdit.mockResolvedValue({ data: {} });
@@ -329,7 +338,7 @@ describe('reusing a stored transcript (AUTO_TRANSCRIBE_SPEC.md §5)', () => {
     renderEditor();
     await startTranscribe();
     await act(async () => { screen.getByRole('button', { name: 'Transcribe again' }).click(); });
-    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Transcript' })).toHaveValue(TRANSCRIPT));
+    await waitFor(() => expect(screen.getByRole('textbox', { name: 'Transcript' })).toHaveValue(TRANSCRIPT), { timeout: 5000 });
     expect(transcribeSketch).toHaveBeenCalledTimes(1);
   });
 
@@ -361,6 +370,23 @@ describe('reusing a stored transcript (AUTO_TRANSCRIBE_SPEC.md §5)', () => {
     });
     // The new note is still made exactly as before.
     expect(createNote).toHaveBeenCalledTimes(1);
+  });
+
+  it('Convert saves a pending stroke and waits for it before reading (2.8)', async () => {
+    transcriptState.current = stored();
+    let land;
+    updateNote.mockImplementationOnce(() => new Promise((r) => { land = r; }));
+    renderEditor();
+    await screen.findByTestId('editor');
+    fireEvent.click(screen.getByRole('button', { name: 'ink' }));
+    const menu = await openMenu();
+    await act(async () => { within(menu).getByRole('menuitem', { name: /convert handwriting to text/i }).click(); });
+    await waitFor(() => expect(updateNote).toHaveBeenCalledTimes(1));
+    // Nothing is read, reused or paid for while the stroke is unsaved.
+    expect(transcribeSketch).not.toHaveBeenCalled();
+    expect(screen.queryByRole('textbox', { name: 'Transcript' })).toBeNull();
+    await act(async () => { land({ data: { updateNote: { id: 'sketch-1', title: 'Tuesday', updatedAt: '2026-11-15T10:00:00.000Z' } } }); });
+    expect(await screen.findByRole('textbox', { name: 'Transcript' })).toBeInTheDocument();
   });
 
   it('an out-of-date transcript is not reused: the page is read as before', async () => {
@@ -417,7 +443,11 @@ describe('Send tasks to TodoGeek (BUJO_HANDWRITING.md)', () => {
     expect(sent[2]).toMatchObject({ content: 'dentist', signifier: '@' });
     expect(recordSketchTasksSent).toHaveBeenCalledTimes(1);
     expect(recordSketchTasksSent.mock.calls[0][0].variables).toMatchObject({ noteId: 'sketch-1' });
-    expect(recordSketchTasksSent.mock.calls[0][0].variables.keys).toHaveLength(3);
+    // The exact keys of the three lines, plus their loose forms (1.11).
+    expect(recordSketchTasksSent.mock.calls[0][0].variables.keys.filter((k) => !k.startsWith('~'))).toHaveLength(3);
+    // C1: each task carries a stable clientId for its line of this sketch.
+    expect(sent.map((v) => v.clientId)).toEqual([expect.stringMatching(/^ng:[0-9a-f]{32}$/), expect.stringMatching(/^ng:[0-9a-f]{32}$/), expect.stringMatching(/^ng:[0-9a-f]{32}$/)]);
+    expect(new Set(sent.map((v) => v.clientId)).size).toBe(3);
     expect(await screen.findByText('3 entries were added to TodoGeek.')).toBeInTheDocument();
     // The sketch itself is never written by this.
     expect(updateNote).not.toHaveBeenCalled();
@@ -451,8 +481,38 @@ describe('Send tasks to TodoGeek (BUJO_HANDWRITING.md)', () => {
     await act(async () => { within(dialog).getByRole('button', { name: 'Send 3 to TodoGeek' }).click(); });
     expect(await screen.findByText('2 entries were added to TodoGeek.')).toBeInTheDocument();
     expect(screen.getByText(/1 entry was not added/)).toBeInTheDocument();
-    expect(recordSketchTasksSent.mock.calls[0][0].variables.keys).toHaveLength(2);
+    expect(recordSketchTasksSent.mock.calls[0][0].variables.keys.filter((k) => !k.startsWith('~'))).toHaveLength(2);
   });
+
+  it('words corrected in the dialog are kept as transcript corrections (1.11)', async () => {
+    transcriptState.current = storedJournal();
+    renderEditor();
+    const dialog = await openSend();
+    const words = within(dialog).getByRole('textbox', { name: /Words — Task: call the roofer/ });
+    fireEvent.change(words, { target: { value: 'call the roofer Bob !high #house' } });
+    await act(async () => { within(dialog).getByRole('button', { name: 'Send 3 to TodoGeek' }).click(); });
+    await waitFor(() => expect(saveSketchTranscriptEdit).toHaveBeenCalledTimes(1));
+    const { variables } = saveSketchTranscriptEdit.mock.calls[0][0];
+    expect(variables).toMatchObject({ noteId: 'sketch-1', forHash: HASH });
+    expect(variables.text.split('\n')[1]).toBe('* call the roofer Bob !high #house');
+    expect(variables.text.split('\n')[2]).toBe('[ ] book flights');
+  });
+
+  it('a retried Send sends the same clientId for the same line (C1)', async () => {
+    transcriptState.current = storedJournal();
+    renderEditor();
+    let dialog = await openSend();
+    await act(async () => { within(dialog).getByRole('button', { name: 'Send 3 to TodoGeek' }).click(); });
+    await waitFor(() => expect(createTodoTask).toHaveBeenCalledTimes(3));
+    const first = createTodoTask.mock.calls[0][0].variables.clientId;
+    expect(first).toMatch(/^ng:[0-9a-f]{32}$/);
+    await screen.findByText('3 entries were added to TodoGeek.');
+    await act(async () => { within(dialog).getByRole('button', { name: 'Close' }).click(); });
+    dialog = await openSend();
+    await act(async () => { within(dialog).getByRole('button', { name: 'Send 3 to TodoGeek' }).click(); });
+    await waitFor(() => expect(createTodoTask).toHaveBeenCalledTimes(6));
+    expect(createTodoTask.mock.calls[3][0].variables.clientId).toBe(first);
+  }, 60000); // two full sends: slow on a loaded runner
 
   it('a page with no journal marks says so, and shows the marks', async () => {
     transcriptState.current = storedJournal({ text: 'just some prose\nand more prose' });

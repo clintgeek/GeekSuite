@@ -1,32 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { screen, waitFor, fireEvent, within } from '@testing-library/react';
-import { gql } from '@apollo/client';
+import { GET_NOTES_PAGE as GET_NOTES } from '../../graphql/queries';
 import { renderWithProviders } from '../testUtils';
 import NoteList from '../../components/NoteList';
 
-const GET_NOTES = gql`
-    query GetNotes($tag: String, $prefix: String, $under: String, $type: String, $limit: Int) {
-        notes(tag: $tag, prefix: $prefix, under: $under, type: $type, limit: $limit) {
-            id
-            title
-            content
-            type
-            tags
-            pinned
-            pinnedAt
-            createdAt
-            updatedAt
-        }
-    }
-`;
+// The list query NoteList sends (graphql/queries.js).
 
-// Default variables match what NoteList sends: { tag, prefix, under, type: null, limit: 200 }
-const DEFAULT_VARS = { tag: undefined, prefix: undefined, under: undefined, type: null, limit: 200 };
+
+// Default variables match what NoteList sends (notesPage, review 5.2).
+const DEFAULT_VARS = { tag: undefined, prefix: undefined, under: undefined, type: null, sort: 'updatedAt_desc', first: 100 };
 
 function mockNotesQuery(notes = [], variables = DEFAULT_VARS) {
     return {
         request: { query: GET_NOTES, variables },
-        result: { data: { notes } },
+        result: { data: { notesPage: { notes, nextCursor: null, hasMore: false } } },
     };
 }
 
@@ -37,8 +24,8 @@ describe('NoteList Unit Tests', () => {
 
     it('renders list of notes', async () => {
         const mocks = [mockNotesQuery([
-            { id: '1', title: 'Note 1', content: 'Content 1', type: 'markdown', tags: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-            { id: '2', title: 'Note 2', content: 'Content 2', type: 'richtext', tags: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+            { id: '1', title: 'Note 1', preview: 'Content 1', type: 'markdown', tags: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+            { id: '2', title: 'Note 2', preview: 'Content 2', type: 'richtext', tags: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
         ])];
         renderWithProviders(<NoteList />, { mocks });
         await waitFor(() => expect(screen.getByText('Note 1')).toBeInTheDocument());
@@ -46,7 +33,7 @@ describe('NoteList Unit Tests', () => {
     });
 
     it('shows loading skeleton when loading', () => {
-        const mocks = [{ request: { query: GET_NOTES, variables: DEFAULT_VARS }, delay: 9999, result: { data: { notes: [] } } }];
+        const mocks = [{ request: { query: GET_NOTES, variables: DEFAULT_VARS }, delay: 9999, result: { data: { notesPage: { notes: [], nextCursor: null, hasMore: false } } } }];
         const { container } = renderWithProviders(<NoteList />, { mocks });
         expect(screen.queryByText('Note 1')).not.toBeInTheDocument();
         expect(container.querySelectorAll('.MuiSkeleton-root').length).toBeGreaterThan(0);
@@ -59,25 +46,26 @@ describe('NoteList Unit Tests', () => {
         const now = Date.now();
         const iso = (h) => new Date(now - h * 3600e3).toISOString();
         const notes = [
-            { id: '1', title: 'Fresh', content: '', type: 'text', tags: [], createdAt: iso(1000), updatedAt: iso(0.05) },
-            { id: '2', title: 'Old', content: '', type: 'text', tags: [], createdAt: iso(2000), updatedAt: iso(24 * 60) },
+            { id: '1', title: 'Fresh', preview: '', type: 'text', tags: [], createdAt: iso(1000), updatedAt: iso(0.05) },
+            { id: '2', title: 'Old', preview: '', type: 'text', tags: [], createdAt: iso(2000), updatedAt: iso(24 * 60) },
         ];
-        renderWithProviders(<NoteList />, { mocks: [mockNotesQuery(notes)] });
+        // A–Z is sorted by the server now (review 5.2): a second query.
+        renderWithProviders(<NoteList />, { mocks: [mockNotesQuery(notes), mockNotesQuery(notes, { ...DEFAULT_VARS, sort: 'title_asc' })] });
         expect(await screen.findByRole('heading', { name: 'Today' })).toBeInTheDocument();
         const today = screen.getByRole('region', { name: 'Today' });
         expect(today).toHaveTextContent('Fresh');
         expect(today).not.toHaveTextContent('Old');
 
         fireEvent.click(screen.getByRole('button', { name: 'A-Z' }));
+        expect(await screen.findByText('Fresh')).toBeInTheDocument();
         expect(screen.queryByRole('heading', { name: 'Today' })).not.toBeInTheDocument();
-        expect(screen.getByText('Fresh')).toBeInTheDocument();
         expect(screen.getByText('Old')).toBeInTheDocument();
         vi.useRealTimers();
     });
 
     it('shows the type as a labelled glyph and up to two plain tags on every row', async () => {
         const notes = [
-            { id: '1', title: 'Tagged', content: 'x', type: 'markdown', tags: ['a', 'b/c', 'd'], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+            { id: '1', title: 'Tagged', preview: 'x', type: 'markdown', tags: ['a', 'b/c', 'd'], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
         ];
         renderWithProviders(<NoteList />, { mocks: [mockNotesQuery(notes)] });
         const row = (await screen.findByText('Tagged')).closest('a');
@@ -91,7 +79,7 @@ describe('NoteList Unit Tests', () => {
 
     it('filters by type with one quiet row of pressed/unpressed chips', async () => {
         const notes = [
-            { id: '1', title: 'One', content: 'x', type: 'markdown', tags: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+            { id: '1', title: 'One', preview: 'x', type: 'markdown', tags: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
         ];
         renderWithProviders(<NoteList />, { mocks: [mockNotesQuery(notes)] });
         await screen.findByText('One');
@@ -110,8 +98,8 @@ describe('NoteList Unit Tests', () => {
         const now = Date.now();
         const iso = (h) => new Date(now - h * 3600e3).toISOString();
         const notes = [
-            { id: '1', title: 'Pinned but old', content: '', type: 'text', tags: [], pinned: true, createdAt: iso(2000), updatedAt: iso(24 * 60) },
-            { id: '2', title: 'Fresh', content: '', type: 'text', tags: [], pinned: false, createdAt: iso(1000), updatedAt: iso(0.05) },
+            { id: '1', title: 'Pinned but old', preview: '', type: 'text', tags: [], pinned: true, createdAt: iso(2000), updatedAt: iso(24 * 60) },
+            { id: '2', title: 'Fresh', preview: '', type: 'text', tags: [], pinned: false, createdAt: iso(1000), updatedAt: iso(0.05) },
         ];
         renderWithProviders(<NoteList />, { mocks: [mockNotesQuery(notes)] });
 
@@ -131,7 +119,7 @@ describe('NoteList Unit Tests', () => {
 
     it('shows no "Pinned" heading when nothing is pinned', async () => {
         const notes = [
-            { id: '1', title: 'One', content: '', type: 'text', tags: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+            { id: '1', title: 'One', preview: '', type: 'text', tags: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
         ];
         renderWithProviders(<NoteList />, { mocks: [mockNotesQuery(notes)] });
         await screen.findByText('One');
@@ -140,8 +128,8 @@ describe('NoteList Unit Tests', () => {
 
     it('a tag view sends `under` and each row names the sub-tag it sits in', async () => {
         const notes = [
-            { id: '1', title: 'Parent note', content: 'x', type: 'markdown', tags: ['house'], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
-            { id: '2', title: 'Door note', content: 'x', type: 'markdown', tags: ['misc', 'house/garage/door'], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+            { id: '1', title: 'Parent note', preview: 'x', type: 'markdown', tags: ['house'], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+            { id: '2', title: 'Door note', preview: 'x', type: 'markdown', tags: ['misc', 'house/garage/door'], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
         ];
         const vars = { ...DEFAULT_VARS, under: 'house' };
         renderWithProviders(<NoteList under="house" />, { mocks: [mockNotesQuery(notes, vars)] });
@@ -157,5 +145,48 @@ describe('NoteList Unit Tests', () => {
         const mocks = [mockNotesQuery([])];
         renderWithProviders(<NoteList />, { mocks });
         await waitFor(() => expect(screen.getByText(/No notes yet/i)).toBeInTheDocument());
+    });
+});
+
+describe('NoteList — server sort and keyset paging (review 5.1/5.2)', () => {
+    const row = (i) => ({ id: `n${i}`, title: `Note ${i}`, preview: `Body ${i}`, type: 'markdown', tags: [], pinned: false, pinnedAt: null, createdAt: new Date(Date.now() - i * 1000).toISOString(), updatedAt: new Date(Date.now() - i * 1000).toISOString() });
+
+    it('asks for one page, and "Show more notes" asks for the next with the server cursor', async () => {
+        const first = Array.from({ length: 100 }, (_, i) => row(i));
+        const second = [row(100), row(101)];
+        renderWithProviders(<NoteList />, {
+            mocks: [
+                { request: { query: GET_NOTES, variables: DEFAULT_VARS }, result: { data: { notesPage: { notes: first, nextCursor: 'c1', hasMore: true } } } },
+                { request: { query: GET_NOTES, variables: { ...DEFAULT_VARS, after: 'c1' } }, result: { data: { notesPage: { notes: second, nextCursor: null, hasMore: false } } } },
+            ],
+        });
+        expect(await screen.findByText('Note 99')).toBeInTheDocument();
+        expect(screen.getByText(/100\+ notes/)).toBeInTheDocument();
+        fireEvent.click(screen.getByRole('button', { name: /show more notes/i }));
+        expect(await screen.findByText('Note 101')).toBeInTheDocument();
+        // The last page says so.
+        expect(screen.queryByRole('button', { name: /show more notes/i })).toBeNull();
+        expect(screen.getByText('102 notes')).toBeInTheDocument();
+    });
+
+    it('sorts on the server: A-Z asks for title_asc and shows the server order', async () => {
+        const rows = [row(1), row(2)];
+        renderWithProviders(<NoteList />, {
+            mocks: [
+                mockNotesQuery(rows),
+                mockNotesQuery([{ ...row(2), title: 'apple' }, { ...row(1), title: 'Banana' }], { ...DEFAULT_VARS, sort: 'title_asc' }),
+            ],
+        });
+        await screen.findByText('Note 1');
+        fireEvent.click(screen.getByRole('button', { name: 'A-Z' }));
+        const apple = await screen.findByText('apple');
+        const banana = screen.getByText('Banana');
+        expect(apple.compareDocumentPosition(banana) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    });
+
+    it('shows the server preview, not the body (lists carry no content)', async () => {
+        renderWithProviders(<NoteList />, { mocks: [mockNotesQuery([row(1)])] });
+        expect(await screen.findByText('Body 1')).toBeInTheDocument();
+        expect(screen.queryByRole('button', { name: /show more notes/i })).toBeNull();
     });
 });

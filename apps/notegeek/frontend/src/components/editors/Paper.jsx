@@ -12,6 +12,7 @@ import { Box, IconButton, Popover, Tooltip, Typography, useTheme } from '@mui/ma
 import { useEditor, useValue } from '@tldraw/tldraw';
 import { PAPER_COLORS, PAPER_PATTERNS, rulingStyle } from './paperModel';
 import { usePaper, setPaper } from './usePaper';
+import { popoverOrigins, tooltipPlacement, useSketchPortal } from './sketchPortal';
 
 export function PaperBackground() {
     const editor = useEditor();
@@ -69,11 +70,15 @@ export function PaperPicker() {
     const editor = useEditor();
     const { paper, look } = usePaper();
     const [anchor, setAnchor] = useState(null);
+    // Into the sketch's container (visible in fullscreen), opening away from the bar.
+    const { container, position } = useSketchPortal();
+    const origins = popoverOrigins(position);
+    const tip = { placement: tooltipPlacement(position), slotProps: { popper: { container } } };
     const lineFor = (colorId) => (PAPER_COLORS.find((c) => c.id === colorId) || PAPER_COLORS[0]).line;
 
     return (
         <>
-            <Tooltip title="Paper" placement="top">
+            <Tooltip title="Paper" {...tip}>
                 <IconButton
                     aria-label="Paper"
                     aria-haspopup="dialog"
@@ -87,17 +92,18 @@ export function PaperPicker() {
             <Popover
                 open={Boolean(anchor)}
                 anchorEl={anchor}
+                container={container}
                 onClose={() => setAnchor(null)}
-                anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-                transformOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-                slotProps={{ paper: { role: 'dialog', 'aria-label': 'Paper', sx: { p: 3, mb: 2 } } }}
+                anchorOrigin={origins.anchorOrigin}
+                transformOrigin={origins.transformOrigin}
+                slotProps={{ paper: { role: 'dialog', 'aria-label': 'Paper', sx: { p: 3, ...origins.gap } } }}
             >
                 <Typography component="h2" variant="caption" sx={{ display: 'block', mb: 1, color: 'text.secondary' }}>
                     Colour
                 </Typography>
                 <Box role="group" aria-label="Paper colour" sx={{ display: 'flex', gap: 1, mb: 3 }}>
                     {PAPER_COLORS.map((c) => (
-                        <Tooltip key={c.id} title={c.label} placement="top">
+                        <Tooltip key={c.id} title={c.label} {...tip}>
                             <IconButton
                                 aria-label={`Paper: ${c.label}`}
                                 aria-pressed={paper.color === c.id ? 'true' : 'false'}
@@ -114,7 +120,7 @@ export function PaperPicker() {
                 </Typography>
                 <Box role="group" aria-label="Paper lines" sx={{ display: 'flex', gap: 1 }}>
                     {PAPER_PATTERNS.map((p) => (
-                        <Tooltip key={p.id} title={p.label} placement="top">
+                        <Tooltip key={p.id} title={p.label} {...tip}>
                             <IconButton
                                 aria-label={`Lines: ${p.label}`}
                                 aria-pressed={paper.pattern === p.id ? 'true' : 'false'}

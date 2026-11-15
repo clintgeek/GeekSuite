@@ -28,6 +28,11 @@ function getPreview(note, maxLen = 120) {
     if (note.snippet) return note.snippet;
     const type = note.type || 'text';
     if (VISUAL_TYPES.includes(type)) return '';
+    // List rows carry the server's plain-text `preview`, not the body (5.1).
+    if (typeof note.content !== 'string') {
+        const p = typeof note.preview === 'string' ? note.preview.trim() : '';
+        return p.length > maxLen ? `${p.slice(0, maxLen - 1).trimEnd()}…` : p;
+    }
     return previewText(note.content, type, maxLen, { shape: true });
 }
 
@@ -149,7 +154,9 @@ function NoteRow({
     // words are, by definition, not what found it.
     const byMeaning = note.matchedBy === 'meaning';
     const why = (byMeaning || prominent) && note.why ? note.why : null;
-    const isCode = type === 'code' && !note.snippet && !why;
+    // The tinted code preview needs the body; a list row (preview only)
+    // shows the server's plain excerpt instead.
+    const isCode = type === 'code' && !note.snippet && !why && typeof note.content === 'string';
     const preview = isCode ? '' : (why || getPreview(note, maxPreview));
     const highlight = byMeaning ? null : query;
     const g = graphiteTokens(theme);

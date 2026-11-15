@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -12,7 +12,7 @@ import {
   Typography,
   useTheme,
 } from '@mui/material';
-import { GeekEmptyState, GeekSheet, slashFocusProps, useToast } from '@geeksuite/ui';
+import { GeekEmptyState, GeekErrorState, GeekSheet, slashFocusProps, useToast } from '@geeksuite/ui';
 import ArrowForward from '@mui/icons-material/ArrowForward';
 import CallMerge from '@mui/icons-material/CallMerge';
 import FoldTargetPicker from '../components/foldin/FoldTargetPicker';
@@ -74,8 +74,11 @@ function QuickCaptureHome() {
   const navigate = useNavigate();
   const theme = useTheme();
   const g = graphiteTokens(theme);
-  const { notes, fetchNotes, isLoadingList, createNote } = useNoteStore();
+  const { notes, fetchNotes, isLoadingList, listError, createNote } = useNoteStore();
   const [captureText, setCaptureText] = useState('');
+  // One capture at a time (1.21): a double tap on Save made two notes.
+  const [capturing, setCapturing] = useState(false);
+  const capturingRef = useRef(false);
   // "Fold into…" (DOCS/CONTEXT.md §13): a capture that belongs in a note you
   // already have. Pick the note (suggestions ranked like the share target's),
   // then Fold-in shows where it goes before anything changes.
@@ -85,23 +88,38 @@ function QuickCaptureHome() {
   // Select mode over the notes on Home (DOCS/COMPOSE_MANY_AND_ARCHIVE_SPEC.md U1).
   const selection = useNoteSelection();
 
+  // Only what Home shows (3.5): it used to fetch 50 notes to draw 12.
   useEffect(() => {
-    fetchNotes({ limit: 50 });
+    fetchNotes({ limit: RECENT_COUNT });
   }, [fetchNotes]);
 
   const handleQuickCapture = async (e) => {
-    e.preventDefault();
-    if (!captureText.trim()) return;
-    const created = await createNote({
-      title: '',
-      type: 'markdown',
-      content: captureText.trim(),
-    });
-    if (created) {
-      setCaptureText('');
-      notify('Note saved', { tone: 'success' });
-      // Stay on home — refresh the list so the new note appears in Recent
-      fetchNotes({ limit: 50 });
+    e?.preventDefault?.();
+    if (!captureText.trim() || capturingRef.current) return;
+    capturingRef.current = true;
+    setCapturing(true);
+    try {
+      // Line breaks kept (1.21): the box is multi-line now, and only the
+      // ends are trimmed — a list typed on a phone stays a list.
+      const created = await createNote({
+        title: '',
+        type: 'markdown',
+        content: captureText.replace(/^\s*\n|\s+$/g, ''),
+      });
+      if (created) {
+        setCaptureText('');
+        notify('Note saved', { tone: 'success' });
+        // Stay on home — refresh the list so the new note appears in Recent
+        fetchNotes({ limit: RECENT_COUNT });
+      } else {
+        // It used to fail without a word, with the text still in the box
+        // looking saved. Say so; the text stays for another try.
+        const why = useNoteStore.getState().selectedError;
+        notify(`Not saved${why ? ` — ${why}` : ''}. Your text is still in the box.`, { tone: 'error' });
+      }
+    } finally {
+      capturingRef.current = false;
+      setCapturing(false);
     }
   };
 
@@ -123,9 +141,12 @@ function QuickCaptureHome() {
             onSubmit={handleQuickCapture}
             sx={{
               display: 'flex',
-              alignItems: 'center',
+              // Bottom-aligned: the box grows with a multi-line capture and
+              // the buttons stay by the thumb.
+              alignItems: 'flex-end',
               gap: '4px',
               minHeight: 56,
+              py: '6px',
               pl: '16px',
               pr: '6px',
               borderRadius: '12px',
@@ -141,6 +162,12 @@ function QuickCaptureHome() {
               onChange={(e) => setCaptureText(e.target.value)}
               placeholder="Write something down…"
               fullWidth
+              multiline
+              maxRows={8}
+              // Enter is a new line (a capture is often a list); Ctrl/Cmd+Enter saves.
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) handleQuickCapture(e);
+              }}
               // `/` lands here, not in the header search: this page exists to
               // catch a thought. No select — a half-typed thought is not a
               // query to replace.
@@ -159,8 +186,8 @@ function QuickCaptureHome() {
                     <CallMerge fontSize="small" />
                   </IconButton>
                 </Tooltip>
-                <Button type="submit" variant="contained" disableElevation sx={{ flexShrink: 0, borderRadius: '8px', px: '16px', minHeight: 44 }}>
-                  Save
+                <Button type="submit" variant="contained" disableElevation disabled={capturing} sx={{ flexShrink: 0, borderRadius: '8px', px: '16px', minHeight: 44 }}>
+                  {capturing ? 'Saving…' : 'Save'}
                 </Button>
               </>
             ) : (
@@ -174,12 +201,21 @@ function QuickCaptureHome() {
       </Box>
 
       <Box sx={{ width: '100%', maxWidth: layout.contentWidth, mx: 'auto', px: { xs: '8px', sm: '16px' }, pt: { xs: '12px', sm: '20px' }, pb: '24px' }}>
-        {isLoadingList ? (
+        {/* Skeletons only when there is nothing to show yet (3.5): the
+            notes from the last visit stay on screen while they refresh. */}
+        {isLoadingList && notes.length === 0 ? (
           <Box sx={{ px: '8px' }}>
             {[1, 2, 3, 4, 5].map((i) => (
               <Skeleton key={i} height={layout.rowHeight} sx={{ borderRadius: 1, mb: 0.5 }} variant="rounded" />
             ))}
           </Box>
+        ) : listError && notes.length === 0 ? (
+          // A failed load is not "Nothing here yet" (3.5).
+          <GeekErrorState
+            error={{ message: listError }}
+            description="Could not load your notes."
+            onRetry={() => fetchNotes({ limit: RECENT_COUNT })}
+          />
         ) : notes.length === 0 ? (
           <GeekEmptyState
             title="Nothing here yet"
@@ -271,7 +307,7 @@ function QuickCaptureHome() {
           note={foldTarget}
           initialInput={captureText.trim()}
           onClose={() => setFoldTarget(null)}
-          onApplied={() => { setCaptureText(''); fetchNotes({ limit: 50 }); }}
+          onApplied={() => { setCaptureText(''); fetchNotes({ limit: RECENT_COUNT }); }}
         />
       ) : null}
     </Box>

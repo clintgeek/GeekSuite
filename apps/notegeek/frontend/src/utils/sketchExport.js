@@ -75,6 +75,23 @@ export function sketchExportOptions(bounds, maxEdge = EXPORT_MAX_EDGE) {
   };
 }
 
+/**
+ * Below this many image pixels per page unit, handwriting written at 100%
+ * comes out roughly 10px tall or less, and the model's reading falls apart
+ * (review 2.7). A page this long is still sent — but the status line says so.
+ */
+export const MIN_READABLE_SCALE = 0.5;
+
+/** Image pixels per page unit the model gets for ink with these bounds. */
+export function readableScale(bounds, maxEdge = EXPORT_MAX_EDGE) {
+  const w = Math.max(1, bounds?.w || bounds?.width || 1);
+  const h = Math.max(1, bounds?.h || bounds?.height || 1);
+  return Math.min(TLDRAW_PIXEL_RATIO, maxEdge / (Math.max(w, h) + EXPORT_PADDING * 2));
+}
+
+/** Is the page too long (or wide) for one image to keep its handwriting legible? */
+export const tooLongToRead = (bounds, maxEdge = EXPORT_MAX_EDGE) => readableScale(bounds, maxEdge) < MIN_READABLE_SCALE;
+
 /** `{ width, height }` scaled down (never up) so the longest edge is at most `max`. */
 export function fitWithin(width, height, max = EXPORT_MAX_EDGE) {
   const w = Math.max(1, Math.round(width));
@@ -149,7 +166,7 @@ export async function blobToBase64(blob) {
  * @param {number} [deps.maxBytes]  refused past this; `Infinity` for print,
  *   which never leaves the device
  * @param {boolean} [deps.base64=true]  print needs only the blob
- * @returns {Promise<{ blob: Blob, base64: string, mediaType: 'image/png', width: number, height: number }>}
+ * @returns {Promise<{ blob: Blob, base64: string, mediaType: 'image/png', width: number, height: number, tooLong: boolean }>}
  * @throws {SketchExportError} code `empty` | `too_large` | `encode`
  */
 export async function exportSketchPng(editor, {
@@ -184,7 +201,10 @@ export async function exportSketchPng(editor, {
     );
   }
 
-  return { blob, base64: base64 ? await toBase64(blob) : '', mediaType: 'image/png', width, height };
+  return {
+    blob, base64: base64 ? await toBase64(blob) : '', mediaType: 'image/png', width, height,
+    tooLong: tooLongToRead(bounds, maxEdge),
+  };
 }
 
 /** `{ w, h }` of the smallest box holding every one of `boxes` (nulls skipped). */

@@ -18,6 +18,7 @@ const NOTE_A = {
   id: 'a',
   title: 'Roof quote',
   content: 'call back',
+  preview: 'call back',
   type: 'text',
   tags: ['house'],
   pinned: false,

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useContext, useEffect, useState } from 'react';
 import { alpha } from '@mui/material/styles';
 import {
     Typography,
@@ -11,7 +11,8 @@ import {
 } from '@mui/material';
 import LocalOfferOutlined from '@mui/icons-material/LocalOfferOutlined';
 import { GeekEmptyState, GeekErrorState, GeekSheet } from '@geeksuite/ui';
-import { gql, useQuery } from '@apollo/client';
+import { getApolloContext, useQuery } from '@apollo/client';
+import { GET_NOTES_PAGE } from '../graphql/queries';
 import NoteRow from './notes/NoteRow';
 import { graphiteTokens, layout, tapTarget44 } from '../theme/tokens';
 import { NOTE_TYPE_ORDER, noteTypeMeta } from './notes/noteTypeMeta';
@@ -21,21 +22,9 @@ import { useNoteSelection, rowSelectProps } from '../hooks/useNoteSelection';
 import { SelectButton, SelectingHeader } from './select/SelectControl';
 import SelectionBar from './select/SelectionBar';
 
-const GET_NOTES = gql`
-    query GetNotes($tag: String, $prefix: String, $under: String, $type: String, $limit: Int) {
-        notes(tag: $tag, prefix: $prefix, under: $under, type: $type, limit: $limit) {
-            id
-            title
-            content
-            type
-            tags
-            pinned
-            pinnedAt
-            createdAt
-            updatedAt
-        }
-    }
-`;
+// One page of the list. Keyset paging (5.2): "Show more" asks for the next
+// page after the last note shown, so notes past the newest 200 are reachable.
+export const NOTE_PAGE_SIZE = 100;
 
 // Type filters: "All" and every type, as short plural labels with the
 // type's glyph. One quiet row; the active one is highlighted.
@@ -97,6 +86,14 @@ const SORT_OPTIONS = [
     { value: 'title',   label: 'A-Z' },
 ];
 
+// The server's own sort names (gateway `notes(sort:)`). Sorting on the server
+// means A–Z is A–Z of every note, not of the 200 newest (5.2).
+const SERVER_SORT = {
+    updated: 'updatedAt_desc',
+    created: 'createdAt_desc',
+    title: 'title_asc',
+};
+
 /**
  * A recency heading: a sentence-case label, a hairline, and the bucket's count.
  * An <h3> so the list has a real outline for screen-reader navigation.
@@ -157,25 +154,59 @@ function NoteList({ tag, prefix, under }) {
     // tag's list is a different page, so the selection does not carry over.
     const selection = useNoteSelection({ resetKey: `${tag || ''}|${prefix || ''}|${under || ''}` });
 
-    const { loading: isLoadingList, error, data, refetch } = useQuery(GET_NOTES, {
-        variables: { tag, prefix, under, type: typeFilter, limit: 200 },
+    const variables = { tag, prefix, under, type: typeFilter, sort: SERVER_SORT[sortBy], first: NOTE_PAGE_SIZE };
+    const { loading: isLoadingList, error, data, refetch } = useQuery(GET_NOTES_PAGE, {
+        variables,
         fetchPolicy: 'cache-and-network',
     });
 
-    const notes = React.useMemo(() => data?.notes || [], [data]);
+    // Pages after the first, fetched on "Show more". Kept here rather than
+    // merged into the cached first page, so the cache's `notesPage` entries
+    // stay exactly what each query asked for (and evict as before).
+    const apollo = useContext(getApolloContext())?.client || null;
+    const [more, setMore] = useState({ key: null, notes: [], cursor: null, hasMore: false, loading: false, error: null });
+    const listKey = JSON.stringify(variables);
+    const firstPage = data?.notesPage;
+    // A new filter, sort or a refreshed first page starts paging over.
+    useEffect(() => {
+        setMore({ key: listKey, notes: [], cursor: null, hasMore: false, loading: false, error: null });
+    }, [listKey, firstPage]);
 
-    // Client-side sort — the resolver already returns by updatedAt desc,
-    // but we offer created/title sorts too. For 'updated' we skip re-sorting.
-    const sortedNotes = React.useMemo(() => {
-        if (sortBy === 'updated') return notes;
-        const arr = [...notes];
-        if (sortBy === 'created') {
-            arr.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
-        } else if (sortBy === 'title') {
-            arr.sort((a, b) => (a.title || 'Untitled').localeCompare(b.title || 'Untitled'));
+    const paged = more.key === listKey && more.notes.length > 0;
+    const notes = React.useMemo(() => {
+        const first = firstPage?.notes || [];
+        if (!paged) return first;
+        const seen = new Set(first.map((n) => n.id));
+        return [...first, ...more.notes.filter((n) => !seen.has(n.id))];
+    }, [firstPage, more, paged]);
+    const nextCursor = paged ? more.cursor : firstPage?.nextCursor;
+    const hasMore = Boolean(apollo) && Boolean(nextCursor) && (paged ? more.hasMore : Boolean(firstPage?.hasMore));
+
+    const loadMore = async () => {
+        if (!apollo || more.loading || !nextCursor) return;
+        setMore((m) => ({ ...m, key: listKey, loading: true, error: null }));
+        try {
+            const { data: page } = await apollo.query({
+                query: GET_NOTES_PAGE,
+                variables: { ...variables, after: nextCursor },
+                fetchPolicy: 'network-only',
+            });
+            const got = page?.notesPage;
+            setMore((m) => (m.key !== listKey ? m : {
+                ...m,
+                notes: [...m.notes, ...(got?.notes || [])],
+                cursor: got?.nextCursor || null,
+                hasMore: Boolean(got?.hasMore),
+                loading: false,
+            }));
+        } catch (err) {
+            setMore((m) => ({ ...m, loading: false, error: err?.message || 'Could not load more notes.' }));
         }
-        return arr;
-    }, [notes, sortBy]);
+    };
+
+    // The server sorts — titles case-insensitively — so the list shows
+    // exactly what came back, in that order (5.2).
+    const sortedNotes = notes;
 
     // Pinned notes get their own group ABOVE everything else — the server
     // already sorts them first, so this is a client-side split, not a
@@ -223,7 +254,7 @@ function NoteList({ tag, prefix, under }) {
                 px: '4px',
             }}>
                 <Typography variant="h6" component="h2" sx={{ color: 'text.secondary', m: 0, mr: 'auto' }}>
-                    {notes.length} {notes.length === 1 ? 'note' : 'notes'}
+                    {notes.length}{hasMore ? '+' : ''} {notes.length === 1 && !hasMore ? 'note' : 'notes'}
                 </Typography>
 
                 {notes.length > 0 && <SelectButton selection={selection} />}
@@ -342,6 +373,31 @@ function NoteList({ tag, prefix, under }) {
                     ) : null}
                 </>
             )}
+
+            {hasMore || more.error ? (
+                <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '4px', py: '16px' }}>
+                    {more.error ? (
+                        <Typography variant="body2" sx={{ color: 'error.main' }}>{more.error}</Typography>
+                    ) : null}
+                    <ButtonBase
+                        onClick={loadMore}
+                        disabled={more.loading}
+                        data-load-more=""
+                        sx={{
+                            ...tapTarget44,
+                            px: '16px',
+                            borderRadius: '8px',
+                            fontSize: '0.875rem',
+                            fontWeight: 600,
+                            color: 'text.primary',
+                            border: `1px solid ${g.border}`,
+                            '&:focus-visible': { outline: `2px solid ${g.ink}`, outlineOffset: 2 },
+                        }}
+                    >
+                        {more.loading ? 'Loading…' : more.error ? 'Try again' : 'Show more notes'}
+                    </ButtonBase>
+                </Box>
+            ) : null}
 
             <SelectionBar selection={selection} />
         </Box>

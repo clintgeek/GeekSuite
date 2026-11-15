@@ -10,9 +10,27 @@
  *
  * It must render INSIDE <Tldraw>: useEditor() and useTools() only resolve in
  * tldraw's editor and UI context.
+ *
+ * Review 2026-11 (DOCS/NOTEGEEK_TODOGEEK_REVIEW_2026-11.md):
+ *   - 2.5 (D2): the short bar gains Eraser and a More popover (Select, Redo,
+ *     Highlighter, Zoom to fit, and the rest of the tools).
+ *   - 2.6: full or short is chosen by the CONTAINER's length (ResizeObserver),
+ *     not the viewport: from 900px a 220px sidebar takes room, and the last
+ *     buttons fell off. What doesn't fit is in More.
+ *   - 2.4: the bar sits on any edge (bottom / top / left / right, per device,
+ *     in More), and in pen mode a resting palm can't press it.
+ *   - 2.2: every picker and tooltip portals into the sketch's container, so
+ *     they show in fullscreen.
+ *   - 2.3: "Finger draws" (in More) turns palm rejection off on this device.
+ *   - 2.11: the bar clears the gesture bar (safe-area insets); the pen's ink
+ *     swatches sit on the paper's colour, so dark ink shows in dark mode.
+ *   - 2.12: a strip of the last three pens; Share as image.
  */
-import React, { useEffect, useState } from 'react';
-import { Box, IconButton, Popover, SvgIcon, Tooltip, Typography, useMediaQuery, useTheme } from '@mui/material';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
+import {
+    Box, Button, FormControlLabel, IconButton, Popover, SvgIcon, Switch, ToggleButton, ToggleButtonGroup,
+    Tooltip, Typography, useMediaQuery, useTheme,
+} from '@mui/material';
 import {
     useEditor, useValue, useTools,
     DefaultColorStyle, DefaultSizeStyle, DefaultColorThemePalette, GeoShapeGeoStyle,
@@ -40,11 +58,34 @@ import ZoomInIcon from '@mui/icons-material/ZoomIn';
 import ZoomOutIcon from '@mui/icons-material/ZoomOut';
 import FullscreenIcon from '@mui/icons-material/Fullscreen';
 import FullscreenExitIcon from '@mui/icons-material/FullscreenExit';
+import MoreHorizIcon from '@mui/icons-material/MoreHoriz';
+import IosShareIcon from '@mui/icons-material/IosShare';
 import { graphiteTokens } from '../../theme/tokens';
 import { PaperPicker } from './Paper';
+import { usePaper } from './usePaper';
+import { popoverOrigins, tooltipPlacement, useSketchPortal } from './sketchPortal';
+import { BAR_POSITIONS, pushRecentPen, readRecentPens } from '../../utils/penPrefs';
 
-/** The width from which the bar carries every tool (tablet portrait and up). */
+/**
+ * Before the bar can be measured (jsdom, the first frame): the viewport query
+ * the bar used to use (tablet portrait and up).
+ */
 export const FULL_TOOLBAR_QUERY = '(min-width: 720px)';
+/** The full bar is ~760px of buttons: it needs this much container, along its edge. */
+export const FULL_BAR_MIN = 800;
+
+/**
+ * A touch on the bar in pen mode is a palm when a pen was near a moment ago
+ * (resting the hand to write), or the contact is wide. A deliberate fingertip
+ * with the pen put down still works, so the bar is never locked out.
+ */
+export const PALM_PEN_RECENT_MS = 1500;
+export const PALM_CONTACT_PX = 24;
+export function isPalmTouch(e, { penMode, lastPenAt, now = Date.now() }) {
+    if (!penMode || e.pointerType !== 'touch') return false;
+    if (now - (lastPenAt || 0) < PALM_PEN_RECENT_MS) return true;
+    return (e.width || 0) >= PALM_CONTACT_PX || (e.height || 0) >= PALM_CONTACT_PX;
+}
 
 // Material Symbols "ink_eraser" (Apache 2.0); MUI's icon set has no eraser.
 const EraserIcon = (props) => (
@@ -84,39 +125,78 @@ const SHAPES = [
 ];
 const SHAPE_TOOL_IDS = new Set(['geo', 'arrow', 'line', 'frame']);
 
-function PenStylePicker({ editor, fine, onFineChange }) {
+/** The pen's ink, drawn on the paper it will land on (dark ink stays visible in dark mode). */
+function InkDot({ background, color, size }) {
+    return (
+        <Box
+            aria-hidden
+            sx={{
+                width: size + 10, height: size + 10, borderRadius: '50%',
+                display: 'flex', alignItems: 'center', justifyContent: 'center',
+                bgcolor: background || 'transparent',
+                boxShadow: (t) => (background ? `0 0 0 1px ${t.palette.divider}` : 'none'),
+            }}
+        >
+            <Box sx={{ width: size, height: size, borderRadius: '50%', bgcolor: color, boxShadow: (t) => (background ? 'none' : `0 0 0 1px ${t.palette.divider}`) }} />
+        </Box>
+    );
+}
+
+function PenStylePicker({ editor, fine, onFineChange, onToolPicked }) {
+    const { container, position } = useSketchPortal();
+    const origins = popoverOrigins(position);
     // tldraw's scheme, not the app's: on paper the page is light even in dark
     // mode, and the swatches must show the ink as it will look (Paper.jsx).
     const isDark = useValue('dark ink', () => editor.user.getIsDarkMode(), [editor]);
     const palette = DefaultColorThemePalette[isDark ? 'darkMode' : 'lightMode'];
+    const { look } = usePaper();
     const color = useValue('pen color', () => editor.getStyleForNextShape(DefaultColorStyle), [editor]);
     const size = useValue('pen size', () => editor.getStyleForNextShape(DefaultSizeStyle), [editor]);
     const [anchor, setAnchor] = useState(null);
+    const [recent, setRecent] = useState(() => readRecentPens());
     const current = size === 's' && fine ? 'fine' : size;
     const dot = (PEN_SIZES.find((s) => s.value === current) || PEN_SIZES[0]).dot;
+
+    const apply = (style, value) => {
+        // Restyle what's selected, and every stroke from now on.
+        editor.setStyleForSelectedShapes(style, value);
+        editor.setStyleForNextShapes(style, value);
+        if (editor.getCurrentToolId() === 'hand') {
+            editor.setCurrentTool('draw');
+            onToolPicked?.();
+        }
+    };
+    const remember = (pen) => setRecent(pushRecentPen(pen));
 
     const chooseSize = (value) => {
         // Fine is size 's' plus a scale on new strokes; everything else is
         // tldraw's own size and turns Fine off.
         onFineChange(value === 'fine');
-        choose(DefaultSizeStyle, value === 'fine' ? 's' : value);
+        apply(DefaultSizeStyle, value === 'fine' ? 's' : value);
+        remember({ color, size: value });
     };
-
-    const choose = (style, value) => {
-        // Restyle what's selected, and every stroke from now on.
-        editor.setStyleForSelectedShapes(style, value);
-        editor.setStyleForNextShapes(style, value);
-        if (editor.getCurrentToolId() === 'hand') editor.setCurrentTool('draw');
+    const chooseColor = (value) => {
+        apply(DefaultColorStyle, value);
+        remember({ color: value, size: current });
+    };
+    const choosePen = (pen) => {
+        onFineChange(pen.size === 'fine');
+        apply(DefaultSizeStyle, pen.size === 'fine' ? 's' : pen.size);
+        apply(DefaultColorStyle, pen.color);
+        remember(pen);
+        setAnchor(null);
     };
 
     const swatch = {
         minWidth: 44, minHeight: 44, width: 44, height: 44,
         borderRadius: 2, border: '2px solid transparent',
     };
+    const sizeLabel = (v) => (PEN_SIZES.find((s) => s.value === v) || PEN_SIZES[1]).label;
+    const others = recent.filter((p) => p.color !== color || p.size !== current);
 
     return (
         <>
-            <Tooltip title="Pen colour and size" placement="top">
+            <Tooltip title="Pen colour and size" placement={tooltipPlacement(position)} slotProps={{ popper: { container } }}>
                 <IconButton
                     aria-label="Pen colour and size"
                     aria-haspopup="dialog"
@@ -124,24 +204,37 @@ function PenStylePicker({ editor, fine, onFineChange }) {
                     size="small"
                     onClick={(e) => setAnchor(e.currentTarget)}
                 >
-                    <Box
-                        aria-hidden
-                        sx={{
-                            width: dot + 4, height: dot + 4, borderRadius: '50%',
-                            bgcolor: palette[color]?.solid ?? 'text.primary',
-                            boxShadow: (t) => `0 0 0 1px ${t.palette.divider}`,
-                        }}
-                    />
+                    <InkDot background={look.background} color={palette[color]?.solid ?? 'currentColor'} size={dot + 4} />
                 </IconButton>
             </Tooltip>
             <Popover
                 open={Boolean(anchor)}
                 anchorEl={anchor}
+                container={container}
                 onClose={() => setAnchor(null)}
-                anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-                transformOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-                slotProps={{ paper: { role: 'dialog', 'aria-label': 'Pen colour and size', sx: { p: 3, mb: 2 } } }}
+                anchorOrigin={origins.anchorOrigin}
+                transformOrigin={origins.transformOrigin}
+                slotProps={{ paper: { role: 'dialog', 'aria-label': 'Pen colour and size', sx: { p: 3, ...origins.gap } } }}
             >
+                {others.length ? (
+                    <>
+                        <Typography component="h2" variant="caption" sx={{ display: 'block', mb: 1, color: 'text.secondary' }}>
+                            Recent pens
+                        </Typography>
+                        <Box role="group" aria-label="Recent pens" sx={{ display: 'flex', gap: 1, mb: 3 }}>
+                            {others.map((p) => (
+                                <IconButton
+                                    key={`${p.color}|${p.size}`}
+                                    aria-label={`Recent pen: ${colorName(p.color)}, ${sizeLabel(p.size)}`}
+                                    onClick={() => choosePen(p)}
+                                    sx={{ ...swatch, borderColor: 'divider' }}
+                                >
+                                    <InkDot background={look.background} color={palette[p.color]?.solid} size={(PEN_SIZES.find((s) => s.value === p.size) || PEN_SIZES[1]).dot + 4} />
+                                </IconButton>
+                            ))}
+                        </Box>
+                    </>
+                ) : null}
                 <Typography component="h2" variant="caption" sx={{ display: 'block', mb: 1, color: 'text.secondary' }}>
                     Size
                 </Typography>
@@ -161,13 +254,22 @@ function PenStylePicker({ editor, fine, onFineChange }) {
                 <Typography component="h2" variant="caption" sx={{ display: 'block', mb: 1, color: 'text.secondary' }}>
                     Colour
                 </Typography>
-                <Box role="group" aria-label="Pen colour" sx={{ display: 'grid', gridTemplateColumns: 'repeat(4, 44px)', gap: 1 }}>
+                <Box
+                    role="group"
+                    aria-label="Pen colour"
+                    sx={{
+                        display: 'grid', gridTemplateColumns: 'repeat(4, 44px)', gap: 1,
+                        // The swatches sit on the paper they will be drawn on:
+                        // black ink on a dark popover was invisible (2.11).
+                        ...(look.background ? { bgcolor: look.background, borderRadius: 2, p: 1, mx: -1 } : null),
+                    }}
+                >
                     {PEN_COLORS.map((c) => (
                         <IconButton
                             key={c}
                             aria-label={`Colour: ${colorName(c)}`}
                             aria-pressed={color === c ? 'true' : 'false'}
-                            onClick={() => choose(DefaultColorStyle, c)}
+                            onClick={() => chooseColor(c)}
                             sx={{ ...swatch, borderColor: color === c ? 'primary.main' : 'transparent' }}
                         >
                             <Box aria-hidden sx={{ width: 24, height: 24, borderRadius: '50%', bgcolor: palette[c]?.solid }} />
@@ -182,8 +284,9 @@ function PenStylePicker({ editor, fine, onFineChange }) {
 /** One tool button. The active tool is highlighted (Graphite): ink on highlighter. */
 function ToolButton({ label, active = false, onClick, disabled = false, children, sx, ...rest }) {
     const hl = graphiteTokens(useTheme());
+    const { container, position } = useSketchPortal();
     return (
-        <Tooltip title={label} placement="top">
+        <Tooltip title={label} placement={tooltipPlacement(position)} slotProps={{ popper: { container } }}>
             {/* span: a disabled button still gets its tooltip */}
             <span>
                 <IconButton
@@ -208,11 +311,18 @@ function ToolButton({ label, active = false, onClick, disabled = false, children
     );
 }
 
-const Divider = () => <Box aria-hidden sx={{ width: '1px', height: 24, bgcolor: 'divider', mx: 0.5, flexShrink: 0 }} />;
+const Divider = ({ vertical = false }) => (
+    <Box aria-hidden sx={vertical
+        ? { height: '1px', width: 24, bgcolor: 'divider', my: 0.5, flexShrink: 0 }
+        : { width: '1px', height: 24, bgcolor: 'divider', mx: 0.5, flexShrink: 0 }}
+    />
+);
 
-/** A button that opens a small grid of more buttons above the bar. */
-function ToolMenu({ label, active, icon, children }) {
+/** A button that opens a small grid of more buttons, away from the bar. */
+function ToolMenu({ label, active, icon, children, columns = 5 }) {
     const [anchor, setAnchor] = useState(null);
+    const { container, position } = useSketchPortal();
+    const origins = popoverOrigins(position);
     const close = () => setAnchor(null);
     return (
         <>
@@ -228,30 +338,60 @@ function ToolMenu({ label, active, icon, children }) {
             <Popover
                 open={Boolean(anchor)}
                 anchorEl={anchor}
+                container={container}
                 onClose={close}
-                anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
-                transformOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-                slotProps={{ paper: { role: 'dialog', 'aria-label': label, sx: { p: 2, mb: 2 } } }}
+                anchorOrigin={origins.anchorOrigin}
+                transformOrigin={origins.transformOrigin}
+                slotProps={{ paper: { role: 'dialog', 'aria-label': label, sx: { p: 2, ...origins.gap } } }}
             >
-                <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(5, 44px)', gap: 1 }}>
-                    {typeof children === 'function' ? children(close) : children}
-                </Box>
+                {typeof children === 'function' ? children(close) : (
+                    <Box sx={{ display: 'grid', gridTemplateColumns: `repeat(${columns}, 44px)`, gap: 1 }}>{children}</Box>
+                )}
             </Popover>
         </>
     );
 }
 
 const menuItemSx = { width: 44, height: 44 };
+const grid = (columns) => ({ display: 'grid', gridTemplateColumns: `repeat(${columns}, 44px)`, gap: 1 });
+const POSITION_LABELS = { bottom: 'Bottom', top: 'Top', left: 'Left', right: 'Right' };
 
-export default function DrawingToolbar({ containerRef, onFullscreenChange, fine, onFineChange }) {
+/** How much room the bar has along its edge: the container, measured. */
+function useBarRoom(containerRef, vertical) {
+    const fallbackFull = useMediaQuery(FULL_TOOLBAR_QUERY);
+    const [room, setRoom] = useState(0);
+    useEffect(() => {
+        const el = containerRef?.current;
+        if (!el) return undefined;
+        const measure = (rect = el.getBoundingClientRect()) => setRoom(Math.round(vertical ? rect.height : rect.width));
+        measure();
+        if (typeof ResizeObserver !== 'function') return undefined;
+        const ro = new ResizeObserver((entries) => {
+            const r = entries?.[0]?.contentRect;
+            measure(r && (r.width || r.height) ? r : undefined);
+        });
+        ro.observe(el);
+        return () => ro.disconnect();
+    }, [containerRef, vertical]);
+    // Not laid out yet (or jsdom): the viewport's answer until it is.
+    return room > 0 ? room >= FULL_BAR_MIN : fallbackFull;
+}
+
+export default function DrawingToolbar({
+    containerRef, onFullscreenChange, fine, onFineChange,
+    position = 'bottom', onPositionChange, fingerDraws = false, onFingerDrawsChange,
+    onToolPicked, onShareImage,
+}) {
     const editor = useEditor();
     const tools = useTools();
-    const full = useMediaQuery(FULL_TOOLBAR_QUERY);
+    const vertical = position === 'left' || position === 'right';
+    const full = useBarRoom(containerRef, vertical);
     const currentTool = useValue('current tool', () => editor.getCurrentToolId(), [editor]);
     const geo = useValue('geo style', () => editor.getStyleForNextShape(GeoShapeGeoStyle), [editor]);
     const canUndo = useValue('can undo', () => editor.getCanUndo(), [editor]);
     const canRedo = useValue('can redo', () => editor.getCanRedo(), [editor]);
     const zoom = useValue('zoom', () => editor.getZoomLevel(), [editor]);
+    const penMode = useValue('pen mode', () => Boolean(editor.getInstanceState?.()?.isPenMode), [editor]);
     const [isFullscreen, setIsFullscreen] = useState(false);
 
     useEffect(() => {
@@ -263,6 +403,32 @@ export default function DrawingToolbar({ containerRef, onFullscreenChange, fine,
         document.addEventListener('fullscreenchange', handleFullscreenChange);
         return () => document.removeEventListener('fullscreenchange', handleFullscreenChange);
     }, [onFullscreenChange]);
+
+    // A pen near the screen (hovering or writing) means a touch on the bar is
+    // the hand resting to write.
+    const lastPenAtRef = useRef(0);
+    useEffect(() => {
+        const seen = (e) => { if (e.pointerType === 'pen') lastPenAtRef.current = Date.now(); };
+        const opts = { capture: true, passive: true };
+        window.addEventListener('pointermove', seen, opts);
+        window.addEventListener('pointerdown', seen, opts);
+        return () => {
+            window.removeEventListener('pointermove', seen, opts);
+            window.removeEventListener('pointerdown', seen, opts);
+        };
+    }, []);
+    const palmUntilRef = useRef(0);
+    const onPointerDownCapture = useCallback((e) => {
+        if (!isPalmTouch(e, { penMode, lastPenAt: lastPenAtRef.current })) return;
+        e.preventDefault();
+        e.stopPropagation();
+        palmUntilRef.current = Date.now() + 800;
+    }, [penMode]);
+    const onClickCapture = useCallback((e) => {
+        if (Date.now() >= palmUntilRef.current) return;
+        e.preventDefault();
+        e.stopPropagation();
+    }, []);
 
     const toggleFullscreen = async () => {
         try {
@@ -278,28 +444,140 @@ export default function DrawingToolbar({ containerRef, onFullscreenChange, fine,
 
     // tldraw's own tool actions (they set styles, open the image picker, …);
     // a plain setCurrentTool if the id is missing.
-    const select = (id) => (tools[id] ? tools[id].onSelect('toolbar') : editor.setCurrentTool(id));
+    const select = (id) => {
+        onToolPicked?.();
+        return tools[id] ? tools[id].onSelect('toolbar') : editor.setCurrentTool(id);
+    };
     const isShapeActive = (id) => (currentTool === 'geo' ? geo === id : currentTool === id);
     const ActiveShapeIcon = (SHAPE_TOOL_IDS.has(currentTool) && SHAPES.find((s) => isShapeActive(s.id))?.Icon) || CategoryOutlinedIcon;
+
+    const shapesMenu = (
+        <ToolMenu label="Shapes" active={SHAPE_TOOL_IDS.has(currentTool)} icon={<ActiveShapeIcon fontSize="small" />}>
+            {(close) => (
+                <Box sx={grid(5)}>
+                    {SHAPES.map((shape) => (
+                        <ToolButton
+                            key={shape.id}
+                            label={shape.label}
+                            active={isShapeActive(shape.id)}
+                            onClick={() => { select(shape.id); close(); }}
+                            sx={menuItemSx}
+                        >
+                            <shape.Icon fontSize="small" />
+                        </ToolButton>
+                    ))}
+                </Box>
+            )}
+        </ToolMenu>
+    );
+
+    const moreMenu = (
+        <ToolMenu label="More" icon={<MoreHorizIcon fontSize="small" />}>
+            {(close) => (
+                <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, maxWidth: 5 * 44 + 4 * 4 }}>
+                    {!full ? (
+                        <Box role="group" aria-label="More tools" sx={grid(5)}>
+                            <ToolButton label="Select" active={currentTool === 'select'} onClick={() => { select('select'); close(); }} sx={menuItemSx}>
+                                <NearMeOutlinedIcon fontSize="small" sx={{ transform: 'scaleX(-1)' }} />
+                            </ToolButton>
+                            <ToolButton label="Redo" onClick={() => editor.redo()} disabled={!canRedo} sx={menuItemSx}>
+                                <RedoIcon fontSize="small" />
+                            </ToolButton>
+                            <ToolButton label="Highlighter" active={currentTool === 'highlight'} onClick={() => { select('highlight'); close(); }} sx={menuItemSx}>
+                                <BorderColorOutlinedIcon fontSize="small" />
+                            </ToolButton>
+                            <ToolButton label="Zoom to fit" onClick={() => { editor.zoomToFit(); close(); }} sx={menuItemSx}>
+                                <CropFreeIcon fontSize="small" />
+                            </ToolButton>
+                            {shapesMenu}
+                            <ToolButton label="Text" active={currentTool === 'text'} onClick={() => { select('text'); close(); }} sx={menuItemSx}>
+                                <TextFieldsIcon fontSize="small" />
+                            </ToolButton>
+                            <ToolButton label="Sticky note" active={currentTool === 'note'} onClick={() => { select('note'); close(); }} sx={menuItemSx}>
+                                <StickyNote2OutlinedIcon fontSize="small" />
+                            </ToolButton>
+                            <ToolButton label="Insert image" onClick={() => { select('asset'); close(); }} sx={menuItemSx}>
+                                <ImageOutlinedIcon fontSize="small" />
+                            </ToolButton>
+                            <ToolButton label="Zoom in" onClick={() => editor.zoomIn()} sx={menuItemSx}>
+                                <ZoomInIcon fontSize="small" />
+                            </ToolButton>
+                            <ToolButton label="Zoom out" onClick={() => editor.zoomOut()} sx={menuItemSx}>
+                                <ZoomOutIcon fontSize="small" />
+                            </ToolButton>
+                        </Box>
+                    ) : null}
+                    {onShareImage ? (
+                        <Button
+                            startIcon={<IosShareIcon fontSize="small" />}
+                            onClick={() => { close(); onShareImage(); }}
+                            sx={{ textTransform: 'none', minHeight: 44, justifyContent: 'flex-start' }}
+                        >
+                            Share as image
+                        </Button>
+                    ) : null}
+                    {onFingerDrawsChange ? (
+                        <FormControlLabel
+                            control={<Switch checked={fingerDraws} onChange={(e) => onFingerDrawsChange(e.target.checked)} />}
+                            label="Finger draws"
+                            sx={{ m: 0, minHeight: 44 }}
+                        />
+                    ) : null}
+                    {onPositionChange ? (
+                        <Box>
+                            <Typography component="h2" variant="caption" sx={{ display: 'block', mb: 1, color: 'text.secondary' }}>
+                                Toolbar on this device
+                            </Typography>
+                            <ToggleButtonGroup
+                                exclusive
+                                size="small"
+                                value={position}
+                                onChange={(_e, v) => { if (v) onPositionChange(v); }}
+                                aria-label="Toolbar position"
+                            >
+                                {BAR_POSITIONS.map((p) => (
+                                    <ToggleButton key={p} value={p} aria-label={`Toolbar: ${POSITION_LABELS[p]}`} sx={{ minHeight: 44, minWidth: 48, textTransform: 'none' }}>
+                                        {POSITION_LABELS[p]}
+                                    </ToggleButton>
+                                ))}
+                            </ToggleButtonGroup>
+                        </Box>
+                    ) : null}
+                </Box>
+            )}
+        </ToolMenu>
+    );
+
+    const safe = (side) => `calc(16px + env(safe-area-inset-${side}, 0px))`;
+    const place = {
+        bottom: { bottom: safe('bottom'), left: '50%', transform: 'translateX(-50%)' },
+        top: { top: safe('top'), left: '50%', transform: 'translateX(-50%)' },
+        left: { left: safe('left'), top: '50%', transform: 'translateY(-50%)' },
+        right: { right: safe('right'), top: '50%', transform: 'translateY(-50%)' },
+    }[position] || {};
 
     return (
         <Box
             role="toolbar"
             aria-label="Drawing tools"
+            aria-orientation={vertical ? 'vertical' : 'horizontal'}
+            data-bar-position={position}
+            data-bar-full={full ? 'true' : 'false'}
+            onPointerDownCapture={onPointerDownCapture}
+            onClickCapture={onClickCapture}
             sx={{
                 position: 'absolute',
-                bottom: 16,
-                left: '50%',
-                transform: 'translateX(-50%)',
+                ...place,
                 display: 'flex',
+                flexDirection: vertical ? 'column' : 'row',
                 alignItems: 'center',
                 gap: 0.5,
-                maxWidth: 'calc(100% - 16px)',
+                ...(vertical ? { maxHeight: 'calc(100% - 16px)', overflowY: 'auto' } : { maxWidth: 'calc(100% - 16px)' }),
                 bgcolor: 'background.paper',
                 borderRadius: 3,
                 boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
-                px: 1.5,
-                py: 0.75,
+                px: vertical ? 0.75 : 1.5,
+                py: vertical ? 1.5 : 0.75,
                 zIndex: 100,
                 border: '1px solid',
                 borderColor: 'divider',
@@ -318,26 +596,16 @@ export default function DrawingToolbar({ containerRef, onFullscreenChange, fine,
             </ToolButton>
 
             {full && (
+                <ToolButton label="Highlighter" active={currentTool === 'highlight'} onClick={() => select('highlight')}>
+                    <BorderColorOutlinedIcon fontSize="small" />
+                </ToolButton>
+            )}
+            <ToolButton label="Eraser" active={currentTool === 'eraser'} onClick={() => select('eraser')}>
+                <EraserIcon fontSize="small" />
+            </ToolButton>
+            {full && (
                 <>
-                    <ToolButton label="Highlighter" active={currentTool === 'highlight'} onClick={() => select('highlight')}>
-                        <BorderColorOutlinedIcon fontSize="small" />
-                    </ToolButton>
-                    <ToolButton label="Eraser" active={currentTool === 'eraser'} onClick={() => select('eraser')}>
-                        <EraserIcon fontSize="small" />
-                    </ToolButton>
-                    <ToolMenu label="Shapes" active={SHAPE_TOOL_IDS.has(currentTool)} icon={<ActiveShapeIcon fontSize="small" />}>
-                        {(close) => SHAPES.map((shape) => (
-                            <ToolButton
-                                key={shape.id}
-                                label={shape.label}
-                                active={isShapeActive(shape.id)}
-                                onClick={() => { select(shape.id); close(); }}
-                                sx={menuItemSx}
-                            >
-                                <shape.Icon fontSize="small" />
-                            </ToolButton>
-                        ))}
-                    </ToolMenu>
+                    {shapesMenu}
                     <ToolButton label="Text" active={currentTool === 'text'} onClick={() => select('text')}>
                         <TextFieldsIcon fontSize="small" />
                     </ToolButton>
@@ -351,11 +619,11 @@ export default function DrawingToolbar({ containerRef, onFullscreenChange, fine,
             )}
 
             {/* Pen colour and size */}
-            <PenStylePicker editor={editor} fine={fine} onFineChange={onFineChange} />
+            <PenStylePicker editor={editor} fine={fine} onFineChange={onFineChange} onToolPicked={onToolPicked} />
             {/* Paper colour and lines (Paper.jsx) */}
             <PaperPicker />
 
-            <Divider />
+            <Divider vertical={vertical} />
 
             <ToolButton label="Undo" onClick={() => editor.undo()} disabled={!canUndo}>
                 <UndoIcon fontSize="small" />
@@ -366,26 +634,30 @@ export default function DrawingToolbar({ containerRef, onFullscreenChange, fine,
                 </ToolButton>
             )}
 
-            <Divider />
+            <Divider vertical={vertical} />
 
             {full && (
                 <ToolMenu label={`Zoom, ${Math.round(zoom * 100)}%`} icon={<ZoomInIcon fontSize="small" />}>
-                    {(close) => [
-                        <ToolButton key="out" label="Zoom out" onClick={() => editor.zoomOut()} sx={menuItemSx}>
-                            <ZoomOutIcon fontSize="small" />
-                        </ToolButton>,
-                        <ToolButton key="in" label="Zoom in" onClick={() => editor.zoomIn()} sx={menuItemSx}>
-                            <ZoomInIcon fontSize="small" />
-                        </ToolButton>,
-                        <ToolButton key="100" label="Zoom to 100%" onClick={() => { editor.resetZoom(); close(); }} sx={{ ...menuItemSx, fontSize: 12, fontWeight: 700 }}>
-                            1:1
-                        </ToolButton>,
-                        <ToolButton key="fit" label="Zoom to fit" onClick={() => { editor.zoomToFit(); close(); }} sx={menuItemSx}>
-                            <CropFreeIcon fontSize="small" />
-                        </ToolButton>,
-                    ]}
+                    {(close) => (
+                        <Box sx={grid(4)}>
+                            <ToolButton label="Zoom out" onClick={() => editor.zoomOut()} sx={menuItemSx}>
+                                <ZoomOutIcon fontSize="small" />
+                            </ToolButton>
+                            <ToolButton label="Zoom in" onClick={() => editor.zoomIn()} sx={menuItemSx}>
+                                <ZoomInIcon fontSize="small" />
+                            </ToolButton>
+                            <ToolButton label="Zoom to 100%" onClick={() => { editor.resetZoom(); close(); }} sx={{ ...menuItemSx, fontSize: 12, fontWeight: 700 }}>
+                                1:1
+                            </ToolButton>
+                            <ToolButton label="Zoom to fit" onClick={() => { editor.zoomToFit(); close(); }} sx={menuItemSx}>
+                                <CropFreeIcon fontSize="small" />
+                            </ToolButton>
+                        </Box>
+                    )}
                 </ToolMenu>
             )}
+
+            {moreMenu}
 
             <ToolButton label={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'} onClick={toggleFullscreen}>
                 {isFullscreen ? <FullscreenExitIcon fontSize="small" /> : <FullscreenIcon fontSize="small" />}

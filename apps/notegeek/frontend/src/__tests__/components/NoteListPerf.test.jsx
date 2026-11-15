@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { screen, waitFor } from '@testing-library/react';
-import { gql } from '@apollo/client';
+import { GET_NOTES_PAGE, NOTE_THUMB_CONTENT } from '../../graphql/queries';
 import { renderWithProviders } from '../testUtils';
 import NoteList from '../../components/NoteList';
 
@@ -13,25 +13,12 @@ import NoteList from '../../components/NoteList';
  * worst case). So: the rows paint with a placeholder glyph first, and the
  * sketch previews arrive after.
  *
+ * Since review 5.1 the list carries no bodies at all: each sketch tile
+ * fetches its own note's body once it is near the screen.
+ *
  * The time bar is an order of magnitude, not a local best: CI measures the
  * runner, not the code (see the wall-clock landmine in DOCS/CONTEXT.md).
  */
-
-const GET_NOTES = gql`
-    query GetNotes($tag: String, $prefix: String, $under: String, $type: String, $limit: Int) {
-        notes(tag: $tag, prefix: $prefix, under: $under, type: $type, limit: $limit) {
-            id
-            title
-            content
-            type
-            tags
-            pinned
-            pinnedAt
-            createdAt
-            updatedAt
-        }
-    }
-`;
 
 function sketch(strokes, points) {
     const store = {};
@@ -55,18 +42,24 @@ describe('NoteList — a long list with sketch thumbnails', () => {
                 title: `Note ${i}`,
                 type,
                 tags: ['a', 'b'],
-                content: type === 'handwritten' ? heavy : type === 'code' ? '{"language":"js","code":"const x = 1;"}' : `<p>Body ${i}</p>`,
+                preview: type === 'handwritten' ? '' : `Body ${i}`,
+                pinned: false,
+                pinnedAt: null,
                 createdAt: new Date(now - i * 3600e3).toISOString(),
                 updatedAt: new Date(now - i * 3600e3).toISOString(),
             };
         });
+        const thumbMocks = notes.filter((n) => n.type === 'handwritten').map((n) => ({
+            request: { query: NOTE_THUMB_CONTENT, variables: { id: n.id } },
+            result: { data: { note: { id: n.id, content: heavy, updatedAt: n.updatedAt } } },
+        }));
 
         const started = performance.now();
         renderWithProviders(<NoteList />, {
             mocks: [{
-                request: { query: GET_NOTES, variables: { tag: undefined, prefix: undefined, under: undefined, type: null, limit: 200 } },
-                result: { data: { notes } },
-            }],
+                request: { query: GET_NOTES_PAGE, variables: { tag: undefined, prefix: undefined, under: undefined, type: null, sort: 'updatedAt_desc', first: 100 } },
+                result: { data: { notesPage: { notes, nextCursor: null, hasMore: false } } },
+            }, ...thumbMocks],
         });
         await screen.findByText('Note 199');
         const rowsMs = performance.now() - started;

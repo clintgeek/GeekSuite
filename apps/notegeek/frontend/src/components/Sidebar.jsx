@@ -23,6 +23,7 @@ import ClearIcon from '@mui/icons-material/Clear';
 import TagIcon from '@mui/icons-material/LocalOffer';
 import AllNotesIcon from '@mui/icons-material/AutoStoriesOutlined';
 import ArchiveOutlined from '@mui/icons-material/ArchiveOutlined';
+import DeleteOutline from '@mui/icons-material/DeleteOutline';
 import MoreIcon from '@mui/icons-material/MoreHoriz';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
 import { GeekSidebar, geekLayout, useGeekShell } from '@geeksuite/ui';
@@ -411,6 +412,7 @@ export function TagsPanel({ onNavigate, stickyBg = 'background.paper' }) {
 
     const onAllNotes = location.pathname === '/notes';
     const onArchived = location.pathname === '/archived';
+    const onDeleted = location.pathname === '/deleted';
 
     return (
         <>
@@ -505,6 +507,26 @@ export function TagsPanel({ onNavigate, stickyBg = 'background.paper' }) {
                         <ListItemText
                             primary="Archived"
                             primaryTypographyProps={{ fontSize: '0.8125rem', fontWeight: onArchived ? 600 : 400 }}
+                        />
+                    </ListItemButton>
+                    </ListItem>
+                    {/* Recently deleted (C4, review 2026-11 1.19): deleted notes
+                        wait here 30 days. Beside Archived, same weight. */}
+                    <ListItem disablePadding>
+                    <ListItemButton
+                        component={Link}
+                        to="/deleted"
+                        selected={onDeleted}
+                        aria-current={onDeleted ? 'page' : undefined}
+                        onClick={onNavigate}
+                        data-nav-deleted=""
+                    >
+                        <ListItemIcon sx={{ minWidth: 26 }}>
+                            <DeleteOutline sx={{ fontSize: 17, color: onDeleted ? g.onHl : 'text.secondary' }} />
+                        </ListItemIcon>
+                        <ListItemText
+                            primary="Recently deleted"
+                            primaryTypographyProps={{ fontSize: '0.8125rem', fontWeight: onDeleted ? 600 : 400 }}
                         />
                     </ListItemButton>
                     </ListItem>

@@ -6,6 +6,7 @@
  * replaced; this is a derived copy, so its first line says where it came from.
  */
 import { noteLinkMarkup } from './noteLinks';
+import { readMarkDetailed } from './journalLines';
 
 const sketchLabel = (sketchTitle) => String(sketchTitle || '').trim() || 'Untitled sketch';
 
@@ -46,12 +47,14 @@ export function backLinkLine({ sketchId, sketchTitle, source = 'sketch' }) {
  * Only the mark changes — never the words.
  */
 export function journalMarkAsMarkdown(line) {
-  const m = /^(\s*)(?:[-*]\s+)?\[( |x|X)?\]\s+(?=\S)/.exec(line);
-  if (m) return `${m[1]}- [${m[2] && m[2] !== ' ' ? 'x' : ' '}] ${line.slice(m[0].length)}`;
-  const done = /^(\s*)(?:x|X|×)\s+(?=\S)/.exec(line);
-  if (done) return `${done[1]}- [x] ${line.slice(done[0].length)}`;
-  const event = /^(\s*)(?:o|O|○)\s+(?=\S)/.exec(line);
-  if (event) return `${event[1]}- ○ ${line.slice(event[0].length)}`;
+  // The same mark table as "Send tasks" (journalLines.js), so the two can
+  // never disagree about what a line is (review 2.9).
+  const m = readMarkDetailed(line);
+  if (!m) return line;
+  const after = String(line).slice(m.indent.length + m.firstLength).replace(/^\s*/, '');
+  if (m.style === 'box') return `${m.indent}- [ ] ${after}`;
+  if (m.style === 'checked' || m.style === 'done') return `${m.indent}- [x] ${after}`;
+  if (m.style === 'event' && m.mark !== '@') return `${m.indent}- ○ ${after}`;
   return line;
 }
 

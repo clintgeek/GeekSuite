@@ -97,8 +97,11 @@ function NotePage() {
         );
     }
 
-    // Show loading indicator while fetching
-    if (isLoadingSelected) {
+    // A spinner only when there is nothing to show (3.1). `cache-and-network`
+    // keeps `loading` true while it re-checks a note it already has, and this
+    // used to hide the cached note behind a spinner on every open — and
+    // forever, offline.
+    if (isLoadingSelected && !noteToDisplay) {
         return (
             <Box
                 sx={{
@@ -118,8 +121,9 @@ function NotePage() {
         );
     }
 
-    // Show error if note couldn't be loaded
-    if (queryError) {
+    // An error only matters when there is no copy to show (3.1): offline, the
+    // cached note is still the note.
+    if (queryError && !noteToDisplay) {
         return (
             <Box sx={{ maxWidth: 500, mx: 'auto', py: 8 }}>
                 <GeekErrorState

@@ -226,19 +226,21 @@ describe('useNoteStore', () => {
     // deleteNote
     // =========================================================================
     describe('deleteNote', () => {
-        it('should clear selectedNote and refetch on success', async () => {
+        it('should clear selectedNote and drop the row — no unbounded refetch (review 3.5)', async () => {
             deleteNoteApi.mockResolvedValueOnce({});
-            // Mock fetchNotes to resolve quickly
-            getNotesApi.mockResolvedValueOnce({ data: [] });
+            getNotesApi.mockClear();
 
-            useNoteStore.setState({ selectedNote: { _id: '1' } });
+            useNoteStore.setState({ selectedNote: { _id: '1' }, notes: [{ id: '1' }, { id: '2' }], searchResults: [{ _id: '1' }] });
 
             const result = await useNoteStore.getState().deleteNote('1');
 
             const state = useNoteStore.getState();
             expect(result).toBe(true);
             expect(state.selectedNote).toBeNull();
-            expect(getNotesApi).toHaveBeenCalled();
+            expect(state.notes.map((n) => n.id)).toEqual(['2']);
+            expect(state.searchResults).toEqual([]);
+            // It used to call fetchNotes() with no filters: every note, every body.
+            expect(getNotesApi).not.toHaveBeenCalled();
         });
 
         it('should set selectedError on failure', async () => {

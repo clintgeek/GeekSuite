@@ -1,9 +1,9 @@
-import React, { useId } from 'react';
+import React, { useEffect, useId, useMemo, useState } from 'react';
 import {
     Alert, Box, Button, Checkbox, Chip, CircularProgress, Dialog, DialogActions, DialogContent,
-    DialogTitle, Divider, TextField, Typography, useMediaQuery, useTheme,
+    DialogTitle, Divider, FormControlLabel, Switch, TextField, Typography, useMediaQuery, useTheme,
 } from '@mui/material';
-import { KIND, summarize } from '../../utils/journalLines';
+import { KIND, rowEdits, summarize, writtenAnchor } from '../../utils/journalLines';
 
 /**
  * SendTasksDialog — a sketch's journal lines, on their way to TodoGeek
@@ -17,7 +17,16 @@ import { KIND, summarize } from '../../utils/journalLines';
  *
  * Nothing is sent until "Send to TodoGeek". The sketch is never changed.
  *
- * `rows`: [{ key, kind, text, on, sent, unsure }]
+ * `rows`: [{ key, kind, text, original, line, on, sent, probablySent, unsure }]
+ *
+ * `writtenAt` (the transcript's date): when the page was read on an earlier
+ * day, "tomorrow" and "/friday" are read from THAT day, with a visible line
+ * and a switch (review 2.10, D6). `onSend({ now })` gets the anchor, or null
+ * for today.
+ *
+ * `onCorrections(edits)`: called on Send with the words the writer changed,
+ * `[{ line, from, to }]` (journalLines `rowEdits`), so the page can keep them
+ * as corrections to the sketch's transcript (review 1.11).
  */
 export default function SendTasksDialog({
     open,
@@ -31,6 +40,8 @@ export default function SendTasksDialog({
     onSend,
     onClose,
     onRetry,
+    writtenAt = null,
+    onCorrections = null,
 }) {
     const theme = useTheme();
     const phone = useMediaQuery(theme.breakpoints.down('sm'));
@@ -38,6 +49,16 @@ export default function SendTasksDialog({
     const mono = { fontFamily: theme.typography.fontFamilyMono, wordSpacing: 'normal' };
     const button = { textTransform: 'none', [theme.breakpoints.down('md')]: { minHeight: 44 } };
     const chosen = rows.filter((r) => r.on && r.text.trim());
+    const written = useMemo(() => writtenAnchor(writtenAt), [writtenAt]);
+    const [anchored, setAnchored] = useState(true);
+    // A new page (or a new reading) starts anchored again.
+    useEffect(() => { setAnchored(true); }, [writtenAt]);
+    const readFrom = written && anchored ? written.anchor : new Date();
+    const send = () => {
+        const edits = rowEdits(chosen);
+        if (edits.length && onCorrections) onCorrections(edits);
+        onSend({ now: written && anchored ? written.anchor : null });
+    };
 
     return (
         <Dialog open={open} onClose={sending ? undefined : onClose} fullScreen={phone} maxWidth="md" fullWidth aria-labelledby={titleId}>
@@ -97,6 +118,19 @@ export default function SendTasksDialog({
                     </Box>
                 ) : null}
 
+                {stage === 'review' && rows.length > 0 && written ? (
+                    <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexWrap: 'wrap', gap: 2, mb: 3 }}>
+                        <Typography variant="caption" sx={{ ...mono, color: 'text.secondary' }} data-testid="written-anchor">
+                            {anchored ? written.label : `${written.label.split(' · ')[0]} · dates read from today`}
+                        </Typography>
+                        <FormControlLabel
+                            control={<Switch size="small" checked={anchored} onChange={(e) => setAnchored(e.target.checked)} disabled={sending} />}
+                            label="Read dates from that day"
+                            sx={{ m: 0, minHeight: 44, '& .MuiFormControlLabel-label': { fontSize: '0.8125rem' } }}
+                        />
+                    </Box>
+                ) : null}
+
                 {stage === 'review' && rows.length > 0 ? (
                     <Box component="ul" sx={{ listStyle: 'none', m: 0, p: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
                         {rows.map((row) => {
@@ -114,6 +148,7 @@ export default function SendTasksDialog({
                                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, flexWrap: 'wrap', mb: 1 }}>
                                             <Chip size="small" variant="outlined" label={KIND[row.kind]?.label || 'Task'} sx={mono} />
                                             {row.sent ? <Chip size="small" label="Already sent" sx={mono} /> : null}
+                                            {row.probablySent && !row.sent ? <Chip size="small" variant="outlined" label="Probably already sent" sx={mono} /> : null}
                                             {row.unsure ? <Chip size="small" color="warning" variant="outlined" label="Check the [?]" sx={mono} /> : null}
                                         </Box>
                                         <TextField
@@ -124,7 +159,7 @@ export default function SendTasksDialog({
                                             size="small"
                                             multiline
                                             inputProps={{ 'aria-label': `Words — ${label}` }}
-                                            helperText={summarize(row.text)}
+                                            helperText={summarize(row.text, { now: readFrom })}
                                             FormHelperTextProps={{ sx: { ...mono, fontSize: '0.75rem', mx: 0 } }}
                                         />
                                     </Box>
@@ -142,7 +177,7 @@ export default function SendTasksDialog({
                 </Button>
                 <Box sx={{ flex: 1 }} />
                 {stage === 'review' && rows.length > 0 ? (
-                    <Button onClick={onSend} disabled={sending || chosen.length === 0} variant="contained" sx={button}>
+                    <Button onClick={send} disabled={sending || chosen.length === 0} variant="contained" sx={button}>
                         {sending ? 'Sending…' : chosen.length === 1 ? 'Send 1 to TodoGeek' : `Send ${chosen.length} to TodoGeek`}
                     </Button>
                 ) : null}

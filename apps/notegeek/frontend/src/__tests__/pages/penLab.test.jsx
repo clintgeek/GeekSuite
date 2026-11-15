@@ -39,6 +39,16 @@ describe('PenLab', () => {
     }
   });
 
+  it('a button pressed mid-stroke (a chorded move) is not called an eraser: nothing acts on it', () => {
+    show();
+    fireEvent(screen.getByRole('application', { name: 'Pen test area' }), new PointerEvent('pointermove', { bubbles: true, pointerType: 'pen', button: -1, buttons: 3 }));
+    expect(firstRow()[1]).toBe('pointermove');
+    expect(firstRow()[6]).toMatch(/^nothing mid-stroke/);
+    // and a plain lift says nothing at all
+    fireEvent(screen.getByRole('application', { name: 'Pen test area' }), new PointerEvent('pointerup', { bubbles: true, pointerType: 'pen', button: 2, buttons: 0 }));
+    expect(firstRow()[6]).toBe('');
+  });
+
   it('a key press is listed too (a Bluetooth pen button can arrive as a key)', () => {
     show();
     fireEvent.keyDown(window, { key: 'PageDown', code: 'PageDown' });

@@ -36,7 +36,7 @@
  * honestly decide which cached variants a changed note now belongs to, and
  * guessing wrong is worse than refetching.
  */
-const NOTE_DERIVED_ROOT_FIELDS = ['notes', 'noteTags', 'noteTagUsage', 'searchNotes'];
+const NOTE_DERIVED_ROOT_FIELDS = ['notes', 'notesPage', 'noteTags', 'noteTagUsage', 'searchNotes'];
 
 const evictNoteDerived = (cache) => {
   for (const fieldName of NOTE_DERIVED_ROOT_FIELDS) {
@@ -59,6 +59,12 @@ export const onNoteDeleted = (noteId) => (cache, { data }) => {
   if (data && data.deleteNote === false) return;
   const ref = cache.identify({ __typename: 'Note', id: String(noteId) });
   if (ref) cache.evict({ id: ref });
+  // Soft delete (C4): the note joins Recently deleted, and leaves the [[
+  // picker, backlinks and Related as well as the lists.
+  cache.evict({ id: 'ROOT_QUERY', fieldName: 'deletedNotes' });
+  for (const fieldName of ['noteTitles', 'backlinks', 'relatedNotes']) {
+    cache.evict({ id: 'ROOT_QUERY', fieldName });
+  }
   evictNoteDerived(cache);
 };
 
@@ -67,8 +73,44 @@ export const onNoteDeleted = (noteId) => (cache, { data }) => {
  * not is which `notes(tag:)` lists it now belongs to, or the tag index it may
  * have just added a brand-new tag to.
  */
-export const onNoteUpdated = (cache) => {
-  evictNoteDerived(cache);
+export const onNoteUpdated = (cache, result, options = {}) => {
+  try {
+    // UPDATE_NOTE no longer selects `content` (5.7: a sketch's body made the
+    // round trip back on every autosave). The body this write SENT is what
+    // the server now holds, so put it on the cached note; otherwise a viewer
+    // opened from cache would show the text from before the edit.
+    const variables = options?.variables || {};
+    const id = result?.data?.updateNote?.id || variables.id;
+    if (id && typeof variables.content === 'string') {
+      const ref = cache.identify({ __typename: 'Note', id: String(id) });
+      if (ref) cache.modify({ id: ref, fields: { content: () => variables.content } });
+    }
+    // An autosave that did not touch the tags changes no list's membership
+    // and no tag count (5.7). Every autosave used to refetch the whole tag
+    // index and every note's tags on desktop. The caller says so through
+    // the mutation's context; anything that does not say is treated as a
+    // tag change, which is the old, safe behaviour.
+    if (options?.context?.tagsChanged === false) return;
+    evictNoteDerived(cache);
+  } catch {
+    // A cache update must never take a successful write down with it.
+  }
+};
+
+/**
+ * A soft-deleted note came back from Recently deleted, or one was purged
+ * from it (C4). Either way the lists, counts, tags and search all change.
+ */
+export const onNoteRestored = (cache) => {
+  try {
+    cache.evict({ id: 'ROOT_QUERY', fieldName: 'deletedNotes' });
+    for (const fieldName of ARCHIVE_DERIVED_ROOT_FIELDS) {
+      cache.evict({ id: 'ROOT_QUERY', fieldName });
+    }
+    evictNoteDerived(cache);
+  } catch {
+    // never fail the write
+  }
 };
 
 /**
@@ -94,6 +136,7 @@ export const onNoteUpdated = (cache) => {
  */
 export const onNotePinned = (cache) => {
   cache.evict({ id: 'ROOT_QUERY', fieldName: 'notes' });
+  cache.evict({ id: 'ROOT_QUERY', fieldName: 'notesPage' });
   cache.gc();
 };
 

@@ -35,7 +35,7 @@ const NOTE = {
 
 const stateMock = (archived) => ({
   request: { query: NOTE_ARCHIVE_STATE, variables: { id: 'n1' } },
-  result: { data: { note: { __typename: 'Note', id: 'n1', archived, archivedAt: archived ? '2026-10-08T12:00:00.000Z' : null } } },
+  result: { data: { note: { __typename: 'Note', id: 'n1', archived, archivedAt: archived ? '2026-10-08T12:00:00.000Z' : null, deletedAt: null } } },
   maxUsageCount: 5,
 });
 const noteMock = { request: { query: GET_NOTE_BY_ID, variables: { id: 'n1' } }, result: { data: { note: NOTE } }, maxUsageCount: 5 };

@@ -1,15 +1,37 @@
 import { gql } from '@apollo/client';
 
-export const CREATE_NOTE = gql`
-    mutation CreateNote($title: String, $content: String!, $type: String, $tags: [String!]) {
-        createNote(title: $title, content: $content, type: $type, tags: $tags) {
+/**
+ * What a write gives back (5.7, review 2026-11). No `content`: the caller
+ * already has the body it just sent, and a sketch's body is megabytes — every
+ * autosave used to carry it back down. `onNoteUpdated` writes the sent body
+ * into the cached note instead (graphql/cacheUpdates.js).
+ */
+const NOTE_WRITE_FIELDS = `
             id
             title
-            content
             type
             tags
             createdAt
             updatedAt
+`;
+
+export const CREATE_NOTE = gql`
+    mutation CreateNote($title: String, $content: String!, $type: String, $tags: [String!]) {
+        createNote(title: $title, content: $content, type: $type, tags: $tags) {
+            ${NOTE_WRITE_FIELDS}
+        }
+    }
+`;
+
+/**
+ * A photo note, created WITH its reviewed reading (C6), so it is searchable
+ * even if nothing after the create succeeds. Its own document so every other
+ * create stays valid against a gateway that predates the argument.
+ */
+export const CREATE_PHOTO_NOTE = gql`
+    mutation CreatePhotoNote($title: String, $content: String!, $type: String, $tags: [String!], $transcriptText: String) {
+        createNote(title: $title, content: $content, type: $type, tags: $tags, transcriptText: $transcriptText) {
+            ${NOTE_WRITE_FIELDS}
         }
     }
 `;
@@ -25,6 +47,10 @@ export const UPDATE_NOTE = gql`
         # schema is strict, so an undeclared variable fails the WHOLE mutation
         # — which is how blood pressure nearly lost its logging entirely.
         $changeReason: String
+        # The updatedAt this edit was made against (C3). A note changed on
+        # another device since then is refused with extensions.code CONFLICT
+        # and the server's copy, instead of being silently overwritten.
+        $baseUpdatedAt: String
     ) {
         updateNote(
             id: $id
@@ -33,21 +59,41 @@ export const UPDATE_NOTE = gql`
             type: $type
             tags: $tags
             changeReason: $changeReason
+            baseUpdatedAt: $baseUpdatedAt
         ) {
+            ${NOTE_WRITE_FIELDS}
+        }
+    }
+`;
+
+/** Soft delete (C4, decision D1): the note moves to Recently deleted for 30 days. */
+export const DELETE_NOTE = gql`
+    mutation DeleteNote($id: ID!) {
+        deleteNote(id: $id)
+    }
+`;
+
+/** Back out of Recently deleted. */
+export const RESTORE_NOTE = gql`
+    mutation RestoreNote($id: ID!) {
+        restoreNote(id: $id) {
             id
+            deletedAt
             title
-            content
             type
             tags
+            pinned
+            pinnedAt
             createdAt
             updatedAt
         }
     }
 `;
 
-export const DELETE_NOTE = gql`
-    mutation DeleteNote($id: ID!) {
-        deleteNote(id: $id)
+/** Delete forever: only for a note already in Recently deleted. */
+export const PURGE_NOTE = gql`
+    mutation PurgeNote($id: ID!) {
+        purgeNote(id: $id)
     }
 `;
 
@@ -267,11 +313,13 @@ export const SAVE_SKETCH_TRANSCRIPT_EDIT = gql`
 export const CREATE_TODO_TASK = gql`
     mutation CreateTodoTask(
         $content: String!, $signifier: String, $status: String, $priority: Int, $tags: [String],
-        $dueDate: Date, $note: String, $recurrenceRule: String, $private: Boolean
+        $dueDate: Date, $note: String, $recurrenceRule: String, $private: Boolean,
+        $clientId: String
     ) {
         createTask(
             content: $content, signifier: $signifier, status: $status, priority: $priority, tags: $tags,
-            dueDate: $dueDate, note: $note, recurrenceRule: $recurrenceRule, private: $private
+            dueDate: $dueDate, note: $note, recurrenceRule: $recurrenceRule, private: $private,
+            clientId: $clientId
         ) {
             id
             content

@@ -1,8 +1,9 @@
 import React from 'react';
 import { DialogContentText, Button } from '@mui/material';
 import { useNavigate } from 'react-router-dom';
-import { GeekDialog } from '@geeksuite/ui';
+import { GeekDialog, useToast } from '@geeksuite/ui';
 import useNoteStore from '../store/noteStore';
+import { restoreNoteApi } from '../services/api';
 
 /**
  * `onDiscarded` — "this note is gone, stand down" — is fired on BOTH exit paths
@@ -15,10 +16,15 @@ import useNoteStore from '../store/noteStore';
  * It is deliberately NOT `onClose`. The two used to be one handler, so the
  * dialog's *Cancel* button navigated away from an unsaved note — cancelling
  * the confirm dialog was itself a way to leave the page.
+ *
+ * Delete is a soft delete (C4, decision D1, review 2026-11 1.19): the note
+ * waits in Recently deleted for 30 days with its history, and the toast
+ * offers Undo. **Cancel** is the focused button, so Enter never deletes.
  */
 function DeleteNoteDialog({ open, onClose, onDiscarded, noteId, noteTitle, isUnsavedNote }) {
   const navigate = useNavigate();
   const deleteNote = useNoteStore(state => state.deleteNote);
+  const { notify, dismiss } = useToast();
 
   const handleDelete = async () => {
     try {
@@ -36,6 +42,34 @@ function DeleteNoteDialog({ open, onClose, onDiscarded, noteId, noteTitle, isUns
         if (onDiscarded) onDiscarded();
         onClose();
         navigate('/');
+        // The toast outlives this dialog (and the page it was on), so Undo
+        // calls the API directly rather than anything of this component's.
+        let toastId = null;
+        toastId = notify('Note deleted', {
+          tone: 'success',
+          duration: 10000,
+          action: (
+            <Button
+              color="inherit"
+              size="small"
+              onClick={async () => {
+                if (toastId != null) dismiss?.(toastId);
+                try {
+                  await restoreNoteApi(noteId);
+                  useNoteStore.getState().refreshLists?.();
+                  notify('Note restored', { tone: 'success' });
+                } catch (err) {
+                  notify(err?.message || 'Could not restore it. It is in Recently deleted.', { tone: 'error' });
+                }
+              }}
+              sx={{ textTransform: 'none', fontWeight: 600, minHeight: 44, minWidth: 44 }}
+            >
+              Undo
+            </Button>
+          ),
+        });
+      } else {
+        notify(useNoteStore.getState().selectedError || 'Could not delete the note.', { tone: 'error' });
       }
     } catch (error) {
       console.error('Error deleting note:', error);
@@ -52,12 +86,12 @@ function DeleteNoteDialog({ open, onClose, onDiscarded, noteId, noteTitle, isUns
       mode="window"
       title="Delete Note"
       primaryAction={
-        <Button onClick={handleDelete} variant="contained" color="error" autoFocus>
+        <Button onClick={handleDelete} variant="contained" color="error">
           {isUnsavedNote ? 'Discard' : 'Delete'}
         </Button>
       }
       secondaryAction={
-        <Button onClick={onClose} variant="text" color="inherit">
+        <Button onClick={onClose} variant="text" color="inherit" autoFocus>
           Cancel
         </Button>
       }
@@ -66,7 +100,7 @@ function DeleteNoteDialog({ open, onClose, onDiscarded, noteId, noteTitle, isUns
         {isUnsavedNote ? (
           "Are you sure you want to discard this unsaved note?"
         ) : (
-          `Are you sure you want to delete ${noteTitle || 'this note'}? This action cannot be undone.`
+          `Delete ${noteTitle || 'this note'}? It stays in Recently deleted for 30 days, where you can restore it.`
         )}
       </DialogContentText>
     </GeekDialog>
