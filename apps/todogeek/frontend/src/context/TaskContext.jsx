@@ -1,9 +1,9 @@
-import React, { createContext, useContext, useState, useCallback, useRef, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useCallback, useRef, useMemo } from 'react';
 import { useApolloClient } from '@apollo/client';
-import { Alert, Snackbar } from '@mui/material';
-import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth } from 'date-fns';
+import { format, startOfWeek, startOfMonth, endOfMonth } from 'date-fns';
+import { localTimeZone } from '@geeksuite/task-grammar';
 import {
-  GET_TASKS, GET_ALL_TASKS, GET_DAILY_TASKS, GET_WEEKLY_TASKS, GET_MONTHLY_TASKS
+  GET_ALL_TASKS, GET_DAILY_TASKS, GET_WEEKLY_TASKS, GET_MONTHLY_TASKS
 } from '../graphql/queries';
 import {
   CREATE_TASK, UPDATE_TASK, DELETE_TASK, UPDATE_TASK_STATUS, MIGRATE_TASK_TO_FUTURE,
@@ -17,12 +17,44 @@ import {
   onTaskCreated, onTaskUpdated, onTaskStatusChanged, onTaskDeleted,
   onSubtaskAdded, onSubtaskRemoved,
 } from '../graphql/cacheUpdates';
-import RecurringEditDialog from '../components/tasks/RecurringEditDialog';
+import { avoidUtcMidnight, dueFields, withExplicitTime } from '../utils/dueDate';
+import { newClientId } from '../utils/clientId.js';
 // Pure sort module — keeps the comparator testable without this file's deps.
 import { compareTasks, sortTasks } from '../utils/taskSort.js';
 
 
-const AUTH_CONFIG = { withCredentials: true };
+/**
+ * How long a write may take before it is given up (plan 1.10). The request is
+ * aborted and the caller told; a create is retried with the SAME clientId
+ * (contract C1), so a write that did land is never made twice. Reads are not
+ * limited: `allTasks` on a slow phone connection may honestly take longer.
+ */
+export const WRITE_TIMEOUT_MS = 15000;
+const WRITE_CONTEXT = { timeoutMs: WRITE_TIMEOUT_MS };
+
+/** How many times a read that overlapped a local write is re-run (plan 1.9). */
+export const MAX_FETCH_ATTEMPTS = 4;
+
+/** A client id for one create (contract C1), reused on its retries. */
+export { newClientId };
+
+/** Every task entering state, with a timed 6 pm-Central instant off UTC midnight. */
+const ingest = (list) => (Array.isArray(list) ? list.map(withExplicitTime) : list);
+
+/**
+ * The write's due-date fields with their flag (contract C2). A caller that
+ * already says `hasDueTime` is believed (a timed value is still moved off
+ * UTC midnight); one that does not gets it from the value's shape.
+ */
+function withDueFlag(fields) {
+  if (!fields || !('dueDate' in fields)) return fields;
+  if (typeof fields.hasDueTime === 'boolean') {
+    return fields.hasDueTime && fields.dueDate
+      ? { ...fields, dueDate: avoidUtcMidnight(fields.dueDate).toISOString?.() ?? fields.dueDate }
+      : fields;
+  }
+  return { ...fields, ...dueFields(fields.dueDate) };
+}
 
 // Error types for better error handling
 const TaskError = {
@@ -218,6 +250,7 @@ const buildOptimisticStatus = (snapshot, taskId, status, completedAt, cancelledA
       note: snapshot.note ?? null,
       tags: snapshot.tags ?? [],
       dueDate: snapshot.dueDate ?? null,
+      hasDueTime: typeof snapshot.hasDueTime === 'boolean' ? snapshot.hasDueTime : null,
       originalDate: snapshot.originalDate ?? null,
       migratedFrom: snapshot.migratedFrom ?? null,
       migratedTo: snapshot.migratedTo ?? null,
@@ -271,6 +304,27 @@ export const useTaskContext = () => {
   return context;
 };
 
+/**
+ * The task list behind every TodoGeek view, and every write to it.
+ *
+ * ## Reads never overwrite newer writes (plan 1.9)
+ * A read that started before (or ran during) a local write may answer with
+ * the list as it was BEFORE that write: open the app after a minute away,
+ * type at once, and the big `allTasks` reply lands after the create — the new
+ * task vanished until the next refresh. Every write bumps `writeSeq`; a read
+ * whose window overlapped one is dropped and run again (up to
+ * MAX_FETCH_ATTEMPTS), and a read that a newer read has superseded is dropped.
+ *
+ * ## An empty answer is double-checked (plan 1.12)
+ * A non-empty list is never replaced by an empty one on a single answer: the
+ * read is repeated once first. Failures are returned (`{ status: 'error' }`)
+ * so the caller can say "Couldn't reach your list" instead of "Nothing due".
+ *
+ * ## Errors
+ * `error` is set for the caller to show; this provider renders nothing of its
+ * own (it sits outside the toast provider — PenContext turns `error` into a
+ * toast). The retired screens' snackbar and recurring-scope dialog are gone.
+ */
 const TaskProvider = ({ children }) => {
   const apolloClient = useApolloClient();
 
@@ -278,63 +332,75 @@ const TaskProvider = ({ children }) => {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(LoadingState.IDLE);
   const [error, setError] = useState(null);
-  const fetchTimeoutRef = useRef(null);
-  const lastFetchRef = useRef(null);
   const [currentView, setCurrentView] = useState('daily');
   const [currentDate, setCurrentDate] = useState(new Date());
 
-  // Recurring dialog state
-  const [recurringDialog, setRecurringDialog] = useState({ open: false, actionType: 'delete', resolve: null });
-
-  // Filter state
-  const [filters, setFilters] = useState({
-    search: '',
-    status: '',
-    priority: '',
-    signifier: '',
-    tags: []
-  });
-
   // Mirror of `tasks` for callbacks that must read the latest state without
   // taking a dependency on it (keeps their identity stable across re-renders).
+  // Updated synchronously by `commit`, not by an effect, so a read that lands
+  // in the same tick as a write sees it.
   const tasksRef = useRef(tasks);
-  useEffect(() => {
-    tasksRef.current = tasks;
-  }, [tasks]);
+  const commit = useCallback((updater) => {
+    setTasks((prev) => {
+      const next = typeof updater === 'function' ? updater(prev) : updater;
+      tasksRef.current = next;
+      return next;
+    });
+  }, []);
 
   const getTaskFromState = useCallback((id) => findTaskInState(tasksRef.current, id), []);
 
-  const promptRecurringScope = async (actionType) => {
-    return new Promise((resolve) => {
-      setRecurringDialog({ open: true, actionType, resolve });
-    });
-  };
+  /* ---------- write sequencing (1.9) ---------- */
 
-  const handleRecurringDialogClose = () => {
-    if (recurringDialog.resolve) recurringDialog.resolve(null);
-    setRecurringDialog(prev => ({ ...prev, open: false }));
-  };
+  const writeSeq = useRef(0);
+  const writesInFlight = useRef(0);
+  const writeWaiters = useRef([]);
+  const fetchSeq = useRef(0);
 
-  const handleRecurringDialogConfirm = (scope) => {
-    if (recurringDialog.resolve) recurringDialog.resolve(scope);
-    setRecurringDialog(prev => ({ ...prev, open: false }));
-  };
+  const beginWrite = useCallback(() => {
+    writeSeq.current += 1;
+    writesInFlight.current += 1;
+  }, []);
+  const endWrite = useCallback(() => {
+    writeSeq.current += 1;
+    writesInFlight.current = Math.max(0, writesInFlight.current - 1);
+    if (writesInFlight.current === 0) {
+      const waiters = writeWaiters.current;
+      writeWaiters.current = [];
+      waiters.forEach((resolve) => resolve());
+    }
+  }, []);
+  const writesSettled = useCallback(() => (
+    writesInFlight.current === 0
+      ? Promise.resolve()
+      : new Promise((resolve) => { writeWaiters.current.push(resolve); })
+  ), []);
+
+  /* ---------- status changes: one at a time per task (1.21) ---------- */
+
+  // A quick tick then un-tick sends two mutations; their answers can arrive in
+  // either order, and the later answer used to win on screen whatever the
+  // server ended with. They are now sent one after the other per task, and
+  // only the newest request's answer is applied. A `virtual_` occurrence
+  // gets a real id from its first answer; later requests use it (`aliases`).
+  const statusChains = useRef(new Map());
+  const statusTickets = useRef(new Map());
+  const aliases = useRef(new Map());
+  const resolveId = useCallback((id) => aliases.current.get(String(id)) || id, []);
 
   const clearError = useCallback(() => setError(null), []);
 
   /**
    * Every request in this app goes through Apollo, so errors arrive as
-   * ApolloError: { graphQLErrors: [...], networkError, message } — never as the
-   * axios `error.response.status` shape this used to parse.
+   * ApolloError: { graphQLErrors: [...], networkError, message }.
    *
-   * Records a `{ type, message }` on context state (which renders a snackbar)
-   * and returns the message. It intentionally does NOT rethrow; callers that
-   * need the rejection to propagate (createTask/updateTask, whose dialogs stay
-   * open on failure) rethrow explicitly.
+   * Records a `{ type, message }` on context state and returns the message.
+   * It intentionally does NOT rethrow; callers that need the rejection to
+   * propagate rethrow explicitly.
    */
   const handleApiError = useCallback((err, fallback = 'An unexpected error occurred') => {
     const gqlErrors = err?.graphQLErrors ?? [];
-    const networkError = err?.networkError;
+    const networkError = err?.networkError ?? (err?.name === 'TimeoutError' ? err : null);
     const networkGqlErrors = networkError?.result?.errors ?? [];
 
     let type = TaskError.UNKNOWN;
@@ -352,7 +418,10 @@ const TaskProvider = ({ children }) => {
       }
     } else if (networkError) {
       message = networkGqlErrors.map((e) => e.message).filter(Boolean).join('; ');
-      if (networkError.statusCode === 401 || networkError.statusCode === 403) {
+      if (networkError.name === 'TimeoutError' || networkError.timeout) {
+        type = TaskError.NETWORK;
+        message = 'TodoGeek did not answer in time. Check your connection and try again.';
+      } else if (networkError.statusCode === 401 || networkError.statusCode === 403) {
         type = TaskError.AUTH;
         message = message || 'Your session has expired. Please sign in again.';
       } else {
@@ -368,268 +437,167 @@ const TaskProvider = ({ children }) => {
     return finalMessage;
   }, []);
 
-  // Filter management
-  const updateFilters = useCallback((newFilters) => {
-    setFilters(prev => ({ ...prev, ...newFilters }));
-  }, []);
+  /* ---------- reads ---------- */
 
-  const clearFilters = useCallback(() => {
-    setFilters({
-      search: '',
-      status: '',
-      priority: '',
-      signifier: '',
-      tags: []
-    });
-  }, []);
-
-  // Task fetching with debouncing and cache
-  // NOTE: Backend does not implement /tasks/range; use /tasks with startDate/endDate query params.
-  const fetchTasksForDateRange = useCallback(async (startDate, endDate, fetchKey) => {
-    // Generate fetch key if not provided
-    const key = fetchKey || `${ startDate.toISOString() }-${ endDate.toISOString() }`;
-
-    // Skip if already fetching this range
-    if (loading === LoadingState.FETCHING && lastFetchRef.current === key) {
-      return;
-    }
-
-    try {
-      setLoading(LoadingState.FETCHING);
-      setError(null);
-      lastFetchRef.current = key;
-
-      // Format dates as YYYY-MM-DD
-      const formattedStartDate = format(startDate, 'yyyy-MM-dd');
-      const formattedEndDate = format(endDate, 'yyyy-MM-dd');
-
-      const response = await apolloClient.query({
-        query: GET_MONTHLY_TASKS, // Reuse monthly for arbitrary range conceptually
-        variables: {
-          startDate: formattedStartDate,
-          endDate: formattedEndDate,
-          tzOffsetMinutes: tzOffsetFor(startDate),
-        },
-        fetchPolicy: 'no-cache'
-      });
-
-      const newTasks = response.data?.monthlyTasks || [];
-      setTasks(prevTasks => {
-        if (JSON.stringify(prevTasks) !== JSON.stringify(newTasks)) {
-          return newTasks;
-        }
-        return prevTasks;
-      });
-
-      setLoading(LoadingState.IDLE);
-      setError(null);
-    } catch (error) {
-      console.error('Error fetching tasks:', error);
-      handleApiError(error, 'Failed to load tasks');
-      setLoading(LoadingState.IDLE);
-    }
-  }, [handleApiError, loading]);
-
-  // Cleanup timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (fetchTimeoutRef.current) {
-        clearTimeout(fetchTimeoutRef.current);
+  const runQuery = useCallback(async (viewType, date) => {
+    switch (viewType) {
+      case 'daily': {
+        const dateStr = format(date || new Date(), 'yyyy-MM-dd');
+        const dRes = await apolloClient.query({
+          query: GET_DAILY_TASKS,
+          variables: { tzOffsetMinutes: tzOffsetFor(date || new Date()), date: dateStr },
+          fetchPolicy: 'no-cache'
+        });
+        return dRes.data?.dailyTasks || [];
       }
-    };
-  }, []);
+      case 'weekly': {
+        // `weekStartsOn: 1` — Monday is the app's week (utils/reviewWeek.js).
+        const startDate = startOfWeek(date || new Date(), { weekStartsOn: 1 });
+        const wRes = await apolloClient.query({
+          query: GET_WEEKLY_TASKS,
+          variables: {
+            date: format(startDate, 'yyyy-MM-dd'),
+            tzOffsetMinutes: tzOffsetFor(startDate),
+          },
+          fetchPolicy: 'no-cache'
+        });
+        return wRes.data?.weeklyTasks || [];
+      }
+      case 'monthly': {
+        const monthStart = startOfMonth(date || new Date());
+        const monthEnd = endOfMonth(date || new Date());
+        const mRes = await apolloClient.query({
+          query: GET_MONTHLY_TASKS,
+          variables: {
+            startDate: format(monthStart, 'yyyy-MM-dd'),
+            endDate: format(monthEnd, 'yyyy-MM-dd'),
+            tzOffsetMinutes: tzOffsetFor(monthStart),
+          },
+          fetchPolicy: 'no-cache'
+        });
+        return mRes.data?.monthlyTasks || [];
+      }
+      case 'year':
+      default: {
+        const aRes = await apolloClient.query({
+          query: GET_ALL_TASKS,
+          fetchPolicy: 'no-cache'
+        });
+        return aRes.data?.allTasks || [];
+      }
+    }
+  }, [apolloClient]);
 
-  // Task fetching
+  /**
+   * Load a view. Resolves `{ status }`:
+   *   'ok'         — applied
+   *   'superseded' — a newer fetch started; this answer was dropped
+   *   'stale'      — every attempt overlapped a local write; nothing applied
+   *   'error'      — failed (`error` is set); the list on screen is untouched
+   */
   const fetchTasks = useCallback(async (viewType, date) => {
+    const mine = ++fetchSeq.current;
     setLoading(LoadingState.FETCHING);
     setError(null);
+    let doubtedEmpty = false;
     try {
-      let responseData = [];
-
-      switch (viewType) {
-        case 'daily': {
-          const dateStr = format(date || new Date(), 'yyyy-MM-dd');
-          const dRes = await apolloClient.query({
-            query: GET_DAILY_TASKS,
-            variables: { tzOffsetMinutes: tzOffsetFor(date || new Date()), date: dateStr },
-            fetchPolicy: 'no-cache'
-          });
-          responseData = dRes.data?.dailyTasks || [];
-          break;
+      for (let attempt = 0; attempt < MAX_FETCH_ATTEMPTS; attempt += 1) {
+        // Never read across a write that is already in flight.
+        await writesSettled();
+        if (mine !== fetchSeq.current) return { status: 'superseded' };
+        const seqAtStart = writeSeq.current;
+        const responseData = await runQuery(viewType, date);
+        if (mine !== fetchSeq.current) return { status: 'superseded' };
+        // A local write began or ended while this read was out: the answer
+        // may not include it. Read again.
+        if (writeSeq.current !== seqAtStart || writesInFlight.current > 0) continue;
+        // An empty answer for a list that is not empty is asked twice.
+        const holding = Array.isArray(tasksRef.current) && tasksRef.current.length > 0;
+        if (responseData.length === 0 && holding && !doubtedEmpty) {
+          doubtedEmpty = true;
+          continue;
         }
-        case 'weekly': {
-          // `weekStartsOn: 1`. date-fns defaults to Sunday, so this silently
-          // re-derived the week start from the Monday `WeeklySpread` had
-          // already computed and handed back the PREVIOUS Sunday — the UI
-          // drew Mon-Sun while the gateway was asked for Sun-Sat, so the
-          // rendered Sunday column was structurally always empty. Monday is
-          // the app's week everywhere else (see utils/reviewWeek.js).
-          const startDate = startOfWeek(date || new Date(), { weekStartsOn: 1 });
-          const wRes = await apolloClient.query({
-            query: GET_WEEKLY_TASKS,
-            variables: {
-              date: format(startDate, 'yyyy-MM-dd'),
-              tzOffsetMinutes: tzOffsetFor(startDate),
-            },
-            fetchPolicy: 'no-cache'
-          });
-          responseData = wRes.data?.weeklyTasks || [];
-          break;
-        }
-        case 'monthly': {
-          const monthStart = startOfMonth(date || new Date());
-          const monthEnd = endOfMonth(date || new Date());
-          const mRes = await apolloClient.query({
-            query: GET_MONTHLY_TASKS,
-            variables: {
-              startDate: format(monthStart, 'yyyy-MM-dd'),
-              endDate: format(monthEnd, 'yyyy-MM-dd'),
-              tzOffsetMinutes: tzOffsetFor(monthStart),
-            },
-            fetchPolicy: 'no-cache'
-          });
-          responseData = mRes.data?.monthlyTasks || [];
-          break;
-        }
-        case 'year':
-        default: {
-          const aRes = await apolloClient.query({
-            query: GET_ALL_TASKS,
-            fetchPolicy: 'no-cache'
-          });
-          responseData = aRes.data?.allTasks || [];
-          break;
-        }
+        commit(ingest(responseData));
+        setCurrentView(viewType);
+        setCurrentDate(date || new Date());
+        return { status: 'ok' };
       }
-
-      setTasks(responseData);
-      setCurrentView(viewType);
-      setCurrentDate(date || new Date());
-      setLoading(LoadingState.IDLE);
+      return { status: 'stale' };
     } catch (err) {
+      if (mine !== fetchSeq.current) return { status: 'superseded' };
       console.error('Error fetching tasks:', err);
       handleApiError(err, 'Failed to fetch tasks');
-      setLoading(LoadingState.IDLE);
+      return { status: 'error', error: err };
+    } finally {
+      if (mine === fetchSeq.current) setLoading(LoadingState.IDLE);
     }
-  }, [handleApiError]);
+  }, [handleApiError, runQuery, writesSettled, commit]);
 
-  const fetchAllTasks = useCallback(async () => {
-    // Skip if already fetching
-    if (loading === LoadingState.FETCHING) {
-      return;
-    }
+  /* ---------- writes ---------- */
 
-    // Generate a unique request ID
-    const requestId = Date.now();
-    lastFetchRef.current = requestId;
-
-    try {
-      setLoading(LoadingState.FETCHING);
-      setError(null);
-
-      const response = await apolloClient.query({
-        query: GET_ALL_TASKS,
-        fetchPolicy: 'no-cache'
-      });
-
-      // Check if this is still the most recent request
-      if (lastFetchRef.current !== requestId) {
-        return;
-      }
-
-      const newTasks = response.data?.allTasks || [];
-
-      // Only update state if the data has actually changed
-      setTasks(prevTasks => {
-        const prevString = JSON.stringify(prevTasks);
-        const newString = JSON.stringify(newTasks);
-        if (prevString !== newString) {
-          return newTasks;
-        }
-        return prevTasks;
-      });
-
-      setLoading(LoadingState.IDLE);
-      setError(null);
-    } catch (error) {
-      // Only set error if this is still the most recent request
-      if (lastFetchRef.current === requestId) {
-        console.error('Error fetching all tasks:', error);
-        handleApiError(error, 'Failed to load tasks');
-        setLoading(LoadingState.IDLE);
-      }
-    }
-  }, [handleApiError]);
-
-  // Remove the effect that watches filters for 'all' view
-  // Instead, add a debounced filter effect
-  const debouncedFetchRef = useRef(null);
-
-  useEffect(() => {
-    // Only run this effect if we're in the 'all' view
-    const path = window.location.pathname;
-    const view = path.split('/')[2] || 'daily';
-
-    if (view === 'all' && loading === LoadingState.IDLE) {
-      // Clear any existing timeout
-      if (debouncedFetchRef.current) {
-        clearTimeout(debouncedFetchRef.current);
-      }
-
-      // Set a new timeout
-      debouncedFetchRef.current = setTimeout(() => {
-        fetchAllTasks();
-      }, 300); // Debounce for 300ms
-    }
-
-    // Cleanup
-    return () => {
-      if (debouncedFetchRef.current) {
-        clearTimeout(debouncedFetchRef.current);
-      }
-    };
-  }, [filters, fetchAllTasks]); // Remove loading from dependencies
-
-  // Cleanup timeouts on unmount
-  useEffect(() => {
-    return () => {
-      if (fetchTimeoutRef.current) {
-        clearTimeout(fetchTimeoutRef.current);
-      }
-      if (debouncedFetchRef.current) {
-        clearTimeout(debouncedFetchRef.current);
-      }
-    };
-  }, []);
-
-  // Task operations
+  /**
+   * Create a task. `taskData.clientId` makes it idempotent (contract C1): a
+   * caller retrying a failed or timed-out create passes the SAME clientId,
+   * and the gateway hands back the task the first attempt made. One is made
+   * up here when the caller sends none; it rides on the thrown error
+   * (`err.clientId`) so the caller can retry with it.
+   *
+   * A repeating task comes back as its series MASTER, which no list shows
+   * (`allTasks` returns its occurrences). It is not added to state; the
+   * caller refetches to get the occurrence rows (plan 1.6).
+   */
   const createTask = useCallback(async (taskData) => {
+    const variables = withDueFlag({ ...taskData });
+    if (!variables.clientId) variables.clientId = newClientId();
+    if (variables.recurrenceRule && !variables.timeZone) {
+      const zone = localTimeZone();
+      if (zone) variables.timeZone = zone;
+    }
+    beginWrite();
     setLoading(LoadingState.CREATING);
     setError(null);
     try {
       const response = await apolloClient.mutate({
         mutation: CREATE_TASK,
-        variables: { ...taskData },
+        variables,
         // Clause 3: a new task changes the tag index and, if it is filed, its
         // collection's tallies. Both are the gateway's to compute.
         update: onTaskCreated,
+        context: WRITE_CONTEXT,
       });
 
-      const createdTask = response.data?.createTask;
-
-      setTasks(prevTasks => (
-        Array.isArray(prevTasks) ? [...prevTasks, createdTask] : [createdTask]
-      ));
+      const createdTask = withExplicitTime(response.data?.createTask);
+      if (createdTask && !createdTask.isSeriesMaster) {
+        // A replayed create returns a task we may already hold: replace, never duplicate.
+        commit((prevTasks) => {
+          const list = Array.isArray(prevTasks) ? prevTasks : [];
+          return list.some((t) => sameTask(t, createdTask.id))
+            ? list.map((t) => (sameTask(t, createdTask.id) ? { ...t, ...createdTask } : t))
+            : [...list, createdTask];
+        });
+      }
       return createdTask;
     } catch (err) {
       handleApiError(err, 'Failed to create task');
+      if (err && typeof err === 'object') err.clientId = variables.clientId;
       throw err;
     } finally {
       setLoading(LoadingState.IDLE);
+      endWrite();
     }
-  }, [handleApiError]);
+  }, [apolloClient, handleApiError, beginWrite, endWrite, commit]);
 
-  const updateTask = useCallback(async (taskId, updates, editScope = 'THIS_INSTANCE') => {
+  /**
+   * Update a task. `options.optimistic` shows the change at once and puts the
+   * row back if the server refuses (moves: swipe, pick a date, move all —
+   * 3.18); without it the list changes when the answer comes.
+   */
+  const updateTask = useCallback(async (rawTaskId, updates, editScope = 'THIS_INSTANCE', options = {}) => {
+    const taskId = resolveId(rawTaskId);
+    const snapshot = options.optimistic
+      ? (findTaskInState(tasksRef.current, taskId) || findTaskInState(tasksRef.current, rawTaskId))
+      : null;
+    beginWrite();
     try {
       setLoading(LoadingState.UPDATING);
       setError(null);
@@ -641,115 +609,157 @@ const TaskProvider = ({ children }) => {
         'collectionId',
         // Private: hide the words on a desktop (PrivacyContext).
         'private',
+        // Contract C2, and a repeat's wall-clock zone.
+        'hasDueTime', 'timeZone',
       ];
-      const cleanUpdates = {};
+      let cleanUpdates = {};
       for (const key of ALLOWED_UPDATE_FIELDS) {
         if (key in updates) {
           cleanUpdates[key] = updates[key];
         }
       }
+      cleanUpdates = withDueFlag(cleanUpdates);
+      if (cleanUpdates.recurrenceRule && !cleanUpdates.timeZone) {
+        const zone = localTimeZone();
+        if (zone) cleanUpdates.timeZone = zone;
+      }
+
+      if (snapshot) {
+        const patch = { ...cleanUpdates };
+        if ('dueDate' in patch) {
+          // State keeps dates as ISO instants; a date-only one is its UTC midnight.
+          const v = patch.dueDate;
+          patch.dueDate = !v ? null
+            : (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? `${v}T00:00:00.000Z` : new Date(v).toISOString());
+        }
+        commit(prev => mapTasksState(prev, task => (
+          (sameTask(task, taskId) || sameTask(task, rawTaskId)) ? { ...task, ...patch } : task
+        )));
+      }
 
       // The result knows where the task landed; only the client knows where it
       // came from, so the previous collection is closed over for the update.
-      const previousCollectionId = findTaskInState(tasksRef.current, taskId)?.collectionId ?? null;
+      const previousCollectionId = (snapshot || findTaskInState(tasksRef.current, taskId))?.collectionId ?? null;
 
       const response = await apolloClient.mutate({
         mutation: UPDATE_TASK,
         variables: { id: taskId, input: cleanUpdates, editScope },
         update: onTaskUpdated(previousCollectionId),
+        context: WRITE_CONTEXT,
       });
 
-      const updatedTask = response.data?.updateTask;
+      const updatedTask = withExplicitTime(response.data?.updateTask);
 
       // `mapTasksState` patches the task wherever it is — top-level row or one
-      // of a parent's steps — and re-sorts, in whichever shape this state is
-      // holding. What it replaces was an array branch that only looked at
-      // top-level rows (so editing a step from its parent's expander left the
-      // old text on screen) and an object branch that keyed the task by the
-      // *UTC* day of an instant `dueDate`, filing a 9pm-Central task under
-      // tomorrow — the same class BURN_REVIEW #8 fixed one file over.
-      // Merging rather than replacing also keeps fields the mutation does not
-      // select (subtaskCount, originalDueDate) instead of dropping them.
+      // of a parent's steps — and re-sorts. Merging rather than replacing also
+      // keeps fields the mutation does not select (subtaskCount, originalDueDate).
       if (updatedTask) {
-        setTasks(prev => mapTasksState(prev, task => (
-          sameTask(task, taskId) ? { ...task, ...updatedTask } : task
+        commit(prev => mapTasksState(prev, task => (
+          (sameTask(task, taskId) || sameTask(task, rawTaskId)) ? { ...task, ...updatedTask } : task
         )));
       }
 
       setLoading(LoadingState.IDLE);
       return updatedTask;
     } catch (err) {
+      if (snapshot) {
+        commit(prev => mapTasksState(prev, task => (
+          (sameTask(task, taskId) || sameTask(task, rawTaskId)) ? snapshot : task
+        )));
+      }
       handleApiError(err, 'Failed to update task');
       setLoading(LoadingState.IDLE);
       throw err;
+    } finally {
+      endWrite();
     }
-  }, [handleApiError]);
+  }, [apolloClient, handleApiError, beginWrite, endWrite, commit, resolveId]);
 
   /**
    * Optimistic status toggle: flip the task in local state immediately so the
    * checkbox responds instantly, then reconcile with the server response.
    * On failure the previous task object is restored and the error surfaced.
+   *
+   * Per task, requests go one at a time and only the newest one's answer is
+   * applied (see `statusChains`). `options.editScope` is passed through for a
+   * series master (ALL_INSTANCES finishes the whole series).
    */
-  const updateTaskStatus = useCallback(async (taskId, newStatus) => {
-    const snapshot = findTaskInState(tasksRef.current, taskId);
+  const updateTaskStatus = useCallback(async (taskId, newStatus, options = {}) => {
+    const key = String(taskId);
+    const snapshot = findTaskInState(tasksRef.current, resolveId(taskId)) || findTaskInState(tasksRef.current, taskId);
     const completedAt = newStatus === 'completed' ? new Date().toISOString() : null;
     const cancelledAt = newStatus === 'cancelled' ? new Date().toISOString() : null;
+    const ticket = (statusTickets.current.get(key) || 0) + 1;
+    statusTickets.current.set(key, ticket);
+    const isLatest = () => statusTickets.current.get(key) === ticket;
+    const isThisTask = (task, id) => sameTask(task, taskId) || sameTask(task, id);
 
     setError(null);
-    setTasks(prev => mapTasksState(prev, task => (
-      sameTask(task, taskId) ? { ...task, status: newStatus, completedAt, cancelledAt } : task
+    commit(prev => mapTasksState(prev, task => (
+      isThisTask(task, resolveId(taskId)) ? { ...task, status: newStatus, completedAt, cancelledAt } : task
     )));
 
-    try {
+    beginWrite();
+    const prior = statusChains.current.get(key) || Promise.resolve();
+    const run = prior.catch(() => {}).then(async () => {
+      const id = resolveId(taskId);
+      const variables = { id, status: newStatus };
+      if (options.editScope) variables.editScope = options.editScope;
       const response = await apolloClient.mutate({
         mutation: UPDATE_TASK_STATUS,
-        variables: { id: taskId, status: newStatus },
+        variables,
         // Ticking a checkbox is this app's most-repeated gesture; it must not
         // wait on a round trip. Apollo writes this layer immediately and rolls
         // the whole thing back if the mutation rejects.
-        optimisticResponse: buildOptimisticStatus(snapshot, taskId, newStatus, completedAt, cancelledAt),
+        optimisticResponse: buildOptimisticStatus(snapshot, id, newStatus, completedAt, cancelledAt),
         update: onTaskStatusChanged(snapshot?.collectionId ?? null),
+        context: WRITE_CONTEXT,
       });
+      return { id, serverTask: response.data?.updateTaskStatus };
+    });
+    statusChains.current.set(key, run);
 
-      const serverTask = response.data?.updateTaskStatus;
+    try {
+      const { id, serverTask } = await run;
       if (serverTask) {
-        // Reconcile with the authoritative server object.
-        setTasks(prev => mapTasksState(prev, task => (
-          sameTask(task, taskId) ? { ...task, ...serverTask } : task
-        )));
+        const serverId = String(serverTask.id ?? serverTask._id ?? '');
+        if (serverId && serverId !== String(id)) {
+          aliases.current.set(key, serverId);
+          aliases.current.set(String(id), serverId);
+        }
+        commit(prev => mapTasksState(prev, task => {
+          if (!isThisTask(task, id)) return task;
+          // Only the newest request's answer decides what the row says; an
+          // older one still hands over the real id a virtual occurrence got.
+          return isLatest()
+            ? withExplicitTime({ ...task, ...serverTask })
+            : { ...task, id: serverTask.id ?? task.id };
+        }));
       }
-
-      setError(null);
+      if (isLatest()) setError(null);
       return serverTask;
     } catch (error) {
-      // Roll back to the pre-toggle task object.
-      if (snapshot) {
-        setTasks(prev => mapTasksState(prev, task => (
-          sameTask(task, taskId) ? snapshot : task
+      if (isLatest() && snapshot) {
+        // Roll back to the pre-toggle task object.
+        commit(prev => mapTasksState(prev, task => (
+          isThisTask(task, resolveId(taskId)) ? snapshot : task
         )));
       }
       handleApiError(error, 'Failed to update task status');
       return undefined;
+    } finally {
+      if (statusChains.current.get(key) === run && isLatest()) statusChains.current.delete(key);
+      endWrite();
     }
-  }, [apolloClient, handleApiError]);
+  }, [apolloClient, handleApiError, beginWrite, endWrite, commit, resolveId]);
 
   /**
-   * Park a task ("blocked"): it keeps its due date but leaves the log until it
-   * is unblocked. Not optimistic — `blockedAt` is the server's clock and the
-   * gateway refuses to block a completed/cancelled task, so we wait for the
-   * authoritative object and merge it in (the same reconcile step
-   * `updateTaskStatus` does after its optimistic flip).
-   *
-   * Every list that can contain a parked task is fetched `no-cache`, so the
-   * views that need to change refetch after this resolves rather than relying
-   * on Apollo cache invalidation (see the CONTEXT.md debt note).
-   *
-   * @param {string} taskId
-   * @param {string} [reason] optional; 280 chars max, enforced by the gateway
-   * @returns {Promise<object|undefined>} the parked task, or undefined on error
+   * Park a task ("blocked"). Not optimistic — `blockedAt` is the server's
+   * clock and the gateway refuses to block a completed/cancelled task.
    */
   const blockTask = useCallback(async (taskId, reason) => {
     setError(null);
+    beginWrite();
     try {
       const response = await apolloClient.mutate({
         mutation: BLOCK_TASK,
@@ -759,7 +769,7 @@ const TaskProvider = ({ children }) => {
 
       const serverTask = response.data?.blockTask;
       if (serverTask) {
-        setTasks(prev => mapTasksState(prev, task => (
+        commit(prev => mapTasksState(prev, task => (
           sameTask(task, taskId) ? { ...task, ...serverTask } : task
         )));
       }
@@ -767,12 +777,15 @@ const TaskProvider = ({ children }) => {
     } catch (error) {
       handleApiError(error, 'Failed to block task');
       return undefined;
+    } finally {
+      endWrite();
     }
-  }, [apolloClient, handleApiError]);
+  }, [apolloClient, handleApiError, beginWrite, endWrite, commit]);
 
   /** Un-park a task: back to `pending`, blocked fields cleared, dueDate kept. */
   const unblockTask = useCallback(async (taskId) => {
     setError(null);
+    beginWrite();
     try {
       const response = await apolloClient.mutate({
         mutation: UNBLOCK_TASK,
@@ -782,7 +795,7 @@ const TaskProvider = ({ children }) => {
 
       const serverTask = response.data?.unblockTask;
       if (serverTask) {
-        setTasks(prev => mapTasksState(prev, task => (
+        commit(prev => mapTasksState(prev, task => (
           sameTask(task, taskId) ? { ...task, ...serverTask } : task
         )));
       }
@@ -790,33 +803,23 @@ const TaskProvider = ({ children }) => {
     } catch (error) {
       handleApiError(error, 'Failed to unblock task');
       return undefined;
+    } finally {
+      endWrite();
     }
-  }, [apolloClient, handleApiError]);
+  }, [apolloClient, handleApiError, beginWrite, endWrite, commit]);
 
   /**
    * Delete a task. Returns TRUE only when the server confirmed it.
    *
-   * It used to return `undefined` on success, on failure AND on the user
-   * cancelling the recurring-scope prompt, so a caller could not tell the
-   * three apart. `ReviewPage` consequently marked a card reviewed whatever
-   * happened: the mutation failed, a snackbar flashed, and the card left the
-   * queue anyway — the task resurfaced the next day having been "reviewed".
-   *
-   * Callers that ignore the return value are unaffected.
+   * `editScope` defaults to THIS_INSTANCE. (The retired screens prompted for a
+   * scope here with a dialog; every live caller passes one.)
    */
-  const deleteTask = useCallback(async (taskId, editScopeParam = null) => {
+  const deleteTask = useCallback(async (rawTaskId, editScopeParam = null) => {
+    const taskId = resolveId(rawTaskId);
+    const editScope = editScopeParam || 'THIS_INSTANCE';
+    beginWrite();
     try {
-      const task = getTaskFromState(taskId);
-      let editScope = editScopeParam;
-      if (!editScope) {
-        if (task && (task.isSeriesMaster || task.seriesId || task.recurrenceRule || String(taskId).startsWith('virtual_'))) {
-          editScope = await promptRecurringScope('delete');
-          if (!editScope) return false; // user cancelled — nothing happened
-        } else {
-          editScope = 'THIS_INSTANCE';
-        }
-      }
-
+      const task = getTaskFromState(taskId) || getTaskFromState(rawTaskId);
       setLoading(LoadingState.DELETING);
       setError(null);
 
@@ -833,20 +836,41 @@ const TaskProvider = ({ children }) => {
         update: parent
           ? onSubtaskRemoved(parent.id || parent._id, taskId)
           : onTaskDeleted(taskId, task?.collectionId ?? null),
+        context: WRITE_CONTEXT,
       });
 
-      setTasks(prev => removeTaskFromState(prev, taskId));
+      commit(prev => removeTaskFromState(removeTaskFromState(prev, taskId), rawTaskId));
       return true;
     } catch (error) {
       handleApiError(error, 'Failed to delete task');
       return false;
     } finally {
       setLoading(LoadingState.IDLE);
+      endWrite();
     }
-  }, [handleApiError, getTaskFromState]);
+  }, [apolloClient, handleApiError, getTaskFromState, beginWrite, endWrite, commit, resolveId]);
+
+  /**
+   * Drop the not-yet-materialised occurrences of a series that fall before
+   * `before` (decision D3): when the late row is finished, the misses behind
+   * it are skipped — the gateway stops expanding them (`skipMissedBefore`),
+   * and this keeps the list on screen from showing the next one meanwhile.
+   */
+  const skipEarlierOccurrences = useCallback((seriesId, before) => {
+    if (!seriesId || !before) return;
+    const cutoff = new Date(before).getTime();
+    if (Number.isNaN(cutoff)) return;
+    commit(prev => (Array.isArray(prev) ? prev.filter((t) => !(
+      String(t?.id ?? '').startsWith('virtual_')
+      && String(t.seriesId) === String(seriesId)
+      && t.status !== 'completed' && t.status !== 'cancelled'
+      && new Date(t.dueDate).getTime() < cutoff
+    )) : prev));
+  }, [commit]);
 
   // Migration operations
   const migrateTask = useCallback(async (taskId, targetDate) => {
+    beginWrite();
     try {
       setLoading(LoadingState.MIGRATING);
       setError(null);
@@ -860,16 +884,9 @@ const TaskProvider = ({ children }) => {
       const migratedTask = response.data?.migrateTaskToFuture;
 
       // Merge the authoritative object in place, exactly like updateTaskStatus
-      // does. This used to rebuild an object-keyed-by-date structure with
-      // `Object.entries(prev)` — a shape nothing has produced since the log
-      // views moved to plain arrays, so `tasks.filter` was called on a task
-      // object and threw `tasks.filter is not a function` INSIDE the try. The
-      // mutation had already succeeded; the user got "Failed to migrate task"
-      // and a list that never moved. (Had it not thrown, it would have left
-      // `tasks` as an object, which every consumer of this array then has to
-      // defend against.)
+      // does (this once rebuilt a keyed-by-date object and threw on arrays).
       if (migratedTask) {
-        setTasks(prev => mapTasksState(prev, task => (
+        commit(prev => mapTasksState(prev, task => (
           sameTask(task, taskId) ? { ...task, ...migratedTask } : task
         )));
       }
@@ -879,22 +896,17 @@ const TaskProvider = ({ children }) => {
       handleApiError(error, 'Failed to migrate task');
     } finally {
       setLoading(LoadingState.IDLE);
+      endWrite();
     }
-  }, [handleApiError]);
+  }, [apolloClient, handleApiError, beginWrite, endWrite, commit]);
 
   /**
-   * Add a step to an entry.
-   *
-   * The gateway creates an ordinary task carrying `parentTask` and appends it
-   * to the parent's ordered list; here that means appending it to the parent's
-   * `subtasks` array in state, which is what the `2/5` chip counts. The step
-   * is deliberately NOT added as a top-level row: it belongs under its parent
-   * for as long as the parent is on screen (`utils/subtasks.splitNested`).
-   *
-   * @returns {Promise<object|undefined>} the new step, or undefined on error
+   * Add a step to an entry (gateway subtask API, kept). The step is appended
+   * to its parent's `subtasks` array, never added as a top-level row.
    */
   const addSubtask = useCallback(async (parentId, input) => {
     setError(null);
+    beginWrite();
     try {
       const response = await apolloClient.mutate({
         mutation: ADD_SUBTASK,
@@ -912,7 +924,7 @@ const TaskProvider = ({ children }) => {
       const subtask = response.data?.addSubtask;
       if (!subtask) return undefined;
 
-      setTasks(prev => mapTasksState(prev, task => {
+      commit(prev => mapTasksState(prev, task => {
         if (!sameTask(task, parentId)) return task;
         const children = Array.isArray(task.subtasks) ? task.subtasks : [];
         if (children.some(child => sameTask(child, subtask.id))) return task;
@@ -923,18 +935,14 @@ const TaskProvider = ({ children }) => {
     } catch (error) {
       handleApiError(error, 'Failed to add subtask');
       return undefined;
+    } finally {
+      endWrite();
     }
-  }, [apolloClient, handleApiError]);
+  }, [apolloClient, handleApiError, beginWrite, endWrite, commit]);
 
   /**
-   * Reorder an entry's steps. `orderedSubtaskIds` must name every one of them
-   * exactly once — the gateway rejects a partial list rather than dropping the
-   * remainder, which is the behaviour we want: a reorder that quietly loses a
-   * row is worse than one that fails.
-   *
-   * Optimistic, because dragging a row and watching it snap back for a beat is
-   * the whole reason reorder UIs feel cheap. The pre-move order is restored on
-   * failure.
+   * Reorder an entry's steps (optimistic; the pre-move order is restored on
+   * failure). `orderedSubtaskIds` must name every one of them exactly once.
    */
   const reorderSubtasks = useCallback(async (parentId, orderedSubtaskIds) => {
     setError(null);
@@ -944,11 +952,12 @@ const TaskProvider = ({ children }) => {
     const byId = new Map(previous.map(child => [String(child.id ?? child._id), child]));
     const reordered = orderedSubtaskIds.map(id => byId.get(String(id))).filter(Boolean);
     if (reordered.length === previous.length) {
-      setTasks(prev => mapTasksState(prev, task => (
+      commit(prev => mapTasksState(prev, task => (
         sameTask(task, parentId) ? { ...task, subtasks: reordered } : task
       )));
     }
 
+    beginWrite();
     try {
       const response = await apolloClient.mutate({
         mutation: REORDER_SUBTASKS,
@@ -956,33 +965,29 @@ const TaskProvider = ({ children }) => {
       });
       return response.data?.reorderSubtasks;
     } catch (error) {
-      setTasks(prev => mapTasksState(prev, task => (
+      commit(prev => mapTasksState(prev, task => (
         sameTask(task, parentId) ? { ...task, subtasks: previous } : task
       )));
       handleApiError(error, 'Failed to reorder subtasks');
       return undefined;
+    } finally {
+      endWrite();
     }
-  }, [apolloClient, handleApiError]);
+  }, [apolloClient, handleApiError, beginWrite, endWrite, commit]);
 
   const value = useMemo(() => ({
     // State
     tasks,
     loading,
     error,
-    filters,
     currentView,
     currentDate,
 
     // Error handling
     clearError,
 
-    // Filter management
-    updateFilters,
-    clearFilters,
-
     // Task operations
     fetchTasks,
-    fetchAllTasks,
     createTask,
     updateTask,
     updateTaskStatus,
@@ -990,6 +995,7 @@ const TaskProvider = ({ children }) => {
     unblockTask,
     deleteTask,
     migrateTask,
+    skipEarlierOccurrences,
 
     // Subtasks (removal is deleteTask — a step is an ordinary task)
     addSubtask,
@@ -1003,13 +1009,9 @@ const TaskProvider = ({ children }) => {
     tasks,
     loading,
     error,
-    filters,
     currentView,
     currentDate,
-    updateFilters,
-    clearFilters,
     fetchTasks,
-    fetchAllTasks,
     createTask,
     updateTask,
     updateTaskStatus,
@@ -1017,6 +1019,7 @@ const TaskProvider = ({ children }) => {
     unblockTask,
     deleteTask,
     migrateTask,
+    skipEarlierOccurrences,
     addSubtask,
     reorderSubtasks,
     getTaskFromState,
@@ -1026,35 +1029,9 @@ const TaskProvider = ({ children }) => {
   return (
     <TaskContext.Provider value={value}>
       {children}
-      <RecurringEditDialog
-        open={recurringDialog.open}
-        actionType={recurringDialog.actionType}
-        onClose={handleRecurringDialogClose}
-        onConfirm={handleRecurringDialogConfirm}
-      />
-      {/* App-wide surface for task errors. Cleared on dismiss, and on the next
-          successful operation (each operation resets `error` to null). */}
-      <Snackbar
-        open={Boolean(error)}
-        autoHideDuration={6000}
-        onClose={(_event, reason) => {
-          if (reason === 'clickaway') return;
-          clearError();
-        }}
-        anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
-        sx={{ bottom: { xs: 80, md: 24 } }}
-      >
-        <Alert
-          onClose={clearError}
-          severity="error"
-          variant="filled"
-          sx={{ maxWidth: 480 }}
-        >
-          {typeof error === 'string' ? error : error?.message}
-        </Alert>
-      </Snackbar>
     </TaskContext.Provider>
   );
 };
 
 export { TaskProvider };
+export default TaskProvider;

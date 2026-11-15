@@ -66,7 +66,7 @@ export function tasksToMarkdown(tasks) {
     // `dueDayKey` (./dueDate.js) reads a date-only dueDate in UTC and a timed
     // one locally, the way the gateway does. `localDateString` on both put
     // every date-only entry under the previous day's heading west of UTC.
-    const key = task.dueDate ? (dueDayKey(task.dueDate) || null) : null;
+    const key = task.dueDate ? (dueDayKey(task) || null) : null;
     if (!groups.has(key)) groups.set(key, []);
     groups.get(key).push(task);
   });

@@ -13,6 +13,10 @@ import { useCallback, useRef, useState } from 'react';
  * finger lifts; the row follows the finger and shows which action it will
  * take, so letting go short of a threshold is always a safe "never mind".
  *
+ * `right` / `left` switch a direction off for a row that cannot take it (a
+ * finished row cannot be moved; a note or an event cannot be ticked): the row
+ * does not follow the finger that way and shows no promise it will not keep.
+ *
  * `swipeOutcome` is the decision on its own, so it can be tested without
  * synthesising pointer streams.
  */
@@ -28,15 +32,16 @@ export const SWIPE = {
  * @param {number} width  row width in px
  * @returns {'done'|'tomorrow'|'pick'|null}
  */
-export function swipeOutcome(dx, width = 360) {
-  if (dx >= SWIPE.ACTION_PX) return 'done';
+export function swipeOutcome(dx, width = 360, { right = true, left = true } = {}) {
+  if (dx >= SWIPE.ACTION_PX) return right ? 'done' : null;
+  if (!left) return null;
   const long = Math.max(SWIPE.LONG_MIN_PX, width * SWIPE.LONG_FRACTION);
   if (dx <= -long) return 'pick';
   if (dx <= -SWIPE.ACTION_PX) return 'tomorrow';
   return null;
 }
 
-export default function useSwipe({ onDone, onTomorrow, onPick, enabled = true } = {}) {
+export default function useSwipe({ onDone, onTomorrow, onPick, enabled = true, right = true, left = true } = {}) {
   const start = useRef(null);
   const axis = useRef(null);
   // A swipe ends in a pointerup, which the browser follows with a click on
@@ -75,13 +80,14 @@ export default function useSwipe({ onDone, onTomorrow, onPick, enabled = true } 
       }
     }
     if (axis.current !== 'x') return;
-    setDx(mx);
-  }, []);
+    // A direction this row cannot take does not move it.
+    setDx((mx > 0 && !right) || (mx < 0 && !left) ? 0 : mx);
+  }, [right, left]);
 
   const onPointerUp = useCallback((e) => {
     const s = start.current;
     if (!s || axis.current !== 'x') { reset(); return; }
-    const outcome = swipeOutcome(e.clientX - s.x, s.width);
+    const outcome = swipeOutcome(e.clientX - s.x, s.width, { right, left });
     swallowClick.current = true;
     // …if one comes at all. Never let it eat the NEXT, deliberate tap.
     setTimeout(() => { swallowClick.current = false; }, 350);
@@ -89,13 +95,13 @@ export default function useSwipe({ onDone, onTomorrow, onPick, enabled = true } 
     if (outcome === 'done') onDone?.();
     else if (outcome === 'tomorrow') onTomorrow?.();
     else if (outcome === 'pick') onPick?.();
-  }, [onDone, onTomorrow, onPick, reset]);
+  }, [onDone, onTomorrow, onPick, reset, right, left]);
 
   const width = start.current?.width || 360;
   return {
     dx,
     dragging,
-    pending: dragging ? swipeOutcome(dx, width) : null,
+    pending: dragging ? swipeOutcome(dx, width, { right, left }) : null,
     handlers: {
       onPointerDown,
       onPointerMove,

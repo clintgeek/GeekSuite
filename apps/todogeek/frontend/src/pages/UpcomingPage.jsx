@@ -11,7 +11,7 @@ import { differenceInCalendarDays, format } from 'date-fns';
 import { usePen } from '../context/PenContext';
 import { penOf } from '../theme/pen';
 import TagChips from '../components/pen/TagChips';
-import PenPage, { PenLoading } from '../components/pen/PenPage';
+import PenPage, { PenLoadError, PenLoading } from '../components/pen/PenPage';
 import usePenRows from '../components/pen/usePenRows';
 import { EmptyLine, PageTitle, SectionCaption } from '../components/pen/PenHeadings';
 import { UPCOMING_DAYS, upcomingGroups } from '../utils/penViews';
@@ -20,12 +20,13 @@ function DayNumeral({ date, now, showMonth, p }) {
   const diff = differenceInCalendarDays(date, now);
   const word = diff === 1 ? 'Tomorrow' : format(date, 'EEE');
   return (
-    <Box sx={{ width: { xs: 52, sm: 88 }, flexShrink: 0, pt: 2, pb: 3 }}>
+    // 72px on a phone: "Tomorrow" at 14px is ~66px and used to clip to "Tomorro".
+    <Box sx={{ width: { xs: 72, sm: 88 }, flexShrink: 0, pt: 2, pb: 3 }}>
       <Typography component="h2" aria-label={`${diff === 1 ? 'Tomorrow, ' : ''}${format(date, 'EEEE d MMMM')}`} sx={{ m: 0, lineHeight: 1 }}>
         <Box component="span" sx={{ display: 'block', fontSize: { xs: '2.25rem', sm: '2.75rem' }, fontWeight: 700, letterSpacing: '-0.05em', color: p.ink }}>
           {format(date, 'd')}
         </Box>
-        <Box component="span" sx={{ display: 'block', mt: 1, fontSize: '0.875rem', fontWeight: 600, color: diff === 1 ? p.ink : p.grey }}>
+        <Box component="span" sx={{ display: 'block', mt: 1, fontSize: '0.875rem', fontWeight: 600, whiteSpace: 'nowrap', color: diff === 1 ? p.ink : p.grey }}>
           {word}{showMonth ? ` · ${format(date, 'MMM')}` : ''}
         </Box>
       </Typography>
@@ -50,7 +51,7 @@ const UpcomingPage = () => {
       <PageTitle aside={pen.loaded ? `${total} coming up` : null}>Upcoming</PageTitle>
       <Box sx={{ pb: 4 }}><TagChips /></Box>
 
-      {!pen.loaded ? <PenLoading /> : (
+      {pen.loadError && !(pen.corpus?.length) ? <PenLoadError onRetry={pen.refresh} /> : !pen.loaded ? <PenLoading /> : (
         <>
           {groups.days.length === 0 && groups.later.length === 0 && (
             <EmptyLine>Nothing ahead. Add a date to a task with “tomorrow” or “/friday”.</EmptyLine>

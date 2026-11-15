@@ -8,7 +8,7 @@
  * Which pin is ACTIVE is this session's, shared by every view.
  */
 import { useState } from 'react';
-import { Box, ButtonBase, Checkbox, FormControlLabel } from '@mui/material';
+import { Box, Button, ButtonBase, Checkbox, FormControlLabel } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { GeekSheet } from '@geeksuite/ui';
 import { penOf } from '../../theme/pen';
@@ -28,6 +28,8 @@ function Chip({ active, onClick, children, ...rest }) {
       sx={{
         minHeight: 44,
         px: 3.5,
+        flexShrink: 0,
+        whiteSpace: 'nowrap',
         borderRadius: '22px',
         fontSize: '0.9375rem',
         fontWeight: active ? 650 : 500,
@@ -52,7 +54,23 @@ export default function TagChips() {
   const isOn = (tag) => tagFilter && normalizeTag(tagFilter) === normalizeTag(tag);
 
   return (
-    <Box component="nav" aria-label="Filter by tag" sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center' }}>
+    // One scrolling row on a phone (it wrapped to three lines and ate the
+    // screen, 3.15); wrapped from `md`.
+    <Box
+      component="nav"
+      aria-label="Filter by tag"
+      sx={{
+        display: 'flex',
+        flexWrap: { xs: 'nowrap', md: 'wrap' },
+        overflowX: { xs: 'auto', md: 'visible' },
+        mx: { xs: -4, sm: -6, md: 0 },
+        px: { xs: 4, sm: 6, md: 0 },
+        gap: 2,
+        alignItems: 'center',
+        scrollbarWidth: 'none',
+        '&::-webkit-scrollbar': { display: 'none' },
+      }}
+    >
       {pinned.length > 0 && (
         <Chip active={!tagFilter} onClick={() => setTagFilter(null)}>All</Chip>
       )}
@@ -66,12 +84,16 @@ export default function TagChips() {
       )}
       <ButtonBase
         onClick={() => setPicking(true)}
-        sx={{ minHeight: 44, px: 2, fontSize: '0.9375rem', color: 'text.secondary', textDecoration: 'underline', textUnderlineOffset: '3px', borderRadius: '4px' }}
+        sx={{ minHeight: 44, px: 2, flexShrink: 0, whiteSpace: 'nowrap', fontSize: '0.9375rem', color: 'text.secondary', textDecoration: 'underline', textUnderlineOffset: '3px', borderRadius: '4px' }}
       >
         {pinned.length ? 'Pins…' : 'Pin tags…'}
       </ButtonBase>
 
-      <GeekSheet open={picking} onClose={() => setPicking(false)} title="Pinned tags" description="Pinned tags sit above every view. One tap filters." maxWidth="xs">
+      <GeekSheet open={picking} onClose={() => setPicking(false)} title="Pinned tags"
+        description="Pinned tags sit above every view. One tap filters."
+        maxWidth="xs"
+        actions={<Button variant="contained" onClick={() => setPicking(false)} sx={{ minHeight: 44 }}>Done</Button>}
+      >
         <Box sx={{ display: 'grid', pb: 2 }}>
           {all.length === 0 && <Box sx={{ color: 'text.secondary', py: 2 }}>No tags yet. Add one with #tag when you write a task.</Box>}
           {all.map((tag) => (

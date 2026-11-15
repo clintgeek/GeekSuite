@@ -53,6 +53,8 @@ const REQUIRED_TASK_FIELDS = [
   'isSeriesMaster',
   // A row only knows to hide its words if the list it came from said so.
   'private',
+  // Contract C2: whether dueDate carries a time (6 pm Central is UTC midnight).
+  'hasDueTime',
 ];
 
 describe('task query selection sets', () => {

@@ -2,7 +2,7 @@
  * HelpSheet — the whole grammar and every key on one card. Opened by the `?`
  * beside the add box and by the `?` key.
  */
-import { Box, Button, Typography } from '@mui/material';
+import { Box, Button, Typography, useMediaQuery } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { GeekSheet } from '@geeksuite/ui';
 import { penOf } from '../../theme/pen';
@@ -17,7 +17,7 @@ const GRAMMAR = [
   ['$^draft text', 'a note saved to NoteGeek (last)'],
   ['@  -  ?  !', 'first character: event, note, question, important'],
   ['(daily)  (weekly)  (monthly)', 'repeats'],
-  ['(private)', 'private: hidden on a desktop until clicked'],
+  ['(private)', 'private: hidden until you tap it'],
 ];
 
 const KEYS = [
@@ -32,11 +32,22 @@ const KEYS = [
   ['g t  g u  g d  g s', 'Today, Upcoming, Done, Search'],
 ];
 
+// What the marks on a row mean (priority was a bare bar with no legend).
+const MARKS = [
+  ['red bar, full height', 'high priority'],
+  ['red bar, half height', 'medium priority'],
+  ['short grey bar', 'low priority'],
+  ['–  note    @  event', 'written down, not ticked; not counted as to do'],
+  ['?  !  >  <', 'question, important, migrated, scheduled'],
+  ['red words, “2 days late”', 'carried over from an earlier day'],
+  ['“9am · passed”', 'timed earlier today and still open'],
+];
+
 const SWIPES = [
   ['swipe right', 'done'],
   ['swipe left', 'tomorrow'],
   ['long swipe left', 'pick a date'],
-  ['hold ⋮⋮ and drag', 'reorder (Today)'],
+  ['Reorder, then hold ⋮⋮ and drag', 'put Today in your own order'],
 ];
 
 function Table({ title, rows }) {
@@ -58,11 +69,16 @@ function Table({ title, rows }) {
 }
 
 export default function HelpSheet({ open, onClose }) {
+  // A phone is not shown keyboard keys; a desktop is not shown swipes. A
+  // tablet with a keyboard or a trackpad is shown both.
+  const hasKeys = useMediaQuery('(any-hover: hover) and (any-pointer: fine)');
+  const hasTouch = useMediaQuery('(any-pointer: coarse)');
   return (
-    <GeekSheet open={open} onClose={onClose} title="Writing a task" description="Type it the way you would say it. Enter adds it." maxWidth="sm">
+    <GeekSheet open={open} onClose={onClose} title="Writing a task" description="Type it the way you would say it. Enter adds it." maxWidth="sm" snap="full">
       <Table title="In the add box" rows={GRAMMAR} />
-      <Table title="Keys" rows={KEYS} />
-      <Table title="On a phone" rows={SWIPES} />
+      <Table title="On a row" rows={MARKS} />
+      {hasKeys && <Table title="Keys" rows={KEYS} />}
+      {(hasTouch || !hasKeys) && <Table title="Touch" rows={SWIPES} />}
       <Box sx={{ pb: 2 }}>
         <Button variant="contained" onClick={onClose} sx={{ minHeight: 44, px: 5 }}>Got it</Button>
       </Box>

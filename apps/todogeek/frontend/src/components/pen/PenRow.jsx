@@ -4,26 +4,32 @@
  *
  *   [margin]  [□]  words #tag #tag                       9am
  *
- * - The margin carries the proofreader's marks: a red bar for priority (full
- *   height High, half Medium, grey half Low) and, for non-task kinds only, the
+ * - The margin carries the proofreader's marks: a bar for priority (full
+ *   height High, half Medium, a short grey bar Low — the legend is in the Help
+ *   sheet) and, for the kinds that are still to-dos (`?` `!` `>` `<`), the
  *   signifier glyph in grey. A plain task shows nothing there.
- * - The square is the checkbox. Ticking it fills it red and draws the strike
- *   through the words (see penMarks.js); the words then grey.
+ * - Notes (`-`) and events (`@`) are written down, not ticked (D4): the
+ *   checkbox's place holds their glyph instead, and nothing can mark them done.
+ * - The square is the checkbox. Ticking it fills it in neutral ink (D7: done is
+ *   not an alarm) and the red strike is drawn through the words (penMarks.js)
+ *   while the row settles; the words then grey.
  * - Right-hand side: the time, "tomorrow", a weekday — grey — or, when it is
  *   late, red words ("2 days late").
  * - Tapping the words opens the inline editor below the row.
- * - Desktop (a real hover): done / tomorrow / pick-a-date buttons appear on
- *   hover or keyboard focus. Phone: swipe right for done, left for tomorrow,
- *   a long swipe left to pick a date (hooks/useSwipe.js).
- * - PRIVATE tasks (2026-10-01, context/PrivacyContext.jsx). On a desktop the
- *   words, tags and note are NOT RENDERED until revealed: the row shows an
+ * - Any device that has a hover-capable pointer (`any-hover`, so a tablet with
+ *   a trackpad counts): done / tomorrow / pick-a-date buttons appear on hover
+ *   or keyboard focus, and take the time's place while they show. Touch:
+ *   swipe right for done, left for tomorrow, a long swipe left to pick a date
+ *   (hooks/useSwipe.js). A finished row has no left swipe.
+ * - PRIVATE tasks (2026-10-01, context/PrivacyContext.jsx; masked on EVERY
+ *   device since D5). The words, tags and note are NOT RENDERED until revealed: the row shows an
  *   eye-slash and an ink redaction bar, one button whose accessible name is
  *   "Private task, hidden. Activate to show." — nothing to select, copy, read
  *   aloud or catch in a screenshot. Click / Enter / Space reveals that task in
  *   place; the eye-slash before the words then hides it again. An open editor
  *   is revealed while open, and blurred while the window is away. The square,
  *   the priority mark, the kind glyph and the date stay, so the list still
- *   reads. On a phone the words show, with a small eye-slash mark.
+ *   reads.
  */
 import { memo, useEffect, useId, useRef } from 'react';
 import { Reorder, useDragControls } from 'framer-motion';
@@ -34,6 +40,7 @@ import { useReducedMotion } from '@geeksuite/ui';
 import { penOf } from '../../theme/pen';
 import { STRIKE_MS, TICK_PATH, redactionWidth, srOnly, strikeImage } from './penMarks';
 import useSwipe from '../../hooks/useSwipe';
+import { isCheckable } from './penKinds';
 import { isDone, whenLabel } from '../../utils/penViews';
 import { HIDDEN_LABEL, PRIVATE_LABEL, usePrivacy } from '../../context/PrivacyContext';
 
@@ -42,8 +49,22 @@ const KIND = {
   '-': 'Note',
   '?': 'Question',
   '!': 'Important',
+  '>': 'Migrated',
+  '<': 'Scheduled',
 };
 const PRIORITY = { 1: 'High priority', 2: 'Medium priority', 3: 'Low priority' };
+
+/** "9am" / "2:30pm" at the end of a row's date text: it names a time of day. */
+const ENDS_IN_CLOCK = /\d(am|pm)$/;
+
+/** An open task timed earlier today: its time has passed. */
+export function timePassed(task, when, now) {
+  if (!task?.dueDate || isDone(task) || when?.late || !ENDS_IN_CLOCK.test(when?.text || '')) return false;
+  const due = new Date(task.dueDate);
+  const at = now instanceof Date ? now : new Date();
+  return !Number.isNaN(due.getTime()) && due.getTime() < at.getTime() && localDay(due) === localDay(at);
+}
+const localDay = (d) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 
 
 export function PenCheckbox({ checked, label, onClick, motion = true }) {
@@ -66,8 +87,9 @@ export function PenCheckbox({ checked, label, onClick, motion = true }) {
         aria-hidden
         sx={{
           width: 20, height: 20, borderRadius: '2px', display: 'block',
-          border: `1.5px solid ${checked ? p.red : p.box}`,
-          backgroundColor: checked ? p.red : 'transparent',
+          // D7: done is neutral ink, never the red of "high" and "late".
+          border: `1.5px solid ${checked ? p.grey : p.box}`,
+          backgroundColor: checked ? p.grey : 'transparent',
           transition: motion ? 'background-color 120ms ease, border-color 120ms ease' : 'none',
         }}
       >
@@ -75,7 +97,7 @@ export function PenCheckbox({ checked, label, onClick, motion = true }) {
           <path
             d={TICK_PATH}
             fill="none"
-            stroke={p.onRed}
+            stroke={p.paper}
             strokeWidth="2.25"
             strokeLinecap="round"
             strokeLinejoin="round"
@@ -95,8 +117,8 @@ function PriorityMark({ priority, p }) {
       aria-hidden
       data-priority-mark={priority}
       sx={{
-        position: 'absolute', left: 2, width: 3, borderRadius: '2px',
-        top: high ? 10 : 16, bottom: high ? 10 : 'auto', height: high ? 'auto' : 14,
+        position: 'absolute', left: 2, width: 4, borderRadius: '2px',
+        top: high ? 10 : 16, bottom: high ? 10 : 'auto', height: high ? 'auto' : priority === 2 ? 18 : 10,
         backgroundColor: priority === 3 ? p.box : p.red,
       }}
     />
@@ -180,12 +202,12 @@ function DragHandle({ label, controls, onMove, p }) {
       onClick={(e) => e.stopPropagation()}
       onContextMenu={(e) => e.preventDefault()}
       sx={{
-        width: 44, height: 44, flexShrink: 0, borderRadius: '4px',
+        width: 44, height: 44, flexShrink: 0, borderRadius: '4px', order: 3,
         display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
         color: p.box, cursor: 'grab', touchAction: 'pan-y',
         userSelect: 'none', WebkitUserSelect: 'none', WebkitTouchCallout: 'none',
         '&:active': { cursor: 'grabbing' },
-        '@media (hover: hover)': { '&:hover': { color: p.ink } },
+        '@media (any-hover: hover)': { '&:hover': { color: p.ink } },
         '&.Mui-focusVisible': { outline: `2px solid ${p.ink}`, outlineOffset: -4, color: p.ink },
       }}
     >
@@ -222,7 +244,9 @@ function PenRow({
 }) {
   const theme = useTheme();
   const p = penOf(theme);
-  const canHover = useMediaQuery('(hover: hover) and (pointer: fine)');
+  // ANY hover-capable pointer, not the primary one: a tablet with a trackpad
+  // has a finger as its primary pointer and still needs the row's buttons.
+  const canHover = useMediaQuery('(any-hover: hover) and (any-pointer: fine)');
   const reducedMotion = useReducedMotion();
   const motion = !reducedMotion;
   const editorId = useId();
@@ -231,6 +255,8 @@ function PenRow({
   const cancelled = task.status === 'cancelled';
   const when = context === 'done' ? { text: cancelled ? 'cancelled' : '' } : whenLabel(task, now, context);
   const kind = KIND[task.signifier];
+  const checkable = isCheckable(task);
+  const passed = timePassed(task, when, now);
   const privacy = usePrivacy();
   const isPrivate = task.private === true;
   const revealed = isPrivate && privacy.isRevealed(id);
@@ -242,8 +268,14 @@ function PenRow({
     display: 'block', textAlign: 'left', borderRadius: '4px',
     '&.Mui-focusVisible': { outline: `2px solid ${p.ink}`, outlineOffset: -2 },
   };
+  // Swipe works on any touch, whatever else the device has (a mouse drag is
+  // ignored by the hook). A note or event cannot be ticked; a finished row
+  // cannot be moved, so it has no left swipe (it used to promise "Tomorrow"
+  // and do nothing).
   const swipe = useSwipe({
-    enabled: !canHover && !expanded,
+    enabled: !expanded,
+    right: checkable,
+    left: !isDone(task),
     onDone: () => onDone?.(task),
     onTomorrow: () => onTomorrow?.(task),
     onPick: () => onPickDate?.(task),
@@ -258,9 +290,15 @@ function PenRow({
     dragControls,
     layout: 'position',
     transition: { duration: sortMotion && motion ? 0.15 : 0 },
-    // Lifted while held: a hairline shadow, no scale — the strike stays the
-    // app's one flourish.
-    whileDrag: { boxShadow: '0 4px 14px rgba(0,0,0,0.18)' },
+    // Lifted while held, no scale — the strike stays the app's one flourish.
+    // The lift is an ink ring on a raised ground, so it reads in the dark too
+    // (a black shadow does not), and the ring is the drop line: the row is
+    // always in the slot it will land in.
+    whileDrag: {
+      boxShadow: `0 0 0 2px ${p.ink}, 0 8px 22px rgba(0,0,0,${theme.palette.mode === 'dark' ? 0.55 : 0.2})`,
+      backgroundColor: p.surface,
+      zIndex: 2,
+    },
     onDragEnd: () => onDragEnd?.(task),
   } : {};
 
@@ -269,6 +307,11 @@ function PenRow({
   const revealLabel = swipe.dx > 0
     ? (isDone(task) ? 'Not done' : 'Done')
     : pending === 'pick' ? 'Pick a date' : 'Tomorrow';
+  const RevealIcon = swipe.dx > 0 ? Check : pending === 'pick' ? CalendarDays : ArrowRight;
+  // A tick under the thumb when the swipe will take (Android; iOS has no vibrate).
+  useEffect(() => {
+    if (pending && typeof navigator !== 'undefined') navigator.vibrate?.(10);
+  }, [pending]);
 
   const rowSx = { listStyle: 'none', position: 'relative', borderBottom: `1px solid ${p.rule}` };
   const body = (
@@ -280,13 +323,16 @@ function PenRow({
           sx={{
             position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
             justifyContent: reveal === 'left' ? 'flex-start' : 'flex-end',
-            px: 5, fontWeight: 700, fontSize: '0.9375rem',
-            backgroundColor: reveal === 'left' ? p.red : p.ink,
-            color: reveal === 'left' ? p.onRed : p.paper,
+            gap: 2, px: 5, fontWeight: 700, fontSize: '0.9375rem',
+            // Done is neutral ink (D7); a move is the red pen.
+            backgroundColor: reveal === 'left' ? p.grey : p.ink,
+            color: p.paper,
             opacity: pending ? 1 : 0.55,
           }}
         >
-          {revealLabel}
+          {reveal === 'right' && revealLabel}
+          <RevealIcon size={20} strokeWidth={2} />
+          {reveal === 'left' && revealLabel}
         </Box>
       )}
 
@@ -295,6 +341,7 @@ function PenRow({
         sx={{
           position: 'relative',
           display: 'flex',
+          flexWrap: { xs: 'wrap', sm: 'nowrap' },
           alignItems: 'flex-start',
           pl: { xs: 4, sm: 5 },
           pr: sortable ? 0 : 1,
@@ -304,16 +351,19 @@ function PenRow({
           transform: swipe.dx ? `translateX(${swipe.dx}px)` : 'none',
           transition: swipe.dragging || !motion ? 'none' : 'transform 160ms ease',
           touchAction: 'pan-y',
-          '@media (hover: hover)': {
+          '@media (any-hover: hover)': {
             '&:hover': { backgroundColor: p.fill },
             '&:hover [data-row-actions], &:focus-within [data-row-actions]': { opacity: 1 },
+            // The buttons take the time's place while they show.
+            '&:hover [data-row-when], &:focus-within [data-row-when]': { opacity: 0 },
           },
         }}
       >
         <PriorityMark priority={task.priority} p={p} />
-        {kind && (
+        {kind && checkable && (
           <Box
             aria-hidden
+            data-kind-glyph
             sx={{
               position: 'absolute', left: { xs: 6, sm: 8 }, top: 13, width: 11, textAlign: 'center',
               fontSize: '0.875rem', fontWeight: 600, lineHeight: '24px', color: p.grey,
@@ -323,12 +373,26 @@ function PenRow({
           </Box>
         )}
 
-        <PenCheckbox
-          checked={done && !cancelled}
-          motion={motion}
-          label={`${done ? 'Not done' : 'Done'}: ${name}`}
-          onClick={() => onDone?.(task)}
-        />
+        {checkable ? (
+          <PenCheckbox
+            checked={done && !cancelled}
+            motion={motion}
+            label={`${done ? 'Not done' : 'Done'}: ${name}`}
+            onClick={() => onDone?.(task)}
+          />
+        ) : (
+          // A note or an event: its glyph where the square would be (D4).
+          <Box
+            aria-hidden
+            data-record-glyph={task.signifier}
+            sx={{
+              width: 44, height: 44, flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+              fontSize: '1.125rem', fontWeight: 600, color: p.grey,
+            }}
+          >
+            {task.signifier === '@' ? '@' : '–'}
+          </Box>
+        )}
 
         {hidden && (
           // The words are not in the DOM: only the mark and a bar.
@@ -372,12 +436,6 @@ function PenRow({
           aria-controls={expanded ? editorId : undefined}
           sx={wordsButtonSx}
         >
-          {isPrivate && !privacy.hides && (
-            // Phone: the words show; the mark says they are private.
-            <Box component="span" aria-hidden data-private-mark sx={{ display: 'inline-flex', verticalAlign: '-2px', mr: 1.5, color: p.grey }}>
-              <EyeOff size={15} strokeWidth={1.75} />
-            </Box>
-          )}
           <Box
             component="span"
             data-words
@@ -419,19 +477,6 @@ function PenRow({
         </ButtonBase>
         )}
 
-        {when.text && (
-          <Box
-            sx={{
-              flexShrink: 0, pt: 3.25, pr: 1, fontSize: '0.875rem', lineHeight: '20px',
-              whiteSpace: 'nowrap',
-              color: when.late ? p.red : p.grey,
-              fontWeight: when.late ? 600 : 400,
-            }}
-          >
-            {when.text}
-          </Box>
-        )}
-
         {sortable && (canDrag ? (
           <DragHandle
             label={`Move ${name}`}
@@ -441,8 +486,34 @@ function PenRow({
           />
         ) : (
           // Settling or open: the grip's room stays, so nothing shifts.
-          <Box aria-hidden sx={{ width: 44, height: 44, flexShrink: 0 }} />
+          <Box aria-hidden sx={{ width: 44, height: 44, flexShrink: 0, order: 3 }} />
         ))}
+
+        {/* The date. On a phone it sits UNDER the words, so they keep the row's
+            width (it used to take 80–120px from them); from `sm` it is the
+            right-hand column. It is last in the DOM and placed by `order`. */}
+        {when.text && (
+          <Box
+            data-row-when
+            data-time-passed={passed ? 'true' : undefined}
+            sx={{
+              flexShrink: 0,
+              order: { xs: 4, sm: 2 },
+              flexBasis: { xs: '100%', sm: 'auto' },
+              pl: { xs: '48px', sm: 0 },
+              pt: { xs: 0, sm: 3.25 },
+              pb: { xs: 2, sm: 0 },
+              mt: { xs: '-6px', sm: 0 },
+              pr: 1, fontSize: '0.875rem', lineHeight: '20px',
+              whiteSpace: 'nowrap',
+              color: when.late || passed ? p.red : p.grey,
+              fontWeight: when.late || passed ? 600 : 400,
+              transition: motion ? 'opacity 100ms ease' : 'none',
+            }}
+          >
+            {passed ? `${when.text} · passed` : when.text}
+          </Box>
+        )}
 
         {canHover && (
           <Box

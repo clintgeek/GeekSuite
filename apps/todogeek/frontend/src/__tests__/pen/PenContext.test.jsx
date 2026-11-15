@@ -82,9 +82,11 @@ describe('Undo', () => {
   it('moving offers Undo, and Undo puts the old due date back', async () => {
     const { ref } = mount();
     await act(async () => { await ref.current.moveTo(task(), '2026-10-02', { label: 'Moved.' }); });
-    expect(fake.updateTask).toHaveBeenCalledWith('t1', { dueDate: '2026-10-02' });
+    // Optimistic since 2026-11-15 (3.18).
+    expect(fake.updateTask).toHaveBeenCalledWith('t1', { dueDate: '2026-10-02' }, 'THIS_INSTANCE', { optimistic: true });
     act(() => lastUndo()());
-    expect(fake.updateTask).toHaveBeenLastCalledWith('t1', { dueDate: '2026-09-29T00:00:00.000Z' });
+    // The old value goes back with its own flag: a legacy ISO midnight is date-only.
+    expect(fake.updateTask).toHaveBeenLastCalledWith('t1', { dueDate: '2026-09-29T00:00:00.000Z', hasDueTime: false }, 'THIS_INSTANCE', { optimistic: true });
   });
 
   it('"Move all to today" moves each, and one Undo restores each', async () => {
@@ -97,8 +99,8 @@ describe('Undo', () => {
     expect(fake.updateTask).toHaveBeenCalledTimes(2);
     expect(toasts.at(-1).message).toBe('Moved 2 to today.');
     act(() => lastUndo()());
-    expect(fake.updateTask).toHaveBeenCalledWith('a', { dueDate: '2026-09-20T00:00:00.000Z' });
-    expect(fake.updateTask).toHaveBeenCalledWith('b', { dueDate: '2026-09-25T00:00:00.000Z' });
+    expect(fake.updateTask).toHaveBeenCalledWith('a', { dueDate: '2026-09-20T00:00:00.000Z', hasDueTime: false }, 'THIS_INSTANCE', { optimistic: true });
+    expect(fake.updateTask).toHaveBeenCalledWith('b', { dueDate: '2026-09-25T00:00:00.000Z', hasDueTime: false }, 'THIS_INSTANCE', { optimistic: true });
   });
 });
 

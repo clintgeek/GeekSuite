@@ -8,6 +8,7 @@ import { GeekBottomNav } from '@geeksuite/ui';
 import { useTheme } from '@mui/material/styles';
 import { navItems, activeNavId } from './navConfig';
 import { penOf } from '../../theme/pen';
+import { scrollMainToTop } from './scrollTop';
 
 const MobileTabBar = () => {
   const location = useLocation();
@@ -26,6 +27,8 @@ const MobileTabBar = () => {
     <GeekBottomNav
       items={items}
       activeId={currentId}
+      // Tapping the tab you are on goes to its top.
+      onNavigate={(item) => { if (item.id === currentId) scrollMainToTop(); }}
       sx={{ backgroundColor: p.paper, borderTop: `1px solid ${p.rule}` }}
     />
   );

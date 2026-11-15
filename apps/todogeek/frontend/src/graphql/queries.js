@@ -183,6 +183,7 @@ export const GET_TASKS = gql`
       isBacklog
       blockedReason
       private
+      hasDueTime
       blockedAt
       taskType
       collectionId
@@ -216,6 +217,7 @@ export const GET_ALL_TASKS = gql`
       isBacklog
       blockedReason
       private
+      hasDueTime
       blockedAt
       taskType
       collectionId
@@ -249,6 +251,7 @@ export const GET_DAILY_TASKS = gql`
       isBacklog
       blockedReason
       private
+      hasDueTime
       blockedAt
       taskType
       collectionId
@@ -282,6 +285,7 @@ export const GET_WEEKLY_TASKS = gql`
       isBacklog
       blockedReason
       private
+      hasDueTime
       blockedAt
       taskType
       collectionId
@@ -315,6 +319,7 @@ export const GET_MONTHLY_TASKS = gql`
       isBacklog
       blockedReason
       private
+      hasDueTime
       blockedAt
       taskType
       collectionId
@@ -353,6 +358,7 @@ export const GET_BLOCKED_TASKS = gql`
       isBacklog
       blockedReason
       private
+      hasDueTime
       blockedAt
       taskType
       recurrenceRule
@@ -430,6 +436,7 @@ export const GET_COLLECTION = gql`
         isBacklog
         blockedReason
         private
+        hasDueTime
         blockedAt
         taskType
         recurrenceRule
@@ -464,6 +471,7 @@ export const GET_TASKS_BY_TAG = gql`
             isBacklog
             blockedReason
             private
+            hasDueTime
             blockedAt
             taskType
             collectionId

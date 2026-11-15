@@ -19,6 +19,24 @@
  *
  * Enter adds and keeps focus in the box, so the next task can follow.
  *
+ * ## Two lines, a preview (plan 3.17)
+ * The box is a one-line field that grows to two (the first real use is a
+ * sentence with a date, a tag and a priority on a 390px phone, which used to
+ * scroll sideways and crop what you were typing). It is a <textarea> so it can
+ * wrap; Enter still adds (Shift+Enter does nothing special: there are no line
+ * breaks in a task, a pasted one becomes a space). Under the box one grey line
+ * says what was understood — "tomorrow at 2pm · #work · high" — so the
+ * underline is not the only place to look.
+ *
+ * ## A tag filter (plan 1.15)
+ * With a pinned tag on, the add box shows "Will be tagged #work ×": the new task
+ * gets the tag (PenContext `pendingTag`) so it does not vanish from the filtered
+ * list; × takes it off for the next add.
+ *
+ * ## While it saves (plan 1.14)
+ * The box is cleared after the round trip only if the line is still the one
+ * that was sent: whatever you typed while the request was out stays.
+ *
  * PRIVATE (2026-10-01): the eye-slash "Private" tick box beside the line and
  * the typed `(private)` token are the same thing — the line is the only state.
  * Ticking appends the token; unticking takes every copy out; typing or
@@ -34,12 +52,15 @@ import { penOf } from '../../theme/pen';
 import { srOnly } from './penMarks';
 import { parseTaskInputDetailed } from '../../utils/parseTaskInput';
 import { describeParse, segmentLine, setPrivateToken, spokenDate, toCreateInput } from '../../utils/quickAdd';
+import { previewLine } from './addPreview';
 import { localDateString } from '@geeksuite/utils';
 
 
 const FONT = { fontSize: '1.125rem', lineHeight: '28px', fontWeight: 450, letterSpacing: 'normal' };
+// The field is 44px tall with one line (8px above and below a 28px line).
+const PAD_Y = 8;
 
-export default function AddBox({ onAdd, onHelp, autoFocus = false, now }) {
+export default function AddBox({ onAdd, onHelp, autoFocus = false, now, pendingTag = null, onDismissTag }) {
   const theme = useTheme();
   const p = penOf(theme);
   const inputRef = useRef(null);
@@ -72,7 +93,7 @@ export default function AddBox({ onAdd, onHelp, autoFocus = false, now }) {
 
   const syncScroll = useCallback(() => {
     const el = inputRef.current;
-    if (el && overlayRef.current) overlayRef.current.style.transform = `translateX(${-el.scrollLeft}px)`;
+    if (el && overlayRef.current) overlayRef.current.style.transform = `translateY(${-el.scrollTop}px)`;
   }, []);
   useEffect(() => { syncScroll(); }, [value, syncScroll]);
 
@@ -86,17 +107,21 @@ export default function AddBox({ onAdd, onHelp, autoFocus = false, now }) {
       return;
     }
     const due = typeof input.dueDate === 'string' ? input.dueDate : localDateString(new Date(input.dueDate));
-    const where = due !== localDateString(new Date()) ? spokenDate(detail, new Date()) : null;
+    // Said even for today (3.22): with the keyboard up the new row is off
+    // screen, and "nothing happened" is the worst thing a box can say.
+    const where = due !== localDateString(new Date()) ? spokenDate(detail, new Date()) : 'today';
     setBusy(true);
+    const sent = value;
     const created = await onAdd?.(input, { noteGeekNote, where });
     setBusy(false);
     if (created === null || created === false) {
       inputRef.current?.focus();
       return;
     }
-    setValue('');
+    // Only the line that was sent is cleared: words typed during the round trip stay.
+    setValue((cur) => (cur === sent ? '' : cur));
     // A private task's words are not repeated, even to the live region.
-    setAnnounce(`Added${input.private ? ' a private task' : `: ${input.content}`}${where ? `, for ${where}` : ''}.`);
+    setAnnounce(`Added${input.private ? ' a private task' : `: ${input.content}`}${where && where !== 'today' ? `, for ${where}` : ''}.`);
     inputRef.current?.focus();
   };
 
@@ -114,7 +139,10 @@ export default function AddBox({ onAdd, onHelp, autoFocus = false, now }) {
 
   const kindGlyph = parsed && parsed.signifier && parsed.signifier !== '*' ? parsed.signifier : null;
 
+  const preview = previewLine(parsed, clock);
+
   return (
+    <Box>
     <Box
       component="form"
       onSubmit={submit}
@@ -122,10 +150,11 @@ export default function AddBox({ onAdd, onHelp, autoFocus = false, now }) {
       sx={{
         position: 'relative',
         display: 'flex',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         gap: 1,
         pl: 5,
         pr: 1,
+        py: '4px',
         minHeight: 56,
         backgroundColor: p.surface,
         border: `1.5px solid ${p.ink}`,
@@ -138,9 +167,9 @@ export default function AddBox({ onAdd, onHelp, autoFocus = false, now }) {
           aria-hidden
           data-add-priority={parsed.priority}
           sx={{
-            position: 'absolute', left: 6, width: 3, borderRadius: '2px',
+            position: 'absolute', left: 6, width: 4, borderRadius: '2px',
             top: parsed.priority === 1 ? 12 : 21, bottom: parsed.priority === 1 ? 12 : 'auto',
-            height: parsed.priority === 1 ? 'auto' : 14,
+            height: parsed.priority === 1 ? 'auto' : parsed.priority === 2 ? 18 : 10,
             backgroundColor: parsed.priority === 3 ? p.box : p.red,
           }}
         />
@@ -153,8 +182,13 @@ export default function AddBox({ onAdd, onHelp, autoFocus = false, now }) {
 
       <Box sx={{ position: 'relative', flex: 1, minWidth: 0, overflow: 'hidden' }}>
         {value && (
-          <Box aria-hidden sx={{ position: 'absolute', inset: 0, pointerEvents: 'none', display: 'flex', alignItems: 'center', overflow: 'hidden' }}>
-            <Box ref={overlayRef} component="span" data-add-overlay sx={{ ...FONT, whiteSpace: 'pre', color: p.ink }}>
+          <Box aria-hidden sx={{ position: 'absolute', left: 0, right: 0, top: `${PAD_Y}px`, bottom: 0, pointerEvents: 'none', overflow: 'hidden' }}>
+            <Box
+              ref={overlayRef}
+              component="span"
+              data-add-overlay
+              sx={{ ...FONT, display: 'block', whiteSpace: 'pre-wrap', overflowWrap: 'break-word', color: p.ink }}
+            >
               {segments.map((seg, i) => (
                 <Box key={i} component="span" data-kind={seg.kind || undefined} sx={underline(seg.kind)}>
                   {seg.text}
@@ -166,18 +200,29 @@ export default function AddBox({ onAdd, onHelp, autoFocus = false, now }) {
         <InputBase
           inputRef={inputRef}
           value={value}
-          onChange={(e) => setValue(e.target.value)}
+          multiline
+          minRows={1}
+          maxRows={2}
+          onChange={(e) => setValue(e.target.value.replace(/\s*\n+\s*/g, ' '))}
           onScroll={syncScroll}
-          // Escape leaves the box, so the list keys (j k x t d e) work.
-          onKeyDown={(e) => { if (e.key === 'Escape' && !value) inputRef.current?.blur(); }}
+          onKeyDown={(e) => {
+            // Enter adds (a task has no line breaks); Escape leaves the box,
+            // so the list keys (j k x t d e) work.
+            if (e.key === 'Enter' && !e.nativeEvent?.isComposing) { submit(e); return; }
+            if (e.key === 'Escape' && !value) inputRef.current?.blur();
+          }}
           onSelect={syncScroll}
           placeholder="Add a task — call Dana tomorrow 2pm #work !high"
           fullWidth
           sx={{
             ...FONT,
             minHeight: 44,
-            '& input': {
+            alignItems: 'flex-start',
+            py: `${PAD_Y}px`,
+            '& textarea': {
               p: 0,
+              ...FONT,
+              overflowWrap: 'break-word',
               color: value ? 'transparent' : p.ink,
               caretColor: p.ink,
               '&::placeholder': { color: p.muted, opacity: 1 },
@@ -194,7 +239,7 @@ export default function AddBox({ onAdd, onHelp, autoFocus = false, now }) {
           }}
         />
       </Box>
-      <Tooltip title="Private: hidden on a desktop until clicked" enterDelay={400}>
+      <Tooltip title="Private: hidden until you tap it" enterDelay={400}>
         <ButtonBase
           role="checkbox"
           aria-checked={isPrivate}
@@ -202,8 +247,8 @@ export default function AddBox({ onAdd, onHelp, autoFocus = false, now }) {
           onClick={togglePrivate}
           data-add-private={isPrivate ? 'true' : undefined}
           sx={{
-            minWidth: 44, height: 44, px: { xs: 0, sm: 2 }, gap: 1.5, flexShrink: 0, borderRadius: '4px',
-            fontSize: '0.875rem', fontWeight: 600,
+            minWidth: 44, height: 44, px: 2, gap: 1, flexShrink: 0, borderRadius: '4px',
+            fontSize: '0.8125rem', fontWeight: 600,
             color: isPrivate ? p.paper : p.grey,
             backgroundColor: isPrivate ? p.ink : 'transparent',
             '&:hover': { color: isPrivate ? p.paper : p.ink },
@@ -211,7 +256,8 @@ export default function AddBox({ onAdd, onHelp, autoFocus = false, now }) {
           }}
         >
           <EyeOff size={18} strokeWidth={1.75} aria-hidden />
-          <Box component="span" aria-hidden sx={{ display: { xs: 'none', sm: 'inline' } }}>Private</Box>
+          {/* Labelled on every width: an unlabelled eye-slash on a phone said nothing. */}
+          <Box component="span" aria-hidden>Private</Box>
         </ButtonBase>
       </Tooltip>
       <IconButton aria-label="How to write a task" onClick={onHelp} sx={{ width: 44, height: 44, color: p.grey }}>
@@ -220,6 +266,27 @@ export default function AddBox({ onAdd, onHelp, autoFocus = false, now }) {
 
       <Box id={describeId} sx={srOnly}>{summary}</Box>
       <Box role="status" aria-live="polite" sx={srOnly}>{announce}</Box>
+    </Box>
+    {/* What it understood, in words (the underline is the other half). */}
+    {/* Under a tag filter the new task gets the filter's tag (1.15); say so, and let it be taken off. */}
+    {pendingTag && !(parsed?.tags || []).includes(pendingTag) && (
+      <Box sx={{ pt: 1, display: 'flex', alignItems: 'center', gap: 2, fontSize: '0.8125rem', color: p.grey }}>
+        <span>Will be tagged</span>
+        <ButtonBase
+          onClick={onDismissTag}
+          data-pending-tag={pendingTag}
+          aria-label={`Tagged #${pendingTag}. Remove`}
+          sx={{ minHeight: 44, px: 3, gap: 1, borderRadius: '22px', border: `1px solid ${p.ink}`, color: p.ink, fontWeight: 600, fontSize: '0.8125rem' }}
+        >
+          #{pendingTag}<span aria-hidden>×</span>
+        </ButtonBase>
+      </Box>
+    )}
+    {preview && (
+      <Box aria-hidden data-add-preview sx={{ pt: 1, pl: 1, fontSize: '0.8125rem', lineHeight: '16px', color: p.grey }}>
+        {preview}
+      </Box>
+    )}
     </Box>
   );
 }

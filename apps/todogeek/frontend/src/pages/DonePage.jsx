@@ -4,11 +4,11 @@
  * "Three views".
  */
 import { useMemo, useState } from 'react';
-import { Box, Button, InputAdornment, TextField } from '@mui/material';
-import { Search } from 'lucide-react';
+import { Box, Button } from '@mui/material';
 import { usePen } from '../context/PenContext';
 import TagChips from '../components/pen/TagChips';
-import PenPage, { PenLoading } from '../components/pen/PenPage';
+import SearchField from '../components/pen/SearchField';
+import PenPage, { PenLoadError, PenLoading } from '../components/pen/PenPage';
 import usePenRows from '../components/pen/usePenRows';
 import { EmptyLine, PageTitle, SectionCaption } from '../components/pen/PenHeadings';
 import { dayTitle, doneGroups, limitGroups } from '../utils/penViews';
@@ -29,19 +29,18 @@ const DonePage = () => {
     <PenPage>
       <PageTitle aside={pen.loaded ? `${total} crossed off` : null}>Done</PageTitle>
       <Box sx={{ pb: 4, display: 'grid', gap: 3 }}>
-        <TextField
+        <SearchField
           value={query}
           onChange={(e) => { setQuery(e.target.value); setLimit(PAGE); }}
+          onClear={() => { setQuery(''); setLimit(PAGE); }}
           placeholder="Search what’s done"
           size="small"
-          fullWidth
-          inputProps={{ 'aria-label': 'Search done tasks', type: 'search' }}
-          InputProps={{ startAdornment: <InputAdornment position="start"><Search size={18} aria-hidden /></InputAdornment> }}
+          label="Search done tasks"
         />
         <TagChips />
       </Box>
 
-      {!pen.loaded ? <PenLoading /> : (
+      {pen.loadError && !(pen.corpus?.length) ? <PenLoadError onRetry={pen.refresh} /> : !pen.loaded ? <PenLoading /> : (
         <>
           {total === 0 && <EmptyLine>{query ? `Nothing done matches “${query}”.` : 'Nothing crossed off yet.'}</EmptyLine>}
           {shown.map((g) => (

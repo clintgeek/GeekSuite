@@ -78,7 +78,16 @@ export const ALL = [
   task({ content: 'Review Dana’s PR on the billing export', dueDate: on(0), priority: 1, tags: ['work', 'fd'] }),
   task({ content: 'Write the retro notes', dueDate: at(0, 14), priority: 2, note: 'Three things that worked, one that did not.', tags: ['work'] }),
   task({ content: 'Pick up the dry cleaning', dueDate: on(0) }),
-  // Private: hidden on a desktop until clicked.
+  // A timed task whose time has passed today (12:05am: passed whenever this runs), marked "passed".
+  task({ content: 'Morning pages', dueDate: at(0, 0, 5), tags: ['home'] }),
+  // A note: no checkbox, not a to-do (D4).
+  task({ content: 'Gate code is 4471', signifier: '-', dueDate: on(0) }),
+  // A repeating task: today's occurrence of a daily series.
+  task({
+    id: 'virtual_vitamins_today', content: 'Take the vitamins', dueDate: at(0, 8), seriesId: 'series-vitamins',
+    recurrenceRule: 'DTSTART:20260101T140000Z\nRRULE:FREQ=DAILY', recurrencePattern: 'daily',
+  }),
+  // Private: masked on every device until tapped (D5).
   task({ content: 'Finish the write-up for David', dueDate: at(0, 16), priority: 2, private: true, note: 'Before the 1:1 on Thursday.', tags: ['manager'] }),
   // The one subtask: shown as an ordinary task.
   task({ content: 'Ask the county about the setback', dueDate: on(0), priority: 3, tags: ['house'], parentTask: { __typename: 'Task', id: 't3', content: 'File the permit amendment', status: 'blocked' } }),

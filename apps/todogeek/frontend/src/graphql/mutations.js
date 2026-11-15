@@ -87,8 +87,8 @@ export const DELETE_COLLECTION = gql`
 `;
 
 export const CREATE_TASK = gql`
-  mutation CreateTask($content: String!, $signifier: String, $status: String, $priority: Int, $tags: [String], $dueDate: Date, $createdAt: Date, $updatedAt: Date, $note: String, $recurrenceRule: String, $isSeriesMaster: Boolean, $collectionId: ID, $private: Boolean) {
-    createTask(content: $content, signifier: $signifier, status: $status, priority: $priority, tags: $tags, dueDate: $dueDate, createdAt: $createdAt, updatedAt: $updatedAt, note: $note, recurrenceRule: $recurrenceRule, isSeriesMaster: $isSeriesMaster, collectionId: $collectionId, private: $private) {
+  mutation CreateTask($content: String!, $signifier: String, $status: String, $priority: Int, $tags: [String], $dueDate: Date, $createdAt: Date, $updatedAt: Date, $note: String, $recurrenceRule: String, $collectionId: ID, $private: Boolean, $clientId: String, $hasDueTime: Boolean, $timeZone: String) {
+    createTask(content: $content, signifier: $signifier, status: $status, priority: $priority, tags: $tags, dueDate: $dueDate, createdAt: $createdAt, updatedAt: $updatedAt, note: $note, recurrenceRule: $recurrenceRule, collectionId: $collectionId, private: $private, clientId: $clientId, hasDueTime: $hasDueTime, timeZone: $timeZone) {
       id
       content
       signifier
@@ -104,6 +104,8 @@ export const CREATE_TASK = gql`
       isBacklog
       blockedReason
       private
+      hasDueTime
+      timeZone
       blockedAt
       taskType
       recurrencePattern
@@ -137,6 +139,8 @@ export const UPDATE_TASK = gql`
       isBacklog
       blockedReason
       private
+      hasDueTime
+      timeZone
       blockedAt
       taskType
       recurrencePattern
@@ -162,8 +166,8 @@ export const DELETE_TASK = gql`
 `;
 
 export const UPDATE_TASK_STATUS = gql`
-  mutation UpdateTaskStatus($id: ID!, $status: String!) {
-    updateTaskStatus(id: $id, status: $status) {
+  mutation UpdateTaskStatus($id: ID!, $status: String!, $editScope: EditScope) {
+    updateTaskStatus(id: $id, status: $status, editScope: $editScope) {
       id
       content
       signifier
@@ -180,6 +184,7 @@ export const UPDATE_TASK_STATUS = gql`
       isBacklog
       blockedReason
       private
+      hasDueTime
       blockedAt
       taskType
       createdAt
@@ -212,6 +217,7 @@ export const BLOCK_TASK = gql`
       isBacklog
       blockedReason
       private
+      hasDueTime
       blockedAt
       taskType
       createdAt
@@ -240,6 +246,7 @@ export const UNBLOCK_TASK = gql`
       isBacklog
       blockedReason
       private
+      hasDueTime
       blockedAt
       taskType
       createdAt
@@ -267,6 +274,7 @@ export const MIGRATE_TASK_TO_FUTURE = gql`
       isBacklog
       blockedReason
       private
+      hasDueTime
       blockedAt
       taskType
       createdAt

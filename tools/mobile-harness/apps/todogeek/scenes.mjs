@@ -2,6 +2,17 @@
 // (apps/todogeek/DOCS/SIMPLE_PLAN.md). Three views and search; everything
 // else redirects to Today, and the redirect scenes FAIL (throw) if it does not.
 
+import { json } from '../../lib/net.mjs';
+
+// On a phone the grips are behind "Reorder" (3.16); a desktop has them always.
+const startReorder = async (page, h) => {
+  if (!h.isPhone) return;
+  const toggle = page.locator('[data-reorder-toggle]').first();
+  if (!(await toggle.count())) throw new Error('no Reorder toggle on the phone Today');
+  await toggle.click();
+  await page.waitForTimeout(250);
+};
+
 const expectPath = async (page, want) => {
   const path = new URL(page.url()).pathname;
   if (path !== want) throw new Error(`expected to land on ${want}, got ${path}`);
@@ -153,7 +164,6 @@ export const scenes = [
     name: '40-private-hidden',
     goto: '/today',
     wait: 1400,
-    viewports: ['desktop'],
     async setup(page) {
       const hidden = page.getByRole('button', { name: 'Private task, hidden. Activate to show.' });
       if (!(await hidden.count())) throw new Error('no hidden private row on the desktop Today');
@@ -166,7 +176,6 @@ export const scenes = [
     name: '41-private-revealed',
     goto: '/today',
     wait: 1400,
-    viewports: ['desktop'],
     async setup(page) {
       const hidden = page.getByRole('button', { name: 'Private task, hidden. Activate to show.' }).first();
       if (!(await hidden.count())) throw new Error('no hidden private row to reveal');
@@ -179,16 +188,16 @@ export const scenes = [
     },
   },
   {
-    // Phone: shown, with the small eye-slash mark.
+    // Phone: masked too, until tapped (D5) — it used to show the words.
     name: '42-private-phone',
     goto: '/today',
     wait: 1400,
     viewports: ['phone'],
     async setup(page) {
-      if (!(await page.getByText('Finish the write-up for David').count())) throw new Error('the phone hid a private task');
-      if (!(await page.locator('[data-private-mark]').count())) throw new Error('no private mark on the phone');
-      const row = page.locator('[data-private-mark]').first();
-      await row.scrollIntoViewIfNeeded();
+      if (await page.getByText('Finish the write-up for David').count()) throw new Error('the phone showed a private task');
+      const hidden = page.getByRole('button', { name: 'Private task, hidden. Activate to show.' }).first();
+      if (!(await hidden.count())) throw new Error('no hidden private row on the phone');
+      await hidden.scrollIntoViewIfNeeded();
     },
   },
   {
@@ -202,7 +211,7 @@ export const scenes = [
       await box.click();
       await page.keyboard.type('Fire Jane (private) friday #manager');
       await page.waitForTimeout(300);
-      const tick = page.getByRole('checkbox', { name: 'Private' }).first();
+      const tick = page.getByRole('checkbox', { name: 'Private', exact: true }).first();
       if ((await tick.getAttribute('aria-checked')) !== 'true') throw new Error('typing (private) did not tick the box');
     },
     teardown: async (page) => {
@@ -217,7 +226,8 @@ export const scenes = [
     name: '50-today-grips',
     goto: '/today',
     wait: 1400,
-    async setup(page) {
+    async setup(page, h) {
+      await startReorder(page, h);
       const today = page.getByRole('region', { name: 'Today' });
       const grips = await today.locator('[data-drag-handle]').count();
       const rows = await today.locator('[data-row-id]').count();
@@ -233,7 +243,8 @@ export const scenes = [
     name: '51-anytime-grips',
     goto: '/today',
     wait: 1400,
-    async setup(page) {
+    async setup(page, h) {
+      await startReorder(page, h);
       const anytime = page.getByRole('region', { name: 'Anytime' });
       const grips = await anytime.locator('[data-drag-handle]').count();
       if (grips !== 3) throw new Error(`Anytime: expected 3 grips, found ${grips}`);
@@ -273,7 +284,8 @@ export const scenes = [
     goto: '/today',
     wait: 1400,
     viewports: ['phone'],
-    async setup(page) {
+    async setup(page, h) {
+      await startReorder(page, h);
       const grip = page.getByRole('region', { name: 'Today' }).locator('[data-drag-handle]').first();
       if (!(await grip.count())) throw new Error('no grip to hold');
       await grip.scrollIntoViewIfNeeded();
@@ -297,6 +309,99 @@ export const scenes = [
       const moved = await page.locator('section[aria-label="Today"] li[data-row-id]').evaluateAll((els) => els.some((el) => getComputedStyle(el).transform !== 'none'));
       if (!moved) throw new Error(`holding and moving the grip did not drag a row (${lifted})`);
     },
+  },
+  {
+    // The phone's pick-a-date sheet, opened by a long swipe left (released).
+    name: '62-date-sheet-phone',
+    goto: '/today',
+    wait: 1400,
+    viewports: ['phone'],
+    async setup(page) {
+      const words = page.getByRole('button', { name: /^review dana/i }).first();
+      const box = await words.boundingBox();
+      const y = box.y + box.height / 2;
+      const x = box.x + Math.min(160, box.width / 2);
+      await words.evaluate((el, { x, y }) => {
+        const fire = (type, cx) => el.dispatchEvent(new PointerEvent(type, {
+          bubbles: true, cancelable: true, pointerId: 8, pointerType: 'touch', isPrimary: true, clientX: cx, clientY: y, button: 0,
+        }));
+        fire('pointerdown', x);
+        for (let i = 1; i <= 6; i += 1) fire('pointermove', x - (240 * i) / 6);
+        fire('pointerup', x - 240);
+      }, { x, y });
+      await page.waitForTimeout(600);
+      if (!(await page.getByRole('dialog', { name: /move to/i }).count())) throw new Error('the date sheet did not open');
+    },
+    teardown: (page, h) => h.esc(),
+  },
+  {
+    // A repeating task: saving an edit asks "this one or the series?".
+    name: '63-repeating-task',
+    goto: '/today',
+    wait: 1400,
+    async setup(page) {
+      await page.getByRole('button', { name: /^take the vitamins/i }).first().click();
+      await page.waitForTimeout(500);
+      await page.getByRole('button', { name: 'High', exact: true }).first().click();
+      await page.getByRole('button', { name: 'Save', exact: true }).first().click();
+      await page.waitForTimeout(500);
+      if (!(await page.getByRole('dialog').count())) {
+        await page.screenshot({ path: '/tmp/claude-1000/-mnt-Media-Projects-GeekSuite/f0462fc7-cc88-4f8d-92fc-bf57c7622732/scratchpad/dbg63.png' });
+        throw new Error('no this-one-or-the-series question');
+      }
+    },
+  },
+  {
+    // A note has no checkbox and a passed time is marked; neither counts as a to-do.
+    name: '64-note-and-passed',
+    goto: '/today',
+    wait: 1400,
+    async setup(page) {
+      if (await page.getByRole('checkbox', { name: /gate code/i }).count()) throw new Error('a note has a checkbox');
+      if (!(await page.locator('[data-record-glyph="-"]').count())) throw new Error('no note glyph');
+      if (!(await page.locator('[data-time-passed="true"]').count())) throw new Error('a passed time is not marked');
+      await page.locator('[data-record-glyph="-"]').first().scrollIntoViewIfNeeded();
+    },
+  },
+  {
+    // Nothing on the list at all.
+    name: '60-today-empty',
+    probe: true,
+    async setup(page, h) {
+      await page.route('**/graphql', (r) => {
+        const body = r.request().postData() || '';
+        if (r.request().method() === 'POST' && /GetAllTasks/.test(body)) return json(r, { data: { allTasks: [] } });
+        return r.fallback();
+      });
+      await page.goto(h.base + '/today', { waitUntil: 'networkidle' });
+      await page.waitForTimeout(1200);
+      const ok = (await page.getByText(/nothing due today/i).count()) && (await page.getByText('0 to do · 0 done').count());
+      if (!ok) {
+        await page.unroute('**/graphql');
+        throw new Error('empty Today should say "Nothing due today" and 0 to do · 0 done once loaded');
+      }
+    },
+    async teardown(page) { await page.unroute('**/graphql'); },
+  },
+  {
+    // The list could not be loaded: said, with Retry — not "Nothing due today".
+    name: '61-load-error',
+    async setup(page, h) {
+      await page.route('**/graphql', (r) => {
+        const body = r.request().postData() || '';
+        if (r.request().method() === 'POST' && /GetAllTasks/.test(body)) return json(r, { errors: [{ message: 'Service unavailable' }], data: null }, 503);
+        return r.fallback();
+      });
+      await page.goto(h.base + '/today', { waitUntil: 'networkidle' });
+      await page.waitForTimeout(1500);
+      const drawnEmpty = await page.getByText(/nothing due today/i).count();
+      const hasRetry = await page.getByRole('button', { name: 'Retry' }).count();
+      if (drawnEmpty || !hasRetry) {
+        await page.unroute('**/graphql'); // the runner skips teardown after a throw
+        throw new Error(drawnEmpty ? 'a failed load was drawn as "Nothing due today"' : 'no Retry on a failed load');
+      }
+    },
+    async teardown(page) { await page.unroute('**/graphql'); },
   },
   // Retired screens: their URLs land on Today. These throw if they do not.
   ...['/review', '/plan/weekly', '/plan/monthly', '/plan/backlog', '/habits', '/collections/c1', '/templates', '/tags', '/settings', '/tasks/daily'].map((from) => ({

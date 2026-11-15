@@ -8,7 +8,9 @@
  * the page going hidden, or after 60 seconds. An open editor shows the words,
  * and blurs while the window is away.
  *
- * Phone: the words show, with a small eye-slash mark.
+ * Phone: the same (decision D5, 2026-11-15) — a private task is masked on every
+ * device until tapped. It used to show its words on a phone, a touch tablet
+ * and any window narrower than 900px.
  */
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -175,16 +177,28 @@ describe('desktop: hidden by default', () => {
   });
 });
 
-describe('phone: shown, with the mark', () => {
-  it('shows the words, tags and note, and an eye-slash mark', () => {
-    desktop = false;
+describe('phone: masked too, until tapped (D5)', () => {
+  it('does not render the words, tags or note on a phone, and a tap shows them', () => {
+    desktop = false; // no wide viewport, no mouse
     const { container } = mount();
+    expectNoSecret(container);
+    expect(container.querySelector('[data-private-mark]')).toBeNull();
+    fireEvent.click(hiddenButton());
     expect(screen.getByText(SECRET)).toBeInTheDocument();
     expect(screen.getByText(NOTE)).toBeInTheDocument();
-    expect(container.querySelector('[data-private-mark]')).not.toBeNull();
-    expect(hiddenButton()).toBeNull();
-    // Read as private, too.
-    expect(screen.getByRole('button', { name: /Fire Jane.*, private/ })).toBeInTheDocument();
+  });
+
+  it('leaving the app hides it again (the phone is shared and handed round too)', () => {
+    desktop = false;
+    const { container } = mount();
+    fireEvent.click(hiddenButton());
+    expect(screen.getByText(SECRET)).toBeInTheDocument();
+    act(() => {
+      Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+      document.dispatchEvent(new Event('visibilitychange'));
+    });
+    expectNoSecret(container);
+    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
   });
 });
 

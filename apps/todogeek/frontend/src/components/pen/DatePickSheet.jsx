@@ -9,6 +9,7 @@ import { format } from 'date-fns';
 import { GeekSheet } from '@geeksuite/ui';
 import { dueDayKey } from '../../utils/dueDate';
 import { quickDates } from '../../utils/penViews';
+import { PRIVATE_LABEL } from '../../context/PrivacyContext';
 
 export default function DatePickSheet({ task, onPick, onClose, now = new Date() }) {
   const [value, setValue] = useState('');
@@ -25,7 +26,9 @@ export default function DatePickSheet({ task, onPick, onClose, now = new Date() 
       open={open}
       onClose={onClose}
       title="Move to…"
-      description={task?.content}
+      // A private task's words are never repeated here (D5): this sheet is
+      // open on a phone as often as on a desktop, over the same shared screen.
+      description={task?.private === true ? PRIVATE_LABEL : task?.content}
       maxWidth="xs"
     >
       <Box sx={{ display: 'grid', gap: 2, pb: 2 }}>

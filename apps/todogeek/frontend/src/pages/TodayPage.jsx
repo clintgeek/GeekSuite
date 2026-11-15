@@ -18,18 +18,25 @@
  * order is saved for TODAY's local date (`useDailyOrder`), so tomorrow starts
  * from the normal rule; how it is applied is `utils/manualOrder.js`. A move
  * is said out loud in a polite live region. Carried over is not sortable.
+ *
+ * On a phone the grips are not on every row (a permanent 44px grip left 140px
+ * for the words, 3.16): "Reorder" in the header turns them on, "Done" turns
+ * them off. Notes and events are not to-dos (D4): no count, no carry-over.
+ * The add box is docked on a phone and sticky on a desktop; it takes focus by
+ * itself ONCE, on a desktop, when the page opens with nothing to do — never
+ * again when you tick the last task (that popped the keyboard on a tablet).
  */
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { Reorder } from 'framer-motion';
-import { Box, ButtonBase, useMediaQuery } from '@mui/material';
+import { Box, Button, ButtonBase, useMediaQuery } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { ChevronRight } from 'lucide-react';
-import { useGeekShell } from '@geeksuite/ui';
+import { useGeekShell, useGeekToastClearance } from '@geeksuite/ui';
 import { usePen } from '../context/PenContext';
 import { penOf } from '../theme/pen';
 import AddBox from '../components/pen/AddBox';
 import TagChips from '../components/pen/TagChips';
-import PenPage, { PenLoading } from '../components/pen/PenPage';
+import PenPage, { PenLoadError, PenLoading } from '../components/pen/PenPage';
 import usePenRows from '../components/pen/usePenRows';
 import { DeskDate, EmptyLine, SectionCaption } from '../components/pen/PenHeadings';
 import { srOnly } from '../components/pen/penMarks';
@@ -37,6 +44,7 @@ import useKeyboardInset from '../hooks/useKeyboardInset';
 import useDailyOrder from '../hooks/useDailyOrder';
 import { PRIVATE_LABEL } from '../context/PrivacyContext';
 import { dayKey, taskId, todaySections, withSettling } from '../utils/penViews';
+import { applyKinds } from '../components/pen/penKinds';
 import { manualSections, moveIdBy, reorderSubset } from '../utils/manualOrder';
 
 function OverdueLine({ count, open, onToggle, onMoveAll, p }) {
@@ -46,7 +54,11 @@ function OverdueLine({ count, open, onToggle, onMoveAll, p }) {
         onClick={onToggle}
         aria-expanded={open}
         aria-controls="overdue-list"
-        sx={{ minHeight: 44, px: 2, gap: 2, borderRadius: '4px', fontSize: '1rem', fontWeight: 600, color: p.ink }}
+        sx={{
+          minHeight: 44, px: 2, gap: 2, borderRadius: '4px', fontSize: '1rem', fontWeight: 600, color: p.ink,
+          // The focus highlight stays inside the button (an outer ring was clipped on the open header).
+          '&.Mui-focusVisible': { outline: `2px solid ${p.ink}`, outlineOffset: -2 },
+        }}
       >
         <Box component="span" aria-hidden sx={{ display: 'inline-flex', transition: 'none', transform: open ? 'rotate(90deg)' : 'none' }}>
           <ChevronRight size={18} />
@@ -71,8 +83,13 @@ function Dock({ children }) {
   const keyboard = useKeyboardInset();
   const theme = useTheme();
   const p = penOf(theme);
+  const ref = useRef(null);
+  // Toasts ("Done. Undo", "Added for tomorrow.") rise above the box instead of
+  // sitting on it, and above the keyboard with it (3.13).
+  useGeekToastClearance(ref, true);
   return (
     <Box
+      ref={ref}
       data-add-dock
       sx={{
         position: 'fixed',
@@ -110,15 +127,17 @@ const TodayPage = () => {
   const p = penOf(theme);
   const isPhone = useMediaQuery(theme.breakpoints.down('md'));
   const [overdueOpen, setOverdueOpen] = useState(false);
+  const [reorder, setReorder] = useState(false);
+  const canHover = useMediaQuery('(any-hover: hover) and (any-pointer: fine)');
   const daily = useDailyOrder(dayKey(pen.now));
   // A drag in progress: { section, ids } — the order Reorder reports as the row moves.
   const [draft, setDraft] = useState(null);
   const draftRef = useRef(null);
   const [said, setSaid] = useState('');
 
-  const counts = useMemo(() => todaySections(pen.visible, pen.now).counts, [pen.visible, pen.now]);
+  const counts = useMemo(() => applyKinds(todaySections(pen.visible, pen.now)).counts, [pen.visible, pen.now]);
   const auto = useMemo(
-    () => todaySections(withSettling(pen.visible, pen.settling), pen.now),
+    () => applyKinds(todaySections(withSettling(pen.visible, pen.settling), pen.now)),
     [pen.visible, pen.settling, pen.now],
   );
   const manual = useMemo(() => manualSections(auto, daily.ids), [auto, daily.ids]);
@@ -185,9 +204,11 @@ const TodayPage = () => {
     () => [...(overdueOpen ? sections.overdue : []), ...sections.today, ...sections.anytime].map(real),
     [sections, overdueOpen],
   );
-  const { renderRow, sheet, expandedId } = usePenRows(order, { onMove, onDragEnd });
+  const { renderRow, sheet } = usePenRows(order, { onMove, onDragEnd });
   const row = (t) => renderRow(real(t), { crossed: Boolean(t.__real) });
-  const sortableRow = (t) => renderRow(real(t), { crossed: Boolean(t.__real), sortable: true, sortMotion: Boolean(draft) });
+  // Grips: always on a desktop; on a phone only in Reorder mode.
+  const gripsOn = !isPhone || reorder;
+  const sortableRow = (t) => renderRow(real(t), { crossed: Boolean(t.__real), sortable: gripsOn, sortMotion: Boolean(draft) });
   const sortableList = (section) => (
     <Reorder.Group
       as="ul"
@@ -200,26 +221,51 @@ const TodayPage = () => {
     </Reorder.Group>
   );
 
-  // On desktop the box takes focus only when there is nothing to do: with a
-  // list on screen, the keys (j k x t d e) are the faster way in; `/` or
-  // Ctrl+N reach the box from anywhere.
+  // On desktop the box takes focus when the page opens with nothing to do:
+  // with a list on screen, the keys (j k x t d e) are the faster way in; `/`
+  // or Ctrl+N reach the box from anywhere. Decided ONCE, on the first loaded
+  // render: ticking the last task must not pull focus (and the keyboard) in.
+  const focusOnOpen = useRef(null);
+  if (focusOnOpen.current === null && pen.loaded) {
+    focusOnOpen.current = !isPhone && canHover && counts.toDo === 0;
+  }
   const addBox = (
     <AddBox
       onAdd={pen.add}
       onHelp={() => pen.setHelpOpen(true)}
       now={pen.now}
-      autoFocus={!isPhone && pen.loaded && counts.toDo === 0}
+      autoFocus={focusOnOpen.current === true}
+      pendingTag={pen.pendingTag}
+      onDismissTag={pen.dismissPendingTag}
     />
   );
+  const sortableCount = sections.today.length + sections.anytime.length;
 
   return (
     <PenPage dock={isPhone}>
-      <DeskDate date={pen.now} toDo={counts.toDo} done={counts.done} />
-      <Box sx={{ pb: 4 }}><TagChips /></Box>
+      <DeskDate date={pen.now} toDo={counts.toDo} done={counts.done} loading={!pen.loaded || Boolean(pen.loadError && !pen.corpus?.length)} />
+      <Box sx={{ pb: isPhone && sortableCount > 1 ? 0 : 4 }}><TagChips /></Box>
+      {isPhone && sortableCount > 1 && (
+        <Box sx={{ display: 'flex', justifyContent: 'flex-end', pb: 1 }}>
+          <Button
+            onClick={() => setReorder((r) => !r)}
+            aria-pressed={reorder}
+            data-reorder-toggle
+            sx={{ minHeight: 44, px: 2, color: p.ink, fontWeight: 600, textDecoration: 'underline', textUnderlineOffset: '3px' }}
+          >
+            {reorder ? 'Done reordering' : 'Reorder'}
+          </Button>
+        </Box>
+      )}
 
-      {!isPhone && <Box sx={{ pb: 5 }}>{addBox}</Box>}
+      {/* Sticky on a desktop: the list scrolls under it, the box stays. */}
+      {!isPhone && (
+        <Box data-add-sticky sx={{ position: 'sticky', top: 0, zIndex: 2, backgroundColor: p.paper, pb: 5, pt: 1, mt: -1 }}>
+          {addBox}
+        </Box>
+      )}
 
-      {!pen.loaded ? <PenLoading /> : (
+      {pen.loadError && !(pen.corpus?.length) ? <PenLoadError onRetry={pen.refresh} /> : !pen.loaded ? <PenLoading /> : (
         <>
           {sections.overdue.length > 0 && (
             <Box component="section" aria-label="Carried over">
@@ -255,8 +301,9 @@ const TodayPage = () => {
 
       <Box role="status" aria-live="polite" data-order-said sx={srOnly}>{said}</Box>
 
-      {/* The editor needs the room; the add box comes back when it closes. */}
-      {isPhone && !expandedId && <Dock>{addBox}</Dock>}
+      {/* Always there on a phone: the editor is a sheet over it, so it no longer
+          vanishes with the editor (or when the open task is ticked, 3.19). */}
+      {isPhone && <Dock>{addBox}</Dock>}
       {sheet}
     </PenPage>
   );

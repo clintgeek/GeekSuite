@@ -10,9 +10,9 @@
  * change made on one view is already right on the next, with no refetch.
  *
  * Days are LOCAL calendar days, keyed `yyyy-MM-dd`. A due date goes through
- * `dueDayKey` (utils/dueDate.js: UTC midnight is date-only, anything else is a
- * local instant); completion stamps are plain instants and go through
- * `localDateString`.
+ * `dueDayKey(task)` (utils/dueDate.js: the task's `hasDueTime` flag, or for a
+ * row without one, UTC midnight is date-only); completion stamps are plain
+ * instants and go through `localDateString`.
  *
  * Repeating tasks: `allTasks` expands a series a year either side of today as
  * `virtual_…` rows, so a daily series would put 365 past occurrences in
@@ -45,7 +45,7 @@ export function doneDayKey(task) {
     const d = new Date(stamp);
     if (!Number.isNaN(d.getTime())) return localDateString(d);
   }
-  return dueDayKey(task?.dueDate) || '';
+  return dueDayKey(task) || '';
 }
 
 /** 1 High, 2 Medium, 3 Low; none sorts last. */
@@ -68,8 +68,8 @@ export function compareWithinDay(a, b) {
   const pa = priorityRank(a);
   const pb = priorityRank(b);
   if (pa !== pb) return pa - pb;
-  const ta = hasDueTime(a.dueDate) ? new Date(a.dueDate).getTime() : Infinity;
-  const tb = hasDueTime(b.dueDate) ? new Date(b.dueDate).getTime() : Infinity;
+  const ta = hasDueTime(a) ? new Date(a.dueDate).getTime() : Infinity;
+  const tb = hasDueTime(b) ? new Date(b.dueDate).getTime() : Infinity;
   if (ta !== tb) return ta < tb ? -1 : 1;
   const ca = created(a);
   const cb = created(b);
@@ -78,8 +78,8 @@ export function compareWithinDay(a, b) {
 }
 
 const byDue = (a, b) => {
-  const ka = dueDayKey(a.dueDate);
-  const kb = dueDayKey(b.dueDate);
+  const ka = dueDayKey(a);
+  const kb = dueDayKey(b);
   if (ka !== kb) return ka < kb ? -1 : 1;
   return compareWithinDay(a, b);
 };
@@ -91,7 +91,7 @@ function latestPerSeries(tasks) {
   for (const task of tasks) {
     if (!isVirtual(task) || !task.seriesId) { out.push(task); continue; }
     const prev = best.get(task.seriesId);
-    if (!prev || dueDayKey(task.dueDate) > dueDayKey(prev.dueDate)) best.set(task.seriesId, task);
+    if (!prev || dueDayKey(task) > dueDayKey(prev)) best.set(task.seriesId, task);
   }
   return [...out, ...best.values()];
 }
@@ -137,7 +137,7 @@ export function todaySections(tasks, now = new Date()) {
       if (task.status === 'completed' && doneDayKey(task) === today) doneToday += 1;
       continue;
     }
-    const key = dueDayKey(task.dueDate);
+    const key = dueDayKey(task);
     if (!key) anytime.push(task);
     else if (key < today) overdue.push(task);
     else if (key === today) due.push(task);
@@ -168,21 +168,21 @@ export function upcomingGroups(tasks, now = new Date(), span = UPCOMING_DAYS) {
   const later = [];
   for (const task of tasks || []) {
     if (!isOpen(task)) continue;
-    const key = dueDayKey(task.dueDate);
+    const key = dueDayKey(task);
     if (!key || key <= today) continue;
     (key <= horizon ? soon : later).push(task);
   }
 
   const days = new Map();
   for (const task of soon.sort(byDue)) {
-    const key = dueDayKey(task.dueDate);
-    if (!days.has(key)) days.set(key, { key, date: dueDayStart(task.dueDate), tasks: [] });
+    const key = dueDayKey(task);
+    if (!days.has(key)) days.set(key, { key, date: dueDayStart(task), tasks: [] });
     days.get(key).tasks.push(task);
   }
 
   const months = new Map();
   for (const task of firstPerSeries(later.sort(byDue))) {
-    const date = dueDayStart(task.dueDate);
+    const date = dueDayStart(task);
     const key = format(date, 'yyyy-MM');
     if (!months.has(key)) months.set(key, { key, date: new Date(date.getFullYear(), date.getMonth(), 1), tasks: [] });
     months.get(key).tasks.push(task);
@@ -223,16 +223,38 @@ export function doneGroups(tasks, query = '') {
   return [...groups.values()];
 }
 
+/**
+ * One row per series for Search: the most recent occurrence that has already
+ * come round (the "late" row Today shows — decision D3), or, when none has,
+ * the next one. It used to be the first in date order — the OLDEST missed
+ * occurrence, up to a year back. Rows that are not virtual are untouched.
+ */
+function representativePerSeries(tasks, today) {
+  const chosen = new Map();
+  for (const task of tasks) {
+    if (!isVirtual(task) || !task.seriesId) continue;
+    const key = dueDayKey(task);
+    const prev = chosen.get(task.seriesId);
+    if (!prev) { chosen.set(task.seriesId, task); continue; }
+    const pk = dueDayKey(prev);
+    const pastNew = key && key <= today;
+    const pastPrev = pk && pk <= today;
+    if (pastNew && (!pastPrev || key > pk)) chosen.set(task.seriesId, task);
+    else if (!pastNew && !pastPrev && key < pk) chosen.set(task.seriesId, task);
+  }
+  return tasks.filter((task) => !isVirtual(task) || !task.seriesId || chosen.get(task.seriesId) === task);
+}
+
 /** Search: open matches (soonest first), then finished ones (newest first). */
-export function searchTasks(tasks, query) {
+export function searchTasks(tasks, query, now = new Date()) {
   const q = String(query ?? '').trim();
   if (!q) return { open: [], done: [] };
   const hits = (tasks || []).filter((t) => matchesQuery(t, q));
-  const open = firstPerSeries(hits.filter(isOpen).sort((a, b) => {
-    const ka = dueDayKey(a.dueDate) || '9999';
-    const kb = dueDayKey(b.dueDate) || '9999';
+  const open = representativePerSeries(hits.filter(isOpen), dayKey(now)).sort((a, b) => {
+    const ka = dueDayKey(a) || '9999';
+    const kb = dueDayKey(b) || '9999';
     return ka === kb ? compareWithinDay(a, b) : (ka < kb ? -1 : 1);
-  }));
+  });
   const done = hits.filter(isDone).sort((a, b) => doneStamp(b) - doneStamp(a));
   return { open, done };
 }
@@ -254,7 +276,8 @@ export function tagCounts(tasks) {
 /** A due time as a row says it: "9am", "2:30pm". Empty for a date-only due date. */
 export function clockLabel(value) {
   if (!hasDueTime(value)) return '';
-  const d = new Date(value);
+  const raw = value && typeof value === 'object' && !(value instanceof Date) ? value.dueDate : value;
+  const d = new Date(raw);
   const mins = d.getMinutes();
   const hours = d.getHours();
   const h12 = hours % 12 || 12;
@@ -275,9 +298,9 @@ export function clockLabel(value) {
  */
 export function whenLabel(task, now = new Date(), context = 'list') {
   if (!task?.dueDate) return { text: '' };
-  const day = dueDayStart(task.dueDate);
+  const day = dueDayStart(task);
   if (!day) return { text: '' };
-  const clock = clockLabel(task.dueDate);
+  const clock = clockLabel(task);
   const diff = differenceInCalendarDays(day, now);
 
   if (isOpen(task) && diff < 0) {
@@ -306,7 +329,7 @@ export function withSettling(tasks, settling) {
  */
 export function dueDateOn(task, targetKey) {
   if (!targetKey) return null;
-  if (!hasDueTime(task?.dueDate)) return targetKey;
+  if (!hasDueTime(task)) return targetKey;
   const old = new Date(task.dueDate);
   const [y, m, d] = targetKey.split('-').map(Number);
   return new Date(y, m - 1, d, old.getHours(), old.getMinutes(), 0, 0).toISOString();

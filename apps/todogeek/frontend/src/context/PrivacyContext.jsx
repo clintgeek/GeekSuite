@@ -6,11 +6,12 @@
  * that shared to the team at large."
  *
  * ## Where it applies
- * Only on a DESKTOP: at or above the app's `md` breakpoint (the shell's own
- * switch, AppShell / TodayPage) AND with a fine pointer. A phone is not
- * screen-shared to a meeting, so a private task there shows its words, with a
- * small mark that says it is private. Off a desktop, `hides` is false and
- * nothing here does anything.
+ * EVERYWHERE (decision D5, 2026-11-15). It used to be a desktop-only rule: a
+ * phone showed the words with a small mark, and so did a half-width desktop
+ * window or any touch screen — which is exactly the screen-share and
+ * over-the-shoulder case the feature exists for. A private task is masked on
+ * every device until tapped. (`useHidesPrivate` keeps its name and its
+ * contract for callers; it is simply always true now.)
  *
  * ## Hidden by default, revealed one task at a time
  * `reveal(id)` shows one task's words in place. It goes hidden again when:
@@ -28,8 +29,6 @@
  * Nothing is stored. A reload starts with everything hidden.
  */
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
-import { useMediaQuery } from '@mui/material';
-import { useTheme } from '@mui/material/styles';
 
 export const REVEAL_MS = 60 * 1000;
 export const PRIVATE_LABEL = 'Private task';
@@ -37,12 +36,9 @@ export const HIDDEN_LABEL = 'Private task, hidden. Activate to show.';
 
 const PrivacyContext = createContext(null);
 
-/** True on a desktop: md and up, with a mouse or trackpad. */
+/** True on every device since D5: a private task is masked until tapped. */
 export function useHidesPrivate() {
-  const theme = useTheme();
-  const wide = useMediaQuery(theme.breakpoints.up('md'));
-  const fine = useMediaQuery('(pointer: fine)');
-  return wide && fine;
+  return true;
 }
 
 export function PrivacyProvider({ children }) {
@@ -115,9 +111,6 @@ export function PrivacyProvider({ children }) {
     };
   }, [hides, hideAll]);
 
-  // Off a desktop (or after a resize down to one) nothing stays revealed.
-  useEffect(() => { if (!hides) { hideAll(); setAway(false); } }, [hides, hideAll]);
-
   useEffect(() => () => {
     timers.current.forEach((t) => clearTimeout(t));
     timers.current.clear();
@@ -136,8 +129,8 @@ export function PrivacyProvider({ children }) {
 }
 
 /**
- * The privacy state. Outside a provider it FAILS SAFE: on a desktop a private
- * task is hidden and cannot be revealed, rather than shown.
+ * The privacy state. Outside a provider it FAILS SAFE: a private task is
+ * hidden and cannot be revealed, rather than shown.
  */
 export function usePrivacy() {
   const ctx = useContext(PrivacyContext);

@@ -78,11 +78,22 @@ describe('parseTaskInput', () => {
     expect(result.dueDate.getMinutes()).toBe(0);
   });
 
-  it('resolves an explicit month-name + day date', () => {
-    const result = parseTaskInput('Renew passport /mar 15');
-    expect(result.dueDate.getFullYear()).toBe(new Date().getFullYear());
+  it('resolves an explicit month-name + day date (this year, while it is still ahead)', () => {
+    const now = new Date(2026, 0, 10, 12);
+    const result = parseTaskInput('Renew passport /mar 15', { now });
+    expect(result.dueDate.getFullYear()).toBe(2026);
     expect(result.dueDate.getMonth()).toBe(2); // 0-indexed: March
     expect(result.dueDate.getDate()).toBe(15);
+  });
+
+  it('rolls a month-name date that has passed to next year (plan 1.16)', () => {
+    // This test used to assert the opposite: /mar 5 typed in November was
+    // LAST March, already eight months overdue.
+    const now = new Date(2026, 10, 15, 12);
+    const result = parseTaskInput('Renew passport /mar 5', { now });
+    expect(result.dueDate.getFullYear()).toBe(2027);
+    expect(result.dueDate.getMonth()).toBe(2);
+    expect(result.dueDate.getDate()).toBe(5);
   });
 
   it('resolves a hyphenated /YYYY-MM-DD date without the signifier eating the hyphen', () => {
@@ -122,8 +133,8 @@ describe('parseTaskInput', () => {
     });
 
     it('anchors DTSTART on the parsed due date, not "now"', () => {
-      const result = parseTaskInput('(weekly) Water plants /mar 15');
-      expect(result.dueDate.getFullYear()).toBe(new Date().getFullYear());
+      const result = parseTaskInput('(weekly) Water plants /mar 15', { now: new Date(2026, 0, 10, 12) });
+      expect(result.dueDate.getFullYear()).toBe(2026);
       expect(result.dueDate.getMonth()).toBe(2);
       expect(result.dueDate.getDate()).toBe(15);
       // The rule built directly from the parsed dueDate must match exactly —

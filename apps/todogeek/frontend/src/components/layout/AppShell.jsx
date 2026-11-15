@@ -10,6 +10,8 @@
  * `GeekToastProvider` stays inside `GeekShell` (so it reads the shell's
  * insets and clears the sidebar and tab bar).
  */
+import { useEffect, useRef } from 'react';
+import { useLocation } from 'react-router-dom';
 import { Box, useMediaQuery } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { GeekShell, GeekToastProvider, useGeekShell } from '@geeksuite/ui';
@@ -18,12 +20,22 @@ import Sidebar from './Sidebar';
 import { chromeFor } from '../../theme/chrome';
 import TopBar from './TopBar';
 import MobileTabBar from './MobileTabBar';
+import { scrollMainToTop } from './scrollTop';
 
-function PenFrame({ children }) {
+export function PenFrame({ children }) {
   const { bottomInset } = useGeekShell();
+  const { pathname } = useLocation();
+  const first = useRef(true);
+  // Each tab opens at its top: the scroll position used to carry from one
+  // view to the next (3.20). Tapping the ACTIVE tab does it too (MobileTabBar).
+  useEffect(() => {
+    if (first.current) { first.current = false; return; }
+    scrollMainToTop();
+  }, [pathname]);
   return (
     <Box
       component="main"
+      data-pen-frame
       sx={{
         flex: 1,
         overflowY: 'auto',
