@@ -75,12 +75,28 @@ jobs:
           # desktop outgrew one 25-minute job on 2026-10-17 (the job was
           # cancelled at the timeout). Its scenes are all numbered, and
           # FG_SCENES filters them, so it runs as three balanced shards.
+          # Plus one TABLET shard each for NoteGeek and TodoGeek (review 4.1,
+          # 2026-11): the Android tablet, 800x1280 dark + 1280x800 light
+          # (one scheme per orientation; both schemes' contrast is already
+          # gated on phone and desktop). Its own job, so no existing shard
+          # gets longer and the wall time stays the slowest shard's; only
+          # those two apps because they are what the tablet work is for, and
+          # NoteGeek's ~60 scenes x 2 tablet contexts is ~11 min locally.
+          # Screenshots land in out/ci/<app>/ with a -tablet / -tablet-land
+          # suffix. It is ADVISORY (--tablet-advisory: findings listed in
+          # SUMMARY.md, never failing the job) until the tablet wave clears
+          # them; then drop that flag and it gates like the rest.
           shards=$(node --input-type=module -e "
             import { APP_NAMES } from './tools/mobile-harness/lib/registry.mjs';
             const split = { fitnessgeek: [['0-3', '^[0-3]'], ['4+6', '^[46]'], ['5', '^5']] };
+            const base = '--desktop';
+            const tabletArgs = '--tablet-only --tablet-viewports tablet-dark,tablet-land-light --tablet-advisory';
             const out = APP_NAMES.flatMap((app) => split[app]
-              ? split[app].map(([part, scenes]) => ({ app, label: app + ' ' + part, key: app + '-' + part.replace('+', ''), scenes }))
-              : [{ app, label: app, key: app, scenes: '' }]);
+              ? split[app].map(([part, scenes]) => ({ app, label: app + ' ' + part, key: app + '-' + part.replace('+', ''), scenes, args: base }))
+              : [{ app, label: app, key: app, scenes: '', args: base }]);
+            for (const app of ['notegeek', 'todogeek']) {
+              out.push({ app, label: app + ' tablet', key: app + '-tablet', scenes: '', args: tabletArgs });
+            }
             console.log(JSON.stringify(out));")
           echo "shards: $shards"
           echo "shards=$shards" >> "$GITHUB_OUTPUT"
@@ -139,7 +155,9 @@ jobs:
           # Empty for every app but a split one: the app's own scene filter
           # (FitnessGeek's FG_SCENES) ignores an empty value and runs all.
           FG_SCENES: ${{ matrix.shard.scenes }}
-        run: pnpm --filter @geeksuite/mobile-harness run ci -- --enforce-a11y --desktop --app ${{ matrix.shard.app }}
+        # `args` is '--desktop' for every app shard and the tablet flags for
+        # the two tablet shards (see the app list job).
+        run: pnpm --filter @geeksuite/mobile-harness run ci -- --enforce-a11y ${{ matrix.shard.args }} --app ${{ matrix.shard.app }}
 
       - name: Upload screenshots and SUMMARY.md
         if: always()

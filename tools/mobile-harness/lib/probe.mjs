@@ -2,10 +2,10 @@
 //
 // Three rules:
 //   tap-target  every visible interactive element is at least 44x44 —
-//               phone viewport only (MOBILE_UI_PLAN §2: 44px is the rule
-//               below `md`; nothing in the grammar promises it at desktop
-//               widths, and grading a 1280-wide layout against it is just
-//               noise on the gate). The measured box is a union of the
+//               coarse-pointer viewports only: the phone and, since review
+//               4.1/4.3 (2026-11), the Android tablet at any width. A finger
+//               does not shrink at 900px; a mouse-driven 1280-wide desktop
+//               is not graded (the runner passes `isPhone: h.coarse`). The measured box is a union of the
 //               element's own rect with any absolutely positioned
 //               `::before`/`::after` hit-area pseudo (see `pseudoHitBox`
 //               below), so `.hit44`/`.dot`-style invisible expanded targets
@@ -398,7 +398,8 @@ const collect = async ({ isPhone, a11y = false, axeOptions = null }) => {
   return violations;
 };
 
-// `isPhone` gates tap-target (see the header comment above); text-floor and
+// `isPhone` gates tap-target (see the header comment above — the runner
+// passes true for every coarse-pointer viewport, tablets included); text-floor and
 // h-scroll run regardless of viewport.
 // `a11y` runs the axe-core pass as well; it is opt-in at this level (the
 // runner turns it on, `selftest.mjs`'s tap-target fixture leaves it off) and

@@ -65,6 +65,7 @@ import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import { geekLayout, geekShape } from '../designTokens.js';
 import { useReducedMotion } from '../motion.js';
+import { useBackToClose } from '../hooks/useBackToClose.js';
 
 /** Inline SVG — @mui/icons-material is not a peer dependency of this package. */
 function CloseGlyph() {
@@ -122,6 +123,9 @@ export const GeekDialog = forwardRef(function GeekDialog(
     titleSx,
     primaryActionSx,
     bodySx,
+    // Android Back closes the dialog (review 3.27, hooks/backStack.js).
+    // With `disableClose` Back is swallowed rather than leaving the page.
+    backToClose = true,
   },
   ref
 ) {
@@ -138,6 +142,7 @@ export const GeekDialog = forwardRef(function GeekDialog(
     if (disableClose) return;
     onClose?.(event, reason);
   };
+  useBackToClose(open, handleClose, { enabled: backToClose });
 
   return (
     <Dialog

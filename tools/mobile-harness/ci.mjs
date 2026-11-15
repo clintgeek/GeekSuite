@@ -13,11 +13,15 @@
 //   node ci.mjs --enforce-a11y                      # a11y counts toward exit
 //   node ci.mjs --no-a11y                           # skip the axe pass entirely
 //   node ci.mjs --app gamegeek --enforce-a11y --desktop   # one CI shard, exactly
+//   node ci.mjs --app notegeek --enforce-a11y --desktop --tablet   # + 800x1280 / 1280x800 Android tablet
+//   node ci.mjs --app notegeek --tablet-only        # just the tablet contexts
+//   node ci.mjs --app notegeek --tablet --tablet-advisory   # tablet reported, not gating
+//   node ci.mjs --app notegeek --tablet-only --tablet-viewports tablet-dark,tablet-land-light   # the CI tablet shard
 import fs from 'node:fs';
 import path from 'node:path';
 import { APP_NAMES } from './lib/registry.mjs';
 import { runApp, summarize, report, summaryMarkdown, TOOL_ROOT } from './lib/runner.mjs';
-import { PHONE_VIEWPORTS, ALL_VIEWPORTS, launch } from './lib/contexts.mjs';
+import { PHONE_VIEWPORTS, ALL_VIEWPORTS, TABLET_VIEWPORTS, launch } from './lib/contexts.mjs';
 import { buildApp, startPreview } from './lib/serve.mjs';
 
 const argv = process.argv.slice(2);
@@ -28,7 +32,25 @@ const label = (() => {
   const i = argv.indexOf('--label');
   return i > -1 && argv[i + 1] ? argv[i + 1] : 'ci';
 })();
-const viewports = has('desktop') ? ALL_VIEWPORTS : PHONE_VIEWPORTS;
+// --desktop adds the 1280x900 contexts; --tablet adds the Android tablet in
+// both orientations (review 4.1); --tablet-only runs the tablet alone.
+// --tablet-viewports tablet-dark,tablet-land-light narrows the tablet set
+// (CI walks one scheme per orientation: the layout is what the tablet is for,
+// and both schemes' contrast is already gated on phone and desktop).
+const tabletPick = (() => {
+  const i = argv.indexOf('--tablet-viewports');
+  if (i === -1 || !argv[i + 1]) return TABLET_VIEWPORTS;
+  const keys = argv[i + 1].split(',').map((k) => k.trim()).filter(Boolean);
+  const bad = keys.filter((k) => !TABLET_VIEWPORTS.includes(k));
+  if (bad.length) {
+    console.error(`unknown tablet viewport(s): ${bad.join(', ')} (have: ${TABLET_VIEWPORTS.join(', ')})`);
+    process.exit(2);
+  }
+  return keys;
+})();
+const viewports = has('tablet-only')
+  ? tabletPick
+  : [...(has('desktop') ? ALL_VIEWPORTS : PHONE_VIEWPORTS), ...(has('tablet') ? tabletPick : [])];
 const a11y = !has('no-a11y');
 const enforceA11y = has('enforce-a11y');
 
@@ -66,7 +88,10 @@ for (const app of apps) {
 
 await browser.close();
 
-const summary = summarize(runs, { enforceA11y });
+// --tablet-advisory: walk and report the tablet, but keep it out of the exit
+// code (CI, until the tablet wave burns its findings down).
+const advisoryViewports = has('tablet-advisory') ? TABLET_VIEWPORTS : [];
+const summary = summarize(runs, { enforceA11y, advisoryViewports });
 report(summary);
 
 // SUMMARY.md rides along with the screenshots into the CI artifact, so the

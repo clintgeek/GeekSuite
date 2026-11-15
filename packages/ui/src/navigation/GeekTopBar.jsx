@@ -41,6 +41,7 @@ import Toolbar from '@mui/material/Toolbar';
 import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import { geekLayout, geekShape } from '../designTokens.js';
+import { useBackToClose } from '../hooks/useBackToClose.js';
 import { DEFAULT_SLASH_PRIORITY, slashFocusProps } from '../focus/slashFocus.js';
 import { GeekAppSwitcher } from './GeekAppSwitcher.jsx';
 import { GeekThemeToggle } from './GeekThemeToggle.jsx';
@@ -143,6 +144,9 @@ function AccountMenu({ account, themeRow }) {
   const open = Boolean(anchorEl);
   const handleOpen = useCallback((event) => setAnchorEl(event.currentTarget), []);
   const handleClose = useCallback(() => setAnchorEl(null), []);
+  // Android Back closes the menu (3.27). A menu item that navigates closes
+  // first in the same handler (`run` below), which backStack.js handles.
+  useBackToClose(open, handleClose);
 
   const {
     name,

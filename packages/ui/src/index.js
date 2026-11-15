@@ -1,6 +1,15 @@
 export { LoginSplash } from './LoginSplash';
 export { readableAcross, readableOn, toneForMode } from './color';
 export { useReducedMotion } from './motion.js';
+export {
+  BACK_STATE_KEY,
+  DESKTOP_MIN_WIDTH,
+  TABLET_MIN_SHORT_SIDE,
+  classifyFormFactor,
+  geekMedia,
+  useBackToClose,
+  useFormFactor,
+} from './hooks';
 export { createGeekSuiteTheme, geekDesignTokens } from './createGeekSuiteTheme';
 export {
   GEEK_TOAST_DURATION,

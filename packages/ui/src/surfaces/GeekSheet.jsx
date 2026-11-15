@@ -83,6 +83,7 @@ import useForkRef from '@mui/material/utils/useForkRef';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { geekLayout, geekMotion, geekShape } from '../designTokens.js';
 import { useReducedMotion } from '../motion.js';
+import { useBackToClose } from '../hooks/useBackToClose.js';
 
 /** Selector for "the first focusable element", used when `initialFocus` is
  * `true` rather than a caller-supplied selector string. */
@@ -163,7 +164,11 @@ export function GeekSheet({
   sx,
   bodySx,
   headerSx,
+  // Android Back closes the sheet (review 3.27, hooks/backStack.js). Pass
+  // false only when the caller already owns a history entry for it.
+  backToClose = true,
 }) {
+  useBackToClose(open, onClose, { enabled: backToClose });
   const theme = useTheme();
   const isBelowNavBreakpoint = useMediaQuery(theme.breakpoints.down(geekLayout.navBreakpoint));
   const prefersReducedMotion = useReducedMotion();

@@ -4,10 +4,12 @@
 //   node shoot.mjs --app bookgeek --base http://localhost:1801 --label m6
 //   node shoot.mjs --app todogeek --serve --label m6        # build + preview
 //   node shoot.mjs --app basegeek --serve --viewports all   # + desktop
+//   node shoot.mjs --app notegeek --serve --viewports tablet   # Android tablet, both orientations
+//   node shoot.mjs --app notegeek --serve --viewports every    # phone + desktop + tablet
 import path from 'node:path';
 import { appSpec, APP_NAMES } from './lib/registry.mjs';
 import { runApp, summarize, report, TOOL_ROOT } from './lib/runner.mjs';
-import { PHONE_VIEWPORTS, ALL_VIEWPORTS } from './lib/contexts.mjs';
+import { PHONE_VIEWPORTS, ALL_VIEWPORTS, DESKTOP_VIEWPORTS, TABLET_VIEWPORTS, EVERY_VIEWPORT } from './lib/contexts.mjs';
 import { buildApp, startPreview } from './lib/serve.mjs';
 
 const argv = process.argv.slice(2);
@@ -21,16 +23,20 @@ const has = (name) => argv.includes(`--${name}`);
 
 const app = flag('app');
 if (!app || !APP_NAMES.includes(app)) {
-  console.error(`usage: node shoot.mjs --app <${APP_NAMES.join('|')}> [--base URL | --serve] [--label NAME] [--viewports phone|desktop|all] [--no-build] [--no-shots] [--no-a11y] [--enforce-a11y]`);
+  console.error(`usage: node shoot.mjs --app <${APP_NAMES.join('|')}> [--base URL | --serve] [--label NAME] [--viewports phone|desktop|tablet|all|every] [--tablet] [--no-build] [--no-shots] [--no-a11y] [--enforce-a11y]`);
   process.exit(2);
 }
 
 const label = flag('label', 'local');
 const viewportArg = flag('viewports', 'phone');
-const viewports =
-  viewportArg === 'all' ? ALL_VIEWPORTS
-    : viewportArg === 'desktop' ? ALL_VIEWPORTS.filter((v) => v.startsWith('desktop'))
-      : PHONE_VIEWPORTS;
+const BY_NAME = {
+  phone: PHONE_VIEWPORTS,
+  desktop: DESKTOP_VIEWPORTS,
+  tablet: TABLET_VIEWPORTS,
+  all: ALL_VIEWPORTS, // phone + desktop, as it always was
+  every: EVERY_VIEWPORT, // + tablet
+};
+const viewports = [...(BY_NAME[viewportArg] || PHONE_VIEWPORTS), ...(has('tablet') && viewportArg !== 'tablet' && viewportArg !== 'every' ? TABLET_VIEWPORTS : [])];
 
 let base = flag('base');
 let preview = null;

@@ -139,7 +139,7 @@ describe('the back gesture', () => {
         <AddFoodDialog open onClose={onClose} mealType="lunch" onLogItems={vi.fn()} />
       </GeekToastProvider>
     );
-    expect(window.history.state?.fgSheets?.length).toBeGreaterThan(0);
+    expect(window.history.state?.__geekBack?.length).toBeGreaterThan(0);
     window.dispatchEvent(new PopStateEvent('popstate', { state: {} }));
     expect(onClose).toHaveBeenCalledTimes(1);
   });

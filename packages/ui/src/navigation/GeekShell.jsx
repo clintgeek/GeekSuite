@@ -32,6 +32,7 @@ import Drawer from '@mui/material/Drawer';
 import useMediaQuery from '@mui/material/useMediaQuery';
 import { useTheme } from '@mui/material/styles';
 import { geekLayout } from '../designTokens.js';
+import { useBackToClose } from '../hooks/useBackToClose.js';
 import { useFocusMode } from '../focus/index.js';
 import { useSlashFocus } from '../focus/SlashFocus.jsx';
 import { GeekFab } from '../surfaces/GeekFab.jsx';
@@ -94,6 +95,9 @@ export function GeekShell({
   const hasNav = Boolean(nav);
   const showNav = hasNav && !focusMode;
   const showBottomNav = Boolean(bottomNav) && !focusMode;
+
+  // Android Back closes the nav drawer before it leaves the page (3.27).
+  useBackToClose(showNav && isMobile && mobileOpen, closeNav);
 
   const shellValue = useMemo(
     () => ({

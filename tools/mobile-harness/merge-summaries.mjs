@@ -68,6 +68,11 @@ const merged = {
   a11yByRule: groupA11y(a11y),
   enforceA11y: shards.some((s) => s.summary?.enforceA11y),
   errors: cat('errors'),
+  advisory: {
+    violations: shards.flatMap((s) => s.summary?.advisory?.violations || []),
+    a11y: shards.flatMap((s) => s.summary?.advisory?.a11y || []),
+    errors: shards.flatMap((s) => s.summary?.advisory?.errors || []),
+  },
   ok: shards.length > 0 && shards.every((s) => s.summary?.ok && !(s.failures || []).length) && missing.length === 0,
 };
 

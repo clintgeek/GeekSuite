@@ -3,7 +3,6 @@ import { Box } from '@mui/material';
 import { Restaurant as FoodIcon } from '@mui/icons-material';
 import { FoodComposer } from '../FoodSearch';
 import { useUndoToast } from '../FoodSearch/undoToast.jsx';
-import { useBackToClose } from '../FoodSearch/useBackToClose.js';
 import { sheetTitle } from '../FoodSearch/composerText.js';
 import BarcodeScanner from '../BarcodeScanner/BarcodeScanner.jsx';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
@@ -74,8 +73,10 @@ const AddFoodDialog = ({
   const { offerUndo } = useUndoToast(onUndo);
   const today = useToday();
   const day = date || today;
-  // Android's back gesture closes this sheet instead of leaving the page.
-  useBackToClose(Boolean(open), onClose);
+  // Android's back gesture closes this sheet instead of leaving the page:
+  // GeekDialog (under PremiumDialog) owns that now, via the shared
+  // useBackToClose. A second, local registration here made one Back call
+  // onClose twice.
 
   return (
     <>

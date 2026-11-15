@@ -59,6 +59,7 @@ import ListItemText from '@mui/material/ListItemText';
 import Typography from '@mui/material/Typography';
 import { alpha } from '@mui/material/styles';
 import { geekLayout, geekShape } from '../designTokens.js';
+import { useBackToClose } from '../hooks/useBackToClose.js';
 import { SIDEBAR_CHIP_TINT, sidebarChipInk } from './sidebarInk.js';
 import { initialsFrom } from './navUtils.js';
 import { useGeekShell } from './shellContext.js';
@@ -183,6 +184,8 @@ export const GeekSidebar = forwardRef(function GeekSidebar(
   ref
 ) {
   const { closeNav } = useGeekShell();
+  // Legacy temporary drawer: Android Back closes it first (3.27).
+  useBackToClose(variant === 'temporary' && mobileOpen, onMobileClose);
   const resolvedSections = normalizeSections({ sections, items });
   const resolvedBrand = brand ?? (appName ? { name: appName } : null);
   const legacyFooter = isValidElement(footer) ? footer : null;

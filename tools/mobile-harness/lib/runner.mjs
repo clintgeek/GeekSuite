@@ -9,6 +9,10 @@ import { probePage, partition, isA11y } from './probe.mjs';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 export const TOOL_ROOT = path.resolve(HERE, '..');
 
+// CSS width of a viewport spec; phone devices come from Playwright's
+// descriptor, which the runner does not load, so they read as 390.
+const viewportWidth = (spec) => (spec.overrides?.viewport || spec.viewport || { width: 390 }).width;
+
 export async function loadApp(app) {
   const fixtures = await import(path.join(TOOL_ROOT, 'apps', app, 'fixtures.mjs'));
   const scenes = await import(path.join(TOOL_ROOT, 'apps', app, 'scenes.mjs'));
@@ -56,7 +60,26 @@ export async function runApp({
         base,
         viewport: spec.label,
         scheme: spec.scheme,
-        isPhone: spec.label === 'phone',
+        // "The phone LAYOUT", which is how every scene uses it: open the
+        // drawer, the tags sheet, the bottom bar. A portrait tablet (800px)
+        // sits under the suite's 900px nav breakpoint and gets that layout,
+        // so it is true there too — that is what lets existing scenes run on
+        // the tablet unchanged (review 4.1). When an app grows a tablet
+        // layout (D9: a rail from 600px), its scenes branch on `isTablet` /
+        // `form` first. The tap-target rule does not read this: it follows
+        // `coarse` (see the probe call below).
+        isPhone: spec.label === 'phone' || (spec.label === 'tablet' && viewportWidth(spec) < 900),
+        isTablet: spec.label === 'tablet',
+        form: spec.form,
+        coarse: Boolean(spec.coarse),
+        width: viewportWidth(spec),
+        height: (spec.overrides?.viewport || spec.viewport || { height: 844 }).height,
+        get landscape() {
+          return this.width > this.height;
+        },
+        get compact() {
+          return this.width < 900;
+        },
         settle: (ms = 600) => page.waitForTimeout(ms),
         async esc(ms = 500) {
           await page.keyboard.press('Escape');
@@ -66,8 +89,10 @@ export async function runApp({
       };
 
       for (const scene of scenes) {
-        if (scene.viewports && !scene.viewports.includes(spec.label)) continue;
+        if (scene.viewports && !scene.viewports.includes(spec.label) && !scene.viewports.includes(spec.form)) continue;
         const name = scene.name;
+        // HARNESS_SCENES='^6' runs only the scenes whose name matches (local iteration).
+        if (process.env.HARNESS_SCENES && !new RegExp(process.env.HARNESS_SCENES).test(name)) continue;
         try {
           // `freshPage: true` starts the scene in a new tab. One page serves a
           // whole viewport, and every page.click() before this scene left
@@ -94,7 +119,9 @@ export async function runApp({
           if (screenshots) {
             await page.screenshot({ path: path.join(outDir, `${app}-${name}-${spec.scheme}${spec.suffix}.png`) });
           }
-          const raw = scene.probe === false ? [] : await probePage(page, { isPhone: h.isPhone, a11y });
+          // tap-target is enforced wherever the pointer is a finger (phone and
+          // tablet, any width), not by width: review 4.3.
+          const raw = scene.probe === false ? [] : await probePage(page, { isPhone: h.coarse, a11y });
           const { open, waived } = partition(raw, waivers, name);
           results.push({ viewport: key, scene: name, open, waived });
           if (!quiet) {
@@ -132,10 +159,17 @@ export async function runApp({
 // `enforceA11y` decides whether the axe findings count toward `ok` (and so
 // toward the exit code). Default off: the three grammar rules are the gate,
 // a11y is a burn-down list until it reaches zero (DOCS/MOBILE_UI_PLAN §2).
-export function summarize(runs, { enforceA11y = false } = {}) {
+//
+// `advisoryViewports` (viewport keys) are walked and reported but never
+// count toward `ok`: their findings land in `summary.advisory` instead. CI
+// uses it for the tablet contexts (--tablet-advisory) until the tablet wave
+// burns them down, the same way a11y was report-only before 2026-09-05.
+export function summarize(runs, { enforceA11y = false, advisoryViewports = [] } = {}) {
   const violations = [];
   const a11y = [];
   const errors = [];
+  const advisory = { violations: [], a11y: [], errors: [] };
+  const isAdvisory = (viewport) => advisoryViewports.includes(viewport);
   let scenesRun = 0;
   let waivedCount = 0;
   let a11yWaivedCount = 0;
@@ -144,12 +178,13 @@ export function summarize(runs, { enforceA11y = false } = {}) {
       if (r.scene !== '(page)' && !r.skipped) scenesRun += 1;
       waivedCount += (r.waived || []).length;
       a11yWaivedCount += (r.waived || []).filter(isA11y).length;
+      const sink = isAdvisory(r.viewport) ? advisory : { violations, a11y, errors };
       for (const v of r.open || []) {
         const row = { app: run.app, viewport: r.viewport, scene: r.scene, ...v };
-        (isA11y(v) ? a11y : violations).push(row);
+        (isA11y(v) ? sink.a11y : sink.violations).push(row);
       }
-      if (r.error) errors.push({ app: run.app, viewport: r.viewport, scene: r.scene, message: r.error });
-      for (const e of r.pageErrors || []) errors.push({ app: run.app, viewport: r.viewport, scene: r.scene, message: e });
+      if (r.error) sink.errors.push({ app: run.app, viewport: r.viewport, scene: r.scene, message: r.error });
+      for (const e of r.pageErrors || []) sink.errors.push({ app: run.app, viewport: r.viewport, scene: r.scene, message: e });
     }
   }
   const enforced = enforceA11y ? violations.length + a11y.length : violations.length;
@@ -162,6 +197,7 @@ export function summarize(runs, { enforceA11y = false } = {}) {
     a11yByRule: groupA11y(a11y),
     enforceA11y,
     errors,
+    advisory,
     ok: enforced === 0 && errors.length === 0,
   };
 }
@@ -226,6 +262,17 @@ export function report(summary) {
     console.log('\n── page errors ─────────────────────────────────────────────');
     for (const e of summary.errors) console.log(`  ${e.app} ${e.viewport} ${e.scene}: ${e.message}`);
   }
+  const adv = summary.advisory;
+  if (adv && adv.violations.length + adv.a11y.length + adv.errors.length) {
+    console.log(
+      `\n── advisory (not gating): ${adv.violations.length} grammar, ${adv.a11y.length} a11y, ` +
+        `${adv.errors.length} errors ──`,
+    );
+    for (const v of [...adv.violations, ...adv.a11y]) {
+      console.log(`  [${isA11y(v) ? `a11y:${v.rule}` : v.rule}] ${v.app} ${v.viewport} ${v.scene}\n      ${v.el}\n      ${v.detail}`);
+    }
+    for (const e of adv.errors) console.log(`  ${e.app} ${e.viewport} ${e.scene}: ${e.message}`);
+  }
 }
 
 // The same a11y burn-down as a Markdown table, written next to the
@@ -274,6 +321,16 @@ export function summaryMarkdown(summary, { label = 'ci', apps = [] } = {}) {
     lines.push('## page errors');
     lines.push('');
     for (const e of summary.errors) lines.push(`- ${e.app} ${e.viewport} ${e.scene}: ${e.message}`);
+    lines.push('');
+  }
+  const adv = summary.advisory;
+  if (adv && adv.violations.length + adv.a11y.length + adv.errors.length) {
+    lines.push('## advisory — reported, not gating (tablet until the tablet wave lands)');
+    lines.push('');
+    for (const v of [...adv.violations, ...adv.a11y]) {
+      lines.push(`- \`[${isA11y(v) ? `a11y:${v.rule}` : v.rule}]\` ${v.app} ${v.viewport} ${v.scene} — \`${v.hint}\` — ${v.detail}`);
+    }
+    for (const e of adv.errors) lines.push(`- error: ${e.app} ${e.viewport} ${e.scene}: ${e.message}`);
     lines.push('');
   }
   return lines.join('\n');

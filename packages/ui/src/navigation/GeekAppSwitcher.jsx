@@ -7,6 +7,7 @@ import Tooltip from '@mui/material/Tooltip';
 import Typography from '@mui/material/Typography';
 import { alpha } from '@mui/material/styles';
 import { geekLayout, geekShape } from '../designTokens.js';
+import { useBackToClose } from '../hooks/useBackToClose.js';
 
 /**
  * The GeekSuite roster, in switcher order. This is the single source of truth
@@ -87,6 +88,8 @@ export const GeekAppSwitcher = forwardRef(function GeekAppSwitcher(
 
   const handleOpen = useCallback((event) => setAnchorEl(event.currentTarget), []);
   const handleClose = useCallback(() => setAnchorEl(null), []);
+  // Android Back closes the switcher before it leaves the page (3.27).
+  useBackToClose(open, handleClose);
 
   return (
     <>

@@ -31,10 +31,17 @@ node tools/mobile-harness/shoot.mjs --app todogeek --serve --no-build --label wi
 # Add the 1280x900 desktop contexts
 node tools/mobile-harness/shoot.mjs --app basegeek --serve --viewports all
 
+# The Android tablet (800x1280 portrait + 1280x800 landscape, touch), alone or
+# on top of everything else
+node tools/mobile-harness/shoot.mjs --app notegeek --serve --viewports tablet
+node tools/mobile-harness/shoot.mjs --app notegeek --serve --viewports every
+
 # Everything, the way CI runs it
 pnpm --filter @geeksuite/mobile-harness run ci
 node tools/mobile-harness/ci.mjs --app bookgeek --app flockgeek   # a subset
 node tools/mobile-harness/ci.mjs --app gamegeek --enforce-a11y --desktop   # one CI shard, exactly
+node tools/mobile-harness/ci.mjs --app notegeek --enforce-a11y --desktop --tablet   # the NoteGeek/TodoGeek shards
+node tools/mobile-harness/ci.mjs --app todogeek --tablet-only                    # just the tablet
 
 # Make the axe-core findings count toward the exit code. CI passes this; the
 # tool's own default is still report-only, so pass it when you want the gate.
@@ -51,7 +58,7 @@ node tools/mobile-harness/selftest.mjs
 HARNESS_CPU_THROTTLE=4 FG_SCENES='^5' node tools/mobile-harness/ci.mjs --app fitnessgeek
 ```
 
-Screenshots land in `out/<label>/<app>/<app>-<scene>-<scheme>[-desktop].png`,
+Screenshots land in `out/<label>/<app>/<app>-<scene>-<scheme>[-desktop|-tablet|-tablet-land].png`,
 and `ci.mjs` writes `out/<label>/SUMMARY.md` next to them — the run's counts
 plus the a11y burn-down table, so the CI artifact carries the numbers and not
 just the pixels. `out/` is gitignored. Exit code is 0 only when every scene is
@@ -102,7 +109,8 @@ install and `lib/playwright.mjs` will use it (it already falls back to the
 lib/
   playwright.mjs   resolve Playwright (dep → PLAYWRIGHT_MODULE → local checkout)
   a11y.mjs         resolve + inject axe-core; the axe.run options
-  contexts.mjs     iPhone 14 dark/light + 1280x900 desktop contexts
+  contexts.mjs     iPhone 14 dark/light, 1280x900 desktop, and the Android
+                   tablet (800x1280 + 1280x800, touch, DPR 2) contexts
   net.mjs          route plumbing: CORS/preflight, session routes, GraphQL stubs
   probe.mjs        the three grammar rules + the a11y pass, measured in the
                    page; plus waiver matching
@@ -151,7 +159,36 @@ export const scenes = [
 
 The runner navigates to `base + goto` (`networkidle`), waits `wait` ms
 (default 1200), runs `setup`, screenshots, probes, then runs `teardown`.
-`h` carries `{ page, base, viewport, scheme, isPhone, settle, esc, log }`.
+`h` carries `{ page, base, viewport, scheme, isPhone, settle, esc, log }`, plus
+for tablet-aware scenes `{ isTablet, form, coarse, width, height, landscape,
+compact }`. `viewport` is `'phone' | 'tablet' | 'desktop'`; `form` splits the
+tablet into `'tablet-portrait' | 'tablet-landscape'`, and `scene.viewports`
+accepts either (`['phone', 'tablet-portrait']`). `isPhone` means "the phone
+layout": the phone viewport, and also the portrait tablet, which sits under
+the apps' 900px nav breakpoint — that is what lets existing scenes run on the
+tablet unchanged. `compact` says the same thing by width alone. When an app
+grows a real tablet layout (D9's rail), its scenes branch on `isTablet` /
+`form` first.
+
+### Tablet (review 4.1, 2026-11)
+
+`--tablet` (ci.mjs) or `--viewports tablet|every` (shoot.mjs) adds an Android
+tablet the way Chrome on a Galaxy Tab S8 / Lenovo Tab P11 reports itself:
+800×1280 and 1280×800 CSS px, DPR 2, `hasTouch` + `isMobile`, an Android UA
+without "Mobile". In Chromium that makes `(pointer: coarse)`, `(hover: none)`
+and `(any-hover: none)` true — the same answers `useFormFactor()` in
+`packages/ui` keys on. A scene with no `viewports` runs there automatically;
+a `viewports: ['phone']` scene does not. The tablet is coarse, so the
+44px tap-target rule applies to it at both widths.
+
+CI runs it as two extra shards, `mobile grammar · notegeek tablet` and
+`… todogeek tablet`: `--tablet-only --tablet-viewports
+tablet-dark,tablet-land-light --tablet-advisory`. One scheme per orientation
+(contrast in both schemes is already gated on phone and desktop), separate
+jobs so no existing shard grows, and **advisory**: `--tablet-advisory` keeps
+tablet findings and scene errors out of the exit code and lists them under
+"advisory" in SUMMARY.md. Drop that flag once the tablet wave has burned them
+down, and the tablet gates like everything else.
 
 **Scenes are independent.** Nothing is carried between them, so a scene that
 needs a sheet open must open it itself. That costs a navigation and buys a
@@ -206,7 +243,7 @@ counts when `--enforce-a11y` is passed — CI passes it:
 
 | category | assertion | viewport | gate |
 |------|-----------|----------|------|
-| `tap-target` | every visible interactive element is ≥ 44×44 | phone only | enforcing |
+| `tap-target` | every visible interactive element is ≥ 44×44 | coarse pointer (phone, tablet) | enforcing |
 | `text-floor` | no visible readable string below 12px | all | enforcing |
 | `h-scroll` | `document.scrollingElement.scrollWidth === clientWidth` | all | enforcing |
 | `a11y` | no axe-core violation at `wcag2a` / `wcag2aa` | all | enforcing in CI (`--enforce-a11y`) |
@@ -218,11 +255,13 @@ rules they are the same string. For `a11y` the category is `a11y` and the
 rule is the **axe rule id** (`image-alt`, `color-contrast`, …), which is what
 the burn-down groups by.
 
-`tap-target` only runs when the scene is walked at the phone viewport
-(`runner.mjs` passes `isPhone: h.isPhone` into `probePage`, which gates the
-rule inside `collect(isPhone)` in `lib/probe.mjs`). MOBILE_UI_PLAN §2 makes
-44px a rule below `md`, not a universal one — grading a 1280×900 desktop
-scene against it is noise, not signal. `text-floor` and `h-scroll` still run
+`tap-target` only runs when the scene is walked at a coarse-pointer viewport
+— the phone and the tablet (`runner.mjs` passes `isPhone: h.coarse` into
+`probePage`, which gates the rule inside `collect(isPhone)` in
+`lib/probe.mjs`). It used to be phone-only, on MOBILE_UI_PLAN §2's "44px
+below `md`"; review 4.3 (2026-11) moved it to the pointer, because a finger
+on a 1280-wide landscape tablet is no smaller than on a phone. Grading a
+mouse-driven 1280×900 desktop against it is still noise, not signal. `text-floor` and `h-scroll` still run
 at every viewport, desktop included, because both grammar rules genuinely do
 apply everywhere. `ci.mjs` only walks phone viewports by default anyway
 (`--desktop` adds the 1280×900 contexts), so this mostly matters for that
