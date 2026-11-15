@@ -352,7 +352,9 @@ the typeDefs. Only the module notes under the block are hand-maintained — put 
 |---|---|
 | `sketchTranscript(noteId: ID!)` | `SketchTranscriptState!` |
 | `notes(tag: String, prefix: String, under: String, type: String, limit: Int, sort: String)` | `[Note!]!` |
+| `notesPage(tag: String, prefix: String, under: String, type: String, sort: String, first: Int, after: String)` | `NotePage!` |
 | `note(id: ID!)` | `Note` |
+| `deletedNotes(limit: Int)` | `[Note!]!` |
 | `noteVersions(noteId: ID!)` | `[NoteVersion!]!` |
 | `noteVersion(id: ID!)` | `NoteVersion` |
 | `noteTags` | `[String!]!` |
@@ -369,8 +371,8 @@ the typeDefs. Only the module notes under the block are hand-maintained — put 
 
 | Field | Returns |
 |---|---|
-| `createNote(title: String, content: String!, type: String, tags: [String!])` | `Note!` |
-| `updateNote(id: ID!, title: String, content: String, type: String, tags: [String!], changeReason: String)` | `Note!` |
+| `createNote(title: String, content: String!, type: String, tags: [String!], transcriptText: String)` | `Note!` |
+| `updateNote(id: ID!, title: String, content: String, type: String, tags: [String!], changeReason: String, baseUpdatedAt: String, transcriptText: String)` | `Note!` |
 | `restoreNoteVersion(versionId: ID!)` | `Note!` |
 | `composeNote(content: String!)` | `ComposedNote!` |
 | `composeNotes(noteIds: [ID!]!)` | `ComposedNotes!` |
@@ -379,11 +381,13 @@ the typeDefs. Only the module notes under the block are hand-maintained — put 
 | `transcribeSketch(image: String!, mediaType: String!, source: String, noteId: ID)` | `SketchTranscript!` |
 | `autoTranscribeSketch(noteId: ID!, image: String!, mediaType: String!)` | `SketchTranscriptState!` |
 | `saveSketchTranscriptEdit(noteId: ID!, text: String!, forHash: String)` | `SketchTranscriptState!` |
-| `recordSketchTasksSent(noteId: ID!, keys: [String!]!)` | `SketchTranscriptState!` |
+| `recordSketchTasksSent(noteId: ID!, keys: [String!]!, texts: [String!])` | `SketchTranscriptState!` |
 | `setNotePinned(id: ID!, pinned: Boolean!)` | `Note!` |
 | `archiveNotes(ids: [ID!]!)` | `ArchiveResult!` |
 | `restoreNotes(ids: [ID!]!)` | `ArchiveResult!` |
 | `deleteNote(id: ID!)` | `Boolean!` |
+| `restoreNote(id: ID!)` | `Note!` |
+| `purgeNote(id: ID!)` | `Boolean!` |
 | `renameTag(oldTag: String!, newTag: String!)` | `Boolean!` |
 | `deleteTag(tag: String!)` | `Boolean!` |
 
@@ -486,10 +490,10 @@ the typeDefs. Only the module notes under the block are hand-maintained — put 
 
 | Field | Returns |
 |---|---|
-| `createTask(content: String!, signifier: String, status: String, priority: Int, tags: [String], dueDate: Date, createdAt: Date, updatedAt: Date, note: String, recurrencePattern: String, recurrenceRule: String, isSeriesMaster: Boolean, collectionId: ID, private: Boolean)` | `Task!` |
+| `createTask(content: String!, signifier: String, status: String, priority: Int, tags: [String], dueDate: Date, createdAt: Date, updatedAt: Date, note: String, recurrencePattern: String, recurrenceRule: String, isSeriesMaster: Boolean, collectionId: ID, private: Boolean, clientId: String, hasDueTime: Boolean, timeZone: String)` | `Task!` |
 | `updateTask(id: ID!, input: UpdateTaskInput!, editScope: EditScope)` | `Task!` |
 | `deleteTask(id: ID!, editScope: EditScope)` | `DeleteResponse!` |
-| `updateTaskStatus(id: ID!, status: String!)` | `Task!` |
+| `updateTaskStatus(id: ID!, status: String!, editScope: EditScope)` | `Task!` |
 | `blockTask(id: ID!, reason: String)` | `Task!` |
 | `unblockTask(id: ID!)` | `Task!` |
 | `addSubtask(parentId: ID!, content: String!, signifier: String, status: String, priority: Int, tags: [String], dueDate: Date)` | `Task!` |
