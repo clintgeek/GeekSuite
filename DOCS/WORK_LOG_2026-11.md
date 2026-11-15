@@ -37,6 +37,23 @@ bar**: Paper and Fullscreen move into More, leaving six 44 px buttons (284 px).
 Verified: BookGeek api 253 tests (new ones go red with the as-is guard removed), web
 355; NoteGeek vitest 1,017. Harness results are in the commit messages.
 
+**Follow-up the same evening (Chef: "once you open a book's card, you can't close
+it" and "I still can't download comic books directly").**
+
+- **A book could not be closed.** Wave 1 gave `GeekSheet` its own history entry so
+  Android Back closes it. BookGeek's book sheet is a route and closes with
+  `navigate(-1)`, which only popped that entry. Fixed with `backToClose={false}` on
+  that sheet. Broken in production from the wave 1 UI deploy until this fix. No other
+  app closes a sheet this way (checked GameGeek, ThingGeek, NoteGeek, NewsGeek,
+  FitnessGeek).
+- **The close X on a phone took no taps** on that sheet: its body drew over the
+  button. `GeekSheet`'s close button now sits above the body (`zIndex: 2`).
+- **"Card" meant the book page.** A comic's page now leads with one Download button
+  for the stored file and has no Read or Send; the first pass had only added a line
+  to the grid card and left the download three taps deep.
+- Harness: `03e-detail-closes` (goes red with the fix reverted) and a real download
+  event in `03d-detail-comic-download`. Neither fault was visible to the unit tests.
+
 ## 2026-11-15 — NoteGeek + TodoGeek: wave 1 of the review built and deployed
 
 Per-item status, the decisions, deploy order and the device checklist are in the
