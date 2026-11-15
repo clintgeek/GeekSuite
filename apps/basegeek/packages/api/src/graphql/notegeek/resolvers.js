@@ -1,6 +1,6 @@
 import mongoose from 'mongoose';
 import { GraphQLError } from 'graphql';
-import Note, { active } from './models/Note.js';
+import Note, { active, notDeleted, staleIndexFields } from './models/Note.js';
 import {
   validateInput,
   createNoteArgsSchema,
@@ -20,15 +20,22 @@ import {
   archiveNotesArgsSchema,
   archivedNotesArgsSchema,
   composeNotesArgsSchema,
+  notesPageArgsSchema,
+  NOTES_PAGE_DEFAULT,
+  clampSearchQuery,
   assertContentCeiling,
 } from './validation.js';
+import { snippetAround, derivedFields, previewFor } from './noteDerived.js';
+import {
+  noteProjection, sortSpec, pageQuery, encodeCursor, decodeCursor, TITLE_COLLATION, fillMissingPreviews,
+} from './noteLists.js';
 import { sanitizeNoteArgs } from './sanitize.js';
 import { suggestForNote } from './suggest.js';
 import { composeNote, composeNotes } from './compose.js';
 import { transcribeSketch } from './transcribe.js';
 import {
   autoTranscribeSketch, getSketchTranscript, rememberConvertReading, saveSketchTranscriptEdit,
-  recordSketchTasksSent,
+  recordSketchTasksSent, transcriptForCreate,
 } from './sketchTranscript.js';
 import { foldInPreview, planOperations, applyPlan, refusalFor } from './foldin.js';
 import NoteVersion from './models/NoteVersion.js';
@@ -42,6 +49,7 @@ import {
 import { spellingsOf, subtreeSpellings, storedSpellingsWhere, anyOf } from '../shared/tagSpellings.js';
 import {
   snapshotNote,
+  shouldSnapshotEdit,
   isMeaningfulChange,
   listNoteVersions,
   getNoteVersion,
@@ -62,7 +70,7 @@ import {
   whyExcerpt,
   relatedNotes as findRelatedNotes,
   indexStatus,
-  invalidateUserVectors,
+  dropNoteVectors,
 } from './semantic.js';
 
 const validateCreateNote = validateInput(createNoteArgsSchema);
@@ -82,6 +90,7 @@ const validateFoldInApply = validateInput(foldInApplyArgsSchema);
 const validateArchiveNotes = validateInput(archiveNotesArgsSchema);
 const validateArchivedNotes = validateInput(archivedNotesArgsSchema);
 const validateComposeNotes = validateInput(composeNotesArgsSchema);
+const validateNotesPage = validateInput(notesPageArgsSchema);
 
 /** Default page of the Archived view. */
 const ARCHIVED_DEFAULT_LIMIT = 50;
@@ -143,17 +152,19 @@ const SEARCH_RESULT_LIMIT = 100;
 /** The stored tag ceiling — the same 100 `validation.js` enforces on input. */
 const TAG_MAX = 100;
 
-/** One search result row. The snippet rules are the original ones. */
-function searchRow(note, { score, matchedBy = null, why = null, bestMatch = false }) {
-  let snippet = '';
-  if (note.content && !note.isLocked && note.type !== 'handwritten' && note.type !== 'mindmap') {
-    const plain = note.content.replace(/<[^>]+>/g, '');
-    snippet = plain.slice(0, 200);
-  }
+/**
+ * One search result row. The snippet is plain text around the first word that
+ * starts with a query term (plan 5.5): from `wordText`, so a rich-text note
+ * shows words, not tags; a code note its code, not its JSON; a mind map its
+ * labels; and a sketch its transcript. Locked and encrypted notes: none.
+ */
+function searchRow(note, { score, matchedBy = null, why = null, bestMatch = false, q = '' }) {
+  const hidden = note.isLocked || note.isEncrypted;
+  const snippet = hidden ? '' : snippetAround(note.wordText || '', q);
   return {
     _id: note._id,
     title: note.title,
-    type: note.type,
+    type: note.type || 'text',
     tags: normalizeTags(note.tags || []),
     isLocked: note.isLocked || false,
     isEncrypted: note.isEncrypted || false,
@@ -166,6 +177,130 @@ function searchRow(note, { score, matchedBy = null, why = null, bestMatch = fals
     why,
     bestMatch,
   };
+}
+
+/** How long a note stays in Recently deleted before it is purged. */
+export const DELETED_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+const DELETED_DEFAULT_LIMIT = 50;
+
+/** Hard-delete one note and everything hanging off it. Best effort past the note itself. */
+async function hardDelete(note, userId) {
+  const res = await Note.deleteOne({ _id: note._id, userId, deletedAt: { $ne: null } });
+  if (!res.deletedCount) return false;
+  await deleteVersionsForNote(note._id, userId);
+  try {
+    await NoteChunk.deleteMany({ noteId: note._id, userId });
+  } catch (err) {
+    logger.warn({ err: err?.message }, '[notegeek] chunk cleanup failed; the sweep will retry');
+  }
+  dropNoteVectors(userId, note._id);
+  return true;
+}
+
+/**
+ * Purge the caller's notes deleted over 30 days ago. Lazy — run when
+ * Recently deleted is read and on every delete — so there is no job to keep
+ * alive. Never fails the caller's request.
+ */
+export async function purgeExpiredNotes(userId, now = Date.now()) {
+  try {
+    const expired = await Note.find(
+      { userId, deletedAt: { $ne: null, $lt: new Date(now - DELETED_RETENTION_MS) } },
+      { _id: 1 },
+    ).limit(200).lean();
+    let purged = 0;
+    for (const n of expired) {
+      // eslint-disable-next-line no-await-in-loop
+      if (await hardDelete(n, userId)) purged += 1;
+    }
+    if (purged) logger.info({ userId: String(userId), purged }, '[notegeek] expired deleted notes purged');
+    return purged;
+  } catch (err) {
+    logger.warn({ err: err?.message }, '[notegeek] purge of expired deleted notes failed');
+    return 0;
+  }
+}
+
+/** C3: the write lost to a newer save. Carries the server's copy. Status 200, like any resolver error. */
+function noteConflict(note) {
+  return new GraphQLError('This note was changed on another device since you started editing.', {
+    extensions: {
+      code: 'CONFLICT',
+      serverNote: {
+        id: String(note._id),
+        title: note.title ?? null,
+        content: note.content ?? '',
+        tags: normalizeTags(note.tags || []),
+        type: note.type || 'text',
+        updatedAt: new Date(note.updatedAt).toISOString(),
+      },
+    },
+  });
+}
+
+/** Titles with a word starting with `q` (plan 5.4): the hybrid search's third list. */
+async function titlePrefixIds(scope, q) {
+  const needle = String(q || '').trim();
+  if (needle.length < 2 || needle.length > 100) return [];
+  const re = new RegExp(`(^|[\\s\\-_/([{"'])${ escapeRegex(needle) }`, 'i');
+  const rows = await Note.find({ ...scope, title: re }, { title: 1, updatedAt: 1 })
+    .sort({ updatedAt: -1 }).limit(50).lean();
+  const low = needle.toLowerCase();
+  return rows
+    .map((r, i) => ({ r, i }))
+    .sort((a, b) => (String(a.r.title).toLowerCase().startsWith(low) ? 0 : 1) - (String(b.r.title).toLowerCase().startsWith(low) ? 0 : 1) || a.i - b.i)
+    .slice(0, 20)
+    .map(({ r }) => String(r._id));
+}
+
+/** Mongo's "no text index" (the moment the index is being swapped at start-up). */
+const isMissingTextIndex = (err) => err?.code === 27 || /text index required/i.test(String(err?.message));
+
+/**
+ * The list's filter: the owner's active notes, narrowed by tag / prefix /
+ * under / type (shared by notes and notesPage).
+ */
+async function listFilter(userId, { tag, prefix, under, type }) {
+  // Archived notes leave the list (spec §3 A2). The tag-spelling lookups
+  // below stay owner-wide: a superset of spellings narrows nothing wrongly.
+  const filter = { userId, ...active() };
+
+  // `tag` and `prefix` are separate arguments and a client may send both.
+  // Two plain assignments meant the second silently REPLACED the first, so
+  // `notes(tag: "flock", prefix: "chores/")` quietly dropped the tag half
+  // and returned the wrong list. Both narrow now, which is what a caller
+  // asking for both means.
+  //
+  // Every tag argument is read through the suite standard AND matched
+  // against the owner's stored spellings (`shared/tagSpellings.js`), so a
+  // note tagged before the standard (`geekSuite`) is still found by
+  // `geek-suite` until the migration rewrites it.
+  const owner = { userId };
+  const tagConds = [];
+  if (tag) tagConds.push(anyOf(await spellingsOf(Note, owner, tag)));
+  if (prefix) {
+    // A raw prefix (old bundles), also tried in the standard spelling.
+    const normPrefix = normalizeTag(prefix) + (/\/\s*$/.test(prefix) ? '/' : '');
+    const hits = await storedSpellingsWhere(Note, owner,
+      (n, stored) => stored.startsWith(prefix) || (normPrefix !== '' && n.startsWith(normPrefix)));
+    tagConds.push(anyOf(hits));
+  }
+  // `under` is the nested-tag view: the tag itself AND everything beneath
+  // it (`house` → `house`, `house/garage`, never `houseboat`). Normalized
+  // the way stored tags are, so `house/` finds `house`. One that
+  // normalizes to nothing narrows nothing, like an absent argument.
+  const underTag = normalizeTag(under);
+  if (underTag) tagConds.push(anyOf(await subtreeSpellings(Note, owner, underTag)));
+  if (tagConds.length === 1) {
+    filter.tags = tagConds[0];
+  } else if (tagConds.length > 1) {
+    filter.$and = tagConds.map((cond) => ({ tags: cond }));
+  }
+  if (type) {
+    filter.type = type;
+  }
+
+  return filter;
 }
 
 const badTagInput = (message, path = 'newTag') =>
@@ -201,80 +336,63 @@ export const resolvers = {
       return getNoteVersion({ versionId: id, userId });
     },
 
-    notes: async (_, { tag, prefix, under, type, limit, sort }, context) => {
+    notes: async (_, { tag, prefix, under, type, limit, sort }, context, info) => {
       const userId = context.user?.id;
       if (!userId) return [];
-
-      // Archived notes leave the list (spec §3 A2). The tag-spelling lookups
-      // below stay owner-wide: a superset of spellings narrows nothing wrongly.
-      const filter = { userId, ...active() };
-
-      // `tag` and `prefix` are separate arguments and a client may send both.
-      // Two plain assignments meant the second silently REPLACED the first, so
-      // `notes(tag: "flock", prefix: "chores/")` quietly dropped the tag half
-      // and returned the wrong list. Both narrow now, which is what a caller
-      // asking for both means.
-      //
-      // Every tag argument is read through the suite standard AND matched
-      // against the owner's stored spellings (`shared/tagSpellings.js`), so a
-      // note tagged before the standard (`geekSuite`) is still found by
-      // `geek-suite` until the migration rewrites it.
-      const owner = { userId };
-      const tagConds = [];
-      if (tag) tagConds.push(anyOf(await spellingsOf(Note, owner, tag)));
-      if (prefix) {
-        // A raw prefix (old bundles), also tried in the standard spelling.
-        const normPrefix = normalizeTag(prefix) + (/\/\s*$/.test(prefix) ? '/' : '');
-        const hits = await storedSpellingsWhere(Note, owner,
-          (n, stored) => stored.startsWith(prefix) || (normPrefix !== '' && n.startsWith(normPrefix)));
-        tagConds.push(anyOf(hits));
-      }
-      // `under` is the nested-tag view: the tag itself AND everything beneath
-      // it (`house` → `house`, `house/garage`, never `houseboat`). Normalized
-      // the way stored tags are, so `house/` finds `house`. One that
-      // normalizes to nothing narrows nothing, like an absent argument.
-      const underTag = normalizeTag(under);
-      if (underTag) tagConds.push(anyOf(await subtreeSpellings(Note, owner, underTag)));
-      if (tagConds.length === 1) {
-        filter.tags = tagConds[0];
-      } else if (tagConds.length > 1) {
-        filter.$and = tagConds.map((cond) => ({ tags: cond }));
-      }
-      if (type) {
-        filter.type = type;
-      }
-
-      let sortObj = { updatedAt: -1 };
-      switch (sort?.toLowerCase()) {
-        case 'updatedat_asc':
-          sortObj = { updatedAt: 1 };
-          break;
-        case 'updatedat_desc':
-          sortObj = { updatedAt: -1 };
-          break;
-        case 'createdat_desc':
-          sortObj = { createdAt: -1 };
-          break;
-        case 'title_asc':
-          sortObj = { title: 1 };
-          break;
-      }
-
+      const filter = await listFilter(userId, { tag, prefix, under, type });
+      const { key, dir } = sortSpec(sort);
       // Pinned notes sort first, ahead of whatever order was requested —
       // server-side, matching how every other `notes` sort is decided here
-      // rather than left to the client.
-      const query = Note.find(filter).sort({ pinned: -1, ...sortObj });
+      // rather than left to the client. Lean, and without `content` unless
+      // it was selected (plan 5.1).
+      const query = Note.find(filter, noteProjection(info)).sort({ pinned: -1, [key]: dir }).lean();
+      if (key === 'title') query.collation(TITLE_COLLATION);
       if (limit && limit > 0) query.limit(limit);
-      return await query;
+      return await fillMissingPreviews(await query);
     },
 
-    note: async (_, { id }, context) => {
+    /** The list a page at a time (plan 5.2). See noteLists.js for the cursor. */
+    notesPage: async (_, rawArgs, context, info) => {
+      const userId = context.user?.id;
+      if (!userId) return { notes: [], nextCursor: null, hasMore: false };
+      const args = validateNotesPage(rawArgs || {});
+      const spec = sortSpec(args.sort);
+      const first = args.first ?? NOTES_PAGE_DEFAULT;
+      const filter = await listFilter(userId, args);
+      const cursor = decodeCursor(args.after, spec);
+      const { sort, after, skip } = pageQuery(spec, cursor);
+      const query = Note.find(after ? { $and: [filter, after] } : filter, noteProjection(info, ['notes']))
+        .sort(sort).skip(skip).limit(first + 1).lean();
+      if (spec.key === 'title') query.collation(TITLE_COLLATION);
+      const rows = await fillMissingPreviews(await query);
+      const hasMore = rows.length > first;
+      const notes = hasMore ? rows.slice(0, first) : rows;
+      return {
+        notes,
+        hasMore,
+        nextCursor: hasMore ? encodeCursor(notes[notes.length - 1], spec, skip + notes.length) : null,
+      };
+    },
+
+    /** Recently deleted, newest first. Reading it purges what is past 30 days. */
+    deletedNotes: async (_, { limit }, context, info) => {
+      const userId = context.user?.id;
+      if (!userId) return [];
+      await purgeExpiredNotes(userId);
+      const n = Math.max(1, Math.min(Number(limit) || DELETED_DEFAULT_LIMIT, 200));
+      return await fillMissingPreviews(await Note.find({ userId, deletedAt: { $ne: null } }, noteProjection(info))
+        .sort({ deletedAt: -1, _id: -1 }).limit(n).lean());
+    },
+
+    note: async (_, { id }, context, info) => {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
       if (!id || id === 'undefined' || !mongoose.isValidObjectId(id)) {
         throw new Error(`Invalid Note ID format: ${ id }`);
       }
-      const note = await Note.findOne({ _id: id, userId });
+      // By id, deleted ones too: a link or a stale tab opens it, and the
+      // client shows "In Recently deleted · Restore" from `deletedAt`.
+      const note = await Note.findOne({ _id: id, userId }, noteProjection(info)).lean();
       if (!note) throw new Error('Note not found or you do not have permission to view it');
       return note;
     },
@@ -306,9 +424,9 @@ export const resolvers = {
       ).size;
       // renameTag/deleteTag reach archived notes too (spec §3 A4), so the
       // dialogs need this to say what an action will actually touch.
-      const archivedSpellings = await subtreeSpellings(Note, { userId, archived: true }, root);
+      const archivedSpellings = await subtreeSpellings(Note, { userId, archived: true, ...notDeleted() }, root);
       const archived = archivedSpellings.length
-        ? await Note.countDocuments({ userId, archived: true, tags: anyOf(archivedSpellings) })
+        ? await Note.countDocuments({ userId, archived: true, ...notDeleted(), tags: anyOf(archivedSpellings) })
         : 0;
       return { notes, subTags, archived };
     },
@@ -324,10 +442,13 @@ export const resolvers = {
      * is down or slow, hybrid is silently keyword-only (still cut, never a
      * best match).
      */
-    searchNotes: async (_, { q, under, hybrid }, context) => {
+    searchNotes: async (_, { q: rawQ, under, hybrid }, context) => {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
-      if (!q || q.trim().length === 0) throw new Error('Search query cannot be empty');
+      if (!rawQ || rawQ.trim().length === 0) throw new Error('Search query cannot be empty');
+      // Bounded (plan 5.10): cut at a word, never refused — Fold-in's picker
+      // searches with the start of a 12 000-character paste.
+      const q = clampSearchQuery(rawQ);
 
       // Bounded. This had no limit at all while projecting every matching
       // row's full `content` — a field whose ceiling is 5 000 000 characters
@@ -341,13 +462,23 @@ export const resolvers = {
       const scope = { userId, ...active() };
       const underTag = normalizeTag(under);
       if (underTag) scope.tags = anyOf(await subtreeSpellings(Note, { userId }, underTag));
-      const projection = { title: 1, type: 1, tags: 1, isLocked: 1, isEncrypted: 1, createdAt: 1, updatedAt: 1, content: 1 };
-      const keywordRows = await Note.find(
-        { ...scope, $text: { $search: q.trim() } },
-        { ...projection, score: { $meta: 'textScore' } }
-      ).sort({ score: { $meta: 'textScore' } }).limit(SEARCH_RESULT_LIMIT).lean();
+      // `wordText`, not `content`: the snippet's words without a sketch's
+      // megabytes of JSON (plan 5.1/5.5).
+      const projection = { title: 1, type: 1, tags: 1, isLocked: 1, isEncrypted: 1, createdAt: 1, updatedAt: 1, wordText: 1 };
+      let keywordRows = [];
+      try {
+        keywordRows = await Note.find(
+          { ...scope, $text: { $search: q } },
+          { ...projection, score: { $meta: 'textScore' } }
+        ).sort({ score: { $meta: 'textScore' } }).limit(SEARCH_RESULT_LIMIT).lean();
+      } catch (err) {
+        // The moment the text index is being rebuilt at start-up
+        // (wordIndex.js): no keyword hits, not an error.
+        if (!isMissingTextIndex(err)) throw err;
+        logger.warn('[notegeek] text index missing (rebuilding?); keyword search empty');
+      }
 
-      if (!hybrid) return keywordRows.map((note) => searchRow(note, { score: note.score }));
+      if (!hybrid) return keywordRows.map((note) => searchRow(note, { score: note.score, q }));
 
       let vector = { hits: [], runnerUpScore: null, backfilling: false };
       try {
@@ -357,15 +488,17 @@ export const resolvers = {
         logger.warn({ err: err?.message }, '[notegeek] vector search failed; keyword-only');
       }
       const vectorHits = vector.hits;
+      const prefixIds = await titlePrefixIds(scope, q).catch(() => []);
 
       // The weak-hit cuts, RRF, and the best match: semantic.js `rankHybrid`.
       const ranked = rankHybrid({
-        keywordRows, vectorHits, runnerUpScore: vector.runnerUpScore, backfilling: vector.backfilling,
+        keywordRows, vectorHits, runnerUpScore: vector.runnerUpScore, backfilling: vector.backfilling, prefixIds,
       });
       const byId = new Map(keywordRows.map((n) => [String(n._id), n]));
-      // Meaning-only hits are re-read through the same scope (owner + `under`),
-      // which also drops a note deleted since its vectors were cached.
-      const missing = vectorHits.map((h) => h.noteId).filter((id) => !byId.has(id));
+      // Meaning-only (and title-prefix) hits are re-read through the same
+      // scope (owner + `under`), which also drops a note deleted since its
+      // vectors were cached.
+      const missing = [...new Set([...vectorHits.map((h) => h.noteId), ...prefixIds])].filter((id) => !byId.has(id));
       if (missing.length) {
         const extra = await Note.find({ ...scope, _id: { $in: missing } }, projection).lean();
         for (const n of extra) byId.set(String(n._id), n);
@@ -383,6 +516,7 @@ export const resolvers = {
             matchedBy: r.matchedBy,
             why: hit ? whyExcerpt(hit.text, note.title) : null,
             bestMatch: r.best,
+            q,
           });
         });
     },
@@ -433,14 +567,16 @@ export const resolvers = {
      * The Archived view (spec §3 A6): the caller's archived notes, most
      * recently archived first. Paged; an anonymous caller gets nothing.
      */
-    archivedNotes: async (_, rawArgs, context) => {
+    archivedNotes: async (_, rawArgs, context, info) => {
       const userId = context.user?.id;
       if (!userId) return [];
       const { limit, offset } = validateArchivedNotes(rawArgs || {});
-      return await Note.find({ userId, archived: true })
+      return await Note.find({ userId, archived: true, ...notDeleted() }, noteProjection(info))
         .sort({ archivedAt: -1, _id: -1 })
         .skip(offset ?? 0)
-        .limit(limit ?? ARCHIVED_DEFAULT_LIMIT);
+        .limit(limit ?? ARCHIVED_DEFAULT_LIMIT)
+        .lean()
+        .then(fillMissingPreviews);
     },
 
     /** How much of the caller's library is searchable by meaning. */
@@ -492,7 +628,7 @@ export const resolvers = {
       // before validation, so the strict schema never sees it — leaving the
       // session as the only source of ownership.
       const { userId: _payloadUserId, ...ownArgs } = rawArgs;
-      const args = validateCreateNote(ownArgs);
+      const { transcriptText, ...args } = validateCreateNote(ownArgs);
       // `text` notes store TipTap HTML and notegeek renders it as markup, so
       // the body is sanitized before it is stored — see `sanitize.js` for the
       // profile and for why the other four types are passed through untouched
@@ -508,19 +644,25 @@ export const resolvers = {
       // again.
       assertContentCeiling(cleaned.content, effectiveType, { sanitized: true });
       const links = await resolveLinks({ userId, content: cleaned.content, type: effectiveType });
-      const note = new Note({ ...cleaned, userId, links });
+      // C6: a photo note's reviewed reading rides in the same write, so the
+      // note is searchable even if the follow-up save never lands.
+      const transcript = typeof transcriptText === 'string' && effectiveType === 'handwritten'
+        ? { sketchTranscript: transcriptForCreate({ content: cleaned.content, text: transcriptText }) }
+        : {};
+      const note = new Note({ ...cleaned, ...transcript, userId, links });
       const saved = await note.save();
       // Anyone's [[This title]] that was waiting for this note now finds it.
       if (saved.title) await resolvePendingLinks({ userId, noteId: saved._id, title: saved.title });
       return saved;
     },
 
-    updateNote: async (_, rawArgs, context) => {
+    updateNote: async (_, rawArgs, context, info) => {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
       // `changeReason` is peeled off here: it labels the HISTORY entry, and
       // must never become part of the update payload written to the note.
-      const { id, changeReason, ...args } = validateUpdateNote(rawArgs);
+      // `baseUpdatedAt` and `transcriptText` are not note fields either.
+      const { id, changeReason, baseUpdatedAt, transcriptText, ...args } = validateUpdateNote(rawArgs);
       if (!id || id === 'undefined' || !mongoose.isValidObjectId(id)) {
         throw new Error(`Invalid Note ID format: ${ id }`);
       }
@@ -564,10 +706,33 @@ export const resolvers = {
       // existed. This is the ONLY site that updates a note's content, which
       // is what makes one snapshot call sufficient.
       const previous = await Note.findOne({ _id: id, userId }).lean();
+      if (!previous) throw new Error('Note not found or you do not have permission to edit it');
+
+      // C3: an edit made against an older copy of the note is refused, with
+      // the server's copy, instead of silently replacing a newer save from
+      // another device. Checked here for a quick answer, and again in the
+      // write itself (the filter on updatedAt), which is what makes it safe:
+      // a save landing between this read and the write still loses nothing.
+      const base = baseUpdatedAt ? new Date(baseUpdatedAt) : null;
+      if (base && new Date(previous.updatedAt).getTime() !== base.getTime()) throw noteConflict(previous);
+
+      // C6 (update side): the reviewed reading of the sketch being saved.
+      if (typeof transcriptText === 'string' && (payload.type || previous.type) === 'handwritten') {
+        const body = typeof payload.content === 'string' ? payload.content : previous.content;
+        const edited = transcriptForCreate({ content: body, text: transcriptText }).edited;
+        const transcript = { ...(previous.sketchTranscript || {}), edited };
+        payload = {
+          ...payload,
+          'sketchTranscript.edited': edited,
+          'sketchTranscript.editedSearchable': true,
+          ...derivedFields({ type: 'handwritten', sketchTranscript: transcript, isLocked: previous.isLocked, isEncrypted: previous.isEncrypted }),
+          ...staleIndexFields(),
+        };
+      }
 
       // [[Links]]: re-read from the body whenever the body (or the type) is
       // written. Cheap: nothing at all unless the text has `[[` or `/notes/`.
-      if (previous && (typeof payload.content === 'string' || typeof payload.type === 'string')) {
+      if (typeof payload.content === 'string' || typeof payload.type === 'string') {
         payload = {
           ...payload,
           links: await resolveLinks({
@@ -579,23 +744,37 @@ export const resolvers = {
         };
       }
 
+      // Coalesced history (plan 1.5): decided before the write, from the note
+      // as it was. The snapshot itself is stored after the write succeeds.
+      const reason = changeReason || 'edit';
+      const plan = reason === 'edit'
+        ? await shouldSnapshotEdit(previous, payload)
+        : { snapshot: isMeaningfulChange(previous, payload), keep: false };
+
+      // The answer carries only what the caller selected: an autosave that
+      // asks for id + updatedAt doesn't get a multi-MB sketch sent back
+      // (plan 5.7).
       const note = await Note.findOneAndUpdate(
-        { _id: id, userId },
+        base ? { _id: id, userId, updatedAt: previous.updatedAt } : { _id: id, userId },
         payload,
-        { new: true }
+        { new: true, projection: noteProjection(info), lean: true }
       );
-      if (!note) throw new Error('Note not found or you do not have permission to edit it');
+      if (!note) {
+        const now = base ? await Note.findOne({ _id: id, userId }).lean() : null;
+        if (now) throw noteConflict(now);
+        throw new Error('Note not found or you do not have permission to edit it');
+      }
 
       if (typeof payload.title === 'string' && linkKey(payload.title) !== linkKey(previous?.title)) {
         await resolvePendingLinks({ userId, noteId: note._id, title: note.title });
       }
 
-      if (isMeaningfulChange(previous, payload)) {
+      if (plan.snapshot) {
         // `reason` rides in from the caller so an AI rewrite is labelled as
         // one in the history; a plain edit is the default. Never awaited for
         // its failure — `snapshotNote` swallows its own errors, because
         // losing a history entry must not lose the edit.
-        await snapshotNote(previous, changeReason || 'edit');
+        await snapshotNote(previous, reason, { keep: plan.keep });
       }
 
       return note;
@@ -630,6 +809,12 @@ export const resolvers = {
     /** Restore archived notes; clears `archivedAt` (spec §3 A5). */
     restoreNotes: (_, rawArgs, context) => setArchived(rawArgs, context, false),
 
+    /**
+     * Move a note to Recently deleted (soft delete, decision D1). Not an
+     * edit: `timestamps: false`, no version. History is kept for a restore;
+     * search passages go now (restoreNote re-queues them); links to it fall
+     * back to waiting for its title. Deleting a deleted note is a no-op.
+     */
     deleteNote: async (_, rawArgs, context) => {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
@@ -637,19 +822,23 @@ export const resolvers = {
       if (!id || id === 'undefined' || !mongoose.isValidObjectId(id)) {
         throw new Error(`Invalid Note ID format: ${ id }`);
       }
-      const note = await Note.findOneAndDelete({ _id: id, userId });
-      if (!note) throw new Error('Note not found or you do not have permission to delete it');
-      // Keeping the history of a deleted note would mean delete did not
-      // delete, which is not what the word promises.
-      await deleteVersionsForNote(id, userId);
-      // Its search passages go with it. A failure here is not the user's
-      // problem: the indexer's sweep removes orphaned chunks later.
+      const note = await Note.findOneAndUpdate(
+        { _id: id, userId, deletedAt: null },
+        { $set: { deletedAt: new Date() } },
+        { new: true, timestamps: false, projection: { _id: 1, title: 1 } },
+      );
+      if (!note) {
+        if (await Note.exists({ _id: id, userId })) return true; // already deleted
+        throw new Error('Note not found or you do not have permission to delete it');
+      }
+      // Its search passages go now. A failure here is not the user's
+      // problem: the indexer's sweep removes a deleted note's chunks later.
       try {
         await NoteChunk.deleteMany({ noteId: note._id, userId });
       } catch (err) {
         logger.warn({ err: err?.message }, '[notegeek] chunk cleanup failed; the sweep will retry');
       }
-      invalidateUserVectors(userId);
+      dropNoteVectors(userId, note._id);
       // Links to it fall back to waiting for its title (or another note
       // with that title). Never fails the delete.
       try {
@@ -657,7 +846,43 @@ export const resolvers = {
       } catch (err) {
         logger.warn({ err: err?.message }, '[notegeek] link cleanup after delete failed');
       }
+      await purgeExpiredNotes(userId);
       return true;
+    },
+
+    /** Back from Recently deleted, as it was. Re-queued for meaning search; links re-resolve. */
+    restoreNote: async (_, { id }, context, info) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      if (!id || !mongoose.isValidObjectId(id)) throw new Error(`Invalid Note ID format: ${ id }`);
+      const note = await Note.findOneAndUpdate(
+        { _id: id, userId, deletedAt: { $ne: null } },
+        { $set: { deletedAt: null, ...staleIndexFields() } },
+        { new: true, timestamps: false, projection: noteProjection(info), lean: true },
+      );
+      if (!note) {
+        const live = await Note.findOne({ _id: id, userId }, noteProjection(info)).lean();
+        if (live) return live; // not deleted: nothing to do
+        throw new Error('Note not found or you do not have permission to restore it');
+      }
+      if (note.title) {
+        try {
+          await resolvePendingLinks({ userId, noteId: note._id, title: note.title });
+        } catch (err) {
+          logger.warn({ err: err?.message }, '[notegeek] link re-resolve after restore failed');
+        }
+      }
+      return note;
+    },
+
+    /** Delete for good — only a note already in Recently deleted. */
+    purgeNote: async (_, { id }, context) => {
+      const userId = context.user?.id;
+      if (!userId) throw new Error('Unauthorized');
+      if (!id || !mongoose.isValidObjectId(id)) throw new Error(`Invalid Note ID format: ${ id }`);
+      const purged = await hardDelete({ _id: new mongoose.Types.ObjectId(String(id)) }, userId);
+      if (purged) logger.info({ userId: String(userId), noteId: String(id) }, '[notegeek] note purged');
+      return purged;
     },
     /**
      * Put a note back to an earlier version.
@@ -764,15 +989,25 @@ export const resolvers = {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
       const { noteId } = validateAutoTranscribeSketch(rawArgs);
-      const { image, mediaType } = validateTranscribeSketch({ image: rawArgs.image, mediaType: rawArgs.mediaType });
-      return await autoTranscribeSketch({ noteId, userId, image, mediaType });
+      // The image is checked only once the note is known to want reading:
+      // a photo, locked or already-read sketch is answered from its state
+      // without scanning megabytes of base64. (The upload itself can only be
+      // saved by the client: check sketchTranscript(noteId).status first —
+      // off / searchable / failed / retry / transcribing mean "don't send".)
+      return await autoTranscribeSketch({
+        noteId,
+        userId,
+        image: rawArgs.image,
+        mediaType: rawArgs.mediaType,
+        validate: ({ image, mediaType }) => validateTranscribeSketch({ image, mediaType }),
+      });
     },
 
     recordSketchTasksSent: async (_, rawArgs, context) => {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
-      const { noteId, keys } = validateRecordSketchTasksSent(rawArgs);
-      return await recordSketchTasksSent({ noteId, userId, keys });
+      const { noteId, keys, texts } = validateRecordSketchTasksSent(rawArgs);
+      return await recordSketchTasksSent({ noteId, userId, keys, texts: texts || [] });
     },
 
     saveSketchTranscriptEdit: async (_, rawArgs, context) => {
@@ -955,6 +1190,21 @@ export const resolvers = {
 
   Note: {
     id: (note) => note._id.toString(),
+    // Lists are read lean (plan 5.1), so a field an old note never had is
+    // absent, not defaulted: these give the schema's non-null fields the
+    // mongoose defaults back.
+    type: (note) => note.type || 'text',
+    isLocked: (note) => note.isLocked === true,
+    isEncrypted: (note) => note.isEncrypted === true,
+    pinned: (note) => note.pinned === true,
+    content: (note) => note.content ?? '',
+    preview: (note) => {
+      if (note.isLocked || note.isEncrypted) return null;
+      if (typeof note.preview === 'string' && (note.preview || note.derivedV)) return note.preview;
+      // Not derived yet (a note from before `preview`, before the start-up backfill).
+      return typeof note.content === 'string' ? previewFor(note) : (note.preview ?? null);
+    },
+    deletedAt: (note) => (note.deletedAt ? new Date(note.deletedAt).toISOString() : null),
     // Read in the suite standard, so a note tagged before it (`geekSuite`)
     // shows — and is next saved as — `geek-suite` even before the migration.
     tags: (note) => normalizeTags(note.tags || []),

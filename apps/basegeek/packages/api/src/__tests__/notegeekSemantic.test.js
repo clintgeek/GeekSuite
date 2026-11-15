@@ -229,22 +229,42 @@ describe('embeddings client', () => {
     expect((await embedTexts(['x'], { kind: 'document' }).catch((e) => e)).inputProblem).toBe(false);
   });
 
-  test('no cloud path: the semantic modules import nothing from the AI stack and only embeddings.js fetches', () => {
-    // The catalog modules get the same guarantee (MCP_SPEC D25): they embed
-    // through notegeek/embeddings.js and fetch nowhere at all.
-    const groups = [
-      [path.join(HERE, '../graphql/notegeek'), ['embeddings.js', 'chunking.js', 'semantic.js', 'indexer.js', 'models/NoteChunk.js']],
-      [path.join(HERE, '../graphql/catalog'), ['catalogText.js', 'catalogSemantic.js', 'catalogIndexer.js', 'salvagePicks.js', 'models/GameVector.js', 'models/BookVector.js']],
+  test('no cloud path: nothing the search modules import, however deep, reaches the AI stack; only embeddings.js fetches', () => {
+    // The WHOLE import graph, not just each module's direct imports (plan
+    // 2026-11-15): models/Note.js, sketchText.js and noteDerived.js sit under
+    // the search modules, and anything they pull in is as able to send note
+    // text out as the modules themselves. The catalog modules get the same
+    // guarantee (MCP_SPEC D25): they embed through notegeek/embeddings.js and
+    // fetch nowhere at all.
+    const NOTEGEEK = path.join(HERE, '../graphql/notegeek');
+    const CATALOG = path.join(HERE, '../graphql/catalog');
+    const roots = [
+      ...['embeddings.js', 'chunking.js', 'semantic.js', 'indexer.js', 'sketchText.js', 'noteDerived.js', 'wordIndex.js', 'models/NoteChunk.js', 'models/Note.js'].map((f) => path.join(NOTEGEEK, f)),
+      ...['catalogText.js', 'catalogSemantic.js', 'catalogIndexer.js', 'salvagePicks.js', 'models/GameVector.js', 'models/BookVector.js'].map((f) => path.join(CATALOG, f)),
     ];
-    for (const [dir, files] of groups) for (const f of files) {
-      const src = readFileSync(path.join(dir, f), 'utf8');
-      const imports = [...src.matchAll(/^\s*import[^'"]*['"]([^'"]+)['"]/gm)].map((m) => m[1]);
-      for (const spec of imports) {
-        expect(spec).not.toMatch(/ai(Service|FeatureRunner|Geek|Free|Catalog|Provider)|openrouter|anthropic|openai|groq|axios/i);
+    const FORBIDDEN = /ai(Service|FeatureRunner|Geek|Free|Catalog|Provider)|openrouter|anthropic|openai|groq|axios|transcribe|suggest|compose|foldin/i;
+    const seen = new Set();
+    const queue = [...roots];
+    while (queue.length) {
+      const file = queue.shift();
+      if (seen.has(file)) continue;
+      seen.add(file);
+      const src = readFileSync(file, 'utf8');
+      const specs = [
+        ...src.matchAll(/^\s*(?:import|export)[^'"]*?from\s*['"]([^'"]+)['"]/gm),
+        ...src.matchAll(/^\s*import\s*['"]([^'"]+)['"]/gm),
+        ...src.matchAll(/\bimport\(\s*['"]([^'"]+)['"]\s*\)/g),
+      ].map((m) => m[1]);
+      for (const spec of specs) {
+        expect([path.relative(HERE, file), spec]).toEqual([path.relative(HERE, file), expect.not.stringMatching(FORBIDDEN)]);
+        if (spec.startsWith('.')) queue.push(path.resolve(path.dirname(file), spec));
       }
       const fetches = (src.match(/\bfetch\(/g) || []).length;
-      expect([f, fetches]).toEqual([f, f === 'embeddings.js' ? 1 : 0]);
+      const isEmbeddings = file === path.join(NOTEGEEK, 'embeddings.js');
+      expect([path.relative(HERE, file), fetches]).toEqual([path.relative(HERE, file), isEmbeddings ? 1 : 0]);
     }
+    // The walk really went below the roots (Note.js → appConnections, logger …).
+    expect(seen.size).toBeGreaterThan(roots.length);
   });
 
   test('every embed call a whole index + search cycle makes goes to EMBEDDINGS_URL', async () => {

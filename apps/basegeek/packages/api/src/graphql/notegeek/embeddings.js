@@ -131,11 +131,14 @@ export const MAX_CHARS_PER_INPUT = 4000;
  * so the indexer charges the note rather than backing off the whole queue.
  */
 export class EmbeddingsUnavailableError extends Error {
-  constructor(message, { status = null, cause } = {}) {
+  constructor(message, { status = null, cause, timeout = false } = {}) {
     super(message, cause ? { cause } : undefined);
     this.name = 'EmbeddingsUnavailableError';
     this.status = status;
     this.inputProblem = status === 400;
+    // Slow, not down: the service answered nothing in time (it may just be
+    // busy with the indexer). semantic.js treats this as a soft failure.
+    this.timeout = timeout;
   }
 }
 
@@ -186,7 +189,7 @@ export async function embedTexts(texts, { kind, timeoutMs = 60000 } = {}) {
   } catch (err) {
     throw new EmbeddingsUnavailableError(
       err?.name === 'AbortError' ? `embeddings timed out after ${ timeoutMs } ms` : `embeddings unreachable: ${ err?.message }`,
-      { cause: err },
+      { cause: err, timeout: err?.name === 'AbortError' },
     );
   } finally {
     clearTimeout(timer);

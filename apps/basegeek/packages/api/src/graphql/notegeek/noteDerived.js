@@ -1,0 +1,121 @@
+/**
+ * noteDerived.js — what a note's words are, without its markup: the text word
+ * search indexes (`wordText`), the short `preview` lists show, and the search
+ * snippet around a hit. Pure: no Mongo, no network, nothing from the AI stack
+ * (models/Note.js imports it, and the privacy test walks that graph).
+ *
+ * By type (the same reading chunking.js gives the embedder):
+ *   markdown    the text as written, minus markup that is not words
+ *   text        TipTap HTML with the tags stripped
+ *   code        the code (not the `{ language, code }` JSON around it)
+ *   mindmap     the node labels (not the graph JSON)
+ *   handwritten the recognised handwriting (sketchTranscript), never the
+ *               tldraw JSON
+ * An encrypted note has no words here: its body is ciphertext.
+ */
+import { htmlToText, codeText, mindmapText } from './chunking.js';
+import { sketchSearchText } from './sketchText.js';
+
+/** Bump when what these functions produce changes; wordIndex.js re-derives every note below it. */
+export const DERIVED_VERSION = 2;
+/** About two lines of a list row. */
+export const PREVIEW_CHARS = 200;
+export const SNIPPET_CHARS = 200;
+const SKETCH = 'handwritten';
+
+/** Markdown → its words: links keep their text, emphasis and heading marks go. */
+export function markdownToText(md) {
+  return String(md ?? '')
+    .replace(/```[^\n]*\n/g, '\n')
+    .replace(/```/g, '')
+    .replace(/!\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '$2')
+    .replace(/\[\[([^\]]+)\]\]/g, '$1')
+    .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+    .replace(/^\s{0,3}#{1,6}\s+/gm, '')
+    .replace(/^\s{0,3}>\s?/gm, '')
+    .replace(/^\s*[-*+]\s+\[[ xX]\]\s+/gm, '')
+    .replace(/^\s*(?:[-*+]|\d+[.)])\s+/gm, '')
+    .replace(/(\*\*|__|~~|`)/g, '')
+    .replace(/(^|[\s(])[*_]([^*_\n]+)[*_](?=[\s).,;:!?]|$)/g, '$1$2')
+    .replace(/^\s*([-*_]\s*){3,}$/gm, '')
+    .replace(/[ \t]+/g, ' ')
+    .replace(/\n\s*\n\s*(\n\s*)+/g, '\n\n')
+    .trim();
+}
+
+/** A note's words, by type. `note` needs type, content, sketchTranscript, isEncrypted. */
+export function wordTextFor(note) {
+  if (!note || note.isEncrypted) return '';
+  const type = note.type || 'text';
+  if (type === SKETCH) return sketchSearchText(note.sketchTranscript);
+  const content = typeof note.content === 'string' ? note.content : '';
+  switch (type) {
+    case 'markdown': return markdownToText(content);
+    case 'text': return htmlToText(content);
+    case 'code': return codeText(content).trim();
+    case 'mindmap': return mindmapText(content);
+    default: return content;
+  }
+}
+
+/** Cut at a word boundary with an ellipsis. */
+function clip(text, max) {
+  if (text.length <= max) return text;
+  const cut = text.slice(0, max).replace(/\s+\S*$/, '');
+  return `${ cut || text.slice(0, max) }…`;
+}
+
+/**
+ * Plain text for a list row: about PREVIEW_CHARS of the note's words on one
+ * line. Locked and encrypted notes have none (the list must not show them).
+ */
+export function previewFor(note) {
+  if (!note || note.isLocked || note.isEncrypted) return '';
+  const words = wordTextFor(note).replace(/\s+/g, ' ').trim();
+  return clip(words, PREVIEW_CHARS);
+}
+
+/** Both derived fields at once, plus the version stamp. */
+export function derivedFields(note) {
+  return { wordText: wordTextFor(note), preview: previewFor(note), derivedV: DERIVED_VERSION };
+}
+
+/** Query words worth finding: 2+ characters, lowercased, quotes and operators dropped. */
+export function queryTerms(q) {
+  return [...new Set(String(q ?? '')
+    .toLowerCase()
+    .replace(/["“”]/g, ' ')
+    .split(/[^\p{L}\p{N}]+/u)
+    .filter((w) => w.length >= 2))];
+}
+
+const escapeRe = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
+ * The words around the first query term that starts a word in `text`
+ * ("day" finds "day off", never the end of "Sunday"). No hit: the opening.
+ * Plain text in, plain text out — the client highlights.
+ */
+export function snippetAround(text, q, max = SNIPPET_CHARS) {
+  const plain = String(text ?? '').replace(/\s+/g, ' ').trim();
+  if (!plain) return '';
+  const terms = queryTerms(q);
+  let at = -1;
+  if (terms.length) {
+    const re = new RegExp(`(^|[^\\p{L}\\p{N}])(${ terms.map(escapeRe).join('|') })`, 'iu');
+    const m = re.exec(plain);
+    if (m) at = m.index + m[1].length;
+  }
+  if (at <= 0) return clip(plain, max);
+  const lead = Math.floor(max * 0.35);
+  let start = Math.max(0, at - lead);
+  // Start on a word, never in the middle of one.
+  if (start > 0) {
+    const space = plain.lastIndexOf(' ', start);
+    start = space >= 0 && at - space <= lead + 20 ? space + 1 : start;
+  }
+  let s = plain.slice(start, start + max);
+  if (start + max < plain.length) s = `${ s.replace(/\s+\S*$/, '') }…`;
+  return start > 0 ? `…${ s }` : s;
+}

@@ -16,10 +16,7 @@
  *   A6    archivedNotes: newest archivedAt first.
  */
 import mongoose from 'mongoose';
-import express from 'express';
-import request from 'supertest';
 
-const { default: jwt } = await import('jsonwebtoken');
 const { default: Note } = await import('../graphql/notegeek/models/Note.js');
 const { default: NoteVersion } = await import('../graphql/notegeek/models/NoteVersion.js');
 const { userGeekConn } = await import('../models/user.js');
@@ -27,7 +24,6 @@ const { resolvers } = await import('../graphql/notegeek/resolvers.js');
 const { suggestForNote } = await import('../graphql/notegeek/suggest.js');
 const { resolvers: glanceResolvers } = await import('../graphql/glance/resolvers.js');
 const { resolvers: suiteTagResolvers } = await import('../graphql/suitetags/resolvers.js');
-const { default: noteGeekRoutes } = await import('../routes/noteGeek.js');
 
 const { Query, Mutation, Note: NoteType } = resolvers;
 const ALICE = new mongoose.Types.ObjectId();
@@ -323,35 +319,4 @@ describe('A2 — suiteTags', () => {
   });
 });
 
-// ── A2: legacy REST /api/notes ─────────────────────────────────────────────
-describe('A2 — legacy REST /api/notes', () => {
-  const app = express();
-  app.use(express.json());
-  app.use('/api/notes', noteGeekRoutes);
-  const token = () => jwt.sign({ id: String(ALICE), app: 'notegeek' }, process.env.JWT_SECRET);
-
-  async function seedRest() {
-    // The legacy router has its own model on the default connection.
-    const col = mongoose.connection.collection('notes');
-    await col.insertMany([
-      { userId: ALICE, title: 'Live one', content: 'x', tags: ['rest/live'], type: 'markdown', updatedAt: new Date() },
-      { userId: ALICE, title: 'Legacy', content: 'x', tags: ['rest/legacy'], type: 'markdown', updatedAt: new Date() },
-      { userId: ALICE, title: 'Gone one', content: 'x', tags: ['rest/gone'], type: 'markdown', archived: true, archivedAt: new Date(), updatedAt: new Date() },
-    ]);
-  }
-
-  test('GET / lists no archived note (and keeps the legacy one)', async () => {
-    await seedRest();
-    const res = await request(app).get('/api/notes').set('Authorization', `Bearer ${ token() }`);
-    expect(res.status).toBe(200);
-    expect(res.body.map((n) => n.title).sort()).toEqual(['Legacy', 'Live one']);
-  });
-
-  test('GET /tags builds no hierarchy from an archived note', async () => {
-    await seedRest();
-    const res = await request(app).get('/api/notes/tags').set('Authorization', `Bearer ${ token() }`);
-    expect(res.status).toBe(200);
-    expect(JSON.stringify(res.body)).toContain('live');
-    expect(JSON.stringify(res.body)).not.toContain('gone');
-  });
-});
+// (A2's legacy REST /api/notes checks went with that route, deleted 2026-11-15.)

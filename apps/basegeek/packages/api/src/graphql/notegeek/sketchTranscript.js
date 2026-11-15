@@ -28,9 +28,10 @@
 
 import mongoose from 'mongoose';
 import logger from '../../lib/logger.js';
-import Note from './models/Note.js';
+import Note, { staleIndexFields } from './models/Note.js';
 import { transcribeSketch as defaultTranscribe } from './transcribe.js';
-import { sketchContentHash, hasPhotoPages, sketchSearchText } from './sketchText.js';
+import { sketchContentHash, hasPhotoPages, sketchSearchText, hasAnyShape, correctionsStillApply } from './sketchText.js';
+import { previewFor, DERIVED_VERSION } from './noteDerived.js';
 
 export { sketchContentHash, hasPhotoPages, sketchSearchText };
 
@@ -41,8 +42,16 @@ export const CLAIM_STALE_MS = 2 * 60 * 1000;
 /** Transient failures back off 2 min → 4 → 8 … capped at an hour. */
 export const RETRY_BASE_MS = 2 * 60 * 1000;
 export const RETRY_MAX_MS = 60 * 60 * 1000;
-/** After this many transient failures in a row the content is given up on. */
+/**
+ * After this many failures that say something about THIS page (an error the
+ * model or the pipeline raised for it) the content is given up on. An outage
+ * (AI_UNAVAILABLE: provider down, timeout) or today's cap (AI_CAP) says
+ * nothing about the page: those back off and retry but never count, so six
+ * capped days no longer mark a sketch `failed` (2026-11-15).
+ */
 export const MAX_ATTEMPTS = 6;
+/** Failures that are about the service or the day, not the page. */
+export const NOT_THE_PAGE = new Set(['AI_UNAVAILABLE', 'AI_CAP']);
 /** The preference key notegeek's Settings page writes (User.appPreferences.notegeek). */
 export const AUTO_PREF_KEY = 'autoTranscribeSketches';
 
@@ -59,9 +68,49 @@ const log = logger.child({ module: 'notegeek-sketch-transcript' });
  * retry        a transient failure; it will try again after `retryAt`
  * failed       this content could not be read; not retried until it changes
  */
-export function transcriptView(note, { now = Date.now(), autoEnabled = true } = {}) {
+/**
+ * The content hash remembered on the note, when it is still for this content
+ * (same length and updatedAt as when it was computed); undefined otherwise.
+ */
+export function rememberedHash(note) {
+  const h = note?.sketchHash;
+  if (!h || !note?.updatedAt || !h.at || typeof note.content !== 'string') return undefined;
+  if (h.len !== note.content.length || new Date(h.at).getTime() !== new Date(note.updatedAt).getTime()) return undefined;
+  return h.value ?? null;
+}
+
+/**
+ * The sketch's content hash: remembered on the note when it is still valid,
+ * else computed once and remembered (a conditional write, so it never lands
+ * on newer content). Never computed on save: autosave runs every couple of
+ * seconds while drawing, a transcript read once per saved drawing.
+ */
+export async function contentHashOf(note) {
+  if (note?.type !== 'handwritten') return null;
+  const known = rememberedHash(note);
+  if (known !== undefined) return known;
+  const value = sketchContentHash(note.content);
+  if (note._id && note.updatedAt && typeof note.content === 'string') {
+    try {
+      await Note.updateOne(
+        { _id: note._id, updatedAt: note.updatedAt },
+        { $set: { sketchHash: { value, len: note.content.length, at: note.updatedAt } } },
+        { timestamps: false },
+      );
+    } catch (err) {
+      log.warn({ err: err?.message }, 'could not remember the sketch hash');
+    }
+  }
+  return value;
+}
+
+export function transcriptView(note, { now = Date.now(), autoEnabled = true, contentHash: knownHash } = {}) {
   const t = note?.sketchTranscript || {};
-  const contentHash = note?.type === 'handwritten' ? sketchContentHash(note.content) : null;
+  let contentHash = null;
+  if (note?.type === 'handwritten') {
+    const remembered = knownHash !== undefined ? knownHash : rememberedHash(note);
+    contentHash = remembered !== undefined ? remembered : sketchContentHash(note.content);
+  }
   let status;
   if (!contentHash) status = 'empty';
   else if (note.isLocked || note.isEncrypted) status = 'off';
@@ -92,6 +141,7 @@ export function transcriptView(note, { now = Date.now(), autoEnabled = true } = 
     retryAt: status === 'retry' && t.retryAt ? new Date(t.retryAt).toISOString() : null,
     error: status === 'retry' || status === 'failed' ? (t.error || null) : null,
     sentTaskKeys: Array.isArray(t.sentTaskKeys) ? t.sentTaskKeys : [],
+    sentTaskTexts: Array.isArray(t.sentTaskTexts) ? t.sentTaskTexts : [],
     autoEnabled,
   };
 }
@@ -114,19 +164,28 @@ export async function isAutoTranscribeOn(userId) {
 
 // ── writes ─────────────────────────────────────────────────────────────────
 
-const NOTE_FIELDS = { type: 1, content: 1, isLocked: 1, isEncrypted: 1, sketchTranscript: 1 };
+const NOTE_FIELDS = { type: 1, content: 1, isLocked: 1, isEncrypted: 1, sketchTranscript: 1, sketchHash: 1, updatedAt: 1 };
+
+/** The note's transcript state, hashing through the remembered hash. */
+async function viewOf(note, { now, autoEnabled }) {
+  return transcriptView(note, { now, autoEnabled, contentHash: await contentHashOf(note) });
+}
+const readView = async (noteId, userId, opts) => viewOf(await Note.findOne({ _id: noteId, userId }, NOTE_FIELDS).lean(), opts);
 
 function notFound() {
   return new Error('Note not found or you do not have permission to edit it');
 }
 
-/** Hand changed text to word search and the semantic indexer. Never an edit. */
-function indexFields(transcript) {
+/**
+ * Hand changed text to word search, the list preview and the semantic
+ * indexer. Never an edit. `note` is the stored note (lock flags).
+ */
+function indexFields(transcript, note = {}) {
   return {
     wordText: sketchSearchText(transcript),
-    embeddingState: 'stale',
-    embeddingAttempts: 0,
-    embeddingRetryAt: null,
+    preview: previewFor({ type: 'handwritten', sketchTranscript: transcript, isLocked: note.isLocked, isEncrypted: note.isEncrypted }),
+    derivedV: DERIVED_VERSION,
+    ...staleIndexFields(),
   };
 }
 
@@ -144,7 +203,26 @@ function nextUtcMidnight(now) {
 async function storeReading({ noteId, userId, hash, text, provenance, source, filter, now }) {
   const fresh = await Note.findOne({ _id: noteId, userId }, NOTE_FIELDS).lean();
   if (!fresh) return null;
-  const stillCurrent = sketchContentHash(fresh.content) === hash;
+  // Everything was erased while the page was being read: what was read is no
+  // longer on it, so it is not stored (or it would be searchable forever —
+  // an empty sketch is never read again). The claim is released.
+  if (!hasAnyShape(fresh.content)) {
+    await Note.updateOne(
+      { _id: noteId, userId, ...filter },
+      { $set: { 'sketchTranscript.status': 'pending', 'sketchTranscript.claimedAt': null } },
+      { timestamps: false },
+    );
+    return null;
+  }
+  const stillCurrent = (await contentHashOf(fresh)) === hash;
+  // Corrections made for an older drawing: still searchable while that
+  // drawing is still on the page (the reading they corrected is mostly in
+  // this one), not once it was erased or rewritten.
+  const prior = fresh.sketchTranscript || {};
+  let editedSearchable = prior.editedSearchable !== false;
+  if (prior.edited && prior.edited.hash !== hash && prior.edited.hash === prior.hash) {
+    editedSearchable = correctionsStillApply(prior.text, text);
+  }
   // Field by field, never the whole subdocument: `edited` (the user's own
   // corrections) is not part of a reading and must survive any race with one.
   const reading = {
@@ -157,14 +235,16 @@ async function storeReading({ noteId, userId, hash, text, provenance, source, fi
     status: stillCurrent ? 'searchable' : 'stale',
     error: null,
     attempts: 0,
+    retries: 0,
     retryAt: null,
     failedHash: null,
     claimedAt: null,
+    editedSearchable,
   };
   const $set = Object.fromEntries(Object.entries(reading).map(([k, v]) => [`sketchTranscript.${k}`, v]));
   const res = await Note.updateOne(
     { _id: noteId, userId, ...filter },
-    { $set: { ...$set, ...indexFields({ ...reading, edited: fresh.sketchTranscript?.edited }) } },
+    { $set: { ...$set, ...indexFields({ ...reading, edited: fresh.sketchTranscript?.edited }, fresh) } },
     { timestamps: false },
   );
   return res.modifiedCount ? reading : null;
@@ -175,17 +255,21 @@ async function storeReading({ noteId, userId, hash, text, provenance, source, fi
  * reported in it (status `retry` / `failed`), never thrown, so the client's
  * background work can't surface as an error.
  */
-export async function autoTranscribeSketch({ noteId, userId, image, mediaType, now = Date.now(), transcribe = defaultTranscribe }) {
+export async function autoTranscribeSketch({ noteId, userId, image, mediaType, now = Date.now(), transcribe = defaultTranscribe, validate = null }) {
   if (!mongoose.isValidObjectId(noteId)) throw notFound();
   const note = await Note.findOne({ _id: noteId, userId }, NOTE_FIELDS).lean();
   if (!note) throw notFound();
   const autoEnabled = await isAutoTranscribeOn(userId);
-  const view = transcriptView(note, { now, autoEnabled });
+  const view = await viewOf(note, { now, autoEnabled });
 
   // Nothing to do — and nothing sent: switched off, nothing drawn, not a
   // candidate, already read, given up on, or backing off.
   if (!autoEnabled || note.type !== 'handwritten') return view;
   if (['empty', 'off', 'searchable', 'failed', 'retry', 'transcribing'].includes(view.status)) return view;
+
+  // Only now is the image worth checking (and a bad one is refused before
+  // any claim or model call).
+  if (validate) ({ image, mediaType } = validate({ image, mediaType }));
 
   const hash = view.contentHash;
   // One request per sketch: take the claim atomically, or leave it alone.
@@ -201,9 +285,7 @@ export async function autoTranscribeSketch({ noteId, userId, image, mediaType, n
     { $set: { 'sketchTranscript.status': 'processing', 'sketchTranscript.submittedHash': hash, 'sketchTranscript.claimedAt': new Date(now) } },
     { timestamps: false },
   );
-  if (!claim.modifiedCount) {
-    return transcriptView(await Note.findOne({ _id: noteId, userId }, NOTE_FIELDS).lean(), { now, autoEnabled });
-  }
+  if (!claim.modifiedCount) return readView(noteId, userId, { now, autoEnabled });
   const ours = { 'sketchTranscript.submittedHash': hash, 'sketchTranscript.status': 'processing' };
 
   try {
@@ -212,15 +294,20 @@ export async function autoTranscribeSketch({ noteId, userId, image, mediaType, n
   } catch (err) {
     const code = err?.extensions?.code || null;
     const prior = note.sketchTranscript || {};
-    const attempts = (prior.submittedHash === hash ? prior.attempts || 0 : 0) + 1;
+    const samePage = prior.submittedHash === hash;
+    // An outage or today's cap is about the service, not this page: it backs
+    // off but never counts toward giving up (NOT_THE_PAGE).
+    const counts = !NOT_THE_PAGE.has(code);
+    const attempts = (samePage ? prior.attempts || 0 : 0) + (counts ? 1 : 0);
+    const retries = (samePage ? prior.retries || 0 : 0) + 1;
     // Permanent: the model read this page and the answer was unusable, or the
     // input was refused. Retrying the same page costs a request for the same
-    // answer. Transient: an outage, a timeout, today's cap.
+    // answer.
     const permanent = code === 'AI_DEGENERATE' || code === 'AI_EMPTY' || code === 'BAD_USER_INPUT' || attempts >= MAX_ATTEMPTS;
     const retryAt = permanent ? null
       : code === 'AI_CAP' ? nextUtcMidnight(now)
-        : new Date(now + Math.min(RETRY_BASE_MS * 2 ** (attempts - 1), RETRY_MAX_MS));
-    log.info({ noteId: String(noteId), code, attempts, permanent }, 'automatic transcription did not succeed');
+        : new Date(now + Math.min(RETRY_BASE_MS * 2 ** (retries - 1), RETRY_MAX_MS));
+    log.info({ noteId: String(noteId), code, attempts, retries, permanent }, 'automatic transcription did not succeed');
     await Note.updateOne(
       { _id: noteId, userId, ...ours },
       {
@@ -229,6 +316,7 @@ export async function autoTranscribeSketch({ noteId, userId, image, mediaType, n
           'sketchTranscript.failedHash': permanent ? hash : null,
           'sketchTranscript.retryAt': retryAt,
           'sketchTranscript.attempts': attempts,
+          'sketchTranscript.retries': retries,
           'sketchTranscript.error': String(err?.message || 'Transcription failed').slice(0, 300),
           'sketchTranscript.claimedAt': null,
         },
@@ -236,7 +324,7 @@ export async function autoTranscribeSketch({ noteId, userId, image, mediaType, n
       { timestamps: false },
     );
   }
-  return transcriptView(await Note.findOne({ _id: noteId, userId }, NOTE_FIELDS).lean(), { now, autoEnabled });
+  return readView(noteId, userId, { now, autoEnabled });
 }
 
 /**
@@ -250,11 +338,21 @@ export async function rememberConvertReading({ noteId, userId, text, provenance,
     if (!mongoose.isValidObjectId(noteId)) return;
     const note = await Note.findOne({ _id: noteId, userId }, NOTE_FIELDS).lean();
     if (!note || note.type !== 'handwritten' || note.isLocked || note.isEncrypted || hasPhotoPages(note.content)) return;
-    const hash = sketchContentHash(note.content);
+    const hash = await contentHashOf(note);
     if (!hash || note.sketchTranscript?.hash === hash) return;
+    // Never over a running automatic read — but a claim older than
+    // CLAIM_STALE_MS is a crashed gateway's (every push restarts it), not a
+    // running read. Before 2026-11-15 such a claim made every later Convert
+    // reading be paid for and thrown away.
     await storeReading({
       noteId, userId, hash, text, provenance, source: 'convert', now,
-      filter: { 'sketchTranscript.status': { $ne: 'processing' } },
+      filter: {
+        $or: [
+          { 'sketchTranscript.status': { $ne: 'processing' } },
+          { 'sketchTranscript.claimedAt': { $lt: new Date(now - CLAIM_STALE_MS) } },
+          { 'sketchTranscript.claimedAt': null },
+        ],
+      },
     });
   } catch (err) {
     log.warn({ err: err?.message }, 'could not keep the Convert reading');
@@ -273,43 +371,75 @@ export async function saveSketchTranscriptEdit({ noteId, userId, text, forHash, 
   if (note.type !== 'handwritten') throw new Error('Only a sketch has a transcript.');
   // No hash from the caller (the photo flow, which never sees one): the text
   // is for the sketch as saved right now.
-  const hash = forHash || sketchContentHash(note.content);
-  const next = { ...(note.sketchTranscript || {}), edited: { text: String(text), hash, at: new Date(now) } };
+  const hash = forHash || await contentHashOf(note);
+  const next = { ...(note.sketchTranscript || {}), edited: { text: String(text), hash, at: new Date(now) }, editedSearchable: true };
   await Note.updateOne(
     { _id: noteId, userId },
-    { $set: { 'sketchTranscript.edited': next.edited, ...indexFields(next) } },
+    { $set: { 'sketchTranscript.edited': next.edited, 'sketchTranscript.editedSearchable': true, ...indexFields(next, note) } },
     { timestamps: false },
   );
   const autoEnabled = await isAutoTranscribeOn(userId);
-  return transcriptView(await Note.findOne({ _id: noteId, userId }, NOTE_FIELDS).lean(), { now, autoEnabled });
+  return readView(noteId, userId, { now, autoEnabled });
 }
 
-/** How many sent-line keys a sketch keeps (newest win). */
+/**
+ * The `sketchTranscript` a sketch is CREATED with when its reviewed reading
+ * comes with it (a photo note, C6): the corrections, for the content being
+ * saved. One write, so the note is searchable even if no later save lands.
+ */
+export function transcriptForCreate({ content, text, now = Date.now() }) {
+  return {
+    status: 'pending',
+    edited: { text: String(text), hash: sketchContentHash(content), at: new Date(now) },
+  };
+}
+
+/** How many sent-line keys (and texts) a sketch keeps (newest win). */
 export const MAX_SENT_TASK_KEYS = 500;
+/** A sent line's text is kept to this many characters. */
+export const SENT_TASK_TEXT_MAX = 300;
 
 /**
  * Journal lines of this sketch were sent to TodoGeek (BUJO_HANDWRITING.md).
  * Remembered per sketch so the "Send tasks" dialog marks them as sent rather
- * than offering them again. Only keys — the tasks themselves live in TodoGeek.
+ * than offering them again. Keys — and, from newer clients, the text sent —
+ * never the tasks themselves (they live in TodoGeek).
+ *
+ * `$addToSet` with `$each`, then a trim to the newest MAX_SENT_TASK_KEYS: two
+ * sends that overlap both land. The old read-merge-`$set` let the second
+ * write replace the first one's keys (2026-11-15, plan 1.11).
  */
-export async function recordSketchTasksSent({ noteId, userId, keys, now = Date.now() }) {
+export async function recordSketchTasksSent({ noteId, userId, keys, texts = [], now = Date.now() }) {
   if (!mongoose.isValidObjectId(noteId)) throw notFound();
-  const note = await Note.findOne({ _id: noteId, userId }, NOTE_FIELDS).lean();
+  const note = await Note.findOne({ _id: noteId, userId }, { type: 1 }).lean();
   if (!note) throw notFound();
   if (note.type !== 'handwritten') throw new Error('Only a sketch has journal lines.');
-  const merged = [...new Set([...(note.sketchTranscript?.sentTaskKeys || []), ...keys])].slice(-MAX_SENT_TASK_KEYS);
+  const cleanTexts = [...new Set((texts || []).map((t) => String(t).replace(/\s+/g, ' ').trim().slice(0, SENT_TASK_TEXT_MAX)).filter(Boolean))];
   await Note.updateOne(
     { _id: noteId, userId },
-    { $set: { 'sketchTranscript.sentTaskKeys': merged } },
+    {
+      $addToSet: {
+        'sketchTranscript.sentTaskKeys': { $each: keys },
+        ...(cleanTexts.length ? { 'sketchTranscript.sentTaskTexts': { $each: cleanTexts } } : {}),
+      },
+    },
     { timestamps: false },
   );
+  for (const field of ['sentTaskKeys', 'sentTaskTexts']) {
+    // eslint-disable-next-line no-await-in-loop
+    await Note.updateOne(
+      { _id: noteId, userId, [`sketchTranscript.${ field }.${ MAX_SENT_TASK_KEYS }`]: { $exists: true } },
+      { $push: { [`sketchTranscript.${ field }`]: { $each: [], $slice: -MAX_SENT_TASK_KEYS } } },
+      { timestamps: false },
+    );
+  }
   const autoEnabled = await isAutoTranscribeOn(userId);
-  return transcriptView(await Note.findOne({ _id: noteId, userId }, NOTE_FIELDS).lean(), { now, autoEnabled });
+  return readView(noteId, userId, { now, autoEnabled });
 }
 
 export async function getSketchTranscript({ noteId, userId, now = Date.now() }) {
   if (!mongoose.isValidObjectId(noteId)) throw notFound();
   const note = await Note.findOne({ _id: noteId, userId }, NOTE_FIELDS).lean();
   if (!note) throw notFound();
-  return transcriptView(note, { now, autoEnabled: await isAutoTranscribeOn(userId) });
+  return viewOf(note, { now, autoEnabled: await isAutoTranscribeOn(userId) });
 }

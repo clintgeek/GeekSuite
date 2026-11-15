@@ -167,9 +167,17 @@ export const createNoteArgsSchema = z
     content: z.string().min(1).max(SNAPSHOT_CONTENT_MAX),
     type: noteTypeSchema,
     tags: tagsSchema,
+    // C6: a photo note's reviewed reading, stored with the note in the same
+    // write so it is searchable even if no later save lands. Sketches only.
+    transcriptText: z.string().max(DOC_CONTENT_MAX, 'That transcript is too long.').nullish(),
   })
   .strict()
-  .superRefine(checkContentCeiling());
+  .superRefine(checkContentCeiling())
+  .superRefine((args, ctx) => {
+    if (typeof args.transcriptText === 'string' && args.type !== 'handwritten') {
+      ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['transcriptText'], message: 'Only a sketch has a transcript.' });
+    }
+  });
 
 export const updateNoteArgsSchema = z
   .object({
@@ -191,6 +199,18 @@ export const updateNoteArgsSchema = z
     // the ordinary save path, which labels itself `edit` — so nothing in the
     // history depends on it.
     changeReason: z.enum(['edit', 'compose', 'restore']).optional(),
+    // C3: the note's updatedAt (ISO) this edit was made against. When it no
+    // longer matches, the write is refused with CONFLICT. Absent = the old
+    // last-write-wins behaviour, for tabs from before.
+    baseUpdatedAt: z
+      .string()
+      .trim()
+      .max(64)
+      .refine((v) => !Number.isNaN(new Date(v).getTime()), 'baseUpdatedAt must be a date (ISO 8601).')
+      .nullish(),
+    // C6, the update side: the reviewed reading of a sketch, kept as its
+    // corrections for the content this update saves.
+    transcriptText: z.string().max(DOC_CONTENT_MAX, 'That transcript is too long.').nullish(),
   })
   .strict()
   .superRefine(checkContentCeiling({ unknownTypeIsSnapshot: true }));
@@ -209,6 +229,45 @@ export const composeNoteArgsSchema = z
   .strict();
 
 export const deleteNoteArgsSchema = z.object({ id: idString }).strict();
+
+// ── Notes list paging (notesPage, plan 5.2) ────────────────────────────────
+
+export const NOTE_SORTS = ['updatedAt_desc', 'updatedAt_asc', 'createdAt_desc', 'createdAt_asc', 'title_asc', 'title_desc'];
+export const NOTES_PAGE_MAX = 200;
+export const NOTES_PAGE_DEFAULT = 50;
+
+export const notesPageArgsSchema = z
+  .object({
+    tag: z.string().max(200).nullish(),
+    prefix: z.string().max(200).nullish(),
+    under: z.string().max(200).nullish(),
+    type: z.enum(NOTE_TYPES).nullish(),
+    // Any case (`updatedat_desc` too, as the old `notes` query took it).
+    sort: z
+      .string()
+      .max(40)
+      .refine((v) => NOTE_SORTS.some((n) => n.toLowerCase() === v.toLowerCase()), `sort must be one of ${NOTE_SORTS.join(', ')}.`)
+      .nullish(),
+    first: z.number().int().min(1).max(NOTES_PAGE_MAX).nullish(),
+    after: z.string().max(512).nullish(),
+  })
+  .strict();
+
+// ── Search (plan 5.10) ──────────────────────────────────────────────────────
+
+/**
+ * A search query is cut to this many characters (at a word), never refused:
+ * Fold-in's note picker searches with the start of what was pasted (up to
+ * 12 000 characters), and a long query is a slow `$text` and a truncated
+ * embedding anyway.
+ */
+export const SEARCH_QUERY_MAX = 500;
+export function clampSearchQuery(q) {
+  const s = String(q ?? '').trim();
+  if (s.length <= SEARCH_QUERY_MAX) return s;
+  const cut = s.slice(0, SEARCH_QUERY_MAX);
+  return (cut.replace(/\s+\S*$/, '') || cut).trim();
+}
 
 // ── Archive / Compose-many (DOCS/COMPOSE_MANY_AND_ARCHIVE_SPEC.md) ──────────
 
@@ -405,6 +464,9 @@ export const recordSketchTasksSentArgsSchema = z
   .object({
     noteId: idString,
     keys: z.array(z.string().trim().min(1).max(80)).min(1).max(200),
+    // Optional: the text of each line sent (any order), for "probably
+    // already sent" matching after a correction changes a line's key.
+    texts: z.array(z.string().max(2000)).max(200).nullish(),
   })
   .strict();
 

@@ -3,7 +3,7 @@
  * network.
  *
  * One vector per note would blur a long note into its average subject, so a
- * long note is cut into passages of ~250–350 words, each embedded on its own,
+ * long note is cut into passages of ~200–280 words, each embedded on its own,
  * and a search matches the best passage. The title opens the first passage
  * (always), so a note is findable by what it is called even when its body is
  * a list of part numbers.
@@ -23,18 +23,32 @@
 import { sketchSearchText } from './sketchText.js';
 import { createHash } from 'node:crypto';
 
-/** A passage closes once it reaches this many words at a paragraph boundary... */
-export const CHUNK_MIN_WORDS = 250;
+/**
+ * Passage size is set by the embedding model's window: mxbai-embed-large
+ * reads 512 tokens and silently drops the rest. English prose runs ~1.3
+ * tokens a word and ~4 characters a token, but code, URLs, part numbers and
+ * non-English text run far denser — a 350-word / 3 000-character passage (the
+ * nomic-era sizes, 2 048-token window) could be 700+ tokens, so the tail of
+ * many passages was never embedded. Since 2026-11-15: 200–280 words and at
+ * most MAX_CHUNK_CHARS characters, which keeps a passage (plus the title on
+ * the first) under ~480 tokens even at 3.8 characters a token. A passage
+ * longer in characters is SPLIT, never cut, so nothing falls off the end.
+ * Changing these changes every note's passage hash: the indexer re-embeds
+ * the library once, in the background (Chef's ~100 passages ≈ 6 min).
+ *
+ * A passage closes once it reaches this many words at a paragraph boundary...
+ */
+export const CHUNK_MIN_WORDS = 200;
 /** ...and never grows past this; a single longer paragraph is split by words. */
-export const CHUNK_MAX_WORDS = 350;
+export const CHUNK_MAX_WORDS = 280;
 /** Words carried from the end of one passage into the next, so a thought that
  * straddles the cut is whole in at least one of them. */
 export const CHUNK_OVERLAP_WORDS = 40;
 /** A pathological note stops being chunked here (~20 000 words). The rest is
  * still keyword-searchable; it just has no vectors. */
 export const MAX_CHUNKS_PER_NOTE = 60;
-/** A passage is cut to this many characters however many words it has. */
-export const MAX_CHUNK_CHARS = 3000;
+/** A passage is never longer than this many characters (split by words past it). */
+export const MAX_CHUNK_CHARS = 1800;
 
 const ENTITIES = { amp: '&', lt: '<', gt: '>', quot: '"', apos: "'", nbsp: ' ', '#39': "'" };
 
@@ -68,7 +82,7 @@ export function codeText(content) {
   return raw;
 }
 
-function mindmapText(content) {
+export function mindmapText(content) {
   try {
     const parsed = JSON.parse(String(content ?? ''));
     const nodes = Array.isArray(parsed?.nodes) ? parsed.nodes : [];
@@ -163,8 +177,23 @@ export function chunkNote(note) {
   if (fresh > 0) flush();
 
   const out = chunks.slice(0, MAX_CHUNKS_PER_NOTE);
-  if (title) out[0] = `${ title }\n\n${ out[0] }`;
-  return out.map((c) => c.slice(0, MAX_CHUNK_CHARS));
+  if (title) out[0] = `${ title.slice(0, 300) }\n\n${ out[0] }`;
+  return out.flatMap(splitByChars).slice(0, MAX_CHUNKS_PER_NOTE);
+}
+
+/** A passage over MAX_CHUNK_CHARS becomes several, cut between words (a word longer than that is cut). */
+function splitByChars(passage) {
+  if (passage.length <= MAX_CHUNK_CHARS) return [passage];
+  const out = [];
+  let cur = '';
+  for (const w of passage.split(/(?<=\s)/)) {
+    if (cur && cur.length + w.length > MAX_CHUNK_CHARS) { out.push(cur.trimEnd()); cur = ''; }
+    let word = w;
+    while (word.length > MAX_CHUNK_CHARS) { out.push(word.slice(0, MAX_CHUNK_CHARS)); word = word.slice(MAX_CHUNK_CHARS); }
+    cur += word;
+  }
+  if (cur.trim()) out.push(cur.trimEnd());
+  return out;
 }
 
 /**

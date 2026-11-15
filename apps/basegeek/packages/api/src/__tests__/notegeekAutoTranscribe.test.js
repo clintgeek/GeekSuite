@@ -303,15 +303,16 @@ describe('word search reads wordText, never sketch JSON', () => {
     await coll.insertOne({ title: 'Old sketch', content: snapshot([stroke('a')]), type: 'handwritten', userId: new mongoose.Types.ObjectId(USER), tags: [] });
 
     const result = await ensureNoteWordIndex();
-    expect(result).toMatchObject({ filled: 1, sketches: 1, dropped: 1, created: true });
+    expect(result).toMatchObject({ derived: 2, dropped: 1, created: true });
     const text = (await coll.indexes()).filter((i) => i.key?._fts);
     expect(text).toHaveLength(1);
     expect(Object.keys(text[0].weights).sort()).toEqual(['tags', 'title', 'wordText']);
+    expect(text[0].weights).toEqual({ title: 10, tags: 5, wordText: 1 });
     // "draw" and "shape" no longer match the sketch's JSON; the markdown words still match.
     expect(await Note.countDocuments({ $text: { $search: 'shape' } })).toBe(0);
     expect(await Note.countDocuments({ $text: { $search: 'garage' } })).toBe(1);
     // Idempotent.
-    expect(await ensureNoteWordIndex()).toMatchObject({ filled: 0, sketches: 0, dropped: 0, created: false });
+    expect(await ensureNoteWordIndex()).toMatchObject({ derived: 0, pinned: 0, dropped: 0, created: false });
   });
 });
 

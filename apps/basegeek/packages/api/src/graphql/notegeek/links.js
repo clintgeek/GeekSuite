@@ -121,11 +121,12 @@ export async function resolveLinks({ userId, content, type, previous = [] }) {
   const titles = parsed.filter((l) => !l.noteId).map((l) => l.title);
   const [alive, byTitle] = await Promise.all([
     idCandidates.size
-      ? Note.find({ userId, _id: { $in: [...idCandidates].filter((id) => mongoose.isValidObjectId(id)) } }, { _id: 1, archived: 1 }).lean()
+      // A note in Recently deleted is no link target (restoreNote re-resolves).
+      ? Note.find({ userId, deletedAt: null, _id: { $in: [...idCandidates].filter((id) => mongoose.isValidObjectId(id)) } }, { _id: 1, archived: 1 }).lean()
       : [],
     // Active before archived (missing/false sort before true), then oldest.
     titles.length
-      ? Note.find({ userId, title: { $in: titles } }, { _id: 1, title: 1, createdAt: 1, archived: 1 })
+      ? Note.find({ userId, deletedAt: null, title: { $in: titles } }, { _id: 1, title: 1, createdAt: 1, archived: 1 })
         .collation({ locale: 'en', strength: 2 })
         .sort({ archived: 1, createdAt: 1 })
         .lean()
@@ -187,7 +188,7 @@ export async function detachLinksTo({ userId, noteId, title }) {
   );
   const key = linkKey(title);
   if (!key) return;
-  const heir = await Note.findOne({ userId, title: cleanTitle(title) }, { _id: 1 })
+  const heir = await Note.findOne({ userId, deletedAt: null, _id: { $ne: id }, title: cleanTitle(title) }, { _id: 1 })
     .collation({ locale: 'en', strength: 2 }).sort({ archived: 1, createdAt: 1 }).lean();
   if (heir) await resolvePendingLinks({ userId, noteId: heir._id, title });
 }

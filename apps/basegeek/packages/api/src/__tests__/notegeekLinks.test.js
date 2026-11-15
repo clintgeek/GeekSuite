@@ -171,6 +171,9 @@ describe('resolving links on save', () => {
     const t = await create(ALICE, 'Target', 't');
     const src = await create(ALICE, 'Src', 'no links');
     await update(ALICE, src, { content: 'now [[Target]]' });
+    // A new editing session (history is coalesced: one version per ~10 min
+    // of continuous editing, plus one at a session's start).
+    await Note.collection.updateOne({ _id: src._id }, { $set: { updatedAt: new Date(Date.now() - 11 * 60 * 1000) } });
     await update(ALICE, src, { content: 'gone again' });
     expect(await linksOf(src)).toEqual([]);
     const versions = await listNoteVersions({ noteId: String(src._id), userId: String(ALICE) });

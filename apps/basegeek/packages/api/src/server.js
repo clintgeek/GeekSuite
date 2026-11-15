@@ -19,7 +19,6 @@ import postgresRoutes from './routes/postgres.js';
 import influxRoutes from './routes/influx.js';
 import authRoutes from './routes/auth.js';
 import userRoutes from './routes/user.js';
-import noteGeekRoutes from './routes/noteGeek.js';
 import aiRoutes from './routes/aiRoutes.js';
 import openaiProxyRoutes from './routes/openaiProxy.js';
 import apiKeyRoutes from './routes/apiKeys.js';
@@ -220,7 +219,9 @@ if (process.env.NODE_ENV === 'development') {
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/users', userRoutes);
-app.use('/api/notes', noteGeekRoutes);
+// `/api/notes` (routes/noteGeek.js) was mounted here until 2026-11-15: a
+// legacy REST copy of NoteGeek on the DEFAULT connection (datageek.notes,
+// read by nothing) that stored lockHash in plain text. NoteGeek uses /graphql.
 app.use('/api/ai', aiRoutes);
 app.use('/openai/v1', openaiProxyRoutes);
 app.use('/api/api-keys', apiKeyRoutes);
@@ -602,7 +603,6 @@ const server = app.listen(PORT, '0.0.0.0', async () => {
   logger.info(`Redis status available at http://localhost:${ PORT }/api/redis/status`);
   logger.info(`Postgres status available at http://localhost:${ PORT }/api/postgres/status`);
   logger.info(`User API available at http://localhost:${ PORT }/api/users/`);
-  logger.info(`NoteGeek API available at http://localhost:${ PORT }/api/notes/`);
 
   // The Phase 2A provider-health job used to start here. It went with the
   // second routing stack (2026-09-07): a 60 s interval that mutated a LOCAL

@@ -42,6 +42,7 @@ NoteGeek's note storage, searching, and mutations are **100% gateway-owned** by 
 - **Gateway Location**: `apps/basegeek/packages/api/src/graphql/notegeek/`.
 - **Mongoose Model**: `Note` collection in the shared MongoDB instance (`noteGeek` db), plus
   `noteChunks` (embedded passages, §11) and `noteversions`.
+- **Deleting a note is a soft delete since 2026-11-15** (§17): Recently deleted for 30 days, then purged.
 - **Zod Validation**: every mutation's arguments are validated with Zod (`notegeek/validation.js`).
 
 ### GraphQL Surface
@@ -89,7 +90,8 @@ which exist.)
     anchor broke. Undo = `restoreNoteVersion(versionId)`.
   - `setNotePinned(id, pinned)`: owner-scoped. It writes no history entry and leaves
     `updatedAt` untouched.
-  - `deleteNote(id)`
+  - `deleteNote(id)` — moves the note to Recently deleted (§17). `restoreNote(id)`, `purgeNote(id)`,
+    query `deletedNotes(limit)`.
   - `renameTag(oldTag, newTag)` → `Boolean!` (true when any note changed): renames or **moves** the
     whole subtree — `house` → `home` turns `house/garage` into `home/garage`; `garage` →
     `house/garage` moves it and its children. Merges into an existing tag with no duplicates (one copy,
@@ -267,15 +269,18 @@ down, search is keyword-only and Related is empty; nothing else is asked.
   that lands mid-embed leaves the note stale and it goes round again. A tick stops after 25 s.
 - **Backfill:** notes from before this have no state and are simply the oldest in the queue. A sweep
   at start-up (20 s after boot) and hourly deletes chunks of deleted notes and re-queues "indexed"
-  notes with no chunks **of the current model**. `deleteNote` deletes its chunks at once.
+  notes with no chunks **of the current model**. `deleteNote` deletes its chunks at once (and the sweep
+  removes any a soft-deleted note still has); `restoreNote` re-queues the note.
 - **Changing the model** is a background re-index, not a migration: search, Related and
   `noteIndexStatus.chunks` read only chunks whose `model` is the current one; the start-up sweep
   re-queues every indexed note that has none (the passage hash includes the model, so nothing is
   skipped as "unchanged"); re-embedding a note replaces its rows by (note, chunk), so its old-model
   rows go with it, and the sweep deletes strays. Meanwhile search is keyword + whatever is already
   re-embedded, never a mix of two models, never an error — and claims no best match while any
-  old-model chunk is left. Chef's library (34 notes, 96 passages) at ~3.5 s a passage ≈ 6–7 min. (NoteGeek has no trash — delete is
-  delete.) Measured 2026-09-30 against the live service on a busy box: the 14 harness fixture notes
+  old-model chunk is left. Chef's library (34 notes, 96 passages) at ~3.5 s a passage ≈ 6–7 min. (Until 2026-11-15
+  NoteGeek had no trash — delete was delete. **Reversed 2026-11-15, Chef approved decision D1** of
+  `DOCS/NOTEGEEK_TODOGEEK_REVIEW_2026-11.md`: a deleted note goes to Recently deleted for 30 days with its
+  history, see §17. Its passages are still dropped at delete and rebuilt on restore.) Measured 2026-09-30 against the live service on a busy box: the 14 harness fixture notes
   (14 passages) took 12.9 s; an 1 873-word note was 8 passages, ~16 s.
 - **Failure handling:** connection error, timeout or 5xx → the whole loop pauses with doubling
   backoff (30 s → 15 min, shared with search), the note is not charged. A 400 → the note is charged:
@@ -547,6 +552,8 @@ Spec: `DOCS/COMPOSE_MANY_AND_ARCHIVE_SPEC.md` §3. Gateway facts:
 - **Query:** `archivedNotes(limit, offset)` — newest `archivedAt` first; limit default 50, max 200.
 - **Checks:** `src/__tests__/notegeekArchive.test.js` (one test per read site) and the `archived notes` block in
   `notegeekSemantic.test.js`; every filter revert-checked red.
+- **2026-11-15:** `active()` also excludes soft-deleted notes (`deletedAt: null`), and the archived-only reads
+  (`archivedNotes`, `noteTagUsage.archived`) spread `notDeleted()`. The legacy REST `/api/notes` route is gone.
 
 ## 15. Compose from several notes
 
@@ -640,3 +647,68 @@ Spec: `DOCS/COMPOSE_MANY_AND_ARCHIVE_SPEC.md` §5 (U1–U9). Needs §14/§15's g
   revert-checked red; single-note Compose's tests unchanged and green. Harness `20a-select-mode`,
   `20b-compose-many-draft`, `20c-compose-many-offer`, `20d-compose-many-archived` (only the used ids archived, toast
   with Undo), `20e-archived-view` (reached via the Tags panel, Restore-only bar), `20f-archived-banner`.
+
+## 17. Save safety, history, Recently deleted, lists and search (gateway, 2026-11-15)
+
+From `DOCS/NOTEGEEK_TODOGEEK_REVIEW_2026-11.md` (Tier 1 + Tier 5, gateway half). Code in
+`apps/basegeek/packages/api/src/graphql/notegeek/`. **Deploy the gateway first** (every change is additive),
+confirm it live, then NoteGeek.
+
+- **Write conflicts (C3):** `updateNote(..., baseUpdatedAt)` — the note's `updatedAt` the edit was made
+  against. If it changed since, nothing is written and the error is `extensions.code: 'CONFLICT'` with
+  `extensions.serverNote { id title content tags type updatedAt }` (HTTP 200, like other resolver errors). The
+  write itself filters on `updatedAt`, so it is atomic, not read-then-write. Omitted = last write wins (old tabs).
+- **Recently deleted (C4, D1 — reverses §11's "no trash"):** `deleteNote` sets `deletedAt` (`timestamps:
+  false`, no version), drops the note's passages, detaches links to it; history is kept. Every list, count,
+  search, link resolution, Related, `noteIndexStatus`, glance and suite-tags read excludes it (`active()`).
+  `note(id)` still opens it (client shows `deletedAt`). `restoreNote(id)` clears it and re-queues indexing and
+  links; `deletedNotes(limit)` lists newest first; `purgeNote(id)` hard-deletes one already-deleted note with
+  versions and passages. Notes deleted over 30 days ago are purged lazily on `deletedNotes` and on `deleteNote`.
+- **History (1.5, `versions.js`):** edits are coalesced — a version at a note's first edit, at the start of a
+  session (the note was still for 10 min), then at most one per 10 min of continuous editing. Retention: all of
+  the last 24 h, newest per UTC day for 30 days, newest per week after; capped at 100 versions and 50 MB of
+  content per note. The snapshot before a large shrink (content to under half, notes ≥ 200 chars) is
+  `keep: true` and never pruned (at most 20 per note). compose / restore / fold_in always snapshot.
+- **Photo note text (C6):** `createNote(..., transcriptText)` (sketches only) stores the reviewed reading as the
+  transcript's corrections in the same write. `updateNote(..., transcriptText)` does the same for the saved content.
+- **Sent journal lines (C5):** `recordSketchTasksSent(noteId, keys, texts)` uses `$addToSet`; optional `texts`
+  are kept as `SketchTranscriptState.sentTaskTexts` for loose "probably already sent" matching. Newest 500 each.
+- **Transcription state:** a `processing` claim older than 2 min (a gateway restart mid-read) no longer throws
+  away a Convert reading. Outages (`AI_UNAVAILABLE`) and `AI_CAP` days back off but never count toward the six
+  attempts that mark a sketch `failed`. The content hash is remembered on the note (`sketchHash`, valid for the
+  content's length + `updatedAt`) — computed once per saved drawing on first read, never on autosave (measured:
+  ~0.4 s for a 6 MB snapshot each time it used to be recomputed; the hash function is also ~30–45% faster with
+  identical output). The image of `autoTranscribeSketch` is validated only when the note will actually be read;
+  the upload itself can only be avoided by the client: **check `sketchTranscript(noteId).status` first — `off`
+  (photo/locked), `searchable`, `failed`, `retry` (before `retryAt`) and `transcribing` mean "don't export".**
+- **Search text without stale words:** an autosave never re-derives a sketch's search text from a transcript it
+  read earlier (that wrote old readings back). Erasing everything on a sketch clears its search text at once;
+  corrections stop being searchable once a newer reading of different content lands. The indexer marks a note
+  indexed only if its `embeddingTicket` (renewed whenever it is queued) is unchanged, so a transcript arriving
+  mid-embed is never marked indexed against the old text.
+- **Lists (5.1, 5.2, 5.6):** `Note.preview` — ~200 chars of the note's words, no markup (a sketch's from its
+  transcript; null for locked/encrypted). List queries (`notes`, `notesPage`, `archivedNotes`, `deletedNotes`,
+  `note`, and `updateNote`'s answer) read lean and leave `content` out unless it is selected. New query
+  `notesPage(tag, prefix, under, type, sort, first, after) → { notes nextCursor hasMore }`: keyset paging on
+  date sorts, offset under an opaque cursor for title sorts (case-insensitive); sorts `updatedAt_desc` (default),
+  `updatedAt_asc`, `createdAt_desc`, `createdAt_asc`, `title_asc`, `title_desc`. Index
+  `{ userId, pinned: -1, updatedAt: -1, _id: -1 }`. `notes` keeps its old arguments.
+- **Word search (5.3–5.5, 5.10):** `wordText` holds words, not markup: rich text without tags, code without its
+  JSON wrapper, mind-map labels, Markdown without syntax, a sketch's transcript; encrypted notes none
+  (`noteDerived.js`, `DERIVED_VERSION` 2; older notes are re-derived at start-up). Text index weights
+  `{ title: 10, tags: 5, wordText: 1 }`. Hybrid search fuses a third list — titles with a word starting with the
+  query ("gar" → Garage door) — at weight 0.9. Snippets are plain text around the first word that STARTS with a
+  query term (never "Sun**day**"), sketches show their transcript, never JSON. Queries are cut to 500 chars.
+- **Changing the text index (weights or fields) is a drop and recreate** — Mongo can't alter one in place, and
+  allows one per collection. `wordIndex.js#ensureNoteWordIndex` does it at every start-up when the live index's
+  keys or weights differ, and is a no-op otherwise. For the moment between drop and create, `searchNotes`
+  returns no keyword hits instead of an error. Mongoose's autoIndex may log an IndexOptionsConflict once on the
+  first boot with new weights; harmless.
+- **Meaning search (5.8, 5.9):** index writes patch the cached vectors of one note instead of dropping the
+  user's whole cache. A timeout trips the embeddings breaker only after 3 in a row (a refused connection or 5xx
+  still trips it at once), so one slow query no longer pauses search and indexing for everyone. Passages are
+  200–280 words and at most 1 800 characters (mxbai's 512-token window; the old 3 000 could overflow it) and are
+  split, not cut. The first boot re-embeds the library once in the background.
+- **Glance / suite-tags** show `preview`, never a sketch's JSON; glance search reads `wordText`.
+- **Privacy:** `notegeekSemantic.test.js` walks the whole import graph of the search modules (incl.
+  `models/Note.js`, `sketchText.js`, `noteDerived.js`) — none may reach the AI stack, only `embeddings.js` fetches.

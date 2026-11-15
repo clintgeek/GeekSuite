@@ -15,7 +15,100 @@
  * no version describes a state that was never replaced.
  */
 
-import NoteVersion, { MAX_VERSIONS_PER_NOTE } from './models/NoteVersion.js';
+import mongoose from 'mongoose';
+import NoteVersion, {
+  MAX_VERSIONS_PER_NOTE,
+  MAX_VERSION_BYTES_PER_NOTE,
+  MAX_KEPT_VERSIONS_PER_NOTE,
+} from './models/NoteVersion.js';
+
+// ── coalescing and retention (plan 1.5, 2026-11-15) ───────────────────────
+/** A pause longer than this ends an editing session; the next save snapshots. */
+export const SESSION_GAP_MS = 10 * 60 * 1000;
+/** During continuous editing, at most one version per this long. */
+export const COALESCE_MS = 10 * 60 * 1000;
+/** Everything younger than this is kept. */
+export const KEEP_ALL_MS = 24 * 60 * 60 * 1000;
+/** Newest version of each UTC day kept up to this age; newest of each week after. */
+export const DAILY_FOR_MS = 30 * 24 * 60 * 60 * 1000;
+/** A change that leaves under this share of the content is a large shrink. */
+export const SHRINK_RATIO = 0.5;
+/** ...measured only on notes at least this long (a 6-character note isn't worth pinning). */
+export const SHRINK_MIN_CHARS = 200;
+
+/** Did this change remove most of the note? Its "before" is then kept for good. */
+export function isLargeShrink(previous, payload) {
+  const before = typeof previous?.content === 'string' ? previous.content.length : 0;
+  if (typeof payload?.content !== 'string' || before < SHRINK_MIN_CHARS) return false;
+  return payload.content.length < before * SHRINK_RATIO;
+}
+
+/**
+ * Should an ordinary edit (autosave) snapshot the note as it was? Coalescing:
+ *   - the first version of a note, always;
+ *   - a session start: the note had been still for SESSION_GAP_MS — its
+ *     state then is the end of the last session, worth keeping;
+ *   - during continuous editing, once the newest version is COALESCE_MS old;
+ *   - and always before a large shrink.
+ * Non-edit reasons (compose, restore, fold_in) always snapshot; the caller
+ * decides that. Never throws: a failed check snapshots (history over space).
+ */
+export async function shouldSnapshotEdit(previous, payload, { now = Date.now() } = {}) {
+  if (!isMeaningfulChange(previous, payload)) return { snapshot: false, keep: false };
+  if (isLargeShrink(previous, payload)) return { snapshot: true, keep: true };
+  const lastEdit = previous?.updatedAt ? new Date(previous.updatedAt).getTime() : 0;
+  if (!lastEdit || now - lastEdit > SESSION_GAP_MS) return { snapshot: true, keep: false };
+  try {
+    const newest = await NoteVersion.findOne({ noteId: previous._id }, { createdAt: 1 }).sort({ createdAt: -1 }).lean();
+    if (!newest) return { snapshot: true, keep: false };
+    return { snapshot: now - new Date(newest.createdAt).getTime() >= COALESCE_MS, keep: false };
+  } catch {
+    return { snapshot: true, keep: false };
+  }
+}
+
+/**
+ * Which versions survive, newest first in, ids to delete out. Pure.
+ *   1. the newest version and every `keep` row (up to MAX_KEPT_VERSIONS_PER_NOTE);
+ *   2. everything younger than KEEP_ALL_MS;
+ *   3. the newest of each UTC day up to DAILY_FOR_MS, of each week after;
+ *   4. then the count and byte caps, dropping the oldest unprotected first.
+ */
+export function versionsToPrune(rows, { now = Date.now(), maxCount = MAX_VERSIONS_PER_NOTE, maxBytes = MAX_VERSION_BYTES_PER_NOTE } = {}) {
+  const sorted = [...rows].sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+  const keepIds = new Set();
+  const protectedIds = new Set();
+  if (sorted[0]) { keepIds.add(String(sorted[0]._id)); protectedIds.add(String(sorted[0]._id)); }
+  let kept = 0;
+  for (const r of sorted) {
+    if (r.keep && kept < MAX_KEPT_VERSIONS_PER_NOTE) {
+      kept += 1;
+      keepIds.add(String(r._id));
+      protectedIds.add(String(r._id));
+    }
+  }
+  const buckets = new Set();
+  for (const r of sorted) {
+    const t = new Date(r.createdAt).getTime();
+    const age = now - t;
+    if (age < KEEP_ALL_MS) { keepIds.add(String(r._id)); continue; }
+    const day = Math.floor(t / 86400000);
+    const bucket = age < DAILY_FOR_MS ? `d${ day }` : `w${ Math.floor((day + 3) / 7) }`;
+    if (!buckets.has(bucket)) { buckets.add(bucket); keepIds.add(String(r._id)); }
+  }
+  // The caps, oldest unprotected first.
+  let survivors = sorted.filter((r) => keepIds.has(String(r._id)));
+  const size = (r) => Number(r.size) || 0;
+  let bytes = survivors.reduce((n, r) => n + size(r), 0);
+  for (let i = survivors.length - 1; i >= 0 && (survivors.length > maxCount || bytes > maxBytes); i -= 1) {
+    const r = survivors[i];
+    if (protectedIds.has(String(r._id))) continue;
+    bytes -= size(r);
+    survivors.splice(i, 1);
+  }
+  const alive = new Set(survivors.map((r) => String(r._id)));
+  return sorted.filter((r) => !alive.has(String(r._id))).map((r) => r._id);
+}
 
 /**
  * Has anything worth keeping actually changed?
@@ -48,10 +141,12 @@ export function isMeaningfulChange(previous, payload) {
  * @param {string} reason what replaced it — 'edit', 'compose', 'restore', 'fold_in'
  * @returns {Promise<object|null>} the stored version, or null
  */
-export async function snapshotNote(previous, reason = 'edit') {
+export async function snapshotNote(previous, reason = 'edit', { keep = false } = {}) {
   if (!previous?._id || !previous?.userId) return null;
   try {
     const version = await NoteVersion.create({
+      size: typeof previous.content === 'string' ? previous.content.length : 0,
+      keep: Boolean(keep),
       noteId: previous._id,
       userId: previous.userId,
       title: previous.title,
@@ -70,20 +165,21 @@ export async function snapshotNote(previous, reason = 'edit') {
 }
 
 /**
- * Drop everything past the retention cap for one note, oldest first.
+ * Apply the retention rules (`versionsToPrune`) to one note. Reads ids,
+ * dates, flags and sizes only — never the bodies (an old row without `size`
+ * is measured in Mongo).
  *
  * Best-effort for the same reason as above.
  */
-export async function pruneVersions(noteId, keep = MAX_VERSIONS_PER_NOTE) {
+export async function pruneVersions(noteId, { now = Date.now(), keep, maxBytes } = {}) {
   try {
-    const stale = await NoteVersion
-      .find({ noteId })
-      .sort({ createdAt: -1 })
-      .skip(keep)
-      .select('_id')
-      .lean();
+    const rows = await NoteVersion.aggregate([
+      { $match: { noteId: typeof noteId === 'string' ? new mongoose.Types.ObjectId(noteId) : noteId } },
+      { $project: { createdAt: 1, keep: 1, size: { $ifNull: ['$size', { $strLenCP: { $ifNull: ['$content', ''] } }] } } },
+    ]);
+    const stale = versionsToPrune(rows, { now, ...(keep ? { maxCount: keep } : {}), ...(maxBytes ? { maxBytes } : {}) });
     if (stale.length) {
-      await NoteVersion.deleteMany({ _id: { $in: stale.map((v) => v._id) } });
+      await NoteVersion.deleteMany({ _id: { $in: stale } });
     }
     return stale.length;
   } catch {

@@ -28,7 +28,8 @@
  * treats that as stale, so they are simply the queue's oldest entries. The
  * sweep (at start-up, then hourly) also re-queues any "indexed" note that has
  * no chunks of the current model (the collection was dropped, or the model
- * changed — see `sweepIndex`) and deletes chunks whose note is gone.
+ * changed — see `sweepIndex`) and deletes chunks whose note is gone or in
+ * Recently deleted.
  *
  * ## When the service is down
  *
@@ -46,7 +47,7 @@ import Note from './models/Note.js';
 import NoteChunk from './models/NoteChunk.js';
 import { chunkNote, chunksHash } from './chunking.js';
 import { embedTexts, embeddingsConfig, EmbeddingsUnavailableError, MAX_CHARS_PER_REQUEST } from './embeddings.js';
-import { invalidateUserVectors, markServiceDown, markServiceUp, serviceIsDown } from './semantic.js';
+import { invalidateUserVectors, replaceNoteVectors, dropNoteVectors, markServiceDown, markServiceUp, serviceIsDown } from './semantic.js';
 
 export const QUIET_MS = 30 * 1000;
 export const TICK_MS = 10 * 1000;
@@ -69,6 +70,8 @@ export function dueFilter(now = Date.now()) {
   return {
     embeddingState: { $in: ['stale', null] },
     updatedAt: { $lte: new Date(now - QUIET_MS) },
+    // A deleted note is not embedded; restoreNote queues it again.
+    deletedAt: null,
     $or: [{ embeddingRetryAt: null }, { embeddingRetryAt: { $lte: new Date(now) } }],
   };
 }
@@ -85,8 +88,14 @@ function batches(texts) {
   return out;
 }
 
+/**
+ * Record the outcome, but only for the text that was read: same `updatedAt`
+ * (no edit since) AND same `embeddingTicket` (not re-queued since — a sketch
+ * transcript lands with `timestamps: false`, so `updatedAt` alone missed it
+ * and the note was marked indexed against the older transcript).
+ */
 const setIndexState = (note, fields) => Note.updateOne(
-  { _id: note._id, updatedAt: note.updatedAt },
+  { _id: note._id, updatedAt: note.updatedAt, embeddingTicket: note.embeddingTicket ?? null },
   { $set: fields },
   { timestamps: false },
 );
@@ -103,7 +112,7 @@ export async function indexNote(note) {
 
   if (!chunks.length) {
     await NoteChunk.deleteMany({ noteId: note._id });
-    invalidateUserVectors(note.userId);
+    dropNoteVectors(note.userId, note._id);
     await setIndexState(note, { embeddingState: 'skipped', embeddingHash: hash, embeddingError: null });
     return 'skipped';
   }
@@ -138,11 +147,14 @@ export async function indexNote(note) {
   // Rows past the new end. Together with the replace above (one row per
   // note + chunk, unique index) that is every old row, whatever model wrote it.
   await NoteChunk.deleteMany({ noteId: note._id, chunk: { $gte: chunks.length } });
-  invalidateUserVectors(note.userId);
+  replaceNoteVectors(note.userId, note._id, {
+    model, rows: ops.map((o) => o.replaceOne.replacement),
+  });
 
-  // Deleted while we were embedding: take the rows back out.
-  if (!(await Note.exists({ _id: note._id }))) {
+  // Deleted (or moved to Recently deleted) while we were embedding: take the rows back out.
+  if (!(await Note.exists({ _id: note._id, deletedAt: null }))) {
     await NoteChunk.deleteMany({ noteId: note._id });
+    dropNoteVectors(note.userId, note._id);
     return 'deleted';
   }
   const res = await setIndexState(note, {
@@ -153,7 +165,7 @@ export async function indexNote(note) {
 
 async function pickNext(now) {
   const head = await Note.findOne(dueFilter(now), {
-    _id: 1, userId: 1, title: 1, type: 1, isLocked: 1, isEncrypted: 1, updatedAt: 1, embeddingHash: 1, embeddingAttempts: 1,
+    _id: 1, userId: 1, title: 1, type: 1, isLocked: 1, isEncrypted: 1, updatedAt: 1, embeddingHash: 1, embeddingAttempts: 1, embeddingTicket: 1,
     // A sketch's text is its transcript (chunking.js); small, so always read.
     'sketchTranscript.text': 1, 'sketchTranscript.edited': 1,
   }).sort({ updatedAt: 1 }).lean();
@@ -241,7 +253,8 @@ function tally(results) {
 export async function sweepIndex() {
   const { model } = embeddingsConfig();
   const chunkNoteIds = await NoteChunk.distinct('noteId');
-  const live = new Set((await Note.find({ _id: { $in: chunkNoteIds } }, { _id: 1 }).lean()).map((n) => String(n._id)));
+  // A soft-deleted note counts as gone: its passages go (restoreNote re-queues it).
+  const live = new Set((await Note.find({ _id: { $in: chunkNoteIds }, deletedAt: null }, { _id: 1 }).lean()).map((n) => String(n._id)));
   const orphans = chunkNoteIds.filter((id) => !live.has(String(id)));
   let removed = 0;
   if (orphans.length) {
@@ -253,7 +266,7 @@ export async function sweepIndex() {
   const { deletedCount: oldModel } = await NoteChunk.deleteMany({ noteId: { $in: currentIds }, model: { $ne: model } });
   removed += oldModel;
   const { modifiedCount: requeued } = await Note.updateMany(
-    { embeddingState: 'indexed', _id: { $nin: currentIds.map((id) => new mongoose.Types.ObjectId(String(id))) } },
+    { embeddingState: 'indexed', deletedAt: null, _id: { $nin: currentIds.map((id) => new mongoose.Types.ObjectId(String(id))) } },
     { $set: { embeddingState: 'stale', embeddingHash: null } },
     { timestamps: false },
   );

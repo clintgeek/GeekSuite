@@ -23,6 +23,7 @@ import mongoose from 'mongoose';
 import { normalizeTag, normalizeTags } from '@geeksuite/tags';
 import householdModule from '@geeksuite/schemas/thinggeek/household';
 import Note, { active as activeNote } from '../notegeek/models/Note.js';
+import { fillMissingPreviews } from '../notegeek/noteLists.js';
 import Task from '../todogeek/models/Task.js';
 import { Thing } from '../thinggeek/models/thing.js';
 import { spellingsOf, subtreeSpellings } from '../shared/tagSpellings.js';
@@ -80,15 +81,15 @@ function plainSnippet(text) {
   return plain.length > SNIPPET_MAX ? `${plain.slice(0, SNIPPET_MAX - 1)}…` : plain;
 }
 
-const SNAPSHOT_TYPES = new Set(['mindmap', 'handwritten']);
-
 function noteRow(n, tag) {
-  const hidden = n.isLocked || n.isEncrypted || SNAPSHOT_TYPES.has(n.type);
+  // The stored preview (plain text for every type; a sketch's transcript, a
+  // mind map's labels) — never the body, which for a sketch is tldraw JSON.
+  const hidden = n.isLocked || n.isEncrypted;
   return {
     app: 'notegeek',
     id: String(n._id),
     title: n.title || 'Untitled',
-    snippet: hidden ? null : plainSnippet(n.content),
+    snippet: hidden ? null : plainSnippet(n.preview),
     url: URLS.notegeek(n._id, tag),
     tags: normalizeTags(n.tags),
     updatedAt: n.updatedAt || null,
@@ -114,7 +115,7 @@ function thingRow(t, tag) {
 }
 
 const PROJECTIONS = {
-  notegeek: { title: 1, content: 1, type: 1, tags: 1, isLocked: 1, isEncrypted: 1, updatedAt: 1 },
+  notegeek: { title: 1, preview: 1, type: 1, tags: 1, isLocked: 1, isEncrypted: 1, updatedAt: 1 },
   todogeek: { content: 1, note: 1, tags: 1, private: 1, updatedAt: 1 },
   thinggeek: { name: 1, tags: 1, updatedAt: 1 },
 };
@@ -164,6 +165,7 @@ export const resolvers = {
             .sort({ updatedAt: -1 })
             .limit(PER_APP_LIMIT)
             .lean();
+          if (app === 'notegeek') await fillMissingPreviews(docs);
           return docs.map((d) => ROWS[app](d, want));
         }, []);
       }));

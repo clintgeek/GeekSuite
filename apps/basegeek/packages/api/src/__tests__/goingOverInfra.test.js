@@ -63,7 +63,6 @@ const { User, userGeekConn } = await import('../models/user.js');
 const { default: logger } = await import('../lib/logger.js');
 const { default: redisRoutes } = await import('../routes/redis.js');
 const { default: postgresRoutes } = await import('../routes/postgres.js');
-const { default: noteGeekRoutes } = await import('../routes/noteGeek.js');
 
 function buildApp() {
   const app = express();
@@ -77,7 +76,6 @@ function buildApp() {
   app.use((req, res, next) => { httpLogger(req, res); next(); });
   app.use('/api/redis', redisRoutes);
   app.use('/api/postgres', postgresRoutes);
-  app.use('/api/notes', noteGeekRoutes);
   return app;
 }
 
@@ -85,7 +83,6 @@ let app;
 let adminToken;
 let userToken;
 let userId;
-let seq = 0;
 
 beforeAll(async () => {
   if (userGeekConn.readyState === 0) await userGeekConn.asPromise();
@@ -159,69 +156,7 @@ describe('a dependency that is down produces a 500, not a dead process', () => {
 });
 
 // ───────────────────────────────────────────────────────────────────────────
-describe('GET /api/notes/tags is reachable', () => {
-  /**
-   * `router.get('/tags')` was declared at the BOTTOM of the file, below
-   * `router.get('/:id')`. Express matches in declaration order, so every
-   * request for the tag hierarchy was swallowed by the `:id` route and
-   * answered 404 "Note not found".
-   */
-  const makeNote = (tags) => request(app)
-    .post('/api/notes')
-    .set('Authorization', `Bearer ${userToken}`)
-    .send({ title: `n${seq++}`, content: 'body', tags });
-
-  it('returns the tag hierarchy rather than 404 "Note not found"', async () => {
-    await makeNote(['chores/feed', 'chores/water', 'flock']);
-    const res = await request(app)
-      .get('/api/notes/tags')
-      .set('Authorization', `Bearer ${userToken}`);
-
-    expect(res.status).toBe(200);
-    expect(res.body).toHaveProperty('chores');
-    expect(res.body.chores).toHaveProperty('feed');
-    expect(res.body).toHaveProperty('flock');
-  });
-
-  it('has not shadowed the :id route it now sits above', async () => {
-    const created = await makeNote(['x']);
-    const res = await request(app)
-      .get(`/api/notes/${created.body._id}`)
-      .set('Authorization', `Bearer ${userToken}`);
-    expect(res.status).toBe(200);
-    expect(res.body._id).toBe(created.body._id);
-  });
-});
-
-// ───────────────────────────────────────────────────────────────────────────
-describe('GET /api/notes?prefix= is a literal prefix, not a regex', () => {
-  const makeNote = (tags) => request(app)
-    .post('/api/notes')
-    .set('Authorization', `Bearer ${userToken}`)
-    .send({ title: `p${seq++}`, content: 'body', tags });
-
-  it('matches metacharacters literally instead of as wildcards', async () => {
-    await makeNote(['a.b/one']);
-    await makeNote(['axb/two']);
-
-    const literal = await request(app)
-      .get('/api/notes')
-      .query({ prefix: 'a.b' })
-      .set('Authorization', `Bearer ${userToken}`);
-    expect(literal.status).toBe(200);
-    expect(literal.body.map((n) => n.tags[0])).toEqual(['a.b/one']);
-  });
-
-  it('answers a ReDoS-shaped prefix promptly and with nothing', async () => {
-    // `(a+)+$` unescaped is a catastrophic backtracker evaluated by mongod per
-    // document; escaped it is a literal that matches no tag.
-    const started = Date.now();
-    const res = await request(app)
-      .get('/api/notes')
-      .query({ prefix: '(a+)+$' })
-      .set('Authorization', `Bearer ${userToken}`);
-    expect(res.status).toBe(200);
-    expect(res.body).toEqual([]);
-    expect(Date.now() - started).toBeLessThan(5000);
-  });
-});
+// The legacy REST `/api/notes` route (routes/noteGeek.js) and its tests were
+// deleted 2026-11-15: it wrote to datageek.notes, which nothing reads, and
+// stored lockHash in plain text. NoteGeek's `notes` query compares a prefix
+// with startsWith over the owner's stored tags, never as a regex.

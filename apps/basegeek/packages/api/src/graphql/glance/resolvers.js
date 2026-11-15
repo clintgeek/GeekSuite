@@ -11,6 +11,7 @@ import taskService from '../todogeek/services/taskService.js';
 import habitService from '../todogeek/services/habitService.js';
 
 import Note, { active as activeNote } from '../notegeek/models/Note.js';
+import { fillMissingPreviews } from '../notegeek/noteLists.js';
 import { Book } from '../bookgeek/models/book.js';
 import { BookReading, findBooksFor } from '../bookgeek/readerBooks.js';
 import Bird from '../flockgeek/models/Bird.js';
@@ -84,11 +85,19 @@ function mapTask(t) {
   };
 }
 
+/**
+ * A note's opening words: its stored `preview` (plain text; a sketch's from
+ * its transcript — never the tldraw JSON this used to show), cut to 120.
+ */
+const NOTE_SNIPPET_CHARS = 120;
 function noteSnippet(note) {
   if (note.isLocked || note.isEncrypted) return null;
-  if (!note.content) return null;
-  return note.content.substring(0, 120);
+  const text = typeof note.preview === 'string' ? note.preview.trim() : '';
+  if (!text) return null;
+  return text.length > NOTE_SNIPPET_CHARS ? `${text.slice(0, NOTE_SNIPPET_CHARS - 1).replace(/\s+\S*$/, '')}…` : text;
 }
+/** What a glance note row reads — never the body. */
+const NOTE_ROW_FIELDS = { title: 1, type: 1, tags: 1, updatedAt: 1, preview: 1, isLocked: 1, isEncrypted: 1 };
 
 function icalText(value) {
   if (value == null) return '';
@@ -299,10 +308,10 @@ export async function fetchGlanceToday(context, date) {
   try {
     if (userOid) {
       // Archived notes are not "recent" (NoteGeek spec §3 A2).
-      const notes = await Note.find({ userId: userOid, ...activeNote() })
+      const notes = await fillMissingPreviews(await Note.find({ userId: userOid, ...activeNote() }, NOTE_ROW_FIELDS)
         .sort({ updatedAt: -1 })
         .limit(5)
-        .lean();
+        .lean());
 
       result.recentNotes = notes.map((n) => ({
         id: n._id.toString(),
@@ -492,14 +501,19 @@ export async function searchThings(userId, term, options = {}) {
         ...activeNote(), // archived notes are not found (NoteGeek spec §3 A2)
         ...sinceClause,
         ...tagClause,
+        // `wordText`: the note's words (a sketch's transcript), never markup
+        // or a sketch's drawing JSON.
         $or: [
           { title: regex },
-          { content: regex, isLocked: false, isEncrypted: false },
+          { wordText: regex, isLocked: { $ne: true }, isEncrypted: { $ne: true } },
+          // A note not yet given `wordText` (a raw import): its body, unless a sketch.
+          { wordText: { $exists: false }, type: { $ne: 'handwritten' }, content: regex, isLocked: { $ne: true }, isEncrypted: { $ne: true } },
         ],
-      })
+      }, NOTE_ROW_FIELDS)
         .sort({ updatedAt: -1 })
         .limit(cap)
         .lean();
+      await fillMissingPreviews(notes);
 
       for (const n of notes) {
         results.push({

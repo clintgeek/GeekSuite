@@ -33,11 +33,15 @@ const noteConn = getAppConnection('notegeek');
  * `suggest.js` and `compose.js` — those must never SEND such content to a
  * model; this must faithfully KEEP it.
  *
- * ## Retention
+ * ## Retention (since 2026-11-15, plan 1.5 — see versions.js)
  *
- * `MAX_VERSIONS_PER_NOTE` newest rows per note, pruned on write. The corpus
- * is small (16 notes, ~24KB total when this was built), so the cap exists to
- * bound a pathological editor loop rather than to save meaningful space.
+ * Edits are coalesced (one version per ~10 minutes of continuous editing,
+ * plus one when a session starts), then thinned by age: everything from the
+ * last day, the newest of each day for 30 days, the newest of each week after
+ * that — capped at MAX_VERSIONS_PER_NOTE rows and MAX_VERSION_BYTES_PER_NOTE
+ * of content per note (a sketch is up to 5 MB a version). The snapshot taken
+ * before a large shrink is `keep: true` and survives all of it. Before this,
+ * 50 rows (one per autosave pause) covered only the last few minutes.
  */
 const NoteVersionSchema = new mongoose.Schema(
   {
@@ -69,6 +73,14 @@ const NoteVersionSchema = new mongoose.Schema(
      * benefit, not for logic.
      */
     reason: { type: String, default: 'edit' },
+    /** Content length (characters), so retention can budget without reading bodies. Absent on old rows. */
+    size: { type: Number, default: null },
+    /**
+     * Never pruned by age or budget: the note as it was before a change that
+     * removed most of it (versions.js `isLargeShrink`) — the version you'd
+     * want after an accidental select-all-delete or an erased sketch.
+     */
+    keep: { type: Boolean, default: false },
   },
   { timestamps: true }
 );
@@ -78,7 +90,11 @@ NoteVersionSchema.index({ noteId: 1, createdAt: -1 });
 // Ownership-scoped reads and the delete-a-note cascade.
 NoteVersionSchema.index({ userId: 1, noteId: 1 });
 
-export const MAX_VERSIONS_PER_NOTE = 50;
+export const MAX_VERSIONS_PER_NOTE = 100;
+/** Content kept per note across its versions: ~10 large sketches. */
+export const MAX_VERSION_BYTES_PER_NOTE = 50 * 1024 * 1024;
+/** `keep: true` rows per note beyond which even they go, oldest first (a runaway loop). */
+export const MAX_KEPT_VERSIONS_PER_NOTE = 20;
 
 export default noteConn.models.NoteVersion
   || noteConn.model('NoteVersion', NoteVersionSchema);

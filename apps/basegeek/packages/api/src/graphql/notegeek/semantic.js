@@ -79,7 +79,7 @@
  */
 
 import mongoose from 'mongoose';
-import Note, { active } from './models/Note.js';
+import Note, { active, notDeleted } from './models/Note.js';
 import NoteChunk from './models/NoteChunk.js';
 import { embedTexts, embeddingsConfig, modelSpec, EmbeddingsUnavailableError } from './embeddings.js';
 
@@ -87,6 +87,8 @@ import { embedTexts, embeddingsConfig, modelSpec, EmbeddingsUnavailableError } f
 export const RRF_K = 60;
 export const KEYWORD_WEIGHT = 1.0;
 export const VECTOR_WEIGHT = 0.8;
+/** Title-prefix hits (rankHybrid's third list). */
+export const PREFIX_WEIGHT = 0.9;
 /** Keyword hits under this share of the top textScore are dropped (`selectKeywordHits`). */
 export const KEYWORD_MIN_RATIO = 0.4;
 export const SEARCH_MAX_VECTOR_HITS = 20;
@@ -102,18 +104,34 @@ const WHY_CHARS = 180;
 // ── service health, shared with the indexer ────────────────────────────────
 const BACKOFF_BASE_MS = 30 * 1000;
 const BACKOFF_MAX_MS = 15 * 60 * 1000;
-const health = { downUntil: 0, failures: 0, lastError: null, lastOkAt: null };
+const health = { downUntil: 0, failures: 0, softFailures: 0, lastError: null, lastOkAt: null };
 
-/** Record a failure; each consecutive one doubles the pause (30 s → 15 min). */
+/**
+ * Slow is not down. A timeout means the service answered nothing in time —
+ * usually because Ollama (one request at a time) was busy with the indexer —
+ * so ONE slow query used to pause meaning-search and indexing for everyone
+ * for 30 s, doubling to 15 min (plan 5.8). Timeouts now trip the breaker only
+ * after SOFT_TRIP of them in a row; a refused connection or a 5xx still trips
+ * it at once.
+ */
+export const SOFT_TRIP = 3;
+
+/** Record a failure; each consecutive one doubles the pause (30 s → 15 min). Returns the pause (0: not tripped). */
 export function markServiceDown(err, now = Date.now()) {
+  health.lastError = String(err?.message || err).slice(0, 300);
+  if (err?.timeout) {
+    health.softFailures += 1;
+    if (health.softFailures < SOFT_TRIP) return 0;
+  }
+  health.softFailures = 0;
   health.failures += 1;
   const pause = Math.min(BACKOFF_BASE_MS * 2 ** (health.failures - 1), BACKOFF_MAX_MS);
   health.downUntil = now + pause;
-  health.lastError = String(err?.message || err).slice(0, 300);
   return pause;
 }
 export function markServiceUp(now = Date.now()) {
   health.failures = 0;
+  health.softFailures = 0;
   health.downUntil = 0;
   health.lastOkAt = new Date(now);
 }
@@ -121,7 +139,7 @@ export const serviceIsDown = (now = Date.now()) => health.downUntil > now;
 export const serviceHealth = () => ({ ...health });
 /** Tests only. */
 export function _resetSemanticState() {
-  health.downUntil = 0; health.failures = 0; health.lastError = null; health.lastOkAt = null;
+  health.downUntil = 0; health.failures = 0; health.softFailures = 0; health.lastError = null; health.lastOkAt = null;
   vectorCache.clear();
   queryCache.clear();
 }
@@ -129,10 +147,31 @@ export function _resetSemanticState() {
 // ── the per-user vector cache ──────────────────────────────────────────────
 const vectorCache = new Map(); // `${userId}\u0000${model}` -> { at, rows }
 
+/** Drop the user's whole cache (a sweep, a model change). Per-note writes use the two below. */
 export function invalidateUserVectors(userId) {
   const prefix = `${ String(userId) }\u0000`;
   for (const key of [...vectorCache.keys()]) if (key.startsWith(prefix)) vectorCache.delete(key);
 }
+
+/**
+ * One note's passages changed: patch the user's cached rows in place rather
+ * than throwing away every vector they have (plan 5.8 — every index write
+ * used to make the next search re-read and re-convert the whole library).
+ * `rows` are `{ chunk, text, vector }` of `model`; omitted = the note is gone.
+ */
+export function replaceNoteVectors(userId, noteId, { model = null, rows = [] } = {}) {
+  const prefix = `${ String(userId) }\u0000`;
+  const id = String(noteId);
+  for (const [key, entry] of vectorCache) {
+    if (!key.startsWith(prefix)) continue;
+    const keep = entry.rows.filter((r) => r.noteId !== id);
+    const add = key === `${ prefix }${ model }`
+      ? rows.map((r) => ({ noteId: id, chunk: r.chunk, text: r.text || '', vec: Float32Array.from(r.vector) }))
+      : [];
+    vectorCache.set(key, { ...entry, rows: add.length ? keep.concat(add) : keep });
+  }
+}
+export const dropNoteVectors = (userId, noteId) => replaceNoteVectors(userId, noteId);
 
 /** Every current-model chunk the user has: `{ noteId, chunk, text, vec: Float32Array }`. */
 export async function userVectors(userId, now = Date.now()) {
@@ -289,11 +328,15 @@ export function rrfFuse(lists, k = RRF_K) {
  * keep their RRF order. With no vector hits it is the cut keyword list, in
  * textScore order, with no best match.
  */
-export function rankHybrid({ keywordRows, vectorHits = [], runnerUpScore = null, backfilling = false }) {
+export function rankHybrid({ keywordRows, vectorHits = [], runnerUpScore = null, backfilling = false, prefixIds = [] }) {
   const keyword = selectKeywordHits(keywordRows);
   const fused = rrfFuse([
     { ids: keyword.map((n) => String(n._id)), weight: KEYWORD_WEIGHT },
     { ids: vectorHits.map((h) => h.noteId), weight: VECTOR_WEIGHT },
+    // Titles with a word that starts with what was typed ("gar" → Garage
+    // door), plan 5.4: `$text` matches whole words only. Third, so a tie
+    // still goes to a keyword hit.
+    { ids: prefixIds.map(String), weight: PREFIX_WEIGHT },
   ]);
   const best = pickBestMatch({
     keywordTopId: keyword.length ? String(keyword[0]._id) : null, vectorHits, runnerUpScore, backfilling,
@@ -303,7 +346,7 @@ export function rankHybrid({ keywordRows, vectorHits = [], runnerUpScore = null,
     if (at > 0) fused.unshift(...fused.splice(at, 1));
   }
   return fused.map((f) => {
-    const kw = f.ranks[0] !== null;
+    const kw = f.ranks[0] !== null || f.ranks[2] !== null;
     const vec = f.ranks[1] !== null;
     return {
       id: f.id,
@@ -336,7 +379,10 @@ export function whyExcerpt(text, title) {
  * `{ userId, archived }`), never cached, so an archive is honoured at once.
  */
 export async function archivedNoteIds(userId) {
-  const rows = await Note.find({ userId, archived: true }, { _id: 1 }).lean();
+  // Archived or deleted: neither may appear in meaning search or Related.
+  // (A deleted note's passages are removed at delete, but a cached copy may
+  // still hold them until it is patched; this read is the guarantee.)
+  const rows = await Note.find({ userId, $or: [{ archived: true }, { deletedAt: { $ne: null } }] }, { _id: 1 }).lean();
   return new Set(rows.map((n) => String(n._id)));
 }
 
@@ -450,7 +496,7 @@ export async function indexStatus({ userId }) {
   const uid = new mongoose.Types.ObjectId(String(userId));
   const [states, chunks] = await Promise.all([
     Note.aggregate([
-      { $match: { userId: uid } },
+      { $match: { userId: uid, ...notDeleted() } },
       { $group: { _id: { $ifNull: ['$embeddingState', 'stale'] }, n: { $sum: 1 } } },
     ]),
     // Searchable passages: the current model's (old ones are ignored).

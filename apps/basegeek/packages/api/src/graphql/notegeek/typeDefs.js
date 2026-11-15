@@ -18,6 +18,13 @@ export const typeDefs = gql`
     """What replaced this version: edit, compose, restore, fold_in."""
     reason: String
     createdAt: String
+    """
+    True for the snapshot taken before a change that removed most of the note
+    (an accidental select-all-delete, an erased sketch). Never pruned.
+    """
+    keep: Boolean
+    """Content length in characters (null on versions from before 2026-11-15)."""
+    size: Int
   }
 
   """
@@ -119,6 +126,12 @@ export const typeDefs = gql`
     error: String
     "Keys of journal lines already sent to TodoGeek from this sketch."
     sentTaskKeys: [String!]!
+    """
+    The text of lines sent (from clients that send it with
+    recordSketchTasksSent), whitespace-collapsed, newest 500. For "probably
+    already sent" matching when a corrected line has a new key.
+    """
+    sentTaskTexts: [String!]!
     autoEnabled: Boolean!
   }
 
@@ -249,6 +262,27 @@ export const typeDefs = gql`
     the typed text is not rewritten.
     """
     links: [NoteLink!]!
+    """
+    About 200 characters of the note's words for a list row: no markup, no
+    JSON; a sketch's from its transcript. Null for a locked or encrypted note.
+    Select this instead of content in lists — when content is not selected the
+    gateway does not read it at all.
+    """
+    preview: String
+    """
+    When the note was moved to Recently deleted (ISO 8601); null when it
+    wasn't. A deleted note leaves every list and search, is still opened by
+    id, and is purged 30 days after this.
+    """
+    deletedAt: String
+  }
+
+  """One page of the note list (notesPage). Pass nextCursor back as after."""
+  type NotePage {
+    notes: [Note!]!
+    """Null on the last page."""
+    nextCursor: String
+    hasMore: Boolean!
   }
 
   type NoteLink {
@@ -384,7 +418,22 @@ export const typeDefs = gql`
     together, they all narrow.
     """
     notes(tag: String, prefix: String, under: String, type: String, limit: Int, sort: String): [Note!]!
+    """
+    The note list, a page at a time (keyset paging: stable while notes are
+    edited). Same filters as notes; pinned notes first, then sort:
+    updatedAt_desc (default) | updatedAt_asc | createdAt_desc | createdAt_asc |
+    title_asc | title_desc (titles case-insensitive). first: 1-200, default
+    50. after: the previous page's nextCursor.
+    """
+    notesPage(tag: String, prefix: String, under: String, type: String, sort: String, first: Int, after: String): NotePage!
+    """A note by id — including one in Recently deleted (deletedAt is set) or archived."""
     note(id: ID!): Note
+    """
+    Recently deleted: the caller's soft-deleted notes, most recently deleted
+    first (default 50, max 200). Notes deleted over 30 days ago are purged
+    when this is read.
+    """
+    deletedNotes(limit: Int): [Note!]!
     """A note's history, newest first. The content field is null here —
     fetch one version with noteVersion rather than pulling every body."""
     noteVersions(noteId: ID!): [NoteVersion!]!
@@ -394,7 +443,10 @@ export const typeDefs = gql`
     noteTagUsage(tag: String!): TagUsage!
     """
     Search. hybrid = also match by meaning (local embeddings), fused with the
-    keyword hits; omitted/false is keyword-only, as before.
+    keyword hits and with titles that have a word starting with q ("gar" →
+    Garage door); omitted/false is keyword-only, as before. q is cut to 500
+    characters. snippet is plain text around the first word starting with a
+    query term (a sketch's from its transcript); the client highlights.
     """
     searchNotes(q: String!, under: String, hybrid: Boolean): [SearchSnippet!]!
     """The caller's notes closest in meaning to this one. Empty until it is indexed."""
@@ -410,7 +462,11 @@ export const typeDefs = gql`
   }
 
   type Mutation {
-    createNote(title: String, content: String!, type: String, tags: [String!]): Note!
+    """
+    transcriptText (sketches only, C6): the reviewed reading of the pages,
+    stored with the note so it is searchable from the first write.
+    """
+    createNote(title: String, content: String!, type: String, tags: [String!], transcriptText: String): Note!
     updateNote(
       id: ID!
       title: String
@@ -422,6 +478,15 @@ export const typeDefs = gql`
       compose, restore. Only affects what the history list shows.
       """
       changeReason: String
+      """
+      C3: the updatedAt (ISO 8601) this edit was made against. If the note has
+      changed since, nothing is written and the error has extensions.code
+      CONFLICT and extensions.serverNote { id title content tags type
+      updatedAt }. Omitted: last write wins, as before.
+      """
+      baseUpdatedAt: String
+      """Sketches: the reviewed reading of the content being saved (kept as its corrections)."""
+      transcriptText: String
     ): Note!
     """Put a note back to an earlier version. Snapshots the current state
     first, so a restore is itself undoable."""
@@ -465,7 +530,7 @@ export const typeDefs = gql`
     saveSketchTranscriptEdit(noteId: ID!, text: String!, forHash: String): SketchTranscriptState!
     """Remember that these journal lines of a sketch were sent to TodoGeek
     (BUJO_HANDWRITING.md), so they are not offered again."""
-    recordSketchTasksSent(noteId: ID!, keys: [String!]!): SketchTranscriptState!
+    recordSketchTasksSent(noteId: ID!, keys: [String!]!, texts: [String!]): SketchTranscriptState!
     """Pin or unpin a note. Scoped to the owner, like every other note mutation."""
     setNotePinned(id: ID!, pinned: Boolean!): Note!
     """
@@ -476,7 +541,20 @@ export const typeDefs = gql`
     archiveNotes(ids: [ID!]!): ArchiveResult!
     """Restore archived notes (same rules as archiveNotes). Clears archivedAt."""
     restoreNotes(ids: [ID!]!): ArchiveResult!
+    """
+    Move a note to Recently deleted (soft delete, decision D1). Its history is
+    kept; restoreNote brings it back; it is purged after 30 days. Deleting an
+    already-deleted note is a no-op (true).
+    """
     deleteNote(id: ID!): Boolean!
+    """Bring a note back from Recently deleted, as it was."""
+    restoreNote(id: ID!): Note!
+    """
+    Permanently delete one note that is already in Recently deleted, with its
+    history and search passages. True when it was purged; false when it is
+    not in Recently deleted.
+    """
+    purgeNote(id: ID!): Boolean!
     """
     Rename or move a tag with its whole subtree: house -> home turns
     house/garage into home/garage; garage -> house/garage moves it. Merges
