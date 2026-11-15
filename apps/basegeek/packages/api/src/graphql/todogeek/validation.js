@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { normalizeTags } from '@geeksuite/tags';
+import rrulePkg from 'rrule';
 import {
   idString,
   instantField,
@@ -12,6 +13,8 @@ import {
 // here so this module stays the single import for todogeek's resolvers and
 // its test suite.
 export { validateInput };
+
+const { rrulestr, RRule } = rrulePkg;
 
 /**
  * Input validation for the todogeek mutations — SUITE_TODO's "input
@@ -66,7 +69,90 @@ const tagsSchema = z
 // anything else is already a no-op there, so the enum matches its own input.
 const recurrencePatternSchema = z.enum(['none', 'daily', 'weekly', 'monthly']).nullable().optional();
 // `DTSTART:...\nRRULE:...` — a real newline, so no single-line pattern here.
-const recurrenceRuleSchema = z.string().trim().max(1000).nullable().optional();
+// Checked for what it EXPANDS to, not just its length (`recurrenceRuleProblem`).
+const recurrenceRuleSchema = z
+  .string()
+  .trim()
+  .max(1000)
+  .superRefine((rule, ctx) => {
+    const problem = recurrenceRuleProblem(rule);
+    if (problem) ctx.addIssue({ code: z.ZodIssueCode.custom, message: problem });
+  })
+  .nullable()
+  .optional();
+/**
+ * A repeating task's RRULE, judged by what it would cost to expand.
+ *
+ * Any text used to be accepted. `allTasks` expands every series a stretch
+ * either side of today on the SHARED gateway, so `FREQ=SECONDLY` (or a DAILY
+ * rule with `BYHOUR`×`BYMINUTE` lists) would build tens of millions of rows
+ * and block every app's requests while it did. TodoGeek's grammar only ever
+ * writes DAILY / WEEKLY / MONTHLY; YEARLY is allowed too.
+ *
+ * Refused: anything rrule cannot parse; more than one rule (an RRuleSet —
+ * RDATE/EXRULE lines; exceptions live in `exdates`); a frequency finer than a
+ * day; COUNT over MAX_RULE_COUNT; INTERVAL over MAX_RULE_INTERVAL; and any
+ * rule that would produce more than MAX_OCCURRENCES_PER_YEAR occurrences in
+ * the year after its DTSTART (a daily rule is 366). Returns null when fine.
+ */
+export const MAX_RULE_COUNT = 1000;
+export const MAX_RULE_INTERVAL = 1000;
+export const MAX_OCCURRENCES_PER_YEAR = 400;
+const ALLOWED_FREQS = new Set([RRule.YEARLY, RRule.MONTHLY, RRule.WEEKLY, RRule.DAILY]);
+
+export function recurrenceRuleProblem(text) {
+  if (text === null || text === undefined || text === '') return null;
+  let rule;
+  try {
+    rule = rrulestr(String(text));
+  } catch {
+    return 'recurrenceRule is not a valid RRULE';
+  }
+  if (!(rule instanceof RRule)) return 'recurrenceRule must be a single RRULE';
+  const opts = rule.origOptions || {};
+  if (!ALLOWED_FREQS.has(opts.freq)) return 'recurrenceRule may repeat daily at most (no HOURLY, MINUTELY or SECONDLY)';
+  if (opts.count !== undefined && opts.count !== null && opts.count > MAX_RULE_COUNT) {
+    return `recurrenceRule COUNT must be ${MAX_RULE_COUNT} or fewer`;
+  }
+  if (opts.interval !== undefined && opts.interval !== null && (opts.interval < 1 || opts.interval > MAX_RULE_INTERVAL)) {
+    return `recurrenceRule INTERVAL must be between 1 and ${MAX_RULE_INTERVAL}`;
+  }
+  const start = rule.options.dtstart instanceof Date ? rule.options.dtstart : new Date();
+  const yearOn = new Date(start.getTime() + 366 * 86400000);
+  let seen = 0;
+  // The iterator stops the moment the cap is passed, so a hostile rule costs
+  // MAX_OCCURRENCES_PER_YEAR + 1 steps here, never its full expansion.
+  rule.between(start, yearOn, true, () => {
+    seen += 1;
+    return seen <= MAX_OCCURRENCES_PER_YEAR;
+  });
+  if (seen > MAX_OCCURRENCES_PER_YEAR) return 'recurrenceRule repeats too often (more than daily)';
+  return null;
+}
+
+/** An IANA zone the runtime knows ("America/Chicago"), or null/absent. */
+const timeZoneSchema = z
+  .string()
+  .trim()
+  .max(64)
+  .refine((tz) => {
+    try {
+      new Intl.DateTimeFormat('en-US', { timeZone: tz });
+      return true;
+    } catch {
+      return false;
+    }
+  }, { message: 'must be an IANA time zone, e.g. America/Chicago' })
+  .nullable()
+  .optional();
+
+// Contract C1: the client's own id for one create. A UUID from TodoGeek,
+// `ng:<32 hex>` from NoteGeek; any short opaque string is accepted.
+const clientIdSchema = z.string().trim().min(1).max(100).nullable().optional();
+
+// Contract C2: does dueDate carry a time? Absent/null → derived (legacy rule).
+const hasDueTimeSchema = z.boolean().nullable().optional();
+
 const contentSchema = (max = 2000) => z.string().trim().min(1).max(max);
 const noteSchema = z.string().trim().max(5000).nullable().optional();
 
@@ -96,9 +182,16 @@ export const createTaskSchema = z
     note: noteSchema,
     recurrencePattern: recurrencePatternSchema,
     recurrenceRule: recurrenceRuleSchema,
-    isSeriesMaster: z.boolean().optional(),
+    // Accepted so old clients still validate, and then IGNORED: a task is a
+    // series master exactly when it carries a recurrenceRule
+    // (taskService.createTask). A client-sent `true` with no rule made a task
+    // that no view ever shows.
+    isSeriesMaster: z.boolean().nullable().optional(),
     collectionId: idString.nullable().optional(),
     private: z.boolean().nullable().optional(),
+    clientId: clientIdSchema,
+    hasDueTime: hasDueTimeSchema,
+    timeZone: timeZoneSchema,
   })
   .strict();
 
@@ -116,6 +209,8 @@ export const updateTaskInputSchema = z
     recurrenceRule: recurrenceRuleSchema,
     collectionId: idString.nullable().optional(),
     private: z.boolean().nullable().optional(),
+    hasDueTime: hasDueTimeSchema,
+    timeZone: timeZoneSchema,
   })
   .strict();
 

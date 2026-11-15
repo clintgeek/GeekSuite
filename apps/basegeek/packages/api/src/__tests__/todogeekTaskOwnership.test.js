@@ -45,7 +45,9 @@ describe('BUG 1 — ownership scoping', () => {
     const t = await makeTask();
     expect(await resolvers.Query.task(null, { id: String(t._id) }, ctx(ALICE))).not.toBeNull();
     expect(await resolvers.Query.task(null, { id: String(t._id) }, ctx(BOB))).toBeNull();
-    expect(await resolvers.Query.task(null, { id: String(t._id) }, ctx(null))).toBeNull();
+    // Signed out is an UNAUTHENTICATED error now, not an empty answer (plan 1.12).
+    await expect(resolvers.Query.task(null, { id: String(t._id) }, ctx(null)))
+      .rejects.toMatchObject({ extensions: { code: 'UNAUTHENTICATED' } });
   });
 
   test('updateTask cannot touch another user’s task', async () => {

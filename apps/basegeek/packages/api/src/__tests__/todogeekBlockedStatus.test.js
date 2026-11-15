@@ -216,7 +216,8 @@ describe('ownership — block / unblock are scoped to the owner', () => {
     const t = await makeTask();
     await taskService.blockTask(String(t._id), 'waiting', ALICE);
     expect(await resolvers.Query.blockedTasks(null, {}, ctx(BOB))).toHaveLength(0);
-    expect(await resolvers.Query.blockedTasks(null, {}, ctx(null))).toHaveLength(0);
+    await expect(resolvers.Query.blockedTasks(null, {}, ctx(null)))
+      .rejects.toMatchObject({ extensions: { code: 'UNAUTHENTICATED' } });
     expect(await resolvers.Query.blockedTasks(null, {}, ctx(ALICE))).toHaveLength(1);
   });
 });

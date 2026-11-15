@@ -23,7 +23,12 @@
  *                             /next-monday … /next-sunday
  *                             /2026-03-15  /03-15-2026  /03-15  /15th
  *                             /mar 5th  /january 15
- *   Time (after a date):      9am  14:30  2:30pm  2 p.m.
+ *   Time (after a date):      9am  14:30  2:30pm  2 p.m.  — am/pm or hh:mm
+ *                             only: `/tomorrow 2 loaves` is not 2 am.
+ *   The `/` must start a word (a URL's `/2024` is not a date), a date with
+ *   no year is the NEXT one (`/mar 5` in November is next March, `/15th`
+ *   after the 15th is next month's), and a day the month does not have
+ *   (`/02-30`) is not a date at all.
  *   Plain-word date (2026-09-29, SIMPLE_PLAN Phase 1) — only when no slash
  *   date was given, and only as the FIRST or LAST words of what is left:
  *                             today  tomorrow  monday … sunday
@@ -108,6 +113,46 @@ function defaultTime(date) {
   return date;
 }
 
+/**
+ * A calendar date at 09:00 local, or null when the day does not exist in that
+ * month (`/02-30`, `/feb 30`, `/31st` in a 30-day month) — JavaScript would
+ * quietly roll those into the next month.
+ */
+function calendarDate(year, month, day) {
+  if (!Number.isFinite(year) || !Number.isFinite(month) || !Number.isFinite(day)) return null;
+  if (month < 0 || month > 11 || day < 1 || day > 31) return null;
+  const d = new Date(year, month, day);
+  if (d.getFullYear() !== year || d.getMonth() !== month || d.getDate() !== day) return null;
+  return defaultTime(d);
+}
+
+const startOfLocalDay = (d) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+
+/**
+ * A date typed without a year is the NEXT one: `/mar 5` typed in November is
+ * next March, not eight months overdue. Tries this year, then the next.
+ */
+function nextYearlyDate(month, day, now) {
+  for (let y = now.getFullYear(); y <= now.getFullYear() + 1; y += 1) {
+    const d = calendarDate(y, month, day);
+    if (d && startOfLocalDay(d) >= startOfLocalDay(now)) return d;
+  }
+  return null;
+}
+
+/** `/15th` is the next 15th: this month's if it has not passed, else the next month that has one. */
+function nextMonthlyDate(day, now) {
+  for (let i = 0; i <= 12; i += 1) {
+    const d = calendarDate(now.getFullYear(), now.getMonth() + i, day);
+    // calendarDate validates against the month it was asked for, so month
+    // overflow (getMonth()+i > 11) is normalised first.
+    const probe = new Date(now.getFullYear(), now.getMonth() + i, 1);
+    const real = d ?? calendarDate(probe.getFullYear(), probe.getMonth(), day);
+    if (real && startOfLocalDay(real) >= startOfLocalDay(now)) return real;
+  }
+  return null;
+}
+
 /* ---------- recurrence (RRULE) ---------- */
 
 const FREQ_BY_WORD = { daily: 'DAILY', weekly: 'WEEKLY', monthly: 'MONTHLY' };
@@ -151,9 +196,13 @@ const PATTERNS = {
   recurrence: /\((daily|weekly|monthly)\)/i,
   private: /\(private\)/gi,
   priority: /!(high|medium|low)\b/i,
+  // The slash must start a word (`read example.com/2024 notes` is a URL, not
+  // a due date), the date must end one (`/2024` is not the 20th), and a time
+  // after it must say am/pm or hh:mm (`buy /tomorrow 2 loaves` is two loaves,
+  // not 2 am) — checked in the parser, which shortens the match when it
+  // does not. Plan 1.16, 2026-11-15.
   dateTime:
-    /\/(today|tomorrow|next-week|next-month|next-(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|(?:mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)|(?:\d{4}-\d{2}-\d{2})|(?:\d{2}-\d{2}-\d{4})|(?:\d{2}-\d{2})|(?:\d{1,2})(?:st|nd|rd|th)?|(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{1,2}(?:st|nd|rd|th)?)(?:\s+(\d{1,2})(?::(\d{2}))?\s*(?:([ap]\.?m\.?))?)?/i,
-  timeMarker: /\b([ap]\.?m\.?)\b/i,
+    /(?<!\S)\/(today|tomorrow|next-week|next-month|next-(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)|(?:mon(?:day)?|tue(?:sday)?|wed(?:nesday)?|thu(?:rsday)?|fri(?:day)?|sat(?:urday)?|sun(?:day)?)|(?:\d{4}-\d{2}-\d{2})|(?:\d{2}-\d{2}-\d{4})|(?:\d{2}-\d{2})|(?:\d{1,2})(?:st|nd|rd|th)?|(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{1,2}(?:st|nd|rd|th)?)(?![\w/-])(?:\s+(\d{1,2})(?::(\d{2}))?\s*(?:([ap]\.?m\.?)(?![\w]))?)?/i,
   type: /^[*@\-!?]/,
   noteGeek: /\$\^(.+)$/,
   note: /\^(.+)$/,
@@ -358,59 +407,54 @@ export function parseTaskInputDetailed(text, { now = new Date() } = {}) {
     } else {
       const parts = dateStr.split('-');
       if (parts.length === 2) {
-        date = defaultTime(new Date(date.getFullYear(), parseInt(parts[0]) - 1, parseInt(parts[1])));
+        // MM-DD, no year: the next one.
+        date = nextYearlyDate(parseInt(parts[0], 10) - 1, parseInt(parts[1], 10), now);
       } else if (parts.length === 3) {
-        if (parts[0].length === 4) {
-          date = defaultTime(new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])));
-        } else {
-          date = defaultTime(new Date(parseInt(parts[2]), parseInt(parts[0]) - 1, parseInt(parts[1])));
-        }
+        // A typed year is taken as written, even in the past.
+        date = parts[0].length === 4
+          ? calendarDate(parseInt(parts[0], 10), parseInt(parts[1], 10) - 1, parseInt(parts[2], 10))
+          : calendarDate(parseInt(parts[2], 10), parseInt(parts[0], 10) - 1, parseInt(parts[1], 10));
       } else {
         // month-name + day  OR  bare day number
         const monthDayMatch = dl.match(
           /^(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+(\d{1,2})(?:st|nd|rd|th)?$/i,
         );
         if (monthDayMatch) {
-          const month = MONTH_NAMES[monthDayMatch[1].toLowerCase()];
-          const day = parseInt(monthDayMatch[2]);
-          date = defaultTime(new Date(date.getFullYear(), month, day));
+          date = nextYearlyDate(MONTH_NAMES[monthDayMatch[1].toLowerCase()], parseInt(monthDayMatch[2], 10), now);
         } else {
-          // A bare number like /15th is the 15th of the current month.
-          const bareDay = parseInt(dateStr.replace(/(?:st|nd|rd|th)$/i, ''));
-          if (!isNaN(bareDay)) {
-            date = defaultTime(new Date(date.getFullYear(), date.getMonth(), bareDay));
-          }
+          // A bare number like /15th is the next 15th.
+          date = nextMonthlyDate(parseInt(dateStr.replace(/(?:st|nd|rd|th)$/i, ''), 10), now);
         }
       }
     }
 
-    let end = dtMatch.index + fullMatch.length;
-    if (timeStr) {
-      let hours = parseInt(timeStr);
-      const mins = minutes ? parseInt(minutes) : 0;
-      let mer = meridian?.toLowerCase().replace(/\./g, '');
-
-      if (!mer) {
-        const markerMatch = masked.slice(end).match(PATTERNS.timeMarker);
-        if (markerMatch) mer = markerMatch[1].toLowerCase().replace(/\./g, '');
+    // A date that does not exist (`/02-30`) is not a date: the token stays
+    // in the words, and nothing is underlined.
+    if (date) {
+      // The date token alone: `/` + the date words.
+      let end = dtMatch.index + 1 + dateStr.length;
+      // A time only counts when it is unmistakable — am/pm or hh:mm, in range.
+      let hours = timeStr ? parseInt(timeStr, 10) : NaN;
+      const mins = minutes ? parseInt(minutes, 10) : 0;
+      const mer = meridian?.toLowerCase().replace(/\./g, '');
+      if (timeStr && (minutes || mer) && mins <= 59 && (mer ? hours >= 1 && hours <= 12 : hours <= 23)) {
+        if (mer) {
+          if (mer.startsWith('p') && hours < 12) hours += 12;
+          else if (mer.startsWith('a') && hours === 12) hours = 0;
+        }
+        date.setHours(hours, mins, 0, 0);
+        hasTime = true;
+        end = dtMatch.index + fullMatch.length;
+      } else {
+        date.setHours(9, 0, 0, 0);
       }
+      // The regex's optional `\s*` before a meridian can end on a trailing
+      // space; the underline should stop at the last character of the token.
+      while (end > dtMatch.index && /\s/.test(line[end - 1])) end -= 1;
 
-      if (mer) {
-        if (mer.startsWith('p') && hours < 12) hours += 12;
-        else if (mer.startsWith('a') && hours === 12) hours = 0;
-      }
-
-      date.setHours(hours, mins, 0, 0);
-      hasTime = true;
-    } else {
-      date.setHours(9, 0, 0, 0);
+      dueDate = date;
+      take(dtMatch.index, end, 'date');
     }
-    // The regex's optional `\s*` before a meridian can end on a trailing
-    // space; the underline should stop at the last character of the token.
-    while (end > dtMatch.index && /\s/.test(line[end - 1])) end -= 1;
-
-    dueDate = date;
-    take(dtMatch.index, end, 'date');
   }
 
   // 4b. Plain-word date — only when the slash grammar gave none.

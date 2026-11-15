@@ -17,6 +17,15 @@ export const typeDefs = gql`
     note: String
     tags: [String]
     dueDate: Date
+    """
+    True when \`dueDate\` carries a time of day, false when it is a date only.
+    Always a boolean. Rows written before the field existed are read with the
+    legacy rule (a dueDate at exactly UTC midnight is date-only) — which is
+    wrong for a task timed at 6 pm US-Central, and why the flag exists.
+    """
+    hasDueTime: Boolean
+    "The IANA zone a repeating series keeps its wall-clock time in, or null."
+    timeZone: String
     originalDate: Date
     migratedFrom: String
     migratedTo: String
@@ -204,6 +213,13 @@ export const typeDefs = gql`
     collectionId: ID
     "Mark the task private (true) or not (false). null is read as false."
     private: Boolean
+    """
+    Does \`dueDate\` carry a time? Omitted (or null) while \`dueDate\` is sent:
+    derived with the legacy rule (UTC midnight = date only).
+    """
+    hasDueTime: Boolean
+    "IANA zone for a repeating series' wall-clock time (America/Chicago)."
+    timeZone: String
   }
 
   """
@@ -358,16 +374,33 @@ export const typeDefs = gql`
 
   type Mutation {
     """
+    \`clientId\` makes the create idempotent: a second createTask from the same
+    user with the same clientId returns the task the first one made, with no
+    error and no duplicate (a retried request, a double Enter, NoteGeek's
+    "Send tasks" re-run). \`hasDueTime\` says whether \`dueDate\` carries a
+    time; omitted, it is derived with the legacy UTC-midnight rule.
+    \`status: "completed"\` stamps \`completedAt\` (and "cancelled",
+    \`cancelledAt\`). The RRULE must repeat daily at most, with sane COUNT and
+    INTERVAL — anything that would expand to more than ~one row a day is a
+    BAD_USER_INPUT error.
+
     Recurrence is expressed as \`recurrenceRule\` — an RRULE string of the form
     \`DTSTART:20260315T090000Z\\nRRULE:FREQ=WEEKLY\`. A task created with one
     becomes a series master and its occurrences are expanded per view window.
     \`recurrencePattern\` is accepted for backward compatibility only and is
     translated to an equivalent RRULE at create time.
     """
-    createTask(content: String!, signifier: String, status: String, priority: Int, tags: [String], dueDate: Date, createdAt: Date, updatedAt: Date, note: String, recurrencePattern: String @deprecated(reason: "Legacy recurrence enum — translated to recurrenceRule server-side. Send recurrenceRule instead."), recurrenceRule: String, isSeriesMaster: Boolean, collectionId: ID, private: Boolean): Task!
+    createTask(content: String!, signifier: String, status: String, priority: Int, tags: [String], dueDate: Date, createdAt: Date, updatedAt: Date, note: String, recurrencePattern: String @deprecated(reason: "Legacy recurrence enum — translated to recurrenceRule server-side. Send recurrenceRule instead."), recurrenceRule: String, isSeriesMaster: Boolean @deprecated(reason: "Ignored. A task is a series master exactly when it carries a recurrenceRule."), collectionId: ID, private: Boolean, clientId: String, hasDueTime: Boolean, timeZone: String): Task!
     updateTask(id: ID!, input: UpdateTaskInput!, editScope: EditScope): Task!
     deleteTask(id: ID!, editScope: EditScope): DeleteResponse!
-    updateTaskStatus(id: ID!, status: String!): Task!
+    """
+    Change a task's status. On a repeating series MASTER (the row createTask
+    returns for a repeating task) this is refused (BAD_USER_INPUT) unless
+    \`editScope\` is ALL_INSTANCES: ticking "vitamins (daily)" straight after
+    adding it used to complete the whole series. Occurrences
+    (\`virtual_…\` ids and their override rows) are unaffected by editScope.
+    """
+    updateTaskStatus(id: ID!, status: String!, editScope: EditScope): Task!
     """
     Park a task: status becomes 'blocked', \`blockedReason\`/\`blockedAt\` are
     stamped, and the task drops out of every log view while keeping its

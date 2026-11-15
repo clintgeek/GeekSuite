@@ -6,6 +6,7 @@ import { normalizeTag } from '@geeksuite/tags';
 import { spellingsOf } from '../../shared/tagSpellings.js';
 import rrulePkg from 'rrule';
 import { isOrderTaskId, MAX_ORDERED_TASK_IDS } from '../validation.js';
+import { hasDueTime as midnightRuleHasDueTime, effectiveHasDueTime } from './reminderService.js';
 
 const { rrulestr, RRule } = rrulePkg;
 
@@ -63,12 +64,62 @@ export function recurrencePatternToRRule(pattern, startDate) {
   return `DTSTART:${ formatDtstart(start) }\nRRULE:FREQ=${ freq }`;
 }
 
+/* ─── Wall-clock repeats (DST) ─────────────────────────────────────────────
+ *
+ * An RRULE's DTSTART is a UTC instant (`DTSTART:20260315T140000Z`), and rrule
+ * steps in UTC, so "9 am daily" written in July fired at 8 am from November.
+ * rrule's own TZID support depends on the PROCESS time zone (measured: the
+ * same rule gives different instants under TZ=UTC and TZ=America/Chicago), so
+ * it is not used. Instead a series carries its IANA zone (`Task.timeZone`)
+ * and each raw occurrence is moved by the difference between the zone's
+ * offset at DTSTART and at the occurrence — the same local clock time, every
+ * day of the year. A series without a zone (every one written before
+ * 2026-11-15) expands exactly as before.
+ */
+const zoneFormatters = new Map();
+function zoneFormatter(timeZone) {
+  if (!zoneFormatters.has(timeZone)) {
+    zoneFormatters.set(timeZone, new Intl.DateTimeFormat('en-US', {
+      timeZone, hourCycle: 'h23', year: 'numeric', month: '2-digit', day: '2-digit',
+      hour: '2-digit', minute: '2-digit', second: '2-digit',
+    }));
+  }
+  return zoneFormatters.get(timeZone);
+}
+
+/** Minutes EAST of UTC for `timeZone` at `date` (local = utc + offset). */
+export function zoneOffsetMinutes(timeZone, date) {
+  const parts = {};
+  for (const { type, value } of zoneFormatter(timeZone).formatToParts(date)) parts[type] = value;
+  const asUtc = Date.UTC(+parts.year, +parts.month - 1, +parts.day, +parts.hour, +parts.minute, +parts.second);
+  const whole = date.getTime() - date.getUTCMilliseconds();
+  return Math.round((asUtc - whole) / 60000);
+}
+
+/**
+ * A raw rrule occurrence moved to the same wall-clock time as `dtstart` in
+ * `timeZone`. Returns `raw` untouched without a zone, or if the zone is bad.
+ */
+export function correctForZone(raw, dtstart, timeZone) {
+  if (!timeZone || !(raw instanceof Date) || !(dtstart instanceof Date)) return raw;
+  try {
+    const base = zoneOffsetMinutes(timeZone, dtstart);
+    const guess = new Date(raw.getTime() + (base - zoneOffsetMinutes(timeZone, raw)) * 60000);
+    return new Date(raw.getTime() + (base - zoneOffsetMinutes(timeZone, guess)) * 60000);
+  } catch {
+    return raw;
+  }
+}
+
 class TaskService {
   /**
    * How far either side of today the 'all' view expands recurring rules.
    * See `expansionWindow` for why this exists and what it costs.
    */
   static ALL_VIEW_HORIZON_DAYS = 365;
+
+  /** How far ahead the 'all' view expands every occurrence (see expansionWindow). */
+  static ALL_VIEW_DENSE_DAYS = 62;
 
   constructor() {
     this.taskModel = Task;
@@ -355,36 +406,25 @@ class TaskService {
       };
     }
 
-    // THE 'all' VIEW, BOUNDED.
+    // THE 'all' VIEW, BOUNDED — twice.
     //
-    // This was `new Date(0)` to `new Date(8640000000000000)` — the entire
-    // representable date range — handed straight to `rule.between`. One
-    // ordinary open-ended daily rule ("take vitamins", no UNTIL, no COUNT,
-    // which is what `buildRecurrenceRule` emits) expands that to 2,912,443
-    // occurrences in 12.5 seconds, measured. It terminates only because rrule
-    // stops at year 9999.
+    // It was `new Date(0)` to the end of representable time (one open-ended
+    // daily rule: 2,912,443 occurrences, 12.5 s, measured), then a year either
+    // side of today (~730 rows per daily series, every load).
     //
-    // `allTasks` feeds Search, Review and the Backlog, and basegeek is the
-    // shared gateway for the whole suite — so one recurring task made three
-    // routes block every app's event loop for twelve seconds and then build,
-    // sort and serialise 2.9 million objects.
-    //
-    // A year either side of today: wide enough that a series is findable in
-    // Search and its recent occurrences are visible to Review, narrow enough
-    // to cap a daily rule at ~730 rows. A deliberate horizon, not a natural
-    // boundary — an occurrence more than a year out will not be found by
-    // Search, though every materialised row still will be.
-    //
-    // Worth revisiting: for Search the right answer may be to return the
-    // SERIES rather than its occurrences, since every occurrence carries
-    // identical text and 730 identical hits is its own bug. That is a
-    // behaviour change, so it is not made here — this fixes the crash without
-    // quietly redefining what Search returns.
+    // Since 2026-11-15 (plan 5.13 + decision D3) it is yesterday to
+    // ALL_VIEW_DENSE_DAYS ahead. Nothing reads further back: TodoGeek shows
+    // ONE late row per series (the carry-forward occurrence just before this
+    // window, plus anything inside it), Done reads completed rows, which are
+    // real documents and not expanded, and Search shows a series once. Ahead,
+    // Upcoming needs 14 days in full and "Later" shows a series once at its
+    // next occurrence, so the expansion adds one occurrence past the window
+    // (`getTasksForDateRange`) and stops. A daily series is ~65 rows, not 730.
     const viewStart = new Date(startOfDayDate);
-    viewStart.setUTCDate(viewStart.getUTCDate() - TaskService.ALL_VIEW_HORIZON_DAYS);
+    viewStart.setUTCDate(viewStart.getUTCDate() - 1);
     viewStart.setUTCHours(0, 0, 0, 0);
     const viewEnd = new Date(startOfDayDate);
-    viewEnd.setUTCDate(viewEnd.getUTCDate() + TaskService.ALL_VIEW_HORIZON_DAYS);
+    viewEnd.setUTCDate(viewEnd.getUTCDate() + TaskService.ALL_VIEW_DENSE_DAYS);
     viewEnd.setUTCHours(23, 59, 59, 999);
     return { viewStart, viewEnd };
   }
@@ -483,33 +523,70 @@ class TaskService {
       status: { $nin: ['completed', 'cancelled', 'blocked'] }
     });
 
-    // BOUNDED, NOT EVERY OVERRIDE EVER. `overrideMap` is only ever read by
-    // key `${seriesId}_${originalDueDate}` for (a) occurrences expanded inside
-    // [viewStart, viewEnd] and (b) the one carry-forward occurrence just
-    // before viewStart on the daily/all views. So that is all we fetch: the
-    // window, plus the exact (series, past date) pair for each master. Rows
-    // with no originalDueDate were already ignored when building the map.
-    const overrideClauses = [];
-    if (masterTasks.length > 0) {
-      const masterIds = masterTasks.map(m => m._id);
-      overrideClauses.push({
-        seriesId: { $in: masterIds },
-        originalDueDate: { $gte: viewStart, $lte: viewEnd },
-      });
-      if (viewType === 'daily' || viewType === 'all') {
-        for (const master of masterTasks) {
-          if (!master.recurrenceRule) continue;
-          try {
-            const pastDate = rrulestr(master.recurrenceRule).before(viewStart, false);
-            if (pastDate) {
-              overrideClauses.push({ seriesId: master._id, originalDueDate: pastDate });
-            }
-          } catch (e) {
-            // Invalid rule: the expansion loop below logs it and skips it.
+    // Each master's occurrences, worked out ONCE: wall-clock corrected
+    // (`correctForZone`), exdates and the D3 late floor applied. The override
+    // fetch and the rows below both read this list, so they cannot disagree
+    // about which instant an occurrence is.
+    const carryForward = viewType === 'daily' || viewType === 'all';
+    const plans = [];
+    for (const master of masterTasks) {
+      if (!master.recurrenceRule) continue;
+      try {
+        const rule = rrulestr(master.recurrenceRule);
+        const dtstart = rule.options?.dtstart;
+        const zone = effectiveHasDueTime(master) ? master.timeZone : null;
+        const fix = (raw) => correctForZone(raw, dtstart, zone);
+        const floor = master.skipMissedBefore ? new Date(master.skipMissedBefore).getTime() : null;
+        const excluded = (date) => (
+          (master.exdates || []).some((ex) => ex.getTime() === date.getTime())
+        );
+        // A raw occurrence near a window edge can move up to an hour either
+        // way, so the raw search is widened and the corrected date re-checked.
+        const SLACK = 2 * 60 * 60 * 1000;
+        const inWindow = rule
+          .between(new Date(viewStart.getTime() - SLACK), new Date(viewEnd.getTime() + SLACK), true)
+          .map(fix)
+          .filter((d) => d >= viewStart && d <= viewEnd);
+        const occurrences = [];
+        for (const date of inWindow) {
+          if (excluded(date)) continue;
+          occurrences.push({ date, carried: false });
+        }
+        if (carryForward) {
+          const raw = rule.before(new Date(viewStart.getTime() - SLACK), false);
+          // The last occurrence before the window, corrected — or the one the
+          // slack skipped over, if it corrects to before viewStart.
+          const between = rule
+            .between(new Date(viewStart.getTime() - SLACK), viewStart, true)
+            .map(fix)
+            .filter((d) => d < viewStart);
+          const past = between.length ? between[between.length - 1] : (raw ? fix(raw) : null);
+          if (past && !excluded(past)) occurrences.push({ date: past, carried: true });
+        }
+        if (viewType === 'all') {
+          // One occurrence past the dense window, so a series whose next
+          // date is further out is still in Upcoming's "Later" and in Search.
+          const raw = rule.after(new Date(viewEnd.getTime() + SLACK), false);
+          if (raw) {
+            const next = fix(raw);
+            if (!excluded(next)) occurrences.push({ date: next, carried: false });
           }
         }
+        plans.push({
+          master,
+          // D3: no un-materialised occurrence before the late floor.
+          occurrences: occurrences.filter(({ date }) => floor === null || date.getTime() >= floor),
+        });
+      } catch (e) {
+        console.error("Invalid RRULE on task", master._id, e);
       }
     }
+
+    // BOUNDED, NOT EVERY OVERRIDE EVER: exactly the (series, occurrence)
+    // pairs about to be shown, by `$in` per series.
+    const overrideClauses = plans
+      .filter((p) => p.occurrences.length > 0)
+      .map((p) => ({ seriesId: String(p.master._id), originalDueDate: { $in: p.occurrences.map((o) => o.date) } }));
     const overrides = overrideClauses.length === 0
       ? []
       : await this.taskModel.find({
@@ -523,73 +600,31 @@ class TaskService {
       }
     }
 
-    for (const master of masterTasks) {
-      if (!master.recurrenceRule) continue;
-      try {
-        const rule = rrulestr(master.recurrenceRule);
-        const occurrences = rule.between(viewStart, viewEnd, true);
-
-        for (const date of occurrences) {
-          if (master.exdates && master.exdates.some(ex => ex.getTime() === date.getTime())) continue;
-
-          const key = `${master._id}_${date.getTime()}`;
-          if (!overrideMap.has(key)) {
-            tasksWithDates.push({
-              _id: `virtual_${master._id}_${date.getTime()}`,
-              content: master.content,
-              signifier: master.signifier,
-              status: 'pending',
-              priority: master.priority,
-              note: master.note,
-              tags: master.tags,
-              dueDate: date,
-              originalDueDate: date,
-              seriesId: master._id,
-              recurrenceRule: master.recurrenceRule,
-              recurrencePattern: master.recurrencePattern,
-              collectionId: master.collectionId,
-              private: master.private === true,
-              isVirtual: true,
-              createdBy: master.createdBy
-            });
-          }
-        }
-
-        // Carry-forward logic for daily/all view
-        if (viewType === 'daily' || viewType === 'all') {
-          const pastDate = rule.before(viewStart, false);
-          if (pastDate) {
-            let skipPast = false;
-            if (master.exdates && master.exdates.some(ex => ex.getTime() === pastDate.getTime())) skipPast = true;
-            
-            if (!skipPast) {
-              const pastKey = `${master._id}_${pastDate.getTime()}`;
-              const pastOverride = overrideMap.get(pastKey);
-              if (!pastOverride) {
-                tasksWithDates.push({
-                  _id: `virtual_${master._id}_${pastDate.getTime()}`,
-                  content: master.content,
-                  signifier: master.signifier,
-                  status: 'pending',
-                  priority: master.priority,
-                  note: master.note,
-                  tags: master.tags,
-                  dueDate: pastDate,
-                  originalDueDate: pastDate,
-                  seriesId: master._id,
-                  recurrenceRule: master.recurrenceRule,
-                  recurrencePattern: master.recurrencePattern,
-                  collectionId: master.collectionId,
-                  private: master.private === true,
-                  isVirtual: true,
-                  createdBy: master.createdBy
-                });
-              }
-            }
-          }
-        }
-      } catch (e) {
-        console.error("Invalid RRULE on task", master._id, e);
+    for (const { master, occurrences } of plans) {
+      const timed = effectiveHasDueTime(master);
+      for (const { date } of occurrences) {
+        const key = `${master._id}_${date.getTime()}`;
+        if (overrideMap.has(key)) continue;
+        tasksWithDates.push({
+          _id: `virtual_${master._id}_${date.getTime()}`,
+          content: master.content,
+          signifier: master.signifier,
+          status: 'pending',
+          priority: master.priority,
+          note: master.note,
+          tags: master.tags,
+          dueDate: date,
+          hasDueTime: timed,
+          timeZone: master.timeZone || null,
+          originalDueDate: date,
+          seriesId: master._id,
+          recurrenceRule: master.recurrenceRule,
+          recurrencePattern: master.recurrencePattern,
+          collectionId: master.collectionId,
+          private: master.private === true,
+          isVirtual: true,
+          createdBy: master.createdBy
+        });
       }
     }
     // --- RRULE EXPANSION END ---
@@ -762,15 +797,56 @@ class TaskService {
     if (!owned) throw new Error('Collection not found');
   }
 
+  /**
+   * `hasDueTime` for a write that sets `dueDate` (contract C2): the caller's
+   * flag when it sent one, else the legacy midnight rule — what every client
+   * before the flag meant. No due date is never timed.
+   */
+  resolveHasDueTime(dueDate, sent) {
+    if (!dueDate) return false;
+    if (typeof sent === 'boolean') return sent;
+    return midnightRuleHasDueTime(dueDate);
+  }
+
   async createTask(taskData) {
     this.requireUser(taskData?.createdBy);
-    const data = this.normalizeRecurrence(taskData);
+    // A client-sent `isSeriesMaster` is ignored: a task is a series master
+    // exactly when it carries a recurrenceRule (normalizeRecurrence sets it).
+    // `isSeriesMaster: true` with no rule made a task every view filters out.
+    const { isSeriesMaster: _ignored, ...input } = taskData;
+    const data = this.normalizeRecurrence(input);
+    if (!data.recurrenceRule) data.isSeriesMaster = false;
     // `private: null` (or absent — every pre-private client) is not private.
     if ('private' in data) data.private = data.private === true;
     if ('collectionId' in data) {
       await this.assertOwnedCollection(data.collectionId, data.createdBy);
       if (!data.collectionId) data.collectionId = null;
     }
+    data.hasDueTime = this.resolveHasDueTime(data.dueDate, data.hasDueTime);
+    if (!data.timeZone) data.timeZone = null;
+    // A task created finished is finished NOW (NoteGeek's `x` journal lines
+    // create completed tasks). Without the stamp it had no day in Done.
+    if (data.status === 'completed' && !data.completedAt) data.completedAt = new Date();
+    if (data.status === 'cancelled' && !data.cancelledAt) data.cancelledAt = new Date();
+
+    // Contract C1: one task per (user, clientId). A retry of a create that
+    // did land returns the task it made. The unique index is the real guard;
+    // the lookup first just keeps the common retry off the error path.
+    if (typeof data.clientId === 'string' && data.clientId.trim()) {
+      data.clientId = data.clientId.trim();
+      const existing = await this.taskModel.findOne({ createdBy: data.createdBy, clientId: data.clientId });
+      if (existing) return existing;
+      try {
+        return await new this.taskModel(data).save();
+      } catch (err) {
+        if (err?.code === 11000) {
+          const raced = await this.taskModel.findOne({ createdBy: data.createdBy, clientId: data.clientId });
+          if (raced) return raced;
+        }
+        throw err;
+      }
+    }
+    delete data.clientId;
     return new this.taskModel(data).save();
   }
 
@@ -781,8 +857,13 @@ class TaskService {
   buildOverride(master, originalDueDate, updateData) {
     const base = master.toObject();
     delete base._id;
+    // The master's create id is the master's alone (unique per user), and the
+    // late floor and zone are series bookkeeping, not an occurrence's.
+    delete base.clientId;
     return {
       ...base,
+      skipMissedBefore: null,
+      timeZone: null,
       // THE OCCURRENCE'S OWN DATE, NOT THE SERIES'.
       //
       // `base` is the master spread whole, so it carries the master's
@@ -809,6 +890,133 @@ class TaskService {
       createdAt: new Date(),
       updatedAt: new Date(),
     };
+  }
+
+  /**
+   * Write one occurrence's override, creating it or updating the one that
+   * already exists. There is ONE row per (series, occurrence) — a unique index
+   * says so — and a second write for the same occurrence is ordinary: a tick
+   * and an un-tick sent before the first answer came back both name the
+   * `virtual_` id. It used to be a plain insert, so the second one failed on
+   * the index and the screen and server disagreed.
+   */
+  async upsertOverride(master, originalDueDate, updateData) {
+    const filter = {
+      createdBy: master.createdBy,
+      seriesId: String(master._id),
+      originalDueDate,
+    };
+    const patch = { ...updateData, updatedAt: new Date() };
+    const existing = await this.taskModel.findOne(filter).select('_id');
+    if (existing) {
+      return this.taskModel.findOneAndUpdate({ _id: existing._id }, patch, { new: true, runValidators: true });
+    }
+    try {
+      return await new this.taskModel(this.buildOverride(master, originalDueDate, updateData)).save();
+    } catch (err) {
+      if (err?.code !== 11000) throw err;
+      return this.taskModel.findOneAndUpdate(filter, patch, { new: true, runValidators: true });
+    }
+  }
+
+  /**
+   * The occurrence a series MASTER's row stands for: its first one, as the
+   * expansion would key it. A client holds a master only straight after
+   * creating a repeating task (`allTasks` never returns masters), and the row
+   * it draws is that first occurrence.
+   */
+  firstOccurrenceOf(master) {
+    try {
+      const rule = rrulestr(master.recurrenceRule);
+      const dtstart = rule.options?.dtstart;
+      const raw = rule.after(new Date(dtstart.getTime() - 1000), true);
+      if (!raw) return null;
+      const zone = effectiveHasDueTime(master) ? master.timeZone : null;
+      return correctForZone(raw, dtstart, zone);
+    } catch {
+      return null;
+    }
+  }
+
+  /** `virtual_<masterId>_<epochMs>` for one occurrence. */
+  virtualIdFor(master, date) {
+    return `virtual_${master._id}_${date.getTime()}`;
+  }
+
+  /**
+   * D3: one late row per series. Finishing an occurrence that has already
+   * come round (its time is not in the future) moves the series' late floor
+   * to it, so the misses before it stop being expanded. Finishing a future
+   * occurrence early does not — today's would otherwise vanish with it.
+   */
+  async raiseLateFloor(masterId, occurrenceDate, userId) {
+    if (!masterId || !(occurrenceDate instanceof Date) || Number.isNaN(occurrenceDate.getTime())) return;
+    if (occurrenceDate.getTime() > Date.now()) return;
+    await this.taskModel.updateOne(
+      {
+        _id: masterId,
+        createdBy: userId,
+        $or: [{ skipMissedBefore: null }, { skipMissedBefore: { $lt: occurrenceDate } }],
+      },
+      { $set: { skipMissedBefore: occurrenceDate } }
+    );
+  }
+
+  /**
+   * "Change the time for all": move the whole series by the same amount the
+   * edited occurrence moved — DTSTART, the master's own date, its exdates and
+   * the keys of its materialised occurrences — so every occurrence lands at
+   * the new time. It used to write the new instant into the master's
+   * `dueDate` only; the RRULE's DTSTART stayed put and nothing moved.
+   *
+   * Returns null when there is nothing to shift (no movement, no parseable
+   * single rule, or the caller is rewriting the rule itself), and the caller
+   * falls back to the plain field update.
+   */
+  async shiftSeries(master, fromDate, updateData, userId) {
+    if (!('dueDate' in updateData) || !updateData.dueDate || !fromDate) return null;
+    if ('recurrenceRule' in updateData) return null;
+    const to = new Date(updateData.dueDate);
+    const from = new Date(fromDate);
+    const delta = to.getTime() - from.getTime();
+    if (!delta || Number.isNaN(delta) || !master.recurrenceRule) return null;
+    let rule;
+    try {
+      rule = rrulestr(master.recurrenceRule);
+    } catch {
+      return null;
+    }
+    if (!(rule instanceof RRule) || !rule.origOptions?.dtstart) return null;
+
+    const opts = rule.origOptions;
+    const shiftedRule = new RRule({
+      ...opts,
+      dtstart: new Date(opts.dtstart.getTime() + delta),
+    }).toString();
+    const shiftedDue = master.dueDate ? new Date(new Date(master.dueDate).getTime() + delta) : new Date(opts.dtstart.getTime() + delta);
+    const { dueDate: _occurrenceDue, ...rest } = updateData;
+    const updated = await this.taskModel.findOneAndUpdate(
+      { _id: master._id, createdBy: userId },
+      {
+        ...rest,
+        recurrenceRule: shiftedRule,
+        dueDate: shiftedDue,
+        exdates: (master.exdates || []).map((d) => new Date(new Date(d).getTime() + delta)),
+        skipMissedBefore: master.skipMissedBefore ? new Date(new Date(master.skipMissedBefore).getTime() + delta) : null,
+        remindedAt: null,
+        updatedAt: new Date(),
+      },
+      { new: true, runValidators: true }
+    );
+
+    // Re-key the series' overrides. Two passes through a far-off parking
+    // range, because (series, originalDueDate) is unique and a one-pass shift
+    // by exactly one interval collides with the next occurrence's row.
+    const PARK = 1000 * 365 * 86400000;
+    const filter = { createdBy: userId, seriesId: String(master._id), originalDueDate: { $type: 'date' } };
+    await this.taskModel.updateMany(filter, [{ $set: { originalDueDate: { $add: ['$originalDueDate', delta + PARK] } } }]);
+    await this.taskModel.updateMany(filter, [{ $set: { originalDueDate: { $subtract: ['$originalDueDate', PARK] } } }]);
+    return updated;
   }
 
   /**
@@ -845,7 +1053,23 @@ class TaskService {
       );
     }
 
-    const until = new Date(splitDate.getTime() - 1000);
+    // `splitDate` is an occurrence as the client saw it — wall-clock
+    // corrected (correctForZone). The rule's own (raw) occurrence for it can
+    // sit up to an hour away, so UNTIL is taken from that raw one: one second
+    // before it ends the old series exactly there.
+    let rawSplit = splitDate;
+    const zone = effectiveHasDueTime(master) ? master.timeZone : null;
+    if (zone) {
+      const dtstart = rule.options?.dtstart;
+      const near = rule.between(
+        new Date(splitDate.getTime() - 2 * 3600000),
+        new Date(splitDate.getTime() + 2 * 3600000),
+        true
+      );
+      const match = near.find((raw) => correctForZone(raw, dtstart, zone).getTime() === splitDate.getTime());
+      if (match) rawSplit = match;
+    }
+    const until = new Date(Math.min(splitDate.getTime(), rawSplit.getTime()) - 1000);
 
     const truncated = new RRule({ ...rule.origOptions, until, count: null });
     const truncatedMaster = await this.taskModel.findOneAndUpdate(
@@ -867,6 +1091,7 @@ class TaskService {
     const newRule = new RRule({ ...rule.origOptions, dtstart: splitDate, until: rule.origOptions.until ?? null });
     const base = master.toObject();
     delete base._id;
+    delete base.clientId;
     const newMaster = await new this.taskModel({
       ...base,
       ...updateData,
@@ -877,6 +1102,7 @@ class TaskService {
       exdates: (master.exdates || []).filter((d) => d.getTime() >= splitDate.getTime()),
       dueDate: updateData.dueDate ?? splitDate,
       originalDueDate: null,
+      skipMissedBefore: null,
       createdAt: new Date(),
       updatedAt: new Date(),
     }).save();
@@ -925,6 +1151,18 @@ class TaskService {
       if (nextDue !== prevDue) updateData = { ...updateData, remindedAt: null };
     }
 
+    // Contract C2: a write that moves the date says whether it is timed, or
+    // is read with the legacy midnight rule (old bundles send only dueDate).
+    if ('dueDate' in updateData) {
+      updateData = { ...updateData, hasDueTime: this.resolveHasDueTime(updateData.dueDate, updateData.hasDueTime) };
+    } else if ('hasDueTime' in updateData && typeof updateData.hasDueTime !== 'boolean') {
+      const { hasDueTime: _dropped, ...rest } = updateData;
+      updateData = rest;
+    }
+    if ('timeZone' in updateData && !updateData.timeZone) updateData = { ...updateData, timeZone: null };
+    delete updateData.clientId;
+    delete updateData.skipMissedBefore;
+
     if ('recurrenceRule' in updateData || 'recurrencePattern' in updateData) {
       updateData = this.normalizeRecurrence(
         updateData,
@@ -941,6 +1179,8 @@ class TaskService {
     if (target.virtual) {
       const { master, originalDueDate } = target;
       if (scope === 'ALL_INSTANCES') {
+        const shifted = await this.shiftSeries(master, originalDueDate, updateData, userId);
+        if (shifted) return shifted;
         return this.taskModel.findOneAndUpdate(
           { _id: master._id, createdBy: userId },
           { ...updateData, updatedAt: new Date() },
@@ -950,10 +1190,18 @@ class TaskService {
       if (scope === 'FUTURE_INSTANCES') {
         return this.splitSeriesAt(master, originalDueDate, updateData, userId);
       }
-      return new this.taskModel(this.buildOverride(master, originalDueDate, updateData)).save();
+      return this.upsertOverride(master, originalDueDate, updateData);
     }
 
     const task = target.task;
+
+    // THIS occurrence, from a master's row: the master stands for its first
+    // occurrence, so that occurrence gets the edit (plan 1.6). A change to
+    // the repeat itself is a series edit and still goes to the master.
+    if (task.isSeriesMaster && scope === 'THIS_INSTANCE' && !('recurrenceRule' in updateData)) {
+      const first = this.firstOccurrenceOf(task);
+      if (first) return this.upsertOverride(task, first, updateData);
+    }
 
     if (scope === 'FUTURE_INSTANCES' && (task.isSeriesMaster || task.seriesId)) {
       const masterId = task.seriesId || task._id;
@@ -966,6 +1214,17 @@ class TaskService {
 
     if (task.isSeriesMaster || scope === 'ALL_INSTANCES') {
       const targetId = task.seriesId || task._id;
+      // "For all" from an occurrence's row moves the series by as much as
+      // that occurrence moved; from the master's own row, by as much as the
+      // master's first date did.
+      const master = task.isSeriesMaster ? task : await this.findOwnedTask(targetId, userId);
+      if (master?.isSeriesMaster) {
+        const from = task.isSeriesMaster
+          ? (this.firstOccurrenceOf(master) || master.dueDate)
+          : (task.originalDueDate || task.dueDate);
+        const shifted = await this.shiftSeries(master, from, updateData, userId);
+        if (shifted) return shifted;
+      }
       const updated = await this.taskModel.findOneAndUpdate(
         { _id: targetId, createdBy: userId },
         { ...updateData, updatedAt: new Date() },
@@ -991,9 +1250,12 @@ class TaskService {
       const { master, originalDueDate } = target;
       if (scope === 'ALL_INSTANCES') return this.deleteSeries(master, userId);
       if (scope === 'FUTURE_INSTANCES') return this.splitSeriesAt(master, originalDueDate, null, userId);
+      // A virtual occurrence may already have an override row (a tick sent a
+      // moment ago); it goes too, or it would outlive its exdate.
+      await this.taskModel.deleteOne({ createdBy: userId, seriesId: String(master._id), originalDueDate });
       return this.taskModel.findOneAndUpdate(
         { _id: master._id, createdBy: userId },
-        { $push: { exdates: originalDueDate } },
+        { $addToSet: { exdates: originalDueDate } },
         { new: true }
       );
     }
@@ -1011,10 +1273,38 @@ class TaskService {
       }
     }
 
-    if (task.isSeriesMaster || scope === 'ALL_INSTANCES') {
+    if (scope === 'ALL_INSTANCES' && (task.isSeriesMaster || task.seriesId)) {
       const targetId = task.seriesId || task._id;
       const master = await this.findOwnedTask(targetId, userId);
       if (master) return this.deleteSeries(master, userId);
+    }
+
+    // THIS occurrence of a master's row: the master stands for its first
+    // occurrence (see firstOccurrenceOf), so that is the one deleted. It used
+    // to delete the whole series — "vitamins (daily)" deleted straight after
+    // adding it was gone for good. Plan 1.6.
+    if (task.isSeriesMaster) {
+      const first = this.firstOccurrenceOf(task);
+      if (!first) return this.deleteSeries(task, userId);
+      await this.taskModel.deleteOne({
+        createdBy: userId, seriesId: String(task._id), originalDueDate: first,
+      });
+      return this.taskModel.findOneAndUpdate(
+        { _id: task._id, createdBy: userId },
+        { $addToSet: { exdates: first } },
+        { new: true }
+      );
+    }
+
+    // A materialised occurrence (moved, edited, completed) deleted on its
+    // own: its date goes into the master's exdates FIRST, or the expansion
+    // finds no override for that date any more and the virtual comes back.
+    // SIMPLE_PLAN promised "deletes that occurrence only". Plan 1.7.
+    if (task.seriesId && task.originalDueDate && mongoose.Types.ObjectId.isValid(task.seriesId)) {
+      await this.taskModel.updateOne(
+        { _id: task.seriesId, createdBy: userId },
+        { $addToSet: { exdates: task.originalDueDate } }
+      );
     }
 
     if (task.parentTask) {
@@ -1033,7 +1323,7 @@ class TaskService {
 
     if (target.virtual) {
       const { master, originalDueDate } = target;
-      return new this.taskModel(this.buildOverride(master, originalDueDate, updateData)).save();
+      return this.upsertOverride(master, originalDueDate, updateData);
     }
 
     return this.taskModel.findOneAndUpdate(
@@ -1110,8 +1400,22 @@ class TaskService {
       .sort({ blockedAt: -1, updatedAt: -1 });
   }
 
-  async updateTaskStatus(taskId, status, userId) {
+  async updateTaskStatus(taskId, status, userId, editScope = null) {
     this.requireUser(userId);
+
+    // A series MASTER's row is its first occurrence (firstOccurrenceOf). A
+    // status change on it without ALL_INSTANCES acts on that occurrence: it
+    // used to complete the master, and "vitamins (daily)" ticked straight
+    // after adding it vanished from every view and never repeated. Plan 1.6.
+    if (editScope !== 'ALL_INSTANCES' && !this.parseVirtualId(taskId)) {
+      const own = await this.findOwnedTask(taskId, userId);
+      if (own?.isSeriesMaster && own.recurrenceRule) {
+        const first = this.firstOccurrenceOf(own);
+        if (!first) throw badRequest('This repeating task has no occurrence to change; use ALL_INSTANCES');
+        taskId = this.virtualIdFor(own, first);
+      }
+    }
+
     // 'blocked' has its own entry point so the transition guard and the
     // blockedAt stamping live in exactly one place.
     if (status === 'blocked') return this.blockTask(taskId, null, userId);
@@ -1132,7 +1436,11 @@ class TaskService {
     // was removed — recurrence is now expressed exclusively as an RRULE series
     // and future occurrences are expanded virtually, never materialized on
     // completion.
-    return this.updateStatusInternal(taskId, updateData, userId);
+    const result = await this.updateStatusInternal(taskId, updateData, userId);
+    if (result && (status === 'completed' || status === 'cancelled') && result.seriesId && result.originalDueDate) {
+      await this.raiseLateFloor(result.seriesId, new Date(result.originalDueDate), userId);
+    }
+    return result;
   }
 
   async getTaskById(taskId, userId) {

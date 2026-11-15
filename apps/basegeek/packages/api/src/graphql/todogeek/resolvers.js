@@ -5,7 +5,7 @@ import taskService from './services/taskService.js';
 import collectionService from './services/collectionService.js';
 import habitService from './services/habitService.js';
 import { batchLoad } from './batch.js';
-import reminderService from './services/reminderService.js';
+import reminderService, { effectiveHasDueTime } from './services/reminderService.js';
 import reviewService from './services/reviewService.js';
 import { normalizeTags } from '@geeksuite/tags';
 import { spellingsOf } from '../shared/tagSpellings.js';
@@ -85,11 +85,29 @@ function rethrowUserError(err) {
   throw err;
 }
 
+/**
+ * The signed-in user's id for a TASK query, or an UNAUTHENTICATED error.
+ *
+ * These queries used to answer an anonymous caller with `[]` and HTTP 200, so
+ * an expired session (or an anonymous fall-through) looked exactly like
+ * "Nothing due today" — a list that had quietly emptied itself. The shared
+ * Apollo error link reads UNAUTHENTICATED as "refresh the session once, then
+ * sign in again", which is what should happen. (Plan item 1.12.)
+ */
+function requireTaskReader(context) {
+  const userId = context.user?.id;
+  if (!userId) {
+    throw new GraphQLError('Unauthorized: sign in to read tasks', {
+      extensions: { code: 'UNAUTHENTICATED', http: { status: 401 } },
+    });
+  }
+  return userId;
+}
+
 export const resolvers = {
   Query: {
     tasks: async (_, { status, tags }, context) => {
-      const userId = context.user?.id;
-      if (!userId) return [];
+      const userId = requireTaskReader(context);
       const filter = { createdBy: userId };
       if (status) filter.status = status;
       const { default: Task } = await import('./models/Task.js');
@@ -99,55 +117,46 @@ export const resolvers = {
       return Task.find(filter).sort({ originalDate: -1 });
     },
     task: async (_, { id }, context) => {
-      const userId = context.user?.id;
-      if (!userId) return null;
+      const userId = requireTaskReader(context);
       return taskService.getTaskById(id, userId);
     },
     // The caller's manual order for one local day (Today's drag-to-reorder).
     // Signed out reads as "no order", like dailyTasks.
     dailyTaskOrder: async (_, rawArgs, context) => {
-      const userId = context.user?.id;
-      if (!userId) return [];
+      const userId = requireTaskReader(context);
       const { dateKey } = validateDailyTaskOrder(rawArgs);
       return taskService.getDailyOrder({ userId, dateKey });
     },
     dailyTasks: async (_, { date, tzOffsetMinutes = null }, context) => {
-      const userId = context.user?.id;
-      if (!userId) return [];
+      const userId = requireTaskReader(context);
       const dateStr = date || format(new Date(), 'yyyy-MM-dd');
       return taskService.getTasksForDateRange({ userId, startDate: dateStr, endDate: dateStr, viewType: 'daily', tzOffsetMinutes });
     },
     weeklyTasks: async (_, { date, tzOffsetMinutes = null }, context) => {
-      const userId = context.user?.id;
-      if (!userId) return [];
+      const userId = requireTaskReader(context);
       const dateStr = date || format(new Date(), 'yyyy-MM-dd');
       return taskService.getTasksForDateRange({ userId, startDate: dateStr, endDate: dateStr, viewType: 'weekly', tzOffsetMinutes });
     },
     monthlyTasks: async (_, { startDate, endDate, tzOffsetMinutes = null }, context) => {
-      const userId = context.user?.id;
-      if (!userId) return [];
+      const userId = requireTaskReader(context);
       const sDate = startDate || format(new Date(), 'yyyy-MM-dd');
       const eDate = endDate || format(new Date(), 'yyyy-MM-dd');
       return taskService.getTasksForDateRange({ userId, startDate: sDate, endDate: eDate, viewType: 'monthly', tzOffsetMinutes });
     },
     allTasks: async (_, __, context) => {
-      const userId = context.user?.id;
-      if (!userId) return [];
+      const userId = requireTaskReader(context);
       return taskService.getTasksForDateRange({ userId, startDate: new Date(), endDate: new Date(), viewType: 'all' });
     },
     blockedTasks: async (_, __, context) => {
-      const userId = context.user?.id;
-      if (!userId) return [];
+      const userId = requireTaskReader(context);
       return taskService.getBlockedTasks(userId);
     },
     taskTags: async (_, __, context) => {
-      const userId = context.user?.id;
-      if (!userId) return [];
+      const userId = requireTaskReader(context);
       return taskService.getTagsForUser(userId);
     },
     tasksByTag: async (_, { tag }, context) => {
-      const userId = context.user?.id;
-      if (!userId) return [];
+      const userId = requireTaskReader(context);
       return taskService.getTasksByTags(userId, [tag]);
     },
     collections: async (_, __, context) => {
@@ -248,7 +257,11 @@ export const resolvers = {
       if (args.createdAt) taskData.createdAt = new Date(args.createdAt);
       if (args.dueDate) taskData.dueDate = new Date(args.dueDate);
       if (args.updatedAt) taskData.updatedAt = new Date(args.updatedAt);
-      return taskService.createTask(taskData);
+      try {
+        return await taskService.createTask(taskData);
+      } catch (err) {
+        return rethrowUserError(err);
+      }
     },
     updateTask: async (_, rawArgs, context) => {
       const userId = context.user?.id;
@@ -257,7 +270,12 @@ export const resolvers = {
       // Sanitize: only pass fields that exist on the Task schema.
       // taskType is a virtual, createdAt/updatedAt/createdBy are managed server-side.
       const { taskType, createdAt, updatedAt, createdBy, __typename, ...safeInput } = input || {};
-      const task = await taskService.updateTask(id, safeInput, editScope, userId);
+      let task;
+      try {
+        task = await taskService.updateTask(id, safeInput, editScope, userId);
+      } catch (err) {
+        rethrowUserError(err);
+      }
       if (!task) throw new Error('Task not found');
       return task;
     },
@@ -274,14 +292,24 @@ export const resolvers = {
     deleteTask: async (_, { id, editScope }, context) => {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
-      const result = await taskService.deleteTask(id, editScope, userId);
+      let result;
+      try {
+        result = await taskService.deleteTask(id, editScope, userId);
+      } catch (err) {
+        rethrowUserError(err);
+      }
       if (!result) throw new Error('Task not found');
       return { success: true, message: 'Task deleted successfully' };
     },
-    updateTaskStatus: async (_, { id, status }, context) => {
+    updateTaskStatus: async (_, { id, status, editScope = null }, context) => {
       const userId = context.user?.id;
       if (!userId) throw new Error('Unauthorized');
-      const task = await taskService.updateTaskStatus(id, status, userId);
+      let task;
+      try {
+        task = await taskService.updateTaskStatus(id, status, userId, editScope);
+      } catch (err) {
+        rethrowUserError(err);
+      }
       if (!task) throw new Error('Task not found');
       return task;
     },
@@ -501,6 +529,10 @@ export const resolvers = {
     // A row from before the field existed, or a lean/virtual object without
     // it, is simply not private.
     private: (task) => task.private === true,
+    // Contract C2: the stored flag, or the legacy UTC-midnight rule for a row
+    // without one. Always a boolean.
+    hasDueTime: (task) => effectiveHasDueTime(task),
+    timeZone: (task) => task.timeZone || null,
     // Read in the suite standard, so a task tagged before it (`geekSuite`)
     // shows — and is next saved as — `geek-suite` even before the migration.
     tags: (task) => (Array.isArray(task.tags) ? normalizeTags(task.tags) : task.tags),

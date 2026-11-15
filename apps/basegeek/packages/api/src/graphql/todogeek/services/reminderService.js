@@ -43,6 +43,24 @@ export function hasDueTime(dueDate) {
 }
 
 /**
+ * Does THIS TASK carry a due time? (contract C2, 2026-11-15)
+ *
+ * The stored `hasDueTime` flag when the row has one; otherwise the legacy
+ * midnight rule above. The flag exists because 6 pm US-Central is exactly
+ * UTC midnight: a task timed then read as date-only, and never reminded.
+ * Every server reader of "is it timed?" goes through this, never through
+ * `hasDueTime(dueDate)` directly, so a flagged row is read the same way
+ * everywhere.
+ *
+ * @param {{ dueDate?: Date|string|null, hasDueTime?: boolean|null }} task
+ */
+export function effectiveHasDueTime(task) {
+  if (!task?.dueDate) return false;
+  if (typeof task.hasDueTime === 'boolean') return task.hasDueTime;
+  return hasDueTime(task.dueDate);
+}
+
+/**
  * ReminderService — web-push reminders for tasks that carry a due *time*.
  *
  * Two halves:
@@ -255,8 +273,10 @@ class ReminderService {
       dueDate: { $gt: lower, $lte: upper },
     });
 
-    // A UTC-midnight dueDate is a calendar date, not a moment — skip it.
-    const due = candidates.filter((task) => hasDueTime(task.dueDate));
+    // A date-only task is due on a day, not at a moment — skip it. The
+    // stored flag decides when there is one, so a task timed at 6 pm
+    // US-Central (= UTC midnight) is reminded; legacy rows use the midnight rule.
+    const due = candidates.filter((task) => effectiveHasDueTime(task));
     const summary = { considered: due.length, sent: 0, pruned: 0, failed: 0 };
     if (!due.length) return summary;
 

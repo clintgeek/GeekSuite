@@ -1,5 +1,5 @@
 import React from 'react';
-import { ApolloClient, InMemoryCache, ApolloProvider, createHttpLink } from '@apollo/client';
+import { ApolloClient, ApolloLink, InMemoryCache, ApolloProvider, createHttpLink } from '@apollo/client';
 import { setContext } from '@apollo/client/link/context';
 
 // Use env var if set, otherwise fallback to relative /graphql
@@ -222,8 +222,70 @@ export const errorLink = (appName) => onError(({ graphQLErrors, networkError, re
     }
 });
 
+/**
+ * An OPT-IN request timeout (2026-11-15, NoteGeek/TodoGeek plan 1.10).
+ *
+ * A request with `context: { timeoutMs }` is aborted and fails with a
+ * `TimeoutError` (`networkError.name === 'TimeoutError'`, `.timeout === true`)
+ * once that many milliseconds pass without an answer. Without `timeoutMs`
+ * nothing changes: there is deliberately NO default, because several apps
+ * run long AI calls through this same client and a suite-wide limit would cut
+ * them off. TodoGeek's add box used to freeze for as long as a stalled
+ * request did; it now asks for ~15 s and retries with the same clientId.
+ *
+ * Sits before authLink, so a wait for a session refresh counts against the
+ * limit too — the person is waiting either way.
+ */
+export class TimeoutError extends Error {
+    constructor(ms) {
+        super(`The request timed out after ${ Math.round(ms / 1000) } s`);
+        this.name = 'TimeoutError';
+        this.timeout = true;
+    }
+}
+
+export const timeoutLink = new ApolloLink((operation, forward) => {
+    const ms = Number(operation.getContext().timeoutMs);
+    if (!Number.isFinite(ms) || ms <= 0) return forward(operation);
+    return new Observable((observer) => {
+        const controller = typeof AbortController === 'function' ? new AbortController() : null;
+        if (controller) {
+            const { fetchOptions } = operation.getContext();
+            operation.setContext({ fetchOptions: { ...(fetchOptions || {}), signal: controller.signal } });
+        }
+        let settled = false;
+        let sub = null;
+        const timer = setTimeout(() => {
+            if (settled) return;
+            settled = true;
+            if (sub) sub.unsubscribe();
+            if (controller) controller.abort();
+            observer.error(new TimeoutError(ms));
+        }, ms);
+        sub = forward(operation).subscribe({
+            next: (result) => { if (!settled) observer.next(result); },
+            error: (err) => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
+                observer.error(err);
+            },
+            complete: () => {
+                if (settled) return;
+                settled = true;
+                clearTimeout(timer);
+                observer.complete();
+            },
+        });
+        return () => {
+            clearTimeout(timer);
+            if (sub) sub.unsubscribe();
+        };
+    });
+});
+
 export const createApolloClient = (appName) => new ApolloClient({
-    link: errorLink(appName).concat(authLink).concat(httpLink),
+    link: errorLink(appName).concat(timeoutLink).concat(authLink).concat(httpLink),
     cache: new InMemoryCache()
 });
 

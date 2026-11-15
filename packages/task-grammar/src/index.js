@@ -14,4 +14,4 @@ export {
   buildRecurrenceRule,
   frequencyFromRecurrenceRule,
 } from './parseTaskInput.js';
-export { toCreateInput } from './createInput.js';
+export { toCreateInput, avoidUtcMidnight, localTimeZone } from './createInput.js';

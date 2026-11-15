@@ -92,10 +92,12 @@ describe("the 'all' view no longer expands to the end of time", () => {
     expect(viewEnd.getTime()).toBeLessThan(new Date('2100-01-01').getTime());
   });
 
-  it('spans a year either side of the anchor day', () => {
+  it('spans yesterday to ALL_VIEW_DENSE_DAYS ahead (plan 5.13, D3)', () => {
+    // One late row per series needs no year of past occurrences: the
+    // carry-forward occurrence before the window is the late row.
     const { viewStart, viewEnd } = taskService.expansionWindow('all', anchor, endOfDay);
-    expect(viewStart.toISOString()).toBe('2025-09-20T00:00:00.000Z');
-    expect(viewEnd.toISOString()).toBe('2027-09-20T23:59:59.999Z');
+    expect(viewStart.toISOString()).toBe('2026-09-19T00:00:00.000Z');
+    expect(viewEnd.toISOString()).toBe('2026-11-21T23:59:59.999Z');
   });
 
   it('caps a daily rule at a number a request can actually serialise', async () => {
@@ -109,8 +111,8 @@ describe("the 'all' view no longer expands to the end of time", () => {
     const rule = rrulestr('DTSTART:20260101T090000Z\nRRULE:FREQ=DAILY');
 
     const occurrences = rule.between(viewStart, viewEnd, true);
-    expect(occurrences.length).toBeLessThan(800);
-    expect(occurrences.length).toBeGreaterThan(300);
+    expect(occurrences.length).toBeLessThan(70);
+    expect(occurrences.length).toBeGreaterThan(60);
   });
 });
 

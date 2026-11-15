@@ -16,6 +16,16 @@ const taskSchema = new mongoose.Schema({
     default: 'pending',
   },
   dueDate: { type: Date, default: null },
+  // Does `dueDate` carry a time of day? (2026-11-15, contract C2.)
+  //
+  // "Date only" used to be encoded as `dueDate` at EXACTLY UTC midnight, and
+  // 6 pm US-Central IS UTC midnight (7 pm in summer): "pick up kids today 6pm"
+  // was stored as a date-only task for the next day, left Today and never
+  // reminded. The flag says it out loud instead. NO default on purpose: a row
+  // written before the field (or by a client that never sends it) has no key,
+  // and every reader falls back to the legacy midnight rule through
+  // `effectiveHasDueTime` (services/reminderService.js).
+  hasDueTime: { type: Boolean },
   priority: { type: Number, min: 1, max: 3, default: null },
   note: { type: String, trim: true, default: null },
   tags: [{ type: String, trim: true }],
@@ -64,6 +74,24 @@ const taskSchema = new mongoose.Schema({
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now },
   createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+  // The client's own id for the create that made this task (contract C1). A
+  // retried create — a timeout whose request did land, a double Enter, a
+  // NoteGeek "Send tasks" re-run — carries the same one, and createTask hands
+  // back the task it already made instead of a duplicate. No default: absent
+  // on every row that was not created with one.
+  clientId: { type: String },
+  // The IANA zone a repeating series was written in ("America/Chicago").
+  // The RRULE's DTSTART is a UTC instant, so its occurrences repeat at a
+  // fixed UTC time and drift an hour at every DST change; with a zone the
+  // expansion keeps the wall-clock time instead (taskService.correctForZone).
+  // Null on legacy masters, which expand exactly as before.
+  timeZone: { type: String, default: null },
+  // D3 (2026-11-15): one "late" row per repeating series. Completing (or
+  // cancelling) an occurrence moves this floor to that occurrence, and the
+  // expansion never produces an un-materialised occurrence before it — so
+  // ticking the late row of a daily missed for five days does not reveal
+  // the one before it. Real override rows are unaffected.
+  skipMissedBefore: { type: Date, default: null },
 });
 
 taskSchema.pre('save', function (next) {
@@ -129,6 +157,14 @@ taskSchema.index(
       originalDueDate: { $type: 'date' },
     },
   }
+);
+
+// ONE TASK PER CLIENT CREATE (contract C1). Partial on `$type: 'string'`
+// for the same reason as the override index above: rows without a clientId
+// must not collide on a missing value.
+taskSchema.index(
+  { createdBy: 1, clientId: 1 },
+  { unique: true, partialFilterExpression: { clientId: { $type: 'string' } } }
 );
 
 const Task = todoConn.models.Task || todoConn.model('Task', taskSchema);

@@ -69,9 +69,9 @@ describe('dailyTaskOrder — read back, owner only', () => {
     expect(await read(BOB, '2026-10-29')).not.toEqual(mine);
   });
 
-  test('signed out reads as no order', async () => {
+  test('signed out is UNAUTHENTICATED, not "no order" (plan 1.12)', async () => {
     await save(ALICE, '2026-10-29', [oid()]);
-    expect(await read(null, '2026-10-29')).toEqual([]);
+    await expect(read(null, '2026-10-29')).rejects.toMatchObject({ extensions: { code: 'UNAUTHENTICATED' } });
   });
 
   test('a malformed dateKey is rejected', async () => {
