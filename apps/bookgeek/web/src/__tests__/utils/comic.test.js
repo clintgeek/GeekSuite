@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-  BOOK_FILE_ACCEPT, comicKind, comicLine, downloadRows, fileFormat, hasComicFile, isAsIsFormat, volumeLabel,
+  BOOK_FILE_ACCEPT, comicDownloadFormat, comicKind, comicLine, downloadRows, fileFormat, hasComicFile, isAsIsFormat, volumeLabel,
 } from '../../utils/comic';
 
 const file = (format, size = 1000) => ({ format, path: `/data/library/x.${format.toLowerCase()}`, size });
@@ -79,6 +79,20 @@ describe('comics and manga', () => {
 
     it('never offers an as-is format the book does not have', () => {
       expect(downloadRows({ files: [file('EPUB')] }).some((r) => isAsIsFormat(r.format))).toBe(false);
+    });
+  });
+
+  describe("the file a comic's Download button hands over", () => {
+    it('prefers the comic archive, then PDF, then EPUB', () => {
+      expect(comicDownloadFormat({ files: [file('EPUB'), file('PDF'), file('CBZ')] })).toBe('cbz');
+      expect(comicDownloadFormat({ files: [file('EPUB'), file('PDF')] })).toBe('pdf');
+      expect(comicDownloadFormat({ files: [file('MOBI'), file('EPUB')] })).toBe('epub');
+    });
+
+    it('falls back to whatever file there is, and to null with none', () => {
+      expect(comicDownloadFormat({ files: [file('MOBI')] })).toBe('mobi');
+      expect(comicDownloadFormat({ files: [] })).toBeNull();
+      expect(comicDownloadFormat({})).toBeNull();
     });
   });
 });

@@ -103,3 +103,18 @@ export function downloadRows(book) {
     : [];
   return [...asIs, ...ebooks];
 }
+
+/**
+ * The file a comic's Download button hands over, as it is stored: the comic
+ * archive if there is one, else the PDF, else the EPUB, else whatever is
+ * there. A comic is downloaded and read elsewhere, so its book page leads
+ * with Download where an ordinary book has Read and Send (Chef, 2026-11-15).
+ * Returns the lowercase format, or null when the book has no file.
+ */
+export function comicDownloadFormat(book) {
+  const formats = filesOf(book).map(fileFormat).filter(Boolean);
+  for (const wanted of [...COMIC_FORMATS, "pdf", "epub"]) {
+    if (formats.includes(wanted)) return wanted;
+  }
+  return formats[0] || null;
+}

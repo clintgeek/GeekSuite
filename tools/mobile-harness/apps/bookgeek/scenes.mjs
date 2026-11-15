@@ -72,6 +72,38 @@ export const scenes = [
     teardown: (page, h) => h.esc(),
   },
   {
+    // A book can be CLOSED (2026-11-15). The sheet is a route; when it also
+    // took its own Back-button history entry, closing only popped that entry
+    // and the book stayed open, by the X, by Escape and by Back alike. Opens
+    // a book and closes it each of the three ways, in the real browser
+    // history (the unit tests run on a memory router and could not see this).
+    name: '03e-detail-closes',
+    goto: '/',
+    async setup(page, h) {
+      const sheetOpen = () => page.getByRole('button', { name: 'More actions' }).count();
+      const open = async () => {
+        await page.getByText('Lock In', { exact: true }).first().click();
+        await h.settle(900);
+        if (!(await sheetOpen())) throw new Error('the book did not open');
+        if (!/\/book\//.test(new URL(page.url()).pathname)) throw new Error(`open book, but the URL is ${page.url()}`);
+      };
+      const closed = async (how) => {
+        await h.settle(900);
+        if (await sheetOpen()) throw new Error(`the book is still open after ${how}`);
+        if (new URL(page.url()).pathname !== '/') throw new Error(`closed by ${how}, but the URL is ${page.url()}`);
+      };
+      await open();
+      await page.locator('[data-geek-sheet="close"]:visible').last().click();
+      await closed('the close button');
+      await open();
+      await page.keyboard.press('Escape');
+      await closed('Escape');
+      await open();
+      await page.goBack();
+      await closed('Back');
+    },
+  },
+  {
     // A manga volume (2026-11-15): the card wears "MANGA · VOL. 3", and the
     // download sheet offers the CBZ as it is — no EPUB/AZW3/MOBI rows, since
     // there is nothing to convert a comic archive into.
@@ -84,6 +116,25 @@ export const scenes = [
       if (text !== 'MANGA · VOL. 3') throw new Error(`the comic line reads "${text}"`);
       await page.getByText('Delicious in Dungeon', { exact: true }).first().click();
       await h.settle(1000);
+      // The book page leads with Download of the stored file; a comic has no
+      // Read and no Send.
+      if (!(await page.getByRole('button', { name: 'Download CBZ', exact: true }).count())) throw new Error('a comic has no "Download CBZ" button');
+      for (const name of ['Read', 'Send']) {
+        if (await page.getByRole('button', { name, exact: true }).count()) throw new Error(`a comic's page still offers ${name}`);
+      }
+      await page.route('**/api/books/*/download/*', (r) => r.fulfill({
+        status: 200,
+        headers: { 'content-type': 'application/octet-stream', 'content-disposition': 'attachment; filename="delicious-in-dungeon-03.cbz"' },
+        body: 'CBZ',
+      }));
+      const [download] = await Promise.all([
+        page.waitForEvent('download', { timeout: 8000 }).catch(() => null),
+        page.getByRole('button', { name: 'Download CBZ', exact: true }).click(),
+      ]);
+      if (!download) throw new Error('pressing Download CBZ started no download');
+      if (!/\/api\/books\/b9\/download\/cbz$/.test(download.url())) throw new Error(`the download went to ${download.url()}`);
+      await download.cancel().catch(() => {});
+      await h.settle(300);
       await page.getByRole('button', { name: 'More actions' }).click();
       await h.settle(500);
       await page.getByText('Download / Convert', { exact: true }).first().click();

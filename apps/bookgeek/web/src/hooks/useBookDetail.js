@@ -144,14 +144,18 @@ export function useBookDetail({ bookId, onClose, onDeleted }) {
     }
   }
 
-  async function handleDownload(book, format) {
+  /**
+   * `direct`: the file is already there and wanted as it is (a comic's
+   * Download button), so it goes to the browser's downloader too.
+   */
+  async function handleDownload(book, format, { direct = false } = {}) {
     const id = bookIdOf(book);
     if (!id) return;
 
     // A comic archive or a PDF is handed to the browser's own downloader.
     // The fetch-then-blob below holds the whole file in memory first, which
     // is fine for a 2 MB ebook and not for a 300 MB manga volume on a phone.
-    if (isAsIsFormat(format)) {
+    if (direct || isAsIsFormat(format)) {
       setDownloadOpen(false);
       setDownloadError(null);
       const a = document.createElement("a");

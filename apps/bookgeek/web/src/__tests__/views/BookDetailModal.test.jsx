@@ -113,6 +113,39 @@ describe('BookDetailModal', () => {
     expect(screen.getByText('science fiction · Must Read · AUTO')).toBeInTheDocument();
   });
 
+  it('a manga leads with Download of the stored file, and has no Read or Send', async () => {
+    const user = userEvent.setup();
+    const manga = {
+      ...book,
+      title: 'Death Note Vol 3',
+      tags: ['Manga', 'Thriller'],
+      files: [{ format: 'EPUB', path: 'uploads/b9/death-note-3.epub', size: 37378720 }],
+    };
+    const props = baseProps({ selectedBook: manga });
+    renderWithProviders(<BookDetailModal {...props} />);
+    expect(screen.queryByRole('button', { name: 'Read' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Send' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/No EPUB yet/)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Download EPUB' }));
+    expect(props.handleDownload).toHaveBeenCalledWith(manga, 'epub', { direct: true });
+  });
+
+  it('a comic archive downloads as the archive; with no file the button is off', () => {
+    const cbz = { ...book, tags: [], files: [{ format: 'CBZ', path: 'uploads/b9/v1.cbz', size: 1 }] };
+    const { rerender } = renderWithProviders(<BookDetailModal {...baseProps({ selectedBook: cbz })} />);
+    expect(screen.getByRole('button', { name: 'Download CBZ' })).toBeEnabled();
+    rerender(<BookDetailModal {...baseProps({ selectedBook: { ...book, tags: ['Manga'], files: [] } })} />);
+    expect(screen.getByRole('button', { name: 'Download' })).toBeDisabled();
+    expect(screen.getByText(/No file yet/)).toBeInTheDocument();
+  });
+
+  it('an ordinary book keeps Read and Send, and has no Download button', () => {
+    renderWithProviders(<BookDetailModal {...baseProps()} />);
+    expect(screen.getByRole('button', { name: 'Read' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Send' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Download/ })).not.toBeInTheDocument();
+  });
+
   it('enables Read when the book has an epub file', () => {
     renderWithProviders(<BookDetailModal {...baseProps()} />);
     // Exact name, not a substring match — the description's own "Read more"

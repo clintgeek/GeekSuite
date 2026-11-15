@@ -181,9 +181,19 @@ convert TO an as-is format (`test/comicFormats.test.js`).
   `comics` / `comic book` / `graphic novel` tag → "Comic"; any tag saying manga,
   manhwa or manhua → "Manga", whatever the file is. A bare "comic" tag does not
   count ("Comic fantasy").
-- **The card** wears one caption above the title: "MANGA · VOL. 3" (the volume is
-  `series.index`). **The download sheet** lists as-is files first and hides the
-  ebook rows when the book has no ebook file.
+- **The grid card** wears one caption above the title: "MANGA · VOL. 3" (the volume
+  is `series.index`).
+- **The book page** of a comic swaps Read and Send for one **Download** button that
+  hands over the stored file directly, with no conversion (`comicDownloadFormat`:
+  comic archive, else PDF, else EPUB, else whatever is there). Other formats stay
+  under ⋯ → Download / Convert, where as-is files are listed first and the ebook
+  rows are hidden when the book has no ebook file.
+- **The book sheet is a route — it must keep `backToClose={false}`.** `GeekSheet`
+  takes its own history entry so Android Back closes it (packages/ui, 2026-11-15).
+  This sheet closes with `navigate(-1)`, which then only popped that entry: for a
+  few hours a book could not be closed at all. Harness scene `03e-detail-closes`
+  closes it by the X, Escape and Back in real browser history (the unit tests use a
+  memory router and cannot see this).
 - **Deliberately ignored (Chef, 2026-11-15):** comics in the in-app reader, in Send
   to Kindle and in device baskets. Don't build or propose them.
 - Not built: cover or metadata extraction from an archive.

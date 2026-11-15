@@ -25,6 +25,7 @@ import {
 import { alpha, useTheme } from "@mui/material/styles";
 import useMediaQuery from "@mui/material/useMediaQuery";
 import {
+  Download as DownloadIcon,
   MenuBook as ReadIcon,
   MoreHoriz as MoreIcon,
   Send as SendIcon,
@@ -33,7 +34,7 @@ import {
 import { GeekDialog, GeekSheet, useToast } from "@geeksuite/ui";
 import { formatDescriptionForDisplay } from "../utils/bookDisplay";
 import { hasEpubFile } from "./detail/bookFacts";
-import { hasComicFile, hasEbookFile } from "../utils/comic";
+import { comicDownloadFormat, comicKind } from "../utils/comic";
 import CoverTools from "./detail/CoverTools";
 import DetailHero from "./detail/DetailHero";
 import DownloadSheet from "./detail/DownloadSheet";
@@ -171,6 +172,11 @@ export default function BookDetailModal({
   if (!selectedBook) return null;
 
   const epubAvailable = hasEpubFile(selectedBook);
+  // "Manga" / "Comic" / null. A comic's page swaps Read and Send for one
+  // Download button that hands over the stored file (Chef, 2026-11-15:
+  // comics are not read in the app or sent to a Kindle).
+  const comic = comicKind(selectedBook);
+  const comicFormat = comic ? comicDownloadFormat(selectedBook) : null;
   const description = formatDescriptionForDisplay(selectedBook.description);
 
   const closeDeleteConfirm = () => {
@@ -189,15 +195,12 @@ export default function BookDetailModal({
         text: `Sending to ${sendToKindleStatus.kindleEmail}`,
       }
       : null,
-    !epubAvailable
-      ? {
-        key: "no-epub",
-        tone: "text.muted",
-        // A comic has nothing for the in-app reader, and nothing to convert.
-        text: hasComicFile(selectedBook) && !hasEbookFile(selectedBook)
-          ? "A comic file — download it to read in a comic reader"
-          : "No EPUB yet — attach or convert one from ⋯",
-      }
+    // A comic is not read or sent from here: its bar leads with Download.
+    comic && !comicFormat
+      ? { key: "no-file", tone: "text.muted", text: "No file yet — attach one from ⋯" }
+      : null,
+    !comic && !epubAvailable
+      ? { key: "no-epub", tone: "text.muted", text: "No EPUB yet — attach or convert one from ⋯" }
       : null,
   ].filter(Boolean);
 
@@ -206,6 +209,11 @@ export default function BookDetailModal({
       <GeekSheet
         open={Boolean(selectedBook)}
         onClose={closeBookModal}
+        // This sheet IS a route (/book/:id): closing it is a history step
+        // (BookDetailRoute `close`), so Back already closes it. With the
+        // sheet's own Back entry on top, that step only popped the entry and
+        // the book could not be closed at all (2026-11-15).
+        backToClose={false}
         snap="full"
         mode="auto"
         maxWidth="md"
@@ -346,29 +354,50 @@ export default function BookDetailModal({
             </Box>
           ) : null}
 
-          <Box sx={{ display: "grid", gridTemplateColumns: "1.6fr 1fr 1fr .7fr", gap: 1 }}>
-            <Button
-              variant="contained"
-              color="primary"
-              disabled={!epubAvailable}
-              onClick={() => {
-                setReaderError(null);
-                setReaderOpen(true);
-              }}
-              sx={BAR_BUTTON_SX}
-            >
-              <ReadIcon />
-              Read
-            </Button>
-            <Button
-              variant="outlined"
-              disabled={sendToKindleLoading}
-              onClick={() => handleSendToKindle(selectedBook)}
-              sx={BAR_BUTTON_SX}
-            >
-              <SendIcon />
-              {sendToKindleLoading ? "Sending…" : "Send"}
-            </Button>
+          <Box
+            sx={{
+              display: "grid",
+              gridTemplateColumns: comic ? "1.6fr 1fr .7fr" : "1.6fr 1fr 1fr .7fr",
+              gap: 1,
+            }}
+          >
+            {comic ? (
+              <Button
+                variant="contained"
+                color="primary"
+                disabled={!comicFormat}
+                onClick={() => handleDownload(selectedBook, comicFormat, { direct: true })}
+                sx={BAR_BUTTON_SX}
+              >
+                <DownloadIcon />
+                {comicFormat ? `Download ${comicFormat.toUpperCase()}` : "Download"}
+              </Button>
+            ) : (
+              <>
+                <Button
+                  variant="contained"
+                  color="primary"
+                  disabled={!epubAvailable}
+                  onClick={() => {
+                    setReaderError(null);
+                    setReaderOpen(true);
+                  }}
+                  sx={BAR_BUTTON_SX}
+                >
+                  <ReadIcon />
+                  Read
+                </Button>
+                <Button
+                  variant="outlined"
+                  disabled={sendToKindleLoading}
+                  onClick={() => handleSendToKindle(selectedBook)}
+                  sx={BAR_BUTTON_SX}
+                >
+                  <SendIcon />
+                  {sendToKindleLoading ? "Sending…" : "Send"}
+                </Button>
+              </>
+            )}
             <Button variant="outlined" onClick={() => setShelfOpen(true)} sx={BAR_BUTTON_SX}>
               <ShelfIcon />
               Shelf
