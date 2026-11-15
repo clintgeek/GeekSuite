@@ -2,6 +2,16 @@
 
 What shipped, as it landed. Wanted-but-not-done lives in `SUITE_TODO.md`.
 
+## 2026-11-15 — NoteGeek + TodoGeek: deep review, plan only
+
+- Seven parallel reviews (two app shells, sketch stack, both data layers, both
+  screenshot sets) merged into `DOCS/NOTEGEEK_TODOGEEK_REVIEW_2026-11.md`, ordered
+  by impact. No code changed.
+- Headlines: both apps can lose or corrupt work (Tier 1); the sketch editor
+  serialises the whole document per pointer frame; neither app has a tablet
+  layout and the harness has no tablet viewport.
+- Nine decisions wait on Chef (table D1–D9 in the doc).
+
 ## 2026-11-14 — NoteGeek: sketches searchable by their handwriting
 
 - **Automatic sketch transcription** (spec + as-built: `apps/notegeek/DOCS/AUTO_TRANSCRIBE_SPEC.md`).

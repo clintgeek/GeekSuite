@@ -315,6 +315,9 @@ data through curated, read-only tools. Blocked on Chef's three answers in the pl
 
 ### TodoGeek — remaining from `DOCS/TODOGEEK_REVIEW_2026-09.md`
 
+- **2026-11-15 review:** the prioritised plan for this app (phone, tablet, desktop) is
+  `DOCS/NOTEGEEK_TODOGEEK_REVIEW_2026-11.md`. Nothing in it is built yet.
+
 All of §1 and §2 shipped 2026-09-20/21. What is left, in the report's own
 recommended order:
 
@@ -385,6 +388,9 @@ the app was down over its due time, should it arrive late or be skipped?
   densest chart screens: **Chef's design call, not a mechanical edit.**
 
 ### NoteGeek
+
+- **2026-11-15 review:** the prioritised plan for this app (phone, tablet, desktop) is
+  `DOCS/NOTEGEEK_TODOGEEK_REVIEW_2026-11.md`. Nothing in it is built yet.
 
 - ~~**No undo for anything.**~~ — **done 2026-09-21.** Every note now carries
   version history (50 per note), and Compose, plain edits and restores are all
