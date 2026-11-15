@@ -314,6 +314,10 @@ export function GeekSheet({
                 position: 'absolute',
                 top: 8,
                 right: 8,
+                // Above the body: a sheet with a collapsed header (BookGeek's
+                // book, headerSx p:0) draws its body under this button, and
+                // the body took every tap meant for it (2026-11-15).
+                zIndex: 2,
                 minWidth: geekLayout.minClickTarget,
                 minHeight: geekLayout.minClickTarget,
                 borderRadius: `${geekShape.radius.control}px`,
