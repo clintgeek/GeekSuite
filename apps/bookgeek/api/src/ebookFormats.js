@@ -14,7 +14,7 @@ const CALIBRE_EBOOK_CONVERT_BIN =
 
 const execFileAsync = promisify(execFile);
 
-import { CONVERTIBLE_FORMATS, DOWNLOAD_FORMATS, isAsIsFormat } from "./formats.js";
+import { CONVERTIBLE_FORMATS, DOWNLOAD_FORMATS, isAsIsFormat, isComicFormat } from "./formats.js";
 
 /** The formats `ensureFormat` will convert TO. Downloads accept more (formats.js). */
 export const SUPPORTED_FORMATS = CONVERTIBLE_FORMATS;
@@ -203,10 +203,17 @@ export async function ensureFormat(book, format, opts = {}) {
     // Only files still inside the library are candidate sources; an escaping
     // row is dropped here rather than being converted from (which would also
     // have written the converted artifact next to it, outside the root).
-    const sources = (book.files || []).filter(
+    // A comic archive is never a source either: pages of images make a poor
+    // ebook, and a 300 MB volume ties the converter up until it times out
+    // (Chef, 2026-11-15). A comic is downloaded as it is or not at all.
+    const confined = (book.files || []).filter(
       (f) => f.path && resolveStored(f.path, "Book.files[].path")
     );
+    const sources = confined.filter((f) => !isComicFormat(normalizeFormat(f)));
     if (sources.length === 0) {
+      if (confined.length > 0) {
+        throw new EnsureFormatError("Comic files are not converted", 409);
+      }
       throw new EnsureFormatError("No source files available", 404);
     }
 

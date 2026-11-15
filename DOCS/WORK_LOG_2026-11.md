@@ -51,6 +51,10 @@ it" and "I still can't download comic books directly").**
 - **"Card" meant the book page.** A comic's page now leads with one Download button
   for the stored file and has no Read or Send; the first pass had only added a line
   to the grid card and left the download three taps deep.
+- **No conversion from a comic archive either** (Chef): `ensureFormat` drops CBZ, CBR,
+  CB7 and CBT as sources and answers 409 "Comic files are not converted" when a comic
+  is all the book has. The UI already hid those rows; this closes the API and the
+  Kindle basket path. api 255 tests, the two new ones red without the filter.
 - Harness: `03e-detail-closes` (goes red with the fix reverted) and a real download
   event in `03d-detail-comic-download`. Neither fault was visible to the unit tests.
 

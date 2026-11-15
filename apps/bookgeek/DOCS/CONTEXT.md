@@ -170,7 +170,10 @@ ebook-convert input.mobi output.epub
 | As-is | `cbz`, `cbr`, `cb7`, `cbt`, `pdf` | the stored file, or a 404 — never converted to |
 
 Add a format there, never in a route or a schema. `ensureFormat` refuses to
-convert TO an as-is format (`test/comicFormats.test.js`).
+convert TO an as-is format, and refuses to convert FROM a comic archive (409
+"Comic files are not converted") — so a comic in a Kindle basket shows that
+message instead of tying the converter up (`test/comicFormats.test.js`). A PDF or
+an EPUB tagged Manga is still an ordinary source.
 
 - **Download:** as-is formats are a plain link the browser downloads
   (`useBookDetail.handleDownload`); ebooks keep the fetch-then-blob path so a

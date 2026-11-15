@@ -171,6 +171,32 @@ describe("ensureFormat with a comic", () => {
     );
   });
 
+  test("a comic is never converted FROM either: no EPUB or MOBI out of a CBZ", async () => {
+    const book = makeBook([{ format: "CBZ", path: "uploads/b1/vol-01.cbz" }]);
+    for (const format of ["epub", "mobi", "azw3"]) {
+      await assert.rejects(
+        () => ensureFormat(book, format),
+        (err) => err instanceof EnsureFormatError && err.status === 409 && /not converted/.test(err.message),
+        format
+      );
+    }
+    assert.deepEqual(convertRuns(), []);
+    assert.equal(book.saved, 0);
+    assert.equal(fs.existsSync(path.join(libraryDir, "uploads", "b1", "vol-01.epub")), false);
+  });
+
+  test("with a comic and an ebook, the ebook is the source, never the comic", async () => {
+    const book = makeBook([
+      { format: "CBZ", path: "uploads/b1/vol-01.cbz" },
+      { format: "EPUB", path: "uploads/b1/novel.epub" },
+    ]);
+    const result = await ensureFormat(book, "mobi");
+    assert.equal(result.converted, true);
+    const [argv] = convertRuns().map((line) => JSON.parse(line));
+    assert.ok(argv[0].endsWith("novel.epub"), `converted from ${argv[0]}`);
+    fs.rmSync(result.fullPath);
+  });
+
   test("an ebook format is still converted on demand", async () => {
     const book = makeBook([{ format: "EPUB", path: "uploads/b1/novel.epub" }]);
     const result = await ensureFormat(book, "mobi");
