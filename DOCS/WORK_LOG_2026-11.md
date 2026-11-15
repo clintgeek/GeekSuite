@@ -2,6 +2,41 @@
 
 What shipped, as it landed. Wanted-but-not-done lives in `SUITE_TODO.md`.
 
+## 2026-11-15 — BookGeek: comics and manga; NoteGeek: the sketch bar on narrow phones
+
+**BookGeek — comic and manga files (emergency patch).** A comic archive could be
+attached to a book but never taken back out: `GET /api/books/:id/download/:format`
+accepted only `epub`, `azw3`, `mobi`, and the pickers did not offer comic files.
+
+- **Formats:** one list, `apps/bookgeek/api/src/formats.js`, read by the route, its zod
+  schema, `ensureFormat` and the Calibre rescan (each had its own copy). Ebooks
+  (`epub`, `azw3`, `mobi`) convert on demand as before. Comic archives (`cbz`, `cbr`,
+  `cb7`, `cbt`) and `pdf` are **as-is**: the stored file or a 404, never a conversion.
+- **Download:** as-is files go through the browser's own downloader (a plain link), not
+  the fetch-then-blob path, which holds the whole file in memory.
+- **Upload:** both pickers accept the comic archives; multer's cap is 1 GB (was 200 MB).
+  **nginx still caps the request at 120 MB** — not changed, see SUITE_TODO.
+- **Card:** a comic or manga wears one line above its title, "MANGA · VOL. 3". A book is
+  a comic by its file, or by a `comics` / `graphic novel` tag; it is Manga when a tag
+  says manga, manhwa or manhua. The volume is the series index (`web/src/utils/comic.js`).
+- **Detail:** the download sheet lists the comic file first and leaves the ebook rows
+  out when the book has no ebook file; the "No EPUB yet" hint reads as a comic's.
+- No gateway change: `files[].format` and the Format facet were already open strings.
+- The download sheet's rows are now real list items (an axe `list` fault the sheet
+  always had; it had no harness scene until `03d-detail-comic-download`).
+- **Out of scope by decision (Chef, 2026-11-15):** reading comics in the app, and
+  comics in Send to Kindle or device baskets. Not done either: cover or metadata
+  extraction from an archive.
+
+**NoteGeek — sketch bar under 388 px.** The short bar scrolled sideways on a 360 px
+phone, with More and Fullscreen starting off-screen. Those widths now get a **tight
+bar**: Paper and Fullscreen move into More, leaving six 44 px buttons (284 px).
+`barMode()` in `DrawingToolbar.jsx`; harness scene `22a2-sketch-tight-bar` checks it at
+360 px.
+
+Verified: BookGeek api 253 tests (new ones go red with the as-is guard removed), web
+355; NoteGeek vitest 1,017. Harness results are in the commit messages.
+
 ## 2026-11-15 — NoteGeek + TodoGeek: wave 1 of the review built and deployed
 
 Per-item status, the decisions, deploy order and the device checklist are in the

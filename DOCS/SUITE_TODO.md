@@ -450,8 +450,13 @@ the app was down over its due time, should it arrive late or be skipped?
     both ends": the 30-day window spans the 1 Nov clock change); look at the FitnessGeek
     backend CI job that failed on `0ad31621`; push the five NoteGeek phone layout fixes
     and the updated harness fixtures (local).
-  - Sketch bar on phones narrower than ~388 px scrolls sideways; move Fullscreen or
-    Paper into More at those widths (design call).
+  - ~~Sketch bar on phones narrower than ~388 px scrolls sideways.~~ **Done 2026-11-15:**
+    the tight bar (Paper and Fullscreen in More).
+  - **BookGeek comics (2026-11-15), still open:** nginx caps a BookGeek upload at
+    120 MB (`clintgeek.com_bookGeek.conf`, two places) while the API now takes 1 GB — a
+    large manga volume will get a 413 until that is raised (Chef's call, nginx is not in
+    the repo); no cover or metadata read out of an archive. An in-app comic reader and
+    comics in Kindle/baskets are **not wanted** (Chef, 2026-11-15) — don't propose them.
   - New NoteGeek queries (`notesPage`, `deletedNotes`) answer empty to a signed-out
     caller, like the older ones — covered by the gateway auth fix in the suite review.
   - Sidebar tag counts still use `notes { id tags }` with no limit; fine while `notes` is
