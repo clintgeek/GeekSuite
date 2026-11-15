@@ -714,3 +714,56 @@ confirm it live, then NoteGeek.
 - **Glance / suite-tags** show `preview`, never a sketch's JSON; glance search reads `wordText`.
 - **Privacy:** `notegeekSemantic.test.js` walks the whole import graph of the search modules (incl.
   `models/Note.js`, `sketchText.js`, `noteDerived.js`) — none may reach the AI stack, only `embeddings.js` fetches.
+
+## 18. Save safety, Recently deleted and lists (client, 2026-11-15)
+
+Client half of §17 (local, not deployed; the gateway goes first). `frontend/src/`.
+
+- **Saving (1.2, 1.3).** `pages/NoteEditorPage.jsx` saves at once on `visibilitychange` to hidden and on
+  `pagehide`, and on unmount; `handleSave` reads the form through refs so a flush during unmount sees the latest
+  text. The `online` event and return-to-visible re-run a save that is dirty (and not in a conflict). A device
+  copy lives in IndexedDB (`utils/draftStore.js`, memory fallback, never throws), key `note:<id>` or `new:<history
+  key>`: mirrored 500 ms after a change and at once on hide, unmount or a failed save; cleared when the server
+  acknowledges a save the form still equals, and on discard or delete. On open, a draft that differs from the
+  server copy shows `components/notes/RestoreDraftBanner.jsx` ("Restore unsaved changes" / "Discard"); a restored
+  draft keeps its own `baseUpdatedAt`, so a note changed elsewhere still meets the conflict check.
+- **Conflicts (1.4).** The editor sends `baseUpdatedAt` (ISO of the seeded or last-acknowledged `updatedAt`). On
+  `graphQLErrors[].extensions.code === 'CONFLICT'`, `components/notes/ConflictDialog.jsx` opens (not
+  dismissable, nothing autofocused, autosave paused): **Keep mine** (re-send with the server's `updatedAt` as
+  the base), **Use theirs** (server copy shown, clean), **Keep both** (a new note "<title> (this device)" with my
+  text, then theirs shown, with an Open toast). The editor seeds only from a network-fresh query (or the cache
+  when offline); when clean it re-checks `note(id)` network-only on return to visible and puts a newer copy on
+  screen.
+- **Routing (1.20).** `pages/NoteEditorRoute.jsx` is the element for `/notes/new` and `/notes/:id/edit`; the
+  editor key is `location.state.editorKey`, else `note:<id>` / `new:<location.key>`. After the first create the
+  editor does `navigate('/notes/<id>/edit', { replace: true, state: { editorKey } })` with the same key, so there is
+  no remount (a sketch's canvas does not reload). "New note" from an autosaved new note is a new history entry
+  and a fresh editor. `NewNoteWrapper` is gone.
+- **Recently deleted (1.19, D1).** `DeleteNoteDialog` autofocuses Cancel, says 30 days in Recently deleted, and
+  after a delete toasts "Note deleted" with Undo (`restoreNote`). `pages/DeletedNotes.jsx` at `/deleted` lists
+  `deletedNotes(limit: 200)` with Restore and Delete forever (its own confirm, Cancel focused); linked from the
+  Tags panel beside Archived (phones reach it through the Notes page's Tags sheet), not from Settings. A deleted
+  note opened by id shows `components/notes/DeletedBanner.jsx` in the viewer and editor (from
+  `NoteArchiveState.deletedAt`).
+- **Lists (5.1, 5.2, 3.5).** Lists select `preview`, never `content`. The Notes page uses `notesPage(first: 100,
+  after: nextCursor, sort)` with "Show more notes" (the count reads `100+` while more exist); sort is server-side
+  (`updatedAt_desc`, `createdAt_desc`, `title_asc`) and the client re-sort is gone. Sketch and mind-map row
+  thumbnails fetch their own body when scrolled near (`NoteThumbContent`, cache-first); code rows show the plain
+  preview. Home fetches `limit: 12`, shows a skeleton only with nothing on screen, shows list errors with Retry, and
+  a store `deleteNote` drops the row instead of refetching every note.
+- **Open a note from cache (3.1).** `NotePage` shows a spinner only when `loading && !data` and an error only
+  when there is no cached note; `apolloClient.js` adds a `Query.note` to `Note:<id>` redirect (not in the shared
+  api-client). The cache is memory-only: offline cold start still shows nothing.
+- **Cache and write responses (5.7).** `UPDATE_NOTE` and `CREATE_NOTE` select `id title type tags createdAt
+  updatedAt` (no `content`). `onNoteUpdated(cache, result, { variables, context })` writes the sent `content`
+  onto `Note:<id>` and, when `context.tagsChanged === false`, evicts nothing; `notesPage` is among the evicted
+  root fields.
+- **Small ones (1.21).** `TagSelector` commits a typed tag on blur. Home capture is multi-line (Ctrl/Cmd+Enter
+  saves), has a double-tap guard, and a failure toasts "Not saved - <why>. Your text is still in the box." An empty
+  title is saved as empty (no "Untitled Note"; the server title is not written back into the field). Send tasks
+  passes a stable `clientId` (see `BUJO_HANDWRITING.md`).
+- **Photo notes** are created with `transcriptText` (`CreatePhotoNote`); the follow-up edit call is gone.
+- **Landmines.** The client needs the gateway of §17: an old gateway fails validation on `baseUpdatedAt`,
+  `transcriptText`, `preview`, `notesPage` and `deletedAt`. The Sidebar's tag counts still use `notes { id tags }`
+  with no limit, fine while `notes` is unlimited by default. Whole-page tests need the 20 s `testTimeout` (raised
+  in both NoteGeek and TodoGeek on 2026-11-15; they flaked at 5 s under load).

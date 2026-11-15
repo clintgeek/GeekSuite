@@ -247,3 +247,36 @@ That mapping is a guess (no documentation exists) and harmless if it never arriv
   failures not counted as sent, `x` → ticked checkbox, both pen-button mappings. One rule
   (`SKIP` for page markers) turned out to be dead code and was removed, not tested.
 - TodoGeek's own 438 tests pass on the moved parser.
+
+## As built, review wave 1 (2026-11-15, local, not deployed)
+
+Changes to the journal reading and Send tasks from `DOCS/NOTEGEEK_TODOGEEK_REVIEW_2026-11.md`
+2.9-2.10 and 1.10-1.11. They supersede the decisions above where they differ. Still no run against
+real handwriting.
+
+- **One mark table (2.9).** `utils/journalLines.js` `MARKS` / `readMarkDetailed` is used by Send tasks
+  and by `sketchToText.journalMarkAsMarkdown` ("Keep as plain text"). A second symbol mark is
+  stripped (`! * call bob` is important "call bob"; `* x ray` stays words). `x`, `>` and `<` need a
+  letter after them; `[ ]` works without a space; a line with no letters or digits is not an entry;
+  numbered lines are offered unticked (kind `numbered`).
+- **Dates anchor to the page (2.10, D6).** When the page was read on an earlier day the dialog shows
+  "Written Mon 16 Nov · dates read from then" with a switch (`writtenAnchor(writtenAt)`);
+  `onSend({ now })` passes the anchor and `taskInputFor(entry, { now, today })` reads relative dates
+  from `now`. **Undated lines still land on the real today** (an undated line should not arrive
+  overdue). `@geeksuite/task-grammar` already took `now`.
+- **Already sent, loosely (1.11).** A sent line is remembered as an exact key plus loose `~words` keys
+  (as read and as sent, each at most 80 chars) in `sentTaskKeys`, and its text in
+  `sentTaskTexts` (gateway, `$addToSet`, newest 500). `sendTaskRows` marks a close match (edit
+  similarity 0.8 or more, length 6 or more) `probablySent` and leaves it unticked; the dialog says
+  "Probably already sent". Words corrected in the dialog are returned through `onCorrections([{line,
+  from, to}])` and saved as transcript corrections (`applyLineEdits`, then
+  `saveSketchTranscriptEdit({ noteId, text, forHash })`).
+- **A retried Send is the same create (1.10).** Each task carries `clientId` = `ng:` + the first 32 hex
+  of sha-256(`noteId|lineKey`) (`utils/taskClientId.js`, Web Crypto; sent without one where it is
+  unavailable), so the gateway's `{createdBy, clientId}` index makes a resend a no-op.
+- **Grammar side.** `toCreateInput` nudges a timed value off exact UTC midnight for every caller;
+  `createTask` with `status: completed` (an `x` line) now gets `completedAt`. To send the flag
+  explicitly NoteGeek would declare `$hasDueTime`/`$timeZone` and call
+  `toCreateInput(parsed, { today, explicit: true })`; it does not today, so the gateway derives it.
+- **Not verified:** the transcription prompt's mark rules were changed (2026-11-14) without a
+  real-model run, and still have not been run against real handwriting.

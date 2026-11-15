@@ -1,7 +1,236 @@
 # NoteGeek + TodoGeek — review and improvement plan (2026-11-15)
 
 Goal (Chef): perfect phone, tablet and desktop use in both apps. This is the
-plan, in order of impact. Nothing here has been built.
+plan, in order of impact. As written it was a plan only; wave 1 has since been
+built and deployed on 2026-11-15. See *Status — wave 1 built* just below.
+
+## Status — wave 1 built and deployed (2026-11-15)
+
+Wave 1 was built by six agents in parallel and committed to local `main`. **Nothing
+is pushed, nothing is deployed.** The rest of this document is the original plan and
+is unchanged; this section says what happened to each item. "Done" means built, with a
+test that was seen to go red with the fix reverted (the agents' mutation checks) unless
+the note says otherwise. "Done" does not mean tried on a device: see *Needs a real
+device* below.
+
+### Commits (local, on `main`, in dependency order)
+
+| Commit | What |
+|---|---|
+| `90e7d09d` | NoteGeek gateway: save safety (conflict check), soft delete, coalesced history, leaner lists, better search |
+| `0ad31621` | TodoGeek gateway + `packages/task-grammar` + `packages/api-client` (opt-in write timeout) |
+| `5aa58918` | `packages/ui` `useBackToClose` + `useFormFactor`; harness tablet viewports |
+| `5cddc2dd` | NoteGeek frontend: save safety, conflicts, soft delete, sketch and pen fixes |
+| `76eed497` | TodoGeek frontend: client data integrity, phone editor sheet, private masked everywhere, retired pages deleted |
+| `dae59be7` | DOCS cleanup, archive and index |
+
+### Item by item
+
+Status words: **Done**, **Partly**, **Not started**, **Not a bug**. Items no wave-1
+agent owned are Not started unless a report says otherwise.
+
+#### Tier 1 — lost work and wrong data
+
+| Item | Status | What was built (where it differs from the plan) |
+|---|---|---|
+| 1.1 six pm Central | Done | Explicit `hasDueTime` (+ `timeZone`) on the task, stored by the gateway and derived with the old rule when a client omits it (old bundle, NoteGeek). Clients also never send a timed value on exact UTC midnight. **Not done:** the gateway's daily/weekly/monthly Mongo window clauses still use the midnight rule; the live UI reads `allTasks`, so nothing on screen depends on them |
+| 1.2 unsaved edits | Done | Save on hidden/`pagehide`; device copy in IndexedDB (`draftStore.js`) with a "Restore unsaved changes" banner; sketch flushes its pending snapshot on unmount, hide and pagehide |
+| 1.3 failed/offline save | Done | Retries on `online` and on return to the app |
+| 1.4 two devices, one note | Done | `baseUpdatedAt` check in the gateway (`CONFLICT` with the server copy, atomic); client dialog Keep mine / Use theirs / Keep both; clean editor re-checks on return to the app |
+| 1.5 version history | Done | First edit / session start / one per 10 min; last 24 h all, daily for 30 days, weekly after; caps 100 rows and 50 MB per note; a snapshot before a large shrink is kept (max 20) |
+| 1.6 tick/delete a fresh repeat | Done, differs | **Acts on the first occurrence** (override or exdate) instead of refusing without `ALL_INSTANCES`; ALL_INSTANCES still acts on the series. Keeps the live old bundle working |
+| 1.7 deleted occurrence returns | Done | Deleting an override adds its original date to the master's exdates |
+| 1.8 overdue repeat (D3) | Done | One late row per series; completing/cancelling an occurrence whose time has come raises `skipMissedBefore`. Search shows a series at its latest missed occurrence. Undo of the tick does not un-skip the earlier misses (by design) |
+| 1.9 refresh overwrites an add | Done | Write counter + in-flight count; overlapped reads are re-run (max 4) |
+| 1.10 duplicate / stalled create | Done | `clientId` idempotency (unique partial index `{createdBy, clientId}`); `api-client` `timeoutLink`, opt-in per operation (`context.timeoutMs`, no default); TodoGeek writes use 15 s and retry a transient failure once with the same `clientId`; NoteGeek Send tasks sends `ng:` + hash of note and line |
+| 1.11 "already sent" | Done | Sent lines kept as exact + loose keys, `$addToSet`; optional `sentTaskTexts`; dialog marks "Probably already sent"; corrections made in the dialog are saved as transcript corrections |
+| 1.12 expired session looks empty | Done | Anonymous task queries throw `UNAUTHENTICATED` (this changes 3 old tests that asserted `[]`); a doubtful empty answer is re-read once; a failed read keeps the list and sets `loadError` |
+| 1.13 inline edit discarded | Done | Collapsing the editor saves; Escape/Cancel discard; repeating asks scope; an emptied words field stays open |
+| 1.14 add box erases typing | Done | Clears only the line that was sent |
+| 1.15 add under tag filter | Done | The active tag is added to the new task as a ghost chip (x to leave it off); if an add lands without it, a toast with Show |
+| 1.16 grammar | Done | All three: `buy /tomorrow 2 loaves`, `/mar 5` in November, `example.com/2024`; impossible days are text |
+| 1.17 sketch reload wipes stroke | Done | Snapshots load as a remote change, never echo back as a save |
+| 1.18 image makes sketch unsaveable | Done | Own asset handler shrinks to 1600 px; refuses by name an image still over 1.5 MB or one that would pass `SNAPSHOT_CONTENT_MAX` |
+| 1.19 delete is permanent (D1) | Done | Soft delete, 30-day Recently deleted, lazy purge; `restoreNote`, `purgeNote`, `deletedNotes`; excluded from links, Related, vectors, indexer, glance, suite tags. Client: `/deleted`, Undo toast, Cancel focused, banner on a deleted note |
+| 1.20 New note / `/notes/new` | Done | `NoteEditorRoute` with a stable editor key; first create replaces the URL without a remount |
+| 1.21 T series time for "all" | Done | Moves DTSTART, master due date, exdates, late floor and overrides by the same delta |
+| 1.21 T DST drift | Done | A series may carry `timeZone`; expansion keeps wall-clock time in that zone. Legacy masters expand as before. Cannot be seen until the March change (test only) |
+| 1.21 T `createTask` completed / `isSeriesMaster` | Done | Completed stamps `completedAt` (cancelled: `cancelledAt`); client `isSeriesMaster` ignored and `@deprecated` |
+| 1.21 T recurrence validation | Done | Refuses unparseable rules, RRuleSets, HOURLY and finer, COUNT > 1000, INTERVAL outside 1..1000, more than 400 occurrences in a year |
+| 1.21 T tick/un-tick order | Done | Occurrence override is an upsert; status changes serialised per task; only the newest answer applies |
+| 1.21 N stale `processing` claim | Done | Convert is no longer discarded under a claim older than 2 min |
+| 1.21 N indexer vs older transcript | Done | `embeddingTicket` renewed on queue; indexer marks only if unchanged |
+| 1.21 N autosave writes old transcript | Done | The Note middleware no longer re-derives a sketch's words on content saves |
+| 1.21 N erased ink / old corrections | Done | Erase-all clears the searchable text; a reading landing after erase-all is not stored; corrections retire when a new reading shows < 50 % of their lines |
+| 1.21 N photo note reviewed-text | Done | `createNote(transcriptText)`; the follow-up call is gone |
+| 1.21 N TagSelector blur | Done | Commits the typed tag on blur |
+| 1.21 N Home capture | Done | Multi-line (Ctrl/Cmd+Enter saves), double-tap guard, failure toast keeping the text |
+| 1.21 N "Untitled Note" | Done | Empty title saved as empty |
+| 1.21 T private words in date sheet / hiding off below 900 px | Done | Date sheet no longer prints private words; masked on every device (see D5) |
+
+#### Tier 2 — pen and sketch
+
+| Item | Status | What was built |
+|---|---|---|
+| 2.1 serialise per frame | Done | `store.listen` with `{scope:'document', source:'user'}` only marks dirty; one `getStoreSnapshot()` per 400 ms timer (same body as before, so the saved format and the gateway hash are unchanged). **Pen lag not measured** |
+| 2.2 fullscreen pickers invisible | Done | Popovers and tooltips mount inside the sketch container |
+| 2.3 palm rejection after first stroke | Done | Pen mode from the first touch on a device once a pen has been seen; "Finger draws" switch in More |
+| 2.4 palm on the toolbar | Done | Toolbar ignores a touch when a pen was near in the last 1.5 s or the contact is 24 px or more; bar can sit bottom, top, left or right, per device. Thresholds unverified on devices |
+| 2.5 phone bar (D2) | Done | Move, Write, Eraser, Pen, Paper, Undo, More, Fullscreen; More holds Select, Redo, Highlighter, Zoom to fit, shapes, text, sticky, image, zoom, Share, Finger draws, bar position |
+| 2.6 15-tool bar too wide | Done | Full or compact by container length (800 px) via ResizeObserver |
+| 2.7 long sketches | Partly | Detects "too long to read well" (< 0.5 px per page unit) and says so on the status line. **Banded reading not done**: needs a gateway change (several images per call) |
+| 2.8 transcription state | Done | Edit during a read comes back not-current; backoff 2/4/8 min up to 1 h; no export once the gateway says `off`; Convert and Send tasks await the save and refresh the status; AI_UNAVAILABLE/AI_CAP never count toward `failed`; sketch hash stored once per saved drawing |
+| 2.9 journal marks | Done | One mark table shared by Send tasks and "Keep as plain text"; second symbol stripped; `x`, `>`, `<` need a letter; `[ ]` without a space; numbered lines offered unticked |
+| 2.10 relative dates (D6) | Done | "Written Mon 16 Nov · dates read from then" with a switch; undated lines still land on the real today (agent's call) |
+| 2.11 sketch usability | Partly | Done: camera per note, opens fit-to-content on the hand tool (first pen press arms Write), tappable status line (Transcribe now, View text), corrections carried forward by line diff, safe-area insets, pen-button lift heard on `window`, ink swatches on paper colour, paper written into the sketch on first ink (D8), /labs/pen fixed. **Not done:** folding or tucking the chrome above the canvas (NoteGeek page layout); the text-tool top-bar shift (not reproducible from code) |
+| 2.12 missing for pen-first | Partly | Done: share as image, View text without Convert, two-finger-tap undo, Recent pens. **Left:** lasso, scribble-to-erase, pages, pressure toggle, search-hit location in a sketch |
+
+#### Tier 3 — phone friction
+
+| Item | Status | What was built |
+|---|---|---|
+| 3.1 note open waits on network | Done | Cached note shows at once; `Query.note` cache redirect. Cache is still memory-only (no offline cold start: Tier 7.1) |
+| 3.2 Android Back | Not started | Only the overlay part is covered, by 3.27 |
+| 3.3 checklists are pictures | Not started | |
+| 3.4 new note three taps | Not started | |
+| 3.5 Home skeletons / 50 notes | Done | Fetches 12, skeleton only with nothing on screen, errors shown with Retry, delete drops the row |
+| 3.6 – 3.12 | Not started | Scroll/filter loss, version history on phone, dialogs, code editor keyboard, mind map, review dialogs, `[[` picker |
+| 3.13 toasts on the add box | Done | Dock and Save footer register clearance; TaskContext's second snackbar removed. Harness only |
+| 3.14 editor taller than phone | Done | Bottom sheet below md, sticky Save, autofocus only with a fine pointer |
+| 3.15 hero and chips | Partly | Smaller phone hero, tag chips one scrolling row, top bar says "TodoGeek" on phone. **No collapse-on-scroll** |
+| 3.16 row width | Done | Date under the words on phone; grips only in a "Reorder" mode on phone |
+| 3.17 add box | Done | Two-line auto-grow, Enter adds, parsed preview line, Private labelled |
+| 3.18 optimistic moves | Done | Optimistic with rollback; "Move all" sends in parallel |
+| 3.19 – 3.22 | Done | Ticking closes the editor first; scroll to top on route change and active tab; left-swipe disabled on done rows; toast for a today-dated add |
+| 3.23 swipe affordance | Done | Icons and haptics (vibrate); device only |
+| 3.24 Upcoming clip | Done | Numeral 72 px nowrap; visual check only |
+| 3.25 Pins and Help sheets | Done | Close buttons; Help hides keys on touch-only |
+| 3.26 Reminders | Done | In the account menu; no test |
+| 3.27 Android Back closes overlays | Done | `useBackToClose` in `packages/ui`, wired into GeekSheet, GeekDialog, nav drawer, legacy sidebar drawer, account menu, app switcher. Known limits are documented in `backStack.js`. Select mode and NoteGeek's raw MUI dialogs are not covered; FitnessGeek ServingSheet/FixSheet and GameGeek MediaViewer keep their own local hooks |
+
+#### Tier 4 — tablet and desktop layout
+
+| Item | Status | What was built |
+|---|---|---|
+| 4.1 harness tablet viewports | Done | 800x1280 and 1280x800, coarse pointer, `--tablet` flags, two advisory CI shards (NoteGeek, TodoGeek). CI wall time not measured |
+| 4.2 `useFormFactor` | Done | `{phone, tablet, desktop, coarse, fine, anyHover, width, height, landscape}`; apps are not migrated onto it yet |
+| 4.3 size by pointer | Partly | `packages/ui` has no width-based shrinking (**Not a bug** there); `geekMedia` added. TodoGeek done (hover actions on any-hover, swipe on any touch). **NoteGeek not started**: 2,076 tablet-landscape tap-target findings |
+| 4.4 – 4.12 | Not started | Nav rail, NoteGeek two-pane, TodoGeek two-pane, week board, split view, keyboard-up tuck, desktop keyboard, right-click, `/search` boxes |
+| 4.13 TodoGeek add box / focus | Done | Sticky box on desktop; focus once, not each time Today empties. Sidebar counts and pinned tags not built |
+
+#### Tier 5 — search quality and speed
+
+| Item | Status | What was built |
+|---|---|---|
+| 5.1 full content of 200 notes | Done | Stored `preview`; lean lists and projection; clients select `preview` |
+| 5.2 notes past 200 | Done | `notesPage` keyset paging; server sort; "Show more notes" |
+| 5.3 word search indexes markup | Done | `noteDerived.js` `wordText` (HTML stripped, code without JSON, mind-map labels, markdown syntax); derived version 2 backfilled at start-up |
+| 5.4 title weighting | Partly | Weights title 10, tags 5, wordText 1 and a title-prefix list in the ranking. **Typo matching not built** |
+| 5.5 snippets | Done | Plain text around the first word-start hit; sketches use the transcript. Word-boundary highlighting is client-side and was not touched |
+| 5.6 list index | Done | `{userId, pinned, updatedAt, _id}` plus `{userId, deletedAt}` |
+| 5.7 autosave refetch | Done | Slim write response; tags evicted only when tags changed; the sent content is written to the cache |
+| 5.8 vector cache | Done | Per-note replace/drop; timeouts trip the breaker only after 3 in a row |
+| 5.9 chunk size | Done | 200-280 words, at most 1,800 chars (estimate-based, no tokenizer offline); whole library re-embeds once |
+| 5.10 query length | Done | Cut to 500 chars at a word |
+| 5.11 bundle size | Not started | |
+| 5.12 TodoGeek re-render | Done | Handlers ref-stable, row memo effective |
+| 5.13 history reload | Partly | `allTasks` window now yesterday to +62 days (a daily series is about 65 rows, not 730). **No incremental reads**: the whole corpus is still re-read on each refresh |
+| 5.14 other devices' changes | Done | Re-read on focus, return to the tab (if over 30 s), reconnect, and every 5 min while visible |
+
+#### Tier 6 — polish
+
+| Item | Status | Note |
+|---|---|---|
+| N title shown twice | Not started | |
+| N five gutters | Not started | |
+| N three dialog grammars | Not started | |
+| N photo notes raw markers | Not started | |
+| N suggestions panel | Not started | |
+| N wide tables/code clip | Not started | |
+| N select-mode stack | Not started | |
+| N viewer tag chips | Not started | |
+| N font-size setting | Not started | |
+| N photo tray | Not started | |
+| N glance and suite-tags raw sketch JSON | Done | Both now use the stored `preview`; glance search reads `wordText` |
+| T Done in red (D7) | Done | Neutral ink on the checkbox and swipe |
+| T priority legend | Done | Legend in Help; wider, distinct marks |
+| T notes and events (D4) | Partly | No checkbox, not counted as to-dos, carried-over and the to-do count drop them, **but only on the display side**. Events do not expire in the data (see D4) |
+| T private redacted vs plain (D5) | Done | Masked on every device |
+| T hover overprint, date clip, blue clear icon, drag lift | Done | Time hides while actions show; grid min widths; clear icon fixed; drag ring and raised ground. No drop line was reported |
+| T clipped "carried over" header highlight | Partly | Not reproduced; an inside focus ring was added. Unverified |
+| T passed times, loading counts, Done cap | Done | "9am · passed"; counts blank while loading; Done cap message |
+| T recurring-edit Escape | Not a bug | Not reproducible: MUI Modal swallows Escape. A guard was added anyway; its test proves the guard only |
+| Both: empty/loading/error harness scenes | Not started | TodoGeek scenes were extended, but no scene for these states was reported |
+
+#### Tier 7 and cleanups
+
+| Item | Status | Note |
+|---|---|---|
+| 7.1 offline-first | Not started | |
+| 7.2 one prose surface | Not started | |
+| 7.3 capture from anywhere | Not started | |
+| 7.4 handwritten add field | Not started | The shared grammar and clientId plumbing it needs now exist |
+| 7.5 server-side transcription | Not started | |
+| 7.6 bulk organise | Not started | |
+| Cleanup: TodoGeek Phase 4 | Done, with leftovers | Eight retired pages and their component folders, hooks, TemplateContext and their tests deleted; TaskContext no longer mounts a dialog or snackbar. Redirects kept. `RecurringEditDialog.jsx` is **live** (InlineEditor) and was kept. A set of unreachable utils/services remain (listed in `SUITE_TODO.md`) |
+| Cleanup: `routes/noteGeek.js` | Done | Deleted with its mount and tests (no caller found) |
+| Cleanup: docs drift | Done | By `dae59be7`. The `SORTING_RULES.md` read-first block is the only fix for that item |
+| Cleanup: privacy test | Done | Walks the whole import graph |
+| Cleanup: harness | Partly | Stale `bujogeek/` output and 50 stale screenshots removed (untracked). TodoGeek still has no scenes for login, empty states or repeats |
+
+### Decisions D1 to D9 — how each was applied
+
+| # | Applied as |
+|---|---|
+| D1 | Yes. Soft delete, 30-day Recently deleted at `/deleted`, Undo toast, lazy purge on read. `apps/notegeek/DOCS/CONTEXT.md` §11 records the reversal and §17 the mechanics |
+| D2 | Yes. Eraser and More on the phone bar |
+| D3 | Yes. One late row per series; ticking it skips earlier misses |
+| D4 | **Half.** Notes and events lose the checkbox and are not counted or carried over, in the display only (`penKinds.js`). **Events do not expire in the data**; moving that rule into `penViews.todaySections` is still open |
+| D5 | Yes. `useHidesPrivate` is always true: masked on every device until tap |
+| D6 | Yes. Anchor to the page's written date, with a switch; undated lines stay on the real today |
+| D7 | Yes. Neutral ink for done |
+| D8 | Yes. First ink writes the effective paper into the document meta |
+| D9 | **Not built.** No rail yet (4.4 not started). 4.1 and 4.2 are the groundwork |
+
+### Deploy order and first-boot effects
+
+1. **Gateway first, then the apps.** The new TodoGeek bundle sends `clientId`, `hasDueTime`, `timeZone` and `editScope`, and the new NoteGeek bundle sends `baseUpdatedAt`, `transcriptText` and reads `preview`, `notesPage`, `deletedAt`. An old gateway rejects them with `GRAPHQL_VALIDATION_FAILED`. The gateway is backward compatible with the live old bundles and with NoteGeek's Send tasks. Confirm the gateway is up before the UI goes (the Watchtower note: every push to main restarts the fleet; this is one push, so the order has to be a confirmed two-step).
+2. **On first boot of the new gateway** (expect it to be slow, and the box is shared):
+   - NoteGeek's text index is dropped and recreated with the new weights. The log line to watch for is `NoteGeek word index updated`.
+   - Derived search text (`wordText`, `preview`) is backfilled at start-up (derived version 2).
+   - The whole note library re-embeds once, locally, because chunk sizes changed. Search quality is degraded until it finishes. Note text stays on the box.
+   - Mongo builds the `{createdBy, clientId}` unique partial index on tasks (trivial: no `clientId` values exist) and the note list indexes.
+3. Behaviour changes to expect: anonymous TodoGeek task queries now return `UNAUTHENTICATED` rather than empty; deleted notes disappear from everywhere until restored; the legacy REST route `routes/noteGeek.js` is gone (no caller found).
+4. One api test fails outside this work (`goingOverFitnessGlance`, a 30-day window across the 1 Nov clock change); untriaged. Wave 1 was deployed on 2026-11-15 (`0ad31621` gateway, then `dae59be7`). Five phone layout fixes found by new harness scenes after the deploy are committed locally and not yet pushed — see the work log.
+
+### Needs a real device (merged from all six reports)
+
+Items 1 to 10 of the original list below still stand, with these additions from wave 1.
+
+NoteGeek
+1. Android PWA backgrounding: switch to the camera or lock within 2 s of typing or a stroke, return: saved, or "Restore unsaved changes" if the app was killed. Kill from recents mid-sketch, reopen.
+2. Offline on a train: write, see "offline", reconnect: saves without another edit.
+3. Two devices on one note: tablet idle, phone edits, tablet types: conflict dialog. Tablet idle and clean, return to the app: shows the phone's text.
+4. New note, first autosave: address bar becomes `/notes/<id>/edit` with no flicker or caret loss; for a sketch, no canvas reload.
+5. Home capture multi-line on the Android keyboard (Enter is newline; Save by the thumb).
+6. Recently deleted reachable from the phone's Tags sheet; the Undo toast reachable with a thumb.
+7. Pen: lag on a 1-3 MB sketch before/after 2.1; whether a ~400 ms pause still drops a stroke (1.17); palm thresholds (1.5 s, 24 px contact) on the S26 and the Lenovo, and whether Android reports contact width/height for palms; pen mode from the first touch; "Finger draws".
+8. Sketch chrome: fullscreen pickers now visible and the Snackbar position; gesture-bar safe area; left or right bar in landscape; container-width switch on the Lenovo portrait width; two-finger tap versus pinch; `navigator.share` with a file in Samsung Chrome; text-tool top-bar shift; HEIC or large photo through the image handler.
+9. The 0.5 px per unit legibility threshold against real model reads.
+10. Harness scenes `10-editor-sketch` and `03q-sketch-paper-dark` will look different (fit-to-content, hand tool, More button, paper-backed swatches) and were not re-run.
+
+TodoGeek
+11. A 6 pm Central task on the phone: stays on Today, reminder push at 6 pm.
+12. A repeat created now keeps its clock time after the March DST change (cannot wait; test only).
+13. Another device's change appears on focus, on return, and within 5 min on a desktop tab.
+14. Airplane-mode add: times out after about 15 s, the line is kept, one task after reconnect and resend.
+15. Editor sheet above the keyboard on Android; haptics on swipe actions; row actions on a tablet with a trackpad; reorder drag on touch; the Reminders item in the account menu.
+
+Shared
+16. Android Back or edge swipe in the installed PWA on sheet, dialog, nav drawer, account menu; account menu then Settings then Back.
+17. First real CI run of the two tablet shards (wall time unmeasured).
+
+---
 
 ## How this was made
 

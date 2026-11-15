@@ -27,7 +27,7 @@ Pull from here when planning the next pass; update as work lands or priorities s
   - fitnessgeek's REST insights twin (`/api/insights`) — unused in-suite but publicly reachable; delete once access logs confirm.
   - aiGeek UsagePanel shows session-wide call counts against a per-user daily cap, and no `costUnknown` yet.
   - A provider may bill a request cancelled mid-flight; the per-call cap and OpenRouter's credit limit are the backstop.
-  - `goingOverFitnessGlance` DST case still red (pre-existing).
+  - `goingOverFitnessGlance` DST case still red (pre-existing), for the next push; `aiHardeningCancellation` was a load flake on 2026-11-15 and passes.
 
 ---
 
@@ -326,9 +326,34 @@ so ChatGPT / Claude clients can read suite data through curated, read-only tools
 
 ### TodoGeek — remaining from `DOCS/TODOGEEK_REVIEW_2026-09.md`
 
-- **2026-11-15 review:** the prioritised plan for this app (phone, tablet, desktop) is
-  `DOCS/NOTEGEEK_TODOGEEK_REVIEW_2026-11.md`. Wave 1 of it is built locally and not yet
-  deployed (2026-11-15); the rest is not built.
+- **2026-11-15 review, wave 1 built locally, not pushed or deployed** (gateway first).
+  Plan and per-item status: `DOCS/NOTEGEEK_TODOGEEK_REVIEW_2026-11.md` (Status section,
+  with the device checklist at its end). Cross-app context: `DOCS/SUITE_REVIEW_2026-11.md`
+  and `DOCS/SUITE_FORM_FACTOR_PLAN_2026-11.md`. **Still open after wave 1:**
+  - *Layout (Tier 4):* nav rail from 600 px (D9), two-pane at >= 1100 px, week strip on
+    Upcoming; 3.15's collapse-on-scroll hero; sidebar counts and pinned tags.
+  - *Data:* D4 expiry is display-only (`penKinds.applyKinds`); events never expire in the
+    data, move the rule into `penViews.todaySections`. Incremental task reads (5.13: the
+    whole corpus is still re-read on each refresh). The gateway's daily/weekly/monthly
+    Mongo window clauses still use the UTC-midnight rule (dead for the live UI, which
+    reads `allTasks`).
+  - *Bare `dueDate` callers:* `components/pen/editorForm.js` (`hasDueTime(task?.dueDate)`,
+    `dueDayKey(task?.dueDate)`) and `DatePickSheet.jsx` (`dueDayKey(task.dueDate)`) pass
+    the value, not the task. Correct today only because TaskContext moves timed
+    UTC-midnight values off midnight on ingest; switch to `hasDueTime(task)` / `dueDayKey(task)`.
+  - `utils/quickAdd.describeParse` still says Private is "hidden on a desktop".
+  - *Dead code left by the Phase 4 cleanup (unreachable, with some tests):*
+    `services/templateService.js`; `utils/{constants,exportTasks,filterTasks,normalizeTasks,
+    provenanceLine,reviewWeek,subtasks,taskAging}.js`; `theme/{colors,inks}.js`;
+    `components/ThemeToggle.jsx`; `components/auth/LoginForm.jsx`; their tests (exportTasks,
+    reviewWeek, subtasks, taskSort). `components/tasks/RecurringEditDialog.jsx` is live; keep it.
+  - *Not covered:* TodoGeek harness scenes for login, empty/loading/error states, repeats;
+    the "carried over" header highlight was not reproduced (inside focus ring added,
+    unverified).
+  - *Tier 7:* offline-first outbox (keyed on `clientId`), capture from anywhere, handwritten
+    add field (the grammar and `clientId` plumbing now exist).
+  - Tablet CI shard for TodoGeek is advisory (one finding: the sidebar brand link in
+    landscape); drop `--tablet-advisory` when clear.
 
 All of §1 and §2 shipped 2026-09-20/21. What is left, in the report's own
 recommended order:
@@ -349,11 +374,11 @@ recommended order:
 - **§4 UX gaps — four of ten done 2026-09-21.** Shipped: one-tap move to
   tomorrow, focus-by-id, the habit delete confirm, the missing g-chords on
   Plan/Tags, and the phantom ⌘K help row.
-  **Still open:** Plan's Weekly and Backlog cannot edit a task at all (the
-  biggest remaining one — the screen whose job is planning can only complete
-  or delete); Review's `e` re-files instead of editing; `RecurringEditDialog`
-  bypasses `TodoDialog` and its 44px floor; subtask removal is the one delete
-  with no confirm; day navigation on Today is mouse-only.
+  **Overtaken 2026-11-15:** Plan, Review, `TodoDialog` and the other retired pages and
+  components were deleted in wave 1 (only Today, Upcoming, Done and Search remain), so
+  the Plan/Review/`TodoDialog` gaps no longer exist. **Still open:** subtask removal is
+  the one delete with no confirm (the subtask API is kept in the gateway; no screen
+  uses it now); day navigation on Today is mouse-only.
 
 **Open question for Chef:** recurring reminders fire once and then go silent
 (documented in `apps/todogeek/DOCS/REMINDERS.md`, not fixed). The fix changes
@@ -401,9 +426,36 @@ the app was down over its due time, should it arrive late or be skipped?
 
 ### NoteGeek
 
-- **2026-11-15 review:** the prioritised plan for this app (phone, tablet, desktop) is
-  `DOCS/NOTEGEEK_TODOGEEK_REVIEW_2026-11.md`. Wave 1 of it is built locally and not yet
-  deployed (2026-11-15); the rest is not built.
+- **2026-11-15 review, wave 1 built locally, not pushed or deployed** (gateway first;
+  first boot rebuilds the text index and re-embeds the library once). Plan and per-item
+  status: `DOCS/NOTEGEEK_TODOGEEK_REVIEW_2026-11.md` (Status section; device checklist at
+  its end). Cross-app context: `DOCS/SUITE_REVIEW_2026-11.md`,
+  `DOCS/SUITE_FORM_FACTOR_PLAN_2026-11.md`. **Still open after wave 1:**
+  - *Not started:* Tier 3 phone friction 3.2-3.4 and 3.6-3.12 (Back from share, tappable
+    checklists, new-note focus, scroll/filter memory, version history on phone, dialogs,
+    code-editor keyboard, mind map, review dialogs, `[[` picker); Tier 4 layout 4.4-4.12
+    and the NoteGeek half of 4.3; 5.11 lazy routes; most Tier 6 NoteGeek polish; Tier 7.
+  - *Sketch:* banded reading of long sketches (needs a gateway change: several images per
+    call; today it only warns "page too long to read well"); chrome above the canvas still
+    takes ~35 % of a phone screen; lasso, scribble-to-erase, pages, pressure toggle,
+    search-hit location; typo matching in search (5.4).
+  - *Harness:* NoteGeek fixtures lack stubs for `SketchTranscript` and
+    `SaveSketchTranscriptEdit`; scenes `10-editor-sketch` and `03q-sketch-paper-dark` need a
+    re-run and re-look; the fresh-build NoteGeek run was pending when this was written;
+    2,076 tablet-landscape tap-target findings per scheme (the desktop layout under a
+    finger; portrait 46, editor scenes only); the two tablet CI shards are advisory.
+  - *Suite:* GameGeek's `MediaViewer` and FitnessGeek's ServingSheet/FixSheet keep their own
+    `useBackToClose`; fold them onto `@geeksuite/ui`'s. Apps are not yet on `useFormFactor`.
+  - *Next push:* triage `goingOverFitnessGlance` ("leaves a longer window inclusive at
+    both ends": the 30-day window spans the 1 Nov clock change); look at the FitnessGeek
+    backend CI job that failed on `0ad31621`; push the five NoteGeek phone layout fixes
+    and the updated harness fixtures (local).
+  - Sketch bar on phones narrower than ~388 px scrolls sideways; move Fullscreen or
+    Paper into More at those widths (design call).
+  - New NoteGeek queries (`notesPage`, `deletedNotes`) answer empty to a signed-out
+    caller, like the older ones — covered by the gateway auth fix in the suite review.
+  - Sidebar tag counts still use `notes { id tags }` with no limit; fine while `notes` is
+    unlimited by default.
 
 - ~~**No undo for anything.**~~ — **done 2026-09-21.** Every note now carries
   version history (50 per note), and Compose, plain edits and restores are all

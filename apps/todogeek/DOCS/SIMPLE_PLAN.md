@@ -163,7 +163,7 @@ Decisions the spec left open, and how they were made. One commit; `git revert` t
   collection tasks from the log; with those screens gone, their tasks must show as ordinary ones, and one
   list also means a change on one view is right on the next without a refetch. It re-reads when the tab
   comes back after a minute away.
-- **Repeats:** `allTasks` expands a series a year either side of today. Overdue keeps only a series'
+- **Repeats:** (superseded 2026-11-15: the window is now yesterday to +62 days, see the end of this file) `allTasks` expands a series a year either side of today. Overdue keeps only a series'
   latest missed occurrence (what the daily log's carry-forward did); Upcoming's "Later" shows a series once,
   at its next occurrence. Search shows it once.
 - **Blocked** tasks (status `blocked`) are ordinary open tasks: they appear by their due date and can be
@@ -227,7 +227,7 @@ Decisions the spec left open, and how they were made. One commit; `git revert` t
 ### Retired
 - Review, Plan (weekly, monthly, backlog), Templates, Tags, Collections, Habits, Journal, Settings, and the
   legacy `/tasks/*` URLs redirect to `/today` (`RETIRED_PATHS` in `components/layout/navConfig.jsx`). Their
-  files, resolvers and data are untouched (Phase 4). Settings went too: theme is the top-bar toggle,
+  files, resolvers and data were untouched at the time (Phase 4); **the pages and components were deleted 2026-11-15**, the gateway resolvers and data remain. Settings went too: theme is the top-bar toggle,
   reminders the sidebar switch; the account menu has no Settings row.
 
 ### Red Pen
@@ -245,3 +245,27 @@ Decisions the spec left open, and how they were made. One commit; `git revert` t
 - **The only animation:** the route fade (`GeekAppFrame`) was replaced with an equivalent frame that does
   not fade; the loading shimmer with a still line.
 - **The sidebar** is the page's paper in both modes, active row in ink with a red margin bar.
+
+
+## As built, review wave 1 (2026-11-15, local, not deployed)
+
+What changed against this plan, from `DOCS/NOTEGEEK_TODOGEEK_REVIEW_2026-11.md`. Detail is in the last section of
+`CONTEXT.md`.
+
+- **Time of day is explicit** (`hasDueTime`, `timeZone`); a 6 pm Central task is no longer read as date-only.
+- **A repeat shows once.** One late row per series (D3): ticking a late occurrence skips the earlier misses. Search
+  shows each series at its most recent missed occurrence, else its next. The expansion window is yesterday to +62
+  days (not a year either side).
+- **First-occurrence rule.** Ticking, deleting or single-editing a series master straight after creating it acts on
+  its first occurrence, not the series.
+- **Adds are safe to retry** (`clientId`), writes time out at 15 s, a failed load shows "Couldn't reach your list"
+  (`loadError`) instead of "Nothing due today", and the list re-reads on focus, return, reconnect and every 5 min.
+- **Add box:** two-line auto-grow with a parsed preview; clears only what was sent; an active tag filter tags the
+  new task (ghost chip, x to leave it off).
+- **Editor** is a bottom sheet with a sticky Save below `md`; collapsing it saves.
+- **Reorder mode** on phone (grips only there; date under the words).
+- **Private is masked on every device** (D5), not desktop only.
+- **Notes and events** (D4) have no checkbox and are not counted or carried over, in the display only; events do not
+  expire in the data yet.
+- **Done is a neutral ink** (D7), not red.
+- **Retired pages and components are deleted**, not just redirected.

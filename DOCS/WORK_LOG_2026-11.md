@@ -2,6 +2,84 @@
 
 What shipped, as it landed. Wanted-but-not-done lives in `SUITE_TODO.md`.
 
+## 2026-11-15 — NoteGeek + TodoGeek: wave 1 of the review built and deployed
+
+Per-item status, the decisions, deploy order and the device checklist are in the
+Status section of `DOCS/NOTEGEEK_TODOGEEK_REVIEW_2026-11.md`. Six commits on local
+`main`, deployed the same day (see the end of this entry):
+
+- `90e7d09d` NoteGeek gateway: save safety (`baseUpdatedAt` conflict check), soft
+  delete with 30-day Recently deleted, coalesced version history with caps, stored
+  `preview`, `notesPage` keyset paging, cleaned word index (title weighting), per-note
+  vector replace, stored sketch hash, transcript integrity fixes, legacy
+  `routes/noteGeek.js` deleted.
+- `0ad31621` TodoGeek gateway + `task-grammar` + `api-client`: explicit
+  `hasDueTime`/`timeZone`, `clientId` idempotency, first-occurrence rule, one late
+  row per series, recurrence validation, DST-safe series, bounded expansion window,
+  anonymous reads now `UNAUTHENTICATED`; opt-in write timeout in `api-client`;
+  grammar fixes.
+- `5aa58918` `packages/ui` `useBackToClose` (Android Back closes overlays) and
+  `useFormFactor`; harness tablet viewports and two advisory CI shards.
+- `5cddc2dd` NoteGeek frontend: autosave on hide, IndexedDB drafts, conflict
+  dialog, `NoteEditorRoute`, Recently deleted, paged lists; sketch stack (listener
+  scope, pen mode at mount, palm rule, phone bar Eraser + More, open fit-to-content,
+  image shrink, one mark table, date anchoring, loose sent matching, attempts rule,
+  client pre-check).
+- `76eed497` TodoGeek frontend: serialised and optimistic writes, re-read on focus,
+  phone editor bottom sheet, Reorder mode, private masked on every device, neutral
+  done ink, retired pages and components deleted.
+- `dae59be7` DOCS cleanup (below).
+
+Tests as reported by the build agents: gateway todogeek 366 pass; NoteGeek gateway
+new suites pass; TodoGeek frontend 496 pass; NoteGeek frontend 1009 pass;
+packages/ui 864 pass; TodoGeek harness 92 scenes, 0 violations. Each fix was
+mutation-checked (revert, see red, restore) by its author. After the agents stopped,
+on a quieter machine: full api suite 184 of 185 suites, 3,769 tests; both frontend
+suites clean; `gql-arg-audit` clean. vitest `testTimeout` raised to 20 s in both apps
+because whole-page tests flaked at 5 s under load.
+
+Known red: one api test outside this work, `goingOverFitnessGlance` ("leaves a longer
+window inclusive at both ends": expects 2026-10-16, gets 2026-10-15; the 30-day window
+now spans the 1 Nov clock change). Not triaged — for the next push.
+`aiHardeningCancellation` was a load flake and passes.
+
+**Deployed 2026-11-15** in two pushes, on Chef's go-ahead: gateway first (`0ad31621`;
+log line "NoteGeek word index updated", derived 49), then UIs and docs (`dae59be7`).
+Containers recreated and healthy; both sites 200; NoteGeek on the new bundle. CI on
+`0ad31621` was red in three jobs: TodoGeek frontend tests (old tests against the new
+grammar at that intermediate commit; green at `dae59be7` locally), the gql argument
+audit (clean at `dae59be7` locally) and the FitnessGeek backend job (not inspected).
+
+**NoteGeek harness.** The run on the fresh build failed with 28 page errors, and
+Chef chose to push anyway. All seven failing scenes turned out to be fixture gaps
+(`GetNotesPage` and `CreatePhotoNote` had no stub). Fixtures were brought up to date
+and 11 scenes added for the new screens; those found five real phone layout bugs,
+fixed after the deploy and **not yet pushed**: the phone sketch bar ran 12 px off a
+390 px screen once Eraser and More were added; the transcript status line was a
+40 px target; the restore-draft banner wrapped one word per line; Recently deleted
+split its two buttons; "Keep mine" wrapped. Now PASS: 292 scenes, 0 violations,
+0 a11y, 0 page errors; NoteGeek vitest 1,012. Open: on phones narrower than ~388 px
+the sketch bar scrolls sideways (More and Fullscreen start off-screen).
+
+Not built: banded reading of long sketches (needs a gateway change), nav rail and
+two-pane layouts, NoteGeek tablet tap targets, most of NoteGeek Tiers 3/4/6, Tier 7.
+D4 (events expire) is display-only; D9 (rail) not started.
+
+Also today:
+
+- **Suite review** — `DOCS/SUITE_REVIEW_2026-11.md`: the other apps reviewed, plan
+  only.
+- **Form-factor plan** — `DOCS/SUITE_FORM_FACTOR_PLAN_2026-11.md`: bringing every
+  app to phone, tablet and desktop quality, plan only.
+- **DOCS cleanup** (`dae59be7`) — new `DOCS/README.md` index; finished plans moved
+  to `ARCHIVE/` unless code or CI cites them by path; stale headers corrected
+  (app counts, MUI version, ports); `BUJOGEEK_REVIEW_2026-09.md` renamed to
+  `TODOGEEK_REVIEW_2026-09.md` (four code comments already cited that name); stale
+  FlockGeek and StoryGeek docs archived; FlockGeek README rewritten. Details of
+  what was left alone are in the cleanup report. One sighting for Chef: a
+  gitignored, untracked archived TodoGeek doc contains a credential-shaped value
+  (not printed, not touched; rotate or redact at your call).
+
 ## 2026-11-15 — NoteGeek + TodoGeek: deep review, plan only
 
 - Seven parallel reviews (two app shells, sketch stack, both data layers, both

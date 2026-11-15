@@ -348,3 +348,44 @@ a day**, leaving 10 for Convert. A sketch that hits the cap waits for the next U
 
 **Deploy order:** the gateway first (additive schema; it swaps the text index at start-up),
 confirmed live, then NoteGeek.
+
+## As built, review wave 1 (2026-11-15, local, not deployed)
+
+From `DOCS/NOTEGEEK_TODOGEEK_REVIEW_2026-11.md` item 2.8 and the Tier 1 transcript items. Gateway
+mechanics are also in `CONTEXT.md` §17. These change or add to the section above:
+
+- **Stored sketch hash.** The content hash is remembered on the note (`sketchHash {value, len,
+  at}`, valid for the content's length and `updatedAt`), computed once per saved drawing on first
+  read and never on autosave. The hash function is faster with identical output (6 MB snapshot:
+  390-780 ms before, 270-407 ms now, repeat reads about 0).
+- **Attempts rule.** `AI_UNAVAILABLE` and `AI_CAP` back off (`retries`) but never count toward the
+  six attempts that mark a hash `failed`. (Replaces "after 6 attempts" counting every failure.)
+- **Claims and ordering.** A `processing` claim older than 2 min no longer discards a Convert
+  reading (the auto claim already had it). `embeddingTicket` is renewed whenever a note is
+  queued and the indexer marks only if it is unchanged. A content save no longer re-derives a
+  sketch's words (it wrote old readings back). Erase-all clears `wordText`, preview and
+  transcript text, and a reading that lands after it is not stored; corrections retire when a new
+  reading shows under 50 % of the corrected reading's lines.
+- **Client pre-check.** The image is validated server-side only when the note will actually be
+  read, but the upload can only be avoided by the client: `useAutoTranscribe` and the Convert and
+  Send paths ask `sketchTranscript(noteId).status` first and do not export on `off`, `searchable`,
+  `failed`, `retry` (before `retryAt`) or `transcribing`. Once the gateway says `off`, nothing is
+  exported again, even after markup.
+- **`useAutoTranscribe`.** An ink edit during an in-flight read comes back `current: false`,
+  `text: null`, `waiting` (it used to claim the old text was current). Export and network errors
+  back off 2, 4, 8 min up to 1 h; `too_large` waits for the next edit. New `transcribeNow()`
+  (the status line's "Transcribe now"). `sketchExport` reports `tooLong` (under 0.5 px per page
+  unit) and the status line says "page too long to read well".
+- **Convert and Send tasks await the save** (`settleSave()`: the save in flight and any queued
+  replay) and then read the server's transcript state before deciding to reuse or pay; after a
+  paid read the status is refreshed, so the same page is not paid for three times.
+- **Corrections** carry forward into a fresh Convert reading by line diff
+  (`utils/transcriptCorrections.js`, per device, `notegeek:sketchCorrections`); `original` stays
+  the machine reading.
+- **Photo notes:** `createNote(..., transcriptText)` (new `CreatePhotoNote` document) stores the
+  reviewed text in the same write, so a failed second call can no longer leave a photo note
+  unsearchable.
+- **Not done:** banded reading of a long sketch. `autoTranscribeSketch` takes one image, so bands
+  need a gateway change (for example `images: [String!]`, read each, join).
+- **Tests:** gateway `notegeekTranscriptIntegrity.test.js` (15); NoteGeek `useAutoTranscribe`
+  (+6), `TranscriptStatus`, the sketch-transcribe page test (Convert waits for the save).

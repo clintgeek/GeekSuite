@@ -142,6 +142,10 @@ export, backlog) still sees it, and `blockedTasks` is the list view.
 
 #### Private tasks — added 2026-10-01
 
+> **Superseded 2026-11-15 (D5):** private tasks are now masked on every device, phone included, until tapped
+> (`useHidesPrivate` is always true); the date sheet no longer prints private words. Where this section says
+> "desktop only" or "phone: words shown", read the section at the end of this file.
+
 Chef: a todo like "Fire Jane" should not be on a screen that is accidentally shared. **Desktop
 only** — on a phone it shows normally.
 
@@ -227,7 +231,7 @@ render them with the indicator. PageHeader stats show "N blocked".
 ## Invariants (do not regress)
 
 - **Ownership**: every gateway read/write is scoped by `createdBy` in the service layer (`requireUser` pattern). Cross-user ids behave as not-found. Covered by jest suites.
-- **Dates**: date-only values are UTC midnight; date KEYS on the client use date-fns `format(date, 'yyyy-MM-dd')` (local), never `toISOString()`.
+- **Dates**: date-only is now an explicit `hasDueTime: false` flag on the task (2026-11-15); the old rule "date-only = UTC midnight" is only the fallback for rows without the flag; date KEYS on the client use date-fns `format(date, 'yyyy-MM-dd')` (local), never `toISOString()`.
 - **Sorting**: one canonical comparator (`compareTasks` in TaskContext, `sortTasks` in taskService) per `DOCS/SORTING_RULES.md`; completed/cancelled sink (cancelled last).
 - **Errors**: Apollo error shapes parsed by `handleApiError`, surfaced via the TaskProvider snackbar. Status toggles are optimistic with rollback.
 
@@ -852,3 +856,90 @@ files.
 (redundant with `App.jsx`'s app-wide one, harmless, not a bundle cost); the
 habit/collection editors and `ReviewNoteDialog` (checked, genuinely light,
 see above).
+
+
+---
+
+## Wave 1 of the 2026-11 review — as built (2026-11-15, local, not deployed)
+
+From `DOCS/NOTEGEEK_TODOGEEK_REVIEW_2026-11.md` (per-item status is in its Status section). **Deploy the gateway
+first**: the new bundle sends `clientId`, `hasDueTime`, `timeZone` and `editScope`, which an old gateway rejects.
+The gateway stays compatible with the live old bundle and NoteGeek's Send tasks. Gateway code is in
+`apps/basegeek/packages/api/src/graphql/todogeek/`.
+
+### Data model and contract (all additive)
+- **`hasDueTime` / `timeZone` (1.1).** `Task.hasDueTime` (no default) is explicit; the gateway derives it with
+  the old UTC-midnight rule when a client omits it (`effectiveHasDueTime`, used by reminders, the resolver and
+  expansion). The client sends it on every write from the value's shape (`yyyy-MM-dd` is date-only, an instant is
+  timed) and moves a timed value that is exactly UTC midnight one second later. `utils/dueDate.js`
+  (`hasDueTime`, `dueDayKey`, `dueDayStart`) take a task and honour its flag. `Task.timeZone` (IANA) is sent on
+  creates and updates that carry a recurrence rule. The gateway's daily/weekly/monthly Mongo window clauses still
+  use the midnight rule (unused by the live UI, which reads `allTasks`).
+- **`clientId` (1.10).** `createTask(clientId)` is idempotent: a lookup, a unique partial index
+  `{createdBy, clientId}` (strings only) and an E11000 race fallback. The client always sends one
+  (`utils/clientId.js`) and retries a transient failure once with the same id; a failed add's id is remembered so
+  submitting the same line again is the same create. Overrides and split series never inherit a master's id.
+  Writes use the opt-in `api-client` timeout (`context: { timeoutMs: 15000 }`, no default anywhere else).
+- **Series.** A series master is a task that has a rule; the client `isSeriesMaster` argument is `@deprecated` and
+  ignored. A status change, THIS_INSTANCE edit or THIS_INSTANCE delete on a master **acts on its first occurrence**
+  (not refused); ALL_INSTANCES acts on the series. Deleting an override pushes its `originalDueDate` into the
+  master's `exdates`. An ALL_INSTANCES date change shifts DTSTART, the master's due date, exdates, the late floor
+  and the overrides together. A series with a `timeZone` keeps its wall-clock time across DST. Rules are refused
+  when unparseable, an RRuleSet, HOURLY or finer, COUNT over 1000, INTERVAL outside 1..1000, or more than 400
+  occurrences in the first year (`recurrenceRuleProblem`). `createTask` with status completed stamps `completedAt`.
+- **One late row per series (D3).** Completing or cancelling an occurrence whose time has come raises
+  `master.skipMissedBefore`; expansion never produces an un-materialised occurrence before it (a future
+  occurrence ticked early does not). The client drops the earlier misses at once
+  (`skipEarlierOccurrences`); Undo restores the row's status but not the skipped misses. Search shows a series at
+  its most recent missed occurrence, else its next.
+- **Bounded expansion (5.13).** `allTasks` expands yesterday to +62 days plus one carry-forward occurrence before
+  and one after (a daily series is about 65 rows, not 730). Completed rows are real documents and all returned.
+  This supersedes "a year either side" in `SIMPLE_PLAN.md`. Not done: incremental reads.
+- **Signed out (1.12).** Anonymous TASK queries throw `UNAUTHENTICATED` instead of returning `[]`.
+
+### Client state
+- **`TaskContext`** renders nothing now (the retired screens' dialog and snackbar are gone; `filters`,
+  `fetchAllTasks`, `fetchTasksForDateRange` removed; block/unblock, migrate and subtask functions kept).
+  Writes carry a sequence counter: a read waits for in-flight writes, a read whose window overlapped a write is
+  re-run (max 4), a superseded read is dropped. `fetchTasks` returns `{status: 'ok'|'superseded'|'stale'|'error'}`.
+  An empty answer replacing a non-empty list is re-read once; a failed read keeps the list. Status changes are
+  serialised per task and only the newest answer applies. `updateTask(id, fields, scope, { optimistic: true })`
+  patches at once and rolls back on refusal (moves use it; "Move all" is parallel).
+- **`PenContext`** exposes `loaded`, `loadError`, `refresh()`, `pendingTag`, `dismissPendingTag()`,
+  `restorePendingTag()`. It re-reads on focus and tab return (if over 30 s old), on reconnect (over 5 s) and every
+  5 min while visible. Its toasts are the only toast system (TaskContext's `error` is turned into a toast).
+  Adds under a tag filter get the filter's tag (ghost chip, x to leave it off); an add that lands without it toasts
+  "Added, not tagged #work." with Show.
+- **Grammar (1.16)** (`packages/task-grammar`): a time after a slash date needs am/pm or hh:mm; `/mar 5` in
+  November means next March (`/15th` after the 15th, next month; a typed year is kept); `/` must start a word and
+  the date end one (`example.com/2024` is text); impossible days are text.
+
+### UI
+- **Editor (1.13, 3.14).** Collapsing the editor saves (a repeating task asks for scope; an emptied words field
+  stays open); Escape and Cancel discard. Below `md` the editor is a `GeekSheet` bottom sheet with a sticky Save
+  footer above the keyboard; autofocus only with `(pointer: fine)`. Ticking a task closes the editor first.
+- **Add box (1.14, 3.17).** Clears only the line that was sent; a two-line auto-grow textarea, Enter adds, a
+  parsed preview line (`addPreview.js`), Private labelled.
+- **Reorder mode (3.16).** On phone the date sits under the words and the grips appear only in "Reorder" mode.
+- **Private masked everywhere (D5).** See the note on the Private tasks section above.
+- **Notes and events (D4).** `penKinds.applyKinds` drops notes and events from carried-over and from the to-do
+  count, and the checkbox is gone, **in the display only**: events do not expire in the data. Moving the rule into
+  `penViews.todaySections` is open.
+- **Done ink (D7).** Done is a neutral ink on the checkbox and swipe, not the priority red; the Help sheet carries
+  a priority legend. Passed times read "9am - passed"; counts are blank while loading.
+- **Retired pages deleted (Phase 4).** The eight retired pages, `components/{plan,review,templates,today,tasks,
+  shared,primitives,navigation}` (except `components/tasks/RecurringEditDialog.jsx`, which `InlineEditor` uses),
+  `layout/PageHeader`, five hooks, `TemplateContext` and their tests are gone. Redirects remain
+  (`RETIRED_PATHS`). The gateway subtask API is untouched. Unreachable leftovers are listed in `DOCS/SUITE_TODO.md`.
+- **Shell.** Swipe actions have icons and vibrate; swipe-left is disabled on done rows; scroll resets on route
+  change and when the active tab is tapped; Reminders is in the account menu; Help and Pins sheets have close
+  buttons; row actions and swipe follow `any-hover` / any touch, not width. Android Back closes sheets and dialogs
+  (`useBackToClose` in `@geeksuite/ui`).
+
+### Known gaps
+- `components/pen/editorForm.js` and `DatePickSheet.jsx` still pass a bare `dueDate` to `hasDueTime` /
+  `dueDayKey` (correct only because the client moves timed values off UTC midnight on ingest).
+- `utils/quickAdd.describeParse` still says Private is "hidden on a desktop".
+- The recurring-edit dialog's Escape discarding the edit could not be reproduced (MUI Modal swallows Escape); a
+  guard was added anyway.
+- Whole-page tests need the 20 s `testTimeout` raised on 2026-11-15.

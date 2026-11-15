@@ -479,3 +479,65 @@ Full camera frames came to ~492 KB a page at 2000px, so 8 pages (~5.3 MB) overra
 
 The tray's size meter and the ceiling check count the kept copy. The page tests go red if
 the page sizes or stores the full-size copy.
+
+## As built, review wave 1 (2026-11-15, local, not deployed)
+
+From `DOCS/NOTEGEEK_TODOGEEK_REVIEW_2026-11.md` Tiers 1-2. Everything below is
+`frontend/src/` unless noted. None of it has been tried on a pen or a phone yet; the
+device list is in the review's Status section. It supersedes the sections above where
+they differ (open position, listener, phone bar).
+
+- **Saving (1.2, 1.17, 2.1).** `HandwrittenEditor` listens with
+  `store.listen(fn, { scope: 'document', source: 'user' })`. The listener only sets a dirty
+  flag and restarts the 400 ms timer; the timer serialises once with
+  `store.getStoreSnapshot()` (same `{store, schema}` body as the deprecated `getSnapshot()`,
+  so the saved format and the gateway's hash input are unchanged; tldraw 2.4.6's exported
+  `getSnapshot(store)` returns `{document, session}` and must not be used). A pending
+  snapshot is flushed on unmount, on `visibilitychange` to hidden and on `pagehide`;
+  `sketchApiRef.current.flush()` returns the pending body so the page can save it first.
+  Incoming content loads through `store.mergeRemoteChanges(() => loadSnapshot(...))`, so a
+  load is never seen by the user-only listener, never echoes back as a save, and is not
+  undoable. The `content` prop reloads only content that is not one of our last 3 saves
+  (History restore, a conflict's "Use theirs").
+- **Images (1.18).** `<Tldraw maxImageDimension={1600}>` plus our own
+  `registerExternalAssetHandler('file')` in `utils/sketchImages.js`: shrinks to 1600 px
+  (JPEG 0.85, PNG if small) and refuses, by name, an image still over 1.5 MB or one that
+  would push the sketch past `SNAPSHOT_CONTENT_MAX`, before anything is inserted. The
+  message shows in a Snackbar inside the container. (tldraw's own `maxImageDimension` only
+  shrinks the shape, not the bytes.)
+- **Fullscreen (2.2).** `components/editors/sketchPortal.js` is a context; every Popover gets
+  `container` and every Tooltip `slotProps.popper.container` pointing at the sketch container.
+- **Pen mode at mount (2.3).** `utils/penPrefs.js`: a pen press sets
+  `notegeek:sketchPenSeen`. Mount and `PenModeSync` turn `isPenMode` on from the first touch
+  on a device that has seen a pen. A "Finger draws" switch in More (per device) keeps it off.
+- **Palm rule and toolbar position (2.4).** In pen mode the toolbar ignores a touch (the
+  pointerdown and the click after it) when a pen was near in the last 1.5 s or the contact is
+  24 px or more (`isPalmTouch`). A deliberate fingertip with the pen put away still works, so
+  the bar cannot lock you out. The bar can sit bottom, top, left or right (vertical bar), per
+  device, set in More; popovers open away from it. The bar uses `env(safe-area-inset-*)`.
+  Thresholds are guesses until measured on the S26 and the Lenovo.
+- **Phone bar (2.5, D2).** Move, Write, **Eraser**, Pen, Paper, Undo, **More**, Fullscreen.
+  More holds Select, Redo, Highlighter, Zoom to fit, Shapes, Text, Sticky, Image, zoom in and
+  out, Share, Finger draws and Bar position. The full bar gains a More for the settings.
+- **Full or compact (2.6).** Chosen by the container's length along the bar's edge
+  (ResizeObserver, full at 800 px or more); the viewport query is only the fallback before
+  layout or in jsdom. What does not fit goes in More.
+- **Opening a sketch (2.11).** The camera is kept per note (localStorage, 60 notes, LRU); a
+  saved sketch opens on its saved camera, else fit-to-content (at most 100 %). **A saved sketch
+  now opens on the hand tool** and the first plain pen press arms Write (before: origin at
+  100 % with the pen armed). The status line is tappable (Transcribe now, View text in a
+  dialog with Copy). The pen-button lift is also heard on `window` (no stuck eraser).
+  Ink swatches and the pen dot sit on the paper colour. D8: the first ink writes the
+  effective paper into the document meta. `/labs/pen` calls `penButtonTool` and says "nothing
+  mid-stroke" for chorded moves.
+- **Cheap wins (2.12).** Share as image (More): `navigator.share({files})` when available,
+  else a PNG download at print resolution; two-finger-tap undo (`utils/twoFingerTap.js`,
+  listen-only); a "Recent pens" strip (last 3, per device) in the pen picker.
+- **Not done:** lasso, scribble-to-erase, pages or a page boundary, a pressure toggle, search-hit
+  location in a sketch; folding or tucking the chrome above the canvas (page layout); the
+  text-tool top-bar shift (could not be reproduced from the code).
+- **Tests:** `HandwrittenEditor.test.jsx`'s tldraw mock now honours listen filters,
+  `getStoreSnapshot`, a deprecated `getSnapshot`/`loadSnapshot` that throw, `mergeRemoteChanges`
+  and the asset handler (20 s per-test timeout). New: `sketchImages`, `twoFingerTap`,
+  `palmTouch`. Harness scenes `10-editor-sketch` and `03q-sketch-paper-dark` change look and
+  were not re-run.
