@@ -51,6 +51,8 @@ It is idempotent — values already starting with `v1:` are skipped, so it can b
 
 ## Build and deploy
 
+> **2026-11-15:** this section is the manual, break-glass path. Normal deploys are a push to `main` (CI → GHCR → Watchtower), and rollback is a revert-and-push or re-tagging an earlier `sha-<commit>` image — see `DOCS/CICD.md` and `DOCS/RUNBOOK.md` §6 at the repo root. The compose layout, env table, key-encryption and maintenance notes in this file are still current.
+
 From the **repo root**:
 
 ```bash

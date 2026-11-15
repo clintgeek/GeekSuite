@@ -1,5 +1,7 @@
 # aiGeek — has this been overcomplicated?
 
+> **Status 2026-11-15:** analysis, not a spec. Stage 1 of §6 (paid-first for NoteGeek and FitnessGeek) was done 2026-09-24; Stages 2–3 are not started. Related: `AIGEEK_CAPABILITY_ROUTING.md` (the routing design) and `AIGEEK_REVIEW_2026-09.md` (the bug review).
+
 *Analysis, 2026-09-19. Answers a direct question from the owner. Read-only: no
 code changed to produce this document. Numbers marked "measured" came from
 `AISpend`/`AIUsage`/`AIFreeTier`/`AIAppConfig` on the running `datageek_mongodb`

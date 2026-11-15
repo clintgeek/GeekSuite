@@ -38,7 +38,7 @@ Required env vars must be set before the server will start — see the table bel
 
 ## Deploy
 
-See the root `DEPLOY.md` for the general build + push flow. Basegeek-specific steps:
+Normal deploys are a push to `main` (CI → GHCR → Watchtower; `DOCS/CICD.md` and `DOCS/RUNBOOK.md` §6 at the repo root). The manual, break-glass path:
 
 ```bash
 # Build and push image
@@ -103,9 +103,9 @@ pnpm test
 
 - `DOCS/AUTH_SYSTEM.md` — token model, rotation, fail-fast env, middleware
 - `DOCS/SSO_IMPLEMENTATION.md` — cross-subdomain cookie spec
-- `DOCS/SSO_CLIENT_MIGRATION_PLAYBOOK.md` — how client apps integrate
+- `DOCS/ARCHIVE/SSO_CLIENT_MIGRATION_PLAYBOOK.md` — how client apps integrate
 - `DOCS/DEPLOYMENT_GUIDE.md` — full deploy + database maintenance
 - `DOCS/AI_CATALOG.md` — all AI providers, models, rate limits, API formats
 - `DOCS/API_KEYS.md` — machine-to-machine API key management
-- `DOCS/AUTH_HARDENING_2026-04.md` — hardening pass plan (April 2026)
-- `DOCS/CLEANUP_PASS_2026-04.md` — critical-fix pass plan (April 2026)
+- `DOCS/ARCHIVE/AUTH_HARDENING_2026-04.md` — hardening pass plan (April 2026)
+- `DOCS/ARCHIVE/CLEANUP_PASS_2026-04.md` — critical-fix pass plan (April 2026)

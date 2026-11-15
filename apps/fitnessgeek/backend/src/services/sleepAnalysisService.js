@@ -317,7 +317,7 @@ function analyzeCardiovascularRecovery(heartRates, stages) {
    * rate did not drop adequately — check for alcohol, late eating" every
    * night. A real nocturnal dip compares sleeping HR with DAYTIME HR, which
    * needs waking-hours samples from `HeartRateIntraday`; `DailyStats` has no
-   * daytime average. See DOCS/FITNESSGEEK_HEALTH_DASHBOARD_FINDINGS.md.
+   * daytime average. See DOCS/ARCHIVE/FITNESSGEEK_HEALTH_DASHBOARD_FINDINGS.md.
    */
   const hrDipPercent = null;
 

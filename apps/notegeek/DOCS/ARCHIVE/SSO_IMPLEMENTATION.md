@@ -1,3 +1,5 @@
+> **Archived 2026-11-15.** Describes the pre-cookie localStorage-token design. Current auth: `DOCS/CONTEXT.md` §2 and the suite reference `DOCS/CONTEXT.md` / `DOCS/SSO_OVERVIEW.md` at the repo root.
+
 # NoteGeek SSO Implementation Guide
 
 ## Overview

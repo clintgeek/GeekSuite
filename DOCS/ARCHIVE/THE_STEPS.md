@@ -1,3 +1,5 @@
+> **Archived 2026-11-15.** Step tracker for the 2026-09-13 documentation consolidation; every step is checked. Nothing live remains here. Index of live docs: `DOCS/README.md`.
+
 # GeekSuite — The Steps
 
 Execution step tracker for the Suite-level documentation consolidation and repository hygiene pass.

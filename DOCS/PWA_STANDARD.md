@@ -2,6 +2,19 @@
 
 > **The one rule**: Auth endpoints must NEVER be cached by a service worker.
 
+> **Re-checked 2026-11-15 against every app's `vite.config.js` and `public/`.** All eleven
+> frontends ship a service worker and a manifest, and `tools/pwa-audit.mjs` (the `pwa-audit`
+> job in `ci.yml`) enforces this standard on each built app — when this page and the audit
+> disagree, the audit wins. Who uses which flavor today:
+>
+> | Flavor | Apps |
+> |---|---|
+> | A — VitePWA/Workbox `generateSW` | basegeek, todogeek, fitnessgeek, notegeek, gamegeek, thinggeek, newsgeek |
+> | B — hand-rolled `public/sw.js` | bookgeek, flockgeek, storygeek, startgeek |
+>
+> The per-app tables further down (§1a and "Current Status") are 2026-09-05 snapshots of
+> eight apps and are kept as the record of that pass, not as today's state.
+
 ---
 
 ## Why this matters
@@ -92,8 +105,8 @@ there is nothing to stamp.
 | startgeek | B (hand-rolled) | ✅ done 2026-09-05 (Q54) — built with npm/Vite standalone, same plugin shape in its own `vite.config.js` |
 | notegeek | A (VitePWA/Workbox) | ✅ already fine — `generateSW`'s revisioned manifest + `cleanupOutdatedCaches` reinstall on every deploy natively; no hand-rolled SW exists to fix |
 | fitnessgeek | A (VitePWA/Workbox) | ✅ already fine — same as notegeek, via the plugin |
-| todogeek | A (VitePWA/Workbox) | ⏳ pending R90 — another agent owns `apps/todogeek/frontend/vite.config.js` as of 2026-09-05; likely already fine like notegeek/fitnessgeek (same flavor) but not yet re-verified under R90 |
-| basegeek | none | n/a — ships no service worker |
+| todogeek | A (VitePWA/Workbox) | ✅ (checked 2026-11-15: `cleanupOutdatedCaches`, `clientsClaim`, `skipWaiting` all set in its `vite.config.js`) — was: ⏳ pending R90 — another agent owns `apps/todogeek/frontend/vite.config.js` as of 2026-09-05; likely already fine like notegeek/fitnessgeek (same flavor) but not yet re-verified under R90 |
+| basegeek | none on 2026-09-05; A (VitePWA, `registerType: 'autoUpdate'`) today | n/a then — it shipped no service worker |
 
 **A StaleWhileRevalidate rule for JS/CSS/fonts must refuse `text/html`.**
 Precaching does not cover everything — hashed font files (`.woff`/`.woff2` are
@@ -172,14 +185,14 @@ including the async ones nobody downloads on the first visit).
 
 | App | Routes lazy | Vendor chunks (all eager) | First load raw / gzip | Largest chunk | New hashed chunks after a deploy |
 |-----|-------------|---------------------------|------------------------|---------------|-----------------------------------|
-| flockgeek | ✅ 2026-09-05 — 8 of 10 (`HomePage` + `LoginPage` stay eager, see `apps/flockgeek/CONTEXT.md` "Bundle") | react-vendor / mui / apollo / motion; no async vendor group (no chart, date or export library in the app) | 1011 kB / 312 kB (was 1072 kB / 326 kB, one 1060 kB chunk) | 313 kB `mui` (was 1060 kB) | ✅ precached — hand-rolled `public/sw.js` has no build step, so `swPrecache()` in its `vite.config.js` stamps the hashed `.js`/`.css` list + a content-hash `BUILD_ID` into `dist/sw.js` (the flavour-B equivalent of `generateSW`'s `globPatterns`) |
+| flockgeek | ✅ 2026-09-05 — 8 of 10 (`HomePage` + `LoginPage` stay eager, see `apps/flockgeek/DOCS/CONTEXT.md` "Bundle") | react-vendor / mui / apollo / motion; no async vendor group (no chart, date or export library in the app) | 1011 kB / 312 kB (was 1072 kB / 326 kB, one 1060 kB chunk) | 313 kB `mui` (was 1060 kB) | ✅ precached — hand-rolled `public/sw.js` has no build step, so `swPrecache()` in its `vite.config.js` stamps the hashed `.js`/`.css` list + a content-hash `BUILD_ID` into `dist/sw.js` (the flavour-B equivalent of `generateSW`'s `globPatterns`) |
 | todogeek | ✅ 2026-09-05 — all 12 pages, including `LoginPage`/`RegisterPage`; fallback is the app's own `SkeletonLoader` parchment shimmer, not a spinner (see `apps/todogeek/DOCS/CONTEXT.md` "Bundle") | react-vendor / apollo / motion / date-fns eager, `markdown` (react-markdown + the whole remark/micromark tail) async behind the lazy TemplatePreview; **deliberately no `mui` group** — measured three ways in `apps/todogeek/frontend/vite.config.js`, and here a group costs 77 kB of first load rather than saving it (fitnessgeek's is load-bearing only because of its chart vendors) | 1010 kB / 310 kB (was 1606 kB / 480 kB, one single 1605 kB chunk — no `manualChunks`, no route splitting at all) | 449 kB entry `index` (was 1605 kB); nothing over 500 kB, build no longer warns | ✅ precached — `generateSW`'s default `globPatterns`; verified after the split: 44 hashed `.js`/`.css` on disk, all 44 in the SW's 47-entry manifest (+ `index.html`, `offline.html`, `favicon.svg`). Precache-only, no runtime asset rule, so there is no cache for a `text/html` response to poison; an unknown hashed chunk falls straight through to the network, where the backend's extname-404 guard answers 404 |
 
 ### 2. Two SW Flavors in the Suite
 
 #### A. VitePWA + Workbox (preferred for new apps)
 
-Used by: fitnessGeek, NoteGeek, TodoGeek
+Used by: basegeek, TodoGeek, fitnessGeek, NoteGeek, GameGeek, ThingGeek, NewsGeek
 
 Config lives in `vite.config.js` under `VitePWA({ workbox: { runtimeCaching: [...] } })`.
 
@@ -376,11 +389,13 @@ needs `workbox-recipes`' `offlineFallback()` / a custom `setCatchHandler`, which
   SW reaches `activated`, an online `/api/me` fetch hits the network (401, not a cached
   200) and is absent from the `storygeek-cache-v1` cache, and going offline and
   navigating renders the offline page.
-- **todogeek, notegeek, fitnessgeek**: `manifest.json` icons still combine
+- *(Resolved — see §3, revised 2026-09-27: every app now has a dedicated maskable icon, no manifest in the tree combines `"any maskable"` (checked 2026-11-15), and the audit fails a build that does.)*
+  **todogeek, notegeek, fitnessgeek**: `manifest.json` icons still combine
   `purpose: "any maskable"` on a single non-safe-zone SVG/PNG (no dedicated maskable
   icon exists). Left as-is — do not invent icons — but a real maskable icon (safe zone
   padding) is still missing suite-wide.
-- **basegeek**: no manifest exists; PWA remains out of scope by design (gateway/auth
+- *(No longer true: basegeek's `vite.config.js` now carries a VitePWA block with its own manifest, and it is in the audit's app list.)*
+  **basegeek**: no manifest exists; PWA remains out of scope by design (gateway/auth
   portal, per the standard's original call).
 
 ---
@@ -392,7 +407,7 @@ needs `workbox-recipes`' `offlineFallback()` / a custom `setCatchHandler`, which
 3. **Never cache a `text/html` response for a script/style/font request** — see §1a; a SPA fallback that does not 404 asset paths will hand you one
 4. **After any code-splitting change, re-check that every hashed chunk is precached** — §1a
 5. **Always bump the cache version** (`v1` → `v2`) when changing SW logic so old caches get cleaned
-6. **Always use `skipWaiting()` + `clients.claim()`** so new SWs activate immediately
+6. **Always use `skipWaiting()` + `clients.claim()`** so new SWs activate immediately. One deliberate exception: fitnessgeek sets `registerType: 'prompt'` and `skipWaiting: false`, so an update waits instead of reloading under an entry in progress
 7. **Test auth flow after every SW change**: login → verify `/api/me` → logout → verify `/api/me` returns 401 (not cached 200)
 8. **The hand-rolled registration snippet must capture `hadController` before calling `register()`, and the `controllerchange` handler must bail when it was `false`.** `sw.js` calls `skipWaiting()` + `clients.claim()`, so a first-ever visit takes control of the page that installed it and fires `controllerchange` too — reloading a page the visitor was already reading, on the very install that should be silent. Only a real update (a controller already existed) is worth the reload. Fixed 2026-09-05 (going-over) in `apps/bookgeek/web/index.html`, `apps/storygeek/frontend/index.html` and `apps/startgeek/index.html`. `apps/flockgeek/frontend/src/main.jsx` registers the same way (not `index.html` — its `sw.js` registration lives in the entry script) and carries the identical bug; not fixed here — out of this pass's file scope, flagged for the owning agent. VitePWA/Workbox apps (Flavor A: notegeek, fitnessgeek, todogeek) don't carry this snippet at all and are unaffected. basegeek ships no service worker.
 9. **Render `<GeekUpdateIndicator />` (`@geeksuite/ui`) once near the app root, inside the MUI ThemeProvider.** Rows 5 and 6 together mean the first open after a deploy always draws the OLD build from cache, then reloads into the new one once the new worker takes over — measured 2026-10-04 on GameGeek: old build at 0.1 s, reload at ~5.6 s, the library drawn twice. Chef chose to keep both rules (network-first navigation and "apply on next open" were both declined), so the reload stays and the indicator says "Updating to the latest version…" while it downloads. It shows only over an existing controller (never on a first install), hides if the install goes `redundant`, and reloads nothing itself. Adopted by bookgeek and gamegeek (2026-10-04); the other PWAs have the same double draw and don't render it yet (`DOCS/SUITE_TODO.md`).

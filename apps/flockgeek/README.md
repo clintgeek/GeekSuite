@@ -1,49 +1,33 @@
-# FlockGeek Starter Kit
+# FlockGeek
 
-FlockGeek is a starter application for managing small flocks. It includes a React + MUI frontend, an Express API skeleton, PWA wiring, and Docker tooling so you can get a working flock-management UI and API running quickly.
+Flock management for a small poultry flock: birds, eggs, harvests. Part of GeekSuite.
 
-## Stack
+- **Frontend** (`frontend/`): React 18 + Vite + MUI 5, an installed PWA.
+- **Backend** (`backend/`): a thin Express server — auth proxying to basegeek, a status
+  route, and the built frontend. It has no models and no CRUD of its own.
+- **Data**: every read and write goes through basegeek's GraphQL gateway
+  (`apps/basegeek/packages/api/src/graphql/flockgeek/`).
+- **Auth**: basegeek SSO cookies; there is no local login.
 
-- React 18 + Vite (JavaScript)
-- MUI v5 theming aligned with the GeekSuite Unified Design System
-- Express API with placeholder auth flow and health route
-- Shared spacing, typography, and layout primitives
-- PWA manifest + service worker registration
-- Docker setup for frontend and backend
-- `docker-compose.yml` orchestrating local dev
+## Run it
 
-## Getting Started
+This is a pnpm workspace member — install once from the repo root with `pnpm install`.
 
 ```bash
-# One-shot bootstrap from repo root
-npm install
-
-# Start both servers in watch mode (backend via nodemon, frontend via Vite)
-npm start
-
-# Manual installs if you prefer separate steps
-npm install --prefix frontend
-npm install --prefix backend
-
-# Docker option
-docker compose up --build
+pnpm --filter ./apps/flockgeek/backend dev     # nodemon; PORT defaults to 4094
+pnpm --filter ./apps/flockgeek/frontend dev    # Vite, http://localhost:5173
+pnpm --filter ./apps/flockgeek/backend test    # jest
+pnpm --filter ./apps/flockgeek/frontend test   # vitest
 ```
 
-Frontend is available at http://localhost:5173 and proxies API calls to http://localhost:4000. When using the root `npm start`, Concurrently keeps both processes running in a single terminal.
+## Deploy
 
-- `backend/src/server.js` boots Express with CORS, logging, and versioned routes.
-- `backend/src/routes/auth.js` + controllers provide an auth skeleton ready for integration with real data sources.
-- `backend/src/middleware/authMiddleware.js` shows how to guard routes once tokens are issued.
+A push to `main` builds `ghcr.io/clintgeek/flockgeek:latest` and Watchtower rolls the
+container (port 5001). Procedure, rollback and landmines: `DOCS/RUNBOOK.md` and
+`DOCS/CICD.md` at the repo root.
 
-## Docker
+## Docs
 
-- `docker-compose.yml` starts both services with shared `.env` overrides.
-- Individual `Dockerfile`s live in `frontend/` and `backend/` folders.
-
-## Extending
-
-- Replace mock logic in `backend/src/controllers/authController.js` with production-ready services.
-- Expand `frontend/src/pages` with real screens, reusing layout primitives.
-- Add persistent storage (Postgres, Mongo, etc.) by extending `docker-compose.yml`.
-
-Refer to the design system in `DOCS/GeekSuite_Unified_Design_System.md` for detailed styling guidance.
+- `DOCS/CONTEXT.md` — how this app actually works, and its dated going-over notes.
+- `DOCS/ARCHIVE/` — the migration-era notes and the old starter-kit README.
+- `archive/` — an older standalone copy of the app's code; not built, not deployed.

@@ -11,7 +11,7 @@ basegeek is the central auth authority for all GeekSuite apps. Every app validat
 | Access token (JWT) | 1 hour | `geek_token` cookie + JSON response body |
 | Refresh token (JWT with `jti` + `family`) | 30 days | `geek_refresh_token` cookie + JSON response body |
 
-Cookies are set for `SSO_COOKIE_DOMAIN` (e.g. `.clintgeek.com`) so all subdomains share the session. Cookies are **not** HttpOnly — JavaScript must be able to read them during the cookie-first rollout. See `SSO_IMPLEMENTATION.md` for the full cookie spec.
+Cookies are set for `SSO_COOKIE_DOMAIN` (e.g. `.clintgeek.com`) so all subdomains share the session. Cookies **are** HttpOnly now (`routes/auth.js` sets `httpOnly: true` on both; only the `geek_csrf` cookie is readable by design). The rest of this sentence is the pre-rollout state, kept for context: cookies were **not** HttpOnly — JavaScript must be able to read them during the cookie-first rollout. See `SSO_IMPLEMENTATION.md` for the full cookie spec.
 
 ---
 
@@ -179,6 +179,6 @@ Role and admin-gate coverage lives in two suites:
 ## Further reading
 
 - `DOCS/SSO_IMPLEMENTATION.md` — cookie spec, cross-subdomain SSO details
-- `DOCS/SSO_CLIENT_MIGRATION_PLAYBOOK.md` — how client apps integrate with SSO
-- `DOCS/AUTH_HARDENING_2026-04.md` — plan doc for the April 2026 hardening pass (rotation, encryption, tests)
-- `DOCS/CLEANUP_PASS_2026-04.md` — plan doc for the prior critical-fix pass
+- `DOCS/ARCHIVE/SSO_CLIENT_MIGRATION_PLAYBOOK.md` — how client apps integrate with SSO
+- `DOCS/ARCHIVE/AUTH_HARDENING_2026-04.md` — plan doc for the April 2026 hardening pass (rotation, encryption, tests)
+- `DOCS/ARCHIVE/CLEANUP_PASS_2026-04.md` — plan doc for the prior critical-fix pass

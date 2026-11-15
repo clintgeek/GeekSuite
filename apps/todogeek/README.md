@@ -6,6 +6,8 @@ Tasks, habits & lists — a daily-driver todo app. Part of GeekSuite.
 
 ## What todogeek is
 
+> **2026-11-15: this section and "Main features" describe the app before Red Pen (2026-09-29).** Review, Plan, Templates, the command palette and task aging are retired; the app is Today / Upcoming / Done / Search. What it does now: `DOCS/SIMPLE_PLAN.md` ("As built") and `DOCS/CONTEXT.md`.
+
 A daily-driver todo planner built around a daily ritual: Today → Review → Plan. Tasks migrate forward automatically. Aging tasks surface visually (sage → amber → red → plum) to create passive accountability. Templates create batches of tasks from multi-line content.
 
 Not a kanban board. Not a project tracker. A planner you open every morning.
@@ -62,7 +64,7 @@ These go in `apps/todogeek/.env.production` (gitignored). `env_file` is set in `
 
 ## Quick start (dev)
 
-Backend runs on port 5001 in dev (`server/.env.local`). Frontend on 5173 (Vite default).
+Backend runs on port 5001 in dev (`backend/.env.local`). Frontend on 5173 (Vite default).
 
 ```bash
 # Backend
@@ -96,5 +98,5 @@ Compose file: `apps/todogeek/docker-compose.yml`. Container name: `todogeek`.
 
 - [`DOCS/CONTEXT.md`](DOCS/CONTEXT.md) — current architecture, data models, API endpoints, and known issues.
 - [`DOCS/SORTING_RULES.md`](DOCS/SORTING_RULES.md) — task display and sorting rules (floating, past-due, scheduled).
-- [`DOCS/HARDENING_2026-04.md`](DOCS/HARDENING_2026-04.md) — security and operational hardening pass (April 2026): data isolation, CORS, pino logging, graceful shutdown.
+- [`DOCS/ARCHIVE/HARDENING_2026-04.md`](DOCS/ARCHIVE/HARDENING_2026-04.md) — security and operational hardening pass (April 2026): data isolation, CORS, pino logging, graceful shutdown.
 - [`../../DOCS/GEEK_SUITE_DESIGN_LANGUAGE.md`](../../DOCS/GEEK_SUITE_DESIGN_LANGUAGE.md) — suite-wide design system (colors, typography, spacing, components).

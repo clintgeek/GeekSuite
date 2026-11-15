@@ -1,3 +1,5 @@
+> **Archived 2026-11-15.** A 2026-09-05 snapshot; every finding is closed. The live description of the proxy is `packages/api/README_OPENAI_PROXY.md`.
+
 # aiGeek OpenAI-Compatibility Audit
 
 > **Anthropic removed 2026-09-07 (out of credit).** This audit is a snapshot of

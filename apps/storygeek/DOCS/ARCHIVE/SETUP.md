@@ -1,3 +1,5 @@
+> **Archived 2026-11-15.** Pre-aiGeek setup notes (a baseGeek API key, a named primary model, port 9988). Current local setup: `LOCAL_DEV.md`.
+
 # StoryGeek Setup Guide
 
 ## Environment Variables

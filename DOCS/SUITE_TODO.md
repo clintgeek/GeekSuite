@@ -10,12 +10,13 @@ Pull from here when planning the next pass; update as work lands or priorities s
 > Historical work queue tiers from `TODO_ORDER.md` are archived at
 > [`DOCS/ARCHIVE/TODO_ORDER_2026-09.md`](ARCHIVE/TODO_ORDER_2026-09.md).
 > For the append-only scratch-pad of deferred ideas, see [`DOCS/DEFERRED_WORK.md`](DEFERRED_WORK.md).
+> What every other file in this folder is, and whether it is live: [`DOCS/README.md`](README.md).
 
 ---
 
 ## 1. In Flight
 
-- **Suite-wide Documentation & Backlog Consolidation** (Stream 1–4): Establishing canonical Sage session files (`THE_CONTEXT.md`, `THE_PLAN.md`, `THE_STEPS.md`), tracking `GRAPHQL.md`, moving completed sprint docs to `ARCHIVE/`, and updating `README.md`.
+- ~~**Suite-wide Documentation & Backlog Consolidation**~~ — **done 2026-09** (every step checked in `ARCHIVE/THE_STEPS.md`); `THE_PLAN.md` and `THE_STEPS.md` were archived 2026-11-15 and the folder index is `DOCS/README.md`. Was: (Stream 1–4): Establishing canonical Sage session files (`THE_CONTEXT.md`, `THE_PLAN.md`, `THE_STEPS.md`), tracking `GRAPHQL.md`, moving completed sprint docs to `ARCHIVE/`, and updating `README.md`.
 - **Mobile Harness CI Ratchet**: Maintaining 0 findings across **150** scenes in `.github/workflows/mobile-harness.yml`. (Was written as 139; corrected 2026-09-16.)
   - Note, learned 2026-09-16: a scene whose `setup` returns `false` is **skipped, not failed**, so the run still reports PASS. fitnessgeek's scene 11 covered nothing for two days that way. A skipped scene is silent — check the per-scene lines, not just the total.
 - **aiGeek hardening pass (2026-11-06)** — built locally, uncommitted; see `WORK_LOG_2026-11.md`. Left open:
@@ -127,7 +128,7 @@ Pull from here when planning the next pass; update as work lands or priorities s
   - **An undone medication delete comes back under a new id**, so that day's ticks for it
     are lost.
 - **Follow-ups from the FitnessGeek UX build (2026-10-17/18)**, see
-  `apps/fitnessgeek/DOCS/UX_REVIEW_2026-10-17.md`:
+  `apps/fitnessgeek/DOCS/ARCHIVE/UX_REVIEW_2026-10-17.md`:
   - **SpO2 surfaces** (Activity, the Health dashboard sleep tab with its sleep-apnea alert, the
     Settings toggle) still exist. That's against Chef's stance; it's his call.
   - **Garmin pages merge** (Activity plus the Health dashboard into one page with Today / Last
@@ -149,7 +150,7 @@ Pull from here when planning the next pass; update as work lands or priorities s
 - **GraphQL Gateway Consolidation Follow-ups**:
   - Migrate remaining FitnessGeek REST reads (food search / barcode / favorites / recent in `foodService.js`) to gateway queries.
   - Retire FlockGeek caller-less mounted REST layer in `routes/api.js` (Chef item Q22).
-  - Delete unused StoryGeek gateway schema in `apps/basegeek/packages/api/src/graphql/storygeek` (Chef item Q38).
+  - ~~Delete unused StoryGeek gateway schema in `apps/basegeek/packages/api/src/graphql/storygeek` (Chef item Q38).~~ Done — the directory no longer exists (checked 2026-11-15).
 - **Mongo Connection Topology (basegeek)**:
   - Investigated: four connection pools serve four distinct databases (`userGeek`, `basegeek`, `aiGeek`, app data). Deferred unless connection limits become a bottleneck. Avoid calling `getAppConnection('usergeek')` which would spawn a redundant pool.
 
@@ -181,7 +182,9 @@ Wanted, not built on the 2026-09-22 overnight run:
   `CONTEXT.md` fixes, and the `@geeksuite/collection` extraction (BookGeek and GameGeek
   consolidated onto it together, since GameGeek is shipping tonight with its own copies of
   the library components to move fast). Step-by-step, verified per step:
-  [`DOCS/BOOKGEEK_PREP_PLAN.md`](BOOKGEEK_PREP_PLAN.md). **Proposal, not started.**
+  [`DOCS/ARCHIVE/BOOKGEEK_PREP_PLAN.md`](ARCHIVE/BOOKGEEK_PREP_PLAN.md). ~~**Proposal, not started.**~~
+  **Done 2026-09-25/26** under the plan that replaced it, [`DOCS/BOOKGEEK_CLEANUP_PLAN.md`](BOOKGEEK_CLEANUP_PLAN.md)
+  (Phases A–C, including the `@geeksuite/collection` extraction).
 - **GameGeek phases G2–G6** — `GamePlayer` split/sessions/Journal, Steam+CSV imports, Tonight
   rules engine + Stats, free-walk AI (cuttable), backlog goal/wishlist/loans/scan-to-add/MCP.
   Full phase table and done-when criteria: [`DOCS/GameGeekPlan.md`](GameGeekPlan.md) §11.
@@ -237,7 +240,7 @@ Wanted, not built on the 2026-09-22 overnight run:
   ~~The Steam library import and Paste-a-list are **to be removed**, right after the
   tags/filters work lands.~~ **Done 2026-09-25.** Single "Add game" stays. Heroic, GOG Galaxy, Epic and Amazon
   importers are **not planned**
-  ([`DOCS/GAMEGEEK_STOREFRONT_IMPORTS.md`](GAMEGEEK_STOREFRONT_IMPORTS.md) is research
+  ([`DOCS/ARCHIVE/GAMEGEEK_STOREFRONT_IMPORTS.md`](ARCHIVE/GAMEGEEK_STOREFRONT_IMPORTS.md) is research
   only now).
 
 ### ThingGeek — phase 2 (`DOCS/THINGGEEK_PLAN.md`)
@@ -262,8 +265,8 @@ both are enabled there but not deployed.
 
 ### S Pen ideas, parked (Chef, 2026-09-27)
 
-The eraser button and handwriting-to-Markdown are being built
-(`apps/notegeek/DOCS/HANDWRITING.md`). Parked, both "awesome and will work no matter what":
+The eraser button and handwriting-to-Markdown are built (`apps/notegeek/DOCS/HANDWRITING.md`,
+"As built (2026-09-27)"; this line said "being built" until 2026-11-15). Parked, both "awesome and will work no matter what":
 - **ThingGeek photo markup:** circle the serial plate, or scribble on a damage photo. Chef
   isn't using ThingGeek yet.
 - **A handwritten daily page in TodoGeek.** Waits until TodoGeek has been torn apart and
@@ -297,6 +300,13 @@ It's parked because TodoGeek has no solid tag view to build on yet. What already
 - **Prerequisite:** a real TodoGeek tag view (a tag page or filter screen) before cross-app
   sections have a home there.
 
+### BookGeek — remove the legacy per-reader fields from `Book`
+
+Per-reader shelves shipped 2026-10-13 (`apps/bookgeek/DOCS/PER_READER_SHELVES_PLAN.md` §5: "remove
+later, after a while live"). `packages/schemas/bookgeek/book.js` still declares `shelf`, `rating`,
+`readingProgress` and `myTags` on `Book` (checked 2026-11-15). Deprecate before removing — see the
+stale-bundle rule.
+
 ### BookGeek — audiobooks?
 
 Chef, 2026-09-26: "I have audiobooks but I never thought to manage them in bookgeek and I
@@ -309,14 +319,16 @@ whether BookGeek should hold audiobooks.
 **Next up after ThingGeek** (Chef, 2026-09-25), built together with Chef while he's awake,
 not overnight.
 
-Proposed 2026-09-22: a `/mcp` route in basegeek so ChatGPT / Claude clients can read suite
-data through curated, read-only tools. Blocked on Chef's three answers in the plan's §6
-(ChatGPT → OAuth; health data in or out; read-only v1), then a spec via `spec-builder`.
+**Parked 2026-10-02.** Chef answered the plan's questions (its §0), Stage 1 was specced
+(`DOCS/MCP_SPEC.md`) and built on branch `mcp-parked`, and it was not merged; only the catalog
+vectors shipped, behind `DOCS/WHAT_NEXT_SPEC.md`. Was (2026-09-22): a `/mcp` route in basegeek
+so ChatGPT / Claude clients can read suite data through curated, read-only tools.
 
 ### TodoGeek — remaining from `DOCS/TODOGEEK_REVIEW_2026-09.md`
 
 - **2026-11-15 review:** the prioritised plan for this app (phone, tablet, desktop) is
-  `DOCS/NOTEGEEK_TODOGEEK_REVIEW_2026-11.md`. Nothing in it is built yet.
+  `DOCS/NOTEGEEK_TODOGEEK_REVIEW_2026-11.md`. Wave 1 of it is built locally and not yet
+  deployed (2026-11-15); the rest is not built.
 
 All of §1 and §2 shipped 2026-09-20/21. What is left, in the report's own
 recommended order:
@@ -369,7 +381,7 @@ the app was down over its due time, should it arrive late or be skipped?
   wrong; fixing that exposed ten more bad numbers downstream, all fixed. The
   dashboard now matches Garmin's own summary to the minute on every night
   checked. Full account in
-  [`FITNESSGEEK_HEALTH_DASHBOARD_FINDINGS.md`](./FITNESSGEEK_HEALTH_DASHBOARD_FINDINGS.md).
+  [`ARCHIVE/FITNESSGEEK_HEALTH_DASHBOARD_FINDINGS.md`](./ARCHIVE/FITNESSGEEK_HEALTH_DASHBOARD_FINDINGS.md).
 - **Still open from that work:**
   - A real nocturnal HR dip — sleeping HR against waking-hours HR from
     `HeartRateIntraday`. The old one compared a stage against a time of night
@@ -390,7 +402,8 @@ the app was down over its due time, should it arrive late or be skipped?
 ### NoteGeek
 
 - **2026-11-15 review:** the prioritised plan for this app (phone, tablet, desktop) is
-  `DOCS/NOTEGEEK_TODOGEEK_REVIEW_2026-11.md`. Nothing in it is built yet.
+  `DOCS/NOTEGEEK_TODOGEEK_REVIEW_2026-11.md`. Wave 1 of it is built locally and not yet
+  deployed (2026-11-15); the rest is not built.
 
 - ~~**No undo for anything.**~~ — **done 2026-09-21.** Every note now carries
   version history (50 per note), and Compose, plain edits and restores are all
@@ -447,7 +460,7 @@ the app was down over its due time, should it arrive late or be skipped?
   Remaining there: the search ranker's `chosenForQuery` pin is still unwired (the describe path
   has its own history reuse, so this only sharpens the fallback).
 
-- **NoteGeek `getTagHierarchy` Intermittent 500**:
+- ~~**NoteGeek `getTagHierarchy` Intermittent 500**~~ — **obsolete, checked 2026-11-15:** no `getTagHierarchy` exists anywhere in the tree any more, and the test file named below is gone too (NoteGeek's notes moved to the gateway). Was:
   - `GET /api/notes/tags` sets `children: null` for a shallow tag (`work`) and then indexes into it when a deeper tag (`work/project1`) arrives later. Mongo return order is non-deterministic.
   - Fix: Build the hierarchy tree with `children: {}` consistently, or sort tags by depth before building tree.
   - Test currently skipped: `apps/notegeek/backend/__tests__/controllers/notes.test.js`.
@@ -515,7 +528,7 @@ the app was down over its due time, should it arrive late or be skipped?
   both need this before a third user can safely exist; FitnessGeek's app-local household
   becomes a thin layer over it. See that doc's phased rollout (H0–H4).
 - ~~**Registration gate**~~ — **shipped 2026-09-25** (`REGISTRATION_MODE`, default closed; see §2). This entry said "awaiting Chef's call" until 2026-10-06.
-- **BookGeek prep** — `DOCS/BOOKGEEK_PREP_PLAN.md`. Proposal, not started. The deletion pass
+- ~~**BookGeek prep**~~ — **done 2026-09-25/26** as `DOCS/BOOKGEEK_CLEANUP_PLAN.md` Phases A–C (the prep plan is in `DOCS/ARCHIVE/BOOKGEEK_PREP_PLAN.md`). Was: Proposal, not started. The deletion pass
   (dead REST CRUD in `apps/bookgeek/api/src/server.js`, dead models, stale `CONTEXT.md`) plus
   the `@geeksuite/collection` extraction. Sequencing updated 2026-09-24: GameGeek is shipping
   tonight with its own local copies of BookGeek-modelled components, so the extraction now
@@ -525,7 +538,7 @@ the app was down over its due time, should it arrive late or be skipped?
   (Steam + CSV imports), G4 (Tonight + Stats + Glance), G5 (free-walk AI, golden-set entries),
   G6 (backlog goal, wishlist, loans, scan-to-add, MCP tools). Each phase's done-when is in the
   plan's table; G5 is explicitly cuttable if rules-based Tonight feels good without it.
-- ~~**GameGeek storefront file importer**~~ — **superseded 2026-09-25**: Chef's call is Playnite-only imports (no per-store importers; Steam/IGDB/RAWG are metadata only). `DOCS/GAMEGEEK_STOREFRONT_IMPORTS.md` stays as research.
+- ~~**GameGeek storefront file importer**~~ — **superseded 2026-09-25**: Chef's call is Playnite-only imports (no per-store importers; Steam/IGDB/RAWG are metadata only). `DOCS/ARCHIVE/GAMEGEEK_STOREFRONT_IMPORTS.md` stays as research.
 
 ## 9. From the memory audit, 2026-09-24
 

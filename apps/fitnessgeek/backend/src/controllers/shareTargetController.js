@@ -12,7 +12,7 @@
 // `@geeksuite/auth`'s axios interceptor attaches that header to every
 // mutation this app's own JS makes regardless, so a request built by the
 // app is ready for either control, today or after `CSRF_TOKEN=enforce`
-// ships suite-wide (DOCS/THE_PLAN.md §2.1). A share-sheet POST is neither:
+// ships suite-wide (DOCS/SUITE_TODO.md §2). A share-sheet POST is neither:
 // it is not this app's JS, so it carries no `X-CSRF-Token`, and as a
 // same-origin top-level OS-initiated navigation it may or may not carry an
 // `Origin` header depending on the browser — not something to build a

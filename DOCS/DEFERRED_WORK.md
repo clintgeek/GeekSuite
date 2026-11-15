@@ -11,6 +11,32 @@ decided against.
 
 ---
 
+## Status check, 2026-11-15
+
+Each entry below was checked against the tree. The entries themselves are left as written.
+
+**Done — no longer deferred:**
+- HttpOnly cookies (`routes/auth.js` sets `httpOnly: true` on the access and refresh cookies; see `SSO_OVERVIEW.md`).
+- CSRF: the origin guard (`csrfGuard`) is on `main` in every backend, and the double-submit token is built and running in `report` mode. The only step left is the `enforce` flip — `SUITE_TODO.md` §2.
+- Garmin password encrypted at rest (struck below; the production backfill is still Chef's call, `SUITE_TODO.md` §4).
+- Circuit breakers in fitnessgeek (`apps/fitnessgeek/backend/src/lib/breakers.js`).
+- basegeek AI response cache TTL + LRU (`services/aiService.js`, `AI_CACHE_TTL_MS`).
+- `/api/health` reports dependency status (`lib/healthCheck.js`, wired in `server.js`).
+- Admin gate on `GET /api/users` (`routes/user.js`, `requireAdmin`).
+- "Apps still to migrate": todogeek and notegeek both live under `apps/`.
+- "Apps still to harden": all backends shut down through `installShutdownHooks` (2026-10-06, `9725bb97`).
+- bookgeek format conversion: `ebook-convert` is wired (`apps/bookgeek/api/src`).
+
+**Still open:**
+- geekLock sidecar adoption.
+- Input validation with Zod (also `SUITE_TODO.md` §6).
+- Mongo connection duplication in basegeek (`models/user.js` still calls `createConnection`; `SUITE_TODO.md` §4 records it as investigated and deferred).
+- Hardcoded dev/LAN origins in the CORS fallbacks.
+- `appPreferences` Map vs Object drift — not re-checked.
+- storygeek's dark dice tones — not re-checked.
+
+---
+
 ## Security work spun off from basegeek-auth-hardening
 
 These were explicitly carved out of the auth hardening branch because

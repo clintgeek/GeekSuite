@@ -13,11 +13,11 @@ Compiled 2026-09-05 from the repo (`DOCS/*.md`, `DEPLOY.md`, `STATUS.md`, every
 disagree with what the box actually runs, both are stated and the disagreement is flagged.
 
 **A live multi-agent work session was in flight while this was written** (see
-`DOCS/BURN_QUEUE.md`) — the working tree had ~20 modified files and several new, uncommitted
+`DOCS/ARCHIVE/BURN_QUEUE.md`) — the working tree had ~20 modified files and several new, uncommitted
 packages (`packages/logger`, `packages/schemas`, `packages/utils`, `tools/`). **Update
 2026-09-05, later the same session:** all four landed and are committed (waves 1–7,
-`DOCS/BURN_QUEUE.md`); the specific "uncommitted package" caveats below are stale. The general
-warning stands, though — the burn is still running (`DOCS/BURN_QUEUE.md` "Running") and the tree
+`DOCS/ARCHIVE/BURN_QUEUE.md`); the specific "uncommitted package" caveats below are stale. The general
+warning stands, though — the burn is still running (`DOCS/ARCHIVE/BURN_QUEUE.md` "Running") and the tree
 may be dirty again by the time you read this. Test counts here are the last CI/STATUS-verified
 numbers; a local run against a dirty tree may differ. Run `git status --short` before trusting
 any number in this doc as current.
@@ -199,7 +199,7 @@ from CI. `docker/watchtower/` mirrors the live config in-repo.
 - **Landmine 2 — basegeek publishes last and lands one scan later.** Every push rebuilds and
   republishes all 8 images in the same `release.yml` matrix run, but basegeek's image finishes
   ~1 minute after the rest and so lands on the *next* Watchtower poll, not the same one
-  (`DOCS/BURN_QUEUE.md`). After a push, expect the other 7 to update on one poll and basegeek on
+  (`DOCS/ARCHIVE/BURN_QUEUE.md`). After a push, expect the other 7 to update on one poll and basegeek on
   the poll after. A docs-only-looking push that "did nothing" to basegeek may just not have
   reached its scan yet.
 - **Everything rebuilds on every push, whether it touched that app or not** — a
@@ -362,7 +362,7 @@ longer the primary deploy path (`DEPLOY.md`) — and using it re-triggers landmi
 **The `resolve.dedupe` requirement** (all six MUI-consuming apps: todogeek, fitnessgeek,
 flockgeek, notegeek, bookgeek, basegeek's own `packages/ui`): `packages/ui` peers on
 `@mui/material ^5`, and because apps alias `@geeksuite/ui` to source, pnpm installs a private
-MUI 5 alongside each app's MUI 7 — two separate theme contexts, so the shell frame renders
+MUI 5 alongside the app's own copy (apps were on MUI 7 when this was written; every app's `package.json` is on MUI 5 as of 2026-11-15, and the dedupe is still required) — two separate theme contexts, so the shell frame renders
 MUI-default light regardless of the app's `ThemeProvider`. Symptom: dark mode shows white
 panes under themed text; light mode looks fine by coincidence. Fix is the `dedupe` array
 above in each app's `vite.config.js`.
@@ -371,7 +371,7 @@ above in each app's `vite.config.js`.
 
 ## 8. The mobile harness
 
-**As of 2026-09-05 this is in the repo and CI-enforcing** (M6, `DOCS/MOBILE_UI_PLAN.md` §5) —
+**As of 2026-09-05 this is in the repo and CI-enforcing** (M6, `DOCS/ARCHIVE/MOBILE_UI_PLAN.md` §5) —
 the scratch Playwright script from the M0–M5 passes is now `tools/mobile-harness`
 (`@geeksuite/mobile-harness`): shared iPhone-14 dark/light + 1280×900 contexts, fixture/route
 plumbing per app, and a probe that fails on any tap target < 44px, readable text < 12px,
@@ -425,7 +425,7 @@ some of these may differ once the in-flight work lands).
 | Package | Command | Result at time of writing |
 |---|---|---|
 | `packages/ui` | `npx vitest run` | **340 passed**, 8 files — matches `STATUS.md` |
-| `apps/basegeek/packages/api` | `node --experimental-vm-modules node_modules/jest/bin/jest.js --forceExit` (= `npm test`). **No `--runInBand`** (2026-11-06): in band the heap grows ~25 MB per file and 179 files hit Node's ~4 GB ceiling; without it `jest.config.js`'s `workerIdleMemoryLimit` recycles the one worker, peak 1.3 GB, 205 s. 3626 tests / 179 suites as of 2026-11-06. | The `Cannot find module '@geeksuite/logger'` failure seen earlier this pass was a transient burn-session artifact (an uncommitted `packages/logger` not yet linked); resolved once it landed (`61997ed`) and the workspace was reinstalled. The suite has grown fast the same day as more gateway modules gained zod validation and shared schemas — `DOCS/BURN_QUEUE.md` cites **1082** for the api suite as of the R70 stream (09-05). Re-run `pnpm install` at the repo root if a local run disagrees, and treat any single number here as a snapshot, not a contract. |
+| `apps/basegeek/packages/api` | `node --experimental-vm-modules node_modules/jest/bin/jest.js --forceExit` (= `npm test`). **No `--runInBand`** (2026-11-06): in band the heap grows ~25 MB per file and 179 files hit Node's ~4 GB ceiling; without it `jest.config.js`'s `workerIdleMemoryLimit` recycles the one worker, peak 1.3 GB, 205 s. 3626 tests / 179 suites as of 2026-11-06. | The `Cannot find module '@geeksuite/logger'` failure seen earlier this pass was a transient burn-session artifact (an uncommitted `packages/logger` not yet linked); resolved once it landed (`61997ed`) and the workspace was reinstalled. The suite has grown fast the same day as more gateway modules gained zod validation and shared schemas — `DOCS/ARCHIVE/BURN_QUEUE.md` cites **1082** for the api suite as of the R70 stream (09-05). Re-run `pnpm install` at the repo root if a local run disagrees, and treat any single number here as a snapshot, not a contract. |
 | `apps/bookgeek/api` | `npm test` (`node --test test/*.test.js`) | **78 passed**, 2 suites |
 | `apps/todogeek/frontend` | `npx vitest run` | **64 passed**, 3 files |
 | `apps/todogeek/backend`, `apps/fitnessgeek/backend`, `apps/flockgeek/backend`, `apps/storygeek/backend`, `apps/notegeek/backend` | `pnpm test` (jest, mongodb-memory-server) — this is CI's `test-backends` matrix | fitnessgeek: **45 passed** (one run showed 1 flaky failure in `auth.test.js` on a `responseTime` assertion under load, reran clean — treat as flaky, not broken); flockgeek: **57 passed**, 5 suites; storygeek: `npm test` runs both `test:node` (**65 passed**) and `test:jest` (**41 passed**) = 106 total; notegeek backend: **96 passed / 9 skipped**, 3 of 10 suites skipped |
@@ -584,14 +584,15 @@ A dedicated pass over `apps/*/Dockerfile`, `apps/*/docker-compose.yml`, `apps/*/
 
 ## Where to look next
 
-- `DOCS/MOBILE_UI_PLAN.md` — the Pocket Pass mobile pass, per-app findings, and the shared
+- `DOCS/ARCHIVE/MOBILE_UI_PLAN.md` — the Pocket Pass mobile pass, per-app findings, and the shared
   `packages/ui` grammar. M6 guardrails (harness into the repo) landed 2026-09-05 — see §8 above.
-- `DOCS/THE_UI_UNIFICATION_PLAN.md` — suite-wide design/component unification plan.
-- `DOCS/AI_SEARCH_PLAN.md` — StartGeek Ask / `glanceAsk` design.
-- `DOCS/TODO_ORDER.md` — the single cross-cutting prioritized work queue; consult before
-  `SUITE_TODO.md`.
-- `DOCS/SUITE_TODO.md` — the detailed backlog `TODO_ORDER.md` sequences.
-- `DOCS/BURN_QUEUE.md` — if the tree is dirty and you don't know why, this is the live
+- `DOCS/ARCHIVE/THE_UI_UNIFICATION_PLAN.md` — suite-wide design/component unification plan.
+- `DOCS/ARCHIVE/AI_SEARCH_PLAN.md` — StartGeek Ask / `glanceAsk` design.
+- `DOCS/ARCHIVE/TODO_ORDER_2026-09.md` — the September work queue (history).
+- `DOCS/SUITE_TODO.md` — the live backlog.
+- `DOCS/README.md` — index of every doc in this folder and whether it is live. (The
+  entries in this list were re-pointed at `DOCS/ARCHIVE/` on 2026-11-15; those plans are finished.)
+- `DOCS/ARCHIVE/BURN_QUEUE.md` — if the tree is dirty and you don't know why, this is the live
   multi-stream work log explaining it, plus how to safely resume or commit each stream.
 
 ## 12. aiGeek catalog (the job runs itself; these are the manual override)

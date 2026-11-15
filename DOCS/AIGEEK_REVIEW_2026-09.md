@@ -1,5 +1,7 @@
 # aiGeek — review findings, 2026-09-19
 
+> **Status 2026-11-15:** every finding is done or "won't do" except the two structural splits (§3.1 `aiRoutes.js`, §3.2 `useAIGeek.js` — both files are still that size) and the open question in §5. Kept here because code comments cite §2.
+
 A full read of aiGeek's backend (~13k lines) and director UI (~5k lines), done in
 three parallel passes: routing/catalog, request path, and UI. Read-only; nothing was
 changed during the review.
@@ -200,6 +202,8 @@ the cost is deleting tested, deliberate security behaviour, the trade is bad.
 `/stats` turned out to carry the same shape — a permission-gating test — which is why it
 was investigated rather than deleted. Apply this test to any future deletion here: **before
 removing a route, check what its tests are asserting, not just who calls it.**
+
+*(What follows, down to the next rule, is a leftover copy of the §2 table from before the fixes landed, kept as written. The table at the top of §2 is the current one. — noted 2026-11-15)*
 
 ---|---|---|---|
 | `POST /api/ai/context/reset/:conversationId` | `aiRoutes.js` | Always returns `{success:true, message:'Context reset queued (Phase 2A½ feature)'}` whatever the input. Zero callers in the repo, tests included. **A caller today would believe context was reset when nothing happened.** | open |

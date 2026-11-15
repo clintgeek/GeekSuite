@@ -113,6 +113,8 @@ Stored notes (`type: 'text'`) contain TipTap HTML. NoteGeek strictly sanitizes o
 1. **Frontend**: Rendered markup passes through `frontend/src/utils/sanitizeNoteHtml.js` (DOMPurify).
 2. **Gateway**: Mutations sanitize markdown/HTML on write via `apps/basegeek/packages/api/src/graphql/notegeek/sanitize.js`.
 
+The rule (carried over from the retired `CURSOR-CONTEXT.md`, 2026-11-15): **stored HTML reaches the DOM only through `sanitizeNoteHtml`.** The render layer is the one that has to hold, because rows written before the gateway sanitized are still in the database. There are two `dangerouslySetInnerHTML` sites, both behind it: `NoteViewer.jsx` and `notes/NotePrintView.jsx`. The Markdown renderers are not such a site only because neither loads `rehype-raw`; adding it would make them one. The longer account is in `DOCS/ARCHIVE/CURSOR-CONTEXT.md` (Q63).
+
 ---
 
 ## 4. Frontend Editor Engines

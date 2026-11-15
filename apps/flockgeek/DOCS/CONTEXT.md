@@ -513,6 +513,6 @@ counts are unaffected by this stream.
 
 ## Conventions / notes
 
-- This file and `THE_PLAN.md` are allowed to be rough and updated frequently.
-- When starting a new session on FlockGeek: read this file and `THE_PLAN.md` first.
+- This file is allowed to be rough and updated frequently. (`THE_PLAN.md` was archived to `DOCS/ARCHIVE/THE_PLAN.md`.)
+- When starting a new session on FlockGeek: read this file first.
 - **Server rule:** Sage never starts or stops servers directly. Sage must ask Chef to handle any server start/stop. Deviating from this rule is considered a failure.

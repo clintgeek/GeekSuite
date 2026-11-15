@@ -44,8 +44,9 @@ See `DOCS/LOCAL_AUTH_NOTES.md` for details.
 
 ## Deploy
 
+Normal deploys are a push to `main` (CI → GHCR → Watchtower; root `DOCS/CICD.md`).
 See root [`DEPLOY.md`](../../DEPLOY.md) for the consolidated-in-source-tree
-deployment convention. From the repo root:
+deployment convention. The manual, break-glass path, from the repo root:
 
 ```bash
 ./build.sh fitnessgeek
@@ -122,6 +123,6 @@ See `DOCS/` for deeper topics.
 
 ## Further reading
 
-- [`DOCS/HARDENING_2026-04.md`](DOCS/HARDENING_2026-04.md) — April 2026 hardening pass: boot, shutdown, logging, CORS, axios consolidation
+- [`DOCS/ARCHIVE/HARDENING_2026-04.md`](DOCS/ARCHIVE/HARDENING_2026-04.md) — April 2026 hardening pass: boot, shutdown, logging, CORS, axios consolidation
 - [`DOCS/LOCAL_AUTH_NOTES.md`](DOCS/LOCAL_AUTH_NOTES.md) — How cookie rewriting keeps BaseGeek SSO working on localhost
 - [`DOCS/ARCHIVE/`](DOCS/ARCHIVE/) — Historical design docs: keto mode plan, food lookup plan, upgrade plan, issue plan, docker deployment, theme test guide

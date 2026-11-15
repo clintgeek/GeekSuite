@@ -1,6 +1,6 @@
 # Specification: Compose from several notes, and Archive
 
-Status: approved for build 2026-10-08. Owner decisions are Chef's (§2); design is Sage's (§3–§6) and open
+Status: **built** (approved for build 2026-10-08; `composeNotes`, `archiveNotes`, `restoreNotes` and `archivedNotes` are in the gateway — see CONTEXT.md §14–16). Owner decisions are Chef's (§2); design is Sage's (§3–§6) and open
 to review. Builds on Compose (`apps/basegeek/packages/api/src/graphql/notegeek/compose.js`, CONTEXT.md) — read
 that file's header before touching anything here.
 

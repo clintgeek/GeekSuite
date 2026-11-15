@@ -1,6 +1,6 @@
 # GameGeek — tags and the filter interface
 
-*Written 2026-09-25. Status: building. Chef: "We need to find tags for these. We need a
+*Written 2026-09-25. Status: built and live (the header said "building" until 2026-11-15). Chef: "We need to find tags for these. We need a
 beautiful interface to sort/filter by tag/genre/played/store/most things."*
 
 ## Where we start (measured 2026-09-25, 683 games)

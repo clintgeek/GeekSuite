@@ -6,7 +6,7 @@
 
 ```bash
 # Backend dependencies
-cd StoryGeek/backend
+cd apps/storygeek/backend
 npm install
 
 # Frontend dependencies
@@ -20,16 +20,16 @@ Create `.env` files in both backend and frontend directories:
 
 **Backend (.env):**
 ```bash
-cd StoryGeek/backend
+cd apps/storygeek/backend
 ```
 
 Create `backend/.env`:
 ```env
 NODE_ENV=development
-PORT=5000
+PORT=9977
 DB_URI=mongodb://localhost:27017/storygeek?authSource=admin
 JWT_SECRET=your_jwt_secret_here
-BASEGEEK_URL=http://localhost:9988
+BASEGEEK_URL=http://localhost:8987
 AI_GEEK_API_KEY=bg_...
 ```
 
@@ -40,7 +40,7 @@ own service key, and aiGeek decides which model answers. So there is no
 `STORYGEEK_GM_PROVIDER`, `STORYGEEK_GM_MODEL`, `STORYGEEK_FREE_ONLY`,
 `STORYGEEK_AUX_PROVIDER` or `STORYGEEK_AUX_MODEL` either. Those five were
 removed because a hand-typed model id is a promise that expires the next time
-a vendor retires a slug (`DOCS/AIGEEK_ELEVATION_PLAN.md`, Chef's decision D4).
+a vendor retires a slug (`DOCS/ARCHIVE/AIGEEK_ELEVATION_PLAN.md`, Chef's decision D4).
 
 `AI_GEEK_API_KEY` is minted on the baseGeek host and needs two permissions,
 `ai:call` and `ai:models`:
@@ -60,33 +60,33 @@ whoever is playing.
 
 **Frontend (.env):**
 ```bash
-cd StoryGeek/frontend
+cd apps/storygeek/frontend
 ```
 
 Create `frontend/.env`:
 ```env
-VITE_API_URL=http://localhost:5000
+VITE_API_URL=http://localhost:9977/api   # informational: vite.config.js defines this itself in dev
 ```
 
 ### 3. Start Development Servers
 
 **Terminal 1 - Backend:**
 ```bash
-cd StoryGeek/backend
+cd apps/storygeek/backend
 npm run dev
 ```
-Backend will run on: http://localhost:5000
+Backend will run on: http://localhost:9977
 
 **Terminal 2 - Frontend:**
 ```bash
-cd StoryGeek/frontend
+cd apps/storygeek/frontend
 npm run dev
 ```
-Frontend will run on: http://localhost:3000
+Frontend will run on: http://localhost:5173
 
 ### 4. Access the App
 
-Open your browser to: **http://localhost:3000**
+Open your browser to: **http://localhost:5173**
 
 ## Development Workflow
 

@@ -41,7 +41,7 @@
  * ## Reading the failures
  *
  * When this file was written, 22 cases were marked `it.failing(...)`: FINDINGS,
- * not flakes, each naming a finding id from DOCS/OPENAI_COMPAT_AUDIT.md. Jest
+ * not flakes, each naming a finding id from DOCS/ARCHIVE/OPENAI_COMPAT_AUDIT.md. Jest
  * passes a `failing` test when its body throws and *fails the run* when the
  * body starts passing — so the day someone closed a gap, the suite told them to
  * promote the test to `it`. Green before the fix, green after, red only in
@@ -1696,7 +1696,7 @@ describe('routing aliases', () => {
 //     went with the provider — there is no Anthropic credential, no adapter,
 //     and no reason to serve a second vendor's dialect of a contract this file
 //     already tests at /openai/v1. Recorded in DOCS/AI_CATALOG.md; the audit
-//     item lives on in DOCS/OPENAI_COMPAT_AUDIT.md as history.
+//     item lives on in DOCS/ARCHIVE/OPENAI_COMPAT_AUDIT.md as history.
 // ─────────────────────────────────────────────────────────────────────────────
 
 // ─────────────────────────────────────────────────────────────────────────────

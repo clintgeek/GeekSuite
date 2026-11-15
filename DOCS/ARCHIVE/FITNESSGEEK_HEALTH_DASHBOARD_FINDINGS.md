@@ -1,3 +1,5 @@
+> **Archived 2026-11-15.** All findings fixed 2026-09-22 (see the status note below). The four follow-ups still open are in `DOCS/SUITE_TODO.md` §5 "FitnessGeek — Health Dashboard".
+
 # Health Dashboard — are the numbers real?
 
 *Investigation, 2026-09-22. Answers a direct question from Chef: "the numbers

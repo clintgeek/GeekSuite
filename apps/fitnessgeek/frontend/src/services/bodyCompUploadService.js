@@ -12,7 +12,7 @@
 // `setupAxiosInterceptors()` uses internally — so this call is protected by
 // the identical double-submit header every other mutation in the suite
 // sends, and keeps working unchanged if/when `CSRF_TOKEN=enforce` ever
-// extends beyond basegeek (DOCS/THE_PLAN.md §2.1).
+// extends beyond basegeek (DOCS/SUITE_TODO.md §2).
 
 // A 401 here gets ONE refresh-and-retry, then a plain "Please sign in again"
 // (review P2: raw fetch never refreshed, and the raw text reached the screen).

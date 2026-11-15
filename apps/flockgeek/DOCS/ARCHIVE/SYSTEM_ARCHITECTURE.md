@@ -1,3 +1,5 @@
+> **Archived 2026-11-15.** Describes the old local controller + Mongoose backend. All CRUD moved to basegeek's GraphQL gateway; the backend here is auth and status only. Live doc: `../CONTEXT.md`.
+
 # 🗺️ FlockGeek System Architecture & Data Flow
 
 ## Complete System Overview

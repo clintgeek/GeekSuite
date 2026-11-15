@@ -1,5 +1,7 @@
 # GeekSuite — The Context
 
+> Suite overview and the invariants code comments cite (§3). Operations live in `DOCS/RUNBOOK.md`; `DOCS/CONTEXT.md` is the SSO reference, not a second copy of this file. Everything else: `DOCS/README.md`. App list, ports and packages re-checked against the tree 2026-11-15.
+
 Master architecture context and canonical reference for the GeekSuite monorepo.
 Maintained as the primary orientation and operating truth for Sage and the engineering squad.
 
@@ -7,7 +9,7 @@ Maintained as the primary orientation and operating truth for Sage and the engin
 
 ## 1. System Architecture Overview
 
-GeekSuite is a self-hosted, multi-tenant productivity and life-management ecosystem composed of **8 active applications**, shared backend services, and a unified authentication and data access layer.
+GeekSuite is a self-hosted, multi-tenant productivity and life-management ecosystem composed of **11 active applications**, shared backend services, and a unified authentication and data access layer.
 
 ```mermaid
 graph TD
@@ -15,7 +17,7 @@ graph TD
     Edge -->|"*.clintgeek.com"| Apps["App Frontend & Services"]
     Edge -->|"*/graphql"| Gateway["Apollo GraphQL Gateway<br/>(basegeek :8987)"]
     
-    subgraph Suite Apps [8 Active Applications]
+    subgraph Suite Apps [11 Active Applications]
         basegeek["basegeek (:8987)<br/>Auth, Gateway, AI, Admin"]
         bookgeek["bookgeek (:1800)<br/>Library, Baskets, E-Reader"]
         todogeek["todogeek (:5005)<br/>Tasks & Habits"]
@@ -24,6 +26,9 @@ graph TD
         notegeek["notegeek (:9988)<br/>Notes, Code, Mindmaps"]
         startgeek["startgeek (:3000)<br/>Launcher, Hero, Dock"]
         storygeek["storygeek (:9977)<br/>Creative Writing, Codex"]
+        gamegeek["gamegeek (:1810)<br/>Game Library (Playnite)"]
+        thinggeek["thinggeek (:1820)<br/>Household Inventory, Attic"]
+        newsgeek["newsgeek (:1830)<br/>Local-first News Briefing"]
     end
     
     Gateway --> Datastores
@@ -50,7 +55,7 @@ graph TD
 ### 1.2 Apollo GraphQL Gateway
 - **Single Apollo Server**: Mounted at `/graphql` in `apps/basegeek/packages/api/src/server.js` (host port `8987`).
 - **Nginx routing**: Every app's Nginx configuration proxies `/graphql` to `http://192.168.1.17:8987/graphql`. The browser communicates with its own origin, avoiding cross-origin issues.
-- **Merged schema**: Combines `shared`, `basegeek`, `todogeek`, `fitnessgeek`, `flockgeek`, `bookgeek`, `notegeek`, and `glance` typeDefs/resolvers via `@graphql-tools/merge`.
+- **Merged schema**: Combines `shared`, `basegeek`, `todogeek`, `fitnessgeek`, `flockgeek`, `bookgeek`, `notegeek`, `gamegeek`, `thinggeek` (plus its `attic`), `newsgeek`, `glance`, and `suitetags` typeDefs/resolvers (the list is `apps/basegeek/packages/api/src/graphql/index.js`) via `@graphql-tools/merge`.
 - **Ownership & Auth**: Resolvers enforce user ownership using `context.user` verified via in-process JWT validation against `userGeek`.
 
 ### 1.3 Active Applications & Port Map
@@ -59,12 +64,14 @@ All containers run on `server` (`192.168.1.17`) attached to `datageek_network` (
 | App | Host Port | Internal Port | Stack | Status / Role |
 |-----|-----------|---------------|-------|---------------|
 | **basegeek** | `8987` | `8987` | Vite + React / Node + Express | SSO authority, GraphQL gateway, AIGeek director |
-| **bookgeek** | `1800` | `1800` | Vite + React + Tailwind / Node | Book catalog, format conversion, device baskets |
-| **todogeek** | `5005` | `5005` | Vite + React + MUI 7 / Node | Tasks & habits (pure GraphQL consumer) |
+| **bookgeek** | `1800` | `1800` | Vite + React + MUI 5 / Node | Book catalog, format conversion, device baskets |
+| **todogeek** | `5005` | `5005` | Vite + React + MUI 5 / Node | Tasks (pure GraphQL consumer) |
 | **fitnessgeek** | `4080` | `3001` | Vite + React / Node (ESM, v20) | Nutrition, weights, vitest suites, Garmin sync |
 | **flockgeek** | `5001` | `5001` | Vite + React / Node + Express | Poultry tracking, harvest logging |
 | **notegeek** | `9988` | `9988` | Vite + React / Node + Express | Note-taking, mind maps, tags |
 | **startgeek** | `3000` | `3000` | Vite + React + Tailwind (serve) | Standalone launcher, quick-glance, dock |
+| **gamegeek** | `1810` | `1810` | Vite + React + MUI 5 / Node + Express | Game library fed by Playnite exports |
+| **thinggeek** | `1820` | `1820` | Vite + React + MUI 5 / Node + Express | Household inventory; the Attic (sealed documents) |
 | **newsgeek** | `1830` | `1830` | Vite + React + MUI 5 / Node + Express | Local-first news briefing; feed ingest worker |
 | **storygeek** | `9977` | `9977` | Vite + React / Node + Express | Interactive writing, narrative generation |
 
@@ -77,6 +84,10 @@ All containers run on `server` (`192.168.1.17`) attached to `datageek_network` (
 - **`@geeksuite/logger`**: Standardized Pino HTTP logger and serializers with automatic credential redaction (passwords, tokens, cookies).
 - **`@geeksuite/schemas`**: Canonical Mongoose schema definitions shared across apps and gateway (FitnessGeek models, tripwire tests).
 - **`@geeksuite/crypto-vault`**: AES-256-GCM symmetric encryption for secrets at rest (`KEY_VAULT_SECRET`).
+- **`@geeksuite/tags`**: The suite tag standard (lowercase kebab, `/` nesting) — see `DOCS/TAG_STANDARD.md`.
+- **`@geeksuite/collection`**: Library/collection pieces shared by BookGeek and GameGeek.
+- **`@geeksuite/task-grammar`**: Task-input grammar shared by TodoGeek and NoteGeek's handwritten journal.
+- **`@geeksuite/backdrop`**: Picks and preloads a wallpaper from basegeek's backdrop service.
 - **`@geeksuite/eslint-config`**: Shared ESLint 9 flat config across packages and applications.
 
 ### 1.5 Shared Datastores

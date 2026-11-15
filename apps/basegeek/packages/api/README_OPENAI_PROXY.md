@@ -9,7 +9,7 @@ it works — base URL and API key are the only changes.
 > OpenAI SDK puts on the wire and checks them against OpenAI's machine-readable
 > spec (`openai/openai-openapi`, openapi 3.1.0, `info.version` 2.3.0). The gaps
 > that suite found are catalogued in
-> [`DOCS/OPENAI_COMPAT_AUDIT.md`](../../DOCS/OPENAI_COMPAT_AUDIT.md); they were
+> [`DOCS/ARCHIVE/OPENAI_COMPAT_AUDIT.md`](../../DOCS/ARCHIVE/OPENAI_COMPAT_AUDIT.md); they were
 > closed on 2026-09-05. Run it with `pnpm test -- openaiCompat`.
 
 > **Anthropic removed 2026-09-07 (out of credit).** The provider is gone from

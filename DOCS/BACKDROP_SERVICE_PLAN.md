@@ -1,5 +1,7 @@
 # Backdrop Service — Plan
 
+> **Status 2026-11-15: built and live since 2026-11-13** (`60678d93`, `3b875e41`) — see "As built" below and `DOCS/WORK_LOG_2026-11.md`. Kept as the design record: code cites it.
+
 *Status: APPROVED, 2026-11-13. Scope set by Chef: backgrounds only, public sources
 only, consumers are StartGeek and the unified login screen.*
 

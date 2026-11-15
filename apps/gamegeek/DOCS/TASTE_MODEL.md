@@ -42,7 +42,7 @@ labels did not change.
   a replay is welcome".
 - **Unrated** is unknown, never neutral.
 
-## Consequences for the app (proposed, not built)
+## Consequences for the app (item 2 is built; the rest is proposed)
 
 1. The shelf picker and the star rating show these definitions, so entering data stays
    consistent with this model.

@@ -53,7 +53,7 @@ Part of GeekSuite. Authenticates via `@geeksuite/auth` (basegeek SSO). **All dat
 
 **Frontend:**
 - React 18 + Vite + VitePWA
-- Material-UI (MUI) v7, Framer Motion, Lucide icons
+- Material-UI (MUI) v5 (`@mui/material ^5.18` in `frontend/package.json`; this line said v7 until 2026-11-15), Framer Motion, Lucide icons
 - Apollo Client (GraphQL), React Router v6, date-fns
 
 **Backend (local, thin):**
@@ -486,7 +486,7 @@ worth rewriting rather than keeping, it is fifteen lines.
 - ~~Subtasks: schema fields exist (`parentTask`/`subtasks`, addSubtask mutation) but no frontend
   UI.~~ — **done 2026-09-05** (`d53b008`).
 - CompletedSection not in keyboard nav.
-- No frontend test coverage (gateway suites cover the data layer).
+- ~~No frontend test coverage (gateway suites cover the data layer).~~ Stale: `frontend/src` has its own test suites now (checked 2026-11-15).
 - Upcoming section reuses `monthlyTasks` for a 7-day window; the client-side filter does the real windowing.
 
 ---

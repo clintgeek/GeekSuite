@@ -1,3 +1,5 @@
+> **Archived 2026-11-15.** September 2026 roadmap snapshot, superseded. Live backlog: `DOCS/SUITE_TODO.md` (the one open item here, Q18b `CSRF_TOKEN=enforce`, is in its §2; Q10/Q22/Q38/Q42/Q48 were closed in `BURN_QUEUE.md`). Index of live docs: `DOCS/README.md`.
+
 # GeekSuite — The Plan
 
 Strategic roadmap, current operational status, open architectural decisions, and upcoming engineering passes.

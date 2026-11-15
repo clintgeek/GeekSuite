@@ -237,7 +237,7 @@ sent and the optional path did not send at all.
 **anonymously**. On basegeek's gateway that anonymous request reached a resolver, which threw
 `UNAUTHENTICATED` for want of a user, which `packages/api-client`'s shared Apollo error link turns
 into `logout()` + a login redirect in every app built on `createApolloClient`. So a basegeek that
-was merely *slow* logged every open tab in the suite out. (`DOCS/BURN_REVIEW_2.md` §3.)
+was merely *slow* logged every open tab in the suite out. (`DOCS/ARCHIVE/BURN_REVIEW_2.md` §3.)
 
 **Client side.** A 503 must never reach a logout path:
 
@@ -379,7 +379,7 @@ its own `TZ` handling, if any, is unaudited by this pass.
 - [`SSO_OVERVIEW.md`](SSO_OVERVIEW.md) — full SSO architecture, risks, and migration plan
 - `apps/basegeek/DOCS/SSO_IMPLEMENTATION.md` — basegeek auth implementation detail
 - `apps/basegeek/DOCS/AUTH_SYSTEM.md` — auth system overview
-- `apps/basegeek/DOCS/SSO_CLIENT_MIGRATION_PLAYBOOK.md` — per-app migration steps
+- `apps/basegeek/DOCS/ARCHIVE/SSO_CLIENT_MIGRATION_PLAYBOOK.md` — per-app migration steps
 
 ---
 

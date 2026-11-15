@@ -1,3 +1,5 @@
+> **Archived 2026-11-15.** A qualitative survey from 2026-04/08 whose tables are stale by its own note; the 2026-11-06 counts below are a snapshot. How to run each suite today: `DOCS/RUNBOOK.md` §9.
+
 # GeekSuite Test Coverage Report
 
 _Generated 2026-04-21; updated 2026-08-30. Qualitative survey — not measured via coverage tooling._

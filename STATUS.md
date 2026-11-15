@@ -1,3 +1,5 @@
+> **Frozen snapshot — last updated 2026-09-07.** This is the record of the September 2026 burn, not the current state: the suite has eleven apps now, and the `DOCS/…` plans it cites have since moved to `DOCS/ARCHIVE/`. Current state: `DOCS/WORK_LOG_2026-11.md` (what shipped), `DOCS/SUITE_TODO.md` (what is open), `DOCS/README.md` (index). Note added 2026-11-15.
+
 # GeekSuite — Status
 
 *Updated 2026-09-07. Quiet and current: `main` at `213b9d5`, CI + Release + the mobile harness green

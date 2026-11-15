@@ -4,10 +4,11 @@ A calm, minimal browser start page for the GeekSuite ecosystem.
 
 ## Development
 
+StartGeek is a pnpm workspace member (since 2026-11-13). From the repo root:
+
 ```bash
-cd apps/startgeek
-npm install
-npm run dev
+pnpm install
+pnpm --filter ./apps/startgeek dev
 ```
 
 Open `http://localhost:5173`.
@@ -15,8 +16,8 @@ Open `http://localhost:5173`.
 ## Build & lint
 
 ```bash
-npm run lint
-npm run build
+pnpm --filter ./apps/startgeek lint
+pnpm --filter ./apps/startgeek build
 ```
 
 ## Production (Docker)

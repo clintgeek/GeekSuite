@@ -283,7 +283,7 @@ They are not interchangeable and both are required.
   second `<link rel="manifest">`. `share_target` goes in the static file.
 - **A share-sheet POST carries no `X-CSRF-Token`.** It originates from the OS, not from
   the app's Axios instance. The repo is at `CSRF_TOKEN=report` and moving to `enforce`
-  (`THE_PLAN.md` §2.1), so this must be solved rather than exempted away.
+  (`SUITE_TODO.md` §2), so this must be solved rather than exempted away.
 
 ---
 

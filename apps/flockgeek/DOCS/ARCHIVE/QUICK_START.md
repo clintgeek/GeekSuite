@@ -1,3 +1,5 @@
+> **Archived 2026-11-15.** Describes a February 2026 dev session and the old email/password login with localStorage tokens. Auth is redirect-to-basegeek with cookies now. Live doc: `../CONTEXT.md`.
+
 # 🎯 IMMEDIATE NEXT STEPS - Getting Started with Live System
 
 ## Current Status ✅

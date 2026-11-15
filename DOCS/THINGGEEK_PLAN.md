@@ -3,7 +3,7 @@
 *Written 2026-09-25 from Chef's design note ("Using MongoDB, GraphQL, and AI for Flexible
 Inventory Management") and the conversation after it. Chef: "start when ready, keep going
 until done, make decisions on my behalf based on how you see things done elsewhere in
-geeksuite or your best judgement." Status: **building overnight, 2026-09-25 → 26.***
+geeksuite or your best judgement." Status: **live since 2026-09-26** (was "building overnight, 2026-09-25 → 26"); Phase 2 at the end is not built and is tracked in `DOCS/SUITE_TODO.md`.*
 
 ## What it is
 

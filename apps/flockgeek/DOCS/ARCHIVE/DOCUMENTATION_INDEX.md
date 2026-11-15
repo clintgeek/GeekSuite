@@ -1,3 +1,5 @@
+> **Archived 2026-11-15.** A February 2026 session index; every file it links has since moved into this folder. Live doc: `../CONTEXT.md`.
+
 # 📖 FlockGeek Documentation Index
 
 ## 🎯 START HERE

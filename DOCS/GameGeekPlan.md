@@ -1,5 +1,7 @@
 # GameGeek — Plan
 
+> **Status 2026-11-15:** the line below is the 2026-09-24 header and is out of date. GameGeek shipped overnight 2026-09-24/25 and is live (see "Deviations from the plan" near the end, and `DOCS/WORK_LOG_2026-09.md`). Imports are Playnite-only (`apps/gamegeek/DOCS/PLAYNITE_IMPORT.md`). Still unbuilt: phases G2–G6 (§11), tracked in `DOCS/SUITE_TODO.md`. Kept as the design record: code comments cite it by section.
+
 *Written 2026-09-24, revised the same day after Chef's calls. Status: **proposal, nothing
 built.** This isn't a spec yet. The open questions in §13 decide what the spec says.*
 
@@ -743,7 +745,7 @@ Deviations from the plan above, decided overnight:
 | Plan said | Shipped | Why |
 |---|---|---|
 | `api/` + `web/` | `backend/` + `frontend/` | the todogeek thin-backend shape; `tools/gql-arg-audit.mjs` and boot-smoke conventions |
-| Prep phase P0 before G0 | P0 **not done**; GameGeek has its own library components | shipping overnight without touching BookGeek unsupervised. The extraction now consolidates **both** apps onto `@geeksuite/collection` in one pass (`DOCS/BOOKGEEK_PREP_PLAN.md`) |
+| Prep phase P0 before G0 | P0 **not done**; GameGeek has its own library components | shipping overnight without touching BookGeek unsupervised. The extraction now consolidates **both** apps onto `@geeksuite/collection` in one pass (`DOCS/ARCHIVE/BOOKGEEK_PREP_PLAN.md`) |
 | IGDB as primary provider | Steam store search (keyless) is live; IGDB activates when `IGDB_CLIENT_ID`/`IGDB_CLIENT_SECRET` are set | no Twitch app exists yet — Chef must create one |
 | `/mnt/extra_space` for data | `apps/gamegeek/data/{covers,imports}` | `/mnt/extra_space` is root-owned; DEPLOY.md's `apps/<app>/data/` convention |
 | Bottom nav with 4 tabs | drawer + desktop rail, no bottom nav | only Library and Settings exist; no placeholder tabs |
@@ -752,7 +754,7 @@ Deviations from the plan above, decided overnight:
 
 Storefronts: Steam is automatic (needs `STEAM_API_KEY`); GOG, Epic, Amazon are manual via
 Paste a list for now; Amazon Luna no longer has owned games at all. Research and the next
-step (a Heroic/Playnite file importer): `DOCS/GAMEGEEK_STOREFRONT_IMPORTS.md`.
+step (a Heroic/Playnite file importer): `DOCS/ARCHIVE/GAMEGEEK_STOREFRONT_IMPORTS.md`.
 
 Not built yet: Tonight, Journal, Stats, backlog goal, loans, scan-to-add, AI (G5 — cuttable),
 Glance, MCP. The tenancy and registration-gate work is planned in

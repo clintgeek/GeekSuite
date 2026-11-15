@@ -1,6 +1,6 @@
 # Recipes in My Foods — Plan
 
-*Status: DRAFT, 2026-10-13. Chef chose "Both": an ingredient builder at the core,
+*Status: **shipped 2026-10-13** (`b6f008de`, `c052aae1`; `DOCS/WORK_LOG_2026-10.md`) — this header said DRAFT until 2026-11-15. §5 lists deliberate non-goals. Chef chose "Both": an ingredient builder at the core,
 with pasted recipe text as a second way to fill it. Decisions marked **(Chef?)**
 are Sage's defaults and stand unless Chef says otherwise.*
 

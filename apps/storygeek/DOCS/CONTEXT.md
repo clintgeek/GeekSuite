@@ -2,7 +2,7 @@
 
 This file is StoryGeek's project-context note (servers/ports/known-quirks), separate from
 `DOCS/CONTINUITY.md` (the continuity-engine architecture — canon, facts, provenance) and
-`LOCAL_DEV.md`/`SETUP.md` (dev setup). It didn't exist before 2026-09-05; this is its first
+`LOCAL_DEV.md` (dev setup; the older `SETUP.md` is in `DOCS/ARCHIVE/`). It didn't exist before 2026-09-05; this is its first
 entry.
 
 ## Backend — zod input validation (2026-09-05)

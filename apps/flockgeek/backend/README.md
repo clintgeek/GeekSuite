@@ -2,7 +2,7 @@
 
 Thin Express backend for FlockGeek. All flock/bird/egg/health data lives on basegeek's
 GraphQL gateway (`apps/basegeek/packages/api/src/graphql/flockgeek/`) — this backend no
-longer has any CRUD surface of its own. See `apps/flockgeek/CONTEXT.md` for the full
+longer has any CRUD surface of its own. See `apps/flockgeek/DOCS/CONTEXT.md` for the full
 account (why, and what was here before Night 2 2026-09-06 / Q22 deleted it).
 
 ## Scripts

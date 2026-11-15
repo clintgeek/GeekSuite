@@ -1,3 +1,5 @@
+> **Archived 2026-11-15.** A March 2026 `jwt-decode` login-failure log with no conclusion. Auth is cookie SSO now (`DOCS/CONTEXT.md` §2) and nothing in `frontend/src` imports `jwt-decode`. Nothing live remains.
+
 # Troubleshooting: jwt-decode Issue
 
 ## Issue Description

@@ -22,7 +22,7 @@
 - Logged-in: the above plus quick capture, suite search, and the module row
   from basegeek.
 - Dock (`src/config/apps.jsx`), Chef 2026-10-09: Notes, Todo, Fitness,
-  Books, Games, Things. Flock was dropped from the dock. Six fit at 390px
+  Books, Games, News (`PRIMARY_APPS` in `src/config/apps.jsx`; this line said "Things" until 2026-11-15). Flock was dropped from the dock. Six fit at 390px
   without scrolling, because phone labels drop the letter-spacing so
   "FITNESS" isn't truncated. A seventh app would scroll (snap).
 

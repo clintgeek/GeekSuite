@@ -1,5 +1,7 @@
 # aiGeek — Capability Routing
 
+> **Status 2026-11-15:** Stages 1–3 shipped 2026-09-15/16 (cause-based retirement, `need:` resolution, measured latency, the golden set). Open per `DOCS/SUITE_TODO.md`: §3.4 (app configs store needs, not models) and §3.5 (retire name-matching in `aiModelCapabilitiesService`). Code comments cite this file.
+
 *Proposal, 2026-09-15. Written after a day of walking into this system's failure
 modes one at a time while building FitnessGeek's describe-and-log.*
 

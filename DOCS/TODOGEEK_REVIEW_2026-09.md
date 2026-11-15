@@ -1,3 +1,5 @@
+> **Status 2026-11-15 — mostly history, kept here because code comments and `SUITE_TODO.md` cite it by section.** Written as *BuJoGeek*; the app was renamed TodoGeek on 2026-10-10 and this file was renamed from `BUJOGEEK_REVIEW_2026-09.md` to the name those citations already used. §1 and §2 shipped 2026-09-20/21; what is left of §3–§4 is tracked in `DOCS/SUITE_TODO.md` ("TodoGeek — remaining from…"). The UI it reviewed was replaced by Red Pen (2026-09-29); the current plan for the app is `DOCS/NOTEGEEK_TODOGEEK_REVIEW_2026-11.md`.
+
 # BuJoGeek — Review, 2026-09-20
 
 Five parallel read-only reviews (dates/recurrence, data integrity, UI/UX, code quality,

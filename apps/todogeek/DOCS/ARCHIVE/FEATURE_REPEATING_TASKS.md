@@ -1,3 +1,5 @@
+> **Archived 2026-11-15.** Shipped: `rrule`, `seriesId`/`recurrenceRule`/`isSeriesMaster`/`originalDueDate` on `Task`, and the `EditScope` enum are all in the gateway. This file was the unfilled planning template. Live behaviour: `CONTEXT.md` and `REMINDERS.md`.
+
 # Repeating Tasks Implementation Plan
 
 Provide a brief description of the problem, any background context, and what the change accomplishes.

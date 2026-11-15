@@ -1,3 +1,5 @@
+> **Archived 2026-11-15.** A manual click-through of the February 2026 build. Tests today: backend `jest`, frontend `vitest run` (see each `package.json`).
+
 # FlockGeek Frontend + Backend - Testing Guide
 
 ## Current System Status ✅

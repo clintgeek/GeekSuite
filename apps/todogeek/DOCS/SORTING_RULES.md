@@ -1,5 +1,26 @@
 # Task Sorting and Display Rules
 
+> **Read this first (2026-11-15).** Red Pen (`SIMPLE_PLAN.md`, "As built") replaced the views
+> these rules were written for. What the app does now is in `frontend/src/utils/penViews.js`:
+> Today (Overdue · Today · Anytime), Upcoming and Done.
+>
+> **Still true:** an open task with a future date shows only on that date (in Upcoming); the
+> priority order; the whole "Manual order (Today)" section.
+>
+> **No longer true:**
+> - A completed task shows only in Done, grouped by the day it was completed — never on its
+>   scheduled or creation date as well.
+> - An overdue open task shows once, in Today's Overdue section, one row per series. It does
+>   not also appear on its past date, and nothing is migrated or re-dated.
+> - An open task with no date sits in Today's "Anytime" section; its creation date is irrelevant.
+> - The Daily / Weekly / Monthly / Year views are retired (their paths redirect to `/today`).
+>   The old comparator survives only in `utils/taskSort.js` and the gateway's `sortTasks`, and
+>   drives no visible view. Within a section the order is priority, then timed before untimed,
+>   then created, then id (`compareWithinDay`).
+> - Priority is drawn as the proofreader's bar, not coloured flags.
+>
+> The text below is kept as written because code comments cite it.
+
 ## Terms and Definitions
 - **Float / Floating / Floater**: A task that is incomplete and automatically migrates to today's date until completed, backlogged, or migrated elsewhere. The migration occurs when tasks are pulled for a view.
 - **Scheduled Date**: Synonym for due date

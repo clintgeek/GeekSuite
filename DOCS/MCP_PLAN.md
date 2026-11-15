@@ -1,9 +1,8 @@
 # GeekSuite MCP — Plan
 
-Status: **proposed, not started.** First written 2026-09-22; rewritten 2026-10-02 after
-Chef's calls (§0). No spec yet; this is the design to build one from. Surface reference:
-`DOCS/GRAPHQL.md` (which does not yet document the `gamegeek` module — read
-`apps/basegeek/packages/api/src/graphql/gamegeek/typeDefs.js`).
+Status: **parked 2026-10-02.** Stage 1 (read-only, CLI) was specced in `DOCS/MCP_SPEC.md` and built on branch `mcp-parked`; it is not on `main`. Only the catalog vectors shipped, behind `DOCS/WHAT_NEXT_SPEC.md`. First written 2026-09-22; rewritten 2026-10-02 after
+Chef's calls (§0). This is the design and rationale; the spec is `DOCS/MCP_SPEC.md`. Surface reference:
+`DOCS/GRAPHQL.md`.
 
 Goal: let Chef's AI clients read parts of the suite's data through a Model Context Protocol
 server. Read-only first; writes are a later, separate decision.

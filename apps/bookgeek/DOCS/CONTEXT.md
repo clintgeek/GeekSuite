@@ -67,7 +67,7 @@ Exclusive Shelf, My Review, Spoiler, Private Notes, Read Count, Owned Copies
 - **AI:** Gemini via aiGeek
 - **Ebook Processing:** Calibre CLI (ebook-meta, ebook-convert, fetch-ebook-metadata)
 - **External APIs:** OpenLibrary (free), Google Books (optional)
-- **Deployment:** Docker (API: 1800, Frontend: 1801)
+- **Deployment:** Docker, one container on port 1800 (`docker-compose.yml`); 1801 is only the Vite dev-server port
 - **UI:** Dark mode default, Inter/Geist fonts
 
 ### Visual identity — "Used Bookstore" (2026-09-30; replaced "Midnight Reader")

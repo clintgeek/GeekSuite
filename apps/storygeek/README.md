@@ -12,7 +12,7 @@ A collaborative AI-powered storytelling game that blends DnD mechanics with choo
 
 StoryGeek is a fantasy storytelling game where players collaborate with AI to create immersive narratives. The game combines:
 
-- **AI-powered storytelling** with Claude 3 Haiku for rich, consistent narratives
+- **AI-powered storytelling** through aiGeek (basegeek's AI front door — StoryGeek holds no provider keys or model names; see `LOCAL_DEV.md`)
 - **Dice mechanics** for chance-based outcomes and tension
 - **Player agency** through choices and character development
 - **World building** with persistent characters, locations, and story threads
@@ -50,7 +50,7 @@ StoryGeek is a fantasy storytelling game where players collaborate with AI to cr
 
 ## Development Status
 
-🚧 **In Development** 🚧
+**Running in production** (port 9977; see the root `README.md`). The checklist below is the original 2025 project checklist and was never ticked — it is not the current state. Current docs: `DOCS/CONTEXT.md`, `DOCS/CONTINUITY.md`, `LOCAL_DEV.md`.
 
 - [ ] Project structure setup
 - [ ] Core story management system

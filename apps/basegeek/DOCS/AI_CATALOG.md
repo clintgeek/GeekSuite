@@ -6,7 +6,7 @@
 > The catalog is written by the catalog job now; nothing seeds it from a
 > literal. Read the aiGeek page or the `AIModel` / `AIPricing` / `AIFreeTier`
 > collections for what is true, and
-> [AIGEEK_CATALOG_JOB.md](./AIGEEK_CATALOG_JOB.md) for how they get that way.
+> [AIGEEK_CATALOG_JOB.md](./ARCHIVE/AIGEEK_CATALOG_JOB.md) for how they get that way.
 > See **The catalog feeds itself (Phase 1, 2026-09-07)** below.
 
 <!-- API keys are stored in the database via BaseGeek UI - never commit real keys here -->
@@ -124,7 +124,7 @@ one line:
 **`anthropic` is out of the roster, and this time the provider worked.** The
 account ran out of credit and is not being refilled, so a provider that answered
 correctly became one that 400s on every call. Chef's decision, recorded in
-`DOCS/AIGEEK_ELEVATION_PLAN.md` (D3): it comes out the way `llm7` and `onemin`
+`DOCS/ARCHIVE/AIGEEK_ELEVATION_PLAN.md` (D3): it comes out the way `llm7` and `onemin`
 did, not disabled-and-parked.
 
 What went, in one pass:
@@ -267,9 +267,9 @@ and `rotationManager.PROVIDER_LIMITS`. Three of those quota tables disagreed wit
 each other. The only thing keeping any of it honest was Chef running
 `discover-free-models.js` by hand.
 
-Phase 1 of [../../../DOCS/AIGEEK_ELEVATION_PLAN.md](../../../DOCS/AIGEEK_ELEVATION_PLAN.md)
+Phase 1 of [../../../DOCS/ARCHIVE/AIGEEK_ELEVATION_PLAN.md](../../../DOCS/ARCHIVE/AIGEEK_ELEVATION_PLAN.md)
 replaced the lot with observation on a schedule. **The catalog job**
-([AIGEEK_CATALOG_JOB.md](./AIGEEK_CATALOG_JOB.md)) is the design of record:
+([AIGEEK_CATALOG_JOB.md](./ARCHIVE/AIGEEK_CATALOG_JOB.md)) is the design of record:
 hourly tick, discovery every 24 h, re-probe every 6 h, one `AICatalogRun`
 document per run. It reads each provider's own `/models` listing, probes every
 free candidate under our own account through the same adapter a real call takes,

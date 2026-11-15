@@ -1,3 +1,5 @@
+> **Status 2026-11-15: fixed; history.** The fix described here lives in `frontend/src/components/notes/NoteShell.jsx` (`disableContentScroll`), whose comment cites this file — which is why it has not been archived. The `client/src/...` paths below no longer exist.
+
 # Handwritten Editor Mobile Touch Fix
 
 ## Problem Summary

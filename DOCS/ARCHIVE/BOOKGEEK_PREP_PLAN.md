@@ -1,3 +1,5 @@
+> **Archived 2026-11-15.** Superseded 2026-09-25 by `DOCS/BOOKGEEK_CLEANUP_PLAN.md`, which re-sequenced this work and finished it (Phases A–C done 2026-09-26). Nothing live remains here.
+
 # BookGeek Prep — Plan
 
 Status: **proposal, plan, not started.** Written 2026-09-24. Extracted and re-verified from

@@ -1,6 +1,6 @@
 # FitnessGeek — The Food Search Plan
 
-*Proposal, 2026-09-14. Nothing here is built yet.*
+*Proposal, 2026-09-14. ~~Nothing here is built yet.~~ **Shipped 2026-09-14** (§0 has the build state) and since superseded as the primary logging path by describe-and-log (`THE_DESCRIBE_AND_LOG_PLAN.md`, 2026-09-16). Leftovers are in `DOCS/SUITE_TODO.md`.*
 
 Food search is the app's front door: it is the one thing a person does three to five
 times a day, and everything else in FitnessGeek is downstream of it. Today it is the

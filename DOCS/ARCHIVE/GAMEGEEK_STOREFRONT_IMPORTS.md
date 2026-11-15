@@ -1,3 +1,5 @@
+> **Archived 2026-11-15.** Research only; nothing here is planned (see the decision below). The live import spec is `apps/gamegeek/DOCS/PLAYNITE_IMPORT.md`.
+
 > **Decision, 2026-09-25:** Playnite is GameGeek's only import. Chef: "I'm not going to
 > build 8 API systems just to get game listings from GOG, Epic, Amazon, etc. when Playnite
 > already solved that." This page is kept as research. Nothing below is planned. Spec:

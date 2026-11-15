@@ -1,7 +1,9 @@
 # BookGeek — cleanup plan
 
+> **Status 2026-11-15: finished.** Phases A, B, C1 and C2 are done (2026-09-25/26); only "Later, not in this plan" at the end is open. Kept here, not archived, because code comments and `ci.yml` cite it by phase.
+
 *Written 2026-09-25. Chef: "Let's clean up bookgeek, it's an important app." This replaces
-the sequencing in `DOCS/BOOKGEEK_PREP_PLAN.md`, whose verified facts and deletion list
+the sequencing in `DOCS/ARCHIVE/BOOKGEEK_PREP_PLAN.md`, whose verified facts and deletion list
 still stand.*
 
 ## What changed since the prep plan

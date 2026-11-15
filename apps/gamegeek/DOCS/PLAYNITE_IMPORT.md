@@ -1,6 +1,6 @@
 # GameGeek — Playnite import
 
-*Written 2026-09-25. Status: building. Chef: "the initial library should be fed and updated
+*Written 2026-09-25. Status: built and live (the header said "building" until 2026-11-15). Chef: "the initial library should be fed and updated
 with this file/format." Steam stays as a possible metadata source later, not the library.*
 
 ## The file

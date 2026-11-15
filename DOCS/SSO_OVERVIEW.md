@@ -914,7 +914,7 @@ For each app:
 
 - `apps/basegeek/DOCS/SSO_IMPLEMENTATION.md` — basegeek server-side auth implementation (routes, middleware, token flow)
 - `apps/basegeek/DOCS/AUTH_SYSTEM.md` — auth system overview (tokens, refresh rotation, Redis reuse detection, encrypted API keys)
-- `apps/basegeek/DOCS/AUTH_HARDENING_2026-04.md` — April 2026 hardening pass detail (pino logging, refresh-token rotation, AES-GCM key encryption, 33 auth tests)
-- `apps/basegeek/DOCS/SSO_CLIENT_MIGRATION_PLAYBOOK.md` — per-app migration checklist
+- `apps/basegeek/DOCS/ARCHIVE/AUTH_HARDENING_2026-04.md` — April 2026 hardening pass detail (pino logging, refresh-token rotation, AES-GCM key encryption, 33 auth tests)
+- `apps/basegeek/DOCS/ARCHIVE/SSO_CLIENT_MIGRATION_PLAYBOOK.md` — per-app migration checklist
 - `DOCS/CONTEXT.md` — suite-level SSO context summary
-- `DOCS/DEFERRED_WORK.md` — CSRF protection and HttpOnly cookie rollout (deferred)
+- `DOCS/DEFERRED_WORK.md` — the deferred list (its 2026-11-15 status check records CSRF and HttpOnly as done)

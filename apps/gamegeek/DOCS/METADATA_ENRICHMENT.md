@@ -1,6 +1,6 @@
 # GameGeek — metadata and cover enrichment
 
-*Written 2026-09-25. Status: building. Chef picked the sources: Steam, IGDB and RAWG.*
+*Written 2026-09-25. Status: built and live (the header said "building" until 2026-11-15). Chef picked the sources: Steam, IGDB and RAWG.*
 
 ## Why
 

@@ -1,5 +1,11 @@
 # Deployment convention
 
+> **How a deploy normally happens (added 2026-11-15):** push to `main`. `release.yml`
+> publishes each app's image to GHCR and Watchtower on the box pulls it — see
+> `DOCS/CICD.md` and `DOCS/RUNBOOK.md` §5–§6. `build.sh`, described below, is the
+> break-glass local path. What this file is still the reference for is the directory
+> layout, env files and data volumes.
+
 Each GeekSuite app is deployed out of its **own source directory** under
 `apps/<appname>/`. Code, runtime config, and persistent data all live
 next to each other in one path. `build.sh` builds and deploys every app
@@ -61,7 +67,7 @@ runs in the source tree. No second path to keep in sync.
    Store `KEY_VAULT_SECRET`, `JWT_SECRET`, Mongo passwords, etc. in a
    password manager. Losing `KEY_VAULT_SECRET` makes every encrypted
    AIConfig key garbage — the migration in
-   `apps/basegeek/DOCS/AUTH_HARDENING_2026-04.md` is a one-way door.
+   `apps/basegeek/DOCS/ARCHIVE/AUTH_HARDENING_2026-04.md` is a one-way door.
 
 ## Shared secrets across apps
 
@@ -120,6 +126,8 @@ the same pattern — explicit `environment:` entries for exactly the vars it
 needs, no blanket `env_file:`.
 
 ## Applying the #10/#12 fix (2026-09-05 burn review)
+
+> **Applied.** `DOCS/RUNBOOK.md` §10 records both as fixed 2026-09-05, and the healthchecks and `depends_on: condition: service_healthy` are in `apps/basegeek/docker-compose.yml`. The "not yet applied" text below is history.
 
 The compose changes for BURN_REVIEW_2 #10 (env_file scoping, above) and #12
 (datastore healthchecks + `depends_on: condition: service_healthy`, see

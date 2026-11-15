@@ -4,7 +4,7 @@
 reader you wish Google News were") and the decisions below. Status: N0 live (ingest,
 Latest, Sources, reader-added sources, the Source sheet); the front page (Today, per-reader
 ranking) built 2026-10-11 ahead of clustering; ingest hygiene (platform throttle, path
-rules, excerpt boilerplate, display-time duplicate collapse) built 2026-10-11; N1/N2 not started.*
+rules, excerpt boilerplate, display-time duplicate collapse) built 2026-10-11; N1 phase 1 (embeddings and the golden-set tools, `apps/newsgeek/DOCS/CLUSTERING.md`) built 2026-10-11; N1 phase 2 (story assignment) and N2 not started.*
 
 ## What it is
 
