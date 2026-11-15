@@ -313,10 +313,35 @@ function ToolButton({ label, active = false, onClick, disabled = false, children
 
 const Divider = ({ vertical = false }) => (
     <Box aria-hidden sx={vertical
-        ? { height: '1px', width: 24, bgcolor: 'divider', my: 0.5, flexShrink: 0 }
-        : { width: '1px', height: 24, bgcolor: 'divider', mx: 0.5, flexShrink: 0 }}
+        ? { height: '1px', width: 24, bgcolor: 'divider', my: `${DIVIDER_MARGIN}px`, flexShrink: 0 }
+        : { width: '1px', height: 24, bgcolor: 'divider', mx: `${DIVIDER_MARGIN}px`, flexShrink: 0 }}
     />
 );
+
+/**
+ * The bar's own chrome along its edge, in px: the gap between buttons and the
+ * padding at each end. The SHORT bar has none to spare: its eight 44px
+ * buttons are 352px of a 390px phone, and with the roomy bar's gaps and
+ * padding it came to 386px in a 374px bar, so Fullscreen hung off the right
+ * edge of the screen (found by the harness, 2026-11-15). The full bar, which
+ * only shows where there is 800px of room, keeps its air.
+ */
+export const DIVIDER_MARGIN = 2;
+export const SHORT_BAR_BUTTONS = 8;
+export const SHORT_BAR_DIVIDERS = 2;
+/** The bar keeps this much clear of the container's edges (maxWidth below). */
+export const BAR_EDGE_MARGIN = 16;
+export const barChrome = (full) => (full ? { gap: 2, pad: 6 } : { gap: 0, pad: 4 });
+/** How wide the short bar is with 44px buttons: chrome, dividers, border and all. */
+export const shortBarWidth = (button = 44) => {
+    const { gap, pad } = barChrome(false);
+    const items = SHORT_BAR_BUTTONS + SHORT_BAR_DIVIDERS;
+    return SHORT_BAR_BUTTONS * button
+        + SHORT_BAR_DIVIDERS * (1 + 2 * DIVIDER_MARGIN)
+        + (items - 1) * gap
+        + 2 * pad
+        + 2; // the 1px border
+};
 
 /** A button that opens a small grid of more buttons, away from the bar. */
 function ToolMenu({ label, active, icon, children, columns = 5 }) {
@@ -555,6 +580,7 @@ export default function DrawingToolbar({
         left: { left: safe('left'), top: '50%', transform: 'translateY(-50%)' },
         right: { right: safe('right'), top: '50%', transform: 'translateY(-50%)' },
     }[position] || {};
+    const chrome = barChrome(full);
 
     return (
         <Box
@@ -571,13 +597,21 @@ export default function DrawingToolbar({
                 display: 'flex',
                 flexDirection: vertical ? 'column' : 'row',
                 alignItems: 'center',
-                gap: 0.5,
-                ...(vertical ? { maxHeight: 'calc(100% - 16px)', overflowY: 'auto' } : { maxWidth: 'calc(100% - 16px)' }),
+                gap: `${chrome.gap}px`,
+                // Never wider (or taller) than the page it sits on. A phone
+                // narrower than the short bar scrolls it rather than losing
+                // its last buttons off the edge.
+                ...(vertical
+                    ? { maxHeight: `calc(100% - ${BAR_EDGE_MARGIN}px)`, overflowY: 'auto' }
+                    : { maxWidth: `calc(100% - ${BAR_EDGE_MARGIN}px)`, overflowX: 'auto' }),
+                scrollbarWidth: 'none',
+                '&::-webkit-scrollbar': { display: 'none' },
+                '& > *': { flexShrink: 0 },
                 bgcolor: 'background.paper',
                 borderRadius: 3,
                 boxShadow: '0 4px 20px rgba(0,0,0,0.15)',
-                px: vertical ? 0.75 : 1.5,
-                py: vertical ? 1.5 : 0.75,
+                px: vertical ? 0.75 : `${chrome.pad}px`,
+                py: vertical ? `${chrome.pad}px` : 0.75,
                 zIndex: 100,
                 border: '1px solid',
                 borderColor: 'divider',

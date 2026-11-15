@@ -386,13 +386,162 @@ export const TAG_COUNT_NOTES = [
   ...extraTagged.map(([id, tags]) => ({ __typename: 'Note', id, tags })),
 ];
 
+// ── The list queries (review 2026-11, 5.1/5.2) ──────────────────────────────
+// A list row carries `preview` (the gateway's plain-text excerpt) and never
+// `content`. These mirror basegeek's noteDerived.js / noteLists.js just far
+// enough that a row here reads the way a real one does: a sketch has no words
+// of its own, a code note previews its code, a mind map its labels.
+const PREVIEW_CHARS = 200;
+const SKETCH_WORDS = 'Onboarding flow\nsign up -> verify email -> first note';
+const stripHtml = (html) => String(html || '').replace(/<[^>]+>/g, ' ');
+const stripMarkdown = (md) => String(md || '')
+  .replace(/```[^\n]*\n/g, '\n').replace(/```/g, '')
+  .replace(/\[\[([^\]|]+)\|([^\]]+)\]\]/g, '$2').replace(/\[\[([^\]]+)\]\]/g, '$1')
+  .replace(/\[([^\]]*)\]\([^)]*\)/g, '$1')
+  .replace(/^\s{0,3}#{1,6}\s+/gm, '').replace(/^\s{0,3}>\s?/gm, '')
+  .replace(/^\s*[-*+]\s+\[[ xX]\]\s+/gm, '').replace(/^\s*(?:[-*+]|\d+[.)])\s+/gm, '')
+  .replace(/(\*\*|__|~~|`)/g, '');
+const wordsOf = (n) => {
+  try {
+    // A sketch's words are its recognised handwriting, never the tldraw JSON.
+    if (n.type === 'handwritten') return n.id === 'n3' ? SKETCH_WORDS : '';
+    if (n.type === 'code') return JSON.parse(n.content).code || '';
+    if (n.type === 'mindmap') return JSON.parse(n.content).nodes.map((x) => x.data?.label).filter(Boolean).join(' ');
+  } catch { return ''; }
+  return n.type === 'markdown' ? stripMarkdown(n.content) : stripHtml(n.content);
+};
+export const previewOf = (n) => {
+  const words = wordsOf(n).replace(/\s+/g, ' ').trim();
+  if (words.length <= PREVIEW_CHARS) return words;
+  return `${words.slice(0, PREVIEW_CHARS).replace(/\s+\S*$/, '')}…`;
+};
+/** A note as the list queries return it: NOTE_LIST_FIELDS, no body. */
+export const listRow = (n) => ({
+  __typename: 'Note',
+  id: n.id, title: n.title, preview: previewOf(n), type: n.type, tags: n.tags,
+  pinned: Boolean(n.pinned), pinnedAt: n.pinnedAt ?? null, createdAt: n.createdAt, updatedAt: n.updatedAt,
+});
+
 // The gateway's nested-tag rules, just enough for the stubs: `under` is the
 // tag itself or anything beneath it.
 const inSubtree = (t, root) => t === root || t.startsWith(`${root}/`);
 
+// tag = exactly that tag; prefix = any tag starting with the string; under =
+// the tag or anything beneath it; type = that note type. Sent together, they
+// all narrow (typeDefs.js `notes` / `notesPage`).
+export const filterNotes = (list, vars = {}) => list.filter((n) =>
+  (!vars.tag || n.tags.includes(vars.tag))
+  && (!vars.prefix || n.tags.some((t) => t.startsWith(vars.prefix)))
+  && (!vars.under || n.tags.some((t) => inSubtree(t, vars.under)))
+  && (!vars.type || n.type === vars.type));
+
+// Pinned first, then the chosen key (titles case-insensitively), the way
+// noteLists.js sorts. Unknown sort → newest edit first.
+const SORTS = {
+  updatedat_desc: ['updatedAt', -1], updatedat_asc: ['updatedAt', 1],
+  createdat_desc: ['createdAt', -1], createdat_asc: ['createdAt', 1],
+  title_asc: ['title', 1], title_desc: ['title', -1],
+};
+export const sortNotes = (list, sort) => {
+  const [key, dir] = SORTS[String(sort || '').toLowerCase()] || SORTS.updatedat_desc;
+  const val = (n) => (key === 'title' ? String(n.title || '').toLowerCase() : n[key]);
+  return [...list].sort((a, b) =>
+    Number(Boolean(b.pinned)) - Number(Boolean(a.pinned))
+    || (val(a) < val(b) ? -dir : val(a) > val(b) ? dir : 0));
+};
+
+// `notesPage`: `first` rows after the `after` cursor (here simply an offset;
+// it is opaque to the client either way).
+export const notesPage = (list, vars = {}) => {
+  const rows = sortNotes(filterNotes(list, vars), vars.sort);
+  const start = Math.max(0, Number(vars.after) || 0);
+  const first = Math.min(200, Math.max(1, Number(vars.first) || 50));
+  const page = rows.slice(start, start + first);
+  const hasMore = start + first < rows.length;
+  return {
+    notesPage: {
+      __typename: 'NotePage',
+      notes: page.map(listRow),
+      nextCursor: hasMore ? String(start + first) : null,
+      hasMore,
+    },
+  };
+};
+
+// Recently deleted (C4): soft-deleted notes, most recently deleted first.
+// They are in no list, tag count or search; `note(id)` still opens them.
+const deletedNote = (id, title, type, tags, content, deletedHoursAgo) => ({
+  ...note(id, title, type, tags, content, daysAgo(12), daysAgo(50)),
+  deletedAt: hoursAgo(deletedHoursAgo),
+});
+export const DELETED = [
+  deletedNote('xd1', 'Old standup template', 'markdown', ['work'], '## Yesterday\n\n## Today\n\n## Blocked\n\nReplaced by the weekly planning ritual.', 1),
+  deletedNote('xd2', 'Paint colours for the hallway — the long list of every swatch we looked at before choosing', 'text', ['house'], '<p>Went with the warm grey in the end; the swatches are in the garage.</p>', 30),
+  deletedNote('xd3', 'Scratch sketch', 'handwritten', [], '', 24 * 21),
+];
+
+// A sketch's automatic transcript (AUTO_TRANSCRIBE_SPEC.md): the fixture
+// sketch has been read, so its status line says it is searchable.
+export const transcriptState = (over = {}) => ({
+  __typename: 'SketchTranscriptState',
+  status: 'searchable', contentHash: 'h-sketch-1', current: true,
+  text: 'Onboarding flow\nsign up -> verify email -> first note',
+  edited: false, source: 'auto', provider: 'openrouter', model: 'openai/gpt-4.1-mini',
+  at: hoursAgo(20), retryAt: null, error: null, sentTaskKeys: [], autoEnabled: true,
+  ...over,
+});
+
+const AI_PROVENANCE = { __typename: 'AIProvenance', source: 'model', reason: null, model: 'openai/gpt-4.1-mini', provider: 'openrouter', cached: false, callsToday: 1, cap: 60 };
+
+// Every note the fixtures know, by id (thumbnails, restores).
+const byId = (id) => [...NOTES, NOTE_WIDE_TABLE, NOTE_PRINT, NOTE_LINKED, NOTE_SPIDERS, ...ARCHIVED, ...DELETED].find((n) => n.id === id) || null;
+
+// What a write gives back (NOTE_WRITE_FIELDS): no body.
+const written = (id, vars = {}, base = {}) => ({
+  __typename: 'Note',
+  id,
+  title: vars.title ?? base.title ?? '',
+  type: vars.type ?? base.type ?? 'markdown',
+  tags: vars.tags ?? base.tags ?? [],
+  createdAt: base.createdAt ?? new Date().toISOString(),
+  updatedAt: new Date().toISOString(),
+});
+
+/**
+ * A stub answer that is a GraphQL ERROR, not data (lib/net.mjs `gqlError`
+ * shape): the gateway's CONFLICT refusal of a guarded updateNote (C3).
+ */
+export const conflictAnswer = (serverNote) => ({
+  __graphql: {
+    data: null,
+    errors: [{
+      message: 'This note was changed on another device since you started editing.',
+      path: ['updateNote'],
+      extensions: {
+        code: 'CONFLICT',
+        serverNote: {
+          id: serverNote.id, title: serverNote.title ?? null, content: serverNote.content ?? '',
+          tags: serverNote.tags || [], type: serverNote.type || 'text', updatedAt: serverNote.updatedAt,
+        },
+      },
+    }],
+  },
+});
+
 export const OPS = {
+  // Home's few rows: same filters, a limit, list rows (no bodies).
   GetNotes: (vars) => ({
-    notes: vars?.under ? NOTES.filter((n) => n.tags.some((t) => inSubtree(t, vars.under))) : NOTES,
+    notes: sortNotes(filterNotes(NOTES, vars), vars?.sort).slice(0, vars?.limit || 200).map(listRow),
+  }),
+  // The Notes page and every tag view, a page at a time.
+  GetNotesPage: (vars) => notesPage(NOTES, vars),
+  // A list row's thumbnail fetches its own note's body once it is in view.
+  NoteThumbContent: (vars) => {
+    const hit = byId(vars.id);
+    return { note: hit ? { __typename: 'Note', id: hit.id, content: hit.content, updatedAt: hit.updatedAt } : null };
+  },
+  DeletedNotes: (vars) => ({
+    deletedNotes: DELETED.slice(0, vars?.limit || 50).map((n) => ({ ...listRow(n), deletedAt: n.deletedAt })),
   }),
   NoteTagUsage: (vars) => {
     const hit = TAG_COUNT_NOTES.filter((n) => n.tags.some((t) => inSubtree(t, vars.tag)));
@@ -405,9 +554,33 @@ export const OPS = {
   GetNoteTagCounts: { notes: TAG_COUNT_NOTES },
   GetNoteById: { note: NOTE_N1 },
   GetNoteTags: { noteTags: TAGS },
-  CreateNote: { createNote: note('new1', 'Untitled Note', 'text', [], '') },
-  UpdateNote: { updateNote: NOTE_N1 },
+  CreateNote: (vars) => ({ createNote: written('new1', vars) }),
+  // A photo note, created WITH its reviewed reading (C6).
+  CreatePhotoNote: (vars) => ({ createNote: written('photo1', vars) }),
+  // The note as written: the title, tags and type that were sent, and a new
+  // updatedAt for the next save's baseUpdatedAt.
+  UpdateNote: (vars) => ({ updateNote: written(vars.id, vars, byId(vars.id) || NOTE_N1) }),
+  // Soft delete (C4): Recently deleted for 30 days; restore brings it back.
   DeleteNote: { deleteNote: true },
+  RestoreNote: (vars) => {
+    const n = byId(vars.id) || NOTE_N1;
+    return { restoreNote: { ...listRow({ ...n, id: vars.id }), deletedAt: null } };
+  },
+  PurgeNote: { purgeNote: true },
+  // History: nothing saved before, unless a scene says otherwise.
+  GetNoteVersions: { noteVersions: [] },
+  GetNoteVersion: { noteVersion: null },
+  // Opt-in (appPreferences.notegeek.suggestOnSave); nothing to suggest by default.
+  SuggestForNote: { suggestForNote: { __typename: 'NoteSuggestions', tags: [], related: [], provenance: { ...AI_PROVENANCE, source: 'none' } } },
+  // Automatic sketch transcription: the open sketch has been read.
+  SketchTranscript: () => ({ sketchTranscript: transcriptState() }),
+  AutoTranscribeSketch: () => ({ autoTranscribeSketch: transcriptState({ at: new Date().toISOString() }) }),
+  SaveSketchTranscriptEdit: (vars) => ({
+    saveSketchTranscriptEdit: transcriptState({ text: vars.text, edited: true, source: 'user', contentHash: vars.forHash || 'h-sketch-1', at: new Date().toISOString() }),
+  }),
+  RecordSketchTasksSent: (vars) => ({ recordSketchTasksSent: transcriptState({ sentTaskKeys: vars.keys || [] }) }),
+  // Journal lines → TodoGeek, through the same gateway.
+  CreateTodoTask: (vars) => ({ createTask: { __typename: 'Task', id: `task-${String(vars.clientId || 'x').slice(0, 8)}`, content: vars.content } }),
   RenameTag: { renameTag: true },
   DeleteTag: { deleteTag: true },
   SearchNotes: { searchNotes: [] },
@@ -427,7 +600,8 @@ export const OPS = {
   // Archive (spec §3): nothing is archived unless a scene says so.
   NoteArchiveState: (vars) => {
     const hit = ARCHIVED.find((n) => n.id === vars.id);
-    return { note: { __typename: 'Note', id: vars.id, archived: Boolean(hit), archivedAt: hit ? hit.archivedAt : null } };
+    const gone = DELETED.find((n) => n.id === vars.id);
+    return { note: { __typename: 'Note', id: vars.id, archived: Boolean(hit), archivedAt: hit ? hit.archivedAt : null, deletedAt: gone ? gone.deletedAt : null } };
   },
   ArchivedNotes: { archivedNotes: ARCHIVED },
   ArchiveNotes: (vars) => ({ archiveNotes: { __typename: 'ArchiveResult', ids: vars.ids, count: vars.ids.length } }),

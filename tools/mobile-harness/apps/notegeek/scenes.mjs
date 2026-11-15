@@ -80,6 +80,10 @@ async function openSketchToTranscribe(page, h) {
     ...OPS,
     GetNoteById: { note: NOTE_SKETCH },
     UpdateNote: { updateNote: NOTE_SKETCH },
+    // Not read yet (the default fixture sketch is): a sketch whose stored
+    // reading is current is shown that reading instead of being sent again
+    // (AUTO_TRANSCRIBE_SPEC.md §5), and these scenes are about the sending.
+    SketchTranscript: () => ({ sketchTranscript: transcriptState({ status: 'waiting', current: false, text: null, model: null, provider: null, source: null, at: null }) }),
     TranscribeSketch: (vars) => {
       sent.push(vars);
       return { transcribeSketch: { text: TRANSCRIPT, provenance: { source: 'model', reason: null, model: 'openai/gpt-4.1-mini', provider: 'openrouter', cached: false, callsToday: 1, cap: 40 } } };
@@ -132,7 +136,7 @@ async function reviewTranscript(page, h) {
 
 import { fileURLToPath } from 'node:url';
 import { json, graphqlRoute } from '../../lib/net.mjs';
-import { OPS, ARCHIVED, NOTE_COMPOSED, NOTE_SUGGESTIONS, NOTE_CODE, NOTE_MINDMAP, NOTE_SKETCH, NOTE_WIDE_TABLE, NOTE_MD, NOTE_PRINT, SEARCH_RESULTS, HYBRID_RESULTS, BEST_MATCH_RESULTS, NEAR_TIE_RESULTS, RELATED_TO_N1, NOTE_N1, NOTE_LINKED, NOTE_LINKED_LINKS, BACKLINKS_TO_NL, NOTE_SPIDERS, FOLD_IN_INPUT, FOLD_IN_PROPOSAL, SPIDERS_FOLDED, SPIDERS_SEARCH } from './fixtures.mjs';
+import { OPS, ARCHIVED, DELETED, NOTES, conflictAnswer, transcriptState, notesPage, listRow, NOTE_COMPOSED, NOTE_SUGGESTIONS, NOTE_CODE, NOTE_MINDMAP, NOTE_SKETCH, NOTE_WIDE_TABLE, NOTE_MD, NOTE_PRINT, SEARCH_RESULTS, HYBRID_RESULTS, BEST_MATCH_RESULTS, NEAR_TIE_RESULTS, RELATED_TO_N1, NOTE_N1, NOTE_LINKED, NOTE_LINKED_LINKS, BACKLINKS_TO_NL, NOTE_SPIDERS, FOLD_IN_INPUT, FOLD_IN_PROPOSAL, SPIDERS_FOLDED, SPIDERS_SEARCH } from './fixtures.mjs';
 
 // ── Fold-in helpers (scenes 19a-19e) ────────────────────────────────────────
 // The gateway is stubbed with the proposal the real model made for this note
@@ -151,7 +155,7 @@ async function stubFoldIn(page, extra = {}) {
       return { foldInApply: { __typename: 'FoldInResult', note: { ...NOTE_SPIDERS, content: SPIDERS_FOLDED, updatedAt: new Date().toISOString() }, versionId: 'v-fold', applied: vars.operations.length } };
     },
     SearchNotes: (vars) => { calls.search.push(vars); return { searchNotes: SPIDERS_SEARCH }; },
-    CreateNote: (vars) => { calls.create.push(vars); return OPS.CreateNote; },
+    CreateNote: (vars) => { calls.create.push(vars); return OPS.CreateNote(vars); },
     ...extra,
   });
   return calls;
@@ -228,8 +232,16 @@ async function stubPhotoGateway(page) {
       calls.transcribe.push(vars);
       return { transcribeSketch: { text: PHOTO_READINGS[calls.transcribe.length - 1] ?? 'more writing', provenance: PROV } };
     },
+    // The photo sketch note goes through its own document, CreatePhotoNote,
+    // carrying the reviewed reading (C6, 2026-11-15); the text note through
+    // the ordinary CreateNote. Both land in `calls.create`, in order, with
+    // the operation that sent them.
+    CreatePhotoNote: (vars) => {
+      calls.create.push({ ...vars, op: 'CreatePhotoNote' });
+      return { createNote: photoNote('photo1', vars.title, vars.type, vars.content, vars.tags || []) };
+    },
     CreateNote: (vars) => {
-      calls.create.push(vars);
+      calls.create.push({ ...vars, op: 'CreateNote' });
       const id = vars.type === 'handwritten' ? 'photo1' : 'md1';
       return { createNote: photoNote(id, vars.title, vars.type, vars.content, vars.tags || []) };
     },
@@ -293,6 +305,10 @@ async function savePhotos(page, h) {
   if (calls.create.length !== 2 || photo?.type !== 'handwritten' || md?.type !== 'markdown') {
     throw new Error(`expected a photo sketch note then a markdown note, saw ${calls.create.map((c) => c.type).join(', ')}`);
   }
+  if (photo.op !== 'CreatePhotoNote') throw new Error(`the photo note was created by ${photo.op}, not CreatePhotoNote`);
+  // C6: the reviewed reading rides WITH the create, so the photo note is
+  // searchable even if nothing after it succeeds.
+  if (!String(photo.transcriptText || '').includes('Kitchen plan')) throw new Error('the photo note was created without its reviewed reading (transcriptText)');
   if (!md.content.startsWith(`From photos: [${photo.title}](/notes/photo1)`)) throw new Error('the markdown note does not link back to the photo note');
   const content = JSON.parse(photo.content);
   const images = Object.values(content.store).filter((r) => r.typeName === 'shape' && r.type === 'image');
@@ -489,6 +505,63 @@ async function openComposeMany(page, h, calls) {
   const sent = [...calls.compose[0].noteIds].sort().join(',');
   if (sent !== 'n1,n3,n5') throw new Error(`composeNotes sent ${sent}`);
 }
+
+// The editor mirrors unsaved work to IndexedDB (utils/draftStore.js) and
+// offers it back the next time the note is opened. One browser context serves
+// every scene of a viewport, so a scene that leaves an edit unsaved (the
+// failed save, the offline one, anything typed and abandoned) would put a
+// "Restore unsaved changes" banner on whichever later scene opens that note.
+// Every scene therefore ends by forgetting the device's drafts.
+//
+// The app must be gone first: a dirty editor writes its draft again on
+// `pagehide`, so clearing while it is still on screen is undone by the very
+// navigation that starts the next scene. The detour is a blank same-origin
+// page served by the harness (every scene navigates for itself, so none
+// depends on where the last one stopped).
+const BLANK = '/__harness_blank';
+const blankRouted = new WeakSet();
+async function clearDrafts(page, h) {
+  try {
+    if (!blankRouted.has(page)) {
+      blankRouted.add(page);
+      await page.route(`**${BLANK}`, (r) => r.fulfill({ contentType: 'text/html', body: '<!doctype html><title>blank</title>' }));
+    }
+    await page.goto(h.base + BLANK, { waitUntil: 'load' });
+    await page.evaluate(() => new Promise((resolve) => {
+      const req = indexedDB.deleteDatabase('notegeek-drafts');
+      req.onsuccess = req.onerror = () => resolve();
+      // Still held by the page that just left: the delete completes as soon
+      // as that connection closes, ahead of the next page's open().
+      req.onblocked = () => resolve();
+    }));
+  } catch (err) {
+    // A scene must not fail on its cleanup, but a cleanup that silently does
+    // nothing is how a leftover draft shows up three scenes later.
+    console.log(`  [drafts] could not clear the device drafts: ${String(err.message || err).split('\n')[0]}`);
+  }
+}
+const withCleanDrafts = (scene) => ({
+  ...scene,
+  // The runner skips teardown for a scene whose setup threw, and a failed
+  // scene is exactly the one that leaves an edit behind.
+  ...(scene.setup ? {
+    async setup(page, h) {
+      try {
+        return await scene.setup(page, h);
+      } catch (err) {
+        await clearDrafts(page, h);
+        throw err;
+      }
+    },
+  } : {}),
+  async teardown(page, h) {
+    try {
+      if (scene.teardown) await scene.teardown(page, h);
+    } finally {
+      await clearDrafts(page, h);
+    }
+  },
+});
 
 export const scenes = [
   // Home (QuickCaptureHome): the capture box and the notes, nothing else.
@@ -958,7 +1031,49 @@ export const scenes = [
       if (await page.locator('.tl-error-boundary').count()) {
         throw new Error('tldraw rendered its own error screen');
       }
+      // A saved sketch opens to be READ (2026-11-15): on the hand tool (a
+      // stray touch pans, it does not scribble), with the whole drawing in view.
+      const bar = page.getByRole('toolbar', { name: 'Drawing tools' });
+      if (await bar.count()) {
+        if ((await bar.getByRole('button', { name: 'Move', exact: true }).getAttribute('aria-pressed')) !== 'true') {
+          throw new Error('a saved sketch did not open on the hand (Move) tool');
+        }
+      }
+      const fit = await page.evaluate(() => {
+        const box = document.querySelector('.tl-container')?.getBoundingClientRect();
+        const shapes = [...document.querySelectorAll('.tl-shape')].map((el) => el.getBoundingClientRect()).filter((r) => r.width && r.height);
+        if (!box || !shapes.length) return null;
+        return { total: shapes.length, inside: shapes.filter((r) => r.left >= box.left - 1 && r.right <= box.right + 1 && r.top >= box.top - 1 && r.bottom <= box.bottom + 1).length };
+      });
+      if (!fit) throw new Error('the sketch drew no shapes');
+      if (fit.inside !== fit.total) throw new Error(`fit-to-content: only ${fit.inside} of ${fit.total} shapes are inside the canvas`);
     },
+  },
+  {
+    // The sketch's status line, tapped (review 2.11): the detail that used to
+    // be a hover tooltip, with "View text".
+    name: '10t-sketch-transcript-status',
+    async setup(page, h) {
+      await openNote(page, h, NOTE_SKETCH, '/notes/n3/edit');
+      const status = page.locator('[data-transcript-status="searchable"]');
+      if (!(await status.count())) throw new Error('a read sketch does not say it is searchable');
+      await status.click();
+      await h.settle(400);
+      if (!(await page.getByRole('button', { name: 'View text' }).count())) throw new Error('the status detail has no "View text"');
+    },
+    teardown: (page, h) => h.esc(400),
+  },
+  {
+    // "View text": the reading itself (full screen on a phone).
+    name: '10u-sketch-transcript-text',
+    async setup(page, h) {
+      await openNote(page, h, NOTE_SKETCH, '/notes/n3/edit');
+      await page.locator('[data-transcript-status="searchable"]').click();
+      await page.getByRole('button', { name: 'View text' }).click();
+      await page.getByRole('dialog', { name: /The handwriting, as read/ }).waitFor({ timeout: 5000 });
+      await h.settle(500);
+    },
+    teardown: (page, h) => h.esc(400),
   },
   {
     // The ⋯ menu on a sketch with ink: "Convert handwriting to text" enabled.
@@ -1063,7 +1178,13 @@ export const scenes = [
     viewports: ['phone'],
     async setup(page, h) {
       const { photo } = await savePhotos(page, h);
-      await graphqlRoute(page, { ...OPS, GetNoteById: { note: photoNote('photo1', photo.title, 'handwritten', photo.content, photo.tags) } });
+      await graphqlRoute(page, {
+        ...OPS,
+        GetNoteById: { note: photoNote('photo1', photo.title, 'handwritten', photo.content, photo.tags) },
+        // Photo pages are never read automatically (the gateway says `off`);
+        // their reviewed reading went in with the create.
+        SketchTranscript: () => ({ sketchTranscript: transcriptState({ status: 'off', current: false, text: null, model: null, provider: null, source: null, at: null }) }),
+      });
       await page.goto(h.base + '/notes/photo1', { waitUntil: 'networkidle' });
       await h.settle(1800);
       if (await page.getByText(/something went wrong|failed to load/i).count()) throw new Error('the photo note rendered our error boundary');
@@ -1419,7 +1540,7 @@ export const scenes = [
         ...OPS,
         GetNoteById: { note: NOTE_LINKED },
         NoteLinks: { note: { __typename: 'Note', id: 'nl', links: NOTE_LINKED_LINKS } },
-        CreateNote: (vars) => { creates += 1; return OPS.CreateNote; },
+        CreateNote: (vars) => { creates += 1; return OPS.CreateNote(vars); },
       });
       await page.goto(h.base + '/notes/nl', { waitUntil: 'networkidle' });
       await h.settle(1000);
@@ -1755,7 +1876,300 @@ export const scenes = [
       if (!(await page.getByRole('button', { name: 'Restore from archive' }).count())) throw new Error('the viewer still offers Archive');
     },
   },
-];
+
+  // ── Save safety, conflicts, soft delete (2026-11-15, review 2026-11) ──────
+  {
+    // "Unsaved changes on this device · Discard · Restore" (1.2). Made the way
+    // it really happens: an edit the server never acknowledged (the save
+    // answers nothing), then the page is reloaded. The device copy is offered
+    // back; restoring it puts the typed line on screen again.
+    name: '21a-restore-draft-banner',
+    async setup(page, h) {
+      await bootstrapChef(page);
+      await graphqlRoute(page, { ...OPS, GetNoteById: { note: NOTE_MD }, UpdateNote: { updateNote: null } });
+      await page.goto(h.base + '/notes/n2/edit', { waitUntil: 'networkidle' });
+      await h.settle(1200);
+      if (await page.locator('[data-restore-draft]').count()) throw new Error('a draft was offered before anything was typed (a leftover from another scene?)');
+      const body = page.getByRole('textbox', { name: 'Note body' });
+      await body.click();
+      await body.press('Control+End');
+      await body.type('\n- [ ] vanilla, the real kind');
+      await h.settle(1500); // the device copy is written 500 ms after the last key
+      await page.reload({ waitUntil: 'networkidle' });
+      await h.settle(1400);
+      const banner = page.locator('[data-restore-draft]');
+      if (!(await banner.count())) throw new Error('the unsaved edit was not offered back after a reload');
+      for (const name of ['Restore unsaved changes', 'Discard']) {
+        if (!(await banner.getByRole('button', { name }).count())) throw new Error(`the banner has no "${name}"`);
+      }
+      if ((await page.getByRole('textbox', { name: 'Note body' }).inputValue()).includes('vanilla')) throw new Error('the draft was applied without asking');
+      // The sentence reads as a sentence. On a phone it was squeezed to one
+      // word a line beside the two buttons (eight lines); the buttons now
+      // drop under it.
+      const lines = await banner.locator('p').first().evaluate((el) => {
+        const cs = getComputedStyle(el);
+        return Math.round((el.getBoundingClientRect().height - parseFloat(cs.paddingTop) - parseFloat(cs.paddingBottom)) / parseFloat(cs.lineHeight));
+      });
+      if (lines > 2) throw new Error(`the banner's sentence wraps to ${lines} lines`);
+      const discard = await banner.getByRole('button', { name: 'Discard' }).boundingBox();
+      const restore = await banner.getByRole('button', { name: 'Restore unsaved changes' }).boundingBox();
+      if (Math.abs(discard.y - restore.y) > 2) throw new Error('Discard and Restore are on different lines of the banner');
+      // Off the field, so the phone's formatting bar is not docked over the shot.
+      await page.locator(':focus').evaluate((el) => el.blur()).catch(() => {});
+      await h.settle(400);
+    },
+    teardown: async (page, h) => {
+      await page.locator('[data-restore-draft]').getByRole('button', { name: 'Restore unsaved changes' }).click();
+      await h.settle(400);
+      if (!(await page.getByRole('textbox', { name: 'Note body' }).inputValue()).includes('vanilla, the real kind')) {
+        throw new Error('Restore did not put the unsaved line back');
+      }
+    },
+  },
+  {
+    // "This note changed on another device" (1.4, C3): the gateway refuses the
+    // save with extensions.code CONFLICT and its own copy. The dialog cannot
+    // be dismissed (Escape, backdrop) and no button is focused: Enter must not
+    // pick a side. The refused save carried the version it was made against.
+    name: '21b-conflict-dialog',
+    async setup(page, h) {
+      await bootstrapChef(page);
+      const saves = [];
+      const theirs = { ...NOTE_MD, title: 'Recipe: brown butter cookies (Heather\'s tweaks)', content: `${NOTE_MD.content}\n\n- Heather: 340°F in the new oven.`, updatedAt: new Date(Date.now() - 4 * 60000).toISOString() };
+      await graphqlRoute(page, {
+        ...OPS,
+        GetNoteById: { note: NOTE_MD },
+        UpdateNote: (vars) => { saves.push(vars); return conflictAnswer(theirs); },
+      });
+      await page.goto(h.base + '/notes/n2/edit', { waitUntil: 'networkidle' });
+      await h.settle(1200);
+      const title = page.getByLabel('Note title');
+      await title.click();
+      await title.press('End');
+      await title.type(' (v2)');
+      await page.keyboard.press('Control+s');
+      const dialog = page.getByRole('dialog', { name: 'This note changed on another device' });
+      await dialog.waitFor({ timeout: 10000 });
+      await h.settle(600);
+      if (!saves.length) throw new Error('no updateNote was sent');
+      if (new Date(saves[0].baseUpdatedAt).getTime() !== new Date(NOTE_MD.updatedAt).getTime()) {
+        throw new Error(`the save did not carry the version it was made against (baseUpdatedAt ${saves[0].baseUpdatedAt})`);
+      }
+      for (const name of ['Keep mine', 'Keep both', 'Use theirs']) {
+        if (!(await dialog.getByRole('button', { name }).count())) throw new Error(`the conflict dialog has no "${name}"`);
+      }
+      const focused = await page.evaluate(() => (document.activeElement?.closest('button') ? document.activeElement.textContent : ''));
+      if (focused) throw new Error(`"${focused}" is focused: Enter would pick a side`);
+      await page.keyboard.press('Escape');
+      await h.settle(300);
+      if (!(await dialog.count())) throw new Error('Escape dismissed the conflict dialog');
+      const before = saves.length;
+      await h.settle(2600); // longer than the autosave delay
+      if (saves.length !== before) throw new Error('autosave kept saving while the conflict was open');
+    },
+    teardown: async (page, h) => {
+      await page.getByRole('button', { name: 'Use theirs' }).click();
+      await h.settle(500);
+      if (await page.getByRole('dialog', { name: 'This note changed on another device' }).count()) throw new Error('"Use theirs" did not close the dialog');
+      if (!/Heather's tweaks/.test(await page.getByLabel('Note title').inputValue())) throw new Error('"Use theirs" did not show their copy');
+    },
+  },
+  {
+    // Recently deleted (/deleted, C4): three notes waiting out their 30 days,
+    // each with Restore and Delete forever. One has a title far wider than a
+    // phone, one is a sketch with no words.
+    name: '21c-recently-deleted',
+    goto: '/deleted',
+    wait: 1200,
+    async setup(page, h) {
+      const rows = page.locator('[data-deleted-row]');
+      if ((await rows.count()) !== DELETED.length) throw new Error(`expected ${DELETED.length} deleted notes, saw ${await rows.count()}`);
+      const first = rows.first();
+      if (!/Old standup template/.test(await first.innerText())) throw new Error('the most recently deleted note is not first');
+      for (const name of ['Restore', 'Delete forever']) {
+        if (!(await first.getByRole('button', { name }).count())) throw new Error(`a deleted row has no "${name}"`);
+      }
+      if (!(await page.getByRole('heading', { level: 1, name: /Recently deleted/ }).count())) throw new Error('no "Recently deleted" heading');
+      // The two actions stay together on one line, in every row.
+      for (let i = 0; i < DELETED.length; i += 1) {
+        const a = await rows.nth(i).getByRole('button', { name: 'Delete forever' }).boundingBox();
+        const b = await rows.nth(i).getByRole('button', { name: 'Restore' }).boundingBox();
+        if (Math.abs(a.y - b.y) > 2) throw new Error(`row ${i + 1}: Restore (y ${Math.round(b.y)}) is not beside Delete forever (y ${Math.round(a.y)})`);
+      }
+    },
+  },
+  {
+    // "Delete forever?": the one irreversible act, so it asks, with Cancel
+    // focused (Enter cancels).
+    name: '21d-delete-forever-dialog',
+    goto: '/deleted',
+    wait: 1200,
+    async setup(page, h) {
+      await page.locator('[data-deleted-row]').first().getByRole('button', { name: 'Delete forever' }).click();
+      const dialog = page.getByRole('dialog', { name: 'Delete forever?' });
+      await dialog.waitFor({ timeout: 5000 });
+      await h.settle(500);
+      const focused = await page.evaluate(() => document.activeElement?.textContent || '');
+      if (!/cancel/i.test(focused)) throw new Error(`"${focused}" is focused in "Delete forever?", not Cancel`);
+    },
+    teardown: (page, h) => h.esc(400),
+  },
+  {
+    // Recently deleted, empty.
+    name: '21e-recently-deleted-empty',
+    async setup(page, h) {
+      await graphqlRoute(page, { ...OPS, DeletedNotes: { deletedNotes: [] } });
+      await page.goto(h.base + '/deleted', { waitUntil: 'networkidle' });
+      await h.settle(1000);
+      if (!(await page.getByText('Nothing deleted').count())) throw new Error('no empty state on an empty Recently deleted');
+    },
+  },
+  {
+    // A deleted note opened by id (a [[link]], a bookmark, Back): the
+    // "Deleted <date> · Restore" banner.
+    name: '21f-deleted-banner',
+    async setup(page, h) {
+      await bootstrapChef(page);
+      await graphqlRoute(page, { ...OPS, GetNoteById: { note: DELETED[0] } });
+      await page.goto(h.base + '/notes/xd1', { waitUntil: 'networkidle' });
+      await h.settle(1200);
+      const banner = page.locator('[data-deleted-banner]');
+      if (!(await banner.count())) throw new Error('a deleted note opened by id shows no "Deleted" banner');
+      if (!(await banner.getByRole('button', { name: 'Restore' }).count())) throw new Error('the deleted banner has no Restore');
+    },
+  },
+  {
+    // Delete is undoable (1.19): the confirm (Cancel focused, so Enter never
+    // deletes), then home with the "Note deleted · Undo" toast. The note has
+    // left the lists; Undo sends restoreNote for it.
+    name: '21g-delete-undo-toast',
+    async setup(page, h) {
+      await bootstrapChef(page);
+      const calls = { del: [], restore: [] };
+      const left = () => NOTES.filter((n) => !calls.del.includes(n.id) || calls.restore.includes(n.id));
+      await graphqlRoute(page, {
+        ...OPS,
+        GetNoteById: { note: NOTE_N1 },
+        GetNotes: (vars) => ({ notes: notesPage(left(), { ...vars, first: vars?.limit || 200 }).notesPage.notes }),
+        GetNotesPage: (vars) => notesPage(left(), vars),
+        DeleteNote: (vars) => { calls.del.push(vars.id); return { deleteNote: true }; },
+        RestoreNote: (vars) => { calls.restore.push(vars.id); return { restoreNote: { ...listRow(NOTE_N1), deletedAt: null } }; },
+      });
+      await page.goto(h.base + '/notes/n1/edit', { waitUntil: 'networkidle' });
+      await h.settle(1200);
+      await page.getByRole('button', { name: /more note actions/i }).first().click();
+      await h.settle(300);
+      await page.getByRole('menuitem', { name: /delete note/i }).first().click();
+      const dialog = page.getByRole('dialog', { name: 'Delete Note' });
+      await dialog.waitFor({ timeout: 5000 });
+      await h.settle(400);
+      const focused = await page.evaluate(() => document.activeElement?.textContent || '');
+      if (!/cancel/i.test(focused)) throw new Error(`"${focused}" is focused in the delete confirm, not Cancel`);
+      await dialog.getByRole('button', { name: 'Delete', exact: true }).click();
+      const undo = page.getByRole('button', { name: 'Undo' });
+      await undo.waitFor({ timeout: 8000 });
+      await h.settle(900);
+      if (calls.del.join() !== 'n1') throw new Error(`deleteNote sent for "${calls.del.join()}"`);
+      if (!(await page.getByText('Note deleted').count())) throw new Error('no "Note deleted" toast');
+      if (new URL(page.url()).pathname !== '/') throw new Error(`after a delete the page is ${new URL(page.url()).pathname}, not home`);
+      if (await page.locator('[data-note-row]').filter({ hasText: 'Q3 roadmap notes' }).count()) throw new Error('the deleted note is still listed on home');
+      if (!(await undo.isVisible())) throw new Error('the Undo toast is gone before the shot');
+    },
+    teardown: async (page, h) => {
+      await page.getByRole('button', { name: 'Undo' }).click();
+      await page.getByText('Note restored').waitFor({ timeout: 8000 });
+      await h.settle(600);
+      if (!(await page.locator('[data-note-row]').filter({ hasText: 'Q3 roadmap notes' }).count())) throw new Error('Undo did not bring the note back to home');
+    },
+  },
+
+  // ── The sketch bar (2026-11-15) ───────────────────────────────────────────
+  {
+    // The bar's More popover. On a phone the short bar keeps Move, Write,
+    // Eraser, the pen, Paper, Undo, More and Fullscreen; everything else
+    // (Select, Redo, Highlighter, shapes, text, image, zoom) is in More, with
+    // Share as image, Finger draws and where the bar sits. On desktop the bar
+    // is full and More holds only the last three.
+    name: '22a-sketch-more',
+    goto: '/notes/new?type=handwritten',
+    wait: 2500,
+    async setup(page, h) {
+      await h.settle(800);
+      const bar = page.getByRole('toolbar', { name: 'Drawing tools' });
+      if (!(await bar.count())) throw new Error('no drawing toolbar on a new sketch');
+      const isFull = (await bar.getAttribute('data-bar-full')) === 'true';
+      if (h.viewport === 'phone' && isFull) throw new Error('a phone got the full bar');
+      if (!isFull) {
+        for (const name of ['Move', 'Write', 'Eraser', 'Pen colour and size', 'Undo', 'More', 'Fullscreen']) {
+          if (!(await bar.getByRole('button', { name, exact: true }).count())) throw new Error(`the short bar has no "${name}"`);
+        }
+        const box = await bar.boundingBox();
+        if (box.x < 0 || box.x + box.width > page.viewportSize().width + 1) throw new Error(`the short bar is wider than the screen (${Math.round(box.x)}..${Math.round(box.x + box.width)})`);
+      }
+      // Every button of the bar is inside the bar, and so on the screen. The
+      // short bar's eight buttons used to be 386px in a 374px bar: Fullscreen
+      // hung off the right edge of a 390px phone (2026-11-15).
+      const spill = await bar.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        return [...el.querySelectorAll('button')]
+          .map((b) => ({ name: b.getAttribute('aria-label'), q: b.getBoundingClientRect() }))
+          .filter(({ q }) => q.left < r.left - 0.5 || q.right > r.right + 0.5 || q.right > innerWidth + 0.5)
+          .map(({ name, q }) => `${name} ${Math.round(q.left)}..${Math.round(q.right)} (bar ${Math.round(r.left)}..${Math.round(r.right)})`);
+      });
+      if (spill.length) throw new Error(`buttons spill out of the drawing bar: ${spill.join('; ')}`);
+      await bar.getByRole('button', { name: 'More', exact: true }).click();
+      const more = page.getByRole('dialog', { name: 'More' });
+      await more.waitFor({ timeout: 5000 });
+      await h.settle(500);
+      if (!isFull) {
+        for (const name of ['Select', 'Redo', 'Highlighter', 'Zoom to fit', 'Shapes', 'Text', 'Sticky note', 'Insert image', 'Zoom in', 'Zoom out']) {
+          if (!(await more.getByRole('button', { name, exact: true }).count())) throw new Error(`More has no "${name}"`);
+        }
+      }
+      if (!(await more.getByRole('checkbox', { name: 'Finger draws' }).count())) throw new Error('More has no "Finger draws"');
+      if (!(await more.getByRole('group', { name: 'Toolbar position' }).count())) throw new Error('More has no toolbar position');
+      const box = await more.boundingBox();
+      const vp = page.viewportSize();
+      if (box.x < 0 || box.y < 0 || box.x + box.width > vp.width + 1 || box.y + box.height > vp.height + 1) {
+        throw new Error(`the More popover runs off screen (${Math.round(box.x)},${Math.round(box.y)} ${Math.round(box.width)}x${Math.round(box.height)} in ${vp.width}x${vp.height})`);
+      }
+    },
+    teardown: (page, h) => h.esc(400),
+  },
+  {
+    // Fullscreen, with the pen picker open (review 2.2). MUI portals a
+    // popover to <body>, which is not on screen in fullscreen: the picker
+    // opened invisibly and its backdrop ate every tap. It must render INSIDE
+    // the fullscreen element. Skipped (not failed) where the browser refuses
+    // fullscreen.
+    name: '22b-sketch-fullscreen-pen',
+    goto: '/notes/new?type=handwritten',
+    wait: 2500,
+    async setup(page, h) {
+      await h.settle(800);
+      const bar = page.getByRole('toolbar', { name: 'Drawing tools' });
+      await bar.getByRole('button', { name: 'Fullscreen', exact: true }).click();
+      await h.settle(900);
+      if (!(await page.evaluate(() => Boolean(document.fullscreenElement)))) {
+        h.log('fullscreen was refused by this browser: scene skipped');
+        return false;
+      }
+      if (!(await bar.getByRole('button', { name: 'Exit fullscreen', exact: true }).count())) throw new Error('in fullscreen the bar has no "Exit fullscreen"');
+      await bar.getByRole('button', { name: 'Pen colour and size' }).click();
+      const picker = page.getByRole('dialog', { name: 'Pen colour and size' });
+      await picker.waitFor({ timeout: 5000 });
+      await h.settle(500);
+      const inside = await picker.evaluate((el) => Boolean(document.fullscreenElement?.contains(el)));
+      if (!inside) throw new Error('the pen picker rendered outside the fullscreen element (invisible in fullscreen)');
+      if (!(await picker.getByRole('button', { name: 'Size: Small' }).isVisible())) throw new Error('the pen sizes are not visible in fullscreen');
+    },
+    teardown: async (page, h) => {
+      await h.esc(300);
+      await page.evaluate(() => (document.fullscreenElement ? document.exitFullscreen() : null)).catch(() => {});
+      await h.settle(400);
+    },
+  },
+].map(withCleanDrafts);
 
 // Known, ticketed violations. Each one should die when the app is fixed —
 // an empty list is the goal, not a permanent parking lot.

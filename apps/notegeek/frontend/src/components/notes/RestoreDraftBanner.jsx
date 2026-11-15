@@ -36,15 +36,21 @@ export default function RestoreDraftBanner({ savedAt, onRestore, onDiscard, sx }
       }}
     >
       <HistoryOutlined aria-hidden sx={{ fontSize: 18, color: g.ink2, flexShrink: 0 }} />
-      <Typography sx={{ fontSize: '0.875rem', color: g.ink, flex: 1, minWidth: 0 }}>
+      {/* A basis, not `flex: 1`: with no floor the sentence was squeezed to
+          one word a line on a phone while the two buttons kept the row. Now
+          the pair of buttons drops to its own line (right-aligned) when the
+          sentence and both do not fit. */}
+      <Typography sx={{ fontSize: '0.875rem', color: g.ink, flex: '1 1 180px', minWidth: 0, py: '8px' }}>
         Unsaved changes on this device{when ? ` from ${when}` : ''}
       </Typography>
-      <Button onClick={onDiscard} color="inherit" sx={{ ...button, fontWeight: 500 }}>
-        Discard
-      </Button>
-      <Button onClick={onRestore} color="inherit" sx={button}>
-        Restore unsaved changes
-      </Button>
+      <Box sx={{ display: 'flex', alignItems: 'center', gap: '8px', ml: 'auto', flexShrink: 0 }}>
+        <Button onClick={onDiscard} color="inherit" sx={{ ...button, fontWeight: 500 }}>
+          Discard
+        </Button>
+        <Button onClick={onRestore} color="inherit" sx={button}>
+          Restore unsaved changes
+        </Button>
+      </Box>
     </Box>
   );
 }

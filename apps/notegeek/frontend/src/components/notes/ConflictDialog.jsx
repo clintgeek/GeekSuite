@@ -19,7 +19,8 @@ import { formatRelativeTime } from '../../utils/dateUtils';
  */
 export default function ConflictDialog({ open, serverNote, busy = false, onKeepMine, onUseTheirs, onKeepBoth }) {
   const when = serverNote?.updatedAt ? formatRelativeTime(serverNote.updatedAt) : null;
-  const button = { textTransform: 'none', minHeight: 44 };
+  // nowrap: on a phone "Keep mine" broke onto two lines beside the other two.
+  const button = { textTransform: 'none', minHeight: 44, whiteSpace: 'nowrap', flexShrink: 0 };
   return (
     <GeekDialog
       open={open}

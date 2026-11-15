@@ -71,6 +71,8 @@ const opFromDocument = (text = '') => {
 };
 
 // ops: { OperationName: data } or a function (op, variables, request) => data.
+// An operation with no stub is reported on the console ("unstubbed op") and
+// answered with empty data; pass `onMiss` to collect them instead.
 export async function graphqlRoute(ctx, ops, { onMiss } = {}) {
   await ctx.route('**/graphql', (r) => {
     if (r.request().method() === 'OPTIONS') {
@@ -93,6 +95,10 @@ export async function graphqlRoute(ctx, ops, { onMiss } = {}) {
       else console.log(`  [graphql] unstubbed op: ${op}`);
       return json(r, { data: {} });
     }
+    // A stub may answer with a GraphQL error instead of data (a refusal the
+    // app has to handle, like the gateway's CONFLICT): return
+    // `{ __graphql: { data, errors } }` and that is the whole response body.
+    if (data && typeof data === 'object' && data.__graphql) return json(r, data.__graphql);
     return json(r, { data });
   });
 }

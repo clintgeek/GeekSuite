@@ -113,12 +113,18 @@ export default function DeletedNotes() {
                       </Typography>
                     </Box>
                   </Box>
-                  <Button onClick={() => setConfirm(note)} disabled={purging} color="inherit" sx={{ ...button, fontWeight: 500 }}>
-                    Delete forever
-                  </Button>
-                  <Button onClick={() => restore(note)} disabled={restoring} variant="outlined" sx={button}>
-                    Restore
-                  </Button>
+                  {/* One group: on a phone the pair drops under the note
+                      together, right-aligned. Apart, "Delete forever" stayed
+                      beside the title (cutting it short) and Restore fell to
+                      a line of its own. */}
+                  <Box sx={{ display: 'flex', alignItems: 'center', gap: '8px', ml: 'auto', flexShrink: 0 }}>
+                    <Button onClick={() => setConfirm(note)} disabled={purging} color="inherit" sx={{ ...button, fontWeight: 500 }}>
+                      Delete forever
+                    </Button>
+                    <Button onClick={() => restore(note)} disabled={restoring} variant="outlined" sx={button}>
+                      Restore
+                    </Button>
+                  </Box>
                 </Box>
               </React.Fragment>
             ))}

@@ -114,7 +114,7 @@ lib/
   net.mjs          route plumbing: CORS/preflight, session routes, GraphQL stubs
   probe.mjs        the three grammar rules + the a11y pass, measured in the
                    page; plus waiver matching
-  registry.mjs     the eight apps: build dir, package name, package manager
+  registry.mjs     the eleven apps: build dir, package name, package manager
   serve.mjs        `pnpm --filter <pkg> build` + `vite preview` on a free port
   runner.mjs       walk an app's scenes: navigate, act, screenshot, probe
 apps/<app>/

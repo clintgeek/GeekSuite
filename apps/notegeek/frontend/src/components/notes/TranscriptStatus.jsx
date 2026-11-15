@@ -99,8 +99,10 @@ export default function TranscriptStatus({ view, onTranscribeNow = null }) {
           whiteSpace: 'nowrap',
           borderRadius: 1,
           // A small target in a dense row: the hit area grows, the text doesn't.
+          // 44px tall whatever the line's own height (it was inset -12px on a
+          // 16px line: 40px, under the phone floor).
           position: 'relative',
-          '&::after': { content: '""', position: 'absolute', inset: '-12px -4px' },
+          '&::after': { content: '""', position: 'absolute', left: -4, right: -4, top: '50%', height: 44, transform: 'translateY(-50%)' },
           '&::before': { content: '"· "' },
           '&:focus-visible': { outline: `2px solid ${theme.palette.primary.main}`, outlineOffset: 2 },
         }}
