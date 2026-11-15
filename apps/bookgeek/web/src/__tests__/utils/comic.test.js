@@ -96,3 +96,12 @@ describe('comics and manga', () => {
     });
   });
 });
+
+describe('the Add-book choice writes tags that comicKind recognises', () => {
+  it('Manga and Comics, on a plain EPUB', async () => {
+    const { COMIC_KIND_TAGS } = await import('../../utils/comic');
+    const epub = [{ format: 'EPUB', path: 'x.epub' }];
+    expect(comicKind({ files: epub, tags: [COMIC_KIND_TAGS.manga] })).toBe('Manga');
+    expect(comicKind({ files: epub, tags: [COMIC_KIND_TAGS.comic] })).toBe('Comic');
+  });
+});

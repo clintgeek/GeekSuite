@@ -457,6 +457,8 @@ the app was down over its due time, should it arrive late or be skipped?
     large manga volume will get a 413 until that is raised (Chef's call, nginx is not in
     the repo); no cover or metadata read out of an archive. An in-app comic reader and
     comics in Kindle/baskets are **not wanted** (Chef, 2026-11-15) — don't propose them.
+  - **BookGeek: deleting a book leaves its `bookreadings` rows behind** (found clearing
+    Death Note 2026-11-15; one orphan removed by hand). The delete should remove them.
   - New NoteGeek queries (`notesPage`, `deletedNotes`) answer empty to a signed-out
     caller, like the older ones — covered by the gateway auth fix in the suite review.
   - Sidebar tag counts still use `notes { id tags }` with no limit; fine while `notes` is

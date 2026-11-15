@@ -55,6 +55,10 @@ it" and "I still can't download comic books directly").**
   CB7 and CBT as sources and answers 409 "Comic files are not converted" when a comic
   is all the book has. The UI already hid those rows; this closes the API and the
   Kindle basket path. api 255 tests, the two new ones red without the filter.
+- **Add book: "Manga or comic?"** Chef's manga are EPUBs, which nothing recognises by
+  file type, and the dialog had nowhere to add a tag. Two toggles beside the file
+  chooser write the shared tag `Manga` or `Comics` on the new book. (Detecting it
+  from the EPUB's metadata was started and stopped at Chef's word.)
 - Harness: `03e-detail-closes` (goes red with the fix reverted) and a real download
   event in `03d-detail-comic-download`. Neither fault was visible to the unit tests.
 

@@ -118,3 +118,10 @@ export function comicDownloadFormat(book) {
   }
   return formats[0] || null;
 }
+
+/**
+ * The Add-book dialog's Manga / Comic choice, and the shared tag each one
+ * writes. The tag is what makes an EPUB or a PDF a comic: nothing about the
+ * file says so (Chef's manga are EPUBs, 2026-11-15).
+ */
+export const COMIC_KIND_TAGS = { manga: "Manga", comic: "Comics" };

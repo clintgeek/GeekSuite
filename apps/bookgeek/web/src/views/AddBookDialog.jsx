@@ -16,6 +16,8 @@ import MenuItem from "@mui/material/MenuItem";
 import Select from "@mui/material/Select";
 import Stack from "@mui/material/Stack";
 import TextField from "@mui/material/TextField";
+import ToggleButton from "@mui/material/ToggleButton";
+import ToggleButtonGroup from "@mui/material/ToggleButtonGroup";
 import Typography from "@mui/material/Typography";
 import { GeekDialog } from "@geeksuite/ui";
 import { BOOK_FILE_ACCEPT } from "../utils/comic";
@@ -26,6 +28,7 @@ export default function AddBookDialog({
   addBookAuthors,
   addBookError,
   addBookIsbn,
+  addBookKind = "",
   addBookLoading,
   addBookOpen,
   addBookShelf,
@@ -34,6 +37,7 @@ export default function AddBookDialog({
   setAddBookAuthors,
   setAddBookFile,
   setAddBookIsbn,
+  setAddBookKind,
   setAddBookOpen,
   setAddBookShelf,
   setAddBookTitle,
@@ -111,31 +115,55 @@ export default function AddBookDialog({
                 ))}
             </Select>
           </FormControl>
-          <Box>
-            <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mb: 0.5 }}>
-              Book file (optional)
-            </Typography>
-            <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
-              <Button variant="outlined" component="label">
-                Choose file…
-                <input
-                  type="file"
-                  accept={BOOK_FILE_ACCEPT}
-                  hidden
-                  onChange={(e) => {
-                    const file = e.target.files?.[0] || null;
-                    setAddBookFile(file);
-                    setFileName(file?.name || "");
-                  }}
-                />
-              </Button>
-              {fileName ? (
-                <Typography variant="body2" sx={{ color: "text.secondary" }} noWrap>
-                  {fileName}
-                </Typography>
-              ) : null}
-            </Stack>
-          </Box>
+          {/* Kind on the left, the file on the right; they stack on a phone.
+              Manga / Comic is asked here because an EPUB or a PDF does not say
+              what it is: the choice writes the tag that makes it a comic. */}
+          <Stack direction={{ xs: "column", sm: "row" }} spacing={{ xs: 2, sm: 3 }} alignItems="flex-start">
+            <Box>
+              <Typography id="add-book-kind" variant="caption" sx={{ color: "text.secondary", display: "block", mb: 0.5 }}>
+                Manga or comic?
+              </Typography>
+              <ToggleButtonGroup
+                exclusive
+                size="small"
+                value={addBookKind || null}
+                onChange={(_e, value) => setAddBookKind?.(value || "")}
+                aria-labelledby="add-book-kind"
+              >
+                <ToggleButton value="manga" sx={{ minHeight: 44, px: 2, textTransform: "none" }}>
+                  Manga
+                </ToggleButton>
+                <ToggleButton value="comic" sx={{ minHeight: 44, px: 2, textTransform: "none" }}>
+                  Comic
+                </ToggleButton>
+              </ToggleButtonGroup>
+            </Box>
+            <Box sx={{ minWidth: 0 }}>
+              <Typography variant="caption" sx={{ color: "text.secondary", display: "block", mb: 0.5 }}>
+                Book file (optional)
+              </Typography>
+              <Stack direction="row" spacing={1.5} alignItems="center" flexWrap="wrap">
+                <Button variant="outlined" component="label" sx={{ minHeight: 44 }}>
+                  Choose file…
+                  <input
+                    type="file"
+                    accept={BOOK_FILE_ACCEPT}
+                    hidden
+                    onChange={(e) => {
+                      const file = e.target.files?.[0] || null;
+                      setAddBookFile(file);
+                      setFileName(file?.name || "");
+                    }}
+                  />
+                </Button>
+                {fileName ? (
+                  <Typography variant="body2" sx={{ color: "text.secondary" }} noWrap>
+                    {fileName}
+                  </Typography>
+                ) : null}
+              </Stack>
+            </Box>
+          </Stack>
           {addBookError ? (
             <Alert severity="error" variant="standard">
               {addBookError}

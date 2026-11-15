@@ -7,7 +7,8 @@
 import { useEffect, useState } from "react";
 import { useApolloClient } from "@apollo/client";
 import { useNavigate } from "react-router-dom";
-import { CREATE_BOOK } from "../graphql/mutations.js";
+import { CREATE_BOOK, UPDATE_BOOK } from "../graphql/mutations.js";
+import { COMIC_KIND_TAGS } from "../utils/comic";
 import { refreshLibraryList, writeRestBook } from "../graphql/cachePolicies.js";
 import { authFetch } from "../utils/authFetch";
 import { bookPath } from "../components/navConfig";
@@ -23,6 +24,8 @@ export function useAddBook({ params }) {
   const [addBookIsbn, setAddBookIsbn] = useState("");
   const [addBookShelf, setAddBookShelf] = useState("want-to-read");
   const [addBookFile, setAddBookFile] = useState(null);
+  // "" | "manga" | "comic" — the dialog's Manga / Comic choice.
+  const [addBookKind, setAddBookKind] = useState("");
 
   // `addBookFile` was cleared only on a successful create, so a picked-then-
   // cancelled file survived: reopening the dialog showed no file (the child's
@@ -34,6 +37,7 @@ export function useAddBook({ params }) {
     if (addBookOpen) return;
     setAddBookFile(null);
     setAddBookError(null);
+    setAddBookKind("");
   }, [addBookOpen]);
 
   async function handleCreateBook(e) {
@@ -68,6 +72,21 @@ export function useAddBook({ params }) {
 
       const created = data.createBook || null;
       const createdId = created?.id || created?._id || null;
+
+      // Manga / Comic: `createBook` takes no tags, so the tag goes on with a
+      // second call. It is the shared `tags` (a fact about the book, seen by
+      // every reader), not the caller's own `myTags`.
+      const kindTag = COMIC_KIND_TAGS[addBookKind];
+      if (createdId && kindTag) {
+        try {
+          await apolloClient.mutate({
+            mutation: UPDATE_BOOK,
+            variables: { id: createdId, input: { tags: [kindTag] } },
+          });
+        } catch {
+          throw new Error(`Book created, but it could not be marked as ${ kindTag }. Add the tag from Edit metadata.`);
+        }
+      }
 
       if (createdId && addBookFile) {
         try {
@@ -124,6 +143,8 @@ export function useAddBook({ params }) {
     addBookShelf,
     setAddBookShelf,
     setAddBookFile,
+    addBookKind,
+    setAddBookKind,
     handleCreateBook,
   };
 }

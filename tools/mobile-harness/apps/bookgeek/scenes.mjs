@@ -196,6 +196,13 @@ export const scenes = [
       if (!(await add.count())) return false;
       await add.click();
       await h.settle(700);
+      // The Manga / Comic choice (2026-11-15), shot with Manga picked.
+      const manga = page.getByRole('button', { name: 'Manga', exact: true });
+      if (!(await manga.count())) throw new Error('Add book has no Manga choice');
+      if (!(await page.getByRole('button', { name: 'Comic', exact: true }).count())) throw new Error('Add book has no Comic choice');
+      await manga.click();
+      await h.settle(300);
+      if ((await manga.getAttribute('aria-pressed')) !== 'true') throw new Error('Manga did not stay picked');
     },
     teardown: (page, h) => h.esc(),
   },

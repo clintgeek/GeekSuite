@@ -184,6 +184,11 @@ an EPUB tagged Manga is still an ordinary source.
   `comics` / `comic book` / `graphic novel` tag → "Comic"; any tag saying manga,
   manhwa or manhua → "Manga", whatever the file is. A bare "comic" tag does not
   count ("Comic fantasy").
+- **Add book asks "Manga or comic?"** (two toggles beside the file chooser). The
+  choice writes the shared tag `Manga` or `Comics` with an `updateBook` straight
+  after `createBook` (which takes no tags). This is how an EPUB or PDF becomes a
+  comic: Chef's manga are EPUBs, and the file says nothing. Reading the EPUB's own
+  metadata to detect it was proposed and stopped by Chef the same day.
 - **The grid card** wears one caption above the title: "MANGA · VOL. 3" (the volume
   is `series.index`).
 - **The book page** of a comic swaps Read and Send for one **Download** button that
