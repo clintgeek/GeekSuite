@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import {
-    barChrome, shortBarWidth, BAR_EDGE_MARGIN, SHORT_BAR_BUTTONS,
+    barChrome, barMode, shortBarWidth, tightBarWidth, BAR_EDGE_MARGIN, SHORT_BAR_BUTTONS, TIGHT_BAR_BUTTONS,
 } from '../../../components/editors/DrawingToolbar';
 
 /**
@@ -27,5 +27,31 @@ describe('the short sketch bar fits a phone', () => {
     it('leaves the full bar its air', () => {
         expect(barChrome(true)).toEqual({ gap: 2, pad: 6 });
         expect(barChrome(false).gap).toBeLessThan(barChrome(true).gap);
+    });
+});
+
+/**
+ * Narrower phones (2026-11-15): under 388px the short bar no longer fits, and
+ * it used to scroll sideways with More and Fullscreen starting off-screen.
+ * Those sizes get the tight bar: Paper and Fullscreen move into More.
+ */
+describe('the tight sketch bar, for phones narrower than the short bar', () => {
+    it('is chosen exactly where the short bar stops fitting', () => {
+        const edge = shortBarWidth(44) + BAR_EDGE_MARGIN;
+        expect(barMode(edge, 800)).toBe('short');
+        expect(barMode(edge - 1, 800)).toBe('tight');
+        expect(barMode(390, 800)).toBe('short');
+        expect(barMode(375, 800)).toBe('tight');
+        expect(barMode(360, 800)).toBe('tight');
+        expect(barMode(800, 800)).toBe('full');
+    });
+
+    it('stays short, not tight, before the container is measured', () => {
+        expect(barMode(0, 800)).toBe('short');
+    });
+
+    it('fits a 320px phone with 44px buttons', () => {
+        expect(tightBarWidth(44)).toBeLessThanOrEqual(320 - BAR_EDGE_MARGIN);
+        expect(tightBarWidth(44)).toBeGreaterThanOrEqual(TIGHT_BAR_BUTTONS * 44);
     });
 });

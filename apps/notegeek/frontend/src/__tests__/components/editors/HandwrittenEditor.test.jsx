@@ -1146,6 +1146,40 @@ describe('HandwrittenEditor — the 2026-11 review', () => {
                 rect.mockRestore();
             }
         });
+
+        it('a phone narrower than the short bar gets the tight bar: Paper and Fullscreen are in More', async () => {
+            setViewport(true);
+            const user = userEvent.setup();
+            const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, right: 360, bottom: 700, width: 360, height: 700, x: 0, y: 0, toJSON: () => ({}) });
+            try {
+                await mount();
+                const bar = screen.getByRole('toolbar', { name: 'Drawing tools' });
+                expect(bar).toHaveAttribute('data-bar-tight', 'true');
+                expect(within(bar).queryByRole('button', { name: 'Fullscreen' })).not.toBeInTheDocument();
+                expect(within(bar).queryByRole('button', { name: 'Paper' })).not.toBeInTheDocument();
+                for (const name of ['Move', 'Write', 'Eraser', 'Undo', 'More']) expect(within(bar).getByRole('button', { name })).toBeInTheDocument();
+                await user.click(within(bar).getByRole('button', { name: 'More' }));
+                const more = await screen.findByRole('dialog', { name: 'More' });
+                expect(within(more).getByRole('button', { name: 'Paper' })).toBeInTheDocument();
+                expect(within(more).getByRole('button', { name: 'Fullscreen' })).toBeInTheDocument();
+            } finally {
+                rect.mockRestore();
+            }
+        });
+
+        it('at 390px the short bar still carries Paper and Fullscreen itself', async () => {
+            setViewport(true);
+            const rect = vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockReturnValue({ left: 0, top: 0, right: 390, bottom: 700, width: 390, height: 700, x: 0, y: 0, toJSON: () => ({}) });
+            try {
+                await mount();
+                const bar = screen.getByRole('toolbar', { name: 'Drawing tools' });
+                expect(bar).toHaveAttribute('data-bar-tight', 'false');
+                expect(within(bar).getByRole('button', { name: 'Fullscreen' })).toBeInTheDocument();
+                expect(within(bar).getByRole('button', { name: 'Paper' })).toBeInTheDocument();
+            } finally {
+                rect.mockRestore();
+            }
+        });
     });
 
     describe('2.11 sketch usability', () => {

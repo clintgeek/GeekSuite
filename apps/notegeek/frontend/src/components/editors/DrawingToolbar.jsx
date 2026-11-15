@@ -343,6 +343,22 @@ export const shortBarWidth = (button = 44) => {
         + 2; // the 1px border
 };
 
+/**
+ * A phone narrower than the short bar (under 388px: a 360px Android, a 375px
+ * iPhone SE or mini) gets the TIGHT bar: Paper and Fullscreen, the two that
+ * are set once and left, move into More. Six buttons, 284px, so nothing
+ * starts off-screen and nothing shrinks below 44px (2026-11-15; the short bar
+ * used to scroll sideways here, with More and Fullscreen out of sight).
+ */
+export const TIGHT_BAR_BUTTONS = 6;
+export const tightBarWidth = (button = 44) => shortBarWidth(button) - (SHORT_BAR_BUTTONS - TIGHT_BAR_BUTTONS) * button;
+/** Which bar a container this long (along the bar's edge) gets. 0 = not measured. */
+export const barMode = (room, fullMin) => {
+    if (room >= fullMin) return 'full';
+    if (room > 0 && room < shortBarWidth() + BAR_EDGE_MARGIN) return 'tight';
+    return 'short';
+};
+
 /** A button that opens a small grid of more buttons, away from the bar. */
 function ToolMenu({ label, active, icon, children, columns = 5 }) {
     const [anchor, setAnchor] = useState(null);
@@ -399,7 +415,8 @@ function useBarRoom(containerRef, vertical) {
         return () => ro.disconnect();
     }, [containerRef, vertical]);
     // Not laid out yet (or jsdom): the viewport's answer until it is.
-    return room > 0 ? room >= FULL_BAR_MIN : fallbackFull;
+    if (room <= 0) return fallbackFull ? 'full' : 'short';
+    return barMode(room, FULL_BAR_MIN);
 }
 
 export default function DrawingToolbar({
@@ -410,7 +427,9 @@ export default function DrawingToolbar({
     const editor = useEditor();
     const tools = useTools();
     const vertical = position === 'left' || position === 'right';
-    const full = useBarRoom(containerRef, vertical);
+    const mode = useBarRoom(containerRef, vertical);
+    const full = mode === 'full';
+    const tight = mode === 'tight';
     const currentTool = useValue('current tool', () => editor.getCurrentToolId(), [editor]);
     const geo = useValue('geo style', () => editor.getStyleForNextShape(GeoShapeGeoStyle), [editor]);
     const canUndo = useValue('can undo', () => editor.getCanUndo(), [editor]);
@@ -530,6 +549,16 @@ export default function DrawingToolbar({
                             <ToolButton label="Zoom out" onClick={() => editor.zoomOut()} sx={menuItemSx}>
                                 <ZoomOutIcon fontSize="small" />
                             </ToolButton>
+                            {tight ? (
+                                <>
+                                    <Box sx={{ display: 'contents', '& .MuiIconButton-root': menuItemSx }}>
+                                        <PaperPicker />
+                                    </Box>
+                                    <ToolButton label={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'} onClick={() => { close(); toggleFullscreen(); }} sx={menuItemSx}>
+                                        {isFullscreen ? <FullscreenExitIcon fontSize="small" /> : <FullscreenIcon fontSize="small" />}
+                                    </ToolButton>
+                                </>
+                            ) : null}
                         </Box>
                     ) : null}
                     {onShareImage ? (
@@ -589,6 +618,7 @@ export default function DrawingToolbar({
             aria-orientation={vertical ? 'vertical' : 'horizontal'}
             data-bar-position={position}
             data-bar-full={full ? 'true' : 'false'}
+            data-bar-tight={tight ? 'true' : 'false'}
             onPointerDownCapture={onPointerDownCapture}
             onClickCapture={onClickCapture}
             sx={{
@@ -599,8 +629,8 @@ export default function DrawingToolbar({
                 alignItems: 'center',
                 gap: `${chrome.gap}px`,
                 // Never wider (or taller) than the page it sits on. A phone
-                // narrower than the short bar scrolls it rather than losing
-                // its last buttons off the edge.
+                // narrower than the short bar gets the tight bar; scrolling
+                // is only the last resort below that (under 300px).
                 ...(vertical
                     ? { maxHeight: `calc(100% - ${BAR_EDGE_MARGIN}px)`, overflowY: 'auto' }
                     : { maxWidth: `calc(100% - ${BAR_EDGE_MARGIN}px)`, overflowX: 'auto' }),
@@ -654,8 +684,8 @@ export default function DrawingToolbar({
 
             {/* Pen colour and size */}
             <PenStylePicker editor={editor} fine={fine} onFineChange={onFineChange} onToolPicked={onToolPicked} />
-            {/* Paper colour and lines (Paper.jsx) */}
-            <PaperPicker />
+            {/* Paper colour and lines (Paper.jsx); in More on the tight bar */}
+            {!tight && <PaperPicker />}
 
             <Divider vertical={vertical} />
 
@@ -693,9 +723,11 @@ export default function DrawingToolbar({
 
             {moreMenu}
 
-            <ToolButton label={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'} onClick={toggleFullscreen}>
-                {isFullscreen ? <FullscreenExitIcon fontSize="small" /> : <FullscreenIcon fontSize="small" />}
-            </ToolButton>
+            {!tight && (
+                <ToolButton label={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'} onClick={toggleFullscreen}>
+                    {isFullscreen ? <FullscreenExitIcon fontSize="small" /> : <FullscreenIcon fontSize="small" />}
+                </ToolButton>
+            )}
         </Box>
     );
 }

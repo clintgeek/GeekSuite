@@ -519,6 +519,9 @@ they differ (open position, listener, phone bar).
 - **Phone bar (2.5, D2).** Move, Write, **Eraser**, Pen, Paper, Undo, **More**, Fullscreen.
   More holds Select, Redo, Highlighter, Zoom to fit, Shapes, Text, Sticky, Image, zoom in and
   out, Share, Finger draws and Bar position. The full bar gains a More for the settings.
+  Under 388 px of room (a 360 or 375 px phone) it is the **tight bar** (2026-11-15):
+  Paper and Fullscreen move into More too, so six 44 px buttons fit and nothing scrolls
+  (`barMode`, `tightBarWidth`; harness scene `22a2-sketch-tight-bar` at 360 px).
 - **Full or compact (2.6).** Chosen by the container's length along the bar's edge
   (ResizeObserver, full at 800 px or more); the viewport query is only the fallback before
   layout or in jsdom. What does not fit goes in More.

@@ -2137,6 +2137,50 @@ export const scenes = [
     teardown: (page, h) => h.esc(400),
   },
   {
+    // A phone narrower than the short bar (360px here; the short bar needs
+    // 388). It used to scroll sideways with More and Fullscreen starting
+    // off-screen. Now it is the tight bar: Paper and Fullscreen are in More,
+    // every button is 44px and on the screen (2026-11-15).
+    name: '22a2-sketch-tight-bar',
+    goto: '/notes/new?type=handwritten',
+    wait: 2500,
+    viewports: ['phone'],
+    async setup(page, h) {
+      const was = page.viewportSize();
+      page.__wasViewport = was;
+      await page.setViewportSize({ width: 360, height: was.height });
+      await h.settle(1200);
+      const bar = page.getByRole('toolbar', { name: 'Drawing tools' });
+      if (!(await bar.count())) throw new Error('no drawing toolbar on a new sketch');
+      if ((await bar.getAttribute('data-bar-tight')) !== 'true') throw new Error('a 360px phone did not get the tight bar');
+      for (const name of ['Move', 'Write', 'Eraser', 'Pen colour and size', 'Undo', 'More']) {
+        if (!(await bar.getByRole('button', { name, exact: true }).count())) throw new Error(`the tight bar has no "${name}"`);
+      }
+      const spill = await bar.evaluate((el) => {
+        const r = el.getBoundingClientRect();
+        const out = el.scrollWidth > el.clientWidth + 1 ? [`the bar scrolls (${el.scrollWidth} in ${el.clientWidth})`] : [];
+        return out.concat([...el.querySelectorAll('button')]
+          .map((b) => ({ name: b.getAttribute('aria-label'), q: b.getBoundingClientRect() }))
+          .filter(({ q }) => q.left < r.left - 0.5 || q.right > r.right + 0.5 || q.right > innerWidth + 0.5 || q.width < 43.5)
+          .map(({ name, q }) => `${name} ${Math.round(q.left)}..${Math.round(q.right)}`));
+      });
+      if (spill.length) throw new Error(`the tight bar does not fit: ${spill.join('; ')}`);
+      await bar.getByRole('button', { name: 'More', exact: true }).click();
+      const more = page.getByRole('dialog', { name: 'More' });
+      await more.waitFor({ timeout: 5000 });
+      await h.settle(500);
+      for (const name of ['Paper', 'Fullscreen', 'Select', 'Redo']) {
+        if (!(await more.getByRole('button', { name, exact: true }).count())) throw new Error(`More has no "${name}" on the tight bar`);
+      }
+      const box = await more.boundingBox();
+      if (box.x < 0 || box.x + box.width > 361) throw new Error(`the More popover runs off a 360px screen (${Math.round(box.x)}..${Math.round(box.x + box.width)})`);
+    },
+    async teardown(page, h) {
+      await h.esc(400);
+      if (page.__wasViewport) await page.setViewportSize(page.__wasViewport);
+    },
+  },
+  {
     // Fullscreen, with the pen picker open (review 2.2). MUI portals a
     // popover to <body>, which is not on screen in fullscreen: the picker
     // opened invisibly and its backdrop ate every tap. It must render INSIDE
