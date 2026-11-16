@@ -87,7 +87,8 @@ const tabletScenes = [
     name: '72-two-pane-empty',
     goto: '/today',
     wait: 1500,
-    viewports: ['tablet-landscape', 'desktop'],
+    // Tablet only: the desktop keeps one pane until Chef has seen two (2026-11-16).
+    viewports: ['tablet-landscape'],
     async setup(page) {
       if (!(await page.locator('[data-geek-two-pane="split"]').count())) throw new Error('Today is not two panes at this width');
       if (!(await page.locator('[data-task-detail-empty]').count())) throw new Error('no placeholder in the empty detail pane');
@@ -98,7 +99,8 @@ const tabletScenes = [
     name: '73-two-pane-open',
     goto: '/today',
     wait: 1500,
-    viewports: ['tablet-landscape', 'desktop'],
+    // Tablet only: the desktop keeps one pane until Chef has seen two (2026-11-16).
+    viewports: ['tablet-landscape'],
     async setup(page) {
       const list = page.getByRole('region', { name: 'Today’s list' });
       await list.getByRole('button', { name: /^write the retro notes/i }).first().click();

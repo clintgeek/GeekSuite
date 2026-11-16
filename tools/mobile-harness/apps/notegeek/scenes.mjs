@@ -2327,7 +2327,8 @@ export const scenes = [
     // note. Opening a note keeps the list, its scroll and its filter; the
     // open note's row is marked; another note opens in the same pane.
     name: '40d-two-pane',
-    viewports: ['tablet-landscape', 'desktop'],
+    // Tablet only: the desktop keeps one pane until Chef has seen two (2026-11-16).
+    viewports: ['tablet-landscape'],
     async setup(page, h) {
       await bootstrapChef(page);
       const full = (id) => NOTES.find((n) => n.id === id) || NOTE_N1;
