@@ -1,3 +1,5 @@
+import { runBeforeLeave } from './leaveHooks.js';
+
 // Canonical cross-tab auth channel for the whole suite. Every app both posts
 // and listens here; do not fork these values.
 export const AUTH_CHANNEL = 'geeksuite-auth';
@@ -33,6 +35,52 @@ export const USER_CACHE_KEY = 'geeksuite:last-user';
 
 const GEEK_TOKEN_KEY = 'geek_token';
 const GEEK_REFRESH_TOKEN_KEY = 'geek_refresh_token';
+
+/**
+ * Upper bounds on the two fetches every request waits behind
+ * (SUITE_REVIEW_2026-11 A1). On a dead-but-connected network — captive
+ * Wi-Fi, a dropped tunnel, a phone leaving a lift — `fetch` can hang for
+ * minutes, and while the refresh hangs EVERY Apollo operation and axios call
+ * waits on it (authLink / the request interceptor await waitForRefresh()), and
+ * a hung `/api/me` keeps the splash up and the session keeper's retry ladder
+ * from ever starting.
+ *
+ * A timed-out fetch rejects with a `TimeoutError` that carries no `status`,
+ * so isSessionExpiredError() reads it as "couldn't check", not "signed out":
+ * the session is kept and the next caller tries again.
+ */
+export const REFRESH_TIMEOUT_MS = 15000;
+export const ME_TIMEOUT_MS = 15000;
+/** How long a request will wait for a refresh in flight before going anyway. */
+export const REFRESH_WAIT_CAP_MS = 10000;
+
+/**
+ * `fetch` with a deadline. Uses an AbortController so the request is really
+ * cancelled, not just abandoned; the rejection is a TimeoutError either way.
+ */
+async function fetchWithTimeout(url, options, ms) {
+  const controller = typeof AbortController === 'function' ? new AbortController() : null;
+  let timer = null;
+  const deadline = new Promise((_, reject) => {
+    timer = setTimeout(() => {
+      if (controller) {
+        try { controller.abort(); } catch { /* ignore */ }
+      }
+      const err = new Error(`Request timed out after ${ Math.round(ms / 1000) } s`);
+      err.name = 'TimeoutError';
+      err.timeout = true;
+      reject(err);
+    }, ms);
+  });
+  try {
+    return await Promise.race([
+      fetch(url, controller ? { ...options, signal: controller.signal } : options),
+      deadline,
+    ]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 /**
  * Double-submit CSRF token (basegeek, 2026-09-05).
@@ -234,7 +282,14 @@ let lastRefreshAt = 0;
 
 function getStoredToken() {
   if (typeof window === 'undefined') return null;
-  return localStorage.getItem(GEEK_TOKEN_KEY);
+  // Blocked or private-mode storage throws on access. That must not take
+  // every request down with it (SUITE_REVIEW_2026-11 A6): the session cookie
+  // still authenticates, the Bearer copy is a convenience.
+  try {
+    return localStorage.getItem(GEEK_TOKEN_KEY);
+  } catch {
+    return null;
+  }
 }
 
 // There is deliberately no `getStoredRefreshToken()`. The stored copy is
@@ -246,14 +301,22 @@ function getStoredToken() {
 
 function saveTokens(token, refreshToken) {
   if (typeof window === 'undefined') return;
-  if (token) localStorage.setItem(GEEK_TOKEN_KEY, token);
-  if (refreshToken) localStorage.setItem(GEEK_REFRESH_TOKEN_KEY, refreshToken);
+  try {
+    if (token) localStorage.setItem(GEEK_TOKEN_KEY, token);
+    if (refreshToken) localStorage.setItem(GEEK_REFRESH_TOKEN_KEY, refreshToken);
+  } catch {
+    // Storage blocked or full: the cookies set by the same response still hold the session.
+  }
 }
 
 export function clearTokens() {
   if (typeof window === 'undefined') return;
-  localStorage.removeItem(GEEK_TOKEN_KEY);
-  localStorage.removeItem(GEEK_REFRESH_TOKEN_KEY);
+  try {
+    localStorage.removeItem(GEEK_TOKEN_KEY);
+    localStorage.removeItem(GEEK_REFRESH_TOKEN_KEY);
+  } catch {
+    // ignore
+  }
   // The session is over, so the remembered user goes with it.
   clearCachedUser();
 }
@@ -366,12 +429,12 @@ async function doTokenRefresh() {
   // Cookie-first: let the shared HttpOnly geek_refresh_token cookie carry the token.
   // The stored localStorage refresh token is a stale fallback across apps/tabs and
   // would trigger rotation-reuse revocation if sent in the body.
-  const res = await fetch(`${ apiBase }/auth/refresh`, {
+  const res = await fetchWithTimeout(`${ apiBase }/auth/refresh`, {
     method: 'POST',
     credentials: 'include',
     headers: { 'Content-Type': 'application/json', ...csrfHeaders() },
     body: JSON.stringify({}),
-  });
+  }, REFRESH_TIMEOUT_MS);
 
   // 400 is basegeek's "Refresh token is required": there is no refresh
   // cookie at all, so there is no session to keep.
@@ -437,9 +500,15 @@ export function refreshSession() {
  * once when there is none. Request paths await this so a request sent while
  * the foreground refresh runs carries the new token rather than the old one.
  */
-export function waitForRefresh() {
+export function waitForRefresh(capMs = REFRESH_WAIT_CAP_MS) {
   if (!refreshPromise) return Promise.resolve();
-  return refreshPromise.then(() => undefined, () => undefined);
+  const settled = refreshPromise.then(() => undefined, () => undefined);
+  // Capped (SUITE_REVIEW_2026-11 A1): a refresh that is stuck must not hold
+  // every request in the app. Past the cap the request goes with what it has;
+  // if that is refused it joins the same refresh through the error path.
+  let timer = null;
+  const cap = new Promise((resolve) => { timer = setTimeout(resolve, capMs); });
+  return Promise.race([settled, cap]).finally(() => clearTimeout(timer));
 }
 
 /** Expiry of a JWT in ms since epoch, or null when it can't be read. */
@@ -511,12 +580,12 @@ export async function getMe() {
       headers['Authorization'] = `Bearer ${ token }`;
     }
 
-    return await fetch(`${ apiBase }/me`, {
+    return await fetchWithTimeout(`${ apiBase }/me`, {
       method: 'GET',
       credentials: 'include',
       cache: 'no-store',
       headers
-    });
+    }, ME_TIMEOUT_MS);
   };
 
   let res = await fetchMe();
@@ -835,7 +904,13 @@ export function setupAxiosInterceptors(axiosInstance, onSessionExpired) {
             clearTokens();
             broadcastLogout();
             stopRefreshTimer();
-            if (onSessionExpired) onSessionExpired();
+            // Let the app save drafts before its own session-expired
+            // handler navigates away (SUITE_REVIEW_2026-11 A5). Resolves
+            // on the next microtask when nothing is registered.
+            return runBeforeLeave('session-ending').then(() => {
+              if (onSessionExpired) onSessionExpired();
+              return Promise.reject(refreshError);
+            });
           }
           return Promise.reject(refreshError);
         }

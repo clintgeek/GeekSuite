@@ -270,11 +270,13 @@ describe('errorLink stale-bundle heal', () => {
     expect(reloads.length).toBe(1);
   });
 
-  it('may reload again once the window has passed', () => {
+  it('may reload again once the window has passed', async () => {
     const reloads = setBrowserEnv();
     expect(reloadForStaleBundleOnce(1_000_000)).toBe(true);
     expect(reloadForStaleBundleOnce(1_000_000 + STALE_RELOAD_WINDOW_MS - 1)).toBe(false);
     expect(reloadForStaleBundleOnce(1_000_000 + STALE_RELOAD_WINDOW_MS + 1)).toBe(true);
+    // The reload now waits for the before-leave hooks (a microtask when none).
+    await new Promise((resolve) => setTimeout(resolve, 0));
     expect(reloads.length).toBe(2);
   });
 

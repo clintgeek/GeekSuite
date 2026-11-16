@@ -79,8 +79,15 @@ describe('suiteTags', () => {
     expect(garage.apps).toEqual([{ app: 'notegeek', count: 1 }]);
   });
 
-  test('signed out is empty', async () => {
-    expect(await Query.suiteTags(null, {}, {})).toEqual([]);
+  test('signed out is UNAUTHENTICATED, not an empty list', async () => {
+    // [] here was indistinguishable from an expired session (SUITE_REVIEW_2026-11 S1).
+    for (const call of [
+      () => Query.suiteTags(null, {}, {}),
+      () => Query.taggedAcross(null, { tag: 'house/garage' }, {}),
+      () => Query.taggedAcross(null, { tag: 'house/garage' }, { user: null }),
+    ]) {
+      await expect(call()).rejects.toMatchObject({ extensions: { code: 'UNAUTHENTICATED' } });
+    }
   });
 });
 

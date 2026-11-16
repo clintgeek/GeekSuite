@@ -126,6 +126,7 @@ the typeDefs. Only the module notes under the block are hand-maintained — put 
 | `bookAiStatus` | `BookAiStatus!` |
 | `whatNext(limit: Int, mood: String)` | `WhatNextResult!` |
 | `draftBookMetadata(bookId: ID!)` | `BookMetadataDraft!` |
+| `deletedBooks(limit: Int)` | `[Book!]!` |
 
 **Mutations**
 
@@ -134,6 +135,7 @@ the typeDefs. Only the module notes under the block are hand-maintained — put 
 | `createBook(input: CreateBookInput!)` | `Book` |
 | `updateBook(id: ID!, input: UpdateBookInput!)` | `Book` |
 | `deleteBook(id: ID!, deleteFiles: Boolean)` | `DeleteBookResponse` |
+| `restoreBook(id: ID!)` | `Book` |
 | `saveBookProfile(input: BookProfileInput!)` | `BookProfile` |
 | `saveLibraryFilter(input: SaveLibraryFilterInput!)` | `[BookSavedFilter!]!` |
 | `deleteLibraryFilter(id: String!)` | `[BookSavedFilter!]!` |
@@ -147,7 +149,7 @@ the typeDefs. Only the module notes under the block are hand-maintained — put 
 | Field | Returns |
 |---|---|
 | `fitnessUserSettings` | `FitnessUserSettings` |
-| `fitnessWeights` | `[FitnessWeight]` |
+| `fitnessWeights(startDate: Date, endDate: Date, limit: Int)` | `[FitnessWeight]` |
 | `fitnessWeight(id: ID!)` | `FitnessWeight` |
 | `activeNutritionGoals` | `NutritionGoals` |
 | `nutritionGoalsHistory` | `[NutritionGoals]` |
@@ -159,7 +161,7 @@ the typeDefs. Only the module notes under the block are hand-maintained — put 
 | `fitnessMeal(id: ID!)` | `FitnessMeal` |
 | `fitnessMedications` | `[FitnessMedication]` |
 | `fitnessMedication(id: ID!)` | `FitnessMedication` |
-| `bloodPressures` | `[BloodPressure]` |
+| `bloodPressures(startDate: Date, endDate: Date, limit: Int)` | `[BloodPressure]` |
 | `bloodPressure(id: ID!)` | `BloodPressure` |
 | `bodyCompositions(startDate: Date, endDate: Date)` | `[BodyComposition!]!` |
 | `bodyCompositionSummary(date: String)` | `BodyCompSummary!` |

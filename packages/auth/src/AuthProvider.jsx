@@ -9,6 +9,7 @@ import {
   clearCachedUser,
 } from './authClient.js';
 import { createSessionKeeper } from './sessionKeeper.js';
+import { runBeforeLeave } from './leaveHooks.js';
 
 const AuthContext = createContext(null);
 
@@ -48,8 +49,12 @@ export function AuthProvider({ appName, onLogout: onLogoutCallback, children }) 
           startRefreshTimer(() => {
             timerStartedRef.current = false;
             clearCachedUser();
-            setUser(null);
-            onLogoutCallback?.();
+            // Clearing the user unmounts the app; give it a moment to save
+            // drafts first (SUITE_REVIEW_2026-11 A5).
+            runBeforeLeave('session-ending').then(() => {
+              setUser(null);
+              onLogoutCallback?.();
+            });
           });
         }
       },
@@ -79,9 +84,13 @@ export function AuthProvider({ appName, onLogout: onLogoutCallback, children }) 
     return onLogout(() => {
       clearCachedUser();
       timerStartedRef.current = false;
-      setUser(null);
       stopRefreshTimer();
-      onLogoutCallback?.();
+      // Another tab signed out; this one's open work goes with the unmount
+      // unless it is saved first (SUITE_REVIEW_2026-11 A5).
+      runBeforeLeave('session-ending').then(() => {
+        setUser(null);
+        onLogoutCallback?.();
+      });
     });
   }, [onLogoutCallback]);
 

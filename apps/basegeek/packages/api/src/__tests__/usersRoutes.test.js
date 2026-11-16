@@ -246,10 +246,10 @@ describe('authentication is enforced on private routes', () => {
     expect(res.status).toBe(401);
   });
 
-  it('rejects a malformed/garbage token with 403', async () => {
+  it('rejects a malformed/garbage token with 401 (S6: 403 is for "not allowed", not "who are you")', async () => {
     const res = await request(app)
       .get('/api/users/preferences/notegeek')
       .set('Authorization', 'Bearer not-a-real-jwt');
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(401);
   });
 });

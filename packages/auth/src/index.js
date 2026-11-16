@@ -2,6 +2,14 @@ export { AuthProvider, useAuth } from './AuthProvider.jsx';
 export { default as GeekLogin } from './GeekLogin.jsx';
 export { createSessionKeeper, RETRY_DELAYS_MS } from './sessionKeeper.js';
 export {
+  onBeforeLeave,
+  runBeforeLeave,
+  resetLeaveHooksForTests,
+  BEFORE_RELOAD_EVENT,
+  SESSION_ENDING_EVENT,
+  LEAVE_HOOK_TIMEOUT_MS,
+} from './leaveHooks.js';
+export {
   AUTH_CHANNEL,
   AUTH_LOGOUT,
   loginRedirect,
@@ -32,4 +40,7 @@ export {
   extractCsrfErrorCode,
   isCsrfFailure,
   triggerCsrfReloadOnce,
+  REFRESH_TIMEOUT_MS,
+  ME_TIMEOUT_MS,
+  REFRESH_WAIT_CAP_MS,
 } from './authClient.js';

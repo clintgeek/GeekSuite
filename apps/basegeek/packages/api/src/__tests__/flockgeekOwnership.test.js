@@ -29,6 +29,16 @@ const ctx = (userId) => (userId ? { user: { id: userId } } : {});
 
 const { Query, Mutation } = resolvers;
 
+/** The shared "not signed in" shape (graphql/shared/auth.js). */
+const expectUnauthenticated = async (promise) => {
+  const err = await promise.then(
+    () => { throw new Error('expected UNAUTHENTICATED, got an answer'); },
+    (e) => e,
+  );
+  expect(err.extensions?.code).toBe('UNAUTHENTICATED');
+  expect(err.message).toMatch(/^Unauthorized/);
+};
+
 const makeBird = (overrides = {}) =>
   Bird.create({ ownerId: ALICE, tagId: `A-${Math.random().toString(36).slice(2, 8)}`, name: 'Henrietta', ...overrides });
 
@@ -54,7 +64,7 @@ describe('single-entity reads are owner-scoped', () => {
     const bird = await makeBird();
     expect(await Query.bird(null, { id: String(bird._id) }, ctx(ALICE))).not.toBeNull();
     expect(await Query.bird(null, { id: String(bird._id) }, ctx(BOB))).toBeNull();
-    expect(await Query.bird(null, { id: String(bird._id) }, ctx(null))).toBeNull();
+    await expectUnauthenticated(Query.bird(null, { id: String(bird._id) }, ctx(null)));
   });
 
   test('pairing / hatchEvent / flockGroup / meatRun refuse anonymous and cross-user reads', async () => {
@@ -83,24 +93,25 @@ describe('single-entity reads are owner-scoped', () => {
     for (const [resolver, doc] of cases) {
       expect(await resolver(null, { id: String(doc._id) }, ctx(ALICE))).not.toBeNull();
       expect(await resolver(null, { id: String(doc._id) }, ctx(BOB))).toBeNull();
-      expect(await resolver(null, { id: String(doc._id) }, ctx(null))).toBeNull();
+      await expectUnauthenticated(resolver(null, { id: String(doc._id) }, ctx(null)));
     }
   });
 
-  test('anonymous list queries return nothing rather than every tenant', async () => {
+  test('anonymous list queries are refused (UNAUTHENTICATED), never every tenant and never a silent []', async () => {
+    // An anonymous read used to answer []. With the gateway that let an
+    // expired session through as anonymous, that [] was the "empty flock"
+    // bug: HTTP 200, nothing for the client to refresh on
+    // (SUITE_REVIEW_2026-11 S1). Now it is refused with the shared shape.
     await makeBird();
     await Location.create({ ownerId: ALICE, name: 'Coop A', type: 'coop' });
     await EggProduction.create({ ownerId: ALICE, date: new Date(), eggsCount: 6 });
 
-    expect(await Query.birds(null, {}, ctx(null))).toEqual([]);
-    expect(await Query.flockLocations(null, {}, ctx(null))).toEqual([]);
-    expect(await Query.eggProductions(null, {}, ctx(null))).toEqual([]);
-    expect(await Query.hatchEvents(null, {}, ctx(null))).toEqual([]);
-    expect(await Query.pairings(null, {}, ctx(null))).toEqual([]);
-    expect(await Query.flockGroups(null, {}, ctx(null))).toEqual([]);
-    expect(await Query.groupMemberships(null, {}, ctx(null))).toEqual([]);
-    expect(await Query.meatRuns(null, {}, ctx(null))).toEqual([]);
-    expect(await Query.flockEvents(null, {}, ctx(null))).toEqual([]);
+    for (const read of [
+      Query.birds, Query.flockLocations, Query.eggProductions, Query.hatchEvents, Query.pairings,
+      Query.flockGroups, Query.groupMemberships, Query.meatRuns, Query.flockEvents,
+    ]) {
+      await expectUnauthenticated(read(null, {}, ctx(null)));
+    }
 
     expect(await Query.birds(null, {}, ctx(BOB))).toHaveLength(0);
     expect(await Query.birds(null, {}, ctx(ALICE))).toHaveLength(1);
@@ -117,9 +128,9 @@ describe('single-entity reads are owner-scoped', () => {
 
     expect(await Query.healthRecords(null, { birdId: String(bird._id) }, ctx(ALICE))).toHaveLength(1);
     expect(await Query.healthRecords(null, { birdId: String(bird._id) }, ctx(BOB))).toHaveLength(0);
-    expect(await Query.healthRecords(null, { birdId: String(bird._id) }, ctx(null))).toEqual([]);
-    expect(await Query.birdTraits(null, { birdId: String(bird._id) }, ctx(null))).toEqual([]);
-    expect(await Query.birdNotes(null, { birdId: String(bird._id) }, ctx(null))).toEqual([]);
+    await expectUnauthenticated(Query.healthRecords(null, { birdId: String(bird._id) }, ctx(null)));
+    await expectUnauthenticated(Query.birdTraits(null, { birdId: String(bird._id) }, ctx(null)));
+    await expectUnauthenticated(Query.birdNotes(null, { birdId: String(bird._id) }, ctx(null)));
   });
 });
 

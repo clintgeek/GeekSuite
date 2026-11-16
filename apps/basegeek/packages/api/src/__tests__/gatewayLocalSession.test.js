@@ -1,7 +1,8 @@
 /**
  * gatewayLocalSession.test.js — basegeek validates its own sessions in-process.
  *
- * `server.js` mounts `/graphql` behind the shared `optionalUser()`. Its default
+ * `server.js` mounts `/graphql` behind `gatewaySession()`, which is the shared
+ * `optionalUser()` with a refused token answered 401. optionalUser's default
  * validator asks `BASEGEEK_URL/api/users/me` over HTTP, which is correct for
  * the six consumer backends and pathological here: inside basegeek that URL
  * resolves to basegeek. Every gateway request went out through nginx and back
@@ -36,8 +37,7 @@ jest.unstable_mockModule('redis', () => ({ createClient: () => fakeRedisClient }
 
 const { default: mongoose } = await import('mongoose');
 const { User, userGeekConn } = await import('../models/user.js');
-const { localSessionValidator } = await import('../middleware/auth.js');
-const { optionalUser } = await import('@geeksuite/user/server');
+const { localSessionValidator, gatewaySession } = await import('../middleware/auth.js');
 
 let app;
 let basegeekSelfCalls = [];
@@ -71,8 +71,9 @@ beforeAll(async () => {
   app = express();
   app.use(express.json());
   app.use(cookieParser());
-  // The same mount server.js uses.
-  app.use('/graphql', optionalUser({ validateSession: localSessionValidator }));
+  // The same mount server.js uses: optionalUser() + localSessionValidator,
+  // with a refused token answered 401 (gatewaySession, SUITE_REVIEW_2026-11 S1).
+  app.use('/graphql', gatewaySession());
   app.post('/graphql', (req, res) => {
     res.json({ user: req.user || null, geek: req.geek || null });
   });
@@ -145,7 +146,7 @@ describe('/graphql validates the session without leaving the process', () => {
     expect(basegeekSelfCalls).toEqual([]);
   });
 
-  it('runs anonymously on a bad cookie, and still makes no outbound call', async () => {
+  it('answers 401 UNAUTHENTICATED on a bad cookie, and still makes no outbound call', async () => {
     basegeekSelfCalls = [];
 
     const res = await request(app)
@@ -153,13 +154,13 @@ describe('/graphql validates the session without leaving the process', () => {
       .set('Cookie', 'geek_token=not-a-jwt')
       .send({ query: '{ __typename }' });
 
-    expect(res.status).toBe(200);
-    expect(res.body.user).toBeNull();
-    expect(res.body.geek).toBeNull();
+    expect(res.status).toBe(401);
+    expect(res.body.errors[0].extensions.code).toBe('UNAUTHENTICATED');
+    expect(res.body).not.toHaveProperty('data');
     expect(basegeekSelfCalls).toEqual([]);
   });
 
-  it('runs anonymously on a token signed with the wrong secret', async () => {
+  it('answers 401 UNAUTHENTICATED on a token signed with the wrong secret', async () => {
     const user = await User.create({ username: `gateway_local_forged_${uniq()}`, passwordHash: 'c' });
     const forged = jwt.sign({ id: String(user._id) }, 'not-the-basegeek-secret-at-all!!', { expiresIn: '1h' });
     basegeekSelfCalls = [];
@@ -169,8 +170,8 @@ describe('/graphql validates the session without leaving the process', () => {
       .set('Cookie', `geek_token=${forged}`)
       .send({ query: '{ __typename }' });
 
-    expect(res.status).toBe(200);
-    expect(res.body.user).toBeNull();
+    expect(res.status).toBe(401);
+    expect(res.body.errors[0].extensions.code).toBe('UNAUTHENTICATED');
     expect(basegeekSelfCalls).toEqual([]);
   });
 
@@ -199,8 +200,8 @@ describe('/graphql validates the session without leaving the process', () => {
       .set('Cookie', `geek_token=${token}`)
       .send({ query: '{ __typename }' });
 
-    expect(res.status).toBe(200);
-    expect(res.body.user).toBeNull();
+    expect(res.status).toBe(401);
+    expect(res.body.errors[0].extensions.code).toBe('UNAUTHENTICATED');
     expect(basegeekSelfCalls).toEqual([]);
   });
 
@@ -220,7 +221,7 @@ describe('/graphql validates the session without leaving the process', () => {
     expect(res.body.user.id).toBe(String(user._id));
   });
 
-  it('runs anonymously when the token names a user that no longer exists', async () => {
+  it('answers 401 UNAUTHENTICATED when the token names a user that no longer exists', async () => {
     const ghost = new mongoose.Types.ObjectId();
     const token = jwt.sign({ id: String(ghost), app: 'basegeek' }, process.env.JWT_SECRET, { expiresIn: '1h' });
     basegeekSelfCalls = [];
@@ -230,8 +231,8 @@ describe('/graphql validates the session without leaving the process', () => {
       .set('Cookie', `geek_token=${token}`)
       .send({ query: '{ __typename }' });
 
-    expect(res.status).toBe(200);
-    expect(res.body.user).toBeNull();
+    expect(res.status).toBe(401);
+    expect(res.body.errors[0].extensions.code).toBe('UNAUTHENTICATED');
     expect(basegeekSelfCalls).toEqual([]);
   });
 
@@ -244,7 +245,7 @@ describe('/graphql validates the session without leaving the process', () => {
 
     const failing = express();
     failing.use(cookieParser());
-    failing.use('/graphql', optionalUser({
+    failing.use('/graphql', gatewaySession({
       validateSession: (t, ctx) => localSessionValidator(t, ctx),
     }));
     failing.post('/graphql', (req, res) => res.json({ user: req.user || null }));

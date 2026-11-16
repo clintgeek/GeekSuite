@@ -18,8 +18,15 @@ export const authLink = setContext(async (_, { headers }) => {
     // operation hit a 401) is about to replace the token: wait for it rather
     // than send the old one. Resolves at once when there is none.
     await waitForRefresh();
-    // Extract token. In GeekSuite, it might be stored in localStorage by auth pkg
-    const token = localStorage.getItem('geek_token');
+    // Extract token. In GeekSuite, it might be stored in localStorage by auth pkg.
+    // Guarded: blocked/private-mode storage throws on access, and that must not
+    // fail every operation — the session cookie still authenticates (A6).
+    let token = null;
+    try {
+        token = localStorage.getItem('geek_token');
+    } catch {
+        token = null;
+    }
     // Double-submit CSRF token for basegeek (see DOCS/CONTEXT.md "CSRF: the
     // double-submit token"). GraphQL is POST-only, so every query and mutation
     // goes through this link; csrfHeaders() with no method reads geek_csrf off
@@ -43,6 +50,7 @@ import {
     refreshSession,
     waitForRefresh,
     isSessionExpiredError,
+    runBeforeLeave,
 } from '@geeksuite/auth';
 
 /**
@@ -105,8 +113,56 @@ export function reloadForStaleBundleOnce(now = Date.now()) {
         // a reload could loop, so don't reload at all.
         return false;
     }
-    window.location.reload();
+    // Give the app a moment to save drafts before the page goes
+    // (`geeksuite:before-reload`, onBeforeLeave — SUITE_REVIEW_2026-11 A4).
+    // Capped inside runBeforeLeave, so a stuck hook cannot stop the reload.
+    runBeforeLeave('stale-bundle').then(
+        () => window.location.reload(),
+        () => window.location.reload(),
+    );
     return true;
+}
+
+/**
+ * Is this GraphQL error "you are not signed in"? (SUITE_REVIEW_2026-11 S2.)
+ *
+ * The gateway's one shape is `extensions.code === 'UNAUTHENTICATED'`
+ * (graphql/shared/auth.js). Older modules still throw a bare
+ * `Error('Unauthorized')` (Apollo reports it as INTERNAL_SERVER_ERROR) or
+ * `extensions.code: 'UNAUTHORIZED'`, so those are still read as a session
+ * problem until every module has moved.
+ *
+ * What is NOT a session problem any more:
+ *   - a message that merely contains "401" — an id, a count, a title in an
+ *     error message used to fire a refresh and replay the operation;
+ *   - `extensions.code === 'FORBIDDEN'` — signed in, not allowed. Refreshing
+ *     cannot change the answer, and every refresh is a rotation the reuse
+ *     detector has to forgive.
+ */
+export function isUnauthenticatedGraphQLError(err) {
+    const code = err?.extensions?.code;
+    if (code === 'UNAUTHENTICATED' || code === 'UNAUTHORIZED') return true;
+    if (code === 'FORBIDDEN') return false;
+    return typeof err?.message === 'string' && err.message.includes('Unauthorized');
+}
+
+function isMutation(operation) {
+    const defs = operation?.query?.definitions;
+    return Array.isArray(defs)
+        && defs.some((d) => d?.kind === 'OperationDefinition' && d.operation === 'mutation');
+}
+
+/**
+ * May an operation that failed UNAUTHENTICATED be sent again after the
+ * refresh? Always for a query. For a mutation, only when nothing in it ran:
+ * a response carrying any non-null top-level `data` means part of it
+ * executed, and replaying it would do that part twice (A6).
+ */
+export function mayReplayAfterRefresh(operation, response) {
+    if (!isMutation(operation)) return true;
+    const data = response?.data;
+    if (!data || typeof data !== 'object') return true;
+    return !Object.values(data).some((v) => v !== null && v !== undefined);
 }
 
 export const errorLink = (appName) => onError(({ graphQLErrors, networkError, response, operation, forward }) => {
@@ -142,8 +198,8 @@ export const errorLink = (appName) => onError(({ graphQLErrors, networkError, re
     // logged every open tab in the suite out whenever basegeek got slow
     // (BURN_REVIEW_2 §3). A 5xx must therefore stop here: it is a retryable
     // failure of the infrastructure, not a verdict on this session. The
-    // substring checks below ('401', 'Unauthorized') are loose enough that a
-    // 5xx body could otherwise trip them, so the guard is explicit rather than
+    // legacy 'Unauthorized' substring check below is loose enough that a 5xx
+    // body could otherwise trip it, so the guard is explicit rather than
     // implied by `statusCode !== 401`.
     if (networkError && networkError.statusCode >= 500) {
         return;
@@ -152,16 +208,7 @@ export const errorLink = (appName) => onError(({ graphQLErrors, networkError, re
     let unauthenticated = false;
 
     if (graphQLErrors) {
-        for (let err of graphQLErrors) {
-            if (
-                err.extensions?.code === 'UNAUTHENTICATED' ||
-                err.message?.includes('Unauthorized') ||
-                err.message?.includes('401')
-            ) {
-                unauthenticated = true;
-                break;
-            }
-        }
+        unauthenticated = graphQLErrors.some(isUnauthenticatedGraphQLError);
     }
 
     if (networkError && networkError.statusCode === 401) {
@@ -183,12 +230,30 @@ export const errorLink = (appName) => onError(({ graphQLErrors, networkError, re
         //
         // As with the CSRF heal above, onError won't be called again for the
         // retry's own failure, so a second 401 just reaches the caller.
+        // A 401 that also carries `data` (a resolver that set
+        // `extensions.http.status`, e.g. TodoGeek's task reads) is delivered
+        // by HttpLink TWICE — `next(result)` then `error(err)` — so onError
+        // calls this handler twice for one operation. Only the first runs the
+        // refresh-and-replay; the second gets an observable that never emits,
+        // so the operation is sent again once, not twice.
+        if (operation.getContext?.().geeksuiteAuthRetry) {
+            return new Observable(() => {});
+        }
+        operation.setContext?.({ geeksuiteAuthRetry: true });
+        const replay = networkError ? true : mayReplayAfterRefresh(operation, response);
         return new Observable((observer) => {
             let sub = null;
             let closed = false;
             refreshSession().then(
                 () => {
                     if (closed) return;
+                    if (!replay) {
+                        // Part of this mutation ran: the session is renewed
+                        // for what comes next, but this one is not sent twice.
+                        observer.next(response);
+                        observer.complete();
+                        return;
+                    }
                     sub = forward(operation).subscribe({
                         next: (result) => observer.next(result),
                         error: (retryError) => observer.error(retryError),
@@ -198,12 +263,16 @@ export const errorLink = (appName) => onError(({ graphQLErrors, networkError, re
                 (refreshError) => {
                     if (closed) return;
                     if (isSessionExpiredError(refreshError)) {
-                        // Log out to clear tokens and broadcast to other tabs.
-                        logout().then(() => {
-                            if (appName) {
-                                loginRedirect(appName, window.location.href);
-                            }
-                        }).catch((e) => console.error('GeekSuite Apollo 401 logout failed:', e));
+                        // Let the app save drafts first (`geeksuite:session-ending`,
+                        // onBeforeLeave — SUITE_REVIEW_2026-11 A5), then log out to
+                        // clear tokens and broadcast to other tabs, then sign in.
+                        runBeforeLeave('session-ending')
+                            .then(() => logout())
+                            .then(() => {
+                                if (appName) {
+                                    loginRedirect(appName, window.location.href);
+                                }
+                            }).catch((e) => console.error('GeekSuite Apollo 401 logout failed:', e));
                         if (networkError) observer.error(networkError);
                         else {
                             observer.next(response);
