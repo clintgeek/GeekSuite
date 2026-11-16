@@ -233,6 +233,7 @@ the typeDefs. Only the module notes under the block are hand-maintained — put 
 | `birdNotes(birdId: ID!)` | `[BirdNote!]!` |
 | `healthRecords(birdId: ID!)` | `[HealthRecord!]!` |
 | `eggProductions(startDate: Date, endDate: Date, birdId: ID, groupId: ID)` | `[EggProduction!]!` |
+| `lastEggProduction(locationId: ID)` | `EggProduction` |
 | `hatchEvents(activeOnly: Boolean)` | `[HatchEvent!]!` |
 | `hatchEvent(id: ID!)` | `HatchEvent` |
 | `pairings(activeOnly: Boolean)` | `[Pairing!]!` |
@@ -282,6 +283,7 @@ the typeDefs. Only the module notes under the block are hand-maintained — put 
 | `gameShelves` | `GameShelfStats!` |
 | `gameProfile` | `GameProfile!` |
 | `gameVocabulary` | `GameVocabulary!` |
+| `deletedGames(limit: Int)` | `[GameDeletedEntry!]!` |
 
 **Mutations**
 
@@ -290,6 +292,7 @@ the typeDefs. Only the module notes under the block are hand-maintained — put 
 | `createGame(input: GameInput!, shelf: String)` | `Game!` |
 | `updateGame(id: ID!, input: GameInput!)` | `Game!` |
 | `deleteGame(id: ID!)` | `DeleteResponse!` |
+| `restoreDeletedGame(id: ID!)` | `GameRestoreResult!` |
 | `setGameState(gameId: ID!, input: GameStateInput!)` | `Game!` |
 | `logGameSession(gameId: ID!, input: GameSessionInput!)` | `Game!` |
 | `deleteGameSession(gameId: ID!, sessionId: ID!)` | `Game!` |
@@ -325,7 +328,7 @@ the typeDefs. Only the module notes under the block are hand-maintained — put 
 | `newsPlaces` | `[NewsPlace!]!` |
 | `newsSources(status: String)` | `[NewsSource!]!` |
 | `newsSource(id: ID!)` | `NewsSource` |
-| `newsArticles(section: String, placeId: ID, sourceId: ID, before: Date, limit: Int)` | `NewsArticlePage!` |
+| `newsArticles(section: String, placeId: ID, sourceId: ID, before: Date, cursor: String, limit: Int)` | `NewsArticlePage!` |
 | `newsFrontPage` | `NewsFrontPage!` |
 | `newsSuggestedSources` | `[NewsSuggestion!]!` |
 

@@ -359,3 +359,12 @@ Little Rock, Texarkana, Conway and the southern half of the state.
   `openInNewTab`, `openers` and `readerLinks.id`, so it ships only after basegeek is live.
 - **No migration:** a missing `openInNewTab` reads as true, and missing `openers` and
   `sectionQuotas.around` read as the defaults.
+
+### 2026-11-16: paging by cursor, resume refresh (suite review, wave 3)
+
+- `newsArticles(cursor)` returns `NewsArticlePage.nextCursor`; the list pages by it, so a
+  tick that stores new stories no longer shifts or repeats rows on "older stories".
+- Coming back to the app refetches quietly and shows an "N new stories" bar; the list
+  does not move until it is tapped. Scroll position is remembered across article opens.
+- A failed "older stories" load says so, with a retry.
+- Deploy order: gateway first (the UI selects `nextCursor`).

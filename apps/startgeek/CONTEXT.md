@@ -395,3 +395,14 @@ forever. Fixed the same way: `BUILD_ID`/`PRECACHE_ASSETS` placeholders in
 `vite.config.js` from the built `assets/*.js`/`*.css` list; `CACHE_NAME` is
 now `startgeek-cache-${BUILD_ID}`. Dev (`vite dev`) still serves the source
 file untouched — no build step there. See DOCS/PWA_STANDARD.md §1a.
+
+## 2026-11-16 — suite review, wave 3
+
+- **Captures cannot double.** A todo capture carries a `clientId` and a busy guard
+  (`src/lib/capture.js`). Note capture has no idempotency key yet.
+- **Failures say so.** The session check has an `'error'` status (it used to read as
+  signed out); failed loads show `LoadProblem`.
+- **Resume refetch** via the suite hooks, imported by file path from `packages/ui/src`
+  (StartGeek does not take the whole UI package); `vite.config.js` has `resolve.dedupe`
+  for that. A hooks subpath export would be cleaner.
+- `glanceAsk` uses the household day (`householdToday()`), not the UTC day.

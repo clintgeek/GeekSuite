@@ -641,12 +641,10 @@ existing doc home, not just history:
 - **Tablet baseline, untriaged FitnessGeek scene errors at tablet size:** `63b-meds-add-simple-filled`
   portrait "missing: Save in the footer" (may be an unreachable button), `07u-reports-body`
   tablet-dark, `45a` toast over the ribbon in landscape, one contrast hit on `60b`.
-- **Trust passes not started:** StoryGeek (duplicate turn, turn lock, composer draft, soft delete,
-  transcript storage), StartGeek (duplicate captures → send `clientId`; error and startup states),
-  GameGeek (S-D1 restore deleted games, S-D2 remove hours, shared back hook), NewsGeek, FlockGeek.
+- **Trust passes:** done in wave 3 (see §11 for what they left).
 - **`requireUser` shape** not yet applied to the thinggeek, fitnessgeek and other modules.
-- **`glanceAsk` uses the UTC day** (`glance/resolvers.js` `defaultDateString`): use
-  `shared/householdToday.js`. Same pattern in fitnessgeek `reportWindow`'s fallback.
+- fitnessgeek `reportWindow`'s fallback still uses the UTC day; use `shared/householdToday.js`
+  (`glanceAsk` done in wave 3).
 - **ThingGeek:** photos lost on an Android tab kill (IndexedDB, M); `clientId` de-duplication
   for Add and Walk creates; unique `{householdId, sha256}` index needs a duplicate check first.
 - **FitnessGeek:** finding 6 (two back stacks in the add flow) needs a device.
@@ -655,3 +653,28 @@ existing doc home, not just history:
   (`apps/bookgeek/api/scripts/sweep-orphan-readings.mjs`) written, **not run** — dump first;
   30-day retention is defined twice (gateway resolvers and `bookTrash.js`).
 - **Still Chef's:** `$unset` of BookGeek's legacy reader fields; Phase 6 device sessions.
+
+## 11. Wave 3 leftovers (2026-11-16)
+
+- **Chef's call — two panes on the desktop.** TodoGeek Today and NoteGeek notes are
+  list | detail on a tablet from 1024 px only. To include the desktop: drop `tablet &&` in
+  `apps/todogeek/frontend/src/hooks/useTodoLayout.js`; return `useFormFactor()` unchanged in
+  `apps/notegeek/frontend/src/hooks/useNoteFormFactor.js`; flip the two "held back" tests.
+- **Tablet layouts still to do:** ThingGeek (rail, two-pane), BookGeek, FitnessGeek, GameGeek
+  (rail, columns). Before GameGeek/ThingGeek/FlockGeek take the rail: fix the rail's
+  current-label contrast (suite-default dark 3.67:1, flockgeek light 3.36:1) by painting the
+  label with a measured ink.
+- **packages/ui:** `GeekToastProvider`'s bottom clearance is overridden by MUI above 600 px;
+  fix there, then remove TodoGeek's `TOAST_SX` / `useDockClearanceVar`. Optional:
+  `geekMedia.phone`; a hooks subpath export (StartGeek imports hooks by file path).
+- **NoteGeek:** a long title is clipped on a tablet (single-line field). Sketches in
+  landscape open in the note pane (~800 px), not full width.
+- **GameGeek:** restore is not transactional; a game hidden in Playnite is removed with no
+  snapshot to restore from.
+- **StartGeek:** note capture has no idempotency key (todo capture does).
+- **StoryGeek:** `startStory` is not idempotent; transcript storage (plan only; the
+  checkpoint cap is Chef's call).
+- **FlockGeek:** the egg log is still read unbounded.
+- **Still open from §10:** `useUnsavedGuard` on ThingGeek Edit/Attic and FitnessGeek
+  recipe/food/meal; `useRefetchOnResume` in FitnessGeek; the FitnessGeek tablet scene errors;
+  state scenes (empty / loading / error / offline).

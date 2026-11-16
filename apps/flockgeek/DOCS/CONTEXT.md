@@ -516,3 +516,9 @@ counts are unaffected by this stream.
 - This file is allowed to be rough and updated frequently. (`THE_PLAN.md` was archived to `DOCS/ARCHIVE/THE_PLAN.md`.)
 - When starting a new session on FlockGeek: read this file first.
 - **Server rule:** Sage never starts or stops servers directly. Sage must ask Chef to handle any server start/stop. Deviating from this rule is considered a failure.
+
+## 2026-11-16 — suite review, wave 3
+
+- `lastEggProduction` (gateway): Home reads the last entry instead of the whole egg log.
+  The egg-log page itself is still read unbounded (SUITE_TODO §11).
+- Home shows `GeekLoadError` on a failed load instead of an empty flock.

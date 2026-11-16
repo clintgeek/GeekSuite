@@ -502,7 +502,7 @@ One page, BookGeek-style: platforms owned, default platform, custom shelves, Ste
 
 It must pass `tools/mobile-harness --enforce-a11y` locally before any UI push. Planned
 scenes: `01-library`, `01b-library-list`, `02-drawer`, `03-detail`, `04-add-search`,
-`05-log-session`, `06-finish`, `07-tonight`, `08-journal`, `09-stats`, `10-settings`,
+`06-finish`, `07-tonight`, `08-journal`, `09-stats`, `10-settings`,
 `11-account-menu`.
 
 ---

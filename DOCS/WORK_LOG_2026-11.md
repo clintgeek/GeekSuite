@@ -338,3 +338,48 @@ and `SUITE_REVIEW_2026-11.md` (§ Decisions).
   thinggeek 508; fitnessgeek fe 1,014 / be 995; gamegeek 178; bookgeek web 383 / api 260;
   startgeek 24. Under load from parallel agents the frontend suites time out at random — run them alone.
 - **Deploy:** gateway half pushed first as `03ae3f0c`, then the app halves.
+
+## 2026-11-16 — Wave 3: the remaining trust passes; tablet layouts for TodoGeek and NoteGeek
+
+Chef: "You can push when ready." Built by agents, reviewed and verified by Sage on a
+quiet machine, pushed gateway-first.
+
+- **packages/ui:** `GeekSheet` `tabletMaxWidth` (600 default — a sheet is a centred
+  dialog on a tablet, not an 800 px slab), `GeekContentColumn` (680), `geekTarget()`,
+  `geekMedia.tabletUp`, `useGeekNavSlots`, `GeekShell` `rail` + `leftInset`.
+  Known gap: the rail's current label fails contrast in suite-default dark (3.67:1) and
+  flockgeek light (3.36:1); recorded in `themeContrast`, no app with those themes uses the rail yet.
+- **GameGeek (S-D1, S-D2):** Settings → Deleted games, with restore (`deletedGames`,
+  `restoreDeletedGame`, `DeletedGame` in `packages/schemas`); hours and sessions removed
+  from the UI, gateway fields `@deprecated`, not removed; shared back-to-close; Playnite
+  preview and toast say how many games an upload removes.
+- **StartGeek:** captures carry a `clientId` and a busy guard (no duplicate todo on a
+  double tap or retry); a failed session check and failed loads say so; refetch on resume;
+  `glanceAsk` uses the household day.
+- **NewsGeek:** `newsArticles(cursor)` + `nextCursor` (paging no longer skips or repeats
+  when new stories arrive); resume shows "N new stories" instead of moving the list;
+  scroll position remembered; a failed "older stories" load says so.
+- **FlockGeek:** `lastEggProduction`; Home shows a load error instead of an empty flock.
+- **StoryGeek (own backend):** a turn carries a `clientId` and is answered once
+  (`GET /api/stories/:id/turns/:clientId`); one turn per story at a time (409
+  `TURN_IN_PROGRESS`, lock expires after 5 minutes); composer draft kept locally; 30-day
+  trash with restore and delete forever. Transcript storage not built — plan in
+  `apps/storygeek/DOCS/CONTEXT.md`.
+- **TodoGeek tablet:** rail, 640 px rows with the time beside the words, add box docked
+  beside the rail, `GeekLoadError`, Today as list | task from 1024 px. `MobileTabBar` deleted.
+- **NoteGeek tablet:** rail (Home, Search, New, Notes, Tags — Tags opens a sheet with the
+  tree, Archived, Recently deleted), 600 px lists, format toolbar under the title,
+  list | note from 1024 px, full-size title and tag fields. Tap-target violations at tablet
+  size 5,134 → 0. Fixed on the way: switching sketch → sketch kept one editor mounted, so
+  the save for the sketch being left never ran (editor now keyed by note id).
+  `MobileBottomNav` deleted.
+- **Two panes are tablet-only for now.** Plan P2a says "landscape tablet, desktop"; Chef
+  was asked whether his desktop should change and had not answered at push time, so the
+  desktop keeps its layout. One line each to turn on: `useTodoLayout.js`, `useNoteFormFactor.js`.
+  A mouse window 600–1,199 px wide does get the rail.
+- **Tests (quiet machine):** basegeek api 3,856; ui 984; api-client 43; auth 80; user 105;
+  schemas 46; task-grammar 10; todogeek 516; notegeek 1,038; thinggeek 508; fitnessgeek fe
+  1,014 / be 995; gamegeek fe 186 / be 593; newsgeek fe 322 / be 264; storygeek fe 91 / be 124;
+  flockgeek fe 63 / be 17; bookgeek web 383 / api 260; startgeek 41. Harness, all 11 apps,
+  `--enforce-a11y --desktop`: 0 violations.
+- **Not checked on a device:** pen, on-screen keyboard, Android Back in two-pane, anything signed in.
