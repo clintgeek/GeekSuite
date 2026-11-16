@@ -2,8 +2,8 @@
  * Apollo cache policies for NewsGeek.
  *
  * `newsArticles` is one list per filter (section / place / source). The
- * first page (no `before`) replaces it — a refetch is a fresh front page —
- * and an "Older stories" page (`before` set) appends, deduped by article.
+ * first page (no `cursor`) replaces it — a refetch is a fresh front page —
+ * and an "Older stories" page (`cursor` set) appends, deduped by article.
  *
  * "Free to read" is the reader's server-side pref, NOT an argument: the
  * gateway answers the same variables differently with the switch on or off.
@@ -38,7 +38,8 @@ export const NEWS_TYPE_POLICIES = {
       newsArticles: {
         keyArgs: ['section', 'placeId', 'sourceId'],
         merge(existing, incoming, { args, readField }) {
-          if (!args?.before || !existing) return incoming;
+          // A next page comes by `cursor` (or, from an older bundle's cache, `before`).
+          if (!(args?.cursor || args?.before) || !existing) return incoming;
           const seen = new Set(existing.items.map((ref) => readField('id', ref)));
           const fresh = incoming.items.filter((ref) => !seen.has(readField('id', ref)));
           return { ...incoming, items: [...existing.items, ...fresh] };

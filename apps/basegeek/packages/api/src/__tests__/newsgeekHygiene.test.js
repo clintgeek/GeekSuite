@@ -201,6 +201,27 @@ describe('newsArticles (Everything and section pages)', () => {
     expect(p3.nextBefore).toBeNull();
   });
 
+  // The compound cursor (pageCursor.js, 2026-11-16) keeps the same rule.
+  it('paging by cursor: a copy collapsed into a story on page 1 never reappears on page 2; nothing is skipped', async () => {
+    const BY_CURSOR = `query($cursor: String, $limit: Int) { newsArticles(cursor: $cursor, limit: $limit) { nextCursor items { ${ITEM} } } }`;
+    const katv = await mkSource({ name: 'KATV' });
+    const kark = await mkSource({ name: 'KARK' });
+    const T = (k) => `Unique state story number ${k} for cursor paging`;
+    await mkArticle(katv, AP, { age: 1 * H });
+    await mkArticle(katv, T(1), { age: 2 * H });
+    await mkArticle(katv, T(2), { age: 3 * H });
+    await mkArticle(kark, AP, { age: 4 * H });
+    await mkArticle(kark, T(3), { age: 5 * H });
+    await mkArticle(kark, T(4), { age: 6 * H });
+    const p1 = (await ok(BY_CURSOR, { limit: 2 })).newsArticles;
+    expect(p1.items.map((i) => i.title)).toEqual([AP, T(1)]);
+    const p2 = (await ok(BY_CURSOR, { limit: 2, cursor: p1.nextCursor })).newsArticles;
+    expect(p2.items.map((i) => i.title)).toEqual([T(2), T(3)]);
+    const p3 = (await ok(BY_CURSOR, { limit: 2, cursor: p2.nextCursor })).newsArticles;
+    expect(p3.items.map((i) => i.title)).toEqual([T(4)]);
+    expect(p3.nextCursor).toBeNull();
+  });
+
   it('paging: when a group ends a page, the cursor is its newest copy, so a story between the copies is not skipped', async () => {
     const katv = await mkSource({ name: 'KATV' });
     const kark = await mkSource({ name: 'KARK' });

@@ -398,13 +398,18 @@ const fixtureOf = (pageUrl) => {
 // `free`: the reader's "Free to read" switch is on — paywalled sources' items
 // are left out and the page says how many were hidden.
 const WALLED_IDS = new Set(SOURCES.filter((s) => s.paywalled).map((s) => s.id));
+// The gateway's compound cursor (publishedAt ms + id) is opaque to the app.
+const OLDER_CURSOR = '1760000000000.0123456789abcdef01234567';
+// `error`: the gateway answers with an error (the paper didn't arrive);
+// `olderfail`: page one arrives but "Older stories" fails (SUITE_REVIEW_2026-11 NewsGeek 1-4).
+const GATEWAY_ERROR = { __graphql: { data: null, errors: [{ message: 'Gateway unavailable', extensions: { code: 'INTERNAL_SERVER_ERROR' } }] } };
 const articlesFor = (vars, mode) => {
-  if (mode === 'empty') return { __typename: 'NewsArticlePage', items: [], nextBefore: null, hiddenPaywalled: 0 };
+  if (mode === 'empty') return { __typename: 'NewsArticlePage', items: [], nextCursor: null, hiddenPaywalled: 0 };
   const free = mode === 'free';
   // Around Arkansas is a story section, never a source label.
-  if (vars.section === 'around') return { __typename: 'NewsArticlePage', items: AROUND_ITEMS, nextBefore: null, hiddenPaywalled: 0 };
+  if (vars.section === 'around') return { __typename: 'NewsArticlePage', items: AROUND_ITEMS, nextCursor: null, hiddenPaywalled: 0 };
   const items = ARTICLES.filter((a) => (!vars.section || a.sections.includes(vars.section)) && (!vars.sourceId || a.sourceId === vars.sourceId) && !(free && WALLED_IDS.has(a.sourceId)));
-  return { __typename: 'NewsArticlePage', items, nextBefore: ago(400), hiddenPaywalled: free ? 14 : 0 };
+  return { __typename: 'NewsArticlePage', items, nextCursor: OLDER_CURSOR, hiddenPaywalled: free ? 14 : 0 };
 };
 
 export async function routes(ctx) {
@@ -449,6 +454,7 @@ export async function routes(ctx) {
       case 'NewsSetPublisherOpener':
         return { newsSetPublisherOpener: withOpener(mode, vars) };
       case 'NewsFrontPage':
+        if (mode === 'error') return GATEWAY_ERROR;
         return { newsFrontPage: frontPageFor(mode) };
       case 'NewsHomePlaces':
         return { newsPrefs: { __typename: 'NewsPrefs', homePlaces: mode === 'nonadmin' ? [] : HOME_PLACES } };
@@ -468,6 +474,7 @@ export async function routes(ctx) {
       case 'NewsPlaces':
         return { newsPlaces: PLACES };
       case 'NewsArticles':
+        if (mode === 'error' || (mode === 'olderfail' && vars.cursor)) return GATEWAY_ERROR;
         return { newsArticles: articlesFor(vars, mode) };
       case 'NewsSources':
         return { newsSources: SOURCES.map((s) => asSeenBy(s, mode)) };

@@ -91,7 +91,7 @@ describe('Also in, through the queries', () => {
   });
 
   it('Everything selects alsoIn: the list shows the line', async () => {
-    const page = { data: { newsArticles: { __typename: 'NewsArticlePage', items: [article('e1', { alsoIn: COPIES.slice(0, 2) })], nextBefore: null, hiddenPaywalled: 0 } } };
+    const page = { data: { newsArticles: { __typename: 'NewsArticlePage', items: [article('e1', { alsoIn: COPIES.slice(0, 2) })], nextCursor: null, hiddenPaywalled: 0 } } };
     renderWithProviders(<LatestView />, { mocks: [prefsMock, { request: { query: GET_NEWS_ARTICLES, variables: { limit: 30 } }, result: page }] });
     expect(await screen.findByRole('button', { name: 'Also in KARK +1' })).toBeInTheDocument();
   });

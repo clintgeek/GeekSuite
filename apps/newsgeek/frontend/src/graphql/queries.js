@@ -86,8 +86,8 @@ export const GET_NEWS_PLACES = gql`
 `;
 
 export const GET_NEWS_ARTICLES = gql`
-  query NewsArticles($section: String, $placeId: ID, $sourceId: ID, $before: Date, $limit: Int) {
-    newsArticles(section: $section, placeId: $placeId, sourceId: $sourceId, before: $before, limit: $limit) {
+  query NewsArticles($section: String, $placeId: ID, $sourceId: ID, $cursor: String, $limit: Int) {
+    newsArticles(section: $section, placeId: $placeId, sourceId: $sourceId, cursor: $cursor, limit: $limit) {
       items {
         id
         title
@@ -112,7 +112,7 @@ export const GET_NEWS_ARTICLES = gql`
           name
         }
       }
-      nextBefore
+      nextCursor
       hiddenPaywalled
     }
   }

@@ -23,6 +23,12 @@ import AnswerCard from './AnswerCard'
 import DraftPreview from './DraftPreview'
 import Toast from './Toast'
 import { slashFocusAction } from '../lib/slashFocus'
+import {
+  captureAttemptFor,
+  createBusyGuard,
+  partialCaptureMessage,
+  runTaskCapture,
+} from '../lib/capture'
 
 const ENGINE_STORAGE_KEY = 'startgeek.engine'
 const SUITE_DEBOUNCE_MS = 250
@@ -37,15 +43,17 @@ const getInitialEngineIndex = () => {
   }
 }
 
-const getModeLabel = (mode, engine, status, asking, drafting) => {
+const getModeLabel = (mode, engine, status, asking, drafting, capturing) => {
   if (mode === 'web') return engine.label
+  if (status === 'loading') return 'Connecting…'
+  if (status === 'error') return 'Not connected'
   if (status !== 'in') {
     return mode === 'suite' || mode === 'ask'
       ? 'Sign in to search the suite'
       : 'Sign in to capture'
   }
-  if (mode === 'task') return drafting ? 'Drafting…' : 'Task → TodoGeek'
-  if (mode === 'note') return drafting ? 'Drafting…' : 'Note → NoteGeek'
+  if (mode === 'task') return capturing ? 'Saving…' : drafting ? 'Drafting…' : 'Task → TodoGeek'
+  if (mode === 'note') return capturing ? 'Saving…' : drafting ? 'Drafting…' : 'Note → NoteGeek'
   if (mode === 'suite') return 'Suite search'
   if (mode === 'ask') return asking ? 'Thinking…' : 'Ask the suite'
   return engine.label
@@ -93,16 +101,24 @@ const CommandBox = ({ onOpenSettings }) => {
   const [askLoading, setAskLoading] = useState(false)
   const [draft, setDraft] = useState(null)
   const [draftLoading, setDraftLoading] = useState(false)
+  const [capturing, setCapturing] = useState(false)
 
   const inputRef = useRef(null)
   const searchDebounceRef = useRef(null)
   // The line "Edit" just handed back. It came from the model once already;
   // sending it straight back would be a loop, so the parser gets it whole.
   const skipDraftRef = useRef(null)
+  // One Enter at a time: a double Enter (or the phone's Go key tapped twice)
+  // on a slow gateway used to file the line twice (SUITE_REVIEW_2026-11 #8).
+  const guardRef = useRef(null)
+  if (!guardRef.current) guardRef.current = createBusyGuard()
+  // The task capture in progress or last failed: its clientId and the steps
+  // that finished. Enter on the same line again resumes it (lib/capture.js).
+  const attemptRef = useRef(null)
 
   const { mode, query } = useMemo(() => detectMode(value), [value])
   const engine = ENGINES[engineIndex]
-  const modeLabel = getModeLabel(mode, engine, status, askLoading, draftLoading)
+  const modeLabel = getModeLabel(mode, engine, status, askLoading, draftLoading, capturing)
   const showAskHint = mode === 'ask' && status === 'in' && !askEnabled
 
   // "Edit": the draft goes back into the box as the shorthand the parser
@@ -283,33 +299,15 @@ const CommandBox = ({ onOpenSettings }) => {
    * path — including defaulting to today at 9am, as TodoGeek's quick-add does.
    */
   const createTaskFromFields = useCallback(
-    async (fields) => {
-      let dueDate = fields.dueDate ? new Date(fields.dueDate) : null
-      if (!dueDate || Number.isNaN(dueDate.getTime())) {
-        dueDate = new Date()
-        dueDate.setHours(9, 0, 0, 0)
-      }
-
-      const { createTask: task } = await gql(CREATE_TASK, {
-        content: fields.content || '',
-        signifier: fields.signifier || '*',
-        priority: fields.priority || null,
-        tags: fields.tags?.length ? fields.tags : null,
-        dueDate: dueDate.toISOString(),
-        note: fields.note || null,
-        recurrenceRule: fields.recurrenceRule || null,
+    async (fields, key) => {
+      const attempt = captureAttemptFor(attemptRef.current, key)
+      attemptRef.current = attempt
+      await runTaskCapture(fields, attempt, {
+        createTask: async (variables) => (await gql(CREATE_TASK, variables)).createTask,
+        createNote: (text) => handleCreateNote(text),
+        blockTask: (id, reason) => gql(BLOCK_TASK, { id, reason }),
       })
-
-      if (fields.noteGeekNote) {
-        await handleCreateNote(fields.noteGeekNote)
-      }
-
-      if (fields.blocked) {
-        await gql(BLOCK_TASK, {
-          id: task.id,
-          reason: fields.blockedReason || null,
-        })
-      }
+      attemptRef.current = null
     },
     [handleCreateNote]
   )
@@ -335,7 +333,9 @@ const CommandBox = ({ onOpenSettings }) => {
         markOut()
         return
       }
-      setToast(failureMessage(err, fallback))
+      // A task that was filed before a later step failed must say so, or
+      // the person retypes it. Enter again finishes only the missing step.
+      setToast(partialCaptureMessage(err, attemptRef.current) || failureMessage(err, fallback))
     },
     [markOut]
   )
@@ -352,7 +352,7 @@ const CommandBox = ({ onOpenSettings }) => {
     [refetch]
   )
 
-  const handleEnter = useCallback(async () => {
+  const runEnter = useCallback(async () => {
     if (mode === 'web') {
       const q = query.trim()
       if (!q) return
@@ -379,7 +379,7 @@ const CommandBox = ({ onOpenSettings }) => {
             })
             captureDone('Note saved')
           } else {
-            await createTaskFromFields(draft.draft)
+            await createTaskFromFields(draft.draft, `draft:${JSON.stringify(draft.draft)}`)
             captureDone('Task added')
           }
         } catch (err) {
@@ -422,7 +422,7 @@ const CommandBox = ({ onOpenSettings }) => {
           await handleCreateNote(q)
           captureDone('Note saved')
         } else {
-          await createTaskFromFields(parseTaskInput(q))
+          await createTaskFromFields(parseTaskInput(q), `task:${q}`)
           captureDone('Task added')
         }
       } catch (err) {
@@ -527,6 +527,20 @@ const CommandBox = ({ onOpenSettings }) => {
     draft,
   ])
 
+  // Every Enter (and the draft's Create) goes through the guard: while one is
+  // in flight — a capture, a draft call, an Ask — a second is dropped.
+  const handleEnter = useCallback(() => {
+    if (mode === 'web') return runEnter()
+    return guardRef.current.run(async () => {
+      setCapturing(mode === 'task' || mode === 'note')
+      try {
+        await runEnter()
+      } finally {
+        setCapturing(false)
+      }
+    })
+  }, [mode, runEnter])
+
   const handleKeyDown = (e) => {
     if (e.key === 'Tab' && mode === 'web') {
       e.preventDefault()
@@ -599,7 +613,7 @@ const CommandBox = ({ onOpenSettings }) => {
           aria-controls={mode === 'suite' || mode === 'ask' ? 'search-results' : undefined}
         />
 
-        {(searchLoading && mode === 'suite') || askLoading || draftLoading ? (
+        {(searchLoading && mode === 'suite') || askLoading || draftLoading || capturing ? (
           <span className="w-1.5 h-1.5 rounded-full bg-ink-2 animate-pulse" aria-hidden="true" />
         ) : null}
         <span className="shrink-0 font-mono text-[12px] tracking-[0.06em] uppercase text-ink-2 px-2.5 py-1.5 rounded-md border border-hair truncate max-w-[11rem]">

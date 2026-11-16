@@ -4,6 +4,7 @@ import { useSession } from '../hooks/useSession'
 import { gql, UnauthorizedError } from '../lib/graphql'
 import { GLANCE_TODAY } from '../lib/queries'
 import { INTERVALS } from '../constants'
+import { useRefetchOnResume } from '../lib/refetchOnResume'
 
 function todayIso() {
   const d = new Date()
@@ -17,8 +18,8 @@ export const GlanceProvider = ({ children }) => {
   const [data, setData] = useState(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState(null)
+  const [loadedAt, setLoadedAt] = useState(null)
   const lastFetchedRef = useRef(0)
-  const intervalRef = useRef(null)
 
   const load = useCallback(
     async (force = false) => {
@@ -36,6 +37,7 @@ export const GlanceProvider = ({ children }) => {
         const result = await gql(GLANCE_TODAY, { date: todayIso() })
         setData(result.glanceToday || null)
         lastFetchedRef.current = Date.now()
+        setLoadedAt(lastFetchedRef.current)
       } catch (err) {
         if (err instanceof UnauthorizedError) {
           markOut()
@@ -55,43 +57,29 @@ export const GlanceProvider = ({ children }) => {
     if (status !== 'in') {
       setData(null)
       setError(null)
+      setLoadedAt(null)
       lastFetchedRef.current = 0
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-        intervalRef.current = null
-      }
       return
     }
-
     load(true)
-
-    intervalRef.current = setInterval(() => {
-      load(true)
-    }, INTERVALS.GLANCE_REFRESH)
-
-    const handleWindowFocus = () => {
-      if (document.visibilityState !== 'hidden' && Date.now() - lastFetchedRef.current > INTERVALS.GLANCE_STALE) {
-        load(true)
-      }
-    }
-
-    window.addEventListener('focus', handleWindowFocus)
-
-    return () => {
-      if (intervalRef.current) {
-        clearInterval(intervalRef.current)
-        intervalRef.current = null
-      }
-      window.removeEventListener('focus', handleWindowFocus)
-    }
   }, [status, load])
+
+  // Resume, focus, back-forward restore and "online" re-read the day (the
+  // suite hook; SUITE_REVIEW_2026-11 §3). The 5-minute poll runs only while
+  // the page is visible — it used to run in hidden tabs too, and an installed
+  // PWA coming back did not always fire `focus`.
+  useRefetchOnResume(refetch, {
+    enabled: status === 'in',
+    minIntervalMs: INTERVALS.GLANCE_STALE,
+    pollMs: INTERVALS.GLANCE_REFRESH,
+  })
 
   // Memoized: every consumer of this context (ModuleGrid, TaskRow, CommandBox)
   // re-rendered on every GlanceProvider render otherwise, including the ones
   // caused by the 60s poll setting `loading` twice.
   const value = useMemo(
-    () => ({ data, loading, error, refetch }),
-    [data, loading, error, refetch]
+    () => ({ data, loading, error, loadedAt, refetch }),
+    [data, loading, error, loadedAt, refetch]
   )
 
   return (

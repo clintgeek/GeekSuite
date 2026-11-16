@@ -206,6 +206,26 @@ export const scenes = [
   { name: '44-settings-reading', goto: '/settings', wait: 1600, setup: scrollTo('#settings-reading') },
   // Settings → Publishers → Open with: the overrides, each with "Use original".
   { name: '45-settings-openers', goto: '/settings', wait: 1600, setup: scrollTo('[data-testid="publisher-openers"]') },
+  // Wave 3 (2026-11-16): a failed load is never an empty paper — Today and
+  // Everything say the paper didn't arrive, with Try again…
+  { name: '46-today-error', goto: '/?__fixture=error', wait: 1600 },
+  { name: '47-everything-error', goto: '/everything?__fixture=error', wait: 1600 },
+  // …and an "Older stories" failure is said at the foot of the list, with Try again.
+  {
+    name: '48-older-stories-failed',
+    goto: '/everything?__fixture=olderfail',
+    wait: 1600,
+    async setup(page, h) {
+      const btn = page.getByRole('button', { name: 'Older stories' });
+      if (!(await btn.count())) return false;
+      await btn.first().scrollIntoViewIfNeeded();
+      await btn.first().click();
+      await page.getByTestId('older-failed').waitFor({ timeout: 5000 });
+      await page.getByTestId('older-failed').scrollIntoViewIfNeeded();
+      await h.settle(400);
+      return undefined;
+    },
+  },
 ];
 
 export const waivers = [];

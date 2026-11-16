@@ -17,16 +17,25 @@
  * Free to read and every Source sheet switch change what the gateway returns:
  * after the write, the cached front page and lists are dropped and the page
  * refetched (cachePolicies.resetArticleLists), as on Everything.
+ *
+ * Coming back (SUITE_REVIEW_2026-11 NewsGeek findings 1, 2): the masthead
+ * says when the paper was set ("Updated 8:05 AM", from generatedAt). When the
+ * PWA resumes, the reader at the top gets the new paper quietly; one further
+ * down gets a "N new stories" bar instead of a page reordered under them
+ * (usePaperRefresh). Back to Today reads the front page from the cache once,
+ * so the stories under the restored scroll position are the ones they left.
  */
-import React, { useState } from 'react';
-import { Box, Button, CircularProgress, Link, Typography } from '@mui/material';
-import { NetworkStatus, useApolloClient, useMutation, useQuery } from '@apollo/client';
-import { useToast } from '@geeksuite/ui';
-import { Link as RouterLink, Navigate, useLocation } from 'react-router-dom';
+import React, { useCallback, useState } from 'react';
+import { Box, CircularProgress, Link, Typography } from '@mui/material';
+import { useApolloClient, useMutation, useQuery } from '@apollo/client';
+import { GeekLoadError, geekLoadStatus, useToast } from '@geeksuite/ui';
+import { Link as RouterLink, Navigate, useLocation, useNavigationType } from 'react-router-dom';
 import ArticleItem from '../components/ArticleItem';
 import Column from '../components/Column';
 import FreeToReadSwitch from '../components/FreeToReadSwitch';
 import Masthead from '../components/Masthead';
+import NewStoriesBar from '../components/NewStoriesBar';
+import { usePaperRefresh } from '../hooks/usePaperRefresh';
 import SourceSheet from '../components/SourceSheet';
 import { useViewer } from '../hooks/useViewer';
 import { resetArticleLists } from '../graphql/cachePolicies';
@@ -94,6 +103,16 @@ export default function TodayView() {
   const [feedUrl, setFeedUrl] = useState(null);
   const { notify } = useToast();
   const client = useApolloClient();
+  const navType = useNavigationType();
+  // Back (POP) with the paper still cached: show that paper, not a re-ranked one.
+  const [firstPolicy] = useState(() => {
+    if (navType !== 'POP') return 'cache-and-network';
+    try {
+      return client.readQuery({ query: GET_NEWS_FRONT_PAGE })?.newsFrontPage ? 'cache-first' : 'cache-and-network';
+    } catch {
+      return 'cache-and-network';
+    }
+  });
 
   const prefsQ = useQuery(GET_NEWS_PREFS, { fetchPolicy: 'cache-and-network', nextFetchPolicy: 'cache-first', skip: legacy });
   const freeToRead = Boolean(prefsQ.data?.newsPrefs?.freeToReadOnly);
@@ -101,18 +120,34 @@ export default function TodayView() {
   const opening = openingPrefs(prefsQ.data?.newsPrefs);
   const [setPrefs, { loading: savingPrefs }] = useMutation(SET_NEWS_PREFS);
 
-  const { data, error, networkStatus, refetch } = useQuery(GET_NEWS_FRONT_PAGE, {
+  const { data, error, loading, refetch } = useQuery(GET_NEWS_FRONT_PAGE, {
     notifyOnNetworkStatusChange: true,
-    fetchPolicy: 'cache-and-network',
+    fetchPolicy: firstPolicy,
     nextFetchPolicy: 'cache-first',
     skip: legacy,
   });
 
-  if (legacy) return <Navigate to={`/everything${location.search}`} replace />;
-
   const front = data?.newsFrontPage;
   const sections = (front?.sections ?? []).filter((s) => s.items?.length);
-  const loadingFirst = !front && networkStatus !== NetworkStatus.error;
+  const status = geekLoadStatus({ loading, error, data: front, isEmpty: (f) => !f });
+  const loadingFirst = status === 'loading';
+
+  // Resume (finding 1): the new paper quietly at the top, or a "new stories" bar.
+  const peek = useCallback(
+    () =>
+      client
+        .query({ query: GET_NEWS_FRONT_PAGE, fetchPolicy: 'no-cache' })
+        .then((r) => (r.data?.newsFrontPage?.sections ?? []).flatMap((s) => (s.items ?? []).map((a) => a.id))),
+    [client]
+  );
+  const { pending, showNew } = usePaperRefresh({
+    refetch,
+    peek,
+    currentIds: sections.flatMap((s) => s.items.map((a) => a.id)),
+    enabled: Boolean(front) && !legacy,
+  });
+
+  if (legacy) return <Navigate to={`/everything${location.search}`} replace />;
 
   const toggleFreeToRead = async (next) => {
     try {
@@ -142,7 +177,8 @@ export default function TodayView() {
 
   return (
     <Column>
-      <Masthead edition="Today’s paper" />
+      <NewStoriesBar count={pending?.count} onShow={showNew} />
+      <Masthead edition="Today’s paper" updatedAt={front?.generatedAt} />
       <Box sx={{ display: 'flex', justifyContent: 'flex-end', borderBottom: 1, borderColor: 'divider' }}>
         <FreeToReadSwitch checked={freeToRead} onChange={toggleFreeToRead} disabled={!prefsQ.data || savingPrefs} />
       </Box>
@@ -153,16 +189,17 @@ export default function TodayView() {
         </Box>
       ) : null}
 
-      {error && !front ? (
-        <Box role="alert" sx={{ py: 10, textAlign: 'center' }}>
-          <Typography variant="h5" component="p" sx={{ mb: 1 }}>
-            The paper didn’t arrive.
-          </Typography>
-          <Typography sx={{ color: 'text.secondary', mb: 3 }}>We couldn’t reach the news desk. Your connection or the gateway may be down.</Typography>
-          <Button variant="outlined" color="inherit" onClick={() => refetch()}>
-            Try again
-          </Button>
-        </Box>
+      {status === 'error' ? (
+        <GeekLoadError
+          data-testid="paper-error"
+          title="The paper didn’t arrive."
+          description="We couldn’t reach the news desk. Your connection or the gateway may be down."
+          error={error}
+          showDetail={false}
+          retryLabel="Try again"
+          onRetry={() => refetch().catch(() => {})}
+          sx={{ py: 10 }}
+        />
       ) : null}
 
       {front && !sections.length ? (

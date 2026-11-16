@@ -150,7 +150,12 @@ export const typeDefs = gql`
 
   type NewsArticlePage {
     items: [NewsArticle!]!
+    # Date-only cursor (kept for old clients): stories sharing the boundary
+    # second can be skipped. New clients page with nextCursor.
     nextBefore: Date
+    # Opaque compound cursor (publishedAt + id): pass it back as
+    # newsArticles(cursor:). Null on the last page. Added 2026-11-16.
+    nextCursor: String
     # Paywalled articles the reader's "Free to read" switch left out of this
     # list (same filters, ignoring the cursor). 0 when the switch is off.
     hiddenPaywalled: Int!
@@ -252,7 +257,8 @@ export const typeDefs = gql`
     # Chronological, newest first: Everything, or one section page. "section"
     # filters by the story's per-reader section (NewsArticle.section), not the
     # source's labels (2026-10-11); "around" too.
-    newsArticles(section: String, placeId: ID, sourceId: ID, before: Date, limit: Int): NewsArticlePage!
+    # Paging: cursor (a page's nextCursor) wins over the older, date-only before.
+    newsArticles(section: String, placeId: ID, sourceId: ID, before: Date, cursor: String, limit: Int): NewsArticlePage!
     # Today: the ranked front page for the caller (ranking.js).
     newsFrontPage: NewsFrontPage!
     # Aggregator articles, last 30 days, grouped by publisher domain, minus domains a

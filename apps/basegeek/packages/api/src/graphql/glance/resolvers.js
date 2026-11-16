@@ -1,5 +1,4 @@
 import mongoose from 'mongoose';
-import { format } from 'date-fns';
 import logger from '../../lib/logger.js';
 import { normalizeTag } from '@geeksuite/tags';
 import ical from 'node-ical';
@@ -19,11 +18,22 @@ import EggProduction from '../flockgeek/models/EggProduction.js';
 
 import { resolvers as fitnessResolvers } from '../fitnessgeek/resolvers.js';
 import { planQuery, answerFrom, draftFrom } from './askService.js';
+import { householdToday } from '../shared/householdToday.js';
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-function defaultDateString() {
-  return format(new Date(), 'yyyy-MM-dd');
+/**
+ * The household's calendar day as `YYYY-MM-DD` — the default for every glance
+ * read that is not handed a date by its caller.
+ *
+ * This used to be `format(new Date(), 'yyyy-MM-dd')`, which in a UTC container
+ * is the UTC day: from about 6-7 PM Central it was already tomorrow, so Ask's
+ * "what's due today" answered from tomorrow's snapshot (SUITE_REVIEW_2026-11,
+ * ranked item 6). `householdToday()` is the suite's one answer to "what day is
+ * it at home" (decision S-D4).
+ */
+export function defaultDateString(now = new Date()) {
+  return householdToday(now).toISOString().slice(0, 10);
 }
 
 function startOfDay(dateStr) {

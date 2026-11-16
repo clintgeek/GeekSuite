@@ -1,6 +1,8 @@
-import { useState, useEffect, useCallback, useMemo } from 'react'
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react'
 import { SessionContext } from './sessionContextValue'
 import { BASEGEEK, logout } from '../lib/basegeek'
+import { sessionStatusFor } from '../lib/sessionStatus'
+import { useRefetchOnResume } from '../lib/refetchOnResume'
 
 export const SessionProvider = ({ children }) => {
   const [user, setUser] = useState(null)
@@ -28,30 +30,56 @@ export const SessionProvider = ({ children }) => {
     }
   }, [])
 
-  useEffect(() => {
-    const check = async () => {
-      try {
-        const res = await fetch(`${BASEGEEK}/api/users/me`, {
-          credentials: 'include',
-        })
-        if (res.ok) {
-          const json = await res.json()
-          setUser(json.user || null)
-          setStatus(json.user ? 'in' : 'out')
-        } else {
-          markOut()
-        }
-      } catch {
-        markOut()
-      }
-    }
+  // status: 'loading' | 'in' | 'out' | 'error'. 'error' is "couldn't ask"
+  // (network, 5xx, AUTH_UNAVAILABLE) — never drawn as signed out (THE_CONTEXT
+  // §3.3). It retries on Retry, on resume and when the connection comes back.
+  const [checking, setChecking] = useState(false)
+  const checkingRef = useRef(false)
 
-    check()
+  const check = useCallback(async () => {
+    if (checkingRef.current) return
+    checkingRef.current = true
+    setChecking(true)
+    let httpStatus = null
+    let body = null
+    try {
+      const res = await fetch(`${BASEGEEK}/api/users/me`, {
+        credentials: 'include',
+      })
+      httpStatus = res.status
+      // An OK answer that isn't JSON is a broken proxy, not a signed-out user.
+      if (res.ok) {
+        body = await res.json().catch(() => {
+          httpStatus = null
+          return null
+        })
+      }
+    } catch {
+      httpStatus = null
+    } finally {
+      checkingRef.current = false
+      setChecking(false)
+    }
+    const next = sessionStatusFor(httpStatus, body)
+    if (next === 'in') {
+      setUser(body.user)
+      setStatus('in')
+    } else if (next === 'out') {
+      markOut()
+    } else {
+      setStatus((prev) => (prev === 'in' ? prev : 'error'))
+    }
   }, [markOut])
 
+  useEffect(() => {
+    check()
+  }, [check])
+
+  useRefetchOnResume(check, { enabled: status === 'error', minIntervalMs: 5000 })
+
   const value = useMemo(
-    () => ({ user, status, signOut, markOut }),
-    [user, status, signOut, markOut]
+    () => ({ user, status, checking, signOut, markOut, recheck: check }),
+    [user, status, checking, signOut, markOut, check]
   )
 
   return (

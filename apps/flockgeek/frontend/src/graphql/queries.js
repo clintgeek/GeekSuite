@@ -58,6 +58,19 @@ export const GET_EGG_PRODUCTIONS = gql`
   }
 `;
 
+// The harvest sheet's "Last harvest" chip and days-since prefill: one indexed
+// read on the gateway instead of every egg record ever logged (2026-11-16).
+export const GET_LAST_EGG_PRODUCTION = gql`
+  query GetLastEggProduction($locationId: ID) {
+    lastEggProduction(locationId: $locationId) {
+      id
+      date
+      eggsCount
+      locationId
+    }
+  }
+`;
+
 export const GET_PAIRINGS = gql`
   query GetPairings($activeOnly: Boolean) {
     pairings(activeOnly: $activeOnly) {

@@ -14,7 +14,7 @@ import { article, source, newsPrefs } from '../fixtures';
 import { renderWithProviders } from '../testUtils';
 
 const prefsMock = { request: { query: GET_NEWS_PREFS }, result: { data: { newsPrefs: { ...newsPrefs(), freeToReadOnly: false, readerLinks: [] } } }, maxUsageCount: 5 };
-const page = (items) => ({ data: { newsArticles: { __typename: 'NewsArticlePage', items, nextBefore: null, hiddenPaywalled: 0 } } });
+const page = (items) => ({ data: { newsArticles: { __typename: 'NewsArticlePage', items, nextCursor: null, hiddenPaywalled: 0 } } });
 const articlesMock = (variables, items) => ({ request: { query: GET_NEWS_ARTICLES, variables }, result: page(items), maxUsageCount: 3 });
 
 describe('Bottom tabs', () => {

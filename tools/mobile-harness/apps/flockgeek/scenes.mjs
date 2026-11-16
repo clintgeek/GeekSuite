@@ -5,8 +5,29 @@
 // guard). Every scene here is independent — one that needs an open sheet
 // or dialog re-opens it from its own `goto`, since the runner carries no
 // state between scenes.
+import { graphqlRoute } from '../../lib/net.mjs';
+import { OPS } from './fixtures.mjs';
+
 export const scenes = [
   { name: '01-home', goto: '/', wait: 1500 },
+
+  {
+    // Home when the egg read fails (SUITE_REVIEW_2026-11, FlockGeek 2): the
+    // error with Retry, never the cards reading "0 eggs a day".
+    name: '01b-home-load-error',
+    async setup(page, h) {
+      await graphqlRoute(page, {
+        ...OPS,
+        GetEggProductions: { __graphql: { data: null, errors: [{ message: 'Gateway timeout' }] } },
+      });
+      await page.goto(h.base + '/', { waitUntil: 'networkidle' });
+      await h.settle(1500);
+      if (!(await page.locator('[data-geek-load-error]').count())) throw new Error('a failed egg read raised no load error');
+      if (!(await page.getByRole('button', { name: 'Retry' }).count())) throw new Error('the load error has no Retry');
+      if (await page.getByText('Eggs / day').count()) throw new Error('the summary cards drew despite the failed read');
+    },
+    teardown: (page) => page.unroute('**/graphql'),
+  },
 
   {
     name: '02-harvest-sheet',

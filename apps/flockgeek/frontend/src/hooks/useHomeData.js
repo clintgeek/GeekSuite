@@ -24,15 +24,26 @@ function rollingWindow() {
 
 export default function useHomeData() {
   const { todayStr, rollingStartStr } = rollingWindow();
-  const { data: birdsData, loading: birdsLoading, error: birdsError } = useQuery(GET_BIRDS);
-  const { data: groupsData, loading: groupsLoading } = useQuery(GET_FLOCK_GROUPS);
-  const { data: eggsData, loading: eggsLoading } = useQuery(GET_EGG_PRODUCTIONS, {
+  const birds = useQuery(GET_BIRDS);
+  const groups = useQuery(GET_FLOCK_GROUPS);
+  const eggs = useQuery(GET_EGG_PRODUCTIONS, {
     variables: { startDate: rollingStartStr, endDate: todayStr },
   });
-  const { data: hatchesData, loading: hatchesLoading } = useQuery(GET_HATCH_EVENTS);
+  const hatches = useQuery(GET_HATCH_EVENTS);
+  const queries = [birds, groups, eggs, hatches];
+  const { data: birdsData } = birds;
+  const { data: groupsData } = groups;
+  const { data: eggsData } = eggs;
+  const { data: hatchesData } = hatches;
 
-  const loading = birdsLoading || groupsLoading || eggsLoading || hatchesLoading;
-  const error = birdsError || null;
+  const loading = queries.some((q) => q.loading);
+  // SUITE_REVIEW_2026-11 (FlockGeek 2): only the birds error used to count,
+  // so a failed egg read became "0 eggs a day" — the reassuring-wrong
+  // direction. Every card on Home is computed from one of these four reads,
+  // so ANY of them failing with nothing to show is a failed Home; a failed
+  // background refetch that left earlier data in place is not.
+  const error = queries.find((q) => q.error && !q.data)?.error || null;
+  const refetch = () => Promise.all(queries.map((q) => q.refetch()));
 
   const birdsList = birdsData?.birds || [];
   const groupsList = groupsData?.flockGroups || [];
@@ -90,6 +101,7 @@ export default function useHomeData() {
   return {
     loading,
     error,
+    refetch,
     stats: { birdsCount, groupsCount, layingHensCount, avgDailyEggs, recentHatches: hatchesList },
     items,
   };

@@ -7,7 +7,7 @@ import LatestView from '../../views/LatestView';
 import { article, newsPrefs } from '../fixtures';
 import { renderWithProviders } from '../testUtils';
 
-const page = (items, nextBefore = null, hiddenPaywalled = 0) => ({ data: { newsArticles: { __typename: 'NewsArticlePage', items, nextBefore, hiddenPaywalled } } });
+const page = (items, nextCursor = null, hiddenPaywalled = 0) => ({ data: { newsArticles: { __typename: 'NewsArticlePage', items, nextCursor, hiddenPaywalled } } });
 const articlesMock = (variables, result) => ({ request: { query: GET_NEWS_ARTICLES, variables }, result });
 const prefsMock = (freeToReadOnly = false, readerLinks = []) => ({
   request: { query: GET_NEWS_PREFS },
@@ -48,12 +48,12 @@ describe('Latest', () => {
     expect(screen.getAllByTestId('official-badge')).toHaveLength(1);
   });
 
-  it('"Older stories" asks for the next page with before = nextBefore and appends it', async () => {
-    const cursor = '2026-10-09T08:00:00.000Z';
+  it('"Older stories" asks for the next page with cursor = nextCursor and appends it', async () => {
+    const cursor = '1760000000000.0123456789abcdef01234567';
     const mocks = [
       prefsMock(),
       articlesMock({ limit: 30 }, page([article('new1'), article('new2')], cursor)),
-      articlesMock({ limit: 30, before: cursor }, page([article('old1', { title: 'Older headline' })], null)),
+      articlesMock({ limit: 30, cursor }, page([article('old1', { title: 'Older headline' })], null)),
     ];
     renderWithProviders(<LatestView />, { mocks });
 

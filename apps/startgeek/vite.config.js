@@ -84,4 +84,9 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 3000,
   },
+  // src/lib/refetchOnResume.js and glanceState.js import two files from
+  // packages/ui by path (the package entry pulls MUI). One React, always.
+  resolve: {
+    dedupe: ['react', 'react-dom'],
+  },
 })

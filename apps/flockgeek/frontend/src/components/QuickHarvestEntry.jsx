@@ -23,7 +23,7 @@ import EggIcon from "@mui/icons-material/EggAlt";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import { slashFocusProps, useToast } from "@geeksuite/ui";
-import { GET_EGG_PRODUCTIONS } from "../graphql/queries";
+import { GET_LAST_EGG_PRODUCTION } from "../graphql/queries";
 import { RECORD_EGG_PRODUCTION } from "../graphql/mutations";
 
 /**
@@ -47,32 +47,32 @@ const QuickHarvestEntry = ({ onSuccess, locations = [], variant = "panel" }) => 
   const [showDetails, setShowDetails] = useState(false);
   const { notify } = useToast();
 
-  // Fetch recent egg productions to find last harvest per location
-  const { data: eggsData, refetch: refetchEggs } = useQuery(GET_EGG_PRODUCTIONS, {
+  // The last harvest at the selected location. This used to fetch EVERY egg
+  // record ever logged and sort them here, each time the sheet opened
+  // (SUITE_REVIEW_2026-11, FlockGeek 1); the gateway answers it with one
+  // indexed read now. No location picked → no prefill, as before.
+  const { data: lastData } = useQuery(GET_LAST_EGG_PRODUCTION, {
+    variables: { locationId },
+    skip: !locationId,
     fetchPolicy: 'cache-and-network',
   });
-  const allEggs = eggsData?.eggProductions || [];
+  const lastForLocation = locationId ? lastData?.lastEggProduction ?? null : null;
 
-  // Find last harvest for the selected location
   const { lastHarvest, daysSinceLastHarvest } = useMemo(() => {
-    if (!locationId) return { lastHarvest: null, daysSinceLastHarvest: 1 };
-    const forLocation = allEggs
-      .filter(e => e.locationId === locationId)
-      .sort((a, b) => new Date(b.date) - new Date(a.date));
-    if (forLocation.length === 0) return { lastHarvest: null, daysSinceLastHarvest: 1 };
-    const last = forLocation[0];
+    if (!lastForLocation) return { lastHarvest: null, daysSinceLastHarvest: 1 };
+    const last = lastForLocation;
     const lastUTCDate = new Date(last.date);
     const lastDateLocal = new Date(lastUTCDate.getUTCFullYear(), lastUTCDate.getUTCMonth(), lastUTCDate.getUTCDate());
     const today = startOfLocalDay();
     const diffDays = Math.round((today - lastDateLocal) / (1000 * 60 * 60 * 24));
     return { lastHarvest: last, daysSinceLastHarvest: Math.max(1, diffDays) };
-  }, [locationId, allEggs]);
+  }, [lastForLocation]);
 
   const [daysOverride, setDaysOverride] = useState(null);
   const days = daysOverride ?? daysSinceLastHarvest;
 
   const [recordEggProduction, { loading: submitting }] = useMutation(RECORD_EGG_PRODUCTION, {
-    refetchQueries: ['GetEggProductions'],
+    refetchQueries: ['GetEggProductions', 'GetLastEggProduction'],
     awaitRefetchQueries: true,
     onCompleted: () => {
       const daysText = days > 1 ? ` (${ days } days)` : "";
@@ -81,7 +81,6 @@ const QuickHarvestEntry = ({ onSuccess, locations = [], variant = "panel" }) => 
       setNotes("");
       setShowDetails(false);
       setDaysOverride(null);
-      refetchEggs();
       if (onSuccess) onSuccess();
     },
     onError: (err) => notify(err.message || "Failed to log harvest", { tone: 'error' }),

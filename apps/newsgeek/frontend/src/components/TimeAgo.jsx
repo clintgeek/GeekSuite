@@ -6,8 +6,11 @@
 import React from 'react';
 import { Box, Tooltip } from '@mui/material';
 import { absoluteTime, relativeTime } from '../utils/dates';
+import { useResumeTick } from '../hooks/useResumeTick';
 
 export default function TimeAgo({ value, prefix = '', sx }) {
+  // "12m ago" is re-read when the PWA comes back, not frozen at the moment it was put away.
+  useResumeTick();
   if (!value) return null;
   const absolute = absoluteTime(value);
   const iso = new Date(value).toISOString();

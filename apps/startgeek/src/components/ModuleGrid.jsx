@@ -8,6 +8,8 @@ import TaskRow from './TaskRow'
 import CalendarModule from './CalendarModule'
 import FitnessModule from './FitnessModule'
 import ReadingModule from './ReadingModule'
+import { LoadProblem, StaleNotice } from './LoadProblem'
+import { glanceRowState } from '../lib/glanceState'
 
 const containerVariants = {
   hidden: { opacity: 0 },
@@ -47,12 +49,36 @@ const upcomingLabel = (task, todayIso) => {
 // Calendar and Tasks each span two rows; Fitness and Reading stack on the
 // right and set the height. The task list scrolls inside that height.
 const ModuleGrid = () => {
-  const { data, loading } = useGlance()
-  const { status } = useSession()
+  const { data, loading, error, loadedAt, refetch } = useGlance()
+  const { status, checking, recheck } = useSession()
   const { settings } = useSettings()
   const on = settings.modules
 
+  // Couldn't reach basegeek to ask who this is — not the same as signed out.
+  if (status === 'error') {
+    return (
+      <LoadProblem
+        title="Couldn't reach your account"
+        detail="Your tasks, fitness and reading will show once it answers."
+        onRetry={recheck}
+        retrying={checking}
+      />
+    )
+  }
+
   if (status !== 'in') return null
+
+  const rowState = glanceRowState({ data, loading, error })
+  if (rowState === 'error') {
+    return (
+      <LoadProblem
+        title="Couldn't load today"
+        detail="Tasks, fitness and reading didn't load. Nothing is lost."
+        onRetry={refetch}
+        retrying={loading}
+      />
+    )
+  }
 
   const tasks = data?.tasks
   const overdue = tasks?.overdue || []
@@ -95,9 +121,16 @@ const ModuleGrid = () => {
     )
   }
 
-  if (!hasCalendar && !hasTasks && !hasSide) return null
+  const stale =
+    rowState === 'stale' ? (
+      <StaleNotice loadedAt={loadedAt} onRetry={refetch} retrying={loading} />
+    ) : null
+
+  if (!hasCalendar && !hasTasks && !hasSide) return stale
 
   return (
+    <>
+    {stale}
     <motion.div
       className={rowClasses}
       initial={REDUCED_MOTION ? false : 'hidden'}
@@ -145,6 +178,7 @@ const ModuleGrid = () => {
 
       {hasReading && <ReadingModule book={data.reading[0]} />}
     </motion.div>
+    </>
   )
 }
 

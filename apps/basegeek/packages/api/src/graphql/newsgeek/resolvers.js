@@ -4,6 +4,7 @@ import { NewsSource } from './models/source.js';
 import { NewsPlace } from './models/place.js';
 import { NewsArticle } from './models/article.js';
 import { NewsPrefs } from './models/prefs.js';
+import { afterCursorClause, decodeCursor, encodeCursor, isAtOrBeforeCursor } from './pageCursor.js';
 import { requireAdminUser } from '../basegeek/resolvers.js';
 import { User } from '../../models/user.js';
 import constants from '@geeksuite/schemas/newsgeek/constants';
@@ -758,8 +759,10 @@ async function duplicateContext({ rows, base, walled, sourceMap }) {
  */
 async function articlePage(args, viewer) {
   const { freeToReadOnly } = viewer;
-  const { section, placeId, sourceId, before } = args;
+  const { section, placeId, sourceId, before, cursor } = args;
   if (section != null) oneOf(section, STORY_SECTIONS, 'section');
+  // The compound cursor (pageCursor.js) wins over the old date-only `before`.
+  const after = cursor != null ? decodeCursor(cursor) : null;
   let limit = args.limit == null ? DEFAULT_LIMIT : args.limit;
   if (!Number.isInteger(limit) || limit < 1) throw badInput('limit must be a positive integer');
   limit = Math.min(limit, MAX_LIMIT);
@@ -773,7 +776,7 @@ async function articlePage(args, viewer) {
     NewsSource.find(sourceFilter, SOURCE_LIST_FIELDS).lean(),
     loadAllPlaces(),
   ]);
-  if (!sources.length) return { items: [], nextBefore: null, hiddenPaywalled: 0 };
+  if (!sources.length) return { items: [], nextBefore: null, nextCursor: null, hiddenPaywalled: 0 };
 
   const now = new Date();
   const ctx = rankingContext(places, viewer, now);
@@ -789,7 +792,8 @@ async function articlePage(args, viewer) {
 
   const walled = freeToReadOnly ? paywalledClause(sources, viewer) : null;
   const filter = { $and: [...list] };
-  if (before != null) filter.$and.push({ publishedAt: { $lt: before } });
+  if (after) filter.$and.push(afterCursorClause(after));
+  else if (before != null) filter.$and.push({ publishedAt: { $lt: before } });
   if (walled) filter.$and.push({ $nor: [walled] });
 
   const fetchN = Math.min(limit * PAGE_FETCH_FACTOR, PAGE_FETCH_MAX);
@@ -801,7 +805,7 @@ async function articlePage(args, viewer) {
     // The one extra count, only when something can be hidden.
     walled ? NewsArticle.countDocuments({ $and: [...list, walled] }) : 0,
   ]);
-  if (!rows.length) return { items: [], nextBefore: null, hiddenPaywalled };
+  if (!rows.length) return { items: [], nextBefore: null, nextCursor: null, hiddenPaywalled };
 
   const sourceMap = new Map(sources.map((s) => [String(s._id), s]));
   const placeMap = placeMapOf(places);
@@ -809,15 +813,19 @@ async function articlePage(args, viewer) {
   const groups = collapseDuplicates({ ctx, articles: [...rows, ...context], sourceById: sourceMap });
 
   const rowIndex = new Map(rows.map((r, i) => [String(r._id), i]));
-  const beforeMs = before != null ? new Date(before).getTime() : null;
+  const beforeMs = !after && before != null ? new Date(before).getTime() : null;
+  // On an earlier page: at/before the cursor in the sort (or, the old way, not older than `before`).
+  const pagedPast = after
+    ? (a) => isAtOrBeforeCursor(a, after)
+    : beforeMs != null ? (a) => new Date(a.publishedAt).getTime() >= beforeMs : null;
   const inThisList = (m) => !section || sectionOf(ctx, m.article, m.source) === section;
   const kept = [];
   for (const g of groups) {
     const onPage = g.members.map((m) => rowIndex.get(String(m.article._id))).filter((i) => i != null);
     if (!onPage.length) continue;                       // only copies around the page
     if (section && g.section !== section) continue;     // the group belongs to another section
-    const shownEarlier = beforeMs != null && g.members.some((m) => !rowIndex.has(String(m.article._id))
-      && new Date(m.article.publishedAt).getTime() >= beforeMs && inThisList(m));
+    const shownEarlier = pagedPast != null && g.members.some((m) => !rowIndex.has(String(m.article._id))
+      && pagedPast(m.article) && inThisList(m));
     if (shownEarlier) continue;
     kept.push({ g, pos: Math.min(...onPage) });
   }
@@ -826,9 +834,11 @@ async function articlePage(args, viewer) {
   const items = page.map(({ g }) => shapeArticle(g.rep, g.source, placeMap, ctx, g));
 
   const more = rows.length === fetchN || kept.length > limit || items.length === limit;
+  const boundary = items.length && more ? rows[page[page.length - 1].pos] : null;
   return {
     items,
-    nextBefore: items.length && more ? rows[page[page.length - 1].pos].publishedAt : null,
+    nextBefore: boundary ? boundary.publishedAt : null,
+    nextCursor: boundary ? encodeCursor(boundary) : null,
     hiddenPaywalled,
   };
 }

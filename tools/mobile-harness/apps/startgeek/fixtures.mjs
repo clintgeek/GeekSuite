@@ -59,7 +59,7 @@ const SETTINGS = {
   calendars: [],
 };
 
-const OPS = {
+export const OPS = {
   GlanceToday: { glanceToday: TODAY },
   GlanceSearch: { glanceSearch: [] },
   CalendarEvents: { calendarEvents: [] },

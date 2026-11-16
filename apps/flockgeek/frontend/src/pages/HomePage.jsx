@@ -11,6 +11,7 @@ import RecentActivity from "../components/home/RecentActivity";
 import QuickHarvestSheet from "../components/QuickHarvestSheet";
 import useHomeData from "../hooks/useHomeData";
 import { GET_LOCATIONS } from "../graphql/queries";
+import { GeekLoadError } from "@geeksuite/ui";
 
 const quickLinks = [
   { label: "Log eggs", to: "/egg-log", icon: <EggIcon /> },
@@ -109,23 +110,38 @@ const HomePage = () => {
         </Box>
       </motion.div>
 
-      {/* Summary cards — asymmetric: first card wider */}
-      <motion.div variants={fadeUp}>
-        <SummaryCards stats={homeData.stats} />
-      </motion.div>
-
-      {/* Activity — full width, no dead right column */}
-      <motion.div variants={fadeUp}>
-        <Box sx={{ mt: 2 }}>
-          <Box sx={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", mb: 1.5 }}>
-            <Typography variant="h4">Recent activity</Typography>
-            <Typography variant="caption" color="text.muted">
-              Last 8 events
-            </Typography>
-          </Box>
-          <RecentActivity items={homeData.items} />
+      {/* A failed read must not draw as zeros ("0 eggs a day"): the cards and
+          the activity list give way to one error with Retry. */}
+      {homeData.error ? (
+        <Box sx={{ mb: 4 }}>
+          <GeekLoadError
+            what="your flock's numbers"
+            error={homeData.error}
+            onRetry={homeData.refetch}
+            data-testid="home-load-error"
+          />
         </Box>
-      </motion.div>
+      ) : (
+        <>
+        {/* Summary cards — asymmetric: first card wider */}
+        <motion.div variants={fadeUp}>
+          <SummaryCards stats={homeData.stats} />
+        </motion.div>
+
+        {/* Activity — full width, no dead right column */}
+        <motion.div variants={fadeUp}>
+          <Box sx={{ mt: 2 }}>
+            <Box sx={{ display: "flex", alignItems: "baseline", justifyContent: "space-between", mb: 1.5 }}>
+              <Typography variant="h4">Recent activity</Typography>
+              <Typography variant="caption" color="text.muted">
+                Last 8 events
+              </Typography>
+            </Box>
+            <RecentActivity items={homeData.items} />
+          </Box>
+        </motion.div>
+        </>
+      )}
 
       {/* Seasonal note — quiet inline footer, not a card */}
       <motion.div variants={fadeUp}>

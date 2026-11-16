@@ -26,7 +26,7 @@ vi.mock('../../api/discover', async (importActual) => {
   return { ...actual, discoverSource: vi.fn() };
 });
 
-const page = (items, nextBefore = null, hiddenPaywalled = 0) => ({ data: { newsArticles: { __typename: 'NewsArticlePage', items, nextBefore, hiddenPaywalled } } });
+const page = (items, nextCursor = null, hiddenPaywalled = 0) => ({ data: { newsArticles: { __typename: 'NewsArticlePage', items, nextCursor, hiddenPaywalled } } });
 const articlesMock = (variables, items, extra = {}) => ({ request: { query: GET_NEWS_ARTICLES, variables }, result: page(items), ...extra });
 const prefsMock = { request: { query: GET_NEWS_PREFS }, result: { data: { newsPrefs: { ...newsPrefs(), freeToReadOnly: false, readerLinks: [] } } }, maxUsageCount: 5 };
 const pubPrefs = (subscribedDomains = [], mutedDomains = []) => ({ __typename: 'NewsPrefs', subscribedSourceIds: [], subscribedDomains, mutedDomains });

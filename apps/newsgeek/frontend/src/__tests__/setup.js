@@ -39,3 +39,12 @@ if (!URL.revokeObjectURL) URL.revokeObjectURL = () => {};
 if (!navigator.clipboard) {
   Object.defineProperty(navigator, 'clipboard', { value: { writeText: async () => {} }, configurable: true });
 }
+
+// Scroll memory (hooks/scrollMemory.js) lives in sessionStorage: one test's place is not the next one's.
+afterEach(() => {
+  try {
+    window.sessionStorage.clear();
+  } catch {
+    /* no storage */
+  }
+});

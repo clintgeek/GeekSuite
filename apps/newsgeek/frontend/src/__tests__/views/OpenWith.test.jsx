@@ -31,7 +31,7 @@ const VIA = article('v1', {
   sourceName: 'Google News: Arkansas',
 });
 
-const page = (items) => ({ data: { newsArticles: { __typename: 'NewsArticlePage', items, nextBefore: null, hiddenPaywalled: 0 } } });
+const page = (items) => ({ data: { newsArticles: { __typename: 'NewsArticlePage', items, nextCursor: null, hiddenPaywalled: 0 } } });
 const articlesMock = (items) => ({ request: { query: GET_NEWS_ARTICLES, variables: { limit: 30 } }, result: page(items), maxUsageCount: 3 });
 const prefsMock = (over = {}) => ({ request: { query: GET_NEWS_PREFS }, result: { data: { newsPrefs: newsPrefs(over) } }, maxUsageCount: 5 });
 const pubPrefsMock = { request: { query: GET_NEWS_PUBLISHER_PREFS }, result: { data: { newsPrefs: { __typename: 'NewsPrefs', subscribedSourceIds: [], subscribedDomains: [], mutedDomains: [] } } }, maxUsageCount: 5 };

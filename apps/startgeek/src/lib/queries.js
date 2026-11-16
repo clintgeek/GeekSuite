@@ -153,6 +153,7 @@ export const CREATE_TASK = `
     $dueDate: Date
     $note: String
     $recurrenceRule: String
+    $clientId: String
   ) {
     createTask(
       content: $content
@@ -162,6 +163,7 @@ export const CREATE_TASK = `
       dueDate: $dueDate
       note: $note
       recurrenceRule: $recurrenceRule
+      clientId: $clientId
     ) {
       id
       content

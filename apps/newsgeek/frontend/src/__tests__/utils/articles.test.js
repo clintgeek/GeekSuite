@@ -18,7 +18,7 @@ describe('resetArticleLists (a Free to read flip)', () => {
   it('drops every cached list, whatever its filter, so on and off never mix', () => {
     expect(NEWS_TYPE_POLICIES.Query.fields.newsArticles.keyArgs).toEqual(['section', 'placeId', 'sourceId']);
     const cache = makeCache();
-    const pageOf = (id) => ({ newsArticles: { __typename: 'NewsArticlePage', items: [article(id)], nextBefore: null, hiddenPaywalled: 0 } });
+    const pageOf = (id) => ({ newsArticles: { __typename: 'NewsArticlePage', items: [article(id)], nextCursor: null, hiddenPaywalled: 0 } });
     cache.writeQuery({ query: GET_NEWS_ARTICLES, variables: { limit: 30 }, data: pageOf('all1') });
     cache.writeQuery({ query: GET_NEWS_ARTICLES, variables: { limit: 30, section: 'tech' }, data: pageOf('tech1') });
     expect(cache.readQuery({ query: GET_NEWS_ARTICLES, variables: { limit: 30, section: 'tech' } })).not.toBeNull();

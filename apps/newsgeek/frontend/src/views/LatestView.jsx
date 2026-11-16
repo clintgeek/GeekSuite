@@ -1,7 +1,7 @@
 /**
  * Everything (`/everything`) and a section page (`/s/:section`): every story
- * newest first from `newsArticles`, paged by `before` with an "Older
- * stories" button — never infinite scroll. Today (`/`) is the ranked front
+ * newest first from `newsArticles`, paged by the gateway's compound
+ * `cursor` with an "Older stories" button — never infinite scroll. Today (`/`) is the ranked front
  * page; this is the archive behind it (N0's Latest, moved 2026-10-11).
  *
  * Everything: the masthead, then the section flags. The section lives in the
@@ -23,24 +23,35 @@
  * until the chip is dismissed (a source has fixed sections, so most flags
  * would only show an empty page). "Look for a direct feed" opens the Add a
  * source sheet on https://<domain> and looks at once.
+ *
+ * Coming back (SUITE_REVIEW_2026-11 NewsGeek findings 1, 2, 4):
+ *  - the PWA resumed: at the top the list refreshes quietly; further down a
+ *    "N new stories" bar waits instead (usePaperRefresh);
+ *  - Back to this page: the list "Older stories" grew is kept (read from the
+ *    cache once instead of refetching page one over it) or, after a reload,
+ *    asked for again at its old length; AppMain puts the reader back;
+ *  - an "Older stories" failure is said, with Try again.
  */
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Box, Button, CircularProgress, IconButton, Typography } from '@mui/material';
 import { Close as CloseIcon } from '@mui/icons-material';
 import { NetworkStatus, useApolloClient, useMutation, useQuery } from '@apollo/client';
-import { useToast } from '@geeksuite/ui';
-import { useSearchParams } from 'react-router-dom';
+import { GeekLoadError, geekLoadStatus, useToast } from '@geeksuite/ui';
+import { useLocation, useNavigationType, useSearchParams } from 'react-router-dom';
 import ArticleItem from '../components/ArticleItem';
 import Column from '../components/Column';
 import FreeToReadSwitch from '../components/FreeToReadSwitch';
 import Masthead from '../components/Masthead';
+import NewStoriesBar from '../components/NewStoriesBar';
 import SectionTabs from '../components/SectionTabs';
 import SourceSheet from '../components/SourceSheet';
 import { useViewer } from '../hooks/useViewer';
+import { usePaperRefresh } from '../hooks/usePaperRefresh';
+import { placeKey, readCount, writeCount } from '../hooks/scrollMemory';
 import { resetArticleLists } from '../graphql/cachePolicies';
 import { SET_NEWS_PREFS } from '../graphql/mutations';
 import { GET_NEWS_ARTICLES, GET_NEWS_PREFS, GET_NEWS_SOURCE } from '../graphql/queries';
-import { EMPTY_LINE, articleVariables, hiddenPaywalledLine } from '../utils/articles';
+import { EMPTY_LINE, articleVariables, firstPageLimit, hiddenPaywalledLine } from '../utils/articles';
 import { GOTHIC, flagSx } from '../theme/theme';
 import { openingPrefs } from '../utils/openUrl';
 import { SECTIONS, SECTION_LABEL } from '../utils/vocab';
@@ -50,6 +61,28 @@ import AddSourceSheet from './AddSourceSheet';
 function LookForFeedSheet({ url, onClose }) {
   const { isAdmin } = useViewer();
   return <AddSourceSheet open onClose={onClose} initialUrl={url} autoRun isAdmin={isAdmin} />;
+}
+
+export const OLDER_FAILED_LINE = 'Couldn’t fetch older stories.';
+
+/**
+ * How the first page is fetched. A new visit: cache and network, as always.
+ * Back (POP) to a list still in the cache: the cache alone, once — a network
+ * refetch of page one would replace the list "Older stories" grew and the
+ * reader's place with it (the resume refresh keeps it current later). Back
+ * after a reload (no cache): as many stories as the reader had.
+ */
+function firstFetch(client, { pop, key, section, sourceId }) {
+  const vars = articleVariables(section, null, sourceId);
+  if (!pop) return { variables: vars, fetchPolicy: 'cache-and-network' };
+  let cached = null;
+  try {
+    cached = client.readQuery({ query: GET_NEWS_ARTICLES, variables: vars });
+  } catch {
+    cached = null;
+  }
+  if (cached?.newsArticles) return { variables: vars, fetchPolicy: 'cache-first' };
+  return { variables: articleVariables(section, null, sourceId, firstPageLimit(readCount(key))), fetchPolicy: 'cache-and-network' };
 }
 
 /** A section page's heading: the section's name set big, and what the list is. */
@@ -80,18 +113,28 @@ export default function LatestView({ fixedSection = null }) {
   const [feedUrl, setFeedUrl] = useState(null);
 
   const { notify } = useToast();
+  const location = useLocation();
+  const navType = useNavigationType();
+  const key = placeKey(location);
+  const listKey = `${section}|${sourceId || ''}`;
 
   const client = useApolloClient();
+  // Decided once per list: the list this page opened on may come back from
+  // the cache (Back); any other list (a tab, the source chip) is fetched as usual.
+  const [opened] = useState(() => ({ listKey, ...firstFetch(client, { pop: navType === 'POP', key, section, sourceId }) }));
+  const fetchPlan =
+    opened.listKey === listKey ? opened : { variables: articleVariables(section, null, sourceId), fetchPolicy: 'cache-and-network' };
+  const [olderFailed, setOlderFailed] = useState(false);
   const prefsQ = useQuery(GET_NEWS_PREFS, { fetchPolicy: 'cache-and-network', nextFetchPolicy: 'cache-first' });
   const freeToRead = Boolean(prefsQ.data?.newsPrefs?.freeToReadOnly);
   // How a story opens (plan "Opening"): window mode, open-with links, openers.
   const opening = openingPrefs(prefsQ.data?.newsPrefs);
   const [setPrefs, { loading: savingPrefs }] = useMutation(SET_NEWS_PREFS);
 
-  const { data, error, networkStatus, fetchMore, refetch } = useQuery(GET_NEWS_ARTICLES, {
-    variables: articleVariables(section, null, sourceId),
+  const { data, error, networkStatus, fetchMore, refetch, loading } = useQuery(GET_NEWS_ARTICLES, {
+    variables: fetchPlan.variables,
     notifyOnNetworkStatusChange: true,
-    fetchPolicy: 'cache-and-network',
+    fetchPolicy: fetchPlan.fetchPolicy,
     nextFetchPolicy: 'cache-first',
   });
 
@@ -118,8 +161,25 @@ export default function LatestView({ fixedSection = null }) {
   // The gateway reports 0 unless the switch is on.
   const hiddenLine = hiddenPaywalledLine(page?.hiddenPaywalled);
   const items = page?.items ?? [];
-  const loadingFirst = !page && networkStatus !== NetworkStatus.error;
+  const status = geekLoadStatus({ loading, error, data: page, isEmpty: (p) => !p });
+  const loadingFirst = status === 'loading';
   const loadingMore = networkStatus === NetworkStatus.fetchMore;
+
+  // How long the list is, for Back after a reload (scrollMemory).
+  useEffect(() => {
+    if (items.length) writeCount(key, items.length);
+  }, [key, items.length]);
+
+  // Resume (finding 1): page one again, quietly at the top, or a "new stories" bar.
+  const peek = useCallback(
+    () =>
+      client
+        .query({ query: GET_NEWS_ARTICLES, variables: articleVariables(section, null, sourceId), fetchPolicy: 'no-cache' })
+        .then((r) => r.data?.newsArticles?.items?.map((a) => a.id) ?? null),
+    [client, section, sourceId]
+  );
+  const refresh = useCallback(() => refetch(articleVariables(section, null, sourceId)), [refetch, section, sourceId]);
+  const { pending, showNew } = usePaperRefresh({ refetch: refresh, peek, currentIds: items.map((a) => a.id), enabled: Boolean(page) });
 
   const filterName = sourceId ? sourceQ.data?.newsSource?.name || items.find((a) => a.sourceId === sourceId)?.sourceName || 'one source' : null;
 
@@ -151,13 +211,16 @@ export default function LatestView({ fixedSection = null }) {
     });
   };
 
+  // An "Older stories" failure is said, with Try again (finding 4) — never swallowed.
   const older = () => {
-    if (!page?.nextBefore) return;
-    fetchMore({ variables: articleVariables(section, page.nextBefore, sourceId) }).catch(() => {});
+    if (!page?.nextCursor) return undefined;
+    setOlderFailed(false);
+    return fetchMore({ variables: articleVariables(section, page.nextCursor, sourceId) }).catch(() => setOlderFailed(true));
   };
 
   return (
     <Column>
+      <NewStoriesBar count={pending?.count} onShow={showNew} />
       {fixedSection ? <SectionHeader section={fixedSection} /> : <Masthead edition="Everything, newest first" />}
       {fixedSection ? null : sourceId ? (
         <Box data-testid="source-filter" sx={{ mt: 3, mb: 1 }}>
@@ -192,16 +255,17 @@ export default function LatestView({ fixedSection = null }) {
         </Box>
       ) : null}
 
-      {error && !page ? (
-        <Box role="alert" sx={{ py: 10, textAlign: 'center' }}>
-          <Typography variant="h5" component="p" sx={{ mb: 1 }}>
-            The paper didn’t arrive.
-          </Typography>
-          <Typography sx={{ color: 'text.secondary', mb: 3 }}>We couldn’t reach the news desk. Your connection or the gateway may be down.</Typography>
-          <Button variant="outlined" color="inherit" onClick={() => refetch()}>
-            Try again
-          </Button>
-        </Box>
+      {status === 'error' ? (
+        <GeekLoadError
+          data-testid="paper-error"
+          title="The paper didn’t arrive."
+          description="We couldn’t reach the news desk. Your connection or the gateway may be down."
+          error={error}
+          showDetail={false}
+          retryLabel="Try again"
+          onRetry={() => refetch().catch(() => {})}
+          sx={{ py: 10 }}
+        />
       ) : null}
 
       {page && !items.length ? (
@@ -222,10 +286,17 @@ export default function LatestView({ fixedSection = null }) {
 
       {items.length ? (
         <Box sx={{ pt: 6, textAlign: 'center' }}>
-          {page?.nextBefore ? (
-            <Button variant="outlined" color="inherit" onClick={older} disabled={loadingMore} sx={{ px: 6, borderColor: 'text.primary' }}>
-              {loadingMore ? 'Fetching older stories…' : 'Older stories'}
-            </Button>
+          {page?.nextCursor ? (
+            <>
+              {olderFailed ? (
+                <Typography role="alert" data-testid="older-failed" sx={{ fontStyle: 'italic', color: 'text.primary', mb: 3 }}>
+                  {OLDER_FAILED_LINE}
+                </Typography>
+              ) : null}
+              <Button variant="outlined" color="inherit" onClick={older} disabled={loadingMore} sx={{ px: 6, minHeight: 44, borderColor: 'text.primary' }}>
+                {loadingMore ? 'Fetching older stories…' : olderFailed ? 'Try again' : 'Older stories'}
+              </Button>
+            </>
           ) : (
             <Typography sx={{ fontStyle: 'italic', color: 'text.secondary' }}>That’s everything we’ve kept. Older stories age out after 90 days.</Typography>
           )}

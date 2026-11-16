@@ -49,3 +49,11 @@ export function relativeTime(value, now = new Date()) {
   if (days < 7) return `${days}d ago`;
   return new Intl.DateTimeFormat('en-US', { timeZone: NEWS_TIMEZONE, month: 'short', day: 'numeric' }).format(d);
 }
+
+/** "8:05 AM", America/Chicago: when the front page was set ("Updated 8:05 AM"). */
+export function clockTime(value) {
+  if (!value) return '';
+  const d = toDate(value);
+  if (Number.isNaN(d.getTime())) return '';
+  return new Intl.DateTimeFormat('en-US', { timeZone: NEWS_TIMEZONE, hour: 'numeric', minute: '2-digit' }).format(d);
+}

@@ -138,6 +138,11 @@ export const OPS = {
   GetBirds: { birds: BIRDS },
   GetFlockLocations: { flockLocations: LOCATIONS },
   GetEggProductions: { eggProductions: EGGS },
+  // The harvest sheet's bounded "last harvest" read (2026-11-16): the newest
+  // EGGS row at the asked-for location.
+  GetLastEggProduction: (vars) => ({
+    lastEggProduction: EGGS.find((e) => !vars?.locationId || e.locationId === vars.locationId) ?? null,
+  }),
   GetPairings: { pairings: PAIRINGS },
   GetHatchEvents: { hatchEvents: HATCHES },
   GetFlockGroups: { flockGroups: GROUPS },
