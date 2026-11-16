@@ -209,10 +209,11 @@ describe('two panes from 1024 px', () => {
         expect(globalThis.__noteListMounts).toBe(1);
     });
 
-    it('desktop 1440: two panes too', () => {
+    it('desktop 1440: one pane, as before — two panes are held back to the tablet', () => {
         setViewport(VIEWPORTS.desktop);
         renderAt('/notes/b');
-        expect(screen.getByRole('region', { name: 'Notes' })).toBeInTheDocument();
-        expect(screen.getByRole('region', { name: 'Note' })).toHaveTextContent('note b');
+        expect($('[data-note-two-pane]')).toBeNull();
+        expect(screen.queryByTestId('note-list')).toBeNull();
+        expect(screen.getByTestId('note-detail')).toHaveTextContent('note b');
     });
 });
