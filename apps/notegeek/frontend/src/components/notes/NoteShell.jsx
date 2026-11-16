@@ -3,6 +3,7 @@ import { Box, useTheme } from '@mui/material';
 import { border, gridBackground, layout, surfaces } from '../../theme/tokens';
 import useEditorChrome from '../../store/editorChromeStore';
 import { DOCKED_TOOLBAR_HEIGHT } from '../editors/EditorToolbar';
+import { PHONE_MEDIA } from '../../hooks/useNoteFormFactor';
 
 const EDITABLE = 'textarea, [contenteditable="true"], input:not([type="checkbox"]):not([type="radio"]):not([type="file"]):not([type="button"])';
 
@@ -139,8 +140,9 @@ function NoteShell({
         // `md` up. On a phone the sheet is edge to edge and the grid would
         // only sit under text, so it is not drawn at all.
         [theme.breakpoints.up('md')]: gridBackground(theme),
-        // Caret-into-view scrolling stops short of the docked toolbar.
-        [theme.breakpoints.down('md')]: { scrollPaddingBottom: `${DOCKED_TOOLBAR_HEIGHT + 24}px` },
+        // Caret-into-view scrolling stops short of the docked toolbar (a
+        // phone's; a tablet's toolbar sits under the title — EditorToolbar).
+        [PHONE_MEDIA]: { scrollPaddingBottom: `${DOCKED_TOOLBAR_HEIGHT + 24}px` },
         scrollbarWidth: 'thin',
         '&::-webkit-scrollbar': { width: 8 },
         '&::-webkit-scrollbar-track': { bgcolor: 'transparent' },
@@ -188,8 +190,10 @@ function NoteShell({
             flexDirection: 'column',
             position: 'relative',
             // Phone: room for the docked formatting toolbar under the last
-            // line (EditorToolbar), plus the home indicator.
-            pb: { xs: `calc(${DOCKED_TOOLBAR_HEIGHT + 40}px + env(safe-area-inset-bottom, 0px))`, md: '64px' },
+            // line (EditorToolbar), plus the home indicator. Tablet and up:
+            // the toolbar is inline, so just a margin of paper.
+            pb: '64px',
+            [PHONE_MEDIA]: { pb: `calc(${DOCKED_TOOLBAR_HEIGHT + 40}px + env(safe-area-inset-bottom, 0px))` },
           }}
         >
           {children}

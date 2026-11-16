@@ -199,6 +199,17 @@ function buildNoteOverrides(mode) {
           tooltip: { fontFamily: SANS },
         },
       },
+      // Menus (the editor's ⋯, New ▾, the tag menu): MUI drops a menu item
+      // to `auto` (~34px) from `sm` up, so on a touch tablet they were
+      // finger-sized only on a phone. 44px for any coarse pointer; a mouse
+      // keeps MUI's dense rows.
+      MuiMenuItem: {
+        styleOverrides: {
+          root: {
+            '@media (pointer: coarse)': { minHeight: 44 },
+          },
+        },
+      },
     },
   };
 }

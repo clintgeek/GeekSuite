@@ -4,7 +4,7 @@ import CloseIcon from '@mui/icons-material/Close';
 import LinkIcon from '@mui/icons-material/InsertLink';
 import TagIcon from '@mui/icons-material/LocalOfferOutlined';
 import { useLazyQuery } from '@apollo/client';
-import { GeekChip } from '@geeksuite/ui';
+import { GeekChip, geekMedia } from '@geeksuite/ui';
 import { SUGGEST_FOR_NOTE } from '../../graphql/queries';
 import { supportsLinkInsertion } from '../../utils/noteLinks';
 import { excerptFor, readDismissed, writeDismissed } from '../../utils/suggestions';
@@ -48,7 +48,8 @@ const TITLE_DEBOUNCE_MS = 1500;
  */
 const chipSx = (theme, tone) => ({
   minHeight: 44,
-  [theme.breakpoints.up('md')]: { minHeight: 32 },
+  // Compact only with a mouse; a finger keeps 44 at any width.
+  [geekMedia.fine]: { minHeight: 32 },
   borderRadius: '4px',
   maxWidth: '100%',
   borderColor: alpha(tone, 0.35),

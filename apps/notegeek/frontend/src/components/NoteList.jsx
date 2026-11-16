@@ -6,11 +6,10 @@ import {
     ButtonBase,
     Skeleton,
     Divider,
-    useMediaQuery,
     useTheme,
 } from '@mui/material';
 import LocalOfferOutlined from '@mui/icons-material/LocalOfferOutlined';
-import { GeekEmptyState, GeekErrorState, GeekSheet } from '@geeksuite/ui';
+import { GeekEmptyState, GeekErrorState, GeekSheet, geekTarget } from '@geeksuite/ui';
 import { getApolloContext, useQuery } from '@apollo/client';
 import { GET_NOTES_PAGE } from '../graphql/queries';
 import NoteRow from './notes/NoteRow';
@@ -21,6 +20,8 @@ import { groupByRecency } from '../utils/recency';
 import { useNoteSelection, rowSelectProps } from '../hooks/useNoteSelection';
 import { SelectButton, SelectingHeader } from './select/SelectControl';
 import SelectionBar from './select/SelectionBar';
+import ListColumn, { useListWidth } from './notes/ListColumn';
+import { usePhoneLayout } from '../hooks/useNoteFormFactor';
 
 // One page of the list. Keyset paging (5.2): "Show more" asks for the next
 // page after the last note shown, so notes past the newest 200 are reachable.
@@ -49,7 +50,8 @@ function FilterChip({ type, active, onClick }) {
             sx={{
                 flexShrink: 0,
                 borderRadius: '999px',
-                [theme.breakpoints.down('md')]: { ...tapTarget44 },
+                // 44 px for a finger at any width (a 1280 px tablet too), compact with a mouse.
+                ...geekTarget({ fine: 30, both: true }),
                 '&:focus-visible': { outline: `2px solid ${g.ink}`, outlineOffset: 2 },
                 '&:hover .ng-chip': { bgcolor: active ? g.hl : alpha(g.ink, 0.05) },
             }}
@@ -146,7 +148,10 @@ function RowList({ notes, dateField, tagContext, selection }) {
 function NoteList({ tag, prefix, under }) {
     const theme = useTheme();
     const g = graphiteTokens(theme);
-    const isPhone = useMediaQuery(theme.breakpoints.down('md'));
+    // The Tags button is the phone's way to the tag tree. A tablet has the
+    // rail's Tags item and a desktop the sidebar, so it is phone-only.
+    const isPhone = usePhoneLayout();
+    const listWidth = useListWidth();
     const [tagsOpen, setTagsOpen] = useState(false);
     const [typeFilter, setTypeFilter] = useState(null);
     const [sortBy, setSortBy] = useState('updated');
@@ -224,18 +229,18 @@ function NoteList({ tag, prefix, under }) {
 
     if (isLoadingList && !data) {
         return (
-            <Box sx={{ py: 2, maxWidth: layout.contentWidth, mx: 'auto' }}>
+            <ListColumn sx={{ py: 2 }}>
                 {[1, 2, 3, 4, 5, 6].map((i) => (
                     <Skeleton key={i} height={layout.rowHeight} sx={{ borderRadius: 1, mb: 0.5 }} variant="rounded" />
                 ))}
-            </Box>
+            </ListColumn>
         );
     }
 
     if (error) {
         return (
             <GeekErrorState
-                sx={{ maxWidth: layout.contentWidth, mx: 'auto' }}
+                sx={{ maxWidth: listWidth, mx: 'auto' }}
                 error={error}
                 onRetry={() => refetch()}
             />
@@ -243,7 +248,7 @@ function NoteList({ tag, prefix, under }) {
     }
 
     return (
-        <Box sx={{ py: { xs: '8px', sm: '16px' }, px: { xs: '8px', sm: 0 }, maxWidth: layout.contentWidth, mx: 'auto' }}>
+        <ListColumn sx={{ py: { xs: '8px', sm: '16px' }, px: { xs: '8px', sm: 0 } }}>
             {/* ── Count, tags (phone), sort — or "N selected · Cancel" ── */}
             {selection.active ? <SelectingHeader selection={selection} /> : (
             <Box sx={{
@@ -400,7 +405,7 @@ function NoteList({ tag, prefix, under }) {
             ) : null}
 
             <SelectionBar selection={selection} />
-        </Box>
+        </ListColumn>
     );
 }
 

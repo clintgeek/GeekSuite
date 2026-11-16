@@ -1,6 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { Autocomplete, TextField, Chip, useTheme } from '@mui/material';
 import LocalOfferOutlined from '@mui/icons-material/LocalOfferOutlined';
+import { geekTarget } from '@geeksuite/ui';
 import useTagStore from '../store/tagStore';
 import { normalizeTags, filterTagOptions } from '../utils/tagPath';
 
@@ -110,9 +111,9 @@ function TagSelector({ selectedTags, onChange, disabled = false }) {
           fontFamily: theme.typography.fontFamily,
           fontSize: '0.875rem',
           alignItems: 'center',
-          // 44px hit area on phones (MOBILE_UI_PLAN §2); compact above.
-          minHeight: 44,
-          [theme.breakpoints.up('sm')]: { minHeight: 32 },
+          // 44px hit area for a finger at any width (MOBILE_UI_PLAN §2; a
+          // tablet too, portrait or landscape); compact with a mouse.
+          ...geekTarget({ fine: 32 }),
         },
         '& .MuiInputBase-input::placeholder': { color: theme.palette.text.secondary, opacity: 1 },
         '& .MuiChip-root': { height: 26, bgcolor: 'transparent', fontSize: '0.8125rem' },

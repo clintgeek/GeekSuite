@@ -6,11 +6,17 @@ import { createNoteTheme } from '../../../theme/createAppTheme';
 import EditorToolbar, { ToolButton } from '../../../components/editors/EditorToolbar';
 import NoteShell from '../../../components/notes/NoteShell';
 import useEditorChrome from '../../../store/editorChromeStore';
+import { VIEWPORTS, restoreViewport, setViewport } from '../../helpers/viewport';
 
 const theme = createNoteTheme('light');
 
-/** matchMedia that says "phone" (below md) or not. */
+/**
+ * A phone (390 px; matchMedia says "below md") or a 1280 px desktop. The
+ * toolbar follows `useFormFactor` (pointer AND size) since the tablet wave,
+ * so the window size has to agree with the queries.
+ */
 function setPhone(isPhone) {
+  Object.defineProperty(window, 'innerWidth', { value: isPhone ? 390 : 1280, configurable: true, writable: true });
   window.matchMedia = vi.fn().mockImplementation((query) => ({
     matches: isPhone && /max-width/.test(query),
     media: query,
@@ -24,6 +30,7 @@ function setPhone(isPhone) {
 }
 
 afterEach(() => {
+  restoreViewport();
   delete window.visualViewport;
   useEditorChrome.getState().reset();
 });
@@ -71,6 +78,25 @@ describe('EditorToolbar', () => {
     const bar = screen.getByRole('toolbar', { name: 'Formatting' });
     expect(bar).toHaveAttribute('data-editor-toolbar', 'inline');
     expect(screen.getByTestId('page')).toContainElement(bar);
+  });
+
+  // Tablet wave 2026-11-16: an 800x1280 touch tablet is not a phone. Its
+  // toolbar sits under the title like landscape's, not docked bottom-left.
+  it.each([
+    ['portrait tablet (800x1280, touch)', VIEWPORTS.tabletPortrait],
+    ['landscape tablet (1280x800, touch)', VIEWPORTS.tabletLandscape],
+  ])('on a %s, is the inline strip in the page, not docked', (_name, vp) => {
+    setViewport(vp);
+    renderBar();
+    const bar = screen.getByRole('toolbar', { name: 'Formatting' });
+    expect(bar).toHaveAttribute('data-editor-toolbar', 'inline');
+    expect(screen.getByTestId('page')).toContainElement(bar);
+  });
+
+  it('a phone held sideways (844x390, touch) still docks', () => {
+    setViewport({ width: 844, height: 390, coarse: true, fine: false, anyHover: false });
+    renderBar();
+    expect(screen.getByRole('toolbar', { name: 'Formatting' })).toHaveAttribute('data-editor-toolbar', 'docked');
   });
 
   it('a tap on a tool does not take the caret out of the text', () => {

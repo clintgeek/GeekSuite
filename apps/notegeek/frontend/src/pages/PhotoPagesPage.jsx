@@ -42,6 +42,7 @@ import {
   rotateBy,
 } from '../utils/photoPages';
 import { dotGridBackground, layout, noteTypeInk, stampFill, surfaces } from '../theme/tokens';
+import { TOUCH_TARGET_MEDIA } from '../hooks/useNoteFormFactor';
 
 /**
  * PhotoPagesPage — "Photo of a page" (DOCS/HANDWRITING.md §3).
@@ -64,7 +65,7 @@ import { dotGridBackground, layout, noteTypeInk, stampFill, surfaces } from '../
  *     note goes first, because the Markdown note links to its id.
  */
 
-const button = (theme) => ({ textTransform: 'none', [theme.breakpoints.down('md')]: { minHeight: 44 } });
+const button = (_theme) => ({ textTransform: 'none', [TOUCH_TARGET_MEDIA]: { minHeight: 44 } });
 
 const kb = (bytes) => (bytes >= 1_000_000 ? `${(bytes / 1_000_000).toFixed(1)} MB` : `${Math.round(bytes / 1000)} KB`);
 
@@ -93,7 +94,7 @@ function PageRow({ page, index, count, onRotate, onRemove, onMove, busy }) {
   const theme = useTheme();
   const mono = { fontFamily: theme.typography.fontFamilyMono, wordSpacing: 'normal' };
   const n = index + 1;
-  const small = { [theme.breakpoints.down('md')]: { width: 44, height: 44 } };
+  const small = { [TOUCH_TARGET_MEDIA]: { width: 44, height: 44 } };
   return (
     <Box
       component="li"

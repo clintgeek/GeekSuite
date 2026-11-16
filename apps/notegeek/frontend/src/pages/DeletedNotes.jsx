@@ -10,6 +10,7 @@ import { onNoteRestored } from '../graphql/cacheUpdates';
 import { formatRelativeTime } from '../utils/dateUtils';
 import { layout } from '../theme/tokens';
 import useNoteStore from '../store/noteStore';
+import { useListWidth } from '../components/notes/ListColumn';
 
 /**
  * Recently deleted (`/deleted`; contract C4, decision D1, review 2026-11 1.19).
@@ -21,6 +22,7 @@ import useNoteStore from '../store/noteStore';
  */
 export default function DeletedNotes() {
   const theme = useTheme();
+  const listWidth = useListWidth();
   const { notify } = useToast();
   const [confirm, setConfirm] = useState(null);
   const { data, loading, error, refetch } = useQuery(DELETED_NOTES, { variables: { limit: 200 }, fetchPolicy: 'cache-and-network' });
@@ -61,7 +63,7 @@ export default function DeletedNotes() {
   const button = { textTransform: 'none', fontWeight: 600, minHeight: 44, minWidth: 44, px: '12px', flexShrink: 0 };
 
   return (
-    <Box sx={{ py: { xs: '8px', sm: '16px' }, px: { xs: '8px', sm: 0 }, maxWidth: layout.contentWidth, mx: 'auto' }}>
+    <Box sx={{ py: { xs: '8px', sm: '16px' }, px: { xs: '8px', sm: 0 }, maxWidth: listWidth, mx: 'auto' }}>
       <Box sx={{ display: 'flex', alignItems: 'center', gap: '8px', px: '4px', mb: '4px', minHeight: 44 }}>
         <Typography component="h1" variant="h6" sx={{ color: 'text.primary', m: 0, mr: 'auto' }}>
           Recently deleted

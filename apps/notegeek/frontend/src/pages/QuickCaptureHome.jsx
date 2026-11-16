@@ -24,6 +24,7 @@ import { graphiteTokens, gridBackground, layout, tapTarget44 } from '../theme/to
 import { useNoteSelection, rowSelectProps } from '../hooks/useNoteSelection';
 import { SelectButton, SelectingHeader } from '../components/select/SelectControl';
 import SelectionBar from '../components/select/SelectionBar';
+import { useListWidth } from '../components/notes/ListColumn';
 
 const RECENT_COUNT = 12;
 
@@ -72,6 +73,7 @@ function CaptureShortcut({ entryKey, label }) {
  */
 function QuickCaptureHome() {
   const navigate = useNavigate();
+  const listWidth = useListWidth();
   const theme = useTheme();
   const g = graphiteTokens(theme);
   const { notes, fetchNotes, isLoadingList, listError, createNote } = useNoteStore();
@@ -135,7 +137,7 @@ function QuickCaptureHome() {
     <Box sx={{ minHeight: '100%' }}>
       {/* The capture band: a strip of engineering paper with the box on it. */}
       <Box sx={{ ...gridBackground(theme), borderBottom: `1px solid ${g.rule}` }}>
-        <Box sx={{ width: '100%', maxWidth: layout.contentWidth, mx: 'auto', px: { xs: '12px', sm: '24px' }, py: { xs: '12px', sm: '24px' } }}>
+        <Box sx={{ width: '100%', maxWidth: listWidth, mx: 'auto', px: { xs: '12px', sm: '24px' }, py: { xs: '12px', sm: '24px' } }}>
           <Box
             component="form"
             onSubmit={handleQuickCapture}
@@ -200,7 +202,7 @@ function QuickCaptureHome() {
         </Box>
       </Box>
 
-      <Box sx={{ width: '100%', maxWidth: layout.contentWidth, mx: 'auto', px: { xs: '8px', sm: '16px' }, pt: { xs: '12px', sm: '20px' }, pb: '24px' }}>
+      <Box sx={{ width: '100%', maxWidth: listWidth, mx: 'auto', px: { xs: '8px', sm: '16px' }, pt: { xs: '12px', sm: '20px' }, pb: '24px' }}>
         {/* Skeletons only when there is nothing to show yet (3.5): the
             notes from the last visit stay on screen while they refresh. */}
         {isLoadingList && notes.length === 0 ? (

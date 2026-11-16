@@ -19,6 +19,7 @@ import PushPin from '@mui/icons-material/PushPin';
 import CheckBox from '@mui/icons-material/CheckBox';
 import CheckBoxOutlineBlank from '@mui/icons-material/CheckBoxOutlineBlank';
 import { useLongPress } from '../../hooks/useLongPress';
+import { useCurrentNoteId } from '../../hooks/useNoteFormFactor';
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -163,6 +164,9 @@ function NoteRow({
 
     const noteId = note.id || note._id;
     const linkTo = to || `/notes/${noteId}`;
+    // Two-pane: the note open beside the list is this row (Layout.jsx).
+    const currentNoteId = useCurrentNoteId();
+    const current = !selectMode && noteId != null && currentNoteId === String(noteId);
 
     // Live in select mode too. A long press turns this row into a checkbox
     // mid-gesture, and the click that ends the press lands on the NEW
@@ -196,6 +200,7 @@ function NoteRow({
             {...buttonProps}
             data-note-row={type}
             data-selected={selectMode ? String(selected) : undefined}
+            aria-current={current ? 'page' : undefined}
             sx={{
                 display: 'flex',
                 alignItems: 'flex-start',
@@ -209,8 +214,8 @@ function NoteRow({
                 textDecoration: 'none',
                 color: 'inherit',
                 transition: 'background-color 120ms ease',
-                ...(selected ? { bgcolor: g.hlSoft } : null),
-                '&:hover': { bgcolor: selected ? g.hlSoft : g.paper },
+                ...(selected || current ? { bgcolor: g.hlSoft } : null),
+                '&:hover': { bgcolor: selected || current ? g.hlSoft : g.paper },
                 // A held row must not start a text selection or Android's
                 // link callout under the finger.
                 ...(onLongPress || selectMode ? { WebkitTouchCallout: 'none', userSelect: 'none' } : null),

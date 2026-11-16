@@ -4,6 +4,7 @@ import {
     DialogTitle, Divider, FormControlLabel, Switch, TextField, Typography, useMediaQuery, useTheme,
 } from '@mui/material';
 import { KIND, rowEdits, summarize, writtenAnchor } from '../../utils/journalLines';
+import { TOUCH_TARGET_MEDIA } from '../../hooks/useNoteFormFactor';
 
 /**
  * SendTasksDialog — a sketch's journal lines, on their way to TodoGeek
@@ -47,7 +48,7 @@ export default function SendTasksDialog({
     const phone = useMediaQuery(theme.breakpoints.down('sm'));
     const titleId = useId();
     const mono = { fontFamily: theme.typography.fontFamilyMono, wordSpacing: 'normal' };
-    const button = { textTransform: 'none', [theme.breakpoints.down('md')]: { minHeight: 44 } };
+    const button = { textTransform: 'none', [TOUCH_TARGET_MEDIA]: { minHeight: 44 } };
     const chosen = rows.filter((r) => r.on && r.text.trim());
     const written = useMemo(() => writtenAnchor(writtenAt), [writtenAt]);
     const [anchored, setAnchored] = useState(true);

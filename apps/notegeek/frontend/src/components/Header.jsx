@@ -4,7 +4,6 @@ import {
   IconButton,
   InputBase,
   Tooltip,
-  useMediaQuery,
   useTheme,
   alpha,
 } from '@mui/material';
@@ -21,6 +20,7 @@ import useNoteStore from '../store/noteStore';
 import useTagStore from '../store/tagStore';
 import useNavStore from '../store/navStore';
 import { pageTitle } from './navConfig';
+import { useNoteFormFactor } from '../hooks/useNoteFormFactor';
 import { displayNameFrom, initialsFrom, secondaryFrom } from '../utils/userDisplay';
 
 /**
@@ -41,7 +41,10 @@ import { displayNameFrom, initialsFrom, secondaryFrom } from '../utils/userDispl
 function Header() {
   const theme = useTheme();
   const g = graphiteTokens(theme);
-  const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  // The sidebar's top bar (desktop) carries the search box, New and the
+  // sidebar toggle. A rail has Search and New of its own, and a phone has
+  // its tab bar, so neither repeats them here.
+  const sidebarMode = useNoteFormFactor().navMode === 'sidebar';
   const location = useLocation();
   const navigate = useNavigate();
   const { mode, toggleMode } = useThemeMode();
@@ -157,11 +160,11 @@ function Header() {
     </>
   );
 
-  // Desktop: fold the sidebar away and back (Layout.jsx). Phones have no
-  // sidebar, so no leading control at all.
+  // Desktop: fold the sidebar away and back (Layout.jsx). Phones and
+  // tablets have no sidebar, so no leading control at all.
   const navLabel = navCollapsed ? 'Show sidebar' : 'Hide sidebar';
   const leading =
-    isMobile || !isAuthenticated ? null : (
+    !sidebarMode || !isAuthenticated ? null : (
       <Tooltip title={navLabel}>
         <IconButton
           onClick={toggleNav}
@@ -179,8 +182,8 @@ function Header() {
     <GeekTopBar
       title={pageTitle(location.pathname)}
       leading={leading}
-      search={isMobile ? undefined : search}
-      actions={<NewNoteMenu />}
+      search={sidebarMode ? search : undefined}
+      actions={sidebarMode ? <NewNoteMenu /> : null}
       mobileActions={null}
       themeMode={mode}
       onThemeToggle={toggleMode}

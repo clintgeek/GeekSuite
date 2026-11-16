@@ -10,11 +10,12 @@ import {
     alpha,
 } from '@mui/material';
 import { gql, useQuery } from '@apollo/client';
-import { GeekErrorState } from '@geeksuite/ui';
+import { GeekErrorState, geekTarget } from '@geeksuite/ui';
 import NoteList from './NoteList';
-import { graphiteTokens, layout, tapTarget44 } from '../theme/tokens';
+import { graphiteTokens } from '../theme/tokens';
 import { tagTree as buildTagTree } from '@geeksuite/tags';
 import { tagHref } from '../utils/tagPath';
+import { useListWidth } from './notes/ListColumn';
 
 // The same documents the sidebar's tag tree reads (Sidebar.jsx), so the
 // sub-tag counts here come out of the same cache entry and always agree with
@@ -49,6 +50,7 @@ function findNode(nodes, path) {
  */
 function SubTagRow({ node }) {
     const theme = useTheme();
+    const listWidth = useListWidth();
     const g = graphiteTokens(theme);
     if (!node || node.children.length === 0) return null;
     return (
@@ -62,7 +64,7 @@ function SubTagRow({ node }) {
                 overflowX: 'auto',
                 scrollbarWidth: 'none',
                 '&::-webkit-scrollbar': { display: 'none' },
-                maxWidth: layout.contentWidth,
+                maxWidth: listWidth,
                 mx: 'auto',
                 px: '2px',
                 mb: '4px',
@@ -77,7 +79,8 @@ function SubTagRow({ node }) {
                     sx={{
                         flexShrink: 0,
                         borderRadius: '999px',
-                        [theme.breakpoints.down('md')]: { ...tapTarget44 },
+                        // 44 px for a finger at any width; compact with a mouse.
+                        ...geekTarget({ fine: 30, both: true }),
                         '&:focus-visible': { outline: `2px solid ${g.ink}`, outlineOffset: 2 },
                         '&:hover .ng-subtag': { bgcolor: alpha(g.ink, 0.05), color: 'text.primary' },
                     }}
@@ -124,9 +127,13 @@ function SubTagRow({ node }) {
  * (`notes(under:)`), each row naming the sub-tag it sits in; the breadcrumb
  * walks back up; the sub-tag row walks down.
  */
-const TagNotesList = () => {
-    const { tag } = useParams();
+const TagNotesList = ({ tag: tagProp } = {}) => {
+    // `tag` as a prop: the two-pane list (Layout.jsx) renders this beside a
+    // note, where the route's params are the note's, not the tag's.
+    const params = useParams();
+    const tag = tagProp ?? params.tag;
     const theme = useTheme();
+    const listWidth = useListWidth();
     const decodedTag = tag ? decodeURIComponent(tag) : '';
 
     const { data: tagData } = useQuery(GET_TAGS, { fetchPolicy: 'cache-first', skip: !tag });
@@ -162,7 +169,7 @@ const TagNotesList = () => {
     const crumbLinkSx = {
         display: 'inline-flex',
         alignItems: 'center',
-        [theme.breakpoints.down('md')]: { minHeight: 44, minWidth: 44 },
+        ...geekTarget({ fine: 0, both: true }),
     };
 
     return (
@@ -172,7 +179,7 @@ const TagNotesList = () => {
                 aria-label="Tag path"
                 sx={{
                     mb: '4px',
-                    maxWidth: layout.contentWidth,
+                    maxWidth: listWidth,
                     mx: 'auto',
                     px: '4px',
                     '& .MuiBreadcrumbs-ol': { flexWrap: 'wrap', rowGap: 0 },

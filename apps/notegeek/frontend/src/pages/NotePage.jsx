@@ -41,6 +41,15 @@ function NotePage() {
 
     // Helper to render the note editor
     // Mind maps need full-height layout; handwritten uses position:fixed so no special wrapper needed
+    //
+    // Keyed by the note: going from one note straight to another
+    // (/notes/a -> /notes/b — a [[link]], Related notes, or the list beside
+    // the note in two-pane) must be a NEW editor. Without the key React kept
+    // the same NoteEditorPage: a's unmount flush (save + device draft) never
+    // ran, and its unsaved edits were left to a form that then re-seeded
+    // itself for b. A new key unmounts a (flush) and mounts b fresh, as the
+    // edit route (NoteEditorRoute) already does.
+    const editorKey = `note:${id}`;
     const renderEditor = () => {
         if (noteToDisplay?.type === 'mindmap') {
             return (
@@ -65,14 +74,14 @@ function NotePage() {
                         flexDirection: 'column',
                         overflow: 'hidden'
                     }}>
-                        <NoteEditorPage />
+                        <NoteEditorPage key={editorKey} />
                     </Box>
                 </Box>
             );
         }
 
         // Standard editor for all other types (including handwritten, which handles its own layout)
-        return <NoteEditorPage />;
+        return <NoteEditorPage key={editorKey} />;
     };
 
     // For new notes, show the editor
@@ -165,7 +174,7 @@ function NotePage() {
     // For other note types, use the regular viewer/editor pattern. The
     // frame does not scroll on /notes/:id (Layout passes `fill` so the
     // editor can own its height), so the viewer brings its own scroller.
-    return isEditRoute ? <NoteEditorPage /> : (
+    return isEditRoute ? <NoteEditorPage key={editorKey} /> : (
         <Box sx={{ flex: 1, minHeight: 0, overflowY: 'auto' }}>
             <NoteViewer />
         </Box>

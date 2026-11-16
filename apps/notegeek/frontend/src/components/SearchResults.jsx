@@ -18,10 +18,11 @@ import SearchIcon from '@mui/icons-material/Search';
 import ClearIcon from '@mui/icons-material/Clear';
 import NoteRow from './notes/NoteRow';
 import useNoteStore from '../store/noteStore';
-import { layout, graphiteTokens } from '../theme/tokens';
+import { graphiteTokens } from '../theme/tokens';
 import { useNoteSelection, rowSelectProps } from '../hooks/useNoteSelection';
 import { SelectButton, SelectingHeader } from './select/SelectControl';
 import SelectionBar from './select/SelectionBar';
+import ListColumn from './notes/ListColumn';
 
 
 // ─── pieces ───────────────────────────────────────────────────────────────────
@@ -132,7 +133,7 @@ function SearchResults() {
     };
 
     return (
-        <Box sx={{ maxWidth: layout.contentWidth, mx: 'auto', py: { xs: 1.5, sm: 2 }, px: { xs: '12px', sm: '16px' } }}>
+        <ListColumn sx={{ py: { xs: 1.5, sm: 2 }, px: { xs: '12px', sm: '16px' } }}>
             {/* Search input — aligned with the Ink Studio aesthetic */}
             <TextField
                 inputRef={inputRef}
@@ -247,7 +248,7 @@ function SearchResults() {
                     description="Press / from anywhere to focus search"
                 />
             )}
-        </Box>
+        </ListColumn>
     );
 }
 

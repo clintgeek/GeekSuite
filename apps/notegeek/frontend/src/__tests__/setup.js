@@ -18,6 +18,14 @@ if (!window.matchMedia) {
   });
 }
 
+// jsdom's window is 1024x768 with no pointer, which `useFormFactor`
+// (@geeksuite/ui) reads as a TABLET (600–1199 px, mouse rules). The suite was
+// written against the desktop shape, so tests start on a 1280x900 desktop;
+// a test that wants a phone or a tablet sets its own viewport
+// (__tests__/helpers/viewport.js).
+window.innerWidth = 1280;
+window.innerHeight = 900;
+
 if (!window.ResizeObserver) {
   window.ResizeObserver = class ResizeObserver {
     observe() {}

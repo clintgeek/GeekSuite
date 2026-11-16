@@ -31,6 +31,7 @@ import { useMarkdownPlugins } from '../../hooks/useNoteLinks';
 import WikiLinkPicker from './WikiLinkPicker';
 import { useTitleOptions, PICKER_LISTBOX_ID, pickerOptionId } from '../../hooks/useTitleOptions';
 import { openWikiLink, completeWikiLink } from '../../utils/wikiLinks';
+import { TOUCH_TARGET_MEDIA } from '../../hooks/useNoteFormFactor';
 
 /**
  * MarkdownEditor — markdown editing with live preview, rendered by
@@ -323,7 +324,7 @@ function MarkdownEditor({ content = '', setContent, isLoading, readOnly = false,
                                     fontWeight: 500,
                                     textTransform: 'none',
                                     color: 'text.secondary',
-                                    [theme.breakpoints.down('md')]: { ...tapTarget44, px: '8px' },
+                                    [TOUCH_TARGET_MEDIA]: { ...tapTarget44, px: '8px' },
                                     '&.Mui-selected, &.Mui-selected:hover': {
                                         color: g.onHl,
                                         bgcolor: g.hl,

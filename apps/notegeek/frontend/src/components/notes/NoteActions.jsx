@@ -30,6 +30,7 @@ import PrintOutlined from '@mui/icons-material/PrintOutlined';
 import CallMerge from '@mui/icons-material/CallMerge';
 import ArchiveOutlined from '@mui/icons-material/ArchiveOutlined';
 import UnarchiveOutlined from '@mui/icons-material/UnarchiveOutlined';
+import { TOUCH_TARGET_MEDIA } from '../../hooks/useNoteFormFactor';
 
 const isMac = typeof navigator !== 'undefined' && /Mac|iP(hone|ad|od)/.test(navigator.platform || navigator.userAgent || '');
 const SAVE_SHORTCUT = isMac ? '⌘S' : 'Ctrl+S';
@@ -69,7 +70,7 @@ export function BackButton({ onBack }) {
         fontSize: '0.75rem',
         fontWeight: 500,
         letterSpacing: '0.04em',
-        [theme.breakpoints.down('md')]: { ...tapTarget44 },
+        [TOUCH_TARGET_MEDIA]: { ...tapTarget44 },
         '&:hover': { color: 'text.primary', bgcolor: glow(theme).soft },
       }}
     >
@@ -138,7 +139,7 @@ function NoteActions({
   const itemSx = {
     gap: 0,
     minHeight: 40,
-    [theme.breakpoints.down('md')]: { minHeight: 44 },
+    [TOUCH_TARGET_MEDIA]: { minHeight: 44 },
     '& .MuiListItemIcon-root': { minWidth: 32, color: 'text.secondary' },
     '& .MuiListItemText-primary': { fontSize: '0.875rem' },
   };
@@ -152,7 +153,7 @@ function NoteActions({
           startIcon={isEditMode ? <Visibility /> : <Edit />}
           onClick={onToggleEdit}
           size="small"
-          sx={{ [theme.breakpoints.down('md')]: { ...tapTarget44 } }}
+          sx={{ [TOUCH_TARGET_MEDIA]: { ...tapTarget44 } }}
         >
           {isEditMode ? 'View' : 'Edit'}
         </Button>
@@ -170,7 +171,7 @@ function NoteActions({
           borderRadius: '6px',
           minWidth: 32,
           minHeight: 32,
-          [theme.breakpoints.down('md')]: { ...tapTarget44 },
+          [TOUCH_TARGET_MEDIA]: { ...tapTarget44 },
           '&:hover': { bgcolor: glow(theme).soft, color: 'text.primary' },
           '&:focus-visible': { boxShadow: `0 0 0 3px ${glow(theme).ring}` },
         }}

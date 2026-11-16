@@ -39,15 +39,16 @@ function InnerProvider({ children }) {
           <CssBaseline />
           {/* PWA_STANDARD rule 9: "Updating…" during the post-deploy reload. */}
           <GeekUpdateIndicator />
-          {/* Desktop-only: undoes the shared theme's 44px input floor so
-              NoteGeek's forms stay compact above the phone breakpoint.
-              Scoped to `@media (min-width: 600px)` — below that, phones
-              need the 44px hit area (MOBILE_UI_PLAN §2, no exceptions),
-              and this `!important` was overruling it (TagSelector's
-              outlined field, the note-title input). */}
+          {/* Mouse-only: undoes the shared theme's 44px input floor so
+              NoteGeek's forms stay compact with a mouse. Scoped to
+              `(min-width: 600px) and (pointer: fine)` — a phone needs the
+              44px hit area (MOBILE_UI_PLAN §2, no exceptions), and so does
+              a finger on a tablet at any width (tablet wave 2026-11-16:
+              this `!important` held the note title and tags at 26–31 px on
+              the 800 and 1280 px tablet). */}
           <GlobalStyles
             styles={{
-              '@media (min-width: 600px)': {
+              '@media (min-width: 600px) and (pointer: fine)': {
                 '.MuiInputBase-root, .MuiOutlinedInput-root': {
                   minHeight: 'auto !important',
                 },

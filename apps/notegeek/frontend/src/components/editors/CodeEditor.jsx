@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Box, Select, MenuItem, FormControl, Typography, useTheme } from '@mui/material';
 import { surfaces } from '../../theme/tokens';
+import { geekTarget } from '@geeksuite/ui';
 
 const CODE_LANGUAGES = [
   { value: 'javascript', label: 'JavaScript' },
@@ -146,7 +147,7 @@ function CodeEditor({ content = '', setContent, readOnly = false, fontSize = 14 
               fontSize: '0.8125rem',
               fontWeight: 600,
               color: 'text.primary',
-              minHeight: { xs: 44, md: 32 },
+              ...geekTarget({ fine: 32 }),
               '& .MuiSelect-select': { py: '4px', pr: '24px !important' },
             }}
           >

@@ -133,6 +133,7 @@ export const dotGridBackground = gridBackground;
  */
 export const layout = {
   contentWidth: 720,    // max width for list views (NoteList, QuickCaptureHome, SearchResults)
+  tabletContentWidth: 600, // the same lists on a tablet (components/notes/ListColumn.jsx)
   pickerWidth: 480,     // max width for the new-note type picker
   timestampMinWidth: 44, // min width for the timestamp column in NoteRow
   rowHeight: 44,        // skeleton row height for list loading states

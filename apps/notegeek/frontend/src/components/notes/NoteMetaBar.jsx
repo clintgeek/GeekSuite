@@ -1,6 +1,7 @@
 import React from 'react';
 import { Box, InputBase, useTheme } from '@mui/material';
 import TagSelector from '../TagSelector';
+import { PHONE_MEDIA } from '../../hooks/useNoteFormFactor';
 import TypeIcon from './TypeIcon';
 import { noteTypeMeta } from './noteTypeMeta';
 
@@ -40,7 +41,7 @@ function NoteMetaBar({
   const meta = noteType ? noteTypeMeta(noteType) : null;
 
   return (
-    <Box sx={{ pt: compact ? '4px' : { xs: '4px', md: '16px' }, pb: compact ? '8px' : '12px' }}>
+    <Box sx={{ pt: compact ? '4px' : '16px', pb: compact ? '8px' : '12px', ...(compact ? null : { [PHONE_MEDIA]: { pt: '4px' } }) }}>
       {/* ── Row 1: navigation and the menu ─────────────────────────── */}
       <Box
         sx={{
@@ -48,7 +49,8 @@ function NoteMetaBar({
           alignItems: 'center',
           gap: '8px',
           minHeight: 44,
-          mb: compact ? 0 : { xs: '4px', md: '12px' },
+          mb: compact ? 0 : '12px',
+          ...(compact ? null : { [PHONE_MEDIA]: { mb: '4px' } }),
           // Pull Back into the margin so its arrow, not its padding, sits on
           // the text column's edge.
           ml: leading ? '-10px' : 0,
@@ -74,11 +76,17 @@ function NoteMetaBar({
         inputProps={{ 'aria-label': 'Note title' }}
         sx={{
           fontFamily: theme.typography.fontFamily,
-          fontSize: compact ? { xs: '1.375rem', md: '1.5rem' } : { xs: '1.625rem', md: '2.125rem' },
+          // Phone sizes under PHONE_MEDIA; a tablet (portrait too) gets the
+          // desktop title — it has the room, and it was a phone's 26px line
+          // at the top of an 800px page (tablet wave 2026-11-16).
+          fontSize: compact ? '1.5rem' : '2.125rem',
+          [PHONE_MEDIA]: { fontSize: compact ? '1.375rem' : '1.625rem' },
           fontWeight: 650,
           letterSpacing: '-0.02em',
           lineHeight: 1.2,
           color: 'text.primary',
+          // 44px for a finger (phone and tablet); ThemeModeProvider lets a
+          // mouse have the compact field.
           minHeight: 44,
           '& .MuiInputBase-input': {
             p: 0,

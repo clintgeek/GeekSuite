@@ -26,10 +26,10 @@ import ArchiveOutlined from '@mui/icons-material/ArchiveOutlined';
 import DeleteOutline from '@mui/icons-material/DeleteOutline';
 import MoreIcon from '@mui/icons-material/MoreHoriz';
 import ChevronRightIcon from '@mui/icons-material/ChevronRight';
-import { GeekSidebar, geekLayout, useGeekShell } from '@geeksuite/ui';
+import { GeekSidebar, geekLayout, geekMedia, geekTarget, useGeekShell } from '@geeksuite/ui';
 import TagContextMenu from './TagContextMenu';
 import { gql, useQuery } from '@apollo/client';
-import { graphiteTokens, tapTarget44 } from '../theme/tokens';
+import { graphiteTokens } from '../theme/tokens';
 import { tagTree as buildTagTree, filterTagTree } from '@geeksuite/tags';
 import { navSections, activeNavId } from './navConfig';
 
@@ -100,10 +100,17 @@ function writeCollapsed(set) {
     }
 }
 
-const ROW_SX = (theme) => ({
-    minHeight: 32,
-    [theme.breakpoints.down('md')]: { minHeight: 44 },
-});
+// Sized by the pointer, not the width (tablet wave 2026-11-16): 44 px for a
+// finger at ANY width — a 1280 px touch tablet showed this tree at 24/32 px,
+// ~5,000 harness hits from a few dozen controls — and compact with a mouse.
+const ROW_SX = () => geekTarget({ fine: 32 });
+const TOGGLE_FINE = 24;
+const toggleBox = {
+    width: 44,
+    height: 44,
+    ...geekTarget({ fine: TOGGLE_FINE, both: true }),
+    [geekMedia.fine]: { width: TOGGLE_FINE, height: TOGGLE_FINE, minWidth: TOGGLE_FINE, minHeight: TOGGLE_FINE },
+};
 
 function TagTreeRow({ node, level, activePath, isOpen, onToggle, theme, onNavigate, onTagMenu, renderChildren }) {
     const href = `/tags/${encodeURIComponent(node.path)}`;
@@ -120,7 +127,7 @@ function TagTreeRow({ node, level, activePath, isOpen, onToggle, theme, onNaviga
                     mx: '6px',
                     borderRadius: '4px',
                     position: 'relative',
-                    ...ROW_SX(theme),
+                    ...ROW_SX(),
                     // The tag being viewed: highlighter under ink.
                     bgcolor: isSelected ? g.hl : 'transparent',
                     '&:hover': { bgcolor: isSelected ? g.hl : alpha(g.ink, 0.05) },
@@ -136,15 +143,11 @@ function TagTreeRow({ node, level, activePath, isOpen, onToggle, theme, onNaviga
                         aria-expanded={isOpen}
                         aria-label={`${isOpen ? 'Collapse' : 'Expand'} ${node.path}`}
                         sx={{
-                            width: 24,
-                            height: 24,
-                            minWidth: 24,
-                            minHeight: 24,
+                            ...toggleBox,
                             p: 0,
                             flexShrink: 0,
                             color: isSelected ? g.onHl : 'text.secondary',
                             borderRadius: '4px',
-                            [theme.breakpoints.down('md')]: { ...tapTarget44, width: 44, height: 44 },
                             '&:hover': { color: 'text.primary', bgcolor: 'transparent' },
                         }}
                     >
@@ -158,7 +161,7 @@ function TagTreeRow({ node, level, activePath, isOpen, onToggle, theme, onNaviga
                         />
                     </IconButton>
                 ) : (
-                    <Box sx={{ width: 24, flexShrink: 0, [theme.breakpoints.down('md')]: { width: 44 } }} />
+                    <Box sx={{ width: 44, flexShrink: 0, [geekMedia.fine]: { width: TOGGLE_FINE } }} />
                 )}
 
                 <Box
@@ -222,11 +225,11 @@ function TagTreeRow({ node, level, activePath, isOpen, onToggle, theme, onNaviga
                         opacity: 0,
                         p: 0.25,
                         mr: '2px',
-                        minWidth: 24,
-                        minHeight: 24,
-                        // A phone has no hover, so the menu — the only way to
-                        // rename, move or delete a tag there — is always shown.
-                        [theme.breakpoints.down('md')]: { ...tapTarget44, opacity: 1 },
+                        ...geekTarget({ fine: TOGGLE_FINE, both: true }),
+                        // A finger has no hover, so the menu — the only way to
+                        // rename, move or delete a tag there — is always shown
+                        // (a touch tablet in landscape too, not only a phone).
+                        [geekMedia.coarse]: { opacity: 1 },
                         '@media (hover: none)': { opacity: 1 },
                         color: isSelected ? g.onHl : 'text.secondary',
                         transition: 'opacity 100ms ease, color 100ms ease',
@@ -263,7 +266,7 @@ function TagTree({ nodes, activePath, collapsed, forceOpen, onToggle, theme, onN
                         left: `${6 + (level - 1) * 14 + 12}px`,
                         width: '1px',
                         bgcolor: theme.palette.divider,
-                        [theme.breakpoints.down('md')]: { left: `${6 + (level - 1) * 14 + 22}px` },
+                        [geekMedia.coarse]: { left: `${6 + (level - 1) * 14 + 22}px` },
                     },
                 } : null),
             }}
@@ -450,7 +453,7 @@ export function TagsPanel({ onNavigate, stickyBg = 'background.paper' }) {
                                         size="small"
                                         aria-label="Clear tag filter"
                                         onClick={() => setTagFilter('')}
-                                        sx={{ color: 'text.secondary', minWidth: 32, minHeight: 32, [theme.breakpoints.down('md')]: { ...tapTarget44 } }}
+                                        sx={{ color: 'text.secondary', ...geekTarget({ fine: 32, both: true }) }}
                                     >
                                         <ClearIcon sx={{ fontSize: 15 }} />
                                     </IconButton>

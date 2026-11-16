@@ -327,6 +327,29 @@ async function openPhoneTags(page, h) {
   if (!(await page.getByRole('dialog', { name: /tags/i }).count())) throw new Error('the Tags sheet did not open');
 }
 
+// NoteGeek's own layout split since the tablet wave (2026-11-16): the phone
+// has the bottom bar, a tablet (portrait 800 AND touch landscape 1280) has
+// the rail, a desktop the sidebar. `h.isPhone` is true on a portrait tablet
+// (the harness's 900px rule), so NoteGeek's scenes branch on these instead.
+const phoneLayout = (h) => h.viewport === 'phone';
+const railLayout = (h) => h.viewport === 'tablet';
+const desktopLayout = (h) => h.viewport === 'desktop';
+
+// The tag tree: the phone's Tags sheet (from the Notes page), the tablet's
+// Tags sheet (from the rail), or — on a desktop — already in the sidebar.
+async function openTags(page, h) {
+  if (phoneLayout(h)) return openPhoneTags(page, h);
+  if (!railLayout(h)) return undefined;
+  const item = page.locator('[data-geek-nav-rail-item="tags"]');
+  if (!(await item.count())) throw new Error('the tablet rail has no Tags item');
+  await item.click();
+  await h.settle(600);
+  if (!(await page.getByRole('dialog', { name: /tags/i }).count())) throw new Error('the rail\'s Tags sheet did not open');
+  return undefined;
+}
+// Bottom bar on a phone, rail on a tablet.
+const navItem = (page, id) => page.locator(`[data-geek-bottom-nav-item="${id}"], [data-geek-nav-rail-item="${id}"]`).first();
+
 // No greeting, no "Continue" cards, and a note row in the first screen.
 async function assertHomeIsNotes(page, h) {
   if (await page.getByText(/good (morning|afternoon|evening)/i).count()) throw new Error('home still has the greeting');
@@ -462,7 +485,7 @@ async function longPress(page, locator) {
 // and the sketch (which Compose will skip). Phone: long-press the first row.
 // Desktop: the header's Select button.
 async function selectThree(page, h) {
-  if (h.isPhone) {
+  if (phoneLayout(h)) {
     await longPress(page, rowFor(page, 'Q3 roadmap notes'));
   } else {
     await page.getByRole('button', { name: 'Select', exact: true }).click();
@@ -483,7 +506,7 @@ async function assertBarInThumbZone(page, h) {
   const b = await bar.boundingBox();
   if (!b) throw new Error('no action bar in select mode');
   const vh = page.viewportSize().height;
-  if (h.isPhone) {
+  if (phoneLayout(h)) {
     const nav = await page.locator('[data-geek-bottom-nav]').boundingBox();
     if (!nav) throw new Error('the tab bar is gone in select mode');
     if (b.y + b.height > nav.y + 1) throw new Error(`the action bar (bottom ${Math.round(b.y + b.height)}) overlaps the tab bar (top ${Math.round(nav.y)})`);
@@ -582,8 +605,8 @@ export const scenes = [
     goto: '/',
     wait: 1200,
     async setup(page, h) {
-      if (h.isPhone) {
-        await page.locator('[data-geek-bottom-nav-item="new"]').click();
+      if (!desktopLayout(h)) {
+        await navItem(page, 'new').click();
         await h.settle(600);
         const sheet = page.getByRole('dialog', { name: /new/i });
         if (!(await sheet.count())) throw new Error('New did not open its sheet');
@@ -812,7 +835,7 @@ export const scenes = [
     goto: '/tags/dev%2Ffrontend',
     wait: 1200,
     async setup(page, h) {
-      if (h.isPhone) await openPhoneTags(page, h);
+      if (!desktopLayout(h)) await openTags(page, h);
       const collapse = page.getByRole('button', { name: /^collapse dev$/i }).first();
       if (!(await collapse.count())) throw new Error('tag "dev" has no expanded chevron');
       await collapse.scrollIntoViewIfNeeded();
@@ -826,7 +849,7 @@ export const scenes = [
     teardown: async (page, h) => {
       // Leave the next scene with the default (expanded) tree.
       await page.evaluate(() => { try { localStorage.removeItem('notegeek.tagTree.collapsed'); } catch { /* ignore */ } });
-      if (h.isPhone) await h.esc(400);
+      if (!desktopLayout(h)) await h.esc(400);
     },
   },
   {
@@ -860,7 +883,7 @@ export const scenes = [
     goto: '/tags/house',
     wait: 1200,
     async setup(page, h) {
-      if (h.isPhone) await openPhoneTags(page, h);
+      if (!desktopLayout(h)) await openTags(page, h);
       await page.getByRole('button', { name: 'Tag options for house' }).first().click();
       await h.settle(300);
       await page.getByRole('menuitem', { name: /rename or move/i }).click();
@@ -879,7 +902,7 @@ export const scenes = [
     },
     teardown: async (page, h) => {
       await h.esc(400);
-      if (h.isPhone) await h.esc(400);
+      if (!desktopLayout(h)) await h.esc(400);
     },
   },
   {
@@ -888,7 +911,7 @@ export const scenes = [
     goto: '/tags/house',
     wait: 1200,
     async setup(page, h) {
-      if (h.isPhone) await openPhoneTags(page, h);
+      if (!desktopLayout(h)) await openTags(page, h);
       await page.getByRole('button', { name: 'Tag options for house' }).first().click();
       await h.settle(300);
       await page.getByRole('menuitem', { name: /delete tag/i }).click();
@@ -898,7 +921,7 @@ export const scenes = [
     },
     teardown: async (page, h) => {
       await h.esc(400);
-      if (h.isPhone) await h.esc(400);
+      if (!desktopLayout(h)) await h.esc(400);
     },
   },
   {
@@ -940,7 +963,7 @@ export const scenes = [
       await h.settle(600);
       const bar = page.getByRole('toolbar', { name: 'Markdown formatting' });
       const docked = await bar.getAttribute('data-editor-toolbar');
-      if (h.isPhone) {
+      if (phoneLayout(h)) {
         if (docked !== 'docked') throw new Error(`phone toolbar is ${docked}, not docked`);
         const box = await bar.boundingBox();
         const vh = page.viewportSize().height;
@@ -1300,9 +1323,9 @@ export const scenes = [
       await graphqlRoute(page, { ...OPS, SearchNotes: { searchNotes: SEARCH_RESULTS } });
       await page.goto(h.base + '/', { waitUntil: 'networkidle' });
       await h.settle(800);
-      if (h.isPhone) {
-        if (await page.locator('header').getByRole('button', { name: /search/i }).count()) throw new Error('the phone top bar still has a search button');
-        await page.locator('[data-geek-bottom-nav-item="search"]').click();
+      if (!desktopLayout(h)) {
+        if (await page.locator('header').getByRole('button', { name: /search/i }).count()) throw new Error('the top bar still has a search button');
+        await navItem(page, 'search').click();
       } else {
         await page.goto(h.base + '/search', { waitUntil: 'networkidle' });
       }
@@ -1520,7 +1543,7 @@ export const scenes = [
       const [ly, ry] = [await linked.boundingBox(), await related.boundingBox()];
       if (!(ly && ry && ly.y < ry.y)) throw new Error('"Linked from" is not above "Related notes"');
       if (!(await linked.getByRole('heading', { name: 'Linked from' }).count())) throw new Error('no "Linked from" heading');
-      if (h.isPhone) await linked.scrollIntoViewIfNeeded();
+      if (!desktopLayout(h)) await linked.scrollIntoViewIfNeeded();
       await h.settle(400);
     },
   },
@@ -1606,8 +1629,8 @@ export const scenes = [
     async setup(page, h) {
       const created = await stubImportCreates(page);
       let entry;
-      if (h.isPhone) {
-        await page.locator('[data-geek-bottom-nav-item="new"]').click();
+      if (!desktopLayout(h)) {
+        await navItem(page, 'new').click();
         await h.settle(600);
         entry = page.getByRole('dialog', { name: /new/i }).getByRole('button', { name: /import a markdown file/i });
       } else {
@@ -1843,12 +1866,12 @@ export const scenes = [
       await stubSelect(page);
       await page.goto(h.base + '/notes', { waitUntil: 'networkidle' });
       await h.settle(800);
-      if (h.isPhone) await openPhoneTags(page, h);
+      if (!desktopLayout(h)) await openTags(page, h);
       await page.getByRole('link', { name: 'Archived' }).click();
       await page.waitForURL(/\/archived$/, { timeout: 8000 });
       await page.getByText(ARCHIVED[0].title).waitFor({ timeout: 8000 });
       await h.settle(600);
-      if (h.isPhone) {
+      if (phoneLayout(h)) {
         await longPress(page, rowFor(page, 'Spring garden plan'));
       } else {
         await page.getByRole('button', { name: 'Select', exact: true }).click();
@@ -2211,6 +2234,125 @@ export const scenes = [
       await h.esc(300);
       await page.evaluate(() => (document.fullscreenElement ? document.exitFullscreen() : null)).catch(() => {});
       await h.settle(400);
+    },
+  },
+
+  // ── Tablet wave (2026-11-16): rail, capped list, portrait editor, two panes ──
+  {
+    // The rail replaces the phone's bottom bar on a tablet, portrait and
+    // landscape alike: Home, Search, New, Notes and Tags; no hamburger. In
+    // portrait the list is one capped, centred column; in landscape the list
+    // sits in its own pane beside a "Pick a note" placeholder.
+    name: '40a-tablet-rail',
+    viewports: ['tablet'],
+    goto: '/notes',
+    wait: 1200,
+    async setup(page, h) {
+      const rail = page.locator('nav[data-geek-nav-rail]');
+      if (!(await rail.count())) throw new Error('no rail on the tablet');
+      if (await page.locator('[data-geek-bottom-nav]').count()) throw new Error('the tablet still draws the phone bottom bar');
+      if (await page.locator('[data-geek-topbar="menu"]').count()) throw new Error('the tablet still has a hamburger');
+      const ids = await page.locator('[data-geek-nav-rail-item]').evaluateAll((els) => els.map((e) => e.getAttribute('data-geek-nav-rail-item')));
+      if (ids.join(',') !== 'home,search,new,notes,tags') throw new Error(`rail items are ${ids.join(',')}`);
+      if ((await page.locator('[data-geek-nav-rail-item="notes"]').getAttribute('aria-current')) !== 'page') throw new Error('Notes is not current on /notes');
+      const row = await page.locator('[data-note-row]').first().boundingBox();
+      if (!row) throw new Error('no note rows');
+      if (h.landscape) {
+        if (!(await page.getByRole('region', { name: 'Notes' }).count())) throw new Error('landscape has no list pane');
+        if (!(await page.getByText('Pick a note').count())) throw new Error('landscape has no "Pick a note" placeholder');
+      } else {
+        if (await page.locator('[data-note-two-pane]').count()) throw new Error('portrait 800 must be one pane');
+        if (row.width > 610) throw new Error(`portrait list rows are ${Math.round(row.width)}px wide (cap 600)`);
+        const railBox = await rail.boundingBox();
+        const mid = row.x + row.width / 2;
+        const colMid = railBox.x + railBox.width + (h.width - railBox.x - railBox.width) / 2;
+        if (Math.abs(mid - colMid) > 12) throw new Error(`the list column is not centred beside the rail (${Math.round(mid)} vs ${Math.round(colMid)})`);
+      }
+    },
+  },
+  {
+    // The rail's Tags item: the sidebar's contents (tag filter, All notes,
+    // Archived, Recently deleted, the tree) in a sheet, so a tablet loses
+    // nothing the desktop sidebar has. The sheet is capped, not 800 wide.
+    name: '40b-tablet-tags-sheet',
+    viewports: ['tablet'],
+    goto: '/notes',
+    wait: 1200,
+    async setup(page, h) {
+      await openTags(page, h);
+      const sheet = page.getByRole('dialog', { name: /tags/i });
+      for (const name of [/all notes/i, /archived/i, /recently deleted/i]) {
+        if (!(await sheet.getByRole('link', { name }).count())) throw new Error(`the Tags sheet has no ${name} link`);
+      }
+      if (!(await sheet.getByRole('button', { name: /^collapse dev$/i }).count())) throw new Error('the Tags sheet has no tag tree');
+      // The paper, not the dialog root (that is the full-screen modal layer).
+      // Portrait: a bottom sheet (`data-geek-sheet="paper"`); landscape: GeekSheet
+      // is a centred MUI Dialog, whose paper is `.MuiDialog-paper`.
+      const box = await page.locator('[role="dialog"] [data-geek-sheet="paper"], .MuiDialog-paper').first().boundingBox({ timeout: 5000 });
+      if (!box || box.width > 610) throw new Error(`the Tags sheet is ${box ? Math.round(box.width) : '?'}px wide`);
+    },
+    teardown: (page, h) => h.esc(400),
+  },
+  {
+    // The editor on Chef's portrait tablet: the formatting toolbar under the
+    // title (as landscape has it), not docked bottom-left; the title and
+    // tags fields at least 44px for a finger; the text at a readable measure.
+    name: '40c-tablet-portrait-editor',
+    viewports: ['tablet-portrait'],
+    async setup(page, h) {
+      await openNote(page, h, NOTE_MD, '/notes/n2/edit');
+      const body = page.getByRole('textbox', { name: 'Note body' });
+      await body.click();
+      await body.press('End');
+      await h.settle(600);
+      const bar = page.getByRole('toolbar', { name: 'Markdown formatting' });
+      if ((await bar.getAttribute('data-editor-toolbar')) !== 'inline') throw new Error('portrait toolbar is not inline');
+      const title = page.getByRole('textbox', { name: 'Note title' });
+      const tb = await bar.boundingBox();
+      const tt = await title.boundingBox();
+      if (!(tb && tt && tb.y > tt.y)) throw new Error('the toolbar is not under the title');
+      if (tb.y > 420) throw new Error(`the toolbar sits at y=${Math.round(tb.y)}, not under the head`);
+      const field = async (loc) => loc.evaluate((el) => (el.closest('.MuiInputBase-root') || el).getBoundingClientRect().height);
+      for (const [name, loc] of [['title', title], ['tags', page.getByRole('combobox', { name: 'Tags' })]]) {
+        const hgt = await field(loc);
+        if (hgt < 43.5) throw new Error(`the ${name} field is ${Math.round(hgt)}px tall`);
+      }
+      const col = await body.boundingBox();
+      if (col && col.width > 700) throw new Error(`the text column is ${Math.round(col.width)}px wide`);
+      if (!(await page.locator('nav[data-geek-nav-rail]').count())) throw new Error('the rail is gone in the editor');
+    },
+  },
+  {
+    // Two panes from 1024px (landscape tablet, desktop): the list beside the
+    // note. Opening a note keeps the list, its scroll and its filter; the
+    // open note's row is marked; another note opens in the same pane.
+    name: '40d-two-pane',
+    viewports: ['tablet-landscape', 'desktop'],
+    async setup(page, h) {
+      await bootstrapChef(page);
+      const full = (id) => NOTES.find((n) => n.id === id) || NOTE_N1;
+      await graphqlRoute(page, { ...OPS, GetNoteById: (vars) => ({ note: full(vars.id) }) });
+      await page.goto(h.base + '/notes', { waitUntil: 'networkidle' });
+      await h.settle(1000);
+      const list = page.getByRole('region', { name: 'Notes' });
+      if (!(await list.count())) throw new Error('no list pane at this width');
+      await list.locator('[data-type-filter="text"]').click();
+      await h.settle(600);
+      await list.evaluate((el) => { el.scrollTop = 40; });
+      const before = await list.evaluate((el) => el.scrollTop);
+      await list.getByRole('link', { name: /Standup snippets/ }).click();
+      await page.waitForURL(/\/notes\/n5$/, { timeout: 8000 });
+      await h.settle(900);
+      const note = page.getByRole('region', { name: 'Note' });
+      if (!(await note.getByText('Standup snippets').count())) throw new Error('the note pane does not show the note');
+      if ((await list.locator('[data-type-filter="text"]').getAttribute('aria-pressed')) !== 'true') throw new Error('the list lost its filter');
+      const after = await list.evaluate((el) => el.scrollTop);
+      if (Math.abs(after - before) > 2) throw new Error(`the list scrolled from ${before} to ${after} when a note opened`);
+      if ((await list.locator('[aria-current="page"]').count()) !== 1) throw new Error('the open note\'s row is not marked');
+      await list.getByRole('link', { name: /Q3 roadmap notes/ }).click();
+      await page.waitForURL(/\/notes\/n1$/, { timeout: 8000 });
+      await h.settle(900);
+      if (!(await note.getByText('Q3 roadmap notes').count())) throw new Error('the second note did not open beside the list');
     },
   },
 ].map(withCleanDrafts);

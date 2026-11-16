@@ -9,6 +9,7 @@ import { layout } from '../theme/tokens';
 import { useNoteSelection, rowSelectProps } from '../hooks/useNoteSelection';
 import { SelectButton, SelectingHeader } from '../components/select/SelectControl';
 import SelectionBar from '../components/select/SelectionBar';
+import { useListWidth } from '../components/notes/ListColumn';
 
 /**
  * Archived (`/archived`, DOCS/COMPOSE_MANY_AND_ARCHIVE_SPEC.md U7): the notes
@@ -19,6 +20,7 @@ import SelectionBar from '../components/select/SelectionBar';
  */
 export default function ArchivedNotes() {
   const theme = useTheme();
+  const listWidth = useListWidth();
   const selection = useNoteSelection();
   const { data, loading, error, refetch } = useQuery(ARCHIVED_NOTES, {
     variables: { limit: 200 },
@@ -27,7 +29,7 @@ export default function ArchivedNotes() {
   const notes = data?.archivedNotes || [];
 
   return (
-    <Box sx={{ py: { xs: '8px', sm: '16px' }, px: { xs: '8px', sm: 0 }, maxWidth: layout.contentWidth, mx: 'auto' }}>
+    <Box sx={{ py: { xs: '8px', sm: '16px' }, px: { xs: '8px', sm: 0 }, maxWidth: listWidth, mx: 'auto' }}>
       {selection.active ? <SelectingHeader selection={selection} /> : (
         <Box sx={{ display: 'flex', alignItems: 'center', gap: '8px', px: '4px', mb: '4px', minHeight: 44 }}>
           <Typography component="h1" variant="h6" sx={{ color: 'text.primary', m: 0, mr: 'auto' }}>

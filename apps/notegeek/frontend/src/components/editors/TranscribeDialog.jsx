@@ -15,6 +15,7 @@ import {
     useMediaQuery,
     useTheme,
 } from '@mui/material';
+import { TOUCH_TARGET_MEDIA } from '../../hooks/useNoteFormFactor';
 
 /**
  * TranscribeDialog — the review step of "Convert handwriting to text"
@@ -66,7 +67,7 @@ export default function TranscribeDialog({
     const mono = { fontFamily: theme.typography.fontFamilyMono, wordSpacing: 'normal' };
     const hasText = Boolean(text && text.trim());
     const reviewing = stage === 'review';
-    const button = { textTransform: 'none', [theme.breakpoints.down('md')]: { minHeight: 44 } };
+    const button = { textTransform: 'none', [TOUCH_TARGET_MEDIA]: { minHeight: 44 } };
     const photo = source === 'photo';
     const strip = Array.isArray(pages) && pages.length > 0;
     const workingLabel = step === 'export'
