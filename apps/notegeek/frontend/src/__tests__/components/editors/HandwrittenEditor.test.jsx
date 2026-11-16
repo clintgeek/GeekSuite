@@ -814,24 +814,23 @@ describe('HandwrittenEditor', () => {
         };
         const drawing = (editor) => { editor.setCurrentTool('draw'); editor.toolState = 'drawing'; };
 
-        // Fine is a choice in the pen picker; new sketches start on Small
-        // (Chef, 2026-11-14).
+        // New sketches start on Fine (Chef, 2026-11-16); choosing it again is harmless.
         const chooseFine = async (user) => {
             await user.click(await screen.findByRole('button', { name: 'Pen colour and size' }));
             await user.click(screen.getByRole('button', { name: 'Size: Fine' }));
         };
 
-        it('is NOT the default: a new sketch is on Small, and a new stroke keeps scale 1', async () => {
+        it('is the default: a new sketch is on Fine, the smallest line, and a new stroke is scaled down', async () => {
             const user = userEvent.setup();
             render(<HandwrittenEditor content="" setContent={setContent} />, { wrapper: AllProviders });
             await screen.findByTestId('tldraw-mock');
             const editor = tl.editors.at(-1);
             expect(editor.setStyleForNextShapes).toHaveBeenCalledWith(DefaultSizeStyle, 's');
             drawing(editor);
-            expect(liveHandler(editor)(newStroke(), 'user').props.scale).toBe(1);
+            expect(liveHandler(editor)(newStroke(), 'user').props.scale).toBe(0.5);
             await user.click(await screen.findByRole('button', { name: 'Pen colour and size' }));
-            expect(screen.getByRole('button', { name: 'Size: Small' })).toHaveAttribute('aria-pressed', 'true');
-            expect(screen.getByRole('button', { name: 'Size: Fine' })).toHaveAttribute('aria-pressed', 'false');
+            expect(screen.getByRole('button', { name: 'Size: Fine' })).toHaveAttribute('aria-pressed', 'true');
+            expect(screen.getByRole('button', { name: 'Size: Small' })).toHaveAttribute('aria-pressed', 'false');
         });
 
         it('sets the scale rather than multiplying it, so a long stroke is not halved again when tldraw splits it', async () => {
@@ -909,11 +908,12 @@ describe('HandwrittenEditor', () => {
             render(<HandwrittenEditor content="" setContent={setContent} />, { wrapper: AllProviders });
             const pen = await screen.findByRole('button', { name: 'Pen colour and size' });
             const dotWidth = () => parseFloat(getComputedStyle(pen.querySelector('[aria-hidden]')).width);
-            const small = dotWidth();
+            // A new sketch starts on Fine.
+            const fine = dotWidth();
+            expect(fine).toBeGreaterThan(0);
             await user.click(pen);
-            await user.click(screen.getByRole('button', { name: 'Size: Fine' }));
-            expect(dotWidth()).toBeGreaterThan(0);
-            expect(dotWidth()).toBeLessThan(small);
+            await user.click(screen.getByRole('button', { name: 'Size: Small' }));
+            expect(dotWidth()).toBeGreaterThan(fine);
         });
 
         it('does not stack handlers when tldraw rebuilds its editor', async () => {
@@ -1289,7 +1289,7 @@ describe('HandwrittenEditor — the 2026-11 review', () => {
             await user.click(await screen.findByRole('button', { name: 'Colour: blue' }));
             await user.click(screen.getByRole('button', { name: 'Colour: red' }));
             const strip = screen.getByRole('group', { name: 'Recent pens' });
-            await user.click(within(strip).getByRole('button', { name: 'Recent pen: blue, Small' }));
+            await user.click(within(strip).getByRole('button', { name: 'Recent pen: blue, Fine' }));
             expect(editor.setStyleForNextShapes).toHaveBeenLastCalledWith(DefaultColorStyle, 'blue');
         });
     });

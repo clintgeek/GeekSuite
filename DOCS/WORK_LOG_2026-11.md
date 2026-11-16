@@ -415,3 +415,9 @@ is downloading them to", then "is there a better way? Readarr does something sim
 - **Not verified:** the nested read-only mount, the real Mongo queries, artwork download.
 - **Deploy:** push, then `docker compose up -d` in `apps/bookgeek` (Watchtower does not
   apply compose changes).
+
+## 2026-11-16 — NoteGeek: new sketches start on the Fine pen
+
+Chef: "sketches should default to the smallest pen line size." Small had been the default
+since 2026-11-14 and wrote too fat on the tablet. `HandwrittenEditor.jsx`: `fineRef` /
+`penFine` start true. Sizes in the picker are unchanged.

@@ -153,10 +153,10 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
     const [isLoading, setIsLoading] = useState(true);
     // The Fine pen: a ref the side effect reads live, and state for the
     // picker. Editor state only — it never goes into the saved document.
-    // Off by default: new sketches start on Small (Chef, 2026-11-14); Fine is
-    // one choice away in the pen picker.
-    const fineRef = useRef(false);
-    const [penFine, setPenFineState] = useState(false);
+    // On by default: new sketches start on Fine, the smallest line (Chef,
+    // 2026-11-16 — Small was the default for two days and wrote too fat).
+    const fineRef = useRef(true);
+    const [penFine, setPenFineState] = useState(true);
     const setPenFine = useCallback((value) => {
         fineRef.current = value;
         setPenFineState(value);
@@ -306,9 +306,9 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
 
         // A saved sketch opens to be read, an empty one to be written on.
         // Handwriting wants a thin pen: tldraw's default (m) wrote fat lines
-        // (Chef, 2026-09-27). New sketches start on Small ('s'); Fine (size
-        // 's' plus FINE_SCALE on each new stroke) was the default until
-        // 2026-11-14.
+        // (Chef, 2026-09-27). New sketches start on Fine, the smallest line:
+        // size 's' here plus FINE_SCALE on each new stroke (fineRef, above).
+        // Small was the default 2026-11-14 to 11-16.
         armOnPenRef.current = hasInk && !readOnly;
         editor.setCurrentTool(hasInk ? 'hand' : 'draw');
         editor.setStyleForNextShapes(DefaultSizeStyle, 's');
