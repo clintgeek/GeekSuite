@@ -880,7 +880,10 @@ export const typeDefs = gql`
 
   type Query {
     fitnessUserSettings: FitnessUserSettings
-    fitnessWeights: [FitnessWeight]
+    # Newest first. Every argument optional; with none, every row (older
+    # frontends send none). startDate/endDate bound log_date inclusively;
+    # limit (1-5000) keeps the newest N.
+    fitnessWeights(startDate: Date, endDate: Date, limit: Int): [FitnessWeight]
     fitnessWeight(id: ID!): FitnessWeight
     activeNutritionGoals: NutritionGoals
     nutritionGoalsHistory: [NutritionGoals]
@@ -893,7 +896,8 @@ export const typeDefs = gql`
     fitnessMeal(id: ID!): FitnessMeal
     fitnessMedications: [FitnessMedication]
     fitnessMedication(id: ID!): FitnessMedication
-    bloodPressures: [BloodPressure]
+    # Same optional window / newest-N arguments as fitnessWeights.
+    bloodPressures(startDate: Date, endDate: Date, limit: Int): [BloodPressure]
     bloodPressure(id: ID!): BloodPressure
     # Scans, oldest first, within an inclusive calendar-day window (either end
     # optional).

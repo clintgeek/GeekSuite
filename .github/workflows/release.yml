@@ -37,9 +37,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - id: set
+        # The dispatch input reaches the shell as an env var, never spliced
+        # into the script, and must name an app that has a Dockerfile
+        # (SUITE_REVIEW_2026-11 C3).
+        env:
+          APP_INPUT: ${{ github.event.inputs.app }}
         run: |
-          if [ -n "${{ github.event.inputs.app }}" ]; then
-            echo "apps=[\"${{ github.event.inputs.app }}\"]" >> "$GITHUB_OUTPUT"
+          if [ -n "$APP_INPUT" ]; then
+            if ! printf '%s' "$APP_INPUT" | grep -Eq '^[a-z0-9-]+$' || [ ! -f "apps/$APP_INPUT/Dockerfile" ]; then
+              echo "::error::'$APP_INPUT' is not an app with apps/<app>/Dockerfile"
+              exit 1
+            fi
+            echo "apps=$(jq -cn --arg a "$APP_INPUT" '[$a]')" >> "$GITHUB_OUTPUT"
           else
             # Apps with root-level Dockerfiles (mirror build.sh APPS)
             apps=$(for d in apps/*/Dockerfile; do basename "$(dirname "$d")"; done | jq -R . | jq -sc .)

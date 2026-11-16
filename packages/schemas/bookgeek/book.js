@@ -24,6 +24,10 @@
  * `unsortedTags` and `myTags` added — additive; old documents lack them until
  * the api's boot migration derives the first two.
  *
+ * 2026-11-15 (S-D5, Recently deleted): `deletedAt`, `deletedBy`,
+ * `deleteFilesOnPurge` added — additive — plus the `hideDeletedBooks` query
+ * middleware, which keeps a deleted book out of every ordinary read.
+ *
  * Takes the caller's mongoose (bookgeek's api is on 7.x, basegeek on 8.x) and
  * neither opens a connection nor registers a model.
  */
@@ -104,13 +108,65 @@ function bookDefinition(mongoose) {
     readingProgress: { type: Number, min: 0, max: 100 },
 
     source: { type: String },
+
+    // Recently deleted (SUITE_REVIEW_2026-11 S-D5, 2026-11-15). A delete sets
+    // these instead of removing the row; the book is restored by clearing
+    // them, or purged (row, every reader's BookReading, and its files when
+    // `deleteFilesOnPurge`) 30 days after `deletedAt`. Every ordinary read
+    // skips a deleted book — see `hideDeletedBooks` below.
+    deletedAt: { type: Date },
+    deletedBy: { type: String },
+    deleteFilesOnPurge: { type: Boolean },
   };
 }
 
 const bookSchemaOptions = Object.freeze({ timestamps: true });
 
+/** Does a filter say anything about `deletedAt` (at the top, or in an $and/$or)? */
+function mentionsDeletedAt(filter) {
+  if (!filter || typeof filter !== 'object') return false;
+  if (Object.prototype.hasOwnProperty.call(filter, 'deletedAt')) return true;
+  return ['$and', '$or', '$nor'].some((op) => Array.isArray(filter[op]) && filter[op].some(mentionsDeletedAt));
+}
+
+/**
+ * `filter`, plus "deleted or not". The way to reach a book in Recently
+ * deleted through a read that would otherwise skip it (its cover, a restore).
+ */
+function includingDeleted(filter = {}) {
+  return { $and: [filter, { $or: [{ deletedAt: null }, { deletedAt: { $ne: null } }] }] };
+}
+
+const QUERY_OPS = Object.freeze([
+  'find', 'findOne', 'countDocuments', 'distinct',
+  'findOneAndUpdate', 'updateOne', 'updateMany',
+]);
+
+/**
+ * A book in Recently deleted is gone for every ordinary read and write, on
+ * BOTH writers (gateway and api) and in every module that loads `Book` —
+ * lists, search, facets, shelf counts, the detail sheet, downloads, Kindle,
+ * device baskets, the startgeek glance — without each of them remembering a
+ * filter. A query that names `deletedAt` itself (the trash list, restore,
+ * purge, `includingDeleted`) is left alone. Aggregates get a leading $match
+ * unless their first stage names `deletedAt`. Deletes are never narrowed.
+ */
+function hideDeletedBooks(schema) {
+  schema.pre(QUERY_OPS, function hideDeleted() {
+    if (mentionsDeletedAt(this.getFilter())) return;
+    this.where({ deletedAt: null });
+  });
+  schema.pre('aggregate', function hideDeletedInAggregate() {
+    const pipeline = this.pipeline();
+    const first = pipeline[0];
+    if (first && first.$match && mentionsDeletedAt(first.$match)) return;
+    pipeline.unshift({ $match: { deletedAt: null } });
+  });
+  return schema;
+}
+
 function createBookSchema(mongoose) {
-  return new mongoose.Schema(bookDefinition(mongoose), { ...bookSchemaOptions });
+  return hideDeletedBooks(new mongoose.Schema(bookDefinition(mongoose), { ...bookSchemaOptions }));
 }
 
 // The tag vocabulary rides along on this module so the gateway can reach it
@@ -125,4 +181,7 @@ module.exports = {
   createBookFileSchema,
   createBookSeriesSchema,
   createBookSchema,
+  hideDeletedBooks,
+  includingDeleted,
+  mentionsDeletedAt,
 };

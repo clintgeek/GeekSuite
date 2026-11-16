@@ -42,9 +42,10 @@ import { startCatalogIndexer, stopCatalogIndexer } from './graphql/catalog/catal
 import { ApolloServer } from '@apollo/server';
 import { expressMiddleware } from '@as-integrations/express4';
 import { typeDefs, resolvers } from './graphql/index.js';
-import { csrfGuard, optionalUser } from '@geeksuite/user/server';
+import { csrfGuard } from '@geeksuite/user/server';
 import { csrfTokenGuard, ensureCsrfCookie } from './middleware/csrfToken.js';
-import { localSessionValidator } from './middleware/auth.js';
+import { gatewaySession } from './middleware/auth.js';
+import { clientErrorResponse, corsOriginError } from './middleware/errorStatus.js';
 
 
 const app = express();
@@ -150,8 +151,8 @@ app.use(cors({
     // allow requests with no origin (like mobile apps, curl, etc.)
     if (!origin) return callback(null, true);
     if (allowedOrigins.indexOf(origin) === -1) {
-      const msg = 'The CORS policy for this site does not allow access from the specified Origin.';
-      return callback(new Error(msg), false);
+      // A 403 the error handler passes through, not a 500 (S4).
+      return callback(corsOriginError(), false);
     }
     return callback(null, true);
   },
@@ -502,7 +503,13 @@ await apolloServer.start();
 // that ended in the whole suite logging out rather than a slow page
 // (BURN_REVIEW_2 §3). `localSessionValidator` verifies the JWT with this
 // process's own secret and loads the user from Mongo; no socket is opened.
-app.use('/graphql', optionalUser({ validateSession: localSessionValidator }));
+//
+// `gatewaySession()` is that same `optionalUser()` stage with one difference
+// (SUITE_REVIEW_2026-11 S1): a token that was PRESENTED and refused —
+// expired, bad signature, user gone — answers 401 UNAUTHENTICATED instead of
+// running anonymously into empty lists, so the shared Apollo error link
+// refreshes the session and replays. No token at all is still anonymous.
+app.use('/graphql', gatewaySession());
 app.use('/graphql', (req, _res, next) => {
   if (req.method === 'POST' && req.body?.operationName) {
     req.log.info(`[GQL] ${req.body.operationName} | vars: ${JSON.stringify(Object.keys(req.body.variables || {}))}`);
@@ -586,7 +593,16 @@ app.get('*', (req, res) => {
 // used to make this handler itself throw, and the rejection was reported by
 // express's default finalhandler instead of here. Fall back to the module
 // logger so every error is logged exactly once, from one place.
+//
+// A client's error (malformed JSON, a body over the limit, a disallowed
+// Origin) keeps its own 4xx status rather than becoming a 500 — see
+// middleware/errorStatus.js (SUITE_REVIEW_2026-11 S4).
 app.use((err, req, res, next) => {
+  const clientError = clientErrorResponse(err, req.id);
+  if (clientError) {
+    (req.log || logger).warn({ status: clientError.status, type: err.type, msg: err.message }, 'client error');
+    return res.status(clientError.status).json(clientError.body);
+  }
   (req.log || logger).error({ err }, '500 handler');
   res.status(500).json({
     message: 'Internal Server Error',

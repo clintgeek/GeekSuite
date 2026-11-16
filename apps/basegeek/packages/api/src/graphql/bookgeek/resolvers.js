@@ -24,6 +24,8 @@ import {
   bookFacetsArgsSchema,
   bookSearchArgsSchema,
   booksLikeArgsSchema,
+  restoreBookArgsSchema,
+  deletedBooksArgsSchema,
 } from "./validation.js";
 
 // The tag vocabulary (apps/bookgeek/DOCS/TAGS.md). The shared module is
@@ -67,6 +69,16 @@ const validateBooksLike = validateInput(booksLikeArgsSchema);
 const validateDraftBookMetadata = validateInput(draftBookMetadataArgsSchema);
 const validateBooksFilter = validateInput(booksFilterArgsSchema);
 const validateBookFacets = validateInput(bookFacetsArgsSchema);
+const validateRestoreBook = validateInput(restoreBookArgsSchema);
+const validateDeletedBooks = validateInput(deletedBooksArgsSchema);
+
+/**
+ * How long a deleted book stays in Recently deleted before it is purged.
+ * The purge itself is bookgeek's own API (`services/bookTrash.js`): it owns
+ * the files, which this gateway cannot reach. Keep the two in step.
+ */
+export const BOOK_TRASH_RETENTION_MS = 30 * 24 * 60 * 60 * 1000;
+const DELETED_BOOKS_DEFAULT_LIMIT = 50;
 
 // Built-in shelves. Users can also define custom shelves (ids prefixed
 // "custom-", stored on their bookgeek Profile); those are counted below by
@@ -193,6 +205,10 @@ export const resolvers = {
     dateFinished: (parent) => parent.dateFinished,
     createdAt: (parent) => parent.createdAt,
     updatedAt: (parent) => parent.updatedAt,
+    deletedAt: (parent) => parent.deletedAt ?? null,
+    purgeAt: (parent) =>
+      parent.deletedAt ? new Date(new Date(parent.deletedAt).getTime() + BOOK_TRASH_RETENTION_MS) : null,
+    deleteFilesOnPurge: (parent) => (parent.deletedAt ? Boolean(parent.deleteFilesOnPurge) : null),
   },
   BookSeries: {
     index: (parent) => toNumber(parent.index, "int"),
@@ -393,8 +409,23 @@ export const resolvers = {
         Book.countDocuments({}),
         Book.countDocuments({ owned: true }),
         // Every shelf value that is not a built-in: the caller's custom shelves.
+        // Joined to the catalog, as gamegeek's `gameShelves` is: a reading
+        // whose book was removed (an orphan from the old REST delete) or is in
+        // Recently deleted is not a book on the shelf (SUITE_REVIEW_2026-11 #4).
         BookReading.aggregate([
           { $match: { userId: String(userId), shelf: { $type: "string", $nin: ["", ...shelfNames] } } },
+          {
+            $lookup: {
+              from: Book.collection.name,
+              let: { bookId: "$bookId" },
+              pipeline: [
+                { $match: { $expr: { $eq: ["$_id", "$$bookId"] }, deletedAt: null } },
+                { $project: { _id: 1 } },
+              ],
+              as: "book",
+            },
+          },
+          { $match: { "book.0": { $exists: true } } },
           { $group: { _id: "$shelf", count: { $sum: 1 } } },
           { $sort: { _id: 1 } },
         ]),
@@ -454,6 +485,17 @@ export const resolvers = {
       const enabled = await library.libraryAssistantEnabled(userId);
       return await library.whatNext({ userId, limit: picks, enabled, mood });
     },
+    // Recently deleted (S-D5). Household-shared like the catalog: anyone in
+    // the house can see and restore what anyone deleted.
+    deletedBooks: async (_, rawArgs, { user }) => {
+      requireUser(user);
+      const { limit } = validateDeletedBooks(rawArgs ?? {});
+      const n = Math.max(1, Math.min(limit ?? DELETED_BOOKS_DEFAULT_LIMIT, 200));
+      return await Book.find({ deletedAt: { $ne: null } })
+        .sort({ deletedAt: -1, _id: -1 })
+        .limit(n)
+        .lean();
+    },
     draftBookMetadata: async (_, rawArgs, { user }) => {
       const userId = requireUser(user);
       const { bookId } = validateDraftBookMetadata(rawArgs);
@@ -508,16 +550,37 @@ export const resolvers = {
       await saveReading(userId, id, reader);
       return await findBookFor(userId, id);
     },
+    // Moves the book to Recently deleted (S-D5, 2026-11-15); it used to
+    // remove the row and every reader's BookReading at once. Readings stay
+    // while it is in the trash, so a restore brings back everyone's shelf,
+    // rating and progress; the purge (bookgeek's api, 30 days on) removes
+    // them. `deleteFiles` is remembered for that purge. Deleting a book
+    // already in the trash is a no-op that still answers success.
     deleteBook: async (_, rawArgs, { user }) => {
-      requireUser(user);
-      const { id } = validateDeleteBook(rawArgs);
+      const userId = requireUser(user);
+      const { id, deleteFiles } = validateDeleteBook(rawArgs);
       if (!validObjectId(id)) return { success: false, deletedId: id };
-      // Simplification: only deleting the book record here for now.
-      // Full implementation should handle file deletion if requested.
-      const res = await Book.deleteOne({ _id: id });
-      // Every reader's record of it goes with it.
-      if (res.deletedCount > 0) await BookReading.deleteMany({ bookId: id });
-      return { success: res.deletedCount > 0, deletedId: id };
+      const res = await Book.updateOne(
+        { _id: id, deletedAt: null },
+        { $set: { deletedAt: new Date(), deletedBy: String(userId), deleteFilesOnPurge: deleteFiles === true } },
+        { timestamps: false },
+      );
+      if (res.matchedCount > 0) return { success: true, deletedId: id };
+      const inTrash = await Book.exists({ _id: id, deletedAt: { $ne: null } });
+      return { success: Boolean(inTrash), deletedId: id };
+    },
+    // Back from Recently deleted, as it was. Null when there is no such book
+    // (purged, or never existed); a book that is not deleted is returned as is.
+    restoreBook: async (_, rawArgs, { user }) => {
+      const userId = requireUser(user);
+      const { id } = validateRestoreBook(rawArgs);
+      if (!validObjectId(id)) return null;
+      await Book.updateOne(
+        { _id: id, deletedAt: { $ne: null } },
+        { $unset: { deletedAt: "", deletedBy: "", deleteFilesOnPurge: "" } },
+        { timestamps: false },
+      );
+      return await findBookFor(userId, id);
     },
     saveBookProfile: async (_, rawArgs, { user }) => {
       const userId = requireUser(user);

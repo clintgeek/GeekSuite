@@ -105,12 +105,18 @@ describe('two readers, one library', () => {
     expect(shelfCounts(await Q.bookFacets(null, {}, ctx(BOB)))).toEqual({ unread: 1 });
   });
 
-  test('deleting a book deletes every reader’s record of it', async () => {
+  // Since 2026-11-15 (S-D5) a delete is Recently deleted: every reader's
+  // record stays until the purge, so a restore brings it all back.
+  test('deleting a book keeps every reader’s record of it, and a restore brings them back', async () => {
     const book = await M.createBook(null, { input: { title: 'Gone', shelf: 'reading' } }, ctx(ALICE));
     await M.updateBook(null, { id: String(book._id), input: { rating: 3 } }, ctx(BOB));
     expect(await BookReading.countDocuments({ bookId: book._id })).toBe(2);
     await M.deleteBook(null, { id: String(book._id) }, ctx(BOB));
-    expect(await BookReading.countDocuments({ bookId: book._id })).toBe(0);
+    expect(await BookReading.countDocuments({ bookId: book._id })).toBe(2);
+    expect(await Q.book(null, { id: String(book._id) }, ctx(ALICE))).toBeNull();
+    await M.restoreBook(null, { id: String(book._id) }, ctx(ALICE));
+    expect(await Q.book(null, { id: String(book._id) }, ctx(ALICE))).toMatchObject({ shelf: 'reading' });
+    expect(await Q.book(null, { id: String(book._id) }, ctx(BOB))).toMatchObject({ rating: 3 });
   });
 
   test('clearing my rating clears mine', async () => {

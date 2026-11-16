@@ -342,6 +342,45 @@ jobs:
         working-directory: packages/tags
         run: npx vitest run
 
+  test-task-grammar:
+    name: shared task-grammar tests (Node)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # @geeksuite/task-grammar is the task parser for TodoGeek's add box,
+      # NoteGeek's handwritten journal AND the gateway (plain Node ESM). Its
+      # behaviour tests run in test-todogeek under vitest; this job loads it the
+      # way the gateway does and pins the contract cases (SUITE_REVIEW_2026-11 C1).
+      - name: Run node --test
+        working-directory: packages/task-grammar
+        run: node --test test/*.test.js
+
+  test-schemas:
+    name: shared schemas tests (every export loads)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      # @geeksuite/schemas: Mongoose schemas shared by the gateway and the app
+      # backends. A file that throws at require time crash-loops whichever
+      # container imports it first (SUITE_REVIEW_2026-11 C1).
+      - name: Run node --test
+        working-directory: packages/schemas
+        run: node --test test/*.test.js
+
   test-crypto-vault:
     name: shared crypto-vault tests
     runs-on: ubuntu-latest

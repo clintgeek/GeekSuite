@@ -42,6 +42,12 @@ export const typeDefs = gql`
     source: String
     createdAt: Date
     updatedAt: Date
+    # Recently deleted (2026-11-15): set while the book is in the trash; it can
+    # be restored until purgeAt, when it is removed for good — with every
+    # reader's shelf, rating and progress, and its files if deleteFilesOnPurge.
+    deletedAt: Date
+    purgeAt: Date
+    deleteFilesOnPurge: Boolean
   }
 
   type BookSeries {
@@ -334,12 +340,19 @@ export const typeDefs = gql`
     bookAiStatus: BookAiStatus!
     whatNext(limit: Int = 5, mood: String): WhatNextResult!
     draftBookMetadata(bookId: ID!): BookMetadataDraft!
+    # Recently deleted, newest first (default 50, max 200). Household-shared,
+    # like the catalog. Purging past 30 days is bookgeek's own API (it owns the files).
+    deletedBooks(limit: Int): [Book!]!
   }
 
   type Mutation {
     createBook(input: CreateBookInput!): Book
     updateBook(id: ID!, input: UpdateBookInput!): Book
+    # Moves the book to Recently deleted (since 2026-11-15; it used to remove it).
+    # deleteFiles: its files are deleted too when it is purged.
     deleteBook(id: ID!, deleteFiles: Boolean): DeleteBookResponse
+    # Back from Recently deleted, with every reader's shelf, rating and progress.
+    restoreBook(id: ID!): Book
     saveBookProfile(input: BookProfileInput!): BookProfile
     saveLibraryFilter(input: SaveLibraryFilterInput!): [BookSavedFilter!]!
     deleteLibraryFilter(id: String!): [BookSavedFilter!]!

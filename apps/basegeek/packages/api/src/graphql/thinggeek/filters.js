@@ -17,7 +17,7 @@ import {
   yearHistogramStages,
   yearRange,
 } from '@geeksuite/collection/server';
-import { DUE_BUCKETS, dueBucketClause, dueWithinClause, occurrenceStages, todayUtc } from './dates.js';
+import { DUE_BUCKETS, dueBucketClause, dueWithinClause, occurrenceStages, todayLocal } from './dates.js';
 
 /**
  * ThingFilterInput (+ the search box's token grammar) → Mongo, and the
@@ -365,7 +365,7 @@ export const HELPER_FIELDS = Object.freeze({ __occ: 0, __nextDue: 0, [ATTR_TEXT]
  * @returns {{ conditions: Record<string, {match: object}>, stages: object[] }} `stages` must run
  *   (after the household match) before any condition.
  */
-export function buildConditions(filter = {}, { types = [], tree = buildThingTree([]), today = todayUtc() } = {}) {
+export function buildConditions(filter = {}, { types = [], tree = buildThingTree([]), today = todayLocal() } = {}) {
   const c = {};
   const add = (key, match) => {
     if (!match) return;
@@ -497,7 +497,7 @@ const dueFacetName = (b) => `due:${b}`;
 const kindFacetName = (k) => `kind:${k}`;
 
 /** The single aggregation behind `thingFacets`. */
-export function facetsPipeline({ householdId, filter = {}, types, tree, today = todayUtc() }) {
+export function facetsPipeline({ householdId, filter = {}, types, tree, today = todayLocal() }) {
   const { conditions, stages } = buildConditions(filter, { types, tree, today });
   const idTypes = identifierTypes(types);
   const inventory = notLocation(types);

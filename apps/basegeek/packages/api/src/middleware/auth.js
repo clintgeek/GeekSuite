@@ -1,5 +1,5 @@
 import jwt from 'jsonwebtoken';
-import { normalizeSsoUser, invalidSession, sessionUnavailable } from '@geeksuite/user/server';
+import { normalizeSsoUser, invalidSession, sessionUnavailable, optionalUser } from '@geeksuite/user/server';
 import { VALID_APPS } from '../config/validApps.js';
 import { User } from '../models/user.js';
 
@@ -14,10 +14,24 @@ import { User } from '../models/user.js';
  * — reads the same one.
  */
 export function readSessionToken(req) {
-  const cookieToken = req.cookies?.geek_token;
-  const authHeader = req.headers?.['authorization'];
-  const headerToken = authHeader && authHeader.split(' ')[1];
+  const cookieToken = usableToken(req?.cookies?.geek_token);
+  const authHeader = req?.headers?.['authorization'];
+  const headerToken = usableToken(authHeader && authHeader.split(' ')[1]);
   return cookieToken || headerToken || null;
+}
+
+/**
+ * A client that stored nothing can still send `Bearer null` or
+ * `Bearer undefined` (a template string over an empty localStorage read).
+ * That is no token at all, not a bad one: it must stay anonymous on the
+ * gateway rather than be answered 401, or a signed-out page would be sent
+ * round the refresh path for presenting the word "null".
+ */
+function usableToken(value) {
+  if (typeof value !== 'string') return null;
+  const v = value.trim();
+  if (!v || v === 'null' || v === 'undefined') return null;
+  return v;
 }
 
 /**
@@ -35,7 +49,12 @@ export function verifyAccessToken(token) {
   try {
     decoded = jwt.verify(token, process.env.JWT_SECRET);
   } catch {
-    return { ok: false, status: 403, message: 'Invalid or expired token' };
+    // 401, not 403 (SUITE_REVIEW_2026-11 S6). An expired or unreadable token
+    // is "who are you?", which is what 401 means and what makes a client
+    // refresh. 403 is kept for "I know who you are and the answer is no"
+    // (admin-required, a household denial). The shared axios interceptor
+    // refreshes on both, so tabs running an older bundle are unaffected.
+    return { ok: false, status: 401, message: 'Invalid or expired token' };
   }
 
   // Validate app claim if present (for backward compatibility)
@@ -90,7 +109,8 @@ export const authenticateToken = (req, res, next) => {
  *      reading `context.user.id` cannot tell the two paths apart.
  *
  * Failure kinds are kept distinct on purpose: a bad token is `invalidSession`
- * (the request continues anonymously under `optionalUser`), while a Mongo that
+ * (answered 401 by `gatewaySession` below — it used to continue anonymously),
+ * while a Mongo that
  * will not answer is `sessionUnavailable` — a 503 with `Retry-After`, never an
  * anonymous request that ends in a logout.
  *
@@ -150,6 +170,88 @@ export async function localSessionValidator(_token, ctx = {}) {
 }
 
 /**
+ * The answer the gateway gives a request whose session token was presented
+ * and refused. Shaped so both ends of the suite read it the same way:
+ *
+ *   - HTTP 401 with no `data` key: Apollo Client's HttpLink raises it as a
+ *     `networkError` with `statusCode: 401`, which the shared error link in
+ *     `@geeksuite/api-client` turns into "refresh once, then replay"
+ *     (and has done since REVIEW_2026-10 B1, so tabs on older bundles heal too);
+ *   - `errors[0].extensions.code === 'UNAUTHENTICATED'` and a message that
+ *     starts "Unauthorized", for clients that read the body instead —
+ *     StartGeek's `gql()` and any hand-rolled fetch.
+ */
+export const GATEWAY_UNAUTHENTICATED_BODY = Object.freeze({
+  errors: [Object.freeze({
+    message: 'Unauthorized: your session has expired, sign in again',
+    extensions: Object.freeze({ code: 'UNAUTHENTICATED' }),
+  })],
+});
+
+export function sendGatewayUnauthenticated(res) {
+  if (typeof res.set === 'function') res.set('Cache-Control', 'no-store');
+  return res.status(401).json(GATEWAY_UNAUTHENTICATED_BODY);
+}
+
+/**
+ * gatewaySession — the `/graphql` mount's session stage.
+ *
+ * `optionalUser()` on its own answered three different requests the same
+ * way: no token, a valid token, and a token that was presented but refused
+ * (expired, bad signature, user gone, minted before a password change). The
+ * third ran anonymously, every owner-scoped list answered `[]` with HTTP 200,
+ * and nothing told the client its session needed a refresh — "the app is
+ * empty after lunch" (SUITE_REVIEW_2026-11 S1).
+ *
+ *   - no token at all          → anonymous, exactly as before. Signed-out
+ *                                 pages and public operations keep working;
+ *   - a valid token            → `req.user`, exactly as before;
+ *   - a refused token          → 401 UNAUTHENTICATED (see above), so the
+ *                                 client refreshes and replays;
+ *   - a check that could not run (Mongo down) → 503 AUTH_UNAVAILABLE from
+ *                                 `optionalUser`, unchanged. Never a 401: a
+ *                                 slow database must not look like a dead
+ *                                 session (BURN_REVIEW_2 §3).
+ *
+ * Only the access token is considered. The refresh cookie rides along on
+ * every request (path `/`) and is deliberately ignored here: a request with
+ * no access token but a refresh cookie is still "no token", because
+ * answering it 401 would send every signed-out browser holding a stale
+ * refresh cookie round refresh → logout → login on any anonymous call.
+ * The refresh itself is REST (`POST /api/auth/refresh`), never routed
+ * through this stage, so an expired access token cannot block it.
+ *
+ * @param {{ validateSession?: Function }} [options]
+ */
+export function gatewaySession({ validateSession = localSessionValidator } = {}) {
+  const REFUSED = Symbol('gatewaySessionRefused');
+  const stage = optionalUser({
+    validateSession: async (token, ctx) => {
+      try {
+        return await validateSession(token, ctx);
+      } catch (err) {
+        // optionalUser decides what kind of failure this was: an
+        // unavailable check answers 503 itself and never calls next(), so the
+        // mark is only read when the request was let through anonymously.
+        if (ctx?.req) ctx.req[REFUSED] = err;
+        throw err;
+      }
+    },
+  });
+
+  return (req, res, next) => stage(req, res, (err) => {
+    if (err) return next(err);
+    if (req[REFUSED] && readSessionToken(req)) {
+      const reason = req[REFUSED]?.message;
+      delete req[REFUSED];
+      req.log?.info?.({ reason }, '[GQL] presented session refused: 401');
+      return sendGatewayUnauthenticated(res);
+    }
+    return next();
+  });
+}
+
+/**
  * lookupRole — the role on a userGeek document, or null when there is no such
  * user. One indexed-field projection.
  *
@@ -199,8 +301,9 @@ export const requireRole = (role) => async (req, res, next) => {
  * requireAdmin — authenticate, then require the 'admin' role.
  *
  * Self-contained so a route can never accidentally be admin-gated without
- * also being authenticated: 401 for a missing token and 403 for an invalid one
- * come from authenticateToken, 403 { error: 'admin_required' } from the role
+ * also being authenticated: 401 for a missing, expired or invalid token
+ * (403 only for a token minted for an app we don't serve) come from
+ * authenticateToken, 403 { error: 'admin_required' } from the role
  * check.
  */
 export const requireAdmin = (req, res, next) => {

@@ -27,6 +27,7 @@ import { fillMissingPreviews } from '../notegeek/noteLists.js';
 import Task from '../todogeek/models/Task.js';
 import { Thing } from '../thinggeek/models/thing.js';
 import { spellingsOf, subtreeSpellings } from '../shared/tagSpellings.js';
+import { requireUser } from '../shared/auth.js';
 import logger from '../../lib/logger.js';
 
 const { isMember, DEFAULT_HOUSEHOLD_ID } = householdModule;
@@ -134,6 +135,9 @@ async function safely(app, fn, fallback) {
 export const resolvers = {
   Query: {
     suiteTags: async (_, __, context) => {
+      // Signed out is UNAUTHENTICATED, not "no tags": an empty answer was
+      // indistinguishable from an expired session (SUITE_REVIEW_2026-11 S1).
+      requireUser(context);
       const open = scopes(context.user);
       if (!open) return [];
       const perApp = await Promise.all(APPS.map((app) => (open[app]
@@ -152,6 +156,7 @@ export const resolvers = {
     },
 
     taggedAcross: async (_, { tag, under = false, apps = null }, context) => {
+      requireUser(context);
       const open = scopes(context.user);
       const want = normalizeTag(tag);
       if (!open || !want) return [];

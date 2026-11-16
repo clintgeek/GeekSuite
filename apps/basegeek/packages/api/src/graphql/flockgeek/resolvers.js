@@ -1,5 +1,6 @@
 import mongoose from 'mongoose';
 import { GraphQLError } from 'graphql';
+import { requireUser } from '../shared/auth.js';
 import {
   validateInput,
   createBirdArgsSchema,
@@ -70,17 +71,15 @@ const validateId = (id) => {
 // into an unscoped query over every tenant's data. Never build a filter from a
 // possibly-undefined user id; go through these helpers instead.
 
-/** Authenticated owner id, or throw. Use for every mutation. */
-const requireUser = (context) => {
-  const ownerId = context?.user?.id;
-  if (!ownerId) {
-    throw new GraphQLError('Unauthorized', { extensions: { code: 'UNAUTHENTICATED' } });
-  }
-  return String(ownerId);
-};
-
-/** Authenticated owner id, or null. Use for reads that degrade to empty. */
-const currentUser = (context) => (context?.user?.id ? String(context.user.id) : null);
+//
+// `requireUser` — the authenticated owner id as a string, or UNAUTHENTICATED
+// (401) — guards reads AND writes. Shared with every gateway module:
+// graphql/shared/auth.js.
+//
+// Reads used to "degrade to empty" for an anonymous caller. That was safe
+// against the IDOR above but it was also how an expired session showed as an
+// empty flock with HTTP 200, with nothing to make the client refresh
+// (SUITE_REVIEW_2026-11 S1). An anonymous read now says so.
 
 const notFound = (label) =>
   new GraphQLError(`${ label } not found`, { extensions: { code: 'NOT_FOUND' } });
@@ -112,44 +111,38 @@ const updateOwned = async (model, id, ownerId, patch, label) => {
 export const resolvers = {
   Query: {
     birds: async (_, { status }, context) => {
-      const ownerId = currentUser(context);
-      if (!ownerId) return [];
+      const ownerId = requireUser(context);
       const { Bird } = await getModels();
       const query = { ownerId, deletedAt: null };
       if (status) query.status = status;
       return Bird.find(query).sort({ name: 1, tagId: 1 });
     },
     bird: async (_, { id }, context) => {
-      const ownerId = currentUser(context);
-      if (!ownerId) return null;
+      const ownerId = requireUser(context);
       validateId(id);
       const { Bird } = await getModels();
       return Bird.findOne({ _id: id, ownerId, deletedAt: null });
     },
     birdTraits: async (_, { birdId }, context) => {
-      const ownerId = currentUser(context);
-      if (!ownerId) return [];
+      const ownerId = requireUser(context);
       validateId(birdId);
       const { BirdTrait } = await getModels();
       return BirdTrait.find({ birdId, ownerId, deletedAt: null }).sort({ loggedAt: -1 });
     },
     birdNotes: async (_, { birdId }, context) => {
-      const ownerId = currentUser(context);
-      if (!ownerId) return [];
+      const ownerId = requireUser(context);
       validateId(birdId);
       const { BirdNote } = await getModels();
       return BirdNote.find({ birdId, ownerId, deletedAt: null }).sort({ loggedAt: -1 });
     },
     healthRecords: async (_, { birdId }, context) => {
-      const ownerId = currentUser(context);
-      if (!ownerId) return [];
+      const ownerId = requireUser(context);
       validateId(birdId);
       const { HealthRecord } = await getModels();
       return HealthRecord.find({ birdId, ownerId, deletedAt: null }).sort({ eventDate: -1 });
     },
     eggProductions: async (_, { startDate, endDate, birdId, groupId }, context) => {
-      const ownerId = currentUser(context);
-      if (!ownerId) return [];
+      const ownerId = requireUser(context);
       const { EggProduction } = await getModels();
       const filter = { ownerId, deletedAt: null };
       if (startDate || endDate) {
@@ -162,49 +155,42 @@ export const resolvers = {
       return EggProduction.find(filter).sort({ date: -1 });
     },
     hatchEvents: async (_, __, context) => {
-      const ownerId = currentUser(context);
-      if (!ownerId) return [];
+      const ownerId = requireUser(context);
       const { HatchEvent } = await getModels();
       return HatchEvent.find({ ownerId, deletedAt: null }).sort({ setDate: -1 });
     },
     hatchEvent: async (_, { id }, context) => {
-      const ownerId = currentUser(context);
-      if (!ownerId) return null;
+      const ownerId = requireUser(context);
       validateId(id);
       const { HatchEvent } = await getModels();
       return HatchEvent.findOne({ _id: id, ownerId, deletedAt: null });
     },
     pairings: async (_, { activeOnly }, context) => {
-      const ownerId = currentUser(context);
-      if (!ownerId) return [];
+      const ownerId = requireUser(context);
       const { Pairing } = await getModels();
       const query = { ownerId, deletedAt: null };
       if (activeOnly) query.active = true;
       return Pairing.find(query).sort({ startDate: -1 });
     },
     pairing: async (_, { id }, context) => {
-      const ownerId = currentUser(context);
-      if (!ownerId) return null;
+      const ownerId = requireUser(context);
       validateId(id);
       const { Pairing } = await getModels();
       return Pairing.findOne({ _id: id, ownerId, deletedAt: null });
     },
     flockGroups: async (_, __, context) => {
-      const ownerId = currentUser(context);
-      if (!ownerId) return [];
+      const ownerId = requireUser(context);
       const { Group } = await getModels();
       return Group.find({ ownerId, deletedAt: null }).sort({ startDate: -1 });
     },
     flockGroup: async (_, { id }, context) => {
-      const ownerId = currentUser(context);
-      if (!ownerId) return null;
+      const ownerId = requireUser(context);
       validateId(id);
       const { Group } = await getModels();
       return Group.findOne({ _id: id, ownerId, deletedAt: null });
     },
     groupMemberships: async (_, { groupId, activeOnly }, context) => {
-      const ownerId = currentUser(context);
-      if (!ownerId) return [];
+      const ownerId = requireUser(context);
       const { GroupMembership } = await getModels();
       const query = { ownerId, deletedAt: null };
       if (groupId) query.groupId = groupId;
@@ -212,31 +198,27 @@ export const resolvers = {
       return GroupMembership.find(query).populate('birdId').sort({ joinedAt: -1 });
     },
     flockLocations: async (_, { activeOnly }, context) => {
-      const ownerId = currentUser(context);
-      if (!ownerId) return [];
+      const ownerId = requireUser(context);
       const { Location } = await getModels();
       const query = { ownerId, deletedAt: null };
       if (activeOnly) query.isActive = true;
       return Location.find(query).sort({ name: 1 });
     },
     meatRuns: async (_, { status }, context) => {
-      const ownerId = currentUser(context);
-      if (!ownerId) return [];
+      const ownerId = requireUser(context);
       const { MeatRun } = await getModels();
       const query = { ownerId, deletedAt: null };
       if (status) query.status = status;
       return MeatRun.find(query).sort({ startDate: -1 });
     },
     meatRun: async (_, { id }, context) => {
-      const ownerId = currentUser(context);
-      if (!ownerId) return null;
+      const ownerId = requireUser(context);
       validateId(id);
       const { MeatRun } = await getModels();
       return MeatRun.findOne({ _id: id, ownerId, deletedAt: null });
     },
     flockEvents: async (_, { entityType, entityId }, context) => {
-      const ownerId = currentUser(context);
-      if (!ownerId) return [];
+      const ownerId = requireUser(context);
       const { Event } = await getModels();
       const query = { ownerId, deletedAt: null };
       if (entityType) query.entityType = entityType;

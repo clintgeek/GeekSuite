@@ -144,7 +144,9 @@ describe('bookgeek — the library stays deliberately shared', () => {
 
     const del = await resolvers.Mutation.deleteBook(null, { id: String(b._id) }, ctx(ALICE));
     expect(del).toEqual({ success: true, deletedId: String(b._id) });
+    // Recently deleted (S-D5): hidden from every ordinary read, row kept.
     expect(await Book.countDocuments({})).toBe(0);
+    expect(await Book.countDocuments({ deletedAt: { $ne: null } })).toBe(1);
   });
 
   test('filters and paging still work for an authenticated caller', async () => {

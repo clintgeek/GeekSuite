@@ -59,6 +59,8 @@ const PAIRS = [
       'files', 'coverPath', 'owned', 'shelf',
       'rating', 'review', 'dateAdded', 'dateStarted', 'dateFinished', 'readCount', 'readingProgress',
       'source', 'createdAt', 'updatedAt',
+      // 2026-11-15: Recently deleted (S-D5).
+      'deletedAt', 'deletedBy', 'deleteFilesOnPurge',
     ],
     // No schema.index() and no path-level index on Book: the only index on
     // the real collection is `_id_`.
@@ -97,6 +99,10 @@ const PAIRS = [
       readCount: 2,
       readingProgress: 37,
       source: 'manual',
+      // `deletedAt` is left off on purpose: a deleted probe is hidden from the
+      // plain findOne below (the Recently-deleted block covers it).
+      deletedBy: 'probe-user',
+      deleteFilesOnPurge: true,
     }),
   },
   {
@@ -318,6 +324,60 @@ describe.each(PAIRS.map((p) => [p.name, p]))('%s write-through (api ⇄ gateway 
     expect(after.not_a_real_field).toBeUndefined();
     expect(after.also_not_real).toBeUndefined();
   });
+});
+
+// ---------------------------------------------------------------------------
+// Recently deleted (S-D5): a deleted book is hidden on BOTH mongooses
+// ---------------------------------------------------------------------------
+
+describe('Recently deleted books are hidden from ordinary reads on both sides', () => {
+  let apiConn;
+  let RestBook;
+  const TRASH_TITLE = `trash-probe-${new mongoose.Types.ObjectId()}`;
+  const { includingDeleted } = bookShared;
+
+  beforeAll(async () => {
+    await BookGraphQL.db.asPromise();
+    const { host, port, name: dbName } = BookGraphQL.db;
+    apiConn = BookRest.base.createConnection(`mongodb://${host}:${port}/`, { dbName });
+    await apiConn.asPromise();
+    RestBook = apiConn.model('Book', BookRest.schema, 'books');
+  }, 60000);
+
+  afterEach(async () => {
+    await BookGraphQL.collection.deleteMany({ title: TRASH_TITLE });
+  });
+
+  afterAll(async () => {
+    await apiConn?.close();
+  });
+
+  test.each([['gateway (mongoose 8)', () => BookGraphQL], ['api (mongoose 7)', () => RestBook]])(
+    '%s: find/findById/count/aggregate/update skip it; deletedAt queries and includingDeleted reach it',
+    async (_label, model) => {
+      const Book = model();
+      const live = await Book.create({ title: TRASH_TITLE });
+      const gone = await Book.create({ title: TRASH_TITLE, deletedAt: new Date() });
+
+      expect((await Book.find({ title: TRASH_TITLE }).lean()).map((b) => String(b._id))).toEqual([String(live._id)]);
+      expect(await Book.findById(gone._id).lean()).toBeNull();
+      expect(await Book.countDocuments({ title: TRASH_TITLE })).toBe(1);
+      expect(await Book.exists({ _id: gone._id })).toBeNull();
+      const agg = await Book.aggregate([{ $match: { title: TRASH_TITLE } }]);
+      expect(agg.map((b) => String(b._id))).toEqual([String(live._id)]);
+      // An edit cannot reach a book in the trash.
+      const upd = await Book.updateOne({ _id: gone._id }, { $set: { publisher: 'x' } });
+      expect(upd.matchedCount).toBe(0);
+
+      // Queries that name deletedAt are left alone.
+      expect((await Book.find({ title: TRASH_TITLE, deletedAt: { $ne: null } }).lean()).map((b) => String(b._id)))
+        .toEqual([String(gone._id)]);
+      expect(await Book.findOne(includingDeleted({ _id: gone._id })).lean()).toBeTruthy();
+      expect(await Book.countDocuments(includingDeleted({ title: TRASH_TITLE }))).toBe(2);
+      const aggAll = await Book.aggregate([{ $match: includingDeleted({ title: TRASH_TITLE }) }]);
+      expect(aggAll).toHaveLength(2);
+    },
+  );
 });
 
 afterAll(async () => {

@@ -21,7 +21,7 @@ import {
   notLocation,
   shapeFacets,
 } from './filters.js';
-import { SOON_DAYS, addDays, dueBucketClause, nextDueOf, occurrenceIn, occurrenceStages, renderDate, todayUtc } from './dates.js';
+import { SOON_DAYS, addDays, dueBucketClause, nextDueOf, occurrenceIn, occurrenceStages, renderDate, todayLocal } from './dates.js';
 import {
   validateInput,
   validateAttributes,
@@ -694,7 +694,7 @@ export const resolvers = {
       asOf: t.value?.asOf ?? null,
     }),
     dates: (t) => {
-      const today = todayUtc();
+      const today = todayLocal();
       return (t.dates ?? []).map((d) => renderDate(d, today)).sort((a, b) => a.daysUntil - b.daysUntil);
     },
     nextDue: (t) => nextDueOf(t.dates ?? []),
@@ -871,7 +871,7 @@ export const resolvers = {
       const householdId = resolveHouseholdId(context.user);
       const { types } = await householdContext(context, householdId);
       const idTypes = identifierTypes(types);
-      const today = todayUtc();
+      const today = todayLocal();
       const soonEnd = addDays(today, SOON_DAYS);
       const project = { ...HELPER_FIELDS, __key: 0 };
       const firstOcc = (cond) => ({ $min: { $filter: { input: '$__occ', as: 'o', cond } } });

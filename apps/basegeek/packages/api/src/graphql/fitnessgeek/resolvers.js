@@ -30,7 +30,7 @@ import {
 } from '@geeksuite/utils';
 import derivationModule from '@geeksuite/schemas/fitnessgeek/bodyCompositionDerivation';
 import { leanMassFor, loadBodyCompScans, toBodyCompPoint } from './bodyCompPoints.js';
-import { validateExperienceInput, validateFitnessMealsArgs, validateParseFoodEntryArgs } from './validation.js';
+import { historyQuery, validateExperienceInput, validateFitnessMealsArgs, validateParseFoodEntryArgs } from './validation.js';
 import { runAIFeature } from '../../services/aiFeatureRunner.js';
 import { runInsight, sanitizeChatHistory, CHAT_MAX_CALLS_PER_DAY } from './insightsAI.js';
 import {
@@ -790,7 +790,12 @@ const getBPContext = async (userId, startDate, endDate) => {
 const buildUserContext = async (userId, options = {}) => {
   const daysBack = options.daysBack || 7;
   const anchor = options.date ? toUtcMidnight(options.date) : toUtcMidnight(new Date());
-  const startDate = toUtcMidnight(subDays(anchor, daysBack));
+  // Whole UTC days, counted in UTC. date-fns `subDays` steps the LOCAL
+  // calendar, so on a host not in UTC a window spanning a clock change lost
+  // an hour and `toUtcMidnight` floored it to the day before: "30 days" from
+  // 2026-11-16 began on 10-16, not 10-17 (the goingOverFitnessGlance red,
+  // Chicago evenings only). The containers run UTC; dev machines don't.
+  const startDate = new Date(anchor.getTime() - daysBack * 86400000);
   const { end: endDate } = utcDayRange(anchor);
   const context = {
     dateRange: { start: utcDateString(startDate), end: utcDateString(endDate), days: daysBack },
@@ -868,9 +873,12 @@ export const resolvers = {
       
       return santizedSettings;
     },
-    fitnessWeights: async (_, __, { user }) => {
+    fitnessWeights: async (_, args, { user }) => {
       if (!user) throw new Error('Unauthorized');
-      return Weight.find({ userId: user.id }).sort({ log_date: -1 });
+      // Optional window / newest-N (review 2026-11 #1); no arguments = every
+      // row, as before, for frontends that predate them.
+      const { filter, limit } = historyQuery(user.id, args);
+      return Weight.find(filter).sort({ log_date: -1 }).limit(limit);
     },
     fitnessWeight: async (_, { id }, { user }) => {
       if (!user) throw new Error('Unauthorized');
@@ -961,14 +969,16 @@ export const resolvers = {
       if (!user) throw new Error('Unauthorized');
       return Medication.findOne({ _id: id, user_id: user.id });
     },
-    bloodPressures: async (_, __, { user }) => {
+    bloodPressures: async (_, args, { user }) => {
       if (!user) throw new Error('Unauthorized');
       // Newest first, and newest first WITHIN a day: `log_date` alone left
       // a morning and an evening reading in index order, so Home and the BP
       // page could call the morning one "current" (review P2). `log_date`
       // leads so a reading backfilled to an earlier day never jumps ahead of
       // today's; `measured_at` then orders the day.
-      return BloodPressure.find({ userId: user.id }).sort(BP_NEWEST_FIRST);
+      // Optional window / newest-N as fitnessWeights; no arguments = every row.
+      const { filter, limit } = historyQuery(user.id, args);
+      return BloodPressure.find(filter).sort(BP_NEWEST_FIRST).limit(limit);
     },
     bloodPressure: async (_, { id }, { user }) => {
       if (!user) throw new Error('Unauthorized');
