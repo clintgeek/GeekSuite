@@ -65,6 +65,7 @@ describe('gamegeek — authentication required', () => {
       gamesLike: () => Query.gamesLike(null, {}, ctx(null)),
       gameLibraryOverview: () => Query.gameLibraryOverview(null, {}, ctx(null)),
       gameWhatNext: () => Query.gameWhatNext(null, {}, ctx(null)),
+      deletedGames: () => Query.deletedGames(null, {}, ctx(null)),
     };
     const mutationCalls = {
       createGame: () => Mutation.createGame(null, { input: { title: 'x' } }, ctx(null)),
@@ -82,6 +83,7 @@ describe('gamegeek — authentication required', () => {
       saveGameFilter: () => Mutation.saveGameFilter(null, { input: { name: 'x' } }, ctx(null)),
       deleteGameFilter: () => Mutation.deleteGameFilter(null, { id: 'x' }, ctx(null)),
       resolveInstallFlag: () => Mutation.resolveInstallFlag(null, { gameId: id, action: 'finished' }, ctx(null)),
+      restoreDeletedGame: () => Mutation.restoreDeletedGame(null, { id }, ctx(null)),
     };
     // Completeness: a new resolver must be added here.
     expect(Object.keys(queryCalls).sort()).toEqual(Object.keys(Query).sort());

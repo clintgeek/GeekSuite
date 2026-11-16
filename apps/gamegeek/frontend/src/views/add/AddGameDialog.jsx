@@ -68,6 +68,10 @@ export default function AddGameDialog() {
     <GeekSheet
       open
       onClose={close}
+      // A route (/add), like the detail sheet: Back already leaves it, and its
+      // own Back entry would turn Back into a push to the library (a loop) and
+      // leave /add behind the replace to /game/:id after Add.
+      backToClose={false}
       snap="full"
       maxWidth="md"
       title="Add a game"

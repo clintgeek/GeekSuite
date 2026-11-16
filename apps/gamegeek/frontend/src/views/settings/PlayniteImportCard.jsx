@@ -51,6 +51,7 @@ export function dropStatusMessage(status) {
     if (c.movedToPlaying) parts.push(`${c.movedToPlaying} moved to Playing`);
     if (c.movedToBacklog) parts.push(`${c.movedToBacklog} moved to Backlog`);
     if (c.removedHidden) parts.push(`${c.removedHidden} hidden removed`);
+    if (c.gamesRemoved) parts.push(`${c.gamesRemoved} ${c.gamesRemoved === 1 ? 'game' : 'games'} removed`);
     const detail = parts.length ? ` (${parts.join(', ')})` : ' (no changes)';
     return `${base} — last export imported ${when}${detail}`;
   }
@@ -121,7 +122,11 @@ export default function PlayniteImportCard({ profile }) {
       if (s.create) parts.push(`${s.create} new`);
       if (s.addCopy) parts.push(`${s.addCopy} extra ${s.addCopy === 1 ? 'copy' : 'copies'}`);
       if (s.update) parts.push(`${s.update} updated`);
-      notify(`Playnite import done — ${parts.join(', ') || 'nothing changed'}.`, { tone: 'success' });
+      // What it took away is said too, so a destructive import is never silent.
+      if (s.movedToBacklog) parts.push(`${s.movedToBacklog} moved to Backlog`);
+      if (s.removedHidden) parts.push(`${s.removedHidden} hidden ${s.removedHidden === 1 ? 'copy' : 'copies'} removed`);
+      if (s.gamesRemoved) parts.push(`${s.gamesRemoved} ${s.gamesRemoved === 1 ? 'game' : 'games'} removed`);
+      notify(`Playnite import done — ${parts.join(', ') || 'nothing changed'}.`, { tone: s.removedHidden || s.gamesRemoved ? 'warning' : 'success' });
       setFile(null);
       setPreview(null);
       setIncludeHidden(false);
@@ -144,7 +149,7 @@ export default function PlayniteImportCard({ profile }) {
     <SettingsCard
       id="playnite"
       title="Import from Playnite"
-      description="Export your library from Playnite with Playnite Library Exporter, then pick the .json here. Re-import any time — it updates, never deletes."
+      description="Export your library from Playnite with Playnite Library Exporter, then pick the .json here. Re-import any time — it updates; only games you hid in Playnite are removed, and the preview says so first."
     >
       <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5, flexWrap: 'wrap' }}>
         {/*

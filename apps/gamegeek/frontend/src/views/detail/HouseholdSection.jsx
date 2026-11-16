@@ -3,7 +3,6 @@ import React from 'react';
 import { Avatar, Box, Typography } from '@mui/material';
 import { Star as StarIcon } from '@mui/icons-material';
 import ShelfTag from '../../components/ShelfTag';
-import { formatHours } from '../../utils/dates';
 import { shelfLabel } from '../../utils/vocab';
 import Section from './Section';
 
@@ -27,9 +26,6 @@ export default function HouseholdSection({ entries = [] }) {
                   <Typography sx={{ fontSize: '0.875rem', fontWeight: 600 }}>{name}</Typography>
                   <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', flexWrap: 'wrap' }}>
                     {e.shelf ? <ShelfTag shelf={e.shelf} label={shelfLabel(e.shelf)} /> : null}
-                    {formatHours(e.hoursPlayed) ? (
-                      <Typography component="span" sx={{ fontSize: '0.75rem', color: 'text.secondary' }}>{formatHours(e.hoursPlayed)}</Typography>
-                    ) : null}
                   </Box>
                 </Box>
                 {e.rating ? (

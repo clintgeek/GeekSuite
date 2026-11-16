@@ -3,7 +3,6 @@ import {
   completionLabel,
   defaultStorefrontFor,
   formatLabel,
-  hoursSourceLabel,
   humanize,
   modeLabel,
   platformLabel,
@@ -56,11 +55,5 @@ describe('vocab labels', () => {
     expect(storefrontLabel('amazon')).toBe('Amazon / Prime Gaming');
     expect(storefrontLabel('other')).toBe('Other');
     expect(formatLabel('subscription')).toBe('Game Pass / subscription');
-  });
-
-  it('says where Playnite hours came from', () => {
-    expect(hoursSourceLabel('playnite')).toBe('From Playnite');
-    expect(hoursSourceLabel('steam')).toBe('From Steam');
-    expect(hoursSourceLabel('manual')).toBe('Logged by you');
   });
 });

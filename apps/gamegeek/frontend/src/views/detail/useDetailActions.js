@@ -15,8 +15,6 @@ import { useApolloClient, useMutation } from '@apollo/client';
 import {
   DELETE_GAME,
   DELETE_GAME_PLAYTHROUGH,
-  DELETE_GAME_SESSION,
-  LOG_GAME_SESSION,
   SAVE_GAME_PLAYTHROUGH,
   UPDATE_GAME,
 } from '../../graphql/mutations';
@@ -35,8 +33,6 @@ export const AGGREGATES = ['GetGameShelves', 'GetGameFacets'];
 
 export function useDetailActions(gameId) {
   const client = useApolloClient();
-  const [logSession] = useMutation(LOG_GAME_SESSION);
-  const [deleteSession] = useMutation(DELETE_GAME_SESSION);
   const [savePlaythrough] = useMutation(SAVE_GAME_PLAYTHROUGH);
   const [deletePlaythrough] = useMutation(DELETE_GAME_PLAYTHROUGH);
   const [updateGame] = useMutation(UPDATE_GAME);
@@ -48,9 +44,6 @@ export function useDetailActions(gameId) {
   );
 
   return {
-    // Logging can move a backlog game to Playing: the shelf counts refetch.
-    logSession: (input) => logSession({ variables: { gameId, input }, refetchQueries: AGGREGATES }),
-    deleteSession: (sessionId) => deleteSession({ variables: { gameId, sessionId }, refetchQueries: AGGREGATES }),
     savePlaythrough: (input) => savePlaythrough({ variables: { gameId, input } }),
     deletePlaythrough: (playthroughId) => deletePlaythrough({ variables: { gameId, playthroughId } }),
     updateGame: (input) => updateGame({ variables: { id: gameId, input }, refetchQueries: AGGREGATES }),

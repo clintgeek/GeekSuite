@@ -163,7 +163,7 @@ export default function App() {
         taglineLine1="Every game you own."
         taglineLine2="Pick up where you left off."
         description="The household game library — what's on which platform, what's in the backlog, what you're playing, and how long it took."
-        features={['Every platform', 'Backlog & shelves', 'Play sessions', 'Steam import']}
+        features={['Every platform', 'Backlog & shelves', 'Ratings & notes', 'Playnite import']}
         onLogin={() => {
           setSigningIn(true);
           setError('');

@@ -2,7 +2,6 @@
 import React from 'react';
 import { Box, Button, Typography } from '@mui/material';
 import PlatformGlyph from '../../components/PlatformGlyph';
-import { formatHours } from '../../utils/dates';
 import { formatLabel, platformLabel, storefrontLabel } from '../../utils/vocab';
 import Section from './Section';
 
@@ -62,7 +61,6 @@ export default function CopiesSection({ copies = [], onEdit }) {
                   {[
                     c.format && formatLabel(c.format),
                     c.storefront && storefrontLabel(c.storefront),
-                    formatHours(c.playtimeHours) || null,
                   ]
                     .filter(Boolean)
                     .join(' · ') || 'Format not recorded'}

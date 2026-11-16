@@ -20,7 +20,7 @@ export default function StorefrontsCard() {
       </Box>
       <Typography component="ol" sx={{ m: 0, pl: 2.5, fontSize: '0.875rem', lineHeight: 1.7, color: 'text.primary' }}>
         <li>Install Playnite and let it index these libraries alongside your others.</li>
-        <li>Export your Playnite library and import it below — hours and all.</li>
+        <li>Export your Playnite library and import it below — every store at once.</li>
         <li>Not on Playnite? Add it manually — Add game → Search, or Enter manually.</li>
       </Typography>
       <Button variant="outlined" startIcon={<ImportIcon />} onClick={() => navigate('/settings#playnite')} sx={{ mt: 2, color: 'text.primary' }}>

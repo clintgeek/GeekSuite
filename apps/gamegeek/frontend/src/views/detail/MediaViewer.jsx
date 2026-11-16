@@ -19,8 +19,10 @@ import {
   OpenInNew as ExternalIcon,
   PlayArrowRounded as PlayIcon,
 } from '@mui/icons-material';
-import { useReducedMotion } from '@geeksuite/ui';
-import { useBackToClose } from '../../hooks/useBackToClose';
+// The suite's back stack (packages/ui hooks/backStack.js), the same one
+// GeekSheet and GeekDialog use, so Back closes the top layer in order. The
+// app's own copy (ggLayers) is gone (SUITE_REVIEW_2026-11 GameGeek finding 4).
+import { useBackToClose, useReducedMotion } from '@geeksuite/ui';
 import { ARCADE, hardShadow } from '../../theme/theme';
 import { inlineVideoSource } from '../../utils/gameMedia';
 

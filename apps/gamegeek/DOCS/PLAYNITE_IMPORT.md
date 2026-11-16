@@ -62,7 +62,8 @@ Response (dry run and commit have the same shape; commit adds `committed: true`)
 }
 ```
 
-Each sample list is capped at 20. `movedToPlaying` and `movedToBacklog` are per-user
+Each sample list is capped at 20. The app no longer shows `hoursBefore`/`hoursAfter`
+(S-D2, 2026-11-16: no hours in the UI). `movedToPlaying` and `movedToBacklog` are per-user
 outcomes (§Installed → Playing) and `gamesRemoved` counts games, so all three are outside the
 entry-bucket sum (§Hidden, removed, deleted, invalid), and a row the import creates is never
 counted as "moved". Errors are `{message, code}`: 400 `PLAYNITE_BAD_FILE` for
@@ -182,7 +183,27 @@ Never overwrite the title or any field someone edited.
   `deleteGame`, and `updateGame` dropping a Playnite copy, write a `PlayniteTombstone`
   (`gamegeek.playnitetombstones`, `@geeksuite/schemas/gamegeek/playniteTombstone`) per
   playniteId. The import never creates or adds a copy for a tombstoned playniteId again:
-  `skippedDeleted`. There is no UI to forget a tombstone; delete the row by hand.
+  `skippedDeleted`.
+- **Restore** (SUITE_REVIEW_2026-11 S-D1, 2026-11-16). Delete stays household-wide but is
+  recoverable. `deleteGame` first writes a `DeletedGame` row (`gamegeek.deletedgames`,
+  same shared module) holding the raw catalog row and **every** member's `GamePlayer`
+  row (shelf, rating, review, notes, playthroughs, stored sessions), then tombstones the
+  Playnite copies with `reason: 'game-deleted'` and `deletedGameId`, then deletes. A
+  manual-only game gets a snapshot too (it has no tombstone). `updateGame` dropping a
+  copy writes `reason: 'copy-removed'`; rows from before have `reason: null`.
+  Settings → **Deleted games** (`deletedGames`) lists snapshots plus every tombstone no
+  snapshot covers. **Restore** (`restoreDeletedGame`) re-inserts the game with the same
+  `_id` and Playnite copies, re-creates each member's row, and clears the tombstones, so
+  the next import treats the game normally. For an entry with no snapshot (deleted before
+  2026-11-16, or a copy removed by hand) Restore only clears the tombstone: the next
+  import re-creates the game or copy fresh, with no shelves or ratings, and the list says
+  so. Restore refuses (CONFLICT, nothing changed) if the game id or one of its Playnite
+  copies is already back in the library. The hidden-in-Playnite removal above keeps no
+  snapshot: unhiding brings the game back without its old shelves and ratings.
+- **The preview and the commit toast say what an import takes away** (finding 6,
+  2026-11-16): `movedToBacklog`, `removedHidden` and `gamesRemoved` show as a warning
+  above the preview counts and in the commit toast (and `gamesRemoved` in the auto-import
+  line), so a destructive import is never silent.
 - A household Playnite copy whose `playniteId` is **not in the file** is counted as
   `notInFile` and listed. It is **never deleted**: a partial export must not wipe the
   library.

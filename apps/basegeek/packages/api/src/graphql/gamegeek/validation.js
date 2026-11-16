@@ -382,3 +382,10 @@ export const gameWhatNextArgsSchema = z
     limit: z.number().int().min(1).max(10).nullable().optional(),
   })
   .strict();
+
+// Settings → Deleted games (S-D1). restoreDeletedGame reuses gameIdArgsSchema.
+export const deletedGamesArgsSchema = z
+  .object({
+    limit: z.number().int().min(1).max(200).nullable().optional(),
+  })
+  .strict();

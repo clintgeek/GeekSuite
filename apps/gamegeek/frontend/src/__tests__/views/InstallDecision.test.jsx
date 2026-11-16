@@ -28,7 +28,7 @@ const flaggedGame = (over = {}) => {
   const g = makeDetailGame();
   return {
     ...g,
-    copies: [{ ...g.copies[0], id: 'c1', platform: 'pc', format: 'digital', storefront: 'epic', fromPlaynite: true, playtimeHours: 3, installed: false }],
+    copies: [{ ...g.copies[0], id: 'c1', platform: 'pc', format: 'digital', storefront: 'epic', fromPlaynite: true, installed: false }],
     me: { ...g.me, shelf: 'playing', installFlag: 'uninstalled', installFlagAt: '2026-09-25T12:00:00.000Z' },
     ...over,
   };
@@ -226,7 +226,7 @@ describe('copies and Settings', () => {
     const preview = { total: 4, counts: { unchanged: 1, removedHidden: 2, skippedDeleted: 1 }, samples: { removedHidden: [{ title: 'Dying Light The Bozak' }] } };
     renderWithProviders(<PlaynitePreview preview={preview} />);
     expect(screen.getByTestId('playnite-removal-summary')).toHaveTextContent(
-      '2 hidden in Playnite are removed from GameGeek (unhide them to bring them back). 1 you deleted from GameGeek stays deleted.'
+      '2 hidden in Playnite are removed from GameGeek (unhide them to bring them back). 1 you deleted from GameGeek stays deleted (restore from Deleted games below).'
     );
     expect(previewSummary(preview).shelfChanges).toBe(2);
   });

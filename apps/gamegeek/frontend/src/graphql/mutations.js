@@ -40,19 +40,16 @@ export const SET_GAME_STATE = gql`
   ${GAME_DETAIL_FIELDS}
 `;
 
-export const LOG_GAME_SESSION = gql`
-  mutation LogGameSession($gameId: ID!, $input: GameSessionInput!) {
-    logGameSession(gameId: $gameId, input: $input) {
-      ...GameDetailFields
-    }
-  }
-  ${GAME_DETAIL_FIELDS}
-`;
-
-export const DELETE_GAME_SESSION = gql`
-  mutation DeleteGameSession($gameId: ID!, $sessionId: ID!) {
-    deleteGameSession(gameId: $gameId, sessionId: $sessionId) {
-      ...GameDetailFields
+/** Settings → Deleted games → Restore (S-D1). `game` is null when it waits for the next import. */
+export const RESTORE_DELETED_GAME = gql`
+  mutation RestoreDeletedGame($id: ID!) {
+    restoreDeletedGame(id: $id) {
+      success
+      message
+      waitsForImport
+      game {
+        ...GameDetailFields
+      }
     }
   }
   ${GAME_DETAIL_FIELDS}

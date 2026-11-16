@@ -6,8 +6,7 @@
  * That error lives in the card (it blocks even showing this component).
  */
 import React, { useState } from 'react';
-import { Box, FormControlLabel, Switch, Typography } from '@mui/material';
-import { formatHours } from '../../utils/dates';
+import { Alert, Box, FormControlLabel, Switch, Typography } from '@mui/material';
 import { shelfLabel, storefrontLabel } from '../../utils/vocab';
 
 /** Flatten a dry-run response into the numbers the card and its tests read. */
@@ -27,6 +26,9 @@ export function previewSummary(preview) {
   // Hidden in Playnite → removed; deleted in GameGeek → never brought back (Chef, 2026-10-09).
   const removedHidden = counts.removedHidden || 0;
   const skippedDeleted = counts.skippedDeleted || 0;
+  // Games that leave the library entirely: every copy was hidden (a subset
+  // of what removedHidden's copies add up to; counted per game).
+  const gamesRemoved = counts.gamesRemoved || 0;
   return {
     total: preview?.total ?? 0,
     create,
@@ -40,10 +42,28 @@ export function previewSummary(preview) {
     movedToBacklog,
     removedHidden,
     skippedDeleted,
+    gamesRemoved,
+    // What takes something away: a shelf move to Backlog, a hidden copy pulled,
+    // a game gone. Never silent (SUITE_REVIEW_2026-11 GameGeek finding 6).
+    destructive: movedToBacklog + removedHidden + gamesRemoved,
     actionable: create + addCopy + update,
     // A shelf move or a removal alone (no catalog change) is still worth committing.
     shelfChanges: movedToPlaying + movedToBacklog + removedHidden,
   };
+}
+
+const plural = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+
+/** One plain line for the warning: everything this import takes away. */
+export function destructiveSentence(s) {
+  const parts = [
+    s.movedToBacklog > 0 ? `moves ${plural(s.movedToBacklog, 'Playing game', 'Playing games')} to Backlog` : null,
+    s.removedHidden > 0 ? `removes ${plural(s.removedHidden, 'copy', 'copies')} hidden in Playnite` : null,
+    s.gamesRemoved > 0 ? `takes ${plural(s.gamesRemoved, 'game', 'games')} out of the library for everyone` : null,
+  ].filter(Boolean);
+  if (!parts.length) return '';
+  const list = parts.length === 1 ? parts[0] : `${parts.slice(0, -1).join(', ')} and ${parts[parts.length - 1]}`;
+  return `This import ${list}.`;
 }
 
 function Stat({ value, label }) {
@@ -109,6 +129,12 @@ export default function PlaynitePreview({ preview, includeHidden, onToggleInclud
 
   return (
     <Box sx={{ mt: 2 }} data-testid="playnite-preview">
+      {s.destructive > 0 ? (
+        <Alert severity="warning" data-testid="playnite-destructive" sx={{ mb: 1.5 }}>
+          {destructiveSentence(s)}
+        </Alert>
+      ) : null}
+
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: 'repeat(2, minmax(0, 1fr))', sm: 'repeat(4, minmax(0, 1fr))' }, gap: 1 }}>
         <Stat value={s.create} label="New games" />
         <Stat value={s.addCopy} label="Extra copies of games you already have" />
@@ -145,13 +171,18 @@ export default function PlaynitePreview({ preview, includeHidden, onToggleInclud
         </Typography>
       ) : null}
 
-      {s.removedHidden > 0 || s.skippedDeleted > 0 ? (
+      {s.removedHidden > 0 || s.gamesRemoved > 0 || s.skippedDeleted > 0 ? (
         <Typography data-testid="playnite-removal-summary" sx={{ fontSize: '0.8125rem', color: 'text.secondary', mt: 1.5, lineHeight: 1.6 }}>
           {[
             s.removedHidden > 0
               ? `${s.removedHidden} hidden in Playnite ${s.removedHidden === 1 ? 'is' : 'are'} removed from GameGeek (unhide ${s.removedHidden === 1 ? 'it' : 'them'} to bring ${s.removedHidden === 1 ? 'it' : 'them'} back)`
               : null,
-            s.skippedDeleted > 0 ? `${s.skippedDeleted} you deleted from GameGeek ${s.skippedDeleted === 1 ? 'stays' : 'stay'} deleted` : null,
+            s.gamesRemoved > 0
+              ? `${s.gamesRemoved} ${s.gamesRemoved === 1 ? 'game leaves' : 'games leave'} the library entirely, with everyone's shelf and rating for ${s.gamesRemoved === 1 ? 'it' : 'them'}`
+              : null,
+            s.skippedDeleted > 0
+              ? `${s.skippedDeleted} you deleted from GameGeek ${s.skippedDeleted === 1 ? 'stays' : 'stay'} deleted (restore from Deleted games below)`
+              : null,
           ]
             .filter(Boolean)
             .join('. ')}
@@ -171,7 +202,7 @@ export default function PlaynitePreview({ preview, includeHidden, onToggleInclud
         id="playnite-sample-update"
         title="Updated"
         items={samples.update}
-        render={(g) => `${formatHours(g.hoursBefore) || '0 h'} → ${formatHours(g.hoursAfter) || '0 h'}`}
+        render={() => 'Updated'}
       />
       <SampleList id="playnite-sample-moved" title="Moving to Playing" items={samples.movedToPlaying} render={(g) => (g.shelfBefore ? shelfLabel(g.shelfBefore) : 'Unshelved')} />
       <SampleList id="playnite-sample-backlog" title="Moving to Backlog" items={samples.movedToBacklog} render={() => 'Not installed'} />

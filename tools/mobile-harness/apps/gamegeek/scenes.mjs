@@ -68,13 +68,20 @@ export const scenes = [
     teardown: (page, h) => h.esc(),
   },
   {
-    name: '05-log-session',
+    // Detail → ⋯ More → Delete game: the confirm says it is for everyone,
+    // that Playnite won't bring it back, and that Settings can restore it
+    // (S-D1, 2026-11-16). Replaces '05-log-session' — Log session is gone (S-D2).
+    name: '05-delete-confirm',
     goto: '/game/g1',
     wait: 1500,
     async setup(page, h) {
-      const log = page.getByTestId('detail-actions').getByRole('button', { name: 'Log session' });
-      if (!(await log.count())) return false;
-      await log.click();
+      const more = page.getByTestId('detail-actions').getByRole('button', { name: 'More actions' });
+      if (!(await more.count())) return false;
+      await more.click();
+      await h.settle(600);
+      const del = page.getByRole('button', { name: /Delete game/ });
+      if (!(await del.count())) return false;
+      await del.click();
       await h.settle(800);
     },
     teardown: async (page, h) => {
@@ -92,6 +99,36 @@ export const scenes = [
     async setup(page, h) {
       await page.getByTestId('playnite-auto-import').waitFor({ timeout: 3000 }).catch(() => {});
       await h.settle(200);
+    },
+  },
+  {
+    // Settings → Deleted games (S-D1): a snapshot row that comes back whole,
+    // an old delete with no snapshot, and a Playnite copy removed by hand —
+    // each says what Restore will do.
+    name: '29-deleted-games',
+    goto: '/settings#deleted',
+    wait: 1400,
+    async setup(page, h) {
+      const list = page.getByTestId('deleted-games-list');
+      await list.waitFor({ timeout: 3000 }).catch(() => {});
+      if (!(await list.count())) return false;
+      await list.scrollIntoViewIfNeeded();
+      await h.settle(300);
+    },
+  },
+  {
+    // Restore on the old delete: nothing comes back now, so the toast says it
+    // returns with the next Playnite import.
+    name: '30-deleted-games-restore',
+    goto: '/settings#deleted',
+    wait: 1400,
+    async setup(page, h) {
+      const btn = page.getByRole('button', { name: /^Restore Dying Light/ });
+      await btn.waitFor({ timeout: 3000 }).catch(() => {});
+      if (!(await btn.count())) return false;
+      await btn.scrollIntoViewIfNeeded();
+      await btn.click();
+      await h.settle(900);
     },
   },
   {

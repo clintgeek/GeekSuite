@@ -42,7 +42,7 @@ function makeClient() {
     GetGame: ({ id }) => ({ game: detail(id) }),
     UpdateGame: ({ id, input }) => ({ updateGame: detail(id, input) }),
     SetGameState: ({ gameId, input }) => ({ setGameState: detail(gameId, { me: { ...detail(gameId).me, ...input } }) }),
-    LogGameSession: ({ gameId }) => ({ logGameSession: detail(gameId) }),
+    SaveGamePlaythrough: ({ gameId }) => ({ saveGamePlaythrough: detail(gameId) }),
     DeleteGame: ({ id }) => {
       const at = ALL.findIndex((g) => g.id === id);
       if (at >= 0) deleted.push(...ALL.splice(at, 1));
@@ -97,7 +97,7 @@ describe('library pagination survives edits', () => {
     await act(() => api.detail.updateGame({ title: 'Renamed' }));
     // The edited card updated in place, from the cache.
     expect(api.games.find((g) => g.id === 'g100').title).toBe('Renamed');
-    await act(() => api.detail.logSession({ minutes: 30 }));
+    await act(() => api.detail.savePlaythrough({ platform: 'pc' }));
     await act(() => api.setShelf(api.games[99], 'finished', { quiet: true }));
     await act(() => api.rate(api.games[10], 4, { quiet: true }));
 

@@ -1,7 +1,7 @@
 /**
- * The sticky action bar: Status · Log session · Rate · ⋯. Four equal 44px+
- * targets, 12px labels, in the thumb's reach and pinned under the hero as the
- * sheet scrolls.
+ * The sticky action bar: Status · Rate · ⋯. Three equal 44px+ targets, 12px
+ * labels, in the thumb's reach and pinned under the hero as the sheet scrolls.
+ * No "Log session" (S-D2, 2026-11-16: Chef doesn't track playtime).
  */
 import React from 'react';
 import { Box, Button } from '@mui/material';
@@ -10,7 +10,6 @@ import {
   MoreHoriz as MoreIcon,
   StarBorder as RateIcon,
   Star as RatedIcon,
-  TimerOutlined as LogIcon,
 } from '@mui/icons-material';
 
 const BAR_BUTTON_SX = {
@@ -28,7 +27,7 @@ const BAR_BUTTON_SX = {
   '& .MuiSvgIcon-root': { fontSize: 20 },
 };
 
-export default function ActionBar({ shelfName, rating, onStatus, onLog, onRate, onMore }) {
+export default function ActionBar({ shelfName, rating, onStatus, onRate, onMore }) {
   return (
     <Box
       data-testid="detail-actions"
@@ -37,7 +36,7 @@ export default function ActionBar({ shelfName, rating, onStatus, onLog, onRate, 
         top: 0,
         zIndex: 2,
         display: 'grid',
-        gridTemplateColumns: 'repeat(4, minmax(0, 1fr))',
+        gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
         gap: 0.5,
         px: { xs: 1, md: 2 },
         py: 0.5,
@@ -52,10 +51,6 @@ export default function ActionBar({ shelfName, rating, onStatus, onLog, onRate, 
         <Box component="span" sx={{ maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {shelfName}
         </Box>
-      </Button>
-      <Button onClick={onLog} sx={BAR_BUTTON_SX}>
-        <LogIcon sx={{ color: 'primary.main' }} />
-        Log session
       </Button>
       <Button onClick={onRate} sx={BAR_BUTTON_SX} aria-label={rating ? `Rating: ${rating} of 5. Change` : 'Rate'}>
         {rating ? <RatedIcon sx={{ color: 'star' }} /> : <RateIcon sx={{ color: 'primary.main' }} />}

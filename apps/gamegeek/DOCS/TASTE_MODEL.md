@@ -49,3 +49,8 @@ labels did not change.
 2. Import: Playnite's `isInstalled` is exactly "installed, ready to go", so installed games
    map to **Playing** — built 2026-09-25, see `PLAYNITE_IMPORT.md` §Installed → Playing.
 3. Hours are not a signal (Chef has Playnite's tracking off). Nothing here uses them.
+   Since 2026-11-16 (SUITE_REVIEW_2026-11 S-D2) the app shows no hours at all: no hours
+   on cards, the detail page, the household list, copies or playthroughs, no hours sort,
+   and no Log session action or Sessions section. The gateway keeps `hoursPlayed`,
+   `hoursSource`, `sessions`, `logGameSession` and `deleteGameSession` (marked
+   `@deprecated`) for tabs running an older bundle; stored hours and sessions are untouched.

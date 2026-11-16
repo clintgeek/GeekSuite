@@ -1,15 +1,15 @@
 /**
- * My status: shelf, progress (debounced as it drags), hours with where they
- * came from, last played, favourite.
+ * My status: shelf, progress (debounced as it drags), last played, favourite.
+ * No hours (Chef doesn't track playtime — S-D2, 2026-11-16).
  */
 import React, { useEffect, useState } from 'react';
-import { Box, Button, FormControlLabel, InputAdornment, Slider, Switch, TextField, Typography } from '@mui/material';
+import { Box, Button, FormControlLabel, Slider, Switch, Typography } from '@mui/material';
 import { useToast } from '@geeksuite/ui';
 import ShelfTag from '../../components/ShelfTag';
 import { useDebouncedCallback } from '../../hooks/useDebouncedCallback';
 import { useSetGameState } from '../../hooks/useGameActions';
-import { formatHours, relativeInstant } from '../../utils/dates';
-import { hoursSourceLabel, shelfLabel } from '../../utils/vocab';
+import { relativeInstant } from '../../utils/dates';
+import { shelfLabel } from '../../utils/vocab';
 import Section from './Section';
 
 function Row({ label, children, sx }) {
@@ -31,24 +31,6 @@ export default function StatusSection({ game, customShelves, onChangeShelf }) {
   const saveProgress = useDebouncedCallback((value) => {
     setState(game.id, { progress: value }).catch(() => notify('Progress did not save.', { tone: 'error' }));
   }, 600);
-
-  const [editingHours, setEditingHours] = useState(false);
-  const [hoursText, setHoursText] = useState('');
-  const hours = formatHours(me.hoursPlayed);
-
-  const saveHours = async () => {
-    const value = hoursText.trim() === '' ? 0 : Number(hoursText);
-    if (!Number.isFinite(value) || value < 0 || value > 100000) {
-      notify('Hours should be a number like 12.5.', { tone: 'warning' });
-      return;
-    }
-    try {
-      await setState(game.id, { hoursPlayed: value });
-      setEditingHours(false);
-    } catch {
-      notify('Hours did not save.', { tone: 'error' });
-    }
-  };
 
   const toggleFavorite = (checked) => {
     setState(game.id, { favorite: checked }).catch(() => notify('Could not update favourite.', { tone: 'error' }));
@@ -86,44 +68,6 @@ export default function StatusSection({ game, customShelves, onChangeShelf }) {
           sx={{ py: '20px', '& .MuiSlider-rail': { opacity: 0.35 }, color: 'primary.main' }}
         />
       </Box>
-
-      {editingHours ? (
-        <Box sx={{ display: 'flex', gap: 1, alignItems: 'flex-start', mt: 0.5 }}>
-          <TextField
-            autoFocus
-            size="small"
-            label="Hours played"
-            value={hoursText}
-            onChange={(e) => setHoursText(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && saveHours()}
-            inputProps={{ inputMode: 'decimal' }}
-            InputProps={{ endAdornment: <InputAdornment position="end">h</InputAdornment> }}
-            helperText={me.hoursSource === 'steam' ? 'Editing makes these your own hours; Steam sync stops touching them.' : ' '}
-            sx={{ flex: 1 }}
-          />
-          <Button variant="contained" onClick={saveHours}>Save</Button>
-          <Button onClick={() => setEditingHours(false)} sx={{ color: 'text.secondary' }}>Cancel</Button>
-        </Box>
-      ) : (
-        <Row label="Hours">
-          <Box sx={{ textAlign: 'right', minWidth: 0 }}>
-            <Typography sx={{ fontSize: '0.875rem', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{hours || 'None yet'}</Typography>
-            {hours && me.hoursSource ? (
-              <Typography sx={{ fontSize: '0.75rem', color: 'text.muted' }}>{hoursSourceLabel(me.hoursSource)}</Typography>
-            ) : null}
-          </Box>
-          <Button
-            onClick={() => {
-              setHoursText(me.hoursPlayed ? String(me.hoursPlayed) : '');
-              setEditingHours(true);
-            }}
-            sx={{ color: 'primary.main', fontWeight: 600, px: 1.5 }}
-            aria-label="Edit hours played"
-          >
-            Edit
-          </Button>
-        </Row>
-      )}
 
       <Row label="Last played">
         <Typography sx={{ fontSize: '0.875rem' }}>{me.lastPlayedAt ? relativeInstant(me.lastPlayedAt) : 'Not yet'}</Typography>

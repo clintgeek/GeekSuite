@@ -4,7 +4,12 @@ import { gql } from '@apollo/client';
 // apps/basegeek/packages/api/src/graphql/gamegeek/typeDefs.js; CI's
 // tools/gql-arg-audit.mjs cross-checks the arguments against it.
 
-/** What a card or a row needs. The detail fragment is a strict superset. */
+/**
+ * What a card or a row needs. The detail fragment is a strict superset.
+ * No hours anywhere (S-D2, 2026-11-16: Chef doesn't track playtime). The
+ * gateway still serves hoursPlayed / hoursSource / sessions, deprecated, for
+ * tabs on an older bundle — don't select them again.
+ */
 export const GAME_CARD_FIELDS = gql`
   fragment GameCardFields on Game {
     id
@@ -27,8 +32,6 @@ export const GAME_CARD_FIELDS = gql`
       shelf
       rating
       progress
-      hoursPlayed
-      hoursSource
       favorite
       lastPlayedAt
     }
@@ -80,7 +83,6 @@ export const GAME_DETAIL_FIELDS = gql`
       acquiredAt
       notes
       fromPlaynite
-      playtimeHours
       installed
     }
     source
@@ -91,8 +93,6 @@ export const GAME_DETAIL_FIELDS = gql`
       review
       notes
       progress
-      hoursPlayed
-      hoursSource
       favorite
       lastPlayedAt
       installFlag
@@ -101,19 +101,10 @@ export const GAME_DETAIL_FIELDS = gql`
         id
         startedAt
         finishedAt
-        hours
         platform
         difficulty
         completion
         notes
-      }
-      sessions(limit: 20) {
-        id
-        playedOn
-        minutes
-        platform
-        note
-        createdAt
       }
     }
     household {
@@ -121,7 +112,6 @@ export const GAME_DETAIL_FIELDS = gql`
       displayName
       shelf
       rating
-      hoursPlayed
     }
   }
   ${GAME_CARD_FIELDS}
@@ -366,6 +356,27 @@ export const GET_GAME_VOCABULARY = gql`
       copyFormats
       modes
       completionLevels
+    }
+  }
+`;
+
+/**
+ * Settings → Deleted games (S-D1). Household-wide, newest first. An entry with
+ * hasSnapshot comes back whole on Restore; one without only stops the Playnite
+ * import skipping it.
+ */
+export const GET_DELETED_GAMES = gql`
+  query GetDeletedGames {
+    deletedGames {
+      id
+      title
+      deletedAt
+      deletedBy
+      deletedByName
+      hasSnapshot
+      reason
+      playniteCopies
+      members
     }
   }
 `;

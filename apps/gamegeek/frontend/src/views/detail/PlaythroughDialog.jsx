@@ -5,15 +5,15 @@ import { GeekDialog, useToast } from '@geeksuite/ui';
 import { calendarDateToUtcIso, utcIsoToInputValue } from '../../utils/dates';
 import { completionLabel, platformLabel } from '../../utils/vocab';
 
-const EMPTY = { startedAt: '', finishedAt: '', hours: '', platform: '', difficulty: '', completion: '', notes: '' };
+// No hours field (S-D2, 2026-11-16): the input omits `hours`, so the gateway
+// leaves any hours already stored on a playthrough as they are.
+const EMPTY = { startedAt: '', finishedAt: '', platform: '', difficulty: '', completion: '', notes: '' };
 
 export function toPlaythroughInput(form, id) {
   const input = {};
   if (id) input.id = id;
   input.startedAt = calendarDateToUtcIso(form.startedAt);
   input.finishedAt = calendarDateToUtcIso(form.finishedAt);
-  const h = form.hours === '' ? null : Number(form.hours);
-  input.hours = Number.isFinite(h) && h >= 0 ? h : null;
   input.platform = form.platform || null;
   input.difficulty = form.difficulty.trim() || null;
   input.completion = form.completion || null;
@@ -33,7 +33,6 @@ export default function PlaythroughDialog({ open, onClose, playthrough, platform
         ? {
             startedAt: utcIsoToInputValue(playthrough.startedAt),
             finishedAt: utcIsoToInputValue(playthrough.finishedAt),
-            hours: playthrough.hours ?? '',
             platform: playthrough.platform || '',
             difficulty: playthrough.difficulty || '',
             completion: playthrough.completion || '',
@@ -72,7 +71,6 @@ export default function PlaythroughDialog({ open, onClose, playthrough, platform
       <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, pt: 1 }}>
         <TextField type="date" label="Started" value={form.startedAt} onChange={set('startedAt')} InputLabelProps={{ shrink: true }} />
         <TextField type="date" label="Finished" value={form.finishedAt} onChange={set('finishedAt')} InputLabelProps={{ shrink: true }} helperText="Leave empty while it's still going" />
-        <TextField label="Hours" value={form.hours} onChange={set('hours')} inputProps={{ inputMode: 'decimal' }} />
         <FormControl>
           <InputLabel id="pt-platform">Platform</InputLabel>
           <Select labelId="pt-platform" label="Platform" value={form.platform} onChange={set('platform')}>

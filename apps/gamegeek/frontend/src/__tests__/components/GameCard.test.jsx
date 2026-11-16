@@ -40,7 +40,7 @@ describe('GameCard', () => {
 
   it('does not invite a rating on a backlog game', () => {
     renderWithProviders(
-      <GameCard game={makeGame({ me: { shelf: 'backlog', rating: null, hoursPlayed: 0 } })} onOpen={() => {}} onRate={() => {}} />
+      <GameCard game={makeGame({ me: { shelf: 'backlog', rating: null } })} onOpen={() => {}} onRate={() => {}} />
     );
     expect(screen.queryByRole('slider')).not.toBeInTheDocument();
   });

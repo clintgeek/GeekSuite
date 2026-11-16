@@ -31,12 +31,10 @@ import EditGameDialog from './EditGameDialog';
 import FindMetadataDialog from './FindMetadataDialog';
 import HouseholdSection from './HouseholdSection';
 import InstallDecisionBanner from './InstallDecisionBanner';
-import LogSessionSheet from './LogSessionSheet';
 import MoreSheet from './MoreSheet';
 import NotesSection from './NotesSection';
 import PlaythroughsSection from './PlaythroughsSection';
 import RatingSection from './RatingSection';
-import SessionsSection from './SessionsSection';
 import ShelfSheet from './ShelfSheet';
 import StatusSection from './StatusSection';
 import UnlinkMetadataDialog from './UnlinkMetadataDialog';
@@ -50,7 +48,7 @@ export default function GameDetail() {
   const navigate = useNavigate();
   const location = useLocation();
   const { notify } = useToast();
-  const [panel, setPanel] = useState(null); // shelf | log | more | edit | cover | copies | metadata | unlink-metadata | delete
+  const [panel, setPanel] = useState(null); // shelf | more | edit | cover | copies | metadata | unlink-metadata | delete
   const ratingRef = useRef(null);
 
   const { data, loading, error, refetch } = useQuery(GET_GAME, {
@@ -111,7 +109,6 @@ export default function GameDetail() {
           shelfName={shelfName}
           rating={me.rating}
           onStatus={() => setPanel('shelf')}
-          onLog={() => setPanel('log')}
           onRate={() => {
             const node = ratingRef.current;
             node?.scrollIntoView?.({ behavior: 'smooth', block: 'center' });
@@ -140,11 +137,6 @@ export default function GameDetail() {
           <Box sx={{ display: 'grid', gap: 1.5, minWidth: 0 }}>
             <StatusSection game={game} customShelves={customShelves} onChangeShelf={() => setPanel('shelf')} />
             <RatingSection ref={ratingRef} game={game} onRate={rate} />
-            <SessionsSection
-              sessions={me.sessions ?? []}
-              onLog={() => setPanel('log')}
-              onDelete={(sid) => actions.deleteSession(sid)}
-            />
             <PlaythroughsSection
               playthroughs={me.playthroughs ?? []}
               platforms={platformChoices.length ? platformChoices : vocab.platforms}
@@ -169,6 +161,11 @@ export default function GameDetail() {
       <GeekSheet
         open
         onClose={close}
+        // This sheet IS a route (/game/:id), so Back already leaves it. Its own
+        // Back entry on top made Back run `close` — a push to the library —
+        // and every later Back landed on /game/:id again: a loop you could
+        // not Back out of (the BookGeek landmine of 2026-11-15, push flavour).
+        backToClose={false}
         snap="full"
         maxWidth="md"
         headerSx={{
@@ -200,19 +197,6 @@ export default function GameDetail() {
             onPick={async (shelf) => {
               closePanel();
               await setShelf(game, shelf);
-            }}
-          />
-          <LogSessionSheet
-            open={panel === 'log'}
-            onClose={closePanel}
-            game={game}
-            profile={profile}
-            vocabPlatforms={vocab.platforms}
-            onSubmit={async (input) => {
-              const wasShelf = game.me?.shelf ?? null;
-              const res = await actions.logSession(input);
-              const now = res.data?.logGameSession?.me?.shelf;
-              notify(now === 'playing' && wasShelf !== 'playing' ? `Logged — ${game.title} is on Playing now.` : 'Session logged.', { tone: 'success' });
             }}
           />
           <MoreSheet

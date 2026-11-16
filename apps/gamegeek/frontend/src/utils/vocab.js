@@ -131,8 +131,6 @@ const MODE_LABELS = {
 
 const COMPLETION_LABELS = { story: 'Story', extra: 'Story + extras', complete: '100%' };
 
-const HOURS_SOURCE_LABELS = { manual: 'Logged by you', steam: 'From Steam', playnite: 'From Playnite' };
-
 /** Title-case a slug: "retro-other" → "Retro Other", "ps5" → "Ps5". */
 export function humanize(id) {
   if (id === null || id === undefined || id === '') return '';
@@ -151,7 +149,6 @@ export const storefrontLabel = lookup(STOREFRONT_LABELS);
 export const formatLabel = lookup(FORMAT_LABELS);
 export const modeLabel = lookup(MODE_LABELS);
 export const completionLabel = lookup(COMPLETION_LABELS);
-export const hoursSourceLabel = lookup(HOURS_SOURCE_LABELS);
 
 export function platformShort(id) {
   if (!id) return '';

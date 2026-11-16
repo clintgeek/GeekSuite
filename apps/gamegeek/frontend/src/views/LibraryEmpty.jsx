@@ -15,9 +15,9 @@ import SavePointMark from '../components/SavePointMark';
 import { shelfLabel } from '../utils/vocab';
 
 const SHELF_HINTS = {
-  playing: 'Log a session on anything and it lands here.',
+  playing: 'Install a game in Playnite and it lands here with the next import.',
   backlog: 'New games start here — the pile of good intentions.',
-  finished: 'Credits rolled? Move a game here and it keeps the hours.',
+  finished: 'Credits rolled? Move a game here.',
   'on-hold': 'For the ones you mean to go back to.',
   abandoned: "No shame. Some games aren't for you.",
   wishlist: "Games you want but don't own yet.",
@@ -94,7 +94,7 @@ export default function LibraryEmpty({ narrowed, libraryEmpty, shelf, shelves, o
           A blank save file
         </Typography>
         <Typography sx={{ color: 'text.secondary', mb: 3, lineHeight: 1.6 }}>
-          Add the first game by searching its title, or bring your whole Playnite library in at once — hours and all.
+          Add the first game by searching its title, or bring your whole Playnite library in at once.
         </Typography>
         <Box sx={{ display: 'flex', gap: 1.5, justifyContent: 'center', flexWrap: 'wrap' }}>
           <Button variant="contained" startIcon={<AddIcon />} onClick={onAdd}>

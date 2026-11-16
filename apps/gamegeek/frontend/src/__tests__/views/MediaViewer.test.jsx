@@ -83,11 +83,13 @@ describe('MediaViewer — navigation', () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it('Android back (popstate) closes the viewer, not the page', async () => {
+  it('Android back (popstate) closes the viewer, not the page — on the suite back stack', async () => {
     const onClose = vi.fn();
-    const before = window.history.state?.ggLayers?.length ?? 0;
+    const before = window.history.state?.__geekBack?.length ?? 0;
     renderWithProviders(<Harness onClose={onClose} />);
-    expect(window.history.state?.ggLayers?.length).toBe(before + 1); // the viewer owns one entry
+    // The viewer owns one entry on the shared stack (@geeksuite/ui backStack), not an app-local one.
+    expect(window.history.state?.__geekBack?.length).toBe(before + 1);
+    expect(window.history.state?.ggLayers).toBeUndefined();
     await act(async () => {
       window.dispatchEvent(new PopStateEvent('popstate', { state: {} }));
     });

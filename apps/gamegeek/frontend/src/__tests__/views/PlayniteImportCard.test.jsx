@@ -2,7 +2,7 @@ import React from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor } from '@testing-library/react';
 import { MockedProvider } from '@apollo/client/testing';
-import PlayniteImportCard from '../../views/settings/PlayniteImportCard';
+import PlayniteImportCard, { dropStatusMessage } from '../../views/settings/PlayniteImportCard';
 import { importPlaynite, getPlayniteDropStatus } from '../../api/rest';
 import { renderWithProviders } from '../testUtils';
 
@@ -18,7 +18,7 @@ const dryRunFixture = (over = {}) => ({
   samples: {
     create: [{ title: 'Arcade Paradise', storefront: 'epic' }],
     addCopy: [{ title: 'Celeste', storefront: 'gog' }],
-    update: [{ title: 'Hades', hoursBefore: 1.2, hoursAfter: 3.4 }],
+    update: [{ title: 'Hades' }],
     notInFile: [{ title: 'Old Game' }],
   },
   committed: false,
@@ -90,6 +90,48 @@ describe('PlayniteImportCard', () => {
     await screen.findByText(/Playnite import done/i);
     // The card resets once the import lands.
     expect(screen.queryByRole('button', { name: /Import \d+ games/ })).not.toBeInTheDocument();
+  });
+
+  it('a destructive dry run warns before commit: moves to Backlog, hidden copies, games removed (finding 6)', async () => {
+    importPlaynite.mockResolvedValueOnce(
+      dryRunFixture({ counts: { create: 0, addCopy: 0, update: 1, unchanged: 10, skippedHidden: 0, notInFile: 0, invalid: 0, movedToBacklog: 2, removedHidden: 3, gamesRemoved: 1 } })
+    );
+    renderCard();
+    selectFile();
+    const warning = await screen.findByTestId('playnite-destructive');
+    expect(warning).toHaveTextContent(
+      'This import moves 2 Playing games to Backlog, removes 3 copies hidden in Playnite and takes 1 game out of the library for everyone.'
+    );
+    expect(screen.getByTestId('playnite-removal-summary')).toHaveTextContent("1 game leaves the library entirely, with everyone's shelf and rating for it");
+  });
+
+  it('no warning when the import only adds and updates', async () => {
+    importPlaynite.mockResolvedValueOnce(dryRunFixture());
+    renderCard();
+    selectFile();
+    await screen.findByTestId('playnite-preview');
+    expect(screen.queryByTestId('playnite-destructive')).toBeNull();
+  });
+
+  it('the commit toast says what was removed and moved, not only what was added', async () => {
+    const counts = { create: 1, addCopy: 0, update: 0, unchanged: 10, skippedHidden: 0, notInFile: 0, invalid: 0, movedToBacklog: 2, removedHidden: 3, gamesRemoved: 1 };
+    importPlaynite.mockResolvedValueOnce(dryRunFixture({ counts }));
+    renderCard();
+    selectFile();
+    const commitButton = await screen.findByRole('button', { name: 'Import 1 game' });
+    importPlaynite.mockResolvedValueOnce(dryRunFixture({ counts, committed: true }));
+    fireEvent.click(commitButton);
+    expect(
+      await screen.findByText('Playnite import done — 1 new, 2 moved to Backlog, 3 hidden copies removed, 1 game removed.')
+    ).toBeInTheDocument();
+  });
+
+  it('the auto-import line counts games removed too', () => {
+    const line = dropStatusMessage({
+      enabled: true, watching: true, folder: 'gamegeek-import/chef/',
+      lastFile: { status: 'imported', processedAt: new Date().toISOString(), counts: { update: 1, removedHidden: 2, gamesRemoved: 1 } },
+    });
+    expect(line).toMatch(/\(1 updated, 2 hidden removed, 1 game removed\)$/);
   });
 
   it('shows the schema v1 message for a bad file', async () => {

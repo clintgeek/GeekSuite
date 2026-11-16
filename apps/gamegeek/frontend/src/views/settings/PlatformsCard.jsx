@@ -1,4 +1,4 @@
-/** The hardware in the house, and which one sessions default to. */
+/** The hardware in the house, and which one new copies default to. */
 import React, { useEffect, useState } from 'react';
 import { Box, Button, FormControl, InputLabel, MenuItem, Select, ToggleButton } from '@mui/material';
 import { useMutation } from '@apollo/client';
@@ -39,7 +39,7 @@ export default function PlatformsCard({ profile, vocab }) {
   const options = showAll ? vocab.platforms : [...new Set([...COMMON.filter((p) => vocab.platforms.includes(p)), ...owned])];
 
   return (
-    <SettingsCard id="platforms" title="Platforms in the house" description="What you play on. It shapes the platform picker when you log a session or add a copy.">
+    <SettingsCard id="platforms" title="Platforms in the house" description="What you play on. It shapes the platform picker when you add a copy or a playthrough.">
       <Box role="group" aria-label="Platforms I own" sx={{ display: 'flex', flexWrap: 'wrap', gap: 0.75 }}>
         {options.map((p) => (
           <ToggleButton key={p} value={p} selected={owned.includes(p)} onChange={() => toggle(p)} sx={selectChipSx}>

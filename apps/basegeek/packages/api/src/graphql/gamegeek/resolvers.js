@@ -3,7 +3,7 @@ import { GraphQLError } from 'graphql';
 import { Game } from './models/game.js';
 import { GamePlayer } from './models/gamePlayer.js';
 import { GameProfile } from './models/profile.js';
-import { PlayniteTombstone } from './models/playniteTombstone.js';
+import { PlayniteTombstone, DeletedGame } from './models/playniteTombstone.js';
 import householdModule from '@geeksuite/schemas/gamegeek/household';
 import constantsModule from '@geeksuite/schemas/gamegeek/constants';
 import gameSchemaModule from '@geeksuite/schemas/gamegeek/game';
@@ -35,6 +35,7 @@ import {
   gamesLikeArgsSchema,
   gameLibraryOverviewArgsSchema,
   gameWhatNextArgsSchema,
+  deletedGamesArgsSchema,
 } from './validation.js';
 
 /**
@@ -103,6 +104,7 @@ const validateGameSearch = validateInput(gameSearchArgsSchema);
 const validateGamesLike = validateInput(gamesLikeArgsSchema);
 const validateGameLibraryOverview = validateInput(gameLibraryOverviewArgsSchema);
 const validateGameWhatNext = validateInput(gameWhatNextArgsSchema);
+const validateDeletedGames = validateInput(deletedGamesArgsSchema);
 
 /** The flag fields cleared whenever the "not installed anymore" question is answered or moot. */
 const CLEAR_INSTALL_FLAG = Object.freeze({ installFlag: null, installFlagAt: null });
@@ -118,19 +120,25 @@ function uninstalledEverywhere(game) {
   return copies.length > 0 && copies.every((c) => c?.playnite?.playniteId && c.playnite.isInstalled === false);
 }
 
+const playniteIdsOf = (copies) => [...new Set((copies ?? []).map((c) => c?.playnite?.playniteId).filter(Boolean))];
+
 /**
  * Remember Playnite copies someone deleted, so the Playnite import never
  * brings them back (Chef, 2026-10-09; @geeksuite/schemas/gamegeek/playniteTombstone).
- * Household-scoped, idempotent.
+ * Household-scoped, idempotent. `reason` and `deletedGameId` (S-D1) say why
+ * the row exists and which snapshot restores it.
  */
-async function rememberDeletedPlaynite(householdId, title, copies, userId) {
-  const ids = [...new Set((copies ?? []).map((c) => c?.playnite?.playniteId).filter(Boolean))];
+async function rememberDeletedPlaynite(householdId, title, copies, userId, { reason = null, deletedGameId = null } = {}) {
+  const ids = playniteIdsOf(copies);
   if (!ids.length) return;
   await PlayniteTombstone.bulkWrite(
     ids.map((playniteId) => ({
       updateOne: {
         filter: { householdId, playniteId },
-        update: { $setOnInsert: { householdId, playniteId, title: title ?? '', deletedBy: userId ?? null, deletedAt: new Date() } },
+        update: {
+          $setOnInsert: { householdId, playniteId, title: title ?? '', deletedBy: userId ?? null, deletedAt: new Date() },
+          $set: { reason, deletedGameId },
+        },
         upsert: true,
       },
     })),
@@ -757,6 +765,54 @@ export const resolvers = {
       return getOrCreateProfile(userId, householdId);
     },
 
+    // Settings → Deleted games (S-D1): snapshots, then the tombstones no
+    // snapshot covers (deleted before snapshots existed, or a Playnite copy
+    // removed by hand). Household-scoped like everything else.
+    deletedGames: async (_, rawArgs, { user } = {}) => {
+      requireUser(user);
+      const householdId = resolveHouseholdId(user);
+      const { limit } = validateDeletedGames(rawArgs ?? {});
+      const n = limit ?? 100;
+      const [snaps, tombs] = await Promise.all([
+        DeletedGame.find({ householdId }, { title: 1, playniteIds: 1, deletedBy: 1, deletedAt: 1, 'players.userId': 1 })
+          .sort({ deletedAt: -1 })
+          .limit(n)
+          .lean(),
+        PlayniteTombstone.find({ householdId }).sort({ deletedAt: -1 }).limit(n * 4).lean(),
+      ]);
+      const covered = new Set(
+        (await DeletedGame.find({ householdId }, { playniteIds: 1 }).lean()).flatMap((d) => d.playniteIds ?? [])
+      );
+      const entries = [
+        ...snaps.map((d) => ({
+          id: String(d._id),
+          title: d.title || 'Untitled game',
+          deletedAt: d.deletedAt ?? null,
+          deletedBy: d.deletedBy ?? null,
+          hasSnapshot: true,
+          reason: 'game-deleted',
+          playniteCopies: (d.playniteIds ?? []).length,
+          members: new Set((d.players ?? []).map((p) => String(p.userId))).size,
+        })),
+        ...tombs
+          .filter((t) => !covered.has(t.playniteId))
+          .map((t) => ({
+            id: String(t._id),
+            title: t.title || 'Untitled game',
+            deletedAt: t.deletedAt ?? null,
+            deletedBy: t.deletedBy ?? null,
+            hasSnapshot: false,
+            reason: t.reason ?? null,
+            playniteCopies: 1,
+            members: 0,
+          })),
+      ]
+        .sort((a, b) => new Date(b.deletedAt || 0) - new Date(a.deletedAt || 0))
+        .slice(0, n);
+      const names = await displayNamesFor([...new Set(entries.map((e) => e.deletedBy).filter(Boolean))]);
+      return entries.map((e) => ({ ...e, deletedByName: e.deletedBy ? names.get(String(e.deletedBy)) ?? null : null }));
+    },
+
     gameVocabulary: async (_, __, { user } = {}) => {
       requireUser(user);
       resolveHouseholdId(user);
@@ -823,7 +879,7 @@ export const resolvers = {
         droppedPlaynite = before.filter((c) => !kept.has(c.playnite.playniteId));
       }
       // A Playnite copy removed by hand stays removed (the import skips it).
-      await rememberDeletedPlaynite(householdId, game.title, droppedPlaynite, userId);
+      await rememberDeletedPlaynite(householdId, game.title, droppedPlaynite, userId, { reason: 'copy-removed' });
       await game.save();
       // A copy edit can make "not installed anymore" moot (a Switch copy was
       // added, the last Playnite copy removed). Every member's flag on this
@@ -836,20 +892,102 @@ export const resolvers = {
       return withMe(game, me);
     },
 
+    // Household-wide, but recoverable (S-D1, 2026-11-16): the whole catalog
+    // row and EVERY member's GamePlayer row go into a DeletedGame snapshot
+    // first, so Settings → Deleted games can put all of it back.
     deleteGame: async (_, rawArgs, { user } = {}) => {
-      requireUser(user);
+      const userId = requireUser(user);
       const householdId = resolveHouseholdId(user);
       const { id } = validateGameId(rawArgs);
       if (!validObjectId(id)) return { success: false, message: 'Game not found' };
-      const game = await Game.findOne({ _id: id, householdId }, { title: 1, copies: 1 }).lean();
+      const game = await Game.findOne({ _id: id, householdId }).lean();
       if (!game) return { success: false, message: 'Game not found' };
+      const players = await GamePlayer.find({ householdId, gameId: game._id }).lean();
+      // The snapshot is written before anything is removed: no snapshot, no delete.
+      const snapshot = await DeletedGame.create({
+        householdId,
+        gameId: game._id,
+        title: game.title ?? '',
+        playniteIds: playniteIdsOf(game.copies),
+        game,
+        players,
+        deletedBy: userId,
+        deletedAt: new Date(),
+      });
       // Remembered before the delete, so the Playnite import never brings it back.
-      await rememberDeletedPlaynite(householdId, game.title, game.copies, user.id);
-      const res = await Game.deleteOne({ _id: id, householdId });
-      if (res.deletedCount === 0) return { success: false, message: 'Game not found' };
+      await rememberDeletedPlaynite(householdId, game.title, game.copies, userId, { reason: 'game-deleted', deletedGameId: snapshot._id });
+      const res = await Game.deleteOne({ _id: game._id, householdId });
+      if (res.deletedCount === 0) {
+        // Someone else deleted it in between; theirs is the snapshot that counts.
+        await DeletedGame.deleteOne({ _id: snapshot._id });
+        return { success: false, message: 'Game not found' };
+      }
       // Every member's state for it — within this household only.
-      await GamePlayer.deleteMany({ householdId, gameId: id });
+      await GamePlayer.deleteMany({ householdId, gameId: game._id });
       return { success: true, message: 'Game deleted' };
+    },
+
+    // S-D1. A snapshot entry comes back now, whole; a tombstone with no
+    // snapshot is only cleared, so the next Playnite import re-creates it.
+    restoreDeletedGame: async (_, rawArgs, { user } = {}) => {
+      const userId = requireUser(user);
+      const householdId = resolveHouseholdId(user);
+      const { id } = validateGameId(rawArgs);
+      if (!validObjectId(id)) throw notFound('Deleted game');
+
+      const snap = await DeletedGame.findOne({ _id: id, householdId }).lean();
+      if (!snap) {
+        const tomb = await PlayniteTombstone.findOne({ _id: id, householdId }).lean();
+        if (!tomb) throw notFound('Deleted game');
+        await PlayniteTombstone.deleteOne({ _id: tomb._id, householdId });
+        return {
+          success: true,
+          message: `${tomb.title || 'That game'} comes back with the next Playnite import.`,
+          game: null,
+          waitsForImport: true,
+        };
+      }
+
+      const gameDoc = { ...snap.game, householdId };
+      if (await Game.exists({ _id: snap.gameId })) {
+        throw userError(`${snap.title || 'That game'} is already in the library.`, 'CONFLICT');
+      }
+      if (snap.playniteIds.length) {
+        const clash = await Game.findOne(
+          { householdId, 'copies.playnite.playniteId': { $in: snap.playniteIds } },
+          { title: 1 }
+        ).lean();
+        if (clash) {
+          throw userError(
+            `${clash.title || 'A game'} already holds this Playnite copy — delete that one first, then restore.`,
+            'CONFLICT'
+          );
+        }
+      }
+
+      // Raw inserts: the snapshot is the stored document, timestamps and all.
+      await Game.collection.insertOne(gameDoc);
+      const players = (snap.players ?? []).filter((p) => p && p.userId);
+      if (players.length) {
+        await GamePlayer.collection.bulkWrite(
+          players.map((p) => ({
+            updateOne: {
+              filter: { userId: p.userId, gameId: snap.gameId },
+              update: { $setOnInsert: { ...p, householdId, gameId: snap.gameId } },
+              upsert: true,
+            },
+          })),
+          { ordered: false }
+        );
+      }
+      if (snap.playniteIds.length) {
+        await PlayniteTombstone.deleteMany({ householdId, playniteId: { $in: snap.playniteIds } });
+      }
+      await DeletedGame.deleteOne({ _id: snap._id, householdId });
+
+      const game = await Game.findOne({ _id: snap.gameId, householdId }).lean();
+      const me = await GamePlayer.findOne({ userId, householdId, gameId: snap.gameId }).lean();
+      return { success: true, message: `${snap.title || 'The game'} is back.`, game: withMe(game, me), waitsForImport: false };
     },
 
     setGameState: async (_, rawArgs, { user } = {}) => {

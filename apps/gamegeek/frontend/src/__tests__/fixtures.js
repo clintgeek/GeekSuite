@@ -16,8 +16,6 @@ export const makeGame = (over = {}) => ({
     shelf: 'playing',
     rating: 4,
     progress: 40,
-    hoursPlayed: 22.5,
-    hoursSource: 'manual',
     favorite: false,
     lastPlayedAt: '2026-09-22T20:00:00.000Z',
   },
@@ -44,8 +42,8 @@ export const makeDetailGame = (over = {}) => {
     source: 'manual',
     createdAt: '2026-09-01T00:00:00.000Z',
     household: [],
-    copies: base.copies.map((c) => ({ ...c, acquiredAt: null, notes: null, fromPlaynite: false, playtimeHours: null, installed: null })),
-    me: { ...base.me, review: '', notes: '', installFlag: null, installFlagAt: null, playthroughs: [], sessions: [] },
+    copies: base.copies.map((c) => ({ ...c, acquiredAt: null, notes: null, fromPlaynite: false, installed: null })),
+    me: { ...base.me, review: '', notes: '', installFlag: null, installFlagAt: null, playthroughs: [] },
     ...over,
   };
 };

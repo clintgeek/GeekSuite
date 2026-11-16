@@ -33,8 +33,12 @@ export { newSeed } from '@geeksuite/collection';
 
 export const PAGE_SIZE = 48;
 
-/** Every sort has a resolver case in the gateway (§B1 "Sorts"). */
-export const SORT_ORDER = ['title', 'dateAdded', 'releaseDate', 'rating', 'lastPlayed', 'hoursPlayed', 'timeToBeat', 'random'];
+/**
+ * Every sort has a resolver case in the gateway (§B1 "Sorts"). The gateway
+ * still sorts by hoursPlayed (old tabs), but the app offers no hours sort
+ * (S-D2, 2026-11-16): a link or saved view with sort=hoursPlayed reads as Title.
+ */
+export const SORT_ORDER = ['title', 'dateAdded', 'releaseDate', 'rating', 'lastPlayed', 'timeToBeat', 'random'];
 
 export const SORT_LABELS = {
   title: 'Title',
@@ -42,7 +46,6 @@ export const SORT_LABELS = {
   releaseDate: 'Release date',
   rating: 'My rating',
   lastPlayed: 'Last played',
-  hoursPlayed: 'Hours played',
   timeToBeat: 'Length',
   random: 'Shuffle',
 };
@@ -54,7 +57,6 @@ export const SORT_SHORT = {
   releaseDate: 'Released',
   rating: 'Rating',
   lastPlayed: 'Played',
-  hoursPlayed: 'Hours',
   timeToBeat: 'Length',
   random: 'Shuffle',
 };
@@ -66,7 +68,6 @@ export const DEFAULT_DIR = {
   releaseDate: 'desc',
   rating: 'desc',
   lastPlayed: 'desc',
-  hoursPlayed: 'desc',
   timeToBeat: 'asc',
   random: 'asc',
 };
@@ -78,7 +79,6 @@ export const DIR_LABELS = {
   releaseDate: { asc: 'Oldest first', desc: 'Newest first' },
   rating: { asc: 'Lowest first', desc: 'Highest first' },
   lastPlayed: { asc: 'Longest ago', desc: 'Most recent' },
-  hoursPlayed: { asc: 'Fewest first', desc: 'Most first' },
   timeToBeat: { asc: 'Shortest first', desc: 'Longest first' },
 };
 

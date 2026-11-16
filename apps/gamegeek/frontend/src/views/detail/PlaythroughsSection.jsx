@@ -1,9 +1,9 @@
-/** Playthroughs: every run, with its dates, hours, platform and how far it went. */
+/** Playthroughs: every run, with its dates, platform and how far it went (no hours — S-D2). */
 import React, { useState } from 'react';
 import { Box, Button, IconButton, Typography } from '@mui/material';
 import { Add as AddIcon, DeleteOutline as DeleteIcon, EditOutlined as EditIcon } from '@mui/icons-material';
 import { useToast } from '@geeksuite/ui';
-import { formatCalendarDate, formatHours } from '../../utils/dates';
+import { formatCalendarDate } from '../../utils/dates';
 import { completionLabel, platformShort } from '../../utils/vocab';
 import PlaythroughDialog from './PlaythroughDialog';
 import Section from './Section';
@@ -48,7 +48,7 @@ export default function PlaythroughsSection({ playthroughs = [], platforms, comp
       ) : (
         <Box component="ul" sx={{ m: 0, p: 0 }}>
           {sorted.map((p, i) => {
-            const facts = [formatHours(p.hours), platformShort(p.platform), p.difficulty, p.completion && completionLabel(p.completion)].filter(Boolean);
+            const facts = [platformShort(p.platform), p.difficulty, p.completion && completionLabel(p.completion)].filter(Boolean);
             const label = `playthrough ${sorted.length - i}`;
             return (
               <Box

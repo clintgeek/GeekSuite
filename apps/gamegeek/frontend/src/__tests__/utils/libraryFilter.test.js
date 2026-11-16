@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_STATE,
+  SORT_ORDER,
   EMPTY_FILTER,
   activeFilterCount,
   buildGamesVariables,
@@ -69,19 +70,25 @@ describe('library URL codec', () => {
   });
 
   it('keeps the old single-value links working', () => {
-    const s = read('?shelf=backlog&platform=switch&owned=false&sort=hoursPlayed&dir=asc&q=mario');
+    const s = read('?shelf=backlog&platform=switch&owned=false&sort=rating&dir=asc&q=mario');
     expect(s.filter.shelves).toEqual(['backlog']);
     expect(s.filter.platforms).toEqual(['switch']);
     expect(s.owned).toBe('false');
-    expect(vars('?shelf=backlog&platform=switch&owned=false&sort=hoursPlayed&dir=asc&q=mario')).toEqual({
+    expect(vars('?shelf=backlog&platform=switch&owned=false&sort=rating&dir=asc&q=mario')).toEqual({
       page: 1,
       limit: 48,
-      sort: 'hoursPlayed',
+      sort: 'rating',
       sortDir: 'asc',
       owned: 'false',
       filter: { q: 'mario', shelves: ['backlog'], platforms: ['switch'] },
     });
     expect(read('?shelf=all').filter.shelves).toEqual([]);
+  });
+
+  it('offers no hours sort, and an old hoursPlayed link reads as Title (S-D2)', () => {
+    expect(SORT_ORDER).not.toContain('hoursPlayed');
+    expect(read('?sort=hoursPlayed&dir=desc').sort).toBe('title');
+    expect(vars('?sort=hoursPlayed&dir=desc').sort).toBe('title');
   });
 
   it('drops unknown enum values and unknown sorts', () => {

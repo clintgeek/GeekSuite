@@ -331,6 +331,16 @@ function facets(f = {}) {
 
 let savedFilters = [...PROFILE.savedFilters];
 
+// Settings → Deleted games (S-D1, 2026-11-16): one of each kind — a snapshot
+// that comes back whole, an old delete with no snapshot, and a Playnite copy
+// removed by hand. Restore answers but leaves this list alone, so every
+// viewport shoots the same three rows.
+export const DELETED_GAMES = [
+  { __typename: 'GameDeletedEntry', id: 'd1', title: 'Vampire Survivors', deletedAt: new Date().toISOString(), deletedBy: 'u2', deletedByName: 'Jess', hasSnapshot: true, reason: 'game-deleted', playniteCopies: 1, members: 2 },
+  { __typename: 'GameDeletedEntry', id: 't1', title: 'Dying Light: The Following — Enhanced Edition', deletedAt: T('2026-10-09'), deletedBy: 'u1', deletedByName: 'Chef', hasSnapshot: false, reason: null, playniteCopies: 1, members: 0 },
+  { __typename: 'GameDeletedEntry', id: 't2', title: 'Control', deletedAt: T('2026-11-02'), deletedBy: 'u1', deletedByName: 'Chef', hasSnapshot: false, reason: 'copy-removed', playniteCopies: 1, members: 0 },
+];
+
 export const OPS = {
   GetGames: (v) => {
     let items = GAMES.filter((g) => matches(g, v.filter || {}));
@@ -368,6 +378,19 @@ export const OPS = {
     savedFilters = savedFilters.filter((x) => x.id !== v.id);
     return { deleteGameFilter: { ...PROFILE, savedFilters } };
   },
+  GetDeletedGames: { deletedGames: DELETED_GAMES },
+  RestoreDeletedGame: (v) => {
+    const e = DELETED_GAMES.find((x) => x.id === v.id) || DELETED_GAMES[0];
+    return {
+      restoreDeletedGame: {
+        __typename: 'GameRestoreResult',
+        success: true,
+        message: e.hasSnapshot ? `${e.title} is back.` : `${e.title} comes back with the next Playnite import.`,
+        waitsForImport: !e.hasSnapshot,
+        game: e.hasSnapshot ? strip(GAMES[0]) : null,
+      },
+    };
+  },
 };
 
 // The Nextcloud auto-import status (apps/gamegeek/DOCS/PLAYNITE_IMPORT.md,
@@ -392,7 +415,9 @@ export const PLAYNITE_DRY_RUN = {
   schemaVersion: 1,
   generatedAtUtc: '2026-09-25T16:21:03Z',
   total: 931,
-  counts: { create: 42, addCopy: 6, update: 178, unchanged: 691, skippedHidden: 241, notInFile: 3, invalid: 0, movedToPlaying: 2, flaggedUninstalled: 1 },
+  // movedToBacklog / removedHidden / gamesRemoved: the destructive side the
+  // preview must say out loud before commit (SUITE_REVIEW_2026-11 finding 6).
+  counts: { create: 42, addCopy: 6, update: 178, unchanged: 691, skippedHidden: 241, notInFile: 3, invalid: 0, movedToPlaying: 2, movedToBacklog: 1, removedHidden: 2, gamesRemoved: 1, skippedDeleted: 1, flaggedUninstalled: 1 },
   samples: {
     create: [
       { title: 'Outer Wilds', storefront: 'epic' },
@@ -400,13 +425,12 @@ export const PLAYNITE_DRY_RUN = {
       { title: 'It Takes Two', storefront: 'ea' },
     ],
     addCopy: [{ title: "Baldur's Gate 3", storefront: 'gog' }],
-    update: [
-      { title: 'Hades', hoursBefore: 38.2, hoursAfter: 41.5 },
-      { title: 'Stardew Valley', hoursBefore: 200.1, hoursAfter: 212.4 },
-    ],
+    update: [{ title: 'Hades' }, { title: 'Stardew Valley' }],
     notInFile: [{ title: 'Celeste' }],
     movedToPlaying: [{ title: 'Control', shelfBefore: 'backlog' }, { title: 'Civilization VI', shelfBefore: 'on-hold' }],
     flaggedUninstalled: [{ title: 'Vampire Survivors' }],
+    movedToBacklog: [{ title: 'Vampire Survivors' }],
+    removedHidden: [{ title: 'Dying Light The Bozak' }, { title: 'Sniper Elite 4' }],
   },
   committed: false,
 };
