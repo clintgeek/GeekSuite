@@ -6,7 +6,7 @@ import {
 import {
   Add as AddIcon, PlayArrow as PlayIcon, Delete as DeleteIcon,
 } from '@mui/icons-material';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { useTheme } from '@mui/material/styles';
 import { useAuth } from '@geeksuite/auth';
 import { GeekEmptyState, GeekErrorState, slashFocusProps, useGeekPrimaryAction, useToast } from '@geeksuite/ui';
@@ -107,13 +107,34 @@ function StoryList() {
     }
   };
 
-  const handleDeleteStory = async (storyId) => {
+  // A delete is a move to Recently deleted (S-D5): restorable for 30 days,
+  // and the toast offers Undo for the mis-tap this exists for.
+  const handleUndoDelete = async (story) => {
+    try {
+      await api.post(`/stories/${story._id}/restore`);
+      await loadStories();
+      notify(`"${story.title}" is back on the table.`, { tone: 'success' });
+    } catch (err) {
+      notify(err.message || 'Could not restore the tale', { tone: 'error' });
+    }
+  };
+
+  const handleDeleteStory = async (story) => {
     if (!user || !user.id) { notify('Authentication required', { tone: 'error' }); return; }
+    if (!story) return;
     setDeletingStory(true);
     try {
-      await api.delete(`/stories/${storyId}`);
+      await api.delete(`/stories/${story._id}`);
       await loadStories();
       setStoryToDelete(null);
+      notify(`"${story.title}" moved to Recently deleted.`, {
+        tone: 'info',
+        action: (
+          <Button color="inherit" size="small" onClick={() => handleUndoDelete(story)} sx={{ minHeight: 44 }}>
+            Undo
+          </Button>
+        ),
+      });
     } catch (err) {
       notify(err.message || 'Failed to delete story', { tone: 'error' });
     } finally {
@@ -322,6 +343,16 @@ function StoryList() {
         </Grid>
       )}
 
+      {/* The way to a tale deleted by mistake — shown even when the shelf is
+          empty, since deleting the only tale is exactly when it is needed. */}
+      {!loadError && (
+        <Box sx={{ mt: { xs: 6, md: 8 }, textAlign: 'center' }}>
+          <Button component={RouterLink} to="/deleted" sx={{ minHeight: 44, color: 'text.secondary', fontFamily: fonts.ui }}>
+            Recently deleted
+          </Button>
+        </Box>
+      )}
+
       {/* New Story Dialog — full-screen below `sm`, so the prompt field is a
           real writing surface on a phone instead of a 326px card. The form
           carries an id so the header's "Begin" can submit it. */}
@@ -384,16 +415,16 @@ function StoryList() {
       <CodexDialog
         open={!!storyToDelete}
         onClose={() => setStoryToDelete(null)}
-        title="Erase This Tale?"
+        title="Delete This Tale?"
         mode="window"
         maxWidth="xs"
         primaryAction={
           <Button
-            onClick={() => handleDeleteStory(storyToDelete?._id)}
+            onClick={() => handleDeleteStory(storyToDelete)}
             variant="contained" color="error"
             disabled={deletingStory}
           >
-            {deletingStory ? 'Erasing...' : 'Destroy'}
+            {deletingStory ? 'Deleting…' : 'Delete'}
           </Button>
         }
         secondaryAction={
@@ -401,10 +432,10 @@ function StoryList() {
         }
       >
         <Typography variant="body1" sx={{ mb: 1 }}>
-          "{storyToDelete?.title}" will be lost to the void.
+          "{storyToDelete?.title}" moves to Recently deleted.
         </Typography>
         <Typography variant="body2" color="text.secondary">
-          All progress, characters, and events will be permanently destroyed.
+          It can be restored from there for 30 days. After that it is gone for good.
         </Typography>
       </CodexDialog>
 

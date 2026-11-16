@@ -7,8 +7,11 @@ import { fonts } from '../../theme/theme';
  * so this is a waiting mark on the page where the next paragraph will land:
  * a lit candle and a line that says who is writing. `role="status"` makes it
  * a polite live region, announced once.
+ *
+ * `label`/`detail` reword it for a turn this screen is waiting out rather
+ * than writing — the player's own resent turn, or another device's.
  */
-export default function WritingIndicator() {
+export default function WritingIndicator({ label = 'The Game Master is writing', detail = null }) {
   const theme = useTheme();
   const c = theme.palette.candle;
   return (
@@ -16,9 +19,14 @@ export default function WritingIndicator() {
       <Candle size={40} flame={c.mode === 'dark' ? c.accent : '#c98a2e'} wax={c.mode === 'dark' ? '#efe3c8' : '#fffaf0'} />
       <Box sx={{ flex: 1 }}>
         <Typography sx={{ fontFamily: fonts.text, fontStyle: 'italic', fontSize: '1.0625rem', color: 'text.secondary' }}>
-          The Game Master is writing
+          {label}
           <Box component="span" className="sg-dots" aria-hidden="true"><span>.</span><span>.</span><span>.</span></Box>
         </Typography>
+        {detail && (
+          <Typography sx={{ fontFamily: fonts.ui, fontSize: '0.875rem', color: 'text.secondary', mt: 0.5 }}>
+            {detail}
+          </Typography>
+        )}
         {/* Ghost lines where the paragraph will land. */}
         <Box aria-hidden="true" sx={{ mt: 1, display: 'grid', gap: 0.75, maxWidth: 420 }}>
           {[92, 100, 64].map((w) => (

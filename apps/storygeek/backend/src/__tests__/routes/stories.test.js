@@ -42,6 +42,11 @@ const mockStory = {
   findById: jest.fn(),
   findByIdAndDelete: jest.fn(),
   find: jest.fn(),
+  // Recently deleted (storyTrashService): soft delete, sweep, restore, purge.
+  updateOne: jest.fn(),
+  deleteOne: jest.fn(),
+  deleteMany: jest.fn(),
+  exists: jest.fn(),
 };
 
 jest.unstable_mockModule(STORY_MODEL_PATH, () => ({
@@ -187,19 +192,34 @@ describe('DELETE /api/stories/:storyId (deleteStory)', () => {
 
     expect(res.status).toBe(403);
     expect(mockStory.findByIdAndDelete).not.toHaveBeenCalled();
+    expect(mockStory.updateOne).not.toHaveBeenCalled();
   });
 
-  test('owner can delete their own story', async () => {
+  test('owner can delete their own story — into Recently deleted, not the void', async () => {
     const story = buildStoryDoc({ userId: OWNER });
     mockStory.findById.mockResolvedValue(story);
-    mockStory.findByIdAndDelete.mockResolvedValue(story);
+    mockStory.updateOne.mockResolvedValue({ matchedCount: 1 });
+    mockStory.deleteMany.mockResolvedValue({ deletedCount: 0 });
 
     const res = await request(buildApp())
       .delete('/api/stories/story-1')
       .set('x-test-user', OWNER);
 
     expect(res.status).toBe(200);
-    expect(mockStory.findByIdAndDelete).toHaveBeenCalledWith('story-1');
+    expect(res.body.retentionDays).toBe(30);
+    expect(new Date(res.body.purgeAt).getTime() - new Date(res.body.deletedAt).getTime())
+      .toBe(30 * 24 * 60 * 60 * 1000);
+    expect(mockStory.updateOne).toHaveBeenCalledWith(
+      { _id: 'story-1', userId: OWNER, deletedAt: null },
+      { $set: { deletedAt: expect.any(Date) }, $unset: { turnLock: '' } }
+    );
+    // The story itself is never hard-deleted by this route.
+    expect(mockStory.findByIdAndDelete).not.toHaveBeenCalled();
+    expect(mockStory.deleteOne).not.toHaveBeenCalled();
+    // The lazy purge ran, and only over stories past their 30 days.
+    expect(mockStory.deleteMany).toHaveBeenCalledWith({
+      deletedAt: { $ne: null, $lt: expect.any(Date) },
+    });
   });
 });
 

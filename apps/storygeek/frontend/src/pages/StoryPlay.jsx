@@ -11,7 +11,7 @@ import {
 } from '@mui/icons-material';
 import { Link as RouterLink, useParams } from 'react-router-dom';
 import { useAuth } from '@geeksuite/auth';
-import { GeekErrorState, GeekSheet, useToast } from '@geeksuite/ui';
+import { GeekErrorState, GeekSheet, useRefetchOnResume, useToast } from '@geeksuite/ui';
 import CodexDialog from '../components/primitives/CodexDialog';
 import Narration from '../components/Narration';
 import useAISettingsStore from '../store/aiSettingsStore';
@@ -26,10 +26,17 @@ import Composer from '../components/play/Composer';
 import WritingIndicator from '../components/play/WritingIndicator';
 import { NarrationEntry, PlayerEntry, SystemEntry } from '../components/play/TranscriptEntry';
 import { opensScene } from '../game/transcript';
+import {
+  newClientId, readComposerDraft, writeComposerDraft, clearComposerDraft,
+  isTurnInProgress, isAmbiguousFailure, turnWaitDelay,
+} from '../game/turnClient';
 import { fonts } from '../theme/theme';
 import {
   getPlayer, getPresentNpcs, getActiveThreads, getScene,
 } from '../game/projections';
+
+/** How long a wait polls an unreadable turn status before opening the composer anyway (lock TTL + a minute). */
+const WAIT_GIVE_UP_MS = 6 * 60 * 1000;
 
 // Map a persisted story event to a chat message. Player "dialogue" events are
 // stored as "Player: <input>"; render them as the player's own bubble on
@@ -83,6 +90,20 @@ function StoryPlay() {
   const [exportData, setExportData] = useState(null);
   const [journalOpen, setJournalOpen] = useState(false);
   const [mobilePanel, setMobilePanel] = useState(null); // 'left' | 'right' | null
+  // A turn this screen is waiting out instead of writing: `{ yours, clientId }`.
+  // `yours` — the player's own turn (a resend whose original is still being
+  // written, or a reload mid-turn); otherwise another device's. The composer
+  // stays shut until it finishes.
+  const [turnBusy, setTurnBusy] = useState(null);
+  // The turn last sent and not yet accepted: `{ clientId, input }`. Sending
+  // the same words again reuses the clientId, which is what lets the server
+  // answer a resend with the turn it already wrote (turnClient.js).
+  const pendingRef = useRef(null);
+  // How many events the transcript was last built from — so a resume or a
+  // finished wait rebuilds it only when the record actually moved.
+  const eventsCountRef = useRef(0);
+  const waitTimerRef = useRef(null);
+  const waitGenRef = useRef(0);
   const containerRef = useRef(null);
   const endRef = useRef(null);
   const inputRef = useRef(null);
@@ -133,11 +154,22 @@ function StoryPlay() {
     setExportData(null);
     setExportError('');
     setLoadError('');
+    // The composer draft for THIS tale (item 11). A draft that carries a
+    // clientId is a turn that was in flight when the page went away — its
+    // words wait until loadStory has asked whether it landed.
+    const draft = readComposerDraft(storyId);
+    setUserInput(draft && !draft.clientId ? draft.text : '');
+    pendingRef.current = null;
+    setTurnBusy(null);
+    initialCheckRef.current = false;
+    return () => stopWaiting();
   }, [storyId]);
 
   useEffect(() => {
     if (user?.id) loadStory();
   }, [storyId, user?.id]);
+
+  const initialCheckRef = useRef(false);
 
   const loadStory = async () => {
     try {
@@ -147,6 +179,11 @@ function StoryPlay() {
       const storyData = response.data;
       setStory(storyData);
       setMessages(storyData.events.map(eventToMessage));
+      eventsCountRef.current = storyData.events.length;
+      if (!initialCheckRef.current) {
+        initialCheckRef.current = true;
+        resumeFromDraft(storyData);
+      }
     } catch (err) {
       setLoadError(err.message || 'Failed to load story');
       console.error('Error loading story:', err);
@@ -165,10 +202,150 @@ function StoryPlay() {
     try {
       const response = await api.get(`/stories/${storyId}`);
       setStory(response.data);
+      if (Array.isArray(response.data?.events)) eventsCountRef.current = response.data.events.length;
     } catch (err) {
       console.warn('Story refresh failed (panels may lag one turn):', err.message);
     }
   };
+
+  // Re-read the story AND rebuild the transcript when the record has moved
+  // on from what is on screen — a turn that landed after this screen gave up
+  // on it, or one another device played. `refreshStory` (above) only feeds
+  // the panels; this is the reconcile the review found missing (item 4).
+  const syncStory = async ({ rebuild = false } = {}) => {
+    try {
+      const response = await api.get(`/stories/${storyId}`);
+      const storyData = response.data;
+      if (!storyData || !Array.isArray(storyData.events)) return null;
+      setStory(storyData);
+      if (rebuild || storyData.events.length !== eventsCountRef.current) {
+        setMessages(storyData.events.map(eventToMessage));
+        eventsCountRef.current = storyData.events.length;
+      }
+      return storyData;
+    } catch (err) {
+      console.warn('Story sync failed:', err.message);
+      return null;
+    }
+  };
+
+  /** Did the turn with this clientId land? `{ status, turnInProgress, response }`. */
+  const checkTurn = async (clientId) => {
+    const response = await api.get(`/stories/${storyId}/turns/${clientId}`);
+    return response.data || {};
+  };
+
+  const stopWaiting = () => {
+    waitGenRef.current += 1;
+    clearTimeout(waitTimerRef.current);
+    waitTimerRef.current = null;
+  };
+
+  /** The turn was accepted: the draft has done its job and the page catches up. */
+  const turnAccepted = async () => {
+    clearComposerDraft(storyId);
+    pendingRef.current = null;
+    setUserInput('');
+    setTurnBusy(null);
+    await syncStory({ rebuild: true });
+  };
+
+  /** Give the player their words back — same clientId, so sending again is safe. */
+  const handBack = (input, clientId) => {
+    setUserInput((current) => (current ? current : input));
+    if (clientId) pendingRef.current = { clientId, input };
+    writeComposerDraft(storyId, { text: input, clientId });
+  };
+
+  /**
+   * Wait out a turn that is being written (item 5's "recovers when the turn
+   * finishes"): poll its status with an easing delay until the lock is gone,
+   * then catch the page up. If it was the player's own turn and it landed,
+   * that is the turn — nothing to send again. If it ended without landing,
+   * the words come back.
+   */
+  const waitForTurn = ({ yours, clientId, input = null }) => {
+    stopWaiting();
+    const gen = waitGenRef.current;
+    const probeId = clientId || newClientId();
+    setTurnBusy({ yours: Boolean(yours), clientId: clientId || null });
+    let attempt = 0;
+    // The server's lock expires after 5 minutes, so a status that cannot be
+    // read for longer than that (offline, the tale deleted elsewhere) is not
+    // worth holding the composer shut for.
+    const giveUpAt = Date.now() + WAIT_GIVE_UP_MS;
+    const poll = async () => {
+      if (gen !== waitGenRef.current) return;
+      let status = null;
+      try { status = await checkTurn(probeId); } catch (err) { status = null; }
+      if (gen !== waitGenRef.current) return;
+      if (status?.status === 'done' && clientId) { stopWaiting(); await turnAccepted(); return; }
+      const stillRunning = status && (status.turnInProgress || status.status === 'in_progress');
+      if (stillRunning || (!status && Date.now() < giveUpAt)) {
+        attempt += 1;
+        waitTimerRef.current = setTimeout(poll, turnWaitDelay(attempt));
+        return;
+      }
+      // Nothing is being written any more.
+      stopWaiting();
+      setTurnBusy(null);
+      await syncStory();
+      if (yours && input) {
+        handBack(input, clientId);
+        notify('Your turn did not finish. Your words are back — sending them again is safe.', { tone: 'warning' });
+      }
+    };
+    waitTimerRef.current = setTimeout(poll, turnWaitDelay(0));
+  };
+  // Run the latest poll now (a return to the app), not after the delay.
+  const pollNow = () => {
+    if (!turnBusy) return false;
+    waitForTurn({ ...turnBusy, input: pendingRef.current?.input || null });
+    return true;
+  };
+
+  /**
+   * First load: a turn may be running (another device, or this one before a
+   * reload), and the composer draft may be a turn that was in flight when
+   * the page went away. Ask before offering those words again.
+   */
+  const resumeFromDraft = async (storyData) => {
+    const draft = readComposerDraft(storyId);
+    const running = storyData.turnInProgress;
+    if (running) {
+      const yours = Boolean(draft?.clientId && running.clientId === draft.clientId);
+      if (draft && !yours) setUserInput(draft.text);
+      if (draft?.clientId) pendingRef.current = { clientId: draft.clientId, input: draft.text };
+      waitForTurn({ yours, clientId: yours ? draft.clientId : null, input: yours ? draft.text : null });
+      return;
+    }
+    if (!draft?.clientId) return;
+    try {
+      const status = await checkTurn(draft.clientId);
+      if (status.status === 'done') { await turnAccepted(); return; }
+    } catch (err) {
+      // Could not ask. The words come back with their clientId, so a resend
+      // is still answered with the turn if it did land.
+    }
+    handBack(draft.text, draft.clientId);
+  };
+
+  const handleInputChange = (value) => {
+    setUserInput(value);
+    const pending = pendingRef.current;
+    // Edited words are a new action, with a new clientId when sent.
+    const same = pending && pending.input === value.trim();
+    if (pending && !same) pendingRef.current = null;
+    writeComposerDraft(storyId, { text: value, clientId: same ? pending.clientId : null });
+  };
+
+  // Back to the app (the PWA resumed, the tab refocused, the connection came
+  // back): finish a wait at once, otherwise pick up turns another device
+  // played meanwhile. Never mid-send.
+  useRefetchOnResume(() => {
+    if (pollNow()) return undefined;
+    return syncStory();
+  }, { enabled: Boolean(story) && !loading });
 
   const handleBookify = async () => {
     if (!storyId) return;
@@ -214,10 +391,21 @@ function StoryPlay() {
     } catch (e) { /* the user dismissed the share sheet */ }
   };
 
+  const takeBackPhantom = () => setMessages(prev => (
+    prev.length > 0 && prev[prev.length - 1].type === 'user' ? prev.slice(0, -1) : prev
+  ));
+
   const handleSubmit = async (e) => {
     e.preventDefault();
-    if (!userInput.trim() || loading) return;
+    if (!userInput.trim() || loading || turnBusy) return;
     const input = userInput.trim();
+    // The same words as the turn last sent and not accepted: same clientId.
+    const pending = pendingRef.current;
+    const clientId = pending && pending.input === input ? pending.clientId : newClientId();
+    pendingRef.current = { clientId, input };
+    // The draft keeps the words AND the clientId until the turn is accepted:
+    // a page that dies mid-turn asks whether it landed before offering them.
+    writeComposerDraft(storyId, { text: input, clientId });
     setUserInput('');
     refocusRef.current = true;
     setMessages(prev => [...prev, { type: 'user', content: input, timestamp: new Date() }]);
@@ -229,6 +417,7 @@ function StoryPlay() {
       // keeps the Game Master's voice consistent on its own.
       const response = await api.post(`/stories/${storyId}/continue`, {
         userInput: input,
+        clientId,
         ...(selectedProvider && selectedModelId
           ? { provider: selectedProvider, model: selectedModelId }
           : {})
@@ -238,17 +427,12 @@ function StoryPlay() {
       const data = response.data;
 
       // The narrator could not serve this turn. The backend answers **200**
-      // with its own words and saved nothing — no event, no turn increment —
-      // so take the phantom user bubble back and hand the player their words
-      // instead of making them retype. Same treatment as the catch below,
-      // because the outcome is the same; only the transport differs.
+      // with its own words and saved nothing — no event, no turn increment,
+      // no receipt — so take the phantom user bubble back and hand the player
+      // their words instead of making them retype.
       if (data.type === 'ai_unavailable') {
-        setMessages(prev => (
-          prev.length > 0 && prev[prev.length - 1].type === 'user'
-            ? prev.slice(0, -1)
-            : prev
-        ));
-        setUserInput((current) => (current ? current : input));
+        takeBackPhantom();
+        handBack(input, clientId);
         setMessages(prev => [...prev, {
           type: 'system',
           content: data.message || 'The narrator is not answering right now. Nothing was lost — try again.',
@@ -256,6 +440,15 @@ function StoryPlay() {
         }]);
         return;
       }
+
+      // Accepted. The draft has done its job.
+      clearComposerDraft(storyId);
+      pendingRef.current = null;
+
+      // The server already had this turn (a resend of one that landed) and
+      // answered from its receipt: the record holds it, so rebuild from the
+      // record rather than append a second copy.
+      if (data.replayed) { await syncStory({ rebuild: true }); return; }
 
       if (data.type) { handleSpecialResponse(data); return; }
 
@@ -275,22 +468,45 @@ function StoryPlay() {
       // turn's changes (new NPCs, location, threads, facts, scene, …).
       refreshStory();
     } catch (err) {
-      // The backend only persists the player's event alongside the AI's, at
-      // the end of the turn — so on a failure nothing was saved and the
-      // bubble on screen is a phantom that vanishes on the next reload. Take
-      // it back and hand the player their words instead of making them retype.
-      setMessages(prev => (
-        prev.length > 0 && prev[prev.length - 1].type === 'user'
-          ? prev.slice(0, -1)
-          : prev
-      ));
-      setUserInput((current) => (current ? current : input));
-      notify(err.message || 'Failed to continue story', { tone: 'error' });
       console.error('Error continuing story:', err);
-      // The mirror case: a client timeout on a turn the server actually
-      // completed. Re-reading the story reconciles the transcript instead of
-      // leaving the UI one turn behind the record.
-      refreshStory();
+      takeBackPhantom();
+
+      // Another turn holds the story (item 5). Wait it out; the composer
+      // opens again when it finishes. If it is THIS turn (a resend whose
+      // original is still being written) the words are not offered back —
+      // they are about to land.
+      if (isTurnInProgress(err)) {
+        const yours = Boolean(err.response?.data?.turnInProgress?.yours);
+        if (!yours) handBack(input, clientId);
+        notify(err.message || 'A turn is already being written for this tale.', { tone: 'info' });
+        waitForTurn({ yours, clientId, input });
+        return;
+      }
+
+      // No answer, or a gateway that gave up: the server may well have saved
+      // the turn (item 4). Ask before offering the words back.
+      if (isAmbiguousFailure(err)) {
+        try {
+          const status = await checkTurn(clientId);
+          if (status.status === 'done') {
+            await turnAccepted();
+            notify('Your turn did land — the page has caught up.', { tone: 'success' });
+            return;
+          }
+          if (status.status === 'in_progress') {
+            notify('Your turn is still being written. It will appear here when it is finished.', { tone: 'info' });
+            waitForTurn({ yours: true, clientId, input });
+            return;
+          }
+        } catch (checkErr) {
+          // Could not ask. The words come back with the SAME clientId, so a
+          // resend is answered with the turn if it did land.
+          console.warn('Turn status check failed:', checkErr.message);
+        }
+      }
+
+      handBack(input, clientId);
+      notify(err.message || 'Failed to continue story', { tone: 'error' });
     } finally { setLoading(false); }
   };
 
@@ -584,6 +800,14 @@ function StoryPlay() {
             )}
             {messages.map((m, i, all) => renderMessage(m, i, all, player?.name))}
             {loading && <WritingIndicator />}
+            {!loading && turnBusy && (
+              <WritingIndicator
+                label={turnBusy.yours ? 'Your turn is still being written' : 'A turn is being written elsewhere'}
+                detail={turnBusy.yours
+                  ? 'It was sent before; it will appear here when it is finished.'
+                  : 'Another device is playing this tale. You can act when its turn lands.'}
+              />
+            )}
             <div ref={endRef} />
           </Box>
         </Box>
@@ -591,9 +815,9 @@ function StoryPlay() {
 
       <Composer
         value={userInput}
-        onChange={setUserInput}
+        onChange={handleInputChange}
         onSubmit={handleSubmit}
-        loading={loading}
+        loading={loading || Boolean(turnBusy)}
         inputRef={inputRef}
         showHint={showLeftRail}
       />

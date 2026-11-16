@@ -148,6 +148,24 @@ export const BOOKIFY = {
   ].join('\n'),
 };
 
+// Recently deleted (S-D5, 2026-11-16): two tales in the bin, one with days
+// to spare and one nearly due — so both wordings of "removed for good" show.
+export const DELETED = {
+  retentionDays: 30,
+  stories: [
+    { _id: 'd1', title: 'The Lantern Fair', genre: 'Mystery', status: 'paused', deletedAt: iso(3), purgeAt: new Date(Date.now() + 27 * 86400000).toISOString() },
+    { _id: 'd2', title: 'Salt Road to Varn, the Long Way Round', genre: 'Adventure', status: 'active', deletedAt: iso(29), purgeAt: new Date(Date.now() + 1 * 86400000 - 60000).toISOString() },
+  ],
+};
+
+// A turn being written on another device (item 5): the story says so on
+// load, and the turn-status poll keeps saying so while the scene is shot.
+export const TURN_RUNNING = {
+  clientId: 'other-device-turn',
+  startedAt: iso(0),
+  expiresAt: new Date(Date.now() + 4 * 60000).toISOString(),
+};
+
 export async function routes(ctx, { base, scheme, viewport } = {}) {
   // sessionRoutes' echoed-origin CORS handling covers this app too: the auth
   // client fetches `/me` cross-origin in dev (VITE_API_URL points elsewhere)
@@ -156,6 +174,9 @@ export async function routes(ctx, { base, scheme, viewport } = {}) {
   await sessionRoutes(ctx);
   await ctx.route('**/api/stories/user/**', (r) => json(r, STORIES));
   await ctx.route('**/api/stories/s1', (r) => json(r, STORY));
+  // "Did my turn land?" — nothing landed and nothing runs, by default.
+  await ctx.route('**/api/stories/s1/turns/*', (r) => json(r, { status: 'unknown', turnInProgress: null, response: null }));
+  await ctx.route('**/api/stories/deleted', (r) => json(r, DELETED));
   await ctx.route('**/api/export/stories/*/bookify', (r) => json(r, { success: true, data: BOOKIFY }));
   // This app's own features go through REST, but the Apollo client is still
   // constructed at boot — stub graphql so it doesn't 404.

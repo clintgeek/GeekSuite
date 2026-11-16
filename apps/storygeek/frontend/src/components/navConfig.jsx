@@ -15,6 +15,7 @@ import BookIcon from '@mui/icons-material/Book';
 import AddIcon from '@mui/icons-material/Add';
 import PeopleIcon from '@mui/icons-material/People';
 import CasinoIcon from '@mui/icons-material/Casino';
+import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 
 /** The story id embedded in /play/:id and /characters/:id, or null. */
 export function storyIdFrom(pathname) {
@@ -32,6 +33,8 @@ export function navSectionsFor(pathname) {
       items: [
         { id: '/', label: 'Your Tales', to: '/', icon: <BookIcon /> },
         { id: '/create', label: 'Begin a Tale', to: '/create', icon: <AddIcon /> },
+        // S-D5: a deleted tale waits here for 30 days.
+        { id: '/deleted', label: 'Recently deleted', to: '/deleted', icon: <DeleteOutlineIcon /> },
       ],
     },
   ];
@@ -66,6 +69,7 @@ export function activeNavId(pathname) {
   if (pathname === '/') return '/';
   if (pathname.startsWith('/settings')) return 'settings';
   if (pathname.startsWith('/create')) return '/create';
+  if (pathname.startsWith('/deleted')) return '/deleted';
   if (pathname.startsWith('/characters')) return '/characters';
   if (pathname.startsWith('/play')) return '/play';
   return undefined;
@@ -82,6 +86,7 @@ export function pageTitle(pathname) {
   if (pathname.startsWith('/play')) return 'At the Table';
   if (pathname.startsWith('/settings')) return 'Settings';
   if (pathname.startsWith('/create')) return 'New Adventure';
+  if (pathname.startsWith('/deleted')) return 'Recently deleted';
   if (pathname === '/') return 'Your Tales';
   return 'StoryGeek';
 }

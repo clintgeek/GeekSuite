@@ -8,6 +8,7 @@ import {
   startStorySchema,
   continueStorySchema,
   updateStoryStatusSchema,
+  turnStatusParamsSchema,
 } from '../validation/schemas/stories.js';
 
 const router = express.Router();
@@ -58,9 +59,14 @@ router.get('/test-debug', storyController.testEndpoint);
 router.post('/start', validate({ body: startStorySchema }), storyController.startStory);
 router.post('/:storyId/continue', validate({ params: storyIdParamsSchema, body: continueStorySchema }), storyController.continueStory);
 router.get('/user/:userId', storyController.getUserStories);
+// Recently deleted (S-D5). `/deleted` must come before `/:storyId`.
+router.get('/deleted', storyController.getDeletedStories);
 router.get('/:storyId/summary', storyController.getStorySummary);
+router.get('/:storyId/turns/:clientId', validate({ params: turnStatusParamsSchema }), storyController.getTurnStatus);
 router.get('/:storyId', storyController.getStory);
 router.patch('/:storyId/status', validate({ params: storyIdParamsSchema, body: updateStoryStatusSchema }), storyController.updateStoryStatus);
+router.post('/:storyId/restore', validate({ params: storyIdParamsSchema }), storyController.restoreStory);
+router.delete('/:storyId/forever', validate({ params: storyIdParamsSchema }), storyController.deleteStoryForever);
 router.delete('/:storyId', validate({ params: storyIdParamsSchema }), storyController.deleteStory);
 
 export default router;

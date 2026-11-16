@@ -5,6 +5,8 @@ import stateExtractionService from '../services/stateExtractionService.js';
 import stateCommitService from '../services/stateCommitService.js';
 import checkpointService from '../services/checkpointService.js';
 import canonQueryService from '../services/canonQueryService.js';
+import turnLockService from '../services/turnLockService.js';
+import storyTrashService from '../services/storyTrashService.js';
 
 const getAuthenticatedUserId = (req) => {
   if (!req.user || !req.user._id) return null;
@@ -42,6 +44,87 @@ const sendAIUnavailable = (res, error) => res.status(200).json({
   reason: error.reason || 'unavailable',
   message: error.message
 });
+
+/** The same answer as a `{ status, body }` result, for runTurn. */
+const aiUnavailableResult = (error) => ({
+  status: 200,
+  body: { type: 'ai_unavailable', reason: error.reason || 'unavailable', message: error.message }
+});
+
+/** A runTurn result with a 200. */
+const ok = (body) => ({ status: 200, body });
+
+/**
+ * **409** — another turn is being written for this story. `yours` is true
+ * when the turn running is this same clientId (the original of a resend), so
+ * the client knows to wait for its own turn rather than offer the words back.
+ */
+const sendTurnInProgress = (res, lock, clientId) => {
+  const live = turnLockService.describeLock(lock);
+  return res.status(409).json({
+    success: false,
+    error: {
+      message: 'A turn is already being written for this tale. It will appear here when it is finished.',
+      code: 'TURN_IN_PROGRESS'
+    },
+    turnInProgress: {
+      yours: Boolean(clientId && live?.clientId && live.clientId === clientId),
+      startedAt: live?.startedAt || null,
+      expiresAt: live?.expiresAt || null
+    }
+  });
+};
+
+/**
+ * Does this input write to the story (and so need the lock and a receipt)?
+ * Mirrors runTurn's dispatch: the four writing commands, the setup opening,
+ * and a story turn — but not a canon question, which is answered from the
+ * record and changes nothing.
+ */
+export const turnWrites = (userInput, story) => {
+  const text = String(userInput || '');
+  if (text.startsWith('/')) {
+    const command = text.toLowerCase().trim();
+    if (command.startsWith('/checkpoint') || command.startsWith('/back') || command.startsWith('/end')) return true;
+    if (command === '/reset-scene') return true;
+    // Everything else under `/` (/recall, /canon, /char, /info,
+    // /list-checkpoints, /timeout, an unknown command) only reads.
+    return false;
+  }
+  if (story?.status === 'setup') return true;
+  return !canonQueryService.isCanonQuery(text);
+};
+
+/** getStory's projection: no checkpoint snapshots, no turn receipts. */
+const STORY_READ_PROJECTION = Object.freeze({
+  'checkpoints.events': 0,
+  'checkpoints.worldState': 0,
+  'checkpoints.characters': 0,
+  'checkpoints.locations': 0,
+  'checkpoints.storyThreads': 0,
+  'checkpoints.storyState': 0,
+  'checkpoints.storySummaries': 0,
+  'checkpoints.diceResults': 0,
+  'checkpoints.stats': 0,
+  turnReceipts: 0
+});
+
+/** getTurnStatus only needs the owner, the lock and the receipts. */
+const STORY_STATUS_PROJECTION = Object.freeze({ userId: 1, turnLock: 1, turnReceipts: 1 });
+
+/**
+ * The story as the play screen gets it: checkpoints as bookmarks (id, name,
+ * turn), no receipts, and the lock as `turnInProgress` — never its token.
+ */
+const storyForClient = (story) => {
+  const plain = typeof story?.toJSON === 'function' ? story.toJSON() : { ...story };
+  const { turnLock, turnReceipts: _receipts, ...rest } = plain;
+  rest.checkpoints = (Array.isArray(plain.checkpoints) ? plain.checkpoints : []).map((cp) => ({
+    id: cp.id, description: cp.description, timestamp: cp.timestamp, turnNumber: cp.turnNumber
+  }));
+  rest.turnInProgress = turnLockService.describeLock(turnLock);
+  return rest;
+};
 
 const requireAuth = (req, res) => {
   const userId = getAuthenticatedUserId(req);
@@ -116,16 +199,82 @@ class StoryController {
     }
   }
 
+  /**
+   * POST /:storyId/continue — one turn.
+   *
+   * A turn that WRITES (a story turn, the setup opening, /reset-scene,
+   * /checkpoint, /back, /end) runs under the story's turn lock and is
+   * idempotent on the client's `clientId` (services/turnLockService.js):
+   *
+   *   - a clientId whose turn already landed gets that turn's response back
+   *     (`replayed: true`) — no AI call, no second event;
+   *   - while another turn holds the lock the answer is **409**
+   *     `TURN_IN_PROGRESS`, with `turnInProgress.yours` true when the turn
+   *     running is this same clientId (the original of a resend);
+   *   - the lock is released BEFORE the response is sent, so the player's
+   *     next action never races its own release.
+   *
+   * Read-only inputs (/recall, /char, /info, /list-checkpoints, /timeout, an
+   * unknown command, an auto-detected canon question) take no lock: asking
+   * what you know never waits on, or blocks, a turn.
+   */
   async continueStory(req, res) {
+    const { storyId } = req.params;
+    let lock = null;
+    let result;
     try {
-      const { storyId } = req.params;
       const { userInput } = req.body;
+      const clientId = req.body.clientId || null;
       const authenticatedUserId = requireAuth(req, res);
       if (!authenticatedUserId) return;
-      const story = await Story.findById(storyId);
+      let story = await Story.findById(storyId);
       if (!story) return res.status(404).json({ error: 'Story not found' });
       if (!isStoryOwner(story, authenticatedUserId)) return res.status(403).json({ error: 'Not authorized to continue this story' });
 
+      if (turnWrites(userInput, story)) {
+        const receipt = turnLockService.findReceipt(story, clientId);
+        if (receipt) return res.json(turnLockService.replayBody(receipt));
+
+        lock = await turnLockService.acquire(Story, { storyId, userId: authenticatedUserId, clientId });
+        if (!lock) {
+          // Either another turn holds the story, or the turn this clientId
+          // is a resend of finished between our read and the lock attempt,
+          // or the story went to Recently deleted. Re-read to say which.
+          const current = await Story.findById(storyId);
+          if (!current || !isStoryOwner(current, authenticatedUserId)) return res.status(404).json({ error: 'Story not found' });
+          const late = turnLockService.findReceipt(current, clientId);
+          if (late) return res.json(turnLockService.replayBody(late));
+          return sendTurnInProgress(res, current.turnLock, clientId);
+        }
+        story = lock.story;
+      }
+
+      // Not `this.runTurn`: routes mount these methods unbound.
+      result = await storyController.runTurn(req, story, { userInput, clientId });
+    } catch (error) {
+      console.error('Error continuing story:', error);
+      // Belt and braces: the three AI call sites catch this themselves, and
+      // this is the net for anything they miss.
+      result = isAIUnavailable(error)
+        ? aiUnavailableResult(error)
+        : { status: 500, body: { error: 'Failed to continue story', message: error.message } };
+    } finally {
+      if (lock) await turnLockService.release(Story, { storyId, token: lock.token });
+    }
+    return res.status(result.status || 200).json(result.body);
+  }
+
+  /**
+   * The turn itself. Returns `{ status?, body }` instead of answering, so
+   * continueStory can release the lock before the client hears back. Every
+   * path that saves records a receipt for `clientId` first, in the same save.
+   */
+  async runTurn(req, story, { userInput, clientId }) {
+    const receiptAndSave = async (body, turnNumber = story.worldState?.turnNumber || 0) => {
+      turnLockService.recordReceipt(story, clientId, { turnNumber, response: body });
+      await story.save();
+    };
+    {
       // Handle special commands
       if (userInput.startsWith('/')) {
         const command = userInput.toLowerCase().trim();
@@ -136,33 +285,34 @@ class StoryController {
           );
           if (!story.checkpoints) story.checkpoints = [];
           story.checkpoints.push(checkpoint);
-          await story.save();
-          return res.json({ type: 'checkpoint_created', checkpoint: { id: checkpoint.id, description: checkpoint.description, timestamp: checkpoint.timestamp, turnNumber: checkpoint.turnNumber }, message: `Checkpoint "${checkpoint.description}" created.` });
+          const created = { type: 'checkpoint_created', checkpoint: { id: checkpoint.id, description: checkpoint.description, timestamp: checkpoint.timestamp, turnNumber: checkpoint.turnNumber }, message: `Checkpoint "${checkpoint.description}" created.` };
+          await receiptAndSave(created);
+          return ok(created);
         }
 
         if (command.startsWith('/back')) {
           const checkpointId = userInput.replace('/back', '').trim();
-          if (!story.checkpoints || story.checkpoints.length === 0) return res.json({ type: 'error', message: 'No checkpoints available. Use /checkpoint to create one.' });
+          if (!story.checkpoints || story.checkpoints.length === 0) return ok({ type: 'error', message: 'No checkpoints available. Use /checkpoint to create one.' });
           const targetCheckpoint = checkpointService.findCheckpoint(story, checkpointId);
-          if (!targetCheckpoint) return res.json({ type: 'error', message: 'Checkpoint not found. Available checkpoints: ' + story.checkpoints.map(cp => `${cp.description} (${cp.id})`).join(', ') });
+          if (!targetCheckpoint) return ok({ type: 'error', message: 'Checkpoint not found. Available checkpoints: ' + story.checkpoints.map(cp => `${cp.description} (${cp.id})`).join(', ') });
 
           // Deterministic post-restore audit — surface any inconsistency
           // instead of letting it silently poison the campaign.
           const violations = checkpointService.restoreCheckpoint(story, targetCheckpoint);
           if (violations.length > 0) console.warn('Post-restore consistency violations:', violations);
-          await story.save();
-
-          return res.json({
+          const restored = {
             type: 'checkpoint_restored',
             checkpoint: { id: targetCheckpoint.id, description: targetCheckpoint.description, timestamp: targetCheckpoint.timestamp, turnNumber: targetCheckpoint.turnNumber },
             consistencyWarnings: violations,
             message: `Restored to checkpoint "${targetCheckpoint.description}".`
-          });
+          };
+          await receiptAndSave(restored);
+          return ok(restored);
         }
 
         if (command.startsWith('/list-checkpoints')) {
-          if (!story.checkpoints || story.checkpoints.length === 0) return res.json({ type: 'error', message: 'No checkpoints available. Use /checkpoint to create one.' });
-          return res.json({ type: 'checkpoint_list', checkpoints: story.checkpoints.map(cp => ({ id: cp.id, description: cp.description, timestamp: cp.timestamp, eventCount: cp.events.length })) });
+          if (!story.checkpoints || story.checkpoints.length === 0) return ok({ type: 'error', message: 'No checkpoints available. Use /checkpoint to create one.' });
+          return ok({ type: 'checkpoint_list', checkpoints: story.checkpoints.map(cp => ({ id: cp.id, description: cp.description, timestamp: cp.timestamp, eventCount: cp.events.length })) });
         }
 
         if (command.startsWith('/char')) {
@@ -171,7 +321,7 @@ class StoryController {
           const characterName = command.replace('/char', '').trim();
           const canonChars = (story.characters || []).filter(c => c.isActive !== false);
           if (!characterName) {
-            return res.json({
+            return ok({
               type: 'character_list',
               characters: canonChars.map(c => ({
                 name: c.name, description: c.description, personality: c.personality,
@@ -180,16 +330,16 @@ class StoryController {
             });
           }
           const character = canonChars.find(c => c.name.toLowerCase().includes(characterName.toLowerCase()));
-          if (!character) return res.json({ type: 'error', message: `Character "${characterName}" not found.` });
-          return res.json({ type: 'character_info', character });
+          if (!character) return ok({ type: 'error', message: `Character "${characterName}" not found.` });
+          return ok({ type: 'character_info', character });
         }
 
         if (command.startsWith('/info')) {
           const searchTerm = command.replace('/info', '').trim();
-          if (!searchTerm) return res.json({ type: 'error', message: 'Please specify what to search for: /info [location/item name]' });
+          if (!searchTerm) return ok({ type: 'error', message: 'Please specify what to search for: /info [location/item name]' });
           const location = story.locations.find(loc => loc.name.toLowerCase().includes(searchTerm.toLowerCase()));
-          if (location) return res.json({ type: 'location_info', location });
-          return res.json({ type: 'error', message: `No information found for "${searchTerm}".` });
+          if (location) return ok({ type: 'location_info', location });
+          return ok({ type: 'error', message: `No information found for "${searchTerm}".` });
         }
 
         if (command.startsWith('/recall') || command.startsWith('/canon')) {
@@ -199,16 +349,17 @@ class StoryController {
           const authHeader2 = req.headers['authorization'];
           const userToken2 = authHeader2 && authHeader2.split(' ')[1];
           const payload = await canonQueryService.answerCanonQuery(story, userInput, userToken2);
-          return res.json(payload);
+          return ok(payload);
         }
 
-        if (command.startsWith('/timeout')) return res.json({ type: 'timeout', message: 'Time-out called. This is a meta-discussion that won\'t affect the story. What would you like to discuss?' });
+        if (command.startsWith('/timeout')) return ok({ type: 'timeout', message: 'Time-out called. This is a meta-discussion that won\'t affect the story. What would you like to discuss?' });
 
         if (command.startsWith('/end')) {
           story.status = 'completed';
           story.stats.lastActive = new Date();
-          await story.save();
-          return res.json({ type: 'story_ended', message: 'Story has been marked as completed.' });
+          const ended = { type: 'story_ended', message: 'Story has been marked as completed.' };
+          await receiptAndSave(ended);
+          return ok(ended);
         }
 
         if (command === '/reset-scene') {
@@ -219,17 +370,19 @@ class StoryController {
           try {
             aiResponse = await aiService.generateStoryResponse(story, 'Continue the story from this new situation', null, userToken, { provider: req.body.provider, model: req.body.model });
           } catch (error) {
-            if (isAIUnavailable(error)) return sendAIUnavailable(res, error);
+            if (isAIUnavailable(error)) return aiUnavailableResult(error);
             throw error;
           }
           story.events.push({ type: 'narrative', description: aiResponse.content, timestamp: new Date(), diceResults: [] });
           story.stats.totalInteractions++;
           story.stats.lastActive = new Date();
-          await story.save();
-          return res.json({ type: 'scene_reset', message: 'Scene has been reset. The situation has changed.', aiResponse: aiResponse.content, notice: aiResponse.notice || null, story });
+          const reset = { type: 'scene_reset', message: 'Scene has been reset. The situation has changed.', aiResponse: aiResponse.content, notice: aiResponse.notice || null };
+          // The receipt keeps the reply, not the whole story document.
+          await receiptAndSave(reset);
+          return ok({ ...reset, story });
         }
 
-        return res.json({ type: 'error', message: 'Unknown command. Available commands: /recall, /char, /info, /checkpoint, /back, /timeout, /end' });
+        return ok({ type: 'error', message: 'Unknown command. Available commands: /recall, /char, /info, /checkpoint, /back, /timeout, /end' });
       }
 
       // Handle setup phase
@@ -259,7 +412,7 @@ class StoryController {
             } catch (aiError) {
               // The story stays in `setup` with its questions intact, so the
               // player answers again rather than losing the story.
-              if (isAIUnavailable(aiError)) return sendAIUnavailable(res, aiError);
+              if (isAIUnavailable(aiError)) return aiUnavailableResult(aiError);
               throw aiError;
             }
             story.status = 'active';
@@ -285,15 +438,16 @@ class StoryController {
               console.error('Opening-scene canon seeding failed (story continues):', seedError.message);
             }
 
-            await story.save();
-            return res.json({ aiResponse: aiResponse.content, status: 'active', storyStarted: true, notice: aiResponse.notice || null });
+            const opened = { aiResponse: aiResponse.content, status: 'active', storyStarted: true, notice: aiResponse.notice || null };
+            await receiptAndSave(opened, 1);
+            return ok(opened);
           } else {
-            return res.json({ type: 'error', message: 'Setup phase error. Please try creating a new story.' });
+            return ok({ type: 'error', message: 'Setup phase error. Please try creating a new story.' });
           }
         } catch (error) {
           console.error('Error in setup phase:', error);
-          if (isAIUnavailable(error)) return sendAIUnavailable(res, error);
-          return res.status(500).json({ error: 'Failed to process setup', message: error.message });
+          if (isAIUnavailable(error)) return aiUnavailableResult(error);
+          return { status: 500, body: { error: 'Failed to process setup', message: error.message } };
         }
       }
 
@@ -309,7 +463,7 @@ class StoryController {
       // own invention and then launders the invention into "known" next turn.
       if (canonQueryService.isCanonQuery(userInput)) {
         const payload = await canonQueryService.answerCanonQuery(story, userInput, userToken);
-        return res.json(payload);
+        return ok(payload);
       }
 
       const turn = (story.worldState.turnNumber || 0) + 1;
@@ -334,7 +488,7 @@ class StoryController {
         // The player's event and the turn increment were pushed onto the
         // in-memory document above but `story.save()` has not run, so nothing
         // is persisted — returning here leaves the record exactly as it was.
-        if (isAIUnavailable(error)) return sendAIUnavailable(res, error);
+        if (isAIUnavailable(error)) return aiUnavailableResult(error);
         throw error;
       }
 
@@ -378,7 +532,6 @@ class StoryController {
         }));
         story.markModified('storyState.canonAlerts');
       }
-      await story.save();
 
       const payload = {
         aiResponse: aiResponse.content,
@@ -391,6 +544,9 @@ class StoryController {
         // `pin_unavailable`). One line of notice; the turn went ahead.
         notice: aiResponse.notice || null
       };
+      // The receipt and the turn are one save: a turn cannot land without
+      // the record that stops its resend from playing it again.
+      await receiptAndSave(payload, turn);
 
       // Full per-turn diagnostics for playtests: which model actually served
       // the turn, and proposed vs. accepted vs. rejected state changes — so a
@@ -422,13 +578,7 @@ class StoryController {
         };
       }
 
-      res.json(payload);
-    } catch (error) {
-      console.error('Error continuing story:', error);
-      // Belt and braces: the three AI call sites above catch this themselves,
-      // and this is the net for anything they miss.
-      if (isAIUnavailable(error)) return sendAIUnavailable(res, error);
-      res.status(500).json({ error: 'Failed to continue story', message: error.message });
+      return ok(payload);
     }
   }
 
@@ -514,10 +664,13 @@ class StoryController {
     try {
       const authenticatedUserId = requireAuth(req, res);
       if (!authenticatedUserId) return;
-      const story = await Story.findById(req.params.storyId);
+      // The checkpoints' snapshots (each a full copy of the transcript and
+      // canon) are left in the database: the play screen never reads them,
+      // and they made every post-turn refresh ship N copies of the tale.
+      const story = await Story.findById(req.params.storyId, STORY_READ_PROJECTION);
       if (!story) return res.status(404).json({ error: 'Story not found' });
       if (!isStoryOwner(story, authenticatedUserId)) return res.status(403).json({ error: 'Not authorized to view this story' });
-      res.json(story);
+      res.json(storyForClient(story));
     } catch (error) {
       console.error('Error getting story:', error);
       res.status(500).json({ error: 'Failed to get story' });
@@ -540,6 +693,11 @@ class StoryController {
     }
   }
 
+  /**
+   * DELETE /:storyId — moves the story to Recently deleted (S-D5). It can be
+   * restored for 30 days; then the lazy purge removes it. The hard delete is
+   * `deleteStoryForever`, and only for a story already in the trash.
+   */
   async deleteStory(req, res) {
     try {
       const authenticatedUserId = requireAuth(req, res);
@@ -547,11 +705,100 @@ class StoryController {
       const story = await Story.findById(req.params.storyId);
       if (!story) return res.status(404).json({ error: 'Story not found' });
       if (!isStoryOwner(story, authenticatedUserId)) return res.status(403).json({ error: 'Not authorized to delete this story' });
-      await Story.findByIdAndDelete(req.params.storyId);
-      res.json({ message: 'Story deleted successfully' });
+      const now = Date.now();
+      const outcome = await storyTrashService.softDeleteStory(Story, { storyId: req.params.storyId, userId: authenticatedUserId, now });
+      if (outcome === 'missing') return res.status(404).json({ error: 'Story not found' });
+      // Lazy purge: every delete sweeps out what has passed its 30 days.
+      await storyTrashService.purgeExpiredStories(Story, now);
+      res.json({
+        message: 'Story moved to Recently deleted',
+        storyId: req.params.storyId,
+        deletedAt: new Date(now),
+        purgeAt: storyTrashService.purgeAtFor(now),
+        retentionDays: storyTrashService.STORY_TRASH_RETENTION_DAYS
+      });
     } catch (error) {
       console.error('Error deleting story:', error);
       res.status(500).json({ error: 'Failed to delete story' });
+    }
+  }
+
+  /** GET /deleted — this player's Recently deleted, after sweeping out the expired. */
+  async getDeletedStories(req, res) {
+    try {
+      const authenticatedUserId = requireAuth(req, res);
+      if (!authenticatedUserId) return;
+      await storyTrashService.purgeExpiredStories(Story);
+      const stories = await storyTrashService.listDeletedStories(Story, { userId: authenticatedUserId });
+      res.json({ stories, retentionDays: storyTrashService.STORY_TRASH_RETENTION_DAYS });
+    } catch (error) {
+      console.error('Error listing deleted stories:', error);
+      res.status(500).json({ error: 'Failed to list recently deleted stories' });
+    }
+  }
+
+  /** POST /:storyId/restore — back out of Recently deleted. Only the owner's own. */
+  async restoreStory(req, res) {
+    try {
+      const authenticatedUserId = requireAuth(req, res);
+      if (!authenticatedUserId) return;
+      const outcome = await storyTrashService.restoreStory(Story, { storyId: req.params.storyId, userId: authenticatedUserId });
+      if (outcome !== 'restored') return res.status(404).json({ error: 'Story not found in Recently deleted' });
+      res.json({ message: 'Story restored', storyId: req.params.storyId });
+    } catch (error) {
+      console.error('Error restoring story:', error);
+      res.status(500).json({ error: 'Failed to restore story' });
+    }
+  }
+
+  /** DELETE /:storyId/forever — the permanent delete, for a story already in the trash. */
+  async deleteStoryForever(req, res) {
+    try {
+      const authenticatedUserId = requireAuth(req, res);
+      if (!authenticatedUserId) return;
+      const purged = await storyTrashService.purgeStory(Story, { storyId: req.params.storyId, userId: authenticatedUserId });
+      if (!purged) return res.status(404).json({ error: 'Story not found in Recently deleted' });
+      res.json({ message: 'Story deleted forever', storyId: req.params.storyId });
+    } catch (error) {
+      console.error('Error deleting story forever:', error);
+      res.status(500).json({ error: 'Failed to delete story' });
+    }
+  }
+
+  /**
+   * GET /:storyId/turns/:clientId — did the turn with this clientId land?
+   *
+   *   status 'done'        → it was saved; `response` is what it answered.
+   *   status 'in_progress' → it is being written right now.
+   *   status 'unknown'     → no record of it and nothing running for it:
+   *                          sending it again (same clientId) is safe.
+   *
+   * `turnInProgress` describes any live turn on the story (another device's
+   * included), so the client can wait it out.
+   */
+  async getTurnStatus(req, res) {
+    try {
+      const authenticatedUserId = requireAuth(req, res);
+      if (!authenticatedUserId) return;
+      const { storyId, clientId } = req.params;
+      const story = await Story.findById(storyId, STORY_STATUS_PROJECTION);
+      if (!story) return res.status(404).json({ error: 'Story not found' });
+      if (!isStoryOwner(story, authenticatedUserId)) return res.status(403).json({ error: 'Not authorized to view this story' });
+      const receipt = turnLockService.findReceipt(story, clientId);
+      const live = turnLockService.describeLock(story.turnLock);
+      let status = 'unknown';
+      if (receipt) status = 'done';
+      else if (live && live.clientId === clientId) status = 'in_progress';
+      res.json({
+        clientId,
+        status,
+        turnNumber: receipt?.turnNumber ?? null,
+        response: receipt ? turnLockService.replayBody(receipt) : null,
+        turnInProgress: live
+      });
+    } catch (error) {
+      console.error('Error reading turn status:', error);
+      res.status(500).json({ error: 'Failed to read turn status' });
     }
   }
 
@@ -593,4 +840,6 @@ class StoryController {
   }
 }
 
-export default new StoryController();
+const storyController = new StoryController();
+
+export default storyController;

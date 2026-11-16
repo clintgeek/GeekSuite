@@ -233,6 +233,37 @@ const storySchema = new mongoose.Schema({
   // Status
   status: { type: String, enum: ['active', 'paused', 'completed', 'abandoned', 'setup'], default: 'active' },
 
+  // ── Turn lifecycle (SUITE_REVIEW_2026-11 items 4 + 5, added 2026-11-16) ──
+  // All three fields are ADDITIVE: a document without them reads exactly as
+  // it did before (no lock, no receipts, not deleted).
+  //
+  // The per-story turn lock. Taken atomically by turnLockService.acquire
+  // (findOneAndUpdate, matching only when no live lock exists) before a turn
+  // that writes, released when it ends. `expiresAt` is what keeps a crashed or
+  // hung turn from holding the story forever: an expired lock is free to take.
+  turnLock: {
+    token: { type: String },
+    clientId: { type: String },
+    startedAt: { type: Date },
+    expiresAt: { type: Date }
+  },
+  // What the last few client-identified turns answered, so a repeat of the
+  // same `clientId` (a resend after a client timeout) gets the turn it
+  // already produced instead of playing the action twice. Capped
+  // (turnLockService.MAX_TURN_RECEIPTS); written in the same save as the turn.
+  turnReceipts: [{
+    _id: false,
+    clientId: { type: String, required: true },
+    turnNumber: { type: Number, default: 0 },
+    response: { type: mongoose.Schema.Types.Mixed, default: {} },
+    createdAt: { type: Date, default: Date.now }
+  }],
+
+  // Recently deleted (SUITE_REVIEW_2026-11 S-D5). Set by a delete; the story
+  // is hidden from every ordinary read by `hideDeletedStories` below and
+  // purged 30 days later (storyTrashService). Null/absent = not deleted.
+  deletedAt: { type: Date, default: null },
+
   // Timestamps
   createdAt: { type: Date, default: Date.now },
   updatedAt: { type: Date, default: Date.now }
@@ -243,6 +274,51 @@ storySchema.pre('save', function(next) {
   this.updatedAt = new Date();
   next();
 });
+
+/** Does a filter say anything about `deletedAt` (at the top, or in an $and/$or/$nor)? */
+export function mentionsDeletedAt(filter) {
+  if (!filter || typeof filter !== 'object') return false;
+  if (Object.prototype.hasOwnProperty.call(filter, 'deletedAt')) return true;
+  return ['$and', '$or', '$nor'].some((op) => Array.isArray(filter[op]) && filter[op].some(mentionsDeletedAt));
+}
+
+/**
+ * Narrow one query to stories that are not in Recently deleted, unless the
+ * query names `deletedAt` itself (the trash list, restore, purge). Exported
+ * so the rule can be tested on a real Query without a database.
+ */
+export function hideDeletedOn(query) {
+  if (mentionsDeletedAt(query.getFilter())) return query;
+  return query.where({ deletedAt: null });
+}
+
+const HIDE_DELETED_OPS = Object.freeze([
+  'find', 'findOne', 'countDocuments', 'distinct',
+  'findOneAndUpdate', 'updateOne', 'updateMany',
+]);
+
+/**
+ * A story in Recently deleted is gone for every ordinary read and write —
+ * the list, getStory, a turn, the characters routes, bookify/epub, the
+ * summary, the diagnostic — without each of them remembering a filter
+ * (`findById` is `findOne`, so it is covered). Same shape as BookGeek's
+ * `hideDeletedBooks` (packages/schemas/bookgeek/book.js). Deletes are never
+ * narrowed: the purge must reach a deleted story.
+ */
+export function hideDeletedStories(schema) {
+  schema.pre(HIDE_DELETED_OPS, function hideDeleted() {
+    hideDeletedOn(this);
+  });
+  schema.pre('aggregate', function hideDeletedInAggregate() {
+    const pipeline = this.pipeline();
+    const first = pipeline[0];
+    if (first && first.$match && mentionsDeletedAt(first.$match)) return;
+    pipeline.unshift({ $match: { deletedAt: null } });
+  });
+  return schema;
+}
+
+hideDeletedStories(storySchema);
 
 // Indexes for performance
 storySchema.index({ userId: 1, status: 1 });

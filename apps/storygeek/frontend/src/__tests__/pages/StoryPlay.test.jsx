@@ -85,6 +85,9 @@ function renderStoryPlay() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Composer drafts live in localStorage (turnClient.js); one test's draft
+  // must not pre-fill the next test's composer.
+  window.localStorage.clear();
   mockMobileMatchMedia();
   api.get.mockResolvedValue({ data: storyFixture });
 });

@@ -391,3 +391,167 @@ in the suite) and Night 2's Q38/Q62 policy set:
   stream's uncommitted work, confirmed via `git diff --stat` — not touched by this stream); the
   `index.js` edit here is a plain 3-line removal with nothing else nearby, and `syntax-check`
   named only the bookgeek file as the failure, not this one.
+
+---
+
+## Wave 3 — the turn lifecycle, drafts, Recently deleted (2026-11-16)
+
+From `DOCS/SUITE_REVIEW_2026-11.md` (ranked items 4, 5, 11; decision S-D5;
+the StoryGeek inspection). Local only — not committed or deployed when written.
+
+### A turn is idempotent (item 4)
+
+The client mints a `clientId` per turn (`frontend/src/game/turnClient.js`,
+`crypto.randomUUID()` with a fallback) and **keeps it when the same words are
+sent again**; edited words get a new one. The server
+(`backend/src/services/turnLockService.js`) records a **receipt**
+`{ clientId, turnNumber, response }` on the story in the *same save* as the
+turn (`recordReceipt` runs immediately before `story.save()` in every writing
+path of `runTurn`), so "the turn landed" and "its receipt exists" cannot
+disagree. A repeat of that clientId is answered from the receipt —
+`{ ...response, replayed: true }` — with no AI call and no second event. The
+last 10 receipts are kept. A turn the narrator could not serve
+(`ai_unavailable`) saves nothing and leaves no receipt, so the same clientId
+simply tries again.
+
+`GET /api/stories/:storyId/turns/:clientId` answers `status: 'done' | 'in_progress' | 'unknown'`
+(+ the replayed `response` when done, + `turnInProgress` for any live turn on
+the story). The play screen asks it **after an ambiguous failure** (no answer,
+a timeout, or a 5xx) before it hands the words back: `done` rebuilds the
+transcript from the record and clears the composer; `in_progress` waits;
+`unknown` (or a status check that itself failed) hands the words back with the
+same clientId — so even a blind resend is safe. A 4xx is a definite "no" and
+hands back at once. `refreshStory` still only feeds the panels; the new
+`syncStory` rebuilds the transcript when the server's event count differs from
+what is on screen (the reconcile the review found missing).
+
+### One writing turn per story (item 5)
+
+`story.turnLock = { token, clientId, startedAt, expiresAt }` is taken by ONE
+atomic `findOneAndUpdate` that matches only when the lock is absent or
+expired, and released (`$unset`, only if the token is still ours) **before the
+response is sent** — `continueStory` wraps `runTurn`, which returns
+`{ status, body }` instead of answering. TTL is 5 minutes
+(`TURN_LOCK_TTL_MS`; longer than two 45s GM calls + a 45s extraction and the
+client's 180s timeout): a crashed or hung turn never holds a story past that.
+A second writing request gets **409** `{ error: { code: 'TURN_IN_PROGRESS', message }, turnInProgress: { yours, startedAt, expiresAt } }`;
+`yours` is true when the running turn has the same clientId (the original of a
+resend). Read-only inputs — `/recall`, `/canon`, `/char`, `/info`,
+`/list-checkpoints`, `/timeout`, unknown commands, an auto-detected canon
+question — take no lock. Writing ones: a story turn, the setup opening,
+`/reset-scene`, `/checkpoint`, `/back`, `/end` (`turnWrites()` in the
+controller mirrors `runTurn`'s dispatch).
+
+The play screen on a 409 (or on a load whose story carries `turnInProgress`)
+shows the writing candle reworded — "A turn is being written elsewhere" /
+"Your turn is still being written" — keeps the composer shut, polls the turn
+status with an easing delay (3s → 20s; the API's limiter is 100 requests per
+15 minutes per IP), and on a return to the app (`useRefetchOnResume`) polls at
+once. When the lock is gone it catches the transcript up and reopens the
+composer; another device's turn leaves the player's own words in place.
+
+Verified against a real `mongod` (the cached 7.0.14 binary through
+`mongodb-memory-server-core` from the pnpm store, scratch script, not
+committed): 20 concurrent acquires → exactly one lock; expiry frees it; a
+stale release leaves a newer lock alone; a legacy document without the new
+fields locks and reads normally; the soft-delete hook hides a story from
+`findById`/`find`/the lock. The committed tests run without a database.
+
+### The composer draft (item 11)
+
+Written to localStorage on every change through `@geeksuite/ui`'s
+`writeGeekDraft` (key `geek-draft:storygeek:composer:<storyId>`), so it
+survives Back, a reload, an evicted PWA and the session-end redirect with no
+flush to miss. While a turn is in flight the draft holds its words **and its
+clientId**; a page that died mid-turn asks the turn status on the next load
+before offering those words again (`resumeFromDraft`). Cleared when a turn is
+accepted (a normal reply, a replay, or a status of `done`). Not
+`useUnsavedGuard` itself: the guard's Back/unload prompts are wrong for a
+composer that is meant to be left half-written, and its draft is read once
+per mount while StoryPlay stays mounted across `storyId` changes.
+
+### Recently deleted (S-D5)
+
+`Story.deletedAt` (default `null`). `DELETE /api/stories/:storyId` now sets it
+(and clears any lock) and runs the lazy purge; nothing is hard-deleted by that
+route any more. The model's `hideDeletedStories` query middleware (same shape
+as BookGeek's `hideDeletedBooks`) adds `deletedAt: null` to every
+find/findOne/findById/countDocuments/distinct/findOneAndUpdate/updateOne/updateMany
+and aggregate that does not name `deletedAt` itself — so the list, the play
+screen, a turn, the lock, the characters routes, bookify/epub, the summary and
+the diagnostic all skip a deleted story without each remembering a filter.
+New routes: `GET /api/stories/deleted` (lazy purge, then the caller's trash
+with `purgeAt`), `POST /api/stories/:storyId/restore`,
+`DELETE /api/stories/:storyId/forever` (only a story already in the caller's
+trash). Purge after 30 days (`STORY_TRASH_RETENTION_MS`), lazily on every
+delete and every trash listing — no job. The UI: the delete confirm reads
+"moves to Recently deleted … can be restored from there for 30 days", the
+toast after a delete has **Undo**, and `/deleted` ("Recently deleted", in the
+sidebar and linked under the list — even an empty one) has Restore and a
+confirmed Delete forever.
+
+### Schema additions (all additive, all on `models/Story.js`)
+
+- `turnLock: { token, clientId, startedAt, expiresAt }`
+- `turnReceipts: [{ clientId, turnNumber, response (Mixed), createdAt }]` (no `_id`)
+- `deletedAt: Date` (default `null`)
+- `continueStorySchema` accepts an optional `clientId` (`[A-Za-z0-9_-]{8,64}`)
+- `GET /:storyId` now also returns `turnInProgress` (null or `{ clientId, startedAt, expiresAt }`)
+
+No index was added. Old documents (no fields) read as unlocked, receipt-less,
+not deleted. StoryGeek has its own backend — there is no gateway module, so
+"gateway first" does not apply; but **the backend must deploy before (or with)
+the frontend**: an old backend's `.strict()` schema 400s a body carrying
+`clientId`, and an old backend hard-deletes.
+
+### getStory no longer ships the checkpoint snapshots
+
+`getStory` reads with a projection that leaves `checkpoints[].events`,
+`worldState`, `characters`, `locations`, `storyThreads`, `storyState`,
+`storySummaries`, `diceResults`, `stats` and `turnReceipts` in Mongo, and
+returns checkpoints as bookmarks `{ id, description, timestamp, turnNumber }`.
+The client never read the snapshots; `/list-checkpoints` and `/back` read the
+full document server-side and are unchanged. This is the read half of the
+review's "Speed" item; the storage half is below.
+
+### Transcript storage — NOT changed; the plan
+
+Every `/checkpoint` copies the whole transcript (plus canon) into the story
+document, uncapped (`checkpointService.makeCheckpoint`). N checkpoints × M
+events grows toward Mongo's 16 MB document limit, at which point **every save
+fails** — every turn of that story. Left alone this wave because the safe fix
+touches `checkpointService`, which is part of the continuity engine
+(CONTINUITY.md), and because `/back` makes the transcript non-append-only.
+
+What it would take:
+
+1. **Data shape (additive).** A checkpoint gains
+   `eventsRef: { count, tailFingerprint }` — the length of the events prefix
+   it captured and a fingerprint of its last event (`turn`, `timestamp`, a hash
+   of `description`; `_id` is not usable because the offline campaign harness
+   runs on plain objects). New checkpoints write `eventsRef` and no `events`.
+   Canon snapshots (characters, facts, threads…) stay inline: they are state,
+   not history, and much smaller.
+2. **Read path (both shapes forever).** Restore uses `checkpoint.events` when
+   present; otherwise `story.events.slice(0, count)` after checking the tail
+   fingerprint. A fingerprint mismatch refuses the restore with a clear message
+   rather than restoring the wrong history.
+3. **The invariant that makes refs safe.** Only `/back` ever shortens
+   `story.events`. Before it truncates to length L, every ref-only checkpoint
+   with `count > L` is **materialised** (its slice copied inline as `events`)
+   in the same save. So a ref-only checkpoint always points at a live prefix.
+4. **Migration.** An idempotent script, dry-run by default: for each existing
+   checkpoint whose inline `events` equal `story.events.slice(0, n)` by
+   fingerprint, replace them with `eventsRef`; anything that does not match
+   stays inline. Run only after the read path has been deployed and soaked;
+   back up first (Duplicati dump).
+5. **Reversibility.** The old read path cannot read refs, so a code rollback
+   after the migration needs the inverse script (materialise every ref). Gate
+   the write side behind `STORYGEEK_CHECKPOINT_REFS` (default off) so the read
+   path can ship alone.
+6. **Risks.** The offline 100-turn campaign test restores at turn ~63 and must
+   keep passing on both shapes; a bug in step 3 loses history silently, so it
+   needs a test that restores across a rewind boundary; the 16 MB cliff should
+   also get a guard (warn when `Object.bsonsize`-ish estimate passes ~8 MB) so
+   it is visible before it fails turns. A cap on the number of checkpoints
+   would be simpler but drops a player's save points — Chef's call.

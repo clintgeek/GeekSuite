@@ -4,7 +4,7 @@
 // each one that needs a sheet/dialog open re-navigates and re-opens it from
 // scratch rather than relying on a previous scene's state.
 import { json } from '../../lib/net.mjs';
-import { CANON } from './fixtures.mjs';
+import { CANON, STORY, TURN_RUNNING } from './fixtures.mjs';
 
 // Send one action from the composer. Throws when the composer is missing: a
 // skipped scene is silent, and these exist to prove specific UI is on screen.
@@ -213,6 +213,54 @@ export const scenes = [
     },
   },
   { name: '14-create', goto: '/create', wait: 1200 },
+  {
+    // Item 5 (2026-11-16): a turn is being written on another device. The
+    // story arrives with `turnInProgress`, the status poll keeps answering
+    // "still running", and the composer stays shut under the notice.
+    name: '15-turn-in-progress',
+    goto: null,
+    async setup(page, h) {
+      const running = { status: 'unknown', turnInProgress: TURN_RUNNING, response: null };
+      await page.route('**/api/stories/s1', (r) => json(r, { ...STORY, turnInProgress: TURN_RUNNING }));
+      await page.route('**/api/stories/s1/turns/*', (r) => json(r, running));
+      try {
+        await page.goto(h.base + '/play/s1', { waitUntil: 'networkidle' });
+        await page.getByText('A turn is being written elsewhere').first().waitFor({ timeout: 5000 });
+        await h.settle(700);
+      } catch (err) {
+        await page.unroute('**/api/stories/s1');
+        await page.unroute('**/api/stories/s1/turns/*');
+        throw err;
+      }
+    },
+    async teardown(page) {
+      await page.unroute('**/api/stories/s1');
+      await page.unroute('**/api/stories/s1/turns/*');
+    },
+  },
+  {
+    // S-D5 (2026-11-16): Recently deleted — Restore and Delete forever per tale.
+    name: '16-recently-deleted',
+    goto: '/deleted',
+    wait: 1200,
+    async setup(page) {
+      await page.getByText('The Lantern Fair').first().waitFor({ timeout: 5000 });
+    },
+  },
+  {
+    // The Delete forever confirm on that page.
+    name: '17-delete-forever-confirm',
+    goto: '/deleted',
+    wait: 1200,
+    viewports: ['phone'],
+    async setup(page, h) {
+      const btn = page.getByRole('button', { name: /^delete the lantern fair forever$/i }).first();
+      if (!(await btn.count())) throw new Error('missing: Delete forever button');
+      await btn.click();
+      await h.settle(600);
+    },
+    teardown: (page, h) => h.esc(400),
+  },
 ];
 
 // Known, ticketed violations. Each one should die when the app is fixed —

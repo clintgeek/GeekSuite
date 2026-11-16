@@ -171,9 +171,38 @@ describe('StoryList', () => {
     const confirmDialog = await screen.findByRole('dialog');
     expect(within(confirmDialog).getByText(/Neon Dead Drop/)).toBeInTheDocument();
 
-    await user.click(within(confirmDialog).getByRole('button', { name: /destroy/i }));
+    await user.click(within(confirmDialog).getByRole('button', { name: /^delete$/i }));
 
     await waitFor(() => expect(api.delete).toHaveBeenCalledWith('/stories/story-2'));
+  });
+
+  // S-D5 (2026-11-16): a delete goes to Recently deleted for 30 days, and the
+  // confirm says so — "lost to the void … permanently destroyed" was the
+  // wording of the hard delete this replaced.
+  it('says the tale can be restored for 30 days, and offers Undo after the delete', async () => {
+    const user = userEvent.setup();
+    api.delete.mockResolvedValue({});
+    api.post.mockResolvedValue({ data: { message: 'Story restored' } });
+    renderStoryList();
+    await screen.findByText('Neon Dead Drop');
+    await user.click(screen.getByRole('button', { name: 'Delete Neon Dead Drop' }));
+
+    const confirmDialog = await screen.findByRole('dialog');
+    expect(within(confirmDialog).getByText(/Recently deleted/)).toBeInTheDocument();
+    expect(within(confirmDialog).getByText(/restored from there for 30 days/i)).toBeInTheDocument();
+    expect(within(confirmDialog).queryByText(/permanently/i)).not.toBeInTheDocument();
+
+    await user.click(within(confirmDialog).getByRole('button', { name: /^delete$/i }));
+    const undo = await screen.findByRole('button', { name: /^undo$/i });
+    await user.click(undo);
+    await waitFor(() => expect(api.post).toHaveBeenCalledWith('/stories/story-2/restore'));
+  });
+
+  it('links to Recently deleted, even from an empty shelf', async () => {
+    api.get.mockResolvedValue({ data: [] });
+    renderStoryList();
+    const link = await screen.findByRole('link', { name: /recently deleted/i });
+    expect(link).toHaveAttribute('href', '/deleted');
   });
 
   // TODO_ORDER #15: the load-error branch now renders `GeekErrorState` with a

@@ -38,6 +38,13 @@ const mockStory = jest.fn().mockImplementation(function ctor(doc) {
 });
 mockStory.findById = jest.fn();
 mockStory.findByIdAndDelete = jest.fn();
+// The turn lock (services/turnLockService.js): acquiring it hands back the
+// story the test put behind findById; releasing it is a no-op here. The
+// soft delete (storyTrashService) goes through updateOne/deleteMany.
+mockStory.findOneAndUpdate = jest.fn(async () => mockStory.findById.getMockImplementation()?.() ?? (await mockStory.findById()));
+mockStory.updateOne = jest.fn(async () => ({ matchedCount: 1 }));
+mockStory.deleteMany = jest.fn(async () => ({ deletedCount: 0 }));
+mockStory.exists = jest.fn(async () => null);
 
 jest.unstable_mockModule(mod('../../models/Story.js'), () => ({
   default: mockStory,
@@ -236,14 +243,18 @@ describe('DELETE /api/stories/:storyId validation', () => {
   test('accepted: a well-formed storyId reaches the controller', async () => {
     const story = buildStoryDoc({ userId: OWNER });
     mockStory.findById.mockResolvedValue(story);
-    mockStory.findByIdAndDelete.mockResolvedValue(story);
 
     const res = await request(buildApp())
       .delete('/api/stories/story-1')
       .set('x-test-user', OWNER);
 
     expect(res.status).toBe(200);
-    expect(mockStory.findByIdAndDelete).toHaveBeenCalledWith('story-1');
+    // A delete is a move to Recently deleted now (S-D5), never a hard delete.
+    expect(mockStory.updateOne).toHaveBeenCalledWith(
+      expect.objectContaining({ _id: 'story-1', userId: OWNER, deletedAt: null }),
+      expect.objectContaining({ $set: expect.objectContaining({ deletedAt: expect.any(Date) }) })
+    );
+    expect(mockStory.findByIdAndDelete).not.toHaveBeenCalled();
   });
 
   test('rejected: an oversized storyId is a 400 before any lookup', async () => {

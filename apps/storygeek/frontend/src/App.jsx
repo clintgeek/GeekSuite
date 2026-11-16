@@ -15,6 +15,7 @@ import StoryCreation from './pages/StoryCreation';
 import StoryPlay from './pages/StoryPlay';
 import CharacterSheet from './pages/CharacterSheet';
 import Settings from './pages/Settings';
+import RecentlyDeleted from './pages/RecentlyDeleted';
 
 function AppShell() {
   const { isAuthenticated, loading } = useAuth();
@@ -58,6 +59,7 @@ function AppShell() {
             <Route path="/play/:storyId" element={authed(<StoryPlay />, { fill: true })} />
             <Route path="/characters/:storyId" element={authed(<CharacterSheet />)} />
             <Route path="/settings" element={authed(<Settings />)} />
+            <Route path="/deleted" element={authed(<RecentlyDeleted />)} />
             <Route path="*" element={<Navigate to={isAuthenticated ? '/' : '/login'} replace />} />
           </Routes>
         </BrowserRouter>

@@ -36,11 +36,24 @@ const startStorySchema = z.object({
 // route's try/catch and surfaces as a 500. Requiring a non-empty string here
 // turns that into a clean 400 instead; every other accepted value (including
 // slash-commands like "/checkpoint ...") is unaffected.
+// `clientId` (2026-11-16) makes a turn idempotent: the client mints one per
+// turn and keeps it when it resends the same words, and the server answers a
+// repeat with the turn it already produced (services/turnLockService.js).
+// Optional, so an older tab that never sends one still plays.
+const clientIdSchema = z.string().trim().min(8).max(64).regex(/^[A-Za-z0-9_-]+$/, 'clientId must be letters, digits, - or _');
+
 const continueStorySchema = z.object({
   userInput: boundedText(20000).min(1, 'userInput is required'),
   provider,
   model,
   debug: z.boolean().optional(),
+  clientId: clientIdSchema.optional(),
+}).strict();
+
+/** `GET /:storyId/turns/:clientId` — did that turn land? */
+const turnStatusParamsSchema = z.object({
+  storyId: storyIdParamsSchema.shape.storyId,
+  clientId: clientIdSchema,
 }).strict();
 
 // storyController.updateStoryStatus writes `req.body.status` straight onto
@@ -50,5 +63,5 @@ const updateStoryStatusSchema = z.object({
   status: z.enum(STORY_STATUSES),
 }).strict();
 
-export { storyIdParamsSchema, startStorySchema, continueStorySchema, updateStoryStatusSchema };
-export default { storyIdParamsSchema, startStorySchema, continueStorySchema, updateStoryStatusSchema };
+export { storyIdParamsSchema, startStorySchema, continueStorySchema, updateStoryStatusSchema, turnStatusParamsSchema, clientIdSchema };
+export default { storyIdParamsSchema, startStorySchema, continueStorySchema, updateStoryStatusSchema, turnStatusParamsSchema, clientIdSchema };
