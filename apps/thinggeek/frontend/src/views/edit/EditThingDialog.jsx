@@ -11,11 +11,14 @@
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Button, InputAdornment, MenuItem, TextField, Typography } from '@mui/material';
+import { useApolloClient } from '@apollo/client';
 import { GeekDialog, useToast } from '@geeksuite/ui';
 import WherePicker from '../../components/WherePicker';
 import TagInput from '../../components/TagInput';
 import TypeIcon from '../../components/TypeIcon';
 import { useThingActions } from '../../hooks/useThingActions';
+import { useUploads } from '../../hooks/useUploads';
+import { GET_THING } from '../../graphql/queries';
 import { useThingTree, useThingTypes, useVocabulary } from '../../hooks/useThingMeta';
 import { subtreeIds } from '../../utils/where';
 import { attributeToForm, buildAttributePatch } from '../../utils/attributes';
@@ -67,15 +70,44 @@ export function thingToForm(thing) {
   };
 }
 
+const photoInput = (p) => ({ id: p.id, role: p.role, caption: (p.caption ?? '').trim() || null });
+const documentInput = (d) => ({ id: d.id, role: d.role, title: (d.title ?? '').trim() || null });
+
+/**
+ * One attachment list for `ThingInput` — or `undefined` (leave it alone).
+ *
+ * The gateway REPLACES photos/documents with the list sent, and an upload
+ * that finishes while the dialog is open is not in the form (it was seeded
+ * on open). Sending the seeded list back would detach that photo, silently
+ * (SUITE_REVIEW_2026-11 ThingGeek finding 1). So:
+ *   - untouched (same ids, order, roles, text as when the dialog opened) →
+ *     not sent at all; the gateway keeps whatever the thing has now;
+ *   - changed → the form's list, plus every attachment in `latest` (the
+ *     freshest read of the thing) that the form never saw, as it is.
+ */
+export function attachmentListInput(formList, seededList, latestList, toInput) {
+  const current = formList.filter((a) => !a.removed).map(toInput);
+  if (!seededList) return current;
+  const seeded = seededList.map(toInput);
+  if (JSON.stringify(current) === JSON.stringify(seeded)) return undefined;
+  const known = new Set(seededList.map((a) => a.id));
+  const arrived = (latestList ?? []).filter((a) => a?.id && !known.has(a.id)).map(toInput);
+  return [...current, ...arrived];
+}
+
 /**
  * The form → `ThingInput`. Arrays replace whole; `attributes` is a PATCH
  * (the gateway merges: changed keys only, null clears) against `original`,
  * the thing's stored attribute map.
+ *
+ * `media.seeded` (the thing as the dialog opened on it) and `media.latest`
+ * (the freshest read) make photos/documents safe against uploads landing
+ * underneath — see `attachmentListInput`. Without them both lists are sent.
  */
-export function formToInput(form, type, original = {}) {
+export function formToInput(form, type, original = {}, media = {}) {
   const value = parseMoneyInput(form.valueAmount);
   const price = parseMoneyInput(form.acquiredPrice);
-  return {
+  const input = {
     name: form.name.trim(),
     typeId: form.typeId || null,
     // Only when it changed: re-sending an unchanged parent would be refused
@@ -100,10 +132,13 @@ export function formToInput(form, type, original = {}) {
         notes: d.notes.trim() || null,
       })),
     relationships: form.relationships.map((r) => ({ kind: r.kind, thingId: r.thing.id })),
-    photos: form.photos.filter((p) => !p.removed).map((p) => ({ id: p.id, role: p.role, caption: (p.caption ?? '').trim() || null })),
-    documents: form.documents.filter((d) => !d.removed).map((d) => ({ id: d.id, role: d.role, title: (d.title ?? '').trim() || null })),
     notes: form.notes,
   };
+  const photos = attachmentListInput(form.photos, media.seeded ? media.seeded.photos ?? [] : null, media.latest?.photos, photoInput);
+  const documents = attachmentListInput(form.documents, media.seeded ? media.seeded.documents ?? [] : null, media.latest?.documents, documentInput);
+  if (photos !== undefined) input.photos = photos;
+  if (documents !== undefined) input.documents = documents;
+  return input;
 }
 
 /** Problems that stop a save, keyed by field. */
@@ -144,10 +179,18 @@ export default function EditThingDialog({ open, onClose, thing, focus }) {
   const [busy, setBusy] = useState(false);
   const [showErrors, setShowErrors] = useState(false);
   const bodyRef = useRef(null);
+  // The thing as the form was seeded from it: photos/documents that arrive
+  // after this are not the form's to drop (formToInput's `media`).
+  const seededRef = useRef(thing);
+  const client = useApolloClient();
+  const { items: uploads } = useUploads(thing?.id);
+  // 'done' items stay listed until the thing has been re-read with them.
+  const uploading = uploads.some((u) => u.status !== 'failed');
 
   useEffect(() => {
     if (open) {
       setForm(thingToForm(thing));
+      seededRef.current = thing;
       setShowErrors(false);
     }
     // Re-seed only when the dialog opens; the thing can update underneath
@@ -190,9 +233,25 @@ export default function EditThingDialog({ open, onClose, thing, focus }) {
       notify(Object.values(errors)[0], { tone: 'warning' });
       return;
     }
+    if (uploading) {
+      notify('A photo or document is still uploading. Save again when it has finished.', { tone: 'warning' });
+      return;
+    }
     setBusy(true);
     try {
-      await updateThing(thing.id, formToInput(form, type, thing.attributes ?? {}));
+      const media = { seeded: seededRef.current ?? thing, latest: thing };
+      let input = formToInput(form, type, thing.attributes ?? {}, media);
+      if (input.photos || input.documents) {
+        // Photos/documents changed: merge against the freshest read, so one
+        // another phone uploaded meanwhile is kept too.
+        try {
+          const res = await client.query({ query: GET_THING, variables: { id: thing.id }, fetchPolicy: 'network-only' });
+          if (res?.data?.thing) input = formToInput(form, type, thing.attributes ?? {}, { ...media, latest: res.data.thing });
+        } catch {
+          /* offline or flaky: the cached thing is the best we know */
+        }
+      }
+      await updateThing(thing.id, input);
       onClose();
       notify('Saved.', { tone: 'success' });
     } catch (e) {

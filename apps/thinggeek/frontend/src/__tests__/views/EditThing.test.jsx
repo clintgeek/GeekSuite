@@ -1,7 +1,8 @@
 import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, screen, within } from '@testing-library/react';
-import { formToInput, thingToForm, validateForm } from '../../views/edit/EditThingDialog';
+import { act, fireEvent, screen, within } from '@testing-library/react';
+import EditThingDialog, { formToInput, thingToForm, validateForm } from '../../views/edit/EditThingDialog';
+import { UploadsProvider, useUploads } from '../../hooks/useUploads';
 import AttributeField from '../../views/edit/AttributeField';
 import { renderWithProviders } from '../testUtils';
 import { TYPES, date, field, makeThing } from '../fixtures';
@@ -72,6 +73,37 @@ describe('thing ↔ form', () => {
     expect('parentId' in formToInput(f, boat, thing.attributes)).toBe(false);
     f.parentId = 'n-van';
     expect(formToInput(f, boat, thing.attributes).parentId).toBe('n-van');
+  });
+
+  it('untouched photos/documents are not sent: an upload that landed after opening is kept (finding 1)', () => {
+    const seeded = wendyWithEverything();
+    const f = thingToForm(seeded);
+    f.name = 'Wendy II'; // "Record the serial" style edit: nothing about media
+    const latest = { ...seeded, photos: [...seeded.photos, { ...seeded.photos[0], id: 'p-new', fileId: 'f9', caption: null }] };
+    const input = formToInput(f, boat, seeded.attributes, { seeded, latest });
+    expect('photos' in input).toBe(false);
+    expect('documents' in input).toBe(false);
+  });
+
+  it('changed photos are sent with every photo that arrived since the dialog opened (finding 1)', () => {
+    const seeded = wendyWithEverything();
+    const f = thingToForm(seeded);
+    f.photos = f.photos.map((p) => (p.id === 'p2' ? { ...p, removed: true } : p));
+    const latest = {
+      ...seeded,
+      photos: [...seeded.photos, { ...seeded.photos[0], id: 'p-new', fileId: 'f9', role: 'id-plate', caption: null }],
+      documents: [...seeded.documents, { ...seeded.documents[0], id: 'doc-new', fileId: 'f8', role: 'manual', title: 'Manual' }],
+    };
+    f.documents = [{ ...f.documents[0], title: 'Bill of sale' }];
+    const input = formToInput(f, boat, seeded.attributes, { seeded, latest });
+    expect(input.photos).toEqual([
+      { id: 'p1', role: 'overview', caption: 'Port side' },
+      { id: 'p-new', role: 'id-plate', caption: null },
+    ]);
+    expect(input.documents).toEqual([
+      { id: 'doc1', role: 'receipt', title: 'Bill of sale' },
+      { id: 'doc-new', role: 'manual', title: 'Manual' },
+    ]);
   });
 
   it('an untouched form sends no attribute changes', () => {
@@ -147,5 +179,30 @@ describe('AttributeField by kind', () => {
     renderWithProviders(<AttributeField field={field('r', 'Registration', 'text', { required: true })} value="" onChange={() => {}} error="Registration is required for this type." />);
     expect(screen.getByRole('textbox', { name: /Registration \*/ })).toHaveAttribute('aria-invalid', 'true');
     expect(screen.getByText('Registration is required for this type.')).toBeInTheDocument();
+  });
+});
+
+describe('saving while an upload is still running (finding 1)', () => {
+  it('does not save; says the upload is still going', async () => {
+    const thing = wendyWithEverything();
+    let enqueue;
+    function Grab() {
+      enqueue = useUploads().enqueue;
+      return null;
+    }
+    const never = () => new Promise(() => {});
+    renderWithProviders(
+      <UploadsProvider upload={never}>
+        <Grab />
+        <EditThingDialog open onClose={() => {}} thing={thing} />
+      </UploadsProvider>,
+      { mocks: [] }
+    );
+    act(() => {
+      enqueue(thing.id, { file: new File(['x'], 'p.jpg', { type: 'image/jpeg' }) });
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
+    expect(await screen.findByText(/still uploading/i)).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Save' })).not.toBeDisabled(); // never went to "Saving…"
   });
 });

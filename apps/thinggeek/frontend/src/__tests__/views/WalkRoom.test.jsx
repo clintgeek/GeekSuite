@@ -1,7 +1,8 @@
 import React from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, waitFor, within } from '@testing-library/react';
-import WalkRoom from '../../views/walk/WalkRoom';
+import WalkRoom, { resetWalkMemory } from '../../views/walk/WalkRoom';
+import { useLocation } from 'react-router-dom';
 import { UploadsProvider } from '../../hooks/useUploads';
 import { CREATE_THING } from '../../graphql/mutations';
 import { GET_THING_TREE, GET_THING_TYPES } from '../../graphql/queries';
@@ -14,11 +15,21 @@ const many = (m) => ({ ...m, maxUsageCount: 20 });
 const typesMock = (types) => many({ request: { query: GET_THING_TYPES }, result: { data: { thingTypes: types } } });
 const treeMock = many({ request: { query: GET_THING_TREE }, result: { data: { thingTree: NODES } } });
 
+function Where() {
+  const loc = useLocation();
+  return <div data-testid="location">{loc.pathname + loc.search}</div>;
+}
+
 function setup({ at = 'n-garage', extraMocks = [], upload, typeMocks = [typesMock(TYPES)] } = {}) {
   const uploadFn = upload ?? vi.fn(async () => ({ file: { id: 'f1' }, entry: { id: 'p1' } }));
-  const Wrapper = ({ children }) => <UploadsProvider upload={uploadFn}>{children}</UploadsProvider>;
-  renderWithProviders(<WalkRoom />, { initialEntries: [`/walk?at=${at}`], mocks: [...typeMocks, treeMock, ...extraMocks], wrapper: Wrapper });
-  return { upload: uploadFn };
+  const Wrapper = ({ children }) => (
+    <UploadsProvider upload={uploadFn}>
+      {children}
+      <Where />
+    </UploadsProvider>
+  );
+  const view = renderWithProviders(<WalkRoom />, { initialEntries: [`/walk?at=${at}`], mocks: [...typeMocks, treeMock, ...extraMocks], wrapper: Wrapper });
+  return { upload: uploadFn, ...view };
 }
 
 // A household's own type with a required field (no starter type has one).
@@ -41,6 +52,7 @@ const pickType = async (name) => fireEvent.click(await screen.findByRole('button
 const createMock = (input, thing) => ({ request: { query: CREATE_THING, variables: { input } }, result: { data: { createThing: thing } } });
 
 beforeEach(() => {
+  resetWalkMemory();
   try {
     window.localStorage.clear();
   } catch {
@@ -242,5 +254,98 @@ describe('Walk the room — required fields', () => {
 
     await waitFor(() => expect(screen.getByTestId('walk-item')).toHaveAttribute('data-status', 'saved'));
     expect(screen.getByTestId('walk-count')).toHaveTextContent('1 added to Garage');
+  });
+});
+
+describe('Walk the room — leaving never drops unsaved work (finding 3)', () => {
+  const input = { name: 'Drill', typeId: 'ty-general', parentId: 'n-garage', tags: [] };
+  const failOnce = { request: { query: CREATE_THING, variables: { input } }, error: new Error('The network dropped.') };
+
+  async function failADrill(opts = {}) {
+    const view = setup({ extraMocks: [failOnce], ...opts });
+    await screen.findByTestId('unit-tag');
+    fireEvent.change(nameBox(), { target: { value: 'Drill' } });
+    fireEvent.click(nextButton());
+    await waitFor(() => expect(screen.getByTestId('walk-item')).toHaveAttribute('data-status', 'failed'));
+    return view;
+  }
+
+  it('Done with a failed create asks first; Keep walking stays, Leave without them goes', async () => {
+    await failADrill();
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByTestId('walk-leave-summary')).toHaveTextContent("1 thing didn't save");
+    expect(screen.getByTestId('location')).toHaveTextContent('/walk?at=n-garage');
+
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Keep walking' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
+    expect(screen.getByTestId('walk-item')).toHaveAttribute('data-status', 'failed');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    fireEvent.click(within(await screen.findByRole('dialog')).getByRole('button', { name: 'Leave without them' }));
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/where?at=n-garage'));
+  });
+
+  it('Done with a typed name not yet added asks too', async () => {
+    setup();
+    await screen.findByTestId('unit-tag');
+    fireEvent.change(nameBox(), { target: { value: 'Shop vac' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    expect(within(await screen.findByRole('dialog')).getByTestId('walk-leave-summary')).toHaveTextContent('"Shop vac" isn\'t added yet');
+  });
+
+  it('Done with everything saved just goes', async () => {
+    setup();
+    await screen.findByTestId('unit-tag');
+    fireEvent.click(screen.getByRole('button', { name: 'Done' }));
+    await waitFor(() => expect(screen.getByTestId('location')).toHaveTextContent('/where?at=n-garage'));
+    expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('Back or a tab switch (the screen just goes) keeps the failed row and the half-typed name for next time; Discard drops a row', async () => {
+    const view = await failADrill();
+    fireEvent.change(nameBox(), { target: { value: 'Shop vac' } });
+    view.unmount();
+
+    setup();
+    await screen.findByTestId('unit-tag');
+    const row = await screen.findByTestId('walk-item');
+    expect(row).toHaveAttribute('data-status', 'failed');
+    expect(row).toHaveTextContent('Drill');
+    expect(screen.getByTestId('walk-restored')).toBeInTheDocument();
+    expect(nameBox()).toHaveValue('Shop vac');
+
+    fireEvent.click(within(row).getByRole('button', { name: 'Discard Drill' }));
+    await waitFor(() => expect(screen.queryByTestId('walk-item')).toBeNull());
+  });
+});
+
+describe('Walk the room — a create in flight when the screen goes', () => {
+  it('still records that it failed; the row is back on the next walk', async () => {
+    const input = { name: 'Ladder', typeId: 'ty-general', parentId: 'n-garage', tags: [] };
+    const view = setup({ extraMocks: [{ request: { query: CREATE_THING, variables: { input } }, error: new Error('Gateway timeout'), delay: 150 }] });
+    await screen.findByTestId('unit-tag');
+    fireEvent.change(nameBox(), { target: { value: 'Ladder' } });
+    fireEvent.click(nextButton());
+    expect(await screen.findByTestId('walk-item')).toHaveAttribute('data-status', 'saving');
+    view.unmount();
+    await new Promise((r) => setTimeout(r, 300));
+
+    setup();
+    const row = await screen.findByTestId('walk-item');
+    expect(row).toHaveTextContent('Ladder');
+    expect(row).toHaveAttribute('data-status', 'failed');
+  });
+});
+
+describe('Walk the room — Remove the photo (finding 6)', () => {
+  it('has a 44 px hit area', async () => {
+    setup();
+    await screen.findByTestId('unit-tag');
+    fireEvent.change(screen.getByTestId('walk-camera-input'), { target: { files: [new File(['x'], 'p.jpg', { type: 'image/jpeg' })] } });
+    const remove = await screen.findByRole('button', { name: 'Remove the photo' });
+    const style = window.getComputedStyle(remove);
+    expect(parseFloat(style.width)).toBeGreaterThanOrEqual(44);
+    expect(parseFloat(style.height)).toBeGreaterThanOrEqual(44);
   });
 });

@@ -20,15 +20,21 @@
  *
  * ## Today
  *
- * "Today" is the UTC calendar day, like every calendar date in the suite
- * (stored as UTC midnight). daysUntil = whole days from today; negative when
- * past.
+ * "Today" is the HOUSEHOLD's calendar day (shared/householdToday.js; one
+ * setting, HOUSEHOLD_TIME_ZONE, default America/Chicago — SUITE_REVIEW_2026-11
+ * S-D4), expressed as UTC midnight like every stored calendar date in the
+ * suite, so the arithmetic below is unchanged. It used to be the UTC day,
+ * which from about 6-7 PM Central is already tomorrow: things due today read
+ * "Overdue by a day". `todayUtc` remains only to floor a stored date to its
+ * UTC day. daysUntil = whole days from today; negative when past.
  *
  * ## nextDue
  *
  * The occurrence with the smallest daysUntil ≥ 0; if every date is past, the
  * MOST overdue one (the earliest). No dates → null.
  */
+
+import { householdToday } from '../shared/householdToday.js';
 
 export const DAY_MS = 24 * 60 * 60 * 1000;
 
@@ -41,8 +47,14 @@ export const YEAR_DAYS = 365;
 export const DUE_BUCKETS = Object.freeze(['overdue', '30d', '90d', 'year']);
 export const DUE_BUCKET_DAYS = Object.freeze({ '30d': SOON_DAYS, '90d': UPCOMING_DAYS, year: YEAR_DAYS });
 
+/** The UTC calendar day of an instant (flooring a stored date). NOT "today": see `todayLocal`. */
 export function todayUtc(now = new Date()) {
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+}
+
+/** "Today" for every due/expiring rule: the household's calendar day, as UTC midnight. */
+export function todayLocal(now = new Date()) {
+  return householdToday(now);
 }
 
 export function addDays(date, days) {
@@ -66,7 +78,7 @@ function monthDiff(a, b) {
 }
 
 /** The occurrence of a stored date that counts today (see the module doc). */
-export function occurrenceOf(d, today = todayUtc()) {
+export function occurrenceOf(d, today = todayLocal()) {
   const anchor = d?.date ? new Date(d.date) : null;
   if (!anchor || Number.isNaN(anchor.getTime())) return null;
   const every = Number(d.recurEveryMonths) || 0;
@@ -77,7 +89,7 @@ export function occurrenceOf(d, today = todayUtc()) {
   return first >= today ? first : addMonthsClamped(anchor, (k + 1) * every);
 }
 
-export function daysUntil(date, today = todayUtc()) {
+export function daysUntil(date, today = todayLocal()) {
   return Math.round((todayUtc(date).getTime() - today.getTime()) / DAY_MS);
 }
 
@@ -89,14 +101,14 @@ export function statusOf(days) {
 }
 
 /** A stored date → its rendered ThingDate fields (the anchor stays `date`). */
-export function renderDate(d, today = todayUtc()) {
+export function renderDate(d, today = todayLocal()) {
   const occ = occurrenceOf(d, today);
   const days = occ ? daysUntil(occ, today) : 0;
   return { ...d, occursOn: occ, daysUntil: days, status: statusOf(days) };
 }
 
 /** The date that counts for "next due" (module doc), or null. */
-export function nextDueOf(dates, today = todayUtc()) {
+export function nextDueOf(dates, today = todayLocal()) {
   const rendered = (dates ?? []).map((d) => renderDate(d, today)).filter((d) => d.occursOn);
   if (!rendered.length) return null;
   const upcoming = rendered.filter((d) => d.daysUntil >= 0).sort((a, b) => a.daysUntil - b.daysUntil);
@@ -128,7 +140,7 @@ function occurrenceExpr(today) {
  * Thing. Filters, facets and the nextDue sort read these; they are projected
  * away before a Thing leaves the pipeline.
  */
-export function occurrenceStages(today = todayUtc()) {
+export function occurrenceStages(today = todayLocal()) {
   return [
     {
       $addFields: {
@@ -165,12 +177,12 @@ export function occurrenceIn(from, to) {
 }
 
 /** Query clause for one due bucket. */
-export function dueBucketClause(bucket, today = todayUtc()) {
+export function dueBucketClause(bucket, today = todayLocal()) {
   if (bucket === 'overdue') return { __occ: { $elemMatch: { $lt: today } } };
   return occurrenceIn(today, addDays(today, DUE_BUCKET_DAYS[bucket]));
 }
 
 /** `due:Nd` / `expiring:Nd`: something falls due within N days, overdue included. */
-export function dueWithinClause(days, today = todayUtc()) {
+export function dueWithinClause(days, today = todayLocal()) {
   return { __occ: { $elemMatch: { $lte: addDays(today, days) } } };
 }

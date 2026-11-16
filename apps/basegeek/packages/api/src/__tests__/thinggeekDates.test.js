@@ -1,7 +1,7 @@
 /**
  * thinggeekDates.test.js — "what's expiring or due?"
  *
- *   - daysUntil counts whole UTC calendar days from today (negative = past);
+ *   - daysUntil counts whole calendar days from the household’s today (negative = past);
  *   - status: overdue (<0) | soon (≤30) | upcoming (≤90) | later;
  *   - a past RECURRING date counts as its next occurrence (anchor + k·N
  *     months, clamped at month end, computed from the anchor so it never

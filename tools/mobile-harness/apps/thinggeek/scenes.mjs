@@ -533,6 +533,20 @@ export const scenes = [
     },
   },
   {
+    // Done with a name typed but not yet added: asks before dropping it
+    // (SUITE_REVIEW_2026-11 ThingGeek finding 3).
+    name: '18e-walk-leave-confirm',
+    goto: '/walk?at=p-garage',
+    wait: 1400,
+    async setup(page, h) {
+      await page.getByLabel('Name *').fill('Shop vac');
+      await page.getByLabel('Name *').blur();
+      if (!(await click(page, h, page.getByRole('button', { name: 'Done' }), 700))) return false;
+      if (!(await page.getByTestId('walk-leave-summary').count())) throw new Error('Done did not ask before dropping the typed item');
+    },
+    teardown: (page, h) => h.esc(),
+  },
+  {
     // First-run checklist, above the attention list: a brand-new household.
     name: '19-attention-checklist',
     goto: '/attention?__fixture=empty',

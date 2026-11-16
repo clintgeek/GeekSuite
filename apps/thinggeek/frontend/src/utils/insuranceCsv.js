@@ -45,9 +45,18 @@ export function hasReceipt(thing) {
   return (thing?.photos ?? []).some((p) => p.role === 'receipt') || (thing?.documents ?? []).some((d) => d.role === 'receipt');
 }
 
+/**
+ * A TEXT cell starting with = + - @, tab or CR is read as a formula by
+ * Excel/Sheets ("-20C freezer", "=HYPERLINK(...)"): it gets a leading `'`
+ * so it stays text. Numbers (money, counts) are left alone — a negative
+ * number is a number. (SUITE_REVIEW_2026-11 ThingGeek finding 7.)
+ */
+const FORMULA_START = /^[=+\-@\t\r]/;
+
 export function csvCell(value) {
   if (value === null || value === undefined) return '';
-  const s = String(value);
+  let s = String(value);
+  if (typeof value === 'string' && FORMULA_START.test(s)) s = `'${s}`;
   return /[",\r\n]/.test(s) || /^\s|\s$/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 

@@ -108,6 +108,22 @@ export function UploadsProvider({ children, upload = uploadThingFile }) {
     []
   );
 
+  // The bytes live only in memory: closing or reloading the tab mid-upload
+  // loses the photo. Ask the browser to warn while one is going (finding 5,
+  // the small fix). An OS that kills a backgrounded PWA fires nothing — that
+  // case still shows up later as "missing: photo" in Needs attention.
+  const inFlight = items.some((it) => it.status === 'uploading');
+  useEffect(() => {
+    if (!inFlight || typeof window === 'undefined') return undefined;
+    const warn = (e) => {
+      e.preventDefault();
+      e.returnValue = '';
+      return '';
+    };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [inFlight]);
+
   const value = useMemo(() => ({ items, enqueue, retry, dismiss }), [items, enqueue, retry, dismiss]);
   return <UploadsContext.Provider value={value}>{children}</UploadsContext.Provider>;
 }

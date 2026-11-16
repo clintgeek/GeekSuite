@@ -70,8 +70,9 @@ export function relativeInstant(value, now = new Date()) {
 }
 
 /**
- * How a due date reads, from the server's whole-day `daysUntil` (UTC
- * calendar, negative when past). The server did the date maths; this only
+ * How a due date reads, from the server's whole-day `daysUntil` (counted
+ * from the household's today — America/Chicago unless the gateway's
+ * HOUSEHOLD_TIME_ZONE says otherwise — negative when past). The server did the date maths; this only
  * words it.
  */
 export function dueText(daysUntil) {

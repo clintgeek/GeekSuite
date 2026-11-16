@@ -35,12 +35,22 @@
  * Save re-sends with the value; the types are re-read so the capture row
  * asks for it from then on. A failed PHOTO upload (the create itself
  * succeeded) shows through the shared uploads queue and retries there.
+ *
+ * Leaving never drops one silently (SUITE_REVIEW_2026-11 ThingGeek
+ * finding 3). Done with anything unsaved — a create that failed, needs a
+ * field or is still saving, or a typed name / photo not yet Next-ed — asks
+ * first ("Keep walking" / "Leave without them"). Back or a tab switch can't
+ * be asked about (no data router), so the room's unsaved rows and the
+ * half-typed item are kept in memory for this app session (`walkMemory`,
+ * Files included) and come back on the next walk of the same room, with a
+ * Discard on each row. A create still in flight when the screen goes keeps
+ * writing its outcome there too.
  */
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Box, Button, ButtonBase, Portal, TextField, Typography, useMediaQuery, useTheme } from '@mui/material';
 import { PhotoCameraOutlined as CameraIcon } from '@mui/icons-material';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { GeekErrorState } from '@geeksuite/ui';
+import { GeekDialog, GeekErrorState } from '@geeksuite/ui';
 import ChromeTheme from '../../components/Chrome';
 import { MiniDoor } from '../../components/StorageUnit';
 import UnitTag from '../../components/UnitTag';
@@ -60,6 +70,28 @@ import AttributeField from '../edit/AttributeField';
 import { attributeErrorsFrom, buildAttributes, fieldList, missingRequired } from '../../utils/attributes';
 
 let seq = 0;
+
+/**
+ * Per room (`?at=`): the walk's rows and the half-typed item, kept across
+ * leaving the screen for this app session. Module scope on purpose: Files
+ * can't go into sessionStorage, and a create in flight must be able to
+ * record its outcome after the screen has unmounted.
+ */
+const walkMemory = new Map(); // at → { items, draft: { name, photo } }
+
+/** Not saved, so not safe to drop without asking. */
+export function isUnsavedItem(item) {
+  return item.status === 'failed' || item.status === 'needs' || item.status === 'saving';
+}
+
+/** Tests only: forget every room. */
+export function resetWalkMemory() {
+  walkMemory.clear();
+}
+
+function rememberedFor(at) {
+  return walkMemory.get(at ?? '') ?? { items: [], draft: { name: '', photo: null } };
+}
 
 /** A place is walkable: a location or a container (never an item — see utils/where kinds). */
 function isWalkablePlace(node) {
@@ -120,26 +152,40 @@ function CaptureThumb({ photo, onPhoto }) {
           onClick={() => onPhoto(null)}
           aria-label="Remove the photo"
           data-testid="walk-photo-remove"
+          // A 44 px hit area (one-handed, in a garage) round the same small
+          // 26 px badge, which sits where it always did (finding 6).
           sx={{
             position: 'absolute',
-            top: -8,
-            right: -8,
-            width: 26,
-            height: 26,
-            minWidth: 26,
+            top: -17,
+            right: -17,
+            width: 44,
+            height: 44,
+            minWidth: 44,
             borderRadius: '50%',
-            bgcolor: 'background.paper',
-            border: 1,
-            borderColor: 'border',
-            color: 'text.primary',
-            fontSize: '0.875rem',
-            fontWeight: 700,
-            lineHeight: 1,
             display: 'grid',
             placeItems: 'center',
           }}
         >
-          ×
+          <Box
+            component="span"
+            aria-hidden="true"
+            sx={{
+              width: 26,
+              height: 26,
+              borderRadius: '50%',
+              bgcolor: 'background.paper',
+              border: 1,
+              borderColor: 'border',
+              color: 'text.primary',
+              fontSize: '0.875rem',
+              fontWeight: 700,
+              lineHeight: 1,
+              display: 'grid',
+              placeItems: 'center',
+            }}
+          >
+            ×
+          </Box>
         </ButtonBase>
       ) : null}
       <input ref={cameraRef} type="file" accept="image/*" capture="environment" hidden aria-hidden="true" tabIndex={-1} data-testid="walk-camera-input" onChange={picked} />
@@ -203,7 +249,7 @@ function FixFields({ item, statusId, onFix }) {
   );
 }
 
-function ItemRow({ item, upload, onRetryCreate, onRetryUpload, onFix }) {
+function ItemRow({ item, upload, onRetryCreate, onRetryUpload, onFix, onDiscard }) {
   const theme = useTheme();
   const failed = item.status === 'failed' || item.status === 'needs';
   const statusId = `walk-status-${item.key}`;
@@ -225,6 +271,11 @@ function ItemRow({ item, upload, onRetryCreate, onRetryUpload, onFix }) {
             <ItemStatusText item={item} upload={upload} />
           </Typography>
         </Box>
+        {failed ? (
+          <Button size="small" onClick={() => onDiscard(item.key)} aria-label={`Discard ${item.name}`} sx={{ minHeight: 44, color: 'text.secondary' }}>
+            Discard
+          </Button>
+        ) : null}
         {item.status === 'failed' ? (
           <Button size="small" onClick={() => onRetryCreate(item.key)} sx={{ minHeight: 44, color: 'text.primary' }}>
             Retry
@@ -273,14 +324,39 @@ export default function WalkRoom() {
   const place = at ? nodesById.get(at) : null;
   const placeIsWalkable = isWalkablePlace(place);
 
-  const [photo, setPhoto] = useState(null);
-  const [name, setName] = useState('');
+  // What an earlier visit to this room left unsaved comes back (finding 3).
+  const [restored] = useState(() => {
+    const mem = rememberedFor(at);
+    const kept = mem.items.filter(isUnsavedItem);
+    walkMemory.set(at ?? '', { items: kept, draft: mem.draft });
+    return { items: kept, draft: mem.draft };
+  });
+  const [photo, setPhoto] = useState(restored.draft.photo ?? null);
+  const [name, setName] = useState(restored.draft.name ?? '');
   const [nameError, setNameError] = useState('');
   const [attrs, setAttrs] = useState({});
   const [attrErrors, setAttrErrors] = useState({});
   const [typeId, setTypeId] = useState(null);
-  const [items, setItems] = useState([]); // newest first: { key, name, typeId, typeIcon, photoFile, previewUrl, status, thingId, error }
+  const [items, setItemsState] = useState(restored.items); // newest first: { key, name, typeId, typeIcon, photoFile, previewUrl, status, thingId, error }
   const [saving, setSaving] = useState(false);
+  const [confirmLeave, setConfirmLeave] = useState(false);
+  const restoredCount = useRef(restored.items.length);
+
+  // Every change to the rows goes through walkMemory first, so a create that
+  // finishes after the screen has gone still records whether it saved.
+  const memKey = at ?? '';
+  const setItems = (fn) => {
+    const mem = rememberedFor(memKey);
+    const next = typeof fn === 'function' ? fn(mem.items) : fn;
+    walkMemory.set(memKey, { ...mem, items: next });
+    setItemsState(next);
+  };
+
+  // The half-typed item survives Back / a tab switch too.
+  useEffect(() => {
+    const mem = rememberedFor(memKey);
+    walkMemory.set(memKey, { ...mem, draft: { name, photo } });
+  }, [memKey, name, photo]);
 
   const generalId = useMemo(() => types.find((t) => t.key === 'general')?.id ?? null, [types]);
   const typesById = useMemo(() => new Map(types.map((t) => [t.id, t])), [types]);
@@ -390,7 +466,35 @@ export default function WalkRoom() {
 
   const uploadFor = (thingId) => (thingId ? uploads.items.find((u) => u.thingId === thingId && u.kind === 'photo') : null);
 
-  const doneWalking = () => navigate(`/where?at=${encodeURIComponent(place.id)}`);
+  const discardItem = (key) => setItems((list) => list.filter((it) => it.key !== key));
+
+  const unsavedCount = items.filter(isUnsavedItem).length;
+  // Failed / needs-a-field rows: the ones that go nowhere unless someone acts.
+  const stuckCount = items.filter((it) => it.status === 'failed' || it.status === 'needs').length;
+  const hasDraft = Boolean(name.trim()) || Boolean(photo);
+
+  const leave = () => navigate(`/where?at=${encodeURIComponent(place.id)}`);
+  const doneWalking = () => {
+    // A create still saving needs no question: it finishes on its own, and
+    // if it fails it is in walkMemory for the next walk of this room.
+    if (stuckCount || hasDraft) {
+      setConfirmLeave(true);
+      return;
+    }
+    leave();
+  };
+  const leaveWithoutThem = () => {
+    // Dropped, as asked — except creates still in flight, which keep
+    // recording their outcome (a failure comes back next time).
+    const mem = rememberedFor(memKey);
+    walkMemory.set(memKey, { items: mem.items.filter((it) => it.status === 'saving'), draft: { name: '', photo: null } });
+    setConfirmLeave(false);
+    leave();
+  };
+  const leaveSummary = [
+    stuckCount ? `${stuckCount === 1 ? '1 thing' : `${stuckCount} things`} didn't save` : null,
+    hasDraft ? `${name.trim() ? `"${name.trim()}"` : 'The photo you took'} isn't added yet` : null,
+  ].filter(Boolean);
 
   if (treeError && !nodes.length) {
     return (
@@ -493,6 +597,11 @@ export default function WalkRoom() {
           <Typography data-testid="walk-count" sx={{ mt: 1, fontSize: '0.9375rem', fontWeight: 700, color: 'text.primary' }}>
             {savedCount} added to {place.name}
           </Typography>
+          {restoredCount.current > 0 && unsavedCount > 0 ? (
+            <Typography data-testid="walk-restored" sx={{ mt: 0.5, fontSize: '0.8125rem', color: 'text.secondary' }}>
+              Kept from your last walk here: retry or discard below.
+            </Typography>
+          ) : null}
         </Box>
         <Button variant="outlined" onClick={doneWalking} sx={{ color: 'text.primary', borderColor: 'text.primary', minHeight: 44, flexShrink: 0, alignSelf: 'flex-start' }}>
           Done
@@ -566,11 +675,32 @@ export default function WalkRoom() {
           </Typography>
           <Box component="ul" sx={{ m: 0, p: 0 }}>
             {items.map((item) => (
-              <ItemRow key={item.key} item={item} upload={uploadFor(item.thingId)} onRetryCreate={retryCreate} onRetryUpload={uploads.retry} onFix={fixCreate} />
+              <ItemRow key={item.key} item={item} upload={uploadFor(item.thingId)} onRetryCreate={retryCreate} onRetryUpload={uploads.retry} onFix={fixCreate} onDiscard={discardItem} />
             ))}
           </Box>
         </Box>
       ) : null}
+
+      <GeekDialog
+        open={confirmLeave}
+        onClose={() => setConfirmLeave(false)}
+        title="Leave with things unsaved?"
+        mode="window"
+        primaryAction={
+          <Button variant="contained" onClick={() => setConfirmLeave(false)} autoFocus>
+            Keep walking
+          </Button>
+        }
+        secondaryAction={
+          <Button onClick={leaveWithoutThem} sx={{ color: 'text.secondary' }}>
+            Leave without them
+          </Button>
+        }
+      >
+        <Typography data-testid="walk-leave-summary" sx={{ fontSize: '0.9375rem', lineHeight: 1.6 }}>
+          {leaveSummary.join('. ')}.
+        </Typography>
+      </GeekDialog>
     </PageFrame>
   );
 }

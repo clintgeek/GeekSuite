@@ -4,6 +4,7 @@ import householdModule from '@geeksuite/schemas/thinggeek/household';
 import atticModule from '@geeksuite/schemas/thinggeek/attic';
 import vaultSessionModule from '@geeksuite/schemas/thinggeek/vaultSession';
 import { Thing } from '../models/thing.js';
+import { householdToday } from '../../shared/householdToday.js';
 import { AtticPerson, AtticDocumentType, AtticDocument, AtticFile, VaultSession, AtticAudit } from '../models/attic.js';
 import {
   validateInput,
@@ -270,7 +271,8 @@ async function expiringFor(context, householdId) {
       typesById(context, householdId),
       peopleById(context, householdId),
     ]);
-    const today = new Date();
+    // The household's day, not the UTC one (S-D4): see shared/householdToday.js.
+    const today = householdToday();
     const out = [];
     for (const d of docs) {
       const type = types.get(String(d.typeId));
@@ -364,7 +366,7 @@ export const resolvers = {
       const { householdId } = await requireVault(context);
       const type = (await typesById(context, householdId)).get(String(d.typeId));
       const warnDays = type?.expiryLabel ? type?.expiryWarnDays ?? null : null;
-      const st = atticExpiryStatus(d.expires, warnDays, new Date());
+      const st = atticExpiryStatus(d.expires, warnDays, householdToday());
       return { date: d.expires ?? null, label: type?.expiryLabel ?? null, status: st.status, daysUntil: st.daysUntil, warnDays, warnsOn: st.warnsOn };
     },
     files: async (d, _a, context) => {

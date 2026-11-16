@@ -13,6 +13,8 @@
  */
 import mongoose from 'mongoose';
 import { ApolloServer } from '@apollo/server';
+import { householdToday } from '../graphql/shared/householdToday.js';
+import { jest } from '@jest/globals';
 import vaultSessionModule from '@geeksuite/schemas/thinggeek/vaultSession';
 import {
   startHarness,
@@ -103,7 +105,7 @@ const UPDATE_DOC = `mutation($id: ID!, $input: AtticDocumentInput!) { updateAtti
 const EXPIRING = `query { atticExpiring { documentId typeName expiryLabel people expires daysUntil status } }`;
 
 function dayFromToday(n) {
-  const now = new Date();
+  const now = householdToday(); // the household's day (S-D4), not the UTC one
   return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + n)).toISOString().slice(0, 10);
 }
 
@@ -444,6 +446,26 @@ describe('the Attic — expiry windows (Needs attention)', () => {
     const rows = (await ok(EXPIRING, {}, HEATHER)).atticExpiring;
     expect(rows.length).toBe(warns ? 1 : 0);
     if (warns) expect(rows[0].status).toBe(days < 0 ? 'expired' : 'warning');
+  });
+
+  test('at 7 PM Central a document expiring today is in date, not expired (S-D4)', async () => {
+    // Only Date is faked: the UTC day is already the 16th, the household's is the 15th.
+    jest.useFakeTimers({
+      now: new Date('2026-11-16T01:00:00.000Z'),
+      doNotFake: ['nextTick', 'setImmediate', 'setTimeout', 'setInterval', 'clearTimeout', 'clearInterval', 'clearImmediate', 'queueMicrotask', 'hrtime', 'performance'],
+    });
+    try {
+      for (const k of Object.keys(tokens)) delete tokens[k];
+      const t = await types();
+      const d = await doc({ typeId: t.passport.id, expires: '2026-11-15' });
+      const [row] = (await ok(EXPIRING)).atticExpiring;
+      expect(row).toMatchObject({ daysUntil: 0, status: 'warning' });
+      const one = await ok(`query($id: ID!) { atticDocument(id: $id) { expiry { daysUntil status } } }`, { id: d.id });
+      expect(one.atticDocument.expiry).toMatchObject({ daysUntil: 0, status: 'warning' });
+    } finally {
+      jest.useRealTimers();
+      for (const k of Object.keys(tokens)) delete tokens[k];
+    }
   });
 
   test('the warning window is the household’s to tune', async () => {

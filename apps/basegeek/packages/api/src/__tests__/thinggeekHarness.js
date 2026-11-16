@@ -13,6 +13,7 @@
  * answers 'default' today).
  */
 import mongoose from 'mongoose';
+import { householdToday } from '../graphql/shared/householdToday.js';
 import { ApolloServer } from '@apollo/server';
 
 const { typeDefs, resolvers } = await import('../graphql/index.js');
@@ -131,9 +132,10 @@ export async function move(id, parentId, userId = CHEF) {
 }
 
 /** UTC calendar day `n` days from today, as YYYY-MM-DD. */
+/** `YYYY-MM-DD`, n days from the HOUSEHOLD's today (S-D4), not the UTC one. */
 export function dayFromToday(n) {
-  const now = new Date();
-  const d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + n));
+  const today = householdToday();
+  const d = new Date(Date.UTC(today.getUTCFullYear(), today.getUTCMonth(), today.getUTCDate() + n));
   return d.toISOString().slice(0, 10);
 }
 

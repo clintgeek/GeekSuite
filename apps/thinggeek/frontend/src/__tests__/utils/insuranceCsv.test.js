@@ -86,6 +86,22 @@ describe('insurance CSV', () => {
     expect(csvCell(null)).toBe('');
   });
 
+  it('neutralises spreadsheet formulas in text cells, not in numbers (finding 7)', () => {
+    expect(csvCell('=HYPERLINK("http://x","y")')).toBe(`"'=HYPERLINK(""http://x"",""y"")"`);
+    expect(csvCell('-20C freezer')).toBe("'-20C freezer");
+    expect(csvCell('+1 555 0100')).toBe("'+1 555 0100");
+    expect(csvCell('@SUM(A1)')).toBe("'@SUM(A1)");
+    expect(csvCell('\tcmd')).toBe("'\tcmd");
+    expect(csvCell('\rcmd')).toBe(`"'\rcmd"`);
+    expect(csvCell('Tackle box')).toBe('Tackle box');
+    expect(csvCell('a-b = c')).toBe('a-b = c');
+    expect(csvCell(-250)).toBe('-250');
+    const [head, row] = parse(buildInsuranceCsv([makeThing({ name: '=1+1', notes: '-20C freezer', acquired: { ...makeThing().acquired, from: '@home' } })]).slice(1));
+    expect(row[head.indexOf('Name')]).toBe("'=1+1");
+    expect(row[head.indexOf('Notes')]).toBe("'-20C freezer");
+    expect(row[head.indexOf('Acquired from')]).toBe("'@home");
+  });
+
   it('a receipt photo counts too', () => {
     expect(hasReceipt({ photos: [{ role: 'receipt' }] })).toBe(true);
     expect(hasReceipt({ photos: [{ role: 'overview' }], documents: [{ role: 'manual' }] })).toBe(false);
