@@ -304,3 +304,21 @@ export const DRAFT_BOOK_METADATA = gql`
     }
   }
 `;
+
+// Recently deleted (S-D5, 2026-11-15). Its own selection, not BookFields:
+// `deletedAt`/`purgeAt`/`deleteFilesOnPurge` exist only on a gateway that
+// has the trash, and only this screen asks for them.
+export const GET_DELETED_BOOKS = gql`
+  query GetDeletedBooks($limit: Int) {
+    deletedBooks(limit: $limit) {
+      id
+      title
+      authors
+      coverPath
+      updatedAt
+      deletedAt
+      purgeAt
+      deleteFilesOnPurge
+    }
+  }
+`;

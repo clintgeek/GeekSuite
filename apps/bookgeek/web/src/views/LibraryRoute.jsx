@@ -78,12 +78,6 @@ export default function LibraryRoute() {
         selectMode={basket.selectMode}
         setSelectMode={basket.setSelectMode}
         toggleBasket={basket.toggleBasket}
-        showMergeUi={library.showMergeUi}
-        selectedBookIds={library.selectedBookIds}
-        toggleBookSelection={library.toggleBookSelection}
-        handleMergeSelectedBooks={library.handleMergeSelectedBooks}
-        mergeLoading={library.mergeLoading}
-        mergeSelectionError={library.mergeSelectionError}
         handleExportCsv={library.handleExportCsv}
         exportingCsv={library.exportingCsv}
         exportError={library.exportError}

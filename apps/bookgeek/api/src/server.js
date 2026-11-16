@@ -36,6 +36,13 @@ async function start() {
     } catch (err) {
       logger.error({ err: err?.message }, "tag migration failed");
     }
+
+    // Recently deleted: purge books deleted over 30 days ago (services/bookTrash.js).
+    // Lazy elsewhere (every delete, opening the list); also at boot, which every
+    // deploy is. Never fatal, never blocks listen.
+    import("./services/bookTrash.js")
+      .then(({ purgeExpiredBooks }) => purgeExpiredBooks())
+      .catch((err) => logger.warn({ err: err?.message }, "boot purge of deleted books failed"));
   }
 
   const server = app.listen(API_PORT, "0.0.0.0", () => {

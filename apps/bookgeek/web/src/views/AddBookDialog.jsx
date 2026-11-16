@@ -26,6 +26,7 @@ const FORM_ID = "add-book-form";
 
 export default function AddBookDialog({
   addBookAuthors,
+  addBookCreatedId = null,
   addBookError,
   addBookIsbn,
   addBookKind = "",
@@ -34,6 +35,7 @@ export default function AddBookDialog({
   addBookShelf,
   addBookTitle,
   handleCreateBook,
+  openCreatedBook,
   setAddBookAuthors,
   setAddBookFile,
   setAddBookIsbn,
@@ -52,6 +54,14 @@ export default function AddBookDialog({
     if (addBookOpen) setFileName("");
   }, [addBookOpen]);
 
+  // The book exists once `createBook` has answered; after that a failed tag
+  // or upload is retried on the SAME book (useAddBook), so the catalog fields
+  // are locked and the buttons say what they will do.
+  const created = Boolean(addBookCreatedId);
+  const primaryLabel = addBookLoading
+    ? (created ? "Retrying…" : "Creating…")
+    : (created ? "Retry" : "Create");
+
   return (
     <GeekDialog
       open={addBookOpen}
@@ -63,21 +73,28 @@ export default function AddBookDialog({
           type="submit"
           form={FORM_ID}
           variant="contained"
-          disabled={addBookLoading || !addBookTitle.trim()}
+          disabled={addBookLoading || (!created && !addBookTitle.trim())}
         >
-          {addBookLoading ? "Creating…" : "Create"}
+          {primaryLabel}
         </Button>
       }
       secondaryAction={
-        <Button type="button" onClick={() => setAddBookOpen(false)} disabled={addBookLoading}>
-          Cancel
-        </Button>
+        created ? (
+          <Button type="button" onClick={() => openCreatedBook?.()} disabled={addBookLoading}>
+            Open book
+          </Button>
+        ) : (
+          <Button type="button" onClick={() => setAddBookOpen(false)} disabled={addBookLoading}>
+            Cancel
+          </Button>
+        )
       }
     >
       <Box component="form" id={FORM_ID} onSubmit={handleCreateBook}>
         <Stack spacing={2}>
           <TextField
             label="Title"
+            disabled={created}
             value={addBookTitle}
             onChange={(e) => setAddBookTitle(e.target.value)}
             required
@@ -86,6 +103,7 @@ export default function AddBookDialog({
           />
           <TextField
             label="Authors"
+            disabled={created}
             value={addBookAuthors}
             onChange={(e) => setAddBookAuthors(e.target.value)}
             placeholder="Jane Doe, John Smith"
@@ -94,11 +112,12 @@ export default function AddBookDialog({
           />
           <TextField
             label="ISBN"
+            disabled={created}
             value={addBookIsbn}
             onChange={(e) => setAddBookIsbn(e.target.value)}
             fullWidth
           />
-          <FormControl fullWidth>
+          <FormControl fullWidth disabled={created}>
             <InputLabel id="add-book-shelf-label">Shelf</InputLabel>
             <Select
               labelId="add-book-shelf-label"
@@ -127,6 +146,7 @@ export default function AddBookDialog({
                 exclusive
                 size="small"
                 value={addBookKind || null}
+                disabled={created}
                 onChange={(_e, value) => setAddBookKind?.(value || "")}
                 aria-labelledby="add-book-kind"
               >
@@ -165,7 +185,7 @@ export default function AddBookDialog({
             </Box>
           </Stack>
           {addBookError ? (
-            <Alert severity="error" variant="standard">
+            <Alert severity={created ? "warning" : "error"} variant="standard">
               {addBookError}
             </Alert>
           ) : null}

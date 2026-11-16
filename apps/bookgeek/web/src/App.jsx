@@ -243,8 +243,11 @@ export default function App() {
         appSuffix="geek"
         taglineLine1="Read beautifully."
         taglineLine2="Your library, reimagined."
-        description="A modern, clean e-reader for your personal library. upload, organize, and read your favorite books anywhere."
-        features={['EPUB Support', 'Sync Progress', 'Metadata Management', 'Dark Mode']}
+        // No progress-sync promise: the in-app reader does not save its place
+        // (SUITE_REVIEW_2026-11 S-D3 — decided against; reverse it only with
+        // position sync built). It is a library first, with a reader in it.
+        description="Your household library: catalog, organize and shelve your books, read EPUBs in the browser, and send them to your Kindle or e-reader."
+        features={['Shared library', 'Your own shelves', 'EPUB reader', 'Send to Kindle']}
         onLogin={() => {
           setAuthLoading(true);
           setAuthError(null);

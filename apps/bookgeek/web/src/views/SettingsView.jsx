@@ -56,6 +56,9 @@ function SpinnerButton({ loading, children, ...props }) {
 }
 
 export default function SettingsView({
+  // Settings → Recently deleted (views/settings/RecentlyDeleted.jsx), passed
+  // in by the route so this view stays free of data fetching.
+  recentlyDeleted = null,
   aiStatus,
   aiStatusError,
   aiStatusLoading,
@@ -438,6 +441,8 @@ export default function SettingsView({
             </Grid>
           </Grid>
         </Stack>
+
+        {recentlyDeleted}
 
         {/* AI */}
         <Stack spacing={1.5}>

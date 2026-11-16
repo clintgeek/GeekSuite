@@ -9,10 +9,11 @@
 import { useCallback, useMemo } from "react";
 import { useApolloClient } from "@apollo/client";
 import { GET_SHELVES } from "../graphql/queries.js";
-import { DELETE_BOOK, UPDATE_BOOK } from "../graphql/mutations.js";
+import { DELETE_BOOK, RESTORE_BOOK, UPDATE_BOOK } from "../graphql/mutations.js";
 import {
   applyShelfChangeToLists,
   patchBook,
+  refreshLibraryList,
   removeBookFromLists,
   writeRestBook,
 } from "../graphql/cachePolicies.js";
@@ -32,12 +33,52 @@ export async function refreshShelfSummary(client) {
 }
 
 /**
- * Delete a book. "Also delete files" goes to bookgeek's own
- * `DELETE /api/books/:id?deleteFiles=true` — the only code that removes a
- * book's files from disk (confined to LIBRARY_PATH by libraryPaths.js), and
- * it deletes the record too. Without it, the gateway's `deleteBook`, which
- * only ever deletes the record (it ignores `deleteFiles`). Resolves to the
- * deleted id; throws with a message the confirm dialog shows.
+ * "Delete forever" from Recently deleted: bookgeek's own API, because the
+ * purge may remove files (only it can reach the library folder). Refuses a
+ * book that is not in the trash. Resolves to the purged id.
+ */
+export async function purgeBookForever(bookId) {
+  const res = await authFetch(`/books/${ encodeURIComponent(bookId) }/forever`, { method: "DELETE" });
+  const json = await res.json().catch(() => null);
+  if (!res.ok || !json || json.success === false) {
+    throw new Error(restErrorMessage(json, "Couldn't delete it for good"));
+  }
+  return String(json.data?.purgedId || bookId);
+}
+
+/**
+ * Opening Recently deleted first purges what is past 30 days (NoteGeek's
+ * lazy rule; services/bookTrash.js). Best effort: a failure only means the
+ * list may show a book a little past its date.
+ */
+export async function purgeExpiredBooks() {
+  try {
+    await authFetch("/books/trash/purge-expired", { method: "POST" });
+  } catch {
+    // ignore: the next delete or the api's boot purge catches up
+  }
+}
+
+/**
+ * Bring a book back from Recently deleted, and put it back in the loaded
+ * library list (refreshed in place) and the shelf counts.
+ */
+export async function restoreBookRecord(client, bookId, { search = "" } = {}) {
+  const res = await client.mutate({ mutation: RESTORE_BOOK, variables: { id: bookId } });
+  const restored = res.data?.restoreBook;
+  if (!restored) throw new Error("That book can't be restored — it may have been deleted for good.");
+  await refreshLibraryList(client, search).catch(() => {});
+  await refreshShelfSummary(client);
+  return restored;
+}
+
+/**
+ * Delete a book — since 2026-11-15 that means "move to Recently deleted";
+ * both paths below only mark it. "Also delete files" goes to bookgeek's own
+ * `DELETE /api/books/:id?deleteFiles=true`, which remembers to remove the
+ * files at the purge (confined to LIBRARY_PATH) and runs the lazy purge of
+ * anything past 30 days. Without it, the gateway's `deleteBook`. Resolves to
+ * the deleted id; throws with a message the confirm dialog shows.
  */
 export async function deleteBookRecord(client, bookId, { deleteFiles = false } = {}) {
   if (deleteFiles) {

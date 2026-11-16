@@ -8,12 +8,13 @@
  * Registration order is server.js's original order; keep it.
  */
 import express from "express";
+import mongoose from "mongoose";
 import fs from "fs";
 import multer from "multer";
 import path from "path";
-import { Book } from "../models/book.js";
+import { Book, includingDeleted } from "../models/book.js";
 import { Profile } from "../models/profile.js";
-import { BookReading, mergeReadings } from "../models/bookReading.js";
+import { BookReading, mergeReadings, readerId } from "../models/bookReading.js";
 import {
   libraryRoot as libraryRootPath,
   resolveInLibrary,
@@ -51,6 +52,7 @@ import {
   tryCalibreEnrich,
 } from "../services/enrichment.js";
 import { deriveTagFields } from "../tags.js";
+import { purgeBook, purgeExpiredBooks, softDeleteBook } from "../services/bookTrash.js";
 
 const router = express.Router();
 
@@ -285,15 +287,22 @@ router.get("/api/books/:id/download/:format", authenticateToken, validate({ para
   }
 });
 
-router.delete("/api/books/:id", authenticateToken, async (req, res) => {
+/**
+ * Delete = move to Recently deleted (S-D5, 2026-11-15). Nothing is removed
+ * here: the row, every reader's readings and the files stay until the purge
+ * (services/bookTrash.js), 30 days on or at "Delete forever".
+ * `?deleteFiles=true` is remembered for that purge. Before this, the route
+ * unlinked the files and removed the row at once — and left every reader's
+ * `bookreadings` behind (SUITE_REVIEW_2026-11 #4).
+ */
+router.delete("/api/books/:id", authenticateToken, validate({ params: bookIdParamsSchema }), async (req, res) => {
   try {
     if (!dbConnected()) {
       return res.status(503).json({ error: "Database not connected" });
     }
 
     const bookId = req.params.id;
-    const book = await Book.findById(bookId).lean();
-    if (!book) {
+    if (!mongoose.isValidObjectId(bookId)) {
       return res.status(404).json({ error: "Book not found" });
     }
 
@@ -304,61 +313,58 @@ router.delete("/api/books/:id", authenticateToken, async (req, res) => {
       deleteFlag === "yes" ||
       deleteFlag === "on";
 
-    let filesDeleted = 0;
-    let filesFailed = 0;
-
-    if (deleteFiles) {
-      const candidatePaths = [];
-
-      if (Array.isArray(book.files)) {
-        for (const f of book.files) {
-          if (f && f.path) {
-            const full = resolveInLibrary(f.path);
-            if (full) candidatePaths.push(full);
-          }
-        }
-      }
-
-      if (book.coverPath) {
-        const full = resolveInLibrary(book.coverPath);
-        if (full) candidatePaths.push(full);
-      }
-
-      for (const fullPath of candidatePaths) {
-        try {
-          const stat = await fs.promises.stat(fullPath);
-          if (!stat.isFile()) continue;
-
-          await fs.promises.unlink(fullPath);
-          filesDeleted += 1;
-        } catch (err) {
-          if (err.code !== "ENOENT") {
-            console.warn("/api/books/:id delete file error", {
-              bookId,
-              fullPath,
-              error: err.message,
-            });
-          }
-          filesFailed += 1;
-        }
-      }
+    const outcome = await softDeleteBook(bookId, { userId: readerId(req), deleteFiles });
+    if (outcome === "missing") {
+      return res.status(404).json({ error: "Book not found" });
     }
-
-    await Book.deleteOne({ _id: bookId }).exec();
+    // Lazy, like NoteGeek: every delete also clears what is past 30 days.
+    await purgeExpiredBooks();
 
     return res.json({
       success: true,
       data: {
         deletedId: bookId,
+        inTrash: true,
         deleteFilesRequested: deleteFiles,
-        filesDeleted,
-        filesFailed,
+        // Kept for old tabs, which read these: nothing is removed until the purge.
+        filesDeleted: 0,
+        filesFailed: 0,
       },
     });
   } catch (err) {
     console.error("/api/books/:id DELETE error", err);
     return res.status(500).json({ error: "Failed to delete book" });
   }
+});
+
+/** "Delete forever" from Recently deleted: only a book already in the trash. */
+router.delete("/api/books/:id/forever", authenticateToken, validate({ params: bookIdParamsSchema }), async (req, res) => {
+  try {
+    if (!dbConnected()) {
+      return res.status(503).json({ error: "Database not connected" });
+    }
+    const bookId = req.params.id;
+    if (!mongoose.isValidObjectId(bookId)) {
+      return res.status(404).json({ error: "Book not found in Recently deleted" });
+    }
+    const result = await purgeBook(bookId);
+    if (!result) {
+      return res.status(404).json({ error: "Book not found in Recently deleted" });
+    }
+    return res.json({ success: true, data: result });
+  } catch (err) {
+    console.error("/api/books/:id/forever DELETE error", err);
+    return res.status(500).json({ error: "Failed to delete book" });
+  }
+});
+
+/** Opening Recently deleted purges what is past 30 days first (NoteGeek's rule). */
+router.post("/api/books/trash/purge-expired", authenticateToken, async (req, res) => {
+  if (!dbConnected()) {
+    return res.status(503).json({ error: "Database not connected" });
+  }
+  const purged = await purgeExpiredBooks();
+  return res.json({ success: true, data: { purged } });
 });
 
 router.post("/api/books/merge", authenticateToken, validate({ body: mergeBodySchema }), async (req, res) => {
@@ -442,7 +448,10 @@ router.get("/api/books/:id/cover", authenticateTokenOrKindle, validate({ params:
       return res.status(503).json({ error: "Database not connected" });
     }
 
-    const book = await Book.findById(req.params.id).lean();
+    // A book in Recently deleted still shows its cover there.
+    const book = mongoose.isValidObjectId(req.params.id)
+      ? await Book.findOne(includingDeleted({ _id: req.params.id })).lean()
+      : null;
     if (!book) {
       return res.status(404).json({ error: "Cover not found" });
     }

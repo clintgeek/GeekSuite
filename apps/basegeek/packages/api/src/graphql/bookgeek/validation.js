@@ -181,6 +181,18 @@ export const deleteBookArgsSchema = z
   })
   .strict();
 
+export const restoreBookArgsSchema = z
+  .object({
+    id: idString,
+  })
+  .strict();
+
+export const deletedBooksArgsSchema = z
+  .object({
+    limit: z.number().int().min(1).max(200).nullable().optional(),
+  })
+  .strict();
+
 // ── Profile: Kindle address + device word ────────────────────────────────────
 
 export const saveBookProfileArgsSchema = z

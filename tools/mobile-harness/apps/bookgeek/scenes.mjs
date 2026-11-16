@@ -1,7 +1,8 @@
 // BookGeek — the M1 pilot surfaces (MOBILE_UI_PLAN.md §3), the Night 2
 // AI library-assistant scenes (R117/R126), and the faceted library of
 // Phase C2 (DOCS/BOOKGEEK_CLEANUP_PLAN.md: @geeksuite/collection, 06b–06j),
-// and the tag vocabulary (DOCS/TAGS.md: 03b, 06k–06m).
+// the tag vocabulary (DOCS/TAGS.md: 03b, 06k–06m), and Recently deleted
+// (S-D5: 06n–06p).
 import { json, graphqlRoute } from '../../lib/net.mjs';
 import { OPS, WHAT_NEXT_PICKS, DRAFT_BOOK_METADATA } from './fixtures.mjs';
 
@@ -230,6 +231,52 @@ export const scenes = [
       await settings.click();
       await h.settle(900);
     },
+  },
+  // ── Recently deleted (S-D5, 2026-11-15) ──────────────────────────────
+  {
+    // Settings → Recently deleted: two books in the trash, each with its
+    // purge date, one marked "files too"; Restore and Delete forever per row.
+    name: '06n-recently-deleted',
+    goto: '/settings',
+    async setup(page, h) {
+      const list = page.getByRole('list', { name: 'Recently deleted books' });
+      await list.waitFor({ timeout: 8000 }).catch(() => {});
+      if (!(await list.count())) return h.log('no Recently deleted list') ?? false;
+      await list.scrollIntoViewIfNeeded();
+      await h.settle(600);
+    },
+  },
+  {
+    // Restore: the row leaves the list and a toast says it is back.
+    name: '06o-recently-deleted-restore',
+    goto: '/settings',
+    async setup(page, h) {
+      const restore = page.getByRole('button', { name: /^Restore “Dune”$/ });
+      await restore.waitFor({ timeout: 8000 }).catch(() => {});
+      if (!(await restore.count())) return h.log('no Restore button') ?? false;
+      await restore.scrollIntoViewIfNeeded();
+      await restore.click();
+      await page.getByText('Restored “Dune”').waitFor({ timeout: 5000 }).catch(() => {});
+      if (await page.getByRole('button', { name: /^Restore “Dune”$/ }).count()) throw new Error('the restored book is still listed');
+      await h.settle(500);
+    },
+  },
+  {
+    // Delete forever asks first, and says what goes with it.
+    name: '06p-recently-deleted-forever',
+    goto: '/settings',
+    async setup(page, h) {
+      const forever = page.getByRole('button', { name: /^Delete “The Hitchhiker’s Guide.*” forever$/ });
+      await forever.waitFor({ timeout: 8000 }).catch(() => {});
+      if (!(await forever.count())) return h.log('no Delete forever button') ?? false;
+      await forever.scrollIntoViewIfNeeded();
+      await forever.click();
+      const dialog = page.getByRole('dialog', { name: 'Delete forever?' });
+      await dialog.waitFor({ timeout: 5000 });
+      if (!(await dialog.getByText(/its files/).count())) throw new Error('the confirm does not say the files go too');
+      await h.settle(500);
+    },
+    teardown: (page, h) => h.esc(),
   },
   // ── The faceted library (Phase C2) ────────────────────────────────────
   {

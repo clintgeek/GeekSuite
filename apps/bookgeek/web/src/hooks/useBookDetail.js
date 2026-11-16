@@ -13,13 +13,15 @@
  */
 import { useEffect, useRef, useState } from "react";
 import { useQuery } from "@apollo/client";
+import { useLocation } from "react-router-dom";
 import { useToast } from "@geeksuite/ui";
 import { GET_BOOK } from "../graphql/queries.js";
 import { apiUrl, authFetch } from "../utils/authFetch";
 import { isAsIsFormat } from "../utils/comic";
 import { calendarDayToIso, isoToCalendarDay, todayAsCalendarIso } from "../utils/lastRead";
 import { notifyMovedToRead } from "../views/detail/movedToReadToast";
-import { bookIdOf, useBookActions } from "./useBookActions";
+import { notifyMovedToTrash } from "../views/detail/movedToTrashToast";
+import { bookIdOf, restoreBookRecord, useBookActions } from "./useBookActions";
 import { useBookEdit } from "./useBookEdit";
 import { useCoverTools } from "./useCoverTools";
 import { useReader } from "./useReader";
@@ -43,6 +45,7 @@ export function useBookDetail({ bookId, onClose, onDeleted }) {
   });
   const selectedBook = data?.book ?? null;
   const actions = useBookActions();
+  const location = useLocation();
 
   const [downloadOpen, setDownloadOpen] = useState(false);
   const [convertingFormat, setConvertingFormat] = useState(null);
@@ -90,18 +93,26 @@ export function useBookDetail({ bookId, onClose, onDeleted }) {
     setEnrichLoading(false);
   }, [selectedBook]);
 
-  // Keep the progress field in step with the open book.
+  // Keep the progress field in step with the open book — keyed on the book
+  // and its progress, NOT the whole object: every cache write to this book
+  // (a star tap, an enrich) hands back a new object, and resetting on those
+  // threw away a number the reader had just typed.
+  const bookKey = bookIdOf(selectedBook);
+  const savedProgress = selectedBook?.readingProgress;
   useEffect(() => {
-    const p = selectedBook?.readingProgress;
-    setProgressDraft(Number.isFinite(p) ? Math.round(p) : "");
+    // A save still waiting for its debounce owns the field: it is about to
+    // write that number, so the old one must not come back meanwhile.
+    if (progressCommitRef.current) return;
+    setProgressDraft(Number.isFinite(savedProgress) ? Math.round(savedProgress) : "");
     setProgressError(null);
-    return () => {
-      if (progressCommitRef.current) {
-        clearTimeout(progressCommitRef.current);
-        progressCommitRef.current = null;
-      }
-    };
-  }, [selectedBook]);
+  }, [bookKey, savedProgress]);
+
+  // Closing the sheet (or anything else that unmounts it) FLUSHES a pending
+  // progress save instead of cancelling it (SUITE_REVIEW_2026-11 BookGeek #2):
+  // type 42 and press Back inside the 400 ms debounce, and 42 is still saved.
+  const flushProgressRef = useRef(null);
+  flushProgressRef.current = flushProgressCommit;
+  useEffect(() => () => flushProgressRef.current?.(), []);
 
   function handleUploadFileChange(event) {
     const file = event.target.files && event.target.files[0];
@@ -273,7 +284,7 @@ export function useBookDetail({ bookId, onClose, onDeleted }) {
     if (next === current) return;
 
     if (progressCommitRef.current) {
-      clearTimeout(progressCommitRef.current);
+      clearTimeout(progressCommitRef.current.timer);
       progressCommitRef.current = null;
     }
     setProgressSavingId(id);
@@ -290,13 +301,25 @@ export function useBookDetail({ bookId, onClose, onDeleted }) {
   }
 
   // Save shortly after the last change so dragging the slider or typing a
-  // number both land without depending on a release/blur event.
+  // number both land without depending on a release/blur event. The pending
+  // save is kept as data (book + value), not only as a timer, so it can be
+  // run early by `flushProgressCommit`.
   function scheduleProgressCommit(book, value) {
-    if (progressCommitRef.current) clearTimeout(progressCommitRef.current);
-    progressCommitRef.current = setTimeout(() => {
+    if (progressCommitRef.current) clearTimeout(progressCommitRef.current.timer);
+    const timer = setTimeout(() => {
       progressCommitRef.current = null;
       handleUpdateProgress(book, value);
     }, 400);
+    progressCommitRef.current = { timer, book, value };
+  }
+
+  /** Run a waiting progress save now. No-op when nothing is waiting. */
+  function flushProgressCommit() {
+    const pending = progressCommitRef.current;
+    if (!pending) return;
+    clearTimeout(pending.timer);
+    progressCommitRef.current = null;
+    handleUpdateProgress(pending.book, pending.value);
   }
 
   async function handleUpdateShelf(book, newShelf) {
@@ -387,6 +410,8 @@ export function useBookDetail({ bookId, onClose, onDeleted }) {
     setDeleteLoading(true);
     setDeleteError(null);
 
+    const title = selectedBook?.title;
+    const search = location.search || "";
     try {
       // The sheet closes BEFORE the book leaves the cache, so it never renders
       // a book that is gone.
@@ -396,6 +421,13 @@ export function useBookDetail({ bookId, onClose, onDeleted }) {
           setDeleteConfirmOpen(false);
           onDeleted?.(deletedId);
         },
+      });
+      // It is in Recently deleted, so a mis-tap is one tap to undo. The toast
+      // outlives the sheet: its handler reports through the toast only.
+      notifyMovedToTrash(notify, title, () => {
+        restoreBookRecord(actions.client, id, { search })
+          .then(() => notify(`Restored “${ title || "Untitled" }”`, { tone: "success" }))
+          .catch((err) => notify(err?.message || "Couldn't restore it — try Settings → Recently deleted.", { tone: "error" }));
       });
     } catch (err) {
       setDeleteError(err.message || "Delete failed.");
@@ -449,6 +481,7 @@ export function useBookDetail({ bookId, onClose, onDeleted }) {
     progressError,
     progressSavingId,
     scheduleProgressCommit,
+    flushProgressCommit,
     handleUpdateProgress,
 
     deleteLoading,

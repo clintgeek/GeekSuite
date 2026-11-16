@@ -2,7 +2,7 @@
 // library of "Book One / Book Two" hides exactly the bugs this harness is
 // looking for: two-line clamps, long-title truncation, serif metrics.
 import { createRequire } from 'node:module';
-import { svg, sessionRoutes, graphqlRoute } from '../../lib/net.mjs';
+import { svg, json, sessionRoutes, graphqlRoute } from '../../lib/net.mjs';
 
 // The real tag vocabulary (apps/bookgeek/DOCS/TAGS.md), so the fixture books
 // carry exactly the libraryTags/unsortedTags every write path would store,
@@ -245,6 +245,23 @@ function facets(f = {}) {
 
 let savedFilters = [...PROFILE.savedFilters];
 
+// Recently deleted (S-D5, 2026-11-15): two books in the trash, one marked to
+// take its files with it. Stateless on purpose — the screen drops a restored
+// row itself, and every viewport must start from the same list.
+const DELETED_AT = '2026-11-12T15:30:00.000Z';
+const PURGE_AT = '2026-12-12T15:30:00.000Z';
+export const DELETED_BOOKS = [
+  {
+    __typename: 'Book', id: 'd1', title: 'The Hitchhiker’s Guide to the Galaxy: The Original Radio Scripts',
+    authors: ['Douglas Adams'], coverPath: 'd1/cover.jpg', updatedAt: DELETED_AT,
+    deletedAt: DELETED_AT, purgeAt: PURGE_AT, deleteFilesOnPurge: true,
+  },
+  {
+    __typename: 'Book', id: 'd2', title: 'Dune', authors: ['Frank Herbert'], coverPath: null, updatedAt: DELETED_AT,
+    deletedAt: '2026-11-03T09:00:00.000Z', purgeAt: '2026-12-03T09:00:00.000Z', deleteFilesOnPurge: false,
+  },
+];
+
 export const OPS = {
   GetShelves: { shelves: SHELVES },
   // Profile data moved off bookgeek's REST onto the gateway 2026-09-05
@@ -288,12 +305,25 @@ export const OPS = {
   },
   // `/book/:id` deep links (and any row the cache holds only partly).
   GetBook: (v) => ({ book: BOOKS.find((b) => b.id === v.id) ?? null }),
+  GetDeletedBooks: { deletedBooks: DELETED_BOOKS },
+  RestoreBook: (v) => {
+    const d = DELETED_BOOKS.find((b) => b.id === v.id);
+    return { restoreBook: d ? { ...BOOKS[0], id: d.id, title: d.title, authors: d.authors, coverPath: d.coverPath } : null };
+  },
 };
 
 export async function routes(ctx) {
   await sessionRoutes(ctx);
+  // Recently deleted: the purge-on-open and Delete forever (bookgeek's API).
+  await ctx.route('**/api/books/trash/purge-expired', (r) => json(r, { success: true, data: { purged: 0 } }));
+  await ctx.route(/\/api\/books\/[^/]+\/forever$/, (r) => json(r, { success: true, data: { purgedId: 'd1' } }));
   await ctx.route(/\/api\/books\/([^/]+)\/cover/, (r) => {
     const id = /\/api\/books\/([^/]+)\/cover/.exec(r.request().url())[1];
+    const deleted = DELETED_BOOKS.find((b) => b.id === id);
+    if (deleted) {
+      if (!deleted.coverPath) return r.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"Cover not found"}' });
+      return svg(r, coverSvg({ ...BOOKS[2], ...deleted }));
+    }
     const book = BOOKS.find((b) => b.id === id) || BOOKS[0];
     if (!book.coverPath) return r.fulfill({ status: 404, contentType: 'application/json', body: '{"error":"Cover not found"}' });
     return svg(r, coverSvg(book));

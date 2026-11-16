@@ -8,6 +8,7 @@ import { useEffect, useRef, useState } from "react";
 import ePub from "epubjs";
 import { useThemeMode } from "@geeksuite/user";
 import { API_BASE } from "../utils/bookDisplay";
+import { loadReaderPrefs, saveReaderPrefs } from "../utils/readerPrefs";
 
 const READER_TEXT_SELECTORS =
   "body, p, div, span, h1, h2, h3, h4, h5, h6, li, blockquote, pre, code, em, strong, a, small, label, input, textarea, select, table, td, th, dd, dt, figcaption, section, article, main, aside, nav, header, footer, hr";
@@ -16,7 +17,11 @@ export function useReader(selectedBook) {
   const { theme: suiteThemeMode } = useThemeMode();
   const [readerOpen, setReaderOpen] = useState(false);
   const [readerError, setReaderError] = useState(null);
-  const [readerTheme, setReaderTheme] = useState(suiteThemeMode === "light" ? "light" : "dark");
+  // Remembered on this device (utils/readerPrefs.js); the suite's mode until
+  // the reader has been flipped once.
+  const [readerTheme, setReaderTheme] = useState(
+    () => loadReaderPrefs().theme || (suiteThemeMode === "light" ? "light" : "dark")
+  );
   const readerContainerRef = useRef(null);
   const readerBookRef = useRef(null);
   const readerRenditionRef = useRef(null);
@@ -99,6 +104,12 @@ export function useReader(selectedBook) {
         if (rendition.themes?.select) {
           rendition.themes.select(readerTheme);
         }
+        // The remembered font size: ReaderModal's stepper only reaches a
+        // rendition that already exists, and this one did not until now.
+        const { fontPct } = loadReaderPrefs();
+        if (fontPct && rendition.themes?.fontSize) {
+          rendition.themes.fontSize(`${ fontPct }%`);
+        }
       } catch (err) {
         if (!cancelled) {
           setReaderError(err?.message || "Failed to load EPUB for this book.");
@@ -138,6 +149,16 @@ export function useReader(selectedBook) {
     if (readerRenditionRef.current?.themes?.select) {
       readerRenditionRef.current.themes.select(readerTheme);
     }
+  }, [readerTheme]);
+
+  // Remember a theme the reader chose (not the suite default it started on).
+  const firstThemeRef = useRef(true);
+  useEffect(() => {
+    if (firstThemeRef.current) {
+      firstThemeRef.current = false;
+      return;
+    }
+    saveReaderPrefs({ theme: readerTheme });
   }, [readerTheme]);
 
   return {

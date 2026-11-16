@@ -3,8 +3,11 @@
  * picked file to `POST /api/books/:id/upload`. On success the library's page 1
  * is refreshed IN PLACE (one request, merged — nothing loaded collapses) and
  * the new book opens at `/book/:id`.
+ *
+ * Create is not repeated: once the book exists, a retry runs only the steps
+ * still owed (the Manga/Comic tag, the upload) against the same id.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useApolloClient } from "@apollo/client";
 import { useNavigate } from "react-router-dom";
 import { CREATE_BOOK, UPDATE_BOOK } from "../graphql/mutations.js";
@@ -27,18 +30,42 @@ export function useAddBook({ params }) {
   // "" | "manga" | "comic" — the dialog's Manga / Comic choice.
   const [addBookKind, setAddBookKind] = useState("");
 
+  // Once `createBook` has answered, the book EXISTS. A later step failing (the
+  // Manga/Comic tag, or the file upload — a big EPUB on a phone connection, a
+  // 413, a timeout) must not send the user back through `createBook`: before
+  // 2026-11-15 the dialog stayed open with "Create" as its only button, and a
+  // second tap made a second book (SUITE_REVIEW_2026-11 BookGeek #1). So the
+  // created id and the steps already done are kept, and a retry runs only
+  // the steps still owed. `addBookCreatedId` is state (the dialog reads it to
+  // say what happened); the ref is what the handler reads, so a double tap
+  // inside one render cannot slip past it.
+  const [addBookCreatedId, setAddBookCreatedId] = useState(null);
+  const progressRef = useRef({ id: null, tagged: false });
+
   // `addBookFile` was cleared only on a successful create, so a picked-then-
   // cancelled file survived: reopening the dialog showed no file (the child's
   // own `fileName` resets on mount) while App still held the old one, and the
   // next Create silently attached an abandoned EPUB to a different book.
   // Keyed on the dialog closing, so every close path — Cancel, backdrop,
-  // Escape — is covered.
+  // Escape — is covered. A half-finished book is forgotten here too: it is in
+  // the library already (the list was refreshed when it was created).
   useEffect(() => {
     if (addBookOpen) return;
     setAddBookFile(null);
     setAddBookError(null);
     setAddBookKind("");
+    setAddBookCreatedId(null);
+    progressRef.current = { id: null, tagged: false };
   }, [addBookOpen]);
+
+  function resetForm() {
+    setAddBookOpen(false);
+    setAddBookTitle("");
+    setAddBookAuthors("");
+    setAddBookIsbn("");
+    setAddBookShelf("want-to-read");
+    setAddBookFile(null);
+  }
 
   async function handleCreateBook(e) {
     if (e && typeof e.preventDefault === "function") {
@@ -46,7 +73,7 @@ export function useAddBook({ params }) {
     }
 
     const title = addBookTitle.trim();
-    if (!title) {
+    if (!progressRef.current.id && !title) {
       setAddBookError("Title is required.");
       return;
     }
@@ -54,41 +81,54 @@ export function useAddBook({ params }) {
     setAddBookLoading(true);
     setAddBookError(null);
     try {
-      const body = {
-        title,
-        authors: addBookAuthors
-          .split(",")
-          .map((a) => a.trim())
-          .filter((a) => a.length > 0),
-        isbn: addBookIsbn.trim() || undefined,
-        shelf: addBookShelf || "want-to-read",
-        owned: false,
-      };
+      let createdId = progressRef.current.id;
 
-      const { data } = await apolloClient.mutate({
-        mutation: CREATE_BOOK,
-        variables: { input: body },
-      });
+      if (!createdId) {
+        const body = {
+          title,
+          authors: addBookAuthors
+            .split(",")
+            .map((a) => a.trim())
+            .filter((a) => a.length > 0),
+          isbn: addBookIsbn.trim() || undefined,
+          shelf: addBookShelf || "want-to-read",
+          owned: false,
+        };
 
-      const created = data.createBook || null;
-      const createdId = created?.id || created?._id || null;
+        const { data } = await apolloClient.mutate({
+          mutation: CREATE_BOOK,
+          variables: { input: body },
+        });
+
+        const created = data.createBook || null;
+        createdId = created?.id || created?._id || null;
+        if (createdId) {
+          progressRef.current = { id: createdId, tagged: false };
+          setAddBookCreatedId(createdId);
+          // It is in the library now, whatever happens next.
+          refreshLibraryList(apolloClient, params.search).catch(() => {});
+        }
+      }
 
       // Manga / Comic: `createBook` takes no tags, so the tag goes on with a
       // second call. It is the shared `tags` (a fact about the book, seen by
-      // every reader), not the caller's own `myTags`.
+      // every reader), not the caller's own `myTags`. Setting it twice is
+      // harmless, but a retry skips it once it has landed.
       const kindTag = COMIC_KIND_TAGS[addBookKind];
-      if (createdId && kindTag) {
+      if (createdId && kindTag && !progressRef.current.tagged) {
         try {
           await apolloClient.mutate({
             mutation: UPDATE_BOOK,
             variables: { id: createdId, input: { tags: [kindTag] } },
           });
+          progressRef.current.tagged = true;
         } catch {
-          throw new Error(`Book created, but it could not be marked as ${ kindTag }. Add the tag from Edit metadata.`);
+          throw new Error(`The book is in your library, but it could not be marked as ${ kindTag }. Retry, or add the tag from Edit metadata.`);
         }
       }
 
       if (createdId && addBookFile) {
+        let uploadJson = null;
         try {
           const formData = new FormData();
           formData.append("file", addBookFile);
@@ -97,26 +137,22 @@ export function useAddBook({ params }) {
             method: "POST",
             body: formData,
           });
-          const uploadJson = await uploadRes.json().catch(() => null);
+          uploadJson = await uploadRes.json().catch(() => null);
           if (!uploadRes.ok || uploadJson?.success === false) {
-            const message =
+            throw new Error(
               uploadJson?.error?.message ||
               uploadJson?.message ||
-              "Book created but failed to attach file";
-            throw new Error(message);
+              (uploadRes.status === 413 ? "the file is too big to upload" : `upload failed (${ uploadRes.status })`),
+            );
           }
-          writeRestBook(apolloClient.cache, uploadJson.data || null);
         } catch (uploadErr) {
-          throw new Error(uploadErr.message || "Book created but failed to attach file");
+          const reason = uploadErr?.message ? ` (${ uploadErr.message })` : "";
+          throw new Error(`The book is in your library, but the file did not attach${ reason }. Retry the upload, or open the book and attach it there.`);
         }
+        writeRestBook(apolloClient.cache, uploadJson?.data || null);
       }
 
-      setAddBookOpen(false);
-      setAddBookTitle("");
-      setAddBookAuthors("");
-      setAddBookIsbn("");
-      setAddBookShelf("want-to-read");
-      setAddBookFile(null);
+      resetForm();
 
       // The new book joins the current list where the server sorts it.
       await refreshLibraryList(apolloClient, params.search).catch(() => {});
@@ -127,6 +163,13 @@ export function useAddBook({ params }) {
     } finally {
       setAddBookLoading(false);
     }
+  }
+
+  /** After a failed step: give up on the file/tag and open the book that was made. */
+  function openCreatedBook() {
+    const id = progressRef.current.id;
+    resetForm();
+    if (id) navigate(bookPath(id, params.search), { state: { fromLibrary: true } });
   }
 
   return {
@@ -145,6 +188,8 @@ export function useAddBook({ params }) {
     setAddBookFile,
     addBookKind,
     setAddBookKind,
+    addBookCreatedId,
+    openCreatedBook,
     handleCreateBook,
   };
 }

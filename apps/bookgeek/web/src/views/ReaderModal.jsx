@@ -17,6 +17,7 @@ import { useTheme } from "@mui/material/styles";
 import CloseIcon from "@mui/icons-material/Close";
 import Brightness4Icon from "@mui/icons-material/Brightness4";
 import Brightness7Icon from "@mui/icons-material/Brightness7";
+import { FONT_MAX, FONT_MIN, FONT_STEP, loadReaderPrefs, saveReaderPrefs } from "../utils/readerPrefs";
 
 // The reader's own page/ink pair — separate from the app's theme, per the
 // mobile plan: "dark: #0f172a page / #e2e8f0 ink; light: #f6f1e7 (warm
@@ -26,9 +27,6 @@ const READER_PALETTES = {
   light: { page: "#f6f1e7", ink: "#1f2937" },
 };
 
-const FONT_MIN = 90;
-const FONT_MAX = 160;
-const FONT_STEP = 10;
 const SWIPE_THRESHOLD = 48;
 const AUTO_HIDE_MS = 2500;
 const RELOCATE_POLL_MS = 250;
@@ -66,7 +64,8 @@ export default function ReaderModal({
   const palette = READER_PALETTES[readerTheme] || READER_PALETTES.dark;
 
   const [chromeVisible, setChromeVisible] = useState(true);
-  const [fontPct, setFontPct] = useState(100);
+  // Remembered on this device (utils/readerPrefs.js).
+  const [fontPct, setFontPct] = useState(() => loadReaderPrefs().fontPct || 100);
   const [progressAvailable, setProgressAvailable] = useState(false);
   const [progressPct, setProgressPct] = useState(null);
   const [locationLabel, setLocationLabel] = useState(null);
@@ -99,11 +98,19 @@ export default function ReaderModal({
   }, [setReaderTheme]);
 
   const decreaseFont = useCallback(() => {
-    setFontPct((v) => Math.max(FONT_MIN, v - FONT_STEP));
+    setFontPct((v) => {
+      const next = Math.max(FONT_MIN, v - FONT_STEP);
+      saveReaderPrefs({ fontPct: next });
+      return next;
+    });
   }, []);
 
   const increaseFont = useCallback(() => {
-    setFontPct((v) => Math.min(FONT_MAX, v + FONT_STEP));
+    setFontPct((v) => {
+      const next = Math.min(FONT_MAX, v + FONT_STEP);
+      saveReaderPrefs({ fontPct: next });
+      return next;
+    });
   }, []);
 
   // Auto-hide: chrome shows on open (and whenever a center tap reveals it

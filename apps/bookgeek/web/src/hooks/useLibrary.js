@@ -12,22 +12,20 @@
  *
  * Also here, because they are the library's and nobody else's: the
  * `/api/health` check that gates the grid, a load-more that says when it
- * failed, the CSV export of everything the filters match, and the (disabled)
- * merge selection.
+ * failed, and the CSV export of everything the filters match. (The two-book
+ * merge selection that sat here behind `showMergeUi = false` was unreachable
+ * and was removed 2026-11-15; Settings → "Merge duplicates" is the merge.)
  */
 import { useCallback, useEffect, useState } from "react";
 import { useApolloClient } from "@apollo/client";
 import { useFacetQuery, usePagedList } from "@geeksuite/collection";
 import { GET_BOOKS, GET_BOOK_FACETS } from "../graphql/queries.js";
-import { writeRestBook, removeBookFromLists } from "../graphql/cachePolicies.js";
 import { API_BASE } from "../utils/bookDisplay";
-import { authFetch } from "../utils/authFetch";
 import { buildBooksCsv, booksCsvFilename, UTF8_BOM } from "../utils/exportBooksCsv.js";
 import { PAGE_SIZE } from "../utils/libraryFilter";
 import { refreshShelfSummary } from "./useBookActions";
 
 export const LIBRARY_PAGE_SIZE = PAGE_SIZE;
-const showMergeUi = false;
 
 /**
  * The bookgeek API must answer before the grid is trusted: a failed health
@@ -204,85 +202,6 @@ export function useLibrary({ lib }) {
     }
   }
 
-  // ── Merge selection (the UI is off: `showMergeUi`) ─────────────────────
-  const [selectedBookIds, setSelectedBookIds] = useState([]);
-  const [mergeSelectionError, setMergeSelectionError] = useState(null);
-  const [mergeLoading, setMergeLoading] = useState(false);
-
-  function toggleBookSelection(bookId, event) {
-    if (event && typeof event.stopPropagation === "function") {
-      event.stopPropagation();
-    }
-    setMergeSelectionError(null);
-    setSelectedBookIds((prev) => {
-      if (prev.includes(bookId)) return prev.filter((id) => id !== bookId);
-      if (prev.length >= 2) return prev;
-      return [...prev, bookId];
-    });
-  }
-
-  async function handleMergeSelectedBooks() {
-    if (selectedBookIds.length !== 2) {
-      setMergeSelectionError("Select exactly two books to merge.");
-      return;
-    }
-
-    const [idA, idB] = selectedBookIds;
-    const a = books.find((b) => (b.id || b._id) === idA);
-    const b = books.find((b) => (b.id || b._id) === idB);
-
-    if (!a || !b) {
-      setMergeSelectionError("Selected books are no longer in the current list.");
-      return;
-    }
-
-    const aIsGr = a.source === "goodreads-import";
-    const bIsGr = b.source === "goodreads-import";
-
-    if (aIsGr === bIsGr) {
-      setMergeSelectionError(
-        "Manual merge currently supports merging one Goodreads-import book into one library book."
-      );
-      return;
-    }
-
-    const primary = aIsGr ? b : a;
-    const secondary = aIsGr ? a : b;
-
-    setMergeLoading(true);
-    setMergeSelectionError(null);
-
-    try {
-      const res = await authFetch("/books/merge", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          primaryId: (primary.id || primary._id),
-          secondaryId: (secondary.id || secondary._id),
-        }),
-      });
-
-      const json = await res.json().catch(() => null);
-      if (!res.ok || json?.success === false) {
-        const message = json?.error?.message || json?.message || "Merge failed";
-        throw new Error(message);
-      }
-
-      const updatedPrimary = json?.data?.primary || null;
-      const deletedId = json?.data?.deletedId?.toString?.();
-      if (updatedPrimary) {
-        writeRestBook(apolloClient.cache, updatedPrimary);
-        if (deletedId) removeBookFromLists(apolloClient.cache, deletedId);
-      }
-
-      setSelectedBookIds([]);
-    } catch (err) {
-      setMergeSelectionError(err.message || "Merge failed.");
-    } finally {
-      setMergeLoading(false);
-    }
-  }
-
   return {
     books,
     total,
@@ -298,11 +217,5 @@ export function useLibrary({ lib }) {
     exportError,
     exportNotice,
     handleExportCsv,
-    showMergeUi,
-    selectedBookIds,
-    toggleBookSelection,
-    mergeLoading,
-    mergeSelectionError,
-    handleMergeSelectedBooks,
   };
 }

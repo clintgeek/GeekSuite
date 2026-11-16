@@ -236,7 +236,7 @@ describe('BookDetailModal', () => {
       <BookDetailModal {...baseProps({ deleteConfirmOpen: true, setDeleteIncludeFiles })} />
     );
     expect(screen.getByText('Delete this book?')).toBeInTheDocument();
-    const checkbox = screen.getByRole('checkbox', { name: 'Also delete files' });
+    const checkbox = screen.getByRole('checkbox', { name: 'Also delete its files when it is deleted for good' });
     expect(checkbox).not.toBeChecked();
     await user.click(checkbox);
     expect(setDeleteIncludeFiles).toHaveBeenCalledWith(true);
@@ -250,7 +250,7 @@ describe('BookDetailModal', () => {
         {...baseProps({ deleteConfirmOpen: true, deleteIncludeFiles: true, handleDeleteSelectedBook })}
       />
     );
-    expect(screen.getByRole('checkbox', { name: 'Also delete files' })).toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Also delete its files when it is deleted for good' })).toBeChecked();
     await user.click(screen.getByRole('button', { name: 'Delete' }));
     expect(handleDeleteSelectedBook).toHaveBeenCalledTimes(1);
   });

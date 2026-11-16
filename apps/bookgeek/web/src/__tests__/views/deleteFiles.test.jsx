@@ -34,7 +34,7 @@ async function deleteFromSheet(user, name, { withFiles }) {
   await user.click(within(dialog).getByRole("button", { name: "More actions" }));
   await user.click(await screen.findByText("Delete book…"));
   const confirm = await screen.findByRole("dialog", { name: /delete this book/i });
-  if (withFiles) await user.click(within(confirm).getByRole("checkbox", { name: /also delete files/i }));
+  if (withFiles) await user.click(within(confirm).getByRole("checkbox", { name: /also delete its files/i }));
   await user.click(within(confirm).getByRole("button", { name: "Delete" }));
 }
 

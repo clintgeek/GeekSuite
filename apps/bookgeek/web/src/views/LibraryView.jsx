@@ -116,12 +116,6 @@ export default function LibraryView({
   selectMode,
   setSelectMode,
   toggleBasket,
-  showMergeUi,
-  selectedBookIds,
-  toggleBookSelection,
-  handleMergeSelectedBooks,
-  mergeLoading,
-  mergeSelectionError,
   handleExportCsv,
   exportingCsv,
   exportError,
@@ -210,12 +204,9 @@ export default function LibraryView({
     });
   };
 
-  // Selection-bar action results (merge, device basket): fire-and-forget
+  // Selection-bar action results (device basket): fire-and-forget
   // feedback on a bar that stays on screen regardless, so a toast rather than
   // a persistent inline caption (TODO_ORDER #15).
-  useEffect(() => {
-    if (mergeSelectionError) notify(mergeSelectionError, { tone: "error" });
-  }, [mergeSelectionError, notify]);
   useEffect(() => {
     if (basketError) notify(basketError, { tone: "error" });
   }, [basketError, notify]);
@@ -240,18 +231,14 @@ export default function LibraryView({
   const shownTotal = total ?? facets.current?.total ?? null;
 
   // Select mode drives the *device basket*: that is the list
-  // `handleCreateDeviceBasket` posts. Merge selection rides along when the
-  // (currently disabled) merge UI is on.
+  // `handleCreateDeviceBasket` posts.
   const selectionCount = basketBookIds.length;
   const selectionBarOpen = selectMode || selectionCount > 0;
 
-  const isSelected = (bookId) =>
-    basketBookIds.includes(bookId) ||
-    (showMergeUi && selectedBookIds.includes(bookId));
+  const isSelected = (bookId) => basketBookIds.includes(bookId);
 
   const handleToggleSelect = (bookId) => {
     toggleBasket(bookId);
-    if (showMergeUi) toggleBookSelection(bookId);
   };
 
   const exitSelectMode = () => {
@@ -268,10 +255,6 @@ export default function LibraryView({
       onExportCsv={handleExportCsv}
       exportingCsv={exportingCsv}
       onSelectBooks={() => setSelectMode?.(true)}
-      showMergeUi={showMergeUi}
-      onMerge={handleMergeSelectedBooks}
-      mergeLoading={mergeLoading}
-      mergeCount={selectedBookIds?.length ?? 0}
     />
   );
   // The assistant asks nothing until this is tapped (it used to load a rail

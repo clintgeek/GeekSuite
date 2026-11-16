@@ -1,5 +1,5 @@
 import { gql } from '@apollo/client';
-import { SAVED_FILTER_FIELDS } from './queries.js';
+import { BOOK_FIELDS, SAVED_FILTER_FIELDS } from './queries.js';
 
 export const CREATE_BOOK = gql`
   mutation CreateBook($input: CreateBookInput!) {
@@ -69,6 +69,16 @@ export const DELETE_BOOK = gql`
       deletedId
     }
   }
+`;
+
+/** Back from Recently deleted, with every reader's shelf, rating and progress. */
+export const RESTORE_BOOK = gql`
+  mutation RestoreBook($id: ID!) {
+    restoreBook(id: $id) {
+      ...BookFields
+    }
+  }
+  ${BOOK_FIELDS}
 `;
 
 // ---------------------------------------------------------------------------

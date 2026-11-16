@@ -8,6 +8,7 @@ import { useBookGeek } from "../hooks/useBookGeek";
 import { useLibraryParams } from "../hooks/useLibraryParams";
 import { useSettings } from "../hooks/useSettings";
 import SettingsView from "./SettingsView";
+import RecentlyDeleted from "./settings/RecentlyDeleted";
 
 const noop = () => {};
 
@@ -31,6 +32,7 @@ export default function SettingsRoute() {
         setActiveView={params.setActiveView}
         shelves={session.shelves}
         user={session.user}
+        recentlyDeleted={<RecentlyDeleted />}
       />
     </Box>
   );

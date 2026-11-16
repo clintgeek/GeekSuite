@@ -208,6 +208,81 @@ an EPUB tagged Manga is still an ordinary source.
 
 ---
 
+## Recently deleted, and the review fixes (2026-11-15)
+
+From `DOCS/SUITE_REVIEW_2026-11.md` (BookGeek findings 1, 2, 4, 6, 8; decisions
+S-D3 and S-D5).
+
+### Recently deleted (S-D5)
+
+- **A delete marks, it does not remove.** Both the gateway's `deleteBook` and
+  `DELETE /api/books/:id` set `deletedAt`, `deletedBy` and
+  `deleteFilesOnPurge` (the dialog's "Also delete its files…") on the `Book`.
+  The row, **every reader's `bookreadings`** and the files stay. The fields are
+  in `packages/schemas/bookgeek/book.js` (additive).
+- **A deleted book is invisible to every ordinary read — by middleware, not by
+  each caller.** `hideDeletedBooks` in the shared schema adds
+  `deletedAt: null` to every `find`/`findOne`/`countDocuments`/`distinct`/
+  update query and prepends a `$match` to every `Book.aggregate`, on both
+  mongooses. So lists, search, facets, shelf counts, the detail sheet, edits,
+  downloads, Kindle pages, device baskets, the What-next shelf and the
+  startgeek glance all skip it without knowing. A query that names
+  `deletedAt` (the trash list, restore, purge) is left alone; to reach a
+  deleted book anywhere else use `includingDeleted(filter)` (only
+  `GET /api/books/:id/cover` does, so the trash list has covers). **Deletes are
+  never narrowed.** **`BookReading` aggregates are not covered** — join to the
+  book with `deletedAt: null` yourself (the custom-shelf counts in `shelves`
+  do; see finding 4).
+- **Gateway:** `deletedBooks(limit)` (newest first, household-shared),
+  `restoreBook(id)`, and `Book.deletedAt` / `purgeAt` / `deleteFilesOnPurge`.
+- **The purge is bookgeek's API** (`api/src/services/bookTrash.js`), because only
+  it can reach the library folder: the row, every reader's readings, and the
+  files + cover if `deleteFilesOnPurge` (else they stay, as a delete always
+  left them). It runs lazily like NoteGeek's: on every `DELETE /api/books/:id`,
+  when the web opens Recently deleted (`POST /api/books/trash/purge-expired`),
+  and once at API boot (every deploy). "Delete forever" is
+  `DELETE /api/books/:id/forever`, which refuses a book that is not in the trash.
+  **30 days is in two places** — `BOOK_TRASH_RETENTION_MS` in the gateway
+  resolvers and in `bookTrash.js`; keep them in step.
+- **Web:** Settings → Recently deleted (`views/settings/RecentlyDeleted.jsx`,
+  `hooks/useRecentlyDeleted.js`) with Restore and Delete forever (confirmed). A
+  delete from the book sheet toasts "moved to Recently deleted" with **Undo**
+  (`views/detail/movedToTrashToast.jsx`). The confirm says it can be restored
+  for 30 days.
+- **Known gaps:** a Calibre rescan or Goodreads import that matches a book in
+  the trash does not see it and creates a new one. The gateway's catalog
+  indexer (`graphql/catalog/catalogIndexer.js`, `Item.find({})`) is hidden from
+  a trashed book too, so it drops its `bookvectors` on the next scan and
+  re-embeds it after a restore.
+
+### The other fixes
+
+- **Add book never creates twice** (finding 1, `hooks/useAddBook.js`). Once
+  `createBook` answers, the id is kept; a failed Manga/Comic tag or upload is
+  retried on the same book, and the dialog says the book is in the library,
+  locks the catalog fields, and offers **Retry** and **Open book**.
+- **A pending progress save is flushed, never dropped** (finding 2,
+  `hooks/useBookDetail.js`). The field resets only on the book id and its saved
+  progress; closing the sheet runs the waiting save at once.
+- **Orphan readings** (finding 4): the purge removes every reader's readings,
+  and the gateway's custom-shelf counts join to a live book. Old orphans:
+  `api/scripts/sweep-orphan-readings.mjs` (dry by default, `--apply` deletes;
+  counts only, never ids or env). It has NOT been run against production.
+- **Edit sends only what changed** (finding 6, `hooks/useBookEdit.js`
+  `changedInput`), diffed against the draft as the dialog opened; nothing
+  changed means no write.
+- **Reader (S-D3):** no position sync (decided against). The splash no longer
+  promises "Sync Progress"; the reader's font size and theme are remembered on
+  the device (`utils/readerPrefs.js`, localStorage in try/catch).
+- **Dead merge selection removed** (finding 8): the two-book merge behind
+  `showMergeUi = false` in `useLibrary`/`LibraryActions`/`LibraryView`.
+  `POST /api/books/merge` is still in the API, unused by the web
+  (Settings' "Merge duplicates" is `/api/import/goodreads/dedupe`).
+- Not done: finding 7 (`$unset` of the legacy reader fields on `Book`) — a
+  hard-to-undo data change, Chef's call.
+
+---
+
 ## Shelves (2026-09-03)
 
 A book has one `shelf` string. Built-in ids: `reading`, `on-reader`, `unread`,

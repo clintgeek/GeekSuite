@@ -514,8 +514,9 @@ export default function BookDetailModal({
         }
       >
         <Typography variant="body2" sx={{ color: "text.secondary" }}>
-          “{selectedBook.title || "Untitled"}” will be removed from your library. This cannot be
-          undone.
+          “{selectedBook.title || "Untitled"}” moves to Recently deleted, for everyone in the house.
+          You can restore it from Settings for 30 days — with everyone’s shelf, rating and
+          progress — then it is deleted for good.
         </Typography>
         <FormControlLabel
           sx={{ mt: 1 }}
@@ -525,7 +526,7 @@ export default function BookDetailModal({
               onChange={(e) => setDeleteIncludeFiles(e.target.checked)}
             />
           }
-          label={<Typography variant="body2">Also delete files</Typography>}
+          label={<Typography variant="body2">Also delete its files when it is deleted for good</Typography>}
         />
         {deleteError ? (
           <Typography variant="body2" sx={{ mt: 1, color: "error.main" }}>

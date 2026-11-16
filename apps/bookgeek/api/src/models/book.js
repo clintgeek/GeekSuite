@@ -13,4 +13,8 @@ import bookSchemaModule from "../../../../../packages/schemas/bookgeek/book.js";
 
 const { createBookSchema } = bookSchemaModule;
 
+// A book in Recently deleted is hidden from every ordinary read by the shared
+// schema's `hideDeletedBooks`; `includingDeleted(filter)` reaches it anyway.
+export const { includingDeleted } = bookSchemaModule;
+
 export const Book = mongoose.model("Book", createBookSchema(mongoose));

@@ -1,8 +1,7 @@
 /**
  * The library's ⋯ menu, beside the sort in the header (`@geeksuite/collection`
  * LibraryHeader `actions`): what the pre-C2 filter sheet kept at its foot —
- * export what the filters match, select books for the device basket, and the
- * (disabled) merge. On a phone it also carries the covers/list switch, which
+ * export what the filters match and select books for the device basket. On a phone it also carries the covers/list switch, which
  * would not fit on the header row there beside Filters, Sort and Save.
  */
 import React, { useState } from "react";
@@ -11,7 +10,6 @@ import {
   CheckBoxOutlined as SelectIcon,
   FileDownloadOutlined as ExportIcon,
   GridView as GridIcon,
-  MergeType as MergeIcon,
   MoreHoriz as MoreIcon,
   ViewList as ListIcon,
 } from "@mui/icons-material";
@@ -24,10 +22,6 @@ export default function LibraryActions({
   onExportCsv,
   exportingCsv = false,
   onSelectBooks,
-  showMergeUi = false,
-  onMerge,
-  mergeLoading = false,
-  mergeCount = 0,
 }) {
   const [anchor, setAnchor] = useState(null);
   const close = () => setAnchor(null);
@@ -78,14 +72,6 @@ export default function LibraryActions({
           </ListItemIcon>
           <ListItemText primary="Select books…" />
         </MenuItem>
-        {showMergeUi ? (
-          <MenuItem onClick={run(onMerge)} disabled={mergeLoading || mergeCount !== 2} sx={{ minHeight: 44 }}>
-            <ListItemIcon>
-              <MergeIcon fontSize="small" />
-            </ListItemIcon>
-            <ListItemText primary={mergeLoading ? "Merging…" : `Merge selected (${ mergeCount }/2)`} />
-          </MenuItem>
-        ) : null}
       </Menu>
     </>
   );
