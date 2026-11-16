@@ -27,7 +27,7 @@ Pull from here when planning the next pass; update as work lands or priorities s
   - fitnessgeek's REST insights twin (`/api/insights`) — unused in-suite but publicly reachable; delete once access logs confirm.
   - aiGeek UsagePanel shows session-wide call counts against a per-user daily cap, and no `costUnknown` yet.
   - A provider may bill a request cancelled mid-flight; the per-call cap and OpenRouter's credit limit are the backstop.
-  - `goingOverFitnessGlance` DST case still red (pre-existing), for the next push; `aiHardeningCancellation` was a load flake on 2026-11-15 and passes.
+  - ~~`goingOverFitnessGlance` DST case~~ fixed 2026-11-15 (counts in UTC days); `aiHardeningCancellation` was a load flake on 2026-11-15 and passes.
 
 ---
 
@@ -629,3 +629,29 @@ existing doc home, not just history:
   means changing type sizes on the densest chart screens — **Chef's design call, not a
   mechanical edit.** (Separately, BP's `measured_at` backfill this branch also covers already
   shipped 2026-09-20 on `main`, `57fcfe9c` — only the harness scenes remain held.)
+
+
+## 10. Wave 2 leftovers (2026-11-16)
+
+- **Adopt the shared pieces:** rail in NoteGeek, TodoGeek, ThingGeek, BookGeek, FitnessGeek,
+  GameGeek; two-pane in NoteGeek, TodoGeek, ThingGeek; `useUnsavedGuard` on ThingGeek Edit/Attic,
+  FitnessGeek recipe/food/meal, StoryGeek composer; `useRefetchOnResume` in FitnessGeek (Home's
+  full load and `useMedsToday.reload`), NewsGeek, StartGeek; `GeekLoadError` in FlockGeek,
+  StartGeek, NewsGeek. Fix order: `TABLET_BASELINE_2026-11.md` § Fix first.
+- **Tablet baseline, untriaged FitnessGeek scene errors at tablet size:** `63b-meds-add-simple-filled`
+  portrait "missing: Save in the footer" (may be an unreachable button), `07u-reports-body`
+  tablet-dark, `45a` toast over the ribbon in landscape, one contrast hit on `60b`.
+- **Trust passes not started:** StoryGeek (duplicate turn, turn lock, composer draft, soft delete,
+  transcript storage), StartGeek (duplicate captures → send `clientId`; error and startup states),
+  GameGeek (S-D1 restore deleted games, S-D2 remove hours, shared back hook), NewsGeek, FlockGeek.
+- **`requireUser` shape** not yet applied to the thinggeek, fitnessgeek and other modules.
+- **`glanceAsk` uses the UTC day** (`glance/resolvers.js` `defaultDateString`): use
+  `shared/householdToday.js`. Same pattern in fitnessgeek `reportWindow`'s fallback.
+- **ThingGeek:** photos lost on an Android tab kill (IndexedDB, M); `clientId` de-duplication
+  for Add and Walk creates; unique `{householdId, sha256}` index needs a duplicate check first.
+- **FitnessGeek:** finding 6 (two back stacks in the add flow) needs a device.
+- **BookGeek:** a Calibre rescan or Goodreads import that matches a book in the trash creates a
+  new copy; `booksLike` can seed from a trashed book's reading; orphan sweep
+  (`apps/bookgeek/api/scripts/sweep-orphan-readings.mjs`) written, **not run** — dump first;
+  30-day retention is defined twice (gateway resolvers and `bookTrash.js`).
+- **Still Chef's:** `$unset` of BookGeek's legacy reader fields; Phase 6 device sessions.

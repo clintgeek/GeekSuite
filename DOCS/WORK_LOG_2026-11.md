@@ -291,3 +291,50 @@ was run red against the old code first. Open items are in `SUITE_TODO.md` §1.
   - `AIGEEK_SIMPLIFICATION` correction.
   - A 2026-11-06 block in `ARCHIVE/AIGEEK_FRONT_DOOR.md`; code citations repointed there.
   - `TEST_COVERAGE` counts.
+
+
+## 2026-11-15/16 — Wave 2: decisions, shared foundations, four trust passes
+
+Chef: tablet is portrait, used for NoteGeek, TodoGeek, FitnessGeek, BookGeek,
+ThingGeek and GameGeek; "make the decisions and document them and get it all
+done"; "push when done". Decisions are in `SUITE_FORM_FACTOR_PLAN_2026-11.md`
+and `SUITE_REVIEW_2026-11.md` (§ Decisions).
+
+- **Gateway / client (review S1, S2, S4, S6, A1, A4–A6, C1, C3):**
+  - `/graphql`: a token presented and refused answers 401 UNAUTHENTICATED, so the
+    client refreshes and replays. No token stays anonymous; an unavailable check stays 503.
+  - `graphql/shared/auth.js`: one `requireUser`, one error shape; applied to flockgeek
+    and suite tags. Other modules still use their old shapes (the client reads both).
+  - REST: expired token → 401 (was 403). Body-parser and CORS errors keep their 4xx.
+  - api-client / auth: timeouts on refresh and `/api/me`; `onBeforeLeave` hooks
+    (`geeksuite:before-reload`, `geeksuite:session-ending`); a partly-run mutation is
+    not replayed.
+  - CI jobs for `packages/task-grammar` and `packages/schemas`.
+  - The agent that built this stalled before reporting; Sage reviewed the diff and ran the suites.
+- **packages/ui (plan 2.3–2.6):** `useRefetchOnResume`, `useUnsavedGuard` (own back
+  entry, optional `geek-draft:` local draft), `GeekLoadError` + `geekLoadStatus`,
+  `GeekNavRail`, `GeekTwoPane`, `useFormFactor` → `kind` / `navMode` / `twoPane`
+  (two panes from 1024 px), `GeekShell` `rail`. No app adopts them yet.
+- **ThingGeek (findings 1, 2, 3, 6, 7; 5 in part):** Edit keeps late uploads; "today"
+  is the household day (`HOUSEHOLD_TIME_ZONE`, default America/Chicago,
+  `graphql/shared/householdToday.js`); Walk asks before leaving unsaved rows and keeps
+  them for the room's next walk; 44 px remove-photo; CSV formula guard.
+- **FitnessGeek (findings 3, 5, 7; 1 corrected):** failed dose read shows "unknown";
+  `fitnessWeights` / `bloodPressures` take `startDate`, `endDate`, `limit`; Home
+  refetches only the day after a food write; Settings saves on leave; BP week average
+  no longer drops a day in the evening; `goingOverFitnessGlance` fixed (UTC days).
+  Review finding 1 was wrong about a 100-row cap: the gateway path had no limit.
+- **BookGeek (findings 1, 2, 4, 6, 8; S-D3, S-D5):** 30-day Recently deleted with
+  Restore / Undo / Delete forever (`hideDeletedBooks` hook on the shared Book schema);
+  retry-safe Add book; progress save flushed; Edit sends only changes; purge removes
+  readings; splash no longer promises sync; reader remembers font and theme.
+- **Tablet baseline:** `TABLET_BASELINE_2026-11.md`. Nothing broken in portrait; the
+  tablet apps are stretched phone layouts.
+- **Harness:** FitnessGeek tooltip scenes 53d/53e were racy (measured the hidden first
+  frame); fixed in the scene.
+- **nginx:** BookGeek `client_max_body_size` 120m → 1g, `/api` timeouts 300 s (Chef's go-ahead).
+- **Tests (quiet machine, 2026-11-16):** basegeek api 3,829; ui 937; api-client 43;
+  auth 80; user 105; schemas 46; task-grammar 10; todogeek 496; notegeek 1,017;
+  thinggeek 508; fitnessgeek fe 1,014 / be 995; gamegeek 178; bookgeek web 383 / api 260;
+  startgeek 24. Under load from parallel agents the frontend suites time out at random — run them alone.
+- **Deploy:** gateway half pushed first as `03ae3f0c`, then the app halves.
