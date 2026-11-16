@@ -71,6 +71,16 @@ FlockGeek fetches every egg record to find the last harvest; FitnessGeek re-runs
 | S-D4 | ThingGeek: a household timezone setting, or assume America/Chicago? |
 | S-D5 | Soft delete suite-wide (StoryGeek stories, BookGeek books, FlockGeek records), as NoteGeek now has? |
 
+### Decisions — made 2026-11-15 (Sage, on Chef's "make the decisions")
+
+| # | Decision | Why |
+|---|---|---|
+| S-D1 | GameGeek delete **stays household-wide but becomes recoverable**: the tombstone keeps each member's shelf, rating and notes; Settings gets a "Deleted games" list with Restore; the dialog says it removes the game for everyone and that Playnite will not bring it back. | The catalog is shared, so a per-person delete would be a different product. The harm is that it is silent and permanent. |
+| S-D2 | **Remove hours from the UI**: drop `hoursPlayed`/`hoursSource` from the card fragment, remove Log session and the sessions section. Gateway fields stay (deprecated, not removed) so old tabs keep working. | Chef's no-hours rule. |
+| S-D3 | **Do not build reader position sync.** Fix the splash text that promises it; remember the reader's font size and theme locally. | Unknown use against a schema + gateway change. Reverse this if Chef reads in the browser. |
+| S-D4 | ThingGeek **assumes America/Chicago**, from one server setting, the way TodoGeek 1.1 was fixed. No household timezone UI. | One household, one timezone. |
+| S-D5 | **Soft delete for BookGeek books and StoryGeek stories** (30 days, then purged; a book's files are kept until the purge). Not FlockGeek: its records are small and re-enterable. GameGeek is covered by S-D1. | These are the two places a mis-tap destroys something that cannot be re-made. |
+
 ## Suggested order
 
 1. Shared gateway/auth plumbing (items 1 and 4 above) — fixes a class for every app.
