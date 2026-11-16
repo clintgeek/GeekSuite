@@ -15,6 +15,7 @@ const CALIBRE_EBOOK_CONVERT_BIN =
 const execFileAsync = promisify(execFile);
 
 import { CONVERTIBLE_FORMATS, DOWNLOAD_FORMATS, isAsIsFormat, isComicFormat } from "./formats.js";
+import { isComicsPath } from "./comicsPaths.js";
 
 /** The formats `ensureFormat` will convert TO. Downloads accept more (formats.js). */
 export const SUPPORTED_FORMATS = CONVERTIBLE_FORMATS;
@@ -209,8 +210,17 @@ export async function ensureFormat(book, format, opts = {}) {
     const confined = (book.files || []).filter(
       (f) => f.path && resolveStored(f.path, "Book.files[].path")
     );
-    const sources = confined.filter((f) => !isComicFormat(normalizeFormat(f)));
+    // Nor is a file in the comics folder: the converted copy is written
+    // beside its source, and that folder is Tankarr's and read-only.
+    const convertible = confined.filter((f) => !isComicFormat(normalizeFormat(f)));
+    const sources = convertible.filter((f) => !isComicsPath(f.path));
     if (sources.length === 0) {
+      if (convertible.length > 0) {
+        throw new EnsureFormatError(
+          "Files in the comics folder are not converted; download it as it is",
+          409
+        );
+      }
       if (confined.length > 0) {
         throw new EnsureFormatError("Comic files are not converted", 409);
       }

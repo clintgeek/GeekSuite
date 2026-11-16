@@ -4,6 +4,7 @@ import path from "path";
 import { Book } from "../models/book.js";
 import { resolveInLibrary, safePathSegment } from "../libraryPaths.js";
 import { fetchImageBuffer } from "../coverFetch.js";
+import { isComicsPath } from "../comicsPaths.js";
 
 export function resolveCoverRelativePathForBook(book, filename) {
   const defaultDir = "covers";
@@ -24,7 +25,9 @@ export function resolveCoverRelativePathForBook(book, filename) {
     baseDirRel = path.dirname(book.coverPath);
   }
 
-  if (!baseDirRel) {
+  // A cover is never written beside a file in the comics folder: Tankarr
+  // owns that folder and the mount is read-only (comicsPaths.js).
+  if (!baseDirRel || isComicsPath(baseDirRel)) {
     baseDirRel = defaultDir;
   }
 

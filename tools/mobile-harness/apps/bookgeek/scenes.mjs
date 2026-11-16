@@ -232,6 +232,22 @@ export const scenes = [
       await h.settle(900);
     },
   },
+  {
+    // Settings → Library maintenance → Scan comics folder (2026-11-16): the
+    // action is there because the server says the folder is on, and the
+    // scan's counts come back as a toast.
+    name: '06m-comics-scan',
+    goto: '/settings',
+    async setup(page, h) {
+      const scan = page.getByRole('button', { name: 'Scan comics folder' });
+      await scan.waitFor({ timeout: 8000 }).catch(() => {});
+      if (!(await scan.count())) throw new Error('Settings does not offer "Scan comics folder" with the feature on');
+      await scan.scrollIntoViewIfNeeded();
+      await scan.click();
+      await page.getByText('Comics folder: 2 added, 1 updated, 14 unchanged.').waitFor({ timeout: 5000 });
+      await h.settle(400);
+    },
+  },
   // ── Recently deleted (S-D5, 2026-11-15) ──────────────────────────────
   {
     // Settings → Recently deleted: two books in the trash, each with its

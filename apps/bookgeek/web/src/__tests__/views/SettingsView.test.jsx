@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from 'vitest';
 import { screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import SettingsView from '../../views/SettingsView';
+import SettingsView, { comicsScanMessage } from '../../views/SettingsView';
 import { SHELVES } from '../fixtures';
 import { renderWithProviders } from '../testUtils';
 
@@ -144,5 +144,56 @@ describe('SettingsView — the Library assistant switch', () => {
     const toggle = screen.getByRole('checkbox', { name: 'Library assistant' });
     expect(toggle).toBeChecked();
     expect(toggle).toBeDisabled();
+  });
+});
+
+describe('SettingsView — the comics folder', () => {
+  it('is not offered on a server without one', () => {
+    renderWithProviders(<SettingsView {...baseProps()} />);
+    expect(screen.queryByRole('button', { name: 'Scan comics folder' })).not.toBeInTheDocument();
+    expect(screen.queryByText('Comics folder')).not.toBeInTheDocument();
+    // The other maintenance jobs are untouched.
+    expect(screen.getByRole('button', { name: 'Rescan library' })).toBeInTheDocument();
+  });
+
+  it('is offered when the server has one, and the button scans', async () => {
+    const handleComicsScan = vi.fn();
+    renderWithProviders(<SettingsView {...baseProps({ comicsEnabled: true, handleComicsScan })} />);
+    await userEvent.click(screen.getByRole('button', { name: 'Scan comics folder' }));
+    expect(handleComicsScan).toHaveBeenCalledTimes(1);
+  });
+
+  it('is busy while it scans', () => {
+    renderWithProviders(
+      <SettingsView {...baseProps({ comicsEnabled: true, comicsScanLoading: true, handleComicsScan: vi.fn() })} />
+    );
+    expect(screen.getByRole('button', { name: 'Scan comics folder' })).toBeDisabled();
+  });
+
+  it('says what the scan did in a toast', async () => {
+    renderWithProviders(
+      <SettingsView
+        {...baseProps({
+          comicsEnabled: true,
+          comicsScanSummary: { added: 2, updated: 1, unchanged: 14, missing: 0, skipped: 0 },
+        })}
+      />
+    );
+    expect(await screen.findByText('Comics folder: 2 added, 1 updated, 14 unchanged.')).toBeInTheDocument();
+  });
+
+  it('and what went wrong', async () => {
+    renderWithProviders(
+      <SettingsView {...baseProps({ comicsEnabled: true, comicsScanError: 'Comics folder scan failed' })} />
+    );
+    expect(await screen.findByText('Comics folder scan failed')).toBeInTheDocument();
+  });
+
+  it('the sentence leaves the quiet counts out and survives a thin answer', () => {
+    expect(comicsScanMessage({ added: 0, updated: 0, unchanged: 3, missing: 1, skipped: 2 })).toBe(
+      'Comics folder: 0 added, 0 updated, 3 unchanged, 1 no longer in the folder, 2 skipped.'
+    );
+    expect(comicsScanMessage({})).toBe('Comics folder: 0 added, 0 updated, 0 unchanged.');
+    expect(comicsScanMessage(undefined)).toBe('Comics folder: 0 added, 0 updated, 0 unchanged.');
   });
 });

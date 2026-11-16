@@ -317,6 +317,10 @@ export async function routes(ctx) {
   // Recently deleted: the purge-on-open and Delete forever (bookgeek's API).
   await ctx.route('**/api/books/trash/purge-expired', (r) => json(r, { success: true, data: { purged: 0 } }));
   await ctx.route(/\/api\/books\/[^/]+\/forever$/, (r) => json(r, { success: true, data: { purgedId: 'd1' } }));
+  // The comics folder (Tankarr's library, 2026-11-16): on, so Settings shows
+  // its "Scan comics folder" action; a scan answers with its counts.
+  await ctx.route('**/api/import/comics/status', (r) => json(r, { success: true, data: { enabled: true, reason: null, scanning: false, lastScanAt: null } }));
+  await ctx.route('**/api/import/comics/scan', (r) => json(r, { success: true, data: { added: 2, updated: 1, unchanged: 14, missing: 0, skipped: 0 } }));
   await ctx.route(/\/api\/books\/([^/]+)\/cover/, (r) => {
     const id = /\/api\/books\/([^/]+)\/cover/.exec(r.request().url())[1];
     const deleted = DELETED_BOOKS.find((b) => b.id === id);

@@ -43,6 +43,13 @@ async function start() {
     import("./services/bookTrash.js")
       .then(({ purgeExpiredBooks }) => purgeExpiredBooks())
       .catch((err) => logger.warn({ err: err?.message }, "boot purge of deleted books failed"));
+
+    // The comics folder (Tankarr's library, read-only at COMICS_PATH): one scan
+    // shortly after boot, then every COMICS_SCAN_MINUTES. Off, and silent after
+    // one log line, when COMICS_PATH is unset or missing. Never fatal.
+    Promise.all([import("./services/comicsFolder.js"), import("./models/book.js")])
+      .then(([{ startComicsScanSchedule }, { Book }]) => startComicsScanSchedule({ models: { Book }, logger }))
+      .catch((err) => logger.warn({ err: err?.message }, "comics scan schedule failed to start"));
   }
 
   const server = app.listen(API_PORT, "0.0.0.0", () => {

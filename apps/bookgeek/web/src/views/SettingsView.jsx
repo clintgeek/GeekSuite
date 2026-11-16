@@ -55,6 +55,15 @@ function SpinnerButton({ loading, children, ...props }) {
   );
 }
 
+/** The comics scan's counts as one sentence; the quiet parts are left out. */
+export function comicsScanMessage(s = {}) {
+  const n = (value) => (Number.isFinite(Number(value)) ? Number(value) : 0);
+  const parts = [`${n(s.added)} added`, `${n(s.updated)} updated`, `${n(s.unchanged)} unchanged`];
+  if (n(s.missing)) parts.push(`${n(s.missing)} no longer in the folder`);
+  if (n(s.skipped)) parts.push(`${n(s.skipped)} skipped`);
+  return `Comics folder: ${parts.join(", ")}.`;
+}
+
 export default function SettingsView({
   // Settings → Recently deleted (views/settings/RecentlyDeleted.jsx), passed
   // in by the route so this view stays free of data fetching.
@@ -67,6 +76,12 @@ export default function SettingsView({
   calibreRescanError,
   calibreRescanLoading,
   calibreRescanSummary,
+  // The comics folder scan: only on a server that has one (hooks/useSettings).
+  comicsEnabled = false,
+  comicsScanError = null,
+  comicsScanLoading = false,
+  comicsScanSummary = null,
+  handleComicsScan,
   customShelves,
   defaultShelfPref,
   deviceWordInput,
@@ -173,6 +188,14 @@ export default function SettingsView({
   useEffect(() => {
     if (calibreRescanError) notify(calibreRescanError, { tone: "error" });
   }, [calibreRescanError, notify]);
+
+  useEffect(() => {
+    if (!comicsScanSummary) return;
+    notify(comicsScanMessage(comicsScanSummary), { tone: "success", duration: 8000 });
+  }, [comicsScanSummary, notify]);
+  useEffect(() => {
+    if (comicsScanError) notify(comicsScanError, { tone: "error" });
+  }, [comicsScanError, notify]);
 
   if (!user) {
     return (
@@ -439,6 +462,30 @@ export default function SettingsView({
                 </Box>
               </Stack>
             </Grid>
+
+            {comicsEnabled ? (
+              <Grid item xs={12} md={4}>
+                <Stack spacing={1} sx={{ height: "100%" }}>
+                  <Typography variant="body1" sx={{ fontWeight: 500 }}>
+                    Comics folder
+                  </Typography>
+                  <Typography variant="body2" sx={{ color: "text.secondary" }}>
+                    Adds the volumes in the comics folder to your library, where they are. It
+                    runs by itself every few minutes; this looks now.
+                  </Typography>
+                  <Box>
+                    <SpinnerButton
+                      variant="contained"
+                      loading={comicsScanLoading}
+                      onClick={handleComicsScan}
+                      sx={{ minHeight: 44 }}
+                    >
+                      Scan comics folder
+                    </SpinnerButton>
+                  </Box>
+                </Stack>
+              </Grid>
+            ) : null}
           </Grid>
         </Stack>
 

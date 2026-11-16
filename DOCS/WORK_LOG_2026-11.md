@@ -383,3 +383,35 @@ quiet machine, pushed gateway-first.
   flockgeek fe 63 / be 17; bookgeek web 383 / api 260; startgeek 41. Harness, all 11 apps,
   `--enforce-a11y --desktop`: 0 violations.
 - **Not checked on a device:** pen, on-screen keyboard, Android Back in two-pane, anything signed in.
+
+## 2026-11-16 — BookGeek: Tankarr's comics folder
+
+Chef: "BookGeek should probably know about /mnt/Media/Comics since that's where Tankarr
+is downloading them to", then "is there a better way? Readarr does something similar".
+
+- **In place, read-only.** `/mnt/Media/Comics` is mounted at `/data/library/_tankarr:ro`
+  (`COMICS_PATH`), inside the library root, so every existing file route serves it and
+  `libraryPaths.js` is unchanged. Tankarr owns the folder; BookGeek never copies, moves,
+  converts beside, or deletes there (`api/src/comicsPaths.js` is the one guard).
+- **Scan** (`services/comicsFolder.js`): 20 s after boot, every 15 minutes
+  (`COMICS_SCAN_MINUTES`), and Settings → Library maintenance → "Scan comics folder".
+  One Book per volume, `source: 'tankarr'`. Files come from the folder; series, authors,
+  volume and language from the names. No archive is opened.
+- **Tankarr's API** (`TANKARR_URL`, `services/tankarrApi.js`), when it answers: authors,
+  description, year, manga-or-comic kind, artwork where the folder has no image. One GET
+  per scan; any failure falls back to names only.
+- **Renames and removals:** a renamed or upgraded file keeps its row; a vanished file keeps
+  the row (ratings and history survive) with no file and `owned: false`. An empty folder
+  (an unmounted disk) strips nothing.
+- **Trash:** a trashed volume is not re-created. It cannot be purged while Tankarr still
+  has the file (it would come straight back), so it stays hidden in Recently deleted.
+- **Also:** covers fetched for such a book go to `covers/`, not beside the file; the
+  Calibre rescan's title match skips Tankarr rows.
+- **Tests:** api 311 (308 pass, 3 skipped: better-sqlite3 will not load on this Node, as
+  before); web 389; harness scene `06m-comics-scan`. Dry run of the scanner on the real
+  folder with an in-memory store: 7 volumes, second pass unchanged.
+- **Checked from the running container:** Tankarr's API answers without a key; the folder
+  is world-readable.
+- **Not verified:** the nested read-only mount, the real Mongo queries, artwork download.
+- **Deploy:** push, then `docker compose up -d` in `apps/bookgeek` (Watchtower does not
+  apply compose changes).

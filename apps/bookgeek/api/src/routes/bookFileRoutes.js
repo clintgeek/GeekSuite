@@ -53,6 +53,7 @@ import {
 } from "../services/enrichment.js";
 import { deriveTagFields } from "../tags.js";
 import { purgeBook, purgeExpiredBooks, softDeleteBook } from "../services/bookTrash.js";
+import { mayUnlinkBookFile } from "../comicsPaths.js";
 
 const router = express.Router();
 
@@ -146,7 +147,9 @@ router.delete("/api/books/:id/cover", authenticateToken, validate({ params: book
       return res.status(404).json({ error: "Book not found" });
     }
 
-    if (book.coverPath && typeof book.coverPath === "string") {
+    // Tankarr's own image, or the series artwork other volumes share, is
+    // only un-set here, never unlinked (comicsPaths.js).
+    if (book.coverPath && typeof book.coverPath === "string" && mayUnlinkBookFile(book, book.coverPath)) {
       const fullPath = resolveInLibrary(book.coverPath);
       if (fullPath) {
         await fs.promises.unlink(fullPath).catch(() => { });
@@ -350,6 +353,14 @@ router.delete("/api/books/:id/forever", authenticateToken, validate({ params: bo
     const result = await purgeBook(bookId);
     if (!result) {
       return res.status(404).json({ error: "Book not found in Recently deleted" });
+    }
+    if (result.held) {
+      // The file is still in Tankarr's folder: purging the row would only
+      // have the next comics scan bring the book back (bookTrash.js).
+      return res.status(409).json({
+        error:
+          "This volume's file is still in the comics folder. Remove it in Tankarr first; until then it stays hidden here.",
+      });
     }
     return res.json({ success: true, data: result });
   } catch (err) {

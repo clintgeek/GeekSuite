@@ -678,3 +678,14 @@ existing doc home, not just history:
 - **Still open from §10:** `useUnsavedGuard` on ThingGeek Edit/Attic and FitnessGeek
   recipe/food/meal; `useRefetchOnResume` in FitnessGeek; the FitnessGeek tablet scene errors;
   state scenes (empty / loading / error / offline).
+
+## 12. BookGeek comics folder leftovers (2026-11-16)
+
+- Recently deleted says "gone for good <date>" for a Tankarr volume that is held; it should
+  say it stays until Tankarr removes the file. Hide "Also delete its files" for these.
+- The purge sweep re-examines held rows every pass; more than 200 of them would starve its window.
+- A person removing a scanned cover is not remembered (the scan can put it back).
+- Unconfirmed about Tankarr: the API-key header name, how a comic `content_kind` is spelled
+  (only `manga` seen), that the artwork route returns image bytes.
+- The Tankarr series id is not stored (needs a schema field); matching is by title.
+- Enrich on a Tankarr volume runs `ebook-meta` on the file (read-only, but it opens it).

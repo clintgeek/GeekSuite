@@ -1,8 +1,8 @@
 /**
  * The Settings route's state: the Send-to-device form (Kindle address, device
- * word), custom shelves, the three import jobs (Goodreads CSV, Goodreads
- * dedupe, Calibre rescan — bookgeek's own `/api/import/*`), and the AI status
- * check. The preferences (default shelf, library assistant) are session-level
+ * word), custom shelves, the import jobs (Goodreads CSV, Goodreads dedupe,
+ * Calibre rescan, and the comics folder scan where the server has one —
+ * bookgeek's own `/api/import/*`), and the AI status check. The preferences (default shelf, library assistant) are session-level
  * and come from hooks/useAppSettings.js through the shared provider.
  *
  * Returned under the prop names `SettingsView` has always taken.
@@ -66,6 +66,26 @@ export function useSettings({ session, params }) {
   const goodreadsImport = useImportJob("/import/goodreads", "Goodreads import failed");
   const goodreadsDedupe = useImportJob("/import/goodreads/dedupe", "Goodreads dedupe failed");
   const calibreRescan = useImportJob("/import/calibre/rescan?limit=5000", "Library rescan failed");
+  const comicsScan = useImportJob("/import/comics/scan", "Comics folder scan failed");
+
+  // The comics folder (Tankarr's library) exists on some servers only; the
+  // action is shown when the API says it is on. A failed check means "off".
+  const [comicsEnabled, setComicsEnabled] = useState(false);
+  useEffect(() => {
+    let live = true;
+    (async () => {
+      try {
+        const res = await authFetch("/import/comics/status");
+        const json = await res.json().catch(() => null);
+        if (live) setComicsEnabled(Boolean(res.ok && json?.data?.enabled));
+      } catch {
+        if (live) setComicsEnabled(false);
+      }
+    })();
+    return () => {
+      live = false;
+    };
+  }, []);
 
   const [aiStatus, setAiStatus] = useState(null);
   const [aiStatusLoading, setAiStatusLoading] = useState(false);
@@ -186,6 +206,12 @@ export function useSettings({ session, params }) {
     calibreRescanLoading: calibreRescan.loading,
     calibreRescanSummary: calibreRescan.summary,
     handleCalibreRescan: () => calibreRescan.run(),
+
+    comicsEnabled,
+    comicsScanError: comicsScan.error,
+    comicsScanLoading: comicsScan.loading,
+    comicsScanSummary: comicsScan.summary,
+    handleComicsScan: () => comicsScan.run(),
 
     goodreadsDedupeError: goodreadsDedupe.error,
     goodreadsDedupeLoading: goodreadsDedupe.loading,

@@ -14,6 +14,10 @@ import { authenticateToken } from "../middleware/auth.js";
 import { validate } from "../validation/validate.js";
 import { calibreRescanQuerySchema } from "../validation/schemas/importJobs.js";
 import { withDerivedTags } from "../tags.js";
+import { TANKARR_SOURCE } from "../comicsPaths.js";
+import { comicsFolderStatus, comicsScanRunning, lastComicsScan, runComicsScan } from "../services/comicsFolder.js";
+import { dbConnected } from "../config.js";
+import { logger } from "../utils/logger.js";
 
 /** Drop undefined values, so an upsert never `$unset`s what it doesn't know. */
 const definedOnly = (obj) => Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined));
@@ -348,9 +352,13 @@ router.post("/calibre/rescan", authenticateToken, validate({ query: calibreResca
         const titleRegex = new RegExp("^" + escapeRegex(titleRaw) + "$", "i");
         const authorRegex = new RegExp(escapeRegex(primaryAuthor), "i");
 
+        // Never a Tankarr volume: every volume of a manga carries the series
+        // title, so a title + author match would pin a Calibre book's files
+        // onto whichever volume came back first.
         book = await Book.findOne({
           title: titleRegex,
           authors: authorRegex,
+          source: { $ne: TANKARR_SOURCE },
         }).exec();
       }
 
@@ -923,5 +931,55 @@ router.post(
     }
   }
 );
+
+// The comics folder (Tankarr's library, indexed in place — services/comicsFolder.js).
+//
+// GET  /api/import/comics/status — is the feature on? Settings shows its
+//      "Scan comics folder" action only when it is.
+// POST /api/import/comics/scan   — scan now; answers with the counts. The scan
+//      reads names only, so it is quick enough to answer in the request (the
+//      same shape as the Calibre rescan). A scan already running — the timer's —
+//      is joined, not doubled.
+router.get("/comics/status", authenticateToken, async (req, res) => {
+  try {
+    const status = await comicsFolderStatus();
+    const last = lastComicsScan();
+    return res.json({
+      success: true,
+      data: {
+        enabled: status.enabled,
+        reason: status.enabled ? null : status.reason,
+        scanning: comicsScanRunning(),
+        lastScanAt: last?.at ?? null,
+      },
+    });
+  } catch (error) {
+    console.error("Comics status failed", error);
+    return res.status(500).json({ success: false, error: { message: "Comics status failed" } });
+  }
+});
+
+router.post("/comics/scan", authenticateToken, async (req, res) => {
+  try {
+    if (!dbConnected()) {
+      return res.status(503).json({ success: false, error: { message: "Database not connected" } });
+    }
+    const result = await runComicsScan({ models: { Book }, logger });
+    if (!result.enabled) {
+      return res.status(409).json({
+        success: false,
+        error: { message: "The comics folder is not set up on this server.", reason: result.reason },
+      });
+    }
+    const { enabled, ...counts } = result; // eslint-disable-line no-unused-vars
+    return res.json({ success: true, data: counts });
+  } catch (error) {
+    console.error("Comics scan failed", error);
+    return res.status(500).json({
+      success: false,
+      error: { message: "Comics scan failed", details: error.message },
+    });
+  }
+});
 
 export default router;

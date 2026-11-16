@@ -24,6 +24,16 @@ services:
       COVERS_PATH: /data/covers
       TEMP_PATH: /data/temp
       ADDME_PATH: /data/addMe
+      # The comics folder: Tankarr's library, mounted read-only INSIDE the
+      # library root (see volumes) and indexed in place. Unset = feature off.
+      # DOCS/CONTEXT.md "The comics folder".
+      COMICS_PATH: /data/library/_tankarr
+      COMICS_SCAN_MINUTES: 15
+      COMICS_TAG: Manga
+      # Optional metadata from Tankarr's API (description, year, kind, artwork).
+      # The scan works from filenames alone when this is unset or Tankarr is down.
+      # TANKARR_API_KEY, if Tankarr ever needs one, belongs in .env.production.
+      TANKARR_URL: http://192.168.1.17:8787
 
     ports:
       - "1800:1800"
@@ -35,6 +45,10 @@ services:
       # COVERS_PATH pointed at an unmounted /data/covers until 2026-09-05, so
       # covers lived inside the container and vanished on every recreate.
       - /mnt/extra_space/books/covers:/data/covers
+      # Tankarr OWNS this folder (it renames and upgrades files). BookGeek only
+      # reads it — keep the :ro. It sits under /data/library because every file
+      # route refuses a path outside the library root (api/src/libraryPaths.js).
+      - /mnt/Media/Comics:/data/library/_tankarr:ro
 
     healthcheck:
       test: ["CMD", "wget", "--spider", "-q", "http://localhost:1800/api/health"]

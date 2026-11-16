@@ -129,6 +129,7 @@ only — never bold it). What changed is the store around them:
 | `/data/library/` | Book files (organized by author/title) |
 | `/data/covers/` | Cover images |
 | `/data/temp/` | Temporary upload storage |
+| `/data/library/_tankarr/` | Tankarr's comics folder, **read-only** (see "The comics folder") |
 
 ---
 
@@ -205,6 +206,136 @@ an EPUB tagged Manga is still an ordinary source.
 - **Deliberately ignored (Chef, 2026-11-15):** comics in the in-app reader, in Send
   to Kindle and in device baskets. Don't build or propose them.
 - Not built: cover or metadata extraction from an archive.
+
+---
+
+## The comics folder — Tankarr's library, indexed in place (2026-11-16)
+
+Tankarr (a manga downloader, its own container) writes
+`/mnt/Media/Comics/<Title (Author, Author)>/<Title - v019 [en].cbz>`, with a
+`<same name>.jpg` beside some volumes and a `cover.jpg` per series. **Tankarr
+owns that folder** — it renames and upgrades files. BookGeek shows those
+volumes in the library and **never copies, moves, renames or deletes anything
+there, and never opens an archive**.
+
+**Mount and env** (`docker-compose.yml`):
+
+| | |
+|---|---|
+| volume | `/mnt/Media/Comics:/data/library/_tankarr:ro` |
+| `COMICS_PATH` | `/data/library/_tankarr`. Unset, missing, or not under `LIBRARY_PATH` → the feature is off (one log line, no error) |
+| `COMICS_SCAN_MINUTES` | default 15; `0` = no timer (the boot scan and the button still work) |
+| `COMICS_TAG` | default `Manga`; the tag a volume gets when Tankarr's API does not say what it is |
+| `TANKARR_URL` | optional, `http://192.168.1.17:8787`. Unset → filenames only |
+| `TANKARR_API_KEY` | optional, in `.env.production` if ever needed. Sent as `X-Api-Key` — **an assumption**: Tankarr's `openapi.json` declared no security scheme on 2026-11-16 |
+
+It is mounted **inside the library root** on purpose: every file route resolves
+`Book.files[].path` against `LIBRARY_PATH` through `api/src/libraryPaths.js` and
+refuses anything outside. A stored path is `_tankarr/<series folder>/<file>`, so
+download and cover routes work unchanged. `libraryPaths.js` was not touched.
+Docker creates an empty `_tankarr` directory in `/mnt/extra_space/books` as the
+mount point; leave it.
+
+**Code:** `api/src/comicsPaths.js` (the one answer to "is this path Tankarr's?"),
+`api/src/services/comicsFolder.js` (parsing, the walk, the scan, the timer),
+`api/src/services/tankarrApi.js` (the optional API). Tests:
+`api/test/comicsFolder.test.js`, `api/test/comicsRoutes.test.js`.
+
+**Scan rules**
+
+- **Names only.** Folder `Title (Author, Author)` → series name + authors (the
+  last parenthesised group; none → no authors). File `Title - v019 [en].<ext>` →
+  volume 19, language `en` (`v`, `vol.`, `volume`; bracketed or parenthesised
+  notes may follow the number). Formats: `cbz cbr cb7 cbt pdf epub`.
+- **One volume, one Book:** `title` = the **series name** (the card already says
+  "MANGA · VOL. 19" above it), `series {name, index}`, `authors`, `language`,
+  `files [{format, path, size, addedAt}]`, `owned: true`, `source: 'tankarr'`,
+  `dateAdded` = the file's mtime, `tags: [Manga]` with the derived tag fields
+  (`withDerivedTags`, the same derivation the Add-book Manga toggle goes
+  through; "Manga" lands in `unsortedTags`, which `comicKind` reads).
+- **No volume number** (a chapter file, an odd name): still indexed, the file's
+  base name as the title, the series name without an index.
+- **Ignored:** dotfiles, images, symlinks, anything deeper than three folders.
+  Unknown extensions are counted (`skippedUnsupported`) and logged, never rows.
+- **A file modified in the last 2 minutes is skipped** (still being written).
+- **Identity is the stored path.** A second scan writes nothing. A new file for a
+  series + volume that already has a `tankarr` row (a rename, an upgrade, a
+  second format) is attached to **that** row; its dead entry is dropped.
+- **A vanished file keeps its book** — every reader's shelf, rating and history
+  hang off the row. Only the dead file entry goes; `owned` turns false until a
+  file comes back.
+- **An empty comics folder strips nothing** (`missingHeld`): that is what an
+  unmounted `/mnt/Media` looks like.
+- **Covers:** the volume's own image, else the folder's `cover.*`, stored as a
+  `coverPath` pointing into `_tankarr/` (no copy — covers are library-relative
+  paths; `COVERS_PATH` is not read by any code). Only set where there is no
+  cover or the cover is the scan's own; a cover a person picks is written to
+  `covers/` (never beside Tankarr's file) and is never replaced.
+- **Triggers:** ~20 s after boot, then every `COMICS_SCAN_MINUTES`, never
+  overlapping itself; and `POST /api/import/comics/scan` (auth) → `{ added,
+  updated, unchanged, missing, skipped, … }`. `GET /api/import/comics/status`
+  (auth) → `{ enabled, reason }`; Settings → Library maintenance shows **Scan
+  comics folder** only when `enabled`.
+
+**Tankarr's API (optional, never required)** — `GET {TANKARR_URL}/api/manga`,
+once per scan, 5 s timeout, GET only. A folder is matched to a series by
+normalized title (case, accents and punctuation ignored; a title two series
+share matches neither). A match gives authors, description, year
+(`publishedDate` = 1 January of it, the *series'* year) and the tag
+(`metadata.content_kind`: `manga` → `Manga`, a comic kind → `Comics`, anything
+else → `COMICS_TAG`). **Fallback rule: any failure — down, slow, not JSON, not a
+list — is logged once and the scan carries on from filenames; the result is
+exactly the filename-only one.** Every field is type-checked and length-capped;
+no API string is ever used in a filesystem path. Artwork is fetched only for a
+series whose folder has no image at all, from Tankarr's own
+`/api/metadata/artwork/…` route only, and saved as `covers/tankarr-<hash>.<ext>`
+(one file per series, shared by its volumes).
+**What a later scan may change on an existing row:** blanks are filled
+(description, year); `authors` are replaced only while they are still exactly
+what the folder name gave; `tags` only while they are still exactly
+`[COMICS_TAG]`. Anything else was typed by a person and stays. The Tankarr
+series id is not stored (no schema field fits; none was added).
+
+**Trash rule.** The scan looks rows up with `includingDeleted(...)`, so a volume
+in Recently deleted is not created again. The purge (`services/bookTrash.js` —
+the only purge; the gateway only computes `purgeAt`) **never unlinks a file
+under `COMICS_PATH`** nor the shared `covers/tankarr-*` artwork, whatever
+"Also delete its files" said, and **does not purge a `tankarr` row whose file
+still exists** (the next scan would bring the book back with everyone's history
+gone): "Delete forever" answers 409 with the reason, the 30-day sweep skips it,
+and it stays hidden in the trash until Tankarr removes the file. The same holds
+while the folder is configured but unreadable.
+
+**Everything else that writes or deletes beside a book's file**
+
+| Code | What it does for a file in the comics folder |
+|---|---|
+| `bookTrash.unlinkBookFiles` (purge) | skipped (`mayUnlinkBookFile`) |
+| `DELETE /api/books/:id/cover` | the cover is un-set, the image is not unlinked |
+| cover upload / OpenLibrary / Google cover (`resolveCoverRelativePathForBook`) | written to `covers/`, not beside the file |
+| `ensureFormat` (download-as, device baskets) | 409 "Files in the comics folder are not converted"; the stored file still downloads as it is |
+| `POST /api/books/:id/upload` | always wrote to `uploads/<id>/`; unchanged |
+| enrich's Calibre cover extraction | always wrote to `covers/`; unchanged |
+| merge, Goodreads dedupe | delete rows, never files; unchanged |
+| Calibre rescan | reads `metadata.db` rows only, never walks the root; its title + author match now skips `source: 'tankarr'` |
+
+**Known gaps**
+
+- Recently deleted still shows "gone for good <date>" for a held Tankarr
+  volume; the truth arrives only when Delete forever answers 409.
+- Removing a Tankarr volume's cover in BookGeek does not stick: the next scan
+  sets it again (there is no "a person removed it" marker).
+- A person who retypes the authors back to exactly the folder's spelling has
+  them replaced by Tankarr's on the next scan.
+- Two files of one volume in different languages become one book with two
+  files; the row's `language` is the first one's.
+- A no-volume file that Tankarr renames becomes a second book; the first stays,
+  fileless.
+- "Enrich" on a Tankarr volume still runs Calibre's `ebook-meta` against the
+  file (read-only) — that is the enrich button's own behaviour, not the scan's.
+- The gateway's catalog indexer embeds the new books like any others.
+- Not verified against the real mount or in the container (2026-11-16): only
+  against a temp-directory fixture and a stubbed Tankarr.
 
 ---
 
