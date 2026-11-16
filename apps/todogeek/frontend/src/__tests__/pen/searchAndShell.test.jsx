@@ -1,7 +1,7 @@
 /** Search's clear button and done cap (Tier 6), and scroll-to-top on tabs (3.20). */
 import React from 'react';
-import { describe, it, expect, vi } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { describe, it, expect, vi, onTestFinished } from 'vitest';
+import { render, screen, fireEvent, within } from '@testing-library/react';
 import { MemoryRouter, Routes, Route, useNavigate } from 'react-router-dom';
 import { ThemeProvider } from '@mui/material/styles';
 import { createTodoTheme } from '../../theme/theme';
@@ -11,9 +11,14 @@ process.env.TZ = 'America/Chicago';
 const pen = {};
 vi.mock('../../context/PenContext', () => ({ usePen: () => pen }));
 vi.mock('../../hooks/usePinnedTags', () => ({ default: () => ({ pinned: [], toggle: vi.fn(), setPinned: vi.fn(), loaded: true }) }));
+// The shell around the tab bar: signed in, no top bar, no push (tablet wave 3
+// folded MobileTabBar into AppShell's one items array).
+vi.mock('../../context/AuthContext', () => ({ useAuth: () => ({ user: { id: 'u1' } }) }));
+vi.mock('../../components/layout/TopBar', () => ({ default: () => null }));
+vi.mock('../../hooks/usePushReminders', () => ({ default: () => ({ status: 'unsupported' }) }));
 const { default: SearchPage, DONE_CAP } = await import('../../pages/SearchPage');
-const { default: MobileTabBar } = await import('../../components/layout/MobileTabBar');
-const { PenFrame } = await import('../../components/layout/AppShell');
+const { default: AppShell, PenFrame } = await import('../../components/layout/AppShell');
+const { setDevice, resetDevice } = await import('../tablet/device');
 
 const now = new Date(2026, 9, 29, 10, 0);
 const theme = createTodoTheme('light');
@@ -63,20 +68,22 @@ describe('each tab opens at its top (3.20)', () => {
     expect(scrollTo).toHaveBeenCalledWith({ top: 0 });
   });
   it('tapping the ACTIVE tab scrolls to the top; another tab navigates', () => {
+    setDevice('phone');
+    onTestFinished(resetDevice);
     const scrollTo = vi.fn();
     Element.prototype.scrollTo = scrollTo;
     render(
       <MemoryRouter initialEntries={['/today']}>
         <ThemeProvider theme={theme}>
-          <main data-pen-frame />
-          <Routes><Route path="*" element={<MobileTabBar />} /></Routes>
+          <Routes><Route path="*" element={<AppShell><p>page</p></AppShell>} /></Routes>
         </ThemeProvider>
       </MemoryRouter>,
     );
-    fireEvent.click(screen.getByRole('link', { name: 'Today' }));
+    const bar = document.querySelector('[data-geek-bottom-nav]');
+    fireEvent.click(within(bar).getByRole('link', { name: 'Today' }));
     expect(scrollTo).toHaveBeenCalledTimes(1);
-    scrollTo.mockClear();
-    fireEvent.click(screen.getByRole('link', { name: 'Upcoming' }));
-    expect(scrollTo).not.toHaveBeenCalled();
+    // Another tab navigates (PenFrame then opens the new view at its top).
+    fireEvent.click(within(bar).getByRole('link', { name: 'Upcoming' }));
+    expect(within(bar).getByRole('link', { name: 'Upcoming' })).toHaveAttribute('aria-current', 'page');
   });
 });

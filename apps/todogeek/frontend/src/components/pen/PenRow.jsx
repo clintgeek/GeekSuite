@@ -241,6 +241,8 @@ function PenRow({
   sortMotion = false,
   onMove,
   onDragEnd,
+  inlineWhen = false,
+  controlsId,
 }) {
   const theme = useTheme();
   const p = penOf(theme);
@@ -355,7 +357,7 @@ function PenRow({
             '&:hover': { backgroundColor: p.fill },
             '&:hover [data-row-actions], &:focus-within [data-row-actions]': { opacity: 1 },
             // The buttons take the time's place while they show.
-            '&:hover [data-row-when], &:focus-within [data-row-when]': { opacity: 0 },
+            '&:hover [data-row-when="column"], &:focus-within [data-row-when="column"]': { opacity: 0 },
           },
         }}
       >
@@ -433,7 +435,9 @@ function PenRow({
         <ButtonBase
           onClick={() => onToggleExpand?.(task)}
           aria-expanded={expanded}
-          aria-controls={expanded ? editorId : undefined}
+          // The editor this row opens: under it, or (two panes) the right pane.
+          // Never an id that is not in the page (axe: aria-valid-attr-value).
+          aria-controls={expanded ? (controlsId ?? (editor ? editorId : undefined)) : undefined}
           sx={wordsButtonSx}
         >
           <Box
@@ -469,6 +473,23 @@ function PenRow({
               {task.tags.map((t) => `#${t}`).join(' ')}
             </Box>
           )}
+          {/* Tablet: the date follows the words and tags on the same line, so
+              a row reads as one thing (it sat ~500px away at the right edge,
+              tablet baseline 01-today / 05-upcoming). */}
+          {inlineWhen && when.text && (
+            <Box
+              component="span"
+              data-row-when="inline"
+              data-time-passed={passed ? 'true' : undefined}
+              sx={{
+                ml: 2, fontSize: '0.875rem', whiteSpace: 'nowrap',
+                color: when.late || passed ? p.red : p.grey,
+                fontWeight: when.late || passed ? 600 : 400,
+              }}
+            >
+              {passed ? `${when.text} · passed` : when.text}
+            </Box>
+          )}
           {task.note && !expanded && (
             <Box component="span" sx={{ display: 'block', fontSize: '0.875rem', color: p.muted, mt: 0.5, overflowWrap: 'anywhere' }}>
               {task.note.split('\n')[0]}
@@ -492,9 +513,9 @@ function PenRow({
         {/* The date. On a phone it sits UNDER the words, so they keep the row's
             width (it used to take 80–120px from them); from `sm` it is the
             right-hand column. It is last in the DOM and placed by `order`. */}
-        {when.text && (
+        {!inlineWhen && when.text && (
           <Box
-            data-row-when
+            data-row-when="column"
             data-time-passed={passed ? 'true' : undefined}
             sx={{
               flexShrink: 0,

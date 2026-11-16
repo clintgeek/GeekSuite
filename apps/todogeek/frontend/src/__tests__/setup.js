@@ -27,3 +27,12 @@ if (!window.ResizeObserver) {
     disconnect() {}
   };
 }
+
+// jsdom's window is 1024x768 with no pointer media. `useFormFactor` (the
+// suite's device rule, used by AppShell and Today since the tablet wave)
+// would call that a tablet with two panes, while MUI's useMediaQuery (no
+// query matches) calls it a desktop. Every test written before the tablet
+// wave assumed the desktop, so the default is a 1280x900 desktop window;
+// the tablet and two-pane tests set their own size (see __tests__/tablet).
+Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: 1280 });
+Object.defineProperty(window, 'innerHeight', { configurable: true, writable: true, value: 900 });

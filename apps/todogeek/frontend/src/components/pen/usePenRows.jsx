@@ -15,12 +15,18 @@
  * latest sorting handlers through refs and are created once: a row re-renders
  * only when its own props change.
  *
+ * ## Two panes (tablet wave 3)
+ * With `{ pane: true }` (Today from 1024 px, `GeekTwoPane`) the open task's
+ * editor is not drawn under its row or in a sheet: it comes back as `detail`
+ * for the page to put in the right-hand pane. The row stays highlighted and
+ * every rule below (save on leave, Escape discards) is the same.
+ *
  * ## Leaving an open editor (plan 1.13)
  * Opening another row, tapping this one again, ticking it, or dismissing the
  * sheet SAVES what changed (InlineEditor.requestSave). Escape and Cancel
  * inside the editor are the explicit discard.
  */
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Box, useMediaQuery } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { GeekSheet } from '@geeksuite/ui';
@@ -29,17 +35,21 @@ import InlineEditor from './InlineEditor';
 import DatePickSheet from './DatePickSheet';
 import useRowKeys from '../../hooks/useRowKeys';
 import useKeyboardInset from '../../hooks/useKeyboardInset';
+import useTodoLayout from '../../hooks/useTodoLayout';
 import { usePen } from '../../context/PenContext';
 import { usePrivacy } from '../../context/PrivacyContext';
 import { isDone, taskId } from '../../utils/penViews';
 import { isCheckable } from './penKinds';
 
-export default function usePenRows(order, { onMove, onDragEnd } = {}) {
+export default function usePenRows(order, { onMove, onDragEnd, pane = false } = {}) {
   const pen = usePen();
   const theme = useTheme();
   const privacy = usePrivacy();
-  // Phone and narrow tablet: the editor is a bottom sheet.
-  const asSheet = useMediaQuery(theme.breakpoints.down('md'));
+  const { inlineWhen } = useTodoLayout();
+  const paneId = useId();
+  // Phone and narrow tablet: the editor is a bottom sheet. Two panes: the right pane.
+  const narrow = useMediaQuery(theme.breakpoints.down('md'));
+  const asSheet = narrow && !pane;
   const keyboard = useKeyboardInset();
 
   const penRef = useRef(pen);
@@ -133,7 +143,9 @@ export default function usePenRows(order, { onMove, onDragEnd } = {}) {
         sortMotion={sortMotion}
         onMove={sortable ? onRowMove : undefined}
         onDragEnd={sortable ? onRowDragEnd : undefined}
-        editor={expanded && !asSheet ? openEditor(task, 'inline') : null}
+        inlineWhen={inlineWhen}
+        controlsId={pane && expanded ? paneId : undefined}
+        editor={expanded && !asSheet && !pane ? openEditor(task, 'inline') : null}
       />
     );
   };
@@ -174,5 +186,17 @@ export default function usePenRows(order, { onMove, onDragEnd } = {}) {
     </>
   );
 
-  return { renderRow, sheet, focusedTaskId: keys.focusedTaskId, expandedId, collapse };
+  const detail = pane && editing ? (
+    <Box
+      key={expandedId}
+      id={paneId}
+      data-task-detail
+      data-private-away={private_ && privacy.away ? 'true' : undefined}
+      sx={{ filter: private_ && privacy.away ? 'blur(10px)' : 'none' }}
+    >
+      {openEditor(editing, 'pane')}
+    </Box>
+  ) : null;
+
+  return { renderRow, sheet, detail, focusedTaskId: keys.focusedTaskId, expandedId, collapse };
 }

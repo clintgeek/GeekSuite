@@ -25,23 +25,31 @@
  * The add box is docked on a phone and sticky on a desktop; it takes focus by
  * itself ONCE, on a desktop, when the page opens with nothing to do — never
  * again when you tick the last task (that popped the keyboard on a tablet).
+ *
+ * Tablet (wave 3, 2026-11-16; `hooks/useTodoLayout.js`). Portrait (800 px):
+ * the rail on the left, the add box docked at the bottom BESIDE it (its
+ * `left` is the shell's `leftInset`) and as wide as the page column, the
+ * grips always on (a 590px row has room for them). From 1024 px (landscape
+ * tablet, desktop) Today is two panes (`GeekTwoPane`): the list, which keeps
+ * its scroll, and the open task in the right pane instead of under its row.
  */
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Reorder } from 'framer-motion';
-import { Box, Button, ButtonBase, useMediaQuery } from '@mui/material';
+import { Box, Button, ButtonBase, Typography, useMediaQuery } from '@mui/material';
 import { useTheme } from '@mui/material/styles';
 import { ChevronRight } from 'lucide-react';
-import { useGeekShell, useGeekToastClearance } from '@geeksuite/ui';
+import { GeekContentColumn, GeekTwoPane, useGeekShell, useGeekToastClearance } from '@geeksuite/ui';
 import { usePen } from '../context/PenContext';
 import { penOf } from '../theme/pen';
 import AddBox from '../components/pen/AddBox';
 import TagChips from '../components/pen/TagChips';
-import PenPage, { PenLoadError, PenLoading } from '../components/pen/PenPage';
+import PenPage, { PenLoadError, PenLoading, usePenColumnWidth } from '../components/pen/PenPage';
 import usePenRows from '../components/pen/usePenRows';
 import { DeskDate, EmptyLine, SectionCaption } from '../components/pen/PenHeadings';
 import { srOnly } from '../components/pen/penMarks';
 import useKeyboardInset from '../hooks/useKeyboardInset';
 import useDailyOrder from '../hooks/useDailyOrder';
+import useTodoLayout from '../hooks/useTodoLayout';
 import { PRIVATE_LABEL } from '../context/PrivacyContext';
 import { dayKey, taskId, todaySections, withSettling } from '../utils/penViews';
 import { applyKinds } from '../components/pen/penKinds';
@@ -78,8 +86,40 @@ function OverdueLine({ count, open, onToggle, onMoveAll, p }) {
   );
 }
 
+/**
+ * The dock's height from the bottom of the screen, as `--pen-dock-clear` on
+ * <html>, for AppShell's toast stack. `useGeekToastClearance` computes the
+ * same number, but from 600 px wide MUI's Snackbar has its own
+ * `@media (min-width:600px) { bottom: 24px }`, which beats the provider's
+ * plain `bottom`: on a portrait tablet the toast sat ON the add box. AppShell
+ * re-applies it inside that media query (see TOAST_SX there).
+ */
+export const DOCK_CLEAR_VAR = '--pen-dock-clear';
+function useDockClearanceVar(ref, keyboard) {
+  useLayoutEffect(() => {
+    const el = ref.current;
+    const root = typeof document !== 'undefined' ? document.documentElement : null;
+    if (!el || !root) return undefined;
+    const measure = () => {
+      const rect = el.getBoundingClientRect();
+      const clear = rect.height ? Math.max(0, window.innerHeight - rect.top) + 8 : 0;
+      root.style.setProperty(DOCK_CLEAR_VAR, `${Math.round(clear)}px`);
+    };
+    measure();
+    const observer = typeof ResizeObserver === 'function' ? new ResizeObserver(measure) : null;
+    observer?.observe(el);
+    window.addEventListener('resize', measure);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener('resize', measure);
+      root.style.removeProperty(DOCK_CLEAR_VAR);
+    };
+  }, [ref, keyboard]);
+}
+
 function Dock({ children }) {
-  const { bottomInset } = useGeekShell();
+  const { bottomInset, leftInset } = useGeekShell();
+  const column = usePenColumnWidth();
   const keyboard = useKeyboardInset();
   const theme = useTheme();
   const p = penOf(theme);
@@ -87,13 +127,15 @@ function Dock({ children }) {
   // Toasts ("Done. Undo", "Added for tomorrow.") rise above the box instead of
   // sitting on it, and above the keyboard with it (3.13).
   useGeekToastClearance(ref, true);
+  useDockClearanceVar(ref, keyboard);
   return (
     <Box
       ref={ref}
       data-add-dock
       sx={{
         position: 'fixed',
-        left: 0,
+        // Beside the tablet's rail, never under it (0 on a phone).
+        left: leftInset ? `${leftInset}px` : 0,
         right: 0,
         bottom: keyboard ? `${keyboard}px` : `calc(${bottomInset}px + env(safe-area-inset-bottom, 0px))`,
         zIndex: (t) => t.zIndex.appBar - 1,
@@ -103,10 +145,35 @@ function Dock({ children }) {
         borderTop: `1px solid ${p.rule}`,
       }}
     >
+      {/* As wide as the page's column, centred over it (a phone: full width). */}
+      <GeekContentColumn maxWidth={column} data-add-dock-column sx={{ maxWidth: column, mx: 'auto', px: { xs: 0, sm: 2 } }}>{children}</GeekContentColumn>
+    </Box>
+  );
+}
+
+/** Two panes, nothing open: a quiet line where the task will be. */
+function DetailPlaceholder({ p }) {
+  return (
+    <Box data-task-detail-empty sx={{ px: 8, pt: 12, color: p.grey, fontSize: '1rem' }}>
+      Tap a task to open it here.
+    </Box>
+  );
+}
+
+/** Two panes: the open task, under a small heading, in the right pane. */
+function DetailPane({ children, p }) {
+  return (
+    <Box sx={{ px: 6, pt: 8, pb: 12, maxWidth: 640 }}>
+      <Typography component="h2" sx={{ fontSize: '0.875rem', fontWeight: 700, letterSpacing: '0.02em', color: p.grey, pb: 3 }}>
+        Task
+      </Typography>
       {children}
     </Box>
   );
 }
+
+/** Today's list pane is wider than GeekTwoPane's default: it is the page, not an index. */
+export const TODAY_LIST_WIDTH = 'clamp(360px, 46vw, 560px)';
 
 const real = (t) => t.__real || t;
 const SORTABLE = ['today', 'anytime'];
@@ -125,7 +192,9 @@ const TodayPage = () => {
   const pen = usePen();
   const theme = useTheme();
   const p = penOf(theme);
-  const isPhone = useMediaQuery(theme.breakpoints.down('md'));
+  const layout = useTodoLayout();
+  const isPhone = layout.phone;
+  const docked = layout.docked;
   const [overdueOpen, setOverdueOpen] = useState(false);
   const [reorder, setReorder] = useState(false);
   const canHover = useMediaQuery('(any-hover: hover) and (any-pointer: fine)');
@@ -204,7 +273,7 @@ const TodayPage = () => {
     () => [...(overdueOpen ? sections.overdue : []), ...sections.today, ...sections.anytime].map(real),
     [sections, overdueOpen],
   );
-  const { renderRow, sheet } = usePenRows(order, { onMove, onDragEnd });
+  const { renderRow, sheet, detail } = usePenRows(order, { onMove, onDragEnd, pane: layout.twoPane });
   const row = (t) => renderRow(real(t), { crossed: Boolean(t.__real) });
   // Grips: always on a desktop; on a phone only in Reorder mode.
   const gripsOn = !isPhone || reorder;
@@ -227,7 +296,7 @@ const TodayPage = () => {
   // render: ticking the last task must not pull focus (and the keyboard) in.
   const focusOnOpen = useRef(null);
   if (focusOnOpen.current === null && pen.loaded) {
-    focusOnOpen.current = !isPhone && canHover && counts.toDo === 0;
+    focusOnOpen.current = !docked && canHover && counts.toDo === 0;
   }
   const addBox = (
     <AddBox
@@ -241,8 +310,8 @@ const TodayPage = () => {
   );
   const sortableCount = sections.today.length + sections.anytime.length;
 
-  return (
-    <PenPage dock={isPhone}>
+  const list = (
+    <PenPage dock={docked}>
       <DeskDate date={pen.now} toDo={counts.toDo} done={counts.done} loading={!pen.loaded || Boolean(pen.loadError && !pen.corpus?.length)} />
       <Box sx={{ pb: isPhone && sortableCount > 1 ? 0 : 4 }}><TagChips /></Box>
       {isPhone && sortableCount > 1 && (
@@ -259,7 +328,7 @@ const TodayPage = () => {
       )}
 
       {/* Sticky on a desktop: the list scrolls under it, the box stays. */}
-      {!isPhone && (
+      {!docked && (
         <Box data-add-sticky sx={{ position: 'sticky', top: 0, zIndex: 2, backgroundColor: p.paper, pb: 5, pt: 1, mt: -1 }}>
           {addBox}
         </Box>
@@ -301,11 +370,28 @@ const TodayPage = () => {
 
       <Box role="status" aria-live="polite" data-order-said sx={srOnly}>{said}</Box>
 
-      {/* Always there on a phone: the editor is a sheet over it, so it no longer
-          vanishes with the editor (or when the open task is ticked, 3.19). */}
-      {isPhone && <Dock>{addBox}</Dock>}
+      {/* Always there on a phone and a portrait tablet: the editor is a sheet
+          over it, so it no longer vanishes with the editor (or when the open
+          task is ticked, 3.19). */}
+      {docked && <Dock>{addBox}</Dock>}
       {sheet}
     </PenPage>
+  );
+
+  if (!layout.twoPane) return list;
+  return (
+    <GeekTwoPane
+      twoPane
+      list={list}
+      detail={detail ? <DetailPane p={p}>{detail}</DetailPane> : null}
+      placeholder={<DetailPlaceholder p={p} />}
+      listWidth={TODAY_LIST_WIDTH}
+      listLabel="Today’s list"
+      detailLabel="Task"
+      listSx={{ bgcolor: p.paper }}
+      detailSx={{ bgcolor: p.paper }}
+      data-today-panes
+    />
   );
 };
 

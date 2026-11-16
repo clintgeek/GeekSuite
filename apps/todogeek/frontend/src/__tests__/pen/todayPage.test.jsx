@@ -33,6 +33,9 @@ const ui = () => (
 const realMatchMedia = window.matchMedia;
 /** `desktop`: wide + hover + fine pointer; otherwise a phone. */
 const device = (kind) => {
+  // The suite's useFormFactor reads the window size too (tablet wave 3).
+  Object.defineProperty(window, 'innerWidth', { configurable: true, writable: true, value: kind === 'desktop' ? 1280 : 390 });
+  Object.defineProperty(window, 'innerHeight', { configurable: true, writable: true, value: kind === 'desktop' ? 900 : 844 });
   window.matchMedia = (query) => {
     const wide = kind === 'desktop';
     const matches = /max-width/.test(query) ? !wide : /any-hover|any-pointer: fine|pointer: fine/.test(query) ? wide : false;

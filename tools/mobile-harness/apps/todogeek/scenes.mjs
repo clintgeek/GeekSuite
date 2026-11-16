@@ -4,9 +4,10 @@
 
 import { json } from '../../lib/net.mjs';
 
-// On a phone the grips are behind "Reorder" (3.16); a desktop has them always.
+// On a phone the grips are behind "Reorder" (3.16); a desktop and a tablet
+// (wave 3: a 590px row has room for them) have them always.
 const startReorder = async (page, h) => {
-  if (!h.isPhone) return;
+  if (!h.isPhone || h.isTablet) return;
   const toggle = page.locator('[data-reorder-toggle]').first();
   if (!(await toggle.count())) throw new Error('no Reorder toggle on the phone Today');
   await toggle.click();
@@ -36,7 +37,82 @@ async function holdSwipe(page, rowText, dx) {
   return true;
 }
 
+// ── Tablet (wave 3, 2026-11-16). These THROW when the tablet layout is missing. ──
+const railChecks = async (page) => {
+  const rail = page.locator('[data-geek-nav-rail]');
+  if (!(await rail.count())) throw new Error('no rail on the tablet');
+  for (const name of ['Today', 'Upcoming', 'Done', 'Search']) {
+    if (!(await rail.getByRole('link', { name, exact: true }).count())) throw new Error(`the rail has no ${name}`);
+  }
+  if (await page.locator('[data-geek-bottom-nav]').count()) throw new Error('a tab bar beside the rail');
+  if (await page.getByRole('button', { name: /open navigation|menu/i }).count()) throw new Error('a hamburger beside the rail');
+};
+const inlineTimeChecks = async (page) => {
+  if (await page.locator('[data-row-when="column"]').count()) throw new Error('a row time is still a right-hand column');
+  if (!(await page.locator('[data-row-when="inline"]').count())) throw new Error('no row time next to the words');
+};
+
+const tabletScenes = [
+  {
+    // Portrait: rail, a capped column, the time beside the words, the add box
+    // docked BESIDE the rail and as wide as the column.
+    name: '70-tablet-today-rail',
+    goto: '/today',
+    wait: 1500,
+    viewports: ['tablet-portrait'],
+    async setup(page) {
+      await railChecks(page);
+      await inlineTimeChecks(page);
+      const dock = await page.locator('[data-add-dock]').boundingBox();
+      if (!dock) throw new Error('no docked add box in portrait');
+      if (dock.x < 72) throw new Error(`the add box starts at ${dock.x}px, under the rail`);
+      const col = await page.locator('[data-add-dock-column]').boundingBox();
+      if (col.width > 641) throw new Error(`the add box is ${col.width}px wide`);
+      const page_ = await page.locator('[data-pen-page]').first().boundingBox();
+      if (page_.width > 641) throw new Error(`the page column is ${page_.width}px wide`);
+    },
+  },
+  {
+    name: '71-tablet-upcoming-rail',
+    goto: '/upcoming',
+    wait: 1400,
+    viewports: ['tablet-portrait'],
+    async setup(page) {
+      await railChecks(page);
+      await inlineTimeChecks(page);
+    },
+  },
+  {
+    // From 1024px: list | task. Nothing open yet: the placeholder.
+    name: '72-two-pane-empty',
+    goto: '/today',
+    wait: 1500,
+    viewports: ['tablet-landscape', 'desktop'],
+    async setup(page) {
+      if (!(await page.locator('[data-geek-two-pane="split"]').count())) throw new Error('Today is not two panes at this width');
+      if (!(await page.locator('[data-task-detail-empty]').count())) throw new Error('no placeholder in the empty detail pane');
+    },
+  },
+  {
+    // A task tapped: its editor in the right pane, the list still beside it.
+    name: '73-two-pane-open',
+    goto: '/today',
+    wait: 1500,
+    viewports: ['tablet-landscape', 'desktop'],
+    async setup(page) {
+      const list = page.getByRole('region', { name: 'Today’s list' });
+      await list.getByRole('button', { name: /^write the retro notes/i }).first().click();
+      await page.waitForTimeout(400);
+      const detail = page.getByRole('region', { name: 'Task', exact: true });
+      if (!(await detail.getByRole('form', { name: /^edit write the retro notes/i }).count())) throw new Error('the editor did not open in the detail pane');
+      if (await list.getByRole('form', { name: /^edit /i }).count()) throw new Error('the editor also opened under the row');
+      await page.mouse.move(5, 5);
+    },
+  },
+];
+
 export const scenes = [
+  ...tabletScenes,
   { name: '01-today', goto: '/today', wait: 1500 },
   {
     // "3 carried over" opened: the late rows in red words.

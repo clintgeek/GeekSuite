@@ -30,6 +30,19 @@ Amended 2026-10-01: **Private tasks** — see "Private tasks" under Data Model. 
 Amended 2026-10-29: **Today drag-to-reorder** — per-day manual order for Today and Anytime; gateway
 `dailyTaskOrder` query and string ids in `TaskOrder`. See "TaskOrder" under Data Model.
 
+Amended 2026-11-16: **Tablet layout (wave 3, local, not deployed)** — `hooks/useTodoLayout.js` decides the
+layout from the suite's `useFormFactor` (pointer first, then size) instead of MUI's `md` (which called an
+800 px portrait tablet a phone). Phone: unchanged (tab bar + drawer, docked add box, Reorder toggle, sheet
+editor). Tablet (600–1199 px, or any touch tablet): `GeekNavRail` from the ONE items array in `navConfig.jsx`
+via `useGeekNavSlots` in `AppShell.jsx` (`MobileTabBar.jsx` is gone; reminders stay in the account menu);
+page column 640 px (`PenPage`, on `GeekContentColumn`; 720 on desktop); a row's time follows its words
+(`PenRow inlineWhen`, `data-row-when="inline"`); grips always on. Portrait tablet: add box docked at the bottom
+beside the rail (`left = useGeekShell().leftInset`), as wide as the column; editor is the (600 px, centred)
+`GeekSheet`. From 1024 px (landscape tablet, desktop) Today is `GeekTwoPane` — list | the open task's editor
+(`usePenRows(order, { pane: true })` returns `detail`); Upcoming/Done/Search keep the inline editor. A failed
+load wider than a phone is `GeekLoadError`. Tests: `__tests__/tablet/` (`device.js` fakes size + pointer;
+`__tests__/setup.js` makes jsdom a 1280x900 desktop). Harness scenes `70`–`73`.
+
 Amended 2026-10-01: **Tags follow the suite standard** (`@geeksuite/tags`, `DOCS/TAG_STANDARD.md`) —
 lowercase kebab-case, `/` nests. The add box reads `#tags` with the suite's one reader
 (`findTagTokens`, hex-colour skip off): `#GeekSuite` saves `geek-suite`, `#home/garage` is one nested tag
