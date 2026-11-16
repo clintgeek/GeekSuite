@@ -154,6 +154,19 @@ export const resolvers = {
       if (groupId) filter.groupId = groupId;
       return EggProduction.find(filter).sort({ date: -1 });
     },
+    // The harvest sheet used to download every egg record ever logged and sort
+    // them in the browser to find one row (SUITE_REVIEW_2026-11, FlockGeek 1).
+    // One indexed read instead: {ownerId, locationId, date: -1} serves it.
+    lastEggProduction: async (_, { locationId } = {}, context) => {
+      const ownerId = requireUser(context);
+      const filter = { ownerId, deletedAt: null };
+      if (locationId != null) {
+        validateId(locationId);
+        filter.locationId = locationId;
+      }
+      const { EggProduction } = await getModels();
+      return EggProduction.findOne(filter).sort({ date: -1, _id: -1 });
+    },
     hatchEvents: async (_, __, context) => {
       const ownerId = requireUser(context);
       const { HatchEvent } = await getModels();

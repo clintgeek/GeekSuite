@@ -39,7 +39,7 @@ export const typeDefs = gql`
     # True when the copy came from a Playnite import (the import updates it by its Playnite id).
     fromPlaynite: Boolean!
     # Playnite's playtime for this copy, in hours (0.1). Null for a copy not from Playnite.
-    playtimeHours: Float
+    playtimeHours: Float @deprecated(reason: "GameGeek shows no hours (Chef does not track playtime, S-D2 2026-11-16). Kept for tabs running an older bundle.")
     # Playnite's isInstalled for this copy. Null for a copy not from Playnite, or one
     # imported before the field was stored (apps/gamegeek/DOCS/PLAYNITE_IMPORT.md).
     installed: Boolean
@@ -49,7 +49,7 @@ export const typeDefs = gql`
     id: ID!
     startedAt: Date
     finishedAt: Date
-    hours: Float
+    hours: Float @deprecated(reason: "GameGeek shows no hours (Chef does not track playtime, S-D2 2026-11-16). Kept for tabs running an older bundle.")
     platform: String
     difficulty: String
     completion: String
@@ -71,8 +71,8 @@ export const typeDefs = gql`
     review: String
     notes: String
     progress: Float
-    hoursPlayed: Float
-    hoursSource: String
+    hoursPlayed: Float @deprecated(reason: "GameGeek shows no hours (Chef does not track playtime, S-D2 2026-11-16). Kept for tabs running an older bundle.")
+    hoursSource: String @deprecated(reason: "GameGeek shows no hours (Chef does not track playtime, S-D2 2026-11-16). Kept for tabs running an older bundle.")
     favorite: Boolean
     lastPlayedAt: Date
     # null | "uninstalled": a Playing game no Playnite copy of which is installed any
@@ -81,7 +81,7 @@ export const typeDefs = gql`
     installFlagAt: Date
     playthroughs: [GamePlaythrough!]!
     # Newest first, capped by the resolver (default 20).
-    sessions(limit: Int = 20): [GameSession!]!
+    sessions(limit: Int = 20): [GameSession!]! @deprecated(reason: "GameGeek no longer logs sessions (S-D2 2026-11-16). Kept for tabs running an older bundle; stored sessions are untouched.")
   }
 
   # Another household member's shelf/rating for the same game (never another household).
@@ -90,7 +90,7 @@ export const typeDefs = gql`
     displayName: String
     shelf: String
     rating: Float
-    hoursPlayed: Float
+    hoursPlayed: Float @deprecated(reason: "GameGeek shows no hours (Chef does not track playtime, S-D2 2026-11-16). Kept for tabs running an older bundle.")
   }
 
   type Game {
@@ -267,6 +267,36 @@ export const typeDefs = gql`
     completionLevels: [String!]!
   }
 
+  # One entry in Settings → Deleted games (S-D1, 2026-11-16).
+  type GameDeletedEntry {
+    # A DeletedGame id (hasSnapshot) or a PlayniteTombstone id (no snapshot).
+    id: ID!
+    title: String!
+    deletedAt: Date
+    deletedBy: ID
+    deletedByName: String
+    # true: Restore brings the game back now, with its Playnite link and every
+    # member's shelf, rating and notes. false: no snapshot was kept (deleted
+    # before 2026-11-16, or a Playnite copy removed by hand); Restore only lets
+    # the next Playnite import bring it back.
+    hasSnapshot: Boolean!
+    # game-deleted | copy-removed | null (an old row: either)
+    reason: String
+    # Playnite copies the delete remembered (the import skips them until restored).
+    playniteCopies: Int!
+    # Household members whose shelf/rating/notes the snapshot kept.
+    members: Int!
+  }
+
+  type GameRestoreResult {
+    success: Boolean!
+    message: String
+    # The restored game; null when the restore waits for the next Playnite import.
+    game: Game
+    # true = nothing was re-created now; the next Playnite import brings it back.
+    waitsForImport: Boolean!
+  }
+
   type RemoveGameShelfResult {
     success: Boolean!
     clearedGames: Int!
@@ -329,7 +359,7 @@ export const typeDefs = gql`
     review: String
     notes: String
     progress: Float
-    hoursPlayed: Float
+    hoursPlayed: Float @deprecated(reason: "GameGeek shows no hours (Chef does not track playtime, S-D2 2026-11-16). Kept for tabs running an older bundle.")
     favorite: Boolean
   }
 
@@ -344,7 +374,7 @@ export const typeDefs = gql`
     id: ID
     startedAt: Date
     finishedAt: Date
-    hours: Float
+    hours: Float @deprecated(reason: "GameGeek shows no hours (Chef does not track playtime, S-D2 2026-11-16). Kept for tabs running an older bundle.")
     platform: String
     difficulty: String
     completion: String
@@ -458,17 +488,25 @@ export const typeDefs = gql`
     gameShelves: GameShelfStats!
     gameProfile: GameProfile!
     gameVocabulary: GameVocabulary!
+    # Settings → Deleted games: the household's deleted games, newest first
+    # (snapshots, plus tombstones no snapshot covers). Household-wide, like delete.
+    deletedGames(limit: Int = 100): [GameDeletedEntry!]!
   }
 
   extend type Mutation {
     # Creates the household game AND the caller's state row (shelf defaults to "backlog").
     createGame(input: GameInput!, shelf: String): Game!
     updateGame(id: ID!, input: GameInput!): Game!
-    # Deletes the household game and every member's state for it.
+    # Deletes the household game and every member's state for it. Recoverable:
+    # the snapshot is listed by deletedGames and brought back by restoreDeletedGame.
     deleteGame(id: ID!): DeleteResponse!
+    # id from deletedGames. Re-creates the game (same id, Playnite link) with
+    # every member's state and clears its tombstones; for an entry with no
+    # snapshot it only clears the tombstone (the next Playnite import re-creates it).
+    restoreDeletedGame(id: ID!): GameRestoreResult!
     setGameState(gameId: ID!, input: GameStateInput!): Game!
-    logGameSession(gameId: ID!, input: GameSessionInput!): Game!
-    deleteGameSession(gameId: ID!, sessionId: ID!): Game!
+    logGameSession(gameId: ID!, input: GameSessionInput!): Game! @deprecated(reason: "GameGeek no longer logs sessions (S-D2 2026-11-16). Kept for tabs running an older bundle; stored sessions are untouched.")
+    deleteGameSession(gameId: ID!, sessionId: ID!): Game! @deprecated(reason: "GameGeek no longer logs sessions (S-D2 2026-11-16). Kept for tabs running an older bundle; stored sessions are untouched.")
     saveGamePlaythrough(gameId: ID!, input: GamePlaythroughInput!): Game!
     deleteGamePlaythrough(gameId: ID!, playthroughId: ID!): Game!
     saveGameProfile(input: GameProfileInput!): GameProfile!

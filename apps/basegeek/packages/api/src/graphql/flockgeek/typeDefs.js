@@ -235,6 +235,12 @@ export const typeDefs = gql`
     birdNotes(birdId: ID!): [BirdNote!]!
     healthRecords(birdId: ID!): [HealthRecord!]!
     eggProductions(startDate: Date, endDate: Date, birdId: ID, groupId: ID): [EggProduction!]!
+    """
+    The newest egg record (by harvest date) for one location, or across every
+    location when locationId is omitted. One indexed read, for the harvest
+    sheet's "Last harvest" chip and its days-since prefill. Added 2026-11-16.
+    """
+    lastEggProduction(locationId: ID): EggProduction
     hatchEvents(activeOnly: Boolean): [HatchEvent!]!
     hatchEvent(id: ID!): HatchEvent
     pairings(activeOnly: Boolean): [Pairing!]!
