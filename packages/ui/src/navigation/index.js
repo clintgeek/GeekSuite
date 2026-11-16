@@ -13,3 +13,4 @@ export { GeekShellContext, useGeekShell } from './shellContext.js';
 export { GeekSidebar } from './GeekSidebar.jsx';
 export { GeekThemeToggle } from './GeekThemeToggle.jsx';
 export { GeekTopBar } from './GeekTopBar.jsx';
+export { useGeekNavSlots } from './useGeekNavSlots.jsx';

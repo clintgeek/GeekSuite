@@ -20,8 +20,17 @@
  * Tablet (plan 2.6): `rail` takes a `<GeekNavRail />` and renders it as the
  * left column, hidden in focus mode. The shell does not choose it — the app
  * does, from `useGeekNavMode()`, and passes `nav`, `rail` or `bottomNav` for
- * the mode it is in (see GeekNavRail's header). A rail publishes
- * `leftInset` (its width) so left-anchored toasts clear it.
+ * the mode it is in (see GeekNavRail's header, or `useGeekNavSlots`, which
+ * does the choosing from one items array). A rail publishes `leftInset` (its
+ * width) so left-anchored toasts clear it.
+ *
+ * A rail is THE primary navigation while it shows (2026-11-16): the shell
+ * then draws no `nav` (neither the permanent column nor the drawer), the top
+ * bar gets no hamburger (`hasNav` is false), and no `bottomNav`. The `md`
+ * breakpoint behind `isMobile` would otherwise call an 800 px tablet
+ * "mobile" and put a hamburger and a tab bar beside its rail. With no rail,
+ * or in focus mode (which hides the rail), nothing about `nav` and
+ * `bottomNav` changes.
  *
  * The shell also owns the page's one thumb-zone action: a page calls
  * `useGeekPrimaryAction({ label, icon, onClick })` and the shell renders the
@@ -102,10 +111,11 @@ export function GeekShell({
   const { focusMode: contextFocusMode } = useFocusMode();
   const focusMode = focusModeOverride ?? contextFocusMode;
 
-  const hasNav = Boolean(nav);
-  const showNav = hasNav && !focusMode;
-  const showBottomNav = Boolean(bottomNav) && !focusMode;
   const showRail = Boolean(rail) && !focusMode;
+  // The rail, when it shows, replaces the sidebar/drawer and the tab bar.
+  const hasNav = Boolean(nav) && !showRail;
+  const showNav = hasNav && !focusMode;
+  const showBottomNav = Boolean(bottomNav) && !focusMode && !showRail;
 
   // Android Back closes the nav drawer before it leaves the page (3.27).
   useBackToClose(showNav && isMobile && mobileOpen, closeNav);

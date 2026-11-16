@@ -70,10 +70,25 @@ export {
   createPrimaryActionRegistry,
   useGeekPrimaryAction,
   useGeekPrimaryActionState,
+  useGeekNavSlots,
   useGeekShell,
 } from './navigation';
-export { GeekDialog, GeekFab, GeekSheet, useGeekDialogFullScreen } from './surfaces';
-export { GEEK_TWO_PANE_LIST_WIDTH, GeekTwoPane } from './layout';
+export {
+  GEEK_SHEET_TABLET_MAX_WIDTH,
+  GeekDialog,
+  GeekFab,
+  GeekSheet,
+  useGeekDialogFullScreen,
+} from './surfaces';
+export {
+  GEEK_COARSE_TARGET,
+  GEEK_CONTENT_COLUMN_MAX_WIDTH,
+  GEEK_FINE_TARGET,
+  GEEK_TWO_PANE_LIST_WIDTH,
+  GeekContentColumn,
+  GeekTwoPane,
+  geekTarget,
+} from './layout';
 export {
   GeekButton,
   GeekChip,

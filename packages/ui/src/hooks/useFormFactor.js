@@ -12,6 +12,19 @@ export const geekMedia = {
   fine: '@media (pointer: fine)',
   anyHover: '@media (any-hover: hover)',
   noHover: '@media (hover: none)',
+  /**
+   * "Not a phone", as CSS — the same rule as `classifyFormFactor` below:
+   * at least 600 wide AND (at least 600 tall, or a fine pointer). So a phone
+   * held sideways (844x390, a finger) stays a phone, a portrait tablet
+   * (800x1280) and a desktop window both match. CSS rather than the hook so
+   * it needs no re-render and server markup carries the same rule. (An
+   * engine with no pointer at all is the one edge it reads differently: a
+   * 700x500 window there stays phone-sized here.)
+   *
+   *   sx={{ [geekMedia.tabletUp]: { maxWidth: 600, mx: 'auto' } }}
+   */
+  tabletUp:
+    '@media (min-width: 600px) and (min-height: 600px), (min-width: 600px) and (pointer: fine)',
 };
 
 const QUERIES = {

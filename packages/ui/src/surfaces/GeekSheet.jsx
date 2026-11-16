@@ -68,6 +68,19 @@
  * (MUI's own `DialogActions` default) right-aligns a Cancel/Confirm pair;
  * `'start'` left-aligns. Default is `'stretch'` for exactly one action child,
  * `'end'` otherwise — a caller with a strong opinion can always override it.
+ *
+ * Tablet width (tablet baseline "Fix first" 3, 2026-11-16): sheet mode runs
+ * up to the `md` breakpoint, so a portrait tablet (800 px) used to get a
+ * bottom sheet as wide as the screen, with 780 px lines. From
+ * `geekMedia.tabletUp` (600 px wide and not a phone held sideways) the sheet
+ * paper is capped at `tabletMaxWidth` (default 600, the dialog's `sm`) and
+ * centred: still anchored to the bottom, still the same Drawer, handle,
+ * backdrop, Escape, Back (`backToClose`) and close button — only its width
+ * and edges change. A `snap="full"` sheet there stops 16 px short of the top
+ * so its rounded top edge and the backdrop show it is a sheet. CSS only: a
+ * phone below 600 px gets the very same markup and no matching rule, so it is
+ * unchanged. Desktop is untouched: `mode="auto"` is already a centred Dialog
+ * from `md` (900 px) up. `tabletMaxWidth={false}` keeps the full-width sheet.
  */
 import { Children, useEffect, useId, useRef } from 'react';
 import Box from '@mui/material/Box';
@@ -84,6 +97,12 @@ import useMediaQuery from '@mui/material/useMediaQuery';
 import { geekLayout, geekMotion, geekShape } from '../designTokens.js';
 import { useReducedMotion } from '../motion.js';
 import { useBackToClose } from '../hooks/useBackToClose.js';
+import { geekMedia } from '../hooks/useFormFactor.js';
+
+/** Widest a sheet gets on a tablet (matches the dialog's `maxWidth="sm"`). */
+export const GEEK_SHEET_TABLET_MAX_WIDTH = 600;
+/** Gap above a `snap="full"` sheet on a tablet, so it reads as a sheet. */
+const TABLET_FULL_SNAP_GAP = 16;
 
 /** Selector for "the first focusable element", used when `initialFocus` is
  * `true` rather than a caller-supplied selector string. */
@@ -157,6 +176,8 @@ export function GeekSheet({
   snap = 'content',
   mode = 'auto',
   maxWidth = 'sm',
+  // Sheet mode at tablet width: cap and centre the paper (see file header).
+  tabletMaxWidth = GEEK_SHEET_TABLET_MAX_WIDTH,
   initialFocus,
   dialogProps,
   drawerProps,
@@ -269,6 +290,26 @@ export function GeekSheet({
             '@supports (max-height: 92dvh)': fullSnap ? undefined : { maxHeight: '92dvh' },
             height: fullSnap ? '100vh' : undefined,
             '@supports (height: 100dvh)': fullSnap ? { height: '100dvh' } : undefined,
+            ...(tabletMaxWidth
+              ? {
+                  [geekMedia.tabletUp]: {
+                    width: '100%',
+                    maxWidth: tabletMaxWidth,
+                    mx: 'auto',
+                    borderRadius: '16px 16px 0 0',
+                    borderLeft: (t) => `1px solid ${t.palette.divider}`,
+                    borderRight: (t) => `1px solid ${t.palette.divider}`,
+                    ...(fullSnap
+                      ? {
+                          height: `calc(100vh - ${TABLET_FULL_SNAP_GAP}px)`,
+                          '@supports (height: 100dvh)': {
+                            height: `calc(100dvh - ${TABLET_FULL_SNAP_GAP}px)`,
+                          },
+                        }
+                      : null),
+                  },
+                }
+              : null),
             ...drawerProps?.PaperProps?.sx,
             ...sx,
           },
