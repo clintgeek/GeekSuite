@@ -77,12 +77,11 @@ const experience = (over = {}) => ({
 
 function mount(over = {}) {
   const value = experience(over);
-  render(
+  return Object.assign(value, { view: render(
     <ExperienceContext.Provider value={value}>
       <Settings />
     </ExperienceContext.Provider>
-  );
-  return value;
+  ) });
 }
 
 beforeEach(() => {
@@ -251,5 +250,48 @@ describe('Settings — Simple (L17) and the Simple view line (L19)', () => {
     mount();
     expect(await screen.findByTestId('simple-view-line')).toHaveTextContent(/Simple shows today, your meals and the check-ins/);
     expect(screen.queryByRole('button', { name: 'More settings' })).toBeNull();
+  });
+});
+
+// SUITE_REVIEW_2026-11 FitnessGeek #7: Android Back or a bottom-nav tap can
+// take the page away with a field still focused, and a removed input fires
+// no blur — the edit used to be dropped on a page that says it saves.
+describe('Settings — an edit survives leaving without a blur', () => {
+  it('the name is saved when the page goes away mid-edit', async () => {
+    const v = mount();
+    const field = await screen.findByLabelText('What should I call you?');
+    fireEvent.change(field, { target: { value: 'Heth' } });
+    v.view.unmount();
+    await waitFor(() => expect(v.update).toHaveBeenCalledWith({ preferred_name: 'Heth' }));
+  });
+
+  it('a blur that already saved is not sent again on leaving', async () => {
+    const v = mount();
+    const field = await screen.findByLabelText('What should I call you?');
+    fireEvent.change(field, { target: { value: 'Heth' } });
+    fireEvent.blur(field);
+    await waitFor(() => expect(v.update).toHaveBeenCalledTimes(1));
+    v.view.unmount();
+    await new Promise((r) => { setTimeout(r, 0); });
+    expect(v.update).toHaveBeenCalledTimes(1);
+  });
+
+  it('age and height are saved when the page goes away mid-edit', async () => {
+    const v = mount();
+    const age = await screen.findByLabelText('Age');
+    fireEvent.change(age, { target: { value: '53' } });
+    fireEvent.change(screen.getByTestId('settings-height-inches'), { target: { value: '6' } });
+    v.view.unmount();
+    await waitFor(() => expect(userService.updateProfile).toHaveBeenCalledWith({ age: 53 }));
+    expect(userService.updateProfile).toHaveBeenCalledWith({ height: '5\'6"' });
+  });
+
+  it('an unchanged page writes nothing on leaving', async () => {
+    const v = mount();
+    await screen.findByLabelText('Age');
+    v.view.unmount();
+    await new Promise((r) => { setTimeout(r, 0); });
+    expect(v.update).not.toHaveBeenCalled();
+    expect(userService.updateProfile).not.toHaveBeenCalled();
   });
 });

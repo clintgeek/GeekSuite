@@ -2,6 +2,9 @@ import { apiService } from './apiService';
 import { localDateString, rollingMean, utcDateString } from '@geeksuite/utils';
 
 const BASE_URL = '/weight';
+// Days of slack before the stats window, so a reading or two either side of
+// it never decides the answer.
+const STATS_MARGIN_DAYS = 30;
 
 export const weightService = {
   /**
@@ -75,8 +78,28 @@ export const weightService = {
    * Backward compatible: `totalChange`, `latestWeight`, `referenceWeight`
    * (now the baseline MEAN) and `periodDays` keep their names.
    */
-  async getWeightStats({ periodDays = 30, windowDays = 7 } = {}) {
-    const response = await apiService.get(BASE_URL);
+  async getWeightStats({ periodDays = 30, windowDays = 7, today = localDateString() } = {}) {
+    // Bounded first (SUITE_REVIEW_2026-11 FitnessGeek #1): the comparison
+    // reads only the last ~periodDays + 2 windows, so Home does not need
+    // every weigh-in ever. The answer is the same as from every row whenever
+    // the window holds what the maths reads; when it can't be sure — no rows,
+    // too short a span (older rows may sit before the window), or a latest
+    // reading so old the baseline week falls outside it — it asks for all.
+    const DAY_MS = 24 * 60 * 60 * 1000;
+    const lookbackDays = periodDays + 2 * windowDays;
+    const since = utcDateString(new Date(Date.parse(`${today}T00:00:00Z`) - (lookbackDays + STATS_MARGIN_DAYS) * DAY_MS));
+    const bounded = await this.computeWeightStats({ periodDays, windowDays, startDate: since });
+    const d = bounded.data;
+    const coversBaseline = d.latestDate && Date.parse(`${d.latestDate}T00:00:00Z`) - Date.parse(`${since}T00:00:00Z`) >= lookbackDays * DAY_MS;
+    if (d.reason === 'no_data' || d.reason === 'insufficient_span' || !coversBaseline) {
+      return this.computeWeightStats({ periodDays, windowDays });
+    }
+    return bounded;
+  },
+
+  /** `getWeightStats`' maths over the rows from `startDate` (all rows without one). */
+  async computeWeightStats({ periodDays = 30, windowDays = 7, startDate = null } = {}) {
+    const response = await apiService.get(startDate ? `${BASE_URL}?startDate=${startDate}` : BASE_URL);
     const logs = response?.data;
     const empty = {
       totalChange: null, latestWeight: null, referenceWeight: null, periodDays: null,

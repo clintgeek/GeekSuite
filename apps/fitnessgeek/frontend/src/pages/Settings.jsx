@@ -131,6 +131,29 @@ function GoalChoice({ selected, onClick, title }) {
   );
 }
 
+/**
+ * Saves what was typed when a field goes away WITHOUT a blur (SUITE_REVIEW
+ * 2026-11 FitnessGeek #7). These fields save on blur, but Android Back or a
+ * bottom-nav tap can unmount the page with the field still focused, and a
+ * focused input that is removed fires no blur: the edit was silently lost on
+ * a page that promises "saves as it changes". The app going to the
+ * background flushes too, since a backgrounded PWA may never come back. Each
+ * `flush` must be a no-op when nothing changed, because a blur may already
+ * have saved it.
+ */
+function useFlushOnLeave(flush) {
+  const ref = useRef(flush);
+  ref.current = flush;
+  useEffect(() => {
+    const onHide = () => { if (document.visibilityState === 'hidden') ref.current(); };
+    document.addEventListener('visibilitychange', onHide);
+    return () => {
+      document.removeEventListener('visibilitychange', onHide);
+      ref.current();
+    };
+  }, []);
+}
+
 /** "About you": the experience answers (their own store) and the profile. */
 function AboutYou({ profile, profileError, onRetryProfile, onProfileSaved }) {
   const { notify } = useToast();
@@ -153,12 +176,21 @@ function AboutYou({ profile, profileError, onRetryProfile, onProfileSaved }) {
     return result;
   };
 
+  // The last name saved or being saved, so a blur and a leave never send it twice.
+  const savedName = useRef(preferredName || '');
+  useEffect(() => { savedName.current = preferredName || ''; }, [preferredName]);
   const saveName = async () => {
     const next = name.trim();
-    if (next === (preferredName || '')) return;
+    if (next === savedName.current) return;
+    const before = savedName.current;
+    savedName.current = next;
     const result = await saveExperience({ preferred_name: next || null });
-    if (!result?.ok) setName(preferredName || '');
+    if (!result?.ok) {
+      savedName.current = before;
+      setName(before);
+    }
   };
+  useFlushOnLeave(saveName);
 
   return (
     <Surface sx={{ mb: 2, borderRadius: '24px' }} id="you" data-testid="about-you">
@@ -217,17 +249,34 @@ function ProfileFields({ profile, onProfileSaved }) {
     }
   };
 
+  // The last age / height saved or being saved: a blur and a leave never
+  // send the same value twice (useFlushOnLeave).
+  const savedAge = useRef(profile?.age ?? null);
   const saveAge = async () => {
-    if (!plausibleAge(age) || Number(age) === Number(profile?.age)) return;
+    if (!plausibleAge(age) || Number(age) === Number(savedAge.current)) return;
+    const before = savedAge.current;
+    savedAge.current = Number(age);
     const ok = await saveProfile({ age: Number(age) });
-    if (!ok) setAge(profile?.age ? String(profile.age) : '');
+    if (!ok) {
+      savedAge.current = before;
+      setAge(before ? String(before) : '');
+    }
   };
 
+  const savedHeight = useRef(profile?.height || '');
+  const typedHeight = useRef(null);
   const saveHeight = async (joined) => {
     if (!joined) return;
-    if (parseHeightToInches(joined) === parseHeightToInches(profile?.height)) return;
-    await saveProfile({ height: joined });
+    if (parseHeightToInches(joined) === parseHeightToInches(savedHeight.current)) return;
+    const before = savedHeight.current;
+    savedHeight.current = joined;
+    const ok = await saveProfile({ height: joined });
+    if (!ok) savedHeight.current = before;
   };
+  useFlushOnLeave(() => {
+    saveAge();
+    if (typedHeight.current) saveHeight(typedHeight.current);
+  });
 
   return (
         <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2.5 }}>
@@ -245,7 +294,7 @@ function ProfileFields({ profile, onProfileSaved }) {
             helperText={age !== '' && !plausibleAge(age) ? 'An age from 13 to 110.' : undefined}
             inputProps={{ inputMode: 'numeric' }}
           />
-          <HeightField idPrefix="settings-height" value={profile.height || ''} onBlur={saveHeight} />
+          <HeightField idPrefix="settings-height" value={profile.height || ''} onChange={(h) => { typedHeight.current = h; }} onBlur={saveHeight} />
           <FormControl fullWidth>
             <InputLabel id="settings-sex-label">Sex</InputLabel>
             <Select

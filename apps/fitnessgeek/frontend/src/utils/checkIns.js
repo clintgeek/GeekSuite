@@ -60,7 +60,7 @@ export function medsChecklist(meds = [], logs = []) {
  * offered as "Weigh in +" — a failed read is not an empty day (review L1).
  * An empty array, or no key at all, is a day with none.
  *
- * @param {{weights?: object[]|null, bloodPressures?: object[]|null, meds?: {taken: number, total: number}|null, today: string}} input
+ * @param {{weights?: object[]|null, bloodPressures?: object[]|null, meds?: {taken: number, total: number, unknown?: boolean}|null, today: string}} input
  * @returns {{id: string, label: string, done: boolean, value: string, spoken: string, to: string}[]}
  */
 export function todayStrip({ weights, bloodPressures, meds, today }) {
@@ -87,7 +87,18 @@ export function todayStrip({ weights, bloodPressures, meds, today }) {
     },
   ].filter(Boolean);
   // No medications, no meds check-in: "Meds 0 of 0" is noise.
-  if (meds && meds.total > 0) {
+  if (meds && meds.total > 0 && meds.unknown) {
+    // The dose logs could not be read: say so, never "0 of 3" — a count of
+    // zero invites a second dose (SUITE_REVIEW_2026-11 FitnessGeek #3).
+    items.push({
+      id: 'meds',
+      label: 'Meds',
+      done: false,
+      value: '?',
+      spoken: 'Couldn’t check which medications are taken today',
+      to: '/medications',
+    });
+  } else if (meds && meds.total > 0) {
     const all = meds.taken >= meds.total;
     items.push({
       id: 'meds',

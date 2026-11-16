@@ -195,6 +195,19 @@ describe('the AI-insight window covers whole calendar days', () => {
     expect(dateRange.start).toBe(dayAt(-30).toISOString().slice(0, 10));
     expect(dateRange.end).toBe(dayAt(0).toISOString().slice(0, 10));
   });
+
+  it('counts the window in UTC days on a host that is not in UTC, across a clock change', async () => {
+    // The case above went red only in Chicago evenings (the 30 days crossed
+    // 2026-11-01's clock change). With a fixed date this one is red at ANY
+    // hour on a host west of UTC with DST — 2026-11-15 00:00Z is the 14th
+    // locally, and 30 local days back lands on 10-15 23:00Z. A UTC host (CI)
+    // cannot see the bug either way; setting TZ inside jest's sandbox does
+    // not reach the process, so this relies on the dev machine's zone.
+    await fitnessResolvers.Query.fitnessInsightsCorrelations(null, { date: '2026-11-15' }, ctx(ALICE));
+    const { dateRange } = contextFromPrompt();
+    expect(dateRange.start).toBe('2026-10-16');
+    expect(dateRange.end).toBe('2026-11-15');
+  });
 });
 
 // ───────────────────────────────────────────────────────────────────────────

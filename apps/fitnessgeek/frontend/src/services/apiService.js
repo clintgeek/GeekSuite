@@ -39,6 +39,13 @@ const GET_WEIGHTS = gql`
   query GetFitnessWeights { fitnessWeights { id weight_value log_date notes source formatted_date } }
 `;
 
+// The bounded forms (SUITE_REVIEW_2026-11 FitnessGeek #1): newest `limit`
+// rows, or a `startDate`/`endDate` window. Their own documents, so a call
+// with no bounds still sends the bare query every gateway knows.
+const GET_WEIGHTS_BOUNDED = gql`
+  query GetFitnessWeightsBounded($startDate: Date, $endDate: Date, $limit: Int) { fitnessWeights(startDate: $startDate, endDate: $endDate, limit: $limit) { id weight_value log_date notes source formatted_date } }
+`;
+
 const ADD_WEIGHT = gql`
   mutation AddFitnessWeight($input: WeightInput!) { addFitnessWeight(input: $input) { id weight_value log_date notes source formatted_date } }
 `;
@@ -149,6 +156,10 @@ const DELETE_MEDICATION = gql`
 // returned nothing the list could re-render from.
 const GET_BPS = gql`
   query GetBps { bloodPressures { id systolic diastolic pulse measured_at log_date notes formatted_date status } }
+`;
+
+const GET_BPS_BOUNDED = gql`
+  query GetBpsBounded($startDate: Date, $endDate: Date, $limit: Int) { bloodPressures(startDate: $startDate, endDate: $endDate, limit: $limit) { id systolic diastolic pulse measured_at log_date notes formatted_date status } }
 `;
 
 const ADD_BP = gql`
@@ -390,6 +401,30 @@ const normalizeLogNutrition = (raw) => {
 };
 
 // Helper map to route Axios urls to GraphQL ops
+/**
+ * A history list read (`/weight`, `/blood-pressure`). `limit`, `startDate`
+ * and `endDate` in the query string used to be dropped on the floor here, so
+ * every caller got every row whatever it asked for. With any of them set the
+ * bounded document is sent; `fallback` is the bare one, used if the gateway
+ * is older than the arguments (it rejects the whole query as an unknown
+ * argument) — every row is a bigger answer, never a wrong one.
+ */
+function historyOp(url, bare, bounded) {
+  const sp = new URLSearchParams(url.split('?')[1] || '');
+  const limit = parseInt(sp.get('limit'), 10);
+  const variables = {
+    startDate: sp.get('startDate') || null,
+    endDate: sp.get('endDate') || null,
+    limit: Number.isFinite(limit) && limit > 0 ? limit : null,
+  };
+  if (!variables.startDate && !variables.endDate && !variables.limit) return { query: bare };
+  return { query: bounded, variables, _fallback: { query: bare } };
+}
+
+const isUnknownArgument = (err) =>
+  (err?.graphQLErrors || err?.errors || []).some((e) => /Unknown argument/i.test(e?.message || ''))
+  || /Unknown argument/i.test(err?.message || '');
+
 function routeRequest(method, url, data) {
   // Normalize
   let base = url.split('?')[0];
@@ -551,7 +586,7 @@ function routeRequest(method, url, data) {
     if (base === '/settings/experience') return { query: GET_EXPERIENCE };
     // /user/settings is an alias — same underlying FitnessUserSettings document
     if (base === '/user/settings') return { query: GET_USER_SETTINGS };
-    if (base === '/weight') return { query: GET_WEIGHTS };
+    if (base === '/weight') return historyOp(url, GET_WEIGHTS, GET_WEIGHTS_BOUNDED);
     // The browser owns the calendar day — the summary ages the latest scan
     // against it to decide whether a scan-based BMR is still usable.
     if (base === '/body-comp/summary') return { query: GET_BODY_COMP_SUMMARY, variables: { date: localDateString() } };
@@ -601,7 +636,7 @@ function routeRequest(method, url, data) {
     }
     if (base.startsWith('/meals/')) return { query: GET_MEALS, variables: { mealType: parts[1] } };
     if (base === '/medications' || base === '/meds') return { query: GET_MEDICATIONS };
-    if (base === '/bp' || base === '/blood-pressure') return { query: GET_BPS };
+    if (base === '/bp' || base === '/blood-pressure') return historyOp(url, GET_BPS, GET_BPS_BOUNDED);
     if (parts[0] === 'blood-pressure' && parts[1]) return { query: GET_BPS }; // Handle /blood-pressure/:id
     if (parts[0] === 'weight' && parts[1]) return { query: GET_WEIGHTS }; // Handle /weight/:id
     if (base === '/streaks/login') return { query: GET_LOGIN_STREAK };
@@ -796,7 +831,14 @@ export const apiService = {
       return { success: true, data: null };
     }
 
-    const res = await apolloClient.query({ ...op, fetchPolicy: 'no-cache' });
+    const { _fallback, ...queryOp } = op;
+    let res;
+    try {
+      res = await apolloClient.query({ ...queryOp, fetchPolicy: 'no-cache' });
+    } catch (err) {
+      if (!_fallback || !isUnknownArgument(err)) throw err;
+      res = await apolloClient.query({ ..._fallback, fetchPolicy: 'no-cache' });
+    }
     // Attempt to automatically extract the root field the caller expects
     const keys = Object.keys(res.data || {});
     if (keys.length === 1) return { success: true, data: res.data[keys[0]] };

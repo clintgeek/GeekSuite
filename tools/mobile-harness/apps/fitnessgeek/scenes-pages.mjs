@@ -10,6 +10,7 @@ import {
   OPS, SETTINGS, DERIVED, DAILY_SUMMARY, WEIGHTS, SAVED_MEALS, FOODS, BPS, experienceOf, heatherOps,
 } from './fixtures.mjs';
 import { must, scrollToSection, HEATHER, isoLocal } from './helpers.mjs';
+import { withHistoryBounds, bareOpOf } from './history-ops.mjs';
 
 // `must`, but it waits a few seconds first: a dialog's content (a household log,
 // a copy count) arrives after a request, and a dark first run is the slow one.
@@ -33,7 +34,8 @@ async function routeOps(page, ops, { fail } = {}) {
     try { payload = JSON.parse(r.request().postData() || '{}'); } catch { /* a miss, not a crash */ }
     const op = payload.operationName || (/\b(?:query|mutation)\s+([A-Za-z0-9_]+)/.exec(payload.query || '') || [])[1];
     const vars = payload.variables || {};
-    if (fail && fail(op, vars)) {
+    // A bounded read fails exactly when its bare read would (history-ops.mjs).
+    if (fail && (fail(op, vars) || fail(bareOpOf(op), vars))) {
       return r.fulfill({
         status: 502,
         contentType: 'application/json',
@@ -41,8 +43,7 @@ async function routeOps(page, ops, { fail } = {}) {
         body: JSON.stringify({ errors: [{ message: 'Bad gateway' }] }),
       });
     }
-    const entry = ops[op];
-    const data = typeof entry === 'function' ? entry(vars, r) : entry;
+    const data = withHistoryBounds(ops)(op, vars, r);
     if (data === undefined) {
       console.log(`  [graphql] unstubbed op: ${op}`);
       return json(r, { data: {} });
@@ -510,8 +511,20 @@ async function tapChartTooltip(page, h, box) {
     if (await tipLoc.first().waitFor({ state: 'attached', timeout: 2000 }).then(() => true, () => false)) break;
   }
   await need(tipLoc, 'the tooltip after a plain tap');
+  // Measure the tooltip a person SEES. Nivo mounts it at the raw touch point
+  // with opacity 0, measures it (ResizeObserver), and only then moves it to
+  // its anchor beside the finger and shows it. On a slow runner the box was
+  // read in that hidden first frame: "tip 266-435 chart 17-373" is the tap
+  // point itself (17 + 0.7 x 356 = 266), never a placement. CI 2026-11,
+  // red on four of five pushes; reproduced locally by delaying
+  // ResizeObserver callbacks 400 ms.
+  const shown = await page.waitForFunction(() => {
+    const el = document.querySelector('[data-testid="chart-tooltip"]');
+    return Boolean(el?.parentElement) && getComputedStyle(el.parentElement).opacity === '1';
+  }, null, { timeout: 3000 }).then(() => true, () => false);
+  if (!shown) throw new Error('the tooltip never became visible after a tap');
   const tip = tipLoc;
-  const t = await tip.first().boundingBox();
+  const t = await stableBox(tip.first(), h);
   if (!t) throw new Error('tooltip has no box');
   if (t.x < b.x - 1 || t.x + t.width > b.x + b.width + 1) {
     throw new Error(`tooltip leaves the chart: tip ${Math.round(t.x)}-${Math.round(t.x + t.width)} chart ${Math.round(b.x)}-${Math.round(b.x + b.width)}`);

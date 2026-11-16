@@ -17,9 +17,12 @@ const { medsService } = await import('../../services/medsService.js');
 const { useMedsToday } = await import('../useMedsToday.js');
 const { default: MedsChecklist } = await import('../../components/Home/MedsChecklist.jsx');
 
+const { MEDS_CHANGED_EVENT } = await import('../useMedsToday.js');
+const { todayStrip } = await import('../../utils/checkIns.js');
+
 function Harness() {
   const meds = useMedsToday('2026-09-27');
-  return <MedsChecklist items={meds.items} taken={meds.taken} total={meds.total} onToggle={meds.toggle} saving={meds.saving} error={meds.error} />;
+  return <MedsChecklist items={meds.items} taken={meds.taken} total={meds.total} onToggle={meds.toggle} saving={meds.saving} error={meds.error} unknown={meds.ticksUnknown} ticksError={meds.ticksError} onRetry={meds.reload} />;
 }
 
 beforeEach(() => {
@@ -58,5 +61,43 @@ describe('the meds checklist', () => {
     await act(async () => { fireEvent.click(lisinopril); });
     await waitFor(() => expect(screen.getByText('Couldn’t save Lisinopril. Try again.')).toBeInTheDocument());
     expect(screen.getByRole('checkbox', { name: 'Lisinopril, morning' })).toHaveAttribute('aria-checked', 'false');
+  });
+});
+
+// SUITE_REVIEW_2026-11 FitnessGeek #3: a failed dose-log read used to set the
+// logs to [] — the checklist then said "0 of 2" with empty boxes, and she
+// could take a dose a second time.
+describe('a failed dose-log read is unknown, never "nothing taken"', () => {
+  it('with no good read for the day: no count, no boxes, a retry that recovers', async () => {
+    medsService.getLogsByDate.mockRejectedValueOnce(new Error('offline'));
+    render(<Harness />);
+    expect(await screen.findByTestId('meds-ticks-unknown')).toBeInTheDocument();
+    expect(screen.queryByText('0 of 2')).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+
+    medsService.getLogsByDate.mockResolvedValueOnce([{ medication_id: 'm1', time_of_day: 'morning', taken: true, created_at: '2026-09-27T12:00:00Z' }]);
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Try again' })); });
+    expect(await screen.findByText('1 of 2')).toBeInTheDocument();
+    expect(screen.queryByTestId('meds-ticks-unknown')).not.toBeInTheDocument();
+  });
+
+  it('a failed reload on the same day keeps the ticks already read and says so', async () => {
+    medsService.getLogsByDate.mockResolvedValueOnce([{ medication_id: 'm1', time_of_day: 'morning', taken: true, created_at: '2026-09-27T12:00:00Z' }]);
+    render(<Harness />);
+    expect(await screen.findByText('1 of 2')).toBeInTheDocument();
+
+    medsService.getLogsByDate.mockRejectedValueOnce(new Error('offline'));
+    await act(async () => { window.dispatchEvent(new Event(MEDS_CHANGED_EVENT)); });
+    await waitFor(() => expect(screen.getByText(/Couldn’t refresh your ticks/)).toBeInTheDocument());
+    expect(screen.getByText('1 of 2')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Lisinopril, morning, taken' })).toHaveAttribute('aria-checked', 'true');
+  });
+
+  it('the Today strip says "Meds ?" for unknown ticks, not "0 of 2"', () => {
+    const items = todayStrip({ weights: [], bloodPressures: [], meds: { taken: 0, total: 2, unknown: true }, today: '2026-09-27' });
+    const meds = items.find((i) => i.id === 'meds');
+    expect(meds.value).toBe('?');
+    expect(meds.done).toBe(false);
+    expect(meds.spoken).not.toMatch(/0 of 2/);
   });
 });

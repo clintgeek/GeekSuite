@@ -8,7 +8,7 @@ import {
   TrendingDown as TrendingDownIcon,
   TrendingFlat as TrendingFlatIcon,
 } from '@mui/icons-material';
-import { parseISO } from 'date-fns';
+import { localDateString, utcDateString } from '@geeksuite/utils';
 import { newestReadingFirst, readingWhen } from './bpTimeUtils.js';
 import { categorizeBP } from '../../utils/bpUtils.js';
 import { bpStageWords } from '../../utils/plainWords.js';
@@ -37,15 +37,16 @@ const BPInsights = ({ bpLogs = [] }) => {
     // "latest" after the evening one was saved.
     const sortedLogs = [...bpLogs].sort(newestReadingFirst);
     const latestReading = sortedLogs[0];
+    // "This week" / "30 days" are CALENDAR days: today and the 6 (29) before
+    // it, on the device's calendar. `log_date` is a calendar day stored at
+    // UTC midnight; comparing it with "this instant minus 7 days" put the
+    // oldest day in or out by the hour — west of UTC, after 18:00 the week
+    // lost its first day and the headline average moved (harness 67-bp-week,
+    // red in Chicago evenings).
     const today = new Date();
-
-    // Calculate 7-day average
-    const sevenDaysAgo = new Date(today);
-    sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-    const last7Days = sortedLogs.filter(log => {
-      const logDate = parseISO(log.log_date);
-      return logDate >= sevenDaysAgo;
-    });
+    const firstDay = (n) => { const d = new Date(today); d.setDate(d.getDate() - (n - 1)); return localDateString(d); };
+    const inLastDays = (log, n) => utcDateString(log.log_date) >= firstDay(n);
+    const last7Days = sortedLogs.filter((log) => inLastDays(log, 7));
 
     const avg7Systolic = last7Days.length > 0
       ? Math.round(last7Days.reduce((sum, log) => sum + log.systolic, 0) / last7Days.length)
@@ -55,12 +56,7 @@ const BPInsights = ({ bpLogs = [] }) => {
       : null;
 
     // Calculate 30-day average
-    const thirtyDaysAgo = new Date(today);
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-    const last30Days = sortedLogs.filter(log => {
-      const logDate = parseISO(log.log_date);
-      return logDate >= thirtyDaysAgo;
-    });
+    const last30Days = sortedLogs.filter((log) => inLastDays(log, 30));
 
     const avg30Systolic = last30Days.length > 0
       ? Math.round(last30Days.reduce((sum, log) => sum + log.systolic, 0) / last30Days.length)

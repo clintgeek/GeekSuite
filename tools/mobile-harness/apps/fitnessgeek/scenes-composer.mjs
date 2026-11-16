@@ -8,6 +8,7 @@
 // not replacements: those stay in scenes.mjs.
 import { graphqlRoute } from '../../lib/net.mjs';
 import { OPS, FOOD_LOGS, SUGGEST_LONG, heatherOps } from './fixtures.mjs';
+import { withHistoryBounds } from './history-ops.mjs';
 import {
   must, foodRoutes, dropFoodRoutes, scrollToSection, HEATHER, typeInto, SOUP,
   fageSuggest, fageDeep, soupSuggest, wait,
@@ -115,7 +116,7 @@ function sheetScene(name, o = {}) {
         await foodRoutes(page, { suggest, deep, suggestMs, deepMs, ...(describe !== undefined ? { describe } : {}) });
         cleanups.push(() => dropFoodRoutes(page));
         const base = experience === 'simple' ? heatherOps({ ...HEATHER, ...heather }, today ? { today } : {}) : OPS;
-        await graphqlRoute(page, { ...base, ...writeOps(), ...(typeof ops === 'function' ? ops() : ops) });
+        await graphqlRoute(page, withHistoryBounds({ ...base, ...writeOps(), ...(typeof ops === 'function' ? ops() : ops) }));
         cleanups.push(() => page.unroute('**/graphql'));
         if (hold) {
           // Held until teardown. Every other op falls through to the stub above.

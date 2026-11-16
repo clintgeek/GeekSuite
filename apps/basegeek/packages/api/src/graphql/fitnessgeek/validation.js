@@ -73,3 +73,42 @@ export const experienceInputSchema = z.object({
 }).strict();
 
 export const validateExperienceInput = validateInput(experienceInputSchema);
+
+/**
+ * `fitnessWeights(startDate:, endDate:, limit:)` / `bloodPressures(...)` —
+ * a bounded read of a history list (SUITE_REVIEW_2026-11 FitnessGeek #1).
+ *
+ * Every argument is optional, and with none the read is exactly what it was:
+ * every row. That is load-bearing — a frontend older than these arguments
+ * still sends the bare query and must keep getting the whole history. Home
+ * asks for the newest few (`limit`); the BP page asks for a window
+ * (`startDate`) and only reads everything when "All" needs it.
+ *
+ * `limit` is capped so a caller cannot ask for an absurd page; `startDate`
+ * and `endDate` arrive as Dates from the shared `Date` scalar and bound
+ * `log_date` inclusively (both are UTC-midnight calendar days).
+ */
+export const HISTORY_LIMIT_MAX = 5000;
+
+export const historyArgsSchema = z.object({
+  startDate: z.date().nullable().optional(),
+  endDate: z.date().nullable().optional(),
+  limit: z.number().int().min(1).max(HISTORY_LIMIT_MAX).nullable().optional(),
+});
+
+export const validateHistoryArgs = validateInput(historyArgsSchema);
+
+/**
+ * The Mongo filter and limit for a bounded history read. `limit: 0` means
+ * "no limit" to mongoose, which is what the no-argument form wants.
+ */
+export function historyQuery(userId, args = {}) {
+  const { startDate, endDate, limit } = validateHistoryArgs(args || {});
+  const filter = { userId };
+  if (startDate || endDate) {
+    filter.log_date = {};
+    if (startDate) filter.log_date.$gte = startDate;
+    if (endDate) filter.log_date.$lte = endDate;
+  }
+  return { filter, limit: limit || 0 };
+}

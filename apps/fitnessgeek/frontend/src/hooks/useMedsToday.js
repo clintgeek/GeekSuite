@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { medsService } from '../services/medsService.js';
 import { medsChecklist } from '../utils/checkIns.js';
 import { errorMessage } from '../utils/errorMessage.js';
@@ -34,6 +34,13 @@ export function useMedsToday(dateArg) {
   const date = dateArg || today;
   const [meds, setMeds] = useState([]);
   const [logs, setLogs] = useState([]);
+  // The day the held dose logs were READ for (null: no good read yet). A
+  // failed dose-log read is not "nothing taken": with no good read for this
+  // day the ticks are unknown, never "0 of 3" — she could take a dose twice
+  // (SUITE_REVIEW_2026-11 FitnessGeek #3).
+  const [logsFor, setLogsFor] = useState(null);
+  const logsForRef = useRef(null);
+  const [ticksError, setTicksError] = useState(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState(null);
   const [saving, setSaving] = useState(null);
@@ -60,7 +67,21 @@ export function useMedsToday(dateArg) {
       } else {
         setLoadError(errorMessage(m.reason, 'Couldn’t load your meds. Try again.'));
       }
-      setLogs(l.status === 'fulfilled' ? asArray(l.value) : []);
+      if (l.status === 'fulfilled') {
+        setLogs(asArray(l.value));
+        logsForRef.current = date;
+        setLogsFor(date);
+        setTicksError(null);
+      } else {
+        // Same day: keep the ticks last read and say the refresh failed.
+        // Another day (or never read): drop them — they are unknown.
+        if (logsForRef.current !== date) {
+          setLogs([]);
+          logsForRef.current = null;
+          setLogsFor(null);
+        }
+        setTicksError(errorMessage(l.reason, 'Couldn’t check which doses are ticked. Try again.'));
+      }
       setLoading(false);
     });
     return () => { cancelled = true; };
@@ -95,7 +116,11 @@ export function useMedsToday(dateArg) {
     }
   }, [date]);
 
-  return { ...checklist, date, loading, loadError, saving, error, toggle, reload };
+  // Unknown = no good dose-log read for THIS day. Callers show "couldn't
+  // check" with a retry, never the count.
+  const ticksUnknown = !loading && logsFor !== date;
+
+  return { ...checklist, date, loading, loadError, ticksUnknown, ticksError, saving, error, toggle, reload };
 }
 
 export default useMedsToday;

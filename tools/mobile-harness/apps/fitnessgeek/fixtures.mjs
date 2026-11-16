@@ -3,6 +3,7 @@
 // operations) plus the shared session routes, so nearly everything below is
 // keyed by GraphQL operation name.
 import { sessionRoutes, graphqlRoute, json, DEFAULT_USER } from '../../lib/net.mjs';
+import { withHistoryBounds } from './history-ops.mjs';
 // The same smoothing the gateway runs (FITNESSGEEK_BODY_DATA_PLAN §0), so the
 // summary fixture is exactly what the resolver would say about these scans —
 // not a hand-typed number that could drift from the rule.
@@ -603,7 +604,7 @@ export const DESCRIBED_SOUP = {
 
 export async function routes(ctx, { base, scheme, viewport } = {}) {
   await sessionRoutes(ctx, USER);
-  await graphqlRoute(ctx, OPS);
+  await graphqlRoute(ctx, withHistoryBounds(OPS));
   // After sessionRoutes: its catch-all `/api/` answers `{ success, data: {} }`,
   // and a later route wins. Reports' Body & recovery reads this.
   await ctx.route('**/api/influx/trends*', (r) => json(r, INFLUX_TRENDS));

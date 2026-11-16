@@ -103,6 +103,12 @@ const longDay = (day) => {
 // Wraps a service call so a missing method (or a sync throw) lands in
 // allSettled as a rejection instead of escaping it.
 const safe = (fn) => Promise.resolve().then(fn);
+// Indexes of the reads in `loadDashboardData` a food write can change: the
+// day's summary (0) and its logs (4).
+const FOOD_WRITE_READS = new Set([0, 4]);
+// Newest weight / BP rows Home asks for. Today's check-ins and the latest
+// reading are all it shows; a day never holds anywhere near this many.
+const HOME_RECENT_ROWS = 20;
 const rowsOf = (res) => {
   const d = res?.data ?? res;
   return Array.isArray(d) ? d : [];
@@ -180,21 +186,34 @@ const DashboardNew = () => {
   notifyRef.current = notify;
   const meds = useMedsToday(today);
 
-  const loadDashboardData = useCallback(async () => {
+  // The last settled answer of every read, for this day. A food write can
+  // change only the day's summary and its logs, so the refresh after one
+  // re-asks those two and reuses the rest — it used to re-fire all eight,
+  // five of them live Garmin calls (SUITE_REVIEW_2026-11 FitnessGeek #5).
+  const lastReadsRef = useRef(null);
+
+  const loadDashboardData = useCallback(async ({ foodOnly = false } = {}) => {
     try {
-      const [summaryResult, goalsResult, weightResult, garminResult, logsResult, streakResult, weightsResult, bpsResult] =
-        await Promise.allSettled([
-          safe(() => fitnessGeekService.getDailySummary(today)),
-          safe(() => goalsService.getDerivedMacros()),
-          safe(() => weightService.getWeightStats()),
-          // `today` (local) — NOT the no-argument form: the containers run
-          // UTC, and an evening dashboard asked Garmin about tomorrow.
-          safe(() => fitnessGeekService.getGarminDaily(today)),
-          safe(() => fitnessGeekService.getLogsForDate(today)),
-          safe(() => streakService.getLoginStreak()),
-          safe(() => weightService.getWeightLogs()),
-          safe(() => bpService.getBPLogs()),
-        ]);
+      const cached = foodOnly && lastReadsRef.current?.day === today ? lastReadsRef.current.results : null;
+      const reads = [
+        () => fitnessGeekService.getDailySummary(today),
+        () => goalsService.getDerivedMacros(),
+        () => weightService.getWeightStats(),
+        // `today` (local) — NOT the no-argument form: the containers run
+        // UTC, and an evening dashboard asked Garmin about tomorrow.
+        () => fitnessGeekService.getGarminDaily(today),
+        () => fitnessGeekService.getLogsForDate(today),
+        () => streakService.getLoginStreak(),
+        // Home needs the newest few only: "Weighed today", "BP today" and the
+        // latest reading — not every row ever (review 2026-11 #1).
+        () => weightService.getWeightLogs({ limit: HOME_RECENT_ROWS }),
+        () => bpService.getBPLogs({ limit: HOME_RECENT_ROWS }),
+      ];
+      const reuse = (i) => cached && !FOOD_WRITE_READS.has(i);
+      const settled = await Promise.allSettled(reads.map((fn, i) => (reuse(i) ? null : safe(fn))));
+      const results = settled.map((r, i) => (reuse(i) ? cached[i] : r));
+      lastReadsRef.current = { day: today, results };
+      const [summaryResult, goalsResult, weightResult, garminResult, logsResult, streakResult, weightsResult, bpsResult] = results;
 
       const value = (r) => (r.status === 'fulfilled' ? r.value : null);
       const ok = (r) => r.status === 'fulfilled';
@@ -315,7 +334,8 @@ const DashboardNew = () => {
     }).catch(() => {});
   }, []);
 
-  const { logItems, undoLogs, describeMeal, adjustLogCalories, updateLog, setLogCalories } = useFoodLogging({ date: today, onChanged: loadDashboardData });
+  const reloadAfterFoodWrite = useCallback(() => loadDashboardData({ foodOnly: true }), [loadDashboardData]);
+  const { logItems, undoLogs, describeMeal, adjustLogCalories, updateLog, setLogCalories } = useFoodLogging({ date: today, onChanged: reloadAfterFoodWrite });
   // Full: a clean describe closes the sheet and leaves a "Just added" strip on the meal card.
   const justAdded = useJustAdded({ setLogCalories, describeMeal, undoLogs });
 
@@ -328,7 +348,7 @@ const DashboardNew = () => {
       await fitnessGeekService.deleteFoodLog(logId);
       justAdded.forget(logId);
       setTimeout(() => {
-        loadDashboardData();
+        reloadAfterFoodWrite();
         setRemovingLogIds((prev) => {
           const next = new Set(prev);
           next.delete(logId);
@@ -388,7 +408,8 @@ const DashboardNew = () => {
   const strip = todayStrip({
     weights: checkIns.weights,
     bloodPressures: checkIns.bloodPressures,
-    meds: meds.loading ? null : { taken: meds.taken, total: meds.total },
+    // Unknown ticks are "Meds ?", never "0 of 3" (review 2026-11 #3).
+    meds: meds.loading ? null : { taken: meds.taken, total: meds.total, unknown: meds.ticksUnknown },
     today,
   });
 
@@ -628,6 +649,9 @@ const DashboardNew = () => {
               onToggle={meds.toggle}
               saving={meds.saving}
               error={meds.error}
+              unknown={meds.ticksUnknown}
+              ticksError={meds.ticksError}
+              onRetry={meds.reload}
             />
           </Surface>
         )}

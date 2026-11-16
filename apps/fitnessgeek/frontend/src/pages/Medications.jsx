@@ -608,6 +608,9 @@ export default function Medications() {
             onToggle={doses.toggle}
             saving={doses.saving}
             error={doses.error}
+            unknown={doses.ticksUnknown}
+            ticksError={doses.ticksError}
+            onRetry={doses.reload}
           />
         </Surface>
       )}

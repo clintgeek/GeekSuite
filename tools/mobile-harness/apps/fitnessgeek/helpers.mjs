@@ -2,6 +2,7 @@
 // the scenes-*.mjs it gathers) build every scene the same way.
 import { json, graphqlRoute } from '../../lib/net.mjs';
 import { heatherOps, DESCRIBED_SOUP, SUGGEST_FAGE, DEEP_FAGE, SUGGEST_SOUP } from './fixtures.mjs';
+import { withHistoryBounds } from './history-ops.mjs';
 
 // The weight, dashboard and wizard scenes THROW when their anchor is missing instead of
 // returning false: a skip is silent (see scene 11's note), and these exist
@@ -15,7 +16,7 @@ export const must = async (locator, what) => {
 // so it is dropped again whether setup succeeds or throws — the runner skips
 // teardown on a throw, and one page serves every scene of a viewport.
 export async function withPageOps(page, ops, fn) {
-  await graphqlRoute(page, ops);
+  await graphqlRoute(page, withHistoryBounds(ops));
   try {
     return await fn();
   } catch (err) {
@@ -127,7 +128,7 @@ export const composerScene = (name, { simple = false, path = '/dashboard', meal 
   async setup(page, h) {
     await foodRoutes(page, routes);
     try {
-      if (simple) await graphqlRoute(page, heatherOps(HEATHER));
+      if (simple) await graphqlRoute(page, withHistoryBounds(heatherOps(HEATHER)));
       await page.goto(h.base + path, { waitUntil: 'networkidle' });
       await h.settle(1400);
       let scope = page;

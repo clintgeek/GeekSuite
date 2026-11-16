@@ -1,5 +1,5 @@
 import React from 'react';
-import { Box, ButtonBase, Typography, Alert } from '@mui/material';
+import { Box, Button, ButtonBase, Typography, Alert } from '@mui/material';
 import { useTheme, alpha } from '@mui/material/styles';
 import { Check as CheckIcon } from '@mui/icons-material';
 import { Link as RouterLink } from 'react-router-dom';
@@ -9,8 +9,14 @@ import { Link as RouterLink } from 'react-router-dom';
  * (SIMPLE_AND_FULL_PLAN.md item 6). One big tick per dose, named plainly:
  * "Metformin · Morning". Tapping writes a dose log; tapping again takes it
  * back. Each row is a real checkbox to a screen reader.
+ *
+ * `unknown`: the day's dose logs could not be read. No count and no boxes —
+ * empty boxes would read as "nothing taken" and invite a second dose
+ * (SUITE_REVIEW_2026-11 FitnessGeek #3) — just the problem and a retry.
+ * `ticksError` with known ticks: a refresh failed; the ticks shown are the
+ * last ones read, and the note says so.
  */
-export default function MedsChecklist({ items = [], taken = 0, total = 0, onToggle, saving, error, title = 'Did you take your meds?' }) {
+export default function MedsChecklist({ items = [], taken = 0, total = 0, onToggle, saving, error, unknown = false, ticksError = null, onRetry, title = 'Did you take your meds?' }) {
   const theme = useTheme();
   // Taken is the app's "done" look: basil at 8% with a basil edge and a
   // basil tick (visual review B2) — leaf is Lunch's colour.
@@ -22,14 +28,22 @@ export default function MedsChecklist({ items = [], taken = 0, total = 0, onTogg
         <Typography id="meds-checklist-title" component="h2" sx={{ fontSize: '1.375rem', fontWeight: 800 }}>
           {title}
         </Typography>
-        {total > 0 && (
+        {total > 0 && !unknown && (
           <Typography sx={{ fontSize: '1rem', fontWeight: 700, color: 'text.secondary', whiteSpace: 'nowrap' }}>
             {taken} of {total}
           </Typography>
         )}
       </Box>
 
-      {total === 0 ? (
+      {unknown && total > 0 ? (
+        <Alert
+          severity="warning"
+          data-testid="meds-ticks-unknown"
+          action={onRetry ? <Button color="inherit" onClick={onRetry} sx={{ minHeight: 44, fontWeight: 700 }}>Try again</Button> : null}
+        >
+          Couldn’t check which doses are ticked, so this can’t say what’s been taken. Try again before taking one.
+        </Alert>
+      ) : total === 0 ? (
         <Typography sx={{ color: 'text.secondary', fontSize: '1.0625rem' }}>
           No meds added yet.{' '}
           <Box component={RouterLink} to="/medications" sx={{ color: 'primary.main', fontWeight: 800 }}>
@@ -89,6 +103,15 @@ export default function MedsChecklist({ items = [], taken = 0, total = 0, onTogg
             </ButtonBase>
           ))}
         </Box>
+      )}
+      {!unknown && ticksError && total > 0 && (
+        <Alert
+          severity="warning"
+          sx={{ mt: 1.5 }}
+          action={onRetry ? <Button color="inherit" onClick={onRetry} sx={{ minHeight: 44, fontWeight: 700 }}>Try again</Button> : null}
+        >
+          Couldn’t refresh your ticks. These are the last ones loaded.
+        </Alert>
       )}
       {error && <Alert severity="error" sx={{ mt: 1.5 }}>{error}</Alert>}
     </Box>

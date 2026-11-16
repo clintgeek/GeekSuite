@@ -7,6 +7,7 @@
 // page serves every scene of a viewport. Every anchor is a must(), so a UI
 // that moved fails loudly instead of skipping.
 import { json, graphqlRoute } from '../../lib/net.mjs';
+import { withHistoryBounds } from './history-ops.mjs';
 import { OPS, SETTINGS, USER, MEDS, experienceOf, heatherOps } from './fixtures.mjs';
 import { scrollToSection, HEATHER, isoLocal } from './helpers.mjs';
 
@@ -41,7 +42,7 @@ const stubbed = (name, { ops, profile, rest = {}, path, wait = 1500, fn, viewpor
     ...(viewports ? { viewports } : {}),
     async setup(page, h) {
       try {
-        if (ops) await graphqlRoute(page, ops);
+        if (ops) await graphqlRoute(page, withHistoryBounds(ops));
         if (profile) await page.route('**/api/me', (r) => json(r, { user: { ...USER, ...profile } }));
         for (const [glob, handler] of Object.entries(rest)) await page.route(glob, handler);
         await page.goto(h.base + path, { waitUntil: 'networkidle' });
