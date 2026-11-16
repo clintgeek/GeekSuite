@@ -149,7 +149,7 @@ instruction. Each is cheap to reverse unless it says otherwise.
 | P2 | **One shared pattern**, built once in `packages/ui`: `GeekNavRail` and `GeekTwoPane`. Each app keeps its own look. | Five apps need it; five inventions would drift. |
 | P2a | **Portrait tablet (800 px) = rail + one pane.** Two panes only from 1024 px wide (landscape tablet, desktop). | Chef holds it portrait; 800 px minus a rail is too tight for list + detail. |
 | P2b | Two-pane only where the app is list → detail: NoteGeek, TodoGeek, ThingGeek. BookGeek and FitnessGeek get the rail and more columns, not two panes. | A cover grid and a dashboard get worse when split. |
-| P3 | Tablet layout work covers the five apps above. The other six must not break at tablet size (baseline run, fix what is broken) and get nothing more. | Follow use, not completeness. |
+| P3 | Tablet layout work covers the five apps above **plus GameGeek** (Chef, 2026-11-16: it is used on the tablet too; a cover grid, so rail + more columns like BookGeek). The other five must not break at tablet size (baseline run, fix what is broken) and get nothing more. | Follow use, not completeness. |
 | P4 | See S-D1…S-D5 in `SUITE_REVIEW_2026-11.md` § Decisions. | |
 | P5 | **Offline-first stays a later bet.** Not part of this run. | Several days per app, and it should follow the layout work. |
 | — | **Deploys:** "get it all done" is read as the go-ahead to ship in gated increments — gateway first, confirmed live, then UIs; every push behind green tests and the harness. | Chef's standing style: verified per-chunk commits, incremental deploys. |
