@@ -17,6 +17,12 @@
  * `nav` and `sidebar` can coexist during a migration; `nav` is rendered after
  * `sidebar`, so pass one or the other in practice.
  *
+ * Tablet (plan 2.6): `rail` takes a `<GeekNavRail />` and renders it as the
+ * left column, hidden in focus mode. The shell does not choose it — the app
+ * does, from `useGeekNavMode()`, and passes `nav`, `rail` or `bottomNav` for
+ * the mode it is in (see GeekNavRail's header). A rail publishes
+ * `leftInset` (its width) so left-anchored toasts clear it.
+ *
  * The shell also owns the page's one thumb-zone action: a page calls
  * `useGeekPrimaryAction({ label, icon, onClick })` and the shell renders the
  * `GeekFab` here, as a *sibling* of the content column — `GeekAppFrame`'s route
@@ -37,6 +43,7 @@ import { useFocusMode } from '../focus/index.js';
 import { useSlashFocus } from '../focus/SlashFocus.jsx';
 import { GeekFab } from '../surfaces/GeekFab.jsx';
 import { GeekPrimaryActionContext, useGeekPrimaryActionState } from './primaryActionContext.js';
+import { GEEK_NAV_RAIL_WIDTH } from './GeekNavRail.jsx';
 import { GeekShellContext } from './shellContext.js';
 
 /**
@@ -64,6 +71,9 @@ export function GeekShell({
   nav,
   navWidth = geekLayout.sidebarWidth,
   navSx,
+  // Tablet: a <GeekNavRail />, rendered as the left column when present.
+  rail,
+  railWidth = GEEK_NAV_RAIL_WIDTH,
   topBar,
   // Optional mobile tab bar (data-entry apps only). Pass it conditionally —
   // its presence is what sets `bottomInset` for GeekAppFrame.
@@ -95,6 +105,7 @@ export function GeekShell({
   const hasNav = Boolean(nav);
   const showNav = hasNav && !focusMode;
   const showBottomNav = Boolean(bottomNav) && !focusMode;
+  const showRail = Boolean(rail) && !focusMode;
 
   // Android Back closes the nav drawer before it leaves the page (3.27).
   useBackToClose(showNav && isMobile && mobileOpen, closeNav);
@@ -105,11 +116,12 @@ export function GeekShell({
       mobileOpen: showNav && isMobile && mobileOpen,
       hasNav,
       bottomInset: showBottomNav ? geekLayout.bottomNavHeight : 0,
+      leftInset: showRail ? railWidth : 0,
       openNav,
       closeNav,
       toggleNav,
     }),
-    [isMobile, mobileOpen, hasNav, showNav, showBottomNav, openNav, closeNav, toggleNav]
+    [isMobile, mobileOpen, hasNav, showNav, showBottomNav, showRail, railWidth, openNav, closeNav, toggleNav]
   );
 
   // The content box used to hardcode `calc(100vh - 60px)` unconditionally, which
@@ -148,6 +160,8 @@ export function GeekShell({
           }}
         >
           {focusMode ? null : sidebar}
+
+          {showRail ? rail : null}
 
           {showNav && !isMobile ? (
             <Box

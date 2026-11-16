@@ -4,11 +4,21 @@ export { useReducedMotion } from './motion.js';
 export {
   BACK_STATE_KEY,
   DESKTOP_MIN_WIDTH,
+  GEEK_DRAFT_PREFIX,
+  REFETCH_ON_ONLINE_MIN_MS,
+  REFETCH_ON_RESUME_MIN_MS,
   TABLET_MIN_SHORT_SIDE,
+  TWO_PANE_MIN_WIDTH,
   classifyFormFactor,
+  clearGeekDraft,
   geekMedia,
+  readGeekDraft,
   useBackToClose,
   useFormFactor,
+  useGeekNavMode,
+  useRefetchOnResume,
+  useUnsavedGuard,
+  writeGeekDraft,
 } from './hooks';
 export { createGeekSuiteTheme, geekDesignTokens } from './createGeekSuiteTheme';
 export {
@@ -16,10 +26,12 @@ export {
   GEEK_TOAST_MAX,
   GeekEmptyState,
   GeekErrorState,
+  GeekLoadError,
   GeekToastClearanceContext,
   GeekToastContext,
   GeekToastProvider,
   GeekUpdateIndicator,
+  geekLoadStatus,
   useGeekToastClearance,
   useServiceWorkerUpdating,
   useToast,
@@ -43,9 +55,12 @@ export {
 export {
   GEEKSUITE_APPS,
   GEEK_BOTTOM_NAV_MAX_ITEMS,
+  GEEK_NAV_RAIL_MIN_TARGET,
+  GEEK_NAV_RAIL_WIDTH,
   GeekAppFrame,
   GeekAppSwitcher,
   GeekBottomNav,
+  GeekNavRail,
   GeekPrimaryActionContext,
   GeekShell,
   GeekSidebar,
@@ -58,6 +73,7 @@ export {
   useGeekShell,
 } from './navigation';
 export { GeekDialog, GeekFab, GeekSheet, useGeekDialogFullScreen } from './surfaces';
+export { GEEK_TWO_PANE_LIST_WIDTH, GeekTwoPane } from './layout';
 export {
   GeekButton,
   GeekChip,

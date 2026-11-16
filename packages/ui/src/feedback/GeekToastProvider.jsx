@@ -92,7 +92,7 @@ export function GeekToastProvider({
 }) {
   const [toasts, setToasts] = useState([]);
   const timers = useRef(new Map());
-  const { isMobile, hasNav, bottomInset } = useGeekShell();
+  const { isMobile, hasNav, bottomInset, leftInset = 0 } = useGeekShell();
 
   // Sticky footers the stack must clear (useGeekToastClearance).
   const clearances = useRef(new Set());
@@ -190,6 +190,8 @@ export function GeekToastProvider({
   const origin =
     anchorOrigin || { vertical: 'bottom', horizontal: isMobile ? 'center' : 'left' };
   const clearsSidebar = !isMobile && hasNav && origin.horizontal === 'left';
+  // A tablet rail (GeekShell `rail`) sits where a left toast would land.
+  const clearsRail = !clearsSidebar && leftInset > 0 && origin.horizontal === 'left';
   // The footer clearance already counts everything below the footer's top,
   // so it replaces the default gap rather than adding to it.
   const navGap = bottomInset + 24;
@@ -206,7 +208,9 @@ export function GeekToastProvider({
         bottom: lift > 0 ? `${bottom}px` : `calc(${bottom}px + env(safe-area-inset-bottom, 0px))`,
         ...(clearsSidebar
           ? { left: `${geekLayout.sidebarWidth + 24}px` }
-          : null),
+          : clearsRail
+            ? { left: `${leftInset + 24}px` }
+            : null),
         ...sx,
       }}
     >

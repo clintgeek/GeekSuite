@@ -24,6 +24,12 @@ const QUERIES = {
 export const TABLET_MIN_SHORT_SIDE = 600;
 /** Width at which a fine-pointer window stops being "tablet" and is desktop. */
 export const DESKTOP_MIN_WIDTH = 1200;
+/**
+ * Width from which list | detail sit side by side (plan P2a, 2026-11-15).
+ * A portrait tablet (800) is rail + ONE pane; landscape (1280) and desktop
+ * get two. Width only, not pointer: it is about room, not fingers.
+ */
+export const TWO_PANE_MIN_WIDTH = 1024;
 
 /**
  * The classification, as a pure function so it can be tested and reused.
@@ -41,6 +47,10 @@ export const DESKTOP_MIN_WIDTH = 1200;
  *   - desktop 1200 and up.
  *
  * Neither (no pointer, or an engine without the query): treated as fine.
+ *
+ * Derived, for layout code that wants one value: `kind` ('phone' | 'tablet'
+ * | 'desktop'), `navMode` ('bottom' | 'rail' | 'sidebar') and `twoPane`
+ * (width >= TWO_PANE_MIN_WIDTH and not a phone).
  *
  * `coarse`/`fine` describe the PRIMARY pointer; `anyHover` is true when ANY
  * input can hover (a tablet with a trackpad attached), which is the right
@@ -65,6 +75,15 @@ export function classifyFormFactor({ width = 0, height = 0, coarse = false, fine
     phone,
     tablet,
     desktop,
+    // The same answer as one value, for a switch or a data attribute.
+    kind: phone ? 'phone' : tablet ? 'tablet' : 'desktop',
+    // Which primary navigation this device gets (plan 2.6, D9): the phone's
+    // bottom bar, the tablet's rail, the desktop's sidebar. A touch tablet in
+    // landscape (1280x800) is still a tablet, so it keeps the rail.
+    navMode: phone ? 'bottom' : tablet ? 'rail' : 'sidebar',
+    // List | detail side by side (GeekTwoPane). Never on a phone, even a
+    // wide one held sideways.
+    twoPane: !phone && width >= TWO_PANE_MIN_WIDTH,
     coarse: Boolean(coarse),
     fine: Boolean(fine),
     anyHover: Boolean(anyHover),
@@ -123,8 +142,8 @@ function subscribe(onChange) {
 
 /**
  * What kind of device this is, by pointer first and size second (review
- * 4.2). Returns `{ phone, tablet, desktop, coarse, fine, anyHover, width,
- * height, landscape }`; exactly one of phone/tablet/desktop is true. The
+ * 4.2). Returns `{ phone, tablet, desktop, kind, navMode, twoPane, coarse,
+ * fine, anyHover, width, height, landscape }`; exactly one of phone/tablet/desktop is true. The
  * rule is `classifyFormFactor` above. Re-renders on resize, rotation, and a
  * pointer change (a keyboard/trackpad cover attached).
  *
@@ -133,6 +152,11 @@ function subscribe(onChange) {
  */
 export function useFormFactor() {
   return useSyncExternalStore(subscribe, readSnapshot, () => SERVER_SNAPSHOT);
+}
+
+/** Just the navigation the shell should draw: 'bottom' | 'rail' | 'sidebar'. */
+export function useGeekNavMode() {
+  return useFormFactor().navMode;
 }
 
 export default useFormFactor;

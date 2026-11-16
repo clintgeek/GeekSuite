@@ -18,21 +18,15 @@
  * inset its content.
  */
 import { forwardRef } from 'react';
-import { Link as RouterLink } from 'react-router-dom';
 import Box from '@mui/material/Box';
 import ButtonBase from '@mui/material/ButtonBase';
 import Typography from '@mui/material/Typography';
 import { geekLayout } from '../designTokens.js';
+import { isSignOutItem, navLinkProps } from './navUtils.js';
 import { useGeekShell } from './shellContext.js';
 
 export const GEEK_BOTTOM_NAV_MAX_ITEMS = 5;
 
-const SIGN_OUT = /(^|[\s_-])(log|sign)[\s_-]?out([\s_-]|$)|^(logout|signout)$/i;
-
-/** A tab bar is navigation, not a session control. Logout items are refused. */
-function isSignOutItem(item) {
-  return SIGN_OUT.test(String(item?.id ?? '')) || SIGN_OUT.test(String(item?.label ?? ''));
-}
 
 export const GeekBottomNav = forwardRef(function GeekBottomNav(
   { items = [], activeId, onNavigate, hidden = false, sx, itemSx, labelSx, ...props },
@@ -64,11 +58,7 @@ export const GeekBottomNav = forwardRef(function GeekBottomNav(
     >
       {safeItems.map((item) => {
         const active = item.id === activeId;
-        const linkProps = item.to
-          ? { component: RouterLink, to: item.to }
-          : item.href
-            ? { component: 'a', href: item.href }
-            : {};
+        const linkProps = navLinkProps(item);
         return (
           <ButtonBase
             key={item.id}

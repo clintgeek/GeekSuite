@@ -13,6 +13,7 @@ export const SHELL_FALLBACK = {
   mobileOpen: false,
   hasNav: false,
   bottomInset: 0,
+  leftInset: 0,
   openNav: noop,
   closeNav: noop,
   toggleNav: noop,
@@ -24,8 +25,10 @@ export const GeekShellContext = createContext(SHELL_FALLBACK);
  * Shell state for chrome that needs it: `GeekTopBar`'s hamburger,
  * `GeekSidebar`'s close-on-navigate, `GeekAppFrame`'s bottom inset.
  *
+ * `leftInset` is the width of a GeekNavRail the shell is showing (0 without).
+ *
  * @returns {{isMobile: boolean, mobileOpen: boolean, hasNav: boolean,
- *   bottomInset: number, openNav: () => void, closeNav: () => void,
+ *   bottomInset: number, leftInset: number, openNav: () => void, closeNav: () => void,
  *   toggleNav: () => void}}
  */
 export function useGeekShell() {

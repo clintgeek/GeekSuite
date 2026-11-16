@@ -7,3 +7,5 @@ export {
 } from './GeekToastProvider.jsx';
 export { GeekToastClearanceContext, GeekToastContext, useGeekToastClearance, useToast } from './toastContext.js';
 export { GeekUpdateIndicator, useServiceWorkerUpdating } from './GeekUpdateIndicator.jsx';
+export { GeekLoadError } from './GeekLoadError.jsx';
+export { geekLoadStatus } from './loadStatus.js';
