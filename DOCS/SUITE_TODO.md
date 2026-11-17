@@ -656,10 +656,7 @@ existing doc home, not just history:
 
 ## 11. Wave 3 leftovers (2026-11-16)
 
-- **Chef's call — two panes on the desktop.** TodoGeek Today and NoteGeek notes are
-  list | detail on a tablet from 1024 px only. To include the desktop: drop `tablet &&` in
-  `apps/todogeek/frontend/src/hooks/useTodoLayout.js`; return `useFormFactor()` unchanged in
-  `apps/notegeek/frontend/src/hooks/useNoteFormFactor.js`; flip the two "held back" tests.
+- Two panes on the desktop: turned on 2026-11-16 (Chef: "we need that desktop too"; the sidebar stays).
 - **Tablet layouts still to do:** ThingGeek (rail, two-pane), BookGeek, FitnessGeek, GameGeek
   (rail, columns). Before GameGeek/ThingGeek/FlockGeek take the rail: fix the rail's
   current-label contrast (suite-default dark 3.67:1, flockgeek light 3.36:1) by painting the

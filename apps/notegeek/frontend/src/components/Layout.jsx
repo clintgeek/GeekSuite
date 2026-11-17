@@ -24,15 +24,25 @@ const TAG_LIST = /^\/tags\/([^/]+)\/?$/;
  * Which list sits in the list pane in two-pane: the last list the writer
  * looked at — all notes, or one tag's notes — so opening a note from a tag
  * keeps that tag's list (its scroll and filters) beside it.
+ *
+ * `beside` says whether that list is ON SCREEN to open a note beside: true
+ * from a list page and on through the notes opened from it, false once the
+ * writer goes anywhere else (Home, Search, a reload straight onto a note).
+ * A note opened from there is a whole page, as it was — the list does not
+ * pop in on the left and push the page over (Chef, 2026-11-16: "a bit
+ * jarring when it moves things around"; TodoGeek's Today never does).
  */
 function useListContext(pathname) {
     const last = useRef({ kind: 'notes', key: 'notes' });
+    const beside = useRef(false);
     let next = null;
     if (pathname === '/notes' || pathname === '/notes/') next = { kind: 'notes', key: 'notes' };
     const tag = TAG_LIST.exec(pathname);
     if (tag) next = { kind: 'tag', tag: tag[1], key: `tag:${tag[1]}` };
     if (next && next.key !== last.current.key) last.current = next;
-    return last.current;
+    if (next) beside.current = true;
+    else if (!NOTE_DETAIL.test(pathname)) beside.current = false;
+    return { ...last.current, beside: beside.current };
 }
 
 /**
@@ -44,8 +54,9 @@ function useListContext(pathname) {
  * the rail shows GeekShell draws no drawer, hamburger or bottom bar.
  *
  * Two panes (tablet wave, plan P2a/P2b): from 1024 px (`twoPane`) the notes
- * list and the note sit side by side on `/notes`, `/tags/:tag` and every
- * single-note route. The list element stays at the same place in the tree
+ * list and the note sit side by side on `/notes`, `/tags/:tag` and a note
+ * opened FROM one of those (see useListContext: a note opened from Home or
+ * Search stays a whole page). The list element stays at the same place in the tree
  * while the note changes, so it keeps its scroll, type filter and sort.
  * Below 1024 nothing changes: one pane, the existing routes.
  *
@@ -73,7 +84,8 @@ function Layout({ children }) {
     const split =
         showNavigation &&
         twoPane &&
-        (Boolean(detailMatch) || pathname === '/notes' || pathname === '/notes/' || TAG_LIST.test(pathname));
+        (pathname === '/notes' || pathname === '/notes/' || TAG_LIST.test(pathname) ||
+            (Boolean(detailMatch) && listContext.beside));
     const fillFrame = singleNote;
     // Writing on a phone: the suite top bar tucks away while the caret is in
     // the note (NoteShell reports it), so the page has the room. The note's

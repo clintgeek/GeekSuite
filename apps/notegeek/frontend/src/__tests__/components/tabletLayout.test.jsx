@@ -181,9 +181,10 @@ describe('two panes from 1024 px', () => {
         expect(screen.getByTestId('note-detail')).toBeInTheDocument();
     });
 
-    it('landscape 1280: the list beside the note', () => {
+    it('landscape 1280: a note opened from the list sits beside it', async () => {
         setViewport(VIEWPORTS.tabletLandscape);
-        renderAt('/notes/a');
+        renderAt('/notes');
+        await act(async () => fireEvent.click(screen.getByRole('link', { name: 'Note A' })));
         const list = screen.getByRole('region', { name: 'Notes' });
         const note = screen.getByRole('region', { name: 'Note' });
         expect(within(list).getByTestId('note-list')).toBeInTheDocument();
@@ -209,11 +210,19 @@ describe('two panes from 1024 px', () => {
         expect(globalThis.__noteListMounts).toBe(1);
     });
 
-    it('desktop 1440: one pane, as before — two panes are held back to the tablet', () => {
-        setViewport(VIEWPORTS.desktop);
-        renderAt('/notes/b');
+    it('a note opened from anywhere else is a whole page: no list pops in beside it', () => {
+        setViewport(VIEWPORTS.tabletLandscape);
+        renderAt('/notes/a');
         expect($('[data-note-two-pane]')).toBeNull();
         expect(screen.queryByTestId('note-list')).toBeNull();
-        expect(screen.getByTestId('note-detail')).toHaveTextContent('note b');
+        expect(screen.getByTestId('note-detail')).toHaveTextContent('note a');
+    });
+
+    it('desktop 1440: two panes too', async () => {
+        setViewport(VIEWPORTS.desktop);
+        renderAt('/notes');
+        await act(async () => fireEvent.click(screen.getByRole('link', { name: 'Note B' })));
+        expect(screen.getByRole('region', { name: 'Notes' })).toBeInTheDocument();
+        expect(screen.getByRole('region', { name: 'Note' })).toHaveTextContent('note b');
     });
 });

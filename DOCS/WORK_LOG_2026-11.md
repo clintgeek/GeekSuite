@@ -427,3 +427,16 @@ since 2026-11-14 and wrote too fat on the tablet. `HandwrittenEditor.jsx`: `fine
 The button's double-click arrives as `keydown` / `key: "Unidentified"` (Chef, `/labs/pen`).
 `utils/penKey.js` makes it undo in sketches (Chef's call), ignored while typing.
 Details in `apps/notegeek/DOCS/BUJO_HANDWRITING.md` § The Lenovo pen. Not tried on the device.
+
+## 2026-11-16 — Two panes on the desktop; NoteGeek's list stays put
+
+- Chef, after using the tablet: "that rail and two panes is beautiful, we need that desktop
+  too" — two panes now apply from 1024 px on any device in TodoGeek and NoteGeek. The
+  desktop keeps its sidebar ("good just like you have it").
+- Chef: NoteGeek "is a bit jarring when it moves things around"; TodoGeek's is better.
+  Cause: NoteGeek split on every note route, so a note opened from Home, Search or New
+  swapped the page for list | note. Now a note opens beside a list only when that list is
+  already on screen (`useListContext().beside` in `Layout.jsx`); from anywhere else it is a
+  whole page. This was read from the code, not seen on his screen.
+- Tests: todogeek 516, notegeek 1,046; harness both apps `--enforce-a11y --desktop` and
+  NoteGeek `--tablet-only`, 0 violations.
