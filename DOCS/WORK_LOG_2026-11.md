@@ -440,3 +440,6 @@ Details in `apps/notegeek/DOCS/BUJO_HANDWRITING.md` § The Lenovo pen. Not tried
   whole page. This was read from the code, not seen on his screen.
 - Tests: todogeek 516, notegeek 1,046; harness both apps `--enforce-a11y --desktop` and
   NoteGeek `--tablet-only`, 0 violations.
+- 2026-11-17: Chef tested NoteGeek and TodoGeek on the tablet and the desktop — "very happy
+  with the results thus far". The reading above stands. CI, harness and images green for
+  `3db858b0`.
