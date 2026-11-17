@@ -6,6 +6,7 @@ function fakeEditor(tool = 'draw', { readonly = false, editing = null } = {}) {
     tool,
     getCurrentToolId: () => e.tool,
     setCurrentTool: vi.fn((t) => { e.tool = t; }),
+    undo: vi.fn(),
     complete: vi.fn(),
     getInstanceState: () => ({ isReadonly: readonly }),
     getEditingShapeId: () => editing,
@@ -22,23 +23,18 @@ describe('the pen button that arrives as a key (Lenovo double-click)', () => {
   let detach;
   afterEach(() => { detach?.(); document.body.innerHTML = ''; });
 
-  it('switches pen to eraser, and back on the next one', () => {
+  it('undoes the last stroke, once per double-click, and leaves the tool alone', () => {
     const editor = fakeEditor('draw');
     let t = 1000;
     detach = attachPenKey(window, () => editor, { now: () => t });
     const ev = press();
-    expect(editor.setCurrentTool).toHaveBeenLastCalledWith('eraser');
+    expect(editor.undo).toHaveBeenCalledTimes(1);
+    expect(editor.complete).toHaveBeenCalled();
     expect(ev.defaultPrevented).toBe(true);
     t += 1000;
     press();
-    expect(editor.setCurrentTool).toHaveBeenLastCalledWith('draw');
-  });
-
-  it('from any other tool (the hand a saved sketch opens on) it goes to the eraser', () => {
-    const editor = fakeEditor('hand');
-    detach = attachPenKey(window, () => editor);
-    press();
-    expect(editor.tool).toBe('eraser');
+    expect(editor.undo).toHaveBeenCalledTimes(2);
+    expect(editor.setCurrentTool).not.toHaveBeenCalled();
   });
 
   it('ignores a second keydown within a quarter second', () => {
@@ -48,7 +44,7 @@ describe('the pen button that arrives as a key (Lenovo double-click)', () => {
     press();
     t += 100;
     press();
-    expect(editor.setCurrentTool).toHaveBeenCalledTimes(1);
+    expect(editor.undo).toHaveBeenCalledTimes(1);
   });
 
   it('ignores the on-screen keyboard: keyCode 229, composing, a repeat', () => {
@@ -57,7 +53,7 @@ describe('the pen button that arrives as a key (Lenovo double-click)', () => {
     press({ keyCode: 229 });
     press({ isComposing: true });
     press({ repeat: true });
-    expect(editor.setCurrentTool).not.toHaveBeenCalled();
+    expect(editor.undo).not.toHaveBeenCalled();
   });
 
   it('ignores it while a text field has the focus', () => {
@@ -67,19 +63,19 @@ describe('the pen button that arrives as a key (Lenovo double-click)', () => {
     document.body.appendChild(input);
     input.focus();
     press();
-    expect(editor.setCurrentTool).not.toHaveBeenCalled();
+    expect(editor.undo).not.toHaveBeenCalled();
   });
 
   it('ignores it while tldraw edits a text shape, and on a read-only sketch', () => {
     const editing = fakeEditor('draw', { editing: 'shape:1' });
     detach = attachPenKey(window, () => editing);
     press();
-    expect(editing.setCurrentTool).not.toHaveBeenCalled();
+    expect(editing.undo).not.toHaveBeenCalled();
     detach();
     const ro = fakeEditor('draw', { readonly: true });
     detach = attachPenKey(window, () => ro);
     press();
-    expect(ro.setCurrentTool).not.toHaveBeenCalled();
+    expect(ro.undo).not.toHaveBeenCalled();
   });
 
   it('ignores every named key', () => {
@@ -92,6 +88,6 @@ describe('the pen button that arrives as a key (Lenovo double-click)', () => {
     const editor = fakeEditor('draw');
     attachPenKey(window, () => editor)();
     press();
-    expect(editor.setCurrentTool).not.toHaveBeenCalled();
+    expect(editor.undo).not.toHaveBeenCalled();
   });
 });

@@ -373,8 +373,8 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
         container.addEventListener('pointerdown', onPenDown, { capture: true });
         const detachPen = attachPenButton(container, () => editorRef.current, { getPointerInfo });
         const detachTap = attachTwoFingerTap(container, () => editorRef.current?.undo());
-        // The Lenovo pen's button, double-clicked, arrives as a key: it
-        // switches pen <-> eraser (utils/penKey.js).
+        // The Lenovo pen's button, double-clicked, arrives as a key: undo
+        // (utils/penKey.js).
         const detachKey = attachPenKey(container.ownerDocument?.defaultView, () => editorRef.current);
         return () => {
             container.removeEventListener('pointerdown', onPenDown, { capture: true });

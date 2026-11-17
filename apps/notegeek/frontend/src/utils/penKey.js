@@ -4,11 +4,12 @@
  * The Lenovo pen (Chef's tablet, 2026-11-16): the tablet keeps a held button
  * for its own menu, but a DOUBLE-CLICK of the button reaches the page as a
  * `keydown` whose `key` is "Unidentified". There is no matching "held"
- * state, so it cannot be "erase while held" (penButton.js); it is a switch:
- * double-click → eraser, double-click again → back to the pen.
+ * state, so it cannot be "erase while held" (penButton.js). It is UNDO
+ * (Chef, 2026-11-16): one action, no mode to be left in by accident — the
+ * same as the two-finger tap. (It switched pen <-> eraser for an hour.)
  *
  * "Unidentified" is also what Android's on-screen keyboard sends for every
- * character (keyCode 229, composing), so the switch only fires when nobody
+ * character (keyCode 229, composing), so it only fires when nobody
  * is typing: no composition, not keyCode 229, no text field or editable
  * focused, and tldraw is not editing a text shape.
  */
@@ -48,8 +49,8 @@ export function attachPenKey(win, getEditor, { now = () => Date.now() } = {}) {
     if (t - last < REPEAT_GUARD_MS) return;
     last = t;
     e.preventDefault();
-    editor.complete?.();
-    editor.setCurrentTool(editor.getCurrentToolId() === 'eraser' ? 'draw' : 'eraser');
+    editor.complete?.(); // a stroke in progress ends first, so it is what gets undone
+    editor.undo();
   };
   win.addEventListener('keydown', onKeyDown, true);
   return () => win.removeEventListener('keydown', onKeyDown, true);
