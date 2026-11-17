@@ -4,7 +4,7 @@
  * refresh), and so themeContrast.test.js can assert it per theme.
  */
 import { alpha } from '@mui/material/styles';
-import { readableAcross, flattenOver } from '../color.js';
+import { readableAcross, readableOn, flattenOver } from '../color.js';
 import { geekInteraction } from '../designTokens.js';
 
 /** The accent tint behind the badge and the monogram chip. */
@@ -26,4 +26,17 @@ export function sidebarChipInk(theme) {
   const selectedTint = alpha(primary.main, geekInteraction.activeOpacity);
   const grounds = [...surfaces, ...surfaces.map((surface) => flattenOver(selectedTint, surface))];
   return readableAcross(primary.main, grounds, { tint: alpha(primary.main, SIDEBAR_CHIP_TINT) });
+}
+
+/**
+ * The ink for GeekNavRail's current item (icon and 12px label). The label is
+ * small text straight on the rail's `background.paper`, so it owes 4.5:1; the
+ * accent itself measured 3.67:1 (suite default, dark) and 3.36:1 (flockgeek,
+ * light) on 2026-11-16. This is the accent when it clears AA, otherwise the
+ * accent walked away from the paper until it does. An app that paints the
+ * rail its own ground sets the current colour through `itemSx`.
+ */
+export function railCurrentInk(theme) {
+  const { primary, background } = theme.palette;
+  return readableOn(primary.main, background.paper);
 }

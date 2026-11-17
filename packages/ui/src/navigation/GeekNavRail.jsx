@@ -8,7 +8,8 @@
  *
  * ONE items array serves all three. The item shape is GeekBottomNav's and
  * GeekSidebar's flat `items`: `{ id, label, icon, to | href | onClick,
- * disabled, badge }`. So a shell picks the surface and passes the same list:
+ * disabled, badge }` (plus `aria-label` and `aria-haspopup`, for a count that
+ * should be read as words or an item that opens a sheet). So a shell picks the surface and passes the same list:
  *
  *   const navMode = useGeekNavMode();
  *   <GeekShell
@@ -29,8 +30,9 @@
  *
  * Identity is the app's: `sx` (the column), `itemSx`, `labelSx`,
  * `indicatorSx` (the pill behind the current icon). Colours come from the
- * theme: `text.secondary` at rest, `primary.main` for the current item, the
- * pill an alpha of `primary.main`. `header` and `footer` are optional slots
+ * theme: `text.secondary` at rest, the accent for the current item (walked to
+ * 4.5:1 on the paper where it falls short — `railCurrentInk`), the pill an
+ * alpha of `primary.main`. `header` and `footer` are optional slots
  * at the top (a New button, the app mark) and pinned at the bottom.
  */
 import { forwardRef } from 'react';
@@ -40,6 +42,7 @@ import Typography from '@mui/material/Typography';
 import { alpha } from '@mui/material/styles';
 import { geekInteraction, geekShape } from '../designTokens.js';
 import { isSignOutItem, navLinkProps } from './navUtils.js';
+import { railCurrentInk } from './sidebarInk.js';
 
 /** Rail width before safe-area padding. */
 export const GEEK_NAV_RAIL_WIDTH = 72;
@@ -130,6 +133,8 @@ export const GeekNavRail = forwardRef(function GeekNavRail(
               <ButtonBase
                 data-geek-nav-rail-item={item.id}
                 aria-current={active ? 'page' : undefined}
+                aria-label={item['aria-label']}
+                aria-haspopup={item['aria-haspopup']}
                 disabled={item.disabled}
                 onClick={(event) => {
                   item.onClick?.(event);
@@ -146,7 +151,7 @@ export const GeekNavRail = forwardRef(function GeekNavRail(
                   alignItems: 'center',
                   justifyContent: 'center',
                   gap: 0.5,
-                  color: active ? 'primary.main' : 'text.secondary',
+                  color: active ? railCurrentInk : 'text.secondary',
                   textDecoration: 'none',
                   borderRadius: `${geekShape.radius.control}px`,
                   '&.Mui-focusVisible': {

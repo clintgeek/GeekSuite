@@ -14,6 +14,9 @@ import { createRoot } from 'react-dom/client';
 import { MemoryRouter } from 'react-router-dom';
 
 import { GeekBottomNav, GeekNavRail, GeekShell, GeekSidebar, GeekTopBar, useGeekNavSlots, useGeekShell } from '../index.js';
+import { ThemeProvider, decomposeColor } from '@mui/material/styles';
+import { createGeekSuiteTheme } from '../createGeekSuiteTheme.js';
+import { railCurrentInk } from '../navigation/sidebarInk.js';
 import { VIEWPORTS, setViewport } from './helpers/viewport.js';
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true;
@@ -171,5 +174,23 @@ describe('GeekShell: a rail is the primary navigation while it shows', () => {
     await mount(everything({ focusMode: true }));
     expect(chrome()).toEqual({ rail: false, bottom: false, sidebar: null, hamburger: false });
     expect(seenShell.hasNav).toBe(true);
+  });
+});
+
+describe("GeekNavRail's current item is painted the measured ink", () => {
+  // The suite default in dark: the accent alone is 3.67:1 on the paper (2026-11-16).
+  it('the current label is railCurrentInk, not the bare accent, where the accent falls short', async () => {
+    const theme = createGeekSuiteTheme({ mode: 'dark' });
+    const ink = railCurrentInk(theme);
+    expect(ink).not.toBe(theme.palette.primary.main);
+    await mount(
+      <ThemeProvider theme={theme}>
+        <GeekNavRail items={items} activeId="today" />
+      </ThemeProvider>
+    );
+    const rgb = (c) => decomposeColor(c).values.slice(0, 3).map(Math.round).join(',');
+    const painted = window.getComputedStyle($('[data-geek-nav-rail-item="today"]')).color;
+    expect(rgb(painted)).toBe(rgb(ink));
+    expect(rgb(painted)).not.toBe(rgb(theme.palette.primary.main));
   });
 });

@@ -32,7 +32,7 @@ import { createStoryTheme } from '../../../../apps/storygeek/frontend/src/theme/
 import createBookTheme from '../../../../apps/bookgeek/web/src/theme/theme.js';
 import { createBaseGeekTheme } from '../../../../apps/basegeek/packages/ui/src/theme.js';
 import { createNewsTheme } from '../../../../apps/newsgeek/frontend/src/theme/theme.js';
-import { SIDEBAR_CHIP_TINT, sidebarChipInk } from '../navigation/sidebarInk.js';
+import { SIDEBAR_CHIP_TINT, railCurrentInk, sidebarChipInk } from '../navigation/sidebarInk.js';
 import { geekInteraction } from '../designTokens.js';
 import { chrome as todoChrome } from '../../../../apps/todogeek/frontend/src/theme/chrome.js';
 import * as fitnessChrome from '../../../../apps/fitnessgeek/frontend/src/components/Layout/chrome.js';
@@ -117,11 +117,11 @@ function pairsFor(theme) {
   // The accent doubles as link text, active-nav text and icon color.
   add('primary.main', p.primary.main, 'background.paper', p.background.paper, 3.0);
 
-  // GeekNavRail's current item (plan 2.6): its label is 12px copy painted
-  // `primary.main` straight on the rail's `background.paper` (the pill sits
-  // behind the icon, not the label). Small text, so AA — not the 3:1 the
-  // accent gets as an icon above.
-  add('GeekNavRail current label (primary.main, 12px)', p.primary.main, 'background.paper', p.background.paper, 4.5);
+  // GeekNavRail's current item (plan 2.6): its label is 12px copy straight
+  // on the rail's `background.paper` (the pill sits behind the icon, not the
+  // label). Small text, so AA. It is painted `railCurrentInk`: the accent,
+  // walked off the paper where the accent alone falls short.
+  add('GeekNavRail current label (railCurrentInk, 12px)', railCurrentInk(theme), 'background.paper', p.background.paper, 4.5);
 
   // Contained-button label sitting on the accent fill.
   pairs.push({
@@ -250,13 +250,6 @@ const KNOWN_GAPS = {
   // Its secondary IS the accent's dark, at rest and pressed alike (#A06E00
   // under a white label); neither .dark nor .light clears AA.
   'flockgeek/dark/secondary.contrastText on contained secondary press fill': 4.45,
-  // GeekNavRail's current-item label, recorded 2026-11-16 when the pair was
-  // added (no app draws the rail yet). The accent clears the 3:1 icon floor
-  // but not AA as 12px words. The fix is either the accent (an app/suite
-  // palette call) or the rail painting its current label with a measured ink
-  // (as GeekSidebar's badge does, sidebarInk.js) — a design call either way.
-  'suite-default/dark/GeekNavRail current label (primary.main, 12px) on background.paper': 3.67,
-  'flockgeek/light/GeekNavRail current label (primary.main, 12px) on background.paper': 3.36,
 };
 
 /* ── suite ─────────────────────────────────────────────────────────────── */
