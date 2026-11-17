@@ -421,3 +421,9 @@ is downloading them to", then "is there a better way? Readarr does something sim
 Chef: "sketches should default to the smallest pen line size." Small had been the default
 since 2026-11-14 and wrote too fat on the tablet. `HandwrittenEditor.jsx`: `fineRef` /
 `penFine` start true. Sizes in the picker are unchanged.
+
+## 2026-11-16 — NoteGeek: the Lenovo pen's double-click switches pen and eraser
+
+The button's double-click arrives as `keydown` / `key: "Unidentified"` (Chef, `/labs/pen`).
+`utils/penKey.js` turns it into a pen ↔ eraser switch in sketches, ignored while typing.
+Details in `apps/notegeek/DOCS/BUJO_HANDWRITING.md` § The Lenovo pen. Not tried on the device.

@@ -280,3 +280,13 @@ real handwriting.
   `toCreateInput(parsed, { today, explicit: true })`; it does not today, so the gateway derives it.
 - **Not verified:** the transcription prompt's mark rules were changed (2026-11-14) without a
   real-model run, and still have not been run against real handwriting.
+
+### 2026-11-16: the double-click arrives as a key
+
+Chef, on the tablet with `/labs/pen`: a DOUBLE-CLICK of the pen's button reaches the page
+as a `keydown` with `key: "Unidentified"` (holding it still opens Lenovo's menu). There is
+no "held" state, so it is a switch, not erase-while-held: in a sketch, double-click →
+eraser, double-click again → pen (`utils/penKey.js`, attached in `HandwrittenEditor`).
+Android's on-screen keyboard also sends "Unidentified" (keyCode 229), so it is ignored
+while anything is being typed. Not yet known: the event's `keyCode`/`code` (the guard
+could be tightened to it), and whether one double-click sends one keydown or two.

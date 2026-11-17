@@ -5,6 +5,7 @@ import {
     exportToBlob, getPointerInfo, loadSnapshot as loadTldrawSnapshot, useEditor, useValue,
 } from '@tldraw/tldraw';
 import { attachPenButton } from '../../utils/penButton';
+import { attachPenKey } from '../../utils/penKey';
 import { exportSketchPng, exportSketchForPrint, PRINT_MAX_EDGE } from '../../utils/sketchExport';
 import { fineStrokeHandler } from '../../utils/finePen';
 import { isInkEdit } from '../../utils/inkEdit';
@@ -372,10 +373,14 @@ const HandwrittenEditor = ({ content, setContent, readOnly = false, sketchApiRef
         container.addEventListener('pointerdown', onPenDown, { capture: true });
         const detachPen = attachPenButton(container, () => editorRef.current, { getPointerInfo });
         const detachTap = attachTwoFingerTap(container, () => editorRef.current?.undo());
+        // The Lenovo pen's button, double-clicked, arrives as a key: it
+        // switches pen <-> eraser (utils/penKey.js).
+        const detachKey = attachPenKey(container.ownerDocument?.defaultView, () => editorRef.current);
         return () => {
             container.removeEventListener('pointerdown', onPenDown, { capture: true });
             detachPen();
             detachTap();
+            detachKey();
         };
     }, [readOnly, isLoading]);
 
