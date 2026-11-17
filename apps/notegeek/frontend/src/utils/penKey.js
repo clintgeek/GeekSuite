@@ -27,6 +27,7 @@ function typing(doc) {
 /** Is this keydown the pen's button (and not a keyboard)? */
 export function isPenKey(e, doc = globalThis.document) {
   if (e.key !== PEN_KEY) return false;
+  if (e.code) return false; // the pen's key has no code (Chef's pen-lab report, 2026-11-16)
   if (e.repeat || e.isComposing || e.keyCode === IME_KEYCODE) return false;
   if (e.ctrlKey || e.metaKey || e.altKey) return false;
   return !typing(doc);

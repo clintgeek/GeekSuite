@@ -288,5 +288,9 @@ as a `keydown` with `key: "Unidentified"` (holding it still opens Lenovo's menu)
 no "held" state, so it cannot be erase-while-held. In a sketch a double-click is **undo**
 (Chef's call the same day; it switched pen and eraser for an hour) — `utils/penKey.js`, attached in `HandwrittenEditor`.
 Android's on-screen keyboard also sends "Unidentified" (keyCode 229), so it is ignored
-while anything is being typed. Not yet known: the event's `keyCode`/`code` (the guard
-could be tightened to it), and whether one double-click sends one keydown or two.
+while anything is being typed.
+
+Chef's pen-lab report (same day): five double-clicks, five keydowns, each more than a
+second apart — one keydown per double-click, `code: ""`. The pen never reports a held
+button on a pointer event (`buttons` is always 1), so erase-while-held cannot work on this
+pen. The `contextmenu` events in the report are the ordinary long-press, already swallowed.

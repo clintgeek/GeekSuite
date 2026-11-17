@@ -82,6 +82,8 @@ describe('the pen button that arrives as a key (Lenovo double-click)', () => {
     expect(isPenKey({ key: 'e' })).toBe(false);
     expect(isPenKey({ key: 'Enter' })).toBe(false);
     expect(isPenKey({ key: 'Unidentified', ctrlKey: true })).toBe(false);
+    expect(isPenKey({ key: 'Unidentified', code: 'F13' })).toBe(false);
+    expect(isPenKey({ key: 'Unidentified', code: '' })).toBe(true);
   });
 
   it('stops listening when detached', () => {
