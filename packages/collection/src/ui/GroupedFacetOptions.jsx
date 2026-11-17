@@ -41,6 +41,7 @@ function FoldedGroupToggle({ group, count, open, controls, noun, onClick }) {
         pb: 0,
         width: '100%',
         minHeight: { xs: 44, md: 34 },
+        '@media (pointer: coarse)': { minHeight: 44 },
         justifyContent: 'flex-start',
         gap: 0.75,
         borderRadius: '8px',
@@ -115,6 +116,7 @@ export default function GroupedFacetOptions({
             gap: 0.5,
             pl: 1,
             minHeight: { xs: 44, md: 36 },
+            '@media (pointer: coarse)': { minHeight: 44 },
             borderRadius: '8px',
             border: 1,
             borderColor: 'border',
@@ -132,7 +134,7 @@ export default function GroupedFacetOptions({
             sx={{
               flex: 1,
               fontSize: { xs: '1rem', md: '0.875rem' },
-              '& .MuiInputBase-input': { height: { xs: 44, md: 36 }, py: 0, boxSizing: 'border-box' },
+              '& .MuiInputBase-input': { height: { xs: 44, md: 36 }, '@media (pointer: coarse)': { height: 44 }, py: 0, boxSizing: 'border-box' },
               '& input::placeholder': { color: 'text.secondary', opacity: 1 },
               '& input[type="search"]::-webkit-search-cancel-button': { WebkitAppearance: 'none', display: 'none' },
             }}

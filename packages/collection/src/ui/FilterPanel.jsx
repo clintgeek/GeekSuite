@@ -65,6 +65,7 @@ export default function FilterPanel({ sections, lib, facets, context, open, onTo
             onClick={lib.clearAll}
             sx={{
               minHeight: 32,
+              '@media (pointer: coarse)': { minHeight: 44 },
               px: 1,
               borderRadius: '8px',
               fontSize: '0.8125rem',

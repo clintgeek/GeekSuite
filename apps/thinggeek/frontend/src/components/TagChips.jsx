@@ -38,7 +38,7 @@ export default function TagChips({ tags = [], max = Infinity, linked = false, sx
             <Box
               component={RouterLink}
               to={libraryLinkWith('tags', tag)}
-              sx={{ ...chipSx, minHeight: { xs: 44, md: 32 }, minWidth: { xs: 44, md: 0 }, justifyContent: 'center', lineHeight: 1, px: 1.25, color: 'text.primary', '&:hover': { borderColor: 'primary.main' } }}
+              sx={{ ...chipSx, minHeight: { xs: 44, md: 32 }, minWidth: { xs: 44, md: 0 }, '@media (pointer: coarse)': { minHeight: 44, minWidth: 44 }, justifyContent: 'center', lineHeight: 1, px: 1.25, color: 'text.primary', '&:hover': { borderColor: 'primary.main' } }}
             >
               {tag}
             </Box>

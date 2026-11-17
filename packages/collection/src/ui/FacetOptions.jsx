@@ -38,6 +38,7 @@ export function OptionRow({ option, type = 'checkbox', name, onChange }) {
         alignItems: 'center',
         gap: 1.25,
         minHeight: { xs: 44, md: 34 },
+        '@media (pointer: coarse)': { minHeight: 44 },
         px: 1,
         borderRadius: '8px',
         cursor: 'pointer',
@@ -127,6 +128,7 @@ export function ShowMoreButton({ expanded, total, onClick, noun = '' }) {
       aria-expanded={expanded ? 'true' : 'false'}
       sx={{
         minHeight: { xs: 44, md: 34 },
+        '@media (pointer: coarse)': { minHeight: 44 },
         px: 1,
         ml: 3.5,
         borderRadius: '8px',

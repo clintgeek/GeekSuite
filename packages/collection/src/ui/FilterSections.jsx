@@ -54,6 +54,7 @@ export function MatchToggle({ value, onChange, text }) {
         sx={{
           '& .MuiToggleButton-root': {
             minHeight: { xs: 44, md: 30 },
+            '@media (pointer: coarse)': { minHeight: 44 },
             minWidth: 52,
             px: 1.25,
             textTransform: 'none',

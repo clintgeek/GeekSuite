@@ -362,6 +362,13 @@ function buildComponents(themePalette) {
         },
       },
     },
+    // A finger on a tablet: MUI drops menu rows to ~36px from 600px wide by
+    // WIDTH, whatever is pointing at them (review 4.3).
+    MuiMenuItem: {
+      styleOverrides: {
+        root: { '@media (pointer: coarse)': { minHeight: 44 } },
+      },
+    },
     MuiListItemButton: {
       styleOverrides: {
         root: {
