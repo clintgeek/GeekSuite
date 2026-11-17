@@ -231,16 +231,15 @@ describe('two-pane Today from 1024 px', () => {
     expect(target).not.toBeNull();
     expect(within(target).getByRole('form', { name: 'Edit Write the retro notes' })).toBeInTheDocument();
   });
-  it('desktop: one pane, as before — two panes are held back to the tablet', () => {
+  it('desktop: two panes too', () => {
     setDevice('desktop');
     setPen(tasks());
     render(inShell(<TodayPage />));
-    expect(document.querySelector('[data-geek-two-pane="split"]')).toBeNull();
-    expect(screen.queryByRole('region', { name: 'Task' })).toBeNull();
-    expect(screen.getByRole('button', { name: /^Write the retro notes/ })).toBeInTheDocument();
+    expect(document.querySelector('[data-geek-two-pane="split"]')).not.toBeNull();
+    expect(screen.getByRole('region', { name: 'Task' })).toBeInTheDocument();
   });
   it('Cancel puts the placeholder back', () => {
-    setDevice('tablet-land');
+    setDevice('desktop');
     setPen(tasks());
     render(inShell(<TodayPage />));
     const list = screen.getByRole('region', { name: 'Today’s list' });

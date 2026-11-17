@@ -15,18 +15,15 @@ import { useFormFactor } from '@geeksuite/ui';
  *             1280 landscape alike, and a 600–1199 px mouse window)
  *   desktop — the sidebar, as before
  *
- * `twoPane` puts the notes list beside the note: a TABLET from 1024 px
- * (landscape). The desktop keeps the layout it had — Chef has not seen two
- * panes there yet, so it is held back (2026-11-16). To give the desktop two
- * panes as well, return `useFormFactor()` unchanged.
+ * `twoPane` (from 1024 px: landscape tablet, desktop) puts the notes list
+ * beside the note. (Held back from the desktop for a few hours on 2026-11-16
+ * until Chef had seen it: "we need that desktop too".)
  *
  * Layout decisions use the hook; target SIZES use CSS on the pointer
  * (`geekTarget` / `geekMedia.coarse`), so they need no re-render.
  */
 export function useNoteFormFactor() {
-  const ff = useFormFactor();
-  const twoPane = ff.tablet && ff.twoPane;
-  return twoPane === ff.twoPane ? ff : { ...ff, twoPane };
+  return useFormFactor();
 }
 
 /** True only on a phone: the shapes that existed before the tablet wave. */
