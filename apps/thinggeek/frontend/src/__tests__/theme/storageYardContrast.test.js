@@ -153,6 +153,11 @@ add('the chrome theme agrees: text.secondary on its default', chrome.palette.tex
 add('a hovered sidebar row: text on the wash over the bar', CHROME.text, over(alpha(CHROME.text, 0.08), CHROME.bar));
 add('the selected sidebar row: text on raised', CHROME.text, CHROME.raised);
 add('the selected sidebar row: its orange glyph', LIVERY.orange, CHROME.raised, GLYPH);
+// The tablet's rail (components/NavRail.jsx): 12px labels on the black flank.
+add('a rail label at rest', CHROME.secondary, CHROME.bar);
+add('the current rail label', CHROME.text, CHROME.bar);
+add("the current rail item's orange glyph on its raised pill", LIVERY.orange, CHROME.raised, GLYPH);
+add('the rail attention count: black ink on orange', LIVERY.ink, LIVERY.orange);
 add('an idle tab glyph on the bar', CHROME.secondary, CHROME.bar, GLYPH);
 add('the current tab glyph (orange) on the bar', LIVERY.orange, CHROME.bar, GLYPH);
 add('odometer numerals on a drum', CHROME.text, CHROME.bar);

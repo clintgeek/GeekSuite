@@ -657,10 +657,12 @@ existing doc home, not just history:
 ## 11. Wave 3 leftovers (2026-11-16)
 
 - Two panes on the desktop: turned on 2026-11-16 (Chef: "we need that desktop too"; the sidebar stays).
-- **Tablet layouts still to do:** ThingGeek (rail, two-pane), BookGeek, FitnessGeek, GameGeek
-  (rail, columns). Before GameGeek/ThingGeek/FlockGeek take the rail: fix the rail's
-  current-label contrast (suite-default dark 3.67:1, flockgeek light 3.36:1) by painting the
-  label with a measured ink.
+- **Tablet scope narrowed (Chef, 2026-11-17):** only NoteGeek and TodoGeek are heavily
+  optimised for the tablet. The rest are desktop apps with mobile views; a tablet gets a
+  sensible middle ground at most, and no desktop layout changes for its sake. So: **no**
+  rail + columns for BookGeek, GameGeek or FitnessGeek, **no** two panes for ThingGeek
+  (its touch-only rail, 2026-11-17, is the middle ground). What remains is a check per app
+  that nothing is broken or too small for a finger on the tablet contexts.
 - **packages/ui:** `GeekToastProvider`'s bottom clearance is overridden by MUI above 600 px;
   fix there, then remove TodoGeek's `TOAST_SX` / `useDockClearanceVar`. Optional:
   `geekMedia.phone`; a hooks subpath export (StartGeek imports hooks by file path).

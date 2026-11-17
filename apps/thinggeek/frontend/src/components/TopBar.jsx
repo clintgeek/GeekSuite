@@ -26,6 +26,7 @@ import { useLocation, useNavigate, useSearchParams } from 'react-router-dom';
 import { useThemeMode } from '@geeksuite/user';
 import { GeekSearchField, GeekTopBar } from '@geeksuite/ui';
 import { useDebouncedCallback } from '../hooks/useDebouncedCallback';
+import useThingNav from '../hooks/useThingNav';
 import { CHROME, DISPLAY_FONT, LIVERY, LIVERY_BAND_PX, MONO_FONT, liveryBand } from '../theme/theme';
 import ChromeTheme from './Chrome';
 import { goBack } from '../utils/goBack';
@@ -87,6 +88,8 @@ export default function TopBar({ user, onSignOut }) {
   const [params, setParams] = useSearchParams();
   const { theme: mode, toggleTheme } = useThemeMode();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
+  // The tablet's rail carries Add at its top; a second one up here is noise.
+  const hasRail = useThingNav() === 'rail';
   const onLibrary = isLibraryPath(location.pathname);
   const onSubPage = isBackPath(location.pathname);
   const hintId = useId();
@@ -195,7 +198,7 @@ export default function TopBar({ user, onSignOut }) {
         onThemeToggle={toggleTheme}
         currentApp={APP_ID}
         actions={
-          onLibrary ? (
+          onLibrary && !hasRail ? (
             <Button
               variant="contained"
               color="hero"

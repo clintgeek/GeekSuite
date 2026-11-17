@@ -443,3 +443,28 @@ Details in `apps/notegeek/DOCS/BUJO_HANDWRITING.md` § The Lenovo pen. Not tried
 - 2026-11-17: Chef tested NoteGeek and TodoGeek on the tablet and the desktop — "very happy
   with the results thus far". The reading above stands. CI, harness and images green for
   `3db858b0`.
+
+## 2026-11-17 — The rail's current label clears AA; ThingGeek takes the rail
+
+- **packages/ui:** `GeekNavRail` paints its current item `railCurrentInk(theme)`
+  (`navigation/sidebarInk.js`): the accent where it clears 4.5:1 on `background.paper`,
+  otherwise the accent walked off the paper until it does. Closes the two known gaps
+  (suite-default dark 3.67:1, flockgeek light 3.36:1); both `KNOWN_GAPS` entries removed.
+  Apps that paint the rail their own ground (TodoGeek, NoteGeek, ThingGeek) set the
+  current colour through `itemSx` and are unchanged. Rail items also pass `aria-label`
+  and `aria-haspopup` through. Test: `tabletNav.test.jsx` reads the painted colour (red
+  with the component reverted).
+- **ThingGeek:** the device picks the navigation (`useGeekNavMode`, pointer first) instead
+  of MUI's `md` breakpoint: phone = tab bar, tablet = the rail (`components/NavRail.jsx`),
+  desktop = sidebar. The rail is the tab bar stood on end, in Storage Yard livery: the
+  orange Add tile on top, then Things · Where · Attention (count) · More (the phone's More
+  sheet). It stays beside the add screen and Walk; the top bar drops its own "Add a thing"
+  while the rail shows. Only a TOUCH tablet takes it (`hooks/useThingNav.js`): anything with
+  a mouse is unchanged (tab bar below 900 px, sidebar above).
+- **Touch targets on a tablet:** filter rows, the Clear all button and toggles in
+  `@geeksuite/collection`, ThingGeek's tag chips, and every MUI menu row (suite theme) are
+  44 px under `(pointer: coarse)`; they were sized by width, so a landscape tablet got the
+  desktop's 30–36 px (432 harness findings before, all of this kind).
+- **Scope (Chef):** "really only note and todo need to be heavily optimized for the
+  tablet… I'm not wanting to necessarily redesign the entire suite, desktop and all." No
+  two panes for ThingGeek; BookGeek and GameGeek left alone. See SUITE_TODO §11.

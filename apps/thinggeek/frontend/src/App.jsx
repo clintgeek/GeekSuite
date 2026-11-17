@@ -13,7 +13,7 @@
  * members-only page instead of the app.
  */
 import React, { Suspense, lazy, useEffect, useState } from 'react';
-import { Box, CircularProgress, Typography, useMediaQuery, useTheme } from '@mui/material';
+import { Box, CircularProgress, Typography } from '@mui/material';
 import { Navigate, Route, Routes, useLocation } from 'react-router-dom';
 import { useApolloClient, useQuery } from '@apollo/client';
 import { getMe, loginRedirect, logout as logoutRequest, onLogout, startRefreshTimer, stopRefreshTimer } from '@geeksuite/auth';
@@ -22,11 +22,13 @@ import { GeekShell, GeekToastProvider, LoginSplash } from '@geeksuite/ui';
 import { CollectionProvider } from '@geeksuite/collection';
 import { installThingPolicies } from './graphql/cachePolicies';
 import { GET_THING_VOCABULARY } from './graphql/queries';
+import useThingNav from './hooks/useThingNav';
 import { UploadsProvider } from './hooks/useUploads';
 import { VaultProvider } from './hooks/useVault';
 import { isNotMemberError, isNotMemberState, onNotMember, resetMembership } from './membership';
 import AppMain from './components/AppMain';
 import BottomTabs from './components/BottomTabs';
+import NavRail from './components/NavRail';
 import NotAMember from './components/NotAMember';
 import Sidebar from './components/Sidebar';
 import BoxMark from './components/BoxMark';
@@ -95,9 +97,8 @@ export function useMembership() {
 
 function SignedIn({ user, onSignOut }) {
   const location = useLocation();
-  const theme = useTheme();
-  // Phone: the tab bar is the navigation (no drawer, no hamburger). md+: the sidebar.
-  const isPhone = useMediaQuery(theme.breakpoints.down('md'));
+  // Phone: the tab bar (no drawer, no hamburger). A touch tablet: the rail. md+ with a mouse: the sidebar.
+  const navMode = useThingNav();
   const { checking, notMember } = useMembership();
   const onLibrary = isLibraryPath(location.pathname);
 
@@ -107,10 +108,11 @@ function SignedIn({ user, onSignOut }) {
   return (
     <CollectionProvider value={THING_COLLECTION}>
       <GeekShell
-        nav={isPhone ? undefined : <Sidebar user={user} onSignOut={onSignOut} />}
+        nav={navMode === 'sidebar' ? <Sidebar user={user} onSignOut={onSignOut} /> : undefined}
         navSx={SIDEBAR_SX}
+        rail={navMode === 'rail' ? <NavRail /> : undefined}
         topBar={<TopBar user={user} onSignOut={onSignOut} />}
-        bottomNav={isPhone && !hidesTabBar(location.pathname) ? <BottomTabs /> : undefined}
+        bottomNav={navMode === 'bottom' && !hidesTabBar(location.pathname) ? <BottomTabs /> : undefined}
       >
         <GeekToastProvider>
           <UploadsProvider>

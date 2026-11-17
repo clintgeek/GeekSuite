@@ -10,6 +10,7 @@ import { fireEvent, screen, within } from '@testing-library/react';
 import UnitTag, { captionForKind, labelTilt } from '../../components/UnitTag';
 import LabelCrumbs from '../../components/LabelCrumbs';
 import BottomTabs from '../../components/BottomTabs';
+import NavRail from '../../components/NavRail';
 import TruckMural from '../../components/TruckMural';
 import { PlaceLabel } from '../../components/ThingRow';
 import OnboardingChecklist from '../../components/OnboardingChecklist';
@@ -164,6 +165,41 @@ describe('the phone tab bar', () => {
     expect(hidesTabBar('/add')).toBe(true);
     expect(hidesTabBar('/walk')).toBe(true);
     expect(hidesTabBar('/')).toBe(false);
+  });
+});
+
+describe("the tablet's rail", () => {
+  it('Add on top, then Things · Where · Attention · More; the current one marked', async () => {
+    renderWithProviders(<NavRail />, { initialEntries: ['/where'], mocks: [attentionMock(), profileMock] });
+    const rail = screen.getByRole('navigation', { name: 'ThingGeek navigation' });
+    expect(rail).toHaveAttribute('data-geek-nav-rail');
+    const add = within(rail).getByRole('link', { name: 'Add a thing' });
+    expect(add).toHaveAttribute('href', '/add');
+    expect(add).toHaveTextContent('Add');
+    const ids = [...rail.querySelectorAll('[data-geek-nav-rail-item]')].map((el) => el.getAttribute('data-geek-nav-rail-item'));
+    expect(ids).toEqual(['things', 'where', 'attention', 'more']);
+    // Add comes before the destinations, in the DOM as on the screen.
+    expect(add.compareDocumentPosition(rail.querySelector('[data-geek-nav-rail-item="things"]')) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(within(rail).getByRole('link', { name: 'Where' })).toHaveAttribute('aria-current', 'page');
+    expect(within(rail).getByRole('link', { name: 'Things' })).not.toHaveAttribute('aria-current');
+  });
+
+  it('Attention carries the count, read as words', async () => {
+    const overdue = [makeThing({ id: 'a' })];
+    const dueSoon = [makeThing({ id: 'b' }), makeThing({ id: 'c' })];
+    renderWithProviders(<NavRail />, { mocks: [attentionMock(overdue, dueSoon), profileMock] });
+    const link = await screen.findByRole('link', { name: 'Needs attention, 3 due' });
+    expect(link.querySelector('[data-geek-nav-rail="badge"]')).toHaveTextContent('3');
+  });
+
+  it('More opens the same sheet as the phone, and is the lit item while it is open', async () => {
+    renderWithProviders(<NavRail />, { mocks: [attentionMock(), profileMock] });
+    const more = screen.getByRole('button', { name: 'More' });
+    expect(more).toHaveAttribute('aria-haspopup', 'dialog');
+    fireEvent.click(more);
+    const sheet = await screen.findByTestId('nav-more');
+    expect(within(sheet).getAllByRole('link').map((a) => a.getAttribute('href'))).toEqual(['/types', '/insurance', '/attic', '/trash', '/settings']);
+    expect(document.querySelector('[data-geek-nav-rail-item="more"]')).toHaveAttribute('aria-current', 'page');
   });
 });
 

@@ -694,6 +694,50 @@ export const scenes = [
       await h.settle(400);
     },
   },
+  // ── Tablet (2026-11-17): the rail. These THROW when it is missing. ──
+  {
+    // Both grips: the rail (Add on top, then Things · Where · Attention · More), no tab bar, no sidebar.
+    name: '70-tablet-rail',
+    goto: '/',
+    wait: 1600,
+    viewports: ['tablet'],
+    async setup(page) {
+      const rail = page.locator('[data-geek-nav-rail]').first();
+      if (!(await rail.count())) throw new Error('no rail on the tablet');
+      if (!(await rail.getByRole('link', { name: 'Add a thing' }).count())) throw new Error('the rail has no Add');
+      for (const id of ['things', 'where', 'attention', 'more']) {
+        if (!(await rail.locator(`[data-geek-nav-rail-item="${id}"]`).count())) throw new Error(`the rail has no ${id}`);
+      }
+      if ((await rail.locator('[data-geek-nav-rail-item="things"]').getAttribute('aria-current')) !== 'page') throw new Error('Things is not the current item on the library');
+      if (await page.getByTestId('bottom-tabs').count()) throw new Error('a tab bar beside the rail');
+      if (await page.locator('[data-geek-nav="permanent"]').count()) throw new Error('a sidebar beside the rail');
+      if (await page.locator('[data-geek-topbar="menu"]').count()) throw new Error('a hamburger beside the rail');
+      const main = await page.locator('main').boundingBox();
+      if (main.x < 72) throw new Error(`the page starts at ${main.x}px, under the rail`);
+    },
+  },
+  {
+    // More, from the rail: the same sheet as the phone's More tab.
+    name: '71-tablet-rail-more',
+    goto: '/where',
+    wait: 1500,
+    viewports: ['tablet'],
+    async setup(page, h) {
+      if (!(await click(page, h, page.locator('[data-geek-nav-rail-item="more"]'), 700))) throw new Error('no More on the rail');
+      if (!(await page.getByTestId('nav-more').count())) throw new Error('the More sheet did not open');
+    },
+    teardown: (page, h) => h.esc(),
+  },
+  {
+    // The add screen keeps the rail beside it; its own Save bar has the foot.
+    name: '72-tablet-add',
+    goto: '/add',
+    wait: 1600,
+    viewports: ['tablet'],
+    async setup(page) {
+      if (!(await page.locator('[data-geek-nav-rail]').count())) throw new Error('the rail left the add screen');
+    },
+  },
 ];
 
 // Known, ticketed violations. The list starts empty and stays that way.
