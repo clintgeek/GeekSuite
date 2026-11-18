@@ -405,8 +405,8 @@ fails on its own:
   `summary.json` into one SUMMARY.md with `tools/mobile-harness/merge-summaries.mjs` (a per-app
   table at the bottom; a shard with no summary is listed MISSING), writes it to the run's
   summary page, and uploads it as `mobile-harness-summary-<run_id>`.
-- **That gate name is a required status check** in the repo ruleset "Protect main" (with the
-  CI job names). Renaming the gate, or giving a shard that exact name, breaks merges until
+- **That gate name is a required status check** in the repo ruleset "Protect main" (with
+  `ci gate`, CI's own gate job; those two are the whole list since 2026-11-18). Renaming either gate, or giving a shard that exact name, breaks merges until
   the ruleset changes too, and changing the ruleset is Chef's call.
 - To reproduce one red shard locally, run that shard's exact command:
   `cd tools/mobile-harness && node ci.mjs --app <app> --enforce-a11y --desktop`.

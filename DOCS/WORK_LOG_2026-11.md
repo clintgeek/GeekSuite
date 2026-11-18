@@ -515,9 +515,12 @@ Chef: "let's get these builds as tight as possible."
   (yesterday's harness-only push rebuilt eleven).
 - **Harness:** only the affected apps' shards; triggers on any `packages/**` change now
   (was `ui` and `tags` only).
-- **Chef's to do:** the "Protect main" ruleset still requires 23 check names, two of which
-  were already stale (`bujogeek frontend tests`, `frontend build smoke`); most of the rest
-  no longer exist. It wants `ci gate` and `mobile grammar (iPhone 14, dark + light)`.
+- **Ruleset updated (Chef's word, 2026-11-18):** "Protect main" required 23 check names, two
+  already stale (`bujogeek frontend tests`, `frontend build smoke`) and most of the rest gone
+  after the restructure. It now requires exactly `ci gate` and
+  `mobile grammar (iPhone 14, dark + light)`; every other rule and the bypass are unchanged.
+  Still true as before: both workflows are path-filtered, so a PR that triggers neither
+  (docs-only) or only CI (tooling-only) leaves a required check pending and needs the bypass.
 - **First full run of the new layout (`e70cae43`):** all green. Images 3.8 min, harness
   7.5 min, CI 10.1 min — CI was now one job: FitnessGeek's frontend tests, 6.3 min.
 - **Why: the `@mui/icons-material` barrel costs 7.5 s to import and vitest pays it per test
