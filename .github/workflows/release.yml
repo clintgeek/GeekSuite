@@ -22,6 +22,7 @@ on:
 permissions:
   contents: read
   packages: write
+  actions: read
 
 concurrency:
   group: release-${{ github.ref }}
@@ -42,6 +43,7 @@ jobs:
         # (SUITE_REVIEW_2026-11 C3).
         env:
           APP_INPUT: ${{ github.event.inputs.app }}
+          GH_TOKEN: ${{ github.token }}
         run: |
           if [ -n "$APP_INPUT" ]; then
             if ! printf '%s' "$APP_INPUT" | grep -Eq '^[a-z0-9-]+$' || [ ! -f "apps/$APP_INPUT/Dockerfile" ]; then
@@ -50,14 +52,23 @@ jobs:
             fi
             echo "apps=$(jq -cn --arg a "$APP_INPUT" '[$a]')" >> "$GITHUB_OUTPUT"
           else
+            # Only the images this push can have changed: an image COPYs its
+            # own app, packages/ and the root manifests, nothing else
+            # (tools/ci-affected.mjs). Measured from the last GREEN release
+            # run, so a failed or cancelled run's apps are built by the next.
+            base=$(gh run list --workflow release.yml --branch main --status success --limit 1 --json headSha --jq '.[0].headSha // ""' || true)
+            affected=$(node tools/ci-affected.mjs --for release --base "$base" | sed -n 's/^apps=//p')
             # Apps with root-level Dockerfiles (mirror build.sh APPS)
-            apps=$(for d in apps/*/Dockerfile; do basename "$(dirname "$d")"; done | jq -R . | jq -sc .)
+            apps=$(for d in apps/*/Dockerfile; do basename "$(dirname "$d")"; done | jq -R . | jq -sc --argjson hit "$affected" '[.[] | select(. as $a | $hit | index($a))]')
+            echo "apps: $apps"
             echo "apps=$apps" >> "$GITHUB_OUTPUT"
           fi
 
   build-and-publish:
     name: publish ${{ matrix.app }}
     needs: matrix
+    # A push that touched no image's inputs (tooling, a workflow) builds none.
+    if: needs.matrix.outputs.apps != '[]'
     runs-on: ubuntu-latest
     timeout-minutes: 30
     strategy:

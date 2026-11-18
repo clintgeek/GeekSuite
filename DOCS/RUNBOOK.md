@@ -430,7 +430,7 @@ some of these may differ once the in-flight work lands).
 | `apps/todogeek/frontend` | `npx vitest run` | **64 passed**, 3 files |
 | `apps/todogeek/backend`, `apps/fitnessgeek/backend`, `apps/flockgeek/backend`, `apps/storygeek/backend`, `apps/notegeek/backend` | `pnpm test` (jest, mongodb-memory-server) — this is CI's `test-backends` matrix | fitnessgeek: **45 passed** (one run showed 1 flaky failure in `auth.test.js` on a `responseTime` assertion under load, reran clean — treat as flaky, not broken); flockgeek: **57 passed**, 5 suites; storygeek: `npm test` runs both `test:node` (**65 passed**) and `test:jest` (**41 passed**) = 106 total; notegeek backend: **96 passed / 9 skipped**, 3 of 10 suites skipped |
 | `apps/notegeek/frontend` | `npx vitest run` | **130 passed / 1 failed** (a worker-timeout under heavy parallel load during this pass, not a real assertion failure) of 131 total, 21 of 22 files. `STATUS.md` reports 141 — the gap is an uncommitted new `App.test.jsx` plus general WIP noise; re-run in isolation for a trustworthy number. |
-| `apps/*/frontend`, `packages/ui`, `apps/startgeek` (build smoke) | `npm run build` per app | Covered by CI's `build-frontends` matrix; not re-run individually during this pass |
+| `apps/*/frontend`, `packages/ui`, `apps/startgeek` (build smoke) | `npm run build` per app | Covered by CI's per-app job (`<app> tests + build`, since 2026-11-18; was the `build-frontends` matrix); not re-run individually during this pass |
 
 ---
 

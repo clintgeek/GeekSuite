@@ -35,18 +35,20 @@ on:
     branches: [main]
     paths:
       - 'apps/**'
-      - 'packages/ui/**'
-      - 'packages/tags/**'
+      - 'packages/**'
       - 'tools/mobile-harness/**'
       - '.github/workflows/mobile-harness.yml'
   pull_request:
     branches: [main]
     paths:
       - 'apps/**'
-      - 'packages/ui/**'
-      - 'packages/tags/**'
+      - 'packages/**'
       - 'tools/mobile-harness/**'
       - '.github/workflows/mobile-harness.yml'
+
+permissions:
+  contents: read
+  actions: read
 
 concurrency:
   group: mobile-harness-${{ github.ref }}
@@ -62,13 +64,27 @@ jobs:
       shards: ${{ steps.list.outputs.shards }}
     steps:
       - uses: actions/checkout@v4
-        with:
-          sparse-checkout: tools/mobile-harness
+      - name: Apps touched since the last green harness run on main
+        id: affected
+        env:
+          GH_TOKEN: ${{ github.token }}
+          EVENT: ${{ github.event_name }}
+        # tools/ci-affected.mjs: an app's own files or scenes run that app's
+        # shard; packages/, the harness itself or this workflow run them all;
+        # so does a pull request, or having no green run to measure from.
+        run: |
+          base=""
+          if [ "$EVENT" = "push" ]; then
+            base=$(gh run list --workflow mobile-harness.yml --branch main --status success --limit 1 --json headSha --jq '.[0].headSha // ""' || true)
+          fi
+          node tools/ci-affected.mjs --for harness --base "$base" >> "$GITHUB_OUTPUT"
       - name: Read the app list from the harness registry
         id: list
+        env:
+          AFFECTED: ${{ steps.affected.outputs.apps }}
         # registry.mjs has no imports, so this needs no install.
         run: |
-          apps=$(node --input-type=module -e "import { APP_NAMES } from './tools/mobile-harness/lib/registry.mjs'; console.log(JSON.stringify(APP_NAMES))")
+          apps=$(node --input-type=module -e "import { APP_NAMES } from './tools/mobile-harness/lib/registry.mjs'; const hit = JSON.parse(process.env.AFFECTED); console.log(JSON.stringify(APP_NAMES.filter((a) => hit.includes(a))))")
           echo "apps: $apps"
           echo "apps=$apps" >> "$GITHUB_OUTPUT"
           # One shard per app, except FitnessGeek: 166 scenes × phone and
@@ -96,10 +112,12 @@ jobs:
             const split = { fitnessgeek: [['0-3', '^[0-3]'], ['4', '^4'], ['5', '^5'], ['6', '^6']] };
             const base = '--desktop';
             const tabletArgs = '--tablet-only --tablet-viewports tablet-dark,tablet-land-light --tablet-advisory';
-            const out = APP_NAMES.flatMap((app) => split[app]
+            const hit = JSON.parse(process.env.AFFECTED);
+            const names = APP_NAMES.filter((a) => hit.includes(a));
+            const out = names.flatMap((app) => split[app]
               ? split[app].map(([part, scenes]) => ({ app, label: app + ' ' + part, key: app + '-' + part.replace('+', ''), scenes, args: base }))
               : [{ app, label: app, key: app, scenes: '', args: base }]);
-            for (const app of ['notegeek', 'todogeek']) {
+            for (const app of ['notegeek', 'todogeek'].filter((a) => hit.includes(a))) {
               out.push({ app, label: app + ' tablet', key: app + '-tablet', scenes: '', args: tabletArgs });
             }
             console.log(JSON.stringify(out));")
@@ -109,6 +127,8 @@ jobs:
   shard:
     name: mobile grammar · ${{ matrix.shard.label }}
     needs: apps
+    # Nothing to walk when a push under apps/ touched only docs.
+    if: needs.apps.outputs.shards != '[]'
     # Pinned, not ubuntu-latest: on 2026-10-29 ubuntu-latest became 26.04 and
     # Playwright 1.58.2 refused it ("does not support chromium on ubuntu26.04"),
     # failing every shard. Move this forward together with a Playwright bump.
@@ -229,8 +249,14 @@ jobs:
         env:
           APPS_RESULT: ${{ needs.apps.result }}
           SHARD_RESULT: ${{ needs.shard.result }}
+          SHARDS: ${{ needs.apps.outputs.shards }}
         run: |
           echo "app list: $APPS_RESULT   shards: $SHARD_RESULT"
+          # No shards at all (nothing a shard reads changed) is a pass.
+          if [ "$APPS_RESULT" = success ] && [ "$SHARD_RESULT" = skipped ] && [ "$SHARDS" = "[]" ]; then
+            echo "no app affected; nothing to walk"
+            exit 0
+          fi
           if [ "$APPS_RESULT" != success ] || [ "$SHARD_RESULT" != success ]; then
             echo "::error::mobile harness failed (app list: $APPS_RESULT, shards: $SHARD_RESULT) — see the per-app 'mobile grammar · <app>' jobs and SUMMARY.md"
             exit 1

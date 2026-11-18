@@ -494,3 +494,27 @@ Chef: "This build is simply too long." The time was setup and waiting, not the t
 - **In CI (`ef2c9905`):** the harness run went 25+ min (timed out) → 9 m 05 s, all green.
   Slowest shard NoteGeek 7 m 03 s (was 23 m); ThingGeek 5 m 23 s (was 23 m 48 s); the four
   FitnessGeek shards 3–5 min each. Dropping `--with-deps` launched and found nothing new.
+
+## 2026-11-18 — CI, harness and images run only what a push touches
+
+Chef: "let's get these builds as tight as possible."
+
+- **`tools/ci-affected.mjs`** (11 tests, run in CI's static job): one answer for all three
+  workflows. `apps/<app>/…` or that app's harness scenes → that app; docs → nothing;
+  `packages/`, the lockfile, root manifests → everything. Measured from the last GREEN run
+  of the same workflow, so a red or cancelled run's changes are covered by the next. No
+  usable base, or a pull request → everything.
+- **Apps are not independent, so CI is the cautious one:** basegeek's api suite reads other
+  apps' files and other apps' tests read basegeek. basegeek is always in CI's matrix, a
+  basegeek change runs every app, and the shared-package job always runs.
+- **`ci.yml` 722 → 246 lines, 59 jobs → at most 15:** `static checks`, `shared package
+  tests`, one `<app> tests + build` per app (backend tests, frontend tests, build, PWA
+  audit of that build), and `ci gate`. The separate build-smoke matrix is gone (the PWA
+  audit already built each app). Same commands as before.
+- **Images:** only the affected apps are built; tooling and other workflows build none
+  (yesterday's harness-only push rebuilt eleven).
+- **Harness:** only the affected apps' shards; triggers on any `packages/**` change now
+  (was `ui` and `tags` only).
+- **Chef's to do:** the "Protect main" ruleset still requires 23 check names, two of which
+  were already stale (`bujogeek frontend tests`, `frontend build smoke`); most of the rest
+  no longer exist. It wants `ci gate` and `mobile grammar (iPhone 14, dark + light)`.
