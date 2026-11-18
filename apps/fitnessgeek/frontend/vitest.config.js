@@ -1,6 +1,8 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+// Test-only: per-icon imports instead of the 7.5s @mui/icons-material barrel.
+import muiIcons from '../../../packages/ui/testing/muiIconsPlugin.js';
 
 // Mirrors apps/flockgeek/frontend/vitest.config.js (and notegeek's, bookgeek's,
 // storygeek's). A separate config, not merged into vite.config.js, so vitest
@@ -12,7 +14,7 @@ import path from 'path';
 // unthemed tree. Service-only tests do not need it; the first component test
 // would.
 export default defineConfig({
-    plugins: [react()],
+    plugins: [muiIcons(), react()],
     resolve: {
         dedupe: ['react', 'react-dom', '@emotion/react', '@emotion/styled', '@mui/material'],
         alias: {

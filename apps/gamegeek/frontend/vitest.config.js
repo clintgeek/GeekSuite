@@ -1,5 +1,7 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
+// Test-only: per-icon imports instead of the 7.5s @mui/icons-material barrel.
+import muiIcons from '../../../packages/ui/testing/muiIconsPlugin.js';
 
 // A separate config (not a `test` block in vite.config.js), same as bookgeek
 // web: the build config aliases @geeksuite/ui and dedupes MUI/React for the
@@ -7,7 +9,7 @@ import react from '@vitejs/plugin-react';
 // jsdom run wants. `server.deps.inline` converges MUI/Emotion into one module
 // graph for the tests instead.
 export default defineConfig({
-  plugins: [react()],
+  plugins: [muiIcons(), react()],
   test: {
     environment: 'jsdom',
     globals: true,

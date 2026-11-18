@@ -1,6 +1,8 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
 import path from 'path';
+// Test-only: per-icon imports instead of the 7.5s @mui/icons-material barrel.
+import muiIcons from '../../../../packages/ui/testing/muiIconsPlugin.js';
 
 // Mirrors apps/fitnessgeek/frontend/vitest.config.js (and flockgeek's,
 // notegeek's, bookgeek's, storygeek's). A separate config, not merged into
@@ -12,7 +14,7 @@ import path from 'path';
 // private @mui/material for its peer range, so without the dedupe a
 // component test gets two MUI copies and an unthemed tree.
 export default defineConfig({
-    plugins: [react()],
+    plugins: [muiIcons(), react()],
     resolve: {
         dedupe: ['react', 'react-dom', '@emotion/react', '@emotion/styled', '@mui/material'],
         alias: {

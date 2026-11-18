@@ -518,3 +518,14 @@ Chef: "let's get these builds as tight as possible."
 - **Chef's to do:** the "Protect main" ruleset still requires 23 check names, two of which
   were already stale (`bujogeek frontend tests`, `frontend build smoke`); most of the rest
   no longer exist. It wants `ci gate` and `mobile grammar (iPhone 14, dark + light)`.
+- **First full run of the new layout (`e70cae43`):** all green. Images 3.8 min, harness
+  7.5 min, CI 10.1 min — CI was now one job: FitnessGeek's frontend tests, 6.3 min.
+- **Why: the `@mui/icons-material` barrel costs 7.5 s to import and vitest pays it per test
+  FILE.** `packages/ui/testing/muiIconsPlugin.js` (test-only vite plugin, in all ten app
+  vitest configs) rewrites `import { Add } from '@mui/icons-material'` to per-icon imports.
+  FitnessGeek frontend 7 m 03 s → 3 m 44 s locally, same 1,014 tests; every other frontend
+  suite passes with its usual count. Worker pool type and `server.deps.inline` made no
+  difference; `--no-isolate` breaks tests.
+- **Tried and dropped:** replacing the harness's fixed 1.2 s post-navigation wait with a
+  readiness check (fonts, DOM quiet, no running transition). Under 10% faster and 394 of
+  1,848 screenshots changed. The time is not in that wait.

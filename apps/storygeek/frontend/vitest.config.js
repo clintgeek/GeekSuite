@@ -1,5 +1,7 @@
 import { defineConfig } from 'vitest/config';
 import react from '@vitejs/plugin-react';
+// Test-only: per-icon imports instead of the 7.5s @mui/icons-material barrel.
+import muiIcons from '../../../packages/ui/testing/muiIconsPlugin.js';
 
 // Mirrors apps/notegeek/frontend/vitest.config.js, apps/bookgeek/web/vitest.config.js
 // and apps/flockgeek/frontend/vitest.config.js. A separate config (not merged
@@ -7,7 +9,7 @@ import react from '@vitejs/plugin-react';
 // storygeek's has no PWA plugin or proxy block today, but keeping the split
 // matches the rest of the suite and costs nothing.
 export default defineConfig({
-    plugins: [react()],
+    plugins: [muiIcons(), react()],
     test: {
         environment: 'jsdom',
         testTimeout: 15000, // full-page renders (StoryPlay) take 2–3s on a loaded runner; 5s flaked
