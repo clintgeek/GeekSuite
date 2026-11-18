@@ -468,3 +468,8 @@ Details in `apps/notegeek/DOCS/BUJO_HANDWRITING.md` § The Lenovo pen. Not tried
 - **Scope (Chef):** "really only note and todo need to be heavily optimized for the
   tablet… I'm not wanting to necessarily redesign the entire suite, desktop and all." No
   two panes for ThingGeek; BookGeek and GameGeek left alone. See SUITE_TODO §11.
+- **Deployed** as `a3b39c1e`: CI and images green, every app container healthy. The mobile
+  harness went red on a timeout, not a finding: the `fitnessgeek 4+6` shard was cancelled
+  at 25 minutes twice (229 and 227 scenes clean when cut off; a 5.3-minute apt step in
+  front of 19.5 minutes of scenes). Fix: `4` and `6` are separate shards and the job
+  timeout is 35 minutes (ThingGeek and NoteGeek ran 23–24 min on the same push).

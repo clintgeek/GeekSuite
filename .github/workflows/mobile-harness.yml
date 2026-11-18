@@ -74,7 +74,12 @@ jobs:
           # One shard per app, except FitnessGeek: 166 scenes × phone and
           # desktop outgrew one 25-minute job on 2026-10-17 (the job was
           # cancelled at the timeout). Its scenes are all numbered, and
-          # FG_SCENES filters them, so it runs as three balanced shards.
+          # FG_SCENES filters them, so it runs as shards by leading digit.
+          # 2026-11-17: the 4+6 shard was cancelled at the timeout twice on one
+          # push (19.5 min of scenes behind a 5.3-minute `--with-deps` apt
+          # step), every scene it reached clean; 4 and 6 are now their own
+          # shards and the job timeout went 25 -> 35 (ThingGeek and NoteGeek
+          # finished the same push at 23-24 min).
           # Plus one TABLET shard each for NoteGeek and TodoGeek (review 4.1,
           # 2026-11): the Android tablet, 800x1280 dark + 1280x800 light
           # (one scheme per orientation; both schemes' contrast is already
@@ -88,7 +93,7 @@ jobs:
           # them; then drop that flag and it gates like the rest.
           shards=$(node --input-type=module -e "
             import { APP_NAMES } from './tools/mobile-harness/lib/registry.mjs';
-            const split = { fitnessgeek: [['0-3', '^[0-3]'], ['4+6', '^[46]'], ['5', '^5']] };
+            const split = { fitnessgeek: [['0-3', '^[0-3]'], ['4', '^4'], ['5', '^5'], ['6', '^6']] };
             const base = '--desktop';
             const tabletArgs = '--tablet-only --tablet-viewports tablet-dark,tablet-land-light --tablet-advisory';
             const out = APP_NAMES.flatMap((app) => split[app]
@@ -110,7 +115,7 @@ jobs:
     runs-on: ubuntu-24.04
     # One app, phone + desktop. The slowest app ran ~8-10 min inside the old
     # single job; 25 leaves room for growth and still catches a hang early.
-    timeout-minutes: 25
+    timeout-minutes: 35
     strategy:
       fail-fast: false
       matrix:
