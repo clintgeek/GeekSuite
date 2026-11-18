@@ -50,6 +50,11 @@ node tools/mobile-harness/ci.mjs --enforce-a11y
 # Skip the axe pass entirely (faster; useful when iterating on the grammar rules)
 node tools/mobile-harness/ci.mjs --no-a11y
 
+# Viewports walk side by side, each in its own thread and browser
+# (lib/parallel.mjs), up to 4 at once. --jobs 1 (or HARNESS_JOBS=1) is the old
+# one-at-a-time walk, for reading a log in order or chasing a timing problem.
+node tools/mobile-harness/ci.mjs --app todogeek --desktop --jobs 1
+
 # Unit coverage for the probe itself (no app build needed — static fixtures)
 node tools/mobile-harness/selftest.mjs
 
@@ -109,6 +114,7 @@ install and `lib/playwright.mjs` will use it (it already falls back to the
 lib/
   playwright.mjs   resolve Playwright (dep → PLAYWRIGHT_MODULE → local checkout)
   a11y.mjs         resolve + inject axe-core; the axe.run options
+  parallel.mjs     one worker thread (own browser, own fixtures) per viewport
   contexts.mjs     iPhone 14 dark/light, 1280x900 desktop, and the Android
                    tablet (800x1280 + 1280x800, touch, DPR 2) contexts
   net.mjs          route plumbing: CORS/preflight, session routes, GraphQL stubs

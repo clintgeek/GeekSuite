@@ -473,3 +473,21 @@ Details in `apps/notegeek/DOCS/BUJO_HANDWRITING.md` § The Lenovo pen. Not tried
   at 25 minutes twice (229 and 227 scenes clean when cut off; a 5.3-minute apt step in
   front of 19.5 minutes of scenes). Fix: `4` and `6` are separate shards and the job
   timeout is 35 minutes (ThingGeek and NoteGeek ran 23–24 min on the same push).
+
+## 2026-11-18 — The harness walks its viewports side by side
+
+Chef: "This build is simply too long." The time was setup and waiting, not the tests.
+
+- **Viewports in parallel** (`tools/mobile-harness/lib/parallel.mjs`): each viewport gets
+  its own worker thread, so its own Chromium and its own copy of the app's fixtures (they
+  keep module-level state). `--jobs N` / `HARNESS_JOBS`, default 4; `--jobs 1` is the old
+  serial walk. A worker that dies is a failed viewport, not a missing one.
+- **Measured locally** (4 cores, `--enforce-a11y --desktop`): TodoGeek 5 m 23 s → 2 m 02 s;
+  all of FitnessGeek (610 scenes) 13 m 55 s; ThingGeek 5 m 29 s; NoteGeek 6 m 40 s. All
+  eleven apps PASS with the same scene counts as the serial run of 2026-11-17.
+- **CI drops `playwright install --with-deps`**: apt on every shard, 5.3 min on the shard
+  that timed out. Not verifiable locally; the first push is its test. If a shard cannot
+  launch the browser or text metrics shift, restore the flag or use the Playwright image.
+- Not done yet: run only the shards a push touches; replace the fixed 1.2 s per-scene wait;
+  fold FitnessGeek's four shards back together once CI times are known; collapse `ci.yml`'s
+  59 jobs.

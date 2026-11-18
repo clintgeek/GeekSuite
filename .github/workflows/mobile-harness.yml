@@ -113,8 +113,8 @@ jobs:
     # Playwright 1.58.2 refused it ("does not support chromium on ubuntu26.04"),
     # failing every shard. Move this forward together with a Playwright bump.
     runs-on: ubuntu-24.04
-    # One app, phone + desktop. The slowest app ran ~8-10 min inside the old
-    # single job; 25 leaves room for growth and still catches a hang early.
+    # One app, phone + desktop, the viewports walked side by side
+    # (tools/mobile-harness/lib/parallel.mjs, since 2026-11-18).
     timeout-minutes: 35
     strategy:
       fail-fast: false
@@ -142,9 +142,15 @@ jobs:
           path: ~/.cache/ms-playwright
           key: playwright-${{ steps.pw.outputs.version }}-chromium-${{ runner.os }}
       - name: Install Chromium
-        # --with-deps installs system libraries every time; the browser binary
-        # itself is skipped when the cache restored it.
-        run: npx playwright install --with-deps chromium
+        # No --with-deps since 2026-11-18: it ran apt on every shard (5.3 min
+        # of the 25 on 2026-11-17, most of it waiting on the mirror) to add
+        # fonts and Xvfb. The runner image already carries the libraries
+        # headless Chromium links against (apt reported them "set to manually
+        # installed"). If a shard ever fails to LAUNCH the browser, or text
+        # metrics shift, put the flag back or move the job into
+        # mcr.microsoft.com/playwright. With the cache restored this step is
+        # a no-op.
+        run: npx playwright install chromium
         working-directory: tools/mobile-harness
 
       - name: Build, serve and probe ${{ matrix.shard.label }}

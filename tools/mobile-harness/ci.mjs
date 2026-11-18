@@ -12,6 +12,7 @@
 //   node ci.mjs --no-build                          # reuse existing dist/
 //   node ci.mjs --enforce-a11y                      # a11y counts toward exit
 //   node ci.mjs --no-a11y                           # skip the axe pass entirely
+//   node ci.mjs --jobs 1                            # one viewport at a time (default: all at once, up to 4)
 //   node ci.mjs --app gamegeek --enforce-a11y --desktop   # one CI shard, exactly
 //   node ci.mjs --app notegeek --enforce-a11y --desktop --tablet   # + 800x1280 / 1280x800 Android tablet
 //   node ci.mjs --app notegeek --tablet-only        # just the tablet contexts
@@ -20,9 +21,10 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { APP_NAMES } from './lib/registry.mjs';
-import { runApp, summarize, report, summaryMarkdown, TOOL_ROOT } from './lib/runner.mjs';
+import { summarize, report, summaryMarkdown, TOOL_ROOT } from './lib/runner.mjs';
 import { PHONE_VIEWPORTS, ALL_VIEWPORTS, TABLET_VIEWPORTS, launch } from './lib/contexts.mjs';
 import { buildApp, startPreview } from './lib/serve.mjs';
+import { runAppParallel } from './lib/parallel.mjs';
 
 const argv = process.argv.slice(2);
 const has = (name) => argv.includes(`--${name}`);
@@ -53,8 +55,17 @@ const viewports = has('tablet-only')
   : [...(has('desktop') ? ALL_VIEWPORTS : PHONE_VIEWPORTS), ...(has('tablet') ? tabletPick : [])];
 const a11y = !has('no-a11y');
 const enforceA11y = has('enforce-a11y');
+// Viewports walk side by side, each in its own thread and browser
+// (lib/parallel.mjs). --jobs N or HARNESS_JOBS caps it; 1 is the old serial
+// walk in one shared browser, for reading a log in order.
+const jobs = (() => {
+  const i = argv.indexOf('--jobs');
+  const n = Number(i > -1 ? argv[i + 1] : process.env.HARNESS_JOBS);
+  return Number.isInteger(n) && n > 0 ? n : 4;
+})();
+const serial = jobs <= 1 || viewports.length <= 1;
 
-const browser = await launch();
+const browser = serial ? await launch() : null;
 const runs = [];
 const failures = [];
 
@@ -66,7 +77,8 @@ for (const app of apps) {
     preview = await startPreview(app);
     console.log(`serving ${app} at ${preview.url}`);
     runs.push(
-      await runApp({
+      await runAppParallel({
+        jobs,
         app,
         base: preview.url,
         outDir: path.join(TOOL_ROOT, 'out', label, app),
@@ -86,7 +98,7 @@ for (const app of apps) {
   }
 }
 
-await browser.close();
+if (browser) await browser.close();
 
 // --tablet-advisory: walk and report the tablet, but keep it out of the exit
 // code (CI, until the tablet wave burns its findings down).
