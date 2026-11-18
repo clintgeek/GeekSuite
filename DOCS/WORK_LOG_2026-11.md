@@ -491,3 +491,6 @@ Chef: "This build is simply too long." The time was setup and waiting, not the t
 - Not done yet: run only the shards a push touches; replace the fixed 1.2 s per-scene wait;
   fold FitnessGeek's four shards back together once CI times are known; collapse `ci.yml`'s
   59 jobs.
+- **In CI (`ef2c9905`):** the harness run went 25+ min (timed out) → 9 m 05 s, all green.
+  Slowest shard NoteGeek 7 m 03 s (was 23 m); ThingGeek 5 m 23 s (was 23 m 48 s); the four
+  FitnessGeek shards 3–5 min each. Dropping `--with-deps` launched and found nothing new.
