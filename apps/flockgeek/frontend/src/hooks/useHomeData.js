@@ -1,7 +1,7 @@
 import { useQuery } from '@apollo/client';
 import { GET_BIRDS, GET_FLOCK_GROUPS, GET_EGG_PRODUCTIONS, GET_HATCH_EVENTS } from '../graphql/queries';
 
-import { localDateString } from '@geeksuite/utils';
+import { localDateString, utcDateString } from '@geeksuite/utils';
 
 /**
  * The rolling 14-day window ending today, as two `YYYY-MM-DD` calendar days.
@@ -15,7 +15,7 @@ import { localDateString } from '@geeksuite/utils';
  * so Apollo sees the same variables and does not refetch, and they change
  * exactly once — when the local day does.
  */
-function rollingWindow() {
+export function rollingWindow() {
   const now = new Date();
   const fourteenDaysAgo = new Date(now);
   fourteenDaysAgo.setDate(fourteenDaysAgo.getDate() - 14);
@@ -62,6 +62,17 @@ export default function useHomeData() {
     avgDailyEggs = Math.round((totalEggs / 14) * 10) / 10;
   }
 
+  // Today's harvest, for Home's "Today" line (UX review 2026-11-18, FlockGeek
+  // 2): the question a keeper opens the app with is "did someone already
+  // collect today?". A harvest date is a calendar day stored at UTC midnight,
+  // so it is compared as a UTC day against the local "today".
+  const todayRecords = eggsList.filter((e) => utcDateString(e.date) === todayStr);
+  const today = {
+    logged: todayRecords.length > 0,
+    eggs: todayRecords.reduce((sum, e) => sum + (e.eggsCount || 0), 0),
+    locationIds: [...new Set(todayRecords.map((e) => e.locationId).filter(Boolean))],
+  };
+
   // `calendarDay` tells RecentActivity which of the two kinds of date this
   // row carries: a harvest date and a set date are calendar days stored at UTC
   // midnight, a bird's `createdAt` is a real instant. Rendering the first two
@@ -103,6 +114,7 @@ export default function useHomeData() {
     error,
     refetch,
     stats: { birdsCount, groupsCount, layingHensCount, avgDailyEggs, recentHatches: hatchesList },
+    today,
     items,
   };
 }

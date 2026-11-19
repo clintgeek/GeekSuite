@@ -1,19 +1,8 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { act, screen } from '@testing-library/react';
+import { describe, it, expect, vi, afterEach } from 'vitest';
+import { screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import QuickHarvestSheet from '../../components/QuickHarvestSheet';
 import { renderWithProviders, mockMatchMediaMatches } from '../testUtils';
-
-const { mockUseGeekPrimaryAction } = vi.hoisted(() => ({
-  mockUseGeekPrimaryAction: vi.fn(),
-}));
-
-vi.mock('@geeksuite/ui', async (importOriginal) => {
-  const actual = await importOriginal();
-  return {
-    ...actual,
-    useGeekPrimaryAction: mockUseGeekPrimaryAction,
-  };
-});
 
 // QuickHarvestSheet mounts the real QuickHarvestEntry, which talks to Apollo
 // directly — out of scope for this sheet-wiring test, so it's stubbed.
@@ -21,54 +10,57 @@ vi.mock('../../components/QuickHarvestEntry', () => ({
   default: () => <div data-testid="quick-harvest-entry-mock" />,
 }));
 
+// The FAB used to be the shell's primary action, which is an egg glyph only
+// on the phone. UX review 2026-11-18 (FlockGeek 4): the daily action says
+// "Log eggs" in words where the job happens, so the sheet mounts its own
+// extended GeekFab (portalled out of the route transition).
 describe('QuickHarvestSheet', () => {
   let restoreMatchMedia;
-
-  beforeEach(() => {
-    mockUseGeekPrimaryAction.mockClear();
-  });
 
   afterEach(() => {
     restoreMatchMedia?.();
     restoreMatchMedia = undefined;
   });
 
-  it("registers 'Log eggs' as the primary action", () => {
+  it("shows a 'Log eggs' FAB with its words on the phone", () => {
     restoreMatchMedia = mockMatchMediaMatches(true); // mobile
     renderWithProviders(<QuickHarvestSheet />);
 
-    expect(mockUseGeekPrimaryAction).toHaveBeenCalledTimes(1);
-    const [config] = mockUseGeekPrimaryAction.mock.calls[0];
-    expect(config.label).toBe('Log eggs');
-    expect(typeof config.onClick).toBe('function');
+    const fab = screen.getByRole('button', { name: 'Log eggs' });
+    expect(fab).toHaveAttribute('data-geek-fab', 'extended');
+    expect(fab).toHaveTextContent('Log eggs');
   });
 
   it('honors a custom label', () => {
     restoreMatchMedia = mockMatchMediaMatches(true);
     renderWithProviders(<QuickHarvestSheet label="Add today's eggs" />);
 
-    const [config] = mockUseGeekPrimaryAction.mock.calls[0];
-    expect(config.label).toBe("Add today's eggs");
+    expect(screen.getByRole('button', { name: "Add today's eggs" })).toBeInTheDocument();
   });
 
-  it('renders nothing at md+, but still registers (the FAB hides itself there)', () => {
+  it('renders nothing at md+ (the inline panel is the entry point there)', () => {
     restoreMatchMedia = mockMatchMediaMatches(false); // desktop
     const { container } = renderWithProviders(<QuickHarvestSheet />);
 
-    expect(mockUseGeekPrimaryAction).toHaveBeenCalledTimes(1);
     expect(container).toBeEmptyDOMElement();
+    expect(screen.queryByRole('button', { name: 'Log eggs' })).not.toBeInTheDocument();
   });
 
-  it('opens the sheet from the registered action', async () => {
+  it('opens the sheet from the FAB', async () => {
+    const user = userEvent.setup();
     restoreMatchMedia = mockMatchMediaMatches(true);
     renderWithProviders(<QuickHarvestSheet />);
 
-    const [config] = mockUseGeekPrimaryAction.mock.calls[0];
-    await act(async () => {
-      config.onClick();
-    });
+    await user.click(screen.getByRole('button', { name: 'Log eggs' }));
 
-    expect(screen.getByText('Quick harvest')).toBeInTheDocument();
+    expect(screen.getByTestId('quick-harvest-entry-mock')).toBeInTheDocument();
+  });
+
+  it('can be opened by its page (controlled)', () => {
+    restoreMatchMedia = mockMatchMediaMatches(true);
+    const onOpenChange = vi.fn();
+    renderWithProviders(<QuickHarvestSheet open onOpenChange={onOpenChange} />);
+
     expect(screen.getByTestId('quick-harvest-entry-mock')).toBeInTheDocument();
   });
 });

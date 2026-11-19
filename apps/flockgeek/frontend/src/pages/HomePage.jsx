@@ -1,7 +1,9 @@
 import EggIcon from "@mui/icons-material/EggOutlined";
 import GroupIcon from "@mui/icons-material/GroupsOutlined";
 import BirdIcon from "@mui/icons-material/PetsOutlined";
-import { Box, Button, Stack, Typography } from "@mui/material";
+import { useState } from "react";
+import { Box, Button, Stack, Typography, useMediaQuery } from "@mui/material";
+import { useTheme } from "@mui/material/styles";
 import { useQuery } from "@apollo/client";
 import { motion } from "framer-motion";
 import { Link as RouterLink } from "react-router-dom";
@@ -9,9 +11,11 @@ import { useAuth } from "../contexts/AuthContext";
 import SummaryCards from "../components/home/SummaryCards";
 import RecentActivity from "../components/home/RecentActivity";
 import QuickHarvestSheet from "../components/QuickHarvestSheet";
+import { HARVEST_FAB_CLEARANCE } from "../utils/harvestDefaults";
+import TodayLine from "../components/home/TodayLine";
 import useHomeData from "../hooks/useHomeData";
 import { GET_LOCATIONS } from "../graphql/queries";
-import { GeekLoadError } from "@geeksuite/ui";
+import { GeekLoadError, geekLayout } from "@geeksuite/ui";
 
 const quickLinks = [
   { label: "Log eggs", to: "/egg-log", icon: <EggIcon /> },
@@ -43,6 +47,11 @@ const HomePage = () => {
   // hands `QuickHarvestEntry`, so the sheet can default and label the pen.
   const { data: locData } = useQuery(GET_LOCATIONS);
   const locations = locData?.flockLocations || [];
+  const theme = useTheme();
+  const isMobile = useMediaQuery(theme.breakpoints.down(geekLayout.navBreakpoint));
+  // Held here so the "Today" line can open the same sheet the FAB opens.
+  const [harvestOpen, setHarvestOpen] = useState(false);
+  const locationName = (id) => locations.find((l) => l.id === id)?.name ?? null;
 
   const rawName = user?.name || user?.username || user?.email?.split("@")[0] || "";
   const displayName = rawName
@@ -50,14 +59,13 @@ const HomePage = () => {
     : "Caretaker";
 
   return (
-    <motion.div variants={stagger} initial="hidden" animate="show">
-      {/* Registers "Log eggs" as the shell's primary action and holds the sheet
-          it opens. Renders nothing at `md`+. */}
-      <QuickHarvestSheet locations={locations} />
+    <Box component={motion.div} variants={stagger} initial="hidden" animate="show" sx={{ pb: HARVEST_FAB_CLEARANCE }}>
+      {/* The "Log eggs" FAB and the sheet it opens. Renders nothing at `md`+. */}
+      <QuickHarvestSheet locations={locations} open={harvestOpen} onOpenChange={setHarvestOpen} />
 
       {/* Greeting header — left-hung, extra vertical air */}
       <motion.div variants={fadeUp}>
-        <Box sx={{ mb: 5, maxWidth: 520 }}>
+        <Box sx={{ mb: 3, maxWidth: 520 }}>
           <Typography variant="overline" sx={{ color: "text.muted", mb: 1, display: "block" }}>
             {new Date().toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
           </Typography>
@@ -70,11 +78,24 @@ const HomePage = () => {
         </Box>
       </motion.div>
 
+      {/* Did anyone collect today? Hidden while the reads fail: the load error
+          below says so, and "not logged yet" would be a guess. */}
+      {!homeData.error && !homeData.loading && (
+        <motion.div variants={fadeUp}>
+          <TodayLine
+            today={homeData.today}
+            locationName={locationName}
+            isMobile={isMobile}
+            onLog={() => setHarvestOpen(true)}
+          />
+        </motion.div>
+      )}
+
       {/* Primary CTA — promoted above the fold, full visual weight. Below `md`
           the thumb-zone FAB *is* this action (it opens the harvest sheet in
           place instead of routing away), so the button stands down. */}
       <motion.div variants={fadeUp}>
-        <Box sx={{ mb: 4, maxWidth: 320 }}>
+        <Box sx={{ mb: 4, maxWidth: 320, display: { xs: "none", md: "block" } }}>
           <Button
             component={RouterLink}
             to="/egg-log"
@@ -86,7 +107,8 @@ const HomePage = () => {
           >
             Log today's eggs
           </Button>
-          <Stack direction="row" spacing={1.5} sx={{ mt: 2 }}>
+          {/* The phone's tab bar already has Birds and Groups. */}
+          <Stack direction="row" spacing={1.5} sx={{ mt: 2, display: { xs: "none", md: "flex" } }}>
             {quickLinks.filter(l => l.to !== "/egg-log").map(({ label, to, icon }) => (
               <Button
                 key={label}
@@ -173,7 +195,7 @@ const HomePage = () => {
           </Box>
         </Box>
       </motion.div>
-    </motion.div>
+    </Box>
   );
 };
 

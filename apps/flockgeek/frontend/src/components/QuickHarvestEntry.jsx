@@ -13,8 +13,7 @@ import {
   InputLabel,
   IconButton,
   Chip,
-  Collapse,
-  Tooltip
+  Collapse
 } from "@mui/material";
 import { alpha } from "@mui/material/styles";
 import AddIcon from "@mui/icons-material/Add";
@@ -23,8 +22,10 @@ import EggIcon from "@mui/icons-material/EggAlt";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import ExpandLessIcon from "@mui/icons-material/ExpandLess";
 import { slashFocusProps, useToast } from "@geeksuite/ui";
-import { GET_LAST_EGG_PRODUCTION } from "../graphql/queries";
+import { GET_EGG_PRODUCTIONS, GET_LAST_EGG_PRODUCTION } from "../graphql/queries";
 import { RECORD_EGG_PRODUCTION } from "../graphql/mutations";
+import { rollingWindow } from "../hooks/useHomeData";
+import { readLastPen, rememberPen, usualCounts } from "../utils/harvestDefaults";
 
 /**
  * QuickHarvestEntry — the app's real "do" action.
@@ -38,6 +39,14 @@ import { RECORD_EGG_PRODUCTION } from "../graphql/mutations";
  * `variant="sheet"` drops the framing Paper so `QuickHarvestSheet` can mount
  * the same component — same query, same mutation, same state — inside a
  * `GeekSheet` in the thumb zone.
+ *
+ * Three taps for the common morning (UX review 2026-11-18, FlockGeek 1 and 3):
+ * the last pen logged on this device is preselected, the quick counts are
+ * built around the usual count at that pen (`utils/harvestDefaults.js`) and
+ * sit directly under the count, and `÷ days` — needed rarely, and prefilled
+ * from the last harvest — is one quiet "Covers 1 day · Change" line instead of
+ * a third of the sheet. The counts used to sit under the days caption and
+ * read as a days picker.
  */
 const QuickHarvestEntry = ({ onSuccess, locations = [], variant = "panel" }) => {
   const inSheet = variant === "sheet";
@@ -45,7 +54,15 @@ const QuickHarvestEntry = ({ onSuccess, locations = [], variant = "panel" }) => 
   const [locationId, setLocationId] = useState("");
   const [notes, setNotes] = useState("");
   const [showDetails, setShowDetails] = useState(false);
+  const [showDays, setShowDays] = useState(false);
   const { notify } = useToast();
+
+  // Recent harvests for the quick counts. Same 14-day window and variables as
+  // Home's tallies, so on Home this is answered from the cache.
+  const { todayStr, rollingStartStr } = rollingWindow();
+  const { data: recentData } = useQuery(GET_EGG_PRODUCTIONS, {
+    variables: { startDate: rollingStartStr, endDate: todayStr },
+  });
 
   // The last harvest at the selected location. This used to fetch EVERY egg
   // record ever logged and sort them here, each time the sheet opened
@@ -80,7 +97,9 @@ const QuickHarvestEntry = ({ onSuccess, locations = [], variant = "panel" }) => 
       setEggCount(0);
       setNotes("");
       setShowDetails(false);
+      setShowDays(false);
       setDaysOverride(null);
+      rememberPen(locationId);
       if (onSuccess) onSuccess();
     },
     onError: (err) => notify(err.message || "Failed to log harvest", { tone: 'error' }),
@@ -104,12 +123,23 @@ const QuickHarvestEntry = ({ onSuccess, locations = [], variant = "panel" }) => 
     recordEggProduction({ variables: payload });
   };
 
-  // Auto-select single location
+  // Default the pen once, when the locations arrive: the pen last logged to
+  // on this device if it still exists, else the only pen there is. Once only,
+  // so choosing "No specific location" is not undone on the next render.
+  const defaultedRef = React.useRef(false);
   React.useEffect(() => {
-    if (locations.length === 1 && !locationId) setLocationId(locations[0].id);
+    if (defaultedRef.current || locations.length === 0) return;
+    defaultedRef.current = true;
+    if (locationId) return;
+    const remembered = readLastPen();
+    if (remembered && locations.some((l) => l.id === remembered)) setLocationId(remembered);
+    else if (locations.length === 1) setLocationId(locations[0].id);
   }, [locations, locationId]);
 
-  const quickAddButtons = [1, 2, 3, 4, 5, 6];
+  const { counts: quickCounts, usual } = useMemo(
+    () => usualCounts(recentData?.eggProductions || [], locationId),
+    [recentData, locationId]
+  );
 
   const body = (
     <>
@@ -197,31 +227,14 @@ const QuickHarvestEntry = ({ onSuccess, locations = [], variant = "panel" }) => 
           <AddIcon fontSize="large" />
         </IconButton>
 
-        <Tooltip title="Days since last harvest — eggs will be averaged over this period">
-          <TextField
-            type="number"
-            value={days}
-            onChange={(e) => setDaysOverride(Math.max(1, parseInt(e.target.value) || 1))}
-            InputProps={{
-              startAdornment: <Box component="span" sx={{ color: "text.secondary", mr: 0.5, userSelect: "none" }}>÷</Box>,
-              endAdornment: <Box component="span" sx={{ color: "text.secondary", ml: 0.5, fontSize: "0.75rem", userSelect: "none" }}>days</Box>,
-            }}
-            inputProps={{ min: 1, 'aria-label': 'Days observed', style: { textAlign: "center", width: "44px" } }}
-            // The border used to appear on hover only, which on a touch screen
-            // meant never. It is always drawn now.
-            sx={{ width: 116, "& .MuiOutlinedInput-root": { minHeight: 44 } }}
-          />
-        </Tooltip>
       </Box>
 
-      {/* The ÷ days rule, on the page rather than under a pointer. */}
-      <Typography variant="caption" sx={{ display: "block", color: "text.muted", mb: 2, fontSize: "0.75rem" }}>
-        ÷ days is how many days this harvest covers — the count is averaged over that
-        many days{lastHarvest ? " (prefilled from the last harvest at this location)" : ""}.
+      {/* One-tap counts, directly under the count they set. */}
+      <Typography id="quick-harvest-counts-label" variant="caption" sx={{ display: "block", color: "text.secondary", mb: 1, fontSize: "0.75rem" }}>
+        {usual ? `Usual count${locationId ? " at this pen" : ""}: ${usual}` : "Quick counts"}
       </Typography>
-
-      <Box sx={{ display: "flex", gap: 1, mb: 2, flexWrap: "wrap" }}>
-        {[...quickAddButtons, 12].map((n) => (
+      <Box role="group" aria-labelledby="quick-harvest-counts-label" sx={{ display: "flex", gap: 1, mb: 2, flexWrap: "wrap" }}>
+        {quickCounts.map((n) => (
           <Button key={n} variant="outlined" onClick={() => setEggCount(n)}
             aria-pressed={eggCount === n}
             sx={{
@@ -233,6 +246,42 @@ const QuickHarvestEntry = ({ onSuccess, locations = [], variant = "panel" }) => 
           </Button>
         ))}
       </Box>
+
+      {/* ÷ days: one quiet line; the field and its rule open on demand. */}
+      <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: showDays ? 1 : 2 }}>
+        <Typography variant="body2" color="text.secondary">
+          Covers {days} day{days !== 1 ? "s" : ""}
+        </Typography>
+        <Button
+          onClick={() => setShowDays((v) => !v)}
+          aria-expanded={showDays}
+          aria-controls="quick-harvest-days"
+          aria-label="Change days covered"
+          sx={{ minHeight: 44, color: "text.secondary", textDecoration: "underline" }}
+        >
+          Change
+        </Button>
+      </Box>
+      <Collapse in={showDays} id="quick-harvest-days" unmountOnExit>
+        <Box sx={{ mb: 2 }}>
+          <TextField
+            type="number"
+            value={days}
+            onChange={(e) => setDaysOverride(Math.max(1, parseInt(e.target.value) || 1))}
+            InputProps={{
+              startAdornment: <Box component="span" sx={{ color: "text.secondary", mr: 0.5, userSelect: "none" }}>÷</Box>,
+              endAdornment: <Box component="span" sx={{ color: "text.secondary", ml: 0.5, fontSize: "0.75rem", userSelect: "none" }}>days</Box>,
+            }}
+            inputProps={{ min: 1, 'aria-label': 'Days observed', style: { textAlign: "center", width: "44px" } }}
+            sx={{ width: 116, mb: 1, "& .MuiOutlinedInput-root": { minHeight: 44 } }}
+          />
+          {/* The ÷ days rule, on the page rather than under a pointer. */}
+          <Typography variant="caption" sx={{ display: "block", color: "text.muted", fontSize: "0.75rem" }}>
+            ÷ days is how many days this harvest covers — the count is averaged over that
+            many days{lastHarvest ? " (prefilled from the last harvest at this location)" : ""}.
+          </Typography>
+        </Box>
+      </Collapse>
 
       <Button onClick={() => setShowDetails(!showDetails)} endIcon={showDetails ? <ExpandLessIcon /> : <ExpandMoreIcon />} sx={{ mb: 1, color: "text.secondary" }}>
         {showDetails ? "Hide" : "Add"} Notes

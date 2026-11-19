@@ -10,6 +10,7 @@ import DeleteIcon from "@mui/icons-material/Delete";
 import EditIcon from "@mui/icons-material/Edit";
 import QuickHarvestEntry from "../components/QuickHarvestEntry";
 import QuickHarvestSheet from "../components/QuickHarvestSheet";
+import { HARVEST_FAB_CLEARANCE } from "../utils/harvestDefaults";
 import ResponsiveTable from "../components/primitives/ResponsiveTable";
 import LedgerDialog from "../components/primitives/LedgerDialog";
 import { useToast } from "@geeksuite/ui";
@@ -181,7 +182,7 @@ const EggLogPage = () => {
   );
 
   return (
-    <Container maxWidth="lg" disableGutters sx={{ py: { xs: 0, md: 4 }, px: { xs: 0, md: 2 } }}>
+    <Container maxWidth="lg" disableGutters sx={{ pt: { xs: 0, md: 4 }, pb: { ...HARVEST_FAB_CLEARANCE, md: 4 }, px: { xs: 0, md: 2 } }}>
       {/* The harvest panel keeps its place at `md`+. Below that it would sit
           mid-page behind a scroll, so the same component is mounted in the
           thumb-zone sheet instead (MOBILE_UI_PLAN.md §4). */}

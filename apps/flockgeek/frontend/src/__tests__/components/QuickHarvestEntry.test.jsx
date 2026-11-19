@@ -55,8 +55,12 @@ describe('QuickHarvestEntry', () => {
     // concurrent load this box sometimes carries; give this one room.
   }, 10000);
 
-  it('shows the ÷ days helper text', () => {
+  // ÷ days folded into a "Covers 1 day · Change" line (UX review 2026-11-18,
+  // FlockGeek 3): the rule is shown with the field, one tap away.
+  it('shows the ÷ days helper text', async () => {
+    const user = userEvent.setup();
     renderWithProviders(<QuickHarvestEntry locations={[]} />);
+    await user.click(screen.getByRole('button', { name: 'Change days covered' }));
     expect(
       screen.getByText(/÷ days is how many days this harvest covers/i)
     ).toBeInTheDocument();
@@ -67,8 +71,10 @@ describe('QuickHarvestEntry', () => {
   // the days field used to pass it as a bare `aria-label` prop on `TextField`,
   // which MUI drops onto the outer root div rather than the actual `<input>`,
   // leaving the input itself unnamed to a screen reader (axe: `label`).
-  it('names the egg-count and days-observed inputs for assistive tech', () => {
+  it('names the egg-count and days-observed inputs for assistive tech', async () => {
+    const user = userEvent.setup();
     renderWithProviders(<QuickHarvestEntry locations={[]} />);
+    await user.click(screen.getByRole('button', { name: 'Change days covered' }));
     expect(screen.getByRole('spinbutton', { name: 'Eggs collected' })).toBeInTheDocument();
     expect(screen.getByRole('spinbutton', { name: 'Days observed' })).toBeInTheDocument();
   });
