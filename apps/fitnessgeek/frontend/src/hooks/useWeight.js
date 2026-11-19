@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { utcDateString } from '@geeksuite/utils';
+import { utcDateString, localDateString } from '@geeksuite/utils';
 import { currentAverage } from '../components/Weight/weightTrend.js';
 import { weightService } from '../services/weightService';
 // Legacy goals removed
@@ -89,15 +89,29 @@ export const useWeight = () => {
         // on 2026-09-23 a goal from April (start 307.5, the last weigh-in
         // before a nine-month gap) outranked the plan Chef had just made
         // (start 318.6), and the tracker measured him from a stale number.
+        //
+        // Compared by DAY, and a tie goes to nutrition_goal (2026-11-18). The
+        // quick target saves its goal weight there with today's date only
+        // ("2026-11-18" = UTC midnight), so by milliseconds a weight_goal
+        // stamped later the same day ("…T15:00Z") or dated in the future beat
+        // the goal she had just set. nutrition_goal is the store the app
+        // writes; nothing writes weight_goal any more. A start in the future
+        // counts as today: a goal can't have started later than now.
         const usable = (g) => g && (g.enabled || (g.startWeight != null && g.targetWeight != null));
-        const startMs = (g) => {
-          const t = g?.startDate ? new Date(g.startDate).getTime() : NaN;
-          return Number.isFinite(t) ? t : -Infinity;
+        const today = localDateString(new Date());
+        const startDay = (g) => {
+          const raw = g?.startDate;
+          if (!raw) return '';
+          const day = /^\d{4}-\d{2}-\d{2}$/.test(String(raw)) ? String(raw) : (() => {
+            const d = new Date(raw);
+            return Number.isFinite(d.getTime()) ? localDateString(d) : '';
+          })();
+          return day > today ? today : day;
         };
         let mapped = null;
         const wgUsable = usable(wgMapped);
         const ngUsable = usable(ngMapped);
-        if (wgUsable && ngUsable) mapped = startMs(ngMapped) > startMs(wgMapped) ? ngMapped : wgMapped;
+        if (wgUsable && ngUsable) mapped = startDay(ngMapped) >= startDay(wgMapped) ? ngMapped : wgMapped;
         else if (wgUsable) mapped = wgMapped;
         else if (ngUsable) mapped = ngMapped;
 

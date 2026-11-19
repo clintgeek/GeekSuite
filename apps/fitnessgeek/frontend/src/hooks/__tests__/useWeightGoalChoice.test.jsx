@@ -45,6 +45,27 @@ describe('useWeight goal choice', () => {
     expect((await goalFor()).startWeight).toBe(315);
   });
 
+  it('B1: a goal set in the quick target today beats a weight goal stamped later the same day', async () => {
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    const laterToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 30).toISOString();
+    settings = {
+      weight_goal: { ...APRIL_WEIGHT_GOAL, startDate: laterToday, targetWeight: 200 },
+      nutrition_goal: { ...SEPT_PLAN, start_date: today, target_weight: 165 },
+    };
+    expect((await goalFor()).targetWeight).toBe(165);
+  });
+
+  it('B1: a weight goal dated in the future does not hide the goal set today', async () => {
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    settings = {
+      weight_goal: { ...APRIL_WEIGHT_GOAL, startDate: `${now.getFullYear() + 1}-01-15`, targetWeight: 200 },
+      nutrition_goal: { ...SEPT_PLAN, start_date: today, target_weight: 165 },
+    };
+    expect((await goalFor()).targetWeight).toBe(165);
+  });
+
   it('either store alone is used as before', async () => {
     settings = { weight_goal: APRIL_WEIGHT_GOAL };
     expect((await goalFor()).startWeight).toBe(307.5);
