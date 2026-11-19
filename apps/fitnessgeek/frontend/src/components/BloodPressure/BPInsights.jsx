@@ -22,7 +22,10 @@ import { bpStageWords } from '../../utils/plainWords.js';
  */
 
 // The category itself — name, thresholds — comes from the one shared categoriser.
-const getBPCategory = (systolic, diastolic) => ({ name: categorizeBP(systolic, diastolic).stage });
+const getBPCategory = (systolic, diastolic) => {
+  const c = categorizeBP(systolic, diastolic);
+  return { name: c.stage, tone: c.tone };
+};
 
 const BPInsights = ({ bpLogs = [] }) => {
   const theme = useTheme();
@@ -155,6 +158,21 @@ const BPInsights = ({ bpLogs = [] }) => {
   const headline = insights.weekCategory
     ? `Your average this week: ${insights.avg7Systolic}/${insights.avg7Diastolic} — ${bpStageWords(insights.weekCategory.name).phrase}`
     : `Your last reading: ${last.systolic}/${last.diastolic} — ${bpStageWords(insights.currentCategory.name).phrase}`;
+  // The heart takes the headline's tone (UX review 2026-11, A5): basil is
+  // this app's "done / normal", and it sat beside "a little high". Basil
+  // only when the headline is normal; amber or red tint above it.
+  const headCategory = insights.weekCategory || insights.currentCategory;
+  const headTone = headCategory?.name === 'Normal'
+    ? 'normal'
+    : headCategory?.tone === 'error' ? 'high' : headCategory?.tone === 'muted' ? 'unknown' : 'raised';
+  const heartBg = headTone === 'normal'
+    ? theme.palette.primary.main
+    : headTone === 'high'
+      ? alpha(theme.palette.error.main, isDark ? 0.28 : 0.16)
+      : headTone === 'raised'
+        ? alpha(theme.palette.warning.main, isDark ? 0.28 : 0.2)
+        : alpha(theme.palette.text.primary, 0.08);
+  const heartInk = headTone === 'normal' ? theme.palette.primary.contrastText : theme.palette.text.primary;
   const tile = {
     p: 2,
     // Nested tiles take the smaller radius inside the card's 24 (review B6);
@@ -169,16 +187,17 @@ const BPInsights = ({ bpLogs = [] }) => {
       <CardContent sx={{ p: 3 }}>
         {/* Header */}
         <Box sx={{ display: 'flex', alignItems: 'center', gap: 2, mb: 3 }}>
-          <Box sx={{
+          <Box data-testid="bp-heart" data-tone={headTone} sx={{
             width: 56,
             height: 56,
+            flexShrink: 0,
             borderRadius: '16px',
-            backgroundColor: theme.palette.primary.main,
+            backgroundColor: heartBg,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center'
           }}>
-            <HeartIcon sx={{ fontSize: 28, color: theme.palette.primary.contrastText }} />
+            <HeartIcon sx={{ fontSize: 28, color: heartInk }} />
           </Box>
           <Box sx={{ flex: 1, minWidth: 0 }}>
             <Typography component="h2" data-testid="bp-headline" sx={{ fontWeight: 800, fontSize: { xs: '1.1875rem', sm: '1.375rem' }, lineHeight: 1.3, color: theme.palette.text.primary, mb: 0.5 }}>
@@ -196,20 +215,8 @@ const BPInsights = ({ bpLogs = [] }) => {
           gridTemplateColumns: { xs: '1fr', sm: 'repeat(2, 1fr)' },
           gap: 2
         }}>
-          {/* 7-Day Average */}
-          {insights.avg7Systolic && (
-            <Box sx={tile}>
-              <Typography variant="caption" sx={{ color: theme.palette.text.secondary, fontWeight: 600, display: 'block', mb: 1 }}>
-                7-day average
-              </Typography>
-              <Typography variant="h6" sx={{ color: theme.palette.text.primary }}>
-                {insights.avg7Systolic}/{insights.avg7Diastolic}
-              </Typography>
-              <Typography variant="caption" sx={{ color: theme.palette.text.secondary }}>
-                {insights.last7DaysCount} {insights.last7DaysCount === 1 ? 'reading' : 'readings'}
-              </Typography>
-            </Box>
-          )}
+          {/* No 7-day tile (UX review 2026-11, A5): the headline is the
+              week's average, and the tile said it again right under it. */}
 
           {/* 30-Day Average */}
           {insights.avg30Systolic && (

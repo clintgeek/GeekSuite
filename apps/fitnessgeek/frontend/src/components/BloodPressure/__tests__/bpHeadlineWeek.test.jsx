@@ -47,6 +47,19 @@ describe('BPInsights headline', () => {
     expect(document.body.textContent).not.toMatch(/7%/);
   });
 
+  it('A5: the heart is not basil when the week is a little high, and the 7-day figure is said once', () => {
+    render(<BPInsights bpLogs={LOGS} />);
+    expect(screen.getByTestId('bp-heart')).toHaveAttribute('data-tone', 'raised');
+    // (The 30-day tile stays; in this fixture it happens to be 128/79 too.)
+    expect(screen.queryByText('7-day average')).toBeNull();
+  });
+
+  it('A5: a normal week keeps the basil heart', () => {
+    const normal = LOGS.map((l) => ({ ...l, systolic: 112, diastolic: 72 }));
+    render(<BPInsights bpLogs={normal} />);
+    expect(screen.getByTestId('bp-heart')).toHaveAttribute('data-tone', 'normal');
+  });
+
   it('readingWhen: yesterday, and a date-only reading shows no made-up time', () => {
     expect(readingWhen({ measured_at: '2026-10-16T23:30:00.000Z' }, '2026-10-17')).toMatch(/^yesterday 6:30\sPM$/);
     expect(readingWhen({ log_date: '2026-10-13T00:00:00.000Z', measured_at: '2026-10-13T00:00:00.000Z' }, '2026-10-17')).toBe('Oct 13');
