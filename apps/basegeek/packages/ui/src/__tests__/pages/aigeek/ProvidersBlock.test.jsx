@@ -2,7 +2,9 @@
  * ProvidersBlock.test.jsx — what the Configuration tab became.
  *
  * The tab had four controls per provider (Enable, key, Test, and a shared
- * Save-all) to express one fact. This has one: the key, saved on blur. So the
+ * Save-all) to express one fact. This has one: the key, saved by the row's own
+ * Save key button (blur-saving was retired 2026-11-18: "click away" means
+ * nothing on a phone, and it made a Cancel impossible). So the
  * cases below are as much about what is *absent* — no Enabled switch, no Test
  * button, no Save — as about what works, because those three are exactly what
  * §3 deleted and what a well-meant future patch would re-add.
@@ -44,7 +46,7 @@ function baseProps(overrides = {}) {
     status: null,
     onRetry: vi.fn(),
     onFieldChange: vi.fn(),
-    onBlurSave: vi.fn(),
+    onSaveKey: vi.fn().mockResolvedValue(true),
     onRemoveKey: vi.fn(),
     ...overrides,
   };
@@ -102,30 +104,87 @@ describe('ProvidersBlock', () => {
     expect(screen.getByText('…cd34')).toBeInTheDocument();
   });
 
-  it('typing reports the field change; blurring is what saves', async () => {
+  it('typing reports the field change; Save key saves, and losing focus does not', async () => {
     const onFieldChange = vi.fn();
-    const onBlurSave = vi.fn();
-    renderWithProviders(<ProvidersBlock {...baseProps({ onFieldChange, onBlurSave })} />);
+    const onSaveKey = vi.fn().mockResolvedValue(true);
+    renderWithProviders(<ProvidersBlock {...baseProps({ onFieldChange, onSaveKey })} />);
     await openRow(/replace key/i, 0); // groq
 
     const field = screen.getByLabelText('API key');
+    // Nothing pasted, nothing to save.
+    expect(screen.getByRole('button', { name: 'Save key' })).toBeDisabled();
     fireEvent.change(field, { target: { value: 'gsk_new' } });
     expect(onFieldChange).toHaveBeenCalledWith('groq', 'apiKey', 'gsk_new');
-    expect(onBlurSave).not.toHaveBeenCalled();
 
     fireEvent.blur(field);
-    expect(onBlurSave).toHaveBeenCalledWith('groq');
+    expect(onSaveKey).not.toHaveBeenCalled();
+  });
+
+  it('Save key commits the pasted key, closes the row and says Saved with the hint', async () => {
+    const onSaveKey = vi.fn().mockResolvedValue(true);
+    const config = { ...CONFIG, groq: { ...CONFIG.groq, apiKey: 'gsk_new', touched: true } };
+    renderWithProviders(<ProvidersBlock {...baseProps({ config, onSaveKey })} />);
+    await openRow(/replace key/i, 0); // groq
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Save key' }));
+    expect(onSaveKey).toHaveBeenCalledWith('groq');
+    await waitFor(() => expect(screen.queryByLabelText('API key')).toBeNull());
+    expect(screen.getByText('Saved · …ab12')).toBeInTheDocument();
+  });
+
+  it('the phone keyboard\'s Go (form submit) saves too', async () => {
+    const onSaveKey = vi.fn().mockResolvedValue(true);
+    const config = { ...CONFIG, groq: { ...CONFIG.groq, apiKey: 'gsk_new', touched: true } };
+    renderWithProviders(<ProvidersBlock {...baseProps({ config, onSaveKey })} />);
+    await openRow(/replace key/i, 0);
+    fireEvent.submit(screen.getByLabelText('API key').closest('form'));
+    expect(onSaveKey).toHaveBeenCalledWith('groq');
+  });
+
+  it('a failed save keeps the row open and does not claim Saved', async () => {
+    const onSaveKey = vi.fn().mockResolvedValue(false);
+    const config = { ...CONFIG, groq: { ...CONFIG.groq, apiKey: 'gsk_new', touched: true } };
+    renderWithProviders(<ProvidersBlock {...baseProps({ config, onSaveKey })} />);
+    await openRow(/replace key/i, 0);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Save key' }));
+    expect(onSaveKey).toHaveBeenCalled();
+    expect(screen.getByLabelText('API key')).toBeInTheDocument();
+    expect(screen.queryByText(/^Saved/)).toBeNull();
+  });
+
+  it('Cancel throws the draft away and saves nothing', async () => {
+    const onFieldChange = vi.fn();
+    const onSaveKey = vi.fn();
+    const config = { ...CONFIG, groq: { ...CONFIG.groq, apiKey: 'gsk_new', touched: true } };
+    renderWithProviders(<ProvidersBlock {...baseProps({ config, onFieldChange, onSaveKey })} />);
+    await openRow(/replace key/i, 0);
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(onFieldChange).toHaveBeenCalledWith('groq', 'apiKey', '');
+    expect(onSaveKey).not.toHaveBeenCalled();
+    await waitFor(() => expect(screen.queryByLabelText('API key')).toBeNull());
+  });
+
+  it('says what to do in words that work on a phone: no "click away"', async () => {
+    renderWithProviders(<ProvidersBlock {...baseProps()} />);
+    await openRow(/add key/i);
+    expect(screen.queryByText(/click away/i)).toBeNull();
+    expect(screen.getByText(/Paste the key, then Save key/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^done$/i })).toBeNull();
   });
 
   it('gives Cloudflare an Account ID field, and nobody else one', async () => {
-    const onBlurSave = vi.fn();
-    renderWithProviders(<ProvidersBlock {...baseProps({ onBlurSave })} />);
+    const onSaveKey = vi.fn().mockResolvedValue(true);
+    const config = { ...CONFIG, cloudflare: { ...CONFIG.cloudflare, accountId: 'acct', touched: true } };
+    renderWithProviders(<ProvidersBlock {...baseProps({ config, onSaveKey })} />);
     await openRow(/add key/i); // cloudflare is the only keyless row
     expect(screen.getAllByLabelText('Account ID')).toHaveLength(1);
-    // Same blur contract as the key: the row saves as a unit, so the account
-    // id and the token cannot be half-written.
-    fireEvent.blur(screen.getByLabelText('Account ID'));
-    expect(onBlurSave).toHaveBeenCalledWith('cloudflare');
+    // The row saves as a unit, so the account id and the token cannot be
+    // half-written; an account id alone is a valid save.
+    const user = userEvent.setup();
+    await user.click(screen.getByRole('button', { name: 'Save key' }));
+    expect(onSaveKey).toHaveBeenCalledWith('cloudflare');
   });
 
   it('opens the row whose key was refused, because that is the one you came to fix', () => {
@@ -139,7 +198,7 @@ describe('ProvidersBlock', () => {
     // "open when failed" would spring back open every time it was dismissed.
     renderWithProviders(<ProvidersBlock {...baseProps({ status: STATUS })} />);
     const user = userEvent.setup();
-    await user.click(screen.getByRole('button', { name: /^done$/i }));
+    await user.click(screen.getByRole('button', { name: 'Cancel' }));
     // Collapse unmounts on exit, but only once the transition has run.
     await waitFor(() => expect(screen.queryByLabelText('API key')).toBeNull());
   });

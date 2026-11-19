@@ -23,7 +23,7 @@
  *     no model answers under shows up in `attention` as `provider_dead`,
  *     which is the same question asked by the system rather than by a button.
  *   - `saveConfiguration` (all providers at once) — replaced by
- *     `saveProviderKey`, one row, on blur. A Save-all across nine providers
+ *     `saveProviderKey`, one row, on its Save key button. A Save-all across nine providers
  *     was one button that could fail for a reason belonging to one of them.
  *
  * New: `GET /api/ai/status` (the one round trip behind Needs attention and
@@ -579,7 +579,7 @@ export function useAIGeek(notify) {
   }, []);
 
   /**
-   * Save one provider's key (and Cloudflare's account id), on blur.
+   * Save one provider's key (and Cloudflare's account id), when its row says Save key.
    *
    * The whole provider onboarding, and the whole offboarding: a key present
    * means enabled, an emptied box means disabled. There is no Enabled switch
@@ -596,16 +596,17 @@ export function useAIGeek(notify) {
    * outlives it until the API grows a way to clear one.
    */
   const saveProviderKey = useCallback(async (provider) => {
+    // Returns true once the server has the key, so the row can say "Saved".
     const entry = state.config[provider];
-    if (!entry?.touched) return;
+    if (!entry?.touched) return false;
 
     const draft = (entry.apiKey || '').trim();
     // A blank draft saves nothing. It used to send `enabled: false`, which
     // switched the provider off while the server kept the key and the chip
     // kept counting catalog rows — "I cleared it and nothing happened" (Chef,
     // 2026-09-08). Stopping a provider is `removeProviderKey`, one button.
-    if (!draft && provider !== 'cloudflare') return;
-    if (!draft && provider === 'cloudflare' && !entry.accountId) return;
+    if (!draft && provider !== 'cloudflare') return false;
+    if (!draft && provider === 'cloudflare' && !entry.accountId) return false;
     dispatch({ type: 'config/saving', provider });
     try {
       const payload = { [provider]: { enabled: true } };
@@ -619,8 +620,10 @@ export function useAIGeek(notify) {
       // should light it up without waiting out the poll (§5, "a key paste
       // shows a chip within one status poll").
       await loadStatus({ silent: true });
+      return true;
     } catch (err) {
       notify(err.message || `Failed to save ${provider}`, { tone: 'error' });
+      return false;
     } finally {
       dispatch({ type: 'config/saving', provider: null });
     }

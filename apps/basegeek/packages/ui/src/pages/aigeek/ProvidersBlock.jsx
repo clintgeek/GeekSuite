@@ -7,7 +7,7 @@
  * was pasted but not saved, a provider enabled with no key, a Test that passed
  * against a credential the rotation was not using: all reachable states.
  *
- * Now: a key field per row, saved on blur, and a chip. The chip is the test —
+ * Now: a key field per row, saved by its Save key button, and a chip. The chip is the test —
  * it is `status.catalog.byProvider`, which counts the rows the catalog job's
  * probe found answering *under our account*, which is the only thing "does
  * this key work" can honestly mean (Principle 1). A provider with a key is
@@ -39,6 +39,14 @@
  *
  * Once open a row stays open until you close it. Collapsing on blur would be
  * tidier and would sometimes eat a key you were still looking at.
+ *
+ * Saving is an explicit "Save key" (or Enter / the phone's Go key), not blur
+ * (2026-11-18 review). "Paste and click away" meant nothing on a phone, and a
+ * pasted secret committed by losing focus — next to a button that said "Done",
+ * which could mean save or cancel — was the riskiest field in the console.
+ * Now the open row has Save key and Cancel, and a saved row says "Saved" with
+ * the new key's last characters. No value is ever shown or logged: the field
+ * is masked and only the server's hint comes back.
  */
 import { useEffect, useMemo, useRef, useState } from 'react';
 import {
@@ -143,11 +151,20 @@ function ProviderRow({
   statusKnown,
   saving,
   open,
+  justSaved,
   onToggle,
+  onCancel,
   onFieldChange,
-  onBlurSave,
+  onSave,
   onRemoveKey,
 }) {
+  const draft = (entry.apiKey || '').trim();
+  const canSave = !saving && (Boolean(draft)
+    || (provider === 'cloudflare' && entry.touched && Boolean(entry.accountId)));
+  const submit = (e) => {
+    e.preventDefault();
+    if (canSave) onSave(provider);
+  };
   return (
     <Box
       // The anchor the `provider_dead` / `provider_listing_failed` attention
@@ -185,7 +202,7 @@ function ProviderRow({
             color="text.muted"
             sx={{ fontFamily: 'monospace', fontSize: 12 }}
           >
-            {entry.keyHint}
+            {justSaved ? `Saved · ${entry.keyHint}` : entry.keyHint}
           </Typography>
         )}
         {saving && <CircularProgress size={14} />}
@@ -197,14 +214,16 @@ function ProviderRow({
         )}
 
         <Stack direction="row" spacing={1} sx={{ ml: 'auto' }}>
-          <Button
-            size="small"
-            variant={entry.hasKey ? 'text' : 'outlined'}
-            onClick={() => onToggle(provider)}
-            sx={{ minHeight: 44, fontSize: 12 }}
-          >
-            {open ? 'Done' : entry.hasKey ? 'Replace key' : 'Add key'}
-          </Button>
+          {!open && (
+            <Button
+              size="small"
+              variant={entry.hasKey ? 'text' : 'outlined'}
+              onClick={() => onToggle(provider)}
+              sx={{ minHeight: 44, fontSize: 12 }}
+            >
+              {entry.hasKey ? 'Replace key' : 'Add key'}
+            </Button>
+          )}
           {entry.hasKey && (
             <Button
               size="small"
@@ -222,6 +241,9 @@ function ProviderRow({
 
       <Collapse in={open} unmountOnExit>
         <Box
+          component="form"
+          onSubmit={submit}
+          aria-label={`${label || provider} key`}
           sx={{
             display: 'grid',
             gridTemplateColumns: { xs: '1fr', md: provider === 'cloudflare' ? '2fr 1fr' : '1fr' },
@@ -240,11 +262,10 @@ function ProviderRow({
             autoComplete="new-password"
             value={entry.apiKey || ''}
             onChange={(e) => onFieldChange(provider, 'apiKey', e.target.value)}
-            onBlur={() => onBlurSave(provider)}
             placeholder={entry.hasKey ? entry.keyHint : 'Paste a key'}
             helperText={entry.hasKey
-              ? `Replaces the stored key (${entry.keyHint || '…'}). Paste and click away.`
-              : 'Paste a key and click away; that is the whole setup'}
+              ? `Paste the new key, then Save key. It replaces the stored one (${entry.keyHint || '…'}).`
+              : 'Paste the key, then Save key. That is the whole setup.'}
             sx={{ '& .MuiInputBase-root': { minHeight: 44 } }}
           />
 
@@ -254,7 +275,6 @@ function ProviderRow({
               label="Account ID"
               value={entry.accountId || ''}
               onChange={(e) => onFieldChange(provider, 'accountId', e.target.value)}
-              onBlur={() => onBlurSave(provider)}
               // Deliberately not masked, and deliberately said out loud: this
               // is the identifier out of the Cloudflare dashboard URL, not a
               // credential, and it is useless without the token. It used to sit
@@ -264,6 +284,25 @@ function ProviderRow({
               sx={{ '& .MuiInputBase-root': { minHeight: 44 } }}
             />
           )}
+          <Stack direction="row" spacing={1} sx={{ gridColumn: '1 / -1' }}>
+            <Button
+              type="submit"
+              size="small"
+              variant="contained"
+              disabled={!canSave}
+              sx={{ minHeight: 44, fontSize: 12 }}
+            >
+              {saving ? 'Saving…' : 'Save key'}
+            </Button>
+            <Button
+              size="small"
+              onClick={() => onCancel(provider)}
+              disabled={saving}
+              sx={{ minHeight: 44, fontSize: 12 }}
+            >
+              Cancel
+            </Button>
+          </Stack>
         </Box>
       </Collapse>
     </Box>
@@ -277,10 +316,12 @@ export default function ProvidersBlock({
   status,
   onRetry,
   onFieldChange,
-  onBlurSave,
+  onSaveKey,
   onRemoveKey,
 }) {
   const providers = Object.keys(config);
+  // The row whose key was just saved, to say "Saved" on its collapsed line.
+  const [justSaved, setJustSaved] = useState(null);
   // Which provider the Remove-key confirm is open for. Transient, so it lives
   // here rather than in the reducer.
   const [removing, setRemoving] = useState(null);
@@ -351,8 +392,20 @@ export default function ProvidersBlock({
           saving={savingProvider === provider}
           onFieldChange={onFieldChange}
           open={opened.has(provider)}
-          onToggle={toggle}
-          onBlurSave={onBlurSave}
+          justSaved={justSaved === provider}
+          onToggle={(p) => { setJustSaved(null); toggle(p); }}
+          onCancel={(p) => {
+            // Throw the draft away: nothing typed here is kept or sent.
+            onFieldChange(p, 'apiKey', '');
+            toggle(p);
+          }}
+          onSave={async (p) => {
+            const ok = await onSaveKey(p);
+            if (ok) {
+              setJustSaved(p);
+              setOpened(prev => { const next = new Set(prev); next.delete(p); return next; });
+            }
+          }}
           onRemoveKey={setRemoving}
         />
       ))}

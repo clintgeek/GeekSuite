@@ -110,7 +110,7 @@ function baseProviders(overrides = {}) {
     status: null,
     onRetry: vi.fn(),
     onFieldChange: vi.fn(),
-    onBlurSave: vi.fn(),
+    onSaveKey: vi.fn(),
     ...overrides,
   };
 }
