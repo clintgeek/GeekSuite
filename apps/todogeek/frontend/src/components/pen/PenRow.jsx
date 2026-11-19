@@ -64,6 +64,16 @@ export function timePassed(task, when, now) {
   const at = now instanceof Date ? now : new Date();
   return !Number.isNaN(due.getTime()) && due.getTime() < at.getTime() && localDay(due) === localDay(at);
 }
+/**
+ * Does a swipe's word fit in the strip the row has uncovered? A safe
+ * over-estimate of 15px bold Inter Tight (9px a character), plus the icon,
+ * the gap and the strip's 16px padding each side. Short of it, the icon alone.
+ */
+export const REVEAL_CHAR_PX = 9;
+export const REVEAL_CHROME_PX = 20 + 8 + 32;
+export function revealFits(label, dx) {
+  return Math.abs(dx) >= String(label || '').length * REVEAL_CHAR_PX + REVEAL_CHROME_PX;
+}
 const localDay = (d) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 
 
@@ -322,19 +332,34 @@ function PenRow({
       {reveal && (
         <Box
           aria-hidden
+          data-swipe-reveal={reveal}
           sx={{
-            position: 'absolute', inset: 0, display: 'flex', alignItems: 'center',
-            justifyContent: reveal === 'left' ? 'flex-start' : 'flex-end',
-            gap: 2, px: 5, fontWeight: 700, fontSize: '0.9375rem',
+            position: 'absolute', inset: 0,
             // Done is neutral ink (D7); a move is the red pen.
             backgroundColor: reveal === 'left' ? p.grey : p.ink,
             color: p.paper,
             opacity: pending ? 1 : 0.55,
           }}
         >
-          {reveal === 'right' && revealLabel}
-          <RevealIcon size={20} strokeWidth={2} />
-          {reveal === 'left' && revealLabel}
+          {/* Pinned inside the strip the row has uncovered, never behind the
+              row: the word shows whole once it fits, the icon alone until
+              then ("omorrow", UX review 2026-11-18 #8). */}
+          <Box
+            data-swipe-reveal-strip
+            sx={{
+              position: 'absolute', top: 0, bottom: 0,
+              [reveal === 'left' ? 'left' : 'right']: 0,
+              width: `${Math.abs(swipe.dx)}px`,
+              overflow: 'hidden', whiteSpace: 'nowrap',
+              display: 'flex', alignItems: 'center',
+              justifyContent: reveal === 'left' ? 'flex-start' : 'flex-end',
+              gap: 2, px: 4, fontWeight: 700, fontSize: '0.9375rem',
+            }}
+          >
+            {reveal === 'right' && revealFits(revealLabel, swipe.dx) && revealLabel}
+            <RevealIcon size={20} strokeWidth={2} style={{ flexShrink: 0 }} />
+            {reveal === 'left' && revealFits(revealLabel, swipe.dx) && revealLabel}
+          </Box>
         </Box>
       )}
 
