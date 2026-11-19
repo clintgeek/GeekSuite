@@ -6,18 +6,21 @@
  * sidebar and a real page title in the top bar. Both are derived from the same
  * list here so a route can never appear in one surface and not the other.
  *
- * StoryGeek's wrinkle: "Characters" is only reachable while you are inside a
- * tale, and its path carries that tale's id. So `navSectionsFor` takes the
- * pathname rather than being a constant, and the codex row lands in its own
- * "This Tale" section instead of floating in the main list.
+ * StoryGeek's wrinkle: "This Tale" only exists while you are inside a tale,
+ * and its rows carry that tale's id. So `navSectionsFor` takes the pathname
+ * rather than being a constant.
+ *
+ * There used to be a "Characters" row here, leading to a "being inscribed"
+ * placeholder (UX review 2026-11-18 #7). The real cast lives in the play
+ * screen's Party & Threads panel, so the row is gone and `/characters/:id`
+ * redirects to the table (App.jsx) for anyone holding an old link.
  */
 import BookIcon from '@mui/icons-material/Book';
 import AddIcon from '@mui/icons-material/Add';
-import PeopleIcon from '@mui/icons-material/People';
 import CasinoIcon from '@mui/icons-material/Casino';
 import DeleteOutlineIcon from '@mui/icons-material/DeleteOutline';
 
-/** The story id embedded in /play/:id and /characters/:id, or null. */
+/** The story id embedded in /play/:id (or an old /characters/:id link), or null. */
 export function storyIdFrom(pathname) {
   return pathname.match(/^\/(?:play|characters)\/([^/]+)/)?.[1] ?? null;
 }
@@ -47,12 +50,6 @@ export function navSectionsFor(pathname) {
         // The way back to the table from the tale's other pages — the play
         // route used to be reachable only from the list.
         { id: '/play', label: 'At the Table', to: `/play/${storyId}`, icon: <CasinoIcon /> },
-        {
-          id: '/characters',
-          label: 'Characters',
-          to: `/characters/${storyId}`,
-          icon: <PeopleIcon />,
-        },
       ],
     });
   }
@@ -70,7 +67,6 @@ export function activeNavId(pathname) {
   if (pathname.startsWith('/settings')) return 'settings';
   if (pathname.startsWith('/create')) return '/create';
   if (pathname.startsWith('/deleted')) return '/deleted';
-  if (pathname.startsWith('/characters')) return '/characters';
   if (pathname.startsWith('/play')) return '/play';
   return undefined;
 }
@@ -82,7 +78,6 @@ export function activeNavId(pathname) {
  * says "At the Table" rather than duplicating a fetch.
  */
 export function pageTitle(pathname) {
-  if (pathname.startsWith('/characters')) return 'Character Codex';
   if (pathname.startsWith('/play')) return 'At the Table';
   if (pathname.startsWith('/settings')) return 'Settings';
   if (pathname.startsWith('/create')) return 'New Adventure';

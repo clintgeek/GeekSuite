@@ -1,5 +1,5 @@
 import React from 'react';
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate, useParams } from 'react-router-dom';
 import { ThemeProvider as MuiThemeProvider } from '@mui/material/styles';
 import CssBaseline from '@mui/material/CssBaseline';
 import { Box, CircularProgress } from '@mui/material';
@@ -13,9 +13,14 @@ import LoginPage from './pages/LoginPage';
 import StoryList from './pages/StoryList';
 import StoryCreation from './pages/StoryCreation';
 import StoryPlay from './pages/StoryPlay';
-import CharacterSheet from './pages/CharacterSheet';
 import Settings from './pages/Settings';
 import RecentlyDeleted from './pages/RecentlyDeleted';
+
+/** `/characters/:id` (an old link to the retired codex placeholder) → the table. */
+function CharactersRedirect() {
+  const { storyId } = useParams();
+  return <Navigate to={`/play/${storyId}`} replace />;
+}
 
 function AppShell() {
   const { isAuthenticated, loading } = useAuth();
@@ -57,7 +62,9 @@ function AppShell() {
             <Route path="/" element={authed(<StoryList />)} />
             <Route path="/create" element={authed(<StoryCreation />)} />
             <Route path="/play/:storyId" element={authed(<StoryPlay />, { fill: true })} />
-            <Route path="/characters/:storyId" element={authed(<CharacterSheet />)} />
+            {/* The Character Codex was a placeholder; the cast lives on the
+                play screen's Party panel. Old links land at the table. */}
+            <Route path="/characters/:storyId" element={<CharactersRedirect />} />
             <Route path="/settings" element={authed(<Settings />)} />
             <Route path="/deleted" element={authed(<RecentlyDeleted />)} />
             <Route path="*" element={<Navigate to={isAuthenticated ? '/' : '/login'} replace />} />
