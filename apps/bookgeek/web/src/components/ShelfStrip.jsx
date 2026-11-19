@@ -42,7 +42,9 @@ export default function ShelfStrip({
   const measure = useCallback(() => {
     const el = stripRef.current;
     if (!el) return;
-    const left = el.scrollLeft > 1;
+    // Past the strip's own 8px padding: snapping the first tab to the start
+    // scrolls a few px, and that is not "more to the left".
+    const left = el.scrollLeft > 12;
     const right = el.scrollLeft + el.clientWidth < el.scrollWidth - 1;
     setMore((prev) => (prev.left === left && prev.right === right ? prev : { left, right }));
   }, []);

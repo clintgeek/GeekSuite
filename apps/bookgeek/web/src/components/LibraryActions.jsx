@@ -14,7 +14,17 @@ import {
   ViewList as ListIcon,
 } from "@mui/icons-material";
 
-const roundIconSx = { width: 44, height: 44, border: 1, borderColor: "border", borderRadius: "999px", color: "text.primary" };
+// An aisle sign like Filters and Sort beside it (review 2026-11-18 #5).
+const roundIconSx = {
+  width: 44,
+  height: 44,
+  borderRadius: "4px",
+  bgcolor: "sign.board",
+  color: "sign.ink",
+  border: (t) => `1px solid ${t.palette.sign.edge}`,
+  boxShadow: (t) => `inset 0 1px 0 rgba(255,255,255,0.18), inset 0 -2px 0 ${t.palette.sign.edge}, 0 1px 2px rgba(20, 12, 4, 0.25)`,
+  "&:hover": { bgcolor: "sign.edge" },
+};
 
 export default function LibraryActions({
   view,

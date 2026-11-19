@@ -78,6 +78,11 @@ describe('ShelfStrip', () => {
     expect(strip).toHaveAttribute('data-more-right', 'true');
     expect(strip).toHaveAttribute('data-more-left', 'false');
 
+    // The first tab snapped a few px into the strip's padding is not "more to the left".
+    strip.scrollLeft = 8;
+    fireEvent.scroll(strip);
+    expect(strip).toHaveAttribute('data-more-left', 'false');
+
     strip.scrollLeft = 410;
     fireEvent.scroll(strip);
     expect(strip).toHaveAttribute('data-more-right', 'false');
