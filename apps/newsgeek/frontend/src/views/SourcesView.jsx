@@ -32,7 +32,7 @@ import { resetArticleLists } from '../graphql/cachePolicies';
 import { SET_NEWS_SOURCE_ON } from '../graphql/mutations';
 import { GET_NEWS_SOURCES, GET_NEWS_SUGGESTED_SOURCES } from '../graphql/queries';
 import { useViewer } from '../hooks/useViewer';
-import { GOTHIC, flagSx } from '../theme/theme';
+import { GOTHIC, flagSx, visuallyHiddenSx } from '../theme/theme';
 import { GROUPS, groupFor, suggestionLine } from '../utils/addSource';
 import { hostOf, matchesFilter, sourceSummary } from '../utils/sources';
 import { SECTION_LABEL, SOURCE_STATUSES, STATUS_LABEL, labelFor } from '../utils/vocab';
@@ -206,12 +206,13 @@ export default function SourcesView() {
 
   return (
     <Column>
-      <Box component="header" sx={{ pt: 6, pb: 3, borderBottom: 2, borderColor: 'text.primary', display: 'flex', flexWrap: 'wrap', alignItems: 'flex-end', gap: 3 }}>
+      {/* The top bar names the page (UX review 2026-11-18, finding 7): the summary and Add are the head. */}
+      <Box component="header" sx={{ pt: 4, display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 3 }}>
         <Box sx={{ mr: 'auto' }}>
-          <Typography variant="h2" component="h1" sx={{ fontSize: { xs: '2rem', sm: '2.5rem' } }}>
+          <Typography component="h1" sx={visuallyHiddenSx}>
             Sources
           </Typography>
-          <Typography data-testid="sources-summary" sx={{ ...flagSx, color: 'text.secondary', mt: 1 }}>
+          <Typography data-testid="sources-summary" sx={{ ...flagSx, color: 'text.secondary' }}>
             {data ? sourceSummary(sources) : ' '}
           </Typography>
         </Box>

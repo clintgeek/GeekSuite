@@ -24,7 +24,7 @@ import InkSwitch from '../components/InkSwitch';
 import PublishersSettings from '../components/PublishersSettings';
 import { SET_NEWS_PREFS } from '../graphql/mutations';
 import { GET_NEWS_PREFS } from '../graphql/queries';
-import { GOTHIC, flagSx } from '../theme/theme';
+import { GOTHIC, flagSx, visuallyHiddenSx } from '../theme/theme';
 import { MAX_LABEL, MAX_READER_LINKS, READER_LINK_HELP, READER_LINK_PLACEHOLDER, cleanReaderLinks, readerLinkErrors } from '../utils/readerLinks';
 
 const same = (a, b) => JSON.stringify(cleanReaderLinks(a)) === JSON.stringify(cleanReaderLinks(b));
@@ -92,11 +92,10 @@ export default function SettingsView() {
 
   return (
     <Column>
-      <Box component="header" sx={{ pt: 6, pb: 3, borderBottom: 2, borderColor: 'text.primary' }}>
-        <Typography variant="h2" component="h1" sx={{ fontSize: { xs: '2rem', sm: '2.5rem' } }}>
-          Settings
-        </Typography>
-      </Box>
+      {/* The top bar already says "Settings" (UX review 2026-11-18, finding 7): the h1 is for screen readers. */}
+      <Typography component="h1" sx={visuallyHiddenSx}>
+        Settings
+      </Typography>
 
       <HomePlacesSettings />
 

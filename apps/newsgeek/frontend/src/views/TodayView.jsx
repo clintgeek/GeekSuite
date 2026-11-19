@@ -44,10 +44,17 @@ import { GET_NEWS_FRONT_PAGE, GET_NEWS_PREFS } from '../graphql/queries';
 import { GOTHIC, SERIF, flagSx } from '../theme/theme';
 import { openingPrefs } from '../utils/openUrl';
 import { SECTION_LABEL } from '../utils/vocab';
+import { sectionEcho } from '../components/WhyChips';
 import AddSourceSheet from './AddSourceSheet';
 
 export const END_LINE = 'That’s today’s paper.';
 export const EVERYTHING_LINK = 'Everything, newest first →';
+// Free to read on (UX review 2026-11-18, finding 9). The front page carries no
+// hidden count yet (that needs a gateway field), so Today says that it left
+// stories out, not how many.
+export const FREE_NOTE = 'Paywalled stories are left out.';
+export const FREE_EMPTY_LINE = 'Nothing on the front page is free to read right now. Turn off Free to read to see the stories that need a subscription.';
+export const EMPTY_PAPER_LINE = 'Nothing on the front page yet — the presses are warming up. Sources are polled every 15–60 minutes.';
 
 function LookForFeedSheet({ url, onClose }) {
   const { isAdmin } = useViewer();
@@ -73,14 +80,23 @@ function FrontSection({ section, first, opening, onOpenSource }) {
   const title = section.title || SECTION_LABEL[section.key] || section.key;
   const headingId = `today-${section.key}`;
   return (
-    <Box component="section" aria-labelledby={headingId} data-testid="front-section" data-section={section.key} sx={{ mt: first ? 6 : 10 }}>
+    <Box component="section" aria-labelledby={headingId} data-testid="front-section" data-section={section.key} sx={{ mt: 6 }}>
       <Box sx={{ borderTop: 3, borderColor: 'text.primary', pt: 1.5, borderBottom: 1, borderBottomColor: 'divider', pb: 1.5 }}>
         <Typography id={headingId} component="h2" sx={{ ...flagSx, fontSize: '0.875rem', letterSpacing: '0.16em', color: 'text.primary' }}>
           {title}
         </Typography>
       </Box>
       {section.items.map((a, i) => (
-        <ArticleItem key={a.id} article={a} why={a.why ?? []} lead={first && i === 0} headingLevel="h3" {...opening} onOpenSource={onOpenSource} />
+        <ArticleItem
+          key={a.id}
+          article={a}
+          why={a.why ?? []}
+          hideChips={sectionEcho(section.key, title)}
+          lead={first && i === 0}
+          headingLevel="h3"
+          {...opening}
+          onOpenSource={onOpenSource}
+        />
       ))}
       {section.moreCount > 0 ? (
         <Box sx={{ display: 'flex', justifyContent: 'flex-end', pt: 1 }}>
@@ -175,13 +191,23 @@ export default function TodayView() {
     setSheetOpen(true);
   };
 
+  const freeSwitch = <FreeToReadSwitch checked={freeToRead} onChange={toggleFreeToRead} disabled={!prefsQ.data || savingPrefs} />;
+
   return (
     <Column>
       <NewStoriesBar count={pending?.count} onShow={showNew} />
-      <Masthead edition="Today’s paper" updatedAt={front?.generatedAt} />
-      <Box sx={{ display: 'flex', justifyContent: 'flex-end', borderBottom: 1, borderColor: 'divider' }}>
-        <FreeToReadSwitch checked={freeToRead} onChange={toggleFreeToRead} disabled={!prefsQ.data || savingPrefs} />
-      </Box>
+      <Masthead
+        edition="Today’s paper"
+        updatedAt={front?.generatedAt}
+        aside={freeSwitch}
+        note={
+          freeToRead ? (
+            <Box component="span" data-testid="free-note" role="status">
+              {FREE_NOTE}
+            </Box>
+          ) : null
+        }
+      />
 
       {loadingFirst ? (
         <Box sx={{ display: 'grid', placeItems: 'center', py: 12 }}>
@@ -205,8 +231,9 @@ export default function TodayView() {
       {front && !sections.length ? (
         <Box data-testid="today-empty" sx={{ py: 12, textAlign: 'center' }}>
           <Typography sx={{ fontStyle: 'italic', color: 'text.secondary', maxWidth: 420, mx: 'auto' }}>
-            Nothing on the front page yet — the presses are warming up. Sources are polled every 15–60 minutes.
+            {freeToRead ? FREE_EMPTY_LINE : EMPTY_PAPER_LINE}
           </Typography>
+          {freeToRead ? <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>{freeSwitch}</Box> : null}
         </Box>
       ) : null}
 

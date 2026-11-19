@@ -4,10 +4,12 @@
  * `cursor` with an "Older stories" button — never infinite scroll. Today (`/`) is the ranked front
  * page; this is the archive behind it (N0's Latest, moved 2026-10-11).
  *
- * Everything: the masthead, then the section flags. The section lives in the
- * URL (`?section=local`), so back and a reload land on the same page.
- * A section page (`fixedSection`, from Today's "More <section> →"): a section
- * heading instead of the masthead and no flags. Sections are per reader and
+ * Everything: a compact dateline (the nameplate is Today's alone — UX review
+ * 2026-11-18, finding 1) with Free to read at its right end, then the section
+ * flags. The section lives in the URL (`?section=local`), so back and a
+ * reload land on the same page. A section page (`fixedSection`, from Today's
+ * "More <section> →"): the same dateline and no flags. The top bar names
+ * both pages, so their h1 is for screen readers only (finding 7). Sections are per reader and
  * per story (NewsArticle.section): the gateway files each story.
  *
  * "Free to read" (the reader's own pref, newsPrefs/newsSetPrefs): on, the
@@ -45,6 +47,7 @@ import Masthead from '../components/Masthead';
 import NewStoriesBar from '../components/NewStoriesBar';
 import SectionTabs from '../components/SectionTabs';
 import SourceSheet from '../components/SourceSheet';
+import { sectionEcho } from '../components/WhyChips';
 import { useViewer } from '../hooks/useViewer';
 import { usePaperRefresh } from '../hooks/usePaperRefresh';
 import { placeKey, readCount, writeCount } from '../hooks/scrollMemory';
@@ -85,23 +88,8 @@ function firstFetch(client, { pop, key, section, sourceId }) {
   return { variables: articleVariables(section, null, sourceId, firstPageLimit(readCount(key))), fetchPolicy: 'cache-and-network' };
 }
 
-/** A section page's heading: the section's name set big, and what the list is. */
-function SectionHeader({ section }) {
-  const label = SECTION_LABEL[section];
-  return (
-    <Box component="header" data-testid="section-header" sx={{ pt: 6, pb: 3, borderBottom: 2, borderColor: 'text.primary' }}>
-      <Typography component="p" sx={{ ...flagSx, color: 'text.secondary', mb: 1 }}>
-        Section
-      </Typography>
-      <Typography variant="h2" component="h1" sx={{ fontSize: { xs: '2.25rem', sm: '2.75rem' } }}>
-        {label}
-      </Typography>
-      <Typography sx={{ fontFamily: GOTHIC, fontSize: '0.875rem', color: 'text.secondary', mt: 2 }}>
-        {section === 'around' ? 'Other Arkansas towns’ papers on their own towns, newest first.' : `Every ${label} story in your paper, newest first.`}
-      </Typography>
-    </Box>
-  );
-}
+/** What a section page holds, when its name alone doesn't say. */
+const SECTION_NOTE = { around: 'Other Arkansas towns’ papers on their own towns, newest first.' };
 
 export default function LatestView({ fixedSection = null }) {
   const [params, setParams] = useSearchParams();
@@ -221,33 +209,46 @@ export default function LatestView({ fixedSection = null }) {
   return (
     <Column>
       <NewStoriesBar count={pending?.count} onShow={showNew} />
-      {fixedSection ? <SectionHeader section={fixedSection} /> : <Masthead edition="Everything, newest first" />}
+      <Masthead
+        compact
+        title={fixedSection ? SECTION_LABEL[fixedSection] : 'Everything'}
+        aside={<FreeToReadSwitch checked={freeToRead} onChange={toggleFreeToRead} disabled={!prefsQ.data || savingPrefs} />}
+        note={
+          hiddenLine || SECTION_NOTE[fixedSection] ? (
+            <>
+              {fixedSection && SECTION_NOTE[fixedSection] ? <Box component="span" sx={{ display: 'block' }}>{SECTION_NOTE[fixedSection]}</Box> : null}
+              {hiddenLine ? (
+                <Box component="span" data-testid="hidden-paywalled" role="status" sx={{ display: 'block' }}>
+                  {hiddenLine}
+                </Box>
+              ) : null}
+            </>
+          ) : null
+        }
+      />
       {fixedSection ? null : sourceId ? (
-        <Box data-testid="source-filter" sx={{ mt: 3, mb: 1 }}>
+        <Box data-testid="source-filter" sx={{ mt: 3 }}>
           <Box
-            sx={{ display: 'inline-flex', alignItems: 'center', maxWidth: '100%', minHeight: 48, pl: 4, border: 2, borderColor: 'text.primary', borderRadius: '24px' }}
+            sx={{ display: 'inline-flex', alignItems: 'center', maxWidth: '100%', minHeight: 44, pl: 3, border: 1, borderColor: 'text.primary', borderRadius: '2px' }}
           >
-            <Typography component="span" sx={{ fontFamily: GOTHIC, fontSize: '0.875rem', fontWeight: 700, color: 'text.primary', minWidth: 0, overflowWrap: 'anywhere' }}>
-              {`Showing: ${filterName}`}
+            <Typography component="span" sx={{ fontFamily: GOTHIC, fontSize: '0.8125rem', fontWeight: 600, letterSpacing: '0.01em', color: 'text.primary', minWidth: 0, overflowWrap: 'anywhere' }}>
+              <Box component="span" sx={{ ...flagSx, fontSize: '0.75rem', color: 'text.secondary' }}>
+                Showing:
+              </Box>{' '}
+              {filterName}
             </Typography>
-            <IconButton aria-label={`Show every source, not just ${filterName}`} onClick={clearSource} sx={{ width: 44, height: 44, flexShrink: 0, color: 'text.primary' }}>
-              <CloseIcon sx={{ fontSize: 20 }} />
+            <IconButton
+              aria-label={`Show every source, not just ${filterName}`}
+              onClick={clearSource}
+              sx={{ width: 44, height: 44, flexShrink: 0, color: 'text.primary', borderRadius: '2px', ml: 1, borderLeft: 1, borderColor: 'divider' }}
+            >
+              <CloseIcon sx={{ fontSize: 18 }} />
             </IconButton>
           </Box>
         </Box>
       ) : (
-        <Box sx={{ mt: 2 }}>
-          <SectionTabs value={section} onChange={pickSection} />
-        </Box>
+        <SectionTabs value={section} onChange={pickSection} />
       )}
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', justifyContent: 'flex-end', columnGap: 4, borderBottom: 1, borderColor: 'divider' }}>
-        {hiddenLine ? (
-          <Typography data-testid="hidden-paywalled" role="status" sx={{ mr: 'auto', fontFamily: GOTHIC, fontStyle: 'italic', fontSize: '0.8125rem', color: 'text.secondary' }}>
-            {hiddenLine}
-          </Typography>
-        ) : null}
-        <FreeToReadSwitch checked={freeToRead} onChange={toggleFreeToRead} disabled={!prefsQ.data || savingPrefs} />
-      </Box>
 
       {loadingFirst ? (
         <Box sx={{ display: 'grid', placeItems: 'center', py: 12 }}>
@@ -279,7 +280,7 @@ export default function LatestView({ fixedSection = null }) {
       {items.length ? (
         <Box component="section" aria-label="Stories">
           {items.map((a) => (
-            <ArticleItem key={a.id} article={a} {...opening} onOpenSource={openSheet} />
+            <ArticleItem key={a.id} article={a} hideChips={fixedSection ? sectionEcho(fixedSection, SECTION_LABEL[fixedSection]) : []} {...opening} onOpenSource={openSheet} />
           ))}
         </Box>
       ) : null}

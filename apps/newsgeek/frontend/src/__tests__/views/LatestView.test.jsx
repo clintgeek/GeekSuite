@@ -91,6 +91,28 @@ describe('Latest', () => {
   });
 });
 
+describe('Everything and the section pages: a compact dateline (UX review 2026-11-18, findings 1, 7)', () => {
+  it('Everything: no nameplate, the page name only for screen readers, Free to read on the dateline', async () => {
+    renderWithProviders(<LatestView />, { mocks: [prefsMock(true), articlesMock({ limit: 30 }, page([article('a1')], null, 14))] });
+    await screen.findAllByTestId('article');
+    expect(screen.queryByRole('heading', { name: 'NewsGeek' })).toBeNull();
+    expect(screen.getByRole('heading', { level: 1, name: 'Everything' })).toBeInTheDocument();
+    expect(screen.queryByText(/Everything, newest first/)).toBeNull();
+    const dateline = screen.getByTestId('dateline');
+    expect(within(dateline).getByRole('switch', { name: 'Free to read' })).toBeChecked();
+    // The count is printed with the switch it explains, under it.
+    expect(within(dateline).getByTestId('hidden-paywalled')).toHaveTextContent('14 paywalled stories hidden');
+  });
+
+  it('a section page: the same dateline, its name not printed a second time', async () => {
+    renderWithProviders(<LatestView fixedSection="local" />, { mocks: [prefsMock(), articlesMock({ limit: 30, section: 'local' }, page([article('a1')]))] });
+    await screen.findAllByTestId('article');
+    expect(screen.getByRole('heading', { level: 1, name: 'Local' })).toBeInTheDocument();
+    expect(screen.queryByTestId('section-header')).toBeNull();
+    expect(screen.queryByRole('heading', { name: 'NewsGeek' })).toBeNull();
+  });
+});
+
 describe('Free to read', () => {
   it('reflects the stored pref: off by default, labelled, nothing hidden', async () => {
     renderWithProviders(<LatestView />, { mocks: [prefsMock(false), articlesMock({ limit: 30 }, page([article('a1')]))] });

@@ -276,7 +276,7 @@ export default function SourceDetailView() {
 
   return (
     <Column>
-      <Box component="header" sx={{ pt: 6, pb: 4, borderBottom: 2, borderColor: 'text.primary' }}>
+      <Box component="header" sx={{ pt: 6, pb: 4, borderBottom: 1, borderColor: 'divider' }}>
         <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2, alignItems: 'center', mb: 2 }}>
           <KindBadge kind={source.kind} />
           <PaywallBadge source={source} />

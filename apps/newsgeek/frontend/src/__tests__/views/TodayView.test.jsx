@@ -171,6 +171,37 @@ describe('Today', () => {
   });
 });
 
+describe('Today — the masthead and Free to read (UX review 2026-11-18, findings 1, 3, 9)', () => {
+  it('the nameplate is Today’s, and Free to read sits in its dateline, not a row of its own', async () => {
+    renderWithProviders(<TodayView />, { mocks: [prefsMock(), frontMock(PAPER)] });
+    await screen.findAllByTestId('front-section');
+    const header = screen.getByRole('heading', { level: 1, name: 'NewsGeek' }).closest('header');
+    expect(within(header).getByRole('switch', { name: 'Free to read' })).toBeInTheDocument();
+    expect(screen.queryByTestId('free-note')).toBeNull();
+  });
+
+  it('an "Arkansas" chip under State only repeats the section and is not printed', async () => {
+    renderWithProviders(<TodayView />, { mocks: [prefsMock(), frontMock(PAPER)] });
+    const blocks = await screen.findAllByTestId('front-section');
+    expect(within(blocks[1]).queryByTestId('why-chip')).toBeNull();
+    // The same chip under Local is news, and stays.
+    expect(within(blocks[0]).getAllByTestId('why-chip')[0]).toHaveTextContent('Arkadelphia');
+  });
+
+  it('with Free to read on, Today says it left paywalled stories out', async () => {
+    renderWithProviders(<TodayView />, { mocks: [prefsMock(true), frontMock(PAPER)] });
+    expect(await screen.findByTestId('free-note')).toHaveTextContent('Paywalled stories are left out.');
+  });
+
+  it('when Free to read empties the paper it says so — not "the presses are warming up" — and offers the switch', async () => {
+    renderWithProviders(<TodayView />, { mocks: [prefsMock(true), frontMock([])] });
+    const empty = await screen.findByTestId('today-empty');
+    expect(empty).toHaveTextContent('Turn off Free to read');
+    expect(empty).not.toHaveTextContent(/presses are warming up/);
+    expect(within(empty).getByRole('switch', { name: 'Free to read' })).toBeChecked();
+  });
+});
+
 describe('Old links', () => {
   it('`/?source=<id>` goes to Everything with the same query', async () => {
     renderWithProviders(

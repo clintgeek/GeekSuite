@@ -18,6 +18,17 @@ export function mastheadDate(now = new Date()) {
   }).format(toDate(now));
 }
 
+/** "Sat, Oct 10, 2026": the dateline on a phone, where the long form and a switch won't share a row. */
+export function shortMastheadDate(now = new Date()) {
+  return new Intl.DateTimeFormat('en-US', {
+    timeZone: NEWS_TIMEZONE,
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  }).format(toDate(now));
+}
+
 /** "Oct 10, 2026, 7:42 AM CDT": the absolute time behind every relative one. */
 export function absoluteTime(value) {
   if (!value) return '';
