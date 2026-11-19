@@ -1,12 +1,17 @@
 /**
- * The sticky action bar: Status · Rate · ⋯. Three equal 44px+ targets, 12px
+ * The sticky action bar: Shelf · Rate · ⋯. Three equal 44px+ targets, 12px
  * labels, in the thumb's reach and pinned under the hero as the sheet scrolls.
  * No "Log session" (S-D2, 2026-11-16: Chef doesn't track playtime).
+ *
+ * Review 2026-11-18: the shelf button wears that shelf's own icon (the
+ * drawer's), not a bookmark for every shelf, and it is called "Shelf" like
+ * the drawer, the filters and the sheet (#6). Pinned, the bar keeps clear of
+ * the sheet's close button at the top right (#2).
  */
 import React from 'react';
 import { Box, Button } from '@mui/material';
+import { ShelfIcon } from '../../components/shelfIcons';
 import {
-  BookmarkBorder as StatusIcon,
   MoreHoriz as MoreIcon,
   StarBorder as RateIcon,
   Star as RatedIcon,
@@ -27,7 +32,10 @@ const BAR_BUTTON_SX = {
   '& .MuiSvgIcon-root': { fontSize: 20 },
 };
 
-export default function ActionBar({ shelfName, rating, onStatus, onRate, onMore }) {
+/** The sheet's close: 44px at 8px from the right edge, plus a 4px gap. */
+export const CLOSE_CLEARANCE = '56px';
+
+export default function ActionBar({ shelf, shelfName, rating, onStatus, onRate, onMore }) {
   return (
     <Box
       data-testid="detail-actions"
@@ -38,7 +46,8 @@ export default function ActionBar({ shelfName, rating, onStatus, onRate, onMore 
         display: 'grid',
         gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
         gap: 0.5,
-        px: { xs: 1, md: 2 },
+        pl: { xs: 1, md: 2 },
+        pr: CLOSE_CLEARANCE,
         py: 0.5,
         bgcolor: 'background.paper',
         borderTop: 1,
@@ -46,8 +55,8 @@ export default function ActionBar({ shelfName, rating, onStatus, onRate, onMore 
         borderColor: 'divider',
       }}
     >
-      <Button onClick={onStatus} sx={BAR_BUTTON_SX} aria-label={`Status: ${shelfName}. Change`}>
-        <StatusIcon sx={{ color: 'primary.main' }} />
+      <Button onClick={onStatus} sx={BAR_BUTTON_SX} aria-label={`Shelf: ${shelfName}. Change`}>
+        <ShelfIcon shelf={shelf} sx={{ color: 'primary.main' }} />
         <Box component="span" sx={{ maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {shelfName}
         </Box>

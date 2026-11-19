@@ -1,5 +1,6 @@
 /**
- * My status: shelf, progress (debounced as it drags), last played, favourite.
+ * My shelf ("Shelf" everywhere — the drawer, filters and sheet say it; review
+ * 2026-11-18 #6): shelf, progress (debounced as it drags), last played, favourite.
  * No hours (Chef doesn't track playtime — S-D2, 2026-11-16).
  */
 import React, { useEffect, useState } from 'react';
@@ -39,7 +40,7 @@ export default function StatusSection({ game, customShelves, onChangeShelf }) {
   const shelfName = me.shelf ? shelfLabel(me.shelf, customShelves) : 'Not on a shelf';
 
   return (
-    <Section title="My status" id="status">
+    <Section title="My shelf" id="status">
       <Row label="Shelf">
         <ShelfTag shelf={me.shelf || 'unshelved'} label={shelfName} />
         <Button onClick={onChangeShelf} sx={{ color: 'primary.main', fontWeight: 600, px: 1.5 }} aria-label={`Change shelf (now ${shelfName})`}>

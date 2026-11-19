@@ -8,7 +8,7 @@
  * card tap paints the hero at once and the rest fills in.
  */
 import React, { useRef, useState } from 'react';
-import { Box, Button, CircularProgress, Typography } from '@mui/material';
+import { Box, Button, CircularProgress, Typography, useMediaQuery, useTheme } from '@mui/material';
 import { useQuery } from '@apollo/client';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { GeekEmptyState, GeekSheet, useToast } from '@geeksuite/ui';
@@ -48,6 +48,8 @@ export default function GameDetail() {
   const navigate = useNavigate();
   const location = useLocation();
   const { notify } = useToast();
+  const theme = useTheme();
+  const isPhone = useMediaQuery(theme.breakpoints.down('md'));
   const [panel, setPanel] = useState(null); // shelf | more | edit | cover | copies | metadata | unlink-metadata | delete
   const ratingRef = useRef(null);
 
@@ -102,10 +104,27 @@ export default function GameDetail() {
   } else {
     const me = game.me || {};
     const shelfName = me.shelf ? shelfLabel(me.shelf, customShelves) : 'Shelve';
+    const statusSection = <StatusSection game={game} customShelves={customShelves} onChangeShelf={() => setPanel('shelf')} />;
+    const ratingSection = <RatingSection ref={ratingRef} game={game} onRate={rate} />;
+    const playthroughsSection = (
+      <PlaythroughsSection
+        playthroughs={me.playthroughs ?? []}
+        platforms={platformChoices.length ? platformChoices : vocab.platforms}
+        completionLevels={vocab.completionLevels}
+        onSave={(input) => actions.savePlaythrough(input)}
+        onDelete={(pid) => actions.deletePlaythrough(pid)}
+      />
+    );
+    const mediaSection = <MediaSection game={game} status={media.status} media={media.media} />;
+    const copiesSection = <CopiesSection copies={game.copies ?? []} onEdit={() => setPanel('copies')} />;
+    const notesSection = <NotesSection game={game} />;
+    const detailsSection = <DetailsSection game={game} onFindMetadata={() => setPanel('metadata')} />;
+    const householdSection = <HouseholdSection entries={game.household ?? []} />;
     content = (
       <>
         <DetailHero game={game} />
         <ActionBar
+          shelf={me.shelf || null}
           shelfName={shelfName}
           rating={me.rating}
           onStatus={() => setPanel('shelf')}
@@ -131,26 +150,35 @@ export default function GameDetail() {
               <InstallDecisionBanner game={game} onResolve={(action) => resolveInstallFlag(game, action)} />
             </Box>
           ) : null}
-          <Box sx={{ gridColumn: '1 / -1', minWidth: 0 }}>
-            <MediaSection game={game} status={media.status} media={media.media} />
-          </Box>
-          <Box sx={{ display: 'grid', gap: 1.5, minWidth: 0 }}>
-            <StatusSection game={game} customShelves={customShelves} onChangeShelf={() => setPanel('shelf')} />
-            <RatingSection ref={ratingRef} game={game} onRate={rate} />
-            <PlaythroughsSection
-              playthroughs={me.playthroughs ?? []}
-              platforms={platformChoices.length ? platformChoices : vocab.platforms}
-              completionLevels={vocab.completionLevels}
-              onSave={(input) => actions.savePlaythrough(input)}
-              onDelete={(pid) => actions.deletePlaythrough(pid)}
-            />
-          </Box>
-          <Box sx={{ display: 'grid', gap: 1.5, minWidth: 0 }}>
-            <CopiesSection copies={game.copies ?? []} onEdit={() => setPanel('copies')} />
-            <NotesSection game={game} />
-            <DetailsSection game={game} onFindMetadata={() => setPanel('metadata')} />
-            <HouseholdSection entries={game.household ?? []} />
-          </Box>
+          {isPhone ? (
+            // Phone (review 2026-11-18 #5): your shelf, rating and notes come
+            // first; the media strip is the same every visit, so it follows.
+            <Box sx={{ display: 'grid', gap: 1.5, minWidth: 0 }} data-testid="detail-sections">
+              {statusSection}
+              {ratingSection}
+              {notesSection}
+              {playthroughsSection}
+              {mediaSection}
+              {copiesSection}
+              {detailsSection}
+              {householdSection}
+            </Box>
+          ) : (
+            <>
+              <Box sx={{ display: 'grid', gap: 1.5, minWidth: 0 }}>
+                {statusSection}
+                {ratingSection}
+                {playthroughsSection}
+              </Box>
+              <Box sx={{ display: 'grid', gap: 1.5, minWidth: 0 }}>
+                {mediaSection}
+                {copiesSection}
+                {notesSection}
+                {detailsSection}
+                {householdSection}
+              </Box>
+            </>
+          )}
         </Box>
       </>
     );

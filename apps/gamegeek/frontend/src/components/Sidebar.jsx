@@ -11,17 +11,7 @@
  */
 import React from 'react';
 import { Box, Typography, alpha, useTheme } from '@mui/material';
-import {
-  BookmarkBorder as BacklogIcon,
-  CheckCircleOutline as FinishedIcon,
-  CollectionsBookmarkOutlined as CustomIcon,
-  DoNotDisturbAltOutlined as AbandonedIcon,
-  FavoriteBorder as WishlistIcon,
-  HelpOutline as UnshelvedIcon,
-  PauseCircleOutline as OnHoldIcon,
-  PlayCircleOutline as PlayingIcon,
-  SportsEsportsOutlined as AllIcon,
-} from '@mui/icons-material';
+import { SportsEsportsOutlined as AllIcon } from '@mui/icons-material';
 import { useLocation } from 'react-router-dom';
 import { useMutation } from '@apollo/client';
 import { GeekSidebar } from '@geeksuite/ui';
@@ -33,16 +23,11 @@ import { canonicalSearch, savedViewSearch } from '../utils/libraryFilter';
 import { displayNameFrom, initialsFrom, secondaryFrom } from '../utils/userDisplay';
 import { APP_NAME, LIBRARY_NAV_ID, activeNavId, isLibraryPath, shelfNavId } from './navConfig';
 import SavePointMark from './SavePointMark';
+import { CustomShelfIcon as CustomIcon, SHELF_ICON_COMPONENTS } from './shelfIcons';
 
-const SHELF_ICONS = {
-  playing: <PlayingIcon />,
-  backlog: <BacklogIcon />,
-  finished: <FinishedIcon />,
-  'on-hold': <OnHoldIcon />,
-  abandoned: <AbandonedIcon />,
-  wishlist: <WishlistIcon />,
-  unshelved: <UnshelvedIcon />,
-};
+const SHELF_ICONS = Object.fromEntries(
+  Object.entries(SHELF_ICON_COMPONENTS).map(([id, Icon]) => [id, <Icon key={id} />])
+);
 
 /**
  * The wordmark as an arcade marquee: an ink sign with a magenta frame and a

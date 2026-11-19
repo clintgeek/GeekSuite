@@ -91,4 +91,35 @@ describe('GameDetail', { timeout: 60000 }, () => {
     expect(dialog).toHaveTextContent(/Playnite won.t bring it back/i);
     expect(dialog).toHaveTextContent(/Settings → Deleted games/);
   });
+
+  it('the Shelf button wears the shelf\'s own icon and the word Shelf, and clears the close button (review 2026-11-18 #2, #6)', async () => {
+    renderDetail();
+    const bar = await screen.findByTestId('detail-actions', {}, SLOW);
+    const shelf = within(bar).getByRole('button', { name: 'Shelf: Playing. Change' });
+    expect(shelf.querySelector('[data-shelf-icon]')).toHaveAttribute('data-shelf-icon', 'playing');
+    // Pinned, the bar runs under the sheet's 44px close at the top right.
+    expect(bar).toHaveStyle({ paddingRight: '56px' });
+    expect(screen.getByRole('heading', { name: 'My shelf' })).toBeInTheDocument();
+  });
+
+  it('on a phone your shelf, rating and notes come before the media strip (review 2026-11-18 #5)', async () => {
+    const original = window.matchMedia;
+    window.matchMedia = (query) => ({
+      matches: true, media: query, onchange: null,
+      addListener: () => {}, removeListener: () => {}, addEventListener: () => {}, removeEventListener: () => {}, dispatchEvent: () => false,
+    });
+    try {
+      renderDetail();
+      const sections = await screen.findByTestId('detail-sections', {}, SLOW);
+      const headings = within(sections).getAllByRole('heading', { level: 3 }).map((h) => h.textContent);
+      const at = (name) => headings.findIndex((h) => h === name);
+      expect(at('My shelf')).toBe(0);
+      expect(at('My rating')).toBe(1);
+      expect(at('Notes & review')).toBe(2);
+      const media = headings.findIndex((h) => h === 'Media' || h === 'Links');
+      expect(media).toBeGreaterThan(at('Notes & review'));
+    } finally {
+      window.matchMedia = original;
+    }
+  });
 });
