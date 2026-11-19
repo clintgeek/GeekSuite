@@ -85,9 +85,11 @@ export default function SearchStep({ initialQuery = '', onPick, onManual, onImpo
 
       {providers && !providers.igdb ? (
         <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', lineHeight: 1.5 }}>
+          {/* One plain line (review 2026-11-18 #10); how to switch IGDB on
+              lives in Settings → Metadata, for whoever runs the server. */}
           {providers.steamStore
-            ? 'Searching the Steam store. Console games and richer details (platforms, modes, time to beat) arrive once IGDB keys are set on the server.'
-            : 'No metadata provider is configured on the server yet, so search is off — enter games manually for now.'}
+            ? 'Searching the Steam store.'
+            : 'Search isn’t switched on yet — enter games by hand for now.'}
         </Typography>
       ) : null}
 

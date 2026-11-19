@@ -126,7 +126,7 @@ export default function MetadataCard() {
 
       {needsKeys ? (
         <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', mt: 1, lineHeight: 1.6 }}>
-          IGDB and RAWG need API keys in GameGeek's server settings; Steam works without one.
+          IGDB and RAWG switch on once their keys are added to GameGeek; Steam works without one.
         </Typography>
       ) : null}
 

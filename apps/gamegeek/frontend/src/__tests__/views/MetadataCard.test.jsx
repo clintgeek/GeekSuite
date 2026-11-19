@@ -52,7 +52,7 @@ describe('MetadataCard', () => {
     expect(screen.getByTestId('provider-igdb')).toHaveAttribute('data-provider-on', 'false');
     expect(screen.getByTestId('provider-rawg')).toHaveAttribute('data-provider-on', 'false');
 
-    expect(screen.getByText(/IGDB and RAWG need API keys in GameGeek's server settings/)).toBeInTheDocument();
+    expect(screen.getByText(/IGDB and RAWG switch on once their keys are added to GameGeek/)).toBeInTheDocument();
   });
 
   it('hides the key-needed line once IGDB and RAWG are both configured', async () => {
