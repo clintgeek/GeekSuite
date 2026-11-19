@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Box, TextField, Button, Alert, Tabs, Tab, CircularProgress } from '@mui/material';
+import { Box, TextField, Button, Alert, Tabs, Tab, CircularProgress, useMediaQuery } from '@mui/material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import AuthFrame from '../components/AuthFrame';
 import { START } from '../components/authLook';
@@ -9,7 +9,11 @@ import { safeRedirect } from '../utils/safeRedirect';
 
 export default function LoginPage() {
   const [tab, setTab] = useState(0);
-  const [form, setForm] = useState({ identifier: '', email: '', password: '' });
+  const [form, setForm] = useState({ username: '', email: '', password: '' });
+  // On a phone, focusing on mount throws the keyboard up over the Sign in
+  // button before the person has read the card. Desktop keeps it.
+  // noSsr: autoFocus only acts on mount, so the first render must be right.
+  const wideEnoughToAutoFocus = useMediaQuery('(min-width:600px)', { noSsr: true });
   const [error, setError] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const navigate = useNavigate();
@@ -59,9 +63,9 @@ export default function LoginPage() {
     setIsLoading(true);
     try {
       if (tab === 0) {
-        await api.post('/auth/login', { identifier: form.identifier, password: form.password, app });
+        await api.post('/auth/login', { identifier: form.username, password: form.password, app });
       } else {
-        await api.post('/auth/register', { username: form.identifier, email: form.email, password: form.password, app });
+        await api.post('/auth/register', { username: form.username, email: form.email, password: form.password, app });
       }
       window.location.href = safeRedirect(redirectUrl);
     } catch (err) {
@@ -99,20 +103,33 @@ export default function LoginPage() {
       </Tabs>
 
       <form onSubmit={handleSubmit}>
+        {/* Password managers (iOS, Android, desktop) key on autocomplete,
+            name and type. Sign in takes a username or an email, so the field
+            is "username" with an email keyboard; Register wants a username. */}
         <TextField
-          label="Username or email"
-          name="identifier"
-          value={form.identifier}
+          label={tab === 0 ? 'Username or email' : 'Username'}
+          id="username"
+          name="username"
+          type="text"
+          value={form.username}
           onChange={handleChange}
           fullWidth
           margin="dense"
           required
-          autoFocus
+          autoFocus={wideEnoughToAutoFocus}
           size="small"
+          inputProps={{
+            autoComplete: 'username',
+            autoCapitalize: 'none',
+            autoCorrect: 'off',
+            spellCheck: false,
+            inputMode: tab === 0 ? 'email' : 'text',
+          }}
         />
         {tab === 1 && (
           <TextField
             label="Email"
+            id="email"
             name="email"
             type="email"
             value={form.email}
@@ -121,10 +138,12 @@ export default function LoginPage() {
             margin="dense"
             required
             size="small"
+            inputProps={{ autoComplete: 'email', autoCapitalize: 'none', spellCheck: false, inputMode: 'email' }}
           />
         )}
         <TextField
           label="Password"
+          id="password"
           name="password"
           type="password"
           value={form.password}
@@ -133,6 +152,7 @@ export default function LoginPage() {
           margin="dense"
           required
           size="small"
+          inputProps={{ autoComplete: tab === 0 ? 'current-password' : 'new-password' }}
         />
         {error && <Alert severity="error" sx={{ mt: 1.5, fontSize: '0.8rem' }}>{error}</Alert>}
         <Button

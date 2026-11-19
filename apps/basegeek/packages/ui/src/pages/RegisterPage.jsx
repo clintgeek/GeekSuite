@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Box, TextField, Button, Alert, CircularProgress } from '@mui/material';
+import { Box, TextField, Button, Alert, CircularProgress, useMediaQuery } from '@mui/material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import AuthFrame from '../components/AuthFrame';
 import { START } from '../components/authLook';
@@ -14,6 +14,8 @@ export default function RegisterPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, loading: authLoading } = useBaseGeekAuth();
+  // Same as LoginPage: no keyboard over the button on a phone at mount.
+  const wideEnoughToAutoFocus = useMediaQuery('(min-width:600px)', { noSsr: true });
 
   const params = new URLSearchParams(location.search);
   const redirectUrl = params.get('redirect') || '/';
@@ -60,9 +62,21 @@ export default function RegisterPage() {
   return (
     <AuthFrame title="Create a GeekSuite account">
       <form onSubmit={handleSubmit}>
-        <TextField label="Username" name="username" value={form.username} onChange={handleChange} fullWidth margin="dense" required autoFocus size="small" />
-        <TextField label="Email" name="email" type="email" value={form.email} onChange={handleChange} fullWidth margin="dense" required size="small" />
-        <TextField label="Password" name="password" type="password" value={form.password} onChange={handleChange} fullWidth margin="dense" required size="small" />
+        <TextField
+          label="Username" id="username" name="username" type="text" value={form.username} onChange={handleChange}
+          fullWidth margin="dense" required autoFocus={wideEnoughToAutoFocus} size="small"
+          inputProps={{ autoComplete: 'username', autoCapitalize: 'none', autoCorrect: 'off', spellCheck: false, inputMode: 'text' }}
+        />
+        <TextField
+          label="Email" id="email" name="email" type="email" value={form.email} onChange={handleChange}
+          fullWidth margin="dense" required size="small"
+          inputProps={{ autoComplete: 'email', autoCapitalize: 'none', spellCheck: false, inputMode: 'email' }}
+        />
+        <TextField
+          label="Password" id="password" name="password" type="password" value={form.password} onChange={handleChange}
+          fullWidth margin="dense" required size="small"
+          inputProps={{ autoComplete: 'new-password' }}
+        />
         {error && <Alert severity="error" sx={{ mt: 1.5, fontSize: '0.8rem' }}>{error}</Alert>}
         <Button type="submit" variant="contained" color="primary" fullWidth disabled={isLoading} sx={{ mt: 2.5, py: 1.25, fontWeight: 600, fontSize: '0.875rem', borderRadius: '10px' }}>
           {isLoading ? 'Working...' : 'Create account'}

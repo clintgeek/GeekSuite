@@ -267,6 +267,8 @@ export default function UserGeekPage() {
               onChange={(e) => setForm({ ...form, username: e.target.value })}
               autoFocus
               size="small"
+              // Someone else's account: keep the admin's own saved login out.
+              inputProps={{ autoComplete: 'off', autoCapitalize: 'none', autoCorrect: 'off', spellCheck: false }}
             />
             <TextField
               label="Email"
@@ -274,6 +276,7 @@ export default function UserGeekPage() {
               value={form.email}
               onChange={(e) => setForm({ ...form, email: e.target.value })}
               size="small"
+              inputProps={{ autoComplete: 'off', autoCapitalize: 'none', spellCheck: false, inputMode: 'email' }}
             />
             <TextField
               label="Password"
@@ -281,6 +284,9 @@ export default function UserGeekPage() {
               value={form.password}
               onChange={(e) => setForm({ ...form, password: e.target.value })}
               size="small"
+              // new-password: a manager offers to generate one rather than
+              // filling in the admin's own current password.
+              inputProps={{ autoComplete: 'new-password' }}
             />
           </Stack>
         </form>
