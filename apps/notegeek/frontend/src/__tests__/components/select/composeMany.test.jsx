@@ -120,6 +120,8 @@ describe('the happy path', () => {
     renderFlow([composeMock(composed())]);
     await startCompose();
     expect(await screen.findByText('1 note left out: Shed sketch (a sketch)')).toBeInTheDocument();
+    // The chip counts the notes that went in (harness 20b showed the ids).
+    expect(screen.getByText('From 2 notes')).toBeInTheDocument();
   });
 
   it('offers to archive ONLY the notes that went in; Archive them archives those, opens the note, and Undo restores', async () => {
