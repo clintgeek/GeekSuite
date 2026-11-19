@@ -32,9 +32,6 @@ vi.mock('@apollo/client', async () => {
   };
 });
 
-// The recurring-scope dialog pulls in the whole TodoDialog/MUI tree; nothing
-// under test opens it.
-vi.mock('../../components/tasks/RecurringEditDialog', () => ({ default: () => null }));
 
 import { TaskProvider, useTaskContext } from '../../context/TaskContext';
 

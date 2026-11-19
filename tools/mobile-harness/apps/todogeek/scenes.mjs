@@ -411,7 +411,9 @@ export const scenes = [
     teardown: (page, h) => h.esc(),
   },
   {
-    // A repeating task: saving an edit asks "this one or the series?".
+    // A repeating task with a change: Save is "Save this one" / "Save every
+    // one" in the editor's footer, one tap, no dialog (review 2026-11-18 #3).
+    // Enter asks the question above them; that is the state drawn.
     name: '63-repeating-task',
     goto: '/today',
     wait: 1400,
@@ -419,12 +421,13 @@ export const scenes = [
       await page.getByRole('button', { name: /^take the vitamins/i }).first().click();
       await page.waitForTimeout(500);
       await page.getByRole('button', { name: 'High', exact: true }).first().click();
-      await page.getByRole('button', { name: 'Save', exact: true }).first().click();
-      await page.waitForTimeout(500);
-      if (!(await page.getByRole('dialog').count())) {
-        await page.screenshot({ path: '/tmp/claude-1000/-mnt-Media-Projects-GeekSuite/f0462fc7-cc88-4f8d-92fc-bf57c7622732/scratchpad/dbg63.png' });
-        throw new Error('no this-one-or-the-series question');
-      }
+      const thisOne = await page.getByRole('button', { name: 'Save this one', exact: true }).count();
+      const everyOne = await page.getByRole('button', { name: 'Save every one', exact: true }).count();
+      if (!thisOne || !everyOne) throw new Error('no "Save this one" / "Save every one" on a changed repeating task');
+      await page.getByLabel('Task', { exact: true }).first().press('Enter');
+      await page.waitForTimeout(300);
+      if (!(await page.getByText(/this task repeats/i).count())) throw new Error('Enter did not ask which ones to save');
+      if (await page.getByRole('dialog', { name: /recurring/i }).count()) throw new Error('the old scope dialog opened');
     },
   },
   {

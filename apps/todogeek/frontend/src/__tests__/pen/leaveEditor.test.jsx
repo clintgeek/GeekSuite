@@ -90,16 +90,18 @@ describe('leaving an open editor saves what changed (1.13)', () => {
     expect(screen.getByRole('form', { name: /edit task a/i })).toBeInTheDocument();
   });
 
-  it('a repeating task asks "this one or the series?" instead of guessing', async () => {
+  it('a repeating task asks "this one or every one?" instead of guessing — in the editor, not a dialog', async () => {
     const repeat = [t('a', { recurrenceRule: 'DTSTART:20260929T140000Z\nRRULE:FREQ=DAILY' }), t('b')];
     render(<List tasks={repeat} />);
     fireEvent.click(words('a'));
     fireEvent.click(screen.getByRole('button', { name: 'High' }));
     await act(async () => { fireEvent.click(words('b')); });
     expect(pen.save).not.toHaveBeenCalled();
-    expect(screen.getByRole('dialog')).toBeInTheDocument();
-    // (the modal hides the page from the a11y tree, hence `hidden`)
-    expect(screen.getByRole('form', { name: /edit task a/i, hidden: true })).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(screen.getByRole('alert')).toHaveTextContent('This task repeats. Save the change to this one, or to every one?');
+    expect(screen.getByRole('form', { name: /edit task a/i })).toBeInTheDocument();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save every one' })); });
+    expect(pen.save).toHaveBeenCalledWith(expect.objectContaining({ id: 'a' }), { priority: 1 }, 'ALL_INSTANCES');
   });
 
   it('ticking the open row saves its edit and closes it (3.19)', async () => {
@@ -120,20 +122,29 @@ describe('leaving an open editor saves what changed (1.13)', () => {
   });
 });
 
-describe('the recurring-edit dialog’s Escape', () => {
-  it('does not also discard the edit', async () => {
-    const onCancel = vi.fn();
-    const repeat = t('r', { recurrenceRule: 'DTSTART:20260929T140000Z\nRRULE:FREQ=DAILY' });
-    render(<ThemeProvider theme={theme}><InlineEditor task={repeat} onSave={vi.fn()} onCancel={onCancel} /></ThemeProvider>);
+describe('a repeating task: which ones to save is the Save button (review 2026-11-18 #3)', () => {
+  const repeat = () => t('r', { recurrenceRule: 'DTSTART:20260929T140000Z\nRRULE:FREQ=DAILY' });
+  it('with changes, Save becomes "Save this one" and "Save every one": one tap, no dialog', async () => {
+    const onSave = vi.fn(() => Promise.resolve(true));
+    render(<ThemeProvider theme={theme}><InlineEditor task={repeat()} onSave={onSave} onCancel={vi.fn()} /></ThemeProvider>);
+    expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'High' }));
-    fireEvent.click(screen.getByRole('button', { name: 'Save' }));
-    await screen.findByRole('dialog');
-    // MUI's modal normally swallows Escape itself; this is the keydown that
-    // reaches the form anyway (it bubbles through the React tree from the
-    // portal, or from a field the question left focusable).
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Save this one' })); });
+    expect(onSave).toHaveBeenCalledWith({ priority: 1 }, 'THIS_INSTANCE');
+    expect(screen.queryByRole('dialog')).toBeNull();
+    expect(document.body.textContent).not.toMatch(/instance/i);
+  });
+  it('Enter asks rather than guessing; Escape still discards', () => {
+    const onCancel = vi.fn();
+    const onSave = vi.fn();
+    render(<ThemeProvider theme={theme}><InlineEditor task={repeat()} onSave={onSave} onCancel={onCancel} /></ThemeProvider>);
+    fireEvent.click(screen.getByRole('button', { name: 'High' }));
+    fireEvent.keyDown(screen.getByLabelText('Task', { selector: 'input' }), { key: 'Enter' });
+    expect(onSave).not.toHaveBeenCalled();
+    expect(screen.getByRole('alert')).toHaveTextContent(/this one, or to every one/);
     fireEvent.keyDown(screen.getByLabelText('Task', { selector: 'input' }), { key: 'Escape' });
-    expect(onCancel).not.toHaveBeenCalled();
-    expect(screen.getByRole('form', { hidden: true })).toBeInTheDocument();
+    expect(onCancel).toHaveBeenCalled();
   });
   it('with no question open, Escape still discards', () => {
     const onCancel = vi.fn();

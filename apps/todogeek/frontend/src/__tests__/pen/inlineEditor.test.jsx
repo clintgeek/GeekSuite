@@ -53,6 +53,18 @@ describe('InlineEditor', () => {
     expect(onCancel).toHaveBeenCalled();
   });
 
+  it('is ruled paper: every label sits above its line, none floats on an outlined box (review 2026-11-18 #3)', () => {
+    const { container } = wrap(<InlineEditor task={task()} onSave={vi.fn()} onCancel={vi.fn()} layout="sheet" />);
+    expect(container.querySelector('.MuiOutlinedInput-root, fieldset, .MuiInputLabel-root')).toBeNull();
+    for (const name of ['Task', 'Date', 'Time', 'Tags', 'Note']) {
+      const input = screen.getByLabelText(name);
+      const label = container.querySelector(`label[for="${input.id}"]`);
+      expect(label, name).not.toBeNull();
+      // The label comes before its field in the page, not inside its border.
+      expect(label.compareDocumentPosition(input) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    }
+  });
+
   it('shows Repeats only on a task that already repeats', () => {
     const { unmount } = wrap(<InlineEditor task={task()} onSave={vi.fn()} onCancel={vi.fn()} />);
     expect(screen.queryByLabelText('Repeats')).toBeNull();
