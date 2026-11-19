@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import {
   Box, Typography, Button, CircularProgress, IconButton, Tooltip, LinearProgress,
+  Menu, MenuItem, ListItemIcon, ListItemText, ButtonBase,
   alpha, useTheme, useMediaQuery,
 } from '@mui/material';
 import {
@@ -52,6 +53,36 @@ const eventToMessage = (event) => {
   };
 };
 
+/**
+ * A play-surface tool below `xl`: the icon with its word under it, 44px tall,
+ * so a thumb can tell Journal from Export without a tooltip touch never shows.
+ */
+function LabelledTool({ label, icon, onClick, disabled = false, ...rest }) {
+  const theme = useTheme();
+  const c = theme.palette.candle;
+  return (
+    <ButtonBase
+      onClick={onClick}
+      disabled={disabled}
+      {...rest}
+      sx={{
+        minWidth: 48, minHeight: 44, px: 0.75, borderRadius: '10px',
+        display: 'inline-flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 0.25,
+        color: 'text.secondary',
+        '& svg': { fontSize: 20 },
+        '&.Mui-disabled': { opacity: 0.6 },
+        '&.Mui-focusVisible': { outline: `2px solid ${c.accent}`, outlineOffset: 1 },
+        '@media (hover: hover)': { '&:hover': { color: c.accent, backgroundColor: alpha(c.accent, 0.08) } },
+      }}
+    >
+      {icon}
+      <Box component="span" sx={{ fontFamily: fonts.ui, fontSize: '0.75rem', fontWeight: 600, lineHeight: 1.1, color: 'text.secondary' }}>
+        {label}
+      </Box>
+    </ButtonBase>
+  );
+}
+
 function StoryPlay() {
   const theme = useTheme();
   // Each rail collapses to a sheet at the width where it stops fitting, and its
@@ -91,6 +122,7 @@ function StoryPlay() {
   const [exportData, setExportData] = useState(null);
   const [journalOpen, setJournalOpen] = useState(false);
   const [mobilePanel, setMobilePanel] = useState(null); // 'left' | 'right' | null
+  const [exportMenuAnchor, setExportMenuAnchor] = useState(null);
   // A `/back` waiting on the player's say-so: `{ input, checkpoint, lostTurns }`.
   const [backConfirm, setBackConfirm] = useState(null);
   // A turn this screen is waiting out instead of writing: `{ yours, clientId }`.
@@ -665,19 +697,18 @@ function StoryPlay() {
     scene.storyDay ? `Day ${scene.storyDay}` : null,
   ].filter(Boolean).join('  ·  ');
 
-  // Party / Journal / Bookify / EPUB. Below `md` they are icon tools on the
-  // scene strip; at `md`+ Journal and the two exports carry their words.
-  // `disabled={exporting}` is on both exports: EPUB used to be missing it,
-  // so it could be double-clicked into two full export runs, or started on
-  // top of a Bookify — both sharing one `exporting` flag.
+  // Party / Journal / the two exports. At `xl` they are worded buttons. Below
+  // `xl` (every phone, and desktop up to 1536px) they used to be four bare
+  // icons whose tooltips never appear on touch — the open book read as
+  // "journal" and the download arrow as "save" (UX review 2026-11-18 #4).
+  // Now each tool carries its word under the icon at 44px, and Bookify and
+  // EPUB fold into one "Export" menu, so the strip holds three tools.
+  // `disabled={exporting}` is on both exports: they share one `exporting`
+  // flag, and EPUB could once be double-clicked into two full export runs.
   const tools = (
     <Box sx={{ display: 'flex', gap: 0.5, alignItems: 'center', flexShrink: 0 }}>
       {!showRightRail && (
-        <Tooltip title="Party & threads">
-          <IconButton aria-label="Party and threads" onClick={() => setMobilePanel('right')} sx={toolSx}>
-            <PartyIcon />
-          </IconButton>
-        </Tooltip>
+        <LabelledTool label="Party" aria-label="Party and threads" icon={<PartyIcon />} onClick={() => setMobilePanel('right')} />
       )}
       {wordedTools ? (
         <>
@@ -700,25 +731,34 @@ function StoryPlay() {
         </>
       ) : (
         <>
-          <Tooltip title="Journal — what your character knows">
-            <IconButton aria-label="Journal" onClick={() => setJournalOpen(true)} sx={{ ...toolSx, color: c.accent }}>
-              <JournalIcon />
-            </IconButton>
-          </Tooltip>
-          <Tooltip title="Bookify — the tale as prose">
-            <span>
-              <IconButton aria-label="Bookify" onClick={handleBookify} disabled={exporting} sx={toolSx}>
-                {exporting ? <CircularProgress size={18} aria-hidden="true" sx={{ color: 'inherit' }} /> : <ExportIcon />}
-              </IconButton>
-            </span>
-          </Tooltip>
-          <Tooltip title="Download EPUB">
-            <span>
-              <IconButton aria-label="EPUB" onClick={handleEpub} disabled={exporting} sx={toolSx}>
-                <EpubIcon />
-              </IconButton>
-            </span>
-          </Tooltip>
+          <LabelledTool label="Journal" icon={<JournalIcon sx={{ color: c.accent }} />} onClick={() => setJournalOpen(true)} />
+          <LabelledTool
+            label={exporting ? 'Binding' : 'Export'}
+            aria-label="Export the tale"
+            aria-haspopup="menu"
+            aria-expanded={exportMenuAnchor ? 'true' : undefined}
+            aria-controls={exportMenuAnchor ? 'sg-export-menu' : undefined}
+            icon={exporting ? <CircularProgress size={20} aria-hidden="true" sx={{ color: 'inherit' }} /> : <ShareIcon />}
+            onClick={(e) => setExportMenuAnchor(e.currentTarget)}
+            disabled={exporting}
+          />
+          <Menu
+            id="sg-export-menu"
+            anchorEl={exportMenuAnchor}
+            open={Boolean(exportMenuAnchor)}
+            onClose={() => setExportMenuAnchor(null)}
+            anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+            transformOrigin={{ vertical: 'top', horizontal: 'right' }}
+          >
+            <MenuItem sx={{ minHeight: 44 }} onClick={() => { setExportMenuAnchor(null); handleBookify(); }}>
+              <ListItemIcon><ExportIcon fontSize="small" /></ListItemIcon>
+              <ListItemText primary="Bookify" secondary="Read the tale as prose" />
+            </MenuItem>
+            <MenuItem sx={{ minHeight: 44 }} onClick={() => { setExportMenuAnchor(null); handleEpub(); }}>
+              <ListItemIcon><EpubIcon fontSize="small" /></ListItemIcon>
+              <ListItemText primary="Download EPUB" secondary="For an e-reader" />
+            </MenuItem>
+          </Menu>
         </>
       )}
     </Box>

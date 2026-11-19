@@ -201,6 +201,12 @@ describe('StoryPlay rails', () => {
   });
 });
 
+// Below `xl` Bookify lives in the Export menu (UX review 2026-11-18 #4).
+async function openBookify() {
+  fireEvent.click(screen.getByRole('button', { name: 'Export the tale' }));
+  fireEvent.click(await screen.findByRole('menuitem', { name: /bookify/i }));
+}
+
 describe('StoryPlay Bookify', () => {
   const originalClipboard = navigator.clipboard;
   const originalShare = navigator.share;
@@ -220,7 +226,7 @@ describe('StoryPlay Bookify', () => {
     renderStoryPlay();
     await screen.findByPlaceholderText('What do you do?');
 
-    fireEvent.click(screen.getByRole('button', { name: /bookify/i }));
+    await openBookify();
 
     expect(await screen.findByText('Once, at a foggy crossroads...')).toBeInTheDocument();
     // Bookify is one AI call per six events, so it carries the long timeout.
@@ -240,7 +246,7 @@ describe('StoryPlay Bookify', () => {
 
     renderStoryPlay();
     await screen.findByPlaceholderText('What do you do?');
-    fireEvent.click(screen.getByRole('button', { name: /bookify/i }));
+    await openBookify();
     await screen.findByText('text');
 
     expect(screen.getByRole('button', { name: /^share$/i })).toBeInTheDocument();
@@ -252,7 +258,7 @@ describe('StoryPlay Bookify', () => {
 
     renderStoryPlay();
     await screen.findByPlaceholderText('What do you do?');
-    fireEvent.click(screen.getByRole('button', { name: /bookify/i }));
+    await openBookify();
     await screen.findByText('text');
 
     expect(screen.queryByRole('button', { name: /^share$/i })).not.toBeInTheDocument();
@@ -378,5 +384,26 @@ describe('StoryPlay reading position', () => {
       expect(spy).toHaveBeenCalledWith(expect.objectContaining({ block: 'start' }))
     );
     spy.mockRestore();
+  });
+});
+
+// UX review 2026-11-18, StoryGeek #4: below `xl` the tools were four bare
+// icons whose tooltips never show on touch. Each now carries its word, and
+// the two exports share one Export menu.
+describe('StoryPlay phone tools', () => {
+  it('every tool shows its word, and the exports sit in one menu', async () => {
+    renderStoryPlay();
+    await screen.findByPlaceholderText('What do you do?');
+
+    expect(screen.getByRole('button', { name: 'Party and threads' })).toHaveTextContent('Party');
+    expect(screen.getByRole('button', { name: 'Journal' })).toHaveTextContent('Journal');
+    const exportBtn = screen.getByRole('button', { name: 'Export the tale' });
+    expect(exportBtn).toHaveTextContent('Export');
+    expect(screen.queryByRole('button', { name: /^bookify$/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^epub$/i })).not.toBeInTheDocument();
+
+    fireEvent.click(exportBtn);
+    expect(await screen.findByRole('menuitem', { name: /bookify/i })).toBeInTheDocument();
+    expect(screen.getByRole('menuitem', { name: /download epub/i })).toBeInTheDocument();
   });
 });

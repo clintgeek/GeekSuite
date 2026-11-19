@@ -118,6 +118,18 @@ export const scenes = [
     goto: '/play/s1',
     wait: 1400,
     async setup(page, h) {
+      // Below `xl` Bookify sits in the Export menu (UX review 2026-11-18 #4);
+      // at `xl` it is a worded button of its own.
+      const exportMenu = page.getByRole('button', { name: /^export the tale$/i }).first();
+      if (await exportMenu.count()) {
+        await exportMenu.click();
+        await h.settle(400);
+        const item = page.getByRole('menuitem', { name: /bookify/i }).first();
+        if (!(await item.count())) throw new Error('missing: Bookify in the Export menu');
+        await item.click();
+        await h.settle(1400);
+        return;
+      }
       const bookify = page.getByRole('button', { name: /^bookify$/i }).first();
       if (!(await bookify.count())) {
         h.log('no Bookify button at', h.viewport, h.scheme);
@@ -127,6 +139,20 @@ export const scenes = [
       await h.settle(1400);
     },
     teardown: (page, h) => h.esc(500),
+  },
+  {
+    // The Export menu itself (Bookify + EPUB), phone only.
+    name: '09b-export-menu',
+    goto: '/play/s1',
+    wait: 1400,
+    viewports: ['phone'],
+    async setup(page, h) {
+      const btn = page.getByRole('button', { name: /^export the tale$/i }).first();
+      if (!(await btn.count())) throw new Error('missing: Export button');
+      await btn.click();
+      await h.settle(600);
+    },
+    teardown: (page, h) => h.esc(400),
   },
   {
     // A /recall answer, rendered as the canon scroll. The page-scoped route
