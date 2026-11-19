@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { opensScene, applyCommand, NEW_SITTING_GAP_MS } from '../../game/transcript';
+import { opensScene, applyCommand, NEW_SITTING_GAP_MS, dayRuleBefore } from '../../game/transcript';
 
 const at = (ms) => new Date(Date.UTC(2026, 8, 1) + ms);
 
@@ -54,5 +54,25 @@ describe('applyCommand', () => {
   it('replaces a command already at the front instead of stacking them', () => {
     expect(applyCommand('/char Mira', '/recall')).toBe('/recall Mira');
     expect(applyCommand('/info', '/char')).toBe('/char ');
+  });
+});
+
+// UX review 2026-11-18, StoryGeek #10.
+describe('dayRuleBefore', () => {
+  const now = new Date(2026, 10, 18, 12, 0);
+  const at = (y, mo, d, h = 9) => ({ type: 'ai', timestamp: new Date(y, mo, d, h) });
+
+  it('rules the first entry and each change of day, nothing in between', () => {
+    const msgs = [at(2026, 10, 17, 9), at(2026, 10, 17, 21), at(2026, 10, 18, 7)];
+    expect(dayRuleBefore(msgs, 0, now)).toBe('Tuesday 17 November');
+    expect(dayRuleBefore(msgs, 1, now)).toBeNull();
+    expect(dayRuleBefore(msgs, 2, now)).toBe('Wednesday 18 November');
+  });
+
+  it('adds the year for another year, and skips undated entries', () => {
+    const msgs = [at(2025, 11, 31), { type: 'system', timestamp: 'not a date' }, at(2025, 11, 31, 22)];
+    expect(dayRuleBefore(msgs, 0, now)).toBe('Wednesday 31 December 2025');
+    expect(dayRuleBefore(msgs, 1, now)).toBeNull();
+    expect(dayRuleBefore(msgs, 2, now)).toBeNull();
   });
 });

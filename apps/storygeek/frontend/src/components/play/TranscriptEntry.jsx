@@ -10,14 +10,37 @@ const visuallyHidden = {
 
 const time = (m) => m.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
+/**
+ * The clock time of an entry — desktop only. On a phone it cost a line per
+ * entry and said nothing about the day; the day rule (below) carries that
+ * now (UX review 2026-11-18 #10).
+ */
 function Stamp({ message, align = 'right' }) {
   return (
     <Typography component="span" sx={{
-      display: 'block', mt: 0.75, textAlign: align, fontFamily: fonts.ui, fontSize: '0.75rem',
+      display: { xs: 'none', md: 'block' }, mt: 0.75, textAlign: align, fontFamily: fonts.ui, fontSize: '0.75rem',
       letterSpacing: '0.06em', color: 'text.secondary', fontVariantNumeric: 'lining-nums tabular-nums',
     }}>
       {time(message)}
     </Typography>
+  );
+}
+
+/** The day a stretch of play happened on, between rules: "Tuesday 17 November". */
+export function DayRule({ label }) {
+  const theme = useTheme();
+  const c = theme.palette.candle;
+  return (
+    <Box role="separator" aria-label={label} sx={{ display: 'flex', alignItems: 'center', gap: 1.5, my: 2.5 }}>
+      <Box aria-hidden="true" sx={{ flex: 1, height: '1px', backgroundColor: c.rule }} />
+      <Typography component="span" aria-hidden="true" sx={{
+        fontFamily: fonts.ui, fontWeight: 700, fontSize: '0.75rem', letterSpacing: '0.12em',
+        textTransform: 'uppercase', color: c.accentLabel, fontVariantNumeric: 'lining-nums',
+      }}>
+        {label}
+      </Typography>
+      <Box aria-hidden="true" sx={{ flex: 1, height: '1px', backgroundColor: c.rule }} />
+    </Box>
   );
 }
 

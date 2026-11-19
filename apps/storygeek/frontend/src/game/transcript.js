@@ -50,3 +50,30 @@ export const COMMANDS = [
   { command: '/timeout', hint: 'Step out of the fiction to talk.' },
   { command: '/end', hint: 'Mark the story complete.' },
 ];
+
+const localDayKey = (t) => {
+  const d = new Date(t);
+  return `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
+};
+
+/**
+ * The day rule to draw above `messages[index]`, or null: the first dated
+ * entry, and every entry whose local calendar day differs from the last
+ * dated entry before it. A campaign played over weeks used to read as one
+ * morning of clock times (UX review 2026-11-18 #10). "Tuesday 17 November",
+ * with the year when it is not this year.
+ */
+export function dayRuleBefore(messages, index, now = new Date()) {
+  const t = timeOf(messages[index]);
+  if (t == null) return null;
+  for (let i = index - 1; i >= 0; i -= 1) {
+    const prev = timeOf(messages[i]);
+    if (prev == null) continue;
+    if (localDayKey(prev) === localDayKey(t)) return null;
+    break;
+  }
+  const d = new Date(t);
+  const opts = { weekday: 'long', day: 'numeric', month: 'long' };
+  if (d.getFullYear() !== now.getFullYear()) opts.year = 'numeric';
+  return d.toLocaleDateString('en-GB', opts).replace(',', '');
+}

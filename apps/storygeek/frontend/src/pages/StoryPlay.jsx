@@ -25,8 +25,8 @@ import JournalDrawer from '../components/panels/JournalDrawer';
 import CanonCard from '../components/play/CanonCard';
 import Composer from '../components/play/Composer';
 import WritingIndicator from '../components/play/WritingIndicator';
-import { NarrationEntry, PlayerEntry, SystemEntry } from '../components/play/TranscriptEntry';
-import { opensScene } from '../game/transcript';
+import { NarrationEntry, PlayerEntry, SystemEntry, DayRule } from '../components/play/TranscriptEntry';
+import { opensScene, dayRuleBefore } from '../game/transcript';
 import { isBackCommand, describeBack } from '../game/checkpoints';
 import {
   newClientId, readComposerDraft, writeComposerDraft, clearComposerDraft,
@@ -625,8 +625,10 @@ function StoryPlay() {
         />
       );
     }
+    const day = dayRuleBefore(all, index);
     return (
       <Box key={index} ref={index === all.length - 1 ? lastEntryRef : undefined} sx={{ scrollMarginTop: 16 }}>
+        {day && <DayRule label={day} />}
         {entry}
       </Box>
     );
