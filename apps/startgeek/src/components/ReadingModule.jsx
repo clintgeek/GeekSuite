@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import Module from './Module'
+import { useLinkTarget } from '../hooks/useLinkTarget'
 
 const BOOKGEEK = 'https://bookgeek.clintgeek.com'
 
@@ -21,6 +22,7 @@ const tintFor = (id = '') => {
 // a tinted spine as the fallback.
 const ReadingModule = ({ book }) => {
   const [coverFailed, setCoverFailed] = useState(false)
+  const targetProps = useLinkTarget()
   const [c1, c2] = tintFor(book.id)
   const authorText = book.authors?.join(', ')
   const progress = Number.isFinite(book.readingProgress) ? Math.round(book.readingProgress) : null
@@ -31,8 +33,7 @@ const ReadingModule = ({ book }) => {
     <Module label="Reading" link={{ label: 'BookGeek', href: `${BOOKGEEK}/books/${book.id}` }}>
       <a
         href={`${BOOKGEEK}/books/${book.id}`}
-        target="_blank"
-        rel="noopener noreferrer"
+        {...targetProps}
         className="flex gap-4 items-start no-underline group flex-1"
       >
         <span

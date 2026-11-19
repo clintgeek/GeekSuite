@@ -1,5 +1,6 @@
 import { motion } from 'framer-motion'
 import { REDUCED_MOTION, ANIMATION } from '../constants'
+import { useLinkTarget } from '../hooks/useLinkTarget'
 
 const variants = {
   hidden: { opacity: 0, y: 6 },
@@ -24,28 +25,30 @@ const OpenGlyph = () => (
  *  foot   — node rendered in the footer strip (optional)
  *  Placement is the parent grid's job (see .hero / .row in index.css).
  */
-const Module = ({ label, count, link, foot, className = '', children }) => (
-  <motion.section variants={variants} className={`mod ${className}`} aria-label={label}>
-    <div className="mod-head">
-      <span className="label">{label}</span>
-      {count != null && (
-        <span className="font-mono text-[12px] text-ink-3 tnum">{count}</span>
-      )}
-      {link && (
-        <a
-          href={link.href}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="module-link ml-auto inline-flex items-center gap-1.5 font-mono text-[12px] tracking-wide text-ink-3 hover:text-accent transition-colors no-underline"
-        >
-          {link.label}
-          <OpenGlyph />
-        </a>
-      )}
-    </div>
-    <div className="mod-body">{children}</div>
-    {foot && <div className="mod-foot">{foot}</div>}
-  </motion.section>
-)
+const Module = ({ label, count, link, foot, className = '', children }) => {
+  const targetProps = useLinkTarget()
+  return (
+    <motion.section variants={variants} className={`mod ${className}`} aria-label={label}>
+      <div className="mod-head">
+        <span className="label">{label}</span>
+        {count != null && (
+          <span className="font-mono text-[12px] text-ink-3 tnum">{count}</span>
+        )}
+        {link && (
+          <a
+            href={link.href}
+            {...targetProps}
+            className="module-link ml-auto inline-flex items-center gap-1.5 font-mono text-[12px] tracking-wide text-ink-3 hover:text-accent transition-colors no-underline"
+          >
+            {link.label}
+            <OpenGlyph />
+          </a>
+        )}
+      </div>
+      <div className="mod-body">{children}</div>
+      {foot && <div className="mod-foot">{foot}</div>}
+    </motion.section>
+  )
+}
 
 export default Module

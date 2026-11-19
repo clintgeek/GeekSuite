@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useGlance } from '../hooks/useGlance'
 import { useSession } from '../hooks/useSession'
 import { useToast } from '../hooks/useToast'
+import { useLinkTarget } from '../hooks/useLinkTarget'
 import { gql } from '../lib/graphql'
 import { isAuthFailure } from '../lib/commandFailure'
 import { toggleTaskWithUndo } from '../lib/feedback'
@@ -52,6 +53,7 @@ const TaskRow = ({ task, late = false, today, aside = null }) => {
   const { refetch } = useGlance()
   const { markOut } = useSession()
   const { notify } = useToast()
+  const targetProps = useLinkTarget()
   // Shown at once on tap (dot filled, words struck); undone if the save fails.
   const [ticked, setTicked] = useState(null)
 
@@ -86,8 +88,7 @@ const TaskRow = ({ task, late = false, today, aside = null }) => {
       />
       <a
         href="https://todogeek.clintgeek.com/"
-        target="_blank"
-        rel="noopener noreferrer"
+        {...targetProps}
         className={`task-link flex-1 min-w-0 text-sm leading-snug transition-colors no-underline ${
           late ? 'text-ink-2 hover:text-ink' : 'text-ink hover:text-white'
         }`}
