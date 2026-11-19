@@ -26,6 +26,7 @@ import Composer from '../components/play/Composer';
 import WritingIndicator from '../components/play/WritingIndicator';
 import { NarrationEntry, PlayerEntry, SystemEntry } from '../components/play/TranscriptEntry';
 import { opensScene } from '../game/transcript';
+import { isBackCommand, describeBack } from '../game/checkpoints';
 import {
   newClientId, readComposerDraft, writeComposerDraft, clearComposerDraft,
   isTurnInProgress, isAmbiguousFailure, turnWaitDelay,
@@ -90,6 +91,8 @@ function StoryPlay() {
   const [exportData, setExportData] = useState(null);
   const [journalOpen, setJournalOpen] = useState(false);
   const [mobilePanel, setMobilePanel] = useState(null); // 'left' | 'right' | null
+  // A `/back` waiting on the player's say-so: `{ input, checkpoint, lostTurns }`.
+  const [backConfirm, setBackConfirm] = useState(null);
   // A turn this screen is waiting out instead of writing: `{ yours, clientId }`.
   // `yours` — the player's own turn (a resend whose original is still being
   // written, or a reload mid-turn); otherwise another device's. The composer
@@ -399,6 +402,23 @@ function StoryPlay() {
     e.preventDefault();
     if (!userInput.trim() || loading || turnBusy) return;
     const input = userInput.trim();
+    // `/back` is the one command that destroys play: every turn after the
+    // checkpoint is replaced by its snapshot, and nothing brings them back.
+    // Ask first (the suite rule for an action that cannot be undone).
+    if (isBackCommand(input)) {
+      setBackConfirm({ input, ...describeBack(story, input) });
+      return;
+    }
+    await sendTurn(input);
+  };
+
+  const confirmBack = async () => {
+    const pending = backConfirm;
+    setBackConfirm(null);
+    if (pending) await sendTurn(pending.input);
+  };
+
+  const sendTurn = async (input) => {
     // The same words as the turn last sent and not accepted: same clientId.
     const pending = pendingRef.current;
     const clientId = pending && pending.input === input ? pending.clientId : newClientId();
@@ -874,6 +894,38 @@ function StoryPlay() {
 
       {/* Journal */}
       <JournalDrawer open={journalOpen} onClose={() => setJournalOpen(false)} story={story} />
+
+      {/* `/back` confirm — window mode like the delete confirm: a short "are
+          you sure" does not earn the whole screen. Says what is lost when
+          the checkpoint and the turn count are known. */}
+      <CodexDialog
+        open={Boolean(backConfirm)}
+        onClose={() => setBackConfirm(null)}
+        title="Return to a checkpoint?"
+        mode="window"
+        maxWidth="xs"
+        primaryAction={
+          <Button onClick={confirmBack} variant="contained" color="error">
+            Return
+          </Button>
+        }
+        secondaryAction={
+          <Button onClick={() => setBackConfirm(null)} sx={{ color: 'text.secondary' }}>Keep playing</Button>
+        }
+      >
+        <Typography variant="body1" sx={{ mb: 1 }}>
+          {backConfirm?.checkpoint
+            ? `Return to "${backConfirm.checkpoint.description}"${Number.isFinite(backConfirm.checkpoint.turnNumber) ? ` (turn ${backConfirm.checkpoint.turnNumber})` : ''}?`
+            : 'Return to your latest checkpoint?'}
+        </Typography>
+        <Typography variant="body2" color="text.secondary">
+          {backConfirm && Number.isFinite(backConfirm.lostTurns)
+            ? (backConfirm.lostTurns === 0
+              ? 'No turns have been played since it. This cannot be undone.'
+              : `${backConfirm.lostTurns === 1 ? 'The 1 turn' : `The ${backConfirm.lostTurns} turns`} played since then will be removed. This cannot be undone.`)
+            : 'Every turn played since then will be removed. This cannot be undone.'}
+        </Typography>
+      </CodexDialog>
 
       {/* Bookify: a whole story in one scrolling body. Full-screen below `sm`
           via CodexDialog, with Copy as the header action — the phone's answer
