@@ -168,14 +168,22 @@ function StoryList() {
   return (
     <Box>
       {/* Header */}
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 4, mb: { xs: 6, md: 8 }, mt: 2 }}>
+      {/* Below `md` the top bar already says "Your Tales", so the page title
+          is kept for screen readers only and the lede leads (UX review #11). */}
+      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-end', gap: 4, mb: { xs: 5, md: 8 }, mt: { xs: 1, md: 2 } }}>
         <Box>
           <Typography component="p" sx={label}>The table is set</Typography>
-          <Typography variant="h2" component="h1" sx={{ mt: 1, fontSize: { xs: '1.6rem', md: '2rem' } }}>
+          <Typography variant="h2" component="h1" sx={{
+            mt: 1, fontSize: { xs: '1.6rem', md: '2rem' },
+            [theme.breakpoints.down('md')]: {
+              position: 'absolute', width: 1, height: 1, p: 0, m: -1, overflow: 'hidden',
+              clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap', border: 0,
+            },
+          }}>
             Your Tales
           </Typography>
           {stories.length > 0 && !loadError && (
-            <Typography sx={{ mt: 1, color: 'text.secondary', fontStyle: 'italic' }}>
+            <Typography sx={{ mt: { xs: 0.5, md: 1 }, color: 'text.secondary', fontStyle: 'italic' }}>
               {stories.length === 1 ? 'One adventure is waiting for you.' : `${stories.length} adventures are waiting for you.`}
             </Typography>
           )}
@@ -272,7 +280,7 @@ function StoryList() {
                   <CardActionArea
                     onClick={() => navigate(`/play/${story._id}`)}
                     aria-label={`Open ${story.title}`}
-                    sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'stretch', justifyContent: 'flex-start', p: { xs: 5, md: 6 }, pb: 3, borderRadius: 'inherit' }}
+                    sx={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'stretch', justifyContent: 'flex-start', p: { xs: 4, md: 6 }, pb: 3, borderRadius: 'inherit' }}
                   >
                     <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2, mb: 3 }}>
                       <Typography component="span" sx={{ ...label, display: 'flex', alignItems: 'center', gap: 1.5 }}>
@@ -315,7 +323,7 @@ function StoryList() {
                       nested inside another button. */}
                   <Box sx={{
                     display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 2,
-                    px: { xs: 5, md: 6 }, py: 2, borderTop: `1px dashed ${c.rule}`,
+                    px: { xs: 4, md: 6 }, py: 2, borderTop: `1px dashed ${c.rule}`,
                   }}>
                     <Typography component="span" sx={{ fontFamily: fonts.ui, fontSize: '0.8125rem', color: 'text.secondary', fontVariantNumeric: 'lining-nums' }}>
                       {formatDate(story.updatedAt)}
