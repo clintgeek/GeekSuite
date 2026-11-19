@@ -19,11 +19,13 @@ import { renderWithProviders } from '../testUtils';
 function rulesFor(el, suffix) {
   const classes = [...el.classList].filter((c) => c.startsWith('css-'));
   const out = [];
-  for (const sheet of document.styleSheets) {
-    for (const rule of sheet.cssRules) {
-      if (rule.selectorText && classes.some((c) => rule.selectorText.includes(`.${c}${suffix}`))) out.push(rule);
+  const walk = (rules, media) => {
+    for (const rule of rules) {
+      if (rule.cssRules && !rule.selectorText) walk(rule.cssRules, rule.media?.mediaText ?? rule.conditionText ?? media);
+      else if (rule.selectorText && classes.some((c) => rule.selectorText.includes(`.${c}${suffix}`))) out.push(Object.assign(rule, { inMedia: media }));
     }
-  }
+  };
+  for (const sheet of document.styleSheets) walk(sheet.cssRules, null);
   return out;
 }
 
@@ -36,7 +38,9 @@ describe('the whole story is one tap (finding 2)', () => {
     const link = screen.getByTestId('story-link');
     const cs = getComputedStyle(link);
     expect(cs.display).toBe('block');
-    expect(cs.minHeight).toBe('44px');
+    // 44px wherever the pointer is a finger (the harness's coarse contexts).
+    const coarse = rulesFor(link, '').find((r) => r.inMedia?.includes('pointer: coarse'));
+    expect(coarse?.style.minHeight).toBe('44px');
     const after = rulesFor(link, '::after');
     expect(after.length).toBeGreaterThan(0);
     expect(after[0].style.position).toBe('absolute');

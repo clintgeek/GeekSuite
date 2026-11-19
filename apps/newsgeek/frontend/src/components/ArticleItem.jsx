@@ -125,7 +125,8 @@ export default function ArticleItem({
           underline="hover"
           sx={{
             display: 'block',
-            minHeight: 44,
+            // A finger needs 44px even under a one-line headline; a mouse doesn't, and the gap would show.
+            '@media (pointer: coarse)': { minHeight: 44 },
             color: 'text.primary',
             fontFamily: SERIF,
             '&:visited': { color: 'text.muted' },
