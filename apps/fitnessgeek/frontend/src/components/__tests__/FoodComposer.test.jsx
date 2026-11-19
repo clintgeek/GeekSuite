@@ -1112,26 +1112,31 @@ describe('B8: undo says what happened', () => {
       await waitFor(() => expect(screen.queryByText('Adding…')).toBeNull());
     }
     // No onUpdateLog here, so each tap is its own entry.
-    expect(await screen.findByText('3 added to snacks')).toBeInTheDocument();
+    expect(await screen.findByText('3 foods added to snacks')).toBeInTheDocument();
 
-    fireEvent.click(screen.getByRole('button', { name: /undo last/i }));
+    fireEvent.click(screen.getByRole('button', { name: /^undo$/i }));
     expect(await screen.findByText("Couldn’t undo — try again")).toBeInTheDocument();
-    expect(screen.getByText('3 added to snacks')).toBeInTheDocument();
+    expect(screen.getByText('3 foods added to snacks')).toBeInTheDocument();
   });
 
   it('the undo toast stays up for ten seconds, not four', async () => {
-    const onLogItems = vi.fn().mockResolvedValue({ ok: 1, fail: 0, logIds: ['l1'] });
-    suggest.mockResolvedValue([food('Egg')]);
-    renderBox({ onLogItems, onUndo: vi.fn() });
-    type('egg');
-    await vi.advanceTimersByTimeAsync(200);
-    await tapToLog(onLogItems);
-    await screen.findByRole('button', { name: /^undo$/i });
+    // A toast that carries Undo: a describe in Full with no strip to show it
+    // (a tap's toast no longer does — the ribbon has the Undo, A9/B7).
+    const onDescribe = vi.fn().mockResolvedValue({
+      ok: 1, fail: 0, logIds: ['l1'], skipped: [], questions: [], totalCalories: 200,
+      logged: [{ logId: 'l1', name: 'Pancakes', loggedServings: 1, mealType: 'snack', calories: 200, nutrition: { calories_per_serving: 200 } }],
+    });
+    renderBox({ onDescribe, onUndo: vi.fn(), onClose: vi.fn() });
+    type('pancakes');
+    logIt();
+    const toastUndo = () => screen.queryByText(/Added to snacks ✓ · Pancakes/)
+      ?.closest('[data-geek-toast]')?.querySelector('button') || null;
+    await waitFor(() => expect(toastUndo()).toHaveTextContent(/^Undo$/));
 
     await act(async () => { await vi.advanceTimersByTimeAsync(6000); });
-    expect(screen.getByRole('button', { name: /^undo$/i })).toBeInTheDocument();
+    expect(toastUndo()).not.toBeNull();
     await act(async () => { await vi.advanceTimersByTimeAsync(5000); });
-    expect(screen.queryByRole('button', { name: /^undo$/i })).toBeNull();
+    expect(toastUndo()).toBeNull();
   });
 });
 
@@ -1222,12 +1227,11 @@ describe('L2: her habitual second tap is a second serving, not a third egg', () 
     expect(screen.getByRole('button', { name: 'Make it 3 Egg' })).toBeInTheDocument();
     // L4: the toast says the amount.
     expect(await screen.findByText('Added to breakfast ✓ · Egg ×2')).toBeInTheDocument();
-    // The ribbon is one entry, not two.
-    expect(screen.getByText('1 added to breakfast')).toBeInTheDocument();
+    // The ribbon is one entry, not two, named with its amount (B7).
+    expect(screen.getByText('Egg ×2 added to breakfast')).toBeInTheDocument();
 
-    // Undo takes back the whole entry.
-    const toast = screen.getByText('Added to breakfast ✓ · Egg ×2').closest('.MuiSnackbarContent-root, [role="alert"]') || document.body;
-    fireEvent.click(within(toast).getAllByRole('button', { name: /^undo$/i }).pop());
+    // Undo — the ribbon's, the sheet's one Undo (A9) — takes back the whole entry.
+    fireEvent.click(within(screen.getByTestId('session-ribbon')).getByRole('button', { name: /^undo$/i }));
     await waitFor(() => expect(onUndo).toHaveBeenCalledWith(['egg-1']));
   });
 
@@ -1286,7 +1290,7 @@ describe('L2: her habitual second tap is a second serving, not a third egg', () 
     await waitFor(() => expect(onUpdateLog).toHaveBeenCalledWith('egg-1', { servings: 3 }));
     expect(onLogItems).toHaveBeenCalledTimes(1);
     expect(await screen.findByText(/3 added/, { selector: '[data-testid="food-row-subtitle"] span' })).toBeInTheDocument();
-    expect(screen.getByText('1 added to breakfast')).toBeInTheDocument();
+    expect(screen.getByText('Egg ×3 added to breakfast')).toBeInTheDocument();
   });
 
   it('B2: where the entry cannot be edited, Amount replaces it — one entry at the end', async () => {
@@ -1311,7 +1315,7 @@ describe('L2: her habitual second tap is a second serving, not a third egg', () 
     expect(onUndo).toHaveBeenCalledWith(['egg-1']);
     expect(onUndo.mock.invocationCallOrder[0]).toBeLessThan(onLogItems.mock.invocationCallOrder[1]);
     expect(onLogItems.mock.calls[1][0][0]).toMatchObject({ name: 'Egg', servings: 3 });
-    expect(await screen.findByText('1 added to breakfast')).toBeInTheDocument();
+    expect(await screen.findByText('Egg ×3 added to breakfast')).toBeInTheDocument();
   });
 
   it('a chip that re-logs two says so ("Toast ×2")', async () => {
@@ -1325,7 +1329,7 @@ describe('L2: her habitual second tap is a second serving, not a third egg', () 
 });
 
 describe('L10 + L11: the sitting shows from the first item, with Done', () => {
-  it('"1 added to lunch" and Done after one tap; Done closes; there is no Undo all', async () => {
+  it('"Fage added to lunch" and Done after one tap; Done closes; there is no Undo all', async () => {
     const onClose = vi.fn();
     const onLogItems = vi.fn().mockResolvedValue({ ok: 1, fail: 0, logIds: ['f1'], perItem: [['f1']] });
     suggest.mockResolvedValue([food('Fage', { nutrition: { calories_per_serving: 190 } })]);
@@ -1335,11 +1339,32 @@ describe('L10 + L11: the sitting shows from the first item, with Done', () => {
     fireEvent.click(await screen.findByText('Fage'));
 
     const ribbon = await screen.findByTestId('session-ribbon');
-    expect(within(ribbon).getByText('1 added to lunch')).toBeInTheDocument();
+    expect(within(ribbon).getByText('Fage added to lunch')).toBeInTheDocument();
     expect(within(ribbon).queryByRole('button', { name: /undo all/i })).toBeNull();
-    expect(within(ribbon).getByRole('button', { name: /undo last/i })).toBeInTheDocument();
+    expect(within(ribbon).getByRole('button', { name: /^undo$/i })).toBeInTheDocument();
     fireEvent.click(within(ribbon).getByRole('button', { name: 'Done' }));
     expect(onClose).toHaveBeenCalledWith({ mealType: 'lunch' });
+  });
+});
+
+describe('A9/B7: one Undo in the sheet, and one way of counting', () => {
+  it('a tap\'s toast says what landed but carries no second Undo — the ribbon has the one', async () => {
+    const onLogItems = vi.fn().mockResolvedValue({ ok: 1, fail: 0, logIds: ['e1'], perItem: [['e1']] });
+    const onUndo = vi.fn().mockResolvedValue({ deleted: ['e1'], failed: [] });
+    suggest.mockResolvedValue([food('Egg', { nutrition: { calories_per_serving: 72 } })]);
+    renderBox({ onLogItems, onUndo, mealType: 'breakfast' });
+    type('egg');
+    await vi.advanceTimersByTimeAsync(200);
+    fireEvent.click(await screen.findByText('Egg'));
+
+    expect(await screen.findByText('Added to breakfast ✓ · Egg')).toBeInTheDocument();
+    expect(screen.getAllByRole('button', { name: /undo/i })).toHaveLength(1);
+    expect(within(screen.getByTestId('session-ribbon')).getByRole('button', { name: 'Undo' })).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'Undo' }));
+    await waitFor(() => expect(onUndo).toHaveBeenCalledWith(['e1']));
+    expect(await screen.findByText('Undone ✓')).toBeInTheDocument();
+    expect(screen.queryByText('Added to breakfast ✓ · Egg')).toBeNull();
   });
 });
 
@@ -1357,15 +1382,17 @@ describe('L12: with a "Just added" strip, no toast sits on top of it', () => {
     await waitFor(() => expect(onJustAdded).toHaveBeenLastCalledWith(expect.objectContaining({ mealType: 'breakfast' })));
     await vi.advanceTimersByTimeAsync(50);
     expect(screen.queryByText(/Added to breakfast ✓/)).toBeNull();
-    expect(screen.queryByRole('button', { name: /^undo$/i })).toBeNull();
+    // No toast at all, so no toast Undo (the strip has it; the closed sheet's
+    // ribbon is all that is left in this unclosed test render).
+    expect(document.querySelector('[data-geek-toast]')).toBeNull();
   });
 
   it('with no strip to show it, the toast still says what landed, with Undo', async () => {
     renderBox({ onDescribe: vi.fn().mockResolvedValue(pancakes), onUndo: vi.fn(), onClose: vi.fn() });
     type('pancakes');
     logIt();
-    expect(await screen.findByText('Added to breakfast ✓ · Chocolate chip pancakes · 880 cal')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /^undo$/i })).toBeInTheDocument();
+    const toast = (await screen.findByText('Added to breakfast ✓ · Chocolate chip pancakes · 880 cal')).closest('[data-geek-toast]');
+    expect(within(toast).getByRole('button', { name: /^undo$/i })).toBeInTheDocument();
   });
 });
 
@@ -1507,7 +1534,7 @@ describe('L7: "Same as Chef\'s dinner"', () => {
     await waitFor(() => expect(onLogItems).toHaveBeenCalledTimes(1));
     const done = await screen.findByRole('button', { name: 'Same as Sarah’s dinner · Added' });
     expect(done).toHaveTextContent('Salmon, Rice, Beans');
-    expect(within(screen.getByTestId('session-ribbon')).getByText(/^3 added to dinner/)).toBeInTheDocument();
+    expect(within(screen.getByTestId('session-ribbon')).getByText(/^3 foods added to dinner/)).toBeInTheDocument();
 
     fireEvent.click(done);
     await vi.advanceTimersByTimeAsync(50);

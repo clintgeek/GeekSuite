@@ -194,7 +194,7 @@ export const scenes = [
       await tapRow(sheet, h, /^Add Egg, /, 'the Egg row');
       await must(sheet.getByText(/^Added$/).first(), '"Added" on the row');
       await must(sheet.getByRole('button', { name: /^Make it 2/ }), '"Make it 2"');
-      await must(sheet.getByTestId('session-ribbon').filter({ hasText: '1 added to breakfast' }), 'the ribbon "1 added to breakfast"');
+      await must(sheet.getByTestId('session-ribbon').filter({ hasText: 'Egg added to breakfast' }), 'the ribbon "Egg added to breakfast"');
       await must(sheet.getByTestId('session-done'), 'Done');
       await dismissToasts(page, h);
     },
@@ -208,8 +208,8 @@ export const scenes = [
       await tapRow(sheet, h, /^Add another Egg, /, 'the Egg row again');
       await must(sheet.getByText(/^2 added$/).first(), '"2 added" on the row');
       await must(sheet.getByRole('button', { name: /^Make it 3/ }), '"Make it 3"');
-      // One entry with two servings: still "1 added", now 144 cal.
-      await must(sheet.getByTestId('session-ribbon').filter({ hasText: '1 added to breakfast' }).filter({ hasText: '144 cal' }), 'the ribbon "1 added to breakfast · 144 cal"');
+      // One entry with two servings, named with its amount (UX review 2026-11, B7).
+      await must(sheet.getByTestId('session-ribbon').filter({ hasText: 'Egg ×2 added to breakfast' }).filter({ hasText: '144 cal' }), 'the ribbon "Egg ×2 added to breakfast · 144 cal"');
       // Two toasts are up now: stacked, both on screen, neither over Done.
       const done = rect(await sheet.getByTestId('session-done').boundingBox());
       await assertToastsClear(page, h, { min: 2, avoid: done });
@@ -309,14 +309,14 @@ export const scenes = [
       await must(sheet.getByTestId('session-ribbon'), 'the ribbon');
     },
   }),
-  // Two different foods: "2 added to breakfast", both calorie counts summed.
+  // Two different foods: "2 foods added to breakfast", both calorie counts summed.
   sheetScene('42b-ribbon-two-items', {
     experience: 'simple', meal: 'breakfast', suggest: eggSuggest,
     fn: async (page, h, sheet) => {
       await typeInto(sheet, 'egg', h, 1000);
       await tapRow(sheet, h, /^Add Egg, /, 'the Egg row');
       await tapRow(sheet, h, /^Add Egg whites, /, 'the Egg whites row');
-      await must(sheet.getByTestId('session-ribbon').filter({ hasText: '2 added to breakfast' }).filter({ hasText: '89 cal' }), 'the ribbon "2 added to breakfast · 89 cal"');
+      await must(sheet.getByTestId('session-ribbon').filter({ hasText: '2 foods added to breakfast' }).filter({ hasText: '89 cal' }), 'the ribbon "2 foods added to breakfast · 89 cal"');
       await dismissToasts(page, h);
     },
   }),
@@ -383,18 +383,21 @@ export const scenes = [
       await h.settle(300);
     },
   }),
-  // Tapped: the copy lands, the toast carries Undo, the ribbon says so.
+  // Tapped: the copy lands, the card says Added, the ribbon counts its foods
+  // and carries the one Undo (UX review 2026-11, B3 and A9/B7).
   sheetScene('45a-same-as-household-tapped', {
     meal: 'dinner',
     fn: async (page, h, sheet) => {
       await (await must(sheet.getByTestId('same-as-household'), 'the household pick')).click();
       await h.settle(1000);
       // The toast stays at the page root (portalling it into the sheet was
-      // pulled: it hopped as the sheet closed). It must be visible, carry
-      // Undo, and sit clear of the ribbon's Done.
+      // pulled: it hopped as the sheet closed). It must be visible, carry no
+      // second Undo, and sit clear of the ribbon's Done.
       const toastEl = await must(page.locator('[data-geek-toast]').first(), 'the toast');
-      await must(page.locator('[data-geek-toast] button', { hasText: 'Undo' }).first(), 'the toast Undo');
-      const ribbon = await must(sheet.getByTestId('session-ribbon'), 'the ribbon');
+      if (await page.locator('[data-geek-toast] button', { hasText: 'Undo' }).count()) throw new Error('the toast carries a second Undo; the ribbon has the one');
+      await must(sheet.getByTestId('same-as-household').filter({ hasText: 'Added' }), 'the pick in its "Added" state');
+      const ribbon = await must(sheet.getByTestId('session-ribbon').filter({ hasText: /\d+ foods added to dinner/ }), 'the ribbon counting foods');
+      await must(ribbon.getByRole('button', { name: /^Undo$/ }), 'the ribbon Undo');
       const t = await toastEl.boundingBox();
       const r = await ribbon.boundingBox();
       if (t && r && t.y + t.height > r.y + 1 && t.y < r.y + r.height - 1) {

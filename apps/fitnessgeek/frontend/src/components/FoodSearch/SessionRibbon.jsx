@@ -3,6 +3,7 @@ import { Box, Typography, Button } from '@mui/material';
 import { Undo as UndoIcon, CheckCircle as LoggedIcon } from '@mui/icons-material';
 import { useTheme, alpha, keyframes } from '@mui/material/styles';
 import { useGeekToastClearance } from '@geeksuite/ui';
+import { withAmount } from './entries.js';
 
 const riseIn = keyframes`
   from { transform: translateY(100%); opacity: 0; }
@@ -48,8 +49,10 @@ const useCountUp = (target, duration = 380) => {
  * the sheet.
  *
  * NO "UNDO ALL" (L11). A red Undo all sat beside Undo last, two small buttons
- * apart, with no redo: one slip took back the whole sitting. Undo last stays;
- * each toast still has its own Undo.
+ * apart, with no redo: one slip took back the whole sitting. Its Undo takes
+ * back the last thing added, and is the sheet's only Undo for a tap (UX
+ * review 2026-11, A9/B7: one label per scope — "Undo" for one item, "Undo
+ * all" for everything just added; the toasts no longer carry a second one).
  *
  * TOASTS STAY ABOVE IT. The ten-second "Added ✓ · Undo" toast used to land
  * right over Done on a phone, so the button she reaches for to finish was
@@ -75,6 +78,13 @@ const SessionRibbon = ({ items = [], where = null, onUndoLast, onDone, busy = fa
   const foods = items.reduce((n, item) => (
     n + (item?.type === 'household-meal' ? Math.max(1, item?.logIds?.length || 0) : 1)
   ), 0);
+  // It names what it counts (B7): the row said "2 added" (servings) while
+  // the ribbon said "1 added" (entries). One entry is named with its amount,
+  // "Egg ×2"; more are "3 foods".
+  const single = items.length === 1 && foods === 1;
+  const what = single
+    ? withAmount(items[0]?.name, items[0]?.type === 'household-meal' ? 1 : items[0]?.servings) || '1 food'
+    : `${foods} foods`;
   const displayed = useCountUp(Math.round(totalCalories));
   const ribbonRef = useRef(null);
   useGeekToastClearance(ribbonRef, items.length > 0);
@@ -108,7 +118,7 @@ const SessionRibbon = ({ items = [], where = null, onUndoLast, onDone, busy = fa
       <LoggedIcon sx={{ color: primary, fontSize: 22, flexShrink: 0 }} aria-hidden />
       <Box sx={{ minWidth: 0, flex: 1 }}>
         <Typography sx={{ fontSize: '1rem', fontWeight: 800, color: 'text.primary', lineHeight: 1.3 }}>
-          {foods} added{where ? ` to ${where}` : ''}
+          {what} added{where ? ` to ${where}` : ''}
         </Typography>
         <Typography sx={{ fontSize: '0.9375rem', color: 'text.secondary', lineHeight: 1.3 }}>
           {displayed.toLocaleString('en-US')} cal
@@ -122,7 +132,7 @@ const SessionRibbon = ({ items = [], where = null, onUndoLast, onDone, busy = fa
           disabled={busy}
           sx={{ color: 'text.primary', fontSize: '0.9375rem', fontWeight: 700, minHeight: 44, flexShrink: 0 }}
         >
-          Undo last
+          Undo
         </Button>
       )}
       {onDone && (

@@ -33,7 +33,8 @@ export default function JustAddedStrip({ items, heard, onUndo, onDone, onFix, bu
       <EntryList items={items} onFix={onFix} busy={busy} />
       <Box sx={{ display: 'flex', gap: 1, mt: 1 }}>
         <Button onClick={onUndo} disabled={busy} sx={{ minHeight: 44, fontWeight: 800, color: 'text.primary' }}>
-          {busy ? 'Undoing…' : 'Undo'}
+          {/* One label per scope (A9): "Undo all" when it takes back several. */}
+          {busy ? 'Undoing…' : items?.length > 1 ? 'Undo all' : 'Undo'}
         </Button>
         <Box sx={{ flex: 1 }} />
         <Button variant="contained" onClick={onDone} disabled={busy} sx={{ minHeight: 44, borderRadius: 999, fontWeight: 800, px: 2.5, boxShadow: 'none' }}>

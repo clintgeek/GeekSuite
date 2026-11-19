@@ -73,10 +73,10 @@ describe('the "Just added" strip', () => {
     expect(screen.queryByTestId('just-added')).toBeNull();
   });
 
-  it('Undo takes back exactly those entries and says "Undone ✓"', async () => {
+  it('Undo all takes back exactly those entries and says "Undone ✓" (A9: "Undo all" when it is several)', async () => {
     renderHome();
     await act(async () => { api.show(ENTRY); });
-    fireEvent.click(within(screen.getByTestId('just-added')).getByRole('button', { name: 'Undo' }));
+    fireEvent.click(within(screen.getByTestId('just-added')).getByRole('button', { name: 'Undo all' }));
     await waitFor(() => expect(undoLogs).toHaveBeenCalledWith(['soup', 'crk']));
     expect(await screen.findByText('Undone ✓')).toBeInTheDocument();
     expect(screen.queryByTestId('just-added')).toBeNull();

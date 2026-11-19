@@ -152,8 +152,17 @@ const FoodComposer = ({
   className
 }) => {
   const theme = useTheme();
-  const { notify } = useToast();
+  const { notify, dismiss } = useToast();
   const { offerUndo, sayUndoOutcome } = useUndoToast(onUndo);
+  // ONE UNDO IN ONE PLACE (UX review 2026-11, A9/B7). A tap logged here puts
+  // the sitting's ribbon up, and the ribbon carries Undo. The toast that says
+  // what landed no longer carries a second one: "Undo last" on the ribbon and
+  // "Undo" on the toast sat stacked over the next row for ten seconds. Its
+  // words stay (short-lived), and an Undo from the ribbon takes it down.
+  const addedToast = useRef(null);
+  const sayAdded = useCallback((message, tone = 'success') => {
+    addedToast.current = notify(message, { tone });
+  }, [notify]);
   const { isSimple } = useExperience();
   const { isOnline } = useOnlineStatus();
   const today = useToday();
@@ -303,10 +312,7 @@ const FoodComposer = ({
         ]);
         // "Egg ×2", not "Egg", when it wasn't one (L4).
         const what = items.length === 1 ? withAmount(items[0].name, items[0].type === 'household-meal' ? 1 : items[0].servings) : `${ok} items`;
-        offerUndo(addedMessage(meal || mealType, what), logIds, {
-          tone: result?.fail ? 'warning' : 'success',
-          onDeleted: forgetDeleted
-        });
+        sayAdded(addedMessage(meal || mealType, what), result?.fail ? 'warning' : 'success');
         forgetDraft();
       }
       if (result?.fail) {
@@ -322,7 +328,7 @@ const FoodComposer = ({
     } finally {
       endWrite();
     }
-  }, [onLogItems, onJustAdded, mealType, day, offerUndo, forgetDeleted, forgetDraft, sayError, beginWrite, endWrite]);
+  }, [onLogItems, onJustAdded, mealType, day, sayAdded, forgetDraft, sayError, beginWrite, endWrite]);
 
   /** What this key wrote earlier in this sitting, if it can take another serving. */
   const priorFor = useCallback((key) => {
@@ -349,7 +355,7 @@ const FoodComposer = ({
         item.logIds?.includes(logId) ? { ...item, servings: count } : item
       )));
       if (asTap) {
-        offerUndo(addedMessage(prior.mealType, withAmount(prior.name, count)), [logId], { onDeleted: forgetDeleted });
+        sayAdded(addedMessage(prior.mealType, withAmount(prior.name, count)));
       } else {
         notify(`Changed to ${count} ✓ · ${prior.name}`, { tone: 'success' });
       }
@@ -358,7 +364,7 @@ const FoodComposer = ({
     } finally {
       endWrite();
     }
-  }, [priorFor, onUpdateLog, notify, offerUndo, forgetDeleted, sayError, beginWrite, endWrite]);
+  }, [priorFor, onUpdateLog, notify, sayAdded, sayError, beginWrite, endWrite]);
 
   /**
    * "Amount" on a row already added this sitting CHANGES that entry
@@ -673,13 +679,17 @@ const FoodComposer = ({
     if (!beginWrite('undo')) return { deleted: [], failed: ids };
     try {
       const outcome = await runUndo(onUndo, ids);
+      if (outcome.deleted.length && addedToast.current != null) {
+        dismiss?.(addedToast.current);
+        addedToast.current = null;
+      }
       forgetDeleted(outcome.deleted);
       sayUndoOutcome(outcome.failed, undoIds);
       return outcome;
     } finally {
       endWrite();
     }
-  }, [onUndo, forgetDeleted, sayUndoOutcome, beginWrite, endWrite]);
+  }, [onUndo, forgetDeleted, sayUndoOutcome, dismiss, beginWrite, endWrite]);
 
   // A meal's several logs go together: it was one gesture, so it is one undo.
   const undoLast = useCallback(
@@ -769,7 +779,7 @@ const FoodComposer = ({
     return { text: null, tone: 'muted' };
   }, [offline, keepDraft, thinking, slow, failure, typed, sentence, onDescribe]);
 
-  // "1 added to lunch": the sitting's meal, when it is one meal on one day.
+  // "Egg added to lunch": the sitting's meal, when it is one meal on one day.
   const sessionWhere = session.length
     && session.every((e) => e.mealType === session[0].mealType && e.date === session[0].date)
     ? sheetMealOnDay(mealWord(session[0].mealType || mealType), session[0].date || day, today, day)
