@@ -17,8 +17,9 @@ export const SELECTION_BAR_SPACE = 120;
  * bottom, in the thumb zone, just above the phone's tab bar; on desktop it
  * spans the content column right of the sidebar.
  *
- *   lists     → Archive (≥ 1) · Compose N notes (≥ 2; says how many it
- *               will skip — sketches, mind maps, locked notes)
+ *   lists     → Archive (≥ 1) · Compose N notes (≥ 2 it can read; N counts
+ *               only those, and the hint says how many it will skip —
+ *               sketches, mind maps, locked notes)
  *   Archived  → Restore (≥ 1)
  *
  * Renders nothing outside select mode — and mounts no Apollo hooks either,
@@ -119,7 +120,9 @@ function ActiveSelectionBar({ selection, archivedView }) {
                   startIcon={<AutoAwesomeMosaic />}
                   sx={{ ...btnSx, flex: { xs: 2, sm: 'initial' } }}
                 >
-                  {count >= COMPOSE_MANY_MIN ? `Compose ${count} notes` : 'Compose'}
+                  {/* The notes it will actually compose, not the selection:
+                      a sketch it skips is not promised (review 2026-11-18 #12). */}
+                  {canCompose ? `Compose ${usable} notes` : 'Compose'}
                 </Button>
               </>
             )}

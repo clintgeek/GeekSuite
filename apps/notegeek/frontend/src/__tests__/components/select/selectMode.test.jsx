@@ -154,7 +154,9 @@ describe('the action bar (U2)', () => {
     fireEvent.click(box('Beta notes'));
     expect(screen.queryByText(/will be skipped/)).not.toBeInTheDocument();
     fireEvent.click(box('Sketch of the shed'));
-    expect(bar().getByRole('button', { name: 'Compose 3 notes' })).toBeEnabled();
+    // Three selected, two it can compose: the button promises two (#12).
+    expect(bar().getByRole('button', { name: 'Compose 2 notes' })).toBeEnabled();
+    expect(bar().queryByRole('button', { name: 'Compose 3 notes' })).toBeNull();
     expect(bar().getByText(/^1 will be skipped/)).toBeInTheDocument();
   });
 
@@ -164,7 +166,7 @@ describe('the action bar (U2)', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Select' }));
     fireEvent.click(box('Alpha plan'));
     fireEvent.click(box('Sketch of the shed'));
-    expect(bar().getByRole('button', { name: 'Compose 2 notes' })).toBeDisabled();
+    expect(bar().getByRole('button', { name: 'Compose' })).toBeDisabled();
     expect(bar().getByText('Compose needs at least two notes it can read')).toBeInTheDocument();
   });
 });

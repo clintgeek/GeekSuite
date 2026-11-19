@@ -92,7 +92,7 @@ const createMock = (fn) => ({
 });
 
 async function startCompose() {
-  const btn = await screen.findByRole('button', { name: 'Compose 3 notes' });
+  const btn = await screen.findByRole('button', { name: 'Compose 2 notes' });
   fireEvent.click(btn);
 }
 

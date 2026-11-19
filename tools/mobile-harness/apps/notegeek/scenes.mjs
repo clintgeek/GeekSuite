@@ -519,7 +519,7 @@ async function openComposeMany(page, h, calls) {
   await page.goto(h.base + '/notes', { waitUntil: 'networkidle' });
   await h.settle(1000);
   await selectThree(page, h);
-  await page.getByRole('button', { name: 'Compose 3 notes' }).click();
+  await page.getByRole('button', { name: 'Compose 2 notes' }).click();
   await page.getByRole('heading', { name: 'Shipping' }).waitFor({ timeout: 10000 });
   await h.settle(500);
   if (calls.compose.length !== 1) throw new Error(`composeNotes called ${calls.compose.length} times`);
@@ -1796,7 +1796,8 @@ export const scenes = [
   {
     // Select mode in All notes: three picked (one a sketch). Each row a
     // checkbox, "3 selected" + Cancel up top, the action bar above the tab
-    // bar with "Compose 3 notes" and the skip count, and Archive.
+    // bar with "Compose 2 notes" (the sketch is not counted) and the skip
+    // count, and Archive.
     name: '20a-select-mode',
     async setup(page, h) {
       await stubSelect(page);
@@ -1804,7 +1805,7 @@ export const scenes = [
       await h.settle(1000);
       await selectThree(page, h);
       const bar = page.getByRole('toolbar', { name: 'Selected notes' });
-      if (await bar.getByRole('button', { name: 'Compose 3 notes' }).isDisabled()) throw new Error('Compose 3 notes is disabled');
+      if (await bar.getByRole('button', { name: 'Compose 2 notes' }).isDisabled()) throw new Error('Compose 2 notes is disabled');
       if (await bar.getByRole('button', { name: 'Archive' }).isDisabled()) throw new Error('Archive is disabled');
       if (!(await bar.getByText(/^1 will be skipped/).count())) throw new Error('the bar does not say the sketch will be skipped');
       if (!(await page.getByRole('button', { name: 'Cancel' }).count())) throw new Error('no Cancel in select mode');
@@ -1813,7 +1814,7 @@ export const scenes = [
     teardown: (page, h) => h.esc(400),
   },
   {
-    // Compose 3 notes -> the draft, with the left-out sketch named above it,
+    // Compose 2 notes (3 selected, 1 sketch) -> the draft, with the left-out sketch named above it,
     // and Save as a new note (no Replace).
     name: '20b-compose-many-draft',
     async setup(page, h) {
