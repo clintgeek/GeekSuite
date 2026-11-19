@@ -106,11 +106,14 @@ export default function InlineEditor({ task, onSave, onCancel, onDelete, apiRef,
         size="small"
         inputProps={{ 'aria-describedby': `${idBase}-hint` }}
       />
-      {/* The date input needs ~150px for "11/15/2026" and its picker icon: the
-          columns have a floor, so the last digit is never clipped. */}
+      {/* The date input needs ~150px for "11/15/2026" and its picker icon, the
+          time ~136px for "02:00 PM" and its clock: the columns have a floor,
+          so neither is clipped. Tags take their own line everywhere (in the
+          desktop pane a third column squeezed Time to "02:00 P", review
+          2026-11-18 #6). */}
       <Box sx={{
         display: 'grid',
-        gridTemplateColumns: { xs: 'minmax(150px, 1.2fr) minmax(110px, 1fr)', sm: 'minmax(160px, 1fr) minmax(120px, 1fr) 2fr' },
+        gridTemplateColumns: 'minmax(150px, 1.2fr) minmax(136px, 1fr)',
         gap: 3,
         alignItems: 'start',
       }}
@@ -123,7 +126,7 @@ export default function InlineEditor({ task, onSave, onCancel, onDelete, apiRef,
           onChange={set('tags')}
           size="small"
           placeholder="#work #fd"
-          sx={{ gridColumn: { xs: '1 / -1', sm: 'auto' } }}
+          sx={{ gridColumn: '1 / -1' }}
         />
       </Box>
       <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 3, alignItems: 'center' }}>

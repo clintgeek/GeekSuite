@@ -381,8 +381,10 @@ function PenRow({
           '@media (any-hover: hover)': {
             '&:hover': { backgroundColor: p.fill },
             '&:hover [data-row-actions], &:focus-within [data-row-actions]': { opacity: 1 },
-            // The buttons take the time's place while they show.
-            '&:hover [data-row-when="column"], &:focus-within [data-row-when="column"]': { opacity: 0 },
+            // The buttons take the time's place while they show. Both switch
+            // at once, no fade: a cross-fade left the icons half-drawn over a
+            // half-gone "2pm" on the open row (UX review 2026-11-18 #6).
+            '&:hover [data-row-when="column"], &:focus-within [data-row-when="column"]': { opacity: 0, visibility: 'hidden' },
           },
         }}
       >
@@ -554,7 +556,6 @@ function PenRow({
               whiteSpace: 'nowrap',
               color: when.late || passed ? p.red : p.grey,
               fontWeight: when.late || passed ? 600 : 400,
-              transition: motion ? 'opacity 100ms ease' : 'none',
             }}
           >
             {passed ? `${when.text} · passed` : when.text}
@@ -567,7 +568,6 @@ function PenRow({
             sx={{
               position: 'absolute', right: sortable ? 48 : 4, top: 6, display: 'flex', gap: 0.5,
               backgroundColor: p.fill, borderRadius: '4px', opacity: 0,
-              transition: motion ? 'opacity 100ms ease' : 'none',
             }}
           >
             <HoverAction label={done ? 'Not done' : 'Done'} onClick={() => onDone?.(task)}><Check size={18} /></HoverAction>

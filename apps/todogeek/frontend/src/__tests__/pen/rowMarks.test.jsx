@@ -127,6 +127,16 @@ describe('row actions follow any hover-capable pointer (4.3)', () => {
     row(t());
     expect(document.querySelector('[data-row-actions]')).not.toBeNull();
   });
+  it('the time is gone, not fading, while the actions show (no icons over "2pm", review 2026-11-18 #6)', () => {
+    media(/any-hover:\s*hover|any-pointer:\s*fine/);
+    row(t({ dueDate: new Date(2026, 8, 29, 14).toISOString() }));
+    const when = document.querySelector('[data-row-when="column"]');
+    const actions = document.querySelector('[data-row-actions]');
+    expect(getComputedStyle(when).transition || '').not.toMatch(/opacity/);
+    expect(getComputedStyle(actions).transition || '').not.toMatch(/opacity/);
+    const css = [...document.querySelectorAll('style')].map((s) => s.textContent).join('\n');
+    expect(css).toMatch(/:focus-within \[data-row-when="column"\]\{opacity:0;visibility:hidden;\}/);
+  });
   it('a touch-only device does not', () => {
     media(/^$/);
     row(t());
