@@ -34,12 +34,46 @@ afterEach(() => {
   assign.mockRestore();
 });
 
+describe('Share / Copy link (UX review 2026-11-18, finding 6)', () => {
+  const withOpener = { readerLinks: LINKS, openers: [{ __typename: 'NewsOpener', sourceId: 's1', domain: null, linkId: 'aaa111' }] };
+  afterEach(() => {
+    delete navigator.share;
+  });
+
+  it('with a share sheet: "Share…" shares the ORIGINAL url and title, never the opener’s', async () => {
+    const share = vi.fn().mockResolvedValue(undefined);
+    navigator.share = share;
+    renderWithProviders(<ArticleItem article={STORY} {...withOpener} />);
+    await userEvent.click(screen.getByRole('button', { name: /More for/ }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Share…' }));
+    expect(share).toHaveBeenCalledWith({ title: 'Fire & ice', url: 'https://pub.example/a?b=1' });
+  });
+
+  it('dismissing the share sheet says nothing', async () => {
+    navigator.share = vi.fn().mockRejectedValue(Object.assign(new Error('cancelled'), { name: 'AbortError' }));
+    renderWithProviders(<ArticleItem article={STORY} readerLinks={LINKS} />);
+    await userEvent.click(screen.getByRole('button', { name: /More for/ }));
+    await userEvent.click(await screen.findByRole('menuitem', { name: 'Share…' }));
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByRole('alert')).toBeNull();
+  });
+
+  it('without one: "Copy link" copies the original url and says "Link copied."', async () => {
+    const user = userEvent.setup();
+    renderWithProviders(<ArticleItem article={STORY} {...withOpener} />);
+    await user.click(screen.getByRole('button', { name: /More for/ }));
+    await user.click(await screen.findByRole('menuitem', { name: 'Copy link' }));
+    expect(await screen.findByText('Link copied.')).toBeInTheDocument();
+    expect(await navigator.clipboard.readText()).toBe('https://pub.example/a?b=1');
+  });
+});
+
 describe('a story’s ⋯ menu', () => {
-  it('lists "Open at publisher" first, then the reader’s links in order', async () => {
+  it('lists "Open at publisher" first, then Copy link (no share sheet here), then the reader’s links in order', async () => {
     renderWithProviders(<ArticleItem article={STORY} readerLinks={LINKS} />);
     await userEvent.click(screen.getByRole('button', { name: 'More for “Fire & ice”' }));
     const items = within(await screen.findByRole('menu')).getAllByRole('menuitem');
-    expect(items.map((i) => i.textContent)).toEqual(['Open at publisher', 'Reader one', 'Reader two']);
+    expect(items.map((i) => i.textContent)).toEqual(['Open at publisher', 'Copy link', 'Reader one', 'Reader two']);
   });
 
   it('opens a reader link with the built URL and noopener,noreferrer', async () => {
@@ -56,7 +90,7 @@ describe('a story’s ⋯ menu', () => {
     expect(open).toHaveBeenCalledWith('https://pub.example/a?b=1', '_blank', 'noopener,noreferrer');
   });
 
-  it('with no links: just "Open at publisher" and "Add open-with links…", which goes to Settings', async () => {
+  it('with no links: "Open at publisher", Copy link and "Add open-with links…", which goes to Settings', async () => {
     renderWithProviders(
       <Routes>
         <Route path="/" element={<ArticleItem article={STORY} readerLinks={[]} />} />
@@ -65,8 +99,8 @@ describe('a story’s ⋯ menu', () => {
     );
     await userEvent.click(screen.getByRole('button', { name: /More for/ }));
     const items = within(await screen.findByRole('menu')).getAllByRole('menuitem');
-    expect(items.map((i) => i.textContent)).toEqual(['Open at publisher', 'Add open-with links…']);
-    await userEvent.click(items[1]);
+    expect(items.map((i) => i.textContent)).toEqual(['Open at publisher', 'Copy link', 'Add open-with links…']);
+    await userEvent.click(items[2]);
     expect(await screen.findByText('settings page')).toBeInTheDocument();
   });
 
