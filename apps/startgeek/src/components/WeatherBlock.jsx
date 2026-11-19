@@ -1,6 +1,7 @@
 import { motion } from 'framer-motion'
 import { useWeather } from '../hooks/useWeather'
 import { ANIMATION, REDUCED_MOTION } from '../constants'
+import { sentenceCase, weatherStats, STAT_SEPARATOR } from '../lib/weatherText'
 
 const SHADOW = { textShadow: '0 2px 30px rgba(0,0,0,0.35)' }
 
@@ -31,12 +32,13 @@ const WeatherBlock = ({ onOpen }) => {
   }
 
   const city = w.location?.split(',')[0] || 'Local'
-  const hasRange = today && Number.isFinite(today.highTemp) && Number.isFinite(today.lowTemp)
-  const stats = [
-    hasRange ? `H ${today.highTemp} · L ${today.lowTemp}` : null,
-    Number.isFinite(w.humidity) ? `${w.humidity}% RH` : null,
-    Number.isFinite(w.windSpeed) ? `W ${w.windSpeed} mph` : null,
-  ].filter(Boolean)
+  const stats = weatherStats({
+    high: today?.highTemp,
+    low: today?.lowTemp,
+    humidity: w.humidity,
+    windSpeed: w.windSpeed,
+  })
+  const description = sentenceCase(w.description)
 
   return (
     <motion.button
@@ -46,7 +48,7 @@ const WeatherBlock = ({ onOpen }) => {
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: ANIMATION.SLOW, ease: ANIMATION.EASE, delay: 0.1 }}
       className="hero-weather group flex flex-col items-end justify-end gap-1.5 text-right select-none rounded-lg -mr-2 pr-2"
-      aria-label={`Weather in ${city}: ${w.temperature} degrees, ${w.description}. Open details`}
+      aria-label={`Weather in ${city}: ${w.temperature} degrees, ${description}. Open details`}
     >
       <span
         className="hero-weather-num flex items-baseline gap-3.5 font-extralight leading-[0.92] tracking-[-0.035em] tnum text-ink"
@@ -58,12 +60,12 @@ const WeatherBlock = ({ onOpen }) => {
       <span className="on-photo text-[17px] text-ink-2">
         <span className="font-medium text-ink">{city}</span>
         <span className="mx-2 text-ink-2" aria-hidden="true">·</span>
-        {w.description}
+        {description}
       </span>
 
       {stats.length > 0 && (
         <span className="on-photo font-mono text-[12px] tracking-[0.06em] uppercase text-ink-2 tnum">
-          {stats.join('   ')}
+          {stats.join(STAT_SEPARATOR)}
           <span className="weather-details-link ml-3 text-ink-2 group-hover:text-accent transition-colors">Details</span>
         </span>
       )}

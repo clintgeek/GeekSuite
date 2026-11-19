@@ -279,7 +279,7 @@ class WeatherService {
   getConditionFromCode(code) {
     const codeMap = {
       0: 'Clear', 1: 'Mainly Clear', 2: 'Partly Cloudy', 3: 'Overcast',
-      45: 'Fog', 48: 'Rime Fog',
+      45: 'Fog', 48: 'Freezing Fog',
       51: 'Light Drizzle', 53: 'Drizzle', 55: 'Heavy Drizzle',
       56: 'Freezing Drizzle', 57: 'Freezing Drizzle',
       61: 'Light Rain', 63: 'Rain', 65: 'Heavy Rain',
@@ -295,7 +295,7 @@ class WeatherService {
   getDescriptionFromCode(code) {
     const descriptions = {
       0: 'clear sky', 1: 'mainly clear', 2: 'partly cloudy', 3: 'overcast',
-      45: 'fog', 48: 'depositing rime fog',
+      45: 'fog', 48: 'freezing fog',
       51: 'light drizzle', 53: 'moderate drizzle', 55: 'dense drizzle',
       56: 'light freezing drizzle', 57: 'dense freezing drizzle',
       61: 'slight rain', 63: 'moderate rain', 65: 'heavy rain',

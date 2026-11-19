@@ -1,17 +1,13 @@
 import { useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { useWeather } from '../hooks/useWeather'
+import { useSettings } from '../hooks/useSettings'
 import { ANIMATION, REDUCED_MOTION } from '../constants'
+import { formatIsoTime } from '../lib/time'
+import { sentenceCase } from '../lib/weatherText'
 
 const FOCUSABLE =
   'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
-
-const hhmm = (iso) => {
-  if (!iso) return null
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return null
-  return `${d.getHours()}:${String(d.getMinutes()).padStart(2, '0')}`
-}
 
 const Detail = ({ k, v }) => (
   <div className="flex flex-col gap-1 min-w-0 border-t border-hair pt-3">
@@ -54,7 +50,7 @@ const Week = ({ days }) => {
             <div className={`font-mono text-[12px] tracking-[0.08em] uppercase ${today ? 'text-accent' : 'text-ink-3'}`}>
               {today ? 'Today' : d.dayName}
             </div>
-            <div className="text-[12px] text-ink-2 truncate">{d.condition}</div>
+            <div className="text-[12px] text-ink-2 truncate">{sentenceCase(d.condition)}</div>
             <div className="range">
               <i style={{ top: `${top}%`, height: `${height}%` }} />
             </div>
@@ -75,6 +71,8 @@ const Week = ({ days }) => {
 const WeatherModal = ({ open, onClose }) => {
   const panelRef = useRef(null)
   const { local } = useWeather()
+  const { settings } = useSettings()
+  const hour12 = settings.clock !== '24'
   const { current: w, forecast } = local
   const today = forecast?.[0]
 
@@ -142,7 +140,7 @@ const WeatherModal = ({ open, onClose }) => {
                   <span className="font-extralight leading-none tracking-[-0.03em] tnum text-ink text-[64px]">
                     {w.temperature}°
                   </span>
-                  <span className="text-[15px] text-ink-2">{w.description}</span>
+                  <span className="text-[15px] text-ink-2">{sentenceCase(w.description)}</span>
                 </div>
               </div>
               <button
@@ -162,8 +160,8 @@ const WeatherModal = ({ open, onClose }) => {
               <Detail k="Wind" v={Number.isFinite(w.windSpeed) ? `${w.windSpeed} mph` : null} />
               <Detail k="Rain chance" v={Number.isFinite(w.precipitationProbability) ? `${w.precipitationProbability}%` : null} />
               <Detail k="Pressure" v={Number.isFinite(w.pressure) ? `${Math.round(w.pressure)} hPa` : null} />
-              <Detail k="Sunrise" v={hhmm(today?.sunrise)} />
-              <Detail k="Sunset" v={hhmm(today?.sunset)} />
+              <Detail k="Sunrise" v={formatIsoTime(today?.sunrise, hour12)} />
+              <Detail k="Sunset" v={formatIsoTime(today?.sunset, hour12)} />
             </div>
 
             <div className="mt-8">

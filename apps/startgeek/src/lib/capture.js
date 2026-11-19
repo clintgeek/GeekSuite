@@ -19,6 +19,9 @@
 // a note capture is protected by the busy guard only.
 
 import { toCreateInput } from '@geeksuite/task-grammar'
+import { formatTime } from './time.js'
+
+export { formatTime }
 
 /** A fresh id for one capture. */
 export function newClientId() {
@@ -104,16 +107,6 @@ export function describeCapture(fields, { now = new Date(), hour12 = true } = {}
   if (fields?.blocked) parts.push('#blocked')
   if (fields?.private) parts.push('private')
   return `Added for ${parts.join(' · ')}`
-}
-
-/** 2pm, 2:30pm, or 14:00 / 14:30 on a 24-hour clock. */
-export function formatTime(date, hour12 = true) {
-  const h = date.getHours()
-  const m = date.getMinutes()
-  const mm = String(m).padStart(2, '0')
-  if (!hour12) return `${String(h).padStart(2, '0')}:${mm}`
-  const h12 = h % 12 === 0 ? 12 : h % 12
-  return `${h12}${m ? `:${mm}` : ''}${h < 12 ? 'am' : 'pm'}`
 }
 
 /**
