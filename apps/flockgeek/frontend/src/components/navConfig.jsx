@@ -63,7 +63,6 @@ export const bottomNavItems = [
 
 /** Routes that have a page title but deliberately no nav row. */
 const extraTitles = {
-  "/dashboard": "Dashboard",
   "/settings": "Settings"
 };
 

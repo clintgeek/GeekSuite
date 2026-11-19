@@ -19,7 +19,7 @@
  * `GeekAppFrame`, whose route transition would otherwise capture a fixed
  * child. No page registered → no FAB.
  *
- * Eight of the ten routes are `lazy()` (see `App.jsx`), so the `Outlet` is
+ * Seven of the nine routes are `lazy()` (see `App.jsx`), so the `Outlet` is
  * wrapped in a `Suspense` boundary. It sits INSIDE `GeekShell` and inside
  * `GeekAppFrame`, at the same depth as the page itself: a boundary any higher
  * would tear the sidebar, top bar and bottom tab bar down to a spinner every

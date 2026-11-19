@@ -11,7 +11,7 @@ import HomePage from "./pages/HomePage";
  *
  * Every page used to be a static import, so one visitor to Home downloaded
  * BirdsPage's 748 lines, both ledger dialogs and every GraphQL document in
- * the app before anything painted. The eight pages below are `lazy()` — each
+ * the app before anything painted. The seven pages below are `lazy()` — each
  * becomes its own chunk that loads when its route is first entered, behind
  * the `Suspense` boundary `LayoutShell` puts around the `Outlet` (so the
  * shell, sidebar, top bar and bottom nav stay mounted while a chunk lands).
@@ -34,7 +34,6 @@ import HomePage from "./pages/HomePage";
  * is missing. `QuickHarvestEntry`/`QuickHarvestSheet` are shared by Home and
  * EggLog, so they ride in the eager Home graph and EggLog reuses them.
  */
-const DashboardPage = lazy(() => import("./pages/DashboardPage"));
 const BirdsPage = lazy(() => import("./pages/BirdsPage"));
 const GroupsPage = lazy(() => import("./pages/GroupsPage"));
 const LocationsPage = lazy(() => import("./pages/LocationsPage"));
@@ -110,7 +109,6 @@ const App = () => {
       {/* Protected Routes */}
       <Route path="/" element={<ProtectedRoute element={<LayoutShell />} />}>
         <Route index element={<HomePage />} />
-        <Route path="dashboard" element={<DashboardPage />} />
         <Route path="birds" element={<BirdsPage />} />
         <Route path="groups" element={<GroupsPage />} />
         <Route path="locations" element={<LocationsPage />} />
