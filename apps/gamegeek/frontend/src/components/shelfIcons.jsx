@@ -3,7 +3,6 @@
  * button (review 2026-11-18 #6: a Finished game used to wear Backlog's
  * bookmark there). Custom shelves share one icon; no shelf is a question mark.
  */
-import React from 'react';
 import {
   BookmarkBorder as BacklogIcon,
   CheckCircleOutline as FinishedIcon,
@@ -25,15 +24,8 @@ export const SHELF_ICON_COMPONENTS = {
   unshelved: UnshelvedIcon,
 };
 
-export { CustomIcon as CustomShelfIcon };
-
 /** The icon component for a shelf id: built-in, custom, or none. */
 export function shelfIconFor(shelf) {
   if (!shelf) return UnshelvedIcon;
   return SHELF_ICON_COMPONENTS[shelf] || CustomIcon;
-}
-
-export function ShelfIcon({ shelf, ...props }) {
-  const Icon = shelfIconFor(shelf);
-  return <Icon data-shelf-icon={shelf || 'unshelved'} {...props} />;
 }

@@ -10,7 +10,7 @@
  */
 import React from 'react';
 import { Box, Button } from '@mui/material';
-import { ShelfIcon } from '../../components/shelfIcons';
+import { shelfIconFor } from '../../components/shelfIcons';
 import {
   MoreHoriz as MoreIcon,
   StarBorder as RateIcon,
@@ -36,6 +36,7 @@ const BAR_BUTTON_SX = {
 export const CLOSE_CLEARANCE = '56px';
 
 export default function ActionBar({ shelf, shelfName, rating, onStatus, onRate, onMore }) {
+  const ShelfIcon = shelfIconFor(shelf);
   return (
     <Box
       data-testid="detail-actions"
@@ -56,7 +57,7 @@ export default function ActionBar({ shelf, shelfName, rating, onStatus, onRate, 
       }}
     >
       <Button onClick={onStatus} sx={BAR_BUTTON_SX} aria-label={`Shelf: ${shelfName}. Change`}>
-        <ShelfIcon shelf={shelf} sx={{ color: 'primary.main' }} />
+        <ShelfIcon data-shelf-icon={shelf || 'unshelved'} sx={{ color: 'primary.main' }} />
         <Box component="span" sx={{ maxWidth: '100%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
           {shelfName}
         </Box>

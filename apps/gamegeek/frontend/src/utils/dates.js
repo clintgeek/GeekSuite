@@ -101,3 +101,12 @@ export function formatHours(hours) {
   const rounded = h >= 100 ? Math.round(h) : Math.round(h * 10) / 10;
   return `${rounded} h`;
 }
+
+/**
+ * "Played today", "Played 3 days ago" — but "Played Sep 22", never "sep 22"
+ * (review 2026-11-18 #8): of `relativeInstant`'s answers, only the relative
+ * words are lower-cased.
+ */
+export function playedWhen(last) {
+  return /^(Today|Yesterday|\d+ days ago)$/.test(last) ? last.toLowerCase() : last;
+}

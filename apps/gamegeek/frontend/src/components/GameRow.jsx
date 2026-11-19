@@ -6,21 +6,13 @@
  */
 import React from 'react';
 import { Box, ButtonBase, Typography } from '@mui/material';
-import { relativeInstant } from '../utils/dates';
+import { playedWhen, relativeInstant } from '../utils/dates';
 import { platformShort, shelfLabel } from '../utils/vocab';
 import GameCover from './GameCover';
 import { copyPlatforms } from './PlatformChips';
 import ShelfTag from './ShelfTag';
 import StarRating from './StarRating';
 import { canRate, metaLine } from './gameDisplay';
-
-/**
- * "Played today", "Played 3 days ago" — but "Played Sep 22", never "sep 22"
- * (review 2026-11-18 #8): only the relative words are lower-cased.
- */
-export function playedWhen(last) {
-  return /^(Today|Yesterday|\d+ days ago)$/.test(last) ? last.toLowerCase() : last;
-}
 
 export default function GameRow({ game, onOpen, onRate, showShelf = true, customShelves = [] }) {
   const title = game.title || 'Untitled';

@@ -1,6 +1,6 @@
 /** Review 2026-11-18 #8: "Played Sep 22", not "Played sep 22". */
 import { describe, expect, it } from 'vitest';
-import { playedWhen } from '../../components/GameRow';
+import { playedWhen } from '../../utils/dates';
 
 describe('playedWhen', () => {
   it('keeps a month name capitalised', () => {

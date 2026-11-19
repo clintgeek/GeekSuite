@@ -23,10 +23,10 @@ import { canonicalSearch, savedViewSearch } from '../utils/libraryFilter';
 import { displayNameFrom, initialsFrom, secondaryFrom } from '../utils/userDisplay';
 import { APP_NAME, LIBRARY_NAV_ID, activeNavId, isLibraryPath, shelfNavId } from './navConfig';
 import SavePointMark from './SavePointMark';
-import { CustomShelfIcon as CustomIcon, SHELF_ICON_COMPONENTS } from './shelfIcons';
+import { SHELF_ICON_COMPONENTS, shelfIconFor } from './shelfIcons';
 
 const SHELF_ICONS = Object.fromEntries(
-  Object.entries(SHELF_ICON_COMPONENTS).map(([id, Icon]) => [id, <Icon key={id} />])
+  Object.entries(SHELF_ICON_COMPONENTS).map(([id, icon]) => [id, React.createElement(icon)])
 );
 
 /**
@@ -83,7 +83,7 @@ export default function Sidebar({ user, shelves, stats, onSignOut }) {
   const shelfItems = shelves.map((shelf) => ({
     id: shelfNavId(shelf.id),
     label: shelf.label,
-    icon: SHELF_ICONS[shelf.id] ?? <CustomIcon />,
+    icon: SHELF_ICONS[shelf.id] ?? React.createElement(shelfIconFor(shelf.id)),
     badge: shelfCount(stats, shelf.id),
     badgeProps,
     to: `/?shelf=${encodeURIComponent(shelf.id)}`,
