@@ -5,6 +5,7 @@ import {
   MonitorHeart as BPIcon,
   DirectionsWalk as StepsIcon,
   Whatshot as StreakIcon,
+  Add as AddIcon,
 } from '@mui/icons-material';
 import { useTheme } from '@mui/material/styles';
 import { Link as RouterLink, useNavigate } from 'react-router-dom';
@@ -514,6 +515,34 @@ const DashboardNew = () => {
             data-testid="what-did-you-eat"
             onClick={() => setAddMeal(mealTypeForHour(hour))}
             sx={{ minHeight: 64, borderRadius: '20px', fontSize: '1.25rem', fontWeight: 800, textTransform: 'none' }}
+          >
+            What did you eat?
+          </Button>
+        )}
+
+        {/* Full: the same job, in the compact form (UX review 2026-11, A1).
+            Chef adds food more than anything else, and the first "+ Add" was
+            a screen and a half down under the plate and macros. One normal
+            pill, not Simple's big bar: it opens the sheet on this hour's meal. */}
+        {!isSimple && (
+          <Button
+            variant="outlined"
+            fullWidth
+            startIcon={<AddIcon aria-hidden />}
+            data-testid="full-add-food"
+            onClick={() => setAddMeal(mealTypeForHour(hour))}
+            sx={{
+              minHeight: 48,
+              borderRadius: '999px',
+              borderWidth: 2,
+              fontSize: '1rem',
+              fontWeight: 800,
+              textTransform: 'none',
+              justifyContent: { xs: 'center', sm: 'flex-start' },
+              maxWidth: { sm: 360 },
+              px: 2.5,
+              '&:hover': { borderWidth: 2 },
+            }}
           >
             What did you eat?
           </Button>

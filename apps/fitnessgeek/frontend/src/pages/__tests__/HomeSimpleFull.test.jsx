@@ -294,6 +294,25 @@ describe('Simple Home: Add first (review Phase 2.13)', () => {
     expect(screen.queryByTestId('what-did-you-eat')).toBeNull();
   });
 
+  it('A1: Full has a compact add above the plate, and it opens the sheet on this hour\'s meal', async () => {
+    renderHome(experience());
+    const button = await screen.findByTestId('full-add-food');
+    expect(button).toHaveTextContent('What did you eat?');
+    expect(button.className).toMatch(/MuiButton-outlined/);
+    const hero = screen.getByTestId('home-hero');
+    expect(button.compareDocumentPosition(hero) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    await act(async () => { fireEvent.click(button); });
+    const sheet = await screen.findByRole('dialog');
+    const meal = mealTypeForHour(new Date().getHours());
+    expect(within(sheet).getByText(new RegExp(`^Add to ${meal === 'snack' ? 'snacks?' : meal}$`))).toBeInTheDocument();
+  });
+
+  it('Simple has no second, compact add — its big bar is the one', async () => {
+    renderHome(experience(SIMPLE));
+    await screen.findByTestId('what-did-you-eat');
+    expect(screen.queryByTestId('full-add-food')).toBeNull();
+  });
+
   it("Full's plate says how much is eaten (72%), not 660 a third time (review D-14)", async () => {
     renderHome(experience());
     await screen.findByTestId('calories-sentence');
