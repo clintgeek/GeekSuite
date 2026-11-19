@@ -8,6 +8,12 @@
 import { graphqlRoute } from '../../lib/net.mjs';
 import { OPS, EGGS } from './fixtures.mjs';
 
+const localToday = () => {
+  const d = new Date();
+  const pad = (n) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+};
+
 export const scenes = [
   { name: '01-home', goto: '/', wait: 1500 },
 
@@ -37,7 +43,10 @@ export const scenes = [
     async setup(page, h) {
       await graphqlRoute(page, {
         ...OPS,
-        GetEggProductions: { eggProductions: EGGS.slice(1) },
+        // Drop anything dated today or later in the browser's own day: the
+        // fixture's day() takes its date from UTC, so late in a US evening
+        // day(-1) is already "today" locally.
+        GetEggProductions: { eggProductions: EGGS.filter((e) => e.date.slice(0, 10) < localToday()) },
       });
       await page.goto(h.base + '/', { waitUntil: 'networkidle' });
       await h.settle(1500);

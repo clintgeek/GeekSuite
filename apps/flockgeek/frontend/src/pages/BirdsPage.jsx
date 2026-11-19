@@ -26,7 +26,7 @@ import { formatDay } from "../utils/formatDate";
  */
 const BIRD_GRID_SX = {
   display: "grid",
-  gridTemplateColumns: "120px minmax(160px, 1fr) 120px 190px 160px 150px",
+  gridTemplateColumns: "110px minmax(140px, 1fr) 110px 170px 130px 130px",
   columnGap: "16px",
   alignItems: "center",
   width: "100%",

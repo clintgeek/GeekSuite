@@ -36,6 +36,7 @@ const TodayLine = ({ today, locationName = () => null, onLog, isMobile }) => {
       }}
     >
       {today.logged ? (
+        <>
         <Typography variant="body1" sx={{ display: "flex", alignItems: "center", gap: 1, minHeight: 44 }}>
           <CheckIcon fontSize="small" sx={{ color: "success.main" }} aria-hidden="true" />
           <span>
@@ -44,6 +45,13 @@ const TodayLine = ({ today, locationName = () => null, onLog, isMobile }) => {
             {pens.length ? ` · ${pens.join(", ")}` : ""}
           </span>
         </Typography>
+        {/* The way to today's records — and, on the phone, the one focusable
+            thing in the scrolling frame once the FAB has left it (axe
+            scrollable-region-focusable). */}
+        <Button component={RouterLink} to="/egg-log" variant="text" sx={{ minHeight: 44, fontWeight: 600 }}>
+          Egg log
+        </Button>
+        </>
       ) : (
         <>
           <Typography variant="body1" sx={{ minHeight: 44, display: "flex", alignItems: "center" }}>
