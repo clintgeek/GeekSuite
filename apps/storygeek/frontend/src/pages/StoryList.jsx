@@ -176,7 +176,8 @@ function StoryList() {
           <Typography variant="h2" component="h1" sx={{
             mt: 1, fontSize: { xs: '1.6rem', md: '2rem' },
             [theme.breakpoints.down('md')]: {
-              position: 'absolute', width: 1, height: 1, p: 0, m: -1, overflow: 'hidden',
+              // px strings: a bare 1 in sx is 100%, and m: -1 is a spacing step.
+              position: 'absolute', width: '1px', height: '1px', p: 0, m: '-1px', overflow: 'hidden',
               clip: 'rect(0 0 0 0)', whiteSpace: 'nowrap', border: 0,
             },
           }}>
