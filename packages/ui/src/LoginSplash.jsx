@@ -128,7 +128,7 @@ export function LoginSplash({
                 color: 'primary.main',
                 mb: 2,
                 display: 'block',
-                fontSize: '0.7rem',
+                fontSize: '0.75rem',
                 fontWeight: 700,
                 letterSpacing: '0.08em',
               }}
@@ -315,7 +315,7 @@ export function LoginSplash({
             }}
           >
             <Box sx={{ flex: 1, height: '1px', bgcolor: 'divider' }} />
-            <Typography variant="caption" sx={{ color: 'text.muted', fontWeight: 600, fontSize: '0.65rem', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+            <Typography variant="caption" sx={{ color: 'text.muted', fontWeight: 600, fontSize: '0.75rem', letterSpacing: '0.08em', textTransform: 'uppercase' }}>
               Secured by GeekBase
             </Typography>
             <Box sx={{ flex: 1, height: '1px', bgcolor: 'divider' }} />
@@ -338,7 +338,7 @@ export function LoginSplash({
                     px: 1.5,
                     py: 0.5,
                     borderRadius: 1.5,
-                    fontSize: '0.7rem',
+                    fontSize: '0.75rem',
                     fontWeight: 600,
                     color: 'text.secondary',
                     bgcolor: alpha(theme.palette.text.primary, 0.04),
@@ -357,7 +357,7 @@ export function LoginSplash({
           sx={{
             mt: 3,
             color: 'text.muted',
-            fontSize: '0.65rem',
+            fontSize: '0.75rem',
             letterSpacing: '0.05em',
             opacity: 0,
             animation: mounted ? 'fadeIn 400ms ease-out 600ms forwards' : 'none',
