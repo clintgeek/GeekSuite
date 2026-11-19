@@ -87,7 +87,33 @@ function clockText(date) {
   return date.toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' });
 }
 
-function Fascia({ user, status, now }) {
+/**
+ * What the board is counting, by name: every station lamp that is not green
+ * and every annunciator window lit at caution. The flaps say "3 cautions";
+ * this says which three, so the first screen never says "trouble" while
+ * showing "all fine".
+ */
+export function lineCauses({ stations = [], attention = [] } = {}) {
+  const lamps = stations
+    .filter((s) => s.state === LAMP.FAULT || s.state === LAMP.WARN)
+    .map((s) => `${s.label} ${s.state === LAMP.FAULT ? 'down' : 'degraded'}`);
+  const windows = annunciate(attention)
+    .filter((t) => t.lit && t.severity === 'warn')
+    .map((t) => (t.count > 1 ? `${t.label} ×${t.count}` : t.label));
+  return { lamps, windows, all: [...lamps, ...windows] };
+}
+
+/** Scroll a panel into view and move focus to it (motion-aware). */
+function jumpTo(id, reduced) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.scrollIntoView?.({ behavior: reduced ? 'auto' : 'smooth', block: 'start' });
+  el.focus?.({ preventScroll: true });
+}
+
+function Fascia({ user, status, now, causes, target, reduced }) {
+  const lit = causes.length > 0 && Boolean(target);
+  const targetName = target === 'annunciator' ? 'the Annunciator' : 'The line';
   return (
     <Box
       component="header"
@@ -112,13 +138,47 @@ function Fascia({ user, status, now }) {
           flexWrap: 'wrap',
         })}
       >
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.25, minWidth: 0, flex: '1 1 260px' }}>
+        <Box
+          // When anything is lit the whole status is a link to where the
+          // causes are listed; when the line is clear it is just a reading.
+          {...(lit ? {
+            component: 'a',
+            href: `#${target}`,
+            'aria-label': `Line status: ${status.message}: ${causes.join(', ')}. Show ${targetName}.`,
+            onClick: (e) => { e.preventDefault(); jumpTo(target, reduced); },
+          } : {})}
+          sx={(theme) => ({
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1.25,
+            minWidth: 0,
+            flex: '1 1 260px',
+            minHeight: 44,
+            color: 'inherit',
+            textDecoration: 'none',
+            borderRadius: 1,
+            ...(lit && {
+              cursor: 'pointer',
+              '&:hover .line-causes, &:focus-visible .line-causes': { textDecoration: 'underline' },
+              '&:focus-visible': { outline: `2px solid ${theme.palette.box.plate.shine}`, outlineOffset: 4 },
+            }),
+          })}
+        >
           <Lamp state={status.state} size={18} />
           <Box sx={{ minWidth: 0 }}>
             <Typography component="span" sx={{ display: 'block', fontFamily: 'fontFamilyMono', fontSize: '0.75rem', letterSpacing: '0.16em', textTransform: 'uppercase', color: '#b0b6be', mb: 0.5 }}>
               Line status
             </Typography>
             <SplitFlap text={status.message} size="md" />
+            {lit && (
+              <Typography
+                component="span"
+                className="line-causes"
+                sx={{ display: 'block', mt: 0.75, fontFamily: 'fontFamilyMono', fontSize: '0.75rem', color: '#d7dbe0', overflowWrap: 'anywhere' }}
+              >
+                {causes.join(' · ')} ›
+              </Typography>
+            )}
           </Box>
         </Box>
         <Box sx={{ textAlign: { xs: 'left', sm: 'right' } }}>
@@ -221,6 +281,9 @@ function AnnunciatorPanel({ status }) {
     <Panel
       number={3}
       title="Annunciator"
+      id="annunciator"
+      tabIndex={-1}
+      sx={{ scrollMarginTop: 72, '&:focus': { outline: 'none' } }}
       caption={status
         ? active ? `${active} alarm ${active === 1 ? 'window' : 'windows'} lit. AIGeek has the detail and the fixes.` : 'Every window dark: nothing on the AI attention list.'
         : 'Waiting for the AI status.'}
@@ -354,15 +417,22 @@ export default function BaseGeekHome() {
     ...box.apps.map((app) => ({ label: app.displayName, state: healthLamp(box.appHealth[app.name]), word: healthDetail(box.appHealth[app.name]) })),
     ...box.services.map((svc) => ({ label: svc.name, state: healthLamp(box.serviceStatus[svc.key]), word: healthDetail(box.serviceStatus[svc.key]) })),
   ];
+  const causes = lineCauses({ stations, attention: isAdmin ? box.status?.attention : [] });
+  // Attention items are listed on the Annunciator (admin only); a lamp that is
+  // not green is on The line, which everyone sees.
+  const causeTarget = isAdmin && causes.windows.length ? 'annunciator' : causes.lamps.length ? 'the-line' : null;
 
   return (
     <Box>
-      <Fascia user={user} status={status} now={now} />
+      <Fascia user={user} status={status} now={now} causes={causes.all} target={causeTarget} reduced={reduced} />
 
       <Box sx={{ display: 'grid', gap: 3 }}>
         <Panel
           number={1}
           title="The line"
+          id="the-line"
+          tabIndex={-1}
+          sx={{ scrollMarginTop: 72, '&:focus': { outline: 'none' } }}
           caption="Every app is a station; its lamp is a live health check through baseGeek. Nameboards open the app."
         >
           <SuiteMap apps={box.apps} health={box.appHealth} services={box.services} serviceStatus={box.serviceStatus} />

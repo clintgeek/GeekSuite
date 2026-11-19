@@ -7,6 +7,10 @@
  * The flaps are `aria-hidden`; the text is given once, whole, as a visually
  * hidden span, so a screen reader hears "all lines clear" and not twenty
  * letters.
+ *
+ * Flaps are grouped by word and only the groups wrap, so a narrow phone board
+ * reads "ALL LINES / CLEAR", never "ALL LINES CLE / AR". A space stays a blank
+ * flap at the end of the word before it.
  */
 import { Box } from '@mui/material';
 import { keyframes } from '@emotion/react';
@@ -32,46 +36,66 @@ export default function SplitFlap({ text, length, size = 'md', tone = 'ink', sx 
   const chars = (length ? raw.padEnd(length, ' ').slice(0, length) : raw).split('');
   const cell = size === 'lg' ? { w: 22, h: 32, f: '1.25rem' } : size === 'sm' ? { w: 13, h: 20, f: '0.75rem' } : { w: 16, h: 24, f: '0.9375rem' };
 
+  // Words with their trailing blanks: "ALL LINES" → ["ALL ", "LINES"].
+  const words = [];
+  let start = 0;
+  for (const token of chars.join('').match(/\S+\s*|\s+/g) || []) {
+    words.push({ start, chars: token.split('') });
+    start += token.length;
+  }
+
   return (
     <Box component="span" sx={{ display: 'inline-flex', flexWrap: 'wrap', gap: '2px', perspective: '400px', maxWidth: '100%', ...sx }}>
       <Box component="span" sx={srOnly}>{String(text ?? '')}</Box>
-      {chars.map((ch, i) => (
+      {words.map((word) => (
         <Box
-          key={`${i}-${ch}`} // position is the identity of a flap
+          key={word.start}
           component="span"
+          data-flap-word=""
           aria-hidden="true"
-          sx={(theme) => ({
-            position: 'relative',
-            width: cell.w,
-            height: cell.h,
-            display: 'inline-flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            borderRadius: '2px',
-            bgcolor: '#23272d',
-            backgroundImage: 'linear-gradient(180deg, #2b3037 0 50%, #1d2126 50% 100%)',
-            color: tone === 'brass' ? theme.palette.box.plate.shine : theme.palette.box.tape.ink,
-            fontFamily: theme.typography.fontFamilyMono,
-            fontWeight: 700,
-            fontSize: cell.f,
-            lineHeight: 1,
-            boxShadow: 'inset 0 -1px 0 rgba(255,255,255,0.06), 0 1px 1px rgba(0,0,0,0.4)',
-            // The hinge: a hairline across the middle of every flap.
-            '&::after': {
-              content: '""',
-              position: 'absolute',
-              left: 0,
-              right: 0,
-              top: '50%',
-              height: '1px',
-              bgcolor: 'rgba(0,0,0,0.55)',
-            },
-            animation: `${flip} 420ms ease-out both`,
-            animationDelay: `${Math.min(i * 28, 600)}ms`,
-            transformOrigin: 'center',
-          })}
+          sx={{ display: 'inline-flex', flexWrap: 'nowrap', gap: '2px' }}
         >
-          {ch === ' ' ? ' ' : ch}
+          {word.chars.map((ch, j) => {
+            const i = word.start + j;
+            return (
+              <Box
+                key={`${i}-${ch}`} // position is the identity of a flap
+                component="span"
+                sx={(theme) => ({
+                  position: 'relative',
+                  width: cell.w,
+                  height: cell.h,
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  borderRadius: '2px',
+                  bgcolor: '#23272d',
+                  backgroundImage: 'linear-gradient(180deg, #2b3037 0 50%, #1d2126 50% 100%)',
+                  color: tone === 'brass' ? theme.palette.box.plate.shine : theme.palette.box.tape.ink,
+                  fontFamily: theme.typography.fontFamilyMono,
+                  fontWeight: 700,
+                  fontSize: cell.f,
+                  lineHeight: 1,
+                  boxShadow: 'inset 0 -1px 0 rgba(255,255,255,0.06), 0 1px 1px rgba(0,0,0,0.4)',
+                  // The hinge: a hairline across the middle of every flap.
+                  '&::after': {
+                    content: '""',
+                    position: 'absolute',
+                    left: 0,
+                    right: 0,
+                    top: '50%',
+                    height: '1px',
+                    bgcolor: 'rgba(0,0,0,0.55)',
+                  },
+                  animation: `${flip} 420ms ease-out both`,
+                  animationDelay: `${Math.min(i * 28, 600)}ms`,
+                  transformOrigin: 'center',
+                })}
+              >
+                {ch === ' ' ? '\u00a0' : ch}
+              </Box>
+            );
+          })}
         </Box>
       ))}
     </Box>

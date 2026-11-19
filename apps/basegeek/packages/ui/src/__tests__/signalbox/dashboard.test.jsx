@@ -8,6 +8,7 @@ import userEvent from '@testing-library/user-event';
 import BaseGeekHome from '../../pages/BaseGeekHome';
 import Settings from '../../pages/Settings';
 import Gauge from '../../signalbox/Gauge';
+import SplitFlap from '../../signalbox/SplitFlap';
 import { useIdle } from '../../signalbox/NightWatch';
 import { getConsolePrefs, _resetConsolePrefs, DEFAULT_PREFS } from '../../signalbox/consolePrefs';
 import { renderWithProviders } from '../testUtils';
@@ -120,6 +121,39 @@ describe('BaseGeekHome as the Signal Box', () => {
     await waitFor(() => expect(screen.getByText('2 cautions')).toBeInTheDocument());
   });
 
+  it('names the cautions under the flaps and jumps to the Annunciator', async () => {
+    const scrolled = vi.fn();
+    const original = Element.prototype.scrollIntoView;
+    Element.prototype.scrollIntoView = scrolled;
+    try {
+      const user = userEvent.setup();
+      renderWithProviders(<BaseGeekHome />);
+      // Lamps settle at their own pace; the two lit windows are fixed.
+      const link = await screen.findByRole('link', { name: /^Line status: .*Listing failed, Catalog stale\. Show the Annunciator\.$/ });
+      expect(link).toHaveAttribute('href', '#annunciator');
+      // Which ones, by name, visibly under the flaps.
+      expect(screen.getByText(/Listing failed · Catalog stale ›/)).toBeInTheDocument();
+      await user.click(link);
+      expect(scrolled).toHaveBeenCalled();
+      expect(scrolled.mock.contexts[0]).toBe(document.getElementById('annunciator'));
+      expect(document.activeElement).toBe(document.getElementById('annunciator'));
+    } finally {
+      Element.prototype.scrollIntoView = original;
+    }
+  });
+
+  it('is only a reading, not a link, when the line is clear', async () => {
+    api.get.mockImplementation((url) => {
+      if (url === '/ai/status') return Promise.resolve({ data: { ...STATUS, attention: [] } });
+      if (url === '/health/infra') return Promise.resolve({ data: { services: { mongo: { online: true }, redis: { online: true }, influx: { online: true } } } });
+      if (url.startsWith('/health/app/')) return Promise.resolve({ data: { status: 'online', latency: 40, data: {} } });
+      return Promise.resolve({ data: {} });
+    });
+    renderWithProviders(<BaseGeekHome />);
+    await screen.findByRole('meter', { name: 'Paid spend today' });
+    await waitFor(() => expect(screen.queryByRole('link', { name: /^Line status/ })).not.toBeInTheDocument());
+  });
+
   it('lever 2 starts catalog discovery, and says so', async () => {
     const user = userEvent.setup();
     renderWithProviders(<BaseGeekHome />);
@@ -159,6 +193,17 @@ describe('BaseGeekHome as the Signal Box', () => {
     expect(screen.queryByText('Instruments')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Lever/ })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: /Open noteGeek/ })).toBeInTheDocument();
+  });
+});
+
+describe('SplitFlap', () => {
+  it('keeps each word on one line: flaps are grouped by word, only groups wrap', () => {
+    const { container } = renderWithProviders(<SplitFlap text="all lines clear" />);
+    const words = [...container.querySelectorAll('[data-flap-word]')];
+    expect(words.map((w) => w.textContent.replace(/\u00a0/g, ' '))).toEqual(['ALL ', 'LINES ', 'CLEAR']);
+    for (const w of words) expect(getComputedStyle(w).flexWrap).toBe('nowrap');
+    // Still read once, whole.
+    expect(screen.getByText('all lines clear')).toBeInTheDocument();
   });
 });
 
