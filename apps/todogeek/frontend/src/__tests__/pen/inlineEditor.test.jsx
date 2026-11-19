@@ -62,6 +62,8 @@ describe('InlineEditor', () => {
       expect(label, name).not.toBeNull();
       // The label comes before its field in the page, not inside its border.
       expect(label.compareDocumentPosition(input) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+      // The input itself is the 44px tap target (harness tap-target rule).
+      if (input.tagName === 'INPUT') expect(getComputedStyle(input).minHeight, name).toBe('44px');
     }
   });
 

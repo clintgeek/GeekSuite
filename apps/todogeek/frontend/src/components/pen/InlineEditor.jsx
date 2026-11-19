@@ -64,6 +64,12 @@ const lineSx = (p) => ({
   '&.Mui-disabled': { color: p.faint, borderBottomStyle: 'dashed' },
   // The 2px ink line IS the focus mark here; the suite's outline would box it.
   '& input, & textarea': { py: 1.5, '&:focus-visible': { outline: 'none' } },
+  // The input itself is the tap target: 44px tall, the line still one rule.
+  '& input': { boxSizing: 'border-box', height: 'auto', minHeight: 44 },
+  '& .MuiSelect-select': {
+    boxSizing: 'border-box', minHeight: '44px !important', display: 'flex', alignItems: 'center', py: 0,
+    '&:focus-visible, &:focus': { outline: 'none', backgroundColor: 'transparent' },
+  },
   '& input::-webkit-calendar-picker-indicator': { cursor: 'pointer' },
 });
 
@@ -339,8 +345,8 @@ export default function InlineEditor({ task, onSave, onCancel, onDelete, apiRef,
           </Button>
         )}
         <Button onClick={onCancel} sx={{ minHeight: 44, color: p.grey }}>Cancel</Button>
-        <Box sx={{ flex: 1 }} />
-        <Button onClick={() => onDelete?.(task)} color="secondary" sx={{ minHeight: 44 }}>Delete</Button>
+        {/* Pushed right on its line, also when the two Save buttons wrap it to a line of its own. */}
+        <Button onClick={() => onDelete?.(task)} color="secondary" sx={{ minHeight: 44, ml: 'auto' }}>Delete</Button>
       </Box>
     </Box>
   );

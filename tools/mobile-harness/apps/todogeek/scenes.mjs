@@ -424,7 +424,9 @@ export const scenes = [
       const thisOne = await page.getByRole('button', { name: 'Save this one', exact: true }).count();
       const everyOne = await page.getByRole('button', { name: 'Save every one', exact: true }).count();
       if (!thisOne || !everyOne) throw new Error('no "Save this one" / "Save every one" on a changed repeating task');
-      await page.getByLabel('Task', { exact: true }).first().press('Enter');
+      // The editor's own Task field: in two panes the right pane is ALSO a
+      // region labelled "Task", and getByLabel found it first.
+      await page.locator('[data-pen-editor]').first().getByLabel('Task', { exact: true }).press('Enter');
       await page.waitForTimeout(300);
       if (!(await page.getByText(/this task repeats/i).count())) throw new Error('Enter did not ask which ones to save');
       if (await page.getByRole('dialog', { name: /recurring/i }).count()) throw new Error('the old scope dialog opened');
