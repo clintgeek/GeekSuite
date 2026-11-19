@@ -56,6 +56,10 @@ export const STORY = {
     mood: 'tense', weather: 'rain', timeOfDay: 'dusk',
     turnNumber: 12, hoursElapsed: 53,
   },
+  // The /back confirmation counts the turns since the latest checkpoint.
+  checkpoints: [
+    { id: 'cp1', description: 'Before the gate', turnNumber: 8, timestamp: iso(2) },
+  ],
   locations: [
     { name: 'The Weighing-House', type: 'building', state: 'intact', atmosphere: 'lamplit and close', description: 'Brass scales, damp sacking, the smell of the flats.' },
   ],

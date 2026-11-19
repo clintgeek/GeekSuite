@@ -220,6 +220,24 @@ export const scenes = [
     teardown: (page, h) => h.esc(500),
   },
   {
+    // `/back` asks before it rewinds (UX review 2026-11-18, StoryGeek 2).
+    name: '12b-back-confirm',
+    goto: '/play/s1',
+    wait: 1400,
+    async setup(page, h) {
+      const composer = page.getByPlaceholder('What do you do?');
+      if (!(await composer.count())) return false;
+      await composer.click();
+      await composer.fill('/back');
+      await composer.press('Enter');
+      await h.settle(900);
+      if (!(await page.getByRole('dialog', { name: 'Return to a checkpoint?' }).count())) {
+        throw new Error('/back sent without asking');
+      }
+    },
+    teardown: (page, h) => h.esc(),
+  },
+  {
     // A brand-new player: nothing on the table yet.
     name: '13-empty-list',
     goto: null,
