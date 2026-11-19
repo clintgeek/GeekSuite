@@ -466,6 +466,37 @@ export const scenes = [
     },
   },
   { name: '13-trash', goto: '/trash', wait: 1400 },
+  {
+    // The empty Trash: a unit with its door down and an EMPTY plate (2026-11-18), not a stock bin glyph.
+    name: '13b-trash-empty',
+    async setup(page, h) {
+      await page.route('**/graphql', async (route) => {
+        const op = route.request().postDataJSON()?.operationName;
+        if (op !== 'GetTrashedThings') return route.fallback();
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: { trashedThings: [] } }) });
+      });
+      await page.goto(h.base + '/trash', { waitUntil: 'networkidle' });
+      await h.settle(1400);
+      if (!(await page.getByTestId('closed-unit').count())) throw new Error('the empty Trash drew no closed unit');
+    },
+    teardown: (page) => page.unroute('**/graphql'),
+  },
+  {
+    // A load failure in the yard's own dress: a shut door with a CLOSED plate, the shared copy and Try again.
+    name: '13c-trash-load-error',
+    async setup(page, h) {
+      await page.route('**/graphql', async (route) => {
+        const op = route.request().postDataJSON()?.operationName;
+        if (op !== 'GetTrashedThings') return route.fallback();
+        return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify({ data: null, errors: [{ message: 'Gateway timeout' }] }) });
+      });
+      await page.goto(h.base + '/trash', { waitUntil: 'networkidle' });
+      await h.settle(1400);
+      if (!(await page.getByTestId('yard-error').count())) throw new Error('a failed Trash read raised no yard error state');
+      if (!(await page.getByRole('button', { name: 'Try again' }).count())) throw new Error('the error state has no Try again');
+    },
+    teardown: (page) => page.unroute('**/graphql'),
+  },
   { name: '14-settings', goto: '/settings', wait: 1400 },
   { name: '15-not-a-member', goto: '/?__fixture=nonmember', wait: 1600 },
   { name: '16-first-run', goto: '/?__fixture=empty', wait: 1600 },
