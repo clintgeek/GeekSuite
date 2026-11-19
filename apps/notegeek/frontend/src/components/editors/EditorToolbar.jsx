@@ -28,8 +28,10 @@ export const DOCKED_TOOLBAR_HEIGHT = 52;
  * Tapping a button must not take the caret out of the text (that would close
  * the keyboard and bring the top bar back), so the bar swallows `mousedown`.
  * A LOUD save status (SaveAlert via editorChromeStore) rides at the start of
- * the docked bar, because by the time you are typing the note's own head has
- * scrolled away.
+ * the docked bar — but only once the note's own head (and its SaveAlert) has
+ * scrolled away, and then as just an icon and Retry, so it never says it a
+ * second time on screen nor pushes the formatting tools off a phone
+ * (review 2026-11-18, #3).
  */
 function EditorToolbar({ label, children, trailing = null, docked: dockedProp }) {
   const theme = useTheme();
@@ -40,6 +42,7 @@ function EditorToolbar({ label, children, trailing = null, docked: dockedProp })
   const inset = useKeyboardInset();
   const saveAlert = useEditorChrome((s) => s.saveAlert);
   const retrySave = useEditorChrome((s) => s.retrySave);
+  const alertInView = useEditorChrome((s) => s.alertInView);
 
   const keepCaret = (e) => {
     // Buttons only: a <select> or input inside the bar still takes focus.
@@ -99,7 +102,7 @@ function EditorToolbar({ label, children, trailing = null, docked: dockedProp })
           borderTop: `1px solid ${g.rule}`,
         }}
       >
-        {saveAlert && (
+        {saveAlert && !alertInView && (
           <SaveAlert
             error={saveAlert.tone === 'error' ? saveAlert.detail || 'not saved' : null}
             offline={saveAlert.tone === 'offline'}

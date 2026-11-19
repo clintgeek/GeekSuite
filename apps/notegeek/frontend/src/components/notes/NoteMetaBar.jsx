@@ -123,7 +123,15 @@ function NoteMetaBar({
               <Box component="span" sx={{ fontSize: '0.8125rem' }}>{meta.label}</Box>
             </Box>
           )}
-          {meta && status && <Box component="span" aria-hidden sx={{ fontSize: '0.75rem' }}>·</Box>}
+          {meta && status && (
+            <Box
+              component="span"
+              aria-hidden
+              // No dangling dot while the stamp has stepped off the screen
+              // for the header's loud SaveAlert (SaveStatus, data-save-loud).
+              sx={{ fontSize: '0.75rem', '&:has(+ [data-save-loud="true"])': { display: 'none' } }}
+            >·</Box>
+          )}
           {status}
         </Box>
       )}

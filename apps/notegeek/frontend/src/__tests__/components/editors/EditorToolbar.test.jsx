@@ -118,6 +118,62 @@ describe('EditorToolbar', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Retry' }));
     expect(retry).toHaveBeenCalledTimes(1);
   });
+
+  // Review 2026-11-18 #3: a failed save was said up to four times.
+  it('does not repeat the alert while the head\'s own alert is on screen', () => {
+    setPhone(true);
+    act(() => {
+      useEditorChrome.getState().setSaveAlert({ tone: 'offline' }, vi.fn());
+      useEditorChrome.getState().setAlertInView(true);
+    });
+    renderBar();
+    const bar = screen.getByRole('toolbar', { name: 'Formatting' });
+    expect(bar.querySelector('[data-save-alert]')).toBeNull();
+    // The head scrolls away: now the docked bar carries it.
+    act(() => { useEditorChrome.getState().setAlertInView(false); });
+    expect(bar.querySelector('[data-save-alert="offline"]')).not.toBeNull();
+  });
+
+  it('the docked copy is an icon and Retry, with no visible words to crowd the tools', () => {
+    setPhone(true);
+    act(() => { useEditorChrome.getState().setSaveAlert({ tone: 'offline' }, vi.fn()); });
+    renderBar();
+    const pill = screen.getByRole('toolbar', { name: 'Formatting' }).querySelector('[data-save-alert]');
+    expect(pill).toHaveAttribute('data-save-alert-compact', 'true');
+    const words = pill.querySelector('span:not([class*="MuiButtonBase"])');
+    // The label is there for a screen reader, clipped off the screen.
+    expect(pill).toHaveTextContent(/offline · not saved/);
+    expect(getComputedStyle(words).position).toBe('absolute');
+    expect(screen.getByRole('button', { name: 'Retry' })).toBeInTheDocument();
+  });
+});
+
+describe('SaveAlert in the head reports whether it is on screen', () => {
+  it('sets alertInView while it is drawn, and clears it when the alert goes', async () => {
+    const { SaveAlert } = await import('../../../components/notes/SaveStatus');
+    const { rerender } = render(
+      <ThemeProvider theme={theme}><SaveAlert error="Network down" reportInView onRetry={vi.fn()} /></ThemeProvider>
+    );
+    expect(useEditorChrome.getState().alertInView).toBe(true);
+    rerender(<ThemeProvider theme={theme}><SaveAlert error={null} reportInView onRetry={vi.fn()} /></ThemeProvider>);
+    expect(useEditorChrome.getState().alertInView).toBe(false);
+  });
+
+  it('follows the IntersectionObserver when there is one', async () => {
+    let cb;
+    const disconnect = vi.fn();
+    window.IntersectionObserver = vi.fn(function IO(fn) { cb = fn; this.observe = vi.fn(); this.disconnect = disconnect; });
+    try {
+      const { SaveAlert } = await import('../../../components/notes/SaveStatus');
+      render(<ThemeProvider theme={theme}><SaveAlert error="x" reportInView /></ThemeProvider>);
+      act(() => cb([{ isIntersecting: true }]));
+      expect(useEditorChrome.getState().alertInView).toBe(true);
+      act(() => cb([{ isIntersecting: false }]));
+      expect(useEditorChrome.getState().alertInView).toBe(false);
+    } finally {
+      delete window.IntersectionObserver;
+    }
+  });
 });
 
 describe('NoteShell writing focus', () => {

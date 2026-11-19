@@ -1585,7 +1585,7 @@ function NoteEditorPage({ editorKey } = {}) {
                   <TranscriptStatus view={transcriptView} onTranscribeNow={transcribeNow || null} />
                 </>
               : <SaveStatus {...saveState} />}
-            alert={<SaveAlert {...saveState} onRetry={() => handleSaveRef.current()} />}
+            alert={<SaveAlert {...saveState} onRetry={() => handleSaveRef.current()} reportInView />}
             // Mounted only when the writer has switched suggestions on: the
             // strip owns a lazy query, and a feature that is off should cost
             // the editor nothing at all, not even a hook.

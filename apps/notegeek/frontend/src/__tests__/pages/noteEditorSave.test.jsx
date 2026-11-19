@@ -251,6 +251,20 @@ describe('NoteEditorPage — quiet when fine, loud when not', () => {
     createNote.mockReset();
   });
 
+  // Review 2026-11-18 #3: the header pill is the one thing on screen that
+  // says "not saved"; the quiet stamp keeps saying it to a screen reader.
+  it('says "not saved" on screen once: the stamp steps off the screen behind the alert', async () => {
+    createNote.mockRejectedValueOnce(new Error('Network down'));
+    renderEditor();
+    await typeTitle('Roof quote');
+    await act(async () => { pressSave(); await Promise.resolve(); });
+    await waitFor(() => expect(alertPill()).not.toBeNull());
+    expect(document.querySelectorAll('[data-save-alert]')).toHaveLength(1);
+    expect(stamp()).toHaveTextContent(/not saved/i);
+    expect(stamp()).toHaveAttribute('data-save-loud', 'true');
+    expect(getComputedStyle(stamp()).position).toBe('absolute');
+  });
+
   it('offline with unsaved edits is loud; offline with nothing unsaved is not', async () => {
     const onLine = vi.spyOn(window.navigator, 'onLine', 'get').mockReturnValue(false);
     try {
