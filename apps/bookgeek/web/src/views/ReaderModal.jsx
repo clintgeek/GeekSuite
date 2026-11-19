@@ -1,36 +1,46 @@
 /**
  * BookGeek in-browser EPUB reader — true full-screen surface (MOBILE_UI_PLAN §3.3).
  *
- * The epub.js rendition is still mounted by the effect in `App` — it owns
+ * The epub.js rendition is mounted by hooks/useReader.js — it owns
  * `readerContainerRef` / `readerRenditionRef` — so both refs are threaded in
- * as props and only the chrome lives here: tap zones for paging, an
- * auto-hiding top/bottom chrome, a font-size stepper and a reader theme
- * toggle, and a progress rail driven by epub.js's `relocated` event.
+ * as props and only the chrome lives here: page-turn strips, an auto-hiding
+ * top/bottom chrome, Contents, a font-size stepper and a reader theme toggle,
+ * and a progress rail driven by epub.js's `relocated` event.
  *
- * Reader surface colors are intentionally NOT theme tokens — the reader has
- * its own dark/light "page" pair (independent of the app's light/dark mode)
- * so a reader in dark mode can still read a book on a warm paper page.
+ * Review 2026-11-18 (#1, #2, #3):
+ *   - Back closes the reader only (`useBackToClose`): the book sheet under it
+ *     is a route, and Back used to pop that too.
+ *   - Using the chrome keeps it up: any tap or focus inside it restarts the
+ *     auto-hide timer, and it stays while Contents is open.
+ *   - The page-turn strips are the outer quarters only. The middle of the page
+ *     belongs to the book — links, footnotes, selecting text — and a plain tap
+ *     there toggles the chrome through epub.js's own click event.
+ *   - Position is the book's: a percentage from generated locations and the
+ *     chapter's title, not "Page 3 of 9" inside a chapter.
+ *   - The bars are the bookstore's signboard; the page pair is the shop's
+ *     paper and its after-hours floor (utils/readerPalette.js), independent of
+ *     the app's own light/dark mode so dark-mode readers can read on paper.
  */
 import React, { useCallback, useEffect, useRef, useState } from "react";
-import { Box, Dialog, IconButton, Typography, ButtonBase, alpha } from "@mui/material";
-import { useTheme } from "@mui/material/styles";
+import { Box, ButtonBase, Dialog, IconButton, Typography, alpha } from "@mui/material";
 import CloseIcon from "@mui/icons-material/Close";
 import Brightness4Icon from "@mui/icons-material/Brightness4";
 import Brightness7Icon from "@mui/icons-material/Brightness7";
+import TocIcon from "@mui/icons-material/Toc";
+import { GeekSheet, useBackToClose } from "@geeksuite/ui";
 import { FONT_MAX, FONT_MIN, FONT_STEP, loadReaderPrefs, saveReaderPrefs } from "../utils/readerPrefs";
-
-// The reader's own page/ink pair — separate from the app's theme, per the
-// mobile plan: "dark: #0f172a page / #e2e8f0 ink; light: #f6f1e7 (warm
-// paper) / #1f2937 ink; follow readerTheme".
-const READER_PALETTES = {
-  dark: { page: "#0f172a", ink: "#e2e8f0" },
-  light: { page: "#f6f1e7", ink: "#1f2937" },
-};
+import { readerPalette } from "../utils/readerPalette";
+import { chapterForHref } from "../utils/readerPosition";
+import { SERIF_FONT, WOOD } from "../theme/theme";
 
 const SWIPE_THRESHOLD = 48;
-const AUTO_HIDE_MS = 2500;
+export const AUTO_HIDE_MS = 2500;
 const RELOCATE_POLL_MS = 250;
 const RELOCATE_POLL_TIMEOUT_MS = 4000;
+/** The page-turn strips: the outer quarter on each side. */
+const TURN_STRIP = "25%";
+/** The progress rail's amber, per page (the app's `progress` tone). */
+const RAIL = { light: "#A34E0B", dark: "#F2A73B" };
 
 function usePrefersReducedMotion() {
   const [reduced, setReduced] = useState(false);
@@ -49,6 +59,19 @@ function usePrefersReducedMotion() {
   return reduced;
 }
 
+/** True when a click inside the book was meant for the book, not the chrome. */
+function clickBelongsToBook(event) {
+  try {
+    const target = event?.target;
+    if (target?.closest?.("a, button, input, select, textarea, label, [role='button'], [role='link']")) return true;
+    const selection = event?.view?.getSelection?.() || target?.ownerDocument?.getSelection?.();
+    if (selection && String(selection).trim()) return true;
+  } catch {
+    // a detached node: treat it as a plain tap
+  }
+  return false;
+}
+
 export default function ReaderModal({
   readerContainerRef,
   readerError,
@@ -58,17 +81,28 @@ export default function ReaderModal({
   setReaderError,
   setReaderOpen,
   setReaderTheme,
+  readerToc = [],
+  locationsReady = false,
+  goToHref,
 }) {
-  const theme = useTheme();
   const reducedMotion = usePrefersReducedMotion();
-  const palette = READER_PALETTES[readerTheme] || READER_PALETTES.dark;
+  const mode = readerTheme === "light" ? "light" : "dark";
+  const palette = readerPalette(mode);
+  const sign = palette.sign;
 
   const [chromeVisible, setChromeVisible] = useState(true);
+  // Bumped by every touch of the chrome, so the auto-hide timer starts over.
+  const [chromeKick, setChromeKick] = useState(0);
+  const [contentsOpen, setContentsOpen] = useState(false);
+  // Keyboard focus inside the chrome holds it up: a control must not fade
+  // out from under a visible focus ring.
+  const [chromeHeld, setChromeHeld] = useState(false);
   // Remembered on this device (utils/readerPrefs.js).
   const [fontPct, setFontPct] = useState(() => loadReaderPrefs().fontPct || 100);
   const [progressAvailable, setProgressAvailable] = useState(false);
   const [progressPct, setProgressPct] = useState(null);
-  const [locationLabel, setLocationLabel] = useState(null);
+  const [currentHref, setCurrentHref] = useState(null);
+  const lastCfiRef = useRef(null);
 
   const touchStartRef = useRef(null);
 
@@ -76,6 +110,9 @@ export default function ReaderModal({
     setReaderOpen(false);
     setReaderError(null);
   }, [setReaderOpen, setReaderError]);
+
+  // Back closes the reader and leaves the book sheet open (review #2).
+  useBackToClose(true, handleClose);
 
   const goPrev = useCallback(() => {
     if (readerRenditionRef.current?.prev) {
@@ -91,6 +128,13 @@ export default function ReaderModal({
 
   const toggleChrome = useCallback(() => {
     setChromeVisible((v) => !v);
+    setChromeKick((k) => k + 1);
+  }, []);
+
+  /** Any use of the chrome: keep it up and start the timer over. */
+  const pokeChrome = useCallback(() => {
+    setChromeVisible(true);
+    setChromeKick((k) => k + 1);
   }, []);
 
   const toggleReaderTheme = useCallback(() => {
@@ -113,13 +157,13 @@ export default function ReaderModal({
     });
   }, []);
 
-  // Auto-hide: chrome shows on open (and whenever a center tap reveals it
-  // again), hides itself 2.5s later. Cleared on unmount / re-trigger.
+  // Auto-hide: the chrome hides itself 2.5s after it was last shown or used,
+  // and never while Contents is open over it or keyboard focus is inside it.
   useEffect(() => {
-    if (!chromeVisible) return undefined;
+    if (!chromeVisible || contentsOpen || chromeHeld) return undefined;
     const id = setTimeout(() => setChromeVisible(false), AUTO_HIDE_MS);
     return () => clearTimeout(id);
-  }, [chromeVisible]);
+  }, [chromeVisible, chromeKick, contentsOpen, chromeHeld]);
 
   // Font-size stepper → epub.js. Guarded: the rendition may not exist yet
   // (still loading) or the fixture may error before one is created.
@@ -131,36 +175,38 @@ export default function ReaderModal({
     }
   }, [fontPct, readerRenditionRef]);
 
-  // Progress rail: epub.js exposes `relocated` on the rendition, but the
-  // rendition is created asynchronously by the effect in hooks/useReader.js (and may
-  // never appear at all if the EPUB fails to load). Poll briefly for it,
-  // then listen for page turns; if it never shows up, leave the rail hidden.
+  const applyLocation = useCallback((location) => {
+    try {
+      const start = location?.start;
+      if (start?.cfi) lastCfiRef.current = start.cfi;
+      // epub.js only knows the book's percentage once its locations exist
+      // (hooks/useReader.js generates them after the first page).
+      const locations = readerRenditionRef.current?.book?.locations;
+      const located = (locations?.length?.() ?? 0) > 0;
+      let pct = start?.percentage;
+      if (located && typeof pct !== "number" && start?.cfi) {
+        pct = locations.percentageFromCfi?.(start.cfi);
+      }
+      setProgressPct(located && typeof pct === "number" && Number.isFinite(pct) ? Math.round(pct * 100) : null);
+      setCurrentHref(start?.href || null);
+    } catch {
+      // ignore malformed location payloads
+    }
+  }, [readerRenditionRef]);
+
+  // The latest handlers, for epub.js listeners bound once per rendition.
+  const handlersRef = useRef({});
+  handlersRef.current = { goPrev, goNext, toggleChrome, handleClose, applyLocation };
+
+  // epub.js's rendition is created asynchronously by hooks/useReader.js (and
+  // may never appear if the EPUB fails to load). Poll briefly for it, then
+  // listen for page turns, and for taps, swipes and keys inside the book's
+  // own iframe (which never reach this document).
   useEffect(() => {
     let cancelled = false;
     let pollId = null;
     let giveUpId = null;
     let detach = null;
-
-    function applyLocation(location) {
-      try {
-        const pct = location?.start?.percentage;
-        if (typeof pct === "number" && Number.isFinite(pct)) {
-          setProgressPct(Math.round(pct * 100));
-        } else {
-          setProgressPct(null);
-        }
-        const displayed = location?.start?.displayed;
-        if (displayed && displayed.page != null && displayed.total != null) {
-          setLocationLabel(`Page ${displayed.page} of ${displayed.total}`);
-        } else if (location?.start?.href) {
-          setLocationLabel(location.start.href);
-        } else {
-          setLocationLabel(null);
-        }
-      } catch {
-        // ignore malformed location payloads
-      }
-    }
 
     function attach(rendition) {
       if (!rendition || typeof rendition.on !== "function") {
@@ -168,17 +214,46 @@ export default function ReaderModal({
         return;
       }
       setProgressAvailable(true);
-      const handleRelocated = (location) => applyLocation(location);
-      rendition.on("relocated", handleRelocated);
+      let touchStart = null;
+      const listeners = {
+        relocated: (location) => handlersRef.current.applyLocation(location),
+        click: (event) => {
+          if (!clickBelongsToBook(event)) handlersRef.current.toggleChrome();
+        },
+        touchstart: (event) => {
+          const t = event?.changedTouches?.[0];
+          touchStart = t ? { x: t.clientX, y: t.clientY } : null;
+        },
+        touchend: (event) => {
+          const t = event?.changedTouches?.[0];
+          const start = touchStart;
+          touchStart = null;
+          if (!start || !t) return;
+          const dx = t.clientX - start.x;
+          const dy = t.clientY - start.y;
+          if (Math.abs(dx) > SWIPE_THRESHOLD && Math.abs(dx) > Math.abs(dy)) {
+            if (dx > 0) handlersRef.current.goPrev();
+            else handlersRef.current.goNext();
+          }
+        },
+        keydown: (event) => {
+          if (event?.key === "ArrowLeft") handlersRef.current.goPrev();
+          else if (event?.key === "ArrowRight") handlersRef.current.goNext();
+          else if (event?.key === "Escape") handlersRef.current.handleClose();
+        },
+      };
+      Object.entries(listeners).forEach(([name, fn]) => rendition.on(name, fn));
       detach = () => {
-        try {
-          rendition.off?.("relocated", handleRelocated);
-        } catch {
-          // ignore
-        }
+        Object.entries(listeners).forEach(([name, fn]) => {
+          try {
+            rendition.off?.(name, fn);
+          } catch {
+            // ignore
+          }
+        });
       };
       try {
-        if (rendition.location) applyLocation(rendition.location);
+        if (rendition.location) handlersRef.current.applyLocation(rendition.location);
       } catch {
         // ignore
       }
@@ -217,6 +292,21 @@ export default function ReaderModal({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedBook?.id, selectedBook?._id]);
+
+  // Locations arrive after the first page: re-read where we are so the rail
+  // and the percentage fill in without waiting for a page turn.
+  useEffect(() => {
+    if (!locationsReady) return;
+    try {
+      const rendition = readerRenditionRef.current;
+      const current = rendition?.currentLocation?.();
+      if (current?.start) applyLocation(current);
+      else if (lastCfiRef.current) applyLocation({ start: { cfi: lastCfiRef.current, href: currentHref } });
+    } catch {
+      // ignore
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [locationsReady]);
 
   const handleKeyDown = useCallback(
     (e) => {
@@ -260,6 +350,9 @@ export default function ReaderModal({
     Array.isArray(selectedBook?.authors) && selectedBook.authors.length > 0
       ? selectedBook.authors.join(", ")
       : null;
+  const chapter = chapterForHref(readerToc, currentHref);
+  const showPct = progressAvailable && progressPct != null;
+  const positionLabel = [showPct ? `${progressPct}%` : null, chapter].filter(Boolean).join(" · ");
 
   const chromeTransition = reducedMotion ? "none" : "opacity 180ms ease";
   const chromeSx = {
@@ -267,12 +360,38 @@ export default function ReaderModal({
     pointerEvents: chromeVisible ? "auto" : "none",
     transition: chromeTransition,
   };
+  // Touching the chrome keeps it up (the stepper used to fade under the thumb).
+  const chromeHandlers = {
+    onPointerDownCapture: pokeChrome,
+    onClickCapture: pokeChrome,
+    onFocusCapture: (event) => {
+      pokeChrome();
+      try {
+        if (event.target?.matches?.(":focus-visible")) setChromeHeld(true);
+      } catch {
+        // no :focus-visible support: the timer alone governs
+      }
+    },
+    onBlurCapture: (event) => {
+      if (!event.currentTarget.contains(event.relatedTarget)) setChromeHeld(false);
+    },
+  };
 
-  const hairline = alpha(palette.ink, 0.14);
+  const signButtonSx = {
+    width: 44,
+    height: 44,
+    flexShrink: 0,
+    color: sign.ink,
+    borderRadius: "6px",
+    "&:hover": { bgcolor: alpha(sign.ink, 0.12) },
+    "&.Mui-disabled": { color: alpha(sign.ink, 0.38) },
+    "&.Mui-focusVisible": { outline: `2px solid ${sign.ink}`, outlineOffset: -2 },
+  };
+  const wood = WOOD[mode];
 
   return (
-    // `disablePortal`: the epub.js effect in hooks/useReader.js (which this file cannot
-    // edit) mounts synchronously on `readerOpen` with a one-shot guard —
+    // `disablePortal`: the epub.js effect in hooks/useReader.js mounts
+    // synchronously on `readerOpen` with a one-shot guard —
     // `if (!readerContainerRef.current) return;`, never retried. MUI's
     // default Modal portal resolves its mount node one tick after the first
     // commit, so the container ref is still null the instant that effect's
@@ -287,6 +406,8 @@ export default function ReaderModal({
       disablePortal
       onClose={handleClose}
       onKeyDown={handleKeyDown}
+      aria-label={`Reading ${title}`}
+      data-testid="book-reader"
       sx={{ zIndex: (t) => t.zIndex.modal + 10 }}
       PaperProps={{
         sx: {
@@ -313,35 +434,24 @@ export default function ReaderModal({
         {/* epub.js mounts its iframe here — must fill the surface. */}
         <Box ref={readerContainerRef} sx={{ position: "absolute", inset: 0 }} />
 
-        {/* Tap zones */}
+        {/* Page-turn strips: the outer quarters. The middle is the book's. */}
         <ButtonBase
           aria-label="Previous page"
           onClick={goPrev}
           disableRipple
-          sx={{ position: "absolute", top: 0, bottom: 0, left: 0, width: "33.34%", zIndex: 1 }}
-        />
-        <ButtonBase
-          aria-label="Toggle controls"
-          onClick={toggleChrome}
-          disableRipple
-          sx={{
-            position: "absolute",
-            top: 0,
-            bottom: 0,
-            left: "33.34%",
-            width: "33.32%",
-            zIndex: 1,
-          }}
+          sx={{ position: "absolute", top: 0, bottom: 0, left: 0, width: TURN_STRIP, zIndex: 1 }}
         />
         <ButtonBase
           aria-label="Next page"
           onClick={goNext}
           disableRipple
-          sx={{ position: "absolute", top: 0, bottom: 0, right: 0, width: "33.34%", zIndex: 1 }}
+          sx={{ position: "absolute", top: 0, bottom: 0, right: 0, width: TURN_STRIP, zIndex: 1 }}
         />
 
-        {/* Top chrome */}
+        {/* Top chrome: the signboard. */}
         <Box
+          data-reader-chrome="top"
+          {...chromeHandlers}
           sx={{
             ...chromeSx,
             position: "absolute",
@@ -353,77 +463,72 @@ export default function ReaderModal({
             minHeight: 60,
             display: "flex",
             alignItems: "center",
-            gap: 1,
+            gap: 0.5,
             px: 1,
-            bgcolor: alpha(palette.page, 0.72),
-            backdropFilter: "blur(10px)",
-            borderBottom: `1px solid ${hairline}`,
+            bgcolor: sign.board,
+            color: sign.ink,
+            borderBottom: `3px solid ${sign.edge}`,
+            boxShadow: "0 2px 6px rgba(20, 12, 4, 0.25)",
           }}
         >
-          <IconButton
-            aria-label="Close"
-            onClick={handleClose}
-            sx={{ width: 44, height: 44, color: palette.ink, flexShrink: 0 }}
-          >
+          <IconButton aria-label="Close" onClick={handleClose} sx={signButtonSx}>
             <CloseIcon fontSize="small" />
           </IconButton>
 
           <Box sx={{ minWidth: 0, flex: 1, textAlign: "center", overflow: "hidden" }}>
             <Typography
-              variant="body1"
+              component="h2"
               noWrap
-              sx={{ fontWeight: 500, color: palette.ink, lineHeight: 1.2 }}
+              sx={{ fontFamily: SERIF_FONT, fontWeight: 400, fontSize: 18, color: sign.ink, lineHeight: 1.2 }}
             >
               {title}
             </Typography>
             {author && (
-              <Typography
-                variant="caption"
-                noWrap
-                sx={{ display: "block", color: alpha(palette.ink, 0.7) }}
-              >
+              <Typography variant="caption" noWrap sx={{ display: "block", color: sign.inkSoft }}>
                 {author}
               </Typography>
             )}
           </Box>
 
-          <Box sx={{ display: "flex", alignItems: "center", gap: 0.25, flexShrink: 0 }}>
+          {readerToc.length > 0 ? (
             <IconButton
-              aria-label="Decrease font size"
-              onClick={decreaseFont}
-              disabled={fontPct <= FONT_MIN}
-              sx={{ width: 44, height: 44, color: palette.ink }}
+              aria-label="Contents"
+              aria-haspopup="dialog"
+              onClick={() => setContentsOpen(true)}
+              sx={signButtonSx}
             >
-              <Typography component="span" sx={{ fontSize: 14, fontWeight: 600 }}>
-                A−
-              </Typography>
+              <TocIcon fontSize="small" />
             </IconButton>
-            <IconButton
-              aria-label="Increase font size"
-              onClick={increaseFont}
-              disabled={fontPct >= FONT_MAX}
-              sx={{ width: 44, height: 44, color: palette.ink }}
-            >
-              <Typography component="span" sx={{ fontSize: 18, fontWeight: 600 }}>
-                A+
-              </Typography>
-            </IconButton>
-            <IconButton
-              aria-label="Toggle reader theme"
-              onClick={toggleReaderTheme}
-              sx={{ width: 44, height: 44, color: palette.ink }}
-            >
-              {readerTheme === "dark" ? (
-                <Brightness7Icon fontSize="small" />
-              ) : (
-                <Brightness4Icon fontSize="small" />
-              )}
-            </IconButton>
-          </Box>
+          ) : null}
+          <IconButton
+            aria-label="Decrease font size"
+            onClick={decreaseFont}
+            disabled={fontPct <= FONT_MIN}
+            sx={signButtonSx}
+          >
+            <Typography component="span" sx={{ fontSize: 14, fontWeight: 600, color: "inherit" }}>
+              A−
+            </Typography>
+          </IconButton>
+          <IconButton
+            aria-label="Increase font size"
+            onClick={increaseFont}
+            disabled={fontPct >= FONT_MAX}
+            sx={signButtonSx}
+          >
+            <Typography component="span" sx={{ fontSize: 18, fontWeight: 600, color: "inherit" }}>
+              A+
+            </Typography>
+          </IconButton>
+          <IconButton aria-label="Toggle reader theme" onClick={toggleReaderTheme} sx={signButtonSx}>
+            {mode === "dark" ? <Brightness7Icon fontSize="small" /> : <Brightness4Icon fontSize="small" />}
+          </IconButton>
         </Box>
 
-        {/* Bottom chrome */}
+        {/* Bottom chrome: where you are in the book, over a shelf edge. */}
         <Box
+          data-reader-chrome="bottom"
+          {...chromeHandlers}
           sx={{
             ...chromeSx,
             position: "absolute",
@@ -432,55 +537,91 @@ export default function ReaderModal({
             right: 0,
             zIndex: 2,
             paddingBottom: "env(safe-area-inset-bottom)",
-            bgcolor: alpha(palette.page, 0.72),
-            backdropFilter: "blur(10px)",
-            borderTop: `1px solid ${hairline}`,
+            bgcolor: alpha(palette.page, 0.94),
+            borderTop: `3px solid ${wood.front}`,
           }}
         >
           {progressAvailable && (
-            <Box sx={{ height: 2, bgcolor: alpha(theme.palette.progress.main, 0.25) }}>
+            <Box
+              role="progressbar"
+              aria-label="Position in the book"
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-valuenow={progressPct ?? undefined}
+              sx={{ height: 3, bgcolor: alpha(RAIL[mode], 0.22) }}
+            >
               <Box
+                data-testid="reader-progress-fill"
                 sx={{
                   height: "100%",
                   width: `${progressPct != null ? progressPct : 0}%`,
-                  bgcolor: theme.palette.progress.main,
+                  bgcolor: RAIL[mode],
                   transition: chromeTransition,
                 }}
               />
             </Box>
           )}
-          <Box
-            sx={{
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "space-between",
-              gap: 1,
-              px: 2,
-              py: 1,
-            }}
-          >
+          <Box sx={{ px: 2, py: 1, minHeight: 36, display: "flex", alignItems: "center" }}>
             <Typography
               variant="caption"
               noWrap
+              data-testid="reader-position"
               sx={{
-                color: readerError ? theme.palette.error.main : alpha(palette.ink, 0.7),
+                color: readerError ? (mode === "dark" ? "#F59A9A" : "#B02A2A") : palette.ink,
                 flex: 1,
                 minWidth: 0,
+                textAlign: "center",
               }}
             >
-              {readerError || locationLabel || ""}
+              {readerError || positionLabel}
             </Typography>
-            {progressAvailable && progressPct != null && (
-              <Typography
-                variant="caption"
-                sx={{ fontFamily: '"Roboto Mono", monospace', color: palette.ink, flexShrink: 0 }}
-              >
-                {progressPct}%
-              </Typography>
-            )}
           </Box>
         </Box>
       </Box>
+
+      <GeekSheet
+        open={contentsOpen}
+        onClose={() => setContentsOpen(false)}
+        title="Contents"
+        maxWidth="xs"
+        // Above the reader, which sits at modal + 10 without a portal.
+        drawerProps={{ sx: { zIndex: (t) => t.zIndex.modal + 20 } }}
+        dialogProps={{ sx: { zIndex: (t) => t.zIndex.modal + 20 } }}
+      >
+        <Box component="ol" sx={{ listStyle: "none", m: 0, p: 0 }}>
+          {readerToc.map((item) => {
+            const current = item.label === chapter;
+            return (
+              <Box component="li" key={item.id}>
+                <ButtonBase
+                  aria-current={current ? "location" : undefined}
+                  onClick={() => {
+                    setContentsOpen(false);
+                    goToHref?.(item.href);
+                  }}
+                  sx={{
+                    width: "100%",
+                    minHeight: 44,
+                    justifyContent: "flex-start",
+                    textAlign: "left",
+                    pl: 1 + item.depth * 2,
+                    pr: 1,
+                    borderRadius: "6px",
+                    typography: "body2",
+                    fontWeight: current ? 700 : 400,
+                    color: current ? "primary.main" : "text.primary",
+                    borderLeft: current ? (t) => `3px solid ${t.palette.primary.main}` : "3px solid transparent",
+                    "&:hover": { bgcolor: "action.hover" },
+                    "&.Mui-focusVisible": { outline: (t) => `2px solid ${t.palette.primary.main}` },
+                  }}
+                >
+                  {item.label}
+                </ButtonBase>
+              </Box>
+            );
+          })}
+        </Box>
+      </GeekSheet>
     </Dialog>
   );
 }

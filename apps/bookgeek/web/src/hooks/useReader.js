@@ -3,17 +3,49 @@
  * effect that opens `GET /api/books/:id/download/epub` into its container.
  * Moved out of App.jsx unchanged; it lives with the detail route because the
  * reader only ever opens from the detail sheet's Read button.
+ *
+ * Where you are (review 2026-11-18 #1): the book reopens at the place this
+ * reader left it ON THIS DEVICE (utils/readerPosition.js — no server sync,
+ * S-D3), and epub.js's locations are generated (or loaded from the device
+ * cache) after the first page is up, so the percentage is the book's, not
+ * the chapter's. The table of contents comes from the book's navigation.
  */
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import ePub from "epubjs";
 import { useThemeMode } from "@geeksuite/user";
 import { API_BASE } from "../utils/bookDisplay";
 import { loadReaderPrefs, saveReaderPrefs } from "../utils/readerPrefs";
+import { READER_PALETTES } from "../utils/readerPalette";
+import {
+  flattenToc,
+  loadCachedLocations,
+  loadReaderPosition,
+  saveCachedLocations,
+  saveReaderPosition,
+} from "../utils/readerPosition";
 
 const READER_TEXT_SELECTORS =
   "body, p, div, span, h1, h2, h3, h4, h5, h6, li, blockquote, pre, code, em, strong, a, small, label, input, textarea, select, table, td, th, dd, dt, figcaption, section, article, main, aside, nav, header, footer, hr";
 
-export function useReader(selectedBook) {
+/** epub.js characters per location: its own default, a fair "page". */
+const LOCATION_CHARS = 1600;
+
+function epubTheme(p) {
+  return {
+    [READER_TEXT_SELECTORS]: {
+      color: `${p.ink} !important`,
+      "background-color": "transparent !important",
+    },
+    "body": {
+      "background-color": `${p.page} !important`,
+    },
+    "a, a:link, a:visited, a:hover, a:active": {
+      color: `${p.link} !important`,
+    },
+  };
+}
+
+export function useReader(selectedBook, { readerId = null } = {}) {
   const { theme: suiteThemeMode } = useThemeMode();
   const [readerOpen, setReaderOpen] = useState(false);
   const [readerError, setReaderError] = useState(null);
@@ -25,7 +57,11 @@ export function useReader(selectedBook) {
   const readerContainerRef = useRef(null);
   const readerBookRef = useRef(null);
   const readerRenditionRef = useRef(null);
+  const [readerToc, setReaderToc] = useState([]);
+  const [locationsReady, setLocationsReady] = useState(false);
   const bookId = selectedBook?.id || selectedBook?._id;
+  const readerIdRef = useRef(readerId);
+  readerIdRef.current = readerId;
 
   useEffect(() => {
     if (!readerOpen || !bookId || !readerContainerRef.current) {
@@ -72,34 +108,29 @@ export function useReader(selectedBook) {
         readerRenditionRef.current = rendition;
 
         if (rendition.themes) {
-          rendition.themes.register("light", {
-            [READER_TEXT_SELECTORS]: {
-              color: "#1f2937 !important",
-              "background-color": "transparent !important",
-            },
-            "body": {
-              "background-color": "#f6f1e7 !important",
-            },
-            "a, a:link, a:visited, a:hover, a:active": {
-              color: "#2563eb !important",
-            },
-          });
+          rendition.themes.register("light", epubTheme(READER_PALETTES.light));
+          rendition.themes.register("dark", epubTheme(READER_PALETTES.dark));
+        }
 
-          rendition.themes.register("dark", {
-            [READER_TEXT_SELECTORS]: {
-              color: "#e2e8f0 !important",
-              "background-color": "transparent !important",
-            },
-            "body": {
-              "background-color": "#0f172a !important",
-            },
-            "a, a:link, a:visited, a:hover, a:active": {
-              color: "#60a5fa !important",
-            },
+        // Every page turn is remembered on this device, for this reader.
+        if (typeof rendition.on === "function") {
+          rendition.on("relocated", (location) => {
+            const cfi = location?.start?.cfi;
+            if (!cancelled && cfi) saveReaderPosition(readerIdRef.current, bookId, cfi);
           });
         }
 
-        await rendition.display();
+        const saved = loadReaderPosition(readerIdRef.current, bookId);
+        if (saved) {
+          try {
+            await rendition.display(saved);
+          } catch {
+            // A position from an older copy of the file: start at the cover.
+            await rendition.display();
+          }
+        } else {
+          await rendition.display();
+        }
 
         if (rendition.themes?.select) {
           rendition.themes.select(readerTheme);
@@ -110,6 +141,16 @@ export function useReader(selectedBook) {
         if (fontPct && rendition.themes?.fontSize) {
           rendition.themes.fontSize(`${ fontPct }%`);
         }
+
+        // Contents, then locations — both after the first page is up, so the
+        // book opens as fast as it did.
+        try {
+          const nav = await book.loaded?.navigation;
+          if (!cancelled) setReaderToc(flattenToc(nav?.toc));
+        } catch {
+          // no navigation document: no Contents button
+        }
+        await prepareLocations(book);
       } catch (err) {
         if (!cancelled) {
           setReaderError(err?.message || "Failed to load EPUB for this book.");
@@ -117,6 +158,28 @@ export function useReader(selectedBook) {
       }
     }
 
+    async function prepareLocations(book) {
+      const locations = book.locations;
+      if (!locations) return;
+      try {
+        const cached = loadCachedLocations(bookId);
+        if (cached) {
+          locations.load(cached);
+        } else {
+          await book.ready;
+          if (cancelled) return;
+          await locations.generate(LOCATION_CHARS);
+          if (cancelled) return;
+          saveCachedLocations(bookId, locations.save());
+        }
+        if (!cancelled && (locations.length?.() ?? 0) > 0) setLocationsReady(true);
+      } catch {
+        // No locations: the reader still shows the chapter, just no percentage.
+      }
+    }
+
+    setReaderToc([]);
+    setLocationsReady(false);
     loadEpub();
 
     return () => {
@@ -161,6 +224,18 @@ export function useReader(selectedBook) {
     saveReaderPrefs({ theme: readerTheme });
   }, [readerTheme]);
 
+  /** Jump to a Contents entry (an href inside the book). */
+  const goToHref = useCallback((href) => {
+    const rendition = readerRenditionRef.current;
+    if (!rendition?.display || !href) return;
+    try {
+      const pending = rendition.display(href);
+      pending?.catch?.(() => {});
+    } catch {
+      // a broken TOC link: stay where you are
+    }
+  }, []);
+
   return {
     readerOpen,
     setReaderOpen,
@@ -170,5 +245,8 @@ export function useReader(selectedBook) {
     setReaderTheme,
     readerContainerRef,
     readerRenditionRef,
+    readerToc,
+    locationsReady,
+    goToHref,
   };
 }

@@ -33,7 +33,7 @@ function clampProgress(value) {
   return Math.min(100, Math.max(0, n));
 }
 
-export function useBookDetail({ bookId, onClose, onDeleted }) {
+export function useBookDetail({ bookId, onClose, onDeleted, readerId = null }) {
   const { data, loading, error } = useQuery(GET_BOOK, {
     variables: { id: bookId },
     // A card tap is answered from the row (Query.book's read policy); a deep
@@ -83,7 +83,7 @@ export function useBookDetail({ bookId, onClose, onDeleted }) {
 
   const covers = useCoverTools({ selectedBook, writeBook: actions.writeBook });
   const edit = useBookEdit({ selectedBook, updateBook: actions.updateBook });
-  const reader = useReader(selectedBook);
+  const reader = useReader(selectedBook, { readerId });
 
   // Reset per-book enrichment status whenever the open book changes (an
   // enrich's own write included — its toast has already fired by then).

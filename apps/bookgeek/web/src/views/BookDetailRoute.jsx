@@ -14,6 +14,7 @@
 import React, { useCallback, useEffect, useRef } from "react";
 import { useLocation, useNavigate, useParams } from "react-router-dom";
 import { libraryPath } from "../components/navConfig";
+import { readerKeyFor } from "../utils/readerPosition";
 import { useBookDetail } from "../hooks/useBookDetail";
 import { useBookGeek } from "../hooks/useBookGeek";
 import BookDetailModal from "./BookDetailModal";
@@ -22,7 +23,7 @@ import ReaderModal from "./ReaderModal";
 function BookDetail({ bookId }) {
   const navigate = useNavigate();
   const location = useLocation();
-  const { basket, shelves, settings } = useBookGeek();
+  const { basket, shelves, settings, user } = useBookGeek();
   const closingRef = useRef(false);
 
   const close = useCallback(() => {
@@ -34,6 +35,7 @@ function BookDetail({ bookId }) {
 
   const detail = useBookDetail({
     bookId,
+    readerId: readerKeyFor(user),
     onClose: close,
     onDeleted: (deletedId) => {
       basket.dropFromBasket(deletedId);
@@ -72,6 +74,9 @@ function BookDetail({ bookId }) {
           setReaderError={reader.setReaderError}
           setReaderOpen={reader.setReaderOpen}
           setReaderTheme={reader.setReaderTheme}
+          readerToc={reader.readerToc}
+          locationsReady={reader.locationsReady}
+          goToHref={reader.goToHref}
         />
       ) : null}
     </>

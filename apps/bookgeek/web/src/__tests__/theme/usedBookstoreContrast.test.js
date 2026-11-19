@@ -10,6 +10,7 @@
 import { describe, expect, it } from 'vitest';
 import { getContrastRatio } from '@mui/material/styles';
 import { SIGN, SIGN_YELLOW, STICKER, TALKER } from '../../theme/theme';
+import { READER_PALETTES } from '../../utils/readerPalette';
 
 const pairs = [];
 const add = (label, fg, bg, min = 4.5) => pairs.push([label, fg, bg, min]);
@@ -27,6 +28,12 @@ for (const mode of ['light', 'dark']) {
   add(`${mode} the selected aisle sign against an unselected one`, SIGN_YELLOW.ground, sign.board, 3);
 }
 for (const [shelf, tone] of Object.entries(STICKER)) add(`${shelf} sticker ink`, tone.ink, tone.ground);
+// The in-app reader's own pages (review 2026-11-18 #3): book text and links.
+for (const [mode, p] of Object.entries(READER_PALETTES)) {
+  add(`reader ${mode} ink on the page`, p.ink, p.page, 7);
+  add(`reader ${mode} link on the page`, p.link, p.page);
+  add(`reader ${mode} bar lettering on the signboard`, p.sign.ink, p.sign.board);
+}
 add('talker handwriting on its card', TALKER.ink, TALKER.card, 7); // handwriting gets a higher bar
 
 describe('Used Bookstore contrast', () => {
