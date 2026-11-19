@@ -18,7 +18,7 @@ import { Check as CheckIcon, VisibilityOffOutlined as HideIcon, VisibilityOutlin
 import { useApolloClient, useMutation, useQuery } from '@apollo/client';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { useDebouncedValue } from '@geeksuite/collection';
-import { useToast } from '@geeksuite/ui';
+import { useToast, useUnsavedGuard } from '@geeksuite/ui';
 import SectionHeading from '../../components/SectionHeading';
 import TypeIcon from '../../components/TypeIcon';
 import { SEARCH_THINGS } from '../../graphql/queries';
@@ -210,6 +210,15 @@ function DocumentForm({ existing }) {
   const [create] = useMutation(CREATE_ATTIC_DOCUMENT);
   const [update] = useMutation(UPDATE_ATTIC_DOCUMENT);
 
+  // Typed or picked anything since the form opened? Then leaving asks first (the
+  // shared useUnsavedGuard: Cancel, Android Back, reload). No draft is kept: the
+  // numbers must never sit in this phone's storage.
+  const content = JSON.stringify({ personIds, title, plain, issued, expires, links: links.map((t) => t.id), notes });
+  const [openedWith] = useState(content);
+  const dirty = content !== openedWith || Object.values(secret).some(Boolean) || Object.values(files).some(Boolean);
+  const leave = () => navigate(existing ? atticDocPath(existing.id) : '/attic');
+  const guard = useUnsavedGuard({ dirty, enabled: !saving, onDiscard: leave });
+
   const identifierFields = (type?.fields ?? []).filter((f) => f.identifier);
   const plainFields = (type?.fields ?? []).filter((f) => !f.identifier);
   const onFile = new Map((existing?.identifiers ?? []).map((i) => [i.key, i.hasValue]));
@@ -360,10 +369,11 @@ function DocumentForm({ existing }) {
             <Button type="submit" variant="contained" disabled={Boolean(saving)} sx={{ ...HERO_BUTTON_SX, flex: { xs: 1, md: 'none' }, px: 4 }} data-testid="attic-save">
               {existing ? 'Save changes' : 'Put it in the Attic'}
             </Button>
-            <Button onClick={() => navigate(existing ? atticDocPath(existing.id) : '/attic')} disabled={Boolean(saving)} sx={{ minHeight: 48, color: 'text.primary' }}>
+            <Button onClick={guard.requestClose} disabled={Boolean(saving)} sx={{ minHeight: 48, color: 'text.primary' }}>
               Cancel
             </Button>
           </Box>
+          {guard.prompt}
         </>
       ) : (
         <Alert severity="info" icon={false} sx={{ bgcolor: 'background.paper', color: 'text.primary', border: 1, borderColor: 'border' }}>

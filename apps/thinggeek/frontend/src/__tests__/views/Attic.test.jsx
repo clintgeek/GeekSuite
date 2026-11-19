@@ -296,6 +296,22 @@ describe('adding a document', () => {
     expect(number).toHaveAttribute('data-masked', 'false');
   });
 
+  it('Cancel with something typed asks before throwing it away; untouched, it just goes', async () => {
+    form();
+    fireEvent.click(await screen.findByRole('radio', { name: 'Passport' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(screen.queryByText('Discard changes?')).toBeNull();
+  });
+
+  it('a typed number counts as a change: Cancel asks first', async () => {
+    form();
+    fireEvent.click(await screen.findByRole('radio', { name: 'Passport' }));
+    fireEvent.change(screen.getByLabelText('Passport number'), { target: { value: 'X1234' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+    expect(await screen.findByText('Discard changes?')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Keep editing' })).toBeInTheDocument();
+  }, 60000);
+
   it('the gateway payload never carries an identifier value', () => {
     const input = documentInputFrom(
       { type: PASSPORT, personIds: ['p1'], title: '', plain: { country: 'USA', number: 'X12345678' }, issued: '', expires: '2027-04-20', links: [], notes: '' },
