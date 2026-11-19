@@ -40,7 +40,7 @@
  */
 import React from 'react';
 import { Box, Link, Typography } from '@mui/material';
-import { GOTHIC, SERIF } from '../theme/theme';
+import { GOTHIC, SERIF, visuallyHiddenSx } from '../theme/theme';
 import AlsoIn from './AlsoIn';
 import ArticleMenu from './ArticleMenu';
 import OfficialBadge from './OfficialBadge';
@@ -49,7 +49,6 @@ import WhyChips from './WhyChips';
 import TimeAgo from './TimeAgo';
 import { linkTargetProps, resolveStoryOpen } from '../utils/openUrl';
 
-const visuallyHidden = { position: 'absolute', width: 1, height: 1, p: 0, m: '-1px', border: 0, overflow: 'hidden', clip: 'rect(0 0 0 0)', clipPath: 'inset(50%)', whiteSpace: 'nowrap' };
 
 const publisherSx = { fontFamily: GOTHIC, fontSize: '0.8125rem', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'text.primary' };
 
@@ -136,7 +135,7 @@ export default function ArticleItem({
           }}
         >
           {article.title}{' '}
-          <Box component="span" sx={visuallyHidden}>
+          <Box component="span" sx={visuallyHiddenSx}>
             {`(${where}${openInNewTab ? ', in a new tab' : ''})`}
           </Box>
         </Link>

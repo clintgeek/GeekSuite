@@ -22,7 +22,7 @@ import PaywallBadge from './PaywallBadge';
 import { resetArticleLists } from '../graphql/cachePolicies';
 import { SET_NEWS_PUBLISHER_OPENER, SET_NEWS_PUBLISHER_PREF } from '../graphql/mutations';
 import { GET_NEWS_PREFS, GET_NEWS_PUBLISHER_PREFS, GET_NEWS_SOURCES } from '../graphql/queries';
-import { GOTHIC, flagSx } from '../theme/theme';
+import { GOTHIC, flagSx, visuallyHiddenSx } from '../theme/theme';
 import { withoutDomain } from '../utils/publishers';
 
 function SubHead({ id, children }) {
@@ -134,7 +134,6 @@ function OpenersList({ sources }) {
   );
 }
 
-const visuallyHiddenSx = { position: 'absolute', width: 1, height: 1, p: 0, m: '-1px', border: 0, overflow: 'hidden', clip: 'rect(0 0 0 0)', clipPath: 'inset(50%)', whiteSpace: 'nowrap' };
 
 export default function PublishersSettings() {
   const client = useApolloClient();

@@ -29,7 +29,7 @@ export default function FreeToReadSwitch({ checked, onChange, disabled = false }
         m: 0,
         minHeight: 44,
         gap: 1,
-        '& .MuiFormControlLabel-label': { ...flagSx, fontSize: '0.8125rem', color: 'text.primary' },
+        '& .MuiFormControlLabel-label': { ...flagSx, fontSize: '0.8125rem', color: 'text.primary', whiteSpace: 'nowrap' },
         '& .MuiFormControlLabel-label.Mui-disabled': { color: 'text.secondary' },
         ...INK_SWITCH_SX,
       }}

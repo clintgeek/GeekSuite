@@ -31,3 +31,20 @@ describe.each(['light', 'dark'])('square shapes (%s)', (mode) => {
     expect(cs.boxShadow).toBe('none');
   });
 });
+
+describe('visually hidden text', () => {
+  it('is a 1px box — a bare 1 in sx is 100%, a page-wide box that scrolled the page sideways', async () => {
+    const { Box } = await import('@mui/material');
+    const { visuallyHiddenSx } = await import('../../theme/theme');
+    render(
+      <ThemeProvider theme={createNewsTheme('light')}>
+        <Box data-testid="hidden" sx={visuallyHiddenSx}>
+          Everything
+        </Box>
+      </ThemeProvider>
+    );
+    const cs = getComputedStyle(screen.getByTestId('hidden'));
+    expect(cs.width).toBe('1px');
+    expect(cs.height).toBe('1px');
+  });
+});

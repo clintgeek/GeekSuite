@@ -77,11 +77,15 @@ export const flagSx = {
   lineHeight: 1.4,
 };
 
-/** Read by screen readers, never painted: a page's h1 when the top bar already prints its name. */
+/**
+ * Read by screen readers, never painted: a page's h1 when the top bar already
+ * prints its name, a link's "(opens at …)". Sizes are '1px' strings: in sx a
+ * bare 1 means 100%, which made the clipped box page-wide and scroll sideways.
+ */
 export const visuallyHiddenSx = {
   position: 'absolute',
-  width: 1,
-  height: 1,
+  width: '1px',
+  height: '1px',
   p: 0,
   m: '-1px',
   border: 0,
