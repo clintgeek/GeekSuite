@@ -4,7 +4,7 @@ import {
   MenuItem, CircularProgress, IconButton, alpha,
 } from '@mui/material';
 import {
-  Add as AddIcon, PlayArrow as PlayIcon, Delete as DeleteIcon,
+  Add as AddIcon, PlayArrow as PlayIcon, Delete as DeleteIcon, AutoStories as ReadIcon,
 } from '@mui/icons-material';
 import { useNavigate, Link as RouterLink } from 'react-router-dom';
 import { useTheme } from '@mui/material/styles';
@@ -224,6 +224,16 @@ function StoryList() {
             const status = statusStyles[story.status] || statusStyles.active;
             const situation = story.worldState?.currentSituation && story.worldState.currentSituation !== 'Story setup in progress'
               ? story.worldState.currentSituation : null;
+            const finished = story.status === 'completed';
+            // The list carries no transcript (getUserStories selects only
+            // title/genre/status/stats/worldState), so a tale with turns and
+            // no situation says so plainly instead of "still being set".
+            const turns = story.stats?.totalInteractions || 0;
+            const noSituationLine = finished
+              ? 'The tale has reached its end.'
+              : (story.status === 'setup' || turns === 0)
+                ? 'The opening scene is still being set.'
+                : 'The tale is under way.';
             return (
               <Grid item xs={12} sm={6} lg={4} key={story._id}>
                 <Card
@@ -289,7 +299,7 @@ function StoryList() {
                       </Typography>
                     ) : (
                       <Typography sx={{ fontStyle: 'italic', color: 'text.secondary', fontSize: '1rem', mb: 3 }}>
-                        The opening scene is still being set.
+                        {noSituationLine}
                       </Typography>
                     )}
 
@@ -311,13 +321,15 @@ function StoryList() {
                       {formatDate(story.updatedAt)}
                     </Typography>
                     <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+                      {/* A finished tale is read, not continued: the play
+                          screen is its transcript, with Bookify one tap away. */}
                       <Button
                         variant="outlined"
-                        startIcon={<PlayIcon />}
+                        startIcon={finished ? <ReadIcon /> : <PlayIcon />}
                         onClick={() => navigate(`/play/${story._id}`)}
                         sx={{ minHeight: 44, px: 3 }}
                       >
-                        Continue
+                        {finished ? 'Read' : 'Continue'}
                       </Button>
                       {/* Icon-only, and there is one per card — so the name
                           has to carry the title, or a screen-reader user

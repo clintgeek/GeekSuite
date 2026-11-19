@@ -242,3 +242,39 @@ describe('StoryList', () => {
     expect(await screen.findByText('The Fog-Bound Crossroads')).toBeInTheDocument();
   });
 });
+
+// UX review 2026-11-18, StoryGeek #8: an 88-turn finished tale said
+// "Continue" and "The opening scene is still being set".
+describe('StoryList — finished and under-way tales', () => {
+  const finished = {
+    _id: 'story-9', title: 'The House on Ashfield Lane', genre: 'Horror', status: 'completed',
+    stats: { totalInteractions: 88, totalDiceRolls: 12 }, worldState: {},
+    updatedAt: '2026-08-03T00:00:00.000Z',
+  };
+  const underWay = {
+    _id: 'story-8', title: 'The Salt Road', genre: 'Adventure', status: 'active',
+    stats: { totalInteractions: 41, totalDiceRolls: 3 }, worldState: {},
+    updatedAt: '2026-08-04T00:00:00.000Z',
+  };
+
+  it('a completed tale offers Read and never says the opening is still being set', async () => {
+    api.get.mockResolvedValue({ data: [finished] });
+    renderStoryList();
+    const card = (await screen.findByText('The House on Ashfield Lane')).closest('article');
+    expect(within(card).getByRole('button', { name: 'Read' })).toBeInTheDocument();
+    expect(within(card).queryByRole('button', { name: 'Continue' })).not.toBeInTheDocument();
+    expect(within(card).queryByText(/still being set/i)).not.toBeInTheDocument();
+    expect(within(card).getByText('The tale has reached its end.')).toBeInTheDocument();
+  });
+
+  it('a tale with turns and no situation is under way, not being set up', async () => {
+    api.get.mockResolvedValue({ data: [underWay, storyFixtures[1]] });
+    renderStoryList();
+    const card = (await screen.findByText('The Salt Road')).closest('article');
+    expect(within(card).getByText('The tale is under way.')).toBeInTheDocument();
+    expect(within(card).getByRole('button', { name: 'Continue' })).toBeInTheDocument();
+    // A tale with no turns yet still says its opening is being set.
+    const fresh = screen.getByText('Neon Dead Drop').closest('article');
+    expect(within(fresh).getByText('The opening scene is still being set.')).toBeInTheDocument();
+  });
+});
