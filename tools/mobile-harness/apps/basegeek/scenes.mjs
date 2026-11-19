@@ -39,28 +39,38 @@ export const scenes = [
   // The public portal. The session fixtures answer as a signed-in user, so
   // this is the portal as a returning visitor sees it, not the cold splash.
   { name: '08-portal', goto: '/portal', wait: 1200 },
+  // 09/10 used to target /databases, which was retired for DataGeek (scenes
+  // 03-06 cover its four tabs) and produced nothing. The numbers now hold two
+  // states the 2026-11-18 fixes introduced.
   {
-    // Databases.jsx is orphaned (no route, no nav entry) — converted during
-    // M4 anyway. Skip cleanly rather than fail when the route is absent.
-    name: '09-databases',
-    goto: '/databases',
-    wait: 900,
+    // On the phone a healthy line folds to a summary and a yard of
+    // nameboards; this is the full-card view one tap away.
+    name: '09-home-line-details',
+    goto: '/',
+    wait: 1200,
+    viewports: ['phone'],
     async setup(page, h) {
-      if (!page.url().includes('/databases')) return h.log('/databases route not present') ?? false;
+      const details = page.getByRole('button', { name: 'Show details' }).first();
+      if (!(await details.count())) return h.log('no "Show details" toggle') ?? false;
+      await details.click();
+      await h.settle(500);
     },
   },
   {
-    name: '10-databases-add',
-    goto: '/databases',
-    wait: 900,
+    // A provider row opened for a key: Save key and Cancel, plain words.
+    name: '10-aigeek-provider-key',
+    goto: '/aigeek',
+    wait: 1800,
     async setup(page, h) {
-      if (!page.url().includes('/databases')) return false;
-      const addDb = page.getByRole('button', { name: /add database/i }).first();
-      if (!(await addDb.count())) return false;
-      await addDb.click();
+      const open = page.getByRole('button', { name: /^(add|replace) key$/i }).first();
+      if (!(await open.count())) return h.log('no provider Add/Replace key button') ?? false;
+      await open.scrollIntoViewIfNeeded();
+      await open.click();
       await h.settle(600);
+      const save = page.getByRole('button', { name: 'Save key' }).first();
+      if (await save.count()) await save.scrollIntoViewIfNeeded();
+      await h.settle(300);
     },
-    teardown: (page, h) => h.esc(),
   },
   // ── /aigeek: a basegeek route, one long status page ─────────────────────
   //
