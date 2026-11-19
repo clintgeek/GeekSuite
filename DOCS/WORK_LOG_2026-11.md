@@ -532,3 +532,15 @@ Chef: "let's get these builds as tight as possible."
 - **Tried and dropped:** replacing the harness's fixed 1.2 s post-navigation wait with a
   readiness check (fonts, DOM quiet, no running transition). Under 10% faster and 394 of
   1,848 screenshots changed. The time is not in that wait.
+
+## 2026-11-18 — Suite design and UX review (plan only)
+
+- Chef asked for a full design and UX review. Eight read-only reviewers worked from
+  today's harness screenshots (1,848) and the code; Sage re-checked 14 headline
+  findings, all held. Written up in `DOCS/SUITE_UX_REVIEW_2026-11.md`: verdict per
+  app, five suite-wide patterns, 30 ranked findings, 11 decisions for Chef, and the
+  twelve reports appended unchanged. **Nothing is built.**
+- Found on the way: ThingGeek's shipped identity is "Storage Yard", not "Moving Day";
+  FlockGeek's offline page is already styled; three harness fixtures are wrong
+  (StartGeek wallpaper address, NewsGeek Today opens scrolled, BaseGeek scenes 09/10
+  point at a route that no longer exists).

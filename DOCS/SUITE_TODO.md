@@ -82,6 +82,8 @@ Pull from here when planning the next pass; update as work lands or priorities s
 
 ## 3. UI / UX & Design Language
 
+> **2026-11-18:** a full design and UX review of every app is in [`SUITE_UX_REVIEW_2026-11.md`](SUITE_UX_REVIEW_2026-11.md) — 30 ranked findings, five suite-wide patterns, 11 decisions for Chef. Plan only; nothing from it is built or queued here yet.
+
 ### Highest Leverage / Follow-ups
 - ~~**FitnessGeek Food Search Rebuild**~~ — **shipped 2026-09-14**, and superseded as the primary path by **describe-and-log, shipped and verified live 2026-09-16** ([`THE_DESCRIBE_AND_LOG_PLAN.md`](../apps/fitnessgeek/DOCS/THE_DESCRIBE_AND_LOG_PLAN.md)). The four Phase-4 UI decisions were all settled 2026-09-14; this entry claimed otherwise until 2026-09-16. Search remains as the fallback for picking a specific branded item.
   - **Still open, small:** the ranker's `chosenForQuery` pin is read by `foodRanker` and written by nothing, so "what you picked for this query last time" does not rank. Note the describe path has its OWN history reuse (`findInHistory`), so the common case is already covered; this only improves the search fallback.
@@ -100,7 +102,7 @@ Pull from here when planning the next pass; update as work lands or priorities s
 - ~~**Reduced Motion Support**~~ — **done 2026-10-06**: the five framer-motion apps (flockgeek, fitnessgeek, todogeek, storygeek, startgeek) wrap their root in `<MotionConfig reducedMotion="user">`, so every animation honours the OS setting. todogeek's grain overlay no longer exists.
 - ~~**Themed Tooltips**~~ — **already done**: `createGeekSuiteTheme`'s `MuiTooltip` override uses theme-derived `tooltipBg`/`tooltipFg` (re-checked 2026-10-06).
 - ~~**"Updating…" on the other PWAs**~~ — **done 2026-10-06** in notegeek, todogeek, flockgeek, storygeek, thinggeek (all reload after a new worker activates). **Deliberately not** in fitnessgeek: it defers updates until the page is hidden (`PWAUpdatePrompt.jsx`, 2026-09-27), so no reload follows the download and the pill would never clear. Not in startgeek: no MUI.
-- **Offline Pages**: Give flockgeek and bookgeek `offline.html` theme-aware styles matching their PWA manifest colors.
+- **Offline Pages**: Give flockgeek and bookgeek `offline.html` theme-aware styles matching their PWA manifest colors. *(2026-11-18: flockgeek's is styled for light and dark now; bookgeek's not re-checked.)*
 
 ---
 
