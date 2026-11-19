@@ -88,8 +88,28 @@ function buildOverrides(mode) {
       MuiAlert: {
         defaultProps: { icon: false },
       },
+      // No ripple anywhere (UX review 2026-11-18 #5): the strike is the app's
+      // one animation, and a ripple caught mid-spread froze as a clipped grey
+      // blob behind "3 carried over" and "Done reordering". Focus stays visible
+      // through the suite's :focus-visible outline (CssBaseline in
+      // createGeekSuiteTheme); a press shows as the fill, flat, for as long as
+      // the finger is down.
+      MuiButtonBase: {
+        defaultProps: { disableRipple: true },
+      },
       MuiButton: {
-        styleOverrides: { root: { textTransform: 'none', boxShadow: 'none' } },
+        defaultProps: { disableRipple: true },
+        styleOverrides: {
+          root: { textTransform: 'none', boxShadow: 'none' },
+          // Text and outlined buttons only: a contained (ink) button keeps its ink.
+          text: { '&:active:not(.Mui-disabled)': { backgroundColor: p.fill } },
+          outlined: { '&:active:not(.Mui-disabled)': { backgroundColor: p.fill } },
+        },
+      },
+      MuiIconButton: {
+        styleOverrides: {
+          root: { '&:active:not(.Mui-disabled)': { backgroundColor: p.fill } },
+        },
       },
       MuiBottomNavigation: {
         styleOverrides: {

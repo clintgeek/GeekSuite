@@ -66,6 +66,7 @@ function OverdueLine({ count, open, onToggle, onMoveAll, p }) {
           minHeight: 44, px: 2, gap: 2, borderRadius: '4px', fontSize: '1rem', fontWeight: 600, color: p.ink,
           // The focus highlight stays inside the button (an outer ring was clipped on the open header).
           '&.Mui-focusVisible': { outline: `2px solid ${p.ink}`, outlineOffset: -2 },
+          '&:active': { backgroundColor: p.fill },
         }}
       >
         <Box component="span" aria-hidden sx={{ display: 'inline-flex', transition: 'none', transform: open ? 'rotate(90deg)' : 'none' }}>
@@ -78,7 +79,7 @@ function OverdueLine({ count, open, onToggle, onMoveAll, p }) {
       <Box sx={{ flex: 1 }} />
       <ButtonBase
         onClick={onMoveAll}
-        sx={{ minHeight: 44, px: 2, borderRadius: '4px', fontSize: '0.9375rem', fontWeight: 600, color: p.ink, textDecoration: 'underline', textUnderlineOffset: '3px' }}
+        sx={{ minHeight: 44, px: 2, borderRadius: '4px', fontSize: '0.9375rem', fontWeight: 600, color: p.ink, textDecoration: 'underline', textUnderlineOffset: '3px', '&:active': { backgroundColor: p.fill } }}
       >
         Move all to today
       </ButtonBase>
