@@ -83,6 +83,12 @@ export default function QuickPicks({
     textAlign: 'left',
     '@media (hover: hover)': { '&:hover': { borderWidth: 2, borderColor: produce.fill, bgcolor: produce.tint } },
   };
+  // Done (UX review 2026-11, B3): after one tap the card says "Added" with a
+  // check and keeps its food list; the box ignores a second tap.
+  const wholeDone = (key) => {
+    const a = added?.[key];
+    return Boolean(a && a.mealType === mealType && a.date === date);
+  };
   const listOf = (names) => `${names.slice(0, 3).join(', ')}${names.length > 3 ? ` and ${names.length - 3} more` : ''}`;
 
   return (
@@ -96,14 +102,18 @@ export default function QuickPicks({
         <Button
           variant="outlined"
           size="large"
-          startIcon={pendingKey === YESTERDAY_KEY ? <CircularProgress size={18} color="inherit" aria-hidden /> : <YesterdayIcon />}
+          startIcon={pendingKey === YESTERDAY_KEY
+            ? <CircularProgress size={18} color="inherit" aria-hidden />
+            : wholeDone(YESTERDAY_KEY) ? <CheckIcon sx={{ color: 'primary.main' }} /> : <YesterdayIcon />}
           disabled={busy}
           onClick={() => onPick?.(yesterday, YESTERDAY_KEY)}
+          aria-label={wholeDone(YESTERDAY_KEY) ? `${sameAs} · Added` : undefined}
           data-testid="same-as-yesterday"
+          data-added={wholeDone(YESTERDAY_KEY) ? 'true' : undefined}
           sx={bigButton}
         >
           <Box component="span" sx={{ display: 'flex', flexDirection: 'column', lineHeight: 1.25 }}>
-            <span>{pendingKey === YESTERDAY_KEY ? 'Adding…' : sameAs}</span>
+            <span>{pendingKey === YESTERDAY_KEY ? 'Adding…' : wholeDone(YESTERDAY_KEY) ? `${sameAs} · Added` : sameAs}</span>
             <Box component="span" sx={{ fontSize: '0.9375rem', fontWeight: 600, color: 'text.secondary' }}>
               {listOf(yesterday.map((f) => f.name))}
             </Box>
@@ -113,16 +123,20 @@ export default function QuickPicks({
 
       {household.map((member) => {
         const key = householdKey(member.userId);
+        const done = wholeDone(key);
         const label = `Same as ${member.name}’s ${meal}`;
         return (
           <Button
             key={key}
             variant="outlined"
             size="large"
-            startIcon={pendingKey === key ? <CircularProgress size={18} color="inherit" aria-hidden /> : <PeopleIcon />}
+            startIcon={pendingKey === key
+              ? <CircularProgress size={18} color="inherit" aria-hidden />
+              : done ? <CheckIcon sx={{ color: 'primary.main' }} /> : <PeopleIcon />}
             disabled={busy}
-            aria-label={label}
+            aria-label={done ? `${label} · Added` : label}
             data-testid="same-as-household"
+            data-added={done ? 'true' : undefined}
             onClick={() => onPick?.([{
               type: 'household-meal',
               name: `${member.name}’s ${meal}`,
@@ -135,7 +149,7 @@ export default function QuickPicks({
             sx={bigButton}
           >
             <Box component="span" sx={{ display: 'flex', flexDirection: 'column', lineHeight: 1.25 }}>
-              <span>{pendingKey === key ? 'Adding…' : label}</span>
+              <span>{pendingKey === key ? 'Adding…' : done ? `${label} · Added` : label}</span>
               <Box component="span" sx={{ fontSize: '0.9375rem', fontWeight: 600, color: 'text.secondary' }}>
                 {listOf(member.foods)}
               </Box>

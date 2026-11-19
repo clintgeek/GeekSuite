@@ -35,19 +35,24 @@ const parseAmount = (raw) => Number.parseFloat(String(raw ?? '').replace(',', '.
  * text box with a decimal keypad rather than `type="number"`, because a
  * number input reports "" for a half-typed "0." and that is the same bug.
  */
-const ServingSheet = ({ open, food, defaultMealType = 'snack', onClose, onConfirm }) => {
+const ServingSheet = ({ open, food, defaultMealType = 'snack', editing = null, onClose, onConfirm }) => {
   const theme = useTheme();
   const [amount, setAmount] = useState('1');
   const [unit, setUnit] = useState('serving');
   const [mealType, setMealType] = useState(defaultMealType);
 
+  // EDITING (UX review 2026-11, B2): the food is already in the log this
+  // sitting, so the sheet opens on what was logged, says "Change Egg", and
+  // its button is Save — it changes that entry instead of adding another.
+  const editingServings = editing ? Number(editing.servings) || 1 : null;
+
   useEffect(() => {
     if (!open) return;
     const requested = Number(food?.requestedQuantity);
-    setAmount(String(requested > 0 ? requested : 1));
+    setAmount(String(editingServings ?? (requested > 0 ? requested : 1)));
     setUnit('serving');
     setMealType(defaultMealType);
-  }, [open, food, defaultMealType]);
+  }, [open, food, defaultMealType, editingServings]);
 
   // Back closes this sheet, not the page (and not the add sheet under it).
   useBackToClose(Boolean(open && food), onClose);
@@ -82,7 +87,9 @@ const ServingSheet = ({ open, food, defaultMealType = 'snack', onClose, onConfir
   return (
     <Dialog open={open} onClose={onClose} maxWidth="xs" fullWidth>
       <DialogTitle sx={{ pb: 0.5 }}>
-        <Typography sx={{ fontSize: '1.0625rem', fontWeight: 700 }}>{food.name}</Typography>
+        <Typography component="span" sx={{ display: 'block', fontSize: '1.0625rem', fontWeight: 700 }}>
+          {editing ? `Change ${food.name}` : food.name}
+        </Typography>
         {food.brand && (
           <Typography sx={{ fontSize: '0.8125rem', color: 'text.secondary' }}>{food.brand}</Typography>
         )}
@@ -182,7 +189,7 @@ const ServingSheet = ({ open, food, defaultMealType = 'snack', onClose, onConfir
           disabled={!canLog}
           onClick={() => { if (canLog) onConfirm?.({ ...food, servings: round(servings, 3) }, mealType); }}
         >
-          Log it
+          {editing ? 'Save' : 'Log it'}
         </Button>
       </DialogActions>
     </Dialog>

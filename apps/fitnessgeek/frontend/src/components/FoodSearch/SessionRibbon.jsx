@@ -70,6 +70,11 @@ const SessionRibbon = ({ items = [], where = null, onUndoLast, onDone, busy = fa
     const per = Number(source?.calories_per_serving) || 0;
     return sum + per * (Number(item?.servings) || 1);
   }, 0);
+  // Foods, not picks (UX review 2026-11, B3): "Same as Sarah's dinner" is one
+  // pick that writes one log per food, and "1 added" undercounted her log.
+  const foods = items.reduce((n, item) => (
+    n + (item?.type === 'household-meal' ? Math.max(1, item?.logIds?.length || 0) : 1)
+  ), 0);
   const displayed = useCountUp(Math.round(totalCalories));
   const ribbonRef = useRef(null);
   useGeekToastClearance(ribbonRef, items.length > 0);
@@ -103,7 +108,7 @@ const SessionRibbon = ({ items = [], where = null, onUndoLast, onDone, busy = fa
       <LoggedIcon sx={{ color: primary, fontSize: 22, flexShrink: 0 }} aria-hidden />
       <Box sx={{ minWidth: 0, flex: 1 }}>
         <Typography sx={{ fontSize: '1rem', fontWeight: 800, color: 'text.primary', lineHeight: 1.3 }}>
-          {items.length} added{where ? ` to ${where}` : ''}
+          {foods} added{where ? ` to ${where}` : ''}
         </Typography>
         <Typography sx={{ fontSize: '0.9375rem', color: 'text.secondary', lineHeight: 1.3 }}>
           {displayed.toLocaleString('en-US')} cal

@@ -267,8 +267,17 @@ const FoodComposer = ({
       })
       .filter((entry) => (entry.logIds || []).length > 0));
     setAddedByKey((prev) => {
-      const next = Object.fromEntries(Object.entries(prev).filter(([, a]) => !a.logIds.some((id) => deleted.includes(id))));
-      return Object.keys(next).length === Object.keys(prev).length ? prev : next;
+      let changed = false;
+      const next = {};
+      for (const [key, a] of Object.entries(prev)) {
+        if (!a.logIds.some((id) => deleted.includes(id))) { next[key] = a; continue; }
+        changed = true;
+        // A whole copied meal stays "Added" until every food in it is gone:
+        // undoing its last food must not let the next tap copy the rest again.
+        const left = a.whole ? a.logIds.filter((id) => !deleted.includes(id)) : [];
+        if (left.length) next[key] = { ...a, logIds: left };
+      }
+      return changed ? next : prev;
     });
   }, []);
 
@@ -352,6 +361,66 @@ const FoodComposer = ({
   }, [priorFor, onUpdateLog, notify, offerUndo, forgetDeleted, sayError, beginWrite, endWrite]);
 
   /**
+   * "Amount" on a row already added this sitting CHANGES that entry
+   * (UX review 2026-11, B2). It used to log a second one: Egg, then
+   * Amount → 3 → Log it, left four eggs in two entries while the row still
+   * said "Added". Now the entry is patched to the new servings (and meal, if
+   * she moved it). Where the entry can't be patched from here, it is replaced
+   * — removed, then added again — so the day still ends with one entry.
+   */
+  const changeAmount = useCallback(async (key, food, meal) => {
+    const prior = key ? addedRef.current[key] : null;
+    if (!prior || prior.logIds.length !== 1) return false;
+    const logId = prior.logIds[0];
+    const count = Number(food.servings) || 1;
+    const target = meal || prior.mealType;
+
+    if (onUpdateLog) {
+      if (!beginWrite(key)) return true;
+      try {
+        const patch = { servings: count, ...(target !== prior.mealType ? { meal_type: target } : {}) };
+        const ok = await onUpdateLog(logId, patch);
+        if (!ok) throw new Error('not updated');
+        setAddedByKey((prev) => (prev[key] ? { ...prev, [key]: { ...prev[key], servings: count, mealType: target } } : prev));
+        setSession((prev) => prev.map((item) => (
+          item.logIds?.includes(logId) ? { ...item, servings: count, mealType: target } : item
+        )));
+        notify(`Changed ✓ · ${withAmount(prior.name, count)}`, { tone: 'success' });
+      } catch (err) {
+        sayError(err, "Couldn’t change that. Try again.");
+      } finally {
+        endWrite();
+      }
+      return true;
+    }
+
+    // No way to edit an entry here: take the old one out, then add the new.
+    if (!onUndo) return false;
+    if (!beginWrite(key)) return true;
+    let removed = false;
+    try {
+      const { deleted } = await runUndo(onUndo, [logId]);
+      removed = deleted.includes(logId);
+      if (removed) forgetDeleted(deleted);
+    } finally {
+      endWrite();
+    }
+    if (!removed) {
+      sayError(null, "Couldn’t change that. Try again.");
+      return true;
+    }
+    const written = await logFoods([food], target, key);
+    const ids = written?.perItem?.[0] || written?.logIds || [];
+    if ((written?.ok ?? 0) > 0 && ids.length === 1) {
+      setAddedByKey((prev) => ({
+        ...prev,
+        [key]: { logIds: ids, servings: count, name: food.name, mealType: target, date: day },
+      }));
+    }
+    return true;
+  }, [onUpdateLog, onUndo, beginWrite, endWrite, notify, sayError, forgetDeleted, logFoods, day]);
+
+  /**
    * A row or a chip: the first tap writes an entry; the next tap on the same
    * one, in this sitting, makes it one more serving (L2).
    */
@@ -377,10 +446,33 @@ const FoodComposer = ({
     return pickOne({ ...food, servings }, key);
   }, [pickOne]);
 
-  /** The quick picks: one food is a pick like a row; several go as one gesture. */
-  const handleQuick = useCallback((items, key) => (
-    items?.length === 1 ? pickOne(items[0], key) : logFoods(items, mealType, key)
-  ), [pickOne, logFoods, mealType]);
+  /**
+   * The quick picks: one food is a pick like a row; several go as one gesture.
+   *
+   * "SAME AS …" IS DONE AFTER ONE TAP (UX review 2026-11, B3). Heather taps
+   * twice "to be sure"; rows and chips absorb that, but these cards copied
+   * the whole meal again. Once one has written, it shows "Added" and a
+   * second tap writes nothing (its Undo is the toast's and the ribbon's).
+   */
+  const handleQuick = useCallback(async (items, key) => {
+    const whole = items?.length > 1 || items?.[0]?.type === 'household-meal';
+    if (!whole) return pickOne(items?.[0], key);
+    const prior = key ? addedRef.current[key] : null;
+    if (prior && prior.mealType === mealType && prior.date === day) {
+      notify(`Already added to ${mealWord(mealType)} ✓`, { tone: 'info' });
+      return null;
+    }
+    const written = await logFoods(items, mealType, key);
+    const ids = (written?.perItem || []).flat().filter(Boolean);
+    const logIds = ids.length ? ids : (written?.logIds || []);
+    if (key && (written?.ok ?? 0) > 0 && logIds.length > 0) {
+      setAddedByKey((prev) => ({
+        ...prev,
+        [key]: { logIds, servings: 1, name: items[0].name, mealType, date: day, whole: true },
+      }));
+    }
+    return written;
+  }, [pickOne, logFoods, mealType, day, notify]);
 
   /** The row's or chip's "Make it N". */
   const handleMore = useCallback((key, count) => setServings(key, count), [setServings]);
@@ -683,6 +775,10 @@ const FoodComposer = ({
     ? sheetMealOnDay(mealWord(session[0].mealType || mealType), session[0].date || day, today, day)
     : null;
 
+  // The row whose Amount is open, when it is already in the log (B2).
+  const adjustingAdded = adjusting ? addedByKey[identityOf(adjusting)] : null;
+  const adjustingPrior = adjustingAdded?.logIds?.length === 1 ? adjustingAdded : null;
+
   const pillButton = { minHeight: 48, borderRadius: 999, fontWeight: 800, fontSize: '1rem', px: 2.5, boxShadow: 'none' };
 
   if (result) {
@@ -965,11 +1061,23 @@ const FoodComposer = ({
       <ServingSheet
         open={Boolean(adjusting)}
         food={adjusting}
-        defaultMealType={mealType}
+        defaultMealType={adjustingPrior?.mealType || mealType}
+        // Already added this sitting: the sheet changes that entry (B2).
+        editing={adjustingPrior ? { servings: adjustingPrior.servings } : null}
         onClose={() => setAdjusting(null)}
-        onConfirm={(food, m) => {
+        onConfirm={async (food, m) => {
           setAdjusting(null);
-          logFoods([food], m, identityOf(food));
+          const key = identityOf(food);
+          if (await changeAmount(key, food, m)) return;
+          const written = await logFoods([food], m, key);
+          const ids = written?.perItem?.[0] || written?.logIds || [];
+          // Now it is added: a second Amount changes it rather than adding.
+          if (key && food.kind !== 'meal' && (written?.ok ?? 0) > 0 && ids.length === 1) {
+            setAddedByKey((prev) => ({
+              ...prev,
+              [key]: { logIds: ids, servings: Number(food.servings) || 1, name: food.name, mealType: m, date: day },
+            }));
+          }
         }}
       />
     </Box>
