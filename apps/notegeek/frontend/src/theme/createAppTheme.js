@@ -199,6 +199,45 @@ function buildNoteOverrides(mode) {
           tooltip: { fontFamily: SANS },
         },
       },
+      // An "info" note (fold-in's dropped lines, Compose's left-out notes, a
+      // photo notice) is a pencilled margin note, not Material's blue box:
+      // sheet ground, a graphite rule, ink text, the (i) in lead. Graphite
+      // has one loud colour, and it is the error red (review 2026-11-18 #7).
+      // Warning and error keep their own colours: they are news.
+      MuiAlert: {
+        styleOverrides: {
+          standardInfo: {
+            backgroundColor: g.sheet,
+            color: g.ink,
+            border: `1px solid ${g.rule}`,
+            '& .MuiAlert-icon': { color: g.lead },
+          },
+          outlinedInfo: {
+            backgroundColor: 'transparent',
+            color: g.ink,
+            borderColor: g.border,
+            '& .MuiAlert-icon': { color: g.lead },
+          },
+        },
+      },
+      // Switches in Graphite: a graphite thumb on a rule-coloured track; on,
+      // the track is a stroke of highlighter with ink on it (the accent is
+      // only ever a fill behind ink).
+      MuiSwitch: {
+        styleOverrides: {
+          switchBase: {
+            color: g.ink2,
+          },
+          colorPrimary: {
+            '&.Mui-checked': { color: g.onHl },
+            '&.Mui-checked + .MuiSwitch-track': { backgroundColor: g.hl, opacity: 1 },
+          },
+          track: {
+            backgroundColor: g.border,
+            opacity: 1,
+          },
+        },
+      },
       // Menus (the editor's ⋯, New ▾, the tag menu): MUI drops a menu item
       // to `auto` (~34px) from `sm` up, so on a touch tablet they were
       // finger-sized only on a phone. 44px for any coarse pointer; a mouse
