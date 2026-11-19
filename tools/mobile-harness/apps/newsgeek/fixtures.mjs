@@ -10,6 +10,8 @@
 //   ?__fixture=nonadmin     a plain reader: newsViewer.isAdmin is false
 //   ?__fixture=free         "Free to read" on: paywalled sources' items left out,
 //                           hiddenPaywalled = 14
+//   ?__fixture=freeempty    "Free to read" on and nothing on the front page is
+//                           free (Today's "turn off Free to read" empty state)
 //
 // Reader-added sources (plan "Reader-added sources"): every source carries
 // defaultOn / onForMe / addedByMe / canEdit / addedByName (admins only), the
@@ -282,7 +284,7 @@ const OP = (o) => ({ __typename: 'NewsOpener', sourceId: o.sourceId ?? null, dom
 const OPENERS = [OP({ sourceId: 's-mal', linkId: 'ex-reader' }), OP({ domain: 'magnoliareporter.com', linkId: 'ex-archive' })];
 const newsPrefsFor = (mode, over = {}) => ({
   __typename: 'NewsPrefs',
-  freeToReadOnly: mode === 'free',
+  freeToReadOnly: mode === 'free' || mode === 'freeempty',
   openInNewTab: true,
   readerLinks: mode === 'nonadmin' ? [] : READER_LINKS,
   openers: mode === 'nonadmin' ? [] : OPENERS,
@@ -377,7 +379,7 @@ const AROUND_ITEMS = FRONT_SECTIONS.find((sec) => sec.key === 'around').items.ma
 const frontPageFor = (mode) => ({
   __typename: 'NewsFrontPage',
   generatedAt: ago(2),
-  sections: mode === 'empty'
+  sections: mode === 'empty' || mode === 'freeempty'
     ? []
     : FRONT_SECTIONS.map((sec) => ({
       __typename: 'NewsFrontSection',

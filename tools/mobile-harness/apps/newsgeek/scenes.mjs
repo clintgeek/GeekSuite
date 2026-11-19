@@ -142,7 +142,10 @@ export const scenes = [
   { name: '25-settings-publishers-empty', goto: '/settings?__fixture=nonadmin', wait: 1600, setup: scrollTo('#settings-publishers') },
   // Today (2026-10-11): the front page — Local, State, National, World, Tech,
   // why-chips, "More <section> →", the end line.
-  { name: '26-today', goto: '/', wait: 1600 },
+  // `freshPage`: a new tab, so no scroll position is remembered from the
+  // scenes before it (sessionStorage is per tab) — this is the top of the
+  // front page, the nameplate over the lead story (UX review 2026-11-18, 10).
+  { name: '26-today', goto: '/', wait: 1600, freshPage: true },
   // …further down: State and National, their More links.
   { name: '27-today-sections', goto: '/', wait: 1600, setup: scrollTo('[data-section="national"]') },
   // …the end of the paper.
@@ -222,6 +225,38 @@ export const scenes = [
       await btn.first().click();
       await page.getByTestId('older-failed').waitFor({ timeout: 5000 });
       await page.getByTestId('older-failed').scrollIntoViewIfNeeded();
+      await h.settle(400);
+      return undefined;
+    },
+  },
+  // UX review 2026-11-18. Free to read on Today: the dateline says
+  // paywalled stories are left out…
+  { name: '49-today-free-to-read', goto: '/?__fixture=free', wait: 1600, freshPage: true },
+  // …and when that empties the paper, says so and offers the switch.
+  { name: '50-today-free-empty', goto: '/?__fixture=freeempty', wait: 1600 },
+  // A story's ⋯ menu on the phone, now with "Share…" (or "Copy link").
+  {
+    name: '51-article-menu-share',
+    goto: '/everything',
+    wait: 1600,
+    async setup(page, h) {
+      const btn = page.getByTestId('article-menu-button');
+      if (!(await btn.count())) return false;
+      await btn.first().click();
+      await h.settle(500);
+      return undefined;
+    },
+    teardown: (page, h) => h.esc(),
+  },
+  // Sources → "Find a source" with a name typed: every section narrowed.
+  {
+    name: '52-sources-find',
+    goto: '/sources',
+    wait: 1600,
+    async setup(page, h) {
+      const field = page.getByLabel('Find a source');
+      if (!(await field.count())) return false;
+      await field.fill('malvern');
       await h.settle(400);
       return undefined;
     },
