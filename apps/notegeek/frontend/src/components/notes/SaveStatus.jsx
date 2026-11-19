@@ -9,8 +9,10 @@ import useEditorChrome from '../../store/editorChromeStore';
 /** On the page for a screen reader, not on the screen. */
 const visuallyHidden = {
   position: 'absolute',
-  width: 1,
-  height: 1,
+  // Strings, not numbers: in `sx` a bare 1 means 100%, which made this
+  // "hidden" span a page wide and scrolled every editor sideways.
+  width: '1px',
+  height: '1px',
   p: 0,
   m: '-1px',
   overflow: 'hidden',

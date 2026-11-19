@@ -263,6 +263,8 @@ describe('NoteEditorPage — quiet when fine, loud when not', () => {
     expect(stamp()).toHaveTextContent(/not saved/i);
     expect(stamp()).toHaveAttribute('data-save-loud', 'true');
     expect(getComputedStyle(stamp()).position).toBe('absolute');
+    // 1px, not sx's `1` (= 100%): the harness caught the page scrolling sideways.
+    expect(getComputedStyle(stamp()).width).toBe('1px');
   });
 
   it('offline with unsaved edits is loud; offline with nothing unsaved is not', async () => {
