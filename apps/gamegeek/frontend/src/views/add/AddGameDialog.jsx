@@ -75,6 +75,10 @@ export default function AddGameDialog() {
       snap="full"
       maxWidth="md"
       title="Add a game"
+      // The close sits in the header row beside the title, not on the search
+      // field's border (review 2026-11-18 #1): the row is as tall as the 44px
+      // close plus its 8px inset, and the title clears it on the right.
+      headerSx={{ minHeight: 60, alignItems: 'center', pr: 14 }}
       bodySx={{ px: { xs: 2, md: 3 } }}
       dialogProps={{ PaperProps: { sx: { height: 'min(88vh, 900px)' } } }}
       actions={
@@ -85,7 +89,9 @@ export default function AddGameDialog() {
         ) : undefined
       }
     >
-      <Box sx={{ pb: 3 }}>
+      {/* 12px above the field, so its floating label is not cut by the
+          top of the scrolling body (it sat half under the heading). */}
+      <Box sx={{ pt: 3, pb: 3 }}>
         {form ? (
           <GameForm
             form={form}
