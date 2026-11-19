@@ -27,12 +27,16 @@ import {
   ExitToApp as LeaveIcon,
   Check as CheckIcon,
   Restaurant as FoodIcon,
-  FitnessCenter as MealsIcon
+  MenuBook as MealsIcon
 } from '@mui/icons-material';
 import { useToast } from '@geeksuite/ui';
 import PremiumDialog from '../primitives/PremiumDialog.jsx';
 import { settingsService } from '../../services/settingsService';
 import { errorMessage } from '../../utils/errorMessage.js';
+
+// Every Settings switch on the right, its label on the left (UX review
+// 2026-11, A11), as "Larger text" does.
+const SWITCH_ROW = { display: 'flex', justifyContent: 'space-between', ml: 0, mr: 0, minHeight: 48, gap: 2 };
 
 const HouseholdSettings = () => {
   const { notify } = useToast();
@@ -278,6 +282,8 @@ const HouseholdSettings = () => {
             </Typography>
             <Box sx={{ mb: 3 }}>
               <FormControlLabel
+                labelPlacement="start"
+                sx={SWITCH_ROW}
                 control={
                   <Switch
                     checked={householdData.share_food_logs ?? true}
@@ -293,6 +299,8 @@ const HouseholdSettings = () => {
                 }
               />
               <FormControlLabel
+                labelPlacement="start"
+                sx={SWITCH_ROW}
                 control={
                   <Switch
                     checked={householdData.share_meals ?? true}

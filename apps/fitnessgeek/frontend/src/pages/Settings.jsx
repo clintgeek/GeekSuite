@@ -505,7 +505,9 @@ const Settings = () => {
               />
             }
             label="Use my Garmin watch"
-            sx={{ mb: 2, display: 'flex' }}
+            labelPlacement="start"
+            // Switch on the right, as everywhere in Settings (A11).
+            sx={{ mb: 2, display: 'flex', justifyContent: 'space-between', ml: 0, mr: 0, minHeight: 48, gap: 2 }}
           />
           <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
             <TextField
@@ -555,7 +557,8 @@ const Settings = () => {
               />
             }
             label="Sleep apnea screening suggestion"
-            sx={{ display: 'flex' }}
+            labelPlacement="start"
+            sx={{ display: 'flex', justifyContent: 'space-between', ml: 0, mr: 0, minHeight: 48, gap: 2 }}
           />
           <Typography variant="body2" sx={{ color: 'text.secondary', mt: 0.5 }}>
             Suggests screening when your watch records blood-oxygen dips overnight. Wrist readings are noisy with movement and sleep position — turn this off if you’ve already discussed them with your doctor.
