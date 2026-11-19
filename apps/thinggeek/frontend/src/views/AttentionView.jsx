@@ -65,8 +65,8 @@ function WarningLight({ tone, count, label, testId }) {
       <Box
         aria-hidden="true"
         sx={{
-          width: 38,
-          height: 38,
+          width: { xs: 30, md: 38 },
+          height: { xs: 30, md: 38 },
           flexShrink: 0,
           borderRadius: '50%',
           border: `3px solid #000`,
@@ -76,7 +76,7 @@ function WarningLight({ tone, count, label, testId }) {
         }}
       />
       <Box sx={{ minWidth: 0 }}>
-        <Typography component="span" sx={{ display: 'block', fontFamily: DISPLAY_FONT, fontWeight: 700, fontSize: '1.75rem', lineHeight: 1, color: CHROME.text, fontVariantNumeric: 'tabular-nums' }}>
+        <Typography component="span" sx={{ display: 'block', fontFamily: DISPLAY_FONT, fontWeight: 700, fontSize: { xs: '1.5rem', md: '1.75rem' }, lineHeight: 1, color: CHROME.text, fontVariantNumeric: 'tabular-nums' }}>
           {count ?? '–'}
         </Typography>
         <Typography component="span" sx={{ display: 'block', fontSize: '0.8125rem', fontWeight: 700, color: CHROME.secondary }}>
@@ -132,32 +132,33 @@ function Dashboard({ overdue, dueSoon, percent, items }) {
       data-testid="dashboard"
       sx={{
         position: 'relative',
-        mb: 2.5,
+        mb: { xs: 1.5, md: 2.5 },
         borderRadius: '10px',
         bgcolor: CHROME.bar,
         backgroundImage: `${dustImage('dark')}, linear-gradient(180deg, #221D18, #100E0C)`,
         border: '3px solid #000',
         boxShadow: 'inset 0 1px 0 rgba(255,255,255,0.06), 0 3px 0 rgba(0,0,0,0.3)',
         color: CHROME.text,
-        p: { xs: 2, md: 2.5 },
+        px: { xs: 1.5, md: 2.5 },
+        py: { xs: 1.25, md: 2.5 },
         display: 'grid',
-        gridTemplateColumns: { xs: 'minmax(0, 1fr) minmax(0, 1.1fr)', md: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.2fr)' },
+        gridTemplateColumns: { xs: 'minmax(0, 1fr) minmax(0, 1fr)', md: 'minmax(0, 1fr) minmax(0, 1fr) minmax(0, 1.2fr)' },
         alignItems: 'center',
         gap: { xs: 1.5, md: 3 },
       }}
     >
-      <Box sx={{ display: 'grid', gap: 1.75, gridColumn: { md: 'span 2' }, gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' } }}>
+      <Box sx={{ display: 'grid', gap: { xs: 1, md: 1.75 }, gridColumn: { md: 'span 2' }, gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' } }}>
         <WarningLight tone="overdue" count={overdue} label="Overdue" testId="light-overdue" />
         <WarningLight tone="soon" count={dueSoon} label="Due soon" testId="light-soon" />
       </Box>
       <Box sx={{ textAlign: 'center', minWidth: 0 }}>
-        <Box sx={{ maxWidth: 200, mx: 'auto' }}>
+        <Box sx={{ maxWidth: { xs: 120, md: 200 }, mx: 'auto' }}>
           <Gauge percent={percent} />
         </Box>
-        <Typography data-testid="record-check" sx={{ fontFamily: DISPLAY_FONT, fontWeight: 700, fontSize: '1.125rem', lineHeight: 1.2, color: CHROME.text }}>
+        <Typography data-testid="record-check" sx={{ fontFamily: DISPLAY_FONT, fontWeight: 700, fontSize: { xs: '1rem', md: '1.125rem' }, lineHeight: 1.2, color: CHROME.text }}>
           Record check {percent != null ? `${percent}%` : '—'}
         </Typography>
-        <Typography sx={{ fontSize: '0.75rem', color: CHROME.secondary, lineHeight: 1.4 }}>
+        <Typography sx={{ display: { xs: 'none', md: 'block' }, fontSize: '0.75rem', color: CHROME.secondary, lineHeight: 1.4 }}>
           {percent != null ? `Photo, receipt and value on file, across ${items} thing${items === 1 ? '' : 's'}` : 'Nothing recorded yet'}
         </Typography>
       </Box>
@@ -167,10 +168,11 @@ function Dashboard({ overdue, dueSoon, percent, items }) {
 
 // ── The lists ────────────────────────────────────────────────────────────────
 
-function DueRow({ thing }) {
+export function DueRow({ thing }) {
   const theme = useTheme();
   const due = thing.nextDue;
   const tone = statusTone(theme, due?.status, theme.palette.background.card);
+  const where = thingWhereText(thing);
   return (
     <Box component="li" sx={{ listStyle: 'none', borderBottom: 1, borderColor: 'divider', '&:last-of-type': { borderBottom: 0 } }}>
       <ButtonBase
@@ -182,12 +184,23 @@ function DueRow({ thing }) {
         <Box sx={{ width: 48, flexShrink: 0 }}>
           <ThingPhoto src={coverSrc(thing)} icon={thing.type?.icon} variant="thumb" radius={3} />
         </Box>
+        {/* Three short lines, not one long one: the date's label and date may wrap
+            (never cut), and the place gets its own line. */}
         <Box sx={{ flex: 1, minWidth: 0 }}>
           <Typography noWrap sx={{ fontWeight: 700, fontSize: '0.9375rem' }}>{thing.name}</Typography>
-          <Typography noWrap sx={{ fontSize: '0.8125rem', color: 'text.secondary' }}>
-            {due ? `${due.label || dateKindLabel(due.kind)} · ${formatCalendarDate(dueDateOf(due))}` : ''}
-            {thingWhereText(thing) ? ` · ${thingWhereText(thing)}` : ''}
-          </Typography>
+          {due ? (
+            <Typography data-testid="due-when" sx={{ fontSize: '0.8125rem', color: 'text.secondary', lineHeight: 1.35, overflowWrap: 'anywhere' }}>
+              {`${due.label || dateKindLabel(due.kind)} · `}
+              <Box component="span" sx={{ whiteSpace: 'nowrap' }}>
+                {formatCalendarDate(dueDateOf(due))}
+              </Box>
+            </Typography>
+          ) : null}
+          {where ? (
+            <Typography noWrap data-testid="due-where" sx={{ fontSize: '0.8125rem', color: 'text.secondary', lineHeight: 1.35 }}>
+              {where}
+            </Typography>
+          ) : null}
         </Box>
         {due ? (
           <Typography component="span" sx={{ fontSize: '0.8125rem', fontWeight: 800, color: tone, flexShrink: 0, textAlign: 'right' }}>
@@ -296,7 +309,16 @@ export default function AttentionView() {
 
   return (
     <PageFrame>
-      <PageHeader title="Needs attention" lede="Dates that have passed or are close, then everything an insurer would ask for that isn't on file yet." />
+      {/* The phone drops the lede: the dash and the section titles say the same, and the first due row comes up the screen. */}
+      <PageHeader
+        title="Needs attention"
+        lede={
+          <Box component="span" data-testid="attention-lede" sx={{ display: { xs: 'none', md: 'inline' } }}>
+            Dates that have passed or are close, then everything an insurer would ask for that isn't on file yet.
+          </Box>
+        }
+        sx={{ mb: { xs: 0, md: 3 } }}
+      />
       <Dashboard overdue={attention ? a.overdue.length : null} dueSoon={attention ? a.dueSoon.length : null} percent={percent} items={itemsCount} />
       {!loading && !treeLoading ? (
         <OnboardingChecklist locationsCount={locationsCount} itemsCount={itemsCount} missingIdPlate={attention?.missingIdPlate ?? 0} walkAt={walkAt} />
