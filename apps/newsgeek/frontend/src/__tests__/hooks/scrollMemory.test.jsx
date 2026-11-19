@@ -80,8 +80,45 @@ function Nav() {
   );
 }
 
+/** Pretend the document was loaded this way (Navigation Timing). */
+function loadedBy(type) {
+  return vi.spyOn(window.performance, 'getEntriesByType').mockImplementation((t) => (t === 'navigation' ? [{ type }] : []));
+}
+
 describe('AppMain', () => {
+  afterEach(() => vi.restoreAllMocks());
+
+  it('a fresh open or a reload starts at the top, though a place is saved (finding 10)', () => {
+    const proto = window.HTMLElement.prototype;
+    const sh = Object.getOwnPropertyDescriptor(proto, 'scrollHeight');
+    const ch = Object.getOwnPropertyDescriptor(proto, 'clientHeight');
+    Object.defineProperty(proto, 'scrollHeight', { configurable: true, get: () => 5000 });
+    Object.defineProperty(proto, 'clientHeight', { configurable: true, get: () => 800 });
+    try {
+      for (const type of ['navigate', 'reload']) {
+        loadedBy(type);
+        writeScroll('/', 2400);
+        const { container, unmount } = render(
+          <MemoryRouter initialEntries={['/']}>
+            <AppMain transitionKey="x">
+              <p>page</p>
+            </AppMain>
+          </MemoryRouter>
+        );
+        expect(container.querySelector('main').scrollTop).toBe(0);
+        unmount();
+        vi.restoreAllMocks();
+      }
+    } finally {
+      if (sh) Object.defineProperty(proto, 'scrollHeight', sh);
+      else delete proto.scrollHeight;
+      if (ch) Object.defineProperty(proto, 'clientHeight', ch);
+      else delete proto.clientHeight;
+    }
+  });
+
   it('Back (POP) returns to the saved place; a new page (PUSH) starts at the top', async () => {
+    loadedBy('back_forward');
     // A tall page: jsdom has no layout, so give <main> a size.
     const proto = window.HTMLElement.prototype;
     const sh = Object.getOwnPropertyDescriptor(proto, 'scrollHeight');
@@ -101,7 +138,7 @@ describe('AppMain', () => {
         </MemoryRouter>
       );
       const main = container.querySelector('main');
-      // First load is a POP (a reload after Back from a story): the saved place.
+      // First load came Back into NewsGeek (Back from a story opened here): the saved place.
       expect(main.scrollTop).toBe(1800);
       act(() => {
         screen.getByRole('button', { name: 'Go' }).click();

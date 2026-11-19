@@ -41,6 +41,30 @@ export const readScroll = (key) => {
 };
 export const writeScroll = (key, scroll) => write(key, { scroll: Math.max(0, Math.round(scroll)) });
 
+/**
+ * How this document was loaded: 'navigate' (a fresh open: a typed URL, a
+ * home-screen launch, a link), 'reload', 'back_forward' (Back or Forward
+ * into this page — e.g. Back from a story opened in this window), or
+ * 'prerender'. Unknown (no Navigation Timing) reads as 'navigate'.
+ */
+export function pageLoadType() {
+  try {
+    const entry = window.performance?.getEntriesByType?.('navigation')?.[0];
+    return entry?.type || 'navigate';
+  } catch {
+    return 'navigate';
+  }
+}
+
+/**
+ * Whether the FIRST page of this document should go back to its saved place
+ * (UX review 2026-11-18, finding 10). Only when the browser came Back (or
+ * Forward) into NewsGeek: react-router calls every first load POP, so a
+ * morning open or a reload used to land mid-paper wherever the reader had
+ * stopped (sessionStorage survives both).
+ */
+export const restoresOnLoad = () => pageLoadType() === 'back_forward';
+
 export const readCount = (key) => {
   const v = read(key)?.count;
   return Number.isInteger(v) && v > 0 ? v : 0;

@@ -7,7 +7,10 @@
  *  - a new page (a link, a tab: PUSH/REPLACE) starts at its top;
  *  - Back/Forward (POP) — including the page load after Back from a story
  *    opened in this window — returns to where they were on that page
- *    (hooks/scrollMemory.js), once the stories are there to scroll to.
+ *    (hooks/scrollMemory.js), once the stories are there to scroll to;
+ *  - but a fresh open or a reload starts at the top, though react-router
+ *    calls that first load POP too (UX review 2026-11-18, finding 10): the
+ *    first page restores only when the browser says it came Back.
  *
  * It also provides the scroll container to the views (hooks/scrollRoot.js),
  * so a resume refresh can tell whether the reader is at the top.
@@ -16,7 +19,7 @@ import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Box } from '@mui/material';
 import { useLocation, useNavigationType } from 'react-router-dom';
 import { ScrollRootContext } from '../hooks/scrollRoot';
-import { placeKey, readScroll, restoreScroll, writeScroll } from '../hooks/scrollMemory';
+import { placeKey, readScroll, restoreScroll, restoresOnLoad, writeScroll } from '../hooks/scrollMemory';
 
 const SAVE_DEBOUNCE_MS = 150;
 
@@ -29,13 +32,17 @@ export default function AppMain({ children, transitionKey }) {
   const key = placeKey(location);
   // The page the current scrollTop belongs to; saved under that key.
   const current = useRef({ key, top: 0 });
+  // The document's first page: restored only when the browser came Back into NewsGeek.
+  const firstPage = useRef(true);
 
   useLayoutEffect(() => {
     if (!node) return undefined;
     // The page being left keeps its place (synchronously: a debounced save may still be pending).
     if (current.current.key !== key) writeScroll(current.current.key, current.current.top);
     current.current = { key, top: 0 };
-    const saved = navType === 'POP' ? readScroll(key) : 0;
+    const first = firstPage.current;
+    firstPage.current = false;
+    const saved = navType === 'POP' && (!first || restoresOnLoad()) ? readScroll(key) : 0;
     node.scrollTop = 0;
     if (!saved) return undefined;
     current.current.top = saved;
