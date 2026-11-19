@@ -1982,9 +1982,11 @@ export const scenes = [
     },
   },
   {
-    // Recently deleted (/deleted, C4): three notes waiting out their 30 days,
-    // each with Restore and Delete forever. One has a title far wider than a
-    // phone, one is a sketch with no words.
+    // Recently deleted (/deleted, C4): three notes waiting out their 30 days.
+    // One has a title far wider than a phone, one is a sketch with no words.
+    // It works the way Archived does (review 2026-11-18 #8): rows open the
+    // note, and select mode restores or deletes forever from the bar; no
+    // per-row buttons.
     name: '21c-recently-deleted',
     goto: '/deleted',
     wait: 1200,
@@ -1993,17 +1995,27 @@ export const scenes = [
       if ((await rows.count()) !== DELETED.length) throw new Error(`expected ${DELETED.length} deleted notes, saw ${await rows.count()}`);
       const first = rows.first();
       if (!/Old standup template/.test(await first.innerText())) throw new Error('the most recently deleted note is not first');
-      for (const name of ['Restore', 'Delete forever']) {
-        if (!(await first.getByRole('button', { name }).count())) throw new Error(`a deleted row has no "${name}"`);
-      }
+      if (await first.getByRole('button', { name: /^(Restore|Delete forever)$/ }).count()) throw new Error('a deleted row still has its own Restore / Delete forever');
       if (!(await page.getByRole('heading', { level: 1, name: /Recently deleted/ }).count())) throw new Error('no "Recently deleted" heading');
-      // The two actions stay together on one line, in every row.
-      for (let i = 0; i < DELETED.length; i += 1) {
-        const a = await rows.nth(i).getByRole('button', { name: 'Delete forever' }).boundingBox();
-        const b = await rows.nth(i).getByRole('button', { name: 'Restore' }).boundingBox();
-        if (Math.abs(a.y - b.y) > 2) throw new Error(`row ${i + 1}: Restore (y ${Math.round(b.y)}) is not beside Delete forever (y ${Math.round(a.y)})`);
+      if (!(await page.getByRole('button', { name: 'Select', exact: true }).count())) throw new Error('no Select on Recently deleted');
+    },
+  },
+  {
+    // Select mode on Recently deleted: one picked; the bar offers Restore
+    // (the primary) and Delete forever (error ink), like Archived's bar.
+    name: '21c2-recently-deleted-select',
+    goto: '/deleted',
+    wait: 1200,
+    async setup(page, h) {
+      await page.getByRole('button', { name: 'Select', exact: true }).click();
+      await page.locator('[data-deleted-row]').first().getByRole('checkbox').click();
+      await h.settle(300);
+      const bar = page.getByRole('toolbar', { name: 'Selected notes' });
+      for (const name of ['Restore', 'Delete forever']) {
+        if (await bar.getByRole('button', { name, exact: true }).isDisabled()) throw new Error(`"${name}" is disabled with a note selected`);
       }
     },
+    teardown: (page, h) => h.esc(400),
   },
   {
     // "Delete forever?": the one irreversible act, so it asks, with Cancel
@@ -2012,14 +2024,17 @@ export const scenes = [
     goto: '/deleted',
     wait: 1200,
     async setup(page, h) {
-      await page.locator('[data-deleted-row]').first().getByRole('button', { name: 'Delete forever' }).click();
+      await page.getByRole('button', { name: 'Select', exact: true }).click();
+      await page.locator('[data-deleted-row]').first().getByRole('checkbox').click();
+      await h.settle(300);
+      await page.getByRole('toolbar', { name: 'Selected notes' }).getByRole('button', { name: 'Delete forever', exact: true }).click();
       const dialog = page.getByRole('dialog', { name: 'Delete forever?' });
       await dialog.waitFor({ timeout: 5000 });
       await h.settle(500);
       const focused = await page.evaluate(() => document.activeElement?.textContent || '');
       if (!/cancel/i.test(focused)) throw new Error(`"${focused}" is focused in "Delete forever?", not Cancel`);
     },
-    teardown: (page, h) => h.esc(400),
+    teardown: async (page, h) => { await h.esc(400); await h.esc(400); },
   },
   {
     // Recently deleted, empty.

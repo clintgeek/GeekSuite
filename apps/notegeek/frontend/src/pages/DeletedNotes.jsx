@@ -3,77 +3,106 @@ import { Box, Button, Divider, Skeleton, Typography, useTheme } from '@mui/mater
 import DeleteOutline from '@mui/icons-material/DeleteOutline';
 import { useMutation, useQuery } from '@apollo/client';
 import { GeekDialog, GeekEmptyState, GeekErrorState, useToast } from '@geeksuite/ui';
-import TypeIcon from '../components/notes/TypeIcon';
+import NoteRow from '../components/notes/NoteRow';
 import { DELETED_NOTES } from '../graphql/queries';
 import { RESTORE_NOTE, PURGE_NOTE } from '../graphql/mutations';
 import { onNoteRestored } from '../graphql/cacheUpdates';
-import { formatRelativeTime } from '../utils/dateUtils';
 import { layout } from '../theme/tokens';
 import useNoteStore from '../store/noteStore';
 import { useListWidth } from '../components/notes/ListColumn';
+import { useNoteSelection, rowSelectProps } from '../hooks/useNoteSelection';
+import { SelectButton, SelectingHeader } from '../components/select/SelectControl';
+import SelectionBar from '../components/select/SelectionBar';
+
+const plural = (n) => `${n} note${n === 1 ? '' : 's'}`;
 
 /**
- * Recently deleted (`/deleted`; contract C4, decision D1, review 2026-11 1.19).
+ * Recently deleted (`/deleted`; contract C4, review 2026-11 1.19).
  *
  * A deleted note waits here for 30 days with its history, then the server
- * purges it. Restore puts it back everywhere it was; Delete forever is the
- * only irreversible act in the app, so it asks first — with Cancel focused.
+ * purges it. It works the way Archived does (review 2026-11-18 #8, "both bins
+ * work one way"): a row opens the note (with its "Deleted · Restore"
+ * banner); select mode puts several back, or deletes them forever. Restore
+ * is the bar's primary. Delete forever is the only irreversible act in the
+ * app, so it asks first, with Cancel focused, in error ink.
  * Reached from the Tags panel (beside Archived) and from Settings.
  */
 export default function DeletedNotes() {
   const theme = useTheme();
   const listWidth = useListWidth();
   const { notify } = useToast();
-  const [confirm, setConfirm] = useState(null);
+  const selection = useNoteSelection();
+  const [confirm, setConfirm] = useState(null); // ids to delete forever
   const { data, loading, error, refetch } = useQuery(DELETED_NOTES, { variables: { limit: 200 }, fetchPolicy: 'cache-and-network' });
   const [restoreMutation, { loading: restoring }] = useMutation(RESTORE_NOTE, { update: onNoteRestored });
   const [purgeMutation, { loading: purging }] = useMutation(PURGE_NOTE);
   const notes = data?.deletedNotes || [];
 
-  const restore = async (note) => {
-    try {
-      await restoreMutation({ variables: { id: note.id } });
+  // One id at a time: the gateway has no batch restore or purge for the bin.
+  // What went through leaves the selection; what failed stays selected.
+  const runEach = async (ids, one) => {
+    const done = [];
+    let failure = null;
+    for (const id of ids) {
+      try {
+        await one(id);
+        done.push(id);
+      } catch (err) {
+        failure = failure || err;
+      }
+    }
+    return { done, failure };
+  };
+
+  const restore = async (ids) => {
+    const { done, failure } = await runEach(ids, (id) => restoreMutation({ variables: { id } }));
+    if (done.length) {
       useNoteStore.getState().refreshLists?.();
-      await refetch();
-      notify('Note restored', { tone: 'success' });
-    } catch (err) {
-      notify(err?.message || 'Could not restore the note.', { tone: 'error' });
+      notify(`Restored ${plural(done.length)}`, { tone: 'success' });
     }
+    if (failure) notify(failure?.message || 'Could not restore the note.', { tone: 'error' });
+    await refetch().catch(() => {});
+    if (failure) selection.remove(done);
+    else selection.exit();
   };
 
-  const purge = async (note) => {
+  const purge = async (ids) => {
     setConfirm(null);
-    try {
-      await purgeMutation({
-        variables: { id: note.id },
-        update: (cache) => {
-          const ref = cache.identify({ __typename: 'Note', id: String(note.id) });
-          if (ref) cache.evict({ id: ref });
-          cache.evict({ id: 'ROOT_QUERY', fieldName: 'deletedNotes' });
-          cache.gc();
-        },
-      });
-      await refetch();
-      notify('Deleted forever', { tone: 'success' });
-    } catch (err) {
-      notify(err?.message || 'Could not delete the note.', { tone: 'error' });
-    }
+    const { done, failure } = await runEach(ids, (id) => purgeMutation({
+      variables: { id },
+      update: (cache) => {
+        const ref = cache.identify({ __typename: 'Note', id: String(id) });
+        if (ref) cache.evict({ id: ref });
+        cache.evict({ id: 'ROOT_QUERY', fieldName: 'deletedNotes' });
+        cache.gc();
+      },
+    }));
+    if (done.length) notify(done.length === 1 ? 'Deleted forever' : `Deleted ${plural(done.length)} forever`, { tone: 'success' });
+    if (failure) notify(failure?.message || 'Could not delete the note.', { tone: 'error' });
+    await refetch().catch(() => {});
+    if (failure) selection.remove(done);
+    else selection.exit();
   };
 
-  const button = { textTransform: 'none', fontWeight: 600, minHeight: 44, minWidth: 44, px: '12px', flexShrink: 0 };
+  const confirmTitle = confirm?.length === 1
+    ? (notes.find((n) => String(n.id) === String(confirm[0]))?.title || 'This note')
+    : null;
 
   return (
     <Box sx={{ py: { xs: '8px', sm: '16px' }, px: { xs: '8px', sm: 0 }, maxWidth: listWidth, mx: 'auto' }}>
-      <Box sx={{ display: 'flex', alignItems: 'center', gap: '8px', px: '4px', mb: '4px', minHeight: 44 }}>
-        <Typography component="h1" variant="h6" sx={{ color: 'text.primary', m: 0, mr: 'auto' }}>
-          Recently deleted
-          {notes.length > 0 ? (
-            <Typography component="span" variant="h6" sx={{ color: 'text.secondary', ml: '8px' }}>
-              {notes.length}
-            </Typography>
-          ) : null}
-        </Typography>
-      </Box>
+      {selection.active ? <SelectingHeader selection={selection} /> : (
+        <Box sx={{ display: 'flex', alignItems: 'center', gap: '8px', px: '4px', mb: '4px', minHeight: 44 }}>
+          <Typography component="h1" variant="h6" sx={{ color: 'text.primary', m: 0, mr: 'auto' }}>
+            Recently deleted
+            {notes.length > 0 ? (
+              <Typography component="span" variant="h6" sx={{ color: 'text.secondary', ml: '8px' }}>
+                {notes.length}
+              </Typography>
+            ) : null}
+          </Typography>
+          {notes.length > 0 && <SelectButton selection={selection} />}
+        </Box>
+      )}
 
       {loading && !data ? (
         <Box sx={{ py: 1 }}>
@@ -92,47 +121,25 @@ export default function DeletedNotes() {
       ) : (
         <>
           <Typography sx={{ color: 'text.secondary', fontSize: '0.8125rem', lineHeight: 1.5, px: '8px', mb: '8px' }}>
-            Deleted notes are kept for 30 days, then removed for good.
+            Kept for 30 days, then removed for good. Open one to read it, or select some to restore.
           </Typography>
-          <Box component="ul" aria-label="Deleted notes" sx={{ listStyle: 'none', m: 0, p: 0 }}>
+          <Box component="section" aria-label="Deleted notes">
             {notes.map((note, idx) => (
               <React.Fragment key={note.id}>
-                {idx > 0 && <Divider component="li" aria-hidden sx={{ borderColor: theme.palette.divider, mx: '8px' }} />}
-                <Box component="li" data-deleted-row={note.id} sx={{ display: 'flex', alignItems: 'center', gap: '8px', py: '8px', px: '8px', flexWrap: 'wrap' }}>
-                  <Box sx={{ flex: '1 1 200px', minWidth: 0 }}>
-                    <Typography sx={{ fontWeight: 600, fontSize: '0.9375rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                      {note.title || 'Untitled'}
-                    </Typography>
-                    {note.preview ? (
-                      <Typography sx={{ color: 'text.secondary', fontSize: '0.8125rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                        {note.preview}
-                      </Typography>
-                    ) : null}
-                    <Box sx={{ display: 'flex', alignItems: 'center', gap: '8px', mt: '4px', color: 'text.secondary' }}>
-                      <TypeIcon type={note.type || 'text'} size={15} />
-                      <Typography component="span" sx={{ fontSize: '0.8125rem', color: 'text.secondary' }}>
-                        {note.deletedAt ? `Deleted ${formatRelativeTime(note.deletedAt)}` : 'Deleted'}
-                      </Typography>
-                    </Box>
-                  </Box>
-                  {/* One group: on a phone the pair drops under the note
-                      together, right-aligned. Apart, "Delete forever" stayed
-                      beside the title (cutting it short) and Restore fell to
-                      a line of its own. */}
-                  <Box sx={{ display: 'flex', alignItems: 'center', gap: '8px', ml: 'auto', flexShrink: 0 }}>
-                    <Button onClick={() => setConfirm(note)} disabled={purging} color="inherit" sx={{ ...button, fontWeight: 500 }}>
-                      Delete forever
-                    </Button>
-                    <Button onClick={() => restore(note)} disabled={restoring} variant="outlined" sx={button}>
-                      Restore
-                    </Button>
-                  </Box>
+                {idx > 0 && <Divider sx={{ borderColor: theme.palette.divider, mx: '8px' }} />}
+                <Box data-deleted-row={note.id}>
+                  <NoteRow note={note} dateField="deletedAt" {...rowSelectProps(selection, note)} />
                 </Box>
               </React.Fragment>
             ))}
           </Box>
         </>
       )}
+
+      <SelectionBar
+        selection={selection}
+        deleted={{ onRestore: restore, onPurge: (ids) => setConfirm(ids), busy: restoring || purging }}
+      />
 
       <GeekDialog
         open={Boolean(confirm)}
@@ -152,7 +159,9 @@ export default function DeletedNotes() {
         }
       >
         <Typography variant="body2">
-          {`${confirm?.title || 'This note'} and its history will be removed for good. This cannot be undone.`}
+          {confirmTitle
+            ? `${confirmTitle} and its history will be removed for good. This cannot be undone.`
+            : `${plural(confirm?.length || 0)} and their history will be removed for good. This cannot be undone.`}
         </Typography>
       </GeekDialog>
     </Box>

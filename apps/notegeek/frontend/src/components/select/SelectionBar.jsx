@@ -3,6 +3,8 @@ import { Box, Button, Typography, useTheme } from '@mui/material';
 import ArchiveOutlined from '@mui/icons-material/ArchiveOutlined';
 import UnarchiveOutlined from '@mui/icons-material/UnarchiveOutlined';
 import AutoAwesomeMosaic from '@mui/icons-material/AutoAwesomeMosaic';
+import DeleteForeverOutlined from '@mui/icons-material/DeleteForeverOutlined';
+import RestoreFromTrashOutlined from '@mui/icons-material/RestoreFromTrashOutlined';
 import { geekLayout, useGeekShell } from '@geeksuite/ui';
 import { useArchiveNotes } from '../../hooks/useArchiveNotes';
 import { COMPOSE_MANY_MAX, COMPOSE_MANY_MIN, skipHint } from '../../utils/composeMany';
@@ -21,18 +23,22 @@ export const SELECTION_BAR_SPACE = 120;
  *               only those, and the hint says how many it will skip —
  *               sketches, mind maps, locked notes)
  *   Archived  → Restore (≥ 1)
+ *   Recently deleted (`deleted`, review 2026-11-18 #8: both bins work one
+ *             way) → Delete forever (≥ 1, error ink; the page asks first)
+ *             · Restore (≥ 1, the primary). The page owns both calls:
+ *             `deleted = { onRestore(ids), onPurge(ids), busy }`.
  *
  * Renders nothing outside select mode — and mounts no Apollo hooks either,
  * so a list that is not selecting (Home reads the store, not Apollo) pays
  * nothing for it. A failed archive/restore keeps the selection; a successful
  * one ends select mode.
  */
-export default function SelectionBar({ selection, archivedView = false }) {
+export default function SelectionBar({ selection, archivedView = false, deleted = null }) {
   if (!selection.active) return null;
-  return <ActiveSelectionBar selection={selection} archivedView={archivedView} />;
+  return <ActiveSelectionBar selection={selection} archivedView={archivedView} deleted={deleted} />;
 }
 
-function ActiveSelectionBar({ selection, archivedView }) {
+function ActiveSelectionBar({ selection, archivedView, deleted }) {
   const theme = useTheme();
   const g = graphiteTokens(theme);
   const { isMobile, hasNav, bottomInset } = useGeekShell();
@@ -44,7 +50,7 @@ function ActiveSelectionBar({ selection, archivedView }) {
   const tooMany = count > COMPOSE_MANY_MAX;
   const canCompose = count >= COMPOSE_MANY_MIN && usable >= COMPOSE_MANY_MIN && !tooMany;
   let hint = '';
-  if (!archivedView && count >= COMPOSE_MANY_MIN) {
+  if (!archivedView && !deleted && count >= COMPOSE_MANY_MIN) {
     if (tooMany) hint = `Compose takes up to ${COMPOSE_MANY_MAX} notes at once`;
     else if (usable < COMPOSE_MANY_MIN) hint = 'Compose needs at least two notes it can read';
     else hint = skipHint(skipCount);
@@ -89,7 +95,30 @@ function ActiveSelectionBar({ selection, archivedView }) {
             </Typography>
           ) : null}
           <Box sx={{ display: 'flex', alignItems: 'center', gap: '8px', justifyContent: 'flex-end' }}>
-            {archivedView ? (
+            {deleted ? (
+              <>
+                <Button
+                  variant="outlined"
+                  color="error"
+                  onClick={() => deleted.onPurge(ids)}
+                  disabled={count < 1 || deleted.busy}
+                  startIcon={<DeleteForeverOutlined />}
+                  sx={{ ...btnSx, flex: { xs: 1, sm: 'initial' } }}
+                >
+                  Delete forever
+                </Button>
+                <Button
+                  variant="contained"
+                  disableElevation
+                  onClick={() => deleted.onRestore(ids)}
+                  disabled={count < 1 || deleted.busy}
+                  startIcon={<RestoreFromTrashOutlined />}
+                  sx={{ ...btnSx, flex: { xs: 1, sm: 'initial' } }}
+                >
+                  {count > 1 ? `Restore ${count} notes` : 'Restore'}
+                </Button>
+              </>
+            ) : archivedView ? (
               <Button
                 variant="contained"
                 disableElevation
