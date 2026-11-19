@@ -8,6 +8,7 @@
 import React, { useState } from 'react';
 import { Alert, Box, FormControlLabel, Switch, Typography } from '@mui/material';
 import { shelfLabel, storefrontLabel } from '../../utils/vocab';
+import { DISPLAY_FONT, DISPLAY_WEIGHT } from '../../theme/theme';
 
 /** Flatten a dry-run response into the numbers the card and its tests read. */
 export function previewSummary(preview) {
@@ -68,8 +69,10 @@ export function destructiveSentence(s) {
 
 function Stat({ value, label }) {
   return (
-    <Box sx={{ minWidth: 0, p: 1.25, borderRadius: 2, bgcolor: 'background.raised', border: 1, borderColor: 'divider' }}>
-      <Typography sx={{ fontSize: '1.375rem', fontWeight: 700, lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>{value}</Typography>
+    // The Metadata card's scoreboard tile (review 2026-11-18 #4): one tile
+    // style for the same kind of number on the same Settings page.
+    <Box sx={{ minWidth: 0, p: 1.25, borderRadius: '8px', bgcolor: 'background.raised', border: '2px solid', borderColor: 'border' }}>
+      <Typography sx={{ fontFamily: DISPLAY_FONT, fontWeight: DISPLAY_WEIGHT, fontSize: '1.375rem', lineHeight: 1.1, fontVariantNumeric: 'tabular-nums' }}>{value}</Typography>
       <Typography sx={{ fontSize: '0.75rem', color: 'text.secondary', mt: 0.25 }}>{label}</Typography>
     </Box>
   );

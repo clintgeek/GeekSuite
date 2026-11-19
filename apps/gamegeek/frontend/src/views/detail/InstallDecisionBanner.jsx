@@ -10,6 +10,7 @@
  */
 import React, { useId } from 'react';
 import { Box, ButtonBase, Typography, alpha } from '@mui/material';
+import { hardShadow } from '../../theme/theme';
 import { INSTALL_ANSWERS } from '../../utils/installDecision';
 
 export default function InstallDecisionBanner({ game, onResolve }) {
@@ -20,10 +21,12 @@ export default function InstallDecisionBanner({ game, onResolve }) {
       aria-labelledby={headingId}
       data-testid="install-decision"
       sx={{
-        border: 1,
+        // Arcade Sticker, like every section on the sheet (review 2026-11-18 #4).
+        border: '2px solid',
         borderColor: 'border',
-        borderRadius: 3,
+        borderRadius: '10px',
         bgcolor: 'background.card',
+        boxShadow: (t) => hardShadow(3, t.palette.arcade.shadow),
         p: 2,
         minWidth: 0,
       }}
@@ -57,13 +60,16 @@ export default function InstallDecisionBanner({ game, onResolve }) {
               minHeight: 44,
               px: 1.25,
               py: 1,
-              borderRadius: '12px',
-              border: 1,
+              borderRadius: '8px',
+              border: '2px solid',
               fontFamily: 'inherit',
               borderColor: 'border',
               bgcolor: 'background.paper',
-              transition: 'border-color 120ms, background-color 120ms',
-              '&:hover': { borderColor: 'text.secondary', bgcolor: (t) => alpha(t.palette.text.primary, 0.035) },
+              boxShadow: (t) => hardShadow(2, t.palette.arcade.shadow),
+              transition: 'background-color 120ms, transform 80ms, box-shadow 80ms',
+              '&:hover': { bgcolor: (t) => alpha(t.palette.text.primary, 0.035) },
+              '&:active': { transform: 'translate(2px, 2px)', boxShadow: 'none' },
+              '@media (prefers-reduced-motion: reduce)': { '&:active': { transform: 'none' } },
               '&.Mui-focusVisible': { outline: 2, outlineStyle: 'solid', outlineColor: 'primary.main', outlineOffset: 1 },
             }}
           >

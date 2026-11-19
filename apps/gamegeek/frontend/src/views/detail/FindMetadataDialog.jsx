@@ -10,6 +10,7 @@ import { GeekSheet, useToast } from '@geeksuite/ui';
 import { getMetadataCandidates } from '../../api/rest';
 import TitlePlate from '../../components/TitlePlate';
 import { platformShort } from '../../utils/vocab';
+import { ARCADE, hardShadow } from '../../theme/theme';
 
 const PROVIDER_LABELS = { steam: 'Steam', igdb: 'IGDB', rawg: 'RAWG' };
 
@@ -100,7 +101,8 @@ export default function FindMetadataDialog({ open, onClose, game, onApply, onApp
                       {c.wouldMatch ? (
                         <Box
                           component="span"
-                          sx={{ px: 0.75, height: 20, display: 'inline-flex', alignItems: 'center', borderRadius: '999px', border: 1, borderColor: 'success.main', color: 'success.main', fontSize: '0.75rem', fontWeight: 700, letterSpacing: '0.02em' }}
+                          // A lime sticker with ink text: neon is a fill, never an ink (review 2026-11-18 #4).
+                          sx={{ px: 0.75, height: 20, display: 'inline-flex', alignItems: 'center', borderRadius: '4px', border: `2px solid ${ARCADE.ink}`, bgcolor: ARCADE.lime, color: ARCADE.ink, boxShadow: hardShadow(2, ARCADE.ink), fontSize: '0.75rem', fontWeight: 800, letterSpacing: '0.02em' }}
                         >
                           Best match
                         </Box>
