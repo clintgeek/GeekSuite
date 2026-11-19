@@ -12,7 +12,7 @@ import LocalOfferOutlined from '@mui/icons-material/LocalOfferOutlined';
 import LocalOffer from '@mui/icons-material/LocalOffer';
 import { GeekSheet, useGeekNavMode, useGeekNavSlots } from '@geeksuite/ui';
 import NewNoteSheet from './new/NewNoteSheet';
-import Sidebar, { TagsPanel } from './Sidebar';
+import Sidebar, { TagsPanel, TAGS_SHEET_HEADER_SX } from './Sidebar';
 import { graphiteTokens } from '../theme/tokens';
 
 /**
@@ -166,7 +166,7 @@ export function useNotePrimaryNav({ hidden = false, sidebarCollapsed = false } =
     <>
       <NewNoteSheet open={newOpen} onClose={() => setNewOpen(false)} />
       {rail ? (
-        <GeekSheet open={tagsOpen} onClose={() => setTagsOpen(false)} title="Tags" snap="full">
+        <GeekSheet open={tagsOpen} onClose={() => setTagsOpen(false)} title="Tags" snap="full" headerSx={TAGS_SHEET_HEADER_SX}>
           <TagsPanel onNavigate={() => setTagsOpen(false)} />
         </GeekSheet>
       ) : null}

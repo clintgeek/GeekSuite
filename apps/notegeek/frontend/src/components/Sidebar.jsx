@@ -354,6 +354,23 @@ function Brand() {
 }
 
 /**
+ * The Tags sheet's header (Notes page on a phone, the rail's Tags on a
+ * tablet). GeekSheet's full-snap close button is a 44px target pinned at
+ * top 8px, while the header around the title is shorter than that: the ×
+ * sat below the title's line and its bottom edge lay on the filter field,
+ * so a tap near it could focus the filter (review 2026-11-18 #10). Here the
+ * header is the button's height plus 8px above and below, and the title is
+ * centred on the same line as the ×, with 8px clear before the field.
+ */
+export const TAGS_SHEET_HEADER_SX = {
+    pt: '8px',
+    pb: '8px',
+    minHeight: 60,
+    boxSizing: 'border-box',
+    alignItems: 'center',
+};
+
+/**
  * TagsPanel — the tag filter, "All notes" and the tag tree, with the one
  * context menu for every row. The desktop sidebar holds it (as `extras`);
  * on a phone the Notes page opens it in a sheet (there is no drawer).

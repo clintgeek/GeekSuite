@@ -15,7 +15,7 @@ import { GET_NOTES_PAGE } from '../graphql/queries';
 import NoteRow from './notes/NoteRow';
 import { graphiteTokens, layout, tapTarget44 } from '../theme/tokens';
 import { NOTE_TYPE_ORDER, noteTypeMeta } from './notes/noteTypeMeta';
-import { TagsPanel } from './Sidebar';
+import { TagsPanel, TAGS_SHEET_HEADER_SX } from './Sidebar';
 import { groupByRecency } from '../utils/recency';
 import { useNoteSelection, rowSelectProps } from '../hooks/useNoteSelection';
 import { SelectButton, SelectingHeader } from './select/SelectControl';
@@ -344,7 +344,7 @@ function NoteList({ tag, prefix, under }) {
             </Box>
 
             {isPhone && (
-                <GeekSheet open={tagsOpen} onClose={() => setTagsOpen(false)} title="Tags" snap="full">
+                <GeekSheet open={tagsOpen} onClose={() => setTagsOpen(false)} title="Tags" snap="full" headerSx={TAGS_SHEET_HEADER_SX}>
                     <TagsPanel onNavigate={() => setTagsOpen(false)} />
                 </GeekSheet>
             )}
