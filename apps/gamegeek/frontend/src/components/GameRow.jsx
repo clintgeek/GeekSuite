@@ -2,7 +2,7 @@
  * One game in the list view — built for scanning and rating in a pass: a
  * small cover, title, one meta line, and the stars in their own column down
  * the right edge. The opening button and the stars are siblings, never nested.
- * No play hours here either (Chef doesn't track playtime); the game's page has them.
+ * No play hours anywhere (Chef doesn't track playtime).
  */
 import React from 'react';
 import { Box, ButtonBase, Typography } from '@mui/material';
@@ -14,6 +14,14 @@ import ShelfTag from './ShelfTag';
 import StarRating from './StarRating';
 import { canRate, metaLine } from './gameDisplay';
 
+/**
+ * "Played today", "Played 3 days ago" — but "Played Sep 22", never "sep 22"
+ * (review 2026-11-18 #8): only the relative words are lower-cased.
+ */
+export function playedWhen(last) {
+  return /^(Today|Yesterday|\d+ days ago)$/.test(last) ? last.toLowerCase() : last;
+}
+
 export default function GameRow({ game, onOpen, onRate, showShelf = true, customShelves = [] }) {
   const title = game.title || 'Untitled';
   const me = game.me || {};
@@ -21,7 +29,7 @@ export default function GameRow({ game, onOpen, onRate, showShelf = true, custom
   const rateable = Boolean(onRate) && canRate(game);
   const shelf = showShelf && me.shelf ? shelfLabel(me.shelf, customShelves) : null;
   const last = me.lastPlayedAt ? relativeInstant(me.lastPlayedAt) : null;
-  const detail = [platforms, last && `Played ${last.toLowerCase()}`].filter(Boolean).join(' · ');
+  const detail = [platforms, last && `Played ${playedWhen(last)}`].filter(Boolean).join(' · ');
 
   return (
     <Box
