@@ -13,6 +13,9 @@ import ChromeTheme from '../../components/Chrome';
 import { CHROME, LIVERY } from '../../theme/theme';
 import { AddAPhotoOutlined as PhotoIcon, EditOutlined as EditIcon, MoreHoriz as MoreIcon, NoteAddOutlined as DocumentIcon } from '@mui/icons-material';
 
+/** The bar's height on a phone (52px buttons + its padding and stripe): how much of the page it covers once pinned. */
+export const ACTION_BAR_PX = 65;
+
 const BAR_BUTTON_SX = {
   minWidth: 0,
   minHeight: 52,

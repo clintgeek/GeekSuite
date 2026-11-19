@@ -18,7 +18,7 @@
  * leads with its fleet-livery mural instead of an empty photo slot, and the
  * mural carries the page's heading.
  */
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Box, Button, CircularProgress } from '@mui/material';
 import { useQuery } from '@apollo/client';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
@@ -32,10 +32,12 @@ import BoxMark from '../../components/BoxMark';
 import { captionForKind } from '../../components/UnitTag';
 import TruckMural from '../../components/TruckMural';
 import { MoveSheet } from '../../components/WherePicker';
+import { useScrollRoot } from '../../components/AppMain';
+import { useTitleWhenScrolledPast } from '../../components/pageTitle';
 import { goBack } from '../../utils/goBack';
 import { labelsPath } from '../../utils/labelUrl';
 import EditThingDialog from '../edit/EditThingDialog';
-import ActionBar from './ActionBar';
+import ActionBar, { ACTION_BAR_PX } from './ActionBar';
 import AddFileSheet from './AddFileSheet';
 import ConfirmTrashDialog from './ConfirmTrashDialog';
 import ContainsSection from './ContainsSection';
@@ -58,9 +60,20 @@ export function ThingDetailBody({ thing, onPanel, onFix, uploads, onRetry, attic
   const edit = (focus) => () => onPanel('edit', focus);
   const kind = kindOf(thing);
   const mural = isParentKind(kind) && !(thing.photos ?? []).length && !photoUploads.length;
+  const { pathname } = useLocation();
+  const scrollRoot = useScrollRoot();
+  const [heading, setHeading] = useState(null);
+  const articleRef = useRef(null);
+  useEffect(() => {
+    setHeading(articleRef.current?.querySelector('#thing-name') ?? null);
+  }, [mural, thing.id]);
+  // Once the name has scrolled under the pinned action bar, the top bar names the thing.
+  useTitleWhenScrolledPast(pathname, thing.name, heading, scrollRoot, ACTION_BAR_PX);
   return (
-    <Box component="article" aria-labelledby="thing-name" data-testid="thing-page" sx={{ maxWidth: 1120, mx: 'auto', px: { xs: 0, md: 3 }, pt: { xs: 0, md: 3 } }}>
-      <Box sx={{ display: { xs: 'block', md: 'grid' }, gridTemplateColumns: { md: 'minmax(0, 1fr) minmax(0, 1fr)' }, gap: mural ? 2 : 3, alignItems: 'stretch' }}>
+    <Box component="article" ref={articleRef} aria-labelledby="thing-name" data-testid="thing-page" sx={{ maxWidth: 1120, mx: 'auto', px: { xs: 0, md: 3 }, pt: { xs: 0, md: 3 } }}>
+      {/* display:contents on a phone (this box and the column inside it), so the
+          action bar's sticky box is the whole article and it pins as you scroll. */}
+      <Box sx={{ display: { xs: 'contents', md: 'grid' }, gridTemplateColumns: { md: 'minmax(0, 1fr) minmax(0, 1fr)' }, gap: mural ? 2 : 3, alignItems: 'stretch' }}>
         {mural ? (
           <TruckMural
             name={thing.name}
@@ -72,7 +85,6 @@ export function ThingDetailBody({ thing, onPanel, onFix, uploads, onRetry, attic
         ) : (
           <Gallery thing={thing} uploads={photoUploads} onAddPhoto={() => onPanel('photo')} onRetry={onRetry} />
         )}
-        {/* display:contents on a phone, so the action bar can pin to the page, not to this column. */}
         <Box sx={{ display: { xs: 'contents', md: 'flex' }, flexDirection: 'column', justifyContent: 'flex-end', gap: 1.5, minWidth: 0, gridColumn: mural ? { md: '1 / -1' } : undefined }}>
           <DetailHeader thing={thing} onMove={() => onPanel('move')} showName={!mural} />
           <ActionBar onEdit={edit()} onAddPhoto={() => onPanel('photo')} onAddDocument={() => onPanel('document')} onMore={() => onPanel('more')} />

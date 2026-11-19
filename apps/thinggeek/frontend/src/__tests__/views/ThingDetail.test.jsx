@@ -1,14 +1,21 @@
 import React from 'react';
 import { describe, expect, it, vi } from 'vitest';
-import { fireEvent, screen, within, waitFor } from '@testing-library/react';
+import { act, fireEvent, screen, within, waitFor } from '@testing-library/react';
 import { Route, Routes, useLocation } from 'react-router-dom';
 import ThingDetail, { ThingDetailBody } from '../../views/detail/ThingDetail';
 import ReadinessPanel from '../../views/detail/ReadinessPanel';
+import TopBar from '../../components/TopBar';
 import { renderWithProviders } from '../testUtils';
 import { GET_THING } from '../../graphql/queries';
 import { crumbs, date, makeRifle, makeThing, typeRef } from '../fixtures';
 
 const body = (thing, props = {}) => <ThingDetailBody thing={thing} onPanel={() => {}} onFix={() => {}} uploads={[]} onRetry={() => {}} {...props} />;
+
+vi.mock('@geeksuite/user', () => ({
+  useThemeMode: () => ({ theme: 'light', toggleTheme: () => {} }),
+}));
+
+const TopBarUnderTest = () => <TopBar user={{ username: 'chef' }} onSignOut={() => {}} />;
 
 const hullRow = () => screen.getByTestId('field-hullNumber');
 
@@ -216,5 +223,74 @@ describe('claim readiness', () => {
     fireEvent.click(screen.getByTestId('fix-receipt'));
     expect(onPanel).toHaveBeenCalledWith('photo');
     expect(onFix).toHaveBeenCalledWith('receipt');
+  });
+});
+
+/** jsdom skips @media rules, so read MUI's xs breakpoint rule (min-width:0px) for an element's emotion class straight from the sheet. */
+function phoneRule(el, prop) {
+  const css = [...document.querySelectorAll('style')].map((st) => st.textContent).join('\n');
+  const classes = [...el.classList].filter((c) => c.startsWith('css-'));
+  for (const cls of classes) {
+    const m = new RegExp(`@media \\(min-width:0px\\)\\{\\.${cls}\\{([^}]*)\\}`).exec(css);
+    const v = m && new RegExp(`(?:^|;)${prop}:([^;]+)`).exec(m[1]);
+    if (v) return v[1];
+  }
+  return null;
+}
+
+describe('on a phone, the action bar pins and the top bar names the thing', () => {
+  it('every box between the action bar and the article is display:contents, so sticky has the whole page to ride', () => {
+    renderWithProviders(body(makeThing()));
+    const article = screen.getByTestId('thing-page');
+    let node = screen.getByTestId('detail-actions').parentElement;
+    const between = [];
+    while (node && node !== article) {
+      between.push(node);
+      node = node.parentElement;
+    }
+    expect(node).toBe(article);
+    expect(between.length).toBeGreaterThan(0);
+    between.forEach((el) => expect(phoneRule(el, 'display')).toBe('contents'));
+    expect(phoneRule(screen.getByTestId('detail-actions'), 'position')).toMatch(/sticky/);
+  });
+
+  it('once the name has scrolled away, the top bar reads the name instead of "Thing"', () => {
+    const observers = [];
+    const Original = window.IntersectionObserver;
+    window.IntersectionObserver = class {
+      constructor(cb) {
+        this.cb = cb;
+        observers.push(this);
+      }
+      observe(el) {
+        this.el = el;
+      }
+      disconnect() {}
+      unobserve() {}
+    };
+    try {
+      const thing = makeThing({ name: 'Wendy' });
+      const { unmount } = renderWithProviders(
+        <>
+          <TopBarUnderTest />
+          {body(thing)}
+        </>,
+        { initialEntries: ['/thing/t-wendy'] }
+      );
+      const title = () => document.querySelector('[data-geek-topbar="title"]');
+      expect(title()).toHaveTextContent('Thing');
+      const io = observers.find((o) => o.el?.id === 'thing-name');
+      expect(io).toBeTruthy();
+      act(() => io.cb([{ isIntersecting: false, boundingClientRect: { bottom: -10 }, rootBounds: { top: 65 } }]));
+      expect(title()).toHaveTextContent('Wendy');
+      act(() => io.cb([{ isIntersecting: true, boundingClientRect: { bottom: 300 }, rootBounds: { top: 65 } }]));
+      expect(title()).toHaveTextContent('Thing');
+      // Below the fold is not "scrolled past".
+      act(() => io.cb([{ isIntersecting: false, boundingClientRect: { bottom: 2000 }, rootBounds: { top: 65 } }]));
+      expect(title()).toHaveTextContent('Thing');
+      unmount();
+    } finally {
+      window.IntersectionObserver = Original;
+    }
   });
 });

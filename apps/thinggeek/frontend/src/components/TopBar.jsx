@@ -34,6 +34,7 @@ import { writeLibraryState } from '../utils/libraryFilter';
 import { visuallyHidden } from '../utils/a11y';
 import { displayNameFrom, initialsFrom, secondaryFrom } from '../utils/userDisplay';
 import { APP_ID, isBackPath, isLibraryPath, titleFor } from './navConfig';
+import { usePageTitle } from './pageTitle';
 
 export const SEARCH_EXAMPLE = ['type:boat', 'tag:fishing', 'in:garage', 'missing:receipt'];
 export const SEARCH_MORE = ['before:2020', 'due:30d', 'has:document'];
@@ -93,6 +94,8 @@ export default function TopBar({ user, onSignOut }) {
   const onLibrary = isLibraryPath(location.pathname);
   const onSubPage = isBackPath(location.pathname);
   const hintId = useId();
+  // A page may lend a better title (the thing page: the thing's name, once scrolled past).
+  const lentTitle = usePageTitle(location.pathname);
 
   const urlQ = params.get('q') || '';
   const [text, setText] = useState(urlQ);
@@ -189,7 +192,7 @@ export default function TopBar({ user, onSignOut }) {
             : (
                 // The page's name in fleet lettering: heavy slab, leaning.
                 <Typography variant="h3" noWrap data-geek-topbar="title" sx={{ minWidth: 0 }}>
-                  {titleFor(location.pathname)}
+                  {lentTitle ?? titleFor(location.pathname)}
                 </Typography>
               )
         }
