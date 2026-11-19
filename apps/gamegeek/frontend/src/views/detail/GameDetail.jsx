@@ -8,7 +8,7 @@
  * card tap paints the hero at once and the rest fills in.
  */
 import React, { useRef, useState } from 'react';
-import { Box, Button, CircularProgress, Typography, useMediaQuery, useTheme } from '@mui/material';
+import { Box, Button, CircularProgress, Typography } from '@mui/material';
 import { useQuery } from '@apollo/client';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { GeekEmptyState, GeekSheet, useToast } from '@geeksuite/ui';
@@ -43,15 +43,18 @@ import MediaSection from './MediaSection';
 import { useGameMedia } from '../../hooks/useGameMedia';
 
 
+const COLUMN_SX = { display: { xs: 'contents', md: 'grid' }, gap: 1.5, minWidth: 0, alignContent: 'start' };
+
 export default function GameDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const location = useLocation();
   const { notify } = useToast();
-  const theme = useTheme();
-  const isPhone = useMediaQuery(theme.breakpoints.down('md'));
   const [panel, setPanel] = useState(null); // shelf | more | edit | cover | copies | metadata | unlink-metadata | delete
   const ratingRef = useRef(null);
+  // Notes typing, held above the GeekSheet so it survives the sheet
+  // re-mounting its contents at md (NotesSection).
+  const [notesDraft, setNotesDraft] = useState(null);
 
   const { data, loading, error, refetch } = useQuery(GET_GAME, {
     variables: { id },
@@ -117,7 +120,13 @@ export default function GameDetail() {
     );
     const mediaSection = <MediaSection game={game} status={media.status} media={media.media} />;
     const copiesSection = <CopiesSection copies={game.copies ?? []} onEdit={() => setPanel('copies')} />;
-    const notesSection = <NotesSection game={game} />;
+    const notesSection = (
+      <NotesSection
+        game={game}
+        draft={notesDraft?.gameId === game.id ? notesDraft : null}
+        onDraft={(d) => setNotesDraft(d ? { ...d, gameId: game.id } : null)}
+      />
+    );
     const detailsSection = <DetailsSection game={game} onFindMetadata={() => setPanel('metadata')} />;
     const householdSection = <HouseholdSection entries={game.household ?? []} />;
     content = (
@@ -136,12 +145,14 @@ export default function GameDetail() {
           onMore={() => setPanel('more')}
         />
         <Box
+          data-testid="detail-sections"
           sx={{
             display: 'grid',
             gridTemplateColumns: { xs: 'minmax(0, 1fr)', md: 'repeat(2, minmax(0, 1fr))' },
             alignItems: 'start',
             gap: 1.5,
             p: { xs: 1.5, md: 2 },
+            '& > *': { minWidth: 0 },
             pb: 'calc(24px + env(safe-area-inset-bottom))',
           }}
         >
@@ -150,35 +161,24 @@ export default function GameDetail() {
               <InstallDecisionBanner game={game} onResolve={(action) => resolveInstallFlag(game, action)} />
             </Box>
           ) : null}
-          {isPhone ? (
-            // Phone (review 2026-11-18 #5): your shelf, rating and notes come
-            // first; the media strip is the same every visit, so it follows.
-            <Box sx={{ display: 'grid', gap: 1.5, minWidth: 0 }} data-testid="detail-sections">
-              {statusSection}
-              {ratingSection}
-              {notesSection}
-              {playthroughsSection}
-              {mediaSection}
-              {copiesSection}
-              {detailsSection}
-              {householdSection}
-            </Box>
-          ) : (
-            <>
-              <Box sx={{ display: 'grid', gap: 1.5, minWidth: 0 }}>
-                {statusSection}
-                {ratingSection}
-                {playthroughsSection}
-              </Box>
-              <Box sx={{ display: 'grid', gap: 1.5, minWidth: 0 }}>
-                {mediaSection}
-                {copiesSection}
-                {notesSection}
-                {detailsSection}
-                {householdSection}
-              </Box>
-            </>
-          )}
+          {/* One tree at every width (no re-mount when a tablet rotates
+              across md, so a half-typed note survives). Below md the two
+              columns are `display: contents`, so the sections stack in DOM
+              order — your shelf, rating and notes first, the media strip
+              after them (review 2026-11-18 #5). From md they are two
+              columns: yours on the left, the game's on the right. */}
+          <Box sx={COLUMN_SX}>
+            {statusSection}
+            {ratingSection}
+            {notesSection}
+            {playthroughsSection}
+          </Box>
+          <Box sx={COLUMN_SX}>
+            {mediaSection}
+            {copiesSection}
+            {detailsSection}
+            {householdSection}
+          </Box>
         </Box>
       </>
     );

@@ -9,7 +9,7 @@
  */
 import React from 'react';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, screen, within } from '@testing-library/react';
+import { act, fireEvent, screen, within } from '@testing-library/react';
 import { MockedProvider } from '@apollo/client/testing';
 import { InMemoryCache } from '@apollo/client';
 import { Route, Routes } from 'react-router-dom';
@@ -118,6 +118,34 @@ describe('GameDetail', { timeout: 60000 }, () => {
       expect(at('Notes & review')).toBe(2);
       const media = headings.findIndex((h) => h === 'Media' || h === 'Links');
       expect(media).toBeGreaterThan(at('Notes & review'));
+    } finally {
+      window.matchMedia = original;
+    }
+  });
+
+  it('a half-typed note survives the sheet crossing the md breakpoint (a tablet rotating)', async () => {
+    const original = window.matchMedia;
+    let wide = true;
+    const listeners = new Set();
+    window.matchMedia = (query) => ({
+      // Only the down('md') style queries flip; a "phone" is !wide.
+      get matches() {
+        return /max-width/.test(query) ? !wide : wide;
+      },
+      media: query, onchange: null,
+      addListener: (fn) => listeners.add(fn), removeListener: (fn) => listeners.delete(fn),
+      addEventListener: (_e, fn) => listeners.add(fn), removeEventListener: (_e, fn) => listeners.delete(fn),
+      dispatchEvent: () => false,
+    });
+    try {
+      renderDetail();
+      const notes = await screen.findByRole('textbox', { name: 'Notes' }, SLOW);
+      fireEvent.change(notes, { target: { value: 'Stuck on the third boss' } });
+      act(() => {
+        wide = false;
+        listeners.forEach((fn) => fn({ matches: true }));
+      });
+      expect(screen.getByRole('textbox', { name: 'Notes' })).toHaveValue('Stuck on the third boss');
     } finally {
       window.matchMedia = original;
     }
