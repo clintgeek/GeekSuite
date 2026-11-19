@@ -8,15 +8,22 @@
  * templates, offered in each story's ⋯ menu after "Open at publisher"
  * (NewsPrefs.readerLinks, max 5). Saved whole through
  * newsSetPrefs({ readerLinks }); the gateway re-checks every rule here and
- * answers BAD_USER_INPUT otherwise. Then "Publishers" (PublishersSettings):
+ * answers BAD_USER_INPUT otherwise.
+ *
+ * One way to save (UX review 2026-11-18, finding 12): like every other
+ * control on this page, the links save themselves — when a field is left and
+ * every link is complete and valid, and when a link is removed (with Undo).
+ * "Saved." under the list says it landed. A complete edit still pending when
+ * the page goes away is sent on the way out, so Back never drops it; a link
+ * left half-filled can't be saved and says what it needs. Then "Publishers" (PublishersSettings):
  * what the reader subscribes to or hid from the Source sheet, and which
  * publishers open with one of these links. Editing a link's template gives
  * it a new id, so the publishers that opened with it go back to the original.
  */
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Box, Button, CircularProgress, IconButton, TextField, Typography } from '@mui/material';
 import { Add as AddIcon, DeleteOutline as RemoveIcon } from '@mui/icons-material';
-import { useMutation, useQuery } from '@apollo/client';
+import { useApolloClient, useMutation, useQuery } from '@apollo/client';
 import { useToast } from '@geeksuite/ui';
 import Column from '../components/Column';
 import HomePlacesSettings from '../components/HomePlacesSettings';
@@ -37,9 +44,13 @@ export default function SettingsView() {
   const prefsQ = useQuery(GET_NEWS_PREFS, { fetchPolicy: 'cache-and-network' });
   const saved = prefsQ.data?.newsPrefs?.readerLinks;
   const [links, setLinks] = useState(null);
-  const [touched, setTouched] = useState(false);
+  // Which fields have been left ("0:label"): their errors show from then on.
+  const [left, setLeft] = useState(() => new Set());
+  // 'saving' | 'saved' | null — said under the list.
+  const [saveState, setSaveState] = useState(null);
   const [saveError, setSaveError] = useState('');
-  const [setPrefs, { loading: saving }] = useMutation(SET_NEWS_PREFS);
+  const [setPrefs] = useMutation(SET_NEWS_PREFS);
+  const client = useApolloClient();
   const [setWindowPref, { loading: savingWindow }] = useMutation(SET_NEWS_PREFS);
   const prefs = prefsQ.data?.newsPrefs;
   const openInNewTab = prefs?.openInNewTab ?? true;
@@ -66,29 +77,90 @@ export default function SettingsView() {
   const errors = (links ?? []).map((l) => readerLinkErrors(l));
   const invalid = errors.some((e) => Object.keys(e).length);
   const dirty = links !== null && saved && !same(links, saved);
+  const validOf = (list) => list.every((l) => !Object.keys(readerLinkErrors(l)).length);
 
   const setLink = (i, key) => (e) => setLinks((ls) => ls.map((l, j) => (j === i ? { ...l, [key]: e.target.value } : l)));
 
-  const save = async (e) => {
-    e.preventDefault();
-    setTouched(true);
+  const writeLinks = (list) =>
+    setPrefs({
+      variables: { input: { readerLinks: cleanReaderLinks(list) } },
+      update(cache, { data }) {
+        if (data?.newsSetPrefs) cache.writeQuery({ query: GET_NEWS_PREFS, data: { newsPrefs: data.newsSetPrefs } });
+      },
+    });
+
+  // What the gateway has now — read through a ref, so Undo (fired from a toast
+  // made a render ago) compares against the save that just landed.
+  const savedRef = useRef(saved);
+  savedRef.current = saved;
+
+  /** Save `list` whole when every link in it is complete; true when it was sent and landed. */
+  const persist = async (list) => {
+    const current = savedRef.current;
+    if (!current || same(list, current) || !validOf(list)) return false;
     setSaveError('');
-    if (invalid) return;
-    const readerLinks = cleanReaderLinks(links);
+    setSaveState('saving');
     try {
-      await setPrefs({
-        variables: { input: { readerLinks } },
-        update(cache, { data }) {
-          if (data?.newsSetPrefs) cache.writeQuery({ query: GET_NEWS_PREFS, data: { newsPrefs: data.newsSetPrefs } });
-        },
-      });
-      setLinks(readerLinks);
-      setTouched(false);
-      notify('Saved.', { tone: 'success' });
+      await writeLinks(list);
+      setSaveState('saved');
+      return true;
     } catch (err) {
+      setSaveState(null);
       setSaveError(err?.graphQLErrors?.[0]?.message || err?.message || 'Couldn’t save. Try again.');
+      return false;
     }
   };
+
+  const leave = (i, key) => () => {
+    setLeft((prev) => new Set(prev).add(`${i}:${key}`));
+    persist(links);
+  };
+
+  const remove = async (i) => {
+    const before = links;
+    const gone = links[i];
+    const next = links.filter((_, j) => j !== i);
+    setLinks(next);
+    setLeft(new Set());
+    const name = gone.label.trim() || 'Link';
+    if (await persist(next)) {
+      notify(`${name} removed.`, {
+        tone: 'success',
+        action: (
+          <Button
+            color="inherit"
+            size="small"
+            onClick={() => {
+              setLinks(before);
+              persist(before);
+            }}
+          >
+            Undo
+          </Button>
+        ),
+      });
+    }
+  };
+
+  // Leaving the page with a complete edit not yet saved (Back straight from a
+  // field): send it on the way out.
+  const pending = useRef(null);
+  pending.current = dirty && !invalid ? links : null;
+  useEffect(
+    () => () => {
+      if (!pending.current) return;
+      client
+        .mutate({
+          mutation: SET_NEWS_PREFS,
+          variables: { input: { readerLinks: cleanReaderLinks(pending.current) } },
+          update(cache, { data }) {
+            if (data?.newsSetPrefs) cache.writeQuery({ query: GET_NEWS_PREFS, data: { newsPrefs: data.newsSetPrefs } });
+          },
+        })
+        .catch(() => {});
+    },
+    [client]
+  );
 
   return (
     <Column>
@@ -139,7 +211,7 @@ export default function SettingsView() {
             <CircularProgress size={20} aria-label="Loading settings" sx={{ color: 'text.secondary' }} />
           )
         ) : (
-          <Box component="form" noValidate onSubmit={save} data-testid="reader-links-form">
+          <Box component="form" noValidate onSubmit={(e) => e.preventDefault()} data-testid="reader-links-form">
             {links.length ? null : (
               <Typography data-testid="reader-links-empty" sx={{ fontStyle: 'italic', color: 'text.secondary', mb: 4 }}>
                 No open-with links yet. Stories open at the publisher.
@@ -147,7 +219,10 @@ export default function SettingsView() {
             )}
             <Box component="ol" aria-label="Open-with links" sx={{ listStyle: 'none', m: 0, p: 0 }}>
               {links.map((l, i) => {
-                const show = touched ? errors[i] : {};
+                const show = {
+                  label: left.has(`${i}:label`) ? errors[i].label : undefined,
+                  template: left.has(`${i}:template`) ? errors[i].template : undefined,
+                };
                 return (
                   <Box component="li" key={i} data-testid="reader-link-row" sx={{ display: 'flex', gap: 2, alignItems: 'flex-start', py: 4, borderBottom: 1, borderColor: 'divider' }}>
                     <Box sx={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', gap: 3 }}>
@@ -155,6 +230,7 @@ export default function SettingsView() {
                         label={`Label ${i + 1}`}
                         value={l.label}
                         onChange={setLink(i, 'label')}
+                        onBlur={leave(i, 'label')}
                         error={Boolean(show.label)}
                         helperText={show.label}
                         inputProps={{ maxLength: MAX_LABEL + 10 }}
@@ -164,6 +240,7 @@ export default function SettingsView() {
                         label={`Link template ${i + 1}`}
                         value={l.template}
                         onChange={setLink(i, 'template')}
+                        onBlur={leave(i, 'template')}
                         error={Boolean(show.template)}
                         helperText={show.template || READER_LINK_HELP}
                         placeholder={READER_LINK_PLACEHOLDER}
@@ -171,7 +248,7 @@ export default function SettingsView() {
                         fullWidth
                       />
                     </Box>
-                    <IconButton aria-label={`Remove ${l.label.trim() || `link ${i + 1}`}`} onClick={() => setLinks((ls) => ls.filter((_, j) => j !== i))} sx={{ width: 44, height: 44, mt: 1 }}>
+                    <IconButton aria-label={`Remove ${l.label.trim() || `link ${i + 1}`}`} onClick={() => remove(i)} sx={{ width: 44, height: 44, mt: 1 }}>
                       <RemoveIcon />
                     </IconButton>
                   </Box>
@@ -192,9 +269,13 @@ export default function SettingsView() {
               >
                 {links.length >= MAX_READER_LINKS ? `${MAX_READER_LINKS} is the most` : 'Add a link'}
               </Button>
-              <Button type="submit" variant="contained" disableElevation disabled={saving || !dirty} sx={{ ml: 'auto' }}>
-                {saving ? 'Saving…' : 'Save'}
-              </Button>
+              <Typography
+                role="status"
+                data-testid="reader-links-status"
+                sx={{ ml: 'auto', alignSelf: 'center', fontFamily: GOTHIC, fontStyle: 'italic', fontSize: '0.8125rem', color: 'text.secondary' }}
+              >
+                {saveState === 'saving' ? 'Saving…' : saveState === 'saved' && !dirty ? 'Saved.' : dirty && invalid ? 'Finish the link to save it.' : ''}
+              </Typography>
             </Box>
           </Box>
         )}

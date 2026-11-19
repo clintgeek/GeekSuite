@@ -228,18 +228,21 @@ describe('Settings → Open-with links', () => {
     result: { data: { newsPrefs: { ...newsPrefs(), freeToReadOnly: false, readerLinks } } },
   });
 
-  it('starts empty, validates like the gateway, and saves the whole list', async () => {
+  const saveMockFor = (saved) => ({
+    request: { query: SET_NEWS_PREFS },
+    variableMatcher: () => true,
+    maxUsageCount: 10,
+    result: (vars) => {
+      saved(vars);
+      return { data: { newsSetPrefs: { ...newsPrefs(), freeToReadOnly: false, readerLinks: vars.input.readerLinks.map((l, i) => ({ __typename: 'NewsReaderLink', id: `id${i}`, ...l })) } } };
+    },
+  });
+
+  it('starts empty, validates like the gateway, and saves the whole list when a field is left — no Save button (finding 12)', async () => {
     const saved = vi.fn();
-    const saveMock = {
-      request: { query: SET_NEWS_PREFS },
-      variableMatcher: () => true,
-      result: (vars) => {
-        saved(vars);
-        return { data: { newsSetPrefs: { ...newsPrefs(), freeToReadOnly: false, readerLinks: vars.input.readerLinks.map((l, i) => ({ __typename: 'NewsReaderLink', id: `id${i}`, ...l })) } } };
-      },
-    };
-    renderWithProviders(<SettingsView />, { mocks: [prefsMock([]), saveMock] });
+    renderWithProviders(<SettingsView />, { mocks: [prefsMock([]), saveMockFor(saved)] });
     expect(await screen.findByTestId('reader-links-empty')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Save' })).toBeNull();
 
     await userEvent.click(screen.getByRole('button', { name: 'Add a link' }));
     await userEvent.type(screen.getByLabelText('Label 1'), '  Reader  ');
@@ -247,16 +250,41 @@ describe('Settings → Open-with links', () => {
     expect(tpl).toHaveAttribute('placeholder', 'https://example.com/read?u={url}');
     expect(screen.getByText('{url} becomes the story’s link; {title} its headline')).toBeInTheDocument();
     await userEvent.type(tpl, 'https://example.com/read?t={{title}');
-    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await userEvent.tab();
     expect(await screen.findByText(/Put \{url\} where/)).toBeInTheDocument();
+    expect(screen.getByTestId('reader-links-status')).toHaveTextContent('Finish the link to save it.');
     expect(saved).not.toHaveBeenCalled();
 
     await userEvent.clear(tpl);
     await userEvent.type(tpl, 'https://example.com/read?u={{url}&t={{title}');
-    await userEvent.click(screen.getByRole('button', { name: 'Save' }));
+    await userEvent.tab();
     await waitFor(() => expect(saved).toHaveBeenCalledTimes(1));
     expect(saved.mock.calls[0][0]).toEqual({ input: { readerLinks: [{ label: 'Reader', template: 'https://example.com/read?u={url}&t={title}' }] } });
     expect(await screen.findByText('Saved.')).toBeInTheDocument();
+  });
+
+  it('an edit still in its field when the page goes away (Back) is saved, not dropped', async () => {
+    const saved = vi.fn();
+    const one = [{ __typename: 'NewsReaderLink', id: 'id0', label: 'Reader', template: 'https://example.com/r?u={url}' }];
+    const { unmount } = renderWithProviders(<SettingsView />, { mocks: [prefsMock(one), saveMockFor(saved)] });
+    const label = await screen.findByLabelText('Label 1');
+    await userEvent.clear(label);
+    await userEvent.type(label, 'Reader two');
+    expect(saved).not.toHaveBeenCalled();
+    unmount();
+    await waitFor(() => expect(saved).toHaveBeenCalledWith({ input: { readerLinks: [{ label: 'Reader two', template: 'https://example.com/r?u={url}' }] } }));
+  });
+
+  it('removing a link saves at once and offers Undo, which puts it back', async () => {
+    const saved = vi.fn();
+    const two = [0, 1].map((i) => ({ __typename: 'NewsReaderLink', id: `id${i}`, label: `L${i}`, template: `https://example.com/${i}?u={url}` }));
+    renderWithProviders(<SettingsView />, { mocks: [prefsMock(two), saveMockFor(saved)] });
+    await userEvent.click(await screen.findByRole('button', { name: 'Remove L0' }));
+    await waitFor(() => expect(saved).toHaveBeenCalledWith({ input: { readerLinks: [{ label: 'L1', template: 'https://example.com/1?u={url}' }] } }));
+    expect(screen.getAllByTestId('reader-link-row')).toHaveLength(1);
+    await userEvent.click(await screen.findByRole('button', { name: 'Undo' }));
+    await waitFor(() => expect(screen.getAllByTestId('reader-link-row')).toHaveLength(2));
+    await waitFor(() => expect(saved).toHaveBeenLastCalledWith({ input: { readerLinks: [{ label: 'L0', template: 'https://example.com/0?u={url}' }, { label: 'L1', template: 'https://example.com/1?u={url}' }] } }));
   });
 
   it('lists the saved links, removes one, and stops adding at five', async () => {
