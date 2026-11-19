@@ -32,7 +32,11 @@
  *
  * `renderDesktopRow(row)` is the escape hatch for a table whose `md`+ row is
  * not a row of cells: BirdsPage's expanding accordion row. The cards, sort,
- * empty state and pagination stay shared.
+ * empty state and pagination stay shared. Such a row is one cell spanning
+ * the table, so the table's own header columns cannot line up with what is
+ * drawn inside it; `renderDesktopHead({ sortBy, sortOrder, onSort })` lets the
+ * page draw its header on the same grid as its rows (UX review 2026-11-18,
+ * FlockGeek 11).
  *
  * `filters` (the fields, not their framing) is owned here too, because the
  * grammar puts filters and sort on the same surface: at `md`+ they are the
@@ -76,6 +80,7 @@ const ResponsiveTable = ({
   errorTitle = "Couldn't load this",
   onRetry,
   renderDesktopRow,
+  renderDesktopHead,
   page = 0,
   rowsPerPage = 10,
   count = 0,
@@ -360,6 +365,13 @@ const ResponsiveTable = ({
           <>
             <Table {...tableProps}>
             <TableHead sx={{ backgroundColor: "action.hover" }}>
+              {typeof renderDesktopHead === "function" ? (
+                <TableRow>
+                  <TableCell colSpan={columns.length} sx={{ p: 0 }}>
+                    {renderDesktopHead({ sortBy, sortOrder, onSort })}
+                  </TableCell>
+                </TableRow>
+              ) : (
               <TableRow>
                 {columns.map((column) => {
                   const sortable = onSort && column.key && (column.sortable ?? true);
@@ -378,6 +390,7 @@ const ResponsiveTable = ({
                   );
                 })}
               </TableRow>
+              )}
             </TableHead>
             <TableBody>
               {rows.length === 0 ? (

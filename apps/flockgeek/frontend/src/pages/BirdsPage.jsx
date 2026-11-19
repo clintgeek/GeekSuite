@@ -3,7 +3,7 @@ import { useQuery, useMutation } from '@apollo/client';
 import {
   Container, TableCell, TableRow, Button, Box, Typography,
   TextField, MenuItem, Chip, FormControl, InputLabel, Select,
-  Accordion, AccordionSummary, AccordionDetails, Grid
+  Accordion, AccordionSummary, AccordionDetails, Grid, TableSortLabel
 } from "@mui/material";
 import ExpandMoreIcon from "@mui/icons-material/ExpandMore";
 import AddIcon from "@mui/icons-material/Add";
@@ -17,6 +17,21 @@ import { utcDateString } from "@geeksuite/utils";
 import { GET_BIRDS, GET_LOCATIONS, GET_FLOCK_GROUPS, GET_GROUP_MEMBERSHIPS, GET_PAIRINGS } from "../graphql/queries";
 import { CREATE_BIRD, UPDATE_BIRD, DELETE_ENTITY } from "../graphql/mutations";
 import { formatDay } from "../utils/formatDate";
+
+/**
+ * The desktop bird row is one accordion spanning the table, so the table's
+ * own header columns never lined up with it (UX review 2026-11-18, FlockGeek
+ * 11). The header and every row now share this grid. The header reserves the
+ * accordion's padding and expand icon so each label sits over its column.
+ */
+const BIRD_GRID_SX = {
+  display: "grid",
+  gridTemplateColumns: "120px minmax(160px, 1fr) 120px 190px 160px 150px",
+  columnGap: "16px",
+  alignItems: "center",
+  width: "100%",
+  pr: "8px",
+};
 
 const statusOptions = ["active", "meat run", "retired"];
 const sexOptions = ["pullet", "hen", "cockerel", "rooster", "unknown"];
@@ -586,7 +601,29 @@ const BirdsPage = () => {
 
   const activeFilterCount = Object.values(filters).filter(Boolean).length;
 
-  /** The `md`+ row: the expanding, edit-in-place accordion, unchanged. */
+  /** The `md`+ header, on the rows' grid. Sort labels as before. */
+  const renderBirdHead = ({ sortBy: activeSort, sortOrder: order, onSort }) => (
+    // Mirrors AccordionSummary: its side padding, then the content grid, then
+    // the expand icon's 24px.
+    <Box sx={{ display: "flex", alignItems: "center", px: (theme) => theme.spacing(2), py: "12px" }}>
+      <Box sx={BIRD_GRID_SX}>
+        {columns.map((column) => (
+          <Box key={column.key} sx={{ minWidth: 0, fontWeight: 500, fontSize: "0.875rem" }}>
+            <TableSortLabel
+              active={activeSort === column.key}
+              direction={activeSort === column.key ? order : "asc"}
+              onClick={() => onSort(column.key)}
+            >
+              {column.label}
+            </TableSortLabel>
+          </Box>
+        ))}
+      </Box>
+      <Box sx={{ width: 24, flexShrink: 0 }} aria-hidden="true" />
+    </Box>
+  );
+
+  /** The `md`+ row: the expanding, edit-in-place accordion. */
   const renderBirdRow = (bird) => {
     const isExpanded = expandedBirdId === bird.id;
     return (
@@ -595,8 +632,8 @@ const BirdsPage = () => {
           <Accordion expanded={isExpanded} onChange={handleAccordionChange(bird.id)}
             sx={{ '&.Mui-expanded': { margin: 0 } }}>
             <AccordionSummary expandIcon={<ExpandMoreIcon />}>
-              <Box sx={{ display: 'flex', alignItems: 'center', width: '100%', pr: 2, gap: 2 }}>
-                <Box sx={{ minWidth: 80, flexShrink: 0 }}>
+              <Box sx={BIRD_GRID_SX}>
+                <Box sx={{ minWidth: 0 }}>
                   {isExpanded ? (
                     <TextField label="Tag ID" size="small" value={editFormData.tagId}
                       onChange={(e) => setEF('tagId', e.target.value)}
@@ -605,7 +642,7 @@ const BirdsPage = () => {
                     <Typography variant="subtitle1"><strong>{bird.tagId}</strong></Typography>
                   )}
                 </Box>
-                <Box sx={{ flexGrow: 1, minWidth: 160 }}>
+                <Box sx={{ minWidth: 0 }}>
                   {isExpanded ? (
                     <TextField label="Name" size="small" value={editFormData.name}
                       onChange={(e) => setEF('name', e.target.value)}
@@ -614,7 +651,7 @@ const BirdsPage = () => {
                     <Typography variant="body1">{bird.name || "-"}</Typography>
                   )}
                 </Box>
-                <Box sx={{ minWidth: 140 }}>
+                <Box sx={{ minWidth: 0 }}>
                   {isExpanded ? (
                     <FormControl fullWidth size="small" onClick={(e) => e.stopPropagation()}>
                       <InputLabel id={`bird-row-${bird.id}-inline-sex-label`}>Sex</InputLabel>
@@ -626,7 +663,7 @@ const BirdsPage = () => {
                     <Typography variant="body2" sx={{ textTransform: 'capitalize' }}>{bird.sex}</Typography>
                   )}
                 </Box>
-                <Box sx={{ minWidth: 180 }}>
+                <Box sx={{ minWidth: 0 }}>
                   {isExpanded ? (
                     <FormControl fullWidth size="small" onClick={(e) => e.stopPropagation()}>
                       <InputLabel id={`bird-row-${bird.id}-inline-breed-label`}>Breed</InputLabel>
@@ -639,7 +676,7 @@ const BirdsPage = () => {
                     <Typography variant="body2">{bird.breed || "-"}</Typography>
                   )}
                 </Box>
-                <Box sx={{ minWidth: 160 }}>
+                <Box sx={{ minWidth: 0 }}>
                   {isExpanded ? (
                     <TextField label="Hatch Date" type="date" size="small" value={editFormData.hatchDate}
                       onChange={(e) => setEF('hatchDate', e.target.value)}
@@ -649,7 +686,7 @@ const BirdsPage = () => {
                     <Typography variant="body2">{asDate(bird.hatchDate)}</Typography>
                   )}
                 </Box>
-                <Box sx={{ minWidth: 140, display: 'flex', alignItems: 'center' }}>
+                <Box sx={{ minWidth: 0, display: 'flex', alignItems: 'center' }}>
                   {isExpanded ? (
                     <FormControl fullWidth size="small" onClick={(e) => e.stopPropagation()}>
                       <InputLabel id={`bird-row-${bird.id}-inline-status-label`}>Status</InputLabel>
@@ -703,6 +740,7 @@ const BirdsPage = () => {
         onRetry={() => refetch()}
         emptyMessage="No birds found"
         renderDesktopRow={renderBirdRow}
+        renderDesktopHead={renderBirdHead}
         page={page}
         rowsPerPage={rowsPerPage}
         count={sorted.length}

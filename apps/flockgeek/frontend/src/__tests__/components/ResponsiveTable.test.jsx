@@ -48,6 +48,23 @@ describe('ResponsiveTable', () => {
     expect(screen.getByRole('cell', { name: 'Henrietta' })).toBeInTheDocument();
   });
 
+  // UX review 2026-11-18, FlockGeek 11: a page whose desktop row is one
+  // spanning cell (Birds) draws its header on the same grid as that row.
+  it('lets a page draw its own desktop header, with the sort state', async () => {
+    restoreMatchMedia = mockMatchMediaMatches(false); // desktop
+    const user = userEvent.setup();
+    const onSort = vi.fn();
+    const renderDesktopHead = vi.fn(({ onSort: sort }) => (
+      <button type="button" onClick={() => sort('name')}>Custom Name header</button>
+    ));
+    renderWithProviders(<ResponsiveTable {...baseProps({ onSort, renderDesktopHead })} />);
+
+    expect(screen.queryByRole('columnheader', { name: 'Tag ID' })).not.toBeInTheDocument();
+    expect(renderDesktopHead).toHaveBeenCalledWith(expect.objectContaining({ sortBy: 'tagId', sortOrder: 'asc' }));
+    await user.click(screen.getByRole('button', { name: 'Custom Name header' }));
+    expect(onSort).toHaveBeenCalledWith('name');
+  }, 30000);
+
   it('renders one card per row below md, titled by the primary column', () => {
     restoreMatchMedia = mockMatchMediaMatches(true); // mobile
     renderWithProviders(<ResponsiveTable {...baseProps()} />);
