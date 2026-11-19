@@ -39,6 +39,8 @@ export const ROUTES = [
   { path: '/types', navId: NAV.types, title: 'Types', tab: 'more' },
   { path: '/insurance', navId: NAV.insurance, title: 'Insurance report', tab: 'more' },
   { path: '/trash', navId: NAV.trash, title: 'Trash', tab: 'more' },
+  // Reached from a thing's More, a Where level, or a selection: a sub-page under More.
+  { path: '/labels', navId: null, title: 'Print labels', tab: 'more', back: true },
   // The Attic: the household's locked unit for family documents.
   { path: '/attic', navId: NAV.attic, title: 'The Attic', tab: 'more' },
   { path: '/attic/types', navId: NAV.attic, title: 'Document types', tab: 'more', back: true },

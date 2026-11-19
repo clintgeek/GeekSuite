@@ -213,7 +213,7 @@ export function AtticSetup() {
           Put a lock on the Attic
         </Typography>
         <Typography sx={{ mt: 0.75, color: 'text.secondary', fontSize: '0.9375rem', lineHeight: 1.55 }}>
-          The family’s documents live behind this door. You open it with your fingerprint, or a PIN when the fingerprint won’t do. Your lock is yours: Heather sets up her own.
+          The family’s documents live behind this door. You open it with your fingerprint, or a PIN when the fingerprint won’t do. Your lock is yours: everyone in the household sets up their own.
         </Typography>
       </Box>
       <Box component="ol" aria-label="Set-up steps" sx={{ listStyle: 'none', m: 0, p: 0, display: 'grid', gap: 1.5 }}>

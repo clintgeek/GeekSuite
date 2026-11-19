@@ -63,9 +63,14 @@ const FRAME = '#000000';
  * 20mm of that width, a breadcrumb next to a name that's supposed to be the
  * biggest thing on the label doesn't fit legibly — it's dropped there (see
  * `LabelSticker` below), not just shrunk. Large keeps it, under the name.
+ *
+ * Small has no `footerFontPt` either (2026-11-18): the 12mm text column
+ * cannot hold "THINGGEEK" legibly — 3.5pt on paper is barely a millimetre
+ * of capital, and the on-screen preview's 13px floor cut it to "THINGG".
+ * The QR already says where the label leads.
  */
 export const LABEL_SIZES = {
-  small: { key: 'small', label: 'Small — 38 × 25mm (label roll)', widthMm: 38, heightMm: 25, qrMm: 20, footerFontPt: 3.5 },
+  small: { key: 'small', label: 'Small — 38 × 25mm (label roll)', widthMm: 38, heightMm: 25, qrMm: 20 },
   large: { key: 'large', label: 'Large — 100 × 60mm (tote front)', widthMm: 100, heightMm: 60, qrMm: 48, breadcrumbFontPt: 8, footerFontPt: 6 },
 };
 
@@ -236,12 +241,14 @@ export default function LabelSticker({ thing, size = 'small', testIdPrefix = 'la
             </Box>
           ) : null}
         </Box>
-        <Box
-          data-testid={id('footer')}
-          sx={{ fontSize: pt(spec.footerFontPt), color: GREY, letterSpacing: '0.08em', textTransform: 'uppercase' }}
-        >
-          ThingGeek
-        </Box>
+        {spec.footerFontPt ? (
+          <Box
+            data-testid={id('footer')}
+            sx={{ fontSize: pt(spec.footerFontPt), color: GREY, letterSpacing: '0.08em', textTransform: 'uppercase' }}
+          >
+            ThingGeek
+          </Box>
+        ) : null}
       </Box>
     </Box>
   );

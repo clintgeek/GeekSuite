@@ -8,6 +8,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { fireEvent, screen, act, within } from '@testing-library/react';
 import { GeekShellContext, SlashFocusProvider } from '@geeksuite/ui';
 import TopBar from '../../components/TopBar';
+import { tabFor } from '../../components/navConfig';
 import { mockViewport, renderWithProviders } from '../testUtils';
 
 vi.mock('@geeksuite/user', () => ({
@@ -65,6 +66,20 @@ describe('on a phone', () => {
       renderWithProviders(<TopBar user={{ username: 'chef' }} onSignOut={() => {}} />, { initialEntries: ['/thing/t-wendy'], wrapper: PhoneShell });
       expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Open navigation' })).toBeNull();
+    } finally {
+      restore();
+    }
+  });
+});
+
+describe('Print labels', () => {
+  it('is a sub-page with its own title: a back arrow and "Print labels", not "ThingGeek"', () => {
+    const restore = mockViewport(390);
+    try {
+      renderWithProviders(<TopBar user={{ username: 'chef' }} onSignOut={() => {}} />, { initialEntries: ['/labels?ids=t1'], wrapper: PhoneShell });
+      expect(screen.getByRole('button', { name: 'Back' })).toBeInTheDocument();
+      expect(document.querySelector('[data-geek-topbar="title"]')).toHaveTextContent('Print labels');
+      expect(tabFor('/labels')).toBe('more');
     } finally {
       restore();
     }

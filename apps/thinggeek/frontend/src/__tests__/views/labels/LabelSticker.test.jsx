@@ -144,12 +144,11 @@ describe('LabelSticker — Small (label roll)', () => {
     expect(toStringMock.mock.calls[0][0]).toMatch(/\/thing\/t-wendy$/);
   });
 
-  it('the name is still the largest text, even without a breadcrumb to compare to', async () => {
-    renderWithProviders(<LabelSticker thing={makeThing()} size="small" />);
-    const name = await screen.findByTestId('label-name');
-    const footer = screen.getByTestId('label-footer');
-    const pt = (el) => parseFloat(window.getComputedStyle(el).fontSize);
-    expect(pt(name)).toBeGreaterThan(pt(footer));
+  it('has no ThingGeek footer: the 12mm column cannot hold it (the preview cut it to "THINGG")', async () => {
+    renderWithProviders(<LabelSticker thing={makeThing()} size="small" preview />);
+    await screen.findByTestId('label-name');
+    expect(screen.queryByTestId('label-footer')).toBeNull();
+    expect(screen.getByTestId('label-sticker')).not.toHaveTextContent(/thinggeek/i);
   });
 
   it('a long name never truncates to one word — it steps down and wraps up to 3 lines', async () => {
@@ -172,17 +171,17 @@ describe('LabelSticker — Small (label roll)', () => {
   });
 
   it('preview mode floors text size instead of printing it true-to-life tiny; print mode never does', async () => {
-    renderWithProviders(<LabelSticker thing={makeThing()} size="small" preview />);
+    // Small has no footer since 2026-11-18, so this uses Large's 6pt (~8px) footer.
+    renderWithProviders(<LabelSticker thing={makeThing()} size="large" preview />);
     const footer = await screen.findByTestId('label-footer');
-    // True Small footer is 3.5pt (~4.7px) — unreadable on a phone screen.
-    // Preview mode floors it with CSS max(3.5pt, 13px); jsdom resolves that
+    // Preview mode floors it with CSS max(6pt, 13px); jsdom resolves that
     // statically to the 13px winner. Print mode (the default) prints the
     // true, tiny, correct-on-paper size instead — asserted below.
     expect(window.getComputedStyle(footer).fontSize).toBe('calc(13px)');
 
-    renderWithProviders(<LabelSticker thing={makeThing()} size="small" />);
+    renderWithProviders(<LabelSticker thing={makeThing()} size="large" />);
     await screen.findAllByTestId('label-qr-svg');
     const printFooters = screen.getAllByTestId('label-footer');
-    expect(window.getComputedStyle(printFooters[printFooters.length - 1]).fontSize).toBe('3.5pt');
+    expect(window.getComputedStyle(printFooters[printFooters.length - 1]).fontSize).toBe('6pt');
   });
 });

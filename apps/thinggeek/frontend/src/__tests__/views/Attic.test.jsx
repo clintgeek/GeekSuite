@@ -174,6 +174,14 @@ describe('the gate', () => {
     await waitFor(() => expect(v.setPin).toHaveBeenCalledWith('481516'));
   });
 
+  it('set-up reads true for whoever is signed in: no member is named', () => {
+    const v = vault({ setUp: false, pin: false, passkeys: [] });
+    renderWithProviders(<AtticView />, { mocks: [homeMock], wrapper: withVault(v) });
+    const setup = screen.getByTestId('attic-setup');
+    expect(setup).toHaveTextContent('Your lock is yours: everyone in the household sets up their own.');
+    expect(setup).not.toHaveTextContent(/Heather|Chef|Clint/);
+  });
+
   it('a passkey alone opens the door, then set-up still asks for the backup PIN', () => {
     renderWithProviders(<AtticView />, { mocks: [homeMock], wrapper: withVault(open({ pin: false })) });
     expect(screen.getByTestId('attic-setup')).toBeInTheDocument();
