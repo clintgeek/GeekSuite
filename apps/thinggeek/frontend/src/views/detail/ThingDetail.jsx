@@ -19,7 +19,7 @@
  * mural carries the page's heading.
  */
 import React, { useEffect, useRef, useState } from 'react';
-import { Box, Button, CircularProgress } from '@mui/material';
+import { Box, Button, CircularProgress, useMediaQuery } from '@mui/material';
 import { useQuery } from '@apollo/client';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import { GeekEmptyState, useToast } from '@geeksuite/ui';
@@ -67,6 +67,15 @@ export function ThingDetailBody({ thing, onPanel, onFix, uploads, onRetry, attic
   useEffect(() => {
     setHeading(articleRef.current?.querySelector('#thing-name') ?? null);
   }, [mural, thing.id]);
+  const phone = useMediaQuery((t) => t.breakpoints.down('md'), { noSsr: true });
+  const contains = showsContents(thing) ? <ContainsSection thing={thing} /> : null;
+  const details = <DetailsSection thing={thing} onEdit={edit('details')} />;
+  const dates = <DatesSection dates={thing.dates ?? []} onEdit={edit('dates')} />;
+  const relationships = <RelationshipsSection relationships={thing.relationships ?? []} onEdit={edit('relationships')} />;
+  const notes = <NotesSection notes={thing.notes} onEdit={edit('notes')} />;
+  const readiness = <ReadinessPanel thing={thing} onFix={onFix} />;
+  const value = <ValueSection thing={thing} onEdit={edit('value')} />;
+  const documents = <DocumentsSection documents={thing.documents ?? []} uploads={docUploads} onAdd={() => onPanel('document')} onRetry={onRetry} />;
   // Once the name has scrolled under the pinned action bar, the top bar names the thing.
   useTitleWhenScrolledPast(pathname, thing.name, heading, scrollRoot, ACTION_BAR_PX);
   return (
@@ -102,19 +111,36 @@ export function ThingDetailBody({ thing, onPanel, onFix, uploads, onRetry, attic
           pb: 'calc(24px + env(safe-area-inset-bottom))',
         }}
       >
-        <Box sx={{ display: 'grid', gap: 1.5, minWidth: 0 }}>
-          {showsContents(thing) ? <ContainsSection thing={thing} /> : null}
-          <DetailsSection thing={thing} onEdit={edit('details')} />
-          <DatesSection dates={thing.dates ?? []} onEdit={edit('dates')} />
-          <RelationshipsSection relationships={thing.relationships ?? []} onEdit={edit('relationships')} />
-          <NotesSection notes={thing.notes} onEdit={edit('notes')} />
-        </Box>
-        <Box sx={{ display: 'grid', gap: 1.5, minWidth: 0 }}>
-          <ReadinessPanel thing={thing} onFix={onFix} />
-          <ValueSection thing={thing} onEdit={edit('value')} />
-          <DocumentsSection documents={thing.documents ?? []} uploads={docUploads} onAdd={() => onPanel('document')} onRetry={onRetry} />
-          {atticSlot}
-        </Box>
+        {phone ? (
+          // Phone: one column, with the insurance payoff (readiness, value, receipts) right under the action bar.
+          <Box sx={{ display: 'grid', gap: 1.5, minWidth: 0 }}>
+            {readiness}
+            {value}
+            {documents}
+            {contains}
+            {details}
+            {dates}
+            {relationships}
+            {notes}
+            {atticSlot}
+          </Box>
+        ) : (
+          <>
+            <Box sx={{ display: 'grid', gap: 1.5, minWidth: 0 }}>
+              {contains}
+              {details}
+              {dates}
+              {relationships}
+              {notes}
+            </Box>
+            <Box sx={{ display: 'grid', gap: 1.5, minWidth: 0 }}>
+              {readiness}
+              {value}
+              {documents}
+              {atticSlot}
+            </Box>
+          </>
+        )}
       </Box>
     </Box>
   );

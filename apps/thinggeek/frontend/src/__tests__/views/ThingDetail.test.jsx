@@ -5,7 +5,7 @@ import { Route, Routes, useLocation } from 'react-router-dom';
 import ThingDetail, { ThingDetailBody } from '../../views/detail/ThingDetail';
 import ReadinessPanel from '../../views/detail/ReadinessPanel';
 import TopBar from '../../components/TopBar';
-import { renderWithProviders } from '../testUtils';
+import { mockViewport, renderWithProviders } from '../testUtils';
 import { GET_THING } from '../../graphql/queries';
 import { crumbs, date, makeRifle, makeThing, typeRef } from '../fixtures';
 
@@ -292,5 +292,38 @@ describe('on a phone, the action bar pins and the top bar names the thing', () =
     } finally {
       window.IntersectionObserver = Original;
     }
+  });
+});
+
+describe('section order', () => {
+  const order = () => {
+    const heads = screen.getAllByRole('heading', { level: 2 }).map((h) => h.textContent);
+    const at = (re) => heads.findIndex((t) => re.test(t));
+    return { readiness: screen.getByTestId('readiness'), at, heads };
+  };
+  const before = (a, b) => Boolean(a.compareDocumentPosition(b) & Node.DOCUMENT_POSITION_FOLLOWING);
+
+  it('on a phone, claim readiness, value and documents come straight after the action bar, before details and notes', () => {
+    const restore = mockViewport(390);
+    try {
+      renderWithProviders(body(makeThing()));
+      const { readiness, at } = order();
+      const notes = screen.getByRole('heading', { level: 2, name: 'Notes' });
+      const details = screen.getByTestId('field-manufacturer');
+      expect(before(screen.getByTestId('detail-actions'), readiness)).toBe(true);
+      expect(before(readiness, details)).toBe(true);
+      expect(before(readiness, notes)).toBe(true);
+      expect(at(/^Value/)).toBeLessThan(at(/^Notes/));
+      expect(at(/^Documents/)).toBeLessThan(at(/^Notes/));
+      expect(before(screen.getByRole('heading', { level: 2, name: /^Documents/ }), details)).toBe(true);
+    } finally {
+      restore();
+    }
+  });
+
+  it('on a desktop, the two columns keep their order: details first, readiness heading the right column', () => {
+    renderWithProviders(body(makeThing()));
+    const details = screen.getByTestId('field-manufacturer');
+    expect(before(details, screen.getByTestId('readiness'))).toBe(true);
   });
 });
