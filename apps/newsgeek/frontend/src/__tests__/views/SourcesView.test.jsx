@@ -77,6 +77,15 @@ describe('Sources at 88 (UX review 2026-11-18, finding 4)', () => {
     expect(screen.getByTestId('sources-none')).toHaveTextContent('No source called “zulu”.');
   });
 
+  it('"Clear the search" empties the field and brings every row back', async () => {
+    await screen.findByText('Alpha Daily');
+    const all = screen.getAllByTestId('source-row').length;
+    await userEvent.type(screen.getByRole('searchbox', { name: 'Find a source' }), 'charl');
+    await userEvent.click(screen.getByRole('button', { name: 'Clear the search' }));
+    expect(screen.getByRole('searchbox', { name: 'Find a source' })).toHaveValue('');
+    expect(screen.getAllByTestId('source-row')).toHaveLength(all);
+  });
+
   it('a row says its status once: not "Active", not "Broken" beside a broken feed, no On/Off text', async () => {
     await screen.findByText('Alpha Daily');
     expect(rowFor('Alpha Daily')).not.toHaveTextContent(/Active/);

@@ -20,8 +20,8 @@
  * a status its feed line already shows, and no "On/Off" beside the switch.
  */
 import React, { useMemo, useState } from 'react';
-import { Box, Button, Chip, CircularProgress, Link, Typography } from '@mui/material';
-import { Add as AddIcon } from '@mui/icons-material';
+import { Box, Button, Chip, CircularProgress, IconButton, InputAdornment, Link, Typography } from '@mui/material';
+import { Add as AddIcon, Close as CloseIcon } from '@mui/icons-material';
 import { useApolloClient, useMutation, useQuery } from '@apollo/client';
 import { GeekSearchField, useToast } from '@geeksuite/ui';
 import { Link as RouterLink } from 'react-router-dom';
@@ -234,7 +234,17 @@ export default function SourcesView() {
         size="small"
         slashFocus={20}
         inputProps={{ 'data-testid': 'find-source', autoCapitalize: 'none', autoCorrect: 'off', spellCheck: false }}
-        sx={{ mt: 4 }}
+        InputProps={{
+          endAdornment: query ? (
+            <InputAdornment position="end">
+              <IconButton aria-label="Clear the search" onClick={() => setQuery('')} edge="end" sx={{ width: 44, height: 44, color: 'text.secondary' }}>
+                <CloseIcon sx={{ fontSize: 20 }} />
+              </IconButton>
+            </InputAdornment>
+          ) : undefined,
+        }}
+        // The browser's own clear button is painted blue: the spot colour is for official notices only.
+        sx={{ mt: 4, '& input::-webkit-search-cancel-button': { display: 'none', WebkitAppearance: 'none' } }}
       />
 
       <Box role="group" aria-label="Filter by status" sx={{ display: 'flex', gap: 2, overflowX: 'auto', py: 3, mx: { xs: -4, sm: 0 }, px: { xs: 4, sm: 0 } }}>
