@@ -97,10 +97,25 @@ export default function TopBar({ user, onSignOut }) {
 
   const mobileSearch = isMobile && onLibrary && searchOpen;
 
+  // Phone search (review 2026-11-18 #7): Back sits at the far left where the
+  // menu was, then the field (its own ✕ only clears the text). The app grid
+  // and avatar step aside while it is open, to give the field the width.
+  const searchToggle = (
+    <IconButton
+      data-geek-topbar="search"
+      onClick={() => setSearchOpen((v) => !v)}
+      aria-label={mobileSearch ? 'Close search' : 'Search games'}
+      aria-expanded={mobileSearch ? 'true' : 'false'}
+      sx={{ color: 'inherit', minWidth: 44, minHeight: 44, ...(mobileSearch ? { ml: -1 } : null) }}
+    >
+      {mobileSearch ? <ArrowBackIcon /> : <SearchIcon />}
+    </IconButton>
+  );
+
   return (
     <GeekTopBar
       elevation={0}
-      leading={mobileSearch ? null : undefined}
+      leading={mobileSearch ? searchToggle : undefined}
       title={
         mobileSearch
           ? React.cloneElement(field, {
@@ -130,19 +145,7 @@ export default function TopBar({ user, onSignOut }) {
           </Button>
         ) : null
       }
-      mobileActions={
-        onLibrary ? (
-          <IconButton
-            data-geek-topbar="search"
-            onClick={() => setSearchOpen((v) => !v)}
-            aria-label={mobileSearch ? 'Close search' : 'Search games'}
-            aria-expanded={mobileSearch ? 'true' : 'false'}
-            sx={{ color: 'inherit' }}
-          >
-            {mobileSearch ? <ArrowBackIcon /> : <SearchIcon />}
-          </IconButton>
-        ) : null
-      }
+      mobileActions={onLibrary && !mobileSearch ? searchToggle : null}
       account={
         user
           ? {
@@ -166,6 +169,9 @@ export default function TopBar({ user, onSignOut }) {
           letterSpacing: '0.02em',
           textTransform: 'uppercase',
         },
+        ...(mobileSearch
+          ? { '& [data-geek-topbar="switcher"], & [data-geek-topbar="account"]': { display: 'none' } }
+          : null),
         '& [data-geek-topbar="theme"], & [data-geek-topbar="switcher"]': {
           color: 'text.primary',
           '&:hover': { bgcolor: alpha(theme.palette.primary.main, 0.1) },
