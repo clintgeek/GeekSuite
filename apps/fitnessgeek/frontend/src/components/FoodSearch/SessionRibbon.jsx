@@ -117,11 +117,14 @@ const SessionRibbon = ({ items = [], where = null, onUndoLast, onDone, busy = fa
     >
       <LoggedIcon sx={{ color: primary, fontSize: 22, flexShrink: 0 }} aria-hidden />
       <Box sx={{ minWidth: 0, flex: 1 }}>
-        <Typography sx={{ fontSize: '1rem', fontWeight: 800, color: 'text.primary', lineHeight: 1.3 }}>
-          {what} added{where ? ` to ${where}` : ''}
+        {/* Two lines whatever the name (harness 2026-11-18: "Greek Yogurt,
+            Plain Whole Milk added to lunch" wrapped to three): the name on
+            one line, cut with an ellipsis; where and how much under it. */}
+        <Typography data-testid="ribbon-what" noWrap sx={{ fontSize: '1rem', fontWeight: 800, color: 'text.primary', lineHeight: 1.3 }}>
+          {what}{' '}
         </Typography>
         <Typography sx={{ fontSize: '0.9375rem', color: 'text.secondary', lineHeight: 1.3 }}>
-          {displayed.toLocaleString('en-US')} cal
+          {`added${where ? ` to ${where}` : ''} · ${displayed.toLocaleString('en-US')} cal`}
         </Typography>
       </Box>
 

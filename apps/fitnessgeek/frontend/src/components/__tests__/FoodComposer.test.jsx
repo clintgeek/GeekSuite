@@ -62,6 +62,8 @@ const renderBox = (props = {}, { simple = false } = {}) => {
   );
 };
 
+// A logged food's name is also the ribbon's first line; the result row comes
+// first in the page, so `[0]` is the row (findAllByText('Egg')[0]).
 const theBox = () => screen.getByLabelText('Tell me what you ate');
 const type = (value) => fireEvent.change(theBox(), { target: { value } });
 const logIt = () => fireEvent.click(screen.getByTestId('log-it'));
@@ -286,7 +288,7 @@ describe('one tap logs it', () => {
     type('egg');
     await vi.advanceTimersByTimeAsync(200);
 
-    fireEvent.click(await screen.findByText('Egg'));
+    fireEvent.click((await screen.findAllByText('Egg'))[0]);
     fireEvent.click(await screen.findByRole('button', { name: 'Make it 2 Egg' }));
     await waitFor(() => expect(onUpdateLog).toHaveBeenCalledWith('egg-1', { servings: 2 }));
     expect(onLogItems).toHaveBeenCalledTimes(1);
@@ -991,7 +993,7 @@ describe('B6: errors in plain words', () => {
     renderBox({ onLogItems });
     type('egg');
     await vi.advanceTimersByTimeAsync(200);
-    fireEvent.click(await screen.findByText('Egg'));
+    fireEvent.click((await screen.findAllByText('Egg'))[0]);
 
     expect(await screen.findByText(/No signal right now/i)).toBeInTheDocument();
     expect(screen.queryByText('Network Error')).toBeNull();
@@ -1027,7 +1029,7 @@ describe('B7: one tap, one log', () => {
     type('egg');
     await vi.advanceTimersByTimeAsync(600);
 
-    fireEvent.click(await screen.findByText('Egg'));
+    fireEvent.click((await screen.findAllByText('Egg'))[0]);
     logIt();
     fireEvent.keyDown(theBox(), { key: 'Enter' });
     expect(onDescribe).not.toHaveBeenCalled();
@@ -1107,16 +1109,16 @@ describe('B8: undo says what happened', () => {
     type('egg');
     await vi.advanceTimersByTimeAsync(200);
     for (let i = 1; i <= 3; i += 1) {
-      fireEvent.click(await screen.findByText('Egg'));
+      fireEvent.click((await screen.findAllByText('Egg'))[0]);
       await waitFor(() => expect(onLogItems).toHaveBeenCalledTimes(i));
       await waitFor(() => expect(screen.queryByText('Adding…')).toBeNull());
     }
     // No onUpdateLog here, so each tap is its own entry.
-    expect(await screen.findByText('3 foods added to snacks')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId('session-ribbon')).toHaveTextContent('3 foods added to snacks'));
 
     fireEvent.click(screen.getByRole('button', { name: /^undo$/i }));
     expect(await screen.findByText("Couldn’t undo — try again")).toBeInTheDocument();
-    expect(screen.getByText('3 foods added to snacks')).toBeInTheDocument();
+    expect(screen.getByTestId('session-ribbon')).toHaveTextContent('3 foods added to snacks');
   });
 
   it('the undo toast stays up for ten seconds, not four', async () => {
@@ -1216,10 +1218,10 @@ describe('L2: her habitual second tap is a second serving, not a third egg', () 
     type('egg');
     await vi.advanceTimersByTimeAsync(200);
 
-    fireEvent.click(await screen.findByText('Egg'));
+    fireEvent.click((await screen.findAllByText('Egg'))[0]);
     await waitFor(() => expect(onLogItems).toHaveBeenCalledTimes(1));
     await screen.findByText(/Added/, { selector: '[data-testid="food-row-subtitle"] span' });
-    fireEvent.click(screen.getByText('Egg'));
+    fireEvent.click(screen.getAllByText('Egg')[0]);
 
     await waitFor(() => expect(onUpdateLog).toHaveBeenCalledWith('egg-1', { servings: 2 }));
     expect(onLogItems).toHaveBeenCalledTimes(1);
@@ -1228,7 +1230,7 @@ describe('L2: her habitual second tap is a second serving, not a third egg', () 
     // L4: the toast says the amount.
     expect(await screen.findByText('Added to breakfast ✓ · Egg ×2')).toBeInTheDocument();
     // The ribbon is one entry, not two, named with its amount (B7).
-    expect(screen.getByText('Egg ×2 added to breakfast')).toBeInTheDocument();
+    expect(screen.getByTestId('session-ribbon')).toHaveTextContent('Egg ×2 added to breakfast');
 
     // Undo — the ribbon's, the sheet's one Undo (A9) — takes back the whole entry.
     fireEvent.click(within(screen.getByTestId('session-ribbon')).getByRole('button', { name: /^undo$/i }));
@@ -1241,10 +1243,10 @@ describe('L2: her habitual second tap is a second serving, not a third egg', () 
     renderBox({ onLogItems });
     type('egg');
     await vi.advanceTimersByTimeAsync(200);
-    fireEvent.click(await screen.findByText('Egg'));
+    fireEvent.click((await screen.findAllByText('Egg'))[0]);
     await waitFor(() => expect(onLogItems).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(screen.queryByText('Adding…')).toBeNull());
-    fireEvent.click(screen.getByText('Egg'));
+    fireEvent.click(screen.getAllByText('Egg')[0]);
     await waitFor(() => expect(onLogItems).toHaveBeenCalledTimes(2));
   });
 
@@ -1279,7 +1281,7 @@ describe('L2: her habitual second tap is a second serving, not a third egg', () 
     type('egg');
     await vi.advanceTimersByTimeAsync(200);
 
-    fireEvent.click(await screen.findByText('Egg'));
+    fireEvent.click((await screen.findAllByText('Egg'))[0]);
     await screen.findByText(/Added/, { selector: '[data-testid="food-row-subtitle"] span' });
 
     fireEvent.click(screen.getByRole('button', { name: /change the amount of egg/i }));
@@ -1290,7 +1292,7 @@ describe('L2: her habitual second tap is a second serving, not a third egg', () 
     await waitFor(() => expect(onUpdateLog).toHaveBeenCalledWith('egg-1', { servings: 3 }));
     expect(onLogItems).toHaveBeenCalledTimes(1);
     expect(await screen.findByText(/3 added/, { selector: '[data-testid="food-row-subtitle"] span' })).toBeInTheDocument();
-    expect(screen.getByText('Egg ×3 added to breakfast')).toBeInTheDocument();
+    expect(screen.getByTestId('session-ribbon')).toHaveTextContent('Egg ×3 added to breakfast');
   });
 
   it('B2: where the entry cannot be edited, Amount replaces it — one entry at the end', async () => {
@@ -1303,7 +1305,7 @@ describe('L2: her habitual second tap is a second serving, not a third egg', () 
     type('egg');
     await vi.advanceTimersByTimeAsync(200);
 
-    fireEvent.click(await screen.findByText('Egg'));
+    fireEvent.click((await screen.findAllByText('Egg'))[0]);
     await screen.findByText(/Added/, { selector: '[data-testid="food-row-subtitle"] span' });
     await waitFor(() => expect(screen.queryByText('Adding…')).toBeNull());
 
@@ -1315,7 +1317,7 @@ describe('L2: her habitual second tap is a second serving, not a third egg', () 
     expect(onUndo).toHaveBeenCalledWith(['egg-1']);
     expect(onUndo.mock.invocationCallOrder[0]).toBeLessThan(onLogItems.mock.invocationCallOrder[1]);
     expect(onLogItems.mock.calls[1][0][0]).toMatchObject({ name: 'Egg', servings: 3 });
-    expect(await screen.findByText('Egg ×3 added to breakfast')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByTestId('session-ribbon')).toHaveTextContent('Egg ×3 added to breakfast'));
   });
 
   it('a chip that re-logs two says so ("Toast ×2")', async () => {
@@ -1339,7 +1341,7 @@ describe('L10 + L11: the sitting shows from the first item, with Done', () => {
     fireEvent.click(await screen.findByText('Fage'));
 
     const ribbon = await screen.findByTestId('session-ribbon');
-    expect(within(ribbon).getByText('Fage added to lunch')).toBeInTheDocument();
+    expect(ribbon).toHaveTextContent('Fage added to lunch');
     expect(within(ribbon).queryByRole('button', { name: /undo all/i })).toBeNull();
     expect(within(ribbon).getByRole('button', { name: /^undo$/i })).toBeInTheDocument();
     fireEvent.click(within(ribbon).getByRole('button', { name: 'Done' }));
@@ -1355,7 +1357,7 @@ describe('A9/B7: one Undo in the sheet, and one way of counting', () => {
     renderBox({ onLogItems, onUndo, mealType: 'breakfast' });
     type('egg');
     await vi.advanceTimersByTimeAsync(200);
-    fireEvent.click(await screen.findByText('Egg'));
+    fireEvent.click((await screen.findAllByText('Egg'))[0]);
 
     expect(await screen.findByText('Added to breakfast ✓ · Egg')).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: /undo/i })).toHaveLength(1);
@@ -1534,7 +1536,7 @@ describe('L7: "Same as Chef\'s dinner"', () => {
     await waitFor(() => expect(onLogItems).toHaveBeenCalledTimes(1));
     const done = await screen.findByRole('button', { name: 'Same as Sarah’s dinner · Added' });
     expect(done).toHaveTextContent('Salmon, Rice, Beans');
-    expect(within(screen.getByTestId('session-ribbon')).getByText(/^3 foods added to dinner/)).toBeInTheDocument();
+    expect(screen.getByTestId('session-ribbon')).toHaveTextContent('3 foods added to dinner');
 
     fireEvent.click(done);
     await vi.advanceTimersByTimeAsync(50);
@@ -1583,7 +1585,7 @@ describe('L24: "You’re signed out. Sign in again." comes with a Sign in button
     renderBox({ onLogItems });
     type('egg');
     await vi.advanceTimersByTimeAsync(200);
-    fireEvent.click(await screen.findByText('Egg'));
+    fireEvent.click((await screen.findAllByText('Egg'))[0]);
     expect(await screen.findByText('You’re signed out. Sign in again.')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: 'Sign in' }));
     expect(loginRedirect).toHaveBeenCalled();
