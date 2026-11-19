@@ -13,12 +13,25 @@ import { GOTHIC } from '../theme/theme';
 
 export const OFFICIAL_CHIP = 'Official';
 
-export function visibleWhy(why = [], { official = false } = {}) {
-  return why.filter((w) => w && !(official && w === OFFICIAL_CHIP));
+/**
+ * The chips worth printing. `hide` is what the page already says: a chip that
+ * only repeats the section the reader is in ("Arkansas" under State) is left
+ * out. Display only — the gateway's ranking and `why` are untouched.
+ */
+export function visibleWhy(why = [], { official = false, hide = [] } = {}) {
+  return why.filter((w) => w && !(official && w === OFFICIAL_CHIP) && !hide.includes(w));
 }
 
-export default function WhyChips({ why = [], official = false, sx }) {
-  const chips = visibleWhy(why, { official });
+/** The State and Around Arkansas sections already say "Arkansas". */
+const SECTION_ECHO = { state: ['Arkansas'], around: ['Arkansas'] };
+
+/** Chip text that only repeats a section's own name: its title, and the place it stands for. */
+export function sectionEcho(key, title) {
+  return [...new Set([title, ...(SECTION_ECHO[key] ?? [])].filter(Boolean))];
+}
+
+export default function WhyChips({ why = [], official = false, hide = [], sx }) {
+  const chips = visibleWhy(why, { official, hide });
   if (!chips.length) return null;
   return (
     <Box component="ul" aria-label="Why it’s here" data-testid="why-chips" sx={{ listStyle: 'none', m: 0, p: 0, display: 'flex', flexWrap: 'wrap', gap: 1.5, ...sx }}>

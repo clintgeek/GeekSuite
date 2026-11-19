@@ -1,0 +1,89 @@
+/**
+ * A story card (UX review 2026-11-18):
+ *  - finding 2: the whole story opens it. The headline link is a full-width
+ *    block at least 44px tall (the harness measures the element, not a
+ *    stretched ::after), and its ::after carries it over the excerpt; the ⋯
+ *    menu, the time and "Also in" sit above that layer;
+ *  - finding 3: the chips ride on the publisher line, the excerpt is two
+ *    lines on a phone, and a chip that repeats the section is not printed;
+ *  - finding 11: an opened headline turns to the faint ink.
+ */
+import React from 'react';
+import { screen, within } from '@testing-library/react';
+import ArticleItem from '../../components/ArticleItem';
+import { GAZETTE } from '../../theme/theme';
+import { article } from '../fixtures';
+import { renderWithProviders } from '../testUtils';
+
+/** Every CSS rule emotion injected whose selector mentions `cls` and `suffix`. */
+function rulesFor(el, suffix) {
+  const classes = [...el.classList].filter((c) => c.startsWith('css-'));
+  const out = [];
+  for (const sheet of document.styleSheets) {
+    for (const rule of sheet.cssRules) {
+      if (rule.selectorText && classes.some((c) => rule.selectorText.includes(`.${c}${suffix}`))) out.push(rule);
+    }
+  }
+  return out;
+}
+
+const hex = (c) => c.toLowerCase();
+const rgbToHex = (rgb) => `#${rgb.match(/\d+/g).slice(0, 3).map((n) => Number(n).toString(16).padStart(2, '0')).join('')}`;
+
+describe('the whole story is one tap (finding 2)', () => {
+  it('the headline link is a full-width block, 44px at least, stretched over the story by its ::after', () => {
+    renderWithProviders(<ArticleItem article={article('a1', { title: 'Short one', alsoIn: [{ __typename: 'NewsAlsoIn', publisher: 'KARK', url: 'https://kark.com/x', sourceId: 's9' }] })} />);
+    const link = screen.getByTestId('story-link');
+    const cs = getComputedStyle(link);
+    expect(cs.display).toBe('block');
+    expect(cs.minHeight).toBe('44px');
+    const after = rulesFor(link, '::after');
+    expect(after.length).toBeGreaterThan(0);
+    expect(after[0].style.position).toBe('absolute');
+    expect(after[0].style.inset).toBe('0');
+    // The story is what it stretches over: the article is the positioned box.
+    expect(getComputedStyle(screen.getByTestId('article')).position).toBe('relative');
+    // Heading semantics and the hidden "opens at…" stay.
+    expect(screen.getByRole('heading', { name: /Short one/ })).toContainElement(link);
+    expect(link).toHaveAccessibleName('Short one (opens at The Arkadelphian, in a new tab)');
+  });
+
+  it('the ⋯ menu and "Also in" stay their own targets, above the stretched link', () => {
+    renderWithProviders(<ArticleItem article={article('a1', { alsoIn: [{ __typename: 'NewsAlsoIn', publisher: 'KARK', url: 'https://kark.com/x', sourceId: 's9' }] })} />);
+    const menu = screen.getByTestId('article-menu-button').parentElement;
+    expect(getComputedStyle(menu).position).toBe('relative');
+    expect(getComputedStyle(menu).zIndex).toBe('1');
+    const also = screen.getByTestId('also-in');
+    expect(getComputedStyle(also).position).toBe('relative');
+    expect(getComputedStyle(also).zIndex).toBe('1');
+  });
+});
+
+describe('a shorter card (finding 3)', () => {
+  it('the why-chips sit on the publisher line', () => {
+    renderWithProviders(<ArticleItem article={article('a1')} why={['Arkadelphia', '★ Favorite']} />);
+    const line = screen.getByTestId('publisher-line');
+    expect(within(line).getAllByTestId('why-chip').map((c) => c.textContent)).toEqual(['Arkadelphia', '★ Favorite']);
+  });
+
+  it('a chip that only repeats the section is left out (display only)', () => {
+    renderWithProviders(<ArticleItem article={article('a1')} why={['Arkansas', '★ Favorite']} hideChips={['State', 'Arkansas']} />);
+    expect(screen.getAllByTestId('why-chip').map((c) => c.textContent)).toEqual(['★ Favorite']);
+  });
+
+  it('place chips on a section page leave out the section’s own place too', () => {
+    renderWithProviders(
+      <ArticleItem article={article('a1', { places: [{ __typename: 'NewsPlace', id: 'ar', name: 'Arkansas' }, { __typename: 'NewsPlace', id: 'lr', name: 'Little Rock' }] })} hideChips={['Arkansas']} />
+    );
+    expect(within(screen.getByRole('list', { name: 'Places' })).getAllByRole('listitem').map((li) => li.textContent)).toEqual(['Little Rock']);
+  });
+});
+
+describe('an opened story changes (finding 11)', () => {
+  it.each(['light', 'dark'])('a visited headline is set in the faint ink (%s)', (mode) => {
+    renderWithProviders(<ArticleItem article={article('a1')} />, { mode });
+    const visited = rulesFor(screen.getByTestId('story-link'), ':visited');
+    expect(visited.length).toBeGreaterThan(0);
+    expect(hex(rgbToHex(visited[0].style.color))).toBe(hex(GAZETTE[mode].inkFaint));
+  });
+});

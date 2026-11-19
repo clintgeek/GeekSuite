@@ -7,7 +7,20 @@
  * Every outbound link here honours the reader's window mode (`openInNewTab`):
  * a new tab, or this window so Back returns to NewsGeek. "Open at publisher"
  * in the ⋯ menu and the Also-in links always use the original URLs.
- * The excerpt is the feed's own, clamped to three lines.
+ * The excerpt is the feed's own, clamped to two lines on a phone (three for
+ * the lead, and on wider screens).
+ *
+ * The whole story is one tap (UX review 2026-11-18, finding 2): the headline
+ * link is a full-width block (its own box is the 44px target the harness
+ * measures) and a stretched ::after carries it over the excerpt and the
+ * space around it. The ⋯ menu, the time and "Also in" sit above that layer
+ * (`position: relative; z-index: 1`) and stay their own targets. Hover
+ * devices get a shade band over the whole story.
+ *
+ * The why-chips (or place chips) ride on the publisher line, and a chip
+ * that only repeats the section the reader is in (`hideChips`, e.g.
+ * "Arkansas" under State) is not printed — display only, the ranking is the
+ * gateway's. An opened story's headline turns to the faint ink (:visited).
  * Official notices carry the OFFICIAL badge and a spot-colour rule at the
  * left edge — the word does the work, the colour only repeats it.
  *
@@ -16,7 +29,7 @@
  * two rows of tags would out-shout the headline. `lead` sets the paper's lead
  * story a size up; `headingLevel` is h3 under Today's section headings.
  *
- * The publisher line is plain text. The Source sheet (plan "Source sheet")
+ * The publisher line is plain text, with the ⋯ at its right end. The Source sheet (plan "Source sheet")
  * opens from the ⋯ menu's "Source settings" (Chef, 2026-10-10: settings live
  * in the menu, not on the name); the headline is still the link to the
  * publisher.
@@ -40,11 +53,22 @@ const visuallyHidden = { position: 'absolute', width: 1, height: 1, p: 0, m: '-1
 
 const publisherSx = { fontFamily: GOTHIC, fontSize: '0.8125rem', fontWeight: 700, letterSpacing: '0.04em', textTransform: 'uppercase', color: 'text.primary' };
 
-export default function ArticleItem({ article, readerLinks = [], openInNewTab = true, openers = [], onOpenSource, why, lead = false, headingLevel = 'h2' }) {
+export default function ArticleItem({
+  article,
+  readerLinks = [],
+  openInNewTab = true,
+  openers = [],
+  onOpenSource,
+  why,
+  hideChips = [],
+  lead = false,
+  headingLevel = 'h2',
+}) {
   const official = article.sourceKind === 'official';
   const publisher = article.publisher || article.sourceName;
   const opened = resolveStoryOpen(article, { openers, readerLinks });
   const where = opened.link ? `opens with ${opened.link.label}` : `opens at ${publisher}`;
+  const chipSx = { display: 'inline-flex' };
   return (
     <Box
       component="article"
@@ -53,33 +77,63 @@ export default function ArticleItem({ article, readerLinks = [], openInNewTab = 
       data-lead={lead ? 'true' : undefined}
       sx={{
         position: 'relative',
-        py: 4,
+        pt: 2,
+        pb: 4,
         borderBottom: 1,
         borderColor: 'divider',
         ...(official && { pl: 3, boxShadow: (t) => `inset 3px 0 0 ${t.palette.official.main}` }),
+        '@media (hover: hover)': {
+          '&:hover': {
+            bgcolor: 'background.shade',
+            // The band runs a little past the column's text edge, without moving it.
+            boxShadow: (t) =>
+              [`-8px 0 0 ${t.palette.background.shade}`, `8px 0 0 ${t.palette.background.shade}`, official ? `inset 3px 0 0 ${t.palette.official.main}` : null]
+                .filter(Boolean)
+                .join(', '),
+          },
+        },
       }}
     >
-      <Box sx={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 2, rowGap: 1, mb: 1.5 }}>
-        {official ? <OfficialBadge /> : null}
-        <Typography component="span" sx={publisherSx}>
-          {publisher}
-        </Typography>
-        <Typography component="span" sx={{ fontFamily: GOTHIC, fontSize: '0.8125rem', color: 'text.secondary' }}>
-          <TimeAgo value={article.publishedAt} />
-        </Typography>
+      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1 }}>
+        <Box data-testid="publisher-line" sx={{ flex: 1, minWidth: 0, minHeight: 44, display: 'flex', flexWrap: 'wrap', alignItems: 'center', columnGap: 2, rowGap: 1, py: 1 }}>
+          {official ? <OfficialBadge /> : null}
+          <Typography component="span" sx={publisherSx}>
+            {publisher}
+          </Typography>
+          <Typography component="span" sx={{ position: 'relative', zIndex: 1, fontFamily: GOTHIC, fontSize: '0.8125rem', color: 'text.secondary' }}>
+            <TimeAgo value={article.publishedAt} />
+          </Typography>
+          {why ? (
+            <WhyChips why={why} official={official} hide={hideChips} sx={chipSx} />
+          ) : (
+            <PlaceChips places={(article.places ?? []).filter((p) => !hideChips.includes(p.name))} sx={chipSx} />
+          )}
+        </Box>
+        <Box sx={{ mr: -2, position: 'relative', zIndex: 1 }}>
+          <ArticleMenu article={article} readerLinks={readerLinks} openInNewTab={openInNewTab} onOpenSource={onOpenSource} />
+        </Box>
       </Box>
-      <Box sx={{ display: 'flex', alignItems: 'flex-start', gap: 1, mb: article.excerpt ? 1.5 : 0 }}>
       <Typography
         variant="h4"
         component={headingLevel}
-        sx={{ flex: 1, minWidth: 0, fontSize: lead ? { xs: '1.75rem', sm: '2.125rem' } : { xs: '1.3125rem', sm: '1.5rem' }, lineHeight: lead ? 1.12 : 1.2 }}
+        sx={{ mt: 0.5, fontSize: lead ? { xs: '1.75rem', sm: '2.125rem' } : { xs: '1.3125rem', sm: '1.5rem' }, lineHeight: lead ? 1.12 : 1.2 }}
       >
         <Link
           href={opened.url}
           {...linkTargetProps(openInNewTab)}
           data-opener={opened.link ? opened.link.id : 'original'}
+          data-testid="story-link"
           underline="hover"
-          sx={{ color: 'text.primary', fontFamily: SERIF, '&:visited': { color: 'text.secondary' }, '&:focus-visible': { outline: '2px solid', outlineOffset: 3 } }}
+          sx={{
+            display: 'block',
+            minHeight: 44,
+            color: 'text.primary',
+            fontFamily: SERIF,
+            '&:visited': { color: 'text.muted' },
+            '&:focus-visible': { outline: '2px solid', outlineOffset: 3 },
+            // The rest of the story taps through to the same link.
+            '&::after': { content: '""', position: 'absolute', inset: 0, zIndex: 0 },
+          }}
         >
           {article.title}{' '}
           <Box component="span" sx={visuallyHidden}>
@@ -87,17 +141,15 @@ export default function ArticleItem({ article, readerLinks = [], openInNewTab = 
           </Box>
         </Link>
       </Typography>
-      <Box sx={{ mt: -1.5, mr: -2 }}>
-        <ArticleMenu article={article} readerLinks={readerLinks} openInNewTab={openInNewTab} onOpenSource={onOpenSource} />
-      </Box>
-      </Box>
       {article.excerpt ? (
         <Typography
           variant="body1"
+          data-testid="excerpt"
           sx={{
+            mt: 1.5,
             color: 'text.secondary',
             display: '-webkit-box',
-            WebkitLineClamp: 3,
+            WebkitLineClamp: { xs: lead ? 3 : 2, sm: 3 },
             WebkitBoxOrient: 'vertical',
             overflow: 'hidden',
           }}
@@ -105,8 +157,7 @@ export default function ArticleItem({ article, readerLinks = [], openInNewTab = 
           {article.excerpt}
         </Typography>
       ) : null}
-      {why ? <WhyChips why={why} official={official} sx={{ mt: 2 }} /> : <PlaceChips places={article.places} sx={{ mt: 2 }} />}
-      <AlsoIn alsoIn={article.alsoIn} openInNewTab={openInNewTab} sx={{ mt: 1 }} />
+      <AlsoIn alsoIn={article.alsoIn} openInNewTab={openInNewTab} sx={{ mt: 1, position: 'relative', zIndex: 1 }} />
     </Box>
   );
 }
