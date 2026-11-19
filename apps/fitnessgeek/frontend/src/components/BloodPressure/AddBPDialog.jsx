@@ -228,6 +228,15 @@ const AddBPDialog = ({ open, onClose, onAdd, mode = 'add', initialValues = null 
 
   const bpStatus = getBPStatus();
 
+  // Save waits for a reading it can save (UX review 2026-11, A8), as the
+  // weight dialog's does: it used to be live with every field empty, a tap
+  // that could only fail. Once both numbers look finished and still don't
+  // pass, the reason shows under the fields rather than after a tap.
+  const check = validateBPForm({ systolic, diastolic, pulse });
+  const ready = !check.error;
+  const looksFinished = String(systolic).length >= 2 && String(diastolic).length >= 2;
+  const liveError = !ready && looksFinished ? check.error : '';
+
   return (
     <PremiumDialog
       open={open}
@@ -242,7 +251,7 @@ const AddBPDialog = ({ open, onClose, onAdd, mode = 'add', initialValues = null 
             onClick={handleSubmit}
             variant="contained"
             startIcon={isEdit ? <EditIcon /> : <AddIcon />}
-            disabled={loading}
+            disabled={loading || !ready}
           >
             {loading ? 'Saving…' : 'Save'}
           </Button>
@@ -351,7 +360,7 @@ const AddBPDialog = ({ open, onClose, onAdd, mode = 'add', initialValues = null 
             )}
 
             <BPSaveError
-              error={error}
+              error={error || liveError}
               duplicate={Boolean(duplicate)}
               onSaveLater={saveOneMinuteLater}
               busy={loading}

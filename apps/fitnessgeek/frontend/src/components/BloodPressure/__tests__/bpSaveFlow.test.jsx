@@ -67,6 +67,35 @@ describe('AddBPDialog — the instant it sends', () => {
   });
 });
 
+describe('A8: Save waits for a reading it can save', () => {
+  it('the dialog\'s Save is off with the fields empty, and on once both numbers are in', () => {
+    render(<AddBPDialog open onClose={() => {}} onAdd={vi.fn()} />);
+    const save = screen.getByRole('button', { name: /^save$/i, hidden: true });
+    expect(save).toBeDisabled();
+    type(screen.getByLabelText(/systolic/i), '128');
+    expect(save).toBeDisabled();
+    type(screen.getByLabelText(/diastolic/i), '82');
+    expect(save).toBeEnabled();
+  });
+
+  it('a finished reading that cannot be saved says why, with Save off', () => {
+    render(<AddBPDialog open onClose={() => {}} onAdd={vi.fn()} />);
+    type(screen.getByLabelText(/systolic/i), '80');
+    type(screen.getByLabelText(/diastolic/i), '120');
+    expect(screen.getByRole('button', { name: /^save$/i, hidden: true })).toBeDisabled();
+    expect(screen.getByText('The top number should be bigger than the bottom number.')).toBeInTheDocument();
+  });
+
+  it('the desktop card\'s Log is off until both numbers are in', () => {
+    render(<QuickAddBP onAdd={vi.fn()} />);
+    const log = screen.getAllByRole('button', { name: /^log$/i, hidden: true })[0];
+    expect(log).toBeDisabled();
+    type(screen.getAllByLabelText(/systolic/i)[0], '128');
+    type(screen.getAllByLabelText(/diastolic/i)[0], '82');
+    expect(log).toBeEnabled();
+  });
+});
+
 describe('AddBPDialog — a duplicate minute', () => {
   it('says so plainly and offers to save it one minute later', async () => {
     const onAdd = vi.fn()

@@ -151,6 +151,11 @@ const QuickAddBP = ({ onAdd, unit = "mmHg", autoOpen = false, onAutoOpened }) =>
   };
 
   const bpStatus = getBPStatus();
+  // As in the dialog (A8): Save waits for a reading it can save, and a
+  // finished-looking reading that can't be saved says why.
+  const check = validateBPForm({ systolic, diastolic, pulse });
+  const looksFinished = String(systolic).length >= 2 && String(diastolic).length >= 2;
+  const liveError = check.error && looksFinished ? check.error : '';
 
   return (
     <>
@@ -244,7 +249,8 @@ const QuickAddBP = ({ onAdd, unit = "mmHg", autoOpen = false, onAutoOpened }) =>
                   type="submit"
                   variant="contained"
                   fullWidth
-                  disabled={loading}
+                  // Not until the reading can be saved (UX review 2026-11, A8).
+                  disabled={loading || Boolean(check.error)}
                   startIcon={<AddIcon />}
                 >
                   {loading ? 'Saving…' : 'Log'}
@@ -277,7 +283,7 @@ const QuickAddBP = ({ onAdd, unit = "mmHg", autoOpen = false, onAutoOpened }) =>
             )}
 
             <BPSaveError
-              error={error}
+              error={error || liveError}
               duplicate={Boolean(duplicate)}
               onSaveLater={saveOneMinuteLater}
               busy={loading}
