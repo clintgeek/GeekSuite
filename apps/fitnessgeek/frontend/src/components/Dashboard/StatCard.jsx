@@ -80,7 +80,9 @@ export default function StatCard({
         height: '100%',
         display: 'flex',
         flexDirection: 'column',
-        justifyContent: 'center',
+        // Top-aligned (UX review 2026-11, A12): centred, a tile with a
+        // caption and one without put their titles ~9 px apart in one row.
+        justifyContent: 'flex-start',
         px: 1.5,
         py: 1.25,
         animation: `${statEnter} 460ms cubic-bezier(0.22, 1, 0.36, 1) both`,
@@ -88,11 +90,8 @@ export default function StatCard({
         '@media (prefers-reduced-motion: reduce)': {
           animation: 'none',
         },
-        transition: 'border-color 180ms ease, transform 180ms ease',
-        '&:hover': {
-          borderColor: alpha(baseColor, 0.4),
-          transform: 'translateY(-1px)',
-        },
+        // No accent outline on hover (A12): a coral edge on Blood pressure
+        // read as a warning about the reading, and the tiles aren't links.
       }}
     >
       {/* Icon + label row */}
